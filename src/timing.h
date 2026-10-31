@@ -27,7 +27,7 @@ typedef struct {
 extern "C" {
 #endif
 
-void jl_init_timing(void);
+void jl_init_timing(void) JL_NOTSAFEPOINT;
 void jl_destroy_timing(void) JL_NOTSAFEPOINT;
 
 // Update the enable bit-mask to enable/disable tracing events for

@@ -186,6 +186,9 @@ function gcd(abc::AbstractArray{<:Integer})
     return a
 end
 
+_gcdx_update(s0::T, q::T, s1::T) where {T<:Unsigned} = s0 -% q *% s1
+_gcdx_update(s0, q, s1) = s0 - q*s1
+
 # return (gcd(a, b), x, y) such that ax+by == gcd(a, b)
 """
     gcdx(a, b...)
@@ -223,7 +226,8 @@ julia> gcdx(15, 12, 20)
     Bézout coefficients that are computed by the extended Euclidean algorithm.
     (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.)
     For signed integers, these coefficients `u` and `v` are minimal in
-    the sense that ``|u| < |b/d|`` and ``|v| < |a/d|``. Furthermore,
+    the sense that ``|u| <= |b/d|`` and ``|v| <= |a/d|`` (with strict inequality
+    when ``|b| > d`` and ``|a| > d``, respectively). Furthermore,
     the signs of `u` and `v` are chosen so that `d` is positive.
     For unsigned integers, the coefficients `u` and `v` might be near
     their `typemax`, and the identity then holds only via the unsigned
@@ -245,8 +249,8 @@ Base.@assume_effects :terminates_locally function gcdx(a::T, b::T) where {T<:Int
     while !iszero(b)
         q, r = divrem(a, b)
         a, b = b, r
-        s0, s1 = s1, s0 - q*s1
-        t0, t1 = t1, t0 - q*t1
+        s0, s1 = s1, _gcdx_update(s0, q, s1)
+        t0, t1 = t1, _gcdx_update(t0, q, t1)
     end
     # for cases like abs(Int8(-128))
     if isnegative(a) && isnegative(abs(a))
@@ -274,7 +278,7 @@ function gcdx(a::Signed, b::Unsigned)
     R = promote_typeof(a, b)
     d, u, v = gcdx(promote(abs(a % signed(R)), b)...)
     flip_typemin = isnegative(a) & (R <: Signed)
-    d, flipsign(u, a - flip_typemin), v
+    d, flipsign(u, a -% oftype(a, flip_typemin)), v
 end
 function gcdx(a::Unsigned, b::Signed)
     d, v, u = gcdx(b, a)
@@ -365,14 +369,15 @@ Inverse (modulo ``2^w``)* by Jeffrey Hurchalla](https://arxiv.org/abs/2204.04342
     The `invmod(n)` and `invmod(n, T)` methods require Julia 1.11 or later.
 """
 invmod(n::Integer, ::Type{T}) where {T<:BitInteger} = invmod(n % T)
+invmod(n, ::Type{Union{}}, slurp...) = throw(MethodError(invmod, (n, Union{}, slurp...)))
 
 function invmod(n::T) where {T<:BitInteger}
     isodd(n) || throw(DomainError(n, "Argument must be odd."))
-    x = (3*n ⊻ 2) % T
-    y = (1 - n*x) % T
+    x = (3 *% n ⊻ 2) % T
+    y = (one(T) -% n *% x) % T
     for _ = 1:trailing_zeros(2*sizeof(T))
-        x *= y + true
-        y *= y
+        x = x *% (y +% one(T))
+        y = y *% y
     end
     return x
 end
@@ -689,7 +694,7 @@ julia> prevpow(4, 16)
 """
 function prevpow(a::T, x::Real) where T <: Real
     x < 1 && throw(DomainError(x, "`x` must be ≥ 1."))
-    # See comment in nextpos() for a == special case.
+    # See comment in nextpow() for a == special case.
     a == 2 && isa(x, Integer) && return _prevpow2(x)
     a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     n = floor(Integer,log(a, x))
@@ -721,7 +726,7 @@ const powers_of_ten = [
 function bit_ndigits0z(x::Base.BitUnsigned64)
     lz = top_set_bit(x)
     nd = (1233*lz)>>12+1
-    nd -= x < powers_of_ten[nd]
+    return nd - (x < powers_of_ten[nd])
 end
 function bit_ndigits0z(x::UInt128)
     n = 0
@@ -758,6 +763,7 @@ ndigits0znb(x::Bool, b::Integer) = x % Int
 
 # The suffix "pb" stands for "positive base"
 function ndigits0zpb(x::Integer, b::Integer)
+    @constprop :aggressive
     # precondition: b > 1
     x == 0 && return 0
     b = Int(b)
@@ -822,6 +828,7 @@ julia> Base.ndigits0z(10)
 See also [`ndigits`](@ref).
 """
 function ndigits0z(x::Integer, b::Integer)
+    @constprop :aggressive
     if b < -1
         ndigits0znb(x, b)
     elseif b > 1
@@ -878,7 +885,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
         i = n
         while i >= 4
             b = UInt32((x % UInt8)::UInt8)
-            d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
+            d = 0x30303030 +% ((b *% 0x08040201) >> 0x3) & 0x01010101
             unsafe_store!(p, (d >> 0x00) % UInt8, i-3)
             unsafe_store!(p, (d >> 0x08) % UInt8, i-2)
             unsafe_store!(p, (d >> 0x10) % UInt8, i-1)
@@ -941,7 +948,6 @@ function append_c_digits(olength::Int, digits::Unsigned, buf, pos::Int)
     end
     if i == 1
         @inbounds buf[pos] = UInt8('0') + rem(digits, 0xa) % UInt8
-        i -= 1
     end
     return pos + olength
 end
@@ -1013,7 +1019,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
-    m = 2 * sizeof(x) - (leading_zeros(x) >> 2)
+    m = (top_set_bit(x) + 3) ÷ 4 # nibbles = ceil(bits / 4)
     n = neg + max(pad, m)
     str = _string_n(n)
     GC.@preserve str begin
@@ -1064,8 +1070,8 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
     return str
 end
 
-split_sign(n::Integer) = unsigned(abs(n)), n < 0
-split_sign(n::Unsigned) = n, false
+split_sign(n::Integer) = (unsigned(abs(n)), n < 0)
+split_sign(n::Unsigned) = (n, false)
 
 """
     string(n::Integer; base::Integer = 10, pad::Integer = 1)
@@ -1094,6 +1100,7 @@ julia> @sprintf("%4i", 5)
 ```
 """
 function string(n::Integer; base::Integer = 10, pad::Integer = 1)
+    @constprop :aggressive
     pad = (min(max(pad, typemin(Int)), typemax(Int)) % Int)::Int
     if base == 2
         (n_positive, neg) = split_sign(n)
@@ -1133,20 +1140,28 @@ julia> bitstring(2.2)
 """
 function bitstring(x::T) where {T}
     isprimitivetype(T) || throw(ArgumentError(LazyString(T, " not a primitive type")))
-    sz = sizeof(T) * 8
+    sz = Core.bitsizeof(T)
+    onebyte = sz == 8
+    subbyte = sz < 8
     str = _string_n(sz)
     GC.@preserve str begin
         p = pointer(str)
         i = sz
         while i >= 4
-            b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
-            d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
+            b = UInt32(onebyte ? bitcast(UInt8, x) : subbyte ? zext_int(UInt8, x) : trunc_int(UInt8, x))
+            d = 0x30303030 +% ((b *% 0x08040201) >> 0x3) & 0x01010101
             unsafe_store!(p, (d >> 0x00) % UInt8, i-3)
             unsafe_store!(p, (d >> 0x08) % UInt8, i-2)
             unsafe_store!(p, (d >> 0x10) % UInt8, i-1)
             unsafe_store!(p, (d >> 0x18) % UInt8, i)
             x = lshr_int(x, 4)
             i -= 4
+        end
+        while i > 0
+            b = UInt8(onebyte ? bitcast(UInt8, x) : subbyte ? zext_int(UInt8, x) : trunc_int(UInt8, x))
+            unsafe_store!(p, 0x30 + (b & 0x01), i)
+            x = lshr_int(x, 1)
+            i -= 1
         end
     end
     return str
@@ -1203,6 +1218,8 @@ end
 Return `true` if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """
 hastypemax(::Type{T}) where {T} = applicable(typemax, T) && applicable(typemin, T)
+hastypemax(::Type{Union{}}) = false
+hastypemax(::Type{Union{}}, slurp...) = throw(MethodError(hastypemax, (Union{}, slurp...)))
 
 """
     digits!(array, n::Integer; base::Integer = 10)
@@ -1474,6 +1491,7 @@ function clamp(x, ::Type{T}) where {T<:Integer}
     hi = typemax(T)
     return (x > hi) ? hi : (x < lo) ? lo : convert(T, x)
 end
+clamp(x, ::Type{Union{}}, slurp...) = throw(MethodError(clamp, (x, Union{}, slurp...)))
 
 
 """

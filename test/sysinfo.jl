@@ -74,3 +74,25 @@ end
     @test repr("text/plain", example_cpus[1]) == "Apple M1 Pro: \n        speed         user         nice          sys         idle          irq\n     2400 MHz     227622 s          0 s      99886 s     891967 s          0 s  "
     @test sprint(Sys.cpu_summary, example_cpus) == "Apple M1 Pro: \n       speed         user         nice          sys         idle          irq\n#1  2400 MHz     227622 s          0 s      99886 s     891967 s          0 s  \n#2  2400 MHz     227558 s          0 s      97810 s     896220 s          0 s  \n#3  2400 MHz      40339 s          0 s      16622 s    1185362 s          0 s  \n#4  2400 MHz      24586 s          0 s       9737 s    1209225 s          0 s  \n"
 end
+
+# Verify CPU speeds are averaged across every CPU in a summary.
+@testset "cpu_summary aggregates speed" begin
+    cpus = [
+        Sys.CPUinfo("A", Int32(1000 + 100i), 0, 0, 0, 0, 0)
+        for i in 0:9
+    ]
+    output = sprint(Sys.cpu_summary, cpus)
+    @test occursin("1450 MHz", output)
+end
+
+# Verify adjacent CPUs are grouped after the model changes.
+@testset "cpu_summary groups models" begin
+    cpus = [
+        Sys.CPUinfo("A", 1000, 0, 0, 0, 0, 0),
+        Sys.CPUinfo("A", 1000, 0, 0, 0, 0, 0),
+        Sys.CPUinfo("B", 2000, 0, 0, 0, 0, 0),
+        Sys.CPUinfo("B", 2000, 0, 0, 0, 0, 0),
+    ]
+    output = sprint(Sys.cpu_summary, cpus)
+    @test occursin("#2  2000 MHz", output)
+end

@@ -2,20 +2,6 @@
 
 # definitions related to C interface
 
-import .Intrinsics: cglobal
-
-"""
-    cglobal((symbol, library) [, type=Cvoid])
-
-Obtain a pointer to a global variable in a C-exported shared library, specified exactly as
-in [`ccall`](@ref).
-Returns a `Ptr{Type}`, defaulting to `Ptr{Cvoid}` if no `Type` argument is
-supplied.
-The values can be read or written by [`unsafe_load`](@ref) or [`unsafe_store!`](@ref),
-respectively.
-"""
-cglobal
-
 """
     CFunction struct
 
@@ -157,12 +143,15 @@ Intended to be called using `do` block syntax as follows:
         ...
     end
 
-This is not needed on worker threads (`Threads.threadid() != 1`) since the
-`InterruptException` will only be delivered to the master thread.
 External functions that do not call julia code or julia runtime
 automatically disable sigint during their execution.
 """
 function disable_sigint(f::Function)
+    depwarn("`disable_sigint` no longer defers Ctrl-C: SIGINT is delivered as a " *
+            "cancellation of the current ^C scope and observed at cancellation " *
+            "points regardless of the sigatomic region this establishes. Shield " *
+            "a region from cancellation by scoping " *
+            "`Base.CANCEL_TOKEN => nothing` over it instead.", :disable_sigint)
     sigatomic_begin()
     res = f()
     # Exception unwind sigatomic automatically
@@ -188,11 +177,13 @@ end
     exit_on_sigint(on::Bool)
 
 Set `exit_on_sigint` flag of the julia runtime.  If `false`, Ctrl-C
-(SIGINT) is capturable as [`InterruptException`](@ref) in `try` block.
+(SIGINT) cancels the current ^C episode's cancellation scope and is
+observed at cancellation points as a [`Base.CancellationRequest`](@ref),
+which is capturable in a `try` block.
 This is the default behavior in REPL, any code run via `-e` and `-E`
 and in Julia script run with `-i` option.
 
-If `true`, `InterruptException` is not thrown by Ctrl-C.  Running code
+If `true`, Ctrl-C terminates the process directly.  Running code
 upon such event requires [`atexit`](@ref).  This is the default
 behavior in Julia script run without `-i` option.
 
@@ -276,27 +267,39 @@ The above input outputs this:
 """
 function ccall_macro_parse(exprs)
     gc_safe = false
+    cancel = nothing
     expr = nothing
     if exprs isa Expr
         expr = exprs
-    elseif length(exprs) == 1
-        expr = exprs[1]
-    elseif length(exprs) == 2
-        gc_expr = exprs[1]
-        expr = exprs[2]
-        if gc_expr.head == :(=) && gc_expr.args[1] == :gc_safe
-            if gc_expr.args[2] == true
-                gc_safe = true
-            elseif gc_expr.args[2] == false
-                gc_safe = false
-            else
-                throw(ArgumentError("gc_safe must be true or false"))
-            end
-        else
-            throw(ArgumentError("@ccall option must be `gc_safe=true` or `gc_safe=false`"))
-        end
     else
-        throw(ArgumentError("@ccall needs a function signature with a return type"))
+        # leading `name = value` options, then the call expression
+        i = 1
+        while i < length(exprs) && isexpr(exprs[i], :(=))
+            opt = exprs[i]::Expr
+            name = opt.args[1]
+            value = opt.args[2]
+            if name === :gc_safe
+                if value === true
+                    gc_safe = true
+                elseif value === false
+                    gc_safe = false
+                else
+                    throw(ArgumentError("gc_safe must be true or false"))
+                end
+            elseif name === :cancel_handler
+                if !(isexpr(value, :tuple) && length(value.args) == 2)
+                    throw(ArgumentError("cancel_handler must be a `(handler, state)` tuple"))
+                end
+                cancel = (value.args[1], value.args[2])
+            else
+                throw(ArgumentError("@ccall options are `gc_safe = <bool>` and `cancel_handler = (handler, state)`"))
+            end
+            i += 1
+        end
+        if i != length(exprs)
+            throw(ArgumentError("@ccall needs a function signature with a return type"))
+        end
+        expr = exprs[i]
     end
 
     # setup and check for errors
@@ -362,18 +365,39 @@ function ccall_macro_parse(exprs)
             pusharg!(a)
         end
     end
-    return func, rettype, types, args, gc_safe, nreq
+    return func, rettype, types, args, gc_safe, cancel, nreq
 end
 
 
-function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, nreq)
+function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, cancel, nreq)
+    have_cancel = cancel !== nothing
+    # `Base.@assume_effects :reset_safe @ccall ...` arrives as the
+    # CCALL_EFFECT_RESET_SAFE bit above the standard effects overrides in
+    # the `@ccall_effects` word (see `@assume_effects` in expr.jl): split it
+    # back out into its dedicated calling-convention slot here.
+    reset_safe = false
     if convention isa Tuple
-        cconv = Expr(:cconv, (convention..., gc_safe), nreq)
+        cc_sym, effects = convention
+        reset_safe = (effects & CCALL_EFFECT_RESET_SAFE) != 0x0000
+        base_cconv = (cc_sym, effects & ~CCALL_EFFECT_RESET_SAFE, gc_safe)
     else
-        cconv = Expr(:cconv, (convention, UInt16(0), gc_safe), nreq)
+        base_cconv = (convention, UInt16(0), gc_safe)
     end
+    if !have_cancel
+        cconv = reset_safe ? Expr(:cconv, (base_cconv..., false, true), nreq) :
+                             Expr(:cconv, base_cconv, nreq)
+        return Expr(:call, :ccall, esc(func), cconv, esc(rettype),
+                     Expr(:tuple, map!(esc, types, types)...), map!(esc, args, args)...)
+    end
+    # Our internal ABI for cancellation handlers is f(func, state, args...). Codegen
+    # inlines the establishment of the handler and the ultimate call to `f` has the
+    # ordinary ABI without the extra arguments.
+    fex, sex = cancel
+    nreq > 0 && (nreq += 2)
+    cconv = Expr(:cconv, reset_safe ? (base_cconv..., true, true) : (base_cconv..., true), nreq)
     return Expr(:call, :ccall, esc(func), cconv, esc(rettype),
-                 Expr(:tuple, map!(esc, types, types)...), map!(esc, args, args)...)
+                Expr(:tuple, :(Ptr{Cvoid}), :(Ptr{Cvoid}), map!(esc, types, types)...),
+                esc(fex), esc(sex), map!(esc, args, args)...)
 end
 
 """
@@ -433,10 +457,82 @@ the `ccall` may block outside of julia.
 
 !!! warning
     This option should be used with caution, as it can lead to undefined behavior if the ccall
-    calls back into the julia runtime. (`@cfunction`/`@ccallables` are safe however)
+    calls back into the julia runtime. (`@cfunction`/`@ccallable` are safe however)
 
 !!! compat "Julia 1.12"
     The `gc_safe` argument requires Julia 1.12 or higher.
+
+# Extended help
+
+## Cancellation
+
+### Semantics of reset_safe annotation
+
+When annotated `@assume_effects :reset_safe`, e.g.:
+
+    Base.@assume_effects :reset_safe @ccall libgmp.__gmpz_mul(x::mpz_t, a::mpz_t, b::mpz_t)::Cvoid
+
+The compiler has license to extend an earlier reset region through the entire
+execution of the called C function. In particular, as a result, the function
+may be abandoned at any point (and reset to the appropriate cancellation
+point).
+
+This imposes strict requirements on the foreign code. In particular, it is
+generally unsafe to call into most C standard library functions (the Julia
+runtime will handle properly protecting the symbol lookup itself), modify
+memory other than allocated since the most recent cancellation point (or
+which the cancellation will explicitly clean up). Additionally, any memory
+access to memory that may be read after a reset must be annotated
+`volatile`. This list of conditions is meant to be illustrative, not
+exhaustive and may be extended with additional warnings in the future.
+
+Co-operating foreign code may use the Julia C API to temporarily protect
+regions from reset, although this API is not yet stable and requires source
+modifications.
+
+!!! compat "Julia 1.14"
+    The `:reset_safe` effect requires Julia 1.14 or higher.
+
+## Cancellation handlers
+
+Because the `:reset_safe` effect imposes such strict requirements, another
+option is provided to allow for cancellation of cooperating foreign code.
+In particular, a long-running foreign call can be made cancellable with the
+`cancel_handler = (handler, state)` option:
+
+    @ccall cancel_handler=(CANCEL_FPTR, ref) lib.solve(ref::Ptr{Cvoid})::Cvoid
+
+`handler` is a C-callable function pointer `void (*)(void *state, uint8_t
+sev)` (typically from [`@cfunction`](@ref)). If the cancellation token
+source (`Base.CancellationTokenSource`) bound to the calling task is
+cancelled while the call runs, the runtime invokes `handler(state, sev)` *on
+the thread executing the call*, like a signal handler: at an arbitrary point
+of the foreign code, on the same stack, resuming the interrupted call when
+the handler returns (`sev` is the request state of the cancelled source).
+The handler performs the library-specific work to make the foreign call
+return early - typically setting a flag or calling the library's own
+cancellation entry point.
+
+Both `CANCEL_FPTR` and `ref` are handled as ordinary ccall arguments (both
+of C type `Ptr{Cvoid}`), including for purposes of rooting. Note that since
+`CANCEL_FPTR` runs as a signal handler, it must be async-signal-safe in the
+ordinary sense, although unlike `:reset_safe`, no requirements are imposed
+on the called function itself.
+
+A function may be annotated with both `:reset_safe` and `cancel_handler`,
+in which case the cancel_handler takes precedence. However, in such a
+situation, the compiler will attempt to preserve the reset region into the
+ccall and it may be read by the cancel_handler (which can then perform some
+library specific cleanup before performing the reset as usual). However,
+this is not required nor assumed. A cancel handler could instead cause the
+function to return early with an error code. Note however, that there is no
+automatic cancellation point implied by the `cancel_handler` attribute. It
+is the responsibility of the user to set an appropriate cancellation point
+either before or after (possibly conditional on an appropriate error return
+code) the ccall.
+
+!!! compat "Julia 1.14"
+    The `cancel_handler` option requires Julia 1.14 or higher.
 """
 macro ccall(exprs...)
     return ccall_macro_lower((:ccall), ccall_macro_parse(exprs)...)

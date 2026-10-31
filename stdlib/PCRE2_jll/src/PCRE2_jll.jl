@@ -16,7 +16,7 @@ artifact_dir::String = ""
 libpcre2_8_path::String = ""
 const libpcre2_8 = LazyLibrary(
     if Sys.iswindows()
-        BundledLazyLibraryPath("libpcre2-8.dll")
+        BundledLazyLibraryPath("libpcre2-8-0.dll")
     elseif Sys.isapple()
         BundledLazyLibraryPath("libpcre2-8.0.dylib")
     elseif Sys.islinux() || Sys.isfreebsd()
@@ -30,6 +30,9 @@ function eager_mode()
     dlopen(libpcre2_8)
 end
 is_available() = true
+
+# JLLWrappers path compatibility accessor
+get_libpcre2_8_path() = libpcre2_8_path
 
 function __init__()
     global libpcre2_8_path = string(libpcre2_8.path)

@@ -40,7 +40,7 @@ void jl_gc_init_page(void)
 
 // Try to allocate a memory block for multiple pages
 // Return `NULL` if allocation failed. Result is aligned to `GC_PAGE_SZ`.
-char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
+static char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
 {
     size_t pages_sz = GC_PAGE_SZ * pg_cnt;
 #ifdef _OS_WINDOWS_
@@ -66,13 +66,13 @@ char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
 }
 
 // Allocate the memory for a new page. Starts with `block_pg_cnt` number
-// of pages. Decrease 4x every time so that there are enough space for a few.
+// of pages. Decrease 4x every time so that there is enough space for a few
 // more chunks (or other allocations). The final page count is recorded
 // and will be used as the starting count next time. If the page count is
 // smaller `MIN_BLOCK_PG_ALLOC` a `jl_memory_exception` is thrown.
 // Assumes `gc_pages_lock` is acquired, the lock is released before the
 // exception is thrown.
-char *jl_gc_try_alloc_pages(void) JL_NOTSAFEPOINT
+STATIC_INLINE char *jl_gc_try_alloc_pages(void) JL_NOTSAFEPOINT_LEAVE_ENTER
 {
     unsigned pg_cnt = block_pg_cnt;
     char *mem = NULL;
@@ -110,6 +110,7 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     // try to get page from `pool_lazily_freed`
     meta = pop_lf_back(&global_page_pool_lazily_freed);
     if (meta != NULL) {
+        jl_atomic_fetch_add_relaxed(&global_page_pool_lazily_freed_n, -(ssize_t)1);
         gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
         // page is already mapped
         return meta;
@@ -127,6 +128,10 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     if (meta != NULL) {
         jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, GC_PAGE_SZ);
         gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
+#ifdef _OS_DARWIN_
+        // the page was released with `MADV_FREE_REUSABLE` in `jl_gc_free_page`
+        madvise(meta->data, GC_PAGE_SZ, MADV_FREE_REUSE);
+#endif
         goto exit;
     }
 
@@ -157,7 +162,20 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     }
 exit:
 #ifdef _OS_WINDOWS_
-    VirtualAlloc(meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
+    // The page was previously only reserved (jl_gc_try_alloc_pages_) or has been
+    // decommitted (jl_gc_free_page), so it needs to be committed before use. This
+    // charges the page against the system commit limit and can fail when that is
+    // exhausted; returning it anyway would hand out memory that raises an access
+    // violation on first touch, so undo and report out-of-memory instead (as
+    // jl_gc_try_alloc_pages does when the reservation itself fails).
+    if (VirtualAlloc(meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE) == NULL) {
+        gc_alloc_map_set(meta->data, GC_PAGE_FREED);
+        push_lf_back(&global_page_pool_freed, meta);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -(int64_t)GC_PAGE_SZ);
+        SetLastError(last_error);
+        errno = last_errno;
+        jl_throw(jl_memory_exception);
+    }
     SetLastError(last_error);
 #endif
     errno = last_errno;
@@ -188,6 +206,17 @@ NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
     VirtualFree(p, decommit_size, MEM_DECOMMIT);
 #elif defined(MADV_FREE)
     static int supports_madv_free = 1;
+#ifdef _OS_DARWIN_
+    // Pages released with `MADV_FREE` stay in the physical footprint of the process until
+    // the kernel actually reclaims them under memory pressure, so the memory looks as if it
+    // were still in use. `MADV_FREE_REUSABLE` drops them from the footprint right away;
+    // `jl_gc_alloc_page` marks them with `MADV_FREE_REUSE` again when they are reused.
+    if (madvise(p, decommit_size, MADV_FREE_REUSABLE) == 0) {
+        msan_unpoison(p, decommit_size);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -decommit_size);
+        return;
+    }
+#endif
     if (supports_madv_free) {
         if (madvise(p, decommit_size, MADV_FREE) == -1) {
             assert(errno == EINVAL);

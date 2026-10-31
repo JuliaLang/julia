@@ -3,15 +3,13 @@
 mutable struct SlotInfo
     defs::Vector{Int}
     uses::Vector{Int}
-    any_newvar::Bool
 end
-SlotInfo() = SlotInfo(Int[], Int[], false)
+SlotInfo() = SlotInfo(Int[], Int[])
 
 function scan_entry!(result::Vector{SlotInfo}, idx::Int, @nospecialize(stmt))
     # NewvarNodes count as defs for the purpose
     # of liveness analysis (i.e. they kill use chains)
     if isa(stmt, NewvarNode)
-        result[slot_id(stmt.slot)].any_newvar = true
         push!(result[slot_id(stmt.slot)].defs, idx)
         return
     elseif isexpr(stmt, :(=))
@@ -172,7 +170,7 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, ir::IRCode, idx::Int, slott
         end
         return (ci.ssavaluetypes::Vector{Any})[idx]
     end
-    isa(x, GlobalRef) && return abstract_eval_globalref_type(x, ci)
+    isa(x, GlobalRef) && return globalref_rt(x, ci)
     isa(x, SSAValue) && return (ci.ssavaluetypes::Vector{Any})[x.id]
     isa(x, Argument) && return slottypes[x.n]
     isa(x, NewSSAValue) && return types(ir)[new_to_regular(x, length(ir.stmts))]
@@ -218,7 +216,7 @@ so it needs a ϕ-node.
 Now, the key insight of that algorithm is that we have two defs, in blocks `A` and `B`,
 and `A` dominates `B`, then we do not need to recurse into `B`, because the set of
 potential backedges from a subtree rooted at `B` (to outside the subtree) is a strict
-subset of those backedges from a subtree rooted at `A` (out outside the subtree rooted
+subset of those backedges from a subtree rooted at `A` (outside the subtree rooted
 at `A`). Note however that this does not work the other way. Thus, the algorithm
 needs to make sure that we always visit `B` before `A`.
 
@@ -578,7 +576,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         # No uses => no need for phi nodes
         isempty(slot.uses) && continue
         # TODO: Restore this optimization
-        if false # length(slot.defs) == 1 && slot.any_newvar
+        if false # length(slot.defs) == 1
             if slot.defs[] == 0
                 typ = sv.slottypes[idx]
                 ssaval = Argument(idx)
@@ -608,13 +606,13 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                 # The slot is live-in into this block. We need to
                 # Create a PhiC node in the catch entry block and
                 # an upsilon node in the corresponding enter block
-                varstate = sv.bb_vartables[li]
-                if varstate === nothing
+                bbstate = sv.bb_states[li]
+                if bbstate === nothing
                     continue
                 end
                 node = PhiCNode(Any[])
                 insertpoint = first_insert_for_bb(code, cfg, li)
-                vt = varstate[idx]
+                vt = bbstate.vartable[idx]
                 phic_ssa = NewSSAValue(
                     insert_node!(ir, insertpoint,
                         NewInstruction(node, vt.typ)).id - length(ir.stmts))
@@ -640,9 +638,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()
-            varstate = sv.bb_vartables[block]
-            @assert varstate !== nothing
-            vt = varstate[idx]
+            bbstate = sv.bb_states[block]
+            @assert bbstate !== nothing
+            vt = bbstate.vartable[idx]
             ssaval = NewSSAValue(insert_node!(ir,
                 first_insert_for_bb(code, cfg, block), NewInstruction(node, vt.typ)).id - length(ir.stmts))
             undef_node = undef_ssaval = nothing
@@ -662,10 +660,8 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     initial_incoming_vals = Pair{Any, Any}[
         if 0 in defuses[x].defs
             Pair{Any, Any}(Argument(x), true)
-        elseif !defuses[x].any_newvar
-            Pair{Any, Any}(UNDEF_TOKEN, false)
         else
-            Pair{Any, Any}(SSAValue(-2), false)
+            Pair{Any, Any}(UNDEF_TOKEN, false)
         end for x in 1:length(ci.slotflags)
     ]
     worklist = Tuple{Int, Int, Vector{Pair{Any, Any}}}[(1, 0, initial_incoming_vals)]
@@ -673,7 +669,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     new_nodes = ir.new_nodes
     @zone "CC: SSA_RENAME" while !isempty(worklist)
         (item, pred, incoming_vals) = pop!(worklist)
-        if sv.bb_vartables[item] === nothing
+        if sv.bb_states[item] === nothing
             continue
         end
         # Rename existing phi nodes first, because their uses occur on the edge
@@ -696,11 +692,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         for (idx, slot) in Iterators.enumerate(phi_slots[item])
             (; ssaval, node, undef_ssaval, undef_node) = new_phi_nodes[item][idx]
             (incoming_val, incoming_def) = incoming_vals[slot]
-            if incoming_val === SSAValue(-1)
-                # Optimistically omit this path.
-                # Liveness analysis would probably have prevented us from inserting this phi node
-                continue
-            end
             push!(node.edges, pred)
             if incoming_val === UNDEF_TOKEN
                 resize!(node.values, length(node.values)+1)
@@ -726,13 +717,11 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         has_pinode = fill(false, length(sv.slottypes))
         for slot in live_slots[item]
             (ival, idef) = incoming_vals[slot]
-            (ival === SSAValue(-1)) && continue
-            (ival === SSAValue(-2)) && continue
             (ival === UNDEF_TOKEN) && continue
 
-            varstate = sv.bb_vartables[item]
-            @assert varstate !== nothing
-            typ = varstate[slot].typ
+            bbstate = sv.bb_states[item]
+            @assert bbstate !== nothing
+            typ = bbstate.vartable[slot].typ
             if !⊑(𝕃ₒ, sv.slottypes[slot], typ)
                 node = PiNode(ival, typ)
                 ival = NewSSAValue(insert_node!(ir,
@@ -782,14 +771,15 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                     if isa(arg1, SlotNumber)
                         id = slot_id(arg1)
                         val = stmt.args[2]
-                        typ = typ_for_val(val, ci, ir, idx, sv.slottypes)
                         # Having UNDEF_TOKEN appear on the RHS is possible if we're on a dead branch.
                         # Do something reasonable here, by marking the LHS as undef as well.
                         if val !== UNDEF_TOKEN
                             thisdef = true
+                            typ = typ_for_val(val, ci, ir, idx, sv.slottypes)
                             thisval = make_ssa!(ci, code, idx, typ)
                         else
                             code[idx] = nothing
+                            typ = Union{}
                             thisval = UNDEF_TOKEN
                             thisdef = false
                         end
@@ -804,10 +794,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                                 new_phic_nodes[leave_block])
                             if cidx !== nothing
                                 node = thisdef ? UpsilonNode(thisval) : UpsilonNode()
-                                if incoming_vals[id] === UNDEF_TOKEN
-                                    node = UpsilonNode()
-                                    typ = Union{}
-                                end
                                 insert = new_phic_nodes[leave_block][cidx].insert
                                 push!(insert.node.values,
                                       NewSSAValue(insert_node!(ir, idx, NewInstruction(node, typ), true).id - length(ir.stmts)))

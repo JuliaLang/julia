@@ -96,9 +96,9 @@ This can then be passed to the `Cmd` constructor to modify its settings, e.g.
 """
 Cmd
 
-hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, hash(x.uid, hash(x.gid, h)))))))
+hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, hash(x.cpus, hash(x.uid, hash(x.gid, h))))))))
 ==(x::Cmd, y::Cmd) = x.exec == y.exec && x.env == y.env && x.ignorestatus == y.ignorestatus &&
-                     x.dir == y.dir && isequal(x.flags, y.flags) && x.uid == y.uid && x.gid == y.gid
+                     x.dir == y.dir && isequal(x.flags, y.flags) && x.cpus == y.cpus && x.uid == y.uid && x.gid == y.gid
 
 struct OrCmds <: AbstractCmd
     a::AbstractCmd
@@ -132,8 +132,62 @@ escape_microsoft_c_args(cmd::Cmd) =
 escape_microsoft_c_args(io::IO, cmd::Cmd) =
     escape_microsoft_c_args(io::IO, cmd.exec...)
 
+# Patterns that indicate a sensitive environment variable name.
+# Matched as whole components after splitting on non-alphanumeric characters,
+# so e.g. "PAT" matches "GITHUB_PAT" but not "PATH".
+const SENSITIVE_ENV_PATTERNS = ("KEY", "TOKEN", "SECRET", "JWT", "PAT",
+                                "PASSWORD", "PASSWD", "PASS", "PWD", "PW",
+                                "CREDENTIAL", "CRED", "AUTH", "PRIVATE", "PRIV")
+
+function is_sensitive_env_name(name::AbstractString)
+    uname = uppercase(name)
+    parts = eachsplit(uname, r"[^A-Za-z0-9]+")
+    return any(part -> part in SENSITIVE_ENV_PATTERNS, parts)
+end
+
+function get_show_env_mode(io::IO)
+    val = get(io, :show_env, :_unset)
+    if val !== :_unset
+        return val::Symbol
+    end
+    envval = get(ENV, "JULIA_SHOW_ENV", nothing)
+    envval === nothing && return :redact
+    envval = lowercase(envval)
+    envval == "all" && return :all
+    envval == "none" && return :none
+    envval == "keys" && return :keys
+    return :redact
+end
+
+function show_env(io::IO, env::Vector{String})
+    mode = get_show_env_mode(io)
+    print(io, "[")
+    for (i, e) in enumerate(env)
+        i > 1 && print(io, ", ")
+        eqidx = findnext('=', e, 2)
+        if eqidx === nothing || mode === :all
+            show(io, e)
+        elseif mode === :keys
+            key = e[1:prevind(e, eqidx)]
+            show(io, key)
+        else  # :redact
+            key = e[1:prevind(e, eqidx)]
+            if is_sensitive_env_name(key)
+                show(io, key)
+            else
+                show(io, e)
+            end
+        end
+    end
+    print(io, "]")
+end
+
 function show(io::IO, cmd::Cmd)
-    print_env = cmd.env !== nothing
+    env = cmd.env
+    if env !== nothing && get_show_env_mode(io) === :none
+        env = nothing
+    end
+    print_env = env !== nothing
     print_dir = !isempty(cmd.dir)
     print_uid = cmd.uid !== nothing
     print_gid = cmd.gid !== nothing
@@ -148,7 +202,8 @@ function show(io::IO, cmd::Cmd)
     join(io, map(cmd.exec) do arg
         replace(sprint(context=io) do io
             with_output_color(:underline, io) do io
-                print_shell_word(io, arg, shell_special)
+                # A leading `~` would be expanded when the command is parsed back.
+                print_shell_word(io, arg, startswith(arg, '~') ? shell_special * '~' : shell_special)
             end
         end, '`' => "\\`")
     end, ' ')
@@ -162,7 +217,7 @@ function show(io::IO, cmd::Cmd)
         print(io, ")")
     end
     if print_env || print_dir
-        print_env && (print(io, ","); show(io, cmd.env))
+        env === nothing || (print(io, ","); show_env(io, env))
         print_dir && (print(io, "; dir="); show(io, cmd.dir))
         print(io, ")")
     end
@@ -271,7 +326,7 @@ byteenv(env::AbstractArray{<:AbstractString}) =
 byteenv(env::AbstractDict) =
     String[cstr(string(k)*"="*string(v)) for (k,v) in env]
 byteenv(env::Nothing) = nothing
-byteenv(env::Union{AbstractVector{Pair{T,V}}, Tuple{Vararg{Pair{T,V}}}}) where {T<:AbstractString,V} =
+byteenv(env::Union{AbstractVector{<:Pair{<:AbstractString}}, Tuple{Vararg{Pair{<:AbstractString}}}}) =
     String[cstr(k*"="*string(v)) for (k,v) in env]
 
 """
@@ -286,6 +341,17 @@ as desired, or use [`addenv`](@ref).
 The `dir` keyword argument can be used to specify a working directory for the command.
 `dir` defaults to the currently set `dir` for `command` (which is the current working
 directory if not specified already).
+
+!!! warning
+    The display redaction behavior (including the `:show_env` IOContext key
+    and `JULIA_SHOW_ENV` environment variable) is experimental and may change
+    in a non-breaking release of Julia.
+
+When displaying a `Cmd`, environment variables whose names match sensitive patterns
+(e.g. containing "KEY", "TOKEN", "SECRET", "PASSWORD", "AUTH", "JWT", "PAT") have
+their values hidden. The display mode can be controlled via the `JULIA_SHOW_ENV`
+environment variable or the `:show_env` IOContext key (which takes precedence),
+with values `:none`, `:keys`, `:redact` (default), or `:all`.
 
 See also [`Cmd`](@ref), [`addenv`](@ref), [`ENV`](@ref), [`pwd`](@ref).
 """
@@ -516,6 +582,9 @@ cmd_interpolate(xs...) = cstr(string(map(cmd_interpolate1, xs)...))
 cmd_interpolate1(x) = x
 cmd_interpolate1(::Nothing) = throw(ArgumentError("`nothing` can not be interpolated into commands (`Cmd`)"))
 
+cmd_redirect_target(x::Redirectable) = x
+cmd_redirect_target(x) = cmd_interpolate(x)
+
 arg_gen() = String[]
 arg_gen(x::AbstractString) = String[cstr(x)]
 function arg_gen(cmd::Cmd)
@@ -589,5 +658,11 @@ Process(`echo 1`, ProcessExited(0))
 """
 macro cmd(str::String)
     cmd_ex = shell_parse(str, special=shell_special, filename=String(__source__.file))[1]
-    return :(cmd_gen($(esc(cmd_ex))))
+    if Meta.isexpr(cmd_ex, :tuple)
+        return :(cmd_gen($(esc(cmd_ex))))
+    else
+        # Pipeline/redirect expression: GlobalRefs inside are already resolved to Base.
+        # esc() ensures $interpolations inside are evaluated in the caller's scope.
+        return esc(cmd_ex)
+    end
 end

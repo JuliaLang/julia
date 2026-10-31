@@ -31,11 +31,21 @@ function check_commonmark_spec_html1(tst; report::Bool=false, flavor::Symbol=:ju
     # by classic macOS line ends (a single "carriage return", also known as CR, '\r' or U+000D) or
     # by Windows line ends (CR+LF) does not change how we parse things
     input2 = replace(input, "\n" => "\r\n")
-    parsed2 = Markdown.parse(input2; flavor)
+    parsed2 = try
+        Markdown.parse(input2; flavor)
+    catch err
+        println("test ", tst["example"], " errors with CRLF line ends: ", sprint(showerror, err))
+        nothing
+    end
     parsed == parsed2 || println("test ", tst["example"], " is parsed differently with CRLF line ends")
 
     input3 = replace(input, "\n" => "\r")
-    parsed3 = Markdown.parse(input2; flavor)
+    parsed3 = try
+        Markdown.parse(input3; flavor)
+    catch err
+        println("test ", tst["example"], " errors with CR line ends: ", sprint(showerror, err))
+        nothing
+    end
     parsed == parsed3 || println("test ", tst["example"], " is parsed differently with CR line ends")
 
     if expected != actual && report
@@ -119,6 +129,14 @@ function generate_test_file(io::IO, data, mode::Symbol; flavor::Symbol=:julia)
         using Markdown
 
         @testset "CommonMark spec test suite: $(mode) mode, $(flavor) flavor" begin
+
+        # Spec examples known not to conform. They are still run below, but instead of
+        # one `@test_broken` each they push into `now_passing` when they unexpectedly
+        # pass, and a single `@test_broken` at the bottom of this file stands in for
+        # the whole set. If the `now_passing` test fails, some examples were fixed:
+        # rerun $(basename(@__FILE__)) and commit the regenerated files.
+        known_broken = BitSet($(sort!(collect(broken))))
+        now_passing = Int[]
         """)
 
     section = ""
@@ -135,7 +153,8 @@ function generate_test_file(io::IO, data, mode::Symbol; flavor::Symbol=:julia)
                 """)
         end
 
-        println(io, "    # Example ", tst["example"])
+        is_broken = tst["example"] in broken
+        println(io, "    # Example ", tst["example"], is_broken ? " (known broken)" : "")
         println(io, "    input = \"", escape_spec_string(tst["markdown"]), "\"")
         if mode == :HTML
             println(io, "    md = Markdown.parse(input; flavor=:$(flavor))");
@@ -148,14 +167,17 @@ function generate_test_file(io::IO, data, mode::Symbol; flavor::Symbol=:julia)
         else
             error("unsupported mode $mode")
         end
-        if tst["example"] in broken
-            println(io, "    @test_broken expected == actual");
+        if is_broken
+            println(io, "    expected == actual && push!(now_passing, ", tst["example"], ")");
         else
             println(io, "    @test expected == actual");
         end
         println(io)
     end
     section != "" && println(io, "end")  # end testset
+    println(io)
+    println(io, "@test now_passing == Int[]")
+    println(io, "@test_broken isempty(known_broken)")
     println(io)
     println(io, "end")
 end

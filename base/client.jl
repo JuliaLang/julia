@@ -31,10 +31,18 @@ answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answ
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
-function repl_cmd(cmd, out)
-    # Immediately expand all arguments, so that typing e.g. ~/bin/foo works.
-    cmd.exec .= expanduser.(cmd.exec)
-
+function repl_cmd(cmd::AbstractCmd, out)
+    if !(cmd isa Cmd)
+        # Pipelines and redirects: run directly without shell wrapping.
+        try
+            run(ignorestatus(cmd))
+        catch
+            lasterr = current_exceptions()
+            lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
+            invokelatest(display_error, lasterr)
+        end
+        return nothing
+    end
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
     elseif cmd.exec[1] == "cd"
@@ -64,7 +72,8 @@ function repl_cmd(cmd, out)
         if !Sys.iswindows()
             shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
             shell_escape_cmd = shell_escape_posixly(cmd)
-            cmd = `$shell -c $shell_escape_cmd`
+            original_cmd = cmd
+            cmd = Cmd(`$shell -c $shell_escape_cmd`, original_cmd.ignorestatus, original_cmd.flags, original_cmd.env, original_cmd.dir, original_cmd.cpus, original_cmd.uid, original_cmd.gid)
         end
         try
             run(ignorestatus(cmd))
@@ -78,6 +87,9 @@ function repl_cmd(cmd, out)
     nothing
 end
 
+repl_cmd(@nospecialize(cmd), out) =
+    throw(ArgumentError("repl_cmd: expected an `AbstractCmd`, got $(typeof(cmd))"))
+
 # deprecated function--preserved for DocTests.jl
 function ip_matches_func(ip, func::Symbol)
     for fr in StackTraces.lookup(ip)
@@ -89,12 +101,35 @@ function ip_matches_func(ip, func::Symbol)
     return false
 end
 
+__script_entry_include(mod::Module, path::String) = _include(identity, mod, path)
+__script_entry_include_string(mod::Module, code::String, filename::String) =
+    include_string(mod, code, filename)
+__script_entry_eval(mod::Module, @nospecialize(ex)) = Core.eval(mod, ex)
+
+is_driver_entry(frame) = !frame.from_c &&
+    (startswith(String(frame.func), "__repl_entry") ||
+     startswith(String(frame.func), "__script_entry"))
+
+# `eval`/`include` machinery a driver entry runs user code through; directly
+# above the cut these frames cannot belong to user code
+function is_driver_machinery(frame)
+    frame.from_c && return false
+    mod = parentmodule(frame)
+    (mod === Base || mod === Core || mod === nothing) || return false
+    return frame.func in (:eval, :include_string, :_include, :include, :fl_toplevel_eval)
+end
+
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
         bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
-        # remove REPL-related frames from interactive printing
-        eval_ind = findlast(frame -> !frame.from_c && startswith(String(frame.func), "__repl_entry"), bt)
-        eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
+        # remove REPL/driver frames from interactive printing
+        eval_ind = findlast(is_driver_entry, bt)
+        if eval_ind !== nothing
+            deleteat!(bt, eval_ind:length(bt))
+            while !isempty(bt) && is_driver_machinery(bt[end])
+                pop!(bt)
+            end
+        end
     end
     return bt
 end
@@ -121,7 +156,6 @@ end
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
 # N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
-__repl_entry_client_lower(mod::Module, @nospecialize(ast)) = Meta.lower(mod, ast)
 __repl_entry_client_eval(mod::Module, @nospecialize(ast)) = Core.eval(mod, ast)
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
@@ -136,11 +170,16 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             if lasterr !== nothing
                 lasterr = scrub_repl_backtrace(lasterr)
                 istrivialerror(lasterr) || setglobal!(Base.MainInclude, :err, lasterr)
-                invokelatest(display_error, errio, lasterr)
-                errcount = 0
-                lasterr = nothing
+                # error display (user-extensible show methods) runs in a
+                # fresh ^C epoch: the failed evaluation's cancelled epoch
+                # must not poison it, and a stuck printout is cancellable
+                try
+                    ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(new_evaluation_cancel_source!()),
+                                       invokelatest(display_error, errio, lasterr))
+                finally
+                    sigint_close_episode!()
+                end
             else
-                ast = __repl_entry_client_lower(Main, ast)
                 value = __repl_entry_client_eval(Main, ast)
                 setglobal!(Base.MainInclude, :ans, value)
                 if !(value === nothing) && show_value
@@ -173,63 +212,36 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     nothing
 end
 
-function _parse_input_line_core(s::String, filename::String, mod::Union{Module, Nothing})
-    ex = Meta.parseall(s; filename, _parse=invokelatest(Meta.parser_for_module, mod))
-    if ex isa Expr && ex.head === :toplevel
-        if isempty(ex.args)
-            return nothing
-        end
-        last = ex.args[end]
-        if last isa Expr && (last.head === :error || last.head === :incomplete)
+function _parse_input_line_core(s::String, filename::String, mod::Union{Module, Nothing}, type)
+    ex = Meta.parseall(s; filename, mod, type)
+    if ex isa Syntax && head(ex) === :toplevel && numchildren(ex) > 0
+        last = ex[end]
+        if (head(last) === :error || head(last) === :incomplete)
             # if a parse error happens in the middle of a multi-line input
             # return only the error, so that none of the input is evaluated.
+            return last
+        end
+    elseif ex isa Expr && ex.head === :toplevel && length(ex.args) > 0
+        last = ex.args[end]
+        if last isa Expr && (last.head === :error || last.head === :incomplete)
             return last
         end
     end
     return ex
 end
 
-function parse_input_line(s::String; filename::String="none", depwarn=true, mod::Union{Module, Nothing}=nothing)
+function parse_input_line(s::String; filename::String="none", depwarn=true, mod::Union{Module, Nothing}=nothing, type=Expr)
     # For now, assume all parser warnings are depwarns
     ex = if depwarn
-        _parse_input_line_core(s, filename, mod)
+        _parse_input_line_core(s, filename, mod, type)
     else
         with_logger(NullLogger()) do
-            _parse_input_line_core(s, filename, mod)
+            _parse_input_line_core(s, filename, mod, type)
         end
     end
     return ex
 end
 parse_input_line(s::AbstractString; kwargs...) = parse_input_line(String(s); kwargs...)
-
-# detect the reason which caused an :incomplete expression
-# from the error message
-# NOTE: the error messages are defined in src/julia-parser.scm
-function fl_incomplete_tag(msg::AbstractString)
-    occursin("string", msg) && return :string
-    occursin("comment", msg) && return :comment
-    occursin("requires end", msg) && return :block
-    occursin("\"`\"", msg) && return :cmd
-    occursin("character", msg) && return :char
-    return :other
-end
-
-incomplete_tag(ex) = :none
-function incomplete_tag(ex::Expr)
-    if ex.head !== :incomplete
-        return :none
-    elseif isempty(ex.args)
-        return :other
-    else
-        a = ex.args[1]
-        if a isa String
-            return fl_incomplete_tag(a)::Symbol
-        else
-            return incomplete_tag(a)::Symbol
-        end
-    end
-end
-incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 
 function exec_options(opts)
     startup               = (opts.startupfile != 2)
@@ -298,22 +310,16 @@ function exec_options(opts)
         end
     end
 
-    # drop all caches if code coverage is enabled. Do it here not earlier, so julia has a chance
-    # of starting up quickly
-    if Base.JLOptions().code_coverage == 2
-        Base.drop_all_caches()
-    end
-
     # process cmds list
     for (cmd, arg) in cmds
         if cmd == 'e'
-            Core.eval(Main, parse_input_line(arg; mod=Main))
+            __script_entry_eval(Main, parse_input_line(arg; mod=Main))
         elseif cmd == 'E'
-            invokelatest(show, Core.eval(Main, parse_input_line(arg; mod=Main)))
+            invokelatest(show, __script_entry_eval(Main, parse_input_line(arg; mod=Main)))
             println()
         elseif cmd == 'm'
             entrypoint = push!(split(arg, "."), "main")
-            Base.eval(Main, Expr(:import, Expr(:., Symbol.(entrypoint)...)))
+            __script_entry_eval(Main, Expr(:import, Expr(:., Symbol.(entrypoint)...)))
             if !invokelatest(should_use_main_entrypoint)
                 error("`main` in `$arg` not declared as entry point (use `@main` to do so)")
             end
@@ -321,7 +327,7 @@ function exec_options(opts)
         elseif cmd == 'L'
             # load file immediately on all processors
             if !distributed_mode
-                include(Main, arg)
+                __script_entry_include(Main, arg)
             else
                 # TODO: Move this logic to Distributed and use a callback
                 @sync for p in invokelatest(Main.procs)
@@ -339,9 +345,9 @@ function exec_options(opts)
         end
         try
             if PROGRAM_FILE == "-"
-                include_string(Main, read(stdin, String), "stdin")
+                __script_entry_include_string(Main, read(stdin, String), "stdin")
             else
-                include(Main, PROGRAM_FILE)
+                __script_entry_include(Main, PROGRAM_FILE)
             end
         catch
             invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
@@ -380,9 +386,9 @@ end
 
 function load_julia_startup()
     global_file = _global_julia_startup_file()
-    (global_file !== nothing) && include(Main, global_file)
+    (global_file !== nothing) && __script_entry_include(Main, global_file)
     local_file = _local_julia_startup_file()
-    (local_file !== nothing) && include(Main, local_file)
+    (local_file !== nothing) && __script_entry_include(Main, local_file)
     return nothing
 end
 
@@ -443,14 +449,13 @@ function run_fallback_repl(interactive::Bool)
     let input = stdin
         if isa(input, File) || isa(input, IOStream)
             # for files, we can slurp in the whole thing at once
-            ex = parse_input_line(read(input, String); mod=Main)
-            if Meta.isexpr(ex, :toplevel)
+            ex = parse_input_line(read(input, String); mod=Main, type=Syntax)
+            if head(ex) === :toplevel
                 # if we get back a list of statements, eval them sequentially
                 # as if we had parsed them sequentially
-                for stmt in ex.args
+                for stmt in children(ex)
                     eval_user_input(stderr, stmt, true)
                 end
-                body = ex.args
             else
                 eval_user_input(stderr, ex, true)
             end
@@ -466,12 +471,19 @@ function run_fallback_repl(interactive::Bool)
                     ex = nothing
                     while !eof(input)
                         line *= readline(input, keep=true)
-                        ex = parse_input_line(line; mod=Main)
-                        if !(isa(ex, Expr) && ex.head === :incomplete)
+                        ex = parse_input_line(line; mod=Main, type=Syntax)
+                        if !(isa(ex, Syntax) && head(ex) === :incomplete)
                             break
                         end
                     end
-                    eval_user_input(stderr, ex, true)
+                    # each interactive input is a fresh ^C epoch (an
+                    # evaluation source, so leftovers stay session-sweepable)
+                    try
+                        ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(new_evaluation_cancel_source!()),
+                                           eval_user_input(stderr, ex, true))
+                    finally
+                        sigint_close_episode!()
+                    end
                 catch err
                     isa(err, InterruptException) ? print("\n\n") : rethrow()
                 end
@@ -492,7 +504,7 @@ function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::B
         repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
         repl.history_file = history_file
     end
-    # Make sure any displays pushed in .julia/config/startup.jl ends up above the
+    # Make sure any displays pushed in .julia/config/startup.jl end up above the
     # REPLDisplay
     d = REPL.REPLDisplay(repl)
     last_active_repl = @isdefined(active_repl) ? active_repl : nothing
@@ -506,7 +518,7 @@ function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::B
     finally
         popdisplay(d)
         active_repl = last_active_repl
-        active_repl_backend = last_active_repl_backend
+        global active_repl_backend = last_active_repl_backend
     end
     nothing
 end
@@ -552,7 +564,8 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
-const main_parser = Base.ScopedValues.ScopedValue{Any}(Core._parse)
+const main_parser = Base.ScopedValues.ScopedValue{Any}(
+    Base.VersionedParse(Base.LATEST_STABLE_EDITION))
 function var"#_internal_julia_parse"(args...)
     main_parser[](args...)
 end
@@ -572,6 +585,72 @@ function should_use_main_entrypoint()
     return true
 end
 
+
+## The interactive session's two-level cancellation-source tree
+#
+# An interactive driver (the REPL backend) runs every evaluation under its
+# own cancellation source, each a child of one long-lived *session* source:
+# cancelling an evaluation's source stops exactly that evaluation (and
+# everything it spawned), while cancelling the session source sweeps every
+# still-running piece of work any evaluation has started - the runaway
+# `@async` from three prompts ago included. Cancellation is monotonic, so a
+# swept session source is retired and the next evaluation starts a fresh
+# session epoch: "everything so far" always means "since the last sweep".
+
+const _session_cancel_source = Ref{Union{Nothing, CancellationTokenSource}}(nothing)
+const _session_cancel_lock = ReentrantLock()
+
+# The current session source, created on first use (and after each sweep).
+function session_cancel_source!()
+    lock(_session_cancel_lock; cancel=nothing)
+    try
+        ses = _session_cancel_source[]
+        if ses === nothing
+            ses = CancellationTokenSource()
+            _session_cancel_source[] = ses
+        end
+        return ses
+    finally
+        unlock(_session_cancel_lock)
+    end
+end
+
+# A fresh source governing one interactive evaluation, linked under the
+# session source.
+new_evaluation_cancel_source!() =
+    CancellationTokenSource(CancellationToken(session_cancel_source!()))
+
+"""
+    Base.cancel_session_work!() -> Bool
+
+Cancel every still-running piece of work started under the current
+interactive session's evaluations (see the session-source tree above) and
+start a fresh session epoch. Returns whether there was a session to sweep.
+The REPL binds this to a repeated `^C` at an empty prompt.
+"""
+function cancel_session_work!()
+    lock(_session_cancel_lock; cancel=nothing)
+    ses = try
+        s = _session_cancel_source[]
+        _session_cancel_source[] = nothing
+        s
+    finally
+        unlock(_session_cancel_lock)
+    end
+    ses === nothing && return false
+    cancel!(ses)
+    return true
+end
+
+function init_frontend()
+    JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
+    if get_bool_env("JULIA_USE_FLISP_LOWERING", true) === true
+        JuliaLowering.activate!(false)
+    else
+        JuliaLowering.activate!(true; freeze_world_age=true)
+    end
+end
+
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
@@ -581,7 +660,14 @@ function _start()
     # `--project` has been processed at this point - latch the active project's syntax
     # version and use it for `-L`, `argfile`, etc. If launched, the REPL will re-evaluate
     # at each prompt.
-    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() try
+    # The whole foreground execution runs as a ^C episode: a SIGINT (with
+    # exit-on-sigint disabled) cancels the episode token's scope. An
+    # interactive session installs its own per-evaluation episodes later
+    # (see REPL.repl_backend_loop), superseding this one. Deliberately a
+    # standalone root, not a session child - see the `sigint_new_episode!`
+    # docstring.
+    sigint_tok = sigint_new_episode!()
+    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() CANCEL_TOKEN=>sigint_tok try
         repl_was_requested = exec_options(JLOptions())
         if invokelatest(should_use_main_entrypoint) && !is_interactive
             main = invokelatest(getglobal, Main, :main)
@@ -604,11 +690,32 @@ function _start()
         end
     catch
         ret = Cint(1)
-        invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
+        # report the error in a fresh ^C epoch (the script's epoch may be
+        # the very cancellation being reported; level-triggered checks in
+        # the printing path would re-throw it mid-report)
+        local errs = scrub_repl_backtrace(current_exceptions())
+        try
+            ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(),
+                               invokelatest(display_error, errs))
+        catch
+            # The report itself failed - e.g. a further ^C cancelled the
+            # display epoch, or a user-defined `show` method errored. The
+            # exit code already reflects the original failure; leave a bare
+            # note rather than dying with an unhandled exception.
+            Core.print(Core.stderr, "\nSYSTEM: displaying the error report failed\n")
+        finally
+            sigint_close_episode!()
+        end
     end
     if is_interactive && get(stdout, :color, false)
-        print(color_normal)
+        try
+            print(color_normal)
+        catch e
+            # the terminal may be gone by now (that may be why the session ended)
+            e isa IOError || rethrow()
+        end
     end
+    generating_output(false) && init_frontend()
     return ret
 end
 

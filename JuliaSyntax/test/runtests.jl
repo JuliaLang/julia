@@ -24,8 +24,8 @@ include("parse_stream.jl")
 include("parser.jl")
 include("green_node.jl")
 include("syntax_node.jl")
-if VERSION >= v"1.12"
-    include("syntax_graph.jl")
+if isdefined(Base, :Syntax)
+    include("syntax.jl")
 end
 include("diagnostics.jl")
 include("parser_api.jl")
@@ -45,8 +45,10 @@ end
 
 include("serialization.jl")
 
-# Basic inference tests
-@static if isdefined(Base, :infer_return_type)
-    @test Base.infer_return_type(JuliaSyntax.sourcetext, (JuliaSyntax.SyntaxTree,)) <: AbstractString
-    @test Base.infer_return_type(JuliaSyntax.byte_range, (JuliaSyntax.SyntaxTree,)) == UnitRange{Int}
+@static if isdefined(Base, :Syntax)
+    @testset "Basic inference tests" begin
+        @test Base.infer_return_type(JuliaSyntax.sourcetext, (JuliaSyntax.Syntax,)) <: AbstractString
+        @test Base.infer_return_type(JuliaSyntax.byte_range, (JuliaSyntax.Syntax,)) == UnitRange{Int}
+        @test Base.infer_return_type(JuliaSyntax.hasproperty, (JuliaSyntax.Syntax,Symbol)) == Bool
+    end
 end

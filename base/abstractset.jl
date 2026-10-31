@@ -95,7 +95,9 @@ max_values(T::Union{map(X -> Type{X}, BitIntegerSmall_types)...}) = 1 << (8*size
 function max_values(T::Union)
     a = max_values(T.a)::Int
     b = max_values(T.b)::Int
-    return max(a, b, a + b)
+    r, o = add_with_overflow(a, b)
+    o && return typemax(Int)
+    return r
 end
 max_values(::Type{Bool}) = 2
 max_values(::Type{Nothing}) = 1
@@ -104,7 +106,7 @@ function union!(s::AbstractSet{T}, itr) where T
     haslength(itr) && sizehint!(s, length(s) + Int(length(itr))::Int; shrink = false)
     for x in itr
         push!(s, x)
-        length(s) == max_values(T) && break
+        eltype(itr) <: T && length(s) == max_values(T) && break
     end
     return s
 end
@@ -200,8 +202,9 @@ intersect!(s::AbstractSet, itr) =
 """
     setdiff(s, itrs...)
 
-Construct the set of elements in `s` but not in any of the iterables in `itrs`.
-Maintain order with arrays. The result will have the same element type as `s`.
+Construct the set of distinct elements in `s` but not in any of the iterables in `itrs`.
+If `s` is not an `AbstractSet` (e.g. an array), the result is a `Vector` without duplicates
+that maintains the order in which elements first appear in `s`.
 
 See also [`setdiff!`](@ref), [`union`](@ref), [`intersect`](@ref).
 
@@ -215,6 +218,11 @@ julia> setdiff([1,2,3], [3,4,5])
 julia> setdiff([1,2,3], [1.0, 2.0])
 1-element Vector{Int64}:
  3
+
+julia> setdiff([3, 1, 1, 2, 3], [2])
+2-element Vector{Int64}:
+ 3
+ 1
 ```
 """
 setdiff(s::AbstractSet, itrs...) = setdiff!(copymutable(s), itrs...)

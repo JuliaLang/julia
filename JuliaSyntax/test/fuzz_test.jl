@@ -1003,7 +1003,7 @@ end
 Fuzz test a parsing function by trying it with many "bad" input strings.
 
 `try_parsefail` should return `nothing` when the parser succeeds, and return a
-string (or reduced string) when parsing succeeds.
+string (or reduced string) when parsing fails'..
 """
 function fuzz_test(try_parsefail::Function, bad_input_iter)
     error_strings = []

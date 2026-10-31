@@ -33,5 +33,5 @@ different purposes:
   elements arranged as: `[ci₁, bt₁, ci₂, bt₂, ..., ciₙ, btₙ]`.
 
   Note that the backtrace elements `btᵢ` contain raw backtrace data that
-  typically needs to be processed using `stacktrace(Base._reformat_bt(btᵢ...))`.
+  typically needs to be processed using `stacktrace(Base._reformat_bt(btᵢ...))`
   to convert them into a usable stack trace format for analysis.

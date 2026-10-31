@@ -15,6 +15,22 @@ function transfer_progress(progress::Ptr{LibGit2.TransferProgress}, payload::Dic
     return Cint(0)
 end
 
+# GitHub occasionally drops connections, so only a lasting failure should fail the test
+function with_network_retry(f)
+    transient(e) = e isa LibGit2.GitError &&
+        e.class in (LibGit2.Error.Net, LibGit2.Error.SSL, LibGit2.Error.HTTP) &&
+        e.code != LibGit2.Error.EAUTH
+    delays = ExponentialBackOff(n=3, first_delay=5, factor=2)
+    return retry(f; delays, check=(_, e) -> transient(e))()
+end
+
+function clone_with_retry(repo_url, repo_path; kwargs...)
+    return with_network_retry() do
+        rm(repo_path; force=true, recursive=true) # a failed attempt can leave a partial clone
+        LibGit2.clone(repo_url, repo_path; kwargs...)
+    end
+end
+
 #########
 # TESTS #
 #########
@@ -26,7 +42,7 @@ mktempdir() do dir
         @testset "HTTPS protocol" begin
             repo_path = joinpath(dir, "Example.HTTPS")
             c = LibGit2.CredentialPayload(allow_prompt=false, allow_git_helpers=false)
-            repo = LibGit2.clone(repo_url, repo_path, credentials=c)
+            repo = clone_with_retry(repo_url, repo_path, credentials=c)
             try
                 @test isdir(repo_path)
                 @test isdir(joinpath(repo_path, ".git"))
@@ -46,7 +62,7 @@ mktempdir() do dir
 
             repo_path = joinpath(dir, "Example.TransferProgress")
             c = LibGit2.CredentialPayload(allow_prompt=false, allow_git_helpers=false)
-            repo = LibGit2.clone(repo_url, repo_path, credentials=c, callbacks=callbacks)
+            repo = clone_with_retry(repo_url, repo_path, credentials=c, callbacks=callbacks)
             try
                 @test isdir(repo_path)
                 @test isdir(joinpath(repo_path, ".git"))
@@ -93,7 +109,7 @@ mktempdir() do dir
                 # Test shallow clone with depth=1
                 repo_path = joinpath(dir, "Example.Shallow")
                 c = LibGit2.CredentialPayload(allow_prompt=false, allow_git_helpers=false)
-                repo = LibGit2.clone(repo_url, repo_path, depth=1, credentials=c)
+                repo = clone_with_retry(repo_url, repo_path, depth=1, credentials=c)
                 try
                     @test isdir(repo_path)
                     @test isdir(joinpath(repo_path, ".git"))
@@ -111,7 +127,7 @@ end
     LibGit2.with(LibGit2.GitRemoteDetached(repo_url)) do remote
         @test !LibGit2.connected(remote)
         c = LibGit2.CredentialPayload(allow_prompt=false, allow_git_helpers=false)
-        LibGit2.connect(remote, LibGit2.Consts.DIRECTION_FETCH, credentials=c)
+        with_network_retry(() -> LibGit2.connect(remote, LibGit2.Consts.DIRECTION_FETCH, credentials=c))
         @test LibGit2.connected(remote)
         remote_heads = LibGit2.ls(remote)
         default_branch = LibGit2.default_branch(remote)

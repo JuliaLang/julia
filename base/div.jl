@@ -43,21 +43,34 @@ julia> div(4, 3, RoundFromZero)
 julia> div(-4, 3, RoundFromZero)
 -2
 ```
-Because `div(x, y)` implements strictly correct truncated rounding based on the true
-value of floating-point numbers, unintuitive situations can arise. For example:
-```jldoctest
-julia> div(6.0, 0.1)
-59.0
-julia> 6.0 / 0.1
-60.0
-julia> 6.0 / big(0.1)
-59.99999999999999666933092612453056361837965690217069245739573412231113406246995
-```
-What is happening here is that the true value of the floating-point number written
-as `0.1` is slightly larger than the numerical value 1/10 while `6.0` represents
-the number 6 precisely. Therefore the true value of `6.0 / 0.1` is slightly less
-than 60. When doing division, this is rounded to precisely `60.0`, but
-`div(6.0, 0.1, RoundToZero)` always truncates the true value, so the result is `59.0`.
+!!! note "Floating-point numbers"
+    Accurate results for floating-point arguments are only guaranteed when the
+    mathematical value ``\\frac{x}{y}`` is within the range of exactly representable
+    integers for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or
+    in other words, given `a = div(x, y)`, when `abs(a) < maxintfloat(a)`.
+
+    Because `div(x, y)` implements strict truncated rounding based on the quotient
+    and remainder of the Euclidean division, and because the binary representation
+    of floating-point numbers (in most cases) only approximates the decimal
+    representation we use, unintuitive situations can arise. For example:
+    ```jldoctest
+    julia> div(6.0, 0.1)
+    59.0
+    julia> 6.0 / 0.1
+    60.0
+    julia> 6.0 / big(0.1)
+    59.99999999999999666933092612453056361837965690217069245739573412231113406246995
+    ```
+    What is happening here is that the binary representation of the `Float64`
+    number written as `0.1` is slightly larger than the numerical value ``0.1``
+    (just like `0.3333333333333333` is less than ``1/3`` in decimal), while `6.0`
+    represents the number ``6`` precisely. Therefore the mathematical result of
+    `6.0` divided by (the `Float64` representation of) `0.1` is slightly less
+    than ``60``. The result of the floating-point division is rounded to precisely
+    `60.0`, but `div(6.0, 0.1, RoundToZero)` takes account of the quotient and
+    (here non-zero) remainder of the Euclidean division, so the result is `59.0`.
+
+    See also [`rem`](@ref), [`divrem`](@ref).
 """
 div(x, y, r::RoundingMode)
 
@@ -79,16 +92,16 @@ without any intermediate rounding.
 - if `r == RoundToZero` (default), then the result is exact, and in the interval
   ``[0, |y|)`` if `x` is positive, or ``(-|y|, 0]`` otherwise. See also [`RoundToZero`](@ref).
 
-- if `r == RoundDown`, then the result is in the interval ``[0, y)`` if `y` is positive, or
-  ``(y, 0]`` otherwise. The result may not be exact if `x` and `y` have different signs, and
+- if `r == RoundDown`, then the result is in the interval ``[0, |y|)`` if `y` is positive, or
+  ``(-|y|, 0]`` otherwise. The result may not be exact if `x` and `y` have different signs, and
   `abs(x) < abs(y)`. See also [`RoundDown`](@ref).
 
-- if `r == RoundUp`, then the result is in the interval ``(-y, 0]`` if `y` is positive, or
-  ``[0, -y)`` otherwise. The result may not be exact if `x` and `y` have the same sign, and
+- if `r == RoundUp`, then the result is in the interval ``(-|y|, 0]`` if `y` is positive, or
+  ``[0, |y|)`` otherwise. The result may not be exact if `x` and `y` have the same sign, and
   `abs(x) < abs(y)`. See also [`RoundUp`](@ref).
 
-- if `r == RoundFromZero`, then the result is in the interval ``(-y, 0]`` if `y` is positive, or
-  ``[0, -y)`` otherwise. The result may not be exact if `x` and `y` have the same sign, and
+- if `r == RoundFromZero`, then the result is in the interval ``(-|y|, 0]`` if `x` is positive, or
+  ``[0, |y|)`` otherwise. The result may not be exact if `x` and `y` have the same sign, and
   `abs(x) < abs(y)`. See also [`RoundFromZero`](@ref).
 
 !!! compat "Julia 1.9"
@@ -116,9 +129,23 @@ rem(x, y, ::RoundingMode{:Down}) = mod(x, y)
 rem(x, y, ::RoundingMode{:Up}) = mod(x, -y)
 rem(x, y, r::RoundingMode{:Nearest}) = x - y * div(x, y, r)
 rem(x::Integer, y::Integer, r::RoundingMode{:Nearest}) = divrem(x, y, r)[2]
-
+function rem(x::Integer, y::Integer, rnd::Union{typeof(RoundNearestTiesAway),
+                                                typeof(RoundNearestTiesUp)})
+    divrem(x, y, rnd)[2]
+end
 function rem(x, y, ::typeof(RoundFromZero))
     signbit(x) == signbit(y) ? rem(x, y, RoundUp) : rem(x, y, RoundDown)
+end
+function rem(x::AbstractFloat, y::AbstractFloat, rnd::Union{typeof(RoundNearestTiesAway),
+                                                            typeof(RoundNearestTiesUp)})
+    r = mod(x, y)
+    isnan(r) && return r
+    if !iszero(r)
+        m, n = abs(r) < floatmax(r)/2 ? abs.((2r, y)) : abs.((r, y/2))
+        m < n && return r
+        m > n && return mod(x, -y)
+    end
+    rnd === RoundNearestTiesUp || signbit(x) == signbit(y) ? mod(x, -y) : r
 end
 
 """
@@ -126,7 +153,7 @@ end
 
 Largest integer less than or equal to `x / y`. Equivalent to `div(x, y, RoundDown)`.
 
-See also [`div`](@ref), [`cld`](@ref), [`fld1`](@ref).
+See also [`div`](@ref), [`cld`](@ref), [`mod`](@ref), [`fldmod`](@ref).
 
 # Examples
 ```jldoctest
@@ -137,21 +164,34 @@ julia> fld.(-5:5, 3)'
 1×11 adjoint(::Vector{Int64}) with eltype Int64:
  -2  -2  -1  -1  -1  0  0  0  1  1  1
 ```
-Because `fld(x, y)` implements strictly correct floored rounding based on the true
-value of floating-point numbers, unintuitive situations can arise. For example:
-```jldoctest
-julia> fld(6.0, 0.1)
-59.0
-julia> 6.0 / 0.1
-60.0
-julia> 6.0 / big(0.1)
-59.99999999999999666933092612453056361837965690217069245739573412231113406246995
-```
-What is happening here is that the true value of the floating-point number written
-as `0.1` is slightly larger than the numerical value 1/10 while `6.0` represents
-the number 6 precisely. Therefore the true value of `6.0 / 0.1` is slightly less
-than 60. When doing division, this is rounded to precisely `60.0`, but
-`fld(6.0, 0.1)` always takes the floor of the true value, so the result is `59.0`.
+!!! note "Floating-point numbers"
+    Accurate results for floating-point arguments are only guaranteed when the
+    mathematical value ``\\frac{x}{y}`` is within the range of exactly representable
+    integers for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or
+    in other words, given `a = fld(x, y)`, when `abs(a) < maxintfloat(a)`.
+
+    Because `fld(x, y)` implements strict floored rounding based on the quotient
+    and remainder of the Euclidean division, and because the binary representation
+    of floating-point numbers (in most cases) only approximates the decimal
+    representation we use, unintuitive situations can arise. For example:
+    ```jldoctest
+    julia> fld(6.0, 0.1)
+    59.0
+    julia> 6.0 / 0.1
+    60.0
+    julia> 6.0 / big(0.1)
+    59.99999999999999666933092612453056361837965690217069245739573412231113406246995
+    ```
+    What is happening here is that the binary representation of the `Float64`
+    number written as `0.1` is slightly larger than the numerical value ``0.1``
+    (just like `0.3333333333333333` is less than ``1/3`` in decimal), while `6.0`
+    represents the number ``6`` precisely. Therefore the mathematical result of
+    `6.0` divided by (the `Float64` representation of) `0.1` is slightly less
+    than ``60``. The result of the floating-point division is rounded to precisely
+    `60.0`, but `fld(6.0, 0.1)` takes account of the quotient and (here non-zero)
+    remainder of the Euclidean division, so the result is `59.0`.
+
+    See also [`rem`](@ref), [`divrem`](@ref).
 """
 fld(a, b) = div(a, b, RoundDown)
 
@@ -160,7 +200,7 @@ fld(a, b) = div(a, b, RoundDown)
 
 Smallest integer larger than or equal to `x / y`. Equivalent to `div(x, y, RoundUp)`.
 
-See also [`div`](@ref), [`fld`](@ref).
+See also [`div`](@ref), [`fld`](@ref), [`mod1`](@ref), [`cldmod1`](@ref).
 
 # Examples
 ```jldoctest
@@ -171,8 +211,45 @@ julia> cld.(-5:5, 3)'
 1×11 adjoint(::Vector{Int64}) with eltype Int64:
  -1  -1  -1  0  0  0  1  1  1  2  2
 ```
+!!! note "Floating-point numbers"
+    Accurate results for floating-point arguments are only guaranteed when the
+    mathematical value ``\\frac{x}{y}`` is within the range of exactly representable
+    integers for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or
+    in other words, given `a = cld(x, y)`, when `abs(a) < maxintfloat(a)`.
+
+    Because `cld(x, y)` implements strict ceiled rounding based on the quotient
+    and remainder of the Euclidean division, and because the binary representation
+    of floating-point numbers (in most cases) only approximates the decimal
+    representation we use, unintuitive situations can arise. For example:
+    ```jldoctest
+    julia> cld(3.0, 0.3)
+    11.0
+    julia> 3.0 / 0.3
+    10.0
+    julia> 3.0 / big(0.3)
+    10.00000000000000037007434154171886050337904945061778828900298697586147515340753
+    ```
+    What is happening here is that the binary representation of the `Float64`
+    number written as `0.3` is slightly less than the numerical value ``0.3``
+    (just like `0.3333333333333333` is less than ``1/3`` in decimal), while `3.0`
+    represents the number ``3`` precisely. Therefore the mathematical result of
+    `3.0` divided by (the `Float64` representation of) `0.3` is slightly larger
+    than ``10``. The result of the floating-point division is rounded to precisely
+    `10.0`, but `cld(3.0, 0.3)` takes account of the quotient and (here non-zero)
+    remainder of the Euclidean division, so the result is `11.0`.
+
+    See also [`rem`](@ref), [`divrem`](@ref).
 """
 cld(a, b) = div(a, b, RoundUp)
+
+"""
+    fld1(a, b)
+
+Legacy spelling of `cld(a, b)` for integers of the same type.
+
+See also [`cld`](@ref).
+"""
+fld1(a, b) = cld(a, b)
 
 # divrem
 """
@@ -182,7 +259,7 @@ The quotient and remainder from Euclidean division.
 Equivalent to `(div(x, y, r), rem(x, y, r))`. Equivalently, with the default
 value of `r`, this call is equivalent to `(x ÷ y, x % y)`.
 
-See also [`fldmod`](@ref), [`cld`](@ref).
+See also [`fldmod`](@ref), [`cldmod1`](@ref), [`div`](@ref), [`rem`](@ref).
 
 # Examples
 ```jldoctest
@@ -225,6 +302,25 @@ function divrem(a::Integer, b::Integer, r::Union{typeof(RoundUp),
         # For compat. Remove in 2.0.
         d = div(a, b, r)
         (d, a - d * b)
+    end
+end
+# For fixed-width integers the floored/ceiled quotient times `b` lies in
+# `(a - b, a + b]` and so wraps on valid inputs (e.g. `fld(typemin(Int), 3)*3`);
+# the remainder is correct only through wrap-cancellation.  The truncated
+# quotient satisfies `|d*b| <= |a|`, so the RoundToZero branch cannot overflow
+# and stays on checkable operators.
+function divrem(a::T, b::T, r::Union{typeof(RoundUp),
+                                     typeof(RoundDown),
+                                     typeof(RoundToZero)}) where T<:BitSigned
+    if r === RoundToZero
+        d = div(a, b)
+        (d, a - d * b)
+    elseif r === RoundDown
+        d = fld(a, b)
+        (d, a -% d *% b)
+    elseif r === RoundUp
+        d = div(a, b, r)
+        (d, a -% d *% b)
     end
 end
 function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearest))
@@ -286,11 +382,11 @@ end
 The floored quotient and modulus after division. A convenience wrapper for
 `divrem(x, y, RoundDown)`. Equivalent to `(fld(x, y), mod(x, y))`.
 
-See also [`fld`](@ref), [`cld`](@ref), [`fldmod1`](@ref).
+See also [`fld`](@ref), [`mod`](@ref), [`divrem`](@ref), [`cldmod1`](@ref).
 """
 fldmod(x, y) = divrem(x, y, RoundDown)
 
-# We definite generic rounding methods for other rounding modes in terms of
+# We define generic rounding methods for other rounding modes in terms of
 # RoundToZero.
 function div(x::Signed, y::Unsigned, ::typeof(RoundDown))
     (q, r) = divrem(x, y)
@@ -366,6 +462,16 @@ function div(x::T, y::T, ::typeof(RoundDown)) where T<:Integer
     d = div(x, y, RoundToZero)
     return d - (signbit(x ⊻ y) & (d * y != x))
 end
+# Granlund & Montgomery (1994), §6: nudge `x` one step toward zero when the signs differ so a
+# single truncated division gives the floor. No multiply-back, so a constant `y` lowers to a bare
+# multiply-shift. Division errors are checked on the original operands.
+function div(x::T, y::T, ::typeof(RoundDown)) where T<:BitSigned
+    (iszero(y) | ((x == typemin(T)) & (y == -1))) && throw(DivideError())
+    k = 8sizeof(T) - 1
+    dsign = y >> k
+    nsign = (x | (x +% dsign)) >> k
+    return _sdiv_nocheck(x +% (dsign - nsign), y) +% (nsign ⊻ dsign)
+end
 
 # cld(x, y) = div(x, y) + ((x > 0) == (y > 0) && rem(x, y) != 0 ? 1 : 0)
 function div(x::T, y::T, ::typeof(RoundUp)) where T<:Unsigned
@@ -376,14 +482,18 @@ function div(x::T, y::T, ::typeof(RoundUp)) where T<:Integer
     d = div(x, y, RoundToZero)
     return d + (((x > 0) == (y > 0)) & (d * y != x))
 end
+# as for `RoundDown`: step `x` toward zero when the signs agree, then round the truncation up
+function div(x::T, y::T, ::typeof(RoundUp)) where T<:BitSigned
+    (iszero(y) | ((x == typemin(T)) & (y == -1))) && throw(DivideError())
+    s = ifelse(y < 0, -(x < 0) % T, (x > 0) % T)
+    return _sdiv_nocheck(x -% s, y) +% (s != 0)
+end
+# caller has excluded `y == 0` and `typemin(T) ÷ -1`
+_sdiv_nocheck(x::T, y::T) where {T<:BitSigned} =
+    Core.sizeof(Int) == 4 && T === Int128 ? div(x, y) : sdiv_int(x, y)
 
-# Real
-# NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
-# so it is used here as the basis of float div().
-div(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} = convert(T, round((x - rem(x, y, r)) / y))
-
-# Vincent Lefèvre: "The Euclidean Division Implemented with a Floating-Point Division and a Floor"
-# https://inria.hal.science/inria-00070403
-# Theorem 1 implies that the following are exact if eps(x/y) <= 1
-div(x::Float32, y::Float32, r::RoundingMode) = Float32(round(Float64(x) / Float64(y), r))
-div(x::Float16, y::Float16, r::RoundingMode) = Float16(round(Float32(x) / Float32(y), r))
+# Floats
+# NB. If eps(x/y) > 1, x/y rounds to an unsafe integer which can't be floored
+# or ceiled if it needs to since x/y ± 1 is not representable.
+# @see https://github.com/JuliaLang/julia/issues/49450#issuecomment-3694946121
+div(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} = round(x / y - rem(x, y, r) / y)

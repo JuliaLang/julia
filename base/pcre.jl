@@ -4,12 +4,18 @@
 
 module PCRE
 
-import ..RefValue
+import ..RefValue, ..DenseUTF8String
 
 # include($BUILDROOT/base/pcre_h.jl)
 include(string(Base.BUILDROOT, "pcre_h.jl"))
 
-const PCRE_LIB = "libpcre2-8"
+if Sys.iswindows()
+    const PCRE_LIB = "libpcre2-8-0.dll"
+elseif Sys.isapple()
+    const PCRE_LIB = "@rpath/libpcre2-8.0.dylib"
+else
+    const PCRE_LIB = "libpcre2-8.so.0"
+end
 
 function create_match_context()
     JIT_STACK_START_SIZE = 32768
@@ -196,7 +202,7 @@ function err_message(errno::Integer)
     return GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
-exec(re, subject::Union{String,SubString{String}}, offset, options, match_data) =
+exec(re, subject::DenseUTF8String, offset, options, match_data) =
     _exec(re, subject, offset, options, match_data)
 exec(re, subject, offset, options, match_data) =
     _exec(re, String(subject)::String, offset, options, match_data)
@@ -212,14 +218,21 @@ end
 
 function exec_r(re, subject, offset, options)
     match_data = create_match_data(re)
-    ans = exec(re, subject, offset, options, match_data)
-    free_match_data(match_data)
-    return ans
+    try
+        return exec(re, subject, offset, options, match_data)
+    finally
+        free_match_data(match_data)
+    end
 end
 
 function exec_r_data(re, subject, offset, options)
     match_data = create_match_data(re)
-    ans = exec(re, subject, offset, options, match_data)
+    ans = try
+        exec(re, subject, offset, options, match_data)
+    catch
+        free_match_data(match_data)
+        rethrow()
+    end
     return ans, match_data
 end
 

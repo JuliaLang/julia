@@ -1,0 +1,7 @@
+name = "BasicJLL"
+uuid = "cc29b252-a5f1-49fa-9af8-86bc3e2aae58"
+version = "0.1.0"
+
+[deps]
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+Zstd_jll = "3161d3a3-bdf6-5164-811a-617609db77b4"

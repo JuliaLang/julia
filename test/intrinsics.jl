@@ -4,6 +4,7 @@
 
 # For curmod_*
 include("testenv.jl")
+using InteractiveUtils: code_llvm
 
 # bits types
 @test isa((() -> Core.Intrinsics.bitcast(Ptr{Int8}, 0))(), Ptr{Int8})
@@ -79,6 +80,406 @@ let x, y, f
     @test string(y) == "$(curmod_prefix)Int24(0x468ace)"
 end
 
+@testset "non-standard integer widths" begin
+    primitive type TestUInt24 24 end
+    primitive type TestUInt40 40 end
+    primitive type TestUInt48 48 end
+    primitive type TestUInt5 5 end
+    primitive type TestUInt17 17 end
+    primitive type TestUInt63 63 end
+    primitive type TestInt17 <: Signed 17 end
+    primitive type TestInt63 <: Signed 63 end
+    primitive type TestUInt129 129 end
+    primitive type TestP24{T} 24 end
+    primitive type TestUInt28 28 end
+
+    @test Core.bitsizeof(TestUInt24) == 24
+    @test Core.bitsizeof(TestUInt40) == 40
+    @test Core.bitsizeof(TestUInt48) == 48
+    @test Core.bitsizeof(TestUInt5) == 5
+    @test Core.bitsizeof(TestUInt17) == 17
+    @test Core.bitsizeof(TestUInt63) == 63
+
+    x24 = Core.Intrinsics.trunc_int(TestUInt24, UInt64(0xffee_ddcc_bbaa_9988))
+    @test Core.Intrinsics.zext_int(UInt64, x24) === 0x0000_0000_00aa_9988
+
+    x40 = Core.Intrinsics.trunc_int(TestUInt40, UInt64(0xffee_ddcc_bbaa_9988))
+    @test Core.Intrinsics.zext_int(UInt64, x40) === 0x0000_00cc_bbaa_9988
+
+    x48 = Core.Intrinsics.trunc_int(TestUInt48, UInt64(0xffee_ddcc_bbaa_9988))
+    @test Core.Intrinsics.zext_int(UInt64, x48) === 0x0000_ddcc_bbaa_9988
+
+    x5 = Core.Intrinsics.trunc_int(TestUInt5, UInt16(0xffff))
+    @test Core.Intrinsics.zext_int(UInt16, x5) === 0x001f
+
+    x17 = Core.Intrinsics.trunc_int(TestUInt17, UInt32(0xffff_ffff))
+    @test Core.Intrinsics.zext_int(UInt32, x17) === 0x0001_ffff
+
+    # A whole primitive is loaded and stored at its full size: sizeof is 4 here,
+    # so one i32 access rather than several sub-word ones.
+    load17(p::Ptr{TestUInt17}) = unsafe_load(p)
+    store17(p::Ptr{TestUInt17}, x::TestUInt17) = unsafe_store!(p, x)
+    load_boxed17(x::Any) = Core.Intrinsics.zext_int(UInt32, x::TestUInt17)
+    bitcast17(x::Any) = Core.Intrinsics.bitcast(TestInt17, x::TestUInt17)
+    load_tuple17(x::Any) = x::Tuple{TestUInt17,TestUInt17}
+    box17(x::TestUInt17) = Ref{Any}(x)[]
+    objectid17(x::TestUInt17) = objectid(x) # spills x to a stack slot
+    # global, for `@cfunction`; returns through sret
+    @eval ret129(x::UInt128) = Core.Intrinsics.zext_int($TestUInt129, x)
+    ccall129(p::Ptr{Cvoid}, x::UInt128) = ccall(p, TestUInt129, (UInt128,), x)
+    # codegen does not know `T`, so it boxes the result with the runtime type
+    ccallp24(@nospecialize(x::Vector{T}), p::Ptr{Cvoid}) where {T} = ccall(p, TestP24{T}, ())
+    @eval cfunction129() = @cfunction(ret129, $TestUInt129, (UInt128,))
+    ccall_narrow(p::Ptr{Cvoid}, x::TestInt17, y::TestUInt24, z::TestUInt28) =
+        ccall(p, Cvoid, (TestInt17, TestUInt24, TestUInt28), x, y, z)
+    # Under Revise these `code_llvm` queries can fail in InteractiveUtils'
+    # reflective inference path before reaching the odd-bit lowering.
+    if !isdefined(Main, :Revise)
+        load_ir = sprint(io -> code_llvm(io, load17, Tuple{Ptr{TestUInt17}};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bload i32\b", load_ir)
+        @test occursin(r"\btrunc i32\b", load_ir)
+        boxed_ir = sprint(io -> code_llvm(io, load_boxed17, Tuple{Any};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bload i32\b", boxed_ir)
+        @test occursin(r"\btrunc i32\b", boxed_ir)
+        store_ir = sprint(io -> code_llvm(io, store17,
+            Tuple{Ptr{TestUInt17}, TestUInt17}; debuginfo=:none, optimize=false))
+        @test occursin(r"\bzext i17\b.*\bto i32\b", store_ir)
+        @test occursin(r"\bstore i32\b", store_ir)
+        box_ir = sprint(io -> code_llvm(io, box17, Tuple{TestUInt17};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bstore i32\b", box_ir)
+        objectid_ir = sprint(io -> code_llvm(io, objectid17, Tuple{TestUInt17};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bstore i32\b", objectid_ir)
+        store129 = Regex("\\bstore i$(8 * sizeof(TestUInt129))\\b")
+        ret_ir = sprint(io -> code_llvm(io, ret129, Tuple{UInt128};
+            debuginfo=:none, optimize=false))
+        @test occursin(store129, ret_ir)
+        ccall_ir = sprint(io -> code_llvm(io, ccall129, Tuple{Ptr{Cvoid}, UInt128};
+            debuginfo=:none, optimize=false))
+        @test occursin(store129, ccall_ir)
+        ccallp24_ir = sprint(io -> code_llvm(io, ccallp24, Tuple{Vector, Ptr{Cvoid}};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bstore i32\b", ccallp24_ir)
+        # A C caller sizes an sret buffer by the C ABI, which may be less than
+        # `sizeof`, so the wrapper writes only the value bytes. 32-byte results
+        # return through sret on these architectures.
+        if Sys.ARCH in (:x86_64, :aarch64)
+            cfunction_ir = sprint(io -> code_llvm(io, cfunction129, Tuple{};
+                debuginfo=:none, dump_module=true, optimize=false))
+            wrapper = match(r"^define [^\n]*@jlcapi_ret129_.*?^}"ms, cfunction_ir).match
+            @test occursin(r"\bstore i136\b", wrapper)
+        end
+        # Arguments narrower than 32 bits are extended by signedness, as for
+        # `_BitInt(N)` in C, although `sizeof` rounds them up to 4. RISC-V
+        # sign-extends everything stored in 4 bytes.
+        narrow_ir = sprint(io -> code_llvm(io, ccall_narrow,
+            Tuple{Ptr{Cvoid}, TestInt17, TestUInt24, TestUInt28}; debuginfo=:none, optimize=false))
+        narrow_call = only(filter(contains("call void %\"p::Ptr\""), split(narrow_ir, '\n')))
+        @test count("signext", narrow_call) == (Sys.ARCH === :riscv64 ? 3 : 1)
+        @test count("zeroext", narrow_call) == (Sys.ARCH === :riscv64 ? 0 : 2)
+        bitcast_ir = sprint(io -> code_llvm(io, bitcast17, Tuple{Any};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bload i24\b", bitcast_ir)
+        # Aggregate elements are still reached at the byte-rounded width. On
+        # 32-bit targets the tuple is returned through sret as a single memcpy
+        # instead, which never materializes the elements.
+        if Sys.WORD_SIZE == 64
+            tuple_ir = sprint(io -> code_llvm(io, load_tuple17, Tuple{Any};
+                debuginfo=:none, optimize=false))
+            @test occursin(r"\bload \[2 x i24\]", tuple_ir)
+            @test occursin(r"\btrunc i24\b", tuple_ir)
+        end
+    end
+
+    # Round-trips through mutable fields, Memory, and field-modification
+    # builtins (the non-atomic typed_store paths in codegen).
+    mutable struct Mut17
+        x::TestUInt17
+    end
+    u17(x) = Core.Intrinsics.trunc_int(TestUInt17, UInt32(x))
+    let m = Mut17(u17(5))
+        setfield!(m, :x, u17(6))
+        @test getfield(m, :x) === u17(6)
+        @test swapfield!(m, :x, u17(7)) === u17(6)
+        @test getfield(m, :x) === u17(7)
+        let r = replacefield!(m, :x, u17(7), u17(8))
+            @test r.success && r.old === u17(7)
+        end
+        @test getfield(m, :x) === u17(8)
+        @test modifyfield!(m, :x, (a, b) -> b, u17(9)).second === u17(9)
+        @test getfield(m, :x) === u17(9)
+    end
+    let mem = Memory{TestUInt17}(undef, 3)
+        for i = 1:3
+            mem[i] = u17(0x1fff0 + i)
+        end
+        @test mem[1] === u17(0x1fff1) && mem[3] === u17(0x1fff3)
+    end
+    let t = (u17(1), u17(0x1ffff))
+        @test t[1] === u17(1) && t[2] === u17(0x1ffff)
+        @test Ref{Any}(t)[] === t
+    end
+
+    # Bits above the logical width belong to nobody: a load must drop them,
+    # even when the memory was written by something other than codegen.
+    let dirty = fill(0xff, 8)
+        GC.@preserve dirty begin
+            p = Ptr{TestUInt17}(pointer(dirty))
+            @test Core.Intrinsics.zext_int(UInt32, unsafe_load(p)) === 0x0001_ffff
+            @test unsafe_load(Ptr{Tuple{TestUInt17,TestUInt17}}(p)) ===
+                (u17(0x1ffff), u17(0x1ffff))
+        end
+    end
+    for (T, mask) in ((TestUInt5, 0x1f), (TestUInt17, 0x0001_ffff),
+                      (TestUInt24, 0x00ff_ffff), (TestUInt40, 0x0000_00ff_ffff_ffff),
+                      (TestUInt63, 0x7fff_ffff_ffff_ffff))
+        dirty = fill(0xff, sizeof(T))
+        v = GC.@preserve dirty ccall(:jl_new_bits, Any, (Any, Ptr{Cvoid}), T, pointer(dirty))
+        @test Core.Intrinsics.zext_int(UInt64, v::T) == mask
+        @test v::T === Core.Intrinsics.trunc_int(T, typemax(UInt64))
+    end
+
+    # sizeof rounds the value bytes up to a multiple of the alignment
+    for (nb, sz) in ((1, 1), (2, 1), (5, 1), (8, 1), (9, 2), (17, 4), (24, 4), (25, 4),
+                     (33, 8), (40, 8), (48, 8), (63, 8), (64, 8), (65, 16), (128, 16))
+        T = Core.eval(@__MODULE__, :(primitive type $(Symbol("TestSz", nb)) $nb end;
+                                     $(Symbol("TestSz", nb))))
+        @test Core.bitsizeof(T) == nb
+        @test sizeof(T) == sz
+        @test sizeof(T) == Base.aligned_sizeof(T)
+        @test Base.datatype_haspadding(T) == (nb != 8 * sz)
+    end
+
+    # A 1-bit primitive is not a Bool: boxing must keep its own type.
+    primitive type TestUInt1 1 end
+    box1(n::UInt8) = Ref{Any}(Core.Intrinsics.trunc_int(TestUInt1, n))[]
+    let one = Ref(0x01)[], zero = Ref(0x00)[]
+        @test box1(one) isa TestUInt1
+        @test box1(one) === Core.Intrinsics.trunc_int(TestUInt1, one)
+        @test box1(one) !== box1(zero)
+    end
+    # Bool keeps boxing to the `jl_true`/`jl_false` singletons, which `===` on
+    # Bool depends on (`jl_pointer_egal`); `===` alone compares by value here,
+    # so check the address. Both boxing paths: plain and via a union.
+    addr(@nospecialize x) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
+    boxbool(b::Bool) = Ref{Any}(b)[]
+    boxboolunion(x::Union{Bool,Int}) = Ref{Any}(x)[]
+    let t = Ref(true)[], f = Ref(false)[]
+        @test addr(boxbool(t)) === addr(true) && addr(boxbool(f)) === addr(false)
+        @test addr(boxboolunion(t)) === addr(true) && addr(boxboolunion(f)) === addr(false)
+    end
+
+    # Runtime intrinsics ignore the bits above an operand's width, which may hold
+    # anything there, and write them as zero in results. `===` ignores those bits,
+    # but zeros keep memory and package images consistent, so check the bytes of
+    # the box the runtime returns. The helpers take `@nospecialize` arguments: a
+    # specialized method would receive the value unboxed and box it anew.
+    rawbytes(@nospecialize x) = GC.@preserve x [unsafe_load(Ptr{UInt8}(addr(x)), i) for i in 1:sizeof(x)]
+    highbits(@nospecialize x) = [b & ~(0xff >> (8 - clamp(Core.bitsizeof(typeof(x)) - 8(i - 1), 0, 8)))
+                                 for (i, b) in enumerate(rawbytes(x))]
+    dirty(T, bytes...) = (m = UInt8[bytes...];
+                          GC.@preserve m Base.invokelatest(Core.Intrinsics.pointerref, Ptr{T}(pointer(m)), 1, 1))
+    @test all(iszero, highbits(Base.invokelatest(Core.Intrinsics.sext_int, TestInt17, Int8(-1))))
+    @test all(iszero, highbits(Base.invokelatest(Core.Intrinsics.sext_int, TestInt63, Int8(-1))))
+    # out of range, so only the bits above the width are defined
+    @test all(iszero, highbits(Base.invokelatest(Core.Intrinsics.fptoui, TestUInt17, 0x1p20)))
+    let x = Base.invokelatest(Core.Intrinsics.flipsign_int, dirty(TestInt17, 0xfd, 0xff, 0xff, 0xff),
+                              Core.Intrinsics.trunc_int(TestInt17, Int32(1)))
+        @test x === Core.Intrinsics.trunc_int(TestInt17, Int32(-3))
+        @test all(iszero, highbits(x))
+    end
+    let one17 = dirty(TestUInt17, 0x01, 0x00, 0xfe, 0x00), one24 = dirty(TestUInt24, 0x01, 0x00, 0x00, 0xff)
+        @test Base.invokelatest(Core.Intrinsics.shl_int, UInt64(1), one17) === UInt64(2)
+        @test Base.invokelatest(Core.Intrinsics.shl_int, UInt64(1), one24) === UInt64(2)
+        @test Base.invokelatest(Core.Intrinsics.lshr_int, UInt64(4), one24) === UInt64(2)
+    end
+    # an amount wider than the shifted value shifts it all out, as in codegen (#63460)
+    @test Base.invokelatest(Core.Intrinsics.shl_int, UInt8(1), UInt16(256)) === 0x00
+    @test Base.invokelatest(Core.Intrinsics.lshr_int, UInt8(0x80), UInt16(257)) === 0x00
+    @test Base.invokelatest(Core.Intrinsics.ashr_int, Int8(-128), UInt16(256)) === Int8(-1)
+    @test Base.invokelatest(Core.Intrinsics.shl_int, Core.Intrinsics.trunc_int(TestUInt5, 0x01),
+                            UInt16(256)) === Core.Intrinsics.trunc_int(TestUInt5, 0x00)
+    # so does an amount of 2^width or more when the width is no C type's
+    shl(x, y) = Core.Intrinsics.shl_int(x, y)
+    lshr(x, y) = Core.Intrinsics.lshr_int(x, y)
+    ashr(x, y) = Core.Intrinsics.ashr_int(x, y)
+    for x in (Core.Intrinsics.trunc_int(TestUInt5, 0x01), Core.Intrinsics.trunc_int(TestUInt17, 0x0001ffff),
+              Core.Intrinsics.trunc_int(TestInt17, Int32(-4)), Core.Intrinsics.trunc_int(TestUInt24, 0x00000001)),
+        y in (UInt8(32), UInt8(33), UInt32(1 << 17 + 1), UInt32(1 << 24)),
+        (f, op) in ((shl, Core.Intrinsics.shl_int), (lshr, Core.Intrinsics.lshr_int), (ashr, Core.Intrinsics.ashr_int))
+        @test Base.invokelatest(op, x, y) === f(x, y)
+    end
+    # an amount that does not fit the width fills with the sign for `ashr_int`,
+    # and the bits above the width of the result are zero
+    let neg = Core.Intrinsics.trunc_int(TestInt17, Int32(-4)), pos = Core.Intrinsics.trunc_int(TestInt17, Int32(4))
+        r = Base.invokelatest(Core.Intrinsics.ashr_int, neg, UInt32(0x20000))
+        @test r === Core.Intrinsics.trunc_int(TestInt17, Int32(-1)) && all(iszero, highbits(r))
+        @test Base.invokelatest(Core.Intrinsics.ashr_int, pos, UInt32(0x20000)) === Core.Intrinsics.trunc_int(TestInt17, Int32(0))
+        @test Base.invokelatest(Core.Intrinsics.ashr_int, dirty(TestInt17, 0xfc, 0xff, 0xf1, 0xff), UInt32(0x20000)) ===
+              Core.Intrinsics.trunc_int(TestInt17, Int32(-1))
+    end
+
+    # a runtime replace compares values, not the bits above their width
+    mutable struct AtomicTestUInt5
+        @atomic x::TestUInt5
+    end
+    let s = AtomicTestUInt5(Core.Intrinsics.trunc_int(TestUInt5, 0x1f))
+        Base.invokelatest(setfield!, s, :x, dirty(TestUInt5, 0xff), :sequentially_consistent)
+        @test Base.invokelatest(replacefield!, s, :x, Core.Intrinsics.trunc_int(TestUInt5, 0x1f),
+                                Core.Intrinsics.trunc_int(TestUInt5, 0x00),
+                                :sequentially_consistent, :sequentially_consistent).success
+    end
+
+    # The padding that rounding `sizeof` up to the alignment adds is zero in the
+    # results of runtime intrinsics.
+    let a = Core.Intrinsics.trunc_int(TestUInt24, 0x00123456),
+        b = Core.Intrinsics.trunc_int(TestUInt24, 0x00000789)
+        # fill recycled GC cells with all-ones, so an unwritten byte shows
+        Base.donotdelete([Ref(typemax(UInt64)) for _ in 1:100_000])
+        GC.gc(false)
+        # byte 4 is the padding of the tuple's first field
+        @test all(1:100) do _
+            r = Base.invokelatest(Core.Intrinsics.checked_sadd_int, a, b)
+            GC.@preserve r unsafe_load(Ptr{UInt8}(addr(r)), 4) == 0
+        end
+        @test all(iszero, highbits(Base.invokelatest(Core.Intrinsics.fptoui, TestUInt129, 3.0)))
+    end
+    # `compilerbarrier` hides the constant from inference, so codegen boxes the
+    # folded LLVM constant
+    const129() = Ref{Any}(Core.Intrinsics.zext_int(TestUInt129, Base.compilerbarrier(:const, 0x01)))[]
+    @test rawbytes(const129()) == [0x01; zeros(UInt8, sizeof(TestUInt129) - 1)]
+
+    x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xffff_ffff_ffff_ffff))
+    @test Core.Intrinsics.zext_int(UInt64, x63) === 0x7fff_ffff_ffff_ffff
+
+    i17 = Core.Intrinsics.trunc_int(TestInt17, Int32(-1))
+    @test Core.Intrinsics.sext_int(Int32, i17) === Int32(-1)
+    i17min = Core.Intrinsics.trunc_int(TestInt17, Int32(-65536))
+    @test Core.Intrinsics.sext_int(Int32, i17min) === Int32(-65536)
+
+    i63 = Core.Intrinsics.trunc_int(TestInt63, Int64(-1))
+    @test Core.Intrinsics.sext_int(Int64, i63) === Int64(-1)
+
+    @test Core.Intrinsics.bitcast(TestUInt24, x24) === x24
+    @test Core.Intrinsics.bitcast(TestUInt63, i63) === Core.Intrinsics.trunc_int(TestUInt63, typemax(UInt64))
+    @test_throws ErrorException Core.Intrinsics.bitcast(TestUInt24, x40)
+    @test_throws ErrorException Core.Intrinsics.bitcast(TestUInt63, x24)
+
+    function compiled_sitofp(::Type{T}, x) where T
+        Core.Intrinsics.sitofp(Float64, x)::Float64
+    end
+    function compiled_uitofp(::Type{T}, x) where T
+        Core.Intrinsics.uitofp(Float64, x)::Float64
+    end
+    function compiled_fptosi(::Type{T}, x) where T
+        Core.Intrinsics.fptosi(T, x)
+    end
+    function compiled_fptoui(::Type{T}, x) where T
+        Core.Intrinsics.fptoui(T, x)
+    end
+
+    si17 = Core.Intrinsics.trunc_int(TestInt17, Int32(-12345))
+    @test compiled_sitofp(TestInt17, si17) === -12345.0
+    @test compiled_fptosi(TestInt17, -12345.0) === si17
+
+    ui17 = Core.Intrinsics.trunc_int(TestUInt17, UInt32(54321))
+    @test compiled_uitofp(TestUInt17, ui17) === 54321.0
+    @test compiled_fptoui(TestUInt17, 54321.0) === ui17
+
+    si63 = Core.Intrinsics.trunc_int(TestInt63, Int64(-(Int64(1) << 52) + 3))
+    @test compiled_sitofp(TestInt63, si63) === -4.503599627370493e15
+    @test compiled_fptosi(TestInt63, -4.503599627370493e15) === si63
+
+    ui63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64((UInt64(1) << 52) + 3))
+    @test compiled_uitofp(TestUInt63, ui63) === 4.503599627370499e15
+    @test compiled_fptoui(TestUInt63, 4.503599627370499e15) === ui63
+
+    chain40 = Core.Intrinsics.trunc_int(TestUInt40, UInt64(0x0000_00aa_bbcc_ddee))
+    chain24 = Core.Intrinsics.trunc_int(TestUInt24, chain40)
+    chain17 = Core.Intrinsics.trunc_int(TestUInt17, chain24)
+    @test Core.Intrinsics.zext_int(UInt64, chain24) === 0x0000_0000_00cc_ddee
+    @test Core.Intrinsics.zext_int(UInt32, chain17) === 0x0000_ddee
+    @test invokelatest(Core.Intrinsics.zext_int, UInt64, x63) === 0x7fff_ffff_ffff_ffff
+
+    ref63 = Ref(ui63)
+    @test ref63[] === ui63
+    ref63[] = x63
+    @test ref63[] === x63
+
+    struct FieldWrap63
+        x::TestUInt63
+        y::UInt8
+    end
+    field_wrap = FieldWrap63(ui63, 0x12)
+    @test field_wrap.x === ui63
+    @test field_wrap.y === 0x12
+
+    struct HashWrap63
+        x::TestUInt63
+    end
+    hw1 = Ref(HashWrap63(Core.Intrinsics.trunc_int(TestUInt63, UInt64(1))))
+    hw2 = Ref(HashWrap63(Core.Intrinsics.trunc_int(TestUInt63, UInt64(1))))
+    GC.@preserve hw1 hw2 begin
+        p2 = Ptr{UInt8}(Base.unsafe_convert(Ptr{HashWrap63}, hw2))
+        unsafe_store!(p2 + 7, unsafe_load(p2 + 7) | 0x80)
+    end
+    @test hw1[] === hw2[]
+    @test hash(hw1[]) == hash(hw2[])
+    @test objectid(hw1[]) == objectid(hw2[])
+
+    primitive type TestBits63 63 end
+    bits63 = Core.Intrinsics.trunc_int(TestBits63, UInt64(0xffff_ffff_ffff_ffff))
+    @test repr(bits63) == "$(curmod_prefix)TestBits63(0x7fffffffffffffff)"
+
+    primitive type TestBits5 5 end
+    primitive type TestBits6 6 end
+    primitive type TestBits7 7 end
+    @test repr(Core.Intrinsics.trunc_int(TestBits5, UInt8(1))) ==
+        "$(curmod_prefix)TestBits5(0x01)"
+    @test repr(Core.Intrinsics.trunc_int(TestBits6, UInt8(1))) ==
+        "$(curmod_prefix)TestBits6(0x01)"
+    @test repr(Core.Intrinsics.trunc_int(TestBits7, UInt8(1))) ==
+        "$(curmod_prefix)TestBits7(0x01)"
+end
+
+# odd-bit primitive integers keep byte-rounded storage but logical bit widths
+primitive type Int63 <: Signed 63 end
+primitive type UInt63 <: Unsigned 63 end
+Int63(x::Int64) = Core.Intrinsics.trunc_int(Int63, x)
+Int63(x::Signed) = Core.Intrinsics.trunc_int(Int63, Int64(x))
+UInt63(x::UInt64) = Core.Intrinsics.trunc_int(UInt63, x)
+Base.Int64(x::Int63) = Core.Intrinsics.sext_int(Int64, x)
+Base.UInt64(x::UInt63) = Core.Intrinsics.zext_int(UInt64, x)
+let x = UInt63(0xc000_ba98_8765_4321), y = Int63(-1)
+    @test sizeof(UInt63) == 8
+    @test Core.bitsizeof(UInt63) == 63
+    @test Core.bitsizeof(x) == 63
+    @test Core.bitsizeof(Int64) == 64
+    @test Core.bitsizeof(1.0) == 64
+    @test UInt64(x) === 0x4000_ba98_8765_4321
+    @test Int64(y) === Int64(-1)
+    @test Int64(Int63(Int32(-1))) === Int64(-1)
+    # Under Revise`, this `code_llvm` query can fail in InteractiveUtils'
+    # reflective inference path before it reaches the actual odd-bit lowering.
+    if !isdefined(Main, :Revise)
+        id_u63(x::UInt63) = x
+        ir = sprint(io -> code_llvm(io, id_u63, Tuple{UInt63}; debuginfo=:none))
+        @test occursin(r"\bi63\b", ir)
+    end
+end
+
+# bitsizeof is only defined for primitive types and their instances
+@test Core.bitsizeof(true) == 8
+@test Core.bitsizeof(C_NULL) == Sys.WORD_SIZE
+for x in (Pair{Int32,Int16}, Tuple{UInt63}, Tuple{}, (), nothing, "abc", :abc, zeros(UInt8, 3),
+          Memory{UInt8}(undef, 3), Union{Int8,Int16}, Ptr, Integer, Union{}, DataType)
+    @test_throws ErrorException Core.bitsizeof(x)
+end
+@test_throws "Type Pair is not a primitive type" Core.bitsizeof(Pair{Int32,Int16})
+
 # test nonsensical valid conversions and errors
 
 compiled_addi(x, y) = Core.Intrinsics.add_int(x, y)
@@ -110,6 +511,10 @@ end
     (0x80000000, Int64(0x80000000), -Int64(0x80000000))
 @test compiled_conv(UInt32, UInt64(0xC000_BA98_8765_4321)) ==
     (0x87654321, 0x0000000087654321, 0xffffffff87654321)
+@test compiled_conv(UInt63, UInt64(0xC000_BA98_8765_4321)) ==
+    (UInt63(0x4000_BA98_8765_4321), 0x4000_BA98_8765_4321, 0xC000_BA98_8765_4321)
+@test compiled_conv(Int63, Int64(-1)) ==
+    (Int63(-1), typemax(Int64), -Int64(1))
 @test_throws ErrorException compiled_conv(Bool, im)
 
 function compiled_fptrunc(::Type{T}, x) where T
@@ -131,6 +536,78 @@ end
 # In function: julia_compiled_fptrunc_3480
 # @test compiled_fptrunc(Core.BFloat16, 1.234) === reinterpret(Core.BFloat16, 0b0_01111111_0011110)
 @test compiled_fptrunc(Float32, 1.234) === 1.234f0
+# Float32 to BFloat16 conversion must preserve subnormals (JuliaMath/BFloat16s.jl#125).
+@noinline compiled_bfloat_fptrunc(x::Float32) = Core.Intrinsics.fptrunc(Core.BFloat16, x)
+let x = reinterpret(Float32, 0x00400000) # 2^-127, exactly the bf16 subnormal 0x0040
+    @test reinterpret(UInt16, compiled_bfloat_fptrunc(x)) === 0x0040
+    @test reinterpret(UInt16, compiled_bfloat_fptrunc(-x)) === 0x8040
+end
+# BFloat16 values that are exactly halfway after rounding to Float32 must not double round
+@test Base.invokelatest(Core.Intrinsics.fptrunc, Core.BFloat16, 1 + 0x1p-8 + 0x1p-40) === reinterpret(Core.BFloat16, 0x3f81)
+# 1.75 * 0.578125 - 2^-40 is just below a BFloat16 halfway point
+@test Base.invokelatest(Core.Intrinsics.fma_float, reinterpret.(Core.BFloat16, (0x3fe0, 0x3f14, 0xab80))...) === reinterpret(Core.BFloat16, 0x3f81)
+@noinline compiled_fma(a, b, c) = Core.Intrinsics.fma_float(a, b, c)
+let fma_cases = (
+        (0x3fe0, 0x3f14, 0xab80) => 0x3f81, # rounds incorrectly via Float32
+        (0x3fc0, 0x3f81, 0x8d80) => 0x3fc1, # 1.5 * (1 + 2^-7) is a halfway point, -2^-100 breaks the tie (lost in Float64)
+        (0x5f80, 0x5fc0, 0xff7f) => 0x7f01, # 1.5 * 2^128 overflows Float32, but -floatmax(BFloat16) brings it back
+    )
+    for (args, res) in fma_cases
+        a, b, c = reinterpret.(Core.BFloat16, args)
+        @test compiled_fma(a, b, c) === reinterpret(Core.BFloat16, res)
+        @test Base.invokelatest(Core.Intrinsics.fma_float, a, b, c) === reinterpret(Core.BFloat16, res)
+    end
+end
+# integer to BFloat16 conversions must not double round through Float32
+@noinline compiled_sitofp(::Type{T}, x) where {T} = Core.Intrinsics.sitofp(T, x)
+@noinline compiled_uitofp(::Type{T}, x) where {T} = Core.Intrinsics.uitofp(T, x)
+@test compiled_sitofp(Core.BFloat16, Int32(2^24 + 2^16 + 1)) === reinterpret(Core.BFloat16, 0x4b81)
+@test compiled_sitofp(Core.BFloat16, -Int32(2^24 + 2^16 + 1)) === reinterpret(Core.BFloat16, 0xcb81)
+@test compiled_uitofp(Core.BFloat16, UInt64(2)^60 + UInt64(2)^52 + 1) === reinterpret(Core.BFloat16, 0x5d81)
+let vals = Any[Int8(-128), Int16(-32768), typemin(Int32), typemax(Int32), typemin(Int64), typemax(Int64),
+               typemin(Int128), typemax(Int128), typemax(UInt32), typemax(UInt64), typemax(UInt128), 0, -1, 1]
+    for T in (Int16, Int32, Int64, Int128, UInt16, UInt32, UInt64, UInt128), _ in 1:200
+        # BFloat16 halfway points (9 significant bits, the last one set), and their neighbors
+        h = T(rand(0x0101:0x0002:0x01ff)) << rand(0:8sizeof(T) - 9 - (T <: Signed))
+        push!(vals, h, h - one(T), h + one(T))
+        T <: Signed && push!(vals, -h, -h - one(T), -h + one(T))
+    end
+    for n in vals
+        cvt = n isa Signed ? Core.Intrinsics.sitofp : Core.Intrinsics.uitofp
+        compiled = n isa Signed ? compiled_sitofp : compiled_uitofp
+        @test compiled(Core.BFloat16, n) === Base.invokelatest(cvt, Core.BFloat16, n)
+    end
+end
+# 128-bit integer <-> Float16 conversions may lower to libcalls (e.g. `__floattihf`)
+@noinline compiled_fptosi_f16(::Type{T}, x) where {T} = Core.Intrinsics.fptosi(T, x)
+@noinline compiled_fptoui_f16(::Type{T}, x) where {T} = Core.Intrinsics.fptoui(T, x)
+for n in Int128[0, 3, 2049, 2051, 65504, 65519, 65520, 65536, typemax(Int128)]
+    @test compiled_sitofp(Float16, n) === Float16(n)
+    @test compiled_sitofp(Float16, -n) === Float16(-n)
+    @test compiled_uitofp(Float16, UInt128(n)) === Float16(UInt128(n))
+end
+@test compiled_sitofp(Float16, typemin(Int128)) === -Inf16
+@test compiled_uitofp(Float16, typemax(UInt128)) === Inf16
+# LLVM miscompiles negative f16 -> i128 on Win64 with avx512fp16 (zero-extends the i64 result):
+# llvm/llvm-project#230703, fix in llvm/llvm-project#230779
+fptosi_f16_i128_broken = Sys.iswindows() && Sys.ARCH === :x86_64 &&
+    occursin("+avx512fp16", ccall(:jl_get_cpu_features, String, ()))
+for x in Float16[0, 0.5, 2.5, 5, 2049, 65504]
+    @test compiled_fptosi_f16(Int128, x) === trunc(Int128, x)
+    @test compiled_fptosi_f16(Int128, -x) === trunc(Int128, -x) broken=(fptosi_f16_i128_broken && x >= 1)
+    @test compiled_fptoui_f16(UInt128, x) === trunc(UInt128, x)
+end
+@static if Sys.ARCH === :x86_64 || Sys.ARCH === :i686
+    script = """
+        using InteractiveUtils
+        @noinline f(x::Float32) = Core.Intrinsics.fptrunc(Core.BFloat16, x)
+        code_native(stdout, f, (Float32,); debuginfo=:none, dump_module=false)
+    """
+    for cpu_target in ("native,+avx512bf16,+avx512vl", "native,+avxneconvert")
+        asm = read(`$(Base.julia_cmd(; cpu_target)) --startup-file=no -e $script`, String)
+        @test !occursin("vcvtneps2bf16", asm)
+    end
+end
 @test_throws ErrorException compiled_fptrunc(Float64, 1.234f0)
 @test_throws ErrorException compiled_fptrunc(Int32, 1.234)
 @test_throws ErrorException compiled_fptrunc(Float32, 1234)
@@ -325,6 +802,8 @@ end
     #   0       00000 0000000000 (incorrect)
     @test_intrinsic Core.Intrinsics.fptrunc Float16 0x1.0000000001p-25 Float16(6.0e-8)
     @test_intrinsic Core.Intrinsics.fptrunc Float16 -0x1.0000000001p-25 Float16(-6.0e-8)
+    # Float64 -> Float32 rounds to one Float32 ulp above a Float16 subnormal midpoint
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 2.2917987282156105e-5 Float16(2.295e-5)
 
     # float_to_half/bfloat_to_float special cases
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Inf32 Inf16
@@ -370,6 +849,12 @@ end
     @test_intrinsic Core.Intrinsics.muladd_float Float16(3.3) Float16(4.4) Float16(5.5) Float16(20.02)
     @test_intrinsic Core.Intrinsics.fma_float Float16(0x1.004p0) Float16(1.25) Float16(0x1p-12) Float16(0x1.408p0)
     @test Float16(0x1.004p0)*Float16(1.25)+Float16(0x1p-12) === Float16(0x1.404p0) # for comparison
+    # a*b+c rounded to Float32 is exactly halfway between two Float16 values
+    @test_intrinsic Core.Intrinsics.fma_float Float16(-336.0) Float16(-37.25) Float16(0.0003653) Float16(1.252e4)
+    # muladd must be either fma(x, y, z) or x*y + z, not a*b+c rounded to Float32 then to Float16
+    let (x, y, z) = reinterpret.(Float16, (0x8d2e, 0x7258, 0x85fe))
+        @test Base.invokelatest(Core.Intrinsics.muladd_float, x, y, z) === x * y + z
+    end
 
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float16(3.3) Float16(3.3) true
@@ -563,4 +1048,98 @@ end)()
         Core.LLVMPtr{T,A}, Tuple{Core.LLVMPtr{T,A}}, ptr)
     f(gws) = passthrough(Core.bitcast(Core.LLVMPtr{UInt32,1}, gws))
     f(C_NULL)
+end
+
+# Test bitcast on union values with inline_roots (split representation)
+@testset "bitcast union with inline_roots" begin
+    struct BitcastMixedGC
+        a::Vector{Int}
+        b::Vector{Int}
+        c::Vector{Float64}
+        d::Int
+    end
+    @noinline function _bitcast_returns_union(x::Int)
+        x == 0 && return BitcastMixedGC(Int[], Int[], Float64[], 0)
+        x == 1 && return UInt(0)
+        x == 2 && return Int(0)
+        x == 3 && return C_NULL
+        return nothing
+    end
+    function _bitcast_trigger(x::Int)
+        val = _bitcast_returns_union(x)
+        return Core.Intrinsics.bitcast(Ptr{Nothing}, val)
+    end
+    @test _bitcast_trigger(1) === Ptr{Nothing}(0)
+    @test _bitcast_trigger(3) === Ptr{Nothing}(0)
+end
+
+# Test unsafe_store! on union values with inline_roots (split representation)
+@testset "pointerset union with inline_roots" begin
+    struct PointersetMixedGC
+        a::Vector{Int}
+        b::Int
+    end
+    @noinline function _pointerset_returns_union(x::Int)
+        x == 0 && return PointersetMixedGC(Int[1,2,3], 42)
+        x == 1 && return UInt(0)
+        return nothing
+    end
+    function _pointerset_trigger(x::Int)
+        val = _pointerset_returns_union(x)::PointersetMixedGC
+        p = Ptr{PointersetMixedGC}(Libc.malloc(2 * sizeof(PointersetMixedGC)))
+        GC.@preserve val begin
+            unsafe_store!(p, val, 1)
+            unsafe_store!(p, val, 2)
+            r1 = unsafe_load(p, 1)
+            r2 = unsafe_load(p, 2)
+        end
+        Libc.free(p)
+        return r1.a, r1.b, r2.a, r2.b
+    end
+    @test _pointerset_trigger(0) == (Int[1,2,3], 42, Int[1,2,3], 42)
+end
+
+# https://github.com/JuliaLang/julia/issues/61436
+tofloat(x) = Core.Intrinsics.uitofp(Float64, x)
+@test tofloat(UInt128(0)) == 0.0
+
+# https://github.com/JuliaLang/julia/issues/61436
+primitive type UIntN256 <: Unsigned 256 end
+@test tofloat(reinterpret(UIntN256, (zeros(UInt8, 32)...,))) == 0.0
+
+@testset "cpu_supports runtime fallback agrees with constant folding" begin
+    CPUID = Base.BinaryPlatforms.CPUID
+    @noinline runtime_cpu_supports(s::Symbol) = Core.Intrinsics.cpu_supports(s)
+    function check(query::Symbol)
+        folded = @eval () -> Core.Intrinsics.cpu_supports($(QuoteNode(query)))
+        @test Base.invokelatest(folded) === runtime_cpu_supports(query)
+    end
+    for name in CPUID._codegen_feature_names()
+        check(name)
+    end
+    # Feature lists, as the macro emits for CPU models; names of other architectures are skipped
+    for cpu in ("generic", "x86-64-v3", "haswell", "sapphirerapids", "diamondrapids", "cortex-a78", "neoverse-v2")
+        features = CPUID._cpu_model_features(cpu)
+        features === nothing && continue
+        query = Symbol(join(features, ','))
+        check(query)
+        @test runtime_cpu_supports(query) === all(runtime_cpu_supports, features)
+    end
+    # Features Julia deliberately keeps out of codegen always test false
+    @static if Sys.ARCH === :x86_64
+        for name in (:rdrnd, :rdseed, :xsaveopt, :avx512bf16, :avxneconvert, Symbol("avx10.1"), Symbol("avx10.2"))
+            @test name in CPUID._codegen_feature_names()
+            folded = @eval () -> Core.Intrinsics.cpu_supports($(QuoteNode(name)))
+            @test !Base.invokelatest(folded)
+            @test !runtime_cpu_supports(name)
+        end
+    end
+    @test !runtime_cpu_supports(Symbol(""))
+    @test !runtime_cpu_supports(Symbol("sse2,not_a_real_feature"))
+    # Code for any target must use the runtime's hard-float calling convention (lp64d)
+    @static if Sys.ARCH === :riscv64
+        for cpu in ("generic", "generic-rv64")
+            @test :d in CPUID._cpu_model_features(cpu)
+        end
+    end
 end

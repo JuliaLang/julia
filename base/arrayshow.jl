@@ -62,6 +62,7 @@ function alignment(io::IO, @nospecialize(X::AbstractVecOrMat),
         cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer,
         #= `size(X) may not infer, set this in caller =# ncols::Integer=size(X, 2)) where {T,V}
     a = Tuple{T, V}[]
+    width = 0
     for j in cols # need to go down each column one at a time
         l = r = 0
         for i in rows # plumb down and see what largest element sizes are
@@ -74,14 +75,15 @@ function alignment(io::IO, @nospecialize(X::AbstractVecOrMat),
             r = max(r, aij[2]) # right characters
         end
         push!(a, (l, r)) # one tuple per column of X, pruned to screen width
-        if length(a) > 1 && sum(map(sum,a)) + sep*length(a) >= cols_if_complete
-            pop!(a) # remove this latest tuple if we're already beyond screen width
+        width += l + r + sep
+        if length(a) > 1 && width >= cols_if_complete
+            width -= sum(pop!(a)) + sep # remove this latest tuple if we're already beyond screen width
             break
         end
     end
     if 1 < length(a) < ncols
-        while sum(map(sum,a)) + sep*length(a) >= cols_otherwise
-            pop!(a)
+        while width >= cols_otherwise
+            width -= sum(pop!(a)) + sep
         end
     end
     return a
@@ -105,7 +107,7 @@ function print_matrix_row(io::IO,
             a = alignment(io, x)::Tuple{Int,Int}
 
             # First try 3-arg show
-            sx = sprint(show, "text/plain", x, context=io, sizehint=0)
+            sx = sprint(show, MIME"text/plain"(), x, context=io, sizehint=0)
 
             # If the output contains line breaks, try 2-arg show instead.
             if occursin('\n', sx)
@@ -183,7 +185,7 @@ function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, h
     screenwidth -= length(pre)::Int + length(post)::Int
     presp = repeat(" ", length(pre)::Int)  # indent each row to match pre string
     postsp = ""
-    @assert textwidth(hdots) == textwidth(ddots)
+    @assert textwidth(hdots) == textwidth(ddots) "hdots and ddots must have same textwidth"
     sepsize = length(sep)::Int
     m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
@@ -290,7 +292,7 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
     reached_last_d = false
     for I in Is
         idxs = I.I
-        @label _ begin
+        @label entry begin
             if limit
                 for i = 1:nd
                     ii = idxs[i]
@@ -308,16 +310,16 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
                                 szj = length(axs[j+2])
                                 indj = tailinds[j]
                                 if szj>10 && first(indj)+2 < idxs[j] <= last(indj)-3
-                                    break _
+                                    break entry
                                 end
                             end
                             print(io, ";"^(i+2))
                             print(io, " \u2026 ")
                             show_full && print(io, "\n\n")
-                            break _
+                            break entry
                         end
                         if ind[firstindex(ind)+2] < ii <= ind[end-3]
-                            break _
+                            break entry
                         end
                     end
                 end
@@ -387,11 +389,17 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
         io = IOContext(io, :limit => false)
     end
 
-    if get(io, :limit, false)::Bool && displaysize(io)[1]-4 <= 0
-        return print(io, " …")
-    else
-        println(io)
+    if get(io, :limit, false)::Bool
+        # when there is no vertical room to show even one row of entries
+        # plus a vertical ellipsis, show as many entries as fit on a single
+        # line, truncated to the terminal width (#58323)
+        screenheight = displaysize(io)[1] - 4
+        if screenheight <= 0 || (screenheight == 1 && (ndims(X) > 2 || size(X, 1) > 1))
+            print(io, ' ')
+            return _show_oneline_truncated(io, X)
+        end
     end
+    println(io)
 
     # 3) update typeinfo
     #
@@ -405,6 +413,15 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     # 4) show actual content
     recur_io = IOContext(io, :SHOWN_SET => X)
     print_array(recur_io, X)
+end
+
+function _show_oneline_truncated(io::IO, X::AbstractArray)
+    cols = displaysize(io)[2]
+    used = textwidth(sprint(summary, X; context=io)) + 2
+    width = max(cols - used, 8)
+    ctx = IOContext(io, :typeinfo => typeof(X), :compact => true)
+    str = sprint(show, X; context=ctx, sizehint=min(4width, 4096))
+    print(io, _truncate_at_width_or_chars(get(io, :color, false)::Bool, str, width))
 end
 
 ## printing with `show`
@@ -422,7 +439,7 @@ _show_nonempty(io::IO, X::AbstractMatrix, prefix::String) =
     _show_nonempty(io, inferencebarrier(X), prefix, false, axes(X))
 
 function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String, drop_brackets::Bool, axs::Tuple{AbstractUnitRange,AbstractUnitRange})
-    @assert !isempty(X)
+    @assert !isempty(X) "X should be non-empty"
     limit = get(io, :limit, false)::Bool
     indr, indc = axs
     nr, nc = length(indr), length(indc)
@@ -551,7 +568,8 @@ end
 # returning Any, as this would cause incorrect printing in e.g. `Vector[Any[1]]`,
 # because eltype(Vector) == Any so `Any` wouldn't be printed in `Any[1]`)
 typeinfo_eltype(typeinfo) = nothing # element type not precisely known
-typeinfo_eltype(typeinfo::Type{Union{}}, slurp...) = nothing
+typeinfo_eltype(typeinfo::Type{Union{}}) = nothing
+typeinfo_eltype(::Type{Union{}}, slurp...) = throw(MethodError(typeinfo_eltype, (Union{}, slurp...)))
 typeinfo_eltype(typeinfo::Type{<:AbstractArray{T}}) where {T} = eltype(typeinfo)
 typeinfo_eltype(typeinfo::Type{<:AbstractDict{K,V}}) where {K,V} = eltype(typeinfo)
 typeinfo_eltype(typeinfo::Type{<:AbstractSet{T}}) where {T} = eltype(typeinfo)

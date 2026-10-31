@@ -4,6 +4,17 @@
 
 include("tempdepot.jl")
 
+function compileall_test_success(cmd)
+    mktemp() do _, output
+        ok = success(pipeline(cmd; stdout=output, stderr=output))
+        if !ok
+            seekstart(output)
+            write(stderr, read(output))
+        end
+        return ok
+    end
+end
+
 function precompile_test_harness(@nospecialize(f))
     load_path = mkdepottempdir()
     try
@@ -51,10 +62,15 @@ precompile_test_harness() do dir
     OncePerFoo.f() # fire init during compilation time
 
     """)
-    Base.compilecache(Base.PkgId("OncePerFoo"))
+    redirect_stdout(devnull) do
+        Base.compilecache(Base.PkgId("OncePerFoo"))
+    end
     new_env = Dict(["JULIA_DEPOT_PATH" => join(DEPOT_PATH, Sys.iswindows() ? ';' : ':'),
                "JULIA_LOAD_PATH" => join(LOAD_PATH, Sys.iswindows() ? ';' : ':')])
-    @test success(pipeline(addenv(`$(Base.julia_cmd()) --compile=all -t1,0 --strip-ir --output-o $(dir)/sys.o.a $(image_file) `, new_env), stderr=stderr, stdout=stdout)) skip=(Sys.WORD_SIZE == 32)
+    @test compileall_test_success(addenv(
+        `$(Base.julia_cmd()) --compile=all -t1,0 --strip-ir --output-o $(dir)/sys.o.a $(image_file)`,
+        new_env,
+    )) skip=(Sys.WORD_SIZE == 32)
     if isfile(joinpath(dir, "sys.o.a"))
         Base.Linking.link_image(joinpath(dir, "sys.o.a"), joinpath(dir, "sys.so"))
         str = readchomp(`$(Base.julia_cmd()) -t1,0 -J  $(dir)/sys.so -e 'Base.scrub_repl_backtrace(nothing); println("loaded"); main()'`)

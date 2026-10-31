@@ -22,6 +22,9 @@ function eager_mode()
 end
 is_available() = @static Sys.isapple() ? true : false
 
+# JLLWrappers path compatibility accessor
+get_llvmlibunwind_path() = llvmlibunwind_path
+
 function __init__()
     global llvmlibunwind_path = string(llvmlibunwind.path)
     global artifact_dir = dirname(Sys.BINDIR)

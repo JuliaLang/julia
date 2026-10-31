@@ -75,6 +75,27 @@ end
     @test scrubbed_repl_bt[1].func == :foo
     @test length(scrubbed_nonrepl_bt) == 3
 
+    # driver entries (script/-e execution) cut like REPL entries, including
+    # the eval/include machinery they run user code through
+    script_bt = [StackFrame(:foo, "foo.jl", 1),
+          StackFrame(Symbol("top-level scope"), "script.jl", 2),
+          StackFrame(:include_string, "loading.jl", 3),
+          StackFrame(:_include, "loading.jl", 4),
+          StackFrame(:__script_entry_include, "client.jl", 5),
+          StackFrame(:exec_options, "client.jl", 6),
+          StackFrame(:_start, "client.jl", 7)]
+    @test [f.func for f in Base.scrub_repl_backtrace(script_bt)] ==
+        [:foo, Symbol("top-level scope")]
+
+    # machinery frames not adjacent to the driver cut belong to user code
+    user_eval_bt = [StackFrame(:foo, "foo.jl", 1),
+          StackFrame(:eval, "boot.jl", 2),
+          StackFrame(Symbol("top-level scope"), "script.jl", 3),
+          StackFrame(:eval, "boot.jl", 4),
+          StackFrame(:__script_entry_eval, "client.jl", 5)]
+    @test [f.func for f in Base.scrub_repl_backtrace(user_eval_bt)] ==
+        [:foo, :eval, Symbol("top-level scope")]
+
     errio = IOBuffer()
     lower_errexpr = :(@bad)
     Base.eval_user_input(errio, lower_errexpr, false)

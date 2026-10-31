@@ -1,7 +1,5 @@
 using Test, JuliaLowering
 
-@testset "Array syntax" begin
-
 test_mod = Module()
 
 # Test that two array element types are equal and that they are also equal
@@ -68,6 +66,15 @@ let
 end
 """) ≅ [1 2 3;
         4 1 2]
+
+# a splat outside the rows is a row of its own
+@test JuliaLowering.include_string(test_mod, """
+let
+    xs = (1,2)
+    [xs...; 3 4]
+end
+""") ≅ [1 2;
+        3 4]
 
 # typed_vcat
 @test JuliaLowering.include_string(test_mod, """
@@ -158,5 +165,3 @@ let var"end" = [1,2,3], y = [7,8,9]
     y[var"end"[var"end"]]
 end
 """) === 9
-
-end # @testset "Array syntax" begin

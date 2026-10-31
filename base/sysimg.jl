@@ -37,6 +37,13 @@ Use [`Base.include`](@ref) to evaluate a file into another module.
     is *syntactic*. I.e. assigning `const myinclude = include` may require
     an explicit `@Core.latestworld` call after `myinclude`.
 
+!!! note
+    `include` always evaluates the file in global scope, even when called inside a function:
+    the included code cannot see or assign the function's local variables, and its new
+    definitions are not visible to the rest of the calling function except via
+    [`invokelatest`](@ref) (see [the world age mechanism](@ref man-world-age)). Thus,
+    `include` should normally only be called at top level.
+
 !!! compat "Julia 1.5"
     Julia 1.5 is required for passing the `mapexpr` argument.
 """
@@ -89,7 +96,7 @@ let
             :SHA, # transitive through Random
             :Sockets, # used by stream.jl
 
-            # Transitive through LingAlg
+            # Transitive through LinearAlgebra
             # OpenBLAS_jll
             # libblastrampoline_jll
 
@@ -101,10 +108,9 @@ let
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)
 
-    tot_time_stdlib = 0.0
     # use a temp module to avoid leaving the type of this closure in Main
     push!(empty!(LOAD_PATH), "@stdlib")
-    m = Core.Module()
+    m = Module()
     GC.@preserve m begin
         print_time = @eval m (mod, t) -> (print(rpad(string(mod) * "  ", $maxlen + 3, "─"));
                                           Base.time_print(stdout, t * 10^9); println())
@@ -158,4 +164,5 @@ Base.TOML.reinit!(Base.TOML_CACHE.p, "")
     BINDIR = ""
     STDLIB = ""
 end
+Base.Compiler.set_typeinf_world!()
 end

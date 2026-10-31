@@ -308,7 +308,7 @@ function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     return PCRE.exec_r(r.regex, String(s), offset, r.match_options)
 end
 
-function occursin(r::Regex, s::SubString{String}; offset::Integer=0)
+function occursin(r::Regex, s::DenseUTF8String; offset::Integer=0)
     compile(r)
     return PCRE.exec_r(r.regex, s, offset, r.match_options)
 end
@@ -340,7 +340,7 @@ function startswith(s::AbstractString, r::Regex)
     return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED)
 end
 
-function startswith(s::SubString{String}, r::Regex)
+function startswith(s::DenseUTF8String, r::Regex)
     compile(r)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ANCHORED)
 end
@@ -372,7 +372,7 @@ function endswith(s::AbstractString, r::Regex)
     return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED)
 end
 
-function endswith(s::SubString{String}, r::Regex)
+function endswith(s::DenseUTF8String, r::Regex)
     compile(r)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED)
 end
@@ -427,7 +427,7 @@ true
 """
 function match end
 
-function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
+function match(re::Regex, str::DenseUTF8String, idx::Integer,
                add_opts::UInt32=UInt32(0))
     compile(re)
     opts = re.match_options | add_opts
@@ -439,10 +439,15 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
     n = div(PCRE.ovec_length(data), 2) - 1
     p = PCRE.ovec_ptr(data)
     mat = SubString(str, unsafe_load(p, 1)+1, prevind(str, unsafe_load(p, 2)+1))
-    cap = Union{Nothing,SubString{String}}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
+    T = if str isa SubString
+        typeof(str)
+    else
+        SubString{typeof(str)}
+    end
+    cap = Union{Nothing,T}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
                                         SubString(str, unsafe_load(p,2i+1)+1,
                                                   prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
-    off = Int[ unsafe_load(p,2i+1)+1 for i=1:n ]
+    off = Int[ unsafe_load(p,2i+1) == PCRE.UNSET ? 0 : unsafe_load(p,2i+1)+1 for i=1:n ]
     result = RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re)
     PCRE.free_match_data(data)
     return result
@@ -450,12 +455,10 @@ end
 
 function _annotatedmatch(m::RegexMatch{S}, str::AnnotatedString{S}) where {S<:AbstractString}
     RegexMatch{AnnotatedString{S}}(
-        (@inbounds SubString{AnnotatedString{S}}(
-            str, m.match.offset, m.match.ncodeunits, Val(:noshift))),
+        (@inbounds raw_substring(str, m.match.offset + 1, m.match.ncodeunits)),
         Union{Nothing,SubString{AnnotatedString{S}}}[
             if !isnothing(cap)
-                (@inbounds SubString{AnnotatedString{S}}(
-                    str, cap.offset, cap.ncodeunits, Val(:noshift)))
+                (@inbounds raw_substring(str, cap.offset + 1, cap.ncodeunits))
             end for cap in m.captures],
         m.offset, m.offsets, m.regex)
 end
@@ -476,10 +479,12 @@ end
 
 match(r::Regex, s::AbstractString) = match(r, s, firstindex(s))
 match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
-    "regex matching is only available for the String and AnnotatedString types; use String(s) to convert"
+    "regex matching is only available for some dense (memory backed strings); use String(s) to convert s to String"
 ))
 
-findnext(re::Regex, str::Union{String,SubString}, idx::Integer) = _findnext_re(re, str, idx, C_NULL)
+function findnext(re::Regex, str::DenseUTF8String, idx::Integer)
+    _findnext_re(re, str, idx, C_NULL)
+end
 
 # TODO: return only start index and update deprecation
 # duck-type str so that external UTF-8 string packages like StringViews can hook in
@@ -650,11 +655,8 @@ function _write_capture(io::IO, group::Int, str, r, re::RegexAndMatchData)
     len = PCRE.substring_length_bynumber(re.match_data, group)
     # in the case of an optional group that doesn't match, len == 0
     len == 0 && return len
-    ensureroom(io, len+1)
-    PCRE.substring_copy_bynumber(re.match_data, group,
-        pointer(io.data, io.ptr), len+1)
-    io.ptr += len
-    io.size = max(io.size, io.ptr - 1)
+    start = unsafe_load(PCRE.ovec_ptr(re.match_data), 2group+1)
+    GC.@preserve str unsafe_write(io, pointer(str, start+1), len)
     return len
 end
 function _write_capture(io::IO, group::Int, str, r, re)
@@ -706,6 +708,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                     i > e && replace_err(repl)
                 end
                 groupname = SubString(repl, groupstart, prevind(repl, i))
+                isempty(groupname) && replace_err(repl)
                 if all(isdigit, groupname)
                     group = parse(Int, groupname)
                 elseif re isa RegexAndMatchData

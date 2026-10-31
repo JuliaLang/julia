@@ -7,7 +7,7 @@
 #include "julia_internal.h"
 #ifndef _OS_WINDOWS_
 #include <sys/mman.h>
-#ifndef MADV_HUGEPAGE
+#if defined(_OS_LINUX_) && !defined(MADV_HUGEPAGE)
 #define MADV_HUGEPAGE 14 //  Compatibility for kernels < 2.6.38 (as in numpy implementation)
 #endif
 #if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)
@@ -81,10 +81,6 @@ extern jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
             ((ty)(cb->func)) args; \
         } \
     } while (0)
-
-#ifdef __cplusplus
-}
-#endif
 
 // =========================================================================== //
 // malloc wrappers, aligned allocation
@@ -190,18 +186,35 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads);
 // list of another thread
 extern jl_mutex_t finalizers_lock;
 // `ptls->finalizers` and `finalizer_list_marked` might have tagged pointers.
-// If an object pointer has the lowest bit set, the next pointer is an unboxed c function pointer.
-// If an object pointer has the second lowest bit set, the current pointer is a c object pointer.
+// If an object pointer has `GC_FIN_CFUNC_TAG` set, the next pointer is an unboxed c function pointer.
+// If an object pointer has `GC_FIN_COBJ_TAG` set, the current pointer is a c object pointer.
 //   It must be aligned at least 4, and it finalized immediately (at "quiescence").
-// `to_finalize` should not have tagged pointers.
+// `to_finalize` carries the same tags: `sweep_finalizer_list` moves entries over unchanged.
+#define GC_FIN_CFUNC_TAG 1
+#define GC_FIN_COBJ_TAG  2
+#define GC_FIN_TAG_MASK  3
+
+#define JL_GC_ENCODE_PUSHFINLIST(n) ((((size_t)(n)) << 2) | JL_GCFRAME_FINLIST)
+
+// Outside finalizer lists, the GC ignores a value in a GC frame whose two low
+// bits are 01 or 10. Embedders can use these patterns to root their own tagged
+// immediates with JL_GC_PUSH*, as long as such values are never stored in
+// fields the GC scans itself. The pattern 11 is reserved for Julia; such values
+// are currently ignored as well, but embedders must not rely on that. Only
+// 4-byte alignment of objects is needed, so this works on 32-bit platforms too;
+// objects are in fact 16-byte aligned (JL_HEAP_ALIGNMENT).
+STATIC_INLINE int gc_is_tagged_immediate(const void *v) JL_NOTSAFEPOINT
+{
+    return ((uintptr_t)v & 0x3) != 0;
+}
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 
 void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT;
-void run_finalizer(jl_task_t *ct, void *o, void *ff);
-void run_finalizers(jl_task_t *ct, int finalizers_thread);
+void run_finalizer(jl_task_t *ct, void *o, void *ff) JL_CANSAFEPOINT;
+void run_finalizers(jl_task_t *ct, int finalizers_thread) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_value_t *f) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o);
+JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o) JL_CANSAFEPOINT;
 
 
 // =========================================================================== //
@@ -226,5 +239,12 @@ extern int gc_logging_enabled;
 
 void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT;
+
+int gc_slot_to_fieldidx(void *_obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT;
+int gc_slot_to_arrayidx(void *_obj, void *begin) JL_NOTSAFEPOINT;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // JL_GC_COMMON_H

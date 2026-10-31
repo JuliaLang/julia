@@ -15,7 +15,7 @@ extern "C" {
 #define _equal_wchar_(x, y, ctx) ((x) == (y))
 #define _hash_wchar_(x, ctx) inthash((uint32_t) ((uintptr_t) (x)))
 #include "htable.inc"
-HTIMPL_R(wcharhash, _hash_wchar_, _equal_wchar_)
+HTIMPL_R(wcharhash, _hash_wchar_, _equal_wchar_, _HTIMPL_IDENTITY_KEYALLOC, _HTIMPL_NOOP_KEYFREE)
 
 static int is_uws(uint32_t wc)
 {

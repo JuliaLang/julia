@@ -1,5 +1,5 @@
 SF:<FILENAME>
-DA:3,1
+DA:3,2
 DA:4,2
 DA:5,0
 DA:7,1
@@ -9,11 +9,13 @@ DA:10,5
 DA:11,1
 DA:12,1
 DA:14,0
-DA:17,1
+DA:17,2
 DA:18,1
 DA:19,1
 DA:20,1
 DA:22,1
-LH:13
-LF:15
+DA:25,1
+DA:27,1
+LH:15
+LF:17
 end_of_record

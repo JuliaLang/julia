@@ -336,6 +336,9 @@ For source reflection macros (`@which`, `@edit`, `@less` etc):
 Type annotations may be used instead of concrete values for the callable or for any of the arguments. The generated code
 will directly use the right-hand side of the type annotation instead of extracting the type of a value at runtime.
 
+!!! compat "Julia 1.13"
+    Support for type annotations requires at least Julia 1.13.
+
 This is particularly useful for callable objects (notably, for those that are hard to construct by hand on the spot),
 or when wanting to provide a type that is not concrete. However, support for callable objects requires setting
 `use_signature_tuple` to true, which is not a default (see the corresponding section below).
@@ -387,6 +390,9 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
     # Ignore assignments (e.g. `@edit a = f(x)` gets turned into `@edit f(x)`)
     if isa(ex0, Expr) && ex0.head === :(=) && isa(ex0.args[1], Symbol)
         return gen_call_with_extracted_types(__module__, fcn, ex0.args[2], kws; is_source_reflection, supports_binding_reflection, use_signature_tuple)
+    end
+    if isa(ex0, Symbol) && (fcn === :which || fcn === :less || fcn === :edit)
+        return Expr(:call, fcn, __module__, QuoteNode(ex0))
     end
     _where_params = nothing
     if isa(ex0, Expr)
@@ -507,6 +513,101 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
             return expand_ref_begin_end!(ex0, __module__) do ex
                 gen_call(fcn, Any[getindex, ex.args...], where_params, kws; use_signature_tuple)
             end
+        elseif ex0.head === :ncat || ex0.head === :typed_ncat
+            if ex0.head === :ncat
+                f = Base.hvncat
+                args = ex0.args
+            else
+                f = Base.typed_hvncat
+                args = ex0.args[2:end]
+            end
+            d = args[1]
+            args = args[2:end]
+            # This mirrors `expand-ncat` in julia-syntax.scm.
+            # The recursive helpers below call themselves through `@__FUNCTION__` rather than
+            # by name, so that they don't capture themselves and end up boxed.
+            is_row(x) = isa(x, Expr) && (x.head === :row || x.head === :nrow)
+            function extract_elements(x)
+                if isa(x, Expr)
+                    eexargs = x.head === :nrow ? x.args[2:end] :
+                        x.head === :row  ? x.args :
+                        nothing
+                    if eexargs === nothing
+                        return Any[x]
+                    else
+                        return collect(Iterators.flatten((@__FUNCTION__).(eexargs)))
+                    end
+                end
+                return Any[x]
+            end
+            function get_is_row_first(x)
+                if isa(x, Expr)
+                    if x.head === :nrow
+                        x = x.args[2:end]
+                    elseif x.head === :row
+                        return true
+                    end
+                end
+                isa(x, Vector) && return any((@__FUNCTION__).(x))
+                return false
+            end
+            function get_shape(a, is_row_first, d)
+                # Unwrap one level of row/nrow expressions
+                function get_next(x)
+                    is_row(x) || return [x]
+                    x.head === :nrow && d <= x.args[1] + 1 && return x.args[2:end]
+                    x.head === :row && d <= 1 && return x.args
+                    return [x]
+                end
+                # Base cases
+                (d == 0 || (d == 1 && !is_row_first)) && return [[length(a)]]
+                (d == 3 && is_row_first) && return (@__FUNCTION__)(a, is_row_first, 2)
+                # Recursive case: the first entry of each child shape is its number of elements,
+                # and every child shape has the same depth, which depends only on `d`
+                shapes = (@__FUNCTION__).(get_next.(a), is_row_first, d - 1)
+                counts = [s[1][1] for s in shapes]
+                result = [[sum(counts)], counts]
+                for level in 2:length(shapes[1])
+                    push!(result, reduce(vcat, [s[level] for s in shapes]))
+                end
+                return result
+            end
+            function get_dims(a, is_row_first, d)
+                if d < 2 && !is_row(a[1])
+                    [length(a)]
+                elseif d == 1
+                    [(@__FUNCTION__)(a[1].args, is_row_first, 0)[1]; length(a)]
+                elseif d == 3 && is_row_first
+                    (@__FUNCTION__)(a, is_row_first, 2)
+                else
+                    anext = isa(a[1], Expr) && a[1].head === :nrow && d == a[1].args[1] + 1 ?
+                        a[1].args[2:end] :
+                        [a[1]]
+                    [length(a); (@__FUNCTION__)(anext, is_row_first, d - 1)]
+                end
+            end
+            is_row_first = get_is_row_first(args)
+            is_1d = !any(is_row, args)
+            xs = collect(Iterators.flatten(extract_elements.(args)))
+            if is_1d
+                args = [ex0.head === :ncat ? [] : Any[ex0.args[1]]; d; xs]
+                return gen_call(fcn, Any[f, args...], where_params, kws; use_signature_tuple)
+            else
+                if any(x -> isexpr(x, :...), xs)
+                    return Expr(:call, :error, "Splatting ... in an hvncat with multiple dimensions is not supported")
+                end
+                shape = get_shape(args, is_row_first, d)
+                # balanced if every slice along each dimension has the same number of elements
+                is_balanced = all(level -> all(==(first(level)), level), @view(shape[2:end]))
+                dimsshape = if is_balanced
+                    reverse!(get_dims(args, is_row_first, d))
+                else
+                    # lowering lists the levels innermost first
+                    reverse!(map(x -> Expr(:tuple, x...), shape))
+                end
+                args = [ex0.head === :ncat ? [] : Any[ex0.args[1]]; Expr(:tuple, dimsshape...); is_row_first; xs]
+                return gen_call(fcn, Any[f, args...], where_params, kws; use_signature_tuple)
+            end
         else
             for (head, f) in Any[:hcat => Base.hcat,
                                  :(.) => Base.getproperty,
@@ -555,20 +656,16 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0; is_sourc
     return gen_call_with_extracted_types(__module__, fcn, arg, kws; is_source_reflection, supports_binding_reflection, use_signature_tuple)
 end
 
-for fname in [:which, :less, :edit, :functionloc]
+for fname in [:which, :less, :edit, :functionloc, :methods]
     @eval begin
         macro ($fname)(ex0)
             gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0, Expr[];
                                           is_source_reflection = true,
-                                          supports_binding_reflection = $(fname === :which),
-                                          use_signature_tuple = true)
+                                          supports_binding_reflection = $(fname in (:which,:less,:edit)),
+                                          # `methods` takes a `(f, types)` pair rather than a signature tuple
+                                          use_signature_tuple = $(fname !== :methods))
         end
     end
-end
-
-macro which(ex0::Symbol)
-    ex0 = QuoteNode(ex0)
-    return :(which($__module__, $ex0))
 end
 
 for fname in [:code_warntype, :code_llvm, :code_native,
@@ -605,9 +702,36 @@ returns the `Method` object for the method that would be called for those argume
 to a variable, it returns the module in which the variable was bound. It calls out to the
 [`which`](@ref) function.
 
-See also: [`@less`](@ref), [`@edit`](@ref).
+See also: [`@less`](@ref), [`@edit`](@ref), [`@methods`](@ref).
 """
 :@which
+
+"""
+    @methods
+
+Applied to a function call, it uses the types of the given arguments to return the list of
+`Method`s that could be applicable, i.e. all methods whose signature is compatible with those
+argument types. It calls out to the [`methods`](@ref) function.
+
+Just like [`@which`](@ref), the arguments are interpreted as values, so their concrete types
+are used. To query against another type, annotate the argument with `::`, e.g.
+`@methods f(::Integer)`. Unlike `@which`, which returns the single method that would be
+dispatched for a concrete call, `@methods` lists every matching method, which is particularly
+useful when the argument types are non-concrete (abstract types, `Union`s or `UnionAll`s).
+
+# Examples
+```julia-repl
+julia> @methods isvalid(::AbstractChar, ::Integer)
+
+julia> @methods isvalid('a', 1)
+```
+
+!!! compat "Julia 1.14"
+    This macro requires at least Julia 1.14.
+
+See also: [`@which`](@ref), [`methods`](@ref).
+"""
+:@methods
 
 """
     @less
@@ -657,7 +781,11 @@ See also: [`code_lowered`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref
     @code_warntype
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_warntype`](@ref) on the resulting expression.
+[`code_warntype`](@ref) on the resulting expression. Use the optional argument `optimize` with
+
+    @code_warntype optimize=true foo(x)
+
+to also apply additional optimizations, such as inlining (the default is `optimize=false`).
 
 See also: [`code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
@@ -696,7 +824,7 @@ by putting it before the function call, like this:
 
 * Set assembly syntax by setting `syntax` to `:intel` (default) for Intel syntax or `:att` for AT&T syntax.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
-* If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
+* If `binary` is `true`, also print the binary machine code for each instruction preceded by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
 
 See also: [`code_native`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref).
@@ -748,8 +876,12 @@ julia> @time_imports using CSV
 A macro to execute an expression and show any methods that were compiled (or recompiled in yellow),
 like the julia args `--trace-compile=stderr --trace-compile-timing` but specifically for a call.
 
+The system may look inside the `@trace_compile` expression and compile some of the called
+code before execution of the top-level expression begins. That compilation is not shown.
+To include it, use `@trace_compile @eval ...` as in the example below.
+
 ```julia-repl
-julia> @trace_compile rand(2,2) * rand(2,2)
+julia> @trace_compile @eval rand(2,2) * rand(2,2)
 #=   39.1 ms =# precompile(Tuple{typeof(Base.rand), Int64, Int64})
 #=  102.0 ms =# precompile(Tuple{typeof(Base.:(*)), Array{Float64, 2}, Array{Float64, 2}})
 2×2 Matrix{Float64}:
@@ -786,7 +918,7 @@ When using `@activate`, additional options for a component may be specified in
 square brackets `@activate Compiler[:option1, :option]`
 
 Currently `Compiler` and `JuliaLowering` are the only available components that
-may be activatived.
+may be activated.
 
 For `@activate Compiler`, the following options are available:
 1. `:reflection` - Activate the compiler for reflection purposes only.
@@ -830,5 +962,7 @@ macro activate(what)
     options = map(options) do opt
         Expr(:kw, opt, true)
     end
-    return :(Base.require($__module__, $(QuoteNode(Component))).activate!(; $(options...)))
+    return :(let M = Base.require($__module__, $(QuoteNode(Component)))
+                 @invokelatest M.activate!(; $(options...))
+             end)
 end

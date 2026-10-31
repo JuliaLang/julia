@@ -5,9 +5,9 @@ let
 end
 #---------------------
 1   1
-2   (= slot₁/a %₁)
+2   (= slot₃/c %₁)
 3   (= slot₂/b %₁)
-4   (= slot₃/c %₁)
+4   (= slot₁/a %₁)
 5   (return %₁)
 
 ########################################
@@ -18,9 +18,9 @@ end
 #---------------------
 1   TestMod.f
 2   (call %₁)
-3   (= slot₁/a %₂)
+3   (= slot₃/c %₂)
 4   (= slot₂/b %₂)
-5   (= slot₃/c %₂)
+5   (= slot₁/a %₂)
 6   (return %₂)
 
 ########################################
@@ -45,15 +45,16 @@ begin
     a = b() = c = d
 end
 #---------------------
-1   (method TestMod.b)
+1   (call core.define_method TestMod :b)
 2   latestworld
 3   TestMod.b
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
-7   SourceLocation::3:9
+7   SourceLocation:3
 8   (call core.svec %₅ %₆ %₇)
-9   --- method core.nothing %₈
+9   (call core.define_method TestMod TestMod.b %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/c(!read,single_assign)]
     1   TestMod.d
     2   (= slot₂/c %₁)
@@ -95,20 +96,19 @@ let
     x
 end
 #---------------------
-1   (newvar slot₁/x)
-2   TestMod.f
-3   (call %₂)
-4   TestMod.T
-5   (= slot₂/tmp %₃)
-6   (call core.isa slot₂/tmp %₄)
-7   (gotoifnot %₆ label₉)
-8   (goto label₁₁)
-9   (call top.convert %₄ slot₂/tmp)
-10  (= slot₂/tmp (call core.typeassert %₉ %₄))
-11  slot₂/tmp
-12  (= slot₁/x %₁₁)
-13  slot₁/x
-14  (return %₁₃)
+1   TestMod.f
+2   (call %₁)
+3   TestMod.T
+4   (= slot₂/tmp %₂)
+5   (call core.isa slot₂/tmp %₃)
+6   (gotoifnot %₅ label₈)
+7   (goto label₁₀)
+8   (call top.convert %₃ slot₂/tmp)
+9   (= slot₂/tmp (call core.typeassert %₈ %₃))
+10  slot₂/tmp
+11  (= slot₁/x %₁₀)
+12  slot₁/x
+13  (return %₁₂)
 
 ########################################
 # "complex lhs" of `::T` => type-assert, not decl
@@ -162,6 +162,14 @@ a.(b) = rhs
 LoweringError:
 a.(b) = rhs
 └───┘ ── dotcall syntax not valid here
+
+########################################
+# Error: Invalid lhs in `=`
+a.(b,c) = rhs
+#---------------------
+LoweringError:
+a.(b,c) = rhs
+└─────┘ ── dotcall syntax not valid here
 
 ########################################
 # Error: Invalid lhs in `=`
@@ -254,7 +262,7 @@ end
 4   TestMod.y
 5   (call top.broadcasted %₃ %₂ %₄)
 6   (call top.materialize! %₂ %₅)
-7   (return %₆)
+7   (return %₂)
 
 ########################################
 # Broadcasted updating assignment with general left hand side permitted
@@ -266,7 +274,7 @@ f() .+= y
 4   TestMod.y
 5   (call top.broadcasted %₃ %₂ %₄)
 6   (call top.materialize! %₂ %₅)
-7   (return %₆)
+7   (return %₂)
 
 ########################################
 # Updating assignment with basic ref as left hand side
@@ -337,6 +345,14 @@ end
 13  (return %₁₀)
 
 ########################################
+# Error: invalid LHS: block
+begin; x; end = 1
+#---------------------
+LoweringError:
+begin; x; end = 1
+└───────────┘ ── invalid syntax in left-hand side of assignment
+
+########################################
 # Error: Updating assignment with invalid left hand side
 f() += y
 #---------------------
@@ -351,3 +367,11 @@ f() += y
 LoweringError:
 (if false end, b) += 2
 #└──────────┘ ── invalid syntax in left-hand side of assignment
+
+########################################
+# Error: Updating assignment to ssavalue (JuliaLang/julia#30062)
+f(), x += 10, 20
+#---------------------
+LoweringError:
+f(), x += 10, 20
+└────┘ ── invalid multiple assignment location

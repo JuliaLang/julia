@@ -398,6 +398,11 @@ end
     str = String(take!(io))
     @test str == "Dict{$(Int), String}()"
     close(io)
+
+    @test !occursin('…', repr(Dict(i => i for i in 1:10); context = :limit => true))
+    s11 = repr(Dict(i => i for i in 1:11); context = :limit => true)
+    @test count("=>", s11) == 10
+    @test endswith(s11, "…)")
 end
 
 
@@ -509,7 +514,7 @@ end
     buf = IOBuffer()
     show(IOContext(buf, :compact => true), d)
 
-    # Check explicitly for the expected strings, since the CPU bitness effects
+    # Check explicitly for the expected strings, since the CPU bitness affects
     # dictionary ordering.
     result = String(take!(buf))
     @test occursin("Dict", result)
@@ -1127,6 +1132,114 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     GC.@preserve A B C D nothing
 end
 
+@testset "WeakValueIdDict" begin
+    A = [1]
+    B = [2]
+    C = [3]
+    a = Ref(2)
+    b = Ref(3)
+    c = Ref(4)
+
+    # construction (values must be mutable, so Refs stand in for them)
+    wid = Base.WeakValueIdDict()
+    wid[A] = a
+    wid[B] = b
+    wid[C] = c
+    @test Base.WeakValueIdDict(A=>a, B=>b, C=>c) == wid
+    @test isa(Base.WeakValueIdDict(A=>a, B=>b, C=>c), Base.WeakValueIdDict{Vector{Int},Base.RefValue{Int}})
+    @test Base.WeakValueIdDict(k=>v for (k,v) in [(A,a), (B,b), (C,c)]) == wid
+    @test Base.WeakValueIdDict([(A,a), (B,b), (C,c)]) == wid
+    @test copy(wid) == wid
+
+    # keyed by identity, not equality
+    A2 = [1]
+    @test !haskey(wid, A2)
+    @test get(wid, A2, nothing) === nothing
+    wid[A2] = Ref(5)
+    @test wid[A][] == 2
+    @test wid[A2][] == 5
+    @test length(wid) == 4
+    delete!(wid, A2)
+
+    @test wid[A] === a
+    @test get(wid, A, c) === a
+    @test getkey(wid, A, nothing) === A
+    @test getkey(wid, A2, 321) === 321
+    @test length(wid) == 3
+    @test !isempty(wid)
+    @test pop!(wid, C) === c
+    @test length(wid) == 2
+    @test pop!(wid, C, c) === c
+    @test C ∉ keys(wid)
+    @test length(wid) == 2
+    @test get!(wid, C, c) === c
+    @test get!(wid, C, b) === c
+    @test get!(() -> b, wid, [4]) === b
+    @test length(wid) == 4
+
+    wid = empty!(wid)
+    @test wid == empty(wid)
+    @test typeof(wid) == typeof(empty(wid))
+    @test length(wid) == 0
+    @test isempty(wid)
+    @test isa(wid, Base.WeakValueIdDict)
+    @test_throws ArgumentError Base.WeakValueIdDict([1, 2, 3])
+
+    # a collected value makes its entry vanish (assert only once the value is
+    # observably gone, so the test cannot fail on a conservatively-rooted ref)
+    widgc = Base.WeakValueIdDict{Vector{Int},Base.RefValue{Int}}()
+    vref = (@noinline function (d, k)
+        v = Ref(1)
+        d[k] = v
+        return WeakRef(v)
+    end)(widgc, A)
+    GC.gc()
+    GC.gc()
+    if vref.value === nothing
+        @test !haskey(widgc, A)
+        @test length(widgc) == 0
+    end
+    delete!(widgc, A)
+    @test get!(() -> b, widgc, A) === b # re-mint after collection
+    @test length(widgc) == 1
+
+    # keys are held strongly while their entry is present; once the value is
+    # collected, the next mutation sweeps the entry and releases the key
+    kref, vref2 = (@noinline function (d)
+        k = [99]
+        v = Ref(1)
+        d[k] = v
+        return WeakRef(k), WeakRef(v)
+    end)(widgc)
+    GC.gc()
+    GC.gc()
+    @test kref.value !== nothing # pinned by the table even after its value died
+    if vref2.value === nothing
+        @test length(widgc) == 1 # the dead entry is already treated as absent
+    end
+    widgc[[123]] = Ref(6) # mutation sweeps value-dead entries
+    GC.gc()
+    GC.gc()
+    if kref.value === nothing
+        @test !haskey(widgc, [99]) # (an egal key never matched anyway: identity keying)
+    end
+
+    # nothing is not a valid key or value
+    @test !haskey(widgc, nothing)
+    @test_throws KeyError(nothing) widgc[nothing]
+    @test_throws KeyError(nothing) get(widgc, nothing, 1)
+    @test_throws KeyError(nothing) get(() -> 1, widgc, nothing)
+    @test_throws KeyError(nothing) pop!(widgc, nothing)
+    @test getkey(widgc, nothing, 321) === 321
+    @test pop!(widgc, nothing, 321) === 321
+    @test delete!(widgc, nothing) === widgc
+    @test_throws ArgumentError widgc[nothing] = Ref(1)
+    @test_throws ArgumentError get!(widgc, nothing, Ref(1))
+    @test_throws ArgumentError widgc[[5]] = nothing
+
+    GC.@preserve A B C a b c nothing
+end
+
 import Base.PersistentDict
 @testset "PersistentDict" begin
     @testset "HAMT HashState" begin
@@ -1153,6 +1266,24 @@ import Base.PersistentDict
 
         @test Core.Compiler.is_removable_if_unused(Base.infer_effects(Base.HAMT.init_hamt, (Type{Vector{Any}},Type{Int},Vector{Any},Int)))
         @test Core.Compiler.is_removable_if_unused(Base.infer_effects(Base.HAMT.HAMT{Vector{Any},Int}, (Pair{Vector{Any},Int},)))
+    end
+    @testset "updates do not modify earlier versions" begin
+        keys = [Ref(i) for i in 1:300]
+        dict = PersistentDict{Any, Int}()
+        ref = Dict{Any, Int}()
+        versions = [(dict, copy(ref))]
+        for i in 1:3000
+            k = keys[mod1(i * 7919, length(keys))]
+            if i % 3 == 0
+                dict = Base.delete(dict, k)
+                delete!(ref, k)
+            else
+                dict = PersistentDict(dict, k => i)
+                ref[k] = i
+            end
+            push!(versions, (dict, copy(ref)))
+        end
+        @test all(((d, r),) -> Dict{Any, Int}(d) == r, versions)
     end
     @testset "basics" begin
         dict = PersistentDict{Int, Int}()
@@ -1368,6 +1499,23 @@ end
     @test_throws KeyError pop!(d, 1)
     @test pop!(d, 1, 0) == 0
     @test pop!(d) == (3=>4)
+    @test_throws ArgumentError pop!(d)
+
+    # interleaved pop!/insert visits every element and doesn't rescan from the start (#63769)
+    d = Dict(i => i for i in 1:1000)
+    seen = Set{Int}()
+    for i in 1001:3000
+        k, v = pop!(d)
+        @test k == v && !(k in seen)
+        push!(seen, k)
+        d[i] = i
+    end
+    @test length(d) == 1000
+    @test isempty(intersect(seen, keys(d)))
+    @test union(seen, keys(d)) == Set(1:3000)
+    while !isempty(d)
+        pop!(d)
+    end
     @test_throws ArgumentError pop!(d)
 end
 

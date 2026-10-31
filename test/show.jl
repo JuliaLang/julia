@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using LinearAlgebra
+using Test, LinearAlgebra
 
 # For curmod_*
 include("testenv.jl")
@@ -31,6 +31,13 @@ end
 @test replstr(Array{Any}(undef, 2,2)) == "2×2 Matrix{Any}:\n #undef  #undef\n #undef  #undef"
 @test replstr(Array{Any}(undef, 2,2,2)) == "2×2×2 Array{Any, 3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
 @test replstr([1f10]) == "1-element Vector{Float32}:\n 1.0f10"
+
+# alignment of elided strings
+lens = length.(eachline(IOBuffer(replstr([" "^100 10;10 10]))))
+@test lens[2] == lens[3]
+# alignment of multiline items in arrays
+lens = length.(eachline(IOBuffer(replstr([[Array{Pair,0}(undef)] 10;10 10]))))
+@test lens[2] == lens[3]
 
 struct T5589
     names::Vector{String}
@@ -172,6 +179,8 @@ end
 @test_repr "w = ((x, y) = z)" # parens aren't necessary, but not wrong
 @test_repr "a & b && c"
 @test_repr "a & (b && c)"
+@test_repr "a .& b .&& c"
+@test_repr "a .&& (b .|| c)"
 @test_repr "(a => b) in c"
 @test_repr "a => b in c"
 @test_repr "*(a..., b)"
@@ -186,6 +195,7 @@ end
 # Exponentiation (>= operator_precedence(:^)) and unary operators
 @test_repr "(-1)^a"
 @test_repr "(-2.1)^-1"
+@test_repr "(-0.0)^2"
 @test_repr "(-x)^a"
 @test_repr "(-a)^-1"
 @test_repr "(!x)↑!a"
@@ -646,7 +656,7 @@ test_repr("let @m(x), y=z; end", true)
 
 @test repr(:(@m x y))    == ":(#= $(@__FILE__):$(@__LINE__) =# @m x y)"
 @test string(:(@m x y))  ==   "#= $(@__FILE__):$(@__LINE__) =# @m x y"
-@test string(:(@m x y;)) == "begin\n    #= $(@__FILE__):$(@__LINE__) =# @m x y\nend"
+@test string(:(@m x y;)) == "begin\n    #= $(@__FILE__):$(@__LINE__) =#\n    #= $(@__FILE__):$(@__LINE__) =# @m x y\nend"
 
 # issue #11436
 @test_repr "1 => 2 => 3"
@@ -1089,6 +1099,9 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 # Printing of :(function (x...) end)
 @test startswith(replstr(Meta.parse("function (x...) end")), ":(function (x...,)")
 
+# Printing of (x...) -> x
+@test startswith(replstr(Meta.parse("(x...) -> x")), ":((x...,)->")
+
 # Printing of macro definitions
 @test sprint(show, :(macro m end)) == ":(macro m end)"
 @test_repr "macro m end"
@@ -1193,7 +1206,7 @@ z856739 = [:a, :b]
 @test_broken repr(:(:(f($(($z856739)...))))) == ":(:(f(\$([:a, :b]...))))"
 @test repr(eval(:(:(f($(($z856739)...)))))) == ":(f(a, b))"
 
-# string interpolation, if this is what the comment in test_rep function
+# string interpolation, if this is what the comment in test_repr function
 # definition talk about
 @test repr(Expr(:string, "foo", :x, "bar")) == ":(\"foo\$(x)bar\")"
 @test Meta.parse(string(Expr(:string, "foo", :x, "bar"))) == Expr(:string, "foo", :x, "bar")
@@ -1536,6 +1549,24 @@ end
 # Test for PR 17803
 @test static_shown(Int128(-1)) == "Int128(0xffffffffffffffffffffffffffffffff)"
 
+# Ignore unused high bits when statically showing odd-bit primitives.
+primitive type StaticShowUInt63 63 end
+let m = Memory{StaticShowUInt63}(undef, 1)
+    GC.@preserve m unsafe_store!(Ptr{UInt64}(pointer(m)), typemax(UInt64))
+    shown = static_shown(m)
+    @test occursin("StaticShowUInt63(0x7fffffffffffffff)", shown)
+    @test !occursin("StaticShowUInt63(0xffffffffffffffff)", shown)
+end
+# ... and padding bytes: sizeof is 4 for these, with 1 resp. 2 bytes of padding
+primitive type StaticShowUInt24 24 end
+primitive type StaticShowUInt17 17 end
+let m = Memory{StaticShowUInt24}(undef, 1), m17 = Memory{StaticShowUInt17}(undef, 1)
+    GC.@preserve m unsafe_store!(Ptr{UInt32}(pointer(m)), typemax(UInt32))
+    @test occursin("StaticShowUInt24(0xffffff)", static_shown(m))
+    GC.@preserve m17 unsafe_store!(Ptr{UInt32}(pointer(m17)), typemax(UInt32))
+    @test occursin("StaticShowUInt17(0x01ffff)", static_shown(m17))
+end
+
 # PR #22160
 @test static_shown(:aa) == ":aa"
 @test static_shown(:+) == ":+"
@@ -1644,6 +1675,24 @@ end
 
 # Test that static show prints something reasonable for `<:Function` types
 @test static_shown(:) == "Base.Colon()"
+
+# Test basic CodeInstance, MethodInstance printing in jl_static_show
+f_test_static_show_mi_ci() = nothing
+let
+    f = f_test_static_show_mi_ci
+    m = first(methods(f, Tuple{}))
+    mi = Base.specialize_method(m, Tuple{typeof(f)}, Core.svec())
+    Base.return_types(f, Tuple{}) # populate .cache
+    @test mi.cache isa Core.CodeInstance
+    ci = mi.cache
+
+    mi_s = static_shown(mi)
+    ci_s = static_shown(ci)
+    @test occursin("MethodInstance", mi_s)
+    @test occursin("CodeInstance", ci_s)
+    @test occursin("f_test_static_show_mi_ci", mi_s)
+    @test occursin("f_test_static_show_mi_ci", ci_s)
+end
 
 # Test @show
 let fname = tempname()
@@ -1790,18 +1839,23 @@ end
         end
     end
     A = Int64[1]
-    @test arrstr(A, 4) == "1-element Vector{Int64}: …"
+    @test arrstr(A, 4) == "1-element Vector{Int64}: [1]"
     @test arrstr(A, 5) == "1-element Vector{Int64}:\n 1"
     push!(A, 2)
-    @test arrstr(A, 5) == "2-element Vector{Int64}:\n ⋮"
+    @test arrstr(A, 5) == "2-element Vector{Int64}: [1, 2]"
     @test arrstr(A, 6) == "2-element Vector{Int64}:\n 1\n 2"
     push!(A, 3)
     @test arrstr(A, 6) == "3-element Vector{Int64}:\n 1\n ⋮"
+    # the summary already names the type, so the single-line form should
+    # not repeat it as an array literal prefix (on any platform)
+    @test arrstr(Int8[1, 2], 4) == "2-element Vector{Int8}: [1, 2]"
 
-    @test arrstr(zeros(4, 3), 4)  == "4×3 Matrix{Float64}: …"
-    @test arrstr(zeros(4, 30), 4) == "4×30 Matrix{Float64}: …"
-    @test arrstr(zeros(4, 3), 5)  == "4×3 Matrix{Float64}:\n ⋮      ⋱  "
-    @test arrstr(zeros(4, 30), 5) == "4×30 Matrix{Float64}:\n ⋮      ⋱  "
+    @test arrstr(zeros(4, 3), 4)  == "4×3 Matrix{Float64}: [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0]"
+    @test arrstr(zeros(4, 30), 4) == "4×30 Matrix{Float64}: [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0;…"
+    @test arrstr(zeros(4, 3), 5)  == "4×3 Matrix{Float64}: [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0]"
+    @test arrstr(zeros(4, 30), 5) == "4×30 Matrix{Float64}: [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0;…"
+    @test arrstr(zeros(1, 30), 5) == "1×30 Matrix{Float64}:\n" *
+        " 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  …  0.0  0.0  0.0  0.0  0.0  0.0  0.0"
     @test arrstr(zeros(4, 3), 6)  == "4×3 Matrix{Float64}:\n 0.0  0.0  0.0\n ⋮         "
     @test arrstr(zeros(4, 30), 6) ==
               string("4×30 Matrix{Float64}:\n",
@@ -1827,7 +1881,7 @@ end
             true
         end
         M = MyBigFill(4, (big(2)^65, 3))
-        @test arrstr(M, 3) == "36893488147419103232×3 $MyBigFill{$Int, 2}: …"
+        @test arrstr(M, 3) == "36893488147419103232×3 $MyBigFill{$Int, 2}: [4 4 4; 4 4 4; … ; 4 4 4; 4 4 4]"
         @test arrstr(M, 8) == "36893488147419103232×3 $MyBigFill{$Int, 2}:\n 4  4  4\n 4  4  4\n ⋮     \n 4  4  4"
     end
 end
@@ -2210,7 +2264,7 @@ h_line() = f_line()
 @test sprint(Base.show_unquoted, Core.Compiler.Argument(-2)) == "_-2"
 
 
-eval(Meta._parse_string("""function my_fun28173(x)
+eval(Meta.parse("""function my_fun28173(x)
     y = if x == 1
             "HI"
         elseif x == 2
@@ -2228,7 +2282,7 @@ eval(Meta._parse_string("""function my_fun28173(x)
             "three"
         end
     return y
-end""", "a"^80, 1, 1, :statement)[1]) # use parse to control the line numbers
+end""", filename="a"^80))
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     @test_throws "must be one of the following" sprint(IRShow.show_ir, src; context = :debuginfo => :_)
     @test !contains(sprint(IRShow.show_ir, src; context = :debuginfo => :source_inline), "a"^80)
@@ -2448,8 +2502,8 @@ end
 @weak_test_repr "a[begin, end, let x=1; (x+1;); end]"
 @test_broken repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
         ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
-@test_repr "a[(bla;)]"
-@test_repr "a[(;;)]"
+@weak_test_repr "a[(bla;)]"
+@weak_test_repr "a[(;;)]"
 @weak_test_repr "a[x -> f(x)]"
 
 @testset "Base.Iterators" begin
@@ -2503,6 +2557,110 @@ end
 @test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
 @test string(Union{Array, Memory}) == "Union{Array, Memory}"
+
+# Discard strictly broader aliases, preserving other ambiguities (issue #41034).
+module M41034
+export Dog, Cat, Giraffe, Pair, CatPair, Kitten, Kitty, FloatPair, IntPair
+export IntegerAnimal, NothingPair, TuplePair, Cats, One, Ints
+struct A{T} end
+const Dog = A{String}
+const Cat = A{Int}
+const Giraffe = A{<:Number}
+const IntegerAnimal = A{<:Integer}
+struct B{T,S,U} end
+const Pair{T,S} = B{T,S,Nothing}
+const CatPair{S} = B{Int,S,Nothing}
+const NothingPair{T} = B{T,Nothing,Nothing}
+const TuplePair{T,S} = B{Tuple{T,S},Nothing,Nothing}
+struct C{T} end
+const Kitten = C{Int}
+const Kitty = C{Int}
+const Cats = C{<:Number}
+struct D{T,S} end
+const FloatPair{S} = D{Float64,S}
+const IntPair{T} = D{T,Int}
+struct Indexed{T,N} end
+const One{T} = Indexed{T,1}
+const Ints{N} = Indexed{Int,N}
+end
+
+@testset "Overlapping type aliases" begin
+    prefix = "$(curmod_prefix)M41034."
+    @test string(M41034.Cat) == "$(prefix)Cat"
+    @test replstr(M41034.Cat) == "Cat (alias for $(prefix)A{$Int})"
+    @test string(M41034.Dog) == "$(prefix)Dog"
+    @test string(M41034.Giraffe) == "$(prefix)Giraffe"
+    @test string(M41034.Giraffe{Float64}) == "$(prefix)Giraffe{Float64}"
+    @test string(M41034.A{Int8}) == "$(prefix)IntegerAnimal{Int8}"
+    @test string(M41034.CatPair) == "$(prefix)CatPair"
+    @test string(M41034.CatPair{String}) == "$(prefix)CatPair{String}"
+    @test string(M41034.Pair{Float64,String}) == "$(prefix)Pair{Float64, String}"
+    @test string(M41034.NothingPair{String}) == "$(prefix)NothingPair{String}"
+    @test string(M41034.NothingPair{Tuple{Int,Float64}}) == "$(prefix)TuplePair{$Int, Float64}"
+    @test Base.make_typealias(M41034.B{Int,Nothing,Nothing}) === nothing
+    @test Base.make_typealias(M41034.Kitten) === nothing
+    @test string(M41034.Kitten) == "$(prefix)C{$Int}"
+    @test Base.make_typealias(M41034.D{Float64,Int}) === nothing
+    @test string(M41034.D{Float64,Int}) == "$(prefix)D{Float64, $Int}"
+    @test Base.make_typealias(M41034.Indexed{Int,1}) === nothing
+    @test string(M41034.Indexed{Int,1}) == "$(prefix)Indexed{$Int, 1}"
+end
+
+# JuMP-style aliases fix backend and hook types before fixing the numeric type.
+module M41034JuMP
+export Model, GenericModel, VariableRef, GenericVariableRef
+abstract type AbstractBackend end
+struct Backend <: AbstractBackend end
+struct ConcreteModel{T<:Real,B<:AbstractBackend,H} end
+const GenericModel{T<:Real} = ConcreteModel{T,AbstractBackend,Any}
+const Model = GenericModel{Float64}
+struct VariableRefImpl{T,M<:ConcreteModel{T}} end
+const GenericVariableRef{T<:Real} = VariableRefImpl{T,GenericModel{T}}
+const VariableRef = GenericVariableRef{Float64}
+end
+
+@testset "Nested model and variable aliases" begin
+    prefix = "$(curmod_prefix)M41034JuMP."
+    @test string(M41034JuMP.Model) == "$(prefix)Model"
+    @test string(M41034JuMP.GenericModel) == "$(prefix)GenericModel"
+    @test string(M41034JuMP.GenericModel{BigFloat}) == "$(prefix)GenericModel{BigFloat}"
+    @test string(M41034JuMP.VariableRef) == "$(prefix)VariableRef"
+    @test string(M41034JuMP.GenericVariableRef) == "$(prefix)GenericVariableRef"
+    @test string(M41034JuMP.GenericVariableRef{BigFloat}) == "$(prefix)GenericVariableRef{BigFloat}"
+    @test Base.make_typealias(M41034JuMP.ConcreteModel{Float64,M41034JuMP.Backend,Nothing}) === nothing
+end
+
+# Alias printing should recover the source binder for bounded alias parameters.
+module MBoundedAlias
+export A, B, U
+struct A{T<:Integer} end
+struct B{T<:Integer} end
+const U{T<:Integer} = Union{A{T}, B{T}}
+end
+let S = TypeVar(:S, Union{}, Integer)
+    @test string(UnionAll(S, Union{MBoundedAlias.A{S}, MBoundedAlias.B{S}})) == "$(curmod_prefix)MBoundedAlias.U"
+end
+
+# Alias printing should also recover the binders for an alias with several
+# bounded parameters, including when an inner binder is bounded by an outer one
+# and the printed type carries the matching typevars as free variables.
+module MBoundedAlias2
+export A, B, U
+struct A{T<:Integer, S<:T} end
+struct B{T<:Integer, S<:T} end
+const U{T<:Integer, S<:T} = Union{A{T,S}, B{T,S}}
+end
+let T = TypeVar(:T, Union{}, Integer), S = TypeVar(:S, Union{}, T)
+    @test string(Union{MBoundedAlias2.A{T,S}, MBoundedAlias2.B{T,S}}) ==
+        "$(curmod_prefix)MBoundedAlias2.U{T, S} where {T<:Integer, S<:T}"
+end
+
+for T in (Union{Int, Vector{Vector{C}} where C}, Union{Int, Vector{Vector{C}} where C<:Real},
+          Union{Nothing, Matrix{Int}, Vector{Vector{C}} where C},
+          Union{Nothing, Vector{Vector{C}} where C<:D} where D)
+    @test eval(Meta.parse(repr(T))) == T
+end
+@test string(Union{Int64, Vector{Vector{C}} where C}) == "Union{Int64, Vector{Vector{C}} where C}"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
@@ -2911,4 +3069,76 @@ let m = only(methods(f_show_method))
     let s = sprint(show, m; context=:print_method_signature_only=>true)
         @test "f_show_method(x::T) where T<:Integer" == s
     end
+end
+
+@testset "issue #54028: Unstable SSA highlighting in code_warntype" begin
+    using InteractiveUtils
+
+    function foo_ssa_test(x)
+        y = x[1]
+        sin(y+1)
+    end
+
+    render_code_warntype(f, tt; color::Bool) = sprint(io -> begin
+        ioc = IOContext(io, :color => color)
+        code_warntype(ioc, f, tt)
+    end)
+
+    has_colored_ssa_lhs(str, color) =
+        occursin(Regex("(\\e\\[$(color)m\\e\\[1m|\\e\\[1m\\e\\[$(color)m)%\\d+(\\e\\[22m\\e\\[39m|\\e\\[39m\\e\\[22m)\\s*="), str)
+
+    has_colored_ssa_rhs(str, color) =
+        occursin(Regex("(\\e\\[$(color)m\\e\\[1m|\\e\\[1m\\e\\[$(color)m)%\\d+(\\e\\[22m\\e\\[39m|\\e\\[39m\\e\\[22m)(?!\\s*=)"), str)
+
+    @testset "strong SSA highlighted for Vector{Any}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=true)
+        @test has_colored_ssa_lhs(str, "91")
+        @test has_colored_ssa_rhs(str, "91")
+    end
+
+    @testset "strong SSA highlighted for Vector{Real}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Real},); color=true)
+        @test has_colored_ssa_lhs(str, "91")
+        @test has_colored_ssa_rhs(str, "91")
+    end
+
+    @testset "mild SSA highlighted for Vector{Union{Int, Float64}}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Union{Int, Float64}},); color=true)
+        @test has_colored_ssa_lhs(str, "33") || has_colored_ssa_lhs(str, "93")
+        @test has_colored_ssa_rhs(str, "33") || has_colored_ssa_rhs(str, "93")
+    end
+
+    @testset "no SSA highlighting with color=false" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=false)
+        @test !contains(str, "\e[91m")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
+    end
+
+    @testset "no SSA highlighting with InteractiveUtils.highlighting[:warntype]=false" begin
+        InteractiveUtils.highlighting[:warntype] = false
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=true)
+        @test !contains(str, "\e[91m")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
+        InteractiveUtils.highlighting[:warntype] = true
+    end
+
+    @testset "stable input has no unstable highlighting" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Float64},); color=true)
+        @test !contains(str, "\e[91m")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
+    end
+end
+
+# issue #62897: `show` of `Type{v}` with a non-type parameter must not be memory-unsafe
+@testset "show Type{v} with value parameter" begin
+    @test repr(Type{setindex!}) == "Type{setindex!}"
+    @test repr(Type{1}) == "Type{1}"
+    @test repr(Type{:sym}) == "Type{:sym}"
+    @test repr(Type{(1, 2)}) == "Type{(1, 2)}"
+    @test sprint(show, Type{1}; context=:compact => false) == "TypeEq{1}"
+    @test repr("text/plain", Type{setindex!}) == "Type{setindex!}"
+    @test repr("text/plain", Type{1}) == "Type{1}"
 end

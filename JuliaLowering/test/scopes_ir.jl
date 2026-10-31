@@ -10,14 +10,14 @@ let x::T = rhs
 end
 #---------------------
 1   TestMod.rhs
-2   TestMod.T
-3   (newvar slot₂/T)
+2   (newvar slot₂/T)
+3   slot₂/T
 4   (= slot₃/tmp %₁)
-5   (call core.isa slot₃/tmp %₂)
+5   (call core.isa slot₃/tmp %₃)
 6   (gotoifnot %₅ label₈)
 7   (goto label₁₀)
-8   (call top.convert %₂ slot₃/tmp)
-9   (= slot₃/tmp (call core.typeassert %₈ %₂))
+8   (call top.convert %₃ slot₃/tmp)
+9   (= slot₃/tmp (call core.typeassert %₈ %₃))
 10  slot₃/tmp
 11  (= slot₁/x %₁₀)
 12  (= slot₂/T 1)
@@ -31,12 +31,11 @@ end
 #---------------------
 1   TestMod.rhs
 2   (call top.indexed_iterate %₁ 1)
-3   (= slot₂/x (call core.getfield %₂ 1))
-4   (= slot₁/iterstate (call core.getfield %₂ 2))
-5   slot₁/iterstate
-6   (call top.indexed_iterate %₁ 2 %₅)
-7   (= slot₃/y (call core.getfield %₆ 1))
-8   (return core.nothing)
+3   (= slot₁/x (call core.getfield %₂ 1))
+4   (= slot₃/ (call core.getfield %₂ 2))
+5   (call top.indexed_iterate %₁ 2 slot₃/)
+6   (= slot₂/y (call core.getfield %₅ 1))
+7   (return core.nothing)
 
 ########################################
 # let syntax with named tuple on lhs creates locals for the unpacked vars
@@ -69,25 +68,27 @@ end
 #---------------------
 1   (call core.svec)
 2   (call core.svec)
-3   (call JuliaLowering.eval_closure_type TestMod :#f##0 %₁ %₂)
-4   latestworld
-5   TestMod.#f##0
-6   (new %₅)
-7   (= slot₁/f %₆)
-8   TestMod.#f##0
+3   (call core.svec)
+4   (call JuliaLowering.eval_closure_type TestMod :#f#f##0 %₁ %₂ %₃)
+5   latestworld
+6   TestMod.#f#f##0
+7   (new %₆)
+8   TestMod.#f#f##0
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::1:5
+11  SourceLocation:1
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.body
     2   (return %₁)
 14  latestworld
-15  (return core.nothing)
+15  (= slot₁/f %₇)
+16  (return core.nothing)
 
 ########################################
-# Error: Invalid `let` var with K"::"
+# Error: Invalid `let` var with :(::)
 let f[]::T = rhs
 end
 #---------------------
@@ -138,15 +139,16 @@ begin
 end
 #---------------------
 1   (= slot₁/y 2)
-2   (method TestMod.f)
+2   (call core.define_method TestMod :f)
 3   latestworld
 4   TestMod.f
-5   (call core.Typeof %₄)
+5   (call core.TypeEqOf %₄)
 6   (call core.svec %₅ core.Any)
 7   (call core.svec)
-8   SourceLocation::3:14
+8   SourceLocation:3
 9   (call core.svec %₆ %₇ %₈)
-10  --- method core.nothing %₉
+10  (call core.define_method TestMod TestMod.f %₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   (call core.tuple false true true)
     2   (return %₁)
@@ -185,29 +187,36 @@ end
 10  (return %₅)
 
 ########################################
-# @locals with function args (TODO: static parameters)
-function f(z)
+# @locals with function args, sparams
+function f(z::T) where T
     @locals
 end
 #---------------------
-1   (method TestMod.f)
+1   (call core.define_method TestMod :f)
 2   latestworld
-3   TestMod.f
-4   (call core.Typeof %₃)
-5   (call core.svec %₄ core.Any)
-6   (call core.svec)
-7   SourceLocation::1:10
-8   (call core.svec %₅ %₆ %₇)
-9   --- method core.nothing %₈
+3   (call core.TypeVar :T)
+4   TestMod.f
+5   (call core.TypeEqOf %₄)
+6   (call core.svec %₅ %₃)
+7   (call core.svec %₃)
+8   SourceLocation:1
+9   (call core.svec %₆ %₇ %₈)
+10  (call core.define_method TestMod TestMod.f %₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/z]
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
-    3   (gotoifnot true label₅)
-    4   (call top.setindex! %₂ slot₂/z :z)
-    5   (return %₂)
-10  latestworld
-11  TestMod.f
-12  (return %₁₁)
+    3   (isdefined slot₂/z)
+    4   (gotoifnot %₃ label₆)
+    5   (call top.setindex! %₂ slot₂/z :z)
+    6   (isdefined static_parameter₁)
+    7   (gotoifnot %₆ label₁₀)
+    8   static_parameter₁
+    9   (call top.setindex! %₂ %₈ :T)
+    10  (return %₂)
+11  latestworld
+12  TestMod.f
+13  (return %₁₂)
 
 ########################################
 # Error: Duplicate function argument names
@@ -381,16 +390,17 @@ function f()
 end
 
 ########################################
-# @isdefined with defined variables
+# @isdefined with local and global variables
 let x = 1
-    @isdefined x
-    @isdefined y
+    @isdefined(x), @isdefined(y)
 end
 #---------------------
 1   1
 2   (= slot₁/x %₁)
-3   (call core.isdefinedglobal TestMod :y false)
-4   (return %₃)
+3   (isdefined slot₁/x)
+4   (call core.isdefinedglobal TestMod :y)
+5   (call core.tuple %₃ %₄)
+6   (return %₅)
 
 ########################################
 # Global function defined inside let (let over lambda)
@@ -404,13 +414,13 @@ end
 3   (call core.setfield! slot₁/x :contents %₁)
 4   (call core.declare_global TestMod :f false)
 5   latestworld
-6   (method TestMod.f)
+6   (call core.define_method TestMod :f)
 7   latestworld
 8   TestMod.f
-9   (call core.Typeof %₈)
+9   (call core.TypeEqOf %₈)
 10  (call core.svec %₉ core.Any)
 11  (call core.svec)
-12  SourceLocation::2:12
+12  SourceLocation:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- code_info
     slots: [slot₁/#self#(!read) slot₂/y]
@@ -419,18 +429,18 @@ end
     3   (call core.setfield! %₂ :contents %₁)
     4   (return %₁)
 15  (call core.svec slot₁/x)
-16  (call JuliaLowering.replace_captured_locals! %₁₄ %₁₅)
-17  --- method core.nothing %₁₃ %₁₆
+16  (call JuliaLowering.replace_captured_locals %₁₄ %₁₅)
+17  (call core.define_method TestMod TestMod.f %₁₃ %₁₆)
 18  latestworld
 19  (call core.declare_global TestMod :g false)
 20  latestworld
-21  (method TestMod.g)
+21  (call core.define_method TestMod :g)
 22  latestworld
 23  TestMod.g
-24  (call core.Typeof %₂₃)
+24  (call core.TypeEqOf %₂₃)
 25  (call core.svec %₂₄)
 26  (call core.svec)
-27  SourceLocation::3:12
+27  SourceLocation:3
 28  (call core.svec %₂₅ %₂₆ %₂₇)
 29  --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
@@ -443,8 +453,8 @@ end
     7   (call core.getfield %₁ :contents)
     8   (return %₇)
 30  (call core.svec slot₁/x)
-31  (call JuliaLowering.replace_captured_locals! %₂₉ %₃₀)
-32  --- method core.nothing %₂₈ %₃₁
+31  (call JuliaLowering.replace_captured_locals %₂₉ %₃₀)
+32  (call core.define_method TestMod TestMod.g %₂₈ %₃₁)
 33  latestworld
 34  TestMod.g
 35  (return %₃₄)
@@ -460,13 +470,13 @@ end
 3   (call core.setfield! slot₁/x :contents %₁)
 4   (call core.declare_global TestMod :f false)
 5   latestworld
-6   (method TestMod.f)
+6   (call core.define_method TestMod :f)
 7   latestworld
 8   TestMod.f
-9   (call core.Typeof %₈)
+9   (call core.TypeEqOf %₈)
 10  (call core.svec %₉)
 11  (call core.svec)
-12  SourceLocation::2:12
+12  SourceLocation:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
@@ -483,8 +493,8 @@ end
     11  (call core.setfield! %₁₀ :contents %₉)
     12  (return %₉)
 15  (call core.svec slot₁/x)
-16  (call JuliaLowering.replace_captured_locals! %₁₄ %₁₅)
-17  --- method core.nothing %₁₃ %₁₆
+16  (call JuliaLowering.replace_captured_locals %₁₄ %₁₅)
+17  (call core.define_method TestMod TestMod.f %₁₃ %₁₆)
 18  latestworld
 19  TestMod.f
 20  (return %₁₉)

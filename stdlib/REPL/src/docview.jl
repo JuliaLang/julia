@@ -11,15 +11,13 @@ import Base.Docs: doc, formatdoc, parsedoc, apropos
 
 using Base: with_output_color, mapany, isdeprecated, isexported
 
-using Base.Filesystem: _readdirx
-
 using InteractiveUtils: subtypes
 
 using Unicode: normalize
 
 ## Help mode ##
 
-# This is split into helpmode and _helpmode to easier unittest _helpmode
+# This is split into helpmode and _helpmode to more easily unit test _helpmode
 function helpmode(io::IO, line::AbstractString, mod::Module=Main)
     internal_accesses = Set{Pair{Module,Symbol}}()
     quote
@@ -52,7 +50,7 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main, internal_acce
             line = "#"
         end
     end
-    x = Meta.parse(line, raise = false, depwarn = false)
+    x = Meta.parse(line; raise = false, depwarn = false, mod)
     assym = Symbol(line)
     expr =
         if haskey(keywords, assym) || Base.isoperator(assym) || isexpr(x, :error) ||
@@ -89,8 +87,9 @@ end
 function parsedoc(d::DocStr)
     if d.object === nothing
         md = formatdoc(d)
-        md.meta[:module] = d.data[:module]
-        md.meta[:path]   = d.data[:path]
+        md.meta[:module]     = d.data[:module]
+        md.meta[:path]       = d.data[:path]
+        md.meta[:linenumber] = d.data[:linenumber]
         d.object = md
     end
     d.object
@@ -393,10 +392,10 @@ function find_readme(m::Module)::Union{String, Nothing}
     isnothing(mpath) && return nothing
     !isfile(mpath) && return nothing # modules in sysimage, where src files are omitted
     path = dirname(mpath)
-    top_path = pkgdir(m)
+    top_path = something(pkgdir(m), path)
     while true
-        for entry in _readdirx(path; sort=true)
-            isfile(entry) && (lowercase(entry.name) in ["readme.md", "readme"]) || continue
+        for entry in readdir(path, DirEntry; sort=true)
+            isfile(entry) && (lowercase(basename(entry)) in ["readme.md", "readme"]) || continue
             return joinpath(entry)
         end
         path == top_path && break # go no further than pkgdir
@@ -737,8 +736,8 @@ function string_distance(a::AbstractString, lena::Integer, b::AbstractString, le
         lena, lenb = lenb, lena
     end
     start = 0
-    for (i, j) in zip(a, b)
-        if a == b
+    for (achar, bchar) in zip(a, b)
+        if achar == bchar
             start += 1
         else
             break
@@ -902,15 +901,16 @@ function accessible(mod::Module)
     bindings = Set(AccessibleBinding(s) for s in names(mod; all=true, imported=true)
                    if !isdeprecated(mod, s))
     for used in moduleusings(mod)
-        union!(bindings, (AccessibleBinding(used, s) for s in names(used)
-                          if !isdeprecated(used, s)))
+        m = used::Module
+        union!(bindings, (AccessibleBinding(m, s) for s in names(m)
+                          if !isdeprecated(m, s)))
     end
     union!(bindings, (AccessibleBinding(k) for k in keys(Base.Docs.keywords)))
     filter!(b -> !occursin('#', b.name), bindings)
     return collect(bindings)
 end
 
-function doc_completions(name, mod::Module=Main)
+function doc_completions(name::AbstractString, mod::Module=Main)
     res = fuzzysort(name, accessible(mod))
 
     # to insert an entry like `raw""` for `"@raw_str"` in `res`
@@ -924,7 +924,7 @@ function doc_completions(name, mod::Module=Main)
     end
     res
 end
-doc_completions(name::Symbol) = doc_completions(string(name), mod)
+doc_completions(name::Symbol, mod::Module=Main) = doc_completions(string(name), mod)
 
 
 # Searching and apropos

@@ -3,13 +3,14 @@
 using Test, SparseArrays
 using Test: guardseed
 
+using Random
+
 @test isempty(Test.detect_closure_boxes(Random))
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
-using Random
 using Random.DSFMT
 
 using Random: default_rng, Sampler, SamplerRangeFast, SamplerRangeInt, SamplerRangeNDL, MT_CACHE_F, MT_CACHE_I
@@ -173,7 +174,7 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
 
     ki[2] = UInt64(0)
 
-    # Zigurrat tables for the exponential distribution
+    # Ziggurat tables for the exponential distribution
     x1 = ziggurat_exp_r
     web[256] = x1/emantissa
     feb[256] = exp(-x1)
@@ -510,7 +511,7 @@ end
     end
 end
 
-@testset "reproducility of methods for $RNG" for RNG=(MersenneTwister,Xoshiro)
+@testset "reproducibility of methods for $RNG" for RNG=(MersenneTwister,Xoshiro)
     mta, mtb = RNG(42), RNG(42)
 
     @test rand(mta) == rand(mtb)
@@ -523,6 +524,14 @@ end
     @test rand(mta,1:10,10) == rand(mtb,1:10,10)
     @test rand(mta,Bool) == rand(mtb,Bool)
     @test bitrand(mta,10) == bitrand(mtb,10)
+
+    # rand! fast path for Array{Complex{T}} must be reproducible across equal RNGs.
+    for T in Base.uniontypes(Base.HWReal)
+        a, b = Vector{Complex{T}}(undef, 10), Vector{Complex{T}}(undef, 10)
+        @test rand!(mta, a) == rand!(mtb, b)
+        c, d = Array{Complex{T},0}(undef), Array{Complex{T},0}(undef)
+        @test rand!(mta, c) == rand!(mtb, d)
+    end
 
     @test randstring(mta) == randstring(mtb)
     @test randstring(mta,10) == randstring(mtb,10)
@@ -692,6 +701,19 @@ let b = ['0':'9';'A':'Z';'a':'z']
         end
     end
     @test randstring(MersenneTwister(0)) == randstring(MersenneTwister(0), b)
+end
+
+@testset "`randstring` with $T" for T in (UInt8, UInt16, UInt32, Int8, Int16, Int32, UInt, Int)
+    # clamp it to a small value so that we don't allocate too much unnecessarily
+    n = clamp(rand(T), Int8) % T
+    @test randstring(n) isa String
+end
+
+@testset "rand from a String with stray continuation bytes" begin
+    rng = Xoshiro(1)
+    @test rand(rng, "\x80") == '\x80'
+    @test Set(rand(rng, "a\x80") for _ in 1:100) == Set(['a', '\x80'])
+    @test Set(rand(rng, "é\x80\x80") for _ in 1:100) == Set(['é', '\x80'])
 end
 
 # this shouldn't crash (#22403)
@@ -1275,6 +1297,21 @@ end
     @test length(xs) == 3
 end
 
+@testset "Union{} as the type to generate throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own methods, which throw, instead of matching `Type{T}` methods
+    rng = Xoshiro(0)
+    for f in (rand, randn, randexp)
+        for args in ((Union{},), (Union{}, 0), (Union{}, 2, 3), (rng, Union{}), (rng, Union{}, 0))
+            @test_throws MethodError(f, args) f(args...)
+        end
+        @test which(f, (Type{Union{}},)).sig == Tuple{typeof(f), Type{Union{}}, Vararg}
+        @test which(f, (typeof(rng), Type{Union{}})).sig == Tuple{typeof(f), Any, Type{Union{}}, Vararg}
+    end
+    A = Union{}[]
+    @test_throws MethodError(rand!, (A, Union{})) rand!(A, Union{})
+    @test_throws MethodError(rand!, (rng, A, Union{})) rand!(rng, A, Union{})
+end
+
 @testset "Float32 RNG typo" begin
     for T in (Float16, Float32, Float64)
         # Make sure generated numbers are sufficiently diverse
@@ -1287,4 +1324,16 @@ end
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Random))
+end
+
+@testset "Issue #63841: scheduler task RNG isolation" begin
+    Random.seed!(1234)
+    r1 = fetch(Threads.@spawn rand())
+
+    Random.seed!(1234)
+    Base._new_sched_task()
+    sleep(0.01)
+    r2 = fetch(Threads.@spawn rand())
+
+    @test r1 == r2
 end

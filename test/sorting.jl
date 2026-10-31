@@ -12,7 +12,7 @@ using .Main.OffsetArrays
 @testset "Base.Sort docstrings" begin
     undoc = Docs.undocumented_names(Base.Sort)
     @test_broken isempty(undoc)
-    @test undoc == [:Algorithm, :SMALL_THRESHOLD, :Sort]
+    @test undoc == [:Algorithm, :Sort]
 end
 
 @testset "Order" begin
@@ -137,7 +137,16 @@ end
             @test partialsortperm(a, i, rev=true) == (11 - i)
         end
     end
+    # descending ranges on inputs large enough to partition
+    w = [4, 5, 2, 1, 1, 4, 4, 4, 2, 4, 5, 5, 3, 3, 2, 2, 4, 5, 2, 2, 5, 5]
+    for r in (5:-1:3, 9:-2:3, 20:-1:1)
+        @test partialsort(w, r) == sort(w)[r]
+        @test w[partialsortperm(w, r)] == sort(w)[r]
+    end
     @test_throws ArgumentError partialsortperm!([1,2], [2,3,1], 1:2)
+    # index vector must hold all indices of v, regardless of eltype(k)
+    @test partialsortperm([300:-1:1;], Int8(3)) === 298
+    @test partialsortperm([300:-1:1;], UInt8(1):UInt8(2)) == [300, 299]
 end
 
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
@@ -322,6 +331,9 @@ end
         @test !issorted(b)
         @test !issorted(c, by=x->1/x)
         @test !issorted(d, rev=true)
+    end
+    let k = 30:-1:10
+        @test sort(a, alg=PartialQuickSort(k))[k] == sort(a)[k]
     end
 
     @test partialsort([3,6,30,1,9], 2, rev=true) == 9
@@ -984,6 +996,18 @@ end
         @test !issorted(v[2001:4000])
         @test !issorted(v)
     end
+
+    # out-of-range lo/hi must throw rather than silently corrupt memory (#63215)
+    for alg in [MergeSort, QuickSort, InsertionSort, PartialQuickSort(1:5),
+                Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+        w = rand(10)
+        @test_throws BoundsError sort!(w, 1, 11, alg, Base.Forward)
+        @test_throws BoundsError sort!(w, 0, 10, alg, Base.Forward)
+        @test_throws BoundsError sort!(w, 1, 2000, alg, Base.Forward)
+        @test_throws BoundsError sort!(w, 1, 2000, alg, Base.Forward, similar(w))
+        @test sort!(w, 11, 10, alg, Base.Forward) === w # empty range is fine
+        @test issorted(sort!(w, 1, 10, alg, Base.Forward))
+    end
 end
 
 @testset "IEEEFloatOptimization with -0.0" begin
@@ -1093,7 +1117,7 @@ function Base.Sort._sort!(v::AbstractVector, ::NonScalarIndexingOfWithoutMissing
     out
 end
 
-@testset "Non-scaler indexing of WithoutMissingVector" begin
+@testset "Non-scalar indexing of WithoutMissingVector" begin
     @testset "Unit test" begin
         wmv = Base.Sort.WithoutMissingVector(Union{Missing, Int}[1, 7, 2, 9])
         @test wmv[[1, 3]] == [1, 2]

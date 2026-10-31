@@ -4,7 +4,7 @@ using Base.Meta
 include("irutils.jl")
 
 # In this test, we will manually construct a CodeInstance that specializes the `myplus`
-# method on a constant for the second argument and test various, interfaces surrounding
+# method on a constant for the second argument and test various interfaces surrounding
 # CodeInstances with ABI overrides.
 myplus(x::Int, y::Int) = x + y
 
@@ -54,7 +54,7 @@ let world = Base.tls_world_age()
     ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, new_ci)
 
     # Poke the source code into the JIT for it
-    ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), new_ci, new_source)
+    ccall(:jl_add_codeinsts_to_jit, Cvoid, (Any, Any), Any[new_ci], Any[new_source])
 end
 
 @test contains(repr(new_ci), "ABI Overridden")

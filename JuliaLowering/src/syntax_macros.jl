@@ -1,202 +1,207 @@
-# The following are versions of macros from Base which act as "standard syntax
-# extensions":
-#
-# * They emit syntactic forms with special `Kind`s and semantics known to
-#   lowering
-# * There is no other Julia surface syntax for these `Kind`s.
-
-# In order to implement these here without getting into bootstrapping problems,
-# we just write them as plain old macro-named functions and add the required
-# __context__ argument ourselves.
+# Experimental "new macros" mostly for testing.  These should soon be
+# deleted and replaced with normal-looking macros lowered by JL.
 #
 # TODO: @inline, @noinline, @inbounds, @simd, @ccall, @assume_effects
 #
-# TODO: Eventually move these to proper `macro` definitions and use
-# `JuliaLowering.include()` or something. Then we'll be in the fun little world
-# of bootstrapping but it shouldn't be too painful :)
+# Note that `@ast __context__ __context__.macrocall [:foo ...]` is unhygienic,
+# since `@ast` is meant for internal lowering use (it requires an explicit
+# provenance argument, and then copies any syntax context from the provenance to
+# any created syntax).  A real user-facing macro to replace it should use the
+# provenance of the literal :foo expression in the file instead, and should
+# not copy context (this is not hard to implement, but the provenance requires
+# it and callers to be JL-lowered, which this file currently isn't.)
 
-function _apply_nospecialize(ctx, ex)
-    k = kind(ex)
-    if k == K"Identifier" || k == K"Placeholder" || k == K"tuple" ||
-        k == K"::" && numchildren(ex) == 1
-        setmeta(ex, :nospecialize, true)
-    elseif k == K"..." || k == K"::" || k == K"=" || k == K"kw"
-        # The @nospecialize macro is responsible for converting K"=" to K"kw".
-        # Desugaring uses this helper internally, so we may see K"kw" too.
-        if k == K"=" && numchildren(ex) === 2
-            ex = @ast ctx ex [K"kw" ex[1] ex[2]]
-        end
-        mapchildren(c->_apply_nospecialize(ctx, c), ctx, ex, 1:1)
+if Base.generating_output(false)
+
+function Base.var"@nospecialize"(__context__::MacroContext, exs::SyntaxTree...)
+    if length(exs) == 0
+        @ast __context__ __context__.macrocall [:meta
+            "nospecialize"::identifier]
+    elseif length(exs) == 1 && head(exs[1]) === :(=)
+        eq = exs[1]
+        @ast __context__ __context__.macrocall [:meta
+            "nospecialize"::identifier [:kw(eq) children(eq)...]]
     else
-        throw(LoweringError(ex, "Invalid function argument"))
+        @ast __context__ __context__.macrocall [:meta
+            "nospecialize"::identifier exs...]
     end
-end
-
-function Base.var"@nospecialize"(__context__::MacroContext, ex, exs...)
-    # TODO support multi-arg version properly
-    _apply_nospecialize(__context__, ex)
 end
 
 # TODO: support all forms that the original supports
 # function Base.var"@atomic"(__context__::MacroContext, ex)
-#     @chk kind(ex) == K"Identifier" || kind(ex) == K"::" (ex, "Expected identifier or declaration")
-#     @ast __context__ __context__.macrocall [K"atomic" ex]
+#     @jl_assert head(ex) == :identifier || head(ex) == :(::) (ex, "Expected identifier or declaration")
+#     @ast __context__ __context__.macrocall [:atomic ex]
 # end
 
 function Base.var"@label"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"Identifier"
-    @ast __context__ ex [K"symboliclabel" ex]
+    if head(ex) !== :identifier
+        return @ast __context__ __context__.macrocall [
+            :symbolicblock "loop-exit"::identifier ex]
+    end
+    syntax_name(ex) == "_" &&
+        error("use `@label expr` for anonymous blocks; `@label _` is not allowed")
+    @ast __context__ ex [:symboliclabel ex]
 end
 
 function Base.var"@label"(__context__::MacroContext, name, body)
-    # Handle `@label _ body` (anonymous) or `@label name body` (named)
-    k = kind(name)
-    if k == K"Identifier"
-        # `@label _ body` or `@label name body` - plain identifier
-    elseif is_contextual_keyword(k)
-        # Contextual keyword used as label name (e.g., `@label outer body`)
-    else
-        throw(MacroExpansionError(name, "Expected identifier for block label"))
+    head(name) === :identifier ||
+        throw(LoweringError(name, "expected a label name"))
+    syntax_name(name) == "_" &&
+        error("use `@label expr` for anonymous blocks; `@label _ expr` is not allowed")
+    k = head(body)
+    if k === :for || k === :while
+        cont = @ast __context__ name string(syntax_name(name), "#cont")::identifier
+        body = @ast __context__ body [k body[1] [:symbolicblock cont body[2]]]
     end
-    # If body is a syntactic loop, wrap its body in a continue block
-    # This allows `continue name` to work by breaking to `name#cont`
-    body_kind = kind(body)
-    if body_kind == K"for" || body_kind == K"while"
-        cont_name = mkleaf(name) # use name's scope and attrs
-        setattr!(name, :kind, K"Identifier")
-        setattr!(name, :name_val, string(name.name_val, "#cont"))
-        loop_body = body[2]
-        wrapped_body = @ast __context__ loop_body [K"symbolicblock"
-            cont_name
-            loop_body
-        ]
-        body = @ast __context__ body [body_kind body[1] wrapped_body]
-    end
-    @ast __context__ __context__.macrocall [K"symbolicblock" name body]
+    @ast __context__ __context__.macrocall [:symbolicblock name body]
 end
 
 function Base.var"@goto"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"Identifier"
-    @ast __context__ ex [K"symbolicgoto" ex]
+    @jl_assert head(ex) == :identifier ex
+    @ast __context__ ex [:symbolicgoto ex]
 end
 
 function Base.var"@locals"(__context__::MacroContext)
-    @ast __context__ __context__.macrocall [K"locals"]
+    @ast __context__ __context__.macrocall [:locals]
+end
+
+@static if isdefined(Base, Symbol("@__FUNCTION__"))
+function Base.var"@__FUNCTION__"(__context__::MacroContext)
+    @ast __context__ __context__.macrocall [:thisfunction]
+end
 end
 
 function Base.var"@isdefined"(__context__::MacroContext, ex)
-    @ast __context__ __context__.macrocall [K"isdefined" ex]
+    @ast __context__ __context__.macrocall [:isdefined ex]
 end
 
 function Base.var"@generated"(__context__::MacroContext)
-    @ast __context__ __context__.macrocall [K"generated"]
+    @ast __context__ __context__.macrocall [:generated]
 end
 function Base.var"@generated"(__context__::MacroContext, ex)
-    if !(kind(ex) === K"function" ||
-        kind(ex) === K"=" && is_eventually_call(ex[1]))
+    if !(head(ex) === :function ||
+        head(ex) === :(=) && is_eventually_call(ex[1]))
         throw(LoweringError(ex, "Expected a function argument to `@generated`"))
     end
-    @ast __context__ __context__.macrocall [K"function"
+    k = head(ex)
+    # Base's `@generated` copies the body's first statement by accident thinking
+    # it's a line node, but when it's a meta, there are performance
+    # implications...
+    body = ex[2]
+    metas = head(body) === :block ?
+        collect(Iterators.takewhile(c -> head(c) === :meta, children(body))) : ()
+    @ast __context__ __context__.macrocall [k
         ex[1]
-        [K"if" [K"generated"]
-            ex[2]
-            [K"block"
-                [K"meta" "generated_only"::K"Identifier"]
-                [K"return"]
+        [:block
+            metas...
+            [:if [:generated]
+                ex[2]
+                [:block
+                    [:meta "generated_only"::identifier]
+                    [:return nothing::value]
+                ]
             ]
         ]
     ]
 end
 
 function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, arg_types)
-    if kind(arg_types) != K"tuple"
-        throw(MacroExpansionError(arg_types, "@cfunction argument types must be a literal tuple"))
+    if head(arg_types) != :tuple
+        throw(LoweringError(arg_types, "@cfunction argument types must be a literal tuple"))
     end
-    arg_types_svec = @ast __context__ arg_types [K"call"
-        [K"core" "svec"::K"Identifier"]
+    arg_types_svec = @ast __context__ arg_types [:call
+        [:core "svec"::identifier]
         children(arg_types)...
     ]
-    if kind(callable) == K"$"
+    if head(callable) == :$
         fptr = callable[1]
         typ = Base.CFunction
     else
         # Kinda weird semantics here - without `$`, the callable is a top level
         # expression evaluated within the module where the `@cfunction` is
         # expanded into.
-        fptr = @ast __context__ callable [K"inert"
+        fptr = @ast __context__ callable [:inert
             callable
         ]
         typ = Ptr{Cvoid}
     end
-    @ast __context__ __context__.macrocall [K"cfunction"
-        typ::K"Value"
+    @ast __context__ __context__.macrocall [:cfunction
+        typ::value
         fptr
         return_type
         arg_types_svec
-        [K"inert" "ccall"::K"Identifier"]
+        [:inert "ccall"::identifier]
     ]
 end
 
 function ccall_macro_parse(ctx, exs)
-    gc_safe=false
+    gc_safe = false
+    cancel = nothing
     opts = exs[1:end-1]
     ex = exs[end]
     for opt in opts
         @stm opt begin
-            [K"=" [K"Identifier"] val] -> if opt[1].name_val != "gc_safe"
-                throw(MacroExpansionError(opt[1], "unknown option name for ccall"))
-            elseif !(kind(val) in KSet"Bool Value")
-                throw(MacroExpansionError(val, "gc_safe must be true or false"))
+            [:(=) [:identifier] val] -> if syntax_name(opt[1]) == "gc_safe"
+                if head(val) !== :value || !(val.value isa Bool)
+                    throw(LoweringError(val, "gc_safe must be true or false"))
+                else
+                    gc_safe = val.value
+                end
+            elseif syntax_name(opt[1]) == "cancel_handler"
+                @stm val begin
+                    [:tuple x y] -> cancel = (x, y)
+                    _ -> throw(LoweringError(val, "bad cancel handler"))
+                end
             else
-                gc_safe = val.value
+                throw(LoweringError(opt[1], "unknown option name for ccall"))
             end
-            _ -> throw(MacroExpansionError(opt, "bad option to ccall"))
+            _ -> throw(LoweringError(opt, "bad option to ccall"))
         end
     end
     if length(opts) >= 2
-        throw(MacroExpansionError(opts[2], "too many options provided to @ccall"))
+        throw(LoweringError(opts[2], "too many options provided to @ccall"))
     end
 
     (func, argts, rettype) = @stm ex begin
-        [K"::" [K"call" f as...] r] -> let f_expanded = @stm f begin
-            [K"." lib sym] -> @ast ctx f [K"tuple" sym lib]
-            [K"inert" [K"Identifier"]] -> @ast ctx f [K"tuple" f]
-            [K"Identifier"] -> @ast ctx f [K"tuple" [K"inert" f]]
-            [K"$" x] -> let kx = kind(x)
-                if kx in KSet"tuple String string" ||
-                        (kx === K"Value" && x.value isa Tuple) ||
-                        kx == K"inert" && !(kx[1].value isa Ptr)
-                    throw(MacroExpansionError(
+        [:(::) [:call f as...] r] -> let f_expanded = @stm f begin
+            [:. lib sym] -> @ast ctx f [:tuple sym lib]
+            [:inert [:identifier]] -> @ast ctx f [:tuple f]
+            [:identifier] -> @ast ctx f [:tuple [:inert f]]
+            [:$ x] -> let kx = head(x)
+                if kx === :tuple || kx === :string ||
+                        (kx === :value && (x.value isa Tuple || x.value isa String)) ||
+                        kx == :inert && !(head(x[1]) == :value && x[1].value isa Ptr)
+                    throw(LoweringError(
                         f, "interpolated value should be a variable or expression, not a literal name or tuple"))
                 end
                 x
             end
-            _ -> throw(MacroExpansionError(
+            _ -> throw(LoweringError(
                 f, "@ccall function name must be a symbol, a `.` node (e.g. `libc.printf`) or an interpolated function pointer (with `\$`)"))
         end
             (f_expanded, as, r)
         end
-        [K"call" _...] -> throw(MacroExpansionError(
-            ex, "expected a return type annotation `::SomeType`", position=:end))
-        _ -> throw(MacroExpansionError(
+        [:call _...] -> throw(LoweringError(
+            ex, "expected a return type annotation `::SomeType`"))
+        _ -> throw(LoweringError(
             ex, "expected call expression with return type"))
     end
 
     # detect varargs
     varargs = nothing
     argstart = 1
-    if length(argts) > 0 && kind(argts[1]) == K"parameters"
+    if length(argts) > 0 && head(argts[1]) == :parameters
         varargs = children(argts[1])
         argstart = 2
     end
 
     # collect args and types
-    args = SyntaxList(ctx)
-    types = SyntaxList(ctx)
+    args = SyntaxList()
+    types = SyntaxList()
     function pusharg!(at)
         @stm at begin
-            [K"::" a t] -> (push!(args, a); push!(types, t))
-            _ -> throw(MacroExpansionError(
+            [:(::) a t] -> (push!(args, a); push!(types, t))
+            _ -> throw(LoweringError(
                 at, "argument needs a type annotation"))
         end
     end
@@ -208,7 +213,7 @@ function ccall_macro_parse(ctx, exs)
     if !isnothing(varargs)
         num_required_args = length(args)
         if num_required_args == 0
-            throw(MacroExpansionError(
+            throw(LoweringError(
                 argts[1],
                 "C ABI prohibits varargs without one required argument"))
         end
@@ -219,21 +224,22 @@ function ccall_macro_parse(ctx, exs)
         num_required_args = 0 # Non-vararg call
     end
 
-    return func, rettype, types, args, gc_safe, num_required_args
+    return func, rettype, types, args, gc_safe, cancel, num_required_args
 end
 
-function ccall_macro_lower(ctx, ex, convention, func, rettype, types, args, gc_safe, num_required_args)
+function ccall_macro_lower(ctx, ex, convention, func, rettype, types, args, gc_safe, cancel, num_required_args)
+    # TODO deal with cancel
     if convention isa Tuple
         cconv_tuple = (convention..., gc_safe)
     else
         cconv_tuple = (convention, UInt16(0), gc_safe)
     end
-    return @ast ctx ex [K"call"
-        "ccall"::K"Identifier"
+    return @ast ctx ex [:call
+        "ccall"::identifier
         func
-        [K"cconv" cconv_tuple::K"Value" num_required_args::K"Value"]
+        [:cconv cconv_tuple::value num_required_args::value]
         rettype
-        [K"tuple" types...]
+        [:tuple types...]
         args...
     ]
 end
@@ -249,69 +255,90 @@ end
 function Base.GC.var"@preserve"(__context__::MacroContext, exs...)
     idents = exs[1:end-1]
     for e in idents
-        if kind(e) != K"Identifier"
-            throw(MacroExpansionError(e, "Preserved variable must be a symbol"))
+        if head(e) != :identifier
+            throw(LoweringError(e, "Preserved variable must be a symbol"))
         end
     end
-    @ast __context__ __context__.macrocall [K"block"
-        [K"="
-            "s"::K"Identifier"
-            [K"gc_preserve_begin"
-                idents...
-            ]
-        ]
-        [K"="
-            "r"::K"Identifier"
-            exs[end]
-        ]
-        [K"gc_preserve_end" "s"::K"Identifier"]
-        "r"::K"Identifier"
-    ]
+    @ast __context__ __context__.macrocall [:gc_preserve exs[end] exs[1:end-1]...]
 end
 
 function Base.Experimental.var"@opaque"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"->"
-    @ast __context__ __context__.macrocall [K"opaque_closure"
-        "nothing"::K"core"
-        "nothing"::K"core"
-        "nothing"::K"core"
-        true::K"Bool"
+    @ast __context__ __context__.macrocall [:opaque_closure
+        nothing::value
+        nothing::value
+        nothing::value
+        true::value
         ex
     ]
 end
 
-function _at_eval_code(ctx, srcref, mod, ex)
-    @ast ctx srcref [K"block"
-        [K"local"
-            [K"="
-                "eval_result"::K"Identifier"
-                [K"call"
-                    # TODO: Call "eval"::K"core" here
-                    JuliaLowering.eval::K"Value"
-                    [K"parameters"
-                        [K"kw"
-                            "expr_compat_mode"::K"Identifier"
-                            ctx.expr_compat_mode::K"Bool"
-                        ]
-                    ]
-                    mod
-                    [K"quote" ex]
+# @eval should mostly ignore hygiene against our system's best wishes.  Still
+# attempt to preserve provenance.
+function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
+    sc = mc.macrocall.context
+    val = remove_scope(@ast mc mc.macrocall ("eval_result"::identifier))
+    q = _legacy_quote_to_syntax((@ast mc mc.macrocall [:quote ex]), 0, true)
+    new_sc = SyntaxContext(base_layer(sc).mod, sc.edition)
+    @ast mc mc.macrocall [:block
+        [:local
+            [:(=)
+                val
+                [:call at_eval_hook::value
+                    mod_st
+                    [:call fill_context::value trim_provenance(q, true) new_sc::value]
                 ]
             ]
         ]
-        [K"unknown_head"(name_val="latestworld-if-toplevel")]
-        "eval_result"::K"Identifier"
+        [:var"latestworld-if-toplevel"]
+        val
     ]
 end
-
 function Base.var"@eval"(__context__::MacroContext, ex)
-    mod = @ast __context__ __context__.macrocall __context__.scope_layer.mod::K"Value"
-    _at_eval_code(__context__, __context__.macrocall, mod, ex)
+    sc = __context__.macrocall.context
+    mod = @ast __context__ __context__.macrocall base_layer(sc).mod::value
+    _at_eval_code(__context__, mod, ex)
 end
 
 function Base.var"@eval"(__context__::MacroContext, mod, ex)
-    _at_eval_code(__context__, __context__.macrocall, mod, ex)
+    head(mod) === :parameters && throw(LoweringError(
+        mod, "`@eval` does not accept keyword arguments"))
+    _at_eval_code(__context__, mod, ex)
 end
+
+function annotate_meta_fbody(st::Syntax, meta::Symbol)
+    @stm st begin
+        [:block args...] ->
+            @ast _ st [:block [:meta String(meta)::identifier] args...]
+        _ -> @ast _ st [:block [:meta String(meta)::identifier] st]
+    end
+end
+function annotate_meta(st::Syntax, meta::Symbol)
+    st = macroexpand(st)
+    @stm st begin
+        [:function call body] ->
+            @ast _ st [:function call annotate_meta_fbody(body, meta)]
+        ([:(=) call body], when=(head(call) === :call || head(call) === :where)) ->
+            @ast _ st [:(=) call annotate_meta_fbody(body, meta)]
+        [:-> call body] ->
+            @ast _ st [:-> call annotate_meta_fbody(body, meta)]
+        st -> let val = remove_scope(@mknode(
+            st; head=:identifier, value="val", children=nothing))
+            @ast _ st [:block [meta true::value]
+                [:local [:(=) val st]]
+                [meta false::value]
+                val]
+        end
+    end
+end
+
+function Base.var"@noinline"(_, st)
+    annotate_meta(st, :noinline)
+end
+function Base.var"@inline"(_, st)
+    annotate_meta(st, :inline)
+end
+
+end # Base.generating_output(false)
 
 #--------------------------------------------------------------------------------
 # The following `@islocal` and `@inert` are macros for special syntax known to
@@ -319,8 +346,8 @@ end
 #
 # For now we have our own versions
 function var"@islocal"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"Identifier"
-    @ast __context__ __context__.macrocall [K"islocal" ex]
+    @jl_assert head(ex) == :identifier ex
+    @ast __context__ __context__.macrocall [:islocal ex]
 end
 
 """
@@ -377,6 +404,106 @@ etc. Needs careful thought - we should probably just copy what lisp does with
 quote+quasiquote 😅
 """
 function var"@inert"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"quote"
-    @ast __context__ __context__.macrocall [K"inert" ex]
+    @jl_assert head(ex) == :quote ex
+    @ast __context__ __context__.macrocall [:inert ex]
+end
+
+# `quote`/`inert` for syntaxtree
+function var"@syntaxinert"(__context__::MacroContext, st)
+    @ast __context__ __context__.macrocall [:syntaxinert st]
+end
+function var"@syntaxquote"(__context__::MacroContext, st)
+    @ast __context__ __context__.macrocall [:syntaxquote st]
+end
+# not particularly good or useful, as @syntaxquote must expand first
+function var"@syntaxunquote"(__context__::MacroContext, st)
+    @ast __context__ __context__.macrocall [:syntaxunquote st]
+end
+
+# If the edition allows, convert quote/$ to syntaxquote/syntaxunquote.
+# This is just a convenient way to create SyntaxTree with full provenance
+# without dedicated surface syntax, mainly for testing metaprogramming in JL.
+# It is insufficient in many ways, e.g. not all forms can be expressed (need
+# surface syntax)
+function var"@legacy_quote_to_syntax"(__context__::MacroContext, st)
+    @jl_assert head(st) === :quote || head(st) === :inert st
+    if is_flisp_compat(__context__.macrocall)
+        st
+    elseif head(st) === :inert
+        @mknode(st; head=:syntaxinert) # parser simplifies quote to inert
+    else
+        _legacy_quote_to_syntax(st, 0, false)
+    end
+end
+function _legacy_quote_to_syntax(st::SyntaxTree, depth, force::Bool)
+    k = head(st)
+    if k === :quote && depth == 0 && (force || !is_flisp_compat(st))
+        @jl_assert numchildren(st) == 1 st
+        @mknode(st; head=:syntaxquote, children=
+            mapsyntax(c->_legacy_quote_to_syntax(c, depth+1, force), children(st)))
+    elseif k === :$ && depth == 1 && (force || !is_flisp_compat(st))
+        @jl_assert numchildren(st) == 1 (st, "bad multi-syntaxunquote")
+        @mknode(st; head=:syntaxunquote)
+    else
+        depth2 = k === :quote ? depth + 1 : k === :$ ? depth - 1 : depth
+        cs = SyntaxList()
+        for c in children(st)
+            # Convert multi-unquote to single unquote
+            if depth2 == 1 && head(c) === :$ && numchildren(c) > 1
+                for c2 in children(c)
+                    push!(cs, @ast _ c [:$ c2])
+                end
+            else
+                push!(cs, c)
+            end
+        end
+        cs_out = mapsyntax(c->_legacy_quote_to_syntax(c, depth2, force), cs)
+        cs_out == children(st) ? st : @mknode(st; children=cs_out)
+    end
+end
+macro legacy_quote_to_syntax(x)
+    esc(x)
+end
+
+"""
+Retrieve the edition of the macrocall
+"""
+function var"@edition"(__context__::MacroContext)
+    __context__.macrocall.context.edition
+end
+macro edition()
+    JL_OLD_EDITION
+end
+
+"""
+Set the edition for some syntax.  This can be used to define macros with older
+signatures in newer editions.
+"""
+function var"@edition"(__context__::MacroContext, ver_st, st)
+    head(st) === :macro || throw(LoweringError(
+        st, "`@edition edition macro` only supports macro definitions"))
+    ver = JuliaLowering.eval(syntax_module(ver_st), ver_st)
+    en = ver isa Tuple{Int, Int} ? ver :
+        ver isa VersionNumber ? (Int(ver.major), Int(ver.minor)) : throw(LoweringError(
+            ver_st, "expected version `v\"...\"`"))
+    _ensure_edition(st, en)
+end
+macro edition(_, x)
+    throw(ArgumentError("@edition requires JuliaLowering"))
+end
+
+function _ensure_edition(st, en::Tuple{Int, Int},
+                         scmap=Dict{SyntaxContext, SyntaxContext}())
+    sc = st.context
+    sc2 = get(scmap, sc, nothing)
+    if isnothing(sc2)
+        sc2 = scmap[sc] = sc.edition == en ? sc :
+            SyntaxContext(sc.layer, sc.unexpanded, en, sc.internal)
+    end
+    if is_leaf(st) || numchildren(st) == 0
+        sc2 == sc ? st : @mknode(st; context=sc2)
+    else
+        out = mapchildren(c->_ensure_edition(c, en, scmap), st)
+        sc2 == sc ? out : @mknode(out; context=sc2)
+    end
 end

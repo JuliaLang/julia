@@ -16,7 +16,7 @@ end
 
 @trigger '_' ->
 function underscore_italic(stream::IO, md::MD)
-    result = parse_inline_wrapper(stream, "_")
+    result = parse_inline_wrapper(stream, "_"; intraword = false)
     return result === nothing ? nothing : Italic(parseinline(result, md))
 end
 
@@ -32,7 +32,7 @@ end
 
 @trigger '_' ->
 function underscore_bold(stream::IO, md::MD)
-    result = parse_inline_wrapper(stream, "__")
+    result = parse_inline_wrapper(stream, "__"; intraword = false)
     return result === nothing ? nothing : Bold(parseinline(result, md))
 end
 
@@ -56,14 +56,27 @@ end
 # Code
 # ––––
 
+"""
+Read a code span: a run of backticks and everything up to the next occurrence of
+that run. Returns the run and the text in between, or `nothing` (leaving `stream`
+where it was) if the run is never closed.
+"""
+function read_code_span(stream::IO)
+    withstream(stream) do
+        ticks = (matchstart(stream, r"^(`+)")::AbstractMatch).match
+        result = readuntil(stream, ticks; newlines=true)
+        result === nothing ? nothing : (ticks, result)
+    end
+end
+
 @trigger '`' ->
 function inline_code(stream::IO, md::MD)
     withstream(stream) do
-        ticks = matchstart(stream, r"^(`+)").match
-        result = readuntil(stream, ticks; newlines=true)
-        if result === nothing
+        span = read_code_span(stream)
+        if span === nothing
             nothing
         else
+            ticks, result = span
             result = strip(result)
             # in code spans, newlines are replaced by spaces
             result = replace(result, '\n' => ' ')
@@ -130,7 +143,7 @@ function footnote_link(stream::IO, md::MD)
         if m === nothing
             return
         else
-            ref = m.captures[1]
+            ref = something(m.captures[1])
             return Footnote(ref, nothing)
         end
     end
@@ -160,7 +173,7 @@ function _is_link(s::AbstractString)
 
     m = match(r"^(.*)://(\S+?)(:\S*)?$", s)
     m ≡ nothing && return false
-    scheme = lowercase(m.captures[1])
+    scheme = lowercase(something(m.captures[1]))
     return scheme in _allowable_schemes
 end
 
@@ -236,10 +249,11 @@ function entity(stream::IO)
     # decimal or hexadecimal entity?
     m = matchstart(stream, DEC_OR_HEX_REGEX)
     if m !== nothing
-        val = if m.captures[2] !== nothing
-            Base.parse(UInt, m.captures[2]; base=10)
+        dec = m.captures[2]
+        val = if dec !== nothing
+            Base.parse(UInt, dec; base=10)
         else
-            Base.parse(UInt, m.captures[3]; base=16)
+            Base.parse(UInt, something(m.captures[3]); base=16)
         end
         c = (val != 0 && isvalid(Char, val)) ? Char(val) : Char(0xFFFD)
         #return c
@@ -274,4 +288,199 @@ function replace_escapes_and_entities(s::AbstractString)
         end
     end
     return takestring!(out)
+end
+
+# ––––––––
+# Raw HTML
+# ––––––––
+
+mutable struct HTMLInline <: MarkdownElement
+    content::String
+end
+
+# skip \n, \r\n or \r
+function skip_line_end(io::IO)
+    eof(io) && return false
+    c = peek(io, Char)
+    if c == '\n'
+        read(io, Char)
+        return true
+    elseif c == '\r'
+        read(io, Char)
+        if !eof(io) && peek(io, Char) == '\n'
+            read(io, Char)
+        end
+        return true
+    end
+    return false
+end
+
+# skip spaces, tabs, and up to one line ending;
+# return true if at least one whitespace was skipped
+function skip_spaces_and_up_to_one_line_ending(io::IO)
+    pos = position(io)
+    skipwhitespace(io)
+    if skip_line_end(io)
+        skipwhitespace(io)
+    end
+    return position(io) > pos
+end
+
+function skip_attribute_value_spec(io::IO)
+    withstream(io) do
+        # An attribute value specification consists of optional spaces, tabs, and up
+        # to one line ending, ...
+        skip_spaces_and_up_to_one_line_ending(io)
+        # ... a = character, ...
+        startswith(io, '=') || return false
+        #... optional spaces, tabs, and up to one line ending, ...
+        skip_spaces_and_up_to_one_line_ending(io)
+        #... and an attribute value.
+        startswith(io, ATTRIBUTE_VALUE_REGEX)
+    end
+end
+
+function skip_attribute(io::IO)
+    withstream(io) do
+        # An attribute consists of spaces, tabs, and up to one line ending, ...
+        skip_spaces_and_up_to_one_line_ending(io) || return false
+        # ... an attribute name, ...
+        startswith(io, ATTRIBUTE_NAME_REGEX) || return false
+        # ... and an optional attribute value specification.
+        skip_attribute_value_spec(io)
+        return true
+    end
+end
+
+function skip_open_tag(io::IO)
+    withstream(io) do
+        # An open tag consists of a < character, ...
+        startswith(io, '<') || return false
+        # ... a tag name, ...
+        startswith(io, TAG_NAME_REGEX) || return false
+        # ... zero or more attributes, ...
+        while skip_attribute(io)
+        end
+        # ... optional spaces, tabs, and up to one line ending, ...
+        skip_spaces_and_up_to_one_line_ending(io)
+        # ... an optional / character, ...
+        startswith(io, '/')
+        # ... and a > character.
+        startswith(io, '>') || return false
+        return true
+    end
+end
+
+function skip_closing_tag(io::IO)
+    withstream(io) do
+        # A closing tag consists of the string </, ...
+        startswith(io, '<') || return false
+        startswith(io, '/') || return false
+        # ... a tag name,...
+        startswith(io, TAG_NAME_REGEX) || return false
+        # ... optional spaces, tabs, and up to one line ending,...
+        skip_spaces_and_up_to_one_line_ending(io)
+        # ... and the character >.
+        startswith(io, '>') || return false
+        return true
+    end
+end
+
+function skip_html_comment(io::IO)
+    withstream(io) do
+        # An HTML comment consists of <!-->, <!--->, or <!--, a string of characters
+        # not including the string -->, and --> (see the HTML spec).
+        startswith(io, "<!--") || return false
+        seek(io, position(io) - 2)
+        count = 0
+        while !eof(io)
+            c = read(io, Char)
+            if c == '-'
+                count += 1
+            elseif c == '>' && count >= 2
+                return true
+            else
+                count = 0
+            end
+        end
+        return false
+    end
+end
+
+function skip_processing_instruction(io::IO)
+    withstream(io) do
+        # A processing instruction consists of the string <?, ...
+        startswith(io, "<?") || return false
+        # ... a string of characters not including the string ?>, and the string ?>.
+        prev = ' '
+        while !eof(io)
+            c = read(io, Char)
+            prev == '?' && c == '>' && return true
+            prev = c
+        end
+        return false
+    end
+end
+
+function skip_declaration(io::IO)
+    withstream(io) do
+        # A declaration consists of the string <!, ...
+        startswith(io, "<!") || return false
+        # ... an ASCII letter, ...
+        !eof(io) || return false
+        c = read(io, Char)
+        (isascii(c) && isletter(c)) || return false
+        # ... zero or more characters not including the character >, and the character >.
+        while !eof(io)
+            read(io, Char) == '>' && return true
+        end
+        return false
+    end
+end
+
+function skip_cdata_section(io::IO)
+    withstream(io) do
+        # A CDATA section consists of the string <![CDATA[, ...
+        startswith(io, "<![CDATA[") || return false
+        # ... a string of characters not including the string ]]>, and the string ]]>.
+        count = 0
+        while !eof(io)
+            c = read(io, Char)
+            if c == ']'
+                count += 1
+            elseif c == '>' && count >= 2
+                return true
+            else
+                count = 0
+            end
+        end
+        return false
+    end
+end
+
+const HTML_BREAK_REGEX = r"^<br\s*/?>"i
+
+@trigger '<' ->
+function html_inline(stream::IO, md::MD)
+    pos = position(stream)
+
+    # special case for <br>: this is of course not part of CommonMark,
+    # but it is the only way to get linebreaks into tables, and by handling
+    # this here, it will also work in LaTeX / PDF output.
+    startswith(stream, HTML_BREAK_REGEX) && return LineBreak()
+
+    # An HTML tag consists of an open tag, a closing tag, an HTML comment, a
+    # processing instruction, a declaration, or a CDATA section.
+    skip_open_tag(stream) ||
+        skip_closing_tag(stream) ||
+        skip_html_comment(stream) ||
+        skip_processing_instruction(stream) ||
+        skip_declaration(stream) ||
+        skip_cdata_section(stream) ||
+        return nothing
+
+    endpos = position(stream)
+    seek(stream, pos)
+    data = read(stream, endpos - pos)
+    return HTMLInline(String(data))
 end

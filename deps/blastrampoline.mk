@@ -8,6 +8,7 @@ $(eval $(call git-external,blastrampoline,BLASTRAMPOLINE,,,$(BUILDDIR)))
 
 BLASTRAMPOLINE_BUILD_OPTS := $(MAKE_COMMON) CC="$(CC) $(SANITIZE_OPTS)" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"
 BLASTRAMPOLINE_BUILD_OPTS += ARCH="$(ARCH)" OS="$(OS)"
+BLASTRAMPOLINE_BUILD_OPTS += LBT_THREADSAFE=1
 
 $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured: $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
@@ -33,7 +34,7 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libblastrampoline.$$(SHLIB_EXT) $$(build_shlibdir)/libblastrampoline.$$(SHLIB_EXT)))
 
 clean-blastrampoline:
-	-$(MAKE) -C $(BLASTRAMPOLINE_BUILD_ROOT) clean
+	-if [ -d $(BLASTRAMPOLINE_BUILD_ROOT) ]; then $(MAKE) -C $(BLASTRAMPOLINE_BUILD_ROOT) clean; fi
 	-$(RM) $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-compiled \
 		$(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured
 

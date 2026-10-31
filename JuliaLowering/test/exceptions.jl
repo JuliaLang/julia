@@ -1,6 +1,4 @@
-@testset "try/catch" begin
-
-test_mod = Module()
+test_mod = @newmod()
 
 @test isempty(current_exceptions())
 
@@ -260,12 +258,10 @@ end
 
 @test isempty(current_exceptions())
 
-end
-
 #-------------------------------------------------------------------------------
 @testset "try/finally" begin
 
-test_mod = Module()
+test_mod = @newmod()
 
 @test JuliaLowering.include_string(test_mod, """
 let x = -1
@@ -351,5 +347,325 @@ begin
     )
 end
 """) == (1,2)
+
+@testset "continue/break and finally" for maybe_catch in ("", "catch _", "catch _\nelse")
+    # break value should be evaluated before finally
+    @test JuliaLowering.include_string(test_mod, """
+    function f_break_value_finally()
+        x = 1
+        @label blk begin
+            try
+                break blk x
+            $maybe_catch
+            finally
+                x = 2
+            end
+        end
+    end
+    f_break_value_finally()
+    """) == 1
+    @test isempty(current_exceptions())
+
+    # continue in try -> finally block -> loop-cont
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2,3]
+            try
+                push!(out, ("try", x))
+                continue
+            $maybe_catch
+            finally
+                push!(out, ("finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("finally", 1), ("try", 2), ("finally", 2), ("try", 3), ("finally", 3)]
+    @test isempty(current_exceptions())
+
+    # break in try -> finally block -> loop-exit
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2,3]
+            try
+                push!(out, ("try", x))
+                break
+            $maybe_catch
+            finally
+                push!(out, ("finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("finally", 1)]
+    @test isempty(current_exceptions())
+
+    # break/continue in loop in try -> loop-cont, loop-exit -> finally
+    @test JuliaLowering.include_string(test_mod, """
+    let out = [], x = 1
+        try
+            push!(out, ("try", x))
+            for outer x in 1:100
+                push!(out, ("loop", x))
+                x > 2 && break
+                continue
+                push!(out, ("bad", x))
+            end
+        $maybe_catch
+        finally
+            push!(out, ("finally", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("loop", 1), ("loop", 2), ("loop", 3), ("finally", 3)]
+    @test isempty(current_exceptions())
+
+    # break/continue in loop in finally -> loop-cont, loop-exit
+    @test JuliaLowering.include_string(test_mod, """
+    let out = [], x = 1
+        try
+            push!(out, ("try", x))
+        $maybe_catch
+        finally
+            for outer x in 1:100
+                push!(out, ("loop", x))
+                x > 2 && break
+                continue
+                push!(out, ("bad", x))
+            end
+            push!(out, ("finally", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("loop", 1), ("loop", 2), ("loop", 3), ("finally", 3)]
+    @test isempty(current_exceptions())
+
+    # continue in finally -> loop-cont
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2,3]
+            try
+                push!(out, ("try", x))
+            $maybe_catch
+            finally
+                continue
+                push!(out, ("finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("try", 2), ("try", 3)]
+    @test isempty(current_exceptions())
+
+    # break in finally -> loop-exit
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2,3]
+            try
+                push!(out, ("try", x))
+            $maybe_catch
+            finally
+                break
+                push!(out, ("finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1)]
+    @test isempty(current_exceptions())
+
+    # error in try -> continue in finally -> loop-cont
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2,3]
+            try
+                push!(out, ("try", x))
+                error()
+            $maybe_catch
+            finally
+                continue
+                push!(out, ("finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("try", 2), ("try", 3)]
+    @test isempty(current_exceptions())
+
+    # error in try -> break in finally -> loop-exit
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2,3]
+            try
+                push!(out, ("try", x))
+                error()
+            $maybe_catch
+            finally
+                break
+                push!(out, ("finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1)]
+    @test isempty(current_exceptions())
+
+    # (nested) continue in try -> finally block -> loop-cont
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2]
+            try
+                push!(out, ("try", x))
+                continue
+            $maybe_catch
+            finally
+                push!(out, ("finally", x))
+                try
+                    push!(out, ("try2", x))
+                    continue
+                finally
+                    push!(out, ("finally2", x))
+                end
+                push!(out, ("bad_finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("finally", 1), ("try2", 1), ("finally2", 1),
+             ("try", 2), ("finally", 2), ("try2", 2), ("finally2", 2)]
+    @test isempty(current_exceptions())
+
+    # (nested) break in try -> finally block -> loop-exit
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2]
+            try
+                push!(out, ("try", x))
+                break
+            $maybe_catch
+            finally
+                push!(out, ("finally", x))
+                try
+                    push!(out, ("try2", x))
+                    break
+                finally
+                    push!(out, ("finally2", x))
+                end
+                push!(out, ("bad_finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("finally", 1), ("try2", 1), ("finally2", 1)]
+    @test isempty(current_exceptions())
+
+    @test jl_eval(test_mod, """let r = nothing
+        try
+            1
+        finally
+            r = (((x::T) where T) -> 1)
+        end
+        r(2)
+    end""") == 1
+end
+
+    @testset "valid uses of @goto" for run in (JuliaLowering.include_string,
+                                               fl_eval)
+        # no finally block
+        @test run(test_mod, """let v = []
+            try
+                @goto lab
+                push!(v, 1)
+            catch e
+            else
+            end
+            @label lab
+            v
+        end
+        """) == []
+        @test run(test_mod, """let v = []
+            try
+                error()
+            catch e
+                @goto lab
+                push!(v, 1)
+            else
+            end
+            @label lab
+            v, length(current_exceptions())
+        end
+        """) == ([], 0)
+        @test run(test_mod, """let v = []
+            try
+            catch e
+            else
+                @goto lab
+                push!(v, 1)
+            end
+            @label lab
+            v
+        end
+        """) == []
+
+        # with finally, but clearly not skipping it
+        @test run(test_mod, """let v = []
+            try
+                @goto lab
+                push!(v, 1)
+                @label lab
+            catch e
+            else
+            finally
+            end
+            v
+        end
+        """) == []
+        @test run(test_mod, """let v = []
+            try
+                error()
+            catch e
+                @goto lab
+                push!(v, 1)
+                @label lab
+            else
+            finally
+            end
+            v
+        end
+        """) == []
+        @test run(test_mod, """let v = []
+            try
+            catch e
+            else
+                @goto lab
+                push!(v, 1)
+                @label lab
+            finally
+            end
+            v
+        end
+        """) == []
+        # broken in flisp, will be broken in JL: finally blocks are cloned
+        # @test run(test_mod, """let v = []
+        #     try
+        #     catch e
+        #     else
+        #     finally
+        #         @goto lab
+        #         push!(v, 1)
+        #         @label lab
+        #     end
+        #     v
+        # end
+        # """) == []
+    end
 
 end

@@ -28,6 +28,16 @@ _colon(::Ordered, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
 _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
     StepRangeLen(start, step, convert(Integer, fld(stop - start, step)) + 1)
 
+const _RangeWrappingInteger = Union{
+    Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}
+
+_range_wrapping_add(x::_RangeWrappingInteger, y::_RangeWrappingInteger) = x +% y
+_range_wrapping_add(x, y) = x + y
+_range_wrapping_sub(x::_RangeWrappingInteger, y::_RangeWrappingInteger) = x -% y
+_range_wrapping_sub(x, y) = x - y
+_range_wrapping_mul(x::_RangeWrappingInteger, y::_RangeWrappingInteger) = x *% y
+_range_wrapping_mul(x, y) = x * y
+
 """
     (:)(start, [step], stop)
 
@@ -187,7 +197,7 @@ range_stop(stop) = range_start_stop(oftype(stop, 1), stop)
 range_stop(stop::Integer) = range_length(stop)
 
 function range_step_stop_length(step, a, len::Integer)
-    start = a - step * (len - oneunit(len))
+    start = _range_wrapping_sub(a, _range_wrapping_mul(step, len - oneunit(len)))
     if start isa Signed
         # overflow in recomputing length from stop is okay
         return StepRange{typeof(start),typeof(step)}(start, step, convert(typeof(start), a))
@@ -198,7 +208,7 @@ end
 # Stop and length as the only argument
 function range_stop_length(a, len::Integer)
     step = oftype(a - a, 1) # assert that step is representable
-    start = a - (len - oneunit(len))
+    start = _range_wrapping_sub(a, len - oneunit(len))
     if start isa Signed
         # overflow in recomputing length from stop is okay
         return UnitRange(start, oftype(start, a))
@@ -209,7 +219,7 @@ end
 # Start and length as the only argument
 function range_start_length(a, len::Integer)
     step = oftype(a - a, 1) # assert that step is representable
-    stop = a + (len - oneunit(len))
+    stop = _range_wrapping_add(a, len - oneunit(len))
     if stop isa Signed
         # overflow in recomputing length from stop is okay
         return UnitRange(oftype(stop, a), stop)
@@ -220,7 +230,7 @@ end
 range_start_stop(start, stop) = start:stop
 
 function range_start_step_length(a, step, len::Integer)
-    stop = a + step * (len - oneunit(len))
+    stop = _range_wrapping_add(a, _range_wrapping_mul(step, len - oneunit(len)))
     if stop isa Signed
         # overflow in recomputing length from stop is okay
         return StepRange{typeof(stop),typeof(step)}(convert(typeof(stop), a), step, stop)
@@ -358,7 +368,8 @@ function steprange_last(start, step, stop)::typeof(stop)
         else
             # Compute absolute value of difference between `start` and `stop`
             # (to simplify handling both signed and unsigned T and checking for signed overflow):
-            absdiff, absstep = stop > start ? (stop - start, step) : (start - stop, -step)
+            absdiff, absstep = stop > start ? (_range_wrapping_sub(stop, start), step) :
+                                                (_range_wrapping_sub(start, stop), -step)
 
             # Compute remainder as a non-negative number:
             if absdiff isa Signed && absdiff < zero(absdiff)
@@ -379,9 +390,9 @@ function steprange_last_empty(start::Integer, step, stop)::typeof(stop)
     # empty range has a special representation where stop = start-1,
     # which simplifies arithmetic for Signed numbers
     if step > zero(step)
-        last = start - oneunit(step)
+        last = _range_wrapping_sub(start, oneunit(step))
     else
-        last = start + oneunit(step)
+        last = _range_wrapping_add(start, oneunit(step))
     end
     return last
 end
@@ -426,7 +437,8 @@ end
 
 # if stop and start are integral, we know that their difference is a multiple of 1
 unitrange_last(start::Integer, stop::Integer) =
-    stop >= start ? stop : convert(typeof(stop), start - oneunit(start - stop))
+    stop >= start ? stop : convert(typeof(stop),
+        _range_wrapping_sub(start, oneunit(_range_wrapping_sub(start, stop))))
 # otherwise, use `floor` as a more efficient way to compute modulus with step=1
 unitrange_last(start, stop) =
     stop >= start ? convert(typeof(stop), start + floor(stop - start)) :
@@ -457,6 +469,9 @@ end
     Base.AbstractOneTo
 
 Abstract type for ranges that start at 1 and have a step size of 1.
+
+!!! compat "Julia 1.13"
+    This type requires at least Julia 1.13.
 """
 abstract type AbstractOneTo{T} <: AbstractUnitRange{T} end
 
@@ -653,9 +668,8 @@ function print_range(io::IO, r::AbstractArray,
     if !haskey(io, :compact)
         io = IOContext(io, :compact => true)
     end
-    screenheight, screenwidth = sz[1] - 4, sz[2]
+    _, screenwidth = sz[1] - 4, sz[2]
     screenwidth -= length(pre) + length(post)
-    postsp = ""
     sepsize = length(sep)
     m = 1 # treat the range as a one-row matrix
     n = length(r)
@@ -805,7 +819,7 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128},
     # (near typemax) for types with known `unsigned` functions
     function length(r::OrdinalRange{T}) where T<:bigints
         s = step(r)
-        diff = last(r) - first(r)
+        diff = last(r) -% first(r)
         isempty(r) && return zero(diff)
         # Compute `(diff ÷ s) + 1` in a manner robust to signed overflow
         # by using the absolute values as unsigneds for non-empty ranges.
@@ -821,10 +835,10 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128},
         isempty(r) && return zero(ET)
         # n.b. !(s isa T)
         if s > 1
-            diff = stop - start
+            diff = stop -% start
             a = convert(ET, div(unsigned(diff), s))
         elseif s < -1
-            diff = start - stop
+            diff = start -% stop
             a = convert(ET, div(unsigned(diff), -s))
         elseif s > 0
             a = convert(ET, div(checked_sub(stop, start), s))
@@ -971,7 +985,7 @@ unsafe_getindex(v::OneTo{T}, i::Integer) where T = convert(T, i)
 unsafe_getindex(v::AbstractRange{T}, i::Integer) where T = convert(T, first(v) + (i - oneunit(i))*step_hp(v))
 function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
     u = oftype(r.offset, i) - r.offset
-    T(r.ref + u*r.step)
+    convert(T, (r.ref + u*r.step))
 end
 unsafe_getindex(r::LinRange, i::Integer) = lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
 
@@ -985,6 +999,17 @@ end
 
 getindex(r::AbstractRange, ::Colon) = copy(r)
 
+function _empty_stop(start, step)
+    if step > zero(step)
+        stop = start - oneunit(step)
+        stop < start && return stop
+    else
+        stop = start + oneunit(step)
+        stop > start && return stop
+    end
+    throw(OverflowError(LazyString("cannot represent an empty range starting at ", start)))
+end
+
 function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integer}
     @inline
     @boundscheck checkbounds(r, s)
@@ -995,7 +1020,7 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
         f = first(r)
         start = oftype(f, f + first(s) - firstindex(r))
         len = length(s)
-        stop = oftype(f, start + (len - oneunit(len)))
+        stop = oftype(f, isempty(s) ? _empty_stop(start, step(r)) : _range_wrapping_add(start, len - oneunit(len)))
         return range(start, stop)
     end
 end
@@ -1011,14 +1036,14 @@ function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        len = Int(last(s))
+        len = count(s)
         return range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length=len)
     else
         f = first(r)
         start = oftype(f, f + s.start - firstindex(r))
         st = step(s)
         len = length(s)
-        stop = oftype(f, start + (len - oneunit(len)) * (iszero(len) ? copysign(oneunit(st), st) : st))
+        stop = oftype(f, isempty(s) ? _empty_stop(start, st) : start + (len - oneunit(len)) * st)
         return range(start, stop; step=st)
     end
 end
@@ -1042,8 +1067,7 @@ function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
         start = oftype(f, f + (fs - firstindex(r)) * st)
         st *= step(s)
         len = length(s)
-        # mimic steprange_last_empty here, to try to avoid overflow
-        stop = oftype(f, start + (len - oneunit(len)) * (iszero(len) ? copysign(oneunit(st), st) : st))
+        stop = oftype(f, isempty(s) ? _empty_stop(start, st) : start + (len - oneunit(len)) * st)
         return range(start, stop; step=st)
     end
 end
@@ -1147,6 +1171,7 @@ end
 function ==(r::Union{StepRange{T},StepRangeLen{T,T}}, s::Union{StepRange{T},StepRangeLen{T,T}}) where {T}
     isempty(r) && return isempty(s)
     _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
+    iszero(step(r)) && return iszero(step(s)) && (first(r) == first(s)) && (length(r) == length(s))
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 end
 
@@ -1229,7 +1254,7 @@ function intersect(r::StepRange, s::StepRange)
     start2, step2, stop2 = first_step_last_ascending(s)
     a = lcm(step1, step2)
 
-    g, x, y = gcdx(step1, step2)
+    g, x, _ = gcdx(step1, step2)
 
     if !iszero(rem(start1 - start2, g))
         # Unaligned, no overlap possible.
@@ -1391,7 +1416,7 @@ promote_rule(::Type{LinRange{A,L}}, b::Type{StepRangeLen{T2,R2,S2,L2}}) where {A
 function vcat(rs::AbstractRange{T}...) where T
     n::Int = 0
     for ra in rs
-        n += length(ra)
+        n = checked_add(n, length(ra))
     end
     a = Vector{T}(undef, n)
     i = 1
@@ -1419,12 +1444,13 @@ end
 collect(r::AbstractRange) = Array(r)
 
 _reverse(r::OrdinalRange, ::Colon) = (:)(last(r), negate(step(r)), first(r))
-function _reverse(r::StepRangeLen, ::Colon)
+function _reverse(r::StepRangeLen{T,R,<:Any,L}, ::Colon) where {T,R,L}
     # If `r` is empty, `length(r) - r.offset + 1 will be nonpositive hence
     # invalid. As `reverse(r)` is also empty, any offset would work so we keep
     # `r.offset`
     offset = isempty(r) ? r.offset : length(r)-r.offset+1
-    return typeof(r)(r.ref, negate(r.step), length(r), offset)
+    step = negate(r.step)
+    return StepRangeLen{T,R,typeof(step),L}(r.ref, step, length(r), offset)
 end
 _reverse(r::LinRange{T}, ::Colon) where {T} = typeof(r)(r.stop, r.start, length(r))
 

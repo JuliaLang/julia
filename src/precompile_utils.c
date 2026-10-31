@@ -7,7 +7,7 @@ JL_DLLEXPORT void jl_suppress_precompile(int suppress)
 }
 
 
-static void jl_rebuild_methtables(arraylist_t *MIs, htable_t *mtables) JL_GC_DISABLED
+static void jl_rebuild_methtables(arraylist_t *MIs, htable_t *mtables) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     // Rebuild MethodTable to contain only those methods for which we compiled code.
     // This can have significant soundness problems if there previously existed

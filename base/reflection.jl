@@ -34,7 +34,7 @@ function code_lowered(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); gener
                 code = ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)
             else
                 error("Could not expand generator for `@generated` method ", m, ". ",
-                      "This can happen if the provided argument types (", t, ") are ",
+                      "This can happen if the provided argument types (", argtypes, ") are ",
                       "not concrete types, but the `generated` argument is `true`.")
             end
         else
@@ -103,7 +103,7 @@ struct CodegenParams
     If enabled, generate the necessary code to support the --code-coverage
     command line flag to julia itself. Note that the option itself does not enable
     code coverage. Rather, it merely generates the support code necessary
-    to code coverage if requested by the command line option.
+    to perform code coverage if requested by the command line option.
     """
     code_coverage::Cint
 
@@ -160,13 +160,13 @@ struct CodegenParams
     targets. The option may be disabled for use in environments where the julia
     runtime is unavailable, but is otherwise recommended to be enabled, even if
     lazy resolution is not required, as the Julia PLT mechanism may have superior
-    performance compared to the native platform mechanism. The options is enabled by default.
+    performance compared to the native platform mechanism. The option is enabled by default.
     """
     use_jlplt::Cint
 
     """
-        If enabled emit LLVM IR for all functions even if wouldn't be compiled
-        for some reason (i.e functions that return a constant value).
+        If enabled emit LLVM IR for all functions even if they wouldn't be compiled
+        for some reason (i.e. functions that return a constant value).
     """
     force_emit_all::Cint
 
@@ -183,19 +183,37 @@ struct CodegenParams
     """
     sanitize_address::Cint
 
+    """
+    When enabled, generate names that are globally unique in this Julia session,
+    across all code generated with this flag set.  Intended for llvmpasses
+    tests.
+    """
+    unique_names::Cint
+
+    """
+    If enabled, retain inlined function scopes in LLVM debug information. Enabled
+    by default so consumers of the emitted IR can reconstruct inlined frames.
+    Julia's internal codegen parameters disable this for image generation in release
+    builds, since its own backtraces reconstruct these frames from CodeInstance debuginfo.
+    """
+    debug_info_inline_scopes::Cint
+
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
                    gcstack_arg::Bool=true, use_jlplt::Bool=true, force_emit_all::Bool=false,
-                   sanitize_memory::Bool=false, sanitize_thread::Bool=false, sanitize_address::Bool=false)
+                   sanitize_memory::Bool=false, sanitize_thread::Bool=false, sanitize_address::Bool=false,
+                   unique_names::Bool=false,
+                   debug_info_inline_scopes::Bool=true)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             debug_info_level, Cint(safepoint_on_entry),
             Cint(gcstack_arg), Cint(use_jlplt), Cint(force_emit_all),
-            Cint(sanitize_memory), Cint(sanitize_thread), Cint(sanitize_address))
+            Cint(sanitize_memory), Cint(sanitize_thread), Cint(sanitize_address),
+            Cint(unique_names), Cint(debug_info_inline_scopes))
     end
 end
 
@@ -596,7 +614,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
     interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
-        _, rt = only(code_typed_opaque_closure(f, types; Compiler))
+        _, rt = only(code_typed_opaque_closure(f, types; interp=passed_interp))
         return Any[rt]
     elseif isa(f, Core.Builtin)
         return Any[_builtin_return_type(passed_interp, interp, f, types)]
@@ -652,7 +670,7 @@ julia> Base.return_types(checksym, (Union{Symbol,String},))
 ```
 
 It's important to note the difference here: `Base.return_types` gives back inferred results
-for each method that matches the given signature `checksum(::Union{Symbol,String})`.
+for each method that matches the given signature `checksym(::Union{Symbol,String})`.
 On the other hand `Base.infer_return_type` returns one collective result that sums up all those possibilities.
 
 !!! warning
@@ -859,7 +877,7 @@ Return the possible computation effects of the function call specified by `f` an
 julia> f1(x) = x * 2;
 
 julia> Base.infer_effects(f1, (Int,))
-(+c,+e,+n,+t,+s,+m,+i)
+(+c,+e,+re,+n,+t,+s,+m,+u,+o,+r)
 ```
 
 This function will return an `Effects` object with information about the computational
@@ -869,7 +887,7 @@ effects of the function `f1` when called with an `Int` argument.
 julia> f2(x::Int) = x * 2;
 
 julia> Base.infer_effects(f2, (Integer,))
-(+c,+e,!n,+t,+s,+m,+i)
+(+c,+e,+re,!n,+t,+s,+m,+u,+o,+r)
 ```
 
 This case is pretty much the same as with `f1`, but there's a key difference to note. For
@@ -957,7 +975,7 @@ function _which(@nospecialize(tt::Type);
         raise && error("no unique matching method found for the specified argument types")
         return nothing
     end
-    return match
+    return match::Core.MethodMatch
 end
 
 """
@@ -995,15 +1013,15 @@ end
 which(@nospecialize(argtypes::Tuple)) = which(to_tuple_type(argtypes))
 
 """
-    which(module, symbol)
+    which(module::Module, symbol::Symbol)
 
 Return the module in which the binding for the variable referenced by `symbol` in `module` was created.
 """
-function which(m::Module, s::Symbol)
-    if !isdefined(m, s)
-        error("\"$s\" is not defined in module $m")
+function which(mdl::Module, symbol::Symbol)
+    if !isdefinedglobal(mdl, symbol)
+        error("\"$symbol\" is not defined in module $mdl")
     end
-    return binding_module(m, s)
+    return binding_module(mdl, symbol)
 end
 
 # function reflection
@@ -1121,13 +1139,20 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
 end
 
 """
-    fbody = bodyfunction(basemethod::Method)
+    fbody = bodyfunction(basemethod::Method; world::UInt=Base.get_world_counter())
 
 Find the keyword "body function" (the function that contains the body of the method
 as written, called after all missing keyword-arguments have been assigned default values).
 `basemethod` is the method you obtain via [`which`](@ref) or [`methods`](@ref).
+
+The binding of the body function is looked up in the world age given by `world`, which
+defaults to the current world counter.
+
+!!! compat "Julia 1.14"
+    The `world` keyword argument requires Julia 1.14 or later. Before Julia 1.14,
+    the binding was looked up in the world age of the calling task.
 """
-function bodyfunction(basemethod::Method)
+function bodyfunction(basemethod::Method; world::UInt=get_world_counter())
     fmod = parentmodule(basemethod)
     # The lowered code for `basemethod` should look like
     #   %1 = mkw(kwvalues..., #self#, args...)
@@ -1140,7 +1165,7 @@ function bodyfunction(basemethod::Method)
             fsym = callexpr.args[1]
             while true
                 if isa(fsym, Symbol)
-                    return getfield(fmod, fsym)
+                    return invoke_in_world(world, getglobal, fmod, fsym)
                 elseif isa(fsym, GlobalRef)
                     if fsym.mod === Core && fsym.name === :_apply
                         fsym = callexpr.args[2]
@@ -1148,9 +1173,9 @@ function bodyfunction(basemethod::Method)
                         fsym = callexpr.args[3]
                     end
                     if isa(fsym, Symbol)
-                        return getfield(fmod, fsym)::Function
+                        return invoke_in_world(world, getglobal, fmod, fsym)::Function
                     elseif isa(fsym, GlobalRef)
-                        return getfield(fsym.mod, fsym.name)::Function
+                        return invoke_in_world(world, getglobal, fsym.mod, fsym.name)::Function
                     elseif isa(fsym, Core.SSAValue)
                         fsym = ast.code[fsym.id]
                     else
@@ -1215,53 +1240,38 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         min = Ref{UInt}(typemin(UInt))
         max = Ref{UInt}(typemax(UInt))
         has_ambig = Ref{Int32}(0)
-        ms = collect(Core.MethodMatch, _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector)
+        ms = _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector{Any}
         has_ambig[] == 0 && return false
-        if !ambiguous_bottom
-            filter!(ms) do m::Core.MethodMatch
-                return !has_bottom_parameter(m.spec_types)
-            end
-        end
         # if ml-matches reported the existence of an ambiguity over their
         # intersection, see if both m1 and m2 seem to be involved in it
-        # (if one was fully dominated by a different method, we want to will
+        # (if one was fully dominated by a different method, we want to
         # report the other ambiguous pair)
-        have_m1 = have_m2 = false
-        for match in ms
-            m = match.method
-            m === m1 && (have_m1 = true)
-            m === m2 && (have_m2 = true)
+        function involves_both(ms)
+            have_m1 = have_m2 = false
+            for match in ms
+                m = (match::Core.MethodMatch).method
+                m === m1 && (have_m1 = true)
+                m === m2 && (have_m2 = true)
+            end
+            return have_m1 && have_m2
         end
-        if !have_m1 || !have_m2
-            # ml-matches did not need both methods to expose the reported ambiguity
-            return false
-        end
+        nms = length(ms)
         if !ambiguous_bottom
-            # since we're intentionally ignoring certain ambiguities (via the
-            # filter call above), see if we can now declare the intersection fully
-            # covered even though it is partially ambiguous over Union{} as a type
-            # parameter somewhere
-            minmax = nothing
-            for match in ms
-                m = match.method
-                match.fully_covers || continue
-                if minmax === nothing || morespecific(m, minmax)
-                    minmax = m
-                end
+            filter!(ms) do m
+                return !has_bottom_parameter((m::Core.MethodMatch).spec_types)
             end
-            if minmax === nothing || minmax == m1 || minmax == m2
-                return true
+        end
+        # ml-matches did not need both methods to expose the reported ambiguity
+        involves_both(ms) || return false
+        if length(ms) != nms
+            # If we intentionally removed certain ambiguities (via the
+            # filter call above), re-run the runtime's match sort on the
+            # remaining matches and see if the solution is still holding an ambiguity
+            # and m1 and m2 are both still reported in the solution.
+            if ccall(:jl_sort_method_matches, Cint, (Any, Cint), ms, true) == 0
+                return false
             end
-            for match in ms
-                m = match.method
-                m === minmax && continue
-                if !morespecific(minmax, m)
-                    if match.fully_covers || !morespecific(m, minmax)
-                        return true
-                    end
-                end
-            end
-            return false
+            involves_both(ms) || return false
         end
         return true
     end

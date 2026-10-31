@@ -160,6 +160,20 @@ julia> if x > 0
 "positive!"
 ```
 
+An `if` expression can also be written on a single line by separating the condition from the
+first branch with a semicolon:
+
+```jldoctest
+julia> x = 3;
+
+julia> if x > 0; "positive!" else "negative..." end
+"positive!"
+```
+
+Without the semicolon (or a line break), the condition may continue into what was meant to be
+the branch: `if 7+2 < 10 -3 else 0 end` is parsed as `if 7+2 < 10-3 else 0 end`, which has an
+empty first branch and evaluates to `0`.
+
 Note that very short conditional statements (one-liners) are frequently expressed using Short-Circuit
 Evaluation in Julia, as outlined in the next section.
 
@@ -317,8 +331,8 @@ of `&&` and `||` operators.
 
 This behavior is frequently used in Julia to form an alternative to very short `if` statements.
 Instead of `if <cond> <statement> end`, one can write `<cond> && <statement>` (which could be
-read as: <cond> *and then* <statement>). Similarly, instead of `if ! <cond> <statement> end`,
-one can write `<cond> || <statement>` (which could be read as: <cond> *or else* <statement>).
+read as: `<cond>` *and then* `<statement>`). Similarly, instead of `if ! <cond> <statement> end`,
+one can write `<cond> || <statement>` (which could be read as: `<cond>` *or else* `<statement>`).
 
 For example, a recursive factorial routine could be defined like this:
 
@@ -397,7 +411,7 @@ julia> while i <= 3
 3
 ```
 
-The `while` loop evaluates the condition expression (`i <= 3` in this case), and as long it remains
+The `while` loop evaluates the condition expression (`i <= 3` in this case), and as long as it remains
 `true`, keeps also evaluating the body of the `while` loop. If the condition expression is `false`
 when the `while` loop is first reached, the body is never evaluated.
 

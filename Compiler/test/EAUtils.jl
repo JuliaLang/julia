@@ -31,7 +31,7 @@ mutable struct EscapeAnalyzer <: AbstractInterpreter
     const world::UInt
     const inf_params::InferenceParams
     const opt_params::OptimizationParams
-    const inf_cache::Vector{InferenceResult}
+    const inf_cache::Compiler.InferenceCache
     const token::EscapeAnalyzerCacheToken
     const entry_mi::Union{Nothing,MethodInstance}
     result::EscapeResultForEntry
@@ -39,7 +39,7 @@ mutable struct EscapeAnalyzer <: AbstractInterpreter
                             entry_mi::Union{Nothing,MethodInstance}=nothing)
         inf_params = InferenceParams()
         opt_params = OptimizationParams()
-        inf_cache = InferenceResult[]
+        inf_cache = Compiler.InferenceCache()
         return new(world, inf_params, opt_params, inf_cache, cache_token, entry_mi)
     end
 end
@@ -296,7 +296,7 @@ while caching the analysis results.
   controls the world age to use when looking up methods, use current world age if not specified.
 - `cache_token::EscapeAnalyzerCacheToken = GLOBAL_EA_CACHE_TOKEN`:
   specifies the cache token to use, by default a global token is used so that the analysis
-  can use the caches from previous invocations. If you with to use a fresh cache and perform
+  can use the caches from previous invocations. If you wish to use a fresh cache and perform
   a new analysis, specify a new `EscapeAnalyzerCacheToken` instance.
 - `interp::EscapeAnalyzer = EscapeAnalyzer(world, cache_token)`:
   specifies the escape analyzer to use.
@@ -340,7 +340,7 @@ Note that this version does not cache the analysis results.
   controls the world age to use when looking up methods, use current world age if not specified.
 - `cache_token::EscapeAnalyzerCacheToken = GLOBAL_EA_CACHE_TOKEN`:
   specifies the cache token to use, by default a global token is used so that the analysis
-  can use the caches from previous invocations. If you with to use a fresh cache and perform
+  can use the caches from previous invocations. If you wish to use a fresh cache and perform
   a new analysis, specify a new `EscapeAnalyzerCacheToken` instance.
 - `interp::AbstractInterpreter = EscapeAnalyzer(world, cache_token)`:
   specifies the abstract interpreter to use, by default a new `EscapeAnalyzer` with an empty cache is created.

@@ -172,7 +172,7 @@ function _matched_map!(f, s1::BitSet, s2::BitSet)
 
     # we must first handle the NO_OFFSET case; we could test for
     # isempty(s1) but it can be costly, so the user has to call
-    # empty!(s1) herself before-hand to re-initialize to NO_OFFSET
+    # empty!(s1) themselves before-hand to re-initialize to NO_OFFSET
     if s1.offset == NO_OFFSET
         return left_false_is_false ? s1 : copy!(s1, s2)
     elseif s2.offset == NO_OFFSET

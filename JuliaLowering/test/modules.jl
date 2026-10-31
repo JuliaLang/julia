@@ -1,5 +1,3 @@
-@testset "modules" begin
-
 test_mod = Module()
 
 A = JuliaLowering.include_string(test_mod, """
@@ -51,4 +49,5 @@ end
 """)
 @test Amod.init_order == ["B", "D", "E", "C", "A"]
 
-end
+@test_throws LoweringError JuliaLowering.eval(
+    test_mod, Expr(:module, true, :NonBlockBody, :x))

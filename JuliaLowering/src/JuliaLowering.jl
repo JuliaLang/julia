@@ -2,6 +2,10 @@
 baremodule JuliaLowering
 
 using Base
+
+# bug with baremodules
+Base.set_syntax_version(JuliaLowering, v"1.14")
+
 # We define a separate _include() for use in this module to avoid mixing method
 # tables with the public `JuliaLowering.include()` API
 const _include = Base.IncludeInto(JuliaLowering)
@@ -12,20 +16,34 @@ else
     using JuliaSyntax
 end
 
-using .JuliaSyntax: highlight, Kind, @KSet_str, is_leaf, children, numchildren,
-    head, kind, flags, has_flags, filename, first_byte, last_byte, byte_range,
-    sourcefile, source_location, span, sourcetext, is_literal, is_infix_op_call,
-    is_postfix_op_call, @isexpr, SyntaxHead, is_syntactic_operator,
-    is_contextual_keyword,
-    SyntaxGraph, SyntaxTree, SyntaxList, NodeId, SourceRef, SourceAttrType,
-    ensure_attributes, ensure_attributes!, delete_attributes, new_id!, hasattr,
-    setattr, setattr!, syntax_graph, is_compatible_graph,
-    check_compatible_graph, copy_node, copy_ast, provenance, sourceref,
-    reparent, mapchildren, flattened_provenance, mkleaf, mknode, newleaf,
-    newnode, tree_ids, @stm, mapsyntax
+using Base: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax, MacroContext,
+    SourceAttrType, head, flattened_provenance, sourceref, unexpanded_sourceref,
+    mapchildren, provenance, JL_NEW_EDITION, JL_OLD_EDITION, DEBUG_LOWERING,
+    is_base_layer, base_layer, escape_layer, remove_scope, fill_context,
+    trim_provenance,
+    syntax_module, edition, adopt_scope, assert_syntax, @mknode, macro_prov,
+    isa_lowering_ast_node, filename, source_line, first_linenode
 
-_include("kinds.jl")
-_register_kinds()
+using .JuliaSyntax: children, first_byte, highlight, is_leaf,
+    last_byte, numchildren, source_location
+
+
+const DEBUG = DEBUG_LOWERING
+# const DEBUG = isdefinedglobal(Base, :DEBUG_LOWERING) ?
+#     Base.DEBUG_LOWERING : true
+
+# Falls back to `Union{}` so that `loc isa MacroSource` is always false on Julia < 1.14
+# where `Core.MacroSource` is not defined.
+const MacroSource = isdefinedglobal(Core, :MacroSource) ? Core.MacroSource : Union{}
+
+const TypeEqOf = isdefinedglobal(Core, :TypeEqOf) ? "TypeEqOf" : "Typeof"
+
+# todo: remove
+const SyntaxTree = Syntax
+const IdTag = Int
+SyntaxList(rest::SyntaxTree...) = SyntaxTree[rest...]
+# Type of `ex[i:j]`
+const SyntaxView = SubArray{SyntaxTree, 1, Vector{SyntaxTree}, Tuple{UnitRange{Int}}, true}
 
 _include("ast.jl")
 _include("bindings.jl")
@@ -44,10 +62,6 @@ _include("syntax_macros.jl")
 _include("eval.jl")
 _include("compat.jl")
 _include("hooks.jl")
-
-function __init__()
-    _register_kinds()
-end
 
 _include("precompile.jl")
 

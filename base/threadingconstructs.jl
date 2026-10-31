@@ -44,7 +44,7 @@ to the Julia process, with atomic-acquire semantics. The result will always be
 greater than or equal to [`threadid()`](@ref) as well as `threadid(task)` for
 any task you were able to observe before calling `maxthreadid`.
 """
-maxthreadid() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cint), :acquire))
+maxthreadid() = Int(unsafe_load(cglobal(:jl_n_threads, Cint), :acquire))
 
 """
     Threads.nthreads(:default | :interactive)::Int
@@ -168,28 +168,74 @@ This includes both mark threads and concurrent sweep threads.
 """
 ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
 
-function threading_run(fun, static)
+# `fun` is captured by the scope closure and, inside it, by every task closure. Lowering
+# only keeps a `@nospecialize` argument untyped for a direct capture (#58426), not for the
+# nested one, so hold it in a struct with an untyped field. Then the closures and the runner
+# have the same types at every `@threads` site and compile once into the sysimage.
+# The cost is one dynamic dispatch per task at start.
+struct _ThreadsFun
+    fun
+end
+
+# Isolate the dynamic dispatch so that `--trim` checks the loop body at each call of the
+# runner, where its type is known. The runner must stay out of line for that call to exist.
+@noinline _threads_call(tfun::_ThreadsFun, i::Int) = tfun.fun(i)
+
+@noinline Base.@nospecializeinfer function threading_run(@nospecialize(fun), static::Bool)
+    tfun = _ThreadsFun(fun)
+    if static && ccall(:jl_in_threaded_region, Cint, ()) != 0
+        error("`@threads :static` cannot be used concurrently or nested")
+    end
     ccall(:jl_enter_threaded_region, Cvoid, ())
     n = threadpoolsize()
     tid_offset = threadpoolsize(:interactive)
     tasks = Vector{Task}(undef, n)
+    # The workers run in a new dynamic scope carrying the token of a fresh
+    # cancellation source, so that cancellation of the enclosing scope reaches
+    # every worker through the token tree.
+    src = Base.CancellationTokenSource(Base.default_cancel_token())
+    tok = Base.CancellationToken(src)
+    cr = nothing
     try
-        for i = 1:n
-            t = Task(() -> fun(i)) # pass in tid
-            t.sticky = static
-            if static
-                ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
-            else
-                # TODO: this should be the current pool (except interactive) if there
-                # are ever more than two pools.
-                _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
-                @assert _result == 1
+        Base.ScopedValues.with(Base.CANCEL_TOKEN => tok) do
+            for i = 1:n
+                t = Task(() -> _threads_call(tfun, i)) # pass in tid
+                t.sticky = static
+                if static
+                    ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+                else
+                    # TODO: this should be the current pool (except interactive) if there
+                    # are ever more than two pools.
+                    _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
+                    @assert _result == 1 "_result != 1"
+                end
+                tasks[i] = t
+                schedule(t)
             end
-            tasks[i] = t
-            schedule(t)
         end
         for i = 1:n
-            Base._wait(tasks[i])
+            r = Base._wait(tasks[i], tok; cancel_value=true)
+            if r isa Base.CancellationRequest
+                # Our own scope was cancelled; the workers observe the same
+                # cancellation through the tree. Await their unwind rather
+                # than unwinding out of the `@threads` while workers are
+                # still running; a severity escalation completes these
+                # teardown waits (value-mode) and is adopted, re-arming
+                # them (at ABANDON_ALL the workers were frozen; nothing to
+                # wait for).
+                cr = r
+                sev = Base.severity(r)
+                for j = i:n
+                    while sev < Base.CANCEL_REQUEST_ABANDON_ALL.request
+                        r2 = Base._wait(tasks[j], tok; min_severity=sev + 0x01,
+                                        cancel_value=true)
+                        r2 isa Base.CancellationRequest || break
+                        cr = r2
+                        sev = Base.severity(r2)
+                    end
+                end
+                break
+            end
         end
     finally
         ccall(:jl_exit_threaded_region, Cvoid, ())
@@ -198,6 +244,18 @@ function threading_run(fun, static)
     if !isempty(failed_tasks)
         throw(CompositeException(map(TaskFailedException, failed_tasks)))
     end
+    # The block's scope was cancelled but every worker happened to complete
+    # cleanly - the request must still surface at this cancellation-aware
+    # boundary rather than be swallowed.
+    cr === nothing || throw(cr)
+end
+
+# Helper to generate the threading run call. Keep the expansion free of `ccall`s: a
+# foreigncall in a top-level thunk forces the whole thunk through codegen, even under
+# `--compile=min`, so a top-level `@threads` would otherwise make the interpreter
+# unusable for everything around it.
+function _threading_run_expr(schedule)
+    :(threading_run(threadsfor_fun, $(schedule === :static)))
 end
 
 function _threadsfor(iter, lbody, schedule)
@@ -212,21 +270,164 @@ function _threadsfor(iter, lbody, schedule)
     quote
         local threadsfor_fun
         $func
-        if $(schedule === :greedy || schedule === :dynamic || schedule === :default)
-            threading_run(threadsfor_fun, false)
-        elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
-            error("`@threads :static` cannot be used concurrently or nested")
-        else # :static
-            threading_run(threadsfor_fun, true)
-        end
+        $(_threading_run_expr(schedule))
         nothing
     end
 end
 
+function _threadsfor_multi_iterator(body, iterators, condition, schedule, result_type, flatten)
+    vars = [iter.args[1] for iter in iterators]
+    ranges = [iter.args[2] for iter in iterators]
+
+    tuple_var = gensym("iter_tuple")
+    assignments = [:($(vars[i]) = $(tuple_var)[$i]) for i in 1:length(vars)]
+    # Use let blocks so destructured variables are local to each iteration,
+    # avoiding data races when multiple threads execute the body concurrently.
+    new_body = Expr(:let, Expr(:block, assignments...), body)
+    new_condition = if condition === true
+        true
+    else
+        Expr(:let, Expr(:block, assignments...), condition)
+    end
+
+    # The product has the shape of the serial comprehension, so the result takes its
+    # shape from it, and each iterator expression is evaluated once.
+    product_expr = Expr(:call, GlobalRef(Base.Iterators, :product), ranges...)
+    synthetic_iter = :($(tuple_var) = $(product_expr))
+
+    return _threadsfor_single_iterator(new_body, synthetic_iter, new_condition, schedule; result_type, flatten)
+end
+
+function _threadsfor_comprehension(gen::Expr, schedule, result_type=nothing)
+    # `[f(x, y) for x in a for y in b(x)]`: the outer generator's body is the inner iterator,
+    # whose elements are collected in order. The work is split over the outer iterator.
+    flatten = gen.head === :flatten
+    if flatten
+        gen = gen.args[1]
+    end
+    @assert gen.head === :generator "gen.head === :generator"
+
+    body = gen.args[1]
+
+    # Check if the second arg is a filter (handles both single and multi-loop with filters)
+    iter_or_filter = gen.args[2]
+    if isa(iter_or_filter, Expr) && iter_or_filter.head === :filter
+        condition = iter_or_filter.args[1]
+        iterators = iter_or_filter.args[2:end]
+    else
+        condition = true
+        iterators = gen.args[2:end]
+    end
+    if length(iterators) == 1
+        return _threadsfor_single_iterator(body, iterators[1], condition, schedule; result_type, flatten)
+    else
+        return _threadsfor_multi_iterator(body, iterators, condition, schedule, result_type, flatten)
+    end
+end
+
+# A one-argument function computing the body, so that a destructuring loop variable such as
+# `(a, b)` becomes a destructuring argument rather than two arguments. It is all user code,
+# so it is escaped as a whole.
+_comprehension_body_func(lidx, body) = esc(Expr(:->, Expr(:tuple, lidx), Expr(:block, body)))
+
+# The element type inferred for the serial comprehension over `iter`, as `collect` infers it
+# before widening unions, so that every result fits and an empty result gets the serial type.
+# `pred` is the filter function, or `true` without a filter. The serial iterator is built as
+# lowering builds it, only for its type.
+function _comprehension_eltype_expr(lidx, body, pred, flatten, iter)
+    src = pred === true ? iter : :(Base.Filter($pred, $iter))
+    gen = :(Base.Generator($(_comprehension_body_func(lidx, body)), $src))
+    flatten && (gen = :(Base.Flatten($gen)))
+    return :(Base._return_type(Base._iterator_upper_bound, Tuple{typeof($gen)}))
+end
+
+# The filter as a separate function of the item, as in a serial comprehension, so that an
+# assignment to the loop variable in the condition does not reach the body.
+_comprehension_pred_expr(lidx, condition) =
+    condition === true ? nothing : :(local pred = $(_comprehension_body_func(lidx, condition)))
+_comprehension_test_expr(condition) = condition === true ? true : :(pred(item))
+
+# Add the results for one item to `dest` with `add!` (`push!` or `put!`).
+_comprehension_add_expr(add!, dest, esc_body, flatten) =
+    flatten ? :(for v in $esc_body; $add!($dest, v); end) : :($add!($dest, $esc_body))
+
+# Give an untyped comprehension result the element type a serial comprehension would have.
+# `ET` is the inferred element type the result was allocated with.
+function _comprehension_result(result::AbstractArray, @nospecialize(ET))
+    if isempty(result)
+        T = Base.promote_typejoin_union(ET)
+        return eltype(result) === T ? result : similar(result, T)
+    end
+    isconcretetype(ET) && return result
+    T = _comprehension_widened_eltype(result, typeof(first(result)), firstindex(result) + 1)
+    return eltype(result) === T ? result : copyto!(similar(result, T), result)
+end
+
+# Widen `T` over the elements from linear index `i` on, as a serial `collect` does. The scan
+# is specialized on `T`, so `el isa T` stays cheap, and restarts only when `T` widens.
+function _comprehension_widened_eltype(result::AbstractArray, ::Type{T}, i::Int) where T
+    for j in i:lastindex(result)
+        el = @inbounds result[j]
+        el isa T || return _comprehension_widened_eltype(result, Base.promote_typejoin(T, typeof(el)), j + 1)
+    end
+    return T
+end
+
+function _threadsfor_single_iterator(body, iterator, condition, schedule; result_type=nothing, flatten=false)
+    lidx = iterator.args[1]
+    range = iterator.args[2]
+    esc_range = esc(range)
+
+    if schedule === :greedy
+        return greedy_comprehension_expr(esc_range, lidx, body, condition, schedule, result_type, flatten)
+    elseif condition === true && !flatten
+        # One result per item: pre-allocate and write directly
+        return _threadsfor_comprehension_fast(esc_range, lidx, body, schedule, result_type)
+    else
+        return default_comprehension_expr(esc_range, lidx, body, condition, schedule, result_type, flatten)
+    end
+end
+
+# Fast path for non-filtered, non-greedy comprehensions: pre-allocate and write directly.
+# Non-AbstractArray iterators (e.g. Iterators.flatten) are collected into an array
+# because the parallel work distribution indexes into items with r[i].
+# AbstractArrays and Tuples are used directly to preserve their index space (e.g. OffsetArrays).
+function _threadsfor_comprehension_fast(esc_range, lidx, body, schedule, result_type)
+    esc_lidx = esc(lidx)
+    esc_body = esc(body)
+    work_dist = _work_distribution_code()
+    ET_expr = result_type === nothing ?
+        _comprehension_eltype_expr(lidx, body, true, false, :iter) : esc(result_type)
+    final_expr = result_type === nothing ? :(_comprehension_result(result, _ET)) : :result
+    return quote
+        let iter = $esc_range
+        local items = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
+        local _ET = $ET_expr
+        local result = similar(Vector{_ET}, axes(items))
+        if !isempty(items)
+            let items = items, result = result
+            local threadsfor_fun
+            function threadsfor_fun(tid = 1)
+                # Reads: items, tid. Defines: r, loop_first, loop_last.
+                $work_dist
+                for i = loop_first:loop_last
+                    local $esc_lidx = @inbounds r[i]
+                    @inbounds result[i] = $esc_body
+                end
+            end
+            $(_threading_run_expr(schedule))
+            end
+        end
+        $final_expr
+        end
+    end
+end
+
+
 function greedy_func(itr, lidx, lbody)
     quote
-        let c = Channel{eltype($itr)}(threadpoolsize(), spawn=true) do ch
-            for item in $itr
+        let iter = $itr, c = Channel{eltype(iter)}(threadpoolsize(), spawn=true) do ch
+            for item in iter
                 put!(ch, item)
             end
         end
@@ -240,41 +441,83 @@ function greedy_func(itr, lidx, lbody)
     end
 end
 
-function default_func(itr, lidx, lbody)
+function greedy_comprehension_expr(esc_range, lidx, body, condition, schedule, result_type, flatten)
+    esc_lidx = esc(lidx)
+    esc_body = esc(body)
+    pred = condition === true ? true : :pred
+    ET_expr = result_type === nothing ?
+        _comprehension_eltype_expr(lidx, body, pred, flatten, :iter) : esc(result_type)
+    vals_expr = result_type === nothing ?
+        :(_comprehension_result(collect(result_channel), _ET)) : :(collect(result_channel))
+    # With one result per item, the result has the shape of the iterator as in a serial
+    # comprehension, although the elements are in arrival order.
+    shape_expr = !flatten && condition === true ?
+        :(Base.IteratorSize(iter) isa Base.HasShape ? reshape(vals, axes(iter)) : vals) : :vals
     quote
-        let range = $itr
-        function threadsfor_fun(tid = 1; onethread = false)
-            r = range # Load into local variable
-            lenr = length(r)
-            # divide loop iterations among threads
-            if onethread
-                tid = 1
-                len, rem = lenr, 0
+        let iter = $esc_range
+            $(_comprehension_pred_expr(lidx, condition))
+            local _ET = $ET_expr
+            local c = Channel{eltype(iter)}(threadpoolsize(), spawn=true) do ch
+                for item in iter
+                    put!(ch, item)
+                end
+            end
+            local result_channel = Channel{_ET}(Inf)
+            local threadsfor_fun
+            function threadsfor_fun(tid)
+                for item in c
+                    if $(_comprehension_test_expr(condition))
+                        local $esc_lidx = item
+                        $(_comprehension_add_expr(:put!, :result_channel, esc_body, flatten))
+                    end
+                end
+            end
+            $(_threading_run_expr(schedule))
+            close(result_channel)
+            local vals = $vals_expr
+            $shape_expr
+        end
+    end
+end
+
+# Helper function to generate work distribution code
+function _work_distribution_code()
+    quote
+        r = items # Load into local variable
+        lenr = length(r)
+        # divide loop iterations among threads
+        len, rem = divrem(lenr, threadpoolsize())
+        # not enough iterations for all the threads?
+        if len == 0
+            if tid > rem
+                return
+            end
+            len, rem = 1, 0
+        end
+        # compute this thread's iterations
+        loop_first = firstindex(r) + ((tid-1) * len)
+        loop_last = loop_first + len - 1
+        # distribute remaining iterations evenly
+        if rem > 0
+            if tid <= rem
+                loop_first = loop_first + (tid-1)
+                loop_last = loop_last + tid
             else
-                len, rem = divrem(lenr, threadpoolsize())
+                loop_first = loop_first + rem
+                loop_last = loop_last + rem
             end
-            # not enough iterations for all the threads?
-            if len == 0
-                if tid > rem
-                    return
-                end
-                len, rem = 1, 0
-            end
-            # compute this thread's iterations
-            f = firstindex(r) + ((tid-1) * len)
-            l = f + len - 1
-            # distribute remaining iterations evenly
-            if rem > 0
-                if tid <= rem
-                    f = f + (tid-1)
-                    l = l + tid
-                else
-                    f = f + rem
-                    l = l + rem
-                end
-            end
-            # run this thread's iterations
-            for i = f:l
+        end
+    end
+end
+
+function default_func(itr, lidx, lbody)
+    work_dist = _work_distribution_code()
+    quote
+        let items = $itr
+        function threadsfor_fun(tid = 1)
+            # Reads: items, tid. Defines: r, loop_first, loop_last.
+            $work_dist
+            for i = loop_first:loop_last
                 local $(esc(lidx)) = @inbounds r[i]
                 $(esc(lbody))
             end
@@ -283,12 +526,56 @@ function default_func(itr, lidx, lbody)
     end
 end
 
+function default_comprehension_expr(esc_range, lidx, body, condition, schedule, result_type, flatten)
+    esc_lidx = esc(lidx)
+    esc_body = esc(body)
+    pred = condition === true ? true : :pred
+    work_dist = _work_distribution_code()
+    ET_expr = result_type === nothing ?
+        _comprehension_eltype_expr(lidx, body, pred, flatten, :iter) : esc(result_type)
+    final_expr = result_type === nothing ? :(_comprehension_result(result, _ET)) : :result
+    quote
+        let iter = $esc_range
+        local items = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
+        $(_comprehension_pred_expr(lidx, condition))
+        local _ET = $ET_expr
+        # One buffer per task-id; tasks process contiguous ranges so concatenating
+        # in tid order preserves iteration order without a sort step.
+        local local_bufs = [Vector{_ET}() for _ in 1:threadpoolsize()]
+        let items = items, local_bufs = local_bufs
+        local threadsfor_fun
+        function threadsfor_fun(tid = 1)
+            # Reads: items, tid. Defines: r, loop_first, loop_last.
+            $work_dist
+            local buf = local_bufs[tid]
+            for i = loop_first:loop_last
+                local item = @inbounds r[i]
+                if $(_comprehension_test_expr(condition))
+                    local $esc_lidx = item
+                    $(_comprehension_add_expr(:push!, :buf, esc_body, flatten))
+                end
+            end
+        end
+        $(_threading_run_expr(schedule))
+        end
+        local result = vcat(local_bufs...)::Vector{_ET}
+        $final_expr
+        end
+    end
+end
+
 """
     Threads.@threads [schedule] for ... end
+    Threads.@threads [schedule] [expr for ... end]
+    Threads.@threads [schedule] T[expr for ... end]
 
-A macro to execute a `for` loop in parallel. The iteration space is distributed to
+A macro to execute a `for` loop or array comprehension in parallel. The iteration space is distributed to
 coarse-grained tasks. This policy can be specified by the `schedule` argument. The
 execution of the loop waits for the evaluation of all iterations.
+
+For `for` loops, the macro executes the loop body in parallel but does not return a value.
+For array comprehensions, the macro executes the comprehension in parallel and returns
+the collected results as an array.
 
 Tasks spawned by `@threads` are scheduled on the `:default` threadpool. This means that
 `@threads` will not use threads from the `:interactive` threadpool, even if called from
@@ -323,6 +610,15 @@ For example, the above conditions imply that:
   used).
 - Unless the `:static` schedule is used, the value of [`threadid()`](@ref Threads.threadid)
   may change even within a single iteration. See [`Task Migration`](@ref man-task-migration).
+
+!!! note
+    The number of tasks created by `@threads` depends on the number of threads. Since each
+    task has its own random number stream (see `Random.TaskLocalRNG`), results that use the
+    default random number generator can change with the number of threads, even when it is
+    seeded (and with the `:greedy` scheduler, they can also vary between runs). For results
+    that do not depend on the number of threads, spawn one task per iteration (e.g.
+    `@sync for x in xs; Threads.@spawn f(x); end`) or use a separate, explicitly seeded
+    random number generator for each iteration.
 
 ## Schedulers
 
@@ -380,13 +676,15 @@ thread other than 1.
 
 ## Examples
 
+### For loops
+
 To illustrate of the different scheduling strategies, consider the following function
 `busywait` containing a non-yielding timed loop that runs for a given number of seconds.
 
 ```julia-repl
 julia> function busywait(seconds)
             tstart = time_ns()
-            while (time_ns() - tstart) / 1e9 < seconds
+            while (time_ns() -% tstart) / 1e9 < seconds
             end
         end
 
@@ -409,6 +707,84 @@ julia> @time begin
 
 The `:dynamic` example takes 2 seconds since one of the non-occupied threads is able
 to run two of the 1-second iterations to complete the for loop.
+
+### Array comprehensions
+
+The `@threads` macro also supports array comprehensions, which return the collected results.
+The result has the same element type and shape as the serial comprehension. Array
+comprehensions preserve element order for `:static` and `:dynamic` (default) scheduling.
+The `:greedy` scheduler does not guarantee element order, since tasks consume work items as
+they become available. Multi-dimensional comprehensions preserve the dimensions of the
+original comprehension (e.g., `[f(i,j) for i in 1:n, j in 1:m]` returns an `n×m` matrix).
+Typed comprehensions (`T[expr for ...]`) are also supported and return an array with the
+specified element type. In a comprehension with several `for` clauses, such as
+`[f(i,j) for i in 1:n for j in 1:i]`, the work is divided over the outermost iterator.
+
+A comprehension with one `for` clause and no filter, scheduled with `:static` or `:dynamic`,
+writes into a pre-allocated result, which is the fastest form.
+
+!!! tip "Performance tip"
+    For best performance, use typed comprehensions (`T[expr for ...]`) when the element type
+    is known. Untyped comprehensions use the compiler's inferred element type; if that is not
+    a concrete type, the results are copied to the element type a serial comprehension
+    would produce, which may be slower.
+
+!!! warning
+    The body expression of a threaded comprehension may execute on any thread and may
+    migrate between threads. Do not rely on [`threadid()`](@ref Threads.threadid) or
+    [`task_local_storage()`](@ref) returning consistent values within the body expression.
+
+```julia-repl
+julia> Threads.@threads [i^2 for i in 1:5] # Simple comprehension
+5-element Vector{Int64}:
+   1
+   4
+   9
+  16
+  25
+
+julia> Threads.@threads [i^2 for i in 1:5 if iseven(i)] # Filtered comprehension
+2-element Vector{Int64}:
+   4
+  16
+
+julia> Threads.@threads [i + j for i in 1:3, j in 1:3] # Multiple loops
+3×3 Matrix{Int64}:
+ 2  3  4
+ 3  4  5
+ 4  5  6
+
+julia> Threads.@threads Float64[i^2 for i in 1:5] # Typed comprehension
+5-element Vector{Float64}:
+  1.0
+  4.0
+  9.0
+ 16.0
+ 25.0
+```
+
+When the iterator doesn't have a known length, such as a channel, the `:greedy` scheduling
+option can be used.
+```julia-repl
+julia> c = Channel(5, spawn=true) do ch
+           foreach(i -> put!(ch, i), 1:5)
+       end;
+
+julia> Threads.@threads :greedy [i^2 for i in c if iseven(i)]
+2-element Vector{Int64}:
+  4
+ 16
+
+julia> # Non-indexable iterators are also supported
+       Threads.@threads [i for i in Iterators.flatten([1:3, 4:6])]
+6-element Vector{Int64}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
+```
 """
 macro threads(args...)
     na = length(args)
@@ -429,13 +805,22 @@ macro threads(args...)
     else
         throw(ArgumentError("wrong number of arguments in @threads"))
     end
-    if !(isa(ex, Expr) && ex.head === :for)
-        throw(ArgumentError("@threads requires a `for` loop expression"))
+    if isa(ex, Expr) && (ex.head === :comprehension || ex.head === :typed_comprehension)
+        # Handle array comprehensions (typed and untyped)
+        if ex.head === :typed_comprehension
+            return _threadsfor_comprehension(ex.args[2], sched, ex.args[1])
+        else
+            return _threadsfor_comprehension(ex.args[1], sched)
+        end
+    elseif isa(ex, Expr) && ex.head === :for
+        # Handle for loops
+        if !(ex.args[1] isa Expr && ex.args[1].head === :(=))
+            throw(ArgumentError("nested outer loops are not currently supported by @threads"))
+        end
+        return _threadsfor(ex.args[1], ex.args[2], sched)
+    else
+        throw(ArgumentError("@threads requires a `for` loop or comprehension expression"))
     end
-    if !(ex.args[1] isa Expr && ex.args[1].head === :(=))
-        throw(ArgumentError("nested outer loops are not currently supported by @threads"))
-    end
-    return _threadsfor(ex.args[1], ex.args[2], sched)
 end
 
 function _spawn_set_thrpool(t::Task, tp::Symbol)
@@ -444,7 +829,7 @@ function _spawn_set_thrpool(t::Task, tp::Symbol)
         tpid = _sym_to_tpid(:default)
     end
     _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid)
-    @assert _result == 1
+    @assert _result == 1 "_result != 1"
     nothing
 end
 

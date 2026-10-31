@@ -2,6 +2,12 @@
 
 import Base.StackTraces: lookup
 
+# Check that glibc's saved stack pointer can be demangled on supported targets.
+if Sys.islinux() && Sys.ARCH in (:i686, :x86_64, :armv7l, :aarch64) &&
+        Base.BinaryPlatforms.libc(Base.BinaryPlatforms.HostPlatform()) == "glibc"
+    @test ccall(:jl_ptr_demangle_available, Cint, ()) == 1
+end
+
 # Test location information for inlined code (ref issues #1334 #12544)
 module test_inline_bt
 using Test
@@ -289,6 +295,26 @@ let code = """
     bt_str = read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String)
     @test occursin(r"InterpreterIP in MethodInstance for .*A\.foo", bt_str)
     @test occursin("InterpreterIP in top-level CodeInfo for Main.A", bt_str)
+end
+
+# Interpreted method and generated function frames show their method
+module InterpFrames
+Base.Experimental.@compiler_options compile=min infer=false
+foo() = error("Expected")
+@generated gen(x) = :(error("Expected"))
+end
+# the method's own frame is outermost (a generated body comes as a macro expansion)
+function interp_frame(f)
+    bt = try f() catch; catch_backtrace() end
+    return last(lookup(bt[findfirst(ip -> ip isa Base.InterpreterIP, bt)]))
+end
+let sf = interp_frame(InterpFrames.foo)
+    @test sprint(show, sf) == "foo() at backtrace.jl:$(only(methods(InterpFrames.foo)).line)"
+    @test parentmodule(sf) === InterpFrames
+end
+let sf = interp_frame(() -> InterpFrames.gen(1))
+    @test sprint(show, sf) == "gen(x::$Int) at backtrace.jl:$(only(methods(InterpFrames.gen)).line)"
+    @test parentmodule(sf) === InterpFrames
 end
 
 """

@@ -24,7 +24,7 @@ access the network during the build process, add the following in `Make.user`:
 USE_BINARYBUILDER=0
 ```
 
-Building Julia requires 5GiB if building all dependencies and approximately 4GiB of virtual memory.
+Building Julia requires 5GiB of disk space when building all dependencies and approximately 4GiB of virtual memory.
 
 To perform a parallel build, use `make -j N` and supply the maximum
 number of concurrent processes. If the defaults in the build do not work for you, and
@@ -162,7 +162,7 @@ Notes for various architectures:
 Building Julia requires that the following software be installed:
 
 - **[GNU make](https://www.gnu.org/software/make)**                — building dependencies.
-- **[gcc & g++](https://gcc.gnu.org)** (>= 7.1) or **[Clang](https://clang.llvm.org)** (>= 5.0, >= 9.3 for Apple Clang) — compiling and linking C, C++.
+- **[gcc & g++](https://gcc.gnu.org)** (>= 7.1) or **[Clang](https://clang.llvm.org)** (>= 5.0; Xcode >= 16 on macOS) — compiling and linking C, C++.
   - On Linux with g++, the static version of libstdc++ is also required.  If it is unavailable, set `USE_RT_STATIC_LIBSTDCXX=0` in `Make.user`.
 - **[libatomic](https://gcc.gnu.org)**          — provided by **[gcc]** and needed to support atomic operations.
 - **[python](https://www.python.org/)** (>=2.7)          — needed to build LLVM.
@@ -194,7 +194,7 @@ repository) and then compiled from source the first time you run
 `make`. The specific version numbers of these libraries that Julia
 uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/julia/blob/master/deps/):
 
-- **[LLVM](https://www.llvm.org)** (15.0 + [patches](https://github.com/JuliaLang/llvm-project/tree/julia-release/15.x)) — compiler infrastructure (see [note below](#llvm)).
+- **[LLVM](https://www.llvm.org)** (23.1 + [patches](https://github.com/JuliaLang/llvm-project/tree/julia-release/23.x)) — compiler infrastructure (see [note below](#llvm)).
 - **[FemtoLisp](https://github.com/JeffBezanson/femtolisp)**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv](https://github.com/JuliaLang/libuv)**  (custom fork) — portable, high-performance event-based I/O library.
 - **[OpenLibm](https://github.com/JuliaLang/openlibm)**             — portable libm library containing elementary math functions.
@@ -210,6 +210,7 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 - **[curl](https://curl.se)**                 — libcurl provides download and proxy support.
 - **[libssh2](https://www.libssh2.org)**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
 - **[OpenSSL](https://www.openssl.org/)**              — library used for cryptography and transport layer security, used by libgit2 and libssh2.
+- **[PicoSAT](https://github.com/JuliaLang/PicoSAT)**  — SAT solver, used by Julia's package manager to resolve package versions.
 - **[utf8proc](https://julialang.org/utf8proc/)**             — a library for processing UTF-8 encoded Unicode strings.
 - **[LLVM libunwind](https://www.nongnu.org/libunwind)**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
 - **[ITTAPI](https://github.com/intel/ittapi)**               — Intel's Instrumentation and Tracing Technology and Just-In-Time API.
@@ -220,6 +221,53 @@ If you already have one or more of these packages installed on your system, you 
 
 Please be aware that this procedure is not officially supported, as it introduces additional variability into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
 
+### Building a dependency from a Git checkout
+
+Most dependencies are downloaded as prebuilt BinaryBuilder artifacts (`*_jll`), but many can instead be
+built from a Git checkout — useful for testing a patch or building against an unreleased upstream commit.
+This is driven by `git-external` in
+[`deps/tools/git-external.mk`](https://github.com/JuliaLang/julia/blob/master/deps/tools/git-external.mk).
+Set the following in `Make.user` (or on the `make` command line):
+
+```make
+# 1. prefer the source build over the prebuilt binary for this dep (or USE_BINARYBUILDER=0 for all)
+USE_BINARYBUILDER_LLVM = 0
+# 2. fetch the source with Git (DEPS_GIT=1 for all, or a space-separated list of names)
+DEPS_GIT = llvm
+# 3. optionally override the origin/branch/commit (defaults live in deps/<name>.version and .mk)
+LLVM_GIT_URL = https://github.com/JuliaLang/llvm-project.git
+LLVM_BRANCH = julia-release/23.x
+LLVM_SHA1 = $(LLVM_BRANCH)   # a branch name, tag, or explicit commit hash
+```
+
+`<NAME>` is the upper-cased dependency name (see `deps/*.mk`, e.g. `LLVM`, `LIBUV`). The branch and commit
+come from `<NAME>_BRANCH`/`<NAME>_SHA1` in `deps/<name>.version`. The checkout is a
+[`git worktree`](https://git-scm.com/docs/git-worktree) of a bare mirror cached at
+`deps/srccache/<name>.git` (so it shares that mirror's objects rather than being a full clone), living at
+`deps/srccache/<name>/` on a detached `HEAD` at `<NAME>_SHA1`.
+
+**Rebuilds** are keyed off `deps/<name>.version`: changing *or merely touching* it re-fetches and resets the
+checkout to `<NAME>_SHA1` and reinstalls the dependency. Each build step records progress in a marker file, so
+touching one (or a predecessor) forces that step and everything after it to rerun:
+
+ * `deps/<name>.version` — re-checkout to `<NAME>_SHA1` (`extract-<name>`) and reinstall (`install-<name>`)
+ * `deps/srccache/<name>/source-extracted` — reconfigure (`configure-<name>`)
+ * `deps/scratch/<name>/build-configured` — recompile (`compile-<name>`)
+ * `deps/scratch/<name>/build-compiled` — restage (`stage-<name>`)
+ * `usr/manifest/<name>` — the installed result (also `uninstall-<name>` / `reinstall-<name>`)
+
+`make version-check-<name>` runs on every build to warn when the checkout has local modifications or does not
+match `<NAME>_SHA1`, and `make distclean-<name>` removes the worktree and cached mirror. Not every dependency
+defines every step (e.g. header-only or install-only deps may have no `configure`/`compile` stage), so some of
+these markers and targets may be absent — check `deps/<name>.mk` for the ones a given dependency actually uses.
+
+**To edit in place**, treat `deps/srccache/<name>/` as an ordinary worktree: change files, commit, or `git
+checkout` another commit, then rebuild (`make compile-<name>` / `make install-<name>`). As long as you don't
+touch `deps/<name>.version`, the checkout is never reset to `<NAME>_SHA1`, so local edits survive rebuilds.
+Bumping `<NAME>_SHA1` to record a new commit triggers a fresh checkout on the next extract, but that checkout
+will fail if the worktree is dirty — this is intentional, so that uncommitted changes are never clobbered.
+Commit (or stash) your work first, then update `<NAME>_SHA1`.
+
 ### LLVM
 
 The most complicated dependency is LLVM, for which we require additional patches from upstream (LLVM is not backward compatible).
@@ -227,7 +275,7 @@ The most complicated dependency is LLVM, for which we require additional patches
 For packaging Julia with LLVM, we recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
  - adding the patches to the LLVM package of the distribution.
-   * A complete list of patches is available in on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/18.x` branch.
+   * A complete list of patches is available on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/23.x` branch.
    * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
 Using an unpatched or different version of LLVM will result in errors and/or poor performance.
@@ -278,6 +326,45 @@ Julia uses a custom fork of libuv. It is a small dependency, and can be safely b
 
 As a high-performance numerical language, Julia should be linked to a multi-threaded BLAS and LAPACK, such as OpenBLAS or ATLAS, which will provide much better performance than the reference `libblas` implementations which may be default on some systems.
 
+## Bounds-checked stdlib package images
+
+Normal builds include stdlib package images for the default bounds-checking mode.
+`make checkbounds-pkgimages` additionally creates a
+`julia-*.checkbounds.tar.gz` companion archive for `--check-bounds=yes`, using the
+same system image and CPU targets as the normal build. These additional caches
+are kept outside `usr`, so they are not included by `make binary-dist` or installers.
+Build the normal distribution before the companion archive: `make binary-dist`
+removes existing distribution archives.
+
+Without the companion, stdlibs are precompiled for `--check-bounds=yes` on first use
+and stored in the first depot, like any other package. The companion avoids this.
+It contains `share/julia/compiled`, so it can be used as an additional depot
+without modifying the Julia installation:
+
+```sh
+mkdir -p ~/julia-checkbounds
+tar -xzf julia-VERSION-PLATFORM.checkbounds.tar.gz -C ~/julia-checkbounds
+export JULIA_DEPOT_PATH=":$HOME/julia-checkbounds/share/julia"
+```
+
+The leading `:` (`;` on Windows) keeps the default depots in front of it; they are
+required, as they provide the stdlib sources the companion was built from. If you
+own the installation, for example an extracted tarball or a juliaup-managed version,
+you can instead extract the archive into its root (the directory containing `bin`
+and `share`), which adds files under `share/julia/compiled` without replacing the
+default images. Do not modify installations managed by a system package manager or
+signed application bundles such as `Julia.app`.
+
+Use the archive from the same build and platform, including the build
+variant; a matching major/minor version alone is insufficient. For nightlies,
+select the companion using the installed build's commit rather than downloading
+an independently resolved `latest` archive. Nightlies and releases publish the
+companion alongside the normal tarball, replacing its `.tar.gz` suffix with
+`.checkbounds.tar.gz`.
+
+Local builds can still bundle both configurations by setting
+`JULIA_CHECK_BOUNDS_PKGIMAGES=1` in `Make.user`, for example for coverage testing.
+
 ## Source distributions of releases
 
 Each pre-release and release of Julia has a "full" source distribution and a "light" source
@@ -310,6 +397,11 @@ LLVM_ASSERTIONS=1
 ```
 
 Please note that assert builds of Julia will be slower than regular (non-assert) builds.
+
+Assert builds also compile the C/C++ runtime with full debug info (variables and types),
+whereas regular release builds only keep line tables. This is controlled by
+`RUNTIME_DEBUG_LEVEL` (1 or 2), which also defaults to 2 when `BOOTSTRAP_DEBUG_LEVEL` is
+set and can be set independently in `Make.user`.
 
 ## Building a debug build of Julia
 
@@ -346,6 +438,24 @@ From this point, you should
 
 Then add all the [build dependencies](#required-build-tools-and-external-libraries), a console-based editor of your choice, `git`, and anything else you'll need (e.g., `gdb`, `rr`, etc). Pick a directory to work in and `git clone` Julia, check out the branch you wish to debug, and build Julia as usual.
 
+
+## Building Julia with MMTk GC
+
+Julia allows different GC implementations through a GC interface. GC is currently selected at build time,
+so switching between the stock GC and any other GC implementation requires rebuilding Julia.
+
+MMTk is one of the GCs integrated with this interface. The MMTk binding is built from source as part of the Julia build
+and requires a Rust toolchain. The simplest way to build Julia with MMTk is:
+```sh
+WITH_THIRD_PARTY_GC=mmtk make
+```
+
+An example of a more advanced configuration that customizes the plan / GC type is:
+```sh
+WITH_THIRD_PARTY_GC=mmtk MMTK_PLAN=StickyImmix MMTK_MOVING=0 MMTK_BUILD_MODE=release make
+```
+
+The default MMTk build uses the `StickyImmix` plan (similar to Julia's generational mark sweep), and a release build of the Rust binding. Further build options can be set either on the command line or in `Make.user`. For details, see [Julia + MMTk](../gc-mmtk.md).
 
 ## Update the version number of a dependency
 

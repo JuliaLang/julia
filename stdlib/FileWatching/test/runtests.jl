@@ -92,7 +92,7 @@ for (i, intvl) in enumerate(intvls)
             sleep(0.1)
         end
         ready = 0
-        # tickle only the odd ones, but test for writablity for everyone
+        # tickle only the odd ones, but test for writability for everyone
         for idx in 1:n
             event = poll_fd(pipe_fds[idx][2], 0.001; readable=true, writable=true)
             @test !event.timedout
@@ -174,12 +174,12 @@ function test_init_afile()
     watched_folders = FileWatching.watched_folders
     @test @lock watched_folders isempty(watched_folders[])
     @test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))
-    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.5
+    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 2
     @test @lock(watched_folders, length(FileWatching.watched_folders[])) == 1
     @test unwatch_folder(dir) === nothing
     @test @lock watched_folders isempty(watched_folders[])
     @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent())))
-    @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 0.5
+    @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 2
     @test unwatch_folder(dir) === nothing
     @test 0.99 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))
     @test 0.99 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))

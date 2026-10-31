@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Casting.h"
 
@@ -52,7 +53,7 @@ CountTrackedPointers::CountTrackedPointers(Type *T, bool ignore_loaded) {
         all = false;
 }
 
-bool hasLoadedTy(Type *T) {
+static bool hasLoadedTy(Type *T) {
     if (isa<PointerType>(T)) {
         if (T->getPointerAddressSpace() == AddressSpace::Loaded)
             return true;
@@ -66,7 +67,7 @@ bool hasLoadedTy(Type *T) {
 }
 
 
-unsigned getCompositeNumElements(Type *T) {
+static unsigned getCompositeNumElements(Type *T) {
     if (auto *ST = dyn_cast<StructType>(T))
         return ST->getNumElements();
     else if (auto *AT = dyn_cast<ArrayType>(T))
@@ -102,7 +103,7 @@ SmallVector<SmallVector<unsigned, 0>, 0> TrackCompositeType(Type *T) {
 }
 
 
-// Walk through simple expressions to until we hit something that requires root numbering
+// Walk through simple expressions until we hit something that requires root numbering
 // If the input value is a scalar (pointer), we may return a composite value as base
 // in which case the second member of the pair is the index of the value in the vector.
 static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCache = true) {
@@ -140,10 +141,12 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
         }
         else if (auto EEI = dyn_cast<ExtractElementInst>(CurrentV)) {
             assert(CurrentV->getType()->isPointerTy() && fld_idx == -1);
-            // TODO: For now, only support constant index.
-            auto IdxOp = cast<ConstantInt>(EEI->getIndexOperand());
-            fld_idx = IdxOp->getLimitedValue(INT_MAX);
-            CurrentV = EEI->getVectorOperand();
+            if (auto IdxOp = dyn_cast<ConstantInt>(EEI->getIndexOperand())) {
+                fld_idx = IdxOp->getLimitedValue(INT_MAX);
+                CurrentV = EEI->getVectorOperand();
+            }
+            else
+                break;
         }
         else if (auto LI = dyn_cast<LoadInst>(CurrentV)) {
             if (hasLoadedTy(LI->getType())) {
@@ -181,8 +184,10 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                 // so we don't need to lift these operations, but we do need to check if it's loaded and continue walking the base pointer
                 if (auto VTy = dyn_cast<VectorType>(II->getType())) {
                     if (hasLoadedTy(VTy->getElementType())) {
-                        Value *Mask = II->getOperand(2);
-                        Value *Passthrough = II->getOperand(3);
+                        // LLVM 22 dropped the alignment operand from masked.load/gather,
+                        // shifting mask and passthrough down by one.
+                        Value *Mask = II->getArgOperand(1);
+                        Value *Passthrough = II->getArgOperand(2);
                         if (!isa<Constant>(Mask) || !cast<Constant>(Mask)->isAllOnesValue()) {
                             assert(isa<UndefValue>(Passthrough) && "unimplemented");
                             (void)Passthrough;
@@ -248,6 +253,7 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
            isa<InsertValueInst>(CurrentV) ||
            isa<ExtractValueInst>(CurrentV) ||
            isa<InsertElementInst>(CurrentV) ||
+           isa<ExtractElementInst>(CurrentV) ||
            isa<ShuffleVectorInst>(CurrentV));
     return std::make_pair(CurrentV, fld_idx);
 }
@@ -370,18 +376,10 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
         if (isa<VectorType>(Cond->getType())) {
             Cond = ExtractElementInst::Create(Cond,
                     ConstantInt::get(Type::getInt32Ty(Cond->getContext()), i),
-#if JL_LLVM_VERSION >= 200000
                     "", SI->getIterator());
-#else
-                    "", SI);
-#endif
         }
         assert(FalseElem->getType() == TrueElem->getType());
-#if JL_LLVM_VERSION >= 200000
         SelectInst *SelectBase = SelectInst::Create(Cond, TrueElem, FalseElem, "gclift", SI->getIterator());
-#else
-        SelectInst *SelectBase = SelectInst::Create(Cond, TrueElem, FalseElem, "gclift", SI);
-#endif
         int Number = ++S.MaxPtrNumber;
         S.AllPtrNumbering[SelectBase] = Number;
         S.ReversePtrNumbering[Number] = SelectBase;
@@ -404,6 +402,28 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
         S.AllCompositeNumbering[SI] = Numbers;
 }
 
+void LateLowerGCFrame::LiftExtractElement(State &S, ExtractElementInst *EEI) {
+    if (S.AllPtrNumbering.count(EEI))
+        return; // already visited here--nothing to do
+    assert(!isTrackedValue(EEI) && !isa<ConstantInt>(EEI->getIndexOperand()));
+    Value *Base = MaybeExtractScalar(S, FindBaseValue(S, EEI->getVectorOperand(), false), EEI);
+    if (S.AllPtrNumbering.count(EEI))
+        return; // handled recursively for us
+    if (isa<PointerType>(Base->getType())) {
+        S.AllPtrNumbering[EEI] = Number(S, Base);
+        return;
+    }
+    SmallVector<Value*, 0> Bases = MaybeExtractVector(S, Base, EEI);
+    IRBuilder<> builder(EEI);
+    Value *BaseVec = PoisonValue::get(FixedVectorType::get(T_prjlvalue, Bases.size()));
+    for (unsigned i = 0; i < Bases.size(); ++i) {
+        assert(Bases[i]->getType() == T_prjlvalue);
+        BaseVec = builder.CreateInsertElement(BaseVec, Bases[i], i);
+    }
+    Value *lift = builder.CreateExtractElement(BaseVec, EEI->getIndexOperand(), "gclift");
+    S.AllPtrNumbering[EEI] = Number(S, lift);
+}
+
 void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
     if (isa<PointerType>(Phi->getType()) ?
             S.AllPtrNumbering.count(Phi) :
@@ -419,11 +439,7 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
         Numbers.resize(NumRoots);
     }
     for (unsigned i = 0; i < NumRoots; ++i) {
-#if JL_LLVM_VERSION >= 200000
         PHINode *lift = PHINode::Create(T_prjlvalue, Phi->getNumIncomingValues(), "gclift", Phi->getIterator());
-#else
-        PHINode *lift = PHINode::Create(T_prjlvalue, Phi->getNumIncomingValues(), "gclift", Phi);
-#endif
         int Number = ++S.MaxPtrNumber;
         S.AllPtrNumbering[lift] = Number;
         S.ReversePtrNumbering[Number] = lift;
@@ -471,7 +487,7 @@ int LateLowerGCFrame::NumberBase(State &S, Value *CurrentV)
     } else if (isa<Argument>(CurrentV) || isa<AllocaInst>(CurrentV) ||
             (isa<AddrSpaceCastInst>(CurrentV) && !isTrackedValue(CurrentV))) {
         // We know this is rooted in the parent
-        // future note: we could chose to exclude argument of type CalleeRooted here
+        // future note: we could choose to exclude argument of type CalleeRooted here
         Number = -1;
     } else if (!isSpecialPtr(CurrentV->getType())) {
         // Externally rooted somehow hopefully (otherwise there's a bug in the
@@ -483,6 +499,10 @@ int LateLowerGCFrame::NumberBase(State &S, Value *CurrentV)
         return Number;
     } else if (isa<PHINode>(CurrentV) && !isTrackedValue(CurrentV)) {
         LiftPhi(S, cast<PHINode>(CurrentV));
+        Number = S.AllPtrNumbering[CurrentV];
+        return Number;
+    } else if (isa<ExtractElementInst>(CurrentV) && !isTrackedValue(CurrentV)) {
+        LiftExtractElement(S, cast<ExtractElementInst>(CurrentV));
         Number = S.AllPtrNumbering[CurrentV];
         return Number;
     } else if (isa<ExtractValueInst>(CurrentV)) {
@@ -614,7 +634,8 @@ SmallVector<int, 0> LateLowerGCFrame::NumberAllBase(State &S, Value *CurrentV) {
         }
     } else {
         assert((isa<LoadInst>(CurrentV) || isa<CallInst>(CurrentV) || isa<PHINode>(CurrentV) || isa<SelectInst>(CurrentV) ||
-                isa<AtomicCmpXchgInst>(CurrentV) || isa<AtomicRMWInst>(CurrentV))
+                isa<AtomicCmpXchgInst>(CurrentV) || isa<AtomicRMWInst>(CurrentV) ||
+                (isa<AddrSpaceCastInst>(CurrentV) && getValueAddrSpace(cast<AddrSpaceCastInst>(CurrentV)->getOperand(0)) == 0))
                 && "unexpected def expression");
         // This is simple, we can just number them sequentially
         for (unsigned i = 0; i < tracked.count; ++i) {
@@ -837,40 +858,6 @@ JL_USED_FUNC static void dumpLivenessState(Function &F, State &S) {
     }
 }
 
-static bool isTBAA(MDNode *TBAA, std::initializer_list<const char*> const strset)
-{
-    if (!TBAA)
-        return false;
-    while (TBAA->getNumOperands() > 1) {
-        TBAA = cast<MDNode>(TBAA->getOperand(1).get());
-        auto str = cast<MDString>(TBAA->getOperand(0))->getString();
-        for (auto str2 : strset) {
-            if (str == str2) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-// Check if this is a load from an immutable value. The easiest
-// way to do so is to look at the tbaa and see if it derives from
-// jtbaa_immut.
-static bool isLoadFromImmut(LoadInst *LI)
-{
-    if (LI->getMetadata(LLVMContext::MD_invariant_load))
-        return true;
-    MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
-    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype", "jtbaa_memoryptr", "jtbaa_memorylen", "jtbaa_memoryown"}))
-        return true;
-    return false;
-}
-
-static bool isConstGV(GlobalVariable *gv)
-{
-    return gv->isConstant() || gv->getMetadata("julia.constgv");
-}
-
 typedef llvm::SmallPtrSet<PHINode*, 1> PhiSet;
 
 static bool isLoadFromConstGV(LoadInst *LI, bool &task_local, PhiSet *seen = nullptr);
@@ -928,7 +915,7 @@ static bool isLoadFromConstGV(Value *v, bool &task_local, PhiSet *seen = nullptr
     return false;
 }
 
-// Check if this is can be traced through constant loads to an constant global
+// Check if this can be traced through constant loads to a constant global
 // or otherwise globally rooted value.
 // Almost all `tbaa_const` loads satisfies this with the exception of
 // task local constants which are constant as far as the code is concerned but aren't
@@ -944,7 +931,7 @@ static bool isLoadFromConstGV(LoadInst *LI, bool &task_local, PhiSet *seen)
     auto load_base = LI->getPointerOperand()->stripInBoundsOffsets();
     assert(load_base); // Static analyzer
     auto gv = dyn_cast<GlobalVariable>(load_base);
-    if (isLoadFromImmut(LI)) {
+    if (isLoadFromRootedRegion(LI)) {
         if (gv)
             return true;
         return isLoadFromConstGV(load_base, task_local, seen);
@@ -1148,52 +1135,43 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
     }
 }
 
-// Look through instructions to find all possible allocas that might become the sret argument
-static SmallSetVector<AllocaInst *, 1> FindSretAllocas(Value* SRetArg) {
+// Look through selects and phis to find all possible alloca bases of a pointer.
+// Returns an empty set if a non-alloca base is encountered. The bases may differ
+// in size and type (e.g. after SimplifyCFG sinks stores to different allocas into
+// a common successor), so callers must handle each base on its own.
+static SmallSetVector<AllocaInst *, 1> FindAllocaBases(Value *V) {
     SmallSetVector<AllocaInst *, 1> allocas;
-    if (AllocaInst *OneSRet = dyn_cast<AllocaInst>(SRetArg)) {
-        allocas.insert(OneSRet); // Found it directly
+    if (AllocaInst *AI = dyn_cast<AllocaInst>(V)) {
+        allocas.insert(AI); // Found it directly
     }
     else {
-        SmallSetVector<Value *, 8> worklist;
-        worklist.insert(SRetArg);
+        SmallVector<Value *, 8> worklist;
+        SmallPtrSet<Value *, 8> visited;
+        worklist.push_back(V);
+        visited.insert(V);
         while (!worklist.empty()) {
-            Value *V = worklist.pop_back_val();
-            if (AllocaInst *Alloca = dyn_cast<AllocaInst>(V->stripInBoundsOffsets())) {
+            Value *W = worklist.pop_back_val();
+            if (AllocaInst *Alloca = dyn_cast<AllocaInst>(W->stripInBoundsOffsets())) {
                 allocas.insert(Alloca); // Found a candidate
             }
-            else if (PHINode *Phi = dyn_cast<PHINode>(V)) {
+            else if (PHINode *Phi = dyn_cast<PHINode>(W)) {
                 for (Value *Incoming : Phi->incoming_values()) {
-                    worklist.insert(Incoming);
+                    if (visited.insert(Incoming).second)
+                        worklist.push_back(Incoming);
                 }
             }
-            else if (SelectInst *SI = dyn_cast<SelectInst>(V)) {
-                auto TrueBranch = SI->getTrueValue();
-                auto FalseBranch = SI->getFalseValue();
-                if (TrueBranch && FalseBranch) {
-                    worklist.insert(TrueBranch);
-                    worklist.insert(FalseBranch);
-                }
-                else {
-                    llvm_dump(SI);
-                    dbgs() << "Malformed Select\n";
-                    allocas.clear();
-                    return allocas;
-                }
+            else if (SelectInst *SI = dyn_cast<SelectInst>(W)) {
+                if (visited.insert(SI->getTrueValue()).second)
+                    worklist.push_back(SI->getTrueValue());
+                if (visited.insert(SI->getFalseValue()).second)
+                    worklist.push_back(SI->getFalseValue());
             }
             else {
-                llvm_dump(V);
-                dbgs() << "Unexpected SRet argument\n";
                 allocas.clear();
                 return allocas;
             }
         }
     }
-    assert(std::all_of(allocas.begin(), allocas.end(), [&] (AllocaInst* SRetAlloca) JL_NOTSAFEPOINT {
-            return (SRetAlloca->getArraySize() == allocas[0]->getArraySize() &&
-                SRetAlloca->getAllocatedType() == allocas[0]->getAllocatedType());
-        }
-    ));
     return allocas;
 }
 
@@ -1223,9 +1201,12 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             if (CountTrackedPointers(VTy->getElementType()).count) {
                                 // LLVM sometimes tries to materialize these operations with undefined pointers in our non-integral address space.
                                 // Hopefully LLVM didn't already propagate that information and poison our users. Set those to NULL now.
-                                Value *passthru = II->getArgOperand(3);
+                                // LLVM 22 dropped the alignment operand from masked.load/gather,
+                                // shifting the passthrough operand from index 3 down to 2.
+                                unsigned passthruIdx = 2;
+                                Value *passthru = II->getArgOperand(passthruIdx);
                                 if (isa<UndefValue>(passthru)) {
-                                    II->setArgOperand(3, Constant::getNullValue(passthru->getType()));
+                                    II->setArgOperand(passthruIdx, Constant::getNullValue(passthru->getType()));
                                 }
                             }
                             if (hasLoadedTy(VTy->getElementType())) {
@@ -1259,7 +1240,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         size_t return_roots = atol(RetRootsAttr.getValueAsString().data());
                         assert(return_roots);
                         HasDefBefore = true;
-                        auto gc_allocas = FindSretAllocas(CI->getArgOperand(i)->stripInBoundsOffsets());
+                        auto gc_allocas = FindAllocaBases(CI->getArgOperand(i)->stripInBoundsOffsets());
                         // We know that with the right optimizations we can forward a sret directly from an argument
                         // This hasn't been seen without adding IPO effects to julia functions but it's possible we need to handle that too
                         if (gc_allocas.size() == 0) {
@@ -1278,6 +1259,11 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     }
                 }
                 NoteOperandUses(S, BBS, I);
+                // Calls tagged "julia.safepoint" by codegen are Julia calls
+                // whose memory effects were narrowed from inferred effects.
+                // They can still reach a GC safepoint, so never let those
+                // effects skip rooting here.
+                bool MarkedSafepoint = CI->hasFnAttr("julia.safepoint");
                 if (!CI->canReturnTwice()) {
                     if (callee) {
                         if (callee == gc_preserve_begin_func) {
@@ -1307,15 +1293,17 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         // Known functions emitted in codegen that are not safepoints
                         if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
                             callee == gc_preserve_end_func || callee == typeof_func ||
+                            callee == blackbox_func ||
                             callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                             callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
                             callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
-                            callee == write_barrier_func || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
+                            isWriteBarrierFunc(callee) || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
                             callee->getName() == "memcmp") {
                             continue;
                         }
-                        if (callee->getMemoryEffects().onlyReadsMemory() ||
-                            callee->getMemoryEffects().onlyAccessesArgPointees()) {
+                        if (!MarkedSafepoint &&
+                            (callee->getMemoryEffects().onlyReadsMemory() ||
+                             callee->getMemoryEffects().onlyAccessesArgPointees())) {
                             continue;
                         }
                     }
@@ -1323,7 +1311,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         // Intrinsics are never safepoints.
                         continue;
                     auto effects = CI->getMemoryEffects();
-                    if (effects.onlyAccessesArgPointees() || effects.onlyReadsMemory())
+                    if (!MarkedSafepoint &&
+                        (effects.onlyAccessesArgPointees() || effects.onlyReadsMemory()))
                         // Readonly functions and functions that cannot change GC state (which is inaccessiblemem) are not safepoints
                         continue;
                 }
@@ -1355,7 +1344,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 continue;
             }
             if (LoadInst *LI = dyn_cast<LoadInst>(&I)) {
-                // If this is a load from an immutable, we know that
+                // If this is a load from a rooted region, we know that
                 // this object will always be rooted as long as the
                 // object we're loading from is, so we can refine uses
                 // of this object to uses of the object we're loading
@@ -1364,7 +1353,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 Type *Ty = LI->getType()->getScalarType();
                 bool refined_globally = false;
                 bool task_local = false;
-                if (isLoadFromImmut(LI) && isSpecialPtr(LI->getPointerOperand()->getType())) {
+                if (isLoadFromRootedRegion(LI) && isSpecialPtr(LI->getPointerOperand()->getType())) {
                     RefinedPtr.push_back(Number(S, LI->getPointerOperand()));
                 }
                 else if (isLoadFromConstGV(LI, task_local)) {
@@ -1441,7 +1430,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
             } else if (StoreInst *SI = dyn_cast<StoreInst>(&I)) {
                 NoteOperandUses(S, BBS, I);
-                MaybeTrackStore(S, SI);
+                if (MaybeTrackStore(S, SI))
+                    BBS.FirstSafepointAfterFirstDef = BBS.FirstSafepoint;
             } else if (isa<ReturnInst>(&I)) {
                 NoteOperandUses(S, BBS, I);
             } else if (auto *ASCI = dyn_cast<AddrSpaceCastInst>(&I)) {
@@ -1455,6 +1445,14 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         }
                     }
                     MaybeNoteDef(S, BBS, ASCI, std::move(RefinedPtr));
+                }
+            } else if (auto *EEI = dyn_cast<ExtractElementInst>(&I)) {
+                if (isTrackedValue(EEI) && !isa<ConstantInt>(EEI->getIndexOperand())) {
+                    SmallVector<int, 0> Nums = NumberAll(S, EEI->getVectorOperand());
+                    SmallVector<int, 1> RefinedPtr(Nums.begin(), Nums.end());
+                    if (MaybeNoteDef(S, BBS, EEI, std::move(RefinedPtr)))
+                        BBS.FirstSafepointAfterFirstDef = BBS.FirstSafepoint;
+                    NoteOperandUses(S, BBS, I);
                 }
             } else if (auto *AI = dyn_cast<AllocaInst>(&I)) {
                 Type *ElT = AI->getAllocatedType();
@@ -1484,37 +1482,48 @@ State LateLowerGCFrame::LocalScan(Function &F) {
 //    return Ptrs.size();
 //}
 
-void LateLowerGCFrame::MaybeTrackStore(State &S, StoreInst *I) {
+bool LateLowerGCFrame::MaybeTrackStore(State &S, StoreInst *I) {
     Value *PtrBase = I->getPointerOperand()->stripInBoundsOffsets();
     auto tracked = CountTrackedPointers(I->getValueOperand()->getType());
     if (!tracked.count)
-        return; // nothing to track is being stored
-    if (AllocaInst *AI = dyn_cast<AllocaInst>(PtrBase)) {
+        return false; // nothing to track is being stored
+    // Find all alloca bases, looking through selects and phis.
+    // LLVM's SROA/InstCombine can merge conditional alloca stores into a
+    // select/phi over alloca pointers (see #60985).
+    auto Allocas = FindAllocaBases(PtrBase);
+    if (Allocas.empty())
+        return false; // assume it is rooted--TODO: should we be more conservative?
+    bool needsTrackedStore = false;
+    bool Tracked = false;
+    for (AllocaInst *AI : Allocas) {
         Type *STy = AI->getAllocatedType();
         if (!AI->isStaticAlloca() || (isa<PointerType>(STy) && STy->getPointerAddressSpace() == AddressSpace::Tracked) || S.ArrayAllocas.count(AI))
-            return; // already numbered this
-        auto tracked = CountTrackedPointers(STy);
-        if (tracked.count) {
-            assert(!tracked.derived);
-            if (tracked.all) {
+            continue; // already numbered this
+        auto allocaTracked = CountTrackedPointers(STy);
+        if (allocaTracked.count) {
+            assert(!allocaTracked.derived);
+            if (allocaTracked.all) {
                 // track the Alloca directly
-                S.ArrayAllocas[AI] = tracked.count * cast<ConstantInt>(AI->getArraySize())->getZExtValue();
-                return;
+                S.ArrayAllocas[AI] = allocaTracked.count * cast<ConstantInt>(AI->getArraySize())->getZExtValue();
+                Tracked = true;
+                continue;
             }
         }
+        needsTrackedStore = true;
     }
-    else {
-        return; // assume it is rooted--TODO: should we be more conservative?
+    if (needsTrackedStore) {
+        // track the Store with a Shadow
+        //auto &Shadow = S.ShadowAllocas[AI];
+        //if (!Shadow)
+        //    Shadow = new AllocaInst(ArrayType::get(T_prjlvalue, tracked.count), 0, "", MI);
+        //AI = Shadow;
+        //Value *Src = I->getValueOperand();
+        //unsigned count = TrackWithShadow(Src, Src->getType(), false, AI, MI, TODO which slots are we actually clobbering?);
+        //assert(count == tracked.count); (void)count;
+        S.TrackedStores.push_back(std::make_pair(I, tracked.count));
+        Tracked = true;
     }
-    // track the Store with a Shadow
-    //auto &Shadow = S.ShadowAllocas[AI];
-    //if (!Shadow)
-    //    Shadow = new AllocaInst(ArrayType::get(T_prjlvalue, tracked.count), 0, "", MI);
-    //AI = Shadow;
-    //Value *Src = I->getValueOperand();
-    //unsigned count = TrackWithShadow(Src, Src->getType(), false, AI, MI, TODO which slots are we actually clobbering?);
-    //assert(count == tracked.count); (void)count;
-    S.TrackedStores.push_back(std::make_pair(I, tracked.count));
+    return Tracked;
 }
 
 /*
@@ -1695,6 +1704,7 @@ void LateLowerGCFrame::ComputeLiveSets(State &S) {
  * greedy coloring gives an optimal coloring. Since our roots are in SSA form,
  * the interference should be chordal.
  */
+namespace {
 struct PEOIterator {
     struct Element {
         unsigned weight;
@@ -1751,6 +1761,7 @@ struct PEOIterator {
         return NextElement;
     }
 };
+}  // anonymous namespace
 
 JL_USED_FUNC static void dumpColorAssignments(const State &S, const ArrayRef<int> &Colors)
 {
@@ -1807,6 +1818,7 @@ std::pair<SmallVector<int, 0>, int> LateLowerGCFrame::ColorRoots(const State &S)
     return {Colors, PreAssignedColors};
 }
 
+#ifndef GC_BARRIER_SNAPSHOT
 static SmallVector<int, 1> *FindRefinements(Value *V, State *S)
 {
     if (!S)
@@ -1826,6 +1838,7 @@ static bool IsPermRooted(Value *V, State *S)
         return RefinePtr->size() == 1 && (*RefinePtr)[0] == -2;
     return false;
 }
+#endif
 
 static inline void UpdatePtrNumbering(Value *From, Value *To, State *S)
 {
@@ -1841,19 +1854,248 @@ static inline void UpdatePtrNumbering(Value *From, Value *To, State *S)
     }
 }
 
-MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
+static MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
     return MDBuilder(Tag->getContext()).createMutableTBAAAccessTag(Tag);
+}
+
+// A fresh object cannot become old before a safepoint (cf. `jl_gc_wb_fresh`). Remove the write
+// barriers whose parent allocation has run since the last safepoint on every path to them.
+//
+// Allocations are safepoints themselves, so at most one allocation is known fresh at any point. A forward
+// must-analysis tracks it per block: safepoints clear it, an allocation replaces it, and joins keep
+// it only when all reachable predecessors agree.
+void LateLowerGCFrame::ElideFreshWriteBarriers(Function &F, State &S)
+{
+    SmallPtrSet<Instruction *, 16> Safepoints(S.SafepointNumbering.begin(), S.SafepointNumbering.end());
+    auto ParentAlloc = [&](Instruction &I) -> CallInst * {
+        auto *CI = dyn_cast<CallInst>(&I);
+        if (!CI || !isWriteBarrierFunc(CI->getCalledOperand()))
+            return nullptr;
+        auto *Parent = dyn_cast<CallInst>(CI->getArgOperand(0)->stripPointerCasts());
+        if (!Parent || !Safepoints.contains(Parent))
+            return nullptr;
+        auto *Callee = Parent->getCalledOperand();
+        if (Callee != alloc_obj_func && Callee != alloc_memory_func)
+            return nullptr;
+        return Parent;
+    };
+    SmallPtrSet<Instruction *, 8> Allocs;
+    SmallSetVector<BasicBlock *, 8> BarrierBBs;
+    for (BasicBlock &BB : F) {
+        for (Instruction &I : BB) {
+            if (auto *Alloc = ParentAlloc(I)) {
+                Allocs.insert(Alloc);
+                BarrierBBs.insert(&BB);
+            }
+        }
+    }
+    if (Allocs.empty())
+        return;
+
+    auto IsSafepoint = [&](Instruction &I) {
+        // CleanupIR adds safepoints around GC transitions, even if the call itself isn't one.
+        // LocalScan doesn't classify invokes, which Julia doesn't emit.
+        auto *CB = dyn_cast<CallBase>(&I);
+        return Safepoints.contains(&I) ||
+               (CB && (!isa<CallInst>(CB) || CB->getOperandBundle("gc-transition")));
+    };
+    // Each reachable block's transfer function. Allocations and safepoints both overwrite the state,
+    // so a block either sets a constant (its last allocation or safepoint, as an instruction or
+    // nullptr) or passes its entry state through (unset).
+    ReversePostOrderTraversal<Function *> RPOT(&F);
+    DenseMap<BasicBlock *, std::optional<Instruction *>> LastDef;
+    for (BasicBlock *BB : RPOT) {
+        std::optional<Instruction *> &BBLastDef = LastDef[BB];
+        for (Instruction &I : *BB) {
+            if (Allocs.contains(&I))
+                BBLastDef = &I;
+            else if (IsSafepoint(I))
+                BBLastDef = nullptr;
+        }
+    }
+
+    // The fresh allocation on entry to each reachable block, iterated to the greatest fixpoint. Unset
+    // is the top of the lattice and the identity for the meet. In reverse post-order only a back edge
+    // can come from a block not visited yet, so the first pass ignores those edges and later passes
+    // include them in the meet once their states are known. Values only descend (unset, allocation,
+    // nullptr), so each block changes at most twice and no worklist is needed.
+    DenseMap<BasicBlock *, std::optional<Instruction *>> In;
+    In[&F.getEntryBlock()] = nullptr;
+    bool Changed = true;
+    while (Changed) {
+        Changed = false;
+        for (BasicBlock *BB : RPOT) {
+            if (BB == &F.getEntryBlock())
+                continue;
+            std::optional<Instruction *> NewIn;
+            for (BasicBlock *Pred : predecessors(BB)) {
+                // An unreachable predecessor has neither entry, so it is skipped like an unvisited one.
+                std::optional<Instruction *> PredOut = LastDef.lookup(Pred);
+                if (!PredOut)
+                    PredOut = In.lookup(Pred);
+                if (!PredOut)
+                    continue;
+                if (!NewIn)
+                    NewIn = PredOut;
+                else if (*NewIn != *PredOut)
+                    NewIn = nullptr;
+            }
+            if (NewIn != In.lookup(BB)) {
+                In[BB] = NewIn;
+                Changed = true;
+            }
+        }
+    }
+
+    for (BasicBlock *BB : BarrierBBs) {
+        auto It = In.find(BB);
+        if (It == In.end() || !It->second) // unreachable
+            continue;
+        Instruction *Fresh = *It->second;
+        for (Instruction &I : make_early_inc_range(*BB)) {
+            if (Fresh && ParentAlloc(I) == Fresh)
+                I.eraseFromParent();
+            else if (Allocs.contains(&I))
+                Fresh = &I;
+            else if (IsSafepoint(I))
+                Fresh = nullptr;
+        }
+    }
 }
 
 void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified) {
     for (auto CI : WriteBarriers) {
         auto parent = CI->getArgOperand(0);
-        if (std::all_of(CI->op_begin() + 1, CI->op_end(),
-                    [parent, &S](Value *child) { return parent == child || IsPermRooted(child, S); })) {
+        // Insertion-barrier optimization: elide the barrier when every child is the
+        // parent or perm-rooted. Invalid for plans that must observe the parent's old
+        // fields regardless of the child (GC_BARRIER_SNAPSHOT).
+#ifndef GC_BARRIER_SNAPSHOT
+        if (llvm::all_of(writeBarrierChildren(CI), [parent, S](Value *child) {
+                return parent == child || IsPermRooted(child, S);
+            })) {
             CI->eraseFromParent();
             continue;
         }
+#else
+        (void)parent;
+#endif
     }
+}
+
+// Emit an allocation of `size` bytes with type tag `tag`, to replace the allocation `CI`
+CallInst *LateLowerGCFrame::EmitGCAllocBytes(IRBuilder<> &builder, CallInst *CI, Value *size, Value *tag)
+{
+    auto T_size = CI->getModule()->getDataLayout().getIntPtrType(CI->getContext());
+    // Strip casts that hide from LLVM that the tag is 16-byte aligned, i.e. that its GC
+    // bits are clear.
+    tag = tag->stripPointerCastsAndAliases();
+    if (auto C = dyn_cast<ConstantExpr>(tag)) {
+        if (C->getOpcode() == Instruction::IntToPtr) {
+            tag = C->getOperand(0);
+        }
+    }
+    else if (auto LI = dyn_cast<LoadInst>(tag)) {
+        // Restore the alignment of a type loaded from a constant global, which LLVM may have
+        // dropped. Other loads may not produce a type on paths that don't reach here.
+        bool task_local = false;
+        if (isLoadFromConstGV(LI, task_local) && getLoadValueAlign(LI) < 16) {
+            Type *T_int64 = Type::getInt64Ty(LI->getContext());
+            auto op = ConstantAsMetadata::get(ConstantInt::get(T_int64, 16));
+            LI->setMetadata(LLVMContext::MD_align, MDNode::get(LI->getContext(), { op }));
+        }
+    }
+    auto tag_type = tag->getType();
+    if (tag_type->isPointerTy()) {
+        auto &DL = CI->getModule()->getDataLayout();
+        auto align = tag->getPointerAlignment(DL).value();
+        if (align < 16) {
+            builder.CreateAlignmentAssumption(DL, tag, 16);
+        }
+    }
+
+    // Unlike `julia.gc_alloc_obj`, `julia.gc_alloc_bytes` lets FinalLowerGC pick the pool for
+    // a constant size, and doesn't set the tag.
+    auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
+    auto ptls = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_gcframe);
+    auto newI = builder.CreateCall(
+        allocBytesIntrinsic,
+        {
+            ptls,
+            builder.CreateIntCast(
+                size,
+                allocBytesIntrinsic->getFunctionType()->getParamType(1),
+                false),
+            builder.CreatePtrToInt(tag, T_size),
+        });
+    newI->setAttributes(allocBytesIntrinsic->getAttributes());
+    newI->addDereferenceableRetAttr(CI->getRetDereferenceableBytes());
+    // Preserve CancellationLowering's reset-region annotation:
+    // FinalLowerGC uses it to select the reset-safe allocation
+    // entry points.
+    if (auto *MD = CI->getMetadata("julia.reset_region"))
+        newI->setMetadata("julia.reset_region", MD);
+    newI->takeName(CI);
+    // Setting the tag in IR was meant to let LLVM see that a fresh object has clear GC bits,
+    // and fold away write barriers on it. Since #59559, write barriers load the tag as volatile,
+    // because a safepoint between the allocation and the barrier can age the object (#59547).
+    // Eliding these write barriers is allowed when no safepoint intervenes.
+    auto &M = *builder.GetInsertBlock()->getModule();
+    StoreInst *store = builder.CreateAlignedStore(
+        tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getPointerABIAlignment(0));
+    store->setOrdering(AtomicOrdering::Unordered);
+    store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+    return newI;
+}
+
+// Expand `julia.gc_alloc_memory`, initializing the header and, if requested, zeroing the data
+// right after the allocation, so that the GC never sees it partially initialized.
+Value *LateLowerGCFrame::LowerGCAllocMemory(CallInst *CI)
+{
+    assert(CI->arg_size() == 5);
+    IRBuilder<> builder(CI);
+    builder.SetCurrentDebugLocation(CI->getDebugLoc());
+    auto &ctx = CI->getContext();
+    auto T_size = CI->getModule()->getDataLayout().getIntPtrType(ctx);
+    Type *T_int8 = Type::getInt8Ty(ctx);
+    Value *nbytes = CI->getArgOperand(1);
+    Value *tag = CI->getArgOperand(2);
+    Value *length = CI->getArgOperand(3);
+    Value *zeroinit = CI->getArgOperand(4);
+    CallInst *newI;
+    Value *derived;
+    Value *data;
+    if (auto size = getInlineMemorySize(CI)) {
+        newI = EmitGCAllocBytes(builder, CI, ConstantInt::get(T_size, *size), tag);
+        newI->addDereferenceableRetAttr(*size);
+        derived = builder.CreateAddrSpaceCast(newI, PointerType::get(ctx, AddressSpace::Derived));
+        Value *objref = builder.CreateAddrSpaceCast(derived, PointerType::get(ctx, 0));
+        data = builder.CreateConstInBoundsGEP1_64(T_int8, objref, JL_GENERICMEMORY_INLINE_DATA_OFFSET);
+        Value *ptr_field = builder.CreateConstInBoundsGEP1_64(T_int8, derived, offsetof(jl_genericmemory_t, ptr));
+        builder.CreateAlignedStore(data, ptr_field, Align(sizeof(void*)));
+    }
+    else {
+        // the runtime initializes the data pointer, and the owner if the data is malloc'd
+        auto allocFunc = getOrDeclare(jl_well_known::GCAllocGenericMemory);
+        auto ptls = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_gcframe);
+        Value *untracked_tag = builder.CreateAddrSpaceCast(tag, PointerType::get(ctx, 0));
+        newI = builder.CreateCall(allocFunc, {ptls, nbytes, untracked_tag});
+        newI->setAttributes(allocFunc->getAttributes());
+        newI->addRetAttr(Attribute::getWithAlignment(ctx, Align(JL_HEAP_ALIGNMENT)));
+        newI->addDereferenceableRetAttr(sizeof(jl_genericmemory_t));
+        newI->takeName(CI);
+        derived = builder.CreateAddrSpaceCast(newI, PointerType::get(ctx, AddressSpace::Derived));
+        Value *ptr_field = builder.CreateConstInBoundsGEP1_64(T_int8, derived, offsetof(jl_genericmemory_t, ptr));
+        data = builder.CreateAlignedLoad(PointerType::get(ctx, 0), ptr_field, Align(sizeof(void*)));
+    }
+    // LLVM may merge allocations of different types, which makes the zeroing flag a variable.
+    auto czeroinit = dyn_cast<ConstantInt>(zeroinit);
+    if (!(czeroinit && czeroinit->isZero()) && !(isa<ConstantInt>(nbytes) && cast<ConstantInt>(nbytes)->isZero())) {
+        Value *zerobytes = czeroinit ? nbytes : builder.CreateSelect(zeroinit, nbytes, ConstantInt::get(T_size, 0));
+        builder.CreateMemSet(data, ConstantInt::get(T_int8, 0), zerobytes, Align(sizeof(void*)));
+    }
+    Value *length_field = builder.CreateConstInBoundsGEP1_64(T_int8, derived, offsetof(jl_genericmemory_t, length));
+    builder.CreateAlignedStore(length, length_field, Align(sizeof(void*)));
+    return newI;
 }
 
 bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
@@ -1871,11 +2113,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     if (T_prjlvalue) {
         T_pprjlvalue = PointerType::getUnqual(T_prjlvalue->getContext());
         Frame = new AllocaInst(T_prjlvalue, allocaAddressSpace,ConstantInt::get(T_int32, maxframeargs), "jlcallframe",
-#if JL_LLVM_VERSION >= 200000
             StartOff->getIterator()
-#else
-            StartOff
-#endif
         );
     }
     SmallVector<CallInst*, 0> write_barriers;
@@ -1890,7 +2128,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     LI->setMetadata(LLVMContext::MD_invariant_load, NULL);
             }
             if (MDNode *TBAA = I->getMetadata(LLVMContext::MD_tbaa)) {
-                if (TBAA->getNumOperands() == 4 && isTBAA(TBAA, {"jtbaa_const", "jtbaa_memoryptr", "jtbaa_memorylen", "tbaa_memoryown"})) {
+                if (TBAA->getNumOperands() == 4 && isTBAA(TBAA, {"jtbaa_const", "jtbaa_memory"})) {
                     MDNode *MutableTBAA = createMutableTBAAAccessTag(TBAA);
                     if (MutableTBAA != TBAA)
                         I->setMetadata(LLVMContext::MD_tbaa, MutableTBAA);
@@ -1915,7 +2153,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
             }
             Value *callee = CI->getCalledOperand();
 
-            if (write_barrier_func && callee == write_barrier_func) {
+            if (isWriteBarrierFunc(callee)) {
                 assert(CI->arg_size() >= 1);
                 write_barriers.push_back(CI);
                 ChangesMade = true;
@@ -1923,113 +2161,107 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 continue;
             }
 
-            if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
+            if (callee && (callee == gcroot_flush_func || callee == gc_preserve_begin_func
                         || callee == gc_preserve_end_func)) {
                 /* No replacement */
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
                 auto *obj = CI->getOperand(0);
-#if JL_LLVM_VERSION >= 200000
                 auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI->getIterator());
-#else
-                auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI);
-#endif
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
             } else if (gc_loaded_func != nullptr && callee == gc_loaded_func) {
                 auto *obj = CI->getOperand(1);
-#if JL_LLVM_VERSION >= 200000
                 auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI->getIterator());
-#else
-                auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI);
-#endif
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
+            } else if (blackbox_func != nullptr && callee == blackbox_func) {
+                // Lower julia.blackbox(ptr) to an "=r,0" inline asm on the raw
+                // untracked pointer. At this point GC frame lowering has already
+                // run, so there are no GC-tracked address spaces left and the
+                // register-tied asm is legal.
+                assert(CI->arg_size() == 1);
+                auto *input = CI->getOperand(0);
+                // Strip any remaining tracked/derived address space cast to get
+                // a plain pointer that the asm can accept.
+                auto *rawTy = llvm::PointerType::getUnqual(CI->getContext());
+                IRBuilder<> builder(CI);
+                builder.SetCurrentDebugLocation(CI->getDebugLoc());
+                Value *raw = builder.CreateAddrSpaceCast(input, rawTy);
+                FunctionType *AsmFTy = FunctionType::get(rawTy, {rawTy}, false);
+                InlineAsm *IA = InlineAsm::get(AsmFTy, "", "=r,0", /*hasSideEffects=*/false);
+                Value *result = builder.CreateCall(AsmFTy, IA, {raw});
+                // Cast back to the original output type
+                Value *out = builder.CreateAddrSpaceCast(result, CI->getType());
+                out->takeName(CI);
+                CI->replaceAllUsesWith(out);
+                UpdatePtrNumbering(CI, out, S);
             } else if (alloc_obj_func && callee == alloc_obj_func) {
                 assert(CI->arg_size() == 3);
 
                 // Initialize an IR builder.
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
+                auto newI = EmitGCAllocBytes(builder, CI, CI->getArgOperand(1), CI->getArgOperand(2));
 
-                // LLVM alignment/bit check is not happy about addrspacecast and refuse
-                // to remove write barrier because of it.
-                // We pretty much only load using `T_size` so try our best to strip
-                // as many cast as possible.
-                auto tag = CI->getArgOperand(2)->stripPointerCastsAndAliases();
-                if (auto C = dyn_cast<ConstantExpr>(tag)) {
-                    if (C->getOpcode() == Instruction::IntToPtr) {
-                        tag = C->getOperand(0);
-                    }
-                }
-                else if (auto LI = dyn_cast<LoadInst>(tag)) {
-                    // Make sure the load is correctly marked as aligned
-                    // since LLVM might have removed them.
-                    // We can't do this in general since the load might not be
-                    // a type in other branches.
-                    // However, it should be safe for us to do this on const globals
-                    // which should be the important cases as well.
-                    bool task_local = false;
-                    if (isLoadFromConstGV(LI, task_local) && getLoadValueAlign(LI) < 16) {
-                        Type *T_int64 = Type::getInt64Ty(LI->getContext());
-                        auto op = ConstantAsMetadata::get(ConstantInt::get(T_int64, 16));
-                        LI->setMetadata(LLVMContext::MD_align, MDNode::get(LI->getContext(), { op }));
-                    }
-                }
-                // As a last resort, if we didn't manage to strip down the tag
-                // for LLVM, emit an alignment assumption.
-                auto tag_type = tag->getType();
-                if (tag_type->isPointerTy()) {
-                    auto &DL = CI->getModule()->getDataLayout();
-                    auto align = tag->getPointerAlignment(DL).value();
-                    if (align < 16) {
-                        // On 5 <= LLVM < 12, it is illegal to call this on
-                        // non-integral pointer. This relies on stripping the
-                        // non-integralness from datalayout before this pass
-                        builder.CreateAlignmentAssumption(DL, tag, 16);
+                // Zero GC pointer fields if the operand bundle specifies offsets
+                // This ensures GC sees valid pointers even if initialization is delayed
+                // Note: ptr_offsets and zeroinit bundles are mutually exclusive
+                auto ptr_offsets_bundle = CI->getOperandBundle("julia.gc_alloc_ptr_offsets");
+                auto zeroinit_bundle = CI->getOperandBundle("julia.gc_alloc_zeroinit");
+                assert(!(ptr_offsets_bundle && zeroinit_bundle) &&
+                       "julia.gc_alloc_ptr_offsets and julia.gc_alloc_zeroinit bundles are mutually exclusive");
+
+                if (ptr_offsets_bundle) {
+                    Value *derived = builder.CreateAddrSpaceCast(newI,
+                        PointerType::get(newI->getContext(), AddressSpace::Derived));
+                    Constant *null_ptr = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
+                    for (Value *offset_val : ptr_offsets_bundle->Inputs) {
+                        if (auto *CI_offset = dyn_cast<ConstantInt>(offset_val)) {
+                            uint64_t offset = CI_offset->getZExtValue();
+                            Value *ptr = builder.CreateInBoundsGEP(
+                                Type::getInt8Ty(newI->getContext()), derived,
+                                ConstantInt::get(T_size, offset));
+                            builder.CreateAlignedStore(null_ptr, ptr, Align(sizeof(void*)));
+                        }
                     }
                 }
 
-                // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
-                // `julia.gc_alloc_obj` except it specializes the call based on the constant
-                // size of the object to allocate, to save one indirection, and doesn't set
-                // the type tag. (Note that if the size is not a constant, it will call
-                // gc_alloc_obj, and will redundantly set the tag.)
-                auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
-                auto ptls = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_gcframe);
-                auto newI = builder.CreateCall(
-                    allocBytesIntrinsic,
-                    {
-                        ptls,
-                        builder.CreateIntCast(
-                            CI->getArgOperand(1),
-                            allocBytesIntrinsic->getFunctionType()->getParamType(1),
-                            false),
-                        builder.CreatePtrToInt(tag, T_size),
-                    });
-                newI->setAttributes(allocBytesIntrinsic->getAttributes());
-                newI->addDereferenceableRetAttr(CI->getRetDereferenceableBytes());
-                newI->takeName(CI);
-                // Now, finally, set the tag. We do this in IR instead of in the C alloc
-                // function, to provide possible optimization opportunities. (I think? TBH
-                // the most recent editor of this code is not entirely clear on why we
-                // prefer to set the tag in the generated code. Providing optimization
-                // opportunities is the most likely reason; the tradeoff is slightly
-                // larger code size and increased compilation time, compiling this
-                // instruction at every allocation site, rather than once in the C alloc
-                // function.)
-                auto &M = *builder.GetInsertBlock()->getModule();
-                StoreInst *store = builder.CreateAlignedStore(
-                    tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getPointerABIAlignment(0));
-                store->setOrdering(AtomicOrdering::Unordered);
-                store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+                // Zero a region if the operand bundle specifies it (for GenericMemory with boxed elements)
+                // Bundle contains: (offset, size) where offset is start byte and size is bytes to zero
+                // Both offset and size can be constants or dynamic SSA values
+                if (zeroinit_bundle) {
+                    assert(zeroinit_bundle->Inputs.size() == 2 &&
+                           "julia.gc_alloc_zeroinit bundle requires exactly 2 arguments (offset, size)");
+                    Value *offset_val = zeroinit_bundle->Inputs[0];
+                    Value *size_val = zeroinit_bundle->Inputs[1];
+                    // Skip if size is known to be zero at compile time
+                    bool skip = false;
+                    if (auto *const_size = dyn_cast<ConstantInt>(size_val)) {
+                        if (const_size->isZero())
+                            skip = true;
+                    }
+                    if (!skip) {
+                        Value *derived = builder.CreateAddrSpaceCast(newI,
+                            PointerType::get(newI->getContext(), AddressSpace::Derived));
+                        Value *ptr = builder.CreateInBoundsGEP(
+                            Type::getInt8Ty(newI->getContext()), derived, offset_val);
+                        builder.CreateMemSet(ptr,
+                            ConstantInt::get(Type::getInt8Ty(newI->getContext()), 0),
+                            size_val, Align(sizeof(void*)));
+                    }
+                }
 
                 // Replace uses of the call to `julia.gc_alloc_obj` with the call to
                 // `julia.gc_alloc_bytes`.
                 CI->replaceAllUsesWith(newI);
 
                 // Update the pointer numbering.
+                UpdatePtrNumbering(CI, newI, S);
+            } else if (alloc_memory_func && callee == alloc_memory_func) {
+                Value *newI = LowerGCAllocMemory(CI);
+                CI->replaceAllUsesWith(newI);
                 UpdatePtrNumbering(CI, newI, S);
             } else if (typeof_func && callee == typeof_func) {
                 assert(CI->arg_size() == 1);
@@ -2087,14 +2319,10 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 FunctionType *FTy = callee == call3_func ? JuliaType::get_jlfunc3_ty(CI->getContext()) :
                                     callee == call2_func ? JuliaType::get_jlfunc2_ty(CI->getContext()) :
                                                            JuliaType::get_jlfunc_ty(CI->getContext());
-#if JL_LLVM_VERSION >= 200000
                 CallInst *NewCall = CallInst::Create(FTy, new_callee, ReplacementArgs, "", CI->getIterator());
-#else
-                CallInst *NewCall = CallInst::Create(FTy, new_callee, ReplacementArgs, "", CI);
-#endif
                 NewCall->setTailCallKind(CI->getTailCallKind());
                 auto callattrs = CI->getAttributes();
-                callattrs = AttributeList::get(CI->getContext(), getFnAttrs(callattrs), getRetAttrs(callattrs), {});
+                callattrs = AttributeList::get(CI->getContext(), callattrs.getFnAttrs(), callattrs.getRetAttrs(), {});
                 if (auto new_callee = CI->getCalledFunction()) // get the parameter attributes from the function target (if possible)
                     callattrs = AttributeList::get(CI->getContext(), {callattrs, new_callee->getAttributes()});
                 NewCall->setAttributes(callattrs);
@@ -2103,6 +2331,47 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 CI->replaceAllUsesWith(NewCall);
                 UpdatePtrNumbering(CI, NewCall, S);
             } else {
+                // Assert that ptr_offsets and zeroinit bundles are only used with gc_alloc_obj
+                assert(!CI->getOperandBundle("julia.gc_alloc_ptr_offsets") &&
+                       "julia.gc_alloc_ptr_offsets bundle should only be on julia.gc_alloc_obj calls");
+                assert(!CI->getOperandBundle("julia.gc_alloc_zeroinit") &&
+                       "julia.gc_alloc_zeroinit bundle should only be on julia.gc_alloc_obj calls");
+
+                // Handle zeroinit_indirect bundle for jl_alloc_genericmemory_unchecked
+                // This bundle specifies: (ptr_field_offset, size) where:
+                // - ptr_field_offset: offset in the allocation where the data pointer is stored
+                // - size: number of bytes to zero at the location pointed to by that pointer
+                if (auto bundle = CI->getOperandBundle("julia.gc_alloc_zeroinit_indirect")) {
+                    assert(callee && callee->getName() == "jl_alloc_genericmemory_unchecked" &&
+                           "julia.gc_alloc_zeroinit_indirect bundle should only be on jl_alloc_genericmemory_unchecked calls");
+                    assert(bundle->Inputs.size() == 2 &&
+                           "julia.gc_alloc_zeroinit_indirect bundle requires exactly 2 arguments (ptr_offset, size)");
+                    Value *ptr_field_offset = bundle->Inputs[0];
+                    Value *size_val = bundle->Inputs[1];
+                    // Skip if size is known to be zero at compile time
+                    bool skip = false;
+                    if (auto *const_size = dyn_cast<ConstantInt>(size_val)) {
+                        if (const_size->isZero())
+                            skip = true;
+                    }
+                    if (!skip) {
+                        IRBuilder<> builder(CI->getNextNode());
+                        builder.SetCurrentDebugLocation(CI->getDebugLoc());
+                        // Load the data pointer from the specified offset in the allocation
+                        Value *derived = builder.CreateAddrSpaceCast(CI,
+                            PointerType::get(CI->getContext(), AddressSpace::Derived));
+                        Value *ptr_field = builder.CreateInBoundsGEP(
+                            Type::getInt8Ty(CI->getContext()), derived, ptr_field_offset);
+                        Value *data_ptr = builder.CreateAlignedLoad(
+                            PointerType::get(CI->getContext(), 0), ptr_field, Align(sizeof(void*)));
+                        // Zero the data region
+                        builder.CreateMemSet(data_ptr,
+                            ConstantInt::get(Type::getInt8Ty(CI->getContext()), 0),
+                            size_val, Align(sizeof(void*)));
+                        ChangesMade = true;
+                    }
+                }
+
                 SmallVector<OperandBundleDef,2> bundles;
                 CI->getOperandBundlesAsDefs(bundles);
                 bool gc_transition = false;
@@ -2138,11 +2407,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     continue;
                 } else {
                     // remove all operand bundles
-#if JL_LLVM_VERSION >= 200000
                     CallInst *NewCall = CallInst::Create(CI, {}, CI->getIterator());
-#else
-                    CallInst *NewCall = CallInst::Create(CI, None, CI);
-#endif
                     NewCall->takeName(CI);
                     NewCall->copyMetadata(*CI);
                     CI->replaceAllUsesWith(NewCall);
@@ -2211,22 +2476,14 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     auto slotAddress = CallInst::Create(
         getOrDeclare(jl_intrinsics::getGCFrameSlot),
         {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
-#if JL_LLVM_VERSION >= 200000
         "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore->getIterator());
-#else
-        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
-#endif
 
     Value *Val = GetPtrForNumber(S, R, InsertBefore);
     // Pointee types don't have semantics, so the optimizer is
     // free to rewrite them if convenient. We need to change
     // it back here for the store.
     assert(Val->getType() == T_prjlvalue);
-#if JL_LLVM_VERSION >= 200000
     new StoreInst(Val, slotAddress, InsertBefore->getIterator());
-#else
-    new StoreInst(Val, slotAddress, InsertBefore);
-#endif
 }
 
 void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot,
@@ -2236,18 +2493,10 @@ void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColor
     auto slotAddress = CallInst::Create(
         getOrDeclare(jl_intrinsics::getGCFrameSlot),
         {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
-#if JL_LLVM_VERSION >= 200000
         "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore->getIterator());
-#else
-        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
-#endif
     // Reset the slot to NULL.
     Value *Val = ConstantPointerNull::get(T_prjlvalue);
-#if JL_LLVM_VERSION >= 200000
     new StoreInst(Val, slotAddress, InsertBefore->getIterator());
-#else
-    new StoreInst(Val, slotAddress, InsertBefore);
-#endif
 }
 
 void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
@@ -2347,11 +2596,11 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
 
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
-        auto replace_alloca = [this, gcframe, &AllocaSlot, T_int32](AllocaInst *&AI) {
-            // Pick a slot for the alloca.
-            AI->getAlign();
+        Align FrameAlign(16);
+        auto replace_alloca = [this, gcframe, &AllocaSlot, &FrameAlign, T_int32](AllocaInst *&AI) {
+            // Preserve both the alloca's alignment and its offset within the frame.
+            FrameAlign = std::max(FrameAlign, AI->getAlign());
             unsigned align = AI->getAlign().value() / sizeof(void*); // TODO: use DataLayout pointer size
-            assert(align <= 16 / sizeof(void*) && "Alignment exceeds llvm-final-gc-lowering abilities");
             if (align > 1)
                 AllocaSlot = LLT_ALIGN(AllocaSlot, align);
             Instruction *slotAddress = CallInst::Create(
@@ -2396,11 +2645,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 assert(Elem->getType() == T_prjlvalue);
                 //auto Idxs = ArrayRef<unsigned>(Tracked[i]);
                 //Value *Elem = ExtractScalar(Base, true, Idxs, SI);
-#if JL_LLVM_VERSION >= 200000
                 Value *shadowStore = new StoreInst(Elem, slotAddress, SI->getIterator());
-#else
-                Value *shadowStore = new StoreInst(Elem, slotAddress, SI);
-#endif
                 (void)shadowStore;
                 // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
                 AllocaSlot++;
@@ -2408,6 +2653,8 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
         }
         auto NRoots = ConstantInt::get(T_int32, MaxColor + 1 + AllocaSlot - 2);
         gcframe->setArgOperand(0, NRoots);
+        if (FrameAlign > Align(16))
+            gcframe->addRetAttr(Attribute::getWithAlignment(F->getContext(), FrameAlign));
         pushGcframe->setArgOperand(1, NRoots);
 
         // Insert GC frame stores
@@ -2418,24 +2665,41 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 auto popGcframe = CallInst::Create(
                     getOrDeclare(jl_intrinsics::popGCFrame),
                     {gcframe});
-#if JL_LLVM_VERSION >= 200000
                 popGcframe->insertBefore(BB.getTerminator()->getIterator());
-#else
-                popGcframe->insertBefore(BB.getTerminator());
-#endif
             }
         }
     }
 }
 
 bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
+    if (F.hasFnAttribute("thunk"))
+        return false;
+
     initAll(*F.getParent());
     smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
 
     pgcstack = getPGCstack(F);
     if (pgcstack) {
+      // Drop the optimistic memory effects codegen put on "julia.safepoint"
+      // calls (see add_fn_attrs_for_effects). They were only valid while the
+      // GC frame was implicit: once this pass makes the frame stores
+      // explicit, a callee that claims not to read them would let DSE/GVN
+      // delete or forward the roots it actually scans through pgcstack.
+      for (auto &BB : F) {
+          for (auto &I : BB) {
+              auto *CI = dyn_cast<CallInst>(&I);
+              if (!CI || !CI->hasFnAttr("julia.safepoint"))
+                  continue;
+              CI->removeFnAttr(Attribute::Memory);
+              for (unsigned i = 0; i < CI->arg_size(); i++) {
+                  if (CI->getParamAttr(i, "gcstack").isValid())
+                      CI->removeParamAttr(i, Attribute::ReadNone);
+              }
+          }
+      }
       State S = LocalScan(F);
+      ElideFreshWriteBarriers(F, S);
       // If there is no safepoint after the first reachable def, then we don't need any roots (even those for allocas)
       if (std::any_of(S.BBStates.begin(), S.BBStates.end(),
                   [&F](auto BBS) {

@@ -6,7 +6,7 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Libdl/docs/src/
 Libdl
 ```
 
-# Dynamic Linker
+# Libdl (Dynamic Linker)
 
 ```@docs
 Libdl.dlopen
@@ -28,5 +28,6 @@ Libdl.DL_LOAD_PATH
 Libdl.LazyLibrary
 Libdl.LazyLibraryPath
 Libdl.BundledLazyLibraryPath
+Libdl.LazyLibraryCallback
 Libdl.add_dependency!
 ```

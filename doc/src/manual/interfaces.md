@@ -134,7 +134,7 @@ It is also often useful to allow iteration over a collection in *reverse order*
 by iterating over [`Iterators.reverse(iterator)`](@ref). To actually support
 reverse-order iteration, however, an iterator
 type `T` needs to implement `iterate` for `Iterators.Reverse{T}`.
-(Given `r::Iterators.Reverse{T}`, the underling iterator of type `T` is `r.itr`.)
+(Given `r::Iterators.Reverse{T}`, the underlying iterator of type `T` is `r.itr`.)
 In our `Squares` example, we would implement `Iterators.Reverse{Squares}` methods:
 
 ```jldoctest squaretype
@@ -147,6 +147,13 @@ julia> collect(Iterators.reverse(Squares(4)))
   4
   1
 ```
+
+Iterable types also support [destructuring assignment](@ref destructuring-assignment), like
+`a, b = Squares(4)`, which is implemented using `iterate`. When "slurping" the remaining elements,
+as in `a, b... = x` or `a, b..., c = x`, they are collected by [`Base.rest`](@ref) and
+[`Base.split_rest`](@ref), respectively. The generic fallbacks return a lazy iterator and a
+`Vector`, respectively, so collection types may want to add methods to these functions,
+for example to return a collection of their own type.
 
 ## Indexing
 
@@ -219,6 +226,8 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `IndexStyle(::Type)`                            | `IndexCartesian()`                     | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
 | `setindex!(A, v, i::Int)`                       |                                        | (if `IndexLinear`) Scalar indexed assignment                                          |
 | `setindex!(A, v, I::Vararg{Int, N})`            |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment   |
+| `isassigned(A, i::Int)`                         | defined in terms of scalar `getindex`  | (if `IndexLinear`) Test whether index `i` is in bounds and has a value                |
+| `isassigned(A, I::Vararg{Int, N})`              | defined in terms of scalar `getindex`  | (if `IndexCartesian`, where `N = ndims(A)`) Test whether index `I` is in bounds and has a value |
 | `getindex(A, I...)`                             | defined in terms of scalar `getindex`  | [Multidimensional and nonscalar indexing](@ref man-array-indexing)                    |
 | `setindex!(A, X, I...)`                            | defined in terms of scalar `setindex!` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
 | `iterate`                                       | defined in terms of scalar `getindex`  | Iteration                                                                             |
@@ -844,7 +853,7 @@ julia> function Base.setproperty!(p::Point, s::Symbol, f)
        end
 ```
 
-It is important that `getfield` and `setfield` are used inside `getproperty` and `setproperty!` instead of the dot syntax,
+It is important that `getfield` and `setfield!` are used inside `getproperty` and `setproperty!` instead of the dot syntax,
 since the dot syntax would make the functions recursive which can lead to type inference issues. We can now
 try out the new functionality:
 
@@ -877,7 +886,7 @@ To support rounding on a new type it is typically sufficient to define the singl
 `round(x::ObjType, r::RoundingMode)`. The passed rounding mode determines in which direction
 the value should be rounded. The most commonly used rounding modes are `RoundNearest`,
 `RoundToZero`, `RoundDown`, and `RoundUp`, as these rounding modes are used in the
-definitions of the one argument `round`, method, and `trunc`, `floor`, and `ceil`,
+definitions of the one argument `round` method, and `trunc`, `floor`, and `ceil`,
 respectively.
 
 In some cases, it is possible to define a three-argument `round` method that is more

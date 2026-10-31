@@ -12,11 +12,11 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
         first = true
         n = 0
         for pair in t
+            limit && n >= 10 && (print(io, "…"); break)
             first || print(io, ", ")
             first = false
             show(recur_io, pair)
             n+=1
-            limit && n >= 10 && (print(io, "…"); break)
         end
     end
     print(io, ')')
@@ -72,19 +72,20 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
     age::UInt
     idxfloor::Int  # an index <= the indices of all used slots
     maxprobe::Int
+    popcursor::Int
 
     function Dict{K,V}() where V where K
         n = 0
         slots = Memory{UInt8}(undef,n)
         fill!(slots, 0x0)
-        new(slots, Memory{K}(undef, n), Memory{V}(undef, n), 0, 0, 0, max(1, n), 0)
+        new(slots, Memory{K}(undef, n), Memory{V}(undef, n), 0, 0, 0, max(1, n), 0, 1)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
-            d.idxfloor, d.maxprobe)
+            d.idxfloor, d.maxprobe, d.popcursor)
     end
-    function Dict{K, V}(slots::Memory{UInt8}, keys::Memory{K}, vals::Memory{V}, ndel::Int, count::Int, age::UInt, idxfloor::Int, maxprobe::Int) where {K, V}
-        new(slots, keys, vals, ndel, count, age, idxfloor, maxprobe)
+    function Dict{K, V}(slots::Memory{UInt8}, keys::Memory{K}, vals::Memory{V}, ndel::Int, count::Int, age::UInt, idxfloor::Int, maxprobe::Int, popcursor::Int) where {K, V}
+        new(slots, keys, vals, ndel, count, age, idxfloor, maxprobe, popcursor)
     end
 end
 function Dict{K,V}(kv) where V where K
@@ -143,6 +144,7 @@ end
     newsz = _tablesz(newsz)
     h.age += 1
     h.idxfloor = 1
+    h.popcursor = 1
     if h.count == 0
         # TODO: tryresize
         h.slots = Memory{UInt8}(undef, newsz)
@@ -223,14 +225,15 @@ function empty!(h::Dict{K,V}) where V where K
     fill!(h.slots, 0x0)
     sz = length(h.slots)
     for i in 1:sz
-        _unsetindex!(h.keys, i)
-        _unsetindex!(h.vals, i)
+        unsetindex!(h.keys, i)
+        unsetindex!(h.vals, i)
     end
     h.ndel = 0
     h.count = 0
     h.maxprobe = 0
     h.age += 1
     h.idxfloor = max(1, sz)
+    h.popcursor = 1
     return h
 end
 
@@ -240,7 +243,7 @@ function ht_keyindex(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
-    maxprobe < sz || throw(AssertionError()) # This error will never trigger, but is needed for terminates_locally to be valid
+    maxprobe < sz || throw(h) # This error will never trigger, but is needed for terminates_locally to be valid
     index, sh = hashindex(key, sz)
     keys = h.keys
 
@@ -616,7 +619,9 @@ end
 
 function pop!(h::Dict)
     isempty(h) && throw(ArgumentError("dict must be non-empty"))
-    idx = skip_deleted_floor!(h)
+    idx = skip_deleted(h, h.popcursor)
+    idx == 0 && (idx = skip_deleted_floor!(h))
+    h.popcursor = idx + 1
     @inbounds key = h.keys[idx]
     @inbounds val = h.vals[idx]
     _delete!(h, idx)
@@ -627,8 +632,8 @@ function _delete!(h::Dict{K,V}, index) where {K,V}
     @inbounds begin
     slots = h.slots
     sz = length(slots)
-    _unsetindex!(h.keys, index)
-    _unsetindex!(h.vals, index)
+    unsetindex!(h.keys, index)
+    unsetindex!(h.vals, index)
     # if the next slot is empty we don't need a tombstone
     # and can remove all tombstones that were required by the element we just deleted
     ndel = 1
@@ -905,10 +910,10 @@ struct PersistentDict{K,V} <: AbstractDict{K,V}
         dict::PersistentDict{K, V}, key, val) where {K, V} = @inline _keyvalueset(dict, key, val)
     @noinline Base.@assume_effects :nothrow :effect_free :terminates_globally KeyValue.set(
         dict::PersistentDict{K, V}, key::K, val::V) where {K, V} = @inline _keyvalueset(dict, key, val)
-    global function _keyvalueset(dict::PersistentDict{K, V}, key, val) where {K, V}
+    global function _keyvalueset(dict::PersistentDict{K, V}, key, @nospecialize(val)) where {K, V}
         trie = dict.trie
         h = HAMT.HashState(key)
-        found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=#true)
+        found, present, trie, i, bi, top, hs = HAMT.path(trie, h, #=persistent=#true)
         HAMT.insert!(found, present, trie, i, bi, hs, val)
         return new{K, V}(top)
     end
@@ -919,9 +924,9 @@ struct PersistentDict{K,V} <: AbstractDict{K,V}
     global function _keyvalueset(dict::PersistentDict{K, V}, key) where {K, V}
         trie = dict.trie
         h = HAMT.HashState(key)
-        found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=#true)
+        found, present, trie, i, bi, top, _ = HAMT.path(trie, h, #=persistent=#true)
         if found && present
-            deleteat!(trie.data, i)
+            trie.data = HAMT.deleteat_copy(trie.data, i)
             HAMT.unset!(trie, bi)
         end
         return new{K, V}(top)
@@ -1006,7 +1011,7 @@ function in(key_val::Pair{K,V}, dict::PersistentDict{K,V}, valcmp=(==)) where {K
     key, val = key_val
     found = KeyValue.get(dict, key)
     found === nothing && return false
-    return valcmp(val, only(found))
+    return valcmp(val, something(found))
 end
 
 function haskey(dict::PersistentDict{K}, key::K) where K
@@ -1016,13 +1021,13 @@ end
 function getindex(dict::PersistentDict{K,V}, key::K) where {K,V}
     found = KeyValue.get(dict, key)
     found === nothing && throw(KeyError(key))
-    return only(found)
+    return something(found)
 end
 
 function get(dict::PersistentDict{K,V}, key::K, default) where {K,V}
     found = KeyValue.get(dict, key)
     found === nothing && return default
-    return only(found)
+    return something(found)
 end
 
 @noinline function KeyValue.get(dict::PersistentDict{K, V}, key) where {K, V}
@@ -1031,10 +1036,10 @@ end
         return nothing
     end
     h = HAMT.HashState(key)
-    found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
+    found, present, trie, i, _, _, _ = HAMT.path(trie, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
-        return (leaf.val,)
+        return Some{V}(leaf.val)
     end
     return nothing
 end
@@ -1042,13 +1047,13 @@ end
 @noinline function KeyValue.get(default, dict::PersistentDict, key)
     found = KeyValue.get(dict, key)
     found === nothing && return default()
-    return only(found)
+    return something(found)
 end
 
 function get(default::Callable, dict::PersistentDict{K,V}, key::K) where {K,V}
     found = KeyValue.get(dict, key)
     found === nothing && return default()
-    return only(found)
+    return something(found)
 end
 
 function delete(dict::PersistentDict{K}, key::K) where K

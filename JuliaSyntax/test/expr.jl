@@ -14,6 +14,8 @@
         @test parseatom(":(a)") == QuoteNode(:a)
         @test parseatom(":(:a)") == Expr(:quote, QuoteNode(:a))
         @test parseatom(":(1+2)") == Expr(:quote, Expr(:call, :+, 1, 2))
+        @test parseatom(":...") == QuoteNode(Symbol("..."))
+        @test parseatom(":(...)") == QuoteNode(Symbol("..."))
         # Compatibility hack for VERSION >= v"1.4"
         # https://github.com/JuliaLang/julia/pull/34077
         @test parseatom(":true") == Expr(:quote, true)
@@ -274,6 +276,10 @@
             Expr(:(=),
                  Expr(Symbol("'"), :x),
                  1)
+        @test parsestmt("x' = A * x") ==
+            Expr(:(=),
+                 Expr(Symbol("'"), :x),
+                 Expr(:call, :*, :A, :x))
 
         # `.=` doesn't introduce short form functions
         @test parsestmt("f() .= xs") ==
@@ -510,10 +516,18 @@
     @testset "syntactic update-assignment operators" begin
         @test parsestmt("x += y") == Expr(:(+=), :x, :y)
         @test parsestmt("x .+= y") == Expr(:(.+=), :x, :y)
+        @test parsestmt("x +%= y"; version=v"1.14") == Expr(Symbol("+%="), :x, :y)
+        @test parsestmt("x -%= y"; version=v"1.14") == Expr(Symbol("-%="), :x, :y)
+        @test parsestmt("x *%= y"; version=v"1.14") == Expr(Symbol("*%="), :x, :y)
+        @test parsestmt("x .+%= y"; version=v"1.14") == Expr(Symbol(".+%="), :x, :y)
         @test parsestmt(":+=") == QuoteNode(Symbol("+="))
+        @test parsestmt(":+%="; version=v"1.14") == QuoteNode(Symbol("+%="))
         @test parsestmt(":(+=)") == QuoteNode(Symbol("+="))
+        @test parsestmt(":(+%=)"; version=v"1.14") == QuoteNode(Symbol("+%="))
         @test parsestmt(":.+=") == QuoteNode(Symbol(".+="))
+        @test parsestmt(":.+%="; version=v"1.14") == QuoteNode(Symbol(".+%="))
         @test parsestmt(":(.+=)") == QuoteNode(Symbol(".+="))
+        @test parsestmt(":(.+%=)"; version=v"1.14") == QuoteNode(Symbol(".+%="))
         @test parsestmt("x \u2212= y") == Expr(:(-=), :x, :y)
     end
 
@@ -765,6 +779,12 @@
 
         @test parsestmt("struct A \n \"doc\" \n a end") ==
             Expr(:struct, false, :A, Expr(:block, LineNumberNode(2), "doc", :a))
+    end
+
+    @testset "typegroup" begin
+        @test parsestmt("typegroup\nstruct A\nend\nend", version=v"1.14") ==
+            Expr(:typegroup, Expr(:block, LineNumberNode(2),
+                Expr(:struct, false, :A, Expr(:block, LineNumberNode(2)))))
     end
 
     @testset "export" begin

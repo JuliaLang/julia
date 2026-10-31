@@ -25,7 +25,24 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
-is_toplevel_expr_head(head::Symbol) = head === :method || head === :thunk
+# Whether a bare `GlobalRef` is something the front-end might have emitted in argument position
+# (an inline `(top ...)`/`(core ...)` operand), even though that is unsound: the value is read by
+# a lookup at codegen/run time with no invalidation edge.
+value_position_globalref_from_lowering(gr::GlobalRef) = (m = gr.mod; m === Core || m === Core.Intrinsics || m === Base || is_top_module(m))
+is_top_module(m::Module) = ccall(:jl_istopmod, UInt8, (Any,), m) != 0
+
+# Whether `gr` currently resolves (through imports, at the latest world) to a defined constant.
+# A single lookup, not a scan over `ir.valid_worlds`: the value-position exception this gates is
+# unsound regardless of world, so no range check could rescue it.
+function is_const_globalref_now(gr::GlobalRef)
+    b = convert(Core.Binding, gr)
+    isdefined(b, :partitions) || return false
+    world = get_world_counter()
+    _, leaf = walk_to_leaf_partition(b, lookup_binding_partition(world, b), world)
+    return is_defined_const_binding(binding_kind(leaf))
+end
+
+is_toplevel_expr_head(head::Symbol) = head === :thunk
 is_value_pos_expr_head(head::Symbol) = head === :static_parameter
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int,
     allow_frontend_forms::Bool, @nospecialize(raise_error))
@@ -66,26 +83,34 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             raise_error()
         end
     elseif isa(op, GlobalRef)
-        if op.mod !== Core && op.mod !== Base
-            (valid_worlds, alldef) = scan_leaf_partitions(nothing, op, WorldWithRange(min_world(ir.valid_worlds), ir.valid_worlds)) do _, _, bpart
-                is_defined_const_binding(binding_kind(bpart))
-            end
-            if !alldef || max_world(valid_worlds) < max_world(ir.valid_worlds) || min_world(valid_worlds) > min_world(ir.valid_worlds)
-                @verify_error "Unbound or partitioned GlobalRef not allowed in value position"
-                raise_error()
-            end
+        # A bare `GlobalRef` names a binding, not a value: reading it takes a lookup, so it is
+        # not a constant and is not valid in value position. An ordinary global read is its own
+        # statement (lowering hoists it -- see `valid-ir-argument?` in julia-syntax.scm), and
+        # once resolved it is a `Core.BindingPartition` (`reformulate_globals_pass!`), which
+        # carries its value or slot with it and needs no lookup.
+        #
+        # Two exceptions are admitted. A world-1 constant (`world1_const`) is immutable, so the
+        # optimizer deliberately leaves it bare for codegen to embed. A top-module/intrinsics
+        # reference lowering emits inline as a `(top ...)`/`(core ...)` operand is unsound but
+        # relied on by the frontend; require only that it is a constant now, since the exception
+        # is unsound regardless of world and a scan over `ir.valid_worlds` could not make it sound.
+        if !(world1_const(op) || (value_position_globalref_from_lowering(op) && is_const_globalref_now(op)))
+            @verify_error "GlobalRef not allowed in value position (only a world-1 constant or a top-module constant emitted by lowering)"
+            raise_error()
         end
+    elseif isa(op, Core.BindingPartition)
+        # The resolved form of a global read (from `reformulate_globals_pass!`), carrying an
+        # invalidation edge. Valid in value position for any binding kind, unlike a bare
+        # `GlobalRef`.
     elseif isa(op, Expr)
         # Only Expr(:boundscheck) is allowed in value position
         if isforeigncall && arg_idx == 1 && op.head === :tuple
             # Allow a tuple literal in symbol position for foreigncall - this
             # is syntax for a literal value or globalref - it is interpreted in
             # global scope by codegen.
-        elseif !is_value_pos_expr_head(op.head)
-            if !allow_frontend_forms || op.head !== :opaque_closure_method
-                @verify_error "Expr not allowed in value position"
-                raise_error()
-            end
+        elseif !allow_frontend_forms || op.head !== :opaque_closure_method
+            @verify_error "Expr not allowed in value position"
+            raise_error()
         end
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
         @verify_error "At statement %$use_idx: Left over SSA marker ($op)"
@@ -338,16 +363,14 @@ function verify_ir(ir::IRCode, print::Bool=true,
         end
 
         if is_phinode_block && !is_valid_phiblock_stmt(stmt)
-            if !isa(stmt, Expr) || !is_value_pos_expr_head(stmt.head)
-                # Go back and check that all non-PhiNodes are valid value-position
-                for validate_idx in firstidx:(lastphi-1)
-                    validate_stmt = ir[SSAValue(validate_idx)][:stmt]
-                    isa(validate_stmt, PhiNode) && continue
-                    check_op(ir, domtree, validate_stmt, bb, idx, idx, print, false, 0,
-                        allow_frontend_forms, raise_error)
-                end
-                is_phinode_block = false
+            # Go back and check that all non-PhiNodes are valid value-position
+            for validate_idx in firstidx:(lastphi-1)
+                validate_stmt = ir[SSAValue(validate_idx)][:stmt]
+                isa(validate_stmt, PhiNode) && continue
+                check_op(ir, domtree, validate_stmt, bb, idx, idx, print, false, 0,
+                         allow_frontend_forms, raise_error)
             end
+            is_phinode_block = false
         end
         if isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)
@@ -374,16 +397,25 @@ function verify_ir(ir::IRCode, print::Bool=true,
             isforeigncall = false
             if isa(stmt, Expr)
                 if stmt.head === :(=)
-                    @verify_error "Assignment should have been removed during SSA conversion"
-                    raise_error()
+                    # Local (slot/SSA) assignments are removed during SSA conversion,
+                    # but a store to a global -- a `GlobalRef` or a `BindingPartition`
+                    # frozen by `reformulate_globals_pass!` -- is a legitimate `:(=)`.
+                    lhs = stmt.args[1]
+                    if !(isa(lhs, GlobalRef) || isa(lhs, Core.BindingPartition))
+                        @verify_error "Assignment should have been removed during SSA conversion"
+                        raise_error()
+                    end
                 elseif stmt.head === :isdefined
                     if length(stmt.args) > 2
                         @verify_error "malformed isdefined"
                         raise_error()
                     end
-                    if stmt.args[1] isa GlobalRef
-                        # undefined GlobalRef is OK in isdefined
-                        continue
+                    let v = stmt.args[1]
+                        # a GlobalRef or static_parameter isdefined check does
+                        # not evaluate its argument
+                        if v isa GlobalRef || isexpr(v, :static_parameter)
+                            continue
+                        end
                     end
                 elseif stmt.head === :throw_undef_if_not
                     if length(stmt.args) > 3
@@ -399,18 +431,8 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     # blocks, which isn't allowed for regular SSA values, so
                     # we skip the validation below.
                     continue
-                elseif stmt.head === :foreigncall
+                elseif stmt.head === :foreigncall || stmt.head === :foreignglobal
                     isforeigncall = true
-                elseif stmt.head === :isdefined && length(stmt.args) == 1 &&
-                        isexpr(stmt.args[1], :static_parameter)
-                    # a GlobalRef or static_parameter isdefined check does not evaluate its argument
-                    continue
-                elseif stmt.head === :call
-                    f = stmt.args[1]
-                    if f isa GlobalRef && f.name === :cglobal
-                        # TODO: these are not yet linearized
-                        continue
-                    end
                 elseif stmt.head === :leave
                     for i in 1:length(stmt.args)
                         arg = stmt.args[i]

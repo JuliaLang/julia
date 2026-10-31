@@ -30,6 +30,7 @@ iterable type.
 Base.iterate
 Base.IteratorSize
 Base.IteratorEltype
+Base.Generator
 ```
 
 Fully implemented by:
@@ -69,6 +70,7 @@ Base.AbstractUnitRange
 Base.StepRange
 Base.StepRangeLen
 Base.UnitRange
+Base.AbstractOneTo
 Base.OneTo
 Base.LinRange
 Base.LogRange

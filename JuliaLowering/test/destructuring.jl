@@ -1,5 +1,3 @@
-@testset "Destructuring" begin
-
 test_mod = Module()
 
 @testset "Destructuring via iteration" begin
@@ -109,6 +107,15 @@ let x = 1, y = 2
     (x,y)
 end
 """) == (2, 1)
+
+# A named tuple on the right is not a tuple of its elements, so the arity isn't
+# known statically
+@test JuliaLowering.include_string(test_mod, """
+let
+    (x,y) = (; c = 3, d = 4)
+    (x,y)
+end
+""") == (3, 4)
 
 # Slurps and splats
 
@@ -220,6 +227,11 @@ let
 end
 """) == (1, 2)
 
-end
+# `const` applies to each destructured global
+@test JuliaLowering.include_string(test_mod, """
+const (; pd_const_a, pd_const_b) = (pd_const_a = 1, pd_const_b = 2)
+""") == (pd_const_a = 1, pd_const_b = 2)
+@test test_mod.pd_const_a == 1 && isconst(test_mod, :pd_const_a)
+@test test_mod.pd_const_b == 2 && isconst(test_mod, :pd_const_b)
 
 end

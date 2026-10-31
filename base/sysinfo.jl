@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module Sys
+# NB: This file is `Core.eval`-uated into the (pre-existing) module Sys
+
 @doc """
 Provide methods for retrieving information about hardware and the operating system.
 """ Sys
@@ -13,34 +14,23 @@ export BINDIR,
        WORD_SIZE,
        ARCH,
        MACHINE,
-       KERNEL,
        JIT,
        PAGESIZE,
        cpu_info,
        cpu_summary,
        sysimage_target,
+       matched_sysimage_target,
        uptime,
        loadavg,
        free_memory,
        total_memory,
        free_physical_memory,
        total_physical_memory,
-       isapple,
-       isbsd,
-       isdragonfly,
-       isfreebsd,
-       islinux,
-       isnetbsd,
-       isopenbsd,
-       isunix,
-       iswindows,
-       isjsvm,
        isexecutable,
        isreadable,
        iswritable,
        username,
-       which,
-       detectwsl
+       which
 
 import ..Base: DATAROOTDIR, show
 
@@ -103,13 +93,6 @@ const ARCH = ccall(:jl_get_ARCH, Any, ())::Symbol
 
 
 """
-    Sys.KERNEL::Symbol
-
-A symbol representing the name of the operating system, as returned by `uname` of the build configuration.
-"""
-const KERNEL = ccall(:jl_get_UNAME, Any, ())::Symbol
-
-"""
     Sys.MACHINE::String
 
 A string containing the build triple.
@@ -134,14 +117,14 @@ global SC_CLK_TCK::Clong
 """
     Sys.CPU_NAME::String
 
-A string representing the name of CPU.
+A string representing the name of the host CPU.
 
 # Examples
 For example, `Sys.CPU_NAME` might equal `"tigerlake"` on an
 [Intel Core "Tiger Lake" CPU](https://en.wikipedia.org/wiki/Tiger_Lake),
 or `"apple-m1"` on an [Apple M1 CPU](https://en.wikipedia.org/wiki/Apple_M1).
 
-Note: Included in the detailed system information via `versioninfo(verbose=true)`.
+Note: Included in the output of `versioninfo()`.
 """
 global CPU_NAME::String
 
@@ -157,7 +140,7 @@ julia> Sys.JIT
 "ORCJIT"
 ```
 
-Note: Included in the detailed system information via `versioninfo(verbose=true)`.
+Note: Included in the output of `versioninfo()`.
 """
 global JIT::String
 
@@ -165,6 +148,7 @@ global JIT::String
     Sys.PAGESIZE::Clong
 
 A number providing the pagesize of the given OS.  Common values being 4kb or 64kb on Linux.
+On Windows, this stores the allocation granularity, not the page size.
 """
 global PAGESIZE::Clong
 
@@ -273,7 +257,7 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
         summary = CPUinfo(cpu[i].model,0,0,0,0,0,0)
         count = j - i + 1
         for x = i:j
-            summary.speed += cpu[i].speed
+            summary.speed += cpu[x].speed
             summary.cpu_times!user += cpu[x].cpu_times!user
             summary.cpu_times!nice += cpu[x].cpu_times!nice
             summary.cpu_times!sys += cpu[x].cpu_times!sys
@@ -304,6 +288,7 @@ function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
         if model != cpu[i].model
             _cpu_summary(io, cpu, first, i-1)
             first = i
+            model = cpu[i].model
         end
     end
     _cpu_summary(io, cpu, first, length(cpu))
@@ -329,6 +314,10 @@ function cpu_info()
     cpus = Vector{CPUinfo}(undef, count[])
     for i = 1:length(cpus)
         cpus[i] = CPUinfo(unsafe_load(UVcpus[], i))
+        if isempty(cpus[i].model) || cpus[i].model == "unknown"
+            # libuv may lack model detection where Julia's CPU detection succeeds.
+            cpus[i].model = CPU_NAME
+        end
     end
     ccall(:uv_free_cpu_info, Cvoid, (Ptr{UV_cpu_info_t}, Int32), UVcpus[], count[])
     return cpus
@@ -345,10 +334,34 @@ system image or for understanding what CPU features were enabled during compilat
 
 If the system image was built with the default settings this will return `"native"`.
 
-See also [`JULIA_CPU_TARGET`](@ref).
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+
+See also [`Sys.matched_sysimage_target`](@ref), [`JULIA_CPU_TARGET`](@ref).
 """
 function sysimage_target()
     return ccall(:jl_get_sysimage_cpu_target, Ref{String}, ())
+end
+
+"""
+    Sys.matched_sysimage_target()
+
+Return the entry of [`Sys.sysimage_target`](@ref) that was selected for the host CPU
+when the system image was loaded.
+
+If the system image was built with the default settings this will return `"native"`.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+See also [`Sys.sysimage_target`](@ref), [`JULIA_CPU_TARGET`](@ref).
+"""
+function matched_sysimage_target()
+    match_idx = let
+        idx = ccall(:jl_get_sysimage_matched_target_index, Int32, ())
+        idx == -1 ? 1 : idx + 1
+    end
+    return String(split(sysimage_target(), ";")[match_idx])
 end
 
 """
@@ -446,157 +459,6 @@ See also:
 """
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
 
-"""
-    Sys.isunix([os])
-
-Predicate for testing if the OS provides a Unix-like interface.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-function isunix(os::Symbol)
-    if iswindows(os)
-        return false
-    elseif islinux(os) || isbsd(os)
-        return true
-    elseif os === :Emscripten
-        # Emscripten implements the POSIX ABI and provides traditional
-        # Unix-style operating system functions such as file system support.
-        # Therefore, we consider it a unix, even though this need not be
-        # generally true for a jsvm embedding.
-        return true
-    else
-        throw(ArgumentError("unknown operating system \"$os\""))
-    end
-end
-
-"""
-    Sys.islinux([os])
-
-Predicate for testing if the OS is a derivative of Linux.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-islinux(os::Symbol) = (os === :Linux)
-
-"""
-    Sys.isbsd([os])
-
-Predicate for testing if the OS is a derivative of BSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    The Darwin kernel descends from BSD, which means that `Sys.isbsd()` is
-    `true` on macOS systems. To exclude macOS from a predicate, use
-    `Sys.isbsd() && !Sys.isapple()`.
-"""
-isbsd(os::Symbol) = (isfreebsd(os) || isopenbsd(os) || isnetbsd(os) || isdragonfly(os) || isapple(os))
-
-"""
-    Sys.isfreebsd([os])
-
-Predicate for testing if the OS is a derivative of FreeBSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on FreeBSD but also on
-    other BSD-based systems. `Sys.isfreebsd()` refers only to FreeBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isfreebsd(os::Symbol) = (os === :FreeBSD)
-
-"""
-    Sys.isopenbsd([os])
-
-Predicate for testing if the OS is a derivative of OpenBSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on OpenBSD but also on
-    other BSD-based systems. `Sys.isopenbsd()` refers only to OpenBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isopenbsd(os::Symbol) = (os === :OpenBSD)
-
-"""
-    Sys.isnetbsd([os])
-
-Predicate for testing if the OS is a derivative of NetBSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on NetBSD but also on
-    other BSD-based systems. `Sys.isnetbsd()` refers only to NetBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isnetbsd(os::Symbol) = (os === :NetBSD)
-
-"""
-    Sys.isdragonfly([os])
-
-Predicate for testing if the OS is a derivative of DragonFly BSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on DragonFly but also on
-    other BSD-based systems. `Sys.isdragonfly()` refers only to DragonFly.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isdragonfly(os::Symbol) = (os === :DragonFly)
-
-"""
-    Sys.iswindows([os])
-
-Predicate for testing if the OS is a derivative of Microsoft Windows NT.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-iswindows(os::Symbol) = (os === :Windows || os === :NT)
-
-"""
-    Sys.isapple([os])
-
-Predicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-isapple(os::Symbol) = (os === :Apple || os === :Darwin)
-
-"""
-    Sys.isjsvm([os])
-
-Predicate for testing if Julia is running in a JavaScript VM (JSVM),
-including e.g. a WebAssembly JavaScript embedding in a web browser.
-
-!!! compat "Julia 1.2"
-    This function requires at least Julia 1.2.
-"""
-isjsvm(os::Symbol) = (os === :Emscripten)
-
-"""
-    Sys.detectwsl()
-
-Runtime predicate for testing if Julia is running inside
-Windows Subsystem for Linux (WSL).
-
-!!! note
-    Unlike `Sys.iswindows`, `Sys.islinux` etc., this is a runtime test, and thus
-    cannot meaningfully be used in `@static if` constructs.
-
-!!! compat "Julia 1.12"
-    This function requires at least Julia 1.12.
-"""
-function detectwsl()
-    # We use the same approach as canonical/snapd do to detect WSL
-    islinux() && (
-        isfile("/proc/sys/fs/binfmt_misc/WSLInterop")
-        || isdir("/run/WSL")
-    )
-end
-
-for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
-    @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
-end
-
 if iswindows()
     function windows_version()
         verinfo = ccall(:GetVersion, UInt32, ())
@@ -643,7 +505,7 @@ function which(program_name::String)
             push!(program_names, base_pname)
         end
 
-        # But also try appending .exe and .com`
+        # But also try appending .exe and .com
         for pe in (".exe", ".com")
             push!(program_names, string(base_pname, pe))
         end
@@ -721,5 +583,3 @@ function username()
     isempty(pw.username) && Base.uv_error("username", Base.UV_ENOENT)
     return pw.username
 end
-
-end # module Sys

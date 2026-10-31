@@ -1,0 +1,4 @@
+# -*- makefile -*-
+
+CPUFEATURES_BRANCH=main
+CPUFEATURES_SHA1=cba903128dc982a16a2b5788f8179eb04e58c2bf

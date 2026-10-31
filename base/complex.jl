@@ -105,7 +105,7 @@ reim(z) = (real(z), imag(z))
     real(T::Type)
 
 Return the type that represents the real part of a value of type `T`.
-e.g: for `T == Complex{R}`, returns `R`.
+e.g., for `T == Complex{R}`, returns `R`.
 Equivalent to `typeof(real(zero(T)))`.
 
 # Examples
@@ -120,7 +120,8 @@ Float64
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
 real(C::Type{<:Complex}) = fieldtype(C, 1)
-real(::Type{Union{}}, slurp...) = Union{}
+real(::Type{Union{}}) = Union{}
+real(::Type{Union{}}, slurp...) = throw(MethodError(real, (Union{}, slurp...)))
 
 """
     isreal(x)::Bool
@@ -188,7 +189,10 @@ Union{Missing, Complex{Int64}}
 """
 complex(::Type{T}) where {T<:Real} = Complex{T}
 complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
-complex(::Type{Union{}}, slurp...) = Union{}
+complex(::Type{Union{}}) = Union{}
+# Keep the slurp signature for bottom-type dispatch pruning,
+# but do not let invalid arities contribute a successful result to inference.
+complex(::Type{Union{}}, slurp...) = throw(MethodError(complex, (Union{}, slurp...)))
 
 flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
@@ -289,6 +293,12 @@ inv(z::Complex{<:Integer}) = inv(float(z))
 -(z::Complex, w::Complex) = Complex(real(z) - real(w), imag(z) - imag(w))
 *(z::Complex, w::Complex) = Complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
+
+-%(z::Complex) = Complex(-%(real(z)), -%(imag(z)))
++%(z::Complex, w::Complex) = Complex(real(z) +% real(w), imag(z) +% imag(w))
+-%(z::Complex, w::Complex) = Complex(real(z) -% real(w), imag(z) -% imag(w))
+*%(z::Complex, w::Complex) = Complex(real(z) *% real(w) -% imag(z) *% imag(w),
+                                     real(z) *% imag(w) +% imag(z) *% real(w))
 
 _mulsub(a, b, c) = _mulsub(promote(a, b, c)...)
 _mulsub(a::T, b::T, c::T) where {T<:Real} = muladd(a, b, -c)
@@ -843,15 +853,23 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where T
         else
             r = -zᵣ
             θ = copysign(Tf(π),imag(z))
-            rᵖ = r^pᵣ * exp(-pᵢ*θ)
-            ϕ = pᵣ*θ + pᵢ*log(r)
+            logr = log(r)
+            re_log, im_phase = pᵣ*logr, pᵢ*θ
+            lim = log(floatmax(Tf)) - one(Tf)
+            rᵖ = (abs(re_log) < lim && abs(im_phase) < lim) ?
+                r^pᵣ * exp(-im_phase) : exp(re_log - im_phase)
+            ϕ = pᵣ*θ + pᵢ*logr
         end
     else
         pᵣ, pᵢ = reim(p)
         r = abs(z)
         θ = angle(z)
-        rᵖ = r^pᵣ * exp(-pᵢ*θ)
-        ϕ = pᵣ*θ + pᵢ*log(r)
+        logr = log(r)
+        re_log, im_phase = pᵣ*logr, pᵢ*θ
+        lim = log(floatmax(Tf)) - one(Tf)
+        rᵖ = (abs(re_log) < lim && abs(im_phase) < lim) ?
+            r^pᵣ * exp(-im_phase) : exp(re_log - im_phase)
+        ϕ = pᵣ*θ + pᵢ*logr
     end
 
     if isfinite(ϕ)
@@ -1082,15 +1100,18 @@ breaking ties using the specified [`RoundingMode`](@ref)s. The first
 [`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.
 
-
-`RoundingModeReal` and `RoundingModeImaginary` default to [`RoundNearest`](@ref),
-which rounds to the nearest integer, with ties (fractional values of 0.5)
-being rounded to the nearest even integer.
+`RoundingModeReal` defaults to [`RoundNearest`](@ref), which rounds to the nearest
+integer, with ties (fractional values of 0.5) being rounded to the nearest even
+integer. `RoundingModeImaginary` defaults to `RoundingModeReal`, so a single
+[`RoundingMode`](@ref) is used for both components.
 
 # Examples
 ```jldoctest
 julia> round(3.14 + 4.5im)
 3.0 + 4.0im
+
+julia> round(3.14 + 4.5im, RoundUp)
+4.0 + 5.0im
 
 julia> round(3.14 + 4.5im, RoundUp, RoundNearestTiesUp)
 4.0 + 5.0im

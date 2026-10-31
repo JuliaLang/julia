@@ -11,7 +11,7 @@ including the output from `cat /proc/cpuinfo`.
 
 ## Compiling Julia
 
-To compilie Julia for RISC-V, you need to manually indicate what architecture, and
+To compile Julia for RISC-V, you need to manually indicate what architecture, and
 optionally which CPU to build for. This can be done by setting the `MARCH` and `MCPU`
 variables in `Make.user`
 
@@ -39,8 +39,14 @@ MARCH := rv64gc
 
 # also set JULIA_CPU_TARGET to the expanded form of rv64gc
 # (it normally copies the value of MCPU, which we don't set)
-JULIA_CPU_TARGET := generic-rv64,i,m,a,f,d,zicsr,zifencei,c
+JULIA_CPU_TARGET := generic-rv64,i,m,a,f,d,zicsr,c
 ```
+
+`zifencei` is deliberately absent even though it is part of `rv64gc`. The
+default Linux user-space ABI prohibits direct execution of `fence.i`, so
+`hwprobe` does not report the extension. Julia uses `hwprobe` for host feature
+detection, and therefore cannot match a system image that requires `zifencei`
+when running with `-C native`.
 
 ### Cross-compilation
 
@@ -48,7 +54,7 @@ A native build on a RISC-V device may take a very long time, so it's also
 possible to cross-compile Julia on a faster machine.
 
 First, get a hold of a RISC-V cross-compilation toolchain that provides
-support for C, C++ and Fortran. This can be done by checking-out the
+support for C, C++ and Fortran. This can be done by checking out the
 [riscv-gnu-toolchain](https://github.com/riscv-collab/riscv-gnu-toolchain)
 repository and building it as follows:
 

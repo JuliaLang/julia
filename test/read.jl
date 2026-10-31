@@ -378,6 +378,8 @@ for (name, f) in l
         verbose && println("$name readeach...")
         @test collect(readeach(io(), Char)) == Vector{Char}(text)
         @test collect(readeach(io(), UInt8)) == Vector{UInt8}(text)
+        @test eltype(readeach(IOBuffer(), Char)) <: Char
+        @test eltype(readeach(IOBuffer(), UInt8)) <: UInt8
 
         cleanup()
 
@@ -707,6 +709,38 @@ end
     @test reinterpret(Int, take!(out)) == fib[1:end-1]
     @test copyuntil(out, seekstart(buf), 21; keep=true) === out
     @test reinterpret(Int, take!(out)) == fib
+end
+
+# IO types extending the documented signatures, which have no `cancel` keyword
+struct CopyUntilIO <: IO
+    b::IOBuffer
+end
+Base.eof(s::CopyUntilIO) = eof(s.b)
+Base.read(s::CopyUntilIO, ::Type{UInt8}) = read(s.b, UInt8)
+Base.copyuntil(out::IO, s::CopyUntilIO, d::UInt8; keep::Bool=false) = copyuntil(out, s.b, d; keep)
+struct ReadLineIO <: IO
+    b::IOBuffer
+end
+Base.eof(s::ReadLineIO) = eof(s.b)
+Base.readline(s::ReadLineIO; keep::Bool=false) = readline(s.b; keep)
+
+@testset "user IO methods without a cancel keyword" begin
+    io() = CopyUntilIO(IOBuffer("ab\ncd\r\nef"))
+    @test readline(io()) == "ab"
+    @test readline(io(); keep=true) == "ab\n"
+    @test readlines(io()) == ["ab", "cd", "ef"]
+    @test collect(eachline(io(); keep=true)) == ["ab\n", "cd\r\n", "ef"]
+    @test readuntil(io(), 'c') == "ab\n"
+    @test readuntil(io(), "c") == "ab\n"
+    @test readuntil(io(), 0x0a) == b"ab"
+    @test String(take!(copyline(IOBuffer(), io()))) == "ab"
+    @test String(take!(copyline(IOBuffer(), io(); keep=true))) == "ab\n"
+    @test String(take!(copyuntil(IOBuffer(), io(), 'c'))) == "ab\n"
+    let out = IOBuffer(collect(codeunits("xyz")); read=true, write=true)
+        copyline(out, CopyUntilIO(IOBuffer("ab\r\ncd")))
+        @test read(seekstart(out), String) == "abz"
+    end
+    @test collect(eachline(ReadLineIO(IOBuffer("ab\ncd")))) == ["ab", "cd"]
 end
 
 # more tests for reverse(eachline)
