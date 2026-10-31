@@ -173,12 +173,17 @@ $$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(buil
 		 JULIA_PROJECT= \
 		 JULIA_DEPOT_PATH=':' \
 		 JULIA_NUM_THREADS=1 \
+		 JULIA_SYSIMG_TIMING_FILE=$$(call cygpath_w,$$@).timing \
 			$$(call spawn, $3) $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-$$* $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
 			$(bootstrap_julia_flags) \
 			--startup-file=no --warn-overwrite=yes --depwarn=error --sysimage $$(call cygpath_w,$$<) $$(call cygpath_w,$$(JULIAHOME)/contrib/generate_precompile.jl) $(JULIA_PRECOMPILE); then \
 		echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***'; \
 		false; \
 	fi )
+	@if [ -f $$@.timing ]; then \
+		perl -MTime::HiRes=time -ne 'printf "Compile ───── %10.6f seconds\n", time - $$$$_' $$@.timing; \
+		rm -f $$@.timing; \
+	fi
 	@mv $$@.tmp $$@
 .SECONDARY: $$(build_private_libdir)/sys$1-o.a $(build_private_libdir)/sys$1-bc.a # request Make to keep these files around
 .SECONDARY: $$(build_private_libdir)/sysbase$1-o.a $(build_private_libdir)/sysbase$1-bc.a # request Make to keep these files around

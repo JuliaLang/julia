@@ -1456,14 +1456,15 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 #endif
 #endif
-        if (sig == SIGINT && jl_ignore_sigint())
+        int heap_released = jl_atomic_load_relaxed(&jl_heap_released);
+        if (sig == SIGINT && !heap_released && jl_ignore_sigint())
             continue;
         // Watchers do not see a parent's exit, which must always end this process.
         if (!profile && !parent_exited && jl_notify_signal_watchers(sig))
             continue;
 
         if (sig == SIGINT) {
-            if (jl_sigint_get_policy() == JL_SIGINT_EXIT ||
+            if (heap_released || jl_sigint_get_policy() == JL_SIGINT_EXIT ||
                     !jl_sigint_request_cancellation()) {
                 critical = 1;
             }
