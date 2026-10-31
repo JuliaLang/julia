@@ -1202,6 +1202,7 @@ iterate(::ProductIterator{Tuple{}}) = (), true
 iterate(::ProductIterator{Tuple{}}, state) = nothing
 
 @inline isdone(P::ProductIterator) = any(isdone, P.iterators)
+@inline _pisdone(::Tuple{}, ::Tuple{}) = true
 @inline function _pisdone(iters, states)
     iter1 = first(iters)
     done1 = isdone(iter1, first(states)[2]) # check step
