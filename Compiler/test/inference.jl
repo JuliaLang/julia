@@ -3941,6 +3941,13 @@ end
 tail_is_ntuple_val((@nospecialize t::Tuple)) = Val(tail_is_ntuple(t))
 @test Base.return_types(tail_is_ntuple, (Tuple,)) |> only === Bool
 @test Base.return_types(tail_is_ntuple_val, (Tuple,)) |> only === Val{true}
+function condgoto(x, q)
+    h = x isa Int
+    q && @goto a
+    @label b; h = false
+    @label a; h = false; @goto b
+end
+@test Base.infer_return_type(condgoto, (Any, Bool)) === Union{}
 
 # https://github.com/JuliaLang/julia/issues/47435
 is_closed_ex(e::InvalidStateException) = true
