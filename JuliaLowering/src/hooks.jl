@@ -48,6 +48,10 @@ function _core_lowering_hook(@nospecialize(code), mod::Module, file::String,
 end
 
 @fzone "JL: eval" function core_eval_hook(mod::Module, @nospecialize(st))
+    if st isa Expr && st.head === :thunk
+        # Already lowered
+        return ccall(:jl_toplevel_eval, Any, (Any, Any), mod, st)
+    end
     if !(st isa SyntaxTree)
         st = expr_to_est(st)
     end
