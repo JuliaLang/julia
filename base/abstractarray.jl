@@ -1742,14 +1742,13 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 # but that solution currently fails (see #27188 and #27224)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
-_typed_vcat_similar(V, ::Type{T}, n) where T = similar(V[1], T, n)
+_typed_vcat_similar(V, ::Type{T}, n) where T = similar(first(V), T, n)
 _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
     _typed_vcat!(_typed_vcat_similar(V, T, sum(map(length, V))), V)
 
 function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
     pos = 1
-    for k=1:Int(length(V))::Int
-        Vk = V[k]
+    for Vk in V
         p1 = pos + Int(length(Vk))::Int - 1
         a[pos:p1] = Vk
         pos = p1+1
@@ -1771,12 +1770,10 @@ hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
 hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
 
 function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
-    nargs = length(A)
-    nrows = size(A[1], 1)
+    nrows = size(first(A), 1)
     ncols = 0
     dense = true
-    for j = 1:nargs
-        Aj = A[j]
+    for Aj in A
         if size(Aj, 1) != nrows
             throw(DimensionMismatch("number of rows of each array must match (got $(map(x->size(x,1), A)))"))
         end
@@ -1784,18 +1781,16 @@ function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
     end
-    B = similar(A[1], T, nrows, ncols)
+    B = similar(first(A), T, nrows, ncols)
     pos = 1
     if dense
-        for k=1:nargs
-            Ak = A[k]
+        for Ak in A
             n = length(Ak)
             copyto!(B, pos, Ak, 1, n)
             pos += n
         end
     else
-        for k=1:nargs
-            Ak = A[k]
+        for Ak in A
             p1 = pos+(isa(Ak,AbstractMatrix) ? size(Ak, 2) : 1)-1
             B[:, pos:p1] = Ak
             pos = p1+1
@@ -1808,18 +1803,16 @@ vcat(A::AbstractVecOrMat...) = typed_vcat(promote_eltype(A...), A...)
 vcat(A::AbstractVecOrMat{T}...) where {T} = typed_vcat(T, A...)
 
 function _typed_vcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
-    nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
-    ncols = size(A[1], 2)
-    for j = 2:nargs
-        if size(A[j], 2) != ncols
+    ncols = size(first(A), 2)
+    for Aj in A
+        if size(Aj, 2) != ncols
             throw(DimensionMismatch("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
         end
     end
-    B = similar(A[1], T, nrows, ncols)
+    B = similar(first(A), T, nrows, ncols)
     pos = 1
-    for k=1:nargs
-        Ak = A[k]
+    for Ak in A
         p1 = pos+size(Ak,1)::Int-1
         B[pos:p1, :] = Ak
         pos = p1+1
