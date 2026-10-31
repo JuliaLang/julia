@@ -1692,7 +1692,7 @@ end
         r = range(a, stop=b, length=5)
         @test r[1] == a && r[5] == b
         for i = 2:4
-            x = ((5 - i) // 4) * a + ((i - 1) // 4) * b
+            x = a + ((i - 1) // 4) * (b - a)
             @test r[i] == x
         end
     end
@@ -1831,6 +1831,18 @@ end
         @test Float64.(@inferred(range(big(start), stop=big(stop), length=11))) == range(start, stop=stop, length=11)
         @test Float64.(@inferred(map(exp, range(big(start), stop=big(stop), length=11)))) == map(exp, range(start, stop=stop, length=11))
     end
+end
+
+@testset "Issue #64272" begin
+    @test all(==(0.1), LinRange(0.1, 0.1, 6))
+    @test issorted(collect(LinRange(0.9, nextfloat(0.9), 10)))
+    @test collect(LinRange(-90:60:90)) == [-90, -30, 30, 90]
+
+    m = floatmax()
+    @test all(isfinite, LinRange(-m, m, 10))
+    @test issorted(collect(LinRange(m, -m, 10)); rev=true)
+    @test LinRange([1.0, -m], [3.0, m], 3)[2] == [2.0, 0.0]
+    @test issorted(collect(LinRange(Float16(3.514), Float16(0.02235), 16190)); rev=true)
 end
 
 @testset "Issue #26532" begin
