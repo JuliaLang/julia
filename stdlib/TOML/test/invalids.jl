@@ -33,4 +33,24 @@ q = 3
 err = tryparse(str)
 @test err isa ParserError
 
+for str in ("a = {}\n[[a.b]]", "a = [{}]\n[[a.b]]", "a = {b = {}}\n[[a.b.c]]")
+    err = tryparse(str)
+    @test err isa ParserError
+    @test err.type == Internals.ErrAddKeyToInlineTable
+end
+err = tryparse("a = 1\n[[a.b]]")
+@test err isa ParserError
+@test err.type == Internals.ErrKeyAlreadyHasValue
+
+str = """
+[a.b.c]
+x = 1
+
+[a]
+b = 2
+"""
+err = tryparse(str)
+@test err isa ParserError
+@test err.type == Internals.ErrDuplicatedKey
+
 end
