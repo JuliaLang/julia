@@ -99,6 +99,7 @@ function setindex!(wkh::WeakKeyDict{K}, v, key) where K
             finalizer(wkh.finalizer, key)
             k = WeakRef(key)
         else
+            k.value === key || finalizer(wkh.finalizer, key)
             k.value = key
         end
         wkh.ht[k] = v
@@ -306,6 +307,7 @@ function setindex!(h::WeakValueIdDict{K,V}, v, key) where {K,V}
     # reserved so that lookup errors stay consistent with WeakKeyDict
     key === nothing && throw(ArgumentError("`nothing` is not a valid WeakValueIdDict key"))
     v === nothing && throw(ArgumentError("`nothing` is not a valid WeakValueIdDict value"))
+    !isa(v, V) && throw(ArgumentError("$(limitrepr(v)) is not a valid value for type $V"))
     lock(h) do
         _cleanup_locked(h)
         finalizer(h.finalizer, v)
