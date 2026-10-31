@@ -505,7 +505,7 @@ LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) whe
 LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 
 _convert2ind(i::Integer) = oneto(i)
-_convert2ind(ind::AbstractUnitRange) = first(ind):last(ind)
+_convert2ind(ind::AbstractUnitRange) = ind
 
 function indices_promote_type(::Type{Tuple{R1,Vararg{R1,N}}}, ::Type{Tuple{R2,Vararg{R2,N}}}) where {R1,R2,N}
     R = promote_type(R1, R2)
