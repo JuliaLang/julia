@@ -1465,6 +1465,7 @@ void jl_init_serializer(void) JL_CANSAFEPOINT;
 void jl_init_uv(void) JL_NOTSAFEPOINT;
 void jl_init_box_caches(void) JL_NOTSAFEPOINT;
 int jl_adopt_image_constants(jl_image_buf_t buf) JL_CANSAFEPOINT;
+void jl_set_symtab(jl_sym_t *root) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT;
 
 extern JL_DLLEXPORT const int jl_tls_elf_support;

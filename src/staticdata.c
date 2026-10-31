@@ -172,6 +172,8 @@ static jl_value_t *image_special(jl_value_t **p, jl_array_t *module_init_order) 
 
 static htable_t serialization_order; // to break cycles, mark all objects that are serialized
 static htable_t nullptrs;
+static htable_t symtab_left, symtab_right; // the links of the system image's symbol table
+static void *symtab_root;
 // FIFO queue for objects to be serialized. Anything requiring fixup upon deserialization
 // must be "toplevel" in this queue. A type that needs uniquing must come after its parameters
 // (but not its other fields), because placeholders are resolved in heap order on load.
@@ -457,7 +459,7 @@ static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTS
     // ignore items that are given a special relocation representation
     if (s->incremental && jl_object_in_image(v))
         return 0;
-    return v != NULL && !jl_is_symbol(v) && v != (jl_value_t*)s->ptls->root_task;
+    return v != NULL && !(s->incremental && jl_is_symbol(v)) && v != (jl_value_t*)s->ptls->root_task;
 }
 
 // Classification of how an object must be handled on deserialization of an
@@ -626,8 +628,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
 {
     jl_queue_for_serialization(s, m->name);
     jl_queue_for_serialization(s, m->parent);
-    if (!jl_options.strip_metadata)
-        jl_queue_for_serialization(s, m->file);
+    jl_queue_for_serialization(s, jl_options.strip_metadata ? jl_empty_sym : m->file);
     jl_queue_for_serialization(s, jl_atomic_load_relaxed(&m->bindingkeyset));
     if (jl_options.trim) {
         jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->bindings), 0, 1);
@@ -698,6 +699,9 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
 #endif
         goto done_fields;
     }
+    // the fields of a symbol are the links of the process's symbol table
+    if (jl_is_symbol(v))
+        goto done_fields;
 
     if (s->incremental && jl_is_datatype(v) && immediate) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
@@ -1181,6 +1185,29 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
     }
 }
 
+// Link the queued symbols into a search tree for the system image, inserting each one where
+// `symtab_lookup` would look for it (the order on hashes is circular, so the tree cannot be
+// built by sorting)
+static void jl_build_symtab(void) JL_NOTSAFEPOINT
+{
+    symtab_root = HT_NOTFOUND;
+    for (size_t i = 0; i < serialization_queue.len; i++) {
+        jl_sym_t *sym = (jl_sym_t*)serialization_queue.items[i];
+        if (!jl_is_symbol(sym))
+            continue;
+        const char *str = jl_symbol_name(sym);
+        void **slot = &symtab_root;
+        while (*slot != HT_NOTFOUND) {
+            jl_sym_t *node = (jl_sym_t*)*slot;
+            intptr_t x = (intptr_t)(sym->hash - node->hash);
+            if (x == 0)
+                x = strncmp(str, jl_symbol_name(node), strlen(str));
+            slot = ptrhash_bp(x < 0 ? &symtab_left : &symtab_right, node);
+        }
+        *slot = sym;
+    }
+}
+
 // Do a pre-order traversal of the to-serialize worklist, in the identical order
 // to the calls to jl_queue_for_serialization would occur in a purely recursive
 // implementation, but without potentially running out of stack.
@@ -1328,7 +1355,7 @@ static uintptr_t add_image_bind(jl_serializer_state *s, image_metadata_t *meta, 
 static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABLED JL_CANSAFEPOINT
 {
     assert(v != NULL && "cannot get backref to NULL object");
-    if (jl_is_symbol(v)) {
+    if (s->incremental && jl_is_symbol(v) && !jl_object_in_image(v)) {
         void **bp = ptrhash_bp(&s->symbol_imports, v);
         if (*bp == HT_NOTFOUND) {
             size_t pos = s->symbols->size;
@@ -1574,12 +1601,14 @@ static int ci_native_code(jl_code_instance_t *ci, jl_invoke_api_t *fptr_type, in
     return *fptr_type != JL_INVOKE_SPECSIG || *invokeptr_id > 0;
 }
 
-enum { PASS_WRITTEN, PASS_CODE_INSTANCES, PASS_OTHERS, NPASSES };
+enum { PASS_WRITTEN, PASS_SYMBOLS, PASS_CODE_INSTANCES, PASS_OTHERS, NPASSES };
 
 static int write_pass(jl_serializer_state *s, jl_value_t *v)
 {
     if (jl_is_module(v))
         return PASS_WRITTEN;
+    if (jl_is_symbol(v))
+        return PASS_SYMBOLS;
     if (!jl_is_code_instance(v))
         return PASS_OTHERS;
     jl_code_instance_t *ci = (jl_code_instance_t*)v;
@@ -1625,7 +1654,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         }
         int mutabl = t->name->mutabl;
         ios_t *f = s->s;
-        if (t->smalltag) {
+        if (t->smalltag && t != jl_symbol_type) {
             if (t->layout->npointers == 0 || t == jl_string_type) {
                 if (jl_datatype_nfields(t) == 0 || mutabl == 0 || t == jl_string_type) {
                     f = s->bits;
@@ -1639,6 +1668,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                  t != jl_datatype_type &&
                  t != jl_typename_type &&
                  t != jl_string_type &&
+                 t != jl_symbol_type &&
                  t != jl_simplevector_type &&
                  t != jl_module_type;
         if (object_id_expected)
@@ -1796,6 +1826,14 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
             for (ii = 0; ii < l; ii++) {
                 write_pointerfield(s, jl_svecref(v, ii));
             }
+        }
+        else if (jl_is_symbol(v)) {
+            jl_sym_t *sym = (jl_sym_t*)v;
+            void *left = ptrhash_get(&symtab_left, sym), *right = ptrhash_get(&symtab_right, sym);
+            write_pointerfield(s, left == HT_NOTFOUND ? NULL : (jl_value_t*)left);
+            write_pointerfield(s, right == HT_NOTFOUND ? NULL : (jl_value_t*)right);
+            write_uint(f, sym->hash);
+            ios_write(f, jl_symbol_name(sym), strlen(jl_symbol_name(sym)) + 1);
         }
         else if (jl_is_string(v)) {
             ios_write(f, (char*)v, sizeof(void*) + jl_string_len(v));
@@ -3112,6 +3150,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     for (i = 0; i < jl_n_builtins; i++) {
         ptrhash_put(&fptr_to_id, (void*)(uintptr_t)jl_builtin_f_addrs[i], (void*)(i + BUILTIN_IDX_BIAS));
     }
+    htable_new(&symtab_left, 0);
+    htable_new(&symtab_right, 0);
     content_dedup_list = jl_alloc_memory_any(0);
     content_dedup_keyset = jl_alloc_memory_any(0);
     content_dedup_max = 0;
@@ -3249,6 +3289,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                 jl_prune_mt_backedges((jl_genericmemory_t*)backedges);
             }
         }
+        // step 1.6: link the symbols of a system image into its symbol table
+        if (worklist == NULL)
+            jl_build_symtab();
     }
 
     jl_image_sections_t h = {0};
@@ -3269,6 +3312,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             write_reloc(&s, &specials, (jl_value_t*)global_roots_list, preferred_base);
             write_reloc(&s, &specials, (jl_value_t*)global_roots_keyset, preferred_base);
             write_reloc(&s, &specials, (jl_value_t*)s.ptls->root_task->tls, preferred_base);
+            write_reloc(&s, &specials, (jl_value_t*)symtab_root, preferred_base);
             h.world = jl_atomic_load_acquire(&jl_world_counter);
             h.typeinf_world = jl_typeinf_world;
             h.gensym_counter = jl_get_gs_ctr();
@@ -3391,6 +3435,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 #endif
     htable_free(&memory_trims);
     htable_free(&serialization_order);
+    htable_free(&symtab_left);
+    htable_free(&symtab_right);
     content_dedup_list = NULL;
     content_dedup_keyset = NULL;
     htable_free(&nullptrs);
@@ -4136,6 +4182,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         jl_global_roots_list = (jl_genericmemory_t*)*specials++;
         jl_global_roots_keyset = (jl_genericmemory_t*)*specials++;
         jl_gc_write(s.ptls->root_task, s.ptls->root_task->tls, jl_value_t, *specials++);
+        jl_set_symtab((jl_sym_t*)*specials++);
         jl_global_roots_max = jl_idset_max(jl_global_roots_list);
         jl_require_world = h.world;
         jl_atomic_store_release(&jl_world_counter, jl_require_world);
