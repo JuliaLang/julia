@@ -1,3 +1,4 @@
 /test_*
 /libarchtest_other.*
 /libunwind-*
+/plt_stubs.S
