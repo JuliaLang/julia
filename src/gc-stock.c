@@ -987,11 +987,62 @@ int jl_gc_classify_pools(size_t sz, int *osize)
 JL_DLLEXPORT gc_fragmentation_stat_t jl_gc_page_fragmentation_stats[JL_GC_N_POOLS];
 JL_DLLEXPORT double jl_gc_page_utilization_stats[JL_GC_N_MAX_POOLS];
 
-STATIC_INLINE void gc_update_fragmentation_data_for_size_class(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+// The pages one thread has swept and the statistics they changed, collected
+// locally and published in bulk, so that threads sweeping in parallel do not
+// contend on the shared page stacks and counters for every page.
+typedef struct {
+    // swept pages that still hold live cells, to be pushed onto one destination stack
+    jl_gc_pagemeta_t *reused_head;
+    jl_gc_pagemeta_t *reused_tail;
+    // fully dead pages, for `global_page_pool_lazily_freed`
+    jl_gc_pagemeta_t *dead_head;
+    jl_gc_pagemeta_t *dead_tail;
+    size_t n_dead;
+    int64_t freed_bytes;
+    size_t n_freed_objs[JL_GC_N_POOLS];
+    size_t n_pages_allocd[JL_GC_N_POOLS];
+} gc_sweep_sink_t;
+
+STATIC_INLINE void gc_sweep_sink_init(gc_sweep_sink_t *sink) JL_NOTSAFEPOINT
 {
-    gc_fragmentation_stat_t *stats = &jl_gc_page_fragmentation_stats[pg->pool_n];
-    jl_atomic_fetch_add_relaxed(&stats->n_freed_objs, pg->nfree);
-    jl_atomic_fetch_add_relaxed(&stats->n_pages_allocd, 1);
+    memset(sink, 0, sizeof(*sink));
+}
+
+STATIC_INLINE void gc_sweep_sink_push(jl_gc_pagemeta_t **head, jl_gc_pagemeta_t **tail,
+                                      jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+{
+    pg->next = *head;
+    if (*head == NULL)
+        *tail = pg;
+    *head = pg;
+}
+
+// Publish the pages collected so far, pushing the reused ones onto `allocd`
+static void gc_sweep_sink_flush_pages(gc_sweep_sink_t *sink, jl_gc_page_stack_t *allocd) JL_NOTSAFEPOINT
+{
+    if (sink->reused_head != NULL) {
+        push_lf_back_chain(allocd, sink->reused_head, sink->reused_tail);
+        sink->reused_head = sink->reused_tail = NULL;
+    }
+    if (sink->dead_head != NULL) {
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -(int64_t)(sink->n_dead * GC_PAGE_SZ));
+        push_lf_back_chain(&global_page_pool_lazily_freed, sink->dead_head, sink->dead_tail);
+        jl_atomic_fetch_add_relaxed(&global_page_pool_lazily_freed_n, sink->n_dead);
+        sink->dead_head = sink->dead_tail = NULL;
+        sink->n_dead = 0;
+    }
+}
+
+static void gc_sweep_sink_flush_counts(gc_sweep_sink_t *sink) JL_NOTSAFEPOINT
+{
+    jl_atomic_fetch_add_relaxed((_Atomic(int64_t) *)&gc_num.freed, sink->freed_bytes);
+    for (int i = 0; i < JL_GC_N_POOLS; i++) {
+        if (sink->n_pages_allocd[i] == 0)
+            continue;
+        gc_fragmentation_stat_t *stats = &jl_gc_page_fragmentation_stats[i];
+        jl_atomic_fetch_add_relaxed(&stats->n_freed_objs, sink->n_freed_objs[i]);
+        jl_atomic_fetch_add_relaxed(&stats->n_pages_allocd, sink->n_pages_allocd[i]);
+    }
 }
 
 STATIC_INLINE void gc_reset_fragmentation_data_for_size_classes(void) JL_NOTSAFEPOINT
@@ -1134,7 +1185,7 @@ FORCE_INLINE int gc_sweep_page_cells(gc_page_profiler_serializer_t *s, jl_gc_pag
 
 // Walks over a page, reconstruting the free lists if the page contains at least one live object. If not,
 // queues up the page for later decommit (i.e. through `madvise` on Unix).
-static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pagemeta_t *pg, int osize) JL_NOTSAFEPOINT
+static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, gc_sweep_sink_t *sink, jl_gc_pagemeta_t *pg, int osize) JL_NOTSAFEPOINT
 {
     char *data = pg->data;
     jl_taggedvalue_t *v0 = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
@@ -1193,14 +1244,14 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
 
 done:
     if (re_use_page) {
-        gc_update_fragmentation_data_for_size_class(pg);
-        push_lf_back(allocd, pg);
+        sink->n_freed_objs[pg->pool_n] += pg->nfree;
+        sink->n_pages_allocd[pg->pool_n]++;
+        gc_sweep_sink_push(&sink->reused_head, &sink->reused_tail, pg);
     }
     else {
-        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -GC_PAGE_SZ);
         gc_alloc_map_set(pg->data, GC_PAGE_LAZILY_FREED);
-        push_lf_back(&global_page_pool_lazily_freed, pg);
-        jl_atomic_fetch_add_relaxed(&global_page_pool_lazily_freed_n, 1);
+        gc_sweep_sink_push(&sink->dead_head, &sink->dead_tail, pg);
+        sink->n_dead++;
     }
     gc_page_profile_write_to_file(s);
     if (GC_TIME_ENABLED)
@@ -1213,18 +1264,18 @@ done:
     size_t delta = (GC_PAGE_SZ - GC_PAGE_OFFSET - nfree * osize);
     jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.pool_live_bytes,
         jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.pool_live_bytes) + delta);
-    jl_atomic_fetch_add_relaxed((_Atomic(int64_t) *)&gc_num.freed, (nfree - old_nfree) * osize);
+    sink->freed_bytes += (int64_t)(nfree - old_nfree) * osize;
 }
 
 // the actual sweeping over all allocated pages in a memory pool
-STATIC_INLINE void gc_sweep_pool_page(gc_page_profiler_serializer_t *s, jl_gc_page_stack_t *allocd, jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_sweep_pool_page(gc_page_profiler_serializer_t *s, gc_sweep_sink_t *sink, jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     int p_n = pg->pool_n;
     int t_n = pg->thread_n;
     jl_ptls_t ptls2 = gc_all_tls_states[t_n];
     jl_gc_pool_t *p = &ptls2->gc_tls.heap.norm_pools[p_n];
     int osize = pg->osize;
-    gc_sweep_page(s, p, allocd, pg, osize);
+    gc_sweep_page(s, p, sink, pg, osize);
 }
 
 // sweep over all memory that is being used and not in a pool
@@ -1412,6 +1463,8 @@ static int gc_sweep_prescan(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_al
     const int n_pages_worth_parallel_sweep = (int)(4 * (1 << 20) / GC_PAGE_SZ);
     int n_pages_to_scan = 0;
     gc_page_profiler_serializer_t serializer = gc_page_serializer_create();
+    gc_sweep_sink_t sink;
+    gc_sweep_sink_init(&sink);
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         if (ptls2 == NULL) {
@@ -1448,12 +1501,13 @@ static int gc_sweep_prescan(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_al
                 push_lf_back_nosync(&tmp, pg);
             }
             else {
-                gc_sweep_pool_page(&serializer, dest, pg);
+                gc_sweep_pool_page(&serializer, &sink, pg);
             }
             if (n_pages_to_scan >= n_pages_worth_parallel_sweep) {
                 break;
             }
         }
+        gc_sweep_sink_flush_pages(&sink, dest);
         if (tail != NULL) {
             tail->next = jl_atomic_load_relaxed(&ptls2->gc_tls.page_metadata_allocd.bottom);
         }
@@ -1462,6 +1516,7 @@ static int gc_sweep_prescan(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_al
             break;
         }
     }
+    gc_sweep_sink_flush_counts(&sink);
     gc_page_serializer_destroy(&serializer);
     return n_pages_to_scan >= n_pages_worth_parallel_sweep;
 }
@@ -1518,6 +1573,8 @@ static void gc_sweep_pool_parallel(jl_ptls_t ptls) JL_NOTSAFEPOINT
     jl_gc_padded_page_stack_t *allocd_scratch = jl_atomic_load(&gc_allocd_scratch);
     if (allocd_scratch != NULL) {
         gc_page_profiler_serializer_t serializer = gc_page_serializer_create();
+        gc_sweep_sink_t sink;
+        gc_sweep_sink_init(&sink);
         while (1) {
             int found_pg = 0;
             // sequentially walk the threads and sweep the pages
@@ -1528,14 +1585,22 @@ static void gc_sweep_pool_parallel(jl_ptls_t ptls) JL_NOTSAFEPOINT
                     continue;
                 }
                 jl_gc_page_stack_t *dest = &allocd_scratch[ptls2->tid].stack;
-                jl_gc_pagemeta_t *pg = try_pop_lf_back(&ptls2->gc_tls.page_metadata_allocd);
+                // nothing is pushed onto `page_metadata_allocd` while the pages
+                // are being swept, so pages can be taken from it in batches
+                int n = 32;
+                jl_gc_pagemeta_t *pg = try_pop_lf_back_n(&ptls2->gc_tls.page_metadata_allocd, &n);
                 assert((&ptls2->gc_tls.page_metadata_allocd != dest) &&
                     "Cannot push back to the same stack we are popping from; see invariant of lock-free stack");
                 // failed steal attempt
                 if (pg == NULL) {
                     continue;
                 }
-                gc_sweep_pool_page(&serializer, dest, pg);
+                for (int i = 0; i < n; i++) {
+                    jl_gc_pagemeta_t *next = pg->next; // sweeping relinks `pg`
+                    gc_sweep_pool_page(&serializer, &sink, pg);
+                    pg = next;
+                }
+                gc_sweep_sink_flush_pages(&sink, dest);
                 found_pg = 1;
             }
             if (!found_pg) {
@@ -1559,6 +1624,7 @@ static void gc_sweep_pool_parallel(jl_ptls_t ptls) JL_NOTSAFEPOINT
             }
             jl_cpu_pause();
         }
+        gc_sweep_sink_flush_counts(&sink);
         gc_page_serializer_destroy(&serializer);
     }
     jl_atomic_fetch_add(&gc_n_threads_sweeping_pools, -1);
