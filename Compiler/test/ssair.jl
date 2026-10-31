@@ -347,6 +347,12 @@ let ir = modified(ir -> push!(ir.cfg.blocks[2].succs, 3)),
     @test occursin("Method instance: $mi", err.msg)
     @test occursin("goto #3 if not true", out)
 end
+# Test that nothing is printed when printing is turned off
+let ir = modified(ir -> push!(ir.cfg.blocks[2].succs, 3))
+    err, out = verifier_output(() -> Compiler.verify_ir(ir, false))
+    @test err isa ErrorException
+    @test isempty(out)
+end
 # Test that a debuginfo edge index with no matching edge is reported
 let di = Compiler.DebugInfoStream(Int32[0, 0, 0, 0, 1, 0])
     @test verifier_output(() -> Compiler.verify_linetable(di, 2)) ==
