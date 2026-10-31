@@ -1,11 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#==
 using Pkg: @pkg_str
+using Printf
 pkg"activate --temp"
 pkg"add JSON@0.21"
 
 import JSON
+import Base: show
 
 function emoji_data(url)
     emojis = JSON.parsefile(download(url))
@@ -41,7 +42,26 @@ open("emoji_symbols.jl", "w") do fh
     end
     println(fh, ")")
 end
-=#
+
+function Base.show(io::IO, c::Char)
+    codepoint_value = codepoint(c)  # Get the Unicode codepoint as an integer
+    codepoint_str = @sprintf("%X", codepoint_value)
+
+    # Find the emoji name by comparing codepoints
+    emoji_name = nothing
+    for (name, emoji) in emoji_symbols
+        if emoji == string(c)
+            emoji_name = name
+            break
+        end
+    end
+
+    if emoji_name !== nothing
+        print("$(string(c)): input as \"$emoji_name\"")
+    else
+        print("$(string(c)): Unicode U+$codepoint_str (category So: Symbol, other)")
+    end
+end
 
 const emoji_symbols = Dict(
     "\\:+1:" => "👍",
