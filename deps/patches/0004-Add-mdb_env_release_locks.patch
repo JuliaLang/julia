@@ -14,21 +14,23 @@ ENOSPC.
 Closing the environment at exit is not always possible, because it
 releases the memory map that earlier transactions returned buffers
 into. mdb_env_release_locks() does only the semaphore part of
-mdb_env_close(): if this process can take the exclusive file lock, it
-removes the set. No transaction may be started afterwards. On other
-lock backends it does nothing. lmdb.h defines
-MDB_HAVE_ENV_RELEASE_LOCKS so that callers can also build against an
-unpatched LMDB.
+mdb_env_close(): it drops this process's shared lock on the lock file,
+then removes the set if it can take the exclusive lock. Dropping the
+shared lock first means that when several users call it at the same
+time, the last one removes the set; mdb_env_close() leaks it in that
+case. No transaction may be started afterwards. On other lock backends
+it does nothing. lmdb.h defines MDB_HAVE_ENV_RELEASE_LOCKS so that
+callers can also build against an unpatched LMDB.
 ---
- libraries/liblmdb/lmdb.h | 14 ++++++++++++++
- libraries/liblmdb/mdb.c  | 23 +++++++++++++++++++++++
- 2 files changed, 37 insertions(+)
+ libraries/liblmdb/lmdb.h | 16 +++++++++++++++
+ libraries/liblmdb/mdb.c  | 43 ++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 59 insertions(+)
 
 diff --git a/libraries/liblmdb/lmdb.h b/libraries/liblmdb/lmdb.h
-index b7733c1..3f8054f 100644
+index bf69895..9bbefb0 100644
 --- a/libraries/liblmdb/lmdb.h
 +++ b/libraries/liblmdb/lmdb.h
-@@ -903,6 +903,20 @@ int  mdb_env_sync(MDB_env *env, int force);
+@@ -903,6 +903,22 @@ int  mdb_env_sync(MDB_env *env, int force);
  	 */
  void mdb_env_close(MDB_env *env);
  
@@ -37,7 +39,9 @@ index b7733c1..3f8054f 100644
 +	 * Where LMDB locks with System V semaphores, the semaphore set outlives the
 +	 * process unless #mdb_env_close() removes it. This removes the set if no
 +	 * other process is using the environment, without releasing the memory map,
-+	 * so buffers returned by earlier transactions stay valid. No transaction
++	 * so buffers returned by earlier transactions stay valid. This process
++	 * also gives up its lock on the lock file, so the last of several
++	 * processes that call this at the same time removes the set. No transaction
 +	 * may be started on the environment afterwards. On other lock backends this
 +	 * does nothing.
 +	 * @param[in] env An environment handle returned by #mdb_env_create()
@@ -50,10 +54,10 @@ index b7733c1..3f8054f 100644
  	 *
  	 * This may be used to set some flags in addition to those from
 diff --git a/libraries/liblmdb/mdb.c b/libraries/liblmdb/mdb.c
-index 9cfb1b7..32bf2e2 100644
+index 96c429a..234809d 100644
 --- a/libraries/liblmdb/mdb.c
 +++ b/libraries/liblmdb/mdb.c
-@@ -6679,6 +6679,29 @@ mdb_env_close_active(MDB_env *env, int excl)
+@@ -6706,6 +6706,49 @@ mdb_env_close_active(MDB_env *env, int excl)
  	env->me_flags &= ~(MDB_ENV_ACTIVE|MDB_ENV_TXKEY);
  }
  
@@ -62,18 +66,38 @@ index 9cfb1b7..32bf2e2 100644
 +{
 +	int rc = MDB_SUCCESS;
 +#ifdef MDB_USE_SYSV_SEM
-+	int excl = 0;
++	struct flock lock_info;
++	int semid;
 +
 +	if (!env || !(env->me_flags & MDB_ENV_ACTIVE) || !env->me_txns ||
 +		env->me_rmutex->semid == -1)
 +		return MDB_SUCCESS;
-+	/* Same as mdb_env_close(): only the last user removes the set */
-+	if (mdb_env_excl_lock(env, &excl) == 0 && excl > 0) {
-+		if (semctl(env->me_rmutex->semid, 0, IPC_RMID) < 0)
-+			rc = ErrCode();
-+	}
++	semid = env->me_rmutex->semid;
 +	env->me_rmutex->semid = -1;
 +	env->me_wmutex->semid = -1;
++	/* Unlike mdb_env_close(), drop our shared lock first. Otherwise users
++	 * that leave at the same time each see the others' locks, and none
++	 * removes the set.
++	 */
++	memset((void *)&lock_info, 0, sizeof(lock_info));
++	lock_info.l_type = F_UNLCK;
++	lock_info.l_whence = SEEK_SET;
++	lock_info.l_start = 0;
++	lock_info.l_len = 1;
++	while (fcntl(env->me_lfd, F_SETLK, &lock_info) && ErrCode() == EINTR) ;
++	lock_info.l_type = F_WRLCK;
++	while ((rc = fcntl(env->me_lfd, F_SETLK, &lock_info)) &&
++			(rc = ErrCode()) == EINTR) ;
++	if (!rc) {
++		if (semctl(semid, 0, IPC_RMID) < 0)
++			rc = ErrCode();
++		/* Let a process that is opening the environment go ahead */
++		lock_info.l_type = F_UNLCK;
++		while (fcntl(env->me_lfd, F_SETLK, &lock_info) && ErrCode() == EINTR) ;
++	} else {
++		/* Another process holds the lock and will clean up */
++		rc = MDB_SUCCESS;
++	}
 +#else
 +	(void)env;
 +#endif

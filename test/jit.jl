@@ -292,13 +292,18 @@ end
                       "JULIA_OBJCACHE" => "0"), String) == "nothing"
 end
 
-# A process that was the only user of a cache removes its SysV semaphores when it exits.
+# Processes that share a cache and exit at the same time remove its SysV semaphores.
 @testset "object-cache semaphores" begin
     Sys.isapple() && mktempdir() do dir
-        script = "print(ccall(:jl_objcache_kv_enabled, Cint, ()) != 0)"
+        script = "print(ccall(:jl_objcache_kv_enabled, Cint, ()) != 0 ? 'y' : 'n'); readline()"
         cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
                      "JULIA_OBJCACHE" => "1", "JULIA_OBJCACHE_PATH" => dir)
-        if read(cmd, String) != "true"
+        procs = [open(cmd, "r+") for _ in 1:4]
+        enabled = all(p -> read(p, Char) == 'y', procs)
+        foreach(p -> close(p.in), procs)
+        foreach(wait, procs)
+        @test all(success, procs)
+        if !enabled
             @test_skip false # the cache is disabled here
             return
         end
