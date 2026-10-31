@@ -59,16 +59,10 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
         end
         return is_derived_type(t, type_parameter(c), mindepth)
     elseif isa(c, DataType)
+        # see if it is one of the supertypes of a parameter
+        mindepth <= 1 && isa(t, DataType) && is_derived_supertype(t, c) && return true
         if mindepth > 0
             mindepth -= 1
-        end
-        if isa(t, DataType)
-            # see if it is one of the supertypes of a parameter
-            super = supertype(c)
-            while super !== Any
-                t === super && return true
-                super = supertype(super)
-            end
         end
         # see if it was extracted from a type parameter
         cP = c.parameters
@@ -77,6 +71,41 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
         end
     end
     return false
+end
+
+function is_derived_supertype(t::DataType, c::DataType)
+    super = supertype(c)
+    while super !== Any
+        if t === super
+            depths = IdDict{Any,Int}()
+            return derived_depth(t, depths) <= derived_depth(c, depths)
+        end
+        super = supertype(super)
+    end
+    return false
+end
+
+function derived_depth(@nospecialize(t), depths::IdDict{Any,Int})
+    d = get(depths, t, 0)
+    d == 0 || return d
+    if isvarargtype(t)
+        d = derived_depth(unwrapva(t), depths)
+    elseif isa(t, Union)
+        d = max(derived_depth(t.a, depths), derived_depth(t.b, depths))
+    elseif isa(t, UnionAll)
+        d = max(derived_depth(t.var.ub, depths), derived_depth(t.body, depths))
+    elseif isType(t)
+        d = derived_depth(type_parameter(t), depths) + 1
+    elseif isa(t, DataType)
+        for p in t.parameters
+            d = max(d, derived_depth(p, depths))
+        end
+        d += 1
+    else
+        d = 1
+    end
+    depths[t] = d
+    return d
 end
 
 function is_derived_type_from_any(@nospecialize(t), sources::SimpleVector, mindepth::Int)

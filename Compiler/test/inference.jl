@@ -1592,6 +1592,38 @@ shift_tri(::Type{ShiftTri{A,B,C}}, n::Int) where {A,B,C} = n == 0 ? Val(A) : shi
 @test only(Base.return_types(n -> shift_tri(ShiftTri{Int8,Int16,Vector{Int}}, n), (Int,))) ==
     Union{Val{Int8}, Val{Int16}, Val{Vector{Int}}}
 
+abstract type RootNestingSuper{T} end
+abstract type NestingSuper{T} <: RootNestingSuper{NestingSuper{Tuple{T}}} end
+descend_nesting_super(::Type{RootNestingSuper{NestingSuper{T}}}) where {T} =
+    descend_nesting_super(supertype(NestingSuper{T}))
+@test only(Base.return_types(() -> descend_nesting_super(RootNestingSuper{NestingSuper{Int}}), ())) === Union{}
+
+abstract type RootSelfSuper{T} end
+abstract type SelfSuper{T} <: RootSelfSuper{SelfSuper{T}} end
+grow_self_super(::Type{SelfSuper{T}}) where {T} = grow_self_super(SelfSuper{supertype(SelfSuper{T})})
+@test only(Base.return_types(() -> grow_self_super(SelfSuper{Int}), ())) === Union{}
+
+grow_vector_super(::Type{Vector{T}}) where {T} = grow_vector_super(Vector{supertype(Vector{T})})
+@test only(Base.return_types(() -> grow_vector_super(Vector{Int}), ())) === Union{}
+
+walk_super_chain(::Type{AbstractArray{T,N}}, n::Int) where {T,N} = Val(N)
+walk_super_chain(::Type{T}, n::Int) where {T} = n == 0 ? Val(:fallback) : walk_super_chain(supertype(T), n - 1)
+@test only(Base.return_types(n -> walk_super_chain(UnitRange{Int}, n), (Int,))) == Union{Val{1}, Val{:fallback}}
+
+abstract type RootCycleSuper{T} end
+abstract type MidCycleSuper{T} <: RootCycleSuper{Int} end
+struct LeafCycleSuper{T} <: MidCycleSuper{RootCycleSuper{T}} end
+@test Compiler.limit_type_size(Tuple{RootCycleSuper{Int}}, Tuple{LeafCycleSuper{Int}}, Tuple{LeafCycleSuper{Int}}, 100, 100) ==
+    Tuple{RootCycleSuper{Int}}
+
+abstract type DeepSuper{T} end
+abstract type DeepeningSuper{T} <: DeepSuper{Tuple{Tuple{T}}} end
+abstract type RootMixedSuper{T} end
+abstract type MixedSuper{T,U} <: RootMixedSuper{MixedSuper{DeepeningSuper{T},Int}} end
+mixed_super_f(::Type{MixedSuper{T,U}}) where {T,U} = mixed_super_g(supertype(MixedSuper{T,U}))
+mixed_super_g(::Type{RootMixedSuper{MixedSuper{T,U}}}) where {T,U} = mixed_super_f(MixedSuper{T,supertype(T)})
+@test only(Base.return_types(() -> mixed_super_f(MixedSuper{DeepeningSuper{Int},supertype(DeepeningSuper{Int})}), ())) === Union{}
+
 @testset "type inference error #19322" begin
     Y_19322 = reshape(round.(Int, abs.(randn(5*1000))) .+ 1, 1000, 5)
 
