@@ -10441,7 +10441,10 @@ static jl_llvm_functions_t
         cursor = -1;
     };
 
-    auto do_coverage = [&] (bool in_user_code) {
+    auto do_coverage = [&] (bool in_user_code, StringRef file) {
+        // Images are instrumented for every path, so exclusions do not apply to them.
+        if (!ctx.emission_context.imaging_mode && jl_path_is_coverage_excluded(file.data()))
+            return false;
         return (coverage_mode == JL_LOG_ALL ||
                 (in_user_code && (coverage_mode == JL_LOG_USER || coverage_mode == JL_LOG_PATH)));
     };
@@ -10461,7 +10464,7 @@ static jl_llvm_functions_t
         }
         for (; dbg < new_lineinfo.size(); dbg++) {
             const auto &newdbg = new_lineinfo[dbg];
-            if (do_coverage(newdbg.is_user_code)) {
+            if (do_coverage(newdbg.is_user_code, newdbg.file)) {
                 if (newdbg.line0 != 0 && (dbg >= prev_lineinfo.size() || newdbg.edgeid != prev_lineinfo[dbg].edgeid || newdbg.line0 != prev_lineinfo[dbg].line))
                     coverageVisitLine(ctx, newdbg.file, newdbg.line0, newdbg.is_user_code);
                 coverageVisitLine(ctx, newdbg.file, newdbg.line, newdbg.is_user_code);
@@ -10493,7 +10496,7 @@ static jl_llvm_functions_t
             if (file.empty())
                 file = "<missing>";
             bool is_user_code = frame_is_user_code(modu, file);
-            if (do_coverage(is_user_code)) {
+            if (do_coverage(is_user_code, file)) {
                 int32_t extraline = jl_cdi_external_firstline(debuginfo);
                 if (extraline != -1)
                     coverageAllocLine(ctx, file, extraline, is_user_code);

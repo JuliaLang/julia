@@ -663,7 +663,21 @@ function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{Basic
 end
 
 # check if coverage mode is enabled
-should_insert_coverage(mod::Module, debuginfo::DebugInfo) = should_instrument(mod, debuginfo, true)
+should_insert_coverage(mod::Module, debuginfo::DebugInfo) =
+    should_instrument(mod, debuginfo, true) && !is_coverage_excluded(debuginfo)
+
+# Images are instrumented for every path, so exclusions do not apply while generating one.
+function is_coverage_excluded(debuginfo::DebugInfo)
+    (generating_output() || JLOptions().coverage_exclude == C_NULL) && return false
+    file = debuginfo_file(debuginfo)
+    return file isa Symbol && ccall(:jl_is_file_coverage_excluded, Cint, (Any,), file) != 0
+end
+
+debuginfo_file(info::DebugInfo) = debuginfo_file(info.def)
+debuginfo_file(file::Symbol) = file
+debuginfo_file(m::Method) = m.file
+debuginfo_file(mi::MethodInstance) = debuginfo_file(mi.def)
+debuginfo_file(::Any) = nothing
 
 function should_instrument(mod::Module, debuginfo::DebugInfo, only_if_affects_optimizer::Bool=false)
     instrumentation_enabled(mod, only_if_affects_optimizer) && return true
