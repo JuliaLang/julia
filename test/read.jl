@@ -756,6 +756,12 @@ end
         @test isempty(Iterators.reverse(eachline(buf)))
     end
 
+    # first line spanning more than one chunk (#64236)
+    for first in ("X", "XY"^3000), n in (4095, 4096, 8191, 8192, 12287)
+        lines = [first, 'a'^n]
+        @test reverse!(collect(Iterators.reverse(eachline(IOBuffer(join(lines, '\n')))))) == lines
+    end
+
     let rempty = Iterators.reverse(eachline(IOBuffer()))
         @test isempty(rempty)
         @test isempty(collect(rempty))
