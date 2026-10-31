@@ -367,7 +367,7 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
     if isdir(src) && (follow_symlinks || !islink(src)) && dst_path != src_path && _is_within(dst_path, src_path)
         throw(ArgumentError("'$dst' is inside '$src'; a directory cannot be moved or copied into itself."))
     end
-    if ispath(dst)
+    if ispath(dst) || islink(dst)
         if force
             # Check for issue when: (src == dst) or when one is a link to the other
             # https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
@@ -690,12 +690,12 @@ end
 function temp_cleanup_purge_prelocked(force::Bool)
     filter!(TEMP_CLEANUP) do (path, asap)
         try
-            ispath(path) || return false
+            ispath(lstat(path)) || return false
             if force || asap
                 prepare_for_deletion(path)
                 rm(path, recursive=true, force=true)
             end
-            return ispath(path)
+            return ispath(lstat(path))
         catch ex
             @warn """
                 Failed to clean up temporary path $(repr(path))
@@ -712,7 +712,7 @@ function temp_cleanup_purge_all()
     may_need_gc = Ref(false)
     @lock TEMP_CLEANUP_LOCK filter!(TEMP_CLEANUP) do (path, _)
         try
-            ispath(path) || return false
+            ispath(lstat(path)) || return false
             may_need_gc[] = true
             return true
         catch ex
@@ -789,7 +789,7 @@ function _tempname(parent::AbstractString, suffix::AbstractString, max_tries::In
     filename = nothing
     for _ in 1:max_tries
         filename = string(prefix, _rand_filename(), suffix)
-        if ispath(filename)
+        if ispath(lstat(filename))
             filename = nothing
         else
             break
@@ -957,7 +957,7 @@ function mktemp(fn::Function, parent::AbstractString=tempdir())
         temp_cleanup_forget(tmp_path)
         try
             close(tmp_io)
-            ispath(tmp_path) && rm(tmp_path)
+            ispath(lstat(tmp_path)) && rm(tmp_path)
         catch ex
             @error "mktemp cleanup" _group=:file exception=(ex, catch_backtrace())
             # might be possible to remove later
@@ -985,7 +985,7 @@ function mktempdir(fn::Function, parent::AbstractString=tempdir();
     finally
         temp_cleanup_forget(tmpdir)
         try
-            if ispath(tmpdir)
+            if ispath(lstat(tmpdir))
                 prepare_for_deletion(tmpdir)
                 rm(tmpdir, recursive=true)
             end

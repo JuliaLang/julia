@@ -525,6 +525,11 @@ end
 @test Base.shell_split("foo\\ bar baz") == ["foo bar", "baz"]
 @test Base.shell_split("'foo bar' baz") == ["foo bar", "baz"]
 @test Base.shell_split("\"foo bar\" baz") == ["foo bar", "baz"]
+@test Base.shell_split("a\\ ") == ["a "]
+@test Base.shell_split("a\\\t") == ["a\t"]
+@test Base.shell_split("a\\\u00a0 ") == ["a\u00a0"]
+@test Base.shell_split("a\\\r") == ["a"]
+@test Base.shell_split("a\\\r\n") == ["a"]
 
 # "Over quoted"
 @test Base.shell_split("'foo\\ bar' baz") == ["foo\\ bar", "baz"]
@@ -556,6 +561,7 @@ let cmd = ["foo=bar", "baz"]
     @test Base.shell_escape(`$cmd`) == "foo=bar baz"
     @test Base.shell_escape_posixly(`$cmd`) == "'foo=bar' baz"
 end
+@test Base.shell_escape_posixly("done", "x", "done") == "'done' x done"
 
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]
@@ -745,6 +751,11 @@ end
 
 # make sure Cmd is nestable
 @test string(Cmd(Cmd(`ls`, detach=true))) == "`ls`"
+
+let p = detach(pipeline(pipeline(truecmd, stderr=truecmd) & truecmd, stdout=devnull))
+    @test all(c -> c.flags & Base.UV_PROCESS_DETACHED != 0, (p.cmd.a.a, p.cmd.a.b, p.cmd.b))
+    @test success(p)
+end
 
 # equality tests for Cmd
 @test Base.Cmd(``) == Base.Cmd(``)
