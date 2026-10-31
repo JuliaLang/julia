@@ -1741,6 +1741,17 @@ void jl_init_serializer(void) JL_CANSAFEPOINT;
 void jl_init_uv(void) JL_NOTSAFEPOINT;
 void jl_init_box_caches(void) JL_NOTSAFEPOINT;
 int jl_adopt_image_constants(jl_image_buf_t buf) JL_CANSAFEPOINT;
+void jl_set_symtab(jl_sym_t *root) JL_NOTSAFEPOINT;
+// The order of the symbol table's search tree, a strict total order: compares the name `str` of
+// length `len`, whose hash is `h`, with `sym`, by hash, then by name
+STATIC_INLINE int jl_symbol_order(uintptr_t h, const char *str, size_t len, jl_sym_t *sym) JL_NOTSAFEPOINT
+{
+    if (h != sym->hash)
+        return h < sym->hash ? -1 : 1;
+    const char *name = jl_symbol_name(sym);
+    int x = strncmp(str, name, len);
+    return x != 0 ? x : name[len] == 0 ? 0 : -1; // a prefix of `name` comes first
+}
 JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT;
 
 extern JL_DLLEXPORT const int jl_tls_elf_support;
