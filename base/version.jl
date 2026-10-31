@@ -453,7 +453,7 @@ function Base.print(io::IO, r::VersionRange)
         print(io, "0 - ")
         join(io, r.upper.t[1:n], '.')
     elseif n == 0
-        join(io, r.lower.t, '.')
+        join(io, r.lower.t[1:m], '.')
         print(io, " - *")
     else
         join(io, r.lower.t[1:m], '.')

@@ -367,13 +367,14 @@ end
     @test string(VersionSpec("1.2-2")) == "1.2 - 2"
     @test string(semver_spec("0.4, 1.2")) == "[0.4, 1.2.0 - 1]"
     @test string(VersionRange("1.2")) == "1.2"
-    @test string(VersionRange("1.2-*")) == "1.2.0 - *"
+    @test string(VersionRange("1.2-*")) == "1.2 - *"
+    @test string(VersionRange("1.2.0-*")) == "1.2.0 - *"
     @test string(VersionRange("0-0.3.2")) == "0 - 0.3.2"
     @test repr(VersionRange("1.2-1.3")) == "VersionRange(\"1.2 - 1.3\")"
     @test repr(VersionSpec("1.2-1.3")) == "VersionSpec(\"1.2 - 1.3\")"
     @test repr(semver_spec("0.4, 1.2")) == "VersionSpec([\"0.4\", \"1.2.0 - 1\"])"
     @test repr(VersionSpec(VersionRange[])) == "VersionSpec([])"
-    for s in ["1.2", "1.2.3 - 2", "0 - 0.3.2", "1.2.0 - *", "*"]
+    for s in ["1.2", "1.2.3 - 2", "0 - 0.3.2", "1.2 - *", "1.2.0 - *", "*"]
         r = VersionRange(s)
         @test VersionRange(string(r)) == r
     end
