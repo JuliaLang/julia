@@ -459,6 +459,7 @@ end
     """
     @test latex(table) ==
         "\\begin{tabular}\n{l | l}\na & b \\\\\n\\hline\n1 & 2 \\\\\n\\end{tabular}\n"
+    @test latex(md"###### Title") == "\\subparagraph{Title}\n"
 
     # mime output
     @test sprint(show, "text/plain", book) ==
