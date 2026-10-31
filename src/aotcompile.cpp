@@ -890,12 +890,47 @@ static jl_code_instance_t *jl_get_ci_equiv_range(jl_code_instance_t *ci JL_PROPA
     return ci;
 }
 
-// Emit the stubs of the foreign symbols (see emit_ccall_stub)
+// Whether a foreign symbol is linked natively (see jl_set_foreign_link_policy)
+static bool aot_links_natively(const jl_ccall_spec_t &Spec) JL_NOTSAFEPOINT
+{
+    return Spec.func != nullptr &&
+           jl_get_foreign_link_policy(Spec.lib_obj) == JL_FOREIGN_LINK_NATIVE;
+}
+
+// Emit the stubs of the foreign symbols (see emit_ccall_stub), or bind the ones linked
+// natively to the symbol itself
 static void aot_emit_ccall_stubs(jl_codegen_output_t &out) JL_CANSAFEPOINT
 {
-    for (auto &[Spec, StubFn] : out.ccall_targets)
-        emit_ccall_stub(out, csymbol_data_fields(out, Spec.func, Spec.lib, Spec.target), StubFn,
-                        /*LargeCodeModel=*/false);
+    Module &M = out.get_module();
+    for (auto &[Spec, StubFn] : out.ccall_targets) {
+        if (!aot_links_natively(Spec)) {
+            emit_ccall_stub(out, csymbol_data_fields(out, Spec.func, Spec.lib, Spec.target), StubFn,
+                            /*LargeCodeModel=*/false);
+            continue;
+        }
+        GlobalValue *Sym = M.getNamedValue(Spec.func);
+        if (Sym == nullptr) {
+            Function *F = Function::Create(StubFn->getFunctionType(), GlobalValue::ExternalLinkage,
+                                           Spec.func, M);
+            F->setCallingConv(StubFn->getCallingConv());
+            Sym = F;
+        }
+        // opaque to LLVM, as for a stub
+        for (User *U : StubFn->users()) {
+            if (auto *CB = dyn_cast<CallBase>(U))
+                CB->addFnAttr(Attribute::NoBuiltin);
+        }
+        StubFn->replaceAllUsesWith(Sym);
+    }
+    for (auto &[Spec, Slot] : out.cglobal_slots) {
+        if (!aot_links_natively(Spec))
+            continue;
+        GlobalValue *Sym = M.getNamedValue(Spec.func);
+        if (Sym == nullptr)
+            Sym = new GlobalVariable(M, Type::getInt8Ty(M.getContext()), /*isConstant=*/false,
+                                     GlobalValue::ExternalLinkage, nullptr, Spec.func);
+        Slot->setInitializer(Sym);
+    }
 }
 
 // Static version of JuliaOJIT::linkOutput

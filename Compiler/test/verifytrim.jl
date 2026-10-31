@@ -173,19 +173,58 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Int32, Tuple{typeof(trim_ccall_st
     end
 end
 
-# verification should fail if an imprecise library type blocks dispatch resolution
+# verification should fail if the library is not a constant: it may hold a different
+# library at run time, whether its type is imprecise or not
 global loose_trim_lib = static_trim_lib
 trim_ccall_loose_lib() = ccall((:jl_getpid, loose_trim_lib), Int32, ())
+global typed_trim_lib::StaticTrimLib = static_trim_lib
+trim_ccall_typed_lib() = ccall((:jl_getpid, typed_trim_lib), Int32, ())
+trim_cglobal_loose_lib() = cglobal((:jl_n_threads, loose_trim_lib))
 
-let infos = typeinf_ext_toplevel(Any[Core.svec(Int32, Tuple{typeof(trim_ccall_loose_lib)})],
+for (f, rt) in ((trim_ccall_loose_lib, Int32), (trim_ccall_typed_lib, Int32),
+                (trim_cglobal_loose_lib, Ptr{Cvoid}))
+    infos = typeinf_ext_toplevel(Any[Core.svec(rt, Tuple{typeof(f)})],
                                  [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
     errors, parents = get_verify_typeinf_trim(infos)
     (warn, desc) = only(errors)
     @test !warn
     @test desc isa CallMissing
-    @test desc.desc == "unresolved dlopen for ccall / cglobal"
+    @test desc.desc == "non-constant library for ccall / cglobal"
     repr = sprint(verify_print_error, desc, parents, warn)
-    @test occursin("unresolved dlopen for ccall / cglobal", repr)
+    @test occursin("non-constant library for ccall / cglobal", repr)
+end
+
+# a library name may be a non-constant global, if typed as one
+global trim_libname::String = static_trim_libname
+trim_ccall_named_lib() = ccall((:jl_getpid, trim_libname), Int32, ())
+global trim_libsym::Symbol = Symbol(static_trim_libname)
+trim_ccall_sym_lib() = ccall((:jl_getpid, trim_libsym), Int32, ())
+trim_ccall_const_named_lib() = ccall((:jl_getpid, static_trim_libname), Int32, ())
+
+for f in (trim_ccall_named_lib, trim_ccall_sym_lib, trim_ccall_const_named_lib)
+    infos = typeinf_ext_toplevel(Any[Core.svec(Int32, Tuple{typeof(f)})],
+                                 [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, _ = get_verify_typeinf_trim(infos)
+    @test isempty(errors)
+end
+
+# verification should fail if the symbol name is not a constant, since there is no symbol to
+# link to natively
+global trim_symname::Symbol = :jl_getpid
+trim_ccall_loose_name() = ccall((trim_symname, static_trim_libname), Int32, ())
+trim_ccall_loose_name_nolib() = ccall((trim_symname,), Int32, ())
+trim_cglobal_loose_name() = cglobal((trim_symname, static_trim_libname))
+
+for (f, rt) in ((trim_ccall_loose_name, Int32), (trim_ccall_loose_name_nolib, Int32),
+                (trim_cglobal_loose_name, Ptr{Cvoid}))
+    infos = typeinf_ext_toplevel(Any[Core.svec(rt, Tuple{typeof(f)})],
+                                 [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, parents = get_verify_typeinf_trim(infos)
+    (warn, desc) = only(errors)
+    @test !warn
+    @test desc isa CallMissing
+    @test desc.desc == "non-constant name for ccall / cglobal"
+    @test occursin("non-constant name for ccall / cglobal", sprint(verify_print_error, desc, parents, warn))
 end
 
 # `LazyLibrary` on-load callbacks are called dynamically, but `--trim` compiles every
@@ -242,4 +281,45 @@ let roots = trim_on_load_roots()
     # names the callback method that has no single specialization
     @test occursin("ParametricTrimOnLoad", desc.desc)
     @test !occursin("(::TrimOnLoad)", desc.desc)
+end
+
+# the record of the foreign symbols that an image uses
+const record_bundled_lib = Base.Libc.Libdl.LazyLibrary(
+    Base.Libc.Libdl.BundledLazyLibraryPath("libtrimrecord.so"))
+record_bundled() = ccall((:trim_record_f, record_bundled_lib), Cint, ())
+record_named() = ccall((:trim_record_g, "libtrimrecord"), Cint, ())
+record_typed_name() = ccall((:trim_record_h, trim_libname), Cint, ())
+record_cglobal() = cglobal((:trim_record_v, record_bundled_lib))
+const record_artifact_lib = Base.Libc.Libdl.LazyLibrary(Base.Libc.Libdl.LazyLibraryPath(
+    Base.Libc.Libdl.LazyArtifactDir(Base.SHA1("0123456789abcdef0123456789abcdef01234567")),
+    "lib", "libtrimrecord.so"))
+record_artifact() = ccall((:trim_record_a, record_artifact_lib), Cint, ())
+record_unlocated() = ccall((:trim_record_u, static_trim_lib), Cint, ())
+
+let path = tempname(), seen = Any[]
+    # written by a hook, with the code that is compiled
+    Compiler.add_codegen_input_hook!(function (codeinfos)
+        push!(seen, codeinfos)
+        Compiler.TrimOutputHooks.record_foreign_symbols(path, codeinfos)
+    end)
+    try
+        infos = typeinf_ext_toplevel(Any[Core.svec(Cint, Tuple{typeof(record_bundled)}),
+                                         Core.svec(Cint, Tuple{typeof(record_named)}),
+                                         Core.svec(Cint, Tuple{typeof(record_typed_name)}),
+                                         Core.svec(Ptr{Cvoid}, Tuple{typeof(record_cglobal)}),
+                                         Core.svec(Cint, Tuple{typeof(record_artifact)}),
+                                         Core.svec(Cint, Tuple{typeof(record_unlocated)})],
+                                     [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+        @test only(seen) === infos
+        record = read(path, String)
+        @test occursin("""{"kind": "ccall", "name": "trim_record_f", "library": {"bundled": "libtrimrecord.so"}}""", record)
+        @test occursin("""{"kind": "ccall", "name": "trim_record_g", "library": {"name": "libtrimrecord"}}""", record)
+        @test occursin("""{"kind": "ccall", "name": "trim_record_h", "library": {"name": null}}""", record)
+        @test occursin("""{"kind": "cglobal", "name": "trim_record_v", "library": {"bundled": "libtrimrecord.so"}}""", record)
+        @test occursin("""{"kind": "ccall", "name": "trim_record_a", "library": {"artifact": {"hash": "0123456789abcdef0123456789abcdef01234567", "path": "lib/libtrimrecord.so"}}}""", record)
+        @test occursin(r"""{"kind": "ccall", "name": "trim_record_u", "library": {"unresolved": "[^"]*StaticTrimLib"}}""", record)
+    finally
+        pop!(Compiler.codegen_input_hooks)
+        rm(path; force=true)
+    end
 end

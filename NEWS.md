@@ -39,6 +39,8 @@ Standard library changes
 
 #### Libdl
 
+* `Libdl.LazyArtifactDir` gives the directory of an artifact in a `LazyLibraryPath`.
+
 #### LinearAlgebra
 
 #### Markdown
