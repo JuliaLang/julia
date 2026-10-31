@@ -1843,7 +1843,9 @@ function setup_interface(
 end
 
 # A write to a hung-up terminal fails with EIO (Linux) or ENXIO (FreeBSD).
+# A read from it can fail with EIO too. That error comes wrapped by the reader task.
 terminal_gone(@nospecialize e) =
+    e isa TaskFailedException ? terminal_gone(e.task.exception) :
     e isa Base.IOError && e.code in (Base.UV_EIO, Base.UV_ENXIO, Base.UV_EPIPE)
 
 function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
