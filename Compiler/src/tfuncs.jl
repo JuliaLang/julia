@@ -624,17 +624,14 @@ add_tfunc(Core.bitsizeof, 1, 1, bitsizeof_tfunc, 1)
     x = unwrap_unionall(xt)
     isconstType(x) && return Const(nfields(type_parameter(x)))
     if isa(x, DataType) && !isabstracttype(x)
-        if x.name === Tuple.name
-            isvatuple(x) && return Int
-            return Const(length(x.types))
-        elseif x.name === _NAMEDTUPLE_NAME
+        if x.name === _NAMEDTUPLE_NAME
             length(x.parameters) == 2 || return Int
             names = x.parameters[1]
             isa(names, Tuple{Vararg{Symbol}}) || return nfields_tfunc(𝕃, rewrap_unionall(x.parameters[2], xt))
             return Const(length(names))
-        else
-            return Const(isdefined(x, :types) ? length(x.types) : length(x.name.names))
         end
+        n = datatype_fieldcount(x)
+        return n === nothing ? Int : Const(n)
     end
     if isa(x, Union)
         na = nfields_tfunc(𝕃, unwraptv(x.a))
@@ -2876,6 +2873,16 @@ const _FLOAT_INTRINSICS = Any[
 # Types compatible with fpext/fptrunc
 const CORE_FLOAT_TYPES = Union{Core.BFloat16, Float16, Float32, Float64}
 
+# `DataType.super` and `DataType.types` are write-once slots filled lazily: a slot
+# that is unset now can be filled later, so `isdefined` or an `UndefRefError` for
+# it is not `:consistent` even though `DataType` is otherwise mutation free
+function is_lazy_datatype_field_argtype(@nospecialize(obj), @nospecialize(name))
+    hasintersect(widenconst(ignorelimited(obj)), DataType) || return false
+    name isa Const || return true
+    fidx = _getfield_fieldindex(DataType, name)
+    return fidx == DATATYPE_SUPER_FIELDINDEX || fidx == DATATYPE_TYPES_FIELDINDEX
+end
+
 function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     # consistent if the first arg is immutable
     na = length(argtypes)
@@ -2890,6 +2897,10 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
         # Some bindings/fields are not allowed to transition from defined to undefined or the reverse, so even
         # if the object is not immutable, we can prove `:consistent`-cy of this:
         consistent = ALWAYS_TRUE
+    elseif is_mutation_free_argtype(wobj) && is_lazy_datatype_field_argtype(wobj, sym)
+        # mutation free makes it `:consistent` below (`inaccessiblememonly`), but a
+        # lazily filled slot is not
+        consistent = ALWAYS_FALSE
     end
     nothrow = isdefined_nothrow(𝕃, argtypes)
     if hasintersect(widenconst(wobj), Module)
@@ -2942,6 +2953,8 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             inaccessiblememonly=ALWAYS_FALSE,
             noub=ALWAYS_FALSE)
     end
+    bcheck = getfield_boundscheck(argtypes)
+    nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
     if is_relocatable_ptr_field(argtypes[1], argtypes[2])
         if !ismutabletype(widenconst(obj)) || is_mutation_free_argtype(obj)
             # access to immutable / mutation-free types is not modelled by `inaccessiblememonly`
@@ -2950,15 +2963,17 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
         else
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
         end
-    elseif is_immutable_argtype(obj) || is_mutation_free_argtype(obj) || is_const_field_argtype(obj, argtypes[2])
+    elseif is_immutable_argtype(obj) || is_const_field_argtype(obj, argtypes[2])
         # :consistent if the argtype is immutable or the field is const
         consistent = ALWAYS_TRUE
+    elseif is_mutation_free_argtype(obj)
+        # or if the object is mutation free, unless a lazily filled slot may throw now and succeed later
+        consistent = nothrow || !is_lazy_datatype_field_argtype(obj, argtypes[2]) ?
+            ALWAYS_TRUE : ALWAYS_FALSE
     else
         consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
     end
     noub = ALWAYS_TRUE
-    bcheck = getfield_boundscheck(argtypes)
-    nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
     if !nothrow
         if bcheck !== :on
             # If we cannot independently prove inboundsness, taint `:noub`.

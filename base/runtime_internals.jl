@@ -1386,12 +1386,12 @@ function datatype_fieldcount(t::DataType)
     elseif isabstracttype(t)
         return nothing
     end
+    # Equivalent to length(t.types), but `t.types` is lazy and we do not want
+    # to be forced to compute it (nor can inference assume it is defined).
     if t.name === Tuple.name
         isvatuple(t) && return nothing
-        return length(t.types)
+        return length(t.parameters)
     end
-    # Equivalent to length(t.types), but `t.types` is lazy and we do not want
-    # to be forced to compute it.
     return length(t.name.names)
 end
 

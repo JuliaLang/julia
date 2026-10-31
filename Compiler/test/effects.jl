@@ -57,6 +57,30 @@ end
 end
 @test_throws MethodError (x -> (supertype(x); nothing))(Union{S,T} where {S,T})
 
+# `DataType.super` is filled lazily for an instantiation of a self-referential
+# definition (issue #61347): a raw read that throws now succeeds once the slot is
+# filled, so neither the throw nor the `isdefined` answer may be folded
+abstract type LazySuperA{T} end
+struct LazySuperS{T} <: LazySuperA{LazySuperS{Tuple{T}}} end
+lazy_super_get(T) = getfield(T, :super)
+lazy_super_isdef(T) = isdefined(T, :super)
+let lazy = (LazySuperS{Tuple{Int}}; LazySuperS{Tuple{Tuple{Int}}})
+    @test !isdefined(lazy, :super)
+    @test !Compiler.is_consistent(Base.infer_effects(lazy_super_get, (Type{lazy},)))
+    @test !Compiler.is_consistent(Base.infer_effects(lazy_super_isdef, (Type{lazy},)))
+    @test !Compiler.is_consistent(Base.infer_effects(lazy_super_get, (DataType,)))
+    @test !Compiler.is_consistent(Base.infer_effects(lazy_super_isdef, (DataType,)))
+    @test Base.infer_return_type(() -> lazy_super_get(LazySuperS{Tuple{Tuple{Int}}})) !== Union{}
+    let src = only(code_typed(() -> lazy_super_isdef(LazySuperS{Tuple{Tuple{Int}}})))[1]
+        @test !any(x -> x isa Core.ReturnNode && x.val === false, src.code)
+    end
+    # the other fields of a type are still foldable
+    @test Compiler.is_foldable(Base.infer_effects(T -> getfield(T, :name), (DataType,)))
+    # an object that may be a type but is not mutation free keeps the usual answer
+    @test Compiler.is_consistent_if_inaccessiblememonly(Compiler.builtin_effects(Compiler.fallback_lattice,
+        Core.isdefined, Any[Any, Symbol], Bool))
+end
+
 # Test that a missing methtable identification gets tainted
 # appropriately
 struct FCallback; f::Union{Nothing, Function}; end

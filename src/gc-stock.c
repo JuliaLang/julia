@@ -3194,6 +3194,7 @@ static void gc_check_all_remsets_are_empty(void) JL_NOTSAFEPOINT
 }
 
 extern jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
+extern jl_array_t *jl_typecache_region_list JL_GLOBALLY_ROOTED;
 extern jl_task_t *wait_empty JL_GLOBALLY_ROOTED;
 
 // mark the initial root set
@@ -3237,6 +3238,8 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_emptytuple_type, "emptytuple_type");
     gc_try_claim_and_push(mq, cmpswap_names, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)cmpswap_names, "cmpswap_names");
+    gc_try_claim_and_push(mq, jl_typecache_region_list, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_typecache_region_list, "typecache_region_list");
     gc_try_claim_and_push(mq, jl_global_roots_list, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_global_roots_list, "global_roots_list");
     gc_try_claim_and_push(mq, jl_global_roots_keyset, NULL);

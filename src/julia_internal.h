@@ -188,6 +188,9 @@ extern _Atomic(int) jl_uv_n_waiters;
 // Protected by jl_uv_mutex.
 extern int jl_uv_loop_unwatched;
 
+// whether the current task holds `lock`
+int jl_mutex_held(jl_mutex_t *lock) JL_NOTSAFEPOINT;
+
 // Global data structures for accessing symbols and other globals
 #include "jl_internal_data.inc"
 
@@ -995,28 +998,57 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable);
 JL_DLLEXPORT jl_typeeq_t *jl_wrap_Type(jl_value_t *t) JL_CANSAFEPOINT;  // x -> Type{x}
 JL_DLLEXPORT jl_value_t *jl_wrap_TypeEgal(jl_value_t *t) JL_CANSAFEPOINT;  // x -> TypeEgal{x} (egality, no free typevars)
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow) JL_CANSAFEPOINT;
-// Deferred type-cache for typegroup resolution: newly instantiated types that
-// reference the (not yet published) group types are recorded here instead of
-// being inserted into the global type caches. Lookups consult `list` so that
-// repeated instantiations stay canonical within the resolution; once the
-// group is validated, the recorded types are published to the global caches
-// (jl_cache_type_if_absent), or simply dropped if the group is discarded.
-// The `list` array must be rooted by the owner of this struct.
+// The types of an instantiation (or a typegroup resolution, or the uniquing of
+// an image's types) that cannot be published yet, because they depend on a type
+// whose construction may still fail or is incomplete: the region of
+// `typecache_lock` that the current task holds lends this to every instantiation
+// nested in it, and commits each type once the types it depends on are complete,
+// or drops it with them (see jltypes.c). A typegroup's members, and the image's
+// new types, are level 0, so what references them waits for the group or image.
 typedef struct {
-    jl_array_t *list; // datatypes created during resolution, in creation order
-    htable_t set;     // pointer set of the entries in `list`
-    htable_t group;   // the in-flight group's datatypes
+    jl_array_t *list;   // deferred types and pending writes `svec(type, super or types)`, in creation order
+    arraylist_t lows;   // the level each entry of `list` depends on
+    arraylist_t frames; // the types the region is building; frame `i` is level `i + 1`
+    htable_t pending;   // uncommitted type -> its level (see `region_low`), while `dirty` is set
+    htable_t writes;    // `t` (or `t + 1`) -> the pending write of its supertype (or field types)
+    arraylist_t written; // `t` (or `t + 1`) for the writes to the fields of frames that a failure takes back
+    void **index;       // the datatypes of a long `list` by hash, open-addressed
+    size_t indexsz, nindexed, indexgen;
+    int dirty;          // the shallowest level of an uncommitted type handed out, or
+                        // `INT_MAX` if none was: nothing can depend on one
 } jl_deferred_typecache_t;
-void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
+void jl_typecache_region_begin(jl_deferred_typecache_t *region) JL_CANSAFEPOINT;
+void jl_typegroup_region_member(jl_deferred_typecache_t *region, jl_datatype_t *dt) JL_NOTSAFEPOINT;
+void jl_typegroup_region_drop(jl_deferred_typecache_t *region, size_t i) JL_NOTSAFEPOINT;
+void jl_typecache_region_layouts(jl_deferred_typecache_t *region) JL_CANSAFEPOINT;
+void jl_typecache_region_end(jl_deferred_typecache_t *region, int publish) JL_CANSAFEPOINT;
+void jl_reinstantiate_inner_types(jl_datatype_t *t) JL_CANSAFEPOINT;
+void jl_finish_inner_types(jl_datatype_t *t) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_datatype_super(jl_datatype_t *dt) JL_CANSAFEPOINT;
-jl_value_t *jl_apply_type_deferred(jl_value_t *tc, jl_value_t **params, size_t n, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
+// The supertype of `dt`, computed on first use if it was deferred; NULL while the
+// definition is in progress. The acquire pairs with the release that publishes it.
+STATIC_INLINE jl_datatype_t *jl_get_super(jl_datatype_t *dt JL_PROPAGATES_ROOT) JL_CANSAFEPOINT
+{
+    jl_datatype_t *super = jl_atomic_load_acquire((_Atomic(jl_datatype_t*)*)&dt->super);
+    return super != NULL ? super : jl_datatype_compute_super(dt);
+}
+// The supertype declared for the wrapper of `tn`, which has the same type-name as the
+// supertype of every instantiation of `tn`, but is set at definition and never deferred:
+// a walk that only follows type-names may use it without computing a lazy supertype.
+// NULL while the definition is in progress.
+STATIC_INLINE jl_datatype_t *jl_typename_super(jl_typename_t *tn JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *wrapper = tn->wrapper;
+    return wrapper == NULL ? NULL : ((jl_datatype_t*)jl_unwrap_unionall(wrapper))->super;
+}
 int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT;
 int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int freevars) JL_NOTSAFEPOINT;
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type) JL_CANSAFEPOINT;
+jl_datatype_t *jl_lookup_or_defer_type_(jl_datatype_t *dt, int *isnew) JL_CANSAFEPOINT;
+jl_svec_t *jl_publish_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, jl_svec_t *types) JL_NOTSAFEPOINT;
 jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v) JL_CANSAFEPOINT;
 void jl_cache_type_(jl_datatype_t *type) JL_CANSAFEPOINT;
-void jl_cache_type_if_absent(jl_datatype_t *type) JL_CANSAFEPOINT;
 jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz) JL_CANSAFEPOINT;
 void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT;
 jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
@@ -2158,7 +2190,7 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 // This prevents `ct` from returning via error handlers or other unintentional
 // means by destroying some old state before we start destroying that state in atexit hooks.
 void post_boot_hooks(void) JL_CANSAFEPOINT;
-int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_NOTSAFEPOINT;
+int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_CANSAFEPOINT;
 JL_CALLABLE(jl_f_opaque_closure_call) JL_CANSAFEPOINT;
 uint_t bindingkey_hash(size_t idx, jl_value_t *data);
 uint_t speccache_hash(size_t idx, jl_value_t *data);

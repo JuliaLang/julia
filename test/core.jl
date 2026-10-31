@@ -8090,18 +8090,51 @@ struct B41503{j,k} <: AbstractArray{A41503{B41503{Any,k}},Any}
     l::k
 end
 @test !isbitstype(B41503{Any,Any})
-@test_broken isbitstype(B41503{Any,Int})
+@test isbitstype(B41503{Any,Int})
 
 struct B40050 <: Ref{Tuple{B40050}}
 end
 @test string((B40050(),)) == "($B40050(),)"
 @test isbitstype(Tuple{B40050})
 
+# a fieldless instantiation made during its own definition gets a layout
+struct E40050{T} <: Ref{E40050{Int}}
+end
+@test isdefined(E40050{Int}, :types)
+@test E40050{Int}() === E40050{Int}.instance
+@test Base.ismutationfree(E40050{Int}) && Base.isidentityfree(E40050{Int})
+@test Base.isidentityfree(Val{1})
+struct G40050{T} <: Ref{G40050{Vector{T}}}
+    x::Int
+end
+let g = Base.unwrap_unionall(G40050).super.parameters[1] # made during the definition
+    @test Base.ismutationfree(g) && Base.isidentityfree(g)
+end
+
+# a supertype mentioning the type does not prevent inlining it
+struct V40050{T} <: Ref{Tuple{V40050{T},Int}}
+    x::T
+end
+@test isbitstype(Tuple{V40050{Int8},Int})
+@test fieldoffset(Tuple{V40050{Int8},Int}, 2) == 8
+@test isbitstype(V40050{Int8})
+let S = Core._structtype(@__MODULE__, :S40050, Core.svec(), Core.svec(:x), Core.svec(), false, 1)
+    Core._setsuper!(S, Ref{Tuple{S,Int}})
+    Core._typebody!(S, Core.svec(Int8))
+    @test isbitstype(S) == isbitstype(Tuple{S,Int})
+end
+
 # issue #41654
 struct X41654 <: Ref{X41654}
 end
 @test isbitstype(X41654)
 @test ('a'=>X41654(),)[1][2] isa X41654
+
+# a failed layout of a type that mentions the new one caches neither
+struct WOvfLayout{X}; a::NTuple{16,X}; end
+struct LOvfLayout{T}; a::Vector{LOvfLayout{T}}; b::Vector{Tuple{Int, WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{Ptr{LOvfLayout{T}}}}}}}}}}}}; end
+@test_throws ErrorException LOvfLayout{Int}
+@test_throws ErrorException LOvfLayout{Int}
 
 # issue #43411
 struct A43411{S, T}
@@ -9479,6 +9512,143 @@ let A = Issue61347.A, S2 = Issue61347.S2
     @test supertype(lazy) isa Type # forcing accessor
     @test isdefined(lazy, :super)
     @test getfield(lazy, :super) === supertype(lazy)
+end
+
+# A lazy supertype can be computed from inside an instantiation, by the
+# subtyping that compares keys in a type cache lookup. When its own
+# instantiation reaches the type being built, it must find it (on the
+# instantiation stack) instead of creating a second copy.
+module LazySuperInProgress
+abstract type A{Y} end
+abstract type Z{W} end
+const U0 = Union{Nothing, Int}  # no stable hash: keys holding it are compared by subtyping
+abstract type R{T} <: A{R{Tuple{T}}} end
+abstract type S{T} <: A{Tuple{T, S{Tuple{T}}, Union{R{Tuple{T}}, Type{Int}}, U0, Z{U0}}} end
+end
+let A = LazySuperInProgress.A, Z = LazySuperInProgress.Z, U0 = LazySuperInProgress.U0,
+    R = LazySuperInProgress.R, S = LazySuperInProgress.S
+    R{Tuple{Tuple{Int}}}      # creates R{Tuple{Tuple{Tuple{Int}}}} with its supertype deferred
+    S{Int}                    # creates X = S{Tuple{Int}} with its supertype deferred
+    X = S{Tuple{Int}}
+    K2 = S{Tuple{Tuple{Tuple{Int}}}}
+    # comparing this key with the supertype key of `S{Tuple{Tuple{Int}}}` walks
+    # the supertype of `X`, which contains `S{Tuple{Tuple{Int}}}` itself
+    A{Tuple{Tuple{Tuple{Int}}, K2, Union{X, Type{Int}}, U0, Z{W}} where W}
+    @test !isdefined(Base.inferencebarrier(X), :super)
+    K = S{Tuple{Tuple{Int}}}
+    @test isdefined(Base.inferencebarrier(X), :super)
+    Ksuper = supertype(X).parameters[1].parameters[2]
+    @test Ksuper == K
+    # `===` compares abstract types structurally, so check the object identity
+    @test pointer_from_objref(Ksuper) == pointer_from_objref(K)
+end
+# the substitution into a dependent bound continues the stack too
+module LazySuperBound
+struct NewT end
+struct Foo{T, S<:Union{Nothing, Val{T}}} end
+struct Bar{T}; x::Foo{T, Nothing}; end
+end
+@test fieldtype(LazySuperBound.Bar{LazySuperBound.NewT}, :x) === LazySuperBound.Foo{LazySuperBound.NewT, Nothing}
+
+# A type cached while another one is being built, and which mentions it, is
+# cached only once that one is complete: a failed construction leaves nothing
+# behind that mentions the type it did not make
+module OrphanInProgress
+abstract type A{X, Y} end
+abstract type B{X<:Integer} end
+struct K{T} <: A{Vector{K{T}}, B{T}} end
+end
+let K = OrphanInProgress.K
+    @test_throws TypeError K{String}
+    @test_throws TypeError K{String}
+    tn = Array.body.body.name
+    @test !any(t -> t isa DataType && any(p -> p isa DataType && p.name === K.body.name, t.parameters),
+               [tn.cache..., tn.linearcache...])
+    @test supertype(K{Int}).parameters[1] === Vector{K{Int}}
+end
+
+# A level of a self-referential definition (#61347) is instantiated from a
+# template whose own supertype is deferred. It is a complete type, not part of
+# a definition in progress: its field types are computed with it, and it does
+# not accumulate on the typename's `partial` list.
+module DeferredSuperLevels
+abstract type A{X} end
+struct F{T} <: A{F{Tuple{T}}}
+    x::T
+end
+abstract type G{T} <: A{G{Tuple{T}}} end
+struct E{T} <: A{E{Tuple{T}}} end
+end
+let F = DeferredSuperLevels.F, A = DeferredSuperLevels.A,
+    G = DeferredSuperLevels.G, E = DeferredSuperLevels.E
+    level2 = supertype(F{Tuple{Int}}).parameters[1]
+    @test level2 === F{Tuple{Tuple{Int}}}
+    @test isdefined(level2, :types)
+    @test fieldtype(level2, 1) === Tuple{Tuple{Int}}
+    @test supertype(level2) === A{F{Tuple{Tuple{Tuple{Int}}}}}
+    @test supertype(supertype(G{Int}).parameters[1]) === A{G{Tuple{Tuple{Int}}}}
+    @test supertype(supertype(E{Int}).parameters[1]) === A{E{Tuple{Tuple{Int}}}}
+    # drained when the definition completes, and nothing is added afterwards
+    @test !isdefined(F.body.name, :partial)
+    @test !isdefined(G.body.name, :partial)
+    @test !isdefined(E.body.name, :partial)
+end
+
+# A supertype is deferred only when its declaration is valid for every
+# parameter: the deferred level is instantiated from inside subtyping, which
+# must not throw. A declaration that can fail is instantiated eagerly, so an
+# invalid level fails at construction.
+module DeferredSuperTotal
+abstract type A{X<:Integer} end
+abstract type C{Y, Z} end
+abstract type D{X, Y<:X} end
+abstract type L{X>:Tuple{}, Y} end
+struct Total{T} <: C{A{Int}, Total{Tuple{T}}} end          # `A{Int}` is checked now; `Total`, `C` have no bounds
+struct Dependent{T} <: D{Any, Dependent{Tuple{T}}} end     # valid, but a dependent bound isn't proven
+struct Closed{T} <: C{Tuple{D{Any, Int}, A{<:Signed}}, Closed{Tuple{T}}} end # closed terms are checked now
+struct Partial{T} <: C{A{T}, Partial{Tuple{T}}} end        # `A{Tuple{T}}` is invalid at the next level
+struct Lower{T} <: L{Tuple{Vararg{T}}, Lower{Tuple{T}}} end # valid, but a lower bound isn't proven
+struct Shift{T, U} <: C{Shift{Tuple{U}, T}, Tuple{U}} end   # `T` reaches the `Tuple` one level down
+struct Rank{T, N} <: C{Rank{Tuple{T}, N}, N} end            # a value parameter
+struct VUnion{T, U} <: C{VUnion{Tuple{U}, T}, Union{U, Int}} end # a value reaches the `Union` one level down
+struct VBound{T, U} <: C{VBound{Tuple{U}, T}, Ref{<:U}} end      # ... or the bound
+end
+let Total = DeferredSuperTotal.Total, Dependent = DeferredSuperTotal.Dependent,
+    Closed = DeferredSuperTotal.Closed, Partial = DeferredSuperTotal.Partial, Lower = DeferredSuperTotal.Lower, Shift = DeferredSuperTotal.Shift,
+    Rank = DeferredSuperTotal.Rank, VUnion = DeferredSuperTotal.VUnion, VBound = DeferredSuperTotal.VBound,
+    A = DeferredSuperTotal.A, C = DeferredSuperTotal.C, D = DeferredSuperTotal.D
+    @test supertype(Total{Int}) === C{A{Int}, Total{Tuple{Int}}}
+    @test !isdefined(Base.inferencebarrier(Total{Tuple{Int}}), :super)  # still deferred
+    @test supertype(supertype(Closed{Int}).parameters[2]) === C{Tuple{D{Any, Int}, A{<:Signed}}, Closed{Tuple{Tuple{Int}}}}
+    @test supertype(Total{Tuple{Int}}) === C{A{Int}, Total{Tuple{Tuple{Int}}}}
+    @test_throws TypeError Partial{Int}          # at construction, not from `supertype(Partial{Tuple{Int}})`
+    @test_throws TypeError Partial{String}
+    @test_throws ErrorException Lower{Int}       # eager, and refused rather than instantiated without end
+    @test_throws ErrorException Dependent{Int}
+    @test supertype(Shift{Int, Int}) === C{Shift{Tuple{Int}, Int}, Tuple{Int}}
+    @test !isdefined(Base.inferencebarrier(Shift{Tuple{Int}, Int}), :super)
+    @test supertype(Shift{Tuple{Int}, Int}) === C{Shift{Tuple{Int}, Tuple{Int}}, Tuple{Int}}
+    @test_throws ErrorException Shift{Union{}, Int}  # the level `Shift{Tuple{Int}, Union{}}` is eager
+    @test supertype(Rank{Int, 1}) === C{Rank{Tuple{Int}, 1}, 1}
+    @test !isdefined(Base.inferencebarrier(Rank{Tuple{Int}, 1}), :super)
+    @test supertype(Rank{Tuple{Int}, 1}) === C{Rank{Tuple{Tuple{Int}}, 1}, 1}
+    @test_throws TypeError VUnion{1, Int}        # the level `VUnion{Tuple{Int}, 1}` is eager
+    @test_throws TypeError VBound{1, Int}
+end
+
+# The cycle can run through several declarations, each of which mentions only
+# the next typename.
+module DeferredSuperMutual
+abstract type A{X} end
+typegroup
+struct S{T} <: A{R{Tuple{T}}} end
+struct R{T} <: A{S{Tuple{T}}} end
+end
+end
+let A = DeferredSuperMutual.A, S = DeferredSuperMutual.S, R = DeferredSuperMutual.R
+    @test supertype(S{Int}) === A{R{Tuple{Int}}}
+    @test supertype(R{Tuple{Int}}) === A{S{Tuple{Tuple{Int}}}}
+    @test !isdefined(S.body.name, :partial)
 end
 
 # Method tables and dispatch caches keep their entries in insertion-ordered dicts that
