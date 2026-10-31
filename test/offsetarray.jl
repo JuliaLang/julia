@@ -345,6 +345,10 @@ am = map(identity, a)
 @test isa(am, OffsetArray)
 @test am == a
 
+dest = OffsetVector(zeros(Int, 3), -2)
+@test asyncmap!(x -> 2x, dest, OffsetVector(1:3, -2)) == OffsetVector([2, 4, 6], -2)
+@test asyncmap!(xs -> map(x -> 2x[1], xs), dest, 4:6; batch_size=2) == OffsetVector([8, 10, 12], -2)
+
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/106
 @test isequal(map(!, OffsetArray([true,missing],2)), OffsetArray([false, missing], 2))
 @test isequal(map(!, OffsetArray([true missing; false true], 2, -1)), OffsetArray([false missing; true false], 2, -1))
