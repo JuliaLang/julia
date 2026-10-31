@@ -2897,6 +2897,38 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test exited === :ok
     @test p.termsignal == Base.SIGTERM
 
+    # code that never reaches a cancellation point still exits by SIGTERM with
+    # its atexit hooks run: after a grace period they run on another thread
+    output, p, exited = run_with_sigterm("""
+        atexit(() -> println("ATEXIT-RAN"))
+        function spin()
+            x = 0.0
+            while true
+                x += sin(x) + 1e-9
+            end
+            return x
+        end
+        spin()
+    """, [0.5])
+    @test exited === :ok
+    @test occursin("ATEXIT-RAN", output)
+    @test p.termsignal == Base.SIGTERM
+
+    # a cleanup that waits for longer than that grace period still finishes
+    output, p, exited = run_with_sigterm("""
+        try
+            sleep(100)
+        finally
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+                sleep(3)
+                println("FINALLY-RAN")
+            end
+        end
+    """, [0.5])
+    @test exited === :ok
+    @test occursin("FINALLY-RAN", output)
+    @test p.termsignal == Base.SIGTERM
+
     # with exit-on-sigint, a SIGINT terminates the process through the same
     # graceful path: the atexit hooks run, the exit is quiet, and the
     # process dies by SIGINT

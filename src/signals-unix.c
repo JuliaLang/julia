@@ -1337,6 +1337,12 @@ JL_DLLEXPORT int jl_sigrtmax(void)
 #endif
 }
 
+static void *termination_fallback(void *arg)
+{
+    jl_termination_watchdog((int)(intptr_t)arg);
+    return NULL;
+}
+
 static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 {
     sigset_t sset;
@@ -1525,7 +1531,16 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             }
         }
         if (termsig != 0) {
-            if (!jl_request_process_termination(termsig)) {
+            if (jl_request_process_termination(termsig)) {
+                pthread_t fallback;
+                pthread_attr_t attr;
+                pthread_attr_init(&attr);
+                pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+                if (pthread_create(&fallback, &attr, termination_fallback, (void*)(intptr_t)termsig) != 0)
+                    jl_safe_printf("WARNING: failed to start the termination fallback\n");
+                pthread_attr_destroy(&attr);
+            }
+            else {
                 // No root source is registered (still initializing, or an
                 // embedder that never runs Base.__init__ - no Julia atexit
                 // hooks can exist either way), or termination was already

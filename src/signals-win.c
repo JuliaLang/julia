@@ -556,8 +556,10 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
             // Without a registered root source, or on a repeat request,
             // run the orderly teardown synchronously here, as before.
             // (Matches unix SIGTERM's exit status.)
-            if (jl_request_process_termination(sig))
+            if (jl_request_process_termination(sig)) {
+                jl_termination_watchdog(sig);
                 Sleep(INFINITE);
+            }
             jl_exit(128 + sig);
         }
     }
