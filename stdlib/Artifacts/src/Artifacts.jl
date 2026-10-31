@@ -769,8 +769,8 @@ find_artifacts_toml(path::AbstractString) =
     find_artifacts_toml(String(path)::String)
 split_artifact_slash(name::AbstractString) =
     split_artifact_slash(String(name)::String)
-artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString) =
-    artifact_slash_lookup(String(name)::String, artifact_dict, String(artifacts_toml)::String)
+artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString, platform::Platform) =
+    artifact_slash_lookup(String(name)::String, artifact_dict, String(artifacts_toml)::String, platform)
 
 # Precompilation to reduce latency
 precompile(load_artifacts_toml, (String,))

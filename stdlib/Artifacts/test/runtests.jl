@@ -389,6 +389,8 @@ end
         artifact_dict = Artifacts.load_artifacts_toml(artifacts_toml)
         @test Artifacts.artifact_slash_lookup("plat/bin/foo", artifact_dict, artifacts_toml, linux64) ==
             ("plat", joinpath("bin", "foo"), SHA1("a"^40))
+        @test Artifacts.artifact_slash_lookup(SubString("plat/bin"), artifact_dict, SubString(artifacts_toml, 1), win64) ==
+            ("plat", "bin", SHA1("b"^40))
         @test_throws "Cannot locate artifact 'plat/bin' for x86_64-apple-darwin" Artifacts.artifact_slash_lookup("plat/bin", artifact_dict, artifacts_toml, mac64)
         @test_throws "Cannot locate artifact 'missing'" Artifacts.artifact_slash_lookup("missing", artifact_dict, artifacts_toml, linux64)
     end
