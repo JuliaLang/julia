@@ -311,6 +311,14 @@ let cases = Pair{String,Compiler.IRCode}[
                 tuple_call(SSAValue(2)), ReturnNode(1)]; verify=false),
         "At statement %2: Invalid use of value statement or terminator %1" =>
             make_ircode(Any[GotoNode(2), tuple_call(SSAValue(1)), ReturnNode(1)]; verify=false),
+        "Basic Block 2 does not dominate block 3 (tried to use value %2 at %4)" =>
+            make_ircode(Any[GotoIfNot(true, 4), tuple_call(), ReturnNode(1),
+                ReturnNode(SSAValue(2))]; verify=false),
+        "Basic Block 2 does not dominate block 3 (tried to use value %2 at %4)" =>
+            make_ircode(Any[GotoIfNot(true, 4), tuple_call(), ReturnNode(1),
+                GotoIfNot(SSAValue(2), 6), ReturnNode(1), ReturnNode(2)]; verify=false),
+        "At statement %2: Invalid use of value statement or terminator %1" =>
+            make_ircode(Any[GotoNode(2), ReturnNode(SSAValue(1))]; verify=false),
         "At statement %1: Left over SSA marker" =>
             make_ircode(Any[tuple_call(Compiler.OldSSAValue(1)), ReturnNode(1)]; verify=false),
         "At statement %1: Left over SSA marker" =>
