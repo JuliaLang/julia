@@ -1227,7 +1227,7 @@ function _reverse(A::BitArray, d::Int)
     nd = ndims(A)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
-    sd == 1 && return copy(A)
+    (sd == 1 || isempty(A)) && return copy(A)
 
     B = similar(A)
 
