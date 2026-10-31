@@ -1337,6 +1337,32 @@ const outsidevar = 7
 end
 @test TestOutsideVar() == TestOutsideVar(7)
 
+# issue #63951: kwarg default expressions should not be shadowed by preceding kwargs
+func63951() = 1.0
+@kwdef struct TestKwdefShadow63951
+    func63951 = func63951()
+    b = func63951()
+end
+@test TestKwdefShadow63951() == TestKwdefShadow63951(1.0, 1.0)
+@test TestKwdefShadow63951(func63951=2.0) == TestKwdefShadow63951(2.0, 1.0)
+@test TestKwdefShadow63951(b=3.0) == TestKwdefShadow63951(1.0, 3.0)
+
+# issue #52316: struct name matching field name in @kwdef
+@kwdef struct TestKwdefSelfName52316
+    Bar::Int = 1
+    TestKwdefSelfName52316::Int = 2
+end
+@test TestKwdefSelfName52316() == TestKwdefSelfName52316(1, 2)
+@test TestKwdefSelfName52316(Bar=10) == TestKwdefSelfName52316(10, 2)
+@test TestKwdefSelfName52316(TestKwdefSelfName52316=20) == TestKwdefSelfName52316(1, 20)
+
+@kwdef struct TestKwdefSelfName52316Param{T}
+    Bar::T = 1
+    TestKwdefSelfName52316Param::T = 2
+end
+@test TestKwdefSelfName52316Param() == TestKwdefSelfName52316Param{Int}(1, 2)
+@test TestKwdefSelfName52316Param{Float64}() == TestKwdefSelfName52316Param{Float64}(1.0, 2.0)
+
 @kwdef mutable struct Test_kwdef_const_atomic
     a
     b::Int
