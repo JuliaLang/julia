@@ -1696,6 +1696,8 @@ let f = open(file, "w")
     test_LibcFILE(Libc.FILE(f, Libc.modestr(true, false)))
 end
 
+@test_throws SystemError Libc.dup(RawFD(-1))
+
 # issue #10994: pathnames cannot contain embedded NUL chars
 for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpath,
         stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch,
