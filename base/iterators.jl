@@ -1768,7 +1768,7 @@ function _nth(::Union{HasShape, HasLength}, itr::Flatten{Take{Repeated{O}}}, n::
     cycles = itr.it.n
     torepeat = itr.it.xs.x
     k = length(torepeat)
-    (n > k*cycles || k == 0) && throw(BoundsError(itr, n))
+    (k == 0 || cld(n, k) > cycles) && throw(BoundsError(itr, n))
 
     # prevent wrap around behaviour and inherit the error handling
     return nth(torepeat, n > 0 ? mod1(n, k) : n)
