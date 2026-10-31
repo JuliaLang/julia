@@ -279,7 +279,7 @@ end
         rgv, rgv_r = collect(rg), collect(rg_r)
         for i = I
             @test insorted(i,rg) === insorted(i,rgv)
-            @test insorted(i,rg_r) === insorted(i,rgv_r,rev=true)
+            @test insorted(i,rg_r,rev=true) === insorted(i,rgv_r,rev=true)
         end
     end
 
@@ -292,13 +292,17 @@ end
 
     rg_r = reverse(rg)
     for i = 1:100
-        @test insorted(rg_r[i], rg_r)
-        @test !insorted(prevfloat(rg_r[i]), rg_r)
-        @test !insorted(nextfloat(rg_r[i]), rg_r)
+        @test insorted(rg_r[i], rg_r, rev=true)
+        @test !insorted(prevfloat(rg_r[i]), rg_r, rev=true)
+        @test !insorted(nextfloat(rg_r[i]), rg_r, rev=true)
     end
 
     @test insorted(1, 1:10) == insorted(1, collect(1:10), by=(>=(5)))
     @test insorted(10, 1:10) == insorted(10, collect(1:10), by=(>=(5)))
+
+    # ranges use the same sort-order equivalence as vectors
+    @test insorted(-0.0, 0.0:1.0) === insorted(-0.0, [0.0, 1.0]) === false
+    @test insorted(missing, 1:3) === insorted(missing, [1, 2, 3]) === false
 
     @test !insorted(0, [])
     @test !insorted(0, [1,2,3])
