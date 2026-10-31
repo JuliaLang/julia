@@ -60,6 +60,15 @@ using Test, Random
         @test Base.unsafe_string(ptr3) == ""
         @test s1 == s2 == s3
 
+        data3 = UInt8[0x73, 0x00, 0x65, 0xff]
+
+        GC.@preserve data3 begin
+            s6 = Base.unsafe_SecretBuffer!(pointer(data3), 3)
+            @test read(s6) == UInt8[0x73, 0x00, 0x65]
+            @test data3 == UInt8[0x00, 0x00, 0x00, 0xff]
+            shred!(s6)
+        end
+
         s4 = SecretBuffer(split("setec astronomy", " ")[1]) # initialize from SubString
         s5 = convert(SecretBuffer, split("setec astronomy", " ")[1]) # initialize from SubString
         @test s4 == s5
