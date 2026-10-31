@@ -297,23 +297,23 @@ let
 end
 """)
 
-err = try
+multi_interp_err = try
     JuliaLowering.eval(test_mod, multi_interp_ex)
     nothing
 catch exc
     @test exc isa LoweringError
     sprint(io->Base.showerror(io, exc, show_detail=false))
 end
-@test contains(err, raw"More than one value in bare `$` expression")
+@test contains(multi_interp_err, raw"More than one value in bare `$` expression")
 
-err = try
+multi_interp_err = try
     jl_eval(test_mod, multi_interp_ex; edition=JL_OLD_EDITION)
     nothing
 catch exc
     @test exc isa LoweringError
     sprint(io->Base.showerror(io, exc, show_detail=false))
 end
-@test contains(err, raw"More than one value in bare `$` expression")
+@test contains(multi_interp_err, raw"More than one value in bare `$` expression")
 
 # Symbol should be interpolated (converted from expr)
 @eval test_mod using JuliaLowering
