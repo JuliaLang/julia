@@ -494,8 +494,6 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         N = prod(shape)
         A = reshape(Vector(1:N), shape)
         B = T(A)
-        trailing5 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-5, 0)))
-        trailing4 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-4, 0)))
         trailing3 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-3, 0)))
         trailing2 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-2, 0)))
         idxs = rand(1:N, 3, 3, 3)

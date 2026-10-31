@@ -620,27 +620,6 @@ function isstored(A::AbstractArray{<:Any,N}, I::Vararg{Integer,N}) where {N}
     return true
 end
 
-# used to compute "end" for last index
-function trailingsize(A, n)
-    s = 1
-    for i=n:ndims(A)
-        s *= size(A,i)
-    end
-    return s
-end
-function trailingsize(inds::Indices, n)
-    s = 1
-    for i=n:length(inds)
-        s *= length(inds[i])
-    end
-    return s
-end
-# This version is type-stable even if inds is heterogeneous
-function trailingsize(inds::Indices)
-    @inline
-    prod(map(length, inds))
-end
-
 ## Bounds checking ##
 
 # The overall hierarchy is
