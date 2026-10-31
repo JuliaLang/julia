@@ -47,7 +47,10 @@ is_value_pos_expr_head(head::Symbol) = head === :static_parameter
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int,
     allow_frontend_forms::Bool, @nospecialize(raise_error))
     if isa(op, SSAValue)
-        op.id > 0 || @verify_error "Def ($(op.id)) is invalid in final IR"
+        if op.id <= 0
+            @verify_error "Def ($(op.id)) is invalid in final IR"
+            raise_error()
+        end
         if op.id > length(ir.stmts)
             if op.id - length(ir.stmts) > length(ir.new_nodes.info)
                 @verify_error "Def ($(op.id)) points to non-existent new node"
