@@ -393,6 +393,10 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 @verify_error "Explicit terminators (other than ReturnNode) must have `Any` type"
                 raise_error()
             end
+            for op in userefs(stmt)
+                check_op(ir, domtree, op[], bb, idx, idx, print, false, 0,
+                    allow_frontend_forms, raise_error)
+            end
         else
             isforeigncall = false
             if isa(stmt, Expr)
