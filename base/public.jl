@@ -59,7 +59,13 @@ public
 
 # collections
     IteratorEltype,
+    EltypeUnknown,
+    HasEltype,
     IteratorSize,
+    SizeUnknown,
+    HasLength,
+    HasShape,
+    IsInfinite,
     to_index,
     vect,
     isdone,
