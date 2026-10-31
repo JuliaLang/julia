@@ -10,6 +10,13 @@ There are never enough tests. Track [code coverage at Codecov](https://codecov.i
 
 4. Run `make test-all` to rebuild Julia and run your new test(s). If you had to fix a bug or add functionality in `base`, this will ensure that your test passes and that you have not introduced extraneous whitespace.
 
+   To rerun a single test file such as `test/arrayops.jl` against your changes to `base/` without
+   rebuilding, use `make test-revise-arrayops` (see [Modifying base more efficiently with Revise.jl](@ref)).
+   Set `JULIA_TEST_FAILFAST=true` to stop at the first failure.
+
+   Do not synchronize tasks or processes in tests with fixed `sleep`s, which break on loaded CI machines;
+   wait on observable state (e.g. a readiness message or a round-trip) instead.
+
 5. Submit the test as a pull request (PR).
 
 * Code for the buildbot configuration is maintained at: https://github.com/staticfloat/julia-buildbot
