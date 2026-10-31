@@ -187,6 +187,12 @@ called "top" because it is at the apex of the type graph. Julia also has a prede
 "bottom" type, at the nadir of the type graph, which is written as `Union{}`. It is the exact
 opposite of `Any`: no object is an instance of `Union{}` and all types (including concrete types) are supertypes of `Union{}`.
 
+Not all abstract types are created with the `abstract type` keyword. `Union{}`, for example, is
+abstract but is not declared this way, and neither are other [type unions](@ref "Type Unions")
+such as `Union{Int,AbstractString}`, or tuple types with non-concrete parameters such as
+`Tuple{Real}`. Note that [`isabstracttype`](@ref) only returns `true` for types declared with
+`abstract type`, so it returns `false` for these.
+
 Let's consider some of the abstract types that make up Julia's numerical hierarchy:
 
 ```julia
