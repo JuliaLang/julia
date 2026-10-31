@@ -426,6 +426,13 @@
     XX(jl_set_zero_subnormals) \
     XX(jl_sigatomic_begin) \
     XX(jl_sigatomic_end) \
+    XX(jl_signal_is_reserved) \
+    XX(jl_signal_name) \
+    XX(jl_signal_take_pending) \
+    XX(jl_signal_watch_start) \
+    XX(jl_signal_watch_stop) \
+    XX(jl_sigrtmax) \
+    XX(jl_sigrtmin) \
     XX(jl_spawn) \
     XX(jl_sparam_slot_value) \
     XX(jl_specializations_get_linfo) \
@@ -551,6 +558,8 @@
     YY(jl_objcache_kv_get) \
     YY(jl_objcache_kv_put) \
     YY(jl_objcache_kv_enabled) \
+    YY(jl_objcache_prune) \
+    YY(jl_objcache_compact) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
     YY(jl_dump_emitted_mi_name) \

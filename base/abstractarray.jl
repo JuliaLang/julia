@@ -21,7 +21,9 @@ convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = Abs
     size(A::AbstractArray, [dim])
 
 Return a tuple containing the dimensions of `A`. Optionally you can specify a
-dimension to just get the length of that dimension.
+dimension to just get the length of that dimension. For `dim > ndims(A)`,
+`size(A, dim)` is `1`, consistent with arrays accepting extra trailing indices
+equal to `1` (see [Omitted and extra indices](@ref)).
 
 Note that `size` may not be defined for arrays with non-standard indices, in which case [`axes`](@ref)
 may be useful. See the manual chapter on [arrays with custom indices](@ref man-custom-indices).
@@ -37,6 +39,9 @@ julia> size(A)
 
 julia> size(A, 2)
 3
+
+julia> size(A, 5)
+1
 ```
 """
 function size(t::AbstractArray, dim)
@@ -1412,7 +1417,7 @@ function _getindex(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) w
     getindex(A, I...)
 end
 _to_subscript_indices(A::AbstractArray, i::Integer) = (@inline; _unsafe_ind2sub(A, i))
-_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@inline; fill_to_length((), 1, Val(N)))
+_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@inline; map(first, axes(A)))
 _to_subscript_indices(A::AbstractArray{T,0}) where {T} = ()
 _to_subscript_indices(A::AbstractArray{T,0}, i::Integer) where {T} = ()
 _to_subscript_indices(A::AbstractArray{T,0}, I::Integer...) where {T} = ()

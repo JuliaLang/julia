@@ -61,7 +61,7 @@ Parse all of `bytes`, a one-based `AbstractVector{UInt8}`, as a `T`, or return a
 
 For integer types, the bytes are an optional `-` or `+` (signed types only) followed by
 digits in `base` (keyword, 2 to 62, default 10), with letters for digits above 9 as in
-[`parse`](@ref).
+[`parse`](@ref). For `Bool`, they can also be `true` or `false`.
 
 For `Float64`, `Float32` and `Float16`, the bytes are a number as [`parse`](@ref) reads it,
 without surrounding whitespace: an optional sign and a decimal or hexadecimal

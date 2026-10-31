@@ -188,3 +188,19 @@ end
     end
     return parseint(T, bytes, i, j, Int(base), neg)
 end
+
+# `Bool` reads digits like the unsigned integers, and also `true` and `false`
+@inline function parsevalue(::Type{Bool}, bytes::AbstractVector{UInt8}; base::Integer = 10)
+    require_one_based_indexing(bytes)
+    n = length(bytes)
+    @inbounds if n == 4 && (bytes[1] == UInt8('t')) & (bytes[2] == UInt8('r')) &
+                           (bytes[3] == UInt8('u')) & (bytes[4] == UInt8('e'))
+        return true
+    elseif n == 5 && (bytes[1] == UInt8('f')) & (bytes[2] == UInt8('a')) &
+                     (bytes[3] == UInt8('l')) & (bytes[4] == UInt8('s')) &
+                     (bytes[5] == UInt8('e'))
+        return false
+    end
+    x = parsevalue(UInt8, bytes; base)
+    return x isa UInt8 ? (x <= 0x01 ? x == 0x01 : OVERFLOW) : x
+end

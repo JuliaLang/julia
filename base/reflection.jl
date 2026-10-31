@@ -975,7 +975,7 @@ function _which(@nospecialize(tt::Type);
         raise && error("no unique matching method found for the specified argument types")
         return nothing
     end
-    return match
+    return match::Core.MethodMatch
 end
 
 """
@@ -1013,15 +1013,15 @@ end
 which(@nospecialize(argtypes::Tuple)) = which(to_tuple_type(argtypes))
 
 """
-    which(module, symbol)
+    which(module::Module, symbol::Symbol)
 
 Return the module in which the binding for the variable referenced by `symbol` in `module` was created.
 """
-function which(m::Module, s::Symbol)
-    if !isdefined(m, s)
-        error("\"$s\" is not defined in module $m")
+function which(mdl::Module, symbol::Symbol)
+    if !isdefinedglobal(mdl, symbol)
+        error("\"$symbol\" is not defined in module $mdl")
     end
-    return binding_module(m, s)
+    return binding_module(mdl, symbol)
 end
 
 # function reflection

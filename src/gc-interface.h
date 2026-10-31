@@ -79,7 +79,8 @@ typedef struct {
     uint64_t sweep_time;
     // Time spent in the last GC marking phase in nanoseconds
     uint64_t mark_time;
-    // Time spent sweeping stack pools in the last GC in nanoseconds
+    // Time spent in the parallel per-thread sweep (stack pools, malloc'd buffers and big objects)
+    // in the last GC in nanoseconds
     uint64_t stack_pool_sweep_time;
     // Total time spent in sweeping phase across all GCs in nanoseconds
     uint64_t total_sweep_time;
@@ -87,11 +88,13 @@ typedef struct {
     uint64_t total_sweep_page_walk_time;
     // Total time spent in madvise calls during sweeping phase across all GCs in nanoseconds
     uint64_t total_sweep_madvise_time;
-    // Total time spent in freeing malloc'd memory during sweeping phase across all GCs in nanoseconds
+    // Total time spent in the serial part of sweeping big objects (the oldest generation,
+    // and all of them when swept serially) across all GCs in nanoseconds
     uint64_t total_sweep_free_mallocd_memory_time;
     // Total time spent in marking phase across all GCs in nanoseconds
     uint64_t total_mark_time;
-    // Total time spent sweeping stack pools across all GCs in nanoseconds
+    // Total time spent in the parallel per-thread sweep (stack pools, malloc'd buffers and big
+    // objects) across all GCs in nanoseconds
     uint64_t total_stack_pool_sweep_time;
     // Timestamp of the last full GC sweep in nanoseconds
     uint64_t last_full_sweep;

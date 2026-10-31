@@ -395,7 +395,7 @@ end
 function getindex(S::IdentityUnitRange, i::StepRange{Bool})
     @inline
     @boundscheck checkbounds(S, i)
-    range(first(i) ? first(S) : last(S), length = last(i), step = Int(step(i)))
+    range(first(i) ? first(S) : last(S), length = count(i), step = Int(step(i)))
 end
 # Indexing with offset ranges should preserve the axes of the indices
 # however, this is only really possible in general with OffsetArrays.
@@ -457,6 +457,11 @@ julia> extrema(b)
 
 Return a `LinearIndices` array with the specified shape or [`axes`](@ref).
 
+When ranges are given, each axis of the result is the axis of the corresponding range,
+not the range itself: e.g. `LinearIndices((0:1, -3:4))` has axes
+`(Base.OneTo(2), Base.OneTo(8))`. To get offset axes, pass ranges that are their own
+axes, such as `Base.IdentityUnitRange` (see the example below).
+
 # Examples
 
 The main purpose of this constructor is intuitive conversion
@@ -471,6 +476,18 @@ julia> linear = LinearIndices((1:3, 1:2))
 
 julia> linear[1,2]
 4
+```
+
+Offset axes:
+
+```jldoctest
+julia> L = LinearIndices(Base.IdentityUnitRange.((0:1, -3:4)));
+
+julia> axes(L)
+(Base.IdentityUnitRange(0:1), Base.IdentityUnitRange(-3:4))
+
+julia> L[0, -3]
+1
 ```
 """
 struct LinearIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int,N}
@@ -514,7 +531,7 @@ end
 function getindex(iter::LinearIndices, i::AbstractRange{<:Integer})
     @inline
     @boundscheck checkbounds(iter, i)
-    @inbounds isa(iter, LinearIndices{1}) ? iter.indices[1][i] : (first(iter):last(iter))[i]
+    @inbounds isa(iter, LinearIndices{1}) ? axes1(iter.indices[1])[i] : (first(iter):last(iter))[i]
 end
 copy(iter::LinearIndices) = iter
 # More efficient iteration — predominantly for non-vector LinearIndices

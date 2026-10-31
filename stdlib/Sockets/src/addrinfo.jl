@@ -36,7 +36,7 @@ function uv_getaddrinfocb(req::Ptr{Cvoid}, status::Cint, addrinfo::Ptr{Cvoid})
                 push!(addrs, IPv4(ntoh(ip4addr)))
             elseif ccall(:jl_sockaddr_is_ip6, Int32, (Ptr{Cvoid},), sockaddr) == 1
                 ip6addr = Ref{UInt128}()
-                scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt128}), sockaddr, ip6addr)
+                ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt128}), sockaddr, ip6addr)
                 push!(addrs, IPv6(ntoh(ip6addr[])))
             end
             addrinfo = ccall(:jl_next_from_addrinfo, Ptr{Cvoid}, (Ptr{Cvoid},), addrinfo)
@@ -149,7 +149,7 @@ function getaddrinfo(host::AbstractString; cancel::Base.CancelTokenArg=Base.DEFA
     throw(DNSError(host, UV_EAI_NONAME))
 end
 
-function uv_getnameinfocb(req::Ptr{Cvoid}, status::Cint, hostname::Cstring, service::Cstring)
+function uv_getnameinfocb(req::Ptr{Cvoid}, status::Cint, hostname::Cstring, _service::Cstring)
     t = Base._claim_uvreq_waiter(req)
     if t !== nothing
         if status != 0
@@ -180,7 +180,6 @@ function getnameinfo(address::Union{IPv4, IPv6}; cancel::Base.CancelTokenArg=Bas
     port = hton(UInt16(0))
     flags = 0
     uvcb = @cfunction(uv_getnameinfocb, Cvoid, (Ptr{Cvoid}, Cint, Cstring, Cstring))
-    status = UV_EINVAL
     host_in = Ref(hton(address.host))
     iolock_begin()
     status = ccall(:jl_getnameinfo, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, UInt16, Cint, Ptr{Cvoid}, Cint),
@@ -282,18 +281,16 @@ julia> getipaddrs(IPv6)
 
 See also [`islinklocaladdr`](@ref).
 """
-function getipaddrs(addr_type::Type{T}=IPAddr; loopback::Bool=false) where T<:IPAddr
+function getipaddrs(::Type{T}=IPAddr; loopback::Bool=false) where T<:IPAddr
     addresses = T[]
     addr_ref = Ref{Ptr{UInt8}}(C_NULL)
     count_ref = Ref{Int32}(1)
-    lo_present = false
     err = ccall(:jl_uv_interface_addresses, Int32, (Ref{Ptr{UInt8}}, Ref{Int32}), addr_ref, count_ref)
     uv_error("getlocalip", err)
     addr, count = addr_ref[], count_ref[]
     for i = 0:(count-1)
         current_addr = addr + i*_sizeof_uv_interface_address
         if 1 == ccall(:jl_uv_interface_address_is_internal, Int32, (Ptr{UInt8},), current_addr)
-            lo_present = true
             if !loopback
                 continue
             end
@@ -303,7 +300,7 @@ function getipaddrs(addr_type::Type{T}=IPAddr; loopback::Bool=false) where T<:IP
             push!(addresses, IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Cvoid},), sockaddr))))
         elseif IPv6 <: T && ccall(:jl_sockaddr_is_ip6, Int32, (Ptr{Cvoid},), sockaddr) == 1
             addr6 = Ref{UInt128}()
-            scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ref{UInt128},), sockaddr, addr6)
+            ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ref{UInt128},), sockaddr, addr6)
             push!(addresses, IPv6(ntoh(addr6[])))
         end
     end

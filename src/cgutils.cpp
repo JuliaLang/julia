@@ -560,20 +560,22 @@ static jl_gc_roots_t make_lazy_gc_roots(Value *inline_roots_ptr, size_t npointer
     return jl_gc_roots_t(inline_roots_ptr, npointers, ai);
 }
 
-// inlined bool indicates whether this must return the inlined roots inside x separately, or whether x itself may be used as the root (if x is already isboxed)
-static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_cgval_t &x, bool inlined=false) JL_CANSAFEPOINT
+// storage_used indicates whether the consumer reads x's storage through an untracked pointer (e.g. one
+// stripped by pointer_from_objref), rather than through x's own address or a copy of its contents. Only
+// then is the address of an unboxed pointer-free value worth rooting: such a value holds no GC
+// references, and every tracked load of its contents already keeps whatever it lives in (a stack slot,
+// or after inlining perhaps a caller's object) alive by itself.
+static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_cgval_t &x, bool storage_used) JL_CANSAFEPOINT
 {
     if (x.constant || x.typ == jl_bottom_type)
         return {};
-    if (!inlined && x.Vboxed) // superset of x.isboxed
+    if (x.Vboxed) // superset of x.isboxed
         return {x.Vboxed};
-    assert(!x.isboxed || !inlined);
     if (!x.inline_roots.empty()) {
-        // if (!inlined) { // TODO: implement this filter operation
+        // TODO: implement this filter operation
         //     SmallVector<unsigned,4> perm_offsets;
         //     find_perm_offsets(typ, perm_offsets, 0);
         //     return filter(!in(perm_offsets), x.inline_roots)
-        // }
         // Copy and load roots via get()
         const jl_gc_roots_t &roots_copy = x.inline_roots;
         SmallVector<Value*,0> result(roots_copy.size());
@@ -581,13 +583,15 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
             result[i] = roots_copy.get(ctx, i);
         return result;
     }
-    if (!inlined && x.ispointer()) {
+    if (x.ispointer()) {
         if (x.V == nullptr) {
             // a union of ghost types has a tag but no data to root
             assert(x.TIndex);
             return {};
         }
         assert(x.V->getType()->getPointerAddressSpace() != AddressSpace::Tracked);
+        if (!storage_used && jl_is_pointerfree(x.typ))
+            return {};
         return {x.V};
     }
     else if (jl_is_concrete_immutable(x.typ) && !jl_is_pointerfree(x.typ)) {
@@ -4074,7 +4078,7 @@ static Value *compute_box_tindex(jl_codectx_t &ctx, const jl_cgval_t &val, jl_va
 static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ, bool maybenull=false) JL_CANSAFEPOINT
 {
     if (val.typ == jl_bottom_type)
-        return UndefValue::get(getInt8Ty(ctx.builder.getContext()));
+        return PoisonValue::get(getInt8Ty(ctx.builder.getContext()));
     if (val.constant)
         return ConstantInt::get(getInt8Ty(ctx.builder.getContext()), get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), typ));
     if (val.TIndex)
@@ -4275,8 +4279,8 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
 {
     jl_value_t *jt = vinfo.typ;
     if (jt == jl_bottom_type || jt == NULL)
-        // We have an undef value on a (hopefully) dead branch
-        return UndefValue::get(ctx.types().T_prjlvalue);
+        // We have a poison value on a (hopefully) dead branch
+        return PoisonValue::get(ctx.types().T_prjlvalue);
     if (vinfo.constant)
         return track_pjlvalue(ctx, literal_pointer_val(ctx, vinfo.constant));
     // This can happen in early bootstrap for `gc_preserve_begin` return value.
@@ -4639,7 +4643,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     strct = Constant::getNullValue(lt);
                 }
                 else {
-                    strct = UndefValue::get(lt);
+                    strct = PoisonValue::get(lt);
                     if (nargs < nf)
                         strct = ctx.builder.CreateFreeze(strct); // Change this to zero initialize instead?
                 }
@@ -4890,7 +4894,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         bool isboxed;
         Type *lt = julia_type_to_llvm(ctx, ty, &isboxed);
         assert(!isboxed);
-        return mark_julia_type(ctx, ctx.builder.CreateFreeze(UndefValue::get(lt)), false, ty);
+        return mark_julia_type(ctx, ctx.builder.CreateFreeze(PoisonValue::get(lt)), false, ty);
     }
 }
 

@@ -798,31 +798,6 @@ void gc_time_big_end(void)
                    t_ms, big_freed, big_total, big_reset);
 }
 
-static int64_t mallocd_memory_total;
-static int64_t mallocd_memory_freed;
-static int64_t mallocd_memory_sweep_start;
-
-void gc_time_mallocd_memory_start(void)
-{
-    mallocd_memory_total = 0;
-    mallocd_memory_freed = 0;
-    mallocd_memory_sweep_start = jl_hrtime();
-}
-
-void gc_time_count_mallocd_memory(int bits)
-{
-    mallocd_memory_total++;
-    mallocd_memory_freed += !gc_marked(bits);
-}
-
-void gc_time_mallocd_memory_end(void)
-{
-    double t_ms = jl_ns2ms(jl_hrtime() - mallocd_memory_sweep_start);
-    jl_safe_printf("GC sweep arrays %.2f ms "
-                   "(freed %" PRId64 " / %" PRId64 ")\n",
-                   t_ms, mallocd_memory_freed, mallocd_memory_total);
-}
-
 void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
                         int64_t perm_scanned_bytes)
 {

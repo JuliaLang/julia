@@ -952,11 +952,11 @@ function project_get_edition(d::Dict)
             end
         end
     end
-    # Finally, if neither of those are set, default to the current Julia version.
+    # Finally, if neither of those are set, default to the newest edition.
     # N.B.: This choice is less "compatible" than defaulting to a fixed older version.
     # However, it avoids surprises from moving over scripts and REPL code to packages
     ed = if sv === nothing
-        VERSION_EDITION
+        LATEST_STABLE_EDITION
     elseif sv <= VersionNumber(OLDEST_EDITION)
         # Syntax versioning was first introduced in Julia 1.14 - we do not support
         # going back to versions before syntax version 1.13.
@@ -988,12 +988,12 @@ end
 
 function parser_for_active_project()
     project = active_project()
-    sv = VERSION_EDITION
+    sv = JL_OLD_EDITION
     if project !== nothing && isfile(project)
         try
             sv = project_get_edition(parsed_toml(project))
         catch e
-            @warn "Failed to read project $project - defaulting to latest syntax. err=$e"
+            @warn "Failed to read project $project - defaulting to syntax edition $sv. err=$e"
         end
     end
     VersionedParse(sv)
@@ -1106,18 +1106,7 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
     return nothing
 end
 
-function is_v1_format_manifest(raw_manifest::Dict{String})
-    if haskey(raw_manifest, "manifest_format")
-        mf = raw_manifest["manifest_format"]
-        if mf isa Dict{String} && haskey(mf, "uuid")
-            # the off-chance where an old format manifest has a dep called "manifest_format"
-            return true
-        end
-        return false
-    else
-        return true
-    end
-end
+is_v1_format_manifest(raw_manifest::Dict{String}) = !haskey(raw_manifest, "manifest_format")
 
 # returns a deps list for both old and new manifest formats
 function get_deps(raw_manifest::Dict)
@@ -1333,8 +1322,8 @@ function implicit_manifest_uuid_load_spec(dir::String, pkg::PkgId)::Union{Nothin
     path, project_file = entry_point_and_project_file(dir, pkg.name)
     if project_file === nothing
         pkg.uuid === nothing || return nothing
-        # Without a project file, treat as empty - which defaults to VERSION
-        return PkgLoadSpec(path, VERSION_EDITION)
+        # Without a project file, treat as empty
+        return PkgLoadSpec(path, LATEST_STABLE_EDITION)
     end
     proj = project_file_name_uuid(project_file, pkg.name)
     proj == pkg || return nothing
@@ -2482,12 +2471,20 @@ end
                     mpre = get(preresolved_cachefiles, modkey, nothing)
                     modpaths = lazy_cachefile_candidates(modkey, modspec.path, DEPOT_PATH)
                     mpre !== nothing && (modpaths = Iterators.flatten(((mpre,), modpaths)))
+                    # a private load, such as a stdlib loaded by the REPL, still needs its cache checked against this environment
+                    privatedep = maybe_loaded_precompile(modkey, modbuild_id)
                     for modpath_to_try in modpaths
                         modtrusted = modpath_to_try === mpre
                         modstaledeps = stale_cachefile(modkey, modbuild_id, modspec, modpath_to_try;
-                                                       stalecheck = stalecheck && !modtrusted, verify_checksums = !modtrusted, split_checksums = false)
+                                                       stalecheck = stalecheck && !modtrusted, verify_checksums = !modtrusted && privatedep === nothing, split_checksums = false)
                         if modstaledeps === true
                             continue
+                        end
+                        if privatedep isa Module
+                            end_loading(modkey, privatedep)
+                            staledeps[i] = privatedep
+                            stalecheck && register_reused_module(privatedep) && push!(newdeps, modkey)
+                            continue next_dep
                         end
                         modstaledeps, modocachepath, _ = modstaledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
                         staledeps[i] = (modspec, modkey, modbuild_id, modpath_to_try, modstaledeps, modocachepath)
@@ -2495,11 +2492,6 @@ end
                     end
                     @debug "Rejecting cache file $path_to_try because required dependency $modkey with build ID $(UUID(modbuild_id)) is missing from the cache."
                     continue next_path
-                end
-                if stalecheck
-                    for dep in staledeps
-                        dep isa Module && register_reused_module(dep) && push!(newdeps, PkgId(dep))
-                    end
                 end
                 M = maybe_loaded_precompile(pkg, newbuild_id)
                 if isa(M, Module)
@@ -2569,7 +2561,7 @@ function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
     if loading === nothing
         loaded = stalecheck ? maybe_root_module(modkey) : nothing
         loaded isa Module && return loaded
-        if build_id != UInt128(0)
+        if !stalecheck && build_id != UInt128(0)
             loaded = maybe_loaded_precompile(modkey, build_id)
             loaded isa Module && return loaded
         end
@@ -3088,7 +3080,7 @@ register_root_module(Main)
 # to the loaded_modules table instead of getting bindings.
 baremodule __toplevel__
 using Base
-global var"#_internal_julia_parse" = Base.VersionedParse(Base.VERSION_EDITION)
+global var"#_internal_julia_parse" = Base.VersionedParse(Base.LATEST_STABLE_EDITION)
 
 # Used for version checking of precompiled cache files only
 global _internal_syntax_version::UInt8 = 0
@@ -3221,7 +3213,7 @@ function __require_prelocked(pkg::PkgId, env)
                             # or an empty set of entries (indicating the precompile should be skipped)
                             if precompiled !== nothing
                                 isempty(precompiled) && return PrecompilableError() # oops, Precompilation forgot to report what this might actually be
-                                local cachefile = precompiled[1]
+                                local cachefile = precompiled[1]::String
                                 local ocachefile = nothing
                                 if JLOptions().use_pkgimages == 1
                                     ocachefile = ocachefile_from_cachefile(cachefile)
@@ -3288,7 +3280,7 @@ function __require_prelocked(pkg::PkgId, env)
         include(__toplevel__, path)
         loaded = maybe_root_module(pkg)
     finally
-        __toplevel__.var"#_internal_julia_parse" = VersionedParse(VERSION_EDITION)
+        __toplevel__.var"#_internal_julia_parse" = VersionedParse(LATEST_STABLE_EDITION)
         lock(require_lock)
         if uuid !== old_uuid
             ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
@@ -3395,7 +3387,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
                 sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
             end
             set_pkgorigin_version_path(this_uuidkey, sourcepath)
-            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, VERSION_EDITION), UInt128(0), false; DEPOT_PATH=depot_path)
+            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, LATEST_STABLE_EDITION), UInt128(0), false; DEPOT_PATH=depot_path)
         end
     finally
         end_loading(this_uuidkey, newm)
@@ -3939,8 +3931,9 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
                 write(f, _crc32c(f))
             end
 
-            # inherit permission from the source file (and make them writable)
-            chmod(tmppath, filemode(spec.path) & 0o777 | 0o200)
+            # inherit permission from the source file, but keep it readable and writable
+            # (`filemode` is 0 if the source has disappeared in the meantime)
+            chmod(tmppath, filemode(spec.path) & 0o777 | 0o600)
 
             # prune the directory with cache files
             if pkg.uuid !== nothing
@@ -4907,7 +4900,7 @@ end
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; kwargs...)
-    return stale_cachefile(PkgLoadSpec(modpath, VERSION_EDITION), cachefile; kwargs...)
+    return stale_cachefile(PkgLoadSpec(modpath, LATEST_STABLE_EDITION), cachefile; kwargs...)
 end
 @constprop :none function stale_cachefile(modspec::PkgLoadSpec, cachefile::String; ignore_loaded::Bool = false, requested_flags::CacheFlags=CacheFlags(), reasons=nothing, verify_checksums::Bool=true)
     return stale_cachefile(PkgId(""), UInt128(0), modspec, cachefile; ignore_loaded, requested_flags, reasons, verify_checksums)

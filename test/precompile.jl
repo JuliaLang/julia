@@ -1773,6 +1773,19 @@ precompile_test_harness("Issue #25971") do load_path
     cachefile, _ = Base.compilecache(Base.PkgId("Foo25971"))
     # Check writable
     @test touch(cachefile) == cachefile
+
+    # Issue #57254: the source disappearing during precompilation must not leave
+    # an unreadable cache file behind
+    sourcefile = joinpath(load_path, "Foo57254.jl")
+    write(sourcefile, """
+        module Foo57254
+        ccall(:jl_generating_output, Cint, ()) == 1 && rm(@__FILE__)
+        end
+        """)
+    cachefile, _ = Base.compilecache(Base.PkgId("Foo57254"))
+    @test !isfile(sourcefile)
+    @test filemode(cachefile) & 0o600 == 0o600
+    @test open(Base.isvalid_cache_header, cachefile) !== nothing
 end
 
 precompile_test_harness("Issue #38312") do load_path
@@ -2231,7 +2244,7 @@ precompile_test_harness("method contributors") do load_path
     depot = DEPOT_PATH[1]
     in_deps_def = """
         in_deps(sig, obj) = Int(0 != ccall(:jl_sig_contributors_world, Csize_t, (Any, Any, Csize_t), sig, Core.methodtable,
-                                     ccall(:jl_external_blob_index, Csize_t, (Any,), obj)))
+                                     Base.Compiler.ReinferUtils.external_blob_index(obj)))
         """
     # f has methods from ContribDep and ContribExt, which are both dependencies of ContribExt only
     out = trusted_edge_test_output(load_path, depot, in_deps_def * """
@@ -2239,16 +2252,20 @@ precompile_test_harness("method contributors") do load_path
         sig = Tuple{typeof(ContribDep.f), Int}
         print(in_deps(sig, ContribExt), " ", in_deps(sig, which(ContribDep.f, (Integer,))), " ",
               in_deps(sig, ContribDep), " ", in_deps(sig, Base), " ", in_deps(sig, Main))
-        # a Type{Union{}} method intersects every constructor, but no other signature
         ctor = Tuple{Type{Int}, Int}
         print(" ", in_deps(ctor, ContribExt))
-        (::Type{Union{}})(::Int) = 0
+        # a method on a kind can match every constructor call, but no other signature
+        struct KindArg end
+        (::DataType)(::KindArg) = 0
         print(" ", in_deps(ctor, ContribExt), " ", in_deps(sig, ContribExt))
+        # so can a Type{Union{}} method
+        (::Type{Union{}})(::Int) = 0
+        print(" ", in_deps(ctor, ContribExt))
         # a method defined in the session is from no image
         ContribDep.f(::Int) = :session
         print(" ", in_deps(sig, ContribExt))
         """)
-    @test out == "1 1 0 0 0 1 0 1 0"
+    @test out == "1 1 0 0 0 1 0 1 0 0"
     # a deletion in the session leaves no method behind but marks the function
     out = trusted_edge_test_output(load_path, depot, in_deps_def * """
         using ContribDep
@@ -2349,6 +2366,106 @@ precompile_test_harness("activation replay") do load_path
         print(ActReplayDep.f(1.0), " ", mint.module, " ", any(i -> isassigned(inters, i) && inters[i] === mint, eachindex(inters)))
         """)
     @test out == "new ActReplayPkg true"
+end
+
+# Verifying an image's edges asks first whether every method under the signature's
+# typenames came from the image or its dependencies: then the worker's verdict stands.
+# Otherwise the interference sets of the expected methods are probed for newcomers,
+# passing over the dependencies' own methods, which the worker already saw.
+precompile_test_harness("edge verification: dependency methods are trusted") do load_path
+    write(joinpath(load_path, "VerifySkipDep.jl"),
+        """
+        module VerifySkipDep
+        abstract type A end
+        abstract type B <: A end
+        struct C <: B end
+        f(x) = :any
+        f(::B) = :b
+        f(::C) = :c
+        k(::Integer) = :int
+        function h end
+        h(::Integer, ::Int) = :dep
+        callh(x) = h(x, 1)
+        end
+        """)
+    # over A this method is covered by f(::B), whose interference set is not empty, so
+    # the probe cannot certify the drop and the edge needs the full lookup
+    write(joinpath(load_path, "VerifySkipOther.jl"),
+        """
+        module VerifySkipOther
+        using VerifySkipDep
+        VerifySkipDep.f(::Union{VerifySkipDep.B, Char}) = :other
+        VerifySkipDep.h(::Int, ::Signed) = :other # ambiguous with Dep's over (Int, Int)
+        end
+        """)
+    # extends f without knowing about the user below
+    write(joinpath(load_path, "VerifySkipExt.jl"),
+        """
+        module VerifySkipExt
+        using VerifySkipDep
+        VerifySkipDep.f(::Int) = :ext
+        end
+        """)
+    write(joinpath(load_path, "VerifySkipUser.jl"),
+        """
+        module VerifySkipUser
+        using VerifySkipDep, VerifySkipOther
+        callf() = VerifySkipDep.f(Base.inferencebarrier(VerifySkipDep.C())::VerifySkipDep.A)
+        calli() = VerifySkipDep.f(1)
+        callk() = VerifySkipDep.k(Base.inferencebarrier(1)::Real) # k's one method does not cover Real
+        precompile(callf, ())
+        precompile(calli, ())
+        precompile(callk, ())
+        precompile(VerifySkipDep.callh, (Int,))
+        end
+        """)
+    for name in ("VerifySkipDep", "VerifySkipOther", "VerifySkipExt", "VerifySkipUser")
+        Base.compilecache(Base.PkgId(name))
+    end
+    depot = DEPOT_PATH[1]
+    out = trusted_edge_test_output(load_path, depot, """
+        using VerifySkipDep
+        # a method of the session is in no image: it poisons the trust in every edge to f and
+        # is probed in the scan, where it intersects f(1) but not f(::A)
+        VerifySkipDep.f(::Int) = :session
+        using VerifySkipUser
+        const RU = Base.Compiler.ReinferUtils
+        Dep = VerifySkipDep
+        cache(f) = only(Base.specializations(only(methods(f)))).cache
+        # verify the edge `sig` of `ci` as code of `image` would, reporting whether it stays
+        # valid and whether that took the full lookup (which the workspace memoizes)
+        function verify(ci, sig, n, fully_covers, image)
+            edges = ci.edges # ..., nmatches::Int, sig, matches...
+            i = findfirst(j -> edges[j] isa Int && edges[j+1] === sig, 1:length(edges)-1) + 2
+            ws = RU.VerifyMethodWorkspace()
+            minw, maxw = RU.verify_call(sig, edges, i, n, Base.get_world_counter(), fully_covers, false, ws, image)
+            return (maxw == typemax(UInt), !isempty(ws.lookups))
+        end
+        blob = RU.external_blob_index
+        cif = cache(VerifySkipUser.callf)
+        sigf = Tuple{typeof(Dep.f), Dep.A}
+        print(cif.min_world == which(Dep.f, (Dep.B,)).primary_world, " ", cif.max_world == typemax(UInt))
+        # Other is a dependency of User, but not of Dep or of code in no image
+        print(" ", verify(cif, sigf, 3, true, blob(VerifySkipUser)), " ", verify(cif, sigf, 3, true, blob(Dep)), " ", verify(cif, sigf, 3, true, typemax(UInt)))
+        # only Dep has methods of k, so User trusts this edge, which no fast path resolves
+        sigk = Tuple{typeof(Dep.k), Real}
+        print(" ", verify(cache(VerifySkipUser.callk), sigk, 1, false, blob(VerifySkipUser)), " ", verify(cache(VerifySkipUser.callk), sigk, 1, false, typemax(UInt)))
+        # a trusted edge without ambiguity is valid from the method it matches
+        print(" ", cache(VerifySkipUser.callk).min_world == which(Dep.k, (Integer,)).primary_world)
+        print(" ", Base.invokelatest(VerifySkipUser.calli))
+        """)
+    @test out == "true true (true, false) (true, true) (true, true) (true, false) (true, true) true session"
+    # Ext's method is in an image that is no dependency of User, so loading User after
+    # it must probe it. The trusted edge of `callh` is ambiguous, so it is valid only from
+    # Other's world: in Dep's world `callh` still calls Dep's method.
+    out = trusted_edge_test_output(load_path, depot, """
+        using VerifySkipDep, VerifySkipExt, VerifySkipUser
+        Dep = VerifySkipDep
+        world = which(Dep.h, (Integer, Int)).primary_world
+        print(Base.invokelatest(VerifySkipUser.calli), " ", Base.invoke_in_world(world, Dep.callh, 1), " ",
+              try Dep.callh(1) catch err; nameof(typeof(err)) end)
+        """)
+    @test out == "ext dep MethodError"
 end
 
 precompile_test_harness("Generator nospecialize") do load_path
@@ -2585,6 +2702,34 @@ precompile_test_harness("Binding Unique") do load_path
     invokelatest() do
         @test UniqueBinding2.thebinding === ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), UniqueBinding1, :x, true)
         @test UniqueBinding2.thebinding2 === ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), UniqueBinding2, :thebinding, true)
+    end
+end
+
+# A WeakRef from a package image must be cleared once its value is dead
+precompile_test_harness("Image WeakRef") do load_path
+    write(joinpath(load_path, "ImageWeakRef.jl"),
+        """
+        module ImageWeakRef
+            mutable struct Box; x::Int; end
+            const W = WeakRef(nothing)
+            const held = Ref{Any}(nothing)
+            @noinline set!() = (W.value = Box(1); nothing)
+            @noinline sethold!() = (W.value = held[] = Box(2); nothing)
+            @noinline cleared() = W.value === nothing
+            @noinline holds() = W.value === held[]
+        end
+        """)
+    @eval using ImageWeakRef
+    invokelatest() do
+        ImageWeakRef.set!()
+        GC.gc(true)
+        @test ImageWeakRef.cleared() skip=!Base.USING_STOCK_GC
+        ImageWeakRef.sethold!()
+        GC.gc(false); GC.gc(true); GC.gc(false)
+        @test ImageWeakRef.holds()
+        ImageWeakRef.held[] = nothing
+        GC.gc(true); GC.gc(true)
+        @test ImageWeakRef.cleared() skip=!Base.USING_STOCK_GC
     end
 end
 
@@ -4215,6 +4360,50 @@ precompile_test_harness("Type{Union{}} inline field") do dir
     @test (@eval $TypeBottomField.X.t) === Union{}
 end
 
+# A package image activates all its methods in one world, so the dispatch cache entries
+# they shadow are invalidated in one pass afterwards. When several of its methods shadow
+# the same specialization, that pass must check each of their signatures.
+precompile_test_harness("dispatch cache entries shadowed by one image") do dir
+    write(joinpath(dir, "ShadowedBase.jl"),
+          """
+          module ShadowedBase
+              # the cache entries for other arguments are guarded against AbstractString
+              j(@nospecialize(x)) = :old
+              j(::AbstractString) = :str
+              k(@nospecialize(x)) = :old
+              k(::AbstractString) = :str
+          end
+          """)
+    write(joinpath(dir, "ShadowingMethods.jl"),
+          """
+          module ShadowingMethods
+              using ShadowedBase
+              # the guard covers one of the two new methods; the other must still
+              # invalidate, whichever of them is checked first
+              ShadowedBase.j(::Int) = :new_int
+              ShadowedBase.j(::String) = :new_string
+              ShadowedBase.k(::String) = :new_string
+              ShadowedBase.k(::Int) = :new_int
+          end
+          """)
+    @test Base.compilecache(Base.PkgId("ShadowedBase")) isa Tuple
+    @test Base.compilecache(Base.PkgId("ShadowingMethods")) isa Tuple
+    @eval using ShadowedBase
+    j, k = @eval (ShadowedBase.j, ShadowedBase.k)
+    # fill the dispatch caches
+    for fn in (j, k)
+        @test Base.invokelatest(fn, 1) === :old
+        @test Base.invokelatest(fn, :s) === :old
+        @test Base.invokelatest(fn, "s") === :str
+    end
+    @eval using ShadowingMethods
+    for fn in (j, k)
+        @test Base.invokelatest(fn, 1) === :new_int
+        @test Base.invokelatest(fn, :s) === :old
+        @test Base.invokelatest(fn, "s") === :new_string
+    end
+end
+
 # Cache rejection reasons and how they are reported when loading triggers precompilation:
 # caches left behind by another version of Julia collapse into one generic message, while
 # actionable reasons (e.g. changed source) are reported by name without version noise.
@@ -5219,6 +5408,12 @@ end
             append!(empty!(DEPOT_PATH), original_depot_path)
         end
     end
+end
+
+@testset "jl_set_newly_inferred rejects a typed vector" begin
+    @test_throws TypeError ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.CodeInstance[])
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), Any[])
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
 end
 
 finish_precompile_test!()

@@ -705,7 +705,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = head(ex)
     if k == :bindingid || k == :value || k == :nothing ||
             k == :inert || k == :syntaxinert || k == :top ||
-            k == :core || k == :symbol ||
+            k == :core || k == :symbol || k == :copyast ||
             k == :sourcelocation || k == :static_eval ||
             k == :foreignsymbol || k == :static_parameter
         ex1 = ex

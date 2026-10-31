@@ -163,7 +163,6 @@ failures_invalid = [
     "invalid/control/string-null.toml",
     "invalid/control/string-us.toml",
     "invalid/encoding/bad-codepoint.toml",
-    "invalid/integer/invalid-hex-03.toml",
     "invalid/encoding/bad-utf8-in-comment.toml",
     "invalid/encoding/bad-utf8-in-multiline-literal.toml",
     "invalid/encoding/bad-utf8-in-multiline.toml",

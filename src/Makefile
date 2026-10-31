@@ -147,7 +147,7 @@ endif
 ifeq ($(OS),WINNT)
 PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,win32_ucontext.h)
 endif
-HEADERS := $(PUBLIC_HEADERS) $(addprefix $(SRCDIR)/,julia_internal.h options.h timing.h passes.h gc-alloc-profiler.h jl_internal_data.inc) $(addprefix $(BUILDDIR)/,$(DTRACE_HEADERS) jl_internal_funcs.inc jl_data_globals_defs.inc)
+HEADERS := $(PUBLIC_HEADERS) $(addprefix $(SRCDIR)/,julia_internal.h options.h timing.h passes.h gc-alloc-profiler.h jl_internal_data.inc arch/cfi_noreturn.h) $(addprefix $(BUILDDIR)/,$(DTRACE_HEADERS) jl_internal_funcs.inc jl_data_globals_defs.inc)
 PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,julia_gcext.h)
 PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLIC_HEADERS)) $(UV_HEADERS))
 
@@ -253,10 +253,15 @@ CG_DEBUG_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia-debug -ljulia-internal-de
 RT_RELEASE_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/flisp/libflisp.a) $(call whole_archive,$(BUILDDIR)/support/libsupport.a) -ljulia $(RT_LIBS)
 CG_RELEASE_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia -ljulia-internal
 
-OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
-DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
-STATIC_OBJS := $(SRCS:%=$(BUILDDIR)/%.static.o)
-STATIC_DOBJS := $(SRCS:%=$(BUILDDIR)/%.static.dbg.obj)
+# assembly in arch/<arch>/, linked into libjulia-internal; each file only defines
+# code for the operating systems it applies to (win_setjmp is part of libsupport)
+ASM_ARCH := $(if $(filter arm%,$(ARCH)),arm,$(ARCH))
+ASM_SRCS := $(filter-out win_setjmp,$(basename $(notdir $(wildcard $(SRCDIR)/arch/$(ASM_ARCH)/*.S))))
+
+OBJS := $(SRCS:%=$(BUILDDIR)/%.o) $(ASM_SRCS:%=$(BUILDDIR)/arch_%.o)
+DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj) $(ASM_SRCS:%=$(BUILDDIR)/arch_%.dbg.obj)
+STATIC_OBJS := $(SRCS:%=$(BUILDDIR)/%.static.o) $(ASM_SRCS:%=$(BUILDDIR)/arch_%.static.o)
+STATIC_DOBJS := $(SRCS:%=$(BUILDDIR)/%.static.dbg.obj) $(ASM_SRCS:%=$(BUILDDIR)/arch_%.static.dbg.obj)
 
 CODEGEN_OBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.o)
 CODEGEN_DOBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.dbg.obj)
@@ -395,6 +400,14 @@ $(BUILDDIR)/%.static.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LL
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
 $(BUILDDIR)/%.static.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) -c $< -o $@)
+$(BUILDDIR)/arch_%.o: $(SRCDIR)/arch/$(ASM_ARCH)/%.S $(SRCDIR)/arch/common.h | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(JCPPFLAGS) -c $< -o $@)
+$(BUILDDIR)/arch_%.dbg.obj: $(SRCDIR)/arch/$(ASM_ARCH)/%.S $(SRCDIR)/arch/common.h | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(JCPPFLAGS) -c $< -o $@)
+$(BUILDDIR)/arch_%.static.o: $(SRCDIR)/arch/$(ASM_ARCH)/%.S $(SRCDIR)/arch/common.h | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(JCPPFLAGS) -c $< -o $@)
+$(BUILDDIR)/arch_%.static.dbg.obj: $(SRCDIR)/arch/$(ASM_ARCH)/%.S $(SRCDIR)/arch/common.h | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(JCPPFLAGS) -c $< -o $@)
 $(BUILDDIR)/gc-mmtk.o $(BUILDDIR)/gc-mmtk.static.o: $(SRCDIR)/gc-mmtk/gc-mmtk.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
 $(BUILDDIR)/gc-mmtk.dbg.obj $(BUILDDIR)/gc-mmtk.static.dbg.obj: $(SRCDIR)/gc-mmtk/gc-mmtk.c $(HEADERS) | $(BUILDDIR)
@@ -568,10 +581,10 @@ $(addprefix $(BUILDDIR)/,APInt.o APInt.dbg.obj APInt.static.o APInt.static.dbg.o
 $(addprefix $(BUILDDIR)/,runtime_intrinsics.o runtime_intrinsics.dbg.obj runtime_intrinsics.static.o runtime_intrinsics.static.dbg.obj): $(SRCDIR)/processor.h
 
 # archive library file rules
-$(BUILDDIR)/support/libsupport.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S *.inc) $(SRCDIR)/support/*.c
+$(BUILDDIR)/support/libsupport.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.inc) $(wildcard $(SRCDIR)/arch/*/win_setjmp.S) $(SRCDIR)/support/*.c
 	$(MAKE) -C $(SRCDIR)/support BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
-$(BUILDDIR)/support/libsupport-debug.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S *.inc) $(SRCDIR)/support/*.c
+$(BUILDDIR)/support/libsupport-debug.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.inc) $(wildcard $(SRCDIR)/arch/*/win_setjmp.S) $(SRCDIR)/support/*.c
 	$(MAKE) -C $(SRCDIR)/support debug BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
 $(FLISP_EXECUTABLE_release): $(BUILDDIR)/flisp/libflisp.a

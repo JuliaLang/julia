@@ -1983,7 +1983,7 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
     // For unions, we may need to keep a reference to the boxed part individually.
     // If this is non-NULL, then, at runtime, we satisfy the invariant that (for the corresponding
-    // runtime values) if `(TIndex | UNION_BOX_MARKER) != 0`, then `Vboxed == V` (by value).
+    // runtime values) if `(TIndex & UNION_BOX_MARKER) != 0`, then `Vboxed == V` (by value).
     // For convenience, we also set this value of isboxed values, in which case
     // it is equal (at compile time) to V.
 
@@ -2081,8 +2081,10 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
         promotion_point(v.promotion_point),
         promotion_ssa(v.promotion_ssa)
     {
-        if (Vboxed)
+        if (Vboxed) {
             assert(Vboxed->getType() == JuliaType::get_prjlvalue_ty(Vboxed->getContext()));
+            assert(V);
+        }
         // this constructor expects we had a badly or equivalently typed version
         // make sure we aren't discarding the actual type information
         if (v.TIndex) {
@@ -2115,7 +2117,7 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
                 allunbox = true;
             }
             assert(v.TIndex || inline_roots.size() == inline_roots_count);
-            if (V == nullptr && constant == nullptr && !isghost && (inline_roots_count == 0 || (!tindex && !justpointers)))
+            if (V == nullptr && constant == nullptr && !isghost && !tindex && !justpointers)
                 *this = jl_cgval_t(); // no data to populate this value
             else if (inline_roots_count < inline_roots.size())
                 inline_roots.truncate(inline_roots_count); // drop excess roots
@@ -4227,7 +4229,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
 {
     ++EmittedBitsCompares;
     if (arg1.typ == jl_bottom_type || arg2.typ == jl_bottom_type)
-        return UndefValue::get(getInt1Ty(ctx.builder.getContext()));
+        return PoisonValue::get(getInt1Ty(ctx.builder.getContext()));
 
     jl_value_t *argty = (arg1.constant ? jl_typeof(arg1.constant) : arg1.typ);
     bool isboxed;
@@ -4274,8 +4276,9 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
             // these roots may seem a bit overkill, but we want to make sure
             // that a!=b implies (a,)!=(b,) even if a and b are unused and
             // therefore could be freed and then the memory for a reused for b
-            gc_uses.append(get_gc_roots_for(ctx, arg1));
-            gc_uses.append(get_gc_roots_for(ctx, arg2));
+            // memcmp reads the storage through pointers that no longer carry the object
+            gc_uses.append(get_gc_roots_for(ctx, arg1, /*storage_used*/true));
+            gc_uses.append(get_gc_roots_for(ctx, arg2, /*storage_used*/true));
             OperandBundleDef OpBundle("jl_roots", gc_uses);
             auto answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
                         varg1,
@@ -6879,6 +6882,9 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r) J
                         decay_derived(ctx, ptr_phi),
                         decay_derived(ctx, phi));
                 }
+                else {
+                    ptr = decay_derived(ctx, ptr_phi);
+                }
             }
             jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, ai, jl_gc_roots_t(ArrayRef(roots)));
             val.Vboxed = ptr_phi;
@@ -7209,7 +7215,7 @@ static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const T
             track_pjlvalue(ctx, literal_pointer_val(ctx, jl_false)));
     }
     // not a boolean (unreachable dead code)
-    return UndefValue::get(getInt1Ty(ctx.builder.getContext()));
+    return PoisonValue::get(getInt1Ty(ctx.builder.getContext()));
 }
 
 static Value *emit_condition(jl_codectx_t &ctx, jl_value_t *cond, const Twine &msg) JL_CANSAFEPOINT
@@ -7750,7 +7756,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
         SmallVector<Value*, 0> vals;
         for (size_t i = 0; i < nargs; ++i) {
-            vals.append(get_gc_roots_for(ctx, argv[i]));
+            // nothing reads the preserved values themselves; only their lifetimes matter
+            vals.append(get_gc_roots_for(ctx, argv[i], /*storage_used*/false));
         }
         Value *token = vals.empty()
             ? (Value*)ConstantTokenNone::get(ctx.builder.getContext())
@@ -10999,7 +11006,7 @@ static jl_llvm_functions_t
 
     for (PHINode *PN : ToDelete) {
         // This basic block is statically unreachable, thus so is this PHINode
-        PN->replaceAllUsesWith(UndefValue::get(PN->getType()));
+        PN->replaceAllUsesWith(PoisonValue::get(PN->getType()));
         PN->eraseFromParent();
     }
 

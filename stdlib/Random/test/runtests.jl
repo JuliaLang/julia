@@ -709,6 +709,13 @@ end
     @test randstring(n) isa String
 end
 
+@testset "rand from a String with stray continuation bytes" begin
+    rng = Xoshiro(1)
+    @test rand(rng, "\x80") == '\x80'
+    @test Set(rand(rng, "a\x80") for _ in 1:100) == Set(['a', '\x80'])
+    @test Set(rand(rng, "é\x80\x80") for _ in 1:100) == Set(['é', '\x80'])
+end
+
 # this shouldn't crash (#22403)
 @test_throws MethodError rand!(Union{UInt,Int}[1, 2, 3])
 

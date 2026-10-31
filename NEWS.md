@@ -22,6 +22,9 @@ Build system changes
 New library functions
 ---------------------
 
+* `bitsizeof(x)` returns the declared width in bits of a primitive type, or of the primitive type
+  of `x`, excluding the padding that `sizeof` includes. It throws for any other type or value ([#61359]).
+
 New library features
 --------------------
 
@@ -55,6 +58,12 @@ Standard library changes
 #### Test
 
 #### TOML
+
+#### UUIDs
+
+* `uuid5` now hashes the bytes of `name` as specified by RFC 4122, instead of first processing
+  backslash escape sequences in it with `unescape_string`. This changes the result for names
+  containing a backslash, which previously could also throw an `ArgumentError`.
 
 External dependencies
 ---------------------

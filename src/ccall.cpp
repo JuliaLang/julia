@@ -461,7 +461,7 @@ static Value *llvm_type_rewrite(
         return v;
 
     if (from_type == getVoidTy(ctx.builder.getContext()) || isa<UndefValue>(v))
-        return UndefValue::get(target_type); // convert undef (unreachable) -> undef (target_type)
+        return PoisonValue::get(target_type); // convert undef (unreachable) -> poison (target_type)
 
     assert(from_type->isPointerTy() == target_type->isPointerTy()); // expect that all ABIs consider all pointers to be equivalent
     if (target_type->isPointerTy())
@@ -1605,7 +1605,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         if (jl_is_long(argi_root))
             continue;
         jl_cgval_t arg_root = emit_expr(ctx, argi_root);
-        gc_uses.append(get_gc_roots_for(ctx, arg_root));
+        // the callee only sees copies of the arguments (see julia_to_native), never this storage
+        gc_uses.append(get_gc_roots_for(ctx, arg_root, /*storage_used*/false));
     }
 
     // Peel the cancellation-guard operands (handler_fn, state) prepended

@@ -351,6 +351,8 @@ const ansi_cleartoendofline = "\e[0K"
 const ansi_enablecursor = "\e[?25h"
 const ansi_disablecursor = "\e[?25l"
 const ansi_clearline = "\e[2K"
+const ansi_beginsync = "\e[?2026h"
+const ansi_endsync = "\e[?2026l"
 ansi_moveup(n::Int) = string("\e[", n, "A")
 
 struct PkgPrecompileError <: Exception
@@ -1329,9 +1331,9 @@ precompilation:
 - Packages with `__precompile__(false)` are skipped if they are from loading to
   avoid repeated work on every session.
 - Parallel compilation is controlled by `JULIA_NUM_PRECOMPILE_TASKS` environment variable
-  (defaults to CPU_THREADS + 1, capped at 16, halved on Windows). The total CPU-thread
+  (defaults to EFFECTIVE_CPU_THREADS + 1, capped at 16, halved on Windows). The total CPU-thread
   budget shared across those workers (worker baselines plus native-image codegen threads)
-  is controlled by `JULIA_PRECOMPILE_THREADS` (defaults to CPU_THREADS + 1).
+  is controlled by `JULIA_PRECOMPILE_THREADS` (defaults to EFFECTIVE_CPU_THREADS + 1).
 - Extensions are precompiled when all their triggers are available in the environment.
 """
 function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
@@ -2408,10 +2410,8 @@ function spawn_print_loop!(s::PrecompileSession)
                         end
                         keyboard_tip(BG)
                     end
+                    # clear each line as it is redrawn, not the whole display up front, to avoid flicker
                     str_ = sprint(; context=s.logio) do iostr
-                        if i_local > 1
-                            print(iostr, ansi_cleartoend)
-                        end
                         bar.header = verbose ? "Precompiling ($(s.num_tasks) tasks) " : "Precompiling packages "
                         # max(0,...) guards against a race where the print loop runs after
                         # n_already_precomp is incremented but before n_done is incremented,
@@ -2426,7 +2426,7 @@ function spawn_print_loop!(s::PrecompileSession)
                             if !isempty(tip)
                                 s_bar = string(s_bar, " ", color_string(tip, tip_color, s.hascolor))
                             end
-                            print(iostr, Base._truncate_at_width_or_chars(true, s_bar, termwidth), "\n")
+                            print(iostr, ansi_cleartoendofline, Base._truncate_at_width_or_chars(true, s_bar, termwidth), "\n")
                         end
                         for pkg_config in pkg_queue_show
                             dep, config = pkg_config
@@ -2481,8 +2481,9 @@ function spawn_print_loop!(s::PrecompileSession)
                             else
                                 string("    ", name)
                             end
-                            println(iostr, Base._truncate_at_width_or_chars(true, line, termwidth))
+                            println(iostr, ansi_cleartoendofline, Base._truncate_at_width_or_chars(true, line, termwidth))
                         end
+                        print(iostr, ansi_cleartoend)
                     end
                     n_print_rows = count("\n", str_)
                     s.printloop_should_exit = s.interrupted_or_done && final_loop
@@ -2493,10 +2494,11 @@ function spawn_print_loop!(s::PrecompileSession)
                             print(s.logio, ansi_disablecursor)
                             cursor_disabled = true
                         end
+                        # terminals that support synchronized output draw the frame in one go
                         if s.printloop_should_exit
-                            print(s.logio, str_)
+                            print(s.logio, ansi_beginsync, str_, ansi_endsync)
                         else
-                            print(s.logio, str_, ansi_moveup(n_print_rows), ansi_movecol1)
+                            print(s.logio, ansi_beginsync, str_, ansi_moveup(n_print_rows), ansi_movecol1, ansi_endsync)
                         end
                     elseif cursor_disabled
                         print(s.logio, ansi_enablecursor)
