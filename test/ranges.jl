@@ -1833,6 +1833,36 @@ end
     end
 end
 
+@testset "Issue #37276" begin
+    # `lerpi` interpolates in the element type, so an element type wider than `Float64`
+    # keeps its own precision rather than being capped at `Float64`.
+    @test real(Base.lerpi(1, 10, Complex{BigFloat}(0), Complex{BigFloat}(1))) ==
+          Base.lerpi(1, 10, BigFloat(0), BigFloat(1))
+    @test real(LinRange(Complex{BigFloat}(0), Complex{BigFloat}(1), 11)[2]) ==
+          LinRange(BigFloat(0), BigFloat(1), 11)[2]
+    # `Float32` ranges interpolate without widening to `Float64`.
+    ir = sprint(io -> code_llvm(io, getindex, (LinRange{Float32,Int}, Int); debuginfo=:none))
+    @test !occursin("double", ir)
+    # Endpoints are exact, constant ranges are constant, and the output is monotonic.
+    rng = Random.Xoshiro(37276)
+    for T in (Float16, Float32), _ in 1:2000
+        n = rand(rng, (2, 3, 10, 51, 1000))
+        a = T(randn(rng) * 10.0^rand(rng, -3:2))
+        b = T(a + randn(rng) * abs(a) * 10.0^rand(rng, -6:0))
+        if rand(rng, Bool)
+            b = -b
+        end
+        r = LinRange(a, b, n)
+        @test first(r) === a && last(r) === b
+        # `issorted(::AbstractRange)` reads only the step, so check the elements.
+        @test issorted(collect(r)) || issorted(collect(r); rev=true)
+        @test all(==(a), LinRange(a, a, n))
+        z = LinRange(complex(a, b), complex(a, b), n)
+        @test all(==(complex(a, b)), z)
+    end
+    @test issorted(collect(LinRange(0.87357676f0, 0.8735782f0, 51)))
+end
+
 @testset "Issue #26532" begin
     x = range(3, stop=3, length=5)
     @test step(x) == 0.0
