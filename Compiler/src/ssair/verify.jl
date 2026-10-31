@@ -64,7 +64,10 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
         end
         if (def_bb == use_bb)
             if op.id > length(ir.stmts)
-                @assert ir.new_nodes.info[op.id - length(ir.stmts)].pos <= use_idx
+                if ir.new_nodes.info[op.id - length(ir.stmts)].pos > use_idx
+                    @verify_error "Def ($(op.id)) does not dominate use ($(use_idx)) in same BB"
+                    raise_error()
+                end
             else
                 if op.id >= use_idx
                     @verify_error "Def ($(op.id)) does not dominate use ($(use_idx)) in same BB"

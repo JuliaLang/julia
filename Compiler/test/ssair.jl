@@ -321,6 +321,11 @@ let cases = Pair{String,Compiler.IRCode}[
             make_ircode(Any[tuple_call(SSAValue(5)), ReturnNode(1)]; verify=false),
         "Def (2) does not dominate use (1) in same BB" =>
             make_ircode(Any[tuple_call(SSAValue(2)), tuple_call(), ReturnNode(1)]; verify=false),
+        "Def (4) does not dominate use (1) in same BB" =>
+            modified(make_ircode(Any[tuple_call(), tuple_call(), ReturnNode(1)])) do ir
+                new = Compiler.insert_node!(ir, 2, Compiler.NewInstruction(tuple_call(), Any))
+                ir.stmts.stmt[1] = tuple_call(new)
+            end,
         "Basic Block 2 does not dominate block 3 (tried to use value %2 at %4)" =>
             make_ircode(Any[GotoIfNot(true, 4), tuple_call(), ReturnNode(1),
                 tuple_call(SSAValue(2)), ReturnNode(1)]; verify=false),
