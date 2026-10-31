@@ -2,7 +2,7 @@
 import Base: SHA1
 
 using Artifacts, Test, Base.BinaryPlatforms
-using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform, load_overrides
+using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform, load_overrides, query_override
 using TOML
 
 @test isempty(Test.detect_closure_boxes(Artifacts))
@@ -76,7 +76,7 @@ run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifac
 
             # Test `load_overrides()` works *with* "Overrides.toml" file with force parameter, which overrides even when `ARTIFACT_OVERRIDES[] !== nothing``
             @test load_overrides(force=true) == expected_output
-        finally # Make sure `DEPOT_PATH` will be restored to the status quo in the event of a bug
+
             # Restore the old `DEPOT_PATH` to avoid messing with any other code
             empty!(Base.DEPOT_PATH)
             append!(Base.DEPOT_PATH, old_depot_path)
@@ -87,6 +87,41 @@ run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifac
 
     # Test the "Overrides.toml" file is cleared back to the status quo
     @test load_overrides(force=true) == empty_output
+
+
+end
+
+@testset "Query Overrides" begin
+    pkg_uuid = Base.UUID("d57dbccd-ca19-4d82-b9b8-9d660942965b")
+    other_uuid = Base.UUID("6a58b7fd-86f0-4be3-8e6c-3b4d8c1a2f5e")
+    target_hash = SHA1("fb886e813a4aed4147d5979fcdf27457d20aa35d")
+
+    overrides = Dict{Symbol, Any}(
+        :UUID => Dict{Base.UUID, Dict{String, Union{SHA1, String}}}(
+            pkg_uuid => Dict{String, Union{SHA1, String}}(
+                "c_simple" => "/path/to/c_simple_dir",
+                "libfoo" => target_hash,
+            ),
+        ),
+        :hash => Dict{SHA1, Union{SHA1, String}}(),
+    )
+
+    # Override to an absolute path is returned unchanged
+    @test query_override(pkg_uuid, "c_simple"; overrides=overrides) == "/path/to/c_simple_dir"
+
+    # Override to another artifact is resolved to that artifact's path
+    @test query_override(pkg_uuid, "libfoo"; overrides=overrides) ==
+        artifact_path(target_hash)
+
+    # `AbstractString` artifact names dispatch to the same result
+    @test query_override(pkg_uuid, SubString("c_simple"); overrides=overrides) ==
+        "/path/to/c_simple_dir"
+
+    # A package with overrides but no matching artifact name returns `nothing`
+    @test query_override(pkg_uuid, "unknown"; overrides=overrides) === nothing
+
+    # A package with no overrides at all returns `nothing`
+    @test query_override(other_uuid, "c_simple"; overrides=overrides) === nothing
 end
 
 @testset "Artifact Paths" begin
