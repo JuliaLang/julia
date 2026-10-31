@@ -724,6 +724,19 @@ end
             @test isopen(s)
             close(s)
         end
+        # Exit cleanup closes the SIGWINCH watcher's handle. Dirty the heap so its
+        # uninitialized fields are likely nonzero, and retry, as that is not guaranteed.
+        script = """
+            ps = [Libc.malloc(sz) for sz in 16:8:1024 for _ in 1:20]
+            foreach(ps) do p
+                ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, 0x5a, 16)
+                Libc.free(p)
+            end
+            close(Base.SignalCondition(Base.SIGWINCH))
+            """
+        for _ in 1:3
+            @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`, stderr=stderr))
+        end
     end
     if !Sys.iswindows()
         # SIGTERM goes through the runtime's signal thread, SIGHUP through a handler.
