@@ -309,8 +309,7 @@ module IteratorsMD
 
     _convert2ind(sz::Bool) = Base.OneTo(Int8(sz))
     _convert2ind(sz::Integer) = Base.oneto(sz)
-    _convert2ind(sz::AbstractUnitRange) = first(sz):last(sz)
-    _convert2ind(sz::OrdinalRange) = first(sz):step(sz):last(sz)
+    _convert2ind(sz::OrdinalRange) = sz
 
     function show(io::IO, iter::CartesianIndices)
         print(io, "CartesianIndices(")
@@ -1343,6 +1342,7 @@ function circcopy!(dest, src)
     if (szsrc = map(length, indssrc)) != (szdest = map(length, indsdest))
         throw(DimensionMismatch("src and dest must have the same sizes (got $szsrc and $szdest)"))
     end
+    isempty(src) && return dest
     shift = map((isrc, idest)->first(isrc)-first(idest), indssrc, indsdest)
     all(x->x==0, shift) && return copyto!(dest, src)
     _circcopy!(dest, (), indsdest, src, (), indssrc)
