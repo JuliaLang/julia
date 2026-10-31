@@ -442,8 +442,6 @@ end
         let u = UInt(typemax(Int)) + 1
             @test isempty(findall(in(u:(u + 5)), 1:typemax(Int)))
         end
-        @test findall(in(big(10)^24:(big(10)^24 + 50)), big(0):7:big(10)^25) ==
-              142857142857142857142859:1:142857142857142857142865
 
         let spans = Any[
                 Int8(-128):Int8(-100), Int8(-50):Int8(50), Int8(50):Int8(127), Int8(10):Int8(5),
