@@ -2107,6 +2107,8 @@ end
     @test Base.Slice(Base.OneTo(3))[Int8(2)] == Int8(2)
     @test Base.Slice(1:10)[Int32(2)] == Int32(2)
     @test Base.Slice(1:10)[Int8(2)] == Int8(2)
+    @test Base.Slice(3:5)[Int8(3)] === 3
+    @test Base.Slice(3:5)[UInt(4)] === 4
 end
 
 @testset "allocation of TwicePrecision call" begin
