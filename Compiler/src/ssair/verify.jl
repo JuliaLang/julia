@@ -19,8 +19,10 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
         pushfirst!(arg.args, :println)
         arg.head = :call
         return esc(quote
-            $arg
-            maybe_show_ir(ir)
+            if print
+                $arg
+                maybe_show_ir(ir)
+            end
         end)
     end
 end
