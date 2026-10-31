@@ -3128,7 +3128,13 @@ end
 @testset "constructor inferability for $T" for T in [AbstractFloat, #=BigFloat,=# Float16,
         Float32, Float64, Integer, Bool, Signed, BigInt, Int128, Int16, Int32, Int64, Int8,
         Unsigned, UInt128, UInt16, UInt32, UInt64, UInt8]
-    @test all(R -> R<:T, Base.return_types(T))
+    # Only Julia's own constructors: earlier tests on this worker may have added their own
+    # (ranges' RealWrapper, math's EvenInteger)
+    let ms = collect(methods(T)), rts = Base.return_types(T)
+        @test all(zip(ms, rts)) do (m, R)
+            Base.moduleroot(parentmodule(m)) ∉ (Core, Base) || R <: T
+        end
+    end
 end
 @testset "constructor inferability for BigFloat" begin
     T = BigFloat
