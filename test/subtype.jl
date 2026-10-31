@@ -1286,13 +1286,45 @@ end
 end
 
 
-let S = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [TypeVar(:T), Any], 2),
+let S = ccall(:jl_new_unionall, Any, (Any, Any), TypeVar(:T), Any),
     VS = TypeVar(:T),
-    T = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [VS, VS], 2)
+    T = ccall(:jl_new_unionall, Any, (Any, Any), VS, VS)
     # check (T where T) == (Any where T)
     # these types are not normally valid, but check them just to make sure subtyping is robust
     @test T <: S
     @test S <: T
+end
+
+# `UnionAll` memoizes structural facts in a hidden flag word on first query
+@test fieldnames(UnionAll) === (:var, :body)
+let T = TypeVar(:T), S = TypeVar(:S)
+    closed = Vector{T} where T
+    open = Pair{T, S} where T # `S` is free
+    for _ in 1:2 # the second round reads the memo
+        @test !Base.has_free_typevars(closed)
+        @test Base.has_free_typevars(open)
+        @test !Base.has_free_typevars(Tuple{Int, closed})
+        @test Base.has_free_typevars(Tuple{Int, open})
+        @test !Base.has_free_typevars(UnionAll(S, Tuple{closed, open}))
+        @test Base.has_free_typevars(Tuple{closed, Union{Int, open}})
+        @test !Base.has_typevar(Tuple{closed, open}, T)
+        @test Base.has_typevar(Tuple{closed, open}, S)
+    end
+    # a raw node (not normalized by the constructor) starts with nothing memoized
+    U = ccall(:jl_new_unionall, Any, (Any, Any), S, Pair{S, T})
+    @test Base.has_free_typevars(U)
+    @test Base.has_free_typevars(U)
+    @test !Base.has_free_typevars(UnionAll(T, U))
+    # generic constructors must not leave a stale memo in the hidden flag word
+    mk = @eval (v, b) -> $(Expr(:new, UnionAll, :v, :b))
+    for i in 1:10000
+        c = mk(TypeVar(:T), Int)
+        Base.has_free_typevars(c)
+        @test Base.has_free_typevars(mk(TypeVar(:T), Vector{S}))
+        c = ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), UnionAll, Any[TypeVar(:T), Int], 2)
+        Base.has_free_typevars(c)
+        @test Base.has_free_typevars(ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), UnionAll, Any[TypeVar(:T), Vector{S}], 2))
+    end
 end
 
 # issue #20121
@@ -2756,6 +2788,36 @@ end
 # requires assertions enabled (to test union-split in `obviously_disjoint`)
 @test !<:(Tuple{Type{Int}, Int}, Tuple{Type{Union{Int, T}}, T} where T<:Union{Int8,Int16})
 @test <:(Tuple{Type{Int}, Int}, Tuple{Type{Union{Int, T}}, T} where T<:Union{Int8,Int})
+
+# Disjoint union branches, shared typevars, and backtracking (#63974).
+@testset "union intersection pruning" begin
+    A = Tuple{Union{Vector{T}, Ref{T}, Set{T}}, T} where T
+    B = Tuple{Union{Vector{Int}, Ref{Float64}}, Float64}
+    @testintersect(A, B, Tuple{Ref{Float64},Float64})
+
+    A = Tuple{Union{Vector{T}, Ref{T}, Set{T}}, Ref{T}} where T
+    B = Tuple{Vector{S}, Union{Vector{S}, Ref{S}, Set{S}}} where S
+    @testintersect(A, B, Tuple{Vector{T},Ref{T}} where T)
+
+    B = Tuple{V,V} where V<:Union{Array{Int},Array{Float64}}
+    @testintersect(A, B, Union{})
+
+    A = Tuple{Union{Ref{T},Set{T}}} where T<:Int
+    B = Tuple{Ref{S}} where S<:Float64
+    @testintersect(A, B, Tuple{Ref{Union{}}})
+
+    T = TypeVar(:T)
+    U = Union{(Array{T,n} for n in 1:20)...}
+    A = UnionAll(T, Tuple{U,U,U})
+    B = Tuple{Vector,Matrix,Array{Float64,3}}
+    @testintersect(A, B, Tuple{Vector{Float64},Matrix{Float64},Array{Float64,3}})
+    @testintersect(A, Tuple{Vector{Int},Matrix,Array{Float64,3}}, Union{})
+
+    # an empty Vararg element intersection still admits the empty tuple
+    A = Tuple{Tuple{Vararg{Union{Int8, Vector{T}}}}, T} where T
+    @testintersect(A, Tuple{Tuple{Vararg{Vector{Int}}}, Float64}, Tuple{Tuple{}, Float64})
+    @test typeintersect(A, Tuple{Tuple{Vararg{Union{Vector{Int}, Int16}}}, Float64}) != Union{}
+end
 
 #issue #49354 (requires assertions enabled)
 @test !<:(Tuple{Type{Union{Int, Val{1}}}, Int}, Tuple{Type{Union{Int, T1}}, T1} where T1<:Val)
