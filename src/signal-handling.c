@@ -853,9 +853,12 @@ static int jl_notify_signal_watchers(int sig) JL_NOTSAFEPOINT
 {
     if (sig <= 0 || sig > JL_MAX_WATCHED_SIGNAL || jl_atomic_load_acquire(&signal_watchers[sig]) == 0)
         return 0;
+    // Read this before waking the watchers: they may close the condition right away, which must
+    // not turn this already-intercepted signal into a fatal one.
+    int intercepted = jl_atomic_load_relaxed(&signal_interceptors[sig]) > 0;
     jl_atomic_store_release(&signal_pending[sig], 1);
     jl_wake_signal_watchers();
-    return jl_atomic_load_relaxed(&signal_interceptors[sig]) > 0;
+    return intercepted;
 }
 
 #if defined(_WIN32)
