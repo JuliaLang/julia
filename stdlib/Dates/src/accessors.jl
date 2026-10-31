@@ -37,7 +37,7 @@ end
 # https://en.wikipedia.org/wiki/Talk:ISO_week_date#Algorithms
 const WEEK_INDEX = (15, 23, 3, 11)
 function week(days)
-    w = div(abs(days - 1), 7) % 20871
+    w = days >= 1 ? div(days - 1, 7) % 20871 : mod(fld(days - 1, 7), 20871)
     c, w = divrem((w + (w >= 10435)), 5218)
     w = (w * 28 + WEEK_INDEX[c + 1]) % 1461
     return div(w, 28) + 1
