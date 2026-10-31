@@ -1445,11 +1445,11 @@ end
             string(Base.thispatch(VERSION), "-", VERSION.prerelease[1])
         envs = Dict{String, String}()
         for (name, julia_version) in (("old", "1.0.0"), ("prerelease", string(Base.thispatch(VERSION), "-zzz")),
-                                      ("current", this_version))
+                                      ("current", this_version), ("unversioned", nothing))
             env = joinpath(dir, name)
             mkpath(env)
             write(joinpath(env, "Project.toml"), "[deps]\n")
-            write(joinpath(env, "Manifest.toml"), """
+            write(joinpath(env, "Manifest.toml"), julia_version === nothing ? "" : """
                 julia_version = "$julia_version"
                 manifest_format = "2.0"
                 """)
@@ -1459,7 +1459,7 @@ end
         mkpath(noproject)
         old_load_path = copy(LOAD_PATH)
         try
-            copy!(LOAD_PATH, [joinpath(dir, name) for name in ("old", "prerelease", "current", "noproject")])
+            copy!(LOAD_PATH, [joinpath(dir, name) for name in ("old", "prerelease", "current", "unversioned", "noproject")])
             err = try
                 Base.require(Test, :NotADependency)
             catch err
@@ -1470,6 +1470,7 @@ end
             @test occursin("resolved with a different\n  julia version", err.msg)
             @test occursin("\n    $(envs["old"]) (v1.0.0)\n", err.msg)
             @test occursin("\n    $(envs["prerelease"]) (v$(Base.thispatch(VERSION))-zzz)\n", err.msg)
+            @test occursin("\n    $(envs["unversioned"]) (julia version not recorded)\n", err.msg)
             @test occursin("different DEV version", err.msg) == (this_version == "$(Base.thispatch(VERSION))-DEV")
             @test occursin("\n    $(envs["current"])\n", err.msg) == (this_version == "$(Base.thispatch(VERSION))-DEV")
             @test occursin("Try `Pkg.instantiate()`", err.msg)
