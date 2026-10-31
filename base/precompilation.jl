@@ -389,7 +389,7 @@ timing_string(t) = string(lpad(round(t, digits = 1), 6), " s")
 # line in verbose mode. Column labels are emitted once via
 # `format_verbose_timing_header`. Returns an empty string if the payload is
 # missing or unparsable.
-function format_verbose_timing(payload::AbstractString, total_seconds::Float64, cache_bytes::Int, peak_rss_bytes::UInt64, hascolor::Bool)
+function format_verbose_timing(payload::AbstractString, total_seconds::Float64, cache_bytes::Integer, peak_rss_bytes::UInt64, hascolor::Bool)
     isempty(payload) && return ""
     include_ns = compilation_ns = deps_ns = UInt64(0)
     methods = 0
@@ -446,7 +446,7 @@ format_verbose_timing_header() = "   total │ include   (deps)   (comp) │ met
 # Sum the on-disk size of the `.ji` cache file and (optionally) its companion
 # pkgimage (`.so`/`.dylib`/`.dll`). Returns 0 if files are missing.
 function _precompile_cache_bytes(cf_jl::AbstractString, cf_so::Union{Nothing,AbstractString})
-    total = 0
+    total = Int64(0)
     try
         isfile(cf_jl) && (total += filesize(cf_jl))
         cf_so === nothing || (isfile(cf_so) && (total += filesize(cf_so)))
@@ -2841,7 +2841,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 println(s.logio, timing_string(t), color_string("  ? ", Base.warn_color(), s.hascolor), name)
                             end
                         else
-                            cache_bytes = 0
+                            cache_bytes = Int64(0)
                             if ret !== nothing
                                 cf_jl, cf_so = ret::Tuple{String, Union{Nothing, String}}
                                 cache_bytes = _precompile_cache_bytes(cf_jl, cf_so)
