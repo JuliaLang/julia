@@ -1253,6 +1253,9 @@ end
     @test nth(finite_cycle_size_unknown, 2) == 3
     @test nth(finite_cycle_size_unknown, 20) == 9
     @test_throws BoundsError nth(finite_cycle_size_unknown, 30) # only wraps 5 times, max n is 5 * 5 = 25
+
+    # unsigned n with a negative first index
+    @test nth(Base.IdentityUnitRange(-5:-3), UInt(1)) == -5
 end
 
 @testset "Iterators docstrings" begin
