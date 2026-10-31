@@ -18,10 +18,9 @@
     using a work-queue managed by `jl_serialize_reachable`.
 
     It's worth emphasizing that the only goal of this stage is to insert objects into `serialization_order`.
-    In later stages, such objects get written in order of `id`.
 
-  - step 2 (the biggest of four steps) takes all items in `serialization_order` and actually serializes them ordered
-    by `id`. The system is serialized into several distinct streams (see `jl_serializer_state`), a "main stream"
+  - step 2 (the biggest of four steps) takes all items in `serialization_order` and actually serializes them.
+    The system is serialized into several distinct streams (see `jl_serializer_state`), a "main stream"
     (the `s` field) as well as parallel streams for writing specific categories of additional internal data (e.g.,
     global data invisible to codegen, as well as deserialization "touch-up" tables, see below). These different streams
     will be concatenated inter steps. Certain key items (e.g., the root task and cached small integers)
@@ -1546,6 +1545,53 @@ static void record_gvars(jl_serializer_state *s, arraylist_t *globals) JL_CANSAF
         jl_queue_for_serialization(s, globals->items[i]);
 }
 
+// How the loader sets the native code of the CodeInstance `ci`: to a runtime function
+// (`fptr_type`), a builtin (`builtin_idx`), or functions of the native image
+// (`invokeptr_id` and `specfptr_id`).  Returns whether the loader writes to `ci`.
+static int ci_native_code(jl_code_instance_t *ci, jl_invoke_api_t *fptr_type, int *builtin_idx,
+                          int32_t *invokeptr_id, int32_t *specfptr_id)
+{
+    *fptr_type = JL_INVOKE_SPECSIG;
+    *builtin_idx = -1;
+    *invokeptr_id = 0;
+    *specfptr_id = 0;
+    if (jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) {
+        *fptr_type = JL_INVOKE_CONST;
+    }
+    else if (jl_is_method(jl_get_ci_mi(ci)->def.method)) {
+        *builtin_idx = jl_builtin_idx(jl_atomic_load_relaxed(&ci->specptr.fptr));
+        if (*builtin_idx >= 0) {
+            *fptr_type = JL_INVOKE_ARGS;
+        }
+        else {
+            jl_get_function_id(native_functions, ci, invokeptr_id, specfptr_id); // see if we generated code for it
+            if (*invokeptr_id < 0) {
+                *fptr_type = (jl_invoke_api_t)-*invokeptr_id;
+                assert(*fptr_type != JL_INVOKE_SPECSIG);
+            }
+        }
+    }
+    return *fptr_type != JL_INVOKE_SPECSIG || *invokeptr_id > 0;
+}
+
+enum { PASS_WRITTEN, PASS_CODE_INSTANCES, PASS_OTHERS, NPASSES };
+
+static int write_pass(jl_serializer_state *s, jl_value_t *v)
+{
+    if (jl_is_module(v))
+        return PASS_WRITTEN;
+    if (!jl_is_code_instance(v))
+        return PASS_OTHERS;
+    jl_code_instance_t *ci = (jl_code_instance_t*)v;
+    jl_invoke_api_t fptr_type;
+    int builtin_idx;
+    int32_t invokeptr_id, specfptr_id;
+    if ((s->incremental && jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) ||
+        ci_native_code(ci, &fptr_type, &builtin_idx, &invokeptr_id, &specfptr_id))
+        return PASS_WRITTEN;
+    return PASS_CODE_INSTANCES;
+}
+
 // The main function for serializing all the items queued in `serialization_order`
 // (They are also stored in `serialization_queue` which is order-preserving, unlike the hash table used
 //  for `serialization_order`).
@@ -1558,8 +1604,14 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
     arraylist_grow(&layout_table, l);
     memset(layout_table.items, 0, l * sizeof(void*));
 
-    // Serialize all entries
-    for (size_t item = 0; item < l; item++) {
+    // Serialize all entries, pass by pass, and in queue order within each pass
+    uint8_t *passes = (uint8_t*)malloc_s(l);
+    for (size_t item = 0; item < l; item++)
+        passes[item] = write_pass(s, (jl_value_t*)serialization_queue.items[item]);
+    for (size_t i = 0; i < NPASSES * l; i++) {
+        size_t item = i % l;
+        if (passes[item] != i / l)
+            continue;
         jl_value_t *v = (jl_value_t*)serialization_queue.items[item];           // the object
         JL_GC_PROMISE_ROOTED(v);
         assert(!(s->incremental && jl_object_in_image(v)));
@@ -1949,34 +2001,15 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 // preserve only JL_CI_FLAGS_NATIVE_CACHE_VALID and JL_CI_FLAGS_UNIQUE_BACKEDGES bits
                 jl_atomic_store_relaxed(&newci->flags, jl_atomic_load_relaxed(&newci->flags) & (JL_CI_FLAGS_NATIVE_CACHE_VALID | JL_CI_FLAGS_UNIQUE_BACKEDGES));
                 jl_atomic_store_relaxed(&newci->specptr.fptr, NULL);
-                uintptr_t fptr_type = JL_INVOKE_SPECSIG;
-                int builtin_idx = -1;
-                if (jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) {
-                    fptr_type = JL_INVOKE_CONST;
-                }
-                else {
-                    if (jl_is_method(jl_get_ci_mi(ci)->def.method)) {
-                        builtin_idx = jl_builtin_idx(jl_atomic_load_relaxed(&ci->specptr.fptr));
-                        if (builtin_idx >= 0)
-                            fptr_type = JL_INVOKE_ARGS;
-                        else {
-                            int32_t invokeptr_id = 0;
-                            int32_t specfptr_id = 0;
-                            jl_get_function_id(native_functions, ci, &invokeptr_id, &specfptr_id); // see if we generated code for it
-                            if (invokeptr_id) {
-                                if (invokeptr_id < 0) {
-                                    fptr_type = (jl_invoke_api_t)-invokeptr_id;
-                                    assert(fptr_type != JL_INVOKE_SPECSIG);
-                                } else {
-                                    write_fptr(s->fptr_record, invokeptr_id, reloc_offset | FPTR_INVOKE);
-                                }
-                                if (specfptr_id) {
-                                    assert(specfptr_id > invokeptr_id && specfptr_id > 0);
-                                    write_fptr(s->fptr_record, specfptr_id, reloc_offset);
-                                }
-                            }
-                        }
-                    }
+                jl_invoke_api_t fptr_type;
+                int builtin_idx;
+                int32_t invokeptr_id, specfptr_id;
+                ci_native_code(ci, &fptr_type, &builtin_idx, &invokeptr_id, &specfptr_id);
+                if (invokeptr_id > 0)
+                    write_fptr(s->fptr_record, invokeptr_id, reloc_offset | FPTR_INVOKE);
+                if (invokeptr_id && specfptr_id) {
+                    assert(specfptr_id > invokeptr_id && specfptr_id > 0);
+                    write_fptr(s->fptr_record, specfptr_id, reloc_offset);
                 }
                 if (fptr_type != JL_INVOKE_SPECSIG)
                     record_reloc(s, reloc_offset + offsetof(jl_code_instance_t, invoke),
@@ -2049,6 +2082,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
             }
         }
     }
+    free(passes);
 }
 
 // Returns the reloc for `item` (see `backref_id`) plus `offset`: a bind, or the address of a slide
@@ -3137,7 +3171,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, s.ptls->root_task->tls);
         }
         else {
-            // Queue the worklist itself as the first item we serialize
             jl_queue_for_serialization(&s, worklist);
             jl_queue_for_serialization(&s, module_init_order);
         }
