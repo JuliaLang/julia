@@ -203,14 +203,50 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
     return need_more_space;
 }
 
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+// Some libsystem_kernel syscall stubs have no unwind info but leave SP and
+// callee-saved registers unchanged. Try LR once when unwinding stops at the
+// first frame. Missing unwind info does not prove this assumption.
+static int jl_unw_lr_context(bt_cursor_t *cursor, bt_context_t *context,
+                             bt_context_t *caller) JL_NOTSAFEPOINT
+{
+    unw_proc_info_t pi;
+    if (unw_get_proc_info(cursor, &pi) != UNW_ENOINFO)
+        return 0;
+    // Only the GPR prefix is guaranteed here (see jl_to_bt_context).
+    arm_thread_state64_t *state = (arm_thread_state64_t*)caller;
+    memset(caller, 0, sizeof(*caller));
+    memcpy(state, context, sizeof(*state));
+    if (state->__lr <= 1)
+        return 0;
+    // Use LR - 1 for lookup and recording, matching a normal caller.
+    state->__pc = state->__lr - 1;
+    return 1;
+}
+#endif
+
 NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
                                   bt_context_t *context, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT
 {
     bt_cursor_t cursor;
     if (!jl_unw_init(&cursor, context, 1))
         return 0;
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    bt_context_t caller;
+    int try_lr = jl_unw_lr_context(&cursor, context, &caller);
+#endif
     size_t bt_size = 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    // This needs a new cursor: setting the IP does not clear libunwind's
+    // missing-info state.
+    if (try_lr && bt_size == 1 && bt_data[0].uintptr != 0 &&
+        jl_unw_init(&cursor, &caller, 1)) {
+        size_t n = 0;
+        jl_unw_stepn(&cursor, bt_data + 1, &n, NULL, maxsize - 1, 0, &pgcstack, 1);
+        bt_size += n;
+    }
+#endif
     return bt_size;
 }
 

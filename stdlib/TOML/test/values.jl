@@ -92,6 +92,12 @@ end
     @test failval("__0"    , Internals.ErrUnexpectedStartOfValue)
     @test failval("1_0_"   , Internals.ErrTrailingUnderscoreNumber)
     @test failval("1_0__0" , Internals.ErrUnderscoreNotSurroundedByDigits)
+
+    # A base prefix must be followed by a digit of that base
+    for s in ("0o8", "0b2", "0x-1", "0b:00", "0x")
+        @test failval(s, Internals.ErrGenericValueError)
+    end
+    @test failval("0x.5", Internals.ErrGenericValueError) # no hex floats
 end
 
 
@@ -178,6 +184,11 @@ end
     # Invalid: \x with invalid hex digits
     @test failval("\"\\xG0\"", Internals.ErrInvalidUnicodeScalar)
 
+    # Line-ending backslash is only valid in multiline basic strings
+    @test failval("\"x\\\ny\"", Internals.ErrInvalidEscapeCharacter)
+    @test failval("\"x\\\r\ny\"", Internals.ErrInvalidEscapeCharacter)
+    @test testval("\"\"\"x\\\ny\"\"\"", "xy")
+
     #=
     Found these examples of string tests somewhere
     quot0=""" """    # valid
@@ -209,6 +220,9 @@ end
     @test testval("[1.0, 2.0, 3.0]", Float64[1.0, 2.0, 3.0])
     @test testval("[1.0, 2.0, 3]", Any[1.0, 2.0, Int64(3)])
     @test testval("[1.0, 2, \"foo\"]", Any[1.0, Int64(2), "foo"])
+    # Base's parser stores dates in internal structs
+    @test Base.TOML.parse(Base.TOML.Parser{nothing}("a = [1979-05-27, 1979-05-28]"))["a"] ==
+          Any[Base.TOML.Date(1979, 5, 27), Base.TOML.Date(1979, 5, 28)]
 end
 
 @testset "Inline tables - TOML v1.1" begin

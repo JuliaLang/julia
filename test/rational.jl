@@ -47,6 +47,8 @@ using Base.MathConstants
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
+    @test_throws InexactError Rational{BigInt}(NaN)
+    @test_throws InexactError Rational(big(NaN))
     # issue 32569
     @test_throws OverflowError 1 // typemin(Int)
     @test_throws ArgumentError 0 // 0
@@ -182,6 +184,8 @@ using Base.MathConstants
     @test_throws DivideError -1//0 + 1//0
     @test Int128(1)//0 + 1//0 isa Rational{Int128}
     @test 1//0 + Int128(1)//0 isa Rational{Int128}
+    @test 0x1//0x0 - 0x1//0x1 === 0x1//0x0
+    @test -%(0x1//0x0, 0x1//0x1) === 0x1//0x0
 
     # inf division by a negative number flips the sign (#63456)
     @test (-1//0) // -1 === 1//0

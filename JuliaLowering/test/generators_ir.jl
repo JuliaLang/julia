@@ -22,10 +22,9 @@
     3   (return %₂)
 14  latestworld
 15  (= slot₁/#-># %₇)
-16  slot₁/#->#
-17  TestMod.xs
-18  (call top.Generator %₁₆ %₁₇)
-19  (return %₁₈)
+16  TestMod.xs
+17  (call top.Generator slot₁/#-># %₁₆)
+18  (return %₁₇)
 
 ########################################
 # Product iteration
@@ -49,22 +48,18 @@
     1   (call top.indexed_iterate slot₂/ 1)
     2   (= slot₃/x (call core.getfield %₁ 1))
     3   (= slot₅/ (call core.getfield %₁ 2))
-    4   slot₅/
-    5   (call top.indexed_iterate slot₂/ 2 %₄)
-    6   (= slot₄/y (call core.getfield %₅ 1))
-    7   TestMod.+
-    8   slot₃/x
-    9   slot₄/y
-    10  (call %₇ %₈ %₉)
-    11  (return %₁₀)
+    4   (call top.indexed_iterate slot₂/ 2 slot₅/)
+    5   (= slot₄/y (call core.getfield %₄ 1))
+    6   TestMod.+
+    7   (call %₆ slot₃/x slot₄/y)
+    8   (return %₇)
 14  latestworld
 15  (= slot₁/#-># %₇)
-16  slot₁/#->#
-17  TestMod.xs
-18  TestMod.ys
-19  (call top.product %₁₇ %₁₈)
-20  (call top.Generator %₁₆ %₁₉)
-21  (return %₂₀)
+16  TestMod.xs
+17  TestMod.ys
+18  (call top.product %₁₆ %₁₇)
+19  (call top.Generator slot₁/#-># %₁₈)
+20  (return %₁₉)
 
 ########################################
 # Use `identity` as the Generator function when possible eg in filters
@@ -88,48 +83,41 @@
     1   (call top.indexed_iterate slot₂/ 1)
     2   (= slot₃/x (call core.getfield %₁ 1))
     3   (= slot₅/ (call core.getfield %₁ 2))
-    4   slot₅/
-    5   (call top.indexed_iterate slot₂/ 2 %₄)
-    6   (= slot₄/y (call core.getfield %₅ 1))
-    7   slot₃/x
-    8   slot₄/y
-    9   (call core.tuple %₇ %₈)
-    10  (return %₉)
+    4   (call top.indexed_iterate slot₂/ 2 slot₅/)
+    5   (= slot₄/y (call core.getfield %₄ 1))
+    6   (call core.tuple slot₃/x slot₄/y)
+    7   (return %₆)
 14  latestworld
 15  (= slot₁/#-># %₇)
-16  slot₁/#->#
+16  (call core.svec)
 17  (call core.svec)
 18  (call core.svec)
-19  (call core.svec)
-20  (call JuliaLowering.eval_closure_type TestMod :#7#8 %₁₇ %₁₈ %₁₉)
-21  latestworld
-22  TestMod.#7#8
-23  (new %₂₂)
-24  TestMod.#7#8
-25  (call core.svec %₂₄ core.Any)
-26  (call core.svec)
-27  SourceLocation:1
-28  (call core.svec %₂₅ %₂₆ %₂₇)
-29  (call core.define_method TestMod core.nothing %₂₈
+19  (call JuliaLowering.eval_closure_type TestMod :#7#8 %₁₆ %₁₇ %₁₈)
+20  latestworld
+21  TestMod.#7#8
+22  (new %₂₁)
+23  TestMod.#7#8
+24  (call core.svec %₂₃ core.Any)
+25  (call core.svec)
+26  SourceLocation:1
+27  (call core.svec %₂₄ %₂₅ %₂₆)
+28  (call core.define_method TestMod core.nothing %₂₇
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/ slot₃/x(single_assign) slot₄/y(!read,single_assign) slot₅/(single_assign)]
     1   (call top.indexed_iterate slot₂/ 1)
     2   (= slot₃/x (call core.getfield %₁ 1))
     3   (= slot₅/ (call core.getfield %₁ 2))
-    4   slot₅/
-    5   (call top.indexed_iterate slot₂/ 2 %₄)
-    6   (= slot₄/y (call core.getfield %₅ 1))
-    7   TestMod.f
-    8   slot₃/x
-    9   (call %₇ %₈)
-    10  (return %₉)
-30  latestworld
-31  (= slot₂/#-># %₂₃)
-32  slot₂/#->#
-33  TestMod.iter
-34  (call top.Filter %₃₂ %₃₃)
-35  (call top.Generator %₁₆ %₃₄)
-36  (return %₃₅)
+    4   (call top.indexed_iterate slot₂/ 2 slot₅/)
+    5   (= slot₄/y (call core.getfield %₄ 1))
+    6   TestMod.f
+    7   (call %₆ slot₃/x)
+    8   (return %₇)
+29  latestworld
+30  (= slot₂/#-># %₂₂)
+31  TestMod.iter
+32  (call top.Filter slot₂/#-># %₃₁)
+33  (call top.Generator slot₁/#-># %₃₂)
+34  (return %₃₃)
 
 ########################################
 # Use of placeholders in iteration vars
@@ -153,10 +141,9 @@
     1   (return 1)
 14  latestworld
 15  (= slot₁/#-># %₇)
-16  slot₁/#->#
-17  TestMod.xs
-18  (call top.Generator %₁₆ %₁₇)
-19  (return %₁₈)
+16  TestMod.xs
+17  (call top.Generator slot₁/#-># %₁₆)
+18  (return %₁₇)
 
 ########################################
 # Error: Use of placeholders in body
@@ -199,10 +186,9 @@ LoweringError:
     12  (return %₁₁)
 14  latestworld
 15  (= slot₁/#-># %₇)
-16  slot₁/#->#
-17  TestMod.iter
-18  (call top.Generator %₁₆ %₁₇)
-19  (return %₁₈)
+16  TestMod.iter
+17  (call top.Generator slot₁/#-># %₁₆)
+18  (return %₁₇)
 
 ########################################
 # return permitted in quoted syntax in generator
@@ -223,14 +209,13 @@ LoweringError:
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/#unused#(!read)]
-    1   (call JuliaLowering.interpolate_expr (inert (return x)))
+    1   (copyast (inert (return x)))
     2   (return %₁)
 14  latestworld
 15  (= slot₁/#-># %₇)
-16  slot₁/#->#
-17  TestMod.iter
-18  (call top.Generator %₁₆ %₁₇)
-19  (return %₁₈)
+16  TestMod.iter
+17  (call top.Generator slot₁/#-># %₁₆)
+18  (return %₁₇)
 
 ########################################
 # Error: `return` not permitted in generator body
@@ -280,19 +265,17 @@ LoweringError:
     1   TestMod.#17#18
     2   (new %₁)
     3   (= slot₃/#-># %₂)
-    4   slot₃/#->#
-    5   TestMod.:
-    6   (call %₅ 1 2)
-    7   (call top.Generator %₄ %₆)
-    8   (return %₇)
+    4   TestMod.:
+    5   (call %₄ 1 2)
+    6   (call top.Generator slot₃/#-># %₅)
+    7   (return %₆)
 26  latestworld
 27  (= slot₁/#-># %₇)
-28  slot₁/#->#
-29  TestMod.:
-30  (call %₂₉ 1 3)
-31  (call top.Generator %₂₈ %₃₀)
-32  (call top.Flatten %₃₁)
-33  (return %₃₂)
+28  TestMod.:
+29  (call %₂₈ 1 3)
+30  (call top.Generator slot₁/#-># %₂₉)
+31  (call top.Flatten %₃₀)
+32  (return %₃₁)
 
 ########################################
 # Comprehension lowers to generator with collect
@@ -320,7 +303,7 @@ T[(x,y) for x in xs, y in ys]
 11  slot₂/
 12  (call core.=== %₁₁ core.nothing)
 13  (call top.not_int %₁₂)
-14  (gotoifnot %₁₃ label₄₉)
+14  (gotoifnot %₁₃ label₄₈)
 15  slot₂/
 16  (= slot₃/y (call core.getfield %₁₅ 1))
 17  (call core.getfield %₁₅ 2)
@@ -328,31 +311,30 @@ T[(x,y) for x in xs, y in ys]
 19  slot₄/
 20  (call core.=== %₁₉ core.nothing)
 21  (call top.not_int %₂₀)
-22  (gotoifnot %₂₁ label₄₃)
+22  (gotoifnot %₂₁ label₄₂)
 23  slot₃/y
 24  (= slot₅/y %₂₃)
 25  slot₄/
 26  (= slot₆/x (call core.getfield %₂₅ 1))
 27  (call core.getfield %₂₅ 2)
-28  slot₆/x
-29  (call core.tuple %₂₈ slot₅/y)
-30  (gotoifnot %₅ label₃₃)
-31  (call top.push! %₇ %₂₉)
-32  (goto label₃₅)
-33  slot₁/
-34  (call top.setindex! %₇ %₂₉ %₃₃)
-35  slot₁/
-36  (= slot₁/ (call top.add_int %₃₅ 1))
-37  (= slot₄/ (call top.iterate %₁ %₂₇))
-38  slot₄/
-39  (call core.=== %₃₈ core.nothing)
-40  (call top.not_int %₃₉)
-41  (gotoifnot %₄₀ label₄₃)
-42  (goto label₂₃)
-43  (= slot₂/ (call top.iterate %₂ %₁₇))
-44  slot₂/
-45  (call core.=== %₄₄ core.nothing)
-46  (call top.not_int %₄₅)
-47  (gotoifnot %₄₆ label₄₉)
-48  (goto label₁₅)
-49  (return %₇)
+28  (call core.tuple slot₆/x slot₅/y)
+29  (gotoifnot %₅ label₃₂)
+30  (call top.push! %₇ %₂₈)
+31  (goto label₃₄)
+32  slot₁/
+33  (call top.setindex! %₇ %₂₈ %₃₂)
+34  slot₁/
+35  (= slot₁/ (call top.add_int %₃₄ 1))
+36  (= slot₄/ (call top.iterate %₁ %₂₇))
+37  slot₄/
+38  (call core.=== %₃₇ core.nothing)
+39  (call top.not_int %₃₈)
+40  (gotoifnot %₃₉ label₄₂)
+41  (goto label₂₃)
+42  (= slot₂/ (call top.iterate %₂ %₁₇))
+43  slot₂/
+44  (call core.=== %₄₃ core.nothing)
+45  (call top.not_int %₄₄)
+46  (gotoifnot %₄₅ label₄₈)
+47  (goto label₁₅)
+48  (return %₇)

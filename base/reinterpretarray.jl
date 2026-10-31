@@ -104,7 +104,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
     reinterpret(::Type{T}, a::AbstractArray{T}) where {T} = a
 
     # With reshaping
-    function reinterpret(::typeof(reshape), ::Type{T}, a::A) where {T,S,A<:AbstractArray{S}}
+    function ReinterpretArray{T}(::typeof(reshape), a::A) where {T,S,A<:AbstractArray{S}}
         function throwintmult(S::Type, T::Type)
             @noinline
             throw(ArgumentError(LazyString("`reinterpret(reshape, T, a)` requires that one of `Base.elsize(Array{T})` (got ",
@@ -185,10 +185,13 @@ julia> reinterpret(reshape, Int, a)             # the result is a matrix
  3  6
 ```
 """
-reinterpret(::typeof(reshape), T::Type, a::AbstractArray)
+reinterpret(::typeof(reshape), ::Type{T}, a::AbstractArray) where {T} = ReinterpretArray{T}(reshape, a)
 
 reinterpret(::Type{T}, a::NonReshapedReinterpretArray) where {T} = reinterpret(T, a.parent)
-reinterpret(::typeof(reshape), ::Type{T}, a::ReshapedReinterpretArray) where {T} = reinterpret(reshape, T, a.parent)
+function reinterpret(::typeof(reshape), ::Type{T}, a::ReshapedReinterpretArray{S,N,P}) where {T,S,N,P}
+    t, s, p = aligned_sizeof(T), aligned_sizeof(S), aligned_sizeof(P)
+    return t == s || t == p || s == p ? reinterpret(reshape, T, a.parent) : ReinterpretArray{T}(reshape, a)
+end
 
 # Definition of StridedArray
 StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
@@ -265,7 +268,7 @@ function IndexStyle(::Type{ReinterpretArray{T,N,S,A,true}}) where {T,N,S,A<:Abst
         IndexStyle(A) === IndexLinear() && return IndexSCartesian2{aligned_sizeof(S) ÷ aligned_sizeof(T)}()
         return IndexCartesian()
     end
-    return IndexStyle(A)
+    return IndexStyle(A) === IndexLinear() ? IndexLinear() : IndexCartesian()
 end
 IndexStyle(::IndexSCartesian2{K}, ::IndexSCartesian2{K}) where {K} = IndexSCartesian2{K}()
 

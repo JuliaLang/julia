@@ -929,6 +929,32 @@ end |> Compiler.is_foldable_nothrow
 end
 @test Compiler.is_foldable(Base.infer_effects(ImmutRef, Tuple{Any}))
 
+# Test that :new and :splatnew of a `Type{T}`-typed value are not `:nothrow`, since the value
+# may be a `UnionAll` rep that is `==` to `T`, which they reject (#61323)
+struct NewTypeEqRep{T}
+    x::T
+end
+@eval new_typeeq_rep(T::Type{NewTypeEqRep{Int}}, x::Int) = ($(Expr(:new, :T, :x)); nothing)
+@eval splatnew_typeeq_rep(T::Type{NewTypeEqRep{Int}}, x::Int) = ($(Expr(:splatnew, :T, :((x,)))); nothing)
+@eval splatnew_const_typeeq_rep(T::Type{NewTypeEqRep{Int}}) = ($(Expr(:splatnew, :T, :((1,)))); nothing)
+# `Core.apply_type(Union, T)` returns `T` itself, which is not necessarily a `DataType`
+@eval Base.@nospecializeinfer apply_union_typeeq_rep(@nospecialize(T::Type{NewTypeEqRep{Int}}), x::Int) =
+    ($(Expr(:new, :(Core.apply_type(Union, T)), :x)); nothing)
+let S = (NewTypeEqRep{T} where Int<:T<:Int)
+    @test S == NewTypeEqRep{Int} && S isa Type{NewTypeEqRep{Int}}
+    for f in Any[new_typeeq_rep, splatnew_typeeq_rep]
+        @test f(NewTypeEqRep{Int}, 1) === nothing
+        @test_throws TypeError f(S, 1)
+        @test !Compiler.is_nothrow(Base.infer_effects(f, (Type{NewTypeEqRep{Int}}, Int)))
+        @test Compiler.is_nothrow(Base.infer_effects(f, (Core.TypeEgal{NewTypeEqRep{Int}}, Int)))
+    end
+    @test !Compiler.is_nothrow(Base.infer_effects(splatnew_const_typeeq_rep, (Type{NewTypeEqRep{Int}},); optimize=false))
+    @test Compiler.is_nothrow(Base.infer_effects(splatnew_const_typeeq_rep, (Core.TypeEgal{NewTypeEqRep{Int}},); optimize=false))
+    @test apply_union_typeeq_rep(NewTypeEqRep{Int}, 1) === nothing
+    @test_throws TypeError apply_union_typeeq_rep(S, 1)
+    @test !Compiler.is_nothrow(Base.infer_effects(apply_union_typeeq_rep, (Type{NewTypeEqRep{Int}}, Int); optimize=true))
+end
+
 @test Compiler.is_foldable_nothrow(Base.infer_effects(typejoin, ()))
 
 # nothrow-ness of subtyping operations
@@ -1524,6 +1550,14 @@ bitsizeof_int() = Core.bitsizeof(Int)
 let effects = Base.infer_effects(bitsizeof_int)
     @test Compiler.is_foldable_nothrow(effects)
     @test Compiler.is_inaccessiblememonly(effects)
+end
+bitsizeof_struct() = (Core.bitsizeof(Pair{Int32,Int16}); nothing)
+@test !Compiler.is_nothrow(Base.infer_effects(bitsizeof_struct))
+@test_throws ErrorException bitsizeof_struct()
+# intrinsics on a primitive `UnionAll` such as `Ptr`, which has no `Core.bitsizeof`
+for f in (p -> Core.Intrinsics.bitcast(UInt, p), p -> Core.Intrinsics.trunc_int(UInt8, p),
+          Core.Intrinsics.bswap_int)
+    @test Base.infer_effects(f, (Ptr,)) isa Compiler.Effects
 end
 
 # Core._svec_ref effects modeling (required for external abstract interpreter that doesn't run optimization)

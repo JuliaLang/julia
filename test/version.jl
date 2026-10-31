@@ -242,3 +242,9 @@ end
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (), (GenericString("sp"), 0x2)) == v"1.2.3+sp.2"
+
+# VersionRange printing keeps the upper bound of a "*" lower bound range
+let r = Base.VersionRange("*-2")
+    @test string(r) == "0 - 2"
+    @test v"2.5.0" in Base.VersionRange(string(r))
+end

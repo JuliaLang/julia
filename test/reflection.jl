@@ -1594,3 +1594,5 @@ end
 using .X1ConstConflict, .X2ConstConflict
 
 @test_throws ErrorException which(@__MODULE__, :xconstconflict)
+
+@test Base.infer_return_type(which, (Type,)) == Method

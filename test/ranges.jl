@@ -500,6 +500,7 @@ end
         @test reverse(reverse(T(1):T(10))) == T(1):T(10)
         @test reverse(reverse(typemin(T):typemax(T))) == typemin(T):typemax(T)
         @test reverse(reverse(typemin(T):2:typemax(T))) == typemin(T):2:typemax(T)
+        @test reverse(StepRangeLen(T(1), T(2), 3)) == T[5, 3, 1]
     end
     @testset "intersect" begin
         @test intersect(1:5, 2:3) === 2:3
@@ -718,6 +719,12 @@ end
     @test_throws BoundsError (3:6)[5]
     @test (@inferred (0:2:10)[7:6]) === 12:2:11
     @test_throws BoundsError (0:2:10)[7:7]
+    @test_throws OverflowError (typemin(Int):typemin(Int)+5)[1:0]
+    @test_throws OverflowError (UInt8(0):UInt8(10))[1:0]
+    @test_throws OverflowError (typemin(Int):typemin(Int)+5)[1:1:0]
+    @test_throws OverflowError (UInt(0):UInt(1):UInt(10))[1:0]
+    @test_throws OverflowError (typemax(Int):-1:typemax(Int)-5)[1:0]
+    @test (Date(2000):Day(1):Date(2001))[1:0] === Date(2000):Day(1):Date(1999, 12, 31)
 
     for start in [true], stop in [true, false]
         @test (@inferred (start:stop)[1:0]) === true:false
@@ -1140,7 +1147,7 @@ end
                        range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20)),
                        3:2, 5:-2:7, range(0.0, step=2.0, length=0), 3//2:3//2:0//1, LinRange(2,3,0),
                        Base.OneTo(1), 1:1, 1:-3:1, 1//1:1//3:1//1, range(1.0, step=2.5, length=1),
-                       LinRange(1,1,1), LinRange(1,1,2)]
+                       LinRange(1,1,1), LinRange(1,1,2), StepRangeLen(1, 0, 2), StepRangeLen(1, 0, 3)]
     for r in Rs
         local r
         ar = Vector(r)
@@ -2353,6 +2360,9 @@ end
     r2 = r[false:true:true]
     @test r2 == collect(r)[false:true:true]
     @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    s = StepRange(true, -1, false)
+    @test r[s] == collect(r)[collect(s)] == [1]
+    @test Base.IdentityUnitRange(r)[s] == [1]
     @test_throws BoundsError r[true:true:false]
     @test_throws BoundsError r[true:true:true]
 

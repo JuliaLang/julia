@@ -972,6 +972,12 @@ end
     c = Channel{Int}(5); foreach(i -> put!(c, i), 1:5); close(c)
     @test collect(zip(c, take(1:10, 2))) == [(1, 1), (2, 2)]
     @test collect(c) == [3, 4, 5]
+    # take(itr, 0) is done before iteration starts, even for a nonempty stateful itr
+    x = Iterators.Stateful([1, 2, 3])
+    @test isempty(take(x, 0))
+    y = Iterators.Stateful([10, 20, 30])
+    @test isempty(collect(zip(y, take(x, 0))))
+    @test collect(y) == [10, 20, 30]
 end
 
 @testset "only" begin
@@ -1112,6 +1118,11 @@ end
     @test Iterators.peel(1:10)[2] |> collect == 2:10
     @test Iterators.peel(x^2 for x in 2:4)[1] == 4
     @test Iterators.peel(x^2 for x in 2:4)[2] |> collect == [9, 16]
+    let (x, r) = Iterators.peel(Iterators.take(Iterators.Stateful([1, 2, 3]), 1))
+        @test x == 1
+        @test isempty(r)
+        @test collect(r) == Int[]
+    end
 end
 
 @testset "last for iterators" begin

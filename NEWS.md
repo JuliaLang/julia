@@ -214,6 +214,8 @@ New library functions
   image, so it survives precompilation; revision tools (e.g. Revise) use it to re-apply the
   original transform when an `include(mapexpr, …)`-ed file is edited.
 * `Sys.matched_sysimage_target()` returns the entry of `Sys.sysimage_target` that was selected for the host CPU when the system image was loaded ([#63762]).
+* `bitsizeof(x)` returns the declared width in bits of a primitive type, or of the primitive type
+  of `x`, excluding the padding that `sizeof` includes. It throws for any other type or value ([#61359]).
 
 New library features
 --------------------

@@ -2255,3 +2255,30 @@ let src = code_typed1((Bool,)) do cond
     # the lifting cache should deduplicate: only 1 phi for `p.x`, not 2
     @test count(x -> isa(x, Core.PhiNode), src.code) == 1
 end
+
+function inserted_phi_goto(x)
+    r = Ref{Any}(x)
+    if false
+        @label a
+        return r[]
+    end
+    r[] += 1
+    r[] * 100
+    @goto a
+end
+function inserted_phi_collatz(n, ::Val{skipcheck}) where skipcheck
+    st = Ref{Any}(n)
+    k = Ref{Any}(0)
+    skipcheck && @goto step
+    @label check
+    st[] == 1 && return k[]
+    @label step
+    st[] = iseven(st[]) ? st[] ÷ 2 : 3st[] + 1
+    k[] += 1
+    @goto check
+end
+@testset "#53011: forward reference from inserted phi" begin
+    @test inserted_phi_goto(15) == 16
+    @test code_typed1(inserted_phi_collatz, (Int, Val{true})) isa CodeInfo
+    @test inserted_phi_collatz(6, Val(true)) == 8
+end

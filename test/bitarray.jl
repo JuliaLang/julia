@@ -1264,6 +1264,14 @@ timesofar("binary arithmetic")
     @check_bit_operation broadcast(!=, b1, b2) BitMatrix
     @check_bit_operation broadcast(<, b1, b2) BitMatrix
     @check_bit_operation broadcast(<=, b1, b2) BitMatrix
+
+    v1, v2 = falses(100), trues(100)
+    @test cmp(v1, v2) == -1
+    @test cmp(v2, v1) == 1
+    @test cmp(v1, v1) == 0
+    @test isless(v1, v2)
+    @test !isless(v2, v1)
+    @test isless(falses(10), falses(20))
 end
 
 timesofar("binary comparison")
@@ -1314,6 +1322,8 @@ timesofar("binary comparison")
         @check_bit_operation selectdim(b1, 1, m) SubArray{Bool, 0}
     end
     @check_bit_operation selectdim(b1, 1, :) SubArray{Bool, 1}
+    @test circshift!(falses(0), 1) == falses(0)
+    @test circshift!(falses(0), falses(0), 1) == falses(0)
 end
 
 timesofar("datamove")

@@ -333,13 +333,13 @@ end
 function widen_all_consts!(src::CodeInfo)
     ssavaluetypes = src.ssavaluetypes::Vector{Any}
     for i = 1:length(ssavaluetypes)
-        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
+        ssavaluetypes[i] = widenconst_split(ssavaluetypes[i])
     end
 
     for i = 1:length(src.code)
         x = src.code[i]
         if isa(x, PiNode)
-            src.code[i] = PiNode(x.val, widenconst(x.typ))
+            src.code[i] = PiNode(x.val, widenconst_split(x.typ))
         end
     end
 
@@ -355,10 +355,46 @@ _topmod(sv::OptimizationState) = _topmod(sv.mod)
 is_stmt_inline(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_INLINE)
 is_stmt_noinline(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_NOINLINE)
 
+# `Expr(:new)` throws unless the value of `Targ` is a `DataType`, but a `Type{T}`-typed value
+# may be a `UnionAll` or `Union` rep that is `==` to `T` (#61323). So we require the type of
+# `Targ` to be a subtype of `DataType`, or `Targ` to be the result of `Core.apply_type` fully
+# applying a constant `UnionAll` type constructor whose body is a non-tuple `DataType`.
+# Other `Core.apply_type` calls may return something else, e.g. `Core.apply_type(Union, T)`
+# returns `T` itself.
+function is_new_type_datatype(@nospecialize(atyp), @nospecialize(Targ),
+                              src::Union{IRCode,IncrementalCompact})
+    widenconst(atyp) <: DataType && return true
+    def = apply_type_unionall_def(Targ, src)
+    def === nothing && return false
+    stmt, body, tvars = def
+    isa(body, DataType) && body.name !== Tuple.name || return false
+    return length(stmt.args) - 2 == length(tvars)
+end
+
+# If `Targ` is defined by a `Core.apply_type` call on a constant `UnionAll` type constructor,
+# return the call together with the body of the type constructor and its type variables.
+function apply_type_unionall_def(@nospecialize(Targ), src::Union{IRCode,IncrementalCompact})
+    isa(Targ, SSAValue) || return nothing
+    stmt = src[Targ][:stmt]
+    is_known_call(stmt, Core.apply_type, src) || return nothing
+    length(stmt.args) ≥ 2 || return nothing
+    tc = argextype(stmt.args[2], src)
+    isa(tc, Const) || return nothing
+    body = tc.val
+    isa(body, UnionAll) || return nothing
+    tvars = TypeVar[]
+    while isa(body, UnionAll)
+        push!(tvars, body.var)
+        body = body.body
+    end
+    return stmt::Expr, body, tvars
+end
+
 function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
     Targ = args[1]
     atyp = argextype(Targ, src)
     # `Expr(:new)` of unknown type could raise arbitrary TypeError.
+    is_new_type_datatype(atyp, Targ, src) || return (false, false, false)
     typ, isexact = instanceof_tfunc(atyp, true)
     if !isexact
         atyp = unwrap_unionall(widenconst(atyp))
@@ -562,7 +598,7 @@ end
         src::Union{IRCode,IncrementalCompact,CodeInfo}, sptypes::Vector{VarState})
     isa(x, GlobalRef) && return globalref_rt_widened(x, src)
     isa(x, Core.BindingPartition) && return partition_rt_widened(x)
-    return widenconst(argextype(x, src, sptypes))
+    return widenconst_split(argextype(x, src, sptypes))
 end
 @inline argextype_widened(@nospecialize(x), ir::IRCode) = argextype_widened(x, ir, ir.sptypes)
 @inline argextype_widened(@nospecialize(x), compact::IncrementalCompact) =
@@ -1148,7 +1184,9 @@ function recognize_global_read(@nospecialize(stmt), ir::IRCode)
     if isa(stmt, GlobalRef)
         return Pair{GlobalRef,Any}(stmt, QuoteNode(:unordered))
     end
-    isa(stmt, Expr) && stmt.head === :call || return nothing
+    # separate checks, so that `stmt` is known to be an `Expr` below
+    isa(stmt, Expr) || return nothing
+    stmt.head === :call || return nothing
     na = length(stmt.args)
     (na == 3 || na == 4) || return nothing
     f = _global_call_singleton(stmt.args[1], ir)
@@ -1261,7 +1299,8 @@ end
 # Only an `allow_import === true` query reformulates (it walks imports to the leaf, matching the resolution below).
 # An `allow_import === false` query is left on the runtime path (if not already folded by inference), which is conservatively correct.
 function recognize_global_isdefined(@nospecialize(stmt), ir::IRCode)
-    isa(stmt, Expr) && stmt.head === :call || return nothing
+    isa(stmt, Expr) || return nothing
+    stmt.head === :call || return nothing
     na = length(stmt.args)
     f = _global_call_singleton(stmt.args[1], ir)
     if f === Core.isdefinedglobal && (3 <= na <= 5)
@@ -1786,7 +1825,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                     nconst = 0
                     for i = 2:nargs
                         aty = widenconditional(argextype(ex.args[i], src, sptypes))
-                        aty′ = widenconst(aty)
+                        aty′ = widenconst_split(aty)
                         if !isdispatchelem(aty′)
                             return cost
                         end

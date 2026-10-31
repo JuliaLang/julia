@@ -874,6 +874,12 @@ namedtup = (;a=1, b=2, c=3)
     end
 end
 
+@testset "`Base.split_rest` with negative `n`" begin
+    for itr in (Any[1, 2, 3], [1, 2, 3], trues(3), view([1, 2, 3], :), (a=1, b=2), "abc", (x for x in 1:3))
+        @test_throws ArgumentError Base.split_rest(itr, -1)
+    end
+end
+
 # Make sure that tuple iteration is foldable
 @test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{NTuple{4, Float64}, Int}))
 @test Core.Compiler.is_foldable(Base.infer_effects(eltype, Tuple{Tuple}))

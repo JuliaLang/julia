@@ -472,7 +472,7 @@ function _search(s::Union{AbstractString,AbstractVector{<:Union{Int8,UInt8}}},
     if isempty(t)
         idx:idx-1
     elseif idx >= firstindex(s)
-        idx:(idx + lastindex(t) - 1)
+        idx:(idx + lastindex(t) - firstindex(t))
     else
         nothing
     end
@@ -789,7 +789,7 @@ function _rsearch(s::Union{AbstractString,AbstractVector{<:Union{Int8,UInt8}}},
     if isempty(t)
         idx:idx-1
     elseif idx > firstindex(s) - 1
-        idx:(idx + lastindex(t) - 1)
+        idx:(idx + lastindex(t) - firstindex(t))
     else
         nothing
     end

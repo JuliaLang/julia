@@ -3650,3 +3650,33 @@ let A = Ref{Tuple{Union{Nothing, T}, T}} where T, B = Ref{Tuple{S, Union{Nothing
     @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(A, B)
     @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(B, A)
 end
+
+@testset "stack overflows in type intersection" begin
+    let A = Tuple{Union{Nothing, S2}, Int, Tuple{S1, S1}} where {S1, S2<:S1}, B = Tuple{T, T, Tuple{T, T}} where T
+        @test Tuple{Int, Int, Tuple{Int, Int}} <: typeintersect(A, B)
+        @test Tuple{Int, Int, Tuple{Int, Int}} <: typeintersect(B, A)
+    end
+
+    let A = Ref{Tuple{T, T}} where T, B = Ref{Tuple{Union{Nothing, Int}, Union{X, Y}}} where {X, Y}
+        @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(A, B)
+        @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(B, A)
+    end
+
+    @testintersect(Tuple{Tuple{T}, T, T} where T, Tuple{S, Tuple{S}, S} where S, Union{})
+end
+
+# an outer existential var below an inner forall var is bounded by its lower bound
+@testset "existential below an inner forall lower bound" begin
+    @test Ref{Ref{S} where S>:Int} <: (Ref{Ref{S} where S>:T} where T)
+    @test Ref{Ref{S} where S>:Int} <: (Ref{Ref{S} where S>:T} where Int<:T<:Int)
+    @test Ref{Pair{S, S} where S>:Int} <: (Ref{Pair{S, S} where S>:T} where T)
+    @test !(Ref{Ref{S} where S>:Int} <: (Ref{Ref{S} where S>:T} where T<:String))
+    @test !(Ref{Ref{S} where S>:Integer} <: (Ref{Ref{S} where S>:T} where T<:Int))
+    let s = TypeVar(:s, Real), S = TypeVar(:S, s, Any)
+        A = UnionAll(s, AbstractVecOrMat{UnionAll(S, Ref{S})})
+        B = UnionAll(s, Vector{UnionAll(S, Ref{S})})
+        @test B <: A
+        @test !(A <: B)
+        @test A != B
+    end
+end

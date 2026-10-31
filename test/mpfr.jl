@@ -18,6 +18,13 @@ import Base.MPFR
         @test precision(x) == 10
         @test x == big"1.1015625"
     end
+    # embedded NUL must not throw from the Cstring conversion
+    @test tryparse(BigFloat, "1\0") === nothing
+    # out-of-range bases must throw instead of tripping an MPFR assertion
+    for b in (-2, 1, 63)
+        @test_throws ArgumentError tryparse(BigFloat, "1"; base=b)
+        @test_throws ArgumentError parse(BigFloat, "1"; base=b)
+    end
 
     @test typeof(BigFloat(typemax(Int8))) == BigFloat
     @test typeof(BigFloat(typemax(Int16))) == BigFloat

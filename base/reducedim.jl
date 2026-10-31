@@ -114,7 +114,7 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
             elseif isunordered(v0)
                 # v0 is missing or a third-party unordered value
                 Tnm = nonmissingtype(Tr)
-                if Tnm <: Union{BitInteger, IEEEFloat, BigFloat}
+                if Tnm !== Union{} && Tnm <: Union{BitInteger, IEEEFloat, BigFloat}
                     v0 = $typeextreme(Tnm)
                 elseif !all(isunordered, A1)
                     v0 = mapreduce(f, $f2, Iterators.filter(!isunordered, A1))
@@ -155,7 +155,8 @@ function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArray
         # v0 is missing or a third-party unordered value
         Tminnm = nonmissingtype(Tmin)
         Tmaxnm = nonmissingtype(Tmax)
-        if Tminnm <: Union{BitInteger, IEEEFloat, BigFloat} &&
+        if Tminnm !== Union{} && Tmaxnm !== Union{} &&
+            Tminnm <: Union{BitInteger, IEEEFloat, BigFloat} &&
             Tmaxnm <: Union{BitInteger, IEEEFloat, BigFloat}
             v0 = (typemax(Tminnm), typemin(Tmaxnm))
         elseif !all(isunordered, A1)

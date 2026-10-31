@@ -187,6 +187,7 @@ end
         @test LinearIndices((3,))[1:2] === 1:2
         @test LinearIndices((3,))[1:2:3] === 1:2:3
         @test_throws BoundsError LinearIndices((3,))[2:4]
+        @test LinearIndices((3:5,))[2:3] === 2:3
         @test_throws BoundsError CartesianIndices((3,))[2,2]
         #   ambiguity btw cartesian indexing and linear indexing in 1d when
         #   indices may be nontraditional

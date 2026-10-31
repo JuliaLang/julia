@@ -528,12 +528,32 @@ function sizeof_nothrow(@nospecialize(x))
     return true
 end
 
-# f shall be Core.sizeof or Core.bitsizeof
-function _const_sizeof(@nospecialize(f), @nospecialize(x))
+# Whether `Core.bitsizeof` is known not to throw on an argument of type `x`: it throws
+# unless the argument is a primitive DataType or an instance of one.
+function bitsizeof_nothrow(@nospecialize(x))
+    if isa(x, Const)
+        v = x.val
+        isa(v, Type) || return isprimitivetype(typeof(v))
+        return isa(v, DataType) && isprimitivetype(v)
+    end
+    xu = unwrap_unionall(x)
+    if isa(xu, Union)
+        return bitsizeof_nothrow(rewrap_unionall(xu.a, x)) &&
+               bitsizeof_nothrow(rewrap_unionall(xu.b, x))
+    end
+    t, exact = instanceof_tfunc(x, false)
+    xw = widenconst(x)
+    # x must be an instance (not a Type) or is the Bottom type object
+    t === Bottom && return isprimitivetype(xw)
+    isType(xw) && !isconstType(xw) && return false
+    return exact && isa(t, DataType) && isprimitivetype(t)
+end
+
+function _const_sizeof(@nospecialize(x))
     # Constant GenericMemory does not have constant size
     isa(x, GenericMemory) && return Int
     size = try
-            f(x)
+            Core.sizeof(x)
         catch ex
             # Might return
             # "argument is an abstract type; size is indeterminate" or
@@ -543,17 +563,17 @@ function _const_sizeof(@nospecialize(f), @nospecialize(x))
         end
     return Const(size)
 end
-@nospecs function size_tfunc(𝕃::AbstractLattice, x, f)
+@nospecs function sizeof_tfunc(𝕃::AbstractLattice, x)
     x = widenmustalias(x)
-    isa(x, Const) && return _const_sizeof(f, x.val)
-    isa(x, Conditional) && return _const_sizeof(f, Bool)
-    isconstType(x) && return _const_sizeof(f, type_parameter(x))
+    isa(x, Const) && return _const_sizeof(x.val)
+    isa(x, Conditional) && return _const_sizeof(Bool)
+    isconstType(x) && return _const_sizeof(type_parameter(x))
     xu = unwrap_unionall(x)
     if isa(xu, Union)
-        return tmerge(size_tfunc(𝕃, rewrap_unionall(xu.a, x), f),
-                      size_tfunc(𝕃, rewrap_unionall(xu.b, x), f))
+        return tmerge(sizeof_tfunc(𝕃, rewrap_unionall(xu.a, x)),
+                      sizeof_tfunc(𝕃, rewrap_unionall(xu.b, x)))
     end
-    # Core.sizeof or Core.bitsizeof operate on either a type or a value.
+    # Core.sizeof operates on either a type or a value.
     # First check which case we're in.
     t, exact = instanceof_tfunc(x, false)
     if t !== Bottom
@@ -562,19 +582,39 @@ end
         x = unwrap_unionall(t)
         if exact && isa(x, Union)
             isinline = uniontype_layout(x)[1]
-            return isinline ? Const(Int(f(x))) : Bottom
+            return isinline ? Const(Int(Core.sizeof(x))) : Bottom
         end
         isa(x, DataType) || return Int
-        (isconcretetype(x) || isprimitivetype(x)) && return _const_sizeof(f, x)
+        (isconcretetype(x) || isprimitivetype(x)) && return _const_sizeof(x)
     else
         x = widenconst(x)
-        x !== DataType && isconcretetype(x) && return _const_sizeof(f, x)
-        isprimitivetype(x) && return _const_sizeof(f, x)
+        x !== DataType && isconcretetype(x) && return _const_sizeof(x)
+        isprimitivetype(x) && return _const_sizeof(x)
     end
     return Int
 end
-@nospecs sizeof_tfunc(𝕃::AbstractLattice, x) = size_tfunc(𝕃, x, Core.sizeof)
-@nospecs bitsizeof_tfunc(𝕃::AbstractLattice, x) = size_tfunc(𝕃, x, Core.bitsizeof)
+@nospecs function bitsizeof_tfunc(𝕃::AbstractLattice, x)
+    x = widenmustalias(x)
+    if isa(x, Const)
+        bitsizeof_nothrow(x) || return Int
+        return Const(Core.bitsizeof(x.val))
+    end
+    t, exact = instanceof_tfunc(x, false)
+    if t === Bottom
+        x = widenconst(x)
+    else
+        # the argument is the type `t` itself, or a value that throws
+        exact || return Int
+        x = t
+    end
+    isa(x, DataType) && isprimitivetype(x) && return Const(Core.bitsizeof(x))
+    return Int
+end
+# Width of a type that passes `isprimitivetype`, for the intrinsic exception checks.
+# Unlike `Core.bitsizeof`, it accepts a `UnionAll` such as `Ptr{T} where T`: every
+# instance has the width of the body (this assumes the width does not depend on a
+# type parameter).
+primitive_bitsizeof(@nospecialize(T)) = Core.bitsizeof(unwrap_unionall(T))
 add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 1)
 add_tfunc(Core.bitsizeof, 1, 1, bitsizeof_tfunc, 1)
 @nospecs function nfields_tfunc(𝕃::AbstractLattice, x)
@@ -1096,7 +1136,7 @@ end
         return true
     end
 
-    s0 = widenconst(s00)
+    s0 = widenconst_split(s00)
     s = unwrap_unionall(s0)
     if isa(s, Union)
         return getfield_nothrow(𝕃, rewrap_unionall(s.a, s00), name, boundscheck) &&
@@ -1259,8 +1299,7 @@ end
             s = typeof(sv)
         else
             sv = type_parameter(s)
-            if isa(sv, DataType) && isa(name, Const) &&
-               _getfield_fieldindex(DataType, name) == DATATYPE_SUPER_FIELDINDEX &&
+            if isa(sv, DataType) && isa(name, Const) && name.val === :super &&
                # read without forcing: on a deferred instantiation whose slot
                # is still unset the modeled `getfield` throws, so no precision
                # is lost by falling through (see issue #61347)
@@ -1271,13 +1310,20 @@ end
                 return Type{svsuper}
             end
             if isTypeDataType(sv) && isa(name, Const)
-                nv = _getfield_fieldindex(DataType, name)::Int
+                nv = _getfield_fieldindex(DataType, name)
+                # neither a `Symbol` nor an `Int`, so the access throws for any rep
+                nv === nothing && return Bottom
                 if nv == DATATYPE_NAME_FIELDINDEX
                     # N.B. This only works for fields that do not depend on type
                     # parameters (which we do not know here).
-                    return Const(sv.name)
+                    rt = Const(sv.name)
+                else
+                    rt = _getfield_tfunc(𝕃, DataType, name, setfield)
                 end
-                s = DataType
+                # the value may also be a `UnionAll` or `Union` rep that is `==` to `sv`
+                # (#61323), which reaches the fields of its own type instead
+                rt = tmerge(rt, _getfield_tfunc(𝕃, UnionAll, name, setfield))
+                return tmerge(rt, _getfield_tfunc(𝕃, Union, name, setfield))
             end
         end
     end
@@ -1390,7 +1436,7 @@ end
     return setfield!_nothrow(𝕃, s00, name, v)
 end
 @nospecs function setfield!_nothrow(𝕃::AbstractLattice, s00, name, v)
-    s0 = widenconst(s00)
+    s0 = widenconst_split(s00)
     s = unwrap_unionall(s0)
     if isa(s, Union)
         return setfield!_nothrow(𝕃, rewrap_unionall(s.a, s00), name, v) &&
@@ -2277,14 +2323,14 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
             anyinfo = true
         else
             if !isvarargtype(x)
-                x = widenconst(x)
+                x = widenconst_split(x)
             end
             argtypes[i] = x
         end
         if isa(x, Const)
             params[i] = typeof(x.val)
         else
-            x = isvarargtype(x) ? x : widenconst(x)
+            x = isvarargtype(x) ? x : widenconst_split(x)
             # since there don't exist any values whose runtime type are `Tuple{Type{...}}`,
             # here we should turn such `Type{...}`-parameters to valid parameters, e.g.
             # (::Type{Int},) -> Tuple{DataType} (or PartialStruct for more accuracy)
@@ -2627,9 +2673,12 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
         return subtype_nothrow(𝕃, argtypes[1], argtypes[2])
     elseif f === isdefined
         return isdefined_nothrow(𝕃, argtypes)
-    elseif f === Core.sizeof || f === Core.bitsizeof
+    elseif f === Core.sizeof
         na == 1 || return false
         return sizeof_nothrow(argtypes[1])
+    elseif f === Core.bitsizeof
+        na == 1 || return false
+        return bitsizeof_nothrow(argtypes[1])
     elseif f === Core.ifelse
         na == 3 || return false
         return ifelse_nothrow(𝕃, argtypes[1], nothing, nothing)
@@ -2856,17 +2905,18 @@ end
 function is_relocatable_ptr_field(@nospecialize(ty), @nospecialize(fld))
     # Special case: these fields are not mutated, but they are the only native pointer fields
     # that have relocations in staticdata.c, so they can change between processes.
-    if hasintersect(widenconst(ty), Core.TypeName) &&
+    t = widenconst_split(ty)
+    if hasintersect(t, Core.TypeName) &&
         (Const(:constfields) ⊑ fld || Const(fieldindex(Core.TypeName, :constfields)) ⊑ fld ||
         Const(:atomicfields) ⊑ fld || Const(fieldindex(Core.TypeName, :atomicfields)) ⊑ fld)
         return true
-    elseif hasintersect(widenconst(ty), DataType) &&
+    elseif hasintersect(t, DataType) &&
         (Const(:layout) ⊑ fld || Const(fieldindex(DataType, :layout)) ⊑ fld)
         return true
-    elseif hasintersect(widenconst(ty), GenericMemory) &&
+    elseif hasintersect(t, GenericMemory) &&
         (Const(:ptr) ⊑ fld || Const(fieldindex(GenericMemory, :ptr)) ⊑ fld)
         return true
-    elseif hasintersect(widenconst(ty), GenericMemoryRef) &&
+    elseif hasintersect(t, GenericMemoryRef) &&
         (Const(:ptr_or_offset) ⊑ fld || Const(fieldindex(GenericMemoryRef, :ptr_or_offset)) ⊑ fld)
         return true
     end
@@ -3382,7 +3432,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         if !isconcrete
             return Union{ErrorException, TypeError}
         end
-        if !(isprimitivetype(ty) && isprimitivetype(xty) && Core.bitsizeof(ty) === Core.bitsizeof(xty))
+        if !(isprimitivetype(ty) && isprimitivetype(xty) && primitive_bitsizeof(ty) === primitive_bitsizeof(xty))
             return ErrorException
         end
         return Union{}
@@ -3408,14 +3458,14 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) > Core.sizeof(xty))
             return ErrorException
         end
-        if (f === Intrinsics.sext_int || f === Intrinsics.zext_int) && !(Core.bitsizeof(ty) > Core.bitsizeof(xty))
+        if (f === Intrinsics.sext_int || f === Intrinsics.zext_int) && !(primitive_bitsizeof(ty) > primitive_bitsizeof(xty))
             return ErrorException
         end
         if f === Intrinsics.fptrunc &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) < Core.sizeof(xty))
             return ErrorException
         end
-        if f === Intrinsics.trunc_int && !(Core.bitsizeof(ty) < Core.bitsizeof(xty))
+        if f === Intrinsics.trunc_int && !(primitive_bitsizeof(ty) < primitive_bitsizeof(xty))
             return ErrorException
         end
         if (f === Intrinsics.fptoui || f === Intrinsics.fptosi) && !(xty <: CORE_FLOAT_TYPES)
@@ -3465,7 +3515,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
     isshift = f === shl_int || f === lshr_int || f === ashr_int
     argtype1 = widenconst(argtypes[1])
     isprimitivetype(argtype1) || return ErrorException
-    f === bswap_int && Core.bitsizeof(argtype1) % 16 != 0 && return ErrorException
+    f === bswap_int && primitive_bitsizeof(argtype1) % 16 != 0 && return ErrorException
     if contains_is(_FLOAT_INTRINSICS, f)
         argtype1 <: CORE_FLOAT_TYPES || return ErrorException
     end

@@ -2567,4 +2567,15 @@ let m = Module()
     @test store_cost == Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal_partition)]
     @test assign_cost == Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal!)]
 end
+
+# `typename` of a non-constant `DataType` is inlined rather than left as a dynamic call,
+# and still folds for a constant argument
+let src = code_typed1((DataType,)) do x
+        Base.typename(x)
+    end
+    @test count(iscall((src, Core.typename)), src.code) == 0
+    @test fully_eliminated(; retval=Int.name) do
+        Base.typename(Int)
+    end
+end
 end # module inline_tests
