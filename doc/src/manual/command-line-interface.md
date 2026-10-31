@@ -211,6 +211,7 @@ The following is a complete list of command-line switches available when launchi
 |`--code-coverage=@<path>`              |Record coverage only for files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--code-coverage=tracefile.info`       |Append coverage information to the LCOV tracefile (filename supports format tokens).|
 |`--code-coverage-mode={hit*\|count}`   |Record whether each line ran (`hit`, the default) or its execution count (`count`, which may be approximate when code runs on multiple threads)|
+|`--code-coverage-exclude=<paths>`      |Record no coverage for files under any of the given paths, separated by `:` (`;` on Windows). Code from these files is also optimized as if coverage were off, for example so that a test suite's own functions do not change what the tests observe.|
 |`--track-allocation[={none*\|user\|all}]` |Count bytes allocated by each source line (omitting setting is equivalent to "user")|
 |`--track-allocation=@<path>`           |Count bytes but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--task-metrics={yes\|no*}`             |Enable the collection of per-task metrics|

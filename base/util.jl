@@ -227,6 +227,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
                 push!(addflags, "--code-coverage=@$(unsafe_string(opts.tracked_path))")
             end
             isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
+            opts.coverage_exclude == C_NULL ||
+                push!(addflags, "--code-coverage-exclude=$(unsafe_string(opts.coverage_exclude))")
         end
     end
     opts.code_coverage_mode == 1 && push!(addflags, "--code-coverage-mode=count")

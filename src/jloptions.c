@@ -167,6 +167,7 @@ JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT
                         0, // target_sanitize_memory
                         0, // target_sanitize_thread
                         0, // target_sanitize_address
+                        NULL, // coverage_exclude
     };
     jl_options_initialized = 1;
 }
@@ -296,6 +297,8 @@ static const char opts[]  =
     " --code-coverage-mode={hit*|count}             Record whether each line ran (`hit`, the default)\n"
     "                                               or collect execution counts (`count`, which may be\n"
     "                                               approximate when code runs on multiple threads)\n"
+    " --code-coverage-exclude=<paths>               Record no coverage for files under these paths,\n"
+    "                                               separated by `:` (`;` on Windows)\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
     " --track-allocation[={none*|user|all}]         Count bytes allocated by each source line (omitting\n"
     "                                               setting is equivalent to `user`)\n"
@@ -399,6 +402,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_compile,
            opt_code_coverage,
            opt_code_coverage_mode,
+           opt_code_coverage_exclude,
            opt_track_allocation,
            opt_check_bounds,
            opt_output_unopt_bc,
@@ -480,6 +484,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "compile",         required_argument, 0, opt_compile },
         { "code-coverage",   optional_argument, 0, opt_code_coverage },
         { "code-coverage-mode", required_argument, 0, opt_code_coverage_mode },
+        { "code-coverage-exclude", required_argument, 0, opt_code_coverage_exclude },
         { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        optional_argument, 0, 'O' },
         { "min-optlevel",    optional_argument, 0, opt_optlevel_min },
@@ -848,6 +853,9 @@ restart_switch:
                 jl_options.code_coverage_mode = JL_COVERAGE_MODE_COUNT;
             else
                 jl_errorf("julia: invalid argument to --code-coverage-mode (%s)", optarg);
+            break;
+        case opt_code_coverage_exclude:
+            jl_options.coverage_exclude = optarg;
             break;
         case opt_track_allocation:
             if (optarg != NULL) {

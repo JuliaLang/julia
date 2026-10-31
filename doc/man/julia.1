@@ -232,6 +232,11 @@ Record whether each line ran (`hit`, the default) or its execution count (`count
 may be approximate when code runs on multiple threads)
 
 .TP
+--code-coverage-exclude=<paths>
+Record no coverage for files under any of the given paths, separated by `:` (`;` on Windows).
+Code from these files is also optimized as if coverage were off.
+
+.TP
 --track-allocation[={none*|user|all}]
 Count bytes allocated by each source line (omitting setting is equivalent to `user`)
 
