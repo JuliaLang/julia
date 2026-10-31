@@ -189,6 +189,7 @@ end
             @test lcm(T[-2]) ⟷ T(2)
             @test lcm(T[4, -6]) ⟷ T(12)
             @test lcm(T[-4, -6]) ⟷ T(12)
+            T <: Base.BitSigned && @test_throws OverflowError lcm(T[typemin(T)])
         end
 
         @test lcm(T[2, 4, 6]) ⟷ T(12)
