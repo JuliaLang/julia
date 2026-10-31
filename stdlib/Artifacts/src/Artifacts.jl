@@ -638,6 +638,8 @@ function split_artifact_slash(name::String)
     if length(split_name) == 1
         return (split_name[1], "")
     else
+        any(c -> c == ".." || !isempty(splitdrive(c)[1]), @view(split_name[2:end])) &&
+            throw(ArgumentError(lazy"artifact path $(repr(name)) must not contain `..` or a drive"))
         return (split_name[1], joinpath(split_name[2:end]...))
     end
 end

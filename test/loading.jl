@@ -736,6 +736,43 @@ mktempdir() do dir
     @test success(cmd)
 end
 
+@testset "named environments stay inside the depot" begin
+    mktempdir() do dir
+        depot = joinpath(dir, "depot")
+        old_depot_path = copy(DEPOT_PATH)
+        try
+            empty!(DEPOT_PATH)
+            push!(DEPOT_PATH, depot)
+            for name in ("@../../outside", "@foo/../../outside", "@" * joinpath(dir, "abs"))
+                @test (@test_logs (:warn,) Base.load_path_expand(name)) === nothing
+            end
+            if Sys.iswindows()
+                @test (@test_logs (:warn,) Base.load_path_expand("@D:outside")) === nothing
+            end
+            @test !ispath(joinpath(dir, "outside"))
+            @test !ispath(joinpath(dir, "abs"))
+            @test Base.load_path_expand("@foo/bar") == joinpath(depot, "environments", "foo", "bar", "Project.toml")
+        finally
+            empty!(DEPOT_PATH)
+            append!(DEPOT_PATH, old_depot_path)
+        end
+    end
+end
+
+mktempdir() do dir
+    project = joinpath(dir, "environments", "scripts", "Project.toml")
+    mkpath(dirname(project))
+    touch(project)
+    old_depot_path = copy(DEPOT_PATH)
+    try
+        empty!(DEPOT_PATH)
+        push!(DEPOT_PATH, dir)
+        @test Base.load_path_expand("@scripts") == project
+    finally
+        copy!(DEPOT_PATH, old_depot_path)
+    end
+end
+
 function _with_empty_load_path(f::Function)
     old_load_path = copy(Base.LOAD_PATH)
     try
@@ -872,6 +909,7 @@ end
         "$s" => [default; bundled],
         "$tmp$s" => [tmp; bundled],
         "$s$tmp" => [default; bundled; tmp],
+        "$s$default" => [default; bundled],
         )
     for (env, result) in pairs(cases)
         script = "DEPOT_PATH == $(repr(result)) || error(\"actual depot \" * join(DEPOT_PATH,':') * \" does not match expected depot \" * join($(repr(result)), ':'))"
@@ -2379,6 +2417,35 @@ end
 
     finally
        copy!(LOAD_PATH, old_load_path)
+    end
+end
+
+@testset "workspace lookup from a sibling of home" begin
+    mktempdir() do root
+        member = joinpath(root, "home2", "member")
+        mkpath(joinpath(root, "home"))
+        mkpath(member)
+        workspace_project = joinpath(root, "Project.toml")
+        write(workspace_project, "[workspace]\nprojects = [\"home2/member\"]\n")
+        write(joinpath(member, "Project.toml"), "name = \"Member\"\n")
+        withenv("HOME" => joinpath(root, "home"), "USERPROFILE" => joinpath(root, "home")) do
+            @test Base.base_project(joinpath(member, "Project.toml")) == workspace_project
+        end
+    end
+end
+
+@testset "workspace lookup with a trailing separator in home" begin
+    mktempdir() do root
+        home = joinpath(root, "home")
+        member = joinpath(home, "member")
+        mkpath(member)
+        write(joinpath(root, "Project.toml"), "[workspace]\nprojects = [\"home\"]\n")
+        write(joinpath(home, "Project.toml"), "[workspace]\nprojects = [\"member\"]\n")
+        write(joinpath(member, "Project.toml"), "name = \"Member\"\n")
+        withenv("HOME" => joinpath(home, ""), "USERPROFILE" => joinpath(home, "")) do
+            @test Base.base_project(joinpath(member, "Project.toml")) == joinpath(home, "Project.toml")
+            @test Base.base_project(joinpath(home, "Project.toml")) === nothing
+        end
     end
 end
 

@@ -164,7 +164,8 @@ function init_depot_path()
         # backwards compatibility: if JULIA_DEPOT_PATH only contains empty entries
         # (e.g., JULIA_DEPOT_PATH=':'), make sure to use the default depot
         if pushfirst_default
-            pushfirst!(DEPOT_PATH, joinpath(homedir(), ".julia"))
+            default = joinpath(homedir(), ".julia")
+            pushfirst!(filter!(!=(default), DEPOT_PATH), default)
         end
     else
         push!(DEPOT_PATH, joinpath(homedir(), ".julia"))
@@ -333,7 +334,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         env == "@." && return current_project()
         env == "@temp" && return mktempdir()
         env == "@stdlib" && return Sys.STDLIB
-        if startswith(env, "@script")
+        if env == "@script" || startswith(env, "@script/") || (Sys.iswindows() && startswith(env, "@script\\"))
             program_file = JLOptions().program_file
             program_file = program_file != C_NULL ? unsafe_string(program_file) : nothing
             isnothing(program_file) && return nothing # User did not pass a script
@@ -347,6 +348,10 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         env = replace(env, '#' => VERSION.minor, count=1)
         env = replace(env, '#' => VERSION.patch, count=1)
         name = env[2:end]
+        if isabspath(name) || !isempty(splitdrive(name)[1]) || ".." in splitpath(name)
+            @warn "Named environment $(repr(env)) must not leave the depot's environments directory"
+            return nothing
+        end
         # look for named env in each depot
         for depot in DEPOT_PATH
             path = joinpath(depot, "environments", name)

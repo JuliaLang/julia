@@ -191,6 +191,21 @@ end
         generate_bin_path(pathsep) = "HelloWorldC$(pathsep)bin$(pathsep)hello_world$(exeext)"
         @test isfile(@artifact_str(generate_bin_path("/")))
         @test isfile(@artifact_str(generate_bin_path("\\")))
+        @test_throws ArgumentError @artifact_str(generate_bin_path("/../.."))
+        @test_throws ArgumentError @artifact_str(generate_bin_path("\\..\\..\\"))
+        if Sys.iswindows()
+            @test_throws ArgumentError @artifact_str(generate_bin_path("/C:"))
+            @test_throws ArgumentError @artifact_str(generate_bin_path("\\C:\\"))
+        end
+        mktempdir() do dir
+            artifacts_toml = joinpath(dir, "Artifacts.toml")
+            write(artifacts_toml, "[\"..\"]\ngit-tree-sha1 = \"$(basename(HelloWorldC_dir))\"\n")
+            artifact_dict = Artifacts.load_artifacts_toml(artifacts_toml)
+            platform = HostPlatform()
+            name, tail, hash = Artifacts.artifact_slash_lookup("..", artifact_dict, artifacts_toml, platform)
+            @test Artifacts.__artifact_str(@__MODULE__, artifacts_toml, name, tail,
+                                          artifact_dict, hash, platform, Val(nothing)) == HelloWorldC_dir
+        end
     end
 end
 
