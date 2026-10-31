@@ -181,7 +181,7 @@ emit(cmuladd_ref, Base.RefValue{Complex{Float32}})
 # CHECK-SAME: @julia_clen
 # CHECK-SAME: {
 # CHECK-NOT: define
-# CHECK: call i{{32|64}} %strlen(
+# CHECK: call i{{32|64}} @strlen_{{[0-9]+}}(
 # CHECK-SAME: "jl_roots"
 # CHECK-NOT: define
 # CHECK: }

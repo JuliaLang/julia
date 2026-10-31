@@ -1,5 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#ifndef JL_JITLAYERS_H
+#define JL_JITLAYERS_H
+
 #include "llvm-version.h"
 
 #include "llvm/ADT/SmallSet.h"
@@ -343,6 +346,29 @@ private:
     StringMap<unsigned> counter;
 };
 
+struct jl_ccall_spec_t {
+    const char *func; // the name, if known statically
+    void *lib;        // the library, if known statically
+    // Otherwise, the svec (fn,) or (fn, lib) to evaluate (permanently rooted)
+    jl_value_t *target;
+    // Keeps the stub apart from others for the same symbol (0 if not)
+    uint64_t site;
+    // The calling convention of the calls
+    unsigned cc;
+};
+
+template<>
+struct llvm::DenseMapInfo<jl_ccall_spec_t> {
+    using T = std::tuple<const char *, void *, jl_value_t *, uint64_t, unsigned>;
+    using I = DenseMapInfo<T>;
+    static inline T to(jl_ccall_spec_t t) {
+        return {t.func, t.lib, t.target, t.site, t.cc};
+    }
+
+    static unsigned getHashValue(const jl_ccall_spec_t &Val) { return I::getHashValue(to(Val)); }
+    static bool isEqual(const jl_ccall_spec_t &LHS, const jl_ccall_spec_t &RHS) { return I::isEqual(to(LHS), to(RHS)); }
+};
+
 struct jl_linker_info_t {
     DenseMap<jl_code_instance_t *, jl_codeinst_funcs_t<orc::SymbolStringPtr>> ci_funcs;
     // Key on the enum's underlying integer type: LLVM's DenseMapInfo requires
@@ -352,6 +378,7 @@ struct jl_linker_info_t {
         call_targets;
     DenseMap<void *, orc::SymbolStringPtr> global_targets;
     DenseMap<_Atomic(uint64_t) *, orc::SymbolStringPtr> coverage_counters;
+    DenseMap<jl_ccall_spec_t, orc::SymbolStringPtr> ccall_targets;
 };
 
 struct jl_emitted_output_t {
@@ -386,6 +413,8 @@ public:
     std::string make_name(StringRef orig_name) JL_NOTSAFEPOINT;
 
     StringRef get_call_target(jl_code_instance_t *ci, bool specsig, bool always_inline) JL_CANSAFEPOINT;
+    Function *get_ccall_target(const char *f_name, void *f_lib,
+                               jl_value_t *target, uint64_t site, CallingConv::ID cc);
 
     // Discard all the context that will be invalidated when we compile the
     // module.  The context and module will be moved to the jl_emitted_output_t.
@@ -401,6 +430,8 @@ public:
         call_targets;
     DenseMap<jl_code_instance_t *, jl_llvm_functions_t> ci_funcs;
     SmallVector<std::pair<jl_code_instance_t *, GlobalVariable *>, 0> external_fns;
+    // foreign symbol -> LLVM function declaration
+    DenseMap<jl_ccall_spec_t, Function *> ccall_targets;
 
     SmallVector<cfunc_decl_t,0> cfuncs;
     std::map<void*, GlobalVariable*> global_targets;
@@ -416,24 +447,12 @@ public:
     DenseMap<std::pair<StringRef, StringRef>, DISubprogram*> inlined_subprograms;
     std::map<jl_datatype_t*, Type*> llvmtypes;
     DenseMap<Constant*, GlobalVariable*> mergedConstants;
-    // Map from symbol name (in a certain library) to its GV in sysimg and the
-    // DL handle address in the current session.
+    // The caches of cglobal addresses (see runtime_sym_gv), by library and name:
+    // for NULL (RTLD_DEFAULT) and the special libraries (JL_EXE_LIBNAME, ...),
+    // and for the others.
     typedef StringMap<GlobalVariable *> SymMapGV;
-    StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
-    SymMapGV symMapDefault;
-    // These symMaps are Windows-only
-    SymMapGV symMapExe;
-    SymMapGV symMapDll;
-    SymMapGV symMapDlli;
-    // Map from distinct callee's to its GOT entry.
-    // In principle the attribute, function type and calling convention
-    // don't need to be part of the key but it seems impossible to forward
-    // all the arguments without writing assembly directly.
-    // This doesn't matter too much in reality since a single function is usually
-    // not called with multiple signatures.
-    DenseMap<AttributeList, std::map<
-        std::tuple<GlobalVariable*, FunctionType*, CallingConv::ID>,
-        GlobalVariable*>> allPltMap;
+    SymMapGV symMapSpecial[4];
+    StringMap<SymMapGV> symMapLib;
     SmallVector<std::unique_ptr<Module>, 0> llvmcall_modules;
 
     // inputs
@@ -491,6 +510,22 @@ std::string emit_abi_constreturn(jl_codegen_output_t &out, jl_abi_t from_abi, jl
 std::string emit_abi_constreturn(jl_codegen_output_t &out, bool specsig, jl_code_instance_t *codeinst) JL_CANSAFEPOINT;
 
 Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptrName, jl_codegen_output_t &out) JL_CANSAFEPOINT;
+bool isSlotThunk(const GlobalObject &G) JL_NOTSAFEPOINT;
+void emit_plt_stub(jl_codegen_output_t &out, Function *StubFn, StringRef Resolve,
+                   ArrayRef<Constant *> Data, bool LargeCodeModel) JL_NOTSAFEPOINT;
+// The lib, func and target fields of a csymbol_data_t
+struct csymbol_data_fields_t {
+    Constant *lib;
+    Constant *func;
+    Constant *target;
+};
+csymbol_data_fields_t csymbol_data_fields(jl_codegen_output_t &out, const char *f_name,
+                                          const void *f_lib, jl_value_t *target) JL_CANSAFEPOINT;
+void emit_ccall_stub(jl_codegen_output_t &out, const csymbol_data_fields_t &Fields,
+                     Function *StubFn, bool LargeCodeModel) JL_NOTSAFEPOINT;
+void emit_ccall_stub_template(jl_codegen_output_t &out, Function *F,
+                              ArrayRef<Constant *> Placeholders,
+                              bool LargeCodeModel) JL_NOTSAFEPOINT;
 void emit_specsig_to_fptr1(
         Function *gf_thunk, jl_returninfo_t::CallingConv cc, unsigned return_roots,
         jl_value_t *calltype, jl_value_t *rettype, bool is_for_opaque_closure,
@@ -584,6 +619,7 @@ using CISymbolMap = DenseMap<jl_code_instance_t *, CISymbolPtr>;
 
 class JLMaterializationUnit;
 class JLTrampolineMaterializationUnit;
+class JLPLTStubUnit;
 
 struct JITObjectInfo {
     std::unique_ptr<WritableMemoryBuffer> BackingBuffer;
@@ -623,9 +659,37 @@ public:
                           jitlink::PassConfiguration &PassConfig) override;
 };
 
+class JuliaOJIT;
+
+// A stub compiled once, when first needed, and instantiated for each use with
+// its placeholder symbols defined as absolute values.
+class JLPLTStub {
+public:
+    // Define the stub `F` in `Out`, with an external global for each placeholder
+    typedef void (*EmitFn)(jl_codegen_output_t &Out, Function *F,
+                           ArrayRef<Constant *> Placeholders,
+                           bool LargeCodeModel) JL_NOTSAFEPOINT;
+    JLPLTStub(EmitFn Emit, unsigned NumPlaceholders) JL_NOTSAFEPOINT
+      : Emit(Emit), NumPlaceholders(NumPlaceholders) {}
+    ~JLPLTStub() JL_NOTSAFEPOINT = default;
+    // The template's object, or NULL if it failed to compile. GC safe.
+    MemoryBuffer *get(JuliaOJIT &JIT) JL_CANSAFEPOINT_ENTER_LEAVE;
+    Expected<std::unique_ptr<jitlink::LinkGraph>>
+    instantiate(JuliaOJIT &JIT, MemoryBuffer &T, orc::SymbolStringPtr Name,
+                ArrayRef<uint64_t> Values) JL_NOTSAFEPOINT;
+
+private:
+    void compile(JuliaOJIT &JIT) JL_CANSAFEPOINT_ENTER_LEAVE;
+    const EmitFn Emit;
+    const unsigned NumPlaceholders;
+    std::once_flag Once;
+    std::unique_ptr<MemoryBuffer> Obj;
+};
+
 class JuliaOJIT {
     friend JLMaterializationUnit;
     friend JLTrampolineMaterializationUnit;
+    friend JLPLTStub;
 private:
     // any verification the user wants to do when adding an OwningResource to the pool
     template <typename AnyT>
@@ -750,7 +814,6 @@ public:
 
     typedef ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPoolT;
 
-    struct DLSymOptimizer;
     struct OptimizerT;
     struct JITPointersT;
 
@@ -796,6 +859,7 @@ public:
     const Triple& getTargetTriple() const JL_NOTSAFEPOINT;
     StringRef getTargetFeatureString() const JL_NOTSAFEPOINT;
     StringRef getTargetCPU() const JL_NOTSAFEPOINT;
+    CodeModel::Model getCodeModel() const JL_NOTSAFEPOINT { return TM->getCodeModel(); }
     const TargetOptions &getTargetOptions() const JL_NOTSAFEPOINT;
     const Target &getTarget() const JL_NOTSAFEPOINT;
     TargetIRAnalysis getTargetIRAnalysis() const JL_NOTSAFEPOINT;
@@ -838,10 +902,6 @@ public:
     std::string getMangledName(StringRef Name) JL_NOTSAFEPOINT;
     std::string getMangledName(const GlobalValue *GV) JL_NOTSAFEPOINT;
 
-    // Note that this is a potential safepoint due to jl_get_library_ and jl_dlsym calls
-    // and must be called from inside safe-regions due to internal use of locks
-    void optimizeDLSyms(Module &M) JL_CANSAFEPOINT_ENTER_LEAVE;
-
     void shutdown() JL_NOTSAFEPOINT;
 
 protected:
@@ -874,6 +934,11 @@ protected:
                                         jl_invoke_api_t API,
                                         const DenseMap<jl_code_instance_t *, jl_code_instance_t *> &EquivMap) JL_NOTSAFEPOINT;
 
+    // Link a call to a foreign symbol, to its address or to a stub.
+    void linkCCall(jitlink::LinkGraph &G,
+                   jitlink::Symbol &Sym,
+                   jl_ccall_spec_t CCall) JL_NOTSAFEPOINT;
+
     // If the provided CodeInstance is neither compiled nor has an ORC symbol in
     // CISymbols, look for a compatible CodeInstance in the MethodInstance's
     // cache that does.  Returns the original CodeInstance if none exists.
@@ -904,9 +969,10 @@ private:
     // CodeInstance is eligible for garbage collection, it must be removed from
     // this map first, with unregisterCI.
     CISymbolMap CISymbols;
+    // The template for the stubs of foreign symbols
+    JLPLTStub CCallStubTemplate{emit_ccall_stub_template, 3};
     jl_name_counter_t Names;
 
-    std::unique_ptr<DLSymOptimizer> DLSymOpt;
 
     //Compilation streams
     jl_locked_stream dump_emitted_mi_name_stream;
@@ -933,7 +999,6 @@ extern JuliaOJIT *jl_ExecutionEngine;
 
 void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
 
-void optimizeDLSyms(Module &M) JL_CANSAFEPOINT_ENTER_LEAVE;
 
 static inline const char *jl_symbol_prefix(jl_symbol_prefix_t type,
                                            jl_invoke_api_t api) JL_NOTSAFEPOINT
@@ -984,3 +1049,5 @@ void jl_jit_add_bytes(size_t bytes) JL_NOTSAFEPOINT;
 void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
                             const jl_linker_info_t &Info) JL_CANSAFEPOINT_ENTER_LEAVE;
+
+#endif // JL_JITLAYERS_H

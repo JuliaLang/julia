@@ -147,6 +147,7 @@ typedef Instruction TerminatorInst;
 #endif
 
 #include "jitlayers.h"
+#include "ccall_data.h"
 #include "processor.h"
 #include "julia_assert.h"
 
@@ -744,21 +745,6 @@ static AttributeList get_attrs_box_zext(LLVMContext &C, unsigned nbytes)
 // global vars
 static const auto jlRTLD_DEFAULT_var = new JuliaVariable{
     XSTR(jl_RTLD_DEFAULT_handle),
-    true,
-    [](Type *T_size) -> Type * { return getPointerTy(T_size->getContext()); },
-};
-static const auto jlexe_var = new JuliaVariable{
-    XSTR(jl_exe_handle),
-    true,
-    [](Type *T_size) -> Type * { return getPointerTy(T_size->getContext()); },
-};
-static const auto jldll_var = new JuliaVariable{
-    XSTR(jl_libjulia_handle),
-    true,
-    [](Type *T_size) -> Type * { return getPointerTy(T_size->getContext()); },
-};
-static const auto jldlli_var = new JuliaVariable{
-    XSTR(jl_libjulia_internal_handle),
     true,
     [](Type *T_size) -> Type * { return getPointerTy(T_size->getContext()); },
 };
@@ -1402,17 +1388,18 @@ static const auto memcmp_func = new JuliaFunction<TypeFnContextAndSizeT>{
             {}); },
     // TODO: inferLibFuncAttributes(*memcmp_func, TLI);
 };
-static const auto jldlsym_func = new JuliaFunction<>{
-    XSTR(jl_load_and_lookup),
+// It can run Julia code, so it may access any memory.
+static const auto jl_resolve_foreignsymbol_func = new JuliaFunction<>{
+    XSTR(jl_resolve_foreignsymbol),
     [](LLVMContext &C) { return FunctionType::get(getPointerTy(C),
-            {getPointerTy(C), getPointerTy(C), getPointerTy(C)}, false); },
-    nullptr,
-};
-static const auto jllazydlsym_func = new JuliaFunction<>{
-    XSTR(jl_lazy_load_and_lookup),
-    [](LLVMContext &C) { return FunctionType::get(getPointerTy(C),
-            {JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C)}, false); },
-    nullptr,
+            {getPointerTy(C)}, false); },
+    [](LLVMContext &C) {
+        AttrBuilder FnAttrs(C);
+        FnAttrs.addAttribute(Attribute::Cold);
+        return AttributeList::get(C,
+                AttributeSet::get(C, FnAttrs),
+                AttributeSet(),
+                {}); },
 };
 static const auto jltypeassert_func = new JuliaFunction<>{
     XSTR(jl_typeassert),
@@ -11335,9 +11322,6 @@ static void init_jit_functions(void)
     add_named_global(jl_small_typeof_var, &jl_small_typeof);
     add_named_global(jlstack_chk_guard_var, &__stack_chk_guard);
     add_named_global(jlRTLD_DEFAULT_var, &jl_RTLD_DEFAULT_handle);
-    add_named_global(jlexe_var, &jl_exe_handle);
-    add_named_global(jldll_var, &jl_libjulia_handle);
-    add_named_global(jldlli_var, &jl_libjulia_internal_handle);
     auto size2pjlvalue = [](Type *T_size) -> Type * {
         return get_pjlvalue(T_size->getContext());
     };
@@ -11398,7 +11382,7 @@ static void init_jit_functions(void)
     add_named_global(jl_typeof_func, (void*)NULL);
     add_named_global(jl_field_write_barrier_p11_func, (void*)NULL);
     add_named_global(jl_field_write_barrier_p13_func, (void*)NULL);
-    add_named_global(jldlsym_func, &jl_load_and_lookup);
+    add_named_global(jl_resolve_foreignsymbol_func, &jl_resolve_foreignsymbol);
     add_named_global("jl_adopt_thread", &jl_adopt_thread);
     add_named_global(jlgetcfunctiontrampoline_func, &jl_get_cfunction_trampoline);
     add_named_global(jlgetnthfieldchecked_func, &jl_get_nth_field_checked);

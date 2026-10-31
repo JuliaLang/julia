@@ -5,6 +5,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "ccall_data.h"
 #include "processor.h"
 #include "julia_assert.h"
 
@@ -49,12 +50,27 @@ void *jl_get_library_(const char *f_lib, int throw_err) JL_CANSAFEPOINT
     return hnd;
 }
 
-JL_DLLEXPORT
-void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd)
+// Like jl_get_library_, but returns NULL instead of loading a library.
+JL_DLLEXPORT void *jl_get_library_if_loaded(const char *f_lib) JL_NOTSAFEPOINT
 {
-    void *handle = jl_atomic_load_acquire(hnd);
-    if (!handle)
-        jl_atomic_store_release(hnd, (handle = jl_get_library(f_lib)));
+    if (f_lib == NULL)
+        return jl_RTLD_DEFAULT_handle;
+    if (f_lib == JL_EXE_LIBNAME)
+        return jl_exe_handle;
+    if (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME)
+        return jl_libjulia_internal_handle;
+    if (f_lib == JL_LIBJULIA_DL_LIBNAME)
+        return jl_libjulia_handle;
+    JL_LOCK_NOGC(&libmap_lock);
+    void *hnd = strhash_get(&libMap, (void*)f_lib);
+    JL_UNLOCK_NOGC(&libmap_lock);
+    return hnd == HT_NOTFOUND ? NULL : hnd;
+}
+
+JL_DLLEXPORT
+void *jl_load_and_lookup(const char *f_lib, const char *f_name)
+{
+    void *handle = jl_get_library(f_lib);
     void * ptr;
     jl_dlsym(handle, f_name, &ptr, 1, 1);
     return ptr;
@@ -92,6 +108,72 @@ void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name)
     void *ptr;
     jl_dlsym(lib_ptr, fname_str, &ptr, 1, 1);
     return ptr;
+}
+
+// `v`, or the value of the global it refers to (a GlobalRef, read in the current
+// world, or a binding partition), throwing if that is undefined.
+static jl_value_t *eval_if_globalref(jl_value_t *v) JL_CANSAFEPOINT
+{
+    if (jl_is_globalref(v))
+        return jl_eval_globalref((jl_globalref_t*)v, jl_current_task->world_age);
+    if (jl_is_binding_partition(v)) {
+        jl_binding_partition_t *bpart = (jl_binding_partition_t*)v;
+        jl_value_t *val = jl_get_binding_partition_leaf_value(bpart);
+        if (val == NULL) {
+            jl_binding_t *bnd = jl_binding_partition_owner(bpart);
+            jl_undefined_var_error(bnd->globalref->name, (jl_value_t*)bnd->globalref->mod);
+        }
+        return val;
+    }
+    return v;
+}
+
+// A fully static symbol is looked up with jl_load_and_lookup, any other with
+// jl_lazy_load_and_lookup, evaluating the parts that are not static.
+static void *csymbol_lookup_impl(const struct csymbol_data_t *data) JL_CANSAFEPOINT
+{
+    jl_svec_t *target = data->target ? *(jl_svec_t**)data->target : NULL;
+    if (target == NULL) {
+        return jl_load_and_lookup(data->lib, data->func);
+    }
+    jl_value_t *name = NULL, *lib = NULL;
+    JL_GC_PUSH2(&name, &lib);
+    name = data->func ? (jl_value_t*)jl_symbol(data->func)
+                      : eval_if_globalref(jl_svecref(target, 0));
+    if (data->lib)
+        lib = (jl_value_t*)jl_symbol(data->lib);
+    else if (jl_svec_len(target) >= 2)
+        lib = eval_if_globalref(jl_svecref(target, 1));
+    void *ptr = jl_lazy_load_and_lookup(lib, name);
+    JL_GC_POP();
+    return ptr;
+}
+
+JL_DLLEXPORT
+void *jl_resolve_foreignsymbol(const struct csymbol_data_t *data) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    jl_task_t *ct = jl_current_task;
+    int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
+    void *out = csymbol_lookup_impl(data);
+    jl_gc_unsafe_leave(ct->ptls, gc_state);
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    return out;
+}
+
+JL_DLLEXPORT
+void *jl_bind_foreignsymbol_slot(jl_plt_entry_t *entry) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    const struct csymbol_data_t *data = (const struct csymbol_data_t*)entry;
+    void *target = jl_resolve_foreignsymbol(data);
+    jl_atomic_store_release((_Atomic(void*)*)data->plt.slot, target);
+    return target;
 }
 
 // miscellany
