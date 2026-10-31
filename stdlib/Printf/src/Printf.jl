@@ -706,7 +706,7 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
     end
     n, pt, neg = isf ? fix_dec(arg, prec, buf2) : ini_dec(arg, min(prec + ise, length(buf2) - 1), buf2)
     if isg && !hash
-        while buf2[n] == UInt8('0')
+        while n > 1 && buf2[n] == UInt8('0')
             n -= 1
         end
     end
