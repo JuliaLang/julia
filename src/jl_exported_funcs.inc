@@ -564,6 +564,7 @@
     YY(jl_dump_compiles) \
     YY(jl_dump_emitted_mi_name) \
     YY(jl_set_debuginfo_source_paths) \
+    YY(jl_set_image_package_roots) \
     YY(jl_dump_llvm_opt) \
     YY(jl_dump_fptr_asm) \
     YY(jl_emit_native) \

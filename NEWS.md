@@ -10,6 +10,12 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* Package image builds now keep the compiled code of each function in the native code cache that
+  JIT compilation already uses, and reuse it in later builds. Rebuilding a package after it or one of
+  its dependencies changes only compiles the functions whose code changed. Entries are keyed on the
+  exact LLVM input of each function and on the compiler build, so a reused object is the one compiling
+  again would produce. `JULIA_OBJCACHE=0` turns the cache off for both.
+
 Command-line option changes
 ---------------------------
 

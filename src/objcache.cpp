@@ -450,6 +450,79 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     return Buf;
 }
 
+ObjCache::Hash ObjCache::hashKey(llvm::StringRef Domain,
+                                 llvm::ArrayRef<llvm::StringRef> Parts) JL_NOTSAFEPOINT
+{
+    llvm::SHA1 Hasher;
+    auto update = [&](llvm::StringRef S) JL_NOTSAFEPOINT {
+        uint8_t Len[sizeof(uint64_t)];
+        endian::write(Len, (uint64_t)S.size(), endianness::big);
+        Hasher.update(Len);
+        Hasher.update(S);
+    };
+    // Tagged and length-prefixed, so these never collide with module hashes
+    // or KV keys.
+    Hasher.update(llvm::StringRef("JLKEY\0", 6));
+    update(Domain);
+    update(LLVM_VERSION_STRING);
+    update(JL_CODEGEN_SRC_HASH);
+    update(jl_gc_image_abi());
+    for (llvm::StringRef Part : Parts)
+        update(Part);
+    return Hasher.final();
+}
+
+std::unique_ptr<llvm::MemoryBuffer> ObjCache::lookup(const Hash &H) JL_NOTSAFEPOINT
+{
+    if (!Initialized.load(memory_order_acquire) || !Env)
+        return nullptr;
+    uint64_t LookupStart = jl_hrtime();
+    auto ObjKey = toObjKey(H);
+    MDBTxn Txn{Env, MDB_RDONLY};
+    if (!Txn.Txn)
+        return nullptr;
+    MDB_val Data;
+    MDB_val Key = mdbVal(ObjKey);
+    if (int Err = mdb_get(Txn.Txn, ObjCacheDbi, &Key, &Data)) {
+        if (Err != MDB_NOTFOUND)
+            checkMDB(Err);
+        NMiss.fetch_add(1, memory_order_relaxed);
+        if (LogFile) {
+            std::unique_lock<std::mutex> Lock{LogMutex};
+            fprintf(LogFile, "keyed-lookup,%s,%.3f,miss\n", llvm::toHex(H, true).c_str(),
+                    (jl_hrtime() - LookupStart) / 1.0e6);
+        }
+        return nullptr;
+    }
+    {
+        std::unique_lock<std::mutex> Lock{Mutex};
+        ObjQueue.push_back({H, nullptr});
+    }
+    QueueCond.notify_one();
+    auto Buf = std::make_unique<MDBMemoryBuffer>(
+        std::move(Txn), llvm::StringRef{(const char *)Data.mv_data, Data.mv_size});
+    NHit.fetch_add(1, memory_order_relaxed);
+    NRead.fetch_add(Buf->getBufferSize(), memory_order_relaxed);
+    if (LogFile) {
+        std::unique_lock<std::mutex> Lock{LogMutex};
+        fprintf(LogFile, "keyed-lookup,%s,%.3f,hit,%zu\n", llvm::toHex(H, true).c_str(),
+                (jl_hrtime() - LookupStart) / 1.0e6, Buf->getBufferSize());
+    }
+    return Buf;
+}
+
+void ObjCache::store(const Hash &H, llvm::StringRef Obj) JL_NOTSAFEPOINT
+{
+    if (!Initialized.load(memory_order_acquire) || !Env)
+        return;
+    auto Copy = llvm::MemoryBuffer::getMemBufferCopy(Obj);
+    {
+        std::unique_lock<std::mutex> Lock{Mutex};
+        ObjQueue.push_back({H, std::move(Copy)});
+    }
+    QueueCond.notify_one();
+}
+
 // Domain-separate KV entries from module-hash entries: the latter hash raw
 // bitcode, the former hash a tagged (namespace, key) frame.
 static ObjCache::Hash hashKVKey(const char *Ns, const uint8_t *Key,
