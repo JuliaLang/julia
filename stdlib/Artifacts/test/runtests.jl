@@ -194,6 +194,11 @@ end
 
             meta = artifact_meta("plat", artifacts_toml; pkg_uuid=uuid, platform=Platform("x86_64", "windows"))
             @test artifact_path(SHA1(meta["git-tree-sha1"])) == override_dir
+
+            load_overrides(force=true)
+            @test Artifacts.query_override(SHA1(hc)) === nothing
+            @test artifact_hash("single", artifacts_toml; pkg_uuid=uuid) == SHA1(hc)
+            @test Artifacts.query_override(SHA1(hc)) == joinpath(depot, "artifacts", he)
         end
     end
 end

@@ -449,7 +449,7 @@ collapsed artifact.  Returns `nothing` if no mapping can be found.
 function artifact_hash(name::String, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform(),
                        pkg_uuid::Union{Base.UUID,Nothing}=nothing)::Union{Nothing, SHA1}
-    meta = artifact_meta(name, artifacts_toml; platform=platform)
+    meta = artifact_meta(name, artifacts_toml; platform=platform, pkg_uuid=pkg_uuid)
     if meta === nothing
         return nothing
     end
