@@ -3,6 +3,7 @@
 using Test
 using REPL
 using Dates
+using Base64: base64encode
 
 using REPL.History
 using REPL.History: HistoryFile, HistEntry, update!,
@@ -697,4 +698,166 @@ end
     end
 end
 
-# TODO: Prompt handling/events, terminal rendering, and end-to-end integration tests
+# Run an interactive search in a fake terminal. The caller is given one function
+# to type keys and one to wait until some text has been displayed.
+function searchhistory(interact::Function, entries::Vector{HistEntry};
+                       size = (30, 80), props = REPL.LineEdit.TerminalProperties())
+    input, output = Pipe(), Pipe()
+    Base.link_pipe!(input, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
+    term = REPL.Terminals.TTYTerminal("dumb", input.out, IOContext(output.in, :displaysize => size), devnull)
+    hist = HistoryFile()
+    append!(hist.records, entries)
+    # Some escape codes go to the process output rather than to the terminal
+    search = @async redirect_stdout(() -> runsearch(hist, term, "", props), devnull)
+    shown = IOBuffer()
+    interact(keys -> write(input.in, keys),
+             text -> write(shown, readuntil(output.out, text, keep = true)))
+    result = fetch(search)
+    close(output.in)
+    close(input.in)
+    write(shown, read(output.out))
+    result, String(take!(shown))
+end
+searchhistory(entries::Vector{HistEntry}, keys::String; kwargs...) =
+    searchhistory((type, _) -> type(keys), entries; kwargs...)
+
+@testset "Interactive search" begin
+    entries = [HistEntry(:julia, now(UTC), "foo $i", i) for i in 1:40]
+    push!(entries, HistEntry(:shell, now(UTC), "ls bar", 41))
+    nothingselected = (mode = nothing, text = "")
+    @testset "Navigation" begin
+        @test searchhistory(entries, "\r")[1] == (mode = :shell, text = "ls bar")
+        @test searchhistory(entries, "\e[A\e[A\r")[1].text == "foo 39"
+        @test searchhistory(entries, "\x10\x10\x0e\r")[1].text == "foo 40"
+        @test searchhistory(entries, "\e[5~\r")[1].text == "foo 29"
+        @test searchhistory(entries, "\e[5~\e[6~\r")[1].text == "ls bar"
+        @test searchhistory(entries, "\e<\r")[1].text == "foo 1"
+        @test searchhistory(entries, "\e<\e>\r")[1].text == "ls bar"
+        result, shown = searchhistory(entries, "\r")
+        @test occursin("[41/41]", shown)
+        @test occursin("try ? for help", shown)
+        @test occursin("shell> ls bar", shown)
+        @test occursin("Ctrl+S to save", shown)
+        result, shown = searchhistory(entries, "\f\r")
+        @test occursin("\e[H\e[2J", shown)
+        @test result.text == "ls bar"
+    end
+    @testset "Aborting" begin
+        for keys in ("\x03", "\x04", "\a", "\e\e", "\e[A\t\x03")
+            @test searchhistory(entries, keys)[1] == nothingselected
+        end
+    end
+    @testset "Filtering" begin
+        result, shown = searchhistory(entries, "bar\r")
+        @test result == (mode = :shell, text = "ls bar")
+        @test occursin("[1/1]", shown)
+        @test occursin("words", shown)
+        @test searchhistory(entries, "7 foo\r")[1].text == "foo 37"
+        @test searchhistory(entries, "shell>\r")[1].text == "ls bar"
+        @test searchhistory(entries, "nomatch\r")[1] == nothingselected
+        for (query, hint) in ("=foo" => "exact", "!bar" => "negated", "`f" => "initialism",
+                              "/fo+" => "regexp", "~fo" => "fuzzy", "foo;" => "separator",
+                              "foo;=4" => "exact", "bar;!foo" => "negated")
+            @test occursin(hint, searchhistory(entries, query * "\r")[2])
+        end
+        # Confirming moves the cursor to the end, so wait for the hint first
+        result = searchhistory(entries) do type, waitfor
+            type("julia>\e[D")
+            waitfor("mode [")
+            type("\r")
+        end[1]
+        @test result.text == "foo 40"
+        # Removing characters widens the search again
+        @test searchhistory(entries, "bar\x7f\x7f\x7f\r")[1].text == "ls bar"
+        # Narrowing a finished search reuses its results
+        result = searchhistory(entries) do type, waitfor
+            type("foo")
+            waitfor("words [40/40]")
+            type(" 1\r")
+        end[1]
+        @test result.text == "foo 31"
+    end
+    @testset "Help" begin
+        for (query, help) in ("?" => "Enter a search term", "??" => "Search your REPL history")
+            result = searchhistory(entries) do type, waitfor
+                type(query)
+                waitfor(help)
+                type("\x7f"^length(query) * "\r")
+            end[1]
+            @test result.text == "ls bar"
+        end
+    end
+    @testset "Selection" begin
+        result, shown = searchhistory(entries, "\e[A\e[A\t\t\r")
+        @test result == (mode = :julia, text = "foo 39\nfoo 40")
+        @test occursin("│ foo 39", shown) && occursin("│ foo 40", shown)
+        @test searchhistory(entries, "\t\t\r")[1].text == "ls bar"
+        # Selected entries are carried over into a new search
+        result, shown = searchhistory(entries, "\e[A\t\e[A\e[A\tbar\t\r")
+        @test result == (mode = :julia, text = "foo 39\nfoo 40\nls bar")
+        @test occursin("carried over", shown)
+        @test occursin("words [•/1]", shown)
+    end
+    @testset "Long entries" begin
+        long = [HistEntry(:julia, now(UTC), "x = " * "a"^100 * " + needle", 1),
+                HistEntry(:julia, now(UTC), join(("line$i" for i in 1:30), '\n'), 2),
+                HistEntry(:shell, now(UTC), "echo " * "b"^100 * " haystack " * "c"^100, 3)]
+        result, shown = searchhistory(long, "needle\r")
+        @test result.text == long[1].content
+        @test occursin("…", shown) && occursin("needle", shown)
+        result, shown = searchhistory(long, "haystack\r")
+        @test result.text == long[3].content
+        @test occursin("…bbb", shown) && occursin("haystack ccc", shown)
+        result, shown = searchhistory(long, "\t\e[A\t\e[A\e[A\t\r"; size = (30, 16))
+        @test result == (mode = :julia, text = join((e.content for e in long), '\n'))
+        result, shown = searchhistory(long, "\e[A\e[A\t\t\r")
+        @test result.text == long[1].content * '\n' * long[2].content
+        @test occursin("lines hidden", shown)
+    end
+    @testset "Incremental filtering" begin
+        # An old selected entry is only found after the first batch of results is shown
+        many = [HistEntry(:julia, now(UTC), "foo $i", i) for i in 1:2000]
+        result = searchhistory(many) do type, waitfor
+            type("\e<\tf")
+            waitfor("words [2000/2000]")
+            type("\r")
+        end[1]
+        @test result.text == "foo 1"
+    end
+    @testset "Saving" begin
+        osc52 = REPL.LineEdit.TerminalProperties()
+        osc52.da1 = [62, 52]
+        result, shown = searchhistory(entries, "\x19"; props = osc52)
+        @test result == nothingselected
+        @test occursin("\e]52;c;$(base64encode("ls bar"))\e\\", shown)
+        @test occursin("Copied 1 line to clipboard", shown)
+        result, shown = searchhistory(entries, "\e[A\e[A\t\t\x13\r"; props = osc52)
+        @test result == nothingselected
+        @test occursin("save to", shown)
+        @test occursin("\e]52;c;$(base64encode("foo 39\nfoo 40"))\e\\", shown)
+        @test occursin("Copied 2 lines to clipboard", shown)
+        # Escape sequences in the save menu do not change the choice
+        result, shown = searchhistory(entries, "\x13\e[A\e]11;rgb:0/0/0\a\r"; props = osc52)
+        @test occursin("\e]52;c;$(base64encode("ls bar"))\e\\", shown)
+        # The clipboard can be offered once the terminal reports it
+        props = REPL.LineEdit.TerminalProperties()
+        result, shown = searchhistory(entries, "\x13\e[?62;52c\r"; props)
+        @test props.da1 == [62, 52]
+        @test occursin("\e]52;c;$(base64encode("ls bar"))\e\\", shown)
+        mktempdir() do dir
+            path = joinpath(dir, "selection.jl")
+            result, shown = searchhistory(entries, "\e[A\t\x13\t\r$path\n"; props = osc52)
+            @test result == nothingselected
+            @test read(path, String) == "foo 40\n"
+            @test occursin("Wrote 1 selected line to", shown)
+            result, shown = searchhistory(entries, "\x13\t\r\n"; props = osc52)
+            @test occursin("History selection aborted", shown)
+            @test read(path, String) == "foo 40\n"
+        end
+        # Leaving the save menu returns to the search
+        for keys in ("\x13\x03\r", "\x13\e\e\r", "\x13\ex\x03\r")
+            @test searchhistory(entries, keys; props = osc52)[1].text == "ls bar"
+        end
+    end
+end
