@@ -58,20 +58,26 @@ end
 @constprop :aggressive @inline function ^(x::Float64, n::Integer)
     n64 = clamp(n, Int64)
     n64 == 0 && return one(x)
-    if use_power_by_squaring(n64)
-        return pow_body(x, n64)
+    return pow_int(x, n64, n)
+end
+
+# One out-of-line call keeps `^` cheap to inline into callers
+@noinline function pow_int(x::Float64, n64::Int64, n::Integer)
+    use_power_by_squaring(n64) || return pow_large_int(x, n64, n)
+    return @inline pow_body(x, n64)
+end
+
+@noinline function pow_large_int(x::Float64, n64::Int64, n::Integer)
+    isnan(x) && return x
+    s = ifelse(signbit(x) && isodd(n), -1.0, 1.0)
+    x = abs(x)
+    y = float(n64)
+    if y == n64
+        return copysign(pow_body(x, y), s)
     else
-        isnan(x) && return x
-        s = ifelse(signbit(x) && isodd(n), -1.0, 1.0)
-        x = abs(x)
-        y = float(n64)
-        if y == n64
-            return copysign(pow_body(x, y), s)
-        else
-            n2 = n64 % 1024
-            y = float(n64 - n2)
-            return pow_body(x, y) * copysign(pow_body(x, n2), s)
-        end
+        n2 = n64 % 1024
+        y = float(n64 - n2)
+        return pow_body(x, y) * copysign(pow_body(x, n2), s)
     end
 end
 
