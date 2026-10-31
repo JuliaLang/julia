@@ -814,6 +814,22 @@ function _iterator_upper_bound(itr)
     throw(nothing)
 end
 
+module MapEltype
+import Base: _iterator_upper_bound, Generator, inferencebarrier
+ccall(:jl_set_module_max_methods, Cvoid, (Any, Cint), @__MODULE__, 127)
+function _iterator_upper_bound(g::Generator)
+    x = iterate(g.iter)
+    while x !== nothing
+        val = g.f(getfield(x, 1))
+        if inferencebarrier(nothing)
+            return val
+        end
+        x = iterate(g.iter, getfield(x, 2))
+    end
+    throw(nothing)
+end
+end
+
 # define this as a macro so that the call to Core.Compiler
 # gets inlined into the caller before recursion detection
 # gets a chance to see it, so that recursive calls to the caller
