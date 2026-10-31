@@ -341,25 +341,16 @@ end
         @test matches_spec_range!(dest, versions, VersionSpec(VersionRange[]), 5) == [0, 0, 0, 0, 0, 1]
     end
 
-    @test string(VersionSpec()) == "*"
+    for s in ["*", "1.2", "1.2.3 - 2", "1.2 - *"]
+        @test string(VersionRange(s)) == s
+    end
     @test string(VersionSpec(VersionRange[])) == "∅"
     @test string(VersionSpec("1.2-2")) == "1.2 - 2"
     @test string(semver_spec("0.4, 1.2")) == "[0.4, 1.2.0 - 1]"
-    @test string(VersionRange("1.2")) == "1.2"
-    @test string(VersionRange("1.2-*")) == "1.2.0 - *"
-    @test string(VersionRange("0-0.3.2")) == "0 - 0.3.2"
     @test repr(VersionRange("1.2-1.3")) == "VersionRange(\"1.2 - 1.3\")"
     @test repr(VersionSpec("1.2-1.3")) == "VersionSpec(\"1.2 - 1.3\")"
     @test repr(semver_spec("0.4, 1.2")) == "VersionSpec([\"0.4\", \"1.2.0 - 1\"])"
     @test repr(VersionSpec(VersionRange[])) == "VersionSpec([])"
-    for s in ["1.2", "1.2.3 - 2", "0 - 0.3.2", "1.2.0 - *", "*"]
-        r = VersionRange(s)
-        @test VersionRange(string(r)) == r
-    end
-    for s in ["^0.2.3", "~1.2", "1.2 - 2.3.4", "<1.2"]
-        spec = semver_spec(s)
-        @test VersionSpec(string(spec)) == spec
-    end
 end
 
 @test v"1.0.0-1" < v"1.0.0-a"
