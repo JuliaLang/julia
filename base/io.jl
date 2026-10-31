@@ -1498,7 +1498,10 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
             inewline = something(findprev(==(UInt8('\n')), chunks[ichunk], inewline-1), 0)
             inewline > 0 && break
             ichunk = ichunk == 1 ? length(chunks) : ichunk - 1
-            ichunk == jchunk && break # found nothing — may need to read more chunks
+            if ichunk == jchunk # found nothing — line starts at the oldest chunk; may need to read more chunks
+                ichunk = ichunk == length(chunks) ? 1 : ichunk + 1
+                break
+            end
             inewline = length(chunks[ichunk])+1 # start for next findprev
         end
 
