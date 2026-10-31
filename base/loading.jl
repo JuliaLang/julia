@@ -4073,12 +4073,12 @@ end
 
 const JI_FLAG_PKGIMAGE::UInt32 = 1 << 0
 const JI_FLAG_SPLIT::UInt32 = 1 << 1
-const JI_PAYLOAD_END_OFFSET = 168 # the source text of a package image follows its payload
+const JI_PAYLOAD_START_OFFSET = 160
 
 function isvalid_cache_header(f::IOStream)
     flags = Ref{UInt32}()
     checksum = Ref{UInt32}()
-    err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}, Ptr{UInt64}, Ptr{Int64}), f.ios, flags, checksum, Ref{Int64}(), Ref{Int64}(), Ref{UInt64}(), Ref{Int64}())
+    err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{UInt64}, Ptr{Int64}, Ptr{Int64}, Ptr{Int64}), f.ios, flags, checksum, Ref{UInt64}(), Ref{Int64}(), Ref{Int64}(), Ref{Int64}())
 
     if err == 0 && (flags[] & JI_FLAG_PKGIMAGE == 0)
         @debug "Cache header was for a system image"
@@ -4297,7 +4297,7 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
     l = read(f, UInt32)
     clone_targets = read(f, l)
     pos = position(f)
-    srctextpos = read(seek(f, JI_PAYLOAD_END_OFFSET), Int64)
+    srctextpos = read(seek(f, JI_PAYLOAD_START_OFFSET), Int64) + read(f, Int64)
     seek(f, pos)
 
     srcfiles = srctext_files(f, srctextpos, includes)
