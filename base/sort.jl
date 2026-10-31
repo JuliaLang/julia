@@ -467,7 +467,6 @@ true
 """
 function insorted end
 insorted(x, v::AbstractVector; kw...) = !isempty(searchsorted(v, x; kw...))
-insorted(x, r::AbstractRange) = in(x, r)
 
 ## Alternative keyword management
 
