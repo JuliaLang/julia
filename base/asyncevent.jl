@@ -80,14 +80,18 @@ object) when the process receives the signal `signum`, for example `Base.SIGHUP`
 `Base.SIGWINCH`. Several deliveries that arrive before a waiting task runs are reported once.
 
 By default the condition only observes the signal, which still has its usual effect:
-`SIGTERM`, for instance, still exits Julia. Pass `intercept=true` to replace the usual
-effect. While any intercepting condition for `signum` is open, the signal only notifies the
+`SIGTERM`, for instance, still exits Julia. If that effect ends the process, it first waits
+for the callbacks of observing conditions to return (see the callback form below), so they
+can finish their work. A second delivery of the signal in the meantime takes effect at once.
+`SIGQUIT` never waits, so that Ctrl-\\ can always stop Julia. Pass `intercept=true` to
+replace the usual effect. While any intercepting condition for `signum` is open, the signal only notifies the
 conditions, and closing the last one with [`close`](@ref) restores the usual effect. Some
 effects happen regardless: a stopped process still resumes on `SIGCONT`.
 
-To clean up when `SIGTERM` stops Julia, prefer [`atexit`](@ref) to intercepting the signal,
-since that exit runs the `atexit` hooks. Intercept it only when the program must decide for
-itself when to stop, and then end the handler with [`exit`](@ref).
+To clean up when `SIGTERM` stops Julia, observe it with a callback or use [`atexit`](@ref)
+rather than intercepting it, since that exit also runs the `atexit` hooks. Intercept it only
+when the program must decide for itself when to stop, and then end the handler with
+[`exit`](@ref).
 
 The signals that have a named constant in `Base` can be watched as follows:
 
@@ -105,8 +109,8 @@ The signals that have a named constant in `Base` can be watched as follows:
 | `Base.SIGINFO`  | no         | yes        | no      | profile peek                          |
 
 Ctrl-C (`SIGINT`) interrupts running code through task cancellation (see
-[`CancellationToken`](@ref)), or exits a script. It can be observed but not intercepted, so
-that code relying on cancellation keeps working. If an intercepting condition's task cannot
+[`CancellationToken`](@ref)), or exits a script. Intercepting it turns both off, so Ctrl-C
+no longer stops running code. If an intercepting condition's task cannot
 run, for example because other code never yields, then on Unix Ctrl-\\ (`SIGQUIT`) still
 stops Julia, unless `SIGQUIT` is also intercepted.
 
@@ -150,16 +154,19 @@ mutable struct SignalCondition
     @atomic set::Bool
     signum::Cint
     intercept::Bool
+    # Guarded by `cond`. They count deliveries, so that a signal waiting on the callback knows
+    # when it has returned.
+    hascallback::Bool
+    notified::Int
+    taken::Int
+    handled::Int
 
     function SignalCondition(signum::Integer; intercept::Bool=false)
         if !(typemin(Cint) <= signum <= typemax(Cint)) ||
                 ccall(:jl_signal_is_reserved, Cint, (Cint,), signum) != 0
             throw(ArgumentError("signal $signum cannot be watched"))
         end
-        if intercept && signum == SIGINT
-            throw(ArgumentError("SIGINT cannot be intercepted, as Ctrl-C goes through task cancellation"))
-        end
-        this = new(ThreadSynchronizer(), true, false, signum, intercept)
+        this = new(ThreadSynchronizer(), true, false, signum, intercept, false, 0, 0, 0)
         iolock_begin()
         err = ccall(:jl_signal_watch_start, Cint, (Cint, Cint, Ptr{Cvoid}),
             signum, intercept, @cfunction(uv_signalcb, Cvoid, (Ptr{Cvoid},)))
@@ -197,6 +204,7 @@ function _trywait(s::SignalCondition, tok::MaybeToken)
         end
         set = s.set
         @atomic :monotonic s.set = false
+        s.taken = s.notified
         return set
     finally
         locked && unlock(s.cond)
@@ -211,6 +219,9 @@ signal `signum`. See there for what `intercept` does. Several deliveries that ar
 so the number of calls is not a count of signals. The `callback` is passed one argument, the
 condition object itself.
 
+When the condition observes a signal whose usual effect ends the process, such as `SIGTERM`,
+that effect waits for `callback` to return.
+
 # Examples
 ```julia
 Base.SignalCondition(Base.SIGHUP; intercept=true) do _
@@ -218,8 +229,20 @@ Base.SignalCondition(Base.SIGHUP; intercept=true) do _
 end
 ```
 """
-SignalCondition(cb::Function, signum::Integer; intercept::Bool=false) =
-    run_callback_task(cb, SignalCondition(signum; intercept))
+function SignalCondition(cb::Function, signum::Integer; intercept::Bool=false)
+    s = SignalCondition(signum; intercept)
+    @lock s.cond s.hascallback = true
+    return run_callback_task(s) do s
+        try
+            cb(s)
+        finally
+            @lock s.cond begin
+                s.handled = s.taken
+                notify(s.cond, false)
+            end
+        end
+    end
+end
 
 function show(io::IO, s::SignalCondition)
     state = isopen(s) ? "open" : "closed"
@@ -498,15 +521,36 @@ end
 
 # The runtime calls this on the event loop after it sees a watched signal.
 function uv_signalcb(::Ptr{Cvoid})
-    while (sig = ccall(:jl_signal_take_pending, Cint, ())) != 0
+    while true
+        sig = ccall(:jl_signal_take_pending, Cint, ())
+        sig == 0 && break
+        callbacks = Pair{SignalCondition, Int}[]
         for s in get(SIGNAL_WATCHERS, sig, ())
             @lock s.cond begin
+                s.notified += 1
+                s.hascallback && push!(callbacks, s => s.notified)
                 @atomic :release s.set = true
                 notify(s.cond, true)
             end
         end
+        if ccall(:jl_signal_take_deferred, Cint, (Cint,), sig) != 0
+            # The process must still end if the current scope is cancelled.
+            ScopedValues.with(CANCEL_TOKEN => nothing) do
+                errormonitor(Threads.@spawn resume_signal(sig, callbacks))
+            end
+        end
     end
     nothing
+end
+
+# Let a deferred signal take its usual effect once these callbacks have returned.
+function resume_signal(sig::Cint, callbacks::Vector{Pair{SignalCondition, Int}})
+    for (s, n) in callbacks
+        @lock s.cond while isopen(s) && s.handled < n
+            wait(s.cond, nothing)
+        end
+    end
+    ccall(:jl_signal_resume, Cvoid, (Cint,), sig)
 end
 
 function uv_timercb(handle::Ptr{Cvoid})

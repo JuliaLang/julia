@@ -502,18 +502,26 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     ReleaseSRWLockExclusive(&ctx_rewrite_lock);
 }
 
+// Set once the observers of a deferred console event are done. Every deferred event ends the
+// process, so one event object serves them all.
+static HANDLE signal_resume_event;
+
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
     // libuv reports these console events as the same signals.
     int watched = wsig == CTRL_C_EVENT ? SIGINT :
                   wsig == CTRL_BREAK_EVENT ? SIGBREAK :
                   wsig == CTRL_CLOSE_EVENT ? SIGHUP : 0;
-    if (jl_notify_signal_watchers(watched)) {
+    int defer = watched != SIGINT || jl_sigint_get_policy() == JL_SIGINT_EXIT;
+    int action = jl_notify_signal_watchers(watched, defer);
+    if (action == JL_SIGNAL_INTERCEPTED) {
         // windows ends the process once this returns, so give the watcher time to run
         if (wsig == CTRL_CLOSE_EVENT)
             Sleep(INFINITE);
         return 1;
     }
+    if (action == JL_SIGNAL_DEFERRED)
+        WaitForSingleObject(signal_resume_event, INFINITE);
     int sig;
     //windows signals use different numbers from unix (raise)
     switch(wsig) {
@@ -703,6 +711,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 
 JL_DLLEXPORT void jl_install_sigint_handler(void)
 {
+    signal_resume_event = CreateEvent(NULL, TRUE, FALSE, NULL);
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
 
@@ -717,7 +726,13 @@ static uv_signal_t *winch_signal;
 
 static void winch_cb(uv_signal_t *handle, int sig)
 {
-    jl_notify_signal_watchers(sig);
+    jl_notify_signal_watchers(sig, 0);
+}
+
+static void jl_signal_watch_resume(int sig)
+{
+    jl_atomic_store_relaxed(&signal_deferred[sig], JL_SIGNAL_DEFER_NONE);
+    SetEvent(signal_resume_event);
 }
 
 static int jl_signal_watch_install(int sig)
