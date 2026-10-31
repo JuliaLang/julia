@@ -205,6 +205,25 @@ $(build_bindir)/7z$(EXE):
 	rm -f "$@" && \
 	ln -svf "$(7Z_PATH)" "$@"
 
+symlink_zstd: $(build_bindir)/zstd$(EXE)
+symlink_zstdmt: $(build_bindir)/zstdmt$(EXE)
+
+ifneq ($(USE_SYSTEM_ZSTD),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_zstd symlink_zstdmt
+ZSTD_PATH := $(shell which zstd$(EXE))
+ZSTDMT_PATH := $(shell which zstdmt$(EXE))
+endif
+
+$(build_bindir)/zstd$(EXE):
+	[ -e "$(ZSTD_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(ZSTD_PATH)" "$@"
+
+$(build_bindir)/zstdmt$(EXE):
+	[ -e "$(ZSTDMT_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(ZSTDMT_PATH)" "$@"
+
 symlink_lld: $(build_bindir)/lld$(EXE)
 
 ifneq ($(USE_SYSTEM_LLD),0)
@@ -250,6 +269,7 @@ $(eval $(call symlink_system_library,CSL,libatomic,1,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,CSL,libgomp,1,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,CSL,libquadmath,0,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,PCRE,libpcre2-8))
+$(eval $(call symlink_system_library,ZSTD,libzstd))
 $(eval $(call symlink_system_library,DSFMT,libdSFMT))
 $(eval $(call symlink_system_library,LIBBLASTRAMPOLINE,libblastrampoline))
 $(eval $(call symlink_system_library,BLAS,$(LIBBLASNAME)))
