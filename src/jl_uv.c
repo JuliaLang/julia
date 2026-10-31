@@ -33,6 +33,7 @@ extern "C" {
 #endif
 
 static uv_async_t signal_async;
+static uv_async_t signal_watch_async;
 static uv_timer_t wait_empty_worker;
 
 static void walk_print_cb(uv_handle_t *h, void *arg)
@@ -118,6 +119,20 @@ void jl_wake_libuv(void)
     uv_async_send(&signal_async);
 }
 
+// Called with the IO lock held. Signal handlers may still use the handle after it is closed at exit.
+void jl_init_signal_watchers(uv_async_cb cb)
+{
+    if (signal_watch_async.type != UV_ASYNC) {
+        uv_async_init(jl_io_loop, &signal_watch_async, cb);
+        uv_unref((uv_handle_t*)&signal_watch_async);
+    }
+}
+
+void jl_wake_signal_watchers(void)
+{
+    uv_async_send(&signal_watch_async);
+}
+
 jl_mutex_t jl_uv_mutex;
 int jl_uv_loop_unwatched = 0;
 
@@ -162,7 +177,14 @@ JL_DLLEXPORT void jl_iolock_end(void) JL_CANSAFEPOINT
         jl_uv_loop_unwatched = 0;
         jl_wake_io_loop_thread();
     }
+    // a thread outside the thread pools never returns to the scheduler, so it must hand
+    // the event loop back to any pool thread that went to sleep because we held the iolock
+    jl_task_t *ct = jl_current_task;
+    int handoff = jl_uv_mutex.count == 1 && jl_threadpoolid(jl_atomic_load_relaxed(&ct->tid)) == -1;
     JL_UV_UNLOCK();
+    // after the unlock, so a thread that saw the iolock held is already marked sleeping
+    if (handoff)
+        jl_wake_io_loop_thread();
 }
 
 
@@ -201,7 +223,7 @@ static void jl_uv_closeHandle(uv_handle_t *handle) JL_CANSAFEPOINT
     }
     if (handle == (uv_handle_t*)&wait_empty_worker)
         handle->type = UV_UNKNOWN_HANDLE;
-    else if (handle == (uv_handle_t*)&signal_async)
+    else if (handle == (uv_handle_t*)&signal_async || handle == (uv_handle_t*)&signal_watch_async)
         return;
     else
         free(handle);

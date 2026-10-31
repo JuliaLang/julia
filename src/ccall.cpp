@@ -461,7 +461,7 @@ static Value *llvm_type_rewrite(
         return v;
 
     if (from_type == getVoidTy(ctx.builder.getContext()) || isa<UndefValue>(v))
-        return UndefValue::get(target_type); // convert undef (unreachable) -> undef (target_type)
+        return PoisonValue::get(target_type); // convert undef (unreachable) -> poison (target_type)
 
     assert(from_type->isPointerTy() == target_type->isPointerTy()); // expect that all ABIs consider all pointers to be equivalent
     if (target_type->isPointerTy())
