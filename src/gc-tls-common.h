@@ -35,6 +35,8 @@ typedef struct {
 
 #define JL_N_STACK_POOLS 16
     small_arraylist_t free_stacks[JL_N_STACK_POOLS];
+    // smallest length of each free_stacks pool since the last stack sweep
+    size_t free_stacks_lowwater[JL_N_STACK_POOLS];
 } jl_thread_heap_common_t;
 
 typedef struct {

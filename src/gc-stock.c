@@ -63,8 +63,12 @@ uv_sem_t gc_sweep_assists_needed;
 _Atomic(int) gc_n_threads_sweeping_per_thread;
 // counter for sharing work in the per-thread sweep
 _Atomic(int) gc_ptls_sweep_idx;
-// counter for round robin of giving back stack pages to the OS
-_Atomic(int) gc_stack_free_idx;
+// whether this stack sweep gives idle pooled stacks back
+static int gc_trim_stack_pools;
+// when idle pooled stacks were last given back
+static uint64_t gc_last_stack_trim_time;
+// pooled stacks count as idle once unused for this long
+#define STACK_POOL_TRIM_INTERVAL_NS (1000 * 1000 * 1000)
 
 // Tag for sentinel nodes in bigval list
 uintptr_t gc_bigval_sentinel_tag;
@@ -1262,22 +1266,83 @@ static void gc_sweep_wait_for_all_per_thread(void) JL_NOTSAFEPOINT
 
 extern const unsigned pool_sizes[];
 
+// Free the stacks of unreachable tasks back to the thread's pools
+static void sweep_live_task_stacks(jl_ptls_t ptls2) JL_NOTSAFEPOINT
+{
+    small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
+    size_t n = 0;
+    size_t ndel = 0;
+    size_t l = live_tasks->len;
+    void **lst = live_tasks->items;
+    if (l == 0)
+        return;
+    while (1) {
+        jl_task_t *t = (jl_task_t*)lst[n];
+        assert(jl_is_task(t));
+        if (gc_marked(jl_astaggedvalue(t)->bits.gc)) {
+            if (t->ctx.stkbuf == NULL)
+                ndel++; // jl_release_task_stack called
+            else
+                n++;
+        }
+        else {
+            ndel++;
+            void *stkbuf = t->ctx.stkbuf;
+            size_t bufsz = t->ctx.bufsz;
+            if (stkbuf) {
+                t->ctx.stkbuf = NULL;
+                _jl_free_stack(ptls2, stkbuf, bufsz);
+            }
+#ifdef _COMPILER_TSAN_ENABLED_
+            if (t->ctx.tsan_state) {
+                __tsan_destroy_fiber(t->ctx.tsan_state);
+                t->ctx.tsan_state = NULL;
+            }
+#endif
+        }
+        if (n >= l - ndel)
+            break;
+        void *tmp = lst[n];
+        lst[n] = lst[n + ndel];
+        lst[n + ndel] = tmp;
+    }
+    live_tasks->len -= ndel;
+}
+
+// Move the stacks that sat unused in a thread's pools since the last trim
+// (below the pool's low-water mark) to the shared pools, keeping at least
+// MIN_STACK_MAPPINGS_PER_POOL. Stacks that the thread keeps reusing stay put.
+// Pools of threads that are not alive are emptied.
+static void share_idle_stacks(jl_ptls_t ptls2) JL_NOTSAFEPOINT
+{
+    jl_thread_heap_common_t *heap = &ptls2->gc_tls_common.heap;
+    int thread_dead = jl_atomic_load_relaxed(&ptls2->current_task) == NULL;
+    if (!thread_dead && !gc_trim_stack_pools)
+        return;
+    for (int p = 0; p < JL_N_STACK_POOLS; p++) {
+        small_arraylist_t *al = &heap->free_stacks[p];
+        size_t n;
+        if (thread_dead) {
+            n = al->len;
+        }
+        else {
+            n = heap->free_stacks_lowwater[p];
+            assert(n <= al->len);
+            if (al->len - n < MIN_STACK_MAPPINGS_PER_POOL)
+                n = al->len > MIN_STACK_MAPPINGS_PER_POOL ? al->len - MIN_STACK_MAPPINGS_PER_POOL : 0;
+        }
+        gc_share_free_stacks(al, p, n);
+        if (thread_dead)
+            small_arraylist_free(al);
+        heap->free_stacks_lowwater[p] = al->len;
+    }
+}
+
 // Sweep the per-thread heaps, one thread's at a time, in parallel with the
 // other collector threads: free the dead malloc'd buffers and big objects and
 // sweep the stack pools.
 static void sweep_per_thread_loop(void) JL_NOTSAFEPOINT
 {
-    // Stack sweeping algorithm:
-    //    // deallocate stacks if we have too many sitting around unused
-    //    for (stk in halfof(free_stacks))
-    //        free_stack(stk, pool_sz);
-    //    // then sweep the task stacks
-    //    for (t in live_tasks)
-    //        if (!gc-marked(t))
-    //            stkbuf = t->stkbuf
-    //            bufsz = t->bufsz
-    //            if (stkbuf)
-    //                push(free_stacks[sz], stkbuf)
     size_t freed_bytes = 0, nfreed = 0;
     int sweep_big_serially = gc_sweep_big_serially();
     jl_atomic_fetch_add(&gc_n_threads_sweeping_per_thread, 1);
@@ -1294,93 +1359,41 @@ static void sweep_per_thread_loop(void) JL_NOTSAFEPOINT
         // stack sweeps have finished (see gc_sweep_big_serially).
         if (!sweep_big_serially)
             sweep_list_of_young_bigvals(ptls2->gc_tls.heap.young_generation_of_bigvals);
-        // free half of stacks that remain unused since last sweep (or all
-        // of them, if the thread is not alive yet or has exited)
-        int thread_dead = jl_atomic_load_relaxed(&ptls2->current_task) == NULL;
-        if (thread_dead || i == jl_atomic_load_relaxed(&gc_stack_free_idx)) {
-            for (int p = 0; p < JL_N_STACK_POOLS; p++) {
-                small_arraylist_t *al = &ptls2->gc_tls_common.heap.free_stacks[p];
-                size_t n_to_free;
-                if (thread_dead) {
-                    n_to_free = al->len; // not alive yet or dead, so it does not need these anymore
-                }
-                else if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
-                    n_to_free = al->len / 2;
-                    if (n_to_free > (al->len - MIN_STACK_MAPPINGS_PER_POOL))
-                        n_to_free = al->len - MIN_STACK_MAPPINGS_PER_POOL;
-                }
-                else {
-                    n_to_free = 0;
-                }
-                for (int n = 0; n < n_to_free; n++) {
-                    void *stk = small_arraylist_pop(al);
-                    free_stack(stk, pool_sizes[p]);
-                }
-                if (thread_dead) {
-                    small_arraylist_free(al);
-                }
-            }
-        }
-
-        small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
-        size_t n = 0;
-        size_t ndel = 0;
-        size_t l = live_tasks->len;
-        void **lst = live_tasks->items;
-        if (l == 0)
-            continue;
-        while (1) {
-            jl_task_t *t = (jl_task_t*)lst[n];
-            assert(jl_is_task(t));
-            if (gc_marked(jl_astaggedvalue(t)->bits.gc)) {
-                if (t->ctx.stkbuf == NULL)
-                    ndel++; // jl_release_task_stack called
-                else
-                    n++;
-            }
-            else {
-                ndel++;
-                void *stkbuf = t->ctx.stkbuf;
-                size_t bufsz = t->ctx.bufsz;
-                if (stkbuf) {
-                    t->ctx.stkbuf = NULL;
-                    _jl_free_stack(ptls2, stkbuf, bufsz);
-                }
-#ifdef _COMPILER_TSAN_ENABLED_
-                if (t->ctx.tsan_state) {
-                    __tsan_destroy_fiber(t->ctx.tsan_state);
-                    t->ctx.tsan_state = NULL;
-                }
-#endif
-            }
-            if (n >= l - ndel)
-                break;
-            void *tmp = lst[n];
-            lst[n] = lst[n + ndel];
-            lst[n + ndel] = tmp;
-        }
-        live_tasks->len -= ndel;
+        // sweep first, so a dead thread's pools are emptied after the stacks
+        // of its unreachable tasks are added to them
+        sweep_live_task_stacks(ptls2);
+        share_idle_stacks(ptls2);
     }
     gc_account_freed_malloced_memory(freed_bytes, nfreed);
     jl_atomic_fetch_add(&gc_n_threads_sweeping_per_thread, -1);
 }
 
-JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT
+// Idle pooled stacks are given back at most once per STACK_POOL_TRIM_INTERVAL_NS,
+// so how many survive does not depend on how often the GC runs, or on an
+// explicit collection, which is followed by a second one right away. `force`
+// (an explicit full collection) gives them back regardless.
+static void gc_sweep_stack_pools(jl_ptls_t ptls, int force) JL_NOTSAFEPOINT
 {
     // initialize ptls index for the parallel per-thread sweep
     assert(gc_n_threads != 0);
-    int stack_free_idx = jl_atomic_load_relaxed(&gc_stack_free_idx);
-    if (stack_free_idx + 1 == gc_n_threads)
-        jl_atomic_store_relaxed(&gc_stack_free_idx, 0);
-    else
-        jl_atomic_store_relaxed(&gc_stack_free_idx, stack_free_idx + 1);
+    uint64_t now = jl_hrtime();
+    gc_trim_stack_pools = force || now - gc_last_stack_trim_time >= STACK_POOL_TRIM_INTERVAL_NS;
+    if (gc_trim_stack_pools)
+        gc_last_stack_trim_time = now;
     jl_atomic_store_release(&gc_ptls_sweep_idx, gc_n_threads - 1); // idx == gc_n_threads = release stacks to the OS so it's serial
     uv_mutex_lock(&live_tasks_lock);
     gc_sweep_wake_all_per_thread(ptls);
     sweep_per_thread_loop();
     gc_sweep_wait_for_all_per_thread();
+    if (gc_trim_stack_pools)
+        gc_trim_shared_free_stacks();
     sweep_mtarraylist_buffers();
     uv_mutex_unlock(&live_tasks_lock);
+}
+
+JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    gc_sweep_stack_pools(ptls, 0);
 }
 
 void jl_gc_notify_task_resume(jl_task_t *task) JL_NOTSAFEPOINT
@@ -3591,7 +3604,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         // foreign sweepfuncs run before any malloc'd buffer is freed
         gc_sweep_foreign_objs();
         uint64_t stack_pool_time = jl_hrtime();
-        jl_gc_sweep_stack_pools_and_mtarraylist_buffers(ptls);
+        gc_sweep_stack_pools(ptls, collection == JL_GC_FULL);
         stack_pool_time = jl_hrtime() - stack_pool_time;
         gc_num.total_stack_pool_sweep_time += stack_pool_time;
         gc_num.stack_pool_sweep_time = stack_pool_time;
@@ -4204,6 +4217,7 @@ void jl_gc_init(void)
     arraylist_new(&to_finalize, 0);
     arraylist_new(&big_weak_corpses, 0);
     uv_mutex_init(&gc_big_sweep_lock);
+    jl_init_shared_free_stacks();
     jl_atomic_store_relaxed(&gc_heap_stats.heap_target, default_collect_interval);
     if (jl_options.hard_heap_limit != 0) {
         jl_atomic_store_relaxed(&gc_heap_stats.heap_target, jl_options.hard_heap_limit);
