@@ -303,7 +303,7 @@ function annotatedstring(xs...)
             print(s, unannotate(x))
         elseif x isa AnnotatedChar
             for annot in x.annotations
-                push!(annotations, (region=1+size:1+size, annot...))
+                push!(annotations, (region=1+size:size+ncodeunits(x), annot...))
             end
             print(s, x.char)
         else
