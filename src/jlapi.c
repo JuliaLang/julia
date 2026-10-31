@@ -876,6 +876,16 @@ JL_DLLEXPORT uint64_t jl_cumulative_recompile_time_ns(void)
 }
 
 /**
+ * @brief Get the cumulative bytes allocated by the GC during compilation.
+ *
+ * @return The cumulative number of bytes allocated during compilation.
+ */
+JL_DLLEXPORT uint64_t jl_cumulative_compile_bytes(void)
+{
+    return jl_atomic_load_relaxed(&jl_cumulative_compile_allocd);
+}
+
+/**
  * @brief Enable per-task timing.
  */
 JL_DLLEXPORT void jl_task_metrics_enable(void)
