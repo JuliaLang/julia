@@ -605,6 +605,8 @@ end
         @test_throws BoundsError findnext("", s, 0)
         @test_throws BoundsError findnext("", s, 12)
         @test_throws StringIndexError findnext("βx", s, 6)
+        @test_throws StringIndexError findnext("βx", u, 6)
+        @test_throws StringIndexError findnext("βx", SubString(u, 1), 6)
     end
 end
 
