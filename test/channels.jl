@@ -755,8 +755,15 @@ end
                 sleep(0.1)
                 set = zeros(UInt8, 128)
                 ccall(:sigpending, Cint, (Ptr{UInt8},), set)
-                println("closed, pending: ", ccall(:sigismember, Cint, (Ptr{UInt8}, Cint), set, $sig))
-                sleep(600)
+                # SIGTERM runs the exit wherever this thread is, and it hangs in malloc,
+                # codegen or libuv (#64410): compile first, then wait without allocating.
+                function report_and_wait(msg)
+                    ccall(:write, Cssize_t, (Cint, Ptr{UInt8}, Csize_t), 1, msg, sizeof(msg))
+                    while true
+                        ccall(:pause, Cint, ())
+                    end
+                end
+                report_and_wait(string("closed, pending: ", ccall(:sigismember, Cint, (Ptr{UInt8}, Cint), set, $sig), "\\n"))
                 """
             errfile = tempname()
             p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`, stderr=errfile), "r")
