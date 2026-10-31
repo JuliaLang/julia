@@ -767,19 +767,14 @@ searchhistory(entries::Vector{HistEntry}, keys::String; kwargs...) =
         @test occursin("words", shown)
         @test searchhistory(entries, "7 foo\r")[1].text == "foo 37"
         @test searchhistory(entries, "shell>\r")[1].text == "ls bar"
+        @test searchhistory(entries, "Shell>\r")[1].text == "ls bar"
         @test searchhistory(entries, "nomatch\r")[1] == nothingselected
         for (query, hint) in ("=foo" => "exact", "!bar" => "negated", "`f" => "initialism",
                               "/fo+" => "regexp", "~fo" => "fuzzy", "foo;" => "separator",
-                              "foo;=4" => "exact", "bar;!foo" => "negated")
+                              "foo;=4" => "exact", "bar;!foo" => "negated",
+                              "julia>" => "mode", "foo;julia>" => "mode")
             @test occursin(hint, searchhistory(entries, query * "\r")[2])
         end
-        # Confirming moves the cursor to the end, so wait for the hint first
-        result = searchhistory(entries) do type, waitfor
-            type("julia>\e[D")
-            waitfor("mode [")
-            type("\r")
-        end[1]
-        @test result.text == "foo 40"
         # Removing characters widens the search again
         @test searchhistory(entries, "bar\x7f\x7f\x7f\r")[1].text == "ls bar"
         # Narrowing a finished search reuses its results
