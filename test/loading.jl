@@ -1377,6 +1377,47 @@ end
     end
 end
 
+# A package loading something that is not its dependency points at manifests resolved by another julia
+@testset "missing dependency error lists manifests from other julia versions" begin
+    mktempdir() do dir
+        this_version = isempty(VERSION.prerelease) ? string(VERSION) :
+            string(Base.thispatch(VERSION), "-", VERSION.prerelease[1])
+        envs = Dict{String, String}()
+        for (name, julia_version) in (("old", "1.0.0"), ("prerelease", string(Base.thispatch(VERSION), "-zzz")),
+                                      ("current", this_version))
+            env = joinpath(dir, name)
+            mkpath(env)
+            write(joinpath(env, "Project.toml"), "[deps]\n")
+            write(joinpath(env, "Manifest.toml"), """
+                julia_version = "$julia_version"
+                manifest_format = "2.0"
+                """)
+            envs[name] = joinpath(env, "Manifest.toml")
+        end
+        noproject = joinpath(dir, "noproject")
+        mkpath(noproject)
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [joinpath(dir, name) for name in ("old", "prerelease", "current", "noproject")])
+            err = try
+                Base.require(Test, :NotADependency)
+            catch err
+                err
+            end
+            @test err isa ArgumentError
+            @test startswith(err.msg, "Cannot load (`using/import`) module NotADependency into module Test in package Test\n")
+            @test occursin("resolved with a different\n  julia version", err.msg)
+            @test occursin("\n    $(envs["old"]) (v1.0.0)\n", err.msg)
+            @test occursin("\n    $(envs["prerelease"]) (v$(Base.thispatch(VERSION))-zzz)\n", err.msg)
+            @test occursin("different DEV version", err.msg) == (this_version == "$(Base.thispatch(VERSION))-DEV")
+            @test occursin("\n    $(envs["current"])\n", err.msg) == (this_version == "$(Base.thispatch(VERSION))-DEV")
+            @test occursin("Try `Pkg.instantiate()`", err.msg)
+        finally
+            copy!(LOAD_PATH, old_load_path)
+        end
+    end
+end
+
 @testset "Extensions" begin
     test_ext = """
     function test_ext(parent::Module, ext::Symbol)
