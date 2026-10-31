@@ -1004,6 +1004,67 @@ end
     end
 end
 
+# TOML reads `deps = []` as a `Vector{Any}`, which must still count as no dependencies
+@testset "Manifest entry with an empty deps list" begin
+    mkdepottempdir() do depot
+        uuid = "e1000000-0000-0000-0000-000000000001"
+        trigger_uuid = "e1000000-0000-0000-0000-000000000002"
+        for (name, pkg_uuid) in (("EmptyDeps", uuid), ("EmptyDepsTrigger", trigger_uuid))
+            mkpath(joinpath(depot, "dev", name, "src"))
+            write(joinpath(depot, "dev", name, "Project.toml"), """
+                name = "$name"
+                uuid = "$pkg_uuid"
+                version = "0.1.0"
+                """)
+            write(joinpath(depot, "dev", name, "src", "$name.jl"), "module $name end\n")
+        end
+        mkpath(joinpath(depot, "dev", "EmptyDeps", "ext"))
+        write(joinpath(depot, "dev", "EmptyDeps", "ext", "EmptyDepsExt.jl"), "module EmptyDepsExt end\n")
+        project_path = joinpath(depot, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            EmptyDeps = "$uuid"
+            EmptyDepsTrigger = "$trigger_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.EmptyDeps]]
+            deps = []
+            path = "../dev/EmptyDeps"
+            uuid = "$uuid"
+            version = "0.1.0"
+            weakdeps = ["EmptyDepsTrigger"]
+
+                [deps.EmptyDeps.extensions]
+                EmptyDepsExt = "EmptyDepsTrigger"
+
+            [[deps.EmptyDepsTrigger]]
+            deps = []
+            path = "../dev/EmptyDepsTrigger"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+            weakdeps = []
+            """)
+        old_load_path = copy(LOAD_PATH)
+        old_depot_path = copy(DEPOT_PATH)
+        try
+            copy!(LOAD_PATH, [project_path])
+            push!(empty!(DEPOT_PATH), depot)
+            pkg = Base.PkgId(Base.UUID(uuid), "EmptyDeps")
+            @test Base.identify_package(pkg, "EmptyDepsTrigger") === nothing
+            @test Base.identify_package(pkg, "EmptyDeps") == pkg
+            EmptyDeps = Base.require(pkg)
+            Base.require(Base.PkgId(Base.UUID(trigger_uuid), "EmptyDepsTrigger"))
+            @test Base.get_extension(EmptyDeps, :EmptyDepsExt) isa Module
+        finally
+            copy!(LOAD_PATH, old_load_path)
+            copy!(DEPOT_PATH, old_depot_path)
+        end
+    end
+end
+
 @testset "Manifest name preferential loading" begin
     mktempdir() do tmp
         proj = joinpath(tmp, "Project.toml")

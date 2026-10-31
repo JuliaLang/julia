@@ -3411,6 +3411,23 @@ has_cachefile(depot, name) =
         """
 end
 
+# TOML reads `deps = []` as a `Vector{Any}`, which must still count as no dependencies
+@testset "precompilepkgs with an empty deps list in the manifest" begin
+    mkdepottempdir() do depot
+        project_path = write_precompile_env(depot, [
+            ("EmptyDepsA", "b0000000-0000-0000-0000-000000000001", String[]),
+            ("EmptyDepsB", "b0000000-0000-0000-0000-000000000002", ["EmptyDepsA"]),
+        ])
+        manifest_path = joinpath(project_path, "Manifest.toml")
+        write(manifest_path, replace(read(manifest_path, String),
+            "path = \"../dev/EmptyDepsA\"" => "deps = []\nweakdeps = []\npath = \"../dev/EmptyDepsA\""))
+        with_precompile_env(depot, project_path) do
+            paths = Base.Precompilation.precompilepkgs(; io=IOBuffer(), fancyprint=false)
+            @test length(paths) == 2
+        end
+    end
+end
+
 # Verbose mode prints a per-package breakdown of where the precompile time went
 @testset "precompilepkgs verbose timing" begin
     mkdepottempdir() do depot

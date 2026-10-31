@@ -677,7 +677,7 @@ function ExplicitEnv(envpath::String)
             name_to_uuid[name] = m_uuid
 
             for key in ["deps", "weakdeps"]
-                deps_pkg = get(Vector{String}, pkg_info, key)::Union{Vector{String}, Dict{String, Any}}
+                deps_pkg = Base.manifest_dep_names(get(Vector{String}, pkg_info, key))::Union{Vector{String}, Dict{String, Any}}
                 d = key == "deps" ? deps :
                     key == "weakdeps" ? weakdeps :
                     error()
