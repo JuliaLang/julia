@@ -41,12 +41,17 @@ impl Slot for JuliaVMSlot {
             JuliaVMSlot::Offset(e) => e.slot_address(),
         }
     }
+}
 
+impl JuliaVMSlot {
+    /// Whether this slot's referent can only be recovered using state captured when the slot
+    /// was made, so it must not be recorded and re-read later.
+    ///
     /// An offset slot's referent is `contents - offset`, where the offset was measured when the
     /// slot was created. For `jl_array_t` that offset is `ref_.ptr_or_offset - ref_.mem`, which
     /// changes whenever the array's `ref_` is reassigned, so the pair only agree at the instant
     /// the slot is made. A zero offset carries no such captured state.
-    fn is_derived(&self) -> bool {
+    pub fn is_derived(&self) -> bool {
         match self {
             JuliaVMSlot::Simple(_) => false,
             JuliaVMSlot::Offset(e) => e.offset() != 0,

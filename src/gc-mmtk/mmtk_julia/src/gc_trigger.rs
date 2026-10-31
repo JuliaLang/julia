@@ -30,7 +30,6 @@ const TUNING_FACTOR: f64 = 2e4;
 /// or the emergency hint latches on again.
 const CONCURRENT_MIN_HEADROOM_PERCENT: usize = 25;
 
-
 /// Julia-style heap sizing heuristics for MMTk.
 ///
 /// `max_total_memory` is a soft limit derived from Julia's heap size hint logic.
@@ -54,19 +53,10 @@ pub struct JuliaGCTrigger {
     next_sweep_full: AtomicBool,
     pending_pages: AtomicUsize,
     heap_size_after_last_full_gc: AtomicUsize,
-    /// Duration of the pause that ended the current cycle, so `resize` can use it after the pause
-    /// is over.
-    last_pause: AtomicUsize,
-    /// Whether the current cycle was automatically triggered. Latched in `on_gc_end`, which has the
-    /// `MMTK` instance; `resize` may run later, from `on_lazy_reclaim_finished`, which does not.
+    /// Whether the current cycle was automatically triggered. Latched at the end of every pause,
+    /// because `on_gc_end` runs once the cycle's reclamation is visible, which under a lazily
+    /// reclaiming plan is after the pause -- and after mmtk-core has reset the flag.
     gc_auto: AtomicBool,
-    /// Incremented per GC cycle, and copied into `sized_epoch` by `resize`, so that a cycle is
-    /// sized exactly once no matter which hook gets there first.
-    gc_epoch: AtomicUsize,
-    sized_epoch: AtomicUsize,
-    /// Set once `on_lazy_reclaim_finished` has fired, after which `on_gc_end` stops sizing and
-    /// leaves it to that hook. See the comment there.
-    lazy_reclaim_seen: AtomicBool,
 }
 
 impl JuliaGCTrigger {
@@ -99,11 +89,7 @@ impl JuliaGCTrigger {
             next_sweep_full: AtomicBool::new(false),
             pending_pages: AtomicUsize::new(0),
             heap_size_after_last_full_gc: AtomicUsize::new(0),
-            last_pause: AtomicUsize::new(0),
             gc_auto: AtomicBool::new(true),
-            gc_epoch: AtomicUsize::new(0),
-            sized_epoch: AtomicUsize::new(0),
-            lazy_reclaim_seen: AtomicBool::new(false),
         }
     }
 
@@ -121,15 +107,12 @@ impl JuliaGCTrigger {
 }
 
 impl GCTriggerPolicy<JuliaVM> for JuliaGCTrigger {
-    // The following two hooks are called for every pause
-    // fn on_pause_start(&self, _mmtk: &'static MMTK<JuliaVM>)
-    // fn on_pause_end(&self, _mmtk: &'static MMTK<JuliaVM>)
-
-    // on_gc_start/on_gc_end are called for every GC cycle
-    // For concurrent GCs, on_gc_start is called at the beginning of the pause that starts a GC cycle, and on_gc_end is called at the end of the pause that ends a GC cycle.
+    // on_gc_start/on_gc_end are called once for every GC cycle. For concurrent GCs, on_gc_start is
+    // called at the beginning of the pause that starts a GC cycle, and on_gc_end once the cycle's
+    // reclamation is visible -- the end of its last pause for a plan that reclaims eagerly, and
+    // after that pause for one that defers sweeping to a concurrent phase.
     /// Note that this trigger is designed for stop-the-world GCs, and has not been adapted to concurrent GCs.
     fn on_gc_start(&self, mmtk: &'static MMTK<JuliaVM>) {
-        self.gc_epoch.fetch_add(1, Ordering::Relaxed);
         self.maybe_force_full_heap(mmtk);
 
         let reserved_pages_now =
@@ -159,94 +142,30 @@ impl GCTriggerPolicy<JuliaVM> for JuliaGCTrigger {
         );
     }
 
+    // Called for every pause, not once per cycle.
+    fn on_pause_end(&self, mmtk: &'static MMTK<JuliaVM>) {
+        // Latched here rather than read in `on_gc_end`: mmtk-core resets the flag before mutators
+        // resume, and `on_gc_end` can run after that, once deferred reclamation has drained.
+        self.gc_auto
+            .store(!mmtk.is_user_triggered_collection(), Ordering::Relaxed);
+    }
+
+    /// Derive the next heap target from what the collection that just finished allocated and
+    /// freed.
+    ///
+    /// Under LXR this runs after the last pause of the cycle, once its deferred sweeping has
+    /// drained and flushed the page resource. That is the first moment `get_reserved_pages()`
+    /// reflects what the collection freed: sizing at the end of the pause instead would see
+    /// `freed_diff == 0` every cycle, drive `gc_rate` to zero, and grow the heap without bound
+    /// (measured: 1.6GB -> 6.4GB peak RSS on `tree_mutable`). It also means the span measured
+    /// here as the collection time covers the cycle's concurrent phases, and the mutator time in
+    /// `on_gc_start` covers the rest -- together they still partition the timeline, which is what
+    /// the `alloc_rate`/`gc_rate` ratio below assumes.
     fn on_gc_end(&self, mmtk: &'static MMTK<JuliaVM>) {
+        let plan = mmtk.get_plan();
         let gc_end_time = unsafe { jl_hrtime() } as usize;
         let pause = gc_end_time - self.gc_start_time.load(Ordering::Relaxed);
         self.gc_end_time.store(gc_end_time, Ordering::Relaxed);
-        self.last_pause.store(pause, Ordering::Relaxed);
-        // Latched here because the resize may run from `on_lazy_reclaim_finished`, which is handed
-        // the plan rather than the instance.
-        self.gc_auto
-            .store(!mmtk.is_user_triggered_collection(), Ordering::Relaxed);
-
-        // A plan that reclaims lazily has freed almost nothing yet: LXR defers its nursery and
-        // mature sweeping to the concurrent phase after this pause, and does not flush the page
-        // resource until that phase drains. Sizing from `get_reserved_pages()` here would see
-        // `freed_diff == 0` every cycle, drive `gc_rate` to zero, and grow the heap without bound
-        // (measured: 1.6GB -> 6.4GB peak RSS on `tree_mutable`). `on_lazy_reclaim_finished` is the
-        // first point the real numbers exist, so let it do the sizing.
-        //
-        // Whether this plan reclaims lazily is learned rather than configured: until that hook has
-        // fired once, size here as a stop-the-world plan would. That keeps a plan which never calls
-        // it -- every non-LXR plan -- working unchanged, and costs the lazy plans one eagerly-sized
-        // cycle at startup.
-        if !self.lazy_reclaim_seen.load(Ordering::Relaxed) {
-            self.resize(mmtk.get_plan());
-        }
-    }
-
-    fn on_lazy_reclaim_finished(&self, plan: &dyn Plan<VM = JuliaVM>) {
-        self.lazy_reclaim_seen.store(true, Ordering::Relaxed);
-        // Skip the cycle `on_gc_end` already sized, so the smoothed history advances once per cycle.
-        if self.sized_epoch.load(Ordering::Relaxed) != self.gc_epoch.load(Ordering::Relaxed) {
-            self.resize(plan);
-        }
-    }
-
-    fn on_pending_allocation(&self, pages: usize) {
-        self.pending_pages.fetch_add(pages, Ordering::SeqCst);
-    }
-
-    fn is_gc_required(
-        &self,
-        space_full: bool,
-        space: Option<SpaceStats<JuliaVM>>,
-        plan: &dyn Plan<VM = JuliaVM>,
-    ) -> bool {
-        if self.is_heap_full(plan) {
-            return true;
-        }
-
-        plan.collection_required(space_full, space)
-    }
-
-    fn is_heap_full(&self, plan: &dyn Plan<VM = JuliaVM>) -> bool {
-        let reserved_pages_now =
-            plan.get_reserved_pages() + self.pending_pages.load(Ordering::SeqCst);
-        let heap_size = conversions::pages_to_bytes(reserved_pages_now);
-        let heap_target = self.heap_target.load(Ordering::Relaxed);
-
-        trace!("Heap size = {}, heap target = {}", heap_size, heap_target);
-        heap_size >= heap_target
-    }
-
-    fn get_current_heap_size_in_pages(&self) -> usize {
-        self.heap_target.load(Ordering::Relaxed) / BYTES_IN_PAGE
-    }
-
-    fn get_max_heap_size_in_pages(&self) -> usize {
-        let hard_heap_limit = self.hard_heap_limit.load(Ordering::Relaxed);
-        let heap_limit = if hard_heap_limit != 0 {
-            hard_heap_limit
-        } else {
-            self.max_heap_size.load(Ordering::Relaxed)
-        };
-        heap_limit / BYTES_IN_PAGE
-    }
-
-    fn can_heap_size_grow(&self) -> bool {
-        true
-    }
-}
-
-impl JuliaGCTrigger {
-    /// Derive the next heap target from what the collection that just finished allocated and
-    /// freed. Runs once per GC cycle, at the point those figures are real -- see the comments in
-    /// `on_gc_end` and `on_lazy_reclaim_finished` for why that is not always the end of the pause.
-    fn resize(&self, plan: &dyn Plan<VM = JuliaVM>) {
-        self.sized_epoch
-            .store(self.gc_epoch.load(Ordering::Relaxed), Ordering::Relaxed);
-        let pause = self.last_pause.load(Ordering::Relaxed);
 
         let pending_pages = self.pending_pages.swap(0, Ordering::SeqCst);
         let reserved_pages_now = plan.get_reserved_pages() + pending_pages;
@@ -418,6 +337,51 @@ impl JuliaGCTrigger {
                 self.heap_target.load(Ordering::Relaxed)
             );
         }
+    }
+
+    fn on_pending_allocation(&self, pages: usize) {
+        self.pending_pages.fetch_add(pages, Ordering::SeqCst);
+    }
+
+    fn is_gc_required(
+        &self,
+        space_full: bool,
+        space: Option<SpaceStats<JuliaVM>>,
+        plan: &dyn Plan<VM = JuliaVM>,
+    ) -> bool {
+        if self.is_heap_full(plan) {
+            return true;
+        }
+
+        plan.collection_required(space_full, space)
+    }
+
+    fn is_heap_full(&self, plan: &dyn Plan<VM = JuliaVM>) -> bool {
+        let reserved_pages_now =
+            plan.get_reserved_pages() + self.pending_pages.load(Ordering::SeqCst);
+        let heap_size = conversions::pages_to_bytes(reserved_pages_now);
+        let heap_target = self.heap_target.load(Ordering::Relaxed);
+
+        trace!("Heap size = {}, heap target = {}", heap_size, heap_target);
+        heap_size >= heap_target
+    }
+
+    fn get_current_heap_size_in_pages(&self) -> usize {
+        self.heap_target.load(Ordering::Relaxed) / BYTES_IN_PAGE
+    }
+
+    fn get_max_heap_size_in_pages(&self) -> usize {
+        let hard_heap_limit = self.hard_heap_limit.load(Ordering::Relaxed);
+        let heap_limit = if hard_heap_limit != 0 {
+            hard_heap_limit
+        } else {
+            self.max_heap_size.load(Ordering::Relaxed)
+        };
+        heap_limit / BYTES_IN_PAGE
+    }
+
+    fn can_heap_size_grow(&self) -> bool {
+        true
     }
 }
 

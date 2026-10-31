@@ -111,12 +111,48 @@ pub extern "C" fn mmtk_gc_init(
 
         // Set concurrent GC threads
         if n_concurrent_gcthreads > 0 {
-            let success = builder.options.concurrent_threads.set(n_concurrent_gcthreads);
+            let success = builder
+                .options
+                .concurrent_threads
+                .set(n_concurrent_gcthreads);
             assert!(
                 success,
                 "Failed to set concurrent GC threads to {}",
                 n_concurrent_gcthreads
             );
+        }
+
+        // LXR pause-time tuning.
+        //
+        // mmtk-core's defaults for these preserve the behaviour LXR had before they became
+        // options; the values below are the ones measured on `tree_mutable`. Deferring all
+        // nursery sweeping to the concurrent phase takes 7-8ms off a 27ms `RefCount` pause,
+        // and splitting each generation of recursively-discovered increments turns the chain
+        // of `ProcessIncs` packets into a tree, so promotion tracing can use more than one
+        // worker.
+        //
+        // Guarded by `was_set` so that `MMTK_LXR_*` still wins: `MMTKBuilder::new` read the
+        // environment before `BUILDER` ever reached us, and an unguarded `set` here would
+        // land after it and silently discard it.
+        if cfg!(feature = "lxr_base") {
+            if !builder.options.lxr_max_stw_sweep_nursery_blocks.was_set() {
+                let success = builder.options.lxr_max_stw_sweep_nursery_blocks.set(0);
+                assert!(
+                    success,
+                    "Failed to set lxr_max_stw_sweep_nursery_blocks to 0"
+                );
+            }
+            if !builder.options.lxr_min_packet_split_size.was_set() {
+                let success = builder.options.lxr_min_packet_split_size.set(64);
+                assert!(success, "Failed to set lxr_min_packet_split_size to 64");
+            }
+            // Split at every generation, not just from the 16th down. The depth gate exists to
+            // stop us paying for a packet near the roots, where the chain is still short; the
+            // chains measured here are long from the start, so the gate only delays the fan-out.
+            if !builder.options.lxr_min_packet_split_depth.was_set() {
+                let success = builder.options.lxr_min_packet_split_depth.set(0);
+                assert!(success, "Failed to set lxr_min_packet_split_depth to 0");
+            }
         }
     }
 
@@ -641,6 +677,7 @@ pub extern "C" fn mmtk_object_reference_write_slow(
     src: ObjectReference,
     target: NullableObjectReference,
 ) {
+    #[cfg(not(feature = "lxr_base"))]
     use mmtk::MutatorContext;
     // A field-granularity barrier cannot use the zero slot below: it would index the
     // per-field unlog bit at address 0. Callers on this path (the C runtime's jl_gc_wb,
@@ -649,7 +686,7 @@ pub extern "C" fn mmtk_object_reference_write_slow(
     #[cfg(feature = "lxr_base")]
     {
         let _ = target;
-        mutator.barrier().object_probable_write(src);
+        crate::scanning::object_probable_write(mutator, src);
         return;
     }
     #[cfg(not(feature = "lxr_base"))]
@@ -672,7 +709,7 @@ pub extern "C" fn mmtk_object_reference_write_field_slow(
 ) {
     use mmtk::MutatorContext;
     if slot.is_zero() {
-        mutator.barrier().object_probable_write(src);
+        crate::scanning::object_probable_write(mutator, src);
         return;
     }
     mutator.barrier().object_reference_write_slow(

@@ -82,7 +82,11 @@ impl Collection<JuliaVM> for VMCollection {
         const JL_GC_INCREMENTAL: i32 = 2;
         let collection: i32 = if let Some(gen_plan) = SINGLETON.get_plan().generational() {
             // For generational plans, we can easily map to Julia's enum.
-            if gen_plan.is_current_gc_nursery() { JL_GC_INCREMENTAL } else { JL_GC_FULL }
+            if gen_plan.is_current_gc_nursery() {
+                JL_GC_INCREMENTAL
+            } else {
+                JL_GC_FULL
+            }
         } else if let Some(concurrent_plan) = SINGLETON.get_plan().concurrent() {
             // For concurrent plans, we do a very rough mapping now.
             match concurrent_plan.current_pause().map(|pause| pause as u8) {
@@ -249,7 +253,7 @@ impl Collection<JuliaVM> for VMCollection {
     /// that advances the epoch -- never runs for it. A thread parked in
     /// `mmtk_wait_for_new_gc_epoch()` after a failed `mmtk_disable_collection()` would wait
     /// forever; the sysimage writer's `jl_gc_enable(0)` is one such thread.
-    fn concurrent_work_finished() {
+    fn concurrent_work_finished_no_pause() {
         let (lock, cvar) = &*crate::GC_EPOCH_COND.clone();
         let mut epoch = lock.lock().unwrap();
         *epoch = epoch.wrapping_add(1);
