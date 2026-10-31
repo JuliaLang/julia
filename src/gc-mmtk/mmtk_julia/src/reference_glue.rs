@@ -1,12 +1,12 @@
-use crate::julia_types::*;
 use crate::JuliaVM;
+use crate::julia_types::*;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::{Address, ObjectReference};
 use mmtk::vm::Finalizable;
 use mmtk::vm::ObjectTracer;
 use mmtk::vm::ReferenceGlue;
 
-extern "C" {
+unsafe extern "C" {
     pub static jl_nothing: *mut jl_value_t;
 }
 

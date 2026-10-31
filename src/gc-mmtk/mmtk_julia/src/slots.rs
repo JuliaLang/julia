@@ -2,8 +2,8 @@ use atomic::Atomic;
 use mmtk::{
     util::{Address, ObjectReference},
     vm::{
-        slot::{SimpleSlot, Slot},
         RootsWorkFactory,
+        slot::{SimpleSlot, Slot},
     },
 };
 
