@@ -380,6 +380,15 @@ Base.string(p::ResolvingPiece) = (p.resolved = true; "dir")
         @test piece.resolved
     end
 
+    let missing_lib = LazyLibrary("libdefinitely_missing"; on_load_callback=() -> error("unreachable")),
+        missing_dep = LazyLibrary(lclf_path; dependencies=[missing_lib])
+        @test dlopen(missing_lib; throw_error=false) === nothing
+        @test missing_lib.handle == C_NULL
+        @test dlopen(missing_dep; throw_error=false) === nothing
+        @test missing_dep.handle == C_NULL
+        @test_throws ErrorException dlopen(missing_lib)
+    end
+
     # Test parallel loading doesn't return C_NULL (issue #60378)
     script = """
     using Libdl

@@ -767,9 +767,9 @@ function copyline(out::IO, s::IO; keep::Bool=false, cancel::CancelTokenArg=DEFAU
         while !eof(s)
             b = read(s, UInt8)
             b == 0x0a && break
-            if b == 0x0d && !eof(s)
+            while b == 0x0d && !eof(s)
                 b = read(s, UInt8)
-                b == 0x0a && break
+                b == 0x0a && return out
                 write(out, 0x0d)
             end
             write(out, b)

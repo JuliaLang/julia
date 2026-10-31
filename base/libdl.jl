@@ -524,11 +524,12 @@ function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
             if ll.handle == C_NULL
                 # Ensure that all dependencies are loaded
                 for dep in ll.dependencies()
-                    dlopen(dep; kwargs...)
+                    dlopen(dep; kwargs...) === nothing && return nothing
                 end
 
                 # Load our library
                 handle = dlopen(_lazy_library_path_string(ll.path), flags; kwargs...)
+                handle === nothing && return nothing
                 @atomic :release ll.handle = handle
 
                 # Only the thread that loaded the library calls the `on_load_callback()`.
