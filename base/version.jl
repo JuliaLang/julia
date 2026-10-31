@@ -226,8 +226,9 @@ function hash(v::VersionNumber, h::UInt)
     h = hash(v.major, h)
     h = hash(v.minor, h)
     h = hash(v.patch, h)
-    h = hash(v.prerelease, ~h)
-    h = hash(v.build, ~h)
+    # the length of these tuples is not known to inference: a loop keeps the calls resolvable for --trim
+    h = _hash_tuple(v.prerelease, ~h)
+    h = _hash_tuple(v.build, ~h)
 end
 
 lowerbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, ("",), ())
