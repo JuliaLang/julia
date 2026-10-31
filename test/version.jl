@@ -248,3 +248,140 @@ let r = Base.VersionRange("*-2")
     @test string(r) == "0 - 2"
     @test v"2.5.0" in Base.VersionRange(string(r))
 end
+
+# Semver compat specs, as used for `[compat]` entries and syntax versions
+@testset "VersionSpec and semver_spec" begin
+    using Base: VersionBound, VersionRange, VersionSpec, semver_spec, isjoinable,
+        matches_spec_range!
+
+    @test semver_spec("^1.2.3") == VersionSpec("1.2.3-1")
+    @test semver_spec("^1.2") == VersionSpec("1.2.0-1")
+    @test semver_spec("^1") == VersionSpec("1.0.0-1")
+    @test semver_spec("^0.2.3") == VersionSpec("0.2.3-0.2")
+    @test semver_spec("^0.0.3") == VersionSpec("0.0.3-0.0.3")
+    @test semver_spec("^0.0") == VersionSpec("0.0.0-0.0")
+    @test semver_spec("^0") == VersionSpec("0.0.0-0")
+    @test semver_spec("1.2.3") == semver_spec("^1.2.3")
+    @test semver_spec("0.0.3") == semver_spec("^0.0.3")
+    @test semver_spec("~1.2.3") == VersionSpec("1.2.3-1.2")
+    @test semver_spec("~1.2") == VersionSpec("1.2.0-1.2")
+    @test semver_spec("~1") == VersionSpec("1.0.0-1")
+    @test semver_spec("~0") == VersionSpec("0.0.0-0")
+    @test semver_spec("<1.2.3") == VersionSpec("0.0.0 - 1.2.2")
+    @test semver_spec("<1.2") == VersionSpec("0.0.0 - 1.1")
+    @test semver_spec("<2") == VersionSpec("0.0.0 - 1")
+    @test semver_spec("=1.2") == VersionSpec("1.2.0")
+    @test semver_spec(">=1.2  ") == VersionSpec("1.2.0-*")
+    @test semver_spec("≥ 1") == semver_spec(">=1") == VersionSpec("1.0.0-*")
+    @test semver_spec("1.2 - 2") == VersionSpec("1.2 - 2")
+    @test semver_spec("1 - 2.3.4") == VersionSpec("1 - 2.3.4")
+    @test semver_spec("0.1.0 - 0.2.2, 1.2") == VersionSpec(["0.1.0 - 0.2.2", "1.2.0-1"])
+    @test semver_spec("1, 1.5") == VersionSpec("1")
+    @test semver_spec("1.2 - 1.5, 1.6 - 1.8") == VersionSpec("1.2 - 1.8")
+
+    @test_throws ErrorException semver_spec("0.0.0")
+    @test_throws ErrorException semver_spec(">=0.0.0")
+    @test_throws ErrorException semver_spec("0.7 1.0")
+    @test_throws ErrorException semver_spec("1.2.3.4")
+    @test semver_spec("1.2.3.4"; throw = false) === nothing
+
+    @test v"1.5.2" in semver_spec("1.2.3")
+    @test !(v"2.0.0" in semver_spec("1.2.3"))
+    @test !(v"1.2.2" in semver_spec("1.2.3"))
+    @test v"1.2.99" in semver_spec("~1.2.3")
+    @test !(v"1.3.0" in semver_spec("~1.2.3"))
+    @test v"0.0.3" in semver_spec("^0.0.3")
+    @test !(v"0.0.4" in semver_spec("^0.0.3"))
+    @test v"0.2.3" in semver_spec("<0.2.4")
+    @test !(v"0.2.4" in semver_spec("<0.2.4"))
+    @test v"0.2.99" in semver_spec("0.1 - 0.2")
+    @test !(v"0.3.0" in semver_spec("0.1 - 0.2"))
+    @test v"100.0.0" in semver_spec(">=1.2")
+    @test v"2.3.4" in semver_spec("1.2 - 2.3.4")
+    @test !(v"2.3.5" in semver_spec("1.2 - 2.3.4"))
+    @test v"1.4.0" in VersionSpec()
+    @test !(v"1.4.0" in VersionSpec(VersionRange[]))
+
+    @test VersionBound(" v1.2 ") == VersionBound(1, 2) == VersionBound((0x1, 0x2))
+    @test VersionBound("*") == VersionBound()
+    @test VersionBound(v"1.2.3") == VersionBound(1, 2, 3)
+    @test hash(VersionBound(1, 2)) == hash(VersionBound("1.2"))
+    @test_throws ErrorException VersionBound("1.2.3.4")
+    @test_throws ArgumentError VersionBound(1, 2, 3, 4)
+    @test_throws ArgumentError VersionRange("1-2-3")
+
+    @test isjoinable(VersionBound(), VersionBound())
+    @test isjoinable(VersionBound(1, 5), VersionBound(1, 6))
+    @test !isjoinable(VersionBound(1, 2), VersionBound(1, 4))
+    @test isjoinable(VersionBound(2), VersionBound(1, 5))
+    @test !isjoinable(VersionBound(1, 2, 3), VersionBound(1, 3))
+    @test !isjoinable(VersionBound(1, 5), VersionBound(1, 6, 0))
+
+    @test VersionRange() == VersionRange("*")
+    @test VersionRange(1, 2) == VersionRange("1.2")
+    @test VersionRange(v"1.2.3") == VersionRange("1.2.3")
+    @test VersionRange(v"1.0.0", v"1.2.1") == VersionRange("1.0.0 - 1.2.1")
+    @test VersionRange("1.2-1.2.0") == VersionRange("1.2.0")
+    @test VersionRange("1.2.0-1.2") == VersionRange("1.2")
+    @test isempty(VersionRange("2-1"))
+    @test isempty(VersionRange("1.3-1.2"))
+    @test !isempty(VersionRange("1-1.2"))
+    @test !isempty(VersionRange("*"))
+
+    @test isempty(union!(VersionRange[]))
+    @test isempty(union!([VersionRange("2-1"), VersionRange("3-2")]))
+    @test union!([VersionRange("1.5-2.8"), VersionRange("2.5-3")]) == [VersionRange("1.5-3")]
+    @test union!([VersionRange("2.5-3"), VersionRange("1.5-2.8")]) == [VersionRange("1.5-3")]
+    @test union!([VersionRange("1.5-2.2"), VersionRange("2.5-3")]) ==
+        [VersionRange("1.5-2.2"), VersionRange("2.5-3")]
+    @test union!([VersionRange("1.5-2.2"), VersionRange("2-1"), VersionRange("2.5-3"), VersionRange("2.3-2.4")]) ==
+        [VersionRange("1.5-3")]
+
+    @test intersect(VersionSpec("1.2-2"), VersionSpec("1.5-3")) == VersionSpec("1.5-2")
+    @test isempty(intersect(VersionSpec("1"), VersionSpec("2")))
+    @test isempty(intersect(VersionSpec(VersionRange[]), VersionSpec("2")))
+    @test intersect(semver_spec("0.1, 1"), semver_spec("0.1.5 - 1.2")) == VersionSpec(["0.1.5 - 0.1", "1 - 1.2"])
+    @test intersect(v"1.3.0", VersionSpec("1")) == VersionSpec("1.3.0")
+    @test isempty(intersect(VersionSpec("1"), v"2.0.0"))
+    @test union(VersionSpec("1"), VersionSpec("1")) == VersionSpec("1")
+    @test union(VersionSpec("1"), VersionSpec("3")) == VersionSpec(["1", "3"])
+    @test union(VersionSpec("1.0-1.4"), VersionSpec("1.5")) == VersionSpec("1.0-1.5")
+
+    let s = VersionSpec("1.2-3")
+        @test copy(s) === s
+        @test VersionSpec(s) === s
+        @test hash(s) == hash(VersionSpec(["1.2-2", "2.1-3"]))
+        @test minimum(s) == VersionBound(1, 2)
+    end
+    @test VersionSpec(v"1.2.3") == VersionSpec("1.2.3")
+    @test VersionSpec(VersionRange("1.2")) == VersionSpec("1.2")
+
+    let versions = [v"0.9.0", v"1.0.0", v"1.2.0", v"1.9.9", v"2.0.0"], dest = trues(6)
+        @test matches_spec_range!(dest, versions, semver_spec("1.2, 0.9"), 5) == [1, 0, 1, 1, 0, 1]
+        @test matches_spec_range!(dest, versions, semver_spec("=1.0.0"), 5) == [0, 1, 0, 0, 0, 1]
+        @test matches_spec_range!(dest, versions, VersionSpec(VersionRange[]), 5) == [0, 0, 0, 0, 0, 1]
+    end
+
+    @test string(VersionSpec()) == "*"
+    @test string(VersionSpec(VersionRange[])) == "∅"
+    @test string(VersionSpec("1.2-2")) == "1.2 - 2"
+    @test string(semver_spec("0.4, 1.2")) == "[0.4, 1.2.0 - 1]"
+    @test string(VersionRange("1.2")) == "1.2"
+    @test string(VersionRange("1.2-*")) == "1.2.0 - *"
+    @test string(VersionRange("0-0.3.2")) == "0 - 0.3.2"
+    @test repr(VersionRange("1.2-1.3")) == "VersionRange(\"1.2 - 1.3\")"
+    @test repr(VersionSpec("1.2-1.3")) == "VersionSpec(\"1.2 - 1.3\")"
+    @test repr(semver_spec("0.4, 1.2")) == "VersionSpec([\"0.4\", \"1.2.0 - 1\"])"
+    @test repr(VersionSpec(VersionRange[])) == "VersionSpec([])"
+    for s in ["1.2", "1.2.3 - 2", "0 - 0.3.2", "1.2.0 - *", "*"]
+        r = VersionRange(s)
+        @test VersionRange(string(r)) == r
+    end
+    for s in ["^0.2.3", "~1.2", "1.2 - 2.3.4", "<1.2"]
+        spec = semver_spec(s)
+        @test VersionSpec(string(spec)) == spec
+    end
+end
+
+@test v"1.0.0-1" < v"1.0.0-a"
+@test !(v"1.0.0-a" < v"1.0.0-1")

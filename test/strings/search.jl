@@ -567,3 +567,44 @@ for T = (UInt, BigInt)
         @test findprev(isletter, astr, T(x)) isa Int
     end
 end
+
+# Substring search on string types other than String and SubString{String}
+@testset "generic string search" begin
+    u = "abxyαβxy"
+    for (s, t) in ((GenericString(u), identity), (u, GenericString))
+        @test findfirst(t("xy"), s) == 3:4
+        @test findnext(t("xy"), s, 4) == 9:10
+        @test findnext(t("y"), s, 10) == 10:10
+        @test findnext(t("αβ"), s, 1) == 5:7
+        @test findnext(t("zz"), s, 1) === nothing
+        @test findnext(t("xyz"), s, 9) === nothing
+        @test findnext(t("yα"), s, 1) == 4:5
+        @test findlast(t("xy"), s) == 9:10
+        @test findprev(t("xy"), s, 9) == 3:4
+        @test findprev(t("xy"), s, 3) === nothing
+        @test findprev(t("ab"), s, 2) == 1:2
+        @test findprev(t("ab"), s, 1) === nothing
+        @test findprev(t("abx"), s, 10) == 1:3
+        @test findprev(t("a"), s, 10) == 1:1
+        @test findprev(t("αβ"), s, 10) == 5:7
+        @test findprev(t("zz"), s, 10) === nothing
+        @test findall(t("xy"), s) == [3:4, 9:10]
+        @test findfirst(t(""), s) === 1:0
+        @test findnext(t(""), s, 11) === 11:10
+        @test findprev(t(""), s, 1) === 1:0
+        @test findprev(t(""), s, 10) === 10:9
+    end
+    @test findall(GenericString("aa"), "aaaa"; overlap=true) == [1:2, 2:3, 3:4]
+    let s = GenericString(u)
+        @test_throws BoundsError findnext("", s, 0)
+        @test_throws BoundsError findnext("", s, 12)
+        @test_throws StringIndexError findnext("βx", s, 6)
+    end
+end
+
+@testset "byte vector backward search with an empty needle" begin
+    @test findprev(UInt8[], b"abc", 0) == 1:0
+    @test findprev(UInt8[], b"abc", 2) == 2:1
+    @test findprev(UInt8[], b"abc", 4) == 0:-1
+    @test_throws BoundsError findprev(UInt8[], b"abc", -1)
+end
