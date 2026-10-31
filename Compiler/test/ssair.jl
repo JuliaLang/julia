@@ -700,6 +700,17 @@ let succs = [[3, 2], [5], [4], [6], Int[], [5, 3], [6]],
     @test domtree.dfs_tree.to_pre == fresh.dfs_tree.to_pre
     @test domtree.dfs_tree.to_post == fresh.dfs_tree.to_post
 end
+# ... and that an unreachable block can also be kept
+let rename = [1, 2, 4, 3]
+    domtree = Compiler.construct_domtree(cfg_from_succs([[2], [3], Int[], [3]]))
+    renamed = cfg_from_succs([[2], [4], [4], Int[]])
+    Compiler.rename_nodes!(domtree, rename)
+    fresh = Compiler.construct_domtree(renamed)
+    @test domtree.idoms_bb == [0, 1, 0, 2]
+    @test same_as_fresh_domtree(domtree, renamed.blocks)
+    @test domtree.dfs_tree.to_pre == fresh.dfs_tree.to_pre
+    @test domtree.dfs_tree.to_post[[1, 2, 4]] == fresh.dfs_tree.to_post[[1, 2, 4]]
+end
 
 # Test that copies of a DFS tree are equal to it but share no storage with it
 let dfs = Compiler.construct_domtree(cfg_from_succs([[3, 2], [5], [4], [6], Int[], [5, 3]])).dfs_tree
