@@ -2836,6 +2836,8 @@
                  ((eq? f 'ccall)
                   (if (not (length> e 4)) (error "too few arguments to ccall"))
                   (let* ((cconv (cadddr e))
+                         ;; match calling conventions by name even when macro hygiene produces a globalref
+                         (cconv (if (and (pair? cconv) (eq? (car cconv) 'globalref)) (caddr cconv) cconv))
                          (have-cconv-expr (and (pair? cconv) (eq? (car cconv) 'cconv)))
                          (have-cconv (or have-cconv-expr
                                          (memq cconv '(cdecl stdcall fastcall thiscall llvmcall))))
@@ -5695,6 +5697,17 @@ f(x) = yt(x)
     (define nslots (length (car (lam:vinfo lam))))
     (define slot-table (symbol-to-idx-map (map car (car (lam:vinfo lam)))))
     (define sp-table (symbol-to-idx-map (lam:sp lam)))
+    ;; the function name and library expression, return type and argument types
+    ;; are evaluated at method definition and cannot reference local variables
+    (define (check-foreigncall-operands e local-ref?)
+      (define (check x what)
+        (if (expr-contains-p local-ref? x)
+            (error (string what " cannot reference local variable"))))
+      (if (tuple-syntax? (cadr e))
+          (check (cadr e) "ccall/cglobal function name and library expression"))
+      (if (eq? (car e) 'foreigncall)
+          (begin (check (caddr e) "ccall return type")
+                 (check (cadddr e) "ccall argument type"))))
     (define (renumber-stuff e)
       (cond ((eq? e UNUSED) (error "Attempted to use slot marked unused"))
             ((symbol? e)
@@ -5723,13 +5736,14 @@ f(x) = yt(x)
             ((eq? (car e) 'lambda)
              (renumber-lambda e 'none 0))
             (else
-             (let ((e (cons (car e)
-                            (map renumber-stuff (cdr e)))))
-               (if (and (memq (car e) '(foreigncall foreignglobal))
-                        (tuple-syntax? (cadr e))
-                        (expr-contains-p (lambda (x) (or (ssavalue? x) (slot? x))) (cadr e))) ;; TODO: use allow-list here
-                   (error "ccall/cglobal function name and library expression cannot reference local variables"))
-               e))))
+             (let ((foreign? (memq (car e) '(foreigncall foreignglobal))))
+               ;; reject SSA values before renumbering: temporaries inside these operands
+               ;; have no statement number
+               (if foreign? (check-foreigncall-operands e ssavalue?))
+               (let ((e (cons (car e)
+                              (map renumber-stuff (cdr e)))))
+                 (if foreign? (check-foreigncall-operands e slot?))
+                 e)))))
     (let ((body (renumber-stuff (lam:body lam)))
           (vi   (lam:vinfo lam)))
       (listify-lambda
