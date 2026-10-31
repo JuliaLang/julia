@@ -574,8 +574,8 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
 {
     JL_TIMING(JULIA_INIT, JULIA_INIT);
 
-    if (sysimage.kind == JL_IMAGE_KIND_SO)
-        jl_gc_notify_image_load(sysimage.data, sysimage.size);
+    if (sysimage.heap)
+        jl_gc_notify_image_load(sysimage.heap, sysimage.heap_size);
 
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
