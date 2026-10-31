@@ -453,30 +453,12 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
 
 // --- serializer ---
 
-#define NBOX_C 1024
-
-// The number of `v` among the objects of `IMPORT_SPECIAL` imports, or -1
-static int64_t special_index(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
-{
-    if (v == (jl_value_t*)s->ptls->root_task)
-        return 0;
-    if (v == jl_nothing)
-        return 1;
-    if (jl_typetagis(v, jl_int64_tag << 4) && (uint64_t)*(int64_t*)v + NBOX_C / 2 < NBOX_C)
-        return 2 + (uint64_t)*(int64_t*)v + NBOX_C / 2;
-    if (jl_typetagis(v, jl_int32_tag << 4) && (uint64_t)*(int32_t*)v + NBOX_C / 2 < NBOX_C)
-        return 2 + NBOX_C + (uint64_t)*(int32_t*)v + NBOX_C / 2;
-    if (jl_typetagis(v, jl_uint8_tag << 4))
-        return 2 + 2 * NBOX_C + *(uint8_t*)v;
-    return -1;
-}
-
 static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
 {
     // ignore items that are given a special relocation representation
     if (s->incremental && jl_object_in_image(v))
         return 0;
-    return v != NULL && !jl_is_symbol(v) && special_index(s, v) < 0;
+    return v != NULL && !jl_is_symbol(v) && v != (jl_value_t*)s->ptls->root_task;
 }
 
 // Classification of how an object must be handled on deserialization of an
@@ -1356,9 +1338,8 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABL
         }
         return (uintptr_t)*bp;
     }
-    int64_t special = special_index(s, v);
-    if (special >= 0)
-        return add_import(s, IMPORT_ENCODE(IMPORT_SPECIAL, special));
+    if (v == (jl_value_t*)s->ptls->root_task)
+        return add_import(s, IMPORT_ENCODE(IMPORT_SPECIAL, 0));
     if (s->incremental && jl_object_in_image(v))
         return add_image_bind(s, external_blob_metadata(v), v);
     if (s->incremental && jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(v)) && needs_uniquing(v, s->query_cache)) {
@@ -2188,17 +2169,6 @@ static uintptr_t jl_resolve_import(jl_serializer_state *s, import_t imp) JL_CANS
     case IMPORT_SPECIAL:
         if (payload == 0)
             return (uintptr_t)s->ptls->root_task;
-        if (payload == 1)
-            return (uintptr_t)jl_nothing;
-        payload -= 2;
-        if (payload < NBOX_C)
-            return (uintptr_t)jl_box_int64((int64_t)payload - NBOX_C / 2);
-        payload -= NBOX_C;
-        if (payload < NBOX_C)
-            return (uintptr_t)jl_box_int32((int32_t)payload - NBOX_C / 2);
-        payload -= NBOX_C;
-        if (payload < 256)
-            return (uintptr_t)jl_box_uint8(payload);
         break;
     case IMPORT_FUNCTION: {
         size_t idx = payload & (((import_t)1 << IMPORT_FUNCTION_KIND_OFFSET) - 1);
@@ -4570,6 +4540,24 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
     jl_gc_notify_image_load(buf.heap, buf.heap_size);
     jl_image_t pkgimage = {};
     return jl_restore_incremental_from_buf(buf, &pkgimage, depmods, completeinfo, pkgname);
+}
+
+// Take `nothing` from the system image before it is relocated, so that the runtime never
+// creates its own: it has no pointer fields, so it is usable where it is, and its special is
+// a slide.  Returns 0 if there is no usable system image.
+int jl_adopt_image_constants(jl_image_buf_t buf) JL_CANSAFEPOINT
+{
+    jl_image_sections_t h;
+    size_t i, n = sizeof(jl_image_specials) / sizeof(jl_image_specials[0]);
+    if (!buf.heap)
+        return 0;
+    memcpy(&h, buf.data + JI_SECTIONS_OFFSET, sizeof(h));
+    const uintptr_t *specials = (const uintptr_t*)(buf.data + h.specials.offset);
+    for (i = 0; i < n; i++) {
+        if (jl_image_specials[i] == &jl_nothing)
+            jl_nothing = (jl_value_t*)(buf.heap + (specials[i] - buf.preferred_base));
+    }
+    return 1;
 }
 
 JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
