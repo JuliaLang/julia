@@ -41,6 +41,8 @@
         Base.AnnotatedString("me", [(1:2, :thing, 0x01), (1:2, :all, 0x03)])
     @test Base.AnnotatedString(str[3:6]) ==
         Base.AnnotatedString("me s", [(1:2, :thing, 0x01), (4:4, :other, 0x02), (1:4, :all, 0x03)])
+    @test [a.region for a in Base.annotations(SubString(str, 3, 6), 4)] == [4:4, 4:4]
+    @test [a.region for a in Base.annotations(SubString(str, 3, 6), 1:2)] == [1:2, 1:2]
     @test str == Base.AnnotatedString("some string", [(1:4, :thing, 0x01), (6:11, :other, 0x02), (1:11, :all, 0x03)])
     @test str != Base.AnnotatedString("some string")
     @test str != Base.AnnotatedString("some string", [(1:1, :thing, 0x01), (1:11, :all, 0x03), (6:6, :other, 0x02)])
