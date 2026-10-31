@@ -731,8 +731,8 @@ function abstract_call_method(interp::AbstractInterpreter,
             comparison = mi.specTypes
             l_comparison = length((unwrap_unionall(comparison)::DataType).parameters)
             spec_len = max(spec_len, l_comparison)
-        elseif !hardlimit && isa(topmost, InferenceState)
-            # Without a hardlimit, permit use of reducers too.
+        elseif !isdefined(method, :recursion_relation) && isa(topmost, InferenceState)
+            # Without a recursion relation, permit use of reducers too.
             comparison = frame_instance(topmost).specTypes
             # n.b. currently don't allow vararg reducers
             #l_comparison = length((unwrap_unionall(comparison)::DataType).parameters)

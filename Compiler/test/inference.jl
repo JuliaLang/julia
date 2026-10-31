@@ -2014,7 +2014,7 @@ copy_dims_out(out) = ()
 copy_dims_out(out, dim::Int, tail...) =  copy_dims_out((out..., dim), tail...)
 copy_dims_out(out, dim::Colon, tail...) = copy_dims_out((out..., dim), tail...)
 @test Base.return_types(copy_dims_out, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 4 < length(Base.specializations(m)) < 15, methods(copy_dims_out)) # currently about 5
+@test all(m -> 3 < length(Base.specializations(m)) < 15, methods(copy_dims_out)) # currently about 5
 
 copy_dims_pair(out) = ()
 copy_dims_pair(out, dim::Int, tail...) =  copy_dims_pair(out => dim, tail...)
@@ -4745,6 +4745,25 @@ let
     f = MixedKeyDict((Dict(2 => 7), Dict(5. => 11)))
     @test mergewith(+, d, e, f).dicts == (Dict(1 => 10, 2 => 7), Dict(4.0 => 2, 5.0 => 20))
 end
+
+# issue #64493
+struct Wrap64493{F}
+    f::F
+end
+(w::Wrap64493)(acc, x) = w.f(x)
+(w::Wrap64493)(::Missing, x) = w.f(x)
+unwrap64493(x) = x
+unwrap64493(x::Tuple) = Wrap64493(unwrap64493)(Base.inferencebarrier(nothing), x[1])
+@test Base.return_types(unwrap64493, (Tuple{Tuple{Tuple{Int}}},)) == Any[Int]
+
+abstract type Root64493{T} end
+abstract type Grow64493{T} <: Root64493{Grow64493{Tuple{T}}} end
+struct Bounce64493 end
+Base.@constprop :none (::Bounce64493)(acc, t) = descend64493(t)
+(::Bounce64493)(::Missing, t) = nothing
+Base.@constprop :none descend64493(::Type{Root64493{Grow64493{T}}}) where {T} =
+    Bounce64493()(Base.inferencebarrier(nothing), supertype(Grow64493{T}))
+@test only(Base.return_types(() -> descend64493(Root64493{Grow64493{Int}}), ())) === Nothing
 
 # Issue #31974
 f31974(a::UnitRange) = (if first(a) <= last(a); f31974((first(a)+1):last(a)); end; a)
