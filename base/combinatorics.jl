@@ -338,13 +338,12 @@ function nextprod(a::Union{Tuple{Vararg{Integer}},AbstractVector{<:Integer}}, x:
     if x > typemax(Int)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
-    k = length(a)
-    v = fill(1, k)                    # current value of each counter
+    v = fill(1, axes(a))              # current value of each counter
     mx = map(a -> nextpow(a,x), a)   # maximum value of each counter
-    v[1] = mx[1]                      # start at first case that is >= x
-    p::widen(Int) = mx[1]             # initial value of product in this case
+    v[begin] = mx[begin]              # start at first case that is >= x
+    p::widen(Int) = mx[begin]         # initial value of product in this case
     best = p
-    icarry = 1
+    icarry = firstindex(a)
 
     while v[end] < mx[end]
         if p >= x
@@ -356,15 +355,15 @@ function nextprod(a::Union{Tuple{Vararg{Integer}},AbstractVector{<:Integer}}, x:
                 icarry += 1
                 p *= a[icarry]
                 v[icarry] *= a[icarry]
-                carrytest = v[icarry] > mx[icarry] && icarry < k
+                carrytest = v[icarry] > mx[icarry] && icarry < lastindex(a)
             end
             if p < x
-                icarry = 1
+                icarry = firstindex(a)
             end
         else
             while p < x
-                p *= a[1]
-                v[1] *= a[1]
+                p *= a[begin]
+                v[begin] *= a[begin]
             end
         end
     end
