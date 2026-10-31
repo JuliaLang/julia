@@ -560,6 +560,13 @@ end
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
+# Line continuation after non-ASCII text in a shifted substring
+@test Base.shell_split("    é\\\n x") == ["éx"]
+let x = "X"
+    @test `ls é $x \
+     --flag`.exec == ["ls", "é", "X", "--flag"]
+end
+
 # Tilde expansion in backtick commands
 @test samepath(only(`~`.exec), homedir())
 @test samepath(only(`~/foo`.exec), joinpath(homedir(), "foo"))
