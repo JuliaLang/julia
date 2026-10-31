@@ -24,6 +24,7 @@ mktempdir() do dir
     file = Base.Filesystem.open(filename, Base.Filesystem.JL_O_RDWR)
     Base.Filesystem.futime(file, 1.0, 2.0)
     @test Base.Filesystem.stat(file).mtime == 2.0
+    @test Base.Filesystem.stat(file).atime == 1.0
     close(file)
 
     # test filesystem readbytes!
@@ -32,6 +33,14 @@ mktempdir() do dir
     Base.Filesystem.readbytes!(file, res)
     @test res == UInt8[text..., (i > 20 for i in (length(text) + 1):length(res))...]
     close(file)
+
+    # test touch with atime parameter
+    original_stat = stat(filename)
+    sleep(0.1)  # ensure time difference
+    touch(filename; atime=true)
+    new_stat = stat(filename)
+    @test new_stat.atime > original_stat.atime
+    @test new_stat.mtime == original_stat.mtime  # mtime should be preserved
 
 end
 
