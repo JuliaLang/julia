@@ -7,7 +7,7 @@ New language features
 Language changes
 ----------------
 
-* `AbstractSlice` exposes `dataids` of its parent array to properly identify aliasing in broadcasting ([#49182]).
+* `Slices` exposes `dataids` of its parent array to properly identify aliasing in broadcasting ([#49182]).
 
 Compiler/Runtime improvements
 -----------------------------
