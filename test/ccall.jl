@@ -2403,3 +2403,11 @@ const sym = :ZSTD_versionString
 get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
 @test startswith(get_zstd_version(), "Zstd")
 end
+
+# PLT thunks keep a frame pointer: on Windows, the unwind info shared by JIT code assumes one
+let f() = ccall((:foo, "libnonexistent"), Cvoid, ())
+    ir = sprint(io -> code_llvm(io, f, (); raw=true, dump_module=true))
+    m = match(r"define [^\n]*@jlplt_foo_\d+\([^\n]*#(\d+)", ir)
+    @test m !== nothing
+    @test occursin(Regex("attributes #$(m[1]) = [^\n]*\"frame-pointer\"=\"all\""), ir)
+end
