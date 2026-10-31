@@ -934,6 +934,9 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT;
 extern _Atomic(int) jl_sigint_dispatch_pending;
+// The signal that requested graceful process termination (0 = none); see
+// jl_request_process_termination in signal-handling.c.
+JL_DLLEXPORT int jl_process_term_signo(void) JL_NOTSAFEPOINT;
 
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream) JL_CANSAFEPOINT;
@@ -1395,6 +1398,10 @@ void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 void jl_init_signal_watchers(uv_async_cb cb);
 void jl_wake_signal_watchers(void) JL_NOTSAFEPOINT;
 void jl_wake_io_loop_thread(void) JL_NOTSAFEPOINT;
+int jl_atexit_fallback_claim(void) JL_NOTSAFEPOINT;
+int jl_atexit_started(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_set_io_loop_tid(int16_t tid) JL_CANSAFEPOINT;
+void jl_atexit_fallback(int sig) JL_CANSAFEPOINT_LEAVE;
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
 int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;

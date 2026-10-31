@@ -498,6 +498,14 @@ Note: Once all exit hooks have been called, no more exit hooks can be registered
 and any call to `atexit(f)` after all hooks have completed will throw an exception.
 This situation may occur if you are registering exit hooks from background Tasks that
 may still be executing concurrently during shutdown.
+
+When a termination signal (such as SIGTERM) ends the process, the running tasks are
+cancelled before the hooks run. A hook must not wait for work that a cancelled task
+will no longer do: when `Base.process_terminating()` is true, skip such a wait or
+bound it. Cleanup that a task must finish belongs in the task's own unwinding, for
+example a `finally` block, and a hook may wait for that unwinding. If a thread keeps
+running code that never waits or checks for cancellation, the hooks instead run on
+another thread at the same time as that code, so they must not depend on it.
 """
 function atexit(f::Function)
     # HACK: if generating output, hint that we might want to compile `f`, so that it is available for the no-codegen test

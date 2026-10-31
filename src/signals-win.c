@@ -49,29 +49,47 @@ void __cdecl crt_sig_handler(int sig, int num)
     case SIGINT:
         signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler);
         if (!jl_ignore_sigint()) {
-            if (jl_sigint_get_policy() == JL_SIGINT_EXIT)
-                jl_exit(130); // 128 + SIGINT
-            // This handler runs synchronously on the raising thread. If that
-            // is a GC-unsafe Julia mutator, the request path's GC exclusion
-            // could deadlock against a collection waiting for this very
-            // thread - transition to GC-safe for the duration (the exclusion
-            // then holds off any new collection while the sources are
-            // touched).
+            // These handlers run synchronously on the raising thread. If
+            // that is a GC-unsafe Julia mutator, the request paths' GC
+            // exclusion could deadlock against a collection waiting for
+            // this very thread - transition to GC-safe for the duration
+            // (the exclusion then holds off any new collection while the
+            // sources are touched).
             jl_task_t *ct = jl_get_current_task();
-            int delivered;
-            if (ct != NULL && ct->ptls != NULL) {
-                int8_t gc_state = jl_gc_safe_enter(ct->ptls);
-                delivered = jl_sigint_request_cancellation();
-                jl_gc_safe_leave(ct->ptls, gc_state);
-            }
-            else {
-                delivered = jl_sigint_request_cancellation();
-            }
-            if (!delivered)
-                jl_exit(130); // 128 + SIGINT
+            jl_ptls_t ptls = (ct != NULL) ? ct->ptls : NULL;
+            int8_t gc_state = (ptls != NULL) ? jl_gc_safe_enter(ptls) : 0;
+            // Deliver the press through the cancellation system, unless ^C
+            // exits or nothing can take it; then request graceful
+            // termination (see jl_request_process_termination).
+            int handled = (jl_sigint_get_policy() != JL_SIGINT_EXIT &&
+                           jl_sigint_request_cancellation()) ||
+                          jl_request_process_termination(sig);
+            if (ptls != NULL)
+                jl_gc_safe_leave(ptls, gc_state);
+            if (!handled)
+                jl_exit(128 + sig);
         }
         break;
-    default: // SIGSEGV, SIGTERM, SIGILL, SIGABRT
+    case SIGTERM: {
+        // A C-runtime raise(SIGTERM): request graceful termination, like a
+        // unix SIGTERM; the raising thread resumes and the governed work
+        // unwinds through its cancellation points into the ordinary exit
+        // path. Without a registered root source, or on a repeat request,
+        // exit abruptly with the C runtime's default disposition.
+        signal(SIGTERM, (void (__cdecl *)(int))crt_sig_handler);
+        jl_task_t *ct = jl_get_current_task();
+        jl_ptls_t ptls = (ct != NULL) ? ct->ptls : NULL;
+        int8_t gc_state = (ptls != NULL) ? jl_gc_safe_enter(ptls) : 0;
+        int handled = jl_request_process_termination(sig);
+        if (ptls != NULL)
+            jl_gc_safe_leave(ptls, gc_state);
+        if (!handled) {
+            signal(SIGTERM, SIG_DFL);
+            raise(sig);
+        }
+        break;
+    }
+    default: // SIGSEGV, SIGILL, SIGABRT
         if (sig == SIGSEGV) { // restarting jl_ or profile
             jl_jmp_buf *saferestore = jl_get_safe_restore();
             if (saferestore) {
@@ -523,18 +541,25 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
         default: sig = SIGTERM; break;
     }
     if (!jl_ignore_sigint()) {
-        if (jl_sigint_get_policy() == JL_SIGINT_EXIT)
-            jl_exit(128 + sig); // 128 + SIGINT
-        if (sig == SIGINT) {
-            if (!jl_sigint_request_cancellation())
-                jl_exit(128 + sig);
+        if (sig == SIGINT && jl_sigint_get_policy() != JL_SIGINT_EXIT &&
+                jl_sigint_request_cancellation()) {
+            // the press was delivered through the cancellation system
         }
         else {
-            // Close/logoff/shutdown (and Ctrl+Break): a termination
-            // request. Windows kills the process the moment this handler
-            // returns for CTRL_CLOSE_EVENT, so run the orderly teardown
-            // synchronously here rather than delivering anything to a
-            // Julia thread. (Matches unix SIGTERM's exit status.)
+            // A termination request: close/logoff/shutdown (and
+            // Ctrl+Break), or ^C with exit-on-sigint. Request graceful
+            // termination (see jl_request_process_termination) and block
+            // this handler thread: Windows kills the process the moment
+            // the handler returns for CTRL_CLOSE_EVENT, while the ordinary
+            // exit path terminates it first when the teardown succeeds -
+            // and the OS's own handler deadline bounds one that does not.
+            // Without a registered root source, or on a repeat request,
+            // run the orderly teardown synchronously here, as before.
+            // (Matches unix SIGTERM's exit status.)
+            if (jl_request_process_termination(sig)) {
+                jl_termination_watchdog(sig);
+                Sleep(INFINITE);
+            }
             jl_exit(128 + sig);
         }
     }

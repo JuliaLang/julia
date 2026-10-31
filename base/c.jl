@@ -183,9 +183,12 @@ which is capturable in a `try` block.
 This is the default behavior in REPL, any code run via `-e` and `-E`
 and in Julia script run with `-i` option.
 
-If `true`, Ctrl-C terminates the process directly.  Running code
-upon such event requires [`atexit`](@ref).  This is the default
-behavior in Julia script run without `-i` option.
+If `true`, Ctrl-C terminates the process: it requests graceful process
+termination, like a `SIGTERM` (the process-wide root cancellation source is
+cancelled, the governed work unwinds, and the process exits through the
+ordinary exit path, running [`atexit`](@ref) hooks, before dying by the
+signal).  This is the default behavior in Julia script run without `-i`
+option.
 
 !!! compat "Julia 1.5"
     Function `exit_on_sigint` requires at least Julia 1.5.
