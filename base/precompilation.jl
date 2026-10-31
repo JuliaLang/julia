@@ -3090,7 +3090,7 @@ function report_precompile_results!(s::PrecompileSession)
     n_failed = count(j -> is_failed(j), values(s.jobs))
     # skipped extensions are implied by their parent or trigger failing, so only count packages
     n_dep_failed = count(((k, j),) -> is_dep_failed(j) && !haskey(s.ext_to_parent, first(k)), s.jobs)
-    if ndeps > 0 || n_failed > 0
+    if ndeps > 0 || n_failed > 0 || s.interrupted || s.canceled
         if !quick_exit
             logstr = sprint(context=s.logio) do iostr
                 if s.fancyprint

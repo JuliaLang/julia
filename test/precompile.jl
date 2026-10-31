@@ -3569,6 +3569,32 @@ end
     end
 end
 
+# A run stopped before any package finished still reports, and keeps the report for later
+@testset "stop_background_precompile with nothing finished" begin
+    mkdepottempdir() do depot
+        started = joinpath(depot, "started")
+        signal = joinpath(depot, "signal")
+        project_path = write_precompile_env(depot, [("BlockingPkg", "c2100000-0000-0000-0000-000000000001", String[])])
+        write_blocking_pkg(depot, "BlockingPkg", String[], started, signal)
+        with_precompile_env(depot, project_path) do
+            io = IOBuffer()
+            t = @async Base.Precompilation.precompilepkgs(; io=IOContext(io, :color => false), fancyprint=false)
+            try
+                wait_until(() -> isfile(started))
+                @test Base.Precompilation.stop_background_precompile(; graceful=false)
+                wait(t)
+            finally
+                touch(signal)
+            end
+            @test occursin(r"\n  0 dependencies precompiled, 1 canceled after \d+ seconds\n", takestring!(io))
+            @test !has_cachefile(depot, "BlockingPkg")
+            io = IOBuffer()
+            Base.Precompilation.monitor_background_precompile(IOContext(io, :color => false))
+            @test occursin(r"\n    0 dependencies precompiled, 1 canceled after \d+ seconds\n", takestring!(io))
+        end
+    end
+end
+
 # A package whose cache file lock is held elsewhere waits for it, and says who holds it
 @testset "precompilepkgs waits for a held cache file lock" begin
     mkdepottempdir() do depot
