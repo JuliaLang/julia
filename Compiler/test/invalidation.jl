@@ -554,3 +554,25 @@ let M = LimitedResultBackedges
         @test all(ci -> ci.max_world == typemax(UInt), cis)
     end
 end
+
+# A published member of an inference cycle that consumed an unpublished member, here `u`
+# whose source is limited, must be invalidated when a dependency of that member changes.
+module UnpublishedCycleMemberInvalidation
+    const COND = Ref(true)
+    leaf() = 1
+    p(x) = COND[] ? 0 : a((x,))
+    a(x) = COND[] ? 0 : u(x)
+    u(x) = (y = p(x); Base.donotdelete(y); leaf(); COND[] && return 1; c(x); a(x); 1)
+    c(x) = COND[] ? 2 : (u(x); 2)
+end
+let interp = InvalidationTester()
+    M = UnpublishedCycleMemberInvalidation
+    @test Base.infer_return_type(M.p, (Int,); interp) === Int
+    ci = Base.method_instance(M.c, (Tuple{Int},)).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    world = Base.get_world_counter()
+    @eval M leaf() = 2
+    @test ci.max_world != typemax(UInt)
+    @test ci.max_world <= world
+end
