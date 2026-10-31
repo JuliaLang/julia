@@ -2143,7 +2143,7 @@ end
 end
 
 @noinline function sort_chunks!(Av, n, alg, order, scratch::Nothing, fst, lst)
-    for lo = fst:n:lst
+    n == 0 || for lo = fst:n:lst
         s = _sort!(Av, alg, order, (; lo, hi=lo+n-1, scratch))
         s !== nothing && return sort_chunks!(Av, n, alg, order, s, lo+n, lst)
     end
@@ -2151,7 +2151,7 @@ end
 end
 
 @noinline function sort_chunks!(Av, n, alg, order, scratch::AbstractVector, fst, lst)
-    for lo = fst:n:lst
+    n == 0 || for lo = fst:n:lst
         _sort!(Av, alg, order, (; lo, hi=lo+n-1, scratch))
     end
     Av
@@ -2198,6 +2198,7 @@ function sort!(A::AbstractArray{T};
                scratch::Union{Vector{T}, Nothing}=size(A, dims) < 10 ? nothing : Vector{T}(undef, size(A, dims))) where T
     nd = ndims(A)
     1 <= dims <= nd || throw(ArgumentError("dimension out of range"))
+    isempty(A) && return A
     alg2 = maybe_apply_initial_optimizations(alg)
     order2 = ord(lt, by, rev, order)
     foreach(ntuple(Val, nd)) do d
