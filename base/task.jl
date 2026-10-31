@@ -604,6 +604,21 @@ function wait_dequeue!(x::DoneWait, w::WaitEntry, why::UInt8)
     return nothing
 end
 
+struct PendingWaits
+    tasks::Vector{Task}
+    slot::Vector{Int}
+    done::BitVector
+    src::Union{CancellationTokenSource, Nothing}
+end
+IteratorSize(::Type{PendingWaits}) = SizeUnknown()
+@inline function iterate(ws::PendingWaits, i::Int=1)
+    j = findnext(!, ws.done, i)
+    j === nothing || return (DoneWait(ws.tasks[j], ws.slot[j]), j + 1)
+    src = ws.src
+    (src === nothing || i > length(ws.tasks) + 1) && return nothing
+    return (SourceWait(src, 0x00), length(ws.tasks) + 2)
+end
+
 function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=false, failfast::Bool=false,
                         tok::MaybeToken=default_cancel_token())
     if (all && !failfast) || length(tasks) <= 1
@@ -658,13 +673,10 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
     # slot 1 is left for the source, which takes the first free slot
     slot = zeros(Int, length(tasks))
     seen = IdDict{Task,Int}()
-    ws = Vector{Union{DoneWait, SourceWait}}()
     for (i, done) in enumerate(done_mask)
-        done && continue
-        slot[i] = get!(seen, tasks[i], length(seen) + 2)
-        push!(ws, DoneWait(tasks[i], slot[i]))
+        done || (slot[i] = get!(seen, tasks[i], length(seen) + 2))
     end
-    src === nothing || push!(ws, SourceWait(src, 0x00))
+    ws = PendingWaits(tasks, slot, done_mask, src)
     w = WaitEntryN(ct, length(seen) + 1)
     while true
         # suspend only when the park armed (a `false` park means a waitable
@@ -691,11 +703,6 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         if nremaining == 0 || (!all && any(done_mask)) || (exception && failfast)
             break
         end
-        empty!(ws)
-        for (i, done) in enumerate(done_mask)
-            done || push!(ws, DoneWait(tasks[i], slot[i]))
-        end
-        src === nothing || push!(ws, SourceWait(src, 0x00))
     end
     withdraw!(ws, w)
 
