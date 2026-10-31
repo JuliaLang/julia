@@ -274,6 +274,7 @@ static GlobalVariable *emit_plt_thunk(
                                      GlobalVariable::PrivateLinkage,
                                      fname, M);
     plt->setAttributes(attrs);
+    jl_init_function(plt, ctx.emission_context);
     if (cc != CallingConv::C)
         plt->setCallingConv(cc);
     auto T_pvoidfunc = getPointerTy(M->getContext());
