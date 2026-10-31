@@ -139,11 +139,8 @@ static int is_skip_filename(const char *filename) JL_NOTSAFEPOINT
     return 0;
 }
 
-JL_DLLEXPORT int jl_path_is_tracked_by(const char *path, const char *tracked) JL_NOTSAFEPOINT
+static int path_is_under(const char *path, const char *tracked, size_t tlen) JL_NOTSAFEPOINT
 {
-    if (tracked == NULL || path == NULL)
-        return 0;
-    size_t tlen = strlen(tracked);
     if (tlen == 0)
         return 1; // no path given: everything is tracked
     while (tlen > 0 && (tracked[tlen - 1] == '/' || tracked[tlen - 1] == PATHSEPSTRING[0]))
@@ -156,6 +153,29 @@ JL_DLLEXPORT int jl_path_is_tracked_by(const char *path, const char *tracked) JL
     return next == '\0' || next == '/' || next == PATHSEPSTRING[0];
 }
 
+JL_DLLEXPORT int jl_path_is_tracked_by(const char *path, const char *tracked) JL_NOTSAFEPOINT
+{
+    if (tracked == NULL || path == NULL)
+        return 0;
+    return path_is_under(path, tracked, strlen(tracked));
+}
+
+JL_DLLEXPORT int jl_path_is_coverage_excluded(const char *path) JL_NOTSAFEPOINT
+{
+    const char *list = jl_options.coverage_exclude;
+    if (list == NULL || path == NULL || !jl_isabspath(path))
+        return 0;
+    while (1) {
+        const char *end = strchr(list, PATHLISTSEPSTRING[0]);
+        size_t len = end ? (size_t)(end - list) : strlen(list);
+        if (len > 0 && path_is_under(path, list, len))
+            return 1;
+        if (!end)
+            return 0;
+        list = end + 1;
+    }
+}
+
 JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT
 {
     return jl_path_is_tracked_by(path, jl_options.tracked_path);
@@ -163,7 +183,8 @@ JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_coverage_enabled_for(jl_module_t *m, const char *filename) JL_NOTSAFEPOINT
 {
-    if (codegen_imaging_mode() || jl_generating_output() || is_skip_filename(filename))
+    if (codegen_imaging_mode() || jl_generating_output() || is_skip_filename(filename) ||
+        jl_path_is_coverage_excluded(filename))
         return 0;
     switch (jl_options.code_coverage) {
     case JL_LOG_ALL:
@@ -360,20 +381,28 @@ static FILE *coverage_fopen(const char *filename, const char *mode) JL_NOTSAFEPO
 #endif
 }
 
+static int coverage_path_is_selected(const char *path) JL_NOTSAFEPOINT
+{
+    if (jl_options.code_coverage == JL_LOG_PATH && !jl_path_is_tracked(path))
+        return 0;
+    return !jl_path_is_coverage_excluded(path);
+}
+
 // Base source locations in system images are relative to the installed base
 // directory. Resolve them only when applying a path filter to a report.
 static int coverage_file_is_selected(logdata_t *logData, const char *filename) JL_NOTSAFEPOINT
 {
-    if (logData != &coverageData || jl_options.code_coverage != JL_LOG_PATH)
+    if (logData != &coverageData ||
+        (jl_options.code_coverage != JL_LOG_PATH && jl_options.coverage_exclude == NULL))
         return 1;
     if (jl_isabspath(filename))
-        return jl_path_is_tracked(filename);
+        return coverage_path_is_selected(filename);
     char path[4096];
     snprintf(path, sizeof(path), "%s/../share/julia/base/%s", jl_options.julia_bindir, filename);
     uv_fs_t req;
-    int selected = 0;
+    int selected = jl_options.code_coverage != JL_LOG_PATH;
     if (uv_fs_realpath(NULL, &req, path, NULL) == 0)
-        selected = jl_path_is_tracked((const char*)req.ptr);
+        selected = coverage_path_is_selected((const char*)req.ptr);
     uv_fs_req_cleanup(&req);
     return selected;
 }

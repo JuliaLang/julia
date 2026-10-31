@@ -167,6 +167,7 @@ JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT
                         0, // target_sanitize_memory
                         0, // target_sanitize_thread
                         0, // target_sanitize_address
+                        NULL, // coverage_exclude
     };
     jl_options_initialized = 1;
 }
@@ -291,6 +292,9 @@ static const char opts[]  =
     "                                               required to select this option. A `@` with no path\n"
     "                                               will track the current directory.\n"
 
+    " --code-coverage=-<paths>                      Record no coverage for files under these paths,\n"
+    "                                               separated by `:` (`;` on Windows). Without another\n"
+    "                                               setting, coverage is recorded for all other files.\n"
     " --code-coverage=tracefile.info                Append coverage information to the LCOV tracefile\n"
     "                                               (filename supports format tokens)\n"
     " --code-coverage-mode={hit*|count}             Record whether each line ran (`hit`, the default)\n"
@@ -824,6 +828,11 @@ restart_switch:
                     codecov = JL_LOG_ALL;
                 else if (!strcmp(optarg, "none"))
                     codecov = JL_LOG_NONE;
+                else if (optarg[0] == '-' && optarg[1] != '\0') {
+                    if (codecov == JL_LOG_NONE)
+                        codecov = JL_LOG_ALL;
+                    jl_options.coverage_exclude = optarg + 1; // skip `-`
+                }
                 else if (endof > 5 && !strcmp(optarg + endof - 5, ".info")) {
                     if (codecov == JL_LOG_NONE)
                         codecov = JL_LOG_ALL;

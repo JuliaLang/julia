@@ -15,6 +15,10 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* `--code-coverage=-<paths>` records no coverage for files under the given paths, and
+  optimizes their code as if coverage were off, so that instrumenting a test suite does not change
+  how its own functions are compiled.
+
 Multi-threading changes
 -----------------------
 

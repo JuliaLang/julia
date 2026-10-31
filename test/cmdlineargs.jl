@@ -741,6 +741,36 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             rm(outfile)
         end
 
+        # excluded files record nothing and are optimized as without coverage
+        mktempdir() do parent
+            excluded = realpath(mkdir(joinpath(parent, "excluded")))
+            other = realpath(mkdir(joinpath(parent, "other")))
+            libfile = joinpath(other, "lib.jl")
+            write(libfile, "g(x) = x + 1\n")
+            srcfile = joinpath(excluded, "main.jl")
+            write(srcfile, """
+                include($(repr(libfile)))
+                h(x) = (x, x)
+                g(h(1)[1])
+                print(Base.Compiler.is_effect_free(Base.infer_effects(h, (Int,))))
+                """)
+            outfile = joinpath(parent, "exclude.info")
+            @test readchomp(`$cov_exename_hit --code-coverage=$outfile $srcfile`) == "false"
+            @test contains(read(outfile, String), "SF:$srcfile")
+            rm(outfile)
+            # a list ending in `.info` must not be taken for a tracefile
+            exclude = join([excluded, joinpath(parent, "missing.info")], Sys.iswindows() ? ';' : ':')
+            @test readchomp(`$cov_exename_hit --code-coverage=$outfile --code-coverage=-$exclude $srcfile`) == "true"
+            report = read(outfile, String)
+            @test !contains(report, "SF:$srcfile")
+            @test contains(report, "SF:$libfile")
+            pidfile = joinpath(parent, "exclude-%p.info")
+            @test contains(readchomp(`$cov_exename_hit --code-coverage=$pidfile --code-coverage=-$excluded -e 'print(Base.julia_cmd())'`),
+                           "--code-coverage=-$excluded")
+            @test readchomp(`$cov_exename_hit --code-coverage=-$excluded -e 'print(Base.JLOptions().code_coverage)'`) == "2"
+            @test !success(pipeline(`$cov_exename_hit --code-coverage=- -e 0`, stderr=devnull))
+        end
+
         # Source and report filenames must support Unicode on Windows as well.
         let unicode_dir = mkdir(joinpath(dir, "coverage λ space"))
             srcfile = joinpath(unicode_dir, "source λ.jl")
