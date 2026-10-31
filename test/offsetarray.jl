@@ -951,3 +951,7 @@ end
     @test parent(B) == A0
     @test axes(B) == Base.IdentityUnitRange.((-10:-9, 9:10))
 end
+
+@testset "nextprod with offset factors" begin
+    @test nextprod(OffsetVector([2, 3, 5], -2), 105) == nextprod([2, 3, 5], 105) == 108
+end
