@@ -3560,11 +3560,13 @@ end
             @test has_cachefile(depot, "BlockingPkg") == graceful
             @test !has_cachefile(depot, "LastPkg")
             @test !Base.Precompilation.is_precompiling_in_background()
-            if graceful
-                @test occursin(r"2 dependencies precompiled, \d+ interrupted after \d+ seconds", output)
-            else
-                @test occursin(r"1 dependency precompiled, \d+ canceled after \d+ seconds", output)
-            end
+            summary = graceful ? r"2 dependencies precompiled, then interrupted after \d+ seconds" :
+                                 r"1 dependency precompiled, \d+ canceled after \d+ seconds"
+            @test occursin(summary, output)
+            # asking for the status afterwards repeats the summary
+            io = IOBuffer()
+            Base.Precompilation.monitor_background_precompile(IOContext(io, :color => false))
+            @test occursin(summary, takestring!(io))
         end
     end
 end

@@ -1927,7 +1927,8 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
             catch e
                 @lock BG begin
                     if BG.interrupt_requested || BG.cancel_requested
-                        BG.result = "Background precompilation was interrupted"
+                        # keep the summary of what was done, if the run got to report it
+                        BG.result === nothing && (BG.result = "Background precompilation was interrupted")
                         # loading must stop rather than compile the package again serially
                         _from_loading && (BG.exception = e)
                     else
@@ -3193,9 +3194,14 @@ function report_precompile_results!(s::PrecompileSession)
                     count(j -> had_pid(j) && !is_recompiled(j) && !is_soft_error(j), values(s.jobs)) :
                     n_failed
                 verb = s.canceled && !s.interrupted ? "canceled" : "interrupted"
-                print(iostr, "  $(ndeps) dependenc$(ndeps == 1 ? "y" : "ies") precompiled, ",
-                      color_string("$(n_canceled_i)", Base.error_color(), s.hascolor),
-                      " $verb after $(seconds_elapsed) seconds")
+                print(iostr, "  $(ndeps) dependenc$(ndeps == 1 ? "y" : "ies") precompiled, ")
+                # a graceful stop lets running jobs finish, so none may have been cut short
+                if n_canceled_i > 0
+                    print(iostr, color_string("$(n_canceled_i)", Base.error_color(), s.hascolor), " ")
+                else
+                    print(iostr, "then ")
+                end
+                print(iostr, "$verb after $(seconds_elapsed) seconds")
                 if n_soft_errors > 0
                     pluralpc = length(s.configs) > 1 ? "dependency configurations" : n_soft_errors == 1 ? "dependency" : "dependencies"
                     print(iostr, "\n  ",
