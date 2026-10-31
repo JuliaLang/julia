@@ -595,7 +595,7 @@ end
     @test findprev("a", s, 10) == 1:1
     @test findprev("αβ", s, 10) == 5:7
     @test findall("xy", s) == [3:4, 9:10]
-    let s = GenericString(u)
+    for s in (GenericString(u), u)
         @test_throws StringIndexError findnext("βx", s, 6)
     end
 end

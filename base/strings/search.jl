@@ -395,6 +395,9 @@ _nthbyte(t::AbstractVector, index) = t[index + (firstindex(t)-1)]
 function _searchindex(s::DenseUTF8String, t::DenseUTF8String, i::Integer)
     # Check for fast case of a single byte
     lastindex(t) == 1 && return something(findnext(isequal(t[1]), s, i), 0)
+    if !isempty(t) && 1 <= i <= ncodeunits(s)
+        @inbounds isvalid(s, i) || string_index_err(s, i)
+    end
     _searchindex(codeunits(s), codeunits(t), i)
 end
 
