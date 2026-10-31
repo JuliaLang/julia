@@ -733,6 +733,8 @@ static int jl_signal_watch_install(int sig)
             winch_signal = NULL;
             return err;
         }
+        // libuv leaves `data` unset, but exit cleanup takes a non-NULL `data` for a Julia object
+        winch_signal->data = NULL;
         uv_unref((uv_handle_t*)winch_signal);
     }
     return uv_signal_start(winch_signal, winch_cb, SIGWINCH);

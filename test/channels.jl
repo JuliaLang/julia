@@ -724,6 +724,19 @@ end
             @test isopen(s)
             close(s)
         end
+        # Exit cleanup closes the SIGWINCH watcher's handle. Dirty the heap so its
+        # uninitialized fields are likely nonzero, and retry, as that is not guaranteed.
+        script = """
+            ps = [Libc.malloc(sz) for sz in 16:8:1024 for _ in 1:20]
+            foreach(ps) do p
+                ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, 0x5a, 16)
+                Libc.free(p)
+            end
+            close(Base.SignalCondition(Base.SIGWINCH))
+            """
+        for _ in 1:3
+            @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`, stderr=stderr))
+        end
     end
     if !Sys.iswindows()
         # SIGTERM goes through the runtime's signal thread, SIGHUP through a handler.
@@ -742,8 +755,15 @@ end
                 sleep(0.1)
                 set = zeros(UInt8, 128)
                 ccall(:sigpending, Cint, (Ptr{UInt8},), set)
-                println("closed, pending: ", ccall(:sigismember, Cint, (Ptr{UInt8}, Cint), set, $sig))
-                sleep(600)
+                # SIGTERM runs the exit wherever this thread is, and it hangs in malloc,
+                # codegen or libuv (#64410): compile first, then wait without allocating.
+                function report_and_wait(msg)
+                    ccall(:write, Cssize_t, (Cint, Ptr{UInt8}, Csize_t), 1, msg, sizeof(msg))
+                    while true
+                        ccall(:pause, Cint, ())
+                    end
+                end
+                report_and_wait(string("closed, pending: ", ccall(:sigismember, Cint, (Ptr{UInt8}, Cint), set, $sig), "\\n"))
                 """
             errfile = tempname()
             p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`, stderr=errfile), "r")
