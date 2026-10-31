@@ -5,12 +5,10 @@ astr = "Hello, world.\n"
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
 @testset "BoundsError for findnext/findprev" begin
-    # I think these should give error on 4 also, and "" is not treated
-    # consistently with SubString("",1,1), nor with Char[]
     for ind in (0, 5)
-        @test_throws BoundsError findnext(SubString("",1,1), "foo", ind)
-        @test_throws BoundsError findprev(SubString("",1,1), "foo", ind)
+        @test_throws BoundsError findnext(SubString("", 1, 0), "foo", ind)
     end
+    @test_throws BoundsError findprev(SubString("", 1, 0), "foo", 5)
 
     # Note: the commented out test will be enabled after fixes to make
     # sure that findnext/findprev are consistent
@@ -259,6 +257,13 @@ end
         @test findprev("", u8str, i) == i:i-1
     end
     @test findlast("", "") === 1:0
+    for s in (astr, u8str, GenericString(u8str))
+        n = ncodeunits(s)
+        @test findprev("", s, 0) === 1:0
+        @test findprev("", s, n + 1) === n+1:n
+        @test_throws BoundsError findprev("", s, n + 2)
+    end
+    @test findlast("", GenericString("")) === 1:0
 end
 
 @testset "string forward search with a zero-char regex" begin
@@ -605,6 +610,7 @@ end
 @testset "byte vector backward search with an empty needle" begin
     @test findprev(UInt8[], b"abc", 0) == 1:0
     @test findprev(UInt8[], b"abc", 2) == 2:1
-    @test findprev(UInt8[], b"abc", 4) == 0:-1
+    @test findprev(UInt8[], b"abc", 4) == 4:3
+    @test_throws BoundsError findprev(UInt8[], b"abc", 5)
     @test_throws BoundsError findprev(UInt8[], b"abc", -1)
 end

@@ -682,7 +682,7 @@ function _rsearchindex(s::AbstractString,
                        t::Union{AbstractString,AbstractChar,Int8,UInt8},
                        i::Integer)
     if isempty(t)
-        return 1 <= i <= nextind(s, lastindex(s))::Int ? i :
+        return 0 <= i <= nextind(s, lastindex(s))::Int ? max(i, 1) :
                throw(BoundsError(s, i))
     end
     t1, trest = Iterators.peel(Iterators.reverse(t))::NTuple{2,Any}
@@ -709,8 +709,8 @@ function _rsearchindex(s::DenseUTF8String, t::DenseUTF8String, i::Integer)
     elseif lastindex(t) != 0
         j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
         return _rsearchindex(codeunits(s), codeunits(t), j)
-    elseif i > sizeof(s)
-        return 0
+    elseif i > sizeof(s) + 1
+        throw(BoundsError(s, i))
     elseif i == 0
         return 1
     else
@@ -726,7 +726,7 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
     k < 0 && throw(BoundsError(s, _k))
 
     if n == 0
-        return 0 <= k <= m ? max(k, 1) : sentinel
+        return 0 <= k <= m + 1 ? max(k, 1) : throw(BoundsError(s, _k))
     elseif m == 0
         return sentinel
     elseif n == 1
