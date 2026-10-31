@@ -963,3 +963,8 @@ end
     @test findlast(UInt8[0x62], v) == 3:3
     @test findprev(UInt8[0x62], v, 2) == 1:1
 end
+
+@testset "isvalid(String, ::OffsetVector)" begin
+    @test !isvalid(String, OffsetVector(UInt8[0xff, 0x61], -1))
+    @test isvalid(String, OffsetVector(UInt8[0x61, 0xce, 0xb2], 5))
+end
