@@ -692,6 +692,18 @@ end
         @test exponent(big(2)^100 + 1) == 100
         @test exponent(big(-1)) == 0
         @test_throws DomainError exponent(big(0))
+        # multi-limb values on and around limb boundaries, with both signs
+        for k in (1, 63, 64, 65, 127, 128, 200), d in (0, 1)
+            x = big(2)^k + d * (big(2)^k - 1)
+            @test exponent(x) == k
+            @test exponent(-x) == k
+        end
+        # `exponent(::BigInt)` must dispatch to the GMP method, which does not allocate
+        let x = big(2)^100 + 1, y = -x
+            exponent(x); exponent(y) # compile
+            @test @allocated(exponent(x)) == 0
+            @test @allocated(exponent(y)) == 0
+        end
 
         @test Base.top_set_bit(big(0)) == 0
         @test Base.top_set_bit(big(2)^100) == 101
@@ -699,6 +711,9 @@ end
         @test Base.top_set_bit(big(2)^100 + 1) == 101
         @test_throws DomainError Base.top_set_bit(big(-1))
     end
+
+    @test @inferred(exponent(true)) === 0
+    @test_throws DomainError exponent(false)
 end
 
 @testset "issue #4884" begin

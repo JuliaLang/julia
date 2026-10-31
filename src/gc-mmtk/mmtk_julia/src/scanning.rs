@@ -113,18 +113,6 @@ impl Scanning<JuliaVM> for VMScanning {
         object: ObjectReference,
         slot_visitor: &mut impl SlotVisitor<JuliaVMSlot>,
     ) {
-        #[cfg(feature = "lxr_base")]
-        if IN_PROBABLE_WRITE.with(|f| f.get()) {
-            // Report only the slots LXR's barrier can record and re-read at the next pause.
-            // See `object_probable_write`.
-            let mut filter = |slot: JuliaVMSlot| {
-                if !slot.is_derived() && slot_is_in_heap(slot) {
-                    slot_visitor.visit_slot(slot);
-                }
-            };
-            process_object(object, &mut filter);
-            return;
-        }
         process_object(object, slot_visitor);
     }
 
@@ -204,7 +192,7 @@ pub(crate) fn gather_mutator_roots(
     let mut root_scan_task = |task: *const _jl_task_t, task_is_root: bool| {
         if !task.is_null() {
             unsafe {
-                crate::julia_scanning::mmtk_scan_gcstack(task, &mut slot_buffer);
+                crate::julia_scanning::mmtk_scan_gcstack(task, &mut slot_buffer, true);
             }
             // Mark tasks scanned directly in this STW pause. Without this, a later concurrent
             // scan would find no record for it and trip the "not bound to a mutator" assert
@@ -294,52 +282,6 @@ pub(crate) fn gather_mutator_roots(
     // We do not need gc_queue_remset from gc.c (we are not using remset in the thread)
 
     (slot_buffer, node_buffer)
-}
-
-#[cfg(feature = "lxr_base")]
-thread_local! {
-    /// Set while this thread is inside [`object_probable_write`].
-    static IN_PROBABLE_WRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    /// The last chunk [`slot_is_in_heap`] found mapped. Starts unaligned, so it matches no chunk.
-    static MAPPED_CHUNK: std::cell::Cell<usize> = const { std::cell::Cell::new(usize::MAX) };
-}
-
-/// Treat every field of `src` as written, for a barrier caller with no slot to give.
-///
-/// LXR derives the fields by calling `scan_object` and records the slots it reports, to be
-/// re-read at the next pause. But `scan_object` reports what an object references, not only
-/// its fields: a task's shadow stack, a `jl_genericmemory`'s malloc'd buffer, and offset slots
-/// whose referent is only valid at the instant the slot is made. None of those can be re-read
-/// later, so `scan_object` leaves them out while this flag is set. Other plans' barriers need
-/// every referent (e.g. for an SATB snapshot), so the filter applies to LXR only.
-pub fn object_probable_write(mutator: &mut Mutator<JuliaVM>, src: ObjectReference) {
-    #[cfg(feature = "lxr_base")]
-    IN_PROBABLE_WRITE.with(|f| f.set(true));
-    mutator.barrier().object_probable_write(src);
-    #[cfg(feature = "lxr_base")]
-    IN_PROBABLE_WRITE.with(|f| f.set(false));
-}
-
-/// Whether `slot` lies in memory MMTk mapped, i.e. has a field unlog bit for LXR's barrier.
-///
-/// Mapping is per chunk, and a probable write asks this for field after field of one object,
-/// so the last chunk found mapped is cached. Only positive answers are cached: mapped memory is
-/// never unmapped, but an unmapped chunk may be mapped later.
-#[cfg(feature = "lxr_base")]
-fn slot_is_in_heap(slot: JuliaVMSlot) -> bool {
-    use mmtk::util::heap::vm_layout::BYTES_IN_CHUNK;
-    let addr = slot.to_address();
-    let chunk = addr.align_down(BYTES_IN_CHUNK).as_usize();
-    MAPPED_CHUNK.with(|c| {
-        if c.get() == chunk {
-            return true;
-        }
-        let mapped = memory_manager::is_mapped_address(addr);
-        if mapped {
-            c.set(chunk);
-        }
-        mapped
-    })
 }
 
 pub fn process_object<EV: SlotVisitor<JuliaVMSlot>>(object: ObjectReference, closure: &mut EV) {
@@ -480,7 +422,7 @@ impl GCStackSnapshots {
     fn capture_snapshot(&self, task: *const _jl_task_t) -> Arc<[ObjectReference]> {
         let mut snapshot_roots = StackRootBuffer { buffer: vec![] };
         unsafe {
-            crate::julia_scanning::mmtk_scan_gcstack(task, &mut snapshot_roots);
+            crate::julia_scanning::mmtk_scan_gcstack(task, &mut snapshot_roots, true);
         }
         log::info!(
             "Took snapshot of stack roots for task {:?}, num roots = {}",

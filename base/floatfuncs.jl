@@ -228,16 +228,70 @@ function isapprox(x::Number, y::Number;
          (nans && isnan(x) && isnan(y))
 end
 
+"""
+    _uabsdiff(x::Integer, y::Integer)
+
+Compute the exact absolute difference, widening the result type when necessary.
+"""
+_uabsdiff(x::Integer, y::Integer) = x < y ? y - x : x - y
+
+_uabsdiff(x::Bool, y::BitInteger) = _uabsdiff(oftype(y, x), y)
+_uabsdiff(x::BitInteger, y::Bool) = _uabsdiff(x, oftype(x, y))
+
+function _uabsdiff(x::BitUnsigned, y::BitUnsigned)
+    lo, hi = minmax(x, y)
+    return hi - lo
+end
+function _uabsdiff(x::BitSigned, y::BitSigned)
+    lo, hi = minmax(x, y)
+    # Unsigned subtraction gives the exact distance even across zero.
+    return unsigned(hi) - unsigned(lo)
+end
+
+# Return (m, u, d, carried), where d is the wrapped absolute difference.
+# On carry, m = |x| and the exact difference is m + u.
+function _mixed_uabsdiff(x::BitSigned, y::BitUnsigned)
+    U = promote_type(unsigned(typeof(x)), typeof(y))
+    v, u = x % U, y % U
+    d = ifelse(x < y, u - v, v - u)
+    # For x < 0, the distance is |x| + y, which carries exactly when d < u.
+    return -v, u, d, (x < 0) & (d < u)
+end
+
+function _uabsdiff(x::BitSigned, y::BitUnsigned)
+    m, u, d, carried = _mixed_uabsdiff(x, y)
+    return carried ? widen(m) + widen(u) : d
+end
+_uabsdiff(x::BitUnsigned, y::BitSigned) = _uabsdiff(y, x)
+
+_uabsdiff_le(x::Integer, y::Integer, b::Real) = _uabsdiff(x, y) <= b
+# Keep widening out of the caller to limit code size.
+@noinline _widesum_le(m::T, u::T, b::Real) where {T<:BitUnsigned} = widen(m) + widen(u) <= b
+function _uabsdiff_le(x::BitSigned, y::BitUnsigned, b::Real)
+    m, u, d, carried = _mixed_uabsdiff(x, y)
+    # Widen only if both the distance and the bound exceed typemax(d).
+    carried & (b > typemax(d)) && return _widesum_le(m, u, b)
+    return (d <= b) & !carried
+end
+_uabsdiff_le(x::BitUnsigned, y::BitSigned, b::Real) = _uabsdiff_le(y, x, b)
+
+_scaled_rtol(rtol::Real, scale::Integer) = (rtol * scale, false)
+_scaled_rtol(rtol::BitInteger, scale::BitInteger) = mul_with_overflow(promote(rtol, scale)...)
+
 function isapprox(x::Integer, y::Integer;
                   atol::Real=0, rtol::Real=rtoldefault(x,y,atol),
                   nans::Bool=false, norm::Function=abs)
-    if norm === abs && atol < 1 && rtol == 0
-        return x == y
-    else
-        # We need to take the difference `max` - `min` when comparing unsigned integers.
-        _x, _y = x < y ? (x, y) : (y, x)
-        return norm(_y - _x) <= max(atol, rtol*max(norm(_x), norm(_y)))
+    if norm === abs
+        atol < 1 && rtol == 0 && return x == y
+        # Check equality before forming the bound, since Inf * 0 is NaN.
+        x == y && return true
+        # uabs handles typemin and avoids signed/unsigned promotion.
+        b, overflowed = _scaled_rtol(rtol, max(uabs(x), uabs(y)))
+        # Overflow implies rtol >= 2, hence rtol * max(|x|, |y|) >= |x - y|.
+        return overflowed || _uabsdiff_le(x, y, max(atol, b))
     end
+    return x == y ||
+        norm(_uabsdiff(x, y)) <= max(atol, rtol*max(norm(uabs(x)), norm(uabs(y))))
 end
 
 """

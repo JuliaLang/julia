@@ -112,3 +112,58 @@ let m = Meta.@lower 1 + 1
     @test :b === @eval $m
     @test isempty(current_exceptions())
 end
+
+# The interpreter must enforce the same memory-order rules as codegen.
+iscall_gr(x, name) = Meta.isexpr(x, :call) && x.args[1] == GlobalRef(Core, name)
+global exec_gp_g::Int = 1
+exec_gp_badread() = getglobal(@__MODULE__, :exec_gp_g, :not_atomic)
+exec_gp_badwrite() = setglobal!(@__MODULE__, :exec_gp_g, 5, :not_atomic)
+exec_gp_goodswap() = swapglobal!(@__MODULE__, :exec_gp_g, 7, :sequentially_consistent)
+let ci = code_typed(exec_gp_badread, ())[1][1]
+    @assert any(x -> iscall_gr(x, :getglobal_partition), ci.code)
+    @test_throws ConcurrencyViolationError exec_gp_badread()
+end
+let ci = code_typed(exec_gp_badwrite, ())[1][1]
+    @assert any(x -> iscall_gr(x, :setglobal_partition), ci.code)
+    @test_throws ConcurrencyViolationError exec_gp_badwrite()
+    @test exec_gp_g === 1 # the failed store must not have written
+end
+let ci = code_typed(exec_gp_goodswap, ())[1][1]
+    @assert any(x -> iscall_gr(x, :swapglobal_partition), ci.code)
+    @test exec_gp_goodswap() === 1 # swap returns the old value
+    @test exec_gp_g === 7
+end
+global exec_gp_def::Int = 3
+exec_gp_isdef() = isdefinedglobal(@__MODULE__, :exec_gp_def, true, :acquire)
+let ci = code_typed(exec_gp_isdef, ())[1][1]
+    @assert any(x -> iscall_gr(x, :isdefinedglobal_partition), ci.code)
+    @test exec_gp_isdef() === true
+end
+
+# A reformulated `modifyglobal!` reaches the interpreter as an `:invoke_modify` node carrying
+# the frozen partition. The interpreter drops the node's code instance and calls the builtin,
+# so the store must still run; a hand-built thunk is always interpreted, so it exercises that.
+global exec_gp_m::Int = 2
+exec_gp_add(a::Int, b::Int) = a + b
+@assert exec_gp_add(1, 2) === 3 # so the method instance below has a cached code instance
+let m = Meta.@lower(1 + 1), add_ci = Base.method_instance(exec_gp_add, (Int, Int)).cache,
+    part = Base.lookup_binding_partition(Base.get_world_counter(),
+                                         convert(Core.Binding, GlobalRef(@__MODULE__, :exec_gp_m)))
+    @assert Meta.isexpr(m, :thunk)
+    @assert add_ci isa Core.CodeInstance
+    src = m.args[1]::CodeInfo
+    src.code = Any[
+        Expr(:invoke_modify, add_ci, GlobalRef(Core, :modifyglobal_partition),
+             QuoteNode(part), GlobalRef(@__MODULE__, :exec_gp_add), 1),
+        ReturnNode(SSAValue(1)),
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.ssaflags = fill(zero(UInt32), nstmts)
+    src.debuginfo = Core.DebugInfo(:none)
+    @test (@eval $m) === (2 => 3)
+    @test exec_gp_m === 3
+end
+# the builtin names its target with a partition, and only that
+@test_throws TypeError Core.modifyglobal_partition(GlobalRef(@__MODULE__, :exec_gp_m), +, 1)
+@test exec_gp_m === 3

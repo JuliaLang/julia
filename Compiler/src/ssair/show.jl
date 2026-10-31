@@ -137,7 +137,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
         skip_ftype = (length(sig) == 0) # doesn't exist...
         skip_ftype = skip_ftype || (
             # ... or, f prints as a user-accessible value...
-            (f isa GlobalRef) &&
+            (f isa GlobalRef || f isa Core.BindingPartition) &&
             # ... and matches the value of the singleton type of the invoked MethodInstance
             (singleton_type(ft) === singleton_type(sig[1]) !== nothing)
         )

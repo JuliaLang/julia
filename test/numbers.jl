@@ -144,11 +144,13 @@ end
             z = ordered[min(i1,j1)], ordered[max(i2,j2)]
             @test Base._extrema_rf(x, y) === z
         end
+        # a NaN operand wins, but its sign is not preserved: the sign of a NaN
+        # result is non-deterministic, so compare with `isequal` rather than `===`
         for i in 1:2, j1 in 1:6, j2 in 1:6 # unordered test (only 1 NaN)
             x = unorded[i] , unorded[i]
             y = ordered[j1], ordered[j2]
-            @test Base._extrema_rf(x, y) === x
-            @test Base._extrema_rf(y, x) === x
+            @test Base._extrema_rf(x, y) ≣ x
+            @test Base._extrema_rf(y, x) ≣ x
         end
         for i in 1:2, j in 1:2 # unordered test (2 NaNs)
             x = unorded[i], unorded[i]

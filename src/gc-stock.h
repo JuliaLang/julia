@@ -144,6 +144,7 @@ typedef struct _jl_gc_pagemeta_t {
 } jl_gc_pagemeta_t;
 
 extern jl_gc_page_stack_t global_page_pool_lazily_freed;
+extern _Atomic(size_t) global_page_pool_lazily_freed_n;
 extern jl_gc_page_stack_t global_page_pool_clean;
 extern jl_gc_page_stack_t global_page_pool_freed;
 

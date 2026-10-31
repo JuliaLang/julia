@@ -6,8 +6,14 @@
 #include <llvm/Support/SHA1.h>
 
 #include "jl_codegen_hash.inc"
+#include "jitlayers.h"
 #include "julia.h"
 #include "julia_internal.h"
+
+#ifdef __linux__
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
 
 namespace endian = llvm::support::endian;
 using endianness = llvm::endianness;
@@ -66,6 +72,21 @@ static FILE *getLogFile()
 
 static FILE *LogFile = getLogFile();
 
+// Linux LMDB uses robust process-shared mutexes to recover locks after an
+// owner dies. QEMU user mode returns ENOSYS for both robust-list syscalls,
+// but glibc still allows creating these mutexes, leaving dead owners' locks
+// unrecoverable. Query the current thread without changing libc's robust list.
+static bool robustMutexesAvailable() JL_NOTSAFEPOINT
+{
+#ifdef __linux__
+    void *head = nullptr;
+    size_t len = 0;
+    return syscall(SYS_get_robust_list, 0, &head, &len) == 0;
+#else
+    return true;
+#endif
+}
+
 static std::optional<std::string> getCachePath() JL_CANSAFEPOINT
 {
     // Useful to be able to override the objcache path for testing, or to use
@@ -83,9 +104,11 @@ static std::optional<std::string> getCachePath() JL_CANSAFEPOINT
 
     // LMDB 1.0 cannot open data files created by LMDB 0.9, so use a
     // different directory than the LMDB 0.9 based versions of this code.
+    // LMDB's data and lock layouts depend on the target ABI (including word
+    // size and libc mutex layout). Separate targets that share a depot.
     return (llvm::Twine(jl_string_ptr(DepotStr)) + "/cache/v" +
             llvm::Twine(JULIA_VERSION_MAJOR) + "." + llvm::Twine(JULIA_VERSION_MINOR) +
-            "/objcache-lmdb1")
+            "/objcache-lmdb1/" + jl_ExecutionEngine->getTargetTriple().str())
         .str();
 }
 
@@ -176,6 +199,11 @@ void ObjCache::initDB()
     // triggers an assertion in rr if another process does a writev() to the fd.
     if (jl_running_under_rr(0))
         goto done;
+
+    if (!robustMutexesAvailable()) {
+        DisabledNotice = "robust mutex support could not be verified";
+        goto done;
+    }
 
     if (checkMDB(mdb_env_create(&Env))) {
         Env = nullptr;

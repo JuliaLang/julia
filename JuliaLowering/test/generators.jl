@@ -291,3 +291,15 @@ end
     @test (feval("(f(_) for _ in 1:3)")).f === test_mod.f
     @test (jeval("(f(_) for _ in 1:3)")).f === test_mod.f
 end
+
+@testset "a comprehension may contain a non-syntactic generator" begin
+    ex = Expr(:comprehension,
+              Expr(:call, GlobalRef(Base, :Generator), :(i -> 2i), :(1:3)))
+    @test fl_eval(test_mod, ex) == [2,4,6]
+    @test jl_eval(test_mod, ex) == [2,4,6]
+
+    ex = Expr(:typed_comprehension, Int,
+              Expr(:call, GlobalRef(Base, :Generator), :(i -> 2i), :(1:3)))
+    @test fl_eval(test_mod, ex) == Int[2,4,6]
+    @test jl_eval(test_mod, ex) == Int[2,4,6]
+end

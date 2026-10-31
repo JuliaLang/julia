@@ -62,10 +62,7 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     // (which would dereference null). If every child is NULL there is nothing
     // to remember, so emit no barrier; the caller erases the call.
     SmallVector<Value*, 8> children;
-    // Operand 1 is the written field's address, which only a field-granularity
-    // barrier looks at; it is not a child and must not have its tag loaded.
-    for (unsigned i = 2; i < target->arg_size(); i++) {
-        Value *child = target->getArgOperand(i);
+    for (Value *child : writeBarrierChildren(target)) {
         if (isa<ConstantPointerNull>(child->stripPointerCasts()))
             continue;
         children.push_back(child);
@@ -99,14 +96,9 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
                                                 MDB.createBranchWeights(Weights));
     trigTerm->getParent()->setName("trigger_wb");
     builder.SetInsertPoint(trigTerm);
-    if (target->getCalledOperand() == write_barrier_func) {
-        auto qr = builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
-        // Propagate CancellationLowering's reset-region annotation to the
-        // slow-path call, so lowerQueueGCRoot selects the reset-safe entry.
-        if (auto *MD = target->getMetadata("julia.reset_region"))
-            qr->setMetadata("julia.reset_region", MD);
-    }
-    else {
-        assert(false);
-    }
+    auto qr = builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
+    // Propagate CancellationLowering's reset-region annotation to the
+    // slow-path call, so lowerQueueGCRoot selects the reset-safe entry.
+    if (auto *MD = target->getMetadata("julia.reset_region"))
+        qr->setMetadata("julia.reset_region", MD);
 }

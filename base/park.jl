@@ -182,11 +182,11 @@ end
 """
     repark!(ws, w::WaitEntry) -> Bool
 
-Re-park on the still-enqueued registration `w`: arm and recheck, with
-the same `Bool` contract as [`park!`](@ref). For the multi-wait loop -
-the caller's bookkeeping between wakes runs unarmed (a completion
-landing there pops-and-drops the unarmed entry; the recheck here catches
-the fired predicate before suspending, so nothing is lost).
+Re-arm and recheck `w`, with the same `Bool` contract as [`park!`](@ref).
+The caller must ensure every pending waitable is still registered and its
+recheck observes notifications delivered while `w` was unarmed. `DoneWait`
+does not satisfy this contract: notification removes the slot required by
+its recheck. Multi-task waits must enqueue pending tasks with [`park!`](@ref).
 """
 function repark!(ws, w::WaitEntry)
     ct = current_task()

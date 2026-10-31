@@ -1454,6 +1454,11 @@ end
         maxargs = 6
         op_argi = 4
         v_argi = 5
+    elseif ff === Core.modifyglobal_partition
+        minargs = 4
+        maxargs = 5
+        op_argi = 3
+        v_argi = 4
     elseif ff === Core.memoryrefmodify!
         minargs = 6
         maxargs = 6
@@ -1487,6 +1492,21 @@ end
         GT = abstract_eval_get_binding_type(interp, sv, o, f).rt
         RT = isa(GT, Const) ? Pair{GT.val, GT.val} : Pair
         TF = isa(GT, Const) ? GT.val : Any
+    elseif ff === Core.modifyglobal_partition
+        GT = nothing
+        p = unwrapva(argtypes[2])
+        if isa(p, Const) && isa(p.val, Core.BindingPartition)
+            p = p.val::Core.BindingPartition
+            kind = binding_kind(p)
+            if kind === PARTITION_KIND_GLOBAL
+                restriction = partition_restriction(p)
+                isa(restriction, Type) && (GT = restriction)
+            elseif kind === PARTITION_KIND_DECLARED
+                GT = Any
+            end
+        end
+        RT = GT === nothing ? Pair : Pair{GT, GT}
+        TF = GT === nothing ? Any : GT
     elseif ff === Core.memoryrefmodify!
         o = unwrapva(argtypes[2])
         RT = memoryrefmodify!_tfunc(𝕃ᵢ, o, Any, Any, Symbol, Bool)
@@ -2693,6 +2713,8 @@ const _EFFECT_FREE_BUILTINS = [
     throw,
     Core.throw_methoderror,
     getglobal,
+    Core.getglobal_partition,
+    Core.isdefinedglobal_partition,
     compilerbarrier,
     Core._svec_len,
     Core._svec_ref,
@@ -2903,9 +2925,11 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     apply_type,
     compilerbarrier,
     Core.current_scope,
+    Core.depwarn_partition,
     donotdelete,
     Core.finalizer,
     Core.get_binding_type,
+    Core.getglobal_partition,
     Core.ifelse,
     # Core.invoke_in_world,
     # invokelatest,
@@ -2933,17 +2957,23 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     isa,
     isdefined,
     # isdefinedglobal,
+    Core.isdefinedglobal_partition,
     modifyfield!,
     # modifyglobal!,
+    # Core.modifyglobal_partition,
     nfields,
     replacefield!,
     # replaceglobal!,
+    Core.replaceglobal_partition,
     setfield!,
     # setfieldonce!,
     # setglobal!,
+    Core.setglobal_partition,
     # setglobalonce!,
+    Core.setglobalonce_partition,
     swapfield!,
     # swapglobal!,
+    Core.swapglobal_partition,
     Core.task_result_type,
     throw,
     tuple,
@@ -2980,6 +3010,32 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         2 ≤ length(argtypes) ≤ 3 || return EFFECTS_THROWS
         # Modeled more precisely in abstract_eval_getglobal
         return generic_getglobal_effects
+    elseif f === Core.getglobal_partition
+        length(argtypes) == 3 || return EFFECTS_THROWS
+        partition = argtypes[2]
+        if isa(partition, Const) && isa(partition.val, Core.BindingPartition)
+            p = partition.val::Core.BindingPartition
+            # Same effects as the read this partition encodes, but the explicit memory order
+            # may be invalid or non-atomic, so it is not `nothrow`.
+            return Effects(abstract_eval_partition_load(partition_owner(p), p, false).effects; nothrow=false)
+        end
+        return generic_getglobal_effects
+    elseif f === Core.setglobal_partition
+        return setglobal!_effects
+    elseif f === Core.swapglobal_partition || f === Core.replaceglobal_partition ||
+           f === Core.setglobalonce_partition
+        # These also read the binding, so they are no more `:consistent` than a read is
+        # (matching `abstract_eval_swapglobal!` and friends).
+        return merge_effects(generic_getglobal_effects, setglobal!_effects)
+    elseif f === Core.isdefinedglobal_partition
+        length(argtypes) == 2 || return EFFECTS_THROWS
+        return generic_isdefinedglobal_effects
+    elseif f === Core.depwarn_partition
+        length(argtypes) == 1 || return EFFECTS_THROWS
+        # A deprecation warning is an observable side effect (printing to stderr, and
+        # throwing under `--depwarn=error`), so this call must never be removed as unused.
+        return Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, effect_free=ALWAYS_FALSE,
+                       nothrow=false, inaccessiblememonly=ALWAYS_FALSE)
     elseif f === Core.get_binding_type
         length(argtypes) == 2 || return EFFECTS_THROWS
         # Modeled more precisely in abstract_eval_get_binding_type
@@ -3636,6 +3692,21 @@ add_tfunc(swapglobal!, 3, 4, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(modifyglobal!, 4, 5, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(replaceglobal!, 4, 6, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(setglobalonce!, 3, 5, @nospecs((𝕃::AbstractLattice, args...)->Bool), 3)
+@nospecs function getglobal_partition_tfunc(𝕃::AbstractLattice, gr, partition, order)
+    isa(partition, Const) || return Any
+    p = partition.val
+    isa(p, Core.BindingPartition) || return Any
+    return partition_rt(p)
+end
+add_tfunc(Core.getglobal_partition, 3, 3, getglobal_partition_tfunc, 0)
+# as for `modifyglobal!`, the result is modeled by `abstract_modifyop!` instead
+add_tfunc(Core.modifyglobal_partition, 3, 4, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
+add_tfunc(Core.setglobal_partition, 2, 3, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
+add_tfunc(Core.swapglobal_partition, 2, 3, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
+add_tfunc(Core.replaceglobal_partition, 3, 5, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
+add_tfunc(Core.setglobalonce_partition, 2, 4, @nospecs((𝕃::AbstractLattice, args...)->Bool), 3)
+add_tfunc(Core.isdefinedglobal_partition, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Bool), 1)
+add_tfunc(Core.depwarn_partition, 1, 1, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 1)
 add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Type), 0)
 
 @nospecs function task_result_type_tfunc(𝕃::AbstractLattice, T)

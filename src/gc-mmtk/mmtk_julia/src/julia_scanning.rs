@@ -19,6 +19,10 @@ const JL_MAX_TAGS: usize = 64; // from vm/julia/src/jl_exports.h
 const OFFSET_OF_INLINED_SPACE_IN_MODULE: usize =
     offset_of!(jl_module_t, usings) + offset_of!(arraylist_t, _space);
 
+/// `JL_SMALL_BYTE_ALIGNMENT` (julia_internal.h): the offset at which a `jl_genericmemory_t`
+/// that owns its elements keeps them, i.e. what `m->ptr` is for such a memory.
+const JL_SMALL_BYTE_ALIGNMENT: usize = 16;
+
 #[allow(improper_ctypes)]
 extern "C" {
     pub static jl_simplevector_type: *const jl_datatype_t;
@@ -153,8 +157,11 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             if nusings > 0 {
                 let mut objary_begin = Address::from_mut_ptr((*m).usings.items);
                 let objary_end = objary_begin.shift::<Address>(nusings as isize);
+                // Past `AL_N_INLINE` the items are in a buffer `arraylist_grow` `malloc`ed.
+                // See [`report_vm_owned_buffer`]; never observed to happen.
+                let report = report_vm_owned_buffer(Address::from_mut_ptr((*m).usings.items));
 
-                while objary_begin < objary_end {
+                while report && objary_begin < objary_end {
                     if PRINT_OBJ_TYPE {
                         println!(" - scan usings: {:?}\n", objary_begin);
                     }
@@ -169,23 +176,40 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
 
             let ta = obj.to_ptr::<jl_task_t>();
 
-            #[cfg(feature = "concurrent_marking")]
-            if crate::collection::CONCURRENT_MARKING_ACTIVE.load(Ordering::SeqCst) {
-                // For concurrent marking, prefer a stable snapshot captured before the task runs.
-                // If no snapshot exists, create one while holding the per-task scan lock so
-                // resume-time snapshotting for the same task waits only until the live task scan
-                // finishes. The snapshot itself is then processed outside the lock.
-                if let Some(snapshot) = crate::scanning::GC_STACK_SNAPSHOTS.gc_thread_scan_stack(ta)
-                {
-                    snapshot.iter().for_each(|slot| {
-                        process_slot(closure, Address::from_ptr(slot as *const _))
-                    });
-                }
+            // A barrier must not account for anything on the GC shadow stack, whichever
+            // form it is presented in. `JL_GC_PUSH*` stores into a `jl_gcframe_t` with no
+            // write barrier at all -- that is the point of a shadow stack -- so no field
+            // edge ever raised a count for what it holds. Its entire accounting is the
+            // lease the root scan takes each pause and the next pause releases. A snapshot
+            // barrier decrementing one would release a count nobody raised, and free an
+            // object that is still referenced.
+            //
+            // This is a fact about who owns the reference, not about where the frames
+            // live, so it holds equally for a copy-stack task whose frames sit in a
+            // GC-allocated `stkbuf` and for a snapshot held in the binding's own memory.
+            if crate::object_barrier::in_walk() {
+                mmtk_scan_gcstack(ta, closure, false);
             } else {
-                mmtk_scan_gcstack(ta, closure);
+                #[cfg(feature = "concurrent_marking")]
+                if crate::collection::CONCURRENT_MARKING_ACTIVE.load(Ordering::SeqCst) {
+                    // For concurrent marking, prefer a stable snapshot captured before the task
+                    // runs. If no snapshot exists, create one while holding the per-task scan
+                    // lock so resume-time snapshotting for the same task waits only until the
+                    // live task scan finishes. The snapshot itself is then processed outside
+                    // the lock.
+                    if let Some(snapshot) =
+                        crate::scanning::GC_STACK_SNAPSHOTS.gc_thread_scan_stack(ta)
+                    {
+                        snapshot.iter().for_each(|slot| {
+                            process_slot(closure, Address::from_ptr(slot as *const _))
+                        });
+                    }
+                } else {
+                    mmtk_scan_gcstack(ta, closure, true);
+                }
+                #[cfg(not(feature = "concurrent_marking"))]
+                mmtk_scan_gcstack(ta, closure, true);
             }
-            #[cfg(not(feature = "concurrent_marking"))]
-            mmtk_scan_gcstack(ta, closure);
 
             // A task can be reached before `jl_task_type` exists. `jl_init_root_task`
             // allocates the root task and stamps its type tag (`jl_set_typetagof`) while the
@@ -390,6 +414,18 @@ unsafe fn scan_genericmemory_elements<SV: SlotVisitor<JuliaVMSlot>>(
     closure: &mut SV,
 ) {
     let data = Address::from_ptr((*m).ptr);
+    // `m->ptr` need not point at elements allocated with the object: `jl_ptr_to_genericmemory`
+    // (`unsafe_wrap(Memory{T}, ptr, n)`) points it at memory the VM was handed. See
+    // [`report_vm_owned_buffer`].
+    //
+    // The inline-ownership compare comes first because it is the cheap way to rule the question
+    // out, and it rules it out for every memory `jl_alloc_genericmemory_unchecked` produces
+    // under `GC_BARRIER_FIELD_PRECISE`. Tracing scans every memory in the heap, so this is
+    // worth keeping off that path.
+    let owns_elements_inline = data == Address::from_ptr(m) + JL_SMALL_BYTE_ALIGNMENT;
+    if !owns_elements_inline && !report_vm_owned_buffer(data) {
+        return;
+    }
     if (*layout).flags.arrayelem_isboxed() != 0 {
         let mut slot = data.shift::<Address>(range.start as isize);
         for _ in range {
@@ -498,9 +534,17 @@ unsafe fn mmtk_jl_genericmemory_data_owner_field_address(m: *const jl_genericmem
 //     mmtk_jl_genericmemory_data_owner_field_address(m).load::<*const mmtk_jl_value_t>()
 // }
 
+/// Visit the reference slots of a task's stack state.
+///
+/// `scan_frames` covers the GC shadow stack -- the `jl_gcframe_t` chain `JL_GC_PUSH*`
+/// builds. A barrier walk passes `false` for it and gets only the task's stack *buffers*
+/// (`ctx.stkbuf` and the exception stack), which are ordinary GC-managed memory and are
+/// genuinely the barrier's business. See `scan_julia_object`'s task branch for why the
+/// frames are not.
 pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
     ta: *const jl_task_t,
     closure: &mut EV,
+    scan_frames: bool,
 ) {
     // ConcurrentImmix may call this from the task-resume barrier. Callers must ensure the task
     // stack is stable before using this path during concurrent marking.
@@ -528,7 +572,7 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
         offset = (*ta).ctx.stkbuf as isize - lb as isize;
     }
 
-    if !s.is_null() {
+    if !s.is_null() && scan_frames {
         let s_nroots_addr = ::std::ptr::addr_of!((*s).nroots);
         let mut nroots = read_stack(Address::from_ptr(s_nroots_addr), offset, lb, ub);
         debug_assert!(nroots.as_usize() as u32 <= u32::MAX);
@@ -609,6 +653,30 @@ fn get_stack_addr(addr: Address, offset: isize, lb: u64, ub: u64) -> Address {
     }
 }
 
+/// Whether a scan should report slots living in `buf`, memory the VM may own rather than MMTk.
+///
+/// A barrier walk must not see them. It records a slot and re-reads it at the next pause,
+/// which the buffer may not survive -- `arraylist_grow` moves one, and
+/// `jl_ptr_to_genericmemory` hands out memory the VM is free to `free`. Such a buffer also has
+/// no side metadata, so there is no field unlog bit to coalesce on.
+///
+/// Skipping is not free: these are real field edges that nothing else counts, so their
+/// referents go uncounted. Deferring the *owner* and re-deriving the fields at the pause is the
+/// fix; until then this is the narrower of two unsound choices.
+///
+/// Answered once per buffer, never per slot -- every slot in one buffer has the same answer,
+/// and the mmapper lookup is far too expensive to repeat. Callers with a cheaper way to rule
+/// the question out should test that first: this reads a thread-local, which is a
+/// `__tls_get_addr` call in a cdylib, before it reaches the lookup.
+///
+/// This is *not* the question a task's GC shadow stack asks. That one is about who owns the
+/// reference's accounting, not about where the memory is, so it holds even for frames in
+/// GC-allocated memory. See `scan_julia_object`'s task branch.
+#[inline(always)]
+unsafe fn report_vm_owned_buffer(buf: Address) -> bool {
+    !crate::object_barrier::in_walk() || mmtk_object_is_managed_by_mmtk(buf.as_usize())
+}
+
 #[inline(always)]
 pub fn process_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Address) {
     let simple_slot = SimpleSlot::from_address(slot);
@@ -654,6 +722,17 @@ pub fn process_offset_slot<EV: SlotVisitor<JuliaVMSlot>>(
     slot: Address,
     offset: usize,
 ) {
+    // A non-zero offset makes this a *derived* slot: its referent is `contents - offset`,
+    // recoverable only with the offset captured right now. A barrier must not record one --
+    // the field it describes is free to change before the pause, so re-reading it later can
+    // yield an address that is not an object at all. Declining costs no reachability either:
+    // a derived slot names an object some other slot already names.
+    //
+    // Tracing still needs them: `load`/`store` on an `OffsetSlot` are how an interior pointer
+    // is fixed up when its object moves. So this is about the barrier, not about the slot.
+    if offset != 0 && crate::object_barrier::in_walk() {
+        return;
+    }
     let offset_slot = OffsetSlot::new_with_offset(slot, offset);
     #[cfg(debug_assertions)]
     {

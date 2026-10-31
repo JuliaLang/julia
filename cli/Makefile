@@ -155,7 +155,7 @@ $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) $(SRCDIR)/li
 		$(call IMPLIB_FLAGS,$@.tmp) $(JLDFLAGS), \
 		$(LIB_OBJS) $(LOADER_LDFLAGS), \
 		$(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(SHIPFLAGS) $(RPATH_LIB), \
-		$(LIB_OBJS) $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT))))
+		$(LIB_OBJS) $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia.$(JL_MAJOR_SHLIB_EXT) $@
 	@$(DSYMUTIL) $@
 ifeq ($(OS), WINNT)
@@ -169,7 +169,7 @@ $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRC
 		$(call IMPLIB_FLAGS,$@.tmp) $(JLDFLAGS), \
 		$(LIB_DOBJS) $(LOADER_LDFLAGS), \
 		$(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(DEBUGFLAGS) $(RPATH_LIB), \
-		$(LIB_DOBJS) $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT))))
+		$(LIB_DOBJS) $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia-debug.$(JL_MAJOR_SHLIB_EXT) $@
 	@$(DSYMUTIL) $@
 ifeq ($(OS), WINNT)
@@ -205,6 +205,7 @@ $(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in $(JULIAHOME)/VERSION
 	mv $$TMPFILE $@
 
 clean: | $(CLEAN_TARGETS)
+	rm -rf $(BUILDDIR)/*.lto
 	rm -f $(BUILDDIR)/*.o $(BUILDDIR)/*.dbg.obj
 	rm -f $(build_bindir)/julia*
 	rm -f $(BUILDDIR)/julia.expmap

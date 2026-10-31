@@ -392,21 +392,19 @@ function reserve_module_binding_i(mod, basename)
 end
 
 # Even less likely to be deterministic than the above, but necessary to avoid
-# quadratic behaviour where flisp doesn't already have it.
-function reserve_module_binding_simple(mod, hint::String)
-    # (JETLS) jl_module_next_counter is not exported before Julia 1.14.0-DEV.3063.
+# quadratic behaviour where flisp doesn't already have it.  See
+# `fl_module_unique_name`
+function module_unique_name(mod::Module)
     @static if VERSION < v"1.14.0-DEV.3063"
-        return reserve_module_binding_i(mod, hint)
+        # (JETLS) jl_module_next_counter is not exported before 1.14.0-DEV.3063
+        reserve_module_binding_i(mod, "")[3:end]
     else
-        i = module_next_counter(mod)
-        name = "$hint#$i"
-        b = _get_module_binding(mod, Symbol(name); create=true)
-        # @assert !isdefined(b, :partitions) || b.partitions.kind === Base.PARTITION_KIND_GUARD hint
-        return name
+        string(@ccall(jl_module_next_counter(mod::Module)::UInt32))
     end
 end
-@static if VERSION >= v"1.14.0-DEV.3063"
-    module_next_counter(mod::Module) = @ccall(jl_module_next_counter(mod::Module)::UInt32)
+function module_unique_name(mod::Module, funcname::AbstractString)
+    occursin('#', funcname) ? module_unique_name(mod) :
+        reserve_module_binding_i(mod, funcname)
 end
 
 # Return true if a `name` is defined in and *by* the module `mod`.

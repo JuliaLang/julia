@@ -190,8 +190,7 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt
     if (lastt->ctx.bufsz < nb) {
         asan_free_copy_stack(lastt->ctx.stkbuf, lastt->ctx.bufsz);
         buf = (void*)jl_gc_alloc_buf(ptls, nb);
-        jl_gc_wb(lastt, (void*)&lastt->ctx.stkbuf, buf);
-        lastt->ctx.stkbuf = buf;
+        jl_gc_write(lastt, lastt->ctx.stkbuf, void, buf);
         lastt->ctx.bufsz = nb;
     }
     else {
@@ -467,7 +466,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt) JL_CANSAFEPOINT
         jl_stack_context_t copy_ctx;
     } lasttstate;
 
-    jl_gc_wb_back(lastt);
+    jl_gc_notify_task_suspend(lastt);
     if (killed) {
         *pt = NULL; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = NULL;
@@ -504,11 +503,6 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt) JL_CANSAFEPOINT
             lastt->ctx.ctx = &lasttstate.ctx;
         }
     }
-    // this task's stack or scope field could have been modified after
-    // it was marked by an incremental collection
-    // move the barrier back instead of walking the shadow stack again here to check if that is required
-    // even if killed (dropping the stack) and just the scope field matters,
-    // let the gc figure that out next time it does a quick mark
     jl_gc_notify_task_resume(t);
 
     // set up global state for new task and clear global state for old task
@@ -1116,8 +1110,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->donenotify = completion_future;
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit scope from parent task
-    jl_gc_wb_fresh(t, ct->scope);
-    t->scope = ct->scope;
+    jl_gc_write_fresh(t, t->scope, jl_value_t, ct->scope);
     // Fork task-local random state from parent
     jl_rng_split(t->rngState, ct->rngState);
     // there is no active exception handler available on this stack yet
@@ -1288,7 +1281,7 @@ CFI_NORETURN
 skip_pop_exception:;
     }
     jl_gc_write(ct, ct->result, jl_value_t, res);
-    ct->invoked = NULL;
+    jl_gc_write(ct, ct->invoked, jl_value_t, NULL);
     jl_finish_task(ct);
     jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
@@ -1593,8 +1586,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);
-    jl_gc_wb_fresh(ct, jl_nothing);
-    ct->scope = jl_nothing;
+    jl_gc_write_fresh(ct, ct->scope, jl_value_t, jl_nothing);
     ct->eh = NULL;
     ct->gcstack = NULL;
     ct->excstack = NULL;

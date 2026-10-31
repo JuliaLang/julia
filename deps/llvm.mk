@@ -46,9 +46,7 @@ LLVM_ENABLE_PROJECTS :=
 LLVM_EXTERNAL_PROJECTS :=
 LLVM_ENABLE_RUNTIMES :=
 ifeq ($(BUILD_LLVM_CLANG), 1)
-LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);clang
-LLVM_ENABLE_RUNTIMES := $(LLVM_ENABLE_RUNTIMES);compiler-rt
-else ifeq ($(OS),Darwin)
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);clang;clang-tools-extra
 LLVM_ENABLE_RUNTIMES := $(LLVM_ENABLE_RUNTIMES);compiler-rt
 endif
 ifeq ($(USE_POLLY), 1)
@@ -113,8 +111,7 @@ LLVM_CMAKE += -DLLVM_ENABLE_ZSTD=FORCE_ON -DZSTD_ROOT="$(build_prefix)"
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
-LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
-LLVM_CMAKE += -DLLVM_UTILS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
+LLVM_CMAKE += -DCMAKE_INSTALL_BINDIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
 LLVM_CMAKE += -DLLVM_INCLUDE_UTILS=ON -DLLVM_INSTALL_UTILS=ON
 LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_ENABLE_BINDINGS=OFF -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_LIBEDIT=Off -DLLVM_ENABLE_LIBEDIT=OFF
 ifeq ($(LLVM_ASSERTIONS), 1)
@@ -209,6 +206,11 @@ LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
 ifeq ($(OS),Darwin)
 # Explicitly use the default for -mmacosx-version-min=10.9 and later
 LLVM_CMAKE += -DLLVM_ENABLE_LIBCXX=ON
+# LLVM archives its static libraries with Xcode's libtool, which cannot index
+# LTO bitcode from a different LLVM; allow using e.g. llvm-libtool-darwin.
+ifneq ($(LLVM_LIBTOOL),)
+LLVM_CMAKE += -DCMAKE_LIBTOOL="$(LLVM_LIBTOOL)"
+endif
 endif
 
 ifeq ($(BUILD_LLVM_CLANG),0)
@@ -223,6 +225,12 @@ endif
 
 LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
 	-DCMAKE_SHARED_LINKER_FLAGS="$(LLVM_LDFLAGS)"
+ifeq ($(OS),Darwin)
+# Build-tree tools such as tblgen link against the bundled zlib and zstd, whose
+# install names are `@rpath/...`, so they need a build rpath to find them.
+# CMake replaces it with the install rpath on install.
+LLVM_CMAKE += -DCMAKE_BUILD_RPATH="$(build_shlibdir)"
+endif
 
 # change the SONAME of Julia's private LLVM
 # i.e. libLLVM-14jl.so
@@ -316,6 +324,41 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
+ifeq ($(OS),Darwin)
+ifneq ($(BUILD_LLVM_CLANG), 1)
+# The LLVM runtimes build of compiler-rt requires clang, so build the builtins
+# standalone with the host compiler instead. Only the host architecture is built,
+# and not the kernel extension variant, which Julia does not use: building several
+# arm64 variants in parallel races on the generated outline atomics.
+LLVM_COMPILERRT_BUILDDIR := $(LLVM_BUILDDIR)/build_compiler-rt
+ifeq ($(ARCH),aarch64)
+LLVM_COMPILERRT_ARCH := arm64
+else
+LLVM_COMPILERRT_ARCH := $(ARCH)
+endif
+
+$(LLVM_COMPILERRT_BUILDDIR)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
+	mkdir -p $(dir $@)
+	cd $(dir $@) && \
+		$(CMAKE) $(SRCCACHE)/$(LLVM_SRC_DIR)/compiler-rt/lib/builtins $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) \
+			-DCMAKE_BUILD_TYPE=Release -DCOMPILER_RT_STANDALONE_BUILD=ON \
+			-DCMAKE_OSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN) \
+			-DCOMPILER_RT_ENABLE_IOS=OFF -DCOMPILER_RT_ENABLE_WATCHOS=OFF \
+			-DCOMPILER_RT_ENABLE_TVOS=OFF -DCOMPILER_RT_ENABLE_XROS=OFF \
+			-DDARWIN_osx_BUILTIN_ARCHS=$(LLVM_COMPILERRT_ARCH) -DDARWIN_osx_SKIP_CC_KEXT=ON
+	echo 1 > $@
+
+$(LLVM_COMPILERRT_BUILDDIR)/build-compiled: $(LLVM_COMPILERRT_BUILDDIR)/build-configured
+	cd $(dir $@) && \
+		$(if $(filter $(CMAKE_GENERATOR),make), \
+		  $(MAKE), \
+		  $(CMAKE) --build .)
+	echo 1 > $@
+
+$(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_COMPILERRT_BUILDDIR)/build-compiled
+endif
+endif
+
 LLVM_INSTALL = \
 	cd $1 && mkdir -p $2$$(build_depsbindir)/lit && \
 	cp $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/*.py $2$$(build_depsbindir)/lit/ && \
@@ -323,16 +366,19 @@ LLVM_INSTALL = \
 	cp -r $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/lit $2$$(build_depsbindir)/lit/ && \
 	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
 ifeq ($(OS), WINNT)
-LLVM_INSTALL += && cp $2$$(build_shlibdir)/$(LLVM_SHARED_LIB_NAME).dll $2$$(build_depsbindir)
+# CMAKE_INSTALL_BINDIR puts the DLL in build_depsbindir alongside the tools,
+# but Julia loads it out of build_shlibdir, so it has to be in both places
+LLVM_INSTALL += && cp $2$$(build_depsbindir)/$(LLVM_SHARED_LIB_NAME).dll $2$$(build_shlibdir)
 endif
 ifeq ($(OS),Darwin)
 # https://github.com/JuliaLang/julia/issues/29981
 LLVM_INSTALL += && ln -s libLLVM.dylib $2$$(build_shlibdir)/libLLVM-$$(LLVM_VER_SHORT).dylib
 # compiler-rt is required for linking sysimages on Darwin
+ifeq ($(BUILD_LLVM_CLANG), 1)
 LLVM_INSTALL += && install -m 0644 $2$$(build_prefix)/lib/clang/$$(LLVM_VER_MAJ)/lib/darwin/libclang_rt.osx.a $2$$(build_libdir)/libclang_rt.osx.a
+else
+LLVM_INSTALL += && install -m 0644 $$(abspath $$(LLVM_COMPILERRT_BUILDDIR))/lib/darwin/libclang_rt.osx.a $2$$(build_libdir)/libclang_rt.osx.a
 endif
-ifeq ($(BUILD_LLD), 1)
-LLVM_INSTALL += && cp $2$$(build_bindir)/lld$$(EXE) $2$$(build_depsbindir)
 endif
 
 $(eval $(call staged-install, \

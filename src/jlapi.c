@@ -1110,9 +1110,10 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_CANSAFEPOINT_ENTE
         while (!TracyCIsConnected) jl_cpu_pause(); // Wait for connection
 #endif
 
-    // no-op on Windows, note that the caller must have already converted
-    // from `wchar_t` to `UTF-8` already if we're running on Windows.
-    uv_setup_args(argc, argv);
+    // Use libuv's copy: setting the process title can overwrite the original
+    // argv storage, including option strings such as the coverage output path.
+    // On Windows the caller must already have converted argv to UTF-8.
+    argv = uv_setup_args(argc, argv);
 
     // No-op on non-windows
     lock_low32();

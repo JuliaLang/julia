@@ -84,7 +84,7 @@ STATIC_INLINE void mmtk_gc_wb_fast(const void *parent, const void *ptr) JL_NOTSA
 // revisiting once that case is ruled out.
 STATIC_INLINE void jl_gc_wb(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT
 {
-#ifdef MMTK_FIELD_BARRIER
+#ifdef GC_BARRIER_FIELD_PRECISE
     if (slot != NULL) {
         jl_gc_queue_root_field((const struct _jl_value_t *)parent, slot);
         return;
@@ -100,73 +100,80 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_
     mmtk_gc_wb_fast(ptr, (void*)0);
 }
 
-// The three annotated-store barriers (see gc-interface.h for what each one asserts).
-//
-// Each assertion is about the value being *stored*, so each is a reason a generational
-// plan has nothing to remember. A plan whose barrier must also observe the value being
-// *displaced* -- MMTK_SNAPSHOT_BARRIER -- gets no such licence from two of the three, and
-// has to take the full barrier instead.
-
 // `parent` is younger than the last safepoint. A generational plan need not remember it,
 // and neither need a snapshot barrier: marking can only have begun at a safepoint, so no
 // field of `parent` can appear in a live snapshot.
 //
-// A reference-counting plan need not remember it either. The recovery argument that serves
-// the other two -- the omitted store is made good later, when the young parent is scanned --
-// holds for counts as well, because LXR derives a nursery object's outgoing counts by
-// scanning it at promotion (`ProcessIncs::promote` -> `scan_nursery_object` ->
-// `count_promoted_field`). Promotion only happens in a pause and a pause only happens at a
-// safepoint, so a parent younger than the last safepoint cannot yet have been promoted: the
-// values its fields hold at promotion time are the ones that get counted, whatever this
-// barrier did or did not observe beforehand. The decrement side balances for the same
-// reason -- no increment was ever issued from this parent for the reference being
-// overwritten, so none is owed.
-//
-// Being a no-op is also what keeps LXR's slot-less barrier away from half-built objects.
-// This entry has no slot to offer, so under a field-granularity plan it would fall back to
-// snapshotting the whole parent, and callers fire it *before* the store, on an object whose
-// remaining fields are still uninitialized (`jl_new_globalref` is the clearest case). That
-// walk reads every field and treats what it finds as a reference to decrement.
-STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+// A reference-counting plan does need it, and this was found by measurement rather than
+// by argument. Both of the above are recovery arguments -- the omitted store is made good
+// later, when the young parent is scanned. Counts are not derived by scanning: they come
+// from barriers and root scans only, so a store that no barrier observed leaves its
+// referent's count one short, and the referent is freed while `parent` still points at it.
+#ifdef GC_BARRIER_FIELD_PRECISE
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
+{
+    mmtk_gc_wb_fast(parent, ptr);
+}
+#else
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, void *slot JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+#endif
 
-#ifdef MMTK_SNAPSHOT_BARRIER
 // Being in a remset means the parent will be *rescanned*, which recovers references
 // inserted into it but not references removed from it: the rescan observes the field
 // after the store. A reference moved out of the current task and into an object the
 // collector has already blackened is then reachable only through a location the snapshot
 // never saw, and is collected while live.
-STATIC_INLINE void jl_gc_wb_current_task(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_wb_current_task(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
 {
+#ifdef GC_BARRIER_SNAPSHOT
     mmtk_gc_wb_fast(parent, ptr);
-}
-
-// That `ptr` is old says nothing about the reference it displaces, which is the one a
-// snapshot barrier has to record.
-STATIC_INLINE void jl_gc_wb_knownold(const void *parent, const void *ptr) JL_NOTSAFEPOINT
-{
-    mmtk_gc_wb_fast(parent, ptr);
-}
-#else
-STATIC_INLINE void jl_gc_wb_current_task(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
-STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
 #endif
+}
 
-STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
+{
+#ifdef GC_BARRIER_SNAPSHOT
+    mmtk_gc_wb_fast(parent, ptr);
+#endif
+}
+
+STATIC_INLINE void jl_gc_multi_wb(const void *parent, void *dest JL_UNUSED, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
     mmtk_gc_wb_fast(parent, (void*)0);
 }
 
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owner, _Atomic(void*) ** dest_pp,
-                                          jl_genericmemory_t *src, _Atomic(void*) ** src_pp,
-                                          size_t* n) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_wb_module_usings(const void *mod, const void *from) JL_NOTSAFEPOINT
 {
-    mmtk_gc_wb_fast(dest_owner, (void*)0);
+    // TODO: Use the written usings slot/span for GC_BARRIER_FIELD_PRECISE,
+    // rather than scanning the module's entire, unbounded usings list.
+    mmtk_gc_wb_fast(mod, from);
 }
 
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const jl_value_t *owner, jl_genericmemory_t *src, char* src_p,
+STATIC_INLINE void jl_gc_genericmemory_copy_boxed(const jl_value_t *dest_owner, _Atomic(void*) *dest_p,
+                                          jl_genericmemory_t *src, _Atomic(void*) *src_p,
+                                          size_t n) JL_NOTSAFEPOINT
+{
+    mmtk_gc_wb_fast(dest_owner, (void*)0);
+    memmove_refs(dest_p, src_p, n);
+}
+
+STATIC_INLINE void jl_gc_genericmemory_copy_ptr(const jl_value_t *owner, char *destdata,
+                                          jl_genericmemory_t *src, char *srcdata,
                                           size_t n, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     mmtk_gc_wb_fast(owner, (void*)0);
+    memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n * dt->layout->size / sizeof(void*));
+}
+
+STATIC_INLINE void jl_gc_genericmemory_clear(const jl_value_t *owner JL_UNUSED,
+                                          jl_genericmemory_t *m JL_UNUSED, char *data,
+                                          size_t nbytes) JL_NOTSAFEPOINT
+{
+#ifdef GC_BARRIER_SNAPSHOT
+    // a deletion barrier must snapshot the overwritten references before the clear
+    mmtk_gc_wb_fast(owner, (void*)0);
+#endif
+    memset(data, 0, nbytes);
 }
 
 

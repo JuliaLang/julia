@@ -815,7 +815,7 @@ t = Rational{BigInt}(0, 1)
 end
 
 @testset "hashing" begin
-    for i in 1:10:100
+    for i in vcat(0, 1:10:100)
         for shift in vcat(0:8, 9:8:81)
             for sgn in (1, -1)
                 bint = sgn * (big(11)^i << shift)
@@ -825,6 +825,15 @@ end
                     @invoke(hash(bint::Real, Base.HASH_SEED))
                 @test Base.hash_integer(bint, Base.HASH_SEED) ==
                     @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
+
+                brat = bint // 3
+                for T in Base.BitInteger_types
+                    typemin(T) <= bint <= typemax(T) || continue
+                    rat = Rational{T}(brat)
+                    for h in (zero(UInt), Base.HASH_SEED, typemax(UInt))
+                        @test hash(rat, h) == hash(brat, h)
+                    end
+                end
             end
         end
     end

@@ -238,8 +238,7 @@ function du_visit!(ctx, state::DefUseState, e)
         return false
 
     elseif k == K"function_decl"
-        # [function_decl] defines and instantiates the closure type and assigns
-        # it to its first argument (but only once per unique closure key).
+        # [function_decl] defines and instantiates the closure type
         @assert kind(e[1]) == K"BindingId"
         func_id = syntax_id(e[1])
         func_id in state.seen && return false
@@ -251,16 +250,24 @@ function du_visit!(ctx, state::DefUseState, e)
                 end
             end
         end
-        du_assign!(state, func_id)
         return false
 
     elseif k == K"method_defs"
-        # Process nested lambdas within
+        # XXX: the assignment is executed after the body, but flisp also makes
+        # the mistake of modelling the assignment as dominating the body, so we
+        # introduce boxes if it's corrected.
+        if kind(e[1]) === K"BindingId"
+            du_assign!(state, syntax_id(e[1]))
+        end
         has_label = false
         for child in children(e)
             has_label |= du_visit!(ctx, state, child)
         end
         return has_label
+
+    elseif k == K"no_method_defs"
+        du_assign!(state, syntax_id(e[1]))
+        return false
 
     elseif k == K"return"
         has_label = numchildren(e) >= 1 ? du_visit!(ctx, state, e[1]) : false

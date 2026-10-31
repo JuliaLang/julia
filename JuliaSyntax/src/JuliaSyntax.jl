@@ -54,8 +54,6 @@ export @K_str, kind
     is_infix_op_call,
     is_prefix_op_call,
     is_postfix_op_call,
-    is_dotted,
-    is_decorated,
     numeric_flags,
     has_flags,
     TRIPLE_STRING_FLAG,

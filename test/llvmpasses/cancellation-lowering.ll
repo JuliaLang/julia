@@ -1,6 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='CancellationLowering' -S %s | FileCheck %s
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='CancellationLowering' -S %s | FileCheck %s
 
 ; NOTE: the CHECK lines assume a 64-bit non-Windows host (the jl_reset_ctx_t
 ; field offsets 8/16/24 and the two-argument setjmp form); the llvmpasses

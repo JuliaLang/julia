@@ -73,6 +73,24 @@ end
     @test length(kids) == 2 # kept + escaped; the dead child was spliced out
     @test kept in kids && escaped_tok.source in kids
 
+    # Dead promoted children must be unlinked even if their pages have no young
+    # allocations, before a cancellation walk can reach their freed walk locks.
+    @noinline function make_promoted_children(root, n)
+        promoted = [CancellationTokenSource(CancellationToken(root)) for _ in 1:n]
+        GC.gc(false) # promote the children before allocating their walk locks
+        foreach(cancel!, promoted)
+        return nothing
+    end
+    for _ in 1:20
+        root3 = CancellationTokenSource()
+        kept3 = CancellationTokenSource(CancellationToken(root3))
+        make_promoted_children(root3, 200)
+        GC.gc(false)
+        @test cancel!(root3)
+        # MMTk may retain promoted children until a full collection.
+        @test live_children(root3) == [kept3] skip=!Base.USING_STOCK_GC
+    end
+
     # linked sources: a source with several parents is cancelled by any of
     # them (the graph is a DAG, not just a tree)
     la = CancellationTokenSource()
@@ -951,19 +969,30 @@ end
     end
     foreach(wait, ts2)
 
-    # waitall re-arms the same registered entry across completions
+    # waitall reuses its entry and source registration across completions
+    src3 = CancellationTokenSource()
     c3 = Channel{Int}(0)
     ts3 = [@async take!(c3) for _ in 1:3]
-    wa3 = @async waitall(ts3)
+    wa3 = @async waitall(ts3; cancel=CancellationToken(src3))
     @test timedwait(() -> (x = @atomic wa3.waiting_on; x isa Base.WaitEntryN), 10.0) == :ok
     w3 = (@atomic wa3.waiting_on)::Base.WaitEntryN
-    for _ in 1:3
+    for n in 1:2
         put!(c3, 0)
+        @test timedwait(10.0) do
+            (@atomic wa3.waiting_on) === w3 &&
+                count(i -> Base._slot_owner(w3, i) isa Base.ThreadSynchronizer,
+                      1:Base._nslots(w3)) == 3 - n
+        end == :ok
+        @test registry_entries(src3) == [w3]
     end
+    put!(c3, 0)
     done3, remaining3 = fetch(wa3)
     @test length(done3) == 3 && isempty(remaining3)
     @test (@atomic wa3.waiting_on) === nothing
     @test count(i -> Base._slot_owner(w3, i) isa Base.ThreadSynchronizer, 1:Base._nslots(w3)) == 0
+    @test (@atomic :monotonic w3.task) === nothing
+    cancel!(src3)
+    @test isempty(registry_entries(src3))
 end
 
 @testset "level-triggered delivery and shielding" begin
@@ -1792,17 +1821,13 @@ end
 end
 
 @testset "cancelled recvfrom stops reception (no dropped datagram)" begin
-    # bind the receiver to a known free port (found via listenany, like the
-    # Sockets tests; retried in case another process grabs it in between)
-    local udp, port
-    for attempt in 1:10
-        port, tcpserver = Sockets.listenany(Sockets.localhost, 0)
-        close(tcpserver)
-        udp = Sockets.UDPSocket()
-        Sockets.bind(udp, Sockets.localhost, port) && break
-        close(udp)
-        attempt == 10 && error("could not bind a UDP test port")
-    end
+    # bind the receiver to an OS-assigned port: deriving a UDP port from a
+    # free TCP port (as `listenany` would) fails on Windows CI, where whole
+    # blocks of UDP ports are reserved (excluded port ranges) and sequential
+    # ephemeral TCP port assignment keeps landing inside them (#38711)
+    udp = Sockets.UDPSocket()
+    Sockets.bind(udp, Sockets.localhost, 0) || error("could not bind a UDP test port")
+    port = Sockets.getsockname(udp)[2]
     src = CancellationTokenSource()
     t = @async Sockets.recvfrom(udp; cancel=CancellationToken(src))
     @test timedwait(() -> is_parked(t), 10.0) == :ok

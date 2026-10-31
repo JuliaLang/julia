@@ -3,3 +3,4 @@
 /*.dSYM
 /*.obj
 /*.pdb
+/*.lto

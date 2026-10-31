@@ -894,51 +894,55 @@ JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, void *host,
     return uv_tcp_bind(handle, (struct sockaddr*)&addr, flags);
 }
 
-JL_DLLEXPORT int jl_tcp_getsockname(uv_tcp_t *handle, uint16_t *port,
-                                    void *host, uint32_t *family)
+static void jl_sockaddr_unpack(struct sockaddr_storage *addr, uint16_t *port,
+                               void *host, uint32_t *family)
 {
-    int namelen;
-    struct sockaddr_storage addr;
-    memset(&addr, 0, sizeof(struct sockaddr_storage));
-    namelen = sizeof addr;
-    int res = uv_tcp_getsockname(handle, (struct sockaddr*)&addr, &namelen);
-    if (res)
-        return res;
-    *family = addr.ss_family;
-    if (addr.ss_family == AF_INET) {
-        struct sockaddr_in *addr4 = (struct sockaddr_in*)&addr;
+    *family = addr->ss_family;
+    if (addr->ss_family == AF_INET) {
+        struct sockaddr_in *addr4 = (struct sockaddr_in*)addr;
         *port = addr4->sin_port;
         memcpy(host, &(addr4->sin_addr), 4);
     }
-    else if (addr.ss_family == AF_INET6) {
-        struct sockaddr_in6 *addr6 = (struct sockaddr_in6*)&addr;
+    else if (addr->ss_family == AF_INET6) {
+        struct sockaddr_in6 *addr6 = (struct sockaddr_in6*)addr;
         *port = addr6->sin6_port;
         memcpy(host, &(addr6->sin6_addr), 16);
     }
+}
+
+JL_DLLEXPORT int jl_tcp_getsockname(uv_tcp_t *handle, uint16_t *port,
+                                    void *host, uint32_t *family)
+{
+    struct sockaddr_storage addr;
+    memset(&addr, 0, sizeof(struct sockaddr_storage));
+    int namelen = sizeof addr;
+    int res = uv_tcp_getsockname(handle, (struct sockaddr*)&addr, &namelen);
+    if (res == 0)
+        jl_sockaddr_unpack(&addr, port, host, family);
     return res;
 }
 
 JL_DLLEXPORT int jl_tcp_getpeername(uv_tcp_t *handle, uint16_t *port,
                                     void *host, uint32_t *family)
 {
-    int namelen;
     struct sockaddr_storage addr;
     memset(&addr, 0, sizeof(struct sockaddr_storage));
-    namelen = sizeof addr;
+    int namelen = sizeof addr;
     int res = uv_tcp_getpeername(handle, (struct sockaddr*)&addr, &namelen);
-    if (res)
-        return res;
-    *family = addr.ss_family;
-    if (addr.ss_family == AF_INET) {
-        struct sockaddr_in *addr4 = (struct sockaddr_in*)&addr;
-        *port = addr4->sin_port;
-        memcpy(host, &(addr4->sin_addr), 4);
-    }
-    else if (addr.ss_family == AF_INET6) {
-        struct sockaddr_in6 *addr6 = (struct sockaddr_in6*)&addr;
-        *port = addr6->sin6_port;
-        memcpy(host, &(addr6->sin6_addr), 16);
-    }
+    if (res == 0)
+        jl_sockaddr_unpack(&addr, port, host, family);
+    return res;
+}
+
+JL_DLLEXPORT int jl_udp_getsockname(uv_udp_t *handle, uint16_t *port,
+                                    void *host, uint32_t *family)
+{
+    struct sockaddr_storage addr;
+    memset(&addr, 0, sizeof(struct sockaddr_storage));
+    int namelen = sizeof addr;
+    int res = uv_udp_getsockname(handle, (struct sockaddr*)&addr, &namelen);
+    if (res == 0)
+        jl_sockaddr_unpack(&addr, port, host, family);
     return res;
 }
 
