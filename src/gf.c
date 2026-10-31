@@ -471,6 +471,7 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
     fargs[3] = jl_box_uint8(source_mode);
     fargs[4] = jl_box_uint8(trim_mode);
     int last_errno = errno;
+    uint64_t last_fpctrl = jl_fpctrl_enter_default();
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
@@ -529,6 +530,7 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
     SetLastError(last_error);
 #endif
     errno = last_errno;
+    jl_fpctrl_restore(last_fpctrl);
 
     if (ci && !jl_is_code_instance(ci)) {
         ci = NULL;
@@ -557,6 +559,7 @@ JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t w
     jl_task_t *ct = jl_current_task;
     jl_code_info_t *ci = NULL;
     int last_errno = errno;
+    uint64_t last_fpctrl = jl_fpctrl_enter_default();
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
@@ -583,6 +586,7 @@ JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t w
     SetLastError(last_error);
 #endif
     errno = last_errno;
+    jl_fpctrl_restore(last_fpctrl);
     if (ci && !jl_is_code_info(ci)) {
         ci = NULL;
     }
@@ -597,7 +601,17 @@ JL_DLLEXPORT jl_value_t *jl_call_in_typeinf_world(jl_value_t **args, int nargs) 
     ct->world_age = jl_typeinf_world;
     int last_pure = ct->ptls->in_pure_callback;
     ct->ptls->in_pure_callback = 0;
-    jl_value_t *ret = jl_apply(args, nargs);
+    uint64_t last_fpctrl = jl_fpctrl_enter_default();
+    jl_value_t *ret = NULL;
+    JL_TRY {
+        ret = jl_apply(args, nargs);
+    }
+    JL_CATCH {
+        jl_fpctrl_restore(last_fpctrl);
+        ct->ptls->in_pure_callback = last_pure;
+        jl_rethrow();
+    }
+    jl_fpctrl_restore(last_fpctrl);
     ct->ptls->in_pure_callback = last_pure;
     ct->world_age = last_age;
     return ret;

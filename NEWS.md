@@ -16,6 +16,15 @@ Command-line option changes
 Multi-threading changes
 -----------------------
 
+* The floating-point control state (the rounding mode set by `setrounding`, together with the
+  exception masks and flush-to-zero bits) is now saved and restored on every task switch, so it
+  behaves as task-local state: a new task inherits the state of the task that created it, and a
+  task resumes with the state it had when it last yielded, regardless of which thread runs it.
+  Type inference, code generation, generated-function generators and finalizers always run under
+  the default control state, so for example unmasking floating-point exceptions with
+  `feenableexcept` no longer makes compilation fail. The sticky exception status flags are not
+  preserved across task switches, nor across any of those runtime entries ([#51277], [#63570]).
+
 Build system changes
 --------------------
 
