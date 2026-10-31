@@ -269,6 +269,13 @@ let cases = Pair{String,Compiler.IRCode}[
         "does not match fall-through terminator %2" =>
             modified(ir -> retarget_edge!(ir, 2, 3, 1),
                 make_ircode(Any[GotoIfNot(true, 3), tuple_call(), ReturnNode(1)])),
+        # an `:enter` must end its block too
+        "does not match fall-through terminator %2" =>
+            modified(make_ircode(Any[EnterNode(4), tuple_call(), ReturnNode(1), ReturnNode(2)])) do ir
+                set_bb_stmts!(ir, 1, 1, 2)
+                set_bb_stmts!(ir, 2, 3, 3)
+                ir.cfg.index[1] = 3
+            end,
         "End of last BB 1 does not match last IR statement 2" =>
             modified(ir -> (empty!(ir.cfg.index); resize!(ir.cfg.blocks, 1)),
                 make_ircode(Any[ReturnNode(1), ReturnNode(2)])),
