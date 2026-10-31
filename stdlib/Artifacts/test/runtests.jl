@@ -89,6 +89,124 @@ run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifac
     @test load_overrides(force=true) == empty_output
 end
 
+function with_test_depots(f, depots...)
+    old_depot_path = copy(Base.DEPOT_PATH)
+    empty!(Base.DEPOT_PATH)
+    append!(Base.DEPOT_PATH, depots)
+    try
+        f()
+    finally
+        empty!(Base.DEPOT_PATH)
+        append!(Base.DEPOT_PATH, old_depot_path)
+        load_overrides(force=true)
+    end
+end
+
+function write_overrides_toml(depot, overrides)
+    mkpath(joinpath(depot, "artifacts"))
+    open(joinpath(depot, "artifacts", "Overrides.toml"), "w") do io
+        TOML.print(io, overrides)
+    end
+end
+
+@testset "Overrides.toml layering and invalid entries" begin
+    uuid = Base.UUID("d57dbccd-ca19-4d82-b9b8-9d660942965b")
+    h1, h2, h3, h4, h5 = ("$(i)"^40 for i in 1:5)
+    mktempdir() do dir
+        high, low = joinpath(dir, "high"), joinpath(dir, "low")
+        p1, p2 = joinpath(dir, "p1"), joinpath(dir, "p2")
+        write_overrides_toml(low, Dict(
+            h1 => p1,
+            h2 => p2,
+            string(uuid) => Dict("a" => p1, "b" => h3),
+        ))
+        # The first depot wins, and an empty string removes an override from a later depot
+        write_overrides_toml(high, Dict(
+            h2 => "",
+            string(uuid) => Dict("a" => h3, "b" => "", "bad" => "relative/path", "num" => 1, "nested" => Dict("x" => p1)),
+            "not-a-hash" => p1,
+            h4 => "relative/path",
+            "not-a-uuid" => Dict("a" => p1),
+            h5 => 1,
+        ))
+        with_test_depots(high, low) do
+            overrides = @test_logs(
+                (:error, r"Invalid SHA1 hash 'not-a-hash'"),
+                (:error, r"entry '4{40}' must map to an absolute path or SHA1 hash"),
+                (:error, r"failed to parse entry `4{40}`"),
+                (:error, r"Invalid UUID 'not-a-uuid'"),
+                (:error, r"failed to parse entry `5{40}`"),
+                (:error, r"entry 'bad' must map to an absolute path or SHA1 hash"),
+                (:error, r"failed to parse entry `bad` for UUID 'd57dbccd-ca19-4d82-b9b8-9d660942965b'"),
+                (:error, r"failed to parse entry `num` for UUID"),
+                (:error, r"failed to parse entry `nested` for UUID"),
+                match_mode=:any,
+                load_overrides(force=true))
+            @test overrides[:hash] == Dict(SHA1(h1) => p1)
+            @test overrides[:UUID] == Dict(uuid => Dict("a" => SHA1(h3)))
+
+            @test Artifacts.query_override(SHA1(h1)) == p1
+            @test Artifacts.query_override(SHA1(h2)) === nothing
+            @test artifact_path(SHA1(h1)) == p1
+            @test artifact_path(SHA1(h1); honor_overrides=false) == joinpath(high, "artifacts", h1)
+            @test Artifacts.query_override(uuid, "a") == joinpath(high, "artifacts", h3)
+            @test Artifacts.query_override(uuid, SubString("a")) == joinpath(high, "artifacts", h3)
+            @test Artifacts.query_override(uuid, "b") === nothing
+            @test Artifacts.query_override(Base.UUID(0), "a") === nothing
+        end
+    end
+end
+
+@testset "Overrides.toml by package UUID" begin
+    uuid = Base.UUID("d57dbccd-ca19-4d82-b9b8-9d660942965b")
+    ha, hb, hc, hd, he = ("$(c)"^40 for c in "abcde")
+    mktempdir() do depot
+        artifacts_toml = joinpath(depot, "Artifacts.toml")
+        write(artifacts_toml, """
+            [[plat]]
+            arch = "x86_64"
+            os = "linux"
+            git-tree-sha1 = "$ha"
+
+            [[plat]]
+            arch = "x86_64"
+            os = "windows"
+            git-tree-sha1 = "$hb"
+
+            [single]
+            git-tree-sha1 = "$hc"
+
+            [untouched]
+            git-tree-sha1 = "$hd"
+            """)
+        override_dir = joinpath(depot, "override")
+        write_overrides_toml(depot, Dict(string(uuid) => Dict("plat" => override_dir, "single" => he)))
+        with_test_depots(depot) do
+            load_overrides(force=true)
+            @test Artifacts.query_override(SHA1(ha)) === nothing
+
+            # Overrides by name only take effect once the package's Artifacts.toml is loaded
+            Artifacts.load_artifacts_toml(SubString(artifacts_toml, 1); pkg_uuid=uuid)
+            @test Artifacts.query_override(SHA1(ha)) == override_dir
+            @test Artifacts.query_override(SHA1(hb)) == override_dir
+            @test Artifacts.query_override(SHA1(hc)) == joinpath(depot, "artifacts", he)
+            @test Artifacts.query_override(SHA1(hd)) === nothing
+
+            meta = artifact_meta("plat", artifacts_toml; pkg_uuid=uuid, platform=Platform("x86_64", "windows"))
+            @test artifact_path(SHA1(meta["git-tree-sha1"])) == override_dir
+
+            load_overrides(force=true)
+            @test Artifacts.query_override(SHA1(hc)) === nothing
+            @test artifact_hash("single", artifacts_toml; pkg_uuid=uuid) == SHA1(hc)
+            @test Artifacts.query_override(SHA1(hc)) == joinpath(depot, "artifacts", he)
+
+            load_overrides(force=true)
+            select_downloadable_artifacts(Artifacts.load_artifacts_toml(artifacts_toml), artifacts_toml; pkg_uuid=uuid)
+            @test Artifacts.query_override(SHA1(hc)) == joinpath(depot, "artifacts", he)
+        end
+    end
+end
+
 @testset "Artifact Paths" begin
     mktempdir() do tempdir
         with_artifacts_directory(tempdir) do
@@ -230,6 +348,96 @@ end
     @test length(keys(artifacts)) == 2
     @test artifacts["HelloWorldC"]["git-tree-sha1"] == "0a8e7b523ef6be31311aefe9983a488616e58201"
     @test artifacts["socrates"]["git-tree-sha1"] == "43563e7631a7eafae1f9f8d9d332e3de44ad7239"
+
+    @test select_downloadable_artifacts(joinpath(@__DIR__, "nonexistent.toml")) == Dict{String,Any}()
+
+    artifacts_toml = SubString(joinpath(@__DIR__, "Artifacts.toml"), 1)
+    artifacts = select_downloadable_artifacts(artifacts_toml; platform=armv7l_linux, include_lazy=true)
+    @test sort(collect(keys(artifacts))) == ["HelloWorldC", "socrates"]
+    @test artifacts["HelloWorldC"]["git-tree-sha1"] == "0a8e7b523ef6be31311aefe9983a488616e58201"
+    artifact_dict = Artifacts.load_artifacts_toml(artifacts_toml)
+    artifacts = select_downloadable_artifacts(artifact_dict, artifacts_toml; platform=armv7l_linux, include_lazy=true)
+    @test sort(collect(keys(artifacts))) == ["HelloWorldC", "socrates"]
+end
+
+@testset "artifact_meta()" begin
+    linux64 = Platform("x86_64", "linux")
+    win64 = Platform("x86_64", "windows")
+    mac64 = Platform("x86_64", "macos")
+    mktempdir() do dir
+        artifacts_toml = joinpath(dir, "Artifacts.toml")
+        write(artifacts_toml, """
+            malformed = "oops"
+
+            [[plat]]
+            arch = "x86_64"
+            os = "linux"
+            git-tree-sha1 = "$("a"^40)"
+
+            [[plat]]
+            arch = "x86_64"
+            os = "windows"
+            git-tree-sha1 = "$("b"^40)"
+
+            [single]
+            git-tree-sha1 = "$("c"^40)"
+
+            [nohash]
+            lazy = true
+            """)
+        @test artifact_meta("plat", artifacts_toml; platform=linux64)["git-tree-sha1"] == "a"^40
+        @test artifact_meta("plat", artifacts_toml; platform=win64)["git-tree-sha1"] == "b"^40
+        @test artifact_meta("plat", artifacts_toml; platform=mac64) === nothing
+        @test artifact_hash("plat", artifacts_toml; platform=mac64) === nothing
+        @test artifact_meta(SubString("single"), SubString(artifacts_toml, 1); platform=mac64)["git-tree-sha1"] == "c"^40
+        @test artifact_meta("missing", artifacts_toml) === nothing
+        @test artifact_meta("single", joinpath(dir, "nonexistent.toml")) === nothing
+        @test (@test_logs (:error, r"artifact 'malformed' malformed, must be array or dict") artifact_meta("malformed", artifacts_toml)) === nothing
+        @test (@test_logs (:error, r"artifact 'nohash' contains no `git-tree-sha1`") artifact_meta("nohash", artifacts_toml)) === nothing
+
+        artifact_dict = Artifacts.load_artifacts_toml(artifacts_toml)
+        @test Artifacts.artifact_slash_lookup("plat/bin/foo", artifact_dict, artifacts_toml, linux64) ==
+            ("plat", joinpath("bin", "foo"), SHA1("a"^40))
+        @test Artifacts.artifact_slash_lookup(SubString("plat/bin"), artifact_dict, SubString(artifacts_toml, 1), win64) ==
+            ("plat", "bin", SHA1("b"^40))
+        @test_throws "Cannot locate artifact 'plat/bin' for x86_64-apple-darwin" Artifacts.artifact_slash_lookup("plat/bin", artifact_dict, artifacts_toml, mac64)
+        @test_throws "Cannot locate artifact 'missing'" Artifacts.artifact_slash_lookup("missing", artifact_dict, artifacts_toml, linux64)
+    end
+end
+
+@testset "find_artifacts_toml()" begin
+    mktempdir() do dir
+        pkg = joinpath(dir, "Pkg")
+        mkpath(joinpath(pkg, "src", "sub"))
+        write(joinpath(pkg, "Project.toml"), "")
+        srcfile = joinpath(pkg, "src", "Pkg.jl")
+        write(srcfile, "")
+        # The search stops at the package's project file
+        @test find_artifacts_toml(srcfile) === nothing
+
+        write(joinpath(pkg, "Artifacts.toml"), "")
+        @test find_artifacts_toml(srcfile) == joinpath(pkg, "Artifacts.toml")
+        @test find_artifacts_toml(joinpath(pkg, "src", "sub")) == joinpath(pkg, "Artifacts.toml")
+        @test find_artifacts_toml(SubString(srcfile, 1)) == joinpath(pkg, "Artifacts.toml")
+        write(joinpath(pkg, "JuliaArtifacts.toml"), "")
+        @test find_artifacts_toml(srcfile) == joinpath(pkg, "JuliaArtifacts.toml")
+
+        loose = joinpath(dir, "loose")
+        mkpath(joinpath(loose, "a", "b"))
+        write(joinpath(loose, "Artifacts.toml"), "")
+        @test find_artifacts_toml(joinpath(loose, "a", "b", "script.jl")) == joinpath(loose, "Artifacts.toml")
+
+        root = dir
+        while dirname(root) != root
+            root = dirname(root)
+        end
+        @test find_artifacts_toml(root) === nothing
+
+        rm(joinpath(pkg, "Artifacts.toml"))
+        rm(joinpath(pkg, "JuliaArtifacts.toml"))
+        ex = Expr(:macrocall, GlobalRef(Artifacts, Symbol("@artifact_str")), LineNumberNode(1, Symbol(srcfile)), "foo")
+        @test_throws "Cannot locate '(Julia)Artifacts.toml' file when attempting to use artifact 'foo'" macroexpand(Module(), ex)
+    end
 end
 
 @testset "@artifact_str install errors" begin
@@ -269,6 +477,23 @@ end
                     error("Unexpected value for Base.JLOptions().depwarn: $(depwarn_flag)")
                 end
             end
+        end
+    end
+
+    mktempdir() do tempdir
+        hash = artifact_hash("HelloWorldC", joinpath(@__DIR__, "Artifacts.toml"))
+        open(joinpath(tempdir, "Overrides.toml"), "w") do io
+            TOML.print(io, Dict(bytes2hex(hash.bytes) => joinpath(tempdir, "missing")))
+        end
+        try
+            with_artifacts_directory(SubString(tempdir, 1)) do
+                load_overrides(force=true)
+                ex = @test_throws ErrorException artifact"HelloWorldC"
+                @test occursin(joinpath(tempdir, "missing"), ex.value.msg)
+                @test occursin("Check that your `Overrides.toml` file is correct", ex.value.msg)
+            end
+        finally
+            load_overrides(force=true)
         end
     end
 end

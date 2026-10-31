@@ -83,7 +83,7 @@ function parse_mapping(mapping::String, name::String, override_file::String)
     return mapping
 end
 function parse_mapping(mapping::Dict{String, Any}, name::String, override_file::String)
-    return Dict{String, Any}(k => parse_mapping(v, name, override_file) for (k, v) in mapping)
+    return Dict{String, Any}(k => parse_mapping(v, k, override_file) for (k, v) in mapping)
 end
 # Fallthrough for invalid Overrides.toml files
 parse_mapping(mapping, name::String, override_file::String) = nothing
@@ -168,6 +168,10 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
 
                 # For each name in the mapping, update appropriately
                 for (name, override_value) in mapping
+                    if !isa(override_value, Union{String, SHA1})
+                        @error("Invalid override in '$(override_file)': failed to parse entry `$(name)` for UUID '$(k)'")
+                        continue
+                    end
                     # If the mapping for this name is the empty string, un-override it
                     if override_value isa String && isempty(override_value)
                         delete!(overrides_uuid[uuid], name)
@@ -445,7 +449,7 @@ collapsed artifact.  Returns `nothing` if no mapping can be found.
 function artifact_hash(name::String, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform(),
                        pkg_uuid::Union{Base.UUID,Nothing}=nothing)::Union{Nothing, SHA1}
-    meta = artifact_meta(name, artifacts_toml; platform=platform)
+    meta = artifact_meta(name, artifacts_toml; platform=platform, pkg_uuid=pkg_uuid)
     if meta === nothing
         return nothing
     end
@@ -457,6 +461,7 @@ function select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::Stri
                                        platform::AbstractPlatform = HostPlatform(),
                                        pkg_uuid::Union{Nothing,Base.UUID} = nothing,
                                        include_lazy::Bool = false)
+    process_overrides(artifact_dict, pkg_uuid)
     artifacts = Dict{String,Any}()
     for name in keys(artifact_dict)
         # Get the metadata about this name for the requested platform
@@ -758,15 +763,15 @@ artifact_meta(name::AbstractString, artifact_dict::Dict, artifacts_toml::Abstrac
 artifact_hash(name::AbstractString, artifacts_toml::AbstractString; kwargs...) =
     artifact_hash(String(name)::String, String(artifacts_toml)::String; kwargs...)
 select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::AbstractString; kwargs...) =
-    select_downloadable_artifacts(artifact_dict, String(artifacts_toml)::String, kwargs...)
+    select_downloadable_artifacts(artifact_dict, String(artifacts_toml)::String; kwargs...)
 select_downloadable_artifacts(artifacts_toml::AbstractString; kwargs...) =
-    select_downloadable_artifacts(String(artifacts_toml)::String, kwargs...)
+    select_downloadable_artifacts(String(artifacts_toml)::String; kwargs...)
 find_artifacts_toml(path::AbstractString) =
     find_artifacts_toml(String(path)::String)
 split_artifact_slash(name::AbstractString) =
     split_artifact_slash(String(name)::String)
-artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString) =
-    artifact_slash_lookup(String(name)::String, artifact_dict, String(artifacts_toml)::String)
+artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString, platform::Platform) =
+    artifact_slash_lookup(String(name)::String, artifact_dict, String(artifacts_toml)::String, platform)
 
 # Precompilation to reduce latency
 precompile(load_artifacts_toml, (String,))
