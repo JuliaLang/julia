@@ -80,15 +80,25 @@ end
     @test isapprox(missing, 1.0, atol=1e-6) === missing
     @test isapprox(1.0, missing, rtol=1e-6) === missing
 
-    # Only assert the methods shipped with Base and the stdlibs: test files
-    # that ran earlier in the same process may have added their own isequal
-    # methods (e.g. arrayops' totally_not_five26034), and what those infer
-    # depends on the session's accumulated method tables, not on `missing`.
-    let ms = collect(methods(isequal, Tuple{Any,Any})),
+    @testset "isequal always infers as Bool" begin
+        # Only assert the methods shipped with Base and the stdlibs: test files
+        # that ran earlier in the same process may have added their own isequal
+        # methods (e.g. arrayops' totally_not_five26034), and what those infer
+        # depends on the session's accumulated method tables, not on `missing`.
+        ms = collect(methods(isequal, Tuple{Any,Any}))
         rts = Base.return_types(isequal, Tuple{Any,Any})
-        @test all(zip(ms, rts)) do (m, rt)
+        good = all(zip(ms, rts)) do (m, rt)
             Base.moduleroot(parentmodule(m)) === Main || rt === Bool
         end
+        if !good
+            # Print some info to make the test failure easier to debug
+            for (m, rt) in zip(ms, rts)
+                if Base.moduleroot(parentmodule(m)) !== Main && rt !== Bool
+                    @info "A method of isequal does not infer as Bool" m rt
+                end
+            end
+        end
+        @test good
     end
 end
 
