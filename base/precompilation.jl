@@ -677,7 +677,7 @@ function ExplicitEnv(envpath::String)
             name_to_uuid[name] = m_uuid
 
             for key in ["deps", "weakdeps"]
-                deps_pkg = get(Vector{String}, pkg_info, key)::Union{Vector{String}, Dict{String, Any}}
+                deps_pkg = Base.manifest_dep_names(get(Vector{String}, pkg_info, key))::Union{Vector{String}, Dict{String, Any}}
                 d = key == "deps" ? deps :
                     key == "weakdeps" ? weakdeps :
                     error()
@@ -1927,7 +1927,8 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
             catch e
                 @lock BG begin
                     if BG.interrupt_requested || BG.cancel_requested
-                        BG.result = "Background precompilation was interrupted"
+                        # keep the summary of what was done, if the run got to report it
+                        BG.result === nothing && (BG.result = "Background precompilation was interrupted")
                         # loading must stop rather than compile the package again serially
                         _from_loading && (BG.exception = e)
                     else
@@ -3090,7 +3091,7 @@ function report_precompile_results!(s::PrecompileSession)
     n_failed = count(j -> is_failed(j), values(s.jobs))
     # skipped extensions are implied by their parent or trigger failing, so only count packages
     n_dep_failed = count(((k, j),) -> is_dep_failed(j) && !haskey(s.ext_to_parent, first(k)), s.jobs)
-    if ndeps > 0 || n_failed > 0
+    if ndeps > 0 || n_failed > 0 || s.interrupted || s.canceled
         if !quick_exit
             logstr = sprint(context=s.logio) do iostr
                 if s.fancyprint
@@ -3193,9 +3194,14 @@ function report_precompile_results!(s::PrecompileSession)
                     count(j -> had_pid(j) && !is_recompiled(j) && !is_soft_error(j), values(s.jobs)) :
                     n_failed
                 verb = s.canceled && !s.interrupted ? "canceled" : "interrupted"
-                print(iostr, "  $(ndeps) dependenc$(ndeps == 1 ? "y" : "ies") precompiled, ",
-                      color_string("$(n_canceled_i)", Base.error_color(), s.hascolor),
-                      " $verb after $(seconds_elapsed) seconds")
+                print(iostr, "  $(ndeps) dependenc$(ndeps == 1 ? "y" : "ies") precompiled, ")
+                # a graceful stop lets running jobs finish, so none may have been cut short
+                if n_canceled_i > 0
+                    print(iostr, color_string("$(n_canceled_i)", Base.error_color(), s.hascolor), " ")
+                else
+                    print(iostr, "then ")
+                end
+                print(iostr, "$verb after $(seconds_elapsed) seconds")
                 if n_soft_errors > 0
                     pluralpc = length(s.configs) > 1 ? "dependency configurations" : n_soft_errors == 1 ? "dependency" : "dependencies"
                     print(iostr, "\n  ",

@@ -3319,6 +3319,334 @@ end
     end
 end
 
+# Write dev packages, given as (name, uuid, deps), into the depot, and a project that depends on all of them
+function write_precompile_env(depot, pkgs)
+    project = "[deps]\n"
+    manifest = "manifest_format = \"2.0\"\n"
+    for (name, uuid, deps) in pkgs
+        pkg_path = joinpath(depot, "dev", name)
+        mkpath(joinpath(pkg_path, "src"))
+        write(joinpath(pkg_path, "Project.toml"), """
+            name = "$name"
+            uuid = "$uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(pkg_path, "src", "$name.jl"), string("module $name\n", join(("import $dep\n" for dep in deps)), "end\n"))
+        project *= "$name = \"$uuid\"\n"
+        manifest *= """
+
+            [[deps.$name]]
+            $(isempty(deps) ? "" : "deps = [$(join(repr.(deps), ", "))]")
+            path = "../dev/$name"
+            uuid = "$uuid"
+            version = "0.1.0"
+            """
+    end
+    project_path = joinpath(depot, "project")
+    mkpath(project_path)
+    write(joinpath(project_path, "Project.toml"), project)
+    write(joinpath(project_path, "Manifest.toml"), manifest)
+    return project_path
+end
+
+function with_precompile_env(f, depot, project_path)
+    original_depot_path = copy(Base.DEPOT_PATH)
+    old_proj = Base.active_project()
+    try
+        push!(empty!(DEPOT_PATH), depot)
+        Base.set_active_project(project_path)
+        f()
+    finally
+        Base.set_active_project(old_proj)
+        append!(empty!(DEPOT_PATH), original_depot_path)
+    end
+end
+
+has_cachefile(depot, name) =
+    (dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", name); isdir(dir) && any(endswith(".ji"), readdir(dir)))
+
+# Packages in a dependency cycle, and their dependents, are reported and skipped
+@testset "precompilepkgs with circular dependencies" begin
+    mkdepottempdir() do depot
+        project_path = write_precompile_env(depot, [
+            ("CycA", "a1000000-0000-0000-0000-000000000001", ["CycB"]),
+            ("CycB", "a1000000-0000-0000-0000-000000000002", ["CycC"]),
+            ("CycC", "a1000000-0000-0000-0000-000000000003", ["CycA"]),
+            ("CycUser", "a1000000-0000-0000-0000-000000000004", ["CycA"]),
+            ("CycFree", "a1000000-0000-0000-0000-000000000005", String[]),
+        ])
+        with_precompile_env(depot, project_path) do
+            io = IOBuffer()
+            paths = Base.Precompilation.precompilepkgs(; io=IOContext(io, :color => false), fancyprint=false)
+            output = takestring!(io)
+            @test length(paths) == 1 && occursin("CycFree", only(paths))
+            @test occursin("Circular dependency detected.\nPrecompilation will be skipped for dependencies in this cycle:\n", output)
+            @test all(name -> occursin(Regex("^ [┌│└].* $name\$", "m"), output), ("CycA", "CycB", "CycC"))
+            @test occursin("which depend on the above cycle:\n  CycUser\n", output)
+            @test occursin("1 dependency successfully precompiled in", output)
+            @test occursin("4 skipped due to circular dependency", output)
+            @test !any(name -> has_cachefile(depot, name), ("CycA", "CycB", "CycC", "CycUser"))
+        end
+    end
+
+    a, b, c, d, e = (Base.PkgId(name) for name in ("A", "B", "C", "D", "E"))
+    ext = Base.PkgId("AExt")
+    ext_to_parent = Dict(ext => a)
+    io = IOContext(IOBuffer(), :color => false)
+    @test Base.Precompilation.excluded_circular_deps_explanation(io, ext_to_parent, [a, b, c, d, e, ext], [[a, b, c], [d]]) == """
+        Circular dependency detected.
+        Precompilation will be skipped for dependencies in these cycles:
+         ┌ A
+         │  B
+         └── C
+         ─ D
+        Precompilation will also be skipped for the following, which depend on the above cycles:
+          E
+          A → AExt"""
+    @test Base.Precompilation.excluded_circular_deps_explanation(io, ext_to_parent, [a, b], [[a, b]]) == """
+        Circular dependency detected.
+        Precompilation will be skipped for dependencies in this cycle:
+         ┌ A
+         └─ B
+        """
+end
+
+# TOML reads `deps = []` as a `Vector{Any}`, which must still count as no dependencies
+@testset "precompilepkgs with an empty deps list in the manifest" begin
+    mkdepottempdir() do depot
+        project_path = write_precompile_env(depot, [
+            ("EmptyDepsA", "b0000000-0000-0000-0000-000000000001", String[]),
+            ("EmptyDepsB", "b0000000-0000-0000-0000-000000000002", ["EmptyDepsA"]),
+        ])
+        manifest_path = joinpath(project_path, "Manifest.toml")
+        write(manifest_path, replace(read(manifest_path, String),
+            "path = \"../dev/EmptyDepsA\"" => "deps = []\nweakdeps = []\npath = \"../dev/EmptyDepsA\""))
+        with_precompile_env(depot, project_path) do
+            paths = Base.Precompilation.precompilepkgs(; io=IOBuffer(), fancyprint=false)
+            @test length(paths) == 2
+        end
+    end
+end
+
+# Verbose mode prints a per-package breakdown of where the precompile time went
+@testset "precompilepkgs verbose timing" begin
+    mkdepottempdir() do depot
+        project_path = write_precompile_env(depot, [
+            ("VerboseA", "b1000000-0000-0000-0000-000000000001", String[]),
+            ("VerboseB", "b1000000-0000-0000-0000-000000000002", ["VerboseA"]),
+        ])
+        with_precompile_env(depot, project_path) do
+            io = IOBuffer()
+            paths = Base.Precompilation.precompilepkgs(; io=IOContext(io, :color => false), verbose=true)
+            output = takestring!(io)
+            @test length(paths) == 2
+            @test occursin(Base.Precompilation.format_verbose_timing_header() * "\n", output)
+            for name in ("VerboseA", "VerboseB")
+                @test occursin(Regex("^ +[\\d.]+ s │ +[\\d.]+s +[\\d.]+s +[\\d.]+s │ +\\d+ +[\\d.]+s +[\\d.]+MB +(\\d+MB|-)  ✓ $name\$", "m"), output)
+            end
+            @test !occursin(Base.PRECOMPILE_VERBOSE_TIMING_MARKER, output)
+
+            # asking for the status afterwards reports the last run
+            io = IOBuffer()
+            Base.Precompilation.monitor_background_precompile(IOContext(io, :color => false))
+            @test occursin(r"^Info Background precompilation completed \d+ (seconds|minutes) ago\n    2 dependencies successfully precompiled in"m, takestring!(io))
+            @test !Base.Precompilation.stop_background_precompile()
+        end
+    end
+
+    fmt = Base.Precompilation.format_verbose_timing
+    @test fmt("", 1.0, 0, UInt64(0), false) == ""
+    @test fmt("methods=3", 1.0, 0, UInt64(0), false) == ""
+    payload = "include_ns=1500000000 deps_ns=250000000 compilation_ns=1000000000 methods=12"
+    @test fmt(payload, 2.0, 3 * 1024^2, UInt64(200 * 1024^2), false) ==
+        " │   1.50s    0.25s    1.00s │      12    0.50s     3.0MB    200MB"
+    @test fmt("include_ns=0", 0.0, 0, UInt64(0), false) ==
+        " │   0.00s    0.00s    0.00s │       0    0.00s         -        -"
+    @test occursin(Base.text_colors[:light_black], fmt("include_ns=0", 0.0, 0, UInt64(0), true))
+    @test !occursin(Base.text_colors[:light_black], fmt(payload, 2.0, 3 * 1024^2, UInt64(200 * 1024^2), true))
+end
+
+@testset "precompile worker process stats" begin
+    PC = Base.Precompilation
+    pid = Int32(getpid())
+    stats = PC.process_stats(pid)
+    @test PC.process_stats(Int32(-1)) == (cpu_ns=UInt64(0), rss_bytes=UInt64(0))
+    job = PC.PrecompileJob()
+    PC.set_pid!(job, pid)
+    jobs = Dict{PC.PkgConfig, PC.PrecompileJob}(
+        (Base.PkgId("WithPid"), `` => Base.CacheFlags()) => job,
+        (Base.PkgId("NoPid"), `` => Base.CacheFlags()) => PC.PrecompileJob())
+    cpu_pcts = Dict{Int32, Float64}()
+    rss = Dict{Int32, UInt64}()
+    prev_cpu_times = Dict{Int32, UInt64}()
+    PC.poll_process_stats!(cpu_pcts, rss, prev_cpu_times, jobs, 1.0)
+    if Sys.islinux() || Sys.isapple()
+        @test stats.cpu_ns > 0 && stats.rss_bytes > 0
+        @test cpu_pcts == Dict(pid => 0.0)
+        @test rss[pid] > 0
+        @test job.peak_rss_bytes > 0
+        @test haskey(prev_cpu_times, pid)
+        job.peak_rss_bytes = 0
+        PC.sample_peak_rss!(jobs)
+        @test job.peak_rss_bytes > 0
+        # a worker that has exited is dropped from the history
+        PC.clear_pid!(job)
+        PC.poll_process_stats!(cpu_pcts, rss, prev_cpu_times, jobs, 1.0)
+        @test isempty(cpu_pcts) && isempty(rss) && isempty(prev_cpu_times)
+    else
+        @test stats == (cpu_ns=UInt64(0), rss_bytes=UInt64(0))
+        @test isempty(cpu_pcts) && isempty(rss)
+    end
+end
+
+# Make a package mark that it has started precompiling, then wait for a signal file
+function write_blocking_pkg(depot, name, deps, started, signal)
+    write(joinpath(depot, "dev", name, "src", "$name.jl"), """
+        module $name
+        $(join(("import $dep\n" for dep in deps)))
+        touch($(repr(started)))
+        while !isfile($(repr(signal)))
+            sleep(0.05)
+        end
+        end
+        """)
+end
+
+wait_until(f) = while !f(); sleep(0.05); end
+
+# A request made while a run is going is merged into it
+@testset "precompilepkgs request merged into a running session" begin
+    mkdepottempdir() do depot
+        started = joinpath(depot, "started")
+        signal = joinpath(depot, "signal")
+        project_path = write_precompile_env(depot, [
+            ("BlockingPkg", "c1000000-0000-0000-0000-000000000001", String[]),
+            ("MergedPkg", "c1000000-0000-0000-0000-000000000002", String[]),
+        ])
+        write_blocking_pkg(depot, "BlockingPkg", String[], started, signal)
+        with_precompile_env(depot, project_path) do
+            io1 = IOBuffer()
+            io2 = IOBuffer()
+            t1 = @async Base.Precompilation.precompilepkgs(["BlockingPkg"]; io=IOContext(io1, :color => false), fancyprint=false)
+            local t2
+            try
+                wait_until(() -> isfile(started))
+                @test Base.Precompilation.is_precompiling_in_background()
+                t2 = @async Base.Precompilation.precompilepkgs(["MergedPkg"]; io=IOContext(io2, :color => false), fancyprint=false)
+                wait_until(() -> has_cachefile(depot, "MergedPkg"))
+                @test !istaskdone(t1)
+            finally
+                touch(signal)
+            end
+            paths1 = fetch(t1)
+            paths2 = fetch(t2)
+            @test any(path -> occursin("BlockingPkg", path), paths1)
+            @test length(paths2) == 1 && occursin("MergedPkg", only(paths2))
+            @test occursin("Merging precompilation request into existing run...", takestring!(io2))
+            output = takestring!(io1)
+            @test occursin("✓ MergedPkg", output) && occursin("✓ BlockingPkg", output)
+            @test occursin("2 dependencies successfully precompiled in", output)
+        end
+    end
+end
+
+# Stopping a run kills its workers, or with `graceful` lets them finish, and starts no new ones
+@testset "stop_background_precompile (graceful=$graceful)" for graceful in (false, true)
+    mkdepottempdir() do depot
+        started = joinpath(depot, "started")
+        signal = joinpath(depot, "signal")
+        project_path = write_precompile_env(depot, [
+            ("FirstPkg", "c2000000-0000-0000-0000-000000000001", String[]),
+            ("BlockingPkg", "c2000000-0000-0000-0000-000000000002", ["FirstPkg"]),
+            ("LastPkg", "c2000000-0000-0000-0000-000000000003", ["BlockingPkg"]),
+        ])
+        write_blocking_pkg(depot, "BlockingPkg", ["FirstPkg"], started, signal)
+        with_precompile_env(depot, project_path) do
+            io = IOBuffer()
+            t = @async Base.Precompilation.precompilepkgs(; io=IOContext(io, :color => false), fancyprint=false)
+            try
+                wait_until(() -> isfile(started))
+                @test Base.Precompilation.stop_background_precompile(; graceful)
+                graceful && touch(signal)
+                wait(t)
+            finally
+                touch(signal)
+            end
+            output = takestring!(io)
+            @test has_cachefile(depot, "FirstPkg")
+            @test has_cachefile(depot, "BlockingPkg") == graceful
+            @test !has_cachefile(depot, "LastPkg")
+            @test !Base.Precompilation.is_precompiling_in_background()
+            summary = graceful ? r"2 dependencies precompiled, then interrupted after \d+ seconds" :
+                                 r"1 dependency precompiled, \d+ canceled after \d+ seconds"
+            @test occursin(summary, output)
+            # asking for the status afterwards repeats the summary
+            io = IOBuffer()
+            Base.Precompilation.monitor_background_precompile(IOContext(io, :color => false))
+            @test occursin(summary, takestring!(io))
+        end
+    end
+end
+
+# A run stopped before any package finished still reports, and keeps the report for later
+@testset "stop_background_precompile with nothing finished" begin
+    mkdepottempdir() do depot
+        started = joinpath(depot, "started")
+        signal = joinpath(depot, "signal")
+        project_path = write_precompile_env(depot, [("BlockingPkg", "c2100000-0000-0000-0000-000000000001", String[])])
+        write_blocking_pkg(depot, "BlockingPkg", String[], started, signal)
+        with_precompile_env(depot, project_path) do
+            io = IOBuffer()
+            t = @async Base.Precompilation.precompilepkgs(; io=IOContext(io, :color => false), fancyprint=false)
+            try
+                wait_until(() -> isfile(started))
+                @test Base.Precompilation.stop_background_precompile(; graceful=false)
+                wait(t)
+            finally
+                touch(signal)
+            end
+            @test occursin(r"\n  0 dependencies precompiled, 1 canceled after \d+ seconds\n", takestring!(io))
+            @test !has_cachefile(depot, "BlockingPkg")
+            io = IOBuffer()
+            Base.Precompilation.monitor_background_precompile(IOContext(io, :color => false))
+            @test occursin(r"\n    0 dependencies precompiled, 1 canceled after \d+ seconds\n", takestring!(io))
+        end
+    end
+end
+
+# A package whose cache file lock is held elsewhere waits for it, and says who holds it
+@testset "precompilepkgs waits for a held cache file lock" begin
+    mkdepottempdir() do depot
+        uuid = "c3000000-0000-0000-0000-000000000001"
+        project_path = write_precompile_env(depot, [("LockedPkg", uuid, String[])])
+        with_precompile_env(depot, project_path) do
+            pidfile = Base.compilecache_pidfile_path(Base.PkgId(Base.UUID(uuid), "LockedPkg"))
+            mkpath(dirname(pidfile))
+            pidlock = Base.mkpidlock_hook(pidfile; stale_age=Base.compilecache_pidlock_stale_age)
+            io = Base.BufferStream()
+            t = @async try
+                Base.Precompilation.precompilepkgs(; io=IOContext(io, :color => false), fancyprint=false)
+            finally
+                close(io)
+            end
+            lines = String[]
+            try
+                while !eof(io)
+                    push!(lines, readline(io))
+                    occursin("Being precompiled by", last(lines)) && break
+                end
+            finally
+                close(pidlock)
+            end
+            paths = fetch(t)
+            append!(lines, readlines(io))
+            @test length(paths) == 1
+            @test "    LockedPkg Being precompiled by an async task in this process (pidfile: $pidfile)" in lines
+            @test any(startswith("  1 dependency successfully precompiled in"), lines)
+        end
+    end
+end
+
 precompile_test_harness("invalidation for 'foreign-keyed' Preferences") do load_path
     # Test that compile-time preferences invalidate, even when queried from a
     # "foreign" UUID / package namespace
