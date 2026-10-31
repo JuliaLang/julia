@@ -639,8 +639,12 @@ function start_sigint_listener()
         # this will prompt any ongoing or pending event to flush also
         close(cond)
         # error-propagation is not needed, since the errormonitor will handle printing that better
-        for t in listeners
-            t === current_task() || _wait(t)
+        # A termination fallback runs this outside every threadpool, while the threads that
+        # could run the listeners may be busy, so it does not wait for them.
+        if Threads.threadpool() !== :foreign
+            for t in listeners
+                t === current_task() || _wait(t)
+            end
         end
     end
     finalizer(cond) do c

@@ -933,6 +933,91 @@ static int jl_notify_signal_watchers(int sig) JL_NOTSAFEPOINT
     return jl_atomic_load_relaxed(&signal_interceptors[sig]) > 0;
 }
 
+// How long a thread may run one task without waiting, after a termination request,
+// before the process is ended without it.
+#define JL_TERM_GRACE_MS 2000
+#define JL_TERM_POLL_MS 50
+// How long the fallback teardown may take before the process ends without it.
+#define JL_TERM_TEARDOWN_MS 5000
+
+static void termination_teardown(void *arg) JL_NO_SAFEPOINT_ANALYSIS JL_CANSAFEPOINT_LEAVE
+{
+    jl_atexit_fallback((int)(intptr_t)arg);
+}
+
+// Returns 1 once the ordinary exit has started. Returns 0 once some thread has run one
+// task for the whole grace period without sleeping, since that code is not checking for
+// cancellation. Threads that wait are left alone however long they take, because a
+// second signal still ends the process at once.
+static int jl_wait_for_exit_or_busy_thread(void)
+{
+    int n = 0;
+    jl_task_t **last = NULL;
+    uint64_t *since = NULL;
+    int started;
+    while (!(started = jl_atexit_started())) {
+        uv_sleep(JL_TERM_POLL_MS);
+        // only the pool threads: a foreign thread may stay out of Julia indefinitely
+        int nthreads = 0;
+        for (int i = 0; i < jl_n_threadpools; i++)
+            nthreads += jl_n_threads_per_pool[i];
+        if (nthreads != n) {
+            free(last);
+            free(since);
+            n = nthreads;
+            last = (jl_task_t**)calloc_s(n * sizeof(jl_task_t*));
+            since = (uint64_t*)calloc_s(n * sizeof(uint64_t));
+        }
+        uint64_t now = uv_hrtime();
+        int busy = 0;
+        jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+        for (int i = 0; i < n; i++) {
+            jl_ptls_t ptls2 = allstates[i];
+            jl_task_t *ct = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
+            int asleep = ptls2 && jl_atomic_load_relaxed(&ptls2->sleep_check_state) != 0;
+            if (ct == NULL || ct != last[i] || asleep) {
+                last[i] = ct;
+                since[i] = now;
+            }
+            else if (now - since[i] >= (uint64_t)JL_TERM_GRACE_MS * 1000000) {
+                busy = 1;
+            }
+        }
+        if (busy)
+            break;
+    }
+    free(last);
+    free(since);
+    return started;
+}
+
+// Run on a thread unknown to Julia after a termination request was delivered. If a thread
+// is still busy in code that does not check for cancellation, run the exit on another
+// thread, and end the process if that does not finish in time either. Returns only if
+// the ordinary exit is running.
+static void jl_termination_watchdog(int sig)
+{
+    if (jl_wait_for_exit_or_busy_thread() || !jl_atexit_fallback_claim())
+        return;
+    uv_thread_t teardown;
+    if (uv_thread_create(&teardown, termination_teardown, (void*)(intptr_t)sig) == 0)
+        uv_sleep(JL_TERM_TEARDOWN_MS);
+    // a hook may be waiting for a task that only a busy thread can run
+    uv_tty_reset_mode();
+    fflush(NULL);
+#ifdef _OS_WINDOWS_
+    _exit(128 + sig);
+#else
+    signal(sig, SIG_DFL);
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, sig);
+    pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
+    raise(sig);
+    _exit(128 + sig);
+#endif
+}
+
 #if defined(_WIN32)
 #include "signals-win.c"
 #else
