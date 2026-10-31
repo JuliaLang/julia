@@ -955,3 +955,11 @@ end
 @testset "nextprod with offset factors" begin
     @test nextprod(OffsetVector([2, 3, 5], -2), 105) == nextprod([2, 3, 5], 105) == 108
 end
+
+@testset "single-byte pattern search in offset vectors" begin
+    v = OffsetVector(UInt8[0x61, 0x62, 0x63, 0x62], -1)
+    @test findfirst(UInt8[0x61], v) == 0:0
+    @test findnext(UInt8[0x62], v, 1) == 1:1
+    @test findlast(UInt8[0x62], v) == 3:3
+    @test findprev(UInt8[0x62], v, 2) == 1:1
+end
