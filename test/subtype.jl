@@ -3680,3 +3680,27 @@ end
         @test A != B
     end
 end
+
+# `obviously_disjoint` looks through typevar bounds in covariant positions
+# and compares invariant typevars by their bounds
+@testset "obviously_disjoint with typevar bounds" begin
+    f = typeof(identity)
+    for (a, b, empty) in Any[
+            (Tuple{f, Type{Int8}, Type{UInt8}}, Tuple{f, Core.TypeEgal{Int64}, Core.TypeEgal{Float64}}, true),
+            (Tuple{f, Type{T}} where T<:Integer, Tuple{f, Type{Int}}, false),
+            (Tuple{f, Type{T}} where T<:AbstractFloat, Tuple{f, Type{Int}}, true),
+            (Tuple{f, Type{T}} where T, Tuple{f, DataType}, false),
+            (Tuple{f, Type{Vector{T}}} where T, Tuple{f, Type{Int}}, true),
+            (Tuple{f, IO, Vector{T}} where T, Tuple{f, IOBuffer, Vector{String}}, false),
+            (Tuple{f, IO, Array{T,2}} where T, Tuple{f, IOBuffer, Vector{String}}, true),
+            (Tuple{f, Vector{<:Integer}}, Tuple{f, Vector{Int}}, false),
+            (Tuple{f, Vector{<:AbstractFloat}}, Tuple{f, Vector{Int}}, true),
+            (Tuple{f, Val{N}} where N, Tuple{f, Val{Int}}, false),
+            (Tuple{f, T, T} where T<:AbstractString, Tuple{f, Int, Nothing}, true),
+            (Tuple{f, Union{T, Nothing}} where T<:AbstractString, Tuple{f, Int}, true),
+            (Tuple{f, Union{T, Nothing}} where T<:Integer, Tuple{f, Int}, false),
+            (Tuple{f, Ref{T}} where T<:AbstractString, Tuple{f, Ref{S}} where S<:Integer, false)]
+        @test (typeintersect(a, b) === Union{}) == empty
+        @test (typeintersect(b, a) === Union{}) == empty
+    end
+end
