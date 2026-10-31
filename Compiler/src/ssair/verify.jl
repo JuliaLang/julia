@@ -393,6 +393,21 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 @verify_error "Explicit terminators (other than ReturnNode) must have `Any` type"
                 raise_error()
             end
+            if isexpr(stmt, :leave)
+                for i in 1:length(stmt.args)
+                    arg = stmt.args[i]
+                    if !isa(arg, Union{Nothing, SSAValue})
+                        @verify_error "Malformed :leave - Expected `Nothing` or SSAValue"
+                        raise_error()
+                    elseif isa(arg, SSAValue)
+                        enter_stmt = ir[arg::SSAValue][:stmt]
+                        if !isa(enter_stmt, Nothing) && !isa(enter_stmt, EnterNode)
+                            @verify_error "Malformed :leave - argument ssavalue should point to `nothing` or :enter"
+                            raise_error()
+                        end
+                    end
+                end
+            end
             for op in userefs(stmt)
                 check_op(ir, domtree, op[], bb, idx, idx, print, false, 0,
                     allow_frontend_forms, raise_error)
@@ -437,20 +452,6 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     continue
                 elseif stmt.head === :foreigncall || stmt.head === :foreignglobal
                     isforeigncall = true
-                elseif stmt.head === :leave
-                    for i in 1:length(stmt.args)
-                        arg = stmt.args[i]
-                        if !isa(arg, Union{Nothing, SSAValue})
-                            @verify_error "Malformed :leave - Expected `Nothing` or SSAValue"
-                            raise_error()
-                        elseif isa(arg, SSAValue)
-                            enter_stmt = ir[arg::SSAValue][:stmt]
-                            if !isa(enter_stmt, Nothing) && !isa(enter_stmt, EnterNode)
-                                @verify_error "Malformed :leave - argument ssavalue should point to `nothing` or :enter"
-                                raise_error()
-                            end
-                        end
-                    end
                 end
             end
             n = 1
