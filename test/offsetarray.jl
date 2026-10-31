@@ -881,6 +881,10 @@ end
     @test reduce(hcat, OffsetArray([[1, 2], view([3, 4], :)], 0:1)) == [1 3; 2 4]
 end
 
+@testset "hvncat of offset array and scalar" begin
+    @test hvncat(1, OffsetVector([1, 2], 5), 3) == [1, 2, 3]
+end
+
 @testset "issue #41630: replace_ref_begin_end!/@view on offset-like arrays" begin
     x = OffsetArray([1 2; 3 4], -10:-9, 9:10)  # 2×2 OffsetArray{...} with indices -10:-9×9:10
 

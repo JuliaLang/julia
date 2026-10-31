@@ -2475,7 +2475,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     for a ∈ as
         if a isa AbstractArray
             lena = length(a)
-            copyto!(A, k, a, 1, lena)
+            copyto!(A, k, a, firstindex(a), lena)
             k += lena
         else
             A[k] = a
