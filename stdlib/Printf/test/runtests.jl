@@ -811,6 +811,8 @@ end
     @test Printf.@sprintf("%*.*d", 10, 4, 12)    == "      0012"
     @test Printf.@sprintf("%+*.*d", 10, 4, 12)   == "     +0012"
     @test Printf.@sprintf("%0*.*d", 10, 4, 12)   == "      0012"
+    @test Printf.@sprintf("%05.0d", 3)           == "    3"
+    @test Printf.@sprintf("%05.*d", 0, 3)        == "    3"
 
     @test Printf.@sprintf("%*d%*d%*d", 4, 12, 4, 13, 4, 14)  == "  12  13  14"
     @test Printf.@sprintf("%*d%*d%*d", 4, 12, 5, 13, 6, 14)  == "  12   13    14"
