@@ -9,8 +9,7 @@
 # TSAN-enabled julia in <path>/tsan.  Required toolss are install under
 # <path>/toolchain.  Note that the same <path> passed to `contrib/asan/build.sh`
 # can be used to share the toolchain used for ASAN.  This scripts also takes
-# optional <make_targets> arguments which are passed to `make`.  The default
-# make target is `debug`.
+# optional <make_targets> arguments which are passed to `make`.
 
 set -ue
 set -x

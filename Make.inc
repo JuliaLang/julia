@@ -1978,15 +1978,15 @@ JULIA_BUILD_MODE := debug
 endif
 endif
 
-ifneq ($(CROSS_BOOTSTRAP_JULIA),)
-JULIA_EXECUTABLE_debug := $(CROSS_BOOTSTRAP_JULIA)
-JULIA_EXECUTABLE_release := $(CROSS_BOOTSTRAP_JULIA)
-JULIA_EXECUTABLE := $(CROSS_BOOTSTRAP_JULIA)
+cross_bootstrap_julia = $(if $(filter 1,$(SYSIMAGE_BUILD)),$(CROSS_BOOTSTRAP_JULIA))
+ifneq ($(cross_bootstrap_julia),)
+JULIA_EXECUTABLE_debug := $(cross_bootstrap_julia)
+JULIA_EXECUTABLE_release := $(cross_bootstrap_julia)
 else
 JULIA_EXECUTABLE_debug := $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release := $(build_bindir)/julia$(EXE)
-JULIA_EXECUTABLE := $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
 endif
+JULIA_EXECUTABLE := $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
 
 JULIA_SYSIMG_debug := $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 JULIA_SYSIMG_release := $(build_private_libdir)/sys.$(SHLIB_EXT)
