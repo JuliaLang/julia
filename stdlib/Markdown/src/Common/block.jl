@@ -343,14 +343,15 @@ function list(stream::IO, block::MD)
         list = List(initial)
 
         buffer = IOBuffer() # For capturing nested text for recursive parsing.
-        newline = false     # For checking if we have two consecutive newlines: end of list.
+        blank = false
         count = 0           # Count of list items. Used to check if we need to push remaining
                             # content in `buffer` after leaving the `while` loop.
         while !eof(stream)
             if blankline(stream)
                 println(buffer)
-                list.loose = true
+                blank = true
             elseif startswith(stream, " "^indent)
+                list.loose |= blank
                 # Indented text that is part of the current list item.
                 print(buffer, readline(stream, keep=true))
             else
@@ -360,6 +361,7 @@ function list(stream::IO, block::MD)
                     pushitem!(list, buffer)
                     break
                 end
+                list.loose |= blank
 
                 # Start of a new list item.
                 count += 1
