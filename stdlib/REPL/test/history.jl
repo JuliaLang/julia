@@ -866,6 +866,12 @@ searchhistory(entries::Vector{HistEntry}, keys::String; kwargs...) =
             result, shown = searchhistory(entries, "\x13\t\r\n"; props = osc52)
             @test occursin("History selection aborted", shown)
             @test read(path, String) == "foo 40\n"
+            # Saving to an existing file appends, starting on a new line
+            searchhistory(entries, "\x13\t\r$path\n"; props = osc52)
+            @test read(path, String) == "foo 40\nls bar\n"
+            write(path, "x = 1")
+            searchhistory(entries, "\x13\t\r$path\n"; props = osc52)
+            @test read(path, String) == "x = 1\nls bar\n"
         end
         # Leaving the save menu returns to the search
         for keys in ("\x13\x03\r", "\x13\e\e\r", "\x13\ex\x03\r")
