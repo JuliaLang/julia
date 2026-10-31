@@ -278,6 +278,8 @@ big(x::TwicePrecision) = big(x.hi) + big(x.lo)
 
 -(x::TwicePrecision) = TwicePrecision(-x.hi, -x.lo)
 
+adjoint(x::TwicePrecision{<:Real}) = x
+
 zero(x::TwicePrecision) = zero(typeof(x))
 function zero(::Type{TwicePrecision{T}}) where {T}
     z = zero(T)

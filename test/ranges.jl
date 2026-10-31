@@ -1804,6 +1804,7 @@ end
     @test @inferred(x ./ r) == 2 ./ [r;] && isa(x ./ r, Vector{Float64})
     @test @inferred(r .\ x) == 2 ./ [r;] && isa(x ./ r, Vector{Float64})
     @test @inferred(x .\ r) === 0.5:0.5:2.5
+    @test @inferred(2.0 .\ (0.0:0.5:2.0)) === (0.0:0.5:2.0) ./ 2.0
 
     @test @inferred(2 .* (r .+ 1) .+ 2) == 6:2:14
 
