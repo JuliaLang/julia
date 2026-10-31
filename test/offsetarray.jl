@@ -712,6 +712,11 @@ end
     @test_throws ArgumentError resize!(a,-3)
 end
 
+@testset "deleteat! with an offset mask" begin
+    m = OffsetVector([false, false, true], -1)
+    @test deleteat!(BitVector([0, 1, 0]), m) == deleteat!([false, true, false], m) == [false, true]
+end
+
 @testset "issue #37199: offset range indices" begin
     # https://github.com/JuliaArrays/OffsetArrays.jl/issues/133
     A0 = [1 3; 2 4]
