@@ -968,3 +968,11 @@ end
     @test !isvalid(String, OffsetVector(UInt8[0xff, 0x61], -1))
     @test isvalid(String, OffsetVector(UInt8[0x61, 0xce, 0xb2], 5))
 end
+
+@testset "SecretBuffer! from an OffsetVector" begin
+    d = OffsetVector(UInt8[0x61, 0x62], -1)
+    s = Base.SecretBuffer!(d)
+    @test read(s, String) == "ab"
+    @test all(iszero, d)
+    Base.shred!(s)
+end
