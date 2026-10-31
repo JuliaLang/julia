@@ -29,6 +29,7 @@
 
 #include "julia.h"
 #include "julia_assert.h"
+#include "llvm-codegen-shared.h"
 
 #define DEBUG_TYPE "expand-atomic-modify"
 #undef DEBUG
@@ -193,6 +194,14 @@ static bool canReorderWithRMW(Instruction &Target, bool verifyop)
     for (auto &I : BB) {
       if (&I == &Target)
         continue;
+      // julia.get_pgcstack reads thread-local state and never writes memory, but
+      // is declared without attributes when not lowered to an argument (non-swiftcc
+      // ABI, used by reflection); don't let it defeat the scan.
+      if (auto *CI = dyn_cast<CallInst>(&I)) {
+        Function *Callee = CI->getCalledFunction();
+        if (Callee && Callee->getName() == "julia.get_pgcstack")
+          continue;
+      }
       if (I.mayWriteToMemory())
         return false;
       if (!mayRead) {
@@ -206,21 +215,50 @@ static bool canReorderWithRMW(Instruction &Target, bool verifyop)
   return !(mayRead && Target.mayWriteToMemory());
 }
 
+// This pass runs after GC lowering, so only inline code that does not need
+// it: julia intrinsics may not have been lowered yet if the op comes later in
+// the module (or, like a nested julia.atomicmodify, will not be expanded by
+// this run), and allocas may hold a lowered GC frame. Also reject an op that
+// both creates GC-tracked values and makes calls (any call, unless
+// AllowCalls), since a call may be a safepoint at which those values, which
+// nothing roots, get collected. Values passed in as arguments are rooted by
+// the caller. julia.get_pgcstack is fine, since it is lowered later, by
+// LowerPTLS.
+static bool canInlineLate(Function &F, bool AllowCalls)
+{
+  if (F.isDeclaration() || F.isInterposable())
+    return false;
+  bool HasCalls = false;
+  bool HasRoots = false;
+  for (auto &I : instructions(F)) {
+    if (isa<AllocaInst>(I))
+      return false;
+    if (CountTrackedPointers(I.getType()).count > 0)
+      HasRoots = true;
+    if (auto *CB = dyn_cast<CallBase>(&I)) {
+      Function *Callee = CB->getCalledFunction();
+      if (Callee && (Callee->isIntrinsic() || Callee->getName() == "julia.get_pgcstack"))
+        continue;
+      if (!AllowCalls || (Callee && Callee->getName().starts_with("julia.")))
+        return false;
+      HasCalls = true;
+    }
+  }
+  return !(HasCalls && HasRoots);
+}
+
 static std::variant<AtomicRMWInst::BinOp,bool> patternMatchAtomicRMWOp(Value *Old, Use **ValOp, Value *RetVal)
 {
   bool verifyop = RetVal == nullptr;
   assert(verifyop ? isa<Argument>(Old) : isa<AtomicRMWInst>(Old));
   Function *Op = verifyop ? cast<Argument>(Old)->getParent() : nullptr;
-  if (verifyop && (Op->isDeclaration() || Op->isInterposable() || Op->isIntrinsic()))
+  if (verifyop && (Op->isIntrinsic() || !canInlineLate(*Op, true)))
     return false;
    // TODO: peek forward from Old through any trivial casts which don't affect the instruction (e.g. i64 to f64 and back)
   if (RetVal == nullptr) {
-    if (Old->use_empty()) {
-      if (ValOp) *ValOp = nullptr;
-      return AtomicRMWInst::Xchg;
-    }
-    if (!Old->hasOneUse())
-      return false;
+    // find the unique return first: a helper with no return always throws
+    // (e.g. the modify type check for a type-unstable op) and must not be
+    // converted to a raw atomicrmw, even if it ignores the loaded value
     ReturnInst *Ret = nullptr;
     for (auto &BB : *Op) {
       if (isa<ReturnInst>(BB.getTerminator())) {
@@ -230,6 +268,12 @@ static std::variant<AtomicRMWInst::BinOp,bool> patternMatchAtomicRMWOp(Value *Ol
       }
     }
     if (Ret == nullptr)
+      return false;
+    if (Old->use_empty()) {
+      if (ValOp) *ValOp = nullptr;
+      return AtomicRMWInst::Xchg;
+    }
+    if (!Old->hasOneUse())
       return false;
     // Now examine the instruction list
     RetVal = Ret->getReturnValue();
@@ -340,8 +384,7 @@ static void expandAtomicModifyToCmpXchg(CallInst &Modify,
 
   ReplacementIRBuilder Builder(&Modify, Modify.getModule()->getDataLayout());
 
-  CallInst *ModifyOp;
-  {
+  auto CreateModifyOp = [&]() {
     SmallVector<Value*> Args(1 + Modify.arg_size() - user_arg_start);
     Args[0] = UndefValue::get(Ty); // Undef used as placeholder for Loaded / RMW;
     for (size_t argi = 0; argi < Modify.arg_size() - user_arg_start; ++argi) {
@@ -349,9 +392,11 @@ static void expandAtomicModifyToCmpXchg(CallInst &Modify,
     }
     SmallVector<OperandBundleDef> Defs;
     Modify.getOperandBundlesAsDefs(Defs);
-    ModifyOp = Builder.CreateCall(Op, Args, Defs);
-    ModifyOp->setCallingConv(Op->getCallingConv());
-  }
+    CallInst *C = Builder.CreateCall(Op, Args, Defs);
+    C->setCallingConv(Op->getCallingConv());
+    return C;
+  };
+  CallInst *ModifyOp = CreateModifyOp();
   Use *LoadedOp = &ModifyOp->getOperandUse(0);
 
   Value *OldVal = nullptr;
@@ -395,6 +440,17 @@ static void expandAtomicModifyToCmpXchg(CallInst &Modify,
           break;
       } else {
         assert(BinOp != decltype(BinOp)(true));
+        if (BinOp == decltype(BinOp)(false)) {
+          // inlining simplified the op into something unconvertible; recreate
+          // the call so the fallback cmpxchg loop has an op to expand (the
+          // leftover inlined code is dead and write-free, per canReorderWithRMW,
+          // so it is safe to disconnect it from RMW and let DCE remove it)
+          RMW->replaceAllUsesWith(UndefValue::get(Ty));
+          Builder.SetInsertPoint(&Modify);
+          ModifyOp = CreateModifyOp();
+          LoadedOp = &ModifyOp->getOperandUse(0);
+          break;
+        }
         auto RMWOp = std::get<AtomicRMWInst::BinOp>(BinOp);
         assert(RMWOp != AtomicRMWInst::BAD_BINOP);
         assert(isa<UndefValue>(RMW->getOperand(1))); // RMW was previously being used as the placeholder for Val
@@ -411,6 +467,31 @@ static void expandAtomicModifyToCmpXchg(CallInst &Modify,
         } else {
           // convert to an atomic fence of the form: atomicrmw or %ptr, 0
           assert(RMWOp == AtomicRMWInst::Or);
+          // The op returned the loaded value unchanged. Unless the inlined op
+          // body still uses it, move RMW down to the original call site, so
+          // that the body runs first: it may throw, in which case nothing
+          // must be stored, and its own memory effects must be visible to
+          // the load.
+          if (RMW->use_empty())
+            RMW->moveBeforePreserving(Modify.getIterator());
+          if (!Ty->isIntegerTy()) {
+            // `or` is integer-only: emit it on the equivalent integer type and
+            // bitcast the loaded value back (happens e.g. when an FP op folds
+            // to an identity, like fadd x, -0.0)
+            IntegerType *ITy = Builder.getIntNTy(Ty->getPrimitiveSizeInBits().getFixedValue());
+            Builder.SetInsertPoint(RMW);
+            AtomicRMWInst *IRMW = Builder.CreateAtomicRMW(AtomicRMWInst::Or, Ptr,
+                ConstantInt::getNullValue(ITy), Alignment, Ordering, SSID);
+            IRMW->copyMetadata(Modify);
+            Value *Cast = Builder.CreateBitCast(IRMW, Ty);
+            if (NewVal == RMW)
+              NewVal = Cast;
+            OldVal = Cast;
+            RMW->replaceAllUsesWith(Cast);
+            RMW->eraseFromParent();
+            Builder.SetInsertPoint(&Modify);
+            break;
+          }
           Val = ConstantInt::getNullValue(Ty);
         }
         RMW->setOperation(RMWOp);
@@ -436,6 +517,17 @@ static void expandAtomicModifyToCmpXchg(CallInst &Modify,
         return ModifyOp;
       },
       CreateWeakCmpXchg);
+    // the op was not convertible to an atomicrmw, but still inline its body
+    // into the loop rather than leaving an opaque call in it
+    Function *Callee = ModifyOp->getCalledFunction();
+    if (Callee && canInlineLate(*Callee, false)) {
+      assert(NewVal == ModifyOp);
+      FreezeInst *TrackReturn = Builder.Insert(new FreezeInst(ModifyOp));
+      InlineFunctionInfo IFI;
+      if (InlineFunction(*ModifyOp, IFI).isSuccess())
+        NewVal = TrackReturn->getOperand(0);
+      TrackReturn->eraseFromParent();
+    }
   }
 
   for (auto user : make_early_inc_range(Modify.users())) {

@@ -1532,3 +1532,72 @@ if Base.JLOptions().depwarn == 2
     @test (@atomic a[]) == 5
     @test (@atomic a[] += 1) == 6   # atomic read-modify-write replacement for `a[] += 1`
 end
+
+# values allocated by the op stay rooted when it is inlined into the atomic modify
+mutable struct ModifyPayload
+    x::Int
+end
+@noinline function alloc_modify_payload(y)
+    p = ModifyPayload(y)
+    finalizer(p -> (p.x = -1), p)
+    return p
+end
+@noinline modify_collect() = GC.gc(true)
+function modify_gc_op(x, y)
+    obj = alloc_modify_payload(y)
+    modify_collect()
+    return obj.x
+end
+@noinline modify_gc!(p::Ptr{Int}, y::Int) = Core.Intrinsics.atomic_pointermodify(p, modify_gc_op, y, :monotonic)
+let r = Ref(0)
+    GC.@preserve r begin
+        p = Base.unsafe_convert(Ptr{Int}, r)
+        @test modify_gc!(p, 1) === Pair(0, 1)
+        @test modify_gc!(p, 2) === Pair(1, 2)
+    end
+end
+
+# atomic modify lowers to a single `atomicrmw` where the op allows it, including for
+# floating-point values, and otherwise inlines the op into the cmpxchg loop
+@noinline modify_fadd!(p::Ptr{T}, v::T) where {T} = Core.Intrinsics.atomic_pointermodify(p, +, v, :monotonic)
+@noinline modify_fsub!(m::AtomicMemory{T}, v::T) where {T} = @atomic :monotonic m[1] -= v
+@noinline modify_branch!(p::Ptr{Float64}, v::Float64) = Core.Intrinsics.atomic_pointermodify(p, (x, v) -> x > 0 ? x + v : x - v, v, :monotonic)
+@noinline modify_idstore!(p::Ptr{Float64}) = Core.Intrinsics.atomic_pointermodify(p, (x, p) -> (unsafe_store!(p, 42.0); x), p, :monotonic)
+@noinline modify_ignore!(p::Ptr{Int8}, v) = Core.Intrinsics.atomic_pointermodify(p, (x, v) -> v, v, :monotonic)
+@testset "atomic modify lowering" begin
+    for T in (Float32, Float64)
+        @test occursin("atomicrmw fadd", sprint(code_llvm, modify_fadd!, (Ptr{T}, T)))
+        @test occursin("atomicrmw fsub", sprint(code_llvm, modify_fsub!, (AtomicMemory{T}, T)))
+        r = Ref(T(1.5))
+        GC.@preserve r begin
+            p = Base.unsafe_convert(Ptr{T}, r)
+            @test modify_fadd!(p, T(2)) === Pair{T,T}(1.5, 3.5)
+            @test modify_fadd!(p, -zero(T)) === Pair{T,T}(3.5, 3.5)
+        end
+        m = AtomicMemory{T}(undef, 1)
+        @atomic m[1] = T(1.5)
+        @test modify_fsub!(m, T(2)) === T(-0.5)
+        @test (@atomic m[1]) === T(-0.5)
+    end
+    llvm = sprint(code_llvm, modify_branch!, (Ptr{Float64}, Float64))
+    @test occursin("cmpxchg", llvm)
+    @test !occursin("call ", llvm)
+    r = Ref(1.0)
+    GC.@preserve r begin
+        p = Base.unsafe_convert(Ptr{Float64}, r)
+        @test modify_branch!(p, 2.0) === Pair(1.0, 3.0)
+        r[] = -1.0
+        @test modify_branch!(p, 2.0) === Pair(-1.0, -3.0)
+        # an op returning the loaded value unchanged still runs before the load
+        @test modify_idstore!(p) === Pair(42.0, 42.0)
+    end
+    # an op whose result fails the type check must throw before storing anything
+    r = Ref(Int8(5))
+    GC.@preserve r begin
+        p = Base.unsafe_convert(Ptr{Int8}, r)
+        @test_throws TypeError modify_ignore!(p, UInt32(1))
+        @test r[] === Int8(5)
+        @test modify_ignore!(p, Int8(7)) === Pair(Int8(5), Int8(7))
+        @test r[] === Int8(7)
+    end
+end
