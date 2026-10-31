@@ -2274,6 +2274,21 @@ end
         @test_throws ErrorException jl_eval(m, "f33243()"; edition)
         @test jl_eval(m, "global x33243::Any; (f33243(), x33243)"; edition) === (2, 2)
     end
+
+    @testset "macros in generated body expand in the staging world" begin
+        # The generator runs in its definition world, but its result is lowered
+        # in the world it is generated for (like flisp, which uses the latest)
+        m = Module()
+        jl_eval(m, """
+        @generated gen_later_macro(x) = :(@later_macro)
+        macro later_macro() 1 end
+        macro redefined_macro() 1 end
+        @generated gen_redefined_macro(x) = :(@redefined_macro)
+        macro redefined_macro() 2 end
+        """; edition)
+        @test jl_eval(m, "gen_later_macro(0)"; edition) === 1
+        @test jl_eval(m, "gen_redefined_macro(0)"; edition) === 2
+    end
 end
 
     genfunc_quote_s = """

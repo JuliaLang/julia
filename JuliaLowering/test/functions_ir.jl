@@ -2178,7 +2178,7 @@ end
 21  (call core.define_method TestMod TestMod.f_only_generated %₂₀
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/y(!read)]
-    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub SyntaxContext(#=omitted=#) #f_only_generated@generator##0 SourceRef:1 (call core.svec :#self# :x :y) (call core.svec)))
+    1   (meta :generated (new Base.SyntaxGeneratedFunctionStub SyntaxContext(#=omitted=#) #f_only_generated@generator##0 SourceRef:1 (call core.svec :#self# :x :y) (call core.svec)))
     2   (meta :generated_only)
     3   (return core.nothing)
 22  latestworld
@@ -2229,7 +2229,7 @@ end
 21  (call core.define_method TestMod TestMod.f_partially_generated %₂₀
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/maybe_gen_stuff(single_assign) slot₅/nongen_stuff(single_assign)]
-    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub SyntaxContext(#=omitted=#) #f_partially_generated@generator##0 SourceRef:1 (call core.svec :#self# :x :y) (call core.svec)))
+    1   (meta :generated (new Base.SyntaxGeneratedFunctionStub SyntaxContext(#=omitted=#) #f_partially_generated@generator##0 SourceRef:1 (call core.svec :#self# :x :y) (call core.svec)))
     2   TestMod.bothgen
     3   (= slot₅/nongen_stuff (call %₂ slot₂/x slot₃/y))
     4   TestMod.some_nongen_stuff

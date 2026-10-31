@@ -19,12 +19,12 @@ end
 # World set with `activate!`, or 0
 const _lowering_world = Ref{UInt}(0)
 
-@inline function invoke_in_lowering_world(f::F, @nospecialize(args...)) where {F}
+@inline function __script_exit_invoke_in_lowering_world(f::F, @nospecialize(args...)) where {F}
     w = _lowering_world[]
     @static if VERSION >= v"1.14.0-DEV.2635"
         w == 0 || return _invoke_in_world(w, f, args...)
     end
-    return invokelatest(f, args...)
+    return Core.invokelatest(f, args...)
 end
 
 function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
@@ -58,7 +58,8 @@ function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
     out[1]
 end
 @noinline function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
-    return invoke_in_lowering_world(_interpolate_syntax, st, vals)::SyntaxTree
+    return __script_exit_invoke_in_lowering_world(
+        _interpolate_syntax, st, vals)::SyntaxTree
 end
 
 #--------------------------------------------------
@@ -226,16 +227,6 @@ end
 #--------------------------------------------------
 # Runtime support infrastructure for `@generated`
 
-# An alternative to Core.GeneratedFunctionStub which works on SyntaxTree rather
-# than Expr.
-struct GeneratedFunctionStub
-    syntax_context::SyntaxContext
-    gen::Function
-    srcref::Union{LineNumberNode,SourceRef}
-    argnames::Core.SimpleVector
-    spnames::Core.SimpleVector
-end
-
 function _gen_args_from_syms(ctx, src, args, sc)
     out = SyntaxList()
     for a in args
@@ -249,31 +240,24 @@ end
 # expression into a CodeInfo.
 #
 # `args` passed into stub by the Julia runtime are (parent_func, static_params..., arg_types...)
-function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize args...)
-    # Some of the lowering pipeline from lower() and the pass-specific setup is
-    # re-implemented here because generated functions are very much (but not
-    # entirely) like macro expansion.
-    #
-    # TODO: Reduce duplication where possible.
-
+function lower_generated_code(g, world, source, @nospecialize args...)
     __module__ = source.module
     sc = g.syntax_context
 
-    # Run code generator - this acts like a macro expander
+    # Run code generator - this acts like a macro expander. `jl_code_for_staged`
+    # runs this in the generator's definition world
     ex0 = g.gen(sc, args...)
 
-    # Note that we expand in `tls_world_age()` (see Core.GeneratedFunctionStub)
-    world = Base.tls_world_age()
-
+    # flisp (see Core.GeneratedFunctionStub) uses the latest world for macros
     return try
-        invoke_in_lowering_world(_lower_generated_code, g, source, sc,
-                                 __module__, world, ex0)
+        __script_exit_invoke_in_lowering_world(
+            _lower_generated_code, g, source, sc, __module__, world, ex0)
     catch exc
         rethrow(to_compatible_exception(exc))
     end
 end
 
-function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
+function _lower_generated_code(g::Base.SyntaxGeneratedFunctionStub, source::Method,
                                sc::SyntaxContext, __module__::Module,
                                world::UInt, @nospecialize(ex0))
     if ex0 isa Expr
@@ -319,7 +303,6 @@ function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
 
     return ci
 end
-
 
 #-------------------------------------------------------------------------------
 # The following functions are called directly by lowering to inspect Julia's state.

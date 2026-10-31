@@ -2475,7 +2475,7 @@ precompile_test_harness("Generator nospecialize") do load_path
         @generated function f(x...)
             :((\$(Base.Meta.quot(x)),))
         end
-        @assert precompile(Tuple{typeof(which(f, (Any,Any)).generator.gen), Any, Any})
+        @assert precompile(only(methods(which(f, (Any,Any)).generator.gen)).sig)
         end
         """)
     ji, ofile = Base.compilecache(Base.PkgId("GenNoSpec"))

@@ -98,7 +98,7 @@ module MiniCassette
         isa(src, CodeInfo) ||
             return generate_lambda_ex(world, source, argnames, spnames, :(error("Unexpected code transformation")))
         src = copy(src)
-        src.edges === Core.svec() ||
+        (src.edges === nothing || src.edges === Core.svec()) ||
             return generate_lambda_ex(world, source, argnames, spnames, :(error("Unexpected code transformation")))
         src.edges = Any[mi]
         transform!(mi, src, length(args), match.sparams)

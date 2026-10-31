@@ -1,35 +1,35 @@
 # This file is machine-generated - editing it directly is not advised
 
 environment_id = "dd8a69ad-5fb8-4982-8386-9647fd58ac86"  # generated
-julia_version = "1.14.0-DEV"
+julia_version = "1.15.0-DEV"
 manifest_format = "2.2"
-project_hash = "6f30eb0e4462e9a5c59d7323aed6b40fd6e2f3da"
+project_hash = "39a9e96fd26eaf3a41f796a8757c9def0213ffc5"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 version = "1.11.0"
 
     [deps.Artifacts.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 version = "1.11.0"
 
     [deps.Base64.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.CRC32c]]
 uuid = "8bf52ea8-c179-5cab-976a-9e18b702a9bc"
 version = "1.11.0"
 
     [deps.CRC32c.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.CodeTracking]]
 deps = ["InteractiveUtils", "REPL", "UUIDs"]
 git-tree-sha1 = "cfb7a2e89e245a9d5016b70323db412b3a7438d5"
-registries = "General"
+registries = ["General", "General"]
 uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
 version = "3.0.2"
 
@@ -38,7 +38,7 @@ version = "3.0.2"
 
 [[deps.Compiler]]
 git-tree-sha1 = "382d79bfe72a406294faca39ef0c3cef6e6ce1f1"
-registries = "General"
+registries = ["General", "General"]
 uuid = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"
 version = "0.1.1"
 
@@ -59,14 +59,14 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 version = "1.11.0"
 
     [deps.Dates.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 version = "1.11.0"
 
     [deps.FileWatching.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -74,15 +74,15 @@ uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 version = "1.11.0"
 
     [deps.InteractiveUtils.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.JuliaInterpreter]]
-deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
-git-tree-sha1 = "521a88f82e52920a3c72b8f43090e23ab3687657"
-repo-rev = "kf/define_method"
-repo-url = "https://github.com/KenoAIStaging/JuliaInterpreter.jl.git"
+deps = ["CodeTracking", "InteractiveUtils", "Random"]
+git-tree-sha1 = "c35411a62b74a0288934ffcfad4fa8dd09b72630"
+repo-rev = "0c3adb4859401971b3b1040e5767bdc2d9414d08"
+repo-url = "https://github.com/JuliaDebug/JuliaInterpreter.jl.git"
 uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
-version = "0.11.4"
+version = "0.12.2"
 
     [deps.JuliaInterpreter.syntax]
     julia_version = "1.10.0"
@@ -101,7 +101,7 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 version = "1.11.0"
 
     [deps.LibGit2.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.LibGit2_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "LibSSH2_jll", "Libdl", "OpenSSL_jll", "PCRE2_jll", "Zlib_jll"]
@@ -124,15 +124,15 @@ uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 version = "1.11.0"
 
     [deps.Libdl.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.LoweredCodeUtils]]
 deps = ["CodeTracking", "Compiler", "JuliaInterpreter"]
-git-tree-sha1 = "1d4c737ab26f51ceed52ab2019c09b7660eb7440"
-repo-rev = "kf/define_method"
-repo-url = "https://github.com/KenoAIStaging/LoweredCodeUtils.jl.git"
+git-tree-sha1 = "b3383cd2b17d8ad4ab7becf07cea43ad692c58bf"
+repo-rev = "6f5c109b054a9f5c04aa042e6fe958fd4cd4f6b7"
+repo-url = "https://github.com/JuliaDebug/LoweredCodeUtils.jl.git"
 uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
-version = "3.8.0"
+version = "3.10.2"
 
     [deps.LoweredCodeUtils.syntax]
     julia_version = "1.10.0"
@@ -143,7 +143,7 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 version = "1.11.0"
 
     [deps.Markdown.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
@@ -162,7 +162,7 @@ version = "3.5.9+0"
 
 [[deps.OrderedCollections]]
 git-tree-sha1 = "05f45c2e0de6259db764adbfd2f1dc6d3f8de13c"
-registries = "General"
+registries = ["General", "General"]
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 version = "2.0.1"
 
@@ -172,7 +172,7 @@ version = "2.0.1"
 [[deps.PCRE2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
-version = "10.48.0+0"
+version = "10.49.1+0"
 
     [deps.PCRE2_jll.syntax]
     julia_version = "1.6.0"
@@ -180,7 +180,7 @@ version = "10.48.0+0"
 [[deps.Preferences]]
 deps = ["TOML"]
 git-tree-sha1 = "8b770b60760d4451834fe79dd483e318eee709c4"
-registries = "General"
+registries = ["General", "General"]
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
 version = "1.5.2"
 
@@ -193,7 +193,7 @@ uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 version = "1.11.0"
 
     [deps.Printf.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.REPL]]
 deps = ["Base64", "Dates", "FileWatching", "InteractiveUtils", "JuliaSyntaxHighlighting", "Markdown", "Sockets", "StyledStrings", "Unicode"]
@@ -201,7 +201,7 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 version = "1.11.0"
 
     [deps.REPL.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.Random]]
 deps = ["SHA"]
@@ -209,15 +209,15 @@ uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 version = "1.11.0"
 
     [deps.Random.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.Revise]]
-deps = ["CRC32c", "CodeTracking", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Preferences", "REPL", "UUIDs"]
-git-tree-sha1 = "df91ef1008af48368d40cf452d3c01fa2270a312"
-repo-rev = "9eaa442e78838987b0fe2fb2888401c563e33a19"
-repo-url = "https://github.com/timholy/Revise.jl.git"
+deps = ["CRC32c", "CodeTracking", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Preferences", "REPL", "Serialization", "UUIDs"]
+git-tree-sha1 = "a63c71c2482aea311a6b348b8c76344ca1a566f9"
+repo-rev = "9b1b6116291160ab49cf937045c3a9e5d24254d0"
+repo-url = "https://github.com/mlechu/Revise.jl.git"
 uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
-version = "3.17.2"
+version = "3.18.0"
 
     [deps.Revise.extensions]
     DistributedExt = "Distributed"
@@ -235,12 +235,19 @@ version = "1.13.0"
     [deps.SHA.syntax]
     julia_version = "1.0.0"
 
+[[deps.Serialization]]
+uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+version = "1.11.0"
+
+    [deps.Serialization.syntax]
+    julia_version = "1.14.0"
+
 [[deps.Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 version = "1.11.0"
 
     [deps.Sockets.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.StyledStrings]]
 uuid = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
@@ -263,14 +270,14 @@ uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 version = "1.11.0"
 
     [deps.UUIDs.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 version = "1.11.0"
 
     [deps.Unicode.syntax]
-    julia_version = "1.14.0-DEV"
+    julia_version = "1.14.0"
 
 [[deps.Zlib_jll]]
 deps = ["Libdl"]

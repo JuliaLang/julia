@@ -1702,11 +1702,12 @@ for i in 1:100
 end
 
 # issue #20835
-@test_throws(ErrorException("could not evaluate ccall argument type (it might depend on a local variable)"),
+# JuliaLowering rejects this early
+@test_throws("local variable",
              eval(:(f20835(x) = ccall(:fn, Cvoid, (Ptr{typeof(x)},), x))))
-@test_throws(UndefVarError(:Something_not_defined_20835, @__MODULE__),
+@test_throws("local variable",
              eval(:(f20835(x) = ccall(:fn, Something_not_defined_20835, (Ptr{typeof(x)},), x))))
-@test isempty(methods(f20835))
+@test !@isdefined(f20835)
 
 @test_throws(ErrorException("ccall method definition: argument 1 type doesn't correspond to a C type"),
              @eval f21104(::Type{T}) where {T} = ccall(:fn, Cvoid, (Some{T},), Some(0)))
@@ -1757,19 +1758,20 @@ let err = ErrorException("error statically evaluating llvm IR argument")
 end
 
 # test for malformed syntax errors
-@test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (), x)))
-@test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))
-@test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y, z)))
-@test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))
-@test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y, z)))
-@test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C), x, y, z)))
-@test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,),)))
-@test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C), )))
-@test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), )))
-@test Expr(:error, "C ABI prohibits vararg without one required argument") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B...,), x)))
-@test Expr(:error, "only the trailing ccall argument type should have \"...\"") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (A, B..., C...), a, x)))
-@test Expr(:error, "only the trailing ccall argument type should have \"...\"") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (A, B..., C...), a, x, y, z)))
-@test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C...), )))
+lowers_to_error(lwr, msg) = Meta.isexpr(lwr, :error)
+@test lowers_to_error(Meta.lower(@__MODULE__, :(ccall(:fn, A, (), x))), "more arguments than types for ccall")
+@test lowers_to_error(Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y))), "more arguments than types for ccall")
+@test lowers_to_error(Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y, z))), "more arguments than types for ccall")
+@test lowers_to_error(Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y))), "more arguments than types for ccall")
+@test lowers_to_error(Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y, z))), "more arguments than types for ccall")
+@test lowers_to_error(Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C), x, y, z))), "more arguments than types for ccall")
+@test lowers_to_error(Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,),))), "more types than arguments for ccall")
+@test lowers_to_error(Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C), ))), "more types than arguments for ccall")
+@test lowers_to_error(Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), ))), "more types than arguments for ccall")
+@test lowers_to_error(Meta.lower(@__MODULE__, :(ccall(:fn, A, (B...,), x))), "C ABI prohibits vararg without one required argument")
+@test lowers_to_error(Meta.lower(@__MODULE__, :(ccall(:fn, A, (A, B..., C...), a, x))), "only the trailing ccall argument type should have \"...\"")
+@test lowers_to_error(Meta.lower(@__MODULE__, :(ccall(:fn, A, (A, B..., C...), a, x, y, z))), "only the trailing ccall argument type should have \"...\"")
+@test lowers_to_error(Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C...), ))), "more types than arguments for ccall")
 
 # test for ccall first argument tuple validation errors
 @test_throws "ccall function name cannot be empty tuple" eval(:(f() = ccall((), A, (), )))
@@ -1799,9 +1801,9 @@ evalf_callback_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} = ci.f(0.5)::
 @test isempty(methods(evalf_callback_c_19805))
 @test_throws(ErrorException("cfunction method definition: Vararg not allowed for argument list"),
              @eval if false; @cfunction(+, Int, (Vararg{Int},)); end)
-@test_throws(ErrorException("could not evaluate cfunction argument type (it might depend on a local variable)"),
+@test_throws("local variable",
              @eval () -> @cfunction(+, Int, (Ref{T}, Ref{T})) where T)
-@test_throws(ErrorException("could not evaluate cfunction return type (it might depend on a local variable)"),
+@test_throws("local variable",
              @eval () -> @cfunction(+, Ref{T}, (Int, Int)) where T)
 @test_throws(ErrorException("cfunction argument 2 type doesn't correspond to a C type"),
              @eval @cfunction(+, Int, (Int, Nothing)))

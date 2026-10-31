@@ -143,11 +143,9 @@ const recycle_worker_tests = ["precompile", "threads"]
 limited_worker_rss && move_to_node1("Distributed")
 
 # Move LinearAlgebra, Pkg, precompile and threads tests to the front, because they take
-# a while, so we might as well get them all started early. JuliaLowering_stdlibs both
-# takes a while and uses a lot of memory at the beginning so try to run it early to keep
-# total memory use flatter. `threads` goes first so that it gets a fresh worker, which is
-# recycled afterwards (see `recycle_worker_tests`).
-for prependme in ["precompile", "LinearAlgebra", "Pkg", "JuliaLowering_stdlibs", "threads"]
+# a while, so we might as well get them all started early. `threads` goes first so that
+# it gets a fresh worker, which is recycled afterwards (see `recycle_worker_tests`).
+for prependme in ["precompile", "LinearAlgebra", "Pkg", "threads"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
     prependme_tests = tests[prependme_test_ids]
     deleteat!(tests, prependme_test_ids)

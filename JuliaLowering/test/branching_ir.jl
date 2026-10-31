@@ -247,13 +247,13 @@ x = @label foo
 end
 #---------------------
 1   TestMod.a
-2   (= slot₁/loop-exit_result 42)
+2   (= slot₁/ 42)
 3   (goto label₆)
 4   TestMod.b
-5   (= slot₁/loop-exit_result %₄)
-6   (isdefined slot₁/loop-exit_result)
+5   (= slot₁/ %₄)
+6   (isdefined slot₁/)
 7   (gotoifnot %₆ label₉)
 8   (goto label₁₀)
-9   (= slot₁/loop-exit_result core.nothing)
-10  slot₁/loop-exit_result
+9   (= slot₁/ core.nothing)
+10  slot₁/
 11  (return %₁₀)

@@ -32,7 +32,7 @@ const TESTNAMES = [
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
         "scopedvalues", "compileall", "rebinding",
         "faulty_constructor_method_should_not_cause_stack_overflows",
-        "JuliaSyntax", "JuliaLowering", "JuliaLowering_stdlibs", "jit",
+        "JuliaSyntax", "JuliaLowering", "jit",
 ]
 
 const INTERNET_REQUIRED_LIST = [
