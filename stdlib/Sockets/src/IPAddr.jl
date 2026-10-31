@@ -42,7 +42,7 @@ ip"192.30.252.154"
 function IPv4(host::Integer)
     if host < 0
         throw(ArgumentError("IPv4 address must be positive"))
-    elseif typemax(typeof(host)) > typemax(UInt32) && host > typemax(UInt32)
+    elseif host > typemax(UInt32)
         throw(ArgumentError("IPv4 address must fit within 32 bits"))
     else
         return IPv4(UInt32(host))
@@ -107,7 +107,7 @@ function IPv6(host::Integer)
         throw(ArgumentError("IPv6 address must be positive"))
         # We allow passing bigger integer types, but need to be careful to avoid overflow
         # Let's hope promotion rules are sensible
-    elseif typemax(typeof(host)) > typemax(UInt128) && host > typemax(UInt128)
+    elseif host > typemax(UInt128)
         throw(ArgumentError("IPv6 address must fit within 128 bits"))
     else
         return IPv6(UInt128(host))
@@ -233,7 +233,8 @@ function parseipv6fields(fields,num_fields)
             cf -= 1
             continue
         end
-        ret |= UInt128(parse(Int, f, base = 16))<<(cf*16)
+        ncodeunits(f) > 4 && throw(ArgumentError("IPv6 field has more than 4 hex digits"))
+        ret |= UInt128(parse(UInt16, f, base = 16))<<(cf*16)
         cf -= 1
     end
     ret
@@ -241,8 +242,14 @@ end
 parseipv6fields(fields) = parseipv6fields(fields,8)
 
 function parse(::Type{IPv6}, str::AbstractString)
+    count("::", str; overlap=true) > 1 && throw(ArgumentError("IPv6 address may contain at most one \"::\""))
+    if (startswith(str, ':') && !startswith(str, "::")) || (endswith(str, ':') && !endswith(str, "::"))
+        throw(ArgumentError("IPv6 address cannot start or end with a single colon"))
+    end
     fields = split(str,':')
-    if length(fields) > 8
+    if length(fields) < 3
+        throw(ArgumentError("too few fields in IPv6 address"))
+    elseif length(fields) > 8
         throw(ArgumentError("too many fields in IPv6 address"))
     elseif length(fields) == 8
         return IPv6(parseipv6fields(fields))

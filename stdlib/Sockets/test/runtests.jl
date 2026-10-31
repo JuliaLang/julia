@@ -173,9 +173,36 @@ sockets_watchdog_timer = Timer(_ -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"
     @test_throws ArgumentError parse(IPv4, "256.256.256.256")
     # too many fields
     @test_throws ArgumentError parse(IPv6, "256:256:256:256:256:256:256:256:256:256:256:256")
+    @test_throws ArgumentError parse(IPv6, "")
+    @test_throws ArgumentError parse(IPv6, ":::")
+    @test_throws ArgumentError parse(IPv6, "::::")
+
+    @test_throws ArgumentError parse(IPv6, "1::2::3")
+    @test_throws ArgumentError parse(IPv6, "::1:2::")
+    @test_throws ArgumentError parse(IPv6, "1:::2")
+    @test_throws ArgumentError parse(IPv6, ":::1")
+    @test_throws ArgumentError parse(IPv6, "1:::2.3.4.5")
+
+    @test_throws ArgumentError parse(IPv6, "::10000")
+    @test_throws ArgumentError parse(IPv6, "::12345")
+    @test_throws ArgumentError parse(IPv6, "::00001")
+    @test parse(IPv6, "::0001") == IPv6(1)
+
+    @test_throws ArgumentError parse(IPv6, ":1")
+    @test_throws ArgumentError parse(IPv6, "1:")
+    @test_throws ArgumentError parse(IPv6, ":1:2")
+    @test_throws ArgumentError parse(IPv6, "1:2:")
+
+    @test_throws ArgumentError parse(IPv6, "::-1")
+    @test_throws ArgumentError parse(IPv6, "::+1")
+    @test_throws ArgumentError parse(IPv6, "1:2:3:4:5:6:7:-1")
 
     @test_throws ArgumentError IPv4(-1)
     @test_throws ArgumentError IPv4(typemax(UInt32) + Int64(1))
+    @test IPv4(big(1)) == ip"0.0.0.1"
+    @test_throws ArgumentError IPv4(big(typemax(UInt32)) + 1)
+    @test IPv6(big(1)) == ip"::1"
+    @test_throws ArgumentError IPv6(big(typemax(UInt128)) + 1)
 
     @test ip"::1" == IPv6(1)
     @test ip"2605:2700:0:3::4713:93e3" == IPv6(parse(UInt128,"260527000000000300000000471393e3", base = 16))
