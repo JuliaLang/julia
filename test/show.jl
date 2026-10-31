@@ -504,6 +504,7 @@ end
 @test sprint(show, Symbol("foo \"bar")) == "Symbol(\"foo \\\"bar\")"
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
+@test sprint(show, :(=>)) == ":(=>)"
 
 # make sure :var"'" prints correctly
 @test sprint(show, Symbol("'")) == "Symbol(\"'\")"
