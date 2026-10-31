@@ -3672,7 +3672,7 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
         if (ios_file(&f, fname, 1, 0, 0, 0) == NULL)
             jl_errorf("System image file \"%s\" not found.", fname);
 
-        if (jl_image_read_ji(&f, &buf, 1) <= 0)
+        if (!jl_image_read_ji(&f, &buf, 1))
             jl_errorf("Error reading system image file.");
 
         ios_close(&f);
@@ -3752,15 +3752,14 @@ static char *jl_image_mmap_at(uintptr_t addr, size_t size, int flags, int fd, si
 // Read and verify the header of the .ji open in `s` into `image`, and read the file into
 // `image->data`.  If `map`, map the heap copy-on-write instead, at its preferred address if it is
 // available, leaving its part of `image->data` unread; it is then temporary.
-// Returns 1 on success, 0 on failure, and -1 if the .ji of a split image was not written with its
-// native image.
+// Returns 0 on failure, including if the .ji of a split image was not written with its native image.
 static int jl_image_read_ji(ios_t *s, jl_image_buf_t *image, int map) JL_NOTSAFEPOINT
 {
     int64_t end = jl_image_read_header(s, image);
     if (!end)
         return 0;
     if (image->is_split && image->checksum != image->heap_checksum)
-        return -1;
+        return 0;
     int64_t heap = image->payload_start, data = heap + image->heap_size;
     if (map) {
         // a mapping must start on an allocation-granularity boundary, so map from the one before
@@ -3911,7 +3910,7 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image) JL_C
 }
 
 // Read the .ji of the split image `handle` into `image` (see jl_image_read_ji), leaving
-// `image->data` NULL if it is the .ji of a package image not written with this .so.
+// `image->data` NULL if it is missing, unreadable or not written with this .so.
 static void jl_image_get_split_ji(void *handle, jl_image_buf_t *image, int map) JL_CANSAFEPOINT
 {
     const char *lib_path = jl_pathname_for_handle(handle);
@@ -3942,23 +3941,10 @@ static void jl_image_get_split_ji(void *handle, jl_image_buf_t *image, int map) 
 #endif
 
     ios_t s;
-    if (!ios_file(&s, ji_path, 1, 0, 0, 0))
-        goto error;
-    int res = jl_image_read_ji(&s, image, map);
-    ios_close(&s);
-    if (res < 0) {
-        if (!(image->flags & JI_FLAG_PKGIMAGE))
-            jl_error("Image checksum mismatch: the heap image (.ji) was not "
-                     "compiled for use with this native image.");
-        return;
+    if (ios_file(&s, ji_path, 1, 0, 0, 0)) {
+        jl_image_read_ji(&s, image, map);
+        ios_close(&s);
     }
-    if (res == 0)
-        goto error;
-    return;
-
-error:
-    jl_printf(JL_STDERR, "unable to load .ji associated with native image: %s\n", ji_path);
-    abort();
 }
 
 JL_DLLEXPORT void jl_image_unpack_split(void *handle, jl_image_buf_t *image) JL_CANSAFEPOINT
@@ -3974,7 +3960,7 @@ JL_DLLEXPORT void jl_image_unpack_split_zstd(void *handle, jl_image_buf_t *image
     jl_image_load_metadata(handle, image);
     jl_image_get_split_ji(handle, image, 0);
     char *comp_data = (char*)image->data;
-    if (comp_data == NULL) // checksum mismatch
+    if (comp_data == NULL)
         return;
     jl_image_decompress(image, comp_data, image->size);
     free(comp_data);
@@ -4026,6 +4012,9 @@ static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage) JL_NOTSAFEPOI
     jl_dlsym(handle, "jl_image_unpack", (void **)&unpack, 1, 0);
     (*unpack)(handle, &image);
 #endif
+    if (image.data == NULL && !is_pkgimage)
+        jl_error("System image file failed consistency check: its heap image (.ji) is missing, "
+                 "unreadable or was not compiled for it.");
     image.base = jl_image_base(image.pointers);
 
     return image;
@@ -4651,9 +4640,9 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
             "Cache file \"%s\" not found.\n", fname);
     }
     jl_image_buf_t buf = { JL_IMAGE_KIND_JI };
-    int res = jl_image_read_ji(&f, &buf, 1);
+    int ok = jl_image_read_ji(&f, &buf, 1);
     ios_close(&f);
-    if (res <= 0)
+    if (!ok)
         return jl_get_exceptionf(jl_errorexception_type, "Error reading package image file \"%s\".", fname);
     jl_gc_notify_image_load(buf.heap, buf.heap_size);
     jl_image_t pkgimage = {};
@@ -4706,13 +4695,14 @@ JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
 JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods, int completeinfo, const char *pkgname, int ignore_native) JL_CANSAFEPOINT
 {
     void *pkgimg_handle = jl_dlopen_e(fname, JL_RTLD_LAZY);
+    if (pkgimg_handle == NULL)
+        return jl_get_exceptionf(jl_errorexception_type, "Package image \"%s\" could not be opened.", fname);
     jl_image_buf_t buf = get_image_buf(pkgimg_handle, /* is_pkgimage */ 1);
     if (buf.data == NULL) {
         // unload it, so that a recompiled image at the same path is not served this handle
         jl_dlclose(pkgimg_handle);
         return jl_get_exceptionf(jl_errorexception_type,
-            "Image checksum mismatch: the heap image (.ji) was not "
-            "compiled for use with \"%s\".", fname);
+            "The heap image (.ji) of \"%s\" is missing, unreadable or was not compiled for it.", fname);
     }
 
     jl_gc_notify_image_load(buf.heap, buf.heap_size);
