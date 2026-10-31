@@ -59,7 +59,7 @@ julia> div(-4, 3, RoundFromZero)
     julia> 6.0 / 0.1
     60.0
     julia> 6.0 / big(0.1)
-    59.99999999999999666933092612453056361837965690217069245739573412231113406246995
+    big"59.99999999999999666933092612453056361837965690217069245739573412231113406246995"
     ```
     What is happening here is that the binary representation of the `Float64`
     number written as `0.1` is slightly larger than the numerical value ``0.1``
@@ -180,7 +180,7 @@ julia> fld.(-5:5, 3)'
     julia> 6.0 / 0.1
     60.0
     julia> 6.0 / big(0.1)
-    59.99999999999999666933092612453056361837965690217069245739573412231113406246995
+    big"59.99999999999999666933092612453056361837965690217069245739573412231113406246995"
     ```
     What is happening here is that the binary representation of the `Float64`
     number written as `0.1` is slightly larger than the numerical value ``0.1``
@@ -227,7 +227,7 @@ julia> cld.(-5:5, 3)'
     julia> 3.0 / 0.3
     10.0
     julia> 3.0 / big(0.3)
-    10.00000000000000037007434154171886050337904945061778828900298697586147515340753
+    big"10.00000000000000037007434154171886050337904945061778828900298697586147515340753"
     ```
     What is happening here is that the binary representation of the `Float64`
     number written as `0.3` is slightly less than the numerical value ``0.3``

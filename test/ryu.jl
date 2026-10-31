@@ -69,10 +69,10 @@ end
     @test "1." == Ryu.writeshortest(1.0, false, false, true, 1)
 
     # expchar
-    @test "1.0d6" == Ryu.writeshortest(1e6, false, false, true, -1, UInt8('d'))
+    @test "1.0d16" == Ryu.writeshortest(1e16, false, false, true, -1, UInt8('d'))
 
     # padexp
-    @test "3.0e+08" == Ryu.writeshortest(3e8, false, false, true, -1, UInt8('e'), true)
+    @test "3.0e+08" == Ryu.writeshortest(3f8, false, false, true, -1, UInt8('e'), true)
 
     # decchar
     @test "3,14" == Ryu.writeshortest(3.14, false, false, true, -1, UInt8('e'), false, UInt8(','))
@@ -211,16 +211,16 @@ end
     @test "1234.0" == Ryu.writeshortest(1.234e+3)
     @test "12345.0" == Ryu.writeshortest(1.2345e+4)
     @test "123456.0" == Ryu.writeshortest(1.23456e+5)
-    @test "1.234567e6" == Ryu.writeshortest(1.234567e+6)
-    @test "1.2345678e7" == Ryu.writeshortest(1.2345678e+7)
-    @test "1.23456789e8" == Ryu.writeshortest(1.23456789e+8)
-    @test "1.23456789e9" == Ryu.writeshortest(1.23456789e+9)
-    @test "1.234567895e9" == Ryu.writeshortest(1.234567895e+9)
-    @test "1.2345678901e10" == Ryu.writeshortest(1.2345678901e+10)
-    @test "1.23456789012e11" == Ryu.writeshortest(1.23456789012e+11)
-    @test "1.234567890123e12" == Ryu.writeshortest(1.234567890123e+12)
-    @test "1.2345678901234e13" == Ryu.writeshortest(1.2345678901234e+13)
-    @test "1.23456789012345e14" == Ryu.writeshortest(1.23456789012345e+14)
+    @test "1234567.0" == Ryu.writeshortest(1.234567e+6)
+    @test "12345678.0" == Ryu.writeshortest(1.2345678e+7)
+    @test "123456789.0" == Ryu.writeshortest(1.23456789e+8)
+    @test "1234567890.0" == Ryu.writeshortest(1.23456789e+9)
+    @test "1234567895.0" == Ryu.writeshortest(1.234567895e+9)
+    @test "12345678901.0" == Ryu.writeshortest(1.2345678901e+10)
+    @test "123456789012.0" == Ryu.writeshortest(1.23456789012e+11)
+    @test "1234567890123.0" == Ryu.writeshortest(1.234567890123e+12)
+    @test "12345678901234.0" == Ryu.writeshortest(1.2345678901234e+13)
+    @test "123456789012345.0" == Ryu.writeshortest(1.23456789012345e+14)
     @test "1.234567890123456e15" == Ryu.writeshortest(1.234567890123456e+15)
 
   # 10^i
@@ -230,15 +230,15 @@ end
     @test "1000.0" == Ryu.writeshortest(1.0e+3)
     @test "10000.0" == Ryu.writeshortest(1.0e+4)
     @test "100000.0" == Ryu.writeshortest(1.0e+5)
-    @test "1.0e6" == Ryu.writeshortest(1.0e+6)
-    @test "1.0e7" == Ryu.writeshortest(1.0e+7)
-    @test "1.0e8" == Ryu.writeshortest(1.0e+8)
-    @test "1.0e9" == Ryu.writeshortest(1.0e+9)
-    @test "1.0e10" == Ryu.writeshortest(1.0e+10)
-    @test "1.0e11" == Ryu.writeshortest(1.0e+11)
-    @test "1.0e12" == Ryu.writeshortest(1.0e+12)
-    @test "1.0e13" == Ryu.writeshortest(1.0e+13)
-    @test "1.0e14" == Ryu.writeshortest(1.0e+14)
+    @test "1000000.0" == Ryu.writeshortest(1.0e+6)
+    @test "10000000.0" == Ryu.writeshortest(1.0e+7)
+    @test "100000000.0" == Ryu.writeshortest(1.0e+8)
+    @test "1000000000.0" == Ryu.writeshortest(1.0e+9)
+    @test "10000000000.0" == Ryu.writeshortest(1.0e+10)
+    @test "100000000000.0" == Ryu.writeshortest(1.0e+11)
+    @test "1000000000000.0" == Ryu.writeshortest(1.0e+12)
+    @test "10000000000000.0" == Ryu.writeshortest(1.0e+13)
+    @test "100000000000000.0" == Ryu.writeshortest(1.0e+14)
     @test "1.0e15" == Ryu.writeshortest(1.0e+15)
 
   # 10^15 + 10^i
@@ -265,30 +265,30 @@ end
     @test "8192.0" == Ryu.writeshortest(8192.0)
     @test "65536.0" == Ryu.writeshortest(65536.0)
     @test "524288.0" == Ryu.writeshortest(524288.0)
-    @test "8.388608e6" == Ryu.writeshortest(8388608.0)
-    @test "6.7108864e7" == Ryu.writeshortest(67108864.0)
-    @test "5.36870912e8" == Ryu.writeshortest(536870912.0)
-    @test "8.589934592e9" == Ryu.writeshortest(8589934592.0)
-    @test "6.8719476736e10" == Ryu.writeshortest(68719476736.0)
-    @test "5.49755813888e11" == Ryu.writeshortest(549755813888.0)
-    @test "8.796093022208e12" == Ryu.writeshortest(8796093022208.0)
-    @test "7.0368744177664e13" == Ryu.writeshortest(70368744177664.0)
-    @test "5.62949953421312e14" == Ryu.writeshortest(562949953421312.0)
+    @test "8388608.0" == Ryu.writeshortest(8388608.0)
+    @test "67108864.0" == Ryu.writeshortest(67108864.0)
+    @test "536870912.0" == Ryu.writeshortest(536870912.0)
+    @test "8589934592.0" == Ryu.writeshortest(8589934592.0)
+    @test "68719476736.0" == Ryu.writeshortest(68719476736.0)
+    @test "549755813888.0" == Ryu.writeshortest(549755813888.0)
+    @test "8796093022208.0" == Ryu.writeshortest(8796093022208.0)
+    @test "70368744177664.0" == Ryu.writeshortest(70368744177664.0)
+    @test "562949953421312.0" == Ryu.writeshortest(562949953421312.0)
     @test "9.007199254740992e15" == Ryu.writeshortest(9007199254740992.0)
 
   # 1000 * (Largest power of 2 <= 10^(i+1))
     @test "8000.0" == Ryu.writeshortest(8.0e+3)
     @test "64000.0" == Ryu.writeshortest(64.0e+3)
     @test "512000.0" == Ryu.writeshortest(512.0e+3)
-    @test "8.192e6" == Ryu.writeshortest(8192.0e+3)
-    @test "6.5536e7" == Ryu.writeshortest(65536.0e+3)
-    @test "5.24288e8" == Ryu.writeshortest(524288.0e+3)
-    @test "8.388608e9" == Ryu.writeshortest(8388608.0e+3)
-    @test "6.7108864e10" == Ryu.writeshortest(67108864.0e+3)
-    @test "5.36870912e11" == Ryu.writeshortest(536870912.0e+3)
-    @test "8.589934592e12" == Ryu.writeshortest(8589934592.0e+3)
-    @test "6.8719476736e13" == Ryu.writeshortest(68719476736.0e+3)
-    @test "5.49755813888e14" == Ryu.writeshortest(549755813888.0e+3)
+    @test "8192000.0" == Ryu.writeshortest(8192.0e+3)
+    @test "65536000.0" == Ryu.writeshortest(65536.0e+3)
+    @test "524288000.0" == Ryu.writeshortest(524288.0e+3)
+    @test "8388608000.0" == Ryu.writeshortest(8388608.0e+3)
+    @test "67108864000.0" == Ryu.writeshortest(67108864.0e+3)
+    @test "536870912000.0" == Ryu.writeshortest(536870912.0e+3)
+    @test "8589934592000.0" == Ryu.writeshortest(8589934592.0e+3)
+    @test "68719476736000.0" == Ryu.writeshortest(68719476736.0e+3)
+    @test "549755813888000.0" == Ryu.writeshortest(549755813888.0e+3)
     @test "8.796093022208e15" == Ryu.writeshortest(8796093022208.0e+3)
 end
 
@@ -352,7 +352,7 @@ end
 
 @testset "Regression" begin
     @test "4.7223665e21" == Ryu.writeshortest(4.7223665f21)
-    @test "8.388608e6" == Ryu.writeshortest(8388608f0)
+    @test "8388608.0" == Ryu.writeshortest(8388608f0)
     @test "1.6777216e7" == Ryu.writeshortest(1.6777216f7)
     @test "3.3554436e7" == Ryu.writeshortest(3.3554436f7)
     @test "6.7131496e7" == Ryu.writeshortest(6.7131496f7)
@@ -429,35 +429,28 @@ end
     @test "Float16(1)" == Ryu.writeshortest(Float16(1.0), false, false, false, -1, UInt8('e'), false, UInt8('.'), true)
 end
 
-let x=floatmin(Float16)
+let x=-Inf16
     while x <= floatmax(Float16)
         @test parse(Float16, Ryu.writeshortest(x)) == x
         x = nextfloat(x)
     end
 end
 
-# function testfloats(T)
-#     x = floatmin(T)
-#     i = 0
-#     fails = 0
-#     success = 0
-#     while x < floatmax(T)
-#         test = parse(T, Ryu.writeshortest(x)) == x
-#         if !test
-
-#             fails += 1
-#         else
-#             success += 1
-#         end
-#         x = nextfloat(x)
-#         i += 1
-
-#     end
-#     return fails / (fails + success)
-# end
-
 @test "-0.00010014" == Ryu.writeshortest(Float16(-0.00010014)) #longest Float16
 end # Float16
+
+@testset "round-trip parsing" begin
+    function randfloats(T, n)
+        x = nextfloat(T(-Inf))
+        while x < T(Inf)
+            parse(T, Ryu.writeshortest(x)) != x && return x, reinterpret(Unsigned, x)
+            x += n*eps(x)*rand(T)
+        end
+    end
+
+    @test randfloats(Float32, 1f3) === nothing
+    @test randfloats(Float64, 1e13) === nothing
+end
 
 @testset "writeshortest(::AbstractVector, pos, ...)" begin
     @testset for Vec in (Vector{UInt8}, Memory{UInt8})
