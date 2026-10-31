@@ -45,6 +45,11 @@ typedef struct {
     size_t perm_scanned_bytes;
     // thread local increment of `scanned_bytes`
     size_t scanned_bytes;
+    // the last type marked through its `ptrmap`: its tag, map and size.
+    // Cleared when marking starts, since a dead type's address can be reused.
+    uintptr_t last_vtag;
+    uint32_t last_ptrmap;
+    size_t last_dtsz;
 } jl_gc_mark_cache_t;
 
 typedef struct {
