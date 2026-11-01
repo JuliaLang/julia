@@ -467,7 +467,7 @@ end
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
     p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - firstindex(a))
-    GC.@preserve ap return unsafe_load(p)
+    GC.@preserve a return unsafe_load(p)
 end
 
 function _is_scalar_reinterpret_applicable(T, S)
@@ -616,7 +616,7 @@ end
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
     p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - firstindex(a))
-    GC.@preserve ap unsafe_store!(p, v)
+    GC.@preserve a unsafe_store!(p, v)
     return a
 end
 

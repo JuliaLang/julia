@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+using InteractiveUtils: code_llvm
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 isdefined(Main, :TSlow) || @eval Main include("testhelpers/arrayindexingtypes.jl")
@@ -974,4 +975,24 @@ end
     src3 = reshape(UInt8.(1:16), 4, 2, 2)
     copyto!(O3, src3)
     @test [O3[i, j, k] for i in 1:4, j in 6:7, k in -1:0] == src3
+end
+
+# The per-element pointer path must not leave a GC preserve of a value loaded from an
+# `Array` parent in the loop body, which keeps the loop from vectorizing
+function simd_sum_reinterpret(r)
+    s = 0
+    @inbounds @simd for i in eachindex(r)
+        s += r[i]
+    end
+    return s
+end
+@testset "reinterpret of an Array vectorizes" begin
+    r = reinterpret(Int16, UInt8.(1:200))
+    @test simd_sum_reinterpret(r) == sum(Int[r[i] for i in eachindex(r)])
+    if Sys.ARCH in (:x86_64, :aarch64)
+        for P in (Vector{UInt8}, Memory{UInt8})
+            llvm = sprint(code_llvm, simd_sum_reinterpret, (Base.ReinterpretArray{Int16,1,UInt8,P,false},))
+            @test occursin(r"<\d+ x i16>", llvm)
+        end
+    end
 end
