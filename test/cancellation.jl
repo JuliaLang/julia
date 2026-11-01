@@ -2966,6 +2966,25 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test p.termsignal == Base.SIGTERM
     @test time() - t0 < 6
 
+    # a hook that calls `exit` during the fallback does not stop the hooks after it
+    t0 = time()
+    output, p, exited = run_with_sigterm("""
+        atexit(() -> println("LAST-HOOK-RAN"))
+        atexit(() -> exit(3))
+        function spin()
+            x = 0.0
+            while true
+                x += sin(x) + 1e-9
+            end
+            return x
+        end
+        spin()
+    """, [0.5])
+    @test exited === :ok
+    @test occursin("LAST-HOOK-RAN", output)
+    @test p.termsignal == Base.SIGTERM
+    @test time() - t0 < 6
+
     # a collection that waits for a thread blocked in a foreign call does not keep the
     # process alive
     t0 = time()

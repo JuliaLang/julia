@@ -230,6 +230,7 @@ JL_DLLEXPORT void jl_raise(int signo)
 // request that the process did not act on in time. Only one of them may run it.
 enum { JL_ATEXIT_NONE, JL_ATEXIT_ORDINARY, JL_ATEXIT_FALLBACK };
 static _Atomic(int) atexit_owner = JL_ATEXIT_NONE;
+static _Atomic(jl_task_t*) fallback_task = NULL;
 
 // `concurrent` means other threads may still be running Julia code, and none of them
 // was stopped, so the teardown must not wait for them or tear down what they use.
@@ -240,8 +241,13 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
     int owner = JL_ATEXIT_NONE;
     if (!jl_atomic_cmpswap(&atexit_owner, &owner, JL_ATEXIT_ORDINARY) &&
             owner == JL_ATEXIT_FALLBACK) {
-        // the fallback is already ending the process
         jl_task_t *ct = jl_get_current_task();
+        if (ct != NULL && ct == jl_atomic_load_relaxed(&fallback_task)) {
+            // a hook called `exit`: carry on with the teardown, as the ordinary exit does
+            jl_atexit_teardown(exitcode, 1);
+            return;
+        }
+        // the fallback is already ending the process
         if (ct != NULL)
             (void)jl_gc_safe_enter(ct->ptls);
         for (;;)
@@ -285,9 +291,11 @@ static void jl_atexit_teardown(int exitcode, int concurrent) JL_NO_SAFEPOINT_ANA
 
     if (ct == NULL && jl_base_module) {
         ct = container_of(jl_adopt_thread(), jl_task_t, gcstack);
-        // the thread that runs the event loop may be busy, and the hooks need the loop
-        if (concurrent)
+        if (concurrent) {
+            jl_atomic_store_relaxed(&fallback_task, ct);
+            // the thread that runs the event loop may be busy, and the hooks need the loop
             jl_set_io_loop_tid(jl_atomic_load_relaxed(&ct->tid));
+        }
     }
     else if (ct != NULL) {
         // we are about to start tearing everything down, so lets try not to get
