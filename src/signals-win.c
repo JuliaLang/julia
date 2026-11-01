@@ -58,9 +58,7 @@ void __cdecl crt_sig_handler(int sig, int num)
             jl_task_t *ct = jl_get_current_task();
             jl_ptls_t ptls = (ct != NULL) ? ct->ptls : NULL;
             int8_t gc_state = (ptls != NULL) ? jl_gc_safe_enter(ptls) : 0;
-            // Deliver the press through the cancellation system, unless ^C
-            // exits or nothing can take it; then request graceful
-            // termination (see jl_request_process_termination).
+            // a ^C that is not delivered as a cancellation requests termination
             int handled = (jl_sigint_get_policy() != JL_SIGINT_EXIT &&
                            jl_sigint_request_cancellation()) ||
                           jl_request_process_termination(sig);
@@ -71,11 +69,8 @@ void __cdecl crt_sig_handler(int sig, int num)
         }
         break;
     case SIGTERM: {
-        // A C-runtime raise(SIGTERM): request graceful termination, like a
-        // unix SIGTERM; the raising thread resumes and the governed work
-        // unwinds through its cancellation points into the ordinary exit
-        // path. Without a registered root source, or on a repeat request,
-        // exit abruptly with the C runtime's default disposition.
+        // a C runtime raise(SIGTERM) requests termination as on unix;
+        // if that fails, die by the signal now
         signal(SIGTERM, (void (__cdecl *)(int))crt_sig_handler);
         jl_task_t *ct = jl_get_current_task();
         jl_ptls_t ptls = (ct != NULL) ? ct->ptls : NULL;
@@ -546,16 +541,8 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
             // the press was delivered through the cancellation system
         }
         else {
-            // A termination request: close/logoff/shutdown (and
-            // Ctrl+Break), or ^C with exit-on-sigint. Request graceful
-            // termination (see jl_request_process_termination) and block
-            // this handler thread: Windows kills the process the moment
-            // the handler returns for CTRL_CLOSE_EVENT, while the ordinary
-            // exit path terminates it first when the teardown succeeds -
-            // and the OS's own handler deadline bounds one that does not.
-            // Without a registered root source, or on a repeat request,
-            // run the orderly teardown synchronously here, as before.
-            // (Matches unix SIGTERM's exit status.)
+            // Windows kills the process once this handler returns for
+            // CTRL_CLOSE_EVENT, so block here until the exit ends it.
             if (jl_request_process_termination(sig))
                 Sleep(INFINITE);
             // a repeat request while an exit runs ends the process at once, as on unix

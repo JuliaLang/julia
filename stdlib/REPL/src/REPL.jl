@@ -672,8 +672,7 @@ show_repl(io::IO, ::MIME"text/plain", ex::Expr) =
         sprint(show, ex, context=IOContext(io, :color => false))))
 
 function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
-    # An evaluation unwound by a process-termination request (SIGTERM) needs
-    # no report - the session is exiting, not returning to a prompt.
+    # no report on termination: the session is exiting, not returning to a prompt
     Base.process_terminating() && return nothing
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
@@ -863,14 +862,12 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
             write(repl.terminal, '\n')
             ((!interrupted && isempty(line)) || hit_eof) && break
         catch e
-            # A process-termination request unwinds the blocked reads; shut
-            # down like an EOF (see the LineEditREPL frontend).
+            # a termination signal unwinds the blocked read; shut down like on EOF
             Base.process_terminating() && break
             isa(e, InterruptException) || rethrow()
         end
     end
-    # terminate backend (shielded: this is REPL teardown and must work while
-    # the frontend's own scope is being cancelled)
+    # terminate backend, shielded because the frontend's scope may be cancelled
     Base.ScopedValues.@with Base.CANCEL_TOKEN => nothing begin
         put!(backend.repl_channel, (nothing, -1))
     end
@@ -1877,14 +1874,10 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     catch e
         # The terminal went away (e.g. its window was closed): end the session
         # like ^D does, rather than failing on the next write to it.
-        # A process-termination request (SIGTERM) cancels the root source,
-        # which unwinds the frontend's blocked terminal reads: shut the REPL
-        # down like an EOF would, so the process exits through the ordinary
-        # exit path.
+        # a termination signal unwinds the blocked terminal read; end the session the same way
         terminal_gone(e) || Base.process_terminating() || rethrow()
     end
-    # Terminate Backend. The put! is REPL teardown and must work while the
-    # frontend's own scope is being cancelled - shield it.
+    # Terminate Backend, shielded because the frontend's scope may be cancelled
     Base.ScopedValues.@with Base.CANCEL_TOKEN => nothing begin
         put!(backend.repl_channel, (nothing, -1))
     end

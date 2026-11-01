@@ -1524,8 +1524,7 @@ const register_atexit_hook = Base.OncePerProcess{Nothing}() do
         task === nothing && return
         istaskdone(task) && return
         stop_background_precompile(; graceful=false)
-        # A termination fallback runs this outside every threadpool, while the threads that
-        # could run the task may be busy, so it does not wait for it.
+        # on termination, a foreign thread may run this while the pool threads stay busy
         Threads.threadpool() === :foreign || wait(task)
     end
     nothing

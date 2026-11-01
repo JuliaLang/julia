@@ -2812,12 +2812,10 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
 end
 
 Sys.isunix() && @testset "SIGTERM graceful termination" begin
-    # Bare executable, as in the "^C" testset: these scenarios assert the
-    # termination semantics, not the suite's flag matrix.
+    # default flags, as in the ^C testset
     exe = joinpath(Sys.BINDIR, Base.julia_exename())
     function run_with_sigterm(code::String, delays; signum::Int=Base.SIGTERM, flags=``)
-        # The readiness marker proves the runtime is up before the first
-        # signal is sent (see the "^C" testset's run_with_sigint).
+        # don't signal before the script has started
         code = "println(\"CHILD-READY\")\n" * code
         out = Pipe()
         p = run(pipeline(`$exe --startup-file=no $flags -e $code`,
@@ -2838,10 +2836,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
         return fetch(reader), p, exited
     end
 
-    # SIGTERM cancels the process root source: the parked sleep unwinds
-    # quietly (no error report), the atexit hooks run in the ordinary exit
-    # path, and the process still dies by SIGTERM (the runtime re-raises it
-    # at the end of the teardown) - issue #62774
+    # SIGTERM during a sleep: quiet exit, hooks run, dies by SIGTERM (#62774)
     output, p, exited = run_with_sigterm("""
         atexit(() -> println("ATEXIT-RAN"))
         sleep(100)
@@ -2853,9 +2848,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test !occursin("CancellationRequest", output)
     @test p.termsignal == Base.SIGTERM
 
-    # `finally` blocks of the governed work run before the exit (shielded,
-    # like any cleanup that must still block - here: write to a pipe - under
-    # its own cancelled scope)
+    # a `finally` block runs before the exit
     output, p, exited = run_with_sigterm("""
         try
             sleep(100)
@@ -2869,8 +2862,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test occursin("FINALLY-RAN", output)
     @test p.termsignal == Base.SIGTERM
 
-    # cleanup code can distinguish a terminating process from an ordinary
-    # cancellation - and catching the request does not avert the exit
+    # a catch block sees a termination request, and catching it does not stop the exit
     output, p, exited = run_with_sigterm("""
         try
             sleep(100)
@@ -2887,8 +2879,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test occursin("terminate-request=true", output)
     @test p.termsignal == Base.SIGTERM
 
-    # work shielded from cancellation cannot be unwound by the graceful
-    # request; a repeat SIGTERM exits abruptly instead
+    # shielded work: a second SIGTERM exits at once
     output, p, exited = run_with_sigterm("""
         Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
             sleep(100)
@@ -2897,8 +2888,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test exited === :ok
     @test p.termsignal == Base.SIGTERM
 
-    # code that never reaches a cancellation point still exits by SIGTERM with
-    # its atexit hooks run: after a grace period they run on another thread
+    # a loop that never reaches a cancellation point: the hooks still run
     output, p, exited = run_with_sigterm("""
         atexit(() -> println("ATEXIT-RAN"))
         function spin()
@@ -2914,7 +2904,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test occursin("ATEXIT-RAN", output)
     @test p.termsignal == Base.SIGTERM
 
-    # a cleanup that waits for longer than that grace period still finishes
+    # a cleanup that waits for longer than the grace period still finishes
     output, p, exited = run_with_sigterm("""
         try
             sleep(100)
@@ -2929,7 +2919,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test occursin("FINALLY-RAN", output)
     @test p.termsignal == Base.SIGTERM
 
-    # so does one that polls with `yield`, while idle threads keep being woken
+    # so does one that polls with `yield` while other threads are idle
     output, p, exited = run_with_sigterm("""
         try
             sleep(100)
@@ -2947,7 +2937,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test occursin("FINALLY-RAN", output)
     @test p.termsignal == Base.SIGTERM
 
-    # with every thread busy, the exit does not also wait out the teardown deadline
+    # every thread busy: the exit is still prompt
     t0 = time()
     output, p, exited = run_with_sigterm("""
         atexit(() -> println("ATEXIT-RAN"))
@@ -2966,7 +2956,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test p.termsignal == Base.SIGTERM
     @test time() - t0 < 6
 
-    # a hook that calls `exit` during the fallback does not stop the hooks after it
+    # a busy thread and a hook that calls `exit`: the later hooks still run
     t0 = time()
     output, p, exited = run_with_sigterm("""
         atexit(() -> println("LAST-HOOK-RAN"))
@@ -2985,8 +2975,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test p.termsignal == Base.SIGTERM
     @test time() - t0 < 6
 
-    # a collection that waits for a thread blocked in a foreign call does not keep the
-    # process alive
+    # a GC waiting on a thread in a foreign call does not block the exit
     t0 = time()
     output, p, exited = run_with_sigterm("""
         Threads.@spawn Libc.systemsleep(100)
@@ -2998,9 +2987,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test p.termsignal == Base.SIGTERM
     @test time() - t0 < 8
 
-    # with exit-on-sigint, a SIGINT terminates the process through the same
-    # graceful path: the atexit hooks run, the exit is quiet, and the
-    # process dies by SIGINT
+    # with exit-on-sigint, SIGINT exits like SIGTERM and dies by SIGINT
     output, p, exited = run_with_sigterm("""
         Base.exit_on_sigint(true)
         atexit(() -> println("ATEXIT-RAN"))
@@ -3013,10 +3000,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test !occursin("CancellationRequest", output)
     @test p.termsignal == Base.SIGINT
 
-    # SIGQUIT is the wedge-proof dump-and-die escape hatch: it prints the
-    # all-task backtraces and exits abruptly - no graceful unwinding, no
-    # atexit hooks - so watchdogs can rely on it even when the process
-    # cannot cooperate
+    # SIGQUIT prints task backtraces and exits at once, without the hooks
     output, p, exited = run_with_sigterm("""
         atexit(() -> println("ATEXIT-RAN"))
         sleep(100)
@@ -3026,11 +3010,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test !occursin("ATEXIT-RAN", output)
     @test p.termsignal == Base.SIGQUIT
 
-    # a SIGTERM at any point during startup must terminate the process:
-    # before Base registers the root source it exits abruptly, afterwards
-    # through the graceful path - it must never wedge (the failure mode of
-    # issue #62774: a teardown hijacked onto a half-initialized thread 0
-    # deadlocking on runtime locks)
+    # SIGTERM at any point in startup exits and never hangs (#62774)
     for delay in (0.0, 0.05, 0.2)
         p = run(pipeline(`$exe --startup-file=no -e 'sleep(60)'`,
                          stdin=devnull, stdout=devnull, stderr=devnull), wait=false)
@@ -3047,8 +3027,7 @@ end
 Sys.isunix() && @testset "SIGTERM in the REPL (pty)" begin
     isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
 
-    # Interactive julia on a pty (like the "^C in the REPL" testset); the
-    # session must shut down cleanly on SIGTERM, dying by the signal.
+    # start a REPL on a pty, run `drive!`, then send SIGTERM
     function repl_sigterm_session(drive!::Function)
         pts, ptm = Main.FakePTYs.open_fake_pty()
         env = copy(ENV)
@@ -3097,13 +3076,11 @@ Sys.isunix() && @testset "SIGTERM in the REPL (pty)" begin
         wait(reader)
     end
 
-    # SIGTERM at an idle prompt: the frontend's terminal read unwinds and
-    # the session exits
+    # SIGTERM at an idle prompt
     repl_sigterm_session() do p, expect, sendline
     end
 
-    # SIGTERM during an evaluation: the evaluation unwinds (with no error
-    # report) and the session exits
+    # SIGTERM during an evaluation
     repl_sigterm_session() do p, expect, sendline
         sendline("println(\"EVAL-1\"); sleep(1000)")
         expect("EVAL-1")

@@ -1879,9 +1879,8 @@ JL_DLLEXPORT int jl_abandon_task_withdraw(int16_t tid)
 
 // cancellation token sources -----------------------------------------------
 
-// Advance the source's state to its join with `sev` (a nonzero state byte:
-// severity plus optionally the terminate bit); returns whether the state
-// changed. Mirrors `Base._raise_state!`.
+// raise the source's state to include `sev`; returns whether it changed.
+// Mirrors `Base._raise_state!`.
 static int cancel_source_raise_state(jl_cancel_source_t *src, uint8_t sev) JL_NOTSAFEPOINT
 {
     uint8_t old = jl_atomic_load_relaxed(&src->state);

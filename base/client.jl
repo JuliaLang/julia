@@ -606,8 +606,7 @@ function session_cancel_source!()
     try
         ses = _session_cancel_source[]
         if ses === nothing
-            # A child of the process root source, so a termination request
-            # (SIGTERM) sweeps the session's work along with everything else.
+            # under the process root, so a termination signal cancels the session too
             ses = CancellationTokenSource(process_cancel_token())
             _session_cancel_source[] = ses
         end
@@ -666,10 +665,8 @@ function _start()
     # exit-on-sigint disabled) cancels the episode token's scope. An
     # interactive session installs its own per-evaluation episodes later
     # (see REPL.repl_backend_loop), superseding this one. Deliberately not a
-    # session child (see the `sigint_new_episode!` docstring), but a child
-    # of the process root source, so a termination request (SIGTERM) unwinds
-    # the foreground work and the process exits through the ordinary exit
-    # path.
+    # session child (see the `sigint_new_episode!` docstring), but under the
+    # process root, so a termination signal unwinds the foreground work.
     sigint_tok = sigint_new_episode!(CancellationTokenSource(process_cancel_token()))
     @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() CANCEL_TOKEN=>sigint_tok try
         repl_was_requested = exec_options(JLOptions())
@@ -695,10 +692,7 @@ function _start()
     catch
         ret = Cint(1)
         if process_terminating()
-            # A termination signal unwound the foreground work: exit quietly
-            # through the ordinary exit path - the atexit hooks run next
-            # (shielded, see `_atexit`) and `jl_atexit_hook` then re-raises
-            # the signal, so the exit status reports the signal death.
+            # no error report on termination; the exit re-raises the signal
             sigint_close_episode!()
         else
             # report the error in a fresh ^C epoch (the script's epoch may be

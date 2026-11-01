@@ -397,8 +397,7 @@ function start_profile_listener()
         # this will prompt any ongoing or pending event to flush also
         close(cond)
         # error-propagation is not needed, since the errormonitor will handle printing that better
-        # A termination fallback runs this outside every threadpool, while the threads that
-        # could run the listener may be busy, so it does not wait for it.
+        # on termination, a foreign thread may run this while the pool threads stay busy
         t === current_task() || Threads.threadpool() === :foreign || _wait(t)
     end
     finalizer(cond) do c
@@ -420,26 +419,13 @@ end
 # never cancel a newly installed one.
 const _sigint_episode = Ref{Tuple{Union{Nothing, CancellationTokenSource}, UInt64}}((nothing, 0))
 
-# The process-wide root cancellation source. Created (fresh, per process) in
-# `__init__` and registered with the runtime; a termination signal (SIGTERM)
-# cancels it - with the terminate flag, see `is_terminate_request` - and the
-# process then exits through the ordinary exit path once the governed work
-# has unwound (the C side re-raises the signal at the end of
-# `jl_atexit_hook`, preserving the exit status). The session and episode
-# sources attach underneath it (see base/client.jl), so a termination
-# request reaches everything an interactive session or script runs; only
-# internal machinery deliberately running unscoped (the signal listeners,
-# cleanup tasks) is outside its reach. This Ref roots the source for the
-# lifetime of the process; the C mirror reads are lock-free.
+# root of all cancellation in the process; a termination signal cancels it.
+# set once under the lock below; this also keeps alive the runtime's unrooted copy
 const _process_cancel_source = Ref{Union{Nothing, CancellationTokenSource}}(nothing)
 
 const _process_cancel_lock = ReentrantLock()
 
-# The process root source, created on first use. `__init__` eagerly creates
-# and registers it (so a SIGTERM is deliverable from process start), but
-# environments that run `_start` without Base's `__init__` (e.g. the
-# sysimage output stage) still get a working - if unregistered-with-the-
-# runtime-after-restore - source tree through the lazy path.
+# init normally creates this; created here when Base's init did not run (sysimage build)
 function process_cancel_source!()
     src = _process_cancel_source[]
     src === nothing || return src
@@ -457,18 +443,14 @@ function process_cancel_source!()
     end
 end
 
-# The token of the process root source, for linking session-level sources
-# underneath it.
 process_cancel_token() = CancellationToken(process_cancel_source!())
 
 @doc """
     Base.process_terminating() -> Bool
 
-Whether graceful process termination has been requested (a termination
-signal - SIGTERM - was received): the process-wide root cancellation source
-has been cancelled and the process exits once the work governed by it has
-unwound. Cleanup code that runs during the unwind can use this to
-distinguish a terminating process from an ordinary cancellation.
+Return `true` once a termination signal (such as SIGTERM) has been received.
+The process exits after the cancelled work has unwound. Cleanup code can use
+this to tell termination apart from an ordinary cancellation.
 """
 process_terminating() = ccall(:jl_process_term_signo, Cint, ()) != 0
 # The task driving the current foreground evaluation (the caller of
@@ -533,11 +515,8 @@ const sigint_pass_lock = ReentrantLock()
 # serializing passes through the lock is enough.
 function _sigint_dispatch_pass()
     if process_terminating()
-        # A termination signal cancelled the process root source (the C
-        # side marked the whole tree - see jl_request_process_termination -
-        # but cannot wake parked waiters); finish the delivery. Idempotent
-        # and level-based, like the ^C path below. Any coincident ^C press
-        # is moot - the process is exiting.
+        # the signal handler marked the tree cancelled but cannot wake parked tasks.
+        # any ^C press no longer matters, since the process is exiting
         root = _process_cancel_source[]
         root === nothing || redeliver!(root)
         return nothing
@@ -641,8 +620,7 @@ function start_sigint_listener()
         # this will prompt any ongoing or pending event to flush also
         close(cond)
         # error-propagation is not needed, since the errormonitor will handle printing that better
-        # A termination fallback runs this outside every threadpool, while the threads that
-        # could run the listeners may be busy, so it does not wait for them.
+        # on termination, a foreign thread may run this while the pool threads stay busy
         if Threads.threadpool() !== :foreign
             for t in listeners
                 t === current_task() || _wait(t)
@@ -681,11 +659,7 @@ function __init__()
         # triggering a profile via signals is not implemented on windows
         start_profile_listener()
     end
-    # The process root cancellation source: termination signals (SIGTERM)
-    # cancel it so the process can exit through the ordinary exit path. Must
-    # be a fresh source per process (severities are monotonic; one restored
-    # from an image could have been cancelled in the build session - and the
-    # runtime-side mirror is not serialized either way).
+    # fresh per process: an image's copy may be cancelled, and the runtime's pointer is not saved
     let root = CancellationTokenSource()
         _process_cancel_source[] = root
         ccall(:jl_set_term_source, Cvoid, (Any,), root)

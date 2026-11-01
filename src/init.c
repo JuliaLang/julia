@@ -226,14 +226,12 @@ JL_DLLEXPORT void jl_raise(int signo)
 #endif
 }
 
-// Which exit runs the teardown: the ordinary one, or the fallback for a termination
-// request that the process did not act on in time. Only one of them may run it.
+// set by whichever exit path claims the teardown first; the other must not run it
 enum { JL_ATEXIT_NONE, JL_ATEXIT_ORDINARY, JL_ATEXIT_FALLBACK };
 static _Atomic(int) atexit_owner = JL_ATEXIT_NONE;
 static _Atomic(jl_task_t*) fallback_task = NULL;
 
-// `concurrent` means other threads may still be running Julia code, and none of them
-// was stopped, so the teardown must not wait for them or tear down what they use.
+// concurrent: other threads still run, so don't wait for them or free what they use
 static void jl_atexit_teardown(int exitcode, int concurrent) JL_CANSAFEPOINT_LEAVE;
 
 JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
@@ -256,8 +254,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
     jl_atexit_teardown(exitcode, 0);
 }
 
-// Returns whether the fallback may run the teardown, which it may only if the ordinary
-// exit has not started.
+// fails if the ordinary exit has already started
 int jl_atexit_fallback_claim(void) JL_NOTSAFEPOINT
 {
     int owner = JL_ATEXIT_NONE;
@@ -269,10 +266,8 @@ int jl_atexit_started(void) JL_NOTSAFEPOINT
     return jl_atomic_load_relaxed(&atexit_owner) != JL_ATEXIT_NONE;
 }
 
-// Called on a thread unknown to Julia, after a successful claim, when a termination
-// request was not acted on in time, for example because the main task is busy in code
-// that never checks for cancellation. No thread is stopped, so none can hold a lock
-// that the exit needs.
+// runs the exit on a foreign thread when a busy thread ignored a termination request
+// no thread is suspended, so none is frozen while holding a lock the exit needs
 void jl_atexit_fallback(int sig) JL_NO_SAFEPOINT_ANALYSIS
 {
     // a busy thread may never reach a safepoint, so a collection would wait for ever
@@ -411,14 +406,11 @@ static void jl_atexit_teardown(int exitcode, int concurrent) JL_NO_SAFEPOINT_ANA
 #ifdef _OS_WINDOWS_
     jl_fin_stackwalk();
 #endif
-    // A graceful, signal-requested termination ran the ordinary teardown
-    // above; the process must nevertheless die by that signal, preserving
-    // the exit status and disposition a supervisor expects of it.
+    // die by the termination signal, so a supervisor sees the status it expects
     int termsig = jl_process_term_signo();
     if (termsig != 0) {
 #ifdef _OS_WINDOWS_
-        // There is no death-by-signal on Windows; report the conventional
-        // 128 + signo exit status instead.
+        // no death by signal on Windows
         exit(128 + termsig);
 #else
         jl_raise(termsig);

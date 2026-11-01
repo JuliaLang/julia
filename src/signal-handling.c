@@ -701,19 +701,10 @@ static int jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
     return 1;
 }
 
-// The process-wide root cancellation source: Base.__init__ creates it,
-// keeps a rooted reference for the lifetime of the process, and registers
-// this mirror. Every session/episode source attaches underneath it, so
-// cancelling it reaches everything a termination request should stop. The
-// signal thread reads the mirror lock-free and uses the object only under
-// a GC exclusion (the subtree walk follows weak child links).
+// the process-wide root cancellation source, kept rooted by Base
+// read without a lock, and used only while GC is excluded
 static _Atomic(jl_value_t *) jl_term_source = NULL;
-// The signal that requested process termination (0 = none). Set (once)
-// before the root source is marked, so any observer of a terminate-flagged
-// cancellation also observes the signal number. Read by Base (the dispatch
-// pass and the exit drivers) and by jl_atexit_hook, which re-raises it at
-// the end of the ordinary teardown to preserve the exit status and
-// disposition of a signal death.
+// set once, before the root source is cancelled, so anyone who sees the cancellation sees it
 static _Atomic(int) jl_term_signo = 0;
 
 JL_DLLEXPORT void jl_set_term_source(jl_value_t *src) JL_NOTSAFEPOINT
@@ -727,23 +718,14 @@ JL_DLLEXPORT int jl_process_term_signo(void) JL_NOTSAFEPOINT
     return jl_atomic_load_acquire(&jl_term_signo);
 }
 
-// A termination signal (SIGTERM) requests graceful process termination:
-// mark the root source's subtree cancelled with the terminate bit and let
-// the cancellation unwind the governed work, so the process exits through
-// the ordinary exit path - atexit hooks run on a sound stack instead of a
-// frame hijacked at an arbitrary point (issue #62774). Returns 1 when the
-// request was delivered; 0 when it cannot be (no root source registered -
-// still initializing, or an embedder that never runs Base.__init__ - or
-// termination was already requested once), in which case the caller must
-// exit abruptly instead. Runs on an ordinary (non-Julia) thread; must not
-// allocate GC memory or take Julia-side locks.
 static void termination_watchdog_thread(void *arg);
 
+// Cancel the root source with the terminate bit, so the process leaves through the
+// ordinary exit. Returns 0 if there is no root source yet, or on a repeat request;
+// the caller must then exit at once. Must not allocate GC memory or take Julia locks.
 static int jl_request_process_termination(int sig) JL_NOTSAFEPOINT
 {
-    // One graceful attempt per process: a repeat request reports failure so
-    // the caller escalates to an abrupt exit (the cooperative delivery
-    // evidently did not lead to an exit).
+    // a second request makes the caller exit at once
     int expected = 0;
     if (!jl_atomic_cmpswap(&jl_term_signo, &expected, sig))
         return 0;
@@ -757,20 +739,14 @@ static int jl_request_process_termination(int sig) JL_NOTSAFEPOINT
     jl_cancel_source_t *src =
         (jl_cancel_source_t*)jl_atomic_load_acquire(&jl_term_source);
     if (src != NULL) {
-        // SAFE severity plus the terminate bit: a termination request wants
-        // the same orderly unwinding as a ^C - resources are released, not
-        // abandoned - it is just not resumable (drivers exit instead of
-        // continuing; see e.g. `Base._start`).
+        // same severity as ^C, so resources are released rather than abandoned
         jl_cancel_subtree_mark(src, JL_CANCEL_TERMINATE_BIT | 0x1);
         jl_membarrier();
     }
     jl_safepoint_exclude_gc_end();
     if (src == NULL)
         return 0;
-    // Delivery, exactly like jl_sigint_request_cancellation's: flag the
-    // dispatch (idle threads keep the event loop moving until a listener
-    // claims it and wakes the parked waiters), interrupt asynchronously-
-    // interruptible regions on every thread, and notify the listener.
+    // deliver it the same way as a ^C press
     if (have_listener)
         jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
@@ -940,8 +916,7 @@ static int jl_notify_signal_watchers(int sig) JL_NOTSAFEPOINT
     return jl_atomic_load_relaxed(&signal_interceptors[sig]) > 0;
 }
 
-// How long a thread may run one task without waiting, after a termination request,
-// before the process is ended without it.
+// how long a thread may run without waiting after a termination request
 #define JL_TERM_GRACE_MS 2000
 #define JL_TERM_POLL_MS 50
 // How long the fallback teardown may take before the process ends without it.
@@ -954,10 +929,9 @@ static void termination_teardown(void *arg) JL_NO_SAFEPOINT_ANALYSIS JL_CANSAFEP
     jl_atexit_fallback((int)(intptr_t)arg);
 }
 
-// Returns 1 once the ordinary exit has started. Returns 0 once some thread has run one
-// task for the whole grace period without switching tasks or sleeping, since that code
-// is not checking for cancellation. Threads that wait are left alone however long they take, because a
-// second signal still ends the process at once.
+// Returns 1 once the ordinary exit starts, or 0 once some thread has neither
+// switched tasks nor slept for the whole grace period.
+// Waiting threads get no deadline, since a second signal still exits at once.
 static int jl_wait_for_exit_or_busy_thread(void)
 {
     int n = 0;
@@ -1000,16 +974,12 @@ static int jl_wait_for_exit_or_busy_thread(void)
     return started;
 }
 
-// Run on a thread unknown to Julia once a termination request is made. If a thread
-// is still busy in code that does not check for cancellation, run the exit on another
-// thread, and end the process if that does not finish in time either. Returns only if
-// the ordinary exit is running.
+// returns only if the ordinary exit is running; otherwise ends the process
 static void jl_termination_watchdog(int sig)
 {
     if (jl_wait_for_exit_or_busy_thread() || !jl_atexit_fallback_claim())
         return;
-    // a collection in flight may be waiting for the busy thread, and the hooks cannot run
-    // until it finishes
+    // a running collection may be waiting for the busy thread
     int waited = 0;
     while (jl_atomic_load_acquire(&jl_gc_running) && waited < JL_TERM_GC_WAIT_MS) {
         uv_sleep(JL_TERM_POLL_MS);
@@ -1019,8 +989,7 @@ static void jl_termination_watchdog(int sig)
     if (!jl_atomic_load_acquire(&jl_gc_running) &&
             uv_thread_create(&teardown, termination_teardown, (void*)(intptr_t)sig) == 0)
         uv_sleep(JL_TERM_TEARDOWN_MS);
-    // a hook may be waiting for a task that only a busy thread can run, or hold a stdio
-    // lock, so do not flush here
+    // no flush: the stuck teardown or a busy thread may hold a stdio lock
     uv_tty_reset_mode();
 #ifdef _OS_WINDOWS_
     _exit(128 + sig);

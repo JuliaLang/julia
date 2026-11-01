@@ -710,9 +710,7 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
 //  1: get state & wait for request
 //  2: unused (was the sigint force-throw request, removed with the old ^C
 //     mechanism)
-//  3: unused (was the exit-signal thread-0 hijack into jl_atexit_hook,
-//     removed when termination signals became graceful root-source
-//     cancellations - see jl_request_process_termination)
+//  3: unused (was the exit-signal hijack of thread 0)
 //  4: no-op
 //  5: deliver a pending cancellation to the current task's published
 //     interruptible-region context(s), if any and the task's bound token
@@ -769,8 +767,7 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
             // for an actual cancellation of the bound token, level-
             // triggered - whichever request delivered the signal.
             if (bound_cancelled) {
-                // The handler contract is in terms of the severity levels
-                // alone - mask off the terminate flag.
+                // handlers see only the severity
                 uint8_t sev = jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state)
                               & JL_CANCEL_SEVERITY_MASK;
                 hctx->fn(hctx->state, sev);
@@ -1433,21 +1430,9 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
         if (!profile && !parent_exited && jl_notify_signal_watchers(sig))
             continue;
 
-        // Signals that terminate the process gracefully - SIGTERM and
-        // (with exit-on-sigint) SIGINT - request termination through the
-        // cancellation system: the root source's cancellation unwinds the
-        // governed work and the process exits through the ordinary exit
-        // path, which runs the atexit hooks on a sound stack and then
-        // re-raises the signal (see jl_request_process_termination).
-        // Hijacking a thread into jl_atexit_hook at an arbitrary point is
-        // unsound - the interrupted frame may hold runtime locks the
-        // teardown needs, or the image may still be initializing (issue
-        // #62774). SIGQUIT is deliberately NOT graceful: its contract is
-        // "dump state and die now" - watchdogs aim it at wedged processes
-        // that a cooperative request cannot unwind - so it prints the
-        // all-task backtraces (via `critical` below) and exits abruptly,
-        // preserving the core-dump disposition; it no longer runs the
-        // atexit hooks.
+        // SIGTERM, and SIGINT when it exits, cancel the root source instead of
+        // hijacking a thread, which may hold locks the exit needs.
+        // SIGQUIT still dumps state and dies at once, keeping its core dump.
         int termsig = 0;
         if (sig == SIGINT) {
             if (jl_sigint_get_policy() == JL_SIGINT_EXIT ||
@@ -1500,9 +1485,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
         // this part is async with the running of the rest of the program
         // and must be thread-safe, but not necessarily signal-handler safe
         if (critical) {
-            // a state-dump request: SIGQUIT (before terminating), a
-            // SIGINFO/SIGUSR1 information request, or the can't-happen
-            // SIGABRT fallback above
+            // a state dump: SIGQUIT, SIGINFO, SIGUSR1 or the SIGABRT fallback
 #ifndef SIGINFO // SIGINFO already prints something similar automatically
             int nthreads = jl_atomic_load_acquire(&jl_n_threads);
             int n_threads_running = 0;
@@ -1526,12 +1509,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
         }
         if (termsig != 0) {
             if (!jl_request_process_termination(termsig)) {
-                // No root source is registered (still initializing, or an
-                // embedder that never runs Base.__init__ - no Julia atexit
-                // hooks can exist either way), or termination was already
-                // requested once and the graceful attempt did not lead to
-                // an exit: die abruptly with the signal's default
-                // disposition, preserving the exit status.
+                // no root source yet, or a second request: die by the signal now
                 sigset_t tset;
                 sigemptyset(&tset);
                 sigaddset(&tset, sig);
@@ -1546,10 +1524,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             }
         }
         else if (sig == SIGQUIT || sig == SIGABRT) {
-            // dump-and-die (SIGQUIT; SIGABRT can't occur - only set by the
-            // sigwait-corruption fallback above): exit abruptly after the
-            // dump, with the signal's default disposition (a core dump,
-            // where enabled)
+            // die by the signal, keeping its core dump
             if (sig == SIGQUIT) {
                 // keep the task list from being collected while it is printed
                 jl_gc_enable_from_nonmutator(0);

@@ -40,9 +40,8 @@ The exception thrown by cancellation points whose governing cancellation
 token has been cancelled. The `request` field records the severity
 ([`CANCEL_REQUEST_SAFE`](@ref), [`CANCEL_REQUEST_ABANDON_EXTERNAL`](@ref) or
 [`CANCEL_REQUEST_ABANDON_ALL`](@ref)) as observed at delivery time; the
-source may escalate afterwards. Use `Base.severity` to read the severity:
-the field may additionally carry the process-termination flag (see
-`Base.is_terminate_request`).
+source may escalate afterwards. The field may also carry a termination flag
+(see `Base.is_terminate_request`), so use `Base.severity` to read the severity.
 """
 struct CancellationRequest <: Exception
     request::UInt8
@@ -93,13 +92,10 @@ frozen in place and never scheduled again.
 const CANCEL_REQUEST_ABANDON_ALL = CancellationRequest(0x4)
 
 # The status byte reported by a cancellation point (`Core.cancellation_point!`)
-# is the governing source's state byte (0 while uncancelled; once cancelled
-# the severity, with the `TERMINATE_BIT` set when the cancellation is a
-# process-termination request) with the 0x40 bit merged in when the task has
-# a pending cooperative-yield request. `SEVERITY_MASK` recovers the severity
-# half; every severity *ordering* comparison must apply it (the flag bits are
-# orthogonal to the escalation order). Mirrors the C-side
-# JL_CANCEL_SEVERITY_MASK / JL_CANCEL_TERMINATE_BIT (src/julia_threads.h).
+# is the governing source's state byte (0 while uncancelled, the severity once
+# cancelled) with the 0x40 bit merged in when the task has a pending
+# cooperative-yield request. A termination request also sets the 0x20 bit,
+# so mask before comparing severities. These must match the runtime's values.
 const STATUS_PREEMPT_BIT = 0x40
 const TERMINATE_BIT = 0x20
 const SEVERITY_MASK = 0x1f
@@ -110,12 +106,9 @@ severity(cr::CancellationRequest) = cr.request & SEVERITY_MASK
 """
     Base.is_terminate_request(cr::CancellationRequest) -> Bool
 
-Whether the cancellation is a process-termination request: a termination
-signal (SIGTERM) cancels the process-wide root cancellation source (see
-`Base.process_terminating`), and the resulting requests carry this
-flag in addition to their severity. Unlike an ordinary cancellation, a
-termination request is not resumable: drivers (the REPL, script runners)
-exit instead of continuing.
+Return `true` if the cancellation comes from a termination signal (such as
+SIGTERM); see also `Base.process_terminating`. Unlike an ordinary cancellation,
+catching it does not stop the process from exiting.
 """
 is_terminate_request(cr::CancellationRequest) = cr.request & TERMINATE_BIT != 0x00
 
@@ -192,16 +185,12 @@ _cancel_parent(src::CancellationTokenSource, i::Int) =
 _cancel_next_child(parent::CancellationTokenSource, child::CancellationTokenSource) =
     ccall(:jl_cancel_source_next_child, Any, (Any, Any), parent, child)::Union{Nothing, CancellationTokenSource}
 
-# The join of two state bytes: the higher severity, plus every flag bit set
-# in either (the two halves are ordered pointwise - a terminate flag never
-# outranks, nor is outranked by, a severity escalation). Mirrors the C-side
-# jl_cancel_state_join.
+# the higher severity of the two, with the flag bits of both (must match the runtime)
 _join_states(a::UInt8, b::UInt8) =
     max(a & SEVERITY_MASK, b & SEVERITY_MASK) | ((a | b) & TERMINATE_BIT)
 
-# Advance the source's state to its join with `sev` (a nonzero state byte:
-# severity plus optional flags). Returns true if the state changed, false if
-# it already subsumed the request.
+# Raise the source's state to include `sev` (nonzero, may carry flags).
+# Returns true if the state changed.
 # seq_cst: pairs with the (child-list publication; state read) sequence in
 # `jl_new_cancel_source` - see the walk in `_cancel_walk_node!`.
 function _raise_state!(src::CancellationTokenSource, sev::UInt8)
