@@ -667,6 +667,8 @@ JL_DLLEXPORT void jl_switch(void) JL_CANSAFEPOINT_ENTER_LEAVE
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     jl_task_t *t = ptls->next_task;
+    // count switches to self too, since a task that keeps yielding is not stuck
+    jl_atomic_store_relaxed(&ptls->nswitches, jl_atomic_load_relaxed(&ptls->nswitches) + 1);
     if (t == ct && !ptls->in_finalizer && !ptls->in_pure_callback) {
         // switching to self is a no-op, but only when a task switch would
         // have been permitted at all: the forbidden-context errors below must

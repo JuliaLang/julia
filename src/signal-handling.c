@@ -946,13 +946,13 @@ static void termination_teardown(void *arg) JL_NO_SAFEPOINT_ANALYSIS JL_CANSAFEP
 }
 
 // Returns 1 once the ordinary exit has started. Returns 0 once some thread has run one
-// task for the whole grace period without sleeping, since that code is not checking for
-// cancellation. Threads that wait are left alone however long they take, because a
+// task for the whole grace period without switching tasks or sleeping, since that code
+// is not checking for cancellation. Threads that wait are left alone however long they take, because a
 // second signal still ends the process at once.
 static int jl_wait_for_exit_or_busy_thread(void)
 {
     int n = 0;
-    jl_task_t **last = NULL;
+    uint32_t *last = NULL;
     uint64_t *since = NULL;
     int started;
     while (!(started = jl_atexit_started())) {
@@ -965,7 +965,7 @@ static int jl_wait_for_exit_or_busy_thread(void)
             free(last);
             free(since);
             n = nthreads;
-            last = (jl_task_t**)calloc_s(n * sizeof(jl_task_t*));
+            last = (uint32_t*)calloc_s(n * sizeof(uint32_t));
             since = (uint64_t*)calloc_s(n * sizeof(uint64_t));
         }
         uint64_t now = uv_hrtime();
@@ -973,10 +973,10 @@ static int jl_wait_for_exit_or_busy_thread(void)
         jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
         for (int i = 0; i < n; i++) {
             jl_ptls_t ptls2 = allstates[i];
-            jl_task_t *ct = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
+            uint32_t nswitches = ptls2 ? jl_atomic_load_relaxed(&ptls2->nswitches) : 0;
             int asleep = ptls2 && jl_atomic_load_relaxed(&ptls2->sleep_check_state) != 0;
-            if (ct == NULL || ct != last[i] || asleep) {
-                last[i] = ct;
+            if (ptls2 == NULL || since[i] == 0 || nswitches != last[i] || asleep) {
+                last[i] = nswitches;
                 since[i] = now;
             }
             else if (now - since[i] >= (uint64_t)JL_TERM_GRACE_MS * 1000000) {

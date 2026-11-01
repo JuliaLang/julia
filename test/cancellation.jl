@@ -2929,6 +2929,24 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test occursin("FINALLY-RAN", output)
     @test p.termsignal == Base.SIGTERM
 
+    # so does one that polls with `yield`, even with nothing else to run
+    output, p, exited = run_with_sigterm("""
+        try
+            sleep(100)
+        finally
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+                t = time()
+                while time() - t < 3
+                    yield()
+                end
+                println("FINALLY-RAN")
+            end
+        end
+    """, [0.5])
+    @test exited === :ok
+    @test occursin("FINALLY-RAN", output)
+    @test p.termsignal == Base.SIGTERM
+
     # with exit-on-sigint, a SIGINT terminates the process through the same
     # graceful path: the atexit hooks run, the exit is quiet, and the
     # process dies by SIGINT

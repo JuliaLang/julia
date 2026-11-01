@@ -214,6 +214,7 @@ typedef struct _jl_tls_states_t {
     struct _jl_task_t *next_task;
     struct _jl_task_t *previous_task;
     struct _jl_task_t *root_task;
+    _Atomic(uint32_t) nswitches; // read from foreign threads
     // Task-abandonment handshake (see jl_abandon_task in task.c). One
     // requester at a time owns the slot; delivery validates the victim's
     // state at the point the thread is actually stopped and commits or
