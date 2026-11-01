@@ -2339,7 +2339,16 @@ function hcat(V::Vector{T}...) where T
             throw(DimensionMismatch("vectors must have same lengths"))
         end
     end
-    return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
+    # the comprehension narrows the element type of an abstract `T` (#33919)
+    isconcretetype(T) || return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
+    M = Matrix{T}(undef, height, length(V))
+    for j in eachindex(V)
+        v = V[j]
+        @inbounds for i in 1:height
+            M[i, j] = v[i]
+        end
+    end
+    return M
 end
 hcat(A::Vector...) = cat(A...; dims=Val(2)) # more special than SparseArrays's hcat
 

@@ -3577,3 +3577,14 @@ end
     @test parent(ref) === mem
     @test Base.memoryindex(ref) === 8
 end
+
+@testset "hcat of Vectors with the same element type" begin
+    vs = [Float64.(k:k+3) for k in 1:100]
+    M = hcat(vs...)
+    @test M isa Matrix{Float64}
+    @test size(M) == (4, 100)
+    @test all(M[:, j] == vs[j] for j in 1:100)
+    @test hcat(Int[], Int[]) == zeros(Int, 0, 2)
+    @test hcat(Any[1, "a"], Any[:b, 2.0]) == Any[1 :b; "a" 2.0]
+    @test_throws DimensionMismatch hcat([1, 2], [3])
+end
