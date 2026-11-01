@@ -1455,7 +1455,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
         buf = IOBuffer(sizehint = ichunk==jchunk ? jnewline : 4096)
         while ichunk != jchunk
             write(buf, chunks[ichunk])
-            ichunk = ichunk == length(chunks) ? 1 : ichunk + 1
+            ichunk = mod1(ichunk + 1, length(chunks))
         end
         chunk = chunks[jchunk]
         write(buf, view(chunk, 1:jnewline))
@@ -1473,7 +1473,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
             write(buf, view(chunks[ichunk], inewline+1:length(chunks[ichunk])))
             i = ichunk
             while true
-                i = i == length(chunks) ? 1 : i + 1
+                i = mod1(i + 1, length(chunks))
                 i == jchunk && break
                 write(buf, chunks[i])
             end
@@ -1487,7 +1487,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
                 chunk = chunks[i]
                 p -= length(resize!(chunk, min(4096, p-p0)))
                 readbytes!(seek(r.itr.stream, p), chunk)
-                i = i == 1 ? length(chunks) : i - 1
+                i = mod1(i - 1, length(chunks))
             end
         end
 
@@ -1497,9 +1497,9 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
         while true
             inewline = something(findprev(==(UInt8('\n')), chunks[ichunk], inewline-1), 0)
             inewline > 0 && break
-            ichunk = ichunk == 1 ? length(chunks) : ichunk - 1
+            ichunk = mod1(ichunk - 1, length(chunks))
             if ichunk == jchunk # found nothing — line starts at the oldest chunk; may need to read more chunks
-                ichunk = ichunk == length(chunks) ? 1 : ichunk + 1
+                ichunk = mod1(ichunk + 1, length(chunks))
                 break
             end
             inewline = length(chunks[ichunk])+1 # start for next findprev
