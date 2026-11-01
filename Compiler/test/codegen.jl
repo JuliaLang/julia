@@ -1555,3 +1555,22 @@ end
 @test missing_edge_union_tag(false, true, false) === 1
 @test missing_edge_union_tag(true, false, false) === missing
 @test missing_edge_union_tag(true, false, true) === nothing
+
+# Bounds checks of a 2-d index left inside a loop (a wrapper that forwards indexing without
+# `@propagate_inbounds`) must not keep the loop from vectorizing: `checkbounds_indices`
+# evaluates all dimensions eagerly, so their sizes are loaded up front and can be hoisted
+struct ForwardingMatrix <: AbstractMatrix{Float64}
+    data::Matrix{Float64}
+end
+Base.size(a::ForwardingMatrix) = size(a.data)
+Base.getindex(a::ForwardingMatrix, i::Int, j::Int) = a.data[i, j]
+Base.setindex!(a::ForwardingMatrix, v, i::Int, j::Int) = (a.data[i, j] = v)
+scale_forwarding!(b::ForwardingMatrix, a::ForwardingMatrix) = (b .= 2.0 .* a)
+@testset "forwarded 2-d indexing vectorizes" begin
+    a = ForwardingMatrix(rand(4, 3))
+    b = ForwardingMatrix(zeros(4, 3))
+    @test scale_forwarding!(b, a).data == 2 .* a.data
+    if Sys.ARCH in (:x86_64, :aarch64)
+        @test occursin(r"<\d+ x double>", get_llvm(scale_forwarding!, Tuple{ForwardingMatrix, ForwardingMatrix}))
+    end
+end
