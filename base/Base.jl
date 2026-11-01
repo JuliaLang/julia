@@ -397,7 +397,9 @@ function start_profile_listener()
         # this will prompt any ongoing or pending event to flush also
         close(cond)
         # error-propagation is not needed, since the errormonitor will handle printing that better
-        t === current_task() || _wait(t)
+        # A termination fallback runs this outside every threadpool, while the threads that
+        # could run the listener may be busy, so it does not wait for it.
+        t === current_task() || Threads.threadpool() === :foreign || _wait(t)
     end
     finalizer(cond) do c
         # if something goes south, still make sure we aren't keeping a reference in C to this

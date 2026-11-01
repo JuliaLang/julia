@@ -2815,12 +2815,12 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     # Bare executable, as in the "^C" testset: these scenarios assert the
     # termination semantics, not the suite's flag matrix.
     exe = joinpath(Sys.BINDIR, Base.julia_exename())
-    function run_with_sigterm(code::String, delays; signum::Int=Base.SIGTERM)
+    function run_with_sigterm(code::String, delays; signum::Int=Base.SIGTERM, flags=``)
         # The readiness marker proves the runtime is up before the first
         # signal is sent (see the "^C" testset's run_with_sigint).
         code = "println(\"CHILD-READY\")\n" * code
         out = Pipe()
-        p = run(pipeline(`$exe --startup-file=no -e $code`,
+        p = run(pipeline(`$exe --startup-file=no $flags -e $code`,
                          stdin=devnull, stdout=out, stderr=out), wait=false)
         close(out.in)
         readuntil(out, "CHILD-READY\n") # returns early (at EOF) if the child dies
@@ -2946,6 +2946,25 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test exited === :ok
     @test occursin("FINALLY-RAN", output)
     @test p.termsignal == Base.SIGTERM
+
+    # with every thread busy, the exit does not also wait out the teardown deadline
+    t0 = time()
+    output, p, exited = run_with_sigterm("""
+        atexit(() -> println("ATEXIT-RAN"))
+        function spin()
+            x = 0.0
+            while true
+                x += sin(x) + 1e-9
+            end
+            return x
+        end
+        Threads.@spawn spin()
+        spin()
+    """, [0.5]; flags=`--threads=2,0`)
+    @test exited === :ok
+    @test occursin("ATEXIT-RAN", output)
+    @test p.termsignal == Base.SIGTERM
+    @test time() - t0 < 6
 
     # with exit-on-sigint, a SIGINT terminates the process through the same
     # graceful path: the atexit hooks run, the exit is quiet, and the
