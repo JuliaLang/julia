@@ -1805,11 +1805,8 @@ vcat(A::AbstractVecOrMat{T}...) where {T} = typed_vcat(T, A...)
 function _typed_vcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(first(A), 2)
-    for Aj in A
-        if size(Aj, 2) != ncols
-            throw(DimensionMismatch("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
-        end
-    end
+    all(a -> size(a, 2) == ncols, A) ||
+        throw(DimensionMismatch("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
     B = similar(first(A), T, nrows, ncols)
     pos = 1
     for Ak in A
