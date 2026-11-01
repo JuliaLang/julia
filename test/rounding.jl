@@ -494,6 +494,37 @@ end
         end
     end
 end
+@testset "rounding Rationals to digits is exact" begin
+    modes = (RoundDown, RoundUp, RoundToZero, RoundFromZero,
+             RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+    # round the exact rational, then convert once
+    function refround(x::Rational, r::RoundingMode, d::Integer, base::Integer=10)
+        T = typeof(float(x))
+        b = big(base)^abs(d)
+        v = d >= 0 ? round(Rational{BigInt}(x) * b, r) // b : round(Rational{BigInt}(x) // b, r) * b
+        iszero(v) && return x < 0 ? -zero(T) : zero(T)
+        return T <: BigFloat ? BigFloat(v) : T(setprecision(() -> BigFloat(v), BigFloat, 5000))
+    end
+    @test round(23//20; digits=1) === 1.2               # an exact tie, to even
+    @test floor(big(23)//20; digits=2) == big"1.15"     # float(23//20) is below 1.15
+    @test round(-1//100; digits=1) === -0.0
+    @test round(Int8(1)//Int8(3); digits=2) === 0.33
+    rng = Random.MersenneTwister(0xbeef)
+    for _ in 1:200
+        num, den = rand(rng, -10^6:10^6), rand(rng, 1:10^4)
+        for x in (num//den, big(num)//den, Int16(num % 3000)//Int16(max(den % 300, 1)))
+            for d in (-3, -1, 0, 1, 2, 5), base in (10, 3), r in modes
+                y = round(x, r; digits=d, base=base)
+                @test y == refround(x, r, d, base)
+                @test signbit(y) == signbit(refround(x, r, d, base))
+                @test typeof(y) == typeof(float(x))
+            end
+        end
+    end    # to nearest, whatever the rounding mode of BigFloat
+    for x in (big(1)//3, -big(2)//3, big(10)^40//7), d in (-1, 2, 30), r in modes
+        @test setrounding(() -> round(x, r; digits=d), BigFloat, RoundUp) == round(x, r; digits=d)
+    end
+end
 @testset "rounding with too much (or too few) precision" begin
     for x in (12345.6789, 0, -12345.6789)
         y = float(x)

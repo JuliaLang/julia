@@ -1441,6 +1441,70 @@ function _divround_magnitude!(a::BigInt, b::BigInt, r::RoundingMode, neg::Bool)
     return q
 end
 
+# Rational inputs are rounded exactly too, rather than after rounding them with `float(x)`.
+# The numerator and denominator may be the caller's, so they are not updated in place.
+function Base._round_digits(x::Rational, r::RoundingMode, digits::Integer, base)
+    T = typeof(float(x))
+    if !(T <: Union{Base.IEEEFloat, BigFloat}) || base < 2 ||
+            abs(widen(digits)) * Base.top_set_bit(base) > 1 << 22   # integers too large
+        return invoke(Base._round_digits, Tuple{Any, RoundingMode, Integer, Any}, x, r, digits, base)
+    end
+    _check_digits_rounding_mode(r)
+    y = _round_digits_small(T, x, r, digits, base)
+    y === nothing || return y
+    neg = x < 0
+    a, q = abs(BigInt(numerator(x))), BigInt(denominator(x))
+    b = big(base)^abs(digits)
+    if digits >= 0
+        N = _divround_magnitude!(a * b, q, r, neg)
+        D = b
+    else
+        N = MPZ.mul!(_divround_magnitude!(MPZ.set(a), q * b, r, neg), b)
+        D = BigInt(1)
+    end
+    iszero(N) && return neg ? -zero(T) : zero(T)
+    neg && MPZ.neg!(N)
+    return _quotient_to_float(T, N, D)
+end
+
+# The common case without BigInts, or nothing: x has machine integer parts, base^|digits| < 2^60,
+# and the rounded value is a quotient of integers exact in T, which one division rounds correctly.
+_round_digits_small(::Type, x::Rational, r, digits, base) = nothing
+function _round_digits_small(::Type{T}, x::Rational{<:Union{Base.BitSigned64, Base.BitUnsigned64}},
+                             r::RoundingMode, digits::Integer, base) where {T<:Base.IEEEFloat}
+    abs(widen(digits)) * Base.top_set_bit(base) <= 60 || return nothing
+    b = iszero(digits) ? Int64(1) : Int64(base)^Int(abs(digits))
+    n, q = Int128(numerator(x)), Int128(denominator(x))
+    if digits >= 0
+        N = div(n * b, q, r)
+        (abs(N) <= maxintfloat(T) && b <= maxintfloat(T)) || return nothing
+        y = T(N) / T(b)
+    else
+        N = div(n, q * b, r) * b
+        abs(N) <= maxintfloat(T) || return nothing
+        y = T(N)
+    end
+    return iszero(y) && n < 0 ? -y : y
+end
+
+# N / D for integers N and D > 0, correctly rounded to nearest in T
+_quotient_to_float(::Type{BigFloat}, N::BigInt, D::BigInt) = _div_nearest(BigFloat(N; precision=ndigits(N; base=2)), D)
+function _quotient_to_float(::Type{T}, N::BigInt, D::BigInt) where {T<:Base.IEEEFloat}
+    a = abs(N)
+    e = Base.top_set_bit(a) - Base.top_set_bit(D)
+    # make 2^e <= a / D < 2^(e+1)
+    (e >= 0 ? a < D << e : a << -e < D) && (e -= 1)
+    e > exponent(floatmax(T)) && return copysign(T(Inf), N)
+    # the ulp of the result, in the subnormal range too
+    lsb = max(e, exponent(floatmin(T))) - precision(T) + 1
+    num, den = lsb >= 0 ? (a, D << lsb) : (a << -lsb, D)
+    n, rem = divrem(num, den)
+    c = cmp(rem << 1, den)
+    (c > 0 || (c == 0 && isodd(n))) && (n += 1)
+    y = ldexp(T(n), lsb)                      # exact, or Inf: n <= 2^precision(T)
+    return N < 0 ? -y : y
+end
+
 function lerpi(j::Integer, d::Integer, a::BigFloat, b::BigFloat)
     t = BigFloat(j)/d
     fma(t, b, fma(-t, a, a))
