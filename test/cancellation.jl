@@ -2929,7 +2929,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test occursin("FINALLY-RAN", output)
     @test p.termsignal == Base.SIGTERM
 
-    # so does one that polls with `yield`, even with nothing else to run
+    # so does one that polls with `yield`, while idle threads keep being woken
     output, p, exited = run_with_sigterm("""
         try
             sleep(100)
@@ -2942,7 +2942,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
                 println("FINALLY-RAN")
             end
         end
-    """, [0.5])
+    """, [0.5]; flags=`--threads=4,0`)
     @test exited === :ok
     @test occursin("FINALLY-RAN", output)
     @test p.termsignal == Base.SIGTERM

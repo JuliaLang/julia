@@ -496,6 +496,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
     uint64_t start_cycles = 0;
 
     while (1) {
+        // a thread looking for work is not busy, even when it is woken too often to sleep
+        jl_atomic_store_relaxed(&ct->ptls->nswitches, jl_atomic_load_relaxed(&ct->ptls->nswitches) + 1);
         if (jl_atomic_load_relaxed(&jl_sigint_dispatch_pending))
             jl_dispatch_sigint_inline();
         jl_task_t *task = get_next_task(trypoptask, q);
