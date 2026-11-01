@@ -110,7 +110,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
     caller.src.min_world = min_world
     caller.src.max_world = max_world
     if isdefined(result, :ci)
-        edges = result_edges(interp, caller)
+        # A tombstoned CI is never published nor used as an edge: its callers copy its
+        # internal edges instead. So there is no need to materialize its edges.
+        edges = result.tombstone ? Core.svec() : result_edges(interp, caller)
         #@assert max_world <= get_world_counter() || isempty(edges)
         ci = result.ci
         mi = result.linfo
@@ -344,10 +346,14 @@ function propagate_unpublished_cycle_proof!(
         cycle_valid_worlds::WorldRange
     ) where {I<:AbstractInterpreter}
     unpublished = InferenceState{I}[]
+    anchor = nothing
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
         if iszero(caller.cache_mode & CACHE_MODE_GLOBAL)
             push!(unpublished, caller)
+        elseif (anchor === nothing && isdefined(caller.result, :ci) &&
+                caller.linfo.def isa Method)
+            anchor = caller
         end
     end
     isempty(unpublished) && return nothing
@@ -369,9 +375,24 @@ function propagate_unpublished_cycle_proof!(
             push!(consumers, caller)
         end
     end
-    for caller in consumers
-        add_inference_proof!(internal_result_edges(caller), cycle_proof)
-        update_valid_age!(caller, world, proof_worlds(cycle_proof))
+    if anchor === nothing
+        for caller in consumers
+            add_inference_proof!(internal_result_edges(caller), cycle_proof)
+            update_valid_age!(caller, world, proof_worlds(cycle_proof))
+        end
+    else
+        # A published member, the anchor, carries the SCC-wide proof once. Its CI is then
+        # invalidated whenever any SCC dependency changes, and so is every caller whose
+        # edges contain that CI. So the other consumers can depend on the anchor CI instead
+        # of copying the proof.
+        add_inference_proof!(internal_result_edges(anchor), cycle_proof)
+        update_valid_age!(anchor, world, proof_worlds(cycle_proof))
+        anchor_ci = anchor.result.ci
+        for caller in consumers
+            caller === anchor && continue
+            add_inference_proof!(internal_result_edges(caller), anchor_ci)
+            update_valid_age!(caller, world, proof_worlds(cycle_proof))
+        end
     end
     return nothing
 end
