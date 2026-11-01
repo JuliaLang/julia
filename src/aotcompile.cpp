@@ -1892,13 +1892,16 @@ static std::unique_ptr<TargetMachine> copy_target_machine(TargetMachine &SourceT
 }
 
 namespace {
-// The target machine and optimizer for compiling image modules. Setting these
-// up costs about as much as compiling a small module, so a thread that
-// compiles many modules keeps one of these, as the JIT does.
+// The target machine, optimizer and object emitter for compiling image
+// modules. Setting these up costs about as much as compiling a small module,
+// so a thread that compiles many modules keeps one of these, as the JIT does.
 struct OutputCompiler {
     TargetMachine &SourceTM;
     std::unique_ptr<TargetMachine> TM;
     std::unique_ptr<NewPM> optimizer;
+    std::unique_ptr<legacy::PassManager> emitter;
+    SmallVector<char, 0> objbuf;
+    std::unique_ptr<raw_svector_ostream> objstream;
 
     OutputCompiler(TargetMachine &SourceTM) : SourceTM(SourceTM), TM(copy_target_machine(SourceTM)) {}
 
@@ -1913,6 +1916,20 @@ struct OutputCompiler {
                                                 getOptLevel(jl_options.opt_level), options);
         }
         return *optimizer;
+    }
+
+    void emit_obj(Module &M, SmallVectorImpl<char> &out)
+    {
+        if (!emitter) {
+            objstream = std::make_unique<raw_svector_ostream>(objbuf);
+            emitter = std::make_unique<legacy::PassManager>();
+            addTargetPasses(emitter.get(), TM->getTargetTriple(), TM->getTargetIRAnalysis());
+            if (TM->addPassesToEmitFile(*emitter, *objstream, nullptr, CodeGenFileType::ObjectFile, false))
+                jl_safe_printf("ERROR: target does not support generation of object files\n");
+        }
+        emitter->run(M);
+        out.assign(objbuf.begin(), objbuf.end());
+        objbuf.clear();
     }
 };
 } // anonymous namespace
@@ -2001,7 +2018,7 @@ static AOTOutputs add_output_impl(Module &M, OutputCompiler &compiler, ShardTime
     if (obj) {
         timers.obj.startTimer();
         TimeTraceScope EmitScope("AOT Emit Object", M.getModuleIdentifier());
-        emit_native(M, *TM, out.obj, false);
+        compiler.emit_obj(M, out.obj);
         timers.obj.stopTimer();
     }
 
