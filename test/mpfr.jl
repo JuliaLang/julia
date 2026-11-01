@@ -49,7 +49,18 @@ import Base.MPFR
     @test typeof(BigFloat(one(Rational{BigInt}))) == BigFloat
     rat = 1 // (big(2)^300 + 1)
     @test BigFloat(rat, RoundDown) < rat < BigFloat(rat, RoundUp)
-    @test BigFloat(-rat, RoundUp) < -rat < BigFloat(-rat, RoundDown)
+    @test BigFloat(-rat, RoundDown) < -rat < BigFloat(-rat, RoundUp)
+    @test BigFloat(rat, RoundToZero) < rat < BigFloat(rat, RoundFromZero)
+    @test BigFloat(-rat, RoundFromZero) < -rat < BigFloat(-rat, RoundToZero)
+    @test BigFloat(rat, RoundUp) == nextfloat(BigFloat(rat, RoundDown))
+    @test BigFloat(-rat, RoundUp) == nextfloat(BigFloat(-rat, RoundDown))
+    @test precision(BigFloat(rat, RoundDown; precision = 1000)) == 1000
+    @test setrounding(() -> BigFloat(-rat), BigFloat, RoundUp) == BigFloat(-rat, RoundUp)
+    # round to nearest: numerator and denominator do not fit in the precision
+    let q = 67791108892893798120704962534465999653053//83244536729286249343016707354319677432458237197532535129548036539018489675706763, z = BigFloat(q, RoundNearest)
+        @test abs(Rational{BigInt}(z) - q) <= abs(Rational{BigInt}(nextfloat(z)) - q)
+        @test abs(Rational{BigInt}(z) - q) <= abs(Rational{BigInt}(prevfloat(z)) - q)
+    end
 
     # BigFloat constructor respects global precision when not specified
     let prec = precision(BigFloat) < 16 ? 256 : precision(BigFloat) ÷ 2
