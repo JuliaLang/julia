@@ -21,6 +21,10 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* Julia no longer builds or ships openlibm, and links against the system libm instead. The
+  `USE_SYSTEM_LIBM` and `USE_SYSTEM_OPENLIBM` build options are gone, and `OpenLibm_jll` is no longer
+  a standard library. Packages that need it can depend on it as a regular package ([#56875]).
+
 New library functions
 ---------------------
 

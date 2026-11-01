@@ -197,7 +197,6 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 - **[LLVM](https://www.llvm.org)** (23.1 + [patches](https://github.com/JuliaLang/llvm-project/tree/julia-release/23.x)) — compiler infrastructure (see [note below](#llvm)).
 - **[FemtoLisp](https://github.com/JeffBezanson/femtolisp)**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv](https://github.com/JuliaLang/libuv)**  (custom fork) — portable, high-performance event-based I/O library.
-- **[OpenLibm](https://github.com/JuliaLang/openlibm)**             — portable libm library containing elementary math functions.
 - **[DSFMT](https://github.com/MersenneTwister-Lab/dSFMT)**                — fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS](https://github.com/xianyi/OpenBLAS)**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)]
 - **[LAPACK](https://www.netlib.org/lapack)**               — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
@@ -489,17 +488,17 @@ Note:
 - For checksum file, it may be **a single file** without a suffix, or **a folder** containing two files.
 
 
-### Example: `OpenLibm`
+### Example: `libblastrampoline`
 
-1. Update Version numbers in `deps/openlibm.version`
-    - `OPENLIBM_VER := 0.X.Y`
-    - `OPENLIBM_BRANCH = v0.X.Y`
-    - `OPENLIBM_SHA1 = new-sha1-hash`
-2. Update Version number in `stdlib/OpenLibm_jll/Project.toml`
-    - `version = "0.X.Y+0"`
-3. Update checksums in `deps/checksums/openlibm`
-    - `make -f contrib/refresh_checksums.mk openlibm`
-4. Check if the patch files `deps/patches/openlibm-*.patch` exist
+1. Update Version numbers in `deps/blastrampoline.version`
+    - `BLASTRAMPOLINE_VER := X.Y.Z`
+    - `BLASTRAMPOLINE_BRANCH = vX.Y.Z`
+    - `BLASTRAMPOLINE_SHA1 = new-sha1-hash`
+2. Update Version number in `stdlib/libblastrampoline_jll/Project.toml`
+    - `version = "X.Y.Z+0"`
+3. Update checksums in `deps/checksums/blastrampoline`
+    - `make -f contrib/refresh_checksums.mk blastrampoline`
+4. Check if the patch files `deps/patches/blastrampoline-*.patch` exist
     - if patches don't exist, skip.
     - if patches exist, check if they have been merged into the new version and need to be removed.
-        When deleting a patch, remember to modify the corresponding Makefile file (`deps/openlibm.mk`).
+        When deleting a patch, remember to modify the corresponding Makefile file (`deps/blastrampoline.mk`).
