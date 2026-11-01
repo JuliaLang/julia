@@ -794,18 +794,41 @@ CC_FULL  := ccache $(CC)
 CXX_FULL := ccache $(CXX)
 FC_FULL  := ccache $(FC)
 # Add an extra indirection to make CC/CXX/FC non-simple vars
-# (because of how -m$(BINARY) is added later on).
-CC       := $(CC_FULL)
-CXX      := $(CXX_FULL)
-FC       := $(FC_FULL)
+# (because of how -m$(BINARY) is added later on). Overriding is required
+# to change these variables at all when the user defined them with
+# `override` in Make.user or on the command line, but avoid it otherwise,
+# so that later plain `+=` appends (e.g. -march=...) keep working.
+ifneq (,$(filter command override,$(origin CC)))
+override CC := $(CC_FULL)
+else
+CC := $(CC_FULL)
+endif
+ifneq (,$(filter command override,$(origin CXX)))
+override CXX := $(CXX_FULL)
+else
+CXX := $(CXX_FULL)
+endif
+ifneq (,$(filter command override,$(origin FC)))
+override FC := $(FC_FULL)
+else
+FC := $(FC_FULL)
+endif
 CC_BASE  := ccache
 CXX_BASE := ccache
 FC_BASE  := ccache
 ifeq ($(USECLANG),1)
 # ccache and Clang don't do well together
 # https://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
+ifneq (,$(filter command override,$(origin CC)))
+override CC += -Qunused-arguments
+else
 CC += -Qunused-arguments
+endif
+ifneq (,$(filter command override,$(origin CXX)))
+override CXX += -Qunused-arguments
+else
 CXX += -Qunused-arguments
+endif
 # https://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
 export CCACHE_CPP2 := yes
 endif
