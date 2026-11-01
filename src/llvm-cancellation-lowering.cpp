@@ -571,6 +571,9 @@ bool CancellationLowering::runOnFunction(Function &F) {
                             ID == Intrinsic::prefetch) {
                             continue;
                         }
+                        // Pure computation (llvm.maximum, llvm.fma, ...): nothing to tear
+                        if (CI->doesNotAccessMemory() && !CI->mayHaveSideEffects() && CI->willReturn())
+                            continue;
                     }
                     // Skip the setjmp and safepoint calls we just created
                     if (Callee && (Callee->getName() == jl_setjmp_name ||
