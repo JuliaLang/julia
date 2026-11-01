@@ -187,14 +187,26 @@ function _round_invstep(x, invstep, r::RoundingMode)
     return _tp_div(_mul_round(x, invstep, r), invstep)
 end
 
-# round x to multiples of 1/(invstepsqrt^2)
-# Using square root of step prevents overflowing
-function _round_invstepsqrt(x, invstepsqrt, r::RoundingMode)
-    y = round((x * invstepsqrt) * invstepsqrt, r) / invstepsqrt / invstepsqrt
-    if !isfinite(y)
-        return x
-    end
-    return y
+# round x to multiples of 1/base^digits when base^digits overflows. Only tiny x have
+# anything to round, so move a power of two from base^digits onto x, exactly in both
+# cases: base^digits == M * 2^(k*digits) with M = (base/2^k)^digits, and x * base^digits
+# == ldexp(x, s) * invstep. The odd part of base^digits is far beyond the precision of x
+# here, so invstep is inexact and the grid is approximate, but the rounding mode is
+# applied exactly to it: floor(x) <= x <= ceil(x) still holds.
+function _round_invstep_overflow(x, base, digits::Integer, r::RoundingMode)
+    base >= 2 || return x                  # not a meaningful base
+    # 2^k <= base < 2^(k+1), taken from the integer since base itself may overflow
+    k = top_set_bit(base) - 1
+    ee = exponent(eps(x))
+    # eps(x) * base^digits >= 2^(ee + k*digits) >= 8: the result is x (see `_round_invstep`)
+    digits >= cld(3 - ee, k) && return x
+    m = ldexp(oftype(x, base >> max(k - 63, 0)), -min(k, 63))   # base / 2^k, in [1, 2]
+    M = m^Int(digits)                      # in [1, 2^digits], no overflow
+    eM = exponent(M)
+    s = k * Int(digits) + eM - (precision(x) + 2)
+    invstep = ldexp(M, precision(x) + 2 - eM)
+    # s > 0 is large enough that ldexp(x, s) is normal, and |ldexp(x, s)| < 2^eM
+    return ldexp(_tp_div(_mul_round(ldexp(x, s), invstep, r), invstep), -s)
 end
 
 # round x to multiples of step
@@ -226,13 +238,30 @@ function _round_digits(x, r::RoundingMode, digits::Integer, base)
         if isfinite(invstep)
             return _round_invstep(fx, invstep, r)
         else
-            invstepsqrt = oftype(fx, base)^oftype(fx, digits/2)
-            return _round_invstepsqrt(fx, invstepsqrt, r)
+            return _round_invstep_overflow(fx, base, digits, r)
         end
     else
-        step = oftype(fx, base)^-digits
+        # -digits overflows for typemin; base^-widen(digits) is then Inf or 1 anyway
+        step = oftype(fx, base)^(digits isa BitSigned && digits == typemin(digits) ? -widen(digits) : -digits)
         return _round_step(fx, step, r)
     end
+end
+# Float16 rounds natively while base^|digits| is below maxintfloat(Float16) == 2048, so
+# it is exact (for base 10, |digits| <= 3; for any |base| >= 2, |digits| <= 10). Past
+# that it is inexact, and 10^digits overflows from digits == 5, which ordinary values
+# reach. Those round in Float64 instead, which holds base^digits exactly for every
+# digits that matters to a Float16. The exactly rounded value is either a Float16
+# midpoint or at least ulp/(2*5^digits) away from one, so rounding the Float64 result
+# to Float16 gives the Float16 closest to it. The native step rounding overflows near
+# floatmax(Float16), so those values go through Float64 as well.
+function _round_digits(x::Float16, r::RoundingMode, digits::Integer, base)
+    if -11 < digits < 11 && (digits >= 0 || abs(x) < 0x1p15)
+        pow = Float16(base)^Int(abs(digits))
+        if abs(pow) < maxintfloat(Float16)
+            return digits >= 0 ? _round_invstep(x, pow, r) : _round_step(x, pow, r)
+        end
+    end
+    return Float16(_round_digits(Float64(x), r, digits, base))
 end
 
 # Rounding exactly needs a correctly rounded `fma` (a `muladd` stand-in would not be

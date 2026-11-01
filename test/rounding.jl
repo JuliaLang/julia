@@ -376,7 +376,7 @@ end
     # sweep against the exact reference, including magnitudes where the scaled value is
     # not representable, and where the result is x itself
     rng = Random.MersenneTwister(0xc0ffee)
-    for (T, exps, ds) in ((Float64, -20:70, -4:4), (Float32, -20:40, -3:3), (Float16, -8:15, -2:2),
+    for (T, exps, ds) in ((Float64, -20:70, -4:4), (Float32, -20:40, -3:3), (Float16, -24:14, -6:9),
                           (Float64, 1000:1023, 0:3), (Float64, -1074:-1040, -2:2),
                           (Float64, -50:20, 15:22), (Float64, 40:120, -22:-15)),
         _ in 1:150
@@ -393,6 +393,32 @@ end
         x = ldexp(rand(rng) + 1, rand(rng, -10:60)) * rand(rng, (-1.0, 1.0))
         for d in -3:6, r in modes
             @test round(x, r; digits=d, base=base) === refround(x, r, d, base)
+        end
+    end
+
+    # base^digits overflows: Float16 from digits == 5, which ordinary values reach
+    @test ceil(Float16(0.0001); digits=5) === Float16(0.00011)
+    @test floor(Float16(0.0001); digits=5) === Float16(0.0001)
+    @test floor(floatmax(Float16); digits=-1) === floatmax(Float16)
+    @test trunc(-floatmax(Float16); digits=-1) === -floatmax(Float16)
+    @test ceil(4.761846424831262e-296; digits=317) >= 4.761846424831262e-296
+    @test floor(1.7110486385708392e-305; digits=328) <= 1.7110486385708392e-305
+    @test round(-1e-320; digits=309) === -0.0
+    @test round(5e-324, RoundUp; digits=323) === 1e-323
+    # bases that overflow the float type, and extreme digits
+    @test ceil(nextfloat(0f0); digits=1, base=typemax(UInt128)) === Float32(1 / big(typemax(UInt128)))
+    @test floor(-5e-324; digits=1, base=big(2)^1030) === -2.0^-1030
+    @test floor(1.5; digits=typemin(Int)) === 0.0
+    @test ceil(1.5; digits=typemin(Int)) === Inf
+    # 10^digits is inexact here, so results can be a grid step off at near-ties, but the
+    # rounding direction still holds
+    for (T, exps, ds) in ((Float32, -150:-100, 38:46), (Float64, -1075:-950, 308:325)), _ in 1:100
+        x = T(ldexp(rand(rng) + 1, rand(rng, exps))) * rand(rng, (-one(T), one(T)))
+        for d in ds
+            @test floor(x; digits=d) <= x <= ceil(x; digits=d)
+            @test abs(trunc(x; digits=d)) <= abs(x) <= abs(round(x, RoundFromZero; digits=d))
+            @test abs(big(round(x; digits=d)) - big(refround(x, RoundNearest, d))) <=
+                  big(10.0)^-d + big(eps(x))
         end
     end
 
