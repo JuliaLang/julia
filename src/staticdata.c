@@ -60,7 +60,8 @@ Encoding of a pointer:
 - for both relocs_list and gctags_list, we write loc/backrefid (for gctags_list this is handled by the caller of write_gctaggedfield,
   for relocs_list it's handled by write_pointerfield)
 - when writing to disk, both call get_reloc_for_item, and its return value (subject to modification by gc bits)
-  ends up being written into the data stream (s->s), and the data stream's position written to s->relocs
+  ends up being written into the data stream (s->s); its position is marked in a bitmap in s->relocs
+  (one bitmap per list, one bit per pointer-sized word)
 
 External links:
 - location holds the offset
@@ -2349,6 +2350,31 @@ static void jl_finish_relocs(char *base, size_t size, arraylist_t *list)
     }
 }
 
+// Pointer fields are about half of all words of the sysimg stream, so one bit per word
+// is smaller than a list of positions.
+static void jl_write_relocbitmap(ios_t *s, size_t size, arraylist_t *list)
+{
+    size_t nbits = sizeof(uintptr_t) * 8;
+    size_t nmap = (size / sizeof(void*) + nbits - 1) / nbits;
+    uintptr_t *bitmap = (uintptr_t*)calloc_s(nmap * sizeof(uintptr_t));
+    size_t last_external = 0;
+    (void)last_external;
+    for (size_t i = 0; i < list->len; i += 2) {
+        size_t pos = (size_t)list->items[i];
+        assert(pos < size && pos % sizeof(void*) == 0);
+        size_t word = pos / sizeof(void*);
+        uintptr_t bit = (uintptr_t)1 << (word % nbits);
+        assert(!(bitmap[word / nbits] & bit) && "duplicate relocation position");
+        bitmap[word / nbits] |= bit;
+        if (((uintptr_t)list->items[i + 1] >> RELOC_TAG_OFFSET) == ExternalLinkage) {
+            assert(pos > last_external && "the reader consumes link_ids in address order");
+            last_external = pos;
+        }
+    }
+    ios_write(s, (const char*)bitmap, nmap * sizeof(uintptr_t));
+    free(bitmap);
+}
+
 static void jl_write_offsetlist(ios_t *s, size_t size, arraylist_t *list)
 {
     for (size_t i = 0; i < list->len; i += 2) {
@@ -2383,39 +2409,69 @@ static void jl_write_arraylist(ios_t *s, arraylist_t *list)
     ios_write(s, (const char*)list->items, list->len * sizeof(void*));
 }
 
-static void jl_read_reloclist(jl_serializer_state *s, jl_array_t *link_ids, uint8_t bits) JL_CANSAFEPOINT
+static inline void jl_reloc_word(jl_serializer_state *s, uintptr_t base, uintptr_t *pv, jl_array_t *link_ids, int *link_index, uint8_t bits) JL_CANSAFEPOINT
+{
+    uintptr_t v = *pv;
+    // Most relocations point into this image's own data.
+    if ((v >> RELOC_TAG_OFFSET) == DataRef) {
+        size_t offset = v & (((uintptr_t)1 << RELOC_TAG_OFFSET) - 1);
+        assert(offset <= s->s->size);
+        v = base + offset;
+    }
+    else {
+        v = get_item_for_reloc(s, base, v, link_ids, link_index);
+    }
+    if (bits && v && ((jl_datatype_t*)v)->smalltag)
+        v = (uintptr_t)((jl_datatype_t*)v)->smalltag << 4; // TODO: should we have a representation that supports sweep without a relocation step?
+    *pv = v | bits;
+}
+
+// Index of the lowest set bit of a nonzero word.
+static inline int jl_lowest_bit(uintptr_t x) JL_NOTSAFEPOINT
+{
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(__riscv_zbb)
+    // No ctz instruction without Zbb, and the libgcc fallback is a call per bit.
+    static const uint8_t debruijn[64] = {
+         0,  1,  2, 53,  3,  7, 54, 27,  4, 38, 41,  8, 34, 55, 48, 28,
+        62,  5, 39, 46, 44, 42, 22,  9, 24, 35, 59, 56, 49, 18, 29, 11,
+        63, 52,  6, 26, 37, 40, 33, 47, 61, 45, 43, 21, 23, 58, 17, 10,
+        51, 25, 36, 32, 60, 20, 57, 16, 50, 31, 19, 15, 30, 14, 13, 12,
+    };
+    return debruijn[((x & -x) * 0x022fdd63cc95386dULL) >> 58];
+#else
+    return __builtin_ctzll(x);
+#endif
+}
+
+// Apply the gctags and relocs bitmaps in one pass over the sysimg stream, one block of
+// `nbits` words at a time. Relocating a header only reads the `smalltag` of its type, which
+// is not relocated itself, so the two need no ordering. Returns the size of one bitmap.
+static size_t jl_read_relocbitmaps(jl_serializer_state *s) JL_CANSAFEPOINT
 {
     uintptr_t base = (uintptr_t)s->s->buf;
-    uintptr_t last_pos = 0;
+    size_t nbits = sizeof(uintptr_t) * 8;
+    size_t nmap = (s->s->size / sizeof(void*) + nbits - 1) / nbits;
     ios_t *relocs = s->relocs;
-    uint8_t *current = (uint8_t *)(relocs->buf + relocs->bpos);
-    int link_index = 0;
-    while (1) {
-        // Read the offset of the next object
-        size_t pos_diff = 0;
-        size_t cnt = 0;
-        while (1) {
-            assert((char *)current < (char *)(relocs->buf + relocs->size));
-            int8_t c = *current++;
-
-            pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
-            if ((c >> 7) == 0)
-                break;
-        }
-        if (pos_diff == 0)
-            break;
-
-        uintptr_t pos = last_pos + pos_diff;
-        last_pos = pos;
-        uintptr_t *pv = (uintptr_t *)(base + pos);
-        uintptr_t v = *pv;
-        v = get_item_for_reloc(s, base, v, link_ids, &link_index);
-        if (bits && v && ((jl_datatype_t*)v)->smalltag)
-            v = (uintptr_t)((jl_datatype_t*)v)->smalltag << 4; // TODO: should we have a representation that supports sweep without a relocation step?
-        *pv = v | bits;
+    assert(relocs->bpos + 2 * nmap * sizeof(uintptr_t) <= relocs->size);
+    const uintptr_t *tags = (const uintptr_t*)(relocs->buf + relocs->bpos);
+    const uintptr_t *ptrs = tags + nmap;
+    assert((uintptr_t)tags % sizeof(uintptr_t) == 0);
+    int tags_link_index = 0;
+    int ptrs_link_index = 0;
+    for (size_t i = 0; i < nmap; i++) {
+        uintptr_t t = tags[i];
+        uintptr_t p = ptrs[i];
+        assert(!(t & p) && "header and pointer-field bitmaps overlap");
+        uintptr_t *pv = (uintptr_t*)(base + i * nbits * sizeof(void*));
+        for (; t; t &= t - 1)
+            jl_reloc_word(s, base, pv + jl_lowest_bit(t), s->link_ids_gctags, &tags_link_index, GC_OLD_MARKED | GC_IN_IMAGE);
+        for (; p; p &= p - 1)
+            jl_reloc_word(s, base, pv + jl_lowest_bit(p), s->link_ids_relocs, &ptrs_link_index, 0);
     }
-    relocs->bpos = (char *)current - relocs->buf;
-    assert(!link_ids || link_index == jl_array_len(link_ids));
+    relocs->bpos += 2 * nmap * sizeof(uintptr_t);
+    assert(!s->link_ids_gctags || tags_link_index == jl_array_len(s->link_ids_gctags));
+    assert(!s->link_ids_relocs || ptrs_link_index == jl_array_len(s->link_ids_relocs));
+    return nmap * sizeof(uintptr_t);
 }
 
 static void jl_read_memreflist(jl_serializer_state *s)
@@ -3573,8 +3629,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     char *base = &f->buf[0];
     jl_finish_relocs(base + sysimg_offset, sysimg_size, &s.gctags_list);
     jl_finish_relocs(base + sysimg_offset, sysimg_size, &s.relocs_list);
-    jl_write_offsetlist(s.relocs, sysimg_size, &s.gctags_list);
-    jl_write_offsetlist(s.relocs, sysimg_size, &s.relocs_list);
+    jl_write_relocbitmap(s.relocs, sysimg_size, &s.gctags_list);
+    jl_write_relocbitmap(s.relocs, sysimg_size, &s.relocs_list);
     jl_write_offsetlist(s.relocs, sysimg_size, &s.memowner_list);
     jl_write_offsetlist(s.relocs, sysimg_size, &s.memref_list);
     if (s.incremental) {
@@ -4515,10 +4571,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     reloc_t *relocs_base = (reloc_t*)&relocs.buf[0];
 
     s.s = &sysimg;
-    jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD_MARKED | GC_IN_IMAGE); // gctags
-    size_t sizeof_tags = ios_pos(&relocs);
-    (void)sizeof_tags;
-    jl_read_reloclist(&s, s.link_ids_relocs, 0); // general relocs
+    size_t sizeof_tags = jl_read_relocbitmaps(&s);
     jl_read_memreflist(&s); // memowner_list relocs (must come before memref_list reads the pointers and after general relocs computes the pointers)
     jl_read_memreflist(&s); // memref_list relocs
     // s.link_ids_gvars will be processed in `jl_update_all_gvars`
