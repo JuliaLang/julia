@@ -2149,6 +2149,9 @@ end
         B .= 0
         copyto!(view(B, axes(B)...), A)
         @test B == A
+        B .= 0
+        copyto!(view(B, axes(B)...), vec(A))
+        @test B == A
     end
     @testset "IndexCartesian - IndexCartesian" begin
         B .= 0

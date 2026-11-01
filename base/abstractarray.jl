@@ -1121,6 +1121,11 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
             for I in iterdest
                 @inbounds dest[I] = src[I]
             end
+        elseif axes(dest) == axes(src)
+            # Same shape: one Cartesian iteration keeps the inner loop contiguous
+            for I in CartesianIndices(dest)
+                @inbounds dest[I] = src[I]
+            end
         else
             # Dual-iterator implementation
             for (Idest, Isrc) in zip(iterdest, itersrc)
