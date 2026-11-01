@@ -2949,7 +2949,13 @@ static UnitOutputs add_output_units(Module &M, TargetMachine &TM, unsigned worke
     // Write the bitcode of every unit before compiling any, in the context of
     // the module, since moving code out of it is much cheaper than copying it
     // into a context per thread.
+    // With one thread, the units are compiled in that context as they are,
+    // which saves parsing them back. Compiling one changes metadata that the
+    // units share, so all are written first.
+    workers = std::max(1u, std::min<unsigned>(workers, nunits));
+    bool in_place = workers == 1;
     SmallVector<SmallVector<char, 0>, 0> bitcodes(nunits);
+    SmallVector<std::unique_ptr<Module>, 0> unit_modules(in_place ? nunits : 0);
     {
         SmallVector<std::unique_ptr<UnitExtractor>, 0> extractors;
         extractors.reserve(nunits);
@@ -2967,10 +2973,13 @@ static UnitOutputs add_output_units(Module &M, TargetMachine &TM, unsigned worke
             BitcodeWriter writer(bitcodes[i]);
             writer.writeModule(*UM, /*ShouldPreserveUseListOrder*/false);
             writer.writeStrtab();
+            if (in_place)
+                unit_modules[i] = std::move(UM);
         }
     }
-    // Don't need M anymore
-    module_released(M);
+    // The units compiled in place need the context of M.
+    if (!in_place)
+        module_released(M);
     uint64_t split_end = jl_hrtime();
 
     std::string config = image_unit_config(TM);
@@ -2983,7 +2992,6 @@ static UnitOutputs add_output_units(Module &M, TargetMachine &TM, unsigned worke
         return units[a].weight > units[b].weight;
     });
     std::atomic<unsigned> next_unit{0};
-    workers = std::max(1u, std::min<unsigned>(workers, nunits));
     run_thread_pool(nunits, workers, jobserver, next_unit, [&](unsigned t) {
         ShardTimers timers;
         OutputCompiler compiler(TM);
@@ -3009,6 +3017,8 @@ static UnitOutputs add_output_units(Module &M, TargetMachine &TM, unsigned worke
                     out.outputs[i].obj.assign(obj->getBufferStart(), obj->getBufferEnd());
                     hits.fetch_add(1, std::memory_order_relaxed);
                     SmallVector<char, 0>().swap(bitcode);
+                    if (in_place)
+                        unit_modules[i].reset();
                     continue;
                 }
                 misses.fetch_add(1, std::memory_order_relaxed);
@@ -3017,30 +3027,41 @@ static UnitOutputs add_output_units(Module &M, TargetMachine &TM, unsigned worke
                 out.suffixes[i] = "_data";
             }
             uint64_t t2 = jl_hrtime();
-            // Compile the unit as parsed back from the bitcode that was hashed,
-            // in a context of its own, so that the module compiled depends on
-            // nothing but the key.
-            LLVMContext unit_ctx;
-            unit_ctx.setDiscardValueNames(true);
-            // The reader drops the debug info of a module that has invalid
-            // debug info, with only a warning.
-            auto handler = std::make_unique<InvalidDebugInfoHandler>();
-            bool &invalid_debug_info = handler->found;
-            unit_ctx.setDiagnosticHandler(std::move(handler));
-            auto UM = cantFail(parseBitcodeFile(MemoryBufferRef(StringRef(bitcode.data(), bitcode.size()), "text"), unit_ctx),
-                               "Error loading unit");
-            SmallVector<char, 0>().swap(bitcode);
-            // The reader runs the verifier itself on a module with debug info.
-            if (invalid_debug_info ||
-                (!UM->getModuleFlag("Debug Info Version") && verifyModule(*UM, &errs())))
-                report_fatal_error("invalid image unit");
-            finalize_unit(*UM, out.suffixes[i]);
-            out.outputs[i] = add_output_impl(*UM, compiler, timers, false, false, true, false);
+            if (in_place) {
+                SmallVector<char, 0>().swap(bitcode);
+                auto &UM = unit_modules[i];
+                finalize_unit(*UM, out.suffixes[i]);
+                out.outputs[i] = add_output_impl(*UM, compiler, timers, false, false, true, false);
+                UM.reset();
+            }
+            else {
+                // Compile the unit as parsed back from the bitcode that was
+                // hashed, in a context of its own, so that the module compiled
+                // depends on nothing but the key.
+                LLVMContext unit_ctx;
+                unit_ctx.setDiscardValueNames(true);
+                // The reader drops the debug info of a module that has invalid
+                // debug info, with only a warning.
+                auto handler = std::make_unique<InvalidDebugInfoHandler>();
+                bool &invalid_debug_info = handler->found;
+                unit_ctx.setDiagnosticHandler(std::move(handler));
+                auto UM = cantFail(parseBitcodeFile(MemoryBufferRef(StringRef(bitcode.data(), bitcode.size()), "text"), unit_ctx),
+                                   "Error loading unit");
+                SmallVector<char, 0>().swap(bitcode);
+                // The reader runs the verifier itself on a module with debug info.
+                if (invalid_debug_info ||
+                    (!UM->getModuleFlag("Debug Info Version") && verifyModule(*UM, &errs())))
+                    report_fatal_error("invalid image unit");
+                finalize_unit(*UM, out.suffixes[i]);
+                out.outputs[i] = add_output_impl(*UM, compiler, timers, false, false, true, false);
+            }
             compile_time.fetch_add(jl_hrtime() - t2, std::memory_order_relaxed);
             if (P.cacheable)
                 cache.store(key, StringRef(out.outputs[i].obj.data(), out.outputs[i].obj.size()));
         }
     });
+    if (in_place)
+        module_released(M);
     if (image_timings_enabled()) {
         dbgs() << formatv("Image object cache: {0} units, {1} hits, {2} misses\n",
                           nunits, hits.load(std::memory_order_relaxed), misses.load(std::memory_order_relaxed));
