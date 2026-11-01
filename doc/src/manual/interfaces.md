@@ -227,6 +227,8 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `similar(A, ::Type{S})`                         | `similar(A, S, size(A))`               | Return a mutable array with the same shape and the specified element type             |
 | `similar(A, dims::Dims)`                        | `similar(A, eltype(A), dims)`          | Return a mutable array with the same element type and size *dims*                     |
 | `similar(A, ::Type{S}, dims::Dims)`             | `Array{S}(undef, dims)`                | Return a mutable array with the specified element type and size                       |
+| `Base.dataids(A)`                               | `(objectid(A),)`                       | Return a tuple of `UInt`s that represent the mutable data segments of an array `A`. |
+| `Base.unaliascopy(A)`                           | `copy(A)`                              | Make a preventative copy of an array `A` in an operation where `A` `Base.mightalias` against another array. |
 | **Non-traditional indices**                     | **Default definition**                 | **Brief description**                                                                 |
 | `axes(A)`                                    | `map(OneTo, size(A))`                  | Return a tuple of `AbstractUnitRange{<:Integer}` of valid indices. The axes should be their own axes, that is `axes.(axes(A),1) == axes(A)` should be satisfied. |
 | `similar(A, ::Type{S}, inds)`              | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |

@@ -58,6 +58,7 @@ Language changes
   of structs follow the new size: `unsafe_store!` through a `Ptr{Int24}` now writes 4 bytes.
   Such types now report `Base.datatype_haspadding`; the trailing padding is not part of the
   value and does not affect `===` or `objectid` ([#61361]).
+* `Slices` exposes `dataids` of its parent array to properly identify aliasing in broadcasting ([#49182]).
 
 Compiler/Runtime improvements
 -----------------------------
