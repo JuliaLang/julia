@@ -717,7 +717,7 @@ FC_ARG := $(shell printf "%s\n" $(call shell_escape,$(FC)) 2>/dev/null | cut -s 
 endif
 
 JFFLAGS := -O2 $(fPIC)
-CPP := $(CC) -E
+CPP = $(CC) -E
 AR := $(CROSS_COMPILE)ar
 AS := $(CROSS_COMPILE)as
 LD := $(CROSS_COMPILE)ld
@@ -725,7 +725,7 @@ RANLIB := $(CROSS_COMPILE)ranlib
 OBJCOPY := $(CROSS_COMPILE)objcopy
 READELF := $(CROSS_COMPILE)readelf
 
-CPP_STDOUT := $(CPP) -P
+CPP_STDOUT = $(CPP) -P
 
 # file extensions
 ifeq ($(OS), WINNT)
