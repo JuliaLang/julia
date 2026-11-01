@@ -205,6 +205,27 @@ function _test_dates()
     println(Core.stdout, "dates: ", day, " ", time)
 end
 
+# `eachindex` of several arrays: its error path must stay specialized on the
+# argument count, or the splat inside `throw_eachindex_mismatch_indices` is left
+# as an unresolved `_apply_iterate`. Five arrays exceed the `max_args` that
+# JuliaC raises for that function; the precompiled 3-array form covers the
+# case where the widened specialization is already in the package image.
+@noinline function sum_eachindex5(a, b, c, d, e)
+    s = 0.0
+    for i in eachindex(a, b, c, d, e)
+        s += a[i] + b[i] + c[i] + d[i] + e[i]
+    end
+    return s
+end
+@noinline function sum_eachindex3(a, b, c)
+    s = 0.0
+    for i in eachindex(a, b, c)
+        s += a[i] + b[i] + c[i]
+    end
+    return s
+end
+precompile(sum_eachindex3, (Vector{Float64}, Vector{Float64}, Vector{Float64}))
+
 function _test_threads()
     v = zeros(Int, 64)
     Threads.@threads for i in eachindex(v)
@@ -256,6 +277,9 @@ function @main(args::Vector{String})::Cint
     println(Core.stdout, "collected: ", kept[], " kept, ", dropped[], " dropped")
 
     println(Core.stdout, interpolate_many(1:3, 2.5, :sym, 'c'))
+    let x = [1.0, 2.0]
+        println(Core.stdout, "eachindex: ", sum_eachindex5(x, x, x, x, x), " ", sum_eachindex3(x, x, x))
+    end
     _test_linalg()
     _test_threads()
 
