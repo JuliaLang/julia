@@ -333,8 +333,6 @@ eachindex(A::AbstractVector) = (@inline(); axes1(A))
 # we unroll the join for easier inference
 _join_comma_and(indsA, indsB) = LazyString(indsA, " and ", indsB)
 _join_comma_and(indsA, indsB, indsC...) = LazyString(indsA, ", ", _join_comma_and(indsB, indsC...))
-# `Vararg{Any,N}` keeps this specialized for every argument count: a widened specialization
-# leaves `_apply_iterate` in the splat below, which `--trim` cannot resolve (#57830).
 @noinline function throw_eachindex_mismatch_indices(indices_str, indsA, indsBs::Vararg{Any,N}) where {N}
     throw(DimensionMismatch(
             LazyString("all inputs to eachindex must have the same ", indices_str, ", got ",

@@ -205,11 +205,6 @@ function _test_dates()
     println(Core.stdout, "dates: ", day, " ", time)
 end
 
-# `eachindex` of several arrays: its error path must stay specialized on the
-# argument count, or the splat inside `throw_eachindex_mismatch_indices` is left
-# as an unresolved `_apply_iterate`. Five arrays exceed the `max_args` that
-# JuliaC raises for that function; the precompiled 3-array form covers the
-# case where the widened specialization is already in the package image.
 @noinline function sum_eachindex5(a, b, c, d, e)
     s = 0.0
     for i in eachindex(a, b, c, d, e)
