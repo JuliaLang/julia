@@ -39,13 +39,15 @@ IdSet() = IdSet{Any}()
 
 copymutable(s::IdSet) = typeof(s)(s)
 emptymutable(s::IdSet{T}, ::Type{U}=T) where {T,U} = IdSet{U}()
+setop_eltype(s::IdSet, itrs...) = afoldl((T, i) -> promote_typejoin(T, eltype(i)), eltype(s), itrs...)
 copy(s::IdSet) = typeof(s)(s)
 
 haskey(s::IdSet, @nospecialize(key)) = ccall(:jl_idset_peek_bp, Int, (Any, Any, Any), s.list, s.idxs, key) != -1
 isempty(s::IdSet) = s.count == 0
 length(s::IdSet)  = s.count
 in(@nospecialize(x), s::IdSet) = haskey(s, x)
-function push!(s::IdSet, @nospecialize(x))
+function push!(s::IdSet{T}, @nospecialize(x)) where {T}
+    x isa T || throw(KeyTypeError(T, x))
     idx = ccall(:jl_idset_peek_bp, Int, (Any, Any, Any), s.list, s.idxs, x)
     if idx >= 0
         s.list[idx + 1] = x
