@@ -374,8 +374,6 @@ endif
 	$(INSTALL_M) $(build_private_libdir)/dllcrt2.o $(DESTDIR)$(private_libdir)/
 	$(INSTALL_M) $(build_private_libdir)/crtbegin.o $(DESTDIR)$(private_libdir)/
 	$(INSTALL_M) $(build_private_libdir)/crtend.o $(DESTDIR)$(private_libdir)/
-
-	$(INSTALL_M) $(build_shlibdir)/libopenlibm.dll.a $(DESTDIR)$(private_libdir)/
 else
 
 # Copy over .dSYM directories directly for Darwin

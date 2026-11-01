@@ -183,11 +183,17 @@ function _find_static(lib)
     end
 end
 
-function _find_loaded(re::Regex)
+function _find_loaded_or_nothing(re::Regex)
     for p in Libdl.dllist()
         occursin(re, p) && return p
     end
-    error("no loaded shared object matching $re")
+    return nothing
+end
+
+function _find_loaded(re::Regex)
+    p = _find_loaded_or_nothing(re)
+    p === nothing && error("no loaded shared object matching $re")
+    return p
 end
 
 function link_image_cmd(path, out; is_sysimage::Bool = false, debug_runtime::Bool = isdebugbuild())
@@ -208,7 +214,6 @@ function link_image_cmd(path, out; is_sysimage::Bool = false, debug_runtime::Boo
     crtend = String[]
     @static if Sys.iswindows()
         # From `x86_64-w64-mingw32-gcc -shared -Wl,--verbose`.
-        append!(LIBS,     String["-lopenlibm"])
         # libmsvcrt-os.a contains MinGW CRT objects that can refer back to
         # libmingw32.a/libmingwex.a; keep the selected CRT last.
         append!(LIBS,     String["-lmingw32", "-lgcc_s", "-lgcc", "-lmoldname", "-lmingwex", "-lmsvcrt-os", "-lmingw32", "-lmingwex", "-lmsvcrt-os", "-lkernel32"])
@@ -227,7 +232,11 @@ function link_image_cmd(path, out; is_sysimage::Bool = false, debug_runtime::Boo
         libc           = _find_loaded(r"/(?:libc|ld-musl-[^/]+)\.so\.\d+$")     # system libc
         ld_linux       = _find_loaded(r"/ld-(?:linux|musl|elf)[^/]*\.so\.\d+$") # system ld
         libc_nonshared = _find_static("libc_nonshared.a")
-        append!(LIBS,     String["-lgcc", "--as-needed", "-lgcc_s", "-latomic", "-lopenlibm", "--no-as-needed", libc])
+        append!(LIBS,     String["-lgcc", "--as-needed", "-lgcc_s", "-latomic", "--no-as-needed"])
+        # musl has no separate libm: its math functions are part of libc
+        libm = _find_loaded_or_nothing(r"/libm\.so\.\d+$")               # system libm
+        libm === nothing || append!(LIBS, String["--as-needed", libm, "--no-as-needed"])
+        push!(LIBS, libc)
         isfile(libc_nonshared) && push!(LIBS, libc_nonshared)
         append!(LIBS,     String["--as-needed", ld_linux, "--no-as-needed"])
         append!(crtbegin, String[_find_static("crti.o"), _find_static("crtbeginS.o")])

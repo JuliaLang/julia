@@ -340,3 +340,45 @@ end
     @test host_ccall() === nothing
     @test host_ir() === nothing
 end
+
+# The JIT must resolve the libm functions that LLVM can lower floating point operations to, on
+# every platform and without openlibm. `nobuiltin` keeps LLVM from turning these into instructions.
+@testset "libm libcalls are resolved by the JIT" begin
+    for (name, T, llt, expected) in (("rint", Float64, "double", 2.0), ("rintf", Float32, "float", 2f0),
+                                     ("trunc", Float64, "double", 2.0), ("truncf", Float32, "float", 2f0),
+                                     ("floor", Float64, "double", 2.0), ("floorf", Float32, "float", 2f0),
+                                     ("ceil", Float64, "double", 3.0), ("ceilf", Float32, "float", 3f0))
+        f = @eval (x::$T) -> Base.llvmcall(($"""
+            declare $llt @$name($llt)
+            define $llt @entry($llt %x) {
+                %y = call $llt @$name($llt %x) nobuiltin
+                ret $llt %y
+            }""", "entry"), $T, Tuple{$T}, x)
+        @test Base.invokelatest(f, T(2.25)) === expected
+    end
+    for (name, T, llt, expected) in (("fmodf", Float32, "float", 1f0), ("powf", Float32, "float", 49f0))
+        f = @eval (x::$T, y::$T) -> Base.llvmcall(($"""
+            declare $llt @$name($llt, $llt)
+            define $llt @entry($llt %x, $llt %y) {
+                %r = call $llt @$name($llt %x, $llt %y) nobuiltin
+                ret $llt %r
+            }""", "entry"), $T, Tuple{$T, $T}, x, y)
+        args = name == "fmodf" ? (T(7), T(3)) : (T(7), T(2))
+        @test Base.invokelatest(f, args...) === expected
+    end
+    for (name, T, llt, expected) in (("fma", Float64, "double", 7.0), ("fmaf", Float32, "float", 7f0))
+        f = @eval (x::$T, y::$T, z::$T) -> Base.llvmcall(($"""
+            declare $llt @$name($llt, $llt, $llt)
+            define $llt @entry($llt %x, $llt %y, $llt %z) {
+                %r = call $llt @$name($llt %x, $llt %y, $llt %z) nobuiltin
+                ret $llt %r
+            }""", "entry"), $T, Tuple{$T, $T, $T}, x, y, z)
+        @test Base.invokelatest(f, T(2), T(3), T(1)) === expected
+    end
+end
+
+# Julia's own libraries must not load openlibm.
+@testset "openlibm is not loaded" begin
+    script = "using Libdl; print(any(contains(\"openlibm\"), Libdl.dllist()))"
+    @test read(`$(Base.julia_cmd()) --startup-file=no -e $script`, String) == "false"
+end

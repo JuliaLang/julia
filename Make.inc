@@ -60,9 +60,6 @@ USE_SYSTEM_LLVM:=0
 USE_SYSTEM_LIBUNWIND:=0
 DISABLE_LIBUNWIND:=0
 USE_SYSTEM_PCRE:=0
-USE_SYSTEM_LIBM:=0
-USE_SYSTEM_OPENLIBM:=0
-UNTRUSTED_SYSTEM_LIBM:=0
 USE_SYSTEM_DSFMT:=0
 USE_SYSTEM_LIBBLASTRAMPOLINE:=0
 USE_SYSTEM_BLAS:=0
@@ -1479,14 +1476,6 @@ LIBLAPACKNAME := liblapack
 endif
 endif
 
-ifeq ($(USE_SYSTEM_LIBM), 1)
-LIBM := -lm
-LIBMNAME := libm
-else
-LIBM := -lopenlibm
-LIBMNAME := libopenlibm
-endif
-
 ifeq ($(USE_SYSTEM_LIBUV), 1)
   LIBUV := $(LOCALBASE)/lib/libuv-julia.a
   LIBUV_INC := $(LOCALBASE)/include
@@ -1556,6 +1545,20 @@ LIBC := glibc
 endif
 endif
 
+# The system math library, as named by `Base.libm_name`. An unversioned `libm.so` can be a
+# linker script that cannot be loaded at runtime, so use the versioned names where they exist.
+# musl reserves `libm.so` as an alias for itself, and msvcrt is the CRT on Windows.
+LIBMNAME := libm
+ifeq ($(LIBC),glibc)
+LIBMNAME := libm.so.6
+else ifeq ($(LIBC),musl)
+LIBMNAME := libm.so
+else ifeq ($(OS),FreeBSD)
+LIBMNAME := libm.so.5
+else ifeq ($(OS),WINNT)
+LIBMNAME := msvcrt
+endif
+
 # CSL_NEXT_GLIBCXX_VERSION is a triple of the symbols representing support for whatever
 # the next libstdc++ version would be. This is used for two things.
 # 1. Whether the system libraries are new enough, if we need to use the libs bundled with CSL
@@ -1583,7 +1586,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.35|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT LIBPICOSAT
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT LIBPICOSAT
 
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
@@ -1793,7 +1796,6 @@ ifeq ($(ARCH),i686)
 JLDFLAGS += --large-address-aware
 endif
 JCPPFLAGS_COMMON += -D_WIN32_WINNT=0x0602 # (0x0602 = _WIN32_WINNT_WIN8)
-UNTRUSTED_SYSTEM_LIBM := 1
 # Use hard links for files on windows, rather than soft links
 #   https://stackoverflow.com/questions/3648819/how-to-make-a-symbolic-link-with-cygwin-in-windows-7
 # Usage: $(WIN_MAKE_HARD_LINK) <source> <target>
@@ -1886,11 +1888,6 @@ ifeq ($(USE_SYSTEM_BLAS),1)
 USE_BINARYBUILDER_OPENBLAS := 0
 # Disable BB LIBSUITESPARSE if we're using system BLAS
 USE_BINARYBUILDER_LIBSUITESPARSE := 0
-endif
-
-ifeq ($(USE_SYSTEM_LIBM),1)
-# If we're using system libm, disable BB OpenLibm
-USE_BINARYBUILDER_OPENLIBM := 0
 endif
 
 
@@ -2069,19 +2066,8 @@ LIBSTDCXX_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/
 endif
 
 
-# USE_SYSTEM_LIBM and USE_SYSTEM_OPENLIBM causes it to get symlinked into build_private_shlibdir
-ifeq ($(USE_SYSTEM_LIBM),1)
-LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
-else ifeq ($(USE_SYSTEM_OPENLIBM),1)
-LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
-else
-LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
-endif
-LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
-
 # We list:
 #  * libgcc_s, because FreeBSD needs to load ours, not the system one.
-#  * libopenlibm, because Windows has an untrustworthy libm, and we want to use ours more than theirs
 #  * libstdc++, because while performing `libstdc++` probing we need to
 #    know the path to the bundled `libstdc++` library.
 #  * libjulia-internal, which must always come second-to-last.
@@ -2093,8 +2079,8 @@ LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/$(LIB
 # That second point will no longer be true for most deps once they are placed within Artifacts directories.
 # Note that we prefix `libjulia-codegen` and `libjulia-internal` with `@` to signify to the loader that it
 # should not automatically dlopen() it in its loading loop, it is "special" and should happen later.
-# We do the same for `libstdc++`, and explicitly place it _after_ `libgcc_s`, and `libm` since `libstdc++`
-# may depend on those libraries (e.g. when USE_SYSTEM_LIBM=1)
+# We do the same for `libstdc++`, and explicitly place it _after_ `libgcc_s` since `libstdc++`
+# may depend on that library
 
 # Helper function to join a list with colons, then place an extra at the end.
 define build_deplibs
@@ -2103,7 +2089,6 @@ endef
 
 LOADER_BUILD_DEP_LIBS = $(call build_deplibs, \
     $(LIBGCC_BUILD_DEPLIB) \
-    $(LIBM_BUILD_DEPLIB) \
     @$(LIBSTDCXX_BUILD_DEPLIB) \
     @$(LIBJULIAINTERNAL_BUILD_DEPLIB) \
     @$(LIBJULIACODEGEN_BUILD_DEPLIB) \
@@ -2111,7 +2096,6 @@ LOADER_BUILD_DEP_LIBS = $(call build_deplibs, \
 
 LOADER_DEBUG_BUILD_DEP_LIBS = $(call build_deplibs, \
    $(LIBGCC_BUILD_DEPLIB) \
-   $(LIBM_BUILD_DEPLIB) \
    @$(LIBSTDCXX_BUILD_DEPLIB) \
    @$(LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB) \
    @$(LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB) \
@@ -2119,14 +2103,12 @@ LOADER_DEBUG_BUILD_DEP_LIBS = $(call build_deplibs, \
 
 LOADER_INSTALL_DEP_LIBS = $(call build_deplibs, \
     $(LIBGCC_INSTALL_DEPLIB) \
-    $(LIBM_INSTALL_DEPLIB) \
     @$(LIBSTDCXX_INSTALL_DEPLIB) \
     @$(LIBJULIAINTERNAL_INSTALL_DEPLIB) \
     @$(LIBJULIACODEGEN_INSTALL_DEPLIB) \
 )
 LOADER_DEBUG_INSTALL_DEP_LIBS = $(call build_deplibs, \
     $(LIBGCC_INSTALL_DEPLIB) \
-    $(LIBM_INSTALL_DEPLIB) \
     @$(LIBSTDCXX_INSTALL_DEPLIB) \
     @$(LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB) \
     @$(LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB) \
@@ -2144,9 +2126,6 @@ JL_RUNTIME_LIBS-$(USE_SYSTEM_ZLIB) += libz
 JL_RUNTIME_LIBS-$(USE_SYSTEM_ZSTD) += libzstd
 ifneq ($(OS),WINNT)
 JL_RUNTIME_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
-endif
-ifeq ($(USE_SYSTEM_LIBM),0)
-JL_RUNTIME_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm
 endif
 # compiler support libraries
 JL_RUNTIME_LIBS-$(USE_SYSTEM_CSL) += libgfortran libquadmath libstdc++ libgomp libssp libatomic
