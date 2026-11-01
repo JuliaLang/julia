@@ -2822,6 +2822,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
                          stdin=devnull, stdout=out, stderr=out), wait=false)
         close(out.in)
         readuntil(out, "CHILD-READY\n") # returns early (at EOF) if the child dies
+        t0 = time() # startup is slow on a loaded machine, so time from here
         reader = @async read(out, String)
         killer = @async begin
             for d in delays
@@ -2830,10 +2831,11 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
             end
         end
         exited = timedwait(() -> process_exited(p), 60.0)
+        elapsed = time() - t0
         exited === :ok || kill(p, Base.SIGKILL) # never wedge the suite
         wait(p)
         wait(killer)
-        return fetch(reader), p, exited
+        return fetch(reader), p, exited, elapsed
     end
 
     # SIGTERM during a sleep: quiet exit, hooks run, dies by SIGTERM (#62774)
@@ -2938,8 +2940,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test p.termsignal == Base.SIGTERM
 
     # every thread busy: the exit is still prompt
-    t0 = time()
-    output, p, exited = run_with_sigterm("""
+    output, p, exited, elapsed = run_with_sigterm("""
         atexit(() -> println("ATEXIT-RAN"))
         function spin()
             x = 0.0
@@ -2954,11 +2955,10 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test exited === :ok
     @test occursin("ATEXIT-RAN", output)
     @test p.termsignal == Base.SIGTERM
-    @test time() - t0 < 6
+    @test elapsed < 6
 
     # a busy thread and a hook that calls `exit`: the later hooks still run
-    t0 = time()
-    output, p, exited = run_with_sigterm("""
+    output, p, exited, elapsed = run_with_sigterm("""
         atexit(() -> println("LAST-HOOK-RAN"))
         atexit(() -> exit(3))
         function spin()
@@ -2973,11 +2973,10 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test exited === :ok
     @test occursin("LAST-HOOK-RAN", output)
     @test p.termsignal == Base.SIGTERM
-    @test time() - t0 < 6
+    @test elapsed < 6
 
     # a GC waiting on a thread in a foreign call does not block the exit
-    t0 = time()
-    output, p, exited = run_with_sigterm("""
+    output, p, exited, elapsed = run_with_sigterm("""
         Threads.@spawn Libc.systemsleep(100)
         sleep(1)
         GC.gc()
@@ -2985,7 +2984,7 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     """, [2.0]; flags=`--threads=2,0`)
     @test exited === :ok
     @test p.termsignal == Base.SIGTERM
-    @test time() - t0 < 8
+    @test elapsed < 8
 
     # with exit-on-sigint, SIGINT exits like SIGTERM and dies by SIGINT
     output, p, exited = run_with_sigterm("""
