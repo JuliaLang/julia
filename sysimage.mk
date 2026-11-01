@@ -29,7 +29,7 @@ $$(build_private_libdir)/$1$2.$$(SHLIB_EXT): $$(build_private_libdir)/$1$2-o.a
 		$$(WIN_LD_DLL_CRT_START) \
 		$$(call whole_archive,$$<) \
 		-ljulia-internal$2 -ljulia$2 \
-		$$(LIBM) $$(WIN_MINGW_LIBS) -lssp $$(WIN_LD_CRT_END), \
+		$$(WIN_MINGW_LIBS) -lssp $$(WIN_LD_CRT_END), \
 		$$(CXX) $$(LDFLAGS) -shared $$(fPIC) -L$$(build_private_libdir) -L$$(build_libdir) -L$$(build_shlibdir), \
 		$$(call whole_archive,$$<) \
 		-ljulia-internal$2 -ljulia$2))
