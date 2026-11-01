@@ -218,16 +218,22 @@ function _round_step(x, step, r::RoundingMode)
     else
         y = round(x / step, r) * step
     end
-    if !isfinite(y)
-        if x > 0
-            return (r == RoundUp ? oftype(x, Inf) : zero(x))
-        elseif x < 0
-            return (r == RoundDown ? -oftype(x, Inf) : -zero(x))
-        else
-            return x
-        end
-    end
+    isfinite(y) || return _round_step_nonfinite(x, step, r)
     return y
+end
+
+# the result of `_round_step` when the rounded value is not finite as a float
+@noinline function _round_step_nonfinite(x, step, r::RoundingMode)
+    (isfinite(x) && !iszero(x)) || return x
+    # With a finite step, the rounded value is a nonzero multiple of step beyond floatmax
+    # (y is Inf, or NaN from Inf - Inf in `_tp_mul`), so the result is ±Inf. With an
+    # infinite step, the rounded value is 0 or ±step: ±Inf when rounding away from zero,
+    # and 0 otherwise. For the nearest modes that assumes |x| < step / 2, which can fail
+    # only for a base whose first power beyond floatmax is below 2 * floatmax.
+    if isfinite(step) || r == RoundFromZero || r == (x > 0 ? RoundUp : RoundDown)
+        return copysign(oftype(x, Inf), x)
+    end
+    return copysign(zero(x), x)
 end
 
 function _round_digits(x, r::RoundingMode, digits::Integer, base)

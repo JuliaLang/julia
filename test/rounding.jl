@@ -525,6 +525,59 @@ end
         @test setrounding(() -> round(x, r; digits=d), BigFloat, RoundUp) == round(x, r; digits=d)
     end
 end
+@testset "rounding to digits past floatmax" begin
+    # the rounded value is beyond floatmax: Inf, not 0 (#64142)
+    @test round(floatmax(); sigdigits=1) === Inf
+    @test round(-floatmax(); sigdigits=2) === -Inf
+    @test round(floatmax(); digits=-308) === Inf
+    @test round(floatmax(), RoundFromZero; digits=-308) === Inf
+    @test round(floatmax(Float32), RoundFromZero; digits=-38) === Inf32
+    @test round(floatmax(Float16), RoundFromZero; sigdigits=1) === Inf16
+    for s in 1:5
+        @test round(floatmax(); sigdigits=s) === Inf
+    end
+    @test round(floatmax(); sigdigits=6) === 1.79769e308
+    @test round(floatmax(), RoundDown; digits=-308) === 1.0e308
+    @test round(-floatmax(), RoundUp; digits=-308) === -1.0e308
+    # the step itself overflows: 0 or the infinite step
+    for r in (RoundNearest, RoundToZero, RoundNearestTiesAway, RoundNearestTiesUp)
+        @test round(1.25, r; digits=typemin(Int)) === 0.0
+        @test round(-1.25, r; digits=-400) === -0.0
+    end
+    @test round(1.25, RoundFromZero; digits=typemin(Int)) === Inf
+    @test round(-1.25, RoundFromZero; digits=-400) === -Inf
+    @test round(-1.25, RoundUp; digits=-400) === -0.0
+    @test round(-1.25, RoundDown; digits=-400) === -Inf
+    for x in (Inf, -Inf, NaN, 0.0, -0.0), r in (RoundNearest, RoundUp, RoundDown, RoundFromZero)
+        @test round(x, r; digits=-400) === x
+        @test round(x, r; digits=-308) === x
+    end
+end
+@testset "sigdigits of Rationals counts digits exactly" begin
+    # float(x) rounds up to a power of the base
+    @test round((10^17 - 1)//10^17, RoundDown; sigdigits=2) === 0.99
+    @test round(-(10^17 - 1)//10^17, RoundUp; sigdigits=2) === -0.99
+    @test round((big(10)^40 - 1)//big(10)^40, RoundDown; sigdigits=3) == big"0.999"
+    @test round(1//1000; sigdigits=1) === 0.001
+    @test round(1000//1; sigdigits=1) === 1000.0
+    @test round((3^30 - 1)//3^30, RoundDown; sigdigits=1, base=3) === 2/3
+    @test round(0//1; sigdigits=3) === 0.0
+    rng = Random.MersenneTwister(0x5d)
+    for _ in 1:300
+        n, d = rand(rng, 1:10^15), rand(rng, 1:10^15)
+        x = rand(rng, Bool) ? n//d : -n//d
+        for base in (10, 3, 2)
+            h = Base.hidigit(x, base)
+            @test (big(base)//1)^(h - 1) <= abs(big(x)) < (big(base)//1)^h
+        end
+    end
+    # within one unit in the 18th digit of a power of ten
+    for k in -3:3, δ in (-1, 0, 1), s in (1, -1)
+        x = s * (10^17 + δ)//10^(17 - k)
+        h = Base.hidigit(x, 10)
+        @test (big(10)//1)^(h - 1) <= abs(big(x)) < (big(10)//1)^h
+    end
+end
 @testset "rounding with too much (or too few) precision" begin
     for x in (12345.6789, 0, -12345.6789)
         y = float(x)

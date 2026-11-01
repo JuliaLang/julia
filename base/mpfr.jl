@@ -1441,6 +1441,60 @@ function _divround_magnitude!(a::BigInt, b::BigInt, r::RoundingMode, neg::Bool)
     return q
 end
 
+# The h with base^(h-1) <= |x| < base^h, for `sigdigits`. float(x) can round across a
+# power of base, and so can the logarithm in `hidigit` for floats, so the count from
+# float(x), which is off by at most one, is checked exactly.
+function Base.hidigit(x::Rational, base)
+    h = Base.hidigit(float(x), base)
+    (iszero(x) || !(base isa Integer) || base < 2) && return h
+    a, q = _hidigit_ints(x, base)
+    while true
+        c = _cmp_pows(oftype(a, base), h - 1, a, q)
+        iszero(c) && return h
+        h += c
+    end
+end
+_hidigit_ints(x::Rational{<:Union{Base.BitSigned64, Base.BitUnsigned64}}, base) =
+    base <= typemax(UInt64) ? (UInt64(Base.uabs(numerator(x))), UInt64(denominator(x))) :
+                              (abs(BigInt(numerator(x))), BigInt(denominator(x)))
+_hidigit_ints(x::Rational, base) = (abs(BigInt(numerator(x))), BigInt(denominator(x)))
+
+# For integers b >= 2, a > 0 and q > 0: -1 if a / q < b^k, 1 if a / q >= b^(k+1), else 0
+function _cmp_pows(b::BigInt, k::Int, a::BigInt, q::BigInt)
+    if k >= 0
+        pq = b^k * q
+        pq > a && return -1
+        return pq * b <= a ? 1 : 0
+    else
+        ap = a * b^(-k - 1)
+        ap >= q && return 1
+        return ap * b >= q ? 0 : -1
+    end
+end
+# with UInt64, products are exact in UInt128, and a power that overflows UInt64 exceeds a and q
+function _cmp_pows(b::UInt64, k::Int, a::UInt64, q::UInt64)
+    if k >= 0
+        p, o = _pow_overflow(b, k)
+        (o || widemul(p, q) > a) && return -1
+        pb = widemul(p, b)
+        return pb <= typemax(UInt64) && widemul(pb % UInt64, q) <= a ? 1 : 0
+    else
+        p, o = _pow_overflow(b, -k - 1)
+        (o || widemul(a, p) >= q) && return 1
+        ap = widemul(a, p) % UInt64            # less than q
+        return widemul(ap, b) >= q ? 0 : -1
+    end
+end
+function _pow_overflow(b::UInt64, k::Int)
+    p = one(b)
+    for _ in 1:k
+        w = widemul(p, b)
+        w > typemax(UInt64) && return p, true
+        p = w % UInt64
+    end
+    return p, false
+end
+
 # Rational inputs are rounded exactly too, rather than after rounding them with `float(x)`.
 # The numerator and denominator may be the caller's, so they are not updated in place.
 function Base._round_digits(x::Rational, r::RoundingMode, digits::Integer, base)
