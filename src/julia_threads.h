@@ -214,6 +214,7 @@ typedef struct _jl_tls_states_t {
     struct _jl_task_t *next_task;
     struct _jl_task_t *previous_task;
     struct _jl_task_t *root_task;
+    _Atomic(uint32_t) nswitches; // read from foreign threads
     // Task-abandonment handshake (see jl_abandon_task in task.c). One
     // requester at a time owns the slot; delivery validates the victim's
     // state at the point the thread is actually stopped and commits or
@@ -389,8 +390,8 @@ struct JL_GC_TRACKED_TYPE _jl_cancel_source_t {
     // installed lazily by the first walker.
     _Atomic(jl_value_t*) walk_lock;
     // 0x00 = uncancelled; otherwise the (nonzero) severity at which the
-    // source is cancelled (0x1 SAFE, 0x3 ABANDON_EXTERNAL, 0x4 ABANDON_ALL).
-    // Monotonic (CAS-max).
+    // source is cancelled (0x1 SAFE, 0x3 ABANDON_EXTERNAL, 0x4 ABANDON_ALL),
+    // plus the 0x20 bit for a termination request. Monotonic.
     _Atomic(uint8_t) state;
     // Number of parent links following the fixed fields. Const.
     uint16_t nparents;
@@ -406,6 +407,18 @@ struct JL_GC_TRACKED_TYPE _jl_cancel_source_t {
     _Atomic(uint32_t) reg_count;
     // jl_cancel_parent_link_t links[nparents];  (see jl_cancel_source_links)
 };
+
+// severity is raised to the max, and the terminate bit stays set once set
+// keep in sync with the matching constants in Base
+#define JL_CANCEL_SEVERITY_MASK 0x1f
+#define JL_CANCEL_TERMINATE_BIT 0x20
+
+static inline uint8_t jl_cancel_state_join(uint8_t a, uint8_t b) JL_NOTSAFEPOINT
+{
+    uint8_t sa = a & JL_CANCEL_SEVERITY_MASK;
+    uint8_t sb = b & JL_CANCEL_SEVERITY_MASK;
+    return (sa > sb ? sa : sb) | ((a | b) & JL_CANCEL_TERMINATE_BIT);
+}
 
 // The fixed-field layout above must be kept in sync with the registration
 // in jltypes.c; the trailing links are invisible to the field system.

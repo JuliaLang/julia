@@ -40,7 +40,8 @@ The exception thrown by cancellation points whose governing cancellation
 token has been cancelled. The `request` field records the severity
 ([`CANCEL_REQUEST_SAFE`](@ref), [`CANCEL_REQUEST_ABANDON_EXTERNAL`](@ref) or
 [`CANCEL_REQUEST_ABANDON_ALL`](@ref)) as observed at delivery time; the
-source may escalate afterwards.
+source may escalate afterwards. The field may also carry a termination flag
+(see `Base.is_terminate_request`), so use `Base.severity` to read the severity.
 """
 struct CancellationRequest <: Exception
     request::UInt8
@@ -93,13 +94,23 @@ const CANCEL_REQUEST_ABANDON_ALL = CancellationRequest(0x4)
 # The status byte reported by a cancellation point (`Core.cancellation_point!`)
 # is the governing source's state byte (0 while uncancelled, the severity once
 # cancelled) with the 0x40 bit merged in when the task has a pending
-# cooperative-yield request. The mask recovers the severity half of such a
-# status byte; source state reads themselves need no masking.
+# cooperative-yield request. A termination request also sets the 0x20 bit,
+# so mask before comparing severities. These must match the runtime's values.
 const STATUS_PREEMPT_BIT = 0x40
-const SEVERITY_MASK = 0x3f
+const TERMINATE_BIT = 0x20
+const SEVERITY_MASK = 0x1f
 
 # The severity of a request, for the delivery layer's comparisons.
-severity(cr::CancellationRequest) = cr.request
+severity(cr::CancellationRequest) = cr.request & SEVERITY_MASK
+
+"""
+    Base.is_terminate_request(cr::CancellationRequest) -> Bool
+
+Return `true` if the cancellation comes from a termination signal (such as
+SIGTERM); see also `Base.process_terminating`. Unlike an ordinary cancellation,
+catching it does not stop the process from exiting.
+"""
+is_terminate_request(cr::CancellationRequest) = cr.request & TERMINATE_BIT != 0x00
 
 """
     cancel_severity(src::CancellationTokenSource) -> Union{Nothing, CancellationRequest}
@@ -174,18 +185,22 @@ _cancel_parent(src::CancellationTokenSource, i::Int) =
 _cancel_next_child(parent::CancellationTokenSource, child::CancellationTokenSource) =
     ccall(:jl_cancel_source_next_child, Any, (Any, Any), parent, child)::Union{Nothing, CancellationTokenSource}
 
-# CAS-max the source's state to `sev` (a valid, nonzero severity). Returns
-# true if the state was raised, false if it was already at (or above) the
-# severity.
+# the higher severity of the two, with the flag bits of both (must match the runtime)
+_join_states(a::UInt8, b::UInt8) =
+    max(a & SEVERITY_MASK, b & SEVERITY_MASK) | ((a | b) & TERMINATE_BIT)
+
+# Raise the source's state to include `sev` (nonzero, may carry flags).
+# Returns true if the state changed.
 # seq_cst: pairs with the (child-list publication; state read) sequence in
 # `jl_new_cancel_source` - see the walk in `_cancel_walk_node!`.
 function _raise_state!(src::CancellationTokenSource, sev::UInt8)
     old = @atomic :monotonic src.state
     while true
-        if old >= sev
+        new = _join_states(old, sev)
+        if new == old
             return false
         end
-        old, success = @atomicreplace :sequentially_consistent :monotonic src.state old => sev
+        old, success = @atomicreplace :sequentially_consistent :monotonic src.state old => new
         success && return true
     end
 end
@@ -801,7 +816,7 @@ function _walk_waiters!(node::CancellationTokenSource, sev::UInt8)
             # (conservatively, e.g. by detaching the awaited request).
             aux = slot.aux
             if sev != 0x00 && (@atomic :sequentially_consistent t.waiting_on) === w &&
-                    aux % UInt8 <= sev
+                    aux % UInt8 <= sev & SEVERITY_MASK
                 if (@atomicreplace t.waiting_on w => nothing).success
                     towake = Pair{Tuple{Task, WaitEntry, UInt64}, Any}((t, w, aux), towake)
                 end
@@ -837,7 +852,7 @@ function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
     # the source registration (state write before walk on this side, push
     # or arm before state recheck on the registrant's).
     st = @atomic :sequentially_consistent node.state
-    sev < st && (sev = st)
+    sev = _join_states(sev, st)
     creq = CancellationRequest(sev)
     towake = _walk_waiters!(node, sev)
     # The actual wakes happen after the walk lock is released: holding it

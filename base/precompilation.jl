@@ -1524,7 +1524,8 @@ const register_atexit_hook = Base.OncePerProcess{Nothing}() do
         task === nothing && return
         istaskdone(task) && return
         stop_background_precompile(; graceful=false)
-        wait(task)
+        # on termination, a foreign thread may run this while the pool threads stay busy
+        Threads.threadpool() === :foreign || wait(task)
     end
     nothing
 end

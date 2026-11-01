@@ -397,7 +397,8 @@ function start_profile_listener()
         # this will prompt any ongoing or pending event to flush also
         close(cond)
         # error-propagation is not needed, since the errormonitor will handle printing that better
-        t === current_task() || _wait(t)
+        # on termination, a foreign thread may run this while the pool threads stay busy
+        t === current_task() || Threads.threadpool() === :foreign || _wait(t)
     end
     finalizer(cond) do c
         # if something goes south, still make sure we aren't keeping a reference in C to this
@@ -417,6 +418,41 @@ end
 # targeted this very generation, so a press for a previous episode can
 # never cancel a newly installed one.
 const _sigint_episode = Ref{Tuple{Union{Nothing, CancellationTokenSource}, UInt64}}((nothing, 0))
+
+# root of all cancellation in the process; a termination signal cancels it.
+# set once under the lock below; this also keeps alive the runtime's unrooted copy
+const _process_cancel_source = Ref{Union{Nothing, CancellationTokenSource}}(nothing)
+
+const _process_cancel_lock = ReentrantLock()
+
+# init normally creates this; created here when Base's init did not run (sysimage build)
+function process_cancel_source!()
+    src = _process_cancel_source[]
+    src === nothing || return src
+    lock(_process_cancel_lock; cancel=nothing)
+    try
+        src = _process_cancel_source[]
+        if src === nothing
+            src = CancellationTokenSource()
+            _process_cancel_source[] = src
+            ccall(:jl_set_term_source, Cvoid, (Any,), src)
+        end
+        return src
+    finally
+        unlock(_process_cancel_lock)
+    end
+end
+
+process_cancel_token() = CancellationToken(process_cancel_source!())
+
+@doc """
+    Base.process_terminating() -> Bool
+
+Return `true` once a termination signal (such as SIGTERM) has been received.
+The process exits after the cancelled work has unwound. Cleanup code can use
+this to tell termination apart from an ordinary cancellation.
+"""
+process_terminating() = ccall(:jl_process_term_signo, Cint, ()) != 0
 # The task driving the current foreground evaluation (the caller of
 # sigint_new_episode!). Nothing in Base reads it yet: the ^C escalation
 # machinery (follow-up PR) targets it directly when the running computation
@@ -478,6 +514,13 @@ const sigint_pass_lock = ReentrantLock()
 # `sigint_pass_lock` held; level-based (it re-reads the episode state), so
 # serializing passes through the lock is enough.
 function _sigint_dispatch_pass()
+    if process_terminating()
+        # the signal handler marked the tree cancelled but cannot wake parked tasks.
+        # any ^C press no longer matters, since the process is exiting
+        root = _process_cancel_source[]
+        root === nothing || redeliver!(root)
+        return nothing
+    end
     src, gen = _sigint_episode[]
     # A press is consumed only if it targeted this episode's generation; a
     # press for a previous episode self-invalidates (its source was already
@@ -577,8 +620,11 @@ function start_sigint_listener()
         # this will prompt any ongoing or pending event to flush also
         close(cond)
         # error-propagation is not needed, since the errormonitor will handle printing that better
-        for t in listeners
-            t === current_task() || _wait(t)
+        # on termination, a foreign thread may run this while the pool threads stay busy
+        if Threads.threadpool() !== :foreign
+            for t in listeners
+                t === current_task() || _wait(t)
+            end
         end
     end
     finalizer(cond) do c
@@ -612,6 +658,11 @@ function __init__()
     @static if !Sys.iswindows()
         # triggering a profile via signals is not implemented on windows
         start_profile_listener()
+    end
+    # fresh per process: an image's copy may be cancelled, and the runtime's pointer is not saved
+    let root = CancellationTokenSource()
+        _process_cancel_source[] = root
+        ccall(:jl_set_term_source, Cvoid, (Any,), root)
     end
     start_sigint_listener()
     _require_world_age[] = get_world_counter()

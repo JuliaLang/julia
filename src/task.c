@@ -667,6 +667,8 @@ JL_DLLEXPORT void jl_switch(void) JL_CANSAFEPOINT_ENTER_LEAVE
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     jl_task_t *t = ptls->next_task;
+    // count switches to self too, since a task that keeps yielding is not stuck
+    jl_atomic_store_relaxed(&ptls->nswitches, jl_atomic_load_relaxed(&ptls->nswitches) + 1);
     if (t == ct && !ptls->in_finalizer && !ptls->in_pure_callback) {
         // switching to self is a no-op, but only when a task switch would
         // have been permitted at all: the forbidden-context errors below must
@@ -1877,15 +1879,16 @@ JL_DLLEXPORT int jl_abandon_task_withdraw(int16_t tid)
 
 // cancellation token sources -----------------------------------------------
 
-// CAS-max the source's state to `sev` (a nonzero severity); returns whether
-// the state was raised. Mirrors `Base._raise_state!`.
+// raise the source's state to include `sev`; returns whether it changed.
+// Mirrors `Base._raise_state!`.
 static int cancel_source_raise_state(jl_cancel_source_t *src, uint8_t sev) JL_NOTSAFEPOINT
 {
     uint8_t old = jl_atomic_load_relaxed(&src->state);
     while (1) {
-        if (old >= sev)
+        uint8_t nw = jl_cancel_state_join(old, sev);
+        if (nw == old)
             return 0;
-        if (jl_atomic_cmpswap(&src->state, &old, sev))
+        if (jl_atomic_cmpswap(&src->state, &old, nw))
             return 1;
     }
 }
@@ -1923,8 +1926,7 @@ static void cancel_source_attach(jl_cancel_source_t *src) JL_NOTSAFEPOINT
         // child_head read) so that either the canceller's walk observes
         // this node, or this load observes the cancelled state.
         uint8_t pst = jl_atomic_load(&p->state);
-        if (pst > sev)
-            sev = pst;
+        sev = jl_cancel_state_join(sev, pst);
     }
     if (sev != 0)
         cancel_source_raise_state(src, sev);

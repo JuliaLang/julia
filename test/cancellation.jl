@@ -2810,3 +2810,279 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
     close(ptm)
     wait(reader)
 end
+
+Sys.isunix() && @testset "SIGTERM graceful termination" begin
+    # default flags, as in the ^C testset
+    exe = joinpath(Sys.BINDIR, Base.julia_exename())
+    function run_with_sigterm(code::String, delays; signum::Int=Base.SIGTERM, flags=``)
+        # don't signal before the script has started
+        code = "println(\"CHILD-READY\")\n" * code
+        out = Pipe()
+        p = run(pipeline(`$exe --startup-file=no $flags -e $code`,
+                         stdin=devnull, stdout=out, stderr=out), wait=false)
+        close(out.in)
+        readuntil(out, "CHILD-READY\n") # returns early (at EOF) if the child dies
+        t0 = time() # startup is slow on a loaded machine, so time from here
+        reader = @async read(out, String)
+        killer = @async begin
+            for d in delays
+                sleep(d)
+                process_running(p) && kill(p, signum)
+            end
+        end
+        exited = timedwait(() -> process_exited(p), 60.0)
+        elapsed = time() - t0
+        exited === :ok || kill(p, Base.SIGKILL) # never wedge the suite
+        wait(p)
+        wait(killer)
+        return fetch(reader), p, exited, elapsed
+    end
+
+    # SIGTERM during a sleep: quiet exit, hooks run, dies by SIGTERM (#62774)
+    output, p, exited = run_with_sigterm("""
+        atexit(() -> println("ATEXIT-RAN"))
+        sleep(100)
+        println("FAIL: not terminated")
+    """, [0.5])
+    @test exited === :ok
+    @test occursin("ATEXIT-RAN", output)
+    @test !occursin("FAIL", output)
+    @test !occursin("CancellationRequest", output)
+    @test p.termsignal == Base.SIGTERM
+
+    # a `finally` block runs before the exit
+    output, p, exited = run_with_sigterm("""
+        try
+            sleep(100)
+        finally
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+                println("FINALLY-RAN")
+            end
+        end
+    """, [0.5])
+    @test exited === :ok
+    @test occursin("FINALLY-RAN", output)
+    @test p.termsignal == Base.SIGTERM
+
+    # a catch block sees a termination request, and catching it does not stop the exit
+    output, p, exited = run_with_sigterm("""
+        try
+            sleep(100)
+        catch e
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+                println("terminating=", Base.process_terminating())
+                println("terminate-request=",
+                        e isa Base.CancellationRequest && Base.is_terminate_request(e))
+            end
+        end
+    """, [0.5])
+    @test exited === :ok
+    @test occursin("terminating=true", output)
+    @test occursin("terminate-request=true", output)
+    @test p.termsignal == Base.SIGTERM
+
+    # shielded work: a second SIGTERM exits at once
+    output, p, exited = run_with_sigterm("""
+        Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+            sleep(100)
+        end
+    """, [0.5, 3.0])
+    @test exited === :ok
+    @test p.termsignal == Base.SIGTERM
+
+    # a loop that never reaches a cancellation point: the hooks still run
+    output, p, exited = run_with_sigterm("""
+        atexit(() -> println("ATEXIT-RAN"))
+        function spin()
+            x = 0.0
+            while true
+                x += sin(x) + 1e-9
+            end
+            return x
+        end
+        spin()
+    """, [0.5])
+    @test exited === :ok
+    @test occursin("ATEXIT-RAN", output)
+    @test p.termsignal == Base.SIGTERM
+
+    # a cleanup that waits for longer than the grace period still finishes
+    output, p, exited = run_with_sigterm("""
+        try
+            sleep(100)
+        finally
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+                sleep(3)
+                println("FINALLY-RAN")
+            end
+        end
+    """, [0.5])
+    @test exited === :ok
+    @test occursin("FINALLY-RAN", output)
+    @test p.termsignal == Base.SIGTERM
+
+    # so does one that polls with `yield` while other threads are idle
+    output, p, exited = run_with_sigterm("""
+        try
+            sleep(100)
+        finally
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+                t = time()
+                while time() - t < 3
+                    yield()
+                end
+                println("FINALLY-RAN")
+            end
+        end
+    """, [0.5]; flags=`--threads=4,0`)
+    @test exited === :ok
+    @test occursin("FINALLY-RAN", output)
+    @test p.termsignal == Base.SIGTERM
+
+    # every thread busy: the exit is still prompt
+    output, p, exited, elapsed = run_with_sigterm("""
+        atexit(() -> println("ATEXIT-RAN"))
+        function spin()
+            x = 0.0
+            while true
+                x += sin(x) + 1e-9
+            end
+            return x
+        end
+        Threads.@spawn spin()
+        spin()
+    """, [0.5]; flags=`--threads=2,0`)
+    @test exited === :ok
+    @test occursin("ATEXIT-RAN", output)
+    @test p.termsignal == Base.SIGTERM
+    @test elapsed < 6
+
+    # a busy thread and a hook that calls `exit`: the later hooks still run
+    output, p, exited, elapsed = run_with_sigterm("""
+        atexit(() -> println("LAST-HOOK-RAN"))
+        atexit(() -> exit(3))
+        function spin()
+            x = 0.0
+            while true
+                x += sin(x) + 1e-9
+            end
+            return x
+        end
+        spin()
+    """, [0.5])
+    @test exited === :ok
+    @test occursin("LAST-HOOK-RAN", output)
+    @test p.termsignal == Base.SIGTERM
+    @test elapsed < 6
+
+    # a GC waiting on a thread in a foreign call does not block the exit
+    output, p, exited, elapsed = run_with_sigterm("""
+        Threads.@spawn Libc.systemsleep(100)
+        sleep(1)
+        GC.gc()
+        sleep(100)
+    """, [2.0]; flags=`--threads=2,0`)
+    @test exited === :ok
+    @test p.termsignal == Base.SIGTERM
+    @test elapsed < 8
+
+    # with exit-on-sigint, SIGINT exits like SIGTERM and dies by SIGINT
+    output, p, exited = run_with_sigterm("""
+        Base.exit_on_sigint(true)
+        atexit(() -> println("ATEXIT-RAN"))
+        sleep(100)
+        println("FAIL: not terminated")
+    """, [0.5]; signum=Int(Base.SIGINT))
+    @test exited === :ok
+    @test occursin("ATEXIT-RAN", output)
+    @test !occursin("FAIL", output)
+    @test !occursin("CancellationRequest", output)
+    @test p.termsignal == Base.SIGINT
+
+    # SIGQUIT prints task backtraces and exits at once, without the hooks
+    output, p, exited = run_with_sigterm("""
+        atexit(() -> println("ATEXIT-RAN"))
+        sleep(100)
+    """, [0.5]; signum=Int(Base.SIGQUIT))
+    @test exited === :ok
+    @test occursin("signal (3)", output)
+    @test !occursin("ATEXIT-RAN", output)
+    @test p.termsignal == Base.SIGQUIT
+
+    # SIGTERM at any point in startup exits and never hangs (#62774)
+    for delay in (0.0, 0.05, 0.2)
+        p = run(pipeline(`$exe --startup-file=no -e 'sleep(60)'`,
+                         stdin=devnull, stdout=devnull, stderr=devnull), wait=false)
+        delay > 0 && sleep(delay)
+        process_running(p) && kill(p)
+        exited = timedwait(() -> process_exited(p), 60.0)
+        exited === :ok || kill(p, Base.SIGKILL)
+        wait(p)
+        @test exited === :ok
+        @test p.termsignal == Base.SIGTERM || p.exitcode == 128 + Base.SIGTERM
+    end
+end
+
+Sys.isunix() && @testset "SIGTERM in the REPL (pty)" begin
+    isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+
+    # start a REPL on a pty, run `drive!`, then send SIGTERM
+    function repl_sigterm_session(drive!::Function)
+        pts, ptm = Main.FakePTYs.open_fake_pty()
+        env = copy(ENV)
+        env["TERM"] = "dumb"
+        env["JULIA_HISTORY"] = tempname()
+        exe = joinpath(Sys.BINDIR, Base.julia_exename())
+        p = run(detach(setenv(`$exe -i -q --startup-file=no --color=no`, env)),
+                pts, pts, pts; wait=false)
+        ccall(:close, Cint, (Cint,), pts) # only the child owns the pts now
+        transcript_lock = ReentrantLock()
+        transcript = UInt8[]
+        reader = @async try
+            while true
+                chunk = readavailable(ptm)
+                isempty(chunk) && break
+                @lock transcript_lock append!(transcript, chunk)
+            end
+        catch # pty closes when the child exits
+        end
+        snapshot() = @lock transcript_lock String(copy(transcript))
+        cursor = Ref(1)
+        function expect(needle::String; timeout::Real=120.0)
+            status = timedwait(timeout; pollint=0.05) do
+                idx = findnext(needle, snapshot(), cursor[])
+                idx === nothing && return false
+                cursor[] = last(idx) + 1
+                return true
+            end
+            if status !== :ok && process_running(p)
+                kill(p, 3) # SIGQUIT: dump task backtraces into the CI log
+                timedwait(() -> istaskdone(reader), 20.0)
+                @error "expect timed out" needle tail=snapshot()[max(1, cursor[]):end]
+            end
+            @test status == :ok
+        end
+        sendline(s) = write(ptm, s * "\n")
+        expect("julia> ")
+        drive!(p, expect, sendline)
+        kill(p) # SIGTERM
+        exited = timedwait(() -> process_exited(p), 60.0)
+        exited === :ok || kill(p, Base.SIGKILL)
+        wait(p)
+        @test exited === :ok
+        @test p.termsignal == Base.SIGTERM
+        close(ptm)
+        wait(reader)
+    end
+
+    # SIGTERM at an idle prompt
+    repl_sigterm_session() do p, expect, sendline
+    end
+
+    # SIGTERM during an evaluation
+    repl_sigterm_session() do p, expect, sendline
+        sendline("println(\"EVAL-1\"); sleep(1000)")
+        expect("EVAL-1")
+        sleep(0.5)
+    end
+end

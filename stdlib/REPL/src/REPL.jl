@@ -672,6 +672,8 @@ show_repl(io::IO, ::MIME"text/plain", ex::Expr) =
         sprint(show, ex, context=IOContext(io, :color => false))))
 
 function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
+    # no report on termination: the session is exiting, not returning to a prompt
+    Base.process_terminating() && return nothing
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
         io = IOContext(io, :module => Base.active_module(repl)::Module)
@@ -860,11 +862,15 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
             write(repl.terminal, '\n')
             ((!interrupted && isempty(line)) || hit_eof) && break
         catch e
+            # a termination signal unwinds the blocked read; shut down like on EOF
+            Base.process_terminating() && break
             isa(e, InterruptException) || rethrow()
         end
     end
-    # terminate backend
-    put!(backend.repl_channel, (nothing, -1))
+    # terminate backend, shielded because the frontend's scope may be cancelled
+    Base.ScopedValues.@with Base.CANCEL_TOKEN => nothing begin
+        put!(backend.repl_channel, (nothing, -1))
+    end
     dopushdisplay && popdisplay(d)
     nothing
 end
@@ -1868,10 +1874,13 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     catch e
         # The terminal went away (e.g. its window was closed): end the session
         # like ^D does, rather than failing on the next write to it.
-        terminal_gone(e) || rethrow()
+        # a termination signal unwinds the blocked terminal read; end the session the same way
+        terminal_gone(e) || Base.process_terminating() || rethrow()
     end
-    # Terminate Backend
-    put!(backend.repl_channel, (nothing, -1))
+    # Terminate Backend, shielded because the frontend's scope may be cancelled
+    Base.ScopedValues.@with Base.CANCEL_TOKEN => nothing begin
+        put!(backend.repl_channel, (nothing, -1))
+    end
     dopushdisplay && popdisplay(d)
     nothing
 end
