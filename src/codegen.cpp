@@ -10920,7 +10920,10 @@ static jl_llvm_functions_t
                 if (VN) {
                     if (new_union.Vboxed)
                         V = new_union.Vboxed;
-                    else if (new_union.constant)
+                    else if (new_union.constant &&
+                             !(dest && roots.empty() && !val.isboxed &&
+                               jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(new_union.constant)) &&
+                               get_box_tindex((jl_datatype_t*)jl_typeof(new_union.constant), phiType)))
                         V = boxed(ctx, new_union);
                     else
                         V = Constant::getNullValue(ctx.types().T_prjlvalue);
