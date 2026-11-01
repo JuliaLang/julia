@@ -975,3 +975,69 @@ end
     copyto!(O3, src3)
     @test [O3[i, j, k] for i in 1:4, j in 6:7, k in -1:0] == src3
 end
+
+@testset "whole-array operations through the data pointer" begin
+    b = UInt8.(1:200)
+    r = reinterpret(Int16, b)
+    ref = Int16[r[i] for i in eachindex(r)]
+    @test sum(r) == sum(ref)
+    @test maximum(r) == maximum(ref)
+    @test mapreduce(abs, +, r) == mapreduce(abs, +, ref)
+    @test sum(reinterpret(Int16, UInt8[])) == 0
+    @test sum(reinterpret(Int32, reshape(UInt8.(1:96), 8, 12))) == sum(Int32[reinterpret(Int32, reshape(UInt8.(1:96), 8, 12))[i] for i in 1:24])
+    @test sum(reinterpret(Int16, view(UInt8.(1:101), 2:101))) == sum(reinterpret(Int16, UInt8.(2:101)))
+
+    @test copyto!(zeros(Int16, 100), r) == ref
+    @test copyto!(zeros(Int16, 120), r)[1:100] == ref
+    @test_throws BoundsError copyto!(zeros(Int16, 50), r)
+    for src in (Int16.(1:100), Float64.(1:100), 1:100, reinterpret(Int16, collect(reinterpret(UInt8, Int16.(1:100)))))
+        d = zeros(UInt8, 200)
+        copyto!(reinterpret(Int16, d), src)
+        @test reinterpret(Int16, d) == 1:100
+    end
+    d = zeros(UInt8, 200)
+    copyto!(reinterpret(Int16, d), Int16.(1:60))
+    @test reinterpret(Int16, d) == [1:60; zeros(40)]
+    @test_throws BoundsError copyto!(reinterpret(Int16, zeros(UInt8, 200)), Int16.(1:101))
+    @test_throws InexactError copyto!(reinterpret(Int16, zeros(UInt8, 200)), fill(1.5, 100))
+    # overlapping source and destination are unaliased first
+    b2 = UInt8.(1:202)
+    copyto!(reinterpret(Int16, view(b2, 3:202)), reinterpret(Int16, view(b2, 1:200)))
+    @test b2 == UInt8[1; 2; 1:200]
+
+    d = zeros(UInt8, 201)
+    fill!(reinterpret(Int16, view(d, 2:201)), -3)
+    @test d[1] == 0 && reinterpret(Int16, d[2:201]) == fill(-3, 100)
+    @test_throws InexactError fill!(reinterpret(Int16, zeros(UInt8, 4)), 1.5)
+
+    b3 = UInt8.(1:200)
+    r3 = reinterpret(Int16, b3)
+    r3 .= Int16(2) .* r3 .+ Int16.(1:100) .- Int16(3)
+    @test r3 == Int16(2) .* ref .+ Int16.(1:100) .- Int16(3)
+    m = Memory{UInt8}(undef, 200)
+    m .= UInt8.(1:200)
+    rm = reinterpret(Int16, m)
+    rm .= rm .* rm
+    @test rm == ref .* ref
+    b4 = UInt8.(1:96)
+    r4 = reinterpret(Int32, reshape(b4, 8, 12))
+    r4ref = copy(r4)
+    r4 .= r4 .+ Int32.(1:12)'
+    @test r4 == r4ref .+ Int32.(1:12)'
+    b5 = UInt8.(1:202)
+    reinterpret(Int16, view(b5, 1:200)) .= reinterpret(Int16, view(b5, 3:202)) .* Int16(2)
+    @test reinterpret(Int16, b5[1:200]) == Int16(2) .* reinterpret(Int16, UInt8.(3:202))
+    @test_throws DimensionMismatch reinterpret(Int16, zeros(UInt8, 200)) .= Int16.(1:99)
+
+    # offset axes keep using the per-element path
+    M = collect(Int8.(reshape(1:16, 4, 4)))
+    R = reinterpret(reshape, Int32, view(M, :, Base.IdentityUnitRange(2:3)))
+    R .= Int32(7)
+    @test R[2] == R[3] == 7
+    @test sum(R) == 14
+
+    # padding checks are unchanged
+    @test_throws Base.PaddingError fill!(reinterpret(Tuple{UInt8,UInt32}, UInt32[1, 2]), (0x01, 0x00000002))
+    P = reinterpret(Tuple{UInt8,UInt32}, UInt32[1, 2, 3, 4])
+    @test sum(x -> x[1], P) == sum(P[i][1] for i in eachindex(P))
+end

@@ -1030,6 +1030,30 @@ preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
     return dest
 end
 
+# Writing into a pointer-indexable ReinterpretArray: index the destination and any such
+# sources through their data pointers, loaded once (unaliased and extruded beforehand)
+@inline function copyto!(dest::Base.ReinterpretArray, bc::Broadcasted{Nothing})
+    Base.uses_ptr_array(dest) || return invoke(copyto!, Tuple{AbstractArray,Broadcasted{Nothing}}, dest, bc)
+    axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
+    Base.check_writable(dest)
+    bc′ = preprocess(dest, bc)
+    GC.@preserve dest bc′ begin
+        d = Base.ptr_array(dest)
+        bp = ptr_leaves(bc′)
+        @inbounds @simd for I in eachindex(bp)
+            d[I] = bp[I]
+        end
+    end
+    return dest
+end
+ptr_leaves(x) = x
+ptr_leaves(bc::Broadcasted) = Broadcasted(bc.style, bc.f, map(ptr_leaves, bc.args), bc.axes)
+function ptr_leaves(e::Extruded{<:Base.ReinterpretArray})
+    Base.uses_ptr_array(e.x) || return e
+    Base.check_readable(e.x)
+    return Extruded(Base.ptr_array(e.x), e.keeps, e.defaults)
+end
+
 # Performance optimization: for BitArray outputs, we cache the result
 # in a 64-bit register before writing into memory (to bypass LSQ)
 @inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})

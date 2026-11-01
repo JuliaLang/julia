@@ -1001,3 +1001,77 @@ function _totuple(T::Type{All32{E,N}}, itr::Union{Array,Memory}) where {E,N}
     elts = collect(E, Iterators.take(itr, len))
     return (elts...,)
 end
+
+# Whole-array operations on a pointer-indexable ReinterpretArray load the data pointer once
+# and index through it, instead of reloading it from the parent for every element.
+struct UnsafePtrArray{T,N} <: AbstractArray{T,N}
+    ptr::Ptr{T}
+    dims::NTuple{N,Int}
+end
+size(a::UnsafePtrArray) = a.dims
+IndexStyle(::Type{<:UnsafePtrArray}) = IndexLinear()
+@inline function getindex(a::UnsafePtrArray, i::Int)
+    @boundscheck checkbounds(a, i)
+    return unsafe_load(a.ptr, i)
+end
+@inline function setindex!(a::UnsafePtrArray{T}, v, i::Int) where {T}
+    @boundscheck checkbounds(a, i)
+    unsafe_store!(a.ptr, convert(T, v)::T, i)
+    return a
+end
+function copyto!(dest::UnsafePtrArray{T}, src::Union{Array{T},Memory{T}}) where {T}
+    length(dest) >= length(src) || throw(BoundsError(dest, eachindex(src)))
+    GC.@preserve src unsafe_copyto!(dest.ptr, pointer(src), length(src))
+    return dest
+end
+function copyto!(dest::Union{Array{T},Memory{T}}, src::UnsafePtrArray{T}) where {T}
+    length(dest) >= length(src) || throw(BoundsError(dest, eachindex(src)))
+    GC.@preserve dest unsafe_copyto!(pointer(dest), src.ptr, length(src))
+    return dest
+end
+
+uses_ptr_array(a::ReinterpretArray) =
+    check_ptr_indexable(a) && IndexStyle(a) isa IndexLinear && !has_offset_axes(a)
+
+# The caller must preserve `a` while the result is in use
+@inline function ptr_array(a::ReinterpretArray{T}) where {T}
+    return UnsafePtrArray{T,ndims(a)}(unsafe_convert(Ptr{T}, cconvert(Ptr{T}, a)), size(a))
+end
+
+function _mapreduce(f, op, ::IndexLinear, A::ReinterpretArray)
+    check_readable(A)
+    T = Tuple{Any,Any,IndexLinear,AbstractArrayOrBroadcasted}
+    uses_ptr_array(A) || return invoke(_mapreduce, T, f, op, IndexLinear(), A)
+    GC.@preserve A invoke(_mapreduce, T, f, op, IndexLinear(), ptr_array(A))
+end
+
+function fill!(A::ReinterpretArray, x)
+    check_writable(A)
+    uses_ptr_array(A) || return invoke(fill!, Tuple{AbstractArray,Any}, A, x)
+    GC.@preserve A fill!(ptr_array(A), x)
+    return A
+end
+
+# Unalias against the real arrays first: the pointer wrapper does not report its memory
+function copyto!(dest::Union{Array,Memory}, src::ReinterpretArray)
+    check_readable(src)
+    src′ = unalias(dest, src)
+    src′ isa ReinterpretArray && uses_ptr_array(src′) || return invoke(copyto!, Tuple{AbstractArray,AbstractArray}, dest, src′)
+    GC.@preserve src′ copyto!(dest, ptr_array(src′))
+    return dest
+end
+function copyto!(dest::ReinterpretArray, src::AbstractArray)
+    check_writable(dest)
+    src′ = unalias(dest, src)
+    uses_ptr_array(dest) || return invoke(copyto!, Tuple{AbstractArray,AbstractArray}, dest, src′)
+    GC.@preserve dest copyto!(ptr_array(dest), src′)
+    return dest
+end
+function copyto!(dest::ReinterpretArray, src::ReinterpretArray)
+    check_writable(dest)
+    check_readable(src)
+    src′ = unalias(dest, src)
+    uses_ptr_array(dest) || return invoke(copyto!, Tuple{AbstractArray,AbstractArray}, dest, src′)
+    GC.@preserve dest copyto!(ptr_array(dest), src′)
+    return dest
+end
