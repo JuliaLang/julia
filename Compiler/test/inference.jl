@@ -1587,6 +1587,11 @@ tpara18457(::Type{AbstractMyType18457{I}}) where {I} = I
 tpara18457(::Type{A}) where {A<:AbstractMyType18457} = tpara18457(supertype(A))
 @test tpara18457(MyType18457{true}) === true
 
+struct ShiftTri{A,B,C} end
+shift_tri(::Type{ShiftTri{A,B,C}}, n::Int) where {A,B,C} = n == 0 ? Val(A) : shift_tri(ShiftTri{B,C,C}, n - 1)
+@test only(Base.return_types(n -> shift_tri(ShiftTri{Int8,Int16,Vector{Int}}, n), (Int,))) ==
+    Union{Val{Int8}, Val{Int16}, Val{Vector{Int}}}
+
 @testset "type inference error #19322" begin
     Y_19322 = reshape(round.(Int, abs.(randn(5*1000))) .+ 1, 1000, 5)
 
