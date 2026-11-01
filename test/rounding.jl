@@ -437,6 +437,61 @@ end
                 @test signbit(y) == signbit(refround(x, r, d))
             end
         end
+        # exact ties, and other bases
+        for k in -40:40, d in -2:2, r in modes, base in (10, 3)
+            x = big(k) / 8
+            e = d >= 0 ? round(x * big(base)^d, r) / big(base)^d : round(x / big(base)^-d, r) * big(base)^-d
+            @test round(x, r; digits=d, base=base) == e
+        end
+        @test signbit(round(big"-0.01"; digits=1)) && signbit(ceil(big"-0.01"; digits=1))
+        @test floor(big"-0.01"; digits=1) == -big"0.1"
+        @test_throws ArgumentError round(big(1.5), RoundingMode{:Foo}(); digits=1)
+        # a BigInt base is not modified
+        b = big(10)
+        @test round(big"1.23456"; digits=2, base=b) == big"1.23"
+        @test b == 10
+        # extreme digits and bases
+        @test round(big"1.5"; digits=-10^9) == 0
+        @test round(big"1.5", RoundUp; digits=-10^9) == big(10.0)^(10^9)
+        @test round(big"1.5", RoundUp; digits=typemin(Int)) == Inf
+        @test round(big"-1.5", RoundDown; digits=-3) == -1000
+        @test round(big"1.5"; digits=1, base=-10) == 1.5
+        y = big(2)^-2000 * (1 + big(2)^-100)
+        @test ceil(y; digits=1, base=big(2)^1100) == big(2)^-1100
+        @test floor(y; digits=1, base=big(2)^1100) == 0
+    end
+    # the result has the current precision, whatever the precision of x
+    for (px, p) in ((300, 64), (64, 300), (200, 64))
+        for x in (BigFloat(π; precision=px), BigFloat(12; precision=px), BigFloat(2.0^255; precision=px))
+            setprecision(BigFloat, p) do
+                for d in (-1, 0, 2, 10), r in modes
+                    y = round(x, r; digits=d)
+                    @test precision(y) == p
+                    @test y == BigFloat(refround(BigFloat(x; precision=4000), r, d); precision=p)
+                end
+            end
+        end
+    end
+    setprecision(BigFloat, 2) do
+        @test round(BigFloat(7674; precision=256); digits=0) == 8192
+    end
+    # x has more precision, is halfway between floats of the current one, and is not a
+    # multiple of the step, so the side of x that the exact result is on decides
+    let x = setprecision(() -> 1 + BigFloat(2)^-100, 200)
+        setprecision(BigFloat, 100) do
+            @test ceil(x; digits=70) == 1 + big(2.0)^-99
+            @test round(x, RoundFromZero; digits=70) == 1 + big(2.0)^-99
+            @test floor(x; digits=70) == 1
+        end
+    end
+    # the result is rounded to nearest, whatever the rounding mode of BigFloat
+    for x in (big"0.0027", big(1) / 3, big(π), big(2)^300 / 3, big"12345.678", BigFloat(π; precision=300)), s in (1, -1),
+            (d, base) in ((3, 3), (100, 10), (-2, 10), (2, 10), (0, 2), (5, 7)), r in modes
+        sx = s > 0 ? x : -x   # exact, at the precision of x
+        want = round(sx, r; digits=d, base=base)
+        for rm in (RoundUp, RoundDown, RoundToZero, RoundFromZero)
+            @test setrounding(() -> round(sx, r; digits=d, base=base), BigFloat, rm) == want
+        end
     end
 end
 @testset "rounding with too much (or too few) precision" begin
