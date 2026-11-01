@@ -1343,6 +1343,39 @@ end
         @test searchsorted(reverse(-1000.0:1:1000), -0.0, rev=true) === 1002:1001
         @test searchsorted(reverse(-1000.0:1:1000), -0.0; lt=<, rev=true) === 1001:1001
     end
+
+    @testset "narrow and mixed integer ranges (issue #64453)" begin
+        @test searchsortedfirst(Int8(-100):Int8(100), Int8(50)) === 151
+        @test searchsortedlast(Int8(-100):Int8(100), Int8(50)) === 151
+        @test searchsortedfirst(Int8(100):Int8(-1):Int8(-100), Int8(-50), Reverse) === 151
+        @test searchsortedlast(Int8(100):Int8(-1):Int8(-100), Int8(-50), Reverse) === 151
+        @test searchsortedfirst(UInt8(200):Int8(-2):UInt8(10), UInt8(15), Reverse) === 94
+        @test searchsortedlast(UInt8(200):Int8(-2):UInt8(10), UInt8(15), Reverse) === 93
+
+        xs = Any[Int8(-128), Int8(-100), Int8(-1), Int8(0), Int8(50), Int8(127),
+                 UInt8(0), UInt8(50), UInt8(128), UInt8(255), -99.5, 50.5, -200, 300]
+        fwd_ranges = Any[
+            Int8(-128):Int8(127), Int8(-100):Int8(3):Int8(100), Int8(5):Int8(1),
+            UInt8(0):UInt8(255), UInt8(10):UInt8(50):UInt8(250), UInt8(20):UInt8(10),
+            Int16(-200):Int16(25):Int16(200),
+        ]
+        rev_ranges = Any[
+            Int8(127):Int8(-1):Int8(-128), Int8(100):Int8(-3):Int8(-100),
+            Int8(100):Int8(-128):Int8(-100), Int8(-10):Int8(-1):Int8(10),
+            UInt8(255):Int8(-1):UInt8(0), UInt8(200):Int8(-2):UInt8(10),
+            Int16(200):Int16(-25):Int16(-200),
+        ]
+        for r in fwd_ranges, x in xs
+            v = collect(r)
+            @test searchsortedfirst(r, x) === searchsortedfirst(v, x)
+            @test searchsortedlast(r, x) === searchsortedlast(v, x)
+        end
+        for r in rev_ranges, x in xs
+            v = collect(r)
+            @test searchsortedfirst(r, x, Reverse) === searchsortedfirst(v, x, Reverse)
+            @test searchsortedlast(r, x, Reverse) === searchsortedlast(v, x, Reverse)
+        end
+    end
 end
 # The "searchsorted" testset is at the end of the file because it is slow.
 
