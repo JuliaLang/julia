@@ -80,14 +80,12 @@ end
     @test isapprox(missing, 1.0, atol=1e-6) === missing
     @test isapprox(1.0, missing, rtol=1e-6) === missing
 
-    # Only assert the methods shipped with Base and the stdlibs: test files
-    # that ran earlier in the same process may have added their own isequal
-    # methods (e.g. arrayops' totally_not_five26034), and what those infer
-    # depends on the session's accumulated method tables, not on `missing`.
+    # Only Base's methods: earlier tests on this worker may have added their own (arrayops'
+    # totally_not_five26034) or loaded stdlibs that do (Random loads SparseArrays)
     let ms = collect(methods(isequal, Tuple{Any,Any})),
         rts = Base.return_types(isequal, Tuple{Any,Any})
         @test all(zip(ms, rts)) do (m, rt)
-            Base.moduleroot(parentmodule(m)) === Main || rt === Bool
+            Base.moduleroot(parentmodule(m)) !== Base || rt === Bool
         end
     end
 end

@@ -142,16 +142,30 @@ const recycle_worker_tests = ["precompile", "threads"]
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Move LinearAlgebra, Pkg, precompile and threads tests to the front, because they take
-# a while, so we might as well get them all started early. JuliaLowering_stdlibs both
-# takes a while and uses a lot of memory at the beginning so try to run it early to keep
-# total memory use flatter. `threads` goes first so that it gets a fresh worker, which is
-# recycled afterwards (see `recycle_worker_tests`).
-for prependme in ["precompile", "LinearAlgebra", "Pkg", "JuliaLowering_stdlibs", "threads"]
-    prependme_test_ids = findall(x->occursin(prependme, x), tests)
-    prependme_tests = tests[prependme_test_ids]
-    deleteat!(tests, prependme_test_ids)
-    prepend!(tests, prependme_tests)
+# Start the longest tests first, so that they don't end up running alone at the end while
+# the other workers sit idle. Roughly in decreasing order of their duration on CI (Linux,
+# macOS and Windows, October 2026); tests that are not listed keep their order and run
+# after these. A package name also covers its test groups.
+const longest_tests = [
+    "Pkg", "LinearAlgebra", "SparseArrays", "threads", "cmdlineargs", "subarray",
+    "compileall", "Compiler/AbstractInterpreter", "precompile", "jit",
+    "JuliaLowering_stdlibs", "loading", "arrayops", "JuliaLowering", "bitarray", "sorting",
+    "Random", "abstractarray", "iterators", "core", "ranges", "LibGit2/libgit2",
+    "FileWatching", "atomics", "math", "rounding", "apint", "JuliaSyntax",
+    "Compiler/inference", "reducedim", "numbers", "misc", "broadcast", "REPL", "Profile",
+    "rational", "cancellation", "InteractiveUtils", "sets",
+]
+function expected_rank(test)
+    rank = findfirst(name -> test == name || startswith(test, name * "/"), longest_tests)
+    return something(rank, length(longest_tests) + 1)
+end
+sort!(tests; by=expected_rank) # stable, so unlisted tests keep their order
+
+# `ambiguous` must be the first test on its worker, as methods defined by other tests can
+# make Base methods ambiguous
+if "ambiguous" in tests
+    splice!(tests, findfirst(isequal("ambiguous"), tests))
+    pushfirst!(tests, "ambiguous")
 end
 
 import LinearAlgebra
