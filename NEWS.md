@@ -7,6 +7,8 @@ New language features
 Language changes
 ----------------
 
+* `Slices` exposes `dataids` of its parent array to properly identify aliasing in broadcasting ([#49182]).
+
 Compiler/Runtime improvements
 -----------------------------
 
