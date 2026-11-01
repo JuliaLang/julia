@@ -439,6 +439,7 @@ DevDocs = [
         "devdocs/boundscheck.md",
         "devdocs/locks.md",
         "devdocs/scheduler-wakeup.md",
+        "devdocs/termination.md",
         "devdocs/offset-arrays.md",
         "devdocs/require.md",
         "devdocs/inference.md",
