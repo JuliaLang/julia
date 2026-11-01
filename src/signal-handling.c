@@ -737,6 +737,8 @@ JL_DLLEXPORT int jl_process_term_signo(void) JL_NOTSAFEPOINT
 // termination was already requested once), in which case the caller must
 // exit abruptly instead. Runs on an ordinary (non-Julia) thread; must not
 // allocate GC memory or take Julia-side locks.
+static void termination_watchdog_thread(void *arg);
+
 static int jl_request_process_termination(int sig) JL_NOTSAFEPOINT
 {
     // One graceful attempt per process: a repeat request reports failure so
@@ -745,6 +747,11 @@ static int jl_request_process_termination(int sig) JL_NOTSAFEPOINT
     int expected = 0;
     if (!jl_atomic_cmpswap(&jl_term_signo, &expected, sig))
         return 0;
+    // started before delivery, which waits for any collection in flight, and a busy thread
+    // can keep that collection from ever finishing
+    uv_thread_t watchdog;
+    if (uv_thread_create(&watchdog, termination_watchdog_thread, (void*)(intptr_t)sig) != 0)
+        jl_safe_printf("WARNING: failed to start the termination watchdog\n");
     int have_listener = jl_atomic_load_relaxed(&sigint_cond_loc) != NULL;
     jl_safepoint_exclude_gc_begin();
     jl_cancel_source_t *src =
@@ -939,6 +946,8 @@ static int jl_notify_signal_watchers(int sig) JL_NOTSAFEPOINT
 #define JL_TERM_POLL_MS 50
 // How long the fallback teardown may take before the process ends without it.
 #define JL_TERM_TEARDOWN_MS 5000
+// How long the fallback waits for a collection in flight before it skips the hooks.
+#define JL_TERM_GC_WAIT_MS 1000
 
 static void termination_teardown(void *arg) JL_NO_SAFEPOINT_ANALYSIS JL_CANSAFEPOINT_LEAVE
 {
@@ -991,7 +1000,7 @@ static int jl_wait_for_exit_or_busy_thread(void)
     return started;
 }
 
-// Run on a thread unknown to Julia after a termination request was delivered. If a thread
+// Run on a thread unknown to Julia once a termination request is made. If a thread
 // is still busy in code that does not check for cancellation, run the exit on another
 // thread, and end the process if that does not finish in time either. Returns only if
 // the ordinary exit is running.
@@ -999,12 +1008,20 @@ static void jl_termination_watchdog(int sig)
 {
     if (jl_wait_for_exit_or_busy_thread() || !jl_atexit_fallback_claim())
         return;
+    // a collection in flight may be waiting for the busy thread, and the hooks cannot run
+    // until it finishes
+    int waited = 0;
+    while (jl_atomic_load_acquire(&jl_gc_running) && waited < JL_TERM_GC_WAIT_MS) {
+        uv_sleep(JL_TERM_POLL_MS);
+        waited += JL_TERM_POLL_MS;
+    }
     uv_thread_t teardown;
-    if (uv_thread_create(&teardown, termination_teardown, (void*)(intptr_t)sig) == 0)
+    if (!jl_atomic_load_acquire(&jl_gc_running) &&
+            uv_thread_create(&teardown, termination_teardown, (void*)(intptr_t)sig) == 0)
         uv_sleep(JL_TERM_TEARDOWN_MS);
-    // a hook may be waiting for a task that only a busy thread can run
+    // a hook may be waiting for a task that only a busy thread can run, or hold a stdio
+    // lock, so do not flush here
     uv_tty_reset_mode();
-    fflush(NULL);
 #ifdef _OS_WINDOWS_
     _exit(128 + sig);
 #else
@@ -1016,6 +1033,11 @@ static void jl_termination_watchdog(int sig)
     raise(sig);
     _exit(128 + sig);
 #endif
+}
+
+static void termination_watchdog_thread(void *arg)
+{
+    jl_termination_watchdog((int)(intptr_t)arg);
 }
 
 #if defined(_WIN32)

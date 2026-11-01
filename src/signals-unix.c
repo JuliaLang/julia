@@ -1337,12 +1337,6 @@ JL_DLLEXPORT int jl_sigrtmax(void)
 #endif
 }
 
-static void *termination_fallback(void *arg)
-{
-    jl_termination_watchdog((int)(intptr_t)arg);
-    return NULL;
-}
-
 static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 {
     sigset_t sset;
@@ -1531,16 +1525,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             }
         }
         if (termsig != 0) {
-            if (jl_request_process_termination(termsig)) {
-                pthread_t fallback;
-                pthread_attr_t attr;
-                pthread_attr_init(&attr);
-                pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-                if (pthread_create(&fallback, &attr, termination_fallback, (void*)(intptr_t)termsig) != 0)
-                    jl_safe_printf("WARNING: failed to start the termination fallback\n");
-                pthread_attr_destroy(&attr);
-            }
-            else {
+            if (!jl_request_process_termination(termsig)) {
                 // No root source is registered (still initializing, or an
                 // embedder that never runs Base.__init__ - no Julia atexit
                 // hooks can exist either way), or termination was already
@@ -1554,8 +1539,8 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #ifdef HAVE_KEVENT
                 signal(sig, SIG_DFL);
 #endif
+                // no flush: a busy thread may hold a stdio lock
                 uv_tty_reset_mode();
-                fflush(NULL);
                 raise(sig); // very unlikely to return
                 _exit(128 + sig);
             }

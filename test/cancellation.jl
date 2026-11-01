@@ -2966,6 +2966,19 @@ Sys.isunix() && @testset "SIGTERM graceful termination" begin
     @test p.termsignal == Base.SIGTERM
     @test time() - t0 < 6
 
+    # a collection that waits for a thread blocked in a foreign call does not keep the
+    # process alive
+    t0 = time()
+    output, p, exited = run_with_sigterm("""
+        Threads.@spawn Libc.systemsleep(100)
+        sleep(1)
+        GC.gc()
+        sleep(100)
+    """, [2.0]; flags=`--threads=2,0`)
+    @test exited === :ok
+    @test p.termsignal == Base.SIGTERM
+    @test time() - t0 < 8
+
     # with exit-on-sigint, a SIGINT terminates the process through the same
     # graceful path: the atexit hooks run, the exit is quiet, and the
     # process dies by SIGINT
