@@ -1163,6 +1163,27 @@ static void reportWriterError(const ErrorInfoBase &E)
     jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
 }
 
+static bool uses_half_types(const Module &M)
+{
+    auto is_half = [](Type *T) {
+        T = T->getScalarType();
+        return T->isHalfTy() || T->isBFloatTy();
+    };
+    for (const Function &F : M) {
+        for (const BasicBlock &BB : F) {
+            for (const Instruction &I : BB) {
+                if (is_half(I.getType()))
+                    return true;
+                for (const Value *Op : I.operands()) {
+                    if (is_half(Op->getType()))
+                        return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionType *FT)
 {
     Function *target = M.getFunction(alias);
@@ -1959,16 +1980,8 @@ static AOTOutputs add_output_impl(Module &M, OutputCompiler &compiler, ShardTime
             optimizer.run(M);
         }
         assert(!verifyLLVMIR(M));
-        bool inject_aliases = false;
-        for (auto &F : M.functions()) {
-            if (!F.isDeclaration() && F.getName() != "_DllMainCRTStartup") {
-                inject_aliases = true;
-                break;
-            }
-        }
-        // no need to inject aliases if we have no functions
-
-        if (inject_aliases) {
+        // only half and bfloat code calls these, and image units are many and small
+        if (uses_half_types(M)) {
             // We would like to emit an alias or an weakref alias to redirect these symbols
             // but LLVM doesn't let us emit a GlobalAlias to a declaration...
             // So for now we inject a definition of these functions that calls our runtime
