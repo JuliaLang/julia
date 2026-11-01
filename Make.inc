@@ -682,40 +682,6 @@ ifeq ($(OS),WINNT)
 JL_VISIBILITY_FLAGS :=
 endif
 
-ifeq ($(USECCACHE), 1)
-# Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
-CC_ARG   := $(CC)
-CXX_ARG  := $(CXX)
-FC_ARG   := $(FC)
-# Expand CC, CXX and FC here already to avoid recursive referencing.
-CC_FULL  := ccache $(CC)
-CXX_FULL := ccache $(CXX)
-FC_FULL  := ccache $(FC)
-# Add an extra indirection to make CC/CXX/FC non-simple vars
-# (because of how -m$(BINARY) is added later on).
-CC       := $(CC_FULL)
-CXX      := $(CXX_FULL)
-FC       := $(FC_FULL)
-CC_BASE  := ccache
-CXX_BASE := ccache
-FC_BASE  := ccache
-ifeq ($(USECLANG),1)
-# ccache and Clang don't do well together
-# https://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
-CC += -Qunused-arguments
-CXX += -Qunused-arguments
-# https://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
-export CCACHE_CPP2 := yes
-endif
-else #USECCACHE
-CC_BASE := $(shell printf "%s\n" $(call shell_escape,$(CC)) | cut -d' ' -f1)
-CC_ARG := $(shell printf "%s\n" $(call shell_escape,$(CC)) | cut -s -d' ' -f2-)
-CXX_BASE := $(shell printf "%s\n" $(call shell_escape,$(CXX)) | cut -d' ' -f1)
-CXX_ARG := $(shell printf "%s\n" $(call shell_escape,$(CXX)) | cut -s -d' ' -f2-)
-FC_BASE := $(shell printf "%s\n" $(call shell_escape,$(FC)) 2>/dev/null | cut -d' ' -f1)
-FC_ARG := $(shell printf "%s\n" $(call shell_escape,$(FC)) 2>/dev/null | cut -s -d' ' -f2-)
-endif
-
 JFFLAGS := -O2 $(fPIC)
 CPP = $(CC) -E
 AR := $(CROSS_COMPILE)ar
@@ -812,6 +778,44 @@ include $(JULIAHOME)/$(MAKE_USER_FNAME)
 endif
 ifeq (exists, $(shell [ -e $(BUILDROOT)/$(MAKE_USER_FNAME) ] && echo exists ))
 include $(BUILDROOT)/$(MAKE_USER_FNAME)
+endif
+
+# Wrap CC/CXX/FC with ccache, if requested. This must happen after the second
+# inclusion of Make.user above, which may (re)define CC/CXX/FC: doing this
+# earlier would drop the ccache prefix again and desync CC/CXX from
+# CC_BASE/CXX_BASE (#64494).
+ifeq ($(USECCACHE), 1)
+# Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
+CC_ARG   := $(CC)
+CXX_ARG  := $(CXX)
+FC_ARG   := $(FC)
+# Expand CC, CXX and FC here already to avoid recursive referencing.
+CC_FULL  := ccache $(CC)
+CXX_FULL := ccache $(CXX)
+FC_FULL  := ccache $(FC)
+# Add an extra indirection to make CC/CXX/FC non-simple vars
+# (because of how -m$(BINARY) is added later on).
+CC       := $(CC_FULL)
+CXX      := $(CXX_FULL)
+FC       := $(FC_FULL)
+CC_BASE  := ccache
+CXX_BASE := ccache
+FC_BASE  := ccache
+ifeq ($(USECLANG),1)
+# ccache and Clang don't do well together
+# https://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
+CC += -Qunused-arguments
+CXX += -Qunused-arguments
+# https://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
+export CCACHE_CPP2 := yes
+endif
+else #USECCACHE
+CC_BASE := $(shell printf "%s\n" $(call shell_escape,$(CC)) | cut -d' ' -f1)
+CC_ARG := $(shell printf "%s\n" $(call shell_escape,$(CC)) | cut -s -d' ' -f2-)
+CXX_BASE := $(shell printf "%s\n" $(call shell_escape,$(CXX)) | cut -d' ' -f1)
+CXX_ARG := $(shell printf "%s\n" $(call shell_escape,$(CXX)) | cut -s -d' ' -f2-)
+FC_BASE := $(shell printf "%s\n" $(call shell_escape,$(FC)) 2>/dev/null | cut -d' ' -f1)
+FC_ARG := $(shell printf "%s\n" $(call shell_escape,$(FC)) 2>/dev/null | cut -s -d' ' -f2-)
 endif
 
 # A bit of a kludge to work around libraries linking to FreeBSD's outdated system libgcc_s
