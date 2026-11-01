@@ -1498,23 +1498,23 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
             inewline = something(findprev(==(UInt8('\n')), chunks[ichunk], inewline-1), 0)
             inewline > 0 && break
             ichunk = mod1(ichunk - 1, length(chunks))
-            if ichunk == jchunk # found nothing — line starts at the oldest chunk; may need to read more chunks
-                ichunk = mod1(ichunk + 1, length(chunks))
-                break
-            end
+            ichunk == jchunk && break # found nothing — may need to read more chunks
             inewline = length(chunks[ichunk])+1 # start for next findprev
         end
 
-        # read more chunks to look for a newline (should rarely happen)
-        if inewline == 0 && p > p0
-            ichunk = jchunk + 1
-            while true
-                chunk = Vector{UInt8}(undef, min(4096, p-p0))
-                p -= length(chunk)
-                readbytes!(seek(r.itr.stream, p), chunk)
-                insert!(chunks, ichunk, chunk)
-                inewline = something(findlast(==(UInt8('\n')), chunk), 0)
-                (p == p0 || inewline > 0) && break
+        if inewline == 0 # no previous newline found
+            if p > p0 # read more chunks to look for a newline (should rarely happen)
+                ichunk = jchunk + 1
+                while true
+                    chunk = Vector{UInt8}(undef, min(4096, p-p0))
+                    p -= length(chunk)
+                    readbytes!(seek(r.itr.stream, p), chunk)
+                    insert!(chunks, ichunk, chunk)
+                    inewline = something(findlast(==(UInt8('\n')), chunk), 0)
+                    (p == p0 || inewline > 0) && break
+                end
+            else # first line starts at beginning of stream (p0)
+                ichunk = mod1(jchunk + 1, length(chunks))
             end
         end
     end
