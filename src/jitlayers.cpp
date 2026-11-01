@@ -1980,6 +1980,20 @@ JuliaOJIT::JuliaOJIT()
         // BFloat16 conversion routines
         { mangle("__truncsfbf2"),   { mangle("julia__truncsfbf2"),    JITSymbolFlags::Exported } },
         { mangle("__truncdfbf2"),   { mangle("julia__truncdfbf2"),    JITSymbolFlags::Exported } },
+#ifdef _OS_WINDOWS_
+        // libm calls that LLVM can emit, which msvcrt.dll does not export on every architecture.
+        // mingw's fma and fmaf are not correctly rounded, so these use Julia's implementations.
+        { mangle("fma"),            { mangle("julia_fma"),            JITSymbolFlags::Exported } },
+        { mangle("fmaf"),           { mangle("julia_fmaf"),           JITSymbolFlags::Exported } },
+        { mangle("rint"),           { mangle("julia_rint"),           JITSymbolFlags::Exported } },
+        { mangle("rintf"),          { mangle("julia_rintf"),          JITSymbolFlags::Exported } },
+        { mangle("trunc"),          { mangle("julia_trunc"),          JITSymbolFlags::Exported } },
+        { mangle("truncf"),         { mangle("julia_truncf"),         JITSymbolFlags::Exported } },
+        { mangle("floorf"),         { mangle("julia_floorf"),         JITSymbolFlags::Exported } },
+        { mangle("ceilf"),          { mangle("julia_ceilf"),          JITSymbolFlags::Exported } },
+        { mangle("fmodf"),          { mangle("julia_fmodf"),          JITSymbolFlags::Exported } },
+        { mangle("powf"),           { mangle("julia_powf"),           JITSymbolFlags::Exported } },
+#endif
     };
     cantFail(GlobalJD.define(orc::symbolAliases(jl_crt)));
 

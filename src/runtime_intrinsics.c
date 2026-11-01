@@ -1487,7 +1487,7 @@ static inline double fma_narrow(double a, double b, double c) JL_NOTSAFEPOINT
 
 // Base.fma_emulated(::Float32, ::Float32, ::Float32)
 // Used on all systems, since some libm fmaf (e.g. FreeBSD's) double round subnormal results.
-static float julia_fmaf(float a, float b, float c) JL_NOTSAFEPOINT
+JL_DLLEXPORT float julia_fmaf(float a, float b, float c) JL_NOTSAFEPOINT
 {
     return (float)fma_narrow(a, b, c);
 }
@@ -1549,7 +1549,7 @@ double fma_correction(double abhi, double ablo, double c, double r) {
 }
 
 // Base.fma_emulated(::Float64, ::Float64, ::Float64)
-double julia_fma(double a, double b, double c) {
+JL_DLLEXPORT double julia_fma(double a, double b, double c) {
     double abhi, ablo, r, s;
     two_mul(&abhi, &ablo, a, b);
     if (!isfinite(abhi+c) || fabs(abhi) < 2.0041683600089732e-292 ||
@@ -1591,6 +1591,18 @@ double julia_fma(double a, double b, double c) {
     s = fma_correction(abhi, ablo, c, r);
     return r+s;
 }
+
+// msvcrt.dll does not export these on every architecture, and the copies linked from
+// libmingwex are not visible to the JIT, so export them for the aliases in jitlayers.cpp.
+JL_DLLEXPORT double julia_rint(double x) JL_NOTSAFEPOINT { return rint(x); }
+JL_DLLEXPORT float julia_rintf(float x) JL_NOTSAFEPOINT { return rintf(x); }
+JL_DLLEXPORT double julia_trunc(double x) JL_NOTSAFEPOINT { return trunc(x); }
+JL_DLLEXPORT float julia_truncf(float x) JL_NOTSAFEPOINT { return truncf(x); }
+JL_DLLEXPORT float julia_floorf(float x) JL_NOTSAFEPOINT { return floorf(x); }
+JL_DLLEXPORT float julia_ceilf(float x) JL_NOTSAFEPOINT { return ceilf(x); }
+JL_DLLEXPORT float julia_fmodf(float x, float y) JL_NOTSAFEPOINT { return fmodf(x, y); }
+JL_DLLEXPORT float julia_powf(float x, float y) JL_NOTSAFEPOINT { return powf(x, y); }
+
 #define fma(a, b, c) \
     sizeof(a) == sizeof(float) ? julia_fmaf(a, b, c) : julia_fma(a, b, c)
 #else // On other systems use fma directly
