@@ -135,6 +135,8 @@ function _insert_green(src::SourceCode,
     elseif !is_leaf(cursor)
         cs = SyntaxList()
         for c in reverse(cursor)
+            # `_green_to_est` drops trivia, so don't build nodes for it
+            is_trivia(c) && !is_error(kind(c)) && continue
             push!(cs, _insert_green(src, txtbuf, offset, c, context))
         end
         st = @mknode(;head=h, children=reverse!(cs), source, context, syntax_flags)
