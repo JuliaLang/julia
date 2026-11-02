@@ -317,7 +317,7 @@ function annotate_meta(st::Syntax, meta::Symbol)
     @stm st begin
         [:function call body] ->
             @ast _ st [:function call annotate_meta_fbody(body, meta)]
-        ([:(=) call body], when=(head(call) === :call || head(call) === :where)) ->
+        ([:(=) call body], when=is_eventually_call(call)) ->
             @ast _ st [:(=) call annotate_meta_fbody(body, meta)]
         [:-> call body] ->
             @ast _ st [:-> call annotate_meta_fbody(body, meta)]
