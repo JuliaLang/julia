@@ -207,8 +207,9 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [:curly t tvs...] ->
         vst1(vcx, t) & no_assignment(tvs, "type parameter list") &
         allv(vst1_curly_typevar, vcx, tvs)
+    # flisp compat: `(x...) where T` lowers to `Core.UnionAll(T, x...)`
     [:where t tds...] ->
-        vst1(vcx, t) & allv(vst1_typevar_decl, vcx, tds)
+        vst1_splat_or_val(vcx, t) & allv(vst1_typevar_decl, vcx, tds)
     [:string xs...] ->
         allv(vst1_splat_or_val, vcx, xs)
     [:-> _...] ->
@@ -966,6 +967,9 @@ vst1_assign(vcx, st; in_const = false) = @stm st begin
     # `vst1_assign_lhs_nontuple` also accepts call forms, but that is a lowering
     # bug where the "function body" is evaluated immediately
     ([:(=) l r], when=is_eventually_call(l)) -> vst1_function(vcx, st)
+    # type alias `X{T} = rhs` is lowered as `rhs where T`, which allows splat
+    ([:(=) l r], when=head(l)===:curly) ->
+        vst1_assign_lhs(vcx, l; in_const) & vst1_splat_or_val(vcx, r)
     [:(=) l r] -> vst1_assign_lhs(vcx, l; in_const) & vst1(vcx, r)
     [:(=) _...] -> @fail(st, "malformed assignment")
     _ -> unknown()

@@ -338,6 +338,13 @@ end
     chain_gb = ChainAlias2{T} = AbstractVector{T}
     """)
 
+    # splatted rhs of a type alias is passed to `Core.UnionAll` (same in flisp)
+    @test JuliaLowering.include_string(test_mod, """
+    let d = (Vector,)
+        SplatAlias{T} = d...
+    end
+    """) == (Vector where T)
+
     # invalid lhss are rejected anywhere in a chain
     @test_throws LoweringError JuliaLowering.include_string(test_mod, """
     let b = 0, c = 0

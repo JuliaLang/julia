@@ -156,6 +156,19 @@ end
 7   (return %₅)
 
 ########################################
+# UnionAll expansion with splatted rhs (flisp compat)
+X{T} = Y...
+#---------------------
+1   (call core.TypeVar :T)
+2   (= slot₁/T %₁)
+3   (call core.tuple slot₁/T)
+4   TestMod.Y
+5   (call core._apply_iterate top.iterate core.UnionAll %₃ %₄)
+6   (call core.declare_const TestMod :X %₅)
+7   latestworld
+8   (return %₅)
+
+########################################
 # Error: Invalid lhs in `=`
 a.(b) = rhs
 #---------------------
