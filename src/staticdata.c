@@ -346,6 +346,7 @@ static htable_t fptr_to_id;
 void *native_functions;   // opaque jl_native_code_desc_t blob used for fetching data from LLVM
 
 // table of struct field addresses to rewrite during saving
+static htable_t object_replace;
 static htable_t field_replace;
 static htable_t bits_replace;
 #ifndef NDEBUG
@@ -1172,6 +1173,11 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
 {
     if (!jl_needs_serialization(s, v))
         return;
+    jl_value_t *replacement = (jl_value_t*)ptrhash_get(&object_replace, v);
+    if (replacement != HT_NOTFOUND) {
+        jl_queue_for_serialization_(s, replacement, recursive, immediate);
+        return;
+    }
 
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
     // check early from errors, so we have a little bit of contextual state for debugging them
@@ -1366,6 +1372,11 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
         return item;
     }
     void *idx = ptrhash_get(&serialization_order, v);
+    if (idx == HT_NOTFOUND) {
+        jl_value_t *replacement = (jl_value_t*)ptrhash_get(&object_replace, v);
+        if (replacement != HT_NOTFOUND)
+            return _backref_id(s, replacement, link_ids);
+    }
     if (idx == HT_NOTFOUND && dedup_by_content(v, (jl_datatype_t*)jl_typeof(v))) {
         jl_value_t *dup = jl_idset_get(content_dedup_list, content_dedup_keyset, v);
         if (dup != NULL)
@@ -2637,14 +2648,18 @@ static int has_references(jl_value_t *v) JL_NOTSAFEPOINT
 }
 #endif
 
-// Write `replacement` in place of the queued object `v`, after queueing. `replacement` must
-// only refer to queued objects.
 static void record_object_change(jl_value_t *v, jl_value_t *replacement) JL_NOTSAFEPOINT
 {
     void *idx = ptrhash_get(&serialization_order, v);
     // to avoid enqueuing child objects that will become unreachable after object replacement,
-    // `v` must already be enqueued non-recursively (i.e. children not enqueued)
-    assert(queueing_done && "object change recorded while queueing");
+    // this function has phase restrictions:
+    if (!queueing_done) {
+        // `v` can have a change recorded before it is enqueued
+        assert(idx == HT_NOTFOUND && "object change recorded after its object was queued");
+        ptrhash_put(&object_replace, v, replacement);
+        return;
+    }
+    // or if `v` is already enqueued it must be non-recursive (i.e. children not enqueued)
     assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1 && idx != (void*)(uintptr_t)-2 &&
            "object change recorded for an object that is not written");
     assert((ptrhash_has(&queued_without_refs, v) || !has_references(v)) &&
@@ -3224,6 +3239,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     htable_new(&serialization_order, 25000);
     htable_new(&field_replace, 0);
     htable_new(&bits_replace, 0);
+    htable_new(&object_replace, 0);
 #ifndef NDEBUG
     htable_new(&queued_without_refs, 0);
 #endif
@@ -3385,17 +3401,13 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     }
     else {
         get_tags(_tags);
-    }
-
-    if (worklist == NULL) {
-        // empty!(Core.ARGS)
-        if (jl_core_module != NULL) {
-            jl_array_t *args = (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS"));
-            if (args != NULL) {
-                jl_array_del_end(args, jl_array_len(args));
-            }
+        // write the modules with an `__init__` as the module init order
+        for (size_t i = 0; _tags[i] != NULL; i++) {
+            if (_tags[i] == (jl_value_t**)&jl_module_init_order)
+                _tags[i] = (jl_value_t**)&module_init_order;
         }
     }
+
     jl_bigint_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("BigInt")) : NULL;
     if (jl_bigint_type) {
         gmp_limb_size = jl_unbox_long(jl_get_global((jl_module_t*)jl_get_global(jl_base_module, jl_symbol("GMP")),
@@ -3407,6 +3419,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     { // step 1: record values (recursively) that need to go in the image
         size_t i;
         if (worklist == NULL) {
+            // write `Core.ARGS` empty
+            jl_array_t *args = jl_core_module ? (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS")) : NULL;
+            if (args != NULL && jl_array_len(args) != 0)
+                record_object_change((jl_value_t*)args, (jl_value_t*)jl_alloc_array_1d(jl_typeof(args), 0));
             for (i = 0; tags[i] != NULL; i++) {
                 jl_value_t *tag = *tags[i];
                 jl_queue_for_serialization(&s, tag);
@@ -3634,6 +3650,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     htable_free(&s.method_roots_index);
     htable_free(&field_replace);
     htable_free(&bits_replace);
+    htable_free(&object_replace);
 #ifndef NDEBUG
     htable_free(&queued_without_refs);
 #endif
