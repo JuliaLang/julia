@@ -2843,8 +2843,6 @@ static void jl_prune_idset(_Atomic(jl_svec_t*) *pkeys, _Atomic(jl_genericmemory_
     record_object_change((jl_value_t*)keys, (jl_value_t*)keys2);
     if (keyset != (jl_genericmemory_t*)jl_an_empty_memory_any)
         record_object_change((jl_value_t*)keyset, (jl_value_t*)jl_atomic_load_relaxed(&keyset2));
-    jl_gc_write_atomic(parent, *pkeys, jl_svec_t, keys2, relaxed);
-    jl_gc_write_atomic(parent, *pkeyset, jl_genericmemory_t, jl_atomic_load_relaxed(&keyset2), relaxed);
 }
 
 static void jl_prune_method_specializations(jl_method_t *m) JL_CANSAFEPOINT JL_GC_DISABLED
