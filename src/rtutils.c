@@ -346,14 +346,26 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh) JL_NO_SAF
 JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh)
 {
     assert(ct->gcstack == eh->gcstack && "Incorrect GC usage under try catch");
-    jl_gc_wb_current_task(ct, &ct->scope, eh->scope);
-    ct->scope = eh->scope;
     ct->eh = eh->prev;
-    jl_gc_wb_current_task(ct, (void*)&ct->bound_cancel_token, eh->bound_cancel_token);
-    jl_atomic_store_relaxed(&ct->bound_cancel_token, eh->bound_cancel_token);
-    ct->bound_cancel_default = eh->bound_cancel_default;
-    jl_atomic_store_release(&ct->reset_ctx, eh->reset_ctx);
-    jl_atomic_store_release(&ct->cancel_handler_ctx, eh->cancel_handler_ctx);
+    if (__likely(ct->scope == eh->scope &&
+                 jl_atomic_load_relaxed(&ct->bound_cancel_token) == eh->bound_cancel_token &&
+                 !eh->reset_ctx && !eh->cancel_handler_ctx)) {
+        // Outside a reset region or guarded foreign call, a normal exit
+        // leaves both closed, so with the scope and token unchanged there is
+        // nothing to restore: a set `bound_cancel_default` still describes
+        // the scope.
+        assert(!jl_atomic_load_relaxed(&ct->reset_ctx));
+        assert(!jl_atomic_load_relaxed(&ct->cancel_handler_ctx));
+    }
+    else {
+        jl_gc_wb_current_task(ct, &ct->scope, eh->scope);
+        ct->scope = eh->scope;
+        jl_gc_wb_current_task(ct, (void*)&ct->bound_cancel_token, eh->bound_cancel_token);
+        jl_atomic_store_relaxed(&ct->bound_cancel_token, eh->bound_cancel_token);
+        ct->bound_cancel_default = eh->bound_cancel_default;
+        jl_atomic_store_release(&ct->reset_ctx, eh->reset_ctx);
+        jl_atomic_store_release(&ct->cancel_handler_ctx, eh->cancel_handler_ctx);
+    }
     ct->ptls->defer_signal = eh->defer_signal; // optional, but certain try-finally (in stream.jl) may be slightly harder to write without this
 }
 
