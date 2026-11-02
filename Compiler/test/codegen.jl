@@ -1608,3 +1608,40 @@ end
     @test isequal(Base.mapany(identity, (Union{}, 'a')), Any[Union{}, 'a'])
     @test isequal(Any[x for x in (Union{}, 1.0)], Any[Union{}, 1.0])
 end
+
+# A split-union PhiNode copies a small component even out of a box, so the data
+# pointer of an unknown box (union index 0x80) is unspecified: naming that box's
+# type in a narrower union must read the box.
+@noinline union_phi_fa(i)::Union{Int, AbstractFloat} = isodd(i) ? i : Base.inferencebarrier(Float64(i))
+@noinline union_phi_fb(i)::Union{Int, AbstractFloat} = isodd(i) ? Base.inferencebarrier(Float64(i)) : i
+function union_phi_retag(c::Bool, i::Int)
+    local y::Union{Int, Float64}
+    x = c ? union_phi_fa(i) : union_phi_fb(i)
+    y = 0
+    try
+        y = x::Union{Int, Float64}
+        error()
+    catch
+        return y
+    end
+end
+# returns a boxed Int (union index 0x81), unlike `union_phi_ret`
+@noinline union_phi_boxret(v::Vector{Any}, i::Int)::Union{Int, String} = v[i]
+@noinline union_phi_ret(i::Int) = i % 3 == 0 ? "s" : i
+function union_phi_sum(v::Vector{Any})
+    s = 0
+    x = union_phi_boxret(v, 1)
+    for i in 2:length(v)
+        x isa Int && (s += x)
+        x = isodd(i) ? union_phi_boxret(v, i) : union_phi_ret(i)
+    end
+    s
+end
+@testset "split-union PhiNode data" begin
+    for c in (true, false), i in 1:4
+        @test union_phi_retag(c, i) === (isodd(i) == c ? i : Float64(i))
+    end
+    v = Any[i % 4 == 0 ? "s" : i for i in 1:21]
+    xs = Any[v[1]; [isodd(i) ? v[i] : union_phi_ret(i) for i in 2:20]]
+    @test union_phi_sum(v) == sum(x -> x isa Int ? x : 0, xs)
+end

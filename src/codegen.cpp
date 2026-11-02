@@ -1983,7 +1983,10 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
     // For unions, we may need to keep a reference to the boxed part individually.
     // If this is non-NULL, then, at runtime, we satisfy the invariant that (for the corresponding
-    // runtime values) if `(TIndex & UNION_BOX_MARKER) != 0`, then `Vboxed == V` (by value).
+    // runtime values) if `(TIndex & UNION_BOX_MARKER) != 0`, then the value is `Vboxed`, and:
+    //  - if `TIndex == (UNION_BOX_MARKER | idx)`, `V` points to the data of component `idx`,
+    //    either in `Vboxed` itself or in a copy (as a PhiNode makes, to drop the box from reads);
+    //  - if `TIndex == UNION_BOX_MARKER`, `V` is unspecified.
     // For convenience, we also set this value of isboxed values, in which case
     // it is equal (at compile time) to V.
 
@@ -3270,6 +3273,11 @@ static jl_cgval_t convert_julia_type_to_union(jl_codectx_t &ctx, const jl_cgval_
                 ctx.builder.CreateBr(postBB);
             }
             ctx.builder.SetInsertPoint(postBB);
+            if (v.TIndex && ret.V) {
+                // V is unspecified for an unknown box, which this may have named
+                Value *wasunknown = ctx.builder.CreateICmpEQ(v.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER));
+                ret.V = ctx.builder.CreateSelect(wasunknown, decay_derived(ctx, v.Vboxed), decay_derived(ctx, ret.V));
+            }
         }
     }
     else if (computed_new_index_early && v.inline_roots.empty() && jl_is_concrete_type(v.typ)) {
@@ -10792,6 +10800,56 @@ static jl_llvm_functions_t
     ctx.builder.SetCurrentDebugLocation(noDbg);
     ctx.builder.ClearInsertionPoint();
 
+    // A split union PhiNode either holds every small component in its slot, copying it even
+    // out of a box, so that reads need no box test; or, if an edge brings a boxed value, which
+    // reads would then have to test for anyway, leaves all boxed data in its box.
+    DenseSet<Value*> phi_keeps_box;
+    auto brings_box = [&](jl_value_t *value, jl_value_t *phiType) JL_CANSAFEPOINT {
+        while (jl_is_ssavalue(value)) {
+            jl_value_t *stmt = jl_array_ptr_ref(ctx.code, ((jl_ssavalue_t*)value)->id - 1);
+            if (!jl_is_pinode(stmt))
+                break;
+            value = jl_fieldref_noalloc(stmt, 0);
+        }
+        const jl_cgval_t *val;
+        if (jl_is_ssavalue(value)) {
+            size_t id = ((jl_ssavalue_t*)value)->id - 1;
+            if (!ctx.ssavalue_assigned[id])
+                return false;
+            val = &ctx.SAvalues[id];
+        }
+        else if (jl_is_argument(value)) {
+            val = &ctx.slots[jl_slot_number(value) - 1].value;
+        }
+        else {
+            return jl_is_globalref(value);
+        }
+        if (phi_keeps_box.count(val->V))
+            return true;
+        if (!val->isboxed || val->constant)
+            return false;
+        return !jl_is_concrete_type(val->typ) || get_box_tindex((jl_datatype_t*)val->typ, phiType) != 0;
+    };
+    for (bool changed = true; changed; ) {
+        changed = false;
+        for (auto &tup : ctx.PhiNodes) {
+            const jl_cgval_t &phi_result = std::get<0>(tup);
+            if (!std::get<2>(tup) || !phi_result.TIndex || phi_keeps_box.count(phi_result.V))
+                continue;
+            jl_value_t *r = std::get<5>(tup);
+            jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(r, 0);
+            jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(r, 1);
+            for (size_t i = 0; i < jl_array_nrows(edges); ++i) {
+                jl_value_t *value = jl_array_ptr_ref(values, i);
+                if (value && come_from_bb[jl_array_data(edges, int32_t)[i]] && brings_box(value, phi_result.typ)) {
+                    phi_keeps_box.insert(phi_result.V);
+                    changed = true;
+                    break;
+                }
+            }
+        }
+    }
+
     // Codegen Phi nodes
     std::map<std::pair<BasicBlock*, BasicBlock*>, BasicBlock*> BB_rewrite_map;
     SmallVector<llvm::PHINode*, 0> ToDelete;
@@ -10803,6 +10861,7 @@ static jl_llvm_functions_t
         SmallVector<PHINode*,0> roots;
         BasicBlock *PhiBB;
         std::tie(phi_result, PhiBB, dest, VN, roots, r) = tup;
+        bool keepbox = phi_keeps_box.count(phi_result.V);
         jl_value_t *phiType = phi_result.typ;
         jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(r, 0);
         jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(r, 1);
@@ -10938,7 +10997,7 @@ static jl_llvm_functions_t
                 }
                 else if (jl_is_concrete_type(val.typ) || val.constant) {
                     size_t tindex = get_box_tindex((jl_datatype_t*)(val.constant ? jl_typeof(val.constant) : val.typ), phiType);
-                    if (tindex && dest && (!VN || !val.isboxed)) {
+                    if (tindex && dest && (!VN || !val.isboxed || !keepbox)) {
                         emit_unionmove(ctx, dest, phiType, union_slot_aliasinfo(ctx, phiType), val, RTindex, nullptr);
                     }
                 }
@@ -10946,9 +11005,9 @@ static jl_llvm_functions_t
                     Value *tindex = ctx.builder.CreateAnd(RTindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
                     if (!VN)
                         RTindex = tindex; // strip UNION_BOX_MARKER
-                    if (dest && (!VN || !val.isboxed)) {
+                    if (dest && (!VN || !val.isboxed || !keepbox)) {
                         Value *skip = ctx.builder.CreateIsNull(tindex); // skip entirely if old value isn't part of the new union
-                        if (new_union.Vboxed != nullptr && roots.empty()) {
+                        if (keepbox && new_union.Vboxed != nullptr && roots.empty()) {
                             // if UNION_BOX_MARKER is set, we won't select this slot anyways, so skip it also
                             Value *isboxed = ctx.builder.CreateICmpNE(
                                 ctx.builder.CreateAnd(RTindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
@@ -10980,6 +11039,8 @@ static jl_llvm_functions_t
             }
             ctx.builder.ClearInsertionPoint();
         }
+        if (dest && TindexN && !keepbox)
+            cast<SelectInst>(phi_result.V)->setCondition(ConstantInt::getFalse(ctx.builder.getContext()));
         // In LLVM IR it is illegal to have phi nodes without incoming values, even if
         // there are no operands (no incoming branches), so delete any such phi nodes
         if (pred_empty(PhiBB)) {
