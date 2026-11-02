@@ -85,6 +85,36 @@ end
     @test_throws ArgumentError Base.Rounding.from_fenv(-99)
 end
 
+# Packages `ccall` through `Base.libm_name`, so it has to name a library with these functions
+@testset "Base.libm_name" begin
+    @test ccall((:sin, Base.libm_name), Cdouble, (Cdouble,), 0.0) == 0.0
+    @test ccall((:floor, Base.libm_name), Cdouble, (Cdouble,), 1.5) == 1.0
+    @test ccall((:tgamma, Base.libm_name), Cdouble, (Cdouble,), 5.0) ≈ 24.0
+    @test ccall((:erf, Base.libm_name), Cdouble, (Cdouble,), 0.0) == 0.0
+    if Sys.iswindows()
+        libm_setround(i) = ccall((:fesetround, Base.libm_name), Cint, (Cint,), i)
+        libm_getround() = ccall((:fegetround, Base.libm_name), Cint, ())
+        inverse(x) = 1.0 / Base.inferencebarrier(x) # not constant folded
+        third, tenth = inverse(3.0), inverse(10.0) # rounded down and up to nearest, respectively
+        for (r, expected) in ((RoundUp, (nextfloat(third), tenth)),
+                              (RoundDown, (third, prevfloat(tenth))),
+                              (RoundToZero, (third, prevfloat(tenth))),
+                              (RoundNearest, (third, tenth)))
+            fe = Base.Rounding.to_fenv(r)
+            status = libm_setround(fe)
+            libm_mode, julia_mode = libm_getround(), rounding(Float64)
+            results = (inverse(3.0), inverse(10.0))
+            libm_setround(Base.Rounding.to_fenv(RoundNearest))
+            libm_mode_after_julia = Base.Rounding.setrounding_raw(libm_getround, Float64, fe)
+            @test status == 0
+            @test libm_mode == fe
+            @test julia_mode == r
+            @test results == expected
+            @test libm_mode_after_julia == fe
+        end
+    end
+end
+
 @testset "round error throwing" begin
     badness = 1//0
     @test_throws DivideError round(Int64,badness,RoundNearestTiesAway)
