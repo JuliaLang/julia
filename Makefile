@@ -581,6 +581,7 @@ ifneq ($(DARWIN_FRAMEWORK),1)
 	for j in $(JL_PRIVATE_TOOLS) ; do \
 		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
 		install_name_tool -rpath @loader_path/$(build_libdir_rel) @executable_path/$(reverse_private_libexecdir_rel) $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
+		codesign -s - -f $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
 	done
 endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
@@ -597,6 +598,7 @@ ifneq ($(DARWIN_FRAMEWORK),1)
 		[ $$j = 7z ] && continue; \
 		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
 		install_name_tool -rpath @executable_path/$(reverse_build_private_libexecdir_rel) @executable_path/$(reverse_private_libexecdir_rel) $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
+		codesign -s - -f $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
 	done
 endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
@@ -613,10 +615,18 @@ ifeq ($(OS), Linux)
 endif
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $$(LOADER_BUILD_DEP_LIBS) != $$(LOADER_INSTALL_DEP_LIBS)
+	# On macOS that invalidates the signature, and the kernel then kills whatever loads the
+	# library, so sign it again. The same goes for the executables whose rpaths are edited above.
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_BUILD_DEP_LIBS)$$,$(LOADER_INSTALL_DEP_LIBS))
+ifeq ($(OS),Darwin)
+	codesign -s - -f $(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT)
+endif
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_DEBUG_BUILD_DEP_LIBS)$$,$(LOADER_DEBUG_INSTALL_DEP_LIBS))
+ifeq ($(OS),Darwin)
+	codesign -s - -f $(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
+endif
 endif
 endif
 
