@@ -615,7 +615,7 @@ function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {
     if iszero(denominator(x)) && !(T <: Integer)
         return convert(T, copysign(unsafe_rational(one(Tr), zero(Tr)), numerator(x)))
     end
-    convert(T, div(numerator(x), denominator(x), r))
+    _round_convert(T, div(numerator(x), denominator(x), r), x, r)
 end
 
 function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where T
