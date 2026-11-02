@@ -24,9 +24,15 @@
 _colon(::Ordered, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
 # for T<:Union{Float16,Float32,Float64} see twiceprecision.jl
 _colon(::Ordered, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
-    StepRangeLen(start, step, convert(Integer, fld(stop - start, step)) + 1)
+    StepRangeLen(start, step, _colon_length(start, step, stop))
 _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
-    StepRangeLen(start, step, convert(Integer, fld(stop - start, step)) + 1)
+    StepRangeLen(start, step, _colon_length(start, step, stop))
+function _colon_length(start, step, stop)
+    # avoid computing `stop - start` for empty ranges, but keep the type of the length
+    empty = _isemptyrange(start, step, stop)
+    len = convert(Integer, fld((empty ? start : stop) - start, step)) + 1
+    return empty ? zero(len) : len
+end
 
 const _RangeWrappingInteger = Union{
     Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}
@@ -349,6 +355,9 @@ struct StepRange{T,S} <: OrdinalRange{T,S}
     end
 end
 
+# whether `start:step:stop` is empty, without computing `stop - start`
+_isemptyrange(start, step, stop) = (start != stop) & ((step > zero(step)) != (stop > start))
+
 # to make StepRange constructor inlineable, so optimizer can see `step` value
 function steprange_last(start, step, stop)::typeof(stop)
     if isa(start, AbstractFloat) || isa(step, AbstractFloat)
@@ -363,7 +372,7 @@ function steprange_last(start, step, stop)::typeof(stop)
     if stop == start
         last = stop
     else
-        if (step > z) != (stop > start)
+        if _isemptyrange(start, step, stop)
             last = steprange_last_empty(start, step, stop)
         else
             # Compute absolute value of difference between `start` and `stop`
@@ -707,7 +716,7 @@ size(r::AbstractRange) = (@inline; (length(r),))
 
 isempty(r::StepRange) =
     # steprange_last(r.start, r.step, r.stop) == r.stop
-    (r.start != r.stop) & ((r.step > zero(r.step)) != (r.stop > r.start))
+    _isemptyrange(r.start, r.step, r.stop)
 isempty(r::AbstractUnitRange) = first(r) > last(r)
 isempty(r::StepRangeLen) = length(r) == 0
 isempty(r::LinRange) = length(r) == 0
