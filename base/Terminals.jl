@@ -86,6 +86,7 @@ clear_line(t::TextTerminal) = error("Unimplemented")
 raw!(t::TextTerminal, raw::Bool) = error("Unimplemented")
 
 beep(t::TextTerminal) = nothing
+# FIXME: Deprecated, unused by Julia itself but kept for packages. Use `REPL.LineEdit.enter_input_mode`/`leave_input_mode`.
 enable_bracketed_paste(t::TextTerminal) = nothing
 disable_bracketed_paste(t::TextTerminal) = nothing
 

@@ -349,6 +349,26 @@ end
     write(buf, "abcde")
     read(buf, UInt16)
     @test takestring!(buf) == "cde"
+
+    # The mark must not bring back already-read bytes
+    buf = new_unseekable_buffer()
+    write(buf, "abcdef")
+    mark(buf)
+    read(buf, UInt16)
+    @test takestring!(buf) == "cdef"
+
+    buf = new_unseekable_buffer()
+    write(buf, "abcdef")
+    closewrite(buf)
+    mark(buf)
+    read(buf, UInt16)
+    @test takestring!(buf) == "cdef"
+
+    buf = new_unseekable_buffer()
+    write(buf, "abcdef")
+    mark(buf)
+    read(buf, UInt16)
+    @test Base.unsafe_takestring!(buf) == "cdef"
 end
 
 @testset "Read/write readonly IOBuffer" begin
@@ -703,6 +723,9 @@ end
     @test peek(io) == 0xe3
     @test peek(io, Char) == 'こ'
     @test peek(io, Int32) == -476872221
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    @test_throws MethodError(peek, (io, Union{})) peek(io, Union{})
+    @test which(peek, (typeof(io), Type{Union{}})).sig == Tuple{typeof(peek), IO, Type{Union{}}, Vararg}
     close(io)
 end
 

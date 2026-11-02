@@ -179,6 +179,8 @@ end
 @test_repr "w = ((x, y) = z)" # parens aren't necessary, but not wrong
 @test_repr "a & b && c"
 @test_repr "a & (b && c)"
+@test_repr "a .& b .&& c"
+@test_repr "a .&& (b .|| c)"
 @test_repr "(a => b) in c"
 @test_repr "a => b in c"
 @test_repr "*(a..., b)"
@@ -193,6 +195,7 @@ end
 # Exponentiation (>= operator_precedence(:^)) and unary operators
 @test_repr "(-1)^a"
 @test_repr "(-2.1)^-1"
+@test_repr "(-0.0)^2"
 @test_repr "(-x)^a"
 @test_repr "(-a)^-1"
 @test_repr "(!x)↑!a"
@@ -653,7 +656,7 @@ test_repr("let @m(x), y=z; end", true)
 
 @test repr(:(@m x y))    == ":(#= $(@__FILE__):$(@__LINE__) =# @m x y)"
 @test string(:(@m x y))  ==   "#= $(@__FILE__):$(@__LINE__) =# @m x y"
-@test string(:(@m x y;)) == "begin\n    #= $(@__FILE__):$(@__LINE__) =# @m x y\nend"
+@test string(:(@m x y;)) == "begin\n    #= $(@__FILE__):$(@__LINE__) =#\n    #= $(@__FILE__):$(@__LINE__) =# @m x y\nend"
 
 # issue #11436
 @test_repr "1 => 2 => 3"
@@ -1554,6 +1557,15 @@ let m = Memory{StaticShowUInt63}(undef, 1)
     @test occursin("StaticShowUInt63(0x7fffffffffffffff)", shown)
     @test !occursin("StaticShowUInt63(0xffffffffffffffff)", shown)
 end
+# ... and padding bytes: sizeof is 4 for these, with 1 resp. 2 bytes of padding
+primitive type StaticShowUInt24 24 end
+primitive type StaticShowUInt17 17 end
+let m = Memory{StaticShowUInt24}(undef, 1), m17 = Memory{StaticShowUInt17}(undef, 1)
+    GC.@preserve m unsafe_store!(Ptr{UInt32}(pointer(m)), typemax(UInt32))
+    @test occursin("StaticShowUInt24(0xffffff)", static_shown(m))
+    GC.@preserve m17 unsafe_store!(Ptr{UInt32}(pointer(m17)), typemax(UInt32))
+    @test occursin("StaticShowUInt17(0x01ffff)", static_shown(m17))
+end
 
 # PR #22160
 @test static_shown(:aa) == ":aa"
@@ -2252,7 +2264,7 @@ h_line() = f_line()
 @test sprint(Base.show_unquoted, Core.Compiler.Argument(-2)) == "_-2"
 
 
-eval(Meta._parse_string("""function my_fun28173(x)
+eval(Meta.parse("""function my_fun28173(x)
     y = if x == 1
             "HI"
         elseif x == 2
@@ -2270,7 +2282,7 @@ eval(Meta._parse_string("""function my_fun28173(x)
             "three"
         end
     return y
-end""", "a"^80, 1, 1, :statement)[1]) # use parse to control the line numbers
+end""", filename="a"^80))
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     @test_throws "must be one of the following" sprint(IRShow.show_ir, src; context = :debuginfo => :_)
     @test !contains(sprint(IRShow.show_ir, src; context = :debuginfo => :source_inline), "a"^80)
@@ -2490,8 +2502,8 @@ end
 @weak_test_repr "a[begin, end, let x=1; (x+1;); end]"
 @test_broken repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
         ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
-@test_repr "a[(bla;)]"
-@test_repr "a[(;;)]"
+@weak_test_repr "a[(bla;)]"
+@weak_test_repr "a[(;;)]"
 @weak_test_repr "a[x -> f(x)]"
 
 @testset "Base.Iterators" begin
@@ -2642,6 +2654,13 @@ let T = TypeVar(:T, Union{}, Integer), S = TypeVar(:S, Union{}, T)
     @test string(Union{MBoundedAlias2.A{T,S}, MBoundedAlias2.B{T,S}}) ==
         "$(curmod_prefix)MBoundedAlias2.U{T, S} where {T<:Integer, S<:T}"
 end
+
+for T in (Union{Int, Vector{Vector{C}} where C}, Union{Int, Vector{Vector{C}} where C<:Real},
+          Union{Nothing, Matrix{Int}, Vector{Vector{C}} where C},
+          Union{Nothing, Vector{Vector{C}} where C<:D} where D)
+    @test eval(Meta.parse(repr(T))) == T
+end
+@test string(Union{Int64, Vector{Vector{C}} where C}) == "Union{Int64, Vector{Vector{C}} where C}"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"

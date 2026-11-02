@@ -7,7 +7,7 @@
 #-------------------------------------------------------------------------------
 # Functions/types used by code emitted from lowering, but not called by it directly
 
-@inline function _invoke_in_world(w::UInt, f::F, @nospecialize(args...)) where {F}
+@inline function _invoke_in_world(w::UInt, @nospecialize(f), @nospecialize(args...))
     if ccall(:jl_is_in_pure_context, Int8, ()) != 0
         # Similar to `Base.invoke_in_world` but also works inside generated-function
         # expansion (see `jl_code_for_staged`)
@@ -16,70 +16,28 @@
     return Base.invoke_in_world(w, f, args...)
 end
 
-# Re-dispatch `f(args...)` at the pinned lowering world (see `jl_lowering_world`)
+# World set with `activate!`, or 0
+const _lowering_world = Ref{UInt}(0)
+
 @inline function invoke_in_lowering_world(f::F, @nospecialize(args...)) where {F}
+    w = _lowering_world[]
     @static if VERSION >= v"1.14.0-DEV.2635"
-        w = unsafe_load(cglobal(:jl_lowering_world, Csize_t))
-        if w == 0
-            # Fallback when the Base lowering hook is not set up
-            w = Base.tls_world_age()
-            # FIXME: as a side effect, enabling the Base lowering hook now affects
-            #        JuliaLowering execution not passing through the hook
-        end
-        return _invoke_in_world(w, f, args...)
-    else
-        f(args...)
+        w == 0 || return _invoke_in_world(w, f, args...)
     end
-end
-
-# Return the current exception. In JuliaLowering we use this rather than the
-# special form `K"the_exception"` to reduce the number of special forms.
-Base.@assume_effects :removable function current_exception()
-    @ccall jl_current_exception(current_task()::Any)::Any
-end
-
-function __interpolate_expr(@nospecialize(ex), depth, @nospecialize(vals::Tuple), val_i)
-    if ex isa QuoteNode
-        out = __interpolate_expr(Expr(:inert, ex.value), depth, vals, val_i)
-        QuoteNode(only(out.args))
-    elseif !(ex isa Expr)
-        ex
-    else
-        inner_depth = ex.head == :quote ? depth + 1 :
-            ex.head == :$ ? depth - 1 : depth
-        cs_out = Any[]
-        for e in ex.args
-            if e isa Expr && e.head == :$ && inner_depth == 0
-                tup = vals[val_i[] += 1]::Tuple
-                for v in tup
-                    push!(cs_out, v)
-                end
-            else
-                push!(cs_out, __interpolate_expr(e, inner_depth, vals, val_i))
-            end
-        end
-        Expr(ex.head, cs_out...)
-    end
-end
-function _interpolate_expr(@nospecialize(ex), @nospecialize(values::Tuple))
-    @jl_assert !Meta.isexpr(ex, :$) (expr_to_est(ex), "expand_quote should handle this")
-    __interpolate_expr(ex, 0, values, Ref(0))
-end
-function interpolate_expr(@nospecialize(ex), @nospecialize(values...))
-    return invoke_in_lowering_world(_interpolate_expr, ex, values)
+    return invokelatest(f, args...)
 end
 
 function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
     is_leaf(st) && return st
-    k = kind(st)
-    inner_depth = k == K"syntaxquote" ? depth + 1 :
-        k == K"syntaxunquote" ? depth - 1 : depth
+    k = head(st)
+    inner_depth = k == :syntaxquote ? depth + 1 :
+        k == :syntaxunquote ? depth - 1 : depth
     cs_out = SyntaxList()
     for c in children(st)
-        if kind(c) == K"syntaxunquote" && inner_depth == 0
+        if head(c) == :syntaxunquote && inner_depth == 0
             tup = vals[val_i[] += 1]::Tuple
             @jl_assert numchildren(c) == 1 st
-            @jl_assert kind(c[1]) === K"..." || length(tup) == 1 st
+            @jl_assert head(c[1]) === :... || length(tup) == 1 st
             for v in tup
                 v2 = !(v isa SyntaxTree) ? expr_to_est(v, c) : v
                 push!(cs_out, v2)
@@ -94,31 +52,34 @@ function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
     # TODO: copy probably not required if immutable
     st = mktree(st)
     val_i = Ref(0)
-    out = __interpolate_syntax((@ast _ st [K"None" st]), 0, vals, val_i)
+    out = __interpolate_syntax((@ast _ st [:none st]), 0, vals, val_i)
     @jl_assert val_i[] == length(vals) st
     @jl_assert numchildren(out) == 1 st
     out[1]
 end
-function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
-    return invoke_in_lowering_world(_interpolate_syntax, st, vals)
+@noinline function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
+    return invoke_in_lowering_world(_interpolate_syntax, st, vals)::SyntaxTree
 end
 
 #--------------------------------------------------
 # Functions called by closure conversion
 function eval_closure_type(mod::Module, closure_type_name::Symbol,
-                           capt_sp, field_names, field_is_box)
+                           capt_sp, field_names, field_is_box,
+                           field_is_nospec=nothing)
     type_params = Core.TypeVar[]
     field_types = []
     for name in capt_sp
         push!(type_params, Core.TypeVar(name))
     end
-    for (name, isbox) in zip(field_names, field_is_box)
-        if !isbox
+    for (i, (name, isbox)) in enumerate(zip(field_names, field_is_box))
+        if isbox
+            push!(field_types, Core.Box)
+        elseif !isnothing(field_is_nospec) && field_is_nospec[i]
+            push!(field_types, Any)
+        else
             T = Core.TypeVar(Symbol(name, "_type"))
             push!(type_params, T)
             push!(field_types, T)
-        else
-            push!(field_types, Core.Box)
         end
     end
     type = Core._structtype(mod, closure_type_name,
@@ -148,7 +109,7 @@ function _replace_captured_locals(@nospecialize(e), locals)
             isa_lowering_ast_node(v) ? QuoteNode(v) : v
         else
             # could possibly limit to foreigncall
-            Expr(e.head, map(a->_replace_captured_locals(a, locals), e.args)...)
+            Expr(e.head, Any[_replace_captured_locals(a, locals) for a in e.args]...)
         end
     elseif e isa QuoteNode
         QuoteNode(_replace_captured_locals(e.value, locals))
@@ -248,15 +209,15 @@ function bind_docs!(type::Type, docstr, lineno::LineNumberNode; field_docs=Core.
 end
 
 """
-Called in the unfortunate cases (K"call", K".", K"Identifier") where docstrings
-change the semantics of the expressions they annotate, no longer requiring the
+Called in the unfortunate cases (call, ., identifier) where docstrings change
+the semantics of the expressions they annotate, no longer requiring the
 expression to execute.
 """
 function bind_static_docs!(mod::Module, name::Symbol, docstr, lnn::LineNumberNode, sigtypes::Type)
     metadata = Dict{Symbol, Any}(
         :linenumber => lnn.line,
         :module => mod,
-        :path => something(lnn.file, "none"),
+        :path => string(something(lnn.file, :var"")),
     )
     bind = Base.Docs.Binding(mod, name)
     Docs.doc!(mod, bind, Base.Docs.docstr(docstr, metadata), sigtypes)
@@ -278,10 +239,8 @@ end
 function _gen_args_from_syms(ctx, src, args, sc)
     out = SyntaxList()
     for a in args
-        id = newleaf(src, K"Identifier", string(a))
-        id = est_to_dst_ident(SyntaxCompatContext(), id) # support placeholders
-        id = @mknode(id; context=sc)
-        push!(out, id)
+        push!(out, @mknode(;head=:identifier, value=string(a::Symbol),
+                           context=sc, source=src))
     end
     out
 end
@@ -306,40 +265,39 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     # Note that we expand in `tls_world_age()` (see Core.GeneratedFunctionStub)
     world = Base.tls_world_age()
 
-    # Lower the generated code in the lowering world
-    return invoke_in_lowering_world(_lower_generated_code, g, source, sc,
-                                   __module__, world, ex0)
+    return try
+        invoke_in_lowering_world(_lower_generated_code, g, source, sc,
+                                 __module__, world, ex0)
+    catch exc
+        rethrow(to_compatible_exception(exc))
+    end
 end
 
 function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
                                sc::SyntaxContext, __module__::Module,
                                world::UInt, @nospecialize(ex0))
     if ex0 isa Expr
-        ex0 = expr_to_est(ex0, source_location(LineNumberNode, g.srcref))
+        ex0 = expr_to_est(ex0, LineNumberNode(Int(source.line), source.file))
     end
-    # TODO: rebase mistake above?
+    # TODO: the above is possible with interpolated `return`, matching flisp,
+    # but we want to throw an error like below
     if !(ex0 isa SyntaxTree)
         ex0 isa Expr && throw(LoweringError(
             ex0, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
-        ex0 = expr_to_est(ex0, g.srcref)
+        ex0 = expr_to_est(ex0, g.srcref, sc)
     end
 
     @jl_assert base_layer(sc).mod == __module__ ex0
-    ex0 = JuliaSyntax.fill_context(ex0, sc)
+    ex0 = fill_context(ex0, sc)
     ctx1 = MacroExpansionContext(ex0, world, true)
-    ex1 = expand_forms_1(ctx1, ex0)
-    # Desugaring
-    ctx2, ex2 = expand_forms_2(ex1, world)
-
-    # Wrap expansion in a non-toplevel lambda and run scope resolution
-    ex2 = @ast ctx2 ex0 [K"generated_lambda"
-        [K"block" _gen_args_from_syms(ctx2, ex1, g.argnames, sc)...]
-        [K"block" _gen_args_from_syms(ctx2, ex1, g.spnames, sc)...]
-        ex2
+    ex0 = @ast _ ex0 [:generated_lambda
+        [:block _gen_args_from_syms(ctx1, ex0, g.argnames, sc)...]
+        [:block _gen_args_from_syms(ctx1, ex0, g.spnames, sc)...]
+        ex0
     ]
+    ex1 = expand_forms_1(ctx1, ex0)
+    ctx2, ex2 = expand_forms_2(ex1, world)
     ctx3, ex3 = resolve_scopes(ctx2, ex2)
-
-    # Rest of lowering
     ctx4, ex4 = convert_closures(ctx3, ex3)
     _ctx5, ex5 = linearize_ir(ctx4, ex4)
     ci = to_lowered_expr(ex5)
@@ -433,10 +391,9 @@ function is_defined_and_owned_global(mod, name, world::UInt=Base.get_world_count
     return _invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
 end
 
-function lookup_method_instance(func, args, world::Integer)
-    allargs = Vector{Any}(undef, length(args) + 1)
-    allargs[1] = func
-    allargs[2:end] = args
+function lookup_method_instance(@nospecialize(func), args::Vector{Any}, world::Integer)
+    allargs = Any[func]
+    append!(allargs, args)
     mi = @ccall jl_method_lookup(allargs::Ptr{Any}, length(allargs)::Csize_t,
                                  world::Csize_t)::Ptr{Cvoid}
     return mi == C_NULL ? nothing : unsafe_pointer_to_objref(mi)

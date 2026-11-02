@@ -38,6 +38,13 @@ pub mod julia_scanning;
 #[rustfmt::skip]
 pub mod julia_types;
 
+// Exactly one of `moving` and `non_moving` must be enabled. In a `non_moving` build, roots that
+// cannot be updated are reported as slots that MMTk must never store to.
+#[cfg(not(any(feature = "moving", feature = "non_moving")))]
+compile_error!("Either the `moving` or the `non_moving` feature must be enabled.");
+#[cfg(all(feature = "moving", feature = "non_moving"))]
+compile_error!("The `moving` and `non_moving` features are mutually exclusive.");
+
 #[derive(Default)]
 pub struct JuliaVM;
 

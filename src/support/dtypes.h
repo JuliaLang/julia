@@ -13,6 +13,14 @@
 #include <stdio.h>
 #include <math.h> // NAN and INF constants
 
+#if defined(__MINGW32__) && !defined(__cplusplus)
+// mingw-w64's signbit calls __signbit, whose gnu_inline definition in math.h returns 0 or
+// 0x200 on i686, while the out-of-line one in libmingwex returns 0 or 1. GCC 15 can call the
+// latter while assuming the former's return value, miscompiling e.g. `!signbit(x)`.
+#undef signbit
+#define signbit(x) __builtin_signbit(x)
+#endif
+
 #include "platform.h"
 #include "analyzer_annotations.h"
 
@@ -123,7 +131,11 @@ typedef intptr_t ssize_t;
 #define LLT_FREE(x) free(x)
 
 #define STATIC_INLINE static inline
-#define FORCE_INLINE static inline __attribute__((always_inline))
+#ifdef _COMPILER_MICROSOFT_
+#  define FORCE_INLINE static __forceinline
+#else
+#  define FORCE_INLINE static inline __attribute__((always_inline))
+#endif
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 #  define NOINLINE __declspec(noinline)

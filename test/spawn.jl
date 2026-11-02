@@ -701,6 +701,17 @@ mktempdir() do dir
     # simple command in shell mode still works
     shell_mode_run("$echostr simple > $outstr")
     @test read(outfile, String) == "simple\n"
+    # shell mode preserves a Cmd's env and dir. The redirect is inside the command
+    # because `cmd > file` is a CmdRedirect, which repl_cmd runs without the shell
+    # wrapping under test; `global` is needed as shell_mode_run interpolates via eval.
+    if !Sys.iswindows()
+        global envcmd = Cmd(`$shcmd -c "echo \$HOWLONG > $outstr"`, env=("HOWLONG" => "ever!",))
+        shell_mode_run("\$envcmd")
+        @test read(outfile, String) == "ever!\n"
+        global dircmd = Cmd(`$shcmd -c "pwd > $outstr"`, dir=dir)
+        shell_mode_run("\$dircmd")
+        @test samefile(strip(read(outfile, String)), dir)
+    end
 end
 
 let roundtrip(s) = first(Base.shell_split(Base.shell_escape(s))) == s
@@ -768,6 +779,14 @@ if !Sys.iswindows()
     @test string(cmd_uid) == "setuid(`echo test`, 1001)"
     cmd_both = setuid(setgid(`echo test`, 1000), 1001)
     @test string(cmd_both) == "setgid(setuid(`echo test`, 1001), 1000)"
+end
+
+# Cmd equality and hashing take CPU affinity into account
+let a = setcpuaffinity(`ls`, [1]), b = `ls`
+    @test a != b
+    @test hash(a) != hash(b)
+    @test a == setcpuaffinity(`ls`, [1])
+    @test hash(a) == hash(setcpuaffinity(`ls`, [1]))
 end
 
 # test redaction of sensitive env vars in Cmd display
@@ -934,6 +953,34 @@ let p = run(`$sleepcmd 100`, wait=false)
     wait(p)
     # Should not throw if already dead
     kill(p)
+end
+
+@testset "signal numbers and names" begin
+    if !Sys.iswindows()
+        for name in (:SIGHUP, :SIGINT, :SIGQUIT, :SIGKILL, :SIGUSR1, :SIGUSR2, :SIGPIPE, :SIGALRM,
+                     :SIGTERM, :SIGCHLD, :SIGCONT, :SIGWINCH, :SIGINFO)
+            name === :SIGINFO && !Sys.isbsd() && continue
+            @test Base.signal_name(getglobal(Base, name)) == String(name)
+        end
+    end
+    @test Base.signal_name(0) === nothing
+    @test Base.signal_name(typemax(Int)) === nothing
+    if Sys.islinux()
+        @test 32 < Base.sigrtmin() < Base.sigrtmax()
+        @test Base.signal_name(Base.sigrtmin() + 2) == "SIGRTMIN+2"
+    elseif Sys.isapple() || Sys.iswindows()
+        @test_throws ErrorException Base.sigrtmin()
+    end
+end
+
+# `kill` by process ID
+let p = run(`$sleepcmd 100`, wait=false)
+    kill(getpid(p), 0) # only checks that the process exists
+    @test_throws Base.IOError kill(getpid(p), typemax(Cint))
+    kill(getpid(p))
+    wait(p)
+    @test !success(p)
+    @test_throws Base.IOError kill(getpid(p))
 end
 
 # Second return of shell_parse

@@ -60,3 +60,21 @@ define i64 @nullptr() {
     %load = load i64, i64 addrspace(11)* %casted
     ret i64 %load
 }
+
+; Leaves that are constant data in a tracked address space can't be lifted, and
+; must not have their (nonexistent, since LLVM 21) use lists walked.
+define i64 @undef_leaf() {
+; CHECK-LABEL: @undef_leaf
+; CHECK: %gep = getelementptr i64, ptr addrspace(11) undef, i64 1
+; CHECK: load i64, ptr addrspace(11) %gep
+    %gep = getelementptr i64, ptr addrspace(11) undef, i64 1
+    %load = load i64, ptr addrspace(11) %gep
+    ret i64 %load
+}
+
+define void @poison_leaf(i64 %v) {
+; CHECK-LABEL: @poison_leaf
+; CHECK: atomicrmw add ptr addrspace(11) poison, i64 %v seq_cst
+    %rmw = atomicrmw add ptr addrspace(11) poison, i64 %v seq_cst
+    ret void
+}

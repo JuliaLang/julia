@@ -59,6 +59,12 @@ public:
     // about, returns a short description of that reason (for display in the
     // REPL banner); otherwise returns null.  Forces initialization.
     const char *disabledNotice() JL_CANSAFEPOINT_ENTER_LEAVE;
+    // Removes the entries last used before Cutoff (seconds since the epoch).
+    // Returns the number of entries removed, or -1 on error.
+    int64_t prune(int64_t Cutoff) JL_CANSAFEPOINT_ENTER_LEAVE;
+    // Writes a copy of the database without its free pages to Dir/data.mdb,
+    // which must not exist yet. Returns an empty string or a description of the error.
+    std::string compact(const char *Dir) JL_CANSAFEPOINT_ENTER_LEAVE;
     void shutdown() JL_NOTSAFEPOINT;
 
     using Hash = std::array<uint8_t, 20>;

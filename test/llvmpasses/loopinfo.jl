@@ -113,6 +113,17 @@ end
     end
 end
 
+# CHECK-LABEL: @julia_loop_vectorize
+# LOWER-LABEL: @julia_loop_vectorize
+# FINAL-LABEL: @julia_loop_vectorize
+@eval function loop_vectorize(N)
+    for i in 1:N
+        iteration(i)
+        $(Expr(:loopinfo, (Symbol("llvm.loop.vectorize.enable"), true)))
+        # CHECK: br {{.*}}, !llvm.loop [[LOOPID5:![0-9]+]]
+    end
+end
+
 ## Check all the MD nodes
 # CHECK: [[LOOPID]] = distinct !{[[LOOPID]], !"julia.simdloop"}
 # CHECK: [[LOOPID2]] = distinct !{[[LOOPID2]], !"julia.simdloop", !"julia.ivdep"}
@@ -120,6 +131,8 @@ end
 # CHECK: [[LOOPUNROLL]] = !{!"llvm.loop.unroll.count", i64 3}
 # CHECK: [[LOOPID4]] = distinct !{[[LOOPID4]], [[LOOPUNROLL2:![0-9]+]]}
 # CHECK: [[LOOPUNROLL2]] = !{!"llvm.loop.unroll.full"}
+# CHECK: [[LOOPID5]] = distinct !{[[LOOPID5]], [[LOOPVECTORIZE:![0-9]+]]}
+# CHECK: [[LOOPVECTORIZE]] = !{!"llvm.loop.vectorize.enable"{{(, i1 true)?}}}
 # LOWER: [[LOOPID]] = distinct !{[[LOOPID]]}
 # LOWER: [[LOOPID2]] = distinct !{[[LOOPID2]]}
 # LOWER: [[LOOPID3]] = distinct !{[[LOOPID3]], [[LOOPUNROLL:![0-9]+]]}
@@ -133,3 +146,4 @@ emit(simdf2, Vector{Float64})
 emit(loop_unroll, Int64)
 emit(loop_unroll2, Int64, Int64)
 emit(notunroll, Int64, Int64)
+emit(loop_vectorize, Int64)

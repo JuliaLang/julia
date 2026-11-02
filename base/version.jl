@@ -267,6 +267,21 @@ catch e
     VersionNumber(0)
 end
 
+# `VERSION` with build metadata for builds that behave differently from a regular one,
+# e.g. `v"1.14.0-alpha1+opt"` or `v"1.14.0-alpha1+assert"`. It is only for display (the
+# banner and `versioninfo()`): `VERSION` itself stays the same so comparisons with it work.
+function version_with_build_variant()
+    tags = String[]
+    isempty(BUILD_VARIANT) || push!(tags, BUILD_VARIANT)
+    if isdebugbuild()
+        push!(tags, "debug")
+    elseif ccall(:jl_is_assertsbuild, Int8, ()) != 0
+        push!(tags, "assert")
+    end
+    isempty(tags) && return VERSION
+    return VersionNumber(VERSION.major, VERSION.minor, VERSION.patch, VERSION.prerelease, (VERSION.build..., tags...))
+end
+
 const libllvm_version = if endswith(libllvm_version_string, "jl")
     # strip the "jl" SONAME suffix (JuliaLang/julia#33058)
     # (LLVM does never report a prerelease version anyway)
@@ -435,8 +450,8 @@ function Base.print(io::IO, r::VersionRange)
     return if (m, n) == (0, 0)
         print(io, '*')
     elseif m == 0
-        print(io, "0 -")
-        join(io, r.upper.t, '.')
+        print(io, "0 - ")
+        join(io, r.upper.t[1:n], '.')
     elseif n == 0
         join(io, r.lower.t, '.')
         print(io, " - *")
@@ -742,3 +757,8 @@ const ver_regs =
     Regex("^((?:≥\\s*)|(?:>=\\s*)|(?:=\\s*)|(?:<\\s*)|(?:=\\s*))v?$version\$") => inequality_interval, # < 0.2 >= 0.5,2
     Regex("^[\\s]*$version[\\s]*?\\s-\\s[\\s]*?$version[\\s]*\$") => hyphen_interval, # 0.7 - 1.3
 ]
+
+# Interaction with language edition: there is at most one edition per minor
+# version, and any version should specify some default edition.
+EditionNumber(v::VersionNumber) = (Int(v.major), Int(v.minor))
+VersionedParse(v::VersionNumber) = VersionedParse(EditionNumber(v))

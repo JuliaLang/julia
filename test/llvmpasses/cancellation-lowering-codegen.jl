@@ -15,7 +15,7 @@ include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 # CHECK: %reset_ctx_ptr = getelementptr
 # CHECK: call i32 @{{.*}}setjmp{{.*}}(ptr {{.*}}, i32 0) #[[ATTR:[0-9]+]]
 # CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
-# CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+# CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 # CHECK: ret
 # CHECK: attributes #[[ATTR]] = {{{.*}}returns_twice{{.*}}}
 function test_cancel_check()

@@ -107,6 +107,8 @@ isassigned(B::BitArray, i::Int) = 1 <= i <= length(B)
 
 IndexStyle(::Type{<:BitArray}) = IndexLinear()
 
+dataids(B::BitArray) = dataids(B.chunks)
+
 ## aux functions ##
 
 const _msk64 = ~UInt64(0)
@@ -814,9 +816,9 @@ function _resize_int!(B::BitVector, n::Int, first::Bool)
     if k1 > k0
         _growend!(Bc, k1 - k0)
         Bc[end] = UInt64(0)
-        if first
-            copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
-        end
+    end
+    if first
+        copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
     end
     B.len = n
     return B
@@ -1021,19 +1023,20 @@ function deleteat!(B::BitVector, inds::AbstractVector{Bool})
     length(inds) == length(B) || throw(BoundsError(B, inds))
 
     n = new_l = length(B)
+    o = firstindex(inds) - 1
     y = findfirst(inds)
     y === nothing && return B
 
     Bc = B.chunks
 
-    p = y
+    p = y - o
     s = y + 1
     checkbounds(B, p)
     q = p + 1
     new_l -= 1
     y = findnext(inds, s)
     while y !== nothing
-        i = y
+        i = y - o
         s = y + 1
         new_l -= 1
         if i > q
@@ -1125,7 +1128,7 @@ function splice!(B::BitVector, r::Union{AbstractUnitRange{Int}, Integer}, ins)
     Bins = BitVector(undef, length(ins))
     i = 1
     for x in ins
-        Bins[i] = Bool(x)
+        Bins[i] = x
         i += 1
     end
     return splice!(B, r, Bins)
@@ -1204,6 +1207,15 @@ end
 function (==)(A::BitArray, B::BitArray)
     size(A) != size(B) && return false
     return A.chunks == B.chunks
+end
+
+function cmp(A::BitVector, B::BitVector)
+    Ac, Bc = A.chunks, B.chunks
+    @inbounds for i in 1:min(length(Ac), length(Bc))
+        d = xor(Ac[i], Bc[i])
+        iszero(d) || return iszero(Bc[i] & d & -d) ? 1 : -1
+    end
+    return cmp(length(A), length(B))
 end
 
 
@@ -1416,6 +1428,7 @@ function _circshift_int!(dest::BitVector, src::BitVector, i::Int)
     i = Int(i)
     length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
     n = length(dest)
+    n == 0 && return dest
     i %= n
     i == 0 && return (src === dest ? src : copyto!(dest, src))
     Bc = (src === dest ? copy(src.chunks) : src.chunks)

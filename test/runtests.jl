@@ -1,5 +1,24 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("testenv.jl")
+
+# Stdlib pkgimages for `--check-bounds=yes` are not bundled by default. Build any missing
+# ones for this process and the workers up front, before loading any stdlib, instead of
+# having every process that loads one wait for it to be built.
+let project = mktempdir(),
+    script = "Base.Precompilation.precompilepkgs(; strict=true)",
+    load_path = "JULIA_LOAD_PATH" => join(["@", "@stdlib"], Sys.iswindows() ? ';' : ':')
+    stdlibs = [name => Base.parsed_toml(joinpath(Sys.STDLIB, name, "Project.toml"))["uuid"]
+               for name in readdir(Sys.STDLIB) if isfile(joinpath(Sys.STDLIB, name, "Project.toml"))]
+    write(joinpath(project, "Project.toml"), "[deps]\n",
+          (string(name, " = \"", uuid, "\"\n") for (name, uuid) in stdlibs)...)
+    # stdlib dependencies are filled in from their own Project.toml
+    write(joinpath(project, "Manifest.toml"), "manifest_format = \"2.0\"\n",
+          (string("\n[[deps.", name, "]]\nuuid = \"", uuid, "\"\n") for (name, uuid) in stdlibs)...)
+    run(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project -e $script`, load_path))
+    run(addenv(`$test_exename $test_exeflags --project=$project -e $script`, load_path))
+end
+
 using Test
 using Distributed
 using Dates
@@ -9,7 +28,6 @@ using Base: Experimental
 using Base.ScopedValues
 
 include("choosetests.jl")
-include("testenv.jl")
 include("buildkitetestjson.jl")
 
 const longrunning_delay = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_DELAY", "45")) * 60 # minutes
@@ -106,29 +124,50 @@ function move_to_node1(t)
     nothing
 end
 
-# Base.compilecache only works from node 1, so precompile test is handled specially
-move_to_node1("ccall")
-move_to_node1("precompile")
+# These add worker processes, which only node 1 can do
+move_to_node1("precompile_distributed")
 move_to_node1("SharedArrays")
-move_to_node1("threads")
 move_to_node1("Distributed")
-move_to_node1("gc")
-# Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
-move_to_node1("stress")
+if Sys.WORD_SIZE == 32
+    # On 32-bit workers that have used a lot of memory, `@threadcall` fails to allocate
+    # signal stacks (`ccall`) and allocations fail (`gc`)
+    move_to_node1("ccall")
+    move_to_node1("gc")
+end
+
+# These leave state behind on their worker (`precompile`: packages loaded and methods
+# added to Base, `threads`: exited adopted threads), which breaks later tests on the
+# same worker, so the worker is replaced once they finish
+const recycle_worker_tests = ["precompile", "threads"]
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
-# as well get them all started early. JuliaLowering_stdlibs both takes a while and
-# uses a lot of memory at the beginning so try to run it early to keep total memory
-# use flatter.
-for prependme in ["LinearAlgebra", "Pkg", "JuliaLowering_stdlibs"]
-    prependme_test_ids = findall(x->occursin(prependme, x), tests)
-    prependme_tests = tests[prependme_test_ids]
-    deleteat!(tests, prependme_test_ids)
-    prepend!(tests, prependme_tests)
+# Start the longest tests first, so that they don't end up running alone at the end while
+# the other workers sit idle. Roughly in decreasing order of their duration on CI (Linux,
+# macOS and Windows, October 2026); tests that are not listed keep their order and run
+# after these. A package name also covers its test groups.
+const longest_tests = [
+    "Pkg", "LinearAlgebra", "SparseArrays", "threads", "cmdlineargs", "subarray",
+    "compileall", "Compiler/AbstractInterpreter", "precompile", "jit",
+    "JuliaLowering_stdlibs", "loading", "arrayops", "JuliaLowering", "bitarray", "sorting",
+    "Random", "abstractarray", "iterators", "core", "ranges", "LibGit2/libgit2",
+    "FileWatching", "atomics", "math", "rounding", "apint", "JuliaSyntax",
+    "Compiler/inference", "reducedim", "numbers", "misc", "broadcast", "REPL", "Profile",
+    "rational", "cancellation", "gc", "InteractiveUtils", "sets", "ccall",
+]
+function expected_rank(test)
+    rank = findfirst(name -> test == name || startswith(test, name * "/"), longest_tests)
+    return something(rank, length(longest_tests) + 1)
+end
+sort!(tests; by=expected_rank) # stable, so unlisted tests keep their order
+
+# `ambiguous` must be the first test on its worker, as methods defined by other tests can
+# make Base methods ambiguous
+if "ambiguous" in tests
+    splice!(tests, findfirst(isequal("ambiguous"), tests))
+    pushfirst!(tests, "ambiguous")
 end
 
 import LinearAlgebra
@@ -459,9 +498,10 @@ cd(@__DIR__) do
                             end
                         else
                             print_testworker_stats(test, wrkr, resp)
-                            if resp[end] > max_worker_rss
-                                # the worker has reached the max-rss limit, recycle it
-                                # so future tests start with a smaller working set
+                            if resp[end] > max_worker_rss || test in recycle_worker_tests
+                                # the worker has reached the max-rss limit or holds state
+                                # left behind by the test, recycle it so future tests start
+                                # with a smaller working set and a fresh environment
                                 if n > 1
                                     rmprocs_with_testenv(wrkr, waitfor=rmwait_timeout)
                                     p = addprocs_with_testenv(1)[1]
@@ -469,7 +509,7 @@ cd(@__DIR__) do
                                     if use_revise
                                         Distributed.remotecall_eval(Main, p, revise_init_expr)
                                     end
-                                else # single process testing
+                                elseif resp[end] > max_worker_rss # single process testing
                                     error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                                 end
                             end

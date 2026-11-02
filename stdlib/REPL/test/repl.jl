@@ -21,19 +21,13 @@ include(joinpath(BASE_TEST_PATH, "testenv.jl"))
 include("FakeTerminals.jl")
 import .FakeTerminals.FakeTerminal
 
-function kill_timer(delay)
-    # Give ourselves a generous timer here, just to prevent
-    # this causing e.g. a CI hang when there's something unexpected in the output.
-    # This is really messy and leaves the process in an undefined state.
-    # the proper and correct way to do this in real code would be to destroy the
-    # IO handles: `close(stdout_read); close(stdin_write)`
-    test_task = current_task()
+# Fail instead of hanging on unexpected output: on expiry, close `ios` so blocked reads
+# return EOF. (Throwing into the test task does not work: an enclosing `@test` catches it.)
+# Callers test `isopen` on the timer before closing it, so an expired timer fails the test.
+function kill_timer(delay, ios...)
     function kill_test(t)
-        # **DON'T COPY ME.**
-        # The correct way to handle timeouts is to close the handle:
-        # e.g. `close(stdout_read); close(stdin_write)`
-        schedule(test_task, "hard kill repl test"; error=true)
-        print(stderr, "WARNING: attempting hard kill of repl test after exceeding timeout\n")
+        print(stderr, "WARNING: closing the IO of the repl test after exceeding timeout\n")
+        foreach(close, ios)
     end
     return Timer(kill_test, delay)
 end
@@ -84,7 +78,7 @@ function fake_repl(@nospecialize(f);
     repl.options = options
     repl.options.semantic_prompts = semantic_prompts
 
-    hard_kill = kill_timer(900) # Your debugging session starts now. You have 15 minutes. Go.
+    hard_kill = kill_timer(900, input, output, err) # Your debugging session starts now. You have 15 minutes. Go.
     f(input.in, output.out, repl)
     t = @async begin
         close(input.in)
@@ -94,6 +88,7 @@ function fake_repl(@nospecialize(f);
     @test read(err.out, String) == ""
     #display(read(output.out, String))
     Base.wait(t)
+    @test isopen(hard_kill) # not fired
     close(hard_kill)
     nothing
 end
@@ -458,10 +453,11 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true,style_input=fa
     write(stdin_write, "1+1\n") # populate history with a trivial input
     readline(stdout_read)
     write(stdin_write, "\e[A\n")
-    let t = kill_timer(60)
+    let t = kill_timer(60, stdin_write, stdout_read)
         # yield make sure this got processed
         readuntil(stdout_read, "1+1")
         readuntil(stdout_read, "\n\n")
+        @test isopen(t)
         close(t) # cancel timeout
     end
 
@@ -1396,16 +1392,18 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
+parse_syntax(s::AbstractString) = Meta.parse(s; type=Base.Syntax)
+
 # AST transformations (softscope, Revise, OhMyREPL, etc.)
 @testset "AST Transformation" begin
     backend = REPL.REPLBackend()
     errormonitor(@async REPL.start_repl_backend(backend))
-    put!(backend.repl_channel, (:(1+1), false))
+    put!(backend.repl_channel, (parse_syntax("1+1"), false))
     reply = take!(backend.response_channel)
     @test reply == Pair{Any, Bool}(2, false)
     twice(ex) = Expr(:tuple, ex, ex)
     push!(backend.ast_transforms, twice)
-    put!(backend.repl_channel, (:(1+1), false))
+    put!(backend.repl_channel, (parse_syntax("1+1"), false))
     reply = take!(backend.response_channel)
     @test reply == Pair{Any, Bool}((2, 2), false)
     put!(backend.repl_channel, (nothing, -1))
@@ -1417,14 +1415,14 @@ end
 @testset "stray InterruptException in REPL backend" begin
     backend = REPL.REPLBackend()
     errormonitor(@async REPL.start_repl_backend(backend))
-    put!(backend.repl_channel, (:(1+1), false))
+    put!(backend.repl_channel, (parse_syntax("1+1"), false))
     @test take!(backend.response_channel) == Pair{Any, Bool}(2, false)
     # the backend task is now parked in take!(repl_channel); inject the interrupt
     # from a throwaway task, since throwto does not reschedule its caller
     @async Base.throwto(backend.backend_task, InterruptException())
     yield()
     @test !istaskdone(backend.backend_task)
-    put!(backend.repl_channel, (:(1+2), false))
+    put!(backend.repl_channel, (parse_syntax("1+2"), false))
     @test timedwait(() -> isready(backend.response_channel), 60) === :ok
     @test take!(backend.response_channel) == Pair{Any, Bool}(3, false)
     put!(backend.repl_channel, (nothing, -1))
@@ -1481,8 +1479,8 @@ end # JSON54872_public
 
     test_logger = TestLogger()
     with_logger(test_logger) do
-        REPL.warn_on_non_owning_accesses(@__MODULE__, :(JSON54872.tryparse))
-        REPL.warn_on_non_owning_accesses(@__MODULE__, :(JSON54872.tryparse))
+        REPL.warn_on_non_owning_accesses(@__MODULE__, Base.expr_to_syntax(:(JSON54872.tryparse)))
+        REPL.warn_on_non_owning_accesses(@__MODULE__, Base.expr_to_syntax(:(JSON54872.tryparse)))
     end
     # only 1 logging statement emitted thanks to `maxlog` mechanism
     @test length(test_logger.logs) == 1
@@ -1556,12 +1554,12 @@ backend = REPL.REPLBackend()
 frontend_task = @async begin
     try
         @testset "AST Transformations Async" begin
-            put!(backend.repl_channel, (:(1+1), false))
+            put!(backend.repl_channel, (parse_syntax("1+1"), false))
             reply = take!(backend.response_channel)
             @test reply == Pair{Any, Bool}(2, false)
             twice(ex) = Expr(:tuple, ex, ex)
             push!(backend.ast_transforms, twice)
-            put!(backend.repl_channel, (:(1+1), false))
+            put!(backend.repl_channel, (parse_syntax("1+1"), false))
             reply = take!(backend.response_channel)
             @test reply == Pair{Any, Bool}((2, 2), false)
         end
@@ -1581,9 +1579,9 @@ end
 @testset "Install missing packages via hooks" begin
     @testset "Parse AST for packages" begin
         test_find_packages(e) =
-            REPL.modules_to_be_loaded(Meta.lower(@__MODULE__, e))
+            REPL.modules_to_be_loaded(Base.expr_to_syntax(e))
         test_find_packages(s::String) =
-            REPL.modules_to_be_loaded(Meta.lower(@__MODULE__, Meta.parse(s)))
+            REPL.modules_to_be_loaded(parse_syntax(s))
 
         mods = test_find_packages("using Foo")
         @test mods == [:Foo]
@@ -1639,12 +1637,12 @@ end
     end
 end
 
-# Test that the REPL can find `using` statements inside macro expansions
 global packages_requested = Any[]
 old_hooks = copy(REPL.install_packages_hooks)
 empty!(REPL.install_packages_hooks)
 push!(REPL.install_packages_hooks, function(pkgs)
     append!(packages_requested, pkgs)
+    false
 end)
 
 fake_repl() do stdin_write, stdout_read, repl
@@ -1657,7 +1655,8 @@ fake_repl() do stdin_write, stdout_read, repl
         readavailable(stdout_read)
     end
 
-    write(stdin_write, "macro usingfoo(); :(using FooNotFound); end\n")
+    write(stdin_write, "using FooNotFound\n")
+    write(stdin_write, "macro usingfoo(); :(using FooNotFoundInMacro); end\n")
     write(stdin_write, "@usingfoo\n")
     write(stdin_write, "\x4")
     Base.wait(repltask)
@@ -1665,7 +1664,9 @@ fake_repl() do stdin_write, stdout_read, repl
     close(stdout_read)
     Base.wait(read_resp_task)
 end
-@test packages_requested == Any[:FooNotFound]
+@test :FooNotFound in packages_requested
+# `using`/`import` are found before macro expansion, so this is missed
+@test_broken :FooNotFoundInMacro in packages_requested
 empty!(REPL.install_packages_hooks); append!(REPL.install_packages_hooks, old_hooks)
 
 # err should reprint error if deeper than top-level
@@ -1682,7 +1683,9 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "foobar\n")
     readline(stdout_read)
     @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined in `Main`"
-    @test readline(stdout_read) == "" skip = Sys.iswindows() && Sys.WORD_SIZE == 32
+    @test readline(stdout_read) == "Stacktrace:" skip = Sys.iswindows() && Sys.WORD_SIZE == 32
+    @test readline(stdout_read) == " [1] top-level scope" skip = Sys.iswindows() && Sys.WORD_SIZE == 32
+    @test occursin(r"^   @ REPL\[\d+\]:1:?1?$", readline(stdout_read)) skip = Sys.iswindows() && Sys.WORD_SIZE == 32
     readuntil(stdout_read, "julia> ", keep=true)
     # check that top-level error did not change `err`
     write(stdin_write, "err\n")
@@ -1918,6 +1921,21 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
 end
+# Hints and Enter with automatically inserted closing brackets
+fake_repl(options=REPL.Options(confirm_exit=false, style_input=false, auto_insert_closing_bracket=true)) do stdin_write, stdout_read, repl
+    repltask = @async REPL.run_repl(repl)
+    write(stdin_write, "f(reada")
+    readuntil(stdout_read, "reada")
+    # the hint is shown before the auto-inserted `)`, after making room for it
+    s1 = readuntil(stdout_read, "vailable")
+    @test contains(s1, "\e[8@")
+    write(stdin_write, "\x15")
+    # the `)` was typed, so moving back over it and pressing Enter runs the input
+    write(stdin_write, "(\"A\" * \"B\")\e[D\r")
+    readuntil(stdout_read, "\"AB\"")
+    write(stdin_write, "\x04")
+    Base.wait(repltask)
+end
 ## hints disabled
 fake_repl(options=REPL.Options(confirm_exit=false,hascolor=true,hint_tab_completes=false,style_input=false,auto_insert_closing_bracket=false)) do stdin_write, stdout_read, repl
     repltask = @async begin
@@ -1937,10 +1955,11 @@ let io = IOBuffer()
     @test REPL.banner(io) === nothing
     seek(io, 0)
     @test countlines(io) == 9
-    take!(io)
+    @test occursin("Version $(Base.version_with_build_variant())", String(take!(io)))
     @test REPL.banner(io; short=true) === nothing
     seek(io, 0)
     @test countlines(io) == 2
+    @test occursin("Version $(Base.version_with_build_variant())", String(take!(io)))
 end
 
 @testset "Docstrings" begin

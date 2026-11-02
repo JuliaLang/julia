@@ -202,6 +202,15 @@ end
     sizehint!(A, 5)
     @test length(A) == 5
     @test A == [1:5;]
+
+    for n in (0, 10)
+        A = [1:100;]
+        empty!(A)
+        @test sizehint!(A, n; first=true) === A
+        @test isempty(A)
+        pushfirst!(A, 1)
+        @test A == [1]
+    end
 end
 @testset "reshape with colon" begin
     # Reshape with an omitted dimension
@@ -535,6 +544,25 @@ end
     insert!(v, 1, 10)
     @test v == [10]
     @test length(v.ref.mem) == 5
+
+    # test that moving data within the same memory doesn't leave stale references behind (issue #63739)
+    nassigned(v) = count(i -> isassigned(v.ref.mem, i), eachindex(v.ref.mem))
+    v = Any[]
+    for r in 1:20
+        for i in 1:48
+            push!(v, Ref(r))
+        end
+        @test nassigned(v) == length(v)
+        for i in 1:48
+            popfirst!(v)
+        end
+        @test nassigned(v) == 0
+    end
+    v = resize!(Any[1:100;], 10)
+    pushfirst!(v, 0)
+    @test length(v.ref.mem) == 100
+    @test v == 0:10
+    @test nassigned(v) == 11
 end
 
 @testset "popat!(::Vector, i, [default])" begin
@@ -1454,6 +1482,13 @@ end
     @test @views mightalias(B[1:2], A[1:2])
     @test @views !mightalias(B[1:end÷2], A[end÷2+1:end])
 
+    C = trues(5,4)
+    @test mightalias(C, reshape(C,10,2))
+    b = BitVector([1, 0, 0, 0])
+    r = reshape(b, 2, 2)
+    b[2:4] .= @view r[1:3]
+    @test b == [1, 1, 0, 0]
+
     AA = [[1],[2]]
     @test @views mightalias(AA, AA[:])
     @test @views mightalias(AA[:], AA[:])
@@ -1689,6 +1724,8 @@ end
     @test_throws BoundsError deleteat!(a, [1,13])
     @test_throws ArgumentError deleteat!(a, [3,2]) # not sorted
     @test_throws BoundsError deleteat!(a, 5:20)
+    @test_throws BoundsError deleteat!(a, 1:typemax(Int))
+    @test_throws BoundsError deleteat!(a, 2:typemax(Int))
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
     @test_throws BoundsError deleteat!(a, falses(11))
@@ -2463,6 +2500,7 @@ end
     @test IndexStyle(selectdim(A, 1, 1)) == IndexStyle(view(A, 1, :, :)) == IndexLinear()
     @test IndexStyle(selectdim(A, 2, 1)) == IndexStyle(view(A, :, 1, :)) == IndexCartesian()
     @test IndexStyle(selectdim(A, 3, 1)) == IndexStyle(view(A, :, :, 1)) == IndexLinear()
+    @test selectdim(A, 2, CartesianIndex(1, 1)) == view(A, :, CartesianIndex(1, 1), :)
 end
 
 # row/column/slice iterator tests
@@ -2734,6 +2772,10 @@ end
 # issue #14482
 @inferred map(Int8, Int[0])
 
+# map with a constructor over an abstract eltype infers a concrete array type
+@test @inferred(map(Float64, Any[1, 2.0])) == [1.0, 2.0]
+@test @inferred(collect(Iterators.map(Float64, Any[1, 2.0]))) == [1.0, 2.0]
+
 # make sure @inbounds isn't used too much
 mutable struct OOB_Callable{T}; a::T; end
 (f::OOB_Callable)(i::Int) = f.a[i]
@@ -2761,6 +2803,9 @@ end
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=1) == [1 2; 4 6]
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=2) == [1 3; 3 7]
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=3) == [1 2; 3 4]
+
+    @test_throws ArgumentError cumsum([1, 2, 3], dims=0)
+    @test_throws ArgumentError cumsum!(Vector{Int}(undef, 3), [1, 2, 3], dims=-1)
 end
 @testset "issue #18363" begin
     @test_throws DimensionMismatch cumsum!([0,0], 1:4)
@@ -2990,6 +3035,10 @@ end
 
     @test accumulate(min, [3 2 1; 3 2 1], dims=2) == [3 2 1; 3 2 1]
     @test accumulate(min, [3 2 1; 3 2 1], dims=2, init=2) == [2 2 1; 2 2 1]
+    @test accumulate(+, [1 2; 3 4], dims=3, init=10) == [11 12; 13 14]
+    @test accumulate(*, ['a' 'b'], dims=3) == ["a" "b"]
+    @test accumulate(+, fill(1), dims=1, init=10) == fill(11)
+    @test accumulate(+, [1, 2], dims=typemax(Int)) == [1, 2]
 
     @test isa(accumulate(+, Int[]), Vector{Int})
     @test isa(accumulate(+, Int[]; init=1.), Vector{Float64})
@@ -3308,6 +3357,63 @@ end
     @test setindex!(zeros(2,2), fill(1.0), CI0, 1, 1) == [1.0 0.0; 0.0 0.0]
 end
 
+@testset "setindex! at mismatched shapes" begin
+    idx_options = (
+        1,
+        1:1,
+        2:2,
+        1:0,
+        1:3,
+        [1,2,3],
+        [1 2 3],
+        [1;2;;;],
+        OffsetArray(1:3, -1),
+    )
+    A = zeros(3, 3, 3)
+    seen = Set{UInt}()
+    for (i, j, k) in Iterators.product(Iterators.repeated(idx_options, 3)...)
+        id = hash(sort([i, j, k]; by=hash))
+        in!(id, seen) && continue
+        for I in ((i, j, k), (k, j, i))
+            # don't test scalar setindex here
+            all(x -> x isa Int, I) && continue
+
+            X = ones((length(i) for i in I if i != 1)...)
+            X_trail = reshape(X, size(X)..., 1)
+            X_prepend = reshape(X, 1, size(X)...)
+            vX = vec(X)
+            cX = reshape(vX, length(vX), 1)
+            oX = OffsetArray(X, (size(X) .- 2*(ndims(X) - 1))...)
+
+            for _X in (X, X_trail, X_prepend, vX, cX, oX)
+                AI = view(A, I...)
+
+                if ((isone(ndims(_X)) || isone(ndims(AI))) && (length(_X) == length(AI))) ||
+                    all(d -> size(_X, d) == size(AI, d), 1:max(ndims(_X), ndims(AI)))
+                    @test any(isone, setindex!(A, _X, I...)) || isempty(_X)
+                    fill!(A, 0)
+                    @test any(isone, setindex!(A, _X, I..., 1)) || isempty(_X)
+                    fill!(A, 0)
+                else
+                    @test_throws DimensionMismatch setindex!(A, _X, I...)
+                    @test_throws DimensionMismatch setindex!(A, _X, I..., 1)
+                    @test_throws DimensionMismatch setindex!(A, _X, I..., :)
+                end
+            end
+        end
+    end
+end
+
+@testset "setindex! with a LogicalIndex from to_indices (#64386)" begin
+    A = zeros(4)
+    A[only(to_indices(A, ([true, false, true, false],)))] = [1.0, 2.0]
+    @test A == [1.0, 0.0, 2.0, 0.0]
+    B = zeros(2, 2)
+    B[only(to_indices(B, (BitMatrix([1 0; 0 1]),)))] = [1.0, 2.0]
+    @test B == [1.0 0.0; 0.0 2.0]
+    @test_throws DimensionMismatch A[only(to_indices(A, ([true, false, true, false],)))] = [1.0]
+end
+
 @testset "conditionally-throwing version of `checkbounds` should return `nothing` if it returns" begin
     # can not just set `typ = Any` because that would include the predicate (non-throwing) methods of `checkbounds`, because `Type{Bool} <: Any`
     for typ in (AbstractString, AbstractArray, Base.AbstractBroadcasted)
@@ -3436,6 +3542,7 @@ end
     @test_throws DimensionMismatch Base.wrap(Array, mem, (10, 10))
     @test Base.wrap(Array, mem, (5,)) == ones(Int, 5)
     @test Base.wrap(Array, mem, 2) == ones(Int, 2)
+    @test Base.wrap(Array, mem, UInt(2)) == ones(Int, 2)
     @test Base.wrap(Array, memref, 10) == ones(Int, 10)
     @test Base.wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
     @test Base.wrap(Array, mem, (5, 2)) == ones(Int, 5, 2)

@@ -1077,6 +1077,46 @@ end
     expect_cancelled(tm)
 end
 
+@testset "disable_sigint shields its region" begin
+    # disable_sigint marks code that must not be unwound (e.g. a Julia callback
+    # under a C frame): cancellation of the scoped token lands after the
+    # region, and reenable_sigint restores the token the region shielded
+    done() = (Base.@cancel_check; :done)
+    function outcome(f)
+        try
+            f()
+        catch e
+            e isa CancellationRequest || rethrow()
+            :cancelled
+        end
+    end
+    src = CancellationTokenSource()
+    cancel!(src)
+    # tested outside the cancelled scope, where a failure can be printed
+    r = with(CANCEL_TOKEN => CancellationToken(src)) do
+        # a bare sigatomic region has no shielded token to restore
+        Base.sigatomic_begin()
+        bare = try
+            outcome(() -> reenable_sigint(done))
+        finally
+            Base.sigatomic_end()
+        end
+        (; shielded = outcome(() -> disable_sigint(done)),
+           after = outcome(done),
+           reenabled = outcome(() -> disable_sigint(() -> reenable_sigint(done))),
+           nested = outcome(() -> disable_sigint(() -> disable_sigint(() -> reenable_sigint(done)))),
+           renested = outcome(() -> disable_sigint(() -> reenable_sigint(() -> disable_sigint(done)))),
+           bare)
+    end
+    @test r.shielded === :done
+    @test r.after === :cancelled
+    @test r.reenabled === :cancelled
+    @test r.nested === :done
+    @test r.renested === :done
+    @test r.bare === :cancelled
+    @test @inferred(disable_sigint(() -> reenable_sigint(() -> 1))) == 1
+end
+
 # a parked watcher keeps the watched source reachable through its live
 # token reference alone (no local rooting in the caller's frame)
 @noinline function _spawn_watcher_on_child(parent)
@@ -1759,6 +1799,73 @@ end
     flush(p; cancel=nothing)
     @test read(p, UInt8; cancel=nothing) == UInt8('o')
     close(p)
+end
+
+@testset "eachline resolves the default token per line" begin
+    src = CancellationTokenSource()
+    cancel!(src)
+    ctok = CancellationToken(src)
+    # made inside a cancelled scope, read outside it
+    itr = with(() -> eachline(IOBuffer("ab\n")), CANCEL_TOKEN => ctok)
+    @test with(() -> iterate(itr), CANCEL_TOKEN => nothing) == ("ab", nothing)
+    # made outside a cancelled scope, read inside it
+    itr = with(() -> eachline(IOBuffer("ab\n")), CANCEL_TOKEN => nothing)
+    @test_throws CancellationRequest with(() -> iterate(itr), CANCEL_TOKEN => ctok)
+    # an explicit token stays with the iterator
+    itr = eachline(IOBuffer("ab\n"); cancel=ctok)
+    @test_throws CancellationRequest with(() -> iterate(itr), CANCEL_TOKEN => nothing)
+end
+
+@testset "IO methods check a cancelled token before touching the stream" begin
+    # rejected before any read or write; `cancel = nothing` still runs, also
+    # through the fallbacks that array `read!` and `write` invoke
+    src = CancellationTokenSource()
+    cancel!(src)
+    ctok = CancellationToken(src)
+    reads = Any[
+        (io; kw...) -> eof(io; kw...),
+        (io; kw...) -> readavailable(io; kw...),
+        (io; kw...) -> readuntil(io, 0x0a; kw...),
+        (io; kw...) -> readuntil(io, '\n'; kw...),
+        (io; kw...) -> readuntil(io, b"ne"; kw...),
+        (io; kw...) -> readline(io; kw...),
+        (io; kw...) -> copyuntil(IOBuffer(), io, 0x0a; kw...),
+        (io; kw...) -> copyline(IOBuffer(), io; kw...),
+        (io; kw...) -> read(io, 3; kw...),
+        (io; kw...) -> readbytes!(io, zeros(UInt8, 3); kw...),
+        (io; kw...) -> read!(io, zeros(UInt8, 3); kw...),
+        (io; kw...) -> read!(io, view(zeros(UInt8, 6), 1:2:6); kw...),
+    ]
+    writes = Any[
+        (io; kw...) -> write(io, UInt8[0x01, 0x02]; kw...),
+        (io; kw...) -> write(io, 0x01, 0x02; kw...),
+    ]
+    mktemp() do path, io
+        write(io, "line1\nline2\n")
+        for op in reads
+            seekstart(io)
+            @test_throws CancellationRequest op(io; cancel=ctok)
+            @test_throws CancellationRequest with(() -> op(io), CANCEL_TOKEN => ctok)
+            @test position(io) == 0
+        end
+        for op in writes
+            seekend(io)
+            n = position(io)
+            @test_throws CancellationRequest op(io; cancel=ctok)
+            @test_throws CancellationRequest with(() -> op(io), CANCEL_TOKEN => ctok)
+            @test position(io) == n
+            @test with(() -> op(io; cancel=nothing), CANCEL_TOKEN => ctok) == 2
+        end
+    end
+    mktemp() do path, io
+        write(io, zeros(UInt8, 64))
+        seekstart(io)
+        A = zeros(Float64, 2)
+        B = zeros(Float64, 4)
+        @test with(() -> read!(io, A; cancel=nothing), CANCEL_TOKEN => ctok) === A
+        @test with(() -> read!(io, view(B, 1:2:4); cancel=nothing), CANCEL_TOKEN => ctok) isa SubArray
+        @test with(() -> write(io, view(B, 1:2:4); cancel=nothing), CANCEL_TOKEN => ctok) == 16
+    end
 end
 
 @testset "explicit tokens and shields thread through call chains" begin
@@ -2649,7 +2756,8 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
                 kill(p, 3) # SIGQUIT
                 timedwait(() -> istaskdone(reader), 20.0) # pty EOF: dump drained
             end
-            @error "expect timed out" needle tail=snapshot()[max(1, cursor[]):end]
+            @error "expect timed out" needle
+            print(stderr, snapshot()[max(1, cursor[]):end]) # logging would truncate the task dump
         end
         @test status == :ok
     end

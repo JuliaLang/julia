@@ -245,7 +245,7 @@ freezes into code are already leaves, so no walk happens there.
 
 A deprecation the walk reaches warns as it would for [`getglobal`](@ref), but `partition`
 itself does not: having named a partition, the caller owns its deprecation, and can ask for it
-with [`Core.depwarn_partition`](@ref).
+with [`Core.depwarn_binding`](@ref).
 """
 Core.getglobal_partition
 
@@ -303,11 +303,9 @@ memory `order`. An import partition is followed to its leaf, as for
 Core.isdefinedglobal_partition
 
 """
-    Core.depwarn_partition(partition::Core.BindingPartition)
+    Core.depwarn_binding(binding::Core.Binding)
 
-Emit the deprecation warning `partition` calls for, if the command line argument `--depwarn` is
-enabled (and throwing under `--depwarn=error`). The compiler emits this alongside a global read
-or store it has resolved, in place of the warning [`getglobal`](@ref) or [`setglobal!`](@ref)
-would have issued while resolving the name.
+Emit a deprecation warning naming `binding` if the command line argument
+`--depwarn` is enabled and throwing under `--depwarn=error`.
 """
-Core.depwarn_partition
+Core.depwarn_binding

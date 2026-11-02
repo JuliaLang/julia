@@ -1116,6 +1116,34 @@ end
     @propagate_inbounds
 
 Tells the compiler to inline a function while retaining the caller's inbounds context.
+
+An [`@inbounds`](@ref) block only elides the [`@boundscheck`](@ref) blocks of functions that
+are inlined directly into it, i.e. one level of inlining deep. Marking a function with
+`@propagate_inbounds` makes it pass on its caller's inbounds context, so that `@boundscheck`
+blocks in the functions it calls are elided too when it is called from an `@inbounds` block.
+This is useful e.g. for an indexing method that forwards to the indexing of another array.
+
+See also [Propagating inbounds](@ref) in the developer documentation.
+
+# Examples
+```julia-repl
+julia> @inline g(x) = (@boundscheck println("checking bounds"); x);
+
+julia> f1(x) = g(x);
+
+julia> Base.@propagate_inbounds f2(x) = g(x);
+
+julia> h1(x) = @inbounds f1(x);
+
+julia> h2(x) = @inbounds f2(x);
+
+julia> h1(1)
+checking bounds
+1
+
+julia> h2(1)
+1
+```
 """
 macro propagate_inbounds(ex)
     if isa(ex, Expr)
@@ -1216,7 +1244,7 @@ function is_short_function_def(@nospecialize(ex))
     while length(ex.args) >= 1 && isa(ex.args[1], Expr)
         (ex.args[1].head === :call) && return true
         (ex.args[1].head === :where || ex.args[1].head === :(::)) || return false
-        ex = ex.args[1]
+        ex = ex.args[1]::Expr
     end
     return false
 end
@@ -1865,8 +1893,10 @@ function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool, loc::L
         end
         error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.")
     end
-    ci.isva = isva
-    code = ci.code
+    # `getfield`/`setfield!`: the `CodeInfo` property methods in deprecated.jl would
+    # invalidate this code, which early-defined generators run in their old world
+    setfield!(ci, :isva, isva)
+    code = getfield(ci, :code)
     bindings = IdSet{Core.Binding}()
     for i = 1:length(code)
         stmt = code[i]
@@ -1875,7 +1905,7 @@ function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool, loc::L
         end
     end
     if !isempty(bindings)
-        ci.edges = Core.svec(bindings...)
+        setfield!(ci, :edges, Core.svec(bindings...))
     end
     return ci
 end

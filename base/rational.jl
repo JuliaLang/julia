@@ -92,6 +92,11 @@ ERROR: MethodError: no method matching //(::Float64, ::Int64)
 
 function //(x::Rational, y::Integer)
     xn, yn = divgcd(promote(x.num, y)...)
+    # If x is infinite, the denominator below is zero and cannot carry the
+    # sign of y, so apply that sign to the numerator instead.
+    if iszero(x.den) && signbit(yn)
+        xn = checked_neg(xn)
+    end
     checked_den(xn, checked_mul(x.den, yn))
 end
 function //(x::Integer,  y::Rational)
@@ -101,6 +106,10 @@ end
 function //(x::Rational, y::Rational)
     xn,yn = divgcd(promote(x.num, y.num)...)
     xd,yd = divgcd(promote(x.den, y.den)...)
+    # See the comment in `//(::Rational, ::Integer)`.
+    if iszero(xd) && signbit(yn)
+        xn = checked_neg(xn)
+    end
     checked_den(checked_mul(xn, yd), checked_mul(xd, yn))
 end
 
@@ -345,6 +354,7 @@ function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
     end
     return Rational{T}(x)
 end
+rationalize(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(rationalize, (Union{}, slurp...)))
 
 
 """
@@ -414,6 +424,8 @@ function -(x::Rational{T}) where T<:Unsigned
     x
 end
 
+-%(x::Rational) = unsafe_rational(-%(x.num), x.den)
+
 function +(x::Rational, y::Rational)
     xp, _ = promote(x, y)::NTuple{2,Rational}
     if isinf(x) && x == y
@@ -434,7 +446,7 @@ end
 
 function -(x::Rational, y::Rational)
     xp, _ = promote(x, y)::NTuple{2,Rational}
-    if isinf(x) && x == -y
+    if isinf(x) && isinf(y) && x != y
         return xp
     end
     xd, yd = divgcd(promote(x.den, y.den)...)
@@ -443,7 +455,7 @@ end
 
 function -%(x::Rational, y::Rational)
     xp, yp = promote(x, y)::NTuple{2,Rational}
-    if isinf(x) && x == -y
+    if isinf(x) && isinf(y) && x != y
         return xp
     end
     xd, yd = divgcd(promote(x.den, y.den)...)
@@ -617,7 +629,7 @@ function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {
     if iszero(denominator(x)) && !(T <: Integer)
         return convert(T, copysign(unsafe_rational(one(Tr), zero(Tr)), numerator(x)))
     end
-    convert(T, div(numerator(x), denominator(x), r))
+    _round_convert(T, div(numerator(x), denominator(x), r), x, r)
 end
 
 function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where T

@@ -834,6 +834,22 @@ catch ex
 end
 pop!(Base.Experimental._hint_handlers[Core.typename(DomainError)])  # order is undefined, don't copy this
 
+# a throwing hint handler is reported once, rather than re-run when the logged
+# exception stack (which contains the hinted exception) is shown
+struct HintRecursionException <: Exception end
+Base.showerror(io::IO, ex::HintRecursionException) = Base.Experimental.show_error_hints(io, ex)
+Base.Experimental.register_error_hint((io, exc) -> error("busted"), HintRecursionException)
+try
+    throw(HintRecursionException())
+catch ex
+    logbuf = IOBuffer()
+    Base.CoreLogging.with_logger(Base.CoreLogging.ConsoleLogger(logbuf)) do
+        showerror(IOBuffer(), ex)
+    end
+    @test count("caused an error", String(take!(logbuf))) == 1
+end
+pop!(Base.Experimental._hint_handlers[Core.typename(HintRecursionException)])
+
 struct ANumber <: Number end
 let err_str = @except_str ANumber()(3 + 4) MethodError
     @test occursin("objects of type $(curmod_prefix)ANumber are not callable", err_str)
@@ -1096,6 +1112,11 @@ end
     # Check hint message
     hintExpected = "Did you mean to access dict values using key: `:c` ? Consider using indexing syntax dict[:c]\n"
     @test occursin(hintExpected, errorMsg)
+
+    # abstract types have no fields to list, and the hint handler must not throw
+    ex = (@test_throws FieldError fieldtype(Integer, :a)).value::FieldError
+    errorMsg = @test_logs sprint(Base.showerror, ex)
+    @test errorMsg == "FieldError: type Integer has no field `a`"
 end
 
 module FieldErrorTest

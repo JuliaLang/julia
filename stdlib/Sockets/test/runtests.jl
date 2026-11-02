@@ -96,7 +96,7 @@ end
 # `randport` is only known to be available for TCP, so find a port that can
 # actually be bound for UDP (#38711).
 function bind_udp_any(host)
-    local port
+    local port = UInt16(rand(2000:4000))
     for _ in 1:100
         port = UInt16(rand(2000:4000))
         sock = UDPSocket()
@@ -139,7 +139,7 @@ function killjob(d)
     end
     nothing
 end
-sockets_watchdog_timer = Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
+sockets_watchdog_timer = Timer(_ -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
 
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
@@ -269,7 +269,7 @@ defaultport = rand(2000:4000)
             if otherip != Sockets.localhost
                 @test_throws Base._UVError("connect", Base.UV_ECONNREFUSED) connect(otherip, p)
             end
-            for i in 1:3
+            for _ in 1:3
                 client = connect(p)
                 let name = getsockname(client)::Tuple{IPAddr, UInt16}
                     @test name[1] == Sockets.localhost
@@ -284,12 +284,12 @@ defaultport = rand(2000:4000)
 
     mktempdir() do tmpdir
         socketname = Sys.iswindows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
-        local nconn = 0
+        local nconn = Ref(0)
         srv = listen(socketname)
         t = accept(srv) do client
-            write(client, "Hello World $(nconn += 1)\n")
+            write(client, "Hello World $(nconn[] += 1)\n")
             close(client)
-            nconn == 3 && Base.wait_close(srv)
+            nconn[] == 3 && Base.wait_close(srv)
         end
         @test read(connect(socketname), String) == "Hello World 1\n"
         @test read(connect(socketname), String) == "Hello World 2\n"
@@ -427,7 +427,7 @@ end
 end
 
 @testset "put! in listenany(defaultport)" begin
-    (p, server) = listenany(defaultport)
+    (_, server) = listenany(defaultport)
     r = Channel(1)
     tsk = @async begin
         put!(r, :start)
@@ -616,11 +616,11 @@ end
 
         # connect to it
         client_sock = connect(addr, port)
-        test_done = false
+        test_done = Ref(false)
         Experimental.@sync begin
             @async begin
                 Base.wait_readnb(client_sock, 1)
-                test_done || error("Client disconnected prematurely.")
+                test_done[] || error("Client disconnected prematurely.")
             end
             @async begin
                 server_sock = accept(listen_sock)
@@ -636,7 +636,7 @@ end
                 @test peer_srvr_port == self_client_port
                 @test self_srvr_port != self_client_port
 
-                test_done = true
+                test_done[] = true
 
                 close(listen_sock)
                 close(client_sock)
@@ -669,9 +669,16 @@ end
             map(wait, recvs)
         end
 
+        # Concurrent test runs on one host share its network namespace, so use an
+        # OS-assigned port, as fixed ports would receive each other's datagrams.
+        function create_sockets(addr::IPAddr)
+            local a = create_socket(addr, 0)
+            local port = getsockname(a)[2]
+            return a, create_socket(addr, port), create_socket(addr, port), port
+        end
+
         # First, test IPv4 broadcast
-        port = 2000
-        a, b, c = [create_socket(ip"0.0.0.0", port) for i in 1:3]
+        a, b, c, port = create_sockets(ip"0.0.0.0")
         try
             # bsd family do not allow broadcasting on loopbacks
             @static if !Sys.isbsd() || Sys.isapple()
@@ -691,13 +698,18 @@ end
         [close(s) for s in [a, b, c]]
 
         # Test ipv6 broadcast groups
-        a, b, c = [create_socket(ip"::", port) for i in 1:3]
+        a, b, c, port = create_sockets(ip"::")
         try
             # Exemplary Interface-local ipv6 multicast group, if we wanted this to actually be routed
             # to other computers, we should use a link-local or larger address scope group
             # bsd family and darwin do not allow broadcasting on loopbacks
             @static if !Sys.isbsd() && !Sys.isapple()
-                group = ip"ff11::6a75:6c69:61"
+                # Group membership is per interface, and Linux delivers a group's
+                # datagrams to every socket bound to the port while any socket on
+                # the host is a member, so a group shared with a concurrent run
+                # would still be received after leaving it. Use a random group ID, in
+                # the range RFC 3307 reserves for host-selected IDs.
+                group = IPv6(UInt128(0xff11) << 112 | rand(UInt128) >> 16 | 0x80000000)
                 join_multicast_group(a, group)
                 join_multicast_group(b, group)
 
@@ -761,16 +773,15 @@ end
 
 @testset "connect!" begin
     # test the method matching connect!(::TCPSocket, ::Sockets.InetAddr{T<:Base.IPAddr})
-    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
-        srv = listen(addr)
+    let srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
+        addr = Sockets.InetAddr(getsockname(srv)...)
         r = @async close(accept(srv))
         close(connect(addr))
         fetch(r)
         close(srv)
     end
 
-    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
-        srv = listen(addr)
+    let srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
         r = @async close(srv)
         @test_throws Base._UVError("accept", Base.UV_ECONNABORTED) accept(srv)
         fetch(r)
@@ -786,8 +797,8 @@ end
 end
 
 @testset "iswritable" begin
-    let addr = Sockets.InetAddr(ip"127.0.0.1", 4445)
-        srv = listen(addr)
+    let srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
+        addr = Sockets.InetAddr(getsockname(srv)...)
         let s = Sockets.TCPSocket()
             Sockets.connect!(s, addr)
             @test iswritable(s) broken=Sys.iswindows()
@@ -801,7 +812,8 @@ end
             close(s)
         end
         close(srv)
-        srv = listen(addr)
+        srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
+        addr = Sockets.InetAddr(getsockname(srv)...)
         let s = Sockets.connect(addr)
             let c = accept(srv)
                 Base.errormonitor(@async try; write(c, c); finally; close(c); end)
@@ -908,8 +920,8 @@ end
 @static if !Sys.iswindows()
     # Issue #29234
     @testset "TCPSocket stdin" begin
-        let addr = Sockets.InetAddr(ip"127.0.0.1", 4455)
-            srv = listen(addr)
+        let srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
+            addr = Sockets.InetAddr(getsockname(srv)...)
             s = connect(addr)
 
             @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no -e "exit()" -i`, stdin=s))

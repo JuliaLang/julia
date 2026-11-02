@@ -3,7 +3,7 @@
 """
     Dates
 
-The `Dates` module provides `Date`, `DateTime`, `Time` types, and related functions.
+The `Dates` module provides `Date`, `DateTime`, `Timestamp`, `Time` types, and related functions.
 
 The types are not aware of time zones, are based on UT seconds
 (86400 seconds a day, avoiding leap seconds), and
@@ -27,7 +27,7 @@ julia> d2-d1
 30 days
 ```
 
-Please see the manual section on [`Date`](@ref) and [`DateTime`](@ref)
+Please see the manual section on [`Date`](@ref), [`DateTime`](@ref), and [`Timestamp`](@ref)
 for more information.
 """
 module Dates
@@ -80,8 +80,9 @@ export Period, DatePeriod, TimePeriod,
        firstdayofquarter, lastdayofquarter,
        tonext, toprev, tofirst, tolast,
        # io.jl
-       ISODateTimeFormat, ISODateFormat, ISOTimeFormat, DateFormat, RFC1123Format, @dateformat_str
+       ISODateTimeFormat, ISODateFormat, ISOTimeFormat, DateFormat,
+       RFC1123Format, @dateformat_str
 
-public format
+public format, Timestamp, unix2timestamp, timestamp2unix, ISOTimestampFormat
 
 end # module

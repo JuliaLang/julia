@@ -2,6 +2,9 @@ name = "Dates"
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 version = "1.11.0"
 
+[syntax]
+julia_version = "1.14"
+
 [deps]
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 

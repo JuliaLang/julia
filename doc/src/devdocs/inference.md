@@ -35,7 +35,7 @@ m = first(mths)
 
 # Create variables needed to call `typeinf_code`
 interp = Core.Compiler.NativeInterpreter()
-sparams = Core.svec()      # this particular method doesn't have type-parameters
+sparams = Core.svec(Int)   # the method's static parameters (here `T = Int`)
 run_optimizer = true       # run all inference optimizations
 types = Tuple{typeof(convert), atypes.parameters...} # Tuple{typeof(convert), Type{Int}, UInt}
 Core.Compiler.typeinf_code(interp, m, types, sparams, run_optimizer)

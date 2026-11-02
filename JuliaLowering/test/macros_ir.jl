@@ -46,9 +46,9 @@ end
 2   latestworld
 3   TestMod.@add_one
 4   (call core.TypeEqOf %₃)
-5   (call core.svec %₄ JuliaLowering.MacroContext core.Any)
+5   (call core.svec %₄ Base.MacroContext core.Any)
 6   (call core.svec)
-7   SourceLocation::1:1
+7   SourceLocation:1
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.@add_one %₈
     --- code_info
@@ -70,9 +70,9 @@ end
 2   latestworld
 3   TestMod.@foo
 4   (call core.TypeEqOf %₃)
-5   (call core.svec %₄ JuliaLowering.MacroContext core.Any)
+5   (call core.svec %₄ Base.MacroContext core.Any)
 6   (call core.svec)
-7   SourceLocation::1:1
+7   SourceLocation:1
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.@foo %₈
     --- code_info
@@ -220,11 +220,11 @@ end
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
-7   SourceLocation::1:1
+7   SourceLocation:1
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.foo %₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/a(nospecialize,!read)]
+    slots: [slot₁/#self#(!read) slot₂/a(!read)]
     1   (meta :nospecialize)
     2   (return core.nothing)
 10  latestworld
@@ -244,7 +244,7 @@ end
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any core.Any)
 6   (call core.svec)
-7   SourceLocation::1:1
+7   SourceLocation:1
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.foo %₈
     --- code_info
@@ -270,7 +270,7 @@ end
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any core.Any core.Any)
 6   (call core.svec)
-7   SourceLocation::1:1
+7   SourceLocation:1
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.foo %₈
     --- code_info
@@ -319,7 +319,7 @@ Base.Experimental.@overlay mt f() = 1
 2   (call core.TypeEqOf %₁)
 3   (call core.svec %₂)
 4   (call core.svec)
-5   SourceLocation:nothing:1:0
+5   SourceLocation:1
 6   (call core.svec %₃ %₄ %₅)
 7   (call core.define_method TestMod TestMod.mt %₆
     --- code_info

@@ -1,10 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Gives a reinterpreted view (of element type T) of the underlying array (of element type S).
+    ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T,N}
+
+Array type typically returned by [`reinterpret(T, a)`](@ref reinterpret) for an array `a`: a
+reinterpreted view (of element type `T`) of the parent array `a` (of type `A` with element
+type `S`).
 If the size of `T` differs from the size of `S`, the array will be compressed/expanded in
-the first dimension. The variant `reinterpret(reshape, T, a)` instead adds or consumes the first dimension
-depending on the ratio of element sizes.
+the first dimension. The variant `reinterpret(reshape, T, a)` (with `IsReshaped == true`)
+instead adds or consumes the first dimension depending on the ratio of element sizes.
 """
 struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T, N}
     parent::A
@@ -104,7 +108,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
     reinterpret(::Type{T}, a::AbstractArray{T}) where {T} = a
 
     # With reshaping
-    function reinterpret(::typeof(reshape), ::Type{T}, a::A) where {T,S,A<:AbstractArray{S}}
+    function ReinterpretArray{T}(::typeof(reshape), a::A) where {T,S,A<:AbstractArray{S}}
         function throwintmult(S::Type, T::Type)
             @noinline
             throw(ArgumentError(LazyString("`reinterpret(reshape, T, a)` requires that one of `Base.elsize(Array{T})` (got ",
@@ -185,10 +189,13 @@ julia> reinterpret(reshape, Int, a)             # the result is a matrix
  3  6
 ```
 """
-reinterpret(::typeof(reshape), T::Type, a::AbstractArray)
+reinterpret(::typeof(reshape), ::Type{T}, a::AbstractArray) where {T} = ReinterpretArray{T}(reshape, a)
 
 reinterpret(::Type{T}, a::NonReshapedReinterpretArray) where {T} = reinterpret(T, a.parent)
-reinterpret(::typeof(reshape), ::Type{T}, a::ReshapedReinterpretArray) where {T} = reinterpret(reshape, T, a.parent)
+function reinterpret(::typeof(reshape), ::Type{T}, a::ReshapedReinterpretArray{S,N,P}) where {T,S,N,P}
+    t, s, p = aligned_sizeof(T), aligned_sizeof(S), aligned_sizeof(P)
+    return t == s || t == p || s == p ? reinterpret(reshape, T, a.parent) : ReinterpretArray{T}(reshape, a)
+end
 
 # Definition of StridedArray
 StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
@@ -265,7 +272,7 @@ function IndexStyle(::Type{ReinterpretArray{T,N,S,A,true}}) where {T,N,S,A<:Abst
         IndexStyle(A) === IndexLinear() && return IndexSCartesian2{aligned_sizeof(S) ÷ aligned_sizeof(T)}()
         return IndexCartesian()
     end
-    return IndexStyle(A)
+    return IndexStyle(A) === IndexLinear() ? IndexLinear() : IndexCartesian()
 end
 IndexStyle(::IndexSCartesian2{K}, ::IndexSCartesian2{K}) where {K} = IndexSCartesian2{K}()
 
@@ -341,28 +348,22 @@ function _setindex!(::IndexSCartesian2, A::AbstractArray, v, I::Vararg{Int, N}) 
 end
 # fallbacks for array types that use "pass-through" indexing (e.g., `IndexStyle(A) = IndexStyle(parent(A))`)
 # but which don't handle SCartesianIndex2
-function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, ind::SCartesianIndex2) where {T,N}
+function _getindex(style::IndexSCartesian2, A::AbstractArray, ind::SCartesianIndex2)
     @_propagate_inbounds_meta
-    J = _ind2sub(tail(axes(A)), ind.j)
-    getindex(A, ind.i, J...)
+    getindex(A, first(axes(A, 1)) + ind.i - 1, _scartesian2_trailing(style, A, ind)...)
 end
 
-function _getindex(::IndexSCartesian2{2}, A::AbstractArray{T,2}, ind::SCartesianIndex2) where {T}
+function _setindex!(style::IndexSCartesian2, A::AbstractArray, v, ind::SCartesianIndex2)
     @_propagate_inbounds_meta
-    J = first(axes(A, 2)) + ind.j - 1
-    getindex(A, ind.i, J)
+    setindex!(A, v, first(axes(A, 1)) + ind.i - 1, _scartesian2_trailing(style, A, ind)...)
 end
 
-function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, ind::SCartesianIndex2) where {T,N}
-    @_propagate_inbounds_meta
-    J = _ind2sub(tail(axes(A)), ind.j)
-    setindex!(A, v, ind.i, J...)
-end
-
-function _setindex!(::IndexSCartesian2{2}, A::AbstractArray{T,2}, v, ind::SCartesianIndex2) where {T}
-    @_propagate_inbounds_meta
-    J = first(axes(A, 2)) + ind.j - 1
-    setindex!(A, v, ind.i, J)
+# `ind.j` is a linear index of the innermost reinterpreted parent, which may not start at 1.
+# Convert it to the matching indices in the trailing axes of `A`.
+@propagate_inbounds function _scartesian2_trailing(style::IndexSCartesian2, A::AbstractArray, ind::SCartesianIndex2)
+    k = ind.j - first(eachindex(style, A).indices2)
+    ax = tail(axes(A))
+    return length(ax) == 1 ? (first(ax[1]) + k,) : Tuple(CartesianIndices(ax)[k + 1])
 end
 
 eachindex(style::IndexSCartesian2, A::AbstractArray) = eachindex(style, parent(A))
@@ -748,10 +749,12 @@ end
 # Return a byte index to Bool map for each byte of an aligned `T`
 # if false, that byte is undefined padding that should not be observed.
 # Preconditions, already checked by the `reinterpret` constructors and `_reinterpret`:
-# `isbitstype(T)` and `!has_bit_padding(T)`
+# `isbitstype(T)` and `!has_bit_padding(T)`. A byte holding both value and padding
+# bits is neither, so the latter is checked here as well.
 function non_padding_bytes(T::DataType)::Memory{Bool}
     # @assert isbitstype(T)
-    # @assert !has_bit_padding(T)
+    has_bit_padding(T) && throw(ArgumentError(LazyString("type `", T,
+        "` contains non-byte-aligned primitive fields, so its padding bytes are not defined")))
     used = Memory{Bool}(undef, aligned_sizeof(T))
     fill!(used, false)
     fill_nonpadding_bytes!(T, 0, used)
@@ -759,7 +762,9 @@ function non_padding_bytes(T::DataType)::Memory{Bool}
 end
 function fill_nonpadding_bytes!(T::DataType, offset::Int, used::Memory{Bool})
     if isprimitivetype(T)
-        for i in 1:sizeof(T)
+        # sizeof rounds the value bytes up to a multiple of the alignment, so the
+        # bytes past them are padding
+        for i in 1:cld(Core.bitsizeof(T), 8)
             used[i + offset] = true
         end
     else
@@ -769,22 +774,18 @@ function fill_nonpadding_bytes!(T::DataType, offset::Int, used::Memory{Bool})
     end
 end
 
-@assume_effects :foldable function isarraypacked(T)
-    !datatype_haspadding(T) && sizeof(T) == aligned_sizeof(T)
-end
-
 # Preconditions, already checked by the `reinterpret` constructors:
 # `isbitstype(T/S)` and `!has_bit_padding(T/S)`
 @assume_effects :foldable function array_subpadding(S, T)
     # Fast path: if every byte of `T` is a non-padding byte, any byte can be
     # read. This also covers zero-size `T`.
-    if isarraypacked(T)
+    if ispacked(T)
         return true
     end
     # `T` has at least one padding byte here. If `S` has none, the byte cycle
     # below visits every byte of `T`, so some readable byte of `S` must land on
     # padding in `T`. This also covers zero-size `S`.
-    if isarraypacked(S)
+    if ispacked(S)
         return false
     end
     s_used, t_used = non_padding_bytes(S), non_padding_bytes(T)
@@ -843,6 +844,10 @@ end
 end
 
 function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
+    if isprimitivetype(In)
+        memcpy(ptr_out, ptr_in, packedsize(In))
+        return
+    end
     writeoffset = 0
     for i ∈ 1:fieldcount(In)
         readoffset = fieldoffset(In, i)
@@ -859,6 +864,10 @@ function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
 end
 
 function _copyfrompacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
+    if isprimitivetype(Out)
+        memcpy(ptr_out, ptr_in, packedsize(Out))
+        return
+    end
     readoffset = 0
     for i ∈ 1:fieldcount(Out)
         writeoffset = fieldoffset(Out, i)
@@ -986,7 +995,7 @@ function _totuple(T::Type{All32{E,N}}, itr::Union{Array,Memory}) where {E,N}
     len = N + 32
     length(itr) >= len || _totuple_err(T)
     if isbitstype(E) && eltype(itr) === E
-        v = length(itr) == len ? itr : view(itr, 1:len)
+        v = length(itr) == len ? vec(itr) : view(itr, 1:len)
         return @inbounds reinterpret(T, v)[1]
     end
     elts = collect(E, Iterators.take(itr, len))

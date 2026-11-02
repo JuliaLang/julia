@@ -38,7 +38,7 @@ else
 using Core.Intrinsics, Core.IR
 
 using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, AnyType, MethodInstance, MethodMatch,
-    MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
+    MethodTable, MethodCache, PartialOpaque, PossiblyAmbiguous, SimpleVector, TypeofVararg,
     TypeEq,
     _apply_iterate, apply_type, compilerbarrier, const_memoryrefget, donotdelete, memoryref_isassigned,
     memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, memoryrefunset!, print, println, show, svec,
@@ -84,6 +84,12 @@ import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, ge
 # Needs to match UUID defined in Project.toml
 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Compiler,
     (0x807dbc54_b67e_4c79, 0x8afb_eafe4df6f2e1))
+
+# Syntax evolution bug: unset in bare modules (TODO).  This surfaces only when
+# Compiler.jl is loaded as a standalone package.
+if isdefined(Base, :end_base_include) && isdefined(Base, :set_syntax_version)
+    Base.set_syntax_version(Compiler, Base.VersionNumber(1, 14))
+end
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
@@ -165,12 +171,6 @@ else
     using Base: @show
 end
 
-# JuliaSyntax doesn't support syntax evolution in bare modules via Project.toml
-# This surfaces only when Compiler.jl is loaded as a standalone package.
-if isdefined(Base, :end_base_include) && isdefined(Base, :set_syntax_version)
-    Base.set_syntax_version(Compiler, Base.VersionNumber(1, 14))
-end
-
 include("cicache.jl")
 include("methodtable.jl")
 include("effects.jl")
@@ -245,7 +245,7 @@ end
 if !isdefined(@__MODULE__, Symbol("#_internal_julia_parse"))
 function var"#_internal_julia_parse"(code, filename::String, lineno::Int, offset::Int, options::Symbol)
     return Base.JuliaSyntax.core_parser_hook(
-        code, filename, lineno, offset, options, Base.VersionNumber(1, 14, 0))
+        code, filename, lineno, offset, options, (1, 14))
 end
 end
 

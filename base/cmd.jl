@@ -96,9 +96,9 @@ This can then be passed to the `Cmd` constructor to modify its settings, e.g.
 """
 Cmd
 
-hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, hash(x.uid, hash(x.gid, h)))))))
+hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, hash(x.cpus, hash(x.uid, hash(x.gid, h))))))))
 ==(x::Cmd, y::Cmd) = x.exec == y.exec && x.env == y.env && x.ignorestatus == y.ignorestatus &&
-                     x.dir == y.dir && isequal(x.flags, y.flags) && x.uid == y.uid && x.gid == y.gid
+                     x.dir == y.dir && isequal(x.flags, y.flags) && x.cpus == y.cpus && x.uid == y.uid && x.gid == y.gid
 
 struct OrCmds <: AbstractCmd
     a::AbstractCmd

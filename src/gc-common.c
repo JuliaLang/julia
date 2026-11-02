@@ -245,7 +245,7 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
 static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT
 {
     void **items = list->items;
-    items[0] = (void*)JL_GC_ENCODE_PUSHARGS(list->len - 2);
+    items[0] = (void*)JL_GC_ENCODE_PUSHFINLIST(list->len - 2);
     items[1] = ct->gcstack;
     ct->gcstack = (jl_gcframe_t*)items;
 }
@@ -704,7 +704,7 @@ STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT {
 
 JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT
 {
-    if (nm > SSIZE_MAX/sz)
+    if (sz != 0 && nm > SSIZE_MAX/sz)
         return NULL;
     return _unchecked_calloc(nm, sz);
 }

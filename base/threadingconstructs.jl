@@ -168,7 +168,21 @@ This includes both mark threads and concurrent sweep threads.
 """
 ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
 
-function threading_run(fun, static)
+# `fun` is captured by the scope closure and, inside it, by every task closure. Lowering
+# only keeps a `@nospecialize` argument untyped for a direct capture (#58426), not for the
+# nested one, so hold it in a struct with an untyped field. Then the closures and the runner
+# have the same types at every `@threads` site and compile once into the sysimage.
+# The cost is one dynamic dispatch per task at start.
+struct _ThreadsFun
+    fun
+end
+
+# Isolate the dynamic dispatch so that `--trim` checks the loop body at each call of the
+# runner, where its type is known. The runner must stay out of line for that call to exist.
+@noinline _threads_call(tfun::_ThreadsFun, i::Int) = tfun.fun(i)
+
+@noinline Base.@nospecializeinfer function threading_run(@nospecialize(fun), static::Bool)
+    tfun = _ThreadsFun(fun)
     if static && ccall(:jl_in_threaded_region, Cint, ()) != 0
         error("`@threads :static` cannot be used concurrently or nested")
     end
@@ -185,7 +199,7 @@ function threading_run(fun, static)
     try
         Base.ScopedValues.with(Base.CANCEL_TOKEN => tok) do
             for i = 1:n
-                t = Task(() -> fun(i)) # pass in tid
+                t = Task(() -> _threads_call(tfun, i)) # pass in tid
                 t.sticky = static
                 if static
                     ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
@@ -596,6 +610,15 @@ For example, the above conditions imply that:
   used).
 - Unless the `:static` schedule is used, the value of [`threadid()`](@ref Threads.threadid)
   may change even within a single iteration. See [`Task Migration`](@ref man-task-migration).
+
+!!! note
+    The number of tasks created by `@threads` depends on the number of threads. Since each
+    task has its own random number stream (see `Random.TaskLocalRNG`), results that use the
+    default random number generator can change with the number of threads, even when it is
+    seeded (and with the `:greedy` scheduler, they can also vary between runs). For results
+    that do not depend on the number of threads, spawn one task per iteration (e.g.
+    `@sync for x in xs; Threads.@spawn f(x); end`) or use a separate, explicitly seeded
+    random number generator for each iteration.
 
 ## Schedulers
 

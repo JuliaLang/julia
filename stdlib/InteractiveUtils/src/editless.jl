@@ -200,7 +200,8 @@ define_default_editors()
 
 Determine the editor to use when running functions like `edit`. Returns a `Cmd`
 object. Change editor by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR`
-environment variables.
+environment variables. The value is split like a shell command (see `Base.shell_split`),
+so it may contain flags, and spaces or backslashes in the path must be quoted or escaped.
 """
 function editor()
     # Note: the editor path can include spaces (if escaped) and flags.

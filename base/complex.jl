@@ -190,7 +190,7 @@ Union{Missing, Complex{Int64}}
 complex(::Type{T}) where {T<:Real} = Complex{T}
 complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
 complex(::Type{Union{}}) = Union{}
-# Keep the slurp signature for bottom-type dispatch pruning (typemap_slurp_search),
+# Keep the slurp signature for bottom-type dispatch pruning,
 # but do not let invalid arities contribute a successful result to inference.
 complex(::Type{Union{}}, slurp...) = throw(MethodError(complex, (Union{}, slurp...)))
 
@@ -293,6 +293,12 @@ inv(z::Complex{<:Integer}) = inv(float(z))
 -(z::Complex, w::Complex) = Complex(real(z) - real(w), imag(z) - imag(w))
 *(z::Complex, w::Complex) = Complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
+
+-%(z::Complex) = Complex(-%(real(z)), -%(imag(z)))
++%(z::Complex, w::Complex) = Complex(real(z) +% real(w), imag(z) +% imag(w))
+-%(z::Complex, w::Complex) = Complex(real(z) -% real(w), imag(z) -% imag(w))
+*%(z::Complex, w::Complex) = Complex(real(z) *% real(w) -% imag(z) *% imag(w),
+                                     real(z) *% imag(w) +% imag(z) *% real(w))
 
 _mulsub(a, b, c) = _mulsub(promote(a, b, c)...)
 _mulsub(a::T, b::T, c::T) where {T<:Real} = muladd(a, b, -c)
@@ -1094,15 +1100,18 @@ breaking ties using the specified [`RoundingMode`](@ref)s. The first
 [`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.
 
-
-`RoundingModeReal` and `RoundingModeImaginary` default to [`RoundNearest`](@ref),
-which rounds to the nearest integer, with ties (fractional values of 0.5)
-being rounded to the nearest even integer.
+`RoundingModeReal` defaults to [`RoundNearest`](@ref), which rounds to the nearest
+integer, with ties (fractional values of 0.5) being rounded to the nearest even
+integer. `RoundingModeImaginary` defaults to `RoundingModeReal`, so a single
+[`RoundingMode`](@ref) is used for both components.
 
 # Examples
 ```jldoctest
 julia> round(3.14 + 4.5im)
 3.0 + 4.0im
+
+julia> round(3.14 + 4.5im, RoundUp)
+4.0 + 5.0im
 
 julia> round(3.14 + 4.5im, RoundUp, RoundNearestTiesUp)
 4.0 + 5.0im

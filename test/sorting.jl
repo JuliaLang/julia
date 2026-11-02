@@ -137,7 +137,16 @@ end
             @test partialsortperm(a, i, rev=true) == (11 - i)
         end
     end
+    # descending ranges on inputs large enough to partition
+    w = [4, 5, 2, 1, 1, 4, 4, 4, 2, 4, 5, 5, 3, 3, 2, 2, 4, 5, 2, 2, 5, 5]
+    for r in (5:-1:3, 9:-2:3, 20:-1:1)
+        @test partialsort(w, r) == sort(w)[r]
+        @test w[partialsortperm(w, r)] == sort(w)[r]
+    end
     @test_throws ArgumentError partialsortperm!([1,2], [2,3,1], 1:2)
+    # index vector must hold all indices of v, regardless of eltype(k)
+    @test partialsortperm([300:-1:1;], Int8(3)) === 298
+    @test partialsortperm([300:-1:1;], UInt8(1):UInt8(2)) == [300, 299]
 end
 
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
@@ -270,7 +279,7 @@ end
         rgv, rgv_r = collect(rg), collect(rg_r)
         for i = I
             @test insorted(i,rg) === insorted(i,rgv)
-            @test insorted(i,rg_r) === insorted(i,rgv_r,rev=true)
+            @test insorted(i,rg_r,rev=true) === insorted(i,rgv_r,rev=true)
         end
     end
 
@@ -283,13 +292,17 @@ end
 
     rg_r = reverse(rg)
     for i = 1:100
-        @test insorted(rg_r[i], rg_r)
-        @test !insorted(prevfloat(rg_r[i]), rg_r)
-        @test !insorted(nextfloat(rg_r[i]), rg_r)
+        @test insorted(rg_r[i], rg_r, rev=true)
+        @test !insorted(prevfloat(rg_r[i]), rg_r, rev=true)
+        @test !insorted(nextfloat(rg_r[i]), rg_r, rev=true)
     end
 
     @test insorted(1, 1:10) == insorted(1, collect(1:10), by=(>=(5)))
     @test insorted(10, 1:10) == insorted(10, collect(1:10), by=(>=(5)))
+
+    # ranges use the same sort-order equivalence as vectors
+    @test insorted(-0.0, 0.0:1.0) === insorted(-0.0, [0.0, 1.0]) === false
+    @test insorted(missing, 1:3) === insorted(missing, [1, 2, 3]) === false
 
     @test !insorted(0, [])
     @test !insorted(0, [1,2,3])
@@ -322,6 +335,9 @@ end
         @test !issorted(b)
         @test !issorted(c, by=x->1/x)
         @test !issorted(d, rev=true)
+    end
+    let k = 30:-1:10
+        @test sort(a, alg=PartialQuickSort(k))[k] == sort(a)[k]
     end
 
     @test partialsort([3,6,30,1,9], 2, rev=true) == 9
@@ -1326,6 +1342,39 @@ end
         @test searchsorted(reverse(-1000.0:1:1000), -0.0; lt=<, by=-) === 1001:1001
         @test searchsorted(reverse(-1000.0:1:1000), -0.0, rev=true) === 1002:1001
         @test searchsorted(reverse(-1000.0:1:1000), -0.0; lt=<, rev=true) === 1001:1001
+    end
+
+    @testset "narrow and mixed integer ranges (issue #64453)" begin
+        @test searchsortedfirst(Int8(-100):Int8(100), Int8(50)) === 151
+        @test searchsortedlast(Int8(-100):Int8(100), Int8(50)) === 151
+        @test searchsortedfirst(Int8(100):Int8(-1):Int8(-100), Int8(-50), Reverse) === 151
+        @test searchsortedlast(Int8(100):Int8(-1):Int8(-100), Int8(-50), Reverse) === 151
+        @test searchsortedfirst(UInt8(200):Int8(-2):UInt8(10), UInt8(15), Reverse) === 94
+        @test searchsortedlast(UInt8(200):Int8(-2):UInt8(10), UInt8(15), Reverse) === 93
+
+        xs = Any[Int8(-128), Int8(-100), Int8(-1), Int8(0), Int8(50), Int8(127),
+                 UInt8(0), UInt8(50), UInt8(128), UInt8(255), -99.5, 50.5, -200, 300]
+        fwd_ranges = Any[
+            Int8(-128):Int8(127), Int8(-100):Int8(3):Int8(100), Int8(5):Int8(1),
+            UInt8(0):UInt8(255), UInt8(10):UInt8(50):UInt8(250), UInt8(20):UInt8(10),
+            Int16(-200):Int16(25):Int16(200),
+        ]
+        rev_ranges = Any[
+            Int8(127):Int8(-1):Int8(-128), Int8(100):Int8(-3):Int8(-100),
+            Int8(100):Int8(-128):Int8(-100), Int8(-10):Int8(-1):Int8(10),
+            UInt8(255):Int8(-1):UInt8(0), UInt8(200):Int8(-2):UInt8(10),
+            Int16(200):Int16(-25):Int16(-200),
+        ]
+        for r in fwd_ranges, x in xs
+            v = collect(r)
+            @test searchsortedfirst(r, x) === searchsortedfirst(v, x)
+            @test searchsortedlast(r, x) === searchsortedlast(v, x)
+        end
+        for r in rev_ranges, x in xs
+            v = collect(r)
+            @test searchsortedfirst(r, x, Reverse) === searchsortedfirst(v, x, Reverse)
+            @test searchsortedlast(r, x, Reverse) === searchsortedlast(v, x, Reverse)
+        end
     end
 end
 # The "searchsorted" testset is at the end of the file because it is slow.

@@ -314,11 +314,11 @@ end
 # IO-based cases
 # TODO: switch ParseStream to use a Memory internally on newer versions of Julia
 VERSION < v"1.11.0-DEV.753" && function ParseStream(io::IOBuffer; version=VERSION)
-    ParseStream(io.data, io, position(io)+1, version)
+    ParseStream(io.data, io, Base.position(io)+1, version)
 end
 function ParseStream(io::Base.GenericIOBuffer; version=VERSION)
     textbuf = unsafe_wrap(Vector{UInt8}, pointer(io.data), length(io.data))
-    ParseStream(textbuf, io, position(io)+1, version)
+    ParseStream(textbuf, io, Base.position(io)+1, version)
 end
 function ParseStream(io::IO; version=VERSION)
     textbuf = read(io)
@@ -468,6 +468,8 @@ end
     error("The parser seems stuck at byte $(stream.next_byte)")
 end
 
+# `peek` and `position` are JuliaSyntax-owned rather than Base methods so their
+# docs stay out of Base help (#54749).
 """
     peek(stream::ParseStream [, n=1]; skip_newlines=false)
 
@@ -476,8 +478,8 @@ non-newline whitespace are skipped automatically. Whitespace containing a
 single newline is returned as kind `K"NewlineWs"` unless `skip_newlines` is
 true.
 """
-function Base.peek(stream::ParseStream, n::Integer=1;
-                   skip_newlines::Bool=false, skip_whitespace=true)
+function peek(stream::ParseStream, n::Integer=1;
+              skip_newlines::Bool=false, skip_whitespace=true)
     kind(peek_token(stream, n; skip_newlines=skip_newlines, skip_whitespace=skip_whitespace))
 end
 
@@ -825,7 +827,7 @@ function steal_token_bytes!(stream::ParseStream, pos::ParseStreamPosition, numby
 end
 
 # Get position of last item emitted into the output stream
-function Base.position(stream::ParseStream)
+function position(stream::ParseStream)
     byte_idx = stream.next_byte
     node_idx = length(stream.output)
 

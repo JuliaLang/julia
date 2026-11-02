@@ -31,6 +31,45 @@ end
 # are not actually materialized as call instructions.
 strip_debug_calls(ir) = replace(ir, r"call void @llvm\.dbg\.declare.*\n" => "", r"call void @llvm\.dbg\.value.*\n" => "")
 
+# Inline debug scopes follow CodegenParams, whose default retains them even
+# when Julia's internal codegen parameters disable them for image generation.
+@inline inner_scope(x) = x + 1
+outer_scope(x) = inner_scope(x)
+@testset "Inline debug scopes" begin
+    @test Base.CodegenParams().debug_info_inline_scopes == 1
+    for scopes in (false, true)
+        params = Base.CodegenParams(debug_info_level=Cint(1), debug_info_inline_scopes=scopes)
+        ir = sprint(io -> code_llvm(io, outer_scope, (Int,); raw=true,
+                                   dump_module=true, optimize=false, params))
+        @test occursin("inlinedAt:", ir) == scopes
+    end
+
+    # IR consumers retain inline scopes during precompilation, independently of
+    # Julia's internal parameters for generating the package image.
+    mktempdir() do dir
+        write(joinpath(dir, "InlineScopesDefault.jl"), """
+            module InlineScopesDefault
+            using InteractiveUtils
+            const scopes = Base.CodegenParams().debug_info_inline_scopes
+            const internal_scopes = unsafe_load(
+                cglobal(:jl_default_cgparams, Base.CodegenParams)).debug_info_inline_scopes
+            @inline inner_scope(x) = x + 1
+            outer_scope(x) = inner_scope(x)
+            const has_inline_scopes = occursin("inlinedAt:", sprint(io ->
+                code_llvm(io, outer_scope, (Int,); raw=true, dump_module=true, optimize=false,
+                          params=Base.CodegenParams(debug_info_level=Cint(1)))))
+            end
+            """)
+        cmd = `$(Base.julia_cmd()) --startup-file=no --compiled-modules=yes --pkgimages=yes
+               -e 'using InlineScopesDefault; print((InlineScopesDefault.scopes,
+                   InlineScopesDefault.internal_scopes, InlineScopesDefault.has_inline_scopes))'`
+        sep = Sys.iswindows() ? ";" : ":"
+        env = ("JULIA_DEPOT_PATH" => dir * sep, "JULIA_LOAD_PATH" => dir * sep * "@stdlib")
+        asserts = ccall(:jl_is_assertsbuild, Int8, ()) != 0
+        @test readchomp(addenv(cmd, env...)) == string((1, Int(asserts), true))
+    end
+end
+
 if !is_debug_build && opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
     @test !occursin(" call ", strip_debug_calls(get_llvm(identity, Tuple{String})))
@@ -609,8 +648,8 @@ let a = Core.Intrinsics.trunc_int(UInt24, 3),
     @test f((a, true)) === true
     @test f((a, false)) === false
     @test sizeof(Tuple{UInt24,Bool}) == 8
-    @test sizeof(UInt24) == 3
-    @test sizeof(Union{UInt8,UInt24}) == 3
+    @test sizeof(UInt24) == 4 # 3 value bytes rounded up to the 4-byte alignment
+    @test sizeof(Union{UInt8,UInt24}) == 4
     @test sizeof(Base.RefValue{Union{UInt8,UInt24}}) == 8
 end
 
@@ -655,6 +694,37 @@ end
         return cond
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f4, Tuple{Bool}, true, false, false))
+
+    # unions of ghosts have nothing to preserve, from a PhiNode or a return value (#63482)
+    function f5(cond)
+        val = cond ? nothing : missing
+        GC.@preserve val begin end
+        return cond
+    end
+    @test f5(true)
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f5, Tuple{Bool}, true, false, false))
+    @noinline f6_ghosts(cond) = cond ? nothing : missing
+    function f6(cond)
+        val = f6_ghosts(cond)
+        GC.@preserve val begin end
+        return cond
+    end
+    @test f6(true)
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f6, Tuple{Bool}, true, false, false))
+
+    # nor do pointer-free values, whether in a stack slot or passed by reference
+    function f7(r)
+        val = r[]
+        GC.@preserve val begin end
+        return val
+    end
+    @test f7(Ref(1+2im)) == 1+2im
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f7, Tuple{Base.RefValue{Complex{Int}}}, true, false, false))
+    function f8(val)
+        GC.@preserve val begin end
+        return val
+    end
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f8, Tuple{Some{Int}}, true, false, false))
 end
 
 # issue #32843
@@ -1136,10 +1206,78 @@ let io = IOBuffer()
     @test !occursin("jtbaa_unionselbyte", str)
 end
 
+# JIT-compiled code refers to the installed Base sources in its debug info,
+# while relative file names of user code are left alone
+let ir = replace(sprint(io -> code_llvm(io, sum, Tuple{Vector{Int}}, dump_module=true, raw=true)), "\\5C" => "\\")
+    m = match(r"!DIFile\(filename: \"reduce\.jl\", directory: \"([^\"]*)\"", ir)
+    @test m !== nothing && samefile(joinpath(m[1], "reduce.jl"),
+                                    joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", "reduce.jl"))
+end
+let f = include_string(@__MODULE__, "difile_user_code(x) = x + 1", "int.jl")
+    ir = sprint(io -> code_llvm(io, f, Tuple{Int}, dump_module=true, raw=true))
+    @test occursin("!DIFile(filename: \"int.jl\", directory: \".\")", ir)
+end
+# ... and keep the recorded file names, which is what `code_llvm` and `code_native` print
+let str = sprint(io -> code_llvm(io, findnext, Tuple{Base.Fix2{typeof(==),UInt8}, Vector{UInt8}, Int}; debuginfo=:source))
+    @test occursin(r"@ strings[/\\]search\.jl:\d+", str)
+end
+let str = sprint(io -> code_llvm(io, Base.Compiler.widenconst, Tuple{Base.Compiler.Const}; debuginfo=:source))
+    @test occursin(r"@ Compiler[/\\]src[/\\]typelattice\.jl:\d+", str)
+end
+mktempdir() do dir
+    file = joinpath(dir, "difile_abspath.jl")
+    write(file, "difile_abspath(x) = x + 1")
+    f = Base.include(@__MODULE__, file)
+    @test occursin("@ $file:1", sprint(io -> code_llvm(io, f, Tuple{Int}; debuginfo=:source)))
+    @test occursin("@ $file:1", sprint(io -> code_native(io, f, Tuple{Int}; debuginfo=:source)))
+end
+# The first matching rewrite applies, whether or not the file exists
+let difiles(f, sig, map) = try
+        ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec(map...))
+        ir = sprint(io -> code_llvm(io, f, sig; dump_module=true, raw=true))
+        # the IR escapes a backslash as `\\` or `\5C`
+        unescape(s) = replace(s, "\\\\" => "/", "\\5C" => "/", "\\" => "/")
+        Dict(unescape(m[1]) => unescape(m[2])
+             for m in eachmatch(r"!DIFile\(filename: \"([^\"]*)\", directory: \"([^\"]*)\"", ir))
+    finally
+        Base.init_debuginfo_source_paths()
+    end
+    sig = Tuple{Base.Fix2{typeof(==),UInt8}, Vector{UInt8}, Int}
+    d = difiles(findnext, sig, ("strings/", "/nonexistent/strings", "", "/nonexistent/base"))
+    @test endswith(d["search.jl"], "/nonexistent/strings")
+    @test endswith(d["int.jl"], "/nonexistent/base")
+    d = difiles(findnext, sig, ("strings/", "/nonexistent/strings"))
+    @test endswith(d["search.jl"], "/nonexistent/strings")
+    @test d["int.jl"] == "."
+    mktempdir() do dir
+        file = joinpath(dir, "difile_rewrite.jl")
+        write(file, "difile_rewrite(x) = x + 1")
+        f = Base.include(@__MODULE__, file)
+        d = difiles(f, Tuple{Int}, (joinpath(dir, ""), "/nonexistent/abs"))
+        name = only(k for k in keys(d) if endswith(k, "difile_rewrite.jl"))
+        @test endswith(name, "/nonexistent/abs/difile_rewrite.jl")
+        @test endswith(d[name], "/nonexistent/abs")
+    end
+end
+
 let io = IOBuffer()
     code_llvm(io, (x, y) -> (@atomic x[1] = y; nothing), (AtomicMemory{Pair{Any,Any}}, Pair{Any,Any},), raw=true, optimize=false)
     str = String(take!(io))
     @test occursin("julia.field_write_barrier", str)
+end
+
+# No write barrier on an object allocated since the last safepoint
+mutable struct FreshBarrierBox
+    x::Any
+end
+fresh_barrier(y) = (b = FreshBarrierBox(nothing); b.x = y; b)
+aged_barrier(y) = (b = FreshBarrierBox(nothing); GC.safepoint(); b.x = y; b)
+if opt_level > 0
+    @test !occursin("queue_root", get_llvm(fresh_barrier, Tuple{Any}))
+    # MMTk lowers write barriers without `jl_gc_queue_root`
+    @static if Base.USING_STOCK_GC
+        @test occursin("queue_root", get_llvm(aged_barrier, Tuple{Any}))
+    end
 end
 
 # Aggregate barriers identify the stored payload's references, including locked elements.
@@ -1223,6 +1361,81 @@ function union_phi_inline_roots(x::Bool)
 end
 @test union_phi_inline_roots(true) === ("Q8", 1)
 
+# issue #64090
+function filter_singleton_types(t)
+    out = Any[]
+    for x in Iterators.filter(x -> x isa Val, t)
+        push!(out, typeof(x))
+    end
+    out
+end
+function narrow_union_with_bits_member(t, i, j, k::Int, c::Bool)
+    x = c ? t[i] : t[j]
+    y = x isa Tuple ? k : x
+    typeof(y)
+end
+function narrow_union_in_try_slot(t, i)
+    local x
+    try
+        x = t[i]
+        error("jump")
+    catch
+    end
+    y = x isa Val ? x : Val(:c)
+    typeof(y)
+end
+struct NumberSetting
+    value::Number
+end
+lookup_setting(s::NumberSetting, key::Symbol) =
+    key === :value ? s.value : key === :none ? nothing : (key, :alias)
+function last_int_setting(s, keys)
+    last = nothing
+    try
+        for key in keys
+            key === :stop && error("stop")
+            v = lookup_setting(s, key)
+            v isa Union{Nothing,Int} || continue
+            last = v
+        end
+    catch
+    end
+    last
+end
+function last_simple_setting(s, key)
+    result = 0
+    try
+        v = lookup_setting(s, key)
+        if v isa Union{Nothing,Int,Tuple{Symbol,Symbol}}
+            result = v
+        end
+        error("jump")
+    catch
+    end
+    result
+end
+@testset "#64090" begin
+    @test filter_singleton_types((Val(:b), Val(:a), (:x, :y))) == [Val{:b}, Val{:a}]
+    @test collect(Iterators.filter(x -> x isa Val, (Val(:b), Val(:a), (:x, :y)))) == [Val(:b), Val(:a)]
+
+    t = (nothing, missing, (:x, :y))
+    @test narrow_union_with_bits_member(t, 1, 1, 5, true) === Nothing
+    @test narrow_union_with_bits_member(t, 2, 2, 5, false) === Missing
+    @test narrow_union_with_bits_member(t, 3, 3, 5, true) === Int
+
+    t = (Val(:b), Val(:a), (:x, :y))
+    @test narrow_union_in_try_slot(t, 1) === Val{:b}
+    @test narrow_union_in_try_slot(t, 2) === Val{:a}
+    @test narrow_union_in_try_slot(t, 3) === Val{:c}
+
+    s = NumberSetting(12345)
+    @test last_int_setting(s, (:value, :pair, :stop)) === 12345
+    @test last_int_setting(s, (:none, :stop)) === nothing
+    @test last_simple_setting(s, :value) === 12345
+    @test last_simple_setting(s, :none) === nothing
+    @test last_simple_setting(s, :pair) === (:pair, :alias)
+end
+
 mutable struct AnyBoxEA val::Any end
 function preserve_any_ea(x)
     b = AnyBoxEA(x)
@@ -1289,3 +1502,56 @@ end
     ir = get_llvm(f_srettest, Tuple{Float32}, true, true, true)
     @test occursin(r"sret\([^)]+\) align \d+", ir)
 end
+
+# Indexing a SimpleVector is a load, not a call to the `_svec_ref` builtin
+const const_svec_ref = Core.svec(1, "a", :b)
+@testset "inline _svec_ref" begin
+    svec_ref_test(v::Core.SimpleVector, i::Int) = v[i]
+    ir = get_llvm(svec_ref_test, Tuple{Core.SimpleVector, Int})
+    @test !occursin("jl_f__svec_ref", ir)
+    @test !occursin(r"box_int(?:32|64)", ir)
+    v = Core.svec(1, "a", :b)
+    @test svec_ref_test(v, 1) === 1
+    @test svec_ref_test(v, 3) === :b
+    @test_throws BoundsError(v, 0) svec_ref_test(v, 0)
+    @test_throws BoundsError(v, 4) svec_ref_test(v, 4)
+    @test_throws BoundsError(Core.svec(), 1) svec_ref_test(Core.svec(), 1)
+
+    # a constant svec has a constant length
+    const_svec_ref_test(i::Int) = const_svec_ref[i]
+    ir = get_llvm(const_svec_ref_test, Tuple{Int})
+    @test !occursin("jl_f__svec_ref", ir)
+    @test occursin(Regex("icmp ult $Iptr %\\S+, 3\\b"), ir)
+    @test const_svec_ref_test(1) === 1
+    @test const_svec_ref_test(3) === :b
+    @test_throws BoundsError(const_svec_ref, 0) const_svec_ref_test(0)
+    @test_throws BoundsError(const_svec_ref, 4) const_svec_ref_test(4)
+end
+
+# LLVM can merge allocations of arrays whose element types differ in whether they need zeroing
+memory_zeroinit_merge(row, names) = collect(getfield(row, nm) for nm in names)
+@testset "merged Memory allocations" begin
+    row = (a=1, b=4.0, c="7")
+    @test memory_zeroinit_merge(row, (:c, :a, :b)) == ["7", 1, 4.0]
+    @test memory_zeroinit_merge(row, (:a, :b, :c)) == [1, 4.0, "7"]
+    @test memory_zeroinit_merge(row, (:b, :b, :b)) == [4.0, 4.0, 4.0]
+end
+
+function missing_edge_union_tag(c::Bool, d::Bool, e::Bool)
+    local x
+    if c
+        x = e ? nothing : missing
+    end
+    if d
+        x = 1
+    end
+    return (c | d) ? x : 0
+end
+let llvm = get_llvm(missing_edge_union_tag, Tuple{Bool, Bool, Bool}, true, false, false)
+    @test occursin(r"%tindex_phi\d* = phi i8", llvm)
+    @test !occursin(r"%tindex_phi\d* = phi i8 [^\n]*poison", llvm)
+end
+@test missing_edge_union_tag(false, false, true) === 0
+@test missing_edge_union_tag(false, true, false) === 1
+@test missing_edge_union_tag(true, false, false) === missing
+@test missing_edge_union_tag(true, false, true) === nothing

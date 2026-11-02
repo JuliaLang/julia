@@ -363,6 +363,11 @@ end
             @test (a % T) * b == 1
         end
     end
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for n in (3, big(3))
+        @test_throws MethodError(invmod, (n, Union{})) invmod(n, Union{})
+        @test which(invmod, (typeof(n), Type{Union{}})).sig == Tuple{typeof(invmod), Any, Type{Union{}}, Vararg}
+    end
 end
 
 @testset "powermod" begin
@@ -826,7 +831,7 @@ end
 @testset "concrete-foldability: `hastypemax`" begin
     @test Base.infer_effects(Base.hastypemax, (Type,)) |> Core.Compiler.is_foldable
     @test Base.infer_effects(Base.hastypemax, (DataType,)) |> Core.Compiler.is_foldable
-    for t in (Bool, Int, BigInt)
+    for t in (Bool, Int, BigInt, Union{})
         @test Base.infer_effects(Base.hastypemax, (Type{t},)) |> Core.Compiler.is_foldable
     end
 end
@@ -835,6 +840,7 @@ end
     @test Base.hastypemax(Bool)
     @test Base.hastypemax(Int)
     @test !Base.hastypemax(BigInt)
+    @test !Base.hastypemax(Union{})
 end
 
 @testset "literal power" begin

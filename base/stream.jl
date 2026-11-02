@@ -99,7 +99,7 @@ end
 
 # Redirectable = Union{IO, FileRedirect, Libc.RawFD} (not exported)
 
-bytesavailable(s::LibuvStream) = bytesavailable(s.buffer)
+bytesavailable(s::LibuvStream) = bytesavailable(s.buffer)::Int
 
 function eof(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
     cancel = precheck_cancel_arg(cancel)
@@ -868,9 +868,9 @@ function displaysize(io::TTY)
     s2 = Ref{Int32}(0)
     iolock_begin()
     check_open(io)
-    Base.uv_error("size (TTY)", ccall(:uv_tty_get_winsize,
-                                      Int32, (Ptr{Cvoid}, Ptr{Int32}, Ptr{Int32}),
-                                      io, s1, s2) != 0)
+    # A failed query (e.g. the fd stopped being a terminal) leaves s1/s2 at 0
+    # and falls through to the default size below.
+    ccall(:uv_tty_get_winsize, Int32, (Ptr{Cvoid}, Ptr{Int32}, Ptr{Int32}), io, s1, s2)
     iolock_end()
     w, h = s1[], s2[]
     h > 0 || (h = default_size[1])

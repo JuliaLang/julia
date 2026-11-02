@@ -375,4 +375,6 @@ end
 @testset "type stable `join` (#55389)" begin
     itr = ("foo" for _ in 1:100)
     @test Base.return_types(join, (typeof(itr),))[] == String
+    @test Base.infer_return_type(join, (Tuple{String,Vararg{String}}, Char)) == String
+    @test Base.infer_return_type(join, (Tuple{Vararg{String}}, String, String)) == String
 end
