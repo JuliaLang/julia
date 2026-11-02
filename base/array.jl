@@ -2333,10 +2333,16 @@ vcat() = Vector{Any}()
 hcat() = Vector{Any}()
 
 function hcat(V::Vector{T}...) where T
-    M = @inline _typed_hcat(T, V)
-    return isconcretetype(T) ? M : map(identity, M)
+    isconcretetype(T) && return @inline _typed_hcat(T, V)
+    height = length(V[1])
+    for j = 2:length(V)
+        if length(V[j]) != height
+            throw(DimensionMismatch("vectors must have same lengths"))
+        end
+    end
+    return [ v[i]::T for i=1:height, v in V ]
 end
-hcat(A::Vector...) = @inline _typed_hcat(promote_eltype(A...), A) # more special than SparseArrays's hcat
+hcat(A::Vector...) = _typed_hcat(promote_eltype(A...), A) # more special than SparseArrays's hcat
 
 vcat(A::Vector...) = @inline _typed_vcat(promote_eltype(A...), A) # more special than SparseArrays's vcat
 
