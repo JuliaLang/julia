@@ -555,6 +555,27 @@ end |> !Compiler.is_inaccessiblememonly
     M.ConstantType{Any}()
 end |> !Compiler.is_inaccessiblememonly
 
+# concrete evaluation should preserve the `:inaccessiblememonly` taint of a call whose
+# result refers to global mutable memory (JuliaLang/julia#64412)
+const constant_mutable_global2 = Ref(0)
+pick_constant_mutable_global(x::Bool) = x ? constant_mutable_global : constant_mutable_global2
+@noinline pick_constant_mutable_global_noinline(x::Bool) = x ? constant_mutable_global : constant_mutable_global2
+let effects = Base.infer_effects() do
+        pick_constant_mutable_global(true)[]
+    end
+    @test !Compiler.is_inaccessiblememonly(effects)
+    @test !Compiler.is_consistent(effects)
+end
+let effects = Base.infer_effects() do
+        pick_constant_mutable_global_noinline(true)[]
+    end
+    @test !Compiler.is_inaccessiblememonly(effects)
+    @test !Compiler.is_consistent(effects)
+end
+@test Base.infer_effects() do
+    pick_constant_mutable_global(true) === constant_mutable_global
+end |> Compiler.is_consistent
+
 # the `:inaccessiblememonly` helper effect allows us to prove `:consistent`-cy of frames
 # including `getfield` / `isdefined` accessing to local mutable object
 
