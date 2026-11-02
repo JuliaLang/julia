@@ -1286,13 +1286,45 @@ end
 end
 
 
-let S = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [TypeVar(:T), Any], 2),
+let S = ccall(:jl_new_unionall, Any, (Any, Any), TypeVar(:T), Any),
     VS = TypeVar(:T),
-    T = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [VS, VS], 2)
+    T = ccall(:jl_new_unionall, Any, (Any, Any), VS, VS)
     # check (T where T) == (Any where T)
     # these types are not normally valid, but check them just to make sure subtyping is robust
     @test T <: S
     @test S <: T
+end
+
+# `UnionAll` memoizes structural facts in a hidden flag word on first query
+@test fieldnames(UnionAll) === (:var, :body)
+let T = TypeVar(:T), S = TypeVar(:S)
+    closed = Vector{T} where T
+    open = Pair{T, S} where T # `S` is free
+    for _ in 1:2 # the second round reads the memo
+        @test !Base.has_free_typevars(closed)
+        @test Base.has_free_typevars(open)
+        @test !Base.has_free_typevars(Tuple{Int, closed})
+        @test Base.has_free_typevars(Tuple{Int, open})
+        @test !Base.has_free_typevars(UnionAll(S, Tuple{closed, open}))
+        @test Base.has_free_typevars(Tuple{closed, Union{Int, open}})
+        @test !Base.has_typevar(Tuple{closed, open}, T)
+        @test Base.has_typevar(Tuple{closed, open}, S)
+    end
+    # a raw node (not normalized by the constructor) starts with nothing memoized
+    U = ccall(:jl_new_unionall, Any, (Any, Any), S, Pair{S, T})
+    @test Base.has_free_typevars(U)
+    @test Base.has_free_typevars(U)
+    @test !Base.has_free_typevars(UnionAll(T, U))
+    # generic constructors must not leave a stale memo in the hidden flag word
+    mk = @eval (v, b) -> $(Expr(:new, UnionAll, :v, :b))
+    for i in 1:10000
+        c = mk(TypeVar(:T), Int)
+        Base.has_free_typevars(c)
+        @test Base.has_free_typevars(mk(TypeVar(:T), Vector{S}))
+        c = ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), UnionAll, Any[TypeVar(:T), Int], 2)
+        Base.has_free_typevars(c)
+        @test Base.has_free_typevars(ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), UnionAll, Any[TypeVar(:T), Vector{S}], 2))
+    end
 end
 
 # issue #20121
@@ -3708,5 +3740,29 @@ end
         @test B <: A
         @test !(A <: B)
         @test A != B
+    end
+end
+
+# `obviously_disjoint` looks through typevar bounds in covariant positions
+# and compares invariant typevars by their bounds
+@testset "obviously_disjoint with typevar bounds" begin
+    f = typeof(identity)
+    for (a, b, empty) in Any[
+            (Tuple{f, Type{Int8}, Type{UInt8}}, Tuple{f, Core.TypeEgal{Int64}, Core.TypeEgal{Float64}}, true),
+            (Tuple{f, Type{T}} where T<:Integer, Tuple{f, Type{Int}}, false),
+            (Tuple{f, Type{T}} where T<:AbstractFloat, Tuple{f, Type{Int}}, true),
+            (Tuple{f, Type{T}} where T, Tuple{f, DataType}, false),
+            (Tuple{f, Type{Vector{T}}} where T, Tuple{f, Type{Int}}, true),
+            (Tuple{f, IO, Vector{T}} where T, Tuple{f, IOBuffer, Vector{String}}, false),
+            (Tuple{f, IO, Array{T,2}} where T, Tuple{f, IOBuffer, Vector{String}}, true),
+            (Tuple{f, Vector{<:Integer}}, Tuple{f, Vector{Int}}, false),
+            (Tuple{f, Vector{<:AbstractFloat}}, Tuple{f, Vector{Int}}, true),
+            (Tuple{f, Val{N}} where N, Tuple{f, Val{Int}}, false),
+            (Tuple{f, T, T} where T<:AbstractString, Tuple{f, Int, Nothing}, true),
+            (Tuple{f, Union{T, Nothing}} where T<:AbstractString, Tuple{f, Int}, true),
+            (Tuple{f, Union{T, Nothing}} where T<:Integer, Tuple{f, Int}, false),
+            (Tuple{f, Ref{T}} where T<:AbstractString, Tuple{f, Ref{S}} where S<:Integer, false)]
+        @test (typeintersect(a, b) === Union{}) == empty
+        @test (typeintersect(b, a) === Union{}) == empty
     end
 end

@@ -123,71 +123,50 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_CANSAF
     }
 }
 
-static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
+// does the UnionAll `u` have free typevars? (memoized in `u->flags`)
+static int unionall_has_free_typevars(jl_unionall_t *u) JL_NOTSAFEPOINT;
+
+static int free_typevar_visit(jl_value_t *v, int pos, jl_typeenv_t *binders, void *ctx) JL_NOTSAFEPOINT
 {
-    while (1) {
-        if (jl_is_datatype(v) && (env == NULL || !((jl_datatype_t*)v)->hasfreetypevars))
-            return ((jl_datatype_t*)v)->hasfreetypevars;
-        if (jl_is_typevar(v)) {
-            return !typeenv_has(env, (jl_tvar_t*)v);
-        }
-        if (jl_is_typeapp(v))
+    if (jl_is_typevar(v))
+        return !typeenv_has(binders, (jl_tvar_t*)v);
+    if (jl_is_typeapp(v))
+        return 1;
+    // a datatype's flag, and a UnionAll's memo, are authoritative unless an
+    // enclosing binder may bind one of the free typevars; outside every
+    // binder, a UnionAll's memo is computed (once) instead of walking it here
+    if (jl_is_datatype(v)) {
+        if (!((jl_datatype_t*)v)->hasfreetypevars)
+            return -1;
+        if (binders == NULL)
             return 1;
-        while (jl_is_unionall(v)) {
-            jl_unionall_t *ua = (jl_unionall_t*)v;
-            if (ua->var->lb != jl_bottom_type && has_free_typevars(ua->var->lb, env))
-                return 1;
-            if (ua->var->ub != (jl_value_t*)jl_any_type && has_free_typevars(ua->var->ub, env))
-                return 1;
-            jl_typeenv_t *newenv = (jl_typeenv_t*)alloca(sizeof(jl_typeenv_t));
-            newenv->var = ua->var;
-            newenv->val = NULL;
-            newenv->prev = env;
-            env = newenv;
-            v = ua->body;
-        }
-        // After unwrapping UnionAll, body might be TypeApp or TypeVar;
-        // restart the loop so those checks at the top fire.
-        if (jl_is_typeapp(v) || jl_is_typevar(v))
-            continue;
-        if (jl_is_datatype(v)) {
-            int expect = ((jl_datatype_t*)v)->hasfreetypevars;
-            if (expect == 0 || env == NULL)
-                return expect;
-            size_t i;
-            for (i = 0; i < jl_nparams(v); i++) {
-                if (has_free_typevars(jl_tparam(v, i), env))
-                    return 1;
-            }
-            return 0;
-        }
-        else if (jl_is_uniontype(v) || jl_is_intersecttype(v)) {
-            if (has_free_typevars(((jl_uniontype_t*)v)->a, env))
-                return 1;
-           v = ((jl_uniontype_t*)v)->b;
-        }
-        else if (jl_is_some_Type(v)) {
-            v = jl_some_Type_T(v);
-        }
-        else if (jl_is_vararg(v)) {
-            jl_vararg_t *vm = (jl_vararg_t*)v;
-            if (!vm->T)
-                return 0;
-            if (vm->N) {
-                if (has_free_typevars(vm->N, env))
-                    return 1;
-            }
-            v = vm->T;
-        }
-        else {
-            return 0;
-        }
     }
+    else if (jl_is_unionall(v)) {
+        if (binders == NULL)
+            return unionall_has_free_typevars((jl_unionall_t*)v) ? 1 : -1;
+        if (jl_is_known_closed(v))
+            return -1;
+    }
+    return 0;
 }
+
+JL_TYPE_WALKER(free_typevars_walk, free_typevar_visit)
 
 JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    return has_free_typevars(v, NULL);
+    return free_typevars_walk(v, 0, NULL, NULL);
+}
+
+static int unionall_has_free_typevars(jl_unionall_t *u) JL_NOTSAFEPOINT
+{
+    int r = jl_unionall_flag(u, JL_UNIONALL_FREEVARS_KNOWN, JL_UNIONALL_FREEVARS);
+    if (r >= 0)
+        return r;
+    jl_typeenv_t binder = { u->var, NULL, NULL };
+    r = free_typevars_walk(u->var->lb, JL_WALK_UNIONALL, NULL, NULL) ||
+        free_typevars_walk(u->var->ub, JL_WALK_UNIONALL | JL_WALK_UB, NULL, NULL) ||
+        free_typevars_walk(u->body, JL_WALK_UNIONALL, &binder, NULL);
+    return jl_unionall_set_flag(u, JL_UNIONALL_FREEVARS_KNOWN, JL_UNIONALL_FREEVARS, r);
 }
 
 static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out) JL_CANSAFEPOINT
@@ -268,75 +247,21 @@ JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v)
 }
 
 // test whether a type has vars bound by the given environment
+static int bound_typevar_visit(jl_value_t *v, int pos, jl_typeenv_t *binders, void *env) JL_NOTSAFEPOINT
+{
+    // a binder met on the way shadows the environment's entry for the same var
+    if (jl_is_typevar(v))
+        return !typeenv_has(binders, (jl_tvar_t*)v) && typeenv_has_ne((jl_typeenv_t*)env, (jl_tvar_t*)v);
+    if (jl_is_known_closed(v))
+        return -1;
+    return 0;
+}
+
+JL_TYPE_WALKER(bound_typevars_walk, bound_typevar_visit)
+
 int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
 {
-    while (1) {
-        if (jl_is_datatype(v) && !((jl_datatype_t*)v)->hasfreetypevars)
-            return 0;
-        if (jl_is_typevar(v)) {
-            return typeenv_has_ne(env, (jl_tvar_t*)v);
-        }
-        if (jl_is_typeapp(v)) {
-            jl_typeapp_t *ta = (jl_typeapp_t*)v;
-            if (jl_has_bound_typevars(ta->head, env))
-                return 1;
-            v = ta->param;
-            continue;
-        }
-        while (jl_is_unionall(v)) {
-            jl_unionall_t *ua = (jl_unionall_t*)v;
-            if (ua->var->lb != jl_bottom_type && jl_has_bound_typevars(ua->var->lb, env))
-                return 1;
-            if (ua->var->ub != (jl_value_t*)jl_any_type && jl_has_bound_typevars(ua->var->ub, env))
-                return 1;
-            // Temporarily remove this var from env if necessary
-            // Note that te might be bound more than once in the env, so
-            // we remove it by setting it to itself in a new env.
-            if (typeenv_has_ne(env, ua->var)) {
-                jl_typeenv_t *newenv = (jl_typeenv_t*)alloca(sizeof(jl_typeenv_t));
-                newenv->var = ua->var;
-                newenv->val = (jl_value_t*)ua->var;
-                newenv->prev = env;
-                env = newenv;
-            }
-            v = ua->body;
-        }
-        // After unwrapping UnionAll, body might be TypeApp or TypeVar;
-        // restart the loop so those checks at the top fire.
-        if (jl_is_typeapp(v) || jl_is_typevar(v))
-            continue;
-        if (jl_is_datatype(v)) {
-            if (!((jl_datatype_t*)v)->hasfreetypevars)
-                return 0;
-            size_t i;
-            for (i = 0; i < jl_nparams(v); i++) {
-                if (jl_has_bound_typevars(jl_tparam(v, i), env))
-                    return 1;
-            }
-            return 0;
-        }
-        else if (jl_is_uniontype(v) || jl_is_intersecttype(v)) {
-            if (jl_has_bound_typevars(((jl_uniontype_t*)v)->a, env))
-                return 1;
-           v = ((jl_uniontype_t*)v)->b;
-        }
-        else if (jl_is_some_Type(v)) {
-            v = jl_some_Type_T(v);
-        }
-        else if (jl_is_vararg(v)) {
-            jl_vararg_t *vm = (jl_vararg_t *)v;
-            if (!vm->T)
-                return 0;
-            if (vm->N) {
-                if (jl_has_bound_typevars(vm->N, env))
-                    return 1;
-            }
-            v = vm->T;
-        }
-        else {
-            return 0;
-        }
-    }
+    return bound_typevars_walk(v, 0, NULL, env);
 }
 
 JL_DLLEXPORT int jl_has_typevar(jl_value_t *t, jl_tvar_t *v) JL_NOTSAFEPOINT
@@ -1051,6 +976,17 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
 
 // unionall types -------------------------------------------------------------
 
+JL_DLLEXPORT jl_value_t *jl_new_unionall(jl_tvar_t *var, jl_value_t *body)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_unionall_t *u = (jl_unionall_t*)jl_gc_alloc(ct->ptls, sizeof(jl_unionall_t), jl_unionall_type);
+    jl_set_typetagof(u, jl_unionall_tag, 0);
+    u->var = var;
+    u->body = body;
+    jl_atomic_store_relaxed(&u->flags, 0);
+    return (jl_value_t*)u;
+}
+
 JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
 {
     if (jl_is_vararg(body)) {
@@ -1095,7 +1031,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
         return body;
     //if (v->lb == v->ub)  // TODO maybe
     //    return jl_substitute_var(body, v, v->ub);
-    return jl_new_struct(jl_unionall_type, v, body);
+    return jl_new_unionall(v, body);
 }
 
 // --- type instantiation and cache ---
@@ -1737,7 +1673,9 @@ jl_unionall_t *jl_rename_unionall(jl_unionall_t *u)
     JL_GC_PUSH2(&v, &t);
     jl_typeenv_t env = { u->var, (jl_value_t *)v, NULL };
     t = inst_type_w_(u->body, &env, NULL, 0, 0, 0);
-    t = jl_new_struct(jl_unionall_type, v, t);
+    t = jl_new_unionall(v, t);
+    // the memoized facts are invariant under renaming the binder
+    jl_atomic_store_relaxed(&((jl_unionall_t*)t)->flags, jl_atomic_load_relaxed(&u->flags));
     JL_GC_POP();
     return (jl_unionall_t*)t;
 }
@@ -1784,7 +1722,7 @@ jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u)
     //if (v->lb == v->ub)  // TODO maybe
     //    t = jl_substitute_var(body, v, v->ub);
     //else
-    t = jl_new_struct(jl_unionall_type, v, t);
+    t = jl_new_unionall(v, t);
     JL_GC_POP();
     return t;
 }
@@ -1797,7 +1735,7 @@ jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u)
         return t;
     t = jl_rewrap_unionall_(t, ((jl_unionall_t*)u)->body);
     JL_GC_PUSH1(&t);
-    t = jl_new_struct(jl_unionall_type, ((jl_unionall_t*)u)->var, t);
+    t = jl_new_unionall(((jl_unionall_t*)u)->var, t);
     JL_GC_POP();
     return t;
 }
@@ -1875,11 +1813,11 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
             jl_tvar_t *newtvar = jl_new_typevar(ut->var->name, lb, ub);
             JL_GC_PUSH1(&newtvar);
             body = jl_substitute_var(body, ut->var, (jl_value_t*)newtvar);
-            t = jl_new_struct(jl_unionall_type, newtvar, body);
+            t = jl_new_unionall(newtvar, body);
             JL_GC_POP();
         }
         else if (body != ut->body) {
-            t = jl_new_struct(jl_unionall_type, ut->var, body);
+            t = jl_new_unionall(ut->var, body);
         }
         JL_GC_POP();
     }
@@ -2204,63 +2142,25 @@ static jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEP
     return NULL;
 }
 
-static int _may_substitute_ub(jl_value_t *v, jl_tvar_t *var, int inside_inv, int *cov_count) JL_NOTSAFEPOINT
+typedef struct {
+    jl_tvar_t *var;
+    int cov_count;
+} may_substitute_ub_ctx_t;
+
+// stops at an occurrence of `var` that forbids the substitution
+static int may_substitute_ub_visit(jl_value_t *v, int pos, jl_typeenv_t *binders, void *ctx_) JL_NOTSAFEPOINT
 {
-    while (1) {
-        if (v == (jl_value_t*)var) {
-            if (inside_inv) {
-                return 0;
-            }
-            else {
-                (*cov_count)++;
-                return *cov_count <= 1 || jl_is_concrete_type(var->ub);
-            }
-        }
-        while (jl_is_unionall(v)) {
-            jl_unionall_t *ua = (jl_unionall_t*)v;
-            if (ua->var == var)
-                return 1;
-            if (ua->var->lb != jl_bottom_type && !_may_substitute_ub(ua->var->lb, var, inside_inv, cov_count))
-                return 0;
-            if (ua->var->ub != (jl_value_t*)jl_any_type && !_may_substitute_ub(ua->var->ub, var, inside_inv, cov_count))
-                return 0;
-            v = ua->body;
-        }
-        if (jl_is_datatype(v)) {
-            int invar = inside_inv || !jl_is_tuple_type(v);
-            for (size_t i = 0; i < jl_nparams(v); i++) {
-                jl_value_t *p = jl_tparam(v, i);
-                if (!_may_substitute_ub(p, var, invar, cov_count))
-                    return 0;
-            }
+    may_substitute_ub_ctx_t *ctx = (may_substitute_ub_ctx_t*)ctx_;
+    if (v == (jl_value_t*)ctx->var) {
+        // treat as invariant inside vararg, for the sake of this algorithm
+        if ((pos & JL_WALK_INVARIANT) || ((pos & JL_WALK_VARARG) && !jl_is_concrete_type(ctx->var->ub)))
             return 1;
-        }
-        else if (jl_is_uniontype(v)) {
-            // TODO: is !inside_inv, these don't have to share the changes to cov_count
-            if (!_may_substitute_ub(((jl_uniontype_t*)v)->a, var, inside_inv, cov_count))
-                return 0;
-            v = ((jl_uniontype_t*)v)->b;
-        }
-        else if (jl_is_vararg(v)) {
-            jl_vararg_t *va = (jl_vararg_t*)v;
-            if (!va->T)
-                return 1;
-            if (va->N) {
-                if (!_may_substitute_ub(va->N, var, 1, cov_count))
-                    return 0;
-            }
-            if (!jl_is_concrete_type(var->ub))
-                inside_inv = 1; // treat as invariant inside vararg, for the sake of this algorithm
-            v = va->T;
-        }
-        else if (jl_is_some_Type(v)) {
-            inside_inv = 1;
-            v = jl_some_Type_T(v);
-        }
-        else {
-            return 1;
-        }
+        ctx->cov_count++;
+        return !(ctx->cov_count <= 1 || jl_is_concrete_type(ctx->var->ub));
     }
+    if (jl_is_unionall(v) && ((jl_unionall_t*)v)->var == ctx->var)
+        return -1; // shadowed
+    return 0;
 }
 
 // Check whether `var` may be replaced with its upper bound `ub` in `v where var<:ub`
@@ -2268,10 +2168,12 @@ static int _may_substitute_ub(jl_value_t *v, jl_tvar_t *var, int inside_inv, int
 //  * `var` does not appear in invariant position
 //  * `var` appears at most once (in covariant position) and not in a `Vararg`
 //    unless the upper bound is concrete (diagonal rule)
+JL_TYPE_WALKER(may_not_substitute_ub_walk, may_substitute_ub_visit)
+
 static int may_substitute_ub(jl_value_t *v, jl_tvar_t *var) JL_NOTSAFEPOINT
 {
-    int cov_count = 0;
-    return _may_substitute_ub(v, var, 0, &cov_count);
+    may_substitute_ub_ctx_t ctx = { var, 0 };
+    return !may_not_substitute_ub_walk(v, 0, NULL, &ctx);
 }
 
 static jl_value_t *normalize_unionalls(jl_value_t *t) JL_CANSAFEPOINT
@@ -2306,7 +2208,7 @@ static jl_value_t *normalize_unionalls(jl_value_t *t) JL_CANSAFEPOINT
         jl_value_t *body = normalize_unionalls(u->body);
         JL_GC_PUSH2(&body, &t);
         if (body != u->body) {
-            t = jl_new_struct(jl_unionall_type, u->var, body);
+            t = jl_new_unionall(u->var, body);
             u = (jl_unionall_t*)t;
         }
 
@@ -2362,39 +2264,27 @@ static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *en
 // `dcache`). Such types are invisible to other threads until published, so
 // instantiations referencing them can be deferred without any risk of a
 // concurrently created duplicate.
+static int references_deferred_walk(jl_value_t *t, int pos, jl_typeenv_t *binders, void *dcache) JL_NOTSAFEPOINT;
+
+static int references_deferred_visit(jl_value_t *t, int pos, jl_typeenv_t *binders, void *dcache_) JL_NOTSAFEPOINT
+{
+    jl_deferred_typecache_t *dcache = (jl_deferred_typecache_t*)dcache_;
+    if (jl_is_datatype(t))
+        return ptrhash_get(&dcache->group, t) != HT_NOTFOUND || ptrhash_get(&dcache->set, t) != HT_NOTFOUND;
+    if (jl_is_typevar(t)) {
+        // the walk does not enter the bounds of a typevar itself
+        jl_tvar_t *tv = (jl_tvar_t*)t;
+        return references_deferred_walk(tv->lb, 0, NULL, dcache) ||
+               references_deferred_walk(tv->ub, 0, NULL, dcache);
+    }
+    return 0;
+}
+
+JL_TYPE_WALKER(references_deferred_walk, references_deferred_visit)
+
 static int type_references_deferred(jl_value_t *t, jl_deferred_typecache_t *dcache) JL_NOTSAFEPOINT
 {
-    if (jl_is_datatype(t)) {
-        if (ptrhash_get(&dcache->group, t) != HT_NOTFOUND || ptrhash_get(&dcache->set, t) != HT_NOTFOUND)
-            return 1;
-        jl_svec_t *p = ((jl_datatype_t*)t)->parameters;
-        size_t np = jl_svec_len(p);
-        for (size_t i = 0; i < np; i++)
-            if (type_references_deferred(jl_svecref(p, i), dcache))
-                return 1;
-        return 0;
-    }
-    if (jl_is_uniontype(t))
-        return type_references_deferred(((jl_uniontype_t*)t)->a, dcache) ||
-               type_references_deferred(((jl_uniontype_t*)t)->b, dcache);
-    if (jl_is_unionall(t)) {
-        jl_unionall_t *ua = (jl_unionall_t*)t;
-        return type_references_deferred((jl_value_t*)ua->var, dcache) ||
-               type_references_deferred(ua->body, dcache);
-    }
-    if (jl_is_typevar(t)) {
-        jl_tvar_t *tv = (jl_tvar_t*)t;
-        return type_references_deferred(tv->lb, dcache) ||
-               type_references_deferred(tv->ub, dcache);
-    }
-    if (jl_is_vararg(t)) {
-        jl_vararg_t *vm = (jl_vararg_t*)t;
-        return (vm->T && type_references_deferred(vm->T, dcache)) ||
-               (vm->N && type_references_deferred(vm->N, dcache));
-    }
-    if (jl_is_typeeq(t) || jl_is_typeegal(t))
-        return type_references_deferred(((jl_typeeq_t*)t)->T, dcache);
-    return 0;
+    return references_deferred_walk(t, 0, NULL, dcache);
 }
 
 // Look up a type in the deferred cache. A linear scan is fine: a typegroup
@@ -2428,43 +2318,18 @@ static int typename_on_stack(jl_typestack_t *stack, jl_typename_t *tn) JL_NOTSAF
 // recognize self-referential definitions, whose supertype/field-type graph may
 // have no finite materialization when the recursive applications are
 // structurally increasing (issue #61347), and is completed lazily instead.
+static int typename_visit(jl_value_t *t, int pos, jl_typeenv_t *binders, void *tn) JL_NOTSAFEPOINT
+{
+    return jl_is_datatype(t) && ((jl_datatype_t*)t)->name == (jl_typename_t*)tn;
+}
+
+JL_TYPE_WALKER(typename_walk, typename_visit)
+
 static int typename_occurs_in(jl_value_t *t, jl_typename_t *tn) JL_NOTSAFEPOINT
 {
-    if (t == NULL)
-        return 0;
-    if (jl_is_svec(t)) {
-        size_t i, l = jl_svec_len(t);
-        for (i = 0; i < l; i++) {
-            if (typename_occurs_in(jl_svecref(t, i), tn))
-                return 1;
-        }
-        return 0;
-    }
-    if (jl_is_datatype(t)) {
-        if (((jl_datatype_t*)t)->name == tn)
-            return 1;
-        return typename_occurs_in((jl_value_t*)((jl_datatype_t*)t)->parameters, tn);
-    }
-    if (jl_is_unionall(t)) {
-        jl_unionall_t *u = (jl_unionall_t*)t;
-        return typename_occurs_in(u->var->lb, tn) || typename_occurs_in(u->var->ub, tn) ||
-               typename_occurs_in(u->body, tn);
-    }
-    if (jl_is_uniontype(t)) {
-        return typename_occurs_in(((jl_uniontype_t*)t)->a, tn) ||
-               typename_occurs_in(((jl_uniontype_t*)t)->b, tn);
-    }
-    if (jl_is_vararg(t)) {
-        jl_vararg_t *vm = (jl_vararg_t*)t;
-        return typename_occurs_in(vm->T, tn) || typename_occurs_in(vm->N, tn);
-    }
-    if (jl_is_typeeq(t))
-        return typename_occurs_in(jl_typeeq_T(t), tn);
-    if (jl_is_typeegal(t))
-        return typename_occurs_in(jl_typeegal_T(t), tn);
     // n.b. free TypeVar bounds are not walked: materialized typevar bound
     // graphs may be cyclic
-    return 0;
+    return t != NULL && typename_walk(t, 0, NULL, tn);
 }
 
 static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
@@ -3096,7 +2961,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
             }
             else if (newbody != ua->body || var != (jl_value_t*)ua->var) {
                 // if t's parameters are not bound in the environment, return it uncopied (#9378)
-                t = jl_new_struct(jl_unionall_type, var, newbody);
+                t = jl_new_unionall((jl_tvar_t*)var, newbody);
             }
         }
         JL_GC_POP();
@@ -3770,7 +3635,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_tvar_t *tttvar = tvar("T");
     jl_value_t *typeeq_body = (jl_value_t*)jl_wrap_Type((jl_value_t*)tttvar);
     JL_GC_PUSH1(&typeeq_body);
-    jl_type_type = (jl_unionall_t*)jl_new_struct(jl_unionall_type, tttvar, typeeq_body);
+    jl_type_type = (jl_unionall_t*)jl_new_unionall(tttvar, typeeq_body);
     JL_GC_POP();
     jl_wrap_Type(jl_bottom_type);
 
@@ -4402,8 +4267,7 @@ void jl_init_types(void) JL_GC_DISABLED
     tttvar = jl_new_typevar(jl_symbol("T"),
                             (jl_value_t*)jl_bottom_type,
                             (jl_value_t*)jl_anytuple_type);
-    jl_anytuple_type_type = (jl_unionall_t*)jl_new_struct(jl_unionall_type,
-                                                          tttvar, (jl_value_t*)jl_wrap_Type((jl_value_t*)tttvar));
+    jl_anytuple_type_type = (jl_unionall_t*)jl_new_unionall(tttvar, (jl_value_t*)jl_wrap_Type((jl_value_t*)tttvar));
 
     jl_tvar_t *ntval_var = jl_new_typevar(jl_symbol("T"), (jl_value_t*)jl_bottom_type,
                                           (jl_value_t*)jl_anytuple_type);
