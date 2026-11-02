@@ -1506,9 +1506,14 @@ function Base._round_digits(x::Rational, r::RoundingMode, digits::Integer, base)
     _check_digits_rounding_mode(r)
     y = _round_digits_small(T, x, r, digits, base)
     y === nothing || return y
-    neg = x < 0
-    a, q = abs(BigInt(numerator(x))), BigInt(denominator(x))
-    b = big(base)^abs(digits)
+    return _round_quotient_digits(T, abs(BigInt(numerator(x))), BigInt(denominator(x)), x < 0,
+                                  r, digits, base)
+end
+
+# round(±a / q, r; digits, base) in T, for integers a >= 0 and q > 0 that are not modified
+function _round_quotient_digits(::Type{T}, a::BigInt, q::BigInt, neg::Bool, r::RoundingMode,
+                                digits::Integer, base::Integer) where {T}
+    b = big(base)^abs(widen(digits))
     if digits >= 0
         N = _divround_magnitude!(a * b, q, r, neg)
         D = b
@@ -1521,13 +1526,25 @@ function Base._round_digits(x::Rational, r::RoundingMode, digits::Integer, base)
     return _quotient_to_float(T, N, D)
 end
 
+# Floats whose base^|digits| is not exact, when the double-double estimate in
+# `_round_digits_dd` is too close to call
+function Base._round_digits_exact(x::T, r::RoundingMode, digits::Integer,
+                                  base::Integer) where {T<:Union{Float32, Float64}}
+    _check_digits_rounding_mode(r)
+    iszero(x) && return x
+    num, pow, _ = Base.decompose(x)                # x == num * 2^pow
+    a = BigInt(abs(num)) << max(pow, 0)
+    q = BigInt(1) << max(-pow, 0)
+    return _round_quotient_digits(T, a, q, signbit(x), r, digits, base)
+end
+
 # The common case without BigInts, or nothing: x has machine integer parts, base^|digits| < 2^60,
 # and the rounded value is a quotient of integers exact in T, which one division rounds correctly.
 _round_digits_small(::Type, x::Rational, r, digits, base) = nothing
 function _round_digits_small(::Type{T}, x::Rational{<:Union{Base.BitSigned64, Base.BitUnsigned64}},
                              r::RoundingMode, digits::Integer, base) where {T<:Base.IEEEFloat}
     abs(widen(digits)) * Base.top_set_bit(base) <= 60 || return nothing
-    b = iszero(digits) ? Int64(1) : Int64(base)^Int(abs(digits))
+    b = iszero(digits) ? Int64(1) : Int64(base)^Int(abs(widen(digits)))
     n, q = Int128(numerator(x)), Int128(denominator(x))
     if digits >= 0
         N = div(n * b, q, r)

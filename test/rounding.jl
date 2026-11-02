@@ -410,15 +410,58 @@ end
     @test floor(-5e-324; digits=1, base=big(2)^1030) === -2.0^-1030
     @test floor(1.5; digits=typemin(Int)) === 0.0
     @test ceil(1.5; digits=typemin(Int)) === Inf
-    # 10^digits is inexact here, so results can be a grid step off at near-ties, but the
-    # rounding direction still holds
-    for (T, exps, ds) in ((Float32, -150:-100, 38:46), (Float64, -1075:-950, 308:325)), _ in 1:100
+    # 10^digits overflows the float type here, and the results are subnormal at times
+    for (T, exps, ds) in ((Float32, -150:-100, 38:46), (Float64, -1075:-950, 308:325)), _ in 1:40
         x = T(ldexp(rand(rng) + 1, rand(rng, exps))) * rand(rng, (-one(T), one(T)))
-        for d in ds
-            @test floor(x; digits=d) <= x <= ceil(x; digits=d)
-            @test abs(trunc(x; digits=d)) <= abs(x) <= abs(round(x, RoundFromZero; digits=d))
-            @test abs(big(round(x; digits=d)) - big(refround(x, RoundNearest, d))) <=
-                  big(10.0)^-d + big(eps(x))
+        for d in ds, r in modes
+            @test round(x, r; digits=d) === refround(x, r, d)
+        end
+    end
+
+    # base^|digits| is finite but not exact: the grid is still that of the exact power
+    @test floor(floatmax(); digits=-299) === 1.797693134e308
+    @test round(prevfloat(floatmax(), 4); sigdigits=15) === 1.79769313486231e308
+    @test round(floatmax(); digits=-377, base=6) === 1.7976931348623147e308
+    @test trunc(floatmax(Float32); sigdigits=8, base=11) === 3.4028233f38
+    @test round(-prevfloat(floatmax(Float32), 3), RoundDown; digits=-31, base=11) === -3.4028229f38
+    @test round(1.2e23; digits=-23) === 1e23           # 10^23 is halfway between floats
+    @test ceil(1.0e23; digits=-23) === 1e23
+    @test round(1.5e23; digits=-23) === 2e23
+    @test round(1e30; sigdigits=3) === 1e30
+    @test round(1.234567e-30; sigdigits=3) === 1.23e-30
+    @test floor(1.2345e-25; digits=27) === 1.23e-25
+    for (T, exps, ds) in ((Float64, 60:200, -60:-23), (Float64, -200:-60, 23:60),
+                          (Float32, 25:120, -36:-11), (Float32, -120:-25, 11:36),
+                          (Float64, 1000:1023, -308:-290), (Float32, 120:127, -38:-30)),
+        _ in 1:60
+        x = T(ldexp(rand(rng) + 1, rand(rng, exps))) * rand(rng, (-one(T), one(T)))
+        d = rand(rng, ds)
+        for r in modes, base in (10, 3, 6)
+            @test round(x, r; digits=d, base=base) === refround(x, r, d, base)
+        end
+        for s in (1, 3, 9), r in modes
+            @test round(x, r; sigdigits=s) === refround(x, r, s - Base.hidigit(x, 10))
+        end
+    end
+    # digits whose absolute value overflows its type
+    @test round(1e130; digits=Int8(-128)) === 1e130
+    @test round(1f30, RoundUp; digits=Int8(-128)) === Inf32
+    @test round(1e300; digits=Int8(-128), base=7) === 1e300
+    @test round(1//3; digits=Int8(-128)) === 0.0
+    # decimal literals sit close to the grid of their own power of ten
+    for e in 23:300, m in (1, 15, 999)
+        x = parse(Float64, "$(m)e$e")
+        for r in (RoundDown, RoundUp, RoundNearest)
+            @test round(x, r; sigdigits=3) === refround(x, r, 3 - Base.hidigit(x, 10))
+        end
+    end
+    @test_throws ArgumentError round(1e25, RoundingMode{:Foo}(); digits=-23)
+    # the band where base^digits is just beyond floatmax
+    for (T, base) in ((Float64, 3), (Float64, 7), (Float32, 3), (Float32, 11)), i in 0:20
+        k = ceil(Int, log(base, big(floatmax(T))))
+        x = prevfloat(floatmax(T), 1000i)
+        for r in modes
+            @test round(x, r; digits=-k, base=base) === refround(x, r, -k, base)
         end
     end
 
