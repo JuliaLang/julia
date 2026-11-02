@@ -580,9 +580,9 @@ julia> collect(range(-0.1, 0.3, length=5))
 julia> collect(LinRange(-0.1, 0.3, 5))
 5-element Vector{Float64}:
  -0.1
- -1.3877787807814457e-17
-  0.09999999999999999
-  0.19999999999999998
+  0.0
+  0.1
+  0.20000000000000004
   0.3
 ```
 
@@ -989,10 +989,14 @@ function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
 end
 unsafe_getindex(r::LinRange, i::Integer) = lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
 
-function lerpi(j::Integer, d::Integer, a::T, b::T) where T
-    t = j/d # ∈ [0,1]
-    # compute approximately fma(t, b, -fma(t, a, a))
-    return T((1-t)*a + t*b)
+lerpi(j::Integer, d::Integer, a::T, b::T) where {T<:Number} = T(_lerp(j/d, a, b))
+
+function _lerp(t, a, b)
+    s = one(t)
+    a, b = s*a, s*b
+    Δ = b - a
+    x = ifelse(isfinite(Δ), a + t*Δ, (s-t)*a + t*b)
+    return ifelse(t == s, b, x)
 end
 
 # non-scalar indexing
