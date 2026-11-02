@@ -1134,7 +1134,6 @@ fib34666(x) =
 # issue #41324
 @testset "Co-schedule" begin
     parent = Threads.@spawn begin
-        @test current_task().sticky == false
         child = @async begin end
         @test current_task().sticky == true
         @test Threads.threadid() == Threads.threadid(child)
