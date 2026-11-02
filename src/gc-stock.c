@@ -3427,6 +3427,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     uint64_t mutator_time = gc_end_time == 0 ? old_mut_time : gc_start_time - gc_end_time;
     uint64_t before_free_heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
     uint64_t start_mark_time = jl_hrtime();
+    int64_t perm_scanned_before_mark = perm_scanned_bytes;
+    int64_t promoted_now = 0;
     JL_PROBE_GC_MARK_BEGIN();
     {
         JL_TIMING(GC, GC_Mark);
@@ -3501,10 +3503,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_mark_and_steal(ptls);
         // Objects only reachable from `to_finalize` are usually dead once
         // their finalizers run; don't count them as promoted. The rare one
-        // that outlives its finalizer is then never counted, since it is old
-        // after this sweep, but it still counts towards heap growth.
+        // that outlives its finalizer is then never counted, but it still
+        // counts towards heap growth.
         gc_sync_all_caches(ptls);
-        int64_t scanned_before_to_finalize = scanned_bytes;
+        promoted_now = perm_scanned_bytes - perm_scanned_before_mark;
         // Conservative marking relies on age to tell allocated objects
         // and freelist entries apart.
         mark_reset_age = !jl_gc_conservative_gc_support_enabled();
@@ -3516,7 +3518,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_mark_and_steal(ptls);
         mark_reset_age = 0;
         gc_sync_all_caches(ptls);
-        scanned_bytes = scanned_before_to_finalize;
     }
 
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
@@ -3543,8 +3544,14 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_stats_big_obj();
     }
     gc_num.total_allocd += gc_num.allocd;
-    // promoted_bytes are all the new bytes scanned that got promoted to old but that have never seen a full GC as old
-    promoted_bytes += scanned_bytes;
+    // promoted_bytes are the bytes that reached the oldest generation, which only a full
+    // sweep frees, since the last full sweep. A quick collection marks old only the objects
+    // that already survived one collection (`GC_OLD` -> `GC_OLD_MARKED`), so its old-marked
+    // bytes are exactly those. Objects that survive only once are still freed by quick
+    // sweeps and are not counted. Right after a full sweep every live old object is
+    // re-marked, so that collection says nothing about promotion.
+    if (!prev_sweep_full)
+        promoted_bytes += promoted_now;
     scanned_bytes = 0;
     // 4. next collection decision
     int remset_nptr = 0;
