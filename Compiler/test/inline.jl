@@ -2578,4 +2578,18 @@ let src = code_typed1((DataType,)) do x
         Base.typename(Int)
     end
 end
+
+# a concrete result that retains the `:inaccessiblememonly` taint of the call can still be
+# inlined as a constant (JuliaLang/julia#64412)
+const constant_some_any1 = Some{Any}(1)
+const constant_some_any2 = Some{Any}(2)
+pick_constant_some_any(::Val{1}, b::Bool) = b ? constant_some_any1 : constant_some_any2
+pick_constant_some_any(::Val{2}, b::Bool) = b ? constant_some_any2 : constant_some_any1
+let src = code_typed1((Bool,)) do b
+        pick_constant_some_any(b ? Val(1) : Val(2), true)
+    end
+    @test count(isinvoke(:pick_constant_some_any), src.code) == 0
+    @test count(iscall((src, pick_constant_some_any)), src.code) == 0
+end
+
 end # module inline_tests
