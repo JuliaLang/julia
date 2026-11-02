@@ -3,11 +3,11 @@
 
 const _has_v1_6_hooks  = VERSION >= v"1.6"
 const _has_v1_10_hooks = isdefined(Core, :_setparser!)
-const _has_v1_14_version_hooks = isdefined(Base, :VERSION_EDITION)
-const VERSION_EDITION = @static if _has_v1_14_version_hooks
-    Base.VERSION_EDITION
+const _has_v1_14_version_hooks = isdefined(Base, :LATEST_STABLE_EDITION)
+const LATEST_STABLE_EDITION = @static if _has_v1_14_version_hooks
+    Base.LATEST_STABLE_EDITION
 else
-    (Int(VERSION.major), Int(VERSION.minor))
+    (1, 13)
 end
 
 struct ErrorSpec
@@ -388,7 +388,7 @@ function core_parser_hook(code, filename, offset, options)
     core_parser_hook(code, filename, 1, offset, options)
 end
 function core_parser_hook(code, filename, lineno, offset, options)
-    core_parser_hook(code, filename, lineno, offset, options, VERSION_EDITION)
+    core_parser_hook(code, filename, lineno, offset, options, LATEST_STABLE_EDITION)
 end
 
 if _has_v1_10_hooks
@@ -438,7 +438,7 @@ end
 # Call the flisp parser
 function _fl_parse_hook(code, filename, lineno, offset, options)
     @static if _has_v1_14_version_hooks
-        Base.fl_parse(code, filename, lineno, offset, options, VERSION_EDITION)
+        Base.fl_parse(code, filename, lineno, offset, options, (1, 14))
     elseif VERSION >= v"1.8.0-DEV.1370" # https://github.com/JuliaLang/julia/pull/43876
         return Core.Compiler.fl_parse(code, filename, lineno, offset, options)
     elseif _has_v1_6_hooks

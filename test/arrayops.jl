@@ -2803,6 +2803,9 @@ end
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=1) == [1 2; 4 6]
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=2) == [1 3; 3 7]
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=3) == [1 2; 3 4]
+
+    @test_throws ArgumentError cumsum([1, 2, 3], dims=0)
+    @test_throws ArgumentError cumsum!(Vector{Int}(undef, 3), [1, 2, 3], dims=-1)
 end
 @testset "issue #18363" begin
     @test_throws DimensionMismatch cumsum!([0,0], 1:4)
@@ -3399,6 +3402,16 @@ end
             end
         end
     end
+end
+
+@testset "setindex! with a LogicalIndex from to_indices (#64386)" begin
+    A = zeros(4)
+    A[only(to_indices(A, ([true, false, true, false],)))] = [1.0, 2.0]
+    @test A == [1.0, 0.0, 2.0, 0.0]
+    B = zeros(2, 2)
+    B[only(to_indices(B, (BitMatrix([1 0; 0 1]),)))] = [1.0, 2.0]
+    @test B == [1.0 0.0; 0.0 2.0]
+    @test_throws DimensionMismatch A[only(to_indices(A, ([true, false, true, false],)))] = [1.0]
 end
 
 @testset "conditionally-throwing version of `checkbounds` should return `nothing` if it returns" begin

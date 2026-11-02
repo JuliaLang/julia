@@ -13,6 +13,7 @@
 
 #define XX(name) \
 .global CNAME(name) SEP \
+DEBUGINFO(name) SEP \
 CNAME(name)##: SEP \
 .cfi_startproc SEP \
 .p2align    2 SEP \
@@ -20,6 +21,7 @@ CNAME(name)##: SEP \
     ldr x16, [x16, PAGEOFF(CNAME(name##_addr))] SEP \
     br x16 SEP \
 .cfi_endproc SEP \
+EXPORT(name) SEP \
 
 JL_RUNTIME_EXPORTED_FUNCS(XX)
 #ifdef _OS_WINDOWS_

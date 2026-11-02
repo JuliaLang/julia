@@ -6,7 +6,7 @@ Core._import(Base, Core, :_eval_import, :_eval_import, true)
 Core._import(Base, Core, :_eval_using, :_eval_using, true)
 
 using .Core.Intrinsics, .Core.IR
-import .Core: VERSION_EDITION, OLDEST_EDITION
+import .Core: OLDEST_EDITION, LATEST_STABLE_EDITION
 
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
@@ -151,8 +151,8 @@ function _setup_module!(mod::Module, edition)
     Core.declare_const(mod, :include, IncludeInto(mod))
     Core.declare_const(mod, :eval, Core.EvalInto(mod))
     if edition === nothing
-        # two cases: (1) VERSION_EDITION is assumed in bootstrap, and (2) after
-        # bootstrap, OLDEST_EDITION module forms have no version
+        # two cases: (1) LATEST_STABLE_EDITION is assumed in bootstrap, and (2)
+        # after bootstrap, OLDEST_EDITION module forms have no version
         if Core._parse === nothing || Core._parse === Base.fl_parse
             return nothing
         end

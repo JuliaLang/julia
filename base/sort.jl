@@ -5,7 +5,7 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype, tail,
-    sub_with_overflow, add_with_overflow, BitSigned, BitIntegerType, top_set_bit
+    sub_with_overflow, add_with_overflow, BitSigned, BitIntegerType, top_set_bit, uabs
 
 import Base:
     sort,
@@ -64,6 +64,10 @@ end
 
 Test whether a collection is in sorted order. The keywords modify what
 order is considered sorted, as described in the [`sort!`](@ref) documentation.
+
+As for `sort!`, `lt` must define a strict weak order, otherwise the result may
+be unexpected: `issorted` only checks that no element is less than the one
+before it. For example, `issorted([1, 1], lt=(<=))` returns `false`.
 
 # Examples
 ```jldoctest
@@ -275,9 +279,9 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrde
         length(a)
     else
         if !(o isa ReverseOrdering)
-            fld(floor(Integer, x) - f, h) + 1
+            fld(maybe_unsigned(floor(Integer, x) - f), uabs(h)) + 1
         else
-            fld(ceil(Integer, x) - f, h) + 1
+            fld(maybe_unsigned(f - ceil(Integer, x)), uabs(h)) + 1
         end
     end
 end
@@ -291,9 +295,9 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrd
         length(a) + 1
     else
         if !(o isa ReverseOrdering)
-            cld(ceil(Integer, x) - f, h) + 1
+            cld(maybe_unsigned(ceil(Integer, x) - f), uabs(h)) + 1
         else
-            cld(floor(Integer, x) - f, h) + 1
+            cld(maybe_unsigned(f - floor(Integer, x)), uabs(h)) + 1
         end
     end
 end
@@ -463,7 +467,6 @@ true
 """
 function insorted end
 insorted(x, v::AbstractVector; kw...) = !isempty(searchsorted(v, x; kw...))
-insorted(x, r::AbstractRange) = in(x, r)
 
 ## Alternative keyword management
 
@@ -1851,7 +1854,7 @@ julia> v[p]
 ```
 """
 partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
-    partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs...)
+    partialsortperm!(similar(Vector{keytype(v)}, axes(v,1)), v, k; kwargs...)
 
 """
     partialsortperm!(ix, v, k; by=identity, lt=isless, rev=false)

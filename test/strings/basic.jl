@@ -587,7 +587,7 @@ end
             (0xd800, false), (0xdfff, false),
             (0xe000, true), (0xffff, true),
             (0x10000, true), (0x10ffff, true),
-            (0x110000, false)
+            (0x110000, false), (-1, false), (Int8(-1), false)
         )
         @test isvalid(Char, val) == pass
         # no value has type `Union{}`

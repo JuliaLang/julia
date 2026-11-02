@@ -132,7 +132,7 @@ unlock(c::GenericCondition) = unlock(c.lock)
 trylock(c::GenericCondition) = trylock(c.lock)
 islocked(c::GenericCondition) = islocked(c.lock)
 
-lock(f, c::GenericCondition) = lock(f, c.lock)
+lock(f::F, c::GenericCondition) where {F} = lock(f, c.lock)
 
 ## GenericCondition as a waitable (see base/park.jl): the lock-carried
 ## kind - its lock is caller-held from before phase 4 into the suspend

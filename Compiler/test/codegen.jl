@@ -1551,3 +1551,22 @@ let v = Any[typemax(Int)], w = Any[nothing]
     @test w[1] === typemax(Int)
     @test (@allocated recopy_union!(w, v)) == 0
 end
+
+function missing_edge_union_tag(c::Bool, d::Bool, e::Bool)
+    local x
+    if c
+        x = e ? nothing : missing
+    end
+    if d
+        x = 1
+    end
+    return (c | d) ? x : 0
+end
+let llvm = get_llvm(missing_edge_union_tag, Tuple{Bool, Bool, Bool}, true, false, false)
+    @test occursin(r"%tindex_phi\d* = phi i8", llvm)
+    @test !occursin(r"%tindex_phi\d* = phi i8 [^\n]*poison", llvm)
+end
+@test missing_edge_union_tag(false, false, true) === 0
+@test missing_edge_union_tag(false, true, false) === 1
+@test missing_edge_union_tag(true, false, false) === missing
+@test missing_edge_union_tag(true, false, true) === nothing

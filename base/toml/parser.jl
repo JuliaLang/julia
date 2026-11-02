@@ -1412,7 +1412,7 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
         c = eat_char(l) # eat the character we stopped at
         next_slash = c == '\\'
         if next_slash && !quoted
-            if peek(l) == '\n' || peek(l) == '\r'
+            if multiline && (peek(l) == '\n' || peek(l) == '\r')
                 push!(l.chunks, start_chunk:(l.prevpos-1-1)) # -1 due to eating the slash
                 skip_ws_nl_no_comment(l)
                 start_chunk = l.prevpos

@@ -939,6 +939,20 @@ end
     @test JuliaLowering.include_string(m, "WA{Int}(5)") isa m.WA{Int}
 end
 
+@testset "inner ctor with a `where`-typed `Type` self argument" begin
+    local test_mod = Module()
+    jl_eval(test_mod, """
+        struct CTW{T}
+            x::T
+            (t::(Type{CTW{T}} where T))(x) = new{T}(x)
+        end
+    """)
+    w = jl_eval(test_mod, "CTW{Int}(1)")
+    @test w isa test_mod.CTW{Int}
+    @test w.x === 1
+    @test jl_eval(test_mod, "CTW{Float64}(1)").x === 1.0
+end
+
 @testset "(AI) struct fields named with underscores" begin
     # Bug in _defaultctors giving lowering a :lambda
     m = Module()

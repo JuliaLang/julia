@@ -134,6 +134,7 @@ void jl_wake_signal_watchers(void)
 }
 
 jl_mutex_t jl_uv_mutex;
+int jl_uv_loop_unwatched = 0;
 
 void jl_init_uv(void)
 {
@@ -170,7 +171,20 @@ JL_DLLEXPORT void jl_iolock_begin(void) JL_CANSAFEPOINT
  */
 JL_DLLEXPORT void jl_iolock_end(void) JL_CANSAFEPOINT
 {
+    // if we leave work in the loop while nobody runs it, wake the event loop thread
+    // (before unlocking, which can throw)
+    if (jl_uv_mutex.count == 1 && jl_uv_loop_unwatched && uv_loop_alive(jl_io_loop)) {
+        jl_uv_loop_unwatched = 0;
+        jl_wake_io_loop_thread();
+    }
+    // a thread outside the thread pools never returns to the scheduler, so it must hand
+    // the event loop back to any pool thread that went to sleep because we held the iolock
+    jl_task_t *ct = jl_current_task;
+    int handoff = jl_uv_mutex.count == 1 && jl_threadpoolid(jl_atomic_load_relaxed(&ct->tid)) == -1;
     JL_UV_UNLOCK();
+    // after the unlock, so a thread that saw the iolock held is already marked sleeping
+    if (handoff)
+        jl_wake_io_loop_thread();
 }
 
 
@@ -432,7 +446,7 @@ static void jl_proc_exit_cleanup_cb(uv_process_t *process, int64_t exit_status, 
  */
 JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
-    JL_UV_LOCK();
+    jl_iolock_begin();
     if (handle->type == UV_PROCESS && ((uv_process_t*)handle)->pid != 0) {
         // take ownership of this handle,
         // so we can waitpid for the resource to exit and avoid leaving zombies
@@ -460,7 +474,7 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
             uv_close(handle, &jl_uv_closeHandle);
         }
     }
-    JL_UV_UNLOCK();
+    jl_iolock_end();
 }
 
 /**
@@ -471,11 +485,11 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 JL_DLLEXPORT void jl_forceclose_uv(uv_handle_t *handle) JL_CANSAFEPOINT
 {
     if (!uv_is_closing(handle)) { // avoid double-closing the stream
-        JL_UV_LOCK();
+        jl_iolock_begin();
         if (!uv_is_closing(handle)) { // double-check
             uv_close(handle, &jl_uv_closeHandle);
         }
-        JL_UV_UNLOCK();
+        jl_iolock_end();
     }
 }
 
@@ -556,9 +570,9 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
         }
     }
     opts.exit_cb = cb;
-    JL_UV_LOCK();
+    jl_iolock_begin();
     int r = uv_spawn(loop, proc, &opts);
-    JL_UV_UNLOCK();
+    jl_iolock_end();
     return r;
 }
 
@@ -707,10 +721,10 @@ JL_DLLEXPORT int jl_uv_write(uv_stream_t *stream, const char *data, size_t n,
     uv_buf_t buf[1];
     buf[0].base = (char*)data;
     buf[0].len = n;
-    JL_UV_LOCK();
+    jl_iolock_begin();
     JL_SIGATOMIC_BEGIN();
     int err = uv_write(uvw, stream, buf, 1, writecb);
-    JL_UV_UNLOCK();
+    jl_iolock_end();
     JL_SIGATOMIC_END();
     return err;
 }
@@ -775,10 +789,10 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
         buf[0].base = data;
         buf[0].len = n;
         req->data = NULL;
-        JL_UV_LOCK();
+        jl_iolock_begin();
         JL_SIGATOMIC_BEGIN();
         int status = uv_write(req, stream, buf, 1, (uv_write_cb)jl_uv_writecb);
-        JL_UV_UNLOCK();
+        jl_iolock_end();
         JL_SIGATOMIC_END();
         if (status < 0) {
             jl_uv_writecb(req, status);
@@ -1261,9 +1275,9 @@ JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_ctx,
     baton->notify_data1 = notify_data1;
     baton->notify_data2 = notify_data2;
 
-    JL_UV_LOCK();
+    jl_iolock_begin();
     uv_queue_work(jl_io_loop, &baton->req, jl_work_wrapper, jl_work_notifier);
-    JL_UV_UNLOCK();
+    jl_iolock_end();
 
     return 0;
 }

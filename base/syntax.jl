@@ -595,7 +595,11 @@ first_linenode(lnn::LineNumberNode) = lnn
 # provenance (but still removed).
 
 function _first_linenode(e::Expr)
-    e.head in (:macrocall, :quote, :inert) || for a in e.args
+    if e.head === :macrocall
+        loc = length(e.args) >= 2 ? e.args[2] : nothing
+        return loc isa LineNumberNode ? loc : nothing
+    end
+    e.head in (:quote, :inert) || for a in e.args
         a isa LineNumberNode && return a
         if a isa Expr
             a_out = _first_linenode(a)
@@ -640,9 +644,11 @@ isa_lowering_ast_node(@nospecialize(e)) =
     e isa Symbol || e isa QuoteNode || e isa Expr || e isa GlobalRef
 
 function expr_to_syntax(@nospecialize(e),
-                        src::Union{LineNumberNode, SourceRef}=
-                            e isa Expr ? first_linenode(e) : LineNumberNode(0, :var""),
+                        src::Union{LineNumberNode, SourceRef}=LineNumberNode(0, :var""),
                         context=SyntaxContext(nothing, nothing, JL_OLD_EDITION, false))
+    if e isa Expr && src isa LineNumberNode && (src.line == 0 || src.file === :none)
+        src = something(_first_linenode(e), src)
+    end
     _expr_to_syntax(e, context, src, false)[1]
 end
 function expr_to_syntax(@nospecialize(e), src::Syntax)

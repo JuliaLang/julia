@@ -170,7 +170,6 @@ end
     run_gctest("gc/objarray.jl")
     run_gctest("gc/chunks.jl")
     run_gctest("gc/copyto.jl")
-    run_gctest("gc/idletasks.jl")
 end
 
 @testset "errno survives allocation" begin

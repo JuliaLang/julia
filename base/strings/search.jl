@@ -412,7 +412,7 @@ function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
     elseif m == 0
         return sentinel
     elseif n == 1
-        return something(findnext(isequal(_nthbyte(t,1)), s, i), sentinel)
+        return something(findnext(isequal(_nthbyte(t,1)), s, Int(_i)), sentinel)
     end
 
     w = m - n
@@ -730,7 +730,7 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
     elseif m == 0
         return sentinel
     elseif n == 1
-        return something(findprev(isequal(_nthbyte(t,1)), s, k), sentinel)
+        return something(findprev(isequal(_nthbyte(t,1)), s, Int(_k)), sentinel)
     end
 
     w = m - n

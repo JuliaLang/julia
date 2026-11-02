@@ -580,9 +580,9 @@ julia> collect(range(-0.1, 0.3, length=5))
 julia> collect(LinRange(-0.1, 0.3, 5))
 5-element Vector{Float64}:
  -0.1
- -1.3877787807814457e-17
-  0.09999999999999999
-  0.19999999999999998
+  0.0
+  0.1
+  0.20000000000000004
   0.3
 ```
 
@@ -989,10 +989,14 @@ function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
 end
 unsafe_getindex(r::LinRange, i::Integer) = lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
 
-function lerpi(j::Integer, d::Integer, a::T, b::T) where T
-    t = j/d # ∈ [0,1]
-    # compute approximately fma(t, b, -fma(t, a, a))
-    return T((1-t)*a + t*b)
+lerpi(j::Integer, d::Integer, a::T, b::T) where {T<:Number} = T(_lerp(j/d, a, b))
+
+function _lerp(t, a, b)
+    s = one(t)
+    a, b = s*a, s*b
+    Δ = b - a
+    x = ifelse(isfinite(Δ), a + t*Δ, (s-t)*a + t*b)
+    return ifelse(t == s, b, x)
 end
 
 # non-scalar indexing
@@ -1171,6 +1175,7 @@ end
 function ==(r::Union{StepRange{T},StepRangeLen{T,T}}, s::Union{StepRange{T},StepRangeLen{T,T}}) where {T}
     isempty(r) && return isempty(s)
     _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
+    iszero(step(r)) && return iszero(step(s)) && (first(r) == first(s)) && (length(r) == length(s))
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 end
 
@@ -1298,16 +1303,14 @@ function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer}
     lspan = last(span)
     fr = first(r)
     lr = last(r)
-    sr = step(r)
-    if sr > 0
-        ifirst = fr >= fspan ? 1 : cld(fspan-fr, sr)+1
-        ilast = lr <= lspan ? length(r) : length(r) - cld(lr-lspan, sr)
-    elseif sr < 0
-        ifirst = fr <= lspan ? 1 : cld(lspan-fr, sr)+1
-        ilast = lr >= fspan ? length(r) : length(r) - cld(lr-fspan, sr)
+    if isempty(r) || isempty(span) || max(fr, lr) < fspan || min(fr, lr) > lspan
+        ifirst, ilast = 1, 0
+    elseif step(r) >= 0
+        ifirst = searchsortedfirst(r, fspan)
+        ilast = searchsortedlast(r, lspan)
     else
-        ifirst = fr >= fspan ? 1 : length(r)+1
-        ilast = fr <= lspan ? length(r) : 0
+        ifirst = searchsortedfirst(r, lspan, Reverse)
+        ilast = searchsortedlast(r, fspan, Reverse)
     end
     r isa AbstractUnitRange ? (ifirst:ilast) : (ifirst:1:ilast)
 end
@@ -1443,12 +1446,13 @@ end
 collect(r::AbstractRange) = Array(r)
 
 _reverse(r::OrdinalRange, ::Colon) = (:)(last(r), negate(step(r)), first(r))
-function _reverse(r::StepRangeLen, ::Colon)
+function _reverse(r::StepRangeLen{T,R,<:Any,L}, ::Colon) where {T,R,L}
     # If `r` is empty, `length(r) - r.offset + 1 will be nonpositive hence
     # invalid. As `reverse(r)` is also empty, any offset would work so we keep
     # `r.offset`
     offset = isempty(r) ? r.offset : length(r)-r.offset+1
-    return typeof(r)(r.ref, negate(r.step), length(r), offset)
+    step = negate(r.step)
+    return StepRangeLen{T,R,typeof(step),L}(r.ref, step, length(r), offset)
 end
 _reverse(r::LinRange{T}, ::Colon) where {T} = typeof(r)(r.stop, r.start, length(r))
 

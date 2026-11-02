@@ -33,12 +33,17 @@ static int archtest_failures = 0;
         return 0; \
     } while (0)
 
+// Tests are built with frame pointers (-fno-omit-frame-pointer), and those
+// that check unwinding also without (ARCHTEST_NO_FP), where unwinding past C
+// code needs its unwind info.
+
 // Whether the function that uses this was entered with the stack aligned as
-// the ABI requires right after a call. With frame pointers (the tests are
-// built with -fno-omit-frame-pointer) the frame address is a fixed offset from
-// the stack pointer at entry; elsewhere, fall back to an over-aligned local,
-// which compilers place assuming the ABI alignment.
-#if defined(__x86_64__) && !defined(_WIN32)
+// the ABI requires right after a call. With frame pointers the frame address
+// is a fixed offset from the stack pointer at entry; elsewhere, fall back to
+// an over-aligned local, which compilers place assuming the ABI alignment.
+#if defined(ARCHTEST_NO_FP)
+#define STACK_ALIGNED_AT_ENTRY() stack_is_aligned()
+#elif defined(__x86_64__) && !defined(_WIN32)
 // rbp = entry rsp - 8, and entry rsp is 8 mod 16
 #define STACK_ALIGNED_AT_ENTRY() ((((uintptr_t)__builtin_frame_address(0)) & 15) == 0)
 #elif defined(__i386__) && !defined(_WIN32)
@@ -88,7 +93,12 @@ static __attribute__((noinline, unused)) int stack_is_aligned(void)
 //    differs between compilers there and GCC's Thumb code keeps none.
 typedef struct {
     uintptr_t ips[64];
+    // the CFA of the frame below each (its stack pointer, as found by the
+    // unwind info of that frame), or 0 if unknown
+    uintptr_t cfas[64];
+    uintptr_t sps[64];  // each frame's own stack pointer, or 0 if unknown
     int n;
+    int ended;          // whether the unwinder reached the end of the chain, not an error
     uintptr_t caller_ip;
 } backtrace_t;
 
@@ -98,8 +108,11 @@ static __attribute__((noinline)) void get_backtrace(backtrace_t *bt)
     bt->caller_ip = RETURN_IP();
     void *frames[sizeof(bt->ips) / sizeof(bt->ips[0])];
     bt->n = RtlCaptureStackBackTrace(0, sizeof(frames) / sizeof(frames[0]), frames, NULL);
-    for (int i = 0; i < bt->n; i++)
+    for (int i = 0; i < bt->n; i++) {
         bt->ips[i] = (uintptr_t)frames[i];
+        bt->cfas[i] = bt->sps[i] = 0;
+    }
+    bt->ended = 1;
 }
 #else
 // (on Windows i686, GCC and its unwinder use DWARF CFI too)
@@ -110,10 +123,14 @@ static _Unwind_Reason_Code backtrace_frame(struct _Unwind_Context *ctx, void *ar
         return _URC_END_OF_STACK;
 #if defined(__arm__)
     // ARM's unwinder (EHABI) only has _Unwind_GetIP, as a macro in GCC's header
-    bt->ips[bt->n++] = _Unwind_GetIP(ctx);
+    bt->ips[bt->n] = _Unwind_GetIP(ctx);
+    bt->cfas[bt->n] = bt->sps[bt->n] = 0;
+    bt->n++;
 #else
     int ip_before_insn = 0;
-    bt->ips[bt->n++] = _Unwind_GetIPInfo(ctx, &ip_before_insn);
+    bt->ips[bt->n] = _Unwind_GetIPInfo(ctx, &ip_before_insn);
+    bt->cfas[bt->n] = _Unwind_GetCFA(ctx);
+    bt->sps[bt->n++] = 0;
 #endif
     return _URC_NO_REASON;
 }
@@ -122,11 +139,14 @@ static __attribute__((noinline)) void get_backtrace(backtrace_t *bt)
 {
     bt->caller_ip = RETURN_IP();
     bt->n = 0;
-    _Unwind_Backtrace(backtrace_frame, bt);
+    // a full buffer stops the walk as an error, too
+    _Unwind_Reason_Code r = _Unwind_Backtrace(backtrace_frame, bt);
+    bt->ended = r == _URC_END_OF_STACK || bt->n == (int)(sizeof(bt->ips) / sizeof(bt->ips[0]));
 }
 #endif
 
-#if !defined(_WIN64) && !(defined(__arm__) && (defined(__thumb__) || defined(__clang__)))
+#if !defined(_WIN64) && !(defined(__arm__) && (defined(__thumb__) || defined(__clang__))) && \
+    !defined(ARCHTEST_NO_FP)
 #define HAVE_FP_BACKTRACE 1
 // The walk stops at the first frame that does not look like part of the chain
 // (one that is not above the previous one, misaligned, or far from it), as code

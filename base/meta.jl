@@ -308,7 +308,7 @@ function parser_for_module(mod::Union{Module, Nothing})
     if mod isa Module && invokelatest(isdefined, mod, Symbol("#_internal_julia_parse"))
         invokelatest(getglobal, mod, Symbol("#_internal_julia_parse"))
     else
-        Base.VersionedParse(Base.VERSION_EDITION)
+        Base.VersionedParse(Base.LATEST_STABLE_EDITION)
     end
 end
 
