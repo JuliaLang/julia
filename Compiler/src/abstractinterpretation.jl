@@ -1155,8 +1155,15 @@ function _concrete_eval_call(
         concrete_result = ConcreteResult(edge, effects; proof)
         return ConstCallResult(Bottom, Any, concrete_result, effects)
     end
-    concrete_result = ConcreteResult(edge, EFFECTS_TOTAL, value; proof)
-    return ConstCallResult(Const(value), Bottom, concrete_result, EFFECTS_TOTAL)
+    rt = Const(value)
+    # A non-mutation-free value obtained by concrete evaluation may refer to global
+    # memory (e.g. a const global `Ref`), so preserve the `:inaccessiblememonly` taint
+    # of the call: otherwise the caller may access the value's memory and still be
+    # refined to be `:inaccessiblememonly` (and thus `:consistent`)
+    concrete_effects = is_mutation_free_argtype(rt) ? EFFECTS_TOTAL :
+        Effects(EFFECTS_TOTAL; inaccessiblememonly=effects.inaccessiblememonly)
+    concrete_result = ConcreteResult(edge, concrete_effects, value; proof)
+    return ConstCallResult(rt, Bottom, concrete_result, concrete_effects)
 end
 
 # check if there is a cycle and duplicated inference of `mi`
