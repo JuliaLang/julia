@@ -192,7 +192,7 @@ end
 
 function _find_loaded(re::Regex)
     p = _find_loaded_or_nothing(re)
-    p === nothing && error("no loaded shared object matching $re")
+    p === nothing && error(lazy"no loaded shared object matching $re")
     return p
 end
 
