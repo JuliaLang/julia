@@ -1,7 +1,7 @@
 # Experimental "new macros" mostly for testing.  These should soon be
 # deleted and replaced with normal-looking macros lowered by JL.
 #
-# TODO: @inline, @noinline, @inbounds, @simd, @ccall, @assume_effects
+# TODO: @inbounds, @simd, @ccall, @assume_effects
 #
 # Note that `@ast __context__ __context__.macrocall [:foo ...]` is unhygienic,
 # since `@ast` is meant for internal lowering use (it requires an explicit
@@ -33,7 +33,7 @@ end
 #     @ast __context__ __context__.macrocall [:atomic ex]
 # end
 
-function Base.var"@label"(__context__::MacroContext, ex)
+function Base.var"@label"(__context__::MacroContext, ex::SyntaxTree)
     if head(ex) !== :identifier
         return @ast __context__ __context__.macrocall [
             :symbolicblock "loop-exit"::identifier ex]
@@ -43,7 +43,7 @@ function Base.var"@label"(__context__::MacroContext, ex)
     @ast __context__ ex [:symboliclabel ex]
 end
 
-function Base.var"@label"(__context__::MacroContext, name, body)
+function Base.var"@label"(__context__::MacroContext, name::SyntaxTree, body::SyntaxTree)
     head(name) === :identifier ||
         throw(LoweringError(name, "expected a label name"))
     syntax_name(name) == "_" &&
@@ -56,7 +56,7 @@ function Base.var"@label"(__context__::MacroContext, name, body)
     @ast __context__ __context__.macrocall [:symbolicblock name body]
 end
 
-function Base.var"@goto"(__context__::MacroContext, ex)
+function Base.var"@goto"(__context__::MacroContext, ex::SyntaxTree)
     @jl_assert head(ex) == :identifier ex
     @ast __context__ ex [:symbolicgoto ex]
 end
@@ -71,14 +71,14 @@ function Base.var"@__FUNCTION__"(__context__::MacroContext)
 end
 end
 
-function Base.var"@isdefined"(__context__::MacroContext, ex)
+function Base.var"@isdefined"(__context__::MacroContext, ex::SyntaxTree)
     @ast __context__ __context__.macrocall [:isdefined ex]
 end
 
 function Base.var"@generated"(__context__::MacroContext)
     @ast __context__ __context__.macrocall [:generated]
 end
-function Base.var"@generated"(__context__::MacroContext, ex)
+function Base.var"@generated"(__context__::MacroContext, ex::SyntaxTree)
     if !(head(ex) === :function ||
         head(ex) === :(=) && is_eventually_call(ex[1]))
         throw(LoweringError(ex, "Expected a function argument to `@generated`"))
@@ -105,7 +105,8 @@ function Base.var"@generated"(__context__::MacroContext, ex)
     ]
 end
 
-function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, arg_types)
+function Base.var"@cfunction"(__context__::MacroContext, callable::SyntaxTree,
+                              return_type::SyntaxTree, arg_types::SyntaxTree)
     if head(arg_types) != :tuple
         throw(LoweringError(arg_types, "@cfunction argument types must be a literal tuple"))
     end
@@ -134,7 +135,7 @@ function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, 
     ]
 end
 
-function ccall_macro_parse(ctx, exs)
+function ccall_macro_parse(ctx::MacroContext, exs::Tuple{Vararg{SyntaxTree}})
     gc_safe = false
     cancel = nothing
     opts = exs[1:end-1]
@@ -198,7 +199,7 @@ function ccall_macro_parse(ctx, exs)
     # collect args and types
     args = SyntaxList()
     types = SyntaxList()
-    function pusharg!(at)
+    function pusharg!(at::SyntaxTree)
         @stm at begin
             [:(::) a t] -> (push!(args, a); push!(types, t))
             _ -> throw(LoweringError(
@@ -227,7 +228,12 @@ function ccall_macro_parse(ctx, exs)
     return func, rettype, types, args, gc_safe, cancel, num_required_args
 end
 
-function ccall_macro_lower(ctx, ex, convention, func, rettype, types, args, gc_safe, cancel, num_required_args)
+function ccall_macro_lower(ctx::MacroContext, ex::SyntaxTree,
+                           convention::Union{Symbol, Tuple{Symbol, UInt16}},
+                           func::SyntaxTree, rettype::SyntaxTree,
+                           types::Vector{SyntaxTree}, args::Vector{SyntaxTree}, gc_safe::Bool,
+                           cancel::Union{Nothing, Tuple{SyntaxTree, SyntaxTree}},
+                           num_required_args::Int)
     # TODO deal with cancel
     if convention isa Tuple
         cconv_tuple = (convention..., gc_safe)
@@ -248,11 +254,11 @@ function Base.var"@ccall"(ctx::MacroContext)
     throw(ArgumentError("@ccall needs a function signature with a return type"))
 end
 
-function Base.var"@ccall"(ctx::MacroContext, exs...)
+function Base.var"@ccall"(ctx::MacroContext, exs::SyntaxTree...)
     ccall_macro_lower(ctx, exs[end], :ccall, ccall_macro_parse(ctx, exs)...)
 end
 
-function Base.GC.var"@preserve"(__context__::MacroContext, exs...)
+function Base.GC.var"@preserve"(__context__::MacroContext, exs::SyntaxTree...)
     idents = exs[1:end-1]
     for e in idents
         if head(e) != :identifier
@@ -262,7 +268,7 @@ function Base.GC.var"@preserve"(__context__::MacroContext, exs...)
     @ast __context__ __context__.macrocall [:gc_preserve exs[end] exs[1:end-1]...]
 end
 
-function Base.Experimental.var"@opaque"(__context__::MacroContext, ex)
+function Base.Experimental.var"@opaque"(__context__::MacroContext, ex::SyntaxTree)
     @ast __context__ __context__.macrocall [:opaque_closure
         nothing::value
         nothing::value
@@ -274,7 +280,7 @@ end
 
 # @eval should mostly ignore hygiene against our system's best wishes.  Still
 # attempt to preserve provenance.
-function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
+function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex::SyntaxTree)
     sc = mc.macrocall.context
     val = remove_scope(@ast mc mc.macrocall ("eval_result"::identifier))
     q = _legacy_quote_to_syntax((@ast mc mc.macrocall [:quote ex]), 0, true)
@@ -293,13 +299,13 @@ function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
         val
     ]
 end
-function Base.var"@eval"(__context__::MacroContext, ex)
+function Base.var"@eval"(__context__::MacroContext, ex::SyntaxTree)
     sc = __context__.macrocall.context
     mod = @ast __context__ __context__.macrocall base_layer(sc).mod::value
     _at_eval_code(__context__, mod, ex)
 end
 
-function Base.var"@eval"(__context__::MacroContext, mod, ex)
+function Base.var"@eval"(__context__::MacroContext, mod::SyntaxTree, ex::SyntaxTree)
     head(mod) === :parameters && throw(LoweringError(
         mod, "`@eval` does not accept keyword arguments"))
     _at_eval_code(__context__, mod, ex)
@@ -331,10 +337,10 @@ function annotate_meta(st::Syntax, meta::Symbol)
     end
 end
 
-function Base.var"@noinline"(_, st)
+function Base.var"@noinline"(::MacroContext, st::SyntaxTree)
     annotate_meta(st, :noinline)
 end
-function Base.var"@inline"(_, st)
+function Base.var"@inline"(::MacroContext, st::SyntaxTree)
     annotate_meta(st, :inline)
 end
 
@@ -345,7 +351,7 @@ end # Base.generating_output(false)
 # lowering which don't exist in Base but arguably should.
 #
 # For now we have our own versions
-function var"@islocal"(__context__::MacroContext, ex)
+function var"@islocal"(__context__::MacroContext, ex::SyntaxTree)
     @jl_assert head(ex) == :identifier ex
     @ast __context__ __context__.macrocall [:islocal ex]
 end
@@ -403,20 +409,20 @@ end
 etc. Needs careful thought - we should probably just copy what lisp does with
 quote+quasiquote 😅
 """
-function var"@inert"(__context__::MacroContext, ex)
+function var"@inert"(__context__::MacroContext, ex::SyntaxTree)
     @jl_assert head(ex) == :quote ex
     @ast __context__ __context__.macrocall [:inert ex]
 end
 
 # `quote`/`inert` for syntaxtree
-function var"@syntaxinert"(__context__::MacroContext, st)
+function var"@syntaxinert"(__context__::MacroContext, st::SyntaxTree)
     @ast __context__ __context__.macrocall [:syntaxinert st]
 end
-function var"@syntaxquote"(__context__::MacroContext, st)
+function var"@syntaxquote"(__context__::MacroContext, st::SyntaxTree)
     @ast __context__ __context__.macrocall [:syntaxquote st]
 end
 # not particularly good or useful, as @syntaxquote must expand first
-function var"@syntaxunquote"(__context__::MacroContext, st)
+function var"@syntaxunquote"(__context__::MacroContext, st::SyntaxTree)
     @ast __context__ __context__.macrocall [:syntaxunquote st]
 end
 
@@ -425,7 +431,7 @@ end
 # without dedicated surface syntax, mainly for testing metaprogramming in JL.
 # It is insufficient in many ways, e.g. not all forms can be expressed (need
 # surface syntax)
-function var"@legacy_quote_to_syntax"(__context__::MacroContext, st)
+function var"@legacy_quote_to_syntax"(__context__::MacroContext, st::SyntaxTree)
     @jl_assert head(st) === :quote || head(st) === :inert st
     if is_flisp_compat(__context__.macrocall)
         st
@@ -435,7 +441,7 @@ function var"@legacy_quote_to_syntax"(__context__::MacroContext, st)
         _legacy_quote_to_syntax(st, 0, false)
     end
 end
-function _legacy_quote_to_syntax(st::SyntaxTree, depth, force::Bool)
+function _legacy_quote_to_syntax(st::SyntaxTree, depth::Int, force::Bool)
     k = head(st)
     if k === :quote && depth == 0 && (force || !is_flisp_compat(st))
         @jl_assert numchildren(st) == 1 st
@@ -479,7 +485,7 @@ end
 Set the edition for some syntax.  This can be used to define macros with older
 signatures in newer editions.
 """
-function var"@edition"(__context__::MacroContext, ver_st, st)
+function var"@edition"(__context__::MacroContext, ver_st::SyntaxTree, st::SyntaxTree)
     head(st) === :macro || throw(LoweringError(
         st, "`@edition edition macro` only supports macro definitions"))
     ver = JuliaLowering.eval(syntax_module(ver_st), ver_st)
@@ -492,8 +498,8 @@ macro edition(_, x)
     throw(ArgumentError("@edition requires JuliaLowering"))
 end
 
-function _ensure_edition(st, en::Tuple{Int, Int},
-                         scmap=Dict{SyntaxContext, SyntaxContext}())
+function _ensure_edition(st::SyntaxTree, en::Tuple{Int, Int},
+                         scmap::Dict{SyntaxContext, SyntaxContext}=Dict{SyntaxContext, SyntaxContext}())
     sc = st.context
     sc2 = get(scmap, sc, nothing)
     if isnothing(sc2)
