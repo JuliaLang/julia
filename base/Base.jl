@@ -103,6 +103,17 @@ include("set.jl")
 
 include("syntax.jl")
 
+# Convenience function for `jl_parse`. Note that bootstrap `include` also goes through
+# `jl_parse`, which uses this as soon as it is defined.
+function _c_parseall_expr(code::Core.SimpleVector, filename::String,
+                          lineno::Int, mod::Union{Module, Nothing})
+    (ptr, len) = code
+    str = unsafe_string(ptr, len)
+    pfm = Meta.parser_for_module(mod)
+    ex, offset = Meta._parse_string(str, filename, lineno, 1, :all, Expr, pfm)
+    return Core.svec(ex, offset-1)
+end
+
 # Dynamic scopes (types only; the ScopedValues API is included much later)
 include("scope.jl")
 # Cancellation tokens (the `cancel` keyword-argument machinery is used from
