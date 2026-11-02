@@ -838,6 +838,10 @@ function to_compatible_exception(@nospecialize(exc))
     end
 end
 
+# Not a closure: compiling code that creates a closure eagerly compiles its body in
+# the latest world, which would pull lowering out of the frozen world.
+_lower_step_positional(iter, mod, world, soft_scope) = lower_step(iter, mod, world; soft_scope)
+
 function _eval(mod::Module, iter::LoweringIterator,
                error_compat::Bool, soft_scope::Union{Nothing,Bool})
     modules = Module[mod]
@@ -845,8 +849,8 @@ function _eval(mod::Module, iter::LoweringIterator,
     while true
         thunk = try
             invoke_in_lowering_world(
-                ()->lower_step(iter, modules[end],
-                               Base.get_world_counter(); soft_scope))::Core.SimpleVector
+                _lower_step_positional, iter, modules[end],
+                Base.get_world_counter(), soft_scope)::Core.SimpleVector
         catch exc
             error_compat ? rethrow(to_compatible_exception(exc)) : rethrow()
         end

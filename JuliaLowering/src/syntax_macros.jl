@@ -285,7 +285,7 @@ function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
                 val
                 [:call at_eval_hook::value
                     mod_st
-                    [:call fill_context::value trim_provenance(q, true) new_sc::value]
+                    [:call _fill_context_in_lowering_world::value trim_provenance(q, true) new_sc::value]
                 ]
             ]
         ]
@@ -293,16 +293,23 @@ function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
         val
     ]
 end
+function _at_eval_code(mc::MacroContext, ex)
+    sc = mc.macrocall.context
+    mod = @ast mc mc.macrocall base_layer(sc).mod::value
+    _at_eval_code(mc, mod, ex)
+end
+_fill_context_in_lowering_world(st, sc) = invoke_in_lowering_world(fill_context, st, sc)
+
+# Macros are called in the latest world, so these (and the `@eval` runtime code above)
+# enter the lowering world explicitly instead of compiling lowering code there.
 function Base.var"@eval"(__context__::MacroContext, ex)
-    sc = __context__.macrocall.context
-    mod = @ast __context__ __context__.macrocall base_layer(sc).mod::value
-    _at_eval_code(__context__, mod, ex)
+    invoke_in_lowering_world(_at_eval_code, __context__, ex)
 end
 
 function Base.var"@eval"(__context__::MacroContext, mod, ex)
     head(mod) === :parameters && throw(LoweringError(
         mod, "`@eval` does not accept keyword arguments"))
-    _at_eval_code(__context__, mod, ex)
+    invoke_in_lowering_world(_at_eval_code, __context__, mod, ex)
 end
 
 function annotate_meta_fbody(st::Syntax, meta::Symbol)
@@ -332,10 +339,10 @@ function annotate_meta(st::Syntax, meta::Symbol)
 end
 
 function Base.var"@noinline"(_, st)
-    annotate_meta(st, :noinline)
+    invoke_in_lowering_world(annotate_meta, st, :noinline)
 end
 function Base.var"@inline"(_, st)
-    annotate_meta(st, :inline)
+    invoke_in_lowering_world(annotate_meta, st, :inline)
 end
 
 end # Base.generating_output(false)

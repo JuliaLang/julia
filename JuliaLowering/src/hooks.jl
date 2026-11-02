@@ -49,7 +49,7 @@ end
 
 @fzone "JL: eval" function core_eval_hook(mod::Module, @nospecialize(st))
     if !(st isa SyntaxTree)
-        st = expr_to_est(st)
+        st = invoke_in_lowering_world(expr_to_est, st)::SyntaxTree
     end
     return _eval(mod, lower_init(st), true, nothing)
 end

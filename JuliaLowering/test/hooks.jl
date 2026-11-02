@@ -160,4 +160,26 @@
         @test_throws "in mapexpr" JL.include_string(ex -> error("in mapexpr"),
                                                     Module(:MapexprErr2), "1+1", "none")
     end
+
+    @testset "entry points called in the latest world use the lowering world" begin
+        # Macros, `@eval`'s runtime code and the `Core.eval` hook are entered from the
+        # latest world. Lowering code they run must still use the frozen lowering
+        # world, so redefining it later must not be seen. This checks the copy of
+        # JuliaLowering in Base, which is the one that defines these Base macros.
+        script = raw"""
+            const JL = Base.JuliaLowering
+            JL._lowering_world[] == 0 && error("JuliaLowering not active in a frozen world")
+            Core.eval(JL, quote
+                annotate_meta(st::Syntax, meta::Symbol) = error("latest-world annotate_meta")
+                _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex) = error("latest-world _at_eval_code")
+            end)
+            @inline g1(x) = x + 1
+            @noinline g2(x) = x + 2
+            @eval g3(x) = x + 3
+            print(g1(1) + g2(1) + g3(1))
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                     "JULIA_USE_FLISP_LOWERING" => "false")
+        @test readchomp(cmd) == "9"
+    end
 end
