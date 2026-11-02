@@ -365,6 +365,7 @@
     XX(jl_pop_handler) \
     XX(jl_pop_handler_noexcept) \
     XX(jl_preload_sysimg) \
+    XX(jl_prepare_system_image) \
     XX(jl_prepend_cwd) \
     XX(jl_printf) \
     XX(jl_print_backtrace) \

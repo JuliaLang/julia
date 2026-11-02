@@ -1042,6 +1042,7 @@ int jl_foreach_reachable_mtable(int (*visit)(jl_methtable_t *mt, void *env) JL_C
 void jl_init_main_module(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT;
 jl_array_t *jl_get_loaded_modules(void) JL_CANSAFEPOINT;
+int jl_precompile_suppressed(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree) JL_CANSAFEPOINT;
 int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
 

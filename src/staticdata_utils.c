@@ -102,6 +102,11 @@ JL_DLLEXPORT void jl_suppress_precompile(int suppress)
     suppress_precompile = suppress;
 }
 
+int jl_precompile_suppressed(void)
+{
+    return suppress_precompile;
+}
+
 static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED /*FIXME*/;
 // Mutex for newly_inferred
 jl_mutex_t newly_inferred_mutex;

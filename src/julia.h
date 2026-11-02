@@ -2488,7 +2488,18 @@ JL_DLLEXPORT const char *jl_get_libjulia_internal_path(void) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint32_t jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, bool_t compress, ios_t **s, jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT, int64_t *srctextpos, jl_array_t *module_init_order) JL_CANSAFEPOINT;
+// how `jl_create_system_image` serializes an image
+typedef struct {
+    int8_t trim;            // as `--trim`
+    int8_t strip_ir;        // as `--strip-ir`
+    int8_t strip_metadata;  // as `--strip-metadata`
+    int8_t keep_codegen_ir; // write the IR retained only to generate native code
+    int8_t emit_split;      // the native code is written to a separate file
+    int8_t compress;        // compress the serialized data
+    const char *cpu_target; // the targets of the native code, for a split package image
+} jl_image_options_t;
+JL_DLLEXPORT ios_t *jl_prepare_system_image(jl_array_t *worklist, const jl_image_options_t *opts, jl_array_t **mod_array JL_REQUIRE_ROOTED_SLOT, jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT, int64_t *srctextpos, int64_t *checksumpos) JL_CANSAFEPOINT;
+JL_DLLEXPORT uint32_t jl_create_system_image(void *native_data, jl_array_t *worklist, const jl_image_options_t *opts, ios_t *f, int64_t checksumpos, jl_array_t *mod_array, jl_array_t *module_init_order, jl_array_t *ext_foreign_cis) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete, const char *pkgimage) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT;
