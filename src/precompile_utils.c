@@ -1,12 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-static int suppress_precompile = 0;
-JL_DLLEXPORT void jl_suppress_precompile(int suppress)
-{
-    suppress_precompile = suppress;
-}
-
-
 static void jl_rebuild_methtables(arraylist_t *MIs, htable_t *mtables) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     // Rebuild MethodTable to contain only those methods for which we compiled code.

@@ -3746,8 +3746,6 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
                                               (emit_split ? JI_FLAG_SPLIT : 0));
     if (worklist) {
         if (_native_data != NULL) {
-            if (suppress_precompile)
-                newly_inferred = NULL;
             *_native_data = jl_create_native(NULL, 0, 1, jl_atomic_load_acquire(&jl_world_counter), NULL, suppress_precompile ? (jl_array_t*)jl_an_empty_vec_any : worklist, 0, module_init_order, ext_foreign_cis);
         }
         jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos);

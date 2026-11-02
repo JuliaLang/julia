@@ -95,6 +95,13 @@ static uint64_t jl_worklist_key(jl_array_t *worklist) JL_NOTSAFEPOINT
     return 0;
 }
 
+// no native code is generated for the code inferred while making a package image
+static int suppress_precompile = 0;
+JL_DLLEXPORT void jl_suppress_precompile(int suppress)
+{
+    suppress_precompile = suppress;
+}
+
 static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED /*FIXME*/;
 // Mutex for newly_inferred
 jl_mutex_t newly_inferred_mutex;
@@ -135,7 +142,7 @@ static jl_array_t *queue_used(jl_array_t *list, jl_query_cache *query_cache) JL_
 
 JL_DLLEXPORT jl_array_t* jl_compute_new_used_ci(void) JL_CANSAFEPOINT
 {
-    if (newly_inferred == NULL)
+    if (newly_inferred == NULL || suppress_precompile)
         return jl_alloc_vec_any(0);
     jl_query_cache query_cache;
     init_query_cache(&query_cache);
