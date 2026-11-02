@@ -1,5 +1,3 @@
-# TODO: Allow `soft_scope::Union{Nothing,Bool}` to be passed through `jl_lower` C API
-
 """
 Becomes `Core._lower()` upon activating JuliaLowering.
 
@@ -24,7 +22,7 @@ function _core_lowering_hook(mod::Module, @nospecialize(code), world, warn, loc)
         st0 = rebase_layers(st0, mod)
         st1 = expand_forms_1(st0, world, true)
         ctx2, st2 = expand_forms_2(st1, world)
-        ctx3, st3 = resolve_scopes(ctx2, st2, warn)
+        ctx3, st3 = resolve_scopes(ctx2, st2, warn, false)
         ctx4, st4 = convert_closures(ctx3, st3)
         ctx5, st5 = linearize_ir(ctx4, st4)
         ex = to_lowered_expr(st5)
@@ -42,7 +40,7 @@ end
     if !(st isa SyntaxTree)
         st = expr_to_est(st)
     end
-    return _eval(mod, lower_init(st), true, nothing)
+    return _eval(mod, lower_init(st), true, false)
 end
 
 # TODO: JL tests expect @eval to run with JL as the active lowerer.  Once it is

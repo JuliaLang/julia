@@ -280,7 +280,7 @@ function _lower_generated_code(g::Base.SyntaxGeneratedFunctionStub, source::Meth
     ]
     ex1 = expand_forms_1(ctx1, ex0)
     ctx2, ex2 = expand_forms_2(ex1, world)
-    ctx3, ex3 = resolve_scopes(ctx2, ex2)
+    ctx3, ex3 = resolve_scopes(ctx2, ex2, false, false)
     ctx4, ex4 = convert_closures(ctx3, ex3)
     _ctx5, ex5 = linearize_ir(ctx4, ex4)
     ci = to_lowered_expr(ex5)

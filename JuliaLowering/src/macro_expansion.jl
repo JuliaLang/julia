@@ -190,7 +190,7 @@ function eval_macro_name(ctx, mctx::MacroContext, st0::SyntaxTree)
             # Instead, we repeat the latter parts of `lower()` here.
             mod = syntax_module(st)::Module
             ctx2, st2 = expand_forms_2(st, ctx.world)
-            ctx3, st3 = resolve_scopes(ctx2, st2)
+            ctx3, st3 = resolve_scopes(ctx2, st2, false, false)
             ctx4, st4 = convert_closures(ctx3, st3)
             _ctx5, st5 = linearize_ir(ctx4, st4)
             expr_form  = to_lowered_expr(st5)

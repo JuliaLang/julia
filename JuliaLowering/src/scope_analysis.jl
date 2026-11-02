@@ -76,9 +76,12 @@ mutable struct ScopeResolutionContext <: AbstractLoweringContext
 end
 
 function contains_softscope_marker(ex)
-    head(ex) == :softscope  && return true
-    needs_resolution(ex) && for c in children(ex)
-        contains_softscope_marker(c) && return true
+    head(ex) == :softscope && return true
+    if needs_resolution(ex) &&
+        !(head(ex) in (:scope_block, :lambda, :method_defs, :generated_lambda))
+        for c in children(ex)
+            contains_softscope_marker(c) && return true
+        end
     end
     return false
 end
@@ -932,10 +935,9 @@ This pass also records the set of binding IDs used locally within the
 enclosing lambda form and information about variables captured by closures.
 """
 @fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex,
-                                                    warn::Bool=false;
-                                                    soft_scope::Union{Nothing,Bool}=nothing,
+                                                    warn::Bool, softscope::Bool;
                                                     world::UInt=ctx.world)
-    enable_soft_scopes = soft_scope !== nothing ? soft_scope : contains_softscope_marker(ex)
+    enable_soft_scopes = softscope || contains_softscope_marker(ex)
     ctx2 = ScopeResolutionContext(ctx.layer, ctx.bindings,
                                   Dict{ScopeLayer, Int}(),
                                   Vector{ScopeInfo}(), Vector{ScopeId}(),

@@ -1,12 +1,12 @@
 # Non-incremental lowering API for non-toplevel non-module expressions.
 # May be removed?
 
-function lower(mod::Module, ex_in::SyntaxTree; soft_scope::Union{Nothing,Bool}=nothing)
+function lower(mod::Module, ex_in::SyntaxTree, softscope::Bool=false)
     ex0 = rebase_layers(ex_in, mod)
     world = Base.get_world_counter()
     ex1 = expand_forms_1(ex0, world, true)
     ctx2, ex2 = expand_forms_2(ex1, world)
-    ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
+    ctx3, ex3 = resolve_scopes(ctx2, ex2, false, softscope)
     ctx4, ex4 = convert_closures(ctx3, ex3)
     _ctx5, ex5 = linearize_ir(ctx4, ex4)
     ex5
@@ -96,8 +96,8 @@ function lower_init(ex::SyntaxTree)
     LoweringIterator([(ex, false, 0)])
 end
 
-function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
-                    soft_scope::Union{Nothing,Bool}=nothing)
+function lower_step(iter::LoweringIterator, mod::Module, world::UInt,
+                    softscope::Bool)
     if isempty(iter.todo)
         return Core.svec(:done)
     end
@@ -110,7 +110,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         elseif is_module_body
             return Core.svec(:end_module)
         else
-            return lower_step(iter, mod, world; soft_scope)
+            return lower_step(iter, mod, world, softscope)
         end
     else
         ex = top_ex
@@ -124,7 +124,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
     end
     if k == :toplevel
         push!(iter.todo, (ex, false, 1))
-        return lower_step(iter, mod, world; soft_scope)
+        return lower_step(iter, mod, world, softscope)
     elseif k == :module
         (version, notbare, mname, body) = @stm ex begin
             [:module version nb_st mname body] ->
@@ -151,7 +151,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         end
         coverage_visit_line(mod, ex)
          ctx2, ex2 = expand_forms_2(ex, world)
-         ctx3, ex3 = resolve_scopes(ctx2, ex2, !is_module_body; soft_scope)
+         ctx3, ex3 = resolve_scopes(ctx2, ex2, !is_module_body, softscope)
          ctx4, ex4 = convert_closures(ctx3, ex3)
         _ctx5, ex5 = linearize_ir(ctx4, ex4)
         out = to_lowered_expr(ex5)
@@ -819,12 +819,11 @@ function _foreignsymbol_expr(ex)
     end
 end
 
-@fzone "JL: eval" function eval(mod::Module, @nospecialize(ex);
-                                soft_scope::Union{Nothing,Bool}=nothing)
+@fzone "JL: eval" function eval(mod::Module, @nospecialize(ex), softscope::Bool=false)
     if !(ex isa SyntaxTree)
         ex = expr_to_est(ex)
     end
-    return _eval(mod, lower_init(ex), false, soft_scope)
+    return _eval(mod, lower_init(ex), false, softscope)
 end
 
 # TODO: Consumers expect LoadError from macros and ErrorException from lowering,
@@ -843,14 +842,14 @@ function to_compatible_exception(@nospecialize(exc))
 end
 
 function _eval(mod::Module, iter::LoweringIterator,
-               error_compat::Bool, soft_scope::Union{Nothing,Bool})
+               error_compat::Bool, softscope::Bool)
     modules = Module[mod]
     result = nothing
     while true
         thunk = try
             invoke_in_lowering_world(
                 ()->lower_step(iter, modules[end],
-                               Base.get_world_counter(); soft_scope))::Core.SimpleVector
+                               Base.get_world_counter(), softscope))::Core.SimpleVector
         catch exc
             error_compat ? rethrow(to_compatible_exception(exc)) : rethrow()
         end
