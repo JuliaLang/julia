@@ -512,6 +512,15 @@ static int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
     return 1;
 }
 
+static jl_value_t *make_linenumbernode(const char *filename, int lineno) JL_CANSAFEPOINT
+{
+    jl_value_t *line = jl_box_long(lineno);
+    JL_GC_PUSH1(&line);
+    jl_value_t *loc = jl_new_struct(jl_linenumbernode_type, line, jl_symbol(filename));
+    JL_GC_POP();
+    return loc;
+}
+
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_for_uninferred(jl_method_instance_t *mi, jl_code_info_t *src)
 {
     jl_svec_t *edges = jl_emptysvec;
@@ -589,15 +598,15 @@ static jl_value_t *jl_eval_toplevel_stmts(jl_module_t *JL_NONNULL m, jl_array_t 
 {
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
-    jl_value_t *root = NULL;
-    JL_GC_PUSH1(&root);
+    jl_value_t *root = NULL, *loc = NULL;
+    JL_GC_PUSH2(&root, &loc);
     jl_value_t *res = jl_nothing;
     int i;
     for (i = 0; i < jl_array_nrows(stmts); i++) {
         root = jl_array_ptr_ref(stmts, i);
         if (jl_needs_lowering(root)) {
-            root = jl_svecref(jl_lower(m, root, *toplevel_filename, *toplevel_lineno, ~(size_t)0,
-                                       need_value), 0);
+            loc = make_linenumbernode(*toplevel_filename, *toplevel_lineno);
+            root = jl_svecref(jl_lower(m, root, ~(size_t)0, need_value, loc), 0);
         }
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         res = jl_toplevel_eval_flex(m, root, fast, 1, toplevel_filename, toplevel_lineno);
@@ -663,7 +672,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     JL_GC_PUSH3(&thk, &ex, &root);
 
     if (!expanded && (jl_needs_lowering(e))) {
-        ex = (jl_expr_t*)jl_svecref(jl_lower(m, e, *toplevel_filename, *toplevel_lineno, ~(size_t)0, 1), 0);
+        root = make_linenumbernode(*toplevel_filename, *toplevel_lineno);
+        ex = (jl_expr_t*)jl_svecref(jl_lower(m, e, ~(size_t)0, 1, root), 0);
     }
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
 
@@ -874,7 +884,8 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     jl_value_t *result = jl_nothing;
     jl_value_t *ast = NULL;
     jl_value_t *expression = NULL;
-    JL_GC_PUSH3(&ast, &result, &expression);
+    jl_value_t *loc = NULL;
+    JL_GC_PUSH4(&ast, &result, &expression, &loc);
 
     ast = jl_svecref(jl_parse(jl_string_data(text), jl_string_len(text),
                               filename, module), 0);
@@ -901,7 +912,8 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
                 jl_atomic_store_relaxed(&jl_lineno, lineno);
                 continue;
             }
-            expression = jl_svecref(jl_lower(module, expression, jl_string_data(filename), lineno, ~(size_t)0, 1), 0);
+            loc = make_linenumbernode(filename_str, lineno);
+            expression = jl_svecref(jl_lower(module, expression, ~(size_t)0, 1, loc), 0);
             ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             result = jl_toplevel_eval_flex(module, expression, 1, 1, &filename_str, &lineno);
         }

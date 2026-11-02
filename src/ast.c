@@ -1164,10 +1164,13 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule,
 }
 
 // warn: Print any lowering warnings returned; otherwise ignore
-JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_module_t *inmodule, jl_value_t *expr,
-                                     const char *filename, int line, size_t world, bool_t warn) JL_CANSAFEPOINT
+JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_module_t *inmodule, jl_value_t *expr, size_t world,
+                                     bool_t warn, jl_value_t *loc) JL_CANSAFEPOINT
 {
     JL_TIMING(LOWERING, LOWERING);
+    int line = jl_linenode_line(loc);
+    jl_value_t *file = jl_linenode_file(loc);
+    const char *filename = jl_is_symbol(file) ? jl_symbol_name((jl_sym_t*)file) : "none";
     jl_timing_show_location(filename, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
     jl_array_t *kwargs = NULL;
     JL_GC_PUSH3(&expr, &kwargs, &inmodule);
@@ -1215,28 +1218,27 @@ JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_module_t *inmodule, jl_value_t *expr,
 
 // Main C entry point to lowering.  Calls jl_fl_lower during bootstrap, and
 // Core._lower otherwise (this is also jl_fl_lower unless we have JuliaLowering)
-JL_DLLEXPORT jl_value_t *jl_lower(jl_module_t *inmodule, jl_value_t *expr,
-                                  const char *filename, int line, size_t world, bool_t warn)
+JL_DLLEXPORT jl_value_t *jl_lower(jl_module_t *inmodule, jl_value_t *expr, size_t world,
+                                  bool_t warn, jl_value_t *loc)
 {
     jl_value_t *julia_lower = NULL;
     if ((!julia_lower || julia_lower == jl_nothing) && jl_core_module)
         julia_lower = jl_get_global_value(jl_core_module, jl_symbol("_lower"), jl_current_task->world_age);
     if (!julia_lower || julia_lower == jl_nothing) {
-        return jl_fl_lower(inmodule, expr, filename, line, world, warn);
+        return jl_fl_lower(inmodule, expr, world, warn, loc);
     }
     jl_value_t **args;
-    JL_GC_PUSHARGS(args, 7);
+    JL_GC_PUSHARGS(args, 6);
     args[0] = julia_lower;
     args[1] = (jl_value_t*)inmodule;
     args[2] = expr;
-    args[3] = jl_cstr_to_string(filename);
-    args[4] = jl_box_long(line);
-    args[5] = jl_box_ulong(world);
-    args[6] = warn ? jl_true : jl_false;
+    args[3] = jl_box_ulong(world);
+    args[4] = warn ? jl_true : jl_false;
+    args[5] = loc;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    jl_value_t *result = jl_apply(args, 7);
+    jl_value_t *result = jl_apply(args, 6);
     ct->world_age = last_age;
     args[0] = result; // root during error check below
     JL_TYPECHK(parse, simplevector, result);

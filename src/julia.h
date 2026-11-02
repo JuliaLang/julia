@@ -2501,9 +2501,8 @@ JL_DLLEXPORT void jl_write_compiler_output(void) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
                                   jl_module_t *inmodule) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_lower(jl_module_t *inmodule, jl_value_t *expr,
-                                  const char *file, int line, size_t world,
-                                  bool_t warn) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_lower(jl_module_t *inmodule, jl_value_t *expr, size_t world,
+                                  bool_t warn, jl_value_t *loc) JL_CANSAFEPOINT;
 
 // external libraries
 enum JL_RTLD_CONSTANT {

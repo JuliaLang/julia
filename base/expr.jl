@@ -1845,8 +1845,8 @@ quoted(@nospecialize(x)) = isa_ast_node(x) ? QuoteNode(x) : x
 
 # Implementation of generated functions
 function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool, loc::LineNumberNode)
-    ci = ccall(:jl_fl_lower, Any, (Any, Any, Ptr{UInt8}, Csize_t, Csize_t, Cint),
-               defmod, ex, loc.file, loc.line, typemax(Csize_t), 0)[1]
+    ci = ccall(:jl_fl_lower, Any, (Any, Any, Csize_t, Cint, Any),
+               defmod, ex, typemax(Csize_t), 0, loc)[1]
     if !isa(ci, CodeInfo)
         if isa(ci, Expr) && ci.head === :error
             msg = ci.args[1]
@@ -1877,17 +1877,15 @@ function (g::Core.GeneratedFunctionStub)(world::UInt, source::Method, @nospecial
     body = g.gen(args...)
     file = source.file
     file isa Symbol || (file = :none)
-    loc = LineNumberNode(Int(source.line), source.file)
+    loc = LineNumberNode(Int(source.line), file)
     lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
                Expr(:var"scope-block",
-                    Expr(:block,
-                         loc,
-                         Expr(:meta, :push_loc, file, :var"@generated body"),
-                         Expr(:return, Expr(:toplevel_pure, body)),
-                         Expr(:meta, :pop_loc))))
-    spnames = g.spnames
+                    Expr(:block, loc, Expr(:return, body))))
+    if g.spnames !== Core.svec()
+        lam = Expr(Symbol("with-static-parameters"), lam, g.spnames...)
+    end
     return generated_body_to_codeinfo(
-        spnames === Core.svec() ? lam : Expr(Symbol("with-static-parameters"), lam, spnames...),
+        Expr(:toplevel_pure, lam),
         source.module,
         source.isva,
         loc)

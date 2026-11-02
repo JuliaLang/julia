@@ -1413,8 +1413,6 @@ function _defaultctors(@nospecialize(ty), functionloc)
     mod = dt.name.module
     n = length(fts)
     names = dt.name.names::Core.SimpleVector
-    src_file = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), functionloc.file)
-    src_line = UInt(functionloc.line)
 
     is_parametric = nparams !== 0
 
@@ -1460,8 +1458,8 @@ function _defaultctors(@nospecialize(ty), functionloc)
         new_expr = Expr(:new, new_args...)
         lambda = Expr(:lambda, argnames,
             Expr(:block, functionloc, Expr(:return, new_expr)))
-        ci = ccall(:jl_lower, Any, (Any, Any, Ptr{UInt8}, UInt, UInt, Int32),
-                   mod, lambda, src_file, src_line, sub_int(UInt(0), UInt(1)), Int32(0))[1]
+        ci = ccall(:jl_lower, Any, (Any, Any, UInt, Int32, Any),
+                   mod, lambda, sub_int(UInt(0), UInt(1)), Int32(0), functionloc)[1]
 
         # Build argdata: svec(svec(Type{ty}, ft1, ft2, ...), svec(tvars...), functionloc)
         atypes_arr = Array{Any,1}(Core.undef, n + 1)
@@ -1529,8 +1527,8 @@ function _defaultctors(@nospecialize(ty), functionloc)
     body_args[nstmts] = Expr(:return, Expr(:new, Core.Argument(1), new_args...))
     lambda = Expr(:lambda, argnames,
         Expr(:block, functionloc, body_args...))
-    ci = ccall(:jl_lower, Any, (Any, Any, Ptr{UInt8}, UInt, UInt, Int32),
-               mod, lambda, src_file, src_line, sub_int(UInt(0), UInt(1)), Int32(0))[1]
+    ci = ccall(:jl_lower, Any, (Any, Any, UInt, Int32, Any),
+               mod, lambda, sub_int(UInt(0), UInt(1)), Int32(0), functionloc)[1]
 
     # Build argdata: svec(svec(UnionAll...Type{dt}..., Any, Any, ...), svec(), functionloc)
     inner_atypes_arr = Array{Any,1}(Core.undef, n + 1)

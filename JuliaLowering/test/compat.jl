@@ -553,12 +553,10 @@ end
         Expr(:ssavalue, 5)
 
     # ssavalue references inside a lambda body should lower successfully
-    lambda = Expr(:lambda, Any[:x],
+    @test jl_eval(test_mod, Expr(:lambda, Any[:x],
         Expr(:block,
             Expr(:(=), Expr(:ssavalue, 0), Expr(:call, GlobalRef(Core, :typeof), :x)),
-            Expr(:return, Expr(:ssavalue, 0))))
-    out = JL.core_lowering_hook(test_mod, lambda)
-    @test out isa Core.SimpleVector && out[1] isa Core.CodeInfo
+            Expr(:return, Expr(:ssavalue, 0))))) isa Core.CodeInfo
 end
 
 @testset "expr compat: #self# becomes `thisfunction`" begin
