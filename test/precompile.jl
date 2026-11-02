@@ -1680,6 +1680,39 @@ precompile_test_harness("delete_method") do dir
     end
 end
 
+precompile_test_harness("serialization leaves the heap unchanged") do dir
+    # The package checks, in the same process right after its image is written, that
+    # serializing it changed nothing that the image leaves out
+    write(joinpath(dir, "SerializeNoMutate.jl"),
+          """
+          module SerializeNoMutate
+          struct Wrap{T} end
+          const kept = Wrap{Int}
+          global counter::Int = 0
+          if ccall(:jl_generating_output, Cint, ()) == 1
+              let dropped = Wrap{Float64}, # only the hook refers to it
+                  b = convert(Core.Binding, GlobalRef(@__MODULE__, :counter)),
+                  # a backedge from code outside this image, as from a dependent package
+                  edge = Base.method_instance(sin, (Float64,)).cache
+                  ccall(:jl_add_binding_backedge, Cvoid, (Any, Any), b, edge)
+                  before = copy(b.backedges)
+                  Base.postoutput() do
+                      after = b.backedges
+                      write(joinpath(@__DIR__, "result.txt"),
+                            "type cache: \$(Wrap{Float64} === dropped)\\n",
+                            "backedges: \$(after == before && all(map(===, after, before)))\\n")
+                  end
+              end
+          end
+          end
+          """)
+    Base.compilecache(Base.PkgId("SerializeNoMutate"))
+    # post-output hooks run when the image includes native code
+    if Base.JLOptions().use_pkgimages == 1
+        @test readlines(joinpath(dir, "result.txt")) == ["type cache: true", "backedges: true"]
+    end
+end
+
 precompile_test_harness("Issues #19030 and #25279") do load_path
     ModuleA = :Issue19030
     write(joinpath(load_path, "$ModuleA.jl"),

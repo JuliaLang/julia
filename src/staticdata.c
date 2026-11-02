@@ -814,6 +814,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         jl_value_t *backedges = get_replaceable_field((jl_value_t**)&mi->backedges, 1);
         if (backedges) {
             assert(!jl_options.trim && !jl_options.strip_ir);
+            jl_queue_for_serialization_(s, backedges, 0, 1);
             jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1);
             size_t i = 0, n = jl_array_nrows(backedges);
             while (i < n) {
@@ -839,6 +840,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // don't recurse into all backedges memory (yet)
             jl_value_t *backedges = get_replaceable_field((jl_value_t**)&b->backedges, 1);
             if (backedges) {
+                jl_queue_for_serialization_(s, backedges, 0, 1);
                 jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1);
                 for (size_t i = 0, n = jl_array_nrows(backedges); i < n; i++) {
                     jl_value_t *b = jl_array_ptr_ref(backedges, i);
@@ -903,8 +905,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                         jl_queue_for_serialization(s, t);
                         // serialize the callers list without forcing the CodeInstances
                         // in it to be serialized (unreachable ones are pruned later)
+                        jl_queue_for_serialization_(s, callers, 0, 1);
                         jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)callers)->ref.mem, 0, 1);
-                        jl_queue_for_serialization(s, callers);
                     }
                 }
             }
@@ -2658,41 +2660,43 @@ static void record_object_change(jl_value_t *v, jl_value_t *replacement) JL_NOTS
 
 // Code below helps slim down the images by
 // removing cached types not referenced in the stream
-static jl_svec_t *jl_prune_type_cache_hash(jl_svec_t *cache) JL_CANSAFEPOINT JL_GC_DISABLED
+static void jl_prune_type_cache_hash(jl_svec_t *cache) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     size_t l = jl_svec_len(cache), i;
     size_t sz = 0;
     if (l == 0)
-        return cache;
+        return;
+    jl_svec_t *kept = jl_svec_copy(cache);
     for (i = 0; i < l; i++) {
-        jl_value_t *ti = jl_svecref(cache, i);
+        jl_value_t *ti = jl_svecref(kept, i);
         if (ti == jl_nothing)
             continue;
         if (ptrhash_get(&serialization_order, ti) == HT_NOTFOUND)
-            jl_svecset(cache, i, jl_nothing);
+            jl_svecset(kept, i, jl_nothing);
         else
             sz += 1;
     }
     if (sz < HT_N_INLINE)
         sz = HT_N_INLINE;
-
-    jl_svec_t *rehashed = cache_rehash_set(cache, sz);
-    record_object_change((jl_value_t*)cache, (jl_value_t*)rehashed);
-    return rehashed;
+    record_object_change((jl_value_t*)cache, (jl_value_t*)cache_rehash_set(kept, sz));
 }
 
-static void jl_prune_type_cache_linear(jl_svec_t *cache)
+static void jl_prune_type_cache_linear(jl_svec_t *cache) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     size_t l = jl_svec_len(cache), ins = 0, i;
+    if (l == 0)
+        return;
+    jl_svec_t *kept = jl_alloc_svec(l);
     for (i = 0; i < l; i++) {
         jl_value_t *ti = jl_svecref(cache, i);
         if (ti == jl_nothing)
             break;
         if (ptrhash_get(&serialization_order, ti) != HT_NOTFOUND)
-            jl_svecset(cache, ins++, ti);
+            jl_svecset(kept, ins++, ti);
     }
     while (ins < l)
-        jl_svecset(cache, ins++, jl_nothing);
+        jl_svecset(kept, ins++, jl_nothing);
+    record_object_change((jl_value_t*)cache, (jl_value_t*)kept);
 }
 
 // Write the memory of an internal array, which nothing else references, only up to its
@@ -2706,10 +2710,17 @@ static void trim_array_memory(jl_array_t *a) JL_GC_DISABLED
         ptrhash_put(&memory_trims, mem, a);
 }
 
-static void jl_prune_mi_backedges(jl_array_t *backedges)
+static void jl_prune_mi_backedges(jl_array_t *backedges) JL_CANSAFEPOINT JL_GC_DISABLED
 {
-    if (backedges == NULL)
+    if (backedges == NULL || jl_array_nrows(backedges) == 0)
         return;
+    // not written, as for a MethodInstance that is only linked to
+    if (ptrhash_get(&serialization_order, backedges) == HT_NOTFOUND)
+        return;
+    jl_array_t *kept = jl_array_copy(backedges);
+    record_object_change((jl_value_t*)backedges, (jl_value_t*)kept);
+    record_object_change((jl_value_t*)backedges->ref.mem, (jl_value_t*)kept->ref.mem);
+    backedges = kept;
     size_t i = 0, ins = 0, n = jl_array_nrows(backedges);
     while (i < n) {
         jl_value_t *invokeTypes;
@@ -2722,32 +2733,40 @@ static void jl_prune_mi_backedges(jl_array_t *backedges)
     trim_array_memory(backedges);
 }
 
-static void jl_prune_tn_backedges(jl_genericmemory_t *table)
+static void jl_prune_tn_backedges(jl_genericmemory_t *table) JL_CANSAFEPOINT JL_GC_DISABLED
 {
+    jl_genericmemory_t *kept_table = NULL; // a copy of `table`, once an entry is dropped
     _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*)table->ptr;
     for (size_t i = 0, n = table->length; i < n; i += 2) {
-        jl_value_t *callers = jl_atomic_load_relaxed(&tab[i + 1]);
-        if (callers == NULL)
+        jl_array_t *callers = (jl_array_t*)jl_atomic_load_relaxed(&tab[i + 1]);
+        if (callers == NULL || jl_array_nrows(callers) == 0)
             continue; // empty or deleted slot
+        jl_array_t *kept = jl_array_copy(callers);
+        record_object_change((jl_value_t*)callers, (jl_value_t*)kept);
+        record_object_change((jl_value_t*)callers->ref.mem, (jl_value_t*)kept->ref.mem);
+        callers = kept;
         size_t j, ins = 0, l = jl_array_nrows(callers);
         for (j = 0; j < l; j++) {
             jl_value_t *ci = jl_array_ptr_ref(callers, j);
             if (ptrhash_get(&serialization_order, ci) != HT_NOTFOUND)
-                jl_array_ptr_set((jl_array_t*)callers, ins++, ci);
+                jl_array_ptr_set(callers, ins++, ci);
         }
-        // compact in place: the array was already queued for serialization, so
-        // pruned CodeInstances must not remain reachable from it
-        jl_array_del_end((jl_array_t*)callers, l - ins);
-        trim_array_memory((jl_array_t*)callers);
+        jl_array_del_end(callers, l - ins);
+        trim_array_memory(callers);
         if (ins == 0) {
             // no caller is being serialized: drop the entry (cf. `jl_eqtable_pop`)
-            jl_gc_write_atomic(table, tab[i], jl_value_t, jl_nothing, relaxed); // clear the key
-            jl_gc_write_atomic(table, tab[i + 1], jl_value_t, NULL, relaxed); // and the value
+            if (kept_table == NULL)
+                kept_table = jl_genericmemory_copy(table);
+            _Atomic(jl_value_t*) *ktab = (_Atomic(jl_value_t*)*)kept_table->ptr;
+            jl_gc_write_atomic(kept_table, ktab[i], jl_value_t, jl_nothing, relaxed); // clear the key
+            jl_gc_write_atomic(kept_table, ktab[i + 1], jl_value_t, NULL, relaxed); // and the value
         }
     }
+    if (kept_table != NULL)
+        record_object_change((jl_value_t*)table, (jl_value_t*)kept_table);
 }
 
-static void jl_prune_mt_backedges(jl_genericmemory_t *allbackedges)
+static void jl_prune_mt_backedges(jl_genericmemory_t *allbackedges) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     for (size_t i = 0, n = allbackedges->length; i < n; i += 2) {
         jl_value_t *tn = jl_genericmemory_ptr_ref(allbackedges, i);
@@ -2757,10 +2776,17 @@ static void jl_prune_mt_backedges(jl_genericmemory_t *allbackedges)
     }
 }
 
-static void jl_prune_binding_backedges(jl_array_t *backedges)
+static void jl_prune_binding_backedges(jl_array_t *backedges) JL_CANSAFEPOINT JL_GC_DISABLED
 {
-    if (backedges == NULL)
+    if (backedges == NULL || jl_array_nrows(backedges) == 0)
         return;
+    // not written, as for a binding that is only linked to
+    if (ptrhash_get(&serialization_order, backedges) == HT_NOTFOUND)
+        return;
+    jl_array_t *kept = jl_array_copy(backedges);
+    record_object_change((jl_value_t*)backedges, (jl_value_t*)kept);
+    record_object_change((jl_value_t*)backedges->ref.mem, (jl_value_t*)kept->ref.mem);
+    backedges = kept;
     size_t i = 0, ins = 0, n = jl_array_nrows(backedges);
     for (i = 0; i < n; i++) {
         jl_value_t *b = jl_array_ptr_ref(backedges, i);
@@ -3459,8 +3485,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             }
             else if (jl_is_typename(v)) {
                 jl_typename_t *tn = (jl_typename_t*)v;
-                jl_gc_write_atomic(tn, tn->cache, jl_svec_t,
-                    jl_prune_type_cache_hash(jl_atomic_load_relaxed(&tn->cache)), relaxed);
+                jl_prune_type_cache_hash(jl_atomic_load_relaxed(&tn->cache));
                 jl_prune_type_cache_linear(jl_atomic_load_relaxed(&tn->linearcache));
             }
             else if (jl_is_method_instance(v)) {
