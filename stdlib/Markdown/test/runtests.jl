@@ -111,6 +111,8 @@ end
     @test isempty(Markdown.parse("\r"))
     @test Markdown.parse("hello\r") == MD(Paragraph(["hello"]))
     @test Markdown.parse("hello\r*julia*") == MD(Paragraph(Any["hello\n", Italic(Any["julia"])]))
+    @test Markdown.parse("hello\r", flavor = :github) == MD(Paragraph(["hello"]))
+    @test Markdown.parse("#\r") == MD(Header{1}(""))
 end
 
 @testset "footnotes" begin
