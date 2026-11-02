@@ -253,10 +253,6 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
             jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for this module **\n\n");
         }
     }
-    if (jl_options.trim) {
-        exit(0); // Some finalizers need to run and we've blown up the bindings table
-        // TODO: Is this still needed
-    }
     JL_GC_POP();
     jl_gc_enable_finalizers(ct, 1);
 }
