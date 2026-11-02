@@ -19,7 +19,7 @@ end
 # World set with `activate!`, or 0
 const _lowering_world = Ref{UInt}(0)
 
-@inline function invoke_in_lowering_world(f::F, @nospecialize(args...)) where {F}
+@inline function __script_exit_invoke_in_lowering_world(f::F, @nospecialize(args...)) where {F}
     w = _lowering_world[]
     @static if VERSION >= v"1.14.0-DEV.2635"
         w == 0 || return _invoke_in_world(w, f, args...)
@@ -58,7 +58,8 @@ function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
     out[1]
 end
 @noinline function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
-    return invoke_in_lowering_world(_interpolate_syntax, st, vals)::SyntaxTree
+    return __script_exit_invoke_in_lowering_world(
+        _interpolate_syntax, st, vals)::SyntaxTree
 end
 
 #--------------------------------------------------
@@ -249,8 +250,8 @@ function lower_generated_code(g, world, source, @nospecialize args...)
 
     # flisp (see Core.GeneratedFunctionStub) uses the latest world for macros
     return try
-        invoke_in_lowering_world(_lower_generated_code, g, source, sc,
-                                 __module__, world, ex0)
+        __script_exit_invoke_in_lowering_world(
+            _lower_generated_code, g, source, sc, __module__, world, ex0)
     catch exc
         rethrow(to_compatible_exception(exc))
     end
