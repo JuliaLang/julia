@@ -41,6 +41,22 @@ extern "C" {
 #define FE_TOWARDZERO 0xc00
 #endif
 
+#if defined(__MINGW32__) && !defined(_UCRT)
+// Packages call `fesetround` through `Base.libm_name`, which is ucrtbase.dll, using the constants
+// from `jl_get_fenv_consts`. So report the values ucrtbase takes, and convert them for MinGW.
+#include <float.h>
+#define JL_FENV_ROUNDING_IS_UCRT
+#define JL_FE_TONEAREST _RC_NEAR
+#define JL_FE_UPWARD _RC_UP
+#define JL_FE_DOWNWARD _RC_DOWN
+#define JL_FE_TOWARDZERO _RC_CHOP
+#else
+#define JL_FE_TONEAREST FE_TONEAREST
+#define JL_FE_UPWARD FE_UPWARD
+#define JL_FE_DOWNWARD FE_DOWNWARD
+#define JL_FE_TOWARDZERO FE_TOWARDZERO
+#endif
+
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir) JL_NOTSAFEPOINT;
 
 /**
@@ -912,10 +928,10 @@ JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
     ret[2] = FE_OVERFLOW;
     ret[3] = FE_DIVBYZERO;
     ret[4] = FE_INVALID;
-    ret[5] = FE_TONEAREST;
-    ret[6] = FE_UPWARD;
-    ret[7] = FE_DOWNWARD;
-    ret[8] = FE_TOWARDZERO;
+    ret[5] = JL_FE_TONEAREST;
+    ret[6] = JL_FE_UPWARD;
+    ret[7] = JL_FE_DOWNWARD;
+    ret[8] = JL_FE_TOWARDZERO;
 }
 
 // TODO: Windows binaries currently load msvcrt which doesn't have these C99 functions.
@@ -924,7 +940,12 @@ JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
 //       libmingwex (see JuliaLang/julia#38466).
 JL_DLLEXPORT int jl_get_fenv_rounding(void)
 {
+#ifdef JL_FENV_ROUNDING_IS_UCRT
+    // MinGW's `fegetround` only reads the x87 control word, which ucrtbase may not set
+    return _controlfp(0, 0) & _MCW_RC;
+#else
     return fegetround();
+#endif
 }
 
 /**
@@ -936,6 +957,14 @@ JL_DLLEXPORT int jl_get_fenv_rounding(void)
  */
 JL_DLLEXPORT int jl_set_fenv_rounding(int i)
 {
+#ifdef JL_FENV_ROUNDING_IS_UCRT
+    switch (i) {
+    case JL_FE_TONEAREST: i = FE_TONEAREST; break;
+    case JL_FE_UPWARD: i = FE_UPWARD; break;
+    case JL_FE_DOWNWARD: i = FE_DOWNWARD; break;
+    case JL_FE_TOWARDZERO: i = FE_TOWARDZERO; break;
+    }
+#endif
     return fesetround(i);
 }
 

@@ -1547,7 +1547,8 @@ endif
 
 # The system math library, as named by `Base.libm_name`. An unversioned `libm.so` can be a
 # linker script that cannot be loaded at runtime, so use the versioned names where they exist.
-# musl reserves `libm.so` as an alias for itself, and msvcrt is the CRT on Windows.
+# musl reserves `libm.so` as an alias for itself. On Windows, ucrtbase has the C99 math functions
+# that packages call, which msvcrt does not, although Julia itself links against msvcrt.
 LIBMNAME := libm
 ifeq ($(LIBC),glibc)
 LIBMNAME := libm.so.6
@@ -1556,7 +1557,7 @@ LIBMNAME := libm.so
 else ifeq ($(OS),FreeBSD)
 LIBMNAME := libm.so.5
 else ifeq ($(OS),WINNT)
-LIBMNAME := msvcrt
+LIBMNAME := ucrtbase
 endif
 
 # CSL_NEXT_GLIBCXX_VERSION is a triple of the symbols representing support for whatever
