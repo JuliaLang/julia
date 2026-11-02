@@ -925,6 +925,7 @@ end
         shown = sprint(show, err)
         @test contains(shown, "error message 1")
         @test contains(shown, "error message 2")
+        @test contains(shown, "jl_assert(1 == 2, _)")
         err = try
             new_st_name = st
             JuliaLowering.@jl_assert(1 == 2, (st, "error message 1"), new_st_name, (st, "error message 2"))

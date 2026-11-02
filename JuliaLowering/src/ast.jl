@@ -17,8 +17,7 @@
             end
         end
         # just add assertion string to first msg
-        msgs.args[2] = Expr(
-            :string, "`jl_assert(", QuoteNode(cond), ", _)`: ", msgs.args[2])
+        msgs.args[2] = :($_jl_assert_msg($(QuoteNode(cond)), $(msgs.args[2])))
         :($(esc(cond)) ? nothing : begin
               throw(LoweringError($(esc(sts)), $(esc(msgs)), true))
           end)
@@ -29,6 +28,10 @@ else
         cond === false ? :(throw("@jl_assert false")) : nothing
     end
 end
+
+@noinline _jl_assert_msg(@nospecialize(cond), @nospecialize(msg)) =
+    Core.compilerbarrier(:type, __jl_assert_msg)(cond, msg)::String
+__jl_assert_msg(cond, msg) = string("`jl_assert(", cond, ", _)`: ", msg)
 
 abstract type AbstractLoweringContext end
 
