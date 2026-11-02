@@ -2883,7 +2883,9 @@ static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, jl_code_
         ci = jl_uncompress_ir(m, codeinst, (jl_value_t*)ci_);
     }
     else {
-        ci = (jl_code_info_t*)ci_;
+        // strip a copy
+        ci = jl_copy_code_info((jl_code_info_t*)ci_);
+        jl_gc_write(ci, ci->slotnames, jl_array_t, jl_array_copy(ci->slotnames));
     }
     strip_slotnames(ci->slotnames, jl_array_len(ci->slotnames));
     jl_gc_write(ci, ci->debuginfo, jl_debuginfo_t, jl_nulldebuginfo);
@@ -2906,8 +2908,7 @@ static void strip_specializations_(jl_method_instance_t *mi) JL_CANSAFEPOINT
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst);
-                jl_gc_wb(codeinst, (void*)&codeinst->inferred, stripped);
-                jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped);
+                record_field_change((jl_value_t*)codeinst, (jl_value_t**)&codeinst->inferred, stripped);
             }
         }
         // n.b. `edges` and `debuginfo` are stripped in jl_insert_into_serialization_queue,
@@ -2950,7 +2951,7 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env) JL_CANSAFE
         }
         if (jl_options.strip_metadata) {
             if (!stripped_ir) {
-                jl_gc_write(m, m->source, jl_value_t, strip_codeinfo_meta(m, m->source, NULL));
+                record_field_change((jl_value_t*)m, &m->source, strip_codeinfo_meta(m, m->source, NULL));
             }
             jl_array_t *slotnames = jl_uncompress_argnames(m->slot_syms);
             JL_GC_PUSH1(&slotnames);
@@ -2959,13 +2960,13 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env) JL_CANSAFE
             if (jl_tparam0(jl_unwrap_unionall(m->sig)) == (jl_value_t*)jl_kwcall_type)
                 tostrip = m->nargs;
             strip_slotnames(slotnames, tostrip);
-            jl_gc_write(m, m->slot_syms, jl_value_t, jl_compress_argnames(slotnames));
+            record_field_change((jl_value_t*)m, &m->slot_syms, jl_compress_argnames(slotnames));
             JL_GC_POP();
         }
     }
     if (jl_options.strip_metadata) {
         record_field_change((jl_value_t*)m, (jl_value_t**)&m->file, (jl_value_t*)jl_empty_sym);
-        m->line = 0;
+        ptrhash_put(&bits_replace, &m->line, jl_box_int32(0));
         record_field_change((jl_value_t*)m, (jl_value_t**)&m->debuginfo, (jl_value_t*)jl_nulldebuginfo);
     }
     jl_value_t *specializations = jl_atomic_load_relaxed(&m->specializations);
@@ -3243,6 +3244,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 #endif
     queueing_done = 0;
     htable_new(&memory_trims, 0);
+    // the replacements recorded below are only reachable from these tables
+    int en = jl_gc_enable(0);
     if (worklist)
         jl_foreach_reachable_mtable(jl_prune_internal_mtable, mod_array, NULL);
     jl_nulldebuginfo = (jl_debuginfo_t*)jl_get_global(jl_core_module, jl_symbol("NullDebugInfo"));
@@ -3297,7 +3300,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         }
     }
 
-    int en = jl_gc_enable(0);
     if (native_functions) {
         // Rewrite each MethodInstance's cache to the ordered list of
         // CodeInstances codegen emitted for this image (see jl_rewrite_mi_caches).
