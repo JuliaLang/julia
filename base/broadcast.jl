@@ -1241,6 +1241,9 @@ broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::StepRange) = big(r.start):
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::StepRangeLen) = StepRangeLen(big(r.ref), big(r.step), length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::LinRange) = LinRange(big(r.start), big(r.stop), length(r))
 
+# Defined here because `range.jl` is loaded before broadcasting exists.
+Base.lerpi(j::Integer, d::Integer, a::T, b::T) where {T} = T(Base._lerp.(j/d, a, b))
+
 ## CartesianIndices
 broadcasted(::typeof(+), I::CartesianIndices{N}, j::CartesianIndex{N}) where N =
     CartesianIndices(map((rng, offset)->rng .+ offset, I.indices, Tuple(j)))
