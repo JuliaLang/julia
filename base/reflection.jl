@@ -993,7 +993,7 @@ function which(@nospecialize(f), @nospecialize(t))
     match, _ = invoke_default_compiler(:_findsup, tt, nothing, world)
     if match === nothing
         me = MethodError(f, t, world)
-        ee = ErrorException(sprint(io -> begin
+        ee = ErrorException(inferencebarrier(sprint)(io -> begin
             println(io, "Calling invoke(f, t, args...) would throw:");
             Base.showerror(io, me);
         end))
