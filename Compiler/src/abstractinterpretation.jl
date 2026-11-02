@@ -122,22 +122,6 @@ end
 widen_call_result(::AbstractInterpreter, si::StmtInfo, state::CallInferenceState, ::AbsIntState) =
     call_result_unused(si) && !(state.rettype === Bottom)
 
-function is_uninformative_call(state::CallInferenceState, applicable::Vector{MethodMatchTarget})
-    if !(state.rettype === Any && state.exctype === Any && state.slotrefinements === nothing)
-        return false
-    end
-    # Overlay status cannot enable concrete evaluation when the other effects are unknown.
-    if Effects(state.all_effects; nonoverlayed=ALWAYS_TRUE) !== EFFECTS_UNKNOWN
-        return false
-    end
-    for i = 1:length(applicable)
-        if !isdispatchtuple(applicable[i].match.spec_types)
-            return true
-        end
-    end
-    return false
-end
-
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(func),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   vtypes::Union{VarTable,Nothing}, sv::AbsIntState, max_methods::Int)
@@ -389,10 +373,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             infercalls2(interp, sv) || push!(sv.tasks, infercalls2)
         end
 
-        if is_uninformative_call(state, applicable)
-            add_remark!(interp, sv, "Deferring edges of uninformative non-concrete call site to the optimizer")
-            retinfo = UninformativeCallInfo(retinfo)
-        end
         gfresult[] = CallMeta(state.rettype, state.exctype, state.all_effects, retinfo, state.slotrefinements)
         return true
     end # function infercalls
@@ -3444,6 +3424,46 @@ end
 CallMeta(rte::RTEffects, info::CallInfo) =
     CallMeta(rte.rt, rte.exct, rte.effects, info, rte.refinements)
 
+function may_resolve_statically(interp::AbstractInterpreter, info::MethodMatchInfo, i::Int,
+                                flag::UInt32)
+    match = info.results[i]::MethodMatch
+    isdispatchtuple(match.spec_types) && return true
+    get_compileable_sig(match.method, match.spec_types, match.sparams) === nothing || return true
+    result = info.call_results[i]
+    if result isa LocalInferenceResult
+        code = get_local_code(result)
+        code isa SomeCase && return true
+        src = code.src
+    elseif result !== nothing
+        return true
+    else
+        edge = info.edges[i]
+        edge isa CodeInstance || return true
+        src = @atomic :monotonic edge.inferred
+    end
+    src === nothing && return false
+    return src_inlining_policy(interp, src, info, flag)
+end
+
+# Inference learned nothing from this call, and the optimizer can neither invoke nor
+# inline any of its matches.
+function is_uninformative_call(interp::AbstractInterpreter, call::CallMeta, flag::UInt32)
+    (call.rt === Any && call.exct === Any && call.refinements === nothing) || return false
+    effects = call.effects
+    if is_nonoverlayed(interp)
+        effects = Effects(effects; nonoverlayed=ALWAYS_TRUE)
+    end
+    effects === EFFECTS_UNKNOWN || return false
+    info = call.info
+    splits = info isa MethodMatchInfo ? (info,) : info isa UnionSplitInfo ? info.split : return false
+    for split in splits
+        for i = 1:length(split.results)
+            may_resolve_statically(interp, split, i, flag) && return false
+        end
+    end
+    return true
+end
+
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sstate::StatementState, sv::InferenceState)
     unused = call_result_unused(sv, sv.currpc)
     if unused
@@ -3454,7 +3474,15 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sstate::St
     Future{Any}(call, interp, sv) do call, _, sv
         # this only is needed for the side-effect, sequenced before any task tries to consume the return value,
         # which this will do even without returning this Future
-        sv.stmt_info[sv.currpc] = call.info
+        # As for a call with too many matches, drop the info so that nothing can use the
+        # lookup and the call needs no edges.
+        if discard_uninformative_call_info(interp) &&
+                is_uninformative_call(interp, call, get_curr_ssaflag(sv))
+            add_remark!(interp, sv, "Call is uninformative, leaving it dynamic")
+            sv.stmt_info[sv.currpc] = NoCallInfo()
+        else
+            sv.stmt_info[sv.currpc] = call.info
+        end
         nothing
     end
     return call

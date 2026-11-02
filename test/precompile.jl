@@ -2245,7 +2245,7 @@ precompile_test_harness("WindowsCacheOverwrite") do load_path
     @test ofile_2 == Base.ocachefile_from_cachefile(ji_2)
 end
 
-# Keep the callee's inferred code in the image even though the dynamic call has no edge.
+# A package image keeps the edge of an uninformative call, so the callee's code is kept too.
 precompile_test_harness("uninformative call site image coverage") do load_path
     write(joinpath(load_path, "UninfCoverageDep.jl"),
         """
@@ -2265,13 +2265,8 @@ precompile_test_harness("uninformative call site image coverage") do load_path
     Base.compilecache(Base.PkgId("UninfCoverage"))
     @eval using UninfCoverage
     Dep = Base.root_module(Base.PkgId("UninfCoverageDep"))
-    Mod = Base.root_module(Base.PkgId("UninfCoverage"))
     fmi = only(Base.method_instances(Dep.f, (Any,), Base.get_world_counter()))
     @test isdefined(fmi, :cache)
-    gci = Base.method_instance(Mod.g, (Vector{Any},)).cache
-    @test gci.max_world == typemax(UInt)
-    @eval Dep f(::Val{:uninf_coverage}) = 2
-    @test gci.max_world == typemax(UInt)
 end
 
 precompile_test_harness("Issue #48391") do load_path
