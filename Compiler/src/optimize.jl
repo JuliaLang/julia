@@ -355,10 +355,46 @@ _topmod(sv::OptimizationState) = _topmod(sv.mod)
 is_stmt_inline(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_INLINE)
 is_stmt_noinline(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_NOINLINE)
 
+# `Expr(:new)` throws unless the value of `Targ` is a `DataType`, but a `Type{T}`-typed value
+# may be a `UnionAll` or `Union` rep that is `==` to `T` (#61323). So we require the type of
+# `Targ` to be a subtype of `DataType`, or `Targ` to be the result of `Core.apply_type` fully
+# applying a constant `UnionAll` type constructor whose body is a non-tuple `DataType`.
+# Other `Core.apply_type` calls may return something else, e.g. `Core.apply_type(Union, T)`
+# returns `T` itself.
+function is_new_type_datatype(@nospecialize(atyp), @nospecialize(Targ),
+                              src::Union{IRCode,IncrementalCompact})
+    widenconst(atyp) <: DataType && return true
+    def = apply_type_unionall_def(Targ, src)
+    def === nothing && return false
+    stmt, body, tvars = def
+    isa(body, DataType) && body.name !== Tuple.name || return false
+    return length(stmt.args) - 2 == length(tvars)
+end
+
+# If `Targ` is defined by a `Core.apply_type` call on a constant `UnionAll` type constructor,
+# return the call together with the body of the type constructor and its type variables.
+function apply_type_unionall_def(@nospecialize(Targ), src::Union{IRCode,IncrementalCompact})
+    isa(Targ, SSAValue) || return nothing
+    stmt = src[Targ][:stmt]
+    is_known_call(stmt, Core.apply_type, src) || return nothing
+    length(stmt.args) ≥ 2 || return nothing
+    tc = argextype(stmt.args[2], src)
+    isa(tc, Const) || return nothing
+    body = tc.val
+    isa(body, UnionAll) || return nothing
+    tvars = TypeVar[]
+    while isa(body, UnionAll)
+        push!(tvars, body.var)
+        body = body.body
+    end
+    return stmt::Expr, body, tvars
+end
+
 function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
     Targ = args[1]
     atyp = argextype(Targ, src)
     # `Expr(:new)` of unknown type could raise arbitrary TypeError.
+    is_new_type_datatype(atyp, Targ, src) || return (false, false, false)
     typ, isexact = instanceof_tfunc(atyp, true)
     if !isexact
         atyp = unwrap_unionall(widenconst(atyp))

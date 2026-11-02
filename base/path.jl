@@ -975,7 +975,7 @@ function encode_uri_component(s::AbstractString)
         else
             # RFC3986 Section 2.1
             push!(out, UInt8('%'))
-            append!(out, codeunits(uppercase(string(cu, base = 16))))
+            append!(out, codeunits(uppercase(string(cu, base = 16, pad = 2))))
         end
     end
     String(out)

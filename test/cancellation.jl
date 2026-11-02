@@ -2716,7 +2716,8 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
                 kill(p, 3) # SIGQUIT
                 timedwait(() -> istaskdone(reader), 20.0) # pty EOF: dump drained
             end
-            @error "expect timed out" needle tail=snapshot()[max(1, cursor[]):end]
+            @error "expect timed out" needle
+            print(stderr, snapshot()[max(1, cursor[]):end]) # logging would truncate the task dump
         end
         @test status == :ok
     end

@@ -1215,6 +1215,18 @@ function popfirst!(W::IntrusiveLinkedListSynchronized)
         unlock(W.lock)
     end
 end
+# Like `popfirst!`, but return `nothing` if `W` is empty. The emptiness check
+# and the pop happen atomically under `W.lock`.
+function trypopfirst!(W::IntrusiveLinkedListSynchronized)
+    isempty(W) && return nothing
+    lock(W.lock)
+    try
+        q = waitqueue(W)
+        return isempty(q) ? nothing : popfirst!(q)
+    finally
+        unlock(W.lock)
+    end
+end
 function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
@@ -1637,8 +1649,9 @@ function discard_stale_workqueue_task(t::Task)
 end
 
 function trypoptask(W::StickyWorkqueue)
-    while !isempty(W)
-        t = popfirst!(W)
+    while true
+        t = trypopfirst!(W)
+        t === nothing && break
         if t._state !== task_state_runnable
             discard_stale_workqueue_task(t)
             continue

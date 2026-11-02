@@ -392,8 +392,9 @@ the properties of that stream (note that `io` can itself be an `IOContext`).
 The following properties are in common use:
 
  - `:compact`: Boolean specifying that values should be printed more compactly, e.g.
-   that numbers should be printed with fewer digits. This is set when printing array
-   elements. `:compact` output should not contain line breaks.
+   that numbers should be printed with fewer digits. Containers may set this when
+   printing their elements, e.g. when there is little space per element as in
+   multi-column matrices. `:compact` output should not contain line breaks.
  - `:limit`: Boolean specifying that containers should be truncated, e.g. showing `…` in
    place of most elements.
  - `:displaysize`: A `Tuple{Int,Int}` giving the size in rows and columns to use for text
@@ -1679,7 +1680,7 @@ const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√)
 const expr_infix_wide = Set{Symbol}([
     :(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(^=), :(&=), :(|=), :(÷=), :(%=), :(>>>=), :(>>=), :(<<=),
     :(.=), :(.+=), :(.-=), :(.*=), :(./=), :(.\=), :(.^=), :(.&=), :(.|=), :(.÷=), :(.%=), :(.>>>=), :(.>>=), :(.<<=),
-    :(&&), :(||), :(<:), :($=), :(⊻=), :(>:), :(-->),
+    :(&&), :(||), :(.&&), :(.||), :(<:), :($=), :(⊻=), :(>:), :(-->),
     :(:=), :(≔), :(⩴), :(≕)])
 const expr_infix = Set{Symbol}([:(:), :(->), :(::)])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
@@ -1808,7 +1809,7 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, quote_level::In
         parens = !is_quoted(item) &&
             (first && prec >= prec_power &&
              ((item isa Expr && item.head === :call && (callee = item.args[1]; isa(callee, Symbol) && callee in uni_ops)) ||
-              (item isa Real && item < 0))) ||
+              (item isa Real && signbit(item)))) ||
             (enclose_operators && item isa Symbol && isoperator(item) && is_valid_identifier(item))
         parens && print(io, '(')
         if kw && is_expr(item, :kw, 2)

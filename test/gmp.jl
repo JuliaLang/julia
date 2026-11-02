@@ -502,6 +502,7 @@ end
 
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2
+@test_throws DomainError isqrt(big(-4))
 
 
 @testset "Exponentiation operator" begin

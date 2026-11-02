@@ -1,9 +1,40 @@
+@testset "validationresult" begin
+    local (; validation_errors, validation_ok, is_known) = JuliaLowering
+    local pass = JuliaLowering.pass()
+    local unkn = JuliaLowering.unknown()
+    local fail = JuliaLowering.valid_st1(JuliaLowering.expr_to_est(Expr(:invalid_expr)))
+
+    @test pass | unkn == pass
+    @test unkn | pass == pass
+    @test pass | fail == pass
+    @test fail | pass == pass
+    @test unkn | fail == fail
+    @test fail | unkn == fail
+
+    @test pass | pass == pass
+    @test unkn | unkn == unkn
+    @test fail | fail == fail
+
+    @test pass & unkn == unkn
+    @test unkn & pass == unkn
+    @test pass & fail == fail
+    @test fail & pass == fail
+    @test unkn & fail == fail
+    @test fail & unkn == fail
+
+    @test pass & pass == pass
+    @test unkn & unkn == unkn
+    let f2 = fail & fail
+        @test is_known(f2)
+        @test !validation_ok(f2)
+    end
+end
+
 # Basic tests that the validator accepts or rejects a given form.  For testing
 # error messages, write an IR test instead.
-
 function vst1_ok(x::Expr)
     est = JuliaLowering.expr_to_est(x)
-    JuliaLowering.valid_st1(est).ok
+    JuliaLowering.validation_ok(JuliaLowering.valid_st1(est))
 end
 
 let

@@ -1023,19 +1023,20 @@ function deleteat!(B::BitVector, inds::AbstractVector{Bool})
     length(inds) == length(B) || throw(BoundsError(B, inds))
 
     n = new_l = length(B)
+    o = firstindex(inds) - 1
     y = findfirst(inds)
     y === nothing && return B
 
     Bc = B.chunks
 
-    p = y
+    p = y - o
     s = y + 1
     checkbounds(B, p)
     q = p + 1
     new_l -= 1
     y = findnext(inds, s)
     while y !== nothing
-        i = y
+        i = y - o
         s = y + 1
         new_l -= 1
         if i > q
@@ -1427,6 +1428,7 @@ function _circshift_int!(dest::BitVector, src::BitVector, i::Int)
     i = Int(i)
     length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
     n = length(dest)
+    n == 0 && return dest
     i %= n
     i == 0 && return (src === dest ? src : copyto!(dest, src))
     Bc = (src === dest ? copy(src.chunks) : src.chunks)

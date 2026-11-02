@@ -33,10 +33,9 @@ end
 2   (call top.indexed_iterate %₁ 1)
 3   (= slot₁/x (call core.getfield %₂ 1))
 4   (= slot₃/ (call core.getfield %₂ 2))
-5   slot₃/
-6   (call top.indexed_iterate %₁ 2 %₅)
-7   (= slot₂/y (call core.getfield %₆ 1))
-8   (return core.nothing)
+5   (call top.indexed_iterate %₁ 2 slot₃/)
+6   (= slot₂/y (call core.getfield %₅ 1))
+7   (return core.nothing)
 
 ########################################
 # let syntax with named tuple on lhs creates locals for the unpacked vars

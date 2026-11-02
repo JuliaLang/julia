@@ -257,7 +257,7 @@ function verify_create_stackframes(codeinst::CodeInstance, stmtidx::Int, parents
         empty!(scopes)
 
         new_parent = get(parents, codeinst, nothing)
-        if haskey(visited, new_parent)
+        if new_parent === nothing || haskey(visited, new_parent)
             break
         end
         push!(visited, new_parent)

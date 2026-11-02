@@ -347,7 +347,8 @@ axes1(S::Slice{<:AbstractOneTo{<:Integer}}) = S.indices
 first(S::Slice) = first(S.indices)
 last(S::Slice) = last(S.indices)
 size(S::Slice) = (length(S.indices),)
-getindex(S::Slice, i::Int) = (@inline; @boundscheck checkbounds(S, i); i)
+getindex(S::Slice, i::Integer) = (@inline; @boundscheck checkbounds(S, i); convert(eltype(S), i))
+getindex(S::Slice, i::Bool) = throw(ArgumentError("invalid index: $i of type Bool"))
 getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
 getindex(S::Slice, i::StepRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
@@ -395,7 +396,7 @@ end
 function getindex(S::IdentityUnitRange, i::StepRange{Bool})
     @inline
     @boundscheck checkbounds(S, i)
-    range(first(i) ? first(S) : last(S), length = last(i), step = Int(step(i)))
+    range(first(i) ? first(S) : last(S), length = count(i), step = Int(step(i)))
 end
 # Indexing with offset ranges should preserve the axes of the indices
 # however, this is only really possible in general with OffsetArrays.
@@ -457,6 +458,11 @@ julia> extrema(b)
 
 Return a `LinearIndices` array with the specified shape or [`axes`](@ref).
 
+When ranges are given, each axis of the result is the axis of the corresponding range,
+not the range itself: e.g. `LinearIndices((0:1, -3:4))` has axes
+`(Base.OneTo(2), Base.OneTo(8))`. To get offset axes, pass ranges that are their own
+axes, such as `Base.IdentityUnitRange` (see the example below).
+
 # Examples
 
 The main purpose of this constructor is intuitive conversion
@@ -471,6 +477,18 @@ julia> linear = LinearIndices((1:3, 1:2))
 
 julia> linear[1,2]
 4
+```
+
+Offset axes:
+
+```jldoctest
+julia> L = LinearIndices(Base.IdentityUnitRange.((0:1, -3:4)));
+
+julia> axes(L)
+(Base.IdentityUnitRange(0:1), Base.IdentityUnitRange(-3:4))
+
+julia> L[0, -3]
+1
 ```
 """
 struct LinearIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int,N}
@@ -487,7 +505,7 @@ LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) whe
 LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 
 _convert2ind(i::Integer) = oneto(i)
-_convert2ind(ind::AbstractUnitRange) = first(ind):last(ind)
+_convert2ind(ind::AbstractUnitRange) = ind
 
 function indices_promote_type(::Type{Tuple{R1,Vararg{R1,N}}}, ::Type{Tuple{R2,Vararg{R2,N}}}) where {R1,R2,N}
     R = promote_type(R1, R2)
@@ -514,7 +532,7 @@ end
 function getindex(iter::LinearIndices, i::AbstractRange{<:Integer})
     @inline
     @boundscheck checkbounds(iter, i)
-    @inbounds isa(iter, LinearIndices{1}) ? iter.indices[1][i] : (first(iter):last(iter))[i]
+    @inbounds isa(iter, LinearIndices{1}) ? axes1(iter.indices[1])[i] : (first(iter):last(iter))[i]
 end
 copy(iter::LinearIndices) = iter
 # More efficient iteration — predominantly for non-vector LinearIndices

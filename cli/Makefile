@@ -69,7 +69,7 @@ LIB_OBJS := $(BUILDDIR)/loader_lib.o $(BUILDDIR)/loader_symbol_probe.o $(BUILDDI
 LIB_DOBJS := $(BUILDDIR)/loader_lib.dbg.obj $(BUILDDIR)/loader_symbol_probe.dbg.obj $(BUILDDIR)/loader_library_probe.dbg.obj
 
 # If this is an architecture that supports dynamic linking, link in a trampoline definition
-ifneq (,$(wildcard $(SRCDIR)/trampolines/trampolines_$(ARCH).S))
+ifneq (,$(wildcard $(SRCDIR)/arch/$(ARCH)/trampolines.S))
 LIB_OBJS += $(BUILDDIR)/loader_trampolines.o
 LIB_DOBJS += $(BUILDDIR)/loader_trampolines.dbg.obj
 endif
@@ -86,9 +86,9 @@ $(BUILDDIR)/loader_exe.o : $(SRCDIR)/loader_exe.c $(HEADERS) $(JULIAHOME)/VERSIO
 	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 $(BUILDDIR)/loader_exe.dbg.obj : $(SRCDIR)/loader_exe.c $(HEADERS) $(JULIAHOME)/VERSION
 	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
-$(BUILDDIR)/loader_trampolines.o : $(SRCDIR)/trampolines/trampolines_$(ARCH).S $(HEADERS) $(SRCDIR)/trampolines/common.h
+$(BUILDDIR)/loader_trampolines.o : $(SRCDIR)/arch/$(ARCH)/trampolines.S $(HEADERS) $(JULIAHOME)/src/arch/common.h
 	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) $< -c -o $@)
-$(BUILDDIR)/loader_trampolines.dbg.obj : $(SRCDIR)/trampolines/trampolines_$(ARCH).S $(HEADERS) $(SRCDIR)/trampolines/common.h
+$(BUILDDIR)/loader_trampolines.dbg.obj : $(SRCDIR)/arch/$(ARCH)/trampolines.S $(HEADERS) $(JULIAHOME)/src/arch/common.h
 	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(LOADER_CFLAGS) $< -c -o $@)
 $(BUILDDIR)/loader_library_probe.o : $(SRCDIR)/loader_library_probe.c $(HEADERS) $(JULIAHOME)/VERSION
 	@$(call PRINT_CC, $(CC) -DJL_LIBRARY_EXPORTS $(SHIPFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
@@ -100,7 +100,7 @@ $(BUILDDIR)/loader_symbol_probe.dbg.obj : $(SRCDIR)/loader_symbol_probe.c $(HEAD
 	@$(call PRINT_CC, $(CC) -DJL_LIBRARY_EXPORTS $(DEBUGFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 
 # Debugging target to help us see what kind of code is being generated for our trampolines
-dump-trampolines: $(SRCDIR)/trampolines/trampolines_$(ARCH).S
+dump-trampolines: $(SRCDIR)/arch/$(ARCH)/trampolines.S
 	$(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) $< -S | sed -E 's/ ((%%)|;) /\n/g' | sed -E 's/.global/\n.global/g'
 
 DIRS = $(build_bindir) $(build_libdir)

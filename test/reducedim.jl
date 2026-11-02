@@ -667,6 +667,10 @@ end
         @test isequal(minimum(x, dims=2), reshape([missing, missing], :, 1))
         @test isequal(maximum(x, dims=2), reshape([missing, missing], :, 1))
     end
+    x = [missing missing; missing missing]
+    @test isequal(maximum(x, dims=1), [missing missing])
+    @test isequal(minimum(x, dims=2), reshape([missing, missing], :, 1))
+    @test isequal(extrema(x, dims=1), [(missing, missing) (missing, missing)])
 end
 
 # issue #26709

@@ -218,6 +218,9 @@ typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
     // Used to represent the length difference between 2 vararg.
     // intersect(X, Y) ==> X = Y + Loffset
     int Loffset;
+    // Nesting depth of Vararg element intersections, where disjoint types admit empty tuples.
+    // Each intersect_all starts a new scope.
+    int vararg_elements;
 } jl_stenv_t;
 
 // state manipulation utilities
@@ -3035,7 +3038,13 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
                         return var_gt((jl_tvar_t*)y, x, e, param, yy, yinner);
                     }
                 }
-                if (yy) record_var_occurrence(yy, e, param);
+                if (yy) {
+                    record_var_occurrence(yy, e, param);
+                    // An outer existential var below an inner forall var must lie below
+                    // every value of it, so it is bounded by its lower bound.
+                    if (!yr && xx->depth0 < yy->depth0)
+                        return var_lt((jl_tvar_t*)x, yy->lb, e, param, xx, xinner);
+                }
                 return var_lt((jl_tvar_t*)x, y, e, param, xx, xinner);
             }
             else if (yr) {
@@ -3575,6 +3584,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->inputs[0] = e->inputs[1] = NULL;
     e->intersecting = NULL;
     e->Loffset = 0;
+    e->vararg_elements = 0;
     e->Lunions.depth = 0;      e->Runions.depth = 0;
     e->Lunions.more = 0;       e->Runions.more = 0;
     e->Lunions.used = 0;       e->Runions.used = 0;
@@ -4256,6 +4266,9 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
         return 1;
     if (jl_typetagof(x) < (jl_max_tags << 4) && jl_is_datatype(t) && jl_typetagis(x,((jl_datatype_t*)t)->smalltag << 4))
         return 1;
+    // every instance of a type is an instance of its wrapper
+    if (jl_is_unionall(t) && !jl_is_type(x) && ((jl_datatype_t*)jl_typeof(x))->name->wrapper == t)
+        return 1;
     if (jl_is_typeapp(t))
         jl_error("internal error: TypeApp in jl_isa");
     if (jl_is_type(x)) {
@@ -4383,7 +4396,28 @@ static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t 
         JL_GC_POP();
         return i;
     }
-    jl_value_t *choice = pick_union_element((jl_value_t*)u, e, 1);
+    jl_value_t *choice;
+    if (e->vararg_elements) {
+        choice = pick_union_element((jl_value_t*)u, e, 1);
+    }
+    else {
+        // Disjoint branches empty this intersect_all iteration. Skip them without recording
+        // choices that would repeat the surrounding work. Decisions depend only on x and u.
+        if (obviously_disjoint(x, (jl_value_t*)u, 0))
+            return jl_bottom_type;
+        // Every subtree walked into is known to overlap x, so a disjoint arm implies the
+        // other one overlaps.
+        choice = (jl_value_t*)u;
+        do {
+            jl_uniontype_t *uc = (jl_uniontype_t*)choice;
+            if (obviously_disjoint(x, uc->a, 0))
+                choice = uc->b;
+            else if (obviously_disjoint(x, uc->b, 0))
+                choice = uc->a;
+            else
+                choice = pick_union_decision(e, 1) ? uc->b : uc->a;
+        } while (jl_is_uniontype(choice));
+    }
     // try all possible choices in covariant position; union them all together at the top level
     return R ? intersect(x, choice, e, param) : intersect(choice, x, e, param);
 }
@@ -5644,12 +5678,14 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
         if (vx && vy) {
             jl_savedenv_t se;
             save_env(e, &se, 1);
+            e->vararg_elements++;
             ii = intersect_varargs((jl_vararg_t*)xi,
                                    (jl_vararg_t*)yi,
                                    lly - llx, // xi's offset: {A^n...,Vararg{T,N}} ∩ {Vararg{S,M}}
                                             // {(A∩S)^n...,Vararg{T∩S,N}} plus N = M-n
                                    e,
                                    param);
+            e->vararg_elements--;
             if (ii == jl_bottom_type)
                 restore_env(e, &se, 1);
             free_env(&se);
@@ -6407,6 +6443,8 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     e->Runions.depth = 0;
     e->Runions.more = 0;
     e->Runions.used = 0;
+    int vararg_elements = e->vararg_elements;
+    e->vararg_elements = 0;
     jl_value_t **is;
     JL_GC_PUSHARGS(is, 2);
     jl_savedenv_t se, me;
@@ -6460,6 +6498,7 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         free_env(&me);
     }
     free_env(&se);
+    e->vararg_elements = vararg_elements;
     JL_GC_POP();
     return is[0];
 }

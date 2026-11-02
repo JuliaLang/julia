@@ -316,13 +316,11 @@ end
     end
     _, fdictc = Profile.flatten(Profile.retrieve()...)
     Base.update_stackframes_callback[] = identity
-    function getline(sfs)
-        for sf in sfs
-            sf.func === :busywait && return sf.line
-        end
-        nothing
-    end
-    @test getline(values(fdictc)) == getline(values(fdict0)) + 2
+    # several busywait frames can be sampled, so compare all of them
+    getlines(sfs) = sort!(unique!([sf.line for sf in sfs if sf.func === :busywait]))
+    lines0 = getlines(values(fdict0))
+    @test !isempty(lines0)
+    @test getlines(values(fdictc)) == lines0 .+ 2
 end
 
 import InteractiveUtils

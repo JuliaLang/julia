@@ -466,9 +466,11 @@ function add_ci_debuginfo!(st::SyntaxTree,
             elseif macro_prov(c) !== nothing
                 efile = _di_sourcefile(c, true)
                 epos = _di_pos(c, true)
-                out_2 = edge_i = findfirst(==(efile), edge_files)
-                @jl_assert out_2 !== nothing (st, "macro loc not collected?")
-                out_3 = Int32(searchsortedfirst(edge_spans[edge_i], epos))
+                if efile !== ufile || epos !== upos
+                    out_2 = edge_i = findfirst(==(efile), edge_files)
+                    @jl_assert out_2 !== nothing (st, "macro loc not collected?")
+                    out_3 = Int32(searchsortedfirst(edge_spans[edge_i], epos))
+                end
             end
             push!(a, out_1)
             push!(a, out_2)
@@ -778,6 +780,7 @@ function _to_lowered_expr(ex::SyntaxTree)
             k == :splatnew ||
             k == :(=) ||
             k == :leave ||
+            k == :copyast ||
             k == :isdefined ||
             k == :loopinfo ||
             k == :thunk ||
@@ -912,9 +915,9 @@ function include_string(mapexpr::Function, mod::Module, code::AbstractString,
                         filename::AbstractString)
     version = if invokelatest(isdefined, mod, Symbol("#_internal_julia_parse"))
         vp = invokelatest(getglobal, mod, Symbol("#_internal_julia_parse"))
-        vp isa Base.VersionedParse ? vp.edition : Base.VERSION_EDITION
+        vp isa Base.VersionedParse ? vp.edition : Base.LATEST_STABLE_EDITION
     else
-        Base.VERSION_EDITION
+        Base.LATEST_STABLE_EDITION
     end
     st = parseall(SyntaxTree, code; filename, version=VersionNumber(version),
                   ignore_warnings=true)

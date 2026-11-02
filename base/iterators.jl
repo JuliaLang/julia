@@ -730,7 +730,7 @@ function peel(itr)
 end
 
 @propagate_inbounds iterate(i::Rest, st=i.st) = iterate(i.itr, st)
-isdone(i::Rest, st...) = isdone(i.itr, st...)
+isdone(i::Rest, st=i.st) = isdone(i.itr, st)
 
 eltype(::Type{<:Rest{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{<:Rest{I}}) where {I} = IteratorEltype(I)
@@ -821,7 +821,7 @@ take_iteratorsize(a) = HasLength()
 take_iteratorsize(::SizeUnknown) = SizeUnknown()
 IteratorSize(::Type{Take{I}}) where {I} = take_iteratorsize(IteratorSize(I))
 length(t::Take) = _min_length(t.xs, 1:t.n, IteratorSize(t.xs), HasLength())
-isdone(t::Take) = isdone(t.xs)
+isdone(t::Take) = (t.n <= 0) | isdone(t.xs)
 isdone(t::Take, state) = (state[1] <= 0) | isdone(t.xs, tail(state)...)
 
 @propagate_inbounds function iterate(it::Take, state=(it.n,))

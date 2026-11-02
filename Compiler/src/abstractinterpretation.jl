@@ -598,20 +598,20 @@ end
 
 function conditional_argtype(𝕃ᵢ::AbstractLattice, @nospecialize(rt), @nospecialize(sig),
                              argtypes::Vector{Any}, i::Int)
-    if isa(rt, InterConditional) && rt.slot == i
-        return rt
-    else
-        argt = widenslotwrapper(argtypes[i])
-        if isvarargtype(argt)
-            @assert fieldcount(sig) == i
-            argt = unwrapva(argt)
-        end
-        thentype = elsetype = tmeet(𝕃ᵢ, argt, fieldtype(sig, i))
-        condval = maybe_extract_const_bool(rt)
-        condval === true && (elsetype = Bottom)
-        condval === false && (thentype = Bottom)
-        return InterConditional(i, thentype, elsetype)
+    argt = widenslotwrapper(argtypes[i])
+    if isvarargtype(argt)
+        @assert fieldcount(sig) == i
+        argt = unwrapva(argt)
     end
+    argt = tmeet(𝕃ᵢ, argt, fieldtype(sig, i))
+    if isa(rt, InterConditional) && rt.slot == i
+        return InterConditional(i, tmeet(𝕃ᵢ, rt.thentype, widenconst(argt)), tmeet(𝕃ᵢ, rt.elsetype, widenconst(argt)))
+    end
+    thentype = elsetype = argt
+    condval = maybe_extract_const_bool(rt)
+    condval === true && (elsetype = Bottom)
+    condval === false && (thentype = Bottom)
+    return InterConditional(i, thentype, elsetype)
 end
 
 function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{MethodMatchTarget},
@@ -3461,7 +3461,8 @@ end
 function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
                            sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
-    rt, _... = instanceof_tfunc(abstract_eval_value(interp, e.args[1], sstate, sv), true)
+    argtype = abstract_eval_value(interp, e.args[1], sstate, sv)
+    rt, _... = instanceof_tfunc(argtype, true)
     ut = unwrap_unionall(rt)
     exct = Union{ErrorException,TypeError}
     if isa(ut, DataType) && !isabstracttype(ut)
@@ -3485,7 +3486,8 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
         # have well-defined field count, and field-level extended lattice elements carry
         # information beyond the declared type.
         if fcount !== nothing
-            nothrow = isconcretedispatch(rt)
+            # `:new` throws on a `UnionAll` or `Union` rep that is only `==` to `rt` (#61323)
+            nothrow = isconcretedispatch(rt) && widenconst(argtype) <: DataType
             @assert nargs ≤ fcount "malformed :new expression" # syntactically enforced by the front-end
             ats = Vector{Any}(undef, nargs)
             local anyrefine = false
@@ -3561,7 +3563,10 @@ end
 function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
                                 sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
-    rt, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], sstate, sv), true)
+    argtype = abstract_eval_value(interp, e.args[1], sstate, sv)
+    rt, isexact = instanceof_tfunc(argtype, true)
+    # `:splatnew` throws on a `UnionAll` or `Union` rep that is only `==` to `rt` (#61323)
+    isexact = isexact && widenconst(argtype) <: DataType
     nothrow = false
     if length(e.args) == 2 && isconcretedispatch(rt) && !ismutabletype(rt)
         at = abstract_eval_value(interp, e.args[2], sstate, sv)
