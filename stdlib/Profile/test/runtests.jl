@@ -584,6 +584,15 @@ end
         part_files = [string(prefix, ext) for ext in (".metadata.json", ".nodes", ".edges", ".strings")]
         @test all(isfile, part_files)
 
+        # with data redacted, every name is written to `.strings` only once
+        strs = String[]
+        let io = IOBuffer(read(string(prefix, ".strings")))
+            while !eof(io)
+                push!(strs, String(read(io, read(io, UInt))))
+            end
+        end
+        @test allunique(strs)
+
         out_file = string(prefix, ".heapsnapshot")
         Profile.HeapSnapshot.assemble_snapshot(prefix, out_file)
         sshot = read(out_file, String)
