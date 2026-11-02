@@ -302,6 +302,9 @@ end
     end
     if spec.dynamic_precision
         precision = args[argp]::Integer
+        if precision < 0
+            precision = T <: Ints ? 0 : T <: Floats && !(T <: HexBases) ? 6 : -1
+        end
         if zero && T <: Ints && precision > 0
             zero = false
         end

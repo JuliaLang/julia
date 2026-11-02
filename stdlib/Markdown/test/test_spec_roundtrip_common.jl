@@ -10,7 +10,7 @@ using Markdown
 # pass, and a single `@test_broken` at the bottom of this file stands in for
 # the whole set. If the `now_passing` test fails, some examples were fixed:
 # rerun regenerate_test_spec.jl and commit the regenerated files.
-known_broken = BitSet([9, 12, 14, 15, 17, 20, 26, 37, 38, 39, 40, 57, 65, 66, 76, 94, 99, 106, 124, 138, 280, 290, 291, 293, 297, 300, 301, 302, 306, 314, 315, 321, 326, 330, 331, 334, 450, 453, 461, 463, 515, 538, 550, 603, 606])
+known_broken = BitSet([9, 12, 14, 15, 17, 20, 26, 37, 38, 39, 40, 57, 65, 66, 76, 94, 99, 106, 124, 280, 290, 291, 293, 297, 300, 301, 302, 306, 314, 315, 321, 326, 450, 453, 461, 463, 515, 538, 550, 603, 606])
 now_passing = Int[]
 
 
@@ -1034,12 +1034,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 138 (known broken)
+    # Example 138
     input = "``` ```\naaa\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    expected == actual && push!(now_passing, 138)
+    @test expected == actual
 
     # Example 139
     input = "~~~~~~\naaa\n~~~ ~~\n"
@@ -2441,19 +2441,19 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 330 (known broken)
+    # Example 330
     input = "` `` `\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    expected == actual && push!(now_passing, 330)
+    @test expected == actual
 
-    # Example 331 (known broken)
+    # Example 331
     input = "`  ``  `\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    expected == actual && push!(now_passing, 331)
+    @test expected == actual
 
     # Example 332
     input = "` a`\n"
@@ -2469,12 +2469,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 334 (known broken)
+    # Example 334
     input = "`\u00A0`\n`  `\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    expected == actual && push!(now_passing, 334)
+    @test expected == actual
 
     # Example 335
     input = "``\nfoo\nbar  \nbaz\n``\n"
