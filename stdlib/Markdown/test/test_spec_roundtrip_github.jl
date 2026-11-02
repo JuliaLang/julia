@@ -30,7 +30,6 @@ known_broken = BitSet([
     99,
     102,
     124,
-    138,
     280,
     290,
     291,
@@ -44,9 +43,6 @@ known_broken = BitSet([
     315,
     321,
     326,
-    330,
-    331,
-    334,
     450,
     453,
     461,
@@ -1080,12 +1076,12 @@ end
     actual = Markdown.parse(new_input; flavor=:github)
     @test expected == actual
 
-    # Example 138 (known broken)
+    # Example 138
     input = "``` ```\naaa\n"
     expected = Markdown.parse(input; flavor=:github)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:github)
-    expected == actual && push!(now_passing, 138)
+    @test expected == actual
 
     # Example 139
     input = "~~~~~~\naaa\n~~~ ~~\n"
@@ -2487,19 +2483,19 @@ end
     actual = Markdown.parse(new_input; flavor=:github)
     @test expected == actual
 
-    # Example 330 (known broken)
+    # Example 330
     input = "` `` `\n"
     expected = Markdown.parse(input; flavor=:github)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:github)
-    expected == actual && push!(now_passing, 330)
+    @test expected == actual
 
-    # Example 331 (known broken)
+    # Example 331
     input = "`  ``  `\n"
     expected = Markdown.parse(input; flavor=:github)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:github)
-    expected == actual && push!(now_passing, 331)
+    @test expected == actual
 
     # Example 332
     input = "` a`\n"
@@ -2515,12 +2511,12 @@ end
     actual = Markdown.parse(new_input; flavor=:github)
     @test expected == actual
 
-    # Example 334 (known broken)
+    # Example 334
     input = "`\u00A0`\n`  `\n"
     expected = Markdown.parse(input; flavor=:github)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:github)
-    expected == actual && push!(now_passing, 334)
+    @test expected == actual
 
     # Example 335
     input = "``\nfoo\nbar  \nbaz\n``\n"

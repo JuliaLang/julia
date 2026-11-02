@@ -85,7 +85,6 @@ known_broken = BitSet([
     257,
     260,
     263,
-    266,
     267,
     271,
     276,
@@ -2247,12 +2246,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 266 (known broken)
+    # Example 266
     input = "1234567890. not ok\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<p>1234567890. not ok</p>\n"
     actual = Markdown.html(md)
-    expected == actual && push!(now_passing, 266)
+    @test expected == actual
 
     # Example 267 (known broken)
     input = "0. ok\n"
