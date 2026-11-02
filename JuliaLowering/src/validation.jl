@@ -200,7 +200,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         vst1_iter(vcx, iter1) &
         vst1(with(vcx; in_loop=true, in_gscope=false), body)
     [:while cond body] ->
-        vst1(vcx, cond) &
+        vst1(with(vcx; in_loop=true), cond) &
         vst1(with(vcx; in_loop=true, in_gscope=false), body)
     [:tuple _...] ->
         vst1_tuple(vcx, st)
@@ -696,8 +696,11 @@ vst1_function_calldecl(vcx, st) = @stm st begin
         vst1_function_calldecl(vcx, callex) &
         allv(vst1_typevar_decl, with(vcx; readable_underscore=true), tds)
     [:(::) callex rt] ->
-        vst1_simple_calldecl(vcx, callex) & vst1(vcx, rt)
-    _ -> vst1_simple_calldecl(vcx, st)
+        vst1_simple_calldecl(vcx, st[1]) & vst1(vcx, rt)
+    [:call _...] -> vst1_simple_calldecl(vcx, st)
+    # anonymous function syntax `function (x); end` or `function (x...); end` is
+    # subject to bad-arglist rules (block, etc.)
+    _ -> vst1_lam_lhs(vcx, st) | @fail(st, "malformed `call` in function decl")
 end
 
 vst1_simple_calldecl(vcx, st) = @stm st begin
@@ -707,9 +710,7 @@ vst1_simple_calldecl(vcx, st) = @stm st begin
         vst1_calldecl_kws(vcx, st[2])
     [:call f ps...] -> vst1_calldecl_name(vcx, f) &
         _calldecl_positionals(vcx, ps, false)
-    # anonymous function syntax `function (x); end` or `function (x...); end` is
-    # subject to bad-arglist rules (block, etc.)
-    _ ->  vst1_lam_lhs(vcx, st) | @fail(st, "malformed `call` in function decl")
+    _ -> @fail(st, "expected `call` expression")
 end
 
 vst1_macro(vcx, st) = @stm st begin
@@ -739,8 +740,8 @@ vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [:identifier] -> vst1_ident(vcx, st; lhs=true) &
         (!is_dotted_operator(syntax_name(st)) ? pass() :
         @fail(st, "dotted operator is not a valid function name"))
-    [:. _ _] ->
-        vst1_calldecl_dot_name(vcx, st)
+    [:. _ _] -> vcx.toplevel ? vst1_calldecl_dot_name(vcx, st) :
+        @fail(st, "global method definition must be placed at top level, or use eval")
     [:curly [:value] tvs...] -> allv(vst1, vcx, tvs)
     [:curly t tvs...] -> vst1_calldecl_name(vcx, t) & allv(vst1, vcx, tvs)
     ([:(::) _...], when=!vcx.toplevel) ->
@@ -1081,7 +1082,8 @@ vst1_splat_or_val(vcx, st) = @stm st begin
 end
 
 vst1_generator(vcx, st) = let
-    vcx = with(vcx; return_ok=false, toplevel=false, in_gscope=false, in_loop=false)
+    vcx = with(vcx; return_ok=false, toplevel=false, in_gscope=false,
+               in_loop=false, in_symblock=false)
     @stm st begin
         [:generator _] -> @fail(st, "`generator` requires >=2 args")
         [:generator val [:filter cond is...]] ->
