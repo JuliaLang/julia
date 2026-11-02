@@ -3077,6 +3077,11 @@ end
         iszero_simple(0) ? nothing : missing
     end |> only === Nothing
 end
+sigisint(x::Integer, c::Bool) = c ? x isa Int : true
+sigisint(x::String, c::Bool) = false
+@test Base.return_types((Union{Int,String}, Bool)) do x, c
+    sigisint(x, c) ? x : nothing
+end |> only == Union{Nothing,Int}
 
 @testset "branching on conditional object" begin
     # simple
