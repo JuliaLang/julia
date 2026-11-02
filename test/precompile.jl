@@ -1689,6 +1689,16 @@ precompile_test_harness("serialization leaves the heap unchanged") do dir
           struct Wrap{T} end
           const kept = Wrap{Int}
           global counter::Int = 0
+          # too large to inline, and inferred while loading, so that its inferred IR is kept
+          # only to emit the image
+          function noinline_sum(n)
+              s = 0
+              for i in 1:n, j in 1:i
+                  s += i * j % 7
+              end
+              return s
+          end
+          noinline_sum(3)
           if ccall(:jl_generating_output, Cint, ()) == 1
               let dropped = Wrap{Float64}, # only the hook refers to it
                   b = convert(Core.Binding, GlobalRef(@__MODULE__, :counter)),
@@ -1698,9 +1708,11 @@ precompile_test_harness("serialization leaves the heap unchanged") do dir
                   before = copy(b.backedges)
                   Base.postoutput() do
                       after = b.backedges
+                      ci = Base.method_instance(noinline_sum, (Int,)).cache
                       write(joinpath(@__DIR__, "result.txt"),
                             "type cache: \$(Wrap{Float64} === dropped)\\n",
-                            "backedges: \$(after == before && all(map(===, after, before)))\\n")
+                            "backedges: \$(after == before && all(map(===, after, before)))\\n",
+                            "inferred: \$(ci.inferred isa Core.CodeInfo)\\n")
                   end
               end
           end
@@ -1709,7 +1721,8 @@ precompile_test_harness("serialization leaves the heap unchanged") do dir
     Base.compilecache(Base.PkgId("SerializeNoMutate"))
     # post-output hooks run when the image includes native code
     if Base.JLOptions().use_pkgimages == 1
-        @test readlines(joinpath(dir, "result.txt")) == ["type cache: true", "backedges: true"]
+        @test readlines(joinpath(dir, "result.txt")) ==
+            ["type cache: true", "backedges: true", "inferred: true"]
     end
 end
 

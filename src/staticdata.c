@@ -943,9 +943,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                     jl_options.outputo != NULL && ci->owner == jl_nothing &&
                     (def->source != NULL || def->generator != NULL) &&
                     jl_is_code_info(inferred) && jl_ir_inlining_cost(inferred) == UINT16_MAX) {
-                    // Drop IR kept only for emitting this image. For a pkgimage this is a
-                    // backstop for a CodeInstance cached by a task racing the end of the
-                    // include phase, which can escape jl_finalize_precompile_inferred.
+                    // Drop IR retained only to generate native code (see jl_precompile_keep_ir).
                     // Optimized opaque closures keep theirs, since it can't be rebuilt.
                     record_field_change((jl_value_t*)ci, (jl_value_t**)&ci->inferred, jl_nothing);
                 }
@@ -3784,7 +3782,8 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
 
     jl_query_cache query_cache;
     init_query_cache(&query_cache);
-    jl_finalize_precompile_inferred(worklist != NULL && _native_data != NULL && jl_options.outputo != NULL);
+    // IR retained only to generate native code is not serialized (see jl_queue_for_serialization)
+    jl_set_precompile_keep_ir(0);
     jl_save_system_image_to_stream(f, mod_array, module_init_order, worklist, extext_methods, extext_records, new_ext, &query_cache);
     if (_native_data != NULL)
         native_functions = NULL;

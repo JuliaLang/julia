@@ -1113,8 +1113,7 @@ JL_DLLEXPORT void jl_set_type_infer_preserve_ir(int8_t v)
 
 // Set by precompile workers around `Base.include` so non-inlineable inferred
 // IR is retained on `CodeInstance.inferred` through the irgen phase instead of
-// being discarded. `jl_finalize_precompile_inferred` nulls them before save
-// (with a backstop in jl_queue_for_serialization).
+// being discarded. The image leaves them out (see jl_queue_for_serialization).
 static _Atomic(int8_t) jl_precompile_keep_ir = 0;
 
 JL_DLLEXPORT int8_t jl_get_precompile_keep_ir(void)
