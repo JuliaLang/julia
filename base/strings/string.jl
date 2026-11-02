@@ -598,7 +598,7 @@ julia> repeat('A', 3)
 ```
 """
 function repeat(c::AbstractChar, r::Integer)
-    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
+    r < 0 && throw(ArgumentError(LazyString("can't repeat a character ", r, " times")))
     r = UInt(r)::UInt
     c = Char(c)::Char
     r == 0 && return ""
