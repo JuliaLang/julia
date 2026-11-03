@@ -271,6 +271,21 @@ StringRef jl_codegen_output_t::get_call_target(jl_code_instance_t *ci, bool spec
     return target.decl->getName();
 }
 
+Function *jl_codegen_output_t::get_ccall_target(const char *f_name, void *f_lib,
+                                                jl_value_t *target, uint64_t site,
+                                                CallingConv::ID cc)
+{
+    assert(f_name || target);
+    auto &f = ccall_targets[{f_name, f_lib, target, site, cc}];
+    if (f)
+        return f;
+    std::string name = f_name ? names(f_name, "_") : names("ccall_dyn", "_");
+    auto fty = FunctionType::get(Type::getVoidTy(get_context()), false);
+    f = Function::Create(fty, Function::ExternalLinkage, name, get_module());
+    f->setCallingConv(cc);
+    return f;
+}
+
 jl_emitted_output_t jl_codegen_output_t::finish(std::unique_ptr<LLVMContext> ctx,
                                                 std::unique_ptr<Module> mod,
                                                 orc::SymbolStringPool &SSP)
@@ -291,9 +306,10 @@ jl_emitted_output_t jl_codegen_output_t::finish(std::unique_ptr<LLVMContext> ctx
     }
     for (auto &[call, target] : call_targets)
         info->call_targets[call] = intern(target.decl->getName());
-    for (auto [val, gv] : global_targets) {
+    for (auto [val, gv] : global_targets)
         info->global_targets[val] = intern(gv->getName());
-    }
+    for (auto [func, target] : ccall_targets)
+        info->ccall_targets[func] = intern(target->getName());
 
     if (!coverage_counters.empty()) {
         // llvm.compiler.used keeps the write-only counters alive. Sort the
@@ -1192,6 +1208,116 @@ private:
     jl_invoke_api_t API;
 };
 
+// The names of the stub and of its placeholders in the module of a template
+static const char *const StubTemplateName = "__jl_stub";
+static std::string stubPlaceholderName(unsigned i) JL_NOTSAFEPOINT
+{
+    return "__jl_stub_placeholder" + std::to_string(i);
+}
+
+// Compile the template when first needed.
+MemoryBuffer *JLPLTStub::get(JuliaOJIT &JIT)
+{
+    std::call_once(Once, [&]() JL_CANSAFEPOINT_ENTER_LEAVE { compile(JIT); });
+    return Obj.get();
+}
+
+void JLPLTStub::compile(JuliaOJIT &JIT)
+{
+    auto Ctx = std::make_unique<LLVMContext>();
+    auto Mod = jl_create_llvm_module("stub_template", *Ctx, JIT.getDataLayout(),
+                                     JIT.getTargetTriple());
+    Mod->addModuleFlag(Module::Warning, "julia.optlevel", (uint32_t)0);
+    jl_codegen_output_t Out{*Mod};
+    SmallVector<Constant *, 3> Placeholders;
+    for (unsigned i = 0; i < NumPlaceholders; i++)
+        Placeholders.push_back(new GlobalVariable(*Mod, Type::getInt8Ty(*Ctx),
+                                                  /*isConstant=*/true,
+                                                  GlobalValue::ExternalLinkage, nullptr,
+                                                  stubPlaceholderName(i)));
+    Function *F = Function::Create(FunctionType::get(Type::getVoidTy(*Ctx), false),
+                                   GlobalValue::ExternalLinkage, StubTemplateName, *Mod);
+    Emit(Out, F, Placeholders, JIT.getCodeModel() == CodeModel::Large);
+    // The JIT stub is called from other modules.
+    F->setLinkage(GlobalValue::ExternalLinkage);
+    F->setVisibility(GlobalValue::DefaultVisibility);
+    JIT.optimizeModule(*Mod);
+    Obj = JIT.compileModule(*Mod);
+}
+
+// A graph of the template object `T`, with the stub named `Name` and the
+// placeholders defined as `Values`.
+Expected<std::unique_ptr<jitlink::LinkGraph>>
+JLPLTStub::instantiate(JuliaOJIT &JIT, MemoryBuffer &T, orc::SymbolStringPtr Name,
+                               ArrayRef<uint64_t> Values)
+{
+    using namespace jitlink;
+    assert(Values.size() == NumPlaceholders);
+    auto G = createLinkGraphFromObject(T.getMemBufferRef(),
+                                       JIT.getExecutionSession().getSymbolStringPool());
+    if (!G)
+        return G.takeError();
+    auto StubName = JIT.mangle(StubTemplateName);
+    for (Symbol *Sym : (*G)->defined_symbols()) {
+        if (!Sym->hasName())
+            continue;
+        if (Sym->getName() == StubName)
+            Sym->setName(Name);
+        else
+            Sym->setScope(Scope::Local);
+    }
+    for (unsigned i = 0; i < NumPlaceholders; i++)
+        if (Symbol *Sym = (*G)->findExternalSymbolByName(JIT.mangle(stubPlaceholderName(i))))
+            (*G)->makeAbsolute(*Sym, orc::ExecutorAddr(Values[i]));
+    return G;
+}
+
+// Defines `Sym` as an instance of a stub template.
+class JLPLTStubUnit : public orc::MaterializationUnit {
+public:
+    JLPLTStubUnit(JuliaOJIT &JIT, ObjectLinkingLayer &OL, JLPLTStub &Template,
+                  SymbolStringPtr Sym, ArrayRef<uint64_t> Values) JL_NOTSAFEPOINT
+      : orc::MaterializationUnit({{{JIT.mangle(*Sym),
+                                    JITSymbolFlags::Exported | JITSymbolFlags::Callable}},
+                                  {}}),
+        JIT(JIT),
+        OL(OL),
+        Template(Template),
+        Sym(Sym),
+        Values(Values.begin(), Values.end())
+    {}
+
+    // During materialization: finalizers disabled, GC safe
+    void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_CANSAFEPOINT_ENTER_LEAVE override // NOLINT[julia-first-decl-annotations]
+    {
+        MemoryBuffer *T = Template.get(JIT);
+        if (!T) {
+            R->failMaterialization();
+            return;
+        }
+        auto G = Template.instantiate(JIT, *T, JIT.mangle(*Sym), Values);
+        if (!G) {
+#ifndef __clang_gcanalyzer__ // reportError runs an unknown callback
+            R->getExecutionSession().reportError(G.takeError());
+#endif
+            R->failMaterialization();
+            return;
+        }
+        OL.emit(std::move(R), std::move(*G));
+    }
+
+    StringRef getName() const override JL_NOTSAFEPOINT { return *Sym; }
+
+    void discard(const JITDylib &JD, const SymbolStringPtr &Name) override {}
+
+private:
+    JuliaOJIT &JIT;
+    ObjectLinkingLayer &OL;
+    JLPLTStub &Template;
+    SymbolStringPtr Sym;
+    SmallVector<uint64_t, 3> Values;
+};
+
 #if defined(LLVM_SHLIB)
 namespace JLEHFrames {
 static Error registerEHFrames(orc::ExecutorAddrRange EHFrameSection) {
@@ -1651,182 +1777,6 @@ private:
 };
 
 
-struct JuliaOJIT::DLSymOptimizer {
-    DLSymOptimizer(bool named) JL_NOTSAFEPOINT {
-        this->named = named;
-#define INIT_RUNTIME_LIBRARY(libname, handle) \
-        do { \
-            auto libidx = (uintptr_t) libname; \
-            if (libidx >= runtime_symbols.size()) { \
-                runtime_symbols.resize(libidx + 1); \
-            } \
-            runtime_symbols[libidx].first = handle; \
-        } while (0)
-
-        INIT_RUNTIME_LIBRARY(NULL, jl_RTLD_DEFAULT_handle);
-        INIT_RUNTIME_LIBRARY(JL_EXE_LIBNAME, jl_exe_handle);
-        INIT_RUNTIME_LIBRARY(JL_LIBJULIA_INTERNAL_DL_LIBNAME, jl_libjulia_internal_handle);
-        INIT_RUNTIME_LIBRARY(JL_LIBJULIA_DL_LIBNAME, jl_libjulia_handle);
-
-#undef INIT_RUNTIME_LIBRARY
-    }
-    ~DLSymOptimizer() JL_NOTSAFEPOINT = default;
-
-    void *lookup_symbol(void *libhandle, const char *fname) JL_NOTSAFEPOINT {
-        void *addr;
-        jl_dlsym(libhandle, fname, &addr, 0, 1);
-        return addr;
-    }
-
-    // TODO: analysis disabled since we aren't able to annotate that it was safe to lock
-    // std::mutex here because we asserted !jl_gcunsaferegion, so we don't need to assert jl_notsafepoint
-    void *lookup(const char *libname, const char *fname) JL_CANSAFEPOINT_ENTER_LEAVE JL_NO_SAFEPOINT_ANALYSIS {
-        StringRef lib(libname);
-        StringRef f(fname);
-        std::lock_guard<std::mutex> lock(symbols_mutex);
-        auto uit = user_symbols.find(lib);
-        if (uit == user_symbols.end()) {
-            jl_task_t *ct = jl_current_task;
-            int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
-            void *handle = jl_get_library_(libname, 0);
-            jl_gc_unsafe_leave(ct->ptls, gc_state);
-            if (!handle)
-                return nullptr;
-            uit = user_symbols.insert(std::make_pair(lib, std::make_pair(handle, StringMap<void*>()))).first;
-        }
-        auto &symmap = uit->second.second;
-        auto it = symmap.find(f);
-        if (it != symmap.end()) {
-            return it->second;
-        }
-        void *handle = lookup_symbol(uit->second.first, fname);
-        symmap[f] = handle;
-        return handle;
-    }
-
-    void *lookup(uintptr_t libidx, const char *fname) JL_NOTSAFEPOINT {
-        std::lock_guard<std::mutex> lock(symbols_mutex);
-        runtime_symbols.resize(std::max(runtime_symbols.size(), libidx + 1));
-        auto it = runtime_symbols[libidx].second.find(fname);
-        if (it != runtime_symbols[libidx].second.end()) {
-            return it->second;
-        }
-        auto handle = lookup_symbol(runtime_symbols[libidx].first, fname);
-        runtime_symbols[libidx].second[fname] = handle;
-        return handle;
-    }
-
-    void operator()(Module &M) JL_CANSAFEPOINT_ENTER_LEAVE {
-        for (auto &GV : M.globals()) {
-            auto Name = GV.getName();
-            if (Name.starts_with("jlplt") && Name.ends_with("got")) {
-                auto fname = GV.getAttribute("julia.fname").getValueAsString().str();
-                void *addr;
-                if (GV.hasAttribute("julia.libname")) {
-                    auto libname = GV.getAttribute("julia.libname").getValueAsString().str();
-                    addr = lookup(libname.data(), fname.data());
-                } else {
-                    assert(GV.hasAttribute("julia.libidx") && "PLT entry should have either libname or libidx attribute!");
-                    auto libidx = (uintptr_t)std::stoull(GV.getAttribute("julia.libidx").getValueAsString().str());
-                    addr = lookup(libidx, fname.data());
-                }
-                if (addr) {
-                    Function *Thunk = nullptr;
-                    if (!GV.isDeclaration()) {
-                        Thunk = cast<Function>(GV.getInitializer()->stripPointerCasts());
-                        assert(++Thunk->uses().begin() == Thunk->uses().end() && "Thunk should only have one use in PLT initializer!");
-                        assert(Thunk->hasLocalLinkage() && "Thunk should not have non-local linkage!");
-                    }
-                    else {
-                        GV.setLinkage(GlobalValue::PrivateLinkage);
-                    }
-                    auto init = ConstantExpr::getIntToPtr(ConstantInt::get(M.getDataLayout().getIntPtrType(M.getContext()), (uintptr_t)addr), GV.getValueType());
-                    if (named) {
-                        auto T = GV.getValueType();
-                        assert(T->isPointerTy());
-                        init = GlobalAlias::create(T, 0, GlobalValue::PrivateLinkage, GV.getName() + ".jit", init, &M);
-                    }
-                    GV.setInitializer(init);
-                    GV.setConstant(true);
-                    GV.setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
-                    if (Thunk) {
-                        Thunk->eraseFromParent();
-                    }
-                }
-            }
-        }
-
-        for (auto &F : M) {
-            for (auto &BB : F) {
-                SmallVector<Instruction *, 0> to_delete;
-                for (auto &I : make_early_inc_range(BB)) {
-                    auto CI = dyn_cast<CallInst>(&I);
-                    if (!CI)
-                        continue;
-                    auto Callee = CI->getCalledFunction();
-                    if (!Callee || Callee->getName() != XSTR(jl_load_and_lookup))
-                        continue;
-                    // Long-winded way of extracting fname without needing a second copy in an attribute
-                    auto fname = cast<ConstantDataArray>(cast<GlobalVariable>(CI->getArgOperand(1)->stripPointerCasts())->getInitializer())->getAsCString();
-                    auto libarg = CI->getArgOperand(0)->stripPointerCasts();
-                    // Should only use in store and phi node
-                    // Note that this uses the raw output of codegen,
-                    // which is why we can assume this
-                    assert(++++CI->use_begin() == CI->use_end());
-                    void *addr;
-                    if (auto GV = dyn_cast<GlobalVariable>(libarg)) {
-                        // Can happen if the library is the empty string, just give up when that happens
-                        if (isa<ConstantAggregateZero>(GV->getInitializer()))
-                            continue;
-                        auto libname = cast<ConstantDataArray>(GV->getInitializer())->getAsCString();
-                        addr = lookup(libname.data(), fname.data());
-                    } else {
-                        // Can happen if we fail the compile time dlfind i.e when we try a symbol that doesn't exist in libc
-                        if (dyn_cast<ConstantPointerNull>(libarg))
-                            continue;
-                        assert(cast<ConstantExpr>(libarg)->getOpcode() == Instruction::IntToPtr && "libarg should be either a global variable or a integer index!");
-                        libarg = cast<ConstantExpr>(libarg)->getOperand(0);
-                        auto libidx = cast<ConstantInt>(libarg)->getZExtValue();
-                        addr = lookup(libidx, fname.data());
-                    }
-                    if (addr) {
-                        auto init = ConstantExpr::getIntToPtr(ConstantInt::get(M.getDataLayout().getIntPtrType(M.getContext()), (uintptr_t)addr), CI->getType());
-                        if (named) {
-                            auto T = CI->getType();
-                            assert(T->isPointerTy());
-                            init = GlobalAlias::create(T, 0, GlobalValue::PrivateLinkage, CI->getName() + ".jit", init, &M);
-                        }
-                        // DCE and SimplifyCFG will kill the branching structure around
-                        // the call, so we don't need to worry about removing everything
-                        for (auto user : make_early_inc_range(CI->users())) {
-                            if (auto SI = dyn_cast<StoreInst>(user)) {
-                                to_delete.push_back(SI);
-                            } else {
-                                auto PHI = cast<PHINode>(user);
-                                PHI->replaceAllUsesWith(init);
-                                to_delete.push_back(PHI);
-                            }
-                        }
-                        to_delete.push_back(CI);
-                    }
-                }
-                for (auto I : to_delete) {
-                    I->eraseFromParent();
-                }
-            }
-        }
-    }
-
-    std::mutex symbols_mutex;
-    StringMap<std::pair<void *, StringMap<void *>>> user_symbols;
-    SmallVector<std::pair<void *, StringMap<void *>>, 0> runtime_symbols;
-    bool named;
-};
-
-void optimizeDLSyms(Module &M) {
-    JuliaOJIT::DLSymOptimizer(true)(M);
-}
-
 void fixupTM(TargetMachine &TM) {
     auto TheTriple = TM.getTargetTriple();
     if (jl_options.opt_level < 2) {
@@ -1861,7 +1811,6 @@ JuliaOJIT::JuliaOJIT()
     SessionJD(ES.createBareJITDylib("JuliaSession")),
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
-    DLSymOpt(std::make_unique<DLSymOptimizer>(false)),
     OCache(),
     MemMgr(createJITLinkMemoryManager()),
     ObjectLayer(ES, *MemMgr),
@@ -2520,6 +2469,13 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
             makeAnonymousLinkGraphSymbol(G, *Sym);
     }
 
+    for (auto &[CCall, T] : Info->ccall_targets) {
+        auto It = Syms.find(T);
+        if (It == Syms.end())
+            continue;
+        linkCCall(G, *It->second, CCall);
+    }
+
     // Rename globals and add mappings
     // TODO: don't leak when we have a way to GC code
     void **Ptrs;
@@ -2599,6 +2555,37 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
     return Sym->specptr;
 }
 
+// Look up a fully static spec, if its library is already loaded.
+static bool ccall_lookup(jl_ccall_spec_t spec, void *&addr) JL_NOTSAFEPOINT
+{
+    if (spec.func == nullptr || spec.target != nullptr)
+        return false;
+    void *l = jl_get_library_if_loaded((const char *)spec.lib);
+    // `l` is NULL for RTLD_DEFAULT (spec.lib == NULL)
+    if (spec.lib != nullptr && l == nullptr)
+        return false;
+    return jl_dlsym(l, spec.func, &addr, /*throw_err=*/0, /*search_deps=*/1);
+}
+
+void JuliaOJIT::linkCCall(jitlink::LinkGraph &G,
+                          jitlink::Symbol &Sym,
+                          jl_ccall_spec_t CCall) JL_NOTSAFEPOINT
+{
+    void *Addr;
+    if (ccall_lookup(CCall, Addr)) {
+        G.makeAbsolute(Sym, ExecutorAddr::fromPtr(Addr));
+        return;
+    }
+
+    // Otherwise, call a new stub
+    auto Name = ES.intern(Names("jlcstub#", CCall.func ? CCall.func : "dyn", "#"));
+    const uint64_t Values[3] = {(uintptr_t)CCall.lib, (uintptr_t)CCall.func,
+                                (uintptr_t)CCall.target};
+    cantFail(JD.define(std::make_unique<JLPLTStubUnit>(
+        *this, ObjectLayer, CCallStubTemplate, Name, Values)));
+    Sym.setName(mangle(*Name));
+}
+
 jl_code_instance_t *JuliaOJIT::findCompatibleCI(jl_code_instance_t *ci)
 {
     // add_codeinsts_to_jit! may have added an equivalent ci to the JIT, but
@@ -2660,8 +2647,6 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
 
 void JuliaOJIT::optimizeModule(Module &M)
 {
-    if (!OCache.isEnabled())
-        optimizeDLSyms(M);
     (*Optimizers)(M);
     if (!OCache.isEnabled())
         (*JITPointers)(M);
@@ -2704,10 +2689,6 @@ void JuliaOJIT::printTimers()
         printer();
     }
     reportAndResetTimings();
-}
-
-void JuliaOJIT::optimizeDLSyms(Module &M) {
-    (*DLSymOpt)(M);
 }
 
 void JuliaOJIT::shutdown()

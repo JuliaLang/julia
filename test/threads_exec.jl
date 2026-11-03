@@ -686,8 +686,8 @@ function test_load_and_lookup_18020(n)
     @threads for i in 1:n
         try
             ccall(:jl_load_and_lookup,
-                  Ptr{Cvoid}, (Cstring, Cstring, Ref{Ptr{Cvoid}}),
-                  "$i", :f, C_NULL)
+                  Ptr{Cvoid}, (Cstring, Cstring),
+                  "$i", :f)
         catch ex
             ex isa ErrorException || rethrow()
             startswith(ex.msg, "could not load library") || rethrow()

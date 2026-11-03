@@ -89,7 +89,7 @@ CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures llvm-expand-atomic-modify \
 	llvm-cancellation-lowering \
-	pipeline llvm_api objcache \
+	pipeline llvm_api objcache plt_stubs \
 	$(GC_CODEGEN_SRCS)
 # translation units of $(CODEGEN_SRCS), except objcache, which includes the hash
 CODEGEN_SRCS_HASH := $(patsubst %,$(SRCDIR)/%.cpp,$(filter-out objcache llvm-final-gc-lowering-mmtk,$(CODEGEN_SRCS)))

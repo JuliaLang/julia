@@ -6,9 +6,6 @@
 #undef DEBUG_TYPE
 #define DEBUG_TYPE "julia_irgen_ccall"
 
-STATISTIC(RuntimeSymLookups, "Number of runtime symbol lookups emitted");
-STATISTIC(PLTThunks, "Number of PLT Thunks emitted");
-STATISTIC(PLT, "Number of direct PLT entries emitted");
 STATISTIC(EmittedCGlobals, "Number of C globals emitted");
 STATISTIC(EmittedLLVMCalls, "Number of llvmcall intrinsics emitted");
 
@@ -55,7 +52,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 }
 
 typedef struct {
-    jl_value_t *gcroot[2];     // GC roots for strings [f_name, f_lib]
+    jl_value_t *gcroot[3];     // GC roots for [f_name, f_lib, target]
 
     // Static name resolution (compile-time known)
     const char *f_name;        // static function name
@@ -65,304 +62,188 @@ typedef struct {
     jl_value_t *f_name_expr;   // expression for function name
     jl_value_t *f_lib_expr;    // expression for library name
 
+    // Unless the name and library are known statically, the svec (fn,) or
+    // (fn, lib) of the values and global references the lookup evaluates
+    jl_value_t *target;
+
     // Runtime pointer
     Value *jl_ptr;             // callable pointer expression result
 } native_sym_arg_t;
 
-// Find or create the GVs for the library and symbol lookup.
-// Return `runtime_lib` (whether the library name is a string) if it returns `lib`.
-// The `lib` and `sym` GV returned may not be in the current module.
-static bool runtime_sym_gvs(jl_codectx_t &ctx, const native_sym_arg_t &symarg,
-                            GlobalVariable *&lib, GlobalVariable *&sym)
+static jl_value_t *unwrap_quoted(jl_value_t *v)
+{
+    if (v != nullptr && jl_is_quotenode(v))
+        return jl_quotenode_value(v);
+    return v;
+}
+
+// The `target` of native_sym_arg_t, rooted for as long as the code using it.
+static jl_value_t *build_target_svec(const native_sym_arg_t &symarg, jl_value_t *arg) JL_CANSAFEPOINT
+{
+    bool dynamic_func = (symarg.f_name == nullptr);
+    bool dynamic_lib = (symarg.f_lib == nullptr) && (symarg.f_lib_expr != nullptr);
+    if (!dynamic_func && !dynamic_lib)
+        return nullptr;
+    if (!jl_is_expr(arg) || ((jl_expr_t*)arg)->head != jl_tuple_sym)
+        return nullptr;
+    jl_expr_t *e = (jl_expr_t*)arg;
+    size_t nargs = jl_expr_nargs(e);
+
+    jl_value_t *svec = nullptr;
+    if (nargs == 1) {
+        svec = (jl_value_t*)jl_svec1(unwrap_quoted(jl_exprarg(e, 0)));
+    }
+    else if (nargs == 2) {
+        svec = (jl_value_t*)jl_svec2(unwrap_quoted(jl_exprarg(e, 0)),
+                                     unwrap_quoted(jl_exprarg(e, 1)));
+    }
+    if (svec == nullptr)
+        return nullptr;
+    return jl_as_global_root(svec, 1);
+}
+
+// Find or create the cache of a cglobal's address. It may not be in the
+// current module.
+static GlobalVariable *runtime_sym_gv(jl_codectx_t &ctx, const native_sym_arg_t &symarg)
 {
     const auto &f_lib = symarg.f_lib;
     const auto &f_name = symarg.f_name;
     // If f_name isn't constant or f_lib_expr is present but f_lib is not,
-    // emit a local cache for sym, but do not cache lib
+    // emit a local cache
     if (!((f_lib || symarg.f_lib_expr == NULL) && f_name)) {
-        std::string name = ctx.emission_context.make_name("dynccall_");
         Module *M = jl_Module;
         auto T_pvoidfunc = getPointerTy(M->getContext());
-        lib = nullptr;
-        sym = new GlobalVariable(*M, T_pvoidfunc, false,
-                                 GlobalVariable::InternalLinkage,
-                                 Constant::getNullValue(T_pvoidfunc), name);
-        return false;
+        return new GlobalVariable(*M, T_pvoidfunc, false, GlobalVariable::InternalLinkage,
+                                  Constant::getNullValue(T_pvoidfunc),
+                                  ctx.emission_context.make_name("cglobal_dyn_"));
     }
 
     auto M = &ctx.emission_context.get_module();
-    bool runtime_lib = false;
-    GlobalVariable *libptrgv;
-    jl_codegen_output_t::SymMapGV *symMap;
-    if ((intptr_t)f_lib == (intptr_t)JL_EXE_LIBNAME) {
-        libptrgv = prepare_global_in(M, jlexe_var);
-        symMap = &ctx.emission_context.symMapExe;
-    }
-    else if ((intptr_t)f_lib == (intptr_t)JL_LIBJULIA_INTERNAL_DL_LIBNAME) {
-        libptrgv = prepare_global_in(M, jldlli_var);
-        symMap = &ctx.emission_context.symMapDlli;
-    }
-    else if ((intptr_t)f_lib == (intptr_t)JL_LIBJULIA_DL_LIBNAME) {
-        libptrgv = prepare_global_in(M, jldll_var);
-        symMap = &ctx.emission_context.symMapDll;
-    }
-    else if (f_lib == NULL) {
-        libptrgv = jl_emit_RTLD_DEFAULT_var(M);
-        symMap = &ctx.emission_context.symMapDefault;
-    }
-    else {
-        std::string name = ctx.emission_context.make_name("ccalllib_", llvm::sys::path::filename(f_lib));
-        runtime_lib = true;
-        auto &libgv = ctx.emission_context.libMapGV[f_lib];
-        if (libgv.first == NULL) {
-            libptrgv = new GlobalVariable(*M, getPointerTy(M->getContext()), false,
-                                          ctx.emission_context.imaging_mode ? GlobalVariable::ExternalLinkage : GlobalVariable::InternalLinkage,
-                                          Constant::getNullValue(getPointerTy(M->getContext())), name);
-            libgv.first = libptrgv;
-        }
-        else {
-            libptrgv = libgv.first;
-        }
-        symMap = &libgv.second;
-    }
-
-    GlobalVariable *&llvmgv = (*symMap)[f_name];
+    auto &symMap = (uintptr_t)f_lib <= 3 ? ctx.emission_context.symMapSpecial[(uintptr_t)f_lib]
+                                         : ctx.emission_context.symMapLib[f_lib];
+    GlobalVariable *&llvmgv = symMap[f_name];
     if (llvmgv == NULL) {
-        std::string name = ctx.emission_context.make_name("ccall_", f_name);
+        std::string name = ctx.emission_context.make_name("cglobal_", f_name);
         auto T_pvoidfunc = getPointerTy(M->getContext());
         llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
                                     ctx.emission_context.imaging_mode ? GlobalVariable::ExternalLinkage : GlobalVariable::InternalLinkage,
                                     Constant::getNullValue(T_pvoidfunc), name);
     }
-
-    lib = libptrgv;
-    sym = llvmgv;
-    return runtime_lib;
+    return llvmgv;
 }
 
-static Value *runtime_sym_lookup(
-        jl_codegen_output_t &emission_context,
-        IRBuilder<> &irbuilder,
-        jl_codectx_t *pctx,
-        const native_sym_arg_t &symarg, Function *f,
-        GlobalVariable *libptrgv,
-        GlobalVariable *llvmgv, bool runtime_lib) JL_CANSAFEPOINT
+csymbol_data_fields_t csymbol_data_fields(jl_codegen_output_t &out, const char *f_name,
+                                          const void *f_lib, jl_value_t *target)
 {
-    ++RuntimeSymLookups;
-    // in pseudo-code, this function emits the following if libptrgv is set:
-    //   global HMODULE *libptrgv
-    //   global void **llvmgv
-    //   if (*llvmgv == NULL)
-    //       *llvmgv = jl_load_and_lookup(f_lib, f_name, libptrgv);
-    //   return (*llvmgv)
-    // otherwise it emits:
-    //   global void **llvmgv
-    //   if (*llvmgv == NULL)
-    //       *llvmgv = jl_lazy_load_and_lookup(f_lib_expr, f_name_expr);
-    //   return (*llvmgv)
-    auto T_pvoidfunc = getPointerTy(irbuilder.getContext());
-    BasicBlock *enter_bb = irbuilder.GetInsertBlock();
-    BasicBlock *dlsym_lookup = BasicBlock::Create(irbuilder.getContext(), "dlsym");
-    BasicBlock *ccall_bb = BasicBlock::Create(irbuilder.getContext(), "ccall");
-    Constant *initnul = ConstantPointerNull::get(T_pvoidfunc);
-    LoadInst *llvmf_orig = irbuilder.CreateAlignedLoad(T_pvoidfunc, llvmgv, Align(sizeof(void*)));
-    // This in principle needs a consume ordering so that load from
-    // this pointer sees a valid value. However, this is not supported by
-    // LLVM (or agreed on in the C/C++ standard FWIW) and should be
-    // almost impossible to happen on every platform we support since this
-    // ordering is enforced by the hardware and LLVM has to speculate an
-    // invalid load from the `cglobal` but doesn't depend on the `cglobal`
-    // value for this to happen.
-    llvmf_orig->setAtomic(AtomicOrdering::Unordered);
-    auto nonnull = irbuilder.CreateICmpNE(llvmf_orig, initnul);
-    setName(emission_context, nonnull, "is_cached");
-    irbuilder.CreateCondBr(
-            nonnull,
-            ccall_bb,
-            dlsym_lookup);
-
-    assert(f->getParent() != NULL);
-    dlsym_lookup->insertInto(f);
-    irbuilder.SetInsertPoint(dlsym_lookup);
-    Instruction *llvmf;
-    if (libptrgv) {
-        // Call jl_load_and_lookup
-        assert(symarg.f_name);
-        Value *libname;
-        if (runtime_lib)
-            libname = stringConstPtr(emission_context, irbuilder, symarg.f_lib);
-        else
-            // f_lib is actually one of the special sentinel values
-            libname = ConstantExpr::getIntToPtr(ConstantInt::get(emission_context.DL.getIntPtrType(irbuilder.getContext()), (uintptr_t)symarg.f_lib), getPointerTy(irbuilder.getContext()));
-        Value *nameval = stringConstPtr(emission_context, irbuilder, symarg.f_name);
-        auto lookup = irbuilder.CreateCall(prepare_call_in(jl_builderModule(irbuilder), jldlsym_func),
-                    { libname, nameval, generic_global_ptr(libptrgv) });
-        llvmf = lookup;
-        setName(emission_context, llvmf, symarg.f_name + StringRef(".found"));
-    }
-    else {
-        // Call jl_lazy_load_and_lookup
-        assert(pctx);
-        jl_codectx_t &ctx = *pctx;
-        Value *fname_val;
-        if (symarg.f_name)
-            fname_val = track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)jl_symbol(symarg.f_name)));
-        else
-            fname_val = boxed(ctx, emit_expr(ctx, symarg.f_name_expr));
-        Value *lib_val;
-        if (symarg.f_lib)
-            lib_val = track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)jl_symbol(symarg.f_lib)));
-        else if (symarg.f_lib_expr)
-            // n.b. f_lib_expr is required to be something simple here (from
-            // resolve_definition_effects validation) such as a globalref or a
-            // quote node for example, not a general expression
-            lib_val = boxed(ctx, emit_expr(ctx, symarg.f_lib_expr));
-        else
-            lib_val = ConstantPointerNull::get(ctx.types().T_prjlvalue);
-        llvmf = irbuilder.CreateCall(prepare_call(jllazydlsym_func), {lib_val, fname_val});
-    }
-    StoreInst *store = irbuilder.CreateAlignedStore(llvmf, llvmgv, Align(sizeof(void*)));
-    store->setAtomic(AtomicOrdering::Release);
-    irbuilder.CreateBr(ccall_bb);
-
-    ccall_bb->insertInto(f);
-    irbuilder.SetInsertPoint(ccall_bb);
-    PHINode *p = irbuilder.CreatePHI(T_pvoidfunc, 2);
-    p->addIncoming(llvmf_orig, enter_bb);
-    p->addIncoming(llvmf, llvmf->getParent());
-    return p;
-}
-
-static Value *runtime_sym_lookup(
-        jl_codectx_t &ctx,
-        const native_sym_arg_t &symarg, Function *f) JL_CANSAFEPOINT
-{
-    GlobalVariable *libptrgv;
-    GlobalVariable *llvmgv;
-    bool runtime_lib = runtime_sym_gvs(ctx, symarg, libptrgv, llvmgv);
-    if (libptrgv) {
-        libptrgv = prepare_global_in(jl_Module, libptrgv);
-        llvmgv = prepare_global_in(jl_Module, llvmgv);
-    }
-    return runtime_sym_lookup(ctx.emission_context, ctx.builder, &ctx, symarg, f, libptrgv, llvmgv, runtime_lib);
-}
-
-// Emit a "PLT" entry that will be lazily initialized
-// when being called the first time.
-static GlobalVariable *emit_plt_thunk(
-        jl_codectx_t &ctx,
-        FunctionType *functype, const AttributeList &attrs,
-        CallingConv::ID cc, const native_sym_arg_t &symarg,
-        GlobalVariable *libptrgv, GlobalVariable *llvmgv,
-        bool runtime_lib) JL_CANSAFEPOINT
-{
-    ++PLTThunks;
-    bool shared = libptrgv != nullptr;
-    assert(shared && "not yet supported by runtime_sym_lookup");
-    auto M = &ctx.emission_context.get_module();
-    if (shared) {
-        assert(symarg.f_name);
-        libptrgv = prepare_global_in(M, libptrgv);
-        llvmgv = prepare_global_in(M, llvmgv);
-    }
-    std::string fname;
-    if (symarg.f_name)
-        fname = ctx.emission_context.make_name("jlplt_", symarg.f_name);
+    auto &M = out.get_module();
+    auto &Ctx = out.get_context();
+    PointerType *PtrTy = PointerType::getUnqual(Ctx);
+    csymbol_data_fields_t Fields{ConstantPointerNull::get(PtrTy), ConstantPointerNull::get(PtrTy),
+                                 ConstantPointerNull::get(PtrTy)};
+    auto String = [&](const char *Str, const Twine &Name) {
+        auto Init = ConstantDataArray::getString(Ctx, Str, true);
+        return new GlobalVariable(M, Init->getType(), true, GlobalVariable::PrivateLinkage,
+                                  Init, Name);
+    };
+    std::string base = out.make_name("$csymbol$");
+    if ((uintptr_t)f_lib <= 3) // NULL or a special library (JL_EXE_LIBNAME, ...)
+        Fields.lib = ConstantExpr::getIntToPtr(
+            ConstantInt::get(M.getDataLayout().getIntPtrType(Ctx), (uintptr_t)f_lib), PtrTy);
     else
-        fname = ctx.emission_context.make_name("jldynplt_");
-    Function *plt = Function::Create(functype,
-                                     GlobalVariable::PrivateLinkage,
-                                     fname, M);
-    plt->setAttributes(attrs);
-    if (cc != CallingConv::C)
-        plt->setCallingConv(cc);
-    auto T_pvoidfunc = getPointerTy(M->getContext());
-    GlobalVariable *got = new GlobalVariable(*M, T_pvoidfunc, false,
-                                             (shared && ctx.emission_context.imaging_mode) ? GlobalVariable::ExternalLinkage : GlobalVariable::PrivateLinkage,
-                                             plt,
-                                             fname + "_got");
-    if (shared) {
-        if (runtime_lib)
-            got->addAttribute("julia.libname", symarg.f_lib);
-        else
-            got->addAttribute("julia.libidx", std::to_string((uintptr_t) symarg.f_lib));
-        got->addAttribute("julia.fname", symarg.f_name);
-    }
-    BasicBlock *b0 = BasicBlock::Create(M->getContext(), "top", plt);
-    IRBuilder<> irbuilder(b0);
-    Value *ptr = runtime_sym_lookup(ctx.emission_context, irbuilder, NULL, symarg, plt, libptrgv,
-                                    llvmgv, runtime_lib);
-    StoreInst *store = irbuilder.CreateAlignedStore(ptr, got, Align(sizeof(void*)));
-    store->setAtomic(AtomicOrdering::Release);
-    SmallVector<Value*, 16> args;
-    for (auto &arg : plt->args())
-        args.push_back(&arg);
-    CallInst *ret = irbuilder.CreateCall(
-        functype,
-        ptr, ArrayRef<Value*>(args));
-    ret->setAttributes(attrs);
-    if (cc != CallingConv::C)
-        ret->setCallingConv(cc);
-    // NoReturn function can trigger LLVM verifier error when declared as
-    // MustTail since other passes might replace the `ret` with
-    // `unreachable` (LLVM should probably accept `unreachable`).
-    if (attrs.hasFnAttr(Attribute::NoReturn)) {
-        irbuilder.CreateUnreachable();
-    }
-    else {
-        // musttail support is very bad on ARM, PPC, PPC64 (as of LLVM 3.9)
-        // Known failures includes vararg (not needed here) and sret.
-        if (ctx.emission_context.TargetTriple.isX86() || (ctx.emission_context.TargetTriple.isAArch64() && !ctx.emission_context.TargetTriple.isOSDarwin())) {
-            // Ref https://bugs.llvm.org/show_bug.cgi?id=47058
-            // LLVM, as of 10.0.1 emits wrong/worse code when musttail is set
-            // Apple silicon macs give an LLVM ERROR if musttail is set here #44107.
-            if (!attrs.hasAttrSomewhere(Attribute::ByVal))
-                ret->setTailCallKind(CallInst::TCK_MustTail);
-        }
-        if (functype->getReturnType() == getVoidTy(irbuilder.getContext())) {
-            irbuilder.CreateRetVoid();
-        }
-        else {
-            irbuilder.CreateRet(ret);
-        }
-    }
-    irbuilder.ClearInsertionPoint();
-
-    return got;
+        Fields.lib = String((const char *)f_lib, base + "$lib");
+    if (f_name)
+        Fields.func = String(f_name, base + "$func");
+    if (target)
+        Fields.target = literal_pointer_val_slot(out, target);
+    return Fields;
 }
 
-static Value *emit_plt(
-        jl_codectx_t &ctx,
-        FunctionType *functype,
-        const AttributeList &attrs,
-        CallingConv::ID cc, const native_sym_arg_t &symarg) JL_CANSAFEPOINT
+// Define `StubFn` as the stub of a foreign symbol (see emit_plt_stub)
+void emit_ccall_stub(jl_codegen_output_t &out, const csymbol_data_fields_t &Fields,
+                     Function *StubFn, bool LargeCodeModel)
 {
-    ++PLT;
-    // Don't do this for vararg functions so that the `musttail` is only
-    // an optimization and is not required to function correctly.
-    assert(!functype->isVarArg());
-    GlobalVariable *libptrgv;
-    GlobalVariable *llvmgv;
-    bool runtime_lib = runtime_sym_gvs(ctx, symarg, libptrgv, llvmgv);
-    if (!libptrgv)
-        return runtime_sym_lookup(ctx, symarg, ctx.f);
+    emit_plt_stub(out, StubFn, XSTR(jl_bind_foreignsymbol_slot), {Fields.lib, Fields.func, Fields.target},
+                  LargeCodeModel);
+}
 
-    auto &pltMap = ctx.emission_context.allPltMap[attrs];
-    auto key = std::make_tuple(llvmgv, functype, cc);
-    GlobalVariable *&sharedgot = pltMap[key];
-    if (!sharedgot) {
-        sharedgot = emit_plt_thunk(ctx,
-                functype, attrs, cc, symarg, libptrgv, llvmgv, runtime_lib);
-    }
-    GlobalVariable *got = prepare_global_in(jl_Module, sharedgot);
-    LoadInst *got_val = ctx.builder.CreateAlignedLoad(got->getValueType(), got, Align(sizeof(void*)));
-    setName(ctx.emission_context, got_val, symarg.f_name);
-    // See comment in `runtime_sym_lookup` above. This in principle needs a
-    // consume ordering too. This is even less likely to cause issues though
-    // since the only thing we do to this loaded pointer is to call it
-    // immediately.
-    got_val->setAtomic(AtomicOrdering::Unordered);
-    return got_val;
+// The JIT's template for emit_ccall_stub (see JLPLTStub), with
+// placeholders for the lib, func and target
+void emit_ccall_stub_template(jl_codegen_output_t &out, Function *F,
+                              ArrayRef<Constant *> Placeholders, bool LargeCodeModel)
+{
+    // The target field points at a cell holding the target, as in images
+    auto Target = new GlobalVariable(out.get_module(), Placeholders[2]->getType(),
+                                     /*isConstant=*/true, GlobalValue::PrivateLinkage,
+                                     Placeholders[2], "target");
+    emit_ccall_stub(out, {Placeholders[0], Placeholders[1], Target}, F, LargeCodeModel);
+}
+
+// The csymbol_data_t of a cglobal, whose slot is the cache from runtime_sym_gv.
+// Nothing calls through the slot, so `resolve` is NULL.
+static Constant *build_csymbol_data_global(jl_codegen_output_t &out,
+                                           const native_sym_arg_t &symarg,
+                                           GlobalVariable *llvmgv) JL_CANSAFEPOINT
+{
+    auto Fields = csymbol_data_fields(out, symarg.f_name, symarg.f_lib, symarg.target);
+    PointerType *PtrTy = PointerType::getUnqual(out.get_context());
+    auto Init = ConstantStruct::getAnon(
+        {ConstantPointerNull::get(PtrTy), llvmgv, Fields.lib, Fields.func, Fields.target});
+    return new GlobalVariable(out.get_module(), Init->getType(), /*isConstant=*/true,
+                              GlobalVariable::PrivateLinkage, Init,
+                              out.make_name("$csymbol$data"));
+}
+
+// Emit the lookup of a cglobal: while its cache is NULL, call
+// jl_resolve_foreignsymbol and store the result into the cache.
+static Value *emit_csymbol_lazy_lookup(jl_codectx_t &ctx,
+                                       const native_sym_arg_t &symarg,
+                                       Function *f) JL_CANSAFEPOINT
+{
+    GlobalVariable *llvmgv = prepare_global_in(jl_Module, runtime_sym_gv(ctx, symarg));
+
+    auto &Ctx = ctx.builder.getContext();
+    auto T_ptr = getPointerTy(Ctx);
+    Constant *initnul = ConstantPointerNull::get(T_ptr);
+
+    BasicBlock *enter_bb = ctx.builder.GetInsertBlock();
+    BasicBlock *resolve_bb = BasicBlock::Create(Ctx, "csymbol.resolve");
+    BasicBlock *use_bb = BasicBlock::Create(Ctx, "csymbol.use");
+
+    LoadInst *fast = ctx.builder.CreateAlignedLoad(T_ptr, llvmgv,
+                                                   Align(sizeof(void*)));
+    fast->setAtomic(AtomicOrdering::Unordered);
+    setName(ctx.emission_context, fast,
+            (symarg.f_name ? StringRef(symarg.f_name) : StringRef("csymbol")) + ".cached");
+    Value *is_null = ctx.builder.CreateICmpEQ(fast, initnul);
+    setName(ctx.emission_context, is_null, "is_unresolved");
+
+    MDBuilder MDB(Ctx);
+    SmallVector<uint32_t, 2> Weights{1, 1u << 20};  // resolve : use
+    ctx.builder.CreateCondBr(is_null, resolve_bb, use_bb,
+                             MDB.createBranchWeights(Weights));
+
+    f->insert(f->end(), resolve_bb);
+    ctx.builder.SetInsertPoint(resolve_bb);
+    Constant *data_gv = build_csymbol_data_global(ctx.emission_context, symarg,
+                                                   llvmgv);
+    auto resolverFn = prepare_call(jl_resolve_foreignsymbol_func);
+    CallInst *resolved = ctx.builder.CreateCall(resolverFn, {data_gv});
+    resolved->addFnAttr(Attribute::Cold);
+    setName(ctx.emission_context, resolved,
+            (symarg.f_name ? StringRef(symarg.f_name) : StringRef("csymbol")) + ".resolved");
+    StoreInst *cache_store = ctx.builder.CreateAlignedStore(resolved, llvmgv,
+                                                            Align(sizeof(void*)));
+    cache_store->setAtomic(AtomicOrdering::Unordered);
+    ctx.builder.CreateBr(use_bb);
+
+    f->insert(f->end(), use_bb);
+    ctx.builder.SetInsertPoint(use_bb);
+    PHINode *p = ctx.builder.CreatePHI(T_ptr, 2);
+    p->addIncoming(fast, enter_bb);
+    p->addIncoming(resolved, resolve_bb);
+    setName(ctx.emission_context, p,
+            symarg.f_name ? StringRef(symarg.f_name) : StringRef("csymbol"));
+    return p;
 }
 
 // --- ABI Implementations ---
@@ -646,9 +527,11 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
     out.f_lib = nullptr;
     out.f_name_expr = nullptr;
     out.f_lib_expr = nullptr;
+    out.target = nullptr;
     out.jl_ptr = nullptr;
     out.gcroot[0] = nullptr;
     out.gcroot[1] = nullptr;
+    out.gcroot[2] = nullptr;
 
     // Check if this is a tuple (normalized by julia-syntax.scm)
     if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_tuple_sym) {
@@ -724,6 +607,9 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
             out.f_lib = jl_dlfind(out.f_name);
         }
     }
+
+    out.target = build_target_svec(out, arg);
+    out.gcroot[2] = out.target;
 }
 
 // --- code generator for cglobal ---
@@ -738,9 +624,9 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_tuple_sym) {
         // Name lookup form
         native_sym_arg_t sym = {};
-        JL_GC_PUSH2(&sym.gcroot[0], &sym.gcroot[1]);
+        JL_GC_PUSH3(&sym.gcroot[0], &sym.gcroot[1], &sym.gcroot[2]);
         interpret_foreignsymbol(ctx, sym, arg);
-        Value *res = runtime_sym_lookup(ctx, sym, ctx.f);
+        Value *res = emit_csymbol_lazy_lookup(ctx, sym, ctx.f);
         JL_GC_POP();
         return mark_julia_type(ctx, res, false, (jl_value_t*)jl_voidpointer_type);
     } else {
@@ -1554,7 +1440,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     }
     assert(jl_is_symbol(cc_sym));
     native_sym_arg_t symarg = {};
-    JL_GC_PUSH4(&rt, &at, &symarg.gcroot[0], &symarg.gcroot[1]);
+    JL_GC_PUSH5(&rt, &at, &symarg.gcroot[0], &symarg.gcroot[1], &symarg.gcroot[2]);
 
     CallingConv::ID cc = CallingConv::C;
     bool llvmcall = false;
@@ -2278,13 +2164,14 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         llvmf = jl_Module->getOrInsertFunction(symarg.f_name, functype).getCallee();
     }
     else {
+        assert(symarg.f_name || symarg.f_name_expr);
         ++DeferredCCallLookups;
-        // vararg requires musttail,
-        // but musttail is incompatible with noreturn.
-        if (functype->isVarArg())
-            llvmf = runtime_sym_lookup(ctx, symarg, ctx.f);
-        else
-            llvmf = emit_plt(ctx, functype, attributes, cc, symarg);
+        // A call to the symbol's placeholder, which linking binds to the
+        // symbol or to its stub (see emit_ccall_stub)
+        uint64_t site = symarg.target ? jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1) : 0;
+        llvmf = ctx.emission_context.get_ccall_target(symarg.f_name,
+                                                       (void *)symarg.f_lib,
+                                                       symarg.target, site, cc);
     }
 
     // Cancellation guard (`@ccall cancel_handler=(fn, state)`): fill a

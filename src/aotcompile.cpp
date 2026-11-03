@@ -728,6 +728,8 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
                     G.setDSOLocal(true);
                     continue;
                 }
+                if (isSlotThunk(G))
+                    continue; // see set_slot_thunk_linkage
                 G.setLinkage(GlobalValue::InternalLinkage);
                 G.setDSOLocal(true);
                 makeSafeName(G);
@@ -888,6 +890,13 @@ static jl_code_instance_t *jl_get_ci_equiv_range(jl_code_instance_t *ci JL_PROPA
     return ci;
 }
 
+// Emit the stubs of the foreign symbols (see emit_ccall_stub)
+static void aot_emit_ccall_stubs(jl_codegen_output_t &out) JL_CANSAFEPOINT
+{
+    for (auto &[Spec, StubFn] : out.ccall_targets)
+        emit_ccall_stub(out, csymbol_data_fields(out, Spec.func, Spec.lib, Spec.target), StubFn,
+                        /*LargeCodeModel=*/false);
+}
 
 // Static version of JuliaOJIT::linkOutput
 static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
@@ -1012,6 +1021,7 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     emit_llvmcall_modules(out);
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them
     aot_link_output(out);
+    aot_emit_ccall_stubs(out);
     // including generating cfunction thunks
     generate_cfunc_thunks(out);
     aot_optimize_roots(out, method_roots);
@@ -2735,7 +2745,6 @@ extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_code_info_t *src, char getwrapper, char optimize, const char *llvm_options, const jl_cgparams_t params)
 {
     // emit this function into a new llvm module
-    jl_task_t *ct = jl_current_task;
     dump->F = nullptr;
     dump->TSM = nullptr;
     dump->pass_output = nullptr;
@@ -2785,11 +2794,6 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 decl_names.invoke = decls->invoke ? decls->invoke->getName() : "";
                 decl_names.specptr = decls->specptr ? decls->specptr->getName() : "";
                 // if compilation succeeded, prepare to return the result
-                if (!jl_options.image_codegen) {
-                    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
-                    optimizeDLSyms(output.get_module());
-                    jl_gc_safe_leave(ct->ptls, gc_state);
-                }
                 assert(!verifyLLVMIR(output.get_module()));
                 if (optimize) {
                     auto opts = OptimizationOptions::defaults();
