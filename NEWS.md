@@ -18,6 +18,9 @@ Command-line option changes
 Multi-threading changes
 -----------------------
 
+* `--threads=auto`, `--procs=auto`, `JULIA_NUM_THREADS=auto` and the default number of GC threads
+  now honour `JULIA_CPU_THREADS`, matching `Sys.EFFECTIVE_CPU_THREADS` ([#64613]).
+
 Build system changes
 --------------------
 

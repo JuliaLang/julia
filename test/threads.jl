@@ -493,7 +493,7 @@ function get_nthreads(options = ``; cpus = nothing, exclusive = false)
     cmd = `$(Base.julia_cmd()) --startup-file=no $(options)`
     cmd = `$cmd -e "print(Threads.threadpoolsize())"`
     cmd = addenv(cmd, "JULIA_EXCLUSIVE" => exclusive ? "1" : "0",
-        "JULIA_NUM_THREADS" => "auto")
+        "JULIA_NUM_THREADS" => "auto", "JULIA_CPU_THREADS" => nothing)
     if cpus !== nothing
         cmd = setcpuaffinity(cmd, cpus)
     end
