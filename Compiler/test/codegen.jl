@@ -1574,3 +1574,21 @@ scale_forwarding!(b::ForwardingMatrix, a::ForwardingMatrix) = (b .= 2.0 .* a)
         @test occursin(r"<\d+ x double>", get_llvm(scale_forwarding!, Tuple{ForwardingMatrix, ForwardingMatrix}))
     end
 end
+
+# getfield with an unknown index into a tuple of singletons selects the type index without a runtime call
+const singleton_tuple = (+, -, +, nothing, missing, Val(1))
+singleton_tuple_getfield(i) = singleton_tuple[i]
+let llvm = get_llvm(singleton_tuple_getfield, Tuple{Int}, true, false, false)
+    @test !occursin("get_nth_field", llvm)
+end
+@testset "getfield on tuple of singletons" begin
+    for i in 1:length(singleton_tuple)
+        @test singleton_tuple_getfield(i) === singleton_tuple[i]
+    end
+    @test_throws BoundsError singleton_tuple_getfield(0)
+    @test_throws BoundsError singleton_tuple_getfield(7)
+end
+# type index 128 is the box marker: a union that large keeps the runtime lookup
+const many_singletons = ntuple(i -> Val(i), 129)
+many_singletons_typeof(i) = typeof(many_singletons[i])
+@test all(many_singletons_typeof(i) === Val{i} for i in 1:129)
