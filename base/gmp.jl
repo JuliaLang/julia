@@ -309,6 +309,10 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     bstr = startpos == firstindex(s) && endpos == lastindex(s) ? String(s) : String(SubString(s,startpos,endpos))
 
     sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,firstindex(bstr),ncodeunits(bstr))
+    if sgn == 0
+        raise && throw(ArgumentError("input string is empty or only contains whitespace"))
+        return nothing
+    end
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
         return nothing
