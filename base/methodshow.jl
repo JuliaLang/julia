@@ -426,7 +426,7 @@ function url(m::Method)
                         commit = string(LibGit2.head_oid(repo))
                         root = LibGit2.path(repo)
                         if startswith(file, root) || startswith(realpath(file), root)
-                            "https://github.com/$u/tree/$commit/"*file[length(root)+1:end]*"#L$line"
+                            "https://github.com/$u/tree/$commit"*file[length(root)+1:end]*"#L$line"
                         else
                             fileurl(file)
                         end
