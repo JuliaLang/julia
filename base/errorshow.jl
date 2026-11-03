@@ -856,13 +856,15 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     end
 
     if !isempty(lines) # Display up to three closest candidates
+        # build the header here so the closure below does not capture (and specialize on) `f`
+        header = if show_constructor_hint
+            sprint(print, "\n\nHint: constructors are defined for `", (f::DataType).name.wrapper,
+                "`, but not for `", f::DataType, "`:"; context=io)
+        else
+            "\n\nClosest candidates are:"
+        end
         Base.with_output_color(:normal, io) do io
-            if show_constructor_hint
-                print(io, "\n\nHint: constructors are defined for `", f.name.wrapper,
-                    "`, but not for `", f, "`:")
-            else
-                print(io, "\n\nClosest candidates are:")
-            end
+            print(io, header)
             permute!(lines, sortperm(line_score))
             i = 0
             for line in lines
