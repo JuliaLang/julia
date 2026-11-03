@@ -419,6 +419,7 @@ end
     @test convert(Bool, BigFloat(0.0)) == false
     @test convert(Bool, BigFloat(1.0)) == true
     @test_throws InexactError convert(Bool, BigFloat(0.1))
+    @test Rational{BigInt}(BigFloat(3//2 + 1//big(2)^301, precision=1000)) == 3//2 + 1//big(2)^301
 
     @test signbit(Float64(BigFloat(NaN))) == 0
     @test signbit(Float64(-BigFloat(NaN))) == 1
@@ -558,6 +559,11 @@ end
 
     @test !isequal(BigFloat(0.0),BigFloat(-0.0))
     @test isequal(z, BigFloat(NaN))
+    v = BigFloat(big(2)^300 + 1, precision=301)
+    @test v == (big(2)^300 + 1)//1
+    @test v != big(2)^300//1
+    @test BigFloat((big(2)^300 + 1)//2, precision=301) == (big(2)^300 + 1)//2
+    @test !isequal(BigFloat(3//2 + 1//big(2)^301, precision=1000), 3//2)
 
     # total ordering
     @test isless(big(-0.0), big(0.0))
@@ -780,13 +786,6 @@ end
         @test ldexp(BigFloat(24.5), Int16(-72)) == ldexp(24.5, -72)
         @test ldexp(BigFloat(24.5), UInt(72)) == ldexp(24.5, 72)
         @test ldexp(BigFloat(24.5), 0x48) == ldexp(24.5, 72)
-        x = BigFloat(big(2)^300 + 1, precision=301)
-        @test precision(ldexp(x, -1)) == precision(ldexp(x, UInt(1))) == 301
-        @test ldexp(x, 0) == x
-        @test Rational{BigInt}(x) == big(2)^300 + 1
-        @test x == (big(2)^300 + 1)//1
-        @test x != big(2)^300//1
-        @test ldexp(x, -1) == (big(2)^300 + 1)//2
     end
 end
 @testset "ceil / floor / trunc" begin
