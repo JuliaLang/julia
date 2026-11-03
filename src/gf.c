@@ -3745,6 +3745,8 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         }
         else if (did_compile && codeinst->owner == jl_nothing) {
             record_precompile_statement(mi, compile_time, is_recompile);
+            if (jl_generating_output() && jl_options.incremental)
+                jl_push_workload_compiled(codeinst);
         }
         JL_GC_POP();
     }
