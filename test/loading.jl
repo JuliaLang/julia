@@ -2144,6 +2144,43 @@ end
     end
 end
 
+@testset "coverage of an inlined function with a compiled copy in a package image" begin
+    mkdepottempdir() do depot
+        mktempdir() do dir
+            dir = realpath(dir) # the tracked path is resolved but the source paths are not
+            pkgdir = joinpath(dir, "CovInline")
+            mkpath(joinpath(pkgdir, "src"))
+            write(joinpath(pkgdir, "Project.toml"), """
+                name = "CovInline"
+                uuid = "3c9f1e2a-5b7d-4e8f-a0b1-c2d3e4f5a6b7"
+                version = "0.1.0"
+                """)
+            srcfile = joinpath(pkgdir, "src", "CovInline.jl")
+            write(srcfile, """
+                module CovInline
+                @inline function inner(x)
+                    y = x + 1
+                    return y * 2
+                end
+                @noinline outer(x) = inner(x)
+                precompile(outer, (Int,))
+                precompile(inner, (Int,))
+                end
+                """)
+            outfile = joinpath(dir, "cov.info")
+            sep = Sys.iswindows() ? ';' : ':'
+            cmd = `$(Base.julia_cmd()[1]) --startup-file=no --pkgimages=yes --code-coverage=$outfile --code-coverage=@$dir -e 'using CovInline; CovInline.outer(parse(Int, "1"))'`
+            @test success(addenv(cmd, "JULIA_DEPOT_PATH" => depot * sep, "JULIA_LOAD_PATH" => dir * sep * "@stdlib"))
+            record = only(filter(contains("SF:" * srcfile), split(read(outfile, String), "end_of_record")))
+            hits = Dict(parse(Int, m[1]) => parse(Int, m[2]) for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
+            # the inlined call covers the definition line, as a call to the compiled copy would
+            for ln in (2, 3, 4)
+                @test get(hits, ln, 0) > 0 context=ln
+            end
+        end
+    end
+end
+
 @testset "CacheFlags coverage path" begin
     cf = Base.CacheFlags(Base.CacheFlags(coverage=1); coverage_path="/a \"b\"")
     @test parse(Base.CacheFlags, sprint(show, cf)) == cf
