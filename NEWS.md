@@ -36,6 +36,13 @@ Standard library changes
 
 #### Dates
 
+* `Base.Parsers.parsevalue` parses a `Date`, `DateTime`, `Time`, or `Timestamp` from bytes, such
+  as part of a buffer, in the `DateFormat` of its `dateformat` keyword. It returns a
+  `Base.Parsers.ParseFailure` instead of throwing, as it does for numbers.
+* Parsing `String` and `SubString{String}` text with a `DateFormat` of numeric fields is about
+  twice as fast.
+* `tryparse` no longer throws an `InvalidCharError` for malformed text where an AM/PM marker goes.
+
 #### InteractiveUtils
 
 #### JuliaSyntaxHighlighting

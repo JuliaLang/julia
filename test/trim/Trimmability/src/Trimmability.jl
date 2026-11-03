@@ -2,7 +2,7 @@
 module Trimmability
 
 using Sockets
-using Dates: Date, DateTime, @dateformat_str
+using Dates: Date, DateTime, Timestamp, @dateformat_str
 
 include("linalg.jl")
 
@@ -198,11 +198,15 @@ end
 @noinline interpolate_many(r, x, s, c) = "got $(r) vs $(first(r)) with $(x) and $(s) and $(c)"
 
 # Parsing with a `DateFormat`, whose error path prints the directive that failed:
-# that `print` must resolve statically too.
+# that `print` must resolve statically too. `parsevalue` reads part of a buffer, and a
+# month name in it as characters.
 function _test_dates()
     day = Date("2026-03-08")
     time = DateTime("2026-03-08 16:00:00.5", dateformat"yyyy-mm-dd HH:MM:SS.s")
-    println(Core.stdout, "dates: ", day, " ", time)
+    buffer = Vector{UInt8}("x,2026-03-08T16:00:00.000000001,Mar 8 2026,y")
+    stamp = Base.Parsers.parsevalue(Timestamp, view(buffer, 3:31))
+    named = Base.Parsers.parsevalue(Date, view(buffer, 33:42); dateformat = dateformat"u d yyyy")
+    println(Core.stdout, "dates: ", day, " ", time, " ", stamp, " ", named)
 end
 
 function _test_threads()
