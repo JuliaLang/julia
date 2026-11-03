@@ -1081,7 +1081,7 @@ function setindex!(A::Array{T}, X::Array{T}, I::AbstractUnitRange{Int}) where T
     lI = length(I)
     setindex_shape_check(X, lI)
     if lI > 0
-        unsafe_copyto!(A, first(I), X, 1, lI)
+        @inbounds copyto!(A, first(I), X, 1, lI)
     end
     return A
 end
