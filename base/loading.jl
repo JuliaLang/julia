@@ -2067,6 +2067,9 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
             insert_extension_triggers(modkey)
             run_package_callbacks(modkey)
         end
+    elseif loaded isa Module && module_build_id(loaded) === build_id && register_reused_module(loaded)
+        insert_extension_triggers(modkey)
+        run_package_callbacks(modkey)
     end
     if loaded isa Module && PkgId(loaded) == modkey && module_build_id(loaded) === build_id
         return loaded
@@ -2199,6 +2202,11 @@ end
                     @goto check_next_path
                     @label check_next_dep
                 end
+                if stalecheck
+                    for dep in staledeps
+                        dep isa Module && register_reused_module(dep) && push!(newdeps, PkgId(dep))
+                    end
+                end
                 M = maybe_loaded_precompile(pkg, newbuild_id)
                 if isa(M, Module)
                     stalecheck && register_root_module(M)
@@ -2246,6 +2254,7 @@ end
                     insert_extension_triggers(modkey)
                     stalecheck && run_package_callbacks(modkey)
                 end
+                empty!(newdeps)
             end
         end
     end
@@ -2630,7 +2639,17 @@ function require(uuidkey::PkgId)
     end
     return invoke_in_world(world, __require, uuidkey)
 end
-__require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
+function __require(uuidkey::PkgId)
+    @lock require_lock begin
+    set_cache = LOADING_CACHE[] === nothing
+    set_cache && (LOADING_CACHE[] = LoadingCache())
+    try
+        return _require_prelocked(uuidkey)
+    finally
+        set_cache && (LOADING_CACHE[] = nothing)
+    end
+    end
+end
 function _require_prelocked(uuidkey::PkgId, env=nothing)
     assert_havelock(require_lock)
     m = start_loading(uuidkey, UInt128(0), true)
@@ -2699,6 +2718,14 @@ end
     loaded_modules[key] = m
     end
     nothing
+end
+
+# A public load can reuse a module that was loaded privately, such as a stdlib loaded by the REPL.
+# Register it, so that it counts as loaded and extensions that it triggers can load.
+function register_reused_module(m::Module)
+    maybe_root_module(PkgId(m)) === nothing || return false
+    register_root_module(m)
+    return true
 end
 
 register_root_module(Core)
@@ -3463,8 +3490,9 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                 write(f, _crc32c(f))
             end
 
-            # inherit permission from the source file (and make them writable)
-            chmod(tmppath, filemode(path) & 0o777 | 0o200)
+            # inherit permission from the source file, but keep it readable and writable
+            # (`filemode` is 0 if the source has disappeared in the meantime)
+            chmod(tmppath, filemode(path) & 0o777 | 0o600)
 
             # prune the directory with cache files
             if pkg.uuid !== nothing

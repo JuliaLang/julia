@@ -1096,8 +1096,15 @@ function _concrete_eval_call(
         concrete_result = ConcreteResult(edge, effects)
         return ConstCallResult(Bottom, Any, concrete_result, effects, #=const_edge=#nothing)
     end
-    concrete_result = ConcreteResult(edge, EFFECTS_TOTAL, value)
-    return ConstCallResult(Const(value), Bottom, concrete_result, EFFECTS_TOTAL, #=const_edge=#nothing)
+    rt = Const(value)
+    # A non-mutation-free value obtained by concrete evaluation may refer to global
+    # memory (e.g. a const global `Ref`), so preserve the `:inaccessiblememonly` taint
+    # of the call: otherwise the caller may access the value's memory and still be
+    # refined to be `:inaccessiblememonly` (and thus `:consistent`)
+    concrete_effects = is_mutation_free_argtype(rt) ? EFFECTS_TOTAL :
+        Effects(EFFECTS_TOTAL; inaccessiblememonly=effects.inaccessiblememonly)
+    concrete_result = ConcreteResult(edge, concrete_effects, value)
+    return ConstCallResult(rt, Bottom, concrete_result, concrete_effects, #=const_edge=#nothing)
 end
 
 # check if there is a cycle and duplicated inference of `mi`
@@ -2779,6 +2786,24 @@ function argtypes_are_actually_getglobal(argtypes::Vector{Any})
     return isa(M.val, Module) && isa(s.val, Symbol)
 end
 
+# The optimizer turns splatted tuples into `Core.svec` calls, and the type of an svec does not
+# record its elements. Look through those calls so that splatting them stays precise.
+function svec_apply_argtypes(𝕃::AbstractLattice, fargs::Vector{Any}, argtypes::Vector{Any}, ir::IRCode)
+    newargtypes = argtypes
+    for i in 4:min(length(fargs), length(argtypes))
+        a = fargs[i]
+        isa(a, SSAValue) || continue
+        isa(argtypes[i], Const) && continue
+        stmt = ir[a][:stmt]
+        is_known_call(stmt, Core.svec, ir) || continue
+        if newargtypes === argtypes
+            newargtypes = copy(argtypes)
+        end
+        newargtypes[i] = tuple_tfunc(𝕃, Any[argextype(x, ir) for x in stmt.args[2:end]])
+    end
+    return newargtypes
+end
+
 # call where the function is known exactly
 function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState,
@@ -2790,6 +2815,9 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     𝕃ᵢ = typeinf_lattice(interp)
     if isa(f, Builtin)
         if f === _apply_iterate
+            if sv isa IRInterpretationState && fargs !== nothing
+                return abstract_apply(interp, svec_apply_argtypes(𝕃ᵢ, fargs, argtypes, sv.ir), si, sv)
+            end
             return abstract_apply(interp, argtypes, si, sv)
         elseif f === invoke
             return abstract_invoke(interp, arginfo, si, sv)
