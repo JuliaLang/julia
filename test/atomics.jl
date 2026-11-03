@@ -526,6 +526,27 @@ function _test_atomic_setonce_replace(T, initial, desired)
         @test mem[idx] == expected
     end
 end
+
+# AtomicMemoryRefs reject ordinary indexing and their atomic macros convert stored values.
+@testset "atomic indexing with AtomicMemoryRef" begin
+    ref = memoryref(AtomicMemory{Int}(undef, 1))
+    @test_throws CanonicalIndexError ref[] = 1
+    @test (@atomic ref[] = Int8(1)) === 1
+    @test (@atomic :acquire ref[]) === 1
+    @test (@atomicswap :acquire_release ref[] = Int8(2)) === 1
+    @test (@atomic :acquire ref[]) === 2
+    @test (@atomicreplace :acquire_release :acquire ref[] 2 => Int8(3)) == (old=2, success=true)
+    @test (@atomicreplace ref[] 2 => Int8(4)) == (old=3, success=false)
+    @test (@atomic ref[]) === 3
+
+    ref = GenericMemoryRef(AtomicMemory{BigInt}(undef, 1))
+    @test !isassigned(ref)
+    @test (@atomiconce :release :monotonic ref[] = Int8(1)) === true
+    @test isassigned(ref)
+    @test (@atomiconce ref[] = Int8(2)) === false
+    @test (@atomic ref[]) == BigInt(1)
+end
+
 @testset "@atomic with AtomicMemory" begin
 
     _test_atomic_get_set_swap_modify(Float64, rand(), rand(), 10)
