@@ -541,21 +541,18 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     return &ct->gcstack;
 }
 
-static int image_is_initialized(void *image) JL_NOTSAFEPOINT
+static int is_unloaded_image(void *image) JL_NOTSAFEPOINT
 {
     jl_image_pointers_t *pointers;
-    if (!jl_dlsym(image, "jl_image_pointers", (void **)&pointers, 0, 0)) {
-        // cannot have been initialized.
-        assert(0 && "no jl_image_pointers in library");
+    if (!jl_dlsym(image, "jl_image_pointers", (void **)&pointers, 0, 0))
         return 0;
-    }
     // Loading an image stores the runtime's pgcstack getter into the
     // image's `jl_pgcstack_func_slot`; until then the slot holds the image's
     // built-in default getter.
     jl_get_pgcstack_func_t getter;
     jl_pgcstack_key_t key;
     jl_pgcstack_getkey(&getter, &key);
-    return *(jl_get_pgcstack_func_t*)pointers->ptls->pgcstack_func_slot == getter;
+    return *(jl_get_pgcstack_func_t*)pointers->ptls->pgcstack_func_slot != getter;
 }
 
 JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void) JL_CANSAFEPOINT_ENTER
@@ -575,14 +572,9 @@ JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void) JL_CANSAFEPOINT_E
         return &jl_get_current_task()->gcstack;
     }
 
+    // NULL for JIT-compiled cfunctions, which are not in any library
     void *handle = jl_find_dynamic_library_by_addr(retaddr, 0, 1);
-    if (handle == NULL) {
-        assert(0 && "caller of jl_autoinit_and_adopt_thread not in any library");
-        fprintf(stderr, "error: thread adoption failed due to bad sysimage lookup\n"
-                        "       (this should not happen, please file a bug report)\n");
-        exit(1);
-    }
-    if (jl_get_pgcstack() != NULL || !image_is_initialized(handle)) {
+    if (jl_get_pgcstack() != NULL || (handle != NULL && is_unloaded_image(handle))) {
         const char *caller = jl_pathname_for_symbol(retaddr);
         const char *loaded = jl_options.image_file;
         fprintf(stderr, "error: a Julia runtime is already initialized in this process with image\n"
