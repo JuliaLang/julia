@@ -403,7 +403,7 @@ function url(m::Method)
     (m.file === :null || m.file === :string) && return ""
     file = string(m.file)
     line = m.line
-    line <= 0 || occursin(r"In\[[0-9]+\]"a, file) && return ""
+    (line <= 0 || occursin(r"In\[[0-9]+\]"a, file)) && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
