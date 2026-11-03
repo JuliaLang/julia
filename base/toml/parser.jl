@@ -658,6 +658,8 @@ function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, 
             # tables that were closed by a different [table] section.
             check_def = define_implicit ? true : (i == length(dotted_keys))
             @try check_allowed_add_key(l, d, check_def)
+        else
+            @try check_allowed_add_key(l, d, false)
         end
         if define_implicit && d isa TOMLDict
             push!(l.implicit_tables, d)
@@ -763,17 +765,11 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
     v = get(d, last_key_part, nothing)
     if v !== nothing
         @try check_allowed_add_key(l, v)
-        if v isa TOMLDict && v in l.implicit_tables
-            return ParserError(ErrDuplicatedKey)
-        end
+        return ParserError(ErrDuplicatedKey)
     end
 
     skip_ws(l)
     value = @try parse_value(l)
-    # Not allowed to overwrite a value with an inline dict
-    if value isa Dict && haskey(d, last_key_part)
-        return ParserError(ErrInlineTableRedefine)
-    end
     # TODO: Performance, hashing `last_key_part` again here
     d[last_key_part] = value
     if capture_comments
@@ -1060,8 +1056,10 @@ function parse_number_or_date_start(l::Parser)
             # Consume remaining digits, then check for ':' or '-'.
             accept_batch(l, isdigit)
             if peek(l) == ':'
+                parsed_sign && return ParserError(ErrParsingDateTime)
                 return parse_local_time(l)
             elseif peek(l) == '-'
+                parsed_sign && return ParserError(ErrParsingDateTime)
                 return parse_datetime(l)
             else
                 return ParserError(ErrLeadingZeroNotAllowedInteger)
@@ -1088,8 +1086,10 @@ function parse_number_or_date_start(l::Parser)
     if !read_underscore
         # No underscores in date / times
         if peek(l) == '-'
+            parsed_sign && return ParserError(ErrParsingDateTime)
             return parse_datetime(l)
         elseif peek(l) == ':'
+            parsed_sign && return ParserError(ErrParsingDateTime)
             return parse_local_time(l)
         end
     end
