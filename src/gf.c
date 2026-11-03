@@ -5368,21 +5368,16 @@ STATIC_INLINE int sig_match_fast(jl_value_t *arg1t, jl_value_t **args, jl_value_
 }
 
 _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
-static _Atomic(uint8_t) pick_which[N_CALL_CACHE];
 #ifdef JL_GF_PROFILE
 size_t ncalls;
 void call_cache_stats()
 {
-    int pick_which_stat[4] = {0, 0, 0, 0};
     int i, count = 0;
     for (i = 0; i < N_CALL_CACHE; i++) {
         if (jl_atomic_load_relaxed(&call_cache[i]))
             count++;
-        ++pick_which_stat[jl_atomic_load_relaxed(&pick_which[i]) & 3];
     }
-    jl_safe_printf("cache occupied: %d / %d; pick_which stats: {%d, %d, %d, %d}\n",
-            count, N_CALL_CACHE,
-            pick_which_stat[0], pick_which_stat[1], pick_which_stat[2], pick_which_stat[3]);
+    jl_safe_printf("cache occupied: %d / %d\n", count, N_CALL_CACHE);
 }
 #endif
 
@@ -5472,13 +5467,19 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
             }
         }
         if (entry != NULL && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
-            // put the entry into the cache if it's valid for a leafsig lookup,
-            // using pick_which to slightly randomize where it ends up
-            // (intentionally not atomically synchronized, since we're just using it for randomness)
-            // TODO: use the thread's `cong` instead as a source of randomness
-            int which = jl_atomic_load_relaxed(&pick_which[cache_idx[0]]) + 1;
-            jl_atomic_store_relaxed(&pick_which[cache_idx[0]], which);
-            jl_atomic_store_release(&call_cache[cache_idx[which & 3]], entry);
+            // put the entry into the cache if it's valid for a leafsig lookup, in an
+            // empty slot or else a random one: round-robin replacement never hits when a
+            // call site cycles through more than 4 targets. Use the top bits of the LCG
+            // step, its low bits have a short period.
+            int which = 0;
+            while (which < 4 && jl_atomic_load_relaxed(&call_cache[cache_idx[which]]))
+                which++;
+            if (which == 4) {
+                uint64_t *seed = &jl_current_task->ptls->rngseed;
+                *seed = 69069 * *seed + 362437;
+                which = *seed >> 62;
+            }
+            jl_atomic_store_release(&call_cache[cache_idx[which]], entry);
         }
         if (entry && for_call) {
             // mfunc was found in slow path, so log --trace-dispatch
