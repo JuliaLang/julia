@@ -3319,7 +3319,7 @@ static bool field_may_be_null(const jl_cgval_t &strct, jl_datatype_t *stt) JL_CA
 static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
         jl_cgval_t *ret, jl_cgval_t strct,
         Value *idx, jl_datatype_t *stt, jl_value_t *inbounds,
-        enum jl_memory_order order) JL_CANSAFEPOINT
+        enum jl_memory_order order, jl_value_t *rt = nullptr) JL_CANSAFEPOINT
 {
     ++EmittedGetfieldUnknowns;
     size_t nfields = jl_datatype_nfields(stt);
@@ -3375,6 +3375,30 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
             }
             else {
                 llvm_unreachable("homogeneous struct should have had a homogeneous type");
+            }
+        }
+        if (strct.isghost && rt && jl_is_uniontype(rt)) {
+            // all fields are singletons: select the field's type index in the inferred union
+            jl_value_t *ut = rt;
+            SmallVector<unsigned, 8> tidx(nfields);
+            bool ok = true;
+            for (size_t i = 0; i < nfields && ok; i++) {
+                tidx[i] = get_box_tindex((jl_datatype_t*)jl_svecref(types, i), ut);
+                ok = tidx[i] != 0 && tidx[i] < UNION_BOX_MARKER;
+            }
+            if (ok) {
+                Value *idx = idx0();
+                Type *T_int8 = getInt8Ty(ctx.builder.getContext());
+                Value *tindex = ConstantInt::get(T_int8, tidx[0]);
+                for (size_t i = 1; i < nfields; i++) {
+                    tindex = ctx.builder.CreateSelect(
+                            ctx.builder.CreateICmpEQ(idx, ConstantInt::get(idx->getType(), i)),
+                            ConstantInt::get(T_int8, tidx[i]),
+                            tindex);
+                }
+                setName(ctx.emission_context, tindex, "getfield_tindex");
+                *ret = mark_julia_slot(nullptr, ut, tindex, ctx.alias().stack);
+                return true;
             }
         }
         if (isboxed || (issame && isa<ArrayType>(strct.V->getType()))) {

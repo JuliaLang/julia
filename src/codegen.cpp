@@ -5390,7 +5390,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     else {
                         // unknown index
                         Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld);
-                        if (emit_getfield_unknownidx(ctx, ret, obj, vidx, utt, boundscheck, order)) {
+                        if (emit_getfield_unknownidx(ctx, ret, obj, vidx, utt, boundscheck, order, rt)) {
                             return true;
                         }
                     }
