@@ -521,6 +521,33 @@ end
     end
 end
 
+@testset "JULIA_EXCLUSIVE pins threads within the CPU affinity mask" begin
+    if AFFINITY_SUPPORTED
+        allowed_cpus = findall(uv_thread_getaffinity())
+        if length(allowed_cpus) ≥ 3
+            script = joinpath(@__DIR__, "print_process_affinity.jl")
+            code = """
+                include($(repr(script)))
+                cpus = Vector{String}(undef, Threads.nthreads())
+                Threads.@threads :static for i in 1:Threads.nthreads()
+                    cpus[i] = join(findall(uv_thread_getaffinity()), ",")
+                end
+                join(stdout, cpus, " ")
+                """
+            cpus = allowed_cpus[2:3]
+            for threads in ("2,0", "2,1")
+                cmd = `$(Base.julia_cmd()) --startup-file=no --threads=$threads -e $code`
+                # JULIA_CPU_THREADS caps `auto`, not the CPUs available for pinning
+                cmd = addenv(cmd, "JULIA_EXCLUSIVE" => "1", "JULIA_CPU_THREADS" => "1")
+                @test read(setcpuaffinity(cmd, cpus), String) == "$(cpus[1]) $(cpus[2])"
+            end
+            cmd = `$(Base.julia_cmd()) --startup-file=no --threads=3 -e ""`
+            cmd = addenv(cmd, "JULIA_EXCLUSIVE" => "1")
+            @test !success(pipeline(setcpuaffinity(cmd, cpus); stderr=devnull))
+        end
+    end
+end
+
 # issue #34769
 function idle_callback(handle)
     idle = Base.@handle_as handle UvTestIdle

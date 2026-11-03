@@ -445,8 +445,11 @@ A boolean value that determines if detailed timing information is printed during
 
 If set to anything besides `0`, then Julia's thread policy is consistent with
 running on a dedicated machine: each thread in the default threadpool is
-affinitized.  [Interactive threads](@ref man-threadpools) remain under the
-control of the operating system scheduler.
+pinned to its own CPU, in order, from the CPUs the process is allowed to run on
+(on platforms that support thread affinity, i.e. not macOS). Requesting more
+default-pool threads than there are such CPUs is an error.
+[Interactive threads](@ref man-threadpools) remain under the control of the
+operating system scheduler.
 
 Otherwise, Julia lets the operating system handle thread policy.
 
