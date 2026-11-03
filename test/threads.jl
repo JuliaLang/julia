@@ -655,13 +655,16 @@ close(proc.in)
         cmd = ignorestatus(addenv(Cmd(cmd_base; dir = @__DIR__), "NTASKS" => n))
         cmd = pipeline(cmd; stdout = stderr, stderr)
         proc = run(cmd; wait = false)
+        start = time()
         done = Threads.Atomic{Bool}(false)
         timeout = false
         timer = Timer(200) do _
             timeout = true
-            for sig in (Base.SIGQUIT, Base.SIGKILL)
-                for _ in 1:3
-                    kill(proc, sig)
+            # The first SIGQUIT prints the backtraces of the tasks. A second one makes the
+            # kernel write a core dump for CI to upload, which can take a minute or two.
+            for (sig, secs) in ((Base.SIGQUIT, 10), (Base.SIGQUIT, 120), (Base.SIGKILL, 10))
+                kill(proc, sig)
+                for _ in 1:secs
                     sleep(1)
                     if done[]
                         @warn "Terminating `$script` required signal $sig"
@@ -676,8 +679,9 @@ close(proc.in)
             @atomic done[] = true
             close(timer)
         end
+        elapsed = round(time() - start; digits = 1)
         if !success(proc) || timeout
-            @error "A \"spawn and wait lots of tasks\" test failed" n proc.exitcode proc.termsignal success(proc) timeout
+            @error "A \"spawn and wait lots of tasks\" test failed" n elapsed proc.exitcode proc.termsignal success(proc) timeout
         end
         @test success(proc)
         @test !timeout
