@@ -1604,7 +1604,7 @@ end
     @test union_phi_singleton([1, 2, 3]) === 4
     @test union_phi_nothing(Int[]) === nothing
     @test union_phi_nothing([1, 2, 3]) === 4
-    # `Union{}` is a boxed constant (typed `Type{Union{}}`), so it keeps its box pointer
+    # `Union{}` (typed `Type{Union{}}`) is an unboxed ghost of `TypeofBottom`
     @test isequal(Base.mapany(identity, (Union{}, 'a')), Any[Union{}, 'a'])
     @test isequal(Any[x for x in (Union{}, 1.0)], Any[Union{}, 1.0])
 end

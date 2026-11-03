@@ -4341,7 +4341,8 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         ctx.builder.CreateAlignedStore(UndefValue::get(ai->getAllocatedType()), ai, ai->getAlign());
     if (src.constant) {
         jl_value_t *typ = jl_typeof(src.constant);
-        assert(skip || deserves_stack(typ));
+        // `for_each_uniontype_small` gives `Type{Union{}}` a slot as `TypeofBottom`, a kind
+        assert(skip || deserves_stack(typ) || typ == (jl_value_t*)jl_typeofbottom_type);
         if (jl_is_concrete_immutable(typ)) {
             emit_guarded_test(ctx, skip ? ctx.builder.CreateNot(skip) : nullptr, nullptr, [&] () JL_CANSAFEPOINT {
                 unsigned alignment = julia_alignment(typ);
