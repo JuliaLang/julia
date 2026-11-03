@@ -2226,6 +2226,11 @@ end
     @test unsafe_load(cglobal_runtime_type(Cint)) == 1
 end
 
+module CGlobalLib
+import ..libccalltest
+const lib = libccalltest
+end
+
 @testset "cglobal interpreter matches compiler" begin
     # The `cglobal(...)` calls written directly in `@test` run at top-level, i.e. through
     # the interpreter; wrapping the same call in a function and calling it forces codegen.
@@ -2238,6 +2243,8 @@ end
     compiled_str_T()    = cglobal("sin", Cint)
     compiled_ptr(p)     = cglobal(p)
     compiled_ptr_T(p)   = cglobal(p, Cfloat)
+    compiled_dot()      = cglobal((:global_var, CGlobalLib.lib))
+    compiled_dot_T()    = cglobal((:global_var, CGlobalLib.lib), Cint)
 
     typed_ptr = convert(Ptr{Cint}, cglobal((:global_var, libccalltest)))
 
@@ -2249,6 +2256,8 @@ end
     @test cglobal("sin", Cint)                        === compiled_str_T()
     @test cglobal(typed_ptr)                          === compiled_ptr(typed_ptr)
     @test cglobal(typed_ptr, Cfloat)                  === compiled_ptr_T(typed_ptr)
+    @test cglobal((:global_var, CGlobalLib.lib))      === compiled_dot()
+    @test cglobal((:global_var, CGlobalLib.lib), Cint) === compiled_dot_T()
 
     # the no-type form always normalizes its result to Ptr{Cvoid}, even from a typed pointer
     @test cglobal((:global_var, libccalltest)) isa Ptr{Cvoid}
