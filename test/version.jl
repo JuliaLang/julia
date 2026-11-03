@@ -228,6 +228,17 @@ let v = v"4.2.1-1.x+a.9"
     @test v.build isa Tuple{Vararg{Union{Integer, AbstractString}}}
 end
 
+# hash: the fields', with the prerelease and build tuples hashed as tuples
+let long = Tuple(isodd(i) ? "x$i" : typemax(UInt64) - i for i in 1:33) # longer than 32: `Any32`
+    for v in (v"0", v"1.2.3", v"1.2.3-rc1", v"1.2.3-rc.2", v"1.2.3+7", v"1.2.3-a.1.b+x.2.y.3", v"4.2.1-1.x+a.9",
+              VersionNumber(1, 2, 3, long, long), typemin(VersionNumber), typemax(VersionNumber)),
+        h in (UInt(0), UInt(0x1234), typemax(UInt))
+        h′ = h ⊻ (0x8ff4ffdb75f9fede % UInt)
+        h′ = hash(v.patch, hash(v.minor, hash(v.major, h′)))
+        @test hash(v, h) == hash(v.build, ~hash(v.prerelease, ~h′))
+    end
+end
+
 # julia_version.h version test
 @test VERSION.major == ccall(:jl_ver_major, Cint, ())
 @test VERSION.minor == ccall(:jl_ver_minor, Cint, ())
