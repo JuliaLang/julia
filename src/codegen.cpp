@@ -2660,10 +2660,14 @@ static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_value_t *typ)
     if (jl_is_some_Type(typ)) {
         // only `TypeEgal{T}` and `Type{Union{}}` have a single (constant) value
         assert(is_uniquerep_Type(typ) || jl_some_Type_T(typ) == jl_bottom_type);
+        if (jl_some_Type_T(typ) == jl_bottom_type) {
+            // `Union{}` is the instance of the singleton `TypeofBottom`, and so a ghost like any other
+            jl_cgval_t ghost((jl_value_t*)jl_typeofbottom_type);
+            ghost.typ = typ;
+            return ghost;
+        }
         jl_cgval_t constant(NULL, true, typ, NULL, best_aliasinfo(ctx, typ), jl_gc_roots_t());
         constant.constant = jl_some_Type_T(typ);
-        if (constant.constant == jl_bottom_type)
-            constant.isghost = true;
         return constant;
     }
     return jl_cgval_t(typ);
@@ -10920,11 +10924,12 @@ static jl_llvm_functions_t
                 if (VN) {
                     if (new_union.Vboxed)
                         V = new_union.Vboxed;
-                    else if (new_union.constant &&
-                             !(dest && roots.empty() && !val.isboxed &&
-                               jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(new_union.constant)) &&
-                               get_box_tindex((jl_datatype_t*)jl_typeof(new_union.constant), phiType)))
+                    else if (new_union.isboxed) {
+                        // The box bit of the tag, and the `emit_unionmove` below, follow `isboxed`
+                        // too: a boxed value is in no slot, and lives only in this box.
+                        assert(new_union.constant); // its box is made on demand
                         V = boxed(ctx, new_union);
+                    }
                     else
                         V = Constant::getNullValue(ctx.types().T_prjlvalue);
                 }
