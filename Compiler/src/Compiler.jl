@@ -213,16 +213,19 @@ end
 
 module IRShow end # relies on string and IO operations defined in Base
 baremodule TrimVerifier using Core end # relies on IRShow, so define this afterwards
+module TrimOutputHooks end # relies on IO operations defined in Base
 
 if isdefined(Base, :end_base_include)
     # When this module is loaded as the standard library, include these files as usual
     include(IRShow, "ssair/show.jl")
     include(TrimVerifier, "verifytrim.jl")
+    include(TrimOutputHooks, "trimoutputhooks.jl")
 else
     function load_irshow!()
         Base.delete_method(Base.which(verify_typeinf_trim, (IO, Vector{Any}, Bool)),)
         include(IRShow, "ssair/show.jl")
         include(TrimVerifier, "verifytrim.jl")
+        include(TrimOutputHooks, "trimoutputhooks.jl")
     end
     function verify_typeinf_trim(io::IO, codeinfos::Vector{Any}, onlywarn::Bool)
         # stub implementation

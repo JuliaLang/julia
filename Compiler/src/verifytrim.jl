@@ -1,13 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import ..Compiler: verify_typeinf_trim, NativeInterpreter, argtypes_to_type, compileable_specialization_for_call,
-    threads_deferred_call_type, is_threads_call_def, foreign_library_type, _libdl_dlopen, _compileable_methods, method_table
+    threads_deferred_call_type, is_threads_call_def, foreignsymbol_type, foreign_library_type,
+    foreign_library_resolved, _libdl_dlopen, _compileable_methods, method_table
 
 using ..Compiler:
      # operators
      !, !=, !==, %, -, +, :, <, <=, ==, =>, >, >=, ^, ∈, ∉,
      # types
-     Array, Builtin, Callable, Cint, CodeInfo, CodeInstance, Csize_t, Exception,
+     Array, Builtin, Callable, Cint, CodeInfo, CodeInstance, Const, Csize_t, Exception,
      GenericMemory, GlobalRef, IdDict, IdSet, IntrinsicFunction, Method, MethodInstance,
      NamedTuple, Pair, PhiCNode, PhiNode, PiNode, QuoteNode, SSAValue, SimpleVector, String,
      Tuple, VarState, Vector,
@@ -164,8 +165,8 @@ function print_stmt_colored(io::IO, codeinfo::CodeInfo, sptypes::Vector{VarState
         return print_value(io, codeinfo, stmt, stable)
     end
 
-    if stmt.head === :foreigncall
-        print_value(io, "ccall", stable)
+    if stmt.head === :foreigncall || stmt.head === :foreignglobal
+        print_value(io, stmt.head === :foreigncall ? "ccall" : "cglobal", stable)
         print(io, "(")
         length(stmt.args) >= 1 && print_value(io, codeinfo, stmt.args[1], stable)
         print(io, ")")
@@ -444,22 +445,23 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             error = "unresolved cfunction"
         elseif isexpr(stmt, :foreigncall) || isexpr(stmt, :foreignglobal)
             spec = stmt.args[1]
-            if isexpr(stmt, :foreigncall) && isexpr(spec, :tuple, 1)
-                foreigncall = spec.args[1]
-                if foreigncall isa String
-                    foreigncall = QuoteNode(Symbol(foreigncall))
+            types = foreignsymbol_type(spec, codeinfo)
+            if types !== nothing # not a function pointer
+                name_type, library_type = types
+                name = name_type isa Const ? name_type.val : nothing
+                if !(name isa Union{String,Symbol})
+                    error = "non-constant name for ccall / cglobal"
+                elseif isexpr(stmt, :foreigncall) && library_type === nothing &&
+                       Symbol(name) in runtime_functions
+                    error = "disallowed ccall into a runtime function"
                 end
-                if foreigncall isa QuoteNode
-                    if foreigncall.value in runtime_functions
-                        error = "disallowed ccall into a runtime function"
-                    end
-                else
-                    error = "disallowed ccall with non-constant name and no library"
-                end
+            end
+            if isempty(error) && !foreign_library_resolved(spec, codeinfo)
+                error = "non-constant library for ccall / cglobal"
             end
             if isempty(error)
                 # the runtime `dlopen(lib)` on first use is dispatched in this caller's world
-                library_type = foreign_library_type(spec, codeinfo, sptypes)
+                library_type = foreign_library_type(spec, codeinfo)
                 library_type === nothing && continue # no runtime `dlopen()` invocation
                 dlopen_fn = _libdl_dlopen()
                 if dlopen_fn !== nothing

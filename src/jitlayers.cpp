@@ -272,11 +272,11 @@ StringRef jl_codegen_output_t::get_call_target(jl_code_instance_t *ci, bool spec
 }
 
 Function *jl_codegen_output_t::get_ccall_target(const char *f_name, void *f_lib,
-                                                jl_value_t *target, uint64_t site,
-                                                CallingConv::ID cc)
+                                                jl_value_t *target, jl_value_t *lib_obj,
+                                                uint64_t site, CallingConv::ID cc)
 {
     assert(f_name || target);
-    auto &f = ccall_targets[{f_name, f_lib, target, site, cc}];
+    auto &f = ccall_targets[{f_name, f_lib, target, lib_obj, site, cc}];
     if (f)
         return f;
     std::string name = f_name ? names(f_name, "_") : names("ccall_dyn", "_");

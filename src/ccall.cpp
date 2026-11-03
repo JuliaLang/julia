@@ -65,6 +65,8 @@ typedef struct {
     // Unless the name and library are known statically, the svec (fn,) or
     // (fn, lib) of the values and global references the lookup evaluates
     jl_value_t *target;
+    // The library, if a constant other than a name (permanently rooted)
+    jl_value_t *lib_obj;
 
     // Runtime pointer
     Value *jl_ptr;             // callable pointer expression result
@@ -106,28 +108,18 @@ static jl_value_t *build_target_svec(const native_sym_arg_t &symarg, jl_value_t 
 // current module.
 static GlobalVariable *runtime_sym_gv(jl_codectx_t &ctx, const native_sym_arg_t &symarg)
 {
-    const auto &f_lib = symarg.f_lib;
-    const auto &f_name = symarg.f_name;
-    // If f_name isn't constant or f_lib_expr is present but f_lib is not,
-    // emit a local cache
-    if (!((f_lib || symarg.f_lib_expr == NULL) && f_name)) {
-        Module *M = jl_Module;
-        auto T_pvoidfunc = getPointerTy(M->getContext());
-        return new GlobalVariable(*M, T_pvoidfunc, false, GlobalVariable::InternalLinkage,
-                                  Constant::getNullValue(T_pvoidfunc),
-                                  ctx.emission_context.make_name("cglobal_dyn_"));
-    }
-
-    auto M = &ctx.emission_context.get_module();
-    auto &symMap = (uintptr_t)f_lib <= 3 ? ctx.emission_context.symMapSpecial[(uintptr_t)f_lib]
-                                         : ctx.emission_context.symMapLib[f_lib];
-    GlobalVariable *&llvmgv = symMap[f_name];
-    if (llvmgv == NULL) {
-        std::string name = ctx.emission_context.make_name("cglobal_", f_name);
-        auto T_pvoidfunc = getPointerTy(M->getContext());
-        llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
-                                    ctx.emission_context.imaging_mode ? GlobalVariable::ExternalLinkage : GlobalVariable::InternalLinkage,
-                                    Constant::getNullValue(T_pvoidfunc), name);
+    uint64_t site = symarg.target ? jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1) : 0;
+    auto &llvmgv = ctx.emission_context.cglobal_slots[{symarg.f_name, (void *)symarg.f_lib,
+                                                       symarg.target, symarg.lib_obj, site, 0}];
+    if (llvmgv == nullptr) {
+        auto M = &ctx.emission_context.get_module();
+        auto T_ptr = getPointerTy(M->getContext());
+        bool shared = ctx.emission_context.imaging_mode && site == 0;
+        llvmgv = new GlobalVariable(*M, T_ptr, false,
+                                    shared ? GlobalVariable::ExternalLinkage : GlobalVariable::InternalLinkage,
+                                    Constant::getNullValue(T_ptr),
+                                    site == 0 ? ctx.emission_context.make_name("cglobal_", symarg.f_name)
+                                              : ctx.emission_context.make_name("cglobal_dyn_"));
     }
     return llvmgv;
 }
@@ -528,6 +520,7 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
     out.f_name_expr = nullptr;
     out.f_lib_expr = nullptr;
     out.target = nullptr;
+    out.lib_obj = nullptr;
     out.jl_ptr = nullptr;
     out.gcroot[0] = nullptr;
     out.gcroot[1] = nullptr;
@@ -583,6 +576,9 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
                 }
                 else if (jl_is_string(lib_val)) {
                     out.f_lib = jl_string_data(lib_val);
+                }
+                else {
+                    out.lib_obj = jl_as_global_root(lib_val, 1);
                 }
             }
         }
@@ -2171,7 +2167,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         uint64_t site = symarg.target ? jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1) : 0;
         llvmf = ctx.emission_context.get_ccall_target(symarg.f_name,
                                                        (void *)symarg.f_lib,
-                                                       symarg.target, site, cc);
+                                                       symarg.target, symarg.lib_obj,
+                                                       site, cc);
     }
 
     // Cancellation guard (`@ccall cancel_handler=(fn, state)`): fill a

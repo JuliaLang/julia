@@ -144,6 +144,28 @@ for (name, namestr, numbytes) in [(:SHA1, "SHA1", 20), (:SHA256, "SHA256", 32)]
     end
 end
 
+# after `SHA1`
+@eval Libc.Libdl begin
+"""
+    LazyArtifactDir(artifact_hash::Base.SHA1)
+
+The directory of the artifact with git tree hash `artifact_hash`, as the first piece of a
+[`LazyLibraryPath`](@ref). `string` gives its path once `Artifacts` is loaded.
+
+# Examples
+
+```julia
+const libfoo = LazyLibrary(LazyLibraryPath(LazyArtifactDir(libfoo_treehash), "lib", "libfoo.so"))
+```
+
+!!! compat "Julia 1.15"
+    `LazyArtifactDir` was added in Julia 1.15.
+"""
+struct LazyArtifactDir
+    artifact_hash::Base.SHA1
+end
+end
+
 # fake uuid5 function (for self-assigned UUIDs)
 # TODO: delete and use real uuid5 once it's in stdlib
 
