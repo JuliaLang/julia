@@ -3538,7 +3538,7 @@ end
 
 # Special pretty printing for EvalInto/IncludeInto
 function show(io::IO, ii::IncludeInto)
-    if getglobal(ii.m, :include) === ii
+    if isdefinedglobal(ii.m, :include) && getglobal(ii.m, :include) === ii
         print(io, ii.m)
         print(io, ".include")
     else
@@ -3547,7 +3547,7 @@ function show(io::IO, ii::IncludeInto)
 end
 
 function show(io::IO, ei::Core.EvalInto)
-    if getglobal(ei.m, :eval) === ei
+    if isdefinedglobal(ei.m, :eval) && getglobal(ei.m, :eval) === ei
         print(io, ei.m)
         print(io, ".eval")
     else
