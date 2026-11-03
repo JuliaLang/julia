@@ -114,15 +114,15 @@ function runprompt!((; term, prompt, pstate, istate), events::Channel{Symbol},
             elseif status === :ignore
                 istate.last_action = istate.current_action
             elseif status === :done
-                print("\e[F")
+                print(term.out_stream, "\e[F")
                 push!(events, :confirm)
                 break
             elseif status === :copy
-                print("\e[1G\e[J")
+                print(term.out_stream, "\e[1G\e[J")
                 push!(events, status)
                 break
             elseif status === :save
-                print("\e[1G\e[J")
+                print(term.out_stream, "\e[1G\e[J")
                 dest = savedest(term, terminal_properties)
                 if isnothing(dest)
                     push!(events, :redraw)
