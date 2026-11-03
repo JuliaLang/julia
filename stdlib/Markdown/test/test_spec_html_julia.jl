@@ -85,9 +85,7 @@ known_broken = BitSet([
     250,
     251,
     254,
-    255,
     257,
-    260,
     263,
     267,
     271,
@@ -110,7 +108,6 @@ known_broken = BitSet([
     300,
     304,
     307,
-    308,
     310,
     311,
     312,
@@ -122,8 +119,6 @@ known_broken = BitSet([
     320,
     321,
     323,
-    325,
-    326,
     329,
     330,
     331,
@@ -2174,12 +2169,12 @@ end
     actual = Markdown.html(md)
     expected == actual && push!(now_passing, 254)
 
-    # Example 255 (known broken)
+    # Example 255
     input = "- one\n\n two\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>one</li>\n</ul>\n<p>two</p>\n"
     actual = Markdown.html(md)
-    expected == actual && push!(now_passing, 255)
+    @test expected == actual
 
     # Example 256
     input = "- one\n\n  two\n"
@@ -2209,12 +2204,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 260 (known broken)
+    # Example 260
     input = ">>- one\n>>\n  >  > two\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<blockquote>\n<ul>\n<li>one</li>\n</ul>\n<p>two</p>\n</blockquote>\n</blockquote>\n"
     actual = Markdown.html(md)
-    expected == actual && push!(now_passing, 260)
+    @test expected == actual
 
     # Example 261
     input = "-one\n\n2.two\n"
@@ -2552,12 +2547,12 @@ end
     actual = Markdown.html(md)
     expected == actual && push!(now_passing, 307)
 
-    # Example 308 (known broken)
+    # Example 308
     input = "- foo\n- bar\n\n<!-- -->\n\n- baz\n- bim\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>foo</li>\n<li>bar</li>\n</ul>\n<!-- -->\n<ul>\n<li>baz</li>\n<li>bim</li>\n</ul>\n"
     actual = Markdown.html(md)
-    expected == actual && push!(now_passing, 308)
+    @test expected == actual
 
     # Example 309
     input = "-   foo\n\n    notcode\n\n-   foo\n\n<!-- -->\n\n    code\n"
@@ -2671,19 +2666,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 325 (known broken)
+    # Example 325
     input = "* foo\n  * bar\n\n  baz\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>\n<p>foo</p>\n<ul>\n<li>bar</li>\n</ul>\n<p>baz</p>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    expected == actual && push!(now_passing, 325)
+    @test expected == actual
 
-    # Example 326 (known broken)
+    # Example 326
     input = "- a\n  - b\n  - c\n\n- d\n  - e\n  - f\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>\n<p>a</p>\n<ul>\n<li>b</li>\n<li>c</li>\n</ul>\n</li>\n<li>\n<p>d</p>\n<ul>\n<li>e</li>\n<li>f</li>\n</ul>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    expected == actual && push!(now_passing, 326)
+    @test expected == actual
 
 end
 
