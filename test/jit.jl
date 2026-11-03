@@ -292,4 +292,26 @@ end
                       "JULIA_OBJCACHE" => "0"), String) == "nothing"
 end
 
+# Processes that share a cache and exit at the same time remove its SysV semaphores.
+@testset "object-cache semaphores" begin
+    Sys.isapple() && mktempdir() do dir
+        script = "print(ccall(:jl_objcache_kv_enabled, Cint, ()) != 0 ? 'y' : 'n'); readline()"
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                     "JULIA_OBJCACHE" => "1", "JULIA_OBJCACHE_PATH" => dir)
+        procs = [open(cmd, "r+") for _ in 1:4]
+        enabled = all(p -> read(p, Char) == 'y', procs)
+        foreach(p -> close(p.in), procs)
+        foreach(wait, procs)
+        @test all(success, procs)
+        if !enabled
+            @test_skip false # the cache is disabled here
+            return
+        end
+        # the key LMDB derives the semaphore set from
+        key = ccall(:ftok, Cint, (Cstring, Cint), joinpath(dir, "lock.mdb"), Cint('M'))
+        @test key != -1
+        @test ccall(:semget, Cint, (Cint, Cint, Cint), key, 0, 0) == -1
+    end
+end
+
 sleep(5)  # Avoids problems where we don't respond to Distributed.jl fast enough
