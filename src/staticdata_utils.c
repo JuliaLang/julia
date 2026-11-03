@@ -11,68 +11,6 @@ static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
     write_uint64(s, *((uint64_t*)&x));
 }
 
-// Decide if `t` must be new, because it points to something new.
-// If it is new, the object (in particular, the super field) might not be entirely
-// valid for the cache, so we want to finish transforming it before attempting
-// to look in the cache for it
-int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeof_sysimg)
-{
-    if (ptrhash_has(news, (void*)t) || ptrhash_has(news, (void*)jl_typeof(t)))
-        return 1;
-    if (!(image_base < (char*)t && (char*)t <= image_base + sizeof_sysimg))
-        return 0; // fast-path for rejection
-    if (jl_is_uniontype(t)) {
-        jl_uniontype_t *u = (jl_uniontype_t*)t;
-        return must_be_new_dt(u->a, news, image_base, sizeof_sysimg) ||
-               must_be_new_dt(u->b, news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_unionall(t)) {
-        jl_unionall_t *ua = (jl_unionall_t*)t;
-        return must_be_new_dt((jl_value_t*)ua->var, news, image_base, sizeof_sysimg) ||
-               must_be_new_dt(ua->body, news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_typevar(t)) {
-        jl_tvar_t *tv = (jl_tvar_t*)t;
-        return must_be_new_dt(tv->lb, news, image_base, sizeof_sysimg) ||
-               must_be_new_dt(tv->ub, news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_some_Type(t)) {
-        return must_be_new_dt(jl_some_Type_T(t), news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_vararg(t)) {
-        jl_vararg_t *tv = (jl_vararg_t*)t;
-        if (tv->T && must_be_new_dt(tv->T, news, image_base, sizeof_sysimg))
-            return 1;
-        if (tv->N && must_be_new_dt(tv->N, news, image_base, sizeof_sysimg))
-            return 1;
-    }
-    else if (jl_is_datatype(t)) {
-        jl_datatype_t *dt = (jl_datatype_t*)t;
-        assert(jl_astaggedvalue(dt->name)->bits.in_image && "type_in_worklist mistake?");
-        jl_datatype_t *super = dt->super;
-        // fast-path: check if super is in news, since then we must be new also
-        // (super is NULL while it refers to a placeholder that is not resolved yet)
-        while (super != NULL && super != jl_any_type) {
-            if (ptrhash_has(news, (void*)super))
-                return 1;
-            if (!(image_base < (char*)super && (char*)super <= image_base + sizeof_sysimg))
-               break; // the rest must all be non-new
-            // otherwise super might be something that was not cached even though a later supertype might be
-            // for example while handling `Type{Mask{4, U} where U}`, if we have `Mask{4, U} <: AbstractSIMDVector{4}`
-            super = super->super;
-        }
-        jl_svec_t *tt = dt->parameters;
-        size_t i, l = jl_svec_len(tt);
-        for (i = 0; i < l; i++)
-            if (must_be_new_dt(jl_tparam(dt, i), news, image_base, sizeof_sysimg))
-                return 1;
-    }
-    else {
-        return must_be_new_dt(jl_typeof(t), news, image_base, sizeof_sysimg);
-    }
-    return 0;
-}
-
 static uint64_t jl_worklist_key(jl_array_t *worklist) JL_NOTSAFEPOINT
 {
     assert(jl_is_array(worklist));
@@ -226,6 +164,9 @@ static int type_in_worklist(jl_value_t *v, jl_query_cache *cache) JL_NOTSAFEPOIN
         jl_vararg_t *tv = (jl_vararg_t*)v;
         result = ((tv->T && type_in_worklist(tv->T, cache)) ||
                   (tv->N && type_in_worklist(tv->N, cache)));
+    }
+    else if (jl_is_some_Type(v)) {
+        result = type_in_worklist(jl_some_Type_T(v), cache);
     }
     else if (jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
@@ -681,7 +622,7 @@ typedef struct {
     uint64_t pointer_free_offset;    // a heap offset
     uint64_t gvar_objects;
     uint64_t world, typeinf_world, gensym_counter;
-    jl_image_section_t fptrs, imports, binds, slides, fixup_types, fixup_objs, specials, gvars, placeholders, strtab;
+    jl_image_section_t fptrs, imports, binds, slides, fixup_types, fixup_objs, specials, gvars, auxdata, strtab;
 } jl_image_sections_t;
 
 // The header has a fixed size, with every field at a fixed offset, so that the loader can
