@@ -780,6 +780,13 @@ end
         @test ldexp(BigFloat(24.5), Int16(-72)) == ldexp(24.5, -72)
         @test ldexp(BigFloat(24.5), UInt(72)) == ldexp(24.5, 72)
         @test ldexp(BigFloat(24.5), 0x48) == ldexp(24.5, 72)
+        x = BigFloat(big(2)^300 + 1, precision=301)
+        @test precision(ldexp(x, -1)) == precision(ldexp(x, UInt(1))) == 301
+        @test ldexp(x, 0) == x
+        @test Rational{BigInt}(x) == big(2)^300 + 1
+        @test x == (big(2)^300 + 1)//1
+        @test x != big(2)^300//1
+        @test ldexp(x, -1) == (big(2)^300 + 1)//2
     end
 end
 @testset "ceil / floor / trunc" begin

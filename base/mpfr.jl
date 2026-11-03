@@ -846,12 +846,12 @@ function big_ln2()
 end
 
 function ldexp(x::BigFloat, n::Clong)
-    z = BigFloat()
+    z = BigFloat(;precision=_precision_with_base_2(x))
     ccall((:mpfr_mul_2si, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Clong, MPFRRoundingMode), z, x, n, rounding_raw(BigFloat))
     return z
 end
 function ldexp(x::BigFloat, n::Culong)
-    z = BigFloat()
+    z = BigFloat(;precision=_precision_with_base_2(x))
     ccall((:mpfr_mul_2ui, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, x, n, rounding_raw(BigFloat))
     return z
 end
