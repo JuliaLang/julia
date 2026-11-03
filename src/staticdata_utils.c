@@ -162,6 +162,9 @@ static int type_in_worklist(jl_value_t *v, jl_query_cache *cache) JL_NOTSAFEPOIN
         result = ((tv->T && type_in_worklist(tv->T, cache)) ||
                   (tv->N && type_in_worklist(tv->N, cache)));
     }
+    else if (jl_is_some_Type(v)) {
+        result = type_in_worklist(jl_some_Type_T(v), cache);
+    }
     else if (jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
         if (!jl_object_in_image((jl_value_t*)dt->name)) {
@@ -628,7 +631,7 @@ typedef struct {
     uint64_t pointer_free_offset;    // a heap offset
     uint64_t gvar_objects;
     uint64_t world, typeinf_world, gensym_counter;
-    jl_image_section_t fptrs, imports, binds, slides, fixup_types, fixup_objs, specials, gvars, placeholders, strtab;
+    jl_image_section_t imports, auxdata, strtab, binds, slides, specials, gvars, fixup_types, fixup_objs, fptrs;
 } jl_image_sections_t;
 
 // The header has a fixed size, with every field at a fixed offset, so that the loader can

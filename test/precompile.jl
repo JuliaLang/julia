@@ -5208,6 +5208,35 @@ precompile_test_harness("pkgimage type cache dedup with unset supertype") do dir
     @test npartial() == n
 end
 
+precompile_test_harness("pkgimage value parameters of new types") do dir
+    # A lookup hashes a value parameter through its type's field types, so a type that
+    # is new to the process must have them while the imports are resolved.
+    write(joinpath(dir, "NewValueTypesDep.jl"),
+          """
+          module NewValueTypesDep
+              struct P{T}; a::Int8; b::T; end
+          end
+          """)
+    write(joinpath(dir, "NewValueTypesUser.jl"),
+          """
+          module NewValueTypesUser
+              using NewValueTypesDep: P
+              const V = Any[Val{P{Int}(1, 2)}, Val{(:a, P{Float64}(1, 2.0))},
+                            Val{P{P{Int}}(1, P{Int}(3, 4))}]
+          end
+          """)
+    Base.compilecache(Base.PkgId("NewValueTypesDep"))
+    Base.compilecache(Base.PkgId("NewValueTypesUser"))
+    @eval using NewValueTypesDep
+    @eval using NewValueTypesUser
+    invokelatest() do
+        P, V = NewValueTypesDep.P, NewValueTypesUser.V
+        @test V[1] === Val{P{Int}(1, 2)}
+        @test V[2] === Val{(:a, P{Float64}(1, 2.0))}
+        @test V[3] === Val{P{P{Int}}(1, P{Int}(3, 4))}
+    end
+end
+
 # Interactive precompile output has to keep its colors: a TTY's implied `:color` must survive
 # the driver's conversion of a raw stream to `IOContext{IO}` (#62970 dropped it). Run a real
 # precompile in a child whose stderr is a pty and look for the color escapes in its output.
