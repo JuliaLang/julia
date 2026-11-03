@@ -131,7 +131,7 @@ function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real
         while true
             s = randexp(r) * L
             s >= n - i && return S # compare before ceil to avoid overflow
-            push!(S, A[i += ceil(Int,s)])
+            push!(S, A[i += max(1, ceil(Int,s))]) # randexp can return 0.0
         end
         # [This algorithm is similar in spirit to, but much simpler than,
         #  the one by Vitter for a related problem in "Faster methods for
