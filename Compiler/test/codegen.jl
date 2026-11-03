@@ -1574,3 +1574,10 @@ scale_forwarding!(b::ForwardingMatrix, a::ForwardingMatrix) = (b .= 2.0 .* a)
         @test occursin(r"<\d+ x double>", get_llvm(scale_forwarding!, Tuple{ForwardingMatrix, ForwardingMatrix}))
     end
 end
+
+# a box of a loop-invariant immutable passed to a dynamic call is allocated once, outside the loop
+invariant_box_loop(x, n) = for _ in 1:n; Base.invokelatest(identity, x); end
+let
+    invariant_box_loop(1.0, 10)
+    @test @allocated(invariant_box_loop(1.0, 1000)) < 1000
+end

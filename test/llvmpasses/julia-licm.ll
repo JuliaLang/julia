@@ -351,3 +351,170 @@ loop:
 exit:
   ret void
 }
+
+declare void @use_double(ptr addrspace(10))
+
+; An escaping box of an immutable is hoisted with its initializing store of an invariant value.
+; CHECK-LABEL: @hoist_immutable_box
+; CHECK: preheader:
+; CHECK-NEXT: %box = call {{.*}} @julia.gc_alloc_obj
+; CHECK-NEXT: %box.data = addrspacecast
+; CHECK-NEXT: store double %x, ptr addrspace(11) %box.data
+; CHECK-NEXT: br label %loop
+; CHECK: loop:
+; CHECK-NEXT: call void @use_double(ptr addrspace(10) %box)
+define void @hoist_immutable_box(ptr %current_task, double %x, i1 %done) {
+  br label %preheader
+preheader:
+  br label %loop
+loop:
+  %box = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_obj(ptr nonnull %current_task, i64 8, ptr addrspace(10) @tag), !julia.immutable !8
+  %box.data = addrspacecast ptr addrspace(10) %box to ptr addrspace(11)
+  store double %x, ptr addrspace(11) %box.data, align 8
+  call void @use_double(ptr addrspace(10) %box)
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
+; A box whose content varies, without the immutable marker, or written after it escapes stays in the loop.
+; CHECK-LABEL: @keep_immutable_box_varying
+; CHECK: loop:
+; CHECK-NEXT: %y = load double
+; CHECK-NEXT: %box = call {{.*}} @julia.gc_alloc_obj
+define void @keep_immutable_box_varying(ptr %current_task, ptr %p, i1 %done) {
+  br label %preheader
+preheader:
+  br label %loop
+loop:
+  %y = load double, ptr %p, align 8
+  %box = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_obj(ptr nonnull %current_task, i64 8, ptr addrspace(10) @tag), !julia.immutable !8
+  %box.data = addrspacecast ptr addrspace(10) %box to ptr addrspace(11)
+  store double %y, ptr addrspace(11) %box.data, align 8
+  call void @use_double(ptr addrspace(10) %box)
+  store double 0.0, ptr %p, align 8
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
+; CHECK-LABEL: @keep_mutable_box
+; CHECK: loop:
+; CHECK-NEXT: %box = call {{.*}} @julia.gc_alloc_obj
+define void @keep_mutable_box(ptr %current_task, double %x, i1 %done) {
+  br label %preheader
+preheader:
+  br label %loop
+loop:
+  %box = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_obj(ptr nonnull %current_task, i64 8, ptr addrspace(10) @tag)
+  %box.data = addrspacecast ptr addrspace(10) %box to ptr addrspace(11)
+  store double %x, ptr addrspace(11) %box.data, align 8
+  call void @use_double(ptr addrspace(10) %box)
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
+; CHECK-LABEL: @keep_immutable_box_store_after_escape
+; CHECK: loop:
+; CHECK-NEXT: %box = call {{.*}} @julia.gc_alloc_obj
+define void @keep_immutable_box_store_after_escape(ptr %current_task, double %x, double %z, i1 %done) {
+  br label %preheader
+preheader:
+  br label %loop
+loop:
+  %box = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_obj(ptr nonnull %current_task, i64 8, ptr addrspace(10) @tag), !julia.immutable !8
+  %box.data = addrspacecast ptr addrspace(10) %box to ptr addrspace(11)
+  store double %x, ptr addrspace(11) %box.data, align 8
+  call void @use_double(ptr addrspace(10) %box)
+  store double %z, ptr addrspace(11) %box.data, align 8
+  call void @use_double(ptr addrspace(10) %box)
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
+
+; A box allocated on only some iterations stays in the loop: hoisting would allocate when it did not.
+; CHECK-LABEL: @keep_immutable_box_conditional
+; CHECK: maybe:
+; CHECK-NEXT: %box = call {{.*}} @julia.gc_alloc_obj
+define void @keep_immutable_box_conditional(ptr %current_task, double %x, i1 %c, i1 %done) {
+  br label %preheader
+preheader:
+  br label %loop
+loop:
+  br i1 %c, label %maybe, label %latch
+maybe:
+  %box = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_obj(ptr nonnull %current_task, i64 8, ptr addrspace(10) @tag), !julia.immutable !8
+  %box.data = addrspacecast ptr addrspace(10) %box to ptr addrspace(11)
+  store double %x, ptr addrspace(11) %box.data, align 8
+  call void @use_double(ptr addrspace(10) %box)
+  br label %latch
+latch:
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
+; CHECK-LABEL: @keep_immutable_box_varying_field
+; CHECK: loop:
+; CHECK: %box = call {{.*}} @julia.gc_alloc_obj
+define void @keep_immutable_box_varying_field(ptr %current_task, double %x, i1 %done) {
+  br label %preheader
+preheader:
+  br label %loop
+loop:
+  %i = phi i64 [ 0, %preheader ], [ %i1, %loop ]
+  %box = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_obj(ptr nonnull %current_task, i64 16, ptr addrspace(10) @tag), !julia.immutable !8
+  %box.data = addrspacecast ptr addrspace(10) %box to ptr addrspace(11)
+  %field = getelementptr double, ptr addrspace(11) %box.data, i64 %i
+  store double %x, ptr addrspace(11) %field, align 8
+  call void @use_double(ptr addrspace(10) %box)
+  %i1 = and i64 %i, 1
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
+declare void @init_field(ptr addrspace(11))
+declare void @read_box(ptr addrspace(11) readonly)
+
+; A call that may write through a pointer into the object keeps it in the loop; a read-only one does not.
+; CHECK-LABEL: @keep_immutable_box_call_init
+; CHECK: loop:
+; CHECK-NEXT: %box = call {{.*}} @julia.gc_alloc_obj
+define void @keep_immutable_box_call_init(ptr %current_task, double %x, i1 %done) {
+  br label %preheader
+preheader:
+  br label %loop
+loop:
+  %box = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_obj(ptr nonnull %current_task, i64 16, ptr addrspace(10) @tag), !julia.immutable !8
+  %box.data = addrspacecast ptr addrspace(10) %box to ptr addrspace(11)
+  store double %x, ptr addrspace(11) %box.data, align 8
+  call void @init_field(ptr addrspace(11) %box.data)
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
+; CHECK-LABEL: @hoist_immutable_box_readonly_call
+; CHECK: preheader:
+; CHECK-NEXT: %box = call {{.*}} @julia.gc_alloc_obj
+; CHECK: loop:
+; CHECK-NEXT: call void @read_box
+define void @hoist_immutable_box_readonly_call(ptr %current_task, double %x, i1 %done) {
+  br label %preheader
+preheader:
+  br label %loop
+loop:
+  %box = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_obj(ptr nonnull %current_task, i64 8, ptr addrspace(10) @tag), !julia.immutable !8
+  %box.data = addrspacecast ptr addrspace(10) %box to ptr addrspace(11)
+  store double %x, ptr addrspace(11) %box.data, align 8
+  call void @read_box(ptr addrspace(11) %box.data)
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
+!8 = !{}

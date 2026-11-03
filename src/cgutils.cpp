@@ -4492,8 +4492,11 @@ static SmallVector<uint64_t, 4> get_gc_ptr_offsets(jl_datatype_t *jt)
 static Value *emit_allocobj(jl_codectx_t &ctx, jl_datatype_t *jt, bool fully_initialized)
 {
     SmallVector<uint64_t, 4> gc_offsets = get_gc_ptr_offsets(jt);
-    return emit_allocobj(ctx, jl_datatype_size(jt), ctx.builder.CreateIntToPtr(emit_tagfrom(ctx, jt), ctx.types().T_pjlvalue),
-                         fully_initialized, julia_alignment((jl_value_t*)jt), gc_offsets);
+    Value *obj = emit_allocobj(ctx, jl_datatype_size(jt), ctx.builder.CreateIntToPtr(emit_tagfrom(ctx, jt), ctx.types().T_pjlvalue),
+                               fully_initialized, julia_alignment((jl_value_t*)jt), gc_offsets);
+    if (!jl_is_mutable(jt))
+        cast<CallInst>(obj)->setMetadata("julia.immutable", MDNode::get(ctx.builder.getContext(), {}));
+    return obj;
 }
 
 // allocation for unknown object from an untracked pointer
