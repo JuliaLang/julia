@@ -137,6 +137,106 @@ struct JuliaLICM : public JuliaPassContext {
                 GetMSSA(GetMSSA),
                 GetSE(GetSE) {}
 
+    // An allocation of an immutable object is never written after its initializing
+    // stores, so it can be hoisted together with them even if it escapes, provided
+    // it runs on every iteration, the stores are in its block, precede every other
+    // use and store loop-invariant values, and nothing else may write to it.
+    bool hoistImmutableAlloc(Loop *L, CallInst *call, BasicBlock *preheader,
+                             BasicBlock::iterator &II, DominatorTree &DT,
+                             MemorySSAUpdater &MSSAU, ScalarEvolution *SE)
+    {
+        if (!call->getMetadata("julia.immutable"))
+            return false;
+        BasicBlock *BB = call->getParent();
+        // hoisting a conditional allocation would allocate where we did not before
+        SmallVector<BasicBlock*, 4> exiting;
+        L->getExitingBlocks(exiting);
+        for (BasicBlock *E : exiting)
+            if (!DT.dominates(BB, E))
+                return false;
+        if (BasicBlock *latch = L->getLoopLatch(); !latch || !DT.dominates(BB, latch))
+            return false;
+        SmallVector<StoreInst*, 4> inits;
+        SmallVector<Instruction*, 8> worklist{call};
+        SmallPtrSet<Instruction*, 8> visited{call};
+        while (!worklist.empty()) {
+            Instruction *ptr = worklist.pop_back_val();
+            for (Use &U : ptr->uses()) {
+                auto *I = cast<Instruction>(U.getUser());
+                if (auto *SI = dyn_cast<StoreInst>(I)) {
+                    if (SI->getPointerOperand() != ptr)
+                        continue; // the object itself is stored somewhere
+                    if (SI->getValueOperand() == ptr || SI->isVolatile() || SI->getParent() != BB ||
+                        !L->isLoopInvariant(SI->getValueOperand()))
+                        return false;
+#if defined(GC_BARRIER_SNAPSHOT)
+                    // the store would need to be seen by the marker
+                    if (SI->getValueOperand()->getType()->isPointerTy())
+                        return false;
+#endif
+                    inits.push_back(SI);
+                }
+                else if (isa<AddrSpaceCastInst>(I) || isa<BitCastInst>(I) ||
+                         (isa<GetElementPtrInst>(I) && I->getOperand(0) == ptr)) {
+                    for (Value *Op : I->operands())
+                        if (Op != ptr && !L->isLoopInvariant(Op))
+                            return false;
+                    if (visited.insert(I).second)
+                        worklist.push_back(I);
+                }
+                else if (auto *CB = dyn_cast<CallBase>(I)) {
+                    // Passing the object itself (a tracked reference) passes an immutable
+                    // Julia value, which the callee cannot modify. A derived pointer could
+                    // be written through (e.g. an sret destination), unless it is read-only.
+                    if (CB->isBundleOperand(&U))
+                        continue;
+                    if (!CB->isArgOperand(&U))
+                        return false;
+                    if (U.get()->getType()->getPointerAddressSpace() != AddressSpace::Tracked &&
+                        !CB->onlyReadsMemory(CB->getArgOperandNo(&U)))
+                        return false;
+                }
+                else if (!isa<LoadInst>(I) && !isa<ICmpInst>(I) && !isa<PtrToIntInst>(I)) {
+                    return false;
+                }
+            }
+        }
+        if (inits.empty())
+            return false;
+        // every initializing store must happen before anything else uses the object
+        size_t seen = 0;
+        for (auto it = std::next(call->getIterator()); it != BB->end() && seen < inits.size(); ++it) {
+            Instruction &I = *it;
+            if (visited.count(&I))
+                continue;
+            if (auto *SI = dyn_cast<StoreInst>(&I); SI && is_contained(inits, SI)) {
+                seen++;
+                continue;
+            }
+            for (Value *Op : I.operands())
+                if (auto *OI = dyn_cast<Instruction>(Op); OI && visited.count(OI))
+                    return false;
+        }
+        if (seen != inits.size())
+            return false;
+        // all checks passed: the IR has not been changed before this point
+        Instruction *InsertPt = preheader->getTerminator();
+        bool changed = false;
+        moveInstructionBefore(*call, *InsertPt, MSSAU, SE);
+        // keep the initializing stores in their original order
+        for (Instruction &I : make_early_inc_range(*BB)) {
+            auto *SI = dyn_cast<StoreInst>(&I);
+            if (!SI || !is_contained(inits, SI))
+                continue;
+            bool ok = makeLoopInvariant(L, SI->getPointerOperand(), changed, InsertPt, MSSAU, SE);
+            assert(ok); (void)ok;
+            moveInstructionBefore(*SI, *InsertPt, MSSAU, SE);
+        }
+        // the instruction after `call` may have moved too: rescan the block
+        II = BB->begin();
+        return true;
+    }
+
 #if !defined(GC_BARRIER_SNAPSHOT) && !defined(GC_BARRIER_FIELD_PRECISE)
     // Replace a field barrier with an object barrier in the preheader.
     CallInst *hoistAsObjectBarrier(CallInst *call, BasicBlock *preheader,
@@ -329,6 +429,15 @@ struct JuliaLICM : public JuliaPassContext {
                     }
                     if (!valid) {
                         LLVM_DEBUG(dbgs() << "Failed to hoist alloc_obj: " << *call << "\n");
+                        continue;
+                    }
+                    if (hoistImmutableAlloc(L, call, preheader, II, *DT, MSSAU, SE)) {
+                        changed = true;
+                        ++HoistedAllocation;
+                        REMARK([&](){
+                            return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
+                                << "hoisting immutable gc allocation " << ore::NV("GC Allocation", call);
+                        });
                         continue;
                     }
                     LLVM_DEBUG(dbgs() << "Running escape analysis for " << *call << "\n");
