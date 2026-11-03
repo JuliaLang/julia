@@ -955,7 +955,7 @@ import LibGit2
 @testset "method show: url for a file in a git repository" begin
     mktempdir() do dir
         dir = realpath(dir)
-        repodir = joinpath(dir, "repo")
+        repodir = joinpath(dir, "repö")
         file = joinpath(repodir, "src", "UrlTest.jl")
         mkpath(dirname(file))
         write(file, "module UrlTest\n\nf() = 1\nend\n")
