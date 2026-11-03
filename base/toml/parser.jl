@@ -1106,7 +1106,8 @@ function parse_number_or_date_start(l::Parser)
         accept(l, x-> x == '+' || x == '-')
         # SPEC: (which follows the same rules as decimal integer values but may include leading zeros)
         read_digit = accept_batch(l, isdigit)
-        _, read_underscore = @try accept_batch_underscore(l, isdigit, !read_digit)
+        _, contains_underscore = @try accept_batch_underscore(l, isdigit, !read_digit)
+        read_underscore |= contains_underscore
     end
     if !ok_end_value(peek(l))
         eat_char(l)
