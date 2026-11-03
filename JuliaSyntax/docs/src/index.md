@@ -1,5 +1,8 @@
 # JuliaSyntax.jl
 
+!!! warning "Experimental and unstable"
+    Everything in this section is experimental.
+
 A Julia compiler frontend, written in Julia.
 
 A [talk from JuliaCon 2022](https://youtu.be/CIiGng9Brrk) covered some aspects
