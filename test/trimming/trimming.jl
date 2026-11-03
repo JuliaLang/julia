@@ -45,6 +45,45 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     @test lines[1] == "Sum of copied values: 6.000000"
     @test lines[2] == "Count of same vectors: 1"
 
+    # Test that entering a second, non-privatized image in the same process
+    # is reported before aborting
+    let dlext = Base.BinaryPlatforms.platform_dlext()
+        driver = joinpath(bindir, "twoimages" * exe_suffix)
+        liba = joinpath(bindir, "twoimages_a." * dlext)
+        libb = joinpath(bindir, "twoimages_b." * dlext)
+        function run_driver(mode)
+            cmd = `$driver $mode $liba $libb`
+            if Sys.iswindows()
+                cmd = addenv(cmd, "PATH" => string(Sys.BINDIR, ';', get(ENV, "PATH", "")))
+            end
+            errfile = tempname()
+            proc = run(pipeline(ignorestatus(cmd), stdout=devnull, stderr=errfile))
+            err = read(errfile, String)
+            rm(errfile, force=true)
+            return proc, err
+        end
+
+        proc, err = run_driver("solo")
+        @test success(proc)
+        @test isempty(err)
+
+        for mode in ("samethread", "newthread")
+            proc, err = run_driver(mode)
+            @test !success(proc)
+            if !Sys.iswindows()
+                @test Base.process_signaled(proc) && proc.termsignal == 6 # SIGABRT
+            end
+            # The image that owns the runtime is named first
+            i = findfirst("a Julia runtime is already initialized in this process with image", err)
+            @test i !== nothing
+            if i !== nothing
+                j = findnext("twoimages_a." * dlext, err, last(i))
+                @test j !== nothing
+                @test j !== nothing && findnext("twoimages_b." * dlext, err, last(j)) !== nothing
+            end
+        end
+    end
+
     # Test that the logging of entrypoints and types works correctly
     str = read(joinpath(bindir, "bindinginfo_libsimple.json"), String)
 
