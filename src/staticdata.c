@@ -2173,6 +2173,23 @@ static void relocmaps_init(jl_relocmaps_t *m, uintptr_t heap_base) JL_NOTSAFEPOI
     ios_ensureroom(&m->binds, nbytes);
 }
 
+// A binds or slides section is a bitmap when its size is exactly `nwords` u64s, and otherwise a
+// list of gaps
+static inline int relocs_is_bitmap(size_t size, size_t nwords) JL_NOTSAFEPOINT
+{
+    return size == nwords * sizeof(uint64_t);
+}
+
+static inline uint32_t relocs_read_gap(const uint8_t **p) JL_NOTSAFEPOINT
+{
+    uint32_t gap = *(*p)++;
+    if (gap == 0) {
+        memcpy(&gap, *p, sizeof(gap));
+        *p += sizeof(gap);
+    }
+    return gap;
+}
+
 // Write the final value of each relocation in `list` into the heap at `base`, and mark it as a
 // slide or a bind
 static void jl_finish_relocs(char *base, arraylist_t *list, jl_relocmaps_t *m)
@@ -2270,15 +2287,28 @@ static void jl_read_arraylist(arraylist_t *list, const char *sec, size_t size)
     memcpy(list->items, sec, size);
 }
 
-// Relocate the slides in `heap`, unless it is at the address they were written for
-static void jl_apply_slides(uintptr_t *heap, uintptr_t expected, const uint64_t *bitmap, size_t nwords) JL_NOTSAFEPOINT
+// jl_apply_slides and jl_apply_binds walk the two forms of a section in separate loops rather than
+// with one iterator, whose test of the form for every word compilers do not hoist out of the
+// loop.  NOINLINE to avoid some bad decisions by LLVM (very hot loops).
+static NOINLINE void jl_apply_slides(uintptr_t *heap, uintptr_t expected, const char *sec, size_t size, size_t nwords) JL_NOTSAFEPOINT
 {
     uintptr_t delta = (uintptr_t)heap - expected;
     if (delta == 0)
         return;
-    for (size_t i = 0; i < nwords; i++)
-        for (uint64_t b = bitmap[i]; b; b &= b - 1)
-            heap[i * 64 + __builtin_ctzll(b)] += delta;
+    if (relocs_is_bitmap(size, nwords)) {
+        // `words` advances with the bitmap, so that GCC can address heap words as words[bit]
+        uintptr_t *words = heap;
+        for (const char *end = sec + size; sec != end; sec += sizeof(uint64_t), words += 64) {
+            for (uint64_t bits = jl_load_unaligned_i64(sec); bits; bits &= bits - 1)
+                words[__builtin_ctzll(bits)] += delta;
+        }
+        return;
+    }
+    const uint8_t *p = (const uint8_t*)sec, *end = p + size;
+    for (size_t word = 0; p != end;) {
+        word += relocs_read_gap(&p);
+        heap[word] += delta;
+    }
 }
 
 // Replace the bind at `pv` with what it refers to, unless that is a placeholder import that is not
@@ -2303,14 +2333,24 @@ static int placeholder_cmp(const void *a, const void *b) JL_NOTSAFEPOINT
     return (x > y) - (x < y);
 }
 
-static void jl_apply_binds(jl_serializer_state *s, uintptr_t *heap, const uint64_t *bitmap, size_t nwords) JL_NOTSAFEPOINT
+static NOINLINE void jl_apply_binds(jl_serializer_state *s, uintptr_t *heap, const char *sec, size_t size, size_t nwords) JL_NOTSAFEPOINT
 {
-    for (size_t i = 0; i < nwords; i++) {
-        for (uint64_t b = bitmap[i]; b; b &= b - 1) {
-            uintptr_t *pv = &heap[i * 64 + __builtin_ctzll(b)];
-            if (!jl_fill_bind(s, pv))
-                arraylist_push(&s->late_binds, pv);
+    if (relocs_is_bitmap(size, nwords)) {
+        uintptr_t *words = heap;
+        for (const char *end = sec + size; sec != end; sec += sizeof(uint64_t), words += 64) {
+            for (uint64_t bits = jl_load_unaligned_i64(sec); bits; bits &= bits - 1) {
+                uintptr_t *pv = &words[__builtin_ctzll(bits)];
+                if (!jl_fill_bind(s, pv))
+                    arraylist_push(&s->late_binds, pv);
+            }
         }
+        return;
+    }
+    const uint8_t *p = (const uint8_t*)sec, *end = p + size;
+    for (size_t word = 0; p != end;) {
+        word += relocs_read_gap(&p);
+        if (!jl_fill_bind(s, &heap[word]))
+            arraylist_push(&s->late_binds, &heap[word]);
     }
 }
 
@@ -3006,6 +3046,32 @@ static void write_section(ios_t *f, size_t payload, jl_image_section_t *out, ios
     ios_close(sec);
 }
 
+static void write_relocs_section(ios_t *f, size_t payload, jl_image_section_t *out, ios_t *bitmap, const char *name) JL_CANSAFEPOINT
+{
+    size_t nwords = bitmap->size / sizeof(uint64_t);
+    ios_t gaps;
+    ios_mem(&gaps, 0);
+    size_t prev = 0;
+    int fits = 1;
+    for (size_t i = 0; i < nwords; i++) {
+        for (uint64_t bits = jl_load_unaligned_i64(bitmap->buf + i * sizeof(uint64_t)); bits; bits &= bits - 1) {
+            size_t word = 64 * i + __builtin_ctzll(bits), gap = word - prev;
+            prev = word;
+            fits &= gap <= UINT32_MAX;
+            if (0 < gap && gap < 256) {
+                write_uint8(&gaps, gap);
+            }
+            else {
+                write_uint8(&gaps, 0);
+                write_uint32(&gaps, gap);
+            }
+        }
+    }
+    int use_gaps = fits && gaps.size < bitmap->size;
+    ios_close(use_gaps ? bitmap : &gaps);
+    write_section(f, payload, out, use_gaps ? &gaps : bitmap, name);
+}
+
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
 static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *module_init_order,
@@ -3370,8 +3436,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         h.heap_size = heap.size;
         write_section(f, payload_start, &h.fptrs, &fptr_record, "fptrs");
         write_section(f, payload_start, &h.imports, &imports, "imports");
-        write_section(f, payload_start, &h.binds, &maps.binds, "binds");
-        write_section(f, payload_start, &h.slides, &maps.slides, "slides");
+        write_relocs_section(f, payload_start, &h.binds, &maps.binds, "binds");
+        write_relocs_section(f, payload_start, &h.slides, &maps.slides, "slides");
         write_section(f, payload_start, &h.fixup_types, &fixup_types, "fixup_types");
         write_section(f, payload_start, &h.fixup_objs, &fixup_objs, "fixup_objs");
         write_section(f, payload_start, &h.specials, &specials, "specials");
@@ -4175,9 +4241,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     for (size_t i = 0; i < s.nimports; i++)
         s.imports_resolved[i] = jl_resolve_import(&s, imports[i]);
     arraylist_new(&s.late_binds, 0);
-    jl_apply_slides((uintptr_t*)image_base, expected_heap,
-                    (const uint64_t*)(payload + h.slides.offset), nwords);
-    jl_apply_binds(&s, (uintptr_t*)image_base, (const uint64_t*)(payload + h.binds.offset), nwords);
+    jl_apply_slides((uintptr_t*)image_base, expected_heap, payload + h.slides.offset, h.slides.size, nwords);
+    jl_apply_binds(&s, (uintptr_t*)image_base, payload + h.binds.offset, h.binds.size, nwords);
 
     // step 3: get references to special values
     uintptr_t heap_delta = (uintptr_t)image_base - expected_heap;
