@@ -689,6 +689,20 @@ end
     scdm = sincosd(missing)
     @test ismissing(scdm[1])
     @test ismissing(scdm[2])
+    # sincospi(missing) returns a (sine, cosine) tuple so destructuring works
+    @testset "sincospi(missing) returns tuple" begin
+        @test sincospi(missing) === (missing, missing)
+        @test sincospi(missing) isa Tuple{Missing, Missing}
+        s, c = sincospi(missing)
+        @test s === missing
+        @test c === missing
+        # other trig missing methods stay as they are
+        @test sincos(missing) === (missing, missing)
+        @test sincosd(missing) === (missing, missing)
+        @test sinpi(missing) === missing
+        @test cospi(missing) === missing
+        @test tanpi(missing) === missing
+    end
 end
 
 @testset "behavior at signed zero of monotonic floating-point functions mapping zero to zero" begin
