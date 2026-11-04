@@ -1447,9 +1447,6 @@ void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 void jl_wake_io_loop_thread(void) JL_NOTSAFEPOINT;
 void jl_init_signal_watchers(uv_async_cb cb);
 void jl_wake_signal_watchers(void) JL_NOTSAFEPOINT;
-void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
-int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;
 
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
 #if defined(_OS_WINDOWS_)
