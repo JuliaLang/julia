@@ -80,6 +80,10 @@ If successful, return a 3-element tuple `(values, pos, num_parsed)`:
         end
     end
 
+    # The error message prints the directive that failed. Each one is printed at its own
+    # type: indexing the mixed-type tuple at a runtime position would need dynamic dispatch.
+    directive_strings = Expr(:tuple, (:(string(directives[$i])) for i in 1:length(directives))...)
+
     return quote
         directives = df.tokens
         locale::DateLocale = df.locale
@@ -100,7 +104,7 @@ If successful, return a 3-element tuple `(values, pos, num_parsed)`:
             if directive_index > length(directives)
                 throw(ArgumentError("Found extra characters at the end of date time string"))
             else
-                d = directives[directive_index]
+                d = $directive_strings[directive_index]
                 throw(ArgumentError("Unable to parse date time. Expected directive $d at char $pos"))
             end
         end
