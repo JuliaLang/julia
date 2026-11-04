@@ -15,14 +15,15 @@ end
 function macroexpand(mod::Module, ex_in::SyntaxTree; recursive::Bool=true)
     # TODO: prevent this from being called in macro bodies
     ex0 = rebase_layers(ex_in, mod)
-    expand_forms_1(ex0, Base.get_world_counter(), recursive)
+    __script_exit_invoke_in_lowering_world(
+        expand_forms_1, ex0, Base.get_world_counter(), recursive)::Syntax
 end
 
 "May be used in macros or from any module"
 function macroexpand(st::SyntaxTree)
     DEBUG && assert_expandable(st)
     ctx = MacroExpansionContext(st, Base.get_world_counter(), true)
-    expand_forms_1(ctx, st)
+    __script_exit_invoke_in_lowering_world(expand_forms_1, ctx, st)::Syntax
 end
 
 # If a top-level thunk has any existing layer, we can assume all syntax has the
