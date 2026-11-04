@@ -1739,6 +1739,30 @@ end
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == ""
 end
 
+# Linux lld gets `--threads=1` only when `CI` equals `"true"` (JuliaLang/julia#64496).
+@testset "lld --threads=1 on Linux CI" begin
+    if Sys.islinux()
+        for strict_definitions in (false, true)
+            unset = withenv("CI" => nothing) do
+                Base.Linking.ld(; strict_definitions).exec
+            end
+            falsy = withenv("CI" => "false") do
+                Base.Linking.ld(; strict_definitions).exec
+            end
+            enabled = withenv("CI" => "true") do
+                Base.Linking.ld(; strict_definitions).exec
+            end
+            @test !("--threads=1" in unset)
+            @test !("--threads=1" in falsy)
+            @test "--threads=1" in enabled
+            # `-z defs` (lld's `--no-undefined`) and every other argument stay put.
+            @test unset == falsy
+            @test filter(arg -> arg != "--threads=1", enabled) == unset
+            @test "defs" in unset
+        end
+    end
+end
+
 @testset "`@constprop`, `@assume_effects` handling of an unknown setting" begin
     for x ∈ ("constprop", "assume_effects")
         try

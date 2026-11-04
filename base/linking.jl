@@ -122,6 +122,12 @@ function ld(; strict_definitions::Bool = false)
         if !isempty(Base.COMPRESS_PKGIMAGE_DEBUG_SECTIONS)
             default_args = `$default_args --compress-debug-sections=$(Base.COMPRESS_PKGIMAGE_DEBUG_SECTIONS)`
         end
+        # LLD 23 can hang forever while linking on Linux CI hosts with an old
+        # system glibc (LLVM parallel linking + glibc bug 25847; JuliaLang/julia#64496).
+        # Read `CI` at call time so the flag is not fixed in the system image.
+        if Sys.islinux() && get(ENV, "CI", "") == "true"
+            default_args = `$default_args --threads=1`
+        end
     end
 
     `$(lld()) -flavor $flavor $default_args`
