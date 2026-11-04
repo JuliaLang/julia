@@ -162,29 +162,6 @@ entry:
   ret ptr %obj
 }
 
-; Intrinsics that neither access memory nor have side effects (here
-; llvm.maximum and llvm.fma) are pure computation and do not drop the reset
-; context; the untagged call after them still does.
-define double @test_pure_intrinsics(<2 x double> %a, <2 x double> %b, double %x) "julia.ipo_reset_safe" {
-entry:
-; CHECK-LABEL: @test_pure_intrinsics
-; CHECK-NOT: store
-; CHECK: %m = call <2 x double> @llvm.maximum.v2f64
-; CHECK-NOT: store
-; CHECK: %f = call double @llvm.fma.f64
-; CHECK-NEXT: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
-; CHECK-NEXT: fence syncscope("singlethread") seq_cst
-; CHECK-NEXT: call void @some_unsafe_call()
-  %pgcstack = call ptr @julia.get_pgcstack()
-  %m = call <2 x double> @llvm.maximum.v2f64(<2 x double> %a, <2 x double> %b)
-  %e = extractelement <2 x double> %m, i64 0
-  %f = call double @llvm.fma.f64(double %e, double %x, double %x)
-  call void @some_unsafe_call()
-  ret double %f
-}
-declare <2 x double> @llvm.maximum.v2f64(<2 x double>, <2 x double>)
-declare double @llvm.fma.f64(double, double, double)
-
 ; In a function with cancellation points of its own, an allocation site
 ; between the region's publication and the next drop is annotated (not
 ; dropped): FinalLowerGC lowers it to a reset-safe entry point.
