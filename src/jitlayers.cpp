@@ -2452,12 +2452,21 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     SmallSet<SymbolStringPtr, 2> OwnedSyms;
     for (auto &KV : MR.getSymbols())
         OwnedSyms.insert(KV.first);
+    // Another thread may have claimed a CI after this module was emitted but
+    // before this materialization unit registered its interface. The bodies
+    // in this graph for that CI get that thread's names, and must not be
+    // exported here.
+    SmallSet<SymbolStringPtr, 2> ForeignCISyms;
     for (auto &[CI, Funcs] : Info->ci_funcs) {
         auto &S = CISymbols.at(CI);
         if (Funcs.invoke)
             RenameDef(Funcs.invoke, S.invoke);
         if (Funcs.specptr)
             RenameDef(Funcs.specptr, S.specptr);
+        if (S.invoke && !OwnedSyms.contains(S.invoke))
+            ForeignCISyms.insert(S.invoke);
+        if (S.specptr && !OwnedSyms.contains(S.specptr))
+            ForeignCISyms.insert(S.specptr);
     }
 
     // Pre-pass: find CI equivalents, and build EquivMap for use in the main
@@ -2500,24 +2509,14 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
             makeAnonymousLinkGraphSymbol(G, *DestSym);
         It->second = renameLinkGraphSymbol(G, *It->second, Dest);
     }
-    SmallSet<SymbolStringPtr, 0> KnownCISyms;
-    for (auto &KV : CISymbols) {
-        auto &S = KV.second;
-        if (S.invoke)
-            KnownCISyms.insert(S.invoke);
-        if (S.specptr)
-            KnownCISyms.insert(S.specptr);
-    }
-    SmallVector<jitlink::Symbol *, 0> DefinedSyms;
-    for (auto *Sym : G.defined_symbols())
-        DefinedSyms.push_back(Sym);
-    // Another thread may have claimed a CI after this module was emitted but
-    // before this materialization unit registered its interface. Any body that
-    // remains in this graph for that CI must not be exported here.
-    for (auto *Sym : DefinedSyms) {
-        if (Sym->hasName() && KnownCISyms.contains(Sym->getName()) &&
-            !OwnedSyms.contains(Sym->getName()))
-            makeAnonymousLinkGraphSymbol(G, *Sym);
+    if (!ForeignCISyms.empty()) {
+        SmallVector<jitlink::Symbol *, 0> DefinedSyms;
+        for (auto *Sym : G.defined_symbols())
+            DefinedSyms.push_back(Sym);
+        for (auto *Sym : DefinedSyms) {
+            if (Sym->hasName() && ForeignCISyms.contains(Sym->getName()))
+                makeAnonymousLinkGraphSymbol(G, *Sym);
+        }
     }
 
     // Rename globals and add mappings
