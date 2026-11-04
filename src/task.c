@@ -1134,7 +1134,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     jl_atomic_store_relaxed(&t->finished_at, 0);
     jl_atomic_store_relaxed(&t->preempt_request, 0);
     jl_atomic_store_relaxed(&t->bound_cancel_token, jl_nothing);
-    t->bound_cancel_default = 0;
     jl_atomic_store_relaxed(&t->reset_ctx, NULL);
     jl_atomic_store_relaxed(&t->cancel_handler_ctx, NULL);
 
@@ -1613,7 +1612,6 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     }
     jl_atomic_store_relaxed(&ct->preempt_request, 0);
     jl_atomic_store_relaxed(&ct->bound_cancel_token, jl_nothing);
-    ct->bound_cancel_default = 0;
     jl_atomic_store_relaxed(&ct->reset_ctx, NULL);
     jl_atomic_store_relaxed(&ct->cancel_handler_ctx, NULL);
     ptls->abandon_to = NULL;

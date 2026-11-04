@@ -6005,7 +6005,6 @@ isdefined_unknown_idx:
         Value *ct = get_current_task(ctx);
         Value *src = boxed(ctx, argv[1]);
         Value *bound_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, bound_cancel_token), "bound_cancel_token");
-        Value *bound_default_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
         jl_aliasinfo_t ai = ctx.alias().mutab_nonconst;
         Value *nothing_val = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_nothing));
         Type *T_int8 = getInt8Ty(ctx.builder.getContext());
@@ -6036,9 +6035,6 @@ isdefined_unknown_idx:
         StoreInst *clear_store = ctx.builder.CreateAlignedStore(nothing_val, bound_ptr, ctx.types().alignof_ptr);
         clear_store->setOrdering(AtomicOrdering::Monotonic);
         ai.decorateInst(clear_store);
-        // The binding is now an explicit `nothing`, not the scoped-default
-        // cache (the skip path above keeps a matching cache intact).
-        ai.decorateInst(ctx.builder.CreateAlignedStore(ConstantInt::get(T_int8, 0), bound_default_ptr, Align(1)));
         ctx.builder.CreateBr(point_bb);
 
         // src is a token source: publish the binding (store only on rebind,
@@ -6058,10 +6054,6 @@ isdefined_unknown_idx:
         StoreInst *bind_store = ctx.builder.CreateAlignedStore(src, bound_ptr, ctx.types().alignof_ptr);
         bind_store->setOrdering(AtomicOrdering::Release);
         ai.decorateInst(bind_store);
-        // A rebind publishes an explicit source: it may differ from the
-        // scoped default, so the cache flag must drop (the same-source skip
-        // path keeps a matching cache intact).
-        ai.decorateInst(ctx.builder.CreateAlignedStore(ConstantInt::get(T_int8, 0), bound_default_ptr, Align(1)));
         ctx.builder.CreateBr(point_bb);
 
         // The cancellation point intrinsic (which the CancellationLowering
@@ -7346,13 +7338,6 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
 #endif
             ctx.alias().mutab_nonconst.decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
-            // This inline restore is the only scope swap not bracketed by the
-            // exception-handler save/restore, so it must invalidate the
-            // task's cached scoped-default cancellation token itself (see
-            // bound_cancel_default in julia_threads.h).
-            Value *bcd_ptr = emit_ptrgep(ctx, get_current_task(ctx), offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
-            ctx.alias().mutab_nonconst.decorateInst(
-                ctx.builder.CreateAlignedStore(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), bcd_ptr, Align(1)));
         }
     }
     else if (head == jl_pop_exception_sym) {
@@ -10802,12 +10787,6 @@ static jl_llvm_functions_t
                 StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
                 ctx.alias().mutab_nonconst.decorateInst(current_scope);
                 ctx.alias().mutab_nonconst.decorateInst(scope_store);
-                // Installing a new scope invalidates the task's cached
-                // scoped-default cancellation token (see bound_cancel_default
-                // in julia_threads.h).
-                Value *bcd_ptr = emit_ptrgep(ctx, get_current_task(ctx), offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
-                ctx.alias().mutab_nonconst.decorateInst(
-                    ctx.builder.CreateAlignedStore(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), bcd_ptr, Align(1)));
                 // GC preserve the current_scope, since it is not rooted in the `jl_handler_t *`,
                 // the newly entered scope is preserved through the current_task.
                 Value *scope_token = ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), {current_scope});
