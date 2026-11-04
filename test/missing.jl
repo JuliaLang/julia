@@ -81,7 +81,7 @@ end
     @test isapprox(1.0, missing, rtol=1e-6) === missing
 
     # Only Base's methods: earlier tests on this worker may have added their own (arrayops'
-    # totally_not_five26034) or loaded stdlibs that do (Random loads SparseArrays)
+    # totally_not_five26034) or loaded stdlibs that do
     let ms = collect(methods(isequal, Tuple{Any,Any})),
         rts = Base.return_types(isequal, Tuple{Any,Any})
         @test all(zip(ms, rts)) do (m, rt)
