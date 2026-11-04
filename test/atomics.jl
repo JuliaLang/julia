@@ -1396,6 +1396,33 @@ test_memory_unset_multiptr(ThreeInlinePtr, AtomicMemory{ThreeInlinePtr}, Val(:un
     @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :acquire_release, 1)
     @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :not_atomic, 1)
     @test_throws BoundsError Base.unsetindex_atomic!(mem, :release, 0)
+    @atomic :monotonic mem[1] = "value"
+    @test Base.unsetindex_atomic!(mem, :release, Int8(1)) === mem
+    @test !isassigned(mem, 1)
+    @test_throws BoundsError Base.unsetindex_atomic!(mem, :release, Int8(2))
+end
+
+# The atomic index functions convert the new value to the element type.
+@testset "atomic index functions convert values" begin
+    order = :sequentially_consistent
+    mem = AtomicMemory{Int}(undef, 2)
+    @test Base.setindex_atomic!(mem, order, 1.0, 1) === 1
+    @test Base.swapindex_atomic!(mem, order, Int32(5), 1) === 1
+    @test Base.swapindex_atomic!(mem, order, 6.0, 1) === 5
+    @test_throws InexactError Base.swapindex_atomic!(mem, order, 2.5, 1)
+    @test Base.replaceindex_atomic!(mem, order, order, 6, 7.0, 1) === (old = 6, success = true)
+    @test Base.replaceindex_atomic!(mem, order, order, 6, 8.0, 1) === (old = 7, success = false)
+    @test_throws InexactError Base.replaceindex_atomic!(mem, order, order, 7, 8.5, 1)
+    @test Base.getindex_atomic(mem, order, 1) === 7
+    @test_throws BoundsError Base.swapindex_atomic!(mem, order, 1, 3)
+
+    smem = AtomicMemory{String}(undef, 2)
+    @test Base.setindexonce_atomic!(smem, order, order, SubString("ab", 1, 1), 1)
+    @test !Base.setindexonce_atomic!(smem, order, order, SubString("ab", 2, 2), 1)
+    @test Base.getindex_atomic(smem, order, 1) === "a"
+    @test Base.replaceindex_atomic!(smem, order, order, "a", SubString("xy"), 1) == (old = "a", success = true)
+    @test Base.getindex_atomic(smem, order, 1) === "xy"
+    @test_throws MethodError Base.setindexonce_atomic!(smem, order, order, 1, 2)
 end
 
 @noinline function _test_once_undef(r)

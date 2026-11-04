@@ -1574,3 +1574,37 @@ scale_forwarding!(b::ForwardingMatrix, a::ForwardingMatrix) = (b .= 2.0 .* a)
         @test occursin(r"<\d+ x double>", get_llvm(scale_forwarding!, Tuple{ForwardingMatrix, ForwardingMatrix}))
     end
 end
+
+# A union phi whose incoming value is a singleton constant that the union stores unboxed
+# must not carry a box pointer (regression from #55045)
+struct UnionPhiStart end
+function union_phi_singleton(x::Vector{Int})
+    acc = UnionPhiStart()
+    for v in x
+        if isodd(v)
+            acc = acc isa UnionPhiStart ? v : acc + v
+        end
+    end
+    return acc
+end
+function union_phi_nothing(x::Vector{Int})
+    acc = nothing
+    for v in x
+        if isodd(v)
+            acc = acc === nothing ? v : acc + v
+        end
+    end
+    return acc
+end
+@testset "union phi with an unboxed singleton constant" begin
+    for f in (union_phi_singleton, union_phi_nothing)
+        @test !occursin("= phi ptr", get_llvm(f, Tuple{Vector{Int}}))
+    end
+    @test union_phi_singleton([2, 4]) === UnionPhiStart()
+    @test union_phi_singleton([1, 2, 3]) === 4
+    @test union_phi_nothing(Int[]) === nothing
+    @test union_phi_nothing([1, 2, 3]) === 4
+    # `Union{}` (typed `Type{Union{}}`) is an unboxed ghost of `TypeofBottom`
+    @test isequal(Base.mapany(identity, (Union{}, 'a')), Any[Union{}, 'a'])
+    @test isequal(Any[x for x in (Union{}, 1.0)], Any[Union{}, 1.0])
+end

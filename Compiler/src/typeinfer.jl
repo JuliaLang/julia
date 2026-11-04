@@ -621,7 +621,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance
     if can_discard_trees && !inlineable
         # Precompile-keep-ir mode: retain non-inlineable IR as raw CodeInfo so
         # irgen's typeinf_ext can reuse it instead of re-inferring.
-        # jl_finalize_precompile_inferred nulls it before save.
+        # The image leaves it out.
         precompile_keep_ir(interp) && return ci
         keep_source_for_output(mi) || return nothing
     end
