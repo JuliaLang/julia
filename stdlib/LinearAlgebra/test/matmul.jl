@@ -406,6 +406,16 @@ end
     end
 end
 
+@testset "Symmetric/Hermitian x vector with negative lda" for T in (Float64, ComplexF64, Float32, ComplexF32)
+    A = view(randn(T, 5, 5), :, 5:-1:1) # negative lda, unsupported by symv!/hemv!
+    Ad = copy(A)
+    x, y = randn(T, 5), randn(T, 5)
+    for W in (Symmetric, Hermitian), uplo in (:U, :L)
+        @test W(A, uplo) * x ≈ W(Ad, uplo) * x
+        @test mul!(copy(y), W(A, uplo), x, 2, 3) ≈ 2 * W(Ad, uplo) * x + 3y
+    end
+end
+
 @testset "issue #15286" begin
     A = reshape(map(Float64, 1:20), 5, 4)
     C = zeros(8, 8)
