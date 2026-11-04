@@ -437,25 +437,14 @@ function put_unbuffered(c::Channel, v)
     lock(c)
     taker = try
         _increment_n_avail(c, 1)
-        local taker
-        while true
-            while isempty(c.cond_take.waitq)
-                check_channel_state(c)
-                notify(c.cond_wait)
-                wait(c.cond_put)
-            end
+        while isempty(c.cond_take.waitq)
             check_channel_state(c)
-            # unfair scheduled version of: notify(c.cond_take, v, false, false); yield()
-            w = popfirst!(waitqueue(c.cond_take))
-            t = w.task
-            if t isa Task && claim_wait(t, w)
-                taker = t
-                break
-            end
-            # stale registration: this waiter's wake was already claimed
-            # by an interrupter - drop it and look for the next taker
+            notify(c.cond_wait)
+            wait(c.cond_put)
         end
-        taker
+        check_channel_state(c)
+        # unfair scheduled version of: notify(c.cond_take, v, false, false); yield()
+        popfirst!(c.cond_take.waitq)
     finally
         _increment_n_avail(c, -1)
         unlock(c)

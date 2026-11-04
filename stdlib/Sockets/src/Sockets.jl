@@ -460,7 +460,7 @@ function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg)
     finally
         Base.sigatomic_end()
         iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::Base.StickyWorkqueue, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::Base.IntrusiveLinkedList{Task}, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later
