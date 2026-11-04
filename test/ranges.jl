@@ -461,6 +461,17 @@ end
         @test findfirst(iszero, 5:-2:-5) === nothing
         @test findfirst(iszero, 6:-2:-6) == 4
         @test findfirst(==(Int128(2)), Int128(1):Int128(1):Int128(4)) === 2
+        # ranges spanning more than half their element type
+        for r in (Int8(-100):Int8(100), Int8(-100):Int8(3):Int8(100), Int8(100):Int8(-3):Int8(-100),
+                  typemin(Int8):typemax(Int8), StepRange(Int8(-100), Int16(3), Int8(100)),
+                  typemin(Int64):Int64(2)^62:typemax(Int64))
+            v = collect(r)
+            for x in unique([typemin(eltype(r)), typemax(eltype(r)), v..., (v .+ one(eltype(r)))...])
+                @test findfirst(==(x), r) === findfirst(==(x), v)
+            end
+        end
+        # indices that do not fit in `Int` throw rather than wrap
+        @test_throws InexactError findfirst(==(Int128(typemax(Int)) + 1), Int128(0):Int128(typemax(Int)) + 2)
     end
     @testset "findlast" begin
         @test findlast(==(1), Base.IdentityUnitRange(-1:1)) == 1
