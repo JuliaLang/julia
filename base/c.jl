@@ -481,12 +481,15 @@ point).
 
 This imposes strict requirements on the foreign code. In particular, it is
 generally unsafe to call into most C standard library functions (the Julia
-runtime will handle properly protecting the symbol lookup itself), modify
-memory other than allocated since the most recent cancellation point (or
-which the cancellation will explicitly clean up). Additionally, any memory
-access to memory that may be read after a reset must be annotated
-`volatile`. This list of conditions is meant to be illustrative, not
-exhaustive and may be extended with additional warnings in the future.
+runtime protects the lookup of the called symbol itself, but not the foreign
+library's own lazily bound calls). Memory that the foreign function writes
+has unspecified contents after a reset: it must remain safe for Julia to
+read and free (e.g. it must not be left pointing to freed memory), and
+callers must not rely on its value. Additionally, any memory access to memory
+that may be read after a reset must be annotated `volatile`. A pure
+computation that only reads its arguments meets these conditions. This list
+of conditions is meant to be illustrative, not exhaustive and may be extended
+with additional warnings in the future.
 
 Co-operating foreign code may use the Julia C API to temporarily protect
 regions from reset, although this API is not yet stable and requires source

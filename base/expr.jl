@@ -872,11 +872,13 @@ the following other `setting`s:
 
 The `:reset_safe` asserts that it is safe to abandon execution of the annotated
 function at any point. For functions so inferred, the compiler may extend the
-reset region of a cancellation point through the `:reset_safe` regions. It thus
-in particular implies `:effect_free`, but is a stronger assertion. For example,
-an `:effect_free` function could in principle take a read-only lock (under appropriate
-assumptions on how this is implemented and annotated), but a `:reset_safe` function
-may not, because it could be abandoned inside the critical section.
+reset region of a cancellation point through the `:reset_safe` regions. It is
+a separate assertion from `:effect_free`, and neither implies the other. For
+example, an `:effect_free` function could in principle take a read-only lock (under
+appropriate assumptions on how this is implemented and annotated), but a `:reset_safe`
+function may not, because it could be abandoned inside the critical section.
+Conversely, a `:reset_safe` foreign call may write memory whose contents are
+unspecified after a reset (see [`@ccall`](@ref)).
 
 The same also applies to many implicitly inserted intrinsics and thus codegen for
 a `:reset_safe` function requires cooperation by the code generator to uphold the
