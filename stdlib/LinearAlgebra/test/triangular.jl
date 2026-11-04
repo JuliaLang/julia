@@ -1057,6 +1057,20 @@ end
 Base.size(A::MyTriangular) = size(A.data)
 Base.getindex(A::MyTriangular, i::Int, j::Int) = A.data[i,j]
 
+@testset "3-arg dot: zeros in y are not strong zeros (#1836)" begin
+    n = 3
+    @testset for TT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+        for i in 1:n, j in 1:n
+            A = ones(n, n); A[i, j] = Inf
+            T = TT(A)
+            # only test entries that are actually stored (and not implicitly unit)
+            isinf(T[i, j]) || continue
+            y = ones(n); y[j] = 0
+            @test isnan(dot(ones(n), T, y))
+        end
+    end
+end
+
 @testset "diagonal mul for generic triangular" begin
     @testset for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
         M = MyTriangular(T(rand(4,4)))

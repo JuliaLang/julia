@@ -616,13 +616,11 @@ function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
     r = dot(x₁, A[1,1], y[1])
     @inbounds for j in 2:m
         yj = y[j]
-        if !iszero(yj)
-            temp = adjoint(A[1,j]) * x₁
-            @simd for i in 2:j
-                temp += adjoint(A[i,j]) * x[i]
-            end
-            r += dot(temp, yj)
+        temp = adjoint(A[1,j]) * x₁
+        @simd for i in 2:j
+            temp += adjoint(A[i,j]) * x[i]
         end
+        r += dot(temp, yj)
     end
     return r
 end
@@ -637,14 +635,12 @@ function dot(x::AbstractVector, A::UnitUpperTriangular, y::AbstractVector)
     r = dot(x₁, y[1])
     @inbounds for j in 2:m
         yj = y[j]
-        if !iszero(yj)
-            temp = adjoint(A[1,j]) * x₁
-            @simd for i in 2:j-1
-                temp += adjoint(A[i,j]) * x[i]
-            end
-            r += dot(temp, yj)
-            r += dot(x[j], yj)
+        temp = adjoint(A[1,j]) * x₁
+        @simd for i in 2:j-1
+            temp += adjoint(A[i,j]) * x[i]
         end
+        r += dot(temp, yj)
+        r += dot(x[j], yj)
     end
     return r
 end
@@ -658,13 +654,11 @@ function dot(x::AbstractVector, A::LowerTriangular, y::AbstractVector)
     r = zero(typeof(dot(first(x), first(A), first(y))))
     @inbounds for j in 1:m
         yj = y[j]
-        if !iszero(yj)
-            temp = adjoint(A[j,j]) * x[j]
-            @simd for i in j+1:m
-                temp += adjoint(A[i,j]) * x[i]
-            end
-            r += dot(temp, yj)
+        temp = adjoint(A[j,j]) * x[j]
+        @simd for i in j+1:m
+            temp += adjoint(A[i,j]) * x[i]
         end
+        r += dot(temp, yj)
     end
     return r
 end
@@ -678,13 +672,11 @@ function dot(x::AbstractVector, A::UnitLowerTriangular, y::AbstractVector)
     r = zero(typeof(dot(first(x), first(y))))
     @inbounds for j in 1:m
         yj = y[j]
-        if !iszero(yj)
-            temp = x[j]
-            @simd for i in j+1:m
-                temp += adjoint(A[i,j]) * x[i]
-            end
-            r += dot(temp, yj)
+        temp = x[j]
+        @simd for i in j+1:m
+            temp += adjoint(A[i,j]) * x[i]
         end
+        r += dot(temp, yj)
     end
     return r
 end
