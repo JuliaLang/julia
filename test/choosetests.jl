@@ -27,7 +27,7 @@ const TESTNAMES = [
         "checked", "bitset", "floatfuncs", "precompile", "precompile_distributed",
         "relocatedepot",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
-        "channels", "cancellation", "iostream", "secretbuffer", "specificity",
+        "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
         "scopedvalues", "compileall", "rebinding",
