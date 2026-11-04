@@ -352,22 +352,18 @@ function dot(x::AbstractVector, H::UpperHessenberg, y::AbstractVector)
     r += dot(x[2], H[2,1], y[1])
     @inbounds for j in 2:m-1
         yj = y[j]
-        if !iszero(yj)
-            temp = adjoint(H[1,j]) * x₁
-            @simd for i in 2:j+1
-                temp += adjoint(H[i,j]) * x[i]
-            end
-            r += dot(temp, yj)
+        temp = adjoint(H[1,j]) * x₁
+        @simd for i in 2:j+1
+            temp += adjoint(H[i,j]) * x[i]
         end
+        r += dot(temp, yj)
     end
     ym = y[m]
-    if !iszero(ym)
-        temp = adjoint(H[1,m]) * x₁
-        @simd for i in 2:m
-            temp += adjoint(H[i,m]) * x[i]
-        end
-        r += dot(temp, ym)
+    temp = adjoint(H[1,m]) * x₁
+    @simd for i in 2:m
+        temp += adjoint(H[i,m]) * x[i]
     end
+    r += dot(temp, ym)
     return r
 end
 

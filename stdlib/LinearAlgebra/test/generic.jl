@@ -637,6 +637,14 @@ end
         v = zeros(ComplexF64, m); a = zeros(ComplexF64, m, n); w = zeros(Float64, n)
         @test dot(v, a, w) === zero(ComplexF64)
     end
+    # zeros in y are not strong zeros (#1836)
+    @test isnan(dot([1.0], [Inf;;], [0.0]))
+    @test isnan(dot([1.0], [NaN;;], [0.0]))
+    for i in 1:3, j in 1:3
+        A = ones(3, 3); A[i, j] = Inf
+        y = ones(3); y[j] = 0
+        @test isnan(dot(ones(3), A, y))
+    end
 end
 
 @testset "condskeel #34512" begin
