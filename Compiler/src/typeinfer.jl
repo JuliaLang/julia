@@ -1017,9 +1017,12 @@ function compute_edges!(sv::InferenceState)
     for i in 1:length(sv.stmt_info)
         add_edges!(edges, sv.stmt_info[i])
     end
-    user_edges = sv.src.edges::Union{Nothing, SimpleVector, Vector{Any}}
-    if user_edges !== nothing && user_edges !== empty_edges
-        append!(edges, user_edges)
+    user_edges = sv.src.edges
+    if user_edges isa Union{SimpleVector, Vector{Any}}
+        user_edges === empty_edges || append!(edges, user_edges)
+    elseif user_edges !== nothing
+        # Generated functions in older packages store a narrowly typed vector here.
+        append!(edges, user_edges::Vector)
     end
     nothing
 end
