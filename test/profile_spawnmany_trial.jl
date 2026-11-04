@@ -1,62 +1,83 @@
 # TRIAL, do not merge
-function trial_cmd(env...; prefix = String[])
-    cmd = `$prefix $(Base.julia_cmd().exec) --depwarn=error --rr-detach --startup-file=no profile_spawnmany_exec.jl`
-    return addenv(Cmd(cmd; dir = @__DIR__), env...)
-end
-
-function trial_run(cmd, limit)
-    proc = run(pipeline(ignorestatus(cmd); stdout = stderr, stderr); wait = false)
+function trial_gdb(label, env...; nhits = 300, sym = "_Uelf64_get_proc_name", ipreg = Sys.ARCH === :aarch64 ? "\$x2" : "\$rdx")
+    dir = mktempdir()
+    script = joinpath(dir, "cmds.gdb")
+    write(script, """
+        set pagination off
+        set confirm off
+        set auto-load off
+        set startup-with-shell off
+        set breakpoint pending on
+        set print thread-events off
+        set print inferior-events off
+        handle all nostop noprint pass
+        set \$hits = 0
+        break $sym
+        commands
+        silent
+        set \$hits = \$hits + 1
+        set \$ip = $ipreg
+        printf "HIT %d ip=%p\\n", \$hits, \$ip
+        info symbol \$ip
+        if \$hits <= 3
+          bt 12
+          x/8i \$ip - 16
+        end
+        if \$hits >= $nhits
+          printf "HIT_LIMIT\\n"
+          info breakpoints
+          kill
+          quit
+        end
+        continue
+        end
+        run
+        info breakpoints
+        printf "INFERIOR_ENDED hits=%d\\n", \$hits
+        quit
+        """)
+    log = joinpath(dir, "gdb.log")
+    julia = Base.julia_cmd().exec
+    cmd = `gdb -q -nx --batch -x $script --args $julia --depwarn=error --startup-file=no profile_spawnmany_exec.jl`
+    cmd = addenv(Cmd(cmd; dir = @__DIR__), "SPAWN_TRIAL" => label, env...)
+    proc = run(pipeline(ignorestatus(cmd); stdout = log, stderr = log); wait = false)
     start = time()
-    timer = Timer(_ -> kill(proc, Base.SIGKILL), limit)
+    timer = Timer(_ -> kill(proc, Base.SIGKILL), 300)
     wait(proc)
     close(timer)
-    return proc, round(time() - start; digits=1)
-end
-
-function trial_tools()
-    paranoid = try read("/proc/sys/kernel/perf_event_paranoid", String) catch err; string(typeof(err)) end
-    println(stderr, "SPAWN_TRIAL_TOOLS paranoid=", strip(paranoid), " kernel=", strip(read(`uname -r`, String)),
-            " page_size=", ccall(:jl_getpagesize, Clong, ()),
-            " ", join(("$t=$(something(Sys.which(t), "none"))" for t in ("perf", "strace", "ltrace", "gdb", "lldb", "bpftrace")), " "))
-    env = ("NTASKS" => "2000000", "SPAWN_WORKLOAD" => "spawn")
-    if Sys.which("perf") !== nothing
-        data = joinpath(mktempdir(), "perf.data")
-        # The sandbox may refuse perf events, so report what happens and carry on
-        proc, secs = trial_run(trial_cmd(env...; prefix = ["perf", "record", "-q", "-g", "-F", "499", "-o", data, "--"]), 400)
-        println(stderr, "SPAWN_TRIAL_PERF record exit=", proc.exitcode, " secs=", secs)
-        if success(proc)
-            for sort in ("dso", "symbol")
-                out = read(ignorestatus(`perf report -i $data --no-children --sort=$sort --stdio -g none`), String)
-                for l in Iterators.take(Iterators.filter(l -> !isempty(l) && !startswith(l, '#'), eachline(IOBuffer(out))), 30)
-                    println(stderr, "SPAWN_TRIAL_PERF ", sort, " ", l)
-                end
-            end
+    lines = readlines(log)
+    println(stderr, "SPAWN_TRIAL_GDB ", label, " exit=", proc.exitcode, " sig=", proc.termsignal, " secs=", round(time() - start; digits=1), " loglines=", length(lines))
+    where = Dict{String,Int}()
+    for (i, l) in enumerate(lines)
+        if startswith(l, "HIT ") && i < length(lines)
+            # Offsets vary within a function, so count by symbol and library
+            s = replace(lines[i+1], r" \+ \d+" => "", r"No symbol matches.*" => "no symbol (not in a loaded library's symbols)")
+            where[s] = get(where, s, 0) + 1
         end
     end
-    if Sys.which("strace") !== nothing
-        out = tempname()
-        proc, secs = trial_run(trial_cmd(env...; prefix = ["strace", "-f", "-c", "-o", out]), 400)
-        println(stderr, "SPAWN_TRIAL_STRACE exit=", proc.exitcode, " secs=", secs)
-        isfile(out) && for l in Iterators.take(eachline(out), 16)
-            println(stderr, "SPAWN_TRIAL_STRACE ", l)
-        end
+    for (s, c) in sort!(collect(where); by = last, rev = true)[1:min(end, 25)]
+        println(stderr, "SPAWN_TRIAL_GDB ", label, " count=", c, " ", s)
+    end
+    first_hits = 0
+    for l in lines
+        startswith(l, "HIT ") && (first_hits += 1)
+        first_hits > 4 && break
+        println(stderr, "SPAWN_TRIAL_GDBLOG ", label, " ", first(l, 180))
+    end
+    for l in lines[max(1, end-6):end]
+        println(stderr, "SPAWN_TRIAL_GDBEND ", label, " ", first(l, 180))
     end
 end
 
 function spawn_trial(phase)
-    Sys.islinux() || return
-    try
-        trial_tools()
-    catch err
-        println(stderr, "SPAWN_TRIAL_TOOLS error ", sprint(showerror, err))
-    end
-    trial_run(trial_cmd("SPAWN_WORKLOAD" => "backtrace", "SPAWN_TRIAL" => "backtrace"), 400)
-    for (workload, n) in (("spin", 0), ("spawn", 20000), ("spawn", 200000), ("spawn", 2000000)),
-            arm in ("profile", "noprofile", "noprofile", "profile")
-        env = ["NTASKS" => string(n), "SPAWN_TRIAL" => "$workload-$n-$arm", "SPAWN_WORKLOAD" => workload]
-        arm == "noprofile" && push!(env, "SPAWN_NOPROFILE" => "1")
-        proc, secs = trial_run(trial_cmd(env...), 400)
-        println(stderr, "SPAWN_TRIAL_RESULT phase=", phase, " workload=", workload, " n=", n, " arm=", arm,
-                " elapsed_s=", secs, " termsignal=", proc.termsignal)
+    Sys.islinux() && Sys.ARCH in (:aarch64, :x86_64) && Sys.which("gdb") !== nothing || return
+    for (label, env) in (("spin", ("SPAWN_WORKLOAD" => "spin",)),
+                         ("spawn200k", ("NTASKS" => "200000", "SPAWN_WORKLOAD" => "spawn")),
+                         ("spawn2M", ("NTASKS" => "2000000", "SPAWN_WORKLOAD" => "spawn")))
+        try
+            trial_gdb(label, env...)
+        catch err
+            println(stderr, "SPAWN_TRIAL_GDB ", label, " error ", sprint(showerror, err))
+        end
     end
 end
