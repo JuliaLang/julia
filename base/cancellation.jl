@@ -26,8 +26,9 @@ itself. Only the holder of the *source* can call [`cancel!`](@ref).
 
 A token takes effect by scoping it over a computation via the
 [`CANCEL_TOKEN`](@ref) scoped value or by explicit token passing.
-Once the associated source is cancelled, the computation's cancellation points (see
-[`@cancel_check`](@ref)) throw a [`CancellationRequest`](@ref).
+Once the associated source is cancelled, the computation's cancellation points
+(blocking operations that take a `cancel` keyword argument) throw a
+[`CancellationRequest`](@ref).
 """
 struct CancellationToken
     source::CancellationTokenSource
@@ -89,14 +90,6 @@ frozen in place and never scheduled again.
     computationally-heavy code).
 """
 const CANCEL_REQUEST_ABANDON_ALL = CancellationRequest(0x4)
-
-# The status byte reported by a cancellation point (`Core.cancellation_point!`)
-# is the governing source's state byte (0 while uncancelled, the severity once
-# cancelled) with the 0x40 bit merged in when the task has a pending
-# cooperative-yield request. The mask recovers the severity half of such a
-# status byte; source state reads themselves need no masking.
-const STATUS_PREEMPT_BIT = 0x40
-const SEVERITY_MASK = 0x3f
 
 # The severity of a request, for the delivery layer's comparisons.
 severity(cr::CancellationRequest) = cr.request
@@ -672,8 +665,8 @@ they *escalate* the severity ([`CANCEL_REQUEST_SAFE`](@ref) ->
 state.
 
 Computations governed by a token of `src` or a descendant observe the cancellation at
-their cancellation points (see [`@cancel_check`](@ref)), which throw a
-[`CancellationRequest`](@ref).
+their cancellation points (blocking operations that take a `cancel` keyword
+argument), which throw a [`CancellationRequest`](@ref).
 
 When `cancel!` returns, every source currently reachable from `src` has
 been advanced to (at least) the requested severity by this very call.
@@ -690,12 +683,6 @@ function cancel!(src::CancellationTokenSource,
     # source is level-triggered.
     _cancel_walk!(src, sev)
     Threads.atomic_fence_heavy()
-    # Shoot down any task now bound to a cancelled source: threads inside a
-    # compiled cancellation region are asynchronously reset to their
-    # cancellation point, which observes the cancellation and throws.
-    # Best-effort: a task the walk misses recovers level-triggered at its
-    # next cancellation point.
-    ccall(:jl_shootdown_cancelled_tasks, Cvoid, ())
     return raised
 end
 
@@ -703,10 +690,8 @@ end
     Base.redeliver!(src::CancellationTokenSource) -> Bool
 
 Re-run the delivery pass for an already-cancelled source at its current
-severity: wakes waiters that registered without observing the cancellation
-and re-sends the interruption signal to bound running computations (the
-signal-based delivery is best-effort and can be missed while a reset point
-is unpublished). Used by the ^C machinery when a press finds the episode
+severity: wakes waiters that registered without observing the cancellation.
+Used by the ^C machinery when a press finds the episode
 source already marked cancelled (e.g. by the C-side fast path in
 `jl_sigint_request_cancellation`, which cannot wake parked waiters itself).
 Returns whether the source was cancelled at all.
@@ -716,7 +701,6 @@ function redeliver!(src::CancellationTokenSource)
     st == 0x00 && return false
     _cancel_walk!(src, st)
     Threads.atomic_fence_heavy()
-    ccall(:jl_shootdown_cancelled_tasks, Cvoid, ())
     return true
 end
 
@@ -889,97 +873,19 @@ end
 
 ## Cancellation points
 
-# The slow path of `@cancel_check`: `st` is the (non-zero) status byte
-# reported by the cancellation point.
-@noinline function handle_cancellation!(src::Union{Nothing, CancellationTokenSource}, st::UInt8)
-    ct = current_task()
-    if st & STATUS_PREEMPT_BIT != 0x00
-        # consume the cooperative-yield request
-        @atomic :monotonic ct.preempt_request = 0x00
-    end
-    # Without a source the cancellation point never reports a severity, which also lets
-    # inference drop the rest of this function for `src::Nothing`.
-    if src === nothing || st & SEVERITY_MASK == 0x00
-        # preempt-only (a pending yield request, or a preempt shootdown that
-        # reset this point): let another task run, then resume
-        yield()
-        return nothing
-    end
+# The slow path of `checkcancel`: `st` is the (non-zero) state byte of the
+# governing source.
+@noinline function handle_cancellation!(src::CancellationTokenSource, st::UInt8)
     # re-read: deliver the severity current at throw time, not the one the
     # fast path happened to observe
     st = @atomic :acquire src.state
     throw(CancellationRequest(st))
 end
 
-"""
-    Core.cancellation_point!(src::Union{Nothing, Core.CancellationTokenSource})::UInt8
-
-Check the cancellation state of `src` (see [`@cancel_check`](@ref)),
-additionally giving the optimizer license to establish this point as a
-cancellation reset point: when compiled, the source is published as the token
-binding governing the current computation, and the runtime may asynchronously
-unwind execution to the nearest preceding cancellation point when the source
-is cancelled. Returns a status byte: `0x00` if nothing is pending, the
-(nonzero) severity if `src` is cancelled, with the `0x40` bit set if a
-cooperative yield (preemption) was requested.
-
-!!! warning
-    `src` must remain otherwise reachable (e.g. through the scope binding
-    that supplied it, as [`@cancel_check`](@ref) guarantees) for the dynamic
-    extent of the region this point establishes: copies of the binding saved
-    by exception handlers are not GC-scanned.
-"""
-Core.cancellation_point!
-
-"""
-    @cancel_check
-    @cancel_check token
-
-Explicit cancellation point: checks whether the cancellation token governing
-the current computation has been cancelled and, if so, throws the
-corresponding [`CancellationRequest`](@ref). Long-running computational code
-should place these in its hot loops so that it can be cancelled.
-
-The one-argument form checks an explicitly provided
-`Union{Nothing, CancellationToken}` instead of resolving the scoped default
-token; use it to hoist the token lookup out of a tight loop.
-"""
-macro cancel_check()
-    quote
-        # compiled cancellation points are also GC safepoints, so that a tight
-        # polling loop cannot starve a concurrent stop-the-world.
-        # The loop re-executes the point whenever the slow path returns (a
-        # preempt-only status yields and resumes): the slow-path call tears
-        # down the point's reset region, so passing the point again is what
-        # re-establishes it before the code the region is meant to cover.
-        local s = default_cancel_source()
-        while true
-            local st = Core.cancellation_point!(s)::UInt8
-            st == 0x00 && break
-            handle_cancellation!(s, st)
-        end
-        nothing
-    end
-end
-
-macro cancel_check(tok)
-    quote
-        local t = $(esc(tok))
-        local s = t === nothing ? nothing : (t::CancellationToken).source
-        while true
-            local st = Core.cancellation_point!(s)::UInt8
-            st == 0x00 && break
-            handle_cancellation!(s, st)
-        end
-        nothing
-    end
-end
-
 # Throw the `CancellationRequest` if `src` is cancelled (level-triggered:
-# no per-task state is consulted). Unlike `@cancel_check` this is not a
-# compiled cancellation point (it opens no async-interruptible region).
-# This is the entry check of every blocking API taking a `cancel` keyword
-# argument: it must run *before* the operation has any side effects.
+# no per-task state is consulted). This is the entry check of every blocking
+# API taking a `cancel` keyword argument: it must run *before* the operation
+# has any side effects.
 @inline function checkcancel(src::CancellationTokenSource)
     st = @atomic :monotonic src.state
     st == 0x00 && return nothing
@@ -996,8 +902,9 @@ struct CancelTokenKey <: AbstractScopedValue{Union{Nothing, CancellationToken}} 
     CANCEL_TOKEN
 
 The scoped value carrying the [`CancellationToken`](@ref) that governs the
-current dynamic extent, or `nothing` if there is none. [`@cancel_check`](@ref)
-checks it, and tasks spawned within a scope inherit it.
+current dynamic extent, or `nothing` if there is none. Blocking operations
+taking a `cancel` keyword argument default to it, and tasks spawned within a
+scope inherit it.
 
 Establish a governing token with the standard scoped-value API
 ([`ScopedValues.@with`](@ref) / [`ScopedValues.with`](@ref)):
@@ -1044,11 +951,9 @@ end
 # `bound_cancel_default` flag is set, `bound_cancel_token` holds the source
 # this lookup would resolve to under the task's current scope (or `nothing`),
 # placed there by the slow path below. The flag is dropped wherever a scope
-# is installed (`with` enter and its inline exit) and by cancellation points
-# publishing a different source, and travels with the token through the
-# exception-handler and finalizer save/restore brackets, so a set flag
-# always describes the current scope (see bound_cancel_default in
-# src/julia_threads.h). Reconstructing the token from the cached source is
+# is installed (`with` enter and its inline exit), and travels with the token
+# through the exception-handler save/restore, so a set flag always describes
+# the current scope (see bound_cancel_default in src/julia_threads.h). Reconstructing the token from the cached source is
 # exact: `CancellationToken` is an immutable wrapper, so the copy is egal to
 # the token in the scope.
 @inline function default_cancel_token()
@@ -1072,19 +977,10 @@ end
             tok = something(v)::Union{Nothing, CancellationToken}
         end
     end
-    # Cache the resolution for the current scope. The store is an untagged
-    # unsafe point for CancellationLowering, so it cannot break a published
-    # reset region's (region, token) coherence: any live region is torn down
-    # before the store and re-established at the next cancellation point.
+    # Cache the resolution for the current scope.
     @atomic :monotonic ct.bound_cancel_token = tok === nothing ? nothing : tok.source
     setfield!(ct, :bound_cancel_default, 0x01)
     return tok
-end
-
-@inline function default_cancel_source()
-    tok = default_cancel_token()
-    tok === nothing && return nothing
-    return (tok::CancellationToken).source
 end
 
 ## `cancel` keyword-argument plumbing

@@ -633,10 +633,10 @@ static int jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
         return 0;
     // Mark the episode source cancelled (SAFE severity) here rather than
     // leaving it to the julia-side listener: the state byte is what every
-    // cancellation point and signal-delivery gate reads, so the signal-based
-    // delivery below is sufficient on its own even if the listener never
-    // gets to run (a single-threaded session, or every thread stuck in a
-    // long foreign call) - exactly the situation ^C must cut through. When
+    // cancellation check reads, so running code observes the interrupt at
+    // its next check even if the listener never gets to run (a
+    // single-threaded session, or every thread stuck in a long foreign
+    // call) - exactly the situation ^C must cut through. When
     // the listener does run, it finds the already-cancelled source and does
     // the remaining bookkeeping (waking parked waiters; see
     // `Base.redeliver!`).
@@ -661,37 +661,22 @@ static int jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
             break;
     }
     if (src != NULL) {
-        // Mark the whole descendant subtree, so the per-thread sends below
-        // can identify a governed running task - even one bound to a scoped
-        // descendant source - by its bound source's state alone.
+        // Mark the whole descendant subtree, so that a check of a scoped
+        // descendant source observes the cancellation by its state alone.
         jl_cancel_subtree_mark(src, 0x1);
-        // The heavy side of the asymmetric fence pairing with the
-        // compiler-order-only publication of task token bindings at
-        // cancellation points (the light side; mirrors
-        // `Threads.atomic_fence_heavy()` in `Base.cancel!`): after this,
-        // either the sends below observe a running task's binding, or the
-        // task's next cancellation point observes the state writes above.
-        jl_membarrier();
     }
     jl_safepoint_exclude_gc_end();
     // Everything below reads only per-thread state and tasks' strongly-held
     // fields - no weakly-reachable source pointers.
     if (src != NULL) {
-        // Mark the dispatch pending BEFORE the per-thread sends (idle
-        // threads keep the event loop moving until the listener claims it).
+        // Mark the dispatch pending (idle threads keep the event loop
+        // moving until the listener claims it).
         // Skipped when no listener is registered (e.g. a trimmed binary that
         // stubs it out): nothing would ever claim the flag, and the
         // scheduler's stay-awake gate would keep idle threads polling
         // forever.
         if (have_listener)
             jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
-        // Interrupt asynchronously-interruptible regions right away, on
-        // every thread: the request-5 dispatch delivers to tasks whose own
-        // bound token source is (now) cancelled, and is a no-op for threads
-        // running unrelated (or no) work.
-        int nthreads = jl_atomic_load_acquire(&jl_n_threads);
-        for (int16_t tid = 0; tid < (int16_t)nthreads; tid++)
-            jl_send_cancellation_signal(tid);
     }
     jl_atomic_store_release(&sigint_pending_gen, gen);
     deliver_sigint_notification();
@@ -904,54 +889,6 @@ JL_DLLEXPORT int jl_signal_take_pending(void)
             return sig;
     }
     return 0;
-}
-
-// jl_send_reset_signal is the static per-platform delivery defined by the
-// file included above; `reset_code` becomes the reset point's setjmp return.
-
-JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
-{
-    jl_send_reset_signal(tid, JL_RESET_CODE_CANCEL);
-}
-
-// Request a cooperative yield from the target thread's current task: mark
-// the task (honored at its next cancellation point) before kicking it out
-// of any published reset region.
-JL_DLLEXPORT void jl_send_preempt_signal(int16_t tid) JL_NOTSAFEPOINT
-{
-    if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
-        return;
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-    if (ptls2 == NULL)
-        return;
-    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    if (ct2 == NULL)
-        return;
-    jl_atomic_store_release(&ct2->preempt_request, 1);
-    jl_send_reset_signal(tid, JL_RESET_CODE_PREEMPT);
-}
-
-// Deliver cancellation shootdowns to every thread whose current task is
-// bound to a now-cancelled token source; called by `cancel!` after
-// propagation and a heavy fence. The check is only a hint (the sender
-// re-validates; a missed task recovers level-triggered), and the unrooted
-// token read is safe because this thread runs GC-unsafe.
-JL_DLLEXPORT void jl_shootdown_cancelled_tasks(void) JL_NOTSAFEPOINT
-{
-    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
-    for (int16_t tid = 0; tid < nthreads; tid++) {
-        jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-        if (ptls2 == NULL)
-            continue;
-        jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-        if (ct2 == NULL)
-            continue;
-        jl_value_t *bound = jl_atomic_load_relaxed(&ct2->bound_cancel_token);
-        if (bound == NULL || bound == jl_nothing ||
-            jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) == 0)
-            continue;
-        jl_send_cancellation_signal(tid);
-    }
 }
 
 static uintptr_t jl_get_pc_from_ctx(const void *_ctx)

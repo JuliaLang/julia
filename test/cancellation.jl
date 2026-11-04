@@ -6,6 +6,11 @@ using Base: cancel!, CancellationRequest, CancellationToken, CancellationTokenSo
 using Base.ScopedValues: with, ScopedValue
 using Libdl
 
+# A polling check of the governing token: the scoped default, or an explicit
+# one. The safepoint keeps a spinning victim from blocking a collection
+# started by the thread that is about to cancel it.
+cancel_check(tok=Base.default_cancel_token()) = (GC.safepoint(); Base.checkcancel(tok))
+
 # Threads.@spawn-style cancellable task (non-sticky, explicitly on the
 # default pool - a compute-bound victim must not land on the interactive/io
 # thread); returns (task, source).
@@ -299,16 +304,16 @@ end
 end
 
 @testset "cancellation points" begin
-    # @cancel_check with no scoped token is a no-op
-    @test with(() -> (Base.@cancel_check; :ran), CANCEL_TOKEN => nothing) === :ran
-    @test (Base.@cancel_check; :ran) === :ran
+    # a check with no scoped token is a no-op
+    @test with(() -> (cancel_check(); :ran), CANCEL_TOKEN => nothing) === :ran
+    @test (cancel_check(); :ran) === :ran
 
-    # a cancellation point under a cancelled scope throws the request
+    # a check under a cancelled scope throws the request
     src = CancellationTokenSource()
     cancel!(src, CANCEL_REQUEST_ABANDON_EXTERNAL)
     err = with(CANCEL_TOKEN => CancellationToken(src)) do
         try
-            Base.@cancel_check
+            cancel_check()
             nothing
         catch e
             e
@@ -317,30 +322,21 @@ end
     @test err isa CancellationRequest
     @test err == CANCEL_REQUEST_ABANDON_EXTERNAL
 
-    # the explicit-token form checks the given token, ignoring the scope
+    # an explicit token is checked instead of the scope
     live = CancellationToken(CancellationTokenSource())
     dead = CancellationToken(src)
     with(CANCEL_TOKEN => dead) do
-        @test (Base.@cancel_check(live); :ran) === :ran
+        @test (cancel_check(live); :ran) === :ran
     end
-    @test_throws CancellationRequest Base.@cancel_check(dead)
-    @test (Base.@cancel_check(nothing); :ran) === :ran
+    @test_throws CancellationRequest cancel_check(dead)
+    @test (cancel_check(nothing); :ran) === :ran
 
-    # without a source, a cancellation point reports at most a preemption request, so
-    # the slow path neither asserts a source nor throws a request
-    let ct = current_task()
-        @atomic :monotonic ct.preempt_request = 0x01
-        @test (Base.@cancel_check(nothing); :ran) === :ran
-        @test (@atomic :monotonic ct.preempt_request) == 0x00
-    end
-    # JET.@test_call println(::Float64)
-
-    # level-triggered: after catching one request, the next point throws again
+    # level-triggered: after catching one request, the next check throws again
     with(CANCEL_TOKEN => dead) do
         caught = 0
         for _ in 1:2
             try
-                Base.@cancel_check
+                cancel_check()
             catch e
                 e isa CancellationRequest || rethrow()
                 caught += 1
@@ -349,16 +345,16 @@ end
         @test caught == 2
         # shielding scopes the token out
         with(CANCEL_TOKEN => nothing) do
-            @test (Base.@cancel_check; :ran) === :ran
+            @test (cancel_check(); :ran) === :ran
         end
     end
 
     # a cancellation against a nested source also throws from the nested
-    # scope's cancellation points
+    # scope's checks
     qroot = CancellationTokenSource()
     qchild = CancellationTokenSource(CancellationToken(qroot))
     cancel!(qroot)
-    @test_throws CancellationRequest with(() -> Base.@cancel_check,
+    @test_throws CancellationRequest with(cancel_check,
                                           CANCEL_TOKEN => CancellationToken(qchild))
 end
 
@@ -385,21 +381,10 @@ end
     # after the scope exits, the ambient default is back
     @test Base.default_cancel_token() === ambient
 
-    # a cancellation point that publishes a *different* explicit source must
-    # not leave the cache claiming it as the scoped default
-    other = CancellationTokenSource()
-    with(CANCEL_TOKEN => tok) do
-        @test Base.default_cancel_token() === tok      # warm the cache
-        Base.@cancel_check CancellationToken(other)    # rebind to `other`
-        @test Base.default_cancel_token() === tok      # still the scoped one
-        Base.@cancel_check nothing                     # explicit clear
-        @test Base.default_cancel_token() === tok
-    end
-
-    # the same-source cancellation point keeps a warm cache intact
+    # a check keeps a warm cache intact
     with(CANCEL_TOKEN => tok) do
         @test Base.default_cancel_token() === tok
-        Base.@cancel_check
+        cancel_check()
         @test getfield(current_task(), :bound_cancel_default) === 0x01
         @test Base.default_cancel_token() === tok
     end
@@ -453,19 +438,19 @@ end
     psrc = CancellationTokenSource()
     with(CANCEL_TOKEN => CancellationToken(psrc)) do
         @test Base.default_cancel_token() === CancellationToken(psrc)
-        Base.@cancel_check
+        cancel_check()
         cancel!(psrc)
-        @test_throws CancellationRequest Base.@cancel_check
+        @test_throws CancellationRequest cancel_check()
     end
 end
 
 @testset "cooperative cancellation of running tasks" begin
-    # a @cancel_check polling loop is stopped cross-thread by cancel!
+    # a polling loop is stopped cross-thread by cancel!
     started = Threads.Atomic{Bool}(false)
     t, src = cancellable_spawn() do
         started[] = true
         while true
-            Base.@cancel_check
+            cancel_check()
             yield() # let the canceller run when there is only one thread
         end
     end
@@ -480,12 +465,12 @@ end
     t2, src2 = cancellable_spawn() do
         inner = Threads.@spawn begin
             while true
-                Base.@cancel_check
+                cancel_check()
                 yield()
             end
         end
         # A cancellable wait would be interrupted by the delivery before
-        # `inner` observes the cancellation at its own cancellation point;
+        # `inner` observes the cancellation at its own check;
         # the assertion is about `inner`'s own observation, so wait for its
         # completion shielded.
         Base._wait(inner, nothing)
@@ -502,7 +487,7 @@ end
     tok3 = CancellationToken(src3)
     t3 = Threads.@spawn begin
         while true
-            Base.@cancel_check tok3
+            cancel_check(tok3)
             yield()
         end
     end
@@ -511,67 +496,6 @@ end
     @test timedwait(() -> istaskdone(t3), 30.0) == :ok
     @test t3.result isa CancellationRequest
     @test t3.result == CANCEL_REQUEST_ABANDON_EXTERNAL
-end
-
-# A pure spin in the frame of the cancellation point itself: the compiled
-# region a point publishes ends at the first store or call, so only compute
-# that stays in the establishing frame - loads and arithmetic - can be
-# interrupted by an asynchronous reset. (Calling out to a spin, however
-# effect-free, would close the region before the call.)
-function _reset_victim(started::Threads.Atomic{Bool})
-    Threads.atomic_xchg!(started, true)
-    # The compiled cancellation point establishes the reset region and binds
-    # the scoped source; nothing after it tears the region down.
-    Base.@cancel_check
-    a = 0
-    while a >= 0
-        a = (a + 1) & typemax(Int)
-    end
-    return a
-end
-
-@testset "asynchronous reset delivery" begin
-    # `cancel!` delivers the shootdown itself: the reset (a signal on Unix,
-    # suspend + context redirect on Windows/Darwin) longjmps back to the
-    # reset point, whose re-executed check observes the cancellation and
-    # throws. The victim never polls, and a signal racing the point's own
-    # execution is covered by the point's level-triggered check.
-    # Needs a second default-pool thread to keep the driver running while
-    # the victim spins.
-    if Threads.nthreads(:default) >= 2
-        started = Threads.Atomic{Bool}(false)
-        t, src = cancellable_spawn(() -> _reset_victim(started))
-        @test timedwait(() -> started[], 30.0) == :ok
-        cancel!(src)
-        # rely on the test harness watchdog for hangs, like other testsets
-        wait(t; throw=false)
-        @test istaskfailed(t)
-        @test t.result isa CancellationRequest
-    end
-end
-
-@testset "preempt shootdown" begin
-    # A preempt shootdown resets the task to its cancellation point without
-    # any source being cancelled: the re-executed point observes the
-    # JL_RESET_CODE_PREEMPT setjmp return (the 0x40 status bit), yields
-    # cooperatively, and resumes - it must never kill the task. A subsequent
-    # cancellation then must.
-    if Threads.nthreads(:default) >= 2
-        started = Threads.Atomic{Bool}(false)
-        t, src = cancellable_spawn(() -> _reset_victim(started))
-        @test timedwait(() -> started[], 30.0) == :ok
-        for _ in 1:50
-            tid = ccall(:jl_get_task_tid, Int16, (Any,), t)
-            tid >= 0 && ccall(:jl_send_preempt_signal, Cvoid, (Int16,), tid)
-            sleep(0.005)
-        end
-        @test !istaskdone(t)
-        cancel!(src) # shoots down the (re-established) region itself
-        # rely on the test harness watchdog for hangs, like other testsets
-        wait(t; throw=false)
-        @test istaskfailed(t)
-        @test t.result isa CancellationRequest
-    end
 end
 
 ## Request-delivery tests (cancellation of waiting tasks)
@@ -982,7 +906,7 @@ end
     # disable_sigint marks code that must not be unwound (e.g. a Julia callback
     # under a C frame): cancellation of the scoped token lands after the
     # region, and reenable_sigint restores the token the region shielded
-    done() = (Base.@cancel_check; :done)
+    done() = (cancel_check(); :done)
     function outcome(f)
         try
             f()
@@ -1348,7 +1272,7 @@ end
     nwritten3 = Ref{Any}(nothing)
     t3 = @async begin
         nwritten3[] = writepartial(p3.in, big; cancel=tok3)
-        Base.@cancel_check tok3
+        cancel_check(tok3)
     end
     sleep(0.5)
     cancel!(src3)
@@ -1486,7 +1410,7 @@ end
         nwritten = Ref{Any}(nothing)
         t, src = cancellable() do
             nwritten[] = writepartial(p2.in, big)
-            Base.@cancel_check
+            cancel_check()
         end
         @test timedwait(() -> parked_on(t, p2.in), 10.0) == :ok
         cancel!(src)
@@ -1983,7 +1907,7 @@ const collatz_code = quote
         while true
             j = i
             while true
-                Base.@cancel_check
+                cancel_check()
                 j = collatz(j)
                 j == 1 && break
                 j == i && error("$j is a collatz counterexample")
@@ -2429,10 +2353,9 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
     # cancelling a BigInt computation never yanks control out of libgmp in
     # an unsafe spot the way the old asynchronous InterruptException
     # delivery could (corrupting the heap - issue #56545): delivery lands at
-    # the loop's own cancellation point, and every libgmp call clears the
-    # reset region before it runs - and BigInt arithmetic in the session
-    # works correctly afterwards
-    sendline("println(\"EVAL-6\"); let b = big(3); while true; Base.@cancel_check; b = b*b % (big(10)^200); end; end")
+    # the loop's own check - and BigInt arithmetic in the session works
+    # correctly afterwards
+    sendline("println(\"EVAL-6\"); let b = big(3); while true; Base.checkcancel(Base.default_cancel_token()); b = b*b % (big(10)^200); end; end")
     expect("EVAL-6")
     sleep(0.5)
     kill(p, Base.SIGINT)

@@ -74,7 +74,6 @@ Base.cancel!
 Base.iscancelled
 Base.cancel_severity
 Base.CANCEL_TOKEN
-Base.@cancel_check
 Base.CANCEL_REQUEST_SAFE
 Base.CANCEL_REQUEST_ABANDON_EXTERNAL
 Base.CANCEL_REQUEST_ABANDON_ALL

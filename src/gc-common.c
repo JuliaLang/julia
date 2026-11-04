@@ -255,17 +255,9 @@ static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOI
 // function returns.
 static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT_LEAVE_WITH_CANSAFEPOINT
 {
-    // Finalizer bookkeeping is not reset-safe: no compiled reset region can
-    // be published here, since every call out of such a region (including
-    // the allocation whose safepoint ran these finalizers) clears it first.
-    assert(jl_atomic_load_relaxed(&ct->reset_ctx) == NULL);
     // Avoid marking `ct` as non-migratable via an `@async` task (as noted in the docstring
     // of `finalizer`) in a finalizer:
     uint8_t sticky = ct->sticky;
-    // Finalizers hijack the current task, so preserve its token binding.
-    jl_value_t *bound_token = jl_atomic_load_relaxed(&ct->bound_cancel_token);
-    uint8_t bound_default = ct->bound_cancel_default;
-    JL_GC_PUSH1(&bound_token);
     // empty out the first two entries for the GC frame
     arraylist_push(list, list->items[0]);
     arraylist_push(list, list->items[1]);
@@ -281,10 +273,6 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     // matches the jl_gc_push_arraylist above
     JL_GC_POP();
     ct->sticky = sticky;
-    jl_gc_wb_current_task(ct, (void*)&ct->bound_cancel_token, bound_token);
-    jl_atomic_store_relaxed(&ct->bound_cancel_token, bound_token);
-    ct->bound_cancel_default = bound_default;
-    JL_GC_POP(); // matches the JL_GC_PUSH1 above
 }
 
 static uint64_t finalizer_rngState[JL_RNG_SIZE];
