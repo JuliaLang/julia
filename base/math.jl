@@ -1322,22 +1322,14 @@ sincos(a::Float16) = Float16.(sincos(Float32(a)))
 for f in (:sin, :cos, :tan, :asin, :atan, :acos,
           :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
           :exp, :exp2, :exp10, :expm1, :log, :log2, :log10, :log1p,
-          :exponent, :sqrt, :cbrt, :sinpi, :cospi, :tanpi)
+          :exponent, :sqrt, :cbrt, :sinpi, :cospi, :sincospi, :tanpi)
     @eval function ($f)(x::Real)
         xf = float(x)
         xf isa typeof(x) && throw(MethodError($f, (x,)))
         return ($f)(xf)
     end
-    @eval $(f)(::Missing) = missing
+    @eval $(f)(::Missing) = $(f === :sincospi ? :(missing, missing) : (:missing))
 end
-# Same Real fallback the shared loop emits; sincospi is omitted there so
-# missing returns a (sine, cosine) tuple, matching sincos and sincosd.
-function sincospi(x::Real)
-    xf = float(x)
-    xf isa typeof(x) && throw(MethodError(sincospi, (x,)))
-    return sincospi(xf)
-end
-sincospi(::Missing) = (missing, missing)
 
 for f in (:atan, :hypot, :log)
     @eval $(f)(::Missing, ::Missing) = missing
