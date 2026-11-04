@@ -62,28 +62,32 @@ LogBL(::Val{2}, ::Type{Float32}) = 0.0f0
 LogBL(::Val{:ℯ}, ::Type{Float32}) = 0.00021219444f0
 LogBL(::Val{10}, ::Type{Float32}) = 0.00023953558f0
 
-# Range reduced kernels
+# Range reduced kernels, base^x - 1 on the reduced range.
+# For bases 2 and 10 the leading term x*c1 goes into a single fma rather than computing
+# x*q(x) with q ≈ c1 rounded first: a one-ulp step in q times |x| can outweigh a one-ulp step
+# in x times c1, which made exp2 and exp10 non-monotone just below 0. Base ℯ has no such
+# violations in the cheaper form.
 function expm1b_kernel(::Val{2}, x::Float64)
-    return x * evalpoly(x, (0.6931471805599393, 0.24022650695910058,
-                            0.05550411502333161, 0.009618129548366803))
+    return muladd(x, 0.6931471805599393, (x*x) * evalpoly(x, (0.24022650695910058,
+                            0.05550411502333161, 0.009618129548366803)))
 end
 function expm1b_kernel(::Val{:ℯ}, x::Float64)
     return x * evalpoly(x, (0.9999999999999912, 0.4999999999999997,
                             0.1666666857598779, 0.04166666857598777))
 end
 function expm1b_kernel(::Val{10}, x::Float64)
-    return x * evalpoly(x, (2.3025850929940255, 2.6509490552391974,
-                            2.034678825384765, 1.1712552025835192))
+    return muladd(x, 2.3025850929940255, (x*x) * evalpoly(x, (2.6509490552391974,
+                            2.034678825384765, 1.1712552025835192)))
 end
 
 function expm1b_kernel(::Val{2}, x::Float32)
-    return x * evalpoly(x, (0.6931472f0, 0.2402265f0, 0.05550411f0))
+    return muladd(x, 0.6931472f0, (x*x) * muladd(x, 0.05550411f0, 0.2402265f0))
 end
 function expm1b_kernel(::Val{:ℯ}, x::Float32)
     return x * evalpoly(x, (1.0f0, 0.5f0, 0.16666667f0))
 end
 function expm1b_kernel(::Val{10}, x::Float32)
-    return x * evalpoly(x, (2.3025851f0, 2.650949f0, 2.0346787f0))
+    return muladd(x, 2.3025851f0, (x*x) * muladd(x, 2.0346787f0, 2.650949f0))
 end
 # Kernels for Float16 (evaluated in Float32 on |r| <= log(base, 2)/2)
 function expb_kernel(::Val{2}, x::Float32)
