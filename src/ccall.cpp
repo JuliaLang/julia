@@ -2362,7 +2362,9 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     ((CallInst*)ret)->setAttributes(attributes);
 
     if (reset_safe_call) {
-        // A reset_safe annotation is just propagated to the LLVM pass
+        // A reset_safe annotation is just propagated to the LLVM pass. (When
+        // llvmf is a `jlplt_` thunk, its first-use resolver runs inside the
+        // spanned region too: jl_load_and_lookup unpublishes it itself.)
         ret->setMetadata("julia.reset_safe", MDNode::get(ctx.builder.getContext(), {}));
     }
 
