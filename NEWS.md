@@ -33,6 +33,8 @@ New library functions
 * `bitsizeof(x)` returns the declared width in bits of a primitive type, or of the primitive type
   of `x`, excluding the padding that `sizeof` includes. It throws for any other type or value ([#61359]).
 * `filterfirst(f, itr)` returns the first element of `itr` for which `f` returns `true` ([#60913]).
+* `Base.haszero(T)` returns whether `zero(T)` is the zero of every value of type `T`. `zero(A)` for
+  an array `A` now uses it, and computes the zeros from the elements when it is `false` ([#61205]).
 
 New library features
 --------------------

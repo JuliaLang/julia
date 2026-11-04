@@ -111,6 +111,7 @@ public
 
 # Numbers
     decompose,
+    haszero,
 
 # C interface
     cconvert,

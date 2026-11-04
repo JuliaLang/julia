@@ -2111,6 +2111,18 @@ end
     @test zero([CustomNumber(5.0)]) == [CustomNumber(0.0)]
     @test zero(Union{CustomNumber, Missing}[missing]) == [CustomNumber(0.0)]
     @test zero(Vector{Union{CustomNumber, Missing}}(undef, 1)) == [CustomNumber(0.0)]
+
+    # zero depends on the value, like physical units stored in each value
+    struct ValueZero <: Number
+        val::Int
+        unit::Int
+    end
+    Base.zero(x::ValueZero) = ValueZero(0, x.unit)
+    Base.haszero(::Type{ValueZero}) = false
+    x = [ValueZero(1, 2), ValueZero(3, 4)]
+    @test zero(view(x, 2:2)) == [ValueZero(0, 4)]
+    @test isequal(zero(Union{ValueZero, Missing}[missing, x[1]]), [missing, ValueZero(0, 2)])
+    @test Base.haszero(Float64) && Base.haszero(Union{Int, Missing}) && !Base.haszero(Number)
 end
 
 @testset "`_prechecked_iterate` optimization" begin

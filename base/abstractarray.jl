@@ -1229,8 +1229,8 @@ end
 copymutable(itr) = collect(itr)
 copymutable(a::Array) = copy(a)
 
-zero(x::AbstractArray{T}) where {T<:Number} = fill!(similar(x, typeof(zero(T))), zero(T))
-zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} = fill!(similar(x, typeof(zero(S))), zero(S))
+zero(x::AbstractArray{T}) where {T<:Union{Missing, Number}} =
+    haszero(T) ? fill!(similar(x, typeof(zero(T))), zero(T)) : map(zero, x)
 zero(x::AbstractArray) = map(zero, x)
 
 function _one(unit::T, mat::AbstractMatrix) where {T}
