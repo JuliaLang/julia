@@ -88,7 +88,7 @@ VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
         map(x->x isa Integer ? UInt64(x) : String(x), pre),
         map(x->x isa Integer ? UInt64(x) : String(x), bld))
 
-VersionNumber(v::Tuple) = VersionNumber(v...)
+VersionNumber(v::Tuple) = VersionNumber(v...)::VersionNumber
 VersionNumber(v::VersionNumber) = v
 
 function print(io::IO, v::VersionNumber)
