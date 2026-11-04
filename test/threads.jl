@@ -21,8 +21,7 @@ include("print_process_affinity.jl") # import `uv_thread_getaffinity`
 # whether `t` currently has an armed wait registration on `waitee`
 function parked_on(t::Task, @nospecialize(waitee))
     w = @atomic t.waiting_on
-    waitee isa Task && (waitee = waitee.donenotify)
-    return w isa Base.WaitEntry && Base._find_slot(w, waitee) != 0
+    return w isa Base.WaitEntry && w.queue === waitee
 end
 
 # simple sanity tests for locks under cooperative concurrent access
@@ -60,10 +59,10 @@ end
         lock(c1)
         lock(c2)
         try
-            w = Base.schedule_on_notify!(c1, t)
-            @test_throws ConcurrencyViolationError Base.schedule_on_notify!(c2, t)
+            w = Base._wait2(c1, t)
+            @test_throws ConcurrencyViolationError Base._wait2(c2, t)
             @test (@atomic t.waiting_on) === w
-            @test length(Base.waitqueue(c1)) == 1
+            @test length(c1.waitq) == 1
             @test isempty(c2.waitq)
             @test notify(c1) == 1
             @test notify(c2) == 0
@@ -77,11 +76,11 @@ end
         target1 = @task nothing
         target2 = @task nothing
         waiter = @task nothing
-        Base.schedule_on_notify!(target1, waiter)
+        Base._wait2(target1, waiter)
         w = @atomic waiter.waiting_on
-        @test_throws ConcurrencyViolationError Base.schedule_on_notify!(target2, waiter)
+        @test_throws ConcurrencyViolationError Base._wait2(target2, waiter)
         @test (@atomic waiter.waiting_on) === w
-        @test length(Base.waitqueue(target1)) == 1
+        @test length((target1.donenotify::Base.ThreadSynchronizer).waitq) == 1
         donenotify2 = target2.donenotify::Base.ThreadSynchronizer
         @test isempty(donenotify2.waitq)
         gotlock = trylock(donenotify2)
@@ -101,12 +100,12 @@ end
         live = @task nothing
         lock(cond)
         try
-            w_stale = Base.schedule_on_notify!(cond, stale)
+            w_stale = Base._wait2(cond, stale)
             @test !isempty(cond)
             @test Base.claim_wait(stale, w_stale)
             @test !isempty(cond.waitq)
             @test isempty(cond)
-            w_live = Base.schedule_on_notify!(cond, live)
+            w_live = Base._wait2(cond, live)
             @test !isempty(cond)
             @test Base.claim_wait(live, w_live)
             @test isempty(cond)
@@ -138,7 +137,7 @@ end
         # eager unlink: entry gone before t even runs
         @test !parked_on(t, cond)
         @test isempty(cond.waitq)
-        @test Base._slot_owner(w::Base.WaitEntry, 1) === nothing # freed for reuse
+        @test (w::Base.WaitEntry).queue === nothing # freed for reuse
         lock(cond)
         @test notify(cond) == 0
         unlock(cond)
@@ -234,7 +233,7 @@ end
             # stays linked for us (the "notifier") to pop
             wait(@async schedule(t, ErrorException("interrupt"), error=true))
             @test popfirst!(Base.waitqueue(cond)) === w
-            @test Base._slot_owner(w::Base.WaitEntry, 1) === nothing
+            @test (w::Base.WaitEntry).queue === nothing
             for _ in 1:1000
                 parked_on(t, cond.lock.cond_wait) && break
                 yield()
@@ -303,7 +302,7 @@ end
     # the cached entries were recycled, not replaced
     @test t.cached_wait_entry === w_spawned
     @test current_task().cached_wait_entry === w_driver
-    @test Base._slot_owner(w_driver::Base.WaitEntry, 1) === nothing # free between parks
+    @test (w_driver::Base.WaitEntry).queue === nothing # free between parks
     if Base.JLOptions().code_coverage == 0
         @test allocated == 0
     end

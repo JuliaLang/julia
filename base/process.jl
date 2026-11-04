@@ -97,15 +97,7 @@ function as_cpumask(cpus::Vector{UInt16})
 end
 
 # handle marshalling of `Cmd` arguments from Julia to C
-@noinline function _spawn_primitive(file, cmd::Cmd, stdio::SpawnIOs,
-                                    tok::MaybeToken=default_cancel_token())
-    # Entry cancellation check before the child exists: a spawn under an
-    # already-cancelled token must not run the command (its side effects
-    # cannot be taken back). `tok` is the *resolved* token of the public
-    # operation (run/open/success/read), threaded down here so an explicit
-    # token - or an explicit `cancel = nothing` shield - governs the spawn
-    # itself, not whatever the ambient scope happens to be.
-    @cancel_check tok
+@noinline function _spawn_primitive(file, cmd::Cmd, stdio::SpawnIOs)
     loop = eventloop()
     cpumask = cmd.cpus
     cpumask === nothing || (cpumask = as_cpumask(cpumask))
@@ -158,28 +150,24 @@ end
     end
 end
 
-# The `tok::MaybeToken` threaded through the _spawn chain is the resolved
-# token of the public operation; see _spawn_primitive.
-_spawn(cmds::AbstractCmd, tok::MaybeToken=default_cancel_token()) =
-    _spawn(cmds, SpawnIOs(), tok)
+_spawn(cmds::AbstractCmd) = _spawn(cmds, SpawnIOs())
 
-function _spawn(cmd::AbstractCmd, stdios::Vector{Redirectable},
-                tok::MaybeToken=default_cancel_token())
+function _spawn(cmd::AbstractCmd, stdios::Vector{Redirectable})
     pp = setup_stdios(stdios) do stdios
-        return _spawn(cmd, stdios, tok)
+        return _spawn(cmd, stdios)
     end
     return pp
 end
 
 # optimization: we can spawn `Cmd` directly without allocating the ProcessChain
-function _spawn(cmd::Cmd, stdios::SpawnIOs, tok::MaybeToken=default_cancel_token())
+function _spawn(cmd::Cmd, stdios::SpawnIOs)
     isempty(cmd.exec) && throw(ArgumentError("cannot spawn empty command"))
-    return _spawn_primitive(cmd.exec[1], cmd, stdios, tok)
+    return _spawn_primitive(cmd.exec[1], cmd, stdios)
 end
 
 # assume that having a ProcessChain means that the stdio are setup
-function _spawn(cmds::AbstractCmd, stdios::SpawnIOs, tok::MaybeToken=default_cancel_token())
-    return _spawn(cmds, stdios, ProcessChain(), tok)
+function _spawn(cmds::AbstractCmd, stdios::SpawnIOs)
+    return _spawn(cmds, stdios, ProcessChain())
 end
 
 # helper function for making a copy of a SpawnIOs, with replacement
@@ -191,35 +179,24 @@ function _stdio_copy(stdios::SpawnIOs, fd::Int, @nospecialize replace)
     return new
 end
 
-function _spawn(redirect::CmdRedirect, stdios::SpawnIOs, tok::MaybeToken=default_cancel_token())
+function _spawn(redirect::CmdRedirect, stdios::SpawnIOs, args...)
     fdnum = redirect.stream_no + 1
     io, close_io = setup_stdio(redirect.handle, redirect.readable)
     try
         stdios = _stdio_copy(stdios, fdnum, io)
-        return _spawn(redirect.cmd, stdios, tok)
+        return _spawn(redirect.cmd, stdios, args...)
     finally
         close_io && close_stdio(io)
     end
 end
 
-function _spawn(redirect::CmdRedirect, stdios::SpawnIOs, chain::ProcessChain, tok::MaybeToken)
-    fdnum = redirect.stream_no + 1
-    io, close_io = setup_stdio(redirect.handle, redirect.readable)
-    try
-        stdios = _stdio_copy(stdios, fdnum, io)
-        return _spawn(redirect.cmd, stdios, chain, tok)
-    finally
-        close_io && close_stdio(io)
-    end
-end
-
-function _spawn(cmds::OrCmds, stdios::SpawnIOs, chain::ProcessChain, tok::MaybeToken)
+function _spawn(cmds::OrCmds, stdios::SpawnIOs, chain::ProcessChain)
     in_pipe, out_pipe = link_pipe(false, false)
     try
         stdios_left = _stdio_copy(stdios, 2, out_pipe)
-        _spawn(cmds.a, stdios_left, chain, tok)
+        _spawn(cmds.a, stdios_left, chain)
         stdios_right = _stdio_copy(stdios, 1, in_pipe)
-        _spawn(cmds.b, stdios_right, chain, tok)
+        _spawn(cmds.b, stdios_right, chain)
     finally
         close_pipe_sync(out_pipe)
         close_pipe_sync(in_pipe)
@@ -227,13 +204,13 @@ function _spawn(cmds::OrCmds, stdios::SpawnIOs, chain::ProcessChain, tok::MaybeT
     return chain
 end
 
-function _spawn(cmds::ErrOrCmds, stdios::SpawnIOs, chain::ProcessChain, tok::MaybeToken)
+function _spawn(cmds::ErrOrCmds, stdios::SpawnIOs, chain::ProcessChain)
     in_pipe, out_pipe = link_pipe(false, false)
     try
         stdios_left = _stdio_copy(stdios, 3, out_pipe)
-        _spawn(cmds.a, stdios_left, chain, tok)
+        _spawn(cmds.a, stdios_left, chain)
         stdios_right = _stdio_copy(stdios, 1, in_pipe)
-        _spawn(cmds.b, stdios_right, chain, tok)
+        _spawn(cmds.b, stdios_right, chain)
     finally
         close_pipe_sync(out_pipe)
         close_pipe_sync(in_pipe)
@@ -241,15 +218,15 @@ function _spawn(cmds::ErrOrCmds, stdios::SpawnIOs, chain::ProcessChain, tok::May
     return chain
 end
 
-function _spawn(cmds::AndCmds, stdios::SpawnIOs, chain::ProcessChain, tok::MaybeToken)
-    _spawn(cmds.a, stdios, chain, tok)
-    _spawn(cmds.b, stdios, chain, tok)
+function _spawn(cmds::AndCmds, stdios::SpawnIOs, chain::ProcessChain)
+    _spawn(cmds.a, stdios, chain)
+    _spawn(cmds.b, stdios, chain)
     return chain
 end
 
-function _spawn(cmd::Cmd, stdios::SpawnIOs, chain::ProcessChain, tok::MaybeToken)
+function _spawn(cmd::Cmd, stdios::SpawnIOs, chain::ProcessChain)
     isempty(cmd.exec) && throw(ArgumentError("cannot spawn empty command"))
-    pp = _spawn_primitive(cmd.exec[1], cmd, stdios, tok)
+    pp = _spawn_primitive(cmd.exec[1], cmd, stdios)
     push!(chain.processes, pp)
     return chain
 end
@@ -380,14 +357,12 @@ spawn_opts_swallow(in::Redirectable=devnull, out::Redirectable=devnull, err::Red
 spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::Redirectable=RawFD(2), extra::Redirectable...) =
     Redirectable[in, out, err, extra...]
 
-function eachline(cmd::AbstractCmd; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
-    tok = resolve_cancel_token(cancel)
-    @cancel_check tok
+function eachline(cmd::AbstractCmd; keep::Bool=false)
     out = PipeEndpoint()
-    processes = _spawn(cmd, Redirectable[devnull, out, stderr], tok)
+    processes = _spawn(cmd, Redirectable[devnull, out, stderr])
     # if the user consumes all the data, also check process exit status for success
-    ondone = () -> (success(processes; cancel=tok) || pipeline_error(processes); nothing)
-    return EachLine(out; keep, ondone, cancel=tok)::EachLine
+    ondone = () -> (success(processes) || pipeline_error(processes); nothing)
+    return EachLine(out, keep=keep, ondone=ondone)::EachLine
 end
 
 """
@@ -404,14 +379,13 @@ Possible mode strings are:
 | `r+` | read, write | `read = true, write = true`      |
 | `w+` | read, write | `read = true, write = true`      |
 """
-function open(cmds::AbstractCmd, mode::AbstractString, stdio::Redirectable=devnull;
-              cancel::CancelTokenArg=DEFAULT_CANCEL)
+function open(cmds::AbstractCmd, mode::AbstractString, stdio::Redirectable=devnull)
     if mode == "r+" || mode == "w+"
-        return open(cmds, stdio, read = true, write = true; cancel)
+        return open(cmds, stdio, read = true, write = true)
     elseif mode == "r"
-        return open(cmds, stdio; cancel)
+        return open(cmds, stdio)
     elseif mode == "w"
-        return open(cmds, stdio, write = true; cancel)
+        return open(cmds, stdio, write = true)
     else
         throw(ArgumentError("mode must be \"r\", \"w\", \"r+\", or \"w+\", not $(repr(mode))"))
     end
@@ -428,27 +402,25 @@ the process's standard input and `stdio` optionally specifies the process's stan
 stream.
 The process's standard error stream is connected to the current global `stderr`.
 """
-function open(cmds::AbstractCmd, stdio::Redirectable=devnull; write::Bool=false, read::Bool=!write,
-              cancel::CancelTokenArg=DEFAULT_CANCEL)
-    tok = resolve_cancel_token(cancel)
+function open(cmds::AbstractCmd, stdio::Redirectable=devnull; write::Bool=false, read::Bool=!write)
     if read && write
         stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in read-write mode"))
         in = PipeEndpoint()
         out = PipeEndpoint()
-        processes = _spawn(cmds, Redirectable[in, out, stderr], tok)
+        processes = _spawn(cmds, Redirectable[in, out, stderr])
         processes.in = in
         processes.out = out
     elseif read
         out = PipeEndpoint()
-        processes = _spawn(cmds, Redirectable[stdio, out, stderr], tok)
+        processes = _spawn(cmds, Redirectable[stdio, out, stderr])
         processes.out = out
     elseif write
         in = PipeEndpoint()
-        processes = _spawn(cmds, Redirectable[in, stdio, stderr], tok)
+        processes = _spawn(cmds, Redirectable[in, stdio, stderr])
         processes.in = in
     else
         stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in no-access mode"))
-        processes = _spawn(cmds, Redirectable[devnull, devnull, stderr], tok)
+        processes = _spawn(cmds, Redirectable[devnull, devnull, stderr])
     end
     return processes
 end
@@ -512,12 +484,10 @@ end
 
 Run `command` and return the resulting output as an array of bytes.
 """
-function read(cmd::AbstractCmd; cancel::CancelTokenArg=DEFAULT_CANCEL)
-    tok = resolve_cancel_token(cancel)
-    @cancel_check tok
-    procs = open(cmd, "r", devnull; cancel=tok)
-    bytes = read(procs.out; cancel=tok)
-    success(procs; cancel=tok) || pipeline_error(procs)
+function read(cmd::AbstractCmd)
+    procs = open(cmd, "r", devnull)
+    bytes = read(procs.out)
+    success(procs) || pipeline_error(procs)
     return bytes::Vector{UInt8}
 end
 
@@ -526,8 +496,7 @@ end
 
 Run `command` and return the resulting output as a `String`.
 """
-read(cmd::AbstractCmd, ::Type{String}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    String(read(cmd; cancel))::String
+read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))::String
 
 """
     run(command, args...; wait::Bool = true)
@@ -550,15 +519,13 @@ Use [`pipeline`](@ref) to control I/O redirection.
 
 See also: [`Cmd`](@ref).
 """
-function run(cmds::AbstractCmd, args...; wait::Bool = true, cancel::CancelTokenArg=DEFAULT_CANCEL)
-    tok = resolve_cancel_token(cancel)
-    @cancel_check tok
+function run(cmds::AbstractCmd, args...; wait::Bool = true)
     if wait
-        ps = _spawn(cmds, spawn_opts_inherit(args...), tok)
-        success(ps; cancel=tok) || pipeline_error(ps)
+        ps = _spawn(cmds, spawn_opts_inherit(args...))
+        success(ps) || pipeline_error(ps)
     else
         stdios = spawn_opts_swallow(args...)
-        ps = _spawn(cmds, stdios, tok)
+        ps = _spawn(cmds, stdios)
         # for each stdio input argument, guess whether the user
         # passed a `stdio` placeholder object as input, and thus
         # might be able to use the return AbstractProcess as an IO object
@@ -678,14 +645,12 @@ function test_success(proc::Process)
     return proc.exitcode == 0 && proc.termsignal == 0
 end
 
-function success(x::Process; cancel::CancelTokenArg=DEFAULT_CANCEL)
-    wait(x; cancel)
+function success(x::Process)
+    wait(x)
     return test_success(x)
 end
-success(procs::Vector{Process}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    mapreduce(p -> success(p; cancel), &, procs)
-success(procs::ProcessChain; cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    success(procs.processes; cancel)
+success(procs::Vector{Process}) = mapreduce(success, &, procs)
+success(procs::ProcessChain) = success(procs.processes)
 
 """
     success(command)
@@ -694,11 +659,7 @@ Run a command object, constructed with backticks (see the [Running External Prog
 section in the manual), and tell whether it was successful (exited with a code of 0).
 An exception is raised if the process cannot be started.
 """
-function success(cmd::AbstractCmd; cancel::CancelTokenArg=DEFAULT_CANCEL)
-    tok = resolve_cancel_token(cancel)
-    @cancel_check tok
-    return success(_spawn(cmd, tok); cancel=tok)
-end
+success(cmd::AbstractCmd) = success(_spawn(cmd))
 
 
 """
@@ -834,21 +795,17 @@ function process_status(s::Process)
            error("process status error")
 end
 
-function wait(x::Process, syncd::Bool=true; cancel::CancelTokenArg=DEFAULT_CANCEL)
-    tok = check_cancel_arg(cancel)
+function wait(x::Process, syncd::Bool=true)
     if !process_exited(x)
         iolock_begin()
         if !process_exited(x)
             preserve_handle(x)
             lock(x.exitnotify)
             iolock_end()
-            locked = true
             try
-                locked = false
-                wait(x.exitnotify, tok)
-                locked = true
+                wait(x.exitnotify)
             finally
-                locked && unlock(x.exitnotify)
+                unlock(x.exitnotify)
                 unpreserve_handle(x)
             end
         else
@@ -857,13 +814,12 @@ function wait(x::Process, syncd::Bool=true; cancel::CancelTokenArg=DEFAULT_CANCE
     end
     # and make sure all sync'd Tasks are complete too
     syncd && for t in x.syncd
-        wait(t, tok)
+        wait(t)
     end
     nothing
 end
 
-wait(x::ProcessChain, syncd::Bool=true; cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    foreach(p -> wait(p, syncd; cancel), x.processes)
+wait(x::ProcessChain, syncd::Bool=true) = foreach(p -> wait(p, syncd), x.processes)
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
 
