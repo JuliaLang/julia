@@ -202,8 +202,21 @@ cd(@__DIR__) do
         Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
 
+    function disk_sizes(path...)
+        try
+            d = diskstat(path...)
+            return Base.format_bytes(d.total), Base.format_bytes(d.available)
+        catch err
+            err isa Base.IOError || rethrow()
+            return "(unavailable)", "(unavailable)"
+        end
+    end
+    disk_total, disk_available = disk_sizes()
+    tmp_total, tmp_available = disk_sizes(tempdir())
     println("""
         Running parallel tests with:
+          gethostname() = $(Libc.gethostname())
+          BUILDKITE_AGENT_NAME = $(get(ENV, "BUILDKITE_AGENT_NAME", "(not set)"))
           getpid() = $(getpid())
           nworkers() = $(nworkers())
           nthreads(:interactive) = $(Threads.threadpoolsize(:interactive))
@@ -211,6 +224,10 @@ cd(@__DIR__) do
           Sys.CPU_THREADS = $(Sys.CPU_THREADS)
           Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
           Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))
+          diskstat().total = $disk_total
+          diskstat().available = $disk_available
+          diskstat(tempdir()).total = $tmp_total
+          diskstat(tempdir()).available = $tmp_available
           Sys.uptime() = $(Sys.uptime()) ($(round(Sys.uptime() / (60 * 60), digits=1)) hours)
         """)
 

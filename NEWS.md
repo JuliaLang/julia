@@ -18,6 +18,12 @@ Command-line option changes
 Multi-threading changes
 -----------------------
 
+* `--threads=auto`, `--procs=auto`, `JULIA_NUM_THREADS=auto` and the default number of GC threads
+  now honour `JULIA_CPU_THREADS`, matching `Sys.EFFECTIVE_CPU_THREADS` ([#64613]).
+* With `JULIA_EXCLUSIVE=1`, default-pool threads are pinned to the CPUs of the inherited affinity
+  mask, in order, instead of to CPUs `0` to `N-1`. Their number is limited by that mask rather
+  than by `Sys.EFFECTIVE_CPU_THREADS` ([#64613]).
+
 Build system changes
 --------------------
 

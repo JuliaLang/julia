@@ -1626,7 +1626,7 @@ end
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 show(io::IO, v::SimpleVector) = show_delim_array(io, v, "svec(", ',', ')', false)
 
-show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
+show(io::IO, s::Symbol) = show_quoted_sym(io, s)
 
 ## Abstract Syntax Tree (AST) printing ##
 
@@ -1739,7 +1739,7 @@ julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Bas
 """
 function operator_associativity(s::Symbol)
     if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_pair, prec_power) ||
-        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) ||
+        (isunaryoperator(s) && !is_unary_and_binary_operator(s) && operator_precedence(s) != prec_comparison) ||
         (s === :<| || s === :|| || s == :?)
         return :right
     elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
@@ -1935,18 +1935,21 @@ function show_unquoted(io::IO, ex::QuoteNode, indent::Int, _prec::Int)
     end
 end
 
+function show_quoted_sym(io::IO, sym::Symbol)
+    if sym in quoted_syms
+        print(io, ":(", sym, ")")
+    else
+        if isidentifier(sym) || (_isoperator(sym) && sym !== Symbol("'"))
+            print(io, ":", sym)
+        else
+            print(io, "Symbol(", repr(String(sym)), ")")
+        end
+    end
+end
+
 function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, quote_level::Int)
     if isa(value, Symbol)
-        sym = value::Symbol
-        if value in quoted_syms
-            print(io, ":(", sym, ")")
-        else
-            if isidentifier(sym) || (_isoperator(sym) && sym !== Symbol("'"))
-                print(io, ":", sym)
-            else
-                print(io, "Symbol(", repr(String(sym)), ")")
-            end
-        end
+        show_quoted_sym(io, value::Symbol)
     else
         if isa(value,Expr) && value.head === :block
             value = value::Expr
@@ -3538,7 +3541,7 @@ end
 
 # Special pretty printing for EvalInto/IncludeInto
 function show(io::IO, ii::IncludeInto)
-    if getglobal(ii.m, :include) === ii
+    if isdefinedglobal(ii.m, :include) && getglobal(ii.m, :include) === ii
         print(io, ii.m)
         print(io, ".include")
     else
@@ -3547,7 +3550,7 @@ function show(io::IO, ii::IncludeInto)
 end
 
 function show(io::IO, ei::Core.EvalInto)
-    if getglobal(ei.m, :eval) === ei
+    if isdefinedglobal(ei.m, :eval) && getglobal(ei.m, :eval) === ei
         print(io, ei.m)
         print(io, ".eval")
     else

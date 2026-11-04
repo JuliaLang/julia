@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <ctype.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -508,12 +509,53 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 #endif
 }
 
+// Parse `JULIA_CPU_THREADS` like `tryparse(Int, ...)` does in `Sys.__init__`;
+// returns 0 for invalid values, which Base already warns about. Digits are
+// parsed by hand because `strtol` accepts prefixes and signs of its own.
+static int parse_cpu_threads(const char *cp) JL_NOTSAFEPOINT
+{
+    while (isspace((unsigned char)*cp))
+        cp++;
+    if (*cp == '+')
+        cp++;
+    int base = 10;
+    if (cp[0] == '0' && (cp[1] == 'x' || cp[1] == 'o' || cp[1] == 'b')) {
+        base = cp[1] == 'x' ? 16 : cp[1] == 'o' ? 8 : 2;
+        cp += 2;
+    }
+    const char *digits = cp;
+    int64_t n = 0;
+    for (; *cp; cp++) {
+        unsigned char c = *cp;
+        int d = isdigit(c) ? c - '0' : isxdigit(c) ? tolower(c) - 'a' + 10 : base;
+        if (d >= base)
+            break;
+        n = n * base + d;
+        if (n > INT_MAX) // larger than any CPU count
+            return 0;
+    }
+    if (cp == digits)
+        return 0;
+    while (isspace((unsigned char)*cp))
+        cp++;
+    return *cp == '\0' ? (int)n : 0;
+}
+
 JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT
 {
-    // We want the more conservative estimate of the two.
-    int cpu_threads = jl_cpu_threads();
+    // Minimum of the hardware CPU count, the OS limits (affinity, CPU quota) and a
+    // valid JULIA_CPU_THREADS, matching `Sys.EFFECTIVE_CPU_THREADS`.
+    int n = jl_cpu_threads();
     int available_parallelism = uv_available_parallelism();
-    return available_parallelism < cpu_threads ? available_parallelism : cpu_threads;
+    if (available_parallelism < n)
+        n = available_parallelism;
+    const char *cp = getenv(CPU_THREADS_NAME);
+    if (cp) {
+        int env_threads = parse_cpu_threads(cp);
+        if (env_threads > 0 && env_threads < n)
+            n = env_threads;
+    }
+    return n;
 }
 
 // -- precompile jobserver --

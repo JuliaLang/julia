@@ -77,6 +77,49 @@ let mi = Base.method_instance(M3.foo, (Int,))
     @test ci.specptr != Ptr{Nothing}(0)
 end
 
+# A call to a foreign CodeInstance without code must not run the native method
+# instead, and must use the code once its owner adds it to the JIT.
+module M4
+    @noinline foo(x) = x+1
+    bar(x) = foo(x)
+    baz(x) = x+100
+    @noinline sp(@nospecialize(x::Vector{T})) where {T} = T
+end
+function foreign_ci(f, argtypes, source_f)
+    @nospecialize
+    # `method_instance` requires a dispatch tuple, which `(Vector,)` is not
+    mi = only(Base.method_instances(f, argtypes, Base.get_world_counter()))
+    source, _ = only(code_typed(source_f, argtypes))
+    ci = CodeInstance(
+        mi, owner, source.rettype, #=exctype=#Any, #=inferred_const=#nothing,
+        #=inferred=#nothing, #=const_flags=#Int32(0), source.min_world,
+        #=max_world=#typemax(UInt), #=effects=#UInt32(0),
+        #=analysis_results=#nothing, source.debuginfo, source.edges
+    )
+    ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, ci)
+    ci, source
+end
+# an opaque closure that calls `f` through an `:invoke` of `ci`
+function invoke_oc(ci, f, argtypes)
+    @nospecialize
+    ir, _ = only(Base.code_ircode(M4.bar, argtypes))
+    ir.stmts.stmt[findfirst(s -> Meta.isexpr(s, (:invoke, :call)), ir.stmts.stmt)] =
+        Expr(:invoke, ci, f, Core.Argument(2))
+    ir.argtypes[1] = Tuple{}
+    Core.OpaqueClosure(ir)
+end
+let (ci, source) = foreign_ci(M4.foo, (Int,), M4.baz)
+    oc = invoke_oc(ci, M4.foo, (Int,))
+    @test_throws "Failed to invoke or compile external codeinst" oc(1)
+    ccall(:jl_add_codeinsts_to_jit, Cvoid, (Any, Any), Any[ci], Any[source])
+    @test oc(1) == 101
+end
+# same for a callee that needs its static parameters at run time
+let (ci, _) = foreign_ci(M4.sp, (Vector,), M4.sp)
+    oc = invoke_oc(ci, M4.sp, (Vector,))
+    @test_throws "Failed to invoke or compile external codeinst" oc([1])
+end
+
 # When runtime dispatch caches compiled code onto an exact-signature
 # MethodInstance by copying it from the widened compileable MethodInstance
 # (`copy_to_mi_cache`), a specsig specptr must not be adopted: it is ABI'd to
@@ -155,12 +198,29 @@ end
     mktempdir() do dir
         logfile = joinpath(dir, "objcache.log")
         script = """
-            for i in 1:600
-                f = Symbol(:objcache_eviction_, i)
-                @eval \$f(x) = x + \$i
-                @eval \$f(1)
+            function compile(range)
+                for i in range
+                    f = Symbol(:objcache_eviction_, i)
+                    @eval \$f(x) = x + \$i
+                    @eval \$f(1)
+                end
             end
-            print(ccall(:jl_objcache_kv_enabled, Cint, ()) != 0 ? "enabled" : "disabled")
+            compile(1:600)
+            enabled = ccall(:jl_objcache_kv_enabled, Cint, ()) != 0
+            if enabled
+                # The writer works through its queue in order, so once this entry is stored
+                # the evictions above are done, however far the writer had fallen behind.
+                ccall(:jl_objcache_kv_put, Cint, (Cstring, Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+                      "eviction-test", "key", 3, "value", 5)
+                for _ in 1:1200
+                    ccall(:jl_objcache_kv_get, Any, (Cstring, Ptr{UInt8}, Csize_t),
+                          "eviction-test", "key", 3) === nothing || break
+                    sleep(0.1)
+                end
+            end
+            # exit with these writes still pending
+            compile(601:700)
+            print(enabled ? "enabled" : "disabled")
         """
         cmd = addenv(
             `$(Base.julia_cmd()) --startup-file=no --color=no -e $script`,

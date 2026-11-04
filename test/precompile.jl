@@ -1900,13 +1900,17 @@ precompile_test_harness("No external edges") do load_path
           end
           """)
     Base.compilecache(Base.PkgId("NoExternalEdges"))
-    @eval begin
+    # Load in a fresh process: methods from earlier tests on this worker (e.g. SparseArrays' `hcat`) would invalidate the cached code
+    script = """
         using NoExternalEdges
-        @test (only(methods(NoExternalEdges.foo1)).specializations::Core.MethodInstance).cache.max_world != 0
-        @test (only(methods(NoExternalEdges.foo2)).specializations::Core.MethodInstance).cache.max_world != 0
-        @test (only(methods(NoExternalEdges.foo3)).specializations::Core.MethodInstance).cache.max_world != 0
-        @test (only(methods(NoExternalEdges.foo4)).specializations::Core.MethodInstance).cache.max_world != 0
-    end
+        for f in (NoExternalEdges.foo1, NoExternalEdges.foo2, NoExternalEdges.foo3, NoExternalEdges.foo4)
+            println((only(methods(f)).specializations::Core.MethodInstance).cache.max_world != 0)
+        end
+        """
+    pathsep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                 "JULIA_LOAD_PATH" => join(LOAD_PATH, pathsep), "JULIA_DEPOT_PATH" => join(DEPOT_PATH, pathsep))
+    @test readlines(cmd) == fill("true", 4)
 end
 
 @testset "issue 38149" begin

@@ -948,6 +948,17 @@ void jl_init_threading(void)
 
 uv_barrier_t thread_init_done;
 
+// The first CPU after `cpu` in the affinity mask `allowed`, or simply the next one if
+// the mask is unknown.
+static int next_allowed_cpu(const char *allowed, int masksize, int cpu)
+{
+    do {
+        cpu++;
+    } while (allowed && cpu < masksize && !allowed[cpu]);
+    assert(cpu < masksize);
+    return cpu;
+}
+
 void jl_start_threads(void)
 {
     int nthreads = jl_atomic_load_relaxed(&jl_n_threads);
@@ -969,11 +980,27 @@ void jl_start_threads(void)
     if (cp && strcmp(cp, "0") != 0)
         exclusive = 1;
 
-    // exclusive use: affinitize threads, master thread on proc 0, threads in
-    // default pool according to a 'compact' policy
+    // exclusive use: pin each default pool thread to its own CPU, in order,
+    // from the CPUs this process may run on ('compact' policy)
     // non-exclusive: no affinity settings; let the kernel move threads about
+    char *allowed = NULL; // inherited affinity mask, NULL if unknown (macOS)
+    int cpu = -1;
     if (exclusive) {
-        if (ndefault_threads > jl_effective_threads()) {
+        // Each thread needs a CPU of its own, so check against the affinity mask, not
+        // against the parallelism budget (CPU quota, JULIA_CPU_THREADS) that `auto` uses.
+        allowed = (char*)alloca(cpumasksize);
+        memset(allowed, 0, cpumasksize); // libuv only fills uv_cpumask_size() entries
+        uvtid = uv_thread_self();
+        int ncpus = 0;
+        if (uv_thread_getaffinity(&uvtid, allowed, cpumasksize) == 0) {
+            for (i = 0; i < cpumasksize; i++)
+                ncpus += allowed[i] != 0;
+        }
+        else { // affinity mask unavailable (macOS): fall back to CPUs 0 to N-1
+            allowed = NULL;
+            ncpus = jl_cpu_threads();
+        }
+        if (ndefault_threads > ncpus) {
             jl_printf(JL_STDERR, "ERROR: Too many threads requested for %s option.\n", MACHINE_EXCLUSIVE_NAME);
             exit(1);
         }
@@ -982,10 +1009,10 @@ void jl_start_threads(void)
         // If there are no interactive threads, the master thread is in the
         // default pool and we must affinitize it
         if (ninteractive_threads == 0) {
-            mask[0] = 1;
-            uvtid = uv_thread_self();
+            cpu = next_allowed_cpu(allowed, cpumasksize, cpu);
+            mask[cpu] = 1;
             uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
-            mask[0] = 0;
+            mask[cpu] = 0;
         }
     }
 
@@ -1000,12 +1027,12 @@ void jl_start_threads(void)
         uv_thread_create(&uvtid, jl_threadfun, t); // NOLINT[julia-first-decl-annotations]
 
         // Interactive pool threads get the low IDs, so check if this is a
-        // default pool thread.  The master thread is already on CPU 0.
+        // default pool thread.
         if (exclusive && i >= ninteractive_threads) {
-            assert(i - ninteractive_threads < cpumasksize);
-            mask[i - ninteractive_threads] = 1;
+            cpu = next_allowed_cpu(allowed, cpumasksize, cpu);
+            mask[cpu] = 1;
             uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
-            mask[i - ninteractive_threads] = 0;
+            mask[cpu] = 0;
         }
     }
 }
