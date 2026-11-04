@@ -6,7 +6,6 @@ using Base.Threads
 
 # TRIAL, do not merge: why is the `@profile` spawn test slow on aarch64 Linux?
 include("profile_spawnmany_trial.jl")
-spawn_trial("start")
 
 function with_output_on_failure(f)
     mktemp() do _, output
