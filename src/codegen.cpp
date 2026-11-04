@@ -3502,6 +3502,21 @@ static void coverageAllocLine(jl_codectx_t &ctx, StringRef filename, int line, b
     jl_coverage_alloc_line(filename.data(), line);
 }
 
+// The definition line and file of the method that a frame belongs to, or 0 if it has none.
+static int32_t coverageDefLine(jl_value_t *func, StringRef &file)
+{
+    if (func && jl_is_method_instance(func))
+        func = ((jl_method_instance_t*)func)->def.value;
+    if (func && jl_is_method(func)) {
+        jl_method_t *m = (jl_method_t*)func;
+        if (m->line > 0) {
+            file = jl_symbol_name(m->file);
+            return m->line;
+        }
+    }
+    return 0;
+}
+
 static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line, bool is_user_code)
 {
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
@@ -10238,6 +10253,8 @@ static jl_llvm_functions_t
         StringRef file;
         ssize_t line;
         ssize_t line0; // if this represents pc=1, then also cover the entry to the function (pc=0)
+        StringRef deffile;
+        ssize_t defline; // for an inlined frame, the definition line of its method, covered on entry to the frame
         bool is_user_code;
         int32_t edgeid;
         bool sameframe(const DebugLineTable &other) const {
@@ -10249,6 +10266,7 @@ static jl_llvm_functions_t
     topinfo.file = ctx.file;
     topinfo.line = toplineno;
     topinfo.line0 = 0;
+    topinfo.defline = 0;
     topinfo.is_user_code = mod_is_user_mod;
     topinfo.loc = topdebugloc;
     topinfo.edgeid = 0;
@@ -10282,10 +10300,11 @@ static jl_llvm_functions_t
                     info.line = i;
                     if (pc > 0 && jl_is_string(debuginfo->linetable))
                         info.line = std::max(0, jl_cdi_firstxy(debuginfo, pc).first);
+                    info.defline = to != 0 ? coverageDefLine(func, info.deffile) : 0;
                     info.line0 = 0;
                     if (pc == 1) {
                         int32_t line0 = jl_cdi_external_firstline(debuginfo);
-                        if (line0 > 0 && info.line != line0)
+                        if (line0 > 0 && info.line != line0 && !(info.defline == line0 && info.deffile == info.file))
                             info.line0 = line0;
                     }
                     if (info.file.empty())
@@ -10463,11 +10482,16 @@ static jl_llvm_functions_t
             if (dbg >= prev_lineinfo.size() || !new_lineinfo[dbg].sameframe(prev_lineinfo[dbg]))
                 break;
         }
+        size_t first_changed = dbg;
         for (; dbg < new_lineinfo.size(); dbg++) {
             const auto &newdbg = new_lineinfo[dbg];
             if (do_coverage(newdbg.is_user_code)) {
                 if (newdbg.line0 != 0 && (dbg >= prev_lineinfo.size() || newdbg.edgeid != prev_lineinfo[dbg].edgeid || newdbg.line0 != prev_lineinfo[dbg].line))
                     coverageVisitLine(ctx, newdbg.file, newdbg.line0, newdbg.is_user_code);
+                // a standalone call covers its definition line on entry, so an inlined call does too
+                bool entered = dbg > first_changed || dbg >= prev_lineinfo.size() || newdbg.edgeid != prev_lineinfo[dbg].edgeid;
+                if (entered && newdbg.defline > 0 && !(newdbg.defline == newdbg.line && newdbg.deffile == newdbg.file))
+                    coverageVisitLine(ctx, newdbg.deffile, newdbg.defline, newdbg.is_user_code);
                 coverageVisitLine(ctx, newdbg.file, newdbg.line, newdbg.is_user_code);
             }
         }
@@ -10501,6 +10525,10 @@ static jl_llvm_functions_t
                 int32_t extraline = jl_cdi_external_firstline(debuginfo);
                 if (extraline != -1)
                     coverageAllocLine(ctx, file, extraline, is_user_code);
+                StringRef deffile;
+                int32_t defline = coverageDefLine(func, deffile);
+                if (defline > 0)
+                    coverageAllocLine(ctx, deffile, defline, is_user_code);
                 for (size_t pc = 1; 1; pc++) {
                     struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
                     if (lineidx.loc == -1)
