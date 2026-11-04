@@ -3045,7 +3045,7 @@ _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::IteratorSize, A) where {T,S}
 
 _vec_axis(A, ax=_iterator_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(length, ax; init=1))
 
-@constprop :aggressive function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
+function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
     xit = Iterators.peel(A)
     nothing === xit && return _empty_stack(dims, T, S, A)
     x1, xrest = xit
@@ -3056,29 +3056,73 @@ _vec_axis(A, ax=_iterator_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(len
     newaxis = _vec_axis(A)
     outax = ntuple(d -> d==dims ? newaxis : ax1[d - (d>dims)], N1)
     B = similar(_ensure_array(x1), T, outax...)
-
-    if dims == 1
-        _dim_stack!(Val(1), B, x1, xrest)
-    elseif dims == 2
-        _dim_stack!(Val(2), B, x1, xrest)
-    else
-        _dim_stack!(Val(dims), B, x1, xrest)
-    end
+    _dim_stack!(Int(dims), B, x1, xrest)
     B
 end
 
-function _dim_stack!(::Val{dims}, B::AbstractArray, x1, xrest) where {dims}
-    before = ntuple(Returns(Colon()), dims - 1)
-    after = ntuple(Returns(Colon()), ndims(B) - dims)
-
-    i = firstindex(B, dims)
-    copyto!(view(B, before..., i, after...), x1)
-
-    for x in xrest
-        _stack_size_check(x, _iterator_axes(x1))
-        i += 1
-        @inbounds copyto!(view(B, before..., i, after...), x)
+# Fill the preallocated output `B` with the slices `x1, xrest...`, the k'th slice going
+# to `selectdim(B, dims, k)`. `x1` is the first slice, and `xrest` iterates the rest.
+# In linear (column-major) order, B can be seen as an array of size (before, n, after), where
+# `before` and `after` are the products of the sizes of B before and after dimension `dims`,
+# and n = size(B, dims) is the number of slices. Each slice, of length before * after,
+# then occupies B[:, k, :] of this array.
+function _dim_stack!(dims::Int, B::AbstractArray, x1, xrest)
+    before = after = 1
+    for d in 1:ndims(B)
+        if d < dims
+            before *= size(B, d)
+        elseif d > dims
+            after *= size(B, d)
+        end
     end
+    # Linear distance in B between consecutive blocks of `before` elements of one slice
+    stride = before * size(B, dims)
+    # Linear index in B of the first element of the current slice
+    off = firstindex(B)
+    _dim_stack_slice!(B, x1, off, before, after, stride)
+    ax1 = _iterator_axes(x1)
+    for x in xrest
+        _stack_size_check(x, ax1)
+        off += before
+        _dim_stack_slice!(B, x, off, before, after, stride)
+    end
+    return nothing
+end
+
+# Copy the single slice `x` into `B`. With B seen as an array of size (before, n, after) as
+# in `_dim_stack!`, x is copied in `after` blocks of `before` consecutive elements each.
+# Block `hi` (counting from 0) is written to linear indices `off + hi*stride .+ (0:before-1)` of B.
+# `off` is the linear index of B where the first element of x goes.
+@inline function _dim_stack_slice!(B::AbstractArray, x, off::Int, before::Int, after::Int, stride::Int)
+    if x isa AbstractArray && IndexStyle(B, x) isa IndexLinear
+        # The size check guarantees length(x) == before * after
+        xi = firstindex(x)  # linear index in x of the start of the current block
+        if before == 1  # e.g. dims == 1: a strided copy
+            @inbounds for j in 0:after-1
+                B[off + j * stride] = x[xi + j]
+            end
+            return nothing
+        end
+        for hi in 0:after-1
+            @inbounds for lo in 0:before-1
+                B[off + lo] = x[xi + lo]
+            end
+            off += stride
+            xi += before
+        end
+    else
+        # Same as above, but for slices which can only be iterated
+        lo = 0  # position within the current block
+        for v in x
+            B[off + lo] = v
+            lo += 1
+            if lo == before
+                lo = 0
+                off += stride
+            end
+        end
+    end
+    return nothing
 end
 
 @inline function _stack_size_check(x, ax1::Tuple)
