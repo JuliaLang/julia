@@ -1227,14 +1227,13 @@ end
     @lock cond notify(cond) # still functional (no waiters)
 
     # Task blocked in wait(::Base.Process); the process itself keeps running
-    p = open(`$(Base.julia_cmd()) --startup-file=no -e "read(stdin)"`, "w")
+    p = run(sleep_cmd(1000); wait=false)
     t, src = cancellable(() -> wait(p))
     spin()
     cancel!(src)
     expect_cancelled(t)
     @test process_running(p)
-    close(p); wait(p)
-    @test success(p)
+    kill(p); wait(p)
 
     # Task blocked in waitany; the awaited tasks live in different scopes and
     # remain unaffected by the waiter's cancellation
