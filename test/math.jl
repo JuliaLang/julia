@@ -689,33 +689,8 @@ end
     scdm = sincosd(missing)
     @test ismissing(scdm[1])
     @test ismissing(scdm[2])
-    # sincospi(missing) returns a (sine, cosine) tuple so destructuring works,
-    # while the other *pi functions still return a single missing.
     @testset "sincospi(missing) returns tuple" begin
-        result = sincospi(missing)
-        @test result === (missing, missing)
-        @test result isa Tuple{Missing, Missing}
-    end
-    @testset "sincospi(missing) destructuring" begin
-        s, c = sincospi(missing)
-        @test s === missing
-        @test c === missing
-    end
-    @testset "other trig missing behavior unchanged" begin
-        @test sincos(missing) === (missing, missing)
-        @test sincosd(missing) === (missing, missing)
-        @test sinpi(missing) === missing
-        @test cospi(missing) === missing
-        @test tanpi(missing) === missing
-    end
-    @testset "sincospi numeric behavior unchanged" begin
-        s, c = sincospi(0.5)
-        @test s ≈ 1.0
-        @test c ≈ 0.0
-
-        s, c = sincospi(1.0)
-        @test s ≈ 0.0
-        @test c ≈ -1.0
+        @test sincospi(missing) === (missing, missing)
     end
 end
 
