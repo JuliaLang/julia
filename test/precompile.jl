@@ -5790,6 +5790,146 @@ end
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
 end
 
+# Check single-rounding FMA semantics in x86 package images compiled without FMA instructions.
+# Cover cancellation and intermediate overflow through software libcalls.
+@testset "FMA in package images without hardware FMA" begin
+    function check_image_process(label, command; check_target=false)
+        output = IOBuffer()
+        process = run(pipeline(ignorestatus(command); stdout=output, stderr=output))
+        diagnostics = String(take!(output))
+        incompatible = occursin("Unable to find compatible target", diagnostics) ||
+                       occursin("Your CPU does not support the CX16", diagnostics)
+        if check_target && process.exitcode != 0 && incompatible
+            @info "Skipping no-FMA pkgimage test: incompatible sysimage" label diagnostics
+            @test_skip process.exitcode == 0
+            return false
+        end
+        if process.exitcode != 0
+            println(stderr, "Package image failure: ", label,
+                    " (exit code ", process.exitcode, ")")
+            println(stderr, "Command: ", Cmd(command.exec))
+            print(stderr, diagnostics)
+            flush(stderr)
+        end
+        @test process.exitcode == 0 context=label
+        return process.exitcode == 0
+    end
+
+    function fma_image_setup(image)
+        """
+        using FMAImage, Libdl
+        image = $(repr(image))
+        @assert any(path -> samefile(path, image), Libdl.dllist()) "Package image was not loaded"
+        calls = Tuple{Function,Tuple}[(FMAImage.has_fma, ())]
+        append!(calls, ((operation, (T, T, T)) for T in (Float32, Float64)
+                        for operation in (FMAImage.public_fma, FMAImage.intrinsic)))
+        for (operation, types) in calls
+            signature = Tuple{typeof(operation), types...}
+            instance = only(mi for mi in Base.specializations(which(operation, types))
+                            if mi.specTypes === signature)
+            pointer = instance.cache.specptr
+            @assert pointer != C_NULL "Missing precompiled native entry point"
+
+            handle = ccall(:jl_find_dynamic_library_by_addr, Ptr{Cvoid},
+                            (Ptr{Cvoid}, Cint, Cint), pointer, 0, 1)
+            @assert handle != C_NULL "Native entry point is not in a loaded library"
+
+            owner = Libdl.dlpath(handle)
+            println(operation, " ", types, ": native entry=", pointer, "; image=", owner)
+            @assert samefile(owner, image) "Native entry point is not in the target package image"
+        end
+        features = FMAImage.has_fma()
+        println("pkgimage FMA support (Float32, Float64): ", features)
+        @assert features == (false, false)
+        """
+    end
+
+    function fma_image_result(T, case)
+        args, expected = if case == "cancellation"
+            ((one(T) + eps(T), one(T) - eps(T), -one(T)), -eps(T)^2)
+        else
+            ((floatmax(T), T(2), -floatmax(T)), floatmax(T))
+        end
+
+        """
+        args = $(repr(args))
+        expected = $(repr(expected))
+        results = map((FMAImage.public_fma, FMAImage.intrinsic)) do operation
+            actual = operation(args...)
+            matches = isequal(actual, expected)
+            println(operation, ": inputs=", args, "; actual=", actual,
+                    "; expected=", expected, "; passed=", matches)
+            matches
+        end
+
+        exit(all(results) ? 0 : 1)
+        """
+    end
+
+    function test_fma_pkgimage(dir)
+        write(joinpath(dir, "FMAImage.jl"),
+            """
+            module FMAImage
+            @noinline has_fma() = (Core.Intrinsics.have_fma(Float32), Core.Intrinsics.have_fma(Float64))
+            @assert precompile(has_fma, ())
+            @noinline intrinsic(a::T, b::T, c::T) where T = Core.Intrinsics.fma_float(a, b, c)
+            @noinline public_fma(a::T, b::T, c::T) where T = fma(a, b, c)
+            for operation in (intrinsic, public_fma), T in (Float32, Float64)
+                @assert precompile(operation, (T, T, T))
+            end
+            end
+            """)
+        depot = joinpath(dir, "depot")
+        target = Sys.matched_sysimage_target() * ",-fma,-fma4"
+        separator = Sys.iswindows() ? ';' : ':'
+        env = ("JULIA_LOAD_PATH" => string(dir, separator, "@stdlib"),
+               "JULIA_DEPOT_PATH" => depot,
+               "JULIA_CPU_TARGET" => target)
+        julia = addenv(`$(Base.julia_cmd()) --startup-file=no
+                        --compiled-modules=yes --pkgimages=yes`, env...)
+
+        compatible = false
+        @testset "target compatibility" begin
+            probe = `$(Base.julia_cmd(; cpu_target=target)) --startup-file=no -e 'exit()'`
+            compatible = check_image_process(target, probe; check_target=true)
+        end
+        compatible || return
+
+        built = false
+        images = String[]
+        @testset "image build" begin
+            built = check_image_process("build", `$julia -e 'using FMAImage'`)
+            if built
+                append!(images, (joinpath(root, file)
+                    for (root, _, files) in walkdir(depot) for file in files
+                    if endswith(file, "." * Libdl.dlext) && occursin("FMAImage", joinpath(root, file))))
+                @test length(images) == 1 context=images
+            end
+        end
+        built && length(images) == 1 || return
+
+        setup = fma_image_setup(only(images))
+        loaded = false
+        @testset "image load" begin
+            loaded = check_image_process("load", `$julia --compiled-modules=strict -e $setup`)
+        end
+        loaded || return
+
+        @testset "pkgimage results" begin
+            for T in (Float32, Float64), case in ("cancellation", "intermediate overflow")
+                check = setup * fma_image_result(T, case)
+                check_image_process("$T $case", `$julia --compiled-modules=strict -e $check`)
+            end
+        end
+    end
+
+    if Sys.ARCH in (:x86_64, :i686)
+        mkdepottempdir(test_fma_pkgimage)
+    else
+        @test_skip Sys.ARCH in (:x86_64, :i686)
+    end
+end
+
 finish_precompile_test!()
 if original_num_precompile_tasks === nothing
     delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")
