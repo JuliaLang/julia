@@ -1537,11 +1537,13 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             continue;
 
         if (sig == SIGINT) {
-            if (jl_sigint_get_policy() == JL_SIGINT_EXIT ||
-                    !jl_sigint_request_cancellation()) {
+            if (exit_on_sigint) {
                 critical = 1;
             }
             else {
+                // Deliver the press through the cancellation system (see
+                // jl_sigint_request_cancellation).
+                jl_sigint_request_cancellation();
                 continue;
             }
         }
