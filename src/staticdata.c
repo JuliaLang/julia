@@ -3022,26 +3022,23 @@ static int jl_prune_internal_mtable(jl_methtable_t *mt, void *env)
 }
 
 // Write the contents of `sec` to `f` at an 8-byte aligned offset, as a section of the payload
-// starting at `payload`, and close `sec`.  A nonempty section's offset and size are stored in
-// `out`; an empty one leaves `out` as it is, which must be zero.  If the image stream cannot be
-// grown to fit the section, fail rather than return with a truncated section.
+// starting at `payload`, store its offset and size in `out`, and close `sec`.  If the image stream
+// cannot be grown to fit the section, fail rather than return with a truncated section.
 static void write_section(ios_t *f, size_t payload, jl_image_section_t *out, ios_t *sec, const char *name) JL_CANSAFEPOINT
 {
-    if (sec->size != 0) {
-        write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
-        out->offset = ios_pos(f) - payload;
-        out->size = sec->size;
-        ios_seek(sec, 0);
-        ios_copyall(f, sec);
-        if ((size_t)ios_pos(f) != payload + out->offset + out->size) {
-            jl_printf(
-                JL_STDERR,
-                "ERROR: failed to write system image: the %s section needs %" PRIu64 " bytes at offset %" PRIu64 " "
-                "but the stream reached only %" PRIu64 " (out of memory)\n",
-                name, (uint64_t)out->size, (uint64_t)(payload + out->offset), (uint64_t)ios_pos(f)
-            );
-            jl_exit(1);
-        }
+    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
+    out->offset = ios_pos(f) - payload;
+    out->size = sec->size;
+    ios_seek(sec, 0);
+    ios_copyall(f, sec);
+    if ((size_t)ios_pos(f) != payload + out->offset + out->size) {
+        jl_printf(
+            JL_STDERR,
+            "ERROR: failed to write system image: the %s section needs %" PRIu64 " bytes at offset %" PRIu64 " "
+            "but the stream reached only %" PRIu64 " (out of memory)\n",
+            name, (uint64_t)out->size, (uint64_t)(payload + out->offset), (uint64_t)ios_pos(f)
+        );
+        jl_exit(1);
     }
     ios_close(sec);
 }
@@ -3348,6 +3345,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         bits_start = sysimg.size;
         jl_image_section_t bits_section;
         write_section(&sysimg, 0, &bits_section, &bits, "pointer-free");
+        assert(bits_section.offset == bits_start);
         s.bits = NULL;
         // the specials and the gvars are relocs, used only while loading
         if (worklist == NULL) {
@@ -3433,6 +3431,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         // while loading
         jl_image_section_t heap;
         write_section(f, payload_start, &heap, &sysimg, "heap");
+        assert(heap.offset == 0);
         h.heap_size = heap.size;
         write_section(f, payload_start, &h.fptrs, &fptr_record, "fptrs");
         write_section(f, payload_start, &h.imports, &imports, "imports");
@@ -3749,6 +3748,7 @@ JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
     ios_close(&f);
     if (end) {
         image->heap = image->data + image->payload_start;
+        image->loader = image->heap + image->heap_size;
     }
     jl_image_load_metadata(handle, image);
 }
@@ -3761,12 +3761,16 @@ static int jl_image_force_slide(void) JL_NOTSAFEPOINT
     return env != NULL && env[0] != '\0' && strcmp(env, "0") != 0;
 }
 
-// Return the address at which to place the heap of an image, or 0 if it should be placed anywhere.
-static uintptr_t jl_image_preferred_heap(uint64_t preferred_base) JL_NOTSAFEPOINT
+// A heap is placed `*lead` bytes past an allocation-granularity boundary, as it is in its file, so
+// that the file can be mapped.  Return the address of the boundary that puts the heap of `image`
+// at its preferred address, or 0 to place it anywhere.
+static uintptr_t jl_image_preferred_start(const jl_image_buf_t *image, size_t *lead) JL_NOTSAFEPOINT
 {
-    if ((uint64_t)(uintptr_t)preferred_base != preferred_base || jl_image_force_slide())
+    *lead = image->payload_start & (jl_getallocationgranularity() - 1);
+    uint64_t heap = image->preferred_base;
+    if (heap == 0 || (uint64_t)(uintptr_t)heap != heap || jl_image_force_slide())
         return 0;
-    return (uintptr_t)preferred_base;
+    return (uintptr_t)heap - *lead;
 }
 
 #ifndef _OS_WINDOWS_
@@ -3792,7 +3796,7 @@ static char *jl_image_mmap_at(uintptr_t addr, size_t size, int flags, int fd, si
 
 // Read and verify the header of the .ji open in `s` into `image`, and read the file into
 // `image->data`.  If `map`, map the heap copy-on-write instead, at its preferred address if it is
-// available, leaving its part of `image->data` unread; it is then temporary.
+// available, and read only the header and the loader data, which are then temporary.
 // Returns 1 on success, 0 on failure, and -1 if the .ji of a split image was not written with its
 // native image.
 static int jl_image_read_ji(ios_t *s, jl_image_buf_t *image, int map) JL_NOTSAFEPOINT
@@ -3802,16 +3806,14 @@ static int jl_image_read_ji(ios_t *s, jl_image_buf_t *image, int map) JL_NOTSAFE
         return 0;
     if (image->is_split && image->checksum != image->heap_checksum)
         return -1;
-    int64_t heap = image->payload_start, data = heap + image->heap_size;
+    int64_t heap_off = image->payload_start, loader_off = heap_off + image->heap_size;
     if (map) {
         // a mapping must start on an allocation-granularity boundary, so map from the one before
-        // the heap, which lets the heap land on its preferred address
-        size_t lead = heap & (jl_getallocationgranularity() - 1);
-        uintptr_t addr = jl_image_preferred_heap(image->preferred_base);
-        if (addr)
-            addr -= lead;
-        int64_t offset = heap - lead;
-        size_t size = data - offset;
+        // the heap
+        size_t lead;
+        uintptr_t addr = jl_image_preferred_start(image, &lead);
+        int64_t offset = heap_off - lead;
+        size_t size = loader_off - offset;
         char *p = NULL;
 #ifdef _OS_WINDOWS_
         HANDLE fmap = CreateFileMapping((HANDLE)_get_osfhandle(s->fd), NULL, PAGE_WRITECOPY, 0, 0, NULL);
@@ -3836,21 +3838,22 @@ static int jl_image_read_ji(ios_t *s, jl_image_buf_t *image, int map) JL_NOTSAFE
         image->heap = p + lead;
         image->data_owned = 1;
     }
-    char *buf = (char *)malloc(end);
+    // read the file, leaving out the heap if it is mapped
+    size_t size = end - (map ? image->heap_size : 0);
+    char *buf = (char *)malloc(size);
     ios_seek(s, 0);
     ios_bufmode(s, bm_none);
-    size_t len = map ? heap : end;
-    int ok = ios_readall(s, buf, len) == len;
-    if (ok && map) {
-        ios_seek(s, data);
-        ok = ios_readall(s, buf + data, end - data) == (size_t)(end - data);
-    }
+    int ok = ios_readall(s, buf, heap_off) == (size_t)heap_off;
+    ios_seek(s, map ? loader_off : heap_off);
+    ok = ok && ios_readall(s, buf + heap_off, size - heap_off) == size - heap_off;
     if (!ok) {
         free(buf);
         return 0;
     }
     image->data = buf;
-    image->size = end;
+    image->size = size;
+    if (map)
+        image->loader = buf + heap_off;
     return 1;
 }
 
@@ -3903,8 +3906,21 @@ static char *jl_image_alloc_pages(size_t size, uintptr_t preferred)
     return data;
 }
 
+static void jl_image_decompress_into(ZSTD_DCtx *dctx, ZSTD_inBuffer *in, char *dst, size_t size) JL_CANSAFEPOINT
+{
+    ZSTD_outBuffer out = { dst, size, 0 };
+    while (out.pos < size) {
+        size_t res = ZSTD_decompressStream(dctx, &out, in);
+        if (ZSTD_isError(res))
+            jl_errorf("Failed to decompress heap image: %s", ZSTD_getErrorName(res));
+        if (res == 0 && out.pos < size)
+            jl_error("Decompressed heap image has unexpected size.");
+    }
+}
+
 // Decompress the payload of the compressed .ji in `data`, whose header is in `image` and whose
-// payload ends at `end`, into a new buffer at the preferred address if it is available.
+// payload ends at `end`: the heap into new pages, at the preferred address if it is available,
+// and the header and the loader data into a temporary buffer.
 static void jl_image_decompress(jl_image_buf_t *image, const char *data, int64_t end) JL_CANSAFEPOINT
 {
     if (!end)
@@ -3914,18 +3930,22 @@ static void jl_image_decompress(jl_image_buf_t *image, const char *data, int64_t
     unsigned long long payload_size = ZSTD_getFrameContentSize(comp_data, comp_len);
     if (payload_size == ZSTD_CONTENTSIZE_UNKNOWN || payload_size == ZSTD_CONTENTSIZE_ERROR)
         jl_error("Compressed heap image is corrupt.");
-    image->size = image->payload_start + payload_size;
-    uintptr_t heap = jl_image_preferred_heap(image->preferred_base);
-    char *buf = jl_image_alloc_pages(image->size, heap ? heap - image->payload_start : 0);
+    // as when mapping, start at the allocation-granularity boundary before the heap
+    size_t lead;
+    uintptr_t start = jl_image_preferred_start(image, &lead);
+    char *pages = jl_image_alloc_pages(lead + image->heap_size, start);
+    image->size = image->payload_start + (payload_size - image->heap_size);
+    char *buf = (char *)malloc(image->size);
     memcpy(buf, data, image->payload_start);
-    size_t res = ZSTD_decompress(buf + image->payload_start, payload_size, comp_data, comp_len);
-    if (ZSTD_isError(res))
-        jl_errorf("Failed to decompress heap image: %s", ZSTD_getErrorName(res));
-    if (res != payload_size)
-        jl_error("Decompressed heap image has unexpected size.");
+    ZSTD_DCtx *dctx = ZSTD_createDCtx();
+    ZSTD_inBuffer in = { comp_data, comp_len, 0 };
+    jl_image_decompress_into(dctx, &in, pages + lead, image->heap_size);
+    jl_image_decompress_into(dctx, &in, buf + image->payload_start, payload_size - image->heap_size);
+    ZSTD_freeDCtx(dctx);
     image->data = buf;
-    image->heap = buf + image->payload_start;
-    image->data_owned = 0;
+    image->heap = pages + lead;
+    image->loader = buf + image->payload_start;
+    image->data_owned = 1;
 }
 
 JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image) JL_CANSAFEPOINT
@@ -4187,6 +4207,12 @@ static int all_usings_unchanged_implicit(jl_module_t *mod)
     return unchanged_implicit;
 }
 
+// The address of a section, in the loader data that follows the heap
+static char *image_section(const char *loader, const jl_image_sections_t *h, jl_image_section_t sec) JL_NOTSAFEPOINT
+{
+    return (char*)(loader + (sec.offset - h->heap_size));
+}
+
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                                                  jl_array_t *depmods, uint32_t checksum,
                                 /* outputs */    jl_array_t **restored JL_REQUIRE_ROOTED_SLOT,
@@ -4197,7 +4223,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                                                  jl_array_t **method_roots_list JL_REQUIRE_ROOTED_SLOT,
                                                  pkgcachesizes *cachesizes,
                                                  image_metadata_t **meta_out,
-                                                 char *heap, uintptr_t expected_heap) JL_CANSAFEPOINT JL_GC_DISABLED
+                                                 char *heap, const char *loader, uintptr_t expected_heap) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     jl_task_t *ct = jl_current_task;
     int en = jl_gc_enable(0);
@@ -4220,34 +4246,31 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     assert(ios_pos(f) == 0 && f->bm == bm_mem);
     jl_image_sections_t h;
     memcpy(&h, f->buf + JI_SECTIONS_OFFSET, sizeof(h));
-    uint64_t payload_start;
-    memcpy(&payload_start, f->buf + JI_PAYLOAD_START_OFFSET, sizeof(payload_start));
-    char *payload = f->buf + payload_start;
     size_t nwords = bitmap_nwords(h.pointer_free_offset);
     char *image_base = heap;
     size_t sizeof_sysimg = h.heap_size;
     ios_static_buffer(&sysimg, image_base, sizeof_sysimg);
-    ios_static_buffer(&fptr_record, payload + h.fptrs.offset, h.fptrs.size);
+    ios_static_buffer(&fptr_record, image_section(loader, &h, h.fptrs), h.fptrs.size);
     ios_t strtab;
-    ios_static_buffer(&strtab, payload + h.strtab.offset, h.strtab.size);
+    ios_static_buffer(&strtab, image_section(loader, &h, h.strtab), h.strtab.size);
     s.symbols = &strtab;
     s.s = &sysimg;
     s.buildid_depmods_idxs = depmod_to_imageidx(depmods);
 
     // step 2: apply relocations
     s.nimports = h.imports.size / sizeof(import_t);
-    const import_t *imports = (const import_t*)(payload + h.imports.offset);
+    const import_t *imports = (const import_t*)(image_section(loader, &h, h.imports));
     s.imports_resolved = (uintptr_t*)malloc_s(s.nimports * sizeof(uintptr_t));
     for (size_t i = 0; i < s.nimports; i++)
         s.imports_resolved[i] = jl_resolve_import(&s, imports[i]);
     arraylist_new(&s.late_binds, 0);
-    jl_apply_slides((uintptr_t*)image_base, expected_heap, payload + h.slides.offset, h.slides.size, nwords);
-    jl_apply_binds(&s, (uintptr_t*)image_base, payload + h.binds.offset, h.binds.size, nwords);
+    jl_apply_slides((uintptr_t*)image_base, expected_heap, image_section(loader, &h, h.slides), h.slides.size, nwords);
+    jl_apply_binds(&s, (uintptr_t*)image_base, image_section(loader, &h, h.binds), h.binds.size, nwords);
 
     // step 3: get references to special values
     uintptr_t heap_delta = (uintptr_t)image_base - expected_heap;
-    jl_resolve_relocs(&s, (uintptr_t*)(payload + h.specials.offset), h.specials.size / sizeof(void*), heap_delta);
-    jl_value_t **specials = (jl_value_t**)(payload + h.specials.offset);
+    jl_resolve_relocs(&s, (uintptr_t*)(image_section(loader, &h, h.specials)), h.specials.size / sizeof(void*), heap_delta);
+    jl_value_t **specials = (jl_value_t**)(image_section(loader, &h, h.specials));
     if (!s.incremental) {
         size_t i;
         for (i = 0; i < sizeof(jl_image_specials) / sizeof(jl_image_specials[0]); i++)
@@ -4274,8 +4297,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         assert(*restored && *init_order && *extext_methods && *extext_records && *method_roots_list);
         *internal_methods = jl_alloc_vec_any(0);
     }
-    jl_read_arraylist(&s.fixup_types, payload + h.fixup_types.offset, h.fixup_types.size);
-    jl_read_arraylist(&s.fixup_objs, payload + h.fixup_objs.offset, h.fixup_objs.size);
+    jl_read_arraylist(&s.fixup_types, image_section(loader, &h, h.fixup_types), h.fixup_types.size);
+    jl_read_arraylist(&s.fixup_objs, image_section(loader, &h, h.fixup_objs), h.fixup_objs.size);
     // Resolve the placeholders of types in heap order.  Before each one, fill in the binds located
     // before its end: everything its lookup reads precedes it, except that a `super` field can
     // refer forward, so it is null until its target is resolved.  A singleton is resolved when a
@@ -4381,7 +4404,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             s.imports_resolved[i] = (uintptr_t)((jl_datatype_t*)s.imports_resolved[IMPORT_PAYLOAD(imports[i])])->instance;
             continue;
         }
-        uintptr_t *record = (uintptr_t*)(payload + h.placeholders.offset) + 3 * IMPORT_PAYLOAD(imports[i]);
+        uintptr_t *record = (uintptr_t*)image_section(loader, &h, h.placeholders) + 3 * IMPORT_PAYLOAD(imports[i]);
         jl_resolve_relocs(&s, record, 3, heap_delta);
         jl_value_t **obj = (jl_value_t**)record;
         s.imports_resolved[i] = type == IMPORT_BINDING ?
@@ -4392,7 +4415,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         jl_fill_bind(&s, (uintptr_t*)later.items[i]);
     arraylist_free(&later);
     arraylist_free(&s.late_binds);
-    uintptr_t *gvars = (uintptr_t*)(payload + h.gvars.offset);
+    uintptr_t *gvars = (uintptr_t*)(image_section(loader, &h, h.gvars));
     jl_resolve_relocs(&s, gvars, h.gvars.size / sizeof(void*), heap_delta);
     free(s.imports_resolved);
     // Perform fixups: things like updating world ages, inserting methods & specializations, etc.
@@ -4603,7 +4626,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
         ios_seek(f, 0);
         pkgcachesizes cachesizes;
         image_metadata_t *meta = NULL;
-        jl_restore_system_image_from_stream_(f, image, depmods, buf->checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &extext_records, &internal_methods, &method_roots_list, &cachesizes, &meta, (char*)buf->heap, buf->preferred_base);
+        jl_restore_system_image_from_stream_(f, image, depmods, buf->checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &extext_records, &internal_methods, &method_roots_list, &cachesizes, &meta, (char*)buf->heap, buf->loader, buf->preferred_base);
         JL_SIGATOMIC_END();
 
         // Add roots to methods
@@ -4671,7 +4694,7 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image, con
         jl_throw(exc);
     ios_seek(f, 0);
     jl_restore_system_image_from_stream_(f, image, NULL, buf->checksum, NULL, NULL,
-                                         NULL, NULL, NULL, NULL, NULL, NULL, (char*)buf->heap, buf->preferred_base);
+                                         NULL, NULL, NULL, NULL, NULL, NULL, (char*)buf->heap, buf->loader, buf->preferred_base);
     jl_init_git_commit();
 }
 
@@ -4713,7 +4736,7 @@ int jl_adopt_image_constants(jl_image_buf_t buf) JL_CANSAFEPOINT
     if (!buf.heap)
         return 0;
     memcpy(&h, buf.data + JI_SECTIONS_OFFSET, sizeof(h));
-    const uintptr_t *specials = (const uintptr_t*)(buf.data + buf.payload_start + h.specials.offset);
+    const uintptr_t *specials = (const uintptr_t*)image_section(buf.loader, &h, h.specials);
     for (i = 0; i < n; i++) {
         if (jl_image_specials[i] == &jl_nothing)
             jl_nothing = (jl_value_t*)(buf.heap + (specials[i] - buf.preferred_base));
@@ -4740,6 +4763,7 @@ JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
     if (buf.data_owned) {
         free((char*)buf.data);
         jl_sysimage_buf.data = NULL;
+        jl_sysimage_buf.loader = NULL;
     }
     JL_SIGATOMIC_END();
 }

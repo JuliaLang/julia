@@ -2487,6 +2487,7 @@ typedef struct {
     const void *coverage; // jl_image_coverage_t *, if built with coverage counters
     const char *heap;     // NULL if the .ji header failed verification
     size_t heap_size;
+    const char *loader;   // the loader data, after the heap; needed only while loading
     bool_t data_owned;    // `data` can be freed after loading
     uint32_t flags;
     uint32_t checksum;
