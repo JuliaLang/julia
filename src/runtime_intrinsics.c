@@ -1594,8 +1594,16 @@ JL_DLLEXPORT double julia_fma(double a, double b, double c) {
 
 // msvcrt.dll does not export these on every architecture, and the copies linked from
 // libmingwex are not visible to the JIT, so export them for the aliases in jitlayers.cpp.
+#if defined(__GNUC__) && !defined(__clang__)
+// GCC's inline rint/rintf expansion assumes round-to-nearest without -frounding-math.
+#pragma GCC push_options
+#pragma GCC optimize ("rounding-math")
+#endif
 JL_DLLEXPORT double julia_rint(double x) JL_NOTSAFEPOINT { return rint(x); }
 JL_DLLEXPORT float julia_rintf(float x) JL_NOTSAFEPOINT { return rintf(x); }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC pop_options
+#endif
 JL_DLLEXPORT double julia_trunc(double x) JL_NOTSAFEPOINT { return trunc(x); }
 JL_DLLEXPORT float julia_truncf(float x) JL_NOTSAFEPOINT { return truncf(x); }
 JL_DLLEXPORT float julia_floorf(float x) JL_NOTSAFEPOINT { return floorf(x); }
