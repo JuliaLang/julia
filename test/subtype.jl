@@ -3782,3 +3782,11 @@ struct Q61645{T,S} end
         @test typeintersect(Y, X) === Union{}
     end
 end
+
+# a var in the upper bound of a binder nested in a lower bound occurs in a triangular position
+let A = Tuple{V, Tuple{S, S} where S>:Tuple{Tuple{T, T} where T<:V}} where V, B = Tuple{Int, Any}
+    X = Tuple{Int, Tuple{S, S} where S>:Tuple{Tuple{T, T} where T<:Integer}}
+    @test X <: A && X <: B
+    @test X <: typeintersect(A, B)
+    @test X <: typeintersect(B, A)
+end
