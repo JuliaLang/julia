@@ -355,7 +355,9 @@ lmul!(A, B)
         end
     end
     alpha, beta = promote(_add.alpha, _add.beta, zero(T))
-    if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
+    if alpha isa T && beta isa T &&
+            stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
+            _fullstride2(A) && _fullstride2(B) && _fullstride2(C)
         if (tA == 'S' || tA == 's') && tB == 'N'
             return BLAS.symm!('L', tA == 'S' ? 'U' : 'L', alpha, A, B, beta, C)
         elseif (tB == 'S' || tB == 's') && tA == 'N'
@@ -412,9 +414,9 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
     mA == 0 && return y
     nA == 0 && return _rmul_or_fill!(y, β)
     alpha, beta = promote(α, β, zero(T))
-    if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-        stride(A, 1) == 1 && _fullstride2(A, abs) &&
-        !iszero(stride(x, 1)) # We only check input's stride here.
+    if alpha isa T && beta isa T &&
+            stride(A, 1) == 1 && _fullstride2(A, abs) &&
+            !iszero(stride(x, 1)) # We only check input's stride here.
         if tA in ('N', 'T', 'C')
             return BLAS.gemv!(tA, alpha, A, x, beta, y)
         # unlike gemv!, symv! and hemv! do not support a negative stride(A, 2)
@@ -443,10 +445,10 @@ function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMa
     mA == 0 && return y
     nA == 0 && return _rmul_or_fill!(y, β)
     alpha, beta = promote(α, β, zero(T))
-    if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-        stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
-        stride(y, 1) == 1 && tA == 'N' && # reinterpret-based optimization is valid only for contiguous `y`
-        !iszero(stride(x, 1))
+    if alpha isa T && beta isa T &&
+            stride(A, 1) == 1 && _fullstride2(A, abs) &&
+            stride(y, 1) == 1 && tA == 'N' && # reinterpret-based optimization is valid only for contiguous `y`
+            !iszero(stride(x, 1))
         BLAS.gemv!(tA, alpha, reinterpret(T, A), x, beta, reinterpret(T, y))
         return y
     else
@@ -465,9 +467,9 @@ function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMa
     mA == 0 && return y
     nA == 0 && return _rmul_or_fill!(y, β)
     alpha, beta = promote(α, β, zero(T))
-    @views if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-        stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
-        !iszero(stride(x, 1)) && tA in ('N', 'T', 'C')
+    @views if alpha isa T && beta isa T &&
+            stride(A, 1) == 1 && _fullstride2(A, abs) &&
+            !iszero(stride(x, 1)) && tA in ('N', 'T', 'C')
         xfl = reinterpret(reshape, T, x) # Use reshape here.
         yfl = reinterpret(reshape, T, y)
         BLAS.gemv!(tA, alpha, A, xfl[1, :], beta, yfl[1, :])
@@ -509,11 +511,9 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
     # alternatively, make non-zero β a show-stopper for BLAS.syrk!
     if iszero(_add.beta) || issymmetric(C)
         alpha, beta = promote(_add.alpha, _add.beta, zero(T))
-        if (alpha isa Union{Bool,T} &&
-            beta isa Union{Bool,T} &&
-            stride(A, 1) == stride(C, 1) == 1 &&
-            stride(A, 2) >= size(A, 1) &&
-            stride(C, 2) >= size(C, 1))
+        if alpha isa T && beta isa T &&
+                stride(A, 1) == stride(C, 1) == 1 &&
+                _fullstride2(A) && _fullstride2(C)
             return copytri!(BLAS.syrk!('U', tA, alpha, A, beta, C), 'U')
         end
     end
@@ -601,12 +601,9 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
     end
 
     alpha, beta = promote(_add.alpha, _add.beta, zero(T))
-    if (alpha isa Union{Bool,T} &&
-        beta isa Union{Bool,T} &&
-        stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
-        stride(A, 2) >= size(A, 1) &&
-        stride(B, 2) >= size(B, 1) &&
-        stride(C, 2) >= size(C, 1))
+    if alpha isa T && beta isa T &&
+            stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
+            _fullstride2(A) && _fullstride2(B) && _fullstride2(C)
         return BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
     end
     _generic_matmatmul!(C, tA, tB, A, B, _add)
@@ -643,12 +640,9 @@ function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::Abs
     alpha, beta = promote(_add.alpha, _add.beta, zero(T))
 
     # Make-sure reinterpret-based optimization is BLAS-compatible.
-    if (alpha isa Union{Bool,T} &&
-        beta isa Union{Bool,T} &&
-        stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
-        stride(A, 2) >= size(A, 1) &&
-        stride(B, 2) >= size(B, 1) &&
-        stride(C, 2) >= size(C, 1) && tA == 'N')
+    if alpha isa T && beta isa T &&
+            stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
+            _fullstride2(A) && _fullstride2(B) && _fullstride2(C) && tA == 'N'
         BLAS.gemm!(tA, tB, alpha, reinterpret(T, A), B, beta, reinterpret(T, C))
         return C
     end
