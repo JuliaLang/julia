@@ -5900,9 +5900,12 @@ end
         @testset "image build" begin
             built = check_image_process("build", `$julia -e 'using FMAImage'`)
             if built
-                append!(images, (joinpath(root, file)
-                    for (root, _, files) in walkdir(depot) for file in files
-                    if endswith(file, "." * Libdl.dlext) && occursin("FMAImage", joinpath(root, file))))
+                for (root, dirs, files) in walkdir(depot)
+                    # macOS dSYM bundles contain a debug file with the same name as the package image.
+                    filter!(dir -> !endswith(dir, ".dSYM"), dirs)
+                    append!(images, (joinpath(root, file) for file in files
+                        if endswith(file, "." * Libdl.dlext) && occursin("FMAImage", joinpath(root, file))))
+                end
                 @test length(images) == 1 context=images
             end
         end
