@@ -2029,11 +2029,6 @@ CallInst *LateLowerGCFrame::EmitGCAllocBytes(IRBuilder<> &builder, CallInst *CI,
         });
     newI->setAttributes(allocBytesIntrinsic->getAttributes());
     newI->addDereferenceableRetAttr(CI->getRetDereferenceableBytes());
-    // Preserve CancellationLowering's reset-region annotation:
-    // FinalLowerGC uses it to select the reset-safe allocation
-    // entry points.
-    if (auto *MD = CI->getMetadata("julia.reset_region"))
-        newI->setMetadata("julia.reset_region", MD);
     newI->takeName(CI);
     // Setting the tag in IR was meant to let LLVM see that a fresh object has clear GC bits,
     // and fold away write barriers on it. Since #59559, write barriers load the tag as volatile,
