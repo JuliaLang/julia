@@ -697,8 +697,8 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     // Re-check now that the thread cannot run: the current task may have
     // switched before the freeze. Delivery is gated on an actual
     // cancellation of the task's bound token source, kept coherent with the
-    // published regions: exception handlers restore the pair together, and
-    // finalizers only run with the region unpublished.
+    // published regions by the exception-handler and finalizer save/restore
+    // discipline.
     ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
     bound = ct2 == NULL ? NULL :
         jl_atomic_load_relaxed(&ct2->bound_cancel_token);

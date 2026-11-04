@@ -118,9 +118,12 @@ function __init__()
             bits_per_limb() != BITS_PER_LIMB ? @error(msg) : @warn(msg)
         end
 
-        # GMP calls may run under a reset region and re-enter the runtime
-        # through these allocation hooks. The hooks unpublish the region
-        # around the allocator.
+        # The jl_gmp_counted_* hooks are the jl_gc_counted_* allocators with a
+        # cancellation-handler region published across them: GMP computations
+        # run under a reset region (see the `reset_safe` annotations in MPZ),
+        # and the hooks are exactly where an asynchronous unwind must not
+        # land - a cancellation delivered inside them is deferred and chained
+        # into the reset on exit instead.
         ccall((:__gmp_set_memory_functions, libgmp), Cvoid,
               (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}),
               cglobal(:jl_gmp_counted_malloc),
