@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, SparseArrays
+using Test
 using Test: guardseed
 
 using Random
@@ -408,10 +408,6 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro(0)], [SeedHashe
                 @test A2 === A
                 if f! === rand!
                     f!(rng..., A, X)             ::typeof(A)
-                    if A isa Array && T !== Char # Char/Integer comparison
-                        f!(rng..., sparse(A))    ::typeof(sparse(A))
-                        f!(rng..., sparse(A), X) ::typeof(sparse(A))
-                    end
                 end
             end
         end
@@ -578,8 +574,6 @@ end
         @test sort!(p) == 1:10
     end
 
-    @test sprand(mta,1,1,0.9) == sprand(mtb,1,1,0.9)
-    @test sprand(mta,10,10,0.3) == sprand(mtb,10,10,0.3)
 end
 
 @testset "MersenneTwister polynomial generation and jump" begin
