@@ -4,6 +4,10 @@ using Test
 
 using Base.Threads
 
+# TRIAL, do not merge: why is the `@profile` spawn test slow on aarch64 Linux?
+include("profile_spawnmany_trial.jl")
+spawn_trial("start")
+
 function with_output_on_failure(f)
     mktemp() do _, output
         try
@@ -645,20 +649,7 @@ end
 # We don't need the watchdog anymore
 close(proc.in)
 
-# TRIAL, do not merge: does malloc arena growth explain the slowdown on aarch64 Linux?
-if Sys.islinux()
-    for arm in ("default", "arena1", "arena1", "default")
-        env = ["NTASKS" => "2000000", "SPAWN_TRIAL" => arm]
-        arm == "arena1" && push!(env, "MALLOC_ARENA_MAX" => "1")
-        cmd = ignorestatus(addenv(Cmd(`$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no profile_spawnmany_exec.jl`; dir = @__DIR__), env...))
-        proc = run(pipeline(cmd; stdout = stderr, stderr); wait = false)
-        start = time()
-        timer = Timer(_ -> kill(proc, Base.SIGKILL), 400)
-        wait(proc)
-        close(timer)
-        println(stderr, "SPAWN_TRIAL_RESULT arm=", arm, " elapsed_s=", round(time() - start; digits=1), " termsignal=", proc.termsignal)
-    end
-end
+spawn_trial("later")
 
 # https://github.com/JuliaLang/julia/pull/42973
 @testset "spawn and wait *a lot* of tasks in @profile" begin
