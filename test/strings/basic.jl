@@ -587,7 +587,7 @@ end
             (0xd800, false), (0xdfff, false),
             (0xe000, true), (0xffff, true),
             (0x10000, true), (0x10ffff, true),
-            (0x110000, false)
+            (0x110000, false), (-1, false), (Int8(-1), false)
         )
         @test isvalid(Char, val) == pass
         # no value has type `Union{}`
@@ -930,6 +930,8 @@ end
         @test nextind(s, 16, 1) == 17
         @test nextind(s, 16, 2) == 18
         @test nextind(s, 16, 3) == 19
+        @test nextind(s, 0, typemax(Int)) == typemax(Int)
+        @test nextind(s, 16, typemax(Int)) == typemax(Int)
         @test_throws BoundsError nextind(s, 17)
         @test_throws BoundsError nextind(s, 17, 0)
         @test_throws BoundsError nextind(s, 17, 1)
@@ -973,6 +975,11 @@ end
     @test last(s, 4) == "ϵ²>0"
     @test last(s, length(s)) == s
     @test last(s, length(s)+1) == s
+    # issue #64143
+    for t in (s, GenericString(s))
+        @test first(t, typemax(Int)) == s
+        @test last(t, typemax(Int)) == s
+    end
 end
 
 @testset "invalid code point" begin

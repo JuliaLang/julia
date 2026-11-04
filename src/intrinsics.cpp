@@ -197,7 +197,7 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         bt = (jl_datatype_t*)jl_tparam0(bt);
 
     if (type_is_ghost(lt))
-        return UndefValue::get(lt);
+        return PoisonValue::get(lt);
 
     if (lt->isFloatTy()) {
         uint32_t data32 = *(const uint32_t*)ptr;
@@ -329,7 +329,7 @@ static Constant *undef_value_for_type(Type *T) {
         // make sure gc pointers (including ptr_phi of union-split) are initialized to NULL
         undef = Constant::getNullValue(T);
     else
-        undef = UndefValue::get(T);
+        undef = PoisonValue::get(T);
     return undef;
 }
 
@@ -435,7 +435,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
     if (ty->isVoidTy() || DL.getTypeSizeInBits(ty) != DL.getTypeSizeInBits(to)) {
         // this can happen in dead code
         CreateTrap(ctx.builder);
-        return UndefValue::get(to);
+        return PoisonValue::get(to);
     }
     else if (!ty->isIntOrPtrTy() && !ty->isFloatingPointTy()) {
         assert(DL.getTypeSizeInBits(ty) == DL.getTypeSizeInBits(to));
@@ -477,7 +477,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, Maybe
             return nullptr;
         }
         CreateTrap(ctx.builder);
-        return UndefValue::get(to); // type mismatch error
+        return PoisonValue::get(to); // type mismatch error
     }
 
     Constant *c = x.constant ? julia_const_to_llvm(ctx, x.constant) : nullptr;

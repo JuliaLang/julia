@@ -124,14 +124,16 @@ function move_to_node1(t)
     nothing
 end
 
-move_to_node1("ccall")
 # These add worker processes, which only node 1 can do
 move_to_node1("precompile_distributed")
 move_to_node1("SharedArrays")
 move_to_node1("Distributed")
-move_to_node1("gc")
-# Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
-move_to_node1("stress")
+if Sys.WORD_SIZE == 32
+    # On 32-bit workers that have used a lot of memory, `@threadcall` fails to allocate
+    # signal stacks (`ccall`) and allocations fail (`gc`)
+    move_to_node1("ccall")
+    move_to_node1("gc")
+end
 
 # These leave state behind on their worker (`precompile`: packages loaded and methods
 # added to Base, `threads`: exited adopted threads), which breaks later tests on the
@@ -142,16 +144,30 @@ const recycle_worker_tests = ["precompile", "threads"]
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Move LinearAlgebra, Pkg, precompile and threads tests to the front, because they take
-# a while, so we might as well get them all started early. JuliaLowering_stdlibs both
-# takes a while and uses a lot of memory at the beginning so try to run it early to keep
-# total memory use flatter. `threads` goes first so that it gets a fresh worker, which is
-# recycled afterwards (see `recycle_worker_tests`).
-for prependme in ["precompile", "LinearAlgebra", "Pkg", "JuliaLowering_stdlibs", "threads"]
-    prependme_test_ids = findall(x->occursin(prependme, x), tests)
-    prependme_tests = tests[prependme_test_ids]
-    deleteat!(tests, prependme_test_ids)
-    prepend!(tests, prependme_tests)
+# Start the longest tests first, so that they don't end up running alone at the end while
+# the other workers sit idle. Roughly in decreasing order of their duration on CI (Linux,
+# macOS and Windows, October 2026); tests that are not listed keep their order and run
+# after these. A package name also covers its test groups.
+const longest_tests = [
+    "Pkg", "LinearAlgebra", "SparseArrays", "threads", "cmdlineargs", "subarray",
+    "compileall", "Compiler/AbstractInterpreter", "precompile", "jit",
+    "JuliaLowering_stdlibs", "loading", "arrayops", "JuliaLowering", "bitarray", "sorting",
+    "Random", "abstractarray", "iterators", "core", "ranges", "LibGit2/libgit2",
+    "FileWatching", "atomics", "math", "rounding", "apint", "JuliaSyntax",
+    "Compiler/inference", "reducedim", "numbers", "misc", "broadcast", "REPL", "Profile",
+    "rational", "cancellation", "gc", "InteractiveUtils", "sets", "ccall",
+]
+function expected_rank(test)
+    rank = findfirst(name -> test == name || startswith(test, name * "/"), longest_tests)
+    return something(rank, length(longest_tests) + 1)
+end
+sort!(tests; by=expected_rank) # stable, so unlisted tests keep their order
+
+# `ambiguous` must be the first test on its worker, as methods defined by other tests can
+# make Base methods ambiguous
+if "ambiguous" in tests
+    splice!(tests, findfirst(isequal("ambiguous"), tests))
+    pushfirst!(tests, "ambiguous")
 end
 
 import LinearAlgebra
@@ -186,8 +202,21 @@ cd(@__DIR__) do
         Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
 
+    function disk_sizes(path...)
+        try
+            d = diskstat(path...)
+            return Base.format_bytes(d.total), Base.format_bytes(d.available)
+        catch err
+            err isa Base.IOError || rethrow()
+            return "(unavailable)", "(unavailable)"
+        end
+    end
+    disk_total, disk_available = disk_sizes()
+    tmp_total, tmp_available = disk_sizes(tempdir())
     println("""
         Running parallel tests with:
+          gethostname() = $(Libc.gethostname())
+          BUILDKITE_AGENT_NAME = $(get(ENV, "BUILDKITE_AGENT_NAME", "(not set)"))
           getpid() = $(getpid())
           nworkers() = $(nworkers())
           nthreads(:interactive) = $(Threads.threadpoolsize(:interactive))
@@ -195,6 +224,10 @@ cd(@__DIR__) do
           Sys.CPU_THREADS = $(Sys.CPU_THREADS)
           Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
           Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))
+          diskstat().total = $disk_total
+          diskstat().available = $disk_available
+          diskstat(tempdir()).total = $tmp_total
+          diskstat(tempdir()).available = $tmp_available
           Sys.uptime() = $(Sys.uptime()) ($(round(Sys.uptime() / (60 * 60), digits=1)) hours)
         """)
 

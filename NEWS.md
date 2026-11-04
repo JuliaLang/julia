@@ -7,6 +7,8 @@ New language features
 Language changes
 ----------------
 
+* `Slices` exposes `dataids` of its parent array to properly identify aliasing in broadcasting ([#49182]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -16,11 +18,21 @@ Command-line option changes
 Multi-threading changes
 -----------------------
 
+* `--threads=auto`, `--procs=auto`, `JULIA_NUM_THREADS=auto` and the default number of GC threads
+  now honour `JULIA_CPU_THREADS`, matching `Sys.EFFECTIVE_CPU_THREADS` ([#64613]).
+* With `JULIA_EXCLUSIVE=1`, default-pool threads are pinned to the CPUs of the inherited affinity
+  mask, in order, instead of to CPUs `0` to `N-1`. Their number is limited by that mask rather
+  than by `Sys.EFFECTIVE_CPU_THREADS` ([#64613]).
+
 Build system changes
 --------------------
 
 New library functions
 ---------------------
+
+* `bitsizeof(x)` returns the declared width in bits of a primitive type, or of the primitive type
+  of `x`, excluding the padding that `sizeof` includes. It throws for any other type or value ([#61359]).
+* `filterfirst(f, itr)` returns the first element of `itr` for which `f` returns `true` ([#60913]).
 
 New library features
 --------------------
@@ -55,6 +67,12 @@ Standard library changes
 #### Test
 
 #### TOML
+
+#### UUIDs
+
+* `uuid5` now hashes the bytes of `name` as specified by RFC 4122, instead of first processing
+  backslash escape sequences in it with `unescape_string`. This changes the result for names
+  containing a backslash, which previously could also throw an `ArgumentError`.
 
 External dependencies
 ---------------------

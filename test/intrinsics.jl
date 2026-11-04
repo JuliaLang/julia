@@ -471,6 +471,15 @@ let x = UInt63(0xc000_ba98_8765_4321), y = Int63(-1)
     end
 end
 
+# bitsizeof is only defined for primitive types and their instances
+@test Core.bitsizeof(true) == 8
+@test Core.bitsizeof(C_NULL) == Sys.WORD_SIZE
+for x in (Pair{Int32,Int16}, Tuple{UInt63}, Tuple{}, (), nothing, "abc", :abc, zeros(UInt8, 3),
+          Memory{UInt8}(undef, 3), Union{Int8,Int16}, Ptr, Integer, Union{}, DataType)
+    @test_throws ErrorException Core.bitsizeof(x)
+end
+@test_throws "Type Pair is not a primitive type" Core.bitsizeof(Pair{Int32,Int16})
+
 # test nonsensical valid conversions and errors
 
 compiled_addi(x, y) = Core.Intrinsics.add_int(x, y)

@@ -389,7 +389,7 @@ function savefile(term::Base.Terminals.TTYTerminal, content::AbstractString)
         println(out, S"\e[F\e[2K{light,grey:{bold:history>} {red:×} History selection aborted}\n")
         return
     end
-    open(filename, "w") do io
+    open(filename, "a+") do io
         seekend(io)
         if !iszero(position(io))
             seek(io, position(io) - 1)

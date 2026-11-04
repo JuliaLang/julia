@@ -105,6 +105,26 @@ if Sys.isunix()
         @test occursin("==== Thread ", err_s)
         @test occursin("==== Done", err_s)
     end
+
+    # issue #50743
+    @testset "abort backtrace reaches Julia" begin
+        script = """
+            mutable struct RLimit
+                cur::Int64
+                max::Int64
+            end
+            const RLIMIT_CORE = 4 # from /usr/include/sys/resource.h
+            ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_CORE, Ref(RLimit(0, 0)))
+            @noinline abort_from_julia() = ccall(:abort, Cvoid, ())
+            abort_from_julia()
+        """
+        exename = `$(Base.julia_cmd()) --startup-file=no --color=no --compile=yes -g1`
+        errp = PipeBuffer()
+        p = run(pipeline(ignorestatus(`$exename -e $script`), stderr=errp))
+        err_s = read(errp, String)
+        @test Base.process_signaled(p) && p.termsignal == 6 # SIGABRT
+        @test occursin("abort_from_julia at none:", err_s)
+    end
 end
 
 @testset "julia_cmd" begin
@@ -449,6 +469,25 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         read(`$exename --threads=auto -e $code`, String) ==
         read(`$exename -tauto -e $code`, String) ==
         read(`$exename -t auto -e $code`, String)
+    # `auto` agrees with Sys.EFFECTIVE_CPU_THREADS, which honours JULIA_CPU_THREADS
+    let code = "print(Threads.threadpoolsize() == Sys.EFFECTIVE_CPU_THREADS)"
+        for nc in ("1", "2")
+            cmd = addenv(`$exename -t auto -e $code`, "JULIA_CPU_THREADS" => nc)
+            @test read(cmd, String) == "true"
+            cmd = addenv(`$exename -e $code`, "JULIA_CPU_THREADS" => nc,
+                         "JULIA_NUM_THREADS" => "auto")
+            @test read(cmd, String) == "true"
+        end
+        @test read(addenv(`$exename -t auto -e $code2`, "JULIA_CPU_THREADS" => "1"), String) == "2"
+    end
+    # the runtime parses JULIA_CPU_THREADS like Base (checked without starting
+    # an uncapped `auto` pool)
+    let code = "print(ccall(:jl_effective_threads, Int32, ()) == Sys.EFFECTIVE_CPU_THREADS)"
+        for nc in ("1", " +1 ", " 0x1 ", "0b10", "010", "0x0x1", "0b0x1", "0b0b1", "0x", "99999", "0", "-1", "+-1", "1x", "invalid", "")
+            cmd = addenv(`$exename -t1 -e $code`, "JULIA_CPU_THREADS" => nc)
+            @test read(pipeline(cmd; stderr=devnull), String) == "true"
+        end
+    end
     for nt in (nothing, "1")
         withenv("JULIA_NUM_THREADS" => nt) do
             @test read(`$exename --threads=2 -e $code`, String) ==
@@ -501,6 +540,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             read(`$exename --threads=auto -e $code`, String) ==
             read(`$exename -tauto -e $code`, String) ==
             read(`$exename -t auto -e $code`, String)
+        withenv("JULIA_NUM_GC_THREADS" => nothing) do
+            @test read(addenv(`$exename -t auto -e $code`, "JULIA_CPU_THREADS" => "1"), String) == "1"
+        end
         for nt in (nothing, "1")
             withenv("JULIA_NUM_GC_THREADS" => nt) do
                 @test test_read_success(`$exename --gcthreads=2 -e $code`) == "2"
@@ -996,7 +1038,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             end
             do_test()
             """), """
-            DA:1,1
+            DA:1,2
             DA:2,1
             DA:3,1
             DA:5,1

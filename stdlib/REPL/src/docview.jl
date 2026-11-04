@@ -901,8 +901,9 @@ function accessible(mod::Module)
     bindings = Set(AccessibleBinding(s) for s in names(mod; all=true, imported=true)
                    if !isdeprecated(mod, s))
     for used in moduleusings(mod)
-        union!(bindings, (AccessibleBinding(used, s) for s in names(used)
-                          if !isdeprecated(used, s)))
+        m = used::Module
+        union!(bindings, (AccessibleBinding(m, s) for s in names(m)
+                          if !isdeprecated(m, s)))
     end
     union!(bindings, (AccessibleBinding(k) for k in keys(Base.Docs.keywords)))
     filter!(b -> !occursin('#', b.name), bindings)

@@ -1529,7 +1529,7 @@ function complete_path_string(path, hint::Bool=false;
         catch err
             if err isa Base.IOError
                 false
-            elseif err isa Base.ArgumentError && occursin("embedded NULs", err.msg)
+            elseif err isa Base.ArgumentError && occursin("embedded NULs", String(err.msg)::String)
                 false
             else
                 rethrow()

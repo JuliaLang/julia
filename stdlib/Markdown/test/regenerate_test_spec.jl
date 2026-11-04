@@ -135,7 +135,8 @@ function generate_test_file(io::IO, data, mode::Symbol; flavor::Symbol=:julia)
         # pass, and a single `@test_broken` at the bottom of this file stands in for
         # the whole set. If the `now_passing` test fails, some examples were fixed:
         # rerun $(basename(@__FILE__)) and commit the regenerated files.
-        known_broken = BitSet($(sort!(collect(broken))))
+        known_broken = BitSet([
+        $(join(("    $i,\n" for i in sort!(collect(broken)))))])
         now_passing = Int[]
         """)
 

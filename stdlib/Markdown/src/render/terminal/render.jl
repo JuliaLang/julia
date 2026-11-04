@@ -180,7 +180,7 @@ function term(io::IO, md::Code, _)
         end
         hl
     elseif md.language == "styled"
-        styled(md.code)
+        styled(md.code)::AnnotatedString{String}
     else
         styled"{markdown_code:$(md.code)}"
     end

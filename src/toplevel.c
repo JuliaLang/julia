@@ -378,7 +378,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int *has_defs, int *has_opaque) JL_CANSAFEPOINT
+static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int *has_defs, int *needs_resolve) JL_CANSAFEPOINT
 {
     if (!jl_is_expr(v))
         return;
@@ -409,8 +409,9 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
         *has_ccall = 1;
         return;
     }
-    else if (head == jl_new_opaque_closure_sym) {
-        *has_opaque = 1;
+    else if (head == jl_new_opaque_closure_sym || head == jl_foreignglobal_sym) {
+        // the interpreter can run these, but only after definition effects are resolved
+        *needs_resolve = 1;
         return;
     }
     else if (head == jl_call_sym && jl_expr_nargs(e) > 0) {
@@ -443,7 +444,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
     for (i = 0; i < jl_array_nrows(e->args); i++) {
         jl_value_t *a = jl_exprarg(e, i);
         if (jl_is_expr(a))
-            expr_attributes(a, body, has_ccall, has_defs, has_opaque);
+            expr_attributes(a, body, has_ccall, has_defs, needs_resolve);
     }
 }
 
@@ -452,19 +453,19 @@ int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile)
     jl_array_t *body = src->code;
     assert(jl_typetagis(body, jl_array_any_type));
     size_t i;
-    int has_ccall = 0, has_defs = 0, has_opaque = 0;
+    int has_ccall = 0, has_defs = 0, needs_resolve = 0;
     if (include_force_compile && jl_has_meta(body, jl_force_compile_sym))
         return 1;
     for(i=0; i < jl_array_nrows(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
-        expr_attributes(stmt, body, &has_ccall, &has_defs, &has_opaque);
+        expr_attributes(stmt, body, &has_ccall, &has_defs, &needs_resolve);
         if (has_ccall)
             return 1;
     }
     return 0;
 }
 
-static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int *has_loops, int *has_opaque, int *forced_compile) JL_CANSAFEPOINT
+static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int *has_loops, int *needs_resolve, int *forced_compile) JL_CANSAFEPOINT
 {
     size_t i;
     *has_loops = 0;
@@ -480,7 +481,7 @@ static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int
                     *has_loops = 1;
             }
         }
-        expr_attributes(stmt, body, has_ccall, has_defs, has_opaque);
+        expr_attributes(stmt, body, has_ccall, has_defs, needs_resolve);
     }
     *forced_compile = jl_has_meta(body, jl_force_compile_sym);
 }
@@ -739,8 +740,8 @@ JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t
     size_t last_age = ct->world_age;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
 
-    int has_ccall = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced_compile = 0;
-    body_attributes((jl_array_t*)thk->code, &has_ccall, &has_defs, &has_loops, &has_opaque, &forced_compile);
+    int has_ccall = 0, has_defs = 0, has_loops = 0, needs_resolve = 0, forced_compile = 0;
+    body_attributes((jl_array_t*)thk->code, &has_ccall, &has_defs, &has_loops, &needs_resolve, &forced_compile);
 
     jl_method_instance_t *mfunc = NULL;
     jl_value_t *result;
@@ -767,7 +768,7 @@ JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t
     else {
         // use interpreter
         assert(thk);
-        if (has_opaque) {
+        if (needs_resolve) {
             jl_resolve_definition_effects_in_ir((jl_array_t*)thk->code, m, NULL, NULL, 0);
         }
         result = jl_interpret_toplevel_thunk(m, thk);

@@ -2,6 +2,7 @@
 module Trimmability
 
 using Sockets
+using Dates: Date, DateTime, @dateformat_str
 
 include("linalg.jl")
 
@@ -196,6 +197,14 @@ end
 # keeps in a merged union: each `print` must still resolve statically.
 @noinline interpolate_many(r, x, s, c) = "got $(r) vs $(first(r)) with $(x) and $(s) and $(c)"
 
+# Parsing with a `DateFormat`, whose error path prints the directive that failed:
+# that `print` must resolve statically too.
+function _test_dates()
+    day = Date("2026-03-08")
+    time = DateTime("2026-03-08 16:00:00.5", dateformat"yyyy-mm-dd HH:MM:SS.s")
+    println(Core.stdout, "dates: ", day, " ", time)
+end
+
 function _test_threads()
     v = zeros(Int, 64)
     Threads.@threads for i in eachindex(v)
@@ -262,6 +271,8 @@ function @main(args::Vector{String})::Cint
 
     user_library_ccall() # prints as a side effect
     lazy_library_ccall()
+    println(Core.stdout, "symbols: ", repr(:sym), " ", repr(Symbol("a b")), " ", repr(:(::)))
+    _test_dates()
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
 

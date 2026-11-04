@@ -308,7 +308,7 @@ function parser_for_module(mod::Union{Module, Nothing})
     if mod isa Module && invokelatest(isdefined, mod, Symbol("#_internal_julia_parse"))
         invokelatest(getglobal, mod, Symbol("#_internal_julia_parse"))
     else
-        Base.VersionedParse(Base.VERSION_EDITION)
+        Base.VersionedParse(Base.LATEST_STABLE_EDITION)
     end
 end
 
@@ -566,8 +566,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                     @assert isa(x.args[4], Int)
                 elseif i == 5
                     @assert isa((x.args[5]::QuoteNode).value,
-                                Union{Symbol, Tuple{Symbol, UInt16, Bool}, Tuple{Symbol, UInt16, Bool, Bool},
-                                      Tuple{Symbol, UInt16, Bool, Bool, Bool}})
+                                Union{Symbol, Tuple{Symbol, UInt16, Bool}, Tuple{Symbol, UInt16, Bool, Bool}})
                 else
                     x.args[i] = _partially_inline!(x.args[i], slot_replacements,
                                                    type_signature, static_param_values,

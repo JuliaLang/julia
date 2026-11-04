@@ -657,45 +657,6 @@ JL_DLLEXPORT void *jl_malloc(size_t sz) JL_CANSAFEPOINT
     return jl_gc_counted_malloc(sz);
 }
 
-// === GMP allocation hooks ===================================================
-// These are special reset-safe versions of GMP's allocation functions. GMP is
-// generally reset-safe, but our allocators are not, so unpublish the reset
-// region around them as the *_reset_safe entry points above do.
-
-JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz)
-{
-    jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL || ct->ptls == NULL)
-        return jl_gc_counted_malloc(sz);
-    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
-    void *data = jl_gc_counted_malloc(sz);
-    reset_region_republish(ct, reset_ctx); // may longjmp
-    return data;
-}
-
-JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
-{
-    jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL || ct->ptls == NULL)
-        return jl_gc_counted_realloc_with_old_size(p, old, sz);
-    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
-    void *data = jl_gc_counted_realloc_with_old_size(p, old, sz);
-    reset_region_republish(ct, reset_ctx); // may longjmp
-    return data;
-}
-
-JL_DLLEXPORT void jl_gmp_counted_free_with_size(void *p, size_t sz)
-{
-    jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL || ct->ptls == NULL) {
-        jl_gc_counted_free_with_size(p, sz);
-        return;
-    }
-    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
-    jl_gc_counted_free_with_size(p, sz);
-    reset_region_republish(ct, reset_ctx); // may longjmp
-}
-
 //_unchecked_calloc does not check for potential overflow of nm*sz
 STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT {
     size_t nmsz = nm*sz;

@@ -12,11 +12,11 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
         first = true
         n = 0
         for pair in t
+            limit && n >= 10 && (print(io, "…"); break)
             first || print(io, ", ")
             first = false
             show(recur_io, pair)
             n+=1
-            limit && n >= 10 && (print(io, "…"); break)
         end
     end
     print(io, ')')
@@ -926,7 +926,7 @@ struct PersistentDict{K,V} <: AbstractDict{K,V}
         h = HAMT.HashState(key)
         found, present, trie, i, bi, top, _ = HAMT.path(trie, h, #=persistent=#true)
         if found && present
-            deleteat!(trie.data, i)
+            trie.data = HAMT.deleteat_copy(trie.data, i)
             HAMT.unset!(trie, bi)
         end
         return new{K, V}(top)
