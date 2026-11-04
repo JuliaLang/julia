@@ -6,50 +6,57 @@ end
 ValidationDiagnostic(st::SyntaxTree, msg, loc) =
     ValidationDiagnostic(SyntaxList(st), String[msg], loc)
 
+struct ValidationUnknown end
+
 """
 The type returned by all `vst` functions.  There are three answers this can
 represent:
-  - valid `(true, nothing)`
-  - known-invalid `(false, [errors...])`
-  - don't know/not my job `(false, nothing)`.
+  - valid `nothing`
+  - known-invalid `[errors...]`
+  - don't know/not my job `ValidationUnknown()`
 """
 struct ValidationResult
-    ok::Bool
-    errors::Union{Nothing, Vector{ValidationDiagnostic}}
+    # Putting this in one field is somewhat of a hack to reduce stack size.
+    data::Union{Nothing, ValidationUnknown, Vector{ValidationDiagnostic}}
 end
 
-pass() = ValidationResult(true, nothing)
-unknown() = ValidationResult(false, nothing)
+is_known(vr::ValidationResult) = !(vr.data isa ValidationUnknown)
+validation_ok(vr::ValidationResult) = vr.data === nothing
+validation_errors(vr::ValidationResult) =
+    vr.data isa Vector{ValidationDiagnostic} ? vr.data : nothing
+pass() = ValidationResult(nothing)
+unknown() = ValidationResult(ValidationUnknown())
 @noinline fail(st::SyntaxTree, msg="invalid syntax", loc=nothing) =
-    ValidationResult(false, [ValidationDiagnostic(
+    ValidationResult([ValidationDiagnostic(
         st, msg, something(loc, LineNumberNode(0)))])
 macro fail(st, msg)
     esc(:($fail($st, $msg, $(QuoteNode(__source__)))))
 end
 
-is_known(vr::ValidationResult) = vr.ok || vr.errors !== nothing
 
-function Base.var"&"(vr1::ValidationResult, vr2::ValidationResult)
-    errors_out = isnothing(vr1.errors) ? vr2.errors :
-        isnothing(vr2.errors) ? vr1.errors :
-        union(vr1.errors, vr2.errors)
-    ValidationResult(vr1.ok & vr2.ok, errors_out)
+@inline function Base.var"&"(vr1::ValidationResult, vr2::ValidationResult)
+    e1 = validation_errors(vr1)
+    e2 = validation_errors(vr2)
+    !isnothing(e1) && !isnothing(e2) ? ValidationResult(union(e1, e2)) :
+        !isnothing(e1) ? vr1 :
+        !isnothing(e2) ? vr2 :
+        validation_ok(vr1) && validation_ok(vr2) ? pass() : unknown()
 end
 
 # Note that this, unlike `&`, is only a true `|` in the case that at least one
 # argument is `ok` or at most one argument produces errors.  If both sides are
 # `!ok` with errors, use the first argument's errors.
-function Base.var"|"(vr1::ValidationResult, vr2::ValidationResult)
-    vr1.ok && return vr1
-    vr2.ok && return vr2
-    ValidationResult(false, !isnothing(vr1.errors) ? vr1.errors : vr2.errors)
+@inline function Base.var"|"(vr1::ValidationResult, vr2::ValidationResult)
+    (validation_ok(vr1) || validation_ok(vr2)) ? pass() :
+        is_known(vr1) ? vr1 :
+        is_known(vr2) ? vr2 : unknown()
 end
 
 abstract type ValidationContext end
 
 # `allv` recurses through the validators, so every frame must see the same `itr`
 # type, or recursion limiting widens it to an abstract `SubArray`.
-function allv(f::T, vcx::ValidationContext, itr::SyntaxView) where {T<:Function}
+@inline function allv(f::T, vcx::ValidationContext, itr::SyntaxView) where {T<:Function}
     ok = pass()
     for i in itr
         ok &= f(vcx, i)
@@ -193,7 +200,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         vst1_iter(vcx, iter1) &
         vst1(with(vcx; in_loop=true, in_gscope=false), body)
     [:while cond body] ->
-        vst1(vcx, cond) &
+        vst1(with(vcx; in_loop=true), cond) &
         vst1(with(vcx; in_loop=true, in_gscope=false), body)
     [:tuple _...] ->
         vst1_tuple(vcx, st)
@@ -363,7 +370,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         if vcx.toplevel
             top_vr
         else
-            !top_vr.ok ? unknown() :
+            !validation_ok(top_vr) ? unknown() :
                 @fail(st, "this syntax is only allowed at top level")
         end
     end | @fail(st, string(
@@ -453,7 +460,8 @@ function vst1_importpath(vcx, st; dots_ok)
             c = c[1]
         end
         # syntax todo: lhs should probably not be true here
-        ok = ok & (vst1_ident(vcx, c).ok ? pass() : vst1_ident(vcx, c; lhs=true))
+        ok = ok & (validation_ok(vst1_ident(vcx, c)) ?
+            pass() : vst1_ident(vcx, c; lhs=true))
         seen_first = true
     end
     return !seen_first ? @fail(st, "expected identifier in `importpath`") : ok
@@ -688,8 +696,11 @@ vst1_function_calldecl(vcx, st) = @stm st begin
         vst1_function_calldecl(vcx, callex) &
         allv(vst1_typevar_decl, with(vcx; readable_underscore=true), tds)
     [:(::) callex rt] ->
-        vst1_simple_calldecl(vcx, callex) & vst1(vcx, rt)
-    _ -> vst1_simple_calldecl(vcx, st)
+        vst1_simple_calldecl(vcx, st[1]) & vst1(vcx, rt)
+    [:call _...] -> vst1_simple_calldecl(vcx, st)
+    # anonymous function syntax `function (x); end` or `function (x...); end` is
+    # subject to bad-arglist rules (block, etc.)
+    _ -> vst1_lam_lhs(vcx, st) | @fail(st, "malformed `call` in function decl")
 end
 
 vst1_simple_calldecl(vcx, st) = @stm st begin
@@ -699,9 +710,7 @@ vst1_simple_calldecl(vcx, st) = @stm st begin
         vst1_calldecl_kws(vcx, st[2])
     [:call f ps...] -> vst1_calldecl_name(vcx, f) &
         _calldecl_positionals(vcx, ps, false)
-    # anonymous function syntax `function (x); end` or `function (x...); end` is
-    # subject to bad-arglist rules (block, etc.)
-    _ ->  vst1_lam_lhs(vcx, st) | @fail(st, "malformed `call` in function decl")
+    _ -> @fail(st, "expected `call` expression")
 end
 
 vst1_macro(vcx, st) = @stm st begin
@@ -731,8 +740,8 @@ vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [:identifier] -> vst1_ident(vcx, st; lhs=true) &
         (!is_dotted_operator(syntax_name(st)) ? pass() :
         @fail(st, "dotted operator is not a valid function name"))
-    [:. _ _] ->
-        vst1_calldecl_dot_name(vcx, st)
+    [:. _ _] -> vcx.toplevel ? vst1_calldecl_dot_name(vcx, st) :
+        @fail(st, "global method definition must be placed at top level, or use eval")
     [:curly [:value] tvs...] -> allv(vst1, vcx, tvs)
     [:curly t tvs...] -> vst1_calldecl_name(vcx, t) & allv(vst1, vcx, tvs)
     ([:(::) _...], when=!vcx.toplevel) ->
@@ -920,9 +929,9 @@ end
 # after anything that isn't a field.  See #62075.
 function _struct_noassign(vcx, body)
     for st in body
-        if head(st) === :(=) && vst1_struct_field(vcx, st[1]).ok
+        if head(st) === :(=) && validation_ok(vst1_struct_field(vcx, st[1]))
             return @fail(st, "assignment syntax in structure fields is reserved")
-        elseif !vst1_struct_field(vcx, st).ok
+        elseif !validation_ok(vst1_struct_field(vcx, st))
             return pass()
         end
     end
@@ -1073,7 +1082,8 @@ vst1_splat_or_val(vcx, st) = @stm st begin
 end
 
 vst1_generator(vcx, st) = let
-    vcx = with(vcx; return_ok=false, toplevel=false, in_gscope=false, in_loop=false)
+    vcx = with(vcx; return_ok=false, toplevel=false, in_gscope=false,
+               in_loop=false, in_symblock=false)
     @stm st begin
         [:generator _] -> @fail(st, "`generator` requires >=2 args")
         [:generator val [:filter cond is...]] ->
@@ -1158,12 +1168,12 @@ function valid_st0(st::SyntaxTree)
     vr = vst1(with(Validation1Context(), unexpanded=true), st)
     # hack: A macrocall can show up almost anywhere, so filter errors pointing
     # at macrocalls instead of adding cases to every function above.
-    isnothing(vr.errors) && return vr.ok
-    vr2_errors = filter(vr.errors) do err
+    errors = validation_errors(vr)
+    isnothing(errors) && return validation_ok(vr)
+    vr2_errors = filter(errors) do err
         isempty(err.sts) || !(head(err.sts[1]) === :macrocall)
     end
-    vr2 = ValidationResult(isempty(vr2_errors), vr2_errors)
-    return vr2.ok
+    return isempty(vr2_errors)
 end
 
 vst0(_, st) = vst1(with(Validation1Context(), unexpanded=true), st)
@@ -1265,6 +1275,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [:_while cond body] -> vst2(vcx, cond) & vst2(vcx, body)
     [:inert _] -> pass()
     [:syntaxinert _] -> pass()
+    [:copyast [:inert _]] -> pass()
     [:lambda _...] -> vst2_lam(vcx, st)
     [:generated_lambda _...] -> vst2_lam(vcx, st)
     # Declare a zero-method generic function with global `name` or creates a

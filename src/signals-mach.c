@@ -328,7 +328,8 @@ static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void),
     memcpy((void*)(sp + sizeof(host_thread_state_t)), float_state, float_size);
     // Push the return address for the restore trigger
     sp -= sizeof(void*);
-    *(uintptr_t*)sp = (uintptr_t)&jl_mach_restore_trigger;
+    // past its first instruction, so that unwinders find its unwind info
+    *(uintptr_t*)sp = (uintptr_t)&jl_mach_restore_trigger + 1;
     state->__rsp = sp;
     state->__rip = (uint64_t)fptr;
     // the interrupted code may have set the direction flag, which C code expects clear
@@ -343,7 +344,8 @@ static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void),
     memcpy((void*)(sp + sizeof(host_thread_state_t)), float_state, float_size);
     state->__sp = sp;
     state->__pc = (uint64_t)fptr;
-    state->__lr = (uintptr_t)&jl_mach_restore_trigger;
+    // past its first instruction, so that unwinders find its unwind info
+    state->__lr = (uintptr_t)&jl_mach_restore_trigger + 4;
     state->__x[0] = arg0;
 #else
 #error "julia: call-in-state not supported on this platform"

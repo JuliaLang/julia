@@ -179,6 +179,8 @@ end
 @test_repr "w = ((x, y) = z)" # parens aren't necessary, but not wrong
 @test_repr "a & b && c"
 @test_repr "a & (b && c)"
+@test_repr "a .& b .&& c"
+@test_repr "a .&& (b .|| c)"
 @test_repr "(a => b) in c"
 @test_repr "a => b in c"
 @test_repr "*(a..., b)"

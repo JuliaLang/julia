@@ -345,6 +345,10 @@ am = map(identity, a)
 @test isa(am, OffsetArray)
 @test am == a
 
+dest = OffsetVector(zeros(Int, 3), -2)
+@test asyncmap!(x -> 2x, dest, OffsetVector(1:3, -2)) == OffsetVector([2, 4, 6], -2)
+@test asyncmap!(xs -> map(x -> 2x[1], xs), dest, 4:6; batch_size=2) == OffsetVector([8, 10, 12], -2)
+
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/106
 @test isequal(map(!, OffsetArray([true,missing],2)), OffsetArray([false, missing], 2))
 @test isequal(map(!, OffsetArray([true missing; false true], 2, -1)), OffsetArray([false missing; true false], 2, -1))
@@ -588,6 +592,8 @@ dest = OffsetArray(Matrix{Int}(undef, 4,4), (-1,1))
 circcopy!(dest, src)
 @test parent(dest) == [8 12 16 4; 5 9 13 1; 6 10 14 2; 7 11 15 3]
 @test dest[1:3,2:4] == src[1:3,2:4]
+dest = OffsetArray(zeros(Int, 2, 0), (1, 0))
+@test circcopy!(dest, zeros(Int, 2, 0)) === dest
 
 # reshape
 A = OffsetArray(rand(4,4), (-3,5))
@@ -708,6 +714,11 @@ end
     length(a) == 3
     axes(a,1) == -2:0
     @test_throws ArgumentError resize!(a,-3)
+end
+
+@testset "deleteat! with an offset mask" begin
+    m = OffsetVector([false, false, true], -1)
+    @test deleteat!(BitVector([0, 1, 0]), m) == deleteat!([false, true, false], m) == [false, true]
 end
 
 @testset "issue #37199: offset range indices" begin
@@ -871,6 +882,18 @@ end
     @test axes(stack([ten[end-1:end] for _ in nought, _ in nought])) == (1:2, 0:2, 0:2)
 end
 
+@testset "reduce(vcat/hcat) of offset vector of arrays" begin
+    V = OffsetArray([[1, 2], [3, 4]], 0:1)
+    @test reduce(vcat, V) == [1, 2, 3, 4]
+    @test reduce(vcat, OffsetArray([[1 2], [3 4]], 0:1)) == [1 2; 3 4]
+    @test reduce(hcat, V) == [1 3; 2 4]
+    @test reduce(hcat, OffsetArray([[1, 2], view([3, 4], :)], 0:1)) == [1 3; 2 4]
+end
+
+@testset "hvncat of offset array and scalar" begin
+    @test hvncat(1, OffsetVector([1, 2], 5), 3) == [1, 2, 3]
+end
+
 @testset "issue #41630: replace_ref_begin_end!/@view on offset-like arrays" begin
     x = OffsetArray([1 2; 3 4], -10:-9, 9:10)  # 2×2 OffsetArray{...} with indices -10:-9×9:10
 
@@ -931,4 +954,29 @@ end
     @test isa(B, OffsetMatrix{Int})
     @test parent(B) == A0
     @test axes(B) == Base.IdentityUnitRange.((-10:-9, 9:10))
+end
+
+@testset "nextprod with offset factors" begin
+    @test nextprod(OffsetVector([2, 3, 5], -2), 105) == nextprod([2, 3, 5], 105) == 108
+end
+
+@testset "single-byte pattern search in offset vectors" begin
+    v = OffsetVector(UInt8[0x61, 0x62, 0x63, 0x62], -1)
+    @test findfirst(UInt8[0x61], v) == 0:0
+    @test findnext(UInt8[0x62], v, 1) == 1:1
+    @test findlast(UInt8[0x62], v) == 3:3
+    @test findprev(UInt8[0x62], v, 2) == 1:1
+end
+
+@testset "isvalid(String, ::OffsetVector)" begin
+    @test !isvalid(String, OffsetVector(UInt8[0xff, 0x61], -1))
+    @test isvalid(String, OffsetVector(UInt8[0x61, 0xce, 0xb2], 5))
+end
+
+@testset "SecretBuffer! from an OffsetVector" begin
+    d = OffsetVector(UInt8[0x61, 0x62], -1)
+    s = Base.SecretBuffer!(d)
+    @test read(s, String) == "ab"
+    @test all(iszero, d)
+    Base.shred!(s)
 end

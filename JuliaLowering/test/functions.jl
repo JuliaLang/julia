@@ -1764,19 +1764,12 @@ end
 end
 
 @testset "Consequences of accepting badly-parsed anonymous forms" begin
-    # kw
-    @test jl_eval(test_mod,
-                  Expr(:call,
-                       Expr(:function, Expr(:kw, :a, 1),
-                            Expr(:block, Expr(:tuple, :a))),
-                       ); edition=JL_NEW_EDITION) == (1,)
-
     # empty block
     @test jl_eval(test_mod,
                   Expr(:call,
                        Expr(:function, Expr(:block),
                             Expr(:block, Expr(:tuple))),
-                       ); edition=JL_NEW_EDITION) == ()
+                       )) == ()
 
     # unwrapped or block-wrapped arg
     @testset for a1 in [:a, Expr(:(::), :a, :Int)],
@@ -1785,14 +1778,9 @@ end
 
         @test jl_eval(test_mod,
                       Expr(:call,
-                           Expr(:function, wrap_where(a2),
-                                Expr(:block, Expr(:tuple, :a))),
-                           1); edition=JL_NEW_EDITION) == (1,)
-        @test jl_eval(test_mod,
-                      Expr(:call,
                            Expr(:function, wrap_where(Expr(:block, a2)),
                                 Expr(:block, Expr(:tuple, :a))),
-                           1); edition=JL_NEW_EDITION) == (1,)
+                           1)) == (1,)
     end
 
     # two-arg block
@@ -1800,7 +1788,7 @@ end
                   Expr(:call,
                        Expr(:function, Expr(:block, :a, :b),
                             Expr(:block, Expr(:tuple, :a, :b))),
-                       1, Expr(:kw, :b, 2)); edition=JL_NEW_EDITION) == (1,2)
+                       1, Expr(:kw, :b, 2))) == (1,2)
 end
 
 @testset "assignment to where-wrapped-tuple" begin

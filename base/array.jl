@@ -168,8 +168,8 @@ end
 """
     vect(X...)
 
-Create a [`Vector`](@ref) with element type computed from the `promote_typeof` of the argument,
-containing the argument list.
+Create a [`Vector`](@ref) containing the argument list, with element type given by
+[`promote_type`](@ref) of the argument types, i.e. `promote_type(map(typeof, X)...)`.
 
 # Examples
 ```jldoctest
@@ -2489,6 +2489,8 @@ Return `nothing` if there is no such element.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
+See also [`filterfirst`](@ref) to get the element instead of its index.
+
 # Examples
 ```jldoctest
 julia> A = [1, 4, 2, 2]
@@ -2535,15 +2537,17 @@ findfirst(::typeof(isone), r::OneTo) = isempty(r) ? nothing : oneunit(keytype(r)
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange{<:Integer}) where {T<:Integer}
     first(r) <= p.x <= last(r) || return nothing
     i1 = first(keys(r))
-    return i1 + oftype(i1, p.x - first(r))
+    return checked_add(i1, convert(typeof(i1), maybe_unsigned(p.x - first(r))))
 end
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
-    d = p.x - first(r)
-    iszero(d % step(r)) || return nothing
-    return convert(keytype(r), d ÷ step(r) + 1)
+    f, h = first(r), step(r)
+    d = maybe_unsigned(h > zero(h) ? p.x - f : f - p.x)
+    n, m = divrem(d, uabs(h))
+    iszero(m) || return nothing
+    return checked_add(oneunit(keytype(r)), convert(keytype(r), n))
 end
 
 findfirst(::typeof(iszero), r::AbstractRange) = findfirst(==(zero(first(r))), r)
@@ -3073,6 +3077,37 @@ function filter!(f, a::AbstractVector)
     end
     return a
 end
+
+"""
+    filterfirst(f, itr)
+
+Get the first element of an iterable collection `itr` for which the
+predicate `f` returns `true`. Throw an `ArgumentError` if there is no such
+element, like [`first`](@ref) does for an empty collection; returning
+`nothing` would be ambiguous, since the element itself may be `nothing`.
+
+See also [`findfirst`](@ref) for the index of that element,
+[`Iterators.filter`](@ref).
+
+!!! compat "Julia 1.15"
+    This method requires at least Julia 1.15.
+
+# Examples
+```jldoctest
+julia> filterfirst(>=(5), 2:2:10)
+6
+
+julia> filterfirst(iseven, [1; 2; 3; 4])
+2
+
+julia> filterfirst(isuppercase, "hello World")
+'W': ASCII/Unicode U+0057 (category Lu: Letter, uppercase)
+
+julia> filterfirst(isodd, 2:2:10)
+ERROR: ArgumentError: collection must be non-empty
+```
+"""
+filterfirst(f, itr) = first(Iterators.filter(f, itr))
 
 """
     filter(f)

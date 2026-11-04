@@ -153,44 +153,7 @@ static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT 
 #  define JL_USE_IFUNC 0
 #endif
 
-// If we've smashed the stack, (and not just normal NORETURN)
-// this will smash stack-unwind too
-#ifdef _OS_WINDOWS_
-#if defined(_CPU_X86_64_)
-    // install the unhandled exception handler at the top of our stack
-    // to call directly into our personality handler
-// N.B. do not switch sections here: with function sections, which LTO turns on,
-// the rest of the function would be emitted away from its own section, leaving
-// the entry point running off the end of a prologue.
-#define CFI_NORETURN \
-    asm volatile ("\t.seh_handler __julia_personality, @except");
-#else
-#define CFI_NORETURN
-#endif
-#else
-// wipe out the call-stack unwind capability beyond this function
-// (we are noreturn, so it is not a total lie)
-// N.B. these directives apply to whichever function the code ends up in, so
-// every function using CFI_NORETURN must be NOINLINE: inlined into a caller,
-// `.cfi_return_column` rebinds the caller's whole FDE to a CIE whose return
-// address register is undefined, and unwinding through any suspended task
-// switch stops there (the PGO+ThinLTO macOS aarch64 build inlined
-// jl_start_fiber_set into ctx_switch and jl_start_fiber_swap).
-#if defined(_CPU_X86_64_)
-// per nongnu libunwind: "x86_64 ABI specifies that end of call-chain is marked with a NULL RBP or undefined return address"
-// so we do all 3, to be extra certain of it
-#define CFI_NORETURN \
-    asm volatile ("\t.cfi_undefined rip"); \
-    asm volatile ("\t.cfi_undefined rbp"); \
-    asm volatile ("\t.cfi_return_column rbp");
-#else
-    // per nongnu libunwind: "DWARF spec says undefined return address location means end of stack"
-    // we use whatever happens to be register 1 on this platform for this
-#define CFI_NORETURN \
-    asm volatile ("\t.cfi_undefined 1"); \
-    asm volatile ("\t.cfi_return_column 1");
-#endif
-#endif
+#include "arch/cfi_noreturn.h"
 
 #if defined(HAVE_SSP) && (defined(_OS_DARWIN_) || defined(_OS_FREEBSD_))
 // This is provided by libSystem on Darwin and libc on FreeBSD, and imported
@@ -220,6 +183,10 @@ static uv_loop_t *const unused_uv_loop_arg = (uv_loop_t *)0xBAD10;
 
 extern jl_mutex_t jl_uv_mutex;
 extern _Atomic(int) jl_uv_n_waiters;
+// Set when a thread finds the event loop idle before it sleeps. Cleared before the
+// scheduler runs the loop, and by jl_iolock_end when it wakes the event loop thread.
+// Protected by jl_uv_mutex.
+extern int jl_uv_loop_unwatched;
 
 // Global data structures for accessing symbols and other globals
 #include "jl_internal_data.inc"
@@ -1372,6 +1339,125 @@ STATIC_INLINE int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT
     // TypeApp has no small type tag, so its tag is the type pointer itself
     return jl_typetagis(v, jl_typeapp_type) && jl_typeapp_type != NULL;
 }
+
+// Structural traversal of a type term, shared by the predicates that look for
+// something in a type (free or bound typevars, a typename, an occurrence of a
+// variable in some kind of position, ...). Each predicate is a visitor, called
+// on every node reachable from the root through Union/Intersect components,
+// UnionAll binder bounds (except the trivial `Union{}` and `Any`) and bodies,
+// datatype parameters, `Vararg` element and length, `Type{}`/`TypeEgal{}`
+// parameters and `TypeApp` head and parameter; the bounds of a typevar node
+// are not entered. `pos` says how the node was
+// reached (`JL_WALK_*` flags, accumulated along the path) and `binders` lists
+// the UnionAll vars bound on that path, innermost first. The visitor returns 0
+// to descend into the node, a positive value to stop the walk (which returns
+// it), or a negative value to skip the node's subterms.
+enum jl_type_walk_pos {
+    JL_WALK_PARAM     = 1 << 0, // under a parameter: of a datatype, `Type{}`, `TypeEgal{}` or `TypeApp`, or a `Vararg` element or length
+    JL_WALK_INVARIANT = 1 << 1, // under an invariant parameter: any of those but a Tuple parameter or `Vararg` element
+    JL_WALK_VARARG    = 1 << 2, // under a `Vararg` element type
+    JL_WALK_TYPEEGAL  = 1 << 3, // under a `TypeEgal{}` parameter
+    JL_WALK_UNIONALL  = 1 << 4, // under the bounds or body of a UnionAll met during the walk
+    JL_WALK_UB        = 1 << 5, // under the upper bound of a UnionAll met during the walk
+};
+typedef int (*jl_type_visit_t)(jl_value_t *t, int pos, jl_typeenv_t *binders, void *ctx) JL_NOTSAFEPOINT;
+
+// One node of the walk. `walk` is the specialized walker the node's subterms
+// recurse into: `JL_TYPE_WALKER` passes itself and its visitor as constants,
+// so once this body is inlined there both calls are direct (and the visitor
+// inlined), as fast as a hand-written traversal.
+FORCE_INLINE int jl_type_walk_node(jl_value_t *t, int pos, jl_typeenv_t *binders, void *ctx,
+                                   jl_type_visit_t visit, jl_type_visit_t walk) JL_NOTSAFEPOINT
+{
+    while (1) {
+        int r = visit(t, pos, binders, ctx);
+        if (r != 0)
+            return r > 0 ? r : 0;
+        if (jl_is_datatype(t)) {
+            jl_datatype_t *dt = (jl_datatype_t*)t;
+            size_t i, np = jl_nparams(dt);
+            if (np == 0)
+                return 0;
+            pos |= JL_WALK_PARAM | (jl_is_tuple_type(t) ? 0 : JL_WALK_INVARIANT);
+            for (i = 0; i + 1 < np; i++) {
+                r = walk(jl_tparam(dt, i), pos, binders, ctx);
+                if (r)
+                    return r;
+            }
+            t = jl_tparam(dt, np - 1);
+        }
+        else if (jl_is_typevar(t)) {
+            return 0; // its bounds are not entered
+        }
+        else if (jl_is_uniontype(t) || jl_is_intersecttype(t)) {
+            r = walk(((jl_uniontype_t*)t)->a, pos, binders, ctx);
+            if (r)
+                return r;
+            t = ((jl_uniontype_t*)t)->b;
+        }
+        else if (jl_is_unionall(t)) {
+            jl_unionall_t *ua = (jl_unionall_t*)t;
+            pos |= JL_WALK_UNIONALL;
+            if (ua->var->lb != jl_bottom_type) {
+                r = walk(ua->var->lb, pos, binders, ctx);
+                if (r)
+                    return r;
+            }
+            if (ua->var->ub != (jl_value_t*)jl_any_type) {
+                r = walk(ua->var->ub, pos | JL_WALK_UB, binders, ctx);
+                if (r)
+                    return r;
+            }
+            jl_typeenv_t *inner = (jl_typeenv_t*)alloca(sizeof(jl_typeenv_t));
+            inner->var = ua->var;
+            inner->val = NULL;
+            inner->prev = binders;
+            binders = inner;
+            t = ua->body;
+        }
+        else if (jl_is_vararg(t)) {
+            jl_vararg_t *vm = (jl_vararg_t*)t;
+            if (vm->N) {
+                r = walk(vm->N, pos | JL_WALK_PARAM | JL_WALK_INVARIANT, binders, ctx);
+                if (r)
+                    return r;
+            }
+            if (!vm->T)
+                return 0;
+            pos |= JL_WALK_PARAM | JL_WALK_VARARG;
+            t = vm->T;
+        }
+        else if (jl_is_typeeq(t)) {
+            pos |= JL_WALK_PARAM | JL_WALK_INVARIANT;
+            t = ((jl_typeeq_t*)t)->T;
+        }
+        else if (jl_is_typeegal(t)) {
+            pos |= JL_WALK_PARAM | JL_WALK_INVARIANT | JL_WALK_TYPEEGAL;
+            t = ((jl_typeeq_t*)t)->T;
+        }
+        else if (jl_is_typeapp(t)) {
+            // a deferred application: nothing can be substituted into it, so
+            // treat both parts as invariant parameters
+            jl_typeapp_t *ta = (jl_typeapp_t*)t;
+            pos |= JL_WALK_PARAM | JL_WALK_INVARIANT;
+            r = walk(ta->head, pos, binders, ctx);
+            if (r)
+                return r;
+            t = ta->param;
+        }
+        else {
+            return 0; // a plain parameter value
+        }
+    }
+}
+
+// define `static int name(jl_value_t *t, int pos, jl_typeenv_t *binders, void *ctx)`,
+// the walk with the visitor `visit`; start it as `name(t, 0, NULL, ctx)`
+#define JL_TYPE_WALKER(name, visit) \
+    static int name(jl_value_t *t, int pos, jl_typeenv_t *binders, void *ctx) JL_NOTSAFEPOINT \
+    { \
+        return jl_type_walk_node(t, pos, binders, ctx, visit, name); \
+    }
 void jl_init_tasks(void) JL_GC_DISABLED JL_NOTSAFEPOINT;
 void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOTSAFEPOINT;
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi) JL_CANSAFEPOINT;
@@ -1427,6 +1513,7 @@ void jl_safepoint_exclude_gc_end(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 void jl_init_signal_watchers(uv_async_cb cb);
 void jl_wake_signal_watchers(void) JL_NOTSAFEPOINT;
+void jl_wake_io_loop_thread(void) JL_NOTSAFEPOINT;
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
 int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;

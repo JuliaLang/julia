@@ -21,19 +21,13 @@ include(joinpath(BASE_TEST_PATH, "testenv.jl"))
 include("FakeTerminals.jl")
 import .FakeTerminals.FakeTerminal
 
-function kill_timer(delay)
-    # Give ourselves a generous timer here, just to prevent
-    # this causing e.g. a CI hang when there's something unexpected in the output.
-    # This is really messy and leaves the process in an undefined state.
-    # the proper and correct way to do this in real code would be to destroy the
-    # IO handles: `close(stdout_read); close(stdin_write)`
-    test_task = current_task()
+# Fail instead of hanging on unexpected output: on expiry, close `ios` so blocked reads
+# return EOF. (Throwing into the test task does not work: an enclosing `@test` catches it.)
+# Callers test `isopen` on the timer before closing it, so an expired timer fails the test.
+function kill_timer(delay, ios...)
     function kill_test(t)
-        # **DON'T COPY ME.**
-        # The correct way to handle timeouts is to close the handle:
-        # e.g. `close(stdout_read); close(stdin_write)`
-        schedule(test_task, "hard kill repl test"; error=true)
-        print(stderr, "WARNING: attempting hard kill of repl test after exceeding timeout\n")
+        print(stderr, "WARNING: closing the IO of the repl test after exceeding timeout\n")
+        foreach(close, ios)
     end
     return Timer(kill_test, delay)
 end
@@ -84,7 +78,7 @@ function fake_repl(@nospecialize(f);
     repl.options = options
     repl.options.semantic_prompts = semantic_prompts
 
-    hard_kill = kill_timer(900) # Your debugging session starts now. You have 15 minutes. Go.
+    hard_kill = kill_timer(900, input, output, err) # Your debugging session starts now. You have 15 minutes. Go.
     f(input.in, output.out, repl)
     t = @async begin
         close(input.in)
@@ -94,6 +88,7 @@ function fake_repl(@nospecialize(f);
     @test read(err.out, String) == ""
     #display(read(output.out, String))
     Base.wait(t)
+    @test isopen(hard_kill) # not fired
     close(hard_kill)
     nothing
 end
@@ -458,10 +453,11 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true,style_input=fa
     write(stdin_write, "1+1\n") # populate history with a trivial input
     readline(stdout_read)
     write(stdin_write, "\e[A\n")
-    let t = kill_timer(60)
+    let t = kill_timer(60, stdin_write, stdout_read)
         # yield make sure this got processed
         readuntil(stdout_read, "1+1")
         readuntil(stdout_read, "\n\n")
+        @test isopen(t)
         close(t) # cancel timeout
     end
 

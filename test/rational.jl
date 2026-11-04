@@ -184,6 +184,8 @@ using Base.MathConstants
     @test_throws DivideError -1//0 + 1//0
     @test Int128(1)//0 + 1//0 isa Rational{Int128}
     @test 1//0 + Int128(1)//0 isa Rational{Int128}
+    @test 0x1//0x0 - 0x1//0x1 === 0x1//0x0
+    @test -%(0x1//0x0, 0x1//0x1) === 0x1//0x0
 
     # inf division by a negative number flips the sign (#63456)
     @test (-1//0) // -1 === 1//0
@@ -503,6 +505,12 @@ end # parse
     @test floor(-13//2) == round(-13//2, RoundDown) == -7//1
     @test floor(11//3) == round(11//3, RoundDown) == 3//1
     @test floor(-11//3) == round(-11//3, RoundDown) == -4//1
+
+    # directed rounding to a float type that cannot hold the integer stays on the correct side of x
+    for (T, n) in ((Float16, 2051), (Float32, 2^24 + 3), (Float64, 2^53 + 3)), x in (n//1, -n//1)
+        @test round(T, x, RoundDown) <= x <= round(T, x, RoundUp)
+        @test abs(round(T, x, RoundToZero)) <= abs(x) <= abs(round(T, x, RoundFromZero))
+    end
 
     for T in (Float16, Float32, Float64)
         @test round(T, true//false) === convert(T, Inf)

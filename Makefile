@@ -65,7 +65,7 @@ julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
 
 # Build the HTML docs (skipped if already exists, notably in tarballs)
-$(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl -o -name version_git.jl \) -prune -o -type f -print)
+$(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl -o -name version_git.jl -o -name version_git_dirty \) -prune -o -type f -print)
 	@$(MAKE) docs
 
 .PHONY: julia-symlink
@@ -154,8 +154,14 @@ julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink j
 stdlibs-cache-release stdlibs-cache-debug : stdlibs-cache-% : julia-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk $*
 
+# The bounds-checked stdlib caches only need the system image, so they can be built in
+# parallel with the normal ones: `make release stdlibs-cache-checkbounds`.
+.PHONY: stdlibs-cache-checkbounds
+stdlibs-cache-checkbounds: julia-sysimg-$(JULIA_BUILD_MODE)
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk stdlibs-cache-checkbounds JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
+
 .PHONY: checkbounds-pkgimages
-checkbounds-pkgimages: $(JULIA_BUILD_MODE)
+checkbounds-pkgimages: stdlibs-cache-checkbounds
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk checkbounds-pkgimages JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 .PHONY: debug release
@@ -575,6 +581,7 @@ ifneq ($(DARWIN_FRAMEWORK),1)
 	for j in $(JL_PRIVATE_TOOLS) ; do \
 		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
 		install_name_tool -rpath @loader_path/$(build_libdir_rel) @executable_path/$(reverse_private_libexecdir_rel) $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
+		codesign -s - -f $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
 	done
 endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
@@ -591,6 +598,7 @@ ifneq ($(DARWIN_FRAMEWORK),1)
 		[ $$j = 7z ] && continue; \
 		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
 		install_name_tool -rpath @executable_path/$(reverse_build_private_libexecdir_rel) @executable_path/$(reverse_private_libexecdir_rel) $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
+		codesign -s - -f $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
 	done
 endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
@@ -607,10 +615,18 @@ ifeq ($(OS), Linux)
 endif
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $$(LOADER_BUILD_DEP_LIBS) != $$(LOADER_INSTALL_DEP_LIBS)
+	# On macOS that invalidates the signature, and the kernel then kills whatever loads the
+	# library, so sign it again. The same goes for the executables whose rpaths are edited above.
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_BUILD_DEP_LIBS)$$,$(LOADER_INSTALL_DEP_LIBS))
+ifeq ($(OS),Darwin)
+	codesign -s - -f $(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT)
+endif
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_DEBUG_BUILD_DEP_LIBS)$$,$(LOADER_DEBUG_INSTALL_DEP_LIBS))
+ifeq ($(OS),Darwin)
+	codesign -s - -f $(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
+endif
 endif
 endif
 

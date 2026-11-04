@@ -309,6 +309,10 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     bstr = startpos == firstindex(s) && endpos == lastindex(s) ? String(s) : String(SubString(s,startpos,endpos))
 
     sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,firstindex(bstr),ncodeunits(bstr))
+    if sgn == 0
+        raise && throw(ArgumentError("input string is empty or only contains whitespace"))
+        return nothing
+    end
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
         return nothing
@@ -861,10 +865,6 @@ Base.checked_pow(x::Integer, p::BigInt) = x^p
 Base.checked_pow(x::BigInt, p::BigInt) = x^p
 
 Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), stackdict, x)::BigInt
-
-## streamlined hashing for BigInt, by avoiding allocation from shifts ##
-
-Base._hash_shl!(x::BigInt, n) = MPZ.mul_2exp!(x, n)
 
 if Limb === UInt64 === UInt
     # On 64 bit systems we can define

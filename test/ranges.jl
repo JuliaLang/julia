@@ -432,6 +432,39 @@ end
             r = 15:-2:-38
             @test findall(in(span), r) == 1:6
         end
+
+        # issue #64453: overflow in endpoint difference for narrow/extreme/mixed integer ranges
+        @test isempty(findall(in(Int8(50):Int8(100)), Int8(-100):Int8(-90)))
+        @test findall(in(Int8(50):Int8(100)), Int8(-100):Int8(100)) == 151:201
+        @test isempty(findall(in(UInt8(200):UInt8(255)), Int8(-128):Int8(127)))
+        @test isempty(findall(in((typemax(Int64) - 10):typemax(Int64)), typemin(Int64):(typemin(Int64) + 10)))
+        @test findall(in(Int32(0):Int32(10)), typemin(Int32):Int32(4):typemax(Int32)) == 536870913:1:536870915
+        let u = UInt(typemax(Int)) + 1
+            @test isempty(findall(in(u:(u + 5)), 1:typemax(Int)))
+        end
+
+        let spans = Any[
+                Int8(-128):Int8(-100), Int8(-50):Int8(50), Int8(50):Int8(127), Int8(10):Int8(5),
+                UInt8(0):UInt8(50), UInt8(100):UInt8(255), UInt8(10):UInt8(5),
+                Int16(-200):Int16(200), Int64(-50):Int64(50), UInt64(1):UInt64(50),
+                big(-50):big(50), false:true, true:false,
+            ],
+            ranges = Any[
+                Int8(-128):Int8(127), Int8(-100):Int8(-90), Int8(50):Int8(100), Int8(5):Int8(1),
+                Int8(-128):Int8(3):Int8(127), Int8(127):Int8(-1):Int8(-128),
+                Int8(127):Int8(-3):Int8(-128), Int8(100):Int8(-128):Int8(-100),
+                StepRangeLen(Int8(-100), Int8(0), 3), StepRangeLen(Int8(0), Int8(0), 0),
+                UInt8(0):UInt8(255), UInt8(10):UInt8(20), UInt8(20):UInt8(10),
+                UInt8(0):UInt8(50):UInt8(255), UInt8(200):Int8(-2):UInt8(10),
+                Int16(-200):Int16(25):Int16(200), Int64(-100):Int64(15):Int64(100),
+                UInt64(10):UInt64(20), UInt64(10):Int8(3):UInt64(100),
+                big(-100):big(15):big(100), big(100):big(-15):big(-100),
+                false:true, true:false, StepRange(true, Int8(-1), false),
+            ]
+            for r in ranges, span in spans
+                @test findall(in(span), r) == findall(in(span), collect(r))
+            end
+        end
     end
     @testset "findfirst" begin
         @test findfirst(==(1), Base.IdentityUnitRange(-1:1)) == 1
@@ -461,6 +494,17 @@ end
         @test findfirst(iszero, 5:-2:-5) === nothing
         @test findfirst(iszero, 6:-2:-6) == 4
         @test findfirst(==(Int128(2)), Int128(1):Int128(1):Int128(4)) === 2
+        # ranges spanning more than half their element type
+        for r in (Int8(-100):Int8(100), Int8(-100):Int8(3):Int8(100), Int8(100):Int8(-3):Int8(-100),
+                  typemin(Int8):typemax(Int8), StepRange(Int8(-100), Int16(3), Int8(100)),
+                  typemin(Int64):Int64(2)^62:typemax(Int64))
+            v = collect(r)
+            for x in unique([typemin(eltype(r)), typemax(eltype(r)), v..., (v .+ one(eltype(r)))...])
+                @test findfirst(==(x), r) === findfirst(==(x), v)
+            end
+        end
+        # indices that do not fit in `Int` throw rather than wrap
+        @test_throws InexactError findfirst(==(Int128(typemax(Int)) + 1), Int128(0):Int128(typemax(Int)) + 2)
     end
     @testset "findlast" begin
         @test findlast(==(1), Base.IdentityUnitRange(-1:1)) == 1
@@ -500,6 +544,7 @@ end
         @test reverse(reverse(T(1):T(10))) == T(1):T(10)
         @test reverse(reverse(typemin(T):typemax(T))) == typemin(T):typemax(T)
         @test reverse(reverse(typemin(T):2:typemax(T))) == typemin(T):2:typemax(T)
+        @test reverse(StepRangeLen(T(1), T(2), 3)) == T[5, 3, 1]
     end
     @testset "intersect" begin
         @test intersect(1:5, 2:3) === 2:3
@@ -1146,7 +1191,7 @@ end
                        range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20)),
                        3:2, 5:-2:7, range(0.0, step=2.0, length=0), 3//2:3//2:0//1, LinRange(2,3,0),
                        Base.OneTo(1), 1:1, 1:-3:1, 1//1:1//3:1//1, range(1.0, step=2.5, length=1),
-                       LinRange(1,1,1), LinRange(1,1,2)]
+                       LinRange(1,1,1), LinRange(1,1,2), StepRangeLen(1, 0, 2), StepRangeLen(1, 0, 3)]
     for r in Rs
         local r
         ar = Vector(r)
@@ -1691,7 +1736,7 @@ end
         r = range(a, stop=b, length=5)
         @test r[1] == a && r[5] == b
         for i = 2:4
-            x = ((5 - i) // 4) * a + ((i - 1) // 4) * b
+            x = a + ((i - 1) // 4) * (b - a)
             @test r[i] == x
         end
     end
@@ -1830,6 +1875,18 @@ end
         @test Float64.(@inferred(range(big(start), stop=big(stop), length=11))) == range(start, stop=stop, length=11)
         @test Float64.(@inferred(map(exp, range(big(start), stop=big(stop), length=11)))) == map(exp, range(start, stop=stop, length=11))
     end
+end
+
+@testset "Issue #64272" begin
+    @test all(==(0.1), LinRange(0.1, 0.1, 6))
+    @test issorted(collect(LinRange(0.9, nextfloat(0.9), 10)))
+    @test collect(LinRange(-90:60:90)) == [-90, -30, 30, 90]
+
+    m = floatmax()
+    @test all(isfinite, LinRange(-m, m, 10))
+    @test issorted(collect(LinRange(m, -m, 10)); rev=true)
+    @test LinRange([1.0, -m], [3.0, m], 3)[2] == [2.0, 0.0]
+    @test issorted(collect(LinRange(Float16(3.514), Float16(0.02235), 16190)); rev=true)
 end
 
 @testset "Issue #26532" begin
@@ -2106,6 +2163,8 @@ end
     @test Base.Slice(Base.OneTo(3))[Int8(2)] == Int8(2)
     @test Base.Slice(1:10)[Int32(2)] == Int32(2)
     @test Base.Slice(1:10)[Int8(2)] == Int8(2)
+    @test Base.Slice(3:5)[Int8(3)] === 3
+    @test Base.Slice(3:5)[UInt(4)] === 4
 end
 
 @testset "allocation of TwicePrecision call" begin
@@ -2138,6 +2197,22 @@ end
     @test reverse(1.0:0.0) === StepRangeLen(Base.TwicePrecision(1.0, 0.0),
                                             Base.TwicePrecision(-1.0, -0.0), 0)
     @test reverse(reverse(1.0:0.0)) === 1.0:0.0
+end
+
+@testset "issue #64408: empty ranges with non-IEEEFloat types" begin
+    for r in (BigFloat(1):BigFloat(-1), BigFloat(1):BigFloat(1):BigFloat(-1),
+              BigFloat(-1):BigFloat(-1):BigFloat(1),
+              range(BigFloat(1), BigFloat(-1); step=1),
+              range(BigFloat(1); stop=BigFloat(-1), step=BigFloat(1)))
+        @test isempty(r)
+        @test length(r) == 0
+        @test eltype(r) == BigFloat
+        @test collect(r) == BigFloat[]
+    end
+    @test BigFloat(1):BigFloat(0) == BigFloat[]
+    @test BigFloat(-1):BigFloat(1) == BigFloat[-1, 0, 1]
+    @test BigFloat(1):BigFloat(-1):BigFloat(-1) == BigFloat[1, 0, -1]
+    @test length(BigFloat(1):BigFloat(1)) == 1
 end
 
 @testset "Issue #30944 ranges with non-IEEEFloat types" begin

@@ -709,6 +709,13 @@ end
     @test randstring(n) isa String
 end
 
+@testset "rand from a String with stray continuation bytes" begin
+    rng = Xoshiro(1)
+    @test rand(rng, "\x80") == '\x80'
+    @test Set(rand(rng, "a\x80") for _ in 1:100) == Set(['a', '\x80'])
+    @test Set(rand(rng, "é\x80\x80") for _ in 1:100) == Set(['é', '\x80'])
+end
+
 # this shouldn't crash (#22403)
 @test_throws MethodError rand!(Union{UInt,Int}[1, 2, 3])
 
@@ -818,6 +825,15 @@ end
     @test shuffle!(a) === a
     a = rand(Int, 1)
     @test shuffle(a) == a
+end
+
+struct ZeroWords <: AbstractRNG end
+Random.rng_native_52(::ZeroWords) = UInt64
+Random.rand(::ZeroWords, ::Random.SamplerType{UInt64}) = UInt64(0)
+
+@testset "randsubseq with a zero exponential draw" begin
+    @test randexp(ZeroWords()) == 0.0
+    @test randsubseq(ZeroWords(), [10, 20, 30], 0.1) == [10, 20, 30]
 end
 
 @testset "rand(::Tuple)" begin

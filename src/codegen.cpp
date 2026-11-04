@@ -2660,10 +2660,14 @@ static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_value_t *typ)
     if (jl_is_some_Type(typ)) {
         // only `TypeEgal{T}` and `Type{Union{}}` have a single (constant) value
         assert(is_uniquerep_Type(typ) || jl_some_Type_T(typ) == jl_bottom_type);
+        if (jl_some_Type_T(typ) == jl_bottom_type) {
+            // `Union{}` is the instance of the singleton `TypeofBottom`, and so a ghost like any other
+            jl_cgval_t ghost((jl_value_t*)jl_typeofbottom_type);
+            ghost.typ = typ;
+            return ghost;
+        }
         jl_cgval_t constant(NULL, true, typ, NULL, best_aliasinfo(ctx, typ), jl_gc_roots_t());
         constant.constant = jl_some_Type_T(typ);
-        if (constant.constant == jl_bottom_type)
-            constant.isghost = true;
         return constant;
     }
     return jl_cgval_t(typ);
@@ -4229,7 +4233,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
 {
     ++EmittedBitsCompares;
     if (arg1.typ == jl_bottom_type || arg2.typ == jl_bottom_type)
-        return UndefValue::get(getInt1Ty(ctx.builder.getContext()));
+        return PoisonValue::get(getInt1Ty(ctx.builder.getContext()));
 
     jl_value_t *argty = (arg1.constant ? jl_typeof(arg1.constant) : arg1.typ);
     bool isboxed;
@@ -7215,7 +7219,7 @@ static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const T
             track_pjlvalue(ctx, literal_pointer_val(ctx, jl_false)));
     }
     // not a boolean (unreachable dead code)
-    return UndefValue::get(getInt1Ty(ctx.builder.getContext()));
+    return PoisonValue::get(getInt1Ty(ctx.builder.getContext()));
 }
 
 static Value *emit_condition(jl_codectx_t &ctx, jl_value_t *cond, const Twine &msg) JL_CANSAFEPOINT
@@ -7315,7 +7319,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
 #ifdef GC_BARRIER_ON_TASKS
             emit_write_barrier(ctx, get_current_task(ctx), scope_ptr, scope_to_restore);
 #else
-            // No barrier required: the running task is kept in the GC remset
+            // No barrier required: old Tasks are implicitly in the GC remset
 #endif
             ctx.alias().mutab_nonconst.decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
@@ -10751,7 +10755,7 @@ static jl_llvm_functions_t
                 // Barrier is needed to snapshot scope value before replacement
                 emit_write_barrier(ctx, get_current_task(ctx), scope_ptr, scope_boxed);
 #else
-                // No barrier required: the running task is kept in the GC remset
+                // No barrier required: old Tasks are implicitly in the GC remset
 #endif
                 StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
                 ctx.alias().mutab_nonconst.decorateInst(current_scope);
@@ -10920,8 +10924,12 @@ static jl_llvm_functions_t
                 if (VN) {
                     if (new_union.Vboxed)
                         V = new_union.Vboxed;
-                    else if (new_union.constant)
+                    else if (new_union.isboxed) {
+                        // The box bit of the tag, and the `emit_unionmove` below, follow `isboxed`
+                        // too: a boxed value is in no slot, and lives only in this box.
+                        assert(new_union.constant); // its box is made on demand
                         V = boxed(ctx, new_union);
+                    }
                     else
                         V = Constant::getNullValue(ctx.types().T_prjlvalue);
                 }
@@ -11006,7 +11014,7 @@ static jl_llvm_functions_t
 
     for (PHINode *PN : ToDelete) {
         // This basic block is statically unreachable, thus so is this PHINode
-        PN->replaceAllUsesWith(UndefValue::get(PN->getType()));
+        PN->replaceAllUsesWith(PoisonValue::get(PN->getType()));
         PN->eraseFromParent();
     }
 

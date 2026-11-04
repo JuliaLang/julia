@@ -598,20 +598,20 @@ end
 
 function conditional_argtype(𝕃ᵢ::AbstractLattice, @nospecialize(rt), @nospecialize(sig),
                              argtypes::Vector{Any}, i::Int)
-    if isa(rt, InterConditional) && rt.slot == i
-        return rt
-    else
-        argt = widenslotwrapper(argtypes[i])
-        if isvarargtype(argt)
-            @assert fieldcount(sig) == i
-            argt = unwrapva(argt)
-        end
-        thentype = elsetype = tmeet(𝕃ᵢ, argt, fieldtype(sig, i))
-        condval = maybe_extract_const_bool(rt)
-        condval === true && (elsetype = Bottom)
-        condval === false && (thentype = Bottom)
-        return InterConditional(i, thentype, elsetype)
+    argt = widenslotwrapper(argtypes[i])
+    if isvarargtype(argt)
+        @assert fieldcount(sig) == i
+        argt = unwrapva(argt)
     end
+    argt = tmeet(𝕃ᵢ, argt, fieldtype(sig, i))
+    if isa(rt, InterConditional) && rt.slot == i
+        return InterConditional(i, tmeet(𝕃ᵢ, rt.thentype, widenconst(argt)), tmeet(𝕃ᵢ, rt.elsetype, widenconst(argt)))
+    end
+    thentype = elsetype = argt
+    condval = maybe_extract_const_bool(rt)
+    condval === true && (elsetype = Bottom)
+    condval === false && (thentype = Bottom)
+    return InterConditional(i, thentype, elsetype)
 end
 
 function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{MethodMatchTarget},
@@ -1155,8 +1155,15 @@ function _concrete_eval_call(
         concrete_result = ConcreteResult(edge, effects; proof)
         return ConstCallResult(Bottom, Any, concrete_result, effects)
     end
-    concrete_result = ConcreteResult(edge, EFFECTS_TOTAL, value; proof)
-    return ConstCallResult(Const(value), Bottom, concrete_result, EFFECTS_TOTAL)
+    rt = Const(value)
+    # A non-mutation-free value obtained by concrete evaluation may refer to global
+    # memory (e.g. a const global `Ref`), so preserve the `:inaccessiblememonly` taint
+    # of the call: otherwise the caller may access the value's memory and still be
+    # refined to be `:inaccessiblememonly` (and thus `:consistent`)
+    concrete_effects = is_mutation_free_argtype(rt) ? EFFECTS_TOTAL :
+        Effects(EFFECTS_TOTAL; inaccessiblememonly=effects.inaccessiblememonly)
+    concrete_result = ConcreteResult(edge, concrete_effects, value; proof)
+    return ConstCallResult(rt, Bottom, concrete_result, concrete_effects)
 end
 
 # check if there is a cycle and duplicated inference of `mi`

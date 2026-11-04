@@ -655,11 +655,8 @@ function _write_capture(io::IO, group::Int, str, r, re::RegexAndMatchData)
     len = PCRE.substring_length_bynumber(re.match_data, group)
     # in the case of an optional group that doesn't match, len == 0
     len == 0 && return len
-    ensureroom(io, len+1)
-    PCRE.substring_copy_bynumber(re.match_data, group,
-        pointer(io.data, io.ptr), len+1)
-    io.ptr += len
-    io.size = max(io.size, io.ptr - 1)
+    start = unsafe_load(PCRE.ovec_ptr(re.match_data), 2group+1)
+    GC.@preserve str unsafe_write(io, pointer(str, start+1), len)
     return len
 end
 function _write_capture(io::IO, group::Int, str, r, re)

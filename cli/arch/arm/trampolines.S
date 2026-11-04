@@ -30,6 +30,7 @@ CONCAT(.L,CNAME(name)): ;\
 CONCAT(.L,CNAMEADDR(name))##: ; \
     .word CNAMEADDR(name)##-(CONCAT(.L,CNAME(name)) + 8); \
 .cfi_endproc; \
+EXPORT(name); \
 
 JL_RUNTIME_EXPORTED_FUNCS(XX)
 #ifdef _OS_WINDOWS_

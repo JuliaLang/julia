@@ -1077,6 +1077,46 @@ end
     expect_cancelled(tm)
 end
 
+@testset "disable_sigint shields its region" begin
+    # disable_sigint marks code that must not be unwound (e.g. a Julia callback
+    # under a C frame): cancellation of the scoped token lands after the
+    # region, and reenable_sigint restores the token the region shielded
+    done() = (Base.@cancel_check; :done)
+    function outcome(f)
+        try
+            f()
+        catch e
+            e isa CancellationRequest || rethrow()
+            :cancelled
+        end
+    end
+    src = CancellationTokenSource()
+    cancel!(src)
+    # tested outside the cancelled scope, where a failure can be printed
+    r = with(CANCEL_TOKEN => CancellationToken(src)) do
+        # a bare sigatomic region has no shielded token to restore
+        Base.sigatomic_begin()
+        bare = try
+            outcome(() -> reenable_sigint(done))
+        finally
+            Base.sigatomic_end()
+        end
+        (; shielded = outcome(() -> disable_sigint(done)),
+           after = outcome(done),
+           reenabled = outcome(() -> disable_sigint(() -> reenable_sigint(done))),
+           nested = outcome(() -> disable_sigint(() -> disable_sigint(() -> reenable_sigint(done)))),
+           renested = outcome(() -> disable_sigint(() -> reenable_sigint(() -> disable_sigint(done)))),
+           bare)
+    end
+    @test r.shielded === :done
+    @test r.after === :cancelled
+    @test r.reenabled === :cancelled
+    @test r.nested === :done
+    @test r.renested === :done
+    @test r.bare === :cancelled
+    @test @inferred(disable_sigint(() -> reenable_sigint(() -> 1))) == 1
+end
+
 # a parked watcher keeps the watched source reachable through its live
 # token reference alone (no local rooting in the caller's frame)
 @noinline function _spawn_watcher_on_child(parent)

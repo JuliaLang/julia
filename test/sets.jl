@@ -661,6 +661,17 @@ end
     @test !allunique((1,2,3,4,3))
     @test allunique((0.0, -0.0))
     @test !allunique((NaN, NaN))
+    @test !allunique(Base.IdSet{Any}(Any[1, 1.0]))
+    @test !allunique(IdDict{Any,Int}(1 => 2, 1.0 => 2))
+    @test allunique(IdDict{Any,Int}(1 => 2, 1.0 => 3))
+    @test !allunique(keys(IdDict{Any,Int}(1 => 2, 1.0 => 2)))
+    @test !allunique(Base.ImmutableDict(Base.ImmutableDict(1 => 2), 1 => 2))
+    v = Ref(2)
+    GC.@preserve v begin
+        w = Base.WeakValueIdDict{Any,Any}(1 => v, 1.0 => v)
+        @test !allunique(w)
+        @test !allunique(keys(w))
+    end
     # Known length 1, need not evaluate:
     @test allunique(error(x) for x in [1])
     # @test_opt allunique(Int[])
@@ -686,6 +697,17 @@ end
     @test allequal(Dict())
     @test allequal(Dict(:a => 1))
     @test !allequal(Dict(:a => 1, :b => 2))
+    @test allequal(Base.IdSet{Any}(Any[1, 1.0]))
+    @test allequal(IdDict{Any,Int}(1 => 2, 1.0 => 2))
+    @test !allequal(IdDict{Any,Int}(1 => 2, 1.0 => 3))
+    @test allequal(keys(IdDict{Any,Int}(1 => 2, 1.0 => 2)))
+    @test allequal(Base.ImmutableDict(Base.ImmutableDict(1 => 2), 1 => 2))
+    v = Ref(2)
+    GC.@preserve v begin
+        w = Base.WeakValueIdDict{Any,Any}(1 => v, 1.0 => v)
+        @test allequal(w)
+        @test allequal(keys(w))
+    end
     # vectors
     @test allequal([])
     @test allequal([1])
@@ -883,6 +905,9 @@ end
     @test replace!(x->2x, Set([3, 6])) == Set([6, 12])
     @test replace!(x->2x, Set([1:20;])) == Set([2:2:40;])
     @test replace!(kv -> (2kv[1] => kv[2]), Dict(1=>2, 2=>4, 4=>8, 8=>16)) == Dict(2=>2, 4=>4, 8=>8, 16=>16)
+    @test replace(x->x+1, BitSet([1, 2])) == BitSet([2, 3])
+    @test replace(BitSet([1, 2]), 1=>2, 2=>1) == BitSet([1, 2])
+    @test replace(x->x+1, Base.IdSet{Int}([1, 2])) == Base.IdSet{Int}([2, 3])
 
     # avoid recursive call issue #25384
     @test_throws MethodError replace!("")
@@ -1061,6 +1086,12 @@ end
     @test isempty(A)
     @test isnothing(sizehint!(A, 10))
     @test Base.copymutable(A) == copy(A)
+    @test_throws TypeError push!(IdSet{Int}(), "a string")
+    @test_throws TypeError IdSet{Bool}(Any[1, 2, true, false])
+    a, b = IdSet{Int}([1]), IdSet{Float64}([1.0])
+    @test union(a, b) isa IdSet{Real} && length(union(a, b)) == 2
+    @test symdiff(a, b) isa IdSet{Real} && length(symdiff(a, b)) == 2
+    @test collect(intersect(a, 1.0:2.0)) == [1]
 end
 
 @testset "⊊, ⊋" begin

@@ -209,7 +209,7 @@ LoweringError:
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/#unused#(!read)]
-    1   (call JuliaLowering.interpolate_expr (inert (return x)))
+    1   (copyast (inert (return x)))
     2   (return %₁)
 14  latestworld
 15  (= slot₁/#-># %₇)
@@ -224,6 +224,18 @@ LoweringError:
 LoweringError:
 ((return x) + y for x in iter)
 # └──────┘ ── `return` not allowed inside comprehension or generator
+
+########################################
+# Error: `break` out of comprehension body inside `@label` block
+@label begin
+    Int[(x > 1 && break; x) for x in 1:3]
+end
+#---------------------
+LoweringError:
+@label begin
+    Int[(x > 1 && break; x) for x in 1:3]
+#                 └───┘ ── unlabeled `break` outside of a `while` or `for` loop
+end
 
 ########################################
 # Nested case with duplicate iteration variables

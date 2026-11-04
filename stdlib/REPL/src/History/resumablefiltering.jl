@@ -140,7 +140,7 @@ function ConditionSet(spec::S) where {S <: AbstractString}
                 rang = something(findfirst('>', cond), typemax(Int))
                 if rang == something(findfirst(isspace, cond), ncodeunits(cond) + 1) - 1
                     mode = @view cond[1:prevind(cond, rang)]
-                    push!(condset.modes, SubString(lowercase(mode)))
+                    push!(condset.modes, mode)
                     cond = @view cond[rang + 1:end]
                 end
             end
@@ -266,7 +266,7 @@ function FilterSpec(cset::ConditionSet)
         end
     end
     for mode in cset.modes
-        push!(spec.modes, Symbol(mode))
+        push!(spec.modes, Symbol(lowercase(mode)))
     end
     spec
 end

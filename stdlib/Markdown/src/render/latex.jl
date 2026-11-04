@@ -25,7 +25,17 @@ function latex(io::IO, content::Vector)
 end
 
 function latex(io::IO, header::Header{l}) where l
-    tag = l < 4 ? "sub"^(l-1) * "section" : "sub"^(l-4) * "paragraph"
+    tag = if l == 1
+        "section"
+    elseif l == 2
+        "subsection"
+    elseif l == 3
+        "subsubsection"
+    elseif l == 4
+        "paragraph"
+    else
+        "subparagraph"
+    end
     wrapinline(io, tag) do
         latexinline(io, header.text)
     end

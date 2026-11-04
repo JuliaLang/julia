@@ -57,7 +57,7 @@ isvalid(T,value)
 
 isvalid(c::AbstractChar) = !ismalformed(c) & !isoverlong(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
 isvalid(::Type{<:AbstractChar}, c::Unsigned) = ((c ≤  0xd7ff ) | ( 0xe000  ≤ c) & (c ≤  0x10ffff ))
-isvalid(::Type{T}, c::Integer) where {T<:AbstractChar}  = isvalid(T, Unsigned(c))
+isvalid(::Type{T}, c::Integer) where {T<:AbstractChar}  = c ≥ 0 && isvalid(T, Unsigned(c))
 isvalid(::Type{<:AbstractChar}, c::AbstractChar)     = isvalid(c)
 isvalid(::Type{Union{}}, value) = false
 isvalid(::Type{Union{}}, slurp...) = throw(MethodError(isvalid, (Union{}, slurp...)))
