@@ -752,7 +752,7 @@ Base.collect(::Type{EmptyType{T}}) where {T} = "borked"
 end
 
 let fd = meta(I12515)[@var(Base.collect)]
-    @test fd.order[1] == (Union{Tuple{Type{I12515.EmptyType{T}}}, Tuple{T}} where T)
+    @test fd.order[1] == (Tuple{Type{I12515.EmptyType{T}}} where T)
 end
 
 # PR #12593
@@ -1442,6 +1442,13 @@ end
     String 4
     """
 )
+
+module DocsTypevar
+"g vec" g(x::Vector{T}) where T = 1
+"g int" g(x::Int) = 2
+end
+@test docstrings_equal(@doc(DocsTypevar.g(::Int)), doc"g int")
+@test docstrings_equal(@doc(DocsTypevar.g(::Vector{Int})), doc"g vec")
 
 # issue #22105
 module I22105
