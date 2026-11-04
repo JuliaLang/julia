@@ -199,6 +199,28 @@ let code = Any[
     @test_throws ["IR verification failed.", "Code location: "] Compiler.verify_ir(ir, false)
 end
 
+@testset "Verifier requires dominance order" begin
+    code = Any[
+        GotoNode(3),
+        ReturnNode(SSAValue(3)),
+        Argument(2),
+        GotoNode(2),
+    ]
+    ir = make_ircode(code; slottypes=Any[Tuple{}, Int], verify=false)
+    @test_throws "IR verification failed." Compiler.verify_ir(ir, false)
+    ir = Compiler.domsort_ssa!(ir, Compiler.construct_domtree(ir))
+    @test Compiler.verify_ir(ir) === nothing
+    @test Core.OpaqueClosure(ir)(42) == 42
+end
+
+@testset "Unused pending instruction at invalid position $pos" for pos in (-1, 0, 2)
+    ir = make_ircode(Any[ReturnNode(0)])
+    Compiler.insert_node!(ir, 1, Compiler.NewInstruction(nothing, Nothing))
+    @test Compiler.verify_ir(ir) === nothing
+    ir.new_nodes.info[1] = Compiler.NewNodeInfo(pos, false)
+    @test_throws "IR verification failed." Compiler.verify_ir(ir, false)
+end
+
 # Issue #29107
 let code = Any[
         # Block 1
@@ -229,6 +251,173 @@ let code = Any[
             end
         end
     end
+end
+
+@testset "Compaction preserves values across reordered blocks" begin
+    code = Any[
+        GotoIfNot(false, 6),
+        GotoNode(3),
+        Argument(2),
+        GotoNode(5),
+        ReturnNode(SSAValue(3)),
+        GotoNode(3),
+    ]
+    ir = make_ircode(code; slottypes=Any[Tuple{}, Int])
+    ir = Compiler.compact!(ir, true)
+    @test Compiler.verify_ir(ir) === nothing
+    @test Core.OpaqueClosure(ir)(42) == 42
+end
+
+@testset "Catch values after deleting upsilons: pending=$pending" for pending in (false, true)
+    code = Any[
+        EnterNode(12),
+        GotoIfNot(false, 6),
+        UpsilonNode(42),
+        GotoNode(5),
+        GotoNode(9),
+        GotoIfNot(true, 3),
+        UpsilonNode(7),
+        GotoNode(5),
+        Expr(:call, GlobalRef(Base, :error), "enter catch"),
+        Expr(:leave, SSAValue(1)),
+        ReturnNode(0),
+        PhiCNode(Any[SSAValue(3), SSAValue(7)]),
+        Expr(:pop_exception, SSAValue(1)),
+        ReturnNode(SSAValue(12)),
+    ]
+    if pending
+        code[2] = GotoNode(6)
+        code[6] = GotoNode(7)
+    end
+    ir = make_ircode(code; slottypes=Any[Tuple{}], verify=!pending)
+    if pending
+        phi = ir.stmts[12][:stmt]
+        newphi = Compiler.insert_node!(ir, SSAValue(12), Compiler.NewInstruction(phi, Any))
+        ir.stmts[12][:stmt] = nothing
+        ir.stmts[14][:stmt] = ReturnNode(newphi)
+        ir = Compiler.domsort_ssa!(ir, Compiler.construct_domtree(ir))
+        ir = Compiler.compact!(ir)
+    else
+        ir = Compiler.compact!(ir, true)
+    end
+    @test Compiler.verify_ir(ir) === nothing
+    @test Core.OpaqueClosure(ir)() == 7
+    @test isempty(current_exceptions())
+end
+
+@testset "Pending instructions in a block that dies during compaction" begin
+    ir = make_ircode(Any[
+        GotoIfNot(false, 5),
+        Expr(:call, GlobalRef(Base, :error), "dead original"),
+        GotoNode(4),
+        ReturnNode(0),
+        GotoIfNot(true, 2),
+        GotoNode(4),
+    ]; slottypes=Any[Tuple{}])
+    compact = Compiler.IncrementalCompact(ir, true)
+    for ((old_idx, idx), _) in compact
+        if old_idx == 2
+            Compiler.insert_node!(compact, SSAValue(idx),
+                Compiler.NewInstruction(Expr(:call, GlobalRef(Base, :error), "dead pending"), Union{}))
+        end
+    end
+    ir = Compiler.finish(compact)
+    @test Compiler.verify_ir(ir) === nothing
+    ir = Compiler.compact!(ir, true)
+    @test Compiler.verify_ir(ir) === nothing
+    @test Core.OpaqueClosure(ir)() == 0
+end
+
+@testset "Pending references: after=$attach_after, dead=$dead_idx" for attach_after in (false, true), dead_idx in 1:3
+    ir = make_ircode(Any[
+        GotoNode(4),
+        Expr(:call, GlobalRef(Base, :error), "dead"),
+        ReturnNode(0),
+        Expr(:call, GlobalRef(Core, :tuple), Argument(2)),
+        Expr(:call, GlobalRef(Core, :tuple), SSAValue(4)),
+        ReturnNode(SSAValue(5)),
+    ]; slottypes=Any[Tuple{}, Int])
+    live = SSAValue[]
+    for i in 1:3
+        if i == dead_idx
+            Compiler.insert_node!(ir, 2,
+                Compiler.NewInstruction(Expr(:call, GlobalRef(Core, :tuple), SSAValue(2)), Any), attach_after)
+        else
+            value = isempty(live) ? Argument(2) : only(live)
+            push!(live, Compiler.insert_node!(ir, 4,
+                Compiler.NewInstruction(Expr(:call, GlobalRef(Core, :tuple), value), Any), attach_after))
+        end
+    end
+    ir.stmts[5][:stmt] = Expr(:call, GlobalRef(Core, :tuple), live...)
+    ir = Compiler.domsort_ssa!(ir, Compiler.construct_domtree(ir))
+    @test Compiler.verify_ir(ir) === nothing
+    ir = Compiler.compact!(ir)
+    @test Compiler.verify_ir(ir) === nothing
+    @test Core.OpaqueClosure(ir)(42) == ((42,), ((42,),))
+end
+
+@testset "GC tokens: live=$keep_begin, pending_begin=$pending_begin, pending_end=$pending_end" for keep_begin in (false, true),
+        pending_begin in (false, true), pending_end in (false, true)
+    ir = make_ircode(Any[
+        GotoNode(keep_begin ? 2 : 5),
+        Expr(:gc_preserve_begin, Argument(2)),
+        GotoNode(4),
+        GotoNode(7),
+        GotoNode(6),
+        GotoNode(4),
+        Expr(:gc_preserve_end, SSAValue(2)),
+        ReturnNode(0),
+    ]; slottypes=Any[Tuple{}, Vector{Int}], verify=false)
+    if pending_begin
+        token = Compiler.insert_node!(ir, 2, Compiler.NewInstruction(ir.stmts[2][:stmt], Nothing))
+        ir.stmts[2][:stmt] = nothing
+        ir.stmts[7][:stmt] = Expr(:gc_preserve_end, token)
+    end
+    if pending_end
+        Compiler.insert_node!(ir, 7, Compiler.NewInstruction(ir.stmts[7][:stmt], Nothing))
+        ir.stmts[7][:stmt] = nothing
+    end
+    ir = Compiler.domsort_ssa!(ir, Compiler.construct_domtree(ir))
+    @test Compiler.verify_ir(ir) === nothing
+    stmts = [ir.stmts.stmt; ir.new_nodes.stmts.stmt]
+    begins = filter(stmt -> isexpr(stmt, :gc_preserve_begin), stmts)
+    ends = filter(stmt -> isexpr(stmt, :gc_preserve_end), stmts)
+    @test length(begins) == length(ends) == Int(keep_begin)
+    if keep_begin
+        @test ir[only(ends).args[1]][:stmt] === only(begins)
+    end
+    @test Compiler.verify_ir(Compiler.compact!(ir)) === nothing
+end
+
+@testset "Unreachable definitions cannot supply ordinary SSA uses" begin
+    ir = make_ircode(Any[
+        GotoNode(4),
+        Expr(:call, GlobalRef(Core, :tuple), Argument(2)),
+        ReturnNode(0),
+        ReturnNode(SSAValue(2)),
+    ]; slottypes=Any[Tuple{}, Int], verify=false)
+    @test_throws AssertionError Compiler.domsort_ssa!(ir, Compiler.construct_domtree(ir))
+end
+
+@testset "Must-throw terminal at instruction $throwidx" for throwidx in (2, 4)
+    ir = make_ircode(
+        Any[
+            GotoIfNot(false, 3),
+            ReturnNode(nothing),
+            GotoIfNot(Argument(2), 2),
+            ReturnNode(nothing),
+        ];
+        slottypes = Any[Tuple{}, Bool],
+        ssavaluetypes = Any[Any, Any, Any, Any],
+    )
+    ir.stmts[throwidx][:stmt] = Expr(:call, GlobalRef(Base, :error), "boom")
+    ir.stmts[throwidx][:type] = Union{}
+    @test Compiler.verify_ir(ir) === nothing
+    ir = Compiler.compact!(ir, true)
+    @test Compiler.verify_ir(ir) === nothing
+    oc = Core.OpaqueClosure(ir)
+    @test_throws ErrorException("boom") oc(throwidx == 4)
+    @test oc(throwidx != 4) === nothing
 end
 
 # Make sure dead blocks that are removed are not still referenced in live phi nodes
