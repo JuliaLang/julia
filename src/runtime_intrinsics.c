@@ -1592,6 +1592,12 @@ JL_DLLEXPORT double julia_fma(double a, double b, double c) {
     return r+s;
 }
 
+// On Windows, package images link libm calls without the JIT aliases. Export the
+// standard names for both architectures to use Julia's implementations instead
+// of libmingwex's inexact FMA routines.
+JL_DLLEXPORT double fma(double a, double b, double c) { return julia_fma(a, b, c); }
+JL_DLLEXPORT float fmaf(float a, float b, float c) { return julia_fmaf(a, b, c); }
+
 // msvcrt.dll does not export these on every architecture, and the copies linked from
 // libmingwex are not visible to the JIT, so export them for the aliases in jitlayers.cpp.
 #if defined(__GNUC__) && !defined(__clang__)
