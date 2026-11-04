@@ -602,17 +602,22 @@ function start_sigint_listener()
     ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
 end
 
-function __init__()
-    # Base library init
-    global _atexit_hooks_finished = false
-    Filesystem.__postinit__()
+function __preinit__()
     reinit_stdio()
-    Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     # initialize loading
     init_depot_path()
     init_load_path()
     init_active_project()
     init_debuginfo_source_paths()
+    init_frontend()
+end
+
+function __init__()
+    # Base library init
+    global _atexit_hooks_finished = false
+    Filesystem.__postinit__()
+    __preinit__()
+    Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
     empty!(checksums_valid)
@@ -632,7 +637,6 @@ function __init__()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())
-    init_frontend()
     nothing
 end
 
