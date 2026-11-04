@@ -639,6 +639,8 @@ typedef struct {
 #define JI_PAYLOAD_SIZE_OFFSET 168
 #define JI_SECTIONS_OFFSET 176
 #define JI_HEADER_SIZE (JI_SECTIONS_OFFSET + sizeof(jl_image_sections_t))
+// The first field of the incremental header, the CRC-32C of a split image's native library
+#define JI_NATIVE_CRC_OFFSET JI_HEADER_SIZE
 
 // This .ji is for an incremental image and not a system image.
 static const uint32_t JI_FLAG_PKGIMAGE = 1 << 0;

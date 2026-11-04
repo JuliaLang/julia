@@ -3615,6 +3615,8 @@ static uint8_t jl_get_toplevel_syntax_version(void) JL_CANSAFEPOINT
 
 static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t *mod_array, jl_array_t **udeps, bool_t emit_split) JL_CANSAFEPOINT
 {
+    assert(ios_pos(f) == JI_NATIVE_CRC_OFFSET);
+    write_uint32(f, 0); // the CRC-32C of the native library, which compilecache fills in
     write_uint8(f, (jl_cache_flags() & ~1) | (emit_split ? 1 : 0));
     // coverage instrumentation of the image, part of the cache identity
     write_uint8(f, jl_image_coverage_config());
@@ -4684,7 +4686,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, const jl_image_buf_t *buf, j
                                  flags & JI_FLAG_PKGIMAGE ? "pkgimage" : "system image");
 
     if (depmods) {
-        ios_seek(f, JI_HEADER_SIZE);
+        ios_seek(f, JI_NATIVE_CRC_OFFSET + sizeof(uint32_t));
         // Syntax version mismatch is not fatal to load
         if (!jl_match_cache_flags_current(read_uint8(f)))
             return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");

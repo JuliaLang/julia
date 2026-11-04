@@ -715,15 +715,6 @@ precompile_test_harness(false) do dir
         @test fb_uuid != fb_uuid1
     end
 
-    # test checksum
-    open(joinpath(cachedir2, "FooBar1.ji"), "a") do f
-        write(f, 0x076cac96) # append 4 random bytes
-    end
-    @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) === true
-    reasons = Dict{Symbol,Int}()
-    @test Base.compilecache_freshest_path(Base.PkgId("FooBar1"); reasons) === nothing
-    @test haskey(reasons, :checksum_invalid)
-
     # test behavior of precompile modules that throw errors
     FooBar2_file = joinpath(dir, "FooBar2.jl")
     write(FooBar2_file,
@@ -2074,7 +2065,6 @@ precompile_test_harness("PkgCacheInspector") do load_path
             # isvalid_cache_header returns checksum id or nothing
             Base.isvalid_cache_header(io) === nothing && throw(ArgumentError("Invalid header in cache file $cachefile."))
             depmodnames = Base.parse_cache_header(io, cachefile)[3]
-            Base.isvalid_file_crc(io) || throw(ArgumentError("Invalid checksum in cache file $cachefile."))
         finally
             close(io)
         end

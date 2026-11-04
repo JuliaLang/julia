@@ -2213,11 +2213,11 @@ function compilecache_freshest_path(pkg::PkgId;
         cachepaths::Vector{String}=get(() -> find_all_in_cache_path(pkg), cachepath_cache, pkg),
         sourcespec::Union{PkgLoadSpec,Nothing}=Base.locate_package_load_spec(pkg),
         flags::CacheFlags=CacheFlags(),
-        # skipping the full-file corruption checks is only safe for advisory
-        # queries (e.g. `isprecompiled`): a caller whose verdict decides what
-        # gets loaded without further validation (like the precompilation
-        # driver) must keep them on, so that a corrupted cache is recompiled
-        # rather than reported as loadable
+        # skipping the check of a package image's .so checksum is only safe for
+        # advisory queries (e.g. `isprecompiled`): a caller whose verdict decides
+        # what gets loaded without further validation (like the precompilation
+        # driver) must keep it on, so that an image whose .so is corrupted is
+        # recompiled rather than reported as loadable.  The .ji is not checksummed.
         verify_checksums::Bool=true,
         unverified::Union{Nothing,Set{String}}=nothing,
         reasons::Union{Dict{Symbol,Int},Nothing}=nothing)
@@ -2240,7 +2240,7 @@ function compilecache_freshest_path(pkg::PkgId;
     for build_id in try_build_ids
         @label next_path for path_to_try in cachepaths
             tried += 1
-            # Checksums read the whole file, so check them after the deps.
+            # The checksum of a .so reads the whole file, so check it after the deps.
             staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; ignore_loaded, requested_flags=flags, verify_checksums=false, reasons)
             if staledeps === true
                 continue
@@ -2389,7 +2389,6 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
             # TODO: Check for valid clone_targets?
         else
             @assert ocachepath === nothing
-            isvalid_file_crc(io) || return ArgumentError("Invalid checksum in cache file $path.")
         end
     finally
         close(io)
@@ -2436,7 +2435,6 @@ end
         @label next_path for path_to_try in paths
             tried += 1
             trusted = path_to_try === pre
-            # Checksums read the whole file, so check them after the deps.
             staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; reasons,
                                         stalecheck = stalecheck && !trusted, verify_checksums = false)
             if staledeps === true
@@ -3928,22 +3926,18 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags)
             ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
 
-            # append checksum for so to the end of the .ji file:
+            # record the checksum of the .so in the .ji
             crc_so = if cache_objects
                 open(_crc32c, tmppath_so, "r")
             else
                 UInt32(0)
             end
 
-            # append extra crc to the end of the .ji file:
             open(tmppath, "r+") do f
                 if isvalid_cache_header(f) === nothing
                     error("Incompatible header for $(repr(MIME"text/plain"(), pkg)) in new cache file $(repr(tmppath)).")
                 end
-                seekend(f)
-                write(f, crc_so)
-                seekstart(f)
-                write(f, _crc32c(f))
+                write(seek(f, JI_NATIVE_CRC_OFFSET), crc_so)
             end
 
             # inherit permission from the source file, but keep it readable and writable
@@ -4037,6 +4031,7 @@ end
 const JI_FLAG_PKGIMAGE::UInt32 = 1 << 0
 const JI_FLAG_SPLIT::UInt32 = 1 << 1
 const JI_PAYLOAD_START_OFFSET = 160
+const JI_NATIVE_CRC_OFFSET = 384
 
 function isvalid_cache_header(f::IOStream)
     flags = Ref{UInt32}()
@@ -4047,20 +4042,16 @@ function isvalid_cache_header(f::IOStream)
         @debug "Cache header was for a system image"
         return nothing # We somehow read the header for a system image
     end
-    return err == 0 ? checksum[] : nothing
+    err == 0 || return nothing
+    skip(f, 4) # .so checksum
+    return checksum[]
 end
-isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == read(f, UInt32))
 
-function isvalid_pkgimage_crc(f::IOStream, ocachefile::String)
-    seekstart(f) # TODO necessary
-    seek(f, filesize(f) - 8)
-    expected_crc_so = read(f, UInt32)
-    crc_so = open(_crc32c, ocachefile, "r")
-    expected_crc_so == crc_so
-end
+isvalid_pkgimage_crc(f::IOStream, ocachefile::String) =
+    read(seek(f, JI_NATIVE_CRC_OFFSET), UInt32) == open(_crc32c, ocachefile, "r")
 
 # Cache files whose checksums passed in this process; a replaced file gets a new key.
-# Only the precompile driver's freshness scan uses it; loading checks only .ji-only caches.
+# Only the precompile driver's freshness scan uses it; loading checks no checksums.
 const checksums_valid = Set{NTuple{2, NTuple{5, Float64}}}() # protected by require_lock
 
 file_identity(st::StatStruct) = (Float64(st.device), Float64(st.inode), Float64(st.size), st.mtime, st.ctime)
@@ -4070,16 +4061,11 @@ function checksum_key(io::IOStream, ocachefile::Union{Nothing, String})
     return (file_identity(stat(io)), oid)
 end
 
-# With `split_checksums = false` a package image with a .so is not checksummed: the loader
-# matches the .ji to its .so through the heap checksum embedded in the .so.
+# Only the .so of a package image is checksummed, and not with `split_checksums = false`: the
+# loader matches the .ji to its .so through the heap checksum embedded in the .so.
 function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{Nothing, String}, reasons; split_checksums::Bool=true)
-    split_checksums || ocachefile === nothing || return false
-    if !isvalid_file_crc(io)
-        @debug "Rejecting cache file $cachefile because it has an invalid checksum"
-        record_reason(reasons, :checksum_invalid)
-        return true
-    end
-    if ocachefile !== nothing && !isvalid_pkgimage_crc(io, ocachefile)
+    split_checksums && ocachefile !== nothing || return false
+    if !isvalid_pkgimage_crc(io, ocachefile)
         @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
         record_reason(reasons, :ocache_checksum_invalid)
         return true
@@ -4719,7 +4705,6 @@ const CACHE_REJECT_REASONS = Dict{Symbol,Pair{Symbol,String}}(
     :dep_missing             => :actionable  => "dependency source file not found",
     :source_path_changed     => :actionable  => "different source file path",
     :dep_identity_changed    => :actionable  => "dependency identifier changed",
-    :checksum_invalid        => :actionable  => "cache file checksum is invalid",
     :ocache_checksum_invalid => :actionable  => "native code cache checksum is invalid",
     :preferences_changed     => :actionable  => "package preferences changed",
     :incompatible_header     => :wrong_julia => "incompatible cache header",
