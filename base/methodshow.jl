@@ -345,11 +345,12 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
         show_method_list_header(io, ms, str -> "\""*str*"\"")
     end
     n = rest = 0
-    last = nothing
 
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
 
+    # Showing one hidden method takes no more room than saying that it is hidden.
+    max >= 0 && length(ms) == max + 1 && (max += 1)
     digit_align_width = length(string(max > 0 ? max : length(ms)))
 
     for meth in ms
@@ -367,18 +368,13 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             end
         else
             rest += 1
-            last = meth
         end
     end
     if rest > 0
         println(io)
-        if rest == 1 && last isa Method
-            show_method(io, last)
-        else
-            print(io, "... $rest methods not shown")
-            if hasname
-                print(io, " (use methods($name) to see them all)")
-            end
+        print(io, "... $rest methods not shown")
+        if hasname
+            print(io, " (use methods($name) to see them all)")
         end
     end
     nothing
@@ -403,7 +399,7 @@ function url(m::Method)
     (m.file === :null || m.file === :string) && return ""
     file = string(m.file)
     line = m.line
-    line <= 0 || occursin(r"In\[[0-9]+\]"a, file) && return ""
+    (line <= 0 || occursin(r"In\[[0-9]+\]"a, file)) && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
@@ -425,8 +421,9 @@ function url(m::Method)
                         u = (match(LibGit2.GITHUB_REGEX,u)::AbstractMatch).captures[1]
                         commit = string(LibGit2.head_oid(repo))
                         root = LibGit2.path(repo)
-                        if startswith(file, root) || startswith(realpath(file), root)
-                            "https://github.com/$u/tree/$commit/"*file[length(root)+1:end]*"#L$line"
+                        path = startswith(file, root) ? file : realpath(file)
+                        if startswith(path, root)
+                            "https://github.com/$u/tree/$commit"*chopprefix(path, root)*"#L$line"
                         else
                             fileurl(file)
                         end
