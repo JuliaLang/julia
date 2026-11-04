@@ -5,7 +5,7 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype, tail,
-    sub_with_overflow, add_with_overflow, BitSigned, BitIntegerType, top_set_bit, uabs
+    sub_with_overflow, add_with_overflow, BitIntegerType, top_set_bit, uabs, maybe_unsigned
 
 import Base:
     sort,
@@ -1441,8 +1441,6 @@ function radix_chunk_size_heuristic(lo::Integer, hi::Integer, bits::Unsigned)
     UInt8(cld(bits, cld(bits, guess)))
 end
 
-maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
-maybe_unsigned(x::BitSigned) = unsigned(x)
 function _issorted(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     @boundscheck checkbounds(v, lo:hi)
     @inbounds for i in (lo+1):hi
