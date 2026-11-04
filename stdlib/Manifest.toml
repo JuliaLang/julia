@@ -181,7 +181,7 @@ version = "1.11.104+0"
 [[deps.LibUV_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "183b4373-6708-53ba-ad28-60e28bb38547"
-version = "2.0.1+23"
+version = "2.0.1+24"
 
     [deps.LibUV_jll.syntax]
     julia_version = "1.6.0"
