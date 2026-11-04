@@ -400,6 +400,8 @@ end
     A
 end
 
+_fullstride2(A, f=identity) = f(stride(A, 2)) >= size(A, 1)
+
 function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{T},
                α::Number=true, β::Number=false) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
@@ -411,13 +413,14 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
     nA == 0 && return _rmul_or_fill!(y, β)
     alpha, beta = promote(α, β, zero(T))
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-        stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
-        !iszero(stride(x, 1)) && # We only check input's stride here.
+        stride(A, 1) == 1 && _fullstride2(A, abs) &&
+        !iszero(stride(x, 1)) # We only check input's stride here.
         if tA in ('N', 'T', 'C')
             return BLAS.gemv!(tA, alpha, A, x, beta, y)
-        elseif tA in ('S', 's')
+        # unlike gemv!, symv! and hemv! do not support a negative stride(A, 2)
+        elseif tA in ('S', 's') && _fullstride2(A)
             return BLAS.symv!(tA == 'S' ? 'U' : 'L', alpha, A, x, beta, y)
-        elseif tA in ('H', 'h')
+        elseif tA in ('H', 'h') && _fullstride2(A)
             return BLAS.hemv!(tA == 'H' ? 'U' : 'L', alpha, A, x, beta, y)
         end
     end

@@ -940,6 +940,43 @@ end
     @test rdiv!(B2v, U) ≈ rdiv!(B2vc, U)
 end
 
+@testset "triangular matrices with non-contiguous or negatively strided parents" for T in (Float64, ComplexF64, Float32, ComplexF32)
+    n = 5
+    # views equal to M, with stride(·, 1) == 2 or with stride(·, 2) < 0, respectively
+    rowstep(M) = (P = zeros(T, 2size(M, 1), size(M, 2)); P[1:2:end, :] = M; view(P, 1:2:size(P, 1), :))
+    colrev(M) = (P = zeros(T, size(M)); P[:, end:-1:1] = M; view(P, :, size(P, 2):-1:1))
+    M = rand(T, n, n) + n*I
+    b, B = rand(T, n), rand(T, n, n)
+    @testset for fM in (rowstep, colrev), t in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular), op in (identity, transpose, adjoint)
+        A, Ad = op(t(fM(M))), op(t(M))
+        @test A * b ≈ Ad * b
+        @test A \ b ≈ Ad \ b
+        @test A * B ≈ Ad * B
+        @test A \ B ≈ Ad \ B
+        @test B * A ≈ B * Ad
+        @test B / A ≈ B / Ad
+        # the destination may also be incompatible with BLAS
+        @test mul!(colrev(zero(B)), A, B) ≈ Ad * B
+        @test mul!(colrev(zero(B)), B, A) ≈ B * Ad
+        @test ldiv!(colrev(zero(B)), A, B) ≈ Ad \ B
+        @test lmul!(A, colrev(B)) ≈ Ad * B
+        @test rmul!(colrev(B), A) ≈ B * Ad
+        @test ldiv!(A, colrev(B)) ≈ Ad \ B
+        @test rdiv!(colrev(B), A) ≈ B / Ad
+        if T <: Complex
+            # a real operand is copied into the complex destination, so this also
+            # dispatches to the methods that call BLAS
+            br, Br = real(b), real(B)
+            @test A * br ≈ Ad * br
+            @test A \ br ≈ Ad \ br
+            @test A * Br ≈ Ad * Br
+            @test A \ Br ≈ Ad \ Br
+            @test Br * A ≈ Br * Ad
+            @test Br / A ≈ Br / Ad
+        end
+    end
+end
+
 @testset "indexing checks" begin
     P = [1 2; 3 4]
     @testset "getindex" begin
