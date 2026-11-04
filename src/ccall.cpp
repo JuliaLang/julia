@@ -274,6 +274,7 @@ static GlobalVariable *emit_plt_thunk(
                                      GlobalVariable::PrivateLinkage,
                                      fname, M);
     plt->setAttributes(attrs);
+    jl_init_function(plt, ctx.emission_context);
     if (cc != CallingConv::C)
         plt->setCallingConv(cc);
     auto T_pvoidfunc = getPointerTy(M->getContext());
@@ -461,7 +462,7 @@ static Value *llvm_type_rewrite(
         return v;
 
     if (from_type == getVoidTy(ctx.builder.getContext()) || isa<UndefValue>(v))
-        return UndefValue::get(target_type); // convert undef (unreachable) -> undef (target_type)
+        return PoisonValue::get(target_type); // convert undef (unreachable) -> poison (target_type)
 
     assert(from_type->isPointerTy() == target_type->isPointerTy()); // expect that all ABIs consider all pointers to be equivalent
     if (target_type->isPointerTy())
@@ -1250,8 +1251,7 @@ public:
             jl_cgval_t *argv,
             SmallVectorImpl<Value*> &gc_uses,
             bool static_rt,
-            const jl_cgval_t *cancel_guard, // NULL, or (fn, state)
-            bool reset_safe_call) const JL_CANSAFEPOINT;
+            const jl_cgval_t *cancel_guard) const JL_CANSAFEPOINT; // NULL, or (fn, state)
 
 private:
 std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
@@ -1540,7 +1540,6 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     jl_sym_t *cc_sym = NULL;
     bool gc_safe = false;
     bool cancel_guard = false;
-    bool reset_safe_call = false;
     if (jl_is_symbol(jlcc)) {
         cc_sym = (jl_sym_t*)jlcc;
     }
@@ -1549,8 +1548,6 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         gc_safe = jl_unbox_bool(jl_get_nth_field_checked(jlcc, 2));
         if (jl_nfields(jlcc) > 3)
             cancel_guard = jl_unbox_bool(jl_get_nth_field_checked(jlcc, 3));
-        if (jl_nfields(jlcc) > 4)
-            reset_safe_call = jl_unbox_bool(jl_get_nth_field_checked(jlcc, 4));
     }
     assert(jl_is_symbol(cc_sym));
     native_sym_arg_t symarg = {};
@@ -2103,8 +2100,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             argv.data(),
             gc_uses,
             static_rt,
-            cancel_guard ? cancel_guard_args.data() : NULL,
-            reset_safe_call);
+            cancel_guard ? cancel_guard_args.data() : NULL);
     JL_GC_POP();
     return retval;
 }
@@ -2117,8 +2113,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         jl_cgval_t *argv,
         SmallVectorImpl<Value*> &gc_uses,
         bool static_rt,
-        const jl_cgval_t *cancel_guard,
-        bool reset_safe_call) const
+        const jl_cgval_t *cancel_guard) const
 {
     ++EmittedCCalls;
     if (!err_msg.empty()) {
@@ -2293,20 +2288,13 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     // delivered while the call runs invokes fn(state, sev) on this thread
     // (see the usr2_handler request-5 dispatch in signals-unix.c), instead
     // of waiting for the next cancellation point. The handler slot is
-    // separate from (and may be active at the same time as) a compiled
-    // reset region's task->reset_ctx, and takes delivery priority while
-    // published.
+    // separate from a compiled reset region's task->reset_ctx (which the
+    // cancellation-lowering pass clears before this call, as before any
+    // other foreign call) and takes delivery priority while published.
     Value *guard_ctx_ptr = NULL;
     Value *guard_null = NULL;
-    MDNode *reset_safe_md = NULL;
     if (cancel_guard) {
         Type *T_size = ctx.types().T_size;
-        // The guard stores are bookkeeping of the cancellation machinery
-        // itself: mark them reset_safe so the cancellation-lowering pass
-        // does not treat them as points that tear down an enclosing reset
-        // region (they may sit between a cancellation point and a
-        // reset-safe foreign call the region is meant to span).
-        reset_safe_md = MDNode::get(ctx.builder.getContext(), {});
         // No lifetime markers: the buffer is observed asynchronously (by
         // the signal-delivery path) while published, not only at its
         // direct uses.
@@ -2329,7 +2317,6 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 emit_ptrgep(ctx, guard_buf, slot * sizeof(void*));
             StoreInst *st = ctx.builder.CreateAlignedStore(v, p, Align(sizeof(void*)));
             st->setOrdering(AtomicOrdering::Monotonic);
-            st->setMetadata("julia.reset_safe", reset_safe_md);
         };
         store_slot(fnv, 0);
         store_slot(statev, 1);
@@ -2344,7 +2331,6 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         guard_ctx_ptr = emit_ptrgep(ctx, task, offsetof(jl_task_t, cancel_handler_ctx), "cancel_handler_ctx_ptr");
         StoreInst *pub = ctx.builder.CreateAlignedStore(guard_buf, guard_ctx_ptr, ctx.types().alignof_ptr);
         pub->setOrdering(AtomicOrdering::Release);
-        pub->setMetadata("julia.reset_safe", reset_safe_md);
         guard_null = ConstantPointerNull::get(cast<PointerType>(guard_buf->getType()));
     }
 
@@ -2360,18 +2346,12 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             bundles);
     ((CallInst*)ret)->setAttributes(attributes);
 
-    if (reset_safe_call) {
-        // A reset_safe annotation is just propagated to the LLVM pass
-        ret->setMetadata("julia.reset_safe", MDNode::get(ctx.builder.getContext(), {}));
-    }
-
     if (cancel_guard) {
-        // Unpublish the handler slot. N.B.: The cancellation LLVM pass does not know or care about the
-        // handler at all (although it must know that this store doesn't invalidate the
-        // reset region).
+        // Unpublish the handler slot. (The cancellation LLVM pass does not
+        // know or care about the handler: this store is an ordinary unsafe
+        // point to it, like the call itself.)
         StoreInst *unpub = ctx.builder.CreateAlignedStore(guard_null, guard_ctx_ptr, ctx.types().alignof_ptr);
         unpub->setOrdering(AtomicOrdering::Release);
-        unpub->setMetadata("julia.reset_safe", reset_safe_md);
     }
 
     if (cc != CallingConv::C)

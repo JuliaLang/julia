@@ -338,6 +338,8 @@ end
         end
         R = LinearIndices((Base.IdentityUnitRange(0:1), 0:1))
         @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
+        @test axes(LinearIndices((Base.IdentityUnitRange(0:1), 2))) === (Base.IdentityUnitRange(0:1), Base.OneTo(2))
+        @test axes(CartesianIndices((Base.IdentityUnitRange(0:1), 2))) === (Base.IdentityUnitRange(0:1), Base.OneTo(2))
     end
 
     @testset "show" begin
@@ -2139,6 +2141,9 @@ end
     @testset "IndexCartesian - IndexLinear" begin
         B .= 0
         copyto!(view(B, axes(B)...), A)
+        @test B == A
+        B .= 0
+        copyto!(view(B, axes(B)...), vec(A))
         @test B == A
     end
     @testset "IndexCartesian - IndexCartesian" begin

@@ -56,6 +56,8 @@ end
     @test testval("2_0.0"       , 20.0)
     @test testval("2_0.0_0e0_0" , 20.0)
     @test testval("2_0.1_0e1_0" , 20.1e10)
+    @test testval("6.022_140_76e23", 6.02214076e23)
+    @test testval("1_000e3"        , 1e6)
 
     @test testval("1_0"    , 10    |> Int64)
     @test testval("1_0_0"  , 100   |> Int64)
@@ -141,6 +143,10 @@ end
     @test failval("2016-09-09T09:09:09x"  , Internals.ErrParsingDateTime)
     @test failval("2016-09-09s09:09:09Z"  , Internals.ErrParsingDateTime)
     @test failval("2016-09-09T09:09:09x"  , Internals.ErrParsingDateTime)
+    @test failval("-200-01-01"            , Internals.ErrParsingDateTime)
+    @test failval("+999-01-01"            , Internals.ErrParsingDateTime)
+    @test failval("+2000-01-01"           , Internals.ErrParsingDateTime)
+    @test failval("-0001-01-01"           , Internals.ErrParsingDateTime)
 end
 
 @testset "Time" begin
@@ -159,6 +165,9 @@ end
     # With optional seconds, "09:09" is a valid time; "x09" triggers newline error
     @test failval("09:09x09", Internals.ErrExpectedNewLineKeyValue)
     @test failval("09:09:0x", Internals.ErrParsingDateTime)
+    @test failval("+1:30:00", Internals.ErrParsingDateTime)
+    @test failval("-0:30:00", Internals.ErrParsingDateTime)
+    @test failval("+01:30:00", Internals.ErrParsingDateTime)
 end
 
 # TODO: Add more dedicated value tests

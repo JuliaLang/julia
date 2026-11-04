@@ -155,12 +155,29 @@ end
     mktempdir() do dir
         logfile = joinpath(dir, "objcache.log")
         script = """
-            for i in 1:600
-                f = Symbol(:objcache_eviction_, i)
-                @eval \$f(x) = x + \$i
-                @eval \$f(1)
+            function compile(range)
+                for i in range
+                    f = Symbol(:objcache_eviction_, i)
+                    @eval \$f(x) = x + \$i
+                    @eval \$f(1)
+                end
             end
-            print(ccall(:jl_objcache_kv_enabled, Cint, ()) != 0 ? "enabled" : "disabled")
+            compile(1:600)
+            enabled = ccall(:jl_objcache_kv_enabled, Cint, ()) != 0
+            if enabled
+                # The writer works through its queue in order, so once this entry is stored
+                # the evictions above are done, however far the writer had fallen behind.
+                ccall(:jl_objcache_kv_put, Cint, (Cstring, Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+                      "eviction-test", "key", 3, "value", 5)
+                for _ in 1:1200
+                    ccall(:jl_objcache_kv_get, Any, (Cstring, Ptr{UInt8}, Csize_t),
+                          "eviction-test", "key", 3) === nothing || break
+                    sleep(0.1)
+                end
+            end
+            # exit with these writes still pending
+            compile(601:700)
+            print(enabled ? "enabled" : "disabled")
         """
         cmd = addenv(
             `$(Base.julia_cmd()) --startup-file=no --color=no -e $script`,
@@ -290,6 +307,28 @@ end
 
     @test read(addenv(`$(Base.julia_cmd()) --startup-file=no -e "print(Base.Experimental.prune_objcache(mktempdir()))"`,
                       "JULIA_OBJCACHE" => "0"), String) == "nothing"
+end
+
+# Processes that share a cache and exit at the same time remove its SysV semaphores.
+@testset "object-cache semaphores" begin
+    Sys.isapple() && mktempdir() do dir
+        script = "print(ccall(:jl_objcache_kv_enabled, Cint, ()) != 0 ? 'y' : 'n'); readline()"
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                     "JULIA_OBJCACHE" => "1", "JULIA_OBJCACHE_PATH" => dir)
+        procs = [open(cmd, "r+") for _ in 1:4]
+        enabled = all(p -> read(p, Char) == 'y', procs)
+        foreach(p -> close(p.in), procs)
+        foreach(wait, procs)
+        @test all(success, procs)
+        if !enabled
+            @test_skip false # the cache is disabled here
+            return
+        end
+        # the key LMDB derives the semaphore set from
+        key = ccall(:ftok, Cint, (Cstring, Cint), joinpath(dir, "lock.mdb"), Cint('M'))
+        @test key != -1
+        @test ccall(:semget, Cint, (Cint, Cint, Cint), key, 0, 0) == -1
+    end
 end
 
 sleep(5)  # Avoids problems where we don't respond to Distributed.jl fast enough

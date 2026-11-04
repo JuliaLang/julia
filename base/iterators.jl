@@ -1202,6 +1202,7 @@ iterate(::ProductIterator{Tuple{}}) = (), true
 iterate(::ProductIterator{Tuple{}}, state) = nothing
 
 @inline isdone(P::ProductIterator) = any(isdone, P.iterators)
+@inline _pisdone(::Tuple{}, ::Tuple{}) = true
 @inline function _pisdone(iters, states)
     iter1 = first(iters)
     done1 = isdone(iter1, first(states)[2]) # check step
@@ -1753,7 +1754,7 @@ julia> first(stateful)
 nth(itr, n::Integer) = _nth(IteratorSize(itr), itr, n)
 nth(itr::Cycle{I}, n::Integer) where I = _nth(IteratorSize(I), itr, n)
 nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where O = _nth(IteratorSize(O), itr, n)
-@propagate_inbounds nth(itr::AbstractArray, n::Integer) = itr[begin + n - 1]
+@propagate_inbounds nth(itr::AbstractArray, n::Integer) = itr[begin + Int(n) - 1]
 
 function _nth(::Union{HasShape, HasLength}, itr::Cycle{I}, n::Integer) where {I}
     N = length(itr.xs)

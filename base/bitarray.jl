@@ -1023,19 +1023,20 @@ function deleteat!(B::BitVector, inds::AbstractVector{Bool})
     length(inds) == length(B) || throw(BoundsError(B, inds))
 
     n = new_l = length(B)
+    o = firstindex(inds) - 1
     y = findfirst(inds)
     y === nothing && return B
 
     Bc = B.chunks
 
-    p = y
+    p = y - o
     s = y + 1
     checkbounds(B, p)
     q = p + 1
     new_l -= 1
     y = findnext(inds, s)
     while y !== nothing
-        i = y
+        i = y - o
         s = y + 1
         new_l -= 1
         if i > q

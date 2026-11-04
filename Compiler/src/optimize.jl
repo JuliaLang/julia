@@ -1179,8 +1179,20 @@ function optional_order_arg(stmt::Expr, i::Int, ir::IRCode)
     return o === nothing ? QuoteNode(nothing) : o
 end
 
+# The callee of a `:call` or `:invoke_modify` statement as a singleton, or nothing.
+function global_callee(@nospecialize(stmt), ir::IRCode)
+    isa(stmt, Expr) || return nothing
+    if stmt.head === :call
+        length(stmt.args) >= 1 && return _global_call_singleton(stmt.args[1], ir)
+    elseif stmt.head === :invoke_modify
+        length(stmt.args) >= 2 && return _global_call_singleton(stmt.args[2], ir)
+    end
+    return nothing
+end
+
 # Recognize a statement that reads a global binding value.
-function recognize_global_read(@nospecialize(stmt), ir::IRCode)
+# `f` is the statement's callee, as computed by `global_callee`.
+function recognize_global_read(@nospecialize(stmt), @nospecialize(f), ir::IRCode)
     if isa(stmt, GlobalRef)
         return Pair{GlobalRef,Any}(stmt, QuoteNode(:unordered))
     end
@@ -1189,7 +1201,6 @@ function recognize_global_read(@nospecialize(stmt), ir::IRCode)
     stmt.head === :call || return nothing
     na = length(stmt.args)
     (na == 3 || na == 4) || return nothing
-    f = _global_call_singleton(stmt.args[1], ir)
     if f === Core.getglobal
         M = _global_call_singleton(stmt.args[2], ir)
         s = _global_call_singleton(stmt.args[3], ir)
@@ -1248,7 +1259,7 @@ end
 # `modifyglobal!` upgrades like the rest, in both the plain call form and the `:invoke_modify`
 # form the inliner gives it -- the code instance that node carries for the reduce function
 # rides along on the upgraded one.
-function recognize_global_write(@nospecialize(stmt), ir::IRCode)
+function recognize_global_write(@nospecialize(stmt), @nospecialize(f), ir::IRCode)
     if isexpr(stmt, :call)
         base = 1
         invoke = nothing
@@ -1260,7 +1271,6 @@ function recognize_global_write(@nospecialize(stmt), ir::IRCode)
     end
     na = length(stmt.args) - base
     3 <= na <= 6 || return nothing # cheap arity check for the narrowest and widest list accepted below
-    f = _global_call_singleton(stmt.args[base], ir)
     if f === Core.modifyglobal! && (na == 4 || na == 5)
         g = _global_write_target(stmt, base, ir)
         g === nothing && return nothing
@@ -1298,11 +1308,10 @@ end
 # `isdefinedglobal(M, s[, allow_import[, order]])` or `isdefined(M::Module, s)`.
 # Only an `allow_import === true` query reformulates (it walks imports to the leaf, matching the resolution below).
 # An `allow_import === false` query is left on the runtime path (if not already folded by inference), which is conservatively correct.
-function recognize_global_isdefined(@nospecialize(stmt), ir::IRCode)
+function recognize_global_isdefined(@nospecialize(stmt), @nospecialize(f), ir::IRCode)
     isa(stmt, Expr) || return nothing
     stmt.head === :call || return nothing
     na = length(stmt.args)
-    f = _global_call_singleton(stmt.args[1], ir)
     if f === Core.isdefinedglobal && (3 <= na <= 5)
         M = _global_call_singleton(stmt.args[2], ir)
         s = _global_call_singleton(stmt.args[3], ir)
@@ -1411,7 +1420,8 @@ function _reformulate_globals!(ir::IRCode, opt::OptimizationState)
     for idx = 1:length(ir.stmts)
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
-        r = recognize_global_read(stmt, ir)
+        f = global_callee(stmt, ir)
+        r = recognize_global_read(stmt, f, ir)
         if r !== nothing
             rr = reformulate_read(r.first, opt, world, edges, read_cache)
             if rr !== nothing
@@ -1423,20 +1433,22 @@ function _reformulate_globals!(ir::IRCode, opt::OptimizationState)
                          QuoteNode(r.first), QuoteNode(p), r.second) : p
                 inst[:stmt] = stmt
                 r.second isa QuoteNode && continue # optimize the loop in the common case
+                f = nothing
             end
             # fall through: a read call may still contain nested `GlobalRef` operands worth rewriting (including for `order`).
         end
-        d = recognize_global_isdefined(stmt, ir)
+        d = recognize_global_isdefined(stmt, f, ir)
         if d !== nothing
             rr = reformulate_read(d.first, opt, world, edges, read_cache)
             if rr !== nothing
                 stmt = Expr(:call, GlobalRef(Core, :isdefinedglobal_partition), QuoteNode(rr[1]), d.second)
                 inst[:stmt] = stmt
                 d.second isa QuoteNode && continue # optimize the loop in the common case
+                f = nothing
             end
             # fall through: as for a read, a non-constant `order` operand may still be a `GlobalRef` worth rewriting.
         end
-        w = recognize_global_write(stmt, ir)
+        w = recognize_global_write(stmt, f, ir)
         if w !== nothing
             part = reformulate_write(w.g, opt, world, edges, write_cache)
             if part !== nothing
@@ -1482,6 +1494,17 @@ function _reformulate_globals!(ir::IRCode, opt::OptimizationState)
         end
 
         # Rewrite (effect-free) `GlobalRef` operands nested inside this statement.
+        if isa(stmt, Expr) && (stmt.head === :invoke || stmt.head === :call)
+            # the common case, as `userefs` would, without its generic operand access
+            args = stmt.args
+            for i = 1:length(args)
+                use = args[i]
+                isa(use, GlobalRef) || continue
+                rr = reformulate_read(use, opt, world, edges, read_cache)
+                rr === nothing || (args[i] = rr[1])
+            end
+            continue
+        end
         urs = userefs(stmt)
         changed = false
         for ur in urs

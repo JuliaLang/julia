@@ -479,6 +479,20 @@ end
 10  (return core.nothing)
 
 ########################################
+# Error: Function with module ref in name not at top level
+function f()
+    function A.g()
+    end
+end
+#---------------------
+LoweringError:
+function f()
+    function A.g()
+#            └─┘ ── global method definition must be placed at top level, or use eval
+    end
+end
+
+########################################
 # Error: Invalid dotop function name
 function (.+)(x,y)
 end

@@ -428,6 +428,13 @@ BigFloat(x::AbstractString, r::RoundingMode; precision::Integer=_precision_with_
 
 ## BigFloat -> Integer
 _unchecked_cast(T, x::BigFloat, r::RoundingMode) = _unchecked_cast(T, x, convert(MPFRRoundingMode, r))
+# MPFR has no ties-away or ties-up mode, but these only differ from ties-to-even at an exact tie
+function _unchecked_cast(T, x::BigFloat, r::Union{RoundingMode{:NearestTiesAway}, RoundingMode{:NearestTiesUp}})
+    f = BigFloat(; precision=_precision_with_base_2(x))
+    ccall((:mpfr_frac, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), f, x, MPFRRoundNearest)
+    (f == 0.5 || f == -0.5) || return _unchecked_cast(T, x, MPFRRoundNearest)
+    return _unchecked_cast(T, x, r isa RoundingMode{:NearestTiesUp} ? MPFRRoundUp : MPFRRoundFromZero)
+end
 
 function _unchecked_cast(::Type{Int64}, x::BigFloat, r::MPFRRoundingMode)
     ccall((:__gmpfr_mpfr_get_sj,libmpfr), Cintmax_t, (Ref{BigFloat}, MPFRRoundingMode), x, r)

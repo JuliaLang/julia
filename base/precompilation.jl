@@ -351,6 +351,8 @@ const ansi_cleartoendofline = "\e[0K"
 const ansi_enablecursor = "\e[?25h"
 const ansi_disablecursor = "\e[?25l"
 const ansi_clearline = "\e[2K"
+const ansi_beginsync = "\e[?2026h"
+const ansi_endsync = "\e[?2026l"
 ansi_moveup(n::Int) = string("\e[", n, "A")
 
 struct PkgPrecompileError <: Exception
@@ -387,7 +389,7 @@ timing_string(t) = string(lpad(round(t, digits = 1), 6), " s")
 # line in verbose mode. Column labels are emitted once via
 # `format_verbose_timing_header`. Returns an empty string if the payload is
 # missing or unparsable.
-function format_verbose_timing(payload::AbstractString, total_seconds::Float64, cache_bytes::Int, peak_rss_bytes::UInt64, hascolor::Bool)
+function format_verbose_timing(payload::AbstractString, total_seconds::Float64, cache_bytes::Integer, peak_rss_bytes::UInt64, hascolor::Bool)
     isempty(payload) && return ""
     include_ns = compilation_ns = deps_ns = UInt64(0)
     methods = 0
@@ -444,7 +446,7 @@ format_verbose_timing_header() = "   total │ include   (deps)   (comp) │ met
 # Sum the on-disk size of the `.ji` cache file and (optionally) its companion
 # pkgimage (`.so`/`.dylib`/`.dll`). Returns 0 if files are missing.
 function _precompile_cache_bytes(cf_jl::AbstractString, cf_so::Union{Nothing,AbstractString})
-    total = 0
+    total = Int64(0)
     try
         isfile(cf_jl) && (total += filesize(cf_jl))
         cf_so === nothing || (isfile(cf_so) && (total += filesize(cf_so)))
@@ -675,7 +677,7 @@ function ExplicitEnv(envpath::String)
             name_to_uuid[name] = m_uuid
 
             for key in ["deps", "weakdeps"]
-                deps_pkg = get(Vector{String}, pkg_info, key)::Union{Vector{String}, Dict{String, Any}}
+                deps_pkg = Base.manifest_dep_names(get(Vector{String}, pkg_info, key))::Union{Vector{String}, Dict{String, Any}}
                 d = key == "deps" ? deps :
                     key == "weakdeps" ? weakdeps :
                     error()
@@ -1925,7 +1927,8 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
             catch e
                 @lock BG begin
                     if BG.interrupt_requested || BG.cancel_requested
-                        BG.result = "Background precompilation was interrupted"
+                        # keep the summary of what was done, if the run got to report it
+                        BG.result === nothing && (BG.result = "Background precompilation was interrupted")
                         # loading must stop rather than compile the package again serially
                         _from_loading && (BG.exception = e)
                     else
@@ -2408,10 +2411,8 @@ function spawn_print_loop!(s::PrecompileSession)
                         end
                         keyboard_tip(BG)
                     end
+                    # clear each line as it is redrawn, not the whole display up front, to avoid flicker
                     str_ = sprint(; context=s.logio) do iostr
-                        if i_local > 1
-                            print(iostr, ansi_cleartoend)
-                        end
                         bar.header = verbose ? "Precompiling ($(s.num_tasks) tasks) " : "Precompiling packages "
                         # max(0,...) guards against a race where the print loop runs after
                         # n_already_precomp is incremented but before n_done is incremented,
@@ -2426,7 +2427,7 @@ function spawn_print_loop!(s::PrecompileSession)
                             if !isempty(tip)
                                 s_bar = string(s_bar, " ", color_string(tip, tip_color, s.hascolor))
                             end
-                            print(iostr, Base._truncate_at_width_or_chars(true, s_bar, termwidth), "\n")
+                            print(iostr, ansi_cleartoendofline, Base._truncate_at_width_or_chars(true, s_bar, termwidth), "\n")
                         end
                         for pkg_config in pkg_queue_show
                             dep, config = pkg_config
@@ -2481,8 +2482,9 @@ function spawn_print_loop!(s::PrecompileSession)
                             else
                                 string("    ", name)
                             end
-                            println(iostr, Base._truncate_at_width_or_chars(true, line, termwidth))
+                            println(iostr, ansi_cleartoendofline, Base._truncate_at_width_or_chars(true, line, termwidth))
                         end
+                        print(iostr, ansi_cleartoend)
                     end
                     n_print_rows = count("\n", str_)
                     s.printloop_should_exit = s.interrupted_or_done && final_loop
@@ -2493,10 +2495,11 @@ function spawn_print_loop!(s::PrecompileSession)
                             print(s.logio, ansi_disablecursor)
                             cursor_disabled = true
                         end
+                        # terminals that support synchronized output draw the frame in one go
                         if s.printloop_should_exit
-                            print(s.logio, str_)
+                            print(s.logio, ansi_beginsync, str_, ansi_endsync)
                         else
-                            print(s.logio, str_, ansi_moveup(n_print_rows), ansi_movecol1)
+                            print(s.logio, ansi_beginsync, str_, ansi_moveup(n_print_rows), ansi_movecol1, ansi_endsync)
                         end
                     elseif cursor_disabled
                         print(s.logio, ansi_enablecursor)
@@ -2838,7 +2841,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 println(s.logio, timing_string(t), color_string("  ? ", Base.warn_color(), s.hascolor), name)
                             end
                         else
-                            cache_bytes = 0
+                            cache_bytes = Int64(0)
                             if ret !== nothing
                                 cf_jl, cf_so = ret::Tuple{String, Union{Nothing, String}}
                                 cache_bytes = _precompile_cache_bytes(cf_jl, cf_so)
@@ -3088,7 +3091,7 @@ function report_precompile_results!(s::PrecompileSession)
     n_failed = count(j -> is_failed(j), values(s.jobs))
     # skipped extensions are implied by their parent or trigger failing, so only count packages
     n_dep_failed = count(((k, j),) -> is_dep_failed(j) && !haskey(s.ext_to_parent, first(k)), s.jobs)
-    if ndeps > 0 || n_failed > 0
+    if ndeps > 0 || n_failed > 0 || s.interrupted || s.canceled
         if !quick_exit
             logstr = sprint(context=s.logio) do iostr
                 if s.fancyprint
@@ -3191,9 +3194,14 @@ function report_precompile_results!(s::PrecompileSession)
                     count(j -> had_pid(j) && !is_recompiled(j) && !is_soft_error(j), values(s.jobs)) :
                     n_failed
                 verb = s.canceled && !s.interrupted ? "canceled" : "interrupted"
-                print(iostr, "  $(ndeps) dependenc$(ndeps == 1 ? "y" : "ies") precompiled, ",
-                      color_string("$(n_canceled_i)", Base.error_color(), s.hascolor),
-                      " $verb after $(seconds_elapsed) seconds")
+                print(iostr, "  $(ndeps) dependenc$(ndeps == 1 ? "y" : "ies") precompiled, ")
+                # a graceful stop lets running jobs finish, so none may have been cut short
+                if n_canceled_i > 0
+                    print(iostr, color_string("$(n_canceled_i)", Base.error_color(), s.hascolor), " ")
+                else
+                    print(iostr, "then ")
+                end
+                print(iostr, "$verb after $(seconds_elapsed) seconds")
                 if n_soft_errors > 0
                     pluralpc = length(s.configs) > 1 ? "dependency configurations" : n_soft_errors == 1 ? "dependency" : "dependencies"
                     print(iostr, "\n  ",

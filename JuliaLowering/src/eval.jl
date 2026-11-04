@@ -170,7 +170,7 @@ end
 
 function coverage_visit_line(mod, st)
     Base.JLOptions().code_coverage == 0 && return
-    lno = Base.first_linenode(st)
+    lno = first_linenode(st)
     (lno.line > 0 && lno.file isa Symbol) || return
     file = String(lno.file)
     if ccall(:jl_coverage_enabled_for, Cint, (Any, Cstring), mod, file) != 0
@@ -915,9 +915,9 @@ function include_string(mapexpr::Function, mod::Module, code::AbstractString,
                         filename::AbstractString)
     version = if invokelatest(isdefined, mod, Symbol("#_internal_julia_parse"))
         vp = invokelatest(getglobal, mod, Symbol("#_internal_julia_parse"))
-        vp isa Base.VersionedParse ? vp.edition : Base.VERSION_EDITION
+        vp isa Base.VersionedParse ? vp.edition : Base.LATEST_STABLE_EDITION
     else
-        Base.VERSION_EDITION
+        Base.LATEST_STABLE_EDITION
     end
     st = parseall(SyntaxTree, code; filename, version=VersionNumber(version),
                   ignore_warnings=true)

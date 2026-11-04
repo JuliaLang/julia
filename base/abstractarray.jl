@@ -721,7 +721,7 @@ See also [`checkbounds`](@ref).
 """
 function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{Any, Vararg})
     @inline
-    return checkindex(Bool, get(inds, 1, OneTo(1)), I[1])::Bool &&
+    return checkindex(Bool, get(inds, 1, OneTo(1)), I[1])::Bool &
         checkbounds_indices(Bool, safe_tail(inds), tail(I))
 end
 
@@ -1110,6 +1110,11 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         if iterdest == itersrc
             # Shared-iterator implementation
             for I in iterdest
+                @inbounds dest[I] = src[I]
+            end
+        elseif axes(dest) == axes(src)
+            # Same shape: one Cartesian iteration keeps the inner loop contiguous
+            for I in CartesianIndices(dest)
                 @inbounds dest[I] = src[I]
             end
         else
@@ -1737,14 +1742,13 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 # but that solution currently fails (see #27188 and #27224)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
-_typed_vcat_similar(V, ::Type{T}, n) where T = similar(V[1], T, n)
+_typed_vcat_similar(V, ::Type{T}, n) where T = similar(first(V), T, n)
 _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
     _typed_vcat!(_typed_vcat_similar(V, T, sum(map(length, V))), V)
 
 function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
     pos = 1
-    for k=1:Int(length(V))::Int
-        Vk = V[k]
+    for Vk in V
         p1 = pos + Int(length(Vk))::Int - 1
         a[pos:p1] = Vk
         pos = p1+1
@@ -1766,12 +1770,10 @@ hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
 hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
 
 function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
-    nargs = length(A)
-    nrows = size(A[1], 1)
+    nrows = size(first(A), 1)
     ncols = 0
     dense = true
-    for j = 1:nargs
-        Aj = A[j]
+    for Aj in A
         if size(Aj, 1) != nrows
             throw(DimensionMismatch("number of rows of each array must match (got $(map(x->size(x,1), A)))"))
         end
@@ -1779,18 +1781,16 @@ function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
     end
-    B = similar(A[1], T, nrows, ncols)
+    B = similar(first(A), T, nrows, ncols)
     pos = 1
     if dense
-        for k=1:nargs
-            Ak = A[k]
+        for Ak in A
             n = length(Ak)
             copyto!(B, pos, Ak, 1, n)
             pos += n
         end
     else
-        for k=1:nargs
-            Ak = A[k]
+        for Ak in A
             p1 = pos+(isa(Ak,AbstractMatrix) ? size(Ak, 2) : 1)-1
             B[:, pos:p1] = Ak
             pos = p1+1
@@ -1803,18 +1803,13 @@ vcat(A::AbstractVecOrMat...) = typed_vcat(promote_eltype(A...), A...)
 vcat(A::AbstractVecOrMat{T}...) where {T} = typed_vcat(T, A...)
 
 function _typed_vcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
-    nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
-    ncols = size(A[1], 2)
-    for j = 2:nargs
-        if size(A[j], 2) != ncols
-            throw(DimensionMismatch("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
-        end
-    end
-    B = similar(A[1], T, nrows, ncols)
+    ncols = size(first(A), 2)
+    all(a -> size(a, 2) == ncols, A) ||
+        throw(DimensionMismatch("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
+    B = similar(first(A), T, nrows, ncols)
     pos = 1
-    for k=1:nargs
-        Ak = A[k]
+    for Ak in A
         p1 = pos+size(Ak,1)::Int-1
         B[pos:p1, :] = Ak
         pos = p1+1
@@ -2477,7 +2472,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     for a ∈ as
         if a isa AbstractArray
             lena = length(a)
-            copyto!(A, k, a, 1, lena)
+            copyto!(A, k, a, firstindex(a), lena)
             k += lena
         else
             A[k] = a
@@ -3050,7 +3045,7 @@ _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::IteratorSize, A) where {T,S}
 
 _vec_axis(A, ax=_iterator_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(length, ax; init=1))
 
-@constprop :aggressive function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
+function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
     xit = Iterators.peel(A)
     nothing === xit && return _empty_stack(dims, T, S, A)
     x1, xrest = xit
@@ -3061,29 +3056,73 @@ _vec_axis(A, ax=_iterator_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(len
     newaxis = _vec_axis(A)
     outax = ntuple(d -> d==dims ? newaxis : ax1[d - (d>dims)], N1)
     B = similar(_ensure_array(x1), T, outax...)
-
-    if dims == 1
-        _dim_stack!(Val(1), B, x1, xrest)
-    elseif dims == 2
-        _dim_stack!(Val(2), B, x1, xrest)
-    else
-        _dim_stack!(Val(dims), B, x1, xrest)
-    end
+    _dim_stack!(Int(dims), B, x1, xrest)
     B
 end
 
-function _dim_stack!(::Val{dims}, B::AbstractArray, x1, xrest) where {dims}
-    before = ntuple(Returns(Colon()), dims - 1)
-    after = ntuple(Returns(Colon()), ndims(B) - dims)
-
-    i = firstindex(B, dims)
-    copyto!(view(B, before..., i, after...), x1)
-
-    for x in xrest
-        _stack_size_check(x, _iterator_axes(x1))
-        i += 1
-        @inbounds copyto!(view(B, before..., i, after...), x)
+# Fill the preallocated output `B` with the slices `x1, xrest...`, the k'th slice going
+# to `selectdim(B, dims, k)`. `x1` is the first slice, and `xrest` iterates the rest.
+# In linear (column-major) order, B can be seen as an array of size (before, n, after), where
+# `before` and `after` are the products of the sizes of B before and after dimension `dims`,
+# and n = size(B, dims) is the number of slices. Each slice, of length before * after,
+# then occupies B[:, k, :] of this array.
+function _dim_stack!(dims::Int, B::AbstractArray, x1, xrest)
+    before = after = 1
+    for d in 1:ndims(B)
+        if d < dims
+            before *= size(B, d)
+        elseif d > dims
+            after *= size(B, d)
+        end
     end
+    # Linear distance in B between consecutive blocks of `before` elements of one slice
+    stride = before * size(B, dims)
+    # Linear index in B of the first element of the current slice
+    off = firstindex(B)
+    _dim_stack_slice!(B, x1, off, before, after, stride)
+    ax1 = _iterator_axes(x1)
+    for x in xrest
+        _stack_size_check(x, ax1)
+        off += before
+        _dim_stack_slice!(B, x, off, before, after, stride)
+    end
+    return nothing
+end
+
+# Copy the single slice `x` into `B`. With B seen as an array of size (before, n, after) as
+# in `_dim_stack!`, x is copied in `after` blocks of `before` consecutive elements each.
+# Block `hi` (counting from 0) is written to linear indices `off + hi*stride .+ (0:before-1)` of B.
+# `off` is the linear index of B where the first element of x goes.
+@inline function _dim_stack_slice!(B::AbstractArray, x, off::Int, before::Int, after::Int, stride::Int)
+    if x isa AbstractArray && IndexStyle(B, x) isa IndexLinear
+        # The size check guarantees length(x) == before * after
+        xi = firstindex(x)  # linear index in x of the start of the current block
+        if before == 1  # e.g. dims == 1: a strided copy
+            @inbounds for j in 0:after-1
+                B[off + j * stride] = x[xi + j]
+            end
+            return nothing
+        end
+        for hi in 0:after-1
+            @inbounds for lo in 0:before-1
+                B[off + lo] = x[xi + lo]
+            end
+            off += stride
+            xi += before
+        end
+    else
+        # Same as above, but for slices which can only be iterated
+        lo = 0  # position within the current block
+        for v in x
+            B[off + lo] = v
+            lo += 1
+            if lo == before
+                lo = 0
+                off += stride
+            end
+        end
+    end
+    return nothing
 end
 
 @inline function _stack_size_check(x, ax1::Tuple)

@@ -259,6 +259,19 @@ end
 
 function showerror(io::IO, ex::MethodError)
     @nospecialize io
+    # Render into a buffer so that the printer is compiled for one concrete IO type and is
+    # not invalidated by packages adding `write` methods for their own IO types
+    buf = IOBuffer()
+    ctx = IOContext(IOContext(buf, io), :displaysize => displaysize(io))::IOContext{IOBuffer}
+    try
+        showerror_methoderror(ctx, ex)
+    finally
+        print(io, takestring!(buf))
+    end
+    nothing
+end
+
+function showerror_methoderror(io::IOContext{IOBuffer}, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.
     is_arg_types = !isa(ex.args, Tuple)
@@ -654,7 +667,6 @@ function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::
 end
 
 function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
-    @nospecialize io
     is_arg_types = !isa(ex.args, Tuple)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
     arg_types_param = Any[(unwrap_unionall(arg_types)::DataType).parameters...]
@@ -844,13 +856,15 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     end
 
     if !isempty(lines) # Display up to three closest candidates
+        # build the header here so the closure below does not capture (and specialize on) `f`
+        header = if show_constructor_hint
+            sprint(print, "\n\nHint: constructors are defined for `", (f::DataType).name.wrapper,
+                "`, but not for `", f::DataType, "`:"; context=io)
+        else
+            "\n\nClosest candidates are:"
+        end
         Base.with_output_color(:normal, io) do io
-            if show_constructor_hint
-                print(io, "\n\nHint: constructors are defined for `", f.name.wrapper,
-                    "`, but not for `", f, "`:")
-            else
-                print(io, "\n\nClosest candidates are:")
-            end
+            print(io, header)
             permute!(lines, sortperm(line_score))
             i = 0
             for line in lines

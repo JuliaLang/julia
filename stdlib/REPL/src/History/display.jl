@@ -184,6 +184,8 @@ function redisplay_prompt(io::IO, oldstate::SelectorState, newstate::SelectorSta
                             ("mode", styconds.modes))
         for substr in substrs
             start, len = substr.offset, substr.ncodeunits
+            # The '>' that ends a mode name is part of its condition
+            name == "mode" && (len += 1)
             patend = max(patend, start + len)
             if start > 1
                 if query[start] == FILTER_SEPARATOR

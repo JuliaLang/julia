@@ -1621,7 +1621,7 @@ function expand_let(ctx, ex)
             rhs = binding[2]
             if is_identifier_like(lhs)
                 if head(lhs) === :placeholder
-                    blk = @ast ctx binding [:block rhs blk]
+                    blk = @ast ctx binding [:block rhs [:scope_block(ex) scope_type blk]]
                 else
                     blk = @ast ctx binding [:block
                         tmp := rhs
@@ -1640,7 +1640,7 @@ function expand_let(ctx, ex)
                 elseif head(var) === :placeholder
                     # do a typeassert/convert here? (this falls through flisp as
                     # a typed global...)
-                    blk = @ast ctx binding [:block rhs blk]
+                    blk = @ast ctx binding [:block rhs [:scope_block(ex) scope_type blk]]
                 else
                     blk = @ast ctx binding [:block
                         tmp := rhs
@@ -3493,11 +3493,11 @@ function rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres
         # recognize `(_::(Type{X{T}} where T))(...)` as an inner-style
         # constructor for X (rewrite it to `X{T}(...) where T`)
         ([:call [:(::) _ [:where _...]] args...], when=begin
-             t, inner_wheres = flatten_wheres(ex[1][2])
+             t, inner_wheres = flatten_wheres(sig[1][2])
              isempty(wheres) && head(t) === :curly && t[1].value === "Type"
          end) -> let
              append!(wheres, inner_wheres)
-             ex2 = @ast ctx ex [:call t[2] args...]
+             ex2 = @ast ctx sig [:call t[2] args...]
              return rewrite_ctor_sig(
                  ctx, ex2, tname, global_tname, struct_typevars, wheres)
         end

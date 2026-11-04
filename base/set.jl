@@ -541,7 +541,7 @@ function _hashed_allunique(C)
     return true
 end
 
-allunique(::Union{AbstractSet,AbstractDict}) = true
+allunique(::Union{Set,BitSet,Dict,KeySet{<:Any,<:Dict}}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
@@ -655,7 +655,7 @@ function allequal(itr)
     return all(isequal(a), rest)
 end
 
-allequal(c::Union{AbstractSet,AbstractDict}) = length(c) <= 1
+allequal(c::Union{Set,BitSet,Dict,KeySet{<:Any,<:Dict}}) = length(c) <= 1
 
 allequal(r::AbstractRange) = iszero(step(r)) || length(r) <= 1
 
@@ -912,32 +912,21 @@ function _replace!(new::Callable, res::Union{AbstractDict,AbstractSet},
              res isa AbstractSet && A isa AbstractSet) "type mismatch"
     count == 0 && return res
     c = 0
-    if res === A # cannot replace elements while iterating over A
-        repl = Pair{eltype(A),eltype(A)}[]
-        for x in A
-            y = new(x)
-            if x !== y
-                push!(repl, x => y)
-                c += 1
-                c == count && break
-            end
+    # collect replacements first: A may be res, and a new value may equal a later old one
+    repl = Pair{eltype(A),eltype(res)}[]
+    for x in A
+        y = new(x)
+        if x !== y
+            push!(repl, x => y)
+            c += 1
+            c == count && break
         end
-        for oldnew in repl
-            pop!(res, askey(first(oldnew), res))
-        end
-        for oldnew in repl
-            push!(res, last(oldnew))
-        end
-    else
-        for x in A
-            y = new(x)
-            if x !== y
-                pop!(res, askey(x, res))
-                push!(res, y)
-                c += 1
-                c == count && break
-            end
-        end
+    end
+    for oldnew in repl
+        pop!(res, askey(first(oldnew), res))
+    end
+    for oldnew in repl
+        push!(res, last(oldnew))
     end
     res
 end
