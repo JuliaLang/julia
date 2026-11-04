@@ -42,6 +42,8 @@ function _compute_linear_layout(parent, indices)
     stride1 = Int(compute_stride1(parent, indices))
     return Int(compute_offset1(parent, stride1, indices)), stride1
 end
+const SubVector{T,P,I,L} = SubArray{T,1,P,I,L}
+const SubMatrix{T,P,I,L} = SubArray{T,2,P,I,L}
 
 check_parent_index_match(parent, indices) = check_parent_index_match(parent, index_ndims(indices...))
 check_parent_index_match(parent::AbstractArray{T,N}, ::NTuple{N, Bool}) where {T,N} = nothing
