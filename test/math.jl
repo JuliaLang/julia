@@ -689,9 +689,7 @@ end
     scdm = sincosd(missing)
     @test ismissing(scdm[1])
     @test ismissing(scdm[2])
-    @testset "sincospi(missing) returns tuple" begin
-        @test sincospi(missing) === (missing, missing)
-    end
+    @test sincospi(missing) === (missing, missing)
 end
 
 @testset "behavior at signed zero of monotonic floating-point functions mapping zero to zero" begin
