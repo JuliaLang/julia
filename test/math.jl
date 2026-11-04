@@ -519,6 +519,8 @@ end
             @test exp2(UInt128(ii)) == expected
         end
     end
+    @test exp2(-(Int128(2)^64) - 1069) === 0.0
+    @test exp2(-(Int128(2)^70) - 1022) === 0.0
 end
 
 @testset "deg2rad/rad2deg" begin

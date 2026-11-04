@@ -696,7 +696,7 @@ isfull(c::Channel) = n_avail(c) ≥ c.sz_max
 # acquisitions honor their resolved token (or explicit shield); see
 # lock(::GenericCondition{ReentrantLock})
 lock(c::Channel; cancel::CancelTokenArg=DEFAULT_CANCEL) = lock(c.cond_take; cancel)
-lock(f, c::Channel) = lock(f, c.cond_take)
+lock(f::F, c::Channel) where {F} = lock(f, c.cond_take)
 unlock(c::Channel) = unlock(c.cond_take)
 trylock(c::Channel) = trylock(c.cond_take)
 

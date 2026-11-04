@@ -43,4 +43,5 @@ outdir = ARGS[1]
     @test lines[31] == "threads: 4160 204"
     @test lines[32] == "custom_library_ccall: $(VERSION.major)"
     @test lines[33] == "lazy_library_ccall: $(VERSION.major) 1"
+    @test lines[34] == "dates: 2026-03-08 2026-03-08T16:00:00.500"
 end

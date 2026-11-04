@@ -10,7 +10,7 @@ struct ConditionSet{S}
     modes::Vector{SubString{S}}
 end
 
-ConditionSet{S}() where {S} = ConditionSet{S}([], [], [], [], [], [], [])
+ConditionSet{S}() where {S} = ConditionSet{S}(ntuple(_ -> SubString{S}[], 7)...)
 
 """
     FILTER_SEPARATOR
@@ -140,7 +140,7 @@ function ConditionSet(spec::S) where {S <: AbstractString}
                 rang = something(findfirst('>', cond), typemax(Int))
                 if rang == something(findfirst(isspace, cond), ncodeunits(cond) + 1) - 1
                     mode = @view cond[1:prevind(cond, rang)]
-                    push!(condset.modes, SubString(lowercase(mode)))
+                    push!(condset.modes, mode)
                     cond = @view cond[rang + 1:end]
                 end
             end
@@ -219,10 +219,10 @@ struct FilterSpec
     modes::Vector{Symbol}
 end
 
-FilterSpec() = FilterSpec([], [], [], [])
+FilterSpec() = FilterSpec(String[], String[], Regex[], Symbol[])
 
 function FilterSpec(cset::ConditionSet)
-    spec = FilterSpec([], [], [], [])
+    spec = FilterSpec()
     for term in cset.exacts
         push!(spec.exacts, String(term))
     end
@@ -266,7 +266,7 @@ function FilterSpec(cset::ConditionSet)
         end
     end
     for mode in cset.modes
-        push!(spec.modes, Symbol(mode))
+        push!(spec.modes, Symbol(lowercase(mode)))
     end
     spec
 end

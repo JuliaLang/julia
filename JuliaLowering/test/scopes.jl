@@ -180,6 +180,7 @@ decls(e...) = Expr(:block,
                    :(name = false),
                    :(local lname = false),
                    :(global gname = false),
+                   :(implicit_gname),
                    e...)
 
 decls_none(e...) = decls(e...)
@@ -187,16 +188,18 @@ decls_neutral(e...) = wrap_neutral(decls(), e...)
 decls_hard(e...) = :(let lname = false # takes a different code path in flisp
                          name = false
                          global gname = false
+                         implicit_gname
                          $(e...)
                      end)
 decls_func(e...) = :((function (argname::spname = false) where spname
                           name = false
                           local lname = false
                           global gname = false
+                          implicit_gname
                           $(e...)
                       end)(#=called=#))
 
-lhs_names = (:name, :lname, :gname, :argname, :spname)
+lhs_names = (:name, :lname, :gname, :implicit_gname, :argname, :spname)
 
 #=
 simple test that
@@ -211,8 +214,9 @@ distraction_scope_end === "resolve me!"
 ```
 =#
 @testset "explicit locals and globals in local scope shadowing outer vars" begin
-    local jl_mod = Module()
-    local fl_mod = Module()
+    local jl_mod = Module(); @eval jl_mod global implicit_gname = false
+    local fl_mod = Module(); @eval fl_mod global implicit_gname = false
+    Core.@latestworld
 
     @testset for soft_mode in (false, true),
         decls_s in (decls_func, decls_hard, decls_neutral, decls_none),
@@ -243,6 +247,7 @@ distraction_scope_end === "resolve me!"
         Core.@latestworld
         for mod in (jl_mod, fl_mod), n in (:gname, :name)
             isdefined(mod, n) && Base.delete_binding(mod, n)
+            mod.implicit_gname = false
         end
         Core.@latestworld
     end
@@ -264,83 +269,83 @@ f_g_shadow_sp_bound(1)
 # to true from the inner scope
 @testset "Behaviour of `=` in local scope (shadow or assign-existing)" begin
     expected_outer_vals = Dict{Tuple{Bool, Function, Function, Function}, Tuple}(
-        (false, decls_func,    wrap_hard,    wrap_func   ) => (true,true,true,true),
-        (false, decls_func,    wrap_hard,    wrap_hard   ) => (true,true,true,true),
-        (false, decls_func,    wrap_hard,    wrap_neutral) => (true,true,true,true),
-        (false, decls_func,    wrap_neutral, wrap_func   ) => (true,true,true,true),
-        (false, decls_func,    wrap_neutral, wrap_hard   ) => (true,true,true,true),
-        (false, decls_func,    wrap_neutral, wrap_neutral) => (true,true,true,true),
-        (false, decls_func,    wrap_none,    wrap_func   ) => (true,true,true,true),
-        (false, decls_func,    wrap_none,    wrap_hard   ) => (true,true,true,true),
-        (false, decls_func,    wrap_none,    wrap_neutral) => (true,true,true,true),
-        (false, decls_hard,    wrap_hard,    wrap_func   ) => (true,true,true),
-        (false, decls_hard,    wrap_hard,    wrap_hard   ) => (true,true,true),
-        (false, decls_hard,    wrap_hard,    wrap_neutral) => (true,true,true),
-        (false, decls_hard,    wrap_neutral, wrap_func   ) => (true,true,true),
-        (false, decls_hard,    wrap_neutral, wrap_hard   ) => (true,true,true),
-        (false, decls_hard,    wrap_neutral, wrap_neutral) => (true,true,true),
-        (false, decls_hard,    wrap_none,    wrap_func   ) => (true,true,true),
-        (false, decls_hard,    wrap_none,    wrap_hard   ) => (true,true,true),
-        (false, decls_hard,    wrap_none,    wrap_neutral) => (true,true,true),
-        (false, decls_neutral, wrap_hard,    wrap_func   ) => (true,true,true),
-        (false, decls_neutral, wrap_hard,    wrap_hard   ) => (true,true,true),
-        (false, decls_neutral, wrap_hard,    wrap_neutral) => (true,true,true),
-        (false, decls_neutral, wrap_neutral, wrap_func   ) => (true,true,true),
-        (false, decls_neutral, wrap_neutral, wrap_hard   ) => (true,true,true),
-        (false, decls_neutral, wrap_neutral, wrap_neutral) => (true,true,true),
-        (false, decls_neutral, wrap_none,    wrap_func   ) => (true,true,true),
-        (false, decls_neutral, wrap_none,    wrap_hard   ) => (true,true,true),
-        (false, decls_neutral, wrap_none,    wrap_neutral) => (true,true,true),
-        (false, decls_none,    wrap_hard,    wrap_func   ) => (false,true,false),
-        (false, decls_none,    wrap_hard,    wrap_hard   ) => (false,true,false),
-        (false, decls_none,    wrap_hard,    wrap_neutral) => (false,true,false),
-        (false, decls_none,    wrap_neutral, wrap_func   ) => (false,true,false),
-        (false, decls_none,    wrap_neutral, wrap_hard   ) => (false,true,false),
-        (false, decls_none,    wrap_neutral, wrap_neutral) => (false,true,false),
-        (false, decls_none,    wrap_none,    wrap_func   ) => (false,true,false),
-        (false, decls_none,    wrap_none,    wrap_hard   ) => (false,true,false),
-        (false, decls_none,    wrap_none,    wrap_neutral) => (false,true,false),
-        (true,  decls_func,    wrap_hard,    wrap_func   ) => (true,true,true,true),
-        (true,  decls_func,    wrap_hard,    wrap_hard   ) => (true,true,true,true),
-        (true,  decls_func,    wrap_hard,    wrap_neutral) => (true,true,true,true),
-        (true,  decls_func,    wrap_neutral, wrap_func   ) => (true,true,true,true),
-        (true,  decls_func,    wrap_neutral, wrap_hard   ) => (true,true,true,true),
-        (true,  decls_func,    wrap_neutral, wrap_neutral) => (true,true,true,true),
-        (true,  decls_func,    wrap_none,    wrap_func   ) => (true,true,true,true),
-        (true,  decls_func,    wrap_none,    wrap_hard   ) => (true,true,true,true),
-        (true,  decls_func,    wrap_none,    wrap_neutral) => (true,true,true,true),
-        (true,  decls_hard,    wrap_hard,    wrap_func   ) => (true,true,true),
-        (true,  decls_hard,    wrap_hard,    wrap_hard   ) => (true,true,true),
-        (true,  decls_hard,    wrap_hard,    wrap_neutral) => (true,true,true),
-        (true,  decls_hard,    wrap_neutral, wrap_func   ) => (true,true,true),
-        (true,  decls_hard,    wrap_neutral, wrap_hard   ) => (true,true,true),
-        (true,  decls_hard,    wrap_neutral, wrap_neutral) => (true,true,true),
-        (true,  decls_hard,    wrap_none,    wrap_func   ) => (true,true,true),
-        (true,  decls_hard,    wrap_none,    wrap_hard   ) => (true,true,true),
-        (true,  decls_hard,    wrap_none,    wrap_neutral) => (true,true,true),
-        (true,  decls_neutral, wrap_hard,    wrap_func   ) => (true,true,true),
-        (true,  decls_neutral, wrap_hard,    wrap_hard   ) => (true,true,true),
-        (true,  decls_neutral, wrap_hard,    wrap_neutral) => (true,true,true),
-        (true,  decls_neutral, wrap_neutral, wrap_func   ) => (true,true,true),
-        (true,  decls_neutral, wrap_neutral, wrap_hard   ) => (true,true,true),
-        (true,  decls_neutral, wrap_neutral, wrap_neutral) => (true,true,true),
-        (true,  decls_neutral, wrap_none,    wrap_func   ) => (true,true,true),
-        (true,  decls_neutral, wrap_none,    wrap_hard   ) => (true,true,true),
-        (true,  decls_neutral, wrap_none,    wrap_neutral) => (true,true,true),
-        (true,  decls_none,    wrap_hard,    wrap_func   ) => (false,true,false),
-        (true,  decls_none,    wrap_hard,    wrap_hard   ) => (false,true,false),
-        (true,  decls_none,    wrap_hard,    wrap_neutral) => (false,true,false),
-        (true,  decls_none,    wrap_neutral, wrap_func   ) => (false,true,false),
-        (true,  decls_none,    wrap_neutral, wrap_hard   ) => (false,true,false),
-        (true,  decls_none,    wrap_neutral, wrap_neutral) => (true,true,true),
-        (true,  decls_none,    wrap_none,    wrap_func   ) => (false,true,false),
-        (true,  decls_none,    wrap_none,    wrap_hard   ) => (false,true,false),
-        (true,  decls_none,    wrap_none,    wrap_neutral) => (true,true,true),
+        (false, decls_func,    wrap_hard,    wrap_func   ) => (true, true,true, false,true),
+        (false, decls_func,    wrap_hard,    wrap_hard   ) => (true, true,true, false,true),
+        (false, decls_func,    wrap_hard,    wrap_neutral) => (true, true,true, false,true),
+        (false, decls_func,    wrap_neutral, wrap_func   ) => (true, true,true, false,true),
+        (false, decls_func,    wrap_neutral, wrap_hard   ) => (true, true,true, false,true),
+        (false, decls_func,    wrap_neutral, wrap_neutral) => (true, true,true, false,true),
+        (false, decls_func,    wrap_none,    wrap_func   ) => (true, true,true, false,true),
+        (false, decls_func,    wrap_none,    wrap_hard   ) => (true, true,true, false,true),
+        (false, decls_func,    wrap_none,    wrap_neutral) => (true, true,true, false,true),
+        (false, decls_hard,    wrap_hard,    wrap_func   ) => (true, true,true, false),
+        (false, decls_hard,    wrap_hard,    wrap_hard   ) => (true, true,true, false),
+        (false, decls_hard,    wrap_hard,    wrap_neutral) => (true, true,true, false),
+        (false, decls_hard,    wrap_neutral, wrap_func   ) => (true, true,true, false),
+        (false, decls_hard,    wrap_neutral, wrap_hard   ) => (true, true,true, false),
+        (false, decls_hard,    wrap_neutral, wrap_neutral) => (true, true,true, false),
+        (false, decls_hard,    wrap_none,    wrap_func   ) => (true, true,true, false),
+        (false, decls_hard,    wrap_none,    wrap_hard   ) => (true, true,true, false),
+        (false, decls_hard,    wrap_none,    wrap_neutral) => (true, true,true, false),
+        (false, decls_neutral, wrap_hard,    wrap_func   ) => (true, true,true, false),
+        (false, decls_neutral, wrap_hard,    wrap_hard   ) => (true, true,true, false),
+        (false, decls_neutral, wrap_hard,    wrap_neutral) => (true, true,true, false),
+        (false, decls_neutral, wrap_neutral, wrap_func   ) => (true, true,true, false),
+        (false, decls_neutral, wrap_neutral, wrap_hard   ) => (true, true,true, false),
+        (false, decls_neutral, wrap_neutral, wrap_neutral) => (true, true,true, false),
+        (false, decls_neutral, wrap_none,    wrap_func   ) => (true, true,true, false),
+        (false, decls_neutral, wrap_none,    wrap_hard   ) => (true, true,true, false),
+        (false, decls_neutral, wrap_none,    wrap_neutral) => (true, true,true, false),
+        (false, decls_none,    wrap_hard,    wrap_func   ) => (false,true,false,false),
+        (false, decls_none,    wrap_hard,    wrap_hard   ) => (false,true,false,false),
+        (false, decls_none,    wrap_hard,    wrap_neutral) => (false,true,false,false),
+        (false, decls_none,    wrap_neutral, wrap_func   ) => (false,true,false,false),
+        (false, decls_none,    wrap_neutral, wrap_hard   ) => (false,true,false,false),
+        (false, decls_none,    wrap_neutral, wrap_neutral) => (false,true,false,false),
+        (false, decls_none,    wrap_none,    wrap_func   ) => (false,true,false,false),
+        (false, decls_none,    wrap_none,    wrap_hard   ) => (false,true,false,false),
+        (false, decls_none,    wrap_none,    wrap_neutral) => (false,true,false,false),
+        (true,  decls_func,    wrap_hard,    wrap_func   ) => (true, true,true, false,true),
+        (true,  decls_func,    wrap_hard,    wrap_hard   ) => (true, true,true, false,true),
+        (true,  decls_func,    wrap_hard,    wrap_neutral) => (true, true,true, false,true),
+        (true,  decls_func,    wrap_neutral, wrap_func   ) => (true, true,true, false,true),
+        (true,  decls_func,    wrap_neutral, wrap_hard   ) => (true, true,true, false,true),
+        (true,  decls_func,    wrap_neutral, wrap_neutral) => (true, true,true, false,true),
+        (true,  decls_func,    wrap_none,    wrap_func   ) => (true, true,true, false,true),
+        (true,  decls_func,    wrap_none,    wrap_hard   ) => (true, true,true, false,true),
+        (true,  decls_func,    wrap_none,    wrap_neutral) => (true, true,true, false,true),
+        (true,  decls_hard,    wrap_hard,    wrap_func   ) => (true, true,true, false),
+        (true,  decls_hard,    wrap_hard,    wrap_hard   ) => (true, true,true, false),
+        (true,  decls_hard,    wrap_hard,    wrap_neutral) => (true, true,true, false),
+        (true,  decls_hard,    wrap_neutral, wrap_func   ) => (true, true,true, false),
+        (true,  decls_hard,    wrap_neutral, wrap_hard   ) => (true, true,true, false),
+        (true,  decls_hard,    wrap_neutral, wrap_neutral) => (true, true,true, false),
+        (true,  decls_hard,    wrap_none,    wrap_func   ) => (true, true,true, false),
+        (true,  decls_hard,    wrap_none,    wrap_hard   ) => (true, true,true, false),
+        (true,  decls_hard,    wrap_none,    wrap_neutral) => (true, true,true, false),
+        (true,  decls_neutral, wrap_hard,    wrap_func   ) => (true, true,true, false),
+        (true,  decls_neutral, wrap_hard,    wrap_hard   ) => (true, true,true, false),
+        (true,  decls_neutral, wrap_hard,    wrap_neutral) => (true, true,true, false),
+        (true,  decls_neutral, wrap_neutral, wrap_func   ) => (true, true,true, false),
+        (true,  decls_neutral, wrap_neutral, wrap_hard   ) => (true, true,true, false),
+        (true,  decls_neutral, wrap_neutral, wrap_neutral) => (true, true,true, true ),
+        (true,  decls_neutral, wrap_none,    wrap_func   ) => (true, true,true, false),
+        (true,  decls_neutral, wrap_none,    wrap_hard   ) => (true, true,true, false),
+        (true,  decls_neutral, wrap_none,    wrap_neutral) => (true, true,true, true ),
+        (true,  decls_none,    wrap_hard,    wrap_func   ) => (false,true,false,false),
+        (true,  decls_none,    wrap_hard,    wrap_hard   ) => (false,true,false,false),
+        (true,  decls_none,    wrap_hard,    wrap_neutral) => (false,true,false,false),
+        (true,  decls_none,    wrap_neutral, wrap_func   ) => (false,true,false,false),
+        (true,  decls_none,    wrap_neutral, wrap_hard   ) => (false,true,false,false),
+        (true,  decls_none,    wrap_neutral, wrap_neutral) => (true, true,true, true ),
+        (true,  decls_none,    wrap_none,    wrap_func   ) => (false,true,false,false),
+        (true,  decls_none,    wrap_none,    wrap_hard   ) => (false,true,false,false),
+        (true,  decls_none,    wrap_none,    wrap_neutral) => (true, true,true, true ),
     )
     expected_s(b::Bool) = b ? "assignment to outer var" : "brand-new var"
 
-    local jl_mod = Module()
-    local fl_mod = Module()
+    local jl_mod = Module(); @eval jl_mod global implicit_gname = false
+    local fl_mod = Module(); @eval fl_mod global implicit_gname = false
 
     @testset for ((soft_mode, decls_s, middle_s, assign_s), results) in expected_outer_vals,
             (lhs_i, lhs) in enumerate(lhs_names)
@@ -353,12 +358,14 @@ f_g_shadow_sp_bound(1)
         elseif lhs === :spname
             @test_throws LoweringError expr_eval(jl_mod, ex)
         else
-            @assert !isdefined(jl_mod, lhs) && !isdefined(fl_mod, lhs)
+            @assert lhs === :implicit_gname || (!isdefined(jl_mod, lhs) && !isdefined(fl_mod, lhs))
             expected = results[lhs_i]
             # see the `@test_broken`s in "is_ambiguous_local"
-            ambiguous = !soft_mode && decls_s === decls_none && middle_s !== wrap_hard &&
-                assign_s === wrap_neutral
-            warnings = ambiguous && lhs === :name ? (softscope_ambiguous_local_warning(:name),) : ()
+            ambiguous = !soft_mode && middle_s !== wrap_hard && assign_s === wrap_neutral &&
+                (decls_s === decls_none ||
+                 (decls_s === decls_neutral && lhs === :implicit_gname))
+            warnings = ambiguous && lhs in (:name, :implicit_gname) ?
+                (softscope_ambiguous_local_warning(lhs),) : ()
             reference_ok = @test_logs(warnings..., fl_eval(fl_mod, ex)) === expected
             !reference_ok && @error("flisp produced unexpected result; fix that or JL scope tests:\n",
                                    "expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
@@ -372,20 +379,26 @@ f_g_shadow_sp_bound(1)
         Core.@latestworld
         for mod in (jl_mod, fl_mod), n in (:gname, :name)
             isdefined(mod, n) && Base.delete_binding(mod, n)
+            mod.implicit_gname = false
         end
         Core.@latestworld
     end
 end
 
-@testset "global declarations at top level are ignored in assignment resolution" begin
+@testset "global declarations at top level are visible to soft scopes only" begin
     suggest_global(e) = :(begin; global declared_unassigned_global; $e; end)
     for soft_mode in (true, false), scope in (wrap_func, wrap_hard, wrap_neutral)
-        ex = scope(:(declared_unassigned_global = true))
+        m = Module()
+        ex = suggest_global(scope(:(declared_unassigned_global = true)))
         soft_mode && (ex = enable_softscope(ex))
-        expr_eval(test_mod, ex)
-        global_assigned = @invokelatest isdefined(test_mod, :declared_unassigned_global)
-        global_assigned && error("global should not be assigned. settings: $soft_mode $scope\n")
-        @test !global_assigned
+        expect_assigned = soft_mode && scope === wrap_neutral
+        # flisp doesn't warn here, see the `@test_broken`s in "is_ambiguous_local"
+        spurious_warning = !soft_mode && scope === wrap_neutral
+        @test_logs(broken=spurious_warning, expr_eval(m, ex))
+        global_assigned = @invokelatest isdefined(m, :declared_unassigned_global)
+        global_assigned == expect_assigned ||
+            @error("unexpected assignment resolution. settings: $soft_mode $scope\n")
+        @test global_assigned == expect_assigned
     end
 
     @testset "soft scope isn't top level" begin

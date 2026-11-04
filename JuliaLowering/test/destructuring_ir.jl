@@ -9,11 +9,10 @@ end
 3   (= slot₂/x (call core.getfield %₂ 1))
 4   (= slot₁/ (call core.getfield %₂ 2))
 5   TestMod.as
-6   slot₁/
-7   (call top.indexed_iterate %₅ 2 %₆)
-8   (= slot₃/y (call core.getfield %₇ 1))
-9   TestMod.as
-10  (return %₉)
+6   (call top.indexed_iterate %₅ 2 slot₁/)
+7   (= slot₃/y (call core.getfield %₆ 1))
+8   TestMod.as
+9   (return %₈)
 
 ########################################
 # Trivial slurping
@@ -37,10 +36,9 @@ end
 3   (= slot₂/x (call core.getfield %₂ 1))
 4   (= slot₁/ (call core.getfield %₂ 2))
 5   TestMod.as
-6   slot₁/
-7   (= slot₃/ys (call top.rest %₅ %₆))
-8   TestMod.as
-9   (return %₈)
+6   (= slot₃/ys (call top.rest %₅ slot₁/))
+7   TestMod.as
+8   (return %₇)
 
 ########################################
 # Slurping, first arg
@@ -55,11 +53,10 @@ end
 5   (call top.indexed_iterate %₄ 1)
 6   (= slot₃/y (call core.getfield %₅ 1))
 7   (= slot₁/ (call core.getfield %₅ 2))
-8   slot₁/
-9   (call top.indexed_iterate %₄ 2 %₈)
-10  (= slot₄/z (call core.getfield %₉ 1))
-11  TestMod.as
-12  (return %₁₁)
+8   (call top.indexed_iterate %₄ 2 slot₁/)
+9   (= slot₄/z (call core.getfield %₈ 1))
+10  TestMod.as
+11  (return %₁₀)
 
 ########################################
 # Slurping, middle arg
@@ -72,14 +69,13 @@ end
 3   (= slot₂/x (call core.getfield %₂ 1))
 4   (= slot₁/ (call core.getfield %₂ 2))
 5   TestMod.as
-6   slot₁/
-7   (call top.split_rest %₅ 1 %₆)
-8   (= slot₃/ys (call core.getfield %₇ 1))
-9   (call core.getfield %₇ 2)
-10  (call top.indexed_iterate %₉ 1)
-11  (= slot₄/z (call core.getfield %₁₀ 1))
-12  TestMod.as
-13  (return %₁₂)
+6   (call top.split_rest %₅ 1 slot₁/)
+7   (= slot₃/ys (call core.getfield %₆ 1))
+8   (call core.getfield %₆ 2)
+9   (call top.indexed_iterate %₈ 1)
+10  (= slot₄/z (call core.getfield %₉ 1))
+11  TestMod.as
+12  (return %₁₁)
 
 ########################################
 # Error: Slurping multiple args
@@ -100,23 +96,20 @@ end
 3   (call core.getfield %₂ 1)
 4   (= slot₁/ (call core.getfield %₂ 2))
 5   TestMod.as
-6   slot₁/
-7   (call top.indexed_iterate %₅ 2 %₆)
-8   (call core.getfield %₇ 1)
-9   (call top.indexed_iterate %₃ 1)
-10  (= slot₅/x (call core.getfield %₉ 1))
-11  (= slot₂/ (call core.getfield %₉ 2))
-12  slot₂/
-13  (call top.indexed_iterate %₃ 2 %₁₂)
-14  (= slot₆/y (call core.getfield %₁₃ 1))
-15  (call top.indexed_iterate %₈ 1)
-16  (= slot₇/z (call core.getfield %₁₅ 1))
-17  (= slot₃/ (call core.getfield %₁₅ 2))
-18  slot₃/
-19  (call top.indexed_iterate %₈ 2 %₁₈)
-20  (= slot₄/w (call core.getfield %₁₉ 1))
-21  TestMod.as
-22  (return %₂₁)
+6   (call top.indexed_iterate %₅ 2 slot₁/)
+7   (call core.getfield %₆ 1)
+8   (call top.indexed_iterate %₃ 1)
+9   (= slot₅/x (call core.getfield %₈ 1))
+10  (= slot₂/ (call core.getfield %₈ 2))
+11  (call top.indexed_iterate %₃ 2 slot₂/)
+12  (= slot₆/y (call core.getfield %₁₁ 1))
+13  (call top.indexed_iterate %₇ 1)
+14  (= slot₇/z (call core.getfield %₁₃ 1))
+15  (= slot₃/ (call core.getfield %₁₃ 2))
+16  (call top.indexed_iterate %₇ 2 slot₃/)
+17  (= slot₄/w (call core.getfield %₁₆ 1))
+18  TestMod.as
+19  (return %₁₈)
 
 ########################################
 # Recursive destructuring with slurping
@@ -129,16 +122,14 @@ end
 3   (call core.getfield %₂ 1)
 4   (= slot₁/ (call core.getfield %₂ 2))
 5   TestMod.as
-6   slot₁/
-7   (call top.indexed_iterate %₅ 2 %₆)
-8   (= slot₅/z (call core.getfield %₇ 1))
-9   (call top.indexed_iterate %₃ 1)
-10  (= slot₃/x (call core.getfield %₉ 1))
-11  (= slot₂/ (call core.getfield %₉ 2))
-12  slot₂/
-13  (= slot₄/ys (call top.rest %₃ %₁₂))
-14  TestMod.as
-15  (return %₁₄)
+6   (call top.indexed_iterate %₅ 2 slot₁/)
+7   (= slot₅/z (call core.getfield %₆ 1))
+8   (call top.indexed_iterate %₃ 1)
+9   (= slot₃/x (call core.getfield %₈ 1))
+10  (= slot₂/ (call core.getfield %₈ 2))
+11  (= slot₄/ys (call top.rest %₃ slot₂/))
+12  TestMod.as
+13  (return %₁₂)
 
 ########################################
 # Destructuring with simple tuple elimination
@@ -354,19 +345,18 @@ let
     (; x::T) = rhs
 end
 #---------------------
-1   (newvar slot₁/x)
-2   TestMod.rhs
-3   (call top.getproperty %₂ :x)
-4   TestMod.T
-5   (= slot₂/tmp %₃)
-6   (call core.isa slot₂/tmp %₄)
-7   (gotoifnot %₆ label₉)
-8   (goto label₁₁)
-9   (call top.convert %₄ slot₂/tmp)
-10  (= slot₂/tmp (call core.typeassert %₉ %₄))
-11  slot₂/tmp
-12  (= slot₁/x %₁₁)
-13  (return %₂)
+1   TestMod.rhs
+2   (call top.getproperty %₁ :x)
+3   TestMod.T
+4   (= slot₂/tmp %₂)
+5   (call core.isa slot₂/tmp %₃)
+6   (gotoifnot %₅ label₈)
+7   (goto label₁₀)
+8   (call top.convert %₃ slot₂/tmp)
+9   (= slot₂/tmp (call core.typeassert %₈ %₃))
+10  slot₂/tmp
+11  (= slot₁/x %₁₀)
+12  (return %₁)
 
 ########################################
 # Error: Property destructuring with frankentuple

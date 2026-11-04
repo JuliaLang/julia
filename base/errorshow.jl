@@ -62,7 +62,7 @@ function showerror(io::IO, ex::BoundsError)
             if ex.i isa AbstractRange
                 print(io, ex.i)
             elseif ex.i isa AbstractString
-                show(io, ex.i)
+                show(io, inferencebarrier(ex.i))
             else
                 for (i, x) in enumerate(ex.i)
                     i > 1 && print(io, ", ")
@@ -517,9 +517,9 @@ function show_namedtuple_diff(io::IO, @nospecialize(sig), @nospecialize(called),
     length(sig.parameters) == 2 && length(called.parameters) == 2 || return false
     s_syms, s_types = sig.parameters
     c_syms, c_types = called.parameters
-    s_syms isa Tuple && c_syms isa Tuple && s_syms == c_syms || return false
+    s_syms isa Tuple && c_syms isa Tuple && s_syms === c_syms || return false
     s_types isa DataType && c_types isa DataType || return false
-    n = length(s_syms)
+    n = length(s_syms)::Int
     length(s_types.parameters) == n == length(c_types.parameters) || return false
     (isvatuple(s_types) || isvatuple(c_types)) && return false
     top_level && print(io, "::")

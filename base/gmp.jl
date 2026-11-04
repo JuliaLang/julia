@@ -309,6 +309,10 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     bstr = startpos == firstindex(s) && endpos == lastindex(s) ? String(s) : String(SubString(s,startpos,endpos))
 
     sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,firstindex(bstr),ncodeunits(bstr))
+    if sgn == 0
+        raise && throw(ArgumentError("input string is empty or only contains whitespace"))
+        return nothing
+    end
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
         return nothing
@@ -634,7 +638,10 @@ cmp(x::Integer, y::BigInt) = -cmp(y, x)
 cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? -1 : sign(MPZ.cmp_d(x, y))
 cmp(x::CdoubleMax, y::BigInt) = -cmp(y, x)
 
-isqrt(x::BigInt) = MPZ.sqrt(x)
+function isqrt(x::BigInt)
+    isnegative(x) && throw(DomainError(x, "isqrt requires a nonnegative integer."))
+    return MPZ.sqrt(x)
+end
 
 ^(x::BigInt, y::Culong) = MPZ.pow_ui(x, y)
 
@@ -858,10 +865,6 @@ Base.checked_pow(x::Integer, p::BigInt) = x^p
 Base.checked_pow(x::BigInt, p::BigInt) = x^p
 
 Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), stackdict, x)::BigInt
-
-## streamlined hashing for BigInt, by avoiding allocation from shifts ##
-
-Base._hash_shl!(x::BigInt, n) = MPZ.mul_2exp!(x, n)
 
 if Limb === UInt64 === UInt
     # On 64 bit systems we can define
@@ -1114,7 +1117,12 @@ for (fJ, fC) in ((:+, :add), (:-, :sub), (:*, :mul), (://, :div))
 end
 
 function Base.cmp(x::Rational{BigInt}, y::Rational{BigInt})
-    Int(ccall((:__gmpq_cmp, libgmp), Cint, (mpq_t, mpq_t), _MPQ(x), _MPQ(y)))
+    if iszero(x.den) || iszero(y.den)
+        iszero(y.den) || return flipsign(1, x.num)
+        iszero(x.den) || return flipsign(-1, y.num)
+        return cmp(isnegative(y.num), isnegative(x.num))
+    end
+    sign(Int(ccall((:__gmpq_cmp, libgmp), Cint, (mpq_t, mpq_t), _MPQ(x), _MPQ(y))))
 end
 
 end # MPQ module

@@ -56,6 +56,8 @@ end
     @test testval("2_0.0"       , 20.0)
     @test testval("2_0.0_0e0_0" , 20.0)
     @test testval("2_0.1_0e1_0" , 20.1e10)
+    @test testval("6.022_140_76e23", 6.02214076e23)
+    @test testval("1_000e3"        , 1e6)
 
     @test testval("1_0"    , 10    |> Int64)
     @test testval("1_0_0"  , 100   |> Int64)
@@ -92,6 +94,12 @@ end
     @test failval("__0"    , Internals.ErrUnexpectedStartOfValue)
     @test failval("1_0_"   , Internals.ErrTrailingUnderscoreNumber)
     @test failval("1_0__0" , Internals.ErrUnderscoreNotSurroundedByDigits)
+
+    # A base prefix must be followed by a digit of that base
+    for s in ("0o8", "0b2", "0x-1", "0b:00", "0x")
+        @test failval(s, Internals.ErrGenericValueError)
+    end
+    @test failval("0x.5", Internals.ErrGenericValueError) # no hex floats
 end
 
 
@@ -135,6 +143,10 @@ end
     @test failval("2016-09-09T09:09:09x"  , Internals.ErrParsingDateTime)
     @test failval("2016-09-09s09:09:09Z"  , Internals.ErrParsingDateTime)
     @test failval("2016-09-09T09:09:09x"  , Internals.ErrParsingDateTime)
+    @test failval("-200-01-01"            , Internals.ErrParsingDateTime)
+    @test failval("+999-01-01"            , Internals.ErrParsingDateTime)
+    @test failval("+2000-01-01"           , Internals.ErrParsingDateTime)
+    @test failval("-0001-01-01"           , Internals.ErrParsingDateTime)
 end
 
 @testset "Time" begin
@@ -153,6 +165,9 @@ end
     # With optional seconds, "09:09" is a valid time; "x09" triggers newline error
     @test failval("09:09x09", Internals.ErrExpectedNewLineKeyValue)
     @test failval("09:09:0x", Internals.ErrParsingDateTime)
+    @test failval("+1:30:00", Internals.ErrParsingDateTime)
+    @test failval("-0:30:00", Internals.ErrParsingDateTime)
+    @test failval("+01:30:00", Internals.ErrParsingDateTime)
 end
 
 # TODO: Add more dedicated value tests
@@ -177,6 +192,11 @@ end
 
     # Invalid: \x with invalid hex digits
     @test failval("\"\\xG0\"", Internals.ErrInvalidUnicodeScalar)
+
+    # Line-ending backslash is only valid in multiline basic strings
+    @test failval("\"x\\\ny\"", Internals.ErrInvalidEscapeCharacter)
+    @test failval("\"x\\\r\ny\"", Internals.ErrInvalidEscapeCharacter)
+    @test testval("\"\"\"x\\\ny\"\"\"", "xy")
 
     #=
     Found these examples of string tests somewhere
@@ -209,6 +229,9 @@ end
     @test testval("[1.0, 2.0, 3.0]", Float64[1.0, 2.0, 3.0])
     @test testval("[1.0, 2.0, 3]", Any[1.0, 2.0, Int64(3)])
     @test testval("[1.0, 2, \"foo\"]", Any[1.0, Int64(2), "foo"])
+    # Base's parser stores dates in internal structs
+    @test Base.TOML.parse(Base.TOML.Parser{nothing}("a = [1979-05-27, 1979-05-28]"))["a"] ==
+          Any[Base.TOML.Date(1979, 5, 27), Base.TOML.Date(1979, 5, 28)]
 end
 
 @testset "Inline tables - TOML v1.1" begin

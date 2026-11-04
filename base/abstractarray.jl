@@ -21,7 +21,9 @@ convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = Abs
     size(A::AbstractArray, [dim])
 
 Return a tuple containing the dimensions of `A`. Optionally you can specify a
-dimension to just get the length of that dimension.
+dimension to just get the length of that dimension. For `dim > ndims(A)`,
+`size(A, dim)` is `1`, consistent with arrays accepting extra trailing indices
+equal to `1` (see [Omitted and extra indices](@ref)).
 
 Note that `size` may not be defined for arrays with non-standard indices, in which case [`axes`](@ref)
 may be useful. See the manual chapter on [arrays with custom indices](@ref man-custom-indices).
@@ -37,6 +39,9 @@ julia> size(A)
 
 julia> size(A, 2)
 3
+
+julia> size(A, 5)
+1
 ```
 """
 function size(t::AbstractArray, dim)
@@ -457,8 +462,12 @@ firstindex(a, d) = (@inline; first(axes(a, d)))
 """
     first(coll)
 
-Get the first element of an iterable collection. Return the start point of an
-[`AbstractRange`](@ref) even if it is empty.
+Get the first element of an iterable collection.
+
+!!! note
+    For an [`AbstractRange`](@ref) the start point is always returned,
+    even if the range is empty. For other empty collections, an error
+    is thrown.
 
 See also [`only`](@ref), [`firstindex`](@ref), [`last`](@ref).
 
@@ -721,7 +730,7 @@ See also [`checkbounds`](@ref).
 """
 function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{Any, Vararg})
     @inline
-    return checkindex(Bool, get(inds, 1, OneTo(1)), I[1])::Bool &&
+    return checkindex(Bool, get(inds, 1, OneTo(1)), I[1])::Bool &
         checkbounds_indices(Bool, safe_tail(inds), tail(I))
 end
 
@@ -1112,6 +1121,11 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
             for I in iterdest
                 @inbounds dest[I] = src[I]
             end
+        elseif axes(dest) == axes(src)
+            # Same shape: one Cartesian iteration keeps the inner loop contiguous
+            for I in CartesianIndices(dest)
+                @inbounds dest[I] = src[I]
+            end
         else
             # Dual-iterator implementation
             for (Idest, Isrc) in zip(iterdest, itersrc)
@@ -1412,7 +1426,7 @@ function _getindex(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) w
     getindex(A, I...)
 end
 _to_subscript_indices(A::AbstractArray, i::Integer) = (@inline; _unsafe_ind2sub(A, i))
-_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@inline; fill_to_length((), 1, Val(N)))
+_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@inline; map(first, axes(A)))
 _to_subscript_indices(A::AbstractArray{T,0}) where {T} = ()
 _to_subscript_indices(A::AbstractArray{T,0}, i::Integer) where {T} = ()
 _to_subscript_indices(A::AbstractArray{T,0}, I::Integer...) where {T} = ()
@@ -1737,14 +1751,13 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 # but that solution currently fails (see #27188 and #27224)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
-_typed_vcat_similar(V, ::Type{T}, n) where T = similar(V[1], T, n)
+_typed_vcat_similar(V, ::Type{T}, n) where T = similar(first(V), T, n)
 _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
     _typed_vcat!(_typed_vcat_similar(V, T, sum(map(length, V))), V)
 
 function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
     pos = 1
-    for k=1:Int(length(V))::Int
-        Vk = V[k]
+    for Vk in V
         p1 = pos + Int(length(Vk))::Int - 1
         a[pos:p1] = Vk
         pos = p1+1
@@ -1766,12 +1779,10 @@ hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
 hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
 
 function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
-    nargs = length(A)
-    nrows = size(A[1], 1)
+    nrows = size(first(A), 1)
     ncols = 0
     dense = true
-    for j = 1:nargs
-        Aj = A[j]
+    for Aj in A
         if size(Aj, 1) != nrows
             throw(DimensionMismatch("number of rows of each array must match (got $(map(x->size(x,1), A)))"))
         end
@@ -1779,18 +1790,16 @@ function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
     end
-    B = similar(A[1], T, nrows, ncols)
+    B = similar(first(A), T, nrows, ncols)
     pos = 1
     if dense
-        for k=1:nargs
-            Ak = A[k]
+        for Ak in A
             n = length(Ak)
             copyto!(B, pos, Ak, 1, n)
             pos += n
         end
     else
-        for k=1:nargs
-            Ak = A[k]
+        for Ak in A
             p1 = pos+(isa(Ak,AbstractMatrix) ? size(Ak, 2) : 1)-1
             B[:, pos:p1] = Ak
             pos = p1+1
@@ -1803,18 +1812,13 @@ vcat(A::AbstractVecOrMat...) = typed_vcat(promote_eltype(A...), A...)
 vcat(A::AbstractVecOrMat{T}...) where {T} = typed_vcat(T, A...)
 
 function _typed_vcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
-    nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
-    ncols = size(A[1], 2)
-    for j = 2:nargs
-        if size(A[j], 2) != ncols
-            throw(DimensionMismatch("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
-        end
-    end
-    B = similar(A[1], T, nrows, ncols)
+    ncols = size(first(A), 2)
+    all(a -> size(a, 2) == ncols, A) ||
+        throw(DimensionMismatch("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
+    B = similar(first(A), T, nrows, ncols)
     pos = 1
-    for k=1:nargs
-        Ak = A[k]
+    for Ak in A
         p1 = pos+size(Ak,1)::Int-1
         B[pos:p1, :] = Ak
         pos = p1+1
@@ -2477,7 +2481,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     for a ∈ as
         if a isa AbstractArray
             lena = length(a)
-            copyto!(A, k, a, 1, lena)
+            copyto!(A, k, a, firstindex(a), lena)
             k += lena
         else
             A[k] = a

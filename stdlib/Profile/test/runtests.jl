@@ -316,13 +316,11 @@ end
     end
     _, fdictc = Profile.flatten(Profile.retrieve()...)
     Base.update_stackframes_callback[] = identity
-    function getline(sfs)
-        for sf in sfs
-            sf.func === :busywait && return sf.line
-        end
-        nothing
-    end
-    @test getline(values(fdictc)) == getline(values(fdict0)) + 2
+    # several busywait frames can be sampled, so compare all of them
+    getlines(sfs) = sort!(unique!([sf.line for sf in sfs if sf.func === :busywait]))
+    lines0 = getlines(values(fdict0))
+    @test !isempty(lines0)
+    @test getlines(values(fdictc)) == lines0 .+ 2
 end
 
 import InteractiveUtils
@@ -585,6 +583,15 @@ end
         run(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; Profile.take_heap_snapshot(ARGS[1]; streaming=true)" $prefix`)
         part_files = [string(prefix, ext) for ext in (".metadata.json", ".nodes", ".edges", ".strings")]
         @test all(isfile, part_files)
+
+        # with data redacted, every name is written to `.strings` only once
+        strs = String[]
+        let io = IOBuffer(read(string(prefix, ".strings")))
+            while !eof(io)
+                push!(strs, String(read(io, read(io, UInt))))
+            end
+        end
+        @test allunique(strs)
 
         out_file = string(prefix, ".heapsnapshot")
         Profile.HeapSnapshot.assemble_snapshot(prefix, out_file)

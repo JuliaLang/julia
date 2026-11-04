@@ -14,6 +14,14 @@ double my_c_sqrt(double x)
     return sqrt(x);
 }
 
+#ifdef _OS_WINDOWS_
+__declspec(dllexport) __cdecl
+#endif
+int pgcstack_agrees(void)
+{
+    return jl_get_pgcstack_inline() == jl_get_pgcstack();
+}
+
 jl_value_t *checked_eval_string(const char* code)
 {
     jl_value_t *result = jl_eval_string(code);
@@ -45,6 +53,14 @@ int main()
 
     if (jl_options.opt_level != 1) {
         jl_printf(jl_stderr_stream(), "setting jl_options didn't work\n");
+        jl_atexit_hook(1);
+        exit(1);
+    }
+
+    // the inline frame-stack lookup behind JL_GC_PUSH*, here and in another task
+    if (!pgcstack_agrees() ||
+        !jl_unbox_bool(checked_eval_string("fetch(Threads.@spawn ccall(:pgcstack_agrees, Cint, ()) != 0)"))) {
+        jl_printf(jl_stderr_stream(), "jl_get_pgcstack_inline() disagrees with jl_get_pgcstack()\n");
         jl_atexit_hook(1);
         exit(1);
     }

@@ -134,7 +134,7 @@ sigatomic_end() = ccall(:jl_sigatomic_end, Cvoid, ())
 """
     disable_sigint(f::Function)
 
-Disable Ctrl-C handler during execution of a function on the current task,
+Disable Ctrl-C handler during execution of a function,
 for calling external code that may call julia code that is not interrupt safe.
 Intended to be called using `do` block syntax as follows:
 
@@ -143,17 +143,17 @@ Intended to be called using `do` block syntax as follows:
         ...
     end
 
+Within `f`, the scoped cancellation token ([`Base.CANCEL_TOKEN`](@ref)) is
+`nothing`, so neither Ctrl-C nor any other cancellation of the enclosing
+computation unwinds `f`: it is observed at the first cancellation point after
+`f` returns. Tasks started within `f` inherit this.
+
 External functions that do not call julia code or julia runtime
 automatically disable sigint during their execution.
 """
 function disable_sigint(f::Function)
-    depwarn("`disable_sigint` no longer defers Ctrl-C: SIGINT is delivered as a " *
-            "cancellation of the current ^C scope and observed at cancellation " *
-            "points regardless of the sigatomic region this establishes. Shield " *
-            "a region from cancellation by scoping " *
-            "`Base.CANCEL_TOKEN => nothing` over it instead.", :disable_sigint)
     sigatomic_begin()
-    res = f()
+    res = ScopedValues.with(f, CANCEL_TOKEN => nothing, _sigint_shielded_token => CANCEL_TOKEN[])
     # Exception unwind sigatomic automatically
     sigatomic_end()
     res
@@ -167,7 +167,9 @@ Temporarily reverses the effect of [`disable_sigint`](@ref).
 """
 function reenable_sigint(f::Function)
     sigatomic_end()
-    res = f()
+    # a bare sigatomic region shields no token
+    shielded = ScopedValues.get(_sigint_shielded_token)
+    res = shielded === nothing ? f() : ScopedValues.with(f, CANCEL_TOKEN => something(shielded))
     # Exception unwind sigatomic automatically
     sigatomic_begin()
     res

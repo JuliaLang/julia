@@ -711,6 +711,20 @@ end
     end
     @test f6(true)
     @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f6, Tuple{Bool}, true, false, false))
+
+    # nor do pointer-free values, whether in a stack slot or passed by reference
+    function f7(r)
+        val = r[]
+        GC.@preserve val begin end
+        return val
+    end
+    @test f7(Ref(1+2im)) == 1+2im
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f7, Tuple{Base.RefValue{Complex{Int}}}, true, false, false))
+    function f8(val)
+        GC.@preserve val begin end
+        return val
+    end
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f8, Tuple{Some{Int}}, true, false, false))
 end
 
 # issue #32843
@@ -1347,6 +1361,81 @@ function union_phi_inline_roots(x::Bool)
 end
 @test union_phi_inline_roots(true) === ("Q8", 1)
 
+# issue #64090
+function filter_singleton_types(t)
+    out = Any[]
+    for x in Iterators.filter(x -> x isa Val, t)
+        push!(out, typeof(x))
+    end
+    out
+end
+function narrow_union_with_bits_member(t, i, j, k::Int, c::Bool)
+    x = c ? t[i] : t[j]
+    y = x isa Tuple ? k : x
+    typeof(y)
+end
+function narrow_union_in_try_slot(t, i)
+    local x
+    try
+        x = t[i]
+        error("jump")
+    catch
+    end
+    y = x isa Val ? x : Val(:c)
+    typeof(y)
+end
+struct NumberSetting
+    value::Number
+end
+lookup_setting(s::NumberSetting, key::Symbol) =
+    key === :value ? s.value : key === :none ? nothing : (key, :alias)
+function last_int_setting(s, keys)
+    last = nothing
+    try
+        for key in keys
+            key === :stop && error("stop")
+            v = lookup_setting(s, key)
+            v isa Union{Nothing,Int} || continue
+            last = v
+        end
+    catch
+    end
+    last
+end
+function last_simple_setting(s, key)
+    result = 0
+    try
+        v = lookup_setting(s, key)
+        if v isa Union{Nothing,Int,Tuple{Symbol,Symbol}}
+            result = v
+        end
+        error("jump")
+    catch
+    end
+    result
+end
+@testset "#64090" begin
+    @test filter_singleton_types((Val(:b), Val(:a), (:x, :y))) == [Val{:b}, Val{:a}]
+    @test collect(Iterators.filter(x -> x isa Val, (Val(:b), Val(:a), (:x, :y)))) == [Val(:b), Val(:a)]
+
+    t = (nothing, missing, (:x, :y))
+    @test narrow_union_with_bits_member(t, 1, 1, 5, true) === Nothing
+    @test narrow_union_with_bits_member(t, 2, 2, 5, false) === Missing
+    @test narrow_union_with_bits_member(t, 3, 3, 5, true) === Int
+
+    t = (Val(:b), Val(:a), (:x, :y))
+    @test narrow_union_in_try_slot(t, 1) === Val{:b}
+    @test narrow_union_in_try_slot(t, 2) === Val{:a}
+    @test narrow_union_in_try_slot(t, 3) === Val{:c}
+
+    s = NumberSetting(12345)
+    @test last_int_setting(s, (:value, :pair, :stop)) === 12345
+    @test last_int_setting(s, (:none, :stop)) === nothing
+    @test last_simple_setting(s, :value) === 12345
+    @test last_simple_setting(s, :none) === nothing
+    @test last_simple_setting(s, :pair) === (:pair, :alias)
+end
+
 mutable struct AnyBoxEA val::Any end
 function preserve_any_ea(x)
     b = AnyBoxEA(x)
@@ -1437,4 +1526,85 @@ const const_svec_ref = Core.svec(1, "a", :b)
     @test const_svec_ref_test(3) === :b
     @test_throws BoundsError(const_svec_ref, 0) const_svec_ref_test(0)
     @test_throws BoundsError(const_svec_ref, 4) const_svec_ref_test(4)
+end
+
+# LLVM can merge allocations of arrays whose element types differ in whether they need zeroing
+memory_zeroinit_merge(row, names) = collect(getfield(row, nm) for nm in names)
+@testset "merged Memory allocations" begin
+    row = (a=1, b=4.0, c="7")
+    @test memory_zeroinit_merge(row, (:c, :a, :b)) == ["7", 1, 4.0]
+    @test memory_zeroinit_merge(row, (:a, :b, :c)) == [1, 4.0, "7"]
+    @test memory_zeroinit_merge(row, (:b, :b, :b)) == [4.0, 4.0, 4.0]
+end
+
+function missing_edge_union_tag(c::Bool, d::Bool, e::Bool)
+    local x
+    if c
+        x = e ? nothing : missing
+    end
+    if d
+        x = 1
+    end
+    return (c | d) ? x : 0
+end
+let llvm = get_llvm(missing_edge_union_tag, Tuple{Bool, Bool, Bool}, true, false, false)
+    @test occursin(r"%tindex_phi\d* = phi i8", llvm)
+    @test !occursin(r"%tindex_phi\d* = phi i8 [^\n]*poison", llvm)
+end
+@test missing_edge_union_tag(false, false, true) === 0
+@test missing_edge_union_tag(false, true, false) === 1
+@test missing_edge_union_tag(true, false, false) === missing
+@test missing_edge_union_tag(true, false, true) === nothing
+
+# Bounds checks of a 2-d index left inside a loop (a wrapper that forwards indexing without
+# `@propagate_inbounds`) must not keep the loop from vectorizing: `checkbounds_indices`
+# evaluates all dimensions eagerly, so their sizes are loaded up front and can be hoisted
+struct ForwardingMatrix <: AbstractMatrix{Float64}
+    data::Matrix{Float64}
+end
+Base.size(a::ForwardingMatrix) = size(a.data)
+Base.getindex(a::ForwardingMatrix, i::Int, j::Int) = a.data[i, j]
+Base.setindex!(a::ForwardingMatrix, v, i::Int, j::Int) = (a.data[i, j] = v)
+scale_forwarding!(b::ForwardingMatrix, a::ForwardingMatrix) = (b .= 2.0 .* a)
+@testset "forwarded 2-d indexing vectorizes" begin
+    a = ForwardingMatrix(rand(4, 3))
+    b = ForwardingMatrix(zeros(4, 3))
+    @test scale_forwarding!(b, a).data == 2 .* a.data
+    if Sys.ARCH in (:x86_64, :aarch64)
+        @test occursin(r"<\d+ x double>", get_llvm(scale_forwarding!, Tuple{ForwardingMatrix, ForwardingMatrix}))
+    end
+end
+
+# A union phi whose incoming value is a singleton constant that the union stores unboxed
+# must not carry a box pointer (regression from #55045)
+struct UnionPhiStart end
+function union_phi_singleton(x::Vector{Int})
+    acc = UnionPhiStart()
+    for v in x
+        if isodd(v)
+            acc = acc isa UnionPhiStart ? v : acc + v
+        end
+    end
+    return acc
+end
+function union_phi_nothing(x::Vector{Int})
+    acc = nothing
+    for v in x
+        if isodd(v)
+            acc = acc === nothing ? v : acc + v
+        end
+    end
+    return acc
+end
+@testset "union phi with an unboxed singleton constant" begin
+    for f in (union_phi_singleton, union_phi_nothing)
+        @test !occursin("= phi ptr", get_llvm(f, Tuple{Vector{Int}}))
+    end
+    @test union_phi_singleton([2, 4]) === UnionPhiStart()
+    @test union_phi_singleton([1, 2, 3]) === 4
+    @test union_phi_nothing(Int[]) === nothing
+    @test union_phi_nothing([1, 2, 3]) === 4
+    # `Union{}` (typed `Type{Union{}}`) is an unboxed ghost of `TypeofBottom`
+    @test isequal(Base.mapany(identity, (Union{}, 'a')), Any[Union{}, 'a'])
+    @test isequal(Any[x for x in (Union{}, 1.0)], Any[Union{}, 1.0])
 end

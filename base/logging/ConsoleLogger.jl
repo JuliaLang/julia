@@ -78,7 +78,7 @@ function default_metafmt(level::LogLevel, _module, group, id, file, line)
     _module !== nothing && (suffix *= string(_module)::String)
     if file !== nothing
         _module !== nothing && (suffix *= " ")
-        suffix *= contractuser(file)::String
+        suffix *= contractuser(string(file)::String)::String
         if line !== nothing
             suffix *= ":$(isa(line, UnitRange) ? "$(first(line))-$(last(line))" : line)"
         end
@@ -131,7 +131,7 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
             (indent=0, msg=l) for l in split(chomp(message), '\n')]
     else
         [(indent=0, msg=l) for l in split(
-             chomp(convert(String, message)::String), '\n')]
+             chomp(String(message)::String), '\n')]
     end
     stream::IO = logger.stream
     if !(isopen(stream)::Bool)

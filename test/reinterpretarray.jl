@@ -893,6 +893,35 @@ end
     c = collect(b)
     @test c[5] == b[5] == 0x00
     @test vec(c) == reinterpret(UInt8, a)
+    r = reinterpret(reshape, Int8, OffsetArray(reinterpret(reshape, UInt8, UInt16[0x0201, 0x0403, 0x0605]), 0, 0))
+    @test map(identity, r) == Int8[1 3 5; 2 4 6]
+end
+
+@testset "nested reshaped reinterpret (#64160)" begin
+    a = UInt32[0x04030201, 0x08070605, 0x0c0b0a09]
+    b = reinterpret(reshape, UInt16, a)
+    c = @inferred reinterpret(reshape, UInt8, b)
+    @test size(c) == (2, 2, 3)
+    @test c == reinterpret(reshape, UInt8, collect(b))
+    @test collect(c) == reshape(UInt8.(1:12), 2, 2, 3)
+    @test c[2, 1, 3] == 0x0a
+    c[1, 2, 3] = 0xff
+    @test a == UInt32[0x04030201, 0x08070605, 0x0cff0a09]
+    @test reinterpret(reshape, UInt32, b) === a
+    @test reinterpret(reshape, UInt16, b) === b
+    @test reinterpret(reshape, UInt16, c) === b
+    @test_throws ArgumentError reinterpret(reshape, UInt32, c)
+    @test_throws ArgumentError reinterpret(reshape, UInt64, reinterpret(reshape, UInt16, UInt32[1 2 3; 4 5 6]))
+
+    x = UInt8.(reshape(1:8, 2, 2, 2))
+    y = @inferred reinterpret(reshape, UInt32, reinterpret(reshape, UInt16, x))
+    @test y == collect(y) == UInt32[0x04030201, 0x08070605]
+    y[2] = 0x0d0c0b0a
+    @test x[:, :, 2] == UInt8[0x0a 0x0c; 0x0b 0x0d]
+
+    a = UInt64[1]
+    b = reinterpret(reshape, Tuple{UInt8,UInt32}, a)
+    @test reinterpret(reshape, UInt32, b) === reinterpret(reshape, UInt32, a)
 end
 
 @testset "BitArray from and into a reshaped reinterpret" begin

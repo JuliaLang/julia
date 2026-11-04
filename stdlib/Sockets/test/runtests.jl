@@ -96,7 +96,7 @@ end
 # `randport` is only known to be available for TCP, so find a port that can
 # actually be bound for UDP (#38711).
 function bind_udp_any(host)
-    local port
+    local port = UInt16(rand(2000:4000))
     for _ in 1:100
         port = UInt16(rand(2000:4000))
         sock = UDPSocket()
@@ -139,7 +139,7 @@ function killjob(d)
     end
     nothing
 end
-sockets_watchdog_timer = Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
+sockets_watchdog_timer = Timer(_ -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
 
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
@@ -269,7 +269,7 @@ defaultport = rand(2000:4000)
             if otherip != Sockets.localhost
                 @test_throws Base._UVError("connect", Base.UV_ECONNREFUSED) connect(otherip, p)
             end
-            for i in 1:3
+            for _ in 1:3
                 client = connect(p)
                 let name = getsockname(client)::Tuple{IPAddr, UInt16}
                     @test name[1] == Sockets.localhost
@@ -284,12 +284,12 @@ defaultport = rand(2000:4000)
 
     mktempdir() do tmpdir
         socketname = Sys.iswindows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
-        local nconn = 0
+        local nconn = Ref(0)
         srv = listen(socketname)
         t = accept(srv) do client
-            write(client, "Hello World $(nconn += 1)\n")
+            write(client, "Hello World $(nconn[] += 1)\n")
             close(client)
-            nconn == 3 && Base.wait_close(srv)
+            nconn[] == 3 && Base.wait_close(srv)
         end
         @test read(connect(socketname), String) == "Hello World 1\n"
         @test read(connect(socketname), String) == "Hello World 2\n"
@@ -427,7 +427,7 @@ end
 end
 
 @testset "put! in listenany(defaultport)" begin
-    (p, server) = listenany(defaultport)
+    (_, server) = listenany(defaultport)
     r = Channel(1)
     tsk = @async begin
         put!(r, :start)
@@ -616,11 +616,11 @@ end
 
         # connect to it
         client_sock = connect(addr, port)
-        test_done = false
+        test_done = Ref(false)
         Experimental.@sync begin
             @async begin
                 Base.wait_readnb(client_sock, 1)
-                test_done || error("Client disconnected prematurely.")
+                test_done[] || error("Client disconnected prematurely.")
             end
             @async begin
                 server_sock = accept(listen_sock)
@@ -636,7 +636,7 @@ end
                 @test peer_srvr_port == self_client_port
                 @test self_srvr_port != self_client_port
 
-                test_done = true
+                test_done[] = true
 
                 close(listen_sock)
                 close(client_sock)
@@ -672,8 +672,8 @@ end
         # Concurrent test runs on one host share its network namespace, so use an
         # OS-assigned port, as fixed ports would receive each other's datagrams.
         function create_sockets(addr::IPAddr)
-            a = create_socket(addr, 0)
-            port = getsockname(a)[2]
+            local a = create_socket(addr, 0)
+            local port = getsockname(a)[2]
             return a, create_socket(addr, port), create_socket(addr, port), port
         end
 
@@ -782,7 +782,6 @@ end
     end
 
     let srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
-        addr = Sockets.InetAddr(getsockname(srv)...)
         r = @async close(srv)
         @test_throws Base._UVError("accept", Base.UV_ECONNABORTED) accept(srv)
         fetch(r)

@@ -275,7 +275,23 @@ timesofar("utils")
         @test_throws DimensionMismatch BitVector(false)
         @test_throws DimensionMismatch BitVector((iszero(i%4) for i in 1:n1, j in 1:n2))
         @test_throws DimensionMismatch BitMatrix((isodd(i) for i in 1:3))
+
+        # iterators that are not generators, and iterators longer than the internal bit cache
+        for itr in (Iterators.take(Iterators.cycle([true, false, false]), 10_000),
+                    (isodd(i) for i in 1:10_000),
+                    (isodd(i) for i in 1:10_000 if i % 3 != 0),
+                    Iterators.reverse([true false true; false false true]))
+            @test BitArray(itr) == Array{Bool}(collect(itr))
+        end
+        @test BitMatrix(Iterators.reverse([true false; false false])) == [false false; false true]
+        @test BitVector(Iterators.take([true, false, true, true], 3)) == [true, false, true]
+        @test_throws DimensionMismatch BitMatrix(Iterators.take([true], 1))
+        @test_throws DimensionMismatch BitMatrix(x for x in [true] if x)
+        @test_throws DimensionMismatch BitArray{3}(Iterators.reverse(trues(2, 2)))
     end
+
+    @test trues((Base.OneTo(2), 3)) == trues(2, 3)
+    @test falses((Base.OneTo(2), 3)) == falses(2, 3)
 
     @testset "constructor from infinite iterator" begin
         inf_iter = Base.Iterators.cycle([true])
@@ -956,6 +972,8 @@ end
         @check_bit_operation broadcast(/, b1, b2) Matrix{Float64}
         @check_bit_operation broadcast(^, b1, b2) BitMatrix
         @check_bit_operation (/)(b1,1) Matrix{Float64}
+        @test_throws MethodError (/)(1, Array(b1))
+        @test_throws MethodError (/)(1, b1)
 
         b2 = trues(n1, n2)
         @check_bit_operation broadcast(div, b1, b2) BitMatrix
@@ -1264,6 +1282,14 @@ timesofar("binary arithmetic")
     @check_bit_operation broadcast(!=, b1, b2) BitMatrix
     @check_bit_operation broadcast(<, b1, b2) BitMatrix
     @check_bit_operation broadcast(<=, b1, b2) BitMatrix
+
+    v1, v2 = falses(100), trues(100)
+    @test cmp(v1, v2) == -1
+    @test cmp(v2, v1) == 1
+    @test cmp(v1, v1) == 0
+    @test isless(v1, v2)
+    @test !isless(v2, v1)
+    @test isless(falses(10), falses(20))
 end
 
 timesofar("binary comparison")
@@ -1287,6 +1313,18 @@ timesofar("binary comparison")
     for m = 0:v1
         b1 = bitrand(m)
         @check_bit_operation reverse(b1) BitVector
+        v = Vector{Bool}(b1)
+        @test reverse!(b1) === b1
+        @test b1 == reverse(v)
+        @test bitcheck(b1)
+    end
+
+    for sz in ((5,), (1, 5), (5, 1), (1, 1, 7), (1, 1), (3, 4), (3, 1, 4), (70, 3), (2, 70, 3))
+        b1 = bitrand(sz)
+        for d = 1:length(sz)
+            @check_bit_operation reverse(b1, dims=d) BitArray{length(sz)}
+            @check_bit_operation reverse(b1, dims=(d,)) BitArray{length(sz)}
+        end
     end
 
     b1 = bitrand(v1)
@@ -1314,6 +1352,8 @@ timesofar("binary comparison")
         @check_bit_operation selectdim(b1, 1, m) SubArray{Bool, 0}
     end
     @check_bit_operation selectdim(b1, 1, :) SubArray{Bool, 1}
+    @test circshift!(falses(0), 1) == falses(0)
+    @test circshift!(falses(0), falses(0), 1) == falses(0)
 end
 
 timesofar("datamove")
@@ -1740,6 +1780,8 @@ timesofar("permutedims")
     @check_bit_operation cat(0, b1, 1, 1, b1, dims=2) Array{Int,3}
     @check_bit_operation cat(3, b1, 4, 5, b1, dims=2) Array{Int,3}
     @check_bit_operation cat(false, b1, true, true, b1, dims=2) BitArray{3}
+    @check_bit_operation cat(b1, b1, dims=Int32(2)) BitArray{3}
+    @check_bit_operation cat(true, b1, dims=0x2) BitArray{3}
 
     b1 = bitrand(n1, n2)
     for m1 = 1:(n1-1), m2 = 1:(n2-1)
@@ -1949,4 +1991,20 @@ end
 let b = trues(10)
     copyto!(b, view([0,0,0], :))
     @test b == [0,0,0,1,1,1,1,1,1,1]
+end
+
+@testset "filter and sizehint!" begin
+    for sz in ((0,), (1,), (v1,), (n1, n2))
+        b = bitrand(sz)
+        @check_bit_operation filter(identity, b) BitVector
+        @check_bit_operation filter(!, b) BitVector
+        @check_bit_operation filter(Returns(true), b) BitVector
+    end
+    b = bitrand(5)
+    @test sizehint!(b, 1000) === b
+    @test length(b) == 5
+    append!(b, trues(995))
+    @test length(b) == 1000 && all(b[6:end])
+    @test sizehint!(b, 0) === b
+    @test length(b) == 1000
 end

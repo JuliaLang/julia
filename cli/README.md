@@ -6,7 +6,7 @@ The code is organized in three pieces:
 
 * `loader_exe.c` gets built into the main `julia` executable. It immediately loads `libjulia`.
 * `loader_lib.c` gets built into the main `libjulia` shared library. This is the main entrypoint for the Julia runtime loading process, which occurs within `jl_load_repl()`.
-* `trampolines/*.S`, which contains assembly definitions for symbol forwarding trampolines. These are used to allow `libjulia` to re-export symbols such that a C linker can use `libjulia` directly for embedding usecases.
+* `arch/<arch>/trampolines.S`, which contain assembly definitions for symbol forwarding trampolines. These are used to allow `libjulia` to re-export symbols such that a C linker can use `libjulia` directly for embedding usecases.
 
 The main requirements of the loader are as follows:
 

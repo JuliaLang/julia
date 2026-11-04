@@ -595,7 +595,11 @@ first_linenode(lnn::LineNumberNode) = lnn
 # provenance (but still removed).
 
 function _first_linenode(e::Expr)
-    e.head in (:macrocall, :quote, :inert) || for a in e.args
+    if e.head === :macrocall
+        loc = length(e.args) >= 2 ? e.args[2] : nothing
+        return loc isa LineNumberNode ? loc : nothing
+    end
+    e.head in (:quote, :inert) || for a in e.args
         a isa LineNumberNode && return a
         if a isa Expr
             a_out = _first_linenode(a)
@@ -640,9 +644,11 @@ isa_lowering_ast_node(@nospecialize(e)) =
     e isa Symbol || e isa QuoteNode || e isa Expr || e isa GlobalRef
 
 function expr_to_syntax(@nospecialize(e),
-                        src::Union{LineNumberNode, SourceRef}=
-                            e isa Expr ? first_linenode(e) : LineNumberNode(0, :var""),
+                        src::Union{LineNumberNode, SourceRef}=LineNumberNode(0, :var""),
                         context=SyntaxContext(nothing, nothing, JL_OLD_EDITION, false))
+    if e isa Expr && src isa LineNumberNode && (src.line == 0 || src.file === :none)
+        src = something(_first_linenode(e), src)
+    end
     _expr_to_syntax(e, context, src, false)[1]
 end
 function expr_to_syntax(@nospecialize(e), src::Syntax)
@@ -785,25 +791,6 @@ function syntax_to_expr(s::Syntax, suppress_linenodes=false)
         end
         out
     end
-end
-
-# convenience function for `jl_parse`
-function _c_parseall_expr(code::Core.SimpleVector, filename::String,
-                          lineno::Int, mod::Union{Module, Nothing})
-    (ptr, len) = code
-    str = unsafe_string(ptr, len)
-    pfm = Meta.parser_for_module(mod)
-    ex, offset = Meta._parse_string(str, filename, lineno, 1, :all, Expr, pfm)
-    return Core.svec(ex, offset-1)
-end
-
-function fl_toplevel_eval(mod::Module, @nospecialize(x))
-    ex = if x isa Syntax
-        Expr(:toplevel, first_linenode(x), syntax_to_expr(x))
-    else
-        x
-    end
-    ccall(:jl_toplevel_eval, Any, (Any, Any), mod, ex)
 end
 
 #-------------------------------------------------------------------------------

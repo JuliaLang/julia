@@ -952,11 +952,11 @@ function project_get_edition(d::Dict)
             end
         end
     end
-    # Finally, if neither of those are set, default to the current Julia version.
+    # Finally, if neither of those are set, default to the newest edition.
     # N.B.: This choice is less "compatible" than defaulting to a fixed older version.
     # However, it avoids surprises from moving over scripts and REPL code to packages
     ed = if sv === nothing
-        VERSION_EDITION
+        LATEST_STABLE_EDITION
     elseif sv <= VersionNumber(OLDEST_EDITION)
         # Syntax versioning was first introduced in Julia 1.14 - we do not support
         # going back to versions before syntax version 1.13.
@@ -988,12 +988,12 @@ end
 
 function parser_for_active_project()
     project = active_project()
-    sv = VERSION_EDITION
+    sv = JL_OLD_EDITION
     if project !== nothing && isfile(project)
         try
             sv = project_get_edition(parsed_toml(project))
         catch e
-            @warn "Failed to read project $project - defaulting to latest syntax. err=$e"
+            @warn "Failed to read project $project - defaulting to syntax edition $sv. err=$e"
         end
     end
     VersionedParse(sv)
@@ -1106,18 +1106,7 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
     return nothing
 end
 
-function is_v1_format_manifest(raw_manifest::Dict{String})
-    if haskey(raw_manifest, "manifest_format")
-        mf = raw_manifest["manifest_format"]
-        if mf isa Dict{String} && haskey(mf, "uuid")
-            # the off-chance where an old format manifest has a dep called "manifest_format"
-            return true
-        end
-        return false
-    else
-        return true
-    end
-end
+is_v1_format_manifest(raw_manifest::Dict{String}) = !haskey(raw_manifest, "manifest_format")
 
 # returns a deps list for both old and new manifest formats
 function get_deps(raw_manifest::Dict)
@@ -1146,6 +1135,9 @@ end
 
 dep_stanza_get(stanza::Nothing, name::String) = nothing
 
+# TOML reads an empty array as `Any[]`, but in a manifest it is an empty list of names
+manifest_dep_names(names) = names isa Vector{Any} && isempty(names) ? String[] : names
+
 function explicit_manifest_deps_get(project_file::String, where::PkgId, name::String)::Union{Nothing,PkgId}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
@@ -1158,7 +1150,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             uuid === nothing && continue
             # deps is either a list of names (deps = ["DepA", "DepB"]) or
             # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
-            deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
+            deps = manifest_dep_names(get(entry, "deps", nothing))::Union{Vector{String}, Dict{String, Any}, Nothing}
             local dep::Union{Nothing, PkgId}
             @label resolved begin
                 if UUID(uuid) === where.uuid
@@ -1184,7 +1176,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                             # 1. Any ordinary dep of the parent package
                             # 2. Any weakdep of the parent package declared as an extension trigger
                             for deps′ in (ext_may_load_weakdep(exts, name) ?
-                                    (get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}, deps) :
+                                    (manifest_dep_names(get(entry, "weakdeps", nothing))::Union{Vector{String}, Dict{String, Any}, Nothing}, deps) :
                                     (deps,))
                                 dep = dep_stanza_get(deps′, name)
                                 dep === nothing && continue
@@ -1333,8 +1325,8 @@ function implicit_manifest_uuid_load_spec(dir::String, pkg::PkgId)::Union{Nothin
     path, project_file = entry_point_and_project_file(dir, pkg.name)
     if project_file === nothing
         pkg.uuid === nothing || return nothing
-        # Without a project file, treat as empty - which defaults to VERSION
-        return PkgLoadSpec(path, VERSION_EDITION)
+        # Without a project file, treat as empty
+        return PkgLoadSpec(path, LATEST_STABLE_EDITION)
     end
     proj = project_file_name_uuid(project_file, pkg.name)
     proj == pkg || return nothing
@@ -1801,8 +1793,8 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                     end
                     extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
                     extensions === nothing && return
-                    weakdeps = get(Dict{String, Any}, entry, "weakdeps")::Union{Vector{String}, Dict{String,Any}}
-                    deps = get(Dict{String, Any}, entry, "deps")::Union{Vector{String}, Dict{String,Any}}
+                    weakdeps = manifest_dep_names(get(Dict{String, Any}, entry, "weakdeps"))::Union{Vector{String}, Dict{String,Any}}
+                    deps = manifest_dep_names(get(Dict{String, Any}, entry, "deps"))::Union{Vector{String}, Dict{String,Any}}
 
                     function expand_deps_list(deps′::Vector{String})
                         deps′_expanded = Dict{String, Any}()
@@ -2940,7 +2932,9 @@ function find_unsuitable_manifests_versions()
             end
             continue
         end
-        push!(unsuitable_manifests, string(manifest_file, " (v", man_julia_version, ")"))
+        # a manifest without a julia version was most likely written before Julia 1.7
+        version_str = man_julia_version isa VersionNumber ? "v$man_julia_version" : "julia version not recorded"
+        push!(unsuitable_manifests, string(manifest_file, " (", version_str, ")"))
     end
     return unsuitable_manifests, dev_manifests
 end
@@ -3091,7 +3085,7 @@ register_root_module(Main)
 # to the loaded_modules table instead of getting bindings.
 baremodule __toplevel__
 using Base
-global var"#_internal_julia_parse" = Base.VersionedParse(Base.VERSION_EDITION)
+global var"#_internal_julia_parse" = Base.VersionedParse(Base.LATEST_STABLE_EDITION)
 
 # Used for version checking of precompiled cache files only
 global _internal_syntax_version::UInt8 = 0
@@ -3224,7 +3218,7 @@ function __require_prelocked(pkg::PkgId, env)
                             # or an empty set of entries (indicating the precompile should be skipped)
                             if precompiled !== nothing
                                 isempty(precompiled) && return PrecompilableError() # oops, Precompilation forgot to report what this might actually be
-                                local cachefile = precompiled[1]
+                                local cachefile = precompiled[1]::String
                                 local ocachefile = nothing
                                 if JLOptions().use_pkgimages == 1
                                     ocachefile = ocachefile_from_cachefile(cachefile)
@@ -3291,7 +3285,7 @@ function __require_prelocked(pkg::PkgId, env)
         include(__toplevel__, path)
         loaded = maybe_root_module(pkg)
     finally
-        __toplevel__.var"#_internal_julia_parse" = VersionedParse(VERSION_EDITION)
+        __toplevel__.var"#_internal_julia_parse" = VersionedParse(LATEST_STABLE_EDITION)
         lock(require_lock)
         if uuid !== old_uuid
             ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
@@ -3398,7 +3392,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
                 sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
             end
             set_pkgorigin_version_path(this_uuidkey, sourcepath)
-            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, VERSION_EDITION), UInt128(0), false; DEPOT_PATH=depot_path)
+            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, LATEST_STABLE_EDITION), UInt128(0), false; DEPOT_PATH=depot_path)
         end
     finally
         end_loading(this_uuidkey, newm)
@@ -3621,8 +3615,7 @@ function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{In
     # When this worker is producing a native object pkgimage, retain raw
     # inferred IR on `CodeInstance.inferred` for the non-inlineable methods
     # that would otherwise be discarded, so the irgen pass can short-circuit
-    # `typeinf_ext` instead of re-inferring. `jl_finalize_precompile_inferred`
-    # clears them (and the flag) before staticdata serialization.
+    # `typeinf_ext` instead of re-inferring. The image leaves them out.
     keep_ir = JLOptions().outputo != C_NULL
     keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 1)
     # This one changes the parser behavior
@@ -4911,7 +4904,7 @@ end
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; kwargs...)
-    return stale_cachefile(PkgLoadSpec(modpath, VERSION_EDITION), cachefile; kwargs...)
+    return stale_cachefile(PkgLoadSpec(modpath, LATEST_STABLE_EDITION), cachefile; kwargs...)
 end
 @constprop :none function stale_cachefile(modspec::PkgLoadSpec, cachefile::String; ignore_loaded::Bool = false, requested_flags::CacheFlags=CacheFlags(), reasons=nothing, verify_checksums::Bool=true)
     return stale_cachefile(PkgId(""), UInt128(0), modspec, cachefile; ignore_loaded, requested_flags, reasons, verify_checksums)

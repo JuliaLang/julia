@@ -256,11 +256,13 @@ setrounding(f::Function, ::Type{BigFloat}, r::RoundingMode) =
 
 
 """
-    BigFloat(x::Union{Real, AbstractString} [, rounding::RoundingMode=rounding(BigFloat)]; [precision::Integer=precision(BigFloat)])
+    BigFloat(x::Union{Real, AbstractString} [, rounding::RoundingMode=rounding(BigFloat)];
+             [precision::Integer=precision(BigFloat)])
 
 Create an arbitrary precision floating point number from `x`, with precision
 `precision`. The `rounding` argument specifies the direction in which the result should be
 rounded if the conversion cannot be done exactly. If not provided, these are set by the current global values.
+The precision is initially set to 256 bits. Use [`setprecision`](@ref) to change the default.
 
 `BigFloat(x::Real)` is the same as `convert(BigFloat,x)`, except if `x` itself is already
 `BigFloat`, in which case it will return a value with the precision set to the current
@@ -281,6 +283,9 @@ See also:
 
 # Examples
 ```jldoctest
+julia> precision(BigFloat) # current default precision in bits
+256
+
 julia> BigFloat(2.1) # 2.1 here is a Float64
 2.100000000000000088817841970012523233890533447265625
 
@@ -405,7 +410,9 @@ function _opposite_round(r::MPFRRoundingMode)
 end
 
 function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=_precision_with_base_2(BigFloat), rounding::MPFRRoundingMode=rounding_raw(BigFloat))
+    base == 0 || 2 <= base <= 62 || throw(ArgumentError(lazy"invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s); base, precision, rounding)
+    Base.containsnul(s) && return nothing
     z = BigFloat(precision=precision)
     err = ccall((:mpfr_set_str, libmpfr), Int32, (Ref{BigFloat}, Cstring, Int32, MPFRRoundingMode), z, s, base, rounding)
     err == 0 ? z : nothing
@@ -426,6 +433,13 @@ BigFloat(x::AbstractString, r::RoundingMode; precision::Integer=_precision_with_
 
 ## BigFloat -> Integer
 _unchecked_cast(T, x::BigFloat, r::RoundingMode) = _unchecked_cast(T, x, convert(MPFRRoundingMode, r))
+# MPFR has no ties-away or ties-up mode, but these only differ from ties-to-even at an exact tie
+function _unchecked_cast(T, x::BigFloat, r::Union{RoundingMode{:NearestTiesAway}, RoundingMode{:NearestTiesUp}})
+    f = BigFloat(; precision=_precision_with_base_2(x))
+    ccall((:mpfr_frac, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), f, x, MPFRRoundNearest)
+    (f == 0.5 || f == -0.5) || return _unchecked_cast(T, x, MPFRRoundNearest)
+    return _unchecked_cast(T, x, r isa RoundingMode{:NearestTiesUp} ? MPFRRoundUp : MPFRRoundFromZero)
+end
 
 function _unchecked_cast(::Type{Int64}, x::BigFloat, r::MPFRRoundingMode)
     ccall((:__gmpfr_mpfr_get_sj,libmpfr), Cintmax_t, (Ref{BigFloat}, MPFRRoundingMode), x, r)
@@ -563,7 +577,7 @@ big(::Type{<:AbstractFloat}) = BigFloat
 big(x::AbstractFloat) = convert(BigFloat, x)
 
 function Rational{BigInt}(x::AbstractFloat)
-    isnan(x) && return zero(BigInt) // zero(BigInt)
+    isnan(x) && throw(InexactError(:Rational, Rational{BigInt}, x))
     isinf(x) && return copysign(one(BigInt),x) // zero(BigInt)
     iszero(x) && return zero(BigInt) // one(BigInt)
     s = max(precision(x) - exponent(x), 0)

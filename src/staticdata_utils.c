@@ -121,42 +121,14 @@ JL_DLLEXPORT void jl_tag_newly_inferred_disable(void)
 // This gets called as the first step of Base.include_package_for_output
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
 {
-    assert(_newly_inferred == NULL || _newly_inferred == jl_nothing || jl_is_array_any(_newly_inferred));
     if (_newly_inferred == jl_nothing)
         _newly_inferred = NULL;
+    // The runtime also stores MethodInstances here, so a narrower element type is unsafe.
+    if (_newly_inferred != NULL)
+        JL_TYPECHK(jl_set_newly_inferred, array_any, _newly_inferred);
     JL_LOCK(&newly_inferred_mutex);
     newly_inferred = (jl_array_t*) _newly_inferred;
     JL_UNLOCK(&newly_inferred_mutex);
-}
-
-// Null `CodeInstance.inferred` for native-owned CIs where it is still a raw
-// `CodeInfo` left by `jl_precompile_keep_ir`. These are non-inlineable methods
-// whose IR is otherwise discarded, retained only long enough for
-// `jl_create_native` to reuse via the `typeinf_ext` short-circuit. A
-// CodeInstance cached racing the end of the include phase can escape this walk;
-// see jl_queue_for_serialization.
-JL_DLLEXPORT void jl_finalize_precompile_inferred(int8_t cleanup_keep_ir)
-{
-    jl_set_precompile_keep_ir(0);
-    if (!cleanup_keep_ir || newly_inferred == NULL)
-        return;
-    size_t n = jl_array_nrows(newly_inferred);
-    for (size_t i = 0; i < n; i++) {
-        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(newly_inferred, i);
-        if (ci == NULL)
-            continue;
-        if (ci->owner != jl_nothing)
-            continue; // foreign interpreters own their cached IR
-        jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
-        if (inferred == NULL || !jl_is_code_info(inferred))
-            continue;
-        jl_method_instance_t *mi = jl_get_ci_mi(ci);
-        if (!jl_is_method(mi->def.value))
-            continue; // toplevel code retains its inferred IR
-        if (mi->def.method->source == NULL)
-            continue; // optimized opaque closures can't reconstruct their IR
-        jl_gc_write_atomic(ci, ci->inferred, jl_value_t, jl_nothing, release);
-    }
 }
 
 static jl_array_t *queue_used(jl_array_t *list, jl_query_cache *query_cache) JL_CANSAFEPOINT;
@@ -969,15 +941,22 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *records, jl_ar
             return;
         }
         assert(jl_array_nrows(records) == l);
+        // These methods all activate in the same world, so their dispatch cache invalidations
+        // can be applied together afterwards. The invalidation log wants them per method.
+        jl_array_t *deferred = _jl_debug_method_invalidation ? NULL : jl_alloc_vec_any(0);
+        JL_GC_PUSH1(&deferred);
         for (i = 0; i < l; i++) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
             jl_value_t *record = jl_array_ptr_ref(records, i);
             //uint64_t t0 = uv_hrtime();
-            jl_method_table_activate_with_record(entry, record == jl_nothing ? NULL : (jl_array_t*)record, image);
+            jl_method_table_activate_with_record(entry, record == jl_nothing ? NULL : (jl_array_t*)record, image, deferred);
             //jl_printf(JL_STDERR, "%f ", (double)(uv_hrtime() - t0) / 1e6);
             //jl_static_show(JL_STDERR, entry->func.value);
             //jl_printf(JL_STDERR, "\n");
         }
+        if (deferred)
+            jl_method_table_invalidate_deferred(deferred, world - 1);
+        JL_GC_POP();
     }
 }
 
