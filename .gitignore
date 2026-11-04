@@ -53,3 +53,18 @@ repo_key
 # Buildkite: Ignore any agent keys (public or private) we have stored
 agent_key*
 contrib/ci-timing/Manifest.toml
+# ADLC / Cursor tooling (injected at Dev time; not product code)
+.cursor/skills/
+.adlc/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.env
+.env.*
+!.env.example
+*.egg-info/
+.venv/
+venv/

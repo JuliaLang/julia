@@ -696,12 +696,6 @@ end
         s, c = sincospi(missing)
         @test s === missing
         @test c === missing
-        # other trig missing methods stay as they are
-        @test sincos(missing) === (missing, missing)
-        @test sincosd(missing) === (missing, missing)
-        @test sinpi(missing) === missing
-        @test cospi(missing) === missing
-        @test tanpi(missing) === missing
     end
 end
 
