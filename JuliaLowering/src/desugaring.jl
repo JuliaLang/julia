@@ -3749,13 +3749,19 @@ end
 # Used to handle TypeVar/TypeApp references during type resolution before real
 # DataTypes exist.  flisp: "Skips method bodies since constructors should use
 # plain apply_type for correct effects inference."
+const _TYPE_CONSTRUCTOR_REPLACEMENTS = Dict("apply_type" => "apply_type_or_typeapp",
+                                             "TypeVar" => "typevar_or_typeapp",
+                                             "UnionAll" => "unionall_or_typeapp")
+
 function _replace_type_constructors(ctx, ex)
     if is_leaf(ex)
         return ex
     end
     k = head(ex)
-    if k == :call && numchildren(ex) >= 1 && head(ex[1]) == :core && syntax_name(ex[1]) == "apply_type"
-        new_head = @ast ctx ex[1] "apply_type_or_typeapp"::core
+    if k == :call && numchildren(ex) >= 1 && head(ex[1]) == :core &&
+            haskey(_TYPE_CONSTRUCTOR_REPLACEMENTS, syntax_name(ex[1])) &&
+            !(syntax_name(ex[1]) == "TypeVar" && numchildren(ex) < 3)
+        new_head = @ast ctx ex[1] _TYPE_CONSTRUCTOR_REPLACEMENTS[syntax_name(ex[1])]::core
         new_children = SyntaxList()
         push!(new_children, new_head)
         for i in 2:numchildren(ex)

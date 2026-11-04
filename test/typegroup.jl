@@ -966,4 +966,38 @@ using Test
         @test stale_tuple_cache_refs(:TG_CacheFail) == 0
     end
 
+    # issue #63827: self-reference applied to parameters in a TypeVar bound
+    @testset "group references in field TypeVar bounds" begin
+        @eval struct TG_UBSelf{T}
+            x::Vector{<:TG_UBSelf{T}}
+        end
+        @test fieldtype(TG_UBSelf{Int}, :x) == Vector{<:TG_UBSelf{Int}}
+        @test TG_UBSelf{Int}(TG_UBSelf{Int}[]).x == TG_UBSelf{Int}[]
+        @eval struct TG_UBSelf{T}
+            x::Vector{<:TG_UBSelf{T}}
+        end
+        @eval struct TG_LBSelf{T}
+            x::Vector{>:TG_LBSelf{T}}
+        end
+        @test fieldtype(TG_LBSelf{Int}, :x) == Vector{>:TG_LBSelf{Int}}
+        @eval struct TG_WhereSelf{T}
+            x::Vector{U} where U<:Union{Nothing, TG_WhereSelf{T}}
+        end
+        @test fieldtype(TG_WhereSelf{Int}, :x) == (Vector{U} where U<:Union{Nothing, TG_WhereSelf{Int}})
+        @eval typegroup
+            struct TG_UBA{T}
+                b::Vector{<:TG_UBB{T}}
+            end
+            struct TG_UBB{T}
+                a::Ref{<:TG_UBA{T}}
+            end
+        end
+        @test fieldtype(TG_UBA{Int}, :b) == Vector{<:TG_UBB{Int}}
+        @test fieldtype(TG_UBB{Int}, :a) == Ref{<:TG_UBA{Int}}
+        @test_throws "bound of U references TG_UBParam" @eval struct TG_UBParam{T, U<:TG_UBParam{T}} end
+        @test_throws "bound of T is not a type" @eval struct TG_UBParamApp{F, T<:F{Int}} end
+        @test !isdefined(@__MODULE__, :TG_UBParam)
+        @test !isdefined(@__MODULE__, :TG_UBParamApp)
+    end
+
 end

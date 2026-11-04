@@ -2616,7 +2616,19 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map, jl_defe
         // Special case: Union is stored as TypeApp with head == Union
         if (head == (jl_value_t*)jl_uniontype_type) {
             result = jl_type_union(resolved, n);
-        } else {
+        }
+        // Deferred TypeVar(name, lb, ub) and UnionAll(var, body), see typevar_or_typeapp
+        else if (head == (jl_value_t*)jl_tvar_type) {
+            assert(n == 3 && jl_is_symbol(resolved[0]));
+            result = (jl_value_t*)jl_new_typevar((jl_sym_t*)resolved[0], resolved[1], resolved[2]);
+        }
+        else if (head == (jl_value_t*)jl_unionall_type) {
+            assert(n == 2);
+            if (!jl_is_typevar(resolved[0]))
+                jl_type_error("UnionAll", (jl_value_t*)jl_tvar_type, resolved[0]);
+            result = jl_type_unionall((jl_tvar_t*)resolved[0], resolved[1]);
+        }
+        else {
             // Resolve the head type
             head = resolve_type_refs(head, subst_map, dcache);
             // For parametric types, we need the wrapper (UnionAll), not the DataType
@@ -2899,14 +2911,25 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             // undefined at this point.)
             for (size_t j = 0; j < jl_svec_len(params); j++) {
                 jl_value_t *p = jl_svecref(params, j);
-                if (jl_is_typevar(p)) {
+                // A TypeApp here is a TypeVar deferred by typevar_or_typeapp
+                jl_value_t *pname = NULL;
+                if (jl_is_typevar(p))
+                    pname = (jl_value_t*)((jl_tvar_t*)p)->name;
+                else if (jl_is_typeapp(p))
+                    pname = ((jl_typeapp_t*)((jl_typeapp_t*)((jl_typeapp_t*)p)->head)->head)->param;
+                if (pname != NULL) {
                     jl_tvar_t *ref = find_typegroup_ref(p, &subst_map);
                     if (ref != NULL)
                         jl_errorf("invalid type parameter bound in definition of %s: "
                                   "bound of %s references %s, whose definition is not yet complete",
                                   jl_symbol_name(tv->name),
-                                  jl_symbol_name(((jl_tvar_t*)p)->name),
+                                  jl_symbol_name((jl_sym_t*)pname),
                                   jl_symbol_name(ref->name));
+                    if (!jl_is_typevar(p))
+                        jl_errorf("invalid type parameter bound in definition of %s: "
+                                  "bound of %s is not a type",
+                                  jl_symbol_name(tv->name),
+                                  jl_symbol_name((jl_sym_t*)pname));
                 }
             }
 

@@ -465,7 +465,7 @@ end
 4   (= slot₂/U (call core.TypeVar :U))
 5   TestMod.S
 6   TestMod.T
-7   (= slot₃/V (call core.TypeVar :V %₅ %₆))
+7   (= slot₃/V (call core.typevar_or_typeapp :V %₅ %₆))
 8   (call core.svec slot₂/U slot₃/V)
 9   (call core.svec)
 10  (call core.svec)
@@ -641,7 +641,7 @@ end
 4   (= slot₂/T (call core.TypeVar :T))
 5   TestMod.Vector
 6   (call core.apply_type_or_typeapp %₅ slot₂/T)
-7   (= slot₃/S (call core.TypeVar :S %₆))
+7   (= slot₃/S (call core.typevar_or_typeapp :S %₆))
 8   (call core.svec slot₂/T slot₃/S)
 9   (call core.svec :v)
 10  (call core.svec)

@@ -466,6 +466,22 @@ function apply_type_or_typeapp(@nospecialize(tc), @nospecialize params...)
     return apply_type(tc, params...)
 end
 
+# A TypeVar whose bound contains a TypeApp is deferred as
+# TypeApp(TypeApp(TypeApp(TypeVar, name), lb), ub), and a UnionAll over such a var
+# as TypeApp(TypeApp(UnionAll, var), body).
+function typevar_or_typeapp(@nospecialize(n), @nospecialize(lb), @nospecialize(ub))
+    if _contains_typeapp(lb) || _contains_typeapp(ub)
+        return TypeApp(TypeApp(TypeApp(TypeVar, n), lb), ub)
+    end
+    return TypeVar(n, lb, ub)
+end
+typevar_or_typeapp(@nospecialize(n), @nospecialize(ub)) = typevar_or_typeapp(n, Union{}, ub)
+
+function unionall_or_typeapp(@nospecialize(v), @nospecialize(t))
+    v isa TypeApp && return TypeApp(TypeApp(UnionAll, v), t)
+    return UnionAll(v, t)
+end
+
 abstract type Exception end
 struct ErrorException <: Exception
     msg::AbstractString

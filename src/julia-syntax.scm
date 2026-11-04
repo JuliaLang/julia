@@ -1405,7 +1405,7 @@
           replaced)))))
 
 ;; Replace (call (core apply_type) ...) with (call (core apply_type_or_typeapp) ...)
-;; in an expression tree. Used for typegroup to handle TypeVar/TypeApp references.
+;; (and likewise TypeVar and UnionAll) in an expression tree. Used for typegroup to handle TypeVar/TypeApp references.
 ;; Skips method bodies since constructors should use plain apply_type for
 ;; correct effects inference.
 (define (replace-type-constructors expr)
@@ -1417,6 +1417,15 @@
               (pair? (cdr expr))
               (equal? (cadr expr) '(core apply_type)))
          `(call (core apply_type_or_typeapp) ,@(map replace-type-constructors (cddr expr))))
+        ((and (eq? (car expr) 'call)
+              (pair? (cdr expr))
+              (equal? (cadr expr) '(core TypeVar))
+              (length> expr 3))
+         `(call (core typevar_or_typeapp) ,@(map replace-type-constructors (cddr expr))))
+        ((and (eq? (car expr) 'call)
+              (pair? (cdr expr))
+              (equal? (cadr expr) '(core UnionAll)))
+         `(call (core unionall_or_typeapp) ,@(map replace-type-constructors (cddr expr))))
         (else (map replace-type-constructors expr))))
 
 ;; Hack: Extract a struct definition from a typegroup block child.
