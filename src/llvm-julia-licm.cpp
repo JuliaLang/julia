@@ -151,8 +151,6 @@ struct JuliaLICM : public JuliaPassContext {
         IRBuilder<> builder(preheader->getTerminator());
         builder.SetCurrentDebugLocation(call->getDebugLoc());
         auto *replacement = builder.CreateCall(object_write_barrier_func, args);
-        if (auto *MD = call->getMetadata("julia.reset_region"))
-            replacement->setMetadata("julia.reset_region", MD);
         createNewInstruction(replacement, call, MSSAU, MemorySSA::BeforeTerminator);
         eraseInstruction(*call, MSSAU);
         return replacement;
