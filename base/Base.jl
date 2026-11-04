@@ -434,9 +434,6 @@ const _sigint_episode = Ref{Tuple{Union{Nothing, CancellationTokenSource}, UInt6
 # has no published token binding, and Distributed points it at the handler
 # of the most recent remotely-submitted request.
 const _sigint_foreground_task = Ref{Union{Nothing, Task}}(nothing)
-# The token a `disable_sigint` region shields, for `reenable_sigint` to
-# restore; unset outside any region.
-const _sigint_shielded_token = ScopedValues.ScopedValue{Union{Nothing, CancellationToken}}()
 
 @doc """
     Base.sigint_new_episode!([src::CancellationTokenSource]) -> CancellationToken
