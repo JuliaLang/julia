@@ -219,7 +219,6 @@ end
     end
     return s
 end
-precompile(sum_eachindex3, (Vector{Float64}, Vector{Float64}, Vector{Float64}))
 
 function _test_threads()
     v = zeros(Int, 64)
