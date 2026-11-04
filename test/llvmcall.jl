@@ -341,39 +341,120 @@ end
     @test host_ir() === nothing
 end
 
-# The JIT must resolve the libm functions that LLVM can lower floating point operations to, on
-# every platform and without openlibm. `nobuiltin` keeps LLVM from turning these into instructions.
-@testset "libm libcalls are resolved by the JIT" begin
-    for (name, T, llt, expected) in (("rint", Float64, "double", 2.0), ("rintf", Float32, "float", 2f0),
-                                     ("trunc", Float64, "double", 2.0), ("truncf", Float32, "float", 2f0),
-                                     ("floor", Float64, "double", 2.0), ("floorf", Float32, "float", 2f0),
-                                     ("ceil", Float64, "double", 3.0), ("ceilf", Float32, "float", 3f0))
-        f = @eval (x::$T) -> Base.llvmcall(($"""
+# Check that the JIT resolves libm calls and preserves their rounding semantics on all
+# platforms, including the Windows aliases. `nobuiltin` prevents replacement by instructions.
+@testset "JIT libm libcalls" begin
+    unary = Dict{String, Function}()
+    unary_cases = (("rint", Float64, "double", 2.0), ("rintf", Float32, "float", 2f0),
+                   ("trunc", Float64, "double", 2.0), ("truncf", Float32, "float", 2f0),
+                   ("floor", Float64, "double", 2.0), ("floorf", Float32, "float", 2f0),
+                   ("ceil", Float64, "double", 3.0), ("ceilf", Float32, "float", 3f0))
+    for (name, T, llt, _) in unary_cases
+        unary[name] = @eval (x::$T) -> Base.llvmcall(($"""
             declare $llt @$name($llt)
             define $llt @entry($llt %x) {
                 %y = call $llt @$name($llt %x) nobuiltin
                 ret $llt %y
             }""", "entry"), $T, Tuple{$T}, x)
-        @test Base.invokelatest(f, T(2.25)) === expected
     end
-    for (name, T, llt, expected) in (("fmodf", Float32, "float", 1f0), ("powf", Float32, "float", 49f0))
-        f = @eval (x::$T, y::$T) -> Base.llvmcall(($"""
+    binary = Dict{String, Function}()
+    for (name, llt) in (("fmodf", "float"), ("powf", "float"))
+        binary[name] = @eval (x::Float32, y::Float32) -> Base.llvmcall(($"""
             declare $llt @$name($llt, $llt)
             define $llt @entry($llt %x, $llt %y) {
                 %r = call $llt @$name($llt %x, $llt %y) nobuiltin
                 ret $llt %r
-            }""", "entry"), $T, Tuple{$T, $T}, x, y)
-        args = name == "fmodf" ? (T(7), T(3)) : (T(7), T(2))
-        @test Base.invokelatest(f, args...) === expected
+            }""", "entry"), Float32, Tuple{Float32, Float32}, x, y)
     end
-    for (name, T, llt, expected) in (("fma", Float64, "double", 7.0), ("fmaf", Float32, "float", 7f0))
-        f = @eval (x::$T, y::$T, z::$T) -> Base.llvmcall(($"""
+    ternary = Dict{String, Function}()
+    for (name, T, llt) in (("fma", Float64, "double"), ("fmaf", Float32, "float"))
+        ternary[name] = @eval (x::$T, y::$T, z::$T) -> Base.llvmcall(($"""
             declare $llt @$name($llt, $llt, $llt)
             define $llt @entry($llt %x, $llt %y, $llt %z) {
                 %r = call $llt @$name($llt %x, $llt %y, $llt %z) nobuiltin
                 ret $llt %r
             }""", "entry"), $T, Tuple{$T, $T, $T}, x, y, z)
-        @test Base.invokelatest(f, T(2), T(3), T(1)) === expected
+    end
+
+    function call_libm(f, args, mode)
+        if mode === nothing
+            return Base.invokelatest(f, args...)
+        end
+        # Restore the mode before asserting; keep inputs opaque to inference.
+        Base.Rounding.setrounding_raw(typeof(first(args)), Base.Rounding.to_fenv(mode)) do
+            Base.invokelatest(f, map(Base.inferencebarrier, args)...)
+        end
+    end
+
+    function test_libcall(func_name, f, args, expected; mode=nothing)
+        @test call_libm(f, args, mode) === expected context=(; func_name, args, mode)
+    end
+
+    @testset "symbol resolution" begin
+        for (name, T, _, expected) in unary_cases
+            test_libcall(name, unary[name], (T(2.25),), expected)
+        end
+        for (name, args, expected) in (("fmodf", (7f0, 3f0), 1f0), ("powf", (7f0, 2f0), 49f0))
+            test_libcall(name, binary[name], args, expected)
+        end
+        for (name, T) in (("fma", Float64), ("fmaf", Float32))
+            test_libcall(name, ternary[name], (T(2), T(3), T(1)), T(7))
+        end
+    end
+
+    @testset "rounding semantics" begin
+        modes = (RoundUp, RoundDown, RoundToZero, RoundNearest)
+        @testset "rint/rintf" begin
+            expectations = ((RoundUp, 3, -2), (RoundDown, 2, -3),
+                            (RoundToZero, 2, -2), (RoundNearest, 2, -2))
+            # 2.5 also exercises ties-to-even.
+            for (name, T) in (("rint", Float64), ("rintf", Float32)),
+                (mode, positive, negative) in expectations, x in (T(2.25), T(2.5))
+                test_libcall(name, unary[name], (x,), T(positive); mode)
+                test_libcall(name, unary[name], (-x,), T(negative); mode)
+            end
+        end
+
+        @testset "trunc/truncf/floor/floorf/ceil/ceilf" begin
+            cases = (("trunc", Float64, -2, 2), ("truncf", Float32, -2, 2),
+                     ("floor", Float64, -3, 2), ("floorf", Float32, -3, 2),
+                     ("ceil", Float64, -2, 3), ("ceilf", Float32, -2, 3))
+            for (name, T, negative, positive) in cases, mode in modes
+                test_libcall(name, unary[name], (T(-2.25),), T(negative); mode)
+                test_libcall(name, unary[name], (T(2.25),), T(positive); mode)
+            end
+        end
+
+        @testset "fmodf/powf" begin
+            cases = (("fmodf", (-7f0, 3f0), -1f0), ("fmodf", (7f0, 3f0), 1f0),
+                     ("powf", (2f0, 10f0), 1024f0))
+            for mode in modes, (name, args, expected) in cases
+                test_libcall(name, binary[name], args, expected; mode)
+            end
+        end
+
+        @testset "fma/fmaf" begin
+            for (name, T) in (("fma", Float64), ("fmaf", Float32))
+                f = ternary[name]
+                e = eps(T)
+                test_libcall(name, f, (T(1) + e, T(1) - e, T(-1)), -e^2;
+                             mode=RoundNearest)
+                test_libcall(name, f, (floatmax(T), T(2), -floatmax(T)), floatmax(T);
+                             mode=RoundNearest)
+                # (1+e)^2 - 1 == 2e + e^2, exactly between 2e and nextfloat(2e)
+                two_e = 2 * e
+                for (mode, want) in ((RoundUp, nextfloat(two_e)), (RoundDown, two_e),
+                                     (RoundToZero, two_e), (RoundNearest, two_e))
+                    test_libcall(name, f, (T(1) + e, T(1) + e, T(-1)), want; mode)
+                end
+                # (1+3e)*(1+e) - 1 == 4e + 3e^2, three quarters of an ulp above 4e
+                four_e = 4 * e
+                for (mode, want) in ((RoundUp, nextfloat(four_e)), (RoundDown, four_e),
+                                     (RoundToZero, four_e), (RoundNearest, nextfloat(four_e)))
+                    test_libcall(name, f, (T(1) + 3 * e, T(1) + e, T(-1)), want; mode)
+                end
+            end
+        end
     end
 end
 
