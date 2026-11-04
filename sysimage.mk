@@ -10,6 +10,10 @@ ifeq ($(JULIA_COVERAGE_IMAGES),1)
 JULIA_SYSIMG_BUILD_FLAGS += $(JULIA_COVERAGE_IMAGE_FLAGS)
 endif
 
+# With SPLIT_SYSIMAGE=1, the heap of sys.$(SHLIB_EXT) is written to sys.ji beside it instead of
+# into the library.
+split_sysimage_ji = $(if $(and $(filter 1,$(SPLIT_SYSIMAGE)),$(filter o,$*)),$1)
+
 default: sysimg-$(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: sysimg-release sysimg-debug
 basecompiler-ji: $(build_private_libdir)/basecompiler.ji
@@ -174,12 +178,13 @@ $$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(buil
 		 JULIA_DEPOT_PATH=':' \
 		 JULIA_NUM_THREADS=1 \
 			$$(call spawn, $3) $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-$$* $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
+			$$(call split_sysimage_ji,--output-ji $$(call cygpath_w,$$(build_private_libdir)/sys$1.ji).tmp) \
 			$(bootstrap_julia_flags) \
 			--startup-file=no --warn-overwrite=yes --depwarn=error --sysimage $$(call cygpath_w,$$<) $$(call cygpath_w,$$(JULIAHOME)/contrib/generate_precompile.jl) $(JULIA_PRECOMPILE); then \
 		echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***'; \
 		false; \
 	fi )
-	@mv $$@.tmp $$@
+	@mv $$@.tmp $$@ $$(call split_sysimage_ji,&& mv $$(build_private_libdir)/sys$1.ji.tmp $$(build_private_libdir)/sys$1.ji)
 .SECONDARY: $$(build_private_libdir)/sys$1-o.a $(build_private_libdir)/sys$1-bc.a # request Make to keep these files around
 .SECONDARY: $$(build_private_libdir)/sysbase$1-o.a $(build_private_libdir)/sysbase$1-bc.a # request Make to keep these files around
 endef
