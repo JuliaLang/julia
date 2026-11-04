@@ -30,10 +30,6 @@ New language features
   operators. However, in a future version, there may be opt-in support to detect unannotated wrapping
   in the default operators ([#50790]).
 
-* `@sync`, `Threads.@threads` and `Experimental.@sync` blocks now scope a cancellation source
-  (see `Base.CancellationTokenSource`) over their children, so cancelling an enclosing scope
-  reaches everything spawned within, and the blocks' teardown awaits internal tasks per the
-  requested cancellation severity ([#60281]).
 * Support for Unicode 18 ([#63349]). The new subscripts `₝` (U+209D), `₞` (U+209E), `₟` (U+209F),
   and `𝿐` (U+1DFD0) can also be used as operator suffixes, accessible as `\_w`, `\_y`, `\_z`, and `\_pgamma`
   at the REPL ([#63505]).
