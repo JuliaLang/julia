@@ -100,9 +100,8 @@ The signals that have a named constant in `Base` can be watched as follows:
 | `Base.SIGWINCH` | yes        | yes        | yes     | none                                  |
 | `Base.SIGINFO`  | no         | yes        | no      | profile peek                          |
 
-Ctrl-C (`SIGINT`) interrupts running code through task cancellation (see
-[`CancellationToken`](@ref)), or exits a script. It can be observed but not intercepted, so
-that code relying on cancellation keeps working. If an intercepting condition's task cannot
+Ctrl-C (`SIGINT`) throws an [`InterruptException`](@ref) into running code, or exits a
+script. It can be observed but not intercepted. If an intercepting condition's task cannot
 run, for example because other code never yields, then on Unix Ctrl-\\ (`SIGQUIT`) still
 stops Julia, unless `SIGQUIT` is also intercepted.
 
@@ -153,7 +152,7 @@ mutable struct SignalCondition
             throw(ArgumentError("signal $signum cannot be watched"))
         end
         if intercept && signum == SIGINT
-            throw(ArgumentError("SIGINT cannot be intercepted, as Ctrl-C goes through task cancellation"))
+            throw(ArgumentError("SIGINT cannot be intercepted"))
         end
         this = new(ThreadSynchronizer(), true, false, signum, intercept)
         iolock_begin()

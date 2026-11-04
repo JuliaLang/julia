@@ -484,7 +484,7 @@ void jl_safepoint_defer_sigint(void)
     uv_mutex_unlock(&safepoint_lock);
 }
 
-int jl_safepoint_consume_sigint(void)
+int jl_safepoint_consume_sigint(void) JL_NOTSAFEPOINT
 {
     int has_signal = 0;
     uv_mutex_lock(&safepoint_lock);

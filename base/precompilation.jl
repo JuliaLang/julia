@@ -1390,7 +1390,7 @@ function precompile_for_loading(into::Module, names::Vector{Symbol})
     try
         _precompile_for_loading(into, names)
     catch err
-        err isa Union{InterruptException, Base.CancellationRequest} && rethrow()
+        err isa InterruptException && rethrow()
         @debug "Look-ahead precompilation failed, leaving it to `require`" exception=(err, catch_backtrace())
     end
     return

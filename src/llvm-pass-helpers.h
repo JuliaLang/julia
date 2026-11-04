@@ -194,6 +194,8 @@ namespace jl_well_known {
 
     // `jl_gc_alloc_typed`: allocates bytes.
     extern const WellKnownFunctionDescription GCAllocTyped;
+
+    // `jl_alloc_genericmemory_unchecked`: allocates a GenericMemory, leaving its length and
     // data uninitialized.
     extern const WellKnownFunctionDescription GCAllocGenericMemory;
 }

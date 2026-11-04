@@ -955,7 +955,7 @@ function trypopfirst!(W::IntrusiveLinkedListSynchronized)
     isempty(W) && return nothing
     lock(W.lock)
     try
-        q = waitqueue(W)
+        q = W.queue
         return isempty(q) ? nothing : popfirst!(q)
     finally
         unlock(W.lock)

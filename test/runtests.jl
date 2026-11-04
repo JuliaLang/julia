@@ -153,7 +153,7 @@ const longest_tests = [
     "Random", "abstractarray", "iterators", "core", "ranges", "LibGit2/libgit2",
     "FileWatching", "atomics", "math", "rounding", "apint", "JuliaSyntax",
     "Compiler/inference", "reducedim", "numbers", "misc", "broadcast", "REPL", "Profile",
-    "rational", "cancellation", "InteractiveUtils", "sets",
+    "rational", "InteractiveUtils", "sets",
 ]
 function expected_rank(test)
     rank = findfirst(name -> test == name || startswith(test, name * "/"), longest_tests)

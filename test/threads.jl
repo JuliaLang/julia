@@ -496,15 +496,6 @@ end
     # A timer or `@threadcall` started on a pool whose threads never sleep must still
     # get serviced by the event loop thread (#63882).
     script = """
-    # The ^C listener keeps the event loop alive, so the event loop thread never
-    # sleeps. Close it so the loop can go idle.
-    hooks = filter(f -> hasproperty(f, :listeners) && hasproperty(f, :cond) &&
-                        getproperty(f, :cond) isa Base.AsyncCondition, Base.atexit_hooks)
-    isdefined(Base, :start_sigint_listener) && length(hooks) != 1 && error("^C listener not found")
-    for f in hooks
-        ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
-        close(f.cond)
-    end
     const done = Threads.Atomic{Bool}(false)
     # keep the only default thread busy: it yields, but never sleeps
     spinner = Threads.@spawn :default begin

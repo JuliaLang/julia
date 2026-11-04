@@ -498,13 +498,6 @@ FORCE_INLINE size_t sweep_unlink_and_free_noaccount(bigval_t *v) JL_NOTSAFEPOINT
     return sz;
 }
 
-FORCE_INLINE void sweep_unlink_and_free(bigval_t *v) JL_NOTSAFEPOINT
-{
-    size_t sz = sweep_unlink_and_free_noaccount(v);
-    gc_num.freed += sz;
-    jl_atomic_store_relaxed(&gc_heap_stats.heap_size, jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - sz);
-}
-
 static uv_mutex_t gc_big_sweep_lock;
 
 // Sweep one thread's list of young big objects. Runs on any collector thread,

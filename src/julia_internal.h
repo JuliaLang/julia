@@ -1432,7 +1432,7 @@ void jl_safepoint_defer_sigint(void) JL_NOTSAFEPOINT;
 // Clear the sigint pending flag and disable the mechanism to deliver sigint.
 // Return `1` if the sigint should be delivered and `0` if there's no sigint
 // to be delivered.
-int jl_safepoint_consume_sigint(void) JL_CANSAFEPOINT;
+int jl_safepoint_consume_sigint(void) JL_NOTSAFEPOINT;
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 void jl_wake_io_loop_thread(void) JL_NOTSAFEPOINT;
 void jl_init_signal_watchers(uv_async_cb cb);

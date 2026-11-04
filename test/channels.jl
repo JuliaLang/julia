@@ -636,7 +636,7 @@ end
     @test wait(t) === nothing
     waiter = @task wait(t)
     yield(waiter)
-    @test timedwait(() -> !isempty(t.cond.waitq) && first(t.cond.waitq).task === waiter, 10) === :ok
+    @test timedwait(() -> !isempty(t.cond.waitq) && first(t.cond.waitq) === waiter, 10) === :ok
     close(t)
     @test_throws TaskFailedException wait(waiter)
     @test waiter.result isa EOFError
@@ -803,8 +803,7 @@ end
                     println("ready")
                     sleep(600)
                 catch e
-                    # The interrupt cancels the rest of this statement, so avoid cancellation points.
-                    Core.println(e isa Base.CancellationRequest ? "interrupted" : "unexpected")
+                    Core.println(e isa InterruptException ? "interrupted" : "unexpected")
                 end
                 """
             errfile = tempname()

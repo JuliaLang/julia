@@ -1332,25 +1332,6 @@ set_object_field_barrier(r, x) = (r[] = x; nothing)
     check_slots(get_llvm(set_object_field_barrier, Tuple{Base.RefValue{T},T}, true, false, false), 11)
 end
 
-# Cancellation-token clears and rebinds must barrier the slot before storing it.
-cancellation_binding_barrier(src) = Core.cancellation_point!(src)
-@testset "cancellation binding barriers" begin
-    ir = get_llvm(cancellation_binding_barrier, Tuple{Union{Nothing,Core.CancellationTokenSource}}, true, false, false)
-    lines = split(ir, '\n')
-    barriers = findall(line -> occursin("call void", line) && occursin("@julia.field_write_barrier.p11", line), lines)
-    @test length(barriers) == 2
-    casts = Dict(m.captures[1] => m.captures[2]
-                 for m in eachmatch(r"(%[^ ,]+) = addrspacecast ptr (%[^ ,]+) to ptr addrspace\(11\)", ir))
-    for i in barriers
-        operands = match(r"@julia.field_write_barrier.p11\(ptr addrspace\(10\) [^,]+, ptr addrspace\(11\) ([^,]+), ptr addrspace\(10\) (.*)\)", lines[i])
-        @test operands !== nothing
-        operands === nothing && continue
-        slot, child = operands.captures
-        destination = haskey(casts, slot) ? "ptr $(casts[slot])" : "ptr addrspace(11) $slot"
-        @test occursin("store atomic ptr addrspace(10) $child, $destination", lines[i + 1])
-    end
-end
-
 # Test phi node codegen for union types with inline roots
 function union_phi_inline_roots(x::Bool)
     if x
