@@ -588,8 +588,7 @@ read!(filename::AbstractString, a) = open(io->read!(io, a), convert(String, file
 # user-extended methods that need not accept a `cancel` keyword. The
 # resolved token therefore gates *between* those calls, via explicit
 # cancellation points, while any parks inside them run under the ambient
-# scope. For the same reason, `cancel` is only forwarded to such methods when
-# the caller passed it explicitly.
+# scope.
 
 """
     readuntil(stream::IO, delim; keep::Bool = false)
@@ -622,11 +621,9 @@ julia> rm("my_file.txt")
 """
 readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
 readuntil(stream::IO, delim::UInt8; cancel::CancelTokenArg=DEFAULT_CANCEL, kw...) =
-    _unsafe_take!(cancel === DEFAULT_CANCEL ? copyuntil(IOBuffer(sizehint=16), stream, delim; kw...) :
-                                              copyuntil(IOBuffer(sizehint=16), stream, delim; cancel, kw...))
+    _unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; cancel, kw...))
 readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; cancel::CancelTokenArg=DEFAULT_CANCEL, kw...) =
-    takestring!(cancel === DEFAULT_CANCEL ? copyuntil(IOBuffer(sizehint=16), stream, delim; kw...) :
-                                            copyuntil(IOBuffer(sizehint=16), stream, delim; cancel, kw...))
+    takestring!(copyuntil(IOBuffer(sizehint=16), stream, delim; cancel, kw...))
 readuntil(stream::IO, delim::T; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) where T =
     _copyuntil(Vector{T}(), stream, delim, keep, resolve_cancel_token(cancel))
 
@@ -710,8 +707,7 @@ function readline(filename::AbstractString; keep::Bool=false, cancel::CancelToke
     return open(io -> readline(io; keep, cancel=tok), filename)
 end
 readline(s::IO=stdin; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    takestring!(cancel === DEFAULT_CANCEL ? copyline(IOBuffer(sizehint=16), s; keep) :
-                                            copyline(IOBuffer(sizehint=16), s; keep, cancel))
+    takestring!(copyline(IOBuffer(sizehint=16), s; keep, cancel))
 
 """
     copyline(out::IO, io::IO=stdin; keep::Bool=false)
@@ -757,8 +753,7 @@ end
 # fallback to optimized methods for IOBuffer in iobuffer.jl
 function copyline(out::IO, s::IO; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
     if keep
-        return cancel === DEFAULT_CANCEL ? copyuntil(out, s, 0x0a; keep=true) :
-                                           copyuntil(out, s, 0x0a; keep=true, cancel)
+        return copyuntil(out, s, 0x0a; keep=true, cancel)
     else
         tok = resolve_cancel_token(cancel)
         @cancel_check tok
@@ -1117,8 +1112,7 @@ end
 
 function copyuntil(out::IO, s::IO, delim::AbstractChar; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
     if delim ≤ '\x7f'
-        return cancel === DEFAULT_CANCEL ? copyuntil(out, s, delim % UInt8; keep) :
-                                           copyuntil(out, s, delim % UInt8; keep, cancel)
+        return copyuntil(out, s, delim % UInt8; keep, cancel)
     end
     tok = resolve_cancel_token(cancel)
     @cancel_check tok
@@ -1246,16 +1240,14 @@ function copyuntil(out::IO, io::IO, target::AbstractString; keep::Bool=false, ca
     isnothing(x) && return out
     c, rest = x
     if isempty(rest) && c <= '\x7f'
-        return cancel === DEFAULT_CANCEL ? copyuntil(out, io, c % UInt8; keep) :
-                                           copyuntil(out, io, c % UInt8; keep, cancel)
+        return copyuntil(out, io, c % UInt8; keep, cancel)
     end
     # convert String to a utf8-byte-iterator
     if !(target isa String) && !(target isa SubString{String})
         target = String(target)
     end
     target = codeunits(target)::AbstractVector
-    return cancel === DEFAULT_CANCEL ? copyuntil(out, io, target; keep) :
-                                       copyuntil(out, io, target; keep, cancel)
+    return copyuntil(out, io, target; keep, cancel)
 end
 
 # like the vector copyuntil below: without the `cancel` keyword here, a
@@ -1364,9 +1356,9 @@ struct EachLine{IOT <: IO}
     stream::IOT
     ondone::Function
     keep::Bool
-    cancel::CancelTokenArg
+    cancel::MaybeToken
     EachLine(stream::IO=stdin; ondone::Function=()->nothing, keep::Bool=false,
-             cancel::CancelTokenArg=DEFAULT_CANCEL) =
+             cancel::MaybeToken=nothing) =
         new{typeof(stream)}(stream, ondone, keep, cancel)
 end
 
@@ -1404,22 +1396,19 @@ julia> rm("my_file.txt");
        Julia 1.8 is required to use `Iterators.reverse` or `last` with `eachline` iterators.
 """
 function eachline(stream::IO=stdin; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
-    EachLine(stream; keep, cancel)::EachLine
+    EachLine(stream; keep, cancel=resolve_cancel_token(cancel))::EachLine
 end
 
 function eachline(filename::AbstractString; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
     s = open(filename)
-    EachLine(s; ondone=()->close(s), keep, cancel)::EachLine
+    EachLine(s; ondone=()->close(s), keep, cancel=resolve_cancel_token(cancel))::EachLine
 end
 
 function iterate(itr::EachLine, state=nothing)
     # token-gate between lines (generic-IO cancel convention)
-    cancel = itr.cancel
-    @cancel_check resolve_cancel_token(cancel)
+    @cancel_check itr.cancel
     eof(itr.stream) && return (itr.ondone(); nothing)
-    line = cancel === DEFAULT_CANCEL ? readline(itr.stream; keep=itr.keep) :
-                                       readline(itr.stream; keep=itr.keep, cancel)
-    (line, nothing)
+    (readline(itr.stream; keep=itr.keep, cancel=itr.cancel), nothing)
 end
 
 eltype(::Type{<:EachLine}) = String
