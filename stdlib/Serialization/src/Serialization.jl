@@ -1151,7 +1151,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_dict(s, t)
     end
     t = desertag(b)::DataType
-    if ismutabletype(t) && length(t.types) > 0  # manual specialization of fieldcount
+    if ismutabletype(t) && fieldcount(t) > 0
         slot = s.counter; s.counter += 1
         push!(s.pending_refs, slot)
     end
@@ -1849,7 +1849,7 @@ end
 
 # default DataType deserializer
 function deserialize(s::AbstractSerializer, t::DataType)
-    nf = length(t.types)
+    nf = fieldcount(t)
     if isprimitivetype(t)
         return read(s.io, t)
     elseif ismutabletype(t)

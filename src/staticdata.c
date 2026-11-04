@@ -152,9 +152,18 @@ static void destroy_query_cache(jl_query_cache *cache) JL_NOTSAFEPOINT
 extern "C" {
 #endif
 
+// TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
 #define NUM_TAGS    6
+
+// Whether a package image stores the supertypes it leaves unset (`type_supers`)
+// for the loader to publish, instead of leaving them to `jl_datatype_compute_super`
+// on first demand. Off: storing them grew the images and slowed loading slightly,
+// and saved no measurable time after loading.
+#ifndef STORE_TYPE_SUPERS
+#define STORE_TYPE_SUPERS 0
+#endif
 
 // An array of special references that need to be restored from the sysimg
 static void get_tags(jl_value_t **tags[NUM_TAGS])
@@ -188,7 +197,6 @@ static htable_t nullptrs;
 static arraylist_t serialization_queue;
 static arraylist_t layout_table;     // cache of `position(s)` for each `id` in `serialization_order`
 static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_reachable
-static arraylist_t deferred_supers;  // deferred datatype super fields, handled by jl_serialize_reachable once the pre-order recursion has unwound
 
 // Track image locations and some associated metadata for all loaded sys / pkgimages.
 // (the data of range i is an image_metadata_t* for build_ids[i])
@@ -379,7 +387,6 @@ typedef struct {
     arraylist_t relocs_list;    // a list of (location, target) pairs, see description at top
     arraylist_t gctags_list;    //      "
     arraylist_t uniquing_types; // a list of locations that reference types that must be de-duplicated
-    arraylist_t uniquing_super; // a list of datatypes, used in super fields, that need to be marked in uniquing_types once they are reached, for handling unique-ing of them on deserialization
     arraylist_t uniquing_objs;  // a list of locations that reference non-types that must be de-duplicated
     arraylist_t fixup_types;    // a list of locations of types requiring (re)caching
     arraylist_t fixup_objs;     // a list of locations of objects requiring (re)caching
@@ -395,6 +402,7 @@ typedef struct {
     jl_array_t *link_ids_gvars;
     jl_array_t *link_ids_external_fnvars;
     jl_array_t *method_roots_list;
+    jl_array_t *type_supers;    // (type, supertype) pairs, for the `super` left unset in the image
     htable_t method_roots_index;
     uint64_t worklist_key;
     jl_query_cache *query_cache;
@@ -724,6 +732,27 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
     jl_queue_for_serialization_(s, (jl_value_t*)t, 1, immediate);
     const jl_datatype_layout_t *layout = t->layout;
+
+    if ((s->incremental || jl_options.trim) && jl_is_datatype(v)) {
+        jl_datatype_t *dt = (jl_datatype_t*)v;
+        jl_datatype_t *super = dt->super;
+        // leave an instantiation's super unset (unless it already points outside
+        // the image): a copy of this type in the loading process may have it unset
+        // (deferred), and the loader cannot uniquify it in place. When enabled
+        // (`STORE_TYPE_SUPERS`), it is stored on the side (`type_supers`), and the
+        // loader publishes it once every type is cached, unless
+        // `jl_datatype_compute_super` filled it on demand meanwhile. Otherwise that
+        // computes it on first demand. A trimmed image drops it too, so that the
+        // supertypes nothing else reaches are trimmed
+        if (super != NULL && (!s->incremental || !jl_object_in_image((jl_value_t*)super)) &&
+                (jl_value_t*)dt != jl_unwrap_unionall(dt->name->wrapper)) {
+            record_field_change((jl_value_t**)&dt->super, NULL);
+            if (s->type_supers) {
+                jl_array_ptr_1d_push(s->type_supers, (jl_value_t*)dt);
+                jl_array_ptr_1d_push(s->type_supers, (jl_value_t*)super);
+            }
+        }
+    }
 
     if (!recursive)
         goto done_fields;
@@ -1125,25 +1154,14 @@ done_fields: ;
     assert(serialization_queue.len < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many items to serialize");
     *bp = to_seroder_entry(idx);
 
-    // DataType is very unusual, in that some of the fields need to be pre-order, and some
-    // (notably super) must not be (even if `jl_queue_for_serialization_` would otherwise
-    // try to promote itself to be immediate)
+    // DataType is very unusual, in that the parameters need to be pre-order (handled
+    // above), while the remaining fields are post-order
     if (s->incremental && jl_is_datatype(v) && immediate && recursive) {
-        jl_datatype_t *dt = (jl_datatype_t*)v;
-        // do not handle the super field now: the supertype's parameters can reach back to
-        // objects that are still on the recursion stack (e.g. `struct Baz{T} <: Bar{Foo{Baz{T}}} end`),
-        // which would order the supertype before its own parameters in the queue. Defer it
-        // until the recursion unwinds; any forward reference this creates in the image is
-        // handled at load time by the uniquing_super/delay_list machinery.
-        if (dt->super && jl_needs_serialization(s, (jl_value_t*)dt->super))
-            arraylist_push(&deferred_supers, (void*)dt->super);
         immediate = 0;
         char *data = (char*)jl_data_ptr(v);
         size_t i, np = layout->npointers;
         for (i = 0; i < np; i++) {
             uint32_t ptr = jl_ptr_offset(t, i);
-            if (ptr * sizeof(jl_value_t*) == offsetof(jl_datatype_t, super))
-                continue; // skip the super field, since it might not be quite validly ordered
             int mutabl = 1;
             jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], mutabl);
             jl_queue_for_serialization_(s, fld, 1, immediate);
@@ -1215,15 +1233,7 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
 static void jl_serialize_reachable(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     size_t i, prevlen = 0;
-    while (1) {
-        // handle deferred super fields now: the recursion stack is unwound here, so
-        // everything reachable through their parameters is already validly ordered
-        while (deferred_supers.len) {
-            jl_value_t *super = (jl_value_t*)deferred_supers.items[--deferred_supers.len];
-            jl_queue_for_serialization_(s, super, 1, 1);
-        }
-        if (object_worklist.len == 0)
-            break;
+    while (object_worklist.len) {
         // reverse!(object_worklist.items, prevlen:end);
         // prevlen is the index of the first new object
         size_t mid = prevlen + (object_worklist.len - prevlen) / 2;
@@ -1624,18 +1634,8 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     write_pointerfield(s, (jl_value_t*)mi->sparam_vals);
                     continue;
                 }
-                else if (jl_is_datatype(v)) {
-                    // iterate in reverse, so that the element swapped in from the back upon
-                    // removal is always one we have already examined
-                    for (size_t i = s->uniquing_super.len; i > 0; i--) {
-                        if (s->uniquing_super.items[i - 1] == (void*)v) {
-                            s->uniquing_super.items[i - 1] = arraylist_pop(&s->uniquing_super);
-                            arraylist_push(&s->uniquing_types, (void*)(uintptr_t)(reloc_offset|3));
-                        }
-                    }
-                }
                 else {
-                    assert(jl_is_datatype_singleton(t) && "unreachable");
+                    assert((jl_is_datatype(v) || jl_is_datatype_singleton(t)) && "unreachable");
                 }
             }
             else if (needs_recaching(v, s->query_cache)) {
@@ -2090,9 +2090,6 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                         ios_write(s->const_data, (char*)&dyn, sizeof(jl_fielddescdyn_t));
                     }
                 }
-                void *superidx = dt->super ? ptrhash_get(&serialization_order, dt->super) : HT_NOTFOUND;
-                if (s->incremental && superidx != HT_NOTFOUND && from_seroder_entry(superidx) > item && needs_uniquing((jl_value_t*)dt->super, s->query_cache))
-                    arraylist_push(&s->uniquing_super, dt->super);
             }
             else if (jl_is_typename(v)) {
                 assert(f == s->s);
@@ -2136,7 +2133,6 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
             }
         }
     }
-    assert(s->uniquing_super.len == 0);
 }
 
 // In deserialization, create Symbols and set up the
@@ -3286,7 +3282,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     content_dedup_max = 0;
     htable_new(&nullptrs, 0);
     arraylist_new(&object_worklist, 0);
-    arraylist_new(&deferred_supers, 0);
     arraylist_new(&serialization_queue, 0);
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
     ios_mem(&sysimg, 0);
@@ -3310,7 +3305,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_new(&s.relocs_list, 0);
     arraylist_new(&s.gctags_list, 0);
     arraylist_new(&s.uniquing_types, 0);
-    arraylist_new(&s.uniquing_super, 0);
     arraylist_new(&s.uniquing_objs, 0);
     arraylist_new(&s.fixup_types, 0);
     arraylist_new(&s.fixup_objs, 0);
@@ -3320,11 +3314,14 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     s.link_ids_gvars = jl_alloc_array_1d(jl_array_int32_type, 0);
     s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_int32_type, 0);
     s.method_roots_list = NULL;
+    s.type_supers = NULL;
     htable_new(&s.method_roots_index, 0);
     jl_value_t **_tags[NUM_TAGS];
     jl_value_t ***tags = s.incremental ? NULL : _tags;
     if (worklist) {
         s.method_roots_list = jl_alloc_vec_any(0);
+        if (STORE_TYPE_SUPERS)
+            s.type_supers = jl_alloc_vec_any(0);
         s.worklist_key = jl_worklist_key(worklist);
     }
     else {
@@ -3389,6 +3386,17 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         // the rest and add some internal root arrays.
         // step 1.3: include some other special roots
         if (s.incremental) {
+            // Queue the stored supertypes, now that nothing is on the recursion stack
+            // (a supertype's parameters can reach back to the type). They can reach
+            // more types whose supertypes are stored, so this repeats until the list
+            // stops growing.
+            if (s.type_supers) {
+                for (i = 1; i < jl_array_nrows(s.type_supers); i += 2) {
+                    jl_queue_for_serialization(&s, jl_array_ptr_ref(s.type_supers, i));
+                    jl_serialize_reachable(&s);
+                }
+                jl_queue_for_serialization(&s, s.type_supers);
+            }
             // Queue the new roots array
             jl_queue_for_serialization(&s, s.method_roots_list);
             jl_serialize_reachable(&s);
@@ -3546,6 +3554,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_write_value(&s, extext_records);
             jl_write_value(&s, new_ext);
             jl_write_value(&s, s.method_roots_list);
+            jl_write_value(&s, s.type_supers);
         }
         write_uint32(f, jl_array_len(s.link_ids_gctags));
         ios_write(f, (char*)jl_array_data(s.link_ids_gctags, uint32_t), jl_array_len(s.link_ids_gctags) * sizeof(uint32_t));
@@ -3560,12 +3569,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 
     assert(object_worklist.len == 0);
     arraylist_free(&object_worklist);
-    assert(deferred_supers.len == 0);
-    arraylist_free(&deferred_supers);
     arraylist_free(&serialization_queue);
     arraylist_free(&layout_table);
     arraylist_free(&s.uniquing_types);
-    arraylist_free(&s.uniquing_super);
     arraylist_free(&s.uniquing_objs);
     arraylist_free(&s.fixup_types);
     arraylist_free(&s.fixup_objs);
@@ -4346,7 +4352,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
     assert(!ios_eof(f));
     s.s = f;
-    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_extext_records = 0, offset_new_ext = 0, offset_method_roots_list = 0;
+    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_extext_records = 0, offset_new_ext = 0, offset_method_roots_list = 0, offset_type_supers = 0;
+    jl_array_t *type_supers = NULL; // in the image
     if (!s.incremental) {
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
@@ -4384,6 +4391,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         offset_extext_records = jl_read_offset(&s);
         offset_new_ext = jl_read_offset(&s);
         offset_method_roots_list = jl_read_offset(&s);
+        offset_type_supers = jl_read_offset(&s);
     }
     s.buildid_depmods_idxs = depmod_to_imageidx(depmods);
     size_t nlinks_gctags = read_uint32(f);
@@ -4415,6 +4423,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         *extext_records = (jl_array_t*)jl_delayed_reloc(&s, offset_extext_records);
         (void)(jl_array_t*)jl_delayed_reloc(&s, offset_new_ext);
         *method_roots_list = (jl_array_t*)jl_delayed_reloc(&s, offset_method_roots_list);
+        type_supers = (jl_array_t*)jl_delayed_reloc(&s, offset_type_supers);
         *internal_methods = jl_alloc_vec_any(0);
     }
     s.s = NULL;
@@ -4461,122 +4470,102 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     //   to the external object.
     arraylist_t cleanup_list;
     arraylist_new(&cleanup_list, 0);
-    arraylist_t delay_list;
-    arraylist_new(&delay_list, 0);
     JL_LOCK(&typecache_lock); // Might GC--prevent other threads from changing any type caches while we inspect them all
-    for (size_t i = 0; i < s.uniquing_types.len; i++) {
-        uintptr_t item = (uintptr_t)s.uniquing_types.items[i];
-        // check whether we are operating on the typetag
-        // (needing to ignore GC bits) or a regular field
-        // and check whether this is a gvar index
-        int tag = (item & 3);
-        item &= ~(uintptr_t)3;
-        uintptr_t *pfld;
-        jl_value_t **obj, *newobj;
-        if (tag == 3) {
-            obj = (jl_value_t**)(image_base + item);
-            pfld = NULL;
-            for (size_t i = 0; i < delay_list.len; i += 2) {
-                if (obj == (jl_value_t **)delay_list.items[i + 0]) {
-                    pfld = (uintptr_t*)delay_list.items[i + 1];
-                    delay_list.items[i + 1] = arraylist_pop(&delay_list);
-                    delay_list.items[i + 0] = arraylist_pop(&delay_list);
-                    break;
-                }
-            }
-            assert(pfld);
-        }
-        else if (tag == 2) {
-            if (image->gvars_base == NULL)
-                continue;
-            item >>= 2;
-            assert(item < s.gvar_record->size / sizeof(reloc_t));
-            pfld = sysimg_gvars(image->gvars_base, image->gvars_offsets, item);
-            obj = *(jl_value_t***)pfld;
-        }
-        else {
-            pfld = (uintptr_t*)(image_base + item);
-            if (tag == 1)
-                obj = (jl_value_t**)jl_typeof(jl_valueof(pfld));
-            else
+    // the new types wait in a region until they are complete, with whatever
+    // the lookups build meanwhile that mentions them
+    jl_deferred_typecache_t region;
+    jl_typecache_region_begin(&region);
+    JL_TRY {
+        for (size_t i = 0; i < s.uniquing_types.len; i++) {
+            uintptr_t item = (uintptr_t)s.uniquing_types.items[i];
+            // check whether we are operating on the typetag
+            // (needing to ignore GC bits) or a regular field
+            // and check whether this is a gvar index
+            int tag = (item & 3);
+            item &= ~(uintptr_t)3;
+            uintptr_t *pfld;
+            jl_value_t **obj, *newobj;
+            assert(tag != 3);
+            if (tag == 2) {
+                if (image->gvars_base == NULL)
+                    continue;
+                item >>= 2;
+                assert(item < s.gvar_record->size / sizeof(reloc_t));
+                pfld = sysimg_gvars(image->gvars_base, image->gvars_offsets, item);
                 obj = *(jl_value_t***)pfld;
-            if ((char*)obj > (char*)pfld) {
-                // this must be the super field
-                assert(tag == 0);
-                arraylist_push(&delay_list, obj);
-                arraylist_push(&delay_list, pfld);
-                ptrhash_put(&new_dt_objs, (void*)obj, obj); // mark obj as invalid
-                *pfld = (uintptr_t)NULL;
-                continue;
-            }
-        }
-        uintptr_t otyp = jl_typetagof(obj);   // the original type of the object that was written here
-        assert(image_base < (char*)obj && (char*)obj <= image_base + sizeof_sysimg);
-        if (otyp == jl_datatype_tag << 4) {
-            jl_datatype_t *dt = (jl_datatype_t*)obj[0], *newdt;
-            if (jl_is_datatype(dt)) {
-                newdt = dt; // already done
             }
             else {
-                dt = (jl_datatype_t*)obj;
-                arraylist_push(&cleanup_list, (void*)obj);
-                ptrhash_remove(&new_dt_objs, (void*)obj); // unmark obj as invalid before must_be_new_dt
-                if (must_be_new_dt((jl_value_t*)dt, &new_dt_objs, image_base, sizeof_sysimg))
-                    newdt = NULL;
+                pfld = (uintptr_t*)(image_base + item);
+                if (tag == 1)
+                    obj = (jl_value_t**)jl_typeof(jl_valueof(pfld));
                 else
-                    newdt = jl_lookup_cache_type_(dt);
-                if (newdt == NULL) {
-                    // make a non-owned copy of obj so we don't accidentally
-                    // assume this is the unique copy later
-                    newdt = jl_new_uninitialized_datatype();
-                    jl_astaggedvalue(newdt)->bits.gc = GC_OLD;
-                    // leave most fields undefined for now, but we may need instance later,
-                    // and we overwrite the name field (field 0) now so preserve it too
-                    if (dt->instance) {
-                        if (dt->instance == jl_nothing)
-                            dt->instance = jl_gc_permobj(ct->ptls, 0, newdt, 0);
-                        newdt->instance = dt->instance;
-                    }
-                    static_assert(offsetof(jl_datatype_t, name) == 0, "");
-                    newdt->name = dt->name;
-                    ptrhash_put(&new_dt_objs, (void*)newdt, dt);
+                    obj = *(jl_value_t***)pfld;
+                // uniqued objects are serialized ahead of every reference to them
+                assert((char*)obj < (char*)pfld);
+            }
+            uintptr_t otyp = jl_typetagof(obj);   // the original type of the object that was written here
+            assert(image_base < (char*)obj && (char*)obj <= image_base + sizeof_sysimg);
+            if (otyp == jl_datatype_tag << 4) {
+                jl_datatype_t *dt = (jl_datatype_t*)obj[0], *newdt;
+                if (jl_is_datatype(dt)) {
+                    newdt = dt; // already done
                 }
                 else {
+                    dt = (jl_datatype_t*)obj;
+                    arraylist_push(&cleanup_list, (void*)obj);
+                    // adopt the type with this key if there is one, else a
+                    // non-owned copy of obj (so we don't accidentally assume this is
+                    // the unique copy later), recorded in the region so that a type
+                    // instantiated by a later lookup (through a lazy supertype) finds
+                    // it. Its parameters are already unique (they precede it), so it
+                    // is ready for lookups and for subtyping; `types` may still reach
+                    // forward into the image, so it is set after the loop
+                    static_assert(offsetof(jl_datatype_t, name) == 0, "");
+                    int isnew;
+                    newdt = jl_lookup_or_defer_type_(dt, &isnew);
+                    if (isnew)
+                        ptrhash_put(&new_dt_objs, (void*)newdt, dt);
                     assert(newdt->hash == dt->hash);
+                    obj[0] = (jl_value_t*)newdt;
                 }
-                obj[0] = (jl_value_t*)newdt;
+                newobj = (jl_value_t*)newdt;
             }
-            newobj = (jl_value_t*)newdt;
+            else {
+                assert(!(image_base < (char*)otyp && (char*)otyp <= image_base + sizeof_sysimg));
+                newobj = ((jl_datatype_t*)otyp)->instance;
+                assert(newobj && newobj != jl_nothing);
+                arraylist_push(&cleanup_list, (void*)obj);
+            }
+            if (tag == 1)
+                *pfld = (uintptr_t)newobj | GC_OLD_MARKED | GC_IN_IMAGE;
+            else
+                *pfld = (uintptr_t)newobj;
+            assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg));
+            assert(jl_typetagis(obj, otyp));
         }
-        else {
-            assert(!(image_base < (char*)otyp && (char*)otyp <= image_base + sizeof_sysimg));
-            newobj = ((jl_datatype_t*)otyp)->instance;
-            assert(newobj && newobj != jl_nothing);
-            arraylist_push(&cleanup_list, (void*)obj);
+        // now that everything the field types reach is unique, publish them into
+        // their final newdt memory location (unless computed lazily meanwhile)
+        void **table = new_dt_objs.table;
+        for (size_t i = 0; i < new_dt_objs.size; i += 2) {
+            void *dt = table[i + 1];
+            if (dt != HT_NOTFOUND) {
+                jl_datatype_t *newdt = (jl_datatype_t*)table[i];
+                assert(*(void**)dt == (void*)newdt);
+                jl_svec_t *types = ((jl_datatype_t*)dt)->types;
+                if (types != NULL)
+                    jl_publish_fieldtypes(newdt, types);
+            }
         }
-        if (tag == 1)
-            *pfld = (uintptr_t)newobj | GC_OLD_MARKED | GC_IN_IMAGE;
-        else
-            *pfld = (uintptr_t)newobj;
-        assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg));
-        assert(jl_typetagis(obj, otyp));
+        // the layouts of the types that mention them, which may fail, before
+        // the other threads are suspended
+        jl_typecache_region_layouts(&region);
     }
-    assert(delay_list.len == 0);
-    arraylist_free(&delay_list);
-    // now that all the fields of dt are assigned and unique, copy them into
-    // their final newdt memory location: this ensures we do not accidentally
-    // think this pkg image has the singular unique copy of it
-    void **table = new_dt_objs.table;
-    for (size_t i = 0; i < new_dt_objs.size; i += 2) {
-        void *dt = table[i + 1];
-        if (dt != HT_NOTFOUND) {
-            jl_datatype_t *newdt = (jl_datatype_t*)table[i];
-            jl_typename_t *name = newdt->name;
-            static_assert(offsetof(jl_datatype_t, name) == 0, "");
-            assert(*(void**)dt == (void*)newdt);
-            *newdt = *(jl_datatype_t*)dt; // copy the datatype fields (except field 1, which we corrupt above)
-            newdt->name = name;
-        }
+    JL_CATCH {
+        // the image is abandoned: drop its new types, with what mentions them
+        jl_typecache_region_end(&region, 0);
+        arraylist_free(&cleanup_list);
+        htable_free(&new_dt_objs);
+        jl_rethrow();
     }
     // we should never see these pointers again, so scramble their memory, so any attempt to look at them crashes
     for (size_t i = 0; i < cleanup_list.len; i++) {
@@ -4592,19 +4581,35 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     arraylist_grow(&cleanup_list, -cleanup_list.len);
     // finally cache all our new types now
     jl_safepoint_suspend_all_threads(ct); // past this point, it is now not safe to observe the intermediate states on other threads via reflection, so temporarily pause those
-    for (size_t i = 0; i < new_dt_objs.size; i += 2) {
-        void *dt = table[i + 1];
-        if (dt != HT_NOTFOUND) {
-            jl_datatype_t *newdt = (jl_datatype_t*)table[i];
-            jl_cache_type_(newdt);
+    { JL_TRY {
+        jl_typecache_region_end(&region, 1);
+        for (size_t i = 0; i < s.fixup_types.len; i++) {
+            uintptr_t item = (uintptr_t)s.fixup_types.items[i];
+            jl_value_t *obj = (jl_value_t*)(image_base + item);
+            assert(jl_is_datatype(obj));
+            jl_cache_type_((jl_datatype_t*)obj);
+        }
+        // publish the stored supertypes now that every type they reach is cached,
+        // keeping any computed on demand meanwhile (`jl_datatype_compute_super`)
+        if (type_supers) {
+            for (size_t i = 0; i < jl_array_nrows(type_supers); i += 2) {
+                jl_datatype_t *dt = (jl_datatype_t*)jl_array_ptr_ref(type_supers, i);
+                jl_datatype_t *super = (jl_datatype_t*)jl_array_ptr_ref(type_supers, i + 1);
+                _Atomic(jl_datatype_t*) *superp = (_Atomic(jl_datatype_t*)*)&dt->super;
+                jl_datatype_t *unset = NULL;
+                jl_gc_wb(dt, (void*)superp, super);
+                jl_atomic_cmpswap(superp, &unset, super);
+            }
         }
     }
-    for (size_t i = 0; i < s.fixup_types.len; i++) {
-        uintptr_t item = (uintptr_t)s.fixup_types.items[i];
-        jl_value_t *obj = (jl_value_t*)(image_base + item);
-        assert(jl_is_datatype(obj));
-        jl_cache_type_((jl_datatype_t*)obj);
-    }
+    JL_CATCH {
+        // the region is closed, but the other threads must not stay suspended
+        JL_UNLOCK(&typecache_lock); // Might GC
+        jl_safepoint_resume_all_threads(ct);
+        arraylist_free(&cleanup_list);
+        htable_free(&new_dt_objs);
+        jl_rethrow();
+    } }
     JL_UNLOCK(&typecache_lock); // Might GC
     jl_safepoint_resume_all_threads(ct); // TODO: move this later to also protect MethodInstance allocations, but we would need to acquire all jl_specializations_get_linfo and jl_module_globalref locks, which is hard
     // Perform fixups: things like updating world ages, inserting methods & specializations, etc.

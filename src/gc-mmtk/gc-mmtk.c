@@ -21,6 +21,7 @@ extern "C" {
 // ========================================================================= //
 
 extern jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
+extern jl_array_t *jl_typecache_region_list JL_GLOBALLY_ROOTED;
 extern const unsigned pool_sizes[];
 extern jl_mutex_t finalizers_lock;
 
@@ -731,6 +732,8 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
 
     // FIXME: transitively pinning for now, should be removed after we add moving Immix
     add_node_to_tpinned_roots_buffer(closure, &tpinned_buf, &tpinned_len, precompile_field_replace);
+    // the types region keys its entries by address
+    add_node_to_tpinned_roots_buffer(closure, &tpinned_buf, &tpinned_len, jl_typecache_region_list);
 
     // types recorded by the allocation profiler
     alloc_profile_root_env_t alloc_profile_env = {closure, &tpinned_buf, &tpinned_len};

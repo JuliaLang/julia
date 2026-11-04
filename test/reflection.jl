@@ -1486,6 +1486,7 @@ end
 @test !Base.ismutationfree(Vector{UInt64})
 
 @test Base.ismutationfree(Type{Union{}})
+@test Base.ismutationfree(typeof(Type{Int}))
 
 @test !Base.ismutationfree(Core.SimpleVector)
 

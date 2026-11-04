@@ -296,7 +296,7 @@ end
 function foo_apply_apply_type_svec()
     A = (Tuple, Float32)
     B = Tuple{Float32, Float32}
-    Core.apply_type(A..., B.types...)
+    Core.apply_type(A..., B.parameters...)
 end
 @test fully_eliminated(foo_apply_apply_type_svec, Tuple{}; retval=NTuple{3, Float32})
 
