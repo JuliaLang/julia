@@ -11469,10 +11469,14 @@ static void init_jit_functions(void)
     add_named_global(jlunlockfield_func, &jl_unlock_field);
     add_named_global(jlgetabiconverter_func, &jl_get_abi_converter);
 
-    jl_get_pgcstack_func_t get_pgcstack;
-    jl_pgcstack_key_t pgcstack_key;
-    jl_pgcstack_getkey(&get_pgcstack, &pgcstack_key);
-    add_named_global("jl_get_pgcstack_resolved", get_pgcstack);
+    // the JIT's counterpart of an image's `jl_ptls_table`
+    static jl_get_pgcstack_func_t pgcstack_func_slot;
+    static uintptr_t pgcstack_key_slot;
+    static_assert(sizeof(jl_pgcstack_key_t) <= sizeof(pgcstack_key_slot), "TLS key doesn't fit its slot");
+    jl_pgcstack_getkey(&pgcstack_func_slot, (jl_pgcstack_key_t*)&pgcstack_key_slot);
+    add_shared_named_global("jl_pgcstack_func_slot", (void*)&pgcstack_func_slot);
+    add_shared_named_global("jl_pgcstack_key_slot", (void*)&pgcstack_key_slot);
+    add_shared_named_global("jl_image_tls_offset", (void*)&jl_tls_offset);
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
