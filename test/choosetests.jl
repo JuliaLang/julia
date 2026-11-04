@@ -22,7 +22,7 @@ const TESTNAMES = [
         "euler", "show", "client", "terminfo",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
         "some", "meta", "stacktraces", "docs", "gc",
-        "misc", "threads", "stress", "binaryplatforms","stdlib_dependencies", "atexit",
+        "misc", "threads", "profile_spawnmany", "stress", "binaryplatforms","stdlib_dependencies", "atexit",
         "enums", "cmdlineargs", "int", "interpreter",
         "checked", "bitset", "floatfuncs", "precompile", "precompile_distributed",
         "relocatedepot",

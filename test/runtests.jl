@@ -128,6 +128,8 @@ end
 move_to_node1("precompile_distributed")
 move_to_node1("SharedArrays")
 move_to_node1("Distributed")
+# Tests running alongside this one can use up its deadlock timeout
+move_to_node1("profile_spawnmany")
 if Sys.WORD_SIZE == 32
     # On 32-bit workers that have used a lot of memory, `@threadcall` fails to allocate
     # signal stacks (`ccall`) and allocations fail (`gc`)
