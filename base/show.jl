@@ -1626,7 +1626,7 @@ end
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 show(io::IO, v::SimpleVector) = show_delim_array(io, v, "svec(", ',', ')', false)
 
-show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
+show(io::IO, s::Symbol) = show_quoted_sym(io, s)
 
 ## Abstract Syntax Tree (AST) printing ##
 
@@ -1935,18 +1935,21 @@ function show_unquoted(io::IO, ex::QuoteNode, indent::Int, _prec::Int)
     end
 end
 
+function show_quoted_sym(io::IO, sym::Symbol)
+    if sym in quoted_syms
+        print(io, ":(", sym, ")")
+    else
+        if isidentifier(sym) || (_isoperator(sym) && sym !== Symbol("'"))
+            print(io, ":", sym)
+        else
+            print(io, "Symbol(", repr(String(sym)), ")")
+        end
+    end
+end
+
 function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, quote_level::Int)
     if isa(value, Symbol)
-        sym = value::Symbol
-        if value in quoted_syms
-            print(io, ":(", sym, ")")
-        else
-            if isidentifier(sym) || (_isoperator(sym) && sym !== Symbol("'"))
-                print(io, ":", sym)
-            else
-                print(io, "Symbol(", repr(String(sym)), ")")
-            end
-        end
+        show_quoted_sym(io, value::Symbol)
     else
         if isa(value,Expr) && value.head === :block
             value = value::Expr
