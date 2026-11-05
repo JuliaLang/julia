@@ -754,6 +754,28 @@ end
     @test_throws ArgumentError hex2bytes(SubString("ĀĀ"))
     @test_throws ArgumentError hex2bytes(SubString("\xff\xff"))
 
+    @testset "UTF-8 strings" begin
+        expected = UInt8[0x01, 0xab, 0xef]
+        for s in ("01abEF", SubString("x01abEFx", 2, 7), Base.StringView(b"01abEF"))
+            @test hex2bytes(s) == expected
+            @test hex2bytes!(zeros(UInt8, 3), s) == expected
+            @test_throws ArgumentError hex2bytes!(zeros(UInt8, 2), s)
+        end
+        # Lengths are counted in codeunits, so non-ASCII input may pass the length checks
+        @test_throws ArgumentError hex2bytes!(zeros(UInt8, 1), "Ā")
+    end
+
+    @testset "Generic strings" begin
+        expected = UInt8[0x01, 0xab, 0xef]
+        s = GenericString("01abEF")
+        @test hex2bytes(s) == expected
+        @test hex2bytes!(zeros(UInt8, 3), s) == expected
+        @test_throws ArgumentError hex2bytes!(zeros(UInt8, 2), s)
+        @test_throws ArgumentError hex2bytes(GenericString("0"))
+        @test_throws ArgumentError hex2bytes(GenericString("0g"))
+        @test_throws ArgumentError hex2bytes(GenericString("ĀĀ"))
+    end
+
     @testset "Issue 23161" begin
         arr = b"0123456789abcdefABCDEF"
         arr1 = Vector{UInt8}(undef, length(arr) >> 1)

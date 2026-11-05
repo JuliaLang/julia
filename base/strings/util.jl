@@ -1234,19 +1234,17 @@ julia> hex2bytes(a)
 """
 function hex2bytes end
 
-hex2bytes(s) = hex2bytes!(Vector{UInt8}(undef, length(s)::Int >> 1), s)
-
-# Strings with `UInt8` codeunits are decoded via their codeunits, since a non-ASCII
-# character consists only of bytes >= 0x80, which are rejected as hex digits.
-# Otherwise, iterate the characters, computing the O(n) `length` only once.
-function hex_digits(s::AbstractString)
-    codeunit(s) === UInt8 && return (codeunits(s), ncodeunits(s))
-    return (s, length(s))
+# Compute `length`, which is O(n) for strings, only once
+function hex2bytes(s)
+    len = length(s)::Int
+    return hex2bytes_len!(Vector{UInt8}(undef, len >> 1), s, len)
 end
 
-function hex2bytes(s::AbstractString)
-    itr, len = hex_digits(s)
-    return hex2bytes_len!(Vector{UInt8}(undef, len >> 1), itr, len)
+# UTF-8 strings are decoded via their codeunits, since a non-ASCII character consists
+# only of bytes >= 0x80, which are rejected as hex digits.
+function hex2bytes(s::UTF8String)
+    len = ncodeunits(s)
+    return hex2bytes_len!(Vector{UInt8}(undef, len >> 1), codeunits(s), len)
 end
 
 """
@@ -1267,7 +1265,7 @@ function hex2bytes!(dest::AbstractVector{UInt8}, itr)
     return hex2bytes_len!(dest, itr, length(itr))
 end
 
-hex2bytes!(dest::AbstractVector{UInt8}, s::AbstractString) = hex2bytes_len!(dest, hex_digits(s)...)
+hex2bytes!(dest::AbstractVector{UInt8}, s::UTF8String) = hex2bytes_len!(dest, codeunits(s), ncodeunits(s))
 
 function hex2bytes_len!(dest::AbstractVector{UInt8}, itr, itr_len::Integer)
     isodd(itr_len) && throw_odd_hex_len(typeof(itr))
