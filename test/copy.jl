@@ -287,6 +287,120 @@ end
     @test copyto!(a, 2, a, 1, 2) == [1;1:2;]
     a = [1:3;]
     @test copyto!(a, 2:3, 1:1, a, 1:2, 1:1) == [1;1:2;]
+    b = falses(65); b[1] = true
+    @test copyto!(b, view(b, 65:-1:1))[65]
+end
+
+struct BoolFlag
+    b::Bool
+end
+Base.convert(::Type{Bool}, x::BoolFlag) = x.b
+
+struct CopyLog <: AbstractVector{Int}
+    data::Vector{Int}
+end
+Base.size(a::CopyLog) = size(a.data)
+Base.getindex(a::CopyLog, i::Int) = a.data[i]
+Base.setindex!(a::CopyLog, x, i::Int) = (a.data[i] = x; a)
+Base.dataids(a::CopyLog) = Base.dataids(a.data)
+Base.unaliascopy(a::CopyLog) = CopyLog(copy(a.data))
+
+struct OtherLog <: AbstractVector{Int}
+    data::Vector{Int}
+end
+Base.size(a::OtherLog) = size(a.data)
+Base.getindex(a::OtherLog, i::Int) = a.data[i]
+Base.setindex!(a::OtherLog, x, i::Int) = (a.data[i] = x; a)
+
+const copylog_calls = Any[]
+struct CopyLogStyle <: Base.CopyToStyle end
+struct OtherLogStyle <: Base.CopyToStyle end
+Base.CopyToStyle(::Type{CopyLog}) = CopyLogStyle()
+Base.CopyToStyle(::Type{OtherLog}) = OtherLogStyle()
+function Base.copyto_unaliased!(::CopyLogStyle, dest::AbstractArray, src::AbstractArray)
+    push!(copylog_calls, (:whole, dest, src))
+    return Base.copyto_unaliased!(Base.DefaultCopyToStyle(), dest, src)
+end
+function Base.copyto_unaliased!(::CopyLogStyle, dest::AbstractArray, Rdest, src::AbstractArray, Rsrc)
+    push!(copylog_calls, (:region, Rdest, Rsrc))
+    return Base.copyto_unaliased!(Base.DefaultCopyToStyle(), dest, Rdest, src, Rsrc)
+end
+
+@testset "CopyToStyle" begin
+    empty!(copylog_calls)
+    @test copyto!(CopyLog(zeros(Int, 4)), [1, 2, 3]) == [1, 2, 3, 0]
+    @test copylog_calls[end][1] === :whole
+    @test copyto!(zeros(Int, 4), CopyLog([1, 2, 3])) == [1, 2, 3, 0]
+    @test copylog_calls[end][1] === :whole
+    @test collect(CopyLog([1, 2])) == [1, 2]
+    @test copylog_calls[end][1] === :whole
+    @test copyto!(CopyLog(zeros(Int, 5)), 2, [1, 2, 3], 1, 3) == [0, 1, 2, 3, 0]
+    @test copylog_calls[end] == (:region, 2:4, 1:3)
+    @test copyto!(CopyLog(zeros(Int, 3)), CartesianIndices((2:3,)), [1, 2], CartesianIndices((1:2,))) == [0, 1, 2]
+    @test copylog_calls[end] == (:region, CartesianIndices((2:3,)), CartesianIndices((1:2,)))
+
+    empty!(copylog_calls)
+    @test copyto!(CopyLog([1, 2]), Int[]) == [1, 2]
+    @test copyto!(CopyLog([1, 2]), 1, Int[], 1, 0) == [1, 2]
+    @test isempty(copylog_calls)
+    @test_throws BoundsError copyto!(CopyLog([1, 2]), [1, 2, 3])
+    @test_throws ArgumentError copyto!(CopyLog([1, 2]), 1, [1], 1, -1)
+    @test isempty(copylog_calls)
+
+    x = CopyLog([1, 2, 3, 4])
+    @test copyto!(x, 2, x, 1, 3) == [1, 1, 2, 3]
+    @test copylog_calls[end][1] === :region
+
+    empty!(copylog_calls)
+    @test copyto!(OtherLog(zeros(Int, 2)), CopyLog([1, 2])) == [1, 2]
+    @test isempty(copylog_calls)
+    @test copyto!(CopyLog(zeros(Int, 2)), CopyLog([1, 2])) == [1, 2]
+    @test copylog_calls[end][1] === :whole
+
+    let a = PermutedDimsArray(zeros(3, 3), (2, 1))
+        @test copyto!(a, ones(2, 2)) == copyto!(zeros(3, 3), ones(2, 2))
+    end
+    let a = PermutedDimsArray(zeros(2, 3), (2, 1))
+        @test copyto!(a, reshape(1:6, 3, 2)) == reshape(1:6, 3, 2)
+    end
+
+    let b = falses(70)
+        @test copyto!(b, trues(65)) == [trues(65); falses(5)]
+        @test copyto!(falses(5), view(trues(10), 2:6)) == trues(5)
+        @test copyto!(falses(4), Bool[1, 0, 1]) == [true, false, true, false]
+        @test copyto!(falses(4), PermutedDimsArray(Bool[1 0; 1 1], (2, 1))) == [true, false, true, true]
+        @test copyto!(zeros(Bool, 3), BitVector([true, false, true])) == [true, false, true]
+        flags = [BoolFlag(true), BoolFlag(false)]
+        @test copyto!(falses(2), view(flags, :)) == [true, false]
+        @test copyto!(falses(3), 2, view(flags, :), 1, 2) == [false, true, false]
+        @test copyto!(falses(3), flags) == [true, false, false]
+        @test copyto!(falses(3), 2, flags, 1, 2) == [false, true, false]
+    end
+    let src = [isodd(i ÷ 3) for i in 1:130]
+        for T in (Int, Int8, Float64)
+            @test copyto!(falses(130), T.(src)) == src
+            @test copyto!(trues(140), 7, T.(src), 3, 120) == [trues(6); src[3:122]; trues(14)]
+        end
+        @test_throws InexactError copyto!(falses(3), [0, 2, 1])
+        @test_throws InexactError copyto!(falses(3), 1, [0.0, 0.5, 1.0], 1, 3)
+    end
+    let bits = BitMatrix([isodd(i + 2j) for i in 1:5, j in 1:7])
+        @test Base._copyto_style(falses(7, 5), PermutedDimsArray(bits, (2, 1))) isa Base.BitArrayCopyToStyle
+        @test copyto!(falses(7, 5), PermutedDimsArray(bits, (2, 1))) == permutedims(bits)
+        dest = PermutedDimsArray(falses(5, 7), (2, 1))
+        @test Base._copyto_style(dest, permutedims(bits)) isa Base.PermutedDimsArrays.PermutedDimsCopyToStyle
+        @test copyto!(dest, permutedims(bits)) == permutedims(bits)
+    end
+end
+
+Base.CopyToStyle(::OtherLogStyle, ::CopyLogStyle) = CopyLogStyle()
+
+@testset "CopyToStyle rules" begin
+    empty!(copylog_calls)
+    @test copyto!(OtherLog(zeros(Int, 2)), CopyLog([1, 2])) == [1, 2]
+    @test copylog_calls[end][1] === :whole
+    @test copyto!(CopyLog(zeros(Int, 2)), OtherLog([1, 2])) == [1, 2]
+    @test length(copylog_calls) == 2
 end
 
 @testset "`deepcopy` a `GenericCondition`" begin
