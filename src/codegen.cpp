@@ -7621,7 +7621,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         // requires an egality-pinned type value: the constructed instance must
         // have exactly the runtime type object, not an `==`-equal rep (#61323)
         // (any other type takes the runtime call, which throws)
-        if (is_uniquerep_Type(ty) && jl_is_new_struct_type(jl_some_Type_T(ty))) {
+        if (is_uniquerep_Type(ty) && jl_is_generic_new_type(jl_some_Type_T(ty))) {
             jl_value_t *tp0 = jl_some_Type_T(ty);
             assert(nargs <= jl_datatype_nfields(tp0) + 1);
             jl_cgval_t res = emit_new_struct(ctx, tp0, nargs - 1, ArrayRef<jl_cgval_t>(argv).drop_front(), is_promotable);

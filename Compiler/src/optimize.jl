@@ -408,7 +408,7 @@ function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src:
         isconcretedispatch(typ) || return (false, false, false)
     end
     typ = typ::DataType
-    new_struct_exception(typ) === nothing || return (false, false, false)
+    datatype_hashiddenfields(typ) && return (false, false, false) # `new` throws
     fcount = datatype_fieldcount(typ)
     fcount === nothing && return (false, false, false)
     fcount >= length(args) - 1 || return (false, false, false)

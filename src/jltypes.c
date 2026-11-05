@@ -4120,7 +4120,6 @@ void jl_init_types(void) JL_GC_DISABLED
     //jl_method_type->name->constfields = method_constfields;
     const static uint32_t method_atomicfields[] = { 0x20000070, 0x0 }; // (1<<4)|(1<<5)|(1<<6)|(1<<29)
     jl_method_type->name->atomicfields = method_atomicfields;
-    jl_method_type->name->hiddenfields = 1; // writelock
 
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"), core,
@@ -4374,7 +4373,6 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_emptysvec,
                         0, 1, 6);
     XX(task);
-    jl_task_type->name->hiddenfields = 1; // stack, context, gcstack, ...
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
     // Declare bound_cancel_token as Union{Nothing, CancellationTokenSource}
@@ -4449,8 +4447,20 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_simplevector_type);
     jl_compute_field_offsets(jl_symbol_type);
     jl_compute_field_offsets(jl_binding_partition_type);
+
+    // types whose instances hold data that their Julia-visible layout does not describe
+    jl_method_type->name->hiddenfields = 1; // writelock
     assert(jl_datatype_size(jl_method_type) < sizeof(jl_method_t));
+    jl_task_type->name->hiddenfields = 1; // stack, context, gcstack, ...
     assert(jl_datatype_size(jl_task_type) < sizeof(jl_task_t));
+    jl_cancel_source_type->name->hiddenfields = 1; // trailing parent links
+    jl_wait_entry_type->name->hiddenfields = 1; // trailing slots
+    // opaque layouts
+    jl_module_type->name->hiddenfields = 1;
+    jl_symbol_type->name->hiddenfields = 1;
+    jl_string_type->name->hiddenfields = 1;
+    jl_simplevector_type->name->hiddenfields = 1;
+    jl_genericmemory_typename->hiddenfields = 1;
 
     // override ismutationfree for builtin types that are mutable for identity
     jl_string_type->ismutationfree = jl_string_type->isidentityfree = 1;

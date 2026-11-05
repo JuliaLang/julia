@@ -1084,6 +1084,7 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     desc->markfunc = markfunc;
     desc->sweepfunc = sweepfunc;
     bt->layout = layout;
+    bt->name->hiddenfields = 1; // allocated by their own code
     jl_gc_write(bt, bt->instance, jl_value_t, NULL);
     return bt;
 }
@@ -1682,14 +1683,16 @@ JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x)
 // struct constructors --------------------------------------------------------
 
 // can the generic struct constructors (`new`) allocate an instance of `type`?
+// (the conditions of `jl_is_generic_new_type`)
 static void check_new_struct_type(jl_datatype_t *type)
 {
-    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout))
+    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL)
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
-    // the object would be too small for the fields hidden past the Julia-visible layout
+    // the object would have no room for the data the layout does not describe
     if (type->name->hiddenfields)
         jl_errorf("new: %s has hidden fields and can only be allocated by the runtime",
                   jl_symbol_name(type->name->name));
+    assert(!jl_is_layout_opaque(type->layout));
 }
 
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...) JL_ROOTED_VARARGS
