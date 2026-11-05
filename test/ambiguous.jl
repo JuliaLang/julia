@@ -96,8 +96,6 @@ ambig(x::Union{Char, Int16}) = 's'
 
 # Automatic detection of ambiguities
 
-const allowed_undefineds = Set([GlobalRef(Base, :active_repl)])
-
 module Ambig1
 ambig(x, y) = 1
 ambig(x::Integer, y) = 2
@@ -168,7 +166,7 @@ end
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
 @testset "detect_ambiguities" begin
-    let ambig = Set(detect_ambiguities(Core, Base; recursive=true, ambiguous_bottom=false, allowed_undefineds))
+    let ambig = Set(detect_ambiguities(Core, Base; recursive=true, ambiguous_bottom=false))
         good = true
         for (sig1, sig2) in ambig
             @test sig1 === sig2 # print this ambiguity
@@ -189,7 +187,7 @@ end
 
     # List standard libraries. Exclude modules such as Main, Base, and Core.
     let modules = [mod for (pkg, mod) in Base.loaded_modules if pkg.uuid !== nothing && String(pkg.name) in STDLIBS]
-        @test isempty(detect_ambiguities(modules...; recursive=true, allowed_undefineds))
+        @test isempty(detect_ambiguities(modules...; recursive=true))
     end
 end
 
@@ -334,6 +332,12 @@ _totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = E
 end
 @test length(detect_unbound_args(M25341; recursive=true)) == 1
 
+# `allowed_undefineds` is ignored, but still accepted for compatibility
+let allowed_undefineds = Set([GlobalRef(Base, :active_repl)])
+    @test length(detect_unbound_args(M25341; recursive=true, allowed_undefineds)) == 1
+    @test length(detect_ambiguities(Ambig1; allowed_undefineds)) == 1
+end
+
 module UnboundDetect
     # some matching calls leave the parameter unbound (with example given)
     unbound1(x::Type{<:T}) where {T} = T                       # f(Union{})
@@ -462,7 +466,7 @@ end
         @test isempty(need_to_handle_undef_sparam)
     end
     let need_to_handle_undef_sparam =
-            Set{Method}(detect_unbound_args(Base; recursive=true, allowed_undefineds))
+            Set{Method}(detect_unbound_args(Base; recursive=true))
         # the parameters left unbound by non-`Union{}` calls (see the reviewed list below)
         expected_undef_sparam = Any[
             Tuple{typeof(Base._totuple), Type{Tuple{Vararg{E}}}, Any, Vararg{Any}} where E,
@@ -479,7 +483,7 @@ end
         @test isempty(need_to_handle_undef_sparam)
     end
     let need_to_handle_undef_sparam =
-            Set{Method}(detect_unbound_args(Base; recursive=true, ambiguous_bottom=true, allowed_undefineds))
+            Set{Method}(detect_unbound_args(Base; recursive=true, ambiguous_bottom=true))
         # reviewed and expected
         expected_undef_sparam = Any[
             Tuple{typeof(Base._totuple), Type{Tuple{Vararg{E}}}, Any, Vararg{Any}} where E,

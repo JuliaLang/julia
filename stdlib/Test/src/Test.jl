@@ -20,23 +20,21 @@ Environment variables:
 """
 module Test
 
-export @test, @test_throws, @test_broken, @test_skip,
-    @test_warn, @test_nowarn,
-    @test_logs, @test_deprecated
+export @inferred, @test, @test_broken, @test_deprecated, @test_logs, @test_nowarn,
+    @test_skip, @test_throws, @test_warn, @testset
 
-export @testset
-export @inferred
-export detect_ambiguities, detect_unbound_args, detect_closure_boxes, detect_closure_boxes_all_modules
-export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
+export detect_ambiguities, detect_closure_boxes, detect_closure_boxes_all_modules,
+    detect_unbound_args
+export GenericArray, GenericDict, GenericOrder, GenericSet, GenericString
 export TestSetException
-export TestLogger, LogRecord
+export LogRecord, TestLogger
 
 using Random
 using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
-using Base: typesplit, remove_linenums!, mapany, quoted
+using Base: mapany, quoted, remove_linenums!, typesplit
 using Serialization: Serialization
-using Base.ScopedValues: LazyScopedValue, ScopedValue, @with
+using Base.ScopedValues: @with, LazyScopedValue, ScopedValue
 
 const global_fail_fast = OncePerProcess{Bool}() do
     return Base.get_bool_env("JULIA_TEST_FAILFAST", false)
@@ -45,12 +43,14 @@ end
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
+const BacktraceVector = AbstractVector{<:Union{Ptr{Nothing},Base.InterpreterIP}}
+
 function ip_has_file_and_func(ip, file, funcs)
     return any(fr -> (in_file(fr, file) && fr.func in funcs), StackTraces.lookup(ip))
 end
 in_file(frame, file) = string(frame.file) == file
 
-function test_location(bt, file_ts, file_t)
+function test_location(bt::BacktraceVector, file_ts, file_t)
     if (isnothing(file_ts) || isnothing(file_t))
         return macrocall_location(bt, something(file_ts, @__FILE__))
     else
@@ -58,13 +58,13 @@ function test_location(bt, file_ts, file_t)
     end
 end
 
-function test_callsite(bt, file_ts, file_t)
+function test_callsite(bt::BacktraceVector, file_ts, file_t)
     # We avoid duplicate calls to `StackTraces.lookup`, as it is an expensive call.
     # For that, we retrieve locations from lower to higher stack elements
     # and only traverse parts of the backtrace which we haven't traversed before.
     # The order will always be <internal functions> -> `@test` -> `@testset`.
     internal = @something(macrocall_location(bt, @__FILE__), return nothing)
-    test = internal - 1 + @something(findfirst(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), @view bt[internal:end]), return nothing)
+    test = @something(findnext(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), bt, internal), return nothing)
     testset = test - 1 + @something(macrocall_location(@view(bt[test:end]), file_ts), return nothing)
 
     # If stacktrace locations differ, include frames until the `@testset` appears.
@@ -83,9 +83,9 @@ function test_callsite(bt, file_ts, file_t)
     return testset
 end
 
-macrocall_location(bt, file) = findfirst(ip -> ip_has_file_and_func(ip, file, (Symbol("macro expansion"),)), bt)
+macrocall_location(bt::BacktraceVector, file) = findfirst(ip -> ip_has_file_and_func(ip, file, (Symbol("macro expansion"),)), bt)
 
-function scrub_backtrace(bt, file_ts, file_t)
+function scrub_backtrace(bt::BacktraceVector, file_ts, file_t)
     do_test_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (:do_test, :do_test_throws)), bt)
     if do_test_ind !== nothing && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
@@ -123,8 +123,12 @@ struct Pass <: Result
     value
     source::Union{Nothing,LineNumberNode}
     message_only::Bool
-    function Pass(test_type::Symbol, orig_expr, data, thrown, source::Union{Nothing,LineNumberNode}=nothing, message_only::Bool=false)
-        return new(test_type, orig_expr, data, thrown, source, message_only)
+    function Pass(
+            test_type::Symbol, orig_expr, data, value,
+            source::Union{Nothing,LineNumberNode}=nothing, message_only::Bool=false
+        )
+        @nospecialize orig_expr data value
+        return new(test_type, orig_expr, data, value, source, message_only)
     end
 end
 
@@ -443,9 +447,9 @@ const comparison_prec = Base.operator_precedence(:(==))
 Preprocess test expressions of function calls with trailing keyword arguments
 so that e.g. `@test a ≈ b atol=ε` means `@test ≈(a, b, atol=ε)`.
 """
-test_expr!(m, ex) = ex
+test_expr!(_m, @nospecialize(ex)) = ex
 
-function test_expr!(m, ex, kws...)
+function test_expr!(m, @nospecialize(ex), kws...)
     @label fail begin
         ex isa Expr && ex.head === :call || break fail
         for kw in kws
@@ -1352,10 +1356,10 @@ end
 # Format the expected warning pattern for display
 # For literals (String, Regex), show the value with matching method
 # For expressions (Function, etc.), show the original expression
-_format_warn_msg(expr, s::AbstractString) = repr(s) * " (occursin)"
-_format_warn_msg(expr, s::Regex) = repr(s) * " (occursin)"
-_format_warn_msg(expr, s::Function) = string(_remove_linenums(expr))
-_format_warn_msg(expr, S::Union{AbstractArray,Tuple}) = string(_remove_linenums(expr)) * " (all, occursin)"
+_format_warn_msg(_expr, s::AbstractString) = repr(s) * " (occursin)"
+_format_warn_msg(_expr, s::Regex) = repr(s) * " (occursin)"
+_format_warn_msg(expr, ::Function) = string(_remove_linenums(expr))
+_format_warn_msg(expr, ::Union{AbstractArray,Tuple}) = string(_remove_linenums(expr)) * " (all, occursin)"
 
 _remove_linenums(x) = x
 function _remove_linenums(ex::Expr)
@@ -1453,8 +1457,8 @@ end
 
 # Records nothing, and throws an error immediately whenever a Fail or
 # Error occurs. Takes no action in the event of a Pass or Broken result
-record(ts::FallbackTestSet, t::Union{Pass, Broken}) = t
-function record(ts::FallbackTestSet, t::Union{Fail, Error})
+record(::FallbackTestSet, t::Union{Pass, Broken}) = t
+function record(::FallbackTestSet, t::Union{Fail, Error})
     println(t)
     throw(FallbackTestSetException("There was an error during testing"))
 end
@@ -1874,7 +1878,7 @@ function get_alignment(ts::DefaultTestSet, depth::Int)
     child_widths = map(t->get_alignment(t, depth+1), ts.results)
     return max(ts_width, maximum(child_widths))
 end
-get_alignment(ts, depth::Int) = 0
+get_alignment(@nospecialize(_ts), _depth::Int) = 0
 
 """
     format_duration(::AbstractTestSet)
@@ -2140,7 +2144,7 @@ macro testset(args...)
     if tests.head === :for
         return testset_forloop(args, tests, __source__)
     elseif tests.head === :let
-        return testset_context(args, tests, __source__)
+        return testset_context(args, tests)
     else
         return testset_beginend_call(args, tests, __source__)
     end
@@ -2149,14 +2153,14 @@ end
 trigger_test_failure_break(@nospecialize(err)) =
     ccall(:jl_test_failure_breakpoint, Cvoid, (Any,), err)
 
-is_failfast_error(err::FailFastError) = true
+is_failfast_error(::FailFastError) = true
 is_failfast_error(err::LoadError) = is_failfast_error(err.error) # handle `include` barrier
-is_failfast_error(err) = false
+is_failfast_error(@nospecialize _) = false
 
 """
 Generate the code for an `@testset` with a `let` argument.
 """
-function testset_context(args, ex, source)
+function testset_context(args, ex)
     desc, testsettype, options = parse_testset_args(args[1:end-1])
     if desc !== nothing || testsettype !== nothing
         # Reserve this syntax if we ever want to allow this, but for now,
@@ -2603,9 +2607,7 @@ function is_in_mods(m::Module, recursive::Bool, mods)
 end
 
 """
-    detect_ambiguities(mod1, mod2...; recursive=false,
-                                      ambiguous_bottom=false,
-                                      allowed_undefineds=nothing)
+    detect_ambiguities(mod1, mod2...; recursive=false, ambiguous_bottom=false)
 
 Return a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules.
@@ -2615,11 +2617,8 @@ Use `recursive=true` to test in all submodules.
 `Union{}` type parameters are included; in most cases you probably
 want to set this to `false`. See [`Base.isambiguous`](@ref).
 
-See [`Test.detect_unbound_args`](@ref) for an explanation of
-`allowed_undefineds`.
-
-!!! compat "Julia 1.8"
-    `allowed_undefineds` requires at least Julia 1.8.
+The keyword argument `allowed_undefineds` is accepted for compatibility
+but ignored; see [`Test.detect_unbound_args`](@ref).
 """
 function detect_ambiguities(mods::Module...;
                             recursive::Bool = false,
@@ -2752,9 +2751,7 @@ See also [`detect_closure_boxes`](@ref) to check specific modules.
 detect_closure_boxes_all_modules() = detect_closure_boxes(Base.loaded_modules_array()...)
 
 """
-    detect_unbound_args(mod1, mod2...; recursive=false,
-                                       ambiguous_bottom=false,
-                                       allowed_undefineds=nothing)
+    detect_unbound_args(mod1, mod2...; recursive=false, ambiguous_bottom=false)
 
 Return a vector of `Method`s which may have unbound type parameters: some
 call matching the method's signature does not pin every static parameter to
@@ -2782,20 +2779,15 @@ Methods are also not reported when none of the possibly-unbound parameters
 is read in the method's lowered body (querying a parameter with
 `@isdefined` does not count as a read, since it cannot throw).
 
-By default, any undefined symbols trigger a warning. This warning can
-be suppressed by supplying a collection of `GlobalRef`s for which
-the warning can be skipped. For example, setting
+The keyword argument `allowed_undefineds` is accepted for compatibility
+but ignored.
 
-```
-allowed_undefineds = Set([GlobalRef(Base, :active_repl),
-                          GlobalRef(Base, :active_repl_backend)])
-```
-
-would suppress warnings about `Base.active_repl` and
-`Base.active_repl_backend`.
-
-!!! compat "Julia 1.8"
-    `allowed_undefineds` requires at least Julia 1.8.
+!!! compat "Julia 1.12"
+    Before Julia 1.12, these functions printed a message for each undefined
+    name found while scanning the given modules, and `allowed_undefineds`
+    (a collection of `GlobalRef`s, added in Julia 1.8) suppressed it for the
+    listed names. Since Julia 1.12 they no longer scan module bindings, so
+    `allowed_undefineds` has no effect.
 
 !!! compat "Julia 1.14"
     `ambiguous_bottom` requires at least Julia 1.14.

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Logging: Logging, AbstractLogger, LogLevel, Info, with_logger
+using Logging: AbstractLogger, Info, LogLevel, Logging, with_logger
 import Base: occursin
 using Base: @lock
 
@@ -304,14 +304,16 @@ macro test_logs(exs...)
 end
 
 function match_logs(f, patterns...; match_mode::Symbol=:all, kwargs...)
-    logs,value = collect_test_logs(f; kwargs...)
+    match_mode === :all || match_mode === :any ||
+        throw(ArgumentError("`match_mode` must be `:all` or `:any`, got $(repr(match_mode))"))
+    logs, value = collect_test_logs(f; kwargs...)
     if match_mode === :all
         didmatch = length(logs) == length(patterns) &&
             all(occursin(p, l) for (p,l) in zip(patterns, logs))
-    elseif match_mode === :any
+    else # match_mode === :any
         didmatch = all(any(occursin(p, l) for l in logs) for p in patterns)
     end
-    didmatch,logs,value
+    return didmatch, logs, value
 end
 
 # TODO: Use a version of parse_level from stdlib/Logging, when it exists.
@@ -331,7 +333,7 @@ logfield_contains(a, b) = a == b
 logfield_contains(a, r::Regex) = occursin(r, a)
 logfield_contains(a::Symbol, r::Regex) = occursin(r, String(a))
 logfield_contains(a::LogLevel, b::Symbol) = a == parse_level(b)
-logfield_contains(a, b::Ignored) = true
+logfield_contains(_, ::Ignored) = true
 
 function occursin(pattern::Tuple, r::LogRecord)
     stdfields = (r.level, r.message, r._module, r.group, r.id, r.file, r.line)
