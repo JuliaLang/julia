@@ -384,6 +384,7 @@ using Core: SSAValue, SlotNumber, PhiNode, PhiCNode, PiNode, UpsilonNode, EnterN
     @test inl(EnterNode(0, SSAValue(1))) === EnterNode(0, SSAValue(11))
     @test inl(EnterNode(5, SlotNumber(1)); slots=Any[42]) === EnterNode(15, 42)
 
+    @test inl(PiNode(SSAValue(1), Int)) === PiNode(SSAValue(11), Int)
 
     let phi = inl(PhiNode(Int32[1, 2], Any[SSAValue(1), SlotNumber(1)]); slots=Any[42])
         @test phi.edges == Int32[11, 12]

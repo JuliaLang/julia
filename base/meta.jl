@@ -516,6 +516,13 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                           slot_offset, statement_offset, boundscheck)
         return x
     end
+    if isa(x, Core.PiNode)
+        return Core.PiNode(
+            _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck),
+            x.typ,
+        )
+    end
     if isa(x, Core.ReturnNode)
        # Unreachable doesn't have val defined
        if !isdefined(x, :val)
