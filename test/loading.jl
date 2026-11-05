@@ -1464,6 +1464,15 @@ end
                 @test Base.stale_prefs(blob)
             end
             @test !Base.toml_egal(Dict("a" => 1), IdDict("a" => 1))
+
+            # integers too large for Int128 parse to a new BigInt each time
+            use_prefs("big = 170141183460469231731687303715884105728")
+            empty!(Base.COMPILETIME_PREFERENCES)
+            Base.record_compiletime_preference(pkg_uuid, "big")
+            blob = Base.get_preferences_blob()
+            @test !Base.stale_prefs(blob)
+            use_prefs("big = 170141183460469231731687303715884105729")
+            @test Base.stale_prefs(blob)
         finally
             copy!(LOAD_PATH, old_load_path)
             empty!(Base.COMPILETIME_PREFERENCES)
