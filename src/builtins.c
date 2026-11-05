@@ -642,9 +642,7 @@ JL_CALLABLE(jl_f_sizeof)
             else
                 jl_errorf("Argument is an incomplete %s type and does not have a definite size.", jl_symbol_name(dx->name->name));
         }
-        if (jl_is_layout_opaque(dx->layout) || // includes all GenericMemory{kind,T}
-            dx == jl_cancel_source_type ||     // variable-sized (layout covers only the fixed fields)
-            dx == jl_wait_entry_type)          // variable-sized likewise
+        if (dx->name->hiddenfields) // the layout does not give the size of the instances
             jl_errorf("Type %s does not have a definite size.", jl_symbol_name(dx->name->name));
         return jl_box_long(jl_datatype_size(x));
     }

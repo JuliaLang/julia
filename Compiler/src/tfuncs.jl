@@ -506,16 +506,9 @@ function sizeof_nothrow(@nospecialize(x))
     xw = widenconst(x)
     isType(xw) && !isconstType(xw) && return false
     x = unwrap_unionall(t)
-    # instances are variable-sized, so the type itself has no definite size
-    x === Core.CancellationTokenSource && return false
-    x === Core.WaitEntryN && return false
-    if isconcrete
-        if isa(x, DataType) && x.layout != C_NULL
-            # there's just a few concrete types with an opaque layout
-            (datatype_nfields(x) == 0 && !datatype_pointerfree(x)) && return false
-        end
-        return true # these must always have a size of these
-    end
+    # the layout does not give the size of the instances, so the type has no definite size
+    isa(x, DataType) && datatype_hashiddenfields(x) && return false
+    isconcrete && return true # these must always have a size of these
     exact || return false # Could always be the type Bottom at runtime, for example, which throws
     t === DataType && return true # DataType itself has a size
     if isa(x, Union)
@@ -524,7 +517,6 @@ function sizeof_nothrow(@nospecialize(x))
     end
     isa(x, DataType) || return false
     x.layout == C_NULL && return false
-    (datatype_nfields(x) == 0 && !datatype_pointerfree(x)) && return false # is-layout-opaque
     return true
 end
 
