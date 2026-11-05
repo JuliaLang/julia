@@ -447,10 +447,12 @@ end
 
     for wrapped in (esc1(:x), hyg(:x), hyg(esc1(:x)), esc1(hyg(:x)), esc1(esc1(:x)), hyg(hyg(esc1(esc1(:x)))))
         @test Meta.unescape(wrapped) === :x
+        @test Meta.reescape(:x, wrapped) == wrapped
     end
     @test Meta.unescape(Expr(:block, lnn, esc1(:x))) === :x
     @test Meta.reescape(:x, :y) === :x
 
+    @test eval(Meta.reescape(:escape_test_var, hyg(esc1(:x)))) === :from_caller
 
     @test Meta.uncurly(:(A{B})) === :A
     @test Meta.uncurly(:(A{B}{C})) == :(A{B})

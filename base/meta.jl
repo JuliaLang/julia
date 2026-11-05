@@ -673,10 +673,10 @@ was escaped, the unescaped expression is wrapped in `:escape` again.
 """
 function reescape(@nospecialize(unescaped_expr), @nospecialize(original_expr))
     if isexpr(original_expr, :escape)
-        return reescape(Expr(:escape, unescaped_expr), original_expr.args[1])
+        return Expr(:escape, reescape(unescaped_expr, original_expr.args[1]))
     elseif isexpr(original_expr, :var"hygienic-scope")
         next, ctx... = original_expr.args
-        return reescape(Expr(:var"hygienic-scope", unescaped_expr, ctx...), next)
+        return Expr(:var"hygienic-scope", reescape(unescaped_expr, next), ctx...)
     else
         return unescaped_expr
     end
