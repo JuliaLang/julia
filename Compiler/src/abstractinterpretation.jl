@@ -3459,13 +3459,27 @@ function is_field_pointerfree(dt::DataType, fidx::Int)
     return datatype_pointerfree(ft)
 end
 
+# the exception `new` of `T` throws whatever its arguments, since only the runtime may
+# allocate `T` (see `check_new_struct_type`), or `nothing`
+function new_struct_exception(T::DataType)
+    datatype_hashiddenfields(T) && return ErrorException
+    if isconcretetype(T) && T.layout != C_NULL &&
+       datatype_nfields(T) == 0 && !datatype_pointerfree(T) # opaque layout
+        return TypeError
+    end
+    return nothing
+end
+
 function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
                            sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
     argtype = abstract_eval_value(interp, e.args[1], sstate, sv)
     rt, _... = instanceof_tfunc(argtype, true)
     ut = unwrap_unionall(rt)
-    isa(ut, DataType) && datatype_hashiddenfields(ut) && return RTEffects(Bottom, ErrorException, EFFECTS_THROWS)
+    if isa(ut, DataType)
+        newexct = new_struct_exception(ut)
+        newexct === nothing || return RTEffects(Bottom, newexct, EFFECTS_THROWS)
+    end
     exct = Union{ErrorException,TypeError}
     if isa(ut, DataType) && !isabstracttype(ut)
         ismutable = ismutabletype(ut)
@@ -3568,7 +3582,10 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
     argtype = abstract_eval_value(interp, e.args[1], sstate, sv)
     rt, isexact = instanceof_tfunc(argtype, true)
     ut = unwrap_unionall(rt)
-    isa(ut, DataType) && datatype_hashiddenfields(ut) && return RTEffects(Bottom, ErrorException, EFFECTS_THROWS)
+    if isa(ut, DataType)
+        newexct = new_struct_exception(ut)
+        newexct === nothing || return RTEffects(Bottom, newexct, EFFECTS_THROWS)
+    end
     # `:splatnew` throws on a `UnionAll` or `Union` rep that is only `==` to `rt` (#61323)
     isexact = isexact && widenconst(argtype) <: DataType
     nothrow = false

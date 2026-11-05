@@ -4297,6 +4297,20 @@ for (T, x) in ((Method, which(sin, (Float64,))), (Task, current_task()))
 end
 @test !Base.datatype_hashiddenfields(Core.MethodInstance)
 
+# so are types with an opaque layout, which `new` would allocate with no room for their data
+for T in (Module, Symbol, String, Core.SimpleVector, Memory{Int})
+    err = TypeError("new", DataType, T)
+    @test_throws err Core.eval(@__MODULE__, Expr(:new, T))
+    fnew = @eval () -> $(Expr(:new, T))
+    @test_throws err Base.invokelatest(fnew)
+    @test Base.infer_return_type(fnew, ()) === Union{}
+    @test !Core.Compiler.is_nothrow(Base.infer_effects(fnew, ()))
+    fsplat = @eval () -> $(Expr(:splatnew, T, ()))
+    @test_throws err Base.invokelatest(fsplat)
+    @test Base.infer_return_type(fsplat, ()) === Union{}
+    @test !Core.Compiler.is_nothrow(Base.infer_effects(fsplat, ()))
+end
+
 # don't allow redefining types if n_uninitialized changes
 struct NInitializedTestType
     a
