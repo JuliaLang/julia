@@ -85,9 +85,9 @@ define hidden swiftcc void @sret_gc_root_phi_select(ptr nonnull swiftself "gcsta
 top:
   ; CHECK-LABEL: @sret_gc_root_phi_select
   ; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 3)
-  ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 2)
-  ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 1)
-  ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+  ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 {{[12]}})
+  ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 {{[01]}})
+  ; CHECK-NOT: @julia.get_gc_frame_slot
   ; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
   ; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 3)
   ; CHECK: alloca [3 x i64], align 8
@@ -108,6 +108,10 @@ false:                                            ; preds = %top
   br label %ret
 
 ret:                                              ; preds = %false, %true
+  ; CHECK: ret:
+  ; CHECK-NEXT: phi ptr
+  ; CHECK-NEXT: [[SRET_SEL_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 {{[012]}})
+  ; CHECK-NEXT: select i1 %unpredictable2, ptr [[SRET_SEL_SLOT]], ptr
   %5 = phi ptr [ %2, %true ], [ %3, %false ]
   %6 = select i1 %unpredictable2, ptr %4, ptr %5
   call swiftcc void @sret_call_gc(ptr noalias nocapture noundef sret({ ptr addrspace(10), i64, i64 }) %1, ptr noalias nocapture noundef "julia.return_roots"="1" %6, ptr nonnull swiftself "gcstack" %0)

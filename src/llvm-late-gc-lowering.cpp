@@ -2502,6 +2502,45 @@ void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColor
 void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
                                           ArrayRef<int> Colors, int PreAssignedColors, Value *GCFrame)
 {
+    int MaxColor = -1;
+    for (int C : Colors)
+        if (C > MaxColor)
+            MaxColor = C;
+    if (MaxColor < 0)
+        return;
+
+    auto isRuntimeThrowCall = [this](Instruction *Inst) {
+        auto *CI = dyn_cast<CallInst>(Inst);
+        if (!CI)
+            return false;
+        Function *Callee = CI->getCalledFunction();
+        if (Callee && (Callee == call_func || Callee == call2_func || Callee == call3_func) && CI->arg_size() >= 1)
+            Callee = dyn_cast<Function>(CI->getArgOperand(0)->stripPointerCasts());
+        if (!Callee)
+            return false;
+        StringRef Name = Callee->getName();
+        if (Name.substr(0, 4) == "ijl_")
+            Name = Name.drop_front(1);
+        if (Name.substr(0, 3) != "jl_")
+            return false;
+        return Name == "jl_throw" || Name == "jl_rethrow" || Name == "jl_rethrow_other" ||
+               Name == "jl_no_exc_handler" || Name == "jl_f_throw" ||
+               Name == "jl_f_throw_methoderror" || Name == "jl_method_error" ||
+               Name == "jl_error" || Name == "jl_errorf" || Name == "jl_exceptionf" ||
+               Name == "jl_too_few_args" || Name == "jl_too_many_args" ||
+               Name == "jl_type_error" || Name == "jl_type_error_rt" ||
+               Name == "jl_type_error_global" || Name == "jl_undefined_var_error" ||
+               Name == "jl_has_no_field_error" || Name == "jl_argument_error" ||
+               Name == "jl_atomic_error" || Name == "jl_bounds_error" ||
+               Name == "jl_bounds_error_v" || Name == "jl_bounds_error_int" ||
+               Name == "jl_bounds_error_tuple_int" || Name == "jl_bounds_error_unboxed_int" ||
+               Name == "jl_bounds_error_ints";
+    };
+
+    BitVector AssignedColors(MaxColor + 1);
+    BitVector DeadColors(MaxColor + 1);
+    unsigned PtrSize = S.F->getParent()->getDataLayout().getPointerSize();
+
     for (auto &BB : *S.F) {
         const BBState &BBS = S.BBStates[&BB];
         if (!BBS.HasSafepoint)
@@ -2513,32 +2552,61 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
                 break;
             }
         }
-        bool ResetDeadSlots = !isa<UnreachableInst>(BB.getTerminator()) || !S.ReturnsTwice.empty();
-        if (!HasLiveSafepoint && !ResetDeadSlots)
+        bool IsUnreachableNoSetjmp = isa<UnreachableInst>(BB.getTerminator()) && S.ReturnsTwice.empty();
+        bool SkipLastSafepointReset = IsUnreachableNoSetjmp &&
+            isRuntimeThrowCall(S.SafepointNumbering[BBS.LastSafepoint]);
+        if (!HasLiveSafepoint && SkipLastSafepointReset && BBS.FirstSafepoint == BBS.LastSafepoint)
             continue;
         LargeSparseBitVector LiveIn;
         AddInPredecessorLiveOuts(&BB, LiveIn, S);
         const LargeSparseBitVector *LastLive = &LiveIn;
         for (int Safepoint = BBS.FirstSafepoint; Safepoint >= BBS.LastSafepoint; --Safepoint) {
+            Instruction *SPInst = S.SafepointNumbering[Safepoint];
             const LargeSparseBitVector &NowLive = S.LiveSets[Safepoint];
-            SmallSet<int, 8> AssignedColors;
+            AssignedColors.reset();
             // store values which are alive in this safepoint but
             // haven't been stored in the GC frame before
             for (int Idx : NowLive) {
                 if (!HasBitSet(*LastLive, Idx)) {
-                    PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame,
-                      S.SafepointNumbering[Safepoint]);
-                    AssignedColors.insert(Colors[Idx]);
+                    PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame, SPInst);
+                    if (Colors[Idx] >= 0)
+                        AssignedColors.set(Colors[Idx]);
                 }
             }
-            if (ResetDeadSlots) {
+            bool IsLastSafepoint = (Safepoint == BBS.LastSafepoint);
+            if (!(IsLastSafepoint && SkipLastSafepointReset)) {
                 // reset slots which are no longer alive and weren't overwritten above
+                DeadColors.reset();
                 for (int Idx : *LastLive) {
-                    if (Colors[Idx] >= PreAssignedColors && !HasBitSet(NowLive, Idx) &&
-                        !AssignedColors.count(Colors[Idx])) {
-                        PlaceGCFrameReset(S, Idx, MinColorRoot, Colors, GCFrame,
-                            S.SafepointNumbering[Safepoint]);
+                    int C = Colors[Idx];
+                    if (C >= PreAssignedColors && !HasBitSet(NowLive, Idx) &&
+                        !AssignedColors.test(C)) {
+                        DeadColors.set(C);
                     }
+                }
+                IRBuilder<> builder(SPInst);
+                for (int StartColor = DeadColors.find_first(); StartColor != -1;) {
+                    int EndColor = StartColor + 1;
+                    while (EndColor < (int)DeadColors.size() && DeadColors.test(EndColor))
+                        ++EndColor;
+                    unsigned Count = EndColor - StartColor;
+                    if (Count >= 4) {
+                        auto slotAddress = builder.CreateCall(
+                            getOrDeclare(jl_intrinsics::getGCFrameSlot),
+                            {GCFrame, ConstantInt::get(Type::getInt32Ty(SPInst->getContext()), StartColor + MinColorRoot)},
+                            "gc_slot_addr_" + StringRef(std::to_string(StartColor + MinColorRoot)));
+                        builder.CreateMemSet(slotAddress, ConstantInt::get(Type::getInt8Ty(SPInst->getContext()), 0),
+                                             PtrSize * Count, Align(PtrSize));
+                    } else {
+                        for (int C = StartColor; C < EndColor; ++C) {
+                            auto slotAddress = builder.CreateCall(
+                                getOrDeclare(jl_intrinsics::getGCFrameSlot),
+                                {GCFrame, ConstantInt::get(Type::getInt32Ty(SPInst->getContext()), C + MinColorRoot)},
+                                "gc_slot_addr_" + StringRef(std::to_string(C + MinColorRoot)));
+                            builder.CreateStore(ConstantPointerNull::get(T_prjlvalue), slotAddress);
+                        }
+                    }
+                    StartColor = DeadColors.find_next(EndColor - 1);
                 }
             }
             LastLive = &NowLive;
