@@ -1210,6 +1210,14 @@ end
 
     # no choice leaves the input alone
     @test complete("f\t", String[])[1] == "f"
+
+    # right arrow at the end of the input accepts a single completion, in either return format
+    @test complete("fo\e[C", ["foo"])[1] == "foo"
+    @test complete("fo\e[C", LineEdit.NamedCompletion.(["foo"]))[1] == "foo"
+    @test complete("fo\e[C", ["foo", "fob"])[1] == "fo"
+    @test complete("f\e[C", ["foo"])[1] == "f"
+    @test complete("fo\e[C", ["foo"]; should_complete=false)[1] == "fo"
+    @test complete("fo\x01\e[C|", ["foo"])[1] == "f|o"
 end
 
 @testset "beep" begin

@@ -1127,7 +1127,7 @@ function edit_move_right(m::MIState)
         refresh_line(s)
         return true
     else
-        completions, reg, should_complete = complete_line(s.p.complete, s, m.active_module)
+        completions, reg, should_complete = complete_line_named(s.p.complete, s, m.active_module)
         if should_complete && eof(buf) && length(completions) == 1 && reg.second - reg.first > 1
             # Replace word by completion
             prev_pos = position(s)
