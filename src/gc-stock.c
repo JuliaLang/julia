@@ -1402,6 +1402,80 @@ static void gc_sweep_wait_for_all_per_thread(void) JL_NOTSAFEPOINT
 
 extern const unsigned pool_sizes[];
 
+// Free half of the stacks that remain unused since the last sweep (or all of
+// them, if the thread is not alive yet or has exited)
+static void free_idle_stacks(jl_ptls_t ptls2, int i) JL_NOTSAFEPOINT
+{
+    int thread_dead = jl_atomic_load_relaxed(&ptls2->current_task) == NULL;
+    if (thread_dead || i == jl_atomic_load_relaxed(&gc_stack_free_idx)) {
+        for (int p = 0; p < JL_N_STACK_POOLS; p++) {
+            small_arraylist_t *al = &ptls2->gc_tls_common.heap.free_stacks[p];
+            size_t n_to_free;
+            if (thread_dead) {
+                n_to_free = al->len; // not alive yet or dead, so it does not need these anymore
+            }
+            else if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
+                n_to_free = al->len / 2;
+                if (n_to_free > (al->len - MIN_STACK_MAPPINGS_PER_POOL))
+                    n_to_free = al->len - MIN_STACK_MAPPINGS_PER_POOL;
+            }
+            else {
+                n_to_free = 0;
+            }
+            for (int n = 0; n < n_to_free; n++) {
+                void *stk = small_arraylist_pop(al);
+                free_stack(stk, pool_sizes[p]);
+            }
+            if (thread_dead) {
+                small_arraylist_free(al);
+            }
+        }
+    }
+}
+
+// Free the stacks of unreachable tasks back to the thread's pools
+static void sweep_live_task_stacks(jl_ptls_t ptls2) JL_NOTSAFEPOINT
+{
+    small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
+    size_t n = 0;
+    size_t ndel = 0;
+    size_t l = live_tasks->len;
+    void **lst = live_tasks->items;
+    if (l == 0)
+        return;
+    while (1) {
+        jl_task_t *t = (jl_task_t*)lst[n];
+        assert(jl_is_task(t));
+        if (gc_marked(jl_astaggedvalue(t)->bits.gc)) {
+            if (t->ctx.stkbuf == NULL)
+                ndel++; // jl_release_task_stack called
+            else
+                n++;
+        }
+        else {
+            ndel++;
+            void *stkbuf = t->ctx.stkbuf;
+            size_t bufsz = t->ctx.bufsz;
+            if (stkbuf) {
+                t->ctx.stkbuf = NULL;
+                _jl_free_stack(ptls2, stkbuf, bufsz);
+            }
+#ifdef _COMPILER_TSAN_ENABLED_
+            if (t->ctx.tsan_state) {
+                __tsan_destroy_fiber(t->ctx.tsan_state);
+                t->ctx.tsan_state = NULL;
+            }
+#endif
+        }
+        if (n >= l - ndel)
+            break;
+        void *tmp = lst[n];
+        lst[n] = lst[n + ndel];
+        lst[n + ndel] = tmp;
+    }
+    live_tasks->len -= ndel;
+}
+
 // Sweep the per-thread heaps, one thread's at a time, in parallel with the
 // other collector threads: free the dead malloc'd buffers and big objects and
 // sweep the stack pools.
@@ -1434,72 +1508,8 @@ static void sweep_per_thread_loop(void) JL_NOTSAFEPOINT
         // stack sweeps have finished (see gc_sweep_big_serially).
         if (!sweep_big_serially)
             sweep_list_of_young_bigvals(ptls2->gc_tls.heap.young_generation_of_bigvals);
-        // free half of stacks that remain unused since last sweep (or all
-        // of them, if the thread is not alive yet or has exited)
-        int thread_dead = jl_atomic_load_relaxed(&ptls2->current_task) == NULL;
-        if (thread_dead || i == jl_atomic_load_relaxed(&gc_stack_free_idx)) {
-            for (int p = 0; p < JL_N_STACK_POOLS; p++) {
-                small_arraylist_t *al = &ptls2->gc_tls_common.heap.free_stacks[p];
-                size_t n_to_free;
-                if (thread_dead) {
-                    n_to_free = al->len; // not alive yet or dead, so it does not need these anymore
-                }
-                else if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
-                    n_to_free = al->len / 2;
-                    if (n_to_free > (al->len - MIN_STACK_MAPPINGS_PER_POOL))
-                        n_to_free = al->len - MIN_STACK_MAPPINGS_PER_POOL;
-                }
-                else {
-                    n_to_free = 0;
-                }
-                for (int n = 0; n < n_to_free; n++) {
-                    void *stk = small_arraylist_pop(al);
-                    free_stack(stk, pool_sizes[p]);
-                }
-                if (thread_dead) {
-                    small_arraylist_free(al);
-                }
-            }
-        }
-
-        small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
-        size_t n = 0;
-        size_t ndel = 0;
-        size_t l = live_tasks->len;
-        void **lst = live_tasks->items;
-        if (l == 0)
-            continue;
-        while (1) {
-            jl_task_t *t = (jl_task_t*)lst[n];
-            assert(jl_is_task(t));
-            if (gc_marked(jl_astaggedvalue(t)->bits.gc)) {
-                if (t->ctx.stkbuf == NULL)
-                    ndel++; // jl_release_task_stack called
-                else
-                    n++;
-            }
-            else {
-                ndel++;
-                void *stkbuf = t->ctx.stkbuf;
-                size_t bufsz = t->ctx.bufsz;
-                if (stkbuf) {
-                    t->ctx.stkbuf = NULL;
-                    _jl_free_stack(ptls2, stkbuf, bufsz);
-                }
-#ifdef _COMPILER_TSAN_ENABLED_
-                if (t->ctx.tsan_state) {
-                    __tsan_destroy_fiber(t->ctx.tsan_state);
-                    t->ctx.tsan_state = NULL;
-                }
-#endif
-            }
-            if (n >= l - ndel)
-                break;
-            void *tmp = lst[n];
-            lst[n] = lst[n + ndel];
-            lst[n + ndel] = tmp;
-        }
-        live_tasks->len -= ndel;
+        free_idle_stacks(ptls2, i);
+        sweep_live_task_stacks(ptls2);
     }
     gc_account_freed_malloced_memory(freed_bytes, nfreed);
     jl_atomic_fetch_add(&gc_n_threads_sweeping_per_thread, -1);
