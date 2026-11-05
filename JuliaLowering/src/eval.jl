@@ -844,6 +844,8 @@ end
 
 __script_entry_eval_thunk(mod::Module, code::Core.CodeInfo) =
     @ccall jl_eval_thunk(mod::Any, code::Any, #=fast=#1::Cint)::Any
+__script_entry_end_module(mod::Module) =
+    @ccall jl_end_new_module(mod::Module)::Cvoid
 
 function _eval(mod::Module, iter::LoweringIterator,
                error_compat::Bool, softscope::Bool)
@@ -868,7 +870,7 @@ function _eval(mod::Module, iter::LoweringIterator,
                 filename::Cstring, loc.line::Cint)::Module
             push!(modules, mod)
         elseif type == :end_module
-            @ccall jl_end_new_module(modules[end]::Module)::Cvoid
+            __script_entry_end_module(modules[end]) # __init__ frames
             result = pop!(modules)
         elseif type == :thunk
             code = thunk[2]
