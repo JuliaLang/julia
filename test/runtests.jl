@@ -159,6 +159,14 @@ limited_worker_rss && move_to_node1("Distributed")
 # Otherwise, we use multiple worker processes if and only if `net_on` is true.
 const use_workers = net_on || Base.get_bool_env("JULIA_TEST_USE_MULTIPLE_WORKERS", false)
 
+# Without workers, nothing can replace the process that the tests in
+# `recycle_worker_tests` leave state behind in, so run them after all other tests,
+# with `threads` last
+if !use_workers
+    move_to_node1("precompile")
+    move_to_node1("threads")
+end
+
 # Start the longest tests first, so that they don't end up running alone at the end while
 # the other workers sit idle. Roughly in decreasing order of their duration on CI (Linux,
 # macOS and Windows, October 2026); tests that are not listed keep their order and run
