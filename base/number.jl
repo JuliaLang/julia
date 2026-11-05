@@ -365,6 +365,25 @@ zero(::Type{T}) where {T<:Number} = convert(T,0)
 zero(::Type{Union{}}, slurp...) = Union{}(0)
 
 """
+    haszero(T::Type)::Bool
+
+Return `true` if `zero(T)` is the zero of every value of type `T`, so that code may use
+`zero(T)` in place of `zero(x)` for any `x::T`. For example, `zero(A)` for an array `A`
+fills the result with `zero(eltype(A))` when this is `true`, and otherwise computes
+`zero(x)` for each element.
+
+This is `true` for concrete subtypes of `Number` and their unions with `Missing`, and `false`
+otherwise. A number type whose zero depends on its value, for example on physical units stored
+in each value, should define `Base.haszero(::Type{MyNumber}) = false`. Other types for which
+`zero(T)` is defined may define it as `true`.
+
+!!! compat "Julia 1.15"
+    This function requires at least Julia 1.15.
+"""
+haszero(::Type) = false
+haszero(::Type{T}) where {T<:Number} = isconcretetype(T)
+
+"""
     one(x)
     one(T::Type)
 
