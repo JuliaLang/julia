@@ -396,12 +396,12 @@ BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=rounding_raw(BigFloat); 
     BigFloat(Float64(x), r; precision=precision)
 
 function BigFloat(x::Rational, r::MPFRRoundingMode=rounding_raw(BigFloat); precision::Integer=_precision_with_base_2(BigFloat))
-    # numerator and denominator are converted exactly, so the division is the only rounding
-    num, den = numerator(x), denominator(x)
+    # the numerator is converted exactly, so the division is the only rounding
+    num = numerator(x)
     n = BigFloat(num; precision = ndigits(num; base = 2))
-    d = BigFloat(den; precision = ndigits(den; base = 2))
+    d = BigInt(denominator(x))
     z = BigFloat(; precision)
-    ccall((:mpfr_div, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), z, n, d, r)
+    ccall((:mpfr_div_z, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigInt}, MPFRRoundingMode), z, n, d, r)
     return z
 end
 
