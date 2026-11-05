@@ -2294,7 +2294,7 @@ end
     @test Base.CacheFlags(cf; opt_level=0).coverage_path == cf.coverage_path
     # the path is no part of the cache's identity
     @test Base.compilecache_path(Base.PkgId("Foo"), ""; flags=cf) == Base.compilecache_path(Base.PkgId("Foo"), ""; flags=plain)
-    for malformed in ("CacheFlags", "CacheFlags(1)", "Flags(; opt_level=1)", "CacheFlags(; coverage_path=1)")
+    for malformed in ("CacheFlags", "CacheFlags(1)", "Flags(; opt_level=1)", "CacheFlags(; coverage_path=1)", "CacheFlags(; opt_level)")
         @test_throws "Malformed CacheFlags string" parse(Base.CacheFlags, malformed)
     end
 end
