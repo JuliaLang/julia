@@ -499,7 +499,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
     if isa(x, Core.PhiNode)
         partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
                           slot_offset, statement_offset, boundscheck)
-        x.edges .+= slot_offset
+        x.edges .+= statement_offset
         return x
     end
     if isa(x, Core.UpsilonNode)

@@ -301,6 +301,12 @@ function shifted_kernel_gen(world::UInt, source, _, K, X)
     return ci
 end
 kernel_ir!(_, ci) = ci
+phi_kernel(c) = c
+function kernel_ir!(::typeof(phi_kernel), ci)
+    ci.code = Any[Core.GotoIfNot(Core.SlotNumber(2), 3), Core.GotoNode(4), Core.GotoNode(4),
+                  Core.PhiNode(Int32[2, 3], Any[1, 2]), Core.ReturnNode(Core.SSAValue(4))]
+    return ci
+end
 @eval function run_shifted(kernel, x)
     $(Expr(:meta, :generated, shifted_kernel_gen))
     $(Expr(:meta, :generated_only))
@@ -314,6 +320,8 @@ strlen_kernel(s::Vector{T}) where {T} = ccall(:strlen, Csize_t, (Ref{T},), s)
 gc_safe_kernel(s::Vector{UInt8}) = @ccall gc_safe=true strlen(s::Ptr{UInt8})::Csize_t
 
 @testset "partially_inline! keeps a moved method working" begin
+    @test run_shifted(phi_kernel, true) === 1
+    @test run_shifted(phi_kernel, false) === 2
     @test run_shifted(ccall_kernel, 1) === 1
     @test run_shifted(ccall_kernel, "a") === "a"
     @test run_shifted(strlen_kernel, UInt8[97, 98, 0]) == 2
@@ -362,6 +370,10 @@ using Core: SSAValue, SlotNumber, PhiNode, PhiCNode, PiNode, UpsilonNode, EnterN
     @test !isdefined(inl(EnterNode(5)), :scope)
 
 
+    let phi = inl(PhiNode(Int32[1, 2], Any[SSAValue(1), SlotNumber(1)]); slots=Any[42])
+        @test phi.edges == Int32[11, 12]
+        @test isequal(phi.values, Any[SSAValue(11), 42])
+    end
     let values = Vector{Any}(undef, 2)
         values[1] = SSAValue(1)
         phi = inl(PhiNode(Int32[1, 2], values))
