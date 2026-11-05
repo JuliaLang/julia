@@ -1923,7 +1923,6 @@ history_prev(::EmptyHistoryProvider) = ("", false)
 history_next(::EmptyHistoryProvider) = ("", false)
 history_first(::EmptyHistoryProvider) = ("", false)
 history_last(::EmptyHistoryProvider) = ("", false)
-history_search(::EmptyHistoryProvider, args...) = false
 add_history(::EmptyHistoryProvider, s) = nothing
 add_history(s::PromptState) = add_history(mode(s).hist, s)
 history_next_prefix(s, hist, prefix) = false

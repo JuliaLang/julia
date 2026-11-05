@@ -3835,8 +3835,6 @@ add_tfunc(Core.task_result_type, 1, 1, task_result_type_tfunc, 0)
 # N.B. the `abstract_eval` callback below allows us to use these queries
 # both during abstract interpret and optimization
 
-const FOREIGNCALL_ARG_START = 6
-
 function foreigncall_effects(@nospecialize(abstract_eval), ::Expr)
     # `:foreigncall` can potentially perform all sorts of operations, including calling
     # overlay methods, but the `:foreigncall` itself is not dispatched, and there is no
@@ -3844,24 +3842,4 @@ function foreigncall_effects(@nospecialize(abstract_eval), ::Expr)
     # be executed using the wrong method table due to concrete evaluation, so using
     # `EFFECTS_UNKNOWN` here and not tainting with `:nonoverlayed` is fine
     return EFFECTS_UNKNOWN
-end
-
-function new_genericmemory_nothrow(@nospecialize(abstract_eval), args::Vector{Any})
-    length(args) ≥ 1+FOREIGNCALL_ARG_START || return false
-    mtype = instanceof_tfunc(abstract_eval(args[FOREIGNCALL_ARG_START]))[1]
-    isa(mtype, DataType) || return false
-    isdefined(mtype, :instance) || return false
-    elsz = Int(datatype_layoutsize(mtype))
-    arrayelem = datatype_arrayelem(mtype)
-    dim = abstract_eval(args[1+FOREIGNCALL_ARG_START])
-    isa(dim, Const) || return false
-    dimval = dim.val
-    isa(dimval, Int) || return false
-    0 < dimval < typemax(Int) || return false
-    tot, ovflw = Intrinsics.checked_smul_int(dimval, elsz)
-    ovflw && return false
-    isunion = 2
-    tot, ovflw = Intrinsics.checked_sadd_int(tot, arrayelem == isunion ? 1 + dimval : 1)
-    ovflw && return false
-    return true
 end
