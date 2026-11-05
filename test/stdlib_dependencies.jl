@@ -11,7 +11,8 @@ depspath = joinpath(buildroot, "deps", "jlutilities")
 objectfile_depot = if ispath(depspath)
     joinpath(realpath(depspath), "depot")
 elseif Base.get_bool_env("JULIA_TEST_IS_BASE_CI", false)
-    mktempdir()
+    # Windows cannot delete a pkgimage while it is loaded
+    mktempdir(; cleanup = !Sys.iswindows())
 end
 if objectfile_depot !== nothing
     pushfirst!(DEPOT_PATH, objectfile_depot)
@@ -260,6 +261,10 @@ else
                         if "libpcre2-8" in missing_deps && "libpcre2" in extraneous_deps
                             missing_deps = setdiff(missing_deps, ["libpcre2-8"])
                             extraneous_deps = setdiff(extraneous_deps, ["libpcre2"])
+                        end
+                        # These stdlibs do not depend on CompilerSupportLibraries_jll, so they cannot declare this
+                        if Sys.WORD_SIZE == 32 && stdlib_name in ("Zlib_jll", "libpicosat_jll")
+                            missing_deps = setdiff(missing_deps, ["libgcc_s_sjlj"])
                         end
                     end
 
