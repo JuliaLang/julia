@@ -984,6 +984,9 @@ end
             """
     @test actual == expected
 
+    @test Markdown.latex(Markdown.parse("!!! note \"a_b & c\"\n    Body")) ==
+        "\\begin{quote}\n\\textbf{note}\n\na\\_b \\& c\n\nBody\n\n\\end{quote}\n"
+
     actual = Markdown.latex(m_1)
     expected =
             """
