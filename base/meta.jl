@@ -535,10 +535,11 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         )
     end
     if isa(x, Core.EnterNode)
-        if x.catch_dest == 0
-            return x
-        end
-        return Core.EnterNode(x, x.catch_dest + statement_offset)
+        catch_dest = x.catch_dest == 0 ? 0 : x.catch_dest + statement_offset
+        isdefined(x, :scope) || return Core.EnterNode(catch_dest)
+        return Core.EnterNode(catch_dest,
+            _partially_inline!(x.scope, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck))
     end
     if isa(x, Expr)
         head = x.head

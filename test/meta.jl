@@ -312,6 +312,16 @@ end
     $(Expr(:meta, :generated_only))
 end
 
+const scoped_kernel_value = Base.ScopedValues.ScopedValue(1)
+function scoped_kernel(c)
+    Base.ScopedValues.@with scoped_kernel_value => 2 begin
+        try
+            c ? scoped_kernel_value[] : error()
+        catch
+            -scoped_kernel_value[]
+        end
+    end
+end
 function ccall_kernel(x::T) where {T}
     cf = @cfunction(identity, Ref{T}, (Ref{T},))
     return ccall(cf, Ref{T}, (Ref{T},), x)
@@ -322,6 +332,8 @@ gc_safe_kernel(s::Vector{UInt8}) = @ccall gc_safe=true strlen(s::Ptr{UInt8})::Cs
 @testset "partially_inline! keeps a moved method working" begin
     @test run_shifted(phi_kernel, true) === 1
     @test run_shifted(phi_kernel, false) === 2
+    @test run_shifted(scoped_kernel, true) === 2
+    @test run_shifted(scoped_kernel, false) === -2
     @test run_shifted(ccall_kernel, 1) === 1
     @test run_shifted(ccall_kernel, "a") === "a"
     @test run_shifted(strlen_kernel, UInt8[97, 98, 0]) == 2
@@ -368,6 +380,9 @@ using Core: SSAValue, SlotNumber, PhiNode, PhiCNode, PiNode, UpsilonNode, EnterN
     @test !isdefined(inl(EnterNode(0)), :scope)
     @test inl(EnterNode(5)) === EnterNode(15)
     @test !isdefined(inl(EnterNode(5)), :scope)
+    @test inl(EnterNode(5, SSAValue(1))) === EnterNode(15, SSAValue(11))
+    @test inl(EnterNode(0, SSAValue(1))) === EnterNode(0, SSAValue(11))
+    @test inl(EnterNode(5, SlotNumber(1)); slots=Any[42]) === EnterNode(15, 42)
 
 
     let phi = inl(PhiNode(Int32[1, 2], Any[SSAValue(1), SlotNumber(1)]); slots=Any[42])
