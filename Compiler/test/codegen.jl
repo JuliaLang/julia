@@ -1537,6 +1537,21 @@ memory_zeroinit_merge(row, names) = collect(getfield(row, nm) for nm in names)
     @test memory_zeroinit_merge(row, (:b, :b, :b)) == [4.0, 4.0, 4.0]
 end
 
+# a value split out of a union keeps its box when it is boxed again
+@noinline getu_union(v) = v[1]::Union{Int, String}
+function recopy_union!(w, v)
+    y = getu_union(v)
+    if y isa Int
+        w[1] = y
+    end
+    nothing
+end
+let v = Any[typemax(Int)], w = Any[nothing]
+    recopy_union!(w, v)
+    @test w[1] === typemax(Int)
+    @test (@allocated recopy_union!(w, v)) == 0
+end
+
 function missing_edge_union_tag(c::Bool, d::Bool, e::Bool)
     local x
     if c
