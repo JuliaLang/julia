@@ -5957,6 +5957,103 @@ end
     end
 end
 
+# Check dynamic rounding and signed zero in x86 package images using rint instructions and libcalls.
+@testset "rint in package images" begin
+    if Sys.ARCH in (:x86_64, :i686)
+        mkdepottempdir() do dir
+            write(joinpath(dir, "RintImage.jl"), raw"""
+                module RintImage
+                    for (T, ir, intrinsic, libcall) in ((Float32, "float", "llvm.rint.f32", "rintf"),
+                                                        (Float64, "double", "llvm.rint.f64", "rint"))
+                        for (operation, symbol, attribute) in ((:intrinsic, intrinsic, ""),
+                                                               (:libcall, libcall, "nobuiltin"))
+                            code = "declare $ir @$symbol($ir)\ndefine $ir @entry($ir %x) {\n" *
+                                   "%r = call $ir @$symbol($ir %x) $attribute\nret $ir %r\n}"
+                            @eval @noinline $operation(x::$T) = Base.llvmcall(
+                                ($code, "entry"), $T, Tuple{$T}, x)
+                            @assert precompile(getfield(@__MODULE__, operation), (T,))
+                        end
+                    end
+                end
+                """)
+            target = Sys.matched_sysimage_target() * ",-sse4.1,-avx"
+            probe = `$(Base.julia_cmd(; cpu_target=target)) --startup-file=no -e 'exit()'`
+            if !check_image_process("rint target compatibility", probe; target, check_target=true)
+                return
+            end
+            depot = joinpath(dir, "depot")
+            separator = Sys.iswindows() ? ';' : ':'
+            julia = addenv(`$(Base.julia_cmd()) --startup-file=no --compiled-modules=yes --pkgimages=yes`,
+                "JULIA_LOAD_PATH" => string(dir, separator, "@stdlib"),
+                "JULIA_DEPOT_PATH" => depot, "JULIA_CPU_TARGET" => target)
+            built = false
+            images = String[]
+            @testset "image build" begin
+                built = check_image_script(dir, "build-rint", julia, "using RintImage"; target)
+                if built
+                    for (root, dirs, files) in walkdir(depot)
+                        filter!(dir -> !endswith(dir, ".dSYM"), dirs)
+                        append!(images, (joinpath(root, file) for file in files
+                            if endswith(file, "." * Libdl.dlext) && occursin("RintImage", joinpath(root, file))))
+                    end
+                    @test length(images) == 1 context=images
+                end
+            end
+            built && length(images) == 1 || return
+            checks = joinpath(dir, "check-rint.jl")
+            write(checks, "using RintImage, Libdl\nimage = " * repr(only(images)) * "\n" * raw"""
+                @assert any(path -> samefile(path, image), Libdl.dllist()) "Package image was not loaded"
+                for operation in (RintImage.intrinsic, RintImage.libcall), T in (Float32, Float64)
+                    signature = Tuple{typeof(operation), T}
+                    instance = only(mi for mi in Base.specializations(which(operation, (T,)))
+                                    if mi.specTypes === signature)
+                    pointer = instance.cache.specptr
+                    @assert pointer != C_NULL "Missing native entry: " * string(signature)
+                    handle = ccall(:jl_find_dynamic_library_by_addr, Ptr{Cvoid},
+                                   (Ptr{Cvoid}, Cint, Cint), pointer, 0, 1)
+                    @assert handle != C_NULL "Missing image owner: " * string(signature)
+                    owner = Libdl.dlpath(handle)
+                    @assert samefile(owner, image) string(signature, ": expected image=", image, "; actual image=", owner)
+                end
+                isempty(ARGS) && exit()
+                T = ARGS[1] == "Float32" ? Float32 : Float64
+                column = parse(Int, ARGS[2])
+                mode = (RoundNearest, RoundDown, RoundUp, RoundToZero)[column]
+                rows = ((2.25, (2., 2., 3., 2.)), (-2.25, (-2., -3., -2., -2.)),
+                        (2.5, (2., 2., 3., 2.)), (-2.5, (-2., -3., -2., -2.)),
+                        (0.5, (0., 0., 1., 0.)), (-0.5, (-0., -1., -0., -0.)),
+                        (0., (0., 0., 0., 0.)), (-0., (-0., -0., -0., -0.)))
+                original = Base.Rounding.rounding_raw(Float64)
+                for operation in (RintImage.intrinsic, RintImage.libcall), (input, expected) in rows
+                    x = Base.inferencebarrier(T(input))
+                    actual = try
+                        Base.Rounding.setrounding_raw(Float64, Base.Rounding.to_fenv(mode))
+                        Base.invokelatest(operation, x)
+                    finally
+                        Base.Rounding.setrounding_raw(Float64, original)
+                    end
+                    @assert isequal(actual, T(expected[column])) string(
+                        "operation=", operation, "; type=", T, "; mode=", mode,
+                        "; input=", repr(x), "; expected=", repr(T(expected[column])), "; actual=", repr(actual))
+                end
+                """)
+            julia = `$julia --compiled-modules=strict`
+            loaded = false
+            @testset "image load" begin
+                loaded = check_image_process("load rint image", `$julia $checks`; target)
+            end
+            loaded || return
+            @testset "pkgimage results" begin
+                for T in (Float32, Float64), (column, mode) in enumerate((RoundNearest, RoundDown, RoundUp, RoundToZero))
+                    check_image_process("rint / $T / $mode", `$julia $checks $T $column`; target)
+                end
+            end
+        end
+    else
+        @test_skip Sys.ARCH in (:x86_64, :i686)
+    end
+end
+
 finish_precompile_test!()
 if original_num_precompile_tasks === nothing
     delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")
