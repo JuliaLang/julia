@@ -399,6 +399,71 @@ top:
   ret void
 }
 
+define void @unreachable_no_reset_and_slot_reuse(i64 %a, ptr addrspace(11) %p, i1 %cond) {
+top:
+; CHECK-LABEL: @unreachable_no_reset_and_slot_reuse
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %v1 = call ptr addrspace(10) @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT0:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v1, ptr [[SLOT0]]
+; CHECK-NEXT: call void @jl_safepoint()
+  call void @jl_safepoint()
+  call void @boxed_simple(ptr addrspace(10) %v1, ptr addrspace(10) %v1)
+  br i1 %cond, label %cont, label %err
+
+cont:
+; CHECK: cont:
+  %v2 = load ptr addrspace(10), ptr addrspace(11) %p, align 8
+; CHECK-NEXT: %v2 = load ptr addrspace(10), ptr addrspace(11) %p, align 8
+; CHECK-NOT: store ptr addrspace(10) null
+; CHECK-NEXT: [[SLOT1:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v2, ptr [[SLOT1]]
+; CHECK-NEXT: call void @jl_safepoint()
+  call void @jl_safepoint()
+  call void @boxed_simple(ptr addrspace(10) %v2, ptr addrspace(10) %v2)
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret void
+
+err:
+; CHECK: err:
+; CHECK-NOT: @julia.get_gc_frame_slot
+; CHECK-NOT: store ptr addrspace(10) null
+; CHECK-NEXT: call void @jl_safepoint()
+; CHECK-NEXT: unreachable
+  call void @jl_safepoint()
+  unreachable
+}
+
+define void @sink_non_entry_alloca(i1 %cond) {
+top:
+; CHECK-LABEL: @sink_non_entry_alloca
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 2)
+; CHECK-NOT: @julia.get_gc_frame_slot
+; FINAL-LABEL: @sink_non_entry_alloca
+; FINAL: %gcframe = alloca ptr addrspace(10), i32 4, align 16
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %sret = alloca [2 x ptr addrspace(10)], align 8
+; CHECK: br i1 %cond, label %use_bb, label %exit
+; FINAL: br i1 %cond, label %use_bb, label %exit
+  br i1 %cond, label %use_bb, label %exit
+
+use_bb:
+; CHECK: use_bb:
+; CHECK-NEXT: %sret = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: call void null(ptr sret([2 x ptr addrspace(10)]) "julia.return_roots"="2" %sret)
+; FINAL: use_bb:
+; FINAL-NEXT: %sret = getelementptr inbounds {{(nuw )?}}ptr addrspace(10), ptr %gcframe, i32 2
+; FINAL-NEXT: call void null(ptr sret([2 x ptr addrspace(10)]) "julia.return_roots"="2" %sret)
+  call void null(ptr sret([2 x ptr addrspace(10)]) "julia.return_roots"="2" %sret)
+  br label %exit
+
+exit:
+; CHECK: exit:
+; CHECK-NEXT: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret void
+}
+
 attributes #10 = { nounwind willreturn memory(argmem: read) "julia.safepoint" }
 attributes #11 = { nounwind willreturn memory(read) "julia.safepoint" }
 attributes #12 = { nounwind willreturn memory(argmem: read) }
