@@ -314,16 +314,12 @@ mutable struct PollingFileWatcher
     closed::Bool # whether the user has explicitly destroyed this
     ioerrno::Int32 # the stat errno as of the last result
     prev_stat::StatStruct # the stat as of the last successful result
-    PollingFileWatcher(file::AbstractString, interval::Float64=5.007; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
-        PollingFileWatcher(String(file), interval; cancel)
-    function PollingFileWatcher(file::String, interval::Float64=5.007;
-                                cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) # same default as nodejs
+    PollingFileWatcher(file::AbstractString, interval::Float64=5.007) = PollingFileWatcher(String(file), interval)
+    function PollingFileWatcher(file::String, interval::Float64=5.007) # same default as nodejs
         stat_req = Memory{UInt8}(undef, Int(_sizeof_uv_fs))
         this = new(file, interval, Base.ThreadSynchronizer(), nothing, stat_req, false, false, 0, StatStruct())
         uv_req_set_data(stat_req, this)
-        # the construction-time wait is governed by the caller's token (or
-        # explicit shield) - poll_file threads its resolved token here
-        wait(this; cancel) # initialize with the current stat before return
+        wait(this) # initialize with the current stat before return
         return this
     end
 end
@@ -594,11 +590,10 @@ isopen(pfw::FDWatcher) = !pfw.mask.timedout
 Base.stat(pfw::PollingFileWatcher) = Base.checkstat(@lock pfw.notify pfw.prev_stat)
 
 # n.b. this _wait may return spuriously early with a timedout event
-function _wait(fdw::_FDWatcher, mask::FDEvent, tok::Base.MaybeToken)
+function _wait(fdw::_FDWatcher, mask::FDEvent)
     iolock_begin()
     preserve_handle(fdw)
     lock(fdw.notify)
-    locked = true
     try
         events = FDEvent(fdw.events & mask.events)
         if !isopen(fdw) # !open
@@ -619,28 +614,24 @@ function _wait(fdw::_FDWatcher, mask::FDEvent, tok::Base.MaybeToken)
                 fdw.active = (readable, writable)
             end
             iolock_end()
-            locked = false
-            evt = wait(fdw.notify, tok)::Int32
-            locked = true
-            return FDEvent(evt)
+            return FDEvent(wait(fdw.notify)::Int32)
         else
             iolock_end()
             return events
         end
     finally
-        locked && unlock(fdw.notify)
+        unlock(fdw.notify)
         unpreserve_handle(fdw)
     end
 end
 
-function wait(fdw::_FDWatcher; readable=true, writable=true, cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
-    tok = Base.resolve_cancel_token(Base.precheck_cancel_arg(cancel))
-    return wait(fdw, FDEvent(readable, writable, false, false), tok)
+function wait(fdw::_FDWatcher; readable=true, writable=true)
+    return wait(fdw, FDEvent(readable, writable, false, false))
 end
-function wait(fdw::_FDWatcher, mask::FDEvent, tok::Base.MaybeToken)
+function wait(fdw::_FDWatcher, mask::FDEvent)
     while true
         mask.timedout && return mask
-        events = _wait(fdw, mask, tok)
+        events = _wait(fdw, mask)
         if !events.timedout
             @lock fdw.notify fdw.events &= ~events.events
             return events
@@ -648,11 +639,10 @@ function wait(fdw::_FDWatcher, mask::FDEvent, tok::Base.MaybeToken)
     end
 end
 
-function wait(fdw::FDWatcher; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
-    tok = Base.resolve_cancel_token(Base.precheck_cancel_arg(cancel))
+function wait(fdw::FDWatcher)
     isopen(fdw) || throw(EOFError())
     while true
-        events = GC.@preserve fdw _wait(fdw.watcher, fdw.mask, tok)
+        events = GC.@preserve fdw _wait(fdw.watcher, fdw.mask)
         isopen(fdw) || throw(EOFError())
         if !events.timedout
             @lock fdw.watcher.notify fdw.watcher.events &= ~events.events
@@ -661,14 +651,13 @@ function wait(fdw::FDWatcher; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
     end
 end
 
-function wait(socket::RawFD; readable=false, writable=false, cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
-    tok = Base.resolve_cancel_token(Base.precheck_cancel_arg(cancel))
-    return wait(socket, FDEvent(readable, writable, false, false), tok)
+function wait(socket::RawFD; readable=false, writable=false)
+    return wait(socket, FDEvent(readable, writable, false, false))
 end
-function wait(fd::RawFD, mask::FDEvent, tok::Base.MaybeToken=Base.default_cancel_token())
+function wait(fd::RawFD, mask::FDEvent)
     fdw = _FDWatcher(fd, mask)
     try
-        return wait(fdw, mask, tok)
+        return wait(fdw, mask)
     finally
         close(fdw, mask)
     end
@@ -676,26 +665,22 @@ end
 
 
 if Sys.iswindows()
-    function wait(socket::WindowsRawSocket; readable=false, writable=false, cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
-        tok = Base.resolve_cancel_token(Base.precheck_cancel_arg(cancel))
-        return wait(socket, FDEvent(readable, writable, false, false), tok)
+    function wait(socket::WindowsRawSocket; readable=false, writable=false)
+        return wait(socket, FDEvent(readable, writable, false, false))
     end
-    function wait(socket::WindowsRawSocket, mask::FDEvent, tok::Base.MaybeToken=Base.default_cancel_token())
+    function wait(socket::WindowsRawSocket, mask::FDEvent)
         fdw = _FDWatcher(socket, mask)
         try
-            return wait(fdw, mask, tok)
+            return wait(fdw, mask)
         finally
             close(fdw, mask)
         end
     end
 end
 
-function wait(pfw::PollingFileWatcher; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
-    tok = Base.resolve_cancel_token(Base.precheck_cancel_arg(cancel))
+function wait(pfw::PollingFileWatcher)
     iolock_begin()
     lock(pfw.notify)
-    locked = true
-    iolocked = true
     prevstat = pfw.prev_stat
     havechange = false
     timer = nothing
@@ -716,21 +701,13 @@ function wait(pfw::PollingFileWatcher; cancel::Base.CancelTokenArg=Base.DEFAULT_
             pfw.active = true
         end
         iolock_end()
-        iolocked = false
-        locked = false
-        havechange = wait(pfw.notify, tok)::Bool
-        locked = true
+        havechange = wait(pfw.notify)::Bool
         unlock(pfw.notify)
-        locked = false
         iolock_begin()
-        iolocked = true
     catch
         # stop_watching: cleanup any timers from before or after starting this wait before it failed, if there are no other watchers
-        # (reacquire what the cleanup reads - the wait-throw released both)
-        iolocked || iolock_begin()
         latetimer = nothing
         try
-            locked || lock(pfw.notify)
             if isempty(pfw.notify)
                 latetimer = pfw.timer
                 pfw.timer = nothing
@@ -744,11 +721,6 @@ function wait(pfw::PollingFileWatcher; cancel::Base.CancelTokenArg=Base.DEFAULT_
             latetimer === nothing || close(latetimer)
             iolock_begin()
         end
-        # rethrow WITHOUT the iolock: the normal path's trailing
-        # iolock_end is skipped on the exceptional exit, so the hold
-        # taken for this cleanup must be released here (leaking it
-        # starves the event loop process-wide)
-        iolock_end()
         rethrow()
     end
     iolock_end()
@@ -772,12 +744,10 @@ function wait(pfw::PollingFileWatcher; cancel::Base.CancelTokenArg=Base.DEFAULT_
     end
 end
 
-function wait(m::FileMonitor; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
-    tok = Base.resolve_cancel_token(Base.precheck_cancel_arg(cancel))
+function wait(m::FileMonitor)
     (@atomic :monotonic m.handle) == C_NULL && throw(EOFError())
     preserve_handle(m)
     lock(m.notify)
-    locked = true
     try
         while true
             (@atomic :monotonic m.handle) == C_NULL && throw(EOFError())
@@ -786,32 +756,26 @@ function wait(m::FileMonitor; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
             if m.ioerrno != 0
                 uv_error("FileMonitor", m.ioerrno)
             end
-            locked = false
-            wait(m.notify, tok)
-            locked = true
+            wait(m.notify)
         end
     finally
-        locked && unlock(m.notify)
+        unlock(m.notify)
         unpreserve_handle(m)
     end
 end
 
-function wait(m::FolderMonitor; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
-    tok = Base.resolve_cancel_token(Base.precheck_cancel_arg(cancel))
+function wait(m::FolderMonitor)
     (@atomic :monotonic m.handle) == C_NULL && throw(EOFError())
     preserve_handle(m)
     lock(m.notify)
-    locked = true
     evt = try
             (@atomic :monotonic m.handle) == C_NULL && throw(EOFError())
             while isempty(m.channel)
-                locked = false
-                wait(m.notify, tok)
-                locked = true
+                wait(m.notify)
             end
             popfirst!(m.channel)
         finally
-            locked && unlock(m.notify)
+            unlock(m.notify)
             unpreserve_handle(m)
         end
     return evt::Pair{String, FileEvent}
@@ -835,8 +799,7 @@ This is a thin wrapper over calling `wait` on a [`FDWatcher`](@ref), which imple
 functionality but requires the user to call `close` manually when finished with it, or risk
 serious crashes.
 """
-function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, timeout_s::Real=-1; readable=false, writable=false, cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
-    tok = Base.resolve_cancel_token(Base.precheck_cancel_arg(cancel))
+function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, timeout_s::Real=-1; readable=false, writable=false)
     mask = FDEvent(readable, writable, false, false)
     mask.timedout && return mask
     fdw = _FDWatcher(s, mask)
@@ -853,7 +816,7 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
             end
             try
                 while true
-                    events = _wait(fdw, mask, tok)
+                    events = _wait(fdw, mask)
                     if timedout[] || !events.timedout
                         @lock fdw.notify fdw.events &= ~events.events
                         return events
@@ -864,7 +827,7 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
                 return FDEvent()
             end
         else
-            return wait(fdw, mask, tok)
+            return wait(fdw, mask)
         end
     finally
         if @isdefined(timer)
@@ -902,8 +865,7 @@ without being detected. To avoid this race, use
 
 directly, re-using the same `fm` each time you `wait`.
 """
-function watch_file(s::String, timeout_s::Float64=-1.0; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
-    tok = Base.resolve_cancel_token(Base.precheck_cancel_arg(cancel))
+function watch_file(s::String, timeout_s::Float64=-1.0)
     fm = FileMonitor(s)
     local timer
     try
@@ -913,7 +875,7 @@ function watch_file(s::String, timeout_s::Float64=-1.0; cancel::Base.CancelToken
             end
         end
         try
-            return wait(fm; cancel=tok)
+            return wait(fm)
         catch ex
             ex isa EOFError && return FileEvent()
             rethrow()
@@ -923,8 +885,7 @@ function watch_file(s::String, timeout_s::Float64=-1.0; cancel::Base.CancelToken
         @isdefined(timer) && close(timer)
     end
 end
-watch_file(s::AbstractString, timeout_s::Real=-1; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
-    watch_file(String(s), Float64(timeout_s); cancel)
+watch_file(s::AbstractString, timeout_s::Real=-1) = watch_file(String(s), Float64(timeout_s))
 
 """
     watch_folder(path::AbstractString, timeout_s::Real=-1)
@@ -946,10 +907,8 @@ This behavior of this function varies slightly across platforms. See
 
 This function is a thin wrapper over calling `wait` on a [`FolderMonitor`](@ref), with added timeout support.
 """
-watch_folder(s::AbstractString, timeout_s::Real=-1; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
-    watch_folder(String(s), timeout_s; cancel)
-function watch_folder(s::String, timeout_s::Real=-1; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
-    tok = Base.resolve_cancel_token(Base.precheck_cancel_arg(cancel))
+watch_folder(s::AbstractString, timeout_s::Real=-1) = watch_folder(String(s), timeout_s)
+function watch_folder(s::String, timeout_s::Real=-1)
     fm = @lock watched_folders get!(watched_folders[], s) do
         return FolderMonitor(s)
     end
@@ -958,7 +917,7 @@ function watch_folder(s::String, timeout_s::Real=-1; cancel::Base.CancelTokenArg
         @lock fm.notify isempty(fm.channel) || return popfirst!(fm.channel)
         if timeout_s <= 0.010
             # for very small timeouts, we can just sleep for the whole timeout-interval
-            (timeout_s == 0) ? yield() : sleep(timeout_s; cancel=tok)
+            (timeout_s == 0) ? yield() : sleep(timeout_s)
             @lock fm.notify isempty(fm.channel) || return popfirst!(fm.channel)
             return "" => FileEvent() # timeout
         else
@@ -971,20 +930,17 @@ function watch_folder(s::String, timeout_s::Real=-1; cancel::Base.CancelTokenArg
     (@atomic :monotonic fm.handle) == C_NULL && throw(EOFError())
     preserve_handle(fm)
     lock(fm.notify)
-    locked = true
     evt = try
             (@atomic :monotonic fm.handle) == C_NULL && throw(EOFError())
             while isempty(fm.channel)
                 if @isdefined(timer)
                     isopen(timer) || return "" => FileEvent() # timeout
                 end
-                locked = false
-                wait(fm.notify, tok)
-                locked = true
+                wait(fm.notify)
             end
             popfirst!(fm.channel)
         finally
-            locked && unlock(fm.notify)
+            unlock(fm.notify)
             unpreserve_handle(fm)
             @isdefined(timer) && close(timer)
         end
@@ -1029,11 +985,8 @@ This is a thin wrapper over calling `wait` on a [`PollingFileWatcher`](@ref), wh
 the functionality, but this function has a small race window between consecutive calls to
 `poll_file` where the file might change without being detected.
 """
-function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::Real=-1; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
-    tok = Base.resolve_cancel_token(Base.precheck_cancel_arg(cancel))
-    # the watcher constructor performs an initial wait: it must run under
-    # this operation's resolved token, not the ambient scope
-    pfw = PollingFileWatcher(s, Float64(interval_seconds); cancel=tok)
+function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::Real=-1)
+    pfw = PollingFileWatcher(s, Float64(interval_seconds))
     local timer
     try
         if timeout_s >= 0
@@ -1041,7 +994,7 @@ function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::R
                 close(pfw)
             end
         end
-        return wait(pfw; cancel=tok)
+        return wait(pfw)
     finally
         close(pfw)
         @isdefined(timer) && close(timer)

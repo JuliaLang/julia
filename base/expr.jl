@@ -875,16 +875,13 @@ the call is generally total, it may however throw.
 """
 macro assume_effects(args...)
     lastex = args[end]
-    settings = args[begin:end-1]
-    if isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
-        override = compute_assumed_settings(settings)
+    override = compute_assumed_settings(args[begin:end-1])
+    if is_function_def(unwrap_macrocalls(lastex))
+        return esc(pushmeta!(lastex::Expr, form_purity_expr(override)))
+    elseif isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
         lastex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(lastex.args, 3, encode_effects_override(override))
         return esc(lastex)
-    end
-    override = compute_assumed_settings(settings)
-    if is_function_def(unwrap_macrocalls(lastex))
-        return esc(pushmeta!(lastex::Expr, form_purity_expr(override)))
     end
     override′ = compute_assumed_setting(override, lastex)
     if override′ !== nothing

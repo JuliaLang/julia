@@ -694,16 +694,6 @@ STATIC_INLINE int jl_genericmemory_data_inline(size_t nbytes) JL_NOTSAFEPOINT
  * safepoints will be caught by the GC analyzer.
  */
 JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty) JL_CANSAFEPOINT;
-// Informs the collector that `v` (freshly allocated) requires weak
-// processing when it dies - collector-side bookkeeping beyond freeing the
-// memory, dispatched on the object's type (currently: unlinking a
-// cancellation token source from its parents' child lists).
-void jl_gc_set_needs_weak_processing(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT;
-// Declare that `v` may be *written* by the GC's weak-processing pass in the
-// cycle in which it dies (e.g. a parent whose intrusive child list dead
-// children splice themselves out of), so its memory must not be reclaimed
-// before that pass has run.
-void jl_gc_set_weak_processing_target(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT;
 // On GCC, only inline when sz is constant
 #ifdef __GNUC__
 #  define jl_gc_alloc(ptls, sz, ty)  \
@@ -970,9 +960,6 @@ void restore_signals(void) JL_NOTSAFEPOINT;
 void jl_exit_with_parent(pid_t parent) JL_NOTSAFEPOINT;
 #endif
 void jl_install_thread_signal_handler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT;
-extern _Atomic(int) jl_sigint_dispatch_pending;
 
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream) JL_CANSAFEPOINT;
@@ -1426,7 +1413,8 @@ int jl_safepoint_start_gc(jl_task_t *ct) JL_CANSAFEPOINT;
 void jl_safepoint_start_gc_from_gc_thread(void) JL_NOTSAFEPOINT;
 // Can only be called by the thread that have got a `1` return value from
 // `jl_safepoint_start_gc()` (or that called `jl_safepoint_start_gc_from_gc_thread()`). This
-// disables the safepoint (for GC) and wakes up waiting threads if there's any.
+// disables the safepoint (for GC, the `mprotect` may not be removed if there's pending SIGINT)
+// and wakes up waiting threads if there's any.
 // The caller should restore `gc_state` **AFTER** calling this function.
 void jl_safepoint_end_gc(void) JL_CANSAFEPOINT;
 // Wait for the GC to finish
@@ -1435,15 +1423,20 @@ void jl_safepoint_end_gc(void) JL_CANSAFEPOINT;
 void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT;
 void jl_safepoint_wait_thread_resume(jl_task_t *ct) JL_NOTSAFEPOINT;
 void jl_safepoint_take_sleep_lock(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
-void jl_safepoint_exclude_gc_begin(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
-void jl_safepoint_exclude_gc_end(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
+// Set pending sigint and enable the mechanisms to deliver the sigint.
+void jl_safepoint_enable_sigint(void) JL_NOTSAFEPOINT;
+// If the safepoint is enabled to deliver sigint, disable it
+// so that the thread won't repeatedly trigger it in a sigatomic region
+// while not being able to actually throw the exception.
+void jl_safepoint_defer_sigint(void) JL_NOTSAFEPOINT;
+// Clear the sigint pending flag and disable the mechanism to deliver sigint.
+// Return `1` if the sigint should be delivered and `0` if there's no sigint
+// to be delivered.
+int jl_safepoint_consume_sigint(void) JL_NOTSAFEPOINT;
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 void jl_wake_io_loop_thread(void) JL_NOTSAFEPOINT;
 void jl_init_signal_watchers(uv_async_cb cb);
 void jl_wake_signal_watchers(void) JL_NOTSAFEPOINT;
-void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
-int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;
 
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
 #if defined(_OS_WINDOWS_)
@@ -2263,13 +2256,7 @@ JL_DLLEXPORT _Atomic(uint64_t) *jl_malloc_data_pointer(const char *filename, int
 JL_DLLEXPORT NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_unwind_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
-int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOINT;
-
-// Values a compiled cancellation reset point's setjmp returns when a
-// shootdown is delivered to it (the longjmp value; see
-// llvm-cancellation-lowering.cpp and the deliveries in signals-*.c):
-#define JL_RESET_CODE_CANCEL  1 // the region's governing source was cancelled
-#define JL_RESET_CODE_PREEMPT 2 // cooperative yield requested; no source checked
+int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT;
 void export_jl_small_typeof(void);
 void export_jl_sysimg_globals(void);
 
@@ -2328,8 +2315,6 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len);
 // -- exports from codegen -- //
 
 #define IR_FLAG_INBOUNDS 0x01
-// This statement is proven :reset_safe (sync with Compiler/src/optimize.jl)
-#define IR_FLAG_RESET_SAFE (1 << 14)
 
 JL_DLLIMPORT void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec) JL_CANSAFEPOINT;
 JL_DLLIMPORT int jl_compile_codeinst(jl_code_instance_t *unspec) JL_CANSAFEPOINT;

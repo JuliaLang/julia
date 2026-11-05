@@ -16,7 +16,6 @@ extern "C" {
     XX(_equiv_typedef,"_equiv_typedef") \
     XX(_expr,"_expr") \
     XX(_import, "_import") \
-    XX(_new_cancel_source,"_new_cancel_source") \
     XX(_primitivetype,"_primitivetype") \
     XX(_setsuper,"_setsuper!") \
     XX(_structtype,"_structtype") \
@@ -28,7 +27,6 @@ extern "C" {
     XX(_using, "_using") \
     XX(applicable,"applicable") \
     XX(apply_type,"apply_type") \
-    XX(cancellation_point,"cancellation_point!") \
     XX(compilerbarrier,"compilerbarrier") \
     XX(const_memoryrefget,"const_memoryrefget") \
     XX(current_scope,"current_scope") \

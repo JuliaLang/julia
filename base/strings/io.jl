@@ -236,13 +236,8 @@ function show(
 end
 
 # optimized methods to avoid iterating over chars
-# (an explicit token is forwarded to unsafe_write, whose cancellable methods
-# accept it; the default sentinel keeps the plain call, which any IO's
-# unsafe_write method supports)
-write(io::IO, s::Union{String,SubString{String}}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    cancel === DEFAULT_CANCEL ?
-        GC.@preserve(s, (unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))) % Int)::Int) :
-        GC.@preserve(s, (unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)); cancel) % Int)::Int)
+write(io::IO, s::Union{String,SubString{String}}) =
+    GC.@preserve s (unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))) % Int)::Int
 print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 
 """

@@ -119,16 +119,6 @@ typedef struct _jl_gc_pagemeta_t {
     // still be old dead objects in the page and `nold` and `prev_nold`
     // should be used to determine if the page needs to be swept
     uint8_t has_young;
-    // Whether any object requiring weak processing on death (see
-    // jl_gc_set_needs_weak_processing) was ever allocated in this page:
-    // such pages must not be freed wholesale when fully dead, and their
-    // dead cells must be inspected by the sweep so those objects get their
-    // processing (currently: linked cancellation token sources, see
-    // gc_is_dead_linked_cancel_source). Atomic: mutators may set it
-    // concurrently for a shared parent's page; all other accesses happen
-    // inside the collection (relaxed suffices - the flag-setter's object
-    // publication, not the flag, carries the ordering)
-    _Atomic(uint8_t) has_weak_processing;
     // Whether a cell was marked only to run its finalizer (through
     // `to_finalize`) in this collection. Such cells are usually garbage once the
     // finalizer has run, so the next quick sweep must visit the page even
@@ -731,14 +721,6 @@ extern int gc_verifying;
 #define verify_parent2(ty,obj,slot,arg1,arg2) do {} while (0)
 #define gc_verifying (0)
 #endif
-
-// Does this (live or dead-this-cycle) cell hold a cancellation source? Such
-// cells take part in the collector's own weak (unlink-on-death) child lists,
-// so passes that rewrite dead objects in place have to leave them alone.
-STATIC_INLINE int gc_is_cancel_source(jl_taggedvalue_t *v) JL_NOTSAFEPOINT
-{
-    return (v->header & ~(uintptr_t)0xf) == (jl_cancel_source_tag << 4);
-}
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;

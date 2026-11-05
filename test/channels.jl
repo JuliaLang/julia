@@ -431,7 +431,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
-        cb = first(t.cond.waitq).task::Task
+        cb = first(t.cond.waitq)
         Libc.systemsleep(0.005)
         @test isopen(t)
         Base.process_events()
@@ -446,7 +446,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
-        cb = first(t.cond.waitq).task::Task
+        cb = first(t.cond.waitq)
         Libc.systemsleep(0.005)
         @test isopen(t)
         close(t)
@@ -460,7 +460,7 @@ end
         async = Base.AsyncCondition() do async
             tc[] += 1
         end
-        cb = first(async.cond.waitq).task::Task
+        cb = first(async.cond.waitq)
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         Base.process_events() # schedule event
@@ -496,7 +496,7 @@ end
         async = Base.AsyncCondition() do async
             tc[] += 1
         end
-        cb = first(async.cond.waitq).task::Task
+        cb = first(async.cond.waitq)
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         Base.process_events() # schedule event
@@ -636,7 +636,7 @@ end
     @test wait(t) === nothing
     waiter = @task wait(t)
     yield(waiter)
-    @test timedwait(() -> !isempty(t.cond.waitq) && first(t.cond.waitq).task === waiter, 10) === :ok
+    @test timedwait(() -> !isempty(t.cond.waitq) && first(t.cond.waitq) === waiter, 10) === :ok
     close(t)
     @test_throws TaskFailedException wait(waiter)
     @test waiter.result isa EOFError
@@ -803,8 +803,7 @@ end
                     println("ready")
                     sleep(600)
                 catch e
-                    # The interrupt cancels the rest of this statement, so avoid cancellation points.
-                    Core.println(e isa Base.CancellationRequest ? "interrupted" : "unexpected")
+                    Core.println(e isa InterruptException ? "interrupted" : "unexpected")
                 end
                 """
             errfile = tempname()

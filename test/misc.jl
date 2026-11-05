@@ -1769,13 +1769,8 @@ if !Sys.iswindows() && !running_under_rr()
     has_internal_err(s) = occursin(r"internal task error"i, s)
     expect_output(output, pat; timeout=60) =
         timedwait(() -> occursin(pat, output[]), timeout) === :ok
-    # The bare executable, not julia_cmd(): these tests probe SIGINT delivery,
-    # not the flag matrix, and the suite's `--check-bounds=yes` would make the
-    # child recompile the code paths whose timing they depend on.
-    interrupt_test_exe() = joinpath(Sys.BINDIR, Base.julia_exename())
     function spawn_interrupt_test_repl()
-        exe = interrupt_test_exe()
-        cmd = addenv(`$exe -q -i --startup-file=no`, Dict("TERM" => "dumb"))
+        cmd = addenv(`$(Base.julia_cmd()) -q -i --startup-file=no`, Dict("TERM" => "dumb"))
         pts, ptm = Main.FakePTYs.open_fake_pty()
         p = run(cmd, pts, pts, pts; wait=false)
         Base.close_stdio(pts)
@@ -1804,23 +1799,12 @@ if !Sys.iswindows() && !running_under_rr()
             kill(p, 2) # SIGINT
             # SIGINT aborts any in-flight input line, so retry with distinct markers
             alive = false
-            # generous horizon: this asserts the session SURVIVES the press,
-            # not its latency - a cold session (first spawns after a build,
-            # slow CI hosts) can lag the first responses behind compilation
-            for attempt in 1:4
+            for attempt in 1:3
                 write(ptm, "println(\"CHECK$(attempt)_\", 1+1)\n")
-                if expect_output(output, "CHECK$(attempt)_2"; timeout=30)
+                if expect_output(output, "CHECK$(attempt)_2"; timeout=20)
                     alive = true
                     break
                 end
-            end
-            if !alive && process_running(p)
-                # collect diagnostics into the CI log: SIGQUIT makes the
-                # session dump all task backtraces onto the pty
-                kill(p, 3)
-                sleep(10)
-                println(stderr, "idle-SIGINT session unresponsive; transcript tail:\n",
-                        last(output[], 16000))
             end
             @test alive
             @test process_running(p)
@@ -1843,13 +1827,12 @@ if !Sys.iswindows() && !running_under_rr()
             # the marker is split so the pty echo of the input line does not match it
             write(ptm, "println(\"LOOP\", \"START\"); while true; sleep(0.05); end\n")
             @test expect_output(output, "LOOPSTART")
-            # ^C is delivered as a cancellation request (InterruptException is
-            # what packages may still rethrow it as); a single SIGINT can be
-            # missed on a loaded machine, so resend until it surfaces
+            # a single SIGINT can be missed on a loaded machine, so resend until
+            # the InterruptException surfaces
             interrupted = false
             for _ in 1:5
                 kill(p, 2) # SIGINT
-                if expect_output(output, r"InterruptException|CancellationRequest"; timeout=10)
+                if expect_output(output, "InterruptException"; timeout=10)
                     interrupted = true
                     break
                 end
@@ -1874,34 +1857,23 @@ if !Sys.iswindows() && !running_under_rr()
             sleep(600)
             """
         iob = Base.BufferStream() # unbounded buffer, so we can read after exit
-        p = run(`$(interrupt_test_exe()) --startup-file=no -e $script`, devnull, devnull, iob; wait=false)
+        p = run(`$(Base.julia_cmd()) --startup-file=no -e $script`, devnull, devnull, iob; wait=false)
         reader = @async try # monitor task to set EOF on iob after p exits
             wait(p)
         finally
             closewrite(iob)
         end
         try
-            @test readline(iob) == "READY"
-            # A press can be missed (even 1.11 needed a 2nd SIGINT here), so
-            # resend until the interrupt visibly arrives: the child starts
-            # reporting it on stderr, or exits. Stop pressing then - a repeat
-            # press would only cancel the report in progress - and allow the
-            # report and exit a generous amount of time on a loaded machine.
-            arrived() = bytesavailable(iob) > 0 || process_exited(p)
-            for _ in 1:5
+            @test occursin("READY", readuntil(iob, "READY", keep=true))
+            # even 1.11 needed a 2nd SIGINT here, so allow a few attempts
+            for i in 1:3
                 kill(p, 2) # SIGINT
-                timedwait(arrived, 10) === :ok && break
+                timedwait(() -> process_exited(p), 10) === :ok && break
             end
-            @test arrived()
-            @test timedwait(() -> process_exited(p), 120) === :ok
-            process_running(p) && kill(p, Base.SIGKILL) # so the reader below terminates
+            @test process_exited(p)
             wait(reader) # wait for iob to reach EOF
             err = read(iob, String)
-            # ^C is delivered as a cancellation request (InterruptException is
-            # what packages may still rethrow it as). If an early press was only
-            # slow to show, a later one may still cancel the report itself - the
-            # fallback note is an acceptable outcome.
-            @test occursin(r"InterruptException|CancellationRequest|displaying the error report failed", err)
+            @test occursin("InterruptException", err)
             @test !has_internal_err(err)
         finally
             process_running(p) && kill(p, Base.SIGKILL)

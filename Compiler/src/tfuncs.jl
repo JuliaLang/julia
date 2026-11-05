@@ -506,9 +506,6 @@ function sizeof_nothrow(@nospecialize(x))
     xw = widenconst(x)
     isType(xw) && !isconstType(xw) && return false
     x = unwrap_unionall(t)
-    # instances are variable-sized, so the type itself has no definite size
-    x === Core.CancellationTokenSource && return false
-    x === Core.WaitEntryN && return false
     if isconcrete
         if isa(x, DataType) && x.layout != C_NULL
             # there's just a few concrete types with an opaque layout

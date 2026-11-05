@@ -3272,17 +3272,6 @@ end
     @test repr(t) == "Task (failed) @0x" * string(UInt(pointer_from_objref(t)), base=16, pad=Sys.WORD_SIZE>>2)
 end
 
-@testset "show CancellationTokenSource" begin
-    for (request, str) in ((Base.CANCEL_REQUEST_SAFE, "cancelled"),
-                           (Base.CANCEL_REQUEST_ABANDON_EXTERNAL, "cancelled, abandon external"),
-                           (Base.CANCEL_REQUEST_ABANDON_ALL, "cancelled, abandon all"))
-        src = Base.CancellationTokenSource()
-        @test repr(src) == "CancellationTokenSource(active)"
-        Base.cancel!(src, request)
-        @test repr(src) == "CancellationTokenSource($str)"
-    end
-end
-
 @testset "IO without context" begin
     io = IOBuffer()
     @test !haskey(io, :compact)

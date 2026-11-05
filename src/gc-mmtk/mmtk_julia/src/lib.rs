@@ -114,7 +114,6 @@ extern "C" {
     pub fn jl_gc_get_stackbase(tid: i16) -> usize;
     pub fn jl_throw_out_of_memory_error();
     pub fn jl_gc_mmtk_sweep_malloced_memory();
-    pub fn jl_gc_sweep_weak_processing();
     pub fn jl_gc_sweep_stack_pools_and_mtarraylist_buffers();
     pub fn jl_hrtime() -> u64;
     pub fn jl_gc_update_stats(t: u64, mmtk_live_bytes: usize, is_nursery: bool);

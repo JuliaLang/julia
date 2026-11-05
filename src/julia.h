@@ -1133,8 +1133,6 @@ typedef struct JL_GC_TRACKED_TYPE {
       XX(simplevector) \
       XX(string) \
       XX(task) \
-      XX(cancel_source) \
-      XX(wait_entry) \
     /* bits types with special allocators */ \
       XX(bool) \
       XX(nothing) \
@@ -1877,8 +1875,6 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_mtable(v)      jl_typetagis(v,jl_methtable_type)
 #define jl_is_mcache(v)      jl_typetagis(v,jl_methcache_type)
 #define jl_is_task(v)        jl_typetagis(v,jl_task_tag<<4)
-#define jl_is_cancel_source(v) jl_typetagis(v,jl_cancel_source_tag<<4)
-#define jl_is_wait_entry(v)  jl_typetagis(v,jl_wait_entry_tag<<4)
 #define jl_is_string(v)      jl_typetagis(v,jl_string_tag<<4)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
@@ -2628,49 +2624,18 @@ struct _jl_handler_t {
     size_t locks_len;
     jl_timing_block_t *timing_stack;
     size_t world_age;
-    // The published reset context and its governing token binding at handler
-    // entry. Restored together when the handler is left or entered
-    // exceptionally, so that an exception thrown out of a reset region does
-    // not leave a context dangling whose establishing frame the unwind
-    // destroyed, and a republished region is never paired with a token that
-    // nested cancellation points rebound in the meantime. (The token is kept
-    // alive by the reachability contract on `Core.cancellation_point!`; the
-    // handler chain is not GC-scanned.)
-    struct _jl_reset_ctx_t *reset_ctx;
-    jl_value_t *bound_cancel_token;
-    // Published ccall handler (if any). Used if we must unwind across a C function
-    // that calls back into julia.
-    struct _jl_cancel_handler_ctx_t *cancel_handler_ctx;
     sig_atomic_t defer_signal;
     int8_t gc_state;
-    // Saved `bound_cancel_default` flag, restored with `bound_cancel_token`
-    // (the pair is only coherent together; see julia_threads.h).
-    uint8_t bound_cancel_default;
 };
 
-#define JL_TASK_STATE_RUNNABLE  0
-#define JL_TASK_STATE_DONE      1
-#define JL_TASK_STATE_FAILED    2
-#define JL_TASK_STATE_ABANDONED 3
+#define JL_TASK_STATE_RUNNABLE 0
+#define JL_TASK_STATE_DONE     1
+#define JL_TASK_STATE_FAILED   2
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t*, jl_value_t*, size_t) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t nparents) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_cancel_source_parent(jl_cancel_source_t *src, size_t i);
-JL_DLLEXPORT jl_value_t *jl_new_wait_entry(jl_value_t *task, size_t nslots) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_wait_entry_slot_owner(jl_value_t *w, size_t i) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_wait_entry_set_slot_owner(jl_value_t *w, size_t i, jl_value_t *v) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_wait_entry_slot_next(jl_value_t *w, size_t i) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_wait_entry_set_slot_next(jl_value_t *w, size_t i, jl_value_t *v) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint64_t jl_wait_entry_slot_aux(jl_value_t *w, size_t i) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_wait_entry_set_slot_aux(jl_value_t *w, size_t i, uint64_t v) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_cancel_source_next_child(jl_cancel_source_t *parent, jl_cancel_source_t *child) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_cancel_source_relink(jl_cancel_source_t *src) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt) JL_CANSAFEPOINT_ENTER_LEAVE;
 JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_send_preempt_signal(int16_t tid) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_shootdown_cancelled_tasks(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);

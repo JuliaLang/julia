@@ -2595,12 +2595,8 @@ function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
         for each in package_locks
             cond2 = each[2][2]
             assert_havelock(cond2.lock)
-            w = cond2.waitq.head
-            while w !== nothing
-                w = w::WaitEntry
-                waiting = @atomic :monotonic w.task
-                waiting isa Task && push!(waiters, waiting => (each[2][1] => each[1]))
-                w = _next_on(w, cond2)
+            for waiting in cond2.waitq
+                push!(waiters, waiting => (each[2][1] => each[1]))
             end
         end
         while true
