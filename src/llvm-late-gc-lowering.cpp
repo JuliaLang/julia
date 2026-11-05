@@ -2680,6 +2680,16 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
         if (!BBS.HasSafepoint) {
             continue;
         }
+        bool HasLiveSafepoint = false;
+        for (int SP : BBS.Safepoints) {
+            if (!S.LiveSets[SP].empty()) {
+                HasLiveSafepoint = true;
+                break;
+            }
+        }
+        if (!HasLiveSafepoint) {
+            continue;
+        }
         LargeSparseBitVector LiveIn;
         AddInPredLiveOuts(&BB, LiveIn, S);
         const LargeSparseBitVector *LastLive = &LiveIn;
@@ -2722,18 +2732,13 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
 
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
-        auto replace_alloca = [this, gcframe, &AllocaSlot, T_int32](AllocaInst *&AI) {
+        auto replace_alloca = [this, gcframe, &AllocaSlot, T_int32, &S, F](AllocaInst *&AI) {
             // Pick a slot for the alloca.
             AI->getAlign();
             unsigned align = AI->getAlign().value() / sizeof(void*); // TODO: use DataLayout pointer size
             assert(align <= 16 / sizeof(void*) && "Alignment exceeds llvm-final-gc-lowering abilities");
             if (align > 1)
                 AllocaSlot = LLT_ALIGN(AllocaSlot, align);
-            Instruction *slotAddress = CallInst::Create(
-                getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
-            slotAddress->insertAfter(gcframe);
-            slotAddress->takeName(AI);
 
             // Check for lifetime intrinsics on this alloca, we can't keep them
             // because we're changing the semantics
@@ -2748,6 +2753,49 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
             for (CallInst *II : ToDelete) {
                 II->eraseFromParent();
             }
+
+            // If all remaining uses are dominated by a non-entry basic block,
+            // sink the slot address calculation to that block instead of placing
+            // it in the entry block.
+            BasicBlock *UseBB = nullptr;
+            bool CanSink = !AI->use_empty();
+            for (User *U : AI->users()) {
+                auto *UI = dyn_cast<Instruction>(U);
+                if (!UI || isa<PHINode>(UI)) {
+                    CanSink = false;
+                    break;
+                }
+                BasicBlock *BB = UI->getParent();
+                if (BB == &F->getEntryBlock() || pred_empty(BB)) {
+                    CanSink = false;
+                    break;
+                }
+                if (!UseBB) {
+                    UseBB = BB;
+                } else if (UseBB != BB) {
+                    if (!S.DT)
+                        S.DT = &GetDT();
+                    if (!S.DT->isReachableFromEntry(UseBB) || !S.DT->isReachableFromEntry(BB)) {
+                        CanSink = false;
+                        break;
+                    }
+                    UseBB = S.DT->findNearestCommonDominator(UseBB, BB);
+                    if (!UseBB || UseBB == &F->getEntryBlock()) {
+                        CanSink = false;
+                        break;
+                    }
+                }
+            }
+
+            Instruction *slotAddress = CallInst::Create(
+                getOrDeclare(jl_intrinsics::getGCFrameSlot),
+                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
+            if (CanSink && UseBB)
+                slotAddress->insertBefore(&*UseBB->getFirstInsertionPt());
+            else
+                slotAddress->insertAfter(gcframe);
+            slotAddress->takeName(AI);
+
             if (slotAddress->getType() != AI->getType()) {
                 // If we're replacing an ArrayAlloca, the pointer element type may need to be fixed up
                 // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
@@ -2777,7 +2825,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
                 auto slotAddress = CallInst::Create(
                     getOrDeclare(jl_intrinsics::getGCFrameSlot),
                     {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
-                slotAddress->insertAfter(gcframe);
+                slotAddress->insertBefore(SI);
                 auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
                 auto Elem = MaybeExtractScalar(S, ValExpr, SI);
                 if (Elem->getType() != T_prjlvalue) {
