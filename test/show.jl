@@ -1617,6 +1617,108 @@ let d = TextDisplay(IOBuffer())
     end
 end
 
+struct RecordingDisplay <: AbstractDisplay
+    log::Vector{Any}
+end
+RecordingDisplay() = RecordingDisplay(Any[])
+Base.display(d::RecordingDisplay, x::Int) = (push!(d.log, x); :plain)
+Base.display(d::RecordingDisplay, ::MIME"text/foo", x) = (push!(d.log, x); :foo)
+# Fails the way a display does when it can't handle a value, so lower displays get a turn.
+struct RejectingDisplay <: AbstractDisplay end
+Base.display(::RejectingDisplay, x) = show(devnull, MIME("image/x-none"), x)
+Base.display(::RejectingDisplay, m::MIME, x) = throw(MethodError(display, (m, x)))
+struct BrokenDisplay <: AbstractDisplay end
+Base.display(::BrokenDisplay, x) = error("broken display")
+Base.display(::BrokenDisplay, ::MIME, x) = error("broken display")
+
+# Which display in the stack handles each way of displaying and redisplaying a value
+@testset "display stack" begin
+    saved = copy(Base.Multimedia.displays)
+    empty!(Base.Multimedia.displays)
+    try
+        @test !displayable("text/foo")
+        @test_throws MethodError display(1)
+        @test_throws MethodError redisplay(1)
+
+        lower, upper = RecordingDisplay(), RecordingDisplay()
+        pushdisplay(lower)
+        pushdisplay(upper)
+        @test displayable("text/foo") && displayable(MIME("text/foo"))
+        @test displayable(upper, "text/foo") && !displayable(upper, "text/bar")
+        @test !displayable("text/bar")
+
+        forms = (display => :plain, redisplay => :plain,
+                 ((x -> f("text/foo", x)) => :foo for f in (display, redisplay))...,
+                 ((x -> f(MIME("text/foo"), x)) => :foo for f in (display, redisplay))...)
+        for (f, result) in forms
+            empty!(upper.log)
+            @test f(1) === result
+            @test upper.log == [1]
+            @test isempty(lower.log)
+        end
+        @test redisplay(lower, 2) === :plain
+        @test redisplay(lower, "text/foo", 3) === :foo
+        @test redisplay(lower, MIME("text/foo"), 4) === :foo
+        @test lower.log == [2, 3, 4]
+
+        # No display in the stack takes the value or the MIME type.
+        for f in (display, redisplay)
+            @test_throws MethodError f(1.5)
+            @test_throws MethodError f("text/bar", 1)
+            @test_throws MethodError f(MIME("text/bar"), 1)
+        end
+
+        # A display that can't handle the value passes it down, other errors are not hidden.
+        pushdisplay(RejectingDisplay())
+        for (f, result) in forms
+            empty!(upper.log)
+            @test f(1) === result
+            @test upper.log == [1]
+        end
+        popdisplay()
+        pushdisplay(BrokenDisplay())
+        for f in (display, redisplay)
+            @test_throws "broken display" f(1)
+            @test_throws "broken display" f("text/foo", 1)
+        end
+        @test popdisplay() === BrokenDisplay()
+
+        # The topmost copy is the one removed, and displays not in the stack are an error.
+        pushdisplay(lower)
+        @test popdisplay(lower) === lower
+        @test Base.Multimedia.displays == [lower, upper]
+        @test_throws KeyError popdisplay(RecordingDisplay())
+        @test popdisplay(lower) === lower
+        @test Base.Multimedia.displays == [upper]
+    finally
+        empty!(Base.Multimedia.displays)
+        append!(Base.Multimedia.displays, saved)
+    end
+
+    # A file stream holds output back until flushed, so this shows the flush reaches it.
+    mktemp() do path, io
+        d = TextDisplay(io)
+        display(d, 1)
+        flush(d)
+        @test read(path, String) == "1\n"
+        close(d)
+        @test !isopen(io)
+    end
+end
+
+struct BinaryShow end
+Base.show(io::IO, ::MIME"image/png", ::BinaryShow) = write(io, 0x01, 0x02)
+@testset "binary and text MIME types" begin
+    @test istextmime("text/anything")
+    @test istextmime("image/svg+xml")
+    @test istextmime(MIME("application/json"))
+    @test !istextmime("image/png")
+    @test repr("image/png", BinaryShow()) == [0x01, 0x02]
+    bytes = [0x03]
+    @test repr("image/png", bytes) === bytes
+    @test repr("application/json", "{}") == "{}"
+end
+
 struct TypeWith4Params{a,b,c,d}
 end
 @test endswith(string(TypeWith4Params{Int8,Int8,Int8,Int8}), "TypeWith4Params{Int8, Int8, Int8, Int8}")
