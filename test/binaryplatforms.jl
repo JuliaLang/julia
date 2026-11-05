@@ -693,6 +693,28 @@ end
     @test_throws ArgumentError Platform("wasm32", "wasi"; call_abi = "eabihf", validate_strict = true)
     @test_throws ArgumentError Platform("x86_64", "linux"; call_abi = "gc", validate_strict = true)
 
+    # Standalone: no host runtime, LLVM's `unknown` OS
+    s = Platform("wasm32", "standalone")
+    @test triplet(s) == "wasm32-unknown-unknown"
+    @test parse(Platform, "wasm32-unknown-unknown") == s
+    @test triplet(parse(Platform, "wasm64-unknown-unknown")) == "wasm64-unknown-unknown"
+    @test platform_name(s) == "Standalone"
+    @test call_abi(s) == "linear"
+    @test os_version(s) === nothing
+    @test Platform("wasm32", "standalone"; validate_strict = true) isa Platform
+    sg = Platform("wasm32", "standalone"; call_abi = "gc")
+    @test triplet(sg) == "wasm32-unknown-unknown-gc"
+    @test parse(Platform, "wasm32-unknown-unknown-gc") == sg
+    @test !platforms_match(sg, s)
+    @test !platforms_match(s, p)
+    @test !platforms_match(s, Platform("wasm32", "wasi"))
+    @test !platforms_match(s, e)
+    @test_throws ArgumentError Platform("wasm32", "standalone"; os_version = v"1", validate_strict = true)
+    @test_throws ArgumentError Platform("x86_64", "standalone"; validate_strict = true)
+    # The generic `-unknown` OS fallback stays unparseable
+    @test_throws ArgumentError parse(Platform, "wasm32-unknown")
+    @test_throws ArgumentError parse(Platform, "x86_64-unknown")
+
     # Extra tags round-trip as for any platform
     q = Platform("wasm64", "wasi"; os_version = v"1", wasm_abi = "lp64")
     @test parse(Platform, triplet(q)) == q

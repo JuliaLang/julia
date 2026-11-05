@@ -230,7 +230,7 @@ function validate_tags(tags::Dict)
         throw_invalid_key("arch")
     end
     # Validate `os`
-    if tags["os"] ∉ ("linux", "macos", "freebsd", "openbsd", "windows", "wasi", "emscripten")
+    if tags["os"] ∉ ("linux", "macos", "freebsd", "openbsd", "windows", "wasi", "emscripten", "standalone")
         throw_invalid_key("os")
     end
     # Validate `os`/`arch` combination
@@ -242,8 +242,12 @@ function validate_tags(tags::Dict)
         throw_os_mismatch()
     end
     # WebAssembly runs only on the WebAssembly OSes, and they only on it
-    if (tags["os"] ∈ ("wasi", "emscripten")) != (tags["arch"] ∈ ("wasm32", "wasm64"))
+    if (tags["os"] ∈ ("wasi", "emscripten", "standalone")) != (tags["arch"] ∈ ("wasm32", "wasm64"))
         throw_os_mismatch()
+    end
+    # Standalone WebAssembly has no host runtime, so nothing to version
+    if tags["os"] == "standalone" && haskey(tags, "os_version")
+        throw_invalid_key("os_version")
     end
 
     # Validate `os`/`libc` combination
@@ -484,6 +488,7 @@ const platform_names = Dict(
     "openbsd" => "OpenBSD",
     "wasi" => "WASI",
     "emscripten" => "Emscripten",
+    "standalone" => "Standalone",
     nothing => "Unknown",
 )
 
@@ -651,6 +656,9 @@ function os_str(p::AbstractPlatform)
         end
     elseif os(p) == "emscripten"
         return "-unknown-emscripten"
+    elseif os(p) == "standalone"
+        # No host runtime: LLVM's and Rust's `wasm32-unknown-unknown`
+        return "-unknown-unknown"
     else
         return "-unknown"
     end
@@ -736,6 +744,7 @@ const os_mapping = Dict(
     "linux" => "-(.*-)?linux",
     "wasi" => "-(.*-)?wasi(p\\d+)?",
     "emscripten" => "-(.*-)?emscripten",
+    "standalone" => "-unknown-unknown",
 )
 const libc_mapping = Dict(
     "libc_nothing" => "",
