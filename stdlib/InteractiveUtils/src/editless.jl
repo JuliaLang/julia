@@ -208,8 +208,9 @@ function editor()
     for var in ["JULIA_EDITOR", "VISUAL", "EDITOR"]
         str = get(ENV, var, nothing)
         str === nothing && continue
-        isempty(str) && error("invalid editor \$$var: $(repr(str))")
-        return Cmd(shell_split(str))
+        args = shell_split(str)
+        isempty(args) && error("invalid editor \$$var: $(repr(str))")
+        return Cmd(args)
     end
     editor_file = "/etc/alternatives/editor"
     editor = (Sys.iswindows() || Sys.isapple()) ? "open" :
