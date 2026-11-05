@@ -2449,7 +2449,7 @@ function flush(s::BufferStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
     end
 end
 
-skip(s::BufferStream, n) = skip(s.buffer, n)
+skip(s::BufferStream, n) = (skip(s.buffer, n); s)
 
 function reseteof(s::BufferStream)
     lock(s.cond) do

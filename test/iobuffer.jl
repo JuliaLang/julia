@@ -660,6 +660,13 @@ end
     @test_throws EOFError read(s, UInt8)
 end
 
+@testset "BufferStream skip" begin
+    s = Base.BufferStream()
+    write(s, "abc")
+    @test skip(s, 1) === s
+    @test read(s, UInt8) == UInt8('b')
+end
+
 @testset "BufferStream buffer_writes" begin
     # The bytes are readable at once, but a parked reader only wakes on flush or close.
     s = Base.BufferStream()
