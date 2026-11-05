@@ -228,7 +228,7 @@ function find_source(path::AbstractString)
 end
 
 """
-    edit(path::AbstractString, line::Integer=0, column::Integer=0)
+    edit(path::AbstractString, line::Integer=1, column::Integer=1)
 
 Edit a file or directory optionally providing a line number to edit the file at.
 Return to the `julia` prompt when you quit the editor. The editor can be changed
