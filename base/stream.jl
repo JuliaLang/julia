@@ -2324,26 +2324,8 @@ function readbytes!(s::BufferStream, a::Vector{UInt8}, nb::Int; cancel::CancelTo
     end
 
     bytes = lock(s.cond) do
-        if nb <= SZ_UNBUFFERED_IO # Under this limit we are OK with copying the array from the stream's buffer
-            wait_locked(s, sbuf, nb, tok)
-        end
-        if bytesavailable(sbuf) >= nb
-            nread = readbytes!(sbuf, a, nb)
-        else
-            initsize = length(a)
-            newbuf = _truncated_pipebuffer(a; maxsize=nb)
-            nread = try
-                s.buffer = newbuf
-                write(newbuf, sbuf)
-                wait_locked(s, newbuf, nb, tok)
-                bytesavailable(newbuf)
-            finally
-                s.buffer = sbuf
-            end
-            _take!(a, _unsafe_take!(newbuf))
-            length(a) >= initsize || resize!(a, initsize)
-        end
-        return nread
+        wait_locked(s, sbuf, nb, tok)
+        return readbytes!(sbuf, a, nb)
     end
     return bytes
 end

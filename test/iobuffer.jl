@@ -678,6 +678,20 @@ end
     @test read(s) == [b"abcde"; reinterpret(UInt8, [0x0066, 0x0067])]
 end
 
+@testset "BufferStream large read does not drop a longer write" begin
+    nb = Base.SZ_UNBUFFERED_IO + 100
+    data = rand(UInt8, 3nb)
+    s = Base.BufferStream()
+    a = UInt8[]
+    reader = @async readbytes!(s, a, nb)
+    wait_for_bufferstream_reader(s, reader)
+    @test write(s, data) == length(data)
+    @test fetch(reader) == nb
+    @test a == data[1:nb]
+    close(s)
+    @test read(s) == data[nb+1:end]
+end
+
 @testset "BufferStream buffer_writes" begin
     # The bytes are readable at once, but a parked reader only wakes on flush or close.
     s = Base.BufferStream()
