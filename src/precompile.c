@@ -159,7 +159,8 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
 
     if (native_code) {
         const char *unpack_func =
-            emit_split ? (comp ? "jl_image_unpack_split_zstd" : "jl_image_unpack_split") :
+            emit_split ? (comp == 2 ? "jl_image_unpack_split_zstd_partial" :
+                          comp ? "jl_image_unpack_split_zstd" : "jl_image_unpack_split") :
                          (comp ? "jl_image_unpack_zstd" : "jl_image_unpack_uncomp");
 
         // jl_dump_native will close and free s when appropriate

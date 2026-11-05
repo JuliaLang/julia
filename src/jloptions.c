@@ -332,8 +332,9 @@ static const char opts_hidden[] =
     "                                               system image\n"
     " --strip-ir                                    Remove IR (intermediate representation) of compiled\n"
     "                                               functions\n"
-    " --compress-sysimage={yes|no*}                 Compress the sys/pkgimage heap at the expense of\n"
-    "                                               slightly increased load time.\n"
+    " --compress-sysimage={yes|no*|partial}         Compress the sys/pkgimage heap at the expense of\n"
+    "                                               slightly increased load time. `partial` leaves the\n"
+    "                                               lazily read part of a pkgimage heap uncompressed\n"
     "\n"
 
     // compiler debugging and experimental (see the devdocs for tips on using these options)
@@ -1146,6 +1147,10 @@ restart_switch:
                 jl_options.compress_sysimage = 1;
             else if (!strcmp(optarg,"no"))
                 jl_options.compress_sysimage = 0;
+            else if (!strcmp(optarg,"partial"))
+                jl_options.compress_sysimage = 2;
+            else
+                jl_errorf("julia: invalid argument to --compress-sysimage={yes|no|partial} (%s)", optarg);
             break;
         case opt_target_sanitize:
             if (!strcmp(optarg, "memory"))

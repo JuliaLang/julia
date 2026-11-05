@@ -253,6 +253,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     end
     if opts.compress_sysimage == 1
         push!(addflags, "--compress-sysimage=yes")
+    elseif opts.compress_sysimage == 2
+        push!(addflags, "--compress-sysimage=partial")
     end
     return `$julia -C $cpu_target -J$image_file $addflags`
 end

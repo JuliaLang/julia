@@ -724,6 +724,8 @@ static int codeinst_may_be_runnable(jl_code_instance_t *ci, int incremental) {
     return jl_atomic_load_relaxed(&ci->min_world) <= jl_typeinf_world && jl_typeinf_world <= max_world;
 }
 
+static int64_t jl_image_partial_compress(ios_t *f, int64_t datastartpos, int64_t dataendpos);
+
 // Anything that requires uniquing or fixing during deserialization needs to be "toplevel"
 // in serialization (i.e., have its own entry in `serialization_order`). Consequently,
 // objects that act as containers for other potentially-"problematic" objects must add such "children"
@@ -3812,7 +3814,10 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     int64_t dataendpos = ios_pos(f);
     uint32_t checksum = checksumpos ? jl_crc32c(0, &f->buf[datastartpos], dataendpos - datastartpos) : 0;
 
-    if (compress) {
+    if (compress == 2 && emit_split) {
+        dataendpos = jl_image_partial_compress(f, datastartpos, dataendpos);
+    }
+    else if (compress) {
         size_t heap_size = dataendpos - datastartpos;
         size_t bound = ZSTD_compressBound(heap_size);
         char *buf = (char *)malloc(bound);
@@ -3962,6 +3967,91 @@ static char *jl_image_alloc_pages(size_t size)
     return data;
 }
 
+// Partially compressed split images (--compress-sysimage=partial)
+//
+// Loading reads the object section and the sections after the constant data in full,
+// while the constant data is only read where it is used. A partially compressed .ji
+// therefore zstd-compresses everything but the constant data, which it stores raw so
+// that it can still be mapped from the file. After the uncompressed .ji header, at
+// datastartpos, it holds:
+//
+//   jl_image_partial_t   positions in the uncompressed .ji
+//   zstd frame           bytes [datastartpos, raw_start)
+//   zstd frame           bytes [raw_end, heap_end)
+//   padding              up to raw_fileoff
+//   raw bytes            [raw_start, raw_end)
+//
+// raw_start, raw_end and raw_fileoff are multiples of JL_IMAGE_PARTIAL_ALIGN, so the
+// raw bytes can be mapped into place on systems with pages up to that size.
+#define JL_IMAGE_PARTIAL_ALIGN ((uint64_t)1 << 16)
+#define JL_IMAGE_PARTIAL_MAGIC ((uint64_t)0x4c4149545241504aULL) // "JPARTIAL"
+
+typedef struct {
+    uint64_t magic;
+    uint64_t raw_start;   // position of the raw bytes in the uncompressed .ji
+    uint64_t raw_end;
+    uint64_t heap_end;    // dataendpos of the uncompressed .ji
+    uint64_t comp1_len;   // length of the frame before the raw bytes
+    uint64_t comp2_len;   // length of the frame after the raw bytes
+    uint64_t raw_fileoff; // position of the raw bytes in this file
+} jl_image_partial_t;
+
+static size_t jl_image_zstd_compress_into(ios_t *out, const char *src, size_t len) JL_NOTSAFEPOINT
+{
+    if (len == 0)
+        return 0;
+    size_t bound = ZSTD_compressBound(len);
+    char *buf = (char *)malloc(bound);
+    size_t comp_size = ZSTD_compress(buf, bound, src, len, 15);
+    if (ZSTD_isError(comp_size)) {
+        free(buf);
+        jl_errorf("compression of system image failed: %s", ZSTD_getErrorName(comp_size));
+    }
+    ios_write(out, buf, comp_size);
+    free(buf);
+    return comp_size;
+}
+
+// Rewrite the heap at [datastartpos, dataendpos) of f in the partially compressed
+// layout, returning the new end of the data.
+static int64_t jl_image_partial_compress(ios_t *f, int64_t datastartpos, int64_t dataendpos)
+{
+    // find the constant data, as jl_restore_system_image_from_stream does
+    const char *heap = f->buf + datastartpos;
+    uint64_t sizeof_sysdata, sizeof_constdata;
+    memcpy(&sizeof_sysdata, heap, sizeof(uint64_t));
+    size_t pos = sizeof(uint64_t) + sizeof_sysdata;
+    memcpy(&sizeof_constdata, heap + pos, sizeof(uint64_t));
+    pos = LLT_ALIGN(pos + sizeof(uint64_t), JL_CACHE_BYTE_ALIGNMENT);
+    uint64_t const_start = datastartpos + pos;
+    uint64_t const_end = const_start + sizeof_constdata;
+    assert(const_end <= (uint64_t)dataendpos);
+
+    jl_image_partial_t hdr;
+    hdr.magic = JL_IMAGE_PARTIAL_MAGIC;
+    hdr.raw_start = LLT_ALIGN(const_start, JL_IMAGE_PARTIAL_ALIGN);
+    hdr.raw_end = const_end & ~(JL_IMAGE_PARTIAL_ALIGN - 1);
+    if (hdr.raw_end <= hdr.raw_start) // too little constant data to be worth mapping
+        hdr.raw_start = hdr.raw_end = dataendpos;
+    hdr.heap_end = dataendpos;
+
+    ios_t out;
+    ios_mem(&out, 0);
+    ios_write(&out, (const char *)&hdr, sizeof(hdr));
+    hdr.comp1_len = jl_image_zstd_compress_into(&out, f->buf + datastartpos, hdr.raw_start - datastartpos);
+    hdr.comp2_len = jl_image_zstd_compress_into(&out, f->buf + hdr.raw_end, dataendpos - hdr.raw_end);
+    hdr.raw_fileoff = LLT_ALIGN(datastartpos + out.size, JL_IMAGE_PARTIAL_ALIGN);
+    write_padding(&out, hdr.raw_fileoff - (datastartpos + out.size));
+    ios_write(&out, f->buf + hdr.raw_start, hdr.raw_end - hdr.raw_start);
+    memcpy(out.buf, &hdr, sizeof(hdr));
+
+    ios_trunc(f, datastartpos);
+    ios_seek(f, datastartpos);
+    ios_write(f, out.buf, out.size);
+    ios_close(&out);
+    return ios_pos(f);
+}
+
 // Decompress a compressed image payload found after the .ji header in data, and
 // return a buffer containing the uncompressed header and payload.
 static void jl_image_decompress(jl_image_buf_t *image, char *data, size_t len) JL_CANSAFEPOINT
@@ -4074,12 +4164,17 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
     size_t size;
     uint32_t flags = 0, checksum = 0;
     int64_t dataendpos = 0, datastartpos = 0;
+    int header_ok;
+    int64_t dataendpos_fieldpos;
     if (!ios_file(&s, ji_path, 1, 0, 0, 0))
         goto error;
     size = ios_filesize(&s);
 
     // check that the .ji matches the .so before reading all of it
-    if (jl_read_verify_header(&s, &flags, &checksum, &dataendpos, &datastartpos) == 0) {
+    header_ok = jl_read_verify_header(&s, &flags, &checksum, &dataendpos, &datastartpos) == 0;
+    // jl_read_verify_header leaves the stream just past the dataendpos field
+    dataendpos_fieldpos = ios_pos(&s) - sizeof(uint64_t);
+    if (header_ok) {
         uint32_t *pchecksum;
         JL_IMAGE_SYM(handle, jl_system_image_checksum, &pchecksum);
         if (checksum != *pchecksum) {
@@ -4093,7 +4188,54 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
     }
     ios_seek(&s, 0);
 
-    if (use_mmap) {
+    if (use_mmap == 2) {
+        // partially compressed: decompress the eagerly read parts into anonymous memory,
+        // and map the raw constant data from the file in between them
+        jl_image_partial_t hdr;
+        if (!header_ok || datastartpos <= 0 || ios_seek(&s, datastartpos) != 0 ||
+            ios_readall(&s, (char *)&hdr, sizeof(hdr)) != sizeof(hdr) ||
+            hdr.magic != JL_IMAGE_PARTIAL_MAGIC ||
+            hdr.raw_start < (uint64_t)datastartpos || hdr.raw_end < hdr.raw_start ||
+            hdr.heap_end < hdr.raw_end ||
+            hdr.raw_fileoff + (hdr.raw_end - hdr.raw_start) > size)
+            goto error;
+        size_t prefix = datastartpos + sizeof(hdr) + hdr.comp1_len + hdr.comp2_len;
+        char *buf = (char *)malloc(prefix);
+        if (buf == NULL || ios_seek(&s, 0) != 0)
+            goto error;
+        ios_bufmode(&s, bm_none);
+        if (ios_readall(&s, buf, prefix) != prefix)
+            goto error;
+        char *d = jl_image_alloc_pages(hdr.heap_end);
+#ifdef MADV_HUGEPAGE
+        madvise(d, hdr.raw_start, MADV_HUGEPAGE);
+#endif
+        memcpy(d, buf, datastartpos);
+        int64_t new_dataendpos = hdr.heap_end;
+        memcpy(d + dataendpos_fieldpos, &new_dataendpos, sizeof(uint64_t));
+        const char *comp = buf + datastartpos + sizeof(hdr);
+        size_t len1 = hdr.raw_start - datastartpos, len2 = hdr.heap_end - hdr.raw_end;
+        if (len1 && ZSTD_decompress(d + datastartpos, len1, comp, hdr.comp1_len) != len1)
+            jl_error("Failed to decompress heap image.");
+        if (len2 && ZSTD_decompress(d + hdr.raw_end, len2, comp + hdr.comp1_len, hdr.comp2_len) != len2)
+            jl_error("Failed to decompress heap image.");
+        free(buf);
+        size_t rawlen = hdr.raw_end - hdr.raw_start;
+        if (rawlen) {
+#ifdef _OS_WINDOWS_
+            if (ios_seek(&s, hdr.raw_fileoff) != 0 || ios_readall(&s, d + hdr.raw_start, rawlen) != rawlen)
+                goto error;
+#else
+            if (mmap(d + hdr.raw_start, rawlen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED,
+                     s.fd, hdr.raw_fileoff) == MAP_FAILED)
+                goto error;
+#endif
+        }
+        ios_close(&s);
+        *dest = d;
+        return hdr.heap_end;
+    }
+    else if (use_mmap) {
 #ifdef _OS_WINDOWS_
         HANDLE hdl = (HANDLE)_get_osfhandle(s.fd);
         HANDLE map = CreateFileMapping(hdl, NULL, PAGE_WRITECOPY, 0, 0, NULL);
@@ -4150,6 +4292,13 @@ error:
 JL_DLLEXPORT void jl_image_unpack_split(void *handle, jl_image_buf_t *image) JL_CANSAFEPOINT
 {
     image->size = jl_image_get_split_ji(handle, (char **)&image->data, 1);
+    image->is_split = 1;
+    jl_image_load_metadata(handle, image);
+}
+
+JL_DLLEXPORT void jl_image_unpack_split_zstd_partial(void *handle, jl_image_buf_t *image) JL_CANSAFEPOINT
+{
+    image->size = jl_image_get_split_ji(handle, (char **)&image->data, 2);
     image->is_split = 1;
     jl_image_load_metadata(handle, image);
 }
