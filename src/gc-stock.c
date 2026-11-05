@@ -4110,12 +4110,15 @@ JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
 
 // allocation wrappers that add to gc pressure
 
-JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
+// The sized entry points count the size the caller passes, which balances as long as the
+// free passes the same size, and avoids looking up the block (slow on macOS).
+void *jl_gc_counted_malloc_(size_t sz, int usable)
 {
     void *data = malloc(sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {
-        sz = memory_block_usable_size(data, 0);
+        if (usable)
+            sz = memory_block_usable_size(data, 0);
         jl_ptls_t ptls = ct->ptls;
         maybe_collect(ptls);
         jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
@@ -4127,12 +4130,12 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
     return data;
 }
 
-JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
+void *jl_gc_counted_calloc_(size_t nm, size_t sz, int usable)
 {
     void *data = calloc(nm, sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {
-        sz = memory_block_usable_size(data, 0);
+        sz = usable ? memory_block_usable_size(data, 0) : nm * sz;
         jl_ptls_t ptls = ct->ptls;
         maybe_collect(ptls);
         jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
@@ -4144,20 +4147,8 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
     return data;
 }
 
-// The allocators above account for the usable size of the block, so use that here
-// too instead of the size passed by the caller (e.g. GMP passes the size it requested).
-JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
+void *jl_gc_counted_realloc_(void *p, size_t old, size_t sz, int usable)
 {
-    sz = p ? memory_block_usable_size(p, 0) : 0;
-    free(p);
-    jl_task_t *ct = jl_get_current_task();
-    if (ct != NULL)
-        jl_batch_accum_free_size(ct->ptls, sz);
-}
-
-JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
-{
-    old = p ? memory_block_usable_size(p, 0) : 0;
     // Handle freeing explicitly: realloc(p, 0) may free p and return NULL,
     // which must not be mistaken for an allocation failure below.
     int freeing = p != NULL && sz == 0;
@@ -4171,7 +4162,8 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     }
     jl_task_t *ct = jl_get_current_task();
     if ((data != NULL || freeing) && ct != NULL) {
-        sz = data ? memory_block_usable_size(data, 0) : 0;
+        if (usable)
+            sz = data ? memory_block_usable_size(data, 0) : 0;
         jl_ptls_t ptls = ct->ptls;
         maybe_collect(ptls);
         if (!(sz < old))
@@ -4188,6 +4180,29 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
         }
     }
     return data;
+}
+
+JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
+{
+    return jl_gc_counted_malloc_(sz, 0);
+}
+
+JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
+{
+    return jl_gc_counted_calloc_(nm, sz, 0);
+}
+
+JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
+{
+    free(p);
+    jl_task_t *ct = jl_get_current_task();
+    if (p != NULL && ct != NULL)
+        jl_batch_accum_free_size(ct->ptls, sz);
+}
+
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+{
+    return jl_gc_counted_realloc_(p, p ? old : 0, sz, 0);
 }
 
 // allocating blocks for Arrays and Strings
