@@ -146,15 +146,6 @@ function is_valid_ir_rvalue(ctx, lhs, rhs)
                           :foreignglobal, :gc_preserve_begin, :new_opaque_closure))
 end
 
-function check_no_local_bindings(ctx, ex, msg)
-    contains_nonglobal_binding = contains_unquoted(ex) do e
-        head(e) == :bindingid && get_binding(ctx, e).kind !== :global
-    end
-    if contains_nonglobal_binding
-        throw(LoweringError(ex, msg))
-    end
-end
-
 # evaluate the arguments of a call, creating temporary locations as needed
 function compile_args(ctx, args)
     # First check if all the arguments are simple (and therefore side-effect free).

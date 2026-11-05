@@ -2531,17 +2531,6 @@ function pos_opt_args(argl::Vector{SyntaxTree})
     argl[opt_start:opt_end]
 end
 
-# (_typevar name lb ub) -> (local (= name (call core TypeVar...)))
-function assign_sparams(ctx, tvs)
-    out = SyntaxList()
-    for tv in tvs
-        @jl_assert head(tv) === :_typevar tv
-        push!(out, @ast ctx tv [:local tv[1]])
-        push!(out, @ast ctx tv [:(=) tv[1] bounds_to_typevar(ctx, tv)])
-    end
-    out
-end
-
 function method_def_sparams(ctx, src, tvs)
     out = SyntaxList()
     for tv in tvs
