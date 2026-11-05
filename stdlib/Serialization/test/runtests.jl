@@ -970,7 +970,10 @@ end
     m = which(SerializeMethodFields.sergen, (Int,))
     m2 = serialize_roundtrip(m)
     @test m2.sig == m.sig && m2.module === SerializeMethodFields
-    @test m2.generator === m.generator
+    @test m2.generator isa typeof(m.generator)
+    @test m2.generator.gen === m.generator.gen
+    @test m2.generator.argnames === m.generator.argnames
+    @test m2.generator.spnames === m.generator.spnames
 
     m = which(SerializeMethodFields.serrec, (Int,))
     m.recursion_relation = SerializeMethodFields.allow_recursion

@@ -209,6 +209,21 @@ function _test_dates()
     println(Core.stdout, "dates: ", day, " ", time, " ", stamp, " ", named)
 end
 
+@noinline function sum_eachindex5(a, b, c, d, e)
+    s = 0.0
+    for i in eachindex(a, b, c, d, e)
+        s += a[i] + b[i] + c[i] + d[i] + e[i]
+    end
+    return s
+end
+@noinline function sum_eachindex3(a, b, c)
+    s = 0.0
+    for i in eachindex(a, b, c)
+        s += a[i] + b[i] + c[i]
+    end
+    return s
+end
+
 function _test_threads()
     v = zeros(Int, 64)
     Threads.@threads for i in eachindex(v)
@@ -260,6 +275,9 @@ function @main(args::Vector{String})::Cint
     println(Core.stdout, "collected: ", kept[], " kept, ", dropped[], " dropped")
 
     println(Core.stdout, interpolate_many(1:3, 2.5, :sym, 'c'))
+    let x = [1.0, 2.0]
+        println(Core.stdout, "eachindex: ", sum_eachindex5(x, x, x, x, x), " ", sum_eachindex3(x, x, x))
+    end
     _test_linalg()
     _test_threads()
 
