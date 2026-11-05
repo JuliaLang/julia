@@ -27,6 +27,10 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* `base/userimg.jl` is no longer supported, and the build now fails if it exists. To build a
+  system image with additional code, use PackageCompiler.jl, or run a script on top of an existing
+  system image with `julia --sysimage <image> --output-o <file> <script>`.
+
 New library functions
 ---------------------
 

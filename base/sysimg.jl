@@ -69,6 +69,11 @@ Base.init_depot_path()
 Base.init_load_path()
 
 if Base.is_primary_base_module
+isfile("userimg.jl") && error("""
+    `base/userimg.jl` is no longer supported. To build a system image that includes \
+    additional code, use PackageCompiler.jl, or run a script on top of an existing \
+    system image with `julia --sysimage <image> --output-o <file> <script>`.""")
+
 # load some stdlib packages but don't put their names in Main
 let
     # Loading here does not call __init__(). This leads to uninitialized RNG
@@ -136,21 +141,15 @@ let
     empty!(Core.ARGS)
     empty!(Base.ARGS)
     empty!(LOAD_PATH)
-    Base.init_load_path() # want to be able to find external packages in userimg.jl
 
     ccall(:jl_clear_implicit_imports, Cvoid, (Any,), Main)
 
-    tot_time_userimg = @elapsed (isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
-
     tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)
-    tot_time = tot_time_base + tot_time_stdlib + tot_time_userimg
+    tot_time = tot_time_base + tot_time_stdlib
 
     println("Sysimage built. Summary:")
     print("Base ──────── "); Base.time_print(stdout, tot_time_base    * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_base    / tot_time) * 100); println("%")
     print("Stdlibs ───── "); Base.time_print(stdout, tot_time_stdlib  * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_stdlib  / tot_time) * 100); println("%")
-    if isfile("userimg.jl")
-    print("Userimg ───── "); Base.time_print(stdout, tot_time_userimg * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg / tot_time) * 100); println("%")
-    end
     print("Total ─────── "); Base.time_print(stdout, tot_time         * 10^9); println();
 
     empty!(LOAD_PATH)
