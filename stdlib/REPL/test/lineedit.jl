@@ -1145,6 +1145,17 @@ end
         @test content(buf) == "ab"
     end
 
+    # ^D on an empty prompt asks for confirmation on the terminal when that is enabled.
+    let repl = REPL.LineEditREPL(FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer(), false), false)
+        repl.options = REPL.Options(confirm_exit=true)
+        prompt = LineEdit.Prompt("test> "; repl)
+        term = FakeTerminal(IOBuffer("\x04\x04"), IOBuffer(), IOBuffer(), false)
+        s = LineEdit.init_state(term, LineEdit.ModalInterface(LineEdit.TextInterface[prompt]))
+        buf, ok, suspend = LineEdit.prompt!(term, s.interface, s)
+        @test !ok && s.aborted
+        @test occursin("Type ^D again to exit.", term_output(s))
+    end
+
     # A key that changes nothing must not leave a step in the undo history.
     for noop in ("\x7f", "\e\b", "\x17", "\x15", "\e[1;3D", "\eW")
         @test content(press("ab\x01$noop\x1f")) == "a"

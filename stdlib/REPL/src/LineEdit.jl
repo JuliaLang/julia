@@ -2946,7 +2946,7 @@ function edit_abort(s::MIState, confirm::Bool=options(s).confirm_exit; key="^D")
         println(terminal(s))
         return :abort
     else
-        println("Type $key again to exit.\n")
+        println(terminal(s), "Type $key again to exit.\n")
         return refresh_line(s)
     end
 end
