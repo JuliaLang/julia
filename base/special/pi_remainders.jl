@@ -215,7 +215,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
 
     rh, rl, k = rem2pi_kernel(x)
     # result in [0, 2π)
-    k = (k == 0 && rh < 0) ? 32 : k
+    k = (k == 0 && rh < 0) ? k + 32 : k
     return add_kpio16(rh, rl, k)
 end
 function rem2pi(x::Float64, ::RoundingMode{:Up})
@@ -232,7 +232,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Up})
 
     rh, rl, k = rem2pi_kernel(x)
     # result in (-2π, 0]
-    k = (k == 0 && rh < 0) ? 0 : k - 32
+    k = (k == 0 && rh < 0) ? k : k - 32
     return add_kpio16(rh, rl, k)
 end
 
