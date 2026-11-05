@@ -23,6 +23,8 @@ typedef struct {
 typedef struct {
     // variable for tracking young (i.e. not in `GC_OLD_MARKED`/last generation) large objects
     struct _bigval_t *young_generation_of_bigvals;
+    // old WeakRefs with an old value, only scanned on full marks (see gc-stock.c)
+    small_arraylist_t old_weak_refs;
 
     // lower bound of the number of pointers inside remembered values
     int remset_nptr;
