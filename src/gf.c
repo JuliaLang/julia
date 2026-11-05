@@ -5409,6 +5409,8 @@ STATIC_INLINE void call_cache_indices(uint32_t callsite, uint32_t cache_idx[4]) 
 static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_value_t **args, uint32_t nargs,
                                                              uint32_t callsite, size_t world, int for_call) JL_CANSAFEPOINT
 {
+    // recomputed rather than passed in: taking the address of the caller's array
+    // would put it on the stack and add a stack-protector check to `jl_apply_generic`
     uint32_t cache_idx[4];
     call_cache_indices(callsite, cache_idx);
     jl_value_t *FT = jl_typeof(F);
