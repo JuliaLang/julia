@@ -5794,6 +5794,169 @@ end
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
 end
 
+"Run a package-image subprocess and report its output and command on failure."
+function check_image_process(label::AbstractString, command::Cmd;
+                             target::AbstractString, check_target::Bool=false)
+    output = IOBuffer()
+    process = run(pipeline(ignorestatus(command); stdout=output, stderr=output))
+    diagnostics = String(take!(output))
+    incompatible = occursin("Unable to find compatible target", diagnostics) ||
+                   occursin("Your CPU does not support the CX16", diagnostics)
+    if check_target && process.exitcode != 0 && incompatible
+        @info "Skipping package-image test: incompatible sysimage" label target diagnostics
+        @test_skip process.exitcode == 0
+        return false
+    end
+
+    context = Text("""
+    $label (exit code $(process.exitcode))
+        Target: $target
+        $diagnostics
+        Command: $(Cmd(command.exec))
+    """)
+    @test process.exitcode == 0 context=context
+
+    return process.exitcode == 0
+end
+
+"Write and run a package-image check script without expanding its source in failure reports."
+function check_image_script(dir::AbstractString, name::AbstractString,
+                            command::Cmd, code::AbstractString;
+                            target::AbstractString, label::AbstractString=name)
+    script = joinpath(dir, name * ".jl")
+    write(script, code)
+    return check_image_process(label, `$command $script`; target)
+end
+
+function _libm_write_checks(dir, image, cases)
+    checks = joinpath(dir, "check-libm.jl")
+    write(checks, """
+        using LibmImage, Libdl
+        image = $(repr(image))
+        @assert any(path -> samefile(path, image), Libdl.dllist()) "Package image was not loaded: " * image
+
+        function check_entry(operation, types)
+            signature = Tuple{typeof(operation), types...}
+            instance = only(mi for mi in Base.specializations(which(operation, types))
+                            if mi.specTypes === signature)
+            pointer = instance.cache.specptr
+            @assert pointer != C_NULL "Missing precompiled native entry point: " * string(signature)
+
+            handle = ccall(:jl_find_dynamic_library_by_addr, Ptr{Cvoid},
+                            (Ptr{Cvoid}, Cint, Cint), pointer, 0, 1)
+            @assert handle != C_NULL "Native entry point is not in a loaded library: " * string(signature)
+
+            owner = Libdl.dlpath(handle)
+            @assert samefile(owner, image) string(signature, ": expected image=", image, "; actual image=", owner)
+        end
+
+        function check_result(case)
+            println("Case: ", case.name)
+            println("Inputs: ", repr(case.args))
+            results = map(case.operations) do name
+                operation = getproperty(LibmImage, name)
+                actual = operation(case.args...)
+                matches = isequal(actual, case.expected)
+                println(operation, ": ", matches ? "PASS" : "FAIL")
+                if !matches
+                    println("  expected: ", repr(case.expected))
+                    println("  actual:   ", repr(actual))
+                end
+                matches
+            end
+            exit(all(results) ? 0 : 1)
+        end
+
+        check_entry(LibmImage.has_fma, ())
+        for operation in (LibmImage.public_fma, LibmImage.intrinsic), T in (Float32, Float64)
+            check_entry(operation, (T, T, T))
+        end
+        features = LibmImage.has_fma()
+        @assert features == (false, false) "Unexpected pkgimage FMA support: " * string(features)
+
+        cases = $(repr(cases))
+        if !isempty(ARGS)
+            check_result(cases[parse(Int, only(ARGS))])
+        end
+        """)
+    return checks
+end
+
+function _libm_test_pkgimage(dir)
+    write(joinpath(dir, "LibmImage.jl"), """
+        module LibmImage
+            @noinline has_fma() = (Core.Intrinsics.have_fma(Float32), Core.Intrinsics.have_fma(Float64))
+            @assert precompile(has_fma, ())
+            @noinline intrinsic(a::T, b::T, c::T) where T = Core.Intrinsics.fma_float(a, b, c)
+            @noinline public_fma(a::T, b::T, c::T) where T = fma(a, b, c)
+            for operation in (intrinsic, public_fma), T in (Float32, Float64)
+                @assert precompile(operation, (T, T, T))
+            end
+        end
+        """)
+    depot = joinpath(dir, "depot")
+    target = Sys.matched_sysimage_target() * ",-fma,-fma4"
+    separator = Sys.iswindows() ? ';' : ':'
+    env = ("JULIA_LOAD_PATH" => string(dir, separator, "@stdlib"),
+           "JULIA_DEPOT_PATH" => depot,
+           "JULIA_CPU_TARGET" => target)
+    julia = addenv(`$(Base.julia_cmd()) --startup-file=no --compiled-modules=yes --pkgimages=yes`, env...)
+
+    compatible = false
+    @testset "target compatibility" begin
+        probe = `$(Base.julia_cmd(; cpu_target=target)) --startup-file=no -e 'exit()'`
+        compatible = check_image_process("target compatibility", probe; target, check_target=true)
+    end
+    compatible || return
+
+    built = false
+    images = String[]
+    @testset "image build" begin
+        built = check_image_script(dir, "build-libm", julia, "using LibmImage"; target)
+        if built
+            for (root, dirs, files) in walkdir(depot)
+                # macOS dSYM bundles contain a debug file with the same name as the package image.
+                filter!(dir -> !endswith(dir, ".dSYM"), dirs)
+                append!(images, (joinpath(root, file) for file in files
+                    if endswith(file, "." * Libdl.dlext) && occursin("LibmImage", joinpath(root, file))))
+            end
+            @test length(images) == 1 context=images
+        end
+    end
+    built && length(images) == 1 || return
+
+    operations = (:public_fma, :intrinsic)
+    cases = Tuple(case for T in (Float32, Float64) for case in (
+        (; name="fma / $T / cancellation", operations,
+         args=(one(T) + eps(T), one(T) - eps(T), -one(T)), expected=-eps(T)^2),
+        (; name="fma / $T / intermediate overflow", operations,
+         args=(floatmax(T), T(2), -floatmax(T)), expected=floatmax(T)),
+    ))
+    checks = _libm_write_checks(dir, only(images), cases)
+    julia = `$julia --compiled-modules=strict`
+    loaded = false
+    @testset "image load" begin
+        loaded = check_image_process("load libm image", `$julia $checks`; target)
+    end
+    loaded || return
+
+    @testset "pkgimage results" begin
+        for (index, case) in enumerate(cases)
+            check_image_process(case.name, `$julia $checks $index`; target)
+        end
+    end
+end
+
+# Check single-rounding FMA semantics in x86 package images compiled without FMA instructions.
+# Cover cancellation and intermediate overflow through software libcalls.
+@testset "FMA in package images without hardware FMA" begin
+    if Sys.ARCH in (:x86_64, :i686)
+        mkdepottempdir(_libm_test_pkgimage)
+    else
+        @test_skip Sys.ARCH in (:x86_64, :i686)
+    end
+end
+
 finish_precompile_test!()
 if original_num_precompile_tasks === nothing
     delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")

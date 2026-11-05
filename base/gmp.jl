@@ -811,7 +811,7 @@ function ndigits0zpb(x::BigInt, b::Integer)
         # non-base 2 mpz_sizeinbase might return an answer 1 too big
         # use property that log(b, x) < ndigits(x, base=b) <= log(b, x) + 1
         n = MPZ.sizeinbase(x, 2)
-        lb = log2(b) # assumed accurate to <1ulp (true for openlibm)
+        lb = log2(b) # assumed accurate to <1ulp
         q,r = divrem(n,lb)
         iq = Int(q)
         maxerr = q*eps(lb) # maximum error in remainder

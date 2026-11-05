@@ -1113,6 +1113,11 @@ static void reportWriterError(const ErrorInfoBase &E)
 
 static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionType *FT)
 {
+    // Leave an existing `name` alone: it was referenced on purpose, and creating
+    // another would give a dead `name.1` instead.
+    if (M.getFunction(name))
+        return;
+
     Function *target = M.getFunction(alias);
     if (!target) {
         target = Function::Create(FT, Function::ExternalLinkage, alias, M);
@@ -1767,6 +1772,19 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
                     FunctionType::get(Type::getBFloatTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
             injectCRTAlias(M, "__truncdfbf2", "julia__truncdfbf2",
                     FunctionType::get(Type::getBFloatTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
+
+#ifdef _OS_WINDOWS_
+            // `llvm.fma` lowers to a libcall to fma/fmaf without hardware FMA, and the
+            // mingw copies the linker would otherwise find are not correctly rounded.
+            // Bind those libcalls to the local definitions, which forward to
+            // libjulia-internal, as the JIT does with its aliases in jitlayers.cpp.
+            Type *DoubleTy = Type::getDoubleTy(M.getContext());
+            Type *FloatTy = Type::getFloatTy(M.getContext());
+            injectCRTAlias(M, "fma", "julia_fma",
+                    FunctionType::get(DoubleTy, {DoubleTy, DoubleTy, DoubleTy}, false));
+            injectCRTAlias(M, "fmaf", "julia_fmaf",
+                    FunctionType::get(FloatTy, {FloatTy, FloatTy, FloatTy}, false));
+#endif // _OS_WINDOWS_
         }
         timers.optimize.stopTimer();
     }
