@@ -76,11 +76,22 @@ The mutability property of a value can be queried for with:
 int jl_is_mutable(jl_value_t *v);
 ```
 
-If the object being stored is a `jl_value_t`, the Julia garbage collector must be notified also:
+If the object being stored is a `jl_value_t`, the Julia garbage collector must be notified also.
+The preferred form performs the store and the write barrier together, in the correct order:
 
 ```c
-void jl_gc_wb(jl_value_t *parent, jl_value_t *ptr);
+jl_gc_write(parent, field, type, val);
+jl_gc_write_atomic(parent, field, type, val, order); // for an _Atomic field
 ```
+
+For updates that are not a single assignment, the barrier can be issued on its own, but must
+run *before* the store it guards:
+
+```c
+void jl_gc_wb(jl_value_t *parent, void *slot, jl_value_t *ptr);
+```
+
+Here `slot` is the address of the field being written and `ptr` is the value stored into it.
 
 However, the [Embedding Julia](@ref) section of the manual is also required reading at this point,
 for covering other details of boxing and unboxing various types, and understanding the gc interactions.
@@ -143,7 +154,7 @@ typedef struct {
 ```
 
 However, in other cases, the tuple may be converted to an anonymous [`isbits`](@ref) type and
-stored unboxed, or it may not stored at all (if it is not being used in a generic context as a
+stored unboxed, or it may not be stored at all (if it is not being used in a generic context as a
 `jl_value_t*`).
 
 Symbols:
@@ -152,17 +163,16 @@ Symbols:
 jl_sym_t *jl_symbol(const char *str);
 ```
 
-Functions and MethodInstance:
+Functions:
 
 ```c
-jl_value_t *jl_new_generic_function(jl_sym_t *name);
-jl_method_instance_t *jl_new_method_instance(jl_value_t *ast, jl_tuple_t *sparams);
+jl_value_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module, size_t new_world);
 ```
 
-Arrays:
+Arrays and memory:
 
 ```c
-jl_array_t *jl_new_array(jl_value_t *atype, jl_tuple_t *dims);
+jl_genericmemory_t *jl_alloc_genericmemory(jl_value_t *mtype, size_t nel);
 jl_array_t *jl_alloc_array_1d(jl_value_t *atype, size_t nr);
 jl_array_t *jl_alloc_array_nd(jl_value_t *atype, size_t *dims, size_t ndims);
 ```
@@ -171,23 +181,21 @@ Note that many of these have alternative allocation functions for various specia
 list here reflects the more common usages, but a more complete list can be found by reading the
 [`julia.h` header file](https://github.com/JuliaLang/julia/blob/master/src/julia.h).
 
-Internal to Julia, storage is typically allocated by `newstruct()` (or `newobj()` for the special
-types):
+A struct whose fields will be filled in afterwards can be allocated with `jl_new_struct_uninit()`,
+which zero-initializes its fields:
 
 ```c
-jl_value_t *newstruct(jl_value_t *type);
-jl_value_t *newobj(jl_value_t *type, size_t nfields);
+jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
 ```
 
-And at the lowest level, memory is getting allocated by a call to the garbage collector (in `gc-stock.c`),
-then tagged with its type:
+And at the lowest level, memory is allocated by a call to the garbage collector (declared in
+`julia_internal.h`, implemented in `gc-stock.c` for the default GC), which also tags it with its type:
 
 ```c
-jl_value_t *jl_gc_allocobj(size_t nbytes);
-void jl_set_typeof(jl_value_t *v, jl_datatype_t *type);
+jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty);
 ```
-!!! note "Out of date Warning"
-    The documentation and usage for the function `jl_gc_allocobj` may be out of date
+
+Here `sz` is the size of the object, not including the type tag.
 
 Note that all objects are allocated in multiples of 4 bytes and aligned to the platform pointer
 size. Memory is allocated from a pool for smaller objects, or directly with `malloc()` for large

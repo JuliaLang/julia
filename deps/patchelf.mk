@@ -14,10 +14,13 @@ $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted: $(SRCCACHE)/patchelf-$(PA
 checksum-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
+$(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-patched: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted
+	echo 1 > $@
+
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: CC:=$(HOSTCC)
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: CXX:=$(HOSTCXX)
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: XC_HOST:=$(BUILD_MACHINE)
-$(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted
+$(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) LDFLAGS="$(CXXLDFLAGS)" CPPFLAGS="$(CPPFLAGS)" MAKE=$(MAKE)
@@ -51,6 +54,7 @@ distclean-patchelf:
 
 get-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2
 extract-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted
+patch-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-patched
 configure-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured
 compile-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled
 check-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-checked

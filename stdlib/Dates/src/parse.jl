@@ -42,7 +42,7 @@ If successful, return a 3-element tuple `(values, pos, num_parsed)`:
 
     tokens = Type[CONVERSION_SPECIFIERS[letter] for letter in letters]
     value_names = Symbol[genvar(t) for t in tokens]
-    value_defaults = Tuple(CONVERSION_DEFAULTS[t] for t in tokens)
+    value_defaults = Any[CONVERSION_DEFAULTS[t] for t in tokens]
 
     # Pre-assign variables to defaults. Allows us to use `@goto done` without worrying about
     # unassigned variables.
@@ -80,6 +80,10 @@ If successful, return a 3-element tuple `(values, pos, num_parsed)`:
         end
     end
 
+    # The error message prints the directive that failed. Each one is printed at its own
+    # type: indexing the mixed-type tuple at a runtime position would need dynamic dispatch.
+    directive_strings = Expr(:tuple, (:(string(directives[$i])) for i in 1:length(directives))...)
+
     return quote
         directives = df.tokens
         locale::DateLocale = df.locale
@@ -100,13 +104,17 @@ If successful, return a 3-element tuple `(values, pos, num_parsed)`:
             if directive_index > length(directives)
                 throw(ArgumentError("Found extra characters at the end of date time string"))
             else
-                d = directives[directive_index]
+                d = $directive_strings[directive_index]
                 throw(ArgumentError("Unable to parse date time. Expected directive $d at char $pos"))
             end
         end
         return nothing
     end
 end
+
+# Every Timestamp{P} parses the same fields
+conversion_translations(::Type{T}) where {T<:TimeType} = CONVERSION_TRANSLATIONS[T]
+conversion_translations(::Type{<:Timestamp}) = CONVERSION_TRANSLATIONS[Timestamp]
 
 """
     tryparsenext_internal(::Type{<:TimeType}, str, pos, len, df::DateFormat, raise=false)
@@ -129,9 +137,9 @@ If successful, returns a 2-element tuple `(values, pos)`:
     tokens = Type[CONVERSION_SPECIFIERS[letter] for letter in letters]
     value_names = Symbol[genvar(t) for t in tokens]
 
-    output_tokens = CONVERSION_TRANSLATIONS[T]
+    output_tokens = conversion_translations(T)
     output_names = Symbol[genvar(t) for t in output_tokens]
-    output_defaults = Tuple(CONVERSION_DEFAULTS[t] for t in output_tokens)
+    output_defaults = Any[CONVERSION_DEFAULTS[t] for t in output_tokens]
 
     # Pre-assign output variables to defaults. Ensures that all output variables are
     # assigned as the value tuple returned from `tryparsenext_core` may not include all
@@ -146,12 +154,29 @@ If successful, returns a 2-element tuple `(values, pos)`:
     # Unpacks the value tuple returned by `tryparsenext_core` into separate variables.
     value_tuple = Expr(:tuple, value_names...)
 
+    # DateTime has no nanosecond field, so add an `n` field to the milliseconds. It must
+    # be a whole number of milliseconds.
+    normalize_fraction = if T === DateTime && Nanosecond in tokens
+        quote
+            millisecond_from_nanoseconds, nanosecond_remainder =
+                divrem(nanosecond, Int64(1000000))
+            if nanosecond_remainder != 0
+                raise && throw(ArgumentError("Fractional second is not exactly representable as a DateTime"))
+                return nothing
+            end
+            millisecond += millisecond_from_nanoseconds
+        end
+    else
+        nothing
+    end
+
     return quote
         val = tryparsenext_core(str, pos, len, df, raise)
         val === nothing && return nothing
         values, pos, num_parsed = val
         $(assign_defaults...)
         $value_tuple = values
+        $normalize_fraction
         return $(Expr(:tuple, output_names...)), pos
     end
 end
@@ -176,7 +201,9 @@ end
     @inbounds while i <= max_pos
         c, ii = iterate(str, i)::Tuple{Char, Int}
         if '0' <= c <= '9'
-            d = d * 10 + (c - '0')
+            digit = Int64(c - '0')
+            d > div(typemax(Int64) - digit, 10) && return nothing
+            d = d * 10 + digit
         else
             break
         end
@@ -326,7 +353,7 @@ end
 Parse the string into its components according to the directives in the `DateFormat`.
 Each component will be a distinct type, typically a subtype of Period. The order of the
 components will match the order of the `DatePart` directives within the `DateFormat`. The
-number of components may be less than the total number of `DatePart`.
+number of components may be less than the total number of `DatePart` directives.
 """
 @generated function parse_components(str::AbstractString, df::DateFormat)
     letters = character_codes(df)

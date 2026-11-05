@@ -193,6 +193,21 @@ $(DEPOT_PATH[1])/logs/repl_history.jl
 
 Sets the maximum number of different instances of a single package that are to be stored in the precompile cache (default = 10).
 
+### [`JULIA_OBJCACHE`](@id JULIA_OBJCACHE)
+
+Julia keeps machine code compiled by the JIT in a native code cache, so that later sessions
+that compile the same code can load it instead. Setting `JULIA_OBJCACHE` to `0` disables the
+cache.
+
+The cache is stored in `cache/v<major>.<minor>/objcache-lmdb1/<target>` in the first depot of
+[`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), or in the directory given by
+`JULIA_OBJCACHE_PATH`. It is disabled on network file systems.
+
+`JULIA_OBJCACHE_CAPACITY` sets the size in bytes at which the least recently used entries
+start to be removed (512 MiB by default, 32 MiB on 32-bit systems). The file keeps its size
+after entries are removed; `Base.Experimental.prune_objcache` removes the entries not used
+recently and writes a smaller copy of the file, for example to save between CI jobs.
+
 ### [`JULIA_VERBOSE_LINKING`](@id JULIA_VERBOSE_LINKING)
 
 If set to true, linker commands will be displayed during precompilation.
@@ -205,7 +220,28 @@ If set to `true`, this indicates to the package server that any package operatio
 
 ### [`JULIA_NUM_PRECOMPILE_TASKS`](@id JULIA_NUM_PRECOMPILE_TASKS)
 
-The number of parallel tasks to use when precompiling packages. See [`Pkg.precompile`](https://pkgdocs.julialang.org/v1/api/#Pkg.precompile).
+The number of parallel tasks (worker subprocesses) to use when precompiling
+packages. See [`Pkg.precompile`](https://pkgdocs.julialang.org/v1/api/#Pkg.precompile).
+
+### [`JULIA_PRECOMPILE_THREADS`](@id JULIA_PRECOMPILE_THREADS)
+
+An unsigned integer that sets the total CPU-thread budget shared across all
+parallel precompile worker subprocesses, keeping the combined number of active
+threads bounded no matter how many workers run. Defaults to one more than the
+number of effective CPU threads.
+
+Unlike [`JULIA_NUM_PRECOMPILE_TASKS`](@ref JULIA_NUM_PRECOMPILE_TASKS) (which caps
+worker *processes*) and [`JULIA_IMAGE_THREADS`](@ref JULIA_IMAGE_THREADS) (which
+caps a *per-worker* thread count), this is the shared total. The two compose:
+the budget bounds what all workers may use together, while `JULIA_IMAGE_THREADS`
+bounds what any one worker may use. Setting `JULIA_IMAGE_THREADS` alone uses a fixed
+number of threads in each worker and leaves total threads unconstrained. For example:
+
+  * neither set: budget = `EFFECTIVE_CPU_THREADS + 1`
+  * `JULIA_PRECOMPILE_THREADS=8`: 8 total threads
+  * `JULIA_IMAGE_THREADS=4`: every worker is pinned to 4 threads; no total thread limit
+  * `JULIA_IMAGE_THREADS=4` and `JULIA_PRECOMPILE_THREADS=8`: budget = 8 total threads,
+    with no worker exceeding 4 imaging threads of its own
 
 ### [`JULIA_PKG_DEVDIR`](@id JULIA_PKG_DEVDIR)
 
@@ -319,6 +355,12 @@ over `$EDITOR`. If none of these environment variables is set, then the editor
 is taken to be `open` on Windows and OS X, or `/etc/alternatives/editor` if it
 exists, or `emacs` otherwise.
 
+The value is split into the command and its arguments like a shell command line (see
+[`Base.shell_split`](@ref)), without invoking a shell. It may therefore include flags, as in
+`emacs -nw`, but spaces and backslashes in a path must be quoted or escaped. For example, the
+Windows path `C:\Vim\vim.exe` must be written as `C:\\Vim\\vim.exe`, `'C:\Vim\vim.exe'` or
+`C:/Vim/vim.exe`.
+
 To use Visual Studio Code on Windows, set `$JULIA_EDITOR` to `code.cmd`.
 
 ## Parallelization
@@ -326,7 +368,9 @@ To use Visual Studio Code on Windows, set `$JULIA_EDITOR` to `code.cmd`.
 ### [`JULIA_CPU_THREADS`](@id JULIA_CPU_THREADS)
 
 Overrides the global variable [`Base.Sys.CPU_THREADS`](@ref), the number of
-logical CPU cores available.
+logical CPU cores available. It also caps [`Sys.EFFECTIVE_CPU_THREADS`](@ref), which is
+what `auto` means for `--threads`, `--procs` and [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS),
+and which bounds the default number of GC threads.
 
 ### [`JULIA_WORKER_TIMEOUT`](@id JULIA_WORKER_TIMEOUT)
 
@@ -342,7 +386,7 @@ non-positive integer, or if the number of CPU threads cannot be determined
 through system calls, then the number of threads is set to `1`.
 
 If `$JULIA_NUM_THREADS` is set to `auto`, then the number of threads will be set
-to the number of CPU threads. It can also be set to a comma-separated string to
+to [`Sys.EFFECTIVE_CPU_THREADS`](@ref). It can also be set to a comma-separated string to
 specify the size of the `:default` and `:interactive` [threadpools](@ref
 man-threadpools), respectively:
 ```bash
@@ -385,23 +429,38 @@ Sets the number of threads used by Garbage Collection. If unspecified is set to 
 
 An unsigned 32-bit integer that sets the number of threads used by image
 compilation in this Julia process. The value of this variable may be
-ignored if the module is a small module. If left unspecified, the smaller
-of the value of [`JULIA_CPU_THREADS`](@ref JULIA_CPU_THREADS) or half the
-number of logical CPU cores is used in its place.
+ignored if the module is a small module.
+
+During parallel package precompilation, workers additionally coordinate their
+CPU usage through a shared token pool sized by
+[`JULIA_PRECOMPILE_THREADS`](@ref JULIA_PRECOMPILE_THREADS), so their combined
+thread count stays bounded. If set, `JULIA_IMAGE_THREADS` limits the imaging
+threads for a single worker and does not affect the total thread limit.
 
 ### [`JULIA_IMAGE_TIMINGS`](@id JULIA_IMAGE_TIMINGS)
 
-A boolean value that determines if detailed timing information is printed during
-during image compilation. Defaults to 0.
+A boolean value that determines if detailed timing information is printed during image compilation. Defaults to 0.
 
 ### [`JULIA_EXCLUSIVE`](@id JULIA_EXCLUSIVE)
 
 If set to anything besides `0`, then Julia's thread policy is consistent with
 running on a dedicated machine: each thread in the default threadpool is
-affinitized.  [Interactive threads](@ref man-threadpools) remain under the
-control of the operating system scheduler.
+pinned to its own CPU, in order, from the CPUs the process is allowed to run on
+(on platforms that support thread affinity, i.e. not macOS). Requesting more
+default-pool threads than there are such CPUs is an error.
+[Interactive threads](@ref man-threadpools) remain under the control of the
+operating system scheduler.
 
 Otherwise, Julia lets the operating system handle thread policy.
+
+### [`JULIA_COPY_STACKS`](@id JULIA_COPY_STACKS)
+
+If set to `1` or `yes`, tasks created without an explicit stack size do not get a stack of their
+own. Instead, they run on the native stack of the thread, which is saved and restored by copying
+on each task switch. This is intended for embedding scenarios where other code requires running
+on the thread's native stack, such as the JVM. It is generally discouraged, since among other
+things each task then stays on the thread it first runs on. Defaults to `0` (or `no`); any other
+value is an error.
 
 ## Garbage Collection
 
@@ -416,7 +475,7 @@ Forces garbage collection if memory usage is higher than the given value. The va
     - M  (mebibytes)
     - G  (gibibytes)
     - T  (tebibytes)
-    - %  (percentage of physical memory)
+    - %  (percentage of physical memory, or of the cgroup memory limit if lower)
 
 For example, `JULIA_HEAP_SIZE_HINT=1G` would provide a 1 GB heap size hint to the garbage collector.
 
@@ -597,3 +656,11 @@ Arguments to be passed to the LLVM backend.
 ### `JULIA_FALLBACK_REPL`
 
 Forces the fallback repl instead of REPL.jl.
+
+### `JULIA_LOAD_CODEGEN_LIB`
+
+If set to a false value (`0`, `f`, `false`, `n`, or `no`, case-insensitive),
+the loader does not load `libjulia-codegen`, and the fallback
+(interpreter-only) implementations in `libjulia-internal` are used instead —
+exactly as if the library were absent from the installation. Intended for
+testing and debugging the no-codegen configuration.

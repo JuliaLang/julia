@@ -106,9 +106,9 @@ function cosh(x::T) where T<:Union{Float32,Float64}
     #    1. Replace x by |x| (cosh(x) = cosh(-x)).
     #    2. Find the branch and the expression to calculate and return it
     #      a)   x <= COSH_SMALL_X
-    #               approximate sinh(x) with a minimax polynomial
+    #               approximate cosh(x) with a minimax polynomial
     #      b)   COSH_SMALL_X <= x < H_LARGE_X
-    #               return cosh(x) = = (exp(x) + exp(-x))/2
+    #               return cosh(x) = (exp(x) + exp(-x))/2
     #      e)   H_LARGE_X  <= x
     #               return cosh(x) = exp(x/2)/2 * exp(x/2)
     #               Note that this branch automatically deals with Infs and NaNs
@@ -123,6 +123,24 @@ function cosh(x::T) where T<:Union{Float32,Float64}
     E = exp(absx)
     return T(.5)*(E + 1/E)
 end
+
+# Once cosh and sinh overflow, their inverses 2exp(-|x|) can still be subnormal, so
+# compute them as (2E)*E with E = exp(-|x|/2), which rounds once.
+function sech(x::T) where T<:Union{Float32,Float64}
+    absx = abs(x)
+    absx >= H_LARGE_X(T) || return inv(cosh(x))
+    E = exp(T(-.5)*absx)
+    return (2*E)*E
+end
+function csch(x::T) where T<:Union{Float32,Float64}
+    absx = abs(x)
+    absx >= H_LARGE_X(T) || return inv(sinh(x))
+    E = exp(T(-.5)*absx)
+    return copysign((2*E)*E, x)
+end
+# cosh and sinh overflow Float16 well before sech and csch underflow it
+sech(x::Float16) = Float16(sech(Float32(x)))
+csch(x::Float16) = Float16(csch(Float32(x)))
 
 # tanh methods
 TANH_LARGE_X(::Type{Float64}) = 44.0
@@ -242,7 +260,7 @@ end
 @noinline atanh_domain_error(x) = throw(DomainError(x, "atanh(x) is only defined for |x| ≤ 1."))
 function atanh(x::T) where T <: Union{Float32, Float64}
     # Method
-    # 1.Reduced x to positive by atanh(-x) = -atanh(x)
+    # 1. Reduce x to positive by atanh(-x) = -atanh(x)
     # 2. Find the branch and the expression to calculate and return it
     #     a) 0 <= x < 0.5
     #         return 0.5*log1p(2x/(1-x))

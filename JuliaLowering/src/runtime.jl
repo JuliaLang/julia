@@ -7,160 +7,79 @@
 #-------------------------------------------------------------------------------
 # Functions/types used by code emitted from lowering, but not called by it directly
 
-# Return the current exception. In JuliaLowering we use this rather than the
-# special form `K"the_exception"` to reduces the number of special forms.
-Base.@assume_effects :removable function current_exception()
-    @ccall jl_current_exception(current_task()::Any)::Any
-end
-
-#--------------------------------------------------
-# Supporting functions for AST interpolation (`quote`)
-struct InterpolationContext{Graph} <: AbstractLoweringContext
-    graph::Graph
-    values::Tuple
-    current_index::Ref{Int}
-end
-
-# Context for `Expr`-based AST interpolation in compat mode
-struct ExprInterpolationContext <: AbstractLoweringContext
-    values::Tuple
-    current_index::Ref{Int}
-end
-
-# Helper functions to make shared interpolation code which works with both
-# SyntaxTree and Expr data structures.
-_interp_kind(ex::SyntaxTree) = kind(ex)
-function _interp_kind(@nospecialize(ex))
-    return (ex isa Expr && ex.head === :quote) ? K"quote" :
-           (ex isa Expr && ex.head === :$)     ? K"$"     :
-           K"None" # Other cases irrelevant to interpolation
-end
-
-_children(ex::SyntaxTree) = children(ex)
-_children(@nospecialize(ex)) = ex isa Expr ? ex.args : ()
-
-_numchildren(ex::SyntaxTree) = numchildren(ex)
-_numchildren(@nospecialize(ex)) = ex isa Expr ? length(ex.args) : 0
-
-_syntax_list(ctx::InterpolationContext) = SyntaxList(ctx)
-_syntax_list(::ExprInterpolationContext) = Any[]
-
-_interp_makenode(::InterpolationContext, ex, args) = mknode(ex, args)
-_interp_makenode(::ExprInterpolationContext, ex, args) = Expr((ex::Expr).head, args...)
-
-_is_leaf(ex::SyntaxTree) = is_leaf(ex)
-_is_leaf(::Expr) = false
-_is_leaf(@nospecialize(_)) = true
-
-# Produce interpolated node for `$x` syntax
-function _interpolated_value(ctx::InterpolationContext, srcref, @nospecialize(ex))
-    if ex isa SyntaxTree
-        if !is_compatible_graph(ctx, ex)
-            ex = copy_ast(ctx, ex)
-        end
-        append_sourceref(ctx, ex, srcref)
-    elseif ex isa Symbol
-        # Plain symbols become identifiers. This is an accommodation for
-        # compatibility to allow `:x` (a Symbol) and `:(x)` (a SyntaxTree) to
-        # be used interchangeably in macros.
-        newleaf(ctx, srcref, K"Identifier", string(ex))
-    else
-        newleaf(ctx, srcref, K"Value", ex)
+@inline function _invoke_in_world(w::UInt, @nospecialize(f), @nospecialize(args...))
+    if ccall(:jl_is_in_pure_context, Int8, ()) != 0
+        # Similar to `Base.invoke_in_world` but also works inside generated-function
+        # expansion (see `jl_code_for_staged`)
+        return Core._call_in_world_total(w, f, args...)
     end
+    return Base.invoke_in_world(w, f, args...)
 end
 
-function _interpolated_value(::ExprInterpolationContext, _, @nospecialize(ex))
-    ex
+# World set with `activate!`, or 0
+const _lowering_world = Ref{UInt}(0)
+
+@inline function invoke_in_lowering_world(f::F, @nospecialize(args...)) where {F}
+    w = _lowering_world[]
+    @static if VERSION >= v"1.14.0-DEV.2635"
+        w == 0 || return _invoke_in_world(w, f, args...)
+    end
+    return invokelatest(f, args...)
 end
 
-function _interpolate_ast(ctx::ExprInterpolationContext, ex::QuoteNode, depth)
-    out = _interpolate_ast(ctx, Expr(:inert, ex.value), depth)
-    QuoteNode(only(out.args))
-end
-
-function _interpolate_ast(ctx, @nospecialize(ex), depth)
-    _is_leaf(ex) && return ex
-    k = _interp_kind(ex)
-    inner_depth = k == K"quote" ? depth + 1 :
-                  k == K"$"     ? depth - 1 :
-                  depth
-    expanded_children = _syntax_list(ctx)
-
-    for e in _children(ex)
-        if _interp_kind(e) == K"$" && inner_depth == 0
-            vals = ctx.values[ctx.current_index[]]::Tuple
-            ctx.current_index[] += 1
-            for (i,v) in enumerate(vals)
-                srcref = _numchildren(e) == 1 ? e : _children(e)[i]
-                push!(expanded_children, _interpolated_value(ctx, srcref, v))
+function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
+    is_leaf(st) && return st
+    k = head(st)
+    inner_depth = k == :syntaxquote ? depth + 1 :
+        k == :syntaxunquote ? depth - 1 : depth
+    cs_out = SyntaxList()
+    for c in children(st)
+        if head(c) == :syntaxunquote && inner_depth == 0
+            tup = vals[val_i[] += 1]::Tuple
+            @jl_assert numchildren(c) == 1 st
+            @jl_assert head(c[1]) === :... || length(tup) == 1 st
+            for v in tup
+                v2 = !(v isa SyntaxTree) ? expr_to_est(v, c) : v
+                push!(cs_out, v2)
             end
         else
-            push!(expanded_children, _interpolate_ast(ctx, e, inner_depth))
+            push!(cs_out, __interpolate_syntax(c, inner_depth, vals, val_i))
         end
     end
-
-    _interp_makenode(ctx, ex, expanded_children)
+    @mknode(st; children=cs_out)
 end
-
-# Produced by expanding K"quote".  Must create a copy of the AST.  Note that
-# wrapping `ex` in an extra node handles the edge case where the root `ex` is
-# `$` (our recursion is one step removed due to forms like `($ a b)`.)
-function interpolate_ast(::Type{SyntaxTree}, ex::SyntaxTree, values...)
-    # Construct graph for interpolation context. We inherit this from the macro
-    # context where possible by detecting it using __macro_ctx__. This feels
-    # hacky though.
-    #
-    # Perhaps we should use a ScopedValue for this instead or get it from
-    # the macro __context__? None of the options feel great here.
-    graph = nothing
-    for vals in values
-        for v in vals
-            if v isa SyntaxTree && hasattr(syntax_graph(v), :__macro_ctx__)
-                graph = syntax_graph(v)
-                break
-            end
-        end
-    end
-    if isnothing(graph)
-        graph = ensure_macro_attributes!(SyntaxGraph())
-    end
-    ctx = InterpolationContext(graph, values, Ref(1))
-
-    # We must copy the AST into our context to use it as the source reference of
-    # generated expressions.
-    ex1 = copy_ast(ctx, ex)
-    out = _interpolate_ast(ctx, @ast(ctx, ex1, [K"None" ex1]), 0)
-    length(children(out)) === 1 || throw(
-        LoweringError(ex1, "More than one value in bare `\$` expression"))
-    return only(children(out))
+function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
+    # TODO: copy probably not required if immutable
+    st = mktree(st)
+    val_i = Ref(0)
+    out = __interpolate_syntax((@ast _ st [:none st]), 0, vals, val_i)
+    @jl_assert val_i[] == length(vals) st
+    @jl_assert numchildren(out) == 1 st
+    out[1]
 end
-
-function interpolate_ast(::Type{Expr}, @nospecialize(ex), values...)
-    ctx = ExprInterpolationContext(values, Ref(1))
-    if ex isa Expr && ex.head === :$
-        @assert length(values) === 1
-        if length(ex.args) !== 1
-            throw(LoweringError(
-                expr_to_est(ex), "More than one value in bare `\$` expression"))
-        end
-        only(values[1])
-    else
-        _interpolate_ast(ctx, ex, 0)
-    end
+@noinline function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
+    return invoke_in_lowering_world(_interpolate_syntax, st, vals)::SyntaxTree
 end
 
 #--------------------------------------------------
 # Functions called by closure conversion
-function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, field_is_box)
+function eval_closure_type(mod::Module, closure_type_name::Symbol,
+                           capt_sp, field_names, field_is_box,
+                           field_is_nospec=nothing)
     type_params = Core.TypeVar[]
     field_types = []
-    for (name, isbox) in zip(field_names, field_is_box)
-        if !isbox
+    for name in capt_sp
+        push!(type_params, Core.TypeVar(name))
+    end
+    for (i, (name, isbox)) in enumerate(zip(field_names, field_is_box))
+        if isbox
+            push!(field_types, Core.Box)
+        elseif !isnothing(field_is_nospec) && field_is_nospec[i]
+            push!(field_types, Any)
+        else
             T = Core.TypeVar(Symbol(name, "_type"))
             push!(type_params, T)
             push!(field_types, T)
-        else
-            push!(field_types, Core.Box)
         end
     end
     type = Core._structtype(mod, closure_type_name,
@@ -171,24 +90,40 @@ function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, 
                             length(field_names))
     Core._setsuper!(type, Core.Function)
     Core.declare_const(mod, closure_type_name, type)
-    Core._typebody!(false, type, Core.svec(field_types...))
+    Core._typebody!(type, Core.svec(field_types...))
     type
 end
 
 # Interpolate captured local variables into the CodeInfo for a global method
-function replace_captured_locals!(codeinfo::Core.CodeInfo, locals::Core.SimpleVector)
-    for (i, ex) in enumerate(codeinfo.code)
-        if Meta.isexpr(ex, :captured_local)
-            codeinfo.code[i] = locals[ex.args[1]::Int]
-        end
+function replace_captured_locals(ci_in::Core.CodeInfo, locals::Core.SimpleVector)
+    ci = copy(ci_in)
+    for (i, ex) in enumerate(ci.code)
+        ci.code[i] = _replace_captured_locals(ex, locals)
     end
-    codeinfo
+    ci
+end
+function _replace_captured_locals(@nospecialize(e), locals)
+    if e isa Expr
+        if e.head === :captured_local
+            v = locals[e.args[1]::Int]
+            isa_lowering_ast_node(v) ? QuoteNode(v) : v
+        else
+            # could possibly limit to foreigncall
+            Expr(e.head, Any[_replace_captured_locals(a, locals) for a in e.args]...)
+        end
+    elseif e isa QuoteNode
+        QuoteNode(_replace_captured_locals(e.value, locals))
+    else
+        e
+    end
 end
 
 #--------------------------------------------------
 # Functions which create modules or mutate their bindings
 
+# For partial compatibility with older julia (JETLS)
 const _Base_has_eval_import = isdefined(Base, :_eval_import)
+const _has_jl_module_public = VERSION >= v"1.14.0-DEV.1556"
 
 function eval_import(imported::Bool, to::Module, from::Union{Expr, Nothing}, paths::Expr...)
     if _Base_has_eval_import
@@ -210,9 +145,15 @@ function eval_using(to::Module, path::Expr)
     end
 end
 
-function eval_public(mod::Module, is_exported::Bool, identifiers)
-    # symbol jl_module_public is no longer exported as of #57765
-    Core.eval(mod, Expr((is_exported ? :export : :public), map(Symbol, identifiers)...))
+function eval_public(mod::Module, is_exported::Bool, identifiers::Vector{String})
+    if _has_jl_module_public
+        syms = Symbol[Symbol(x) for x in identifiers]
+        ccall(:jl_module_public, Cvoid, (Any, Ptr{Any}, Csize_t, Cint),
+              mod, syms, length(syms), is_exported)
+    else
+        Core.eval(mod, Expr((is_exported ? :export : :public),
+                            map(Symbol, identifiers)...))
+    end
 end
 
 #--------------------------------------------------
@@ -268,15 +209,15 @@ function bind_docs!(type::Type, docstr, lineno::LineNumberNode; field_docs=Core.
 end
 
 """
-Called in the unfortunate cases (K"call", K".", K"Identifier") where docstrings
-change the semantics of the expressions they annotate, no longer requiring the
+Called in the unfortunate cases (call, ., identifier) where docstrings change
+the semantics of the expressions they annotate, no longer requiring the
 expression to execute.
 """
 function bind_static_docs!(mod::Module, name::Symbol, docstr, lnn::LineNumberNode, sigtypes::Type)
     metadata = Dict{Symbol, Any}(
         :linenumber => lnn.line,
         :module => mod,
-        :path => something(lnn.file, "none"),
+        :path => string(something(lnn.file, :var"")),
     )
     bind = Base.Docs.Binding(mod, name)
     Docs.doc!(mod, bind, Base.Docs.docstr(docstr, metadata), sigtypes)
@@ -288,19 +229,18 @@ end
 # An alternative to Core.GeneratedFunctionStub which works on SyntaxTree rather
 # than Expr.
 struct GeneratedFunctionStub
-    expr_compat_mode::Bool
+    syntax_context::SyntaxContext
     gen::Function
     srcref::Union{LineNumberNode,SourceRef}
     argnames::Core.SimpleVector
     spnames::Core.SimpleVector
 end
 
-function _gen_args_from_syms(ctx, src, layer, args)
-    out = SyntaxList(ctx.graph)
+function _gen_args_from_syms(ctx, src, args, sc)
+    out = SyntaxList()
     for a in args
-        id = newleaf(syntax_graph(ctx), src, K"Identifier", string(a))
-        id = _est_to_dst_ident(id) # support placeholders
-        push!(out, adopt_scope(id, layer))
+        push!(out, @mknode(;head=:identifier, value=string(a::Symbol),
+                           context=sc, source=src))
     end
     out
 end
@@ -316,54 +256,48 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     #
     # TODO: Reduce duplication where possible.
 
-    graph = ensure_desugaring_attributes!(SyntaxGraph())
     __module__ = source.module
+    sc = g.syntax_context
 
-    # Macro expansion. Note that we expand in `tls_world_age()` (see
-    # Core.GeneratedFunctionStub)
-    macro_world = Base.tls_world_age()
-    ctx1 = MacroExpansionContext(graph, __module__, g.expr_compat_mode, macro_world)
+    # Run code generator - this acts like a macro expander
+    ex0 = g.gen(sc, args...)
 
-    layer = only(ctx1.scope_layers)
+    # Note that we expand in `tls_world_age()` (see Core.GeneratedFunctionStub)
+    world = Base.tls_world_age()
 
-    # Run code generator - this acts like a macro expander and like a macro
-    # expander it gets a MacroContext.
-    mctx = MacroContext(syntax_graph(ctx1), g.srcref, layer, g.expr_compat_mode)
-    ex0 = g.gen(mctx, args...)
+    return try
+        invoke_in_lowering_world(_lower_generated_code, g, source, sc,
+                                 __module__, world, ex0)
+    catch exc
+        rethrow(to_compatible_exception(exc))
+    end
+end
+
+function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
+                               sc::SyntaxContext, __module__::Module,
+                               world::UInt, @nospecialize(ex0))
     if ex0 isa Expr
-        ex0 = expr_to_est(
-            syntax_graph(ctx1), ex0, source_location(LineNumberNode, g.srcref))
+        ex0 = expr_to_est(ex0, LineNumberNode(Int(source.line), source.file))
     end
-    if ex0 isa SyntaxTree
-        if !is_compatible_graph(ctx1, ex0)
-            # If the macro has produced syntax outside the macro context, copy it over.
-            # TODO: Do we expect this always to happen?  What is the API for access
-            # to the macro expansion context?
-            ex0 = copy_ast(ctx1, ex0)
-        end
-    else
-        ex0 = newleaf(syntax_graph(ctx1), g.srcref, K"Value", ex0)
+    # TODO: the above is possible with interpolated `return`, matching flisp,
+    # but we want to throw an error like below
+    if !(ex0 isa SyntaxTree)
+        ex0 isa Expr && throw(LoweringError(
+            ex0, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
+        ex0 = expr_to_est(ex0, g.srcref, sc)
     end
-    # Expand any macros emitted by the generator
-    ex1 = expand_forms_1(ctx1, reparent(ctx1, ex0))
-    ctx1 = MacroExpansionContext(delete_attributes(graph, :__macro_ctx__),
-                                 ctx1.bindings, ctx1.scope_layers,
-                                 ctx1.scope_layer_stack, g.expr_compat_mode,
-                                 macro_world)
-    ex1 = reparent(ctx1, ex1)
 
-    # Desugaring
-    ctx2, ex2 = expand_forms_2(ctx1, ex1)
-
-    # Wrap expansion in a non-toplevel lambda and run scope resolution
-    ex2 = @ast ctx2 ex0 [K"lambda"(is_toplevel_thunk=false, toplevel_pure=true)
-        [K"block" _gen_args_from_syms(ctx2, ex0, layer, g.argnames)...]
-        [K"block" _gen_args_from_syms(ctx2, ex0, layer, g.spnames)...]
-        ex2
+    @jl_assert base_layer(sc).mod == __module__ ex0
+    ex0 = fill_context(ex0, sc)
+    ctx1 = MacroExpansionContext(ex0, world, true)
+    ex0 = @ast _ ex0 [:generated_lambda
+        [:block _gen_args_from_syms(ctx1, ex0, g.argnames, sc)...]
+        [:block _gen_args_from_syms(ctx1, ex0, g.spnames, sc)...]
+        ex0
     ]
+    ex1 = expand_forms_1(ctx1, ex0)
+    ctx2, ex2 = expand_forms_2(ex1, world)
     ctx3, ex3 = resolve_scopes(ctx2, ex2)
-
-    # Rest of lowering
     ctx4, ex4 = convert_closures(ctx3, ex3)
     _ctx5, ex5 = linearize_ir(ctx4, ex4)
     ci = to_lowered_expr(ex5)
@@ -393,9 +327,60 @@ end
 # Get the binding for `name` if one is already resolved in module `mod`. Note
 # that we cannot use `isdefined(::Module, ::Symbol)` here, because that causes
 # binding resolution which is a massive side effect we must avoid in lowering.
-function _get_module_binding(mod, name; create=false)
+function _get_module_binding(mod::Module, name::Symbol; create::Bool=false)
     b = @ccall jl_get_module_binding(mod::Module, name::Symbol, create::Cint)::Ptr{Core.Binding}
     b == C_NULL ? nothing : unsafe_pointer_to_objref(b)
+end
+
+_module_binding_i_taken(mod::Module, basename::AbstractString, i::Int) =
+    _get_module_binding(mod, Symbol(basename, "##", i); create=false) !== nothing
+
+# Reserve a global binding named "$basename##$i" in module `mod` for some
+# free `i`.  We could scan 0:n here, but we instead try exponentially
+# increasing `i` and backwards binary search to achieve `log(n)` performance
+#
+# TODO: Remove the use of this where possible. Currently this is used within
+# lowering to create unique global names for keyword function bodies and
+# closure types as a more local alternative to current-julia-module-counter.
+# However, we should ideally defer it to eval-time to make lowering itself
+# completely non-mutating.
+function reserve_module_binding_i(mod::Module, basename::AbstractString)
+    hi = 0
+    while _module_binding_i_taken(mod, basename, hi)
+        hi = 2hi + 1
+    end
+    lo = hi == 0 ? 0 : (hi - 1) ÷ 2 + 1
+    while lo < hi
+        mid = (lo + hi) ÷ 2
+        if _module_binding_i_taken(mod, basename, mid)
+            lo = mid + 1
+        else
+            hi = mid
+        end
+    end
+    name = "$basename##$hi"
+    # TODO: Fix the race condition here: We should really hold the Module's
+    # binding lock during this test-and-set type operation. But the binding
+    # lock is only accessible from C. See also the C code in
+    # `fl_module_unique_name`.
+    _get_module_binding(mod, Symbol(name); create=true)
+    return name
+end
+
+# Even less likely to be deterministic than the above, but necessary to avoid
+# quadratic behaviour where flisp doesn't already have it.  See
+# `fl_module_unique_name`
+function module_unique_name(mod::Module)
+    @static if VERSION < v"1.14.0-DEV.3063"
+        # (JETLS) jl_module_next_counter is not exported before 1.14.0-DEV.3063
+        reserve_module_binding_i(mod, "")[3:end]
+    else
+        string(@ccall(jl_module_next_counter(mod::Module)::UInt32))
+    end
+end
+function module_unique_name(mod::Module, funcname::AbstractString)
+    occursin('#', funcname) ? module_unique_name(mod) :
+        reserve_module_binding_i(mod, funcname)
 end
 
 # Return true if a `name` is defined in and *by* the module `mod`.
@@ -403,52 +388,23 @@ end
 #
 # (This should do what fl_defined_julia_global does for flisp lowering)
 function is_defined_and_owned_global(mod, name, world::UInt=Base.get_world_counter())
-    return Base.invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
+    return _invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
 end
 
-# "Reserve" a binding: create the binding if it doesn't exist but do not assign
-# to it.
-function reserve_module_binding(mod, name)
-    # TODO: Fix the race condition here: We should really hold the Module's
-    # binding lock during this test-and-set type operation. But the binding
-    # lock is only accessible from C. See also the C code in
-    # `fl_module_unique_name`.
-    if _get_module_binding(mod, name; create=false) === nothing
-        return _get_module_binding(mod, name; create=true) !== nothing
-    else
-        return false
-    end
-end
-
-# Reserve a global binding named "$basename#$i" in module `mod` for the
-# smallest `i` starting at `0`.
-#
-# TODO: Remove the use of this where possible. Currently this is used within
-# lowering to create unique global names for keyword function bodies and
-# closure types as a more local alternative to current-julia-module-counter.
-# However, we should ideally defer it to eval-time to make lowering itself
-# completely non-mutating.
-function reserve_module_binding_i(mod, basename)
-    i = 0
-    while true
-        name = "$basename$i"
-        if reserve_module_binding(mod, Symbol(name))
-            return name
-        end
-        i += 1
-    end
-end
-
-function lookup_method_instance(func, args, world::Integer)
-    allargs = Vector{Any}(undef, length(args) + 1)
-    allargs[1] = func
-    allargs[2:end] = args
+function lookup_method_instance(@nospecialize(func), args::Vector{Any}, world::Integer)
+    allargs = Any[func]
+    append!(allargs, args)
     mi = @ccall jl_method_lookup(allargs::Ptr{Any}, length(allargs)::Csize_t,
                                  world::Csize_t)::Ptr{Cvoid}
     return mi == C_NULL ? nothing : unsafe_pointer_to_objref(mi)
 end
 
 # Like `Base.methods()` but with world age support
-function methods_in_world(func, arg_sig, world)
-    Base._methods(func, arg_sig, -1, world)
+function methods_in_world(func, arg_sig, world, err_ex)
+    out = Base._methods(func, arg_sig, -1, world)
+    @jl_assert(out isa Vector{Any},
+               (err_ex, string(
+                   "Base._methods returned non-vector;",
+                   " bad world age provided? (", world, ")")))
+    out::Vector{Any}
 end

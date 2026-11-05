@@ -65,8 +65,7 @@ function.
 
 include("bindings.jl")
 
-import .Base.Meta: quot, isexpr, unblock, unescape, uncurly
-import .Base: Callable, with_output_color
+import .Base.Meta: quot, isexpr, unblock, unescape
 using .Base: RefValue, mapany
 import ..CoreDocs: lazy_iterpolate
 
@@ -113,8 +112,11 @@ function signature!(tv::Vector{Any}, expr::Expr)
         if isexpr(expr.args[1], :curly) && isempty(tv)
             append!(tv, mapany(tvar, (expr.args[1]::Expr).args[2:end]))
         end
+        allargs = sig.args[end]
         for i = length(tv):-1:1
-            push!(sig.args, :(Tuple{$((tv[i]::Expr).args[1])}))
+            # keep type parameters that no argument uses, e.g. in `S{T}(x) where T`, in the signature (#21016)
+            T = (tv[i]::Expr).args[1]
+            occurs(T, allargs) || push!(sig.args, :(Tuple{$T}))
         end
         for i = length(tv):-1:1
             sig = Expr(:where, sig, tv[i])
@@ -146,6 +148,7 @@ argtype(@nospecialize other) = :Any
 
 tvar(x::Expr)   = x
 tvar(s::Symbol) = :($s <: Any)
+occurs(s, @nospecialize ex) = ex === s || (ex isa Expr && any(a -> occurs(s, a), ex.args))
 
 # Docsystem types.
 # ================
@@ -159,7 +162,7 @@ Both the raw text, `.text`, and the parsed markdown, `.object`, are tracked by t
 Parsing of the raw text is done lazily when a request is made to render the docstring,
 which helps to reduce total precompiled image size.
 
-The `.data` fields stores several values related to the docstring, such as: path,
+The `.data` field stores several values related to the docstring, such as: path,
 linenumber, source code, and fielddocs.
 """
 mutable struct DocStr
@@ -305,6 +308,10 @@ elseif head === :call && length(x.args) >= 1 && isexpr(x.args[1], :(::))
         # for documenting (x::y)(args...), extract the name from y
         # otherwise, for documenting `x::y`, it will be extracted from x
         astname((x.args[1]::Expr).args[end], ismacro)
+    elseif head === :overlay
+        # for documenting `Base.Experimental.@overlay mt f(args...)`, the callee is
+        # `Expr(:overlay, mt, f)`: extract the name from f
+        astname(x.args[end], ismacro)
     else
         n = if isexpr(x, :module)
             isa(x.args[1], Bool) ? 2 : 3
@@ -413,10 +420,12 @@ function objectdoc(__source__, __module__, str, def, expr, sig = :(Union{}))
                 exdef = Expr(:block, exdef)
             end
             val = :val
-            exdef = Expr(:(=), val, exdef)
+            # if-true hack: val should not be recognized as a struct field,
+            # including by @kwdef
+            exdef = Expr(:if, true, Expr(:(=), val, exdef))
         end
         # Note: we want to avoid introducing line number nodes here (issue #24468) for def
-        return Expr(:block, exdef, docex, val)
+        return Expr(:block, exdef, docex, Expr(:if, true, val))
     end
 end
 
@@ -671,7 +680,6 @@ function docm(source::LineNumberNode, mod::Module, ex)
     else
         return simple_lookup_doc(ex)
     end
-    return nothing
 end
 # Drop incorrect line numbers produced by nested macro calls.
 docm(source::LineNumberNode, mod::Module, _, _, x...) = docm(source, mod, x...)

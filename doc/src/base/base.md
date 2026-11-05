@@ -56,6 +56,9 @@ This is the list of reserved keywords in Julia:
 `return`, `struct`, `true`, `try`, `using`, `while`.
 Those keywords are not allowed to be used as variable names.
 
+Names starting and ending with double underscores, or dunders, are reserved for use by Julia. This includes macros. Examples of dunder names currently in use include [`__init__`](@ref), [`__source__`](@ref), [`__module__`](@ref), [`__precompile__`](@ref), [`@__dot__`](@ref), [`@__DIR__`](@ref), [`@__FILE__`](@ref), [`@__LINE__`](@ref), and [`@__MODULE__`](@ref). These reservations are not currently enforced by the parser.
+
+
 The following two-word sequences are reserved:
 `abstract type`, `mutable struct`, `primitive type`.
 However, you can create variables with names:
@@ -224,6 +227,7 @@ Base.isfieldatomic
 
 ```@docs
 Base.sizeof(::Type)
+Core.bitsizeof
 Base.isconcretetype
 Base.isbits
 Base.isbitstype
@@ -291,6 +295,7 @@ Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
 Base.splat
+Base.unsplat
 Base.Fix
 Base.Fix1
 Base.Fix2
@@ -351,6 +356,23 @@ Base.success
 Base.process_running
 Base.process_exited
 Base.kill(::Base.Process, ::Integer)
+Base.kill(::Integer, ::Integer)
+Base.SIGHUP
+Base.SIGINT
+Base.SIGQUIT
+Base.SIGKILL
+Base.SIGUSR1
+Base.SIGUSR2
+Base.SIGPIPE
+Base.SIGALRM
+Base.SIGTERM
+Base.SIGCHLD
+Base.SIGCONT
+Base.SIGWINCH
+Base.SIGINFO
+Base.sigrtmin
+Base.sigrtmax
+Base.signal_name
 Base.Sys.set_process_title
 Base.Sys.get_process_title
 Base.ignorestatus
@@ -400,6 +422,8 @@ Base.Sys.free_physical_memory
 Base.Sys.total_physical_memory
 Base.Sys.uptime
 Base.Sys.sysimage_target
+Base.Sys.matched_sysimage_target
+Base.@cpu_supports
 Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
@@ -469,6 +493,8 @@ Base.Timer(::Function, ::Real)
 Base.Timer
 Base.AsyncCondition
 Base.AsyncCondition(::Function)
+Base.SignalCondition
+Base.SignalCondition(::Function, ::Integer)
 ```
 
 ## Reflection

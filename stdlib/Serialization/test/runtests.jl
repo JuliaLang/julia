@@ -184,7 +184,7 @@ create_serialization_stream() do s # immutable struct with 1 field
     @test invokelatest(deserialize, s) == utype
 end
 
-create_serialization_stream() do s # immutable struct with 2 field
+create_serialization_stream() do s # immutable struct with 2 fields
     usertype = "SerializeSomeType4"
     eval(Meta.parse("struct $(usertype){T}; a::T; b::T; end"))
     utval = eval(Meta.parse("$(usertype)(1,2)"))
@@ -193,7 +193,7 @@ create_serialization_stream() do s # immutable struct with 2 field
     @test invokelatest(deserialize, s) === utval
 end
 
-create_serialization_stream() do s # immutable struct with 3 field
+create_serialization_stream() do s # immutable struct with 3 fields
     usertype = "SerializeSomeType5"
     eval(Meta.parse("struct $(usertype){T}; a::T; b::T; c::T; end"))
     utval = eval(Meta.parse("$(usertype)(1,2,3)"))
@@ -202,13 +202,25 @@ create_serialization_stream() do s # immutable struct with 3 field
     @test invokelatest(deserialize, s) === utval
 end
 
-create_serialization_stream() do s # immutable struct with 4 field
+create_serialization_stream() do s # immutable struct with 4 fields
     usertype = "SerializeSomeType6"
     eval(Meta.parse("struct $(usertype){T}; a::T; b::T; c::T; d::T; end"))
     utval = eval(Meta.parse("$(usertype)(1,2,3,4)"))
     serialize(s, utval)
     seek(s, 0)
     @test invokelatest(deserialize, s) === utval
+end
+
+create_serialization_stream() do s # union types
+    serialize(s, Union{Int,Float64})
+    serialize(s, Union{Int,Missing})
+    serialize(s, Union{Int,Float64,String})
+    serialize(s, [Union{Int,Float64}, Union{String,Symbol}, Union{Int,Missing}])
+    seek(s, 0)
+    @test deserialize(s) === Union{Int,Float64}
+    @test deserialize(s) === Union{Int,Missing}
+    @test deserialize(s) === Union{Int,Float64,String}
+    @test deserialize(s) == Type[Union{Int,Float64}, Union{String,Symbol}, Union{Int,Missing}]
 end
 
 # Expression
@@ -354,6 +366,35 @@ end
 Core.eval(Main, main_ex)
 
 # Task
+# Runnable tasks drop CodeInstance hints but preserve explicit invoke targets.
+serialization_task_result() = 42
+create_serialization_stream() do s
+    t = Task(serialization_task_result)
+    serialize(s, t)
+    seek(s, 0)
+    r = deserialize(s)
+    @test fetch(schedule(r)) === 42
+    @test fetch(schedule(t)) === 42
+end
+
+serialization_task_invoke() = 43
+serialization_task_invoke(x...) = x
+function serialization_task_with_invoke(@nospecialize(f), @nospecialize(invoked))
+    t = Core._task(f, 0, invoked)
+    t.donenotify = Base.ThreadSynchronizer()
+    return t
+end
+for invoked in (Tuple{Vararg}, which(serialization_task_invoke, (Vararg,)))
+    create_serialization_stream() do s
+        t = serialization_task_with_invoke(serialization_task_invoke, invoked)
+        serialize(s, t)
+        seek(s, 0)
+        r = deserialize(s)
+        @test fetch(schedule(r)) === ()
+        @test fetch(schedule(t)) === ()
+    end
+end
+
 create_serialization_stream() do s # user-defined type array
     f = () -> begin task_local_storage(:v, 2); return 1+1 end
     t = Task(f)
@@ -637,7 +678,7 @@ let c1 = Threads.Condition()
     c2 = Threads.Condition(c1.lock)
     lock(c2)
     t = @task nothing
-    Base._wait2(c1, t)
+    Base.schedule_on_notify!(c1, t)
     c3, c4 = deserialize(IOBuffer(sprint(serialize, [c1, c2])))::Vector{Threads.Condition}
     @test c3.lock === c4.lock
     @test islocked(c1)
@@ -693,15 +734,18 @@ end
     for i in 1:10
         old_m[i] = i^2
     end
-    old_x = memoryref(old_m, 5)
-    @test old_x[] == 25
-    old_d = Dict(:x => old_x)
+    # Test roundtrip at every offset
+    for idx in 1:10
+        old_x = memoryref(old_m, idx)
+        @test old_x[] == idx^2
+        old_d = Dict(:x => old_x)
 
-    old_str = sprint(serialize, old_d)
-    new_d = deserialize(IOBuffer(old_str))
+        old_str = sprint(serialize, old_d)
+        new_d = deserialize(IOBuffer(old_str))
 
-    @test new_d[:x] isa MemoryRef
-    @test new_d[:x][] == 25
+        @test new_d[:x] isa MemoryRef
+        @test new_d[:x][] == idx^2
+    end
 end
 
 @testset "Memory" begin
@@ -717,4 +761,225 @@ end
 
     @test new_d[:m] isa Memory
     @test new_d[:m][5] == 125
+end
+
+@testset "CancellationTokenSource" begin
+    using Base: cancel!, CancellationToken, CancellationTokenSource
+    # a diamond: identity sharing of parents must survive the round-trip
+    root = CancellationTokenSource()
+    left = CancellationTokenSource(CancellationToken(root))
+    right = CancellationTokenSource(CancellationToken(root))
+    child = CancellationTokenSource(CancellationToken(left), CancellationToken(right))
+    buf = IOBuffer()
+    serialize(buf, (root, left, right, child))
+    seekstart(buf)
+    r2, l2, rt2, c2 = deserialize(buf)
+    @test r2 isa CancellationTokenSource && c2.nparents == 2
+    @test Base._cancel_parent(c2, 1) === l2 && Base._cancel_parent(c2, 2) === rt2
+    @test Base._cancel_parent(l2, 1) === r2 && Base._cancel_parent(rt2, 1) === r2
+    @test !Base.iscancelled(c2)
+    # the deserialized graph is relinked: cancelling its root reaches the leaf
+    cancel!(r2)
+    @test Base.iscancelled(c2) && Base.iscancelled(l2) && Base.iscancelled(rt2)
+    # ...without affecting the original graph
+    @test !Base.iscancelled(root) && !Base.iscancelled(child)
+
+    # cancellation state round-trips
+    src = CancellationTokenSource()
+    cancel!(src, Base.CANCEL_REQUEST_ABANDON_EXTERNAL)
+    buf = IOBuffer()
+    serialize(buf, src)
+    seekstart(buf)
+    s2 = deserialize(buf)
+    @test Base.cancel_severity(s2) === Base.CANCEL_REQUEST_ABANDON_EXTERNAL
+
+    # the copy is independent: cancelling the original after serialization
+    # does not affect the deserialized graph
+    p = CancellationTokenSource()
+    c = CancellationTokenSource(CancellationToken(p))
+    buf = IOBuffer()
+    serialize(buf, (p, c))
+    seekstart(buf)
+    cancel!(p) # does not affect the serialized bytes
+    p3, c3 = deserialize(buf)
+    @test !Base.iscancelled(c3) # p3 was not cancelled at relink time
+
+    # deserializing under an already-cancelled parent is born cancelled:
+    # a stream may legally record a cancelled parent with an uncancelled
+    # child (e.g. the serializer raced an in-flight cancel! walk); the
+    # child inherits the state when it relinks under the parent
+    p = CancellationTokenSource()
+    c = CancellationTokenSource(CancellationToken(p))
+    Base._raise_state!(p, 0x01) # cancel p without walking to c
+    @test !Base.iscancelled(c)
+    buf = IOBuffer()
+    serialize(buf, c) # parents serialize first, with their state
+    seekstart(buf)
+    c4 = deserialize(buf)
+    @test Base.iscancelled(Base._cancel_parent(c4, 1))
+    @test Base.iscancelled(c4)
+
+    # a corrupt stream cannot inject an out-of-range severity
+    src = CancellationTokenSource()
+    buf = IOBuffer()
+    serialize(buf, src)
+    data = take!(buf)
+    data[end] = 0xbf # state byte: invalid severity 0xbf
+    @test_throws ArgumentError deserialize(IOBuffer(data))
+end
+
+@testset "WaitEntryN" begin
+    # variable-sized runtime object: it must be reconstructed through the
+    # runtime allocator (the generic path would allocate only the fixed
+    # datatype size, and the GC would then scan a nonexistent slot tail)
+    w = Base.WaitEntryN(current_task(), 4)
+    buf = IOBuffer()
+    serialize(buf, w)
+    seekstart(buf)
+    w2 = deserialize(buf)
+    @test w2 isa Core.WaitEntryN
+    @test Base._nslots(w2) == 4
+    # transient wait state does not round-trip: no task, fresh free slots
+    @test (@atomic :monotonic w2.task) === nothing
+    @test all(i -> Base._slot_owner(w2, i) === nothing, 1:4)
+    GC.gc(true)
+    # identity sharing within one stream
+    buf = IOBuffer()
+    serialize(buf, (w, w))
+    seekstart(buf)
+    a, b = deserialize(buf)
+    @test a === b && Base._nslots(a) == 4
+    GC.gc(true)
+end
+
+function serialize_roundtrip(x)
+    buf = IOBuffer()
+    serialize(buf, x)
+    seekstart(buf)
+    return deserialize(buf)
+end
+
+@testset "numeric scalars" begin
+    for x in (Int8(-5), 0xab, Int16(-300), 0xabcd, Int32(-7), Int32(typemax(Int32)), 0xabcdef01,
+              -7, typemin(Int32) - 1, typemax(Int), 0xabcdef0123456789,
+              typemin(Int128), typemax(UInt128), Float16(1.5), 1.25f0, -2.5, 'λ')
+        @test serialize_roundtrip(x) === x
+    end
+    @test isequal(serialize_roundtrip(NaN32), NaN32)
+end
+
+@testset "back references past 65535 objects" begin
+    # objects past this count are referenced with a 32-bit offset
+    v = Any[Ref(i) for i in 1:70_000]
+    push!(v, v[end], v[1])
+    w = serialize_roundtrip(v)
+    @test length(w) == length(v)
+    @test w[end-1] === w[end-2]
+    @test w[end] === w[1]
+    @test w[end-1][] == 70_000
+end
+
+@testset "Memory contents" begin
+    m = Memory{Any}(undef, 5)
+    m[1] = "a string longer than seven bytes"
+    m[2] = m[1]
+    m[4] = m
+    m[5] = 1.5
+    m2 = serialize_roundtrip(m)
+    @test m2 isa Memory{Any} && length(m2) == 5
+    @test m2[1] == m[1]
+    @test m2[2] === m2[1]
+    @test !isassigned(m2, 3)
+    @test m2[4] === m2
+    @test m2[5] === 1.5
+
+    ms = Memory{String}(undef, 3)
+    ms[1] = "x"; ms[3] = "z"
+    ms2 = serialize_roundtrip(ms)
+    @test ms2 isa Memory{String}
+    @test ms2[1] == "x" && !isassigned(ms2, 2) && ms2[3] == "z"
+
+    @test serialize_roundtrip(Memory{Int}(undef, 0)) isa Memory{Int}
+    @test isempty(serialize_roundtrip(Memory{Int}(undef, 0)))
+    @test serialize_roundtrip(Memory{Any}(undef, 0)) isa Memory{Any}
+    @test isempty(serialize_roundtrip(Memory{Any}(undef, 0)))
+
+    # booleans are run-length encoded, with runs capped at 127
+    bits = vcat(fill(true, 300), fill(false, 2), [true, false, true])
+    mb = Memory{Bool}(undef, length(bits))
+    copyto!(mb, bits)
+    mb2 = serialize_roundtrip(mb)
+    @test mb2 isa Memory{Bool}
+    @test collect(mb2) == bits
+    @test isempty(serialize_roundtrip(Memory{Bool}(undef, 0)))
+end
+
+@testset "Tuple types" begin
+    @test serialize_roundtrip(Tuple) === Tuple
+    for T in (Tuple{Int8,Int16,Int32,Rational{Int}}, Tuple{Int8,Int16,Int32,Int64,Rational{Int}},
+              Tuple{Rational{Int8},Vararg{Rational{Int16}}})
+        @test serialize_roundtrip(T) === T
+    end
+end
+
+@testset "UnionAll with free type variables" begin
+    # the body of a type wrapper, with its outer variable left free
+    @test serialize_roundtrip(Dict.body) === Dict.body
+    @test serialize_roundtrip(Dict) === Dict
+end
+
+@testset "serialization errors" begin
+    @test_throws ErrorException("cannot serialize a running Task") serialize(IOBuffer(), current_task())
+    buf = IOBuffer()
+    serialize(buf, 1)
+    b = take!(buf)
+    b[2] = UInt8('X')
+    @test_throws ErrorException("Unsupported serialization format (got header magic bytes 88 76)") deserialize(IOBuffer(b))
+end
+
+@testset "old :method expressions" begin
+    # without a module context the expression is returned unchanged
+    e = Expr(:method, :f_old_method)
+    @test serialize_roundtrip(e) == e
+    with(Serialization.current_module => Main) do
+        @test serialize_roundtrip(Expr(:method, GlobalRef(Base, :f_old_method))) ==
+            Expr(:call, GlobalRef(Core, :define_method), Base, QuoteNode(:f_old_method))
+        @test serialize_roundtrip(Expr(:method, GlobalRef(Base, :f_old_method), :sig, :code)) ==
+            Expr(:call, GlobalRef(Core, :define_method), Base, QuoteNode(:f_old_method), :sig, :code)
+        @test serialize_roundtrip(Expr(:method, false, :sig, :code)) ==
+            Expr(:call, GlobalRef(Core, :define_method), Main, false, :sig, :code)
+    end
+end
+
+@testset "missing" begin
+    @test serialize_roundtrip(missing) === missing
+    v = Union{Missing,Int}[1, missing, 3]
+    @test isequal(serialize_roundtrip(v), v)
+    @test serialize_roundtrip(Some(missing)) === Some(missing)
+end
+
+module SerializeMethodFields
+@generated sergen(x) = :(x + 1)
+serrec(x) = x
+allow_recursion(_...) = true
+Base.Experimental.@MethodTable SerMT
+Base.Experimental.@overlay SerMT sin(x::Float64) = 1.0
+end
+
+@testset "Method fields" begin
+    m = which(SerializeMethodFields.sergen, (Int,))
+    m2 = serialize_roundtrip(m)
+    @test m2.sig == m.sig && m2.module === SerializeMethodFields
+    @test m2.generator isa typeof(m.generator)
+    @test m2.generator.gen === m.generator.gen
+    @test m2.generator.argnames === m.generator.argnames
+    @test m2.generator.spnames === m.generator.spnames
+
+    m = which(SerializeMethodFields.serrec, (Int,))
+    m.recursion_relation = SerializeMethodFields.allow_recursion
+    m2 = serialize_roundtrip(m)
+    @test m2.recursion_relation === SerializeMethodFields.allow_recursion
+
+    om = only(Base.MethodList(SerializeMethodFields.SerMT).ms)
+    @test_throws ErrorException("cannot serialize Method objects with external method tables") serialize(IOBuffer(), om)
 end

@@ -229,12 +229,24 @@ f38435(::Int, ::Int) = 3.0
 function method_instance(f, types=Base.default_tt(f))
     m = which(f, types)
     inst = nothing
-    tt = Base.signature_type(f, types)
+    tt0 = Base.signature_type(f, types)
+    # runtime-dispatch specializations key type-valued slots by egality
+    # (see `jl_compilation_sig`); inference-only (`==`) ones keep `Type{X}`
+    u = Base.unwrap_unionall(tt0)::DataType
+    ps = Any[isa(p, Core.TypeEq) && !Base.has_free_typevars(Base.type_parameter(p)) ?
+             Core.TypeEgal{Base.type_parameter(p)} : p for p in u.parameters]
+    tt1 = Base.rewrap_unionall(Tuple{ps...}, tt0)
     for mi in Base.specializations(m)
-        if mi.specTypes <: tt && tt <: mi.specTypes
+        if (mi.specTypes <: tt1 && tt1 <: mi.specTypes) ||
+           (mi.specTypes <: tt0 && tt0 <: mi.specTypes)
             inst = mi
             break
         end
+    end
+    if inst === nothing
+        # create the (egality-keyed) dispatch specialization if nothing has needed it yet
+        match = Base._which(tt1; raise=false)
+        match === nothing || (inst = Base.specialize_method(match))
     end
     return inst
 end
@@ -527,6 +539,24 @@ Base.delete_method(fshadow_m2)
 
 @test_throws "Method of fshadow already disabled" Base.delete_method(fshadow_m2)
 
+# A caller compiled with an ambiguous callee instead compiles a `throw(::MethodError)`.
+# Deleting one of the ambiguous methods must invalidate the caller (#63224).
+module AmbiguousDeletion
+f(::Nothing, x) = :nothing_method
+f(x, ::Int) = :int_method
+g(a, b) = f(a, b)
+end
+@test_throws "is ambiguous" AmbiguousDeletion.g(nothing, 1)
+wc_ambiguous = get_world_counter()
+Base.delete_method(which(AmbiguousDeletion.f, (Any, Int)))
+@test AmbiguousDeletion.f(nothing, 1) === :nothing_method
+@test AmbiguousDeletion.g(nothing, 1) === :nothing_method
+@test Base.invokelatest(AmbiguousDeletion.g, nothing, 1) === :nothing_method
+# The deletion is not retroactive: earlier worlds retain the ambiguity.
+# `showerror` looks up candidates in the latest world, so test the exception rather than its message.
+@test_throws MethodError Base.invoke_in_world(wc_ambiguous, AmbiguousDeletion.f, nothing, 1)
+@test_throws MethodError Base.invoke_in_world(wc_ambiguous, AmbiguousDeletion.g, nothing, 1)
+
 # Generated functions without edges must have min_world = 1.
 # N.B.: If changing this, move this test to precompile and make sure
 # that the specialization survives revalidation.
@@ -564,6 +594,13 @@ if Base.JLOptions().depwarn <= 1
 else
     @test !Base.invoke_in_world(before_backdate_age, isdefinedglobal, @__MODULE__, :FooBackdated)
 end
+
+# Showing a function from a world prior to its definition should use its backdated
+# binding without warning or erroring
+before_backdate_age = Base.tls_world_age()
+function f_backdated end
+@test Base.invoke_in_world(before_backdate_age, repr, MIME"text/plain"(), f_backdated) ==
+    "f_backdated (generic function with 0 methods)"
 
 # Test that ambiguous binding intersect the using'd binding's world ranges
 module AmbigWorldTest
@@ -626,4 +663,198 @@ rettype_with_side_effect() = eval(:(rettype_side_effect = "blah"; Cint))
 let
     @test rettype_side_effect == "blah"
     ccall(:strlen, rettype_with_side_effect(), (Cstring,), "xx")
+end
+
+# issue #62022 - missing invalidation with CI equivalence swaps during expansive recursion
+# When inference hits recursion limits and reuses cached CIs, the swapped CIs must have
+# proper edges/backedges so that subsequent method additions correctly invalidate them.
+struct W62022{T}; x::T; end
+@noinline leaf62022() = true
+# grow the type up to a fixed limit (inference's recursion limits will trigger first)
+@noinline foo62022(w::W62022)::Bool = foo62022(W62022(w))
+@noinline foo62022(::W62022{W62022{W62022{W62022{W62022{W62022{T}}}}}}) where {T} = leaf62022()
+@test foo62022(W62022(1)) === true # trigger compilation
+# add a new method that bottoms out the recursion earlier, but after the limit
+@noinline foo62022(::W62022{W62022{W62022{W62022{Int}}}}) = false
+@test foo62022(W62022(1)) === false # test for invalidation
+@test foo62022(W62022(W62022(W62022(1)))) === false
+
+# issue #61667 - rebinding a name in Main must not invalidate the show machinery, which
+# concrete-evals binding queries against Main (via `isvisible`)
+struct ShowInval61667; x::Int; end
+fshow61667(v) = string(v)
+@test fshow61667([ShowInval61667(1)]) isa String
+let ci = method_instance(fshow61667, (Vector{ShowInval61667},)).cache
+    @test ci.max_world == typemax(UInt)
+    Core.eval(Main, :(struct ShowInval61667 end))
+    @test ci.max_world == typemax(UInt)
+end
+
+# issue #61667 - new array types must not invalidate abstractly-typed array iteration
+struct IterInval61667{T} <: AbstractVector{T}
+    v::Vector{T}
+end
+Base.size(A::IterInval61667) = size(A.v)
+Base.getindex(A::IterInval61667, i::Int) = A.v[i]
+absvec61667() = Base.inferencebarrier(Module[])::AbstractVector{Module}
+iter61667() = invoke(iterate, Tuple{AbstractArray}, absvec61667())
+@test precompile(iter61667, ())
+let ci = method_instance(iter61667, ()).cache
+    @test ci.max_world == typemax(UInt)
+    Base.eachindex(::IndexLinear, A::IterInval61667) = eachindex(A.v)
+    Base.iterate(A::IterInval61667, y...) = iterate(A.v, y...)
+    @test ci.max_world == typemax(UInt)
+end
+
+# a new method that is only ambiguous with the callee does not invalidate a
+# possibly-ambiguous edge
+function ambig_rt_find_mi(f, target::Type)
+    for m in methods(f)
+        for spec in Base.specializations(m)
+            spec === nothing && continue
+            spec.specTypes == target && return spec
+        end
+    end
+    return nothing
+end
+function ambig_rt_edge_counts(ci::Core.CodeInstance, callee_mi::Core.MethodInstance)
+    # the number of edges from `ci` to `callee_mi`, as
+    # (possibly ambiguous, not possibly ambiguous)
+    counts = [0, 0]
+    isdefined(ci, :edges) || return (counts[1], counts[2])
+    edges = ci.edges
+    i = 1
+    possibly_ambiguous = false
+    while i <= length(edges)
+        e = edges[i]
+        if e isa Core.PossiblyAmbiguous
+            possibly_ambiguous = true
+            i += 1
+            continue
+        end
+        targets = e isa Int ? edges[i+2:i+1+abs(e)] : (e,)
+        for x in targets
+            x isa Core.CodeInstance && (x = x.def)
+            x === callee_mi && (counts[possibly_ambiguous ? 1 : 2] += 1)
+        end
+        i += e isa Int ? 2 + abs(e) : 1
+        possibly_ambiguous = false
+    end
+    return (counts[1], counts[2])
+end
+
+# the ambiguity exists at inference time, so the edge is possibly ambiguous
+ambig_rt_q(x::Integer, y) = 1
+ambig_rt_q(x, y::AbstractString) = 2
+ambig_rt_qcaller(x::Int8, @nospecialize(y)) = ambig_rt_q(x, y)
+# a caller of the caller, to test that the invalidation propagates
+ambig_rt_qouter(@nospecialize(y)) = ambig_rt_qcaller(Int8(1), y)
+let
+    @test precompile(ambig_rt_qcaller, (Int8, Any))
+    @test precompile(ambig_rt_qouter, (Any,))
+    qmi = ambig_rt_find_mi(ambig_rt_qcaller, Tuple{typeof(ambig_rt_qcaller), Int8, Any})
+    calleemi = ambig_rt_find_mi(ambig_rt_q, Tuple{typeof(ambig_rt_q), Int8, Any})
+    outermi = ambig_rt_find_mi(ambig_rt_qouter, Tuple{typeof(ambig_rt_qouter), Any})
+    @test qmi !== nothing && calleemi !== nothing && outermi !== nothing
+    qci = qmi.cache
+    outerci = outermi.cache
+    @test qci.max_world == typemax(UInt)
+    @test outerci.max_world == typemax(UInt)
+    @test ambig_rt_edge_counts(qci, calleemi) == (1, 0)
+    # only ambiguous with the callee, so the edge stays valid
+    @eval ambig_rt_q(x, y::AbstractChar) = 3
+    @test qci.max_world == typemax(UInt)
+    @test outerci.max_world == typemax(UInt)
+    @test Base.inferencebarrier(ambig_rt_qcaller)(Int8(1), 2) === 1
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_qcaller)(Int8(1), "s")
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_qcaller)(Int8(1), 'c')
+    # more specific than the callee for `(Int8, Integer)`, so it invalidates both callers
+    @eval ambig_rt_q(x::Int8, y::Integer) = 4
+    @test qci.max_world != typemax(UInt)
+    @test outerci.max_world != typemax(UInt)
+    @test Base.inferencebarrier(ambig_rt_qcaller)(Int8(1), 2) === 4
+end
+
+# without an ambiguity at inference time, the edge is not possibly ambiguous, so a new
+# ambiguity invalidates it
+ambig_rt_p(x::Integer, y) = 1
+ambig_rt_pcaller(x::Int8, @nospecialize(y)) = ambig_rt_p(x, y)
+let
+    @test precompile(ambig_rt_pcaller, (Int8, Any))
+    pmi = ambig_rt_find_mi(ambig_rt_pcaller, Tuple{typeof(ambig_rt_pcaller), Int8, Any})
+    calleemi = ambig_rt_find_mi(ambig_rt_p, Tuple{typeof(ambig_rt_p), Int8, Any})
+    @test pmi !== nothing && calleemi !== nothing
+    pci = pmi.cache
+    @test pci.max_world == typemax(UInt)
+    @test ambig_rt_edge_counts(pci, calleemi) == (0, 1)
+    @eval ambig_rt_p(x, y::AbstractString) = 2
+    @test pci.max_world != typemax(UInt)
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_pcaller)(Int8(1), "s")
+    @test Base.inferencebarrier(ambig_rt_pcaller)(Int8(1), 2) === 1
+end
+
+# a method that creates a specificity cycle also makes points within its own signature
+# ambiguous that dispatched to other methods before, so it invalidates the caller
+abstract type AmbigCycRTAbsC end
+abstract type AmbigCycRTCplx <: AmbigCycRTAbsC end
+struct AmbigCycRTCplxF64 <: AmbigCycRTCplx end
+abstract type AmbigCycRTAbsF end
+struct AmbigCycRTF <: AmbigCycRTAbsF end
+struct AmbigCycRTOtherC <: AmbigCycRTAbsC end
+Base.Experimental.@max_methods 5 function ambig_rt_cyc end
+ambig_rt_cyc(::AmbigCycRTCplx) = 1
+ambig_rt_cyc(::AmbigCycRTAbsC) = 2
+ambig_rt_cyc(::Union{AmbigCycRTF, AmbigCycRTAbsC}) = 3
+ambig_rt_cyc(::AmbigCycRTAbsF) = 4
+ambig_rt_cyccaller(@nospecialize(x)) = ambig_rt_cyc(x)
+let
+    @test Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTF()) === 3
+    @test precompile(ambig_rt_cyccaller, (Any,))
+    cmi = ambig_rt_find_mi(ambig_rt_cyccaller, Tuple{typeof(ambig_rt_cyccaller), Any})
+    @test cmi !== nothing
+    cci = cmi.cache
+    @test cci.max_world == typemax(UInt)
+    @test !any(e -> e isa Core.PossiblyAmbiguous, cci.edges)
+    # create the cycle
+    @eval ambig_rt_cyc(::Union{AmbigCycRTCplxF64, AmbigCycRTAbsF}) = 5
+    @test cci.max_world != typemax(UInt)
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTF())
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTCplxF64())
+    @test Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTOtherC()) === 2
+end
+
+# a keyword method whose function argument is a Vararg still invalidates callers
+# that were compiled against no matching keyword method
+kwvararg_f(x) = 1
+kwvararg_caller() = kwvararg_f(; x=1)
+@test_throws MethodError kwvararg_caller()
+Core.kwcall(::NamedTuple{(:x,)}, ::typeof(kwvararg_f)...) = 2
+@test kwvararg_caller() === 2
+
+# a method on a kind still invalidates callers that were compiled against no
+# matching constructor
+abstract type KindCalleeT end
+struct KindCalleeArg end
+kindcallee_caller() = KindCalleeT(KindCalleeArg(), KindCalleeArg())
+@test_throws MethodError kindcallee_caller()
+(::DataType)(::KindCalleeArg, ::KindCalleeArg) = 2
+@test kindcallee_caller() === 2
+# every type now has this constructor method, so remove it before later test files look at their methods
+Base.delete_method(which(KindCalleeT, Tuple{KindCalleeArg, KindCalleeArg}))
+@test_throws MethodError kindcallee_caller()
+
+# a lookup that drops a pair of ambiguous methods is not valid in an older world
+# that has only one of them
+function ambigpair_f end
+ambigpair_g(x) = ambigpair_f(x, 1)
+ambigpair_f(::Int, ::Signed) = 1
+const wc_ambigpair = get_world_counter()
+ambigpair_f(::Integer, ::Int) = 2
+@test_throws MethodError ambigpair_g(1)
+@test Base.invoke_in_world(wc_ambigpair, ambigpair_g, 1) === 1
+# the lookup made for `invoke` does not compute the ambiguity, but must still
+# report the same range for its (empty) answer
+let (match, worlds) = Core.Compiler._findsup(Tuple{typeof(ambigpair_f), Int, Int}, nothing, get_world_counter())
+    @test match === nothing
+    @test worlds.min_world > wc_ambigpair
 end

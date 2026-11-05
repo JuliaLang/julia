@@ -14,6 +14,8 @@
         @test parseatom(":(a)") == QuoteNode(:a)
         @test parseatom(":(:a)") == Expr(:quote, QuoteNode(:a))
         @test parseatom(":(1+2)") == Expr(:quote, Expr(:call, :+, 1, 2))
+        @test parseatom(":...") == QuoteNode(Symbol("..."))
+        @test parseatom(":(...)") == QuoteNode(Symbol("..."))
         # Compatibility hack for VERSION >= v"1.4"
         # https://github.com/JuliaLang/julia/pull/34077
         @test parseatom(":true") == Expr(:quote, true)
@@ -514,10 +516,18 @@
     @testset "syntactic update-assignment operators" begin
         @test parsestmt("x += y") == Expr(:(+=), :x, :y)
         @test parsestmt("x .+= y") == Expr(:(.+=), :x, :y)
+        @test parsestmt("x +%= y"; version=v"1.14") == Expr(Symbol("+%="), :x, :y)
+        @test parsestmt("x -%= y"; version=v"1.14") == Expr(Symbol("-%="), :x, :y)
+        @test parsestmt("x *%= y"; version=v"1.14") == Expr(Symbol("*%="), :x, :y)
+        @test parsestmt("x .+%= y"; version=v"1.14") == Expr(Symbol(".+%="), :x, :y)
         @test parsestmt(":+=") == QuoteNode(Symbol("+="))
+        @test parsestmt(":+%="; version=v"1.14") == QuoteNode(Symbol("+%="))
         @test parsestmt(":(+=)") == QuoteNode(Symbol("+="))
+        @test parsestmt(":(+%=)"; version=v"1.14") == QuoteNode(Symbol("+%="))
         @test parsestmt(":.+=") == QuoteNode(Symbol(".+="))
+        @test parsestmt(":.+%="; version=v"1.14") == QuoteNode(Symbol(".+%="))
         @test parsestmt(":(.+=)") == QuoteNode(Symbol(".+="))
+        @test parsestmt(":(.+%=)"; version=v"1.14") == QuoteNode(Symbol(".+%="))
         @test parsestmt("x \u2212= y") == Expr(:(-=), :x, :y)
     end
 

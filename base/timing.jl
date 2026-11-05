@@ -10,7 +10,7 @@ struct GC_Num
     # reset after every garbage collection cycle and will always be zero in case of no use
     # of `gc_disable/gc_enable` blocks
     deferred_alloc::Int64
-    # (GC Internal) Number of bytes freed bytes in the current collection cycle. This field is
+    # (GC Internal) Number of bytes freed in the current collection cycle. This field is
     # reset after every garbage collection cycle and will always be zero when observed
     # during execution of Julia user code. It's incremented as memory is reclaimed during a collection,
     # used to gather some statistics within the collection itself and reset at the end of a GC cycle.
@@ -35,13 +35,13 @@ struct GC_Num
     # (GC internal) Per-thread allocation quota before triggering a GC
     # NOTE: This field is no longer used by the heuristics in the stock GC
     interval::Csize_t
-    # Duration of the last GC pause in nanoseconds
+    # Number of GC pauses completed so far (never reset by the runtime)
     pause::Cint
     # Number of full GC sweeps completed so far (never reset by the runtime)
     full_sweep::Cint
     # Maximum pause duration observed so far in nanoseconds
     max_pause::Int64
-    # Maximum number of bytes allocated any point in time.
+    # Maximum number of bytes allocated at any point in time.
     # NOTE: This is aggregated over objects, not pages
     max_memory::Int64
     # Time taken to reach a safepoint in the last GC cycle in nanoseconds
@@ -54,7 +54,8 @@ struct GC_Num
     sweep_time::Int64
     # Time spent in the last GC marking phase in nanoseconds
     mark_time::Int64
-    # Time spent sweeping stack pools in the last GC in nanoseconds
+    # Time spent in the parallel per-thread sweep (stack pools, malloc'd buffers and big objects)
+    # in the last GC in nanoseconds
     stack_pool_sweep_time::Int64
     # Total time spent in sweeping phase across all GCs in nanoseconds
     total_sweep_time::Int64
@@ -62,16 +63,20 @@ struct GC_Num
     total_sweep_page_walk_time::Int64
     # Total time spent in madvise calls during sweeping phase across all GCs in nanoseconds
     total_sweep_madvise_time::Int64
-    # Total time spent in freeing malloc'd memory during sweeping phase across all GCs in nanoseconds
+    # Total time spent in the serial part of sweeping big objects (the oldest generation,
+    # and all of them when swept serially) across all GCs in nanoseconds
     total_sweep_free_mallocd_memory_time::Int64
     # Total time spent in marking phase across all GCs in nanoseconds
     total_mark_time::Int64
-    # Total time spent sweeping stack pools across all GCs in nanoseconds
+    # Total time spent in the parallel per-thread sweep (stack pools, malloc'd buffers and big
+    # objects) across all GCs in nanoseconds
     total_stack_pool_sweep_time::Int64
     # Timestamp of the last full GC sweep in nanoseconds
     last_full_sweep::Int64
     # Timestamp of the last incremental GC sweep in nanoseconds
     last_incremental_sweep::Int64
+    # Number of tracked image objects referencing non-image objects
+    image_remset_size::Int64
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
@@ -127,7 +132,7 @@ function cumulative_compile_timing(b::Bool)
     return
 end
 
-# total time spend in garbage collection, in nanoseconds
+# total time spent in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 
 """
@@ -501,7 +506,7 @@ macro elapsed(ex)
         Experimental.@force_compile
         local t0 = time_ns()
         $(esc(ex))
-        (time_ns() - t0) / 1e9
+        (time_ns() -% t0) / 1e9
     end
 end
 
@@ -737,9 +742,9 @@ macro timed(ex)
         cumulative_compile_timing(true)
         local compile_elapsedtimes = cumulative_compile_time_ns()
         local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() - elapsedtime;
+            (elapsedtime = time_ns() -% elapsedtime;
             cumulative_compile_timing(false);
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes;
+            compile_elapsedtimes = map(-%, cumulative_compile_time_ns(), compile_elapsedtimes);
             lock_conflicts = Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts;
             Threads.lock_profiling(false))
         )

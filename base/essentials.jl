@@ -517,6 +517,35 @@ pairs(::Type{NamedTuple}) = Pairs{Symbol, V, Nothing, NT} where {V, NT <: NamedT
 
 Transform an indexable container into a Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
+
+This is the type returned by [`pairs`](@ref) for arrays, tuples and named tuples,
+and the type of keyword arguments collected with `kwargs...`. `keys(p)` iterates
+over the keys selected from the container's key space. For arrays, `pairs(A)` uses
+linear indices for vectors and Cartesian indices otherwise;
+`pairs(IndexLinear(), A)` always uses linear indices.
+`values(p)` returns the container itself. Entries can be read like those of other
+`AbstractDict`s. `p[key]` indexes the container directly, so it accepts any key
+supported by the container, while `haskey(p, key)` only consults `keys(p)`.
+`p[key] = value` writes through to the container if it supports `setindex!`, but
+keys cannot be added or removed.
+Use e.g. `Dict(p)` for an independent mutable copy, or `NamedTuple(kwargs)` to get
+keyword arguments as a `NamedTuple`.
+
+# Examples
+```jldoctest
+julia> f(; kwargs...) = kwargs;
+
+julia> kw = f(a = 1, b = 2)
+pairs(::NamedTuple) with 2 entries:
+  :a => 1
+  :b => 2
+
+julia> kw[:a]
+1
+
+julia> NamedTuple(kw)
+(a = 1, b = 2)
+```
 """
 Pairs
 
@@ -623,7 +652,7 @@ function datatype_min_ninitialized(@nospecialize t0)
         if names isa Tuple
             return length(names)
         end
-        t = argument_datatype(types)
+        t = unwrap_unionall(types)
         t isa DataType || return 0
         t.name === Tuple.name || return 0
     end
@@ -745,6 +774,11 @@ unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 unsafe_convert(::Type{Ptr{UInt8}}, s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
 unsafe_convert(::Type{Ptr{Int8}}, s::String) = ccall(:jl_string_ptr, Ptr{Int8}, (Any,), s)
 
+# We don't add any _reinterpret methods until we include reinterpretarray.jl,
+# but defining the function up front avoids a whole lot of invalidations when we
+# do.
+function _reinterpret end
+
 """
     reinterpret(::Type{Out}, x::In)
 
@@ -793,7 +827,8 @@ end
     sizeof(obj)
 
 Size, in bytes, of the canonical binary representation of the given `DataType` `T`, if any.
-Or the size, in bytes, of object `obj` if it is not a `DataType`.
+Or the size, in bytes, of object `obj` if it is not a `DataType`. The size of a primitive type
+includes padding, while [`bitsizeof`](@ref) does not.
 
 See also [`Base.summarysize`](@ref).
 
@@ -833,6 +868,43 @@ Stacktrace:
 ```
 """
 sizeof(x) = Core.sizeof(x)
+
+"""
+    bitsizeof(T::DataType)
+    bitsizeof(obj)
+
+Declared width, in bits, of the primitive type `T`, or of the primitive type of `obj` if it is
+not a `DataType`. Any other type or object throws an error.
+
+This may differ from `8*sizeof(T)`: `sizeof` rounds the value bytes up to a multiple of the type's
+alignment (see the manual section on primitive types), and the bits past the declared width are
+padding.
+
+See also [`sizeof`](@ref).
+
+!!! compat "Julia 1.14"
+    This function requires Julia 1.14 or later.
+
+# Examples
+```jldoctest
+julia> bitsizeof(Float32)
+32
+
+julia> bitsizeof(1.0)
+64
+
+julia> primitive type MyUInt63 <: Unsigned 63 end
+
+julia> bitsizeof(MyUInt63)
+63
+
+julia> bitsizeof(ComplexF32)
+ERROR: Type Complex is not a primitive type and has no bit size.
+Stacktrace:
+[...]
+```
+"""
+Core.bitsizeof
 
 """
     ifelse(condition::Bool, x, y)
@@ -1021,15 +1093,8 @@ end
 
 `@label` and `@goto` cannot create jumps to different top-level statements. Attempts cause an
 error. To still use `@goto`, enclose the `@label` and `@goto` in a block.
-
-!!! compat "Julia syntax version 1.14"
-    As of Julia syntax version 1.14, `@goto` is not allowed for jumping out of a `try`, `catch`,
-    or `else` block when a `finally` block is present.
 """
 macro goto(name::Symbol)
-    return esc(Expr(:oldsymbolicgoto, name))
-end
-function var"@goto"(__source__::Core.MacroSource, __module__::Module, name::Symbol)
     return esc(Expr(:symbolicgoto, name))
 end
 
@@ -1046,7 +1111,12 @@ function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     memoryrefset!(memoryrefnew(getfield(A, :ref), i, false), x, :not_atomic, false)
     return A
 end
-setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryrefnew(A, i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
+function setindex!(A::Memory{Any}, @nospecialize(x), i::Int)
+    @_noub_if_noinbounds_meta
+    (@_boundscheck) && checkbounds(A, i)
+    memoryrefset!(memoryrefnew(A, i, false), x, :not_atomic, false)
+    return A
+end
 setindex!(A::MemoryRef{T}, x) where {T} = (memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck); A)
 setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomic, @_boundscheck); A)
 
@@ -1080,10 +1150,17 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 unsafe_convert(::Type{Ptr{Any}}, sv::SimpleVector) = convert(Ptr{Any},pointer_from_objref(sv)) + sizeof(Ptr)
 
 """
-    isassigned(array, i)::Bool
+    isassigned(array, i...)::Bool
 
-Test whether the given array has a value associated with index `i`. Return `false`
-if the index is out of bounds, or has an undefined reference.
+Test whether the given array has a value associated with index `i...` (one or more
+integers, or a `CartesianIndex`). Return `false` if the index is out of bounds, or has an
+undefined reference.
+
+The generic fallback for `AbstractArray`s calls `getindex` within a `try`/`catch` block,
+which can be slow. New array types should therefore specialize `isassigned` for the same
+indices as their scalar `getindex` method, i.e. `isassigned(A::MyArray, i::Int)` for
+`IndexLinear()` arrays or `isassigned(A::MyArray{T,N}, I::Vararg{Int,N})` for
+`IndexCartesian()` arrays.
 
 # Examples
 ```jldoctest
@@ -1139,9 +1216,14 @@ end
     Val(c)
 
 Return `Val{c}()`, which contains no run-time data. Types like this can be used to
-pass the information between functions through the value `c`, which must be an `isbits`
-value or a `Symbol`. The intent of this construct is to be able to dispatch on constants
-directly (at compile time) without having to test the value of the constant at run time.
+pass the information between functions through the value `c`, which must be a valid type
+parameter, such as an `isbits` value, a `Symbol`, a type, a `Module`, or a tuple of
+`isbits` values or symbols. The intent of this construct is to be able to dispatch on
+constants directly (at compile time) without having to test the value of the constant
+at run time.
+
+!!! compat "Julia 1.10"
+    Using a `Module` as `c` requires at least Julia 1.10.
 
 # Examples
 ```jldoctest
@@ -1256,12 +1338,49 @@ length(a::Array{T,1}) where {T} = getfield(getfield(a, :size), 1)
 const C_NULL = bitcast(Ptr{Cvoid}, 0)
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, Any), t, v) !== Int32(0)
 
-# Default constructor generation for structs without explicit inner constructors.
-# Called by lowered code from struct definitions (both flisp and JuliaLowering).
-# Uses jl_method_def directly with type objects, avoiding type-to-expression conversion.
+# Check whether all type parameters are constrained by fields or other constrained tvars.
+# `tvars` must be ordered from outermost to innermost `UnionAll`.
+function _fieldtypes_constrain_typevars(tvars::Array{Any,1}, fts::Core.SimpleVector)
+    nparams = length(tvars)
+    n = length(fts)
+    i = nparams
+    while i !== 0
+        @inbounds tv = tvars[i]::TypeVar
+        constrained = false
+        j = 1
+        while j !== n + 1
+            ft = fts[j]
+            if has_typevar(ft, tv)
+                constrained = true
+                break
+            end
+            j += 1
+        end
+        if !constrained
+            j = i + 1
+            remaining = nparams - i
+            while remaining !== 0
+                @inbounds tv2 = tvars[j]::TypeVar
+                if has_typevar(tv2.ub, tv)
+                    constrained = true
+                    break
+                end
+                if tv2 === tv
+                    constrained = false
+                    break
+                end
+                j += 1
+                remaining = remaining - 1
+            end
+        end
+        constrained || return false
+        i -= 1
+    end
+    return true
+end
 
-function _defaultctors(@nospecialize(ty), functionloc)
-    # Walk the UnionAll chain to collect type variables and get the DataType
+# Return the DataType, outer-to-inner type variables, and field types for `ty`.
+function _defaultctor_typeinfo(@nospecialize(ty::Type))
     nparams = 0
     ua = ty
     while isa(ua, UnionAll)
@@ -1277,9 +1396,21 @@ function _defaultctors(@nospecialize(ty), functionloc)
         ua = (ua::UnionAll).body
         i = i + 1
     end
+    fts = ccall(:jl_get_fieldtypes, Any, (Any,), dt)::Core.SimpleVector
+    return dt, tvars, fts
+end
+
+# Default constructor generation for structs without explicit inner constructors.
+# Called by lowered code from struct definitions (both flisp and JuliaLowering).
+# Uses jl_method_def directly with type objects, avoiding type-to-expression conversion.
+function _defaultctors(@nospecialize(ty), functionloc)
+    typeinfo = _defaultctor_typeinfo(ty)
+    dt = getfield(typeinfo, 1)
+    tvars = getfield(typeinfo, 2)
+    fts = getfield(typeinfo, 3)
+    nparams = length(tvars)
 
     mod = dt.name.module
-    fts = ccall(:jl_get_fieldtypes, Any, (Any,), dt)::Core.SimpleVector
     n = length(fts)
     names = dt.name.names::Core.SimpleVector
     src_file = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), functionloc.file)
@@ -1303,46 +1434,7 @@ function _defaultctors(@nospecialize(ty), functionloc)
         i = i + 1
     end
 
-    # Check if all type params are constrained by fields or other constrained tvars
-    constrains_all = true
-    i = nparams
-    while i !== 0
-        @inbounds tv = tvars[i]::TypeVar
-        constrained = false
-        j = 1
-        while j !== n + 1
-            ft = fts[j]
-            if has_typevar(ft, tv)
-                constrained = true
-                break
-            end
-            j = j + 1
-        end
-        if !constrained
-            j = i + 1
-            remaining = nparams - i
-            while remaining !== 0
-                @inbounds tv2 = tvars[j]::TypeVar
-                if has_typevar(tv2.ub, tv)
-                    constrained = true
-                    break
-                end
-                if tv2 === tv
-                    constrained = false
-                    break
-                end
-                j = j + 1
-                remaining = remaining - 1
-            end
-        end
-        if !constrained
-            constrains_all = false
-            break
-        end
-        i = i - 1
-    end
-
-    if constrains_all
+    if _fieldtypes_constrain_typevars(tvars, fts)
         # Outer constructor: T(x::FT1, y::FT2, ...) = new{A,B,...}(x, y, ...)
         # Build lambda body with direct `new`, no convert calls
         if is_parametric
@@ -1621,7 +1713,7 @@ end
 _resolve_in_world(world::Integer, gr::GlobalRef) =
     invoke_in_world(UInt(world), Core.getglobal, gr.mod, gr.name)
 
-# Special constprop heuristics for various binary opes
+# Special constprop heuristics for various binary ops
 typename(typeof(function + end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
 typename(typeof(function - end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
 typename(typeof(function * end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC

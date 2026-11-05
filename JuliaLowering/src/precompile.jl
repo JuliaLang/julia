@@ -1,5 +1,6 @@
-# exercise the whole lowering pipeline
-if Base.get_bool_env("JULIA_LOWERING_PRECOMPILE", true)
+@static if Base.get_bool_env("JULIA_LOWERING_PRECOMPILE", true)
+    # Exercise lowering directly so this also works on runtimes where evaluating
+    # JuliaLowering output through `include_string` is not yet compatible.
     thunks = String[
         """
         function foo(xxx, yyy)
@@ -17,11 +18,40 @@ if Base.get_bool_env("JULIA_LOWERING_PRECOMPILE", true)
         """
     ]
     for thunk in thunks
-        stream = JuliaSyntax.ParseStream(thunk)
-        JuliaSyntax.parse!(stream; rule=:all)
-        st0 = JuliaSyntax.build_tree(SyntaxTree, stream; filename=@__FILE__)
+        st0 = JuliaSyntax.parseall(SyntaxTree, thunk; filename="precompile.jl")
         lwrst = lower(@__MODULE__, st0[1])
         lwr = to_lowered_expr(lwrst)
         @assert Meta.isexpr(lwr, :thunk) && only(lwr.args) isa Core.CodeInfo
+    end
+
+    @static if VERSION >= v"1.14.0-DEV.2635"
+        workload = raw"""
+        _precompile_kwf(x; y=1, z=2) = x + y + z
+
+        function _precompile_destr(t)
+            (a, b) = t
+            a + b
+        end
+
+        macro _precompile_plus1(ex)
+            :($(esc(ex)) + 1)
+        end
+        _precompile_usemac(x) = @_precompile_plus1(x)
+
+        @generated function _precompile_genf(x)
+            :(x + 1)
+        end
+
+        # Fire everything so inference and the generator run during the build.
+        _precompile_kwf(1; y = 2)
+        _precompile_destr((1, 2))
+        _precompile_usemac(3)
+        _precompile_genf(1.0)
+        """
+        # Pin the workload to the 1.14 edition, since its macro returns an
+        # `Expr`, which is not allowed in newer editions.
+        st = JuliaSyntax.parseall(SyntaxTree, workload; filename="precompile.jl",
+                                  version=VersionNumber(JL_OLD_EDITION))
+        eval(@__MODULE__, st)
     end
 end

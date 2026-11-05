@@ -56,9 +56,7 @@ function RadioMenu(options::Array{String,1}; pagesize::Int=10, warn::Bool=true, 
 
     # if pagesize is -1, use automatic paging
     pagesize = pagesize == -1 ? length(options) : pagesize
-    # pagesize shouldn't be bigger than options
     pagesize = min(length(options), pagesize)
-    # after other checks, pagesize must be greater than 1
     pagesize < 1 && error("pagesize must be >= 1")
 
     pageoffset = 0
@@ -101,7 +99,7 @@ end
 
 # Legacy interface
 function writeLine(buf::IOBuffer, menu::RadioMenu{<:Dict}, idx::Int, cursor::Bool)
-    # print a ">" on the selected entry
+    # print the cursor on the selected entry
     cursor ? print(buf, menu.config[:cursor] ," ") : print(buf, "  ")
 
     print(buf, replace(menu.options[idx], "\n" => "\\n"))

@@ -77,6 +77,7 @@ signed(::Type{UInt32}) = Int32
 signed(::Type{UInt64}) = Int64
 signed(::Type{UInt128}) = Int128
 signed(::Type{T}) where {T<:Signed} = T
+signed(::Type{Union{}}, slurp...) = throw(MethodError(signed, (Union{}, slurp...)))
 
 ## integer comparisons ##
 
@@ -86,6 +87,11 @@ signed(::Type{T}) where {T<:Signed} = T
 (-)(x::T, y::T) where {T<:BitInteger} = sub_int(x, y)
 (+)(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
 (*)(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
+
+(-%)(x::BitInteger)                    = neg_int(x)
+(-%)(x::T, y::T) where {T<:BitInteger} = sub_int(x, y)
+(+%)(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
+(*%)(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
 
 negate(x) = -x
 negate(x::Unsigned) = -convert(Signed, x)
@@ -131,7 +137,7 @@ end
 function mul_hi(a::Int128, b::Int128)
     shift = sizeof(a)*8 - 1
     t1, t2 = (a >> shift) & b % UInt128, (b >> shift) & a % UInt128
-    (mul_hi(a % UInt128, b % UInt128) - t1 - t2) % Int128
+    (mul_hi(a % UInt128, b % UInt128) -% t1 -% t2) % Int128
 end
 
 """
@@ -204,7 +210,7 @@ when `abs` is applied to the minimum representable value of a signed
 integer. That is, when `x == typemin(typeof(x))`, `abs(x) == x < 0`,
 not `-x` as might be expected.
 
-See also: [`abs2`](@ref), [`unsigned`](@ref), [`sign`](@ref).
+See also: [`abs2`](@ref), [`unsigned`](@ref), [`sign`](@ref), [`Base.uabs`](@ref), [`Base.Checked.checked_abs`](@ref).
 
 # Examples
 ```jldoctest
@@ -255,6 +261,11 @@ julia> signed(unsigned(-2))
 unsigned(x) = x % typeof(convert(Unsigned, zero(x)))
 unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 
+# The difference `hi - lo` of two integers with `hi >= lo`. Fixed-width types can wrap to a
+# negative value when the operands span more than half the type, but it still fits as unsigned.
+maybe_unsigned(x::BitSigned) = unsigned(x)
+maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
+
 """
     signed(x)
 
@@ -299,7 +310,7 @@ exceptions, see note below).
     type, and so rounding error may occur. In particular, if the exact result is very
     close to `y`, then it may be rounded to `y`.
 
-See also: [`rem`](@ref), [`div`](@ref), [`fld`](@ref), [`mod1`](@ref), [`invmod`](@ref).
+See also: [`rem`](@ref), [`fld`](@ref), [`mod1`](@ref), [`fldmod`](@ref), [`invmod`](@ref).
 
 ```jldoctest
 julia> mod(8, 3)
@@ -326,9 +337,16 @@ function mod(x::T, y::T) where T<:Integer
     y == -1 && return T(0)   # avoid potential overflow in fld
     return x - fld(x, y) * y
 end
+# Correcting the truncated remainder is cheaper than `x - fld(x, y) * y`, and cannot overflow:
+# the correction only applies when `r` and `y` have opposite signs.
+function mod(x::T, y::T) where T<:BitSigned
+    r = rem(x, y)
+    return r + ifelse(signbit(r ⊻ y) & (r != 0), y, zero(T))
+end
 function mod(x::BitSigned, y::Unsigned)
     remval = rem(x, y) # correct iff  remval>=0
-    return unsigned(remval + (remval<zero(remval))*y)
+    # the addition re-wraps the negative remainder into the unsigned domain
+    return unsigned(remval +% (remval<zero(remval))*y)
 end
 function mod(x::Unsigned, y::Signed)
     remval =  signed(rem(x, y)) #remval>0 so correct iff y>0 or remval==0
@@ -560,12 +578,29 @@ top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 (<=)(x::T, y::T) where {T<:BitSigned}   = sle_int(x, y)
 (<=)(x::T, y::T) where {T<:BitUnsigned} = ule_int(x, y)
 
-==(x::BitSigned,   y::BitUnsigned) = (x >= 0) & (unsigned(x) == y)
-==(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x == unsigned(y))
-<( x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <  y)
-<( x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <  unsigned(y))
-<=(x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <= y)
-<=(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <= unsigned(y))
+==(x::BitSigned, y::BitUnsigned) = y == x
+<(x::BitSigned, y::BitUnsigned) = !(y <= x)
+<=(x::BitSigned, y::BitUnsigned) = !(y < x)
+
+for op in (:(==), :<, :<=)
+    @eval function $op(x::BitUnsigned, y::BitSigned)
+        if Core.sizeof(x) < Core.sizeof(y)
+            $op(typeof(y)(x), y)
+        else
+            (y >= 0) & $op(x, unsigned(y) % typeof(x))
+        end
+    end
+end
+
+function max(x::S, y::T) where {S <: BitInteger, T <: BitInteger}
+    R = promote_type(S, T)
+    ifelse(x < y, y % R, x % R)
+end
+
+min(x::S, y::BitUnsigned) where S <: BitSigned = ifelse(x < y, x, y % S)
+min(x::BitUnsigned, y::T) where T <: BitSigned = ifelse(x < y, x % T, y)
+
+minmax(x::BitInteger, y::BitInteger) = (min(x, y), max(x, y))
 
 ## integer shifts ##
 
@@ -666,9 +701,12 @@ rem(x::Signed, ::Type{Unsigned}) = x % unsigned(typeof(x))
 rem(x::Unsigned, ::Type{Signed}) = x % signed(typeof(x))
 rem(x::Integer, T::Type{<:Integer}) = convert(T, x)  # `x % T` falls back to `convert`
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
+rem(x, ::Type{Union{}}, slurp...) = throw(MethodError(rem, (x, Union{}, slurp...)))
 mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
+mod(x, ::Type{Union{}}, slurp...) = throw(MethodError(mod, (x, Union{}, slurp...)))
 
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
+unsafe_trunc(::Type{Union{}}, slurp...) = throw(MethodError(unsafe_trunc, (Union{}, slurp...)))
 
 ## integer construction ##
 
@@ -791,8 +829,10 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 """
     typemin(T)
+    typemin(::T)
 
-The lowest value representable by the given (real) numeric DataType `T`.
+The lowest value representable by the given (real) numeric type `T`.
+The argument can alternatively be an instance of `T`.
 
 See also: [`floatmin`](@ref), [`maxintfloat`](@ref), [`typemax`](@ref), [`eps`](@ref).
 
@@ -821,8 +861,10 @@ function typemin end
 
 """
     typemax(T)
+    typemax(::T)
 
-The highest value representable by the given (real) numeric `DataType`.
+The highest value representable by the given (real) numeric type `T`.
+The argument can alternatively be an instance of `T`.
 
 See also: [`floatmax`](@ref), [`maxintfloat`](@ref), [`typemin`](@ref), [`eps`](@ref).
 
@@ -866,6 +908,8 @@ typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemax(::Type{UInt128}) = $(bitcast(UInt128, convert(Int128, -1)))
 @eval typemin(::Type{Int128} ) = $(convert(Int128, 1) << 127)
 @eval typemax(::Type{Int128} ) = $(bitcast(Int128, typemax(UInt128) >> 1))
+typemin(::Type{Union{}}, slurp...) = throw(MethodError(typemin, (Union{}, slurp...)))
+typemax(::Type{Union{}}, slurp...) = throw(MethodError(typemax, (Union{}, slurp...)))
 
 
 widen(::Type{Int8}) = Int16
@@ -897,13 +941,13 @@ if Core.sizeof(Int) == 4
 
         u0 = u & 0xffffffff; u1 = u >> 32
         v0 = v & 0xffffffff; v1 = v >> 32
-        w0 = u0 * v0
-        t = reinterpret(UInt64, u1) * v0 + (w0 >>> 32)
+        w0 = u0 *% v0
+        t = reinterpret(UInt64, u1) *% v0 +% (w0 >>> 32)
         w2 = reinterpret(Int64, t) >> 32
-        w1 = u0 * reinterpret(UInt64, v1) + (t & 0xffffffff)
-        hi = u1 * v1 + w2 + (reinterpret(Int64, w1) >> 32)
-        lo = w0 & 0xffffffff + (w1 << 32)
-        return Int128(hi) << 64 + Int128(lo)
+        w1 = u0 *% reinterpret(UInt64, v1) +% (t & 0xffffffff)
+        hi = u1 *% v1 +% w2 +% (reinterpret(Int64, w1) >> 32)
+        lo = (w0 & 0xffffffff) +% (w1 << 32)
+        return (Int128(hi) << 64) +% Int128(lo)
     end
 
     function widemul(u::UInt64, v::UInt64)
@@ -912,13 +956,13 @@ if Core.sizeof(Int) == 4
 
         u0 = u & 0xffffffff; u1 = u >>> 32
         v0 = v & 0xffffffff; v1 = v >>> 32
-        w0 = u0 * v0
-        t = u1 * v0 + (w0 >>> 32)
+        w0 = u0 *% v0
+        t = u1 *% v0 +% (w0 >>> 32)
         w2 = t >>> 32
-        w1 = u0 * v1 + (t & 0xffffffff)
-        hi = u1 * v1 + w2 + (w1 >>> 32)
-        lo = w0 & 0xffffffff + (w1 << 32)
-        return UInt128(hi) << 64 + UInt128(lo)
+        w1 = u0 *% v1 +% (t & 0xffffffff)
+        hi = u1 *% v1 +% w2 +% (w1 >>> 32)
+        lo = (w0 & 0xffffffff) +% (w1 << 32)
+        return (UInt128(hi) << 64) +% UInt128(lo)
     end
 
     function *(u::Int128, v::Int128)
@@ -927,9 +971,9 @@ if Core.sizeof(Int) == 4
         lolo = widemul(u0, v0)
         lohi = widemul(reinterpret(Int64, u0), v1)
         hilo = widemul(u1, reinterpret(Int64, v0))
-        t = reinterpret(UInt128, hilo) + (lolo >>> 64)
-        w1 = reinterpret(UInt128, lohi) + (t & 0xffffffffffffffff)
-        return Int128(lolo & 0xffffffffffffffff) + reinterpret(Int128, w1) << 64
+        t = reinterpret(UInt128, hilo) +% (lolo >>> 64)
+        w1 = reinterpret(UInt128, lohi) +% (t & 0xffffffffffffffff)
+        return Int128(lolo & 0xffffffffffffffff) +% (reinterpret(Int128, w1) << 64)
     end
 
     function *(u::UInt128, v::UInt128)
@@ -938,9 +982,9 @@ if Core.sizeof(Int) == 4
         lolo = widemul(u0, v0)
         lohi = widemul(u0, v1)
         hilo = widemul(u1, v0)
-        t = hilo + (lolo >>> 64)
-        w1 = lohi + (t & 0xffffffffffffffff)
-        return (lolo & 0xffffffffffffffff) + UInt128(w1) << 64
+        t = hilo +% (lolo >>> 64)
+        w1 = lohi +% (t & 0xffffffffffffffff)
+        return (lolo & 0xffffffffffffffff) +% (UInt128(w1) << 64)
     end
 
     function _setbit(x::UInt128, i)
@@ -1050,7 +1094,7 @@ else
 end
 
 # issue #15489: since integer ops are unchecked, they shouldn't check promotion
-for op in (:+, :-, :*, :&, :|, :xor)
+for op in (:+, :-, :*, :&, :|, :xor, Symbol("+%"), Symbol("-%"), Symbol("*%"))
     @eval function $op(a::Integer, b::Integer)
         T = promote_typeof(a, b)
         aT, bT = a % T, b % T

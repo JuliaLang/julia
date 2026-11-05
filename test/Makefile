@@ -11,11 +11,6 @@ export JULIA_LOAD_PATH := @$(PATHSEP)@stdlib
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
 
-# used by JuliaLowering_stdlibs.jl test (invokes `make` for JL sysimage)
-export MAKE
-export BUILDROOT
-export JULIA_BUILD_MODE
-
 TESTGROUPS = unicode strings compiler Compiler JuliaSyntax JuliaLowering
 TESTS = all default stdlib $(TESTGROUPS) \
 		$(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \
@@ -29,7 +24,6 @@ EMBEDDING_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/embedding" "CC=$(CC
 
 GCEXT_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/gcext" "CC=$(CC)"
 
-TRIMMING_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/trimming" "CC=$(CC)"
 TEST_JULIA_OPTIONS := --check-bounds=yes --startup-file=no --depwarn=error
 TEST_SCRIPT_OPTIONS := --buildroot=$(call cygpath_w,$(BUILDROOT))
 
@@ -86,11 +80,6 @@ embedding:
 gcext:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(GCEXT_ARGS)
 
-.PHONY: trimming
-trimming:
-	@$(MAKE) -C $(SRCDIR)/$@ check $(TRIMMING_ARGS)
-	@$(MAKE) -C $(SRCDIR)/$@ clean $(TRIMMING_ARGS)
-
 .PHONY: clangsa
 clangsa:
 	@$(MAKE) -C $(SRCDIR)/$@
@@ -100,4 +89,3 @@ clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
 	@$(MAKE) -C gcext $@ $(GCEXT_ARGS)
 	@$(MAKE) -C llvmpasses $@
-	@$(MAKE) -C trimming $@ $(TRIMMING_ARGS)

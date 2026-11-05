@@ -11,7 +11,6 @@ using Core: Const
 const CC = Base.Compiler
 using Base.Meta
 using Base: propertynames, something, IdSet
-using Base.Filesystem: _readdirx
 using Base.JuliaSyntax: @K_str, @KSet_str, parseall, byte_range, children, is_prefix_call, is_trivia, kind
 
 using ..REPL.LineEdit: NamedCompletion
@@ -38,7 +37,9 @@ end
 struct ModuleCompletion <: Completion
     parent::Module
     mod::String
+    internal::Bool # not public in the module, which was named explicitly
 end
+ModuleCompletion(parent::Module, mod::String) = ModuleCompletion(parent, mod, false)
 
 struct PackageCompletion <: Completion
     package::String
@@ -127,6 +128,7 @@ _completion_text(c::KeywordArgumentCompletion) = c.kwarg*'='
 completion_text(c) = _completion_text(c)::String
 
 named_completion(c::BslashCompletion) = NamedCompletion(c.completion, c.name)
+named_completion(c::ModuleCompletion) = NamedCompletion(c.mod, c.mod, c.internal)
 
 function named_completion(c)
     text = completion_text(c)::String
@@ -141,19 +143,20 @@ function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
 end
 
-function appendmacro!(syms, macros, needle, endchar)
+function appendmacro!(suggestions, mod, macros, needle, endchar, mark_internal)
     for macsym in macros
         s = String(macsym)
         if endswith(s, needle)
             from = nextind(s, firstindex(s))
             to = prevind(s, sizeof(s)-sizeof(needle)+1)
-            push!(syms, s[from:to]*endchar)
+            push!(suggestions, ModuleCompletion(mod, s[from:to]*endchar, mark_internal && !Base.ispublic(mod, macsym)))
         end
     end
 end
 
 function append_filtered_mod_names!(ffunc::Function, suggestions::Vector{Completion},
-                                    mod::Module, name::String, complete_internal_only::Bool)
+                                    mod::Module, name::String, complete_internal_only::Bool,
+                                    mark_internal::Bool)
     imported = usings = !complete_internal_only
     ssyms = names(mod; all=true, imported, usings)
     filter!(ffunc, ssyms)
@@ -171,12 +174,13 @@ function append_filtered_mod_names!(ffunc::Function, suggestions::Vector{Complet
         end
     end
 
-    syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
-    appendmacro!(syms, macros, "_str", "\"")
-    appendmacro!(syms, macros, "_cmd", "`")
-    for sym in syms
-        push!(suggestions, ModuleCompletion(mod, sym))
+    for s in ssyms
+        completes_global(String(s), name) || continue
+        text = sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s)
+        push!(suggestions, ModuleCompletion(mod, text, mark_internal && !Base.ispublic(mod, s)))
     end
+    appendmacro!(suggestions, mod, macros, "_str", "\"", mark_internal)
+    appendmacro!(suggestions, mod, macros, "_cmd", "`", mark_internal)
     return suggestions
 end
 
@@ -187,6 +191,9 @@ function complete_symbol!(suggestions::Vector{Completion},
                           shift::Bool=false)
     local mod, t, val
     complete_internal_only = isempty(name)
+    # Only mark internal names when a module is named explicitly. Without a prefix, the
+    # user's own definitions would all count as internal.
+    mark_internal = false
     if prefix !== nothing
         res = repl_eval_ex(prefix, context_module)
         res === nothing && return Completion[]
@@ -194,6 +201,7 @@ function complete_symbol!(suggestions::Vector{Completion},
             val = res.val
             if isa(val, Module)
                 mod = val
+                mark_internal = true
                 if !shift
                     # when module is explicitly accessed, show internal bindings that are
                     # defined by the module, unless shift key is pressed
@@ -213,7 +221,7 @@ function complete_symbol!(suggestions::Vector{Completion},
         let mod_for_check = mod,
             modname = nameof(mod_for_check),
             is_main = mod_for_check === Main
-            append_filtered_mod_names!(suggestions, mod, name, complete_internal_only) do s::Symbol
+            append_filtered_mod_names!(suggestions, mod, name, complete_internal_only, mark_internal) do s::Symbol
                 if Base.isdeprecated(mod_for_check, s)
                     return false
                 elseif s === modname
@@ -479,7 +487,7 @@ function cache_PATH()
         end
 
         path_entries = try
-            _readdirx(pathdir)
+            readdir(pathdir, DirEntry)
         catch e
             # Bash allows dirs in PATH that can't be read, so we should as well.
             if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
@@ -494,8 +502,9 @@ function cache_PATH()
             # here, or even on whether the current user can execute the file in question.
             try
                 if isfile(entry)
-                    @lock PATH_cache_lock push!(PATH_cache, entry.name)
-                    push!(this_PATH_cache, entry.name)
+                    name = basename(entry)
+                    @lock PATH_cache_lock push!(PATH_cache, name)
+                    push!(this_PATH_cache, name)
                 end
             catch e
                 # `isfile()` can throw in rare cases such as when probing a
@@ -541,9 +550,9 @@ function complete_path(path::AbstractString;
     end
     entries = try
         if isempty(dir)
-            _readdirx()
+            readdir(DirEntry)
         elseif isdir(dir)
-            _readdirx(dir)
+            readdir(dir, DirEntry)
         else
             return Completion[], dir, false
         end
@@ -554,9 +563,10 @@ function complete_path(path::AbstractString;
 
     matches = Set{String}()
     for entry in entries
-        if startswith(entry.name, prefix)
+        name = basename(entry)
+        if startswith(name, prefix)
             is_dir = try isdir(entry) catch ex; ex isa Base.IOError ? false : rethrow() end
-            push!(matches, is_dir ? joinpath_withsep(entry.name, ""; dirsep) : entry.name)
+            push!(matches, is_dir ? joinpath_withsep(name, ""; dirsep) : name)
         end
     end
 
@@ -675,13 +685,9 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, baile
     # Ignore saw_latestworld
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_stack_uncached(sv))
         partition = CC.abstract_eval_binding_partition!(interp, g, sv)
-        if CC.is_defined_const_binding(CC.binding_kind(partition))
-            return CC.RTEffects(Const(CC.partition_restriction(partition)), Union{}, CC.EFFECTS_TOTAL)
-        else
-            b = convert(Core.Binding, g)
-            if CC.binding_kind(partition) == CC.PARTITION_KIND_GLOBAL && isdefined(b, :value)
-                return CC.RTEffects(Const(b.value), Union{}, CC.EFFECTS_TOTAL)
-            end
+        if Core.isdefinedglobal_partition(partition, :monotonic)
+            value = Core.getglobal_partition(g, partition, :monotonic)
+            return CC.RTEffects(Const(value), Union{}, CC.EFFECTS_TOTAL)
         end
         return CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS)
     end
@@ -735,6 +741,35 @@ function construct_toplevel_mi(src::Core.CodeInfo, context_module::Module)
     return @ccall jl_method_instance_for_thunk(src::Any, context_module::Any)::Ref{Core.MethodInstance}
 end
 
+function try_eval_global(@nospecialize(ex), mod::Module)
+    if ex isa Symbol
+        !isdefinedglobal(mod, ex) && return nothing
+        return Const(getglobal(mod, ex))
+    elseif ex isa GlobalRef
+        !isdefinedglobal(ex.mod, ex.name) && return nothing
+        return Const(getglobal(ex.mod, ex.name))
+    elseif isexpr(ex, :., 2)
+        rhs = ex.args[2]
+        rhs isa QuoteNode || return nothing
+        s = rhs.value
+        s isa Symbol || return nothing
+        parent = try_eval_global(ex.args[1], mod)
+        parent isa Const || return nothing
+        mod = parent.val
+        mod isa Module || return nothing
+        isdefinedglobal(mod, s) || return nothing
+        return Const(getglobal(mod, s))
+    end
+    return nothing
+end
+
+# Lowering can misbehave with nested error expressions.
+function expr_has_error(@nospecialize(e))
+    e isa Expr || return false
+    e.head === :error &&  return true
+    any(expr_has_error, e.args)
+end
+
 # lower `ex` and run type inference on the resulting top-level expression
 function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressive_inference::Bool=false)
     expr_has_error(ex) && return nothing
@@ -742,6 +777,8 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressiv
         # get the inference result for the last expression
         ex = ex.args[end]
     end
+    global_value = try_eval_global(ex, context_module)
+    global_value === nothing || return global_value
     lwr = try
         Meta.lower(context_module, ex)
     catch # macro expansion failed, etc.
@@ -770,7 +807,7 @@ end
 
 # `COMPLETION_WORLD[]` will be initialized within `__init__`
 # (to allow us to potentially remove REPL from the sysimage in the future).
-# Note that inference from the `code_typed` call below will use the current world age
+# Note that inference from the warmup calls below will use the current world age
 # rather than `typemax(UInt)`, since `Base.invoke_in_world` uses the current world age
 # when the given world age is higher than the current one.
 const COMPLETION_WORLD = Ref{UInt}(typemax(UInt))
@@ -779,7 +816,12 @@ const COMPLETION_WORLD = Ref{UInt}(typemax(UInt))
 # This code cache will be available at the world of `COMPLETION_WORLD`,
 # assuming no invalidation will happen before initializing REPL.
 # Once REPL is loaded, `REPLInterpreter` will be resilient against future invalidations.
+# Eval an end-to-end example so that the full compiler pipeline is exercised.
 code_typed(CC.typeinf, (REPLInterpreter, CC.InferenceState))
+repl_eval_ex(:(1 + 1), @__MODULE__)
+repl_eval_ex(:((1, 2).first), @__MODULE__)
+repl_eval_ex(:(identity((1, 2)...)), @__MODULE__)
+repl_eval_ex(:(invoke(identity, Tuple{Any}, 1)), @__MODULE__)
 
 # Method completion on function call expression that look like :(max(1))
 MAX_METHOD_COMPLETIONS::Int = 40
@@ -932,7 +974,7 @@ include("emoji_symbols.jl")
 
 const non_identifier_chars = [" \t\n\r\"\\'`\$><=:;|&{}()[],+-*/?%^~"...]
 const whitespace_chars = [" \t\n\r"...]
-# "\"'`"... is added to whitespace_chars as non of the bslash_completions
+# "\"'`"... is added to whitespace_chars as none of the bslash_completions
 # characters contain any of these characters. It prohibits the
 # bslash_completions function to try and complete on escaped characters in strings
 const bslash_separators = [whitespace_chars..., "\"'`"...]
@@ -965,8 +1007,9 @@ function bslash_completions(string::String, pos::Int, hint::Bool=false)
         # return possible matches; these cannot be mixed with regular
         # Julian completions as only latex / emoji symbols contain the leading \
         symbol_dict = startswith(s, "\\:") ? emoji_symbols : latex_symbols
-        namelist = Iterators.filter(k -> startswith(k, s), keys(symbol_dict))
-        completions = Completion[BslashCompletion(name, "$(symbol_dict[name]) $name") for name in sort!(collect(namelist))]
+        filt = startswith(s, "\\?") ? k -> contains(k, s[3:end]) : k -> startswith(k, s)
+        namelist = Iterators.filter(filt, keys(symbol_dict)) |> collect |> sort!
+        completions = Completion[BslashCompletion(name, "$(symbol_dict[name]) $name") for name in namelist]
         return (true, (completions, slashpos:pos, true))
     end
     return (false, (Completion[], 1:0, false))
@@ -1003,7 +1046,7 @@ function complete_keyword_argument!(suggestions::Vector{Completion},
     # since the syntax "foo(; kwname)" is equivalent to "foo(; kwname=kwname)".
     kwargs = Set{String}()
     for m in methods
-        # if MAX_METHOD_COMPLETIONS is hit a single TextCompletion is return by complete_methods! with an explanation
+        # if MAX_METHOD_COMPLETIONS is hit a single TextCompletion is returned by complete_methods! with an explanation
         # which can be ignored here
         m isa TextCompletion && continue
         m::MethodCompletion
@@ -1055,8 +1098,8 @@ function complete_loading_candidates!(suggestions::Vector{Completion}, s::String
             end
         end
         isdir(dir) || continue
-        for entry in _readdirx(dir)
-            pname = entry.name
+        for entry in readdir(dir, DirEntry)
+            pname = basename(entry)
             if pname[1] != '.' && pname != "METADATA" &&
                 pname != "REQUIRE" && startswith(pname, s)
                 # Valid file paths are
@@ -1113,10 +1156,19 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         if obj !== nothing
             # Skip leading whitespace inside brackets.
             i = @something findnext(!isspace, string, first(key)) nextind(string, last(key))
-            key = intersect(i:last(key), 1:pos)
+            fullkey, key = key, intersect(i:last(key), 1:pos)
             s = string[key]
             matches = find_dict_matches(obj, s)
-            length(matches) == 1 && !closed && (matches[1] *= ']')
+            if length(matches) == 1
+                if !closed
+                    matches[1] *= ']'
+                elseif endswith(matches[1], rstrip(string[nextind(string, pos):last(fullkey)]))
+                    # Also replace the rest of the key and the `]` (e.g. auto-inserted), so that
+                    # `d["a|"]` completes to `d["ab"]|` rather than `d["ab"|"]`
+                    matches[1] *= ']'
+                    key = first(key):nextind(string, last(fullkey))
+                end
+            end
             if length(matches) > 0
                 ret = Completion[DictCompletion(obj, match) for match in sort!(matches)]
                 return ret, key, true
@@ -1139,12 +1191,19 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     #  "~/example.txt TAB => "/home/user/example.txt"
     r, closed = find_str(cur)
     if r !== nothing
-        r = intersect(r, 1:pos)
+        rstr, r = r, intersect(r, 1:pos)
         s = do_string_unescape(string[r])
         ret, success = complete_path_string(s, hint; string_escape=true,
                                             dirsep=Sys.iswindows() ? '\\' : '/')
-        if length(ret) == 1 && !closed && close_path_completion(ret[1].path)
-            ret[1] = PathCompletion(ret[1].path * '"')
+        if length(ret) == 1
+            # Also replace the rest of the string after the cursor if the completion ends with
+            # it, so `"foo|.txt"` completes to `"foobar.txt"` rather than `"foobar.txt.txt"`
+            endswith(ret[1].path, string[nextind(string, pos):last(rstr)]) && (r = first(r):last(rstr))
+            # Close the string, replacing an existing closing quote
+            if last(r) == last(rstr) && close_path_completion(ret[1].path)
+                ret[1] = PathCompletion(ret[1].path * '"')
+                closed && (r = first(r):nextind(string, last(r)))
+            end
         end
         success && return ret, r, success
     end
@@ -1245,13 +1304,6 @@ function close_path_completion(path)
     path = expanduser(path)
     path = do_string_unescape(path)
     !Base.isaccessibledir(path)
-end
-
-# Lowering can misbehave with nested error expressions.
-function expr_has_error(@nospecialize(e))
-    e isa Expr || return false
-    e.head === :error &&  return true
-    any(expr_has_error, e.args)
 end
 
 # Is the cursor inside the square brackets of a ref expression?  If so, returns:
@@ -1437,6 +1489,11 @@ function shell_completions(str, pos, hint::Bool=false; escape_backticks::Bool=fa
     r = last_arg_start:pos
     use_envpath = length(args.args) < 2
     paths, success = complete_path_string(path, hint; use_envpath, cmd_escape=true, escape_backticks, dirsep='/')
+    if length(paths) == 1
+        # Also replace the rest of the argument after the cursor if the completion ends with it
+        argend = prevind(str, something(findnext(isspace, str, nextind(str, pos)), nextind(str, lastindex(str))))
+        endswith(paths[1].path, str[nextind(str, pos):argend]) && (r = last_arg_start:argend)
+    end
     return paths, r, success
 end
 
@@ -1472,7 +1529,7 @@ function complete_path_string(path, hint::Bool=false;
         catch err
             if err isa Base.IOError
                 false
-            elseif err isa Base.ArgumentError && occursin("embedded NULs", err.msg)
+            elseif err isa Base.ArgumentError && occursin("embedded NULs", String(err.msg)::String)
                 false
             else
                 rethrow()

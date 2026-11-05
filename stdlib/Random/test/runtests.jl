@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, SparseArrays
+using Test
 using Test: guardseed
 
 using Random
@@ -174,7 +174,7 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
 
     ki[2] = UInt64(0)
 
-    # Zigurrat tables for the exponential distribution
+    # Ziggurat tables for the exponential distribution
     x1 = ziggurat_exp_r
     web[256] = x1/emantissa
     feb[256] = exp(-x1)
@@ -408,10 +408,6 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro(0)], [SeedHashe
                 @test A2 === A
                 if f! === rand!
                     f!(rng..., A, X)             ::typeof(A)
-                    if A isa Array && T !== Char # Char/Integer comparison
-                        f!(rng..., sparse(A))    ::typeof(sparse(A))
-                        f!(rng..., sparse(A), X) ::typeof(sparse(A))
-                    end
                 end
             end
         end
@@ -511,7 +507,7 @@ end
     end
 end
 
-@testset "reproducility of methods for $RNG" for RNG=(MersenneTwister,Xoshiro)
+@testset "reproducibility of methods for $RNG" for RNG=(MersenneTwister,Xoshiro)
     mta, mtb = RNG(42), RNG(42)
 
     @test rand(mta) == rand(mtb)
@@ -524,6 +520,14 @@ end
     @test rand(mta,1:10,10) == rand(mtb,1:10,10)
     @test rand(mta,Bool) == rand(mtb,Bool)
     @test bitrand(mta,10) == bitrand(mtb,10)
+
+    # rand! fast path for Array{Complex{T}} must be reproducible across equal RNGs.
+    for T in Base.uniontypes(Base.HWReal)
+        a, b = Vector{Complex{T}}(undef, 10), Vector{Complex{T}}(undef, 10)
+        @test rand!(mta, a) == rand!(mtb, b)
+        c, d = Array{Complex{T},0}(undef), Array{Complex{T},0}(undef)
+        @test rand!(mta, c) == rand!(mtb, d)
+    end
 
     @test randstring(mta) == randstring(mtb)
     @test randstring(mta,10) == randstring(mtb,10)
@@ -570,8 +574,6 @@ end
         @test sort!(p) == 1:10
     end
 
-    @test sprand(mta,1,1,0.9) == sprand(mtb,1,1,0.9)
-    @test sprand(mta,10,10,0.3) == sprand(mtb,10,10,0.3)
 end
 
 @testset "MersenneTwister polynomial generation and jump" begin
@@ -649,6 +651,30 @@ end
 # MersenneTwister initialization with invalid values
 @test_throws DomainError DSFMT.DSFMT_state(zeros(Int32, rand(0:DSFMT.JN32-1)))
 
+@testset "DSFMT wrappers" begin
+    @test startswith(dsfmt_get_idstring(), "dSFMT2-19937")
+    s1, s2 = DSFMT_state(), DSFMT_state()
+    dsfmt_init_gen_rand(s1, UInt32(5))
+    dsfmt_init_gen_rand(s2, UInt32(5))
+    @test s1 == s2
+    s3 = copy(s1)
+    @test s3 == s1 && s3.val !== s1.val
+    dsfmt_init_gen_rand(s3, UInt32(6))
+    @test s3 != s1
+    n = 2 * dsfmt_get_min_array_size()
+    A, B = Vector{Float64}(undef, n), Vector{Float64}(undef, n)
+    GC.@preserve A dsfmt_fill_array_close_open!(s1, pointer(A), n)
+    GC.@preserve B dsfmt_fill_array_close1_open2!(s2, pointer(B), n)
+    @test s1 == s2
+    @test all(x -> 0 <= x < 1, A)
+    @test all(x -> 1 <= x < 2, B)
+    @test A == B .- 1
+    @test allunique(A)
+    @test dsfmt_gv_init_by_array(UInt32[1, 2, 3]) === nothing
+    f = DSFMT.calc_jump(1000)
+    @test DSFMT.GF2X(string(f)) == f
+end
+
 @testset "Random.seed!(rng, ...) returns rng" begin
     # issue #21248
     seed = rand(UInt)
@@ -699,6 +725,13 @@ end
     # clamp it to a small value so that we don't allocate too much unnecessarily
     n = clamp(rand(T), Int8) % T
     @test randstring(n) isa String
+end
+
+@testset "rand from a String with stray continuation bytes" begin
+    rng = Xoshiro(1)
+    @test rand(rng, "\x80") == '\x80'
+    @test Set(rand(rng, "a\x80") for _ in 1:100) == Set(['a', '\x80'])
+    @test Set(rand(rng, "é\x80\x80") for _ in 1:100) == Set(['é', '\x80'])
 end
 
 # this shouldn't crash (#22403)
@@ -791,6 +824,71 @@ end
     end
 end
 
+@testset "rand(::$(typeof(RNG)), ::UnitRange{$T}) with 53 to 104 bits" for RNG ∈ (MersenneTwister(0),
+                                                                                RandomDevice(),
+                                                                                Xoshiro(0),
+                                                                                SeedHasher(0)),
+                                                                          T ∈ (Int128, UInt128)
+    for S in (SamplerRangeInt, SamplerRangeFast), bw in (53, 80, 104), a in T[0, 7]
+        r = a:a+(T(1) << bw)-T(1)
+        xs = [rand(RNG, S(r)) for _ in 1:200]
+        @test all(in(r), xs)
+        # every bit of the offset from the start of the range is sometimes set and sometimes not
+        @test reduce(|, xs .- a) == last(r) - a
+        @test reduce(&, xs .- a) == 0
+    end
+end
+
+# RNGs which only provide a few methods, and rely on the generic fallbacks for the rest
+struct Float64NativeRNG <: AbstractRNG
+    mt::MersenneTwister
+end
+Random.rng_native_52(::Float64NativeRNG) = Float64
+Random.rand(r::Float64NativeRNG, sp::Random.SamplerTrivial{Random.CloseOpen12_64}) = rand(r.mt, sp)
+Random.rand(r::Float64NativeRNG, ::Random.SamplerType{T}) where {T<:Union{Bool, Base.BitInteger}} =
+    Random.rand_generic(r, T)
+
+struct UInt64NativeRNG <: AbstractRNG
+    x::Xoshiro
+end
+Random.rng_native_52(::UInt64NativeRNG) = UInt64
+Random.rand(r::UInt64NativeRNG, ::Random.SamplerType{UInt64}) = rand(r.x, UInt64)
+Random.rand(r::UInt64NativeRNG, ::Random.SamplerType{T}) where {T<:Union{Bool, Base.BitInteger}} =
+    Random.rand_generic(r, T)
+
+@testset "UniformBits and rand_generic for $(typeof(rng))" for rng in (MersenneTwister(1),
+                                                                       Xoshiro(1),
+                                                                       RandomDevice(),
+                                                                       SeedHasher(1),
+                                                                       Float64NativeRNG(MersenneTwister(1)),
+                                                                       UInt64NativeRNG(Xoshiro(1)))
+    for (U, k) in ((Random.UInt10(), 10), (Random.UInt23(), 23), (Random.UInt52(), 52),
+                   (Random.UInt52(UInt128), 52), (Random.UInt104(), 104),
+                   (Random.UInt10Raw(), 10), (Random.UInt23Raw(), 23), (Random.UInt52Raw(), 52),
+                   (Random.UInt52Raw(UInt128), 52), (Random.UInt104Raw(), 104))
+        T = Random.gentype(U)
+        mask = (one(T) << k) - one(T)
+        xs = [rand(rng, U) for _ in 1:200]
+        @test xs isa Vector{T}
+        @test reduce(|, xs .& mask) == mask
+        @test reduce(&, xs .& mask) == 0
+        if !(U isa Union{Random.UInt10Raw, Random.UInt23Raw, Random.UInt52Raw, Random.UInt104Raw})
+            @test all(<=(mask), xs)
+        end
+    end
+    if rng isa Union{Float64NativeRNG, UInt64NativeRNG}
+        for T in Base.BitInteger_types
+            xs = [rand(rng, T) for _ in 1:200]
+            @test xs isa Vector{T}
+            @test reduce(|, xs) == ~zero(T)
+            @test reduce(&, xs) == zero(T)
+        end
+        @test Set(rand(rng, Bool) for _ in 1:100) == Set([false, true])
+        @test all(x -> 0 <= x < 1, (rand(rng) for _ in 1:100))
+        @test_throws MethodError Random.seed!(rng, Xoshiro(0))
+    end
+end
+
 @testset "rand! is allocation-free" begin
     for A in (Array{Int}(undef, 20), Array{Float64}(undef, 5, 4), BitArray(undef, 20), BitArray(undef, 50, 40))
         rand!(A)
@@ -810,6 +908,15 @@ end
     @test shuffle!(a) === a
     a = rand(Int, 1)
     @test shuffle(a) == a
+end
+
+struct ZeroWords <: AbstractRNG end
+Random.rng_native_52(::ZeroWords) = UInt64
+Random.rand(::ZeroWords, ::Random.SamplerType{UInt64}) = UInt64(0)
+
+@testset "randsubseq with a zero exponential draw" begin
+    @test randexp(ZeroWords()) == 0.0
+    @test randsubseq(ZeroWords(), [10, 20, 30], 0.1) == [10, 20, 30]
 end
 
 @testset "rand(::Tuple)" begin
@@ -976,6 +1083,20 @@ end
         m = MersenneTwister(0); rand(m, Int64); rand(m)
         @test string(m) == "MersenneTwister(0x48d73dc42d195740db2fa90498613fdf, 0x1911b814c02405e88c49bc52dc8a77ea, 0, 2256, 1254, 1, 0, 1)"
         @test m == MersenneTwister(0x48d73dc42d195740db2fa90498613fdf, 0x1911b814c02405e88c49bc52dc8a77ea, 0, 2256, 1254, 1, 0, 1)
+
+        # rebuilding the state has to replay many refills of the caches
+        for (nf1, ni, nf2) in ((5000, 0, 0), (0, 1000, 0), (5000, 3, 0), (1, 700, 4000), (3000, 1, 3000))
+            m = MersenneTwister(42)
+            foreach(_ -> rand(m), 1:nf1)
+            foreach(_ -> rand(m, Int64), 1:ni)
+            foreach(_ -> rand(m), 1:nf2)
+            m2 = eval(Meta.parse(string(m)))
+            @test m2 == m
+            @test rand(m2, 10) == rand(m, 10)
+            @test rand(m2, UInt128, 10) == rand(m, UInt128, 10)
+        end
+        # filling the integer cache at 1002 values already moves the state past 2000
+        @test_throws DomainError MersenneTwister(1, 2, 0, 3002, 2000, 1, 1002, 1)
     end
 
     @testset "RandomDevice" begin
@@ -1028,6 +1149,33 @@ end
     @test precision(x) == 100
     x = BigFloat()
     @test_throws ArgumentError rand!(rng, x, s) # incompatible precision
+end
+
+@testset "rand(BigFloat) bits and range" begin
+    for prec in (24, 64, 100, 256), rng in (MersenneTwister(1), Xoshiro(1))
+        setprecision(BigFloat, prec) do
+            xs = [rand(rng, BigFloat) for _ in 1:400]
+            @test all(x -> precision(x) == prec && 0 <= x < 1, xs)
+            # values are multiples of 2^-prec, and the lowest of these bits is random
+            ns = [BigInt(ldexp(x, prec)) for x in xs]
+            @test ns == ldexp.(xs, prec)
+            @test any(isodd, ns) && any(iseven, ns)
+            @test minimum(xs) < 0.05 && maximum(xs) > 0.95
+            @test 140 <= count(<(0.5), xs) <= 260
+            s12 = Sampler(rng, Random.CloseOpen12(BigFloat))
+            ys = [rand(rng, s12) for _ in 1:200]
+            @test all(y -> 1 <= y < 2, ys)
+            @test any(y -> isodd(BigInt(ldexp(y, prec - 1))), ys)
+            # the variant with one bit less of precision
+            s01 = Sampler(rng, Random.CloseOpen01(BigFloat))
+            zs = [Random._rand!(rng, BigFloat(), s01, Random.CloseOpen01(BigFloat), nothing) for _ in 1:200]
+            @test all(z -> 0 <= z < 1, zs)
+            @test all(z -> isinteger(ldexp(z, prec - 1)), zs)
+            @test minimum(zs) < 0.1 && maximum(zs) > 0.9
+        end
+    end
+    @test rand(MersenneTwister(5), BigFloat, 3) == rand(MersenneTwister(5), BigFloat, 3)
+    @test rand(Xoshiro(5), BigFloat, 3) == rand(Xoshiro(5), BigFloat, 3)
 end
 
 @testset "shuffle! for BitArray" begin
@@ -1282,6 +1430,21 @@ end
     @test length(xs) == 3
 end
 
+@testset "Union{} as the type to generate throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own methods, which throw, instead of matching `Type{T}` methods
+    rng = Xoshiro(0)
+    for f in (rand, randn, randexp)
+        for args in ((Union{},), (Union{}, 0), (Union{}, 2, 3), (rng, Union{}), (rng, Union{}, 0))
+            @test_throws MethodError(f, args) f(args...)
+        end
+        @test which(f, (Type{Union{}},)).sig == Tuple{typeof(f), Type{Union{}}, Vararg}
+        @test which(f, (typeof(rng), Type{Union{}})).sig == Tuple{typeof(f), Any, Type{Union{}}, Vararg}
+    end
+    A = Union{}[]
+    @test_throws MethodError(rand!, (A, Union{})) rand!(A, Union{})
+    @test_throws MethodError(rand!, (rng, A, Union{})) rand!(rng, A, Union{})
+end
+
 @testset "Float32 RNG typo" begin
     for T in (Float16, Float32, Float64)
         # Make sure generated numbers are sufficiently diverse
@@ -1294,4 +1457,16 @@ end
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Random))
+end
+
+@testset "Issue #63841: scheduler task RNG isolation" begin
+    Random.seed!(1234)
+    r1 = fetch(Threads.@spawn rand())
+
+    Random.seed!(1234)
+    Base._new_sched_task()
+    sleep(0.01)
+    r2 = fetch(Threads.@spawn rand())
+
+    @test r1 == r2
 end

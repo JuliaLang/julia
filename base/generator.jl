@@ -6,7 +6,7 @@
 Given a function `f` and an iterator `iter`, construct an iterator that yields
 the values of `f` applied to the elements of `iter`.
 The syntax `f(x) for x in iter` is syntax for constructing an instance of this
-type.
+type (see [Generator Expressions](@ref man-generators)).
 
 ```jldoctest
 julia> g = (abs2(x) for x in 1:5);
@@ -36,7 +36,8 @@ end
 
 Generator(f, I1, I2, Is...) = Generator(splat(f), zip(I1, I2, Is...))
 
-Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
+Generator(::Type{T}, iter::I) where {T,I} =
+    Generator{I,has_free_typevars(T) ? typeof(T) : Core.TypeEgal{T}}(T, iter)
 
 Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(splat(T), zip(I1, I2, Is...))
 

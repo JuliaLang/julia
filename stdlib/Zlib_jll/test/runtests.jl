@@ -4,4 +4,7 @@ using Test, Zlib_jll
 
 @testset "Zlib_jll" begin
     @test VersionNumber(unsafe_string(ccall((:zlibVersion, libz), Cstring, ()))) == v"1.3.2"
+
+    # Preserve the JLLWrappers path compatibility accessor used by packages.
+    @test Zlib_jll.get_libz_path() == Zlib_jll.libz_path
 end

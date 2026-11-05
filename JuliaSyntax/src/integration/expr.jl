@@ -72,7 +72,7 @@ reverse_nontrivia_children(cursor) = Iterators.filter(should_include_node, Itera
 # 1. Triple quoted string indentation is trivia
 # 2. An \ before newline removes the newline and any following indentation
 #
-# This function concatenating adjacent string chunks together as done in the
+# This function concatenates adjacent string chunks together as done in the
 # reference parser.
 function _string_to_Expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32)
     ret = Expr(:string)
@@ -159,7 +159,7 @@ function fixup_Expr_child(::Type, head::SyntaxHead, @nospecialize(arg), first::B
     elseif k != K"parens" && @isexpr(arg, :., 1) && arg.args[1] isa Tuple
         # This undoes the "Hack" below"
         h, a = arg.args[1]::Tuple{SyntaxHead,Any}
-        arg = ((!was_parens && coalesce_dot && first) ||
+        arg = a isa Symbol && ((!was_parens && coalesce_dot && first) ||
                 is_syntactic_operator(h)) ?
             Symbol(".", a) : Expr(:., a)
     elseif @isexpr(arg, :parameters) && eq_to_kw_in_params
@@ -221,10 +221,10 @@ function version_to_expr(node)
     return VersionNumber(1, nv ÷ 10, nv % 10)
 end
 
+# TODO: no longer extended by JuliaLowering; remove
 _expr_leaf_val(node::SyntaxNode, _...) = node.val
 _expr_leaf_val(cursor::RedTreeCursor, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32) =
     parse_julia_literal(txtbuf, head(cursor), byte_range(cursor) .+ txtbuf_offset)
-# Extended in JuliaLowering to support `node_to_expr(::SyntaxTree, ...)`
 
 # Convert `cursor` (SyntaxNode or RedTreeCursor) to an Expr
 # `source` is a SourceFile, or if node was an Expr originally, a LineNumberNode
@@ -244,8 +244,7 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
         elseif k == K"VERSION"
             return version_to_expr(nodehead)
         else
-            scoped_val = _expr_leaf_val(cursor, txtbuf, txtbuf_offset)
-            val = @isexpr(scoped_val, :scope_layer) ? scoped_val.args[1] : scoped_val
+            val = _expr_leaf_val(cursor, txtbuf, txtbuf_offset)
             if val isa Union{Int128,UInt128,BigInt}
                 # Ignore the values of large integers and convert them back to
                 # symbolic/textual form for compatibility with the Expr
@@ -256,11 +255,9 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
                         Symbol("@big_str")
                 return Expr(:macrocall, GlobalRef(Core, macname), nothing, str)
             elseif is_identifier(k)
-                val2 = lower_identifier_name(val, k)
-                return @isexpr(scoped_val, :scope_layer) ?
-                    Expr(:scope_layer, val2, scoped_val.args[2]) : val2
+                return lower_identifier_name(val, k)
             else
-                return scoped_val
+                return val
             end
         end
     end
@@ -343,20 +340,31 @@ end
         return adjust_macro_name!(retexpr.args[1])
     elseif k == K"?"
         retexpr.head = :if
-    elseif k == K"op=" && length(args) == 3
-        lhs = args[1]
-        op = args[2]
-        rhs = args[3]
-        headstr = string(args[2], '=')
-        retexpr.head = Symbol(headstr)
-        retexpr.args = Any[lhs, rhs]
-    elseif k == K".op=" && length(args) == 3
-        lhs = args[1]
-        op = args[2]
-        rhs = args[3]
-        headstr = '.' * string(args[2], '=')
-        retexpr.head = Symbol(headstr)
-        retexpr.args = Any[lhs, rhs]
+    elseif k == K"DotsIdentifier"
+        n = numeric_flags(flags(nodehead))
+        return n == 2 ? :(..) : :(...)
+    elseif k == K"op="
+        if length(args) == 3
+            lhs = args[1]
+            op = args[2]
+            rhs = args[3]
+            headstr = string(args[2], '=')
+            retexpr.head = Symbol(headstr)
+            retexpr.args = Any[lhs, rhs]
+        elseif length(args) == 1
+            return Symbol(string(args[1], '='))
+        end
+    elseif k == K".op="
+        if length(args) == 3
+            lhs = args[1]
+            op = args[2]
+            rhs = args[3]
+            headstr = '.' * string(args[2], '=')
+            retexpr.head = Symbol(headstr)
+            retexpr.args = Any[lhs, rhs]
+        else
+            return Symbol(string('.', args[1], '='))
+        end
     elseif k == K"macrocall"
         if length(args) >= 2
             a2 = args[2]
@@ -368,7 +376,7 @@ end
                 # Encode the syntax version into `loc` so that the argument order
                 # matches what ordinary macros expect.
                 # Core.MacroSource was added in Julia 1.13+; fall back to plain loc on older versions.
-                if isdefined(Core, :MacroSource)
+                @static if isdefined(Core, :MacroSource)
                     loc = Core.MacroSource(loc, popat!(args, 2))
                 else
                     popat!(args, 2)  # discard the version argument
@@ -386,7 +394,7 @@ end
         retexpr.args = [GlobalRef(Core, Symbol("@doc")), loc, args...]
     elseif k == K"dotcall" || k == K"call"
         # Julia's standard `Expr` ASTs have children stored in a canonical
-        # order which is often not always source order. We permute the children
+        # order which is not always source order. We permute the children
         # here as necessary to get the canonical order.
         if is_infix_op_call(nodehead) || is_postfix_op_call(nodehead)
             args[2], args[1] = args[1], args[2]
@@ -652,7 +660,8 @@ end
         for i = 2:2:length(args)
             arg = args[i]
             if @isexpr(arg, :., 1)
-                args[i] = Symbol(".", arg.args[1])
+                a1 = arg.args[1]
+                a1 isa Symbol && (args[i] = Symbol(".", a1))
             end
         end
     elseif k == K"meta"

@@ -7,7 +7,7 @@ Interface to libc, the C standard library.
 
 import Base: transcode, windowserror, show
 # these need to be defined separately for bootstrapping but belong to Libc
-import Base: memcpy, memmove, memset, memcmp
+import Base: memcmp, memcpy, memmove, memset
 import Core.Intrinsics: bitcast
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, memcpy,
@@ -62,6 +62,7 @@ if Sys.iswindows()
     WindowsRawSocket(handle::WindowsRawSocket) = handle
 
     Base.cconvert(::Type{Ptr{Cvoid}}, fd::WindowsRawSocket) = bitcast(Ptr{Cvoid}, fd)
+    show(io::IO, fd::WindowsRawSocket) = (print(io, "WindowsRawSocket("); show(io, bitcast(UInt, fd)); print(io, ')'))  # avoids invalidation via show_default
     _get_osfhandle(fd::RawFD) = ccall(:_get_osfhandle, WindowsRawSocket, (RawFD,), fd)
     _get_osfhandle(fd::WindowsRawSocket) = fd
     function dup(src::WindowsRawSocket)

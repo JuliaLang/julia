@@ -52,10 +52,10 @@ end
 hash_mix(a::UInt64, b::UInt64) = ⊻(mul_parts(a, b)...)
 
 # faster-but-weaker than hash_mix intended for small keys
-hash_mix_linear(x::Union{UInt64, UInt32}, h::UInt) = 3h - x
+hash_mix_linear(x::Union{UInt64, UInt32}, h::UInt) = 3 *% h -% x
 function hash_finalizer(x::UInt64)
     x ⊻= (x >> 32)
-    x *= 0x63652a4cd374b267
+    x *%= 0x63652a4cd374b267
     x ⊻= (x >> 33)
     return x
 end
@@ -196,51 +196,65 @@ function hash(x::Float16, h::UInt)
 end
 
 ## generic hashing for rational values ##
-_hash_shl!(x, n) = (x << n)
 function hash(x::Real, h::UInt)
     # decompose x as num*2^pow/den
-    num, pow, den = decompose(x)
+    _num, _pow, _den = decompose(x)
+    # promote Bool to Int8 for trailing_zeros and widen
+    num = _num isa Bool ? Int8(_num) : _num
+    den = _den isa Bool ? Int8(_den) : _den
 
     # handle special values
     num == 0 && den == 0 && return hash(NaN, h)
     num == 0 && return hash(ifelse(den > 0, 0.0, -0.0), h)
     den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
 
-    # normalize decomposition
-    if den < 0
-        num = -num
-        den = -den
-    end
-    num_z = trailing_zeros(num)
-
-    num >>= num_z
-    den_z = trailing_zeros(den)
+    # normalize decomposition: num*2^pow/den with den odd, and num odd once shifted by num_z.
+    # num is shifted lazily, so that the generic path below can fold the shift into one operation.
+    num_z::Int = trailing_zeros(num)
+    den_z::Int = trailing_zeros(den)
+    # effective pow for hashing purposes is defined as pow%Int64
+    pow::Int64 = _pow%Int64 +% num_z%Int64 -% den_z%Int64
     den >>= den_z
-    pow += num_z - den_z
+    num_signbit = signbit(num)
+    den_signbit = signbit(den)
+    x_signbit = num_signbit ⊻ den_signbit
+    # The sign is not normalized: num may be unsigned, and negating a BigInt allocates.
+    # hash_integer folds the sign in as `seed ⊻= (x < 0)`, so do the same for the sign of den below.
     # If the real can be represented as an Int64, UInt64, or Float64, hash as those types.
     # To be an Integer the denominator must be 1 and the power must be non-negative.
-    if den == 1
-        # left = ceil(log2(num*2^pow))
-        left = top_set_bit(abs(num)) + pow
+    if den == 1 || den == -1
+        num_sig_dig = exponent(num) + 1 - num_z
         # 2^-1074 is the minimum Float64 so if the power is smaller, not a Float64
         if -1074 <= pow
             if 0 <= pow # if pow is non-negative, it is an integer
-                left <= 63 && return hash(Int64(num) << Int(pow), h)
-                left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow), h)
+                # Int64 and UInt64 hash by their 64-bit pattern, so compute the pattern of
+                # num*2^pow modulo 2^64. It is exact when the value fits in Int64 or UInt64.
+                if pow <= 64 - x_signbit - num_sig_dig
+                    unum = (num >> num_z) % UInt64
+                    return hash(ifelse(den_signbit, -unum, unum) << Int(pow), h)
+                end
             end # typemin(Int64) handled by Float64 case
             # 2^1024 is the maximum Float64 so if the power is greater, not a Float64
-            # Float64s only have 53 mantisa bits (including implicit bit)
-            left <= 1024 && left - pow <= 53 && return hash(ldexp(Float64(num), pow), h)
+            # Float64s have 53 mantissa bits (including implicit bit)
+            if pow <= 1024 - num_sig_dig && num_sig_dig <= 53
+                fnum = Float64((num >> num_z) % Int64) # exact: abs(num >> num_z) has at most 53 bits here
+                return hash(ldexp(ifelse(den_signbit, -fnum, fnum), Int(pow)), h)
+            end
         end
     else
-        h = hash_integer(den, h)
+        h = hash_integer(den, h ⊻ den_signbit)
     end
     # handle generic rational values
-    h = hash_integer(pow, h)
+    h = hash_integer(pow, h) ⊻ den_signbit
 
     # trimming only whole bytes of trailing zeros simplifies greatly
     # some specializations for memory-backed bitintegers
-    h = hash_integer((pow > 0) ? _hash_shl!(num, pow % 8) : num, h)
+    net_shift = num_z - ((pow > 0) ? Int(pow % 8) : 0)
+    h = if net_shift < 0
+        hash_integer(widen(num) << (-net_shift), h)
+    else
+        hash_integer(num >> net_shift, h)
+    end
     return h
 end
 
@@ -281,17 +295,32 @@ end
 
 hash(x::Symbol) = objectid(x)
 
+const hashgr_seed = 0xe19bede84d316c06 % UInt
+const hashps_seed = 0xee5c84c1439961a8 % UInt
+hash(x::GlobalRef, h::UInt) = hash(x.name, hash(x.mod, h ⊻ hashgr_seed))
+function hash(x::PartialStruct, h::UInt)
+    h ⊻= hashps_seed
+    h = hash(x.typ, h)
+    h = hash(x.undefs, h)
+    h = hash(x.fields, h)
+    return h
+end
 
-load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
-    unsafe_load(convert(Ptr{T}, ptr + i - 1))
 
+load_le(::Type{T}, ptr::Ptr{UInt8}, i, align::Int=1) where {T <: Union{UInt32, UInt64}} =
+    pointerref(convert(Ptr{T}, ptr + i - 1), 1, align)
+
+# `A` is a known power-of-two alignment of `ptr`. Only the loads at multiples of 8 bytes from
+# `ptr` can use it; the overlapping reads of the tail may be misaligned.
 @assume_effects :terminates_globally function hash_bytes(
         ptr::Ptr{UInt8},
         n::Int,
         seed::UInt64,
-        secret::NTuple{4, UInt64}
-    )
+        secret::NTuple{4, UInt64},
+        ::Val{A}=Val(1)
+    ) where {A}
     # Adapted with gratitude from [rapidhash](https://github.com/Nicoshev/rapidhash)
+    align = min(A, 8)
     buflen = UInt64(n)
     seed = seed ⊻ hash_mix(seed ⊻ secret[3], secret[2])
 
@@ -303,10 +332,10 @@ load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
         if buflen ≥ 4
             seed ⊻= buflen
             if buflen ≥ 8
-                a = load_le(UInt64, ptr, 1)
+                a = load_le(UInt64, ptr, 1, align)
                 b = load_le(UInt64, ptr, n - 7)
             else
-                a = UInt64(load_le(UInt32, ptr, 1))
+                a = UInt64(load_le(UInt32, ptr, 1, align))
                 b = UInt64(load_le(UInt32, ptr, n - 3))
             end
         elseif buflen > 0
@@ -320,16 +349,16 @@ load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
             see2 = seed
             while i > 48
                 seed = hash_mix(
-                    load_le(UInt64, ptr, pos) ⊻ secret[1],
-                    load_le(UInt64, ptr, pos + 8) ⊻ seed
+                    load_le(UInt64, ptr, pos, align) ⊻ secret[1],
+                    load_le(UInt64, ptr, pos + 8, align) ⊻ seed
                 )
                 see1 = hash_mix(
-                    load_le(UInt64, ptr, pos + 16) ⊻ secret[2],
-                    load_le(UInt64, ptr, pos + 24) ⊻ see1
+                    load_le(UInt64, ptr, pos + 16, align) ⊻ secret[2],
+                    load_le(UInt64, ptr, pos + 24, align) ⊻ see1
                 )
                 see2 = hash_mix(
-                    load_le(UInt64, ptr, pos + 32) ⊻ secret[3],
-                    load_le(UInt64, ptr, pos + 40) ⊻ see2
+                    load_le(UInt64, ptr, pos + 32, align) ⊻ secret[3],
+                    load_le(UInt64, ptr, pos + 40, align) ⊻ see2
                 )
                 pos += 48
                 i -= 48
@@ -339,13 +368,13 @@ load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
         end
         if i > 16
             seed = hash_mix(
-                load_le(UInt64, ptr, pos) ⊻ secret[3],
-                load_le(UInt64, ptr, pos + 8) ⊻ seed
+                load_le(UInt64, ptr, pos, align) ⊻ secret[3],
+                load_le(UInt64, ptr, pos + 8, align) ⊻ seed
             )
             if i > 32
                 seed = hash_mix(
-                    load_le(UInt64, ptr, pos + 16) ⊻ secret[3],
-                    load_le(UInt64, ptr, pos + 24) ⊻ seed
+                    load_le(UInt64, ptr, pos + 16, align) ⊻ secret[3],
+                    load_le(UInt64, ptr, pos + 24, align) ⊻ seed
                 )
             end
         end
@@ -633,5 +662,7 @@ end
 
 hash(data::AbstractString, h::UInt) =
     hash_bytes(utf8units(data), UInt64(h), HASH_SECRET) % UInt
+# String data follows the length field of a 4-byte-aligned object
 @assume_effects :total hash(data::String, h::UInt) =
-    GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET) % UInt
+    GC.@preserve data hash_bytes(
+        pointer(data), sizeof(data), UInt64(h), HASH_SECRET, Val(sizeof(Int))) % UInt

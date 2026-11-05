@@ -5,9 +5,9 @@ mutable struct BindingInfo
     const id::IdTag                 # Unique integer identifying this binding
     const name::String
     const kind::Symbol              # :local :global :argument :static_parameter
-    const node_id::Int              # ID of some K"BindingId" node in the syntax graph
+    const node_id::SyntaxTree
     const mod::Union{Nothing,Module} # Set when `kind === :global`
-    type::Union{Nothing,NodeId}      # Type, for bindings declared like x::T = 10
+    type::Union{Nothing,SyntaxTree}      # Type, for bindings declared like x::T = 10
     lambda_id::Int            # from scope resolution; 0 if unresolved
     is_const::Bool            # Constant, cannot be reassigned
     is_ssa::Bool              # Single assignment, defined before use
@@ -16,7 +16,8 @@ mutable struct BindingInfo
     unboxed::Bool # determined by binding_analysis.jl; flisp generally mutates `capt` instead
 
     # flisp: vinfo
-    is_nospecialize::Bool # @nospecialize on this argument (only valid for kind == :argument)
+    is_nospecialize::Bool # Only valid for kind == :argument
+    is_specialize::Bool
     is_read::Bool
     is_called::Bool
     is_assigned::Bool
@@ -24,53 +25,6 @@ mutable struct BindingInfo
     is_captured::Bool
     is_always_defined::Bool
     is_used_undef::Bool
-end
-
-function BindingInfo(id::IdTag, name::AbstractString, kind::Symbol, node_id::Integer;
-                     mod::Union{Nothing,Module} = nothing,
-                     type::Union{Nothing,NodeId} = nothing,
-                     lambda_id::Int = 0,
-                     is_const::Bool = false,
-                     is_ssa::Bool = false,
-                     is_internal::Bool = false,
-                     is_ambiguous_local::Bool = false,
-                     unboxed::Bool = false,
-                     is_nospecialize::Bool = false,
-                     is_read::Bool = false,
-                     is_called::Bool = false,
-                     is_assigned::Bool = false,
-                     is_assigned_once::Bool = false,
-                     is_captured::Bool = false,
-                     is_always_defined::Bool = is_ssa || kind === :argument,
-                     is_used_undef::Bool = false)
-    BindingInfo(id, name, kind, node_id, mod, type, lambda_id, is_const, is_ssa,
-                is_internal, is_ambiguous_local, unboxed, is_nospecialize,
-                is_read, is_called, is_assigned, is_assigned_once, is_captured,
-                is_always_defined, is_used_undef)
-end
-
-function Base.show(io::IO, binfo::BindingInfo)
-    print(io, "BindingInfo(", binfo.id,
-          ", ", repr(binfo.name),
-          ", ", repr(binfo.kind),
-          ", ", binfo.node_id)
-    !isnothing(binfo.mod)    && print(io, ", mod=", binfo.mod)
-    !isnothing(binfo.type)   && print(io, ", type=", binfo.type)
-    print(io, ", lambda_id=", binfo.lambda_id)
-    binfo.is_const           && print(io, ", is_const=true")
-    binfo.is_ssa             && print(io, ", is_ssa=true")
-    binfo.is_internal        && print(io, ", is_internal=true")
-    binfo.is_ambiguous_local && print(io, ", is_ambiguous_local=true")
-    binfo.unboxed            && print(io, ", unboxed=true")
-    binfo.is_nospecialize    && print(io, ", is_nospecialize=true")
-    binfo.is_read            && print(io, ", is_read=true")
-    binfo.is_called          && print(io, ", is_called=true")
-    binfo.is_assigned        && print(io, ", is_assigned=true")
-    binfo.is_assigned_once   && print(io, ", is_assigned_once=true")
-    binfo.is_captured        && print(io, ", is_captured=true")
-    binfo.is_always_defined  && print(io, ", is_always_defined=true")
-    binfo.is_used_undef      && print(io, ", is_used_undef=true")
-    print(io, ")")
 end
 
 """
@@ -87,6 +41,60 @@ struct Bindings
     info::Vector{BindingInfo}
 end
 
+function BindingInfo(bindings::Bindings,
+                     name::AbstractString, kind::Symbol, node_id::SyntaxTree;
+                     mod::Union{Nothing,Module} = nothing,
+                     type::Union{Nothing,SyntaxTree} = nothing,
+                     lambda_id::Int = 0,
+                     is_const::Bool = false,
+                     is_ssa::Bool = false,
+                     is_internal::Bool = false,
+                     is_ambiguous_local::Bool = false,
+                     unboxed::Bool = false,
+                     is_nospecialize::Bool = false,
+                     is_specialize::Bool = false,
+                     is_read::Bool = false,
+                     is_called::Bool = false,
+                     is_assigned::Bool = false,
+                     is_assigned_once::Bool = false,
+                     is_captured::Bool = false,
+                     is_always_defined::Bool = is_ssa || kind === :argument,
+                     is_used_undef::Bool = false)
+    bid = next_binding_id(bindings)
+    b = BindingInfo(
+        bid, name, kind, node_id, mod, type, lambda_id, is_const, is_ssa,
+        is_internal, is_ambiguous_local, unboxed, is_nospecialize, is_specialize,
+        is_read, is_called, is_assigned, is_assigned_once, is_captured,
+        is_always_defined, is_used_undef)
+    add_binding(bindings, b)
+    b
+end
+
+function Base.show(io::IO, binfo::BindingInfo)
+    print(io, "BindingInfo(", binfo.id,
+          ", ", repr(binfo.name),
+          ", ", repr(binfo.kind),
+          ", ", binfo.node_id)
+    !isnothing(binfo.mod)    && print(io, ", mod=", binfo.mod)
+    !isnothing(binfo.type)   && print(io, ", type=", binfo.type)
+    print(io, ", lambda_id=", binfo.lambda_id)
+    binfo.is_const           && print(io, ", is_const=true")
+    binfo.is_ssa             && print(io, ", is_ssa=true")
+    binfo.is_internal        && print(io, ", is_internal=true")
+    binfo.is_ambiguous_local && print(io, ", is_ambiguous_local=true")
+    binfo.unboxed            && print(io, ", unboxed=true")
+    binfo.is_nospecialize    && print(io, ", is_nospecialize=true")
+    binfo.is_specialize      && print(io, ", is_specialize=true")
+    binfo.is_read            && print(io, ", is_read=true")
+    binfo.is_called          && print(io, ", is_called=true")
+    binfo.is_assigned        && print(io, ", is_assigned=true")
+    binfo.is_assigned_once   && print(io, ", is_assigned_once=true")
+    binfo.is_captured        && print(io, ", is_captured=true")
+    binfo.is_always_defined  && print(io, ", is_always_defined=true")
+    binfo.is_used_undef      && print(io, ", is_used_undef=true")
+    print(io, ")")
+end
+
 Bindings() = Bindings(Vector{BindingInfo}())
 
 next_binding_id(bindings::Bindings) = length(bindings.info) + 1
@@ -98,37 +106,38 @@ function add_binding(bindings::Bindings, binding)
     push!(bindings.info, binding)
 end
 
-function _binding_id(id::IdTag)
-    id
-end
-
-function _binding_id(ex::SyntaxTree)
-    @jl_assert kind(ex) == K"BindingId" ex
-    ex.var_id::IdTag
+function syntax_id(ex::SyntaxTree)
+    @jl_assert head(ex) in (:bindingid, :ssavalue, :slot, :static_parameter, :label) ex
+    ex.value::IdTag
 end
 
 function get_binding(bindings::Bindings, x)::BindingInfo
-    bindings.info[_binding_id(x)]
+    id = if x isa SyntaxTree
+        @jl_assert head(x) === :bindingid x
+        syntax_id(x)
+    else
+        x
+    end
+    bindings.info[id]
 end
 
 function get_binding(ctx::AbstractLoweringContext, x)::BindingInfo
     get_binding(ctx.bindings::Bindings, x)
 end
 
-function _new_binding(ctx::AbstractLoweringContext, srcref::SyntaxTree,
+function _new_binding(bindings::Bindings, srcref::SyntaxTree,
                       name::AbstractString, kind::Symbol; kws...)
-    binding_id = next_binding_id(ctx.bindings)
     # A binding is only useful when it shows up in the tree, so create its tree
     # node eagerly and share it among uses (see `binding_ex`)
-    ex = @ast ctx srcref binding_id::K"BindingId"
-    b = BindingInfo(binding_id, name, kind, ex._id; kws...)
-    add_binding(ctx.bindings, b)
+    bid = next_binding_id(bindings)
+    ex = @mknode(srcref; value=bid, head=:bindingid, children=nothing)
+    b = BindingInfo(bindings, name, kind, ex; kws...)
     return b
 end
 
 # Create a new SSA binding
 function ssavar(ctx::AbstractLoweringContext, srcref, name="tmp")
-    binding_ex(ctx, _new_binding(ctx, srcref, name, :local;
+    binding_ex(ctx, _new_binding(ctx.bindings, srcref, name, :local;
                                  is_ssa=true, is_internal=true))
 end
 
@@ -136,8 +145,8 @@ end
 function new_local_binding(ctx::AbstractLoweringContext, srcref, name;
                            kind=:local, kws...)
     @jl_assert kind === :local || kind === :argument srcref
-    nameref = newleaf(ctx, srcref, K"Identifier", name)
-    b = _new_binding(ctx, nameref, name, kind; is_internal=true, kws...)
+    nameref = newleaf(srcref, :identifier, name)
+    b = _new_binding(ctx.bindings, nameref, name, kind; is_internal=true, kws...)
     lbindings = current_lambda_bindings(ctx)
     if !isnothing(lbindings)
         init_lambda_binding(lbindings, b, false)
@@ -146,21 +155,30 @@ function new_local_binding(ctx::AbstractLoweringContext, srcref, name;
 end
 
 function new_global_binding(ctx::AbstractLoweringContext, srcref, name, mod; kws...)
-    nameref = newleaf(ctx, srcref, K"Identifier", name)
+    nameref = newleaf(srcref, :identifier, name)
     binding_ex(ctx, _new_binding(
-        ctx, nameref, name, :global; is_internal=true, mod=mod, kws...))
+        ctx.bindings, nameref, name, :global; is_internal=true, mod=mod, kws...))
 end
 
 function binding_ex(ctx::AbstractLoweringContext, b::BindingInfo)
-    # Reconstruct the SyntaxTree for this binding. We keep only the node_id
-    # here, because that's got a concrete type. Whereas if we stored SyntaxTree
-    # that would contain the type of the graph used in the pass where the
-    # bindings were created and we'd need to call reparent(), etc.
-    SyntaxTree(syntax_graph(ctx), b.node_id)
+    b.node_id
 end
 binding_ex(ctx, id::IdTag) = binding_ex(ctx, get_binding(ctx, id))
 binding_type_ex(ctx::AbstractLoweringContext, b::BindingInfo) =
-    SyntaxTree(syntax_graph(ctx), b.type)
+    b.type
+
+"""
+Key to use when transforming names into bindings
+"""
+struct NameKey
+    name::String
+    layer::ScopeLayer
+end
+
+function NameKey(ex::SyntaxTree)
+    @jl_assert head(ex) in (:identifier, :symboliclabel, :symbolicgoto) ex
+    NameKey(syntax_name(ex), (ex.context.layer)::ScopeLayer)
+end
 
 # One lambda's variables
 struct LambdaBindings
@@ -179,9 +197,14 @@ struct LambdaBindings
 end
 
 LambdaBindings(self::IdTag = 0, scope_id::ScopeId = 0) =
-    LambdaBindings(self, scope_id, Dict{IdTag,LambdaBindings}())
+    LambdaBindings(self, scope_id, Dict{IdTag,Bool}())
 
 function init_lambda_binding(bindings::LambdaBindings, b::BindingInfo, capt::Bool)
     bindings.locals_capt[b.id] = capt
     b.lambda_id = bindings.scope_id
+end
+
+function lambda_bindings(st::SyntaxTree)
+    @jl_assert head(st) === :lambdabindings st
+    st.value::LambdaBindings
 end

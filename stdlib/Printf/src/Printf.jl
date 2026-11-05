@@ -188,8 +188,8 @@ function Format(f::AbstractString)
             b = bytes[pos]
             pos += 1
         else
-            while b - UInt8('0') < 0x0a
-            width = 10 * width + (b - UInt8('0'))
+            while UInt8('0') <= b <= UInt8('9')
+                width = 10 * width + (b - UInt8('0'))
                 b = bytes[pos]
                 pos += 1
                 pos > len && break
@@ -212,7 +212,7 @@ function Format(f::AbstractString)
                     pos += 1
                 else
                     precision = 0
-                    while b - UInt8('0') < 0x0a
+                    while UInt8('0') <= b <= UInt8('9')
                         precision = 10precision + (b - UInt8('0'))
                         b = bytes[pos]
                         pos += 1
@@ -302,6 +302,9 @@ end
     end
     if spec.dynamic_precision
         precision = args[argp]::Integer
+        if precision < 0
+            precision = T <: Ints ? 0 : T <: Floats && !(T <: HexBases) ? 6 : -1
+        end
         if zero && T <: Ints && precision > 0
             zero = false
         end
@@ -488,8 +491,8 @@ tofloat(x::Base.IEEEFloat) = x
 tofloat(x::BigFloat) = x
 
 _snprintf(ptr, siz, str, arg) =
-    @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
-                                   arg::Ref{BigFloat})::Cint
+    @ccall Base.MPFR.libmpfr.mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
+                                             arg::Ref{BigFloat})::Cint
 
 # Arbitrary constant for a maximum number of bytes we want to output for a BigFloat.
 # 8KiB seems like a reasonable default. Larger BigFloat representations should probably
@@ -596,7 +599,8 @@ function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
                 newpos += 3
             else
                 if prec > -1
-                    s, p = frexp(x)
+                    # scale in Float64, since ldexp(s, 1 + sigbits) can overflow narrower types
+                    s, p = frexp(Float64(x))
                     sigbits = 4 * min(prec, 13)
                     s = 0.25 * round(ldexp(s, 1 + sigbits))
                     # ensure last 2 exponent bits either 01 or 10
@@ -655,7 +659,8 @@ function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
             # right aligned
             n = width - (newpos - pos)
             if zero && isfinite(x)
-                ex = (arg < 0 || (plus | space)) + (T <: Union{Val{'a'}, Val{'A'}} ? 2 : 0)
+                # check the written sign rather than `arg < 0`, which is false for -0.0
+                ex = (buf[pos] == UInt8('-') || (plus | space)) + (T <: Union{Val{'a'}, Val{'A'}} ? 2 : 0)
                 so = pos + ex
                 len = (newpos - pos) - ex
                 copyto!(buf, so + n, buf, so, len)
@@ -704,13 +709,19 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
     end
     n, pt, neg = isf ? fix_dec(arg, prec, buf2) : ini_dec(arg, min(prec + ise, length(buf2) - 1), buf2)
     if isg && !hash
-        while buf2[n] == UInt8('0')
+        while n > 1 && buf2[n] == UInt8('0')
             n -= 1
         end
     end
     expform = ise || (isg && !(-4 < pt <= prec))
-    n2 = n + (expform ? 4 : 0) + (prec > 0 || hash) + (neg || (plus | space)) +
-        (isf && pt >= n ? prec + 1 : 0)
+    expdigits = expform ? max(ndigits(pt - 1), 2) : 0
+    # For `%g` the precision counts significant digits, and the integer part has used some of them
+    nzeros = isf ? prec : max(prec - pt, 0)
+    n2 = (neg || (plus | space)) + (
+        expform ? n + (n > 1 || hash) + 2 + expdigits :
+        pt <= 0 ? n + 2 - pt :
+        pt >= n ? pt + (hash || (isf && prec > 0) ? nzeros + 1 : 0) :
+        n + 1)
     if !leftalign && !zero && n2 < width
         # pad left w/ spaces
         for _ = 1:(width - n2)
@@ -748,15 +759,11 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
         buf[pos] = exp < 0 ? UInt8('-') : UInt8('+')
         pos += 1
         exp = abs(exp)
-        if exp < 10
-            buf[pos] = UInt8('0')
-            buf[pos + 1] = 48 + exp
-            pos += 2
-        else
-            buf[pos] = 48 + div(exp, 10)
-            buf[pos + 1] = 48 + rem(exp, 10)
-            pos += 2
+        for i = expdigits-1:-1:0
+            buf[pos + i] = 48 + rem(exp, 10)
+            exp = div(exp, 10)
         end
+        pos += expdigits
     elseif pt <= 0
         buf[pos] = UInt8('0')
         buf[pos + 1] = UInt8('.')
@@ -783,10 +790,9 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
         if hash || (isf && prec > 0)
             buf[pos] = UInt8('.')
             pos += 1
-            while prec > 0
+            for _ = 1:nzeros
                 buf[pos] = UInt8('0')
                 pos += 1
-                prec -= 1
             end
         end
     else
@@ -872,7 +878,7 @@ end
 function plength(f::Spec{T}, x) where {T <: Chars}
     c = Char(first(x))
     w = textwidth(c)
-    return max(f.width, w) + (ncodeunits(c) - w)
+    return Base.checked_add(max(f.width, w), ncodeunits(c) - w)
 end
 
 plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
@@ -880,22 +886,22 @@ plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
 function plength(f::Spec{T}, x) where {T <: Strings}
     str = string(x)
     sw = textwidth(str)
-    p = f.precision == -1 ? (sw + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
-    return max(f.width, p) + (sizeof(str) - sw)
+    p = f.precision == -1 ? Base.checked_add(sw, f.hash ? (x isa Symbol ? 1 : 2) : 0) : f.precision
+    return Base.checked_add(max(f.width, p), sizeof(str) - sw)
 end
 
 function plength(f::Spec{T}, x) where {T <: Ints}
     x2 = toint(x)
     return max(
         f.width,
-        f.precision + ndigits(x2, base=base(T), pad=1) + MAX_FMT_CHARS_WIDTH
+        Base.checked_add(f.precision, ndigits(x2, base=base(T), pad=1), MAX_FMT_CHARS_WIDTH)
     )
 end
 
 plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
-    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + 0 + MAX_FMT_CHARS_WIDTH)
+    max(f.width, Base.checked_add(Int(f.hash), MAX_INTEGER_PART_WIDTH, MAX_FMT_CHARS_WIDTH))
 plength(f::Spec{T}, x) where {T <: Floats} =
-    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + f.precision + MAX_FMT_CHARS_WIDTH)
+    max(f.width, Base.checked_add(Int(f.hash), MAX_INTEGER_PART_WIDTH, f.precision, MAX_FMT_CHARS_WIDTH))
 plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)
@@ -906,13 +912,13 @@ plength(::Spec{PositionCounter}, x) = 0
     Base.@nexprs 16 i -> begin
         if N >= i
             l, argp = plength(formats[i], args, argp)
-            len += l
+            len = Base.checked_add(len, l)
         end
     end
     if N > 16
         for i = 17:length(formats)
             l, argp = plength(formats[i], args, argp)
-            len += l
+            len = Base.checked_add(len, l)
         end
     end
     return len

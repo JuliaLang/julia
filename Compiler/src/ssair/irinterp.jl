@@ -1,7 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function collect_limitations!(@nospecialize(typ), ::IRInterpretationState)
-    @assert !isa(typ, LimitedAccuracy) "irinterp is unable to handle heavy recursion correctly"
+function collect_limitations!(@nospecialize(typ), sv::IRInterpretationState)
+    if isa(typ, LimitedAccuracy)
+        parent = frame_parent(sv)
+        while parent isa IRInterpretationState
+            parent = frame_parent(parent)
+        end
+        if parent isa InferenceState
+            union!(parent.pclimitations, typ.causes)
+        end
+        return typ.typ
+    end
     return typ
 end
 
@@ -26,7 +35,16 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, arg
         newirsv = IRInterpretationState(interp, ci, mi, argtypes, src)
         if newirsv !== nothing
             assign_parentchild!(newirsv, parent)
-            return ir_abstract_constant_propagation(interp, newirsv)
+            result = ir_abstract_constant_propagation(interp, newirsv)
+            update_valid_age!(parent, world, newirsv.valid_worlds)
+            proof_edges = Any[]
+            for info in newirsv.ir.stmts.info
+                add_edges!(proof_edges, info)
+            end
+            append!(proof_edges, newirsv.edges)
+            proof = LocalInferenceProof(newirsv.valid_worlds, Core.svec(proof_edges...))
+            add_inference_proof!(parent.edges, proof)
+            return result
         end
         return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects)))
     end
@@ -39,10 +57,12 @@ function abstract_eval_invoke_inst(interp::AbstractInterpreter, inst::Instructio
         mi_cache = code_cache(interp)
         code = get(mi_cache, ci, nothing)
         code === nothing && return Pair{Any,Tuple{Bool,Bool}}(nothing, (false, false))
-        code isa InferenceResult && (code = code.ci) # COMBAK: we shouldn't discard the src so easily here, as we might not be able to get it back again
+        code = code::CodeInstance
     else
         code = ci::CodeInstance
     end
+    update_valid_age!(irsv, get_inference_world(interp), proof_worlds(code))
+    add_inference_proof!(irsv.edges, code)
     argtypes = collect_argtypes(interp, stmt.args[2:end], StatementState(nothing, false), irsv)
     argtypes === nothing && return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, false))
     return concrete_eval_invoke(interp, code, argtypes, irsv)
@@ -149,7 +169,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     rt = nothing
     if isa(stmt, Expr)
         head = stmt.head
-        if (head === :call || head === :foreigncall || head === :new || head === :splatnew ||
+        if (head === :call || head === :foreigncall || head === :foreignglobal || head === :new || head === :splatnew ||
             head === :static_parameter || head === :isdefined || head === :boundscheck)
             @assert isempty(irsv.tasks) # TODO: this whole function needs to be converted to a stackless design to be a valid AbsIntState, but this should work here for now
             result = abstract_eval_statement_expr(interp, stmt, StatementState(nothing, false), irsv)
@@ -186,6 +206,9 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
                head === :gc_preserve_end
             return false
         elseif head === :leave
+            return false
+        elseif head === :(=)
+            # a store (which should be to a global at this point) is not refinable
             return false
         else
             Core.println(stmt)
@@ -236,50 +259,63 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     return false
 end
 
-# Process the terminator and add the successor to `bb_ip`. Returns whether a backedge was seen.
-function process_terminator!(@nospecialize(stmt), bb::Int, bb_ip::BitSetBoundedMinPrioritySet)
-    if isa(stmt, ReturnNode)
-        return false
-    elseif isa(stmt, GotoNode)
-        backedge = stmt.label <= bb
-        backedge || push!(bb_ip, stmt.label)
-        return backedge
-    elseif isa(stmt, GotoIfNot)
-        backedge = stmt.dest <= bb
-        backedge || push!(bb_ip, stmt.dest)
-        push!(bb_ip, bb+1)
-        return backedge
-    elseif isa(stmt, EnterNode)
-        dest = stmt.catch_dest
-        if dest ≠ 0
-            @assert dest > bb
-            push!(bb_ip, dest)
-        end
-        push!(bb_ip, bb+1)
-        return false
-    else
-        push!(bb_ip, bb+1)
-        return false
-    end
-end
-
 struct BBScanner
     ir::IRCode
     bb_ip::BitSetBoundedMinPrioritySet
+    scanned::BitSet # blocks already visited by `scan!`
 end
 
 function BBScanner(ir::IRCode)
     bbs = ir.cfg.blocks
     bb_ip = BitSetBoundedMinPrioritySet(length(bbs))
     push!(bb_ip, 1)
-    return BBScanner(ir, bb_ip)
+    return BBScanner(ir, bb_ip, BitSet())
+end
+
+function restart!(scanner::BBScanner)
+    empty!(scanner.scanned)
+    push!(scanner.bb_ip, 1)
+    return scanner
+end
+
+# Returns `true` if `succ` was already scanned; otherwise enqueues it and returns `false`.
+function scanned_or_enqueue!(scanner::BBScanner, succ::Int)
+    succ in scanner.scanned && return true
+    push!(scanner.bb_ip, succ)
+    return false
+end
+
+# Enqueue the not-yet-scanned successors of `bb`. Returns whether any successor
+# had already been scanned, i.e., whether control can flow back to a block that
+# `scan!` has already processed.
+function process_terminator!(@nospecialize(stmt), bb::Int, scanner::BBScanner)
+    if isa(stmt, ReturnNode)
+        return false
+    elseif isa(stmt, GotoNode)
+        return scanned_or_enqueue!(scanner, stmt.label)
+    elseif isa(stmt, GotoIfNot)
+        backedge = scanned_or_enqueue!(scanner, stmt.dest)
+        backedge |= scanned_or_enqueue!(scanner, bb+1)
+        return backedge
+    elseif isa(stmt, EnterNode)
+        dest = stmt.catch_dest
+        backedge = false
+        if dest ≠ 0
+            backedge |= scanned_or_enqueue!(scanner, dest)
+        end
+        backedge |= scanned_or_enqueue!(scanner, bb+1)
+        return backedge
+    else
+        return scanned_or_enqueue!(scanner, bb+1)
+    end
 end
 
 function scan!(callback, scanner::BBScanner, forwards_only::Bool)
-    (; bb_ip, ir) = scanner
+    (; bb_ip, ir, scanned) = scanner
     bbs = ir.cfg.blocks
     while !isempty(bb_ip)
         bb = popfirst!(bb_ip)
+        push!(scanned, bb)
         stmts = bbs[bb].stmts
         lstmt = last(stmts)
         for idx = stmts
@@ -287,7 +323,7 @@ function scan!(callback, scanner::BBScanner, forwards_only::Bool)
             ret = callback(inst, lstmt, bb)
             ret === nothing && return true
             ret::Bool || break
-            idx == lstmt && process_terminator!(inst[:stmt], bb, bb_ip) && forwards_only && return false
+            idx == lstmt && process_terminator!(inst[:stmt], bb, scanner) && forwards_only && return false
         end
     end
     return true
@@ -410,7 +446,7 @@ function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRI
         end
 
         # Slow Path Phase 1.B: Assemble def-use map
-        complete!(tpdum); push!(scanner.bb_ip, 1)
+        complete!(tpdum); restart!(scanner)
         populate_def_use_map!(tpdum, scanner)
 
         # Slow Path Phase 2: Use def-use map to converge cycles.
@@ -459,7 +495,7 @@ function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRI
     end
 
     if irsv.frameid != 0
-        callstack = irsv.callstack::Vector{AbsIntState}
+        callstack = irsv.callstack
         @assert callstack[end] === irsv && length(callstack) == irsv.frameid
         pop!(callstack)
     end

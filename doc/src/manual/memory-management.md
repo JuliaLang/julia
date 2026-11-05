@@ -39,6 +39,8 @@ julia --heap-size-hint=4G  # To set the hint to ~4GB
 julia --heap-size-hint=50% # or to 50% of physical memory
 ```
 
+If a cgroup memory limit (e.g. of a container) is lower than physical memory, a `%` hint is a percentage of that limit instead. When no hint is given, Julia on 64-bit systems uses such a limit as the hint.
+
 The `--heap-size-hint` option tells the garbage collector to trigger collection more aggressively when approaching the specified limit. This is particularly useful in:
 
 * Containers with memory limits
@@ -142,7 +144,7 @@ The best way to minimize GC impact is to reduce unnecessary allocations:
 
 ### Profiling Memory Usage
 
-For detailed guidance on profiling memory allocations and identifying performance bottlenecks, see the [Profiling](@ref man-profiling) section.
+For detailed guidance on profiling memory allocations and identifying performance bottlenecks, see the [Profiling](@ref lib-profiling) section.
 
 ## [Advanced Configuration](@id man-gc-advanced)
 

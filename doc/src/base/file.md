@@ -7,6 +7,8 @@ Base.Filesystem.pwd
 Base.Filesystem.cd(::AbstractString)
 Base.Filesystem.cd(::Function)
 Base.Filesystem.readdir
+Base.Filesystem.DirEntry
+Base.Filesystem.eachentry
 Base.Filesystem.walkdir
 Base.Filesystem.mkdir
 Base.Filesystem.mkpath
@@ -32,6 +34,8 @@ Base.Filesystem.mv
 Base.Filesystem.rename
 Base.Filesystem.rm
 Base.Filesystem.touch
+Base.Filesystem.trylockfile
+Base.Filesystem.unlockfile
 Base.Filesystem.tempname
 Base.Filesystem.tempdir
 Base.Filesystem.mktemp(::AbstractString)

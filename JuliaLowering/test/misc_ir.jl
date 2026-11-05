@@ -1,6 +1,7 @@
 module JuxtuposeTest
+    using ..JuliaLowering
     macro emit_juxtupose()
-        :(10x)
+        JuliaLowering.@legacy_quote_to_syntax :(10x)
     end
 end
 
@@ -31,13 +32,12 @@ x."b"
 
 ########################################
 # Error: Wrong number of children in `.`
-@ast_ [K"." "x"::K"Identifier" "a"::K"Identifier" 3::K"Integer"]
+@ast_ [:. "x"::identifier "a"::identifier 3::value]
 #---------------------
 LoweringError:
-#= line 1 =# - invalid syntax: unknown form `.` or number of arguments 3
+ at line 1: invalid syntax: unknown form `.` or number of arguments 3
+
 Expression:
-  (. x a 3)
-Containing expressions:
   (. x a 3)
 
 ########################################
@@ -177,7 +177,7 @@ LoweringError:
 #---------------------
 LoweringError:
 (; a."b")
-#     ╙ ── expected identifier
+#    └─┘ ── expected identifier
 
 ########################################
 # Error: Named tuple element without valid name
@@ -185,7 +185,7 @@ LoweringError:
 #---------------------
 LoweringError:
 (; a=1, f())
-#       └─┘ ── expected identifier, `=`, or, `...` after semicolon
+#       └─┘ ── expected identifier, `=`, or `...` after semicolon
 
 ########################################
 # Error: Modules not allowed inside blocks
@@ -253,13 +253,12 @@ LoweringError:
 ########################################
 # Error: Test AST which has no source form and thus must have been constructed
 # programmatically (eg, a malformed if)
-@ast_ [K"if"]
+@ast_ [:if]
 #---------------------
 LoweringError:
-#= line 1 =# - expected (if cond body) or (if cond body else)
+ at line 1: expected (if cond body) or (if cond body else)
+
 Expression:
-  (if)
-Containing expressions:
   (if)
 
 ########################################
@@ -269,11 +268,10 @@ let
 end
 #---------------------
 LoweringError:
-#= none:2 =# - unimplemented or unsupported `atomic` declaration
+ at line 2: unimplemented or unsupported `atomic` declaration
+
 Expression:
   (atomic x)
-Containing expressions:
-  (let (block) (block (atomic x)))
 
 ########################################
 # GC.@preserve support
@@ -298,6 +296,13 @@ GC.@preserve a b g() begin
 end
 #---------------------
 MacroExpansionError while expanding GC.@preserve in module Main.TestMod:
+┌─────────────────────────
+GC.@preserve a b g() begin
+    body
+end
+#─┘ ── Error expanding macro
+Caused by:
+LoweringError:
 GC.@preserve a b g() begin
 #                └─┘ ── Preserved variable must be a symbol
     body
@@ -307,36 +312,28 @@ end
 # @eval without module
 @eval $f(x, y)
 #---------------------
-1   JuliaLowering.eval
-2   (call core.tuple :expr_compat_mode)
-3   (call core.apply_type core.NamedTuple %₂)
-4   (call core.tuple false)
-5   (call %₃ %₄)
-6   TestMod.f
-7   (call core.tuple %₆)
-8   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (call ($ f) x y)) %₇)
-9   (= slot₁/eval_result (call core.kwcall %₅ %₁ TestMod %₈))
-10  latestworld
-11  slot₁/eval_result
-12  (return %₁₁)
+1   TestMod.f
+2   (call core.tuple %₁)
+3   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₂)
+4   (call Base.fill_context %₃ SyntaxContext(#=omitted=#))
+5   (= slot₁/eval_result (call Base.JuliaLowering.at_eval_hook TestMod %₄))
+6   latestworld
+7   slot₁/eval_result
+8   (return %₇)
 
 ########################################
 # @eval with module
 @eval mod $f(x, y)
 #---------------------
-1   JuliaLowering.eval
-2   (call core.tuple :expr_compat_mode)
-3   (call core.apply_type core.NamedTuple %₂)
-4   (call core.tuple false)
-5   (call %₃ %₄)
-6   TestMod.mod
-7   TestMod.f
-8   (call core.tuple %₇)
-9   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (call ($ f) x y)) %₈)
-10  (= slot₁/eval_result (call core.kwcall %₅ %₁ %₆ %₉))
-11  latestworld
-12  slot₁/eval_result
-13  (return %₁₂)
+1   TestMod.mod
+2   TestMod.f
+3   (call core.tuple %₂)
+4   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₃)
+5   (call Base.fill_context %₄ SyntaxContext(#=omitted=#))
+6   (= slot₁/eval_result (call Base.JuliaLowering.at_eval_hook %₁ %₅))
+7   latestworld
+8   slot₁/eval_result
+9   (return %₈)
 
 ########################################
 # Juxtaposition
@@ -348,14 +345,7 @@ end
 4   (return %₃)
 
 ########################################
-# Juxtaposition - check the juxtapose multiply is resolved to `JuxtuposeTest.*` when
-# emitted by the macro in the JuxtuposeTest module.
-#
-# This is consistent with Julia's existing system but it's not entirely clear
-# this is good - perhaps we should resolve to Base.* instead? Resolving to the
-# module-local version makes it exactly equivalent to `*`. But one might argue
-# this is confusing because the symbol `*` appears nowhere in the user's source
-# code.
+# Juxtaposition - resolve to macro's mod's `JuxtuposeTest.*`
 JuxtuposeTest.@emit_juxtupose
 #---------------------
 1   TestMod.JuxtuposeTest.*
@@ -367,7 +357,7 @@ JuxtuposeTest.@emit_juxtupose
 # @cfunction expansion with global generic function as function argument
 @cfunction(callable, Int, (Int, Float64))
 #---------------------
-1   (cfunction Ptr{Nothing} :callable (static_eval TestMod.Int) (static_eval (call core.svec TestMod.Int TestMod.Float64)) :ccall)
+1   (cfunction Ptr{Nothing} (static_eval TestMod.callable) (static_eval TestMod.Int) (static_eval (call core.svec TestMod.Int TestMod.Float64)) :ccall)
 2   (return %₁)
 
 ########################################
@@ -383,6 +373,10 @@ JuxtuposeTest.@emit_juxtupose
 @cfunction(f, Int, NotATuple)
 #---------------------
 MacroExpansionError while expanding @cfunction in module Main.TestMod:
+@cfunction(f, Int, NotATuple)
+└───────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
 @cfunction(f, Int, NotATuple)
 #                  └───────┘ ── @cfunction argument types must be a literal tuple
 
@@ -422,7 +416,7 @@ end
 6   (call top.cconvert %₂ %₅)
 7   (call top.unsafe_convert %₁ %₄)
 8   (call top.unsafe_convert %₂ %₆)
-9   (foreigncall (foreigncall_arg1 (tuple (inert foo))) (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 0 (inert (:ccall, 0x0000, false)) %₇ %₈ %₄ %₆)
+9   (foreigncall (foreignsymbol (tuple (inert foo))) (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 0 (inert (:ccall, 0x0000, false)) %₇ %₈ %₄ %₆)
 10  (return %₉)
 
 ########################################
@@ -437,7 +431,7 @@ end
 6   (call top.cconvert %₂ %₅)
 7   (call top.unsafe_convert %₁ %₄)
 8   (call top.unsafe_convert %₂ %₆)
-9   (foreigncall (foreigncall_arg1 (tuple (inert foo))) (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 1 (inert (:ccall, 0x0000, true)) %₇ %₈ %₄ %₆)
+9   (foreigncall (foreignsymbol (tuple (inert foo))) (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 1 (inert (:ccall, 0x0000, true)) %₇ %₈ %₄ %₆)
 10  (return %₉)
 
 ########################################
@@ -461,7 +455,11 @@ ccall(:fcntl, Cint, (RawFD, Cint, Cint...), s, F_GETFL)
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall strlen("foo"::Cstring)
-#                            └ ── expected a return type annotation `::SomeType`
+└───────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
+@ccall strlen("foo"::Cstring)
+#      └────────────────────┘ ── expected a return type annotation `::SomeType`
 
 ########################################
 # Error: No argument type on @ccall
@@ -469,13 +467,21 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo("blah"::Cstring, "bad")::Int
-#                            └─┘ ── argument needs a type annotation
+└─────────────────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
+@ccall foo("blah"::Cstring, "bad")::Int
+#                           └───┘ ── argument needs a type annotation
 
 ########################################
-# Error: @ccall varags without one fixed argument
+# Error: @ccall varargs without one fixed argument
 @ccall foo(; x::Int)::Int
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall foo(; x::Int)::Int
+└───────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
 @ccall foo(; x::Int)::Int
 #          └──────┘ ── C ABI prohibits varargs without one required argument
 
@@ -485,13 +491,33 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo(; x::Int; y::Float64)::Int
+└───────────────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
+@ccall foo(; x::Int; y::Float64)::Int
 #          └──────┘ ── C ABI prohibits varargs without one required argument
+
+########################################
+# Error: Bad @ccall first arg
+@ccall $(:(foo))(1::Cint)::Cint
+#---------------------
+MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall $(:(foo))(1::Cint)::Cint
+└─────────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
+@ccall $(:(foo))(1::Cint)::Cint
+#      └───────┘ ── interpolated value should be a variable or expression, not a literal name or tuple
 
 ########################################
 # Error: Bad @ccall option
 @ccall bad_opt foo(x::Int)::Int
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall bad_opt foo(x::Int)::Int
+└─────────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
 @ccall bad_opt foo(x::Int)::Int
 #      └─────┘ ── bad option to ccall
 
@@ -501,6 +527,10 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall bad_opt=true foo(x::Int)::Int
+└──────────────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
+@ccall bad_opt=true foo(x::Int)::Int
 #      └─────┘ ── unknown option name for ccall
 
 ########################################
@@ -509,7 +539,11 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall gc_safe="hi" foo(x::Int)::Int
-#               └┘ ── gc_safe must be true or false
+└──────────────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
+@ccall gc_safe="hi" foo(x::Int)::Int
+#              └──┘ ── gc_safe must be true or false
 
 ########################################
 # Error: unary & syntax
@@ -549,14 +583,31 @@ include("hi.jl")
 # Const function assignment syntax (legacy)
 const f(x::Int)::Int = x+1
 #---------------------
-1   TestMod.f
-2   TestMod.x
-3   TestMod.Int
-4   (call core.typeassert %₂ %₃)
-5   (call %₁ %₄)
-6   TestMod.Int
-7   (call core.typeassert %₅ %₆)
-8   (return %₇)
+1   (call core.define_method TestMod :f)
+2   latestworld
+3   TestMod.f
+4   (call core.TypeEqOf %₃)
+5   TestMod.Int
+6   (call core.svec %₄ %₅)
+7   (call core.svec)
+8   SourceLocation:1
+9   (call core.svec %₆ %₇ %₈)
+10  (call core.define_method TestMod TestMod.f %₉
+    --- code_info
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read)]
+    1   TestMod.Int
+    2   TestMod.+
+    3   (= slot₃/tmp (call %₂ slot₂/x 1))
+    4   (call core.isa slot₃/tmp %₁)
+    5   (gotoifnot %₄ label₇)
+    6   (goto label₉)
+    7   (call top.convert %₁ slot₃/tmp)
+    8   (= slot₃/tmp (call core.typeassert %₇ %₁))
+    9   slot₃/tmp
+    10  (return %₉)
+11  latestworld
+12  TestMod.f
+13  (return %₁₂)
 
 ########################################
 # Error: Destructuring assignment method definitions (broken, legacy)
@@ -573,3 +624,13 @@ T{U}, (x::Float64, g()) = [Bool, (1, 2)]
 LoweringError:
 T{U}, (x::Float64, g()) = [Bool, (1, 2)]
 #                  └─┘ ── invalid assignment location
+
+########################################
+# aliasscope form: should be passed through unless implementation changes
+Base.Experimental.@aliasscope 1
+#---------------------
+1   (aliasscope)
+2   (= slot₁/aliasscope_result 1)
+3   (popaliasscope)
+4   slot₁/aliasscope_result
+5   (return %₄)

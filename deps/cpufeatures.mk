@@ -1,6 +1,6 @@
 ## CPUFEATURES ##
-CPUFEATURES_GIT_URL := https://github.com/gbaraldi/cpufeatures.git
-CPUFEATURES_TAR_URL = https://api.github.com/repos/gbaraldi/cpufeatures/tarball/$1
+CPUFEATURES_GIT_URL := https://github.com/JuliaLang/cpufeatures.git
+CPUFEATURES_TAR_URL = https://api.github.com/repos/JuliaLang/cpufeatures/tarball/$1
 $(eval $(call git-external,cpufeatures,CPUFEATURES,,,$(BUILDDIR)))
 
 CPUFEATURES_CFLAGS  := -O2 -Wall -Wextra $(fPIC) $(SANITIZE_OPTS)

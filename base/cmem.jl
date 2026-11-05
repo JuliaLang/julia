@@ -48,7 +48,7 @@ end
 Call `memcmp` from the C standard library.
 
 !!! compat "Julia 1.10"
-    Support for `memcmp` requires at least Julia 1.9.
+    Support for `memcmp` requires at least Julia 1.10.
 
 """
 function memcmp(a::Ptr, b::Ptr, n::Integer)

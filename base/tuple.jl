@@ -40,8 +40,6 @@ getindex(t::Tuple, c::Colon) = t
 get(t::Tuple, i::Integer, default) = i in 1:length(t) ? getindex(t, i) : default
 get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 
-# returns new tuple; N.B.: becomes no-op if `i` is out-of-bounds
-
 """
     setindex(t::Tuple, v, i::Integer)
 
@@ -255,9 +253,10 @@ function split_rest(itr, n::Int, state...)
 end
 _split_rest(itr, n::Int) = _split_rest(collect(itr), n)
 function _check_length_split_rest(len, n)
-    len < n && throw(ArgumentError(
-        "The iterator only contains $len elements, but at least $n were requested."
-    ))
+    n < 0 && throw(ArgumentError(LazyString("n cannot be negative: ", n)))
+    len < n && throw(ArgumentError(LazyString(
+        "The iterator only contains ", len, " elements, but at least ", n, " were requested."
+    )))
 end
 function _split_rest(a::Union{AbstractArray, Core.SimpleVector}, n::Int)
     _check_length_split_rest(length(a), n)
@@ -275,12 +274,16 @@ first(t::Tuple) = t[1]
 # eltype
 
 # the <: here makes the runtime a bit more complicated (needing to check isdefined), but really helps inference
-_eltype_ntuple(t::Type{<:Tuple{Vararg{E}}}) where {E} = @isdefined(E) ? (E isa Type ? E : Union{}) : _compute_eltype(t)
+# `E` is undefined either when the `Vararg` matched vacuously (`t == Tuple{}`,
+# eltype `Union{}`) or when a non-concrete element type left the diagonal var
+# unpinned, where `_compute_eltype` recovers the join
+_eltype_ntuple(t::Type{<:Tuple{Vararg{E}}}) where {E} = @isdefined(E) ? (E isa Type ? E : Union{}) : (t <: Tuple{} ? Union{} : _compute_eltype(t))
+const _eltype_ntuple_sig_condition = (Type{<:Tuple{Vararg{E}}} where E)
 # We'd like to be able to infer eltype(::Tuple), so keep the number of eltype(::Type{<:Tuple}) methods at max_methods!
 function eltype(t::Type{<:Tuple})
     if t <: Tuple{}
         Bottom
-    elseif t <: NTuple
+    elseif isa(t, _eltype_ntuple_sig_condition)
         _eltype_ntuple(t)
     else
         _compute_eltype(t)
@@ -369,6 +372,26 @@ const All32{T,N} = Tuple{T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,
                          Vararg{T,N}}
+
+function front(t::NTuple{32, Any})
+    @inline
+    _front(t...)
+end
+
+function front(t::Any32)
+    n = length(t) - 1
+    r = ntuple(i -> getfield(t, i), n)::Tuple{Vararg{eltype(typeof(t))}}
+    return r::_front_type(typeof(t))
+end
+
+# Preserve inference without recursively rebuilding the tuple.
+function _front_type(@nospecialize T::Type{<:Tuple})
+    @_foldable_meta
+    (T isa DataType && !isvatuple(T)) || return Tuple
+    params = (T::DataType).parameters
+    return Tuple{params[1:(length(params)::Int - 1)]...}
+end
+
 function map(f, t::Any32)
     n = length(t)
     A = Vector{Any}(undef, n)
@@ -481,6 +504,8 @@ function _totuple(T::Type{All32{E,N}}, itr) where {E,N}
     end
     (elts...,)
 end
+
+# fast path for Array/Memory lives in reinterpretarray.jl
 
 _totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.rest(itr,s...))...,)
 

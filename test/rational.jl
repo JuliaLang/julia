@@ -27,6 +27,10 @@ using Base.MathConstants
     @test (typemax(Int)//1) * (1//typemax(Int)) == 1
     @test (typemax(Int)//1) / (typemax(Int)//1) == 1
     @test (1//typemax(Int)) / (1//typemax(Int)) == 1
+    # Wrapping rational addition must use modular multiplication for cross-products.
+    @test +%(1//2, 1//3) == 5//6
+    @test +%(typemax(Int)//1, 1//1) == typemin(Int)//1
+    @test -%(typemin(Int)//1) == typemin(Int)//1
     @test_throws OverflowError (1//2)^63
     @test inv((1+typemin(Int))//typemax(Int)) == -1
     @test_throws OverflowError inv(typemin(Int)//typemax(Int))
@@ -34,7 +38,6 @@ using Base.MathConstants
 
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
-    @test @inferred(rationalize(Int, 33//100; tol=0.1)) === 1//3 # because tol
     @test @inferred(rationalize(Int, 3; tol=0.0)) === 3//1
     @test @inferred(rationalize(Int8, 1000//333)) === Rational{Int8}(3//1)
     @test @inferred(rationalize(Int8, 1000//3)) === Rational{Int8}(1//0)
@@ -44,6 +47,8 @@ using Base.MathConstants
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
+    @test_throws InexactError Rational{BigInt}(NaN)
+    @test_throws InexactError Rational(big(NaN))
     # issue 32569
     @test_throws OverflowError 1 // typemin(Int)
     @test_throws ArgumentError 0 // 0
@@ -179,6 +184,23 @@ using Base.MathConstants
     @test_throws DivideError -1//0 + 1//0
     @test Int128(1)//0 + 1//0 isa Rational{Int128}
     @test 1//0 + Int128(1)//0 isa Rational{Int128}
+    @test 0x1//0x0 - 0x1//0x1 === 0x1//0x0
+    @test -%(0x1//0x0, 0x1//0x1) === 0x1//0x0
+
+    # inf division by a negative number flips the sign (#63456)
+    @test (-1//0) // -1 === 1//0
+    @test (1//0) // -1 === -1//0
+    @test (1//0) // -3 === -1//0
+    @test (-1//0) // 2 === -1//0
+    @test (-1//0) / -1 === 1//0
+    @test (-1//0) // (-1//1) === 1//0
+    @test (1//0) // (-2//3) === -1//0
+    @test (1//0) / (-2//3) === -1//0
+    @test (-1//0) // (5//7) === -1//0
+    @test (1//0) // typemin(Int) === -1//0
+    @test typemin(Rational{Int8}) // Int8(-1) === typemax(Rational{Int8})
+    @test big(1)//0 // -1 == -1//0
+    @test (0x1//0x0) // 0x2 === 0x1//0x0
 end
 
 @testset "Rational methods" begin
@@ -483,6 +505,12 @@ end # parse
     @test floor(-13//2) == round(-13//2, RoundDown) == -7//1
     @test floor(11//3) == round(11//3, RoundDown) == 3//1
     @test floor(-11//3) == round(-11//3, RoundDown) == -4//1
+
+    # directed rounding to a float type that cannot hold the integer stays on the correct side of x
+    for (T, n) in ((Float16, 2051), (Float32, 2^24 + 3), (Float64, 2^53 + 3)), x in (n//1, -n//1)
+        @test round(T, x, RoundDown) <= x <= round(T, x, RoundUp)
+        @test abs(round(T, x, RoundToZero)) <= abs(x) <= abs(round(T, x, RoundFromZero))
+    end
 
     for T in (Float16, Float32, Float64)
         @test round(T, true//false) === convert(T, Inf)
@@ -893,4 +921,43 @@ end
     @test rationalize(Int8, 0.995) == 126//127
     @test rationalize(Int8, -1.1531944694388938) == -128//111
     @test rationalize(Int16, 3e-5) == 1//32767
+end
+
+@testset "Irrational vs Rational{BigInt} comparison (#60769)" begin
+    p = precision(BigFloat)
+    for x in (π, ℯ, γ, catalan, φ)
+        r = rationalize(BigInt, x)
+        @test (x < r) == (BigFloat(x; precision=p+32) < BigFloat(r; precision=p+32))
+        @test (x > r) == (BigFloat(x; precision=p+32) > BigFloat(r; precision=p+32))
+        @test cmp(x, r) == -cmp(r, x)
+        @test cmp(x, x) == 0
+        e1 = eps(Float64(x))
+        e2 = eps(BigFloat(x))
+        for tol in (e1 * 2.0.^(-24:8:24)..., e2 * 2.0.^(-64:16:64)...)
+            r = rationalize(BigInt, x; tol)
+            pp = max(p, exponent(x) - exponent(tol) + 32)
+            @test (x < r) == (BigFloat(x; precision=pp) < BigFloat(r; precision=pp))
+        end
+    end
+end
+
+@testset "rationalize(Rational) (issue #60768)" begin
+    r = rationalize(Int64, pi)
+    @test rationalize(Int64, r) == r
+    @test rationalize(Int32, r) == rationalize(Int32, float(r))
+    @test rationalize(Int32, r, tol=0.1) == 16//5
+    @test_throws InexactError rationalize(Int32, r, tol=0)
+    @test_throws InexactError rationalize(Int16, r, tol=0)
+    @test_throws OverflowError rationalize(UInt, -r)
+    @test rationalize(BigInt, r) == Rational{BigInt}(r) == r
+    @test rationalize(Int64, big(r)) == r
+end
+
+@testset "rationalize(Union{}, x) throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for x in (1.5, 3//2, 1, pi, 1.5 + 2.5im)
+        @test_throws MethodError(rationalize, (Union{}, x)) rationalize(Union{}, x)
+        @test_throws MethodError(rationalize, (Union{}, x)) rationalize(Union{}, x; tol = 0.1)
+        @test which(rationalize, (Type{Union{}}, typeof(x))).sig == Tuple{typeof(rationalize), Type{Union{}}, Vararg}
+    end
 end

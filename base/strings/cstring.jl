@@ -31,7 +31,7 @@ Cstring
 Cstring(p::Union{Ptr{Int8},Ptr{UInt8},Ptr{Cvoid}}) = bitcast(Cstring, p)
 Cwstring(p::Union{Ptr{Cwchar_t},Ptr{Cvoid}})       = bitcast(Cwstring, p)
 Ptr{T}(p::Cstring) where {T<:Union{Int8,UInt8,Cvoid}} = bitcast(Ptr{T}, p)
-Ptr{T}(p::Cwstring) where {T<:Union{Cwchar_t,Cvoid}}  = bitcast(Ptr{Cwchar_t}, p)
+Ptr{T}(p::Cwstring) where {T<:Union{Cwchar_t,Cvoid}}  = bitcast(Ptr{T}, p)
 
 convert(::Type{Cstring}, p::Union{Ptr{Int8},Ptr{UInt8},Ptr{Cvoid}}) = Cstring(p)
 convert(::Type{Cwstring}, p::Union{Ptr{Cwchar_t},Ptr{Cvoid}}) = Cwstring(p)
@@ -94,7 +94,7 @@ function cconvert(::Type{Cwstring}, v::Vector{Cwchar_t})
         v[i] == 0 &&
             throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(v))"))
     end
-    v[end] == 0 ||
+    !isempty(v) && v[end] == 0 ||
         throw(ArgumentError("C string data must be NUL terminated: $(repr(v))"))
     return cconvert(Ptr{Cwchar_t}, v)
 end
@@ -106,7 +106,7 @@ cconvert(::Type{Cstring}, s::Symbol) = s
 unsafe_convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
 
 if ccall(:jl_get_UNAME, Any, ()) === :NT
-"""
+@doc """
     Base.cwstring(s)
 
 Convert a string `s` to a NUL-terminated `Vector{Cwchar_t}`, suitable for passing to C
@@ -176,6 +176,10 @@ function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
 end
 transcode(::Type{String}, src::String) = src
 transcode(T, src::String) = transcode(T, codeunits(src))
+# `String(::Vector{UInt8})` consumes (empties) its argument, so wrap a caller's
+# own vector in a view: `String` then copies the bytes out without touching the
+# source, and only that one copy is made. (#28612)
+transcode(::Type{String}, src::Vector{UInt8}) = String(view(src, :))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
@@ -209,7 +213,7 @@ function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
                     elseif a == 0xf0 && b < 0x90 # overlong encoding
                         push!(dst, xor(0x2080, UInt16(b) << 12, UInt16(c) << 6, d))
                     else # 4-byte UTF-8
-                        push!(dst, 0xe5b8 + (UInt16(a) << 8) + (UInt16(b) << 2) + (c >> 4),
+                        push!(dst, 0xe5b8 +% (UInt16(a) << 8) +% (UInt16(b) << 2) +% UInt16(c >> 4),
                                    xor(0xdc80, UInt16(c & 0xf) << 6, d))
                     end
                 else # too short
@@ -277,7 +281,7 @@ function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
             b = src[i += 1]
             if (b & 0xfc00) == 0xdc00
                 # 2-unit UTF-16 sequence => 4-byte UTF-8
-                a += 0x2840
+                a +%= 0x2840
                 dst[j += 1] = 0xf0 | ((a >> 8) % UInt8)
                 dst[j += 1] = 0x80 | ((a % UInt8) >> 2)
                 dst[j += 1] = xor(0xf0, ((a % UInt8) << 4) & 0x3f, (b >> 6) % UInt8)

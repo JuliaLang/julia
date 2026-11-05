@@ -11,7 +11,6 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/Analysis/InstSimplifyFolder.h>
-#include <llvm/CodeGen/AtomicExpandUtils.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/InstIterator.h>
@@ -37,7 +36,7 @@
 using namespace llvm;
 
 // This pass takes fake call instructions that look like this which were emitted by the front end:
-//   (oldval, newval) = call atomicmodify.iN(ptr %op, ptr align(N) %ptr, i8 immarg %SSID, i8 immarg %Ordering, ...) !rmwattributes
+//   (oldval, newval) = call atomicmodify.iN(ptr align(N) %ptr, ptr %op, i8 immarg %Ordering, i8 immarg %SSID, ...) !rmwattributes
 //   where op is a function with a prototype of `iN (iN arg, ...)`
 // Then rewrite that to
 //   oldval = atomicrmw op ptr, val ordering syncscope
@@ -79,7 +78,7 @@ static void createWeakCmpXchgInstFun(IRBuilderBase &Builder, Value *Addr,
 }
 
 // from AtomicExpandImpl, with modification of values returned
-std::pair<Value *, Value *> insertRMWCmpXchgLoop(
+static std::pair<Value *, Value *> insertRMWCmpXchgLoop(
     IRBuilderBase &Builder, Type *ResultTy, Value *Addr, Align AddrAlign,
     AtomicOrdering MemOpOrder, SyncScope::ID SSID, Instruction &Attributes,
     const std::function<Value *(IRBuilderBase &, Value *)> &PerformOp,
@@ -143,29 +142,33 @@ std::pair<Value *, Value *> insertRMWCmpXchgLoop(
 
 // from AtomicExpandImpl
 // IRBuilder to be used for replacement atomic instructions.
+namespace {
 struct ReplacementIRBuilder
     : IRBuilder<InstSimplifyFolder, IRBuilderCallbackInserter> {
   MDNode *MMRAMD = nullptr;
+  MDNode *PCSectionsMD = nullptr;
 
   // Preserves the DebugLoc from I, and preserves still valid metadata.
   // Enable StrictFP builder mode when appropriate.
   explicit ReplacementIRBuilder(Instruction *I, const DataLayout &DL)
       : IRBuilder(I->getContext(), InstSimplifyFolder(DL),
                   IRBuilderCallbackInserter(
-                      [this](Instruction *I) { addMMRAMD(I); })) {
+                      [this](Instruction *I) { addMetadata(I); })) {
     SetInsertPoint(I);
-    this->CollectMetadataToCopy(I, {LLVMContext::MD_pcsections});
     if (BB->getParent()->getAttributes().hasFnAttr(Attribute::StrictFP))
       this->setIsFPConstrained(true);
 
     MMRAMD = I->getMetadata(LLVMContext::MD_mmra);
+    PCSectionsMD = I->getMetadata(LLVMContext::MD_pcsections);
   }
 
-  void addMMRAMD(Instruction *I) {
+  void addMetadata(Instruction *I) {
     if (canInstructionHaveMMRAs(*I))
       I->setMetadata(LLVMContext::MD_mmra, MMRAMD);
+    I->setMetadata(LLVMContext::MD_pcsections, PCSectionsMD);
   }
 };
+}  // anonymous namespace
 
 // Must check that either Target cannot observe or mutate global state
 // or that no trailing instructions does so either.
@@ -295,10 +298,8 @@ static std::variant<AtomicRMWInst::BinOp,bool> patternMatchAtomicRMWOp(Value *Ol
             return AtomicRMWInst::Min;
           case Intrinsic::umin:
             return AtomicRMWInst::UMin;
-#if JL_LLVM_VERSION >= 200000
           case Intrinsic::usub_sat:
            return AtomicRMWInst::USubSat;
-#endif
         }
       }
     }
@@ -323,7 +324,7 @@ static std::variant<AtomicRMWInst::BinOp,bool> patternMatchAtomicRMWOp(Value *Ol
   return false;
 }
 
-void expandAtomicModifyToCmpXchg(CallInst &Modify,
+static void expandAtomicModifyToCmpXchg(CallInst &Modify,
                                  const CreateWeakCmpXchgInstFun &CreateWeakCmpXchg) {
   Value *Ptr = Modify.getOperand(0);
   Function *Op = dyn_cast<Function>(Modify.getOperand(1));
@@ -402,6 +403,10 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
           RMW->moveBeforePreserving(cast<Instruction>(ValOp->getUser())->getIterator()); // ValOp is a user of RMW, and RMW has no other dependants (per patternMatchAtomicRMWOp)
           Val = ValOp->get();
         } else if (RMWOp == AtomicRMWInst::Xchg) {
+          // The op ignored the loaded value, so NewVal is computed by the
+          // inlined op body which may be after RMW: move RMW down to the
+          // original call site, which NewVal is known to dominate.
+          RMW->moveBeforePreserving(Modify.getIterator());
           Val = NewVal;
         } else {
           // convert to an atomic fence of the form: atomicrmw or %ptr, 0

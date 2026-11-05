@@ -1,7 +1,7 @@
-
 @testset "while loops" begin
 
 test_mod = Module()
+Base.set_syntax_version(test_mod, JL_OLD_EDITION)
 
 @test JuliaLowering.include_string(test_mod, """
 let
@@ -50,6 +50,7 @@ end
 @testset "for loops" begin
 
 test_mod = Module()
+Base.set_syntax_version(test_mod, JL_OLD_EDITION)
 
 # iteration
 @test JuliaLowering.include_string(test_mod, """
@@ -173,6 +174,7 @@ end
 @testset "multidimensional for loops" begin
 
 test_mod = Module()
+Base.set_syntax_version(test_mod, JL_OLD_EDITION)
 
 @test JuliaLowering.include_string(test_mod, """
 let
@@ -238,6 +240,75 @@ let
     a
 end
 """) == [(1,1), (2,1), (3,1)]
+
+# An unlabeled break exits an anonymous `@label` block
+@test JuliaLowering.include_string(test_mod, """
+@label begin
+    break
+    error("unreached")
+end
+""") === nothing
+
+# ... but breaking through a named block is still an error
+@test_throws LoweringError JuliaLowering.include_string(test_mod, """
+@label named begin
+    break
+end
+""")
+
+# Values of labeled breaks are scope-resolved: variables (not just
+# literals) work as break values, including from inside nested scopes
+@test JuliaLowering.include_string(test_mod, """
+@label begin
+    let
+        local t = 1
+        break _ t
+    end
+    0
+end
+""") == 1
+
+@test JuliaLowering.include_string(test_mod, """
+@label myblock begin
+    let v = 21
+        break myblock 2v
+    end
+    0
+end
+""") == 42
+
+@test JuliaLowering.include_string(test_mod, """
+let a = []
+    @label outer for i = 1:10
+        x = i * 2
+        i == 3 && break outer x
+        push!(a, i)
+    end
+end
+""") == 6
+
+# `break` in `while` condition
+@test jl_eval(test_mod, """
+let
+    i = 0
+    while (i += 1; i > 3 && break; true)
+    end
+    i
+end
+""") == 4
+
+@test jl_eval(test_mod, """
+let
+    a = []
+    for j = 1:2
+        i = 0
+        while (i += 1; i > 2 && break; true)
+        end
+        push!(a, i)
+    end
+    a
+end
+""") == [3, 3]
 
 end
 

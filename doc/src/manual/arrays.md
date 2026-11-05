@@ -398,6 +398,30 @@ the result in single precision by writing:
 Float32[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 ```
 
+Ranges in comprehensions can depend on previous ranges by writing multiple `for` keywords:
+
+```jldoctest
+julia> [(i, j) for i=1:3 for j=1:i]
+6-element Vector{Tuple{Int64, Int64}}:
+ (1, 1)
+ (2, 1)
+ (2, 2)
+ (3, 1)
+ (3, 2)
+ (3, 3)
+```
+
+In such cases, the result is always 1-d.
+
+Values can be filtered using the `if` keyword:
+
+```jldoctest
+julia> [(i, j) for i=1:3 for j=1:i if i+j == 4]
+2-element Vector{Tuple{Int64, Int64}}:
+ (2, 2)
+ (3, 1)
+```
+
 ## [Generator Expressions](@id man-generators)
 
 Comprehensions can also be written without the enclosing square brackets, producing an object
@@ -438,30 +462,71 @@ captures the three variables `p`, `q` and `n` from the enclosing scope.
 Captured variables can present performance challenges; see
 [performance tips](@ref man-performance-captured).
 
+As with comprehensions, ranges in generators can depend on previous ranges by writing multiple
+`for` keywords, and values can be filtered using the `if` keyword.
 
-Ranges in generators and comprehensions can depend on previous ranges by writing multiple `for`
-keywords:
+## [Uninitialized arrays](@id uninitialized-arrays)
 
-```jldoctest
-julia> [(i, j) for i=1:3 for j=1:i]
-6-element Vector{Tuple{Int64, Int64}}:
- (1, 1)
- (2, 1)
- (2, 2)
- (3, 1)
- (3, 2)
- (3, 3)
+Constructors like `fill`, `zeros` and `ones` construct arrays filled with a specific value.
+For performance-sensitive cases, one can instead choose construct arrays that are uninitialized.
+This is typically done with [`UndefInitializer`](@ref) and its singleton value [`undef`](@ref).
+
+### Uninitialized isbits data
+When the element type is stored inline in the array, as is the case for bitstypes
+and small unions of bitstypes, the value stored will created from arbitrary bit patterns:
+
+```julia
+julia> A = Vector{Int}(undef, 3)
+3-element Vector{Int64}:
+  0
+  4197964751427265632
+ -7018743849073437062
 ```
 
-In such cases, the result is always 1-d.
+While the values are created from arbitrary bits, they are just ordinary values;
+specifically, loading them multiple times will always result in the same value.
 
-Generated values can be filtered using the `if` keyword:
+Beware that the values are constructed circumventing any inner constructors.
+This means that for custom types whose constructors enforce constraints on the values,
+these checks will not be enforced.
+
+For example, in the code below, the `NeverZero` values in `A` might be invalid,
+as `undef` initialization may yield all-zero bits.
+
+```
+struct NeverZero
+    x::UInt
+
+    function NeverZero(x::UInt)
+        if iszero(x)
+            throw(ValueError("NeverZero cannot store a zero"))
+        else
+            new(x)
+        end
+    end
+end
+
+A = Vector{NeverZero}(undef, 10)
+```
+
+!!! compat "Julia 1.11"
+    Prior to Julia 1.11, access to undefined bits types resulted
+    in **undefined behavior.** and could cause miscompilations
+    and invalid behaviour.
+
+### Uninitialized non-isbits data
+When the element type is not stored inline, as is the case when the element type
+is not `isbits`, attempting to access the data will throw an `UndefRefError`:
 
 ```jldoctest
-julia> [(i, j) for i=1:3 for j=1:i if i+j == 4]
-2-element Vector{Tuple{Int64, Int64}}:
- (2, 2)
- (3, 1)
+julia> A = Vector{String}(undef, 2)
+2-element Vector{String}:
+ #undef
+ #undef
+
+julia> A[2]
+ERROR: UndefRefError: access to undefined reference
+[...]
 ```
 
 ## [Indexing](@id man-array-indexing)
@@ -555,9 +620,12 @@ The location `i_1, i_2, i_3, ..., i_{n+1}` contains the value at `A[I_1[i_1, i_2
 All dimensions indexed with scalars are dropped. For example, if `J` is an array of indices, then the result of `A[2, J, 3]` is an
 array with size `size(J)`. Its `j`th element is populated by `A[2, J[j], 3]`.
 
-As a special part of this syntax, the `end` keyword may be used to represent the last index of
-each dimension within the indexing brackets, as determined by the size of the innermost array
-being indexed. Indexing syntax without the `end` keyword is equivalent to a call to [`getindex`](@ref):
+As a special part of the `[...]` indexing syntax, the [`end`](@ref) keyword may be used to represent the last index of
+a dimension; specifically, it is "lowered" by the compiler to a call to [`lastindex`](@ref) for that
+dimension of the array for the innermost enclosing brackets.  Similarly, [`begin`](@ref) within `[...]` indexing is
+lowered to a call to [`firstindex`](@ref) (which always returns `1` for built-in types like `Array` and `String`, but
+external packages may implement containers with indices that start at `0` or elsewhere).
+Otherwise, the bracket indexing syntax is equivalent to a call to [`getindex`](@ref):
 
 ```
 X = getindex(A, I_1, I_2, ..., I_n)
@@ -582,6 +650,13 @@ julia> x[1, [2 3; 4 1]]
 2×2 Matrix{Int64}:
   5  9
  13  1
+
+julia> x[:, div(begin + end, 2)]
+4-element Vector{Int64}:
+ 5
+ 6
+ 7
+ 8
 ```
 
 ## [Indexed Assignment](@id man-indexed-assignment)
@@ -598,22 +673,30 @@ where each `I_k` may be a scalar integer, an array of integers, or any other
 ranges of the form `a:c` or `a:b:c` to select contiguous or strided
 subsections, and arrays of booleans to select elements at their `true` indices.
 
-If all indices `I_k` are integers, then the value in location `I_1, I_2, ..., I_n` of `A` is
-overwritten with the value of `X`, [`convert`](@ref)ing to the
-[`eltype`](@ref) of `A` if necessary.
+Just as [indexing](@ref man-array-indexing) `A[I_1, I_2, ..., I_n]` returns either a single
+element (if all indices are scalar) or an array (if any index is nonscalar), the indexed
+assignment of `A[I_1, I_2, ..., I_n] = X` assigns either a single value to a single location
+or an array of value(s) to an array of location(s) within the array `A`.
 
+If all indices `I_k` are scalar, then the value in location `I_1, I_2, ..., I_n` of `A` is assigned
+to the value of `X`, [`convert`](@ref)ing to the [`eltype`](@ref) of `A` if necessary. Otherwise
+if any index is nonscalar, the right hand side `X` must be an array with the same number of
+elements as the number of locations selected by the indices and it must have a compatible shape.
+Each value in `X` is assigned into the corresponding location in `A[I_1, I_2, ..., I_n]`, following
+the rules of [linear indexing and omitted/extra indices](@ref man-number-of-indices).
 
-If any index `I_k` is itself an array, then the right hand side `X` must also be an
-array with the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or a vector with
-the same number of elements. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
-`A` is overwritten with the value `X[i_1, i_2, ..., i_n]`, converting if necessary. The
-element-wise assignment operator `.=` may be used to [broadcast](@ref Broadcasting) `X`
-across the selected locations:
+That is, `X` must be the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or
+either may be a vector. In the simple case where all the supplied indices are vectors and
+the shapes match, each value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
+`A` is overwritten with the value `X[i_1, i_2, ..., i_n]`, converting if necessary. If either
+side is a vector, then the elements are assigned with column-major [linear indexing](@ref man-linear-indexing).
 
-
-```
-A[I_1, I_2, ..., I_n] .= X
-```
+The element-wise assignment operator `.=` may be used to [broadcast](@ref Broadcasting) `X`
+across multiple selected locations with `A[I_1, I_2, ..., I_n] .= X`. In the common case where the
+concatenated axes of the indices matches the axes of `X`, this behaves like the nonscalar
+indexed assignment described above (that is, `=` without the broadcasting `.`). Unlike indexed
+assignment, however, any mismatched axes will be broadcast (in accordance with broadcast's rules)
+and linear indexing is not supported.
 
 Just as in [Indexing](@ref man-array-indexing), the `end` keyword may be used
 to represent the last index of each dimension within the indexing brackets, as
@@ -838,7 +921,7 @@ julia> x[vec(mask)] == x[mask] # we can also index with a single Boolean vector
 true
 ```
 
-### Number of indices
+### [Number of indices](@id man-number-of-indices)
 
 #### Cartesian indexing
 
@@ -847,7 +930,7 @@ index selects the position(s) in its particular dimension. For example, in the t
 array `A = rand(4, 3, 2)`, `A[2, 3, 1]` will select the number in the second row of the third
 column in the first "page" of the array. This is often referred to as _cartesian indexing_.
 
-#### Linear indexing
+#### [Linear indexing](@id man-linear-indexing)
 
 When exactly one index `i` is provided, that index no longer represents a location in a
 particular dimension of the array. Instead, it selects the `i`th element using the
@@ -884,8 +967,7 @@ julia> LinearIndices(A)[2, 2]
 
 It's important to note that there's a very large asymmetry in the performance
 of these conversions. Converting a linear index to a set of cartesian indices
-requires dividing and taking the remainder, whereas going the other way is just
-multiplies and adds. In modern processors, integer division can be 10-50 times
+requires dividing and taking the remainder, whereas going the other way is just multiplications and additions. In modern processors, integer division can be 10-50 times
 slower than multiplication. While some arrays — like [`Array`](@ref) itself —
 are implemented using a linear chunk of memory and directly use a linear index
 in their implementations, other arrays — like [`Diagonal`](@ref) — need the
@@ -898,7 +980,7 @@ introspect which is which).
     better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
     Not only will this be faster in cases where `A` is `IndexCartesian`,
     but it will also support arrays with custom indexing, such as [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl).
-    If only the values are needed, then is better to just iterate the array directly, i.e. `for a in A`.
+    If only the values are needed, then it is better to just iterate the array directly, i.e. `for a in A`.
 
 #### Omitted and extra indices
 

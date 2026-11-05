@@ -13,18 +13,17 @@
 
 struct ABI_AArch64Layout : AbiLayout {
 
-Type *get_llvm_vectype(jl_datatype_t *dt, LLVMContext &ctx) const
+Type *get_llvm_vectype(jl_datatype_t *dt, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
     // `!dt->name->mutabl && dt->pointerfree && !dt->haspadding && dt->isbitsegal && dt->nfields > 0`
-    if (dt->layout == NULL || jl_is_layout_opaque(dt->layout))
+    // Only tuples of VecElement are lowered as LLVM vectors.
+    if (!jl_is_tuple_type(dt) || dt->layout == NULL || jl_is_layout_opaque(dt->layout))
         return nullptr;
     size_t nfields = dt->layout->nfields;
     assert(nfields > 0);
-    if (nfields < 2)
-        return nullptr;
     Type *lltype;
-    // Short vector should be either 8 bytes or 16 bytes.
+    // Short vectors are defined by size, not element count.
     // Note that there are only two distinct fundamental types for
     // short vectors so we normalize them to <2 x i32> and <4 x i32>
     switch (jl_datatype_size(dt)) {
@@ -59,7 +58,7 @@ Type *get_llvm_vectype(jl_datatype_t *dt, LLVMContext &ctx) const
 }
 
 #define jl_is_floattype(v)   jl_subtype(v,(jl_value_t*)jl_floatingpoint_type)
-Type *get_llvm_fptype(jl_datatype_t *dt, LLVMContext &ctx) const
+Type *get_llvm_fptype(jl_datatype_t *dt, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
     // `!dt->name->mutabl && dt->pointerfree && !dt->haspadding && dt->isbitsegal && dt->nfields == 0`
@@ -85,7 +84,7 @@ Type *get_llvm_fptype(jl_datatype_t *dt, LLVMContext &ctx) const
             lltype : nullptr);
 }
 
-Type *get_llvm_fp_or_vectype(jl_datatype_t *dt, LLVMContext &ctx) const
+Type *get_llvm_fp_or_vectype(jl_datatype_t *dt, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
     if (dt->name->mutabl || dt->layout->npointers || !dt->layout->flags.isbitsegal || dt->layout->flags.haspadding)
@@ -99,13 +98,13 @@ struct ElementType {
     ElementType() : type(nullptr), sz(0) {};
 };
 
-// Whether a type is a homogeneous floating-point aggregates (HFA) or a
+// Whether a type is a homogeneous floating-point aggregate (HFA) or a
 // homogeneous short-vector aggregates (HVA). Returns the element type.
-// An Homogeneous Aggregate is a Composite Type where all of the Fundamental
+// A Homogeneous Aggregate is a Composite Type where all of the Fundamental
 // Data Types of the members that compose the type are the same.
 // Note that it is the fundamental types that are important and not the member
 // types.
-bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele, LLVMContext &ctx) const
+bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Assume:
     //     dt is a pointerfree type, (all members are isbits)
@@ -119,6 +118,18 @@ bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele, L
     // handles this slightly differently.
     // Ref https://llvm.org/bugs/show_bug.cgi?id=26162
     while (size_t nfields = jl_datatype_nfields(dt)) {
+        // A short vector is fundamental, not a single-field aggregate.
+        if (Type *vectype = get_llvm_vectype(dt, ctx)) {
+            if ((ele.sz && dsz != ele.sz) || (ele.type && ele.type != vectype))
+                return false;
+            ele.type = vectype;
+            ele.sz = dsz;
+            nele++;
+            return true;
+        }
+        // Other vectors are not HFAs or HVAs.
+        if (is_vector_type(dt))
+            return false;
         // For composite types, find the first non zero sized member
         size_t i;
         size_t fieldsz;
@@ -135,21 +146,13 @@ bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele, L
                 return false;
             continue;
         }
-        if (Type *vectype = get_llvm_vectype(dt, ctx)) {
-            if ((ele.sz && dsz != ele.sz) || (ele.type && ele.type != vectype))
-                return false;
-            ele.type = vectype;
-            ele.sz = dsz;
-            nele++;
-            return true;
-        }
         // Otherwise, process each members
         for (; i < nfields; i++) {
             size_t fieldsz = jl_field_size(dt, i);
             if (fieldsz == 0)
                 continue;
             jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type(dt, i);
-            if (!jl_is_datatype(dt))
+            if (!jl_is_datatype(fieldtype))
                 return false;
             // Check element count.
             // This needs to be done after the zero size member check
@@ -172,17 +175,17 @@ bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele, L
     return false;
 }
 
-Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele, LLVMContext &ctx) const
+Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
 
-    // An Homogeneous Floating-point Aggregate (HFA) is an Homogeneous Aggregate
+    // A Homogeneous Floating-point Aggregate (HFA) is a Homogeneous Aggregate
     // with a Fundamental Data Type that is a Floating-Point type and at most
     // four uniquely addressable members.
     // An Homogeneous Short-Vector Aggregate (HVA) is an Homogeneous Aggregate
     // with a Fundamental Data Type that is a Short-Vector type and at most four
     // uniquely addressable members.
-    // Maximum HFA and HVA size is 64 bytes (4 x fp128 or 16bytes vector)
+    // Maximum HFA and HVA size is 64 bytes (4 x fp128 or 16-byte vector)
     size_t dsz = jl_datatype_size(dt);
     if (dsz > 64 || !dt->layout || dt->layout->npointers || !dt->layout->flags.isbitsegal || dt->layout->flags.haspadding)
         return NULL;
@@ -193,7 +196,7 @@ Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele, LLVMContext &ctx) const
     return NULL;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override JL_CANSAFEPOINT
 {
     // B.2
     //   If the argument type is an HFA or an HVA, then the argument is used
@@ -226,7 +229,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *T
 //
 // All the out parameters should be default to `false`.
 Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
-                   size_t *rewrite_len, LLVMContext &ctx) const
+                   size_t *rewrite_len, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Based on section 5.4 C of the Procedure Call Standard
     // C.1
@@ -306,7 +309,12 @@ Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
     //   and x[NGRN+1]. x[NGRN] shall contain the lower addressed double-word
     //   of the memory representation of the argument. The NGRN is incremented
     //   by two. The argument has now been allocated.
-    // <merged into C.7 above>
+    // <merged into C.7 above for integral types>
+    // Preserve alignment for LLVM's register and stack allocation.
+    if (jl_datatype_size(dt) == 16 && jl_datatype_align(dt) == 16) {
+        *rewrite_len = 1;
+        return Type::getInt128Ty(ctx);
+    }
     // C.10
     //   If the argument is a Composite Type and the size in double-words of
     //   the argument is not more than 8 minus NGRN, then the argument is
@@ -350,7 +358,7 @@ Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
     // <handled by C.10 above>
 }
 
-bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override JL_CANSAFEPOINT
 {
     // Section 5.5
     // If the type, T, of the result of a function is such that
@@ -368,15 +376,18 @@ bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
     return onstack;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override JL_CANSAFEPOINT
 {
     if (Type *fptype = get_llvm_fp_or_vectype(dt, ctx))
         return fptype;
     bool fpreg = false;
     bool onstack = false;
     size_t rewrite_len = 0;
-    if (Type *rewrite_ty = classify_arg(dt, &fpreg, &onstack, &rewrite_len, ctx))
+    if (Type *rewrite_ty = classify_arg(dt, &fpreg, &onstack, &rewrite_len, ctx)) {
+        if (rewrite_ty->isIntegerTy(128))
+            return rewrite_ty;
         return ArrayType::get(rewrite_ty, rewrite_len);
+    }
     return NULL;
 }
 

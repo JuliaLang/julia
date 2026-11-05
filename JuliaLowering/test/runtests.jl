@@ -2,6 +2,7 @@ using Test, JuliaLowering
 
 @test isempty(Test.detect_closure_boxes(JuliaLowering))
 
+Base.ScopedValues.@with Base.MainInclude.main_parser => Base.VersionedParse(Base.JL_OLD_EDITION) begin
 include("utils.jl")
 
 @testset "JuliaLowering.jl" begin
@@ -18,7 +19,6 @@ include("utils.jl")
     @testset "decls" include("decls.jl")
     @testset "destructuring" include("destructuring.jl")
     @testset "exceptions" include("exceptions.jl")
-    @testset "functions" include("functions.jl")
     @testset "generators" include("generators.jl")
     @testset "import" include("import.jl")
     @testset "loops" include("loops.jl")
@@ -28,7 +28,11 @@ include("utils.jl")
     @testset "quoting" include("quoting.jl")
     @testset "scopes" include("scopes.jl")
     @testset "typedefs" include("typedefs.jl")
+    @testset "functions" include("functions.jl")
 
+    @testset "provenance" include("provenance.jl")
     @testset "compat" include("compat.jl")
     @testset "hooks" include("hooks.jl")
 end
+
+end # @with main_parser

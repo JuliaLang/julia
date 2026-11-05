@@ -182,6 +182,11 @@ end
 @test get(()->0, (a=1, b=2, c=3), :a) == 1
 @test get(()->0, NamedTuple(), :a) == 0
 @test get(()->0, (a=1,), :b) == 0
+@test haskey((a=1,), 1)
+@test get((a=1,), 1, 0) == 1
+@test_throws MethodError haskey((a=1,), Int128(1))
+@test_throws MethodError get((a=1,), 0x01, 0)
+@test_throws MethodError get(()->0, (a=1,), 0x01)
 @test Base.tail((a = 1, b = 2.0, c = 'x')) ≡ (b = 2.0, c = 'x')
 @test Base.tail((a = 1, )) ≡ NamedTuple()
 @test Base.front((a = 1, b = 2.0, c = 'x')) ≡ (a = 1, b = 2.0)
@@ -231,9 +236,9 @@ namedtuple_get_a(x) = x.a
 
 namedtuple_fieldtype_a(x) = fieldtype(typeof(x), :a)
 @test Base.return_types(namedtuple_fieldtype_a, (NamedTuple,)) == Any[Union{Type, TypeVar}]
-@test Base.return_types(namedtuple_fieldtype_a, (typeof((b=1,a="")),)) == Any[Type{String}]
+@test Base.return_types(namedtuple_fieldtype_a, (typeof((b=1,a="")),)) == Any[Core.TypeEgal{String}]
 namedtuple_fieldtype__(x, y) = fieldtype(typeof(x), y)
-@test Base.return_types(namedtuple_fieldtype__, (typeof((b=1,a="")),Symbol))[1] >: Union{Type{Int}, Type{String}}
+@test Base.return_types(namedtuple_fieldtype__, (typeof((b=1,a="")),Symbol))[1] >: Union{Core.TypeEgal{Int}, Core.TypeEgal{String}}
 
 namedtuple_nfields(x) = nfields(x) === 0 ? 1 : ""
 @test Union{Int,String} <: Base.return_types(namedtuple_nfields, (NamedTuple,))[1]
@@ -450,6 +455,7 @@ let c = (a=1, b=2),
 end
 
 @test_throws ErrorException NamedTuple{(), Union{}}
+@test typeintersect(NamedTuple{(),T} where T<:Tuple{Any}, NamedTuple{(),T} where T<:Tuple{}) === Union{}
 for NT in (NamedTuple{(:a, :b), Union{}}, NamedTuple{(:a, :b), T} where T<:Union{})
     @test fieldtype(NT, 1) == Union{}
     @test fieldtype(NT, :b) == Union{}

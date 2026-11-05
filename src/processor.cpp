@@ -2,7 +2,7 @@
 
 // Processor feature detection and dispatch using the cpufeatures library.
 // CPU/feature tables are generated from LLVM's TableGen data and committed
-// to https://github.com/gbaraldi/cpufeatures
+// to https://github.com/JuliaLang/cpufeatures
 //
 // On LLVM version bump:
 //   1. cd cpufeatures && make -f Makefile.generate LLVM_VER=<new>
@@ -16,6 +16,7 @@
 #include "julia_internal.h"
 
 #include <algorithm>
+#include <climits>
 #include <vector>
 #include <string>
 
@@ -34,10 +35,13 @@ namespace {
 
 // Load sysimg/pkgimg, use the callback for dispatch and perform all relocations
 template<typename F>
-static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, void *ctx)
+static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, void *ctx, bool is_sysimg)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Processor);
     jl_image_t res{};
+    res.is_split = image.is_split;
+    res.heap_checksum = image.heap_checksum;
+    res.coverage = image.coverage;
 
     if (image.kind != JL_IMAGE_KIND_SO)
         return res;
@@ -46,7 +50,7 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
     const void *ids = pointers->target_data;
 
     // Set the sysimage CPU target from the stored string
-    if (pointers->cpu_target_string) {
+    if (is_sysimg && pointers->cpu_target_string) {
         jl_set_sysimage_cpu_target(pointers->cpu_target_string);
     }
 
@@ -215,10 +219,10 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
     {
         void *pgcstack_func_slot = pointers->ptls->pgcstack_func_slot;
         void *pgcstack_key_slot = pointers->ptls->pgcstack_key_slot;
-        jl_pgcstack_getkey((jl_get_pgcstack_func**)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
+        jl_pgcstack_getkey((jl_get_pgcstack_func_t*)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
 
         size_t *tls_offset_idx = pointers->ptls->tls_offset;
-        *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
+        *tls_offset_idx = (uintptr_t)jl_tls_offset;
     }
 
     res.jl_small_typeof = pointers->jl_small_typeof;
@@ -249,15 +253,15 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
 
 // Verify the cpufeatures tables were generated from a compatible LLVM version.
 #if defined(TARGET_TABLES_LLVM_VERSION_MAJOR) && defined(LLVM_VERSION_MAJOR)
-static_assert(TARGET_TABLES_LLVM_VERSION_MAJOR == LLVM_VERSION_MAJOR,
-    "cpufeatures tables were generated with a different LLVM major version than Julia uses");
+static_assert(TARGET_TABLES_LLVM_VERSION_MAJOR <= LLVM_VERSION_MAJOR,
+    "cpufeatures tables were generated with a newer LLVM major version than Julia uses");
 #endif
 
 // ============================================================================
 // Debug output
 // ============================================================================
 
-static bool cpufeatures_debug_enabled() {
+static bool cpufeatures_debug_enabled() JL_NOTSAFEPOINT {
     static int enabled = -1;
     if (enabled == -1) {
         const char *debug_env = getenv("JULIA_DEBUG");
@@ -273,7 +277,7 @@ static bool cpufeatures_debug_enabled() {
 // Called from Julia's loading.jl to display ImageTarget features.
 JL_DLLEXPORT jl_value_t *jl_feature_bits_to_string(const uint8_t *bits, int32_t nwords)
 {
-    FeatureBits fb{};
+    tp::FeatureBits fb{};
     int copy_words = nwords < TARGET_FEATURE_WORDS ? nwords : TARGET_FEATURE_WORDS;
     memcpy(fb.bits, bits, copy_words * sizeof(uint64_t));
     auto str = tp::build_feature_string(fb);
@@ -300,17 +304,19 @@ static std::string get_host_feature_string()
 // ============================================================================
 
 static std::vector<tp::LLVMTargetSpec> jit_targets;
+// The sysimage clone selected at load time (unset until a sysimage is loaded).
+static int32_t sysimage_matched_target_index = -1;
 
 // If cpu_target starts with "sysimage", replace it with the target string
 // stored in the loaded sysimage. Otherwise return as-is.
-extern "C" std::string jl_expand_sysimage_keyword(const char *cpu_target) {
+static std::string expand_sysimage_keyword(const char *cpu_target) JL_NOTSAFEPOINT
+{
     if (!cpu_target || !*cpu_target)
         return "";
     std::string option(cpu_target);
     if (option.substr(0, 8) == "sysimage" && (option.size() == 8 || option[8] == ';')) {
-        jl_value_t *target_str = jl_get_sysimage_cpu_target();
-        if (target_str && jl_string_len(target_str) > 0) {
-            std::string expanded(jl_string_data(target_str), jl_string_len(target_str));
+        if (!sysimage_cpu_target.empty()) {
+            std::string expanded = sysimage_cpu_target;
             if (option.size() > 8)
                 expanded += option.substr(8);
             CF_DEBUG("[cpufeatures] expanded 'sysimage' -> '%s'\n", expanded.c_str());
@@ -322,20 +328,124 @@ extern "C" std::string jl_expand_sysimage_keyword(const char *cpu_target) {
     return option;
 }
 
-static void init_jit_targets(const char *cpu_target, bool imaging)
+extern "C" char *jl_expand_sysimage_keyword(const char *cpu_target)
+{
+    return strdup(expand_sysimage_keyword(cpu_target).c_str());
+}
+
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+// LLVM selects vcvtneps2bf16 for f32-to-bf16 conversions despite the
+// instruction unconditionally flushing subnormal inputs. Until LLVM provides
+// a narrower workaround (llvm/llvm-project#221052), disable the feature groups
+// that enable this instruction. This also disables other native x86 BF16
+// operations, and the features that imply them (AVX10), which LLVM would
+// disable anyway; listing them keeps the string's entries equal to what LLVM
+// enables. Keep the feature bits intact because image matching uses them;
+// only these strings control code generation. Explicit negatives are needed
+// because the CPU name otherwise enables the features again.
+static void disable_native_bf16_codegen(std::string &features) JL_NOTSAFEPOINT
+{
+    static const std::vector<const char*> names = []() JL_NOTSAFEPOINT {
+        tp::FeatureBits to_disable{};
+        for (const char *name : {"avx512bf16", "avxneconvert"}) {
+            const tp::FeatureEntry *fe = tp::find_feature(name);
+            assert(fe);
+            tp::feature_set(&to_disable, fe->bit);
+        }
+        const tp::FeatureBits &mask = tp::get_llvm_feature_mask();
+        tp::FeatureBits kept = mask;
+        tp::apply_feature_delta(&kept, tp::FeatureBits{}, to_disable);
+        std::vector<const char*> names;
+        for (uint32_t i = 0; i < tp::num_features; i++) {
+            const auto &feature = tp::feature_table[i];
+            if (tp::feature_test(&mask, feature.bit) && !tp::feature_test(&kept, feature.bit))
+                names.push_back(feature.name);
+        }
+        return names;
+    }();
+    std::string out;
+    size_t pos = 0;
+    do {
+        size_t end = features.find(',', pos);
+        if (end == std::string::npos)
+            end = features.size();
+        std::string tok = features.substr(pos, end - pos);
+        bool skip = tok.size() < 2;
+        for (auto name : names)
+            if (!skip && tok.compare(1, std::string::npos, name) == 0)
+                skip = true;
+        if (!skip) {
+            if (!out.empty())
+                out += ',';
+            out += tok;
+        }
+        pos = end + 1;
+    } while (pos <= features.size());
+    for (auto name : names) {
+        if (!out.empty())
+            out += ',';
+        out += '-';
+        out += name;
+    }
+    features = std::move(out);
+}
+#else
+static void disable_native_bf16_codegen(std::string &) JL_NOTSAFEPOINT {}
+#endif
+
+#if defined(_CPU_RISCV64_)
+// Generated code must follow the runtime's float ABI (see
+// `createTargetMachine`). For a target without the extensions it needs, LLVM
+// falls back to the soft-float ABI with only a warning, so always enable them
+// (and `zicsr`, which F implies).
+static void enable_float_abi_features(std::string &features) JL_NOTSAFEPOINT
+{
+#if defined(__riscv_float_abi_double)
+    const char *abi_features = "+zicsr,+f,+d";
+#elif defined(__riscv_float_abi_single)
+    const char *abi_features = "+zicsr,+f";
+#else
+    const char *abi_features = "";
+#endif
+    if (*abi_features && !features.empty())
+        features += ',';
+    features += abi_features;
+}
+#else
+static void enable_float_abi_features(std::string &) JL_NOTSAFEPOINT {}
+#endif
+
+// Apply Julia's adjustments to the LLVM feature string of a resolved target.
+// Every target whose features reach code generation (the JIT, multiversioning
+// clones, `@cpu_supports` CPU models) goes through this.
+static void finalize_codegen_target(tp::LLVMTargetSpec &spec) JL_NOTSAFEPOINT
+{
+    disable_native_bf16_codegen(spec.cpu_features);
+    enable_float_abi_features(spec.cpu_features);
+}
+
+static std::vector<tp::LLVMTargetSpec> resolve_codegen_targets(const std::string &targets) JL_NOTSAFEPOINT
+{
+    auto specs = tp::resolve_targets_for_llvm(targets);
+    for (auto &spec : specs)
+        finalize_codegen_target(spec);
+    return specs;
+}
+
+static void init_jit_targets(const char *cpu_target, bool imaging) JL_NOTSAFEPOINT
 {
 
     if (!jit_targets.empty())
         return;
 
-    auto target_str = jl_expand_sysimage_keyword(cpu_target);
+    auto target_str = expand_sysimage_keyword(cpu_target);
     CF_DEBUG("[cpufeatures] init_jit_targets: '%s' imaging=%d\n",
              target_str.c_str(), imaging);
 
     if (target_str.empty())
         jl_error("Invalid target option: empty CPU name");
 
-    auto specs = tp::resolve_targets_for_llvm(target_str);
+    auto specs = resolve_codegen_targets(target_str);
 
     if (specs.empty())
         jl_error("No targets specified");
@@ -351,10 +461,55 @@ static void init_jit_targets(const char *cpu_target, bool imaging)
 // Sysimage / pkgimage target matching
 // ============================================================================
 
+// Name the image's targets and the features that `target` lacks for the
+// closest one, using the same conflict test as `tp::match_targets`.
+static std::string incompatible_target_msg(const std::vector<tp::LLVMTargetSpec> &image_targets,
+                                           const tp::LLVMTargetSpec &target, bool is_sysimg)
+{
+    std::string msg = "Unable to find compatible target in cached code image.";
+    if (image_targets.empty())
+        return msg;
+    std::string names;
+    tp::FeatureBits closest_missing{};
+    unsigned closest_n = UINT_MAX;
+    size_t closest = 0;
+    for (size_t i = 0; i < image_targets.size(); i++) {
+        names += (i == 0 ? "" : ", ") + image_targets[i].cpu_name;
+        tp::FeatureBits missing;
+        tp::feature_and_out(&missing, &image_targets[i].en_features, &target.dis_features);
+        tp::feature_andnot(&missing, &missing, &tp::uarch_feature_mask);
+        unsigned n = tp::feature_popcount(&missing);
+        if (n < closest_n) {
+            closest_n = n;
+            closest = i;
+            closest_missing = missing;
+        }
+    }
+    msg += " It was compiled for " + names + ".";
+    if (closest_n > 0) {
+        // "+avx,+xsave" -> "avx, xsave"
+        std::string features;
+        for (char c : tp::build_feature_string(closest_missing)) {
+            if (c == '+')
+                continue;
+            features += c;
+            if (c == ',')
+                features += ' ';
+        }
+        msg += " The closest, " + image_targets[closest].cpu_name +
+               ", requires features that this CPU (" + target.cpu_name + ") lacks: " +
+               features + ".";
+    }
+    if (is_sysimg)
+        msg += " Please read https://docs.julialang.org/en/v1/devdocs/sysimg/ for more.";
+    return msg;
+}
+
 // Shared: deserialize image targets, match against a resolved target.
 // Returns {target_index, vreg_size} or {UINT32_MAX, 0} on failure.
 static std::pair<uint32_t, int> match_image_targets(
-        const void *id, const tp::LLVMTargetSpec &target, jl_value_t **rejection_reason)
+        const void *id, const tp::LLVMTargetSpec &target, jl_value_t **rejection_reason,
+        bool is_sysimg) JL_CANSAFEPOINT
 {
     auto image_targets = tp::deserialize_targets((const uint8_t *)id);
     CF_DEBUG("[cpufeatures]   image has %zu target(s)\n", image_targets.size());
@@ -363,7 +518,7 @@ static std::pair<uint32_t, int> match_image_targets(
     if (match.best_idx < 0) {
         CF_DEBUG("[cpufeatures]   NO compatible target found!\n");
         if (rejection_reason) {
-            std::string msg = "Unable to find compatible target in cached code image.";
+            std::string msg = incompatible_target_msg(image_targets, target, is_sysimg);
             *rejection_reason = jl_pchar_to_string(msg.data(), msg.size());
         }
         return {UINT32_MAX, 0};
@@ -374,7 +529,7 @@ static std::pair<uint32_t, int> match_image_targets(
     return {(uint32_t)match.best_idx, match.vreg_size};
 }
 
-static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **rejection_reason)
+static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **rejection_reason) JL_CANSAFEPOINT
 {
     const char *cpu_target = (const char *)ctx;
     CF_DEBUG("[cpufeatures] match_sysimg_target: cpu_target='%s'\n",
@@ -382,7 +537,7 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
 
     // For multi-target strings (sysimage building), use only the first
     // target for matching against the image being loaded.
-    auto target_str = jl_expand_sysimage_keyword(cpu_target);
+    auto target_str = expand_sysimage_keyword(cpu_target);
     auto semi = target_str.find(';');
     auto first = semi != std::string::npos ? target_str.substr(0, semi) : target_str;
     auto host_specs = tp::resolve_targets_for_llvm(first);
@@ -409,9 +564,12 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
 #endif
 
     // Match against image targets
-    auto match_result = match_image_targets(id, target, rejection_reason);
+    auto match_result = match_image_targets(id, target, rejection_reason, true);
     if (match_result.first == UINT32_MAX)
         return UINT32_MAX;
+
+    // Remember which sysimage clone was selected so Base can report it.
+    sysimage_matched_target_index = match_result.first;
 
     // Clamp JIT vector features to match the sysimage target's vector width.
     // On x86, AVX/AVX-512 change how VecElement tuples are passed in registers
@@ -421,10 +579,13 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
     // (only FixedVectorType/NEON), so SVE clamping is not needed for ABI
     // correctness. RISC-V V is similar. Revisit if Julia adds scalable vector
     // support.
+    // Features that imply the cleared ones (e.g. avxvnni implies avx2) are
+    // cleared with them; otherwise LLVM would enable the cleared ones again.
     int matched_vreg = match_result.second;
     int host_vreg = tp::max_vector_size(target.en_features);
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_)
     if (matched_vreg != host_vreg) {
+        tp::FeatureBits to_disable{};
         if (matched_vreg < 64) {
             static const char *avx512[] = {
                 "avx512f", "avx512dq", "avx512ifma", "avx512cd",
@@ -433,8 +594,8 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
                 "avx512vp2intersect", "avx512bf16", "avx512fp16", nullptr
             };
             for (const char **f = avx512; *f; f++) {
-                const FeatureEntry *fe = find_feature(*f);
-                if (fe) feature_clear(&target.en_features, fe->bit);
+                const tp::FeatureEntry *fe = tp::find_feature(*f);
+                if (fe) tp::feature_set(&to_disable, fe->bit);
             }
         }
         if (matched_vreg < 32) {
@@ -443,12 +604,13 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
                 "vaes", "vpclmulqdq", nullptr
             };
             for (const char **f = avx; *f; f++) {
-                const FeatureEntry *fe = find_feature(*f);
-                if (fe) feature_clear(&target.en_features, fe->bit);
+                const tp::FeatureEntry *fe = tp::find_feature(*f);
+                if (fe) tp::feature_set(&to_disable, fe->bit);
             }
         }
+        tp::apply_feature_delta(&target.en_features, tp::FeatureBits{}, to_disable);
         for (int w = 0; w < TARGET_FEATURE_WORDS; w++)
-            target.dis_features.bits[w] = hw_feature_mask.bits[w] & ~target.en_features.bits[w];
+            target.dis_features.bits[w] = tp::llvm_feature_mask.bits[w] & ~target.en_features.bits[w];
         target.cpu_features = tp::build_llvm_feature_string(target.en_features, target.dis_features);
     }
 #else
@@ -456,14 +618,15 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
     (void)host_vreg;
 #endif
 
+    finalize_codegen_target(target);
     jit_targets.push_back(std::move(target));
     return match_result.first;
 }
 
-static uint32_t match_pkgimg_target(void *ctx, const void *id, jl_value_t **rejection_reason)
+static uint32_t match_pkgimg_target(void *ctx, const void *id, jl_value_t **rejection_reason) JL_CANSAFEPOINT
 {
     auto &target = jit_targets.front();
-    auto result = match_image_targets(id, target, rejection_reason);
+    auto result = match_image_targets(id, target, rejection_reason, false);
     return result.first;
 }
 
@@ -521,13 +684,13 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
     jl_safe_printf("Features:");
     auto host_feats = tp::get_host_features();
     bool first = true;
-    for (uint32_t i = 0; i < num_features; i++) {
-        if (feature_test(&host_feats, feature_table[i].bit)) {
+    for (uint32_t i = 0; i < tp::num_features; i++) {
+        if (feature_test(&host_feats, tp::feature_table[i].bit)) {
             if (first) {
-                jl_safe_printf(" %s", feature_table[i].name);
+                jl_safe_printf(" %s", tp::feature_table[i].name);
                 first = false;
             } else {
-                jl_safe_printf(", %s", feature_table[i].name);
+                jl_safe_printf(", %s", tp::feature_table[i].name);
             }
         }
     }
@@ -545,7 +708,7 @@ JL_DLLEXPORT jl_value_t *jl_check_pkgimage_clones(char *data)
     return jl_nothing;
 }
 
-JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
+jl_value_t *jl_cpu_has_fma(int bits)
 {
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_)
     if ((bits == 32 || bits == 64) && !jit_targets.empty()) {
@@ -556,19 +719,29 @@ JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
 #elif defined(_CPU_AARCH64_)
     if (bits == 32 || bits == 64)
         return jl_true;
+#elif defined(_CPU_RISCV64_)
+    if (!jit_targets.empty()) {
+        const auto &feats = jit_targets.front().en_features;
+        if (bits == 64 && tp::has_feature(feats, "d"))
+            return jl_true;
+        if (bits == 32 && tp::has_feature(feats, "f"))
+            return jl_true;
+        if (bits == 16 && tp::has_feature(feats, "zfh"))
+            return jl_true;
+    }
 #endif
     return jl_false;
 }
 
 // Validate cpu_target string before any processing.
 // Called from init.c early in startup.
-extern "C" JL_DLLEXPORT void jl_check_cpu_target(const char *cpu_target, int imaging)
+extern "C" void jl_check_cpu_target(const char *cpu_target, int imaging)
 {
 
     if (!cpu_target || !*cpu_target)
         return; // NULL/empty handled elsewhere
 
-    auto target_str = jl_expand_sysimage_keyword(cpu_target);
+    auto target_str = expand_sysimage_keyword(cpu_target);
     if (target_str.empty())
         return;
 
@@ -606,7 +779,7 @@ jl_image_t jl_load_sysimg(jl_image_buf_t image, const char *cpu_target)
 
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
-    return load_sysimg_target(image, match_sysimg_target, (void *)cpu_target);
+    return load_sysimg_target(image, match_sysimg_target, (void *)cpu_target, true);
 }
 
 jl_image_t jl_load_pkgimg(jl_image_buf_t image)
@@ -615,47 +788,41 @@ jl_image_t jl_load_pkgimg(jl_image_buf_t image)
         jl_error("JIT targets not initialized");
     if (jit_targets.size() > 1)
         jl_error("Expected only one JIT target");
-    return load_sysimg_target(image, match_pkgimg_target, NULL);
+    return load_sysimg_target(image, match_pkgimg_target, NULL, false);
 }
 
-#ifndef __clang_analyzer__
-std::pair<std::string, std::string>
-jl_get_llvm_target(const char *cpu_target, bool imaging)
+jl_llvm_target_t jl_get_llvm_target(const char *cpu_target, bool imaging)
 {
     init_jit_targets(cpu_target, imaging);
     auto &spec = jit_targets[0];
     CF_DEBUG("[cpufeatures] jl_get_llvm_target: cpu='%s' features='%s'\n",
              spec.cpu_name.c_str(), spec.cpu_features.c_str());
-    return {spec.cpu_name, spec.cpu_features};
+    return {spec.cpu_name.c_str(), spec.cpu_features.c_str()};
 }
-#endif
 
-#ifndef __clang_analyzer__
-const std::pair<std::string, std::string> &jl_get_llvm_disasm_target(void)
+jl_llvm_target_t jl_get_llvm_disasm_target(void)
 {
     // Use generic CPU with all features enabled so the disassembler
     // can decode any instruction (including sysimage clones compiled
     // for targets beyond the current JIT target).
-    static const auto res = [] {
+    static const std::string features = []() JL_NOTSAFEPOINT {
         std::string features;
-        for (uint32_t i = 0; i < num_features; i++) {
-            if (feature_table[i].is_hw) {
+        for (uint32_t i = 0; i < tp::num_features; i++) {
+            if (tp::feature_table[i].is_hw) {
                 if (!features.empty()) features += ',';
                 features += '+';
-                features += feature_table[i].name;
+                features += tp::feature_table[i].name;
             }
         }
-        return std::make_pair(std::string("generic"), std::move(features));
+        return features;
     }();
-    return res;
+    return {"generic", features.c_str()};
 }
-#endif
 
-#ifndef __clang_gcanalyzer__
-jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
+extern "C" jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
 {
-    auto target_str = jl_expand_sysimage_keyword(cpu_target);
-    auto specs = tp::resolve_targets_for_llvm(target_str);
+    auto target_str = expand_sysimage_keyword(cpu_target);
+    auto specs = resolve_codegen_targets(target_str);
 
     if (specs.empty())
         jl_error("No targets specified");
@@ -664,23 +831,45 @@ jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
 
     // Serialized blob for sysimage embedding
     auto blob = tp::serialize_targets(specs);
-    result.data.assign(blob.begin(), blob.end());
+    result.data_size = blob.size();
+    result.data = (uint8_t*)malloc(blob.size());
+    memcpy(result.data, blob.data(), blob.size());
 
     // LLVM specs for codegen
-    for (auto &s : specs) {
-        jl_target_spec_t ele;
-        ele.cpu_name = s.cpu_name;
-        ele.cpu_features = s.cpu_features;
+    result.nspecs = specs.size();
+    result.specs = (jl_target_spec_t*)calloc(specs.size(), sizeof(jl_target_spec_t));
+    for (size_t i = 0; i < specs.size(); i++) {
+        auto &s = specs[i];
+        jl_target_spec_t &ele = result.specs[i];
+        ele.cpu_name = strdup(s.cpu_name.c_str());
+#if defined(_CPU_RISCV64_)
+        // Image code is linked by lld, which shrinks calls and jumps (`auipc`+`jalr` to
+        // `jal`) when the object marks them relaxable. The JIT keeps its target unchanged.
+        s.cpu_features += ",+relax";
+#endif
+        ele.cpu_features = strdup(s.cpu_features.c_str());
         ele.base = s.base;
         ele.clone_all = (s.flags & tp::TF_CLONE_ALL) != 0;
         ele.opt_size = (s.flags & tp::TF_OPTSIZE) != 0;
         ele.min_size = (s.flags & tp::TF_MINSIZE) != 0;
-        ele.diff = s.diff;
-        result.specs.push_back(std::move(ele));
+        ele.en_features_nwords = TARGET_FEATURE_WORDS;
+        ele.en_features = (uint64_t*)malloc(sizeof(s.en_features.bits));
+        memcpy(ele.en_features, s.en_features.bits, sizeof(s.en_features.bits));
     }
     return result;
 }
-#endif
+
+extern "C" void jl_free_clone_targets(jl_clone_targets_t *targets)
+{
+    for (size_t i = 0; i < targets->nspecs; i++) {
+        free(targets->specs[i].cpu_name);
+        free(targets->specs[i].cpu_features);
+        free(targets->specs[i].en_features);
+    }
+    free(targets->specs);
+    free(targets->data);
+    memset(targets, 0, sizeof(*targets));
+}
 
 extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
 {
@@ -690,39 +879,119 @@ extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
     return feature_test(&host_feats, feature);
 }
 
+// Whether `name` is last set to "+" in the LLVM feature string `features`
+static bool feature_string_enables(const std::string &features, const char *name, size_t len) JL_NOTSAFEPOINT
+{
+    bool enabled = false;
+    for (size_t pos = 0; pos < features.size();) {
+        size_t end = features.find(',', pos);
+        if (end == std::string::npos)
+            end = features.size();
+        if (end - pos == len + 1 && features.compare(pos + 1, len, name, len) == 0)
+            enabled = features[pos] == '+';
+        pos = end + 1;
+    }
+    return enabled;
+}
+
+extern "C" JL_DLLEXPORT int jl_cpu_has_features(const char *features)
+{
+    if (jit_targets.empty() || !*features)
+        return 0;
+    const std::string &codegen_features = jit_targets.front().cpu_features;
+    for (const char *name = features;;) {
+        const char *end = strchr(name, ',');
+        size_t len = end ? end - name : strlen(name);
+        if (!feature_string_enables(codegen_features, name, len))
+            return 0;
+        if (!end)
+            return 1;
+        name = end + 1;
+    }
+}
+
+// Hardware features usable outside the kernel, the names `@cpu_supports` accepts
+static bool is_queryable_feature(const tp::FeatureEntry &feature) JL_NOTSAFEPOINT
+{
+    return feature.is_hw && !feature.is_privileged;
+}
+
+extern "C" JL_DLLEXPORT jl_value_t *jl_cpu_codegen_features(void)
+{
+    std::string names;
+    for (uint32_t i = 0; i < tp::num_features; i++) {
+        const auto &feature = tp::feature_table[i];
+        if (!is_queryable_feature(feature))
+            continue;
+        if (!names.empty())
+            names += ',';
+        names += feature.name;
+    }
+    return jl_pchar_to_string(names.data(), names.size());
+}
+
 // ============================================================================
 // Cross-architecture CPU/feature queries
 // ============================================================================
 
 extern "C" JL_DLLEXPORT size_t jl_cpufeatures_nbytes(void)
 {
-    return sizeof(FeatureBits);
+    return sizeof(tp::FeatureBits);
 }
 
 extern "C" JL_DLLEXPORT int jl_cpufeatures_lookup(const char *cpu_name,
                                                     uint8_t *features_out,
                                                     size_t bufsize)
 {
-    if (bufsize < sizeof(FeatureBits))
+    if (bufsize < sizeof(tp::FeatureBits))
         return -1;
-    const CPUEntry *entry = find_cpu(cpu_name);
+    const tp::CPUEntry *entry = tp::find_cpu(cpu_name);
     if (!entry)
         return -1;
-    FeatureBits hw;
+    tp::FeatureBits hw;
     for (int i = 0; i < TARGET_FEATURE_WORDS; i++)
-        hw.bits[i] = entry->features.bits[i] & hw_feature_mask.bits[i];
-    memcpy(features_out, &hw, sizeof(FeatureBits));
+        hw.bits[i] = entry->features.bits[i] & tp::llvm_feature_mask.bits[i];
+    memcpy(features_out, &hw, sizeof(tp::FeatureBits));
     return 0;
+}
+
+extern "C" JL_DLLEXPORT jl_value_t *jl_cpu_target_features(const char *cpu_name)
+{
+    if (!tp::find_cpu(cpu_name))
+        return jl_nothing;
+    auto specs = resolve_codegen_targets(cpu_name);
+    if (specs.empty() || (specs[0].flags & tp::TF_UNKNOWN_NAME))
+        return jl_nothing;
+    // Report what a clone for this CPU is compiled with, not its feature bits,
+    // leaving out entries that are not queryable (e.g. aarch64's v8.1a)
+    const std::string &features = specs[0].cpu_features;
+    std::string names;
+    for (size_t pos = 0; pos < features.size();) {
+        size_t end = features.find(',', pos);
+        if (end == std::string::npos)
+            end = features.size();
+        if (features[pos] == '+') {
+            std::string name = features.substr(pos + 1, end - pos - 1);
+            const tp::FeatureEntry *fe = tp::find_feature(name.c_str());
+            if (fe && is_queryable_feature(*fe)) {
+                if (!names.empty())
+                    names += ',';
+                names += name;
+            }
+        }
+        pos = end + 1;
+    }
+    return jl_pchar_to_string(names.data(), names.size());
 }
 
 extern "C" JL_DLLEXPORT void jl_cpufeatures_host(uint8_t *features_out, size_t bufsize)
 {
-    if (bufsize < sizeof(FeatureBits))
+    if (bufsize < sizeof(tp::FeatureBits))
         return;
     auto fb = tp::get_host_features();
     for (int i = 0; i < TARGET_FEATURE_WORDS; i++)
-        fb.bits[i] &= hw_feature_mask.bits[i];
-    memcpy(features_out, &fb, sizeof(FeatureBits));
+        fb.bits[i] &= tp::llvm_feature_mask.bits[i];
+    memcpy(features_out, &fb, sizeof(tp::FeatureBits));
 }
 
 extern "C" JL_DLLEXPORT size_t jl_cpufeatures_cross_lookup(
@@ -873,16 +1142,27 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
     return jl_cstr_to_string(get_host_feature_string().c_str());
 }
 
-#ifndef __clang_analyzer__
 extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
-    auto targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
-    auto &data = targets.data;
+    // Return the actual JIT target(s) chosen after sysimage matching, so that
+    // debug output reflects what pkgimage clones are compared against rather
+    // than the unmatched targets parsed from `jl_options.cpu_target`.
+    std::vector<uint8_t> data;
+    if (!jit_targets.empty()) {
+        data = tp::serialize_targets(jit_targets);
+    } else {
+        jl_clone_targets_t targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
+        data.assign(targets.data, targets.data + targets.data_size);
+        jl_free_clone_targets(&targets);
+    }
     jl_value_t *arr = (jl_value_t*)jl_alloc_array_1d(jl_array_uint8_type, data.size());
     uint8_t *out = jl_array_data(arr, uint8_t);
     memcpy(out, data.data(), data.size());
     return arr;
 }
-#endif
+
+extern "C" JL_DLLEXPORT int32_t jl_get_sysimage_matched_target_index(void) {
+    return sysimage_matched_target_index;
+}
 
 extern "C" JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void) {
     if (sysimage_cpu_target.empty()) {

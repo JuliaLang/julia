@@ -121,7 +121,7 @@ To generate the `rr` trace locally, but not share, you can do:
 julia --bug-report=rr-local
 ```
 
-Note that this is only works on Linux. The blog post on [Time Travelling Bug Reporting](https://julialang.org/blog/2020/05/rr/) has many more details.
+Note that this only works on Linux. The blog post on [Time Travelling Bug Reporting](https://julialang.org/blog/2020/05/rr/) has many more details.
 
 ## Glossary
 

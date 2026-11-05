@@ -88,7 +88,7 @@ source_location(x) = source_location(sourcefile(x), first_byte(x))
 """
     sourcetext(x)
 
-Get the full source text syntax object `x`
+Get the full source text of syntax object `x`
 """
 function sourcetext(x)
     view(sourcefile(x), byte_range(x))

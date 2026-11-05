@@ -100,7 +100,7 @@ end
     end
 end
 
-@testset "#5939 uft8proc character predicates" begin
+@testset "#5939 utf8proc character predicates" begin
     alower=['a', 'd', 'j', 'y', 'z']
     ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
     for c in vcat(alower,ulower,['ª'])
@@ -305,7 +305,7 @@ end
     @test normalize("\0W", casefold=true) == "\0w"
 end
 
-@testset "ut8proc_map with GenericString" begin
+@testset "utf8proc_map with GenericString" begin
     @test normalize(GenericString("\u006e\u0303"), :NFC) == "\u00f1"
 end
 
@@ -328,6 +328,8 @@ end
     @test !isassigned(0xfffe)
     @test !isassigned(Int(0xffff))
     @test !isassigned(typemax(Int64))
+    @test !isassigned(-1)
+    @test !isassigned(typemin(Int64))
     @test !isassigned("\xf4\x90\x80\x80"[1])
     @test !isassigned("\xf7\xbf\xbf\xbf"[1])
     @test !isassigned("\xff"[1])
@@ -339,8 +341,14 @@ end
     @test isspace('\r')
     @test isspace('\u85')
     @test isspace('\ua0')
+    @test isspace('\u2028')
+    @test isspace('\u2029')
     @test !isspace('\ufffd')
     @test !isspace('\U10ffff')
+    # the Unicode White_Space property (PropList.txt)
+    @test filter(isspace, '\0':'\U10ffff') ==
+        ['\t':'\r'; ' '; '\u85'; '\ua0'; '\u1680'; '\u2000':'\u200a';
+         '\u2028'; '\u2029'; '\u202f'; '\u205f'; '\u3000']
 end
 
 @testset "grapheme iterators" begin

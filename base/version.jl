@@ -100,11 +100,12 @@ function print(io::IO, v::VersionNumber)
     print(io, v.patch)
     if !isempty(v.prerelease)
         print(io, '-')
-        join(io, v.prerelease,'.')
+        # inline join to make call resolvable for --trim
+        @inline join(io, v.prerelease,'.')
     end
     if !isempty(v.build)
         print(io, '+')
-        join(io, v.build,'.')
+        @inline join(io, v.build,'.')
     end
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
@@ -264,6 +265,21 @@ const VERSION = try
 catch e
     println("while creating Base.VERSION, ignoring error $e")
     VersionNumber(0)
+end
+
+# `VERSION` with build metadata for builds that behave differently from a regular one,
+# e.g. `v"1.14.0-alpha1+opt"` or `v"1.14.0-alpha1+assert"`. It is only for display (the
+# banner and `versioninfo()`): `VERSION` itself stays the same so comparisons with it work.
+function version_with_build_variant()
+    tags = String[]
+    isempty(BUILD_VARIANT) || push!(tags, BUILD_VARIANT)
+    if isdebugbuild()
+        push!(tags, "debug")
+    elseif ccall(:jl_is_assertsbuild, Int8, ()) != 0
+        push!(tags, "assert")
+    end
+    isempty(tags) && return VERSION
+    return VersionNumber(VERSION.major, VERSION.minor, VERSION.patch, VERSION.prerelease, (VERSION.build..., tags...))
 end
 
 const libllvm_version = if endswith(libllvm_version_string, "jl")
@@ -434,10 +450,10 @@ function Base.print(io::IO, r::VersionRange)
     return if (m, n) == (0, 0)
         print(io, '*')
     elseif m == 0
-        print(io, "0 -")
-        join(io, r.upper.t, '.')
+        print(io, "0 - ")
+        join(io, r.upper.t[1:n], '.')
     elseif n == 0
-        join(io, r.lower.t, '.')
+        join(io, r.lower.t[1:m], '.')
         print(io, " - *")
     else
         join(io, r.lower.t[1:m], '.')
@@ -459,7 +475,6 @@ function Base.union!(ranges::Vector{<:VersionRange})
 
     sort!(ranges, lt = (a, b) -> (isless_ll(a.lower, b.lower) || (a.lower == b.lower && isless_uu(a.upper, b.upper))))
 
-    k0 = 1
     ks = findfirst(!isempty, ranges)
     ks === nothing && return empty!(ranges)
 
@@ -574,7 +589,7 @@ function Base.union(A::VersionSpec, B::VersionSpec)
 end
 
 Base.:(==)(A::VersionSpec, B::VersionSpec) = A.ranges == B.ranges
-Base.hash(s::VersionSpec, h::UInt) = hash(s.ranges, h + (0x2fd2ca6efa023f44 % UInt))
+Base.hash(s::VersionSpec, h::UInt) = hash(s.ranges, h +% (0x2fd2ca6efa023f44 % UInt))
 
 function Base.print(io::IO, s::VersionSpec)
     isempty(s) && return print(io, _empty_symbol)
@@ -742,3 +757,8 @@ const ver_regs =
     Regex("^((?:≥\\s*)|(?:>=\\s*)|(?:=\\s*)|(?:<\\s*)|(?:=\\s*))v?$version\$") => inequality_interval, # < 0.2 >= 0.5,2
     Regex("^[\\s]*$version[\\s]*?\\s-\\s[\\s]*?$version[\\s]*\$") => hyphen_interval, # 0.7 - 1.3
 ]
+
+# Interaction with language edition: there is at most one edition per minor
+# version, and any version should specify some default edition.
+EditionNumber(v::VersionNumber) = (Int(v.major), Int(v.minor))
+VersionedParse(v::VersionNumber) = VersionedParse(EditionNumber(v))

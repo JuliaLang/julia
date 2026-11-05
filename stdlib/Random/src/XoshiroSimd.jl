@@ -17,7 +17,7 @@ simdThreshold(::Type{Bool}) = 640
 @inline _rotl45(x::UInt64) = (x<<45)|(x>>19)
 @inline _shl17(x::UInt64) = x<<17
 @inline _rotl23(x::UInt64) = (x<<23)|(x>>41)
-@inline _plus(x::UInt64,y::UInt64) = x+y
+@inline _plus(x::UInt64,y::UInt64) = x +% y
 @inline _xor(x::UInt64,y::UInt64) = xor(x,y)
 @inline _and(x::UInt64, y::UInt64) = x & y
 @inline _or(x::UInt64, y::UInt64) = x | y
@@ -31,7 +31,7 @@ simdThreshold(::Type{Bool}) = 640
     x, y)
 
 # `_bits2float(x::UInt64, T)` takes `x::UInt64` as input, it splits it in `N` parts where
-# `N = sizeof(UInt64) / sizeof(T)` (`N = 1` for `Float64`, `N = 2` for `Float32, etc...), it
+# `N = sizeof(UInt64) / sizeof(T)` (`N = 1` for `Float64`, `N = 2` for `Float32`, etc.), it
 # truncates each part to the unsigned type of the same size as `T`, scales all of these
 # numbers to a value of type `T` in the range [0,1) with `_uint2float`, and then
 # recomposes another `UInt64` using all these parts.
@@ -156,10 +156,10 @@ function forkRand(rng::Union{TaskLocalRNG, Xoshiro}, ::Val{N}) where N
     # 0x5a94851fb48a6e05 == hash(UInt(2))|0x01
     # 0x3688cf5d48899fa7 == hash(UInt(3))|0x01
     # 0x867b4bb4c42e5661 == hash(UInt(4))|0x01
-    s0 = ntuple(i->VecElement(0x02011ce34bce797f * rand(rng, UInt64)), Val(N))
-    s1 = ntuple(i->VecElement(0x5a94851fb48a6e05 * rand(rng, UInt64)), Val(N))
-    s2 = ntuple(i->VecElement(0x3688cf5d48899fa7 * rand(rng, UInt64)), Val(N))
-    s3 = ntuple(i->VecElement(0x867b4bb4c42e5661 * rand(rng, UInt64)), Val(N))
+    s0 = ntuple(i->VecElement(0x02011ce34bce797f *% rand(rng, UInt64)), Val(N))
+    s1 = ntuple(i->VecElement(0x5a94851fb48a6e05 *% rand(rng, UInt64)), Val(N))
+    s2 = ntuple(i->VecElement(0x3688cf5d48899fa7 *% rand(rng, UInt64)), Val(N))
+    s3 = ntuple(i->VecElement(0x867b4bb4c42e5661 *% rand(rng, UInt64)), Val(N))
     (s0, s1, s2, s3)
 end
 
@@ -292,7 +292,8 @@ end
     return i
 end
 
-const MutableDenseArray = Union{Base.MutableDenseArrayType{T}, UnsafeView{T}} where {T}
+const MutableDenseArray = Union{Base.MutableDenseArrayType{T}, UnsafeView{T},
+                                Base.NonReshapedReinterpretArray{T,N,S,<:Base.MutableDenseArrayType{S}} where {N,S}} where {T}
 
 function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::MutableDenseArray{T}, ::SamplerTrivial{CloseOpen01{T}}) where {T<:Union{Float16,Float32,Float64}}
     GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*sizeof(T), T, xoshiroWidth(), _bits2float)

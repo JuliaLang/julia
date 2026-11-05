@@ -3,9 +3,10 @@
 ```@docs
 @ccall
 ccall
-Core.Intrinsics.cglobal
+cglobal
 Base.@cfunction
 Base.CFunction
+Base.@ccallable
 Base.unsafe_convert
 Base.cconvert
 Base.unsafe_load

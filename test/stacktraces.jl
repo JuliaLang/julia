@@ -134,7 +134,7 @@ module StackTracesTestMod
     filtered_stacktrace() = StackTraces.remove_frames!(stacktrace(), StackTracesTestMod)
 end
 
-# Test that `removes_frames!` can correctly remove frames from within the module
+# Test that `remove_frames!` can correctly remove frames from within the module
 trace = StackTracesTestMod.unfiltered_stacktrace()
 @test occursin("unfiltered_stacktrace", string(trace))
 
@@ -233,6 +233,14 @@ struct F49231{a,b,c,d,e,f,g} end
     @test tdl(str, 105) == "F49231{Vector,Val{('}','}')},Vector{Vector{Vector{…}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}"
     @test tdl(str, 85) == "F49231{Vector,Val{…},Vector{…},Tuple{…},Int,Int,Int}"
 
+    # a brace inside quotes, also after an escaped quote, does not count as nesting
+    str = "F{Val{\"\\\"}\"},Int}"
+    @test tdl(str, 0, maxdepth = 1) == "F{…}"
+    @test tdl(str, 0, maxdepth = 2) == "F{Val{…},Int}"
+    str = "F{Val{'\\''},Val{'}'}}"
+    @test tdl(str, 0, maxdepth = 1) == "F{…}"
+    @test tdl(str, 0, maxdepth = 2) == "F{Val{…},Val{…}}"
+
     # Stacktrace
     a = UInt8(81):UInt8(160)
     b = view(a, 1:64)
@@ -254,6 +262,32 @@ struct F49231{a,b,c,d,e,f,g} end
     end
     str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,132)))
     @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
+end
+
+# 33457: generator/comprehension lambda should, at the very least, not surface a
+# nonsense frame
+let st = nothing
+    try
+        [undef_var for _ in 1:10]
+    catch _
+        st = stacktrace(catch_backtrace())
+    end
+    @testset for frame in st
+        @test frame.line > 0
+        @test frame.file != :none
+    end
+end
+
+let st = nothing
+    try
+        collect(undef_var for _ in 1:10)
+    catch _
+        st = stacktrace(catch_backtrace())
+    end
+    @testset for frame in st
+        @test frame.line > 0
+        @test frame.file != :none
+    end
 end
 
 @testset "Base.StackTraces docstrings" begin
@@ -351,4 +385,34 @@ let st = try
     @test any(st) do sf
         sf.func === :f_innermost2 && sf.line == f_innermost2_line && sf.linfo isa Core.MethodInstance && sf.inlined
     end
+end
+
+@inline f_inner3(x) = x > 0 ? x : error("neg: $x")
+function f_parent3(a, b, c, d)
+    s = 0
+    @noinline begin   # keep `+` as invokes so codelocs has `to=0` entries
+        s += a; s += b; s += c; s += d
+    end
+    return f_inner3(s)
+end
+let st = try f_parent3(1, 2, 3, -10) catch; stacktrace(catch_backtrace()) end
+    sf = only(filter(sf -> sf.func === :f_inner3 && sf.inlined, st))
+    @test sf.linfo isa Core.MethodInstance
+    @test sf.linfo.def === which(f_inner3, (Int,))
+end
+
+# The generated inner method has no source location of its own.
+macro wrap_in_closure(f)
+    body = f.args[2]
+    inner = Expr(:function, :(inner()), Expr(:block, Expr(:meta, :inline), body))
+    esc(Expr(:function, f.args[1], Expr(:block, __source__, inner, :inner)))
+end
+@wrap_in_closure function f_wrapped4()
+    error("boom")
+end
+f_wrapped4_line = (@__LINE__) - 2
+let st = try f_wrapped4()() catch; stacktrace(catch_backtrace()) end
+    sf = st[findfirst(sf -> sf.line == f_wrapped4_line, st)]
+    @test sf.file === Symbol(@__FILE__)
+    @test sf.linfo.def === only(methods(f_wrapped4()))
 end

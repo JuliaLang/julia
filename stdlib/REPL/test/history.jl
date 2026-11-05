@@ -3,12 +3,14 @@
 using Test
 using REPL
 using Dates
+using Base64: base64encode
 
 using REPL.History
 using REPL.History: HistoryFile, HistEntry, update!,
-    ConditionSet, FilterSpec, filterchunkrev!, ismorestrict,
+    ConditionSet, FilterSpec, filterchunkrev!, ismorestrict, matchregions,
     SelectorState, componentrows, countlines_selected, hoveridx, ishover, gethover,
-    candidates, movehover, toggleselection, fullselection, addcache!
+    candidates, movehover, toggleselection, fullselection, addcache!, sync_selection!,
+    boxedcontent, highlightcand
 
 const HISTORY_SAMPLE_FORMAT_1 = """
 # time: 2020-10-31 05:16:39 AWST
@@ -281,124 +283,123 @@ end
                 empty!(results)
                 cset = ConditionSet("hello")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, entries, spec, seen) == 0
+                @test filterchunkrev!(results, entries, spec) == 0
                 @test results == [entries[1], entries[7]]
                 empty!(results)
                 cset2 = ConditionSet("world")
                 spec2 = FilterSpec(cset2)
-                empty!(seen)
-                @test filterchunkrev!(results, entries, spec2, seen) == 0
+                @test filterchunkrev!(results, entries, spec2) == 0
                 @test results == [entries[1], entries[7]]
                 empty!(results)
                 cset3 = ConditionSet("World")
                 spec3 = FilterSpec(cset3)
-                empty!(seen)
-                @test filterchunkrev!(results, entries, spec3, seen) == 0
+                @test filterchunkrev!(results, entries, spec3) == 0
                 @test results == [entries[7]]
             end
             @testset "Exact" begin
                 empty!(results)
                 cset = ConditionSet("=test")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, entries, spec, seen; maxresults = 2) == 5
+                @test filterchunkrev!(results, entries, spec; maxresults = 2) == 5
                 @test results == [entries[6], entries[9]]
                 empty!(results)
                 cset2 = ConditionSet("=test case")
                 spec2 = FilterSpec(cset2)
-                empty!(seen)
-                @test filterchunkrev!(results, entries, spec2, seen) == 0
+                @test filterchunkrev!(results, entries, spec2) == 0
                 @test results == [entries[3]]
             end
             @testset "Negative" begin
                 empty!(results)
                 cset = ConditionSet("!hello ; !test;! cos")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, entries, spec, seen) == 0
+                @test filterchunkrev!(results, entries, spec) == 0
                 @test results == [entries[2], entries[7], entries[8]]
             end
             @testset "Initialism" begin
                 empty!(results)
                 cset = ConditionSet("`tc")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, entries, spec, seen) == 0
+                @test filterchunkrev!(results, entries, spec) == 0
                 @test results == [entries[3]]
                 empty!(results)
                 cset2 = ConditionSet("`fb")
                 spec2 = FilterSpec(cset2)
-                empty!(seen)
-                @test filterchunkrev!(results, entries, spec2, seen) == 0
+                @test filterchunkrev!(results, entries, spec2) == 0
                 @test results == [entries[8]]
+                # Initials start a word, follow underscores, or begin a camelCase hump
+                isinitialism(q, s) = all(rx -> occursin(rx, s), FilterSpec(ConditionSet("`" * q)).regexps)
+                for s in ("foo bar", "foo_bar", "_foo_bar", "fooBar", "getF(bar)", "(foo).bar")
+                    @test isinitialism("fb", s)
+                end
+                for s in ("afoo bar", "f bar", "foo b", "bar foo")
+                    @test !isinitialism("fb", s)
+                end
+                @test isinitialism("fb", "false):iBar")
+                @test isinitialism("λf", "λx fy")
             end
             @testset "Regexp" begin
                 empty!(results)
                 cset = ConditionSet("/^c.s\\b")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, entries, spec, seen) == 0
+                @test filterchunkrev!(results, entries, spec) == 0
                 @test results == [entries[4], entries[5]]
             end
             @testset "Mode" begin
                 empty!(results)
                 cset = ConditionSet("shell>")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, entries, spec, seen) == 0
+                @test filterchunkrev!(results, entries, spec) == 0
                 @test results == [entries[7]]
             end
             @testset "Fuzzy" begin
                 empty!(results)
                 cset = ConditionSet("~cs")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, entries, spec, seen) == 0
+                @test filterchunkrev!(results, entries, spec) == 0
                 @test results == entries[3:6]
             end
-            @testset "Uniqueness" begin
-                empty!(results)
-                # Create entries with duplicate content in the same mode
-                dup_entries = [
-                    HistEntry(:julia, now(UTC), "println(\"hello\")", 1),
-                    HistEntry(:julia, now(UTC), "cos(2π)", 2),
-                    HistEntry(:julia, now(UTC), "println(\"hello\")", 3),  # duplicate
-                    HistEntry(:julia, now(UTC), "sin(π)", 4),
-                    HistEntry(:julia, now(UTC), "cos(2π)", 5),  # duplicate
-                    HistEntry(:julia, now(UTC), "println(\"hello\")", 6),  # duplicate
-                    HistEntry(:julia, now(UTC), "tan(π/4)", 7),
-                ]
-                # When filtering with seen Set, duplicates are removed
-                cset = ConditionSet("cos")
-                spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, dup_entries, spec, seen) == 0
-                # Should only get unique entries matching the filter
-                # Since we iterate in reverse (7->1), we keep the most recent occurrence of each unique content
-                @test length(results) == 1
-                @test results[1] == dup_entries[5]  # cos(2π) - most recent
-                # When browsing without filtering, duplicates are kept
-                empty!(results)
-                append!(results, dup_entries)
-                @test length(results) == 7  # All entries, including duplicates
-                @test results == dup_entries
-                # Test that same content in different modes is NOT deduplicated
-                empty!(results)
-                mode_entries = [
-                    HistEntry(:julia, now(UTC), "ls", 1),
-                    HistEntry(:shell, now(UTC), "ls", 2),
-                    HistEntry(:julia, now(UTC), "ls", 3),  # duplicate in :julia mode
-                    HistEntry(:shell, now(UTC), "pwd", 4),
-                ]
-                empty!(seen)
-                cset3 = ConditionSet("ls")
-                spec3 = FilterSpec(cset3)
-                @test filterchunkrev!(results, mode_entries, spec3, seen) == 0
-                @test length(results) == 2  # "ls" from :julia and "ls" from :shell
-                @test results[1] == mode_entries[2]  # :shell ls
-                @test results[2] == mode_entries[3]  # :julia ls (most recent)
+            @testset "Resumption" begin
+                many = [HistEntry(:julia, now(UTC), "foo $i", i) for i in 1:500]
+                spec = FilterSpec(ConditionSet("foo"))
+                function filterresumed(; maxresults = length(many), maxtime = Inf)
+                    found = HistEntry[]
+                    idx = filterchunkrev!(found, many, spec; maxresults, maxtime)
+                    while idx != 0
+                        idx = filterchunkrev!(found, many, spec, idx; maxtime)
+                    end
+                    found
+                end
+                # Stopping early, by result count or by time, must neither skip
+                # nor repeat entries, wherever that falls relative to batch boundaries.
+                for maxresults in (1, 7, 10, 43, 499, 500, 1000)
+                    @test filterresumed(; maxresults) == many
+                end
+                @test filterresumed(; maxtime = 0.0) == many
             end
+        end
+        @testset "matchregions with multibyte characters" begin
+            # Handle search for multi-byte characters (issue 61653)
+            spec_ab = FilterSpec(ConditionSet("=αβ"))
+            @test matchregions(spec_ab, "αβ") == [1:3]
+            # Two exact matches separated by a single space should merge, even when
+            # the boundary characters are multibyte
+            spec_two = FilterSpec(ConditionSet("=αβ;=γδ"))
+            @test matchregions(spec_two, "αβ γδ") == [1:8]
+            # Adjacent multibyte matches (no space) must not merge
+            @test matchregions(spec_two, "αβγδ") == [1:3, 5:7]
+            # Multi-character gap must not merge
+            @test matchregions(spec_two, "αβ  γδ") == [1:3, 7:9]
+            # ASCII sanity: single-space-separated matches still merge
+            spec_ascii = FilterSpec(ConditionSet("=foo;=bar"))
+            @test matchregions(spec_ascii, "foo bar") == [1:7]
+        end
+        @testset "matchregions at end of string" begin
+            # Duplicate terms matching at the end of the string (issue 62341)
+            spec_dup = FilterSpec(ConditionSet("test\\; test\\;"))
+            @test matchregions(spec_dup, "test test;") == [6:10, 6:10]
+            # Overlapping matches extending to the end of the string
+            spec_overlap = FilterSpec(ConditionSet("=st;=test"))
+            @test matchregions(spec_overlap, "test") == [1:4, 3:4]
         end
         @testset "Strictness comparison" begin
             c1 = ConditionSet("hello world")
@@ -526,6 +527,18 @@ end
             @test cands.active.entries == few
         end
     end
+    @testset "Rendering" begin
+        # Tabs are zero-width to `textwidth` but not to terminals, so must not be displayed
+        for mode in (:julia, :shell)
+            @test '\t' ∉ String(highlightcand(HistEntry(mode, now(UTC), "a\tb", 1)))
+        end
+        # Every boxed line must exactly fill the box
+        for content in (" "^200 * "\nx", "x\n" * " "^100 * "\n" * "y"^100, "x\n" * " "^100 * "y")
+            io = IOBuffer()
+            boxedcontent(io, Base.AnnotatedString(content), 40, 10)
+            @test all(==(40) ∘ textwidth, eachsplit(chomp(String(take!(io))), '\n'))
+        end
+    end
 end
 
 @testset "Search state manipulation" begin
@@ -648,6 +661,34 @@ end
             @test fullselection(state) == (mode = :julia, text = "old_1")
         end
     end
+    @testset "Selection as candidates arrive" begin
+        many = [HistEntry(:julia, now(UTC), "foo $i", i) for i in 1:100]
+        function filterstate(gathered = HistEntry[])
+            state = SelectorState((30, 80), "foo", FilterSpec(ConditionSet("foo")), HistEntry[], gathered)
+            filterchunkrev!(state, many; maxresults = 10)
+        end
+        # Selections made while filtering is incomplete keep their entries
+        state, idx = filterstate()
+        state = toggleselection(state)
+        while idx != 0
+            state, idx = filterchunkrev!(state, many, idx)
+        end
+        @test fullselection(state).text == "foo 100"
+        # Carried-over entries become active once filtering reaches them
+        state, idx = filterstate([many[50]])
+        while idx != 0
+            state, idx = filterchunkrev!(state, many, idx)
+        end
+        @test isempty(state.selection.gathered)
+        @test fullselection(state).text == "foo 50"
+        # Carried-over entries become active in an unfiltered list too, so they can be deselected
+        state = SelectorState((30, 80), "", FilterSpec(), HistEntry[], [many[100]])
+        append!(state.candidates, many)
+        state = sync_selection!(state, length(many))
+        @test state.selection == (active = [100], gathered = HistEntry[])
+        @test state.scroll == 0
+        @test isempty(toggleselection(state).selection.active)
+    end
     @testset "addcache!" begin
         cache, state = Int[], zero(UInt8)
         for i in 1:128
@@ -657,4 +698,179 @@ end
     end
 end
 
-# TODO: Prompt handling/events, terminal rendering, and end-to-end integration tests
+# Run an interactive search in a fake terminal. The caller is given one function
+# to type keys and one to wait until some text has been displayed.
+function searchhistory(interact::Function, entries::Vector{HistEntry};
+                       size = (30, 80), props = REPL.LineEdit.TerminalProperties())
+    input, output = Pipe(), Pipe()
+    Base.link_pipe!(input, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
+    term = REPL.Terminals.TTYTerminal("dumb", input.out, IOContext(output.in, :displaysize => size), devnull)
+    hist = HistoryFile()
+    append!(hist.records, entries)
+    search = @async runsearch(hist, term, "", props)
+    shown = IOBuffer()
+    function waitfor(text)
+        got = readuntil(output.out, text, keep = true)
+        write(shown, got)
+        endswith(got, text) || error("output ended before $(repr(text)) was displayed")
+    end
+    interact(keys -> write(input.in, keys), waitfor)
+    result = fetch(search)
+    close(output.in)
+    close(input.in)
+    write(shown, read(output.out))
+    result, String(take!(shown))
+end
+searchhistory(entries::Vector{HistEntry}, keys::String; kwargs...) =
+    searchhistory((type, _) -> type(keys), entries; kwargs...)
+
+@testset "Interactive search" begin
+    entries = [HistEntry(:julia, now(UTC), "foo $i", i) for i in 1:40]
+    push!(entries, HistEntry(:shell, now(UTC), "ls bar", 41))
+    nothingselected = (mode = nothing, text = "")
+    @testset "Navigation" begin
+        @test searchhistory(entries, "\r")[1] == (mode = :shell, text = "ls bar")
+        @test searchhistory(entries, "\e[A\e[A\r")[1].text == "foo 39"
+        @test searchhistory(entries, "\x10\x10\x0e\r")[1].text == "foo 40"
+        @test searchhistory(entries, "\e[5~\r")[1].text == "foo 29"
+        @test searchhistory(entries, "\e[5~\e[6~\r")[1].text == "ls bar"
+        @test searchhistory(entries, "\e<\r")[1].text == "foo 1"
+        @test searchhistory(entries, "\e<\e>\r")[1].text == "ls bar"
+        result, shown = searchhistory(entries, "\r")
+        @test occursin("[41/41]", shown)
+        @test occursin("try ? for help", shown)
+        @test occursin("shell> ls bar", shown)
+        @test occursin("Ctrl+S to save", shown)
+        result, shown = searchhistory(entries, "\f\r")
+        @test occursin("\e[H\e[2J", shown)
+        @test result.text == "ls bar"
+        # Everything is drawn on the search terminal, not on the process output
+        mktemp() do path, io
+            redirect_stdout(io) do
+                searchhistory(entries, "\r")
+                searchhistory(entries, "\x19")
+            end
+            close(io)
+            @test read(path, String) == ""
+        end
+    end
+    @testset "Aborting" begin
+        for keys in ("\x03", "\x04", "\a", "\e\e", "\e[A\t\x03")
+            @test searchhistory(entries, keys)[1] == nothingselected
+        end
+    end
+    @testset "Filtering" begin
+        result, shown = searchhistory(entries, "bar\r")
+        @test result == (mode = :shell, text = "ls bar")
+        @test occursin("[1/1]", shown)
+        @test occursin("words", shown)
+        @test searchhistory(entries, "7 foo\r")[1].text == "foo 37"
+        @test searchhistory(entries, "shell>\r")[1].text == "ls bar"
+        @test searchhistory(entries, "Shell>\r")[1].text == "ls bar"
+        @test searchhistory(entries, "nomatch\r")[1] == nothingselected
+        for (query, hint) in ("=foo" => "exact", "!bar" => "negated", "`f" => "initialism",
+                              "/fo+" => "regexp", "~fo" => "fuzzy", "foo;" => "separator",
+                              "foo;=4" => "exact", "bar;!foo" => "negated",
+                              "julia>" => "mode", "foo;julia>" => "mode")
+            @test occursin(hint, searchhistory(entries, query * "\r")[2])
+        end
+        # Removing characters widens the search again
+        @test searchhistory(entries, "bar\x7f\x7f\x7f\r")[1].text == "ls bar"
+        # Narrowing a finished search reuses its results
+        result = searchhistory(entries) do type, waitfor
+            type("foo")
+            waitfor("words [40/40]")
+            type(" 1\r")
+        end[1]
+        @test result.text == "foo 31"
+    end
+    @testset "Help" begin
+        for (query, help) in ("?" => "Enter a search term", "??" => "Search your REPL history")
+            result = searchhistory(entries) do type, waitfor
+                type(query)
+                waitfor(help)
+                type("\x7f"^length(query) * "\r")
+            end[1]
+            @test result.text == "ls bar"
+        end
+    end
+    @testset "Selection" begin
+        result, shown = searchhistory(entries, "\e[A\e[A\t\t\r")
+        @test result == (mode = :julia, text = "foo 39\nfoo 40")
+        @test occursin("│ foo 39", shown) && occursin("│ foo 40", shown)
+        @test searchhistory(entries, "\t\t\r")[1].text == "ls bar"
+        # Selected entries are carried over into a new search
+        result, shown = searchhistory(entries, "\e[A\t\e[A\e[A\tbar\t\r")
+        @test result == (mode = :julia, text = "foo 39\nfoo 40\nls bar")
+        @test occursin("carried over", shown)
+        @test occursin("words [•/1]", shown)
+    end
+    @testset "Long entries" begin
+        long = [HistEntry(:julia, now(UTC), "x = " * "a"^100 * " + needle", 1),
+                HistEntry(:julia, now(UTC), join(("line$i" for i in 1:30), '\n'), 2),
+                HistEntry(:shell, now(UTC), "echo " * "b"^100 * " haystack " * "c"^100, 3)]
+        result, shown = searchhistory(long, "needle\r")
+        @test result.text == long[1].content
+        @test occursin("…", shown) && occursin("needle", shown)
+        result, shown = searchhistory(long, "haystack\r")
+        @test result.text == long[3].content
+        @test occursin("…bbb", shown) && occursin("haystack ccc", shown)
+        result, shown = searchhistory(long, "\t\e[A\t\e[A\e[A\t\r"; size = (30, 16))
+        @test result == (mode = :julia, text = join((e.content for e in long), '\n'))
+        result, shown = searchhistory(long, "\e[A\e[A\t\t\r")
+        @test result.text == long[1].content * '\n' * long[2].content
+        @test occursin("lines hidden", shown)
+    end
+    @testset "Incremental filtering" begin
+        # An old selected entry is only found after the first batch of results is shown
+        many = [HistEntry(:julia, now(UTC), "foo $i", i) for i in 1:2000]
+        result = searchhistory(many) do type, waitfor
+            type("\e<\tf")
+            waitfor("words [2000/2000]")
+            type("\r")
+        end[1]
+        @test result.text == "foo 1"
+    end
+    @testset "Saving" begin
+        osc52 = REPL.LineEdit.TerminalProperties()
+        osc52.da1 = [62, 52]
+        result, shown = searchhistory(entries, "\x19"; props = osc52)
+        @test result == nothingselected
+        @test occursin("\e]52;c;$(base64encode("ls bar"))\e\\", shown)
+        @test occursin("Copied 1 line to clipboard", shown)
+        result, shown = searchhistory(entries, "\e[A\e[A\t\t\x13\r"; props = osc52)
+        @test result == nothingselected
+        @test occursin("save to", shown)
+        @test occursin("\e]52;c;$(base64encode("foo 39\nfoo 40"))\e\\", shown)
+        @test occursin("Copied 2 lines to clipboard", shown)
+        # Escape sequences in the save menu do not change the choice
+        result, shown = searchhistory(entries, "\x13\e[A\e]11;rgb:0/0/0\a\r"; props = osc52)
+        @test occursin("\e]52;c;$(base64encode("ls bar"))\e\\", shown)
+        # The clipboard can be offered once the terminal reports it
+        props = REPL.LineEdit.TerminalProperties()
+        result, shown = searchhistory(entries, "\x13\e[?62;52c\r"; props)
+        @test props.da1 == [62, 52]
+        @test occursin("\e]52;c;$(base64encode("ls bar"))\e\\", shown)
+        mktempdir() do dir
+            path = joinpath(dir, "selection.jl")
+            result, shown = searchhistory(entries, "\e[A\t\x13\t\r$path\n"; props = osc52)
+            @test result == nothingselected
+            @test read(path, String) == "foo 40\n"
+            @test occursin("Wrote 1 selected line to", shown)
+            result, shown = searchhistory(entries, "\x13\t\r\n"; props = osc52)
+            @test occursin("History selection aborted", shown)
+            @test read(path, String) == "foo 40\n"
+            # Saving to an existing file appends, starting on a new line
+            searchhistory(entries, "\x13\t\r$path\n"; props = osc52)
+            @test read(path, String) == "foo 40\nls bar\n"
+            write(path, "x = 1")
+            searchhistory(entries, "\x13\t\r$path\n"; props = osc52)
+            @test read(path, String) == "x = 1\nls bar\n"
+        end
+        # Leaving the save menu returns to the search
+        for keys in ("\x13\x03\r", "\x13\e\e\r", "\x13\ex\x03\r")
+            @test searchhistory(entries, keys; props = osc52)[1].text == "ls bar"
+        end
+    end
+end

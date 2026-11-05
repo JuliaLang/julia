@@ -77,6 +77,13 @@ function startswith(a::DenseUTF8String, b::DenseUTF8String)
     end
 end
 
+# nothrow+foldable: `String`/`SubString{String}` buffers are immutable, the
+# byte-wise `_memcmp` is bounded by `sizeof(b) ≤ ncodeunits(a)`, and
+# `nextind(a, cub)` operates on a valid index (`0 ≤ cub ≤ ncodeunits(a)`).
+@assume_effects :nothrow :foldable function startswith(a::Union{String,SubString{String}}, b::Union{String,SubString{String}})
+    @invoke startswith(a::DenseUTF8String, b::DenseUTF8String)
+end
+
 """
     startswith(io::IO, prefix::Union{AbstractString,Base.Chars})
 
@@ -108,10 +115,17 @@ function endswith(a::DenseUTF8String, b::DenseUTF8String)
     end
 end
 
-"""
-    contains(haystack::AbstractString, needle)
+# nothrow+foldable: see `startswith` above; `pointer(a, astart)` is in bounds
+# (`1 ≤ astart ≤ ncodeunits(a)+1`), and `thisind(a, astart)` accepts the same range.
+@assume_effects :nothrow :foldable function endswith(a::Union{String,SubString{String}}, b::Union{String,SubString{String}})
+    @invoke endswith(a::DenseUTF8String, b::DenseUTF8String)
+end
 
-Return `true` if `haystack` contains `needle`.
+"""
+    contains(haystack::AbstractString, needle::Union{AbstractString,AbstractPattern,AbstractChar})
+
+Return `true` if `haystack` contains `needle`. If `needle` is a regular expression, check
+whether `haystack` contains a match.
 This is the same as `occursin(needle, haystack)`, but is provided for consistency with
 `startswith(haystack, needle)` and `endswith(haystack, needle)`.
 
@@ -373,9 +387,7 @@ end
         has_cr = has_lf & two_bytes & (@inbounds(cu[ncu - two_bytes]) == 0x0d)
         ncu - (has_lf + has_cr)
     end
-    off = s isa String ? 0 : s.offset
-    par = s isa String ? s : s.string
-    @inbounds @inline SubString{String}(par, off, len, Val{:noshift}())
+    @inbounds raw_substring(s, 1, len)
 end
 """
     lstrip([pred=isspace,] str::AbstractString)::SubString
@@ -498,6 +510,19 @@ julia> lpad("March", 10)
 """
 lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = lpad(string(s)::AbstractString, n, string(p))
 
+# Pad for the last `0 < r < textwidth(p)` columns: the shortest prefix of a string pad
+# covering `r` columns, or the whole char for a char pad. When `r` falls inside a wide
+# character, the pad overshoots the requested width.
+function _pad_remainder(p::AbstractString, r::Int)
+    width = 0
+    for (i, c) in pairs(p)
+        width += Int(textwidth(c))::Int
+        width >= r && return @view p[begin:i]
+    end
+    return SubString(p) # unreachable: caller guarantees r < textwidth(p)
+end
+_pad_remainder(p::AbstractChar, r::Int) = p
+
 function lpad(
     s::Union{AbstractChar,AbstractString},
     n::Integer,
@@ -515,7 +540,7 @@ function lpad(
             (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
     end
     q, r = divrem(m, l)
-    r == 0 ? stringfn(p^q, s) : stringfn(p^q, first(p, r), s)
+    r == 0 ? stringfn(p^q, s) : stringfn(p^q, _pad_remainder(p, r), s)
 end
 
 """
@@ -555,7 +580,7 @@ function rpad(
             (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
     end
     q, r = divrem(m, l)
-    r == 0 ? stringfn(s, p^q) : stringfn(s, p^q, first(p, r))
+    r == 0 ? stringfn(s, p^q) : stringfn(s, p^q, _pad_remainder(p, r))
 end
 
 """
@@ -944,7 +969,11 @@ split(str::AbstractString;
     rsplit(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
     rsplit(s::AbstractString, chars; limit::Integer=0, keepempty::Bool=true)
 
-Similar to [`split`](@ref), but starting from the end of the string.
+Similar to [`split`](@ref), but starting from the end of the string. The splits are found
+from right to left (which matters e.g. when `limit` is given), but the substrings are still
+returned in the order in which they appear in `s`.
+
+See also [`eachrsplit`](@ref), which yields the substrings from right to left.
 
 # Examples
 ```jldoctest

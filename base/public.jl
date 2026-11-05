@@ -22,8 +22,27 @@ public
     ImmutableDict,
     OneTo,
     Pairs,
+    SignalCondition,
     LogRange,
     UUID,
+
+# signals
+    SIGHUP,
+    SIGINT,
+    SIGQUIT,
+    SIGKILL,
+    SIGUSR1,
+    SIGUSR2,
+    SIGPIPE,
+    SIGALRM,
+    SIGTERM,
+    SIGCHLD,
+    SIGCONT,
+    SIGWINCH,
+    SIGINFO,
+    sigrtmin,
+    sigrtmax,
+    signal_name,
 
 # Semaphores
     Semaphore,
@@ -35,6 +54,8 @@ public
     has_offset_axes,
     require_one_based_indexing,
     memoryindex,
+    unsetindex!,
+    unsetindex_atomic!,
 
 # collections
     IteratorEltype,
@@ -59,6 +80,7 @@ public
     get_extension,
     isambiguous,
     isexpr,
+    isfieldatomic,
     isidentifier,
     issingletontype,
     identify_package,
@@ -87,6 +109,9 @@ public
     uabs,
     mul_hi,
 
+# Numbers
+    decompose,
+
 # C interface
     cconvert,
     unsafe_convert,
@@ -98,6 +123,7 @@ public
 # Macros
     @assume_effects,
     @constprop,
+    @cpu_supports,
     @locals,
     @propagate_inbounds,
     @__doc__,
@@ -113,6 +139,8 @@ public
 
 # Strings
     escape_raw_string,
+    raw_substring,
+    unannotate,
 
 # Chars
     ismalformed,
