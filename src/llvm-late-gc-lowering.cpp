@@ -2506,24 +2506,39 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
         const BBState &BBS = S.BBStates[&BB];
         if (!BBS.HasSafepoint)
             continue;
+        bool HasLiveSafepoint = false;
+        for (int Safepoint = BBS.FirstSafepoint; Safepoint >= BBS.LastSafepoint; --Safepoint) {
+            if (!S.LiveSets[Safepoint].empty()) {
+                HasLiveSafepoint = true;
+                break;
+            }
+        }
+        bool ResetDeadSlots = !isa<UnreachableInst>(BB.getTerminator()) || !S.ReturnsTwice.empty();
+        if (!HasLiveSafepoint && !ResetDeadSlots)
+            continue;
         LargeSparseBitVector LiveIn;
         AddInPredecessorLiveOuts(&BB, LiveIn, S);
         const LargeSparseBitVector *LastLive = &LiveIn;
         for (int Safepoint = BBS.FirstSafepoint; Safepoint >= BBS.LastSafepoint; --Safepoint) {
             const LargeSparseBitVector &NowLive = S.LiveSets[Safepoint];
-            // reset slots which are no longer alive
-            for (int Idx : *LastLive) {
-                if (Colors[Idx] >= PreAssignedColors && !HasBitSet(NowLive, Idx)) {
-                    PlaceGCFrameReset(S, Idx, MinColorRoot, Colors, GCFrame,
-                        S.SafepointNumbering[Safepoint]);
-                }
-            }
+            SmallSet<int, 8> AssignedColors;
             // store values which are alive in this safepoint but
             // haven't been stored in the GC frame before
             for (int Idx : NowLive) {
                 if (!HasBitSet(*LastLive, Idx)) {
                     PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame,
                       S.SafepointNumbering[Safepoint]);
+                    AssignedColors.insert(Colors[Idx]);
+                }
+            }
+            if (ResetDeadSlots) {
+                // reset slots which are no longer alive and weren't overwritten above
+                for (int Idx : *LastLive) {
+                    if (Colors[Idx] >= PreAssignedColors && !HasBitSet(NowLive, Idx) &&
+                        !AssignedColors.count(Colors[Idx])) {
+                        PlaceGCFrameReset(S, Idx, MinColorRoot, Colors, GCFrame,
+                            S.SafepointNumbering[Safepoint]);
+                    }
                 }
             }
             LastLive = &NowLive;
@@ -2597,17 +2612,12 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
         Align FrameAlign(16);
-        auto replace_alloca = [this, gcframe, &AllocaSlot, &FrameAlign, T_int32](AllocaInst *&AI) {
+        auto replace_alloca = [this, gcframe, &AllocaSlot, &FrameAlign, T_int32, &S, F](AllocaInst *&AI) {
             // Preserve both the alloca's alignment and its offset within the frame.
             FrameAlign = std::max(FrameAlign, AI->getAlign());
             unsigned align = AI->getAlign().value() / sizeof(void*); // TODO: use DataLayout pointer size
             if (align > 1)
                 AllocaSlot = LLT_ALIGN(AllocaSlot, align);
-            Instruction *slotAddress = CallInst::Create(
-                getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
-            slotAddress->insertAfter(gcframe);
-            slotAddress->takeName(AI);
 
             // Check for lifetime intrinsics on this alloca, we can't keep them
             // because we're changing the semantics
@@ -2622,6 +2632,49 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
             for (CallInst *II : ToDelete) {
                 II->eraseFromParent();
             }
+
+            // If all remaining uses are dominated by a non-entry basic block,
+            // sink the slot address calculation to that block instead of placing
+            // it in the entry block.
+            BasicBlock *UseBB = nullptr;
+            bool CanSink = !AI->use_empty();
+            for (User *U : AI->users()) {
+                auto *UI = dyn_cast<Instruction>(U);
+                if (!UI || isa<PHINode>(UI)) {
+                    CanSink = false;
+                    break;
+                }
+                BasicBlock *BB = UI->getParent();
+                if (BB == &F->getEntryBlock() || pred_empty(BB)) {
+                    CanSink = false;
+                    break;
+                }
+                if (!UseBB) {
+                    UseBB = BB;
+                } else if (UseBB != BB) {
+                    if (!S.DT)
+                        S.DT = &GetDT();
+                    if (!S.DT->isReachableFromEntry(UseBB) || !S.DT->isReachableFromEntry(BB)) {
+                        CanSink = false;
+                        break;
+                    }
+                    UseBB = S.DT->findNearestCommonDominator(UseBB, BB);
+                    if (!UseBB || UseBB == &F->getEntryBlock()) {
+                        CanSink = false;
+                        break;
+                    }
+                }
+            }
+
+            Instruction *slotAddress = CallInst::Create(
+                getOrDeclare(jl_intrinsics::getGCFrameSlot),
+                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
+            if (CanSink && UseBB)
+                slotAddress->insertBefore(UseBB->getFirstInsertionPt());
+            else
+                slotAddress->insertAfter(gcframe);
+            slotAddress->takeName(AI);
+
             assert(slotAddress->getType() == AI->getType());
             AI->replaceAllUsesWith(slotAddress);
             AI->eraseFromParent();
@@ -2639,7 +2692,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 auto slotAddress = CallInst::Create(
                     getOrDeclare(jl_intrinsics::getGCFrameSlot),
                     {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
-                slotAddress->insertAfter(gcframe);
+                slotAddress->insertBefore(SI->getIterator());
                 auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
                 auto Elem = MaybeExtractScalar(S, ValExpr, SI);
                 assert(Elem->getType() == T_prjlvalue);
