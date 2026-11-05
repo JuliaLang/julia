@@ -142,7 +142,7 @@ function define_default_editors()
     for (editors, wait) in [
         [[r"\bemacs"], false],
         [[r"\bemacs\b.*\s(-nw|--no-window-system)\b",
-          r"\bemacsclient\b.\s*-(-?nw|t|-?tty)\b"], true],
+          r"\bemacsclient\b.*\s-(-?nw|t|-?tty)\b"], true],
     ]
         define_editor(editors; wait) do cmd, path, line, column
             `$cmd +$line:$column $path`
