@@ -172,6 +172,8 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
     S
 end
 
+SharedArray{T,N}(d::NTuple{N,Integer}; kwargs...) where {T,N} =
+    SharedArray{T,N}(map(Int, d); kwargs...)
 SharedArray{T,N}(I::Integer...; kwargs...) where {T,N} =
     SharedArray{T,N}(I; kwargs...)
 SharedArray{T}(d::NTuple; kwargs...) where {T} =

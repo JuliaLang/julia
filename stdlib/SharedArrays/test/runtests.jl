@@ -653,6 +653,10 @@ end
     end
     @test_throws InexactError SharedArray{Int}([1.5])
     @test size(SharedArray{Int}(1, 2, 3, 4)) == (1, 2, 3, 4)
+    @test size(SharedArray{Int}(Int8(2))) == (2,)
+    @test size(SharedArray{Int}(Int8(2), Int8(3))) == (2, 3)
+    @test size(SharedArray{Int}((Int8(2), Int8(3)))) == (2, 3)
+    @test size(SharedArray{Int,2}(Int8(2), Int8(3))) == (2, 3)
 
     for (S, T, sz) in ((SharedArrays.shmem_rand(1:3, 4), Int, (4,)),
                        (SharedArrays.shmem_rand(1:3, 4, 2), Int, (4, 2)),
