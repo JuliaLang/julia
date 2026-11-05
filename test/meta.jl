@@ -380,6 +380,7 @@ using Core: SSAValue, SlotNumber, PhiNode, PhiCNode, PiNode, UpsilonNode, EnterN
         @test phi.values[1] === SSAValue(11)
         @test !isassigned(phi.values, 2)
     end
+    @test inl(PhiCNode(Any[SSAValue(1), SSAValue(2)])) == PhiCNode(Any[SSAValue(11), SSAValue(12)])
 
     @test inl(Expr(:boundscheck); bc=:propagate) == Expr(:boundscheck)
     @test inl(Expr(:boundscheck); bc=:off) === false

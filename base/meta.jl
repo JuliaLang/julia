@@ -512,8 +512,9 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         )
     end
     if isa(x, Core.PhiCNode)
-        _partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
-                           slot_offset, statement_offset, boundscheck)
+        partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
+                          slot_offset, statement_offset, boundscheck)
+        return x
     end
     if isa(x, Core.ReturnNode)
        # Unreachable doesn't have val defined
