@@ -18,6 +18,12 @@ An array of the command line arguments passed to Julia, as strings.
 """
 const ARGS = String[]
 
+function uninit_args()
+    empty!(Core.ARGS)
+    empty!(ARGS)
+    nothing
+end
+
 """
     exit(code=0)
 
@@ -173,6 +179,11 @@ function init_depot_path()
     nothing
 end
 
+function uninit_depot_path()
+    empty!(DEPOT_PATH)
+    nothing
+end
+
 ## LOAD_PATH & ACTIVE_PROJECT ##
 
 # JULIA_LOAD_PATH: split on `:` (or `;` on Windows)
@@ -294,6 +305,11 @@ function init_load_path()
     append!(empty!(LOAD_PATH), paths)
 end
 
+function uninit_load_path()
+    empty!(LOAD_PATH)
+    nothing
+end
+
 function init_active_project()
     project = (JLOptions().project != C_NULL ?
         unsafe_string(JLOptions().project) :
@@ -303,6 +319,11 @@ function init_active_project()
         project == "" ? nothing :
         startswith(project, "@") ? load_path_expand(project) : abspath(expanduser(project))
     )
+end
+
+function uninit_active_project()
+    ACTIVE_PROJECT[] = nothing
+    nothing
 end
 
 function init_named_env!(path)
@@ -546,6 +567,52 @@ function _atexit(exitcode::Cint)
             println(stderr)
         end
     end
+end
+
+## system image setup ##
+
+# Seeds the current task's RNG with a fixed seed, in place of `Random.__init__` (an all-zero
+# state makes `rand(::UnitRange{Int})` hang)
+function init_build_rng()
+    task = current_task()
+    task.rngState0 = 0x5156087469e170ab
+    task.rngState1 = 0x7431eaead385992c
+    task.rngState2 = 0x503e1d32781c2608
+    task.rngState3 = 0x3a77f7189200c20b
+    task.rngState4 = 0x5502376d099035ae
+    ccall(:jl_gc_init_finalizer_rng_state, Cvoid, ())
+    nothing
+end
+
+# Limited equivalent to `__init__` that sets up enough of the runtime to run top-level
+# code "normally".
+function __init_build()
+    global _atexit_hooks_finished = false
+    init_build_rng()
+    Sys.__init_build()
+    reinit_stdio()
+    init_depot_path()
+    init_load_path()
+    init_active_project()
+    init_debuginfo_source_paths()
+    init_frontend()
+    nothing
+end
+
+# Modifications to the global heap from __init_build() are (mostly) reversed
+# here, to avoid polluting the image.
+function __uninit_build()
+    uninit_toml_cache()
+    uninit_exec_options()
+    uninit_args()
+    uninit_frontend()
+    uninit_debuginfo_source_paths()
+    uninit_active_project()
+    uninit_load_path()
+    uninit_depot_path()
+    uninit_stdio()
+    Sys.__uninit_build()
+    nothing
 end
 
 ## postoutput: register post output hooks ##

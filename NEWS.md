@@ -166,6 +166,10 @@ Build system changes
   Build with `make checkbounds-pkgimages` to create a companion archive, or set
   `JULIA_CHECK_BOUNDS_PKGIMAGES=1` to bundle them ([#60054]).
 
+* `base/userimg.jl` is no longer supported, and the build now fails if it exists. To build a
+  system image with additional code, use PackageCompiler.jl, or run a script on top of an existing
+  system image with `julia --sysimage <image> --output-o <file> <script>`.
+
 New library functions
 ---------------------
 
