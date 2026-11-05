@@ -347,13 +347,6 @@ function release_positions(stream, positions)
 end
 
 #-------------------------------------------------------------------------------
-# Return true when a terminal (token) was emitted last at stream position `pos`
-function token_is_last(stream, pos)
-    # In the unified structure, check if the node at pos is a terminal
-    return pos.node_index > 0 && pos.node_index <= length(stream.output) &&
-           is_terminal(stream.output[pos.node_index])
-end
-
 function lookahead_token_first_byte(stream, i)
     i == 1 ? _next_byte(stream) : stream.lookahead[i-1].next_byte
 end
