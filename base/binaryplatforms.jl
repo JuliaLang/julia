@@ -81,6 +81,10 @@ struct Platform <: AbstractPlatform
             # default `call_abi` to `eabihf` on 32-bit ARM
             tags["call_abi"] = "eabihf"
         end
+        if arch ∈ ("wasm32", "wasm64") && "call_abi" ∉ keys(tags)
+            # default `call_abi` to C's ABI on linear memory
+            tags["call_abi"] = "linear"
+        end
 
         # If the user is asking for strict validation, do so.
         if validate_strict
@@ -265,6 +269,11 @@ function validate_tags(tags::Dict)
     if tags["os"] == "linux" && tags["arch"] ∈ ("armv7l", "armv6l")
         # If an ARM linux does not have `call_abi` set to something valid, be sad.
         if !haskey(tags, "call_abi") || tags["call_abi"] ∉ ("eabihf", "eabi")
+            throw_call_abi_mismatch()
+        end
+    elseif tags["arch"] ∈ ("wasm32", "wasm64")
+        # `linear`: C's ABI on linear memory; `gc`: code compiled to WasmGC
+        if !haskey(tags, "call_abi") || tags["call_abi"] ∉ ("linear", "gc")
             throw_call_abi_mismatch()
         end
     else
@@ -458,6 +467,9 @@ platforms with no explicit `call_abi` choices (which is most platforms).
 ```jldoctest
 julia> call_abi(Platform("armv7l", "Linux"))
 "eabihf"
+
+julia> call_abi(Platform("wasm32", "wasi"))
+"linear"
 
 julia> call_abi(Platform("x86_64", "macos"))
 ```
@@ -661,7 +673,10 @@ function libc_str(p::AbstractPlatform)
 end
 function call_abi_str(p::AbstractPlatform)
     cabi = call_abi(p)
-    cabi === nothing ? "" : string(cabi::Union{Symbol,String})
+    cabi === nothing && return ""
+    # WebAssembly's default ABI is implied; the other is a component of its own
+    arch(p) ∈ ("wasm32", "wasm64") && return cabi == "linear" ? "" : string("-", cabi)
+    return string(cabi::Union{Symbol,String})
 end
 
 Sys.isapple(p::AbstractPlatform) = os(p) == "macos"
@@ -733,6 +748,7 @@ const call_abi_mapping = Dict(
     "call_abi_nothing" => "",
     "eabihf" => "eabihf",
     "eabi" => "eabi",
+    "gc" => "-gc",
 )
 const libgfortran_version_mapping = Dict(
     "libgfortran_nothing" => "",

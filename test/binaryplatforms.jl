@@ -681,6 +681,18 @@ end
     @test !platforms_match(parse(Platform, "wasm32-unknown-wasip2"), p)
     @test !platforms_match(Platform("wasm64", "wasi"), p)
 
+    # The ABI: C on linear memory by default, implied in the triplet; WasmGC spelled out
+    @test call_abi(p) == "linear"
+    g = Platform("wasm32", "wasi"; os_version = v"1", call_abi = "gc")
+    @test triplet(g) == "wasm32-unknown-wasip1-gc"
+    @test parse(Platform, "wasm32-unknown-wasip1-gc") == g
+    @test !platforms_match(g, p)
+    @test !platforms_match(g, Platform("wasm32", "wasi"))
+    @test triplet(Platform("wasm64", "emscripten"; call_abi = "gc")) == "wasm64-unknown-emscripten-gc"
+    @test Platform("wasm32", "wasi"; call_abi = "gc", validate_strict = true) isa Platform
+    @test_throws ArgumentError Platform("wasm32", "wasi"; call_abi = "eabihf", validate_strict = true)
+    @test_throws ArgumentError Platform("x86_64", "linux"; call_abi = "gc", validate_strict = true)
+
     # Extra tags round-trip as for any platform
     q = Platform("wasm64", "wasi"; os_version = v"1", wasm_abi = "lp64")
     @test parse(Platform, triplet(q)) == q
