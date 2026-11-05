@@ -1954,7 +1954,6 @@ end
 refresh_line(s::BufferLike) = refresh_multi_line(s)
 refresh_line(s::BufferLike, termbuf::AbstractTerminal) = refresh_multi_line(termbuf, s)
 
-default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
 write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
