@@ -2415,6 +2415,9 @@ function write(s::BufferStream, a::Array; cancel::CancelTokenArg=DEFAULT_CANCEL)
     end
     return invoke(write, Tuple{IO, AbstractArray}, s, a)
 end
+writepartial(s::BufferStream, a::Vector{UInt8}; cancel::CancelTokenArg=DEFAULT_CANCEL) = write(s, a; cancel)
+writepartial(s::BufferStream, str::Union{String, SubString{String}}; cancel::CancelTokenArg=DEFAULT_CANCEL) = write(s, str; cancel)
+writepartial(s::BufferStream, a::Array; cancel::CancelTokenArg=DEFAULT_CANCEL) = write(s, a; cancel)
 function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
     # entry gate only (see the BufferStream `write` methods above)
     precheck_cancel_arg(cancel)

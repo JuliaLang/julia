@@ -667,6 +667,17 @@ end
     @test read(s, UInt8) == UInt8('b')
 end
 
+@testset "BufferStream writepartial" begin
+    s = Base.BufferStream()
+    @test writepartial(s, "ab") == 2
+    @test writepartial(s, SubString("xcx", 2, 2)) == 1
+    @test writepartial(s, UInt8[0x64]) == 1
+    @test writepartial(s, UInt8[0x65]; cancel=nothing) == 1
+    @test writepartial(s, [0x0066, 0x0067]) == 4
+    close(s)
+    @test read(s) == [b"abcde"; reinterpret(UInt8, [0x0066, 0x0067])]
+end
+
 @testset "BufferStream buffer_writes" begin
     # The bytes are readable at once, but a parked reader only wakes on flush or close.
     s = Base.BufferStream()
