@@ -1789,12 +1789,14 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         ssa_rename[idx] = SSAValue(result_idx)
         values = stmt.values
         if cfg_transforms_enabled
-            # Filter arguments that come from dead blocks
+            # Filter arguments that come from dead blocks. Only -2 marks a dead block:
+            # -1 is a block merged into its successor, whose upsilons stay live, and
+            # -3 an empty block that was dropped.
             values = Any[]
             for value in stmt.values
                 if isa(value, SSAValue)
                     blk = block_for_inst(compact.ir.cfg, value.id)
-                    if bb_rename_pred[blk] < 0
+                    if bb_rename_pred[blk] == -2
                         continue
                     end
                 end
