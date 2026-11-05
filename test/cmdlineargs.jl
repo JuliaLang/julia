@@ -764,6 +764,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             report = read(outfile, String)
             @test !contains(report, "SF:$srcfile")
             @test contains(report, "SF:$libfile")
+            rm(outfile)
+            # allocation tracking still sees the file as instrumented
+            @test readchomp(`$cov_exename_hit --code-coverage=$outfile --code-coverage=-$exclude --track-allocation=@$excluded $srcfile`) == "false"
             pidfile = joinpath(parent, "exclude-%p.info")
             @test contains(readchomp(`$cov_exename_hit --code-coverage=$pidfile --code-coverage=-$excluded -e 'print(Base.julia_cmd())'`),
                            "--code-coverage=-$excluded")

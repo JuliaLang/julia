@@ -667,8 +667,9 @@ should_insert_coverage(mod::Module, debuginfo::DebugInfo) =
     should_instrument(mod, debuginfo, true) && !is_coverage_excluded(debuginfo)
 
 # Images are instrumented for every path, so exclusions do not apply while generating one.
+# Allocation tracking relies on the same markers, so they stay while it is on.
 function is_coverage_excluded(debuginfo::DebugInfo)
-    (generating_output() || JLOptions().coverage_exclude == C_NULL) && return false
+    (generating_output() || JLOptions().coverage_exclude == C_NULL || JLOptions().malloc_log != 0) && return false
     file = debuginfo_file(debuginfo)
     return file isa Symbol && ccall(:jl_is_file_coverage_excluded, Cint, (Any,), file) != 0
 end
