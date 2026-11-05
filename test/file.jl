@@ -122,6 +122,40 @@ end
     end
 end
 
+@testset "DirEntry" begin
+    F = Base.Filesystem
+    a = DirEntry("d", "n", F.UV_DIRENT_FILE)
+    @test a == DirEntry("d", "n", F.UV_DIRENT_FILE)
+    @test hash(a) == hash(DirEntry("d", "n", F.UV_DIRENT_FILE))
+    @test a != DirEntry("d2", "n", F.UV_DIRENT_FILE)
+    @test a != DirEntry("d", "n2", F.UV_DIRENT_FILE)
+    @test a != DirEntry("d", "n", F.UV_DIRENT_DIR)
+    @test length(Set([a, DirEntry("d", "n", F.UV_DIRENT_FILE), DirEntry("d", "n2", F.UV_DIRENT_FILE)])) == 2
+
+    predicates = (isfile => F.UV_DIRENT_FILE, isdir => F.UV_DIRENT_DIR, islink => F.UV_DIRENT_LINK,
+                  isfifo => F.UV_DIRENT_FIFO, issocket => F.UV_DIRENT_SOCKET,
+                  ischardev => F.UV_DIRENT_CHAR, isblockdev => F.UV_DIRENT_BLOCK)
+    for (_, rawtype) in predicates, (predicate, expected) in predicates
+        @test predicate(DirEntry("does/not", "exist", rawtype)) == (rawtype == expected)
+    end
+
+    # Symlinks and unknown types fall through to the filesystem.
+    if !Sys.iswindows()
+        mktempdir() do dir
+            Libc.mkfifo(joinpath(dir, "fifo"))
+            symlink("fifo", joinpath(dir, "fifolink"))
+            symlink("/dev/null", joinpath(dir, "nulllink"))
+            entries = Dict(basename(e) => e for e in readdir(dir, DirEntry))
+            fifo = entries["fifo"]
+            @test isfifo(fifo) && !isfile(fifo) && !ischardev(fifo)
+            @test isfifo(DirEntry(dir, "fifo", F.UV_DIRENT_UNKNOWN))
+            @test islink(entries["fifolink"]) && isfifo(entries["fifolink"])
+            @test islink(entries["nulllink"]) && ischardev(entries["nulllink"])
+            @test !isblockdev(entries["nulllink"]) && !issocket(entries["nulllink"])
+        end
+    end
+end
+
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)
@@ -1876,6 +1910,8 @@ rm(dirwalk, recursive=true)
             @test basename.(readdir(DirEntry)) == readdir()
             @test joinpath.(readdir(DirEntry)) == readdir(join=true)
             @test count(isfile, readdir(join=true)) == count(isfile, readdir(DirEntry))
+            @test sort!(collect(eachentry())) == readdir()
+            @test sort!(collect(eachentry(DirEntry))) == readdir(DirEntry)
         end
     end
 end
