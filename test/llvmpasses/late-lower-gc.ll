@@ -227,6 +227,35 @@ define void @decayar([2 x {} addrspace(10)* addrspace(11)*] %ar) {
 ; OPAQUE: %r = call i32 @callee_root(ptr addrspace(10) %l0, ptr addrspace(10) %l1)
 ; OPAQUE: call void @julia.pop_gc_frame(ptr %gcframe)
 
+define void @sink_non_entry_alloca(i1 %cond) {
+top:
+; CHECK-LABEL: @sink_non_entry_alloca
+; TYPED: %gcframe = call {} addrspace(10)** @julia.new_gc_frame(i32 1)
+; OPAQUE: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+; CHECK-NOT: @julia.get_gc_frame_slot
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %local = alloca {} addrspace(10)*, align 8
+; CHECK: br i1 %cond, label %use_bb, label %exit
+  br i1 %cond, label %use_bb, label %exit
+
+use_bb:
+; CHECK: use_bb:
+; TYPED-NEXT: %local = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 0)
+; OPAQUE-NEXT: %local = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 42)
+  store {} addrspace(10)* %v, {} addrspace(10)** %local, align 8
+  call void @jl_safepoint()
+  %loaded = load {} addrspace(10)*, {} addrspace(10)** %local, align 8
+  call void @boxed_simple({} addrspace(10)* %loaded, {} addrspace(10)* %loaded)
+  br label %exit
+
+exit:
+; CHECK: exit:
+; TYPED-NEXT: call void @julia.pop_gc_frame({} addrspace(10)** %gcframe)
+; OPAQUE-NEXT: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret void
+}
+
 !0 = !{i64 0, i64 23}
 !1 = !{!1}
 !2 = !{!7} ; scope list
