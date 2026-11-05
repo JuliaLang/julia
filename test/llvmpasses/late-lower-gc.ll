@@ -401,11 +401,10 @@ top:
 
 declare void @ijl_throw(ptr addrspace(12)) noreturn
 declare void @j_forever_0() noreturn
-declare i32 @sigsetjmp(ptr, i32) returns_twice
 
-define void @unreachable_no_reset_and_slot_reuse(i64 %a, ptr addrspace(11) %p, i32 %which) {
+define void @slot_reuse_no_redundant_reset(i64 %a, ptr addrspace(11) %p, i1 %cond) {
 top:
-; CHECK-LABEL: @unreachable_no_reset_and_slot_reuse
+; CHECK-LABEL: @slot_reuse_no_redundant_reset
 ; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
   %pgcstack = call ptr @julia.get_pgcstack()
   %v1 = call ptr addrspace(10) @jl_box_int64(i64 signext %a)
@@ -414,11 +413,7 @@ top:
 ; CHECK-NEXT: call void @jl_safepoint()
   call void @jl_safepoint()
   call void @boxed_simple(ptr addrspace(10) %v1, ptr addrspace(10) %v1)
-  switch i32 %which, label %cont [
-    i32 1, label %err_throw
-    i32 2, label %err_forever
-    i32 3, label %err_two_calls
-  ]
+  br i1 %cond, label %cont, label %err_throw
 
 cont:
 ; CHECK: cont:
@@ -435,61 +430,12 @@ cont:
 
 err_throw:
 ; CHECK: err_throw:
+; CHECK-NEXT: [[THROW_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) null, ptr [[THROW_SLOT]]
 ; CHECK-NEXT: call void @ijl_throw(ptr addrspace(12) null)
 ; CHECK-NEXT: unreachable
   call void @ijl_throw(ptr addrspace(12) null)
   unreachable
-
-err_forever:
-; CHECK: err_forever:
-; CHECK-NEXT: [[FOREVER_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-; CHECK-NEXT: store ptr addrspace(10) null, ptr [[FOREVER_SLOT]]
-; CHECK-NEXT: call void @j_forever_0()
-; CHECK-NEXT: unreachable
-  call void @j_forever_0()
-  unreachable
-
-err_two_calls:
-; CHECK: err_two_calls:
-; CHECK-NEXT: [[EARLY_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-; CHECK-NEXT: store ptr addrspace(10) null, ptr [[EARLY_SLOT]]
-; CHECK-NEXT: call void @jl_safepoint()
-; CHECK-NEXT: call void @ijl_throw(ptr addrspace(12) null)
-; CHECK-NEXT: unreachable
-  call void @jl_safepoint()
-  call void @ijl_throw(ptr addrspace(12) null)
-  unreachable
-}
-
-define void @unreachable_setjmp_still_resets(i64 %a, i1 %cond) {
-top:
-; CHECK-LABEL: @unreachable_setjmp_still_resets
-; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
-  %pgcstack = call ptr @julia.get_pgcstack()
-  %jb = alloca [208 x i8], align 16
-  %r = call i32 @sigsetjmp(ptr %jb, i32 0) returns_twice
-  %isz = icmp eq i32 %r, 0
-  br i1 %isz, label %try, label %catch
-
-try:
-  %v1 = call ptr addrspace(10) @jl_box_int64(i64 signext %a)
-  call void @jl_safepoint()
-  call void @boxed_simple(ptr addrspace(10) %v1, ptr addrspace(10) %v1)
-  br i1 %cond, label %catch, label %err_throw
-
-err_throw:
-; CHECK: err_throw:
-; CHECK-NEXT: [[SJ_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-; CHECK-NEXT: store ptr addrspace(10) null, ptr [[SJ_SLOT]]
-; CHECK-NEXT: call void @ijl_throw(ptr addrspace(12) null)
-; CHECK-NEXT: unreachable
-  call void @ijl_throw(ptr addrspace(12) null)
-  unreachable
-
-catch:
-; CHECK: catch:
-; CHECK-NEXT: call void @julia.pop_gc_frame(ptr %gcframe)
-  ret void
 }
 
 define void @coalesce_dead_slots_memset(i64 %a, i1 %cond) {
@@ -515,6 +461,32 @@ forever:
 ; CHECK: forever:
 ; CHECK-NEXT: [[MEMSET_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
 ; CHECK-NEXT: call void @llvm.memset.p0.i{{32|64}}(ptr align {{4|8}} [[MEMSET_SLOT]], i8 0, i{{32|64}} {{20|40}}, i1 false)
+; CHECK-NEXT: call void @j_forever_0()
+; CHECK-NEXT: unreachable
+  call void @j_forever_0()
+  unreachable
+}
+
+define void @dead_slots_below_memset_threshold(i64 %a, i1 %cond) {
+top:
+; CHECK-LABEL: @dead_slots_below_memset_threshold
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 2)
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %v0 = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  %v1 = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  call void @jl_safepoint()
+  br i1 %cond, label %use, label %forever
+
+use:
+  call void @boxed_simple(ptr addrspace(10) %v0, ptr addrspace(10) %v1)
+  ret void
+
+forever:
+; CHECK: forever:
+; CHECK-NEXT: [[RESET0:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) null, ptr [[RESET0]]
+; CHECK-NEXT: [[RESET1:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 1)
+; CHECK-NEXT: store ptr addrspace(10) null, ptr [[RESET1]]
 ; CHECK-NEXT: call void @j_forever_0()
 ; CHECK-NEXT: unreachable
   call void @j_forever_0()
@@ -550,12 +522,12 @@ exit:
   ret void
 }
 
-define void @sink_alloca_common_dominator(i1 %c1, i1 %c2, ptr addrspace(10) %val) {
+define void @recompute_alloca_per_use_block(i1 %c1, i1 %c2, ptr addrspace(10) %val) {
 top:
-; CHECK-LABEL: @sink_alloca_common_dominator
+; CHECK-LABEL: @recompute_alloca_per_use_block
 ; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 2)
 ; CHECK-NOT: @julia.get_gc_frame_slot
-; FINAL-LABEL: @sink_alloca_common_dominator
+; FINAL-LABEL: @recompute_alloca_per_use_block
 ; FINAL: %gcframe = alloca ptr addrspace(10), i32 4, align 16
   %pgcstack = call ptr @julia.get_pgcstack()
   %local = alloca ptr addrspace(10), align 8
@@ -565,16 +537,18 @@ top:
 
 dom:
 ; CHECK: dom:
-; CHECK-NEXT: %local = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
 ; CHECK-NEXT: br i1 %c2, label %left, label %right
 ; FINAL: dom:
-; FINAL-NEXT: %local = getelementptr inbounds {{(nuw )?}}ptr addrspace(10), ptr %gcframe, i32 2
 ; FINAL-NEXT: br i1 %c2, label %left, label %right
   br i1 %c2, label %left, label %right
 
 left:
 ; CHECK: left:
-; CHECK-NEXT: store ptr addrspace(10) %val, ptr %local, align 8
+; CHECK-NEXT: [[LOCAL_L:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %val, ptr [[LOCAL_L]], align 8
+; FINAL: left:
+; FINAL-NEXT: [[FINAL_L:%.*]] = getelementptr inbounds {{(nuw )?}}ptr addrspace(10), ptr %gcframe, i32 2
+; FINAL-NEXT: store ptr addrspace(10) %val, ptr [[FINAL_L]], align 8
   store ptr addrspace(10) %val, ptr %local, align 8
   call void @jl_safepoint()
   %lval = load ptr addrspace(10), ptr %local, align 8
@@ -583,7 +557,11 @@ left:
 
 right:
 ; CHECK: right:
-; CHECK-NEXT: store ptr addrspace(10) %val, ptr %local, align 8
+; CHECK-NEXT: [[LOCAL_R:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %val, ptr [[LOCAL_R]], align 8
+; FINAL: right:
+; FINAL-NEXT: [[FINAL_R:%.*]] = getelementptr inbounds {{(nuw )?}}ptr addrspace(10), ptr %gcframe, i32 2
+; FINAL-NEXT: store ptr addrspace(10) %val, ptr [[FINAL_R]], align 8
   store ptr addrspace(10) %val, ptr %local, align 8
   call void @jl_safepoint()
   %rval = load ptr addrspace(10), ptr %local, align 8

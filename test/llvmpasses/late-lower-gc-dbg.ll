@@ -30,11 +30,45 @@ exit:
   ret void, !dbg !12
 }
 
+define void @boxed_local_diamond_dbg(i1 %c1, i1 %c2, ptr addrspace(10) %val) !dbg !13 {
+top:
+; CHECK-LABEL: @boxed_local_diamond_dbg
+; CHECK: %gcframe = alloca ptr, i32 3, align 16
+; CHECK: dbg{{.*}}declare({{(metadata )?}}ptr %box
+; CHECK: br i1 %c1, label %left, label %right
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %box = alloca ptr addrspace(10), align 8
+  call void @llvm.dbg.declare(metadata ptr %box, metadata !14, metadata !DIExpression(DW_OP_deref)), !dbg !15
+  br i1 %c1, label %left, label %right
+
+left:
+; CHECK: left:
+; CHECK-NEXT: %box = getelementptr inbounds {{(nuw )?}}ptr, ptr %gcframe, i32 2
+  store ptr addrspace(10) %val, ptr %box, align 8, !dbg !15
+  call void @use_ptr(ptr %box), !dbg !15
+  br label %exit
+
+right:
+; CHECK: right:
+; CHECK-NEXT: %box1 = getelementptr inbounds {{(nuw )?}}ptr, ptr %gcframe, i32 2
+  store ptr addrspace(10) %val, ptr %box, align 8, !dbg !15
+  call void @use_ptr(ptr %box), !dbg !15
+  br label %exit
+
+exit:
+  ret void, !dbg !15
+}
+
 ; DWARF: DW_TAG_subprogram
 ; DWARF: DW_AT_name{{.*}}("boxed_local_sunk_dbg")
 ; DWARF: DW_TAG_variable
 ; DWARF-NEXT: DW_AT_location{{.*}}({{.*}}DW_OP_deref)
 ; DWARF-NEXT: DW_AT_name{{.*}}("x")
+; DWARF: DW_TAG_subprogram
+; DWARF: DW_AT_name{{.*}}("boxed_local_diamond_dbg")
+; DWARF: DW_TAG_variable
+; DWARF-NEXT: DW_AT_location{{.*}}({{.*}}DW_OP_deref)
+; DWARF-NEXT: DW_AT_name{{.*}}("y")
 
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!3, !4}
@@ -48,3 +82,6 @@ exit:
 !10 = !DILocalVariable(name: "x", scope: !5, file: !1, line: 2, type: !11)
 !11 = !DIBasicType(name: "Int64", size: 64, encoding: DW_ATE_signed)
 !12 = !DILocation(line: 2, column: 1, scope: !5)
+!13 = distinct !DISubprogram(name: "boxed_local_diamond_dbg", scope: !1, file: !1, line: 5, type: !6, scopeLine: 5, spFlags: DISPFlagDefinition, unit: !0, retainedNodes: !2)
+!14 = !DILocalVariable(name: "y", scope: !13, file: !1, line: 6, type: !11)
+!15 = !DILocation(line: 6, column: 1, scope: !13)

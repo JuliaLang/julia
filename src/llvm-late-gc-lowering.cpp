@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Casting.h"
@@ -2486,17 +2487,27 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     new StoreInst(Val, slotAddress, InsertBefore->getIterator());
 }
 
-void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot,
-                                         ArrayRef<int> Colors, Value *GCFrame,
+void LateLowerGCFrame::PlaceGCFrameReset(unsigned StartSlot, unsigned Count,
+                                         unsigned PtrSize, Value *GCFrame,
                                          Instruction *InsertBefore) {
-    // Get the slot address.
-    auto slotAddress = CallInst::Create(
-        getOrDeclare(jl_intrinsics::getGCFrameSlot),
-        {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
-        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore->getIterator());
-    // Reset the slot to NULL.
-    Value *Val = ConstantPointerNull::get(T_prjlvalue);
-    new StoreInst(Val, slotAddress, InsertBefore->getIterator());
+    IRBuilder<> builder(InsertBefore);
+    auto *T_int32 = Type::getInt32Ty(InsertBefore->getContext());
+    if (Count >= 4) {
+        auto *slotAddress = builder.CreateCall(
+            getOrDeclare(jl_intrinsics::getGCFrameSlot),
+            {GCFrame, ConstantInt::get(T_int32, StartSlot)},
+            "gc_slot_addr_" + StringRef(std::to_string(StartSlot)));
+        builder.CreateMemSet(slotAddress, ConstantInt::get(Type::getInt8Ty(InsertBefore->getContext()), 0),
+                             PtrSize * Count, Align(PtrSize));
+    } else {
+        for (unsigned Slot = StartSlot; Slot < StartSlot + Count; ++Slot) {
+            auto *slotAddress = builder.CreateCall(
+                getOrDeclare(jl_intrinsics::getGCFrameSlot),
+                {GCFrame, ConstantInt::get(T_int32, Slot)},
+                "gc_slot_addr_" + StringRef(std::to_string(Slot)));
+            builder.CreateStore(ConstantPointerNull::get(T_prjlvalue), slotAddress);
+        }
+    }
 }
 
 void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
@@ -2509,53 +2520,14 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
     if (MaxColor < 0)
         return;
 
-    auto isRuntimeThrowCall = [this](Instruction *Inst) {
-        auto *CI = dyn_cast<CallInst>(Inst);
-        if (!CI)
-            return false;
-        Function *Callee = CI->getCalledFunction();
-        if (Callee && (Callee == call_func || Callee == call2_func || Callee == call3_func) && CI->arg_size() >= 1)
-            Callee = dyn_cast<Function>(CI->getArgOperand(0)->stripPointerCasts());
-        if (!Callee)
-            return false;
-        StringRef Name = Callee->getName();
-        if (Name.substr(0, 4) == "ijl_")
-            Name = Name.drop_front(1);
-        if (Name.substr(0, 3) != "jl_")
-            return false;
-        return Name == "jl_throw" || Name == "jl_rethrow" || Name == "jl_rethrow_other" ||
-               Name == "jl_no_exc_handler" || Name == "jl_f_throw" ||
-               Name == "jl_f_throw_methoderror" || Name == "jl_method_error" ||
-               Name == "jl_error" || Name == "jl_errorf" || Name == "jl_exceptionf" ||
-               Name == "jl_too_few_args" || Name == "jl_too_many_args" ||
-               Name == "jl_type_error" || Name == "jl_type_error_rt" ||
-               Name == "jl_type_error_global" || Name == "jl_undefined_var_error" ||
-               Name == "jl_has_no_field_error" || Name == "jl_argument_error" ||
-               Name == "jl_atomic_error" || Name == "jl_bounds_error" ||
-               Name == "jl_bounds_error_v" || Name == "jl_bounds_error_int" ||
-               Name == "jl_bounds_error_tuple_int" || Name == "jl_bounds_error_unboxed_int" ||
-               Name == "jl_bounds_error_ints";
-    };
-
-    BitVector AssignedColors(MaxColor + 1);
-    BitVector DeadColors(MaxColor + 1);
+    // Indexed by color (slot offset relative to MinColorRoot).
+    BitVector SlotsJustWritten(MaxColor + 1);
+    BitVector SlotsToReset(MaxColor + 1);
     unsigned PtrSize = S.F->getParent()->getDataLayout().getPointerSize();
 
     for (auto &BB : *S.F) {
         const BBState &BBS = S.BBStates[&BB];
         if (!BBS.HasSafepoint)
-            continue;
-        bool HasLiveSafepoint = false;
-        for (int Safepoint = BBS.FirstSafepoint; Safepoint >= BBS.LastSafepoint; --Safepoint) {
-            if (!S.LiveSets[Safepoint].empty()) {
-                HasLiveSafepoint = true;
-                break;
-            }
-        }
-        bool IsUnreachableNoSetjmp = isa<UnreachableInst>(BB.getTerminator()) && S.ReturnsTwice.empty();
-        bool SkipLastSafepointReset = IsUnreachableNoSetjmp &&
-            isRuntimeThrowCall(S.SafepointNumbering[BBS.LastSafepoint]);
-        if (!HasLiveSafepoint && SkipLastSafepointReset && BBS.FirstSafepoint == BBS.LastSafepoint)
             continue;
         LargeSparseBitVector LiveIn;
         AddInPredecessorLiveOuts(&BB, LiveIn, S);
@@ -2563,51 +2535,33 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
         for (int Safepoint = BBS.FirstSafepoint; Safepoint >= BBS.LastSafepoint; --Safepoint) {
             Instruction *SPInst = S.SafepointNumbering[Safepoint];
             const LargeSparseBitVector &NowLive = S.LiveSets[Safepoint];
-            AssignedColors.reset();
+            SlotsJustWritten.reset();
             // store values which are alive in this safepoint but
             // haven't been stored in the GC frame before
             for (int Idx : NowLive) {
                 if (!HasBitSet(*LastLive, Idx)) {
                     PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame, SPInst);
                     if (Colors[Idx] >= 0)
-                        AssignedColors.set(Colors[Idx]);
+                        SlotsJustWritten.set(Colors[Idx]);
                 }
             }
-            bool IsLastSafepoint = (Safepoint == BBS.LastSafepoint);
-            if (!(IsLastSafepoint && SkipLastSafepointReset)) {
-                // reset slots which are no longer alive and weren't overwritten above
-                DeadColors.reset();
-                for (int Idx : *LastLive) {
-                    int C = Colors[Idx];
-                    if (C >= PreAssignedColors && !HasBitSet(NowLive, Idx) &&
-                        !AssignedColors.test(C)) {
-                        DeadColors.set(C);
-                    }
+            // reset slots which are no longer alive and weren't overwritten above
+            SlotsToReset.reset();
+            for (int Idx : *LastLive) {
+                int C = Colors[Idx];
+                if (C >= PreAssignedColors && !HasBitSet(NowLive, Idx) &&
+                    !SlotsJustWritten.test(C)) {
+                    SlotsToReset.set(C);
                 }
-                IRBuilder<> builder(SPInst);
-                for (int StartColor = DeadColors.find_first(); StartColor != -1;) {
-                    int EndColor = StartColor + 1;
-                    while (EndColor < (int)DeadColors.size() && DeadColors.test(EndColor))
-                        ++EndColor;
-                    unsigned Count = EndColor - StartColor;
-                    if (Count >= 4) {
-                        auto slotAddress = builder.CreateCall(
-                            getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                            {GCFrame, ConstantInt::get(Type::getInt32Ty(SPInst->getContext()), StartColor + MinColorRoot)},
-                            "gc_slot_addr_" + StringRef(std::to_string(StartColor + MinColorRoot)));
-                        builder.CreateMemSet(slotAddress, ConstantInt::get(Type::getInt8Ty(SPInst->getContext()), 0),
-                                             PtrSize * Count, Align(PtrSize));
-                    } else {
-                        for (int C = StartColor; C < EndColor; ++C) {
-                            auto slotAddress = builder.CreateCall(
-                                getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                                {GCFrame, ConstantInt::get(Type::getInt32Ty(SPInst->getContext()), C + MinColorRoot)},
-                                "gc_slot_addr_" + StringRef(std::to_string(C + MinColorRoot)));
-                            builder.CreateStore(ConstantPointerNull::get(T_prjlvalue), slotAddress);
-                        }
-                    }
-                    StartColor = DeadColors.find_next(EndColor - 1);
+            }
+            for (int Start = SlotsToReset.find_first(); Start != -1;) {
+                int End = SlotsToReset.find_next_unset(Start);
+                if (End == -1) {
+                    PlaceGCFrameReset(Start + MinColorRoot, SlotsToReset.size() - Start, PtrSize, GCFrame, SPInst);
+                    break;
                 }
+                PlaceGCFrameReset(Start + MinColorRoot, End - Start, PtrSize, GCFrame, SPInst);
+                Start = SlotsToReset.find_next(End);
             }
             LastLive = &NowLive;
         }
@@ -2680,12 +2634,17 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
         Align FrameAlign(16);
-        auto replace_alloca = [this, gcframe, &AllocaSlot, &FrameAlign, T_int32, &S, F](AllocaInst *&AI) {
+        auto replace_alloca = [this, gcframe, &AllocaSlot, &FrameAlign, T_int32](AllocaInst *&AI) {
             // Preserve both the alloca's alignment and its offset within the frame.
             FrameAlign = std::max(FrameAlign, AI->getAlign());
             unsigned align = AI->getAlign().value() / sizeof(void*); // TODO: use DataLayout pointer size
             if (align > 1)
                 AllocaSlot = LLT_ALIGN(AllocaSlot, align);
+            Instruction *slotAddress = CallInst::Create(
+                getOrDeclare(jl_intrinsics::getGCFrameSlot),
+                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
+            slotAddress->insertAfter(gcframe);
+            slotAddress->takeName(AI);
 
             // Check for lifetime intrinsics on this alloca, we can't keep them
             // because we're changing the semantics
@@ -2700,53 +2659,36 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
             for (CallInst *II : ToDelete) {
                 II->eraseFromParent();
             }
-
-            // If all remaining uses are dominated by a non-entry basic block,
-            // sink the slot address calculation to that block instead of placing
-            // it in the entry block.
-            BasicBlock *UseBB = nullptr;
-            bool CanSink = !AI->use_empty();
-            for (User *U : AI->users()) {
-                auto *UI = dyn_cast<Instruction>(U);
-                if (!UI || isa<PHINode>(UI)) {
-                    CanSink = false;
-                    break;
-                }
-                BasicBlock *BB = UI->getParent();
-                if (BB == &F->getEntryBlock() || pred_empty(BB)) {
-                    CanSink = false;
-                    break;
-                }
-                if (!UseBB) {
-                    UseBB = BB;
-                } else if (UseBB != BB) {
-                    if (!S.DT)
-                        S.DT = &GetDT();
-                    if (!S.DT->isReachableFromEntry(UseBB) || !S.DT->isReachableFromEntry(BB)) {
-                        CanSink = false;
-                        break;
-                    }
-                    UseBB = S.DT->findNearestCommonDominator(UseBB, BB);
-                    if (!UseBB || UseBB == &F->getEntryBlock()) {
-                        CanSink = false;
-                        break;
-                    }
-                }
-            }
-
-            Instruction *slotAddress = CallInst::Create(
-                getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
-            if (CanSink && UseBB)
-                slotAddress->insertBefore(UseBB->getFirstInsertionPt());
-            else
-                slotAddress->insertAfter(gcframe);
-            slotAddress->takeName(AI);
-
             assert(slotAddress->getType() == AI->getType());
             AI->replaceAllUsesWith(slotAddress);
             AI->eraseFromParent();
             AI = NULL;
+            // Recompute the address in each block that uses it, like a frame index.
+            SmallDenseMap<BasicBlock *, Instruction *, 4> SlotInBB;
+            SmallVector<Instruction *, 4> Clones;
+            std::string OrigName = std::string(slotAddress->getName());
+            for (Use &U : make_early_inc_range(slotAddress->uses())) {
+                auto *UI = cast<Instruction>(U.getUser());
+                auto *PN = dyn_cast<PHINode>(UI);
+                BasicBlock *BB = PN ? PN->getIncomingBlock(U) : UI->getParent();
+                if (BB == slotAddress->getParent() || BB->getFirstInsertionPt() == BB->end())
+                    continue;
+                Instruction *&Local = SlotInBB[BB];
+                if (!Local) {
+                    Local = slotAddress->clone();
+                    Local->insertBefore(BB->getFirstInsertionPt());
+                    Clones.push_back(Local);
+                }
+                U.set(Local);
+            }
+            if (slotAddress->use_empty()) {
+                if (!Clones.empty())
+                    slotAddress->replaceAllUsesWith(Clones.front());
+                if (!slotAddress->isUsedByMetadata())
+                    slotAddress->eraseFromParent();
+            }
+            for (Instruction *Local : Clones)
+                Local->setName(OrigName);
         };
         for (auto AI : S.ArrayAllocas) {
             replace_alloca(AI.first);
