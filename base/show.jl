@@ -2841,32 +2841,6 @@ function print_type_bicolor(io, str::String; color=:normal, inner_color=:light_b
     end
 end
 
-resolvebinding(@nospecialize(ex)) = ex
-resolvebinding(ex::QuoteNode) = ex.value
-resolvebinding(ex::Symbol) = resolvebinding(GlobalRef(Main, ex))
-function resolvebinding(ex::Expr)
-    if ex.head === :. && isa(ex.args[2], Symbol)
-        parent = resolvebinding(ex.args[1])
-        if isa(parent, Module)
-            return resolvebinding(GlobalRef(parent, ex.args[2]))
-        end
-    end
-    return nothing
-end
-function resolvebinding(ex::GlobalRef)
-    isdefined(ex.mod, ex.name) || return nothing
-    isconst(ex.mod, ex.name) || return nothing
-    m = getfield(ex.mod, ex.name)
-    isa(m, Module) || return nothing
-    return m
-end
-
-function ismodulecall(ex::Expr)
-    return ex.head === :call && (ex.args[1] === GlobalRef(Base,:getfield) ||
-                                ex.args[1] === GlobalRef(Core,:getfield)) &&
-           isa(resolvebinding(ex.args[2]), Module)
-end
-
 function show(io::IO, tv::TypeVar)
     # If we are in the `unionall_env`, the type-variable is bound
     # and the type constraints are already printed.
@@ -3439,7 +3413,6 @@ function bitshow(io::IO, B::BitArray)
     l = _mod64(length(B)-1) + 1
     print_bit_chunk(io, Bc[end], l)
 end
-bitshow(B::BitArray) = bitshow(stdout, B)
 
 bitstring(B::BitArray) = sprint(bitshow, B)
 

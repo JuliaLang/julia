@@ -1314,8 +1314,6 @@ function _is_loading_frame(frame::StackFrame)
            (func in _LOADING_INTERNAL_FUNCS || func in _LOADING_ANCHOR_FUNCS)
 end
 
-_is_loading_anchor(frame::StackFrame) = frame.func in _LOADING_ANCHOR_FUNCS
-
 # For improved user experience, collapse runs of frames belonging to the code loading
 # machinery down to the single frame that entered it - see #52988. Unlike hiding
 # everything thrown through `require`, this keeps frames for user code that runs
