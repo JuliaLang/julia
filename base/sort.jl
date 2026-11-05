@@ -493,11 +493,12 @@ end
 """
     make_scratch(scratch::Union{Nothing, Vector}, T::Type, len::Integer)
 
-Return `(s, t)` where `t` is an `AbstractVector` of type `T` with length at least `len`
-that is backed by the `Vector` `s`. If `scratch !== nothing`, then `s === scratch`.
+Return `(s, t)` where `t` is an `AbstractVector` with eltype `T` and length at least
+`len`, backed by the `Vector` `s`.
 
-This function will allocate a new vector if `scratch === nothing`, `resize!` `scratch` if it
-is too short, and `reinterpret` `scratch` if its eltype is not `T`.
+Reuse `scratch`, resizing it if needed and reinterpreting it if its eltype differs
+from `T`. Allocate a new vector if `scratch === nothing` or the eltypes differ
+and either is not a bits type. When reusing `scratch`, `s === scratch`.
 """
 function make_scratch(scratch::Nothing, T::Type, len::Integer)
     s = Vector{T}(undef, len)
@@ -508,6 +509,7 @@ function make_scratch(scratch::Vector{T}, ::Type{T}, len::Integer) where T
     scratch, scratch
 end
 function make_scratch(scratch::Vector, T::Type, len::Integer)
+    isbitstype(eltype(scratch)) && isbitstype(T) || return make_scratch(nothing, T, len)
     len_bytes = len * sizeof(T)
     len_scratch = div(len_bytes, sizeof(eltype(scratch)))
     len_scratch > length(scratch) && resize!(scratch, len_scratch)
