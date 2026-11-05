@@ -2097,8 +2097,10 @@ end
 # .ji) and the plain serialized .ji (--pkgimages=no), with --compress-sysimage
 # (which precompile workers inherit through julia_cmd) on and off in each.
 # Compression requires the split layout, so with --pkgimages=no the worker must
-# warn and emit an uncompressed heap.
-@testset "pkgimage: native=$native compress=$compress" for native in (true, false), compress in (true, false)
+# warn and emit an uncompressed heap. With `via_env`, compression is instead
+# requested through JULIA_COMPRESS_PKGIMAGES, which overrides the forwarded
+# option (here the opposite one) and only applies to native pkgimages.
+@testset "pkgimage: native=$native compress=$compress via_env=$via_env" for native in (true, false), compress in (true, false), via_env in (false, true)
     mktempdir() do dir
         pkgdir = joinpath(dir, "CompressMe")
         mkpath(joinpath(pkgdir, "src"))
@@ -2114,15 +2116,17 @@ end
             f() = 42
             end
             """)
+        flag_compress = via_env ? !compress : compress
         cmd = addenv(`$(Base.julia_cmd()) --pkgimages=$(native ? "yes" : "no")
-                      --compress-sysimage=$(compress ? "yes" : "no")
+                      --compress-sysimage=$(flag_compress ? "yes" : "no")
                       --startup-file=no -E 'using CompressMe; CompressMe.f()'`,
                      "JULIA_DEPOT_PATH" => joinpath(dir, "depot"),
-                     "JULIA_LOAD_PATH" => join((dir, "@stdlib"), Sys.iswindows() ? ";" : ":"))
+                     "JULIA_LOAD_PATH" => join((dir, "@stdlib"), Sys.iswindows() ? ";" : ":"),
+                     "JULIA_COMPRESS_PKGIMAGES" => via_env ? string(compress) : nothing)
         success, out, err = readchomperrors(cmd)
         @test success
         @test out == "42"
-        @test occursin("--compress-sysimage=yes is unsupported", err) == (compress && !native)
+        @test occursin("--compress-sysimage=yes is unsupported", err) == (flag_compress && !native)
 
         compiled = joinpath(dir, "depot", "compiled", "v$(VERSION.major).$(VERSION.minor)", "CompressMe")
         ji_file = only(filter(endswith(".ji"), readdir(compiled; join=true)))

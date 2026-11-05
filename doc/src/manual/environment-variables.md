@@ -589,6 +589,19 @@ A few special features are supported:
 
      Optimize only for size. Clang's `-Oz`.
 
+### [`JULIA_COMPRESS_PKGIMAGES`](@id JULIA_COMPRESS_PKGIMAGES)
+
+If set to `true`, package images written by precompilation have their heap (the `.ji`
+file) compressed with zstd, which typically makes it several times smaller. If set to
+`false`, they are written uncompressed. When unset, precompilation follows the
+`--compress-sysimage` option of the running process, which defaults to `no`.
+
+A compressed heap has to be decompressed in full every time the package is loaded,
+which takes extra time and memory, whereas an uncompressed heap is memory-mapped
+and only the parts that are used are read. Compression therefore trades load time
+for disk space. Loading accepts both kinds of image regardless of this setting, and
+changing it does not make existing caches stale.
+
 
 ## Debugging and profiling
 
