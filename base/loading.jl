@@ -4868,6 +4868,7 @@ end
 # compares mutable containers structurally. This allows us to differentiate
 # `1.0` / `1` / `true` in Preferences, despite these being normally `isequal`
 toml_egal(@nospecialize(A), @nospecialize(B)) = A === B
+toml_egal(A::BigInt, B::BigInt) = A == B # a large integer is parsed to a new object each time
 
 function toml_egal(A::AbstractArray, B::AbstractArray)
     axes(A) != axes(B) && return false
