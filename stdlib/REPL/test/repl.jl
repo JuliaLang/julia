@@ -2244,6 +2244,7 @@ end
             pushfirst!(DEPOT_PATH, joinpath(root, "depot"))
             @test prompt_for(write_project(joinpath(root, "depot", "environments", "env"), "")) == "(@env) pkg> "
             @test prompt_for(write_project(joinpath(root, "depot", "environments", "env2"), "name = \"X\"")) == "(@X) pkg> "
+            @test prompt_for(write_project(joinpath(root, "depot", "environments-old", "env"), "")) == "(env) pkg> " # same prefix only
             popfirst!(DEPOT_PATH)
 
             # a workspace member shows the root project and its path from there
