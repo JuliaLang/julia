@@ -2015,6 +2015,74 @@ end
     @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{REPL.Terminals.UnixTerminal})
 end
 
+import REPL.Terminals
+
+struct BareTerminal <: Terminals.TextTerminal end
+
+# What a terminal type gets by default from the abstract terminal interface
+@testset "TextTerminal defaults" begin
+    t = BareTerminal()
+    @test !Terminals.hascolor(t)
+    for f in (flush, Terminals.beep, Terminals.enable_bracketed_paste, Terminals.disable_bracketed_paste)
+        @test f(t) === nothing
+    end
+    for f in (Base.pipe_reader, Base.pipe_writer, displaysize, Terminals.width, Terminals.height,
+              Terminals.getX, Terminals.getY, Terminals.pos, Terminals.clear, Terminals.clear_line,
+              t -> Terminals.clear_line(t, 1), t -> Terminals.cmove(t, 1, 1), t -> Terminals.raw!(t, true))
+        @test_throws "Unimplemented" f(t)
+    end
+end
+
+# escape sequences of the unix terminal
+@testset "UnixTerminal output" begin
+    t = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    for (f, args, expected) in (
+            (Terminals.cmove_up, (), "\e[1A"),
+            (Terminals.cmove_up, (3,), "\e[3A"),
+            (Terminals.cmove_down, (), "\e[1B"),
+            (Terminals.cmove_down, (3,), "\e[3B"),
+            (Terminals.cmove_right, (), "\e[1C"),
+            (Terminals.cmove_right, (3,), "\e[3C"),
+            (Terminals.cmove_left, (), "\e[1D"),
+            (Terminals.cmove_left, (3,), "\e[3D"),
+            (Terminals.cmove_line_up, (), "\e[1A\r"),
+            (Terminals.cmove_line_up, (2,), "\e[2A\r"),
+            (Terminals.cmove_line_down, (), "\e[1B\r"),
+            (Terminals.cmove_line_down, (2,), "\e[2B\r"),
+            (Terminals.cmove_col, (1,), "\r"),
+            (Terminals.cmove_col, (5,), "\r\e[4C"),
+            (Terminals.enable_bracketed_paste, (), "\e[?2004h"),
+            (Terminals.disable_bracketed_paste, (), "\e[?2004l"),
+            (Terminals.end_keypad_transmit_mode, (), "\e[?1l\e>"),
+            (Terminals.clear, (), "\e[H\e[2J"),
+            (Terminals.clear_line, (), "\r\e[0K"))
+        f(t, args...)
+        @test String(take!(t.out_stream)) == expected
+    end
+    Terminals.beep(t)
+    @test String(take!(t.err_stream)) == "\a"
+    @test isempty(take!(t.out_stream))
+end
+
+# Switching a real terminal device in and out of raw mode
+Sys.iswindows() || @testset "TTYTerminal raw!" begin
+    with_fake_pty() do pts, ptm
+        tty = Base.TTY(pts)
+        term = Terminals.TTYTerminal("xterm", tty, tty, tty)
+        Terminals.raw!(term, true) || error("could not enter raw mode")
+        # raw mode: no echo, no line buffering
+        write(ptm, "a")
+        @test read(tty, Char) == 'a'
+        write(tty, "b")
+        @test read(ptm, Char) == 'b'
+        Terminals.raw!(term, false) || error("could not leave raw mode")
+        write(ptm, "c\n")
+        @test readline(ptm) == "c"
+        @test readline(tty) == "c"
+        close(tty)
+    end
+end
+
 @testset "Dummy Pkg prompt" begin
     # do this in an empty depot to test default for new users
     withenv("JULIA_DEPOT_PATH" => mktempdir() * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => nothing) do
