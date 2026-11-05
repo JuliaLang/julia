@@ -143,10 +143,7 @@ function uv_asynccb end
 function uv_timercb end
 function uv_signalcb end
 
-reinit_stdio() = _reinit_stdio()
-# we need this so it can be called by codegen to print errors, even after
-# reinit_stdio has been redefined by the juliac build script.
-function _reinit_stdio()
+function reinit_stdio()
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))::IO
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))::IO
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))::IO
