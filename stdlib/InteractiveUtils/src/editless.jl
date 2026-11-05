@@ -167,7 +167,7 @@ function define_default_editors()
     define_editor(["code", "code-insiders"]) do cmd, path, line, column
         `$cmd -g $path:$line:$column`
     end
-    define_editor(r"\bnotepad++") do cmd, path, line, column
+    define_editor(r"\bnotepad\+\+") do cmd, path, line, column
         `$cmd $path -n$line`
     end
     if Sys.iswindows()
