@@ -1215,6 +1215,12 @@ end
     @test sprint(showerror, e) == "StringIndexError: invalid index [2], valid nearby index [1]=>'κ'"
 end
 
+@testset "issue #64633: showerror with truncated SubString" begin
+    s = Base.raw_substring("Hello, Bjørn!", 11, 4)
+    err = StringIndexError(s, 1)
+    @test sprint(showerror, err) == "StringIndexError: invalid index [1]"
+end
+
 @testset "summary" begin
     @test sprint(summary, "foα") == "4-codeunit String"
     @test sprint(summary, SubString("foα", 2)) == "3-codeunit SubString{String}"
