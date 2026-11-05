@@ -1985,6 +1985,18 @@ end
             @test occursin(expected, result)
         end
     end
+    @testset "failfast with @test_logs" begin
+        src = """
+        using Test
+        @testset "Foo" failfast=true begin
+            @test_logs (:warn,) @info "wrong level"
+            println("kept going")
+        end
+        """
+        result = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e $src`), stderr=devnull), String)
+        @test occursin("Log Test Failed", result)
+        @test !occursin("kept going", result)
+    end
     @testset "failfast for-loop" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
