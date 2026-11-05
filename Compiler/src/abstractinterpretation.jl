@@ -881,12 +881,6 @@ function matches_sv(parent::AbsIntState, sv::AbsIntState)
             method_for_inference_limit_heuristics(sv) === method_for_inference_limit_heuristics(parent))
 end
 
-function is_method_recursed(method::Method, caller::AbsIntState)
-    return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
-        return method === frame_instance(sv).def
-    end
-end
-
 function is_constprop_edge_recursed(edge::MethodInstance, caller::AbsIntState)
     return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
         return edge === frame_instance(sv) && is_constproped(sv)
@@ -4008,11 +4002,6 @@ function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, sstate::St
         rt = tmerge(typeinf_lattice(interp), rt, thisval)
     end
     return rt
-end
-
-function stmt_taints_inbounds_consistency(sv::AbsIntState)
-    propagate_inbounds(sv) && return true
-    return has_curr_ssaflag(sv, IR_FLAG_INBOUNDS)
 end
 
 function merge_override_effects!(interp::AbstractInterpreter, effects::Effects, sv::InferenceState)

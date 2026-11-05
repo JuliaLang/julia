@@ -485,8 +485,6 @@ end
 const PROGRESS_BAR_TIME_GRANULARITY = Ref(1 / 30.0) # 30 fps
 const PROGRESS_BAR_PERCENTAGE_GRANULARITY = Ref(0.1)
 
-start_progress(io::IO, _::MiniProgressBar) = print(io, ansi_disablecursor)
-
 function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagereturn=true)
     if p.max == 0
         perc = 0.0
@@ -536,8 +534,6 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
     # Print everything in one call
     print(io, to_print)
 end
-
-end_progress(io, p::MiniProgressBar) = print(io, ansi_enablecursor, ansi_clearline)
 
 print_progress_bottom(io::IO) = print(io, "\e[S", ansi_moveup(1), ansi_clearline, ansi_movecol1)
 

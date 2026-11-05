@@ -223,7 +223,6 @@ function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
 end
 
 has_prev_debuginfo(di, pc::Int) = prev_debuginfo(di, pc)[1] !== nothing
-has_edge_debuginfo(di, pc::Int) = edge_debuginfo(di, pc)[1] !== nothing
 
 "(debuginfo, nextpc) from the previous step in the compiler"
 function prev_debuginfo(di, pc::Int)

@@ -428,12 +428,6 @@ function unwraptv_ub(@nospecialize t)
     end
     return t
 end
-function unwraptv_lb(@nospecialize t)
-    while isa(t, TypeVar)
-        t = t.lb
-    end
-    return t
-end
 const unwraptv = unwraptv_ub
 
 """
