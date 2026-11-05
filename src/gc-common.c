@@ -654,13 +654,13 @@ JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
 
 JL_DLLEXPORT void *jl_malloc(size_t sz) JL_CANSAFEPOINT
 {
-    return jl_gc_counted_malloc(sz);
+    return jl_gc_counted_malloc_(sz, 1);
 }
 
 //_unchecked_calloc does not check for potential overflow of nm*sz
 STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT {
     size_t nmsz = nm*sz;
-    return jl_gc_counted_calloc(nmsz, 1);
+    return jl_gc_counted_calloc_(nmsz, 1, 1);
 }
 
 JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT
@@ -681,7 +681,7 @@ JL_DLLEXPORT void jl_free(void *p)
 JL_DLLEXPORT void *jl_realloc(void *p, size_t sz) JL_CANSAFEPOINT
 {
     size_t old = p ? memory_block_usable_size(p, 0) : 0;
-    return jl_gc_counted_realloc_with_old_size(p, old, sz);
+    return jl_gc_counted_realloc_(p, old, sz, 1);
 }
 
 // =========================================================================== //
