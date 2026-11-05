@@ -1915,6 +1915,70 @@ end
     end
 end
 
+@testset "loading from source again after a failure" begin
+    mktempdir() do dir
+        parent_uuid = "e3000000-0000-0000-0000-000000000001"
+        dep_uuid = "e3000000-0000-0000-0000-000000000002"
+        mkpath(joinpath(dir, "RetryParent", "src"))
+        mkpath(joinpath(dir, "RetryParent", "ext"))
+        mkpath(joinpath(dir, "RetryDep", "src"))
+        write(joinpath(dir, "RetryParent", "Project.toml"), """
+            name = "RetryParent"
+            uuid = "$parent_uuid"
+            [weakdeps]
+            RetryDep = "$dep_uuid"
+            [extensions]
+            RetryExt = "RetryDep"
+            """)
+        write(joinpath(dir, "RetryParent", "src", "RetryParent.jl"), "module RetryParent end\n")
+        extfile = joinpath(dir, "RetryParent", "ext", "RetryExt.jl")
+        write(extfile, "module RetryExt\nerror(\"broken extension\")\nend\n")
+        write(joinpath(dir, "RetryDep", "Project.toml"), """
+            name = "RetryDep"
+            uuid = "$dep_uuid"
+            """)
+        write(joinpath(dir, "RetryDep", "src", "RetryDep.jl"), "module RetryDep end\n")
+        write(joinpath(dir, "RetryBroken.jl"), "module RetryBroken\nerror(\"broken package\")\nend\n")
+        script = """
+            loads_broken() = try Base.require(Main, :RetryBroken); true; catch; false; end
+            loads_broken() && error("broken package loaded")
+            loads_broken() && error("broken package loaded on the second attempt")
+            using RetryParent, RetryDep
+            isext() = Base.get_extension(RetryParent, :RetryExt) isa Module
+            isext() && error("extension loaded")
+            Base.retry_load_extensions()
+            isext() && error("extension loaded on retry")
+            length(Base.EXT_DORMITORY_FAILED) == 1 || error("the failed extension was forgotten")
+            write($(repr(extfile)), "module RetryExt end")
+            Base.retry_load_extensions()
+            isext() || error("extension did not load on retry")
+            isempty(Base.EXT_DORMITORY_FAILED) || error("the extension is still listed as failed")
+            ext = Base.get_extension(RetryParent, :RetryExt)
+            ms = UInt64(1_000_000)
+            Base.print_time_imports_report(ext, 2ms, 1ms, ms ÷ 200)
+            Base.print_time_imports_report(RetryDep, 2ms, UInt64(0), UInt64(0))
+            Base.print_time_imports_report_init(RetryDep, 1, 2ms, 1ms, ms ÷ 2)
+            Base.print_time_imports_report_init(RetryDep, 2, 2ms, UInt64(0), UInt64(0))
+            """
+        # without caches, so that these modules load from source
+        cmd = addenv(`$(Base.julia_cmd()) --compiled-modules=no --startup-file=no --color=no -e $script`,
+                     "JULIA_LOAD_PATH" => dir)
+        out, err = IOBuffer(), IOBuffer()
+        ok = success(pipeline(cmd; stdout=out, stderr=err))
+        errtext = String(take!(err))
+        ok || println(errtext)
+        @test ok
+        @test count("Error during loading of extension RetryExt of RetryParent, use `Base.retry_load_extensions()` to retry", errtext) == 2
+        @test occursin("broken extension", errtext)
+        lines = split(String(take!(out)), '\n'; keepempty=false)
+        @test strip.(lines) == [
+            "2.0 ms  RetryParent → RetryExt 50.00% compilation time (<1% recompilation)",
+            "2.0 ms  RetryDep",
+            "┌ 2.0 ms RetryDep.__init__() 50.00% compilation time (50% recompilation)",
+            "├ 2.0 ms RetryDep.__init__()"]
+    end
+end
+
 pkgimage(val) = val == 1 ? `--pkgimages=yes` : `--pkgimages=no`
 opt_level(val) = `-O$val`
 debug_level(val) = `-g$val`
