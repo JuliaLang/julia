@@ -313,6 +313,20 @@ function init_stdio(handle::Ptr{Cvoid})
     return io
 end
 
+# Detaches `io` from its libuv handle without closing the handle
+function uninit_stdio(io::IO)
+    io isa IOContext && return uninit_stdio(io.io)
+    io isa LibuvStream || return
+    io.handle == C_NULL && return
+    flush(io)
+    iolock_begin()
+    disassociate_julia_struct(io.handle)
+    io.handle = C_NULL
+    io.status = StatusClosed
+    iolock_end()
+    nothing
+end
+
 """
     open(fd::OS_HANDLE)::IO
 

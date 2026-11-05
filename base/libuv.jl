@@ -144,6 +144,8 @@ function uv_timercb end
 function uv_signalcb end
 
 function reinit_stdio()
+    # detach old stdio objects, so their finalizers don't close the handles
+    uninit_stdio()
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))::IO
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))::IO
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))::IO
@@ -157,6 +159,16 @@ function reinit_stdio()
             global stderr = IOContext(stderr, :color => color::Bool)
         end
     end
+    nothing
+end
+
+function uninit_stdio()
+    uninit_stdio(stdin)
+    uninit_stdio(stdout)
+    uninit_stdio(stderr)
+    global stdin = devnull
+    global stdout = Core.stdout
+    global stderr = Core.stderr
     nothing
 end
 

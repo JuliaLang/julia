@@ -152,7 +152,9 @@ On Windows, this stores the allocation granularity, not the page size.
 """
 global PAGESIZE::Clong
 
-function __init__()
+__init__() = __init_build()
+
+function __init_build()
     env_threads = nothing
     if haskey(ENV, "JULIA_CPU_THREADS")
         env_threads = ENV["JULIA_CPU_THREADS"]
@@ -172,15 +174,21 @@ function __init__()
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
     global PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
-    __init_build()
-    nothing
-end
-# Populate the paths needed by sysimg compilation, e.g. `generate_precompile.jl`,
-# without pulling in anything unnecessary like `CPU_NAME`
-function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
     vers = "v$(string(VERSION.major)).$(string(VERSION.minor))"
     global STDLIB = abspath(BINDIR, DATAROOTDIR, "julia", "stdlib", vers)
+    nothing
+end
+
+function __uninit_build()
+    global CPU_THREADS = 1
+    global EFFECTIVE_CPU_THREADS = 1
+    global SC_CLK_TCK = 0
+    global CPU_NAME = ""
+    global JIT = ""
+    global PAGESIZE = 0
+    global BINDIR = ""
+    global STDLIB = ""
     nothing
 end
 
