@@ -689,6 +689,14 @@ end
     S = SharedArray{Int}(v)
     @test reduce(vcat, S) == reduce(vcat, v)
     @test reduce(hcat, S) == reduce(hcat, v)
+
+    # Workers holding no elements have nothing to add to the result.
+    v = collect(1:(length(workers()) - 1))
+    S = SharedArray{Int}(v)
+    @test reduce(vcat, S) == reduce(vcat, v)
+    @test reduce(hcat, S) == reduce(hcat, v)
+    @test reduce(max, S) == maximum(v)
+    @test reduce(+, SharedArray{Int}(0)) == 0
 end
 
 @testset "argument errors" begin
