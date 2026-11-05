@@ -114,6 +114,22 @@ end
         end
         @test sort!(seenD) == sort!(readdir(dir))
 
+        # isempty answers correctly and does not consume an entry
+        it3 = eachentry(dir)
+        @test !isempty(it3)
+        @test !Base.isdone(it3)
+        @test sort!(collect(it3)) == sort!(readdir(dir))
+        @test Base.isdone(it3)
+        @test isempty(it3)
+        mktempdir() do empty_dir
+            it4 = eachentry(empty_dir)
+            @test isempty(it4)
+            @test isempty(it4)
+            @test collect(it4) == String[]
+            @test isempty(collect(zip(eachentry(empty_dir), 1:2)))
+        end
+        @test_throws Base.IOError isempty(eachentry("does/not/exist"))
+
         # Accepts a DirEntry as input
         sub = only(e for e in readdir(dir, DirEntry) if isdir(e))
         @test sort!(collect(eachentry(sub))) == ["bfile.txt"]
