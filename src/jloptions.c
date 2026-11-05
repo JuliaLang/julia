@@ -287,10 +287,11 @@ static const char opts[]  =
     // instrumentation options
     " --code-coverage[={none*|user|all}]            Record coverage for source lines (omitting setting is\n"
     "                                               equivalent to `user`)\n"
-    " --code-coverage=@<path>                       Record coverage only for files that fall under the\n"
-    "                                               given file path/directory. The `@` prefix is\n"
-    "                                               required to select this option. A `@` with no path\n"
-    "                                               will track the current directory.\n"
+    " --code-coverage=@<paths>                      Record coverage only for files that fall under the\n"
+    "                                               given files/directories, separated by `:` (`;` on\n"
+    "                                               Windows). The `@` prefix is required to select this\n"
+    "                                               option. A `@` with no path will track the current\n"
+    "                                               directory.\n"
 
     " --code-coverage=-<paths>                      Record no coverage for files under these paths,\n"
     "                                               separated by `:` (`;` on Windows). Without another\n"
@@ -303,8 +304,9 @@ static const char opts[]  =
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
     " --track-allocation[={none*|user|all}]         Count bytes allocated by each source line (omitting\n"
     "                                               setting is equivalent to `user`)\n"
-    " --track-allocation=@<path>                    Count bytes but only in files that fall under the\n"
-    "                                               given file path/directory. The `@` prefix is required\n"
+    " --track-allocation=@<paths>                   Count bytes but only in files that fall under the\n"
+    "                                               given files/directories, separated by `:` (`;` on\n"
+    "                                               Windows). The `@` prefix is required\n"
     "                                               to select this option. A `@` with no path will track\n"
     "                                               the current directory.\n"
     " --bug-report=KIND                             Launch a bug report session. It can be used to start\n"

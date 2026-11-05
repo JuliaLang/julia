@@ -1992,7 +1992,7 @@ end
 CacheFlags(f::UInt8, coverage::Integer, coverage_path::Union{Nothing,String}) =
     CacheFlags(CacheFlags(f, coverage); coverage_path)
 
-# The tracked path if this process collects `@path` coverage with instrumented images.
+# The tracked paths if this process collects `@path` coverage with instrumented images.
 function current_coverage_path()
     opts = JLOptions()
     opts.code_coverage == 3 && opts.malloc_log == 0 || return nothing
@@ -2089,7 +2089,8 @@ function tracked_path_overlaps_sysimage(tracked::String)
     sources = sysimage_sources()
     sources === nothing && return true
     dirs, files = sources
-    return any(dir -> path_is_tracked(dir, tracked) || path_is_tracked(tracked, dir), dirs) ||
+    entries = split(tracked, Sys.iswindows() ? ';' : ':'; keepempty=false)
+    return any(dir -> path_is_tracked(dir, tracked) || any(entry -> path_is_tracked(String(entry), dir), entries), dirs) ||
            any(file -> path_is_tracked(file, tracked), files)
 end
 

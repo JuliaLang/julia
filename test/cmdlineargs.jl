@@ -739,6 +739,24 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foobar $srcfile`)
             @test contains(read(outfile, String), realpath(srcfile))
             rm(outfile)
+            # a path list tracks files under any entry, and entries are resolved separately
+            sep = Sys.iswindows() ? ';' : ':'
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foo$sep$foobar $srcfile`)
+            @test contains(read(outfile, String), realpath(srcfile))
+            rm(outfile)
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foo$sep$(joinpath(parent, "Foob")) $srcfile`)
+            @test !contains(read(outfile, String), realpath(srcfile))
+            rm(outfile)
+            cd(foo) do
+                @test readchomp(`$cov_exename -e 'print(unsafe_string(Base.JLOptions().tracked_path))' --code-coverage=@.$sep../Foobar`) == "$foo$sep$foobar"
+                @test readchomp(`$cov_exename -e 'print(unsafe_string(Base.JLOptions().tracked_path))' --track-allocation=@.$sep../Foobar`) == "$foo$sep$foobar"
+            end
+            @test contains(readchomp(`$cov_exename --code-coverage=@$foo$sep$foobar -e 'print(Base.julia_cmd())'`),
+                           "--code-coverage=@$foo$sep$foobar")
+            # any entry inside the system image's sources rules out plain caches
+            basefile = abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", "Base.jl")
+            @test !Base.tracked_path_overlaps_sysimage("$foo$sep$foobar")
+            @test Base.tracked_path_overlaps_sysimage("$foo$sep$basefile")
         end
 
         # excluded files record nothing and are optimized as without coverage

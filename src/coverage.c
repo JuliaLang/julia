@@ -141,8 +141,6 @@ static int is_skip_filename(const char *filename) JL_NOTSAFEPOINT
 
 static int path_is_under(const char *path, const char *tracked, size_t tlen) JL_NOTSAFEPOINT
 {
-    if (tlen == 0)
-        return 1; // no path given: everything is tracked
     while (tlen > 0 && (tracked[tlen - 1] == '/' || tracked[tlen - 1] == PATHSEPSTRING[0]))
         tlen--;
     if (tlen == 0)
@@ -153,18 +151,8 @@ static int path_is_under(const char *path, const char *tracked, size_t tlen) JL_
     return next == '\0' || next == '/' || next == PATHSEPSTRING[0];
 }
 
-JL_DLLEXPORT int jl_path_is_tracked_by(const char *path, const char *tracked) JL_NOTSAFEPOINT
+static int path_is_under_any(const char *path, const char *list) JL_NOTSAFEPOINT
 {
-    if (tracked == NULL || path == NULL)
-        return 0;
-    return path_is_under(path, tracked, strlen(tracked));
-}
-
-JL_DLLEXPORT int jl_path_is_coverage_excluded(const char *path) JL_NOTSAFEPOINT
-{
-    const char *list = jl_options.coverage_exclude;
-    if (list == NULL || path == NULL || !jl_isabspath(path))
-        return 0;
     while (1) {
         const char *end = strchr(list, PATHLISTSEPSTRING[0]);
         size_t len = end ? (size_t)(end - list) : strlen(list);
@@ -174,6 +162,21 @@ JL_DLLEXPORT int jl_path_is_coverage_excluded(const char *path) JL_NOTSAFEPOINT
             return 0;
         list = end + 1;
     }
+}
+
+JL_DLLEXPORT int jl_path_is_tracked_by(const char *path, const char *tracked) JL_NOTSAFEPOINT
+{
+    if (tracked == NULL || path == NULL)
+        return 0;
+    return path_is_under_any(path, tracked);
+}
+
+JL_DLLEXPORT int jl_path_is_coverage_excluded(const char *path) JL_NOTSAFEPOINT
+{
+    const char *list = jl_options.coverage_exclude;
+    if (list == NULL || path == NULL || !jl_isabspath(path))
+        return 0;
+    return path_is_under_any(path, list);
 }
 
 JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT
