@@ -881,12 +881,6 @@ function matches_sv(parent::AbsIntState, sv::AbsIntState)
             method_for_inference_limit_heuristics(sv) === method_for_inference_limit_heuristics(parent))
 end
 
-function is_method_recursed(method::Method, caller::AbsIntState)
-    return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
-        return method === frame_instance(sv).def
-    end
-end
-
 function is_constprop_edge_recursed(edge::MethodInstance, caller::AbsIntState)
     return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
         return edge === frame_instance(sv) && is_constproped(sv)
@@ -1155,8 +1149,15 @@ function _concrete_eval_call(
         concrete_result = ConcreteResult(edge, effects; proof)
         return ConstCallResult(Bottom, Any, concrete_result, effects)
     end
-    concrete_result = ConcreteResult(edge, EFFECTS_TOTAL, value; proof)
-    return ConstCallResult(Const(value), Bottom, concrete_result, EFFECTS_TOTAL)
+    rt = Const(value)
+    # A non-mutation-free value obtained by concrete evaluation may refer to global
+    # memory (e.g. a const global `Ref`), so preserve the `:inaccessiblememonly` taint
+    # of the call: otherwise the caller may access the value's memory and still be
+    # refined to be `:inaccessiblememonly` (and thus `:consistent`)
+    concrete_effects = is_mutation_free_argtype(rt) ? EFFECTS_TOTAL :
+        Effects(EFFECTS_TOTAL; inaccessiblememonly=effects.inaccessiblememonly)
+    concrete_result = ConcreteResult(edge, concrete_effects, value; proof)
+    return ConstCallResult(rt, Bottom, concrete_result, concrete_effects)
 end
 
 # check if there is a cycle and duplicated inference of `mi`
@@ -3968,8 +3969,7 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
     end
     cconv = e.args[5]
     if isa(cconv, QuoteNode) && (v = cconv.value;
-        isa(v, Union{Tuple{Symbol, UInt16, Bool}, Tuple{Symbol, UInt16, Bool, Bool},
-                     Tuple{Symbol, UInt16, Bool, Bool, Bool}}))
+        isa(v, Union{Tuple{Symbol, UInt16, Bool}, Tuple{Symbol, UInt16, Bool, Bool}}))
         override = decode_effects_override(v[2])
         effects = override_effects(effects, override)
     end
@@ -4002,11 +4002,6 @@ function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, sstate::St
         rt = tmerge(typeinf_lattice(interp), rt, thisval)
     end
     return rt
-end
-
-function stmt_taints_inbounds_consistency(sv::AbsIntState)
-    propagate_inbounds(sv) && return true
-    return has_curr_ssaflag(sv, IR_FLAG_INBOUNDS)
 end
 
 function merge_override_effects!(interp::AbstractInterpreter, effects::Effects, sv::InferenceState)

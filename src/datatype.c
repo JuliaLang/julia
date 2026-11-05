@@ -1535,7 +1535,7 @@ JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl
     extern jl_value_t *jl_permbox##nb(jl_datatype_t *t, uintptr_t tag, uint##nb##_t x) JL_NOTSAFEPOINT \
     {   /* n.b. t must be a concrete isbits datatype of the right size */               \
         jl_task_t *ct = jl_current_task;                                                \
-        jl_value_t *v = jl_gc_permobj(ct->ptls, LLT_ALIGN(nb, sizeof(void*)), t, 0);    \
+        jl_value_t *v = jl_gc_permobj(ct->ptls, LLT_ALIGN(sizeof(uint##nb##_t), sizeof(void*)), t, 0); \
         assert(tag);                                                                    \
         jl_set_typetagof(v, tag, GC_OLD_MARKED);                                        \
         *(uint##nb##_t*)jl_data_ptr(v) = x;                                             \

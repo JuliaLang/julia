@@ -296,6 +296,12 @@ TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, con
 
 const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
 
+function uninit_toml_cache()
+    empty!(TOML_CACHE.d)
+    TOML.reinit!(TOML_CACHE.p, "")
+    nothing
+end
+
 parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
     lock(toml_lock) do
@@ -1353,6 +1359,10 @@ function init_debuginfo_source_paths()
     isempty(DATAROOT) || push!(paths, DATAROOT * "julia/", share)
     push!(paths, "", joinpath(share, "base"))
     ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec(paths...))
+end
+
+function uninit_debuginfo_source_paths()
+    ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec())
 end
 
 function cache_file_entry(pkg::PkgId)
@@ -3615,8 +3625,7 @@ function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{In
     # When this worker is producing a native object pkgimage, retain raw
     # inferred IR on `CodeInstance.inferred` for the non-inlineable methods
     # that would otherwise be discarded, so the irgen pass can short-circuit
-    # `typeinf_ext` instead of re-inferring. `jl_finalize_precompile_inferred`
-    # clears them (and the flag) before staticdata serialization.
+    # `typeinf_ext` instead of re-inferring. The image leaves them out.
     keep_ir = JLOptions().outputo != C_NULL
     keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 1)
     # This one changes the parser behavior

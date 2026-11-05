@@ -28,7 +28,12 @@ $(BUILDDIR)/$(LMDB_SRC_DIR)/pidns.patch-applied: $(BUILDDIR)/$(LMDB_SRC_DIR)/rem
 		patch -p1 -f < $(SRCDIR)/patches/0003-Refuse-to-open-environments-across-pid-namespaces.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(LMDB_SRC_DIR)/source-patched: $(BUILDDIR)/$(LMDB_SRC_DIR)/pidns.patch-applied
+$(BUILDDIR)/$(LMDB_SRC_DIR)/release-locks.patch-applied: $(BUILDDIR)/$(LMDB_SRC_DIR)/pidns.patch-applied
+	cd $(BUILDDIR)/$(LMDB_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/0004-Add-mdb_env_release_locks.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(LMDB_SRC_DIR)/source-patched: $(BUILDDIR)/$(LMDB_SRC_DIR)/release-locks.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(LMDB_SRC_DIR)/build-configured: $(BUILDDIR)/$(LMDB_SRC_DIR)/source-patched

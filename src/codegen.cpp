@@ -1053,6 +1053,11 @@ static const auto jlinvokeoc_func = new JuliaFunction<>{
     get_func2_sig,
     get_func_attrs,
 };
+static const auto jlinvoketarget_func = new JuliaFunction<>{
+    XSTR(jl_invoke_target),
+    get_func2_sig,
+    get_func_attrs,
+};
 static const auto jlopaque_closure_call_func = new JuliaFunction<>{
     XSTR(jl_f_opaque_closure_call),
     get_func_sig,
@@ -2660,10 +2665,14 @@ static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_value_t *typ)
     if (jl_is_some_Type(typ)) {
         // only `TypeEgal{T}` and `Type{Union{}}` have a single (constant) value
         assert(is_uniquerep_Type(typ) || jl_some_Type_T(typ) == jl_bottom_type);
+        if (jl_some_Type_T(typ) == jl_bottom_type) {
+            // `Union{}` is the instance of the singleton `TypeofBottom`, and so a ghost like any other
+            jl_cgval_t ghost((jl_value_t*)jl_typeofbottom_type);
+            ghost.typ = typ;
+            return ghost;
+        }
         jl_cgval_t constant(NULL, true, typ, NULL, best_aliasinfo(ctx, typ), jl_gc_roots_t());
         constant.constant = jl_some_Type_T(typ);
-        if (constant.constant == jl_bottom_type)
-            constant.isghost = true;
         return constant;
     }
     return jl_cgval_t(typ);
@@ -3496,6 +3505,21 @@ static void coverageAllocLine(jl_codectx_t &ctx, StringRef filename, int line, b
         return;
     }
     jl_coverage_alloc_line(filename.data(), line);
+}
+
+// The definition line and file of the method that a frame belongs to, or 0 if it has none.
+static int32_t coverageDefLine(jl_value_t *func, StringRef &file)
+{
+    if (func && jl_is_method_instance(func))
+        func = ((jl_method_instance_t*)func)->def.value;
+    if (func && jl_is_method(func)) {
+        jl_method_t *m = (jl_method_t*)func;
+        if (m->line > 0) {
+            file = jl_symbol_name(m->file);
+            return m->line;
+        }
+    }
+    return 0;
 }
 
 static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line, bool is_user_code)
@@ -6395,7 +6419,10 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                     bool specsig, needsparams;
                     std::tie(specsig, needsparams) = uses_specsig(get_ci_abi(codeinst), mi, codeinst->rettype, ctx.params->prefer_specsig);
                     if (needsparams) {
-                        Value *r = emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
+                        // `jl_invoke` dispatches natively, so a foreign CI must be called through itself
+                        Value *r = codeinst->owner != jl_nothing
+                            ? emit_jlcall(ctx, jlinvoketarget_func, track_pjlvalue(ctx, literal_pointer_val(ctx, ci)), argv, nargs, julia_call2)
+                            : emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
                         result = mark_julia_type(ctx, r, true, rt);
                     }
                     else {
@@ -8008,6 +8035,12 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, j
     Value *theFarg;
 
     if (theFunc) {
+        theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
+    }
+    else if (codeinst->owner != jl_nothing) {
+        // `jl_invoke` would run the native specialization; a foreign CI must be
+        // compiled by its owner, otherwise `jl_invoke_target` errors
+        theFunc = prepare_call(jlinvoketarget_func);
         theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
     }
     else {
@@ -10234,6 +10267,8 @@ static jl_llvm_functions_t
         StringRef file;
         ssize_t line;
         ssize_t line0; // if this represents pc=1, then also cover the entry to the function (pc=0)
+        StringRef deffile;
+        ssize_t defline; // for an inlined frame, the definition line of its method, covered on entry to the frame
         bool is_user_code;
         int32_t edgeid;
         bool sameframe(const DebugLineTable &other) const {
@@ -10245,6 +10280,7 @@ static jl_llvm_functions_t
     topinfo.file = ctx.file;
     topinfo.line = toplineno;
     topinfo.line0 = 0;
+    topinfo.defline = 0;
     topinfo.is_user_code = mod_is_user_mod;
     topinfo.loc = topdebugloc;
     topinfo.edgeid = 0;
@@ -10278,10 +10314,11 @@ static jl_llvm_functions_t
                     info.line = i;
                     if (pc > 0 && jl_is_string(debuginfo->linetable))
                         info.line = std::max(0, jl_cdi_firstxy(debuginfo, pc).first);
+                    info.defline = to != 0 ? coverageDefLine(func, info.deffile) : 0;
                     info.line0 = 0;
                     if (pc == 1) {
                         int32_t line0 = jl_cdi_external_firstline(debuginfo);
-                        if (line0 > 0 && info.line != line0)
+                        if (line0 > 0 && info.line != line0 && !(info.defline == line0 && info.deffile == info.file))
                             info.line0 = line0;
                     }
                     if (info.file.empty())
@@ -10459,11 +10496,16 @@ static jl_llvm_functions_t
             if (dbg >= prev_lineinfo.size() || !new_lineinfo[dbg].sameframe(prev_lineinfo[dbg]))
                 break;
         }
+        size_t first_changed = dbg;
         for (; dbg < new_lineinfo.size(); dbg++) {
             const auto &newdbg = new_lineinfo[dbg];
             if (do_coverage(newdbg.is_user_code)) {
                 if (newdbg.line0 != 0 && (dbg >= prev_lineinfo.size() || newdbg.edgeid != prev_lineinfo[dbg].edgeid || newdbg.line0 != prev_lineinfo[dbg].line))
                     coverageVisitLine(ctx, newdbg.file, newdbg.line0, newdbg.is_user_code);
+                // a standalone call covers its definition line on entry, so an inlined call does too
+                bool entered = dbg > first_changed || dbg >= prev_lineinfo.size() || newdbg.edgeid != prev_lineinfo[dbg].edgeid;
+                if (entered && newdbg.defline > 0 && !(newdbg.defline == newdbg.line && newdbg.deffile == newdbg.file))
+                    coverageVisitLine(ctx, newdbg.deffile, newdbg.defline, newdbg.is_user_code);
                 coverageVisitLine(ctx, newdbg.file, newdbg.line, newdbg.is_user_code);
             }
         }
@@ -10497,6 +10539,10 @@ static jl_llvm_functions_t
                 int32_t extraline = jl_cdi_external_firstline(debuginfo);
                 if (extraline != -1)
                     coverageAllocLine(ctx, file, extraline, is_user_code);
+                StringRef deffile;
+                int32_t defline = coverageDefLine(func, deffile);
+                if (defline > 0)
+                    coverageAllocLine(ctx, deffile, defline, is_user_code);
                 for (size_t pc = 1; 1; pc++) {
                     struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
                     if (lineidx.loc == -1)
@@ -10920,8 +10966,12 @@ static jl_llvm_functions_t
                 if (VN) {
                     if (new_union.Vboxed)
                         V = new_union.Vboxed;
-                    else if (new_union.constant)
+                    else if (new_union.isboxed) {
+                        // The box bit of the tag, and the `emit_unionmove` below, follow `isboxed`
+                        // too: a boxed value is in no slot, and lives only in this box.
+                        assert(new_union.constant); // its box is made on demand
                         V = boxed(ctx, new_union);
+                    }
                     else
                         V = Constant::getNullValue(ctx.types().T_prjlvalue);
                 }
@@ -11374,6 +11424,7 @@ static void init_jit_functions(void)
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
     add_named_global(jlinvoke_func, &jl_invoke);
     add_named_global(jlinvokemodify_func, &jl_invoke_modify);
+    add_named_global(jlinvoketarget_func, &jl_invoke_target);
     add_named_global(jltopeval_func, &jl_toplevel_eval);
     add_named_global(jlcopyast_func, &jl_copy_ast);
     //add_named_global(jlnsvec_func, &jl_svec);
@@ -11418,10 +11469,14 @@ static void init_jit_functions(void)
     add_named_global(jlunlockfield_func, &jl_unlock_field);
     add_named_global(jlgetabiconverter_func, &jl_get_abi_converter);
 
-    jl_get_pgcstack_func_t get_pgcstack;
-    jl_pgcstack_key_t pgcstack_key;
-    jl_pgcstack_getkey(&get_pgcstack, &pgcstack_key);
-    add_named_global("jl_get_pgcstack_resolved", get_pgcstack);
+    // the JIT's counterpart of an image's `jl_ptls_table`
+    static jl_get_pgcstack_func_t pgcstack_func_slot;
+    static uintptr_t pgcstack_key_slot;
+    static_assert(sizeof(jl_pgcstack_key_t) <= sizeof(pgcstack_key_slot), "TLS key doesn't fit its slot");
+    jl_pgcstack_getkey(&pgcstack_func_slot, (jl_pgcstack_key_t*)&pgcstack_key_slot);
+    add_shared_named_global("jl_pgcstack_func_slot", (void*)&pgcstack_func_slot);
+    add_shared_named_global("jl_pgcstack_key_slot", (void*)&pgcstack_key_slot);
+    add_shared_named_global("jl_image_tls_offset", (void*)&jl_tls_offset);
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)

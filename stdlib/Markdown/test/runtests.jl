@@ -98,6 +98,10 @@ end
     md = Markdown.parse(text)
     @test text == Markdown.plain(md)
 
+    md = Markdown.parse("a ` ` b")
+    @test md == MD(Paragraph(["a ", Code(""), " b"]))
+    @test Markdown.parse(Markdown.plain(md)) == md
+
     @test md"""
     ````julia
     foo()
@@ -247,6 +251,8 @@ end
     @test length(doc[2].items[2][2].items) === 2
     @test doc[2].items[2][2].items[1][1].content[1] == "three"
     @test doc[2].items[2][2].items[2][1].content[1] == "four"
+
+    @test Markdown.parse("12345678901234567890. item")[1] isa Markdown.Paragraph
 end
 
 @testset "Links" begin
@@ -1166,9 +1172,7 @@ end
             </li>
             </ol>
             <ul>
-            <li>
-            <p>one</p>
-            </li>
+            <li>one</li>
             </ul>
             <p>two</p>
             <ul>
@@ -1181,10 +1185,8 @@ end
             </li>
             </ul>
             <ul>
-            <li>
-            <pre><code>foo
-            </code></pre>
-            </li>
+            <li><pre><code>foo
+            </code></pre></li>
             </ul>
             <ol>
             <li>foo</li>
@@ -1292,6 +1294,12 @@ end
             \end{itemize}
             """
     @test expected == Markdown.latex(md)
+end
+
+@testset "non-ASCII digits are not list markers" begin
+    for s in ("۱. item", "１. item", "۱) item")
+        @test typeof.(Markdown.parse(s)) == [Markdown.Paragraph]
+    end
 end
 
 @testset "issue 20225, check this can print" begin
@@ -1418,6 +1426,9 @@ end
     @test md[2].loose
     @test md[4].loose
     @test !md[6].loose
+    md = Markdown.parse("- a\n- b\n\nText")
+    @test !md[1].loose
+    @test Markdown.html(md) == "<ul>\n<li>a</li>\n<li>b</li>\n</ul>\n<p>Text</p>\n"
 end
 
 @testset "issue #29995" begin

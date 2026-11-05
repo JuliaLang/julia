@@ -114,15 +114,16 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         return;
     }
 
-    jl_array_t *udeps = NULL;
-    JL_GC_PUSH2(&worklist, &udeps);
-    jl_module_init_order = jl_alloc_vec_any(0);
+    jl_array_t *udeps = NULL, *init_order = NULL;
+    JL_GC_PUSH3(&worklist, &udeps, &init_order);
+    // the modules with an `__init__`, in order
+    init_order = jl_alloc_vec_any(0);
     int i, l = jl_array_nrows(worklist);
     for (i = 0; i < l; i++) {
         jl_value_t *m = jl_array_ptr_ref(worklist, i);
         jl_value_t *f = jl_get_global((jl_module_t*)m, jl_symbol("__init__"));
         if (f) {
-            jl_array_ptr_1d_push(jl_module_init_order, m);
+            jl_array_ptr_1d_push(init_order, m);
         }
     }
 
@@ -140,7 +141,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     uint32_t checksum =
         jl_create_system_image(emit_native ? &native_code : NULL,
                                jl_options.incremental ? worklist : NULL, emit_split, comp,
-                               &s, &udeps, &srctextpos, jl_module_init_order);
+                               &s, &udeps, &srctextpos, init_order);
 
     ios_t f;
 

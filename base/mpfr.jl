@@ -396,17 +396,13 @@ BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=rounding_raw(BigFloat); 
     BigFloat(Float64(x), r; precision=precision)
 
 function BigFloat(x::Rational, r::MPFRRoundingMode=rounding_raw(BigFloat); precision::Integer=_precision_with_base_2(BigFloat))
-    r_den = _opposite_round(r)
-    setprecision(BigFloat, precision) do
-        setrounding_raw(BigFloat, r) do
-            BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x), r_den)::BigFloat
-        end
-    end
-end
-function _opposite_round(r::MPFRRoundingMode)
-    r == MPFRRoundUp && return MPFRRoundDown
-    r == MPFRRoundDown && return MPFRRoundUp
-    return r
+    # the numerator is converted exactly, so the division is the only rounding
+    num = numerator(x)
+    n = BigFloat(num; precision = ndigits(num; base = 2))
+    d = BigInt(denominator(x))
+    z = BigFloat(; precision)
+    ccall((:mpfr_div_z, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigInt}, MPFRRoundingMode), z, n, d, r)
+    return z
 end
 
 function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=_precision_with_base_2(BigFloat), rounding::MPFRRoundingMode=rounding_raw(BigFloat))
@@ -433,6 +429,13 @@ BigFloat(x::AbstractString, r::RoundingMode; precision::Integer=_precision_with_
 
 ## BigFloat -> Integer
 _unchecked_cast(T, x::BigFloat, r::RoundingMode) = _unchecked_cast(T, x, convert(MPFRRoundingMode, r))
+# MPFR has no ties-away or ties-up mode, but these only differ from ties-to-even at an exact tie
+function _unchecked_cast(T, x::BigFloat, r::Union{RoundingMode{:NearestTiesAway}, RoundingMode{:NearestTiesUp}})
+    f = BigFloat(; precision=_precision_with_base_2(x))
+    ccall((:mpfr_frac, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), f, x, MPFRRoundNearest)
+    (f == 0.5 || f == -0.5) || return _unchecked_cast(T, x, MPFRRoundNearest)
+    return _unchecked_cast(T, x, r isa RoundingMode{:NearestTiesUp} ? MPFRRoundUp : MPFRRoundFromZero)
+end
 
 function _unchecked_cast(::Type{Int64}, x::BigFloat, r::MPFRRoundingMode)
     ccall((:__gmpfr_mpfr_get_sj,libmpfr), Cintmax_t, (Ref{BigFloat}, MPFRRoundingMode), x, r)

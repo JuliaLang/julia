@@ -187,12 +187,6 @@ free_match_data(match_data) =
 free_re(re) =
     ccall((:pcre2_code_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), re)
 
-free_jit_stack(stack) =
-    ccall((:pcre2_jit_stack_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), stack)
-
-free_match_context(context) =
-    ccall((:pcre2_match_context_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), context)
-
 function err_message(errno::Integer)
     buffer = Vector{UInt8}(undef, 1024)
     ret = ccall((:pcre2_get_error_message_8, PCRE_LIB), Cint,
@@ -260,15 +254,6 @@ function substring_length_bynumber(match_data, number)
         rc == ERROR_UNSET && return 0
         error("PCRE error: $(err_message(rc))")
     end
-    return Int(s[])
-end
-
-function substring_copy_bynumber(match_data, number, buf, buf_size)
-    s = RefValue{Csize_t}(buf_size)
-    rc = ccall((:pcre2_substring_copy_bynumber_8, PCRE_LIB), Cint,
-               (Ptr{Cvoid}, UInt32, Ptr{UInt8}, Ref{Csize_t}),
-               match_data, number, buf, s)
-    rc < 0 && error("PCRE error: $(err_message(rc))")
     return Int(s[])
 end
 

@@ -185,8 +185,6 @@ function vect(X...)
     return T[X...]
 end
 
-asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
-
 allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
 """
@@ -2537,15 +2535,17 @@ findfirst(::typeof(isone), r::OneTo) = isempty(r) ? nothing : oneunit(keytype(r)
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange{<:Integer}) where {T<:Integer}
     first(r) <= p.x <= last(r) || return nothing
     i1 = first(keys(r))
-    return i1 + oftype(i1, p.x - first(r))
+    return checked_add(i1, convert(typeof(i1), maybe_unsigned(p.x - first(r))))
 end
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
-    d = p.x - first(r)
-    iszero(d % step(r)) || return nothing
-    return convert(keytype(r), d ÷ step(r) + 1)
+    f, h = first(r), step(r)
+    d = maybe_unsigned(h > zero(h) ? p.x - f : f - p.x)
+    n, m = divrem(d, uabs(h))
+    iszero(m) || return nothing
+    return checked_add(oneunit(keytype(r)), convert(keytype(r), n))
 end
 
 findfirst(::typeof(iszero), r::AbstractRange) = findfirst(==(zero(first(r))), r)

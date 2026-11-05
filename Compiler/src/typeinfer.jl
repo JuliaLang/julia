@@ -621,7 +621,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance
     if can_discard_trees && !inlineable
         # Precompile-keep-ir mode: retain non-inlineable IR as raw CodeInfo so
         # irgen's typeinf_ext can reuse it instead of re-inferring.
-        # jl_finalize_precompile_inferred nulls it before save.
+        # The image leaves it out.
         precompile_keep_ir(interp) && return ci
         keep_source_for_output(mi) || return nothing
     end
@@ -1017,9 +1017,12 @@ function compute_edges!(sv::InferenceState)
     for i in 1:length(sv.stmt_info)
         add_edges!(edges, sv.stmt_info[i])
     end
-    user_edges = sv.src.edges::Union{Nothing, SimpleVector, Vector{Any}}
-    if user_edges !== nothing && user_edges !== empty_edges
-        append!(edges, user_edges)
+    user_edges = sv.src.edges
+    if user_edges isa Union{SimpleVector, Vector{Any}}
+        user_edges === empty_edges || append!(edges, user_edges)
+    elseif user_edges !== nothing
+        # Generated functions in older packages store a narrowly typed vector here.
+        append!(edges, user_edges::Vector)
     end
     nothing
 end
@@ -1069,22 +1072,6 @@ function record_slot_assign!(sv::InferenceState)
         end
     end
     sv.src.slottypes = slottypes
-    return nothing
-end
-
-# find the dominating assignment to the slot `id` in the block containing statement `idx`,
-# returns `nothing` otherwise
-function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
-    block = block_for_inst(sv.cfg, idx)
-    for pc in reverse(sv.cfg.blocks[block].stmts) # N.B. reverse since the last assignment is dominating this block
-        pc < idx || continue # N.B. needs pc ≠ idx as `id` can be assigned at `idx`
-        stmt = sv.src.code[pc]
-        isexpr(stmt, :(=)) || continue
-        lhs = stmt.args[1]
-        isa(lhs, SlotNumber) || continue
-        slot_id(lhs) == id || continue
-        return pc
-    end
     return nothing
 end
 

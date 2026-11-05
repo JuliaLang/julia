@@ -170,7 +170,7 @@ end
 
 function coverage_visit_line(mod, st)
     Base.JLOptions().code_coverage == 0 && return
-    lno = Base.first_linenode(st)
+    lno = first_linenode(st)
     (lno.line > 0 && lno.file isa Symbol) || return
     file = String(lno.file)
     if ccall(:jl_coverage_enabled_for, Cint, (Any, Cstring), mod, file) != 0

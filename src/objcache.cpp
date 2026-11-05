@@ -125,6 +125,7 @@ static int checkMDB_(int Err, int Line) JL_NOTSAFEPOINT
 
 class MDBTxn {
 public:
+    MDBTxn() JL_NOTSAFEPOINT = default;
     MDBTxn(MDB_env *Env, unsigned Flags = 0) JL_NOTSAFEPOINT
     {
         if (checkMDB(mdb_txn_begin(Env, nullptr, Flags, &Txn)))
@@ -188,6 +189,7 @@ void ObjCache::initDB()
     jl_gc_unsafe_leave(ct->ptls, gc_state);
 
     std::unique_lock<std::mutex> Lock{Mutex};
+    int OpenErr;
 
     if (Initialized.load(memory_order_acquire))
         return;
@@ -206,21 +208,33 @@ void ObjCache::initDB()
         goto done;
     }
 
-    if (checkMDB(mdb_env_create(&Env))) {
-        Env = nullptr;
-        goto done;
-    }
-    checkMDB(mdb_env_set_maxreaders(Env, 510));
-    checkMDB(mdb_env_set_maxdbs(Env, 128));
-    checkMDB(mdb_env_set_mapsize(Env, OBJCACHE_CAPACITY * 2));
     llvm::sys::fs::create_directories(*CachePath);
-    if (int Err = mdb_env_open(Env, CachePath->c_str(), MDB_NOSYNC | MDB_NOTLS, 0640)) {
-        // These two are expected conditions, not errors: record them so the
+    for (int Attempt = 0;; Attempt++) {
+        if (checkMDB(mdb_env_create(&Env))) {
+            Env = nullptr;
+            goto done;
+        }
+        checkMDB(mdb_env_set_maxreaders(Env, 510));
+        checkMDB(mdb_env_set_maxdbs(Env, 128));
+        checkMDB(mdb_env_set_mapsize(Env, OBJCACHE_CAPACITY * 2));
+        OpenErr = mdb_env_open(Env, CachePath->c_str(), MDB_NOSYNC | MDB_NOTLS, 0640);
+        // the last other user may have removed the semaphores as it exited; a retry makes new ones
+        if (Attempt == 0 && (OpenErr == EINVAL || OpenErr == EIDRM)) {
+            mdb_env_close(Env);
+            continue;
+        }
+        break;
+    }
+    if (int Err = OpenErr) {
+        // These are expected conditions, not errors: record them so the
         // REPL banner can explain why the cache is disabled.
         if (Err == MDB_REMOTE_FS)
             DisabledNotice = "the cache directory is on a network filesystem";
         else if (Err == MDB_PIDNS_MISMATCH)
             DisabledNotice = "it is in use by a process in a different pid namespace";
+        // on Apple this is usually the SysV semaphore limit, not a full disk
+        else if (Err == ENOSPC)
+            DisabledNotice = "no space is left for its lock file or semaphores";
         // EPERM/EACCES: sandboxes (e.g. sandbox-exec on macOS CI) may deny
         // access to the SysV semaphores LMDB uses on Apple platforms; the
         // cache cannot work in such environments, so disable it quietly.
@@ -277,6 +291,14 @@ ObjCache::~ObjCache()
     mdb_dbi_close(Env, ObjCacheDbi);
     mdb_dbi_close(Env, ObjMetaDbi);
     mdb_env_close(Env);
+}
+
+MDBTxn ObjCache::beginTxn(unsigned Flags) JL_NOTSAFEPOINT
+{
+    std::shared_lock<std::shared_mutex> Lock{TxnLock};
+    if (LocksReleased)
+        return {};
+    return MDBTxn{Env, Flags};
 }
 
 static std::atomic<size_t> NWrite = 0, NRead = 0, NMiss = 0, NHit = 0, NEvicted = 0;
@@ -390,7 +412,7 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     auto Hash = hashModule(M);
     auto ObjKey = toObjKey(Hash);
 
-    MDBTxn Txn{Env, MDB_RDONLY};
+    MDBTxn Txn = beginTxn(MDB_RDONLY);
     if (!Txn.Txn)
         return doCompile();
 
@@ -479,7 +501,7 @@ jl_value_t *ObjCache::kvGet(const char *Ns, const uint8_t *Key,
 
     jl_array_t *Ret = nullptr;
     {
-        MDBTxn Txn{Env, MDB_RDONLY};
+        MDBTxn Txn = beginTxn(MDB_RDONLY);
         if (!Txn.Txn)
             return jl_nothing;
 
@@ -571,6 +593,11 @@ int64_t ObjCache::prune(int64_t Cutoff)
     // written, so the two ranges are scanned separately.
     for (int64_t Hit : {(int64_t)0, (int64_t)1 << 62}) {
         while (true) {
+            std::shared_lock<std::shared_mutex> TxnGuard{TxnLock};
+            if (LocksReleased) {
+                Removed = -1;
+                goto done;
+            }
             MDBTxn Txn{Env};
             MDB_cursor *MetaCur;
             if (!Txn.Txn || checkMDB(mdb_cursor_open(Txn.Txn, ObjMetaDbi, &MetaCur))) {
@@ -638,6 +665,9 @@ std::string ObjCache::compact(const char *Dir)
     std::string Path = (llvm::Twine(Dir) + "/data.mdb").str();
     if (llvm::sys::fs::exists(Path))
         return Path + " already exists";
+    std::shared_lock<std::shared_mutex> TxnGuard{TxnLock};
+    if (LocksReleased)
+        return "the native code cache is shutting down";
     if (int Err = mdb_env_copy2(Env, Dir, MDB_CP_COMPACT))
         return mdb_strerror(Err);
     return {};
@@ -658,6 +688,17 @@ void ObjCache::shutdown()
         uv_thread_join(&WriterThread);
         Started = false;
     }
+
+#ifdef MDB_HAVE_ENV_RELEASE_LOCKS
+    // we never close the environment, so SysV semaphores (Apple) would outlive the process
+    {
+        std::unique_lock<std::mutex> InitLock{Mutex};
+        std::unique_lock<std::shared_mutex> Lock{TxnLock};
+        LocksReleased = true;
+        if (Env)
+            checkMDB(mdb_env_release_locks(Env));
+    }
+#endif
 
     if (LogFile) {
         std::unique_lock<std::mutex> Lock{LogMutex};

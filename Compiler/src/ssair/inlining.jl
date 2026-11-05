@@ -1243,11 +1243,6 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
     return nothing
 end
 
-function invoke_signature(argtypes::Vector{Any})
-    ft, argtyps = widenconst(argtypes[2]), instanceof_tfunc(widenconst(argtypes[3]), false)[1]
-    return rewrap_unionall(Tuple{ft, unwrap_unionall(argtyps).parameters...}, argtyps)
-end
-
 function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info::CallInfo), state::InliningState)
     if isa(info, OpaqueClosureCreateInfo)
         lbt = argextype(stmt.args[2], ir)
@@ -1571,7 +1566,9 @@ function concrete_result_item(result::ConcreteResult,
     if !may_inline_concrete_result(result)
         return compileable_specialization(target, result.effects, et, info, state)
     end
-    @assert result.effects === EFFECTS_TOTAL
+    # a successful concrete evaluation may retain the `:inaccessiblememonly` taint of the call
+    # (see `_concrete_eval_call`), which doesn't matter for replacing it with the constant
+    @assert Effects(result.effects; inaccessiblememonly=ALWAYS_TRUE) === EFFECTS_TOTAL
     return ConstantCase(quoted(result.result))
 end
 
