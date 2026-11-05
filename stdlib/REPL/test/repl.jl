@@ -2234,6 +2234,7 @@ end
             # projects without a usable name are named after their directory
             @test prompt_for(joinpath(root, "new", "Project.toml")) == "(new) pkg> "
             @test prompt_for(write_project(joinpath(root, "bad"), "name = [")) == "(bad) pkg> "
+            @test prompt_for(write_project(joinpath(root, "badname"), "name = 3")) == "(badname) pkg> "
 
             # long names are shortened
             @test prompt_for(write_project(joinpath(root, "len"), "name = \"$("a"^30)\"")) == "($("a"^30)) pkg> "

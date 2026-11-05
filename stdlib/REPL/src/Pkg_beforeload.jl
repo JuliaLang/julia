@@ -67,7 +67,8 @@ function projname(project_file::String)
             p = Base.TOML.Parser{nothing}()
             Base.TOML.reinit!(p, read(project_file, String); filepath=project_file)
             proj = Base.TOML.parse(p)
-            get(proj, "name", nothing)
+            name = get(proj, "name", nothing)
+            name isa String ? name : nothing
         catch
             nothing
         end
