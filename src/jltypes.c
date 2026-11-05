@@ -3470,7 +3470,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                                     "names", "atomicfields", "constfields",
                                                     "wrapper", "Typeofwrapper", "cache", "linearcache",
                                                     "partial", "hash", "max_args", "n_uninitialized",
-                                                    "flags", // "abstract", "mutable", "mayinlinealloc",
+                                                    "flags", // "abstract", "mutable", "mayinlinealloc", "hiddenfields",
                                                     "cache_entry_count", "max_methods", "constprop_heuristic",
                                                     "concrete_only");
     const static uint32_t typename_constfields[1]  = { 0b0000110100001001011 }; // TODO: put back atomicfields and constfields in this list
@@ -4120,6 +4120,7 @@ void jl_init_types(void) JL_GC_DISABLED
     //jl_method_type->name->constfields = method_constfields;
     const static uint32_t method_atomicfields[] = { 0x20000070, 0x0 }; // (1<<4)|(1<<5)|(1<<6)|(1<<29)
     jl_method_type->name->atomicfields = method_atomicfields;
+    jl_method_type->name->hiddenfields = 1; // writelock
 
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"), core,
@@ -4373,6 +4374,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_emptysvec,
                         0, 1, 6);
     XX(task);
+    jl_task_type->name->hiddenfields = 1; // stack, context, gcstack, ...
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
     // Declare bound_cancel_token as Union{Nothing, CancellationTokenSource}
@@ -4447,6 +4449,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_simplevector_type);
     jl_compute_field_offsets(jl_symbol_type);
     jl_compute_field_offsets(jl_binding_partition_type);
+    assert(jl_datatype_size(jl_method_type) < sizeof(jl_method_t));
+    assert(jl_datatype_size(jl_task_type) < sizeof(jl_task_t));
 
     // override ismutationfree for builtin types that are mutable for identity
     jl_string_type->ismutationfree = jl_string_type->isidentityfree = 1;

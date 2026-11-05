@@ -4273,6 +4273,30 @@ end
 
 end
 
+# types with fields hidden past their Julia-visible layout can only be allocated by the
+# runtime, since `new` would make an object too small for them
+for (T, x) in ((Method, which(sin, (Float64,))), (Task, current_task()))
+    @test Base.datatype_hashiddenfields(T)
+    vals = Any[getfield(x, i) for i in 1:(fieldcount(T) - T.name.n_uninitialized)]
+    args = Any[QuoteNode(v) for v in vals]
+    err = ErrorException("new: $(nameof(T)) has hidden fields and can only be allocated by the runtime")
+    @test_throws err Core.eval(@__MODULE__, Expr(:new, T, args...))
+    fnew = @eval () -> $(Expr(:new, T, args...))
+    @test_throws err Base.invokelatest(fnew)
+    @test Base.infer_return_type(fnew, ()) === Union{}
+    @test !Core.Compiler.is_nothrow(Base.infer_effects(fnew, ()))
+    fdyn = @eval T -> $(Expr(:new, :T, args...))
+    @test_throws err Base.invokelatest(fdyn, T)
+    fsplat = @eval () -> $(Expr(:splatnew, T, Expr(:tuple, args...)))
+    @test_throws err Base.invokelatest(fsplat)
+    @test Base.infer_return_type(fsplat, ()) === Union{}
+    @test !Core.Compiler.is_nothrow(Base.infer_effects(fsplat, ()))
+    @test_throws err ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, vals, length(vals))
+    @test_throws err ccall(:jl_new_structt, Any, (Any, Any), T, Tuple(vals))
+    @test_throws err ccall(:jl_new_struct_uninit, Any, (Any,), T)
+end
+@test !Base.datatype_hashiddenfields(Core.MethodInstance)
+
 # don't allow redefining types if n_uninitialized changes
 struct NInitializedTestType
     a

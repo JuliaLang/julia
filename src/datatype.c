@@ -87,6 +87,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->abstract = abstract;
     tn->mutabl = mutabl;
     tn->mayinlinealloc = 0;
+    tn->hiddenfields = 0;
     tn->partial = NULL;
     tn->atomicfields = NULL;
     tn->constfields = NULL;
@@ -1680,12 +1681,21 @@ JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x)
 
 // struct constructors --------------------------------------------------------
 
+// can the generic struct constructors (`new`) allocate an instance of `type`?
+static void check_new_struct_type(jl_datatype_t *type)
+{
+    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout))
+        jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
+    // the object would be too small for the fields hidden past the Julia-visible layout
+    if (type->name->hiddenfields)
+        jl_errorf("new: %s has hidden fields and can only be allocated by the runtime",
+                  jl_symbol_name(type->name->name));
+}
+
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...) JL_ROOTED_VARARGS
 {
     jl_task_t *ct = jl_current_task;
-    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout)) {
-        jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
-    }
+    check_new_struct_type(type);
     if (type->instance != NULL)
         return type->instance;
     va_list args;
@@ -1707,9 +1717,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...) JL_ROOTED_VARAR
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na)
 {
     jl_task_t *ct = jl_current_task;
-    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout)) {
-        jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
-    }
+    check_new_struct_type(type);
     size_t nf = jl_datatype_nfields(type);
     if (nf - type->name->n_uninitialized > na || na > nf)
         jl_error("invalid struct allocation");
@@ -1746,8 +1754,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
     jl_task_t *ct = jl_current_task;
     if (!jl_is_tuple(tup))
         jl_type_error("new", (jl_value_t*)jl_tuple_type, tup);
-    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout))
-        jl_type_error("new", (jl_value_t *)jl_datatype_type, (jl_value_t *)type);
+    check_new_struct_type(type);
     size_t nargs = jl_nfields(tup);
     size_t nf = jl_datatype_nfields(type);
     JL_NARGS(new, nf, nf);
@@ -1793,9 +1800,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
 {
     jl_task_t *ct = jl_current_task;
-    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout)) {
-        jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
-    }
+    check_new_struct_type(type);
     if (type->instance != NULL)
         return type->instance;
     size_t size = jl_datatype_size(type);

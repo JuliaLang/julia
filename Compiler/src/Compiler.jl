@@ -53,7 +53,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     OneTo, Ordering, RefValue, _NAMEDTUPLE_NAME,
     _array_for, _bits_findnext, _defaultctors, _methods_by_ftype, _uniontypes, all, allocatedinline, any,
     argument_datatypename, binding_kind, cconvert, copy_exprargs,
-    datatype_fieldcount, datatype_fieldtypes, datatype_layoutsize, datatype_nfields,
+    datatype_fieldcount, datatype_fieldtypes, datatype_hashiddenfields, datatype_layoutsize, datatype_nfields,
     datatype_pointerfree, decode_effects_override, diff_names, fieldindex, visit,
     generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars, has_typevar,
     hasgenerator, hasintersect, indexed_iterate, isType, isTypeEq, isTypeEgal,
