@@ -1574,19 +1574,17 @@ end
         op = unwrapva(argtypes[op_argi])
         v = unwrapva(argtypes[v_argi])
         callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true, si.saw_latestworld), vtypes, sv, #=max_methods=#1)
-        TF = Core.Box(TF)
-        RT = Core.Box(RT)
-        return Future{CallMeta}(callinfo, interp, sv) do callinfo, interp, sv
-            TF = TF.contents
-            RT = RT.contents
-            TF2 = tmeet(ipo_lattice(interp), callinfo.rt, widenconst(TF))
-            if TF2 === Bottom
-                RT = Bottom
-            elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
-                RT = PartialStruct(fallback_lattice, RT, Union{Nothing,Bool}[false,false], Any[TF, TF2])
+        return let TF = TF, RT = RT
+            Future{CallMeta}(callinfo, interp, sv) do callinfo, interp, sv
+                TF2 = tmeet(ipo_lattice(interp), callinfo.rt, widenconst(TF))
+                RT2 = RT
+                if TF2 === Bottom
+                    RT2 = Bottom
+                elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
+                    RT2 = PartialStruct(fallback_lattice, RT, Union{Nothing,Bool}[false,false], Any[TF, TF2])
+                end
+                return CallMeta(RT2, Any, Effects(), ModifyOpInfo(callinfo.info))
             end
-            info = ModifyOpInfo(callinfo.info)
-            return CallMeta(RT, Any, Effects(), info)
         end
     end
     return Future(CallMeta(RT, Any, Effects(), info))
@@ -3625,11 +3623,11 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
             if !hasintersect(af_argtype, ocargt)
                 return Future(CallMeta(Const(Union{}), Union{}, RT_CALL_EFFECTS, NoCallInfo()))
             end
-            rt = rewrap_unionall(uaft.parameters[2], aftw)
+            ocrt = rewrap_unionall(uaft.parameters[2], aftw)
             if aftw isa DataType
-                return Future(CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, NoCallInfo()))
+                return Future(CallMeta(Const(ocrt), Union{}, RT_CALL_EFFECTS, NoCallInfo()))
             else
-                return Future(CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, NoCallInfo()))
+                return Future(CallMeta(Type{<:ocrt}, Union{}, RT_CALL_EFFECTS, NoCallInfo()))
             end
         end
     end
@@ -3645,16 +3643,14 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     # Run the abstract_call without restricting abstract call
     # sites. Otherwise, our behavior model of abstract_call
     # below will be wrong.
-    if isa(sv, InferenceState)
-        old_restrict = sv.restrict_abstract_call_sites
-        sv.restrict_abstract_call_sites = false
-    end
+    old_restrict = isa(sv, InferenceState) && sv.restrict_abstract_call_sites
+    isa(sv, InferenceState) && (sv.restrict_abstract_call_sites = false)
     # TODO: Could pass vtypes here to enable Conditional/MustAlias refinements
     # in return_type inference. Currently passing `nothing` which means any
     # slot-dependent refinements will be widened. This is conservative but
     # may miss some precision opportunities.
     call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, nothing, sv, #=max_methods=#-1)
-    tt = Core.Box(tt)
+    tt_known = isa(tt, Const) || isconstType(tt)
     return Future{CallMeta}(call, interp, sv) do call, _, sv
         if isa(sv, InferenceState)
             sv.restrict_abstract_call_sites = old_restrict
@@ -3674,7 +3670,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
             # in two ways: both as being a subtype of this, and
             # because of LimitedAccuracy causes
             return CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, info)
-        elseif isa(tt.contents, Const) || isconstType(tt.contents)
+        elseif tt_known
             # input arguments were known for certain
             # XXX: this doesn't imply we know anything about rt
             return CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, info)
