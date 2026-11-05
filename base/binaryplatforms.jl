@@ -222,11 +222,11 @@ end
 function validate_tags(tags::Dict)
     throw_invalid_key(k) = throw(ArgumentError("Key \"$(k)\" cannot have value \"$(tags[k])\""))
     # Validate `arch`
-    if tags["arch"] ∉ ("x86_64", "i686", "armv7l", "armv6l", "aarch64", "powerpc64le", "riscv64")
+    if tags["arch"] ∉ ("x86_64", "i686", "armv7l", "armv6l", "aarch64", "powerpc64le", "riscv64", "wasm32", "wasm64")
         throw_invalid_key("arch")
     end
     # Validate `os`
-    if tags["os"] ∉ ("linux", "macos", "freebsd", "openbsd", "windows")
+    if tags["os"] ∉ ("linux", "macos", "freebsd", "openbsd", "windows", "wasi", "emscripten")
         throw_invalid_key("os")
     end
     # Validate `os`/`arch` combination
@@ -235,6 +235,10 @@ function validate_tags(tags::Dict)
         throw_os_mismatch()
     end
     if tags["os"] == "macos" && tags["arch"] ∉ ("x86_64", "aarch64")
+        throw_os_mismatch()
+    end
+    # WebAssembly runs only on the WebAssembly OSes, and they only on it
+    if (tags["os"] ∈ ("wasi", "emscripten")) != (tags["arch"] ∈ ("wasm32", "wasm64"))
         throw_os_mismatch()
     end
 
@@ -466,6 +470,8 @@ const platform_names = Dict(
     "windows" => "Windows",
     "freebsd" => "FreeBSD",
     "openbsd" => "OpenBSD",
+    "wasi" => "WASI",
+    "emscripten" => "Emscripten",
     nothing => "Unknown",
 )
 
@@ -543,7 +549,7 @@ julia> wordsize(Platform("x86_64", "macos"))
 64
 ```
 """
-wordsize(p::AbstractPlatform) = (arch(p) ∈ ("i686", "armv6l", "armv7l")) ? 32 : 64
+wordsize(p::AbstractPlatform) = (arch(p) ∈ ("i686", "armv6l", "armv7l", "wasm32")) ? 32 : 64
 
 """
     triplet(p::AbstractPlatform)
@@ -623,6 +629,16 @@ function os_str(p::AbstractPlatform)
         end
     elseif os(p) == "openbsd"
         return "-unknown-openbsd"
+    elseif os(p) == "wasi"
+        # The WASI preview is the OS version: `wasip1`, `wasip2`. Without one, plain `wasi`, which matches any preview.
+        osvn = os_version(p)
+        if osvn !== nothing
+            return "-unknown-wasip$(osvn.major)"
+        else
+            return "-unknown-wasi"
+        end
+    elseif os(p) == "emscripten"
+        return "-unknown-emscripten"
     else
         return "-unknown"
     end
@@ -664,6 +680,8 @@ const arch_mapping = Dict(
     "armv6l" => "armv6l",
     "powerpc64le" => "p(ower)?pc64le",
     "riscv64" => "(rv64|riscv64)",
+    "wasm32" => "wasm32",
+    "wasm64" => "wasm64",
 )
 # Keep this in sync with `CPUID.ISAs_by_family`
 # These are the CPUID side of the microarchitectures targeted by GCC flags in BinaryBuilder.jl
@@ -701,6 +719,8 @@ const os_mapping = Dict(
     "openbsd" => "-(.*-)?openbsd[\\d\\.]*",
     "windows" => "-w64",
     "linux" => "-(.*-)?linux",
+    "wasi" => "-(.*-)?wasi(p\\d+)?",
+    "emscripten" => "-(.*-)?emscripten",
 )
 const libc_mapping = Dict(
     "libc_nothing" => "",
@@ -816,6 +836,9 @@ function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = f
         end
         if os == "openbsd"
             os_version = extract_os_version("openbsd", r".*openbsd([\d.]+)"sa)
+        end
+        if os == "wasi"
+            os_version = extract_os_version("wasi", r".*wasip(\d+)"sa)
         end
         tags["os_version"] = os_version
 

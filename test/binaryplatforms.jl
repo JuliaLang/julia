@@ -654,3 +654,39 @@ end
     @test platforms_match(ac, ac)
     @test platforms_match(bc, bc)
 end
+
+@testset "WebAssembly" begin
+    # WASI, with its preview as the OS version
+    p = Platform("wasm32", "wasi"; os_version = v"1")
+    @test triplet(p) == "wasm32-unknown-wasip1"
+    @test parse(Platform, "wasm32-unknown-wasip1") == p
+    @test triplet(Platform("wasm32", "wasi")) == "wasm32-unknown-wasi"
+    @test parse(Platform, "wasm32-unknown-wasi") == Platform("wasm32", "wasi")
+    @test triplet(parse(Platform, "wasm32-wasip2")) == "wasm32-unknown-wasip2"
+    @test wordsize(p) == 32
+    @test wordsize(Platform("wasm64", "wasi")) == 64
+    @test platform_name(p) == "WASI"
+    @test sprint(show, MIME("text/plain"), p) isa String
+    @test Platform("wasm32", "wasi"; validate_strict = true) isa Platform
+
+    # Emscripten no longer collides with WASI
+    e = Platform("wasm32", "emscripten")
+    @test triplet(e) == "wasm32-unknown-emscripten"
+    @test parse(Platform, "wasm32-unknown-emscripten") == e
+    @test platform_name(e) == "Emscripten"
+    @test !platforms_match(e, p)
+
+    # A request without a preview matches any; different previews don't match
+    @test platforms_match(Platform("wasm32", "wasi"), p)
+    @test !platforms_match(parse(Platform, "wasm32-unknown-wasip2"), p)
+    @test !platforms_match(Platform("wasm64", "wasi"), p)
+
+    # Extra tags round-trip as for any platform
+    q = Platform("wasm64", "wasi"; os_version = v"1", wasm_abi = "lp64")
+    @test parse(Platform, triplet(q)) == q
+
+    # WebAssembly arches only with WebAssembly OSes
+    @test_throws ArgumentError Platform("wasm32", "linux"; validate_strict = true)
+    @test_throws ArgumentError Platform("x86_64", "wasi"; validate_strict = true)
+    @test_throws ArgumentError Platform("wasm32", "wasi"; libc = "musl", validate_strict = true)
+end
