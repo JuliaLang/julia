@@ -2119,7 +2119,8 @@ function Base.parse(::Type{CacheFlags}, s::AbstractString)
     e = Meta.parse(s)
     if !(e isa Expr && e.head === :call && length(e.args) == 2 &&
         e.args[1] === :CacheFlags &&
-        e.args[2] isa Expr && e.args[2].head == :parameters)
+        e.args[2] isa Expr && e.args[2].head == :parameters &&
+        all(p -> p isa Expr && p.head === :kw, e.args[2].args))
         throw(ArgumentError("Malformed CacheFlags string"))
     end
     params = Dict{Symbol, Any}(p.args[1] => p.args[2] for p in e.args[2].args)
