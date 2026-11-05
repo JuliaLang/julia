@@ -1,4 +1,4 @@
-DISTRIBUTED_BRANCH = kc/revert-cancellation-1.14
-DISTRIBUTED_SHA1 = 7b0caa65772480438edeea3926c4352b0c23378c
+DISTRIBUTED_BRANCH = release-1.14
+DISTRIBUTED_SHA1 = cc64b379c17a26ab83795930f41ca54bf4d4224b
 DISTRIBUTED_GIT_URL := https://github.com/JuliaLang/Distributed.jl
 DISTRIBUTED_TAR_URL = https://api.github.com/repos/JuliaLang/Distributed.jl/tarball/$1
