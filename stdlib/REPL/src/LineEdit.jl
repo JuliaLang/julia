@@ -2842,7 +2842,9 @@ function move_line_end(buf::IOBuffer)
 end
 
 function edit_insert_last_word(s::MIState)
-    hist = mode(s).hist.history
+    hp = mode(s).hist
+    hp isa EmptyHistoryProvider && return 0
+    hist = hp.history
     isempty(hist) && return 0
     isempty(hist.records) && return 0
     edit_insert(s, get_last_word(IOBuffer(hist[end].content)))

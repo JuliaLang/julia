@@ -1122,6 +1122,8 @@ end
             "ABC\x01\el" => "abc",
             "abc\x01\ec" => "Abc",
             "\e[200~ a\r  b\e[201~" => "a\n b",
+            # alt-. needs a history, and this prompt has none
+            "ab\e." => "ab",
             "\x0c" => "",
             "a\x0cb" => "ab",
             "a\x03b" => "b",
