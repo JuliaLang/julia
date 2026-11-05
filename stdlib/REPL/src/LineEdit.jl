@@ -2620,9 +2620,7 @@ let
             return edit_kill_region(s)
         elseif isempty(s) || position(buffer(s)) == 0
             # Handle transitioning to main mode
-            repl = Base.active_repl
-            mirepl = isdefined(repl, :mi) ? repl.mi : repl
-            main_mode = mirepl.interface.modes[1]
+            main_mode = s.interface.modes[1]
             local buf = copy(buffer(s))
             transition(s, main_mode) do
                 state(s, main_mode).input_buffer = buf

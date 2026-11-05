@@ -1272,6 +1272,11 @@ press_repl!(keys) = press_repl!((_...) -> nothing, keys)
     @test LineEdit.mode(s) === shell_mode(repl)
     @test input(s) == ""
 
+    # backspace at the start of the main mode doesn't depend on any global REPL
+    repl, s = press_repl!("\x7fab\x01\x7f")
+    @test LineEdit.mode(s) === julia_mode(repl)
+    @test input(s) == "ab"
+
     # ^C leaves a mode and drops the input
     repl, s = press_repl!(";ls\x03")
     @test LineEdit.mode(s) === julia_mode(repl)
