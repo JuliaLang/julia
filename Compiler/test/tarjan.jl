@@ -194,6 +194,7 @@ let graphs = [
         [[2, 3], [4, 5], [4], [5], Int[]],
         [[2], [3, 4], [2], Int[], [4]], # block 5 is unreachable
         [[5, 6], Int[], [3], [2], [4, 2], [2, 5]],
+        [[7, 4], [4], [2, 6, 5], [6, 7, 4], [5, 3], [2, 7, 6], [6, 2, 5, 3, 4]], # deleting 2->5 changes idoms
     ]
     failures = Tuple{Vector{Vector{Int}},Int,Int}[]
     for succs in graphs
