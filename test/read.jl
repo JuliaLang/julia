@@ -688,6 +688,75 @@ let p = Pipe()
     @test !isopen(p.out)
 end
 
+@testset "Pipe writes" begin
+    p = Pipe()
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    reader = @async read(p.out)
+    expected = UInt8[]
+    for x in ("abc", SubString("xdex", 2, 3), UInt8[1, 2], UInt16[3, 4])
+        @test write(p, x) == sizeof(x)
+        append!(expected, x isa AbstractString ? codeunits(x) : reinterpret(UInt8, x))
+    end
+    @test write(p.in, UInt16[5 6]) == 4
+    append!(expected, reinterpret(UInt8, UInt16[5, 6]))
+    @test_throws "non-isbits" write(p.in, Any[1])
+    close(p.in)
+    @test fetch(reader) == expected
+    close(p)
+end
+
+@testset "Pipe errors" begin
+    p = Pipe()
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    @test_throws "pipe is already in use" Base.link_pipe!(p)
+    # the failed attempt must leave the original pipe working
+    @test write(p, "x") == 1
+    @test read(p, UInt8) == UInt8('x')
+    # Both ends of a pipe are readable on FreeBSD, where this read would block forever.
+    Sys.iswindows() || isreadable(p.in) || @test_throws "not readable" read(p.in, UInt8)
+    close(p)
+    @test_throws "pipe is already in use" Base.open_pipe!(p.out, Base.INVALID_OS_HANDLE)
+    @test Base.start_reading(p.out) == -1
+    Sys.iswindows() || @test_throws "invalid stdio type" open(Base.INVALID_OS_HANDLE)
+end
+
+@testset "stream status strings" begin
+    p = Pipe()
+    @test occursin(" init,", sprint(show, p.out))
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    @test occursin(" open,", sprint(show, p.out))
+    reader = @async read(p.out, UInt8)
+    while p.out.status != Base.StatusActive && !istaskdone(reader)
+        yield()
+    end
+    @test occursin(" active,", sprint(show, p.out))
+    write(p.in, 0x01)
+    @test fetch(reader) == 0x01
+    # Windows stops reading outright when the read finishes, rather than pausing.
+    @test occursin(Sys.iswindows() ? " open," : " paused,", sprint(show, p.out))
+    close(p)
+    @test occursin(" closed,", sprint(show, p.out))
+
+    # states that are hard to observe on a real stream
+    live = Ptr{Cvoid}(1)
+    @testset for (handle, status, str) in (
+            (C_NULL, Base.StatusClosed, "closed"),
+            (C_NULL, Base.StatusUninit, "null"),
+            (C_NULL, Base.StatusOpen, "invalid status"),
+            (live, Base.StatusUninit, "uninit"),
+            (live, Base.StatusInit, "init"),
+            (live, Base.StatusConnecting, "connecting"),
+            (live, Base.StatusOpen, "open"),
+            (live, Base.StatusActive, "active"),
+            (live, Base.StatusPaused, "paused"),
+            (live, Base.StatusClosing, "closing"),
+            (live, Base.StatusClosed, "closed"),
+            (live, Base.StatusEOF, "eof"),
+            (live, -1, "invalid status"))
+        @test Base.uv_status_string((; handle, status)) == str
+    end
+end
+
 @testset "issue #27412" for itr in [eachline(IOBuffer("a")), readeach(IOBuffer("a"), Char)]
     @test !isempty(itr)
     # check that the earlier isempty did not consume the iterator
