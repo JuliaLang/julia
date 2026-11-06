@@ -48,6 +48,7 @@ Base.textwidth
 ```@docs
 Base.SubString
 Base.LazyString
+Base.StringView
 ```
 
 ## Concatenation
@@ -72,8 +73,10 @@ Base.cmp(::AbstractString, ::AbstractString)
 ```@docs
 Base.transcode
 Base.ncodeunits(::AbstractString)
+Base.ncodeunits(::Char)
 Base.codeunit
 Base.codeunits
+Base.CodeUnits
 Base.ascii
 Base.isascii
 ```
@@ -121,12 +124,14 @@ Base.Docs.@text_str
 See also the [Julia manual section about this topic](@ref man-regex-literals).
 
 ```@docs
+Base.AbstractPattern
 Base.Regex
 Base.@r_str
 Base.SubstitutionString
 Base.@s_str
 Base.match
 Base.eachmatch
+Base.AbstractMatch
 Base.RegexMatch
 Base.keys(::RegexMatch)
 Base.:*(r1::Union{Regex,AbstractString,AbstractChar}, rs::Union{Regex,AbstractString,AbstractChar}...)
@@ -184,11 +189,15 @@ See also the [section about regular expressions](@ref base-regex-literals).
 
 ```@docs
 Base.findfirst(::AbstractString, ::AbstractString)
+Base.findfirst(::AbstractChar, ::AbstractString)
 Base.findnext(::AbstractString, ::AbstractString, ::Integer)
 Base.findnext(::AbstractChar, ::AbstractString, ::Integer)
 Base.findlast(::AbstractString, ::AbstractString)
 Base.findlast(::AbstractChar, ::AbstractString)
 Base.findprev(::AbstractString, ::AbstractString, ::Integer)
+Base.findprev(::AbstractChar, ::AbstractString, ::Integer)
+Base.findall(::Union{AbstractPattern, AbstractString, AbstractVector{UInt8}}, ::Union{AbstractPattern, AbstractString, AbstractVector{UInt8}})
+Base.findall(::AbstractChar, ::AbstractString)
 ```
 
 ```@docs
