@@ -318,7 +318,7 @@ cd(@__DIR__) do
                                 # the worker encountered some failure, recycle it
                                 # so future tests get a fresh environment
                                 rmprocs(wrkr, waitfor=rmwait_timeout)
-                                p = addprocs_with_testenv(1)[1]
+                                p = addprocs_with_testenv(1; pool_size=n)[1]
                                 remotecall_fetch(include, p, "testdefs.jl")
                                 if use_revise
                                     Distributed.remotecall_eval(Main, p, revise_init_expr)
@@ -331,7 +331,7 @@ cd(@__DIR__) do
                                 # so future tests start with a smaller working set
                                 if n > 1
                                     rmprocs(wrkr, waitfor=rmwait_timeout)
-                                    p = addprocs_with_testenv(1)[1]
+                                    p = addprocs_with_testenv(1; pool_size=n)[1]
                                     remotecall_fetch(include, p, "testdefs.jl")
                                     if use_revise
                                         Distributed.remotecall_eval(Main, p, revise_init_expr)
