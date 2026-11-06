@@ -296,6 +296,12 @@ TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, con
 
 const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
 
+function uninit_toml_cache()
+    empty!(TOML_CACHE.d)
+    TOML.reinit!(TOML_CACHE.p, "")
+    nothing
+end
+
 parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
     lock(toml_lock) do
@@ -1364,6 +1370,10 @@ function init_debuginfo_source_paths()
     isempty(DATAROOT) || push!(paths, DATAROOT * "julia/", share)
     push!(paths, "", joinpath(share, "base"))
     ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec(paths...))
+end
+
+function uninit_debuginfo_source_paths()
+    ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec())
 end
 
 function cache_file_entry(pkg::PkgId)
@@ -2595,12 +2605,8 @@ function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
         for each in package_locks
             cond2 = each[2][2]
             assert_havelock(cond2.lock)
-            w = cond2.waitq.head
-            while w !== nothing
-                w = w::WaitEntry
-                waiting = @atomic :monotonic w.task
-                waiting isa Task && push!(waiters, waiting => (each[2][1] => each[1]))
-                w = _next_on(w, cond2)
+            for waiting in cond2.waitq
+                push!(waiters, waiting => (each[2][1] => each[1]))
             end
         end
         while true

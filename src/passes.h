@@ -40,10 +40,6 @@ struct FinalLowerGCPass : RequiredPassInfoMixin<FinalLowerGCPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
 };
 
-struct CancellationLoweringPass : RequiredPassInfoMixin<CancellationLoweringPass> {
-    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
-};
-
 struct ExpandAtomicModifyPass : OptionalPassInfoMixin<ExpandAtomicModifyPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
 };

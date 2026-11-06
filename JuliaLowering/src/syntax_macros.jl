@@ -139,7 +139,6 @@ end
 
 function ccall_macro_parse(ctx::MacroContext, exs::Tuple{Vararg{SyntaxTree}})
     gc_safe = false
-    cancel = nothing
     opts = exs[1:end-1]
     ex = exs[end]
     for opt in opts
@@ -149,11 +148,6 @@ function ccall_macro_parse(ctx::MacroContext, exs::Tuple{Vararg{SyntaxTree}})
                     throw(LoweringError(val, "gc_safe must be true or false"))
                 else
                     gc_safe = val.value
-                end
-            elseif syntax_name(opt[1]) == "cancel_handler"
-                @stm val begin
-                    [:tuple x y] -> cancel = (x, y)
-                    _ -> throw(LoweringError(val, "bad cancel handler"))
                 end
             else
                 throw(LoweringError(opt[1], "unknown option name for ccall"))
@@ -227,16 +221,14 @@ function ccall_macro_parse(ctx::MacroContext, exs::Tuple{Vararg{SyntaxTree}})
         num_required_args = 0 # Non-vararg call
     end
 
-    return func, rettype, types, args, gc_safe, cancel, num_required_args
+    return func, rettype, types, args, gc_safe, num_required_args
 end
 
 function ccall_macro_lower(ctx::MacroContext, ex::SyntaxTree,
                            convention::Union{Symbol, Tuple{Symbol, UInt16}},
                            func::SyntaxTree, rettype::SyntaxTree,
                            types::Vector{SyntaxTree}, args::Vector{SyntaxTree}, gc_safe::Bool,
-                           cancel::Union{Nothing, Tuple{SyntaxTree, SyntaxTree}},
                            num_required_args::Int)
-    # TODO deal with cancel
     if convention isa Tuple
         cconv_tuple = (convention..., gc_safe)
     else

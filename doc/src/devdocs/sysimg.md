@@ -13,8 +13,8 @@ This operation is useful for multiple reasons. A user may:
   * Build a precompiled shared library system image on a platform that did not ship with one, thereby
     improving startup times.
   * Modify `Base`, rebuild the system image and use the new `Base` next time Julia is started.
-  * Include a `userimg.jl` file that includes packages into the system image, thereby creating a system
-    image that has packages embedded into the startup environment.
+  * Build a system image with packages embedded into the startup environment, by running a script
+    that loads them on top of an existing system image with `--output-o`.
 
 The [`PackageCompiler.jl` package](https://github.com/JuliaLang/PackageCompiler.jl) contains convenient
 wrapper functions to automate this process.

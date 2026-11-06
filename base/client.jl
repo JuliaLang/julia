@@ -110,6 +110,20 @@ is_driver_entry(frame) = !frame.from_c &&
     (startswith(String(frame.func), "__repl_entry") ||
      startswith(String(frame.func), "__script_entry"))
 
+is_driver_exit(frame) = !frame.from_c && startswith(String(frame.func), "__script_exit")
+
+function remove_driver_spans!(bt::Vector{StackFrame}, unpaired::Bool)
+    while (exit_ind = findlast(is_driver_exit, bt)) !== nothing
+        entry_ind = findprev(is_driver_entry, bt, exit_ind)
+        if entry_ind === nothing
+            unpaired && deleteat!(bt, 1:exit_ind)
+            break
+        end
+        deleteat!(bt, entry_ind:exit_ind)
+    end
+    return bt
+end
+
 # `eval`/`include` machinery a driver entry runs user code through; directly
 # above the cut these frames cannot belong to user code
 function is_driver_machinery(frame)
@@ -122,9 +136,15 @@ end
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
         bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
+        remove_driver_spans!(bt, true)
         # remove REPL/driver frames from interactive printing
         eval_ind = findlast(is_driver_entry, bt)
         if eval_ind !== nothing
+            while eval_ind > 1 && bt[eval_ind-1].inlined &&
+                    bt[eval_ind-1].func === Symbol("macro expansion") &&
+                    bt[eval_ind-1].pointer == bt[eval_ind].pointer
+                eval_ind -= 1
+            end
             deleteat!(bt, eval_ind:length(bt))
             while !isempty(bt) && is_driver_machinery(bt[end])
                 pop!(bt)
@@ -170,15 +190,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             if lasterr !== nothing
                 lasterr = scrub_repl_backtrace(lasterr)
                 istrivialerror(lasterr) || setglobal!(Base.MainInclude, :err, lasterr)
-                # error display (user-extensible show methods) runs in a
-                # fresh ^C epoch: the failed evaluation's cancelled epoch
-                # must not poison it, and a stuck printout is cancellable
-                try
-                    ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(new_evaluation_cancel_source!()),
-                                       invokelatest(display_error, errio, lasterr))
-                finally
-                    sigint_close_episode!()
-                end
+                invokelatest(display_error, errio, lasterr)
             else
                 value = __repl_entry_client_eval(Main, ast)
                 setglobal!(Base.MainInclude, :ans, value)
@@ -360,6 +372,13 @@ function exec_options(opts)
     return repl
 end
 
+function uninit_exec_options()
+    global PROGRAM_FILE = ""
+    global have_color = nothing
+    global is_interactive = false
+    nothing
+end
+
 function _global_julia_startup_file()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
     # If it is not found, then continue on to the relative path based on Sys.BINDIR
@@ -476,14 +495,7 @@ function run_fallback_repl(interactive::Bool)
                             break
                         end
                     end
-                    # each interactive input is a fresh ^C epoch (an
-                    # evaluation source, so leftovers stay session-sweepable)
-                    try
-                        ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(new_evaluation_cancel_source!()),
-                                           eval_user_input(stderr, ex, true))
-                    finally
-                        sigint_close_episode!()
-                    end
+                    eval_user_input(stderr, ex, true)
                 catch err
                     isa(err, InterruptException) ? print("\n\n") : rethrow()
                 end
@@ -585,63 +597,6 @@ function should_use_main_entrypoint()
     return true
 end
 
-
-## The interactive session's two-level cancellation-source tree
-#
-# An interactive driver (the REPL backend) runs every evaluation under its
-# own cancellation source, each a child of one long-lived *session* source:
-# cancelling an evaluation's source stops exactly that evaluation (and
-# everything it spawned), while cancelling the session source sweeps every
-# still-running piece of work any evaluation has started - the runaway
-# `@async` from three prompts ago included. Cancellation is monotonic, so a
-# swept session source is retired and the next evaluation starts a fresh
-# session epoch: "everything so far" always means "since the last sweep".
-
-const _session_cancel_source = Ref{Union{Nothing, CancellationTokenSource}}(nothing)
-const _session_cancel_lock = ReentrantLock()
-
-# The current session source, created on first use (and after each sweep).
-function session_cancel_source!()
-    lock(_session_cancel_lock; cancel=nothing)
-    try
-        ses = _session_cancel_source[]
-        if ses === nothing
-            ses = CancellationTokenSource()
-            _session_cancel_source[] = ses
-        end
-        return ses
-    finally
-        unlock(_session_cancel_lock)
-    end
-end
-
-# A fresh source governing one interactive evaluation, linked under the
-# session source.
-new_evaluation_cancel_source!() =
-    CancellationTokenSource(CancellationToken(session_cancel_source!()))
-
-"""
-    Base.cancel_session_work!() -> Bool
-
-Cancel every still-running piece of work started under the current
-interactive session's evaluations (see the session-source tree above) and
-start a fresh session epoch. Returns whether there was a session to sweep.
-The REPL binds this to a repeated `^C` at an empty prompt.
-"""
-function cancel_session_work!()
-    lock(_session_cancel_lock; cancel=nothing)
-    ses = try
-        s = _session_cancel_source[]
-        _session_cancel_source[] = nothing
-        s
-    finally
-        unlock(_session_cancel_lock)
-    end
-    ses === nothing && return false
-    cancel!(ses)
-    return true
-end
-
 function init_frontend()
     JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
     if get_bool_env("JULIA_USE_FLISP_LOWERING", true) === true
@@ -651,23 +606,28 @@ function init_frontend()
     end
 end
 
+function uninit_frontend()
+    JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
+    JuliaLowering.activate!(false; freeze_world_age=false)
+    nothing
+end
+
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
     # clear any postoutput hooks that were saved in the sysimage
     empty!(Base.postoutput_hooks)
+    if generating_output(false)
+        # `__init__` does not run when writing a system image, so set up enough to run user
+        # code here, and undo it before the image is written
+        __init_build()
+        atexit(__uninit_build)
+    end
     local ret = 0
     # `--project` has been processed at this point - latch the active project's syntax
     # version and use it for `-L`, `argfile`, etc. If launched, the REPL will re-evaluate
     # at each prompt.
-    # The whole foreground execution runs as a ^C episode: a SIGINT (with
-    # exit-on-sigint disabled) cancels the episode token's scope. An
-    # interactive session installs its own per-evaluation episodes later
-    # (see REPL.repl_backend_loop), superseding this one. Deliberately a
-    # standalone root, not a session child - see the `sigint_new_episode!`
-    # docstring.
-    sigint_tok = sigint_new_episode!()
-    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() CANCEL_TOKEN=>sigint_tok try
+    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() try
         repl_was_requested = exec_options(JLOptions())
         if invokelatest(should_use_main_entrypoint) && !is_interactive
             main = invokelatest(getglobal, Main, :main)
@@ -690,22 +650,7 @@ function _start()
         end
     catch
         ret = Cint(1)
-        # report the error in a fresh ^C epoch (the script's epoch may be
-        # the very cancellation being reported; level-triggered checks in
-        # the printing path would re-throw it mid-report)
-        local errs = scrub_repl_backtrace(current_exceptions())
-        try
-            ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(),
-                               invokelatest(display_error, errs))
-        catch
-            # The report itself failed - e.g. a further ^C cancelled the
-            # display epoch, or a user-defined `show` method errored. The
-            # exit code already reflects the original failure; leave a bare
-            # note rather than dying with an unhandled exception.
-            Core.print(Core.stderr, "\nSYSTEM: displaying the error report failed\n")
-        finally
-            sigint_close_episode!()
-        end
+        invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
     end
     if is_interactive && get(stdout, :color, false)
         try
@@ -715,7 +660,6 @@ function _start()
             e isa IOError || rethrow()
         end
     end
-    generating_output(false) && init_frontend()
     return ret
 end
 

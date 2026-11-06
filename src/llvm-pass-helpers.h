@@ -70,7 +70,6 @@ struct JuliaPassContext {
     llvm::Function *call_func;
     llvm::Function *call2_func;
     llvm::Function *call3_func;
-    llvm::Function *cancel_point_func;
 
     // Object barriers carry (parent, children...); field barriers carry
     // (parent, slot, child, ...) with additional (slot, child) pairs.
@@ -195,15 +194,6 @@ namespace jl_well_known {
 
     // `jl_gc_alloc_typed`: allocates bytes.
     extern const WellKnownFunctionDescription GCAllocTyped;
-
-    // Reset-safe variants of the above (minus the narrowed memory effects):
-    // used in functions that may carry a published cancellation reset
-    // region, these unpublish/republish the current task's reset context
-    // around the operation (see llvm-cancellation-lowering.cpp).
-    extern const WellKnownFunctionDescription GCBigAllocResetSafe;
-    extern const WellKnownFunctionDescription GCSmallAllocResetSafe;
-    extern const WellKnownFunctionDescription GCQueueRootResetSafe;
-    extern const WellKnownFunctionDescription GCAllocTypedResetSafe;
 
     // `jl_alloc_genericmemory_unchecked`: allocates a GenericMemory, leaving its length and
     // data uninitialized.

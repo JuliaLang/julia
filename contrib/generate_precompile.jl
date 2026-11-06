@@ -8,10 +8,6 @@ if Threads.maxthreadid() != 1
 end
 
 if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
-Sys.__init_build()
-if !isdefined(Base, :uv_eventloop)
-    Base.reinit_stdio()
-end
 using Base.Meta
 
 ## Debugging options
@@ -36,12 +32,6 @@ precompile(Tuple{typeof(Base.Terminals.width), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.Terminals.height), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.write), Base.Terminals.TTYTerminal, Array{UInt8, 1}})
 precompile(Tuple{typeof(Base.isempty), Base.AnnotatedString{String}})
-# The owner-carrying write paths (String/Array) call _unsafe_write_owned
-# directly, so the workload session does not compile the raw-pointer
-# unsafe_write entry points on its own; interactive startup still reaches
-# them through generic IO plumbing
-precompile(Tuple{typeof(Base.unsafe_write), Base.TTY, Ptr{UInt8}, UInt})
-precompile(Tuple{typeof(Base.unsafe_write), Base.GenericIOBuffer{Memory{UInt8}}, Ptr{UInt8}, UInt})
 
 # loading.jl - without these each precompile worker would precompile these because they're hit before pkgimages are loaded
 precompile(Base.__require, (Module, Symbol))
@@ -430,27 +420,13 @@ end
 
 generate_precompile_statements()
 
-let stdout = Ref{IO}(stdout)
-    Base.PROGRAM_FILE = ""
-    Sys.BINDIR = ""
-    Sys.STDLIB = ""
-    empty!(Base.ARGS)
-    empty!(Core.ARGS)
-    empty!(Base.TOML_CACHE.d)
-    Base.TOML.reinit!(Base.TOML_CACHE.p, "")
+println("Outputting sysimage file...")
 
-    println("Outputting sysimage file...")
-    Base.stdout = Core.stdout
-    Base.stderr = Core.stderr
-
-    # Print report after sysimage has been saved so all time spent can be captured
-    pre_output_time = time_ns()
+# Print report after sysimage has been saved so all time spent can be captured
+let pre_output_time = time_ns()
     Base.postoutput() do
         output_time = time_ns() - pre_output_time
-        let stdout = stdout[]
-            print(stdout, "Output ────── "); Base.time_print(stdout, output_time); println(stdout)
-        end
-        stdout[] = Core.stdout
+        print(Core.stdout, "Output ────── "); Base.time_print(Core.stdout, output_time); println(Core.stdout)
     end
 end
 

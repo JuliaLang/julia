@@ -2672,7 +2672,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     nongen_mdef = let
         nongen_body = @ast ctx body[2] [:block [:meta "generated"::symbol
             [:new
-                GeneratedFunctionStub::value # Use stub type from JuliaLowering
+                Base.SyntaxGeneratedFunctionStub::value
                 SyntaxContext(ctx.layer.mod, sc.edition)::value
                 gen_name
                 # Truncate provenance to just the source file range, as this
@@ -4578,7 +4578,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ex2 = @ast ctx ex [:block
             [:assert "toplevel_only"::symbol [:syntaxinert ex]]
             [:(=) tmp [:call
-             eval::value
+                at_eval_hook::value
                 # a macro expanding to toplevel does not change the eval module,
                 # but does change the name resolution module
                 ctx.layer.mod::value

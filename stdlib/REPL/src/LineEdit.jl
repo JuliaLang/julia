@@ -1127,7 +1127,7 @@ function edit_move_right(m::MIState)
         refresh_line(s)
         return true
     else
-        completions, reg, should_complete = complete_line(s.p.complete, s, m.active_module)
+        completions, reg, should_complete = complete_line_named(s.p.complete, s, m.active_module)
         if should_complete && eof(buf) && length(completions) == 1 && reg.second - reg.first > 1
             # Replace word by completion
             prev_pos = position(s)
@@ -2620,9 +2620,7 @@ let
             return edit_kill_region(s)
         elseif isempty(s) || position(buffer(s)) == 0
             # Handle transitioning to main mode
-            repl = Base.active_repl
-            mirepl = isdefined(repl, :mi) ? repl.mi : repl
-            main_mode = mirepl.interface.modes[1]
+            main_mode = s.interface.modes[1]
             local buf = copy(buffer(s))
             transition(s, main_mode) do
                 state(s, main_mode).input_buffer = buf
@@ -2842,7 +2840,9 @@ function move_line_end(buf::IOBuffer)
 end
 
 function edit_insert_last_word(s::MIState)
-    hist = mode(s).hist.history
+    hp = mode(s).hist
+    hp isa EmptyHistoryProvider && return 0
+    hist = hp.history
     isempty(hist) && return 0
     isempty(hist.records) && return 0
     edit_insert(s, get_last_word(IOBuffer(hist[end].content)))
@@ -2944,7 +2944,7 @@ function edit_abort(s::MIState, confirm::Bool=options(s).confirm_exit; key="^D")
         println(terminal(s))
         return :abort
     else
-        println("Type $key again to exit.\n")
+        println(terminal(s), "Type $key again to exit.\n")
         return refresh_line(s)
     end
 end
@@ -3036,31 +3036,9 @@ AnyDict(
         catch
         end
         cancel_beep(s)
-        if buffer(s).size == 0 && !Base.generating_output()
-            # ^C at an empty prompt: nothing to clear, so the press reaches
-            # for still-running work from earlier evaluations. Two presses
-            # in a row sweep it (with an announce in between) - which also
-            # makes hammering ^C at spewing background output do what the
-            # user means, even though the prompt already returned. The arm
-            # survives exactly one keystroke (`last_action`), so any other
-            # key stands it down.
-            if s.last_action === :cancel_session_arm
-                set_action!(s, :cancel_session)
-                print(terminal(s), "^C\n")
-                if Base.cancel_session_work!()
-                    print(terminal(s), "Cancelled all in-flight work.\n\n")
-                else
-                    print(terminal(s), "\n")
-                end
-            else
-                set_action!(s, :cancel_session_arm)
-                print(terminal(s), "^C  (press ^C again to cancel all in-flight work)\n\n")
-            end
-        else
-            move_input_end(s)
-            refresh_line(s)
-            print(terminal(s), "^C\n\n")
-        end
+        move_input_end(s)
+        refresh_line(s)
+        print(terminal(s), "^C\n\n")
         transition(s, :reset)
         refresh_line(s)
     end,
@@ -3427,7 +3405,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
             notify(s.prompt_ready_event)
         end
         old_state = mode(s)
-        # spawn this because the main repl task is sticky (due to use of @async and schedule_on_notify!)
+        # spawn this because the main repl task is sticky (due to use of @async and _wait2)
         # and we want to not block typing when the repl task thread is busy
         t2 = Threads.@spawn :interactive while true
             eof(term) || peek(term) # wait before locking but don't consume

@@ -561,17 +561,16 @@ end
             # would keep the kernel object alive after we close our own handle, and
             # recreating the segment here would fail with ERROR_ALREADY_EXISTS.
             io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
-            child = open(`$(Base.julia_cmd()) -e "read(stdin)"`, "w")
+            child = run(`$(Base.julia_cmd()) -e "sleep(5)"`; wait = false)
             try
                 sleep(0.5)
                 close(io)
                 io2 = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
                 close(io2)
             finally
-                close(child)
+                kill(child)
                 wait(child)
             end
-            @test success(child)
 
         else # macOS, tests TODO
 

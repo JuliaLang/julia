@@ -301,9 +301,9 @@ function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Arr
     n == 0 && return dest
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs)
-    @boundscheck n <= length(dest) - doffs + 1 || throw(BoundsError(dest, length(dest) + 1))
+    @boundscheck n <= length(dest) - doffs + 1 || throw_boundserror(dest, length(dest) + 1)
     @boundscheck checkbounds(src, soffs)
-    @boundscheck n <= length(src) - soffs + 1 || throw(BoundsError(src, length(src) + 1))
+    @boundscheck n <= length(src) - soffs + 1 || throw_boundserror(src, length(src) + 1)
     doffs = Int(doffs)
     soffs = Int(soffs)
     n = Int(n)
@@ -2535,15 +2535,17 @@ findfirst(::typeof(isone), r::OneTo) = isempty(r) ? nothing : oneunit(keytype(r)
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange{<:Integer}) where {T<:Integer}
     first(r) <= p.x <= last(r) || return nothing
     i1 = first(keys(r))
-    return i1 + oftype(i1, p.x - first(r))
+    return checked_add(i1, convert(typeof(i1), maybe_unsigned(p.x - first(r))))
 end
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
-    d = p.x - first(r)
-    iszero(d % step(r)) || return nothing
-    return convert(keytype(r), d ÷ step(r) + 1)
+    f, h = first(r), step(r)
+    d = maybe_unsigned(h > zero(h) ? p.x - f : f - p.x)
+    n, m = divrem(d, uabs(h))
+    iszero(m) || return nothing
+    return checked_add(oneunit(keytype(r)), convert(keytype(r), n))
 end
 
 findfirst(::typeof(iszero), r::AbstractRange) = findfirst(==(zero(first(r))), r)

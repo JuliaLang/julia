@@ -30,35 +30,6 @@ New language features
   operators. However, in a future version, there may be opt-in support to detect unannotated wrapping
   in the default operators ([#50790]).
 
-* `@sync`, `Threads.@threads` and `Experimental.@sync` blocks now scope a cancellation source
-  (see `Base.CancellationTokenSource`) over their children, so cancelling an enclosing scope
-  reaches everything spawned within, and the blocks' teardown awaits internal tasks per the
-  requested cancellation severity ([#60281]).
-* Task cancellation is now supported, organized around cancellation tokens:
-  `Base.CancellationTokenSource` is a level-triggered, tree-structured cancellation scope
-  (cancelling a source cancels its whole subtree, at monotonically escalating severities), and
-  `Base.CancellationToken` is its observe/wait view. The token governing a computation is carried
-  as a scoped value (`Base.CANCEL_TOKEN`, established with the standard `ScopedValues` API) that
-  propagates to child tasks; blocking operations
-  (`wait`, `lock`, Channel operations, `sleep`, stream and command I/O, Sockets, FileWatching,
-  ...) accept a `cancel` keyword argument defaulting to the scoped token and throw a
-  `Base.CancellationRequest` while it is cancelled. Cancellation is uniformly level-triggered:
-  cleanup code that must block under a cancelled scope shields itself with `cancel = nothing`
-  (or by scoping `Base.CANCEL_TOKEN => nothing` over a whole block). Compute-bound code can opt into cancellation with the
-  `Base.@cancel_check` cancellation point.
-  A long-running foreign call can be made cancellable with
-  `@ccall cancel_handler=(fn, state) ...`: cancelling the governing token runs the
-  C-callable `fn(state, severity)` on the thread executing the call, signal-handler-style,
-  so it can tell the library to return early (the pending cancellation is then thrown at
-  the next cancellation point). Calls into libraries audited for asynchronous unwinding
-  can be annotated `@ccall reset_safe=true ...` instead, letting a cancellation unwind
-  the foreign computation at an arbitrary instruction; `BigInt` (GMP) arithmetic uses
-  this, so checkless bignum loops now cancel cleanly at the first ^C.
-  In interactive sessions, ^C now cancels the current evaluation's cancellation scope
-  (instead of throwing an `InterruptException` into whatever code happened to be running),
-  and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
-  cancellation continues under the cancelled scope unless it re-arms one itself
-  (`ScopedValues.@with Base.CANCEL_TOKEN => Base.sigint_new_episode!() ...`) ([#60281]).
 * Support for Unicode 18 ([#63349]). The new subscripts `₝` (U+209D), `₞` (U+209E), `₟` (U+209F),
   and `𝿐` (U+1DFD0) can also be used as operator suffixes, accessible as `\_w`, `\_y`, `\_z`, and `\_pgamma`
   at the REPL ([#63505]).
@@ -142,6 +113,10 @@ Compiler/Runtime improvements
   `Core.isdefinedglobal_partition` or `Core.depwarn_binding` builtin function. This does not change the
   meaning of the program, but packages that inspect optimized IR (e.g. from `code_typed`) will encounter
   these new forms. See the "Lowered form" section of the developer documentation for their semantics ([#62452]).
+* After a sweep, Julia's default garbage collector now lets any thread reuse the free cells of
+  pages that still hold live objects, instead of only the thread that allocated the page. This
+  reduces the memory footprint of workloads that allocate many small objects on many threads and
+  keep few of them, such as a language server that runs type inference repeatedly ([#63512]).
 
 Command-line option changes
 ---------------------------
@@ -190,6 +165,10 @@ Build system changes
   no longer forces bounds checking. Nightlies and releases provide these as a separate download.
   Build with `make checkbounds-pkgimages` to create a companion archive, or set
   `JULIA_CHECK_BOUNDS_PKGIMAGES=1` to bundle them ([#60054]).
+
+* `base/userimg.jl` is no longer supported, and the build now fails if it exists. To build a
+  system image with additional code, use PackageCompiler.jl, or run a script on top of an existing
+  system image with `julia --sysimage <image> --output-o <file> <script>`.
 
 New library functions
 ---------------------
@@ -415,12 +394,6 @@ See the [Pkg changelog](https://github.com/JuliaLang/Pkg.jl/blob/master/CHANGELO
 * `close(::SharedArray)` eagerly releases the shared-memory mappings referenced through the
   array on all processes, e.g. so the file backing a file-backed `SharedArray` can be deleted
   immediately ([#62488]).
-
-#### Test
-* Pressing `^C` twice at an empty `julia>` prompt now cancels all still-running
-  work started by earlier evaluations (e.g. a runaway `@async` task spewing
-  output): each REPL evaluation runs under its own cancellation source, linked
-  under one session-level source that the repeated press cancels ([#47839]).
 
 #### Test
 

@@ -1261,6 +1261,9 @@ end
 
     # unsigned n with a negative first index
     @test nth(Base.IdentityUnitRange(-5:-3), UInt(1)) == -5
+    # length(v) * cycles overflows Int
+    @test nth(Iterators.cycle([1, 2, 3], typemax(Int) ÷ 2), 1) == 1
+    @test nth(Iterators.cycle([1, 2, 3], typemax(Int)), typemax(Int)) == 1
 end
 
 @testset "Iterators docstrings" begin

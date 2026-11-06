@@ -1073,20 +1073,6 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     else if (jl_is_module(v)) {
         jl_queue_module_for_serialization(s, (jl_module_t*)v);
     }
-    else if (jl_is_cancel_source(v)) {
-        // Write parents - child lists are reconstruct at load time.
-        jl_cancel_source_t *cs = (jl_cancel_source_t*)v;
-        jl_cancel_parent_link_t *links = jl_cancel_source_links(cs);
-        for (size_t i = 0; i < cs->nparents; i++)
-            jl_queue_for_serialization_(s, (jl_value_t*)links[i].parent, 1, immediate);
-    }
-    else if (jl_is_wait_entry(v)) {
-        // Entirely transient wait state: the writer resets `task` and every
-        // slot, so queue nothing - in particular not the live Task the
-        // layout's field walk would otherwise pick up (mirroring the
-        // cancel-source case above, which skips its transient
-        // waiters_head/walk_lock).
-    }
     else if (layout->nfields > 0) {
         if (jl_options.trim) {
             if (jl_is_method(v)) {
@@ -1823,39 +1809,6 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         else if (jl_is_string(v)) {
             ios_write(f, (char*)v, sizeof(void*) + jl_string_len(v));
             write_uint8(f, '\0'); // null-terminated strings for easier C-compatibility
-        }
-        else if (jl_is_cancel_source(v)) {
-            // Variable-sized. Store parents, reset children (reconstructed on load).
-            assert(f == s->s);
-            jl_cancel_source_t *cs = (jl_cancel_source_t*)v;
-            write_pointerfield(s, jl_nothing); // child_head (weak; reset)
-            write_pointerfield(s, jl_nothing); // waiters_head (transient; reset)
-            write_pointerfield(s, jl_nothing); // walk_lock (transient; reset)
-            write_uint8(f, jl_atomic_load_relaxed(&cs->state));
-            write_padding(f, offsetof(jl_cancel_source_t, nparents) - 3 * sizeof(void*) - sizeof(uint8_t));
-            ios_write(f, (char*)&cs->nparents, sizeof(uint16_t));
-            write_padding(f, sizeof(jl_cancel_source_t) - offsetof(jl_cancel_source_t, nparents) - sizeof(uint16_t)); // incl. dead_count + reg_count (transient; reset)
-            jl_cancel_parent_link_t *links = jl_cancel_source_links(cs);
-            for (size_t i = 0; i < cs->nparents; i++) {
-                write_pointerfield(s, (jl_value_t*)links[i].parent);
-                write_pointerfield(s, jl_nothing); // next (weak; reset)
-                write_pointer(f);                  // pprev (reset; set by relink)
-            }
-            // relink under the parents on load
-            arraylist_push(&s->fixup_objs, (void*)reloc_offset);
-        }
-        else if (jl_is_wait_entry(v)) {
-            // Variable-sized; entirely transient wait state - reset on write.
-            assert(f == s->s);
-            jl_wait_entry_t *w = (jl_wait_entry_t*)v;
-            write_pointerfield(s, jl_nothing); // task (transient; reset)
-            ios_write(f, (char*)&w->nslots, sizeof(uint32_t));
-            write_padding(f, sizeof(jl_wait_entry_t) - offsetof(jl_wait_entry_t, nslots) - sizeof(uint32_t));
-            for (size_t i = 0; i < w->nslots; i++) {
-                write_pointerfield(s, jl_nothing); // owner (transient; reset)
-                write_pointerfield(s, jl_nothing); // next (transient; reset)
-                write_padding(f, sizeof(uint64_t)); // aux (transient; reset)
-            }
         }
         else if (jl_is_foreign_type(t) == 1) {
             abort(); // unreachable
@@ -4793,11 +4746,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                     }
                 }
             }
-        }
-        else if (jl_is_cancel_source(obj)) {
-            // relink under its parents, as if newly allocated (the weak
-            // child links were dropped at serialization)
-            jl_cancel_source_relink((jl_cancel_source_t*)obj);
         }
         else {
             abort();

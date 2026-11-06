@@ -134,7 +134,7 @@ sigatomic_end() = ccall(:jl_sigatomic_end, Cvoid, ())
 """
     disable_sigint(f::Function)
 
-Disable Ctrl-C handler during execution of a function,
+Disable Ctrl-C handler during execution of a function on the current task,
 for calling external code that may call julia code that is not interrupt safe.
 Intended to be called using `do` block syntax as follows:
 
@@ -143,17 +143,14 @@ Intended to be called using `do` block syntax as follows:
         ...
     end
 
-Within `f`, the scoped cancellation token ([`Base.CANCEL_TOKEN`](@ref)) is
-`nothing`, so neither Ctrl-C nor any other cancellation of the enclosing
-computation unwinds `f`: it is observed at the first cancellation point after
-`f` returns. Tasks started within `f` inherit this.
-
+This is not needed on worker threads (`Threads.threadid() != 1`) since the
+`InterruptException` will only be delivered to the master thread.
 External functions that do not call julia code or julia runtime
 automatically disable sigint during their execution.
 """
 function disable_sigint(f::Function)
     sigatomic_begin()
-    res = ScopedValues.with(f, CANCEL_TOKEN => nothing, _sigint_shielded_token => CANCEL_TOKEN[])
+    res = f()
     # Exception unwind sigatomic automatically
     sigatomic_end()
     res
@@ -167,9 +164,7 @@ Temporarily reverses the effect of [`disable_sigint`](@ref).
 """
 function reenable_sigint(f::Function)
     sigatomic_end()
-    # a bare sigatomic region shields no token
-    shielded = ScopedValues.get(_sigint_shielded_token)
-    res = shielded === nothing ? f() : ScopedValues.with(f, CANCEL_TOKEN => something(shielded))
+    res = f()
     # Exception unwind sigatomic automatically
     sigatomic_begin()
     res
@@ -179,13 +174,11 @@ end
     exit_on_sigint(on::Bool)
 
 Set `exit_on_sigint` flag of the julia runtime.  If `false`, Ctrl-C
-(SIGINT) cancels the current ^C episode's cancellation scope and is
-observed at cancellation points as a [`Base.CancellationRequest`](@ref),
-which is capturable in a `try` block.
+(SIGINT) is capturable as [`InterruptException`](@ref) in `try` block.
 This is the default behavior in REPL, any code run via `-e` and `-E`
 and in Julia script run with `-i` option.
 
-If `true`, Ctrl-C terminates the process directly.  Running code
+If `true`, `InterruptException` is not thrown by Ctrl-C.  Running code
 upon such event requires [`atexit`](@ref).  This is the default
 behavior in Julia script run without `-i` option.
 
@@ -269,39 +262,26 @@ The above input outputs this:
 """
 function ccall_macro_parse(exprs)
     gc_safe = false
-    cancel = nothing
-    expr = nothing
     if exprs isa Expr
         expr = exprs
-    else
-        # leading `name = value` options, then the call expression
-        i = 1
-        while i < length(exprs) && isexpr(exprs[i], :(=))
-            opt = exprs[i]::Expr
-            name = opt.args[1]
-            value = opt.args[2]
-            if name === :gc_safe
-                if value === true
-                    gc_safe = true
-                elseif value === false
-                    gc_safe = false
-                else
-                    throw(ArgumentError("gc_safe must be true or false"))
-                end
-            elseif name === :cancel_handler
-                if !(isexpr(value, :tuple) && length(value.args) == 2)
-                    throw(ArgumentError("cancel_handler must be a `(handler, state)` tuple"))
-                end
-                cancel = (value.args[1], value.args[2])
+    elseif length(exprs) == 1
+        expr = exprs[1]
+    elseif length(exprs) == 2
+        gc_expr = exprs[1]
+        expr = exprs[2]
+        if gc_expr.head == :(=) && gc_expr.args[1] == :gc_safe
+            if gc_expr.args[2] == true
+                gc_safe = true
+            elseif gc_expr.args[2] == false
+                gc_safe = false
             else
-                throw(ArgumentError("@ccall options are `gc_safe = <bool>` and `cancel_handler = (handler, state)`"))
+                throw(ArgumentError("gc_safe must be true or false"))
             end
-            i += 1
+        else
+            throw(ArgumentError("@ccall option must be `gc_safe=true` or `gc_safe=false`"))
         end
-        if i != length(exprs)
-            throw(ArgumentError("@ccall needs a function signature with a return type"))
-        end
-        expr = exprs[i]
+    else
+        throw(ArgumentError("@ccall needs a function signature with a return type"))
     end
 
     # setup and check for errors
@@ -367,31 +347,18 @@ function ccall_macro_parse(exprs)
             pusharg!(a)
         end
     end
-    return func, rettype, types, args, gc_safe, cancel, nreq
+    return func, rettype, types, args, gc_safe, nreq
 end
 
 
-function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, cancel, nreq)
-    have_cancel = cancel !== nothing
+function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, nreq)
     if convention isa Tuple
-        base_cconv = (convention..., gc_safe)
+        cconv = Expr(:cconv, (convention..., gc_safe), nreq)
     else
-        base_cconv = (convention, UInt16(0), gc_safe)
+        cconv = Expr(:cconv, (convention, UInt16(0), gc_safe), nreq)
     end
-    if !have_cancel
-        cconv = Expr(:cconv, base_cconv, nreq)
-        return Expr(:call, :ccall, esc(func), cconv, esc(rettype),
-                     Expr(:tuple, map!(esc, types, types)...), map!(esc, args, args)...)
-    end
-    # Our internal ABI for cancellation handlers is f(func, state, args...). Codegen
-    # inlines the establishment of the handler and the ultimate call to `f` has the
-    # ordinary ABI without the extra arguments.
-    fex, sex = cancel
-    nreq > 0 && (nreq += 2)
-    cconv = Expr(:cconv, (base_cconv..., true), nreq)
     return Expr(:call, :ccall, esc(func), cconv, esc(rettype),
-                Expr(:tuple, :(Ptr{Cvoid}), :(Ptr{Cvoid}), map!(esc, types, types)...),
-                esc(fex), esc(sex), map!(esc, args, args)...)
+                 Expr(:tuple, map!(esc, types, types)...), map!(esc, args, args)...)
 end
 
 """
@@ -455,39 +422,6 @@ the `ccall` may block outside of julia.
 
 !!! compat "Julia 1.12"
     The `gc_safe` argument requires Julia 1.12 or higher.
-
-# Extended help
-
-## Cancellation handlers
-
-A long-running foreign call can be made cancellable with the
-`cancel_handler = (handler, state)` option:
-
-    @ccall cancel_handler=(CANCEL_FPTR, ref) lib.solve(ref::Ptr{Cvoid})::Cvoid
-
-`handler` is a C-callable function pointer `void (*)(void *state, uint8_t
-sev)` (typically from [`@cfunction`](@ref)). If the cancellation token
-source (`Base.CancellationTokenSource`) bound to the calling task is
-cancelled while the call runs, the runtime invokes `handler(state, sev)` *on
-the thread executing the call*, like a signal handler: at an arbitrary point
-of the foreign code, on the same stack, resuming the interrupted call when
-the handler returns (`sev` is the request state of the cancelled source).
-The handler performs the library-specific work to make the foreign call
-return early - typically setting a flag or calling the library's own
-cancellation entry point.
-
-Both `CANCEL_FPTR` and `ref` are handled as ordinary ccall arguments (both
-of C type `Ptr{Cvoid}`), including for purposes of rooting. Note that since
-`CANCEL_FPTR` runs as a signal handler, it must be async-signal-safe in the
-ordinary sense; no requirements are imposed on the called function itself.
-
-The foreign call is never abandoned by the runtime, and no cancellation
-point is implied by the `cancel_handler` option. It is the responsibility
-of the user to place an appropriate cancellation point either before or
-after (possibly conditional on an appropriate error return code) the ccall.
-
-!!! compat "Julia 1.14"
-    The `cancel_handler` option requires Julia 1.14 or higher.
 """
 macro ccall(exprs...)
     return ccall_macro_lower((:ccall), ccall_macro_parse(exprs)...)
