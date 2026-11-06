@@ -2638,6 +2638,9 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
             AI->eraseFromParent();
             AI = NULL;
             // Recompute the address in each block that uses it, like a frame index.
+            // Keeping all slot GEPs in the entry block leaves O(N) values live across
+            // blocks (CodeGenPrepare does not sink GEPs used as call arguments), which
+            // triggers quadratic compile time in LLVM's MachineSinking pass.
             SmallDenseMap<BasicBlock *, Instruction *, 4> SlotInBB;
             for (Use &U : make_early_inc_range(slotAddress->uses())) {
                 auto *UI = cast<Instruction>(U.getUser());

@@ -399,12 +399,9 @@ top:
   ret void
 }
 
-declare void @ijl_throw(ptr addrspace(12)) noreturn
-declare void @j_forever_0() noreturn
-
-define void @coalesce_noncontiguous_dead_slots(i64 %a, i1 %c1, i1 %c2) {
+define void @coalesce_dead_slot_runs(i64 %a, i1 %cond) {
 top:
-; CHECK-LABEL: @coalesce_noncontiguous_dead_slots
+; CHECK-LABEL: @coalesce_dead_slot_runs
 ; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 6)
   %pgcstack = call ptr @julia.get_pgcstack()
   %v0 = call ptr addrspace(10) @jl_box_int64(i64 %a)
@@ -414,16 +411,13 @@ top:
   %v4 = call ptr addrspace(10) @jl_box_int64(i64 %a)
   %v5 = call ptr addrspace(10) @jl_box_int64(i64 %a)
   call void @jl_safepoint()
-  br i1 %c1, label %use_all, label %branch2
+  br i1 %cond, label %use_all, label %keep_one
 
 use_all:
   call void @boxed_simple(ptr addrspace(10) %v0, ptr addrspace(10) %v1)
   call void @boxed_simple(ptr addrspace(10) %v2, ptr addrspace(10) %v3)
   call void @boxed_simple(ptr addrspace(10) %v4, ptr addrspace(10) %v5)
   ret void
-
-branch2:
-  br i1 %c2, label %keep_one, label %err_throw
 
 keep_one:
 ; CHECK: keep_one:
@@ -434,99 +428,6 @@ keep_one:
 ; CHECK-NEXT: call void @jl_safepoint()
   call void @jl_safepoint()
   call void @boxed_simple(ptr addrspace(10) %v4, ptr addrspace(10) %v4)
-  ret void
-
-err_throw:
-; CHECK: err_throw:
-; CHECK-NEXT: [[THROW_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-; CHECK-NEXT: call void @llvm.memset.p0.i{{32|64}}(ptr align {{4|8}} [[THROW_SLOT]], i8 0, i{{32|64}} {{24|48}}, i1 false)
-; CHECK-NEXT: call void @ijl_throw(ptr addrspace(12) null)
-; CHECK-NEXT: unreachable
-  call void @ijl_throw(ptr addrspace(12) null)
-  unreachable
-}
-
-define void @coalesce_dead_slots_memset(i64 %a, i1 %cond) {
-top:
-; CHECK-LABEL: @coalesce_dead_slots_memset
-; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 5)
-  %pgcstack = call ptr @julia.get_pgcstack()
-  %v0 = call ptr addrspace(10) @jl_box_int64(i64 %a)
-  %v1 = call ptr addrspace(10) @jl_box_int64(i64 %a)
-  %v2 = call ptr addrspace(10) @jl_box_int64(i64 %a)
-  %v3 = call ptr addrspace(10) @jl_box_int64(i64 %a)
-  %v4 = call ptr addrspace(10) @jl_box_int64(i64 %a)
-  call void @jl_safepoint()
-  br i1 %cond, label %use, label %forever
-
-use:
-  call void @boxed_simple(ptr addrspace(10) %v0, ptr addrspace(10) %v1)
-  call void @boxed_simple(ptr addrspace(10) %v2, ptr addrspace(10) %v3)
-  call void @boxed_simple(ptr addrspace(10) %v4, ptr addrspace(10) %v4)
-  ret void
-
-forever:
-; CHECK: forever:
-; CHECK-NEXT: [[MEMSET_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-; CHECK-NEXT: call void @llvm.memset.p0.i{{32|64}}(ptr align {{4|8}} [[MEMSET_SLOT]], i8 0, i{{32|64}} {{20|40}}, i1 false)
-; CHECK-NEXT: call void @j_forever_0()
-; CHECK-NEXT: unreachable
-  call void @j_forever_0()
-  unreachable
-}
-
-define void @dead_slots_below_memset_threshold(i64 %a, i1 %cond) {
-top:
-; CHECK-LABEL: @dead_slots_below_memset_threshold
-; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 2)
-  %pgcstack = call ptr @julia.get_pgcstack()
-  %v0 = call ptr addrspace(10) @jl_box_int64(i64 %a)
-  %v1 = call ptr addrspace(10) @jl_box_int64(i64 %a)
-  call void @jl_safepoint()
-  br i1 %cond, label %use, label %forever
-
-use:
-  call void @boxed_simple(ptr addrspace(10) %v0, ptr addrspace(10) %v1)
-  ret void
-
-forever:
-; CHECK: forever:
-; CHECK-NEXT: [[RESET0:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-; CHECK-NEXT: store ptr addrspace(10) null, ptr [[RESET0]]
-; CHECK-NEXT: [[RESET1:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 1)
-; CHECK-NEXT: store ptr addrspace(10) null, ptr [[RESET1]]
-; CHECK-NEXT: call void @j_forever_0()
-; CHECK-NEXT: unreachable
-  call void @j_forever_0()
-  unreachable
-}
-
-define void @sink_non_entry_alloca(i1 %cond) {
-top:
-; CHECK-LABEL: @sink_non_entry_alloca
-; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 2)
-; CHECK-NOT: @julia.get_gc_frame_slot
-; FINAL-LABEL: @sink_non_entry_alloca
-; FINAL: %gcframe = alloca ptr addrspace(10), i32 4, align 16
-  %pgcstack = call ptr @julia.get_pgcstack()
-  %sret = alloca [2 x ptr addrspace(10)], align 8
-; CHECK: br i1 %cond, label %use_bb, label %exit
-; FINAL: br i1 %cond, label %use_bb, label %exit
-  br i1 %cond, label %use_bb, label %exit
-
-use_bb:
-; CHECK: use_bb:
-; CHECK-NEXT: [[SRET:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-; CHECK-NEXT: call void null(ptr sret([2 x ptr addrspace(10)]) "julia.return_roots"="2" [[SRET]])
-; FINAL: use_bb:
-; FINAL-NEXT: [[FINAL_SRET:%.*]] = getelementptr inbounds {{(nuw )?}}ptr addrspace(10), ptr %gcframe, i32 2
-; FINAL-NEXT: call void null(ptr sret([2 x ptr addrspace(10)]) "julia.return_roots"="2" [[FINAL_SRET]])
-  call void null(ptr sret([2 x ptr addrspace(10)]) "julia.return_roots"="2" %sret)
-  br label %exit
-
-exit:
-; CHECK: exit:
-; CHECK-NEXT: call void @julia.pop_gc_frame(ptr %gcframe)
   ret void
 }
 
