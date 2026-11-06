@@ -565,6 +565,37 @@ end
     @test nassigned(v) == 11
 end
 
+@testset "growat!" begin
+    @test length(growat!(Int[], 1, 2)) == 2
+
+    v = [1, 2, 3, 4, 5]
+    for i = 1:6, delta = 0:3
+        vc = copy(v)
+        @test growat!(vc, i, delta) === vc
+        @test length(vc) == length(v) + delta
+        @test vc[1:i-1] == v[1:i-1]
+        @test vc[i+delta:end] == v[i:end]
+    end
+
+    # new elements of a non-isbits eltype are #undef
+    for i = 1:6, delta = 1:3, first in (false, true)
+        vc = sizehint!(Any[1:5;], 20; first)
+        growat!(vc, i, delta)
+        @test !any(j -> isassigned(vc, j), i:i+delta-1)
+        @test vc[[1:i-1; i+delta:end]] == 1:5
+        @test deleteat!(vc, i:i+delta-1) == 1:5
+    end
+
+    # errors are thrown before `vc` is modified
+    vc = copy(v)
+    @test_throws BoundsError growat!(vc, 0, 1)
+    @test_throws BoundsError growat!(vc, 7, 1)
+    @test_throws ArgumentError growat!(vc, 1, -1)
+    @test_throws ArgumentError growat!(vc, 3, -1)
+    @test_throws ArgumentError growat!(vc, 6, -1)
+    @test vc == v
+end
+
 @testset "popat!(::Vector, i, [default])" begin
     a = [1, 2, 3, 4]
     @test_throws BoundsError popat!(a, 0)
