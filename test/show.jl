@@ -161,6 +161,10 @@ end
 @test_repr ":(:(:(x)))"
 @test_repr "-\"\""
 @test_repr "-(<=)"
+@test_repr "-(1)"
+@test_repr "-(-1)"
+@test_repr "+(1)"
+@test_repr "-(1.5)"
 @test_repr "\$x"
 @test_repr "\$(\"x\")"
 
@@ -201,6 +205,10 @@ end
 @test_repr "(!x)↑!a"
 @test_repr "(!x).a"
 @test_repr "(!x)::a"
+@test_repr ".-x"
+@test_repr "f(.+x, .~y)"
+@test_repr "(.-x)^a"
+@test_repr ".-(-1)"
 
 # invalid UTF-8 strings
 @test_repr "\"\\ud800\""
@@ -248,8 +256,15 @@ end
 @test repr(:((a=1,3;x=2))) == ":((a = 1, 3; x = 2))"
 @test repr(:(g(a,; b))) == ":(g(a; b))"
 @test repr(:(;)) == ":((;))"
-@test repr(:(-(;x))) == ":(-(; x))"
-@test repr(:(+(1, 2;x))) == ":(+(1, 2; x))"
+@test repr(:(-(;x))) == ":((-)(; x))"
+@test repr(:(+(1, 2;x))) == ":((+)(1, 2; x))"
+@test repr(:((+)(b; a = 1))) == ":((+)(b; a = 1))"
+@test_repr "(!)(b; a = 1)"
+@test_repr "(+)(a = 1)"
+@test_repr "(<:)(; a = 1)"
+@test_repr "(>:)(b, c; a = 1)"
+@test_repr "(&)(b, c; a = 1)"
+@test_repr "==(1, 2, atol = 0.1)"
 @test repr(:(1:2...)) == ":(1:2...)"
 
 @test repr(:(1 := 2)) == ":(1 := 2)"
@@ -540,6 +555,10 @@ end
 @test Meta.isidentifier(Symbol("x1"))
 @test !Meta.isidentifier(Symbol("x.1"))
 @test !Meta.isidentifier(Symbol("1x"))
+@test !Meta.isidentifier("\x80")
+@test !Meta.isidentifier("a\xffb")
+@test !Meta.isoperator("'\x80")
+@test sprint(show, Symbol("\x80")) == "Symbol(\"\\x80\")"
 
 # issue #32408: Printing of names which are invalid identifiers
 # Invalid identifiers which need `var` quoting:
@@ -684,6 +703,12 @@ test_repr("let @m(x), y=z; end", true)
 @test_repr "1 => 2 => 3"
 @test_repr "1 => (2 => 3)"
 @test_repr "(1 => 2) => 3"
+
+for s in ("::(-1)", "::(!a)", "::(a + b)", "&(-1)", "\$(-1)",
+          "::(-0.0)", "&(-0.0)", "\$(-0.0)", "::(x::T)",
+          "-(-1)", "-(-0.0)", "(-1)'", "(-0.0)'")
+    @test string(Meta.parse(s)) == s
+end
 
 # pr 12008
 @test_repr "primitive type A B end"
@@ -1110,6 +1135,10 @@ end
 
 # Issue 14121
 @test_repr "(A'x)'"
+@test_repr "(-1)'"
+@test_repr "(-1.5)'ᵀ"
+@test_repr "-(-1)"
+@test_repr "-(-0.0)"
 
 
 # issue #14481
@@ -1219,6 +1248,13 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 @test_repr "Expr(:quote, Expr(:typed_hcat, Expr(:\$, :a), 1))"
 @test_repr repr(Expr(:quote, Expr(:typed_vcat, Expr(:$, :a), 1)))
 @test_repr repr(Expr(:quote, Expr(:typed_hcat, Expr(:$, :a), 1)))
+@test_repr "(a + b)[1 2]"
+@test_repr "(-a)[1;]"
+@test_repr "(a + b)[1;; 2]"
+@test string(Meta.parse("(a + b)[1 2]")) == "(a + b)[1 2]"
+@test_repr "(a + b)[x for x = xs]"
+@test_repr "(-a)[x for x = xs]"
+@test_repr "T[x for x = xs]"
 
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
@@ -1599,6 +1635,7 @@ test_repr("(:).a")
 @test repr(@NamedTuple{kw::NTuple{7, Int64}}) == "@NamedTuple{kw::NTuple{7, Int64}}"
 @test repr(@NamedTuple{a::Float64, b}) == "@NamedTuple{a::Float64, b}"
 @test repr(@NamedTuple{var"#"::Int64}) == "@NamedTuple{var\"#\"::Int64}"
+@test repr(@NamedTuple{var"+"::Int64, var"end"::Int64, in::Int64}) == "@NamedTuple{var\"+\"::Int64, var\"end\"::Int64, in::Int64}"
 # issue #60252. some abstract namedtuples cannot use this format
 @test repr(NamedTuple{(:a, :b), NTuple{N, Int64}} where N) == "NamedTuple{(:a, :b), NTuple{N, Int64}} where N"
 
