@@ -607,6 +607,7 @@ to_power_type(x) = oftype(x*x, x)
 *%(a::T, b::T) where {T} = *(a, b)
 +%(a::T, b::T) where {T} = +(a, b)
 -%(a::T, b::T) where {T} = -(a, b)
+-%(a) = -(a)
 
 *%(a::T, b::T) where {T<:IEEEFloat} = throw(MethodError(*%, (a, b)))
 +%(a::T, b::T) where {T<:IEEEFloat} = throw(MethodError(+%, (a, b)))
