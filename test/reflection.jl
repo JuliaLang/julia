@@ -939,6 +939,12 @@ end
 @test_throws ErrorException sizeof(Symbol)
 @test_throws ErrorException sizeof(Core.SimpleVector)
 @test_throws ErrorException sizeof(Union{})
+# the layout of a type whose instances hold data it does not describe gives no size
+for T in (Method, Task, Module, Memory{Int}, Core.WaitEntryN, Core.CancellationTokenSource)
+    @test_throws ErrorException("Type $(T.name.name) does not have a definite size.") sizeof(T)
+    @test !Core.Compiler.is_nothrow(Base.infer_effects(@eval(() -> sizeof($T)), ()))
+end
+@test Core.Compiler.is_nothrow(Base.infer_effects(() -> sizeof(Core.MethodInstance), ()))
 
 @test nfields((1,2)) == 2
 @test nfields(()) == 0
