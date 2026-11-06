@@ -560,6 +560,8 @@ static jl_gc_roots_t make_lazy_gc_roots(Value *inline_roots_ptr, size_t npointer
     return jl_gc_roots_t(inline_roots_ptr, npointers, ai);
 }
 
+static bool is_uniontype_unboxed_pointerfree(jl_value_t *typ) JL_CANSAFEPOINT;
+
 // storage_used indicates whether the consumer reads x's storage through an untracked pointer (e.g. one
 // stripped by pointer_from_objref), rather than through x's own address or a copy of its contents. Only
 // then is the address of an unboxed pointer-free value worth rooting: such a value holds no GC
@@ -594,7 +596,9 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
             return roots;
         }
         assert(x.V->getType()->getPointerAddressSpace() != AddressSpace::Tracked);
-        if (!storage_used && jl_is_pointerfree(x.typ))
+        // a split union keeps only its unboxed members here; Vboxed roots the others
+        bool pointerfree = x.TIndex ? is_uniontype_unboxed_pointerfree(x.typ) : jl_is_pointerfree(x.typ);
+        if (!storage_used && pointerfree)
             return roots;
         roots.push_back(x.V);
         return roots;
@@ -1224,6 +1228,21 @@ static bool is_uniontype_anyunboxed(jl_value_t *typ) JL_CANSAFEPOINT
     unsigned counter = 0;
     for_each_uniontype_small([&](unsigned, jl_datatype_t*) {}, typ, counter);
     return counter != 0;
+}
+
+// whether the members of `typ` that a split union holds unboxed are pointer-free
+static bool is_uniontype_unboxed_pointerfree(jl_value_t *typ) JL_CANSAFEPOINT
+{
+    bool pointerfree = true;
+    unsigned counter = 0;
+    for_each_uniontype_small(
+            [&](unsigned, jl_datatype_t *jt) {
+                if (!jl_is_datatype_singleton(jt) && jl_datatype_layout(jt)->npointers)
+                    pointerfree = false;
+            },
+            typ,
+            counter);
+    return pointerfree;
 }
 
 
