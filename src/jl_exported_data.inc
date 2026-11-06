@@ -103,6 +103,7 @@
     XX(opaque_closure_method, jl_method_t*) \
     XX(opaque_closure_type, jl_unionall_t*) \
     XX(opaque_closure_typename, jl_typename_t*) \
+    XX(overlay_lookup_type, jl_datatype_t*) \
     XX(pair_type, jl_value_t*) \
     XX(partial_opaque_type, jl_datatype_t*) \
     XX(possibly_ambiguous_type, jl_datatype_t*) \

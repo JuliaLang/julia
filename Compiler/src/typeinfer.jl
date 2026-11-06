@@ -868,7 +868,7 @@ function Base.iterate(it::ForwardToBackedgeIterator, i::Int = 1)
     i > length(edges) && return nothing
     while i ≤ length(edges)
         item = edges[i]
-        if item isa PossiblyAmbiguous
+        if item isa PossiblyAmbiguous || item isa OverlayLookup
             i += 1
             continue
         elseif item isa Int
