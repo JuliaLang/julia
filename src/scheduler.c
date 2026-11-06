@@ -435,6 +435,7 @@ void jl_task_wait_empty(void)
     if (jl_atomic_load_relaxed(&ct->tid) == 0 && jl_base_module) {
         jl_wait_empty_begin();
         size_t lastage = ct->world_age;
+        int finalizers_inhibited = ct->ptls->finalizers_inhibited;
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("wait"), ct->world_age);
         wait_empty = ct;
@@ -453,6 +454,8 @@ void jl_task_wait_empty(void)
         JL_UV_LOCK();
         jl_wait_empty_end();
         JL_UV_UNLOCK();
+        // finalizers are inhibited when this task is woken up (see jl_task_get_next)
+        ct->ptls->finalizers_inhibited = finalizers_inhibited;
     }
 }
 
@@ -659,7 +662,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                             assert(!wasrunning);
                             JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
                             if (!ptls->finalizers_inhibited)
-                                ptls->finalizers_inhibited++; // this annoyingly is rather sticky (we should like to reset it at the end of jl_task_wait_empty)
+                                ptls->finalizers_inhibited++; // until the end of jl_task_wait_empty
                             break;
                         }
                         task = NULL;
