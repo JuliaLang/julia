@@ -520,12 +520,12 @@ function domtree_delete_edge!(domtree::DomTree, blocks::Vector{BasicBlock},
         return domtree
     end
 
-    # Implements Section 3.1 of [GI16]
+    # Based on Section 3.1 of [GI16]
     if is_parent(domtree.dfs_tree, from, to)
         # The `from` block is the parent of the `to` block in the DFS tree, so
         # deleting the edge invalidates the DFS tree, so start from scratch
         update_domtree!(blocks, domtree, true, 0; cache)
-    elseif on_semidominator_path(domtree, from, to)
+    elseif !dominates(domtree, to, from)
         # Recompute semidominators for blocks with preorder number up to that
         # of `to` block. Semidominators for blocks with preorder number greater
         # than that of `to` aren't affected because no semidominator path to
@@ -535,7 +535,8 @@ function domtree_delete_edge!(domtree::DomTree, blocks::Vector{BasicBlock},
         to_pre = domtree.dfs_tree.to_pre[to]
         update_domtree!(blocks, domtree, false, to_pre; cache)
     end
-    # Otherwise, dominator tree is not affected
+    # Otherwise, any path through this edge has already passed through `to`, so
+    # dominator tree is not affected
 
     return domtree
 end
@@ -545,31 +546,6 @@ function is_parent(dfs_tree::DFSTree, x::BBNumber, y::BBNumber)
     x_pre = dfs_tree.to_pre[x]
     y_pre = dfs_tree.to_pre[y]
     return x_pre == dfs_tree.to_parent_pre[y_pre]
-end
-
-"""
-Check if x is on some semidominator path from the semidominator of y to y,
-assuming there is an edge from x to y.
-"""
-function on_semidominator_path(domtree::DomTree, x::BBNumber, y::BBNumber)
-    x_pre = domtree.dfs_tree.to_pre[x]
-    y_pre = domtree.dfs_tree.to_pre[y]
-
-    semi_y = domtree.snca_state[y_pre].semi
-    current_block = x_pre
-
-    # Follow the semidominators of `x` up the DFS tree to see if we ever reach
-    # the semidominator of `y`. If so, `x` is on a semidominator path between
-    # `y` and its semidominator. We can stop if the preorder number of the
-    # semidominators becomes less than that of the semidominator of `y`,
-    # because it can only decrease further.
-    while current_block >= semi_y
-        if semi_y == current_block
-            return true
-        end
-        current_block = domtree.snca_state[current_block].semi
-    end
-    return false
 end
 
 """
@@ -587,8 +563,8 @@ function rename_nodes!(domtree::DomTree, rename_bb::Vector{BBNumber})
     old_nodes = copy(domtree.nodes)
     for (old_bb, new_bb) in enumerate(rename_bb)
         if new_bb != -1
-            domtree.idoms_bb[new_bb] = (new_bb == 1) ?
-                0 : rename_bb[old_idoms_bb[old_bb]]
+            old_idom = old_idoms_bb[old_bb]
+            domtree.idoms_bb[new_bb] = old_idom == 0 ? 0 : rename_bb[old_idom]
             domtree.nodes[new_bb] = old_nodes[old_bb]
             map!(i -> rename_bb[i],
                  domtree.nodes[new_bb].children,
@@ -618,9 +594,11 @@ function rename_nodes!(D::DFSTree, rename_bb::Vector{BBNumber})
     for (old_bb, new_bb) in enumerate(rename_bb)
         if new_bb != -1
             D.to_pre[new_bb] = old_to_pre[old_bb]
-            D.from_pre[old_to_pre[old_bb]] = new_bb
             D.to_post[new_bb] = old_to_post[old_bb]
-            D.from_post[old_to_post[old_bb]] = new_bb
+            if old_to_pre[old_bb] != 0
+                D.from_pre[old_to_pre[old_bb]] = new_bb
+                D.from_post[old_to_post[old_bb]] = new_bb
+            end
 
             # Keep track of highest BB number to resize arrays with
             if new_bb > max_new_bb
