@@ -950,7 +950,7 @@ static void jl_setup_type_wrapper(jl_typename_t *tn, jl_svec_t *parameters, jl_v
     jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
     int np = jl_svec_len(parameters);
     for (int i = np - 1; i >= 0; i--) {
-        *wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters, i), *wrapper);
+        *wrapper = jl_new_unionall((jl_tvar_t*)jl_svecref(parameters, i), *wrapper);
         jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
     }
 }
@@ -1680,12 +1680,21 @@ JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x)
 
 // struct constructors --------------------------------------------------------
 
+// a `UnionAll` has a hidden flag word past its declared fields, so it must
+// come from `jl_new_unionall`
+static void check_not_unionall(jl_datatype_t *type)
+{
+    if (type == jl_unionall_type)
+        jl_error("UnionAll must be constructed with `UnionAll(var, body)`");
+}
+
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...) JL_ROOTED_VARARGS
 {
     jl_task_t *ct = jl_current_task;
     if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout)) {
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     }
+    check_not_unionall(type);
     if (type->instance != NULL)
         return type->instance;
     va_list args;
@@ -1710,6 +1719,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
     if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout)) {
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     }
+    check_not_unionall(type);
     size_t nf = jl_datatype_nfields(type);
     if (nf - type->name->n_uninitialized > na || na > nf)
         jl_error("invalid struct allocation");
@@ -1748,6 +1758,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
         jl_type_error("new", (jl_value_t*)jl_tuple_type, tup);
     if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout))
         jl_type_error("new", (jl_value_t *)jl_datatype_type, (jl_value_t *)type);
+    check_not_unionall(type);
     size_t nargs = jl_nfields(tup);
     size_t nf = jl_datatype_nfields(type);
     JL_NARGS(new, nf, nf);
@@ -1796,6 +1807,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
     if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout)) {
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     }
+    check_not_unionall(type);
     if (type->instance != NULL)
         return type->instance;
     size_t size = jl_datatype_size(type);
