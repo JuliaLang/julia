@@ -88,7 +88,7 @@ CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures llvm-expand-atomic-modify \
-	llvm-cancellation-lowering \
+	llvm-cancellation-lowering llvm-softticks \
 	pipeline llvm_api objcache \
 	$(GC_CODEGEN_SRCS)
 # translation units of $(CODEGEN_SRCS), except objcache, which includes the hash
@@ -560,6 +560,7 @@ $(BUILDDIR)/llvm-pass-helpers.o $(BUILDDIR)/llvm-pass-helpers.dbg.obj: $(SRCDIR)
 $(BUILDDIR)/llvm-propagate-addrspaces.o $(BUILDDIR)/llvm-propagate-addrspaces.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-remove-addrspaces.o $(BUILDDIR)/llvm-remove-addrspaces.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-ptls.o $(BUILDDIR)/llvm-ptls.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
+$(BUILDDIR)/llvm-softticks.o $(BUILDDIR)/llvm-softticks.dbg.obj: $(addprefix $(SRCDIR)/,jitlayers.h llvm-codegen-shared.h objcache.h)
 $(BUILDDIR)/method.o $(BUILDDIR)/method.dbg.obj $(BUILDDIR)/method.static.o $(BUILDDIR)/method.static.dbg.obj: $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/null_sysimage.o $(BUILDDIR)/null_sysimage.dbg.obj $(BUILDDIR)/null_sysimage.static.o $(BUILDDIR)/null_sysimage.static.dbg.obj: $(SRCDIR)/processor.h
 $(BUILDDIR)/precompile.o $(BUILDDIR)/precompile.dbg.obj $(BUILDDIR)/precompile.static.o $(BUILDDIR)/precompile.static.dbg.obj: $(SRCDIR)/serialize.h

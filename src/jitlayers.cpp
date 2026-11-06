@@ -1382,6 +1382,7 @@ namespace {
             auto TM = cantFail(JTMB.createTargetMachine());
             fixupTM(*TM);
             auto options = OptimizationOptions::defaults();
+            options.softticks = jl_softticks_enabled();
             auto NPM = std::make_unique<NewPM>(std::move(TM), O, options);
             // TODO this needs to be locked, as different resource pools may add to the printer vector at the same time
             {
@@ -2126,6 +2127,10 @@ Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM,
                 inconvertibleErrorCode());
             // OrcJIT requires that all modules / files have unique names:
             M.setModuleIdentifier((M.getModuleIdentifier() + Twine("-") + Twine(jl_atomic_fetch_add_relaxed(&jitcounter, 1))).str());
+            // These modules come optimized and skip our pipeline, but they must tick like the
+            // rest of the JIT's code (a module instrumented already is left alone).
+            if (jl_softticks_enabled())
+                addSoftTicks(M, /*imaging=*/false);
             return Error::success();
         }))
         return Err;

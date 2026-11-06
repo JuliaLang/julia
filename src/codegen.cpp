@@ -11629,6 +11629,8 @@ extern "C" void jl_init_llvm(void)
             cl::value_desc("filename"));
     }
 
+    jl_softticks_add_option();
+
     const char *const argv[1] = {"julia"};
     cl::ParseCommandLineOptions(1, argv, "",
                                 /*Errs=*/nullptr,
@@ -11671,6 +11673,8 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("time-passes");
     if (clopt && clopt->getNumOccurrences() > 0)
         jl_is_timing_passes = 1;
+
+    jl_softticks_init();
 
     clopt = llvmopts.lookup("time-trace");
     if (clopt && clopt->getNumOccurrences() > 0) {
