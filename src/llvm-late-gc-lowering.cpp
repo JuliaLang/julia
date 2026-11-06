@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Casting.h"
@@ -1646,6 +1647,102 @@ void LateLowerGCFrame::RefineLiveSet(LargeSparseBitVector &LS, State &S, ArrayRe
     }
 }
 
+static void AddInGCPreserves(State &S) {
+    DominatorTree &DT = *S.DT;
+    SmallVector<const SmallVector<int, 0> *, 0> PreservedNums;
+    DenseMap<const Instruction *, unsigned> Begins;
+    DenseMap<const Instruction *, SmallVector<unsigned, 1>> Ends;
+    DenseMap<const BasicBlock *, SmallVector<unsigned, 1>> EdgeEnds;
+    SmallVector<unsigned, 0> Unended;
+    for (auto &it : S.GCPreserves) {
+        unsigned P = PreservedNums.size();
+        PreservedNums.push_back(&it.second);
+        Begins[it.first] = P;
+        if (it.first->user_empty())
+            Unended.push_back(P);
+        for (const User *U : it.first->users()) {
+            if (auto *II = dyn_cast<InvokeInst>(U)) {
+                BasicBlock *Normal = II->getNormalDest();
+                if (DT.isReachableFromEntry(II->getParent()) &&
+                    DT.dominates(BasicBlockEdge(II->getParent(), Normal), Normal))
+                    EdgeEnds[Normal].push_back(P);
+            } else {
+                Ends[cast<CallBase>(U)].push_back(P);
+            }
+        }
+    }
+    auto AddNums = [&](LargeSparseBitVector &LS, ArrayRef<unsigned> Preserves) {
+        for (unsigned P : Preserves) {
+            for (int Num : *PreservedNums[P])
+                LS.set(Num);
+        }
+    };
+    DenseMap<const Instruction *, int> Safepoints;
+    for (Instruction *&Safepoint : S.SafepointNumbering) {
+        int idx = &Safepoint - S.SafepointNumbering.begin();
+        if (DT.isReachableFromEntry(Safepoint->getParent()))
+            Safepoints[Safepoint] = idx;
+        else
+            AddNums(S.LiveSets[idx], Unended);
+    }
+    SmallVector<unsigned, 0> Active;
+    SmallVector<int, 0> Pos(PreservedNums.size(), -1);
+    auto Insert = [&](unsigned P) {
+        Pos[P] = Active.size();
+        Active.push_back(P);
+    };
+    auto Remove = [&](unsigned P) {
+        unsigned Last = Active.back();
+        Active[Pos[P]] = Last;
+        Pos[Last] = Pos[P];
+        Active.pop_back();
+        Pos[P] = -1;
+    };
+    SmallVector<std::pair<unsigned, bool>, 0> Log;
+    auto Close = [&](ArrayRef<unsigned> Preserves) {
+        for (unsigned P : Preserves) {
+            if (Pos[P] >= 0) {
+                Remove(P);
+                Log.push_back({P, false});
+            }
+        }
+    };
+    SmallVector<size_t, 0> Marks;
+    for (DomTreeNode *N : depth_first(DT.getRootNode())) {
+        unsigned Level = N->getLevel();
+        if (Marks.size() > Level) {
+            while (Log.size() > Marks[Level]) {
+                auto [P, Inserted] = Log.pop_back_val();
+                if (Inserted)
+                    Remove(P);
+                else
+                    Insert(P);
+            }
+            Marks.truncate(Level);
+        }
+        Marks.push_back(Log.size());
+        BasicBlock *BB = N->getBlock();
+        auto EE = EdgeEnds.find(BB);
+        if (EE != EdgeEnds.end())
+            Close(EE->second);
+        for (Instruction &I : *BB) {
+            if (!isa<CallBase>(I))
+                continue;
+            auto SP = Safepoints.find(&I);
+            if (SP != Safepoints.end())
+                AddNums(S.LiveSets[SP->second], Active);
+            auto B = Begins.find(&I);
+            if (B != Begins.end()) {
+                Insert(B->second);
+                Log.push_back({B->second, true});
+            }
+            auto E = Ends.find(&I);
+            if (E != Ends.end())
+                Close(E->second);
+        }
+    }
+}
+
 void LateLowerGCFrame::ComputeLiveSets(State &S) {
     // Iterate over all safe points. Add to live sets all those variables that
     // are now live across their parent block.
@@ -1662,31 +1759,14 @@ void LateLowerGCFrame::ComputeLiveSets(State &S) {
                 LS.set(Live);
         }
         RefineLiveSet(LS, S, S.CalleeRoots[idx]);
-        // If the function has GC preserves, figure out whether we need to
-        // add in any extra live values.
-        if (!S.GCPreserves.empty()) {
-            if (!S.DT) {
-                S.DT = &GetDT();
-            }
-            for (auto it2 : S.GCPreserves) {
-                if (!S.DT->dominates(it2.first, Safepoint))
-                    continue;
-                bool OutsideRange = false;
-                for (const User *U : it2.first->users()) {
-                    // If this is dominated by an end, we don't need to add
-                    // the values to our live set.
-                    if (S.DT->dominates(cast<Instruction>(U), Safepoint)) {
-                        OutsideRange = true;
-                        break;
-                    }
-                }
-                if (OutsideRange)
-                    continue;
-                for (unsigned Num : it2.second) {
-                    LS.set(Num);
-                }
-            }
+    }
+    // If the function has GC preserves, figure out whether we need to
+    // add in any extra live values.
+    if (!S.GCPreserves.empty()) {
+        if (!S.DT) {
+            S.DT = &GetDT();
         }
+        AddInGCPreserves(S);
     }
     // Compute the interference graph
     S.Neighbors.resize(S.MaxPtrNumber+1);
