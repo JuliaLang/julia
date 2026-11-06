@@ -396,6 +396,13 @@ is_union_split_eligible(𝕃::AbstractLattice, argtypes::Vector{Any}, max_union_
                         fargs::Union{Nothing,Vector{Any}}=nothing) =
     1 < unionsplitcost(𝕃, argtypes; fargs) <= max_union_splitting
 
+# The method table recorded in call infos: the overlay table that the lookup consulted, or
+# the global one.
+function info_method_table(interp::AbstractInterpreter)
+    mt = edge_method_table(method_table(interp))
+    return mt === nothing ? Core.methodtable : mt
+end
+
 function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any},
                                          max_methods::Int;
                                          fargs::Union{Nothing,Vector{Any}}=nothing)
@@ -414,8 +421,7 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
         end
         valid_worlds = intersect(valid_worlds, thismatches.valid_worlds)
         thisfullmatch = any(match::MethodMatch->match.fully_covers, thismatches)
-        mt = Core.methodtable
-        thisinfo = MethodMatchInfo(thismatches, mt, sig_n, thisfullmatch)
+        thisinfo = MethodMatchInfo(thismatches, info_method_table(interp), sig_n, thisfullmatch)
         push!(infos, thisinfo)
         for idx = 1:length(thismatches)
             push!(applicable, MethodMatchTarget(thismatches[idx], thisinfo.edges,
@@ -436,8 +442,7 @@ function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(a
         return FailedMethodMatch("Too many methods matched")
     end
     fullmatch = any(match::MethodMatch->match.fully_covers, matches)
-    mt = Core.methodtable
-    info = MethodMatchInfo(matches, mt, atype, fullmatch)
+    info = MethodMatchInfo(matches, info_method_table(interp), atype, fullmatch)
     applicable = MethodMatchTarget[MethodMatchTarget(matches[idx], info.edges,
         info.needs_mi_edges, info.call_results, idx) for idx = 1:length(matches)]
     return MethodMatches(applicable, info, matches.valid_worlds)
@@ -2596,6 +2601,8 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         update_valid_age!(sv, our_world, valid_worlds)
         method = matched.method
     end
+    # an explicit `Method` target involves no lookup
+    invoke_mt = types isa Method ? Core.methodtable : info_method_table(interp)
     tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     ti = tienv[1]
     env = tienv[2]::SimpleVector
@@ -2640,7 +2647,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo′, sig, vtypes)
         info = InvokeCallInfo(edge, match, call_result, lookupsig_box.contents,
-            result.needs_mi_edge)
+            result.needs_mi_edge, invoke_mt)
         if !match.fully_covers
             effects = Effects(effects; nothrow=false)
             exct = exct ⊔ TypeError

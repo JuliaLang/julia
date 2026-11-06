@@ -171,3 +171,13 @@ end
 
 # This query is not cached
 findsup(@nospecialize(sig::Type), table::CachedMethodTable) = findsup(sig, table.table)
+
+"""
+    edge_method_table(view::MethodTableView) -> Union{Nothing,MethodTable}
+
+Return the overlay method table that lookups through `view` consult, or `nothing` if they
+only consult the global method table.
+"""
+edge_method_table(::MethodTableView) = nothing
+edge_method_table(table::OverlayMethodTable) = table.mt
+edge_method_table(table::CachedMethodTable) = edge_method_table(table.table)
