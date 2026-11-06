@@ -598,22 +598,25 @@ macro kwdef(expr)
     fieldnames = Any[]
     defvals = Any[]
     extract_names_and_defvals_from_kwdef_fieldblock!(fieldsblock, fieldnames, defvals)
-    parameters = map(fieldnames, defvals) do fieldname, defval
-        if isnothing(defval)
-            return fieldname
-        else
-            return Expr(:kw, fieldname, defval)
-        end
-    end
-
     # Only define a constructor if the type has fields, otherwise we'll get a stack
     # overflow on construction
-    if !isempty(parameters)
+    if !isempty(fieldnames)
         T_no_esc = Meta.unescape(T)
         if T_no_esc isa Symbol
+            def_funcs = Expr[]
+            parameters = Any[]
+            for (fieldname, defval) in zip(fieldnames, defvals)
+                if isnothing(defval)
+                    push!(parameters, fieldname)
+                else
+                    fn_name = gensym(Symbol(:kwdef_default_, fieldname))
+                    push!(def_funcs, :($fn_name() = $defval))
+                    push!(parameters, Expr(:kw, fieldname, :($fn_name())))
+                end
+            end
             sig = Expr(:call, T, Expr(:parameters, parameters...))
-            body = Expr(:block, __source__, Expr(:call, T, fieldnames...))
-            kwdefs = esc(Expr(:function, sig, body))
+            body = Expr(:block, __source__, Expr(:call, GlobalRef(__module__, T_no_esc), fieldnames...))
+            kwdefs = esc(Expr(:block, def_funcs..., Expr(:function, sig, body)))
         elseif isexpr(T_no_esc, :curly)
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
@@ -622,13 +625,35 @@ macro kwdef(expr)
             P = T.args[2:end]
             Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
-            body1 = Expr(:block, __source__, Expr(:call, S, fieldnames...))
-            sig1 = Expr(:call, S, Expr(:parameters, parameters...))
+            S_name = Meta.unescape(S)
+
+            def_funcs1 = Expr[]
+            parameters1 = Any[]
+            def_funcs2 = Expr[]
+            parameters2 = Any[]
+            for (fieldname, defval) in zip(fieldnames, defvals)
+                if isnothing(defval)
+                    push!(parameters1, fieldname)
+                    push!(parameters2, fieldname)
+                else
+                    fn_name1 = gensym(Symbol(:kwdef_default_, fieldname))
+                    push!(def_funcs1, :($fn_name1() = $defval))
+                    push!(parameters1, Expr(:kw, fieldname, :($fn_name1())))
+
+                    fn_name2 = gensym(Symbol(:kwdef_default_curly_, fieldname))
+                    push!(def_funcs2, :($fn_name2(::Type{$SQ}) where {$(P...)} = $defval))
+                    push!(parameters2, Expr(:kw, fieldname, :($fn_name2($SQ))))
+                end
+            end
+
+            body1 = Expr(:block, __source__, Expr(:call, GlobalRef(__module__, S_name), fieldnames...))
+            sig1 = Expr(:call, S, Expr(:parameters, parameters1...))
             def1 = Expr(:function, sig1, body1)
-            body2 = Expr(:block, __source__, Expr(:call, SQ, fieldnames...))
-            sig2 = :($(Expr(:call, SQ, Expr(:parameters, parameters...))) where {$(P...)})
+
+            body2 = Expr(:block, __source__, Expr(:call, Expr(:curly, GlobalRef(__module__, S_name), Q...), fieldnames...))
+            sig2 = :($(Expr(:call, SQ, Expr(:parameters, parameters2...))) where {$(P...)})
             def2 = Expr(:function, sig2, body2)
-            kwdefs = esc(Expr(:block, def1, def2))
+            kwdefs = esc(Expr(:block, def_funcs1..., def_funcs2..., def1, def2))
         else
             error("Invalid usage of @kwdef")
         end
