@@ -135,10 +135,11 @@ if Sys.WORD_SIZE == 32
     move_to_node1("gc")
 end
 
-# These leave state behind on their worker (`precompile`: packages loaded and methods
-# added to Base, `threads`: exited adopted threads), which breaks later tests on the
-# same worker, so the worker is replaced once they finish
-const recycle_worker_tests = ["precompile", "threads"]
+# These leave state behind on their worker (`Pkg`: purged temporary files that other
+# stdlibs cached the paths of, `precompile`: packages loaded and methods added to Base,
+# `threads`: exited adopted threads), which breaks later tests on the same worker, so
+# the worker is replaced once they finish
+const recycle_worker_tests = ["Pkg", "precompile", "threads"]
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
