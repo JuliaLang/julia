@@ -44,6 +44,10 @@ Build system changes
 New library functions
 ---------------------
 
+* The module `Base.Parsers` is now `public` (but not exported). `Base.Parsers.parsevalue(T, bytes)`
+  parses a value of type `T`, such as an integer, a floating-point number or a `UUID`, from all of
+  an `AbstractVector{UInt8}` and returns a `Base.Parsers.ParseFailure` instead of throwing; its
+  `decimal` keyword sets the decimal point for floats ([#63969]).
 * `bitsizeof(x)` returns the declared width in bits of a primitive type, or of the primitive type
   of `x`, excluding the padding that `sizeof` includes. It throws for any other type or value ([#61359]).
 * `filterfirst(f, itr)` returns the first element of `itr` for which `f` returns `true` ([#60913]).

@@ -5,6 +5,7 @@ public
     Checked,
     Filesystem,
     Order,
+    Parsers,
     ScopedValues,
     Sort,
 
