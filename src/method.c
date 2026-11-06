@@ -481,7 +481,9 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
     // last(inline_flags) == 1: callsite inline region
     // last(inline_flags) == 0: callsite noinline region
     arraylist_t *inline_flags = arraylist_new((arraylist_t*)malloc_s(sizeof(arraylist_t)), 0);
-    arraylist_t *purity_exprs = arraylist_new((arraylist_t*)malloc_s(sizeof(arraylist_t)), 0);
+    // effect override flags of each enclosing :purity region, decoded up front
+    // so that the :purity exprs, which are dropped from the code, need no root
+    arraylist_t *purity_flags = arraylist_new((arraylist_t*)malloc_s(sizeof(arraylist_t)), 0);
     size_t j;
     for (j = 0; j < n; j++) {
         jl_value_t *st = bd[j];
@@ -578,11 +580,17 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_purity_sym) {
             is_flag_stmt = 1;
             size_t na = jl_expr_nargs(st);
-            if (na == NUM_EFFECTS_OVERRIDES)
-                arraylist_push(purity_exprs, (void*)st);
+            if (na == NUM_EFFECTS_OVERRIDES) {
+                uint32_t purity_flag = 0;
+                for (int k = 0; k < NUM_EFFECTS_OVERRIDES; k++) {
+                    if (jl_unbox_bool(jl_exprarg(st, k)))
+                        purity_flag |= 1 << (NUM_IR_FLAGS+k);
+                }
+                arraylist_push(purity_flags, (void*)(uintptr_t)purity_flag);
+            }
             else {
                 assert(na == 0);
-                arraylist_pop(purity_exprs);
+                arraylist_pop(purity_flags);
             }
             bd[j] = jl_nothing;
         }
@@ -614,22 +622,15 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
                 void* inline_flag = inline_flags->items[inline_flags->len-1];
                 flag |= 1 << (inline_flag ? 1 : 2);
             }
-            int n_purity_exprs = purity_exprs->len;
-            if (n_purity_exprs > 0) {
-                // apply all purity overrides
-                for (int i = 0; i < n_purity_exprs; i++) {
-                    void* purity_expr = purity_exprs->items[i];
-                    for (int j = 0; j < NUM_EFFECTS_OVERRIDES; j++) {
-                        flag |= jl_unbox_bool(jl_exprarg((jl_value_t*)purity_expr, j)) ? (1 << (NUM_IR_FLAGS+j)) : 0;
-                    }
-                }
-            }
+            // apply all purity overrides
+            for (size_t i = 0; i < purity_flags->len; i++)
+                flag |= (uint32_t)(uintptr_t)purity_flags->items[i];
             jl_array_uint32_set(li->ssaflags, j, flag);
         }
     }
-    assert(inline_flags->len == 0 && purity_exprs->len == 0); // malformed otherwise
-    arraylist_free(inline_flags); arraylist_free(purity_exprs);
-    free(inline_flags); free(purity_exprs);
+    assert(inline_flags->len == 0 && purity_flags->len == 0); // malformed otherwise
+    arraylist_free(inline_flags); arraylist_free(purity_flags);
+    free(inline_flags); free(purity_flags);
     jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ir, 1);
     jl_array_t *vis = (jl_array_t*)jl_array_ptr_ref(vinfo, 0);
     size_t nslots = jl_array_nrows(vis);
