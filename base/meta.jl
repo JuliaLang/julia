@@ -22,8 +22,8 @@ import Base: isexpr
 
 ## AST decoding helpers ##
 
-is_id_start_char(c::AbstractChar) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
-is_id_char(c::AbstractChar) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
+is_id_start_char(c::AbstractChar) = isvalid(c) && ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
+is_id_char(c::AbstractChar) = isvalid(c) && ccall(:jl_id_char, Cint, (UInt32,), c) != 0
 
 """
      isidentifier(s) -> Bool
@@ -55,7 +55,7 @@ function isidentifier(s::AbstractString)
 end
 isidentifier(s::Symbol) = isidentifier(string(s))
 
-is_op_suffix_char(c::AbstractChar) = ccall(:jl_op_suffix_char, Cint, (UInt32,), c) != 0
+is_op_suffix_char(c::AbstractChar) = isvalid(c) && ccall(:jl_op_suffix_char, Cint, (UInt32,), c) != 0
 
 _isoperator(s) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
 
