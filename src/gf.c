@@ -2466,9 +2466,10 @@ static void update_max_args(jl_value_t *type)
     size_t na = jl_nparams(type);
     if (jl_va_tuple_kind((jl_datatype_t*)type) == JL_VARARG_UNBOUND)
         na--;
-    // update occurs inside global writelock
-    if (na > jl_atomic_load_relaxed(&tn->max_args))
-        jl_atomic_store_relaxed(&tn->max_args, na);
+    // methods of different tables are added under different locks
+    int32_t old = jl_atomic_load_relaxed(&tn->max_args);
+    while ((int32_t)na > old && !jl_atomic_cmpswap_relaxed(&tn->max_args, &old, (int32_t)na))
+        ;
 }
 
 jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED = NULL;
@@ -3387,9 +3388,7 @@ jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method,
     JL_LOCK(&mt->cache->writelock);
     newentry = jl_typemap_alloc((jl_tupletype_t*)method->sig, simpletype, jl_emptysvec, (jl_value_t*)method, ~(size_t)0, 1);
     jl_typemap_insert(&mt->defs, (jl_value_t*)mt, newentry, 0);
-
-    if (mt == jl_method_table)
-        update_max_args(method->sig);
+    update_max_args(method->sig);
     JL_UNLOCK(&mt->cache->writelock);
     JL_GC_POP();
     return newentry;
