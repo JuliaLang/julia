@@ -467,7 +467,15 @@ end
     """
     @test latex(table) ==
         "\\begin{tabular}\n{l | l}\na & b \\\\\n\\hline\n1 & 2 \\\\\n\\end{tabular}\n"
+    @test latex(md"#### Title") == "\\paragraph{Title}\n"
     @test latex(md"###### Title") == "\\subparagraph{Title}\n"
+    @test latex(md"`a_b`") == "\\texttt{a\\_b}\n\n"
+    @test latex(md"~~a_b~~") == "\\sout{a\\_b}\n\n"
+    @test latex(md"[a_b](https://julialang.org/a_b)") == "\\href{https://julialang.org/a_b}{a\\_b}\n\n"
+    @test latex(md"![a_b](c_d.png)") ==
+        "\\begin{figure}\n\\centering\n\\includegraphics{c_d.png}\n\\caption{a\\_b}\n\\end{figure}\n\n\n"
+    @test latex(Markdown.parse("```styled\n{red:hi}\n```")) == "\\begin{verbatim}\nhi\n\\end{verbatim}\n"
+    @test Markdown.latexinline(Bold("a_b")) == "\\textbf{a\\_b}"
 
     # mime output
     @test sprint(show, "text/plain", book) ==
@@ -975,6 +983,9 @@ end
             !!!
             """
     @test actual == expected
+
+    @test Markdown.latex(Markdown.parse("!!! note \"a_b & c\"\n    Body")) ==
+        "\\begin{quote}\n\\textbf{note}\n\na\\_b \\& c\n\nBody\n\n\\end{quote}\n"
 
     actual = Markdown.latex(m_1)
     expected =

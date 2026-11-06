@@ -85,7 +85,7 @@ function latex(io::IO, md::Admonition)
         wrapinline(io, "textbf") do
             print(io, md.category)
         end
-        println(io, "\n\n", md.title, "\n")
+        println(io, "\n\n", latexesc(md.title), "\n")
         latex(io, md.content)
     end
 end
