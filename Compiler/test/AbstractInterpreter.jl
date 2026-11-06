@@ -165,6 +165,26 @@ overlay_shadow_zero(xs::Vector{Int}...) = Int[xs[i][j] for i=eachindex(xs) for j
     overlay_shadow_zero(x...)
 end == Vector{Int}
 
+# adding an overlay method updates the lookups cached by the overlay table
+overlay_recache(::Real) = 0
+overlay_recache(::Real...) = 0
+@overlay OVERLAY_MT overlay_recache(::Real) = 1
+@overlay OVERLAY_MT overlay_recache(::Real...) = 1
+overlay_recache_sig(@nospecialize(tt), world=Base.get_world_counter()) =
+    only(Base._methods_by_ftype(tt, OVERLAY_MT, -1, world)).method.sig
+let world = Base.get_world_counter(),
+    leaf = Tuple{typeof(overlay_recache),Float64},
+    va = Tuple{typeof(overlay_recache),Float64,Float64,Float64,Float64,Float64,Float64}
+    @test overlay_recache_sig(leaf) == Tuple{typeof(overlay_recache),Real}
+    @test overlay_recache_sig(va) == Tuple{typeof(overlay_recache),Vararg{Real}}
+    @eval @overlay OVERLAY_MT overlay_recache(::AbstractFloat) = 2
+    @eval @overlay OVERLAY_MT overlay_recache(::AbstractFloat...) = 2
+    @test overlay_recache_sig(leaf) == Tuple{typeof(overlay_recache),AbstractFloat}
+    @test overlay_recache_sig(va) == Tuple{typeof(overlay_recache),Vararg{AbstractFloat}}
+    @test overlay_recache_sig(leaf, world) == Tuple{typeof(overlay_recache),Real}
+    @test overlay_recache_sig(va, world) == Tuple{typeof(overlay_recache),Vararg{Real}}
+end
+
 # partial concrete evaluation
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing

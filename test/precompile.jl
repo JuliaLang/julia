@@ -2187,6 +2187,47 @@ precompile_test_harness("custom MethodTable dispatch status") do load_path
     end
 end
 
+precompile_test_harness("custom MethodTable cache after loading") do load_path
+    # Loading a package that adds methods to overlay tables updates the lookups those
+    # tables have cached.
+    write(joinpath(load_path, "OverlayCacheBase.jl"),
+        """
+        module OverlayCacheBase
+        f(x) = 0
+        Base.Experimental.@MethodTable(mt1)
+        Base.Experimental.@MethodTable(mt2)
+        Base.Experimental.@overlay mt1 f(x::Real) = 1
+        Base.Experimental.@overlay mt2 f(x::Real) = 1
+        end
+        """)
+    write(joinpath(load_path, "OverlayCacheExt.jl"),
+        """
+        module OverlayCacheExt
+        import OverlayCacheBase: f, mt1, mt2
+        f(x::Real) = 0
+        Base.Experimental.@overlay mt1 f(x::Float64) = 2
+        Base.Experimental.@overlay mt2 f(x::AbstractFloat) = 2
+        end
+        """)
+    Base.compilecache(Base.PkgId("OverlayCacheBase"))
+    Base.compilecache(Base.PkgId("OverlayCacheExt"))
+    @eval using OverlayCacheBase
+    M = invokelatest(getglobal, @__MODULE__, :OverlayCacheBase)
+    lookup(mt, world=Base.get_world_counter()) =
+        only(Base._methods_by_ftype(Tuple{typeof(M.f), Float64}, mt, -1, world)).method.sig
+    world = Base.get_world_counter()
+    for mt in (M.mt1, M.mt2, nothing)
+        @test invokelatest(lookup, mt) == Tuple{typeof(M.f), mt === nothing ? Any : Real}
+    end
+    @eval using OverlayCacheExt
+    @test invokelatest(lookup, M.mt1) == Tuple{typeof(M.f), Float64}
+    @test invokelatest(lookup, M.mt2) == Tuple{typeof(M.f), AbstractFloat}
+    @test invokelatest(lookup, nothing) == Tuple{typeof(M.f), Real}
+    for mt in (M.mt1, M.mt2)
+        @test invokelatest(lookup, mt, world) == Tuple{typeof(M.f), Real}
+    end
+end
+
 precompile_test_harness("DynamicExpressions") do load_path
     # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
     write(joinpath(load_path, "Float16MWE.jl"),
