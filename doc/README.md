@@ -28,6 +28,9 @@ $ make -C doc doctest=true
 
 from the root directory.
 
+To check changes to docstrings in `base/` or the standard libraries without rebuilding Julia, add
+`revise=true`, i.e. `make -C doc doctest=true revise=true`.
+
 ## Customizing Doctest Execution
 
 By default, doctests are run using the in-tree Julia executable.
