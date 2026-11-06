@@ -88,7 +88,7 @@ if !Sys.iswindows()
                 ccall(:kill, Cvoid, (Cint, Cint,), getpid(), 2)
                 for i in 1:100
                     Libc.systemsleep(0.1)
-                    Base.@cancel_check # wait for the SIGINT cancellation to arrive
+                    Base.checkcancel(Base.default_cancel_token()) # wait for the SIGINT cancellation to arrive
                 end
             end
         end

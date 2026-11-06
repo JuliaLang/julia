@@ -267,7 +267,6 @@ JL_DLLEXPORT void jl_enter_handler(jl_task_t *ct, jl_handler_t *eh)
     eh->prev = ct->eh;
     eh->gcstack = ct->gcstack;
     eh->scope = ct->scope;
-    eh->reset_ctx = jl_atomic_load_relaxed(&ct->reset_ctx);
     eh->bound_cancel_token = jl_atomic_load_relaxed(&ct->bound_cancel_token);
     eh->bound_cancel_default = ct->bound_cancel_default;
     eh->gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
@@ -303,7 +302,6 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh) JL_NO_SAF
     jl_gc_wb_current_task(ct, (void*)&ct->bound_cancel_token, eh->bound_cancel_token);
     jl_atomic_store_relaxed(&ct->bound_cancel_token, eh->bound_cancel_token);
     ct->bound_cancel_default = eh->bound_cancel_default;
-    jl_atomic_store_release(&ct->reset_ctx, eh->reset_ctx);
     jl_gc_wb_current_task(ct, &ct->scope, eh->scope);
     ct->scope = eh->scope;
     small_arraylist_t *locks = &ptls->locks;
@@ -350,7 +348,6 @@ JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh)
     jl_gc_wb_current_task(ct, (void*)&ct->bound_cancel_token, eh->bound_cancel_token);
     jl_atomic_store_relaxed(&ct->bound_cancel_token, eh->bound_cancel_token);
     ct->bound_cancel_default = eh->bound_cancel_default;
-    jl_atomic_store_release(&ct->reset_ctx, eh->reset_ctx);
     ct->ptls->defer_signal = eh->defer_signal; // optional, but certain try-finally (in stream.jl) may be slightly harder to write without this
 }
 

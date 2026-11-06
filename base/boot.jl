@@ -196,7 +196,7 @@
 #    sticky::UInt8
 #    priority::UInt16
 #    @atomic _isexception::UInt8
-#    @atomic preempt_request::UInt8
+#    pad00::UInt8
 #    bound_cancel_default::UInt8
 #    pad02::UInt8
 #    rngState0::UInt64

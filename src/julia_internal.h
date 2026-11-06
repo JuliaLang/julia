@@ -2343,12 +2343,6 @@ JL_DLLEXPORT NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, si
 JL_DLLEXPORT NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_unwind_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOINT;
-
-// Values a compiled cancellation reset point's setjmp returns when a
-// shootdown is delivered to it (the longjmp value; see
-// llvm-cancellation-lowering.cpp and the deliveries in signals-*.c):
-#define JL_RESET_CODE_CANCEL  1 // the region's governing source was cancelled
-#define JL_RESET_CODE_PREEMPT 2 // cooperative yield requested; no source checked
 void export_jl_small_typeof(void);
 void export_jl_sysimg_globals(void);
 

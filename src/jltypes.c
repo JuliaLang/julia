@@ -4316,7 +4316,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "sticky",
                                         "priority",
                                         "_isexception",
-                                        "preempt_request",
+                                        "pad00",
                                         "bound_cancel_default",
                                         "pad02",
                                         "rngState0",
@@ -4376,16 +4376,14 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
     // Declare bound_cancel_token as Union{Nothing, CancellationTokenSource}
-    // so reads narrow with a `=== nothing` check instead of a type-tag load
-    // (the tag load is a volatile unsafe point that would tear a published
-    // reset region on every cache-hit token lookup).
+    // so reads narrow with a `=== nothing` check instead of a type-tag load.
     jl_value_t *boundt = jl_new_struct(jl_uniontype_type, (jl_value_t*)jl_cancel_source_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 31, boundt);
     // Set field 20 (metrics_enabled) as const
-    // Set fields 8 (_state), 12 (preempt_request), 24-27 (metric counters),
-    // 28 (waiting_on) and 32 (bound_cancel_token) as atomic
+    // Set fields 8 (_state), 24-27 (metric counters), 28 (waiting_on) and
+    // 32 (bound_cancel_token) as atomic
     const static uint32_t task_constfields[1]  = { 0b00000000000010000000000000000000 };
-    const static uint32_t task_atomicfields[1] = { 0b10001111100000000000100010000000 };
+    const static uint32_t task_atomicfields[1] = { 0b10001111100000000000000010000000 };
     jl_task_type->name->constfields = task_constfields;
     jl_task_type->name->atomicfields = task_atomicfields;
 

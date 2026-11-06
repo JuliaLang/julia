@@ -397,7 +397,7 @@ wait(t::Union{Timer, AsyncCondition, SignalCondition}; cancel::CancelTokenArg=DE
     wait(t, check_cancel_arg(cancel))
 function wait(t::Union{Timer, AsyncCondition, SignalCondition}, tok::MaybeToken)
     ok = _trywait(t, tok)
-    @cancel_check(tok)
+    checkcancel(tok)
     ok || throw(EOFError())
     nothing
 end

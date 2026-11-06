@@ -70,7 +70,6 @@ struct JuliaPassContext {
     llvm::Function *call_func;
     llvm::Function *call2_func;
     llvm::Function *call3_func;
-    llvm::Function *cancel_point_func;
 
     // Object barriers carry (parent, children...); field barriers carry
     // (parent, slot, child, ...) with additional (slot, child) pairs.
