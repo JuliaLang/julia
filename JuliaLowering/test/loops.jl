@@ -287,6 +287,29 @@ let a = []
 end
 """) == 6
 
+# `break` in `while` condition
+@test jl_eval(test_mod, """
+let
+    i = 0
+    while (i += 1; i > 3 && break; true)
+    end
+    i
+end
+""") == 4
+
+@test jl_eval(test_mod, """
+let
+    a = []
+    for j = 1:2
+        i = 0
+        while (i += 1; i > 2 && break; true)
+        end
+        push!(a, i)
+    end
+    a
+end
+""") == [3, 3]
+
 end
 
 

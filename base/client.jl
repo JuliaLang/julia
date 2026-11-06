@@ -360,6 +360,13 @@ function exec_options(opts)
     return repl
 end
 
+function uninit_exec_options()
+    global PROGRAM_FILE = ""
+    global have_color = nothing
+    global is_interactive = false
+    nothing
+end
+
 function _global_julia_startup_file()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
     # If it is not found, then continue on to the relative path based on Sys.BINDIR
@@ -651,11 +658,23 @@ function init_frontend()
     end
 end
 
+function uninit_frontend()
+    JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
+    JuliaLowering.activate!(false; freeze_world_age=false)
+    nothing
+end
+
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
     # clear any postoutput hooks that were saved in the sysimage
     empty!(Base.postoutput_hooks)
+    if generating_output(false)
+        # `__init__` does not run when writing a system image, so set up enough to run user
+        # code here, and undo it before the image is written
+        __init_build()
+        atexit(__uninit_build)
+    end
     local ret = 0
     # `--project` has been processed at this point - latch the active project's syntax
     # version and use it for `-L`, `argfile`, etc. If launched, the REPL will re-evaluate
@@ -715,7 +734,6 @@ function _start()
             e isa IOError || rethrow()
         end
     end
-    generating_output(false) && init_frontend()
     return ret
 end
 

@@ -1004,6 +1004,67 @@ end
     end
 end
 
+# TOML reads `deps = []` as a `Vector{Any}`, which must still count as no dependencies
+@testset "Manifest entry with an empty deps list" begin
+    mkdepottempdir() do depot
+        uuid = "e1000000-0000-0000-0000-000000000001"
+        trigger_uuid = "e1000000-0000-0000-0000-000000000002"
+        for (name, pkg_uuid) in (("EmptyDeps", uuid), ("EmptyDepsTrigger", trigger_uuid))
+            mkpath(joinpath(depot, "dev", name, "src"))
+            write(joinpath(depot, "dev", name, "Project.toml"), """
+                name = "$name"
+                uuid = "$pkg_uuid"
+                version = "0.1.0"
+                """)
+            write(joinpath(depot, "dev", name, "src", "$name.jl"), "module $name end\n")
+        end
+        mkpath(joinpath(depot, "dev", "EmptyDeps", "ext"))
+        write(joinpath(depot, "dev", "EmptyDeps", "ext", "EmptyDepsExt.jl"), "module EmptyDepsExt end\n")
+        project_path = joinpath(depot, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            EmptyDeps = "$uuid"
+            EmptyDepsTrigger = "$trigger_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.EmptyDeps]]
+            deps = []
+            path = "../dev/EmptyDeps"
+            uuid = "$uuid"
+            version = "0.1.0"
+            weakdeps = ["EmptyDepsTrigger"]
+
+                [deps.EmptyDeps.extensions]
+                EmptyDepsExt = "EmptyDepsTrigger"
+
+            [[deps.EmptyDepsTrigger]]
+            deps = []
+            path = "../dev/EmptyDepsTrigger"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+            weakdeps = []
+            """)
+        old_load_path = copy(LOAD_PATH)
+        old_depot_path = copy(DEPOT_PATH)
+        try
+            copy!(LOAD_PATH, [project_path])
+            push!(empty!(DEPOT_PATH), depot)
+            pkg = Base.PkgId(Base.UUID(uuid), "EmptyDeps")
+            @test Base.identify_package(pkg, "EmptyDepsTrigger") === nothing
+            @test Base.identify_package(pkg, "EmptyDeps") == pkg
+            EmptyDeps = Base.require(pkg)
+            Base.require(Base.PkgId(Base.UUID(trigger_uuid), "EmptyDepsTrigger"))
+            @test Base.get_extension(EmptyDeps, :EmptyDepsExt) isa Module
+        finally
+            copy!(LOAD_PATH, old_load_path)
+            copy!(DEPOT_PATH, old_depot_path)
+        end
+    end
+end
+
 @testset "Manifest name preferential loading" begin
     mktempdir() do tmp
         proj = joinpath(tmp, "Project.toml")
@@ -1373,6 +1434,48 @@ end
         finally
             copy!(LOAD_PATH, old_load_path)
             copy!(DEPOT_PATH, old_depot_path)
+        end
+    end
+end
+
+# A package loading something that is not its dependency points at manifests resolved by another julia
+@testset "missing dependency error lists manifests from other julia versions" begin
+    mktempdir() do dir
+        this_version = isempty(VERSION.prerelease) ? string(VERSION) :
+            string(Base.thispatch(VERSION), "-", VERSION.prerelease[1])
+        envs = Dict{String, String}()
+        for (name, julia_version) in (("old", "1.0.0"), ("prerelease", string(Base.thispatch(VERSION), "-zzz")),
+                                      ("current", this_version), ("unversioned", nothing))
+            env = joinpath(dir, name)
+            mkpath(env)
+            write(joinpath(env, "Project.toml"), "[deps]\n")
+            write(joinpath(env, "Manifest.toml"), julia_version === nothing ? "" : """
+                julia_version = "$julia_version"
+                manifest_format = "2.0"
+                """)
+            envs[name] = joinpath(env, "Manifest.toml")
+        end
+        noproject = joinpath(dir, "noproject")
+        mkpath(noproject)
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [joinpath(dir, name) for name in ("old", "prerelease", "current", "unversioned", "noproject")])
+            err = try
+                Base.require(Test, :NotADependency)
+            catch err
+                err
+            end
+            @test err isa ArgumentError
+            @test startswith(err.msg, "Cannot load (`using/import`) module NotADependency into module Test in package Test\n")
+            @test occursin("resolved with a different\n  julia version", err.msg)
+            @test occursin("\n    $(envs["old"]) (v1.0.0)\n", err.msg)
+            @test occursin("\n    $(envs["prerelease"]) (v$(Base.thispatch(VERSION))-zzz)\n", err.msg)
+            @test occursin("\n    $(envs["unversioned"]) (julia version not recorded)\n", err.msg)
+            @test occursin("different DEV version", err.msg) == (this_version == "$(Base.thispatch(VERSION))-DEV")
+            @test occursin("\n    $(envs["current"])\n", err.msg) == (this_version == "$(Base.thispatch(VERSION))-DEV")
+            @test occursin("Try `Pkg.instantiate()`", err.msg)
+        finally
+            copy!(LOAD_PATH, old_load_path)
         end
     end
 end
@@ -2037,6 +2140,43 @@ end
             ))
             @test cov_hit()
             rm_cov_files()
+        end
+    end
+end
+
+@testset "coverage of an inlined function with a compiled copy in a package image" begin
+    mkdepottempdir() do depot
+        mktempdir() do dir
+            dir = realpath(dir) # the tracked path is resolved but the source paths are not
+            pkgdir = joinpath(dir, "CovInline")
+            mkpath(joinpath(pkgdir, "src"))
+            write(joinpath(pkgdir, "Project.toml"), """
+                name = "CovInline"
+                uuid = "3c9f1e2a-5b7d-4e8f-a0b1-c2d3e4f5a6b7"
+                version = "0.1.0"
+                """)
+            srcfile = joinpath(pkgdir, "src", "CovInline.jl")
+            write(srcfile, """
+                module CovInline
+                @inline function inner(x)
+                    y = x + 1
+                    return y * 2
+                end
+                @noinline outer(x) = inner(x)
+                precompile(outer, (Int,))
+                precompile(inner, (Int,))
+                end
+                """)
+            outfile = joinpath(dir, "cov.info")
+            sep = Sys.iswindows() ? ';' : ':'
+            cmd = `$(Base.julia_cmd()[1]) --startup-file=no --pkgimages=yes --code-coverage=$outfile --code-coverage=@$dir -e 'using CovInline; CovInline.outer(parse(Int, "1"))'`
+            @test success(addenv(cmd, "JULIA_DEPOT_PATH" => depot * sep, "JULIA_LOAD_PATH" => dir * sep * "@stdlib"))
+            record = only(filter(contains("SF:" * srcfile), split(read(outfile, String), "end_of_record")))
+            hits = Dict(parse(Int, m[1]) => parse(Int, m[2]) for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
+            # the inlined call covers the definition line, as a call to the compiled copy would
+            for ln in (2, 3, 4)
+                @test get(hits, ln, 0) > 0 context=ln
+            end
         end
     end
 end

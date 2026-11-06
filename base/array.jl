@@ -185,8 +185,6 @@ function vect(X...)
     return T[X...]
 end
 
-asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
-
 allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
 """
@@ -1574,6 +1572,52 @@ function resize!(a::Vector, nl_::Integer; first::Bool=false)
 end
 
 """
+    growat!(a::Vector, i::Integer, delta::Integer) -> a
+
+Grow `a` by `delta` elements inserted at index `i`, so that the new elements occupy
+`i:i+delta-1` and the elements previously at `i:end` move to `i+delta:end`. `i` must be
+between `1` and `length(a) + 1`, and `delta` must be non-negative. As with
+[`resize!`](@ref), the new elements are not guaranteed to be initialized.
+
+If `a` has spare capacity at the end nearer to `i`, only the elements between `i` and that
+end are moved, so growing near either end of `a` is cheap.
+
+`growat!(a, i, delta)` is undone by `deleteat!(a, i:i+delta-1)`.
+
+See also [`resize!`](@ref), [`insert!`](@ref), [`deleteat!`](@ref).
+
+!!! compat "Julia 1.15"
+    This function requires at least Julia 1.15.
+
+# Examples
+```jldoctest
+julia> a = Any[1, 2, 3];
+
+julia> growat!(a, 2, 2)
+5-element Vector{Any}:
+   1
+ #undef
+ #undef
+   2
+   3
+
+julia> a[2:3] = ["x", "y"];
+
+julia> a
+5-element Vector{Any}:
+ 1
+  "x"
+  "y"
+ 2
+ 3
+```
+"""
+function growat!(a::Vector, i::Integer, delta::Integer)
+    _growat!(a, i, delta)
+    return a
+end
+
+"""
     sizehint!(s, n; first::Bool=false, shrink::Bool=true) -> s
 
 Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
@@ -2537,15 +2581,17 @@ findfirst(::typeof(isone), r::OneTo) = isempty(r) ? nothing : oneunit(keytype(r)
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange{<:Integer}) where {T<:Integer}
     first(r) <= p.x <= last(r) || return nothing
     i1 = first(keys(r))
-    return i1 + oftype(i1, p.x - first(r))
+    return checked_add(i1, convert(typeof(i1), maybe_unsigned(p.x - first(r))))
 end
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
-    d = p.x - first(r)
-    iszero(d % step(r)) || return nothing
-    return convert(keytype(r), d ÷ step(r) + 1)
+    f, h = first(r), step(r)
+    d = maybe_unsigned(h > zero(h) ? p.x - f : f - p.x)
+    n, m = divrem(d, uabs(h))
+    iszero(m) || return nothing
+    return checked_add(oneunit(keytype(r)), convert(keytype(r), n))
 end
 
 findfirst(::typeof(iszero), r::AbstractRange) = findfirst(==(zero(first(r))), r)

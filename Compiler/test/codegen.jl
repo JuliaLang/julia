@@ -1555,3 +1555,56 @@ end
 @test missing_edge_union_tag(false, true, false) === 1
 @test missing_edge_union_tag(true, false, false) === missing
 @test missing_edge_union_tag(true, false, true) === nothing
+
+# Bounds checks of a 2-d index left inside a loop (a wrapper that forwards indexing without
+# `@propagate_inbounds`) must not keep the loop from vectorizing: `checkbounds_indices`
+# evaluates all dimensions eagerly, so their sizes are loaded up front and can be hoisted
+struct ForwardingMatrix <: AbstractMatrix{Float64}
+    data::Matrix{Float64}
+end
+Base.size(a::ForwardingMatrix) = size(a.data)
+Base.getindex(a::ForwardingMatrix, i::Int, j::Int) = a.data[i, j]
+Base.setindex!(a::ForwardingMatrix, v, i::Int, j::Int) = (a.data[i, j] = v)
+scale_forwarding!(b::ForwardingMatrix, a::ForwardingMatrix) = (b .= 2.0 .* a)
+@testset "forwarded 2-d indexing vectorizes" begin
+    a = ForwardingMatrix(rand(4, 3))
+    b = ForwardingMatrix(zeros(4, 3))
+    @test scale_forwarding!(b, a).data == 2 .* a.data
+    if Sys.ARCH in (:x86_64, :aarch64)
+        @test occursin(r"<\d+ x double>", get_llvm(scale_forwarding!, Tuple{ForwardingMatrix, ForwardingMatrix}))
+    end
+end
+
+# A union phi whose incoming value is a singleton constant that the union stores unboxed
+# must not carry a box pointer (regression from #55045)
+struct UnionPhiStart end
+function union_phi_singleton(x::Vector{Int})
+    acc = UnionPhiStart()
+    for v in x
+        if isodd(v)
+            acc = acc isa UnionPhiStart ? v : acc + v
+        end
+    end
+    return acc
+end
+function union_phi_nothing(x::Vector{Int})
+    acc = nothing
+    for v in x
+        if isodd(v)
+            acc = acc === nothing ? v : acc + v
+        end
+    end
+    return acc
+end
+@testset "union phi with an unboxed singleton constant" begin
+    for f in (union_phi_singleton, union_phi_nothing)
+        @test !occursin("= phi ptr", get_llvm(f, Tuple{Vector{Int}}))
+    end
+    @test union_phi_singleton([2, 4]) === UnionPhiStart()
+    @test union_phi_singleton([1, 2, 3]) === 4
+    @test union_phi_nothing(Int[]) === nothing
+    @test union_phi_nothing([1, 2, 3]) === 4
+    # `Union{}` (typed `Type{Union{}}`) is an unboxed ghost of `TypeofBottom`
+    @test isequal(Base.mapany(identity, (Union{}, 'a')), Any[Union{}, 'a'])
+    @test isequal(Any[x for x in (Union{}, 1.0)], Any[Union{}, 1.0])
+end

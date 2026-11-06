@@ -490,7 +490,6 @@ function repl_corrections(io::IO, s, mod::Module)
     end
     print_correction(io, s, mod)
 end
-repl_corrections(s) = repl_corrections(stdout, s)
 
 # inverse of latex_symbols Dict, lazily created as needed
 const symbols_latex = Dict{String,String}()

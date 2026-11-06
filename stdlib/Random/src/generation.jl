@@ -134,8 +134,8 @@ rand(r::AbstractRNG, sp::SamplerTrivial{<:UniformBits{T}}) where {T} =
 # we don't call them simply `rand` as this can easily contribute to create
 # ambiguities with user-side methods (forcing the user to resort to @eval)
 
-rand_generic(r::AbstractRNG, T::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}) =
-    rand(r, UInt52Raw()) % T[]
+rand_generic(r::AbstractRNG, ::Type{T}) where {T<:Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}} =
+    rand(r, UInt52Raw()) % T
 
 rand_generic(r::AbstractRNG, ::Type{UInt64}) =
     rand(r, UInt52Raw()) << 32 ⊻ rand(r, UInt52Raw())

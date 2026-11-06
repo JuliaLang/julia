@@ -296,6 +296,12 @@ TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, con
 
 const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
 
+function uninit_toml_cache()
+    empty!(TOML_CACHE.d)
+    TOML.reinit!(TOML_CACHE.p, "")
+    nothing
+end
+
 parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
     lock(toml_lock) do
@@ -1135,6 +1141,9 @@ end
 
 dep_stanza_get(stanza::Nothing, name::String) = nothing
 
+# TOML reads an empty array as `Any[]`, but in a manifest it is an empty list of names
+manifest_dep_names(names) = names isa Vector{Any} && isempty(names) ? String[] : names
+
 function explicit_manifest_deps_get(project_file::String, where::PkgId, name::String)::Union{Nothing,PkgId}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
@@ -1147,7 +1156,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             uuid === nothing && continue
             # deps is either a list of names (deps = ["DepA", "DepB"]) or
             # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
-            deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
+            deps = manifest_dep_names(get(entry, "deps", nothing))::Union{Vector{String}, Dict{String, Any}, Nothing}
             local dep::Union{Nothing, PkgId}
             @label resolved begin
                 if UUID(uuid) === where.uuid
@@ -1173,7 +1182,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                             # 1. Any ordinary dep of the parent package
                             # 2. Any weakdep of the parent package declared as an extension trigger
                             for deps′ in (ext_may_load_weakdep(exts, name) ?
-                                    (get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}, deps) :
+                                    (manifest_dep_names(get(entry, "weakdeps", nothing))::Union{Vector{String}, Dict{String, Any}, Nothing}, deps) :
                                     (deps,))
                                 dep = dep_stanza_get(deps′, name)
                                 dep === nothing && continue
@@ -1350,6 +1359,10 @@ function init_debuginfo_source_paths()
     isempty(DATAROOT) || push!(paths, DATAROOT * "julia/", share)
     push!(paths, "", joinpath(share, "base"))
     ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec(paths...))
+end
+
+function uninit_debuginfo_source_paths()
+    ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec())
 end
 
 function cache_file_entry(pkg::PkgId)
@@ -1790,8 +1803,8 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                     end
                     extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
                     extensions === nothing && return
-                    weakdeps = get(Dict{String, Any}, entry, "weakdeps")::Union{Vector{String}, Dict{String,Any}}
-                    deps = get(Dict{String, Any}, entry, "deps")::Union{Vector{String}, Dict{String,Any}}
+                    weakdeps = manifest_dep_names(get(Dict{String, Any}, entry, "weakdeps"))::Union{Vector{String}, Dict{String,Any}}
+                    deps = manifest_dep_names(get(Dict{String, Any}, entry, "deps"))::Union{Vector{String}, Dict{String,Any}}
 
                     function expand_deps_list(deps′::Vector{String})
                         deps′_expanded = Dict{String, Any}()
@@ -2929,7 +2942,9 @@ function find_unsuitable_manifests_versions()
             end
             continue
         end
-        push!(unsuitable_manifests, string(manifest_file, " (v", man_julia_version, ")"))
+        # a manifest without a julia version was most likely written before Julia 1.7
+        version_str = man_julia_version isa VersionNumber ? "v$man_julia_version" : "julia version not recorded"
+        push!(unsuitable_manifests, string(manifest_file, " (", version_str, ")"))
     end
     return unsuitable_manifests, dev_manifests
 end
@@ -3610,8 +3625,7 @@ function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{In
     # When this worker is producing a native object pkgimage, retain raw
     # inferred IR on `CodeInstance.inferred` for the non-inlineable methods
     # that would otherwise be discarded, so the irgen pass can short-circuit
-    # `typeinf_ext` instead of re-inferring. `jl_finalize_precompile_inferred`
-    # clears them (and the flag) before staticdata serialization.
+    # `typeinf_ext` instead of re-inferring. The image leaves them out.
     keep_ir = JLOptions().outputo != C_NULL
     keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 1)
     # This one changes the parser behavior

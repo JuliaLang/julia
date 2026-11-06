@@ -1923,7 +1923,6 @@ history_prev(::EmptyHistoryProvider) = ("", false)
 history_next(::EmptyHistoryProvider) = ("", false)
 history_first(::EmptyHistoryProvider) = ("", false)
 history_last(::EmptyHistoryProvider) = ("", false)
-history_search(::EmptyHistoryProvider, args...) = false
 add_history(::EmptyHistoryProvider, s) = nothing
 add_history(s::PromptState) = add_history(mode(s).hist, s)
 history_next_prefix(s, hist, prefix) = false
@@ -1955,7 +1954,6 @@ end
 refresh_line(s::BufferLike) = refresh_multi_line(s)
 refresh_line(s::BufferLike, termbuf::AbstractTerminal) = refresh_multi_line(termbuf, s)
 
-default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
 write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)

@@ -69,6 +69,7 @@ emit(query_crossarch)
 # CHECK-NOT: julia.cpu.supports
 # CHECK-NOT: jl_cpu_supports
 # CHECK-NOT: br i1
+# CHECK: {{^}}}
 @inline dispatch(x) = (Base.@cpu_supports x86_64 avx2) ? x * 2 : x + 1
 emit(dispatch, Int)
 

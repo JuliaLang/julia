@@ -1102,6 +1102,14 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test length(d26939.ht) == 0
     @test length(d26939) == 0
 
+    wkd = WeakKeyDict()
+    wkd[A] = 1
+    (@noinline d -> d[[1]] = 2)(wkd)
+    GC.gc()
+    @test length(wkd) == length(collect(wkd))
+    wkd[A] = 3
+    @test length(wkd) == 1
+
     # WeakKeyDict does not convert keys on setting
     @test_throws ArgumentError WeakKeyDict{Vector{Int},Any}([5.0]=>1)
     wkd = WeakKeyDict(A=>2)
@@ -1236,6 +1244,11 @@ end
     @test_throws ArgumentError widgc[nothing] = Ref(1)
     @test_throws ArgumentError get!(widgc, nothing, Ref(1))
     @test_throws ArgumentError widgc[[5]] = nothing
+
+    @test_throws ArgumentError widgc[A] = Ref(1.0)
+    @test_throws ArgumentError get!(widgc, B, Ref(1.0))
+    @test widgc[A] === b
+    @test !haskey(widgc, B)
 
     GC.@preserve A B C a b c nothing
 end

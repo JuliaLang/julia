@@ -908,3 +908,58 @@ end
     @test Base.hash_integer(bint, Base.HASH_SEED) ==
         @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
 end
+
+@testset "parse errors" begin
+    for s in ("", " ", "-", "+ ", "  -  ")
+        @test tryparse(BigInt, s) === nothing
+        @test_throws ArgumentError("input string is empty or only contains whitespace") parse(BigInt, s)
+        @test_throws ArgumentError("input string is empty or only contains whitespace") parse(BigInt, s; base=16)
+    end
+    @test tryparse(BigInt, "0x") === nothing
+    @test_throws ArgumentError("premature end of integer: \"0x\"") parse(BigInt, "0x")
+end
+
+@testset "misc BigInt methods" begin
+    @test Base.GMP.version() isa VersionNumber
+    for x in (0, 1, 2, -3, 2^62 + 1, -2^62)
+        @test big(x) % Bool === x % Bool
+        @test big(x) % Bool === (big(x) + big(2)^70) % Bool
+    end
+    for (a, b) in ((-3, 3), (3, -3), (3, 3), (-3, -3), (12, -18), (0, 5))
+        g, s, t = gcdx(big(a), big(b))
+        @test (g, s, t) == gcdx(a, b)
+        @test g == s*a + t*b
+    end
+    x, y = big(2)^100, -big(3)^70
+    @test Base.add_with_overflow(x, y) == (x + y, false)
+    @test Base.sub_with_overflow(x, y) == (x - y, false)
+    @test Base.checked_pow(3, big(50)) == big(3)^50
+    @test Base.checked_pow(big(-3), big(51)) == big(-3)^51
+    for f in (2.0, -2.0, 0.5, Inf, -Inf, 2.0^70, 1f0)
+        for n in (big(2), big(-2), big(2)^70, big(0))
+            @test cmp(f, n) == cmp(Rational{BigInt}(BigFloat(f)), n) == -cmp(n, f)
+            @test (f <= n) == (BigFloat(f) <= n)
+            @test (f < n) == (BigFloat(f) < n)
+        end
+    end
+    @test cmp(NaN, big(1)) == 1
+    @test cmp(big(1), NaN) == -1
+    @test !(NaN <= big(1)) && !(NaN < big(1)) && !(big(1) <= NaN)
+    # cmp should follow the total order of `isless`, which puts -0.0 before 0
+    @test isless(-0.0, big(0))
+    @test_broken cmp(-0.0, big(0)) == -1
+end
+
+if Base.GMP.Limb === UInt64 === UInt
+    @testset "UnsafeLimbView" begin
+        for x in (big(0x0102030405060708090a0b), big(2)^64 - 1, big(255))
+            n = cld(ndigits(x; base=2), 8)
+            v = Base.GMP.UnsafeLimbView(x, 1, n)
+            @test length(v) == n
+            @test size(v) == (n,)
+            @test collect(v) == digits(UInt8, x; base=256)
+            @test v[n] == last(digits(UInt8, x; base=256))
+            @test_throws BoundsError v[n + 1]
+        end
+    end
+end

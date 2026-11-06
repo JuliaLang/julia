@@ -1766,7 +1766,15 @@ end
 # #6080
 @test_loweringerror(:(ccall(:a, Cvoid, (Cint,), &x)), "invalid syntax &x")
 
-@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall/cglobal function name and library expression cannot reference local variables")
+@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall/cglobal function name and library expression cannot reference local variable")
+# #38907, #59324
+@test_loweringerror(:(let lib = nothing
+                          () -> (lib = "lib"; ccall((:a, lib), Cvoid, ()))
+                      end), "ccall/cglobal function name and library expression cannot reference local variable")
+@test_loweringerror(:(f(::Type{T}) where {T} = ccall(:a, (T where T), ())), "ccall return type cannot reference local variable")
+@test_loweringerror(:(f(T) = ccall(:a, T, ())), "ccall return type cannot reference local variable")
+@test_loweringerror(:(f(x, T) = ccall(:a, Cvoid, (T,), x)), "ccall argument type cannot reference local variable")
+@test_loweringerror(:(f(x) = ccall(:a, Cvoid, (Ref{<:Any},), x)), "ccall argument type cannot reference local variable")
 
 @test_parseerror "x.'"
 @test_parseerror "0.+1"
@@ -3627,7 +3635,7 @@ demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
     @test z == 5
 
     @test_throws ArgumentError begin x, y..., z = 1:1 end
-    @test_throws BoundsError begin x, y, _..., z = 1, 2 end
+    @test_throws ArgumentError begin x, y, _..., z = 1, 2 end
 
     last((a..., b)) = b
     front((a..., b)) = a
@@ -4794,4 +4802,41 @@ end
     :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1;b=3))
     ]
     @test_throws "invalid assignment location" Core.eval(@__MODULE__, ex)
+end
+
+# issue #20392: the calling convention of `ccall` must survive macro hygiene
+macro ccall_cdecl_20392()
+    :(ccall(:jl_get_world_counter, cdecl, UInt, ()))
+end
+macro ccall_llvmcall_20392()
+    :(ccall("llvm.donothing", llvmcall, Cvoid, ()))
+end
+macro ccall_conv_20392(conv)
+    Expr(:call, :ccall, QuoteNode(:jl_get_world_counter), esc(conv), :UInt, Expr(:tuple))
+end
+macro ccall_conv_nested_20392()
+    :(@ccall_conv_20392 cdecl)
+end
+macro cdecl_20392()
+    :cdecl
+end
+macro ccall_esc_callee_20392()
+    Expr(:call, esc(:ccall), QuoteNode(:jl_get_world_counter), :cdecl, :UInt, Expr(:tuple))
+end
+macro call_cdecl_20392()
+    :(g(cdecl))
+end
+@testset "ccall calling convention in macro (#20392)" begin
+    @test @ccall_cdecl_20392() isa UInt
+    @test @ccall_llvmcall_20392() === nothing
+    @test @ccall_conv_nested_20392() isa UInt
+    @test ccall(:jl_get_world_counter, @cdecl_20392(), UInt, ()) isa UInt
+    @test @ccall_esc_callee_20392() isa UInt
+    # hygiene must leave the convention a plain symbol for any lowerer
+    @test (@macroexpand @ccall_cdecl_20392()).args[3] === :cdecl
+    @test (@macroexpand @ccall_conv_nested_20392()).args[3] === :cdecl
+    @test (@macroexpand ccall(:jl_get_world_counter, @cdecl_20392(), UInt, ())).args[3] === :cdecl
+    @test (@macroexpand @ccall_esc_callee_20392()).args[3] === :cdecl
+    # but only there: the names are ordinary variables elsewhere
+    @test (@macroexpand @call_cdecl_20392()).args[2] == GlobalRef(@__MODULE__, :cdecl)
 end

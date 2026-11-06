@@ -226,6 +226,18 @@ LoweringError:
 # └──────┘ ── `return` not allowed inside comprehension or generator
 
 ########################################
+# Error: `break` out of comprehension body inside `@label` block
+@label begin
+    Int[(x > 1 && break; x) for x in 1:3]
+end
+#---------------------
+LoweringError:
+@label begin
+    Int[(x > 1 && break; x) for x in 1:3]
+#                 └───┘ ── unlabeled `break` outside of a `while` or `for` loop
+end
+
+########################################
 # Nested case with duplicate iteration variables
 (x for x in 1:3 for x in 1:2)
 #---------------------

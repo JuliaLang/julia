@@ -24,9 +24,15 @@
 _colon(::Ordered, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
 # for T<:Union{Float16,Float32,Float64} see twiceprecision.jl
 _colon(::Ordered, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
-    StepRangeLen(start, step, convert(Integer, fld(stop - start, step)) + 1)
+    StepRangeLen(start, step, _colon_length(start, step, stop))
 _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
-    StepRangeLen(start, step, convert(Integer, fld(stop - start, step)) + 1)
+    StepRangeLen(start, step, _colon_length(start, step, stop))
+function _colon_length(start, step, stop)
+    # avoid computing `stop - start` for empty ranges, but keep the type of the length
+    empty = _isemptyrange(start, step, stop)
+    len = convert(Integer, fld((empty ? start : stop) - start, step)) + 1
+    return empty ? zero(len) : len
+end
 
 const _RangeWrappingInteger = Union{
     Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}
@@ -349,6 +355,9 @@ struct StepRange{T,S} <: OrdinalRange{T,S}
     end
 end
 
+# whether `start:step:stop` is empty, without computing `stop - start`
+_isemptyrange(start, step, stop) = (start != stop) & ((step > zero(step)) != (stop > start))
+
 # to make StepRange constructor inlineable, so optimizer can see `step` value
 function steprange_last(start, step, stop)::typeof(stop)
     if isa(start, AbstractFloat) || isa(step, AbstractFloat)
@@ -363,7 +372,7 @@ function steprange_last(start, step, stop)::typeof(stop)
     if stop == start
         last = stop
     else
-        if (step > z) != (stop > start)
+        if _isemptyrange(start, step, stop)
             last = steprange_last_empty(start, step, stop)
         else
             # Compute absolute value of difference between `start` and `stop`
@@ -580,9 +589,9 @@ julia> collect(range(-0.1, 0.3, length=5))
 julia> collect(LinRange(-0.1, 0.3, 5))
 5-element Vector{Float64}:
  -0.1
- -1.3877787807814457e-17
-  0.09999999999999999
-  0.19999999999999998
+  0.0
+  0.1
+  0.20000000000000004
   0.3
 ```
 
@@ -707,7 +716,7 @@ size(r::AbstractRange) = (@inline; (length(r),))
 
 isempty(r::StepRange) =
     # steprange_last(r.start, r.step, r.stop) == r.stop
-    (r.start != r.stop) & ((r.step > zero(r.step)) != (r.stop > r.start))
+    _isemptyrange(r.start, r.step, r.stop)
 isempty(r::AbstractUnitRange) = first(r) > last(r)
 isempty(r::StepRangeLen) = length(r) == 0
 isempty(r::LinRange) = length(r) == 0
@@ -989,10 +998,14 @@ function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
 end
 unsafe_getindex(r::LinRange, i::Integer) = lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
 
-function lerpi(j::Integer, d::Integer, a::T, b::T) where T
-    t = j/d # ∈ [0,1]
-    # compute approximately fma(t, b, -fma(t, a, a))
-    return T((1-t)*a + t*b)
+lerpi(j::Integer, d::Integer, a::T, b::T) where {T<:Number} = T(_lerp(j/d, a, b))
+
+function _lerp(t, a, b)
+    s = one(t)
+    a, b = s*a, s*b
+    Δ = b - a
+    x = ifelse(isfinite(Δ), a + t*Δ, (s-t)*a + t*b)
+    return ifelse(t == s, b, x)
 end
 
 # non-scalar indexing

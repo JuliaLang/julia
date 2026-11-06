@@ -740,6 +740,11 @@ end
     @test collect(product(1:1, (1, "2"))) == [(1, 1) (1, "2")]
 end
 
+@testset "product of iterators that are all done" begin
+    @test collect(product(Iterators.Stateful([1, 2]))) == [(1,), (2,)]
+    @test collect(product(eachline(IOBuffer("a\nb")))) == [("a",), ("b",)]
+end
+
 @testset "filter empty iterable #16704" begin
     arr = filter(Returns(true), 1:0)
     @test (@inferred length(arr)) == 0
@@ -1253,6 +1258,12 @@ end
     @test nth(finite_cycle_size_unknown, 2) == 3
     @test nth(finite_cycle_size_unknown, 20) == 9
     @test_throws BoundsError nth(finite_cycle_size_unknown, 30) # only wraps 5 times, max n is 5 * 5 = 25
+
+    # unsigned n with a negative first index
+    @test nth(Base.IdentityUnitRange(-5:-3), UInt(1)) == -5
+    # length(v) * cycles overflows Int
+    @test nth(Iterators.cycle([1, 2, 3], typemax(Int) ÷ 2), 1) == 1
+    @test nth(Iterators.cycle([1, 2, 3], typemax(Int)), typemax(Int)) == 1
 end
 
 @testset "Iterators docstrings" begin
