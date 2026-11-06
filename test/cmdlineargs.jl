@@ -761,6 +761,57 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foobar $srcfile`)
             @test contains(read(outfile, String), realpath(srcfile))
             rm(outfile)
+            # a path list tracks files under any entry, and entries are resolved separately
+            sep = Sys.iswindows() ? ';' : ':'
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foo$sep$foobar $srcfile`)
+            @test contains(read(outfile, String), realpath(srcfile))
+            rm(outfile)
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foo$sep$(joinpath(parent, "Foob")) $srcfile`)
+            @test !contains(read(outfile, String), realpath(srcfile))
+            rm(outfile)
+            cd(foo) do
+                @test readchomp(`$cov_exename -e 'print(unsafe_string(Base.JLOptions().tracked_path))' --code-coverage=@.$sep../Foobar`) == "$foo$sep$foobar"
+                @test readchomp(`$cov_exename -e 'print(unsafe_string(Base.JLOptions().tracked_path))' --track-allocation=@.$sep../Foobar`) == "$foo$sep$foobar"
+            end
+            @test contains(readchomp(`$cov_exename --code-coverage=@$foo$sep$foobar -e 'print(Base.julia_cmd())'`),
+                           "--code-coverage=@$foo$sep$foobar")
+            # any entry inside the system image's sources rules out plain caches
+            basefile = abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", "Base.jl")
+            @test !Base.tracked_path_overlaps_sysimage("$foo$sep$foobar")
+            @test Base.tracked_path_overlaps_sysimage("$foo$sep$basefile")
+        end
+
+        # excluded files record nothing and are optimized as without coverage
+        mktempdir() do parent
+            excluded = realpath(mkdir(joinpath(parent, "excluded")))
+            other = realpath(mkdir(joinpath(parent, "other")))
+            libfile = joinpath(other, "lib.jl")
+            write(libfile, "g(x) = x + 1\n")
+            srcfile = joinpath(excluded, "main.jl")
+            write(srcfile, """
+                include($(repr(libfile)))
+                h(x) = (x, x)
+                g(h(1)[1])
+                print(Base.Compiler.is_effect_free(Base.infer_effects(h, (Int,))))
+                """)
+            outfile = joinpath(parent, "exclude.info")
+            @test readchomp(`$cov_exename_hit --code-coverage=$outfile $srcfile`) == "false"
+            @test contains(read(outfile, String), "SF:$srcfile")
+            rm(outfile)
+            # a list ending in `.info` must not be taken for a tracefile
+            exclude = join([excluded, joinpath(parent, "missing.info")], Sys.iswindows() ? ';' : ':')
+            @test readchomp(`$cov_exename_hit --code-coverage=$outfile --code-coverage=-$exclude $srcfile`) == "true"
+            report = read(outfile, String)
+            @test !contains(report, "SF:$srcfile")
+            @test contains(report, "SF:$libfile")
+            rm(outfile)
+            # allocation tracking still sees the file as instrumented
+            @test readchomp(`$cov_exename_hit --code-coverage=$outfile --code-coverage=-$exclude --track-allocation=@$excluded $srcfile`) == "false"
+            pidfile = joinpath(parent, "exclude-%p.info")
+            @test contains(readchomp(`$cov_exename_hit --code-coverage=$pidfile --code-coverage=-$excluded -e 'print(Base.julia_cmd())'`),
+                           "--code-coverage=-$excluded")
+            @test readchomp(`$cov_exename_hit --code-coverage=-$excluded -e 'print(Base.JLOptions().code_coverage)'`) == "2"
+            @test !success(pipeline(`$cov_exename_hit --code-coverage=- -e 0`, stderr=devnull))
         end
 
         # Source and report filenames must support Unicode on Windows as well.
