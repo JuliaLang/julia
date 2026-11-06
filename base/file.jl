@@ -1232,9 +1232,11 @@ mutable struct DirEntryIterator{T}
     @atomic uvdir::Ptr{Cvoid}
     const status::RefValue{Cint}
     closed::Bool
+    # The next name, when it was read ahead to check for the end of the directory
+    peeked::Union{Nothing, String}
     function DirEntryIterator{T}(dir::AbstractString, join::Bool=false) where {T}
         T === String || T === DirEntry || throw(ArgumentError("element type must be String or DirEntry"))
-        finalizer(close, new{T}(String(dir), join, C_NULL, RefValue{Cint}(0), false))
+        finalizer(close, new{T}(String(dir), join, C_NULL, RefValue{Cint}(0), false, nothing))
     end
 end
 
@@ -1260,23 +1262,41 @@ function Base.close(it::DirEntryIterator)
         ccall(:jl_uv_fs_closedir, Cint, (Ptr{Cvoid},), uvdir)
     end
     it.closed = true
+    it.peeked = nothing
     return
 end
 
 Base.IteratorSize(::Type{<:DirEntryIterator}) = Base.SizeUnknown()
 Base.eltype(::Type{DirEntryIterator{T}}) where {T} = T
-Base.isdone(it::DirEntryIterator, _=nothing) = it.closed
 
-function Base.iterate(it::DirEntryIterator{T}, _=nothing) where {T}
+function _eachentry_read!(it::DirEntryIterator)
     _eachentry_open!(it)
-    name = ccall(:jl_uv_fs_readdir1, Any, (Ptr{Cvoid}, Ptr{Cint}), it.uvdir, it.status)
-    if name === nothing
+    name = ccall(:jl_uv_fs_readdir1, Any, (Ptr{Cvoid}, Ptr{Cint}), it.uvdir, it.status)::Union{Nothing, String}
+    if name === nothing && it.status[] < 0
         err = it.status[]
         close(it)
-        err < 0 && uv_error("eachentry($(repr(it.dir)))", err)
-        return nothing
+        uv_error("eachentry($(repr(it.dir)))", err)
     end
-    name = name::String
+    return name
+end
+
+function Base.isdone(it::DirEntryIterator, _=nothing)
+    it.closed && return true
+    it.peeked === nothing || return false
+    it.peeked = _eachentry_read!(it)
+    return it.peeked === nothing
+end
+
+function Base.iterate(it::DirEntryIterator{T}, _=nothing) where {T}
+    name = it.peeked
+    if name === nothing
+        name = _eachentry_read!(it)
+        if name === nothing
+            close(it)
+            return nothing
+        end
+    end
+    it.peeked = nothing
     value = T === DirEntry ? DirEntry(it.dir, name, it.status[]) :
             it.join ? joinpath(it.dir, name) : name
     return value, nothing
