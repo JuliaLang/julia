@@ -2187,6 +2187,60 @@ precompile_test_harness("custom MethodTable dispatch status") do load_path
     end
 end
 
+precompile_test_harness("custom MethodTable lookups in package images") do load_path
+    # Code inferred through an overlay table and cached in a package image is invalidated
+    # when a method that changes one of its lookups through that table is added, whether
+    # before or after the image is loaded.
+    newinterp_path = abspath(joinpath(@__DIR__, "../Compiler/test/newinterp.jl"))
+    write(joinpath(load_path, "OverlayLookupBase.jl"),
+        """
+        module OverlayLookupBase
+        f(x) = 1
+        Base.Experimental.@MethodTable mt
+        end
+        """)
+    for user in ("OverlayLookupUserA", "OverlayLookupUserB")
+        write(joinpath(load_path, "$user.jl"),
+            """
+            module $user
+            import OverlayLookupBase
+            module Custom
+                import Base.Compiler: Compiler
+                include($(repr(newinterp_path)))
+                @newinterp OverlayLookupInterp
+                import OverlayLookupBase
+                Compiler.method_table(interp::OverlayLookupInterp) =
+                    Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), OverlayLookupBase.mt)
+            end
+            callf(x) = OverlayLookupBase.f(x)
+            Base.return_types(callf, (Int,); interp=Custom.OverlayLookupInterp())
+            end
+            """)
+    end
+    write(joinpath(load_path, "OverlayLookupExt.jl"),
+        """
+        module OverlayLookupExt
+        import OverlayLookupBase: f, mt
+        Base.Experimental.@overlay mt f(x::Int) = 2
+        end
+        """)
+    for pkg in ("OverlayLookupBase", "OverlayLookupUserA", "OverlayLookupUserB", "OverlayLookupExt")
+        Base.compilecache(Base.PkgId(pkg))
+    end
+    cached(U) = invokelatest() do
+        [check_presence(only(Base.specializations(only(methods(f)))), owner)
+         for (f, owner) in ((U.callf, U.Custom.OverlayLookupInterp),)]
+    end
+    @eval using OverlayLookupUserA
+    A = invokelatest(getglobal, @__MODULE__, :OverlayLookupUserA)
+    @test all(!isnothing, cached(A))
+    @eval using OverlayLookupExt
+    @test all(isnothing, cached(A))
+    @eval using OverlayLookupUserB
+    B = invokelatest(getglobal, @__MODULE__, :OverlayLookupUserB)
+    @test all(isnothing, cached(B))
+end
+
 precompile_test_harness("DynamicExpressions") do load_path
     # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
     write(joinpath(load_path, "Float16MWE.jl"),

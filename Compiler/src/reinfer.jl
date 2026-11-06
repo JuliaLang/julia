@@ -4,7 +4,8 @@ using ..Compiler.Base
 using ..Compiler: _findsup, store_backedges, JLOptions, get_world_counter,
     _methods_by_ftype, get_methodtable, get_ci_mi, should_instrument,
     morespecific, RefValue, get_require_world, Vector, IdDict, IdSet,
-    binding_access_range, is_leaf_partition, WorldWithRange, WorldRange, min_world, max_world
+    binding_access_range, is_leaf_partition, WorldWithRange, WorldRange, min_world, max_world,
+    OverlayMethodTable, findall as findall_in_view, findsup as findsup_in_view
 using .Core: CodeInstance, MethodInstance
 
 const CI_FLAGS_NATIVE_CACHE_VALID = 0b1000
@@ -282,6 +283,13 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                     local min_valid2::UInt, max_valid2::UInt
                     edge = initial.callees[j]
                     @assert !(edge isa Method) "unexpected Method edge indicates corrupt edges list creation"
+                    # a lookup made through an overlay method table is redone through it
+                    lookup_mt = nothing
+                    if edge isa Core.OverlayLookup
+                        lookup_mt = edge.mt
+                        j += 1
+                        edge = initial.callees[j]
+                    end
                     possibly_ambiguous = edge isa Core.PossiblyAmbiguous
                     if possibly_ambiguous
                         j += 1
@@ -295,13 +303,13 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
 
                     if edge isa MethodInstance
                         sig = edge.specTypes
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, possibly_ambiguous, workspace, initial.image)
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, possibly_ambiguous, workspace, initial.image, lookup_mt)
                         j += 1
                     elseif edge isa Int
                         sig = initial.callees[j+1]
                         nmatches = abs(edge)
                         fully_covers = edge > 0
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, possibly_ambiguous, workspace, initial.image)
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, possibly_ambiguous, workspace, initial.image, lookup_mt)
                         j += 2 + nmatches
                         edge = sig
                     elseif edge isa Core.Binding
@@ -331,7 +339,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         else
                             meth = callee::Method
                         end
-                        min_valid2, max_valid2 = verify_invokesig(edge, meth, world, matches, initial.image)
+                        min_valid2, max_valid2 = verify_invokesig(edge, meth, world, matches, initial.image, lookup_mt)
                         j += 2
                     end
 
@@ -702,9 +710,11 @@ end
 # `_methods_by_ftype` for `sig`, memoized in `workspace` unless the debug log is on (the log
 # path mutates the result vector). A cached answer is reused when its validity range covers
 # `world`, since the matches are the same in every world of that range.
-function verify_call_lookup(@nospecialize(sig), lim::Int, world::UInt, workspace::VerifyMethodWorkspace, memoize::Bool)
+function verify_call_lookup(@nospecialize(sig), lim::Int, world::UInt, workspace::VerifyMethodWorkspace, memoize::Bool,
+                            mt::Union{Nothing,Core.MethodTable}=nothing)
+    key = mt === nothing ? sig : Pair{Any,Any}(mt, sig)
     if memoize
-        cached = get(workspace.lookups, sig, nothing)
+        cached = get(workspace.lookups, key, nothing)
         if cached !== nothing && cached.lim == lim
             if cached.result === nothing ? cached.world == world : (cached.min_world <= world <= cached.max_world)
                 return cached.result, cached.min_world, cached.max_world, cached.has_ambig
@@ -717,16 +727,30 @@ function verify_call_lookup(@nospecialize(sig), lim::Int, world::UInt, workspace
     minworld[] = 1
     maxworld[] = typemax(UInt)
     has_ambig[] = 0
-    result = _methods_by_ftype(sig, nothing, lim, world, #=ambig=#false, minworld, maxworld, has_ambig)
+    if mt === nothing
+        result = _methods_by_ftype(sig, nothing, lim, world, #=ambig=#false, minworld, maxworld, has_ambig)
+    else
+        lookup = findall_in_view(sig, OverlayMethodTable(world, mt); limit=lim)
+        if lookup === nothing
+            result = nothing
+        else
+            result = lookup.matches
+            minworld[] = lookup.valid_worlds.min_world
+            maxworld[] = lookup.valid_worlds.max_world
+            has_ambig[] = Int32(lookup.ambig)
+        end
+    end
     if memoize
-        workspace.lookups[sig] = VerifyMethodLookup(lim, world, result, minworld[], maxworld[], has_ambig[])
+        workspace.lookups[key] = VerifyMethodLookup(lim, world, result, minworld[], maxworld[], has_ambig[])
     end
     return result, minworld[], maxworld[], has_ambig[]
 end
 
 # Return true if a call to `sig` was the same matches as `expecteds` when run in `world` as it was in `image`.
 # `image` is the linkage blob owning the code instance for the caller of this edge
-function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, possibly_ambiguous::Bool, workspace::VerifyMethodWorkspace, image::UInt)
+# With `mt`, the call was looked up through that overlay method table, and is redone the same way.
+function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, possibly_ambiguous::Bool, workspace::VerifyMethodWorkspace, image::UInt,
+                     mt::Union{Nothing,Core.MethodTable}=nothing)
     # verify that these edges intersect with the same methods as before
     matches = workspace.matches
     # Collect the expected methods once: indexing the edges list boxes the index (no inline
@@ -752,8 +776,8 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
             # so the result of ml_matches is already simply known
             let t = expecteds[i], meth = expected[1], minworld
                 mi = get_mi_from_edge(t) # also recorded for `jl_promote_mi_to_current` below
-                # Fast path is legal when fully_covers=true
-                if fully_covers && expected_dominates_sig(meth, mi)
+                # Fast path is legal when fully_covers=true, and only knows the global method table
+                if mt === nothing && fully_covers && expected_dominates_sig(meth, mi)
                     minworld = meth.primary_world
                     @assert minworld ≤ world "expected method not present in verification world"
                     return minworld, typemax(UInt)
@@ -763,13 +787,20 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         # If every method that could match `sig` was already present in `image`, the
         # result computed there is still exact.
         let minworld = sig_contributors_world(sig, Core.methodtable, image)
+            if minworld != 0 && mt !== nothing
+                # the overlay table must not have changed either
+                mt_minworld = sig_contributors_world(sig, mt, image)
+                minworld = mt_minworld == 0 ? UInt(0) : max(minworld, mt_minworld)
+            end
             if minworld != 0
                 @assert minworld ≤ world "contributor activated after the verification world"
                 # Without an ambiguity the matched methods win in every older world where all
                 # of them are present, so date from the newest of them, as a lookup would. A
                 # lookup can drop an ambiguous pair of which one was the sole match in an older
-                # world, so an ambiguous or empty result is dated from the newest contributor.
-                if !possibly_ambiguous && n != 0
+                # world, so an ambiguous or empty result is dated from the newest contributor,
+                # as is the result of a lookup through an overlay table, which also depends on
+                # what the overlay table lacks.
+                if mt === nothing && !possibly_ambiguous && n != 0
                     minworld = UInt(1)
                     for meth in expected
                         minworld = max(minworld, meth.primary_world)
@@ -782,7 +813,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         # Try the interference set fast path (used by both n==1, when the O(1) checks above
         # did not resolve it, and n>1): the result is unchanged as long as no interfering
         # method intersects sig outside of what the expected method(s) cover.
-        interference_fast_path_success = fully_covers
+        interference_fast_path_success = fully_covers && mt === nothing
         if interference_fast_path_success && n == 1
             # Skip to ml_matches for large interference sets (see VERIFY_INTERF_CAP). The set
             # is packed, so isassigned(., cap+1) tests "size > cap" without any typeintersect.
@@ -851,7 +882,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
     # next, compare the current result of ml_matches to the old result
     debug = _jl_debug_method_invalidation[] !== nothing
     lim = debug ? Int(typemax(Int32)) : n
-    result, minworld, maxworld, has_ambig = verify_call_lookup(sig, lim, world, workspace, !debug)
+    result, minworld, maxworld, has_ambig = verify_call_lookup(sig, lim, world, workspace, !debug, mt)
     if result === nothing
         empty!(matches)
         maxworld = UInt(0)
@@ -891,11 +922,22 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
     return minworld, maxworld
 end
 
-function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt, matches::Vector{Any}, image::UInt)
+# With `lookup_mt`, the `invoke` was looked up through that overlay method table.
+function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt, matches::Vector{Any}, image::UInt,
+                          lookup_mt::Union{Nothing,Core.MethodTable}=nothing)
     @assert invokesig isa Type "corrupt edges list"
     local minworld::UInt, maxworld::UInt
     empty!(matches)
-    if invokesig === expected.sig && method_is_latest_which(expected)
+    if lookup_mt !== nothing
+        matched, valid_worlds = findsup_in_view(invokesig, OverlayMethodTable(world, lookup_mt))
+        minworld, maxworld = valid_worlds.min_world, valid_worlds.max_world
+        if matched === nothing
+            maxworld = 0
+        else
+            push!(matches, matched.method)
+            matched.method === expected || (maxworld = 0)
+        end
+    elseif invokesig === expected.sig && method_is_latest_which(expected)
         # the invoke match is `expected` for `expected->sig`, unless `expected` is replaced
         minworld = expected.primary_world
         @assert minworld ≤ world "expected method not present in verification world"

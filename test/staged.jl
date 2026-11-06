@@ -428,6 +428,31 @@ let mi = only(methods(doit54916)).specializations
     @test found
 end
 
+# The edges of a cached generator can record lookups made through an overlay method table
+Base.Experimental.@MethodTable StagedOverlayMT
+staged_overlay_f(x) = 1
+const staged_overlay_calls = Ref(0)
+struct StagedOverlayGenerator <: Core.CachedGenerator end
+function (::StagedOverlayGenerator)(world::UInt, source::Method, args...)
+    staged_overlay_calls[] += 1
+    src = generate_lambda_ex(world, source, (:staged_overlay_g, :x), (), :x)
+    sig = Tuple{typeof(staged_overlay_f),Int}
+    match = Base._which(sig; world)
+    mi = Base.Compiler.specialize_method(match)
+    src.edges = Core.svec(Core.OverlayLookup(StagedOverlayMT), 1, sig, mi,
+                          Core.OverlayLookup(StagedOverlayMT), sig, mi)
+    return src
+end
+@eval function staged_overlay_g(x)
+    $(Expr(:meta, :generated, StagedOverlayGenerator()))
+    $(Expr(:meta, :generated_only))
+end
+@test staged_overlay_g(42) == 42
+@test staged_overlay_calls[] == 1
+staged_overlay_f(x::Int) = 2
+@test staged_overlay_g(42) == 42
+@test staged_overlay_calls[] == 2
+
 # Test that writing a bad cassette-style pass gives the expected error (#49715)
 function generator49715(world, source, self, f, tt)
     tt = Base.type_parameter(tt)

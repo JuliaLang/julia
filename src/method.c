@@ -874,7 +874,20 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
                 }
                 for (size_t i = 0; i < l; ) {
                     kind = data[i++];
-                    if (jl_is_method_instance(kind)) {
+                    if (jl_typetagis(kind, jl_possibly_ambiguous_type) || jl_typetagis(kind, jl_overlay_lookup_type)) {
+                        // markers of the record that follows
+                    }
+                    else if (jl_is_long(kind)) {
+                        // a lookup group `nmatches, sig, matches...`: the matches follow as edges
+                        i++;
+                    }
+                    else if (jl_is_method(kind)) {
+                        // a `Method` edge has no backedge
+                    }
+                    else if (jl_is_code_instance(kind)) {
+                        jl_method_instance_add_backedge(jl_get_ci_mi((jl_code_instance_t*)kind), jl_nothing, ci);
+                    }
+                    else if (jl_is_method_instance(kind)) {
                         jl_method_instance_add_backedge((jl_method_instance_t*)kind, jl_nothing, ci);
                     }
                     else if (jl_is_binding(kind)) {
@@ -885,8 +898,11 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
                         ex = data[i++];
                         if (jl_is_mtable(ex)) // abstract dispatch (`invokesig, mt`)
                             jl_method_table_add_backedge(kind, ci);
-                        else
+                        else if (jl_is_code_instance(ex))
+                            jl_method_instance_add_backedge(jl_get_ci_mi((jl_code_instance_t*)ex), kind, ci);
+                        else if (jl_is_method_instance(ex))
                             jl_method_instance_add_backedge((jl_method_instance_t*)ex, kind, ci);
+                        // an `invoke` of a `Method` has no backedge
                     }
                 }
             }

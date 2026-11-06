@@ -696,6 +696,13 @@ struct PossiblyAmbiguous
     PossiblyAmbiguous() = new()
 end
 
+# Precedes a lookup record in the edges of a `CodeInstance` inferred through the overlay
+# method table `mt`, so that verification redoes the lookup through that table.
+struct OverlayLookup
+    mt::MethodTable
+    OverlayLookup(mt::MethodTable) = new(mt)
+end
+
 eval(Core, quote
     GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
     NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))
