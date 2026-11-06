@@ -157,6 +157,8 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                 empty!(arg)
             elseif redirect_mode == :none && (!isempty(arg) || word_has_special)
                 append_2to1!(args, arg)
+            elseif redirect_mode != :none
+                error("parsing command `$str`: redirect operator without filename")
             end
             seg_tuple = Expr(:tuple)
             for a in args; push!(seg_tuple.args, Expr(:tuple, a...)); end
