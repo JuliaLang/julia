@@ -301,9 +301,9 @@ function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Arr
     n == 0 && return dest
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs)
-    @boundscheck n <= length(dest) - doffs + 1 || throw(BoundsError(dest, length(dest) + 1))
+    @boundscheck n <= length(dest) - doffs + 1 || throw_boundserror(dest, length(dest) + 1)
     @boundscheck checkbounds(src, soffs)
-    @boundscheck n <= length(src) - soffs + 1 || throw(BoundsError(src, length(src) + 1))
+    @boundscheck n <= length(src) - soffs + 1 || throw_boundserror(src, length(src) + 1)
     doffs = Int(doffs)
     soffs = Int(soffs)
     n = Int(n)

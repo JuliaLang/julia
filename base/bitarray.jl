@@ -458,8 +458,8 @@ function _copyto_int!(dest::BitArray, doffs::Int, src::Union{BitArray,Array}, so
     n < 0 && throw(ArgumentError("Number of elements to copy must be non-negative."))
     soffs < 1 && throw(BoundsError(src, soffs))
     doffs < 1 && throw(BoundsError(dest, doffs))
-    n > length(src) - soffs + 1 && throw(BoundsError(src, length(src)+1))
-    n > length(dest) - doffs + 1 && throw(BoundsError(dest, length(dest)+1))
+    n > length(src) - soffs + 1 && throw_boundserror(src, length(src)+1)
+    n > length(dest) - doffs + 1 && throw_boundserror(dest, length(dest)+1)
     return unsafe_copyto!(dest, doffs, src, soffs, n)
 end
 
