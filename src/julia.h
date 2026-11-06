@@ -741,6 +741,8 @@ typedef struct {
         uint16_t unused_bits : 7;
         uint16_t padding : 1;
     } flags;
+    // bit i is set when word i holds a pointer; 0 when a pointer lies beyond word 31
+    uint32_t ptrmap;
     // union {
     //     jl_fielddesc8_t field8[nfields];
     //     jl_fielddesc16_t field16[nfields];
