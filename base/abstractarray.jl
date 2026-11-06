@@ -1262,10 +1262,19 @@ iterate_starting_state(A, ::IndexStyle) = (eachindex(A),)
 # avoid fragile edges from union-splitting these helpers for abstract arrays (#61667)
 typeof(iterate_starting_state).name.max_methods = UInt8(1)
 @inline iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate_abstractarray(A, state)
+# Avoid splatting `state`: when this is inlined into a caller that does not know the
+# concrete state type, the splats become dynamic `Core._apply_iterate` calls.
 @inline function _iterate_abstractarray(A::AbstractArray, state::Tuple)
-    y = iterate(state...)::Union{Nothing,Tuple}
+    itr = state[1]
+    y = if length(state) == 1
+        iterate(itr)
+    elseif length(state) == 2
+        iterate(itr, state[2])
+    else
+        iterate(state...)
+    end::Union{Nothing,Tuple}
     y === nothing && return nothing
-    A[y[1]], (state[1], tail(y)...)
+    A[y[1]], (itr, y[2])
 end
 @inline function _iterate_abstractarray(A::AbstractArray, state::Integer)
     checkbounds(Bool, A, state) || return nothing
