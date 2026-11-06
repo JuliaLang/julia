@@ -3508,13 +3508,13 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_methtable_type->super = jl_any_type;
     jl_methtable_type->parameters = jl_emptysvec;
     jl_methtable_type->name->n_uninitialized = 0;
-    jl_methtable_type->name->names = jl_perm_symsvec(6, "defs", "cache", "name", "module", "backedges", "contributors");
-    const static uint32_t methtable_constfields[1] = { 0b001110 };
+    jl_methtable_type->name->names = jl_perm_symsvec(7, "defs", "cache", "name", "module", "backedges", "contributors", "by_specificity");
+    const static uint32_t methtable_constfields[1] = { 0b1001110 };
     const static uint32_t methtable_atomicfields[1] = { 0b100001 };
     jl_methtable_type->name->constfields = methtable_constfields;
     jl_methtable_type->name->atomicfields = methtable_atomicfields;
     jl_precompute_memoized_dt(jl_methtable_type, 1);
-    jl_methtable_type->types = jl_svec(6, jl_any_type, jl_methcache_type, jl_symbol_type, jl_any_type /*jl_module_type*/, jl_any_type, jl_any_type);
+    jl_methtable_type->types = jl_svec(7, jl_any_type, jl_methcache_type, jl_symbol_type, jl_any_type /*jl_module_type*/, jl_any_type, jl_any_type, jl_any_type /*jl_bool_type*/);
 
     jl_symbol_type->name = jl_new_typename_in(jl_symbol("Symbol"), core, 0, 1);
     jl_symbol_type->name->wrapper = (jl_value_t*)jl_symbol_type;
@@ -4420,6 +4420,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_methcache_type->types, 2, jl_long_type); // voidpointer
     jl_svecset(jl_methcache_type->types, 3, jl_long_type); // uint32_t plus alignment
     jl_svecset(jl_methtable_type->types, 3, jl_module_type);
+    jl_svecset(jl_methtable_type->types, 6, jl_bool_type);
     jl_svecset(jl_method_type->types, 14, jl_method_instance_type);
     //jl_svecset(jl_debuginfo_type->types, 0, jl_method_instance_type); // union(jl_method_instance_type, jl_method_type, jl_symbol_type)
     jl_svecset(jl_method_instance_type->types, 4, jl_code_instance_type);

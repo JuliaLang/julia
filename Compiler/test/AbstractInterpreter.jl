@@ -321,6 +321,177 @@ let ir = Base.code_ircode(; interp=OverlaySinInterp()) do
     @test oc() == cos(0.)
 end
 
+# Overlay methods ranked by specificity
+# =====================================
+
+@MethodTable SPECIFIC_MT by_specificity=true
+@newinterp SpecificOverlayInterp
+Compiler.method_table(interp::SpecificOverlayInterp) =
+    Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), SPECIFIC_MT)
+specific_view() = Compiler.OverlayMethodTable(Base.get_world_counter(), SPECIFIC_MT)
+
+# a more specific global method wins over an overlay method, and an overlay method replaces
+# the global method with the same signature
+specific_callx(::Real) = 1
+specific_callx(::Float64) = 1.0
+@overlay SPECIFIC_MT specific_callx(::Real) = "overlay"
+@test Base.infer_return_type(specific_callx, (Float64,); interp=SpecificOverlayInterp()) === Float64
+@test Base.infer_return_type(specific_callx, (Int,); interp=SpecificOverlayInterp()) === String
+@test Base.infer_return_type(specific_callx, (Real,); interp=SpecificOverlayInterp()) === Union{Float64,String}
+@test Compiler.findsup(Tuple{typeof(specific_callx),Float64}, specific_view())[1].method ===
+    which(specific_callx, (Float64,))
+@test Base.infer_return_type((Float64,); interp=SpecificOverlayInterp()) do x
+    @invoke specific_callx(x::Real)
+end === String
+
+# an overlay method and a global method that neither wins over the other are ambiguous
+specific_ambig(::Any, ::Int) = 1
+@overlay SPECIFIC_MT specific_ambig(::Real, ::Any) = 2
+@test Compiler.findall(Tuple{typeof(specific_ambig),Float64,Int}, specific_view()).ambig
+@test Compiler.findsup(Tuple{typeof(specific_ambig),Float64,Int}, specific_view())[1] === nothing
+specific_invoke(::Real, ::Any) = 1
+specific_invoke(::Any, ::Int) = 2
+@overlay SPECIFIC_MT specific_invoke(::Any, ::Any) = 3
+@test Compiler.findsup(Tuple{typeof(specific_invoke),Float64,Int}, specific_view())[1] === nothing
+
+# code inferred through the table is invalidated when a new method of either table changes
+# the result of one of its lookups
+specific_inval(::Real) = 1
+@overlay SPECIFIC_MT specific_inval(::Real) = "overlay"
+specific_inval_caller(x) = specific_inval(x)
+specific_inval_rt() = Base.infer_return_type((Float64,); interp=SpecificOverlayInterp()) do x
+    specific_inval_caller(x)
+end
+@test specific_inval_rt() === String
+specific_inval(::Float64) = 1.0
+@test specific_inval_rt() === Float64
+@overlay SPECIFIC_MT specific_inval(::Float64) = :overlay
+@test specific_inval_rt() === Symbol
+
+# with a specificity cycle across the tables (see `AmbigCycle3` in test/ambiguous.jl)
+specific_cycle(::Integer, ::Vararg{String}) = "global"
+@overlay SPECIFIC_MT specific_cycle(::T, ::Vararg{T}) where {T<:Integer} = 1
+specific_cycle_caller(x) = specific_cycle(x)
+specific_cycle_nothrow() = Compiler.is_nothrow(Base.infer_effects((Int,); interp=SpecificOverlayInterp()) do x
+    specific_cycle_caller(x)
+end)
+@test specific_cycle_nothrow()
+specific_cycle(::Integer, ::Vararg{Union{Int,String}}) = :global
+@test !specific_cycle_nothrow()
+
+# lookups through the table do not depend on other overlay tables
+@MethodTable SPECIFIC_OTHER_MT
+specific_isolated(::Int) = 1
+specific_isolated_caller(x) = specific_isolated(x)
+Base.infer_return_type(specific_isolated_caller, (Any,); interp=SpecificOverlayInterp())
+specific_isolated_valid() = let ci = only(Base.specializations(only(methods(specific_isolated_caller)))).cache
+    while ci.owner !== Compiler.cache_owner(SpecificOverlayInterp())
+        ci = ci.next
+    end
+    ci.max_world == typemax(UInt)
+end
+@test specific_isolated_valid()
+@overlay SPECIFIC_OTHER_MT specific_isolated(::String) = 2
+@test specific_isolated_valid()
+specific_isolated(::String) = 2
+@test !specific_isolated_valid()
+
+# merged lookups find the same methods as when all the methods are in the global table
+module SpecificTypes
+abstract type LikeSigned end
+struct LikeInt <: LikeSigned end
+abstract type LikeString end
+struct LikeStr <: LikeString end
+struct LikeMissing end
+abstract type Top end
+abstract type MidA <: Top end
+abstract type MidB <: Top end
+struct A1 <: MidA end
+struct A2 <: MidA end
+struct B1 <: MidB end
+struct P end
+struct Q end
+struct R end
+end
+let T = SpecificTypes, n = 0
+    cases = Any[
+        (["F(::Real)", "F(::Integer)", "F(::Int)", "F(::Union{Int,Float64})", "F(::AbstractFloat)"],
+         [Tuple{Int}, Tuple{Float64}, Tuple{Float32}, Tuple{Integer}, Tuple{Real}, Tuple{Any},
+          Tuple{Union{Int,Float64}}, Tuple{Int8}]),
+        (["F(::Real, ::Any)", "F(::Any, ::Int)", "F(::Int, ::Int)", "F(::Integer, ::Integer)"],
+         [Tuple{Int,Int}, Tuple{Float64,Int}, Tuple{Int,Float64}, Tuple{Real,Real}, Tuple{Any,Any},
+          Tuple{Int8,Int}]),
+        (["F(::T, ::Vararg{T}) where {T<:Integer}", "F(::Integer, ::Vararg{String})",
+          "F(::Integer, ::Vararg{Union{Int,String}})"],
+         [Tuple{Int}, Tuple{Int,Int}, Tuple{Int,String}, Tuple{Integer}, Tuple{Integer,Vararg{Any}}]),
+        (["F(x::Union{T.LikeSigned,T.LikeMissing}, y::T.LikeInt...)",
+          "F(x::Union{T.LikeInt,T.LikeString,T.LikeMissing}, y::T.LikeSigned...)",
+          "F(x::S, y::S...) where {S<:Union{T.LikeInt,T.LikeString}}",
+          "F(x::T.LikeMissing, y::T.LikeInt...)",
+          "F(x::Union{T.LikeSigned,T.LikeStr}, y::T.LikeStr...)",
+          "F(x::T.LikeSigned, y::T.LikeStr...)"],
+         [Tuple{T.LikeInt}, Tuple{T.LikeMissing}, Tuple{T.LikeInt,T.LikeInt}, Tuple{T.LikeStr},
+          Tuple{T.LikeInt,T.LikeStr}, Tuple{Any,Vararg{Any}}]),
+        (["F(x::T.LikeInt, y::T.LikeInt...)",
+          "F(x::Union{T.LikeInt,T.LikeMissing,T.LikeString}, y::T.LikeStr...)",
+          "F(x::Union{T.LikeInt,T.LikeStr}, y::T.LikeInt...)"],
+         [Tuple{T.LikeInt}, Tuple{T.LikeInt,T.LikeStr}, Tuple{T.LikeStr,T.LikeInt}, Tuple{Any,Vararg{Any}}]),
+        (["F(::T.MidA, ::Union{T.A1,T.MidB})", "F(::T.MidA, ::Vararg{T.B1})",
+          "F(::Union{T.A1,T.B1}, ::Vararg{Union{T.B1,T.MidA}})"],
+         [Tuple{T.A1,T.B1}, Tuple{T.A1,T.A1}, Tuple{T.MidA,T.Top}, Tuple{T.Top,Vararg{T.Top}}]),
+        (["F(::T.MidA, ::Union{T.A1,T.MidB})", "F(::S, ::Vararg{S}) where {S<:T.MidA}",
+          "F(::T.MidA, ::Vararg{T.B1})", "F(::Union{T.A1,T.B1}, ::Vararg{Union{T.B1,T.MidA}})",
+          "F(::T.MidA, ::T.A1)"],
+         [Tuple{T.A1,T.A1}, Tuple{T.A1,T.B1}, Tuple{T.A2,T.B1}, Tuple{T.MidA,Union{T.A1,T.MidB}},
+          Tuple{T.Top,Vararg{T.Top}}]),
+        (["F(x::Union{T.LikeSigned,T.LikeMissing}, y::T.LikeInt...)",
+          "F(x::Union{T.LikeInt,T.LikeString,T.LikeMissing}, y::T.LikeSigned...)",
+          "F(x::S, y::S...) where {S<:Union{T.LikeInt,T.LikeString}}",
+          "F(x::T.LikeMissing, y::T.LikeInt...)",
+          "F(x::Union{T.LikeSigned,T.LikeStr,T.LikeMissing}, y::T.LikeStr...)",
+          "F(x::Union{T.LikeSigned,T.LikeMissing}, y::T.LikeStr...)",
+          "F(x::T.LikeInt)"],
+         [Tuple{T.LikeInt}, Tuple{T.LikeMissing}, Tuple{T.LikeInt,T.LikeInt}, Tuple{T.LikeMissing,T.LikeInt},
+          Tuple{Union{T.LikeInt,T.LikeMissing},Vararg{T.LikeInt}}, Tuple{Any,Vararg{Any}}]),
+        (["F(::S, ::Vararg{S}) where {S<:Union{T.P,T.Q}}", "F(::Union{T.P,T.Q}, ::Vararg{T.R})",
+          "F(::T.P, ::Vararg{T.P})", "F(::T.P)"],
+         [Tuple{T.P}, Tuple{T.Q}, Tuple{Union{T.P,T.Q}}, Tuple{T.P,T.P},
+          Tuple{Union{T.P,T.Q},Vararg{Union{T.P,T.Q,T.R}}}, Tuple{Any,Vararg{Any}}]),
+    ]
+    tail(m::Method) = Base.tuple_type_tail(m.sig)
+    for (defs, queries) in cases, mask in 0:(2^length(defs) - 1)
+        n += 1
+        ref, mix = Symbol(:specific_ref_, n), Symbol(:specific_mix_, n)
+        Core.eval(@__MODULE__, :(function $mix end))
+        for (i, def) in enumerate(defs)
+            Core.eval(@__MODULE__, Meta.parse(replace(def, "F(" => "$ref(", "T." => "SpecificTypes.") * " = $i"))
+        end
+        for overlay in (false, true), (i, def) in enumerate(defs)
+            isodd(mask >> (i - 1)) == overlay || continue
+            src = replace(def, "F(" => "$mix(", "T." => "SpecificTypes.") * " = $i"
+            Core.eval(@__MODULE__, Meta.parse(overlay ? "@overlay SPECIFIC_MT " * src : src))
+        end
+        world = Base.get_world_counter()
+        reff, mixf = invokelatest(getglobal, @__MODULE__, ref), invokelatest(getglobal, @__MODULE__, mix)
+        tails = Any[tail(m) for m in methods(reff)]
+        index(m::Method) = findfirst(t -> t == tail(m), tails)
+        summary(::Nothing) = nothing
+        summary(r) = (sort!([(index(x.method), x.fully_covers) for x in r]), r.ambig)
+        for q in queries, (limit, include_ambiguous) in ((-1, false), (-1, true), (2, false))
+            r = Compiler.findall(Tuple{typeof(reff), q.parameters...}, Compiler.InternalMethodTable(world);
+                                 limit, include_ambiguous)
+            m = Compiler.findall(Tuple{typeof(mixf), q.parameters...}, Compiler.OverlayMethodTable(world, SPECIFIC_MT);
+                                 limit, include_ambiguous)
+            @test summary(r) == summary(m)
+        end
+        for q in queries
+            r = Compiler.findsup(Tuple{typeof(reff), q.parameters...}, Compiler.InternalMethodTable(world))[1]
+            m = Compiler.findsup(Tuple{typeof(mixf), q.parameters...}, Compiler.OverlayMethodTable(world, SPECIFIC_MT))[1]
+            @test (r === nothing ? nothing : index(r.method)) == (m === nothing ? nothing : index(m.method))
+        end
+    end
+end
+
 # AbstractLattice
 # ===============
 

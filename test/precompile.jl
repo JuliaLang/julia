@@ -2196,7 +2196,10 @@ precompile_test_harness("custom MethodTable lookups in package images") do load_
         """
         module OverlayLookupBase
         f(x) = 1
+        h(x::Real) = 1
         Base.Experimental.@MethodTable mt
+        Base.Experimental.@MethodTable smt by_specificity=true
+        Base.Experimental.@overlay smt h(x::Real) = "overlay"
         end
         """)
     for user in ("OverlayLookupUserA", "OverlayLookupUserB")
@@ -2208,20 +2211,26 @@ precompile_test_harness("custom MethodTable lookups in package images") do load_
                 import Base.Compiler: Compiler
                 include($(repr(newinterp_path)))
                 @newinterp OverlayLookupInterp
+                @newinterp SpecificLookupInterp
                 import OverlayLookupBase
                 Compiler.method_table(interp::OverlayLookupInterp) =
                     Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), OverlayLookupBase.mt)
+                Compiler.method_table(interp::SpecificLookupInterp) =
+                    Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), OverlayLookupBase.smt)
             end
             callf(x) = OverlayLookupBase.f(x)
+            callh(x) = OverlayLookupBase.h(x)
             Base.return_types(callf, (Int,); interp=Custom.OverlayLookupInterp())
+            Base.return_types(callh, (Float64,); interp=Custom.SpecificLookupInterp())
             end
             """)
     end
     write(joinpath(load_path, "OverlayLookupExt.jl"),
         """
         module OverlayLookupExt
-        import OverlayLookupBase: f, mt
+        import OverlayLookupBase: f, h, mt
         Base.Experimental.@overlay mt f(x::Int) = 2
+        h(x::Float64) = 2.0
         end
         """)
     for pkg in ("OverlayLookupBase", "OverlayLookupUserA", "OverlayLookupUserB", "OverlayLookupExt")
@@ -2229,7 +2238,8 @@ precompile_test_harness("custom MethodTable lookups in package images") do load_
     end
     cached(U) = invokelatest() do
         [check_presence(only(Base.specializations(only(methods(f)))), owner)
-         for (f, owner) in ((U.callf, U.Custom.OverlayLookupInterp),)]
+         for (f, owner) in ((U.callf, U.Custom.OverlayLookupInterp),
+                            (U.callh, U.Custom.SpecificLookupInterp))]
     end
     @eval using OverlayLookupUserA
     A = invokelatest(getglobal, @__MODULE__, :OverlayLookupUserA)

@@ -313,16 +313,18 @@ function add_method_match_proofs!(edges::Vector{Any}, info::MethodMatchInfo,
     return nothing
 end
 
-# Record that adding a method intersecting `atype` may change a lookup. These edges are
-# checked on insertions into any method table.
-function add_missing_edge!(edges::Vector{Any}, @nospecialize(atype))
+# Record that adding a method intersecting `atype` may change a lookup. With the global
+# `mt`, these edges are checked on insertions into any method table. With an overlay `mt`
+# whose methods rank by specificity, any new or deleted method of that table or of the
+# global table that intersects `atype` invalidates the lookup.
+function add_missing_edge!(edges::Vector{Any}, @nospecialize(atype), mt::MethodTable=Core.methodtable)
     for i in 2:length(edges)
-        if edges[i] === Core.methodtable && edges[i-1] == atype
+        if edges[i] === mt && edges[i-1] == atype
             return nothing
         end
     end
     push!(edges, atype)
-    push!(edges, Core.methodtable)
+    push!(edges, mt)
     return nothing
 end
 
@@ -341,7 +343,9 @@ function falls_through_overlay(info::MethodMatchInfo)
 end
 
 function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Bool=false)
-    if !fully_covering(info) || falls_through_overlay(info)
+    if info.mt.by_specificity
+        add_missing_edge!(edges, info.atype, info.mt)
+    elseif !fully_covering(info) || falls_through_overlay(info)
         add_missing_edge!(edges, info.atype)
     end
     nmatches = length(info.results)
@@ -584,7 +588,9 @@ InvokeCallInfo(edge::Union{Nothing,CodeInstance}, match::MethodMatch,
 add_edges_impl(edges::Vector{Any}, info::InvokeCallInfo) =
     _add_edges_impl(edges, info)
 function _add_edges_impl(edges::Vector{Any}, info::InvokeCallInfo, mi_edge::Bool=false)
-    if info.mt !== Core.methodtable
+    if info.mt.by_specificity
+        add_missing_edge!(edges, info.atype, info.mt)
+    elseif info.mt !== Core.methodtable
         m = info.match.method
         (isdefined(m, :external_mt) && m.external_mt === info.mt) || add_missing_edge!(edges, info.atype)
     end

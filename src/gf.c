@@ -2772,6 +2772,7 @@ static int jl_foreach_top_typename_for(void (*f)(jl_typename_t*, int, void*) JL_
 
 struct _typename_add_backedge {
     jl_value_t *typ;
+    jl_value_t *key; // `typ`, or `svec(table, typ)` for a lookup merging an overlay table
     jl_value_t *caller;
 };
 
@@ -2781,16 +2782,21 @@ struct _typename_add_backedge {
 // structurally), rather than a linear scan through every recorded edge with
 // `jl_types_equal`, and so that invalidation intersects each distinct
 // signature only once, no matter how many callers recorded it.
+// A lookup merging an overlay table with the global table is recorded under the key
+// `svec(table, sig)`: every new or deleted method of either table that intersects `sig`
+// invalidates it, since the specificity of the existing methods of one table does not
+// decide how a new method of the other table ranks.
 static void _typename_add_backedge(jl_typename_t *tn, int explct, void *env0) JL_CANSAFEPOINT
 {
     struct _typename_add_backedge *env = (struct _typename_add_backedge*)env0;
     JL_GC_PROMISE_ROOTED(env->typ);
+    JL_GC_PROMISE_ROOTED(env->key);
     JL_GC_PROMISE_ROOTED(env->caller);
     if (!explct)
         return;
     jl_genericmemory_t *allbackedges = jl_method_table->backedges;
     jl_genericmemory_t *table = (jl_genericmemory_t*)jl_eqtable_get(allbackedges, (jl_value_t*)tn, NULL);
-    jl_array_t *callers = table == NULL ? NULL : (jl_array_t*)jl_eqtable_get(table, env->typ, NULL);
+    jl_array_t *callers = table == NULL ? NULL : (jl_array_t*)jl_eqtable_get(table, env->key, NULL);
     if (callers == NULL) {
         // first edge for this signature: add a callers list to the
         // per-typename table, creating the table itself if necessary
@@ -2799,7 +2805,7 @@ static void _typename_add_backedge(jl_typename_t *tn, int explct, void *env0) JL
         JL_GC_PUSH2(&newcallers, &table);
         if (table == NULL)
             table = (jl_genericmemory_t*)jl_an_empty_memory_any;
-        table = jl_eqtable_put(table, env->typ, (jl_value_t*)newcallers, NULL);
+        table = jl_eqtable_put(table, env->key, (jl_value_t*)newcallers, NULL);
         if (table != oldtable) {
             jl_genericmemory_t *newtable = jl_eqtable_put(allbackedges, (jl_value_t*)tn, (jl_value_t*)table, NULL);
             if (newtable != allbackedges) {
@@ -2818,20 +2824,39 @@ static void _typename_add_backedge(jl_typename_t *tn, int explct, void *env0) JL
 }
 
 // add a backedge from a non-existent signature to caller
-JL_DLLEXPORT void jl_method_table_add_backedge(jl_value_t *typ, jl_code_instance_t *caller)
+static void method_table_add_backedge(jl_value_t *typ, jl_value_t *key, jl_code_instance_t *caller) JL_CANSAFEPOINT
 {
-    assert(jl_is_code_instance(caller));
-    if (!jl_atomic_load_relaxed(&allow_new_worlds))
-        return;
     // try to pick the best cache(s) for this typ edge
     jl_methtable_t *mt = jl_method_table;
     jl_methcache_t *mc = mt->cache;
     JL_LOCK(&mc->writelock);
     if (jl_atomic_load_relaxed(&allow_new_worlds)) {
-        struct _typename_add_backedge env = {typ, (jl_value_t*)caller};
+        struct _typename_add_backedge env = {typ, key, (jl_value_t*)caller};
         jl_foreach_top_typename_for(_typename_add_backedge, typ, 0, &env);
     }
     JL_UNLOCK(&mc->writelock);
+}
+
+JL_DLLEXPORT void jl_method_table_add_backedge(jl_value_t *typ, jl_code_instance_t *caller)
+{
+    assert(jl_is_code_instance(caller));
+    if (!jl_atomic_load_relaxed(&allow_new_worlds))
+        return;
+    method_table_add_backedge(typ, typ, caller);
+}
+
+// add a backedge from a lookup of `typ` merging the overlay table `mt` with the global table
+JL_DLLEXPORT void jl_method_table_add_merged_backedge(jl_value_t *typ, jl_value_t *mt, jl_code_instance_t *caller) JL_CANSAFEPOINT
+{
+    assert(jl_is_code_instance(caller));
+    if (!jl_is_mtable(mt))
+        jl_type_error("jl_method_table_add_merged_backedge", (jl_value_t*)jl_methtable_type, mt);
+    if (!jl_atomic_load_relaxed(&allow_new_worlds))
+        return;
+    jl_value_t *key = (jl_value_t*)jl_svec2(mt, typ);
+    JL_GC_PUSH1(&key);
+    method_table_add_backedge(typ, key, caller);
+    JL_GC_POP();
 }
 
 // ---- method-table contributors ----
@@ -2982,6 +3007,7 @@ static int interference_covered_by_record(jl_method_t *m, size_t image) JL_NOTSA
 }
 
 struct _typename_invalidate_backedge {
+    jl_methtable_t *mt; // the table of the new or deleted method
     jl_value_t *type;
     jl_value_t **isect;
     jl_value_t **isect2;
@@ -3010,6 +3036,15 @@ static void _typename_invalidate_backedges(jl_typename_t *tn, int explct, void *
             continue; // empty or deleted slot
         JL_GC_PROMISE_ROOTED(backedgetyp);
         JL_GC_PROMISE_ROOTED(callers);
+        int merged = jl_is_svec(backedgetyp);
+        if (merged) {
+            // a lookup merging an overlay table: only that table and the global one matter
+            if (env->mt != jl_method_table && (jl_value_t*)env->mt != jl_svecref(backedgetyp, 0)) {
+                alive++;
+                continue;
+            }
+            backedgetyp = jl_svecref(backedgetyp, 1);
+        }
         int missing = 0;
         if (jl_type_intersection2(backedgetyp, (jl_value_t*)env->type, env->isect, env->isect2)) {
             // See if the intersection was actually already fully
@@ -3024,7 +3059,7 @@ static void _typename_invalidate_backedges(jl_typename_t *tn, int explct, void *
             //      -> some may have been called: they may be partly replaced (will be detected in the loop later)
             // c.f. `is_replacing`, which is a similar query, but with an existing method match to compare against
             missing = 1;
-            for (size_t j = 0; j < env->n; j++) {
+            for (size_t j = 0; !merged && j < env->n; j++) {
                 jl_method_t *m = env->d[j];
                 JL_GC_PROMISE_ROOTED(m);
                 if (jl_subtype(*env->isect, m->sig) || (*env->isect2 && jl_subtype(*env->isect2, m->sig))) {
@@ -3284,7 +3319,7 @@ static void jl_method_table_invalidate(jl_method_t *replaced, size_t max_world, 
         JL_GC_PUSH2(&isect, &isect2);
         jl_methcache_t *mc = jl_method_table->cache;
         JL_LOCK(&mc->writelock);
-        struct _typename_invalidate_backedge typename_env = {(jl_value_t*)replaced->sig, &isect, &isect2, NULL, 0, max_world, 0};
+        struct _typename_invalidate_backedge typename_env = {mt, (jl_value_t*)replaced->sig, &isect, &isect2, NULL, 0, max_world, 0};
         invalidate_missing_backedges(&typename_env);
         JL_UNLOCK(&mc->writelock);
         JL_GC_POP();
@@ -3395,7 +3430,7 @@ jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method,
     return newentry;
 }
 
-static int has_key(jl_genericmemory_t *keys, jl_value_t *key)
+static int has_key(jl_genericmemory_t *keys, jl_value_t *key) JL_NOTSAFEPOINT
 {
     for (size_t l = keys->length, i = 0; i < l; i++) {
         jl_value_t *k = jl_genericmemory_ptr_ref(keys, i);
@@ -3407,16 +3442,30 @@ static int has_key(jl_genericmemory_t *keys, jl_value_t *key)
     return 0;
 }
 
+// The interference set of `m`. In a lookup merging an overlay table with the global
+// table, `cross` holds (method, set) pairs extending the sets of the matches with
+// the matches of the other table (see `cross_table_interferences`); otherwise it is NULL.
+static jl_genericmemory_t *get_interferences(jl_array_t *cross, jl_method_t *m) JL_NOTSAFEPOINT
+{
+    if (cross != NULL) {
+        for (size_t i = 0, n = jl_array_nrows(cross); i < n; i += 2) {
+            if (jl_array_ptr_ref(cross, i) == (jl_value_t*)m)
+                return (jl_genericmemory_t*)jl_array_ptr_ref(cross, i + 1);
+        }
+    }
+    return jl_atomic_load_relaxed(&m->interferences);
+}
+
 // Check if m2 is in m1's interferences set, which means !morespecific(m1, m2)
 // for two methods that were at any point live in the same table at the same time
 // over some type-intersection
-static int method_in_interferences(jl_method_t *m2, jl_method_t *m1)
+static int method_in_interferences(jl_array_t *cross, jl_method_t *m2, jl_method_t *m1) JL_NOTSAFEPOINT
 {
-    return has_key(jl_atomic_load_relaxed(&m1->interferences), (jl_value_t*)m2);
+    return has_key(get_interferences(cross, m1), (jl_value_t*)m2);
 }
 
 // Find the index of a method in the method match array
-static int find_method_in_matches(jl_array_t *t, jl_method_t *method)
+static int find_method_in_matches(jl_array_t *t, jl_method_t *method) JL_NOTSAFEPOINT
 {
     size_t len = jl_array_nrows(t);
     for (size_t i = 0; i < len; i++) {
@@ -3428,18 +3477,19 @@ static int find_method_in_matches(jl_array_t *t, jl_method_t *method)
 }
 
 // Whether `target_method` is morespecific than `start_method`, and has an type-intersection
-static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t *start_method) JL_CANSAFEPOINT
+static int method_morespecific_recorded(jl_array_t *cross, jl_method_t *target_method, jl_method_t *start_method) JL_CANSAFEPOINT
 {
     if (target_method == start_method)
         return 0;
-    int result = method_in_interferences(target_method, start_method) &&
-                 !method_in_interferences(start_method, target_method);
+    int result = method_in_interferences(cross, target_method, start_method) &&
+                 !method_in_interferences(cross, start_method, target_method);
     //// Expensive cross-check: the recorded relation must agree with ground truth
     //// for every intersecting pair.
     //assert(result == jl_method_morespecific(target_method, start_method) ||
     //       jl_has_empty_intersection(target_method->sig, start_method->sig) ||
     //       jl_has_empty_intersection(start_method->sig, target_method->sig));
-    assert(!result || !(jl_atomic_load_relaxed(&target_method->dispatch_status) & METHOD_SIG_NO_LOSERS));
+    // (the status bits only know the method's own table)
+    assert(!result || cross != NULL || !(jl_atomic_load_relaxed(&target_method->dispatch_status) & METHOD_SIG_NO_LOSERS));
     return result;
 }
 
@@ -3447,14 +3497,14 @@ static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t 
 // strictly morespecific than `m` (a one-directional recorded edge), and
 // already finalized by the sort, so that a method still tangled in the cycle
 // being resolved cannot serve as a cover.
-static int admissible_cover(jl_method_t *m, jl_method_t *m2, jl_array_t *t, arraylist_t *visited)
+static int admissible_cover(jl_array_t *cross, jl_method_t *m, jl_method_t *m2, jl_array_t *t, arraylist_t *visited)
 {
     if (m2 == NULL)
         return 0;
     int idx = find_method_in_matches(t, m2);
     if (idx < 0)
         return 0;
-    if (method_in_interferences(m, m2))
+    if (method_in_interferences(cross, m, m2))
         return 0; // mutually ambiguous, so not a dominator
     if (visited->items[idx] != (void*)1)
         return 0; // not finalized yet (part of the same SCC cycle, handled by ambiguity later)
@@ -3500,11 +3550,11 @@ static int union_of_sigs_covers(jl_value_t *ti, jl_method_t **ms, size_t n) JL_C
 // itself: its own removal was subject to this same check against covers
 // finalized before it, so by induction a reported blocker exists at every
 // point it took over.
-static int check_blocker_transfer(jl_value_t *ti, jl_value_t *ti_S, jl_method_t *S, jl_method_t **covers, size_t ncovers) JL_CANSAFEPOINT
+static int check_blocker_transfer(jl_array_t *cross, jl_value_t *ti, jl_value_t *ti_S, jl_method_t *S, jl_method_t **covers, size_t ncovers) JL_CANSAFEPOINT
 {
     size_t j;
     for (j = 0; j < ncovers; j++) {
-        if (method_morespecific_recorded(S, covers[j]))
+        if (method_morespecific_recorded(cross, S, covers[j]))
             break;
     }
     if (j == ncovers)
@@ -3523,7 +3573,7 @@ static int check_blocker_transfer(jl_value_t *ti, jl_value_t *ti_S, jl_method_t 
         for (j = 0; j < ncovers; j++) {
             // a cover that S does not beat blocks S, whether it is strictly
             // morespecific than S or merely unordered with it
-            if (method_in_interferences(covers[j], S))
+            if (method_in_interferences(cross, covers[j], S))
                 arraylist_push(&blockers, (void*)covers[j]);
         }
         result = union_of_sigs_covers(region, (jl_method_t**)blockers.items, blockers.len);
@@ -3543,7 +3593,7 @@ static int check_blocker_transfer(jl_value_t *ti, jl_value_t *ti_S, jl_method_t 
 // selection requires beating every applicable match, the removal would turn
 // an ambiguous call into apparently a resolved one (test `AmbigNoBeatAll`).
 // Both obligations transfer to the covers under the same pointwise rule.
-static int check_dominance_transfer(jl_method_t *D, jl_value_t *ti, jl_method_t **covers, size_t ncovers, jl_array_t *t) JL_CANSAFEPOINT
+static int check_dominance_transfer(jl_array_t *cross, jl_method_t *D, jl_value_t *ti, jl_method_t **covers, size_t ncovers, jl_array_t *t) JL_CANSAFEPOINT
 {
     // First, the matches D was unordered with. Both members of such a pair
     // record each other, so D's own interference set is enough to enumerate
@@ -3554,19 +3604,19 @@ static int check_dominance_transfer(jl_method_t *D, jl_value_t *ti, jl_method_t 
     // exempt from that scan -- notably when S is the minmax method, which the
     // sort never visits -- leaving this check as the only witness of the pair
     // when D's only cover is a match that S beats (test `AmbigMinmaxPartner`))
-    jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&D->interferences);
+    jl_genericmemory_t *interferences = get_interferences(cross, D);
     JL_GC_PUSH1(&interferences);
     for (size_t i = 0; i < interferences->length; i++) {
         jl_method_t *S = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, i);
         if (S == NULL)
             continue;
-        if (!method_in_interferences(D, S))
+        if (!method_in_interferences(cross, D, S))
             continue; // S is morespecific than D, so D was not blocking it
         int idx = find_method_in_matches(t, S);
         if (idx < 0)
             continue;
         jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, idx);
-        if (!check_blocker_transfer(ti, (jl_value_t*)matc->spec_types, S, covers, ncovers)) {
+        if (!check_blocker_transfer(cross, ti, (jl_value_t*)matc->spec_types, S, covers, ncovers)) {
             JL_GC_POP();
             return 0;
         }
@@ -3577,8 +3627,9 @@ static int check_dominance_transfer(jl_method_t *D, jl_value_t *ti, jl_method_t 
     //
     // If D is not strictly morespecific than anything it intersects
     // (METHOD_SIG_NO_LOSERS), it was beating nobody and there is nothing more to
-    // transfer: the removal is silent (as a fast-path).
-    if (jl_atomic_load_relaxed(&D->dispatch_status) & METHOD_SIG_NO_LOSERS)
+    // transfer: the removal is silent (as a fast-path). The status bits only know the
+    // method's own table, so a merged lookup does without these fast-paths.
+    if (cross == NULL && (jl_atomic_load_relaxed(&D->dispatch_status) & METHOD_SIG_NO_LOSERS))
         return 1;
     size_t len = jl_array_nrows(t);
     for (size_t i = 0; i < len; i++) {
@@ -3588,11 +3639,11 @@ static int check_dominance_transfer(jl_method_t *D, jl_value_t *ti, jl_method_t 
             continue;
         // An S that beats nothing can never strictly beat a cover, so its
         // blocking transfers automatically (as a fast-path)
-        if (jl_atomic_load_relaxed(&S->dispatch_status) & METHOD_SIG_NO_LOSERS)
+        if (cross == NULL && (jl_atomic_load_relaxed(&S->dispatch_status) & METHOD_SIG_NO_LOSERS))
             continue;
-        if (!method_morespecific_recorded(D, S))
+        if (!method_morespecific_recorded(cross, D, S))
             continue;
-        if (!check_blocker_transfer(ti, (jl_value_t*)matc->spec_types, S, covers, ncovers))
+        if (!check_blocker_transfer(cross, ti, (jl_value_t*)matc->spec_types, S, covers, ncovers))
             return 0;
     }
     return 1;
@@ -3608,7 +3659,7 @@ static int check_dominance_transfer(jl_method_t *D, jl_value_t *ti, jl_method_t 
 // ambiguity-reporting consumers still see it.
 //
 // The return value certifies whether to drop m from the reported matches.
-static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t *t, arraylist_t *visited, jl_method_t *minmaxm, int include_ambiguous, int *has_ambiguity) JL_CANSAFEPOINT
+static int check_interferences_covers(jl_array_t *cross, jl_method_t *m, jl_value_t *ti, jl_array_t *t, arraylist_t *visited, jl_method_t *minmaxm, int include_ambiguous, int *has_ambiguity) JL_CANSAFEPOINT
 {
     // Outcome of the cover analysis for one match `m` over its region `ti`, in
     // increasing strength -- each step of the analysis only ever raises it:
@@ -3627,7 +3678,7 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
     // and is pre-finalized, so whenever it strictly beats `m` it is an admissible cover:
     // probe it directly before scanning the interference set in storage order.
     int probed_minmax = 0;
-    if (minmaxm != NULL && method_morespecific_recorded(minmaxm, m) &&
+    if (minmaxm != NULL && method_morespecific_recorded(cross, minmaxm, m) &&
         jl_subtype(ti, (jl_value_t*)minmaxm->sig)) {
         probed_minmax = 1;
         // m can never win dispatch here.
@@ -3635,7 +3686,7 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
         // a specificity cycle may lead back from a cover to a method that only
         // m beat, or m may be the last match blocking another one, and either
         // way the apparent ambiguity is real.
-        if (prove_transfer && !check_dominance_transfer(m, ti, &minmaxm, 1, t))
+        if (prove_transfer && !check_dominance_transfer(cross, m, ti, &minmaxm, 1, t))
             status = COVER_AMBIGUOUS;
         else
             return 1; // COVER_CERTIFIED
@@ -3647,18 +3698,18 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
     // above.)
     arraylist_t covers;
     arraylist_new(&covers, 0);
-    jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&m->interferences);
+    jl_genericmemory_t *interferences = get_interferences(cross, m);
     JL_GC_PUSH1(&interferences);
     for (size_t i = 0; status != COVER_CERTIFIED && i < interferences->length; i++) {
         jl_method_t *m2 = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, i);
-        if (!admissible_cover(m, m2, t, visited))
+        if (!admissible_cover(cross, m, m2, t, visited))
             continue;
         arraylist_push(&covers, (void*)m2);
         if (probed_minmax && m2 == minmaxm)
             continue; // its transfer already failed above
         if (!jl_subtype(ti, (jl_value_t*)m2->sig))
             continue;
-        status = (prove_transfer && !check_dominance_transfer(m, ti, &m2, 1, t)) ?
+        status = (prove_transfer && !check_dominance_transfer(cross, m, ti, &m2, 1, t)) ?
                  COVER_AMBIGUOUS : COVER_CERTIFIED;
     }
     JL_GC_POP();
@@ -3671,7 +3722,7 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
     if (status != COVER_CERTIFIED && covers.len > 1 &&
         union_of_sigs_covers(ti, (jl_method_t**)covers.items, covers.len)) {
         status = (prove_transfer &&
-                  !check_dominance_transfer(m, ti, (jl_method_t**)covers.items, covers.len, t)) ?
+                  !check_dominance_transfer(cross, m, ti, (jl_method_t**)covers.items, covers.len, t)) ?
                  COVER_AMBIGUOUS : COVER_CERTIFIED;
     }
     arraylist_free(&covers);
@@ -3687,13 +3738,13 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
     return status == COVER_CERTIFIED;
 }
 
-static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, int include_ambiguous, int *has_ambiguity) JL_CANSAFEPOINT
+static int check_fully_ambiguous(jl_array_t *cross, jl_method_t *m, jl_value_t *ti, jl_array_t *t, int include_ambiguous, int *has_ambiguity) JL_CANSAFEPOINT
 {
     if (include_ambiguous && *has_ambiguity)
         return 0; // this can only compute *has_ambiguity, which is already known
     int result = 0;
     jl_value_t *region = NULL;
-    jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&m->interferences);
+    jl_genericmemory_t *interferences = get_interferences(cross, m);
     JL_GC_PUSH2(&interferences, &region);
     for (size_t i = 0; i < interferences->length; i++) {
         jl_method_t *m2 = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, i);
@@ -3702,7 +3753,7 @@ static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, 
         int idx = find_method_in_matches(t, m2);
         if (idx < 0)
             continue;
-        if (!method_in_interferences(m, m2))
+        if (!method_in_interferences(cross, m, m2))
             continue;
         if (!*has_ambiguity) {
             jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, idx);
@@ -3849,7 +3900,7 @@ static jl_genericmemory_t *activate_against_methods(struct activate_env *env, jl
             // single world bump, so a same-image method -- the only kind whose
             // serialized interference set could already contain `method` -- never
             // appears in `d`. A replay still probes, as a duplicate key would stay in the set.
-            if (j >= nknown || !method_in_interferences(method, m)) {
+            if (j >= nknown || !method_in_interferences(NULL, method, m)) {
                 jl_genericmemory_t *m_interferences = jl_atomic_load_relaxed(&m->interferences);
                 ssize_t idx;
                 size_t m_max = jl_idset_max(m_interferences);
@@ -4053,7 +4104,7 @@ void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array
             jl_method_t *m2 = d[j];
             if (!m2 || m == m2)
                 continue;
-            if (method_in_interferences(m, m2)) {
+            if (method_in_interferences(NULL, m, m2)) {
                 jl_genericmemory_t *m2_interferences = jl_atomic_load_relaxed(&m2->interferences);
                 ssize_t idx;
                 size_t m2_max = jl_idset_max(m2_interferences);
@@ -4092,7 +4143,7 @@ void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array
     contributor_tag_method(mt, method, contributor_tag_for(method));
     jl_methcache_t *mc = jl_method_table->cache;
     JL_LOCK(&mc->writelock);
-    struct _typename_invalidate_backedge typename_env = {type, &isect, &isect2, d, n, max_world, env.invalidated};
+    struct _typename_invalidate_backedge typename_env = {mt, type, &isect, &isect2, d, n, max_world, env.invalidated};
     invalidate_missing_backedges(&typename_env);
     env.invalidated |= typename_env.invalidated;
     if (oldmi && jl_array_nrows(oldmi)) {
@@ -5740,10 +5791,26 @@ struct ml_matches_env {
     size_t world;
     int lim;
     int include_ambiguous;
+    // merging an overlay table with the global table: the overlay matches are the first
+    // `novl` matches, and the global methods with the same signature are left out
+    int merged;
+    size_t novl;
+    int scanning_global;
     // results:
     jl_value_t *t; // array of method matches
     jl_method_match_t *matc; // current working method match
 };
+
+// Whether an overlay match of a merged lookup has the same signature as `meth`.
+static int replaced_by_overlay(struct ml_matches_env *closure, jl_method_t *meth) JL_CANSAFEPOINT
+{
+    for (size_t i = 0; i < closure->novl; i++) {
+        jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(closure->t, i);
+        if (jl_types_equal((jl_value_t*)meth->sig, (jl_value_t*)matc->method->sig))
+            return 1;
+    }
+    return 0;
+}
 
 static jl_method_match_t *make_method_match(jl_tupletype_t *spec_types, jl_svec_t *sparams, jl_method_t *method, int fully_covers) JL_CANSAFEPOINT
 {
@@ -5793,7 +5860,10 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     if (closure->match.max_valid > max_world)
         closure->match.max_valid = max_world;
     jl_method_t *meth = ml->func.method;
-    int only = jl_atomic_load_relaxed(&meth->interferences)->length == 0;
+    if (closure->scanning_global && replaced_by_overlay(closure, meth))
+        return 1;
+    // the interference set only knows the method's own table
+    int only = !closure->merged && jl_atomic_load_relaxed(&meth->interferences)->length == 0;
     if (closure->lim >= 0 && only) {
         if (closure->lim == 0) {
             closure->t = jl_an_empty_vec_any;
@@ -5821,7 +5891,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         jl_array_ptr_1d_push((jl_array_t*)closure->t, (jl_value_t*)closure->matc);
     }
     // don't need to consider other similar methods if this ml will always fully intersect with them and dominates all of them
-    if (!closure->include_ambiguous || closure->lim != -1)
+    if (!closure->merged && (!closure->include_ambiguous || closure->lim != -1))
         typemap_bottom_search(ml, &closure->match);
     return 1;
 }
@@ -5866,7 +5936,7 @@ typedef struct {
 //  * -1: too many matches for lim, other outputs are undefined
 //  *  0: the child(ren) have been added to the output
 //  * 1+: the children are part of this SCC (up to this depth)
-static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, arraylist_t *stack, arraylist_t *result, int lim, int include_ambiguous, jl_method_t *minmaxm, int *has_ambiguity) JL_CANSAFEPOINT
+static int sort_mlmatches(jl_array_t *cross, jl_array_t *t, size_t idx, arraylist_t *visited, arraylist_t *stack, arraylist_t *result, int lim, int include_ambiguous, jl_method_t *minmaxm, int *has_ambiguity) JL_CANSAFEPOINT
 {
     // Use arraylist_t for explicit stack of processing frames
     arraylist_t frame_stack;
@@ -5909,7 +5979,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                 current->m = current->matc->method;
                 current->ti = (jl_value_t*)current->matc->spec_types;
                 current->cycle = current->depth;
-                current->interference_count = jl_atomic_load_relaxed(&current->m->interferences)->length;
+                current->interference_count = get_interferences(cross, current->m)->length;
                 current->interference_index = 0;
                 current->state = STATE_PROCESSING_INTERFERENCES;
                 break;
@@ -5930,7 +6000,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
 
                 // Process interferences iteratively.
                 while (current->interference_index < current->interference_count) {
-                    jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&current->m->interferences);
+                    jl_genericmemory_t *interferences = get_interferences(cross, current->m);
                     jl_method_t *m2 = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, current->interference_index);
                     current->interference_index++;
 
@@ -5946,7 +6016,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                         continue; // already handled
                     if (child_cycle != 0 && child_cycle - 1 >= current->cycle)
                         continue; // already part of this cycle
-                    if (method_in_interferences(current->m, m2))
+                    if (method_in_interferences(cross, current->m, m2))
                         continue;
 
                     // m2 is morespecific, so attempt to visit it first
@@ -5986,10 +6056,10 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
             case STATE_CHECK_COVERS: {
                 // There is some probability that this method is already fully covered
                 // now, and we can delete this vertex now without anyone noticing.
-               if (check_interferences_covers(current->m, current->ti, t, visited, minmaxm, include_ambiguous, has_ambiguity)) {
+               if (check_interferences_covers(cross, current->m, current->ti, t, visited, minmaxm, include_ambiguous, has_ambiguity)) {
                     visited->items[current->idx] = (void*)1;
                 }
-                else if (check_fully_ambiguous(current->m, current->ti, t, include_ambiguous, has_ambiguity)) {
+                else if (check_fully_ambiguous(cross, current->m, current->ti, t, include_ambiguous, has_ambiguity)) {
                     visited->items[current->idx] = (void*)1;
                 }
 
@@ -6089,7 +6159,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
 // and include_ambiguous is set -- dominance alone therefore justifies removing
 // it from the selection answer, while `sort_method_matches` separately keeps
 // enough blockers to witness each ambiguity it reports.
-static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous, int approximate_ambig, int *has_ambiguity_out) JL_CANSAFEPOINT
+static ssize_t sort_method_matches(jl_array_t *cross, jl_array_t *t, int lim, int include_ambiguous, int approximate_ambig, int *has_ambiguity_out) JL_CANSAFEPOINT
 {
     int has_ambiguity = 0;
     size_t i, j, len = jl_array_nrows(t);
@@ -6121,7 +6191,7 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
                 // strictly morespecific than every method it intersects
                 // meaning it is already proven to be the `minmax` choice
                 // without exploring the list any further.
-                if (jl_atomic_load_relaxed(&m->interferences)->length == 0) {
+                if (get_interferences(cross, m)->length == 0) {
                     minmax = matc;
                     minmax_idx = i;
                     minmax_dominates = 1;
@@ -6133,7 +6203,7 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
                     jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, j);
                     if (matc2->fully_covers) {
                         jl_method_t *m2 = matc2->method;
-                        if (!method_morespecific_recorded(m, m2))
+                        if (!method_morespecific_recorded(cross, m, m2))
                             break;
                     }
                 }
@@ -6162,7 +6232,7 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
                 jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, i);
                 if (!matc->fully_covers) {
                     jl_method_t *m = matc->method;
-                    if (minmaxm != NULL && method_morespecific_recorded(minmaxm, m))
+                    if (minmaxm != NULL && method_morespecific_recorded(cross, minmaxm, m))
                         continue; // minmax dominates this match too
                     all_subtypes = 0;
                     break;
@@ -6219,7 +6289,7 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
             has_ambiguity = 1;
         for (i = 0; i < len; i++) {
             assert(visited.items[i] == (void*)0 || visited.items[i] == (void*)1);
-            int child_cycle = sort_mlmatches(t, i, &visited, &stack, &result, lim == -1 || minmax == NULL ? lim : lim - 1, include_ambiguous, minmaxm, &has_ambiguity);
+            int child_cycle = sort_mlmatches(cross, t, i, &visited, &stack, &result, lim == -1 || minmax == NULL ? lim : lim - 1, include_ambiguous, minmaxm, &has_ambiguity);
             if (child_cycle == -1) {
                 arraylist_free(&visited);
                 arraylist_free(&stack);
@@ -6280,7 +6350,7 @@ JL_DLLEXPORT int jl_sort_method_matches(jl_array_t *t, int include_ambiguous) JL
 {
     JL_TYPECHK(sort_method_matches, array_any, (jl_value_t*)t);
     int has_ambiguity = 0;
-    ssize_t sorted = sort_method_matches(t, -1, include_ambiguous, 0, &has_ambiguity);
+    ssize_t sorted = sort_method_matches(NULL, t, -1, include_ambiguous, 0, &has_ambiguity);
     assert(sorted != -1); (void)sorted; // lim == -1 cannot be exceeded
     return has_ambiguity;
 }
@@ -6294,11 +6364,60 @@ JL_DLLEXPORT int jl_sort_method_matches(jl_array_t *t, int include_ambiguous) JL
 //
 // fully-covers is a Bool indicating whether the queried type is a subtype of
 // the method signature.
-static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
-                              jl_tupletype_t *type, int lim, int include_ambiguous,
-                              int intersections, size_t world, int cache_result_recursion,
-                              size_t *min_valid, size_t *max_valid, int *ambig)
+// Record the relation between the matches of a merged lookup from different tables, as the
+// activation of either method would have recorded it had both been in one table: the matches
+// that a method does not beat join its interference set. Returns the (method, set) pairs for
+// `get_interferences`, or NULL when there is no such pair.
+static jl_array_t *cross_table_interferences(jl_array_t *t, size_t novl) JL_CANSAFEPOINT
 {
+    size_t len = jl_array_nrows(t);
+    jl_array_t *cross = NULL;
+    jl_value_t *isect = NULL;
+    jl_genericmemory_t *set = NULL;
+    JL_GC_PUSH3(&cross, &isect, &set);
+    for (size_t i = 0; i < novl; i++) {
+        jl_method_t *mo = ((jl_method_match_t*)jl_array_ptr_ref(t, i))->method;
+        for (size_t j = novl; j < len; j++) {
+            jl_method_t *mg = ((jl_method_match_t*)jl_array_ptr_ref(t, j))->method;
+            isect = jl_type_intersection((jl_value_t*)mo->sig, (jl_value_t*)mg->sig);
+            if (isect == jl_bottom_type)
+                continue;
+            for (int k = 0; k < 2; k++) {
+                jl_method_t *m = k == 0 ? mo : mg;
+                jl_method_t *m2 = k == 0 ? mg : mo;
+                if (jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig))
+                    continue;
+                if (cross == NULL)
+                    cross = jl_alloc_vec_any(0);
+                size_t c = 0, nc = jl_array_nrows(cross);
+                while (c < nc && jl_array_ptr_ref(cross, c) != (jl_value_t*)m)
+                    c += 2;
+                if (c == nc) {
+                    set = jl_atomic_load_relaxed(&m->interferences);
+                    set = jl_genericmemory_copy(set);
+                    jl_array_ptr_1d_push(cross, (jl_value_t*)m);
+                    jl_array_ptr_1d_push(cross, (jl_value_t*)set);
+                }
+                set = (jl_genericmemory_t*)jl_array_ptr_ref(cross, c + 1);
+                size_t max = jl_idset_max(set);
+                ssize_t idx;
+                set = jl_idset_put_key(set, (jl_value_t*)m2, &max, &idx);
+                jl_array_ptr_set(cross, c + 1, (jl_value_t*)set);
+            }
+        }
+    }
+    JL_GC_POP();
+    return cross;
+}
+
+// With `overlay`, merge its methods with those of `mt` (the global table) by specificity,
+// leaving out the methods of `mt` with the same signature as an overlay method.
+static jl_value_t *ml_matches_(jl_methtable_t *mt, jl_methtable_t *overlay, jl_methcache_t *mc,
+                               jl_tupletype_t *type, int lim, int include_ambiguous,
+                               int intersections, size_t world, int cache_result_recursion,
+                               size_t *min_valid, size_t *max_valid, int *ambig) JL_CANSAFEPOINT
+{
+    assert(overlay == NULL || mc == NULL); // merged results are not cached
     size_t current_world = jl_atomic_load_acquire(&jl_world_counter);
     if (world > current_world)
         return jl_nothing; // the future is not enumerable
@@ -6337,6 +6456,9 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
         world,
         lim,
         include_ambiguous,
+        /* .merged = */ overlay != NULL,
+        /* .novl = */ 0,
+        /* .scanning_global = */ 0,
 
         /* outputs */
         /* .t = */ jl_an_empty_vec_any,
@@ -6420,6 +6542,12 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
         }
     }
     // then scan everything
+    if (overlay) {
+        // the overlay methods first, so the global methods they replace can be left out
+        jl_typemap_intersection_visitor(jl_atomic_load_relaxed(&overlay->defs), 0, &env.match);
+        env.novl = jl_array_nrows(env.t);
+        env.scanning_global = 1;
+    }
     if (!jl_typemap_intersection_visitor(jl_atomic_load_relaxed(&mt->defs), 0, &env.match) && env.t == jl_an_empty_vec_any) {
         JL_GC_POP();
         // if we return early without returning methods, lim was proven to be exceeded
@@ -6438,7 +6566,12 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
     // these and apply specificity to determine a list of dispatch-possible call targets
     size_t len;
     {
-        ssize_t sorted = sort_method_matches((jl_array_t*)env.t, lim, include_ambiguous, ambig == NULL, &has_ambiguity);
+        jl_array_t *cross = NULL;
+        if (env.novl > 0 && jl_array_nrows(env.t) > env.novl)
+            cross = cross_table_interferences((jl_array_t*)env.t, env.novl);
+        JL_GC_PUSH1(&cross);
+        ssize_t sorted = sort_method_matches(cross, (jl_array_t*)env.t, lim, include_ambiguous, ambig == NULL, &has_ambiguity);
+        JL_GC_POP();
         if (sorted == -1) {
             JL_GC_POP();
             return jl_nothing;
@@ -6466,6 +6599,47 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
     if (lim >= 0 && len > lim)
         return jl_nothing;
     return env.t;
+}
+
+static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
+                              jl_tupletype_t *type, int lim, int include_ambiguous,
+                              int intersections, size_t world, int cache_result_recursion,
+                              size_t *min_valid, size_t *max_valid, int *ambig)
+{
+    return ml_matches_(mt, NULL, mc, type, lim, include_ambiguous, intersections, world,
+                       cache_result_recursion, min_valid, max_valid, ambig);
+}
+
+// `jl_matching_methods` for the global table with the methods of the overlay table `mt`,
+// ranked by specificity as if they were global methods that replace any global method
+// with the same signature.
+JL_DLLEXPORT jl_value_t *jl_matching_methods_merged(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
+                                                    size_t world, size_t *min_valid, size_t *max_valid, int *ambig) JL_CANSAFEPOINT
+{
+    if (!jl_is_mtable(mt))
+        jl_type_error("jl_matching_methods_merged", (jl_value_t*)jl_methtable_type, mt);
+    if (ambig != NULL)
+        *ambig = 0;
+    jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
+    if (!jl_is_tuple_type(unw))
+        return (jl_value_t*)jl_an_empty_vec_any;
+    if (unw == (jl_value_t*)jl_emptytuple_type || jl_tparam0(unw) == jl_bottom_type)
+        return (jl_value_t*)jl_an_empty_vec_any;
+    return ml_matches_(jl_method_table, (jl_methtable_t*)mt, NULL, types, lim, include_ambiguous, 1, world, 0, min_valid, max_valid, ambig);
+}
+
+// `jl_gf_invoke_lookup_worlds` for the same merged view as `jl_matching_methods_merged`.
+JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds_merged(jl_value_t *types, jl_value_t *mt, size_t world, size_t *min_world, size_t *max_world) JL_CANSAFEPOINT
+{
+    if (!jl_is_mtable(mt))
+        jl_type_error("jl_gf_invoke_lookup_worlds_merged", (jl_value_t*)jl_methtable_type, mt);
+    jl_value_t *unw = jl_unwrap_unionall(types);
+    if (!jl_is_tuple_type(unw) || jl_tparam0(unw) == jl_bottom_type)
+        return jl_nothing;
+    jl_value_t *matches = ml_matches_(jl_method_table, (jl_methtable_t*)mt, NULL, (jl_tupletype_t*)types, 1, 0, 0, world, 0, min_world, max_world, NULL);
+    if (matches == jl_nothing || jl_array_nrows(matches) != 1)
+        return jl_nothing;
+    return jl_array_ptr_ref(matches, 0);
 }
 
 // see if it might be possible to construct an instance of `typ`
