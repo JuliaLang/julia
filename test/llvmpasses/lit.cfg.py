@@ -24,3 +24,6 @@ elif platform.machine() in ("aarch64", "arm64"):
     config.available_features.add('aarch64')
 elif platform.machine() == "riscv64":
     config.available_features.add('riscv64')
+
+if platform.system() == "Linux":
+    config.available_features.add('linux')

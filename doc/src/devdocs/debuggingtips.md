@@ -246,6 +246,16 @@ are exactly the same in every run.
 
 A recent version of rr (3.1.0 or higher) is required.
 
+rr normally counts the program's progress with the CPU's performance counters, which many virtual
+machines do not provide. With rr's software ticks
+([rr-debugger/rr#4104](https://github.com/rr-debugger/rr/pull/4104)), the program counts its
+progress itself, and rr records it in that mode when the executable carries the `.note.rrsoftticks`
+note. This requires every binary that matters to be built for software ticks. When Julia's own
+C/C++ code is (by a compiler that predefines `__RR_SOFTTICKS__`), the code Julia generates is
+instrumented too: JIT code, and the system and package images it builds (see the `SoftTicks` pass
+in [Custom LLVM Passes](@ref)). Code from libraries that are not built for software ticks, such as
+Julia's binary dependencies in a default build, runs without ticks.
+
 ### Reproducing concurrency bugs with rr
 
 rr simulates a single-threaded machine by default. In order to debug concurrent

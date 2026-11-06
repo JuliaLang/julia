@@ -321,6 +321,9 @@ static ObjCache::Hash hashModule(const llvm::Module &M) JL_NOTSAFEPOINT
     // Compiled code needs to have the same jl_tls_offset value as the running
     // process (see LowerPTLSPass).
     Hasher.update({(uint8_t *)&jl_tls_offset, sizeof jl_tls_offset});
+    // Whether the pipeline adds software ticks, which -julia-softticks can change at run time.
+    uint8_t SoftTicks = jl_softticks_enabled();
+    Hasher.update({&SoftTicks, 1});
     Hasher.update({(uint8_t *)&ModHash[0], sizeof ModHash});
     return Hasher.final();
 }
