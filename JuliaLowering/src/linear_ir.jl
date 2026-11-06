@@ -277,7 +277,7 @@ function emit_return(ctx, srcref, ex)
         # todo: Why does flisp lowering create a mutable variable here even
         # though we don't mutate it?
         # tmp = ssavar(ctx, srcref, "returnval_via_finally") # <- can we use this?
-        tmp = new_local_binding(ctx, srcref, "returnval_via_finally")
+        tmp = new_local_binding(ctx, srcref, "")
         emit(ctx, @ast ctx srcref [:(=) tmp ex])
         tmp
     else
@@ -582,7 +582,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
 
     has_finally_block = !isnothing(finally_block)
     end_label = !in_tail_pos || has_finally_block ? make_label(ctx, ex) : nothing
-    try_result = needs_value && !in_tail_pos ? new_local_binding(ctx, ex, "try_result") : nothing
+    try_result = needs_value && !in_tail_pos ? new_local_binding(ctx, ex, "") : nothing
 
     enter_scope_arg = SyntaxList()
     if scope !== nothing
@@ -598,7 +598,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     ])
     push!(ctx.handler_token_stack, handler_token)
     if has_finally_block
-        finally_handler = FinallyHandler(new_local_binding(ctx, finally_block, "finally_tag"),
+        finally_handler = FinallyHandler(new_local_binding(ctx, finally_block, ""),
                                          JumpTarget(end_label, ctx))
         push!(ctx.finally_handlers, finally_handler)
         emit(ctx, @ast ctx finally_block [:(=) finally_handler.tagvar (-1)::value])
@@ -812,7 +812,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
         end_label = make_label(ctx, ex)
         need_value = needs_value || in_tail_pos
-        result_var = need_value ? new_local_binding(ctx, ex, "$(nk.name)_result") : nothing
+        result_var = need_value ? new_local_binding(ctx, ex, "") : nothing
         outer_target = get(ctx.break_targets, nk, nothing)
         ctx.break_targets[nk] = JumpTarget(end_label, ctx, result_var)
         push!(ctx.break_label_stack, nk)

@@ -1236,7 +1236,7 @@ end
 # the new offset as an `Int`.
 _parse = nothing
 
-#    Core._lower(code, module, filename="none", linenum=0, world=0xfff..., warn=false)
+#    Core._lower(module, code, world, warn, loc)
 #
 # Lower `code` (usually Expr), returning `svec(e::Any xs::Any...)` where `e` is
 # the lowered code, and `xs` is possible additional information from

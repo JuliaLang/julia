@@ -234,7 +234,7 @@ let ex = Meta.parseall("@foo", filename=:bar)
     @test isa(arg2arg2, LineNumberNode) && arg2arg2.file === :bar
 end
 
-_lower(m::Module, ex, world::UInt) = Base.fl_lower(ex, m, "none", 0, world, false)[1]
+_lower(m::Module, ex, world::UInt) = Base.fl_lower(m, ex, world, false, LineNumberNode(0, :none))[1]
 
 module TestExpandInWorldModule
 macro m() 1 end
