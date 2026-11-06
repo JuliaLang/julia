@@ -24,7 +24,7 @@ include("parse_stream.jl")
 include("parser.jl")
 include("green_node.jl")
 include("syntax_node.jl")
-if isdefined(Base, :Syntax)
+if isdefined(JuliaSyntax.BaseSyntax, :Syntax)
     include("syntax.jl")
 end
 include("diagnostics.jl")
@@ -45,7 +45,7 @@ end
 
 include("serialization.jl")
 
-@static if isdefined(Base, :Syntax)
+@static if isdefined(JuliaSyntax.BaseSyntax, :Syntax)
     @testset "Basic inference tests" begin
         @test Base.infer_return_type(JuliaSyntax.sourcetext, (JuliaSyntax.Syntax,)) <: AbstractString
         @test Base.infer_return_type(JuliaSyntax.byte_range, (JuliaSyntax.Syntax,)) == UnitRange{Int}
