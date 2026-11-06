@@ -2487,44 +2487,27 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     new StoreInst(Val, slotAddress, InsertBefore->getIterator());
 }
 
-void LateLowerGCFrame::PlaceGCFrameReset(unsigned StartSlot, unsigned Count,
-                                         unsigned PtrSize, Value *GCFrame,
+// Reset `Count` adjacent slots to NULL, starting at `Slot`.
+void LateLowerGCFrame::PlaceGCFrameReset(unsigned Slot, unsigned Count, Value *GCFrame,
                                          Instruction *InsertBefore) {
     IRBuilder<> builder(InsertBefore);
-    auto *T_int32 = Type::getInt32Ty(InsertBefore->getContext());
+    auto slotAddress = [&](unsigned CurSlot) {
+        return builder.CreateCall(getOrDeclare(jl_intrinsics::getGCFrameSlot),
+                                  {GCFrame, builder.getInt32(CurSlot)},
+                                  "gc_slot_addr_" + StringRef(std::to_string(CurSlot)));
+    };
     if (Count >= 4) {
-        auto *slotAddress = builder.CreateCall(
-            getOrDeclare(jl_intrinsics::getGCFrameSlot),
-            {GCFrame, ConstantInt::get(T_int32, StartSlot)},
-            "gc_slot_addr_" + StringRef(std::to_string(StartSlot)));
-        builder.CreateMemSet(slotAddress, ConstantInt::get(Type::getInt8Ty(InsertBefore->getContext()), 0),
-                             PtrSize * Count, Align(PtrSize));
-    } else {
-        for (unsigned Slot = StartSlot; Slot < StartSlot + Count; ++Slot) {
-            auto *slotAddress = builder.CreateCall(
-                getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                {GCFrame, ConstantInt::get(T_int32, Slot)},
-                "gc_slot_addr_" + StringRef(std::to_string(Slot)));
-            builder.CreateStore(ConstantPointerNull::get(T_prjlvalue), slotAddress);
-        }
+        unsigned PtrSize = InsertBefore->getDataLayout().getPointerSize();
+        builder.CreateMemSet(slotAddress(Slot), builder.getInt8(0), Count * PtrSize, Align(PtrSize));
+        return;
     }
+    for (unsigned i = 0; i < Count; i++)
+        builder.CreateStore(ConstantPointerNull::get(T_prjlvalue), slotAddress(Slot + i));
 }
 
 void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
                                           ArrayRef<int> Colors, int PreAssignedColors, Value *GCFrame)
 {
-    int MaxColor = -1;
-    for (int C : Colors)
-        if (C > MaxColor)
-            MaxColor = C;
-    if (MaxColor < 0)
-        return;
-
-    // Indexed by color (slot offset relative to MinColorRoot).
-    BitVector SlotsJustWritten(MaxColor + 1);
-    BitVector SlotsToReset(MaxColor + 1);
-    unsigned PtrSize = S.F->getParent()->getDataLayout().getPointerSize();
-
     for (auto &BB : *S.F) {
         const BBState &BBS = S.BBStates[&BB];
         if (!BBS.HasSafepoint)
@@ -2533,35 +2516,26 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
         AddInPredecessorLiveOuts(&BB, LiveIn, S);
         const LargeSparseBitVector *LastLive = &LiveIn;
         for (int Safepoint = BBS.FirstSafepoint; Safepoint >= BBS.LastSafepoint; --Safepoint) {
-            Instruction *SPInst = S.SafepointNumbering[Safepoint];
             const LargeSparseBitVector &NowLive = S.LiveSets[Safepoint];
-            SlotsJustWritten.reset();
+            // reset slots which are no longer alive, as runs of adjacent slots
+            SmallVector<int, 8> Dead;
+            for (int Idx : *LastLive) {
+                if (Colors[Idx] >= PreAssignedColors && !HasBitSet(NowLive, Idx))
+                    Dead.push_back(Colors[Idx]);
+            }
+            llvm::sort(Dead);
+            for (size_t i = 0, j; i < Dead.size(); i = j) {
+                for (j = i + 1; j < Dead.size() && Dead[j] == Dead[j - 1] + 1; j++) {}
+                PlaceGCFrameReset(Dead[i] + MinColorRoot, j - i, GCFrame,
+                                  S.SafepointNumbering[Safepoint]);
+            }
             // store values which are alive in this safepoint but
             // haven't been stored in the GC frame before
             for (int Idx : NowLive) {
                 if (!HasBitSet(*LastLive, Idx)) {
-                    PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame, SPInst);
-                    if (Colors[Idx] >= 0)
-                        SlotsJustWritten.set(Colors[Idx]);
+                    PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame,
+                      S.SafepointNumbering[Safepoint]);
                 }
-            }
-            // reset slots which are no longer alive and weren't overwritten above
-            SlotsToReset.reset();
-            for (int Idx : *LastLive) {
-                int C = Colors[Idx];
-                if (C >= PreAssignedColors && !HasBitSet(NowLive, Idx) &&
-                    !SlotsJustWritten.test(C)) {
-                    SlotsToReset.set(C);
-                }
-            }
-            for (int Start = SlotsToReset.find_first(); Start != -1;) {
-                int End = SlotsToReset.find_next_unset(Start);
-                if (End == -1) {
-                    PlaceGCFrameReset(Start + MinColorRoot, SlotsToReset.size() - Start, PtrSize, GCFrame, SPInst);
-                    break;
-                }
-                PlaceGCFrameReset(Start + MinColorRoot, End - Start, PtrSize, GCFrame, SPInst);
-                Start = SlotsToReset.find_next(End);
             }
             LastLive = &NowLive;
         }
@@ -2665,30 +2639,31 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
             AI = NULL;
             // Recompute the address in each block that uses it, like a frame index.
             SmallDenseMap<BasicBlock *, Instruction *, 4> SlotInBB;
-            SmallVector<Instruction *, 4> Clones;
-            std::string OrigName = std::string(slotAddress->getName());
+            Instruction *FirstLocal = nullptr;
             for (Use &U : make_early_inc_range(slotAddress->uses())) {
                 auto *UI = cast<Instruction>(U.getUser());
                 auto *PN = dyn_cast<PHINode>(UI);
                 BasicBlock *BB = PN ? PN->getIncomingBlock(U) : UI->getParent();
-                if (BB == slotAddress->getParent() || BB->getFirstInsertionPt() == BB->end())
+                if (BB == slotAddress->getParent())
                     continue;
                 Instruction *&Local = SlotInBB[BB];
                 if (!Local) {
                     Local = slotAddress->clone();
+                    Local->setName(slotAddress->getName());
                     Local->insertBefore(BB->getFirstInsertionPt());
-                    Clones.push_back(Local);
+                    if (!FirstLocal)
+                        FirstLocal = Local;
                 }
                 U.set(Local);
             }
             if (slotAddress->use_empty()) {
-                if (!Clones.empty())
-                    slotAddress->replaceAllUsesWith(Clones.front());
+                if (FirstLocal) {
+                    slotAddress->replaceAllUsesWith(FirstLocal);
+                    FirstLocal->takeName(slotAddress);
+                }
                 if (!slotAddress->isUsedByMetadata())
                     slotAddress->eraseFromParent();
             }
-            for (Instruction *Local : Clones)
-                Local->setName(OrigName);
         };
         for (auto AI : S.ArrayAllocas) {
             replace_alloca(AI.first);

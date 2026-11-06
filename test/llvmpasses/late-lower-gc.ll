@@ -402,36 +402,44 @@ top:
 declare void @ijl_throw(ptr addrspace(12)) noreturn
 declare void @j_forever_0() noreturn
 
-define void @slot_reuse_no_redundant_reset(i64 %a, ptr addrspace(11) %p, i1 %cond) {
+define void @coalesce_noncontiguous_dead_slots(i64 %a, i1 %c1, i1 %c2) {
 top:
-; CHECK-LABEL: @slot_reuse_no_redundant_reset
-; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+; CHECK-LABEL: @coalesce_noncontiguous_dead_slots
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 6)
   %pgcstack = call ptr @julia.get_pgcstack()
-  %v1 = call ptr addrspace(10) @jl_box_int64(i64 signext %a)
-; CHECK: [[SLOT0:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-; CHECK-NEXT: store ptr addrspace(10) %v1, ptr [[SLOT0]]
-; CHECK-NEXT: call void @jl_safepoint()
+  %v0 = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  %v1 = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  %v2 = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  %v3 = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  %v4 = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  %v5 = call ptr addrspace(10) @jl_box_int64(i64 %a)
   call void @jl_safepoint()
-  call void @boxed_simple(ptr addrspace(10) %v1, ptr addrspace(10) %v1)
-  br i1 %cond, label %cont, label %err_throw
+  br i1 %c1, label %use_all, label %branch2
 
-cont:
-; CHECK: cont:
-  %v2 = load ptr addrspace(10), ptr addrspace(11) %p, align 8
-; CHECK-NEXT: %v2 = load ptr addrspace(10), ptr addrspace(11) %p, align 8
-; CHECK-NOT: store ptr addrspace(10) null
-; CHECK-NEXT: [[SLOT1:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-; CHECK-NEXT: store ptr addrspace(10) %v2, ptr [[SLOT1]]
+use_all:
+  call void @boxed_simple(ptr addrspace(10) %v0, ptr addrspace(10) %v1)
+  call void @boxed_simple(ptr addrspace(10) %v2, ptr addrspace(10) %v3)
+  call void @boxed_simple(ptr addrspace(10) %v4, ptr addrspace(10) %v5)
+  ret void
+
+branch2:
+  br i1 %c2, label %keep_one, label %err_throw
+
+keep_one:
+; CHECK: keep_one:
+; CHECK-NEXT: [[RUN_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: call void @llvm.memset.p0.i{{32|64}}(ptr align {{4|8}} [[RUN_SLOT]], i8 0, i{{32|64}} {{16|32}}, i1 false)
+; CHECK-NEXT: [[SINGLE_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 5)
+; CHECK-NEXT: store ptr addrspace(10) null, ptr [[SINGLE_SLOT]]
 ; CHECK-NEXT: call void @jl_safepoint()
   call void @jl_safepoint()
-  call void @boxed_simple(ptr addrspace(10) %v2, ptr addrspace(10) %v2)
-; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  call void @boxed_simple(ptr addrspace(10) %v4, ptr addrspace(10) %v4)
   ret void
 
 err_throw:
 ; CHECK: err_throw:
 ; CHECK-NEXT: [[THROW_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-; CHECK-NEXT: store ptr addrspace(10) null, ptr [[THROW_SLOT]]
+; CHECK-NEXT: call void @llvm.memset.p0.i{{32|64}}(ptr align {{4|8}} [[THROW_SLOT]], i8 0, i{{32|64}} {{24|48}}, i1 false)
 ; CHECK-NEXT: call void @ijl_throw(ptr addrspace(12) null)
 ; CHECK-NEXT: unreachable
   call void @ijl_throw(ptr addrspace(12) null)
