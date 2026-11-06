@@ -186,9 +186,6 @@ function runsubarraytests(A::Array, I...)
     C = Agen_nodrop(A, I...)
     ld = min(single_stride_dim(C), dim_break_linindex(I))
     S = view(A, I...)
-    if Base.iscontiguous(S)
-        @test S.stride1 == 1
-    end
     test_linear(S, C)
     test_cartesian(S, C)
     test_mixed(S, C)
@@ -928,12 +925,6 @@ end
             end
         end
     end
-end
-
-@testset "issue #29608; contiguousness" begin
-    @test Base.iscontiguous(view(ones(1), 1))
-    @test Base.iscontiguous(view(ones(10), 1:10))
-    @test Base.iscontiguous(view(ones(10), :))
 end
 
 import InteractiveUtils

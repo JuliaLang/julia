@@ -287,8 +287,6 @@ end
 # * Parent index is Colon  -> just use the sub-index as provided
 # * Parent index is scalar -> that dimension was dropped, so skip the sub-index and use the index as is
 
-AbstractZeroDimArray{T} = AbstractArray{T, 0}
-
 reindex(::Tuple{}, ::Tuple{}) = ()
 
 # Skip dropped scalars, so simply peel them off the parent indices and continue
@@ -312,7 +310,6 @@ reindex(idxs::Tuple{AbstractArray{<:Any,N}, Vararg{Any}}, subidxs::Tuple{Vararg{
     (@_propagate_inbounds_meta; (idxs[1][subidxs[1:N]...], reindex(tail(idxs), subidxs[N+1:end])...))
 
 # In general, we simply re-index the parent indices by the provided ones
-SlowSubArray{T,N,P,I} = SubArray{T,N,P,I,false}
 function getindex(V::SubArray{T,N}, I::Vararg{Int,N}) where {T,N}
     @inline
     @boundscheck checkbounds(V, I...)
@@ -454,10 +451,6 @@ compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError(LazyString("invalid strided index type ", typeof(I[1]))))
 
 elsize(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = elsize(P)
-
-iscontiguous(A::SubArray) = iscontiguous(typeof(A))
-iscontiguous(::Type{<:SubArray}) = false
-iscontiguous(::Type{<:FastContiguousSubArray}) = true
 
 first_index(V::FastSubArray) = V.offset1 + V.stride1 * firstindex(V) # cached for fast linear SubArrays
 first_index(V::SubArray) = compute_linindex(parent(V), V.indices)

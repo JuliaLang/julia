@@ -234,11 +234,6 @@ function check_reducedims(R, A)
     return lsiz
 end
 
-"""
-Extract first entry of slices of array A into existing array R.
-"""
-copyfirst!(R::AbstractArray, A::AbstractArray) = mapfirst!(identity, R, A)
-
 function mapfirst!(f::F, R::AbstractArray, A::AbstractArray{<:Any,N}) where {N, F}
     check_reducedims(R, A)
     t = _firstreducedslice(axes(R), axes(A))
@@ -295,9 +290,6 @@ end
 
 mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted) =
     (_mapreducedim!(f, op, R, A); R)
-
-reducedim!(op, R::AbstractArray{RT}, A::AbstractArrayOrBroadcasted) where {RT} =
-    mapreducedim!(identity, op, R, A)
 
 """
     mapreduce(f, op, A::AbstractArray...; dims=:, [init])
