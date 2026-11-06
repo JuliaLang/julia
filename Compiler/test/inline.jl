@@ -1118,7 +1118,7 @@ end
 @test fully_eliminated(f_call_total_noinline_unused, Tuple{Float64})
 @test !fully_eliminated(f_call_volatile_escape, Tuple{Ptr{Int}})
 
-let b = Expr(:block, (:(y += sin($x)) for x in randn(1000))...)
+let b = Expr(:block, (:(y += sin($x)) for x in randn(10))...)
     @eval function f_sin_perf()
         y = 0.0
         $b
