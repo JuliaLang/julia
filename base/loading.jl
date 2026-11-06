@@ -3140,6 +3140,27 @@ end
 
 disable_parallel_precompile::Bool = false
 
+# The manifest in the load path that records `pkg` the way it records a stdlib, without a
+# `git-tree-sha1` or `path`, when this Julia does not ship it
+function former_stdlib_manifest(pkg::PkgId)
+    pkg.uuid === nothing && return nothing
+    is_stdlib(pkg) && return nothing
+    for env in load_path()
+        project_file = env_project_file(env)
+        project_file isa String || continue
+        manifest_file = project_file_manifest_path(project_file)
+        manifest_file === nothing && continue
+        entries = get(get_deps(parsed_toml(manifest_file)), pkg.name, nothing)::Union{Nothing, Vector{Any}}
+        entries === nothing && continue
+        for entry in entries
+            entry = entry::Dict{String, Any}
+            get(entry, "uuid", nothing) == string(pkg.uuid) || continue
+            haskey(entry, "git-tree-sha1") || haskey(entry, "path") || return manifest_file
+        end
+    end
+    return nothing
+end
+
 # Returns `nothing` or the new(ish) module
 function __require_prelocked(pkg::PkgId, env)
     assert_havelock(require_lock)
@@ -3147,9 +3168,14 @@ function __require_prelocked(pkg::PkgId, env)
     # perform the search operation to select the module file require intends to load
     specenv = locate_package_env(pkg, env)
     if specenv === nothing
+        manifest_file = former_stdlib_manifest(pkg)
+        hint = manifest_file === nothing ?
+            "Run `Pkg.instantiate()` to install all recorded dependencies." :
+            "The manifest $(repr(manifest_file)) records it as a standard library, which this version of Julia does not ship.\n" *
+            "   Run `Pkg.resolve()` to install it from a registry."
         throw(ArgumentError("""
             Package $(repr(MIME"text/plain"(), pkg)) is required but does not seem to be installed:
-             - Run `Pkg.instantiate()` to install all recorded dependencies.
+             - $hint
             """))
     end
     spec = specenv[1]
