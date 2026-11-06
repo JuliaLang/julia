@@ -499,7 +499,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
     if isa(x, Core.PhiNode)
         partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
                           slot_offset, statement_offset, boundscheck)
-        x.edges .+= slot_offset
+        x.edges .+= statement_offset
         return x
     end
     if isa(x, Core.UpsilonNode)
@@ -512,8 +512,16 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         )
     end
     if isa(x, Core.PhiCNode)
-        _partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
-                           slot_offset, statement_offset, boundscheck)
+        partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
+                          slot_offset, statement_offset, boundscheck)
+        return x
+    end
+    if isa(x, Core.PiNode)
+        return Core.PiNode(
+            _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck),
+            x.typ,
+        )
     end
     if isa(x, Core.ReturnNode)
        # Unreachable doesn't have val defined
@@ -534,10 +542,11 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         )
     end
     if isa(x, Core.EnterNode)
-        if x.catch_dest == 0
-            return x
-        end
-        return Core.EnterNode(x, x.catch_dest + statement_offset)
+        catch_dest = x.catch_dest == 0 ? 0 : x.catch_dest + statement_offset
+        isdefined(x, :scope) || return Core.EnterNode(catch_dest)
+        return Core.EnterNode(catch_dest,
+            _partially_inline!(x.scope, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck))
     end
     if isa(x, Expr)
         head = x.head
@@ -663,10 +672,10 @@ was escaped, the unescaped expression is wrapped in `:escape` again.
 """
 function reescape(@nospecialize(unescaped_expr), @nospecialize(original_expr))
     if isexpr(original_expr, :escape)
-        return reescape(Expr(:escape, unescaped_expr), original_expr.args[1])
+        return Expr(:escape, reescape(unescaped_expr, original_expr.args[1]))
     elseif isexpr(original_expr, :var"hygienic-scope")
         next, ctx... = original_expr.args
-        return reescape(Expr(:var"hygienic-scope", unescaped_expr, ctx...), next)
+        return Expr(:var"hygienic-scope", reescape(unescaped_expr, next), ctx...)
     else
         return unescaped_expr
     end
