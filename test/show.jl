@@ -304,6 +304,27 @@ end
 # range syntax
 @test_repr "1:2"
 @test_repr "3:4:5"
+@test_repr "a : :b"
+@test_repr "a : b : :c"
+@test_repr "x : :end"
+@test_repr "a : (:b).c"
+@test_repr "x : :(x + 1)"
+@test_repr "a : :b + 1"
+@test_repr "a : :b'ᵀ"
+@test string(Meta.parse("a : :b")) == "a : :b"
+@test string(Meta.parse("a:(:b)[1]")) == "a:(:b)[1]"
+struct RangeEndpointShowCounter
+    calls::Ref{Int}
+end
+Base.show(io::IO, x::RangeEndpointShowCounter) = (x.calls[] += 1; print(io, 1))
+let calls = Ref(0)
+    ex = RangeEndpointShowCounter(calls)
+    for _ in 1:12
+        ex = Expr(:call, :(:), 0, ex)
+    end
+    string(ex)
+    @test calls[] == 1
+end
 let ex4 = Expr(:call, :(:), 1, 2, 3, 4),
     ex1 = Expr(:call, :(:), 1)
     @test eval(Meta.parse(repr(ex4))) == ex4
