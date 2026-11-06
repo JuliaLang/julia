@@ -4330,7 +4330,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
             }
             return box;
         };
-        // a value split out of a union may still have the box it came in
+        // the value may carry a box of itself on some paths (see jl_cgval_t::Vboxed)
         if (vinfo.Vboxed)
             box = emit_guarded_test(ctx, ctx.builder.CreateIsNull(vinfo.Vboxed), vinfo.Vboxed, new_box);
         else
