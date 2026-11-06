@@ -175,6 +175,14 @@ end
     copyline(b, a; keep=false)
     Base.shred!(a)
     @test take!(b) == b"xxabcdexxx"
+
+    # copying into the middle of `b` strips the newline of an empty line, and only a newline
+    for (line, expected) in (("\nxyz", b"QQQQ"), ("\r\nxyz", b"QQQQ"), ("x\r", b"x\rQQ"))
+        a = Base.BufferStream(); write(a, line); closewrite(a)
+        b = IOBuffer(); write(b, "QQQQ"); seekstart(b)
+        copyline(b, a)
+        @test take!(b) == expected
+    end
 end
 
 @testset "take!" begin
