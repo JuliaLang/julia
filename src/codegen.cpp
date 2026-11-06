@@ -1991,6 +1991,9 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
     // runtime values) if `(TIndex & UNION_BOX_MARKER) != 0`, then `Vboxed == V` (by value).
     // For convenience, we also set this value of isboxed values, in which case
     // it is equal (at compile time) to V.
+    // A value narrowed from a union to one of its concrete types (no TIndex, not isboxed)
+    // may keep the box it arrived in: then, at runtime, `Vboxed` is either NULL or a box
+    // holding this value. `convert_julia_type_to_union` and `boxed` rely on this.
 
     // If this is non-NULL (at compile time), it is always of type `T_prjlvalue`.
     // N.B.: In general we expect this to always be a dereferenceable pointer at runtime.
