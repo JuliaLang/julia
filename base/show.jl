@@ -2152,7 +2152,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     )
         op, arg1 = head === Symbol("'") ? (head, args[1]) : (args[1], args[2])
         if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1::Symbol)) || (isa(arg1, Real) && signbit(arg1))
-            show_enclosed_list(io, '(', [arg1::Union{Expr, Symbol, Real}], ", ", ')', indent, 0)
+            show_enclosed_list(io, '(', Any[arg1], ", ", ')', indent, 0)
         else
             show_unquoted(io, arg1, indent, 0, quote_level)
         end
