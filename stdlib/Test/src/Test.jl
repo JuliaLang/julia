@@ -65,7 +65,7 @@ function test_callsite(bt, file_ts, file_t)
     # The order will always be <internal functions> -> `@test` -> `@testset`.
     internal = @something(macrocall_location(bt, @__FILE__), return nothing)
     test = internal - 1 + @something(findfirst(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), @view bt[internal:end]), return nothing)
-    testset = test - 1 + @something(macrocall_location(@view(bt[test:end]), file_ts), return nothing)
+    testset = test - 1 + @something(testset_location(@view(bt[test:end]), file_ts), return nothing)
 
     # If stacktrace locations differ, include frames until the `@testset` appears.
     test != testset && return testset
@@ -74,16 +74,21 @@ function test_callsite(bt, file_ts, file_t)
     # or if `@test` occurred in a function that has been inlined in the testset.
     frames = StackTraces.lookup(bt[testset])
     outer_frame = findfirst(frame -> in_file(frame, file_ts) && frame.func == Symbol("macro expansion"), frames)
-    isnothing(outer_frame) && return nothing
     # The `@test` call occurred directly in scope of a `@testset`.
     # The __source__ from `@test` will be printed in the test message upon failure.
     # There is no need to include more frames, but always include at least the internal macrocall location in the stacktrace.
-    in_file(frames[outer_frame], file_t) && return internal
-    # The `@test` call was inlined, so we still need to include the callsite.
+    !isnothing(outer_frame) && in_file(frames[outer_frame], file_t) && return internal
+    # The `@test` call was inlined (or the `@testset` has no macro expansion frame),
+    # so we still need to include the callsite.
     return testset
 end
 
 macrocall_location(bt, file) = findfirst(ip -> ip_has_file_and_func(ip, file, (Symbol("macro expansion"),)), bt)
+
+testset_location(bt, file_ts) =
+    @something(macrocall_location(bt, file_ts),
+               findfirst(ip -> any(frame -> in_file(frame, file_ts), StackTraces.lookup(ip)), bt),
+               return nothing)
 
 function scrub_backtrace(bt, file_ts, file_t)
     do_test_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (:do_test, :do_test_throws)), bt)
@@ -91,6 +96,10 @@ function scrub_backtrace(bt, file_ts, file_t)
         bt = bt[do_test_ind + 1:end]
     end
     stop_at = test_location(bt, file_ts, file_t)
+    if isnothing(stop_at)
+        driver = findlast(ip -> any(Base.is_driver_entry, StackTraces.lookup(ip)), bt)
+        isnothing(driver) || (stop_at = driver - 1)
+    end
     !isnothing(stop_at) && !isempty(bt) && return bt[1:stop_at]
     return bt
 end
@@ -174,7 +183,7 @@ Fail(test_type::Symbol, orig_expr, data, value, source::LineNumberNode, message_
 function Base.show(io::IO, t::Fail)
     printstyled(io, "Test Failed"; bold=true, color=Base.error_color())
     print(io, " at ")
-    printstyled(io, something(t.source.file, :none), ":", t.source.line, "\n"; bold=true, color=:default)
+    printstyled(io, something(extract_file(t.source), "none"), ":", t.source.line, "\n"; bold=true, color=:default)
     print(io, "  Expression: ", t.orig_expr)
     value, data = t.value, t.data
     if t.test_type === :test_throws_wrong
@@ -285,7 +294,7 @@ function Base.show(io::IO, t::Error)
     end
     printstyled(io, "Error During Test"; bold=true, color=Base.error_color())
     print(io, " at ")
-    printstyled(io, something(t.source.file, :none), ":", t.source.line, "\n"; bold=true, color=:default)
+    printstyled(io, something(extract_file(t.source), "none"), ":", t.source.line, "\n"; bold=true, color=:default)
     if t.test_type === :test_nonbool
         println(io, "  Expression evaluated to non-Boolean")
         println(io, "  Expression: ", t.orig_expr)
@@ -1547,7 +1556,7 @@ function DefaultTestSet(desc::AbstractString;
         time_start, rng, 0, 0., 0x00, ReentrantLock(), Any[])
 end
 extract_file(source::LineNumberNode) = extract_file(source.file)
-extract_file(file::Symbol) = string(file)
+extract_file(file::Symbol) = file === Symbol("") ? nothing : string(file)
 extract_file(::Nothing) = nothing
 
 struct FailFastError <: Exception end

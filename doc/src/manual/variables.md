@@ -126,10 +126,12 @@ julia> x, ___ = size([2 2; 1 1])
 (2, 2)
 
 julia> y = ___
-ERROR: syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+ERROR: syntax: LoweringError:
+ at line 0: all-underscore identifiers are write-only and their values cannot be used in expressions
 
 julia> println(___)
-ERROR: syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+ERROR: syntax: LoweringError:
+ at line 0: all-underscore identifiers are write-only and their values cannot be used in expressions
 ```
 
 The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref Keywords):

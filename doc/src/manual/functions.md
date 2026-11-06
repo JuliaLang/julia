@@ -296,12 +296,12 @@ syntaxes:
 
 ```jldoctest
 julia> x -> x^2 + 2x - 1
-#2 (generic function with 1 method)
+#1 (generic function with 1 method)
 
 julia> function (x)
            x^2 + 2x - 1
        end
-#5 (generic function with 1 method)
+#3 (generic function with 1 method)
 ```
 
 Each statement creates a function taking one argument `x` and returning the value of the polynomial `x^2 +
@@ -554,8 +554,8 @@ as that does not affect method dispatch:
 
 ```jldoctest
 julia> f(x..., y) = x
-ERROR: syntax: invalid "..." on non-final argument
-Stacktrace:
+ERROR: syntax: LoweringError:
+ at none:1: `...` may only be used on the final parameter
 [...]
 
 julia> f((x..., y)) = x

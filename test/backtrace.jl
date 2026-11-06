@@ -23,13 +23,13 @@ end
 
 # same-file inline
 eval(Expr(:function, Expr(:call, :test_inline_1),
-          Expr(:block, Expr(:line, 99, Symbol("backtrace.jl")),
-                       Expr(:block, Expr(:line, 42),
+          Expr(:block, LineNumberNode(99, Symbol("backtrace.jl")),
+                       Expr(:block, LineNumberNode(42, Symbol("backtrace.jl")),
                                     Expr(:meta, :push_loc, Symbol("backtrace.jl"), :inlfunc),
-                                    Expr(:line, 37),
+                                    LineNumberNode(37, Symbol("backtrace.jl")),
                                     Expr(:call, :throw, "foo"),
                                     Expr(:meta, :pop_loc),
-                                    Expr(:line, 99)))))
+                                    LineNumberNode(99, Symbol("backtrace.jl"))))))
 
 @test functionloc(test_inline_1) == ("backtrace.jl", 99)
 try
@@ -37,9 +37,10 @@ try
     error("unexpected")
 catch err
     lkup = get_bt_frames(:test_inline_1, catch_backtrace())
-    @test length(lkup) == 2
-    @test endswith(string(lkup[2].file), "backtrace.jl")
-    @test lkup[2].line == 42
+    # JuliaLowering ignores `push_loc`/`pop_loc`
+    @test_broken length(lkup) == 2
+    @test_broken endswith(string(lkup[2].file), "backtrace.jl")
+    @test_broken lkup[2].line == 42
     # TODO: we don't support surface AST locations with inlined function names
     @test_broken lkup[1].func === :inlfunc
     @test endswith(string(lkup[1].file), "backtrace.jl")
@@ -49,12 +50,12 @@ end
 # different-file inline
 const absfilepath = Sys.iswindows() ? "C:\\foo\\bar\\baz.jl" : "/foo/bar/baz.jl"
 eval(Expr(:function, Expr(:call, :test_inline_2),
-          Expr(:block, Expr(:line, 81, Symbol("backtrace.jl")),
+          Expr(:block, LineNumberNode(81, Symbol("backtrace.jl")),
                        Expr(:block, Expr(:meta, :push_loc, Symbol(absfilepath)),
-                                    Expr(:line, 111),
+                                    LineNumberNode(111, Symbol("backtrace.jl")),
                                     Expr(:call, :throw, "foo"),
                                     Expr(:meta, :pop_loc),
-                                    Expr(:line, 99)))))
+                                    LineNumberNode(99, Symbol("backtrace.jl"))))))
 
 @test functionloc(test_inline_2) == ("backtrace.jl", 81)
 try
@@ -62,10 +63,11 @@ try
     error("unexpected")
 catch err
     lkup = get_bt_frames(:test_inline_2, catch_backtrace())
-    @test length(lkup) == 2
-    @test endswith(string(lkup[2].file), "backtrace.jl")
-    @test lkup[2].line == 81
-    @test string(lkup[1].file) == absfilepath
+    # JuliaLowering ignores `push_loc`/`pop_loc`
+    @test_broken length(lkup) == 2
+    @test_broken endswith(string(lkup[2].file), "backtrace.jl")
+    @test_broken lkup[2].line == 81
+    @test_broken string(lkup[1].file) == absfilepath
     @test lkup[1].line == 111
 end
 
@@ -308,12 +310,14 @@ function interp_frame(f)
     bt = try f() catch; catch_backtrace() end
     return last(lookup(bt[findfirst(ip -> ip isa Base.InterpreterIP, bt)]))
 end
+# JuliaLowering-lowered frames also print a column (`file:line:col`)
+strip_col(s) = replace(s, r"(:\d+):\d+$" => s"\1")
 let sf = interp_frame(InterpFrames.foo)
-    @test sprint(show, sf) == "foo() at backtrace.jl:$(only(methods(InterpFrames.foo)).line)"
+    @test strip_col(sprint(show, sf)) == "foo() at backtrace.jl:$(only(methods(InterpFrames.foo)).line)"
     @test parentmodule(sf) === InterpFrames
 end
 let sf = interp_frame(() -> InterpFrames.gen(1))
-    @test sprint(show, sf) == "gen(x::$Int) at backtrace.jl:$(only(methods(InterpFrames.gen)).line)"
+    @test strip_col(sprint(show, sf)) == "gen(x::$Int) at backtrace.jl:$(only(methods(InterpFrames.gen)).line)"
     @test parentmodule(sf) === InterpFrames
 end
 
