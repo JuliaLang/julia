@@ -2694,7 +2694,8 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
     expect("julia> ")
 
     # ^C interrupts a sleeping REPL evaluation and reports it
-    sendline("println(\"EVAL-1\"); sleep(1000)")
+    # the markers are split so that they don't match the echo of the typed input
+    sendline("println(\"EVAL\", \"-1\"); sleep(1000)")
     expect("EVAL-1") # the evaluation is running (robust under load)
     sleep(0.5)       # ... and parked in sleep(1000)
     kill(p, Base.SIGINT)
@@ -2712,7 +2713,7 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
     sendline("global bgc = Ref(0); global bg = @async while true; sleep(0.01); bgc[] += 1; end; println(\"BG-UP\")")
     expect("BG-UP")
     expect("julia> ")
-    sendline("println(\"EVAL-4\"); sleep(1000)")
+    sendline("println(\"EVAL\", \"-4\"); sleep(1000)")
     expect("EVAL-4")
     sleep(0.5)
     kill(p, Base.SIGINT)
@@ -2724,7 +2725,7 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
 
     # ^C during an in-evaluation terminal read recovers the prompt
     # (the class of issue #58105's "Install package?" prompt)
-    sendline("println(\"EVAL-5\"); readline()")
+    sendline("println(\"EVAL\", \"-5\"); readline()")
     expect("EVAL-5")
     sleep(0.5)
     kill(p, Base.SIGINT)
@@ -2733,7 +2734,7 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
 
     # ^C while parked in a server accept recovers, leaving the server
     # usable (the class of issue #58689)
-    sendline("using Sockets; global srv = listen(Sockets.localhost, 0); println(\"LISTENING\"); accept(srv)")
+    sendline("using Sockets; global srv = listen(Sockets.localhost, 0); println(\"LISTEN\", \"ING\"); accept(srv)")
     expect("LISTENING")
     sleep(0.5)
     kill(p, Base.SIGINT)
@@ -2749,7 +2750,7 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
     # the loop's own cancellation point, and every libgmp call clears the
     # reset region before it runs - and BigInt arithmetic in the session
     # works correctly afterwards
-    sendline("println(\"EVAL-6\"); let b = big(3); while true; Base.@cancel_check; b = b*b % (big(10)^200); end; end")
+    sendline("println(\"EVAL\", \"-6\"); let b = big(3); while true; Base.@cancel_check; b = b*b % (big(10)^200); end; end")
     expect("EVAL-6")
     sleep(0.5)
     kill(p, Base.SIGINT)
