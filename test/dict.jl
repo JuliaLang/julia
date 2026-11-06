@@ -1253,6 +1253,45 @@ end
     GC.@preserve A B C a b c nothing
 end
 
+@testset "Weak dictionary finalizers: $D" for D in (WeakKeyDict, Base.WeakValueIdDict)
+    # A rooted entry finalizer must not keep its dictionary alive.
+    live = [0]
+    f, wr = (@noinline function (live)
+        local d = D(live=>live)
+        return d.finalizer, WeakRef(d)
+    end)(live)
+    GC.@preserve f live begin
+        GC.gc(); GC.gc()
+        @test wr.value === nothing
+    end
+
+    # A dictionary recovered from another finalizer must still clean up dead entries.
+    anchor, recovered = Ref(0), Ref{Any}()
+    (@noinline function (anchor, recovered)
+        saved = D{Vector{Int},Vector{Int}}()
+        finalizer(_ -> (recovered[] = saved), anchor)
+        return nothing
+    end)(anchor, recovered)
+    GC.gc(); GC.gc()
+    finalize(anchor)
+    d = recovered[]
+    keyref, valueref = (@noinline function (d)
+        deadkey, deadvalue = [1], [2]
+        d[deadkey] = deadvalue
+        return WeakRef(deadkey), WeakRef(deadvalue)
+    end)(d)
+    GC.gc(); GC.gc()
+    @test isempty(collect(d))
+    @test isempty(d)
+    key, value = [3], [4]
+    d[key] = value
+    @test length(d.ht) == 1
+    GC.gc(); GC.gc()
+    @test keyref.value === nothing
+    @test valueref.value === nothing
+    GC.@preserve d key value nothing
+end
+
 import Base.PersistentDict
 @testset "PersistentDict" begin
     @testset "HAMT HashState" begin
