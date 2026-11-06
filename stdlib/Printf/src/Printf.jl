@@ -240,8 +240,8 @@ function Format(f::AbstractString)
         # parse type
         !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(InvalidFormatStringError("'$(Char(b))' is not a valid type specifier", f, last_percent_pos, pos-1))
         type = Val{Char(b)}
-        if type <: Ints && precision > 0
-            # note - we should also set zero to false if dynamic precision > 0
+        if type <: Ints && parsedprecdigits && !dynamic_precision
+            # note - we should also set zero to false if dynamic precision >= 0
             # this is taken care of in fmt() for Ints
             zero = false
         elseif (type <: Strings || type <: Chars) && !parsedprecdigits
@@ -304,8 +304,7 @@ end
         precision = args[argp]::Integer
         if precision < 0
             precision = T <: Ints ? 0 : T <: Floats && !(T <: HexBases) ? 6 : -1
-        end
-        if zero && T <: Ints && precision > 0
+        elseif zero && T <: Ints
             zero = false
         end
         argp += 1
