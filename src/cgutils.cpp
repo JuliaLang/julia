@@ -569,8 +569,13 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
 {
     if (x.constant || x.typ == jl_bottom_type)
         return {};
-    if (x.Vboxed) // superset of x.isboxed
+    if (x.isboxed)
         return {x.Vboxed};
+    // the Vboxed of a split union is NULL at runtime while the value is unboxed,
+    // so the unboxed form needs its roots as well
+    SmallVector<Value*,0> roots;
+    if (x.Vboxed)
+        roots.push_back(x.Vboxed);
     if (!x.inline_roots.empty()) {
         // TODO: implement this filter operation
         //     SmallVector<unsigned,4> perm_offsets;
@@ -578,21 +583,21 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
         //     return filter(!in(perm_offsets), x.inline_roots)
         // Copy and load roots via get()
         const jl_gc_roots_t &roots_copy = x.inline_roots;
-        SmallVector<Value*,0> result(roots_copy.size());
         for (size_t i = 0; i < roots_copy.size(); i++)
-            result[i] = roots_copy.get(ctx, i);
-        return result;
+            roots.push_back(roots_copy.get(ctx, i));
+        return roots;
     }
     if (x.ispointer()) {
         if (x.V == nullptr) {
             // a union of ghost types has a tag but no data to root
             assert(x.TIndex);
-            return {};
+            return roots;
         }
         assert(x.V->getType()->getPointerAddressSpace() != AddressSpace::Tracked);
         if (!storage_used && jl_is_pointerfree(x.typ))
-            return {};
-        return {x.V};
+            return roots;
+        roots.push_back(x.V);
+        return roots;
     }
     else if (jl_is_concrete_immutable(x.typ) && !jl_is_pointerfree(x.typ)) {
         jl_value_t *jltype = x.typ;
@@ -600,10 +605,11 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
         Value *agg = emit_unbox(ctx, T, x);
         SmallVector<unsigned,4> perm_offsets;
         find_perm_offsets((jl_datatype_t*)jltype, perm_offsets, 0);
-        return ExtractTrackedValues(ctx, agg, perm_offsets);
+        roots.append(ExtractTrackedValues(ctx, agg, perm_offsets));
+        return roots;
     }
     // nothing here to root, move along
-    return {};
+    return roots;
 }
 
 // --- emitting pointers directly into code ---

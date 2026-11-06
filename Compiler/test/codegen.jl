@@ -727,6 +727,31 @@ end
     @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f8, Tuple{Some{Int}}, true, false, false))
 end
 
+# GC.@preserve of a split union roots the references of its unboxed form,
+# whose box pointer is NULL at runtime
+mutable struct PreservedObj
+    x::Int
+end
+struct PreservedFields
+    o::PreservedObj
+    k::Int
+end
+const preserved_weakref = Ref{WeakRef}()
+@noinline function preserved_obj(i)
+    o = PreservedObj(i)
+    preserved_weakref[] = WeakRef(o)
+    return o
+end
+@noinline function preserve_union_phi(i, s)
+    u = i == 0 ? s : PreservedFields(preserved_obj(i), i) # ::Union{String, PreservedFields}
+    GC.@preserve u begin
+        GC.gc()
+        freed = preserved_weakref[].value === nothing
+    end
+    return freed
+end
+@test !preserve_union_phi(Base.inferencebarrier(1)::Int, "s")
+
 # issue #32843
 function f32843(vals0, v)
     (length(vals0) > 1) && (vals = v[1])
