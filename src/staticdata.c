@@ -231,6 +231,9 @@ static void *to_seroder_entry(size_t idx) JL_NOTSAFEPOINT
 static htable_t new_methtables;
 //static size_t precompilation_world;
 
+uintptr_t jl_sysimage_start = 0;
+uintptr_t jl_sysimage_size = 0;
+
 // Query if a Julia object is in a permalloc region (due to part of a sys- pkg-image)
 static size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
 {
@@ -4910,6 +4913,10 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         (uintptr_t)image_base + sizeof_sysimg,
         (void*)meta);
     meta->deps = image_deps_new(meta->idx, depmods);
+    if (!s.incremental) {
+        jl_sysimage_start = (uintptr_t)image_base;
+        jl_sysimage_size = sizeof_sysimg;
+    }
     jl_timing_counter_inc(JL_TIMING_COUNTER_ImageSize, sizeof_sysimg + sizeof(uintptr_t));
 
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", n_linkage_blobs());
