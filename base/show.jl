@@ -2190,12 +2190,20 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             na = length(func_args)
             if (na == 2 || (na > 2 && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
                     all(a -> !isa(a, Expr) || a.head !== :..., func_args)
-                sep = func === :(:) ? "$func" : " $func "
-
-                if func_prec <= prec
-                    show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, quote_level, true)
+                if func === :(:)
+                    # `:` and an operand printed with a leading `:` would lex as `::`
+                    parts = String[]
+                    for a in func_args
+                        push!(parts, sprint(show_list, Any[a], "", indent, func_prec, quote_level, true; context=io))
+                    end
+                    sep = any(startswith(':'), @view parts[2:end]) ? " : " : ":"
+                    func_prec <= prec && print(io, '(')
+                    join(io, parts, sep)
+                    func_prec <= prec && print(io, ')')
+                elseif func_prec <= prec
+                    show_enclosed_list(io, '(', func_args, " $func ", ')', indent, func_prec, quote_level, true)
                 else
-                    show_list(io, func_args, sep, indent, func_prec, quote_level, true)
+                    show_list(io, func_args, " $func ", indent, func_prec, quote_level, true)
                 end
             elseif na == 1
                 # 1-argument call to normally-binary operator
