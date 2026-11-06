@@ -293,6 +293,7 @@ include("ssair/verify.jl")
 include("ssair/legacy.jl")
 include("ssair/EscapeAnalysis.jl")
 include("ssair/passes.jl")
+include("ssair/outlining.jl")
 include("ssair/irinterp.jl")
 
 function ir_to_codeinf!(opt::OptimizationState{I}, frame::InferenceState{I}, edges::SimpleVector) where {I<:AbstractInterpreter}
@@ -1147,6 +1148,7 @@ function run_passes_ipo_safe(
     if made_changes
         @pass "CC: COMPACT_3" ir = compact!(ir, true)
     end
+    @pass "CC: OUTLINE"   ir = outline_cold_regions!(ir, sv)
     if is_asserts()
         @zone "CC: VERIFY_3" begin
             verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp), sv.linfo)
