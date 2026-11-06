@@ -176,6 +176,47 @@ JL_USED_FUNC void AllocUseInfo::dump()
 #define REMARK(remark)
 #endif
 
+static bool onlyReadsArgument(CallInst *call, unsigned argno)
+{
+    AttributeList attrs = call->getAttributes();
+    if (attrs.hasParamAttr(argno, Attribute::ReadOnly) || attrs.hasParamAttr(argno, Attribute::ReadNone))
+        return true;
+    Function *callee = call->getCalledFunction();
+    if (!callee || !(callee->hasParamAttribute(argno, Attribute::ReadOnly) ||
+                     callee->hasParamAttribute(argno, Attribute::ReadNone)))
+        return false;
+    for (unsigned i = 0; i < call->getNumOperandBundles(); i++) {
+        if (call->getOperandBundleAt(i).getTagName() != "jl_roots")
+            return false;
+    }
+    return true;
+}
+
+static bool collectReadOnlyCalls(Instruction *ptr, SmallSet<CallInst*,4> &calls)
+{
+    bool found = false;
+    SmallVector<Instruction*, 4> worklist{ptr};
+    while (!worklist.empty()) {
+        Instruction *inst = worklist.pop_back_val();
+        for (Use &use: inst->uses()) {
+            auto user = cast<Instruction>(use.getUser());
+            if (isa<GetElementPtrInst>(user) || isa<BitCastInst>(user) || isa<AddrSpaceCastInst>(user)) {
+                worklist.push_back(user);
+                continue;
+            }
+            auto call = dyn_cast<CallInst>(user);
+            if (!call || !call->isArgOperand(&use))
+                return false;
+            unsigned argno = call->getArgOperandNo(&use);
+            if (!call->doesNotCapture(argno) || !onlyReadsArgument(call, argno))
+                return false;
+            calls.insert(call);
+            found = true;
+        }
+    }
+    return found;
+}
+
 void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options) {
     required.use_info.reset();
     Attribute allockind = I->getFnAttr(Attribute::AllocKind);
@@ -236,6 +277,7 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
                         return true;
                     LLVM_DEBUG(dbgs() << "Unknown intrinsic, marking addrescape\n");
                     required.use_info.addrescaped = true;
+                    required.use_info.addrescaped_readonly = false;
                     return true;
                 }
                 if (required.pass.gc_preserve_begin_func == callee) {
@@ -248,6 +290,8 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
             }
             if (required.pass.pointer_from_objref_func == callee) {
                 required.use_info.addrescaped = true;
+                if (!collectReadOnlyCalls(call, required.use_info.readonlycalls))
+                    required.use_info.addrescaped_readonly = false;
                 return true;
             }
             if (required.pass.gc_loaded_func == callee) {
@@ -285,6 +329,7 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
             }
             LLVM_DEBUG(dbgs() << "Call is in jl_roots bundle, marking haspreserve\n");
             required.use_info.haspreserve = true;
+            required.use_info.rootcalls.insert(call);
             return true;
         }
         if (auto store = dyn_cast<StoreInst>(inst)) {
