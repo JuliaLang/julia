@@ -878,8 +878,6 @@ ifneq ($(OS), Darwin)
 endif
 endif
 
-bootstrap_julia_flags :=
-
 ifeq ($(SANITIZE),1)
 SANITIZE_OPTS :=
 SANITIZE_LDFLAGS :=
@@ -897,9 +895,6 @@ endif
 ifeq ($(SANITIZE_THREAD),1)
 SANITIZE_OPTS += -fsanitize=thread -fsanitize-ignorelist=$(JULIAHOME)/contrib/tsan/ignorelist.txt
 SANITIZE_LDFLAGS += -fsanitize=thread
-ifneq ($(CROSS_BOOTSTRAP_JULIA),)
-bootstrap_julia_flags += --target-sanitize=thread
-endif
 endif
 ifeq ($(SANITIZE_OPTS),)
 $(error SANITIZE=1, but no sanitizer selected, set either SANITIZE_MEMORY, SANITIZE_THREAD, or SANITIZE_ADDRESS)
@@ -2005,14 +2000,8 @@ JULIA_BUILD_MODE := debug
 endif
 endif
 
-cross_bootstrap_julia = $(if $(filter 1,$(SYSIMAGE_BUILD)),$(CROSS_BOOTSTRAP_JULIA))
-ifneq ($(cross_bootstrap_julia),)
-JULIA_EXECUTABLE_debug := $(cross_bootstrap_julia)
-JULIA_EXECUTABLE_release := $(cross_bootstrap_julia)
-else
 JULIA_EXECUTABLE_debug := $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release := $(build_bindir)/julia$(EXE)
-endif
 JULIA_EXECUTABLE := $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
 
 JULIA_SYSIMG_debug := $(build_private_libdir)/sys-debug.$(SHLIB_EXT)

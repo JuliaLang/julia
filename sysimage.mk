@@ -1,7 +1,6 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILDDIR := .
 JULIAHOME := $(SRCDIR)
-SYSIMAGE_BUILD := 1
 include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/stdlib/stdlib.mk
 
@@ -43,6 +42,33 @@ $(eval $(call bootstrap_sysimage_link,basecompiler,-debug))
 $(eval $(call bootstrap_sysimage_link,sysbase,))
 $(eval $(call bootstrap_sysimage_link,sysbase,-debug))
 
+ifneq "$(if $(CROSS_BOOTSTRAP_JULIA),1)" "$(if $(CROSS_BOOTSTRAP_SYSBASE),1)"
+$(error CROSS_BOOTSTRAP_JULIA and CROSS_BOOTSTRAP_SYSBASE must be set together)
+endif
+
+bootstrap_julia_flags :=
+
+ifneq ($(CROSS_BOOTSTRAP_JULIA),)
+ifeq ($(SANITIZE),1)
+ifeq ($(SANITIZE_THREAD),1)
+bootstrap_julia_flags += --target-sanitize=thread
+endif
+endif
+JULIA_BOOTSTRAP_EXECUTABLE_debug := $(CROSS_BOOTSTRAP_JULIA)
+JULIA_BOOTSTRAP_EXECUTABLE_release := $(CROSS_BOOTSTRAP_JULIA)
+else
+JULIA_BOOTSTRAP_EXECUTABLE_debug := $(build_bindir)/julia-debug$(EXE)
+JULIA_BOOTSTRAP_EXECUTABLE_release := $(build_bindir)/julia$(EXE)
+endif
+
+ifneq ($(CROSS_BOOTSTRAP_SYSBASE),)
+JULIA_BOOTSTRAP_SYSBASE_release := $(CROSS_BOOTSTRAP_SYSBASE).$(SHLIB_EXT)
+JULIA_BOOTSTRAP_SYSBASE_debug := $(CROSS_BOOTSTRAP_SYSBASE).$(SHLIB_EXT)
+else
+JULIA_BOOTSTRAP_SYSBASE_release := $(build_private_libdir)/sysbase.$(SHLIB_EXT)
+JULIA_BOOTSTRAP_SYSBASE_debug := $(build_private_libdir)/sysbase-debug.$(SHLIB_EXT)
+endif
+
 define sysimage_link
 $$(build_private_libdir)/$1$2.$$(SHLIB_EXT): $$(build_private_libdir)/$1$2-o.a
 	@$$(call PRINT_LINK, JULIA_BINDIR=$$(call cygpath_w,$$(build_bindir)) \
@@ -50,23 +76,14 @@ $$(build_private_libdir)/$1$2.$$(SHLIB_EXT): $$(build_private_libdir)/$1$2-o.a
 		'Base.Linking.link_image(ARGS[1], ARGS[2]; is_sysimage=true, debug_runtime=$(if $2,true,false))' -- $$(call cygpath_w,$$<) $$(call cygpath_w,$$@))
 	@$$(INSTALL_NAME_CMD)$$(notdir $$@) $$@
 ifeq ($$(OS), Darwin)
-	@JULIA_BINDIR=$$(call cygpath_w,$$(build_bindir)) \
-		$$(call spawn,$3) -J $$(call cygpath_w,$4) --startup-file=no -e \
+	@JULIA_BINDIR=$$(call cygpath_w,$$(build_bindir)) $$(call spawn,$3) -J $$(call cygpath_w,$4) --startup-file=no -e \
 		'run(`$$$$(Base.Linking.dsymutil()) $$$$(ARGS[1])`)' -- $$(call cygpath_w,$$@)
 	@rm -rf $$@.dSYM/Contents/Resources/Relocations
 endif
 endef
 
-ifneq ($(CROSS_BOOTSTRAP_SYSBASE),)
-JULIA_SYSBASE_release := $(CROSS_BOOTSTRAP_SYSBASE).$(SHLIB_EXT)
-JULIA_SYSBASE_debug := $(CROSS_BOOTSTRAP_SYSBASE).$(SHLIB_EXT)
-else
-JULIA_SYSBASE_release := $(build_private_libdir)/sysbase.$(SHLIB_EXT)
-JULIA_SYSBASE_debug := $(build_private_libdir)/sysbase-debug.$(SHLIB_EXT)
-endif
-
-$(eval $(call sysimage_link,sys,,$(JULIA_EXECUTABLE_release),$(JULIA_SYSBASE_release)))
-$(eval $(call sysimage_link,sys,-debug,$(JULIA_EXECUTABLE_debug),$(JULIA_SYSBASE_debug)))
+$(eval $(call sysimage_link,sys,,$(JULIA_BOOTSTRAP_EXECUTABLE_release),$(JULIA_BOOTSTRAP_SYSBASE_release)))
+$(eval $(call sysimage_link,sys,-debug,$(JULIA_BOOTSTRAP_EXECUTABLE_debug),$(JULIA_BOOTSTRAP_SYSBASE_debug)))
 
 COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/Base_compiler.jl \
@@ -194,7 +211,7 @@ $$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(buil
 .SECONDARY: $$(build_private_libdir)/sysbase$1-o.a $(build_private_libdir)/sysbase$1-bc.a # request Make to keep these files around
 endef
 
-$(eval $(call base_builder,,-O1,$(JULIA_EXECUTABLE_release)))
-$(eval $(call base_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
-$(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release),$(JULIA_SYSBASE_release)))
-$(eval $(call sysimg_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug),$(JULIA_SYSBASE_debug)))
+$(eval $(call base_builder,,-O1,$(JULIA_BOOTSTRAP_EXECUTABLE_release)))
+$(eval $(call base_builder,-debug,-O0,$(JULIA_BOOTSTRAP_EXECUTABLE_debug)))
+$(eval $(call sysimg_builder,,-O3,$(JULIA_BOOTSTRAP_EXECUTABLE_release),$(JULIA_BOOTSTRAP_SYSBASE_release)))
+$(eval $(call sysimg_builder,-debug,-O0,$(JULIA_BOOTSTRAP_EXECUTABLE_debug),$(JULIA_BOOTSTRAP_SYSBASE_debug)))
