@@ -130,6 +130,68 @@ end
 @test fully_eliminated(recur_termination2x)
 @test fully_eliminated() do; recur_termination2x(); end
 
+# the override of one method in a cycle covers the other cycle members it calls,
+# also for the other callers of the cycle
+Base.@assume_effects :terminates_globally function recur_termination31(x::Int)
+    x > 0 || return 0
+    return recur_termination32(x)
+end
+function recur_termination32(x::Int)
+    while x > 100
+        x -= 1
+    end
+    return recur_termination33(x - 1)
+end
+recur_termination33(x::Int) = recur_termination31(x)
+@test Compiler.is_terminates(Base.infer_effects(x -> recur_termination33(x), (Int,)))
+@test !Compiler.is_terminates(Base.infer_effects(x -> recur_termination32(x), (Int,)))
+
+global recur_consistent_state::Int = 0
+Base.@assume_effects :consistent function recur_consistent1(x::Int)
+    x > 0 || return 0
+    return recur_consistent2(x)
+end
+recur_consistent2(x::Int) = recur_consistent3(x - recur_consistent_state)
+recur_consistent3(x::Int) = recur_consistent1(x)
+@test Compiler.is_consistent(Base.infer_effects(x -> recur_consistent3(x), (Int,)))
+@test !Compiler.is_consistent(Base.infer_effects(x -> recur_consistent2(x), (Int,)))
+
+# and so does a call-site override
+recur_callsite1(x::Int) = x > 0 ? (Base.@assume_effects :terminates_globally recur_callsite2(x)) : 0
+function recur_callsite2(x::Int)
+    while x > 100
+        x -= 1
+    end
+    return recur_callsite1(x - 1)
+end
+@test Compiler.is_terminates(Base.infer_effects(x -> recur_callsite1(x), (Int,)))
+
+# the effects of a cycle member must not make a call into it look safer than it is:
+# this call throws a `MethodError` unless `length(xs) == 1`
+Base.@assume_effects :removable recur_removable1(x::Int) = x > 0 ? recur_removable2(Int[x - 1]) : nothing
+function recur_removable2(xs::Vector{Int})
+    recur_removable1(xs...)
+    return nothing
+end
+recur_removable3(xs::Vector{Int}) = recur_removable2(xs)
+@test !Compiler.is_nothrow(Base.infer_effects(recur_removable3, (Vector{Int},)))
+@test !fully_eliminated(recur_removable3, (Vector{Int},))
+
+# a taint that a cycle member only acquires after another member has called it still
+# reaches that caller, and the flags of its call
+global recur_late_state::Int = 0
+Base.@assume_effects :terminates_globally function recur_late1(x::Int)
+    x > 0 || return 0
+    recur_late2(x - 1)
+    global recur_late_state = x
+    return 0
+end
+recur_late2(x::Int) = (recur_late1(x); 0)
+recur_late3(x::Int) = recur_late2(x)
+Base.infer_effects(recur_late1, (Int,)) # start the cycle at `recur_late1`
+@test !Compiler.is_effect_free(Base.infer_effects(recur_late3, (Int,)))
+@test !fully_eliminated(recur_late3, (Int,))
+
 # anonymous function support for `@assume_effects`
 @test fully_eliminated() do
     map((2,3,4)) do x
