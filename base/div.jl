@@ -259,6 +259,9 @@ The quotient and remainder from Euclidean division.
 Equivalent to `(div(x, y, r), rem(x, y, r))`. Equivalently, with the default
 value of `r`, this call is equivalent to `(x ÷ y, x % y)`.
 
+If one argument is signed and the other unsigned, the quotient can wrap around; see the
+note on mixed signed and unsigned integers in [`div`](@ref).
+
 See also [`fldmod`](@ref), [`cldmod1`](@ref), [`div`](@ref), [`rem`](@ref).
 
 # Examples
@@ -268,6 +271,9 @@ julia> divrem(3, 7)
 
 julia> divrem(7, 3)
 (2, 1)
+
+julia> divrem(UInt8(7), Int8(-2)) # the quotient -3 wraps around to 0xfd
+(0xfd, 0x01)
 ```
 """
 divrem(x, y) = divrem(x, y, RoundToZero)
