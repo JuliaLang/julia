@@ -243,11 +243,25 @@ their static world range is not itself registered for invalidation while they re
 """
 struct InferenceCache
     results::Vector{InferenceCacheEntry}
-    # Index from MethodInstance to indices in `results` where linfo === mi
+    # Index from MethodInstance to indices in `results` of its non-constant entries
     index::IdDict{MethodInstance, Vector{Int}}
+    # a MethodInstance can have thousands of constant entries, so these are also keyed by constant
+    constprop_index::IdDict{UInt, Vector{Int}}
 end
 
-InferenceCache() = InferenceCache(Vector{InferenceCacheEntry}(), IdDict{MethodInstance, Vector{Int}}())
+InferenceCache() = InferenceCache(Vector{InferenceCacheEntry}(), IdDict{MethodInstance, Vector{Int}}(), IdDict{UInt, Vector{Int}}())
+
+# a conditional can be lattice-equal to a Bool constant, so Bool values must not change the key
+function constprop_cache_key(mi::MethodInstance, argtypes::Vector{Any})
+    key = objectid(mi)
+    for argtype in argtypes
+        key *= UInt(31)
+        if isa(argtype, Const) && isbits(argtype.val) && !isa(argtype.val, Bool)
+            key = xor(key, objectid(argtype.val))
+        end
+    end
+    return key
+end
 
 function Base.push!(cache::InferenceCache, entry::InferenceCacheEntry)
     if entry isa InferenceResult
@@ -257,10 +271,10 @@ function Base.push!(cache::InferenceCache, entry::InferenceCacheEntry)
     result = entry isa LocalInferenceResult ? entry.result : entry
     mi = result.linfo
     idx = length(cache.results)
-    if haskey(cache.index, mi)
-        push!(cache.index[mi], idx)
+    if result.overridden_by_const === nothing
+        push!(get!(Vector{Int}, cache.index, mi), idx)
     else
-        cache.index[mi] = Int[idx]
+        push!(get!(Vector{Int}, cache.constprop_index, constprop_cache_key(mi, result.argtypes)), idx)
     end
     return cache
 end
@@ -273,9 +287,14 @@ Base.iterate(cache::InferenceCache, state) = iterate(cache.results, state)
 Base.eltype(::Type{InferenceCache}) = InferenceCacheEntry
 Base.getindex(cache::InferenceCache, i::Int) = cache.results[i]
 
-# Get indices for a specific MethodInstance (returns empty vector if not found)
+# Get indices of the non-constant entries for a MethodInstance (returns empty vector if not found)
 function get_indices(cache::InferenceCache, mi::MethodInstance)
-    return get(cache.index, mi, Int[])
+    return get(Vector{Int}, cache.index, mi)
+end
+
+# keys can collide, so callers must still compare the MethodInstance and argtypes
+function get_constprop_indices(cache::InferenceCache, mi::MethodInstance, argtypes::Vector{Any})
+    return get(Vector{Int}, cache.constprop_index, constprop_cache_key(mi, argtypes))
 end
 
 """
