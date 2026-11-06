@@ -256,7 +256,7 @@ function constprop_cache_key(mi::MethodInstance, argtypes::Vector{Any})
     key = objectid(mi)
     for argtype in argtypes
         key *= UInt(31)
-        if isa(argtype, Const) && isbits(argtype.val) && !isa(argtype.val, Bool)
+        if isa(argtype, Const) && !isa(argtype.val, Bool)
             key = xor(key, objectid(argtype.val))
         end
     end
