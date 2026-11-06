@@ -3730,6 +3730,9 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
         @debug "Generating object cache file for $(repr(MIME"text/plain"(), pkg))"
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
         push!(opts, "--output-o", output_o)
+        # overrides the --compress-sysimage that julia_cmd forwards from this process
+        compress = get_bool_env(Returns(nothing), "JULIA_COMPRESS_PKGIMAGES")
+        compress === nothing || push!(opts, "--compress-sysimage=$(compress ? "yes" : "no")")
     else
         @debug "Generating cache file for $(repr(MIME"text/plain"(), pkg))"
         cpu_target = nothing

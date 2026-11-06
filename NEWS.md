@@ -20,6 +20,9 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* The new `JULIA_COMPRESS_PKGIMAGES` environment variable makes precompilation write package
+  images with a zstd-compressed heap, trading load time for disk space ([#58945]).
+
 Multi-threading changes
 -----------------------
 
