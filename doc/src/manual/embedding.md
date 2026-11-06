@@ -146,8 +146,8 @@ Now the build command is simply `make`.
 If the `JULIA_DIR` environment variable hasn't been setup, add it using the System panel before
 starting Visual Studio. The `bin` folder under JULIA_DIR should be on the system PATH.
 
-We start by opening Visual Studio and creating a new Console Application project. Open the
-'stdafx.h' header file, and add the following lines at the end:
+We start by opening Visual Studio and creating a new Console Application project. Add the following
+line at the top of the project's main source file (e.g. `MyApp.cpp`):
 
 ```c
 #include <julia.h>
@@ -178,12 +178,17 @@ The next step is to set up the project to find the Julia include files and the l
 know whether the Julia installation is 32- or 64-bit. Remove any platform configuration that doesn't correspond
 to the Julia installation before proceeding.
 
-Using the project Properties dialog, go to `C/C++` | `General` and add `$(JULIA_DIR)\include\julia\` to the
-Additional Include Directories property. Then, go to the `Linker` | `General` section and add `$(JULIA_DIR)\lib`
-to the Additional Library Directories property. Finally, under `Linker` | `Input`, add `libjulia.dll.a;libopenlibm.dll.a;`
-to the list of libraries.
+In the project Properties dialog, select `All Configurations` and the platform that matches the Julia
+installation. Go to `C/C++` | `General` and add `$(JULIA_DIR)\include\julia\` to the Additional Include
+Directories property. Then, go to the `Linker` | `General` section and add
+`$(JULIA_DIR)\lib;$(JULIA_DIR)\lib\julia` to the Additional Library Directories property. Finally, under
+`Linker` | `Input`, add `libjulia.dll.a;libopenlibm.dll.a;` to the list of libraries.
 
 At this point, the project should build and run.
+
+!!! compat "Julia 1.13"
+    MSVC can include `julia.h` as of Julia 1.13. On older versions, add `#define __attribute__(x)`
+    before the include.
 
 ## Converting Types
 
