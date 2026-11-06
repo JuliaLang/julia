@@ -33,6 +33,10 @@ end
 
 Overlays the internal method table such that specific queries can be redirected to an
 external table, e.g., to override existing methods.
+
+Methods of the external table take precedence over those of the internal table, unless the
+table was created with `Base.Experimental.@MethodTable name by_specificity=true`: then
+lookups rank them by specificity, as if they had been added to the internal table.
 """
 struct OverlayMethodTable <: MethodTableView
     world::UInt
@@ -76,6 +80,9 @@ findall(@nospecialize(sig::Type), table::InternalMethodTable;
 
 function findall(@nospecialize(sig::Type), table::OverlayMethodTable;
                  limit::Int=-1, include_ambiguous::Bool=false)
+    if table.mt.by_specificity
+        return _findall_merged(sig, table.mt, table.world, limit, include_ambiguous)
+    end
     result = _findall(sig, table.mt, table.world, limit, include_ambiguous)
     result === nothing && return nothing
     nr = length(result)
@@ -109,6 +116,18 @@ function _findall(@nospecialize(sig::Type), mt::Union{Nothing,MethodTable}, worl
     _max_val = RefValue{UInt}(typemax(UInt))
     _ambig = RefValue{Int32}(0)
     ms = _methods_by_ftype(sig, mt, limit, world, include_ambiguous, _min_val, _max_val, _ambig)
+    isa(ms, Vector) || return nothing
+    return MethodLookupResult(ms, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
+end
+
+function _findall_merged(@nospecialize(sig::Type), mt::MethodTable, world::UInt,
+                         limit::Int, include_ambiguous::Bool)
+    _min_val = RefValue{UInt}(typemin(UInt))
+    _max_val = RefValue{UInt}(typemax(UInt))
+    _ambig = RefValue{Int32}(0)
+    ms = ccall(:jl_matching_methods_merged, Any,
+               (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}),
+               sig, mt, limit, include_ambiguous, world, _min_val, _max_val, _ambig)
     isa(ms, Vector) || return nothing
     return MethodLookupResult(ms, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
 end
@@ -149,6 +168,13 @@ findsup(@nospecialize(sig::Type), table::InternalMethodTable) =
     _findsup(sig, nothing, table.world)
 
 function findsup(@nospecialize(sig::Type), table::OverlayMethodTable)
+    if table.mt.by_specificity
+        min_valid = RefValue{UInt}(typemin(UInt))
+        max_valid = RefValue{UInt}(typemax(UInt))
+        match = ccall(:jl_gf_invoke_lookup_worlds_merged, Any, (Any, Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
+                      sig, table.mt, table.world, min_valid, max_valid)::Union{MethodMatch, Nothing}
+        return match, WorldRange(min_valid[], max_valid[])
+    end
     match, valid_worlds = _findsup(sig, table.mt, table.world)
     match !== nothing && return match, valid_worlds
     # fall back to the internal method table

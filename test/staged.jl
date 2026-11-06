@@ -453,6 +453,28 @@ staged_overlay_f(x::Int) = 2
 @test staged_overlay_g(42) == 42
 @test staged_overlay_calls[] == 2
 
+# A cached generator that depends on a lookup ranking overlay methods by specificity is
+# regenerated when a new method changes the lookup (see `AmbigCycle3` in test/ambiguous.jl)
+Base.Experimental.@MethodTable StagedSpecificMT by_specificity=true
+staged_specific_f(::Integer, ::Vararg{String}) = 2
+Base.Experimental.@overlay StagedSpecificMT staged_specific_f(::T, ::Vararg{T}) where {T<:Integer} = 1
+struct StagedSpecificGenerator <: Core.CachedGenerator end
+function (::StagedSpecificGenerator)(world::UInt, source::Method, args...)
+    sig = Tuple{typeof(staged_specific_f),Int}
+    match, _ = Base.Compiler.findsup(sig, Base.Compiler.OverlayMethodTable(world, StagedSpecificMT))
+    src = generate_lambda_ex(world, source, (:staged_specific_g,), (),
+                             QuoteNode(match === nothing ? :ambiguous : :resolved))
+    src.edges = Core.svec(sig, StagedSpecificMT)
+    return src
+end
+@eval function staged_specific_g()
+    $(Expr(:meta, :generated, StagedSpecificGenerator()))
+    $(Expr(:meta, :generated_only))
+end
+@test staged_specific_g() === :resolved
+staged_specific_f(::Integer, ::Vararg{Union{Int,String}}) = 3
+@test staged_specific_g() === :ambiguous
+
 # Test that writing a bad cassette-style pass gives the expected error (#49715)
 function generator49715(world, source, self, f, tt)
     tt = Base.type_parameter(tt)

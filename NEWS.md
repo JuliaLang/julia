@@ -16,6 +16,9 @@ Compiler/Runtime improvements
   pages that still hold live objects, instead of only the thread that allocated the page. This
   reduces the memory footprint of workloads that allocate many small objects on many threads and
   keep few of them, such as a language server that runs type inference repeatedly ([#63512]).
+* `Base.Experimental.@MethodTable name by_specificity=true` creates an overlay method table whose
+  methods rank by specificity against global methods, as if they were global methods, instead of
+  taking precedence over them.
 
 Command-line option changes
 ---------------------------
