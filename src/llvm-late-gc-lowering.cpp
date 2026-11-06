@@ -2639,7 +2639,6 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
             AI = NULL;
             // Recompute the address in each block that uses it, like a frame index.
             SmallDenseMap<BasicBlock *, Instruction *, 4> SlotInBB;
-            Instruction *FirstLocal = nullptr;
             for (Use &U : make_early_inc_range(slotAddress->uses())) {
                 auto *UI = cast<Instruction>(U.getUser());
                 auto *PN = dyn_cast<PHINode>(UI);
@@ -2651,19 +2650,11 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                     Local = slotAddress->clone();
                     Local->setName(slotAddress->getName());
                     Local->insertBefore(BB->getFirstInsertionPt());
-                    if (!FirstLocal)
-                        FirstLocal = Local;
                 }
                 U.set(Local);
             }
-            if (slotAddress->use_empty()) {
-                if (FirstLocal) {
-                    slotAddress->replaceAllUsesWith(FirstLocal);
-                    FirstLocal->takeName(slotAddress);
-                }
-                if (!slotAddress->isUsedByMetadata())
-                    slotAddress->eraseFromParent();
-            }
+            if (slotAddress->use_empty() && !slotAddress->isUsedByMetadata())
+                slotAddress->eraseFromParent();
         };
         for (auto AI : S.ArrayAllocas) {
             replace_alloca(AI.first);

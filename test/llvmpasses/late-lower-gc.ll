@@ -516,11 +516,11 @@ top:
 
 use_bb:
 ; CHECK: use_bb:
-; CHECK-NEXT: %sret = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-; CHECK-NEXT: call void null(ptr sret([2 x ptr addrspace(10)]) "julia.return_roots"="2" %sret)
+; CHECK-NEXT: [[SRET:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: call void null(ptr sret([2 x ptr addrspace(10)]) "julia.return_roots"="2" [[SRET]])
 ; FINAL: use_bb:
-; FINAL-NEXT: %sret = getelementptr inbounds {{(nuw )?}}ptr addrspace(10), ptr %gcframe, i32 2
-; FINAL-NEXT: call void null(ptr sret([2 x ptr addrspace(10)]) "julia.return_roots"="2" %sret)
+; FINAL-NEXT: [[FINAL_SRET:%.*]] = getelementptr inbounds {{(nuw )?}}ptr addrspace(10), ptr %gcframe, i32 2
+; FINAL-NEXT: call void null(ptr sret([2 x ptr addrspace(10)]) "julia.return_roots"="2" [[FINAL_SRET]])
   call void null(ptr sret([2 x ptr addrspace(10)]) "julia.return_roots"="2" %sret)
   br label %exit
 

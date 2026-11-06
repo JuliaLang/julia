@@ -21,7 +21,7 @@ top:
 
 use_bb:
 ; CHECK: use_bb:
-; CHECK-NEXT: %box = getelementptr inbounds {{(nuw )?}}ptr, ptr %gcframe, i32 2
+; CHECK-NEXT: %box{{[0-9]+}} = getelementptr inbounds {{(nuw )?}}ptr, ptr %gcframe, i32 2
   store ptr addrspace(10) %val, ptr %box, align 8, !dbg !12
   call void @use_ptr(ptr %box), !dbg !12
   br label %exit
@@ -43,7 +43,7 @@ top:
 
 left:
 ; CHECK: left:
-; CHECK-NEXT: %box = getelementptr inbounds {{(nuw )?}}ptr, ptr %gcframe, i32 2
+; CHECK-NEXT: %box{{[0-9]+}} = getelementptr inbounds {{(nuw )?}}ptr, ptr %gcframe, i32 2
   store ptr addrspace(10) %val, ptr %box, align 8, !dbg !15
   call void @use_ptr(ptr %box), !dbg !15
   br label %exit
