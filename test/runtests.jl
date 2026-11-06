@@ -137,7 +137,8 @@ end
 
 # These leave state behind on their worker (`precompile`: packages loaded and methods
 # added to Base, `threads`: exited adopted threads), which breaks later tests on the
-# same worker, so the worker is replaced once they finish
+# same worker, so the worker is replaced once they finish. Order matters, since these
+# are moved to node1 when workers are not available
 const recycle_worker_tests = ["precompile", "threads"]
 
 # In a constrained memory environment, run the "distributed" test after all other tests
@@ -160,11 +161,11 @@ limited_worker_rss && move_to_node1("Distributed")
 const use_workers = net_on || Base.get_bool_env("JULIA_TEST_USE_MULTIPLE_WORKERS", false)
 
 # Without workers, nothing can replace the process that the tests in
-# `recycle_worker_tests` leave state behind in, so run them after all other tests,
-# with `threads` last
+# `recycle_worker_tests` leave state behind in, so run them after all other tests
 if !use_workers
-    move_to_node1("precompile")
-    move_to_node1("threads")
+    for test_to_move in recycle_worker_tests
+        move_to_node1(test_to_move)
+    end
 end
 
 # Start the longest tests first, so that they don't end up running alone at the end while
