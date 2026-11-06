@@ -4,6 +4,7 @@
 using Base.MathConstants
 
 using Test
+using Random
 
 @testset "Float64 checks" begin
     # a + b returns a number exactly between prevfloat(1.) and 1., so its
@@ -298,6 +299,328 @@ end
     @test floor(123.456, digits=1) ≈ 123.4
     @test floor(-123.456, digits=1) ≈ -123.5
 end
+@testset "rounding to digits is exact w.r.t. the value of x" begin
+    modes = (RoundDown, RoundUp, RoundToZero, RoundFromZero,
+             RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+    # `round(x * base^d, r) / base^d` on the exact value of `x`, rounded once at the end
+    function refround(x::T, r::RoundingMode, d::Integer, base::Integer=10) where {T<:AbstractFloat}
+        setprecision(BigFloat, 4 * max(precision(x), 53) + 4 * abs(d) + 64) do
+            s = big(base)^abs(d)
+            y = d >= 0 ? round(big(x) * s, r) / s : round(big(x) / s, r) * s
+            return T <: BigFloat ? BigFloat(y; precision=precision(x)) : T(y)
+        end
+    end
+
+    # the rounded product used to land exactly on a rounding boundary
+    let x = float(2^53 - 4)
+        for f in (floor, ceil, trunc, round)
+            @test f(x; digits=1) === x
+        end
+    end
+    @test floor(2.52379309758e8; digits=3) === 2.52379309757e8
+    @test ceil(4.312747009431438e17; digits=-2) === nextfloat(4.312747009431438e17)
+    @test floor(0.29; digits=2) === 0.28
+    @test round(1.15; digits=1) === 1.1
+    @test round(2.675; digits=2) === 2.67
+    @test round(0.5; digits=0) === 0.0
+    @test round(1.5; digits=0) === 2.0
+    @test round(Float32(1.15); digits=1) === 1.1f0            # also below 1.15
+    @test round(1.25; digits=1) === 1.2                        # exact ties are still ties
+    @test round(1.25, RoundNearestTiesAway; digits=1) === 1.3
+    @test round(-1.25, RoundNearestTiesUp; digits=1) === -1.2
+    # signed zeros
+    @test round(-0.0; digits=2) === -0.0
+    @test round(-0.1; digits=0) === -0.0
+    @test ceil(-0.4; digits=0) === -0.0
+    @test trunc(-1e-320; digits=-5) === -0.0
+    @test floor(-1e-320; digits=-5) === -1e5
+
+    # the primitives: `hi + lo == round(x * y, r)` exactly, even when not representable
+    hilo(t::Base.TwicePrecision) = (t.hi, t.lo)
+    let x = 2.0^53 - 4, y = 10.0
+        for r in modes
+            n, m = hilo(Base._mul_round(x, y, r))
+            @test isinteger(n) && isinteger(m)
+            @test big(n) + big(m) == round(big(x) * big(y), r)
+        end
+        @test hilo(Base._mul_round(1.15, 10.0, RoundNearest)) == (11.0, 0.0)
+        for r in modes, y in (100.0, -100.0)
+            n, m = hilo(Base._div_round(4.312747009431438e17, y, r))
+            @test big(n) + big(m) == round(big(4.312747009431438e17) / y, r)
+            n, m = hilo(Base._div_round(2.0^60 + 2.0^8, y / 10, r))
+            @test big(n) + big(m) == round((big(2)^60 + 2^8) / (y / 10), r)
+        end
+        # `_mul_round` is exact at any magnitude; `_div_round` up to |x/y| < maxintfloat^2/4,
+        # and within its documented bound beyond that
+        rng = Random.MersenneTwister(0xf00d)
+        for _ in 1:20, r in modes
+            x = ldexp(rand(rng) + 1, rand(rng, 100:900)) * rand(rng, (-1.0, 1.0)); y = (rand(rng) + 1) * rand(rng, (-1.0, 1.0))
+            n, m = hilo(Base._mul_round(x, y, r))
+            @test big(n) + big(m) == round(big(x) * big(y), r)
+            x = ldexp(rand(rng) + 1, rand(rng, 60:80)) * rand(rng, (-1.0, 1.0)); y = ldexp(rand(rng) + 1, -20) * rand(rng, (-1.0, 1.0))
+            @test abs(x / y) < 2.0^104
+            n, m = hilo(Base._div_round(x, y, r))
+            @test big(n) + big(m) == round(big(x) / big(y), r)
+            x = ldexp(rand(rng) + 1, rand(rng, 120:200)) * rand(rng, (-1.0, 1.0))
+            n, m = hilo(Base._div_round(x, y, r))
+            @test abs(big(n) + big(m) - round(big(x) / big(y), r)) <= big(eps(m)) / 2 + 1
+        end
+        for r in modes
+            @test Base._mul_round(1e200, 1e200, r) === Base.TwicePrecision(Inf, 0.0)
+            @test isnan(Base._mul_round(NaN, 1.0, r).hi)
+            @test Base._div_round(1.0, 0.0, r) === Base.TwicePrecision(Inf, 0.0)
+            @test Base._div_round(-1.0, Inf, r) === Base.TwicePrecision(-0.0, 0.0)
+        end
+    end
+
+    # sweep against the exact reference, including magnitudes where the scaled value is
+    # not representable, and where the result is x itself
+    rng = Random.MersenneTwister(0xc0ffee)
+    for (T, exps, ds) in ((Float64, -20:70, -4:4), (Float32, -20:40, -3:3), (Float16, -24:14, -6:9),
+                          (Float64, 1000:1023, 0:3), (Float64, -1074:-1040, -2:2),
+                          (Float64, -50:20, 15:22), (Float64, 40:120, -22:-15)),
+        _ in 1:150
+        x = T(ldexp(rand(rng) + 1, rand(rng, exps))) * rand(rng, (-one(T), one(T)))
+        for d in ds
+            @test floor(x; digits=d) <= x <= ceil(x; digits=d)
+            @test abs(trunc(x; digits=d)) <= abs(x)
+            for r in modes
+                @test round(x, r; digits=d) === refround(x, r, d)
+            end
+        end
+    end
+    for base in (2, 3, 16), _ in 1:50
+        x = ldexp(rand(rng) + 1, rand(rng, -10:60)) * rand(rng, (-1.0, 1.0))
+        for d in -3:6, r in modes
+            @test round(x, r; digits=d, base=base) === refround(x, r, d, base)
+        end
+    end
+
+    # base^digits overflows: Float16 from digits == 5, which ordinary values reach
+    @test ceil(Float16(0.0001); digits=5) === Float16(0.00011)
+    @test floor(Float16(0.0001); digits=5) === Float16(0.0001)
+    @test floor(floatmax(Float16); digits=-1) === floatmax(Float16)
+    @test trunc(-floatmax(Float16); digits=-1) === -floatmax(Float16)
+    @test ceil(4.761846424831262e-296; digits=317) >= 4.761846424831262e-296
+    @test floor(1.7110486385708392e-305; digits=328) <= 1.7110486385708392e-305
+    @test round(-1e-320; digits=309) === -0.0
+    @test round(5e-324, RoundUp; digits=323) === 1e-323
+    # bases that overflow the float type, and extreme digits
+    @test ceil(nextfloat(0f0); digits=1, base=typemax(UInt128)) === Float32(1 / big(typemax(UInt128)))
+    @test floor(-5e-324; digits=1, base=big(2)^1030) === -2.0^-1030
+    @test floor(1.5; digits=typemin(Int)) === 0.0
+    @test ceil(1.5; digits=typemin(Int)) === Inf
+    # 10^digits overflows the float type here, and the results are subnormal at times
+    for (T, exps, ds) in ((Float32, -150:-100, 38:46), (Float64, -1075:-950, 308:325)), _ in 1:40
+        x = T(ldexp(rand(rng) + 1, rand(rng, exps))) * rand(rng, (-one(T), one(T)))
+        for d in ds, r in modes
+            @test round(x, r; digits=d) === refround(x, r, d)
+        end
+    end
+
+    # base^|digits| is finite but not exact: the grid is still that of the exact power
+    @test floor(floatmax(); digits=-299) === 1.797693134e308
+    @test round(prevfloat(floatmax(), 4); sigdigits=15) === 1.79769313486231e308
+    @test round(floatmax(); digits=-377, base=6) === 1.7976931348623147e308
+    @test trunc(floatmax(Float32); sigdigits=8, base=11) === 3.4028233f38
+    @test round(-prevfloat(floatmax(Float32), 3), RoundDown; digits=-31, base=11) === -3.4028229f38
+    @test round(1.2e23; digits=-23) === 1e23           # 10^23 is halfway between floats
+    @test ceil(1.0e23; digits=-23) === 1e23
+    @test round(1.5e23; digits=-23) === 2e23
+    @test round(1e30; sigdigits=3) === 1e30
+    @test round(1.234567e-30; sigdigits=3) === 1.23e-30
+    @test floor(1.2345e-25; digits=27) === 1.23e-25
+    for (T, exps, ds) in ((Float64, 60:200, -60:-23), (Float64, -200:-60, 23:60),
+                          (Float32, 25:120, -36:-11), (Float32, -120:-25, 11:36),
+                          (Float64, 1000:1023, -308:-290), (Float32, 120:127, -38:-30)),
+        _ in 1:60
+        x = T(ldexp(rand(rng) + 1, rand(rng, exps))) * rand(rng, (-one(T), one(T)))
+        d = rand(rng, ds)
+        for r in modes, base in (10, 3, 6)
+            @test round(x, r; digits=d, base=base) === refround(x, r, d, base)
+        end
+        for s in (1, 3, 9), r in modes
+            @test round(x, r; sigdigits=s) === refround(x, r, s - Base.hidigit(x, 10))
+        end
+    end
+    # digits whose absolute value overflows its type
+    @test round(1e130; digits=Int8(-128)) === 1e130
+    @test round(1f30, RoundUp; digits=Int8(-128)) === Inf32
+    @test round(1e300; digits=Int8(-128), base=7) === 1e300
+    @test round(1//3; digits=Int8(-128)) === 0.0
+    # decimal literals sit close to the grid of their own power of ten
+    for e in 23:300, m in (1, 15, 999)
+        x = parse(Float64, "$(m)e$e")
+        for r in (RoundDown, RoundUp, RoundNearest)
+            @test round(x, r; sigdigits=3) === refround(x, r, 3 - Base.hidigit(x, 10))
+        end
+    end
+    @test_throws ArgumentError round(1e25, RoundingMode{:Foo}(); digits=-23)
+    # the band where base^digits is just beyond floatmax
+    for (T, base) in ((Float64, 3), (Float64, 7), (Float32, 3), (Float32, 11)), i in 0:20
+        k = ceil(Int, log(base, big(floatmax(T))))
+        x = prevfloat(floatmax(T), 1000i)
+        for r in modes
+            @test round(x, r; digits=-k, base=base) === refround(x, r, -k, base)
+        end
+    end
+
+    # BigFloat
+    setprecision(BigFloat, 256) do
+        x = big(2)^300 - big(2)^248
+        for f in (floor, ceil, trunc, round)
+            @test f(x; digits=1) == x
+        end
+        for _ in 1:30
+            x = ldexp(1 + big(rand(rng)) + big(rand(rng)) * big(2)^-53 + big(rand(rng)) * big(2)^-106 + big(rand(rng)) * big(2)^-159,
+                      rand(rng, -20:300)) * rand(rng, (-1, 1))
+            for d in (-3, -1, 0, 1, 3, 20, 60), r in modes
+                y = round(x, r; digits=d)
+                @test y == refround(x, r, d)
+                @test signbit(y) == signbit(refround(x, r, d))
+            end
+        end
+        # exact ties, and other bases
+        for k in -40:40, d in -2:2, r in modes, base in (10, 3)
+            x = big(k) / 8
+            e = d >= 0 ? round(x * big(base)^d, r) / big(base)^d : round(x / big(base)^-d, r) * big(base)^-d
+            @test round(x, r; digits=d, base=base) == e
+        end
+        @test signbit(round(big"-0.01"; digits=1)) && signbit(ceil(big"-0.01"; digits=1))
+        @test floor(big"-0.01"; digits=1) == -big"0.1"
+        @test_throws ArgumentError round(big(1.5), RoundingMode{:Foo}(); digits=1)
+        # a BigInt base is not modified
+        b = big(10)
+        @test round(big"1.23456"; digits=2, base=b) == big"1.23"
+        @test b == 10
+        # extreme digits and bases
+        @test round(big"1.5"; digits=-10^9) == 0
+        @test round(big"1.5", RoundUp; digits=-10^9) == big(10.0)^(10^9)
+        @test round(big"1.5", RoundUp; digits=typemin(Int)) == Inf
+        @test round(big"-1.5", RoundDown; digits=-3) == -1000
+        @test round(big"1.5"; digits=1, base=-10) == 1.5
+        y = big(2)^-2000 * (1 + big(2)^-100)
+        @test ceil(y; digits=1, base=big(2)^1100) == big(2)^-1100
+        @test floor(y; digits=1, base=big(2)^1100) == 0
+    end
+    # the result has the current precision, whatever the precision of x
+    for (px, p) in ((300, 64), (64, 300), (200, 64))
+        for x in (BigFloat(π; precision=px), BigFloat(12; precision=px), BigFloat(2.0^255; precision=px))
+            setprecision(BigFloat, p) do
+                for d in (-1, 0, 2, 10), r in modes
+                    y = round(x, r; digits=d)
+                    @test precision(y) == p
+                    @test y == BigFloat(refround(BigFloat(x; precision=4000), r, d); precision=p)
+                end
+            end
+        end
+    end
+    setprecision(BigFloat, 2) do
+        @test round(BigFloat(7674; precision=256); digits=0) == 8192
+    end
+    # x has more precision, is halfway between floats of the current one, and is not a
+    # multiple of the step, so the side of x that the exact result is on decides
+    let x = setprecision(() -> 1 + BigFloat(2)^-100, 200)
+        setprecision(BigFloat, 100) do
+            @test ceil(x; digits=70) == 1 + big(2.0)^-99
+            @test round(x, RoundFromZero; digits=70) == 1 + big(2.0)^-99
+            @test floor(x; digits=70) == 1
+        end
+    end
+    # the result is rounded to nearest, whatever the rounding mode of BigFloat
+    for x in (big"0.0027", big(1) / 3, big(π), big(2)^300 / 3, big"12345.678", BigFloat(π; precision=300)), s in (1, -1),
+            (d, base) in ((3, 3), (100, 10), (-2, 10), (2, 10), (0, 2), (5, 7)), r in modes
+        sx = s > 0 ? x : -x   # exact, at the precision of x
+        want = round(sx, r; digits=d, base=base)
+        for rm in (RoundUp, RoundDown, RoundToZero, RoundFromZero)
+            @test setrounding(() -> round(sx, r; digits=d, base=base), BigFloat, rm) == want
+        end
+    end
+end
+@testset "rounding Rationals to digits is exact" begin
+    modes = (RoundDown, RoundUp, RoundToZero, RoundFromZero,
+             RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+    # round the exact rational, then convert once
+    function refround(x::Rational, r::RoundingMode, d::Integer, base::Integer=10)
+        T = typeof(float(x))
+        b = big(base)^abs(d)
+        v = d >= 0 ? round(Rational{BigInt}(x) * b, r) // b : round(Rational{BigInt}(x) // b, r) * b
+        iszero(v) && return x < 0 ? -zero(T) : zero(T)
+        return T <: BigFloat ? BigFloat(v) : T(setprecision(() -> BigFloat(v), BigFloat, 5000))
+    end
+    @test round(23//20; digits=1) === 1.2               # an exact tie, to even
+    @test floor(big(23)//20; digits=2) == big"1.15"     # float(23//20) is below 1.15
+    @test round(-1//100; digits=1) === -0.0
+    @test round(Int8(1)//Int8(3); digits=2) === 0.33
+    rng = Random.MersenneTwister(0xbeef)
+    for _ in 1:200
+        num, den = rand(rng, -10^6:10^6), rand(rng, 1:10^4)
+        for x in (num//den, big(num)//den, Int16(num % 3000)//Int16(max(den % 300, 1)))
+            for d in (-3, -1, 0, 1, 2, 5), base in (10, 3), r in modes
+                y = round(x, r; digits=d, base=base)
+                @test y == refround(x, r, d, base)
+                @test signbit(y) == signbit(refround(x, r, d, base))
+                @test typeof(y) == typeof(float(x))
+            end
+        end
+    end    # to nearest, whatever the rounding mode of BigFloat
+    for x in (big(1)//3, -big(2)//3, big(10)^40//7), d in (-1, 2, 30), r in modes
+        @test setrounding(() -> round(x, r; digits=d), BigFloat, RoundUp) == round(x, r; digits=d)
+    end
+end
+@testset "rounding to digits past floatmax" begin
+    # the rounded value is beyond floatmax: Inf, not 0 (#64142)
+    @test round(floatmax(); sigdigits=1) === Inf
+    @test round(-floatmax(); sigdigits=2) === -Inf
+    @test round(floatmax(); digits=-308) === Inf
+    @test round(floatmax(), RoundFromZero; digits=-308) === Inf
+    @test round(floatmax(Float32), RoundFromZero; digits=-38) === Inf32
+    @test round(floatmax(Float16), RoundFromZero; sigdigits=1) === Inf16
+    for s in 1:5
+        @test round(floatmax(); sigdigits=s) === Inf
+    end
+    @test round(floatmax(); sigdigits=6) === 1.79769e308
+    @test round(floatmax(), RoundDown; digits=-308) === 1.0e308
+    @test round(-floatmax(), RoundUp; digits=-308) === -1.0e308
+    # the step itself overflows: 0 or the infinite step
+    for r in (RoundNearest, RoundToZero, RoundNearestTiesAway, RoundNearestTiesUp)
+        @test round(1.25, r; digits=typemin(Int)) === 0.0
+        @test round(-1.25, r; digits=-400) === -0.0
+    end
+    @test round(1.25, RoundFromZero; digits=typemin(Int)) === Inf
+    @test round(-1.25, RoundFromZero; digits=-400) === -Inf
+    @test round(-1.25, RoundUp; digits=-400) === -0.0
+    @test round(-1.25, RoundDown; digits=-400) === -Inf
+    for x in (Inf, -Inf, NaN, 0.0, -0.0), r in (RoundNearest, RoundUp, RoundDown, RoundFromZero)
+        @test round(x, r; digits=-400) === x
+        @test round(x, r; digits=-308) === x
+    end
+end
+@testset "sigdigits of Rationals counts digits exactly" begin
+    # float(x) rounds up to a power of the base
+    @test round((10^17 - 1)//10^17, RoundDown; sigdigits=2) === 0.99
+    @test round(-(10^17 - 1)//10^17, RoundUp; sigdigits=2) === -0.99
+    @test round((big(10)^40 - 1)//big(10)^40, RoundDown; sigdigits=3) == big"0.999"
+    @test round(1//1000; sigdigits=1) === 0.001
+    @test round(1000//1; sigdigits=1) === 1000.0
+    @test round((3^30 - 1)//3^30, RoundDown; sigdigits=1, base=3) === 2/3
+    @test round(0//1; sigdigits=3) === 0.0
+    rng = Random.MersenneTwister(0x5d)
+    for _ in 1:300
+        n, d = rand(rng, 1:10^15), rand(rng, 1:10^15)
+        x = rand(rng, Bool) ? n//d : -n//d
+        for base in (10, 3, 2)
+            h = Base.hidigit(x, base)
+            @test (big(base)//1)^(h - 1) <= abs(big(x)) < (big(base)//1)^h
+        end
+    end
+    # within one unit in the 18th digit of a power of ten
+    for k in -3:3, δ in (-1, 0, 1), s in (1, -1)
+        x = s * (10^17 + δ)//10^(17 - k)
+        h = Base.hidigit(x, 10)
+        @test (big(10)//1)^(h - 1) <= abs(big(x)) < (big(10)//1)^h
+    end
+end
 @testset "rounding with too much (or too few) precision" begin
     for x in (12345.6789, 0, -12345.6789)
         y = float(x)
@@ -329,6 +652,41 @@ end
     @test round(pi, digits = 2, base = 2) ≈ 3.25
     @test round(pi, digits = 3, base = 2) ≈ 3.125
     @test round(pi, digits = 3, base = 5) ≈ 3.144
+end
+# a float type with only basic arithmetic: no `fma`, `eps`, `floatmin` or `maxintfloat`
+struct NoFMAFloat <: AbstractFloat
+    v::Float64
+end
+for f in (:+, :-, :*, :/)
+    @eval Base.$f(a::NoFMAFloat, b::NoFMAFloat) = NoFMAFloat($f(a.v, b.v))
+end
+Base.:-(a::NoFMAFloat) = NoFMAFloat(-a.v)
+for f in (:<, :<=, :(==))
+    @eval Base.$f(a::NoFMAFloat, b::NoFMAFloat) = $f(a.v, b.v)
+end
+Base.round(a::NoFMAFloat, r::RoundingMode) = NoFMAFloat(round(a.v, r))
+Base.isfinite(a::NoFMAFloat) = isfinite(a.v)
+Base.signbit(a::NoFMAFloat) = signbit(a.v)
+Base.abs(a::NoFMAFloat) = NoFMAFloat(abs(a.v))
+Base.log10(a::NoFMAFloat) = NoFMAFloat(log10(a.v))
+Base.floor(::Type{Int}, a::NoFMAFloat) = floor(Int, a.v)
+Base.zero(::Type{NoFMAFloat}) = NoFMAFloat(0.0)
+Base.one(::Type{NoFMAFloat}) = NoFMAFloat(1.0)
+NoFMAFloat(x::NoFMAFloat) = x
+Base.Float64(a::NoFMAFloat) = a.v
+Base.convert(::Type{NoFMAFloat}, x::Real) = NoFMAFloat(Float64(x))
+Base.promote_rule(::Type{NoFMAFloat}, ::Type{<:Integer}) = NoFMAFloat
+@testset "rounding to digits for float types without fma" begin
+    # these round the float product x * base^digits, as before
+    x = NoFMAFloat(1.15)
+    @test round(x; digits=1) === NoFMAFloat(1.2)
+    @test floor(x; digits=1) === NoFMAFloat(1.1)
+    @test ceil(x; digits=1) === NoFMAFloat(1.2)
+    @test trunc(-x; digits=1) === NoFMAFloat(-1.1)
+    @test round(x; sigdigits=2) === NoFMAFloat(1.2)
+    @test round(NoFMAFloat(12345.6789); digits=-2) === NoFMAFloat(12300.0)
+    @test ceil(x; digits=-1000) === NoFMAFloat(Inf)
+    @test floor(-x; digits=-1000) === NoFMAFloat(-Inf)
 end
 @testset "vectorized trunc/round/floor/ceil with digits/base argument" begin
     a = rand(2, 2, 2)

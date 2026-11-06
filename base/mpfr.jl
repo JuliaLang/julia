@@ -29,7 +29,7 @@ import ..Rounding: Rounding,
     rounding_raw, setrounding_raw, rounds_to_nearest, rounds_away_from_zero,
     tie_breaker_is_to_even, correct_rounding_requires_increment
 
-import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp, BigInt
+import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp, BigInt, MPZ
 
 import ..FastMath.sincos_fast
 
@@ -1325,6 +1325,258 @@ function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
     xd = x.d
     GC.@preserve xd memcpy(s.d, Base.unsafe_convert(Ptr{Limb}, xd), b)
     s, x.exp - 8b, x.sign
+end
+
+# round(x, r; digits, base), on the exact value of x, rounded once to nearest at the current
+# precision. Like the rounding of Float64 results, that ignores the current rounding mode of
+# BigFloat: r already says which way to round, and the result is the BigFloat nearest to it.
+# With |x| == m * 2^p for integers m and p, the rounded value is N * base^-digits for an
+# integer N computed exactly with integer arithmetic. The integers are fresh (`decompose`
+# copies, and `pow_ui` allocates, while `big(base)` may be the caller's), so they are
+# updated in place.
+function Base._round_digits(x::BigFloat, r::RoundingMode, digits::Integer, base)
+    _check_digits_rounding_mode(r)
+    # other bases are meaningless; keep what the float code does with them
+    base >= 2 || return invoke(Base._round_digits, Tuple{Any, RoundingMode, Integer, Any}, x, r, digits, base)
+    iszero(x) && return BigFloat(x)
+    d = widen(digits)
+    lb = Base.top_set_bit(base) - 1           # 2^lb <= base < 2^(lb+1)
+    e = exponent(x)                           # 2^e <= |x| < 2^(e+1)
+    # bounds on log2 of the step base^-digits
+    steplo, stephi = d >= 0 ? (-d * (lb + 1), -d * lb) : (-d * lb, -d * (lb + 1))
+    # The step is less than an eighth of eps(x), at the precision of x or the current one,
+    # whichever is larger, so the result is x, at the current precision (see `_round_invstep`).
+    # When x has more precision and is a midpoint at the current one, the side of x that the
+    # exactly rounded value is on decides, so that is left to the integer arithmetic.
+    if stephi <= e - max(precision(x), precision(BigFloat)) - 2
+        (precision(x) <= precision(BigFloat) || !_is_midpoint(x, precision(BigFloat))) &&
+            return BigFloat(x, MPFRRoundNearest)
+    end
+    neg = signbit(x)
+    if e + 2 <= steplo
+        # |x| is less than half the step, so the result is 0 or the step itself
+        _round_magnitude_up(false, -1, r, neg) || return neg ? -BigFloat(0) : BigFloat(0)
+        step = _pow_nearest(BigFloat(base; precision=lb + 1), -d)   # base is exact
+        return neg ? -step : step
+    end
+    # beyond here the integers have about |digits| * log2(base) bits, so only extreme exponents
+    # of x get this far with huge integers; leave those to the float code
+    abs(d) * (lb + 1) > 1 << 22 &&
+        return invoke(Base._round_digits, Tuple{Any, RoundingMode, Integer, Any}, x, r, digits, base)
+    m, p, _ = decompose(x)                    # |x| == m * 2^p
+    b = MPZ.pow_ui(big(base), Culong(abs(d)))
+    if d >= 0
+        p >= 0 && return BigFloat(x, MPFRRoundNearest)   # x is an integer
+        N = _shiftround_magnitude!(MPZ.mul!(m, b), -p, r, neg)
+        iszero(N) && return neg ? -BigFloat(0) : BigFloat(0)
+        neg && MPZ.neg!(N)
+        return _div_nearest(BigFloat(N; precision=ndigits(N; base=2)), b)
+    else
+        if p >= 0
+            N = _divround_magnitude!(MPZ.mul_2exp!(m, p), b, r, neg)
+        else
+            N = _divround_magnitude!(m, MPZ.mul_2exp!(b, -p), r, neg)
+            MPZ.fdiv_q_2exp!(b, -p)           # exact
+        end
+        iszero(N) && return neg ? -BigFloat(0) : BigFloat(0)
+        MPZ.mul!(N, b)
+        neg && MPZ.neg!(N)
+        return BigFloat(N, MPFRRoundNearest)
+    end
+end
+
+# x / c and x^n at the current precision, rounded to nearest whatever the current rounding mode
+function _div_nearest(x::BigFloat, c::BigInt)
+    z = BigFloat()
+    ccall((:mpfr_div_z, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigInt}, MPFRRoundingMode),
+          z, x, c, MPFRRoundNearest)
+    return z
+end
+function _pow_nearest(x::BigFloat, n::Integer)
+    z = BigFloat()
+    if typemin(Clong) <= n <= typemax(Clong)
+        ccall((:mpfr_pow_si, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Clong, MPFRRoundingMode),
+              z, x, n, MPFRRoundNearest)
+    else
+        ccall((:mpfr_pow_z, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigInt}, MPFRRoundingMode),
+              z, x, BigInt(n), MPFRRoundNearest)
+    end
+    return z
+end
+
+# whether x is halfway between two floats of precision p < precision(x)
+_is_midpoint(x::BigFloat, p::Integer) =
+    BigFloat(x, MPFRRoundToZero; precision=p + 1) == x && BigFloat(x, MPFRRoundToZero; precision=p) != x
+
+_check_digits_rounding_mode(::Union{RoundingMode{:Down}, RoundingMode{:Up}, RoundingMode{:ToZero},
+    RoundingMode{:FromZero}, RoundingMode{:Nearest}, RoundingMode{:NearestTiesAway},
+    RoundingMode{:NearestTiesUp}}) = nothing
+_check_digits_rounding_mode(r::RoundingMode) = throw(ArgumentError("unsupported rounding mode $r"))
+
+# whether rounding ±(q + f) for an integer q >= 0 and 0 < f < 1 increases the magnitude;
+# the sign is - iff neg, qodd is isodd(q), and c = cmp(f, 1/2)
+function _round_magnitude_up(qodd::Bool, c::Int, r::RoundingMode, neg::Bool)
+    r === RoundToZero && return false
+    r === RoundFromZero && return true
+    r === RoundDown && return neg
+    r === RoundUp && return !neg
+    return c > 0 || (c == 0 && (r === RoundNearest ? qodd : r === RoundNearestTiesAway || !neg))
+end
+
+# round(±a / 2^k, r) for an integer a > 0 and k > 0, as a magnitude, overwriting a
+function _shiftround_magnitude!(a::BigInt, k::Int, r::RoundingMode, neg::Bool)
+    tz = MPZ.scan1(a, 0)                  # a has tz trailing zeros
+    half = MPZ.tstbit(a, k - 1)
+    MPZ.fdiv_q_2exp!(a, k)
+    tz >= k && return a                       # exact
+    c = half ? (tz == k - 1 ? 0 : 1) : -1
+    _round_magnitude_up(isodd(a), c, r, neg) && MPZ.add_ui!(a, 1)
+    return a
+end
+
+# round(±a / b, r) for integers a >= 0, b > 0, as a magnitude, overwriting a with the remainder
+function _divround_magnitude!(a::BigInt, b::BigInt, r::RoundingMode, neg::Bool)
+    q = BigInt()
+    MPZ.tdiv_qr!(q, a, a, b)
+    iszero(a) && return q
+    c = cmp(MPZ.mul_2exp!(a, 1), b)
+    _round_magnitude_up(isodd(q), c, r, neg) && MPZ.add_ui!(q, 1)
+    return q
+end
+
+# The h with base^(h-1) <= |x| < base^h, for `sigdigits`. float(x) can round across a
+# power of base, and so can the logarithm in `hidigit` for floats, so the count from
+# float(x), which is off by at most one, is checked exactly.
+function Base.hidigit(x::Rational, base)
+    h = Base.hidigit(float(x), base)
+    (iszero(x) || !(base isa Integer) || base < 2) && return h
+    a, q = _hidigit_ints(x, base)
+    while true
+        c = _cmp_pows(oftype(a, base), h - 1, a, q)
+        iszero(c) && return h
+        h += c
+    end
+end
+_hidigit_ints(x::Rational{<:Union{Base.BitSigned64, Base.BitUnsigned64}}, base) =
+    base <= typemax(UInt64) ? (UInt64(Base.uabs(numerator(x))), UInt64(denominator(x))) :
+                              (abs(BigInt(numerator(x))), BigInt(denominator(x)))
+_hidigit_ints(x::Rational, base) = (abs(BigInt(numerator(x))), BigInt(denominator(x)))
+
+# For integers b >= 2, a > 0 and q > 0: -1 if a / q < b^k, 1 if a / q >= b^(k+1), else 0
+function _cmp_pows(b::BigInt, k::Int, a::BigInt, q::BigInt)
+    if k >= 0
+        pq = b^k * q
+        pq > a && return -1
+        return pq * b <= a ? 1 : 0
+    else
+        ap = a * b^(-k - 1)
+        ap >= q && return 1
+        return ap * b >= q ? 0 : -1
+    end
+end
+# with UInt64, products are exact in UInt128, and a power that overflows UInt64 exceeds a and q
+function _cmp_pows(b::UInt64, k::Int, a::UInt64, q::UInt64)
+    if k >= 0
+        p, o = _pow_overflow(b, k)
+        (o || widemul(p, q) > a) && return -1
+        pb = widemul(p, b)
+        return pb <= typemax(UInt64) && widemul(pb % UInt64, q) <= a ? 1 : 0
+    else
+        p, o = _pow_overflow(b, -k - 1)
+        (o || widemul(a, p) >= q) && return 1
+        ap = widemul(a, p) % UInt64            # less than q
+        return widemul(ap, b) >= q ? 0 : -1
+    end
+end
+function _pow_overflow(b::UInt64, k::Int)
+    p = one(b)
+    for _ in 1:k
+        w = widemul(p, b)
+        w > typemax(UInt64) && return p, true
+        p = w % UInt64
+    end
+    return p, false
+end
+
+# Rational inputs are rounded exactly too, rather than after rounding them with `float(x)`.
+# The numerator and denominator may be the caller's, so they are not updated in place.
+function Base._round_digits(x::Rational, r::RoundingMode, digits::Integer, base)
+    T = typeof(float(x))
+    if !(T <: Union{Base.IEEEFloat, BigFloat}) || base < 2 ||
+            abs(widen(digits)) * Base.top_set_bit(base) > 1 << 22   # integers too large
+        return invoke(Base._round_digits, Tuple{Any, RoundingMode, Integer, Any}, x, r, digits, base)
+    end
+    _check_digits_rounding_mode(r)
+    y = _round_digits_small(T, x, r, digits, base)
+    y === nothing || return y
+    return _round_quotient_digits(T, abs(BigInt(numerator(x))), BigInt(denominator(x)), x < 0,
+                                  r, digits, base)
+end
+
+# round(±a / q, r; digits, base) in T, for integers a >= 0 and q > 0 that are not modified
+function _round_quotient_digits(::Type{T}, a::BigInt, q::BigInt, neg::Bool, r::RoundingMode,
+                                digits::Integer, base::Integer) where {T}
+    b = big(base)^abs(widen(digits))
+    if digits >= 0
+        N = _divround_magnitude!(a * b, q, r, neg)
+        D = b
+    else
+        N = MPZ.mul!(_divround_magnitude!(MPZ.set(a), q * b, r, neg), b)
+        D = BigInt(1)
+    end
+    iszero(N) && return neg ? -zero(T) : zero(T)
+    neg && MPZ.neg!(N)
+    return _quotient_to_float(T, N, D)
+end
+
+# Floats whose base^|digits| is not exact, when the double-double estimate in
+# `_round_digits_dd` is too close to call
+function Base._round_digits_exact(x::T, r::RoundingMode, digits::Integer,
+                                  base::Integer) where {T<:Union{Float32, Float64}}
+    _check_digits_rounding_mode(r)
+    iszero(x) && return x
+    num, pow, _ = Base.decompose(x)                # x == num * 2^pow
+    a = BigInt(abs(num)) << max(pow, 0)
+    q = BigInt(1) << max(-pow, 0)
+    return _round_quotient_digits(T, a, q, signbit(x), r, digits, base)
+end
+
+# The common case without BigInts, or nothing: x has machine integer parts, base^|digits| < 2^60,
+# and the rounded value is a quotient of integers exact in T, which one division rounds correctly.
+_round_digits_small(::Type, x::Rational, r, digits, base) = nothing
+function _round_digits_small(::Type{T}, x::Rational{<:Union{Base.BitSigned64, Base.BitUnsigned64}},
+                             r::RoundingMode, digits::Integer, base) where {T<:Base.IEEEFloat}
+    abs(widen(digits)) * Base.top_set_bit(base) <= 60 || return nothing
+    b = iszero(digits) ? Int64(1) : Int64(base)^Int(abs(widen(digits)))
+    n, q = Int128(numerator(x)), Int128(denominator(x))
+    if digits >= 0
+        N = div(n * b, q, r)
+        (abs(N) <= maxintfloat(T) && b <= maxintfloat(T)) || return nothing
+        y = T(N) / T(b)
+    else
+        N = div(n, q * b, r) * b
+        abs(N) <= maxintfloat(T) || return nothing
+        y = T(N)
+    end
+    return iszero(y) && n < 0 ? -y : y
+end
+
+# N / D for integers N and D > 0, correctly rounded to nearest in T
+_quotient_to_float(::Type{BigFloat}, N::BigInt, D::BigInt) = _div_nearest(BigFloat(N; precision=ndigits(N; base=2)), D)
+function _quotient_to_float(::Type{T}, N::BigInt, D::BigInt) where {T<:Base.IEEEFloat}
+    a = abs(N)
+    e = Base.top_set_bit(a) - Base.top_set_bit(D)
+    # make 2^e <= a / D < 2^(e+1)
+    (e >= 0 ? a < D << e : a << -e < D) && (e -= 1)
+    e > exponent(floatmax(T)) && return copysign(T(Inf), N)
+    # the ulp of the result, in the subnormal range too
+    lsb = max(e, exponent(floatmin(T))) - precision(T) + 1
+    num, den = lsb >= 0 ? (a, D << lsb) : (a << -lsb, D)
+    n, rem = divrem(num, den)
+    c = cmp(rem << 1, den)
+    (c > 0 || (c == 0 && isodd(n))) && (n += 1)
+    y = ldexp(T(n), lsb)                      # exact, or Inf: n <= 2^precision(T)
+    return N < 0 ? -y : y
 end
 
 function lerpi(j::Integer, d::Integer, a::BigFloat, b::BigFloat)
