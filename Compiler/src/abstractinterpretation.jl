@@ -350,7 +350,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                             mresult = abstract_call_method(interp, method, csig, sparams, multiple_matches, StmtInfo(false, false), sv)::Future
                             function infercalls3(interp, sv)
                                 local edge = mresult[].edge
-                                if edge !== nothing
+                                # the global dispatch cache only holds methods of the global table
+                                if edge !== nothing && !isoverlayed(method_table(interp))
                                     local sig = match.spec_types
                                     local mi = get_ci_mi(edge)
                                     local vw = valid_worlds
