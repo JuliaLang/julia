@@ -156,9 +156,13 @@ JL_DLLEXPORT int jl_path_is_tracked_by(const char *path, const char *tracked) JL
     return next == '\0' || next == '/' || next == PATHSEPSTRING[0];
 }
 
+// the tracked path as given, made absolute: files loaded through its symlinks match it
+const char *jl_tracked_path_unresolved = NULL;
+
 JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT
 {
-    return jl_path_is_tracked_by(path, jl_options.tracked_path);
+    return jl_path_is_tracked_by(path, jl_options.tracked_path) ||
+           jl_path_is_tracked_by(path, jl_tracked_path_unresolved);
 }
 
 JL_DLLEXPORT int jl_coverage_enabled_for(jl_module_t *m, const char *filename) JL_NOTSAFEPOINT
