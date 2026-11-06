@@ -2349,6 +2349,53 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
 // llvm-cancellation-lowering.cpp and the deliveries in signals-*.c):
 #define JL_RESET_CODE_CANCEL  1 // the region's governing source was cancelled
 #define JL_RESET_CODE_PREEMPT 2 // cooperative yield requested; no source checked
+
+// Runtime operations that may be entered with a compiled cancellation reset
+// region still published (the *_reset_safe allocation entry points, the
+// foreign-call symbol resolver) bracket their work with these: unpublish the
+// region so a delivered reset cannot abandon the runtime's own frames (locks,
+// malloc), and republish it on the way out, so the region survives the
+// operation.
+STATIC_INLINE jl_reset_ctx_t *reset_region_unpublish(jl_task_t *ct) JL_NOTSAFEPOINT
+{
+    jl_reset_ctx_t *reset_ctx = jl_atomic_load_relaxed(&ct->reset_ctx);
+    jl_atomic_store_relaxed(&ct->reset_ctx, (jl_reset_ctx_t*)NULL);
+    // synchronizes with the read of reset_ctx in the signal handler
+    jl_signal_fence();
+    return reset_ctx;
+}
+
+STATIC_INLINE void reset_region_deliver_pending(jl_task_t *ct)
+{
+    jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+    if (bound == NULL || bound == jl_nothing ||
+        jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) == 0)
+        return;
+    // Protected foreign calls defer reset delivery until their guard exits.
+    if (jl_atomic_load_acquire(&ct->cancel_handler_ctx) != NULL)
+        return;
+    jl_reset_ctx_t *reset_ctx = jl_atomic_exchange(&ct->reset_ctx, (jl_reset_ctx_t*)NULL);
+    if (reset_ctx == NULL || reset_ctx->sp == 0)
+        return;
+    ct->gcstack = reset_ctx->gcstack;
+    ct->eh = reset_ctx->eh;
+    asan_unpoison_task_stack(ct, &reset_ctx->mctx);
+    jl_longjmp(reset_ctx->mctx, JL_RESET_CODE_CANCEL);
+}
+
+STATIC_INLINE void reset_region_republish(jl_task_t *ct, jl_reset_ctx_t *reset_ctx)
+{
+    jl_signal_fence();
+    jl_atomic_store_release(&ct->reset_ctx, reset_ctx);
+    if (reset_ctx == NULL)
+        return;
+    // A cancellation that arrived while the region was unpublished found no
+    // reset context and was dropped, and the code we return into may never
+    // poll. Re-check the region's governing source (republish first, so an
+    // arrival in between is the sender's to handle) and perform the missed
+    // delivery ourselves.
+    reset_region_deliver_pending(ct);
+}
 void export_jl_small_typeof(void);
 void export_jl_sysimg_globals(void);
 
