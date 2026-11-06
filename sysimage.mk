@@ -44,7 +44,7 @@ $(eval $(call bootstrap_sysimage_link,sysbase,))
 $(eval $(call bootstrap_sysimage_link,sysbase,-debug))
 
 define sysimage_link
-$$(build_private_libdir)/$1$2.$$(SHLIB_EXT): $$(build_private_libdir)/$1$2-o.a $4
+$$(build_private_libdir)/$1$2.$$(SHLIB_EXT): $$(build_private_libdir)/$1$2-o.a
 	@$$(call PRINT_LINK, JULIA_BINDIR=$$(call cygpath_w,$$(build_bindir)) \
 		$$(call spawn,$3) -J $$(call cygpath_w,$4) --startup-file=no $$(bootstrap_julia_flags) -e \
 		'Base.Linking.link_image(ARGS[1], ARGS[2]; is_sysimage=true, debug_runtime=$(if $2,true,false))' -- $$(call cygpath_w,$$<) $$(call cygpath_w,$$@))
