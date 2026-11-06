@@ -78,7 +78,8 @@ macro lazy_str(text, flags...)
     while (idx = findnext('$', text, idx)) !== nothing
         lastidx < idx && push!(parts, text[lastidx:prevind(text, idx)])
         idx += 1
-        expr, idx = Meta.parseatom(text, idx; filename=string(__source__.file))
+        expr, idx = Meta.parseatom(text, idx; filename=string(__source__.file),
+                                   mod=__module__)
         push!(parts, esc(expr))
         lastidx = idx
     end

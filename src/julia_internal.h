@@ -1562,7 +1562,10 @@ _Atomic(jl_value_t*) *jl_table_peek_bp(jl_genericmemory_t *a, jl_value_t *key) J
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t*) JL_CANSAFEPOINT;
 
-jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_using_core, uint8_t self_name) JL_CANSAFEPOINT;
+#define OLDEST_EDITION (((uint32_t)1 << 16) | ((uint32_t)13))
+#define BOOTSTRAP_EDITION (((uint32_t)1 << 16) | ((uint32_t)14))
+
+jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint32_t edition, uint8_t default_using_core, uint8_t self_name) JL_CANSAFEPOINT;
 jl_module_t *jl_add_standard_imports(jl_module_t *m) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_methcache_t *jl_new_method_cache(void) JL_CANSAFEPOINT;

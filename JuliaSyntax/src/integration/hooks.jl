@@ -3,11 +3,11 @@
 
 const _has_v1_6_hooks  = VERSION >= v"1.6"
 const _has_v1_10_hooks = isdefined(Core, :_setparser!)
-const _has_v1_14_version_hooks = isdefined(Base, :LATEST_STABLE_EDITION)
-const LATEST_STABLE_EDITION = @static if _has_v1_14_version_hooks
-    Base.LATEST_STABLE_EDITION
+const _has_v1_14_version_hooks = isdefined(Base, :LATEST_EDITION)
+const LATEST_EDITION = @static if _has_v1_14_version_hooks
+    Base.LATEST_EDITION
 else
-    (1, 13)
+    (Int(VERSION.major), Int(VERSION.minor))
 end
 
 struct ErrorSpec
@@ -388,7 +388,7 @@ function core_parser_hook(code, filename, offset, options)
     core_parser_hook(code, filename, 1, offset, options)
 end
 function core_parser_hook(code, filename, lineno, offset, options)
-    core_parser_hook(code, filename, lineno, offset, options, LATEST_STABLE_EDITION)
+    core_parser_hook(code, filename, lineno, offset, options, LATEST_EDITION)
 end
 
 if _has_v1_10_hooks

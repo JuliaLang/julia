@@ -51,7 +51,9 @@ jl_module_t *jl_add_standard_imports(jl_module_t *m)
 void jl_init_main_module(void)
 {
     assert(jl_main_module == NULL);
-    jl_main_module = jl_new_module_(jl_symbol("Main"), NULL, 0, 1); // baremodule Main; end
+    // baremodule Main; end
+    jl_main_module = jl_new_module_(
+        jl_symbol("Main"), NULL, BOOTSTRAP_EDITION, 0, 1);
     jl_set_initial_const(jl_core_module, jl_symbol("Main"), (jl_value_t*)jl_main_module, 0); // const Main.Core = Core
     jl_set_initial_const(jl_main_module, jl_symbol("Core"), (jl_value_t*)jl_core_module, 0); // const Core.Main = Main
 }
@@ -141,7 +143,14 @@ JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym
     // If we have `Base`, don't also try to import `Core` - the `Base` exports are a superset.
     // While we allow multiple imports of the same binding from different modules, various error printing
     // performs reflection on which module a binding came from and we'd prefer users see "Base" here.
-    jl_module_t *newm = jl_new_module_(name, is_parent__toplevel__ ? NULL : parent_module, std_imports && jl_base_module != NULL ? 0 : 1, 1);
+    jl_module_t *newm = jl_new_module_(
+        name,
+        is_parent__toplevel__ ? NULL : parent_module,
+        /* TODO: should track the expression edition (requires Syntax) */
+        jl_get_module_edition(parent_module),
+        std_imports && jl_base_module != NULL ? 0 : 1,
+        1
+    );
     jl_value_t *form = (jl_value_t*)newm;
     JL_GC_PUSH1(&form);
     JL_LOCK(&jl_modules_mutex);

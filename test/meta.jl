@@ -463,11 +463,11 @@ end
     @test isempty(Docs.undocumented_names(Meta))
 end
 
-@testset "Meta.parse uses VERSION by default" begin
+@testset "Meta.parse uses the oldest edition by default (no module specified)" begin
     tg = "typegroup struct MetaTG end end"
 
-    @test Meta.isexpr(Meta.parse(tg), :typegroup)
-    @test Meta.isexpr(Meta.parseall(tg).args[end], :typegroup)
+    @test_throws Meta.ParseError Meta.parse(tg)
+    @test Meta.isexpr(Meta.parseall(tg).args[end], :error)
     @test Meta.isexpr(Meta.parse(tg; mod=Module(:MetaTGDefault)), :typegroup)
 
     # 1.13 parser
