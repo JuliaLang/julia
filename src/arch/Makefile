@@ -55,7 +55,6 @@ unix_signal_call_trampoline_HDRS := $(SRCDIR)/test/archstep.h
 unix_signal_call_trampoline_FLAGS := $(STEP_FLAGS)
 unix_signal_call_trampoline_DEPS := $(STEP_DEPS)
 win_setjmp_ASM := $(SRCDIR)/$(ASM_ARCH)/win_setjmp.S
-win_restore_trigger_ASM := $(SRCDIR)/$(ASM_ARCH)/win_restore_trigger.S
 macos_signal_ASM := $(SRCDIR)/$(ASM_ARCH)/macos_call_frame_unwind.S $(SRCDIR)/$(ASM_ARCH)/macos_restore_trigger.S
 macos_signal_FLAGS := $(STEP_FLAGS)
 macos_signal_DEPS := $(STEP_DEPS)
@@ -76,7 +75,7 @@ TEST_LIB_FLAGS := -L$(BUILDDIR)
 endif
 
 ifeq ($(OS),WINNT)
-TESTS := win_setjmp win_restore_trigger trampolines
+TESTS := win_setjmp trampolines
 else ifeq ($(OS),Darwin)
 TESTS := start_fiber macos_signal trampolines
 else
