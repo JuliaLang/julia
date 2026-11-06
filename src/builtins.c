@@ -3003,7 +3003,8 @@ void jl_init_intrinsic_properties(void)
 
 void jl_init_intrinsic_functions(void)
 {
-    jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module, 0, 1);
+    jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module,
+                                      jl_get_module_edition(jl_core_module), 0, 1);
     jl_set_initial_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm, 0);
     jl_mk_builtin_func(jl_intrinsic_type, jl_symbol("IntrinsicFunction"), jl_f_intrinsic_call);
 
