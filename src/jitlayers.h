@@ -466,6 +466,8 @@ std::optional<jl_llvm_functions_t> jl_emit_code(
         jl_value_t *abi_rt,
         jl_code_instance_t *codeinst = nullptr) JL_CANSAFEPOINT;
 
+int jl_requested_optlevel(jl_method_instance_t *mi);
+
 std::optional<jl_llvm_functions_t> jl_emit_codeinst(
         jl_codegen_output_t &out,
         jl_code_instance_t *codeinst,
@@ -769,6 +771,7 @@ public:
     void addGlobalMapping(StringRef Name, uint64_t Addr) JL_NOTSAFEPOINT;
     void addSharedGlobalMapping(StringRef Name, uint64_t Addr) JL_NOTSAFEPOINT;
     void addOutput(jl_emitted_output_t O) JL_NOTSAFEPOINT;
+    void addOutputs(MutableArrayRef<jl_emitted_output_t> Os) JL_NOTSAFEPOINT;
 
     // Methods mainly for the C API
     Error addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM, bool ShouldOptimize = false) JL_NOTSAFEPOINT;
