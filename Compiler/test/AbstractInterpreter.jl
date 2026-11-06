@@ -229,6 +229,24 @@ end == Val{6}
     Val(gpu_factorial3(3))
 end == Val{6}
 
+# `@consistent_overlay` also covers the overlays it calls when they lead back into a cycle
+# with its callers, as with GPU exception runtimes that use checked conversions
+# (Int32(::Int) -> checked_trunc_sint -> throw_inexacterror) and device intrinsics
+cycle_intrinsic(x) = error("not available on the host")
+@overlay OVERLAY_MT cycle_intrinsic(x::Int) = cycle_convert(x)
+@noinline cycle_throw(x) = throw(ArgumentError("negative"))
+@consistent_overlay OVERLAY_MT @noinline cycle_throw(x) =
+    (cycle_intrinsic(1); throw(ArgumentError("negative")))
+cycle_convert(x::Int) = x < 0 ? cycle_throw(x) : x
+cycle_convert_direct(x::Int) = x < 0 ? cycle_throw(x) : cycle_intrinsic(x)
+# (`collect` keeps constant propagation from folding this, only concrete evaluation can)
+Base.@assume_effects :foldable cycle_foldable(x::Int) = length(collect(1:cycle_convert(x)))
+@test Base.infer_effects(x -> cycle_convert(x), (Int,); interp=MTOverlayInterp()) |> Compiler.is_consistent_overlay
+@test Base.infer_effects(x -> cycle_convert_direct(x), (Int,); interp=MTOverlayInterp()) |> !Compiler.is_consistent_overlay
+@test Base.infer_return_type(; interp=MTOverlayInterp()) do
+    Val(cycle_foldable(42))
+end == Val{42}
+
 # GPUCompiler needs accurate inference through kwfunc with the overlay of `Core.throw_inexacterror`
 # https://github.com/JuliaLang/julia/issues/48097
 @newinterp Issue48097Interp
