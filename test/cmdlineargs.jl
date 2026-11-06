@@ -2111,6 +2111,40 @@ end
     end
 end
 
+# A build script writes its image itself
+@testset "write the image from a script" begin
+    mktempdir() do dir
+        exit_o_file = joinpath(dir, "exit.o.a")
+        o_file = joinpath(dir, "img.o.a")
+        result = joinpath(dir, "result.txt")
+        script = """
+            module ImageScript
+            answer() = Cint(42)
+            end
+            Base.Experimental.entrypoint(ImageScript.answer, ())
+            o_file, result = ARGS
+            code = Base.infer_image()
+            Base.Compiler.TrimVerifier.verify_typeinf_trim(devnull, code.codeinfos, true)
+            native = Base.generate_native(code)
+            serialized = try Base.serialize_heap(code, native); "serialized" catch e; sprint(showerror, e) end
+            Base.__uninit_build()
+            heap = Base.serialize_heap(code, native; strip_ir = true, strip_metadata = true)
+            Base.write_image(heap, native; o = o_file)
+            again = try Base.write_image(heap); "written again" catch e; sprint(showerror, e) end
+            write(result, serialized, "\n", again)
+            """
+        @test success(`$(Base.julia_cmd()) --startup-file=no -t1,0 --experimental
+                       --trim=unsafe-warn --strip-ir --strip-metadata --output-o $exit_o_file
+                       -e $script $o_file $result`)
+        lines = readlines(result)
+        @test startswith(lines[1], "the setup for running code while writing a system image")
+        @test lines[2] == "the heap was written already"
+        @test filesize(o_file) > 0
+        # nothing more is written at exit
+        @test !isfile(exit_o_file)
+    end
+end
+
 # Build and use a system image, exercising both split (--output-o together with
 # --output-ji, heap goes into the .ji) and non-split (--output-o only, heap goes
 # into the .so) layouts, with --compress-sysimage on and off in each.

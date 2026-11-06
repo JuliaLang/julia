@@ -499,20 +499,20 @@ static void record_method_roots(egal_set &method_roots, jl_method_instance_t *mi
     JL_UNLOCK(&m->writelock);
 }
 
-static void aot_optimize_roots(jl_codegen_output_t &out, egal_set &method_roots) JL_CANSAFEPOINT
+static void aot_optimize_roots(jl_codegen_output_t &out, egal_set &method_roots, int trim) JL_CANSAFEPOINT
 {
     for (size_t i = 0; i < jl_array_dim0(out.temporary_roots); i++) {
         jl_value_t *val = jl_array_ptr_ref(out.temporary_roots, i);
         auto ref = out.global_targets.find((void*)val);
         if (ref == out.global_targets.end())
             continue;
-        auto get_global_root = [val, &method_roots]() JL_CANSAFEPOINT {
+        auto get_global_root = [val, &method_roots, trim]() JL_CANSAFEPOINT {
             if (jl_is_globally_rooted(val))
                 return val;
             // `--trim` / `--strip-ir` drop all method roots in the serializer
             // under the assumption that they root only objects for compressed
             // IR so any roots for codegen must be stored separately
-            if (!(jl_options.trim || jl_options.strip_ir)) {
+            if (!(trim || jl_options.strip_ir)) {
                 jl_value_t *mval = method_roots.get(val);
                 if (mval)
                     return mval;
@@ -645,17 +645,23 @@ static bool canPartition(const Function &F)
            !F.hasFnAttribute(Attribute::InlineHint);
 }
 
-// this builds the object file portion of the sysimage files for fast startup
+// Options for generating the native code of an image: whether it is trimmed
+struct jl_aot_params_t {
+    int trim;
+};
+
+static void *emit_native(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcThreadSafeModuleRef llvmmod,
+                         const jl_cgparams_t *cgparams, int external_linkage,
+                         const jl_aot_params_t &params) JL_CANSAFEPOINT;
+
+// this builds the object file portion of the sysimage files for fast startup, from the
+// interleaved CodeInstance/CodeInfo work list `codeinfos` and the ordered CodeInstances
+// `ci_order` to store in the method caches of the image, for a trimmed image with `trim`
 // `external_linkage` create linkages between pkgimages.
 extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int external_linkage, size_t world,
-                           jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order, jl_array_t *ext_foreign_cis)
+void *jl_create_native_impl(jl_array_t *codeinfos, jl_array_t *ci_order, int external_linkage, int trim)
 {
-    JL_TIMING(INFERENCE, INFERENCE);
     auto ct = jl_current_task;
-    if (!jl_compile_and_emit_func) {
-        jl_error("inference not available for generating compiled output");
-    }
     bool timed = (ct->reentrant_timing & 1) == 0;
     if (timed)
         ct->reentrant_timing |= 1;
@@ -664,45 +670,8 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
 
-    jl_value_t **fargs;
-    JL_GC_PUSHARGS(fargs, 9);
-#ifdef _P64
-    jl_value_t *jl_array_ulong_type = jl_array_uint64_type;
-#else
-    jl_value_t *jl_array_ulong_type = jl_array_uint32_type;
-#endif
-    jl_array_t *worlds = jl_alloc_array_1d(jl_array_ulong_type, 2);
-    fargs[0] = jl_compile_and_emit_func;
-    fargs[1] = (jl_value_t*)worlds;
-    jl_array_data(worlds, size_t)[0] = jl_typeinf_world;
-    int compiler_world = 1;
-    if (trim || jl_array_data(worlds, size_t)[0] == 0 || jl_array_data(worlds, size_t)[0] == world || external_linkage)
-        compiler_world = 0;
-    jl_array_data(worlds, size_t)[compiler_world] = world; // might overwrite previous
-    worlds->dimsize[0] = 1 + compiler_world;
-    fargs[2] = jl_box_uint8(trim);
-    fargs[3] = jl_box_bool(external_linkage);
-    fargs[4] = worklist ? (jl_value_t*)worklist : jl_nothing; // worklist (or nothing)
-    fargs[5] = mod_array ? (jl_value_t*)mod_array : jl_nothing; // mod_array (or nothing)
-    fargs[6] = jl_box_bool(all);
-    fargs[7] = (jl_value_t*)module_init_order; // module_init_order
-    fargs[8] = ext_foreign_cis ? (jl_value_t*)ext_foreign_cis : jl_nothing; // ext_foreign_cis (or nothing)
-    size_t last_age = ct->world_age;
-    ct->world_age = jl_typeinf_world;
-    fargs[0] = jl_apply(fargs, 9);
-    fargs[1] = fargs[2] = fargs[3] = fargs[4] = fargs[5] = fargs[6] = fargs[7] = fargs[8] = NULL;
-    ct->world_age = last_age;
-    // the bridge returns svec(codeinfos, ci_order): the interleaved
-    // CodeInstance/CodeInfo work list to emit, and the ordered CodeInstances to
-    // store in the method caches of the output image
-    jl_value_t *result = fargs[0];
-    assert(jl_is_svec(result) && jl_svec_len(result) == 2);
-    jl_value_t *codeinfos = jl_svecref(result, 0);
-    jl_value_t *ci_order = jl_svecref(result, 1);
-    JL_TYPECHK(jl_create_native, array_any, codeinfos);
-    JL_TYPECHK(jl_create_native, array_any, ci_order);
-    auto data = (jl_native_code_desc_t *)jl_emit_native((jl_array_t*)codeinfos, (jl_array_t*)ci_order, llvmmod, NULL, external_linkage ? 1 : 0);
-    JL_GC_POP();
+    auto data = (jl_native_code_desc_t *)emit_native(codeinfos, ci_order, NULL, NULL, external_linkage ? 1 : 0,
+                                                      {trim});
 
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
@@ -940,7 +909,7 @@ static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
 
 static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *codeinfos,
                                       jl_array_t *ci_order, const jl_cgparams_t *cgparams,
-                                      int external_linkage) JL_CANSAFEPOINT
+                                      int external_linkage, const jl_aot_params_t &params) JL_CANSAFEPOINT
 {
     jl_cgparams_t target_cgparams = *cgparams;
     target_cgparams.sanitize_memory = jl_options.target_sanitize_memory;
@@ -1014,7 +983,7 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     aot_link_output(out);
     // including generating cfunction thunks
     generate_cfunc_thunks(out);
-    aot_optimize_roots(out, method_roots);
+    aot_optimize_roots(out, method_roots, params.trim);
     out.temporary_roots = nullptr;
     out.temporary_roots_set.clear();
     ci_infos.clear();
@@ -1071,6 +1040,13 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
 extern "C" JL_DLLEXPORT_CODEGEN
 void *jl_emit_native_impl(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int external_linkage)
 {
+    return emit_native(codeinfos, ci_order, llvmmod, cgparams, external_linkage, {jl_options.trim});
+}
+
+static void *emit_native(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcThreadSafeModuleRef llvmmod,
+                         const jl_cgparams_t *cgparams, int external_linkage,
+                         const jl_aot_params_t &params) JL_CANSAFEPOINT
+{
     JL_TIMING(NATIVE_AOT, NATIVE_Create);
     ++CreateNativeCalls;
     CreateNativeMax.updateMax(jl_array_nrows(codeinfos));
@@ -1091,7 +1067,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcTh
 
     data->TSM_ref->withModuleDo([&](Module &M) JL_CANSAFEPOINT {
         data->out = std::make_unique<jl_codegen_output_t>(M);
-        jl_emit_native_to_output(data, codeinfos, ci_order, cgparams, external_linkage);
+        jl_emit_native_to_output(data, codeinfos, ci_order, cgparams, external_linkage, params);
     });
 
     return (void *)data;

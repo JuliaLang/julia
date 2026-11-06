@@ -102,7 +102,7 @@ JL_DLLEXPORT void jl_suppress_precompile(int suppress)
     suppress_precompile = suppress;
 }
 
-int jl_precompile_suppressed(void)
+JL_DLLEXPORT int jl_precompile_suppressed(void)
 {
     return suppress_precompile;
 }

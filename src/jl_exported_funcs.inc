@@ -185,6 +185,7 @@
     XX(jl_generating_output) \
     XX(jl_declare_const_gf) \
     XX(jl_declare_constant_val) \
+    XX(jl_generate_native) \
     XX(jl_gensym) \
     XX(jl_getaffinity) \
     XX(jl_getallocationgranularity) \
@@ -243,6 +244,7 @@
     XX(jl_has_typevar_from_unionall) \
     XX(jl_hrtime) \
     XX(jl_idtable_rehash) \
+    XX(jl_infer_image) \
     XX(jl_init) \
     XX(jl_init_) \
     XX(jl_init_options) \
@@ -403,6 +405,7 @@
     XX(jl_safepoint_suspend_thread) \
     XX(jl_safepoint_resume_thread) \
     XX(jl_SC_CLK_TCK) \
+    XX(jl_serialize_heap) \
     XX(jl_setaffinity) \
     XX(jl_set_ARGS) \
     XX(jl_set_const) \
@@ -520,6 +523,7 @@
     XX(jl_wakeup_thread) \
     XX(jl_wakeup_threadpool) \
     XX(jl_write_compiler_output) \
+    XX(jl_write_image) \
     XX(jl_membarrier) \
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \

@@ -341,6 +341,44 @@ function enqueue_specialization!(all::Bool, worklist, mi::MethodInstance)
     return true
 end
 
+# Infer the code of an image of the modules defined in `worklist`, to generate native code for
+# unless `native` is false, and for a trimmed image with `trim`. This returns svec(codeinfos,
+# ci_order, init_order, ext_foreign_cis, trim): the interleaved CodeInstance/CodeInfo work list to
+# compile, the ordered CodeInstances to store in the method caches of the image, the modules with
+# an `__init__` in order, for a package image the CodeInstances of foreign interpreters to add to
+# it, and whether the image is trimmed. Without `native`, only `init_order` and `trim` are set.
+function infer_image_code(worklist::Vector{Any}, native::Bool, trim::Bool)
+    latestworld = get_world_counter()
+    incremental = JLOptions().incremental != 0
+    trim &= !incremental
+    init_order = Any[]
+    for mod in worklist
+        Core.invoke_in_world(latestworld, isdefined, mod, :__init__) && push!(init_order, mod)
+    end
+    native || return Core.svec(nothing, nothing, init_order, nothing, trim)
+    # also infer for the world of the compiler, if that is an older one and the image keeps the
+    # compiler
+    typeinf_world = unsafe_load(cglobal(:jl_typeinf_world, UInt))
+    worlds = trim || incremental || typeinf_world == 0 || typeinf_world == latestworld ?
+        UInt[latestworld] : UInt[typeinf_world, latestworld]
+    if incremental
+        newmodules = ccall(:jl_precompile_suppressed, Cint, ()) != 0 ? Any[] : worklist
+        mod_array = nothing
+    else
+        newmodules = nothing
+        mod_array = nothing # while bootstrapping
+        if Core.invoke_in_world(latestworld, isdefined, Base, :loaded_modules_array)
+            loaded_modules_array = Core.invoke_in_world(latestworld, getglobal, Base, :loaded_modules_array)
+            mod_array = Core.invoke_in_world(latestworld, loaded_modules_array)
+        end
+    end
+    compile_all = !incremental && JLOptions().compile_enabled == Base.JL_OPTIONS_COMPILE_ALL
+    ext_foreign_cis = Any[]
+    result = compile_and_emit_native(worlds, trim ? TRIM_SAFE : TRIM_NO, incremental, newmodules,
+                                     mod_array, compile_all, init_order, ext_foreign_cis)
+    return Core.svec(result[1], result[2], init_order, ext_foreign_cis, trim)
+end
+
 # Main unified compilation and emission function
 function compile_and_emit_native(worlds::Vector{UInt},
                                  trim_mode::UInt8,
@@ -444,17 +482,7 @@ function compile_and_emit_native(worlds::Vector{UInt},
     # Returns svec(codeinfos, cis): the interleaved CodeInstance/CodeInfo work
     # list for codegen, plus the ordered CodeInstances to place in the method
     # caches of the output image.
-    result = try
-        typeinf_ext_toplevel(tocompile, worlds, trim_mode, external_linkage)
-    catch exc
-        # Handle trimming failures
-        isa(exc, Core.TrimFailure) || rethrow()
-        # The verification check failed. The error message should already have
-        # been printed, so give up here and exit (w/o a stack trace).
-        invokelatest(invokelatest(getglobal, Base, :exit), 1)
-    end
-
-    return result
+    return typeinf_ext_toplevel(tocompile, worlds, trim_mode, external_linkage)
 
 end
 

@@ -1846,6 +1846,126 @@ function generating_output(incremental::Union{Bool,Nothing}=nothing)
     return true
 end
 
+"""
+    Base.ImageCode
+
+The inferred code of an image, from [`Base.infer_image`](@ref). `codeinfos` holds each
+`CodeInstance` to compile followed by its `CodeInfo`, and a `svec(rt, sig)` for each `ccallable`
+alias, or is `nothing` if it was inferred without native code. Do not modify it.
+"""
+struct ImageCode
+    codeinfos::Union{Array{Any,1},Nothing}
+    data::SimpleVector
+end
+
+"""
+    Base.infer_image(; native::Bool = true, trim::Bool = <whether `--trim` is given>)::Base.ImageCode
+
+Infer the code of an image of the modules defined so far, to generate native code for unless
+`native` is `false`, and for a trimmed image with `trim`. The process must have been started with an `--output-*` option, which
+decides whether this is a system image or a package image.
+
+This does not check that the code can be trimmed: use
+`Compiler.TrimVerifier.verify_typeinf_trim(io, code.codeinfos, onlywarn)` for that.
+"""
+function infer_image(; native::Bool = true, trim::Bool = JLOptions().trim != 0)
+    data = ccall(:jl_infer_image, Any, (Cint, Cint), native, trim)::SimpleVector
+    return ImageCode(data[1], data)
+end
+
+"""
+    Base.NativeCode
+
+The native code of an image, from [`Base.generate_native`](@ref).
+"""
+mutable struct NativeCode
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    Base.generate_native(code::Base.ImageCode)::Base.NativeCode
+
+Generate the native code of an image from its inferred `code`. This can only be done once.
+"""
+function generate_native(code::ImageCode)
+    return NativeCode(ccall(:jl_generate_native, Ptr{Cvoid}, (Any,), code.data))
+end
+
+"""
+    Base.SerializedHeap
+
+The serialized heap of an image, from [`Base.serialize_heap`](@ref).
+"""
+mutable struct SerializedHeap
+    ptr::Ptr{Cvoid}
+    checksum::UInt32
+    split::Bool
+    compress::Bool
+    udeps::Any
+    srctextpos::Int64
+end
+
+"""
+    Base.serialize_heap(code::Base.ImageCode, native::Union{Base.NativeCode,Nothing} = nothing;
+                        split::Bool = false, keep_codegen_ir::Bool = native === nothing,
+                        strip_ir::Bool = false, strip_metadata::Bool = false,
+                        compress::Bool = false)::Base.SerializedHeap
+
+Serialize the heap of an image, from its inferred `code` and its `native` code. This waits for
+all other tasks to finish first. For a system image, the setup for running code while writing
+it must be undone with `Base.__uninit_build()` first, after which stdio, the load path and the
+other state it set up are no longer available. A `split` image writes the heap to its own file instead of
+into the native code, and only a split image can be `compress`ed. `keep_codegen_ir` keeps the
+IR of the code that is compiled, for an image whose native code is not loaded with it.
+"""
+function serialize_heap(code::ImageCode, native::Union{NativeCode,Nothing} = nothing;
+                        split::Bool = false, keep_codegen_ir::Bool = native === nothing,
+                        strip_ir::Bool = false, strip_metadata::Bool = false,
+                        compress::Bool = false)
+    native_ptr = native === nothing ? C_NULL : native.ptr
+    native === nothing || native_ptr != C_NULL || error("the native code was written already")
+    _build_initialized &&
+        error("the setup for running code while writing a system image must be undone with `Base.__uninit_build()` first")
+    data = ccall(:jl_serialize_heap, Any, (Any, Ptr{Cvoid}, Cint, Cint, Cint, Cint, Cint),
+                 code.data, native_ptr, split, keep_codegen_ir, strip_ir, strip_metadata,
+                 compress)::SimpleVector
+    return SerializedHeap(data[1]::Ptr{Cvoid}, data[2]::UInt32, split, compress, data[3],
+                          data[4]::Int64)
+end
+
+"""
+    Base.write_image(heap::Base.SerializedHeap, native::Union{Base.NativeCode,Nothing} = nothing;
+                     ji = nothing, o = nothing, bc = nothing, unopt_bc = nothing,
+                     asm = nothing)
+
+Write an image: its serialized `heap` to `ji`, and its `native` code to the object file `o`,
+the bitcode `bc` (or `unopt_bc`, before optimization) and the assembly `asm`. The heap goes to
+`ji` if the image is split or has no native code, and otherwise into the native code. This
+uses up `heap` and `native`.
+"""
+function write_image(heap::SerializedHeap, native::Union{NativeCode,Nothing} = nothing;
+                     ji::Union{String,Nothing} = nothing, o::Union{String,Nothing} = nothing,
+                     bc::Union{String,Nothing} = nothing,
+                     unopt_bc::Union{String,Nothing} = nothing,
+                     asm::Union{String,Nothing} = nothing)
+    heap.ptr == C_NULL && error("the heap was written already")
+    native_ptr = native === nothing ? C_NULL : native.ptr
+    native === nothing || native_ptr != C_NULL || error("the native code was written already")
+    function path(p::Union{String,Nothing})
+        p === nothing && return Ptr{UInt8}(C_NULL)
+        '\0' in p && throw(ArgumentError("a path must not contain NUL characters"))
+        return p
+    end
+    ccall(:jl_write_image, Cvoid,
+          (Ptr{Cvoid}, UInt32, Cint, Cint, Any, Int64, Ptr{Cvoid},
+           Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}),
+          heap.ptr, heap.checksum, heap.split, heap.compress, heap.udeps, heap.srctextpos,
+          native_ptr, path(ji), path(o), path(bc), path(unopt_bc), path(asm))
+    heap.ptr = C_NULL
+    native === nothing || (native.ptr = C_NULL)
+    return nothing
+end
+
 const SLOT_USED = 0x8
 ast_slotflag(@nospecialize(code), i) = ccall(:jl_ir_slotflag, UInt8, (Any, Csize_t), code, i - 1)
 

@@ -2390,10 +2390,6 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
                  enqueue_unprepared_invokes = trim_mode != TRIM_NO)
     end
 
-    if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE
-        verify_typeinf_trim(codeinfos, trim_mode == TRIM_UNSAFE_WARN)
-    end
-
     # Build the ordered list of CodeInstances to store in the image's method
     # caches. This is kept as its own array (rather than being recovered from
     # `codeinfos` by the caller) so the set and ordering of cached entries can be

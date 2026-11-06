@@ -602,9 +602,13 @@ function init_build_rng()
     nothing
 end
 
+# set while the runtime is set up by `__init_build`
+global _build_initialized::Bool = false
+
 # Limited equivalent to `__init__` that sets up enough of the runtime to run top-level
 # code "normally".
 function __init_build()
+    global _build_initialized = true
     global _atexit_hooks_finished = false
     init_build_rng()
     Sys.__init_build()
@@ -618,8 +622,10 @@ function __init_build()
 end
 
 # Modifications to the global heap from __init_build() are (mostly) reversed
-# here, to avoid polluting the image.
+# here, to avoid polluting the image. This does nothing if they are reversed already.
 function __uninit_build()
+    _build_initialized || return nothing
+    global _build_initialized = false
     uninit_toml_cache()
     uninit_exec_options()
     uninit_args()

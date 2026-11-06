@@ -106,23 +106,45 @@ static void jl_wait_for_tasks_and_finalizers(jl_task_t *ct) JL_CANSAFEPOINT
     jl_task_wait_empty(); // then make sure we are the only thread alive that could be running user code past here
 }
 
-// Generate the native code for the image, and collect the CodeInstances of foreign interpreters
-// to add to a package image in `ext_foreign_cis`
-static void *jl_create_native_for_output(jl_array_t *worklist, jl_array_t *module_init_order,
-                                         jl_array_t *ext_foreign_cis, int trim, int compile_all) JL_CANSAFEPOINT
+// Infer the code of the image for the modules defined in `worklist`, to generate native code for
+// unless `native` is false, and for a trimmed image with `trim` (see `Compiler.infer_image_code`)
+static jl_svec_t *jl_infer_image_code(jl_array_t *worklist, int native, int trim) JL_CANSAFEPOINT
 {
-    size_t world = jl_atomic_load_acquire(&jl_world_counter);
-    if (worklist) {
-        if (jl_precompile_suppressed())
-            worklist = (jl_array_t*)jl_an_empty_vec_any;
-        return jl_create_native(NULL, 0, 1, world, NULL, worklist, 0, module_init_order, ext_foreign_cis);
-    }
-    jl_array_t *mod_array = jl_get_loaded_modules();
-    JL_GC_PUSH1(&mod_array);
-    void *native_code = jl_create_native(NULL, trim, 0, world, mod_array, NULL, compile_all,
-                                         module_init_order, ext_foreign_cis);
+    JL_TIMING(INFERENCE, INFERENCE);
+    if (!jl_compile_and_emit_func)
+        jl_error("inference not available for generating compiled output");
+    jl_task_t *ct = jl_current_task;
+    int timed = (ct->reentrant_timing & 1) == 0;
+    if (timed)
+        ct->reentrant_timing |= 1;
+    uint64_t compiler_start_time = 0;
+    uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    if (measure_compile_time_enabled)
+        compiler_start_time = jl_hrtime();
+
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 4);
+    args[0] = jl_compile_and_emit_func;
+    args[1] = (jl_value_t*)worklist;
+    args[2] = jl_box_bool(native);
+    args[3] = jl_box_bool(trim);
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_typeinf_world;
+    jl_value_t *code = jl_apply(args, 4);
+    ct->world_age = last_age;
+    JL_TYPECHK(jl_infer_image, simplevector, code);
+    if (jl_svec_len(code) != 5)
+        jl_error("jl_infer_image: unexpected result from inference");
     JL_GC_POP();
-    return native_code;
+
+    if (timed) {
+        if (measure_compile_time_enabled) {
+            uint64_t end = jl_hrtime();
+            jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
+        }
+        ct->reentrant_timing &= ~1ull;
+    }
+    return (jl_svec_t*)code;
 }
 
 // the files to write an image and its native code to (each NULL if not wanted)
@@ -176,9 +198,167 @@ static void jl_emit_compiler_output(const jl_output_files_t *files, ios_t *s, vo
     }
 }
 
+// set once native code is generated, after which the IR for it is no longer kept
+static int native_generated = 0;
+
+// Generate the native code for the inferred `code` of an image (see `jl_infer_image_code`)
+static void *jl_generate_native_code(jl_svec_t *code) JL_CANSAFEPOINT
+{
+    jl_value_t *codeinfos = jl_svecref(code, 0);
+    jl_value_t *ci_order = jl_svecref(code, 1);
+    if (codeinfos == jl_nothing)
+        jl_error("the image was inferred without native code");
+    JL_TYPECHK(jl_generate_native, array_any, codeinfos);
+    JL_TYPECHK(jl_generate_native, array_any, ci_order);
+    if (native_generated)
+        jl_error("native code can only be generated once");
+    native_generated = 1;
+    void *native_code = jl_create_native((jl_array_t*)codeinfos, (jl_array_t*)ci_order, jl_options.incremental,
+                                         jl_svecref(code, 4) == jl_true);
+    // no more IR is retained to generate native code (the serializer leaves out what was)
+    jl_set_precompile_keep_ir(0);
+    return native_code;
+}
+
+// Serialize the heap of the image for the modules defined in `worklist`, from its inferred
+// `code` and its native code (NULL if none), after `jl_wait_for_tasks_and_finalizers`. This
+// returns the stream, and sets its checksum, and for a package image its dependencies and the
+// position of their source text.
+static ios_t *jl_serialize_heap_code(jl_array_t *worklist, jl_svec_t *code,
+                                     void *native_code, const jl_image_options_t *opts,
+                                     uint32_t *checksum, jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT,
+                                     int64_t *srctextpos) JL_CANSAFEPOINT
+{
+    jl_value_t *init_order = jl_svecref(code, 2);
+    jl_value_t *ext_foreign_cis = jl_svecref(code, 3);
+    JL_TYPECHK(jl_serialize_heap, array_any, init_order);
+    if (ext_foreign_cis != jl_nothing)
+        JL_TYPECHK(jl_serialize_heap, array_any, ext_foreign_cis);
+    jl_array_t *image_worklist = jl_options.incremental ? worklist : NULL;
+    jl_array_t *mod_array = NULL;
+    JL_GC_PUSH1(&mod_array);
+    int64_t checksumpos = 0;
+    ios_t *s = jl_prepare_system_image(image_worklist, opts, &mod_array, udeps, srctextpos, &checksumpos);
+    *checksum = jl_create_system_image(native_code, image_worklist, opts, s, checksumpos, mod_array,
+                                       (jl_array_t*)init_order,
+                                       ext_foreign_cis == jl_nothing ? NULL : (jl_array_t*)ext_foreign_cis);
+    JL_GC_POP();
+
+    for (size_t i = 0; i < jl_current_modules.size; i += 2) {
+        if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
+            jl_printf(JL_STDERR, "\nWARNING: detected unclosed module: ");
+            jl_static_show(JL_STDERR, (jl_value_t*)jl_current_modules.table[i]);
+            jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for this module **\n\n");
+        }
+    }
+    return s;
+}
+
+// set once an image is written, so that none is written at exit
+static int image_written = 0;
+
+static jl_array_t *jl_image_worklist(void) JL_CANSAFEPOINT
+{
+    if (!jl_generating_output())
+        jl_error("no image is written without an `--output-*` option");
+    if (!jl_module_init_order)
+        jl_error("no modules were defined to write an image for");
+    return jl_module_init_order;
+}
+
+static jl_svec_t *jl_check_image_code(jl_value_t *code) JL_CANSAFEPOINT
+{
+    JL_TYPECHK(jl_check_image_code, simplevector, code);
+    if (jl_svec_len(code) != 5)
+        jl_error("expected the result of jl_infer_image");
+    return (jl_svec_t*)code;
+}
+
+JL_DLLEXPORT jl_value_t *jl_infer_image(int native, int trim)
+{
+    return (jl_value_t*)jl_infer_image_code(jl_image_worklist(), native, trim);
+}
+
+JL_DLLEXPORT void *jl_generate_native(jl_value_t *code)
+{
+    jl_image_worklist();
+    return jl_generate_native_code(jl_check_image_code(code));
+}
+
+// Returns svec(stream, checksum, udeps, srctextpos) (see `jl_serialize_heap_code`)
+JL_DLLEXPORT jl_value_t *jl_serialize_heap(jl_value_t *code, void *native_code, int split,
+                                           int keep_codegen_ir, int strip_ir, int strip_metadata,
+                                           int compress)
+{
+    jl_array_t *worklist = jl_image_worklist();
+    jl_svec_t *image_code = jl_check_image_code(code);
+    if (split && !native_code)
+        jl_error("a split image needs native code");
+    if (compress && !split)
+        jl_error("only a split image can be compressed");
+    int trim = jl_svecref(image_code, 4) == jl_true;
+    // without trimming, codegen keeps the roots of its code in method roots unless `--strip-ir`
+    if (native_code && strip_ir && !trim && !jl_options.strip_ir)
+        jl_error("stripping the IR of an image with native code needs `--strip-ir`");
+    jl_image_options_t opts;
+    opts.trim = trim;
+    opts.strip_ir = strip_ir;
+    opts.strip_metadata = strip_metadata;
+    opts.keep_codegen_ir = keep_codegen_ir;
+    opts.emit_split = split;
+    opts.compress = compress;
+    opts.cpu_target = jl_options.cpu_target;
+
+    jl_task_t *ct = jl_current_task;
+    jl_array_t *udeps = NULL;
+    jl_value_t *result = NULL;
+    JL_GC_PUSH2(&udeps, &result);
+    uint32_t checksum = 0;
+    int64_t srctextpos = 0;
+    jl_wait_for_tasks_and_finalizers(ct);
+    ios_t *s;
+    JL_TRY {
+        s = jl_serialize_heap_code(worklist, image_code, native_code, &opts, &checksum, &udeps,
+                                   &srctextpos);
+    }
+    JL_CATCH {
+        jl_gc_enable_finalizers(ct, 1);
+        jl_rethrow();
+    }
+    jl_gc_enable_finalizers(ct, 1);
+    result = jl_box_voidpointer(s);
+    result = (jl_value_t*)jl_svec(4, result, jl_box_uint32(checksum),
+                                  udeps ? (jl_value_t*)udeps : jl_nothing, jl_box_int64(srctextpos));
+    JL_GC_POP();
+    return result;
+}
+
+// Write the serialized heap `s` to `ji` and the native code to the other files (each NULL if not
+// wanted). This consumes both.
+JL_DLLEXPORT void jl_write_image(void *s, uint32_t checksum, int split, int compress,
+                                 jl_value_t *udeps, int64_t srctextpos, void *native_code,
+                                 const char *ji, const char *o, const char *bc,
+                                 const char *unopt_bc, const char *asm_)
+{
+    if (native_code ? !(o || bc || unopt_bc || asm_) : (o || bc || unopt_bc || asm_))
+        jl_error("native output files need native code, and native code needs one");
+    if (split ? !ji : (ji != NULL) == (native_code != NULL))
+        jl_error("a split image needs a `ji` file, and an image without native code needs one");
+    jl_output_files_t files;
+    files.ji = ji;
+    files.o = o;
+    files.bc = bc;
+    files.unopt_bc = unopt_bc;
+    files.s = asm_;
+    jl_emit_compiler_output(&files, (ios_t*)s, native_code, checksum, split, compress,
+                            jl_options.incremental, udeps == jl_nothing ? NULL : (jl_array_t*)udeps,
+                            srctextpos);
+    image_written = 1;
+}
+
 JL_DLLEXPORT void jl_write_compiler_output(void)
 {
-    if (!jl_generating_output()) {
+    if (!jl_generating_output() || image_written) {
         return;
     }
 
@@ -193,49 +373,30 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         return;
     }
 
-    jl_array_t *udeps = NULL, *init_order = NULL, *ext_foreign_cis = NULL, *mod_array = NULL;
-    JL_GC_PUSH5(&worklist, &udeps, &init_order, &ext_foreign_cis, &mod_array);
-    // the modules with an `__init__`, in order
-    init_order = jl_alloc_vec_any(0);
-    int i, l = jl_array_nrows(worklist);
-    for (i = 0; i < l; i++) {
-        jl_value_t *m = jl_array_ptr_ref(worklist, i);
-        jl_value_t *f = jl_get_global((jl_module_t*)m, jl_symbol("__init__"));
-        if (f) {
-            jl_array_ptr_1d_push(init_order, m);
-        }
-    }
-
-    void *native_code = NULL;
     bool_t emit_native = jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm;
-    bool_t emit_split = jl_options.outputji && emit_native;
-    int comp = jl_options.compress_sysimage;
-
-    jl_array_t *image_worklist = jl_options.incremental ? worklist : NULL;
-    if (emit_native) {
-        ext_foreign_cis = jl_alloc_vec_any(0);
-        native_code = jl_create_native_for_output(image_worklist, init_order, ext_foreign_cis,
-                                                  jl_options.trim,
-                                                  jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL);
-    }
-    // no more IR is retained to generate native code (the serializer leaves out what was)
-    jl_set_precompile_keep_ir(0);
+    jl_svec_t *code = jl_infer_image_code(worklist, emit_native, jl_options.trim != 0);
+    jl_array_t *udeps = NULL;
+    JL_GC_PUSH2(&code, &udeps);
+    void *native_code = NULL;
+    if (emit_native)
+        native_code = jl_generate_native_code(code);
+    else
+        jl_set_precompile_keep_ir(0);
 
     jl_image_options_t opts;
-    opts.trim = jl_options.trim;
+    opts.trim = jl_svecref(code, 4) == jl_true;
     opts.strip_ir = jl_options.strip_ir;
     opts.strip_metadata = jl_options.strip_metadata;
     // the IR is only retained to emit an object file (see `jl_precompile_keep_ir`)
     opts.keep_codegen_ir = jl_options.outputo == NULL;
-    opts.emit_split = emit_split;
-    opts.compress = comp;
+    opts.emit_split = jl_options.outputji && emit_native;
+    opts.compress = jl_options.compress_sysimage;
     opts.cpu_target = jl_options.cpu_target;
 
-    int64_t srctextpos = 0, checksumpos = 0;
-    ios_t *s = jl_prepare_system_image(image_worklist, &opts, &mod_array, &udeps, &srctextpos, &checksumpos);
-    uint32_t checksum =
-        jl_create_system_image(native_code, image_worklist, &opts, s, checksumpos, mod_array,
-                               init_order, ext_foreign_cis);
+    uint32_t checksum = 0;
+    int64_t srctextpos = 0;
+    ios_t *s = jl_serialize_heap_code(worklist, code, native_code, &opts, &checksum, &udeps,
+                                      &srctextpos);
 
     jl_output_files_t files;
     files.ji = jl_options.outputji;
@@ -243,16 +404,9 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     files.bc = jl_options.outputbc;
     files.unopt_bc = jl_options.outputunoptbc;
     files.s = jl_options.outputasm;
-    jl_emit_compiler_output(&files, s, native_code, checksum, emit_split, comp,
+    jl_emit_compiler_output(&files, s, native_code, checksum, opts.emit_split, opts.compress,
                             jl_options.incremental, udeps, srctextpos);
-
-    for (size_t i = 0; i < jl_current_modules.size; i += 2) {
-        if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
-            jl_printf(JL_STDERR, "\nWARNING: detected unclosed module: ");
-            jl_static_show(JL_STDERR, (jl_value_t*)jl_current_modules.table[i]);
-            jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for this module **\n\n");
-        }
-    }
+    image_written = 1;
     JL_GC_POP();
     jl_gc_enable_finalizers(ct, 1);
 }
