@@ -2141,3 +2141,63 @@ end
         gx_nt((1, 2))
     end"""; edition) == 3
 end
+
+# Per-method compiler options set via @compiler_options / @optlevel on a function
+# definition are recorded on the resulting Method.
+@testset "compiler options" begin
+    JuliaLowering.include_string(test_mod, raw"""
+    begin
+        Base.Experimental.@compiler_options optimize=2 compile=min infer=true function _test_opts_all(x)
+            x + 1
+        end
+        Base.Experimental.@compiler_options infer=false function _test_opts_noinfer(x)
+            x + 1
+        end
+        function _test_opts_body(x)
+            Base.Experimental.@optlevel 1
+            x + 1
+        end
+        _test_opts_plain(x) = x + 1
+        # `pushmeta!` merges these into one `meta` node
+        Base.Experimental.@optlevel 0 @inline function _test_opts_mixed(x)
+            x + 1
+        end
+        Base.Experimental.@optlevel 0 function _test_opts_kwopt(x::Int, y::Int=1; k::Int=2)
+            x + y + k
+        end
+    end
+    """)
+    m = only(methods(test_mod._test_opts_all))
+    @test (m.optlevel, m.compile, m.infer) === (0x02, 0x03, 0x01)
+    @test !any(x -> Meta.isexpr(x, :meta), Base.uncompressed_ast(m).code)
+    m = only(methods(test_mod._test_opts_noinfer))
+    @test m.infer === 0x00 && m.nospecialize == -1
+    @test only(methods(test_mod._test_opts_body)).optlevel === 0x01
+    m = only(methods(test_mod._test_opts_plain))
+    @test (m.optlevel, m.compile, m.infer) === (0xff, 0xff, 0xff)
+    m = only(methods(test_mod._test_opts_mixed))
+    @test m.optlevel === 0x00 && Base.uncompressed_ast(m).inlining == 0x01
+
+    # options propagate to positional-default wrappers and the kwcall sorter
+    fko = test_mod._test_opts_kwopt
+    for m in (which(fko, (Int,)), which(fko, (Int, Int)),
+              which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(fko), Int)))
+        @test m.optlevel === 0x00
+    end
+
+    # module-level options are applied in control-flow order
+    mod_cond = Module()
+    JuliaLowering.include_string(mod_cond, raw"""
+    cond = false
+    if cond
+        Base.Experimental.@compiler_options optimize=0 infer=false
+    end
+    """)
+    @test ccall(:jl_get_module_optlevel, Cint, (Any,), mod_cond) == -1
+    mod_cond2 = Module()
+    JuliaLowering.include_string(mod_cond2, raw"""
+    Base.Experimental.@compiler_options optimize=0 infer=false
+    """)
+    @test ccall(:jl_get_module_optlevel, Cint, (Any,), mod_cond2) == 0
+    @test ccall(:jl_get_module_infer, Cint, (Any,), mod_cond2) == 0
+end

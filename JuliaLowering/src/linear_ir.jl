@@ -988,24 +988,32 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == :meta
         if numchildren(ex) >= 1
-            # Certain blessed forms are allowed to share a meta expression;
-            # others (nkw, optlevel) treat ex[1] as head and ex[2:end] as args
-            if head(ex[1]) === :purity ||
-                head(ex[1]) === :symbol && syntax_name(ex[1]) in (
-                    "inline", "noinline", "propagate_inbounds",
-                    "nospecializeinfer", "aggressive_constprop", "no_constprop")
-                for c in children(ex)
-                    if head(c) === :purity
-                        old = get(ctx.meta, :purity, UInt16(0))::UInt16
-                        ctx.meta[:purity] = (old | purity_expr_to_flags(c))::UInt16
-                    elseif head(c) === :symbol
-                        ctx.meta[Symbol(syntax_name(c))] = true
-                    else
-                        @jl_assert false c
+            # Classify each child independently: `Base.pushmeta!` may merge e.g.
+            # `@inline` and `@optlevel` into one node. A method's optlevel/infer and
+            # the blessed inline/purity markers are consumed into the CodeInfo;
+            # anything else (including `compile`, which goes on the Method, and all
+            # options in a top-level thunk) is left as a statement.
+            leftover = SyntaxList()
+            for c in children(ex)
+                hc = head(c)
+                if hc in (:optlevel, :infer) && !ctx.is_toplevel_thunk
+                    v = numchildren(c) == 1 && head(c[1]) === :value ? c[1].value : nothing
+                    if v isa Integer && 0 <= v <= (hc === :infer ? 1 : 3)
+                        ctx.meta[hc] = UInt8(v)
                     end
+                elseif hc === :purity
+                    old = get(ctx.meta, :purity, UInt16(0))::UInt16
+                    ctx.meta[:purity] = (old | purity_expr_to_flags(c))::UInt16
+                elseif hc === :symbol && syntax_name(c) in (
+                        "inline", "noinline", "propagate_inbounds",
+                        "nospecializeinfer", "aggressive_constprop", "no_constprop")
+                    ctx.meta[Symbol(syntax_name(c))] = true
+                else
+                    push!(leftover, c)
                 end
-            else
-                emit(ctx, ex)
+            end
+            if !isempty(leftover)
+                emit(ctx, @ast ctx ex [:meta leftover...])
             end
         end
         if needs_value

@@ -639,6 +639,8 @@ function to_code_info(ex::SyntaxTree)
     min_world           = Csize_t(1)
     max_world           = typemax(Csize_t)
     isva                = false
+    optlevel            = get(meta, :optlevel, 0xff)
+    infer               = get(meta, :infer, 0xff)
     inlining_cost       = 0xffff
     rettype             = Any
 
@@ -667,6 +669,8 @@ function to_code_info(ex::SyntaxTree)
         inlining,
         constprop,
         purity,
+        optlevel,
+        infer,
         inlining_cost
     )
 end
@@ -798,6 +802,11 @@ function _to_lowered_expr(ex::SyntaxTree)
             k == :popaliasscope ||
             k == :new_opaque_closure ||
             k == :the_exception ||
+            # compiler options left as `(meta ...)` statements for the interpreter
+            k == :optlevel ||
+            k == :compile ||
+            k == :infer ||
+            k == :max_methods ||
             throw(LoweringError(ex, "Unknown syntax form $k"))
         ret = Expr(k)
         for e in children(ex)

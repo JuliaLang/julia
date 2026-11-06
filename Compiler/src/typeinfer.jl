@@ -1384,6 +1384,14 @@ function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, 
     return mresult
 end
 
+# Inference can be disabled by the method (or its module), or by a generated expansion
+# for its instance via `Expr(:meta, Expr(:infer, 0))`.
+function inference_disabled(interp::AbstractInterpreter, method::Method, src::Union{Nothing,CodeInfo}=nothing)
+    InferenceParams(interp).force_enable_inference && return false
+    ccall(:jl_get_method_infer, Cint, (Any,), method) == 0 && return true
+    return src !== nothing && src.infer === 0x00
+end
+
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState, edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
     mi = specialize_method(method, atype, sparams)
@@ -1406,8 +1414,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         cache_mode = CACHE_MODE_LOCAL
         edge_ci = missing_source_edge
     end
-    if !InferenceParams(interp).force_enable_inference && ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
-        add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target module")
+    if inference_disabled(interp, method)
+        add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target method")
         return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited, edgerecursed))
     end
     if !edgerecursed && !edgelimited
@@ -1448,15 +1456,18 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             result.ci = ccall(:jl_new_codeinst_uninit, Any, (Any, Any),
                 mi, cache_owner(interp))::CodeInstance
         end
-        frame = InferenceState(result, cache_mode, interp) # always use the cache for edge targets
-        if frame === nothing
-            add_remark!(interp, caller, "[typeinf_edge] Failed to retrieve source")
-            # can't get the source for this, so we know nothing
+        src = retrieve_code_info(mi, get_inference_world(interp))
+        if src === nothing || inference_disabled(interp, method, src)
+            # can't get the source for this (or may not infer it), so we know nothing
+            add_remark!(interp, caller, src === nothing ? "[typeinf_edge] Failed to retrieve source" :
+                "[typeinf_edge] Inference is disabled for the target instance")
             if ci_from_engine !== nothing
                 engine_reject(interp, ci_from_engine)
             end
             return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited, edgerecursed))
         end
+        maybe_validate_code(mi, src, "lowered")
+        frame = InferenceState(result, src, cache_mode, interp) # always use the cache for edge targets
         assign_parentchild!(frame, caller)
         # the actual inference task for this edge is going to be scheduled within `typeinf_local` via the callstack queue
         # while splitting off the rest of the work for this caller into a separate workq thunk
@@ -1877,28 +1888,21 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
             return code
         end
     end
-    if !InferenceParams(interp).force_enable_inference
-        if isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0
-            src = retrieve_code_info(mi, get_inference_world(interp))
-            if src isa CodeInfo
-                finish!(interp, mi, ci, src)
-            else
-                engine_reject(interp, ci)
-                ccall(:jl_typeinf_timing_end, Cvoid, (UInt64, Cint), start_time, 0)
-                return nothing
-            end
-            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64, Cint), start_time, 0)
-            return ci
-        end
-    end
-    result = InferenceResult(mi, typeinf_lattice(interp))
-    result.ci = ci
-    frame = InferenceState(result, #=cache_mode=#:global, interp)
-    if frame === nothing
+    src = retrieve_code_info(mi, get_inference_world(interp))
+    if src === nothing
         engine_reject(interp, ci)
         ccall(:jl_typeinf_timing_end, Cvoid, (UInt64, Cint), start_time, 0)
         return nothing
     end
+    if isa(def, Method) && inference_disabled(interp, def, src)
+        finish!(interp, mi, ci, src)
+        ccall(:jl_typeinf_timing_end, Cvoid, (UInt64, Cint), start_time, 0)
+        return ci
+    end
+    result = InferenceResult(mi, typeinf_lattice(interp))
+    result.ci = ci
+    maybe_validate_code(mi, src, "lowered")
+    frame = InferenceState(result, src, CACHE_MODE_GLOBAL, interp)
     typeinf(interp, frame)
     ccall(:jl_typeinf_timing_end, Cvoid, (UInt64, Cint), start_time, 0)
 

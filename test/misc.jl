@@ -1909,3 +1909,158 @@ if !Sys.iswindows() && !running_under_rr()
         end
     end
 end
+
+# Per-method compiler options
+using InteractiveUtils: code_llvm
+function _test_optattr(f, types)
+    ir = sprint(io -> code_llvm(io, f, types; raw=true, dump_module=true, optimize=false))
+    m = match(r"\"julia-optimization-level\"=\"(\d)\"", ir)
+    return m === nothing ? nothing : m[1]
+end
+@testset "per-method compiler options" begin
+    Base.Experimental.@compiler_options optimize=0 function _test_opts_opt0(x)
+        x + 1
+    end
+    Base.Experimental.@optlevel 1 function _test_opts_opt1(x)
+        x + 1
+    end
+    function _test_opts_body(x)
+        Base.Experimental.@optlevel 2
+        x + 1
+    end
+    Base.Experimental.@compiler_options compile=min function _test_opts_min(x)
+        x + 1
+    end
+    Base.Experimental.@compiler_options infer=false function _test_opts_noinfer(x)
+        x + 1
+    end
+    Base.Experimental.@compiler_options optimize=2 compile=min infer=true function _test_opts_all(x)
+        x + 1
+    end
+    _test_opts_plain(x) = x + 1
+
+    m = only(methods(_test_opts_all))
+    @test (m.optlevel, m.compile, m.infer) === (0x02, 0x03, 0x01)
+    @test !any(x -> Meta.isexpr(x, :meta), only(code_lowered(_test_opts_all)).code)
+    m = only(methods(_test_opts_plain))
+    @test (m.optlevel, m.compile, m.infer) === (0xff, 0xff, 0xff)
+
+    @test _test_optattr(_test_opts_opt0, (Int,)) == "0"
+    @test _test_optattr(_test_opts_opt1, (Int,)) == "1"
+    @test _test_optattr(_test_opts_body, (Int,)) == "2"
+    @test _test_optattr(_test_opts_plain, (Int,)) === nothing
+
+    _test_calls_noinfer(x) = _test_opts_noinfer(x)
+    @test only(Base.return_types(_test_calls_noinfer, (Int,))) == Any
+    @test only(Base.return_types(_test_opts_plain, (Int,))) == Int
+    # disabling inference implies @nospecialize
+    @test only(methods(_test_opts_noinfer)).nospecialize == -1
+
+    @test _test_opts_min(1) == 2
+    let ci = @atomic :acquire only(Base.specializations(only(methods(_test_opts_min)))).cache
+        @test (@atomic :acquire ci.invoke) ==
+            unsafe_load(cglobal(:jl_fptr_interpret_call_addr, Ptr{Cvoid}))
+    end
+
+    # options propagate to positional-default wrappers and the kwcall sorter
+    Base.Experimental.@optlevel 0 function _test_opts_kwf(x::Int, y::Int=1; k::Int=2)
+        x + y + k
+    end
+    @test _test_opts_kwf(1) == 4
+    for m in (which(_test_opts_kwf, (Int,)), which(_test_opts_kwf, (Int, Int)),
+              which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(_test_opts_kwf), Int)))
+        @test m.optlevel === 0x00
+    end
+
+    @test_throws "max_methods" @macroexpand Base.Experimental.@compiler_options max_methods=1 function _f(x)
+        x + 1
+    end
+    @test_throws "function definition with a body" @macroexpand Base.Experimental.@optlevel 1 function _f end
+    @test_throws "function definition with a body" @macroexpand Base.Experimental.@compiler_options optimize=1 function _f end
+    @test_throws "optimization level" @macroexpand Base.Experimental.@optlevel 5
+    @test_throws "optimization level" @macroexpand Base.Experimental.@compiler_options optimize=7 function _f(x)
+        x
+    end
+end
+
+struct _TestWrapper{P, F}
+    f::F
+end
+@testset "per-expansion compiler options" begin
+    @generated function _test_staged_opt(w::_TestWrapper{P}, x) where {P}
+        meta = P === nothing ? nothing : Expr(:meta, Expr(:optlevel, P))
+        return quote
+            $meta
+            w.f(x)
+        end
+    end
+    @generated function _test_staged_infer(w::_TestWrapper{P}, x) where {P}
+        meta = P ? Expr(:meta, Expr(:infer, 0)) : nothing
+        return quote
+            $meta
+            w.f(x)
+        end
+    end
+    _test_wrapper_f(x) = x .+ (1.0, 2.0, 3.0, 4.0)
+    wrap(P) = _TestWrapper{P, typeof(_test_wrapper_f)}(_test_wrapper_f)
+
+    @test _test_optattr(_test_staged_opt, (typeof(wrap(0)), Float64)) == "0"
+    @test _test_optattr(_test_staged_opt, (typeof(wrap(2)), Float64)) == "2"
+    @test _test_optattr(_test_staged_opt, (typeof(wrap(nothing)), Float64)) === nothing
+
+    @test _test_staged_infer(wrap(true), 1.0) == (2.0, 3.0, 4.0, 5.0)
+    _test_calls_staged(w, x) = _test_staged_infer(w, x)
+    @test only(Base.return_types(_test_calls_staged, (typeof(wrap(true)), Float64))) == Any
+    @test only(Base.return_types(_test_calls_staged, (typeof(wrap(false)), Float64))) == NTuple{4, Float64}
+end
+
+module _TestModuleOpts
+    Base.Experimental.@optlevel 1
+    Base.Experimental.@compiler_options compile=min max_methods=2
+    fmod(x) = x + 1
+    Base.Experimental.@compiler_options optimize=0 function fmeth(x)
+        x + 1
+    end
+end
+@testset "module-level compiler options" begin
+    # unset method options inherit from the module
+    mm = only(methods(_TestModuleOpts.fmod))
+    @test ccall(:jl_get_method_optlevel, Cint, (Any,), mm) == 1
+    @test ccall(:jl_get_method_compile, Cint, (Any,), mm) == 3
+    @test ccall(:jl_get_module_max_methods, Cint, (Any,), _TestModuleOpts) == 2
+    @test ccall(:jl_get_method_optlevel, Cint, (Any,), only(methods(_TestModuleOpts.fmeth))) == 0
+    @test ccall(:jl_get_module_optlevel, Cint, (Any,), _TestModuleOpts) == 1
+
+    # the function-definition form does not touch the module
+    m0 = Module()
+    Core.eval(m0, :(Base.Experimental.@optlevel 0 f(x) = x))
+    @test ccall(:jl_get_module_optlevel, Cint, (Any,), m0) == -1
+
+    # module options are applied in control-flow order
+    m1 = Module()
+    Core.eval(m1, quote
+        cond = false
+        if cond
+            Base.Experimental.@compiler_options infer=false optimize=0
+        end
+    end)
+    @test ccall(:jl_get_module_infer, Cint, (Any,), m1) == -1
+    @test ccall(:jl_get_module_optlevel, Cint, (Any,), m1) == -1
+    m2 = Module()
+    Core.eval(m2, quote
+        cond = true
+        if cond
+            Base.Experimental.@compiler_options infer=false optimize=0
+        end
+    end)
+    @test ccall(:jl_get_module_infer, Cint, (Any,), m2) == 0
+    @test ccall(:jl_get_module_optlevel, Cint, (Any,), m2) == 0
+
+    # infer=true on a method does not undo a module-wide @nospecialize
+    m3 = Module()
+    Core.eval(m3, quote
+        @nospecialize
+        Base.Experimental.@compiler_options infer=true f(x) = x + 1
+    end)
+    @test only(methods(m3.f)).nospecialize == -1
+end
