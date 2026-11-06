@@ -28,6 +28,11 @@ const libsuitesparseconfig = LazyLibrary(
         BundledLazyLibraryPath("libsuitesparseconfig.so.7")
     else
         error("SuiteSparse_jll: Library 'libsuitesparseconfig' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
+        LazyLibrary[libgcc_s]
+    else
+        LazyLibrary[]
     end
 )
 

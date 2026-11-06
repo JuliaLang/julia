@@ -76,7 +76,10 @@ const libgfortran = LazyLibrary(
     else
         error("CompilerSupportLibraries_jll: Library 'libgfortran' is not available for $(Sys.KERNEL)")
     end;
-    dependencies = @static if @isdefined(libquadmath)
+    # On aarch64 macOS, this library and libstdc++ do not link against libgcc_s
+    dependencies = @static if Sys.isapple() && Sys.ARCH === :aarch64
+        LazyLibrary[libquadmath]
+    elseif @isdefined(libquadmath)
         LazyLibrary[libgcc_s, libquadmath]
     else
         LazyLibrary[libgcc_s]
@@ -94,7 +97,11 @@ const libstdcxx = LazyLibrary(
     else
         error("CompilerSupportLibraries_jll: Library 'libstdcxx' is not available for $(Sys.KERNEL)")
     end;
-    dependencies = LazyLibrary[libgcc_s]
+    dependencies = @static if Sys.isapple() && Sys.ARCH === :aarch64
+        LazyLibrary[]
+    else
+        LazyLibrary[libgcc_s]
+    end
 )
 
 libgomp_path::String = ""
