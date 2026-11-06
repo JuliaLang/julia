@@ -355,6 +355,43 @@ end
             lattice, mi, argtypes, cache, UInt(2)))
         @test Compiler.constprop_cache_lookup(
             lattice, mi, argtypes, cache, UInt(3)) === nothing
+
+        function const_entry(val, tombstone=false)
+            given = copy(argtypes)
+            given[2] = Compiler.Const(val)
+            r = Compiler.InferenceResult(mi, given, overridden)
+            r.tombstone = tombstone
+            r.cache_world = UInt(2)
+            r.valid_worlds = Compiler.WorldRange(UInt(1), UInt(3))
+            return r
+        end
+        function completed_entry(val)
+            r = const_entry(val)
+            r.result = Int
+            return Compiler.LocalInferenceResult(r, proof, UInt(2))
+        end
+
+        # each constant finds its own entry
+        entries = (completed_entry(1), completed_entry(2))
+        cache = Compiler.InferenceCache()
+        foreach(entry -> push!(cache, entry), entries)
+        for entry in entries
+            @test Compiler.constprop_cache_lookup(
+                lattice, mi, entry.result.argtypes, cache, UInt(2)) === entry
+        end
+        @test Compiler.constprop_cache_lookup(
+            lattice, mi, const_entry(3).argtypes, cache, UInt(2)) === nothing
+
+        # a conditional that is always true finds the entry for `true`, including rejected work
+        query = copy(argtypes)
+        query[2] = Compiler.Conditional(2, 0, Any, Union{})
+        completed = completed_entry(true)
+        cycle = const_entry(true)
+        for (entry, expected) in ((completed, completed), (cycle, cycle), (const_entry(true, true), missing))
+            cache = Compiler.InferenceCache()
+            push!(cache, entry)
+            @test Compiler.constprop_cache_lookup(lattice, mi, query, cache, UInt(2)) === expected
+        end
     end
 
     @testset "proof streams and paired edges" begin

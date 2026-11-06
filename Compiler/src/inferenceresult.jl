@@ -218,11 +218,12 @@ function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance,
                                 given_argtypes::Vector{Any}, cache::InferenceCache,
                                 world::UInt)
     nargtypes = length(given_argtypes)
-    indices = get_indices(cache, mi)
+    indices = get_constprop_indices(cache, mi, given_argtypes)
     found_tombstone = false
     for idx in indices
         cached = cache.results[idx]
         cached_result = cached isa LocalInferenceResult ? cached.result : cached
+        cached_result.linfo === mi || continue
         cached_result.cache_world == world || continue
         valid_worlds = cached isa LocalInferenceResult ?
             proof_worlds(cached.proof) : cached_result.valid_worlds
@@ -239,9 +240,7 @@ function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance,
             @assert isvarargtype((unwrap_unionall(mi.specTypes)::DataType).parameters[end]) "invalid `cache_argtypes` for `mi`"
             @goto next_cache
         end
-        cache_overridden_by_const = cached_result.overridden_by_const
-        cache_overridden_by_const === nothing && continue
-        cache_overridden_by_const = cache_overridden_by_const::BitVector
+        cache_overridden_by_const = cached_result.overridden_by_const::BitVector
         for i in 1:nargtypes
             if !is_argtype_match(𝕃, given_argtypes[i], cache_argtypes[i], cache_overridden_by_const[i])
                 @goto next_cache
