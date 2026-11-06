@@ -639,6 +639,11 @@ static inline void add_named_global(StringRef name, T *addr JL_CANSAFEPOINT)
     // data and code pointers
     add_named_global(name, (void*)(uintptr_t)addr);
 }
+template<typename T>
+static inline void add_shared_named_global(StringRef name, T *addr JL_CANSAFEPOINT)
+{
+    add_shared_named_global(name, (void*)(uintptr_t)addr);
+}
 
 static AttributeSet Attributes(LLVMContext &C, std::initializer_list<Attribute::AttrKind> attrkinds, std::initializer_list<Attribute> extra={})
 {
@@ -11386,7 +11391,6 @@ static void init_jit_functions(void)
     add_named_global("jl_fptr_args", jl_fptr_args_addr);
     add_named_global("jl_fptr_sparam", jl_fptr_sparam_addr);
     add_named_global(jl_small_typeof_var, &jl_small_typeof);
-    add_named_global(jlstack_chk_guard_var, &__stack_chk_guard);
     add_named_global(jlRTLD_DEFAULT_var, &jl_RTLD_DEFAULT_handle);
     add_named_global(jlexe_var, &jl_exe_handle);
     add_named_global(jldll_var, &jl_libjulia_handle);
@@ -11402,7 +11406,6 @@ static void init_jit_functions(void)
     global_jlvalue_to_llvm(new JuliaVariable{"jl_diverror_exception", true, size2pjlvalue}, &jl_diverror_exception);
     global_jlvalue_to_llvm(new JuliaVariable{"jl_undefref_exception", true, size2pjlvalue}, &jl_undefref_exception);
     add_named_global(jlgetworld_global, &jl_world_counter);
-    add_named_global("__stack_chk_fail", &__stack_chk_fail);
     add_named_global(jlpgcstack_func, (void*)NULL);
     add_named_global(jlerror_func, &jl_error);
     add_named_global(jlatomicerror_func, &jl_atomic_error);
@@ -11481,19 +11484,25 @@ static void init_jit_functions(void)
     add_shared_named_global("jl_pgcstack_key_slot", (void*)&pgcstack_key_slot);
     add_shared_named_global("jl_image_tls_offset", (void*)&jl_tls_offset);
 
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+    add_named_global("__julia_personality", &__julia_personality);
+#endif
+
+    // referenced by LLVM itself (stack protector, stack probes)
+    add_shared_named_global(jlstack_chk_guard_var->name, &__stack_chk_guard);
+    add_shared_named_global("__stack_chk_fail", &__stack_chk_fail);
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
-    add_named_global("__julia_personality", &__julia_personality);
 #if defined(__MINGW32__)
-    add_named_global("___chkstk_ms", &___chkstk_ms);
+    add_shared_named_global("___chkstk_ms", &___chkstk_ms);
 #else
-    add_named_global("__chkstk", &__chkstk);
+    add_shared_named_global("__chkstk", &__chkstk);
 #endif
 #else
 #if defined(__MINGW32__)
-    add_named_global("_alloca", &_alloca);
+    add_shared_named_global("_alloca", &_alloca);
 #else
-    add_named_global("_chkstk", &_chkstk);
+    add_shared_named_global("_chkstk", &_chkstk);
 #endif
 #endif
 #endif
