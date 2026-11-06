@@ -1992,6 +1992,16 @@ end
     A = [1]
     @test prepend!(A, [2, 3], [4], [5, 6]) === A
     @test A == [2, 3, 4, 5, 6, 1]
+    A = [1, 2, 3]
+    @test append!(A, A, A) == [1, 2, 3, 1, 2, 3, 1, 2, 3]
+    A = [1, 2, 3]
+    @test prepend!(A, A, A) == [1, 2, 3, 1, 2, 3, 1, 2, 3]
+    A = Int[]
+    @test append!(A, [1], A, OffsetArray(A, 0)) == [1]
+    A = Int[]
+    @test prepend!(A, OffsetArray(A, 0), A, [1]) == [1]
+    A = [1, 2]
+    @test append!(A, view(A, 2:-1:1), OffsetArray(A, 5)) == [1, 2, 2, 1, 1, 2]
 
     # offset array
     @test append!([1,2], OffsetArray([9,8], (-3,))) == [1,2,9,8]
