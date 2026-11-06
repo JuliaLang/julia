@@ -1642,7 +1642,7 @@ function setup_interface(
                         isprompt_paste = true
                         curr_prompt_len = sizeof(detected_pkg_prompt)
                         oldpos += curr_prompt_len
-                        Base.active_repl.interface.modes[1].keymap_dict[']'](s, o...)
+                        julia_prompt.keymap_dict[']'](s, o...)
                         pasting_help = false
                     # Check if input line starts with "shell> ", remove it if we are in prompt paste mode and switch mode
                     elseif (firstline || isprompt_paste) && startswith(substr, SHELL_PROMPT)
