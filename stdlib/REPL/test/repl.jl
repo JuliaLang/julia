@@ -1276,6 +1276,10 @@ press_repl!(keys) = press_repl!((_...) -> nothing, keys)
     repl, s = press_repl!("\x7fab\x01\x7f")
     @test LineEdit.mode(s) === julia_mode(repl)
     @test input(s) == "ab"
+    # neither does pasting a pkg prompt
+    repl, s = press_repl!("\e[200~pkg> st\e[201~")
+    @test LineEdit.mode(s) === repl.interface.modes[4]
+    @test input(s) == "st"
 
     # ^C leaves a mode and drops the input
     repl, s = press_repl!(";ls\x03")
