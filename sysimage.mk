@@ -211,7 +211,7 @@ $$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(buil
 .SECONDARY: $$(build_private_libdir)/sysbase$1-o.a $(build_private_libdir)/sysbase$1-bc.a # request Make to keep these files around
 endef
 
-$(eval $(call base_builder,,-O1,$(JULIA_BOOTSTRAP_EXECUTABLE_release)))
-$(eval $(call base_builder,-debug,-O0,$(JULIA_BOOTSTRAP_EXECUTABLE_debug)))
+$(eval $(call base_builder,,-O1,$(JULIA_EXECUTABLE_release)))
+$(eval $(call base_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
 $(eval $(call sysimg_builder,,-O3,$(JULIA_BOOTSTRAP_EXECUTABLE_release),$(JULIA_BOOTSTRAP_SYSBASE_release)))
 $(eval $(call sysimg_builder,-debug,-O0,$(JULIA_BOOTSTRAP_EXECUTABLE_debug),$(JULIA_BOOTSTRAP_SYSBASE_debug)))
