@@ -65,12 +65,14 @@ function showerror(io::IO, exc::StringIndexError)
     if firstindex(s) <= exc.index <= ncodeunits(s)
         iprev = thisind(s, exc.index)
         inext = nextind(s, iprev)
-        escprev = escape_string(s[iprev:iprev])
-        if inext <= ncodeunits(s)
-            escnext = escape_string(s[inext:inext])
-            print(io, ", valid nearby indices [$iprev]=>'$escprev', [$inext]=>'$escnext'")
-        else
-            print(io, ", valid nearby index [$iprev]=>'$escprev'")
+        if isvalid(s, iprev)
+            escprev = escape_string(s[iprev:iprev])
+            if inext <= ncodeunits(s) && isvalid(s, inext)
+                escnext = escape_string(s[inext:inext])
+                print(io, ", valid nearby indices [$iprev]=>'$escprev', [$inext]=>'$escnext'")
+            else
+                print(io, ", valid nearby index [$iprev]=>'$escprev'")
+            end
         end
     end
 end

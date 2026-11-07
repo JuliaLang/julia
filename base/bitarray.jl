@@ -458,8 +458,8 @@ function _copyto_int!(dest::BitArray, doffs::Int, src::Union{BitArray,Array}, so
     n < 0 && throw(ArgumentError("Number of elements to copy must be non-negative."))
     soffs < 1 && throw(BoundsError(src, soffs))
     doffs < 1 && throw(BoundsError(dest, doffs))
-    n > length(src) - soffs + 1 && throw(BoundsError(src, length(src)+1))
-    n > length(dest) - doffs + 1 && throw(BoundsError(dest, length(dest)+1))
+    n > length(src) - soffs + 1 && throw_boundserror(src, length(src)+1)
+    n > length(dest) - doffs + 1 && throw_boundserror(dest, length(dest)+1)
     return unsafe_copyto!(dest, doffs, src, soffs, n)
 end
 
@@ -1935,8 +1935,19 @@ end
 # hvcat -> use fallbacks in abstractarray.jl
 
 
-# BitArray I/O lives in io.jl (it takes a `cancel` keyword, whose plumbing
-# is not yet loaded at this point of bootstrap)
+# BitArray I/O
+
+write(s::IO, B::BitArray) = write(s, B.chunks)
+function read!(s::IO, B::BitArray)
+    n = length(B)
+    Bc = B.chunks
+    read!(s, Bc)
+    if length(Bc) > 0 && Bc[end] & _msk_end(n) ≠ Bc[end]
+        Bc[end] &= _msk_end(n) # ensure that the BitArray is not broken
+        throw(DimensionMismatch("read mismatch, found non-zero bits after BitArray length"))
+    end
+    return B
+end
 
 sizeof(B::BitArray) = sizeof(B.chunks)
 

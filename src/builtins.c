@@ -338,8 +338,6 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         case jl_module_tag:
         case jl_bool_tag:
         case jl_nothing_tag:
-        case jl_cancel_source_tag: // mutable: identity (a == b checked above)
-        case jl_wait_entry_tag:    // mutable: identity (a == b checked above)
             return 0;
         case jl_simplevector_tag:
             return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
@@ -642,9 +640,7 @@ JL_CALLABLE(jl_f_sizeof)
             else
                 jl_errorf("Argument is an incomplete %s type and does not have a definite size.", jl_symbol_name(dx->name->name));
         }
-        if (jl_is_layout_opaque(dx->layout) || // includes all GenericMemory{kind,T}
-            dx == jl_cancel_source_type ||     // variable-sized (layout covers only the fixed fields)
-            dx == jl_wait_entry_type)          // variable-sized likewise
+        if (jl_is_layout_opaque(dx->layout)) // includes all GenericMemory{kind,T}
             jl_errorf("Type %s does not have a definite size.", jl_symbol_name(dx->name->name));
         return jl_box_long(jl_datatype_size(x));
     }
@@ -656,18 +652,6 @@ JL_CALLABLE(jl_f_sizeof)
         return jl_box_long(strlen(jl_symbol_name((jl_sym_t*)x)));
     if (jl_is_svec(x))
         return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
-    if (jl_is_cancel_source(x)) {
-        // variable-sized: one link entry per parent follows the fixed fields
-        jl_cancel_source_t *cs = (jl_cancel_source_t*)x;
-        return jl_box_long(sizeof(jl_cancel_source_t) +
-                           cs->nparents * sizeof(jl_cancel_parent_link_t));
-    }
-    if (jl_is_wait_entry(x)) {
-        // variable-sized: one wait slot per `nslots` follows the fixed fields
-        jl_wait_entry_t *w = (jl_wait_entry_t*)x;
-        return jl_box_long(sizeof(jl_wait_entry_t) +
-                           w->nslots * sizeof(jl_wait_slot_t));
-    }
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->name->abstract);
@@ -742,49 +726,6 @@ JL_CALLABLE(jl_f_current_scope)
 {
     JL_NARGS(current_scope, 0, 0);
     return jl_current_task->scope;
-}
-
-JL_CALLABLE(jl_f__new_cancel_source)
-{
-    // each argument is a parent CancellationTokenSource (checked, along
-    // with distinctness, by jl_new_cancel_source); no arguments makes a
-    // root source
-    return jl_new_cancel_source(args, nargs);
-}
-
-// cancellation_point!(src::Union{Nothing, Core.CancellationTokenSource})::UInt8
-// Returns a status byte: 0x00 nothing pending; the (nonzero) severity if
-// `src` is cancelled; the 0x40 bit is set if a preempt (cooperative yield)
-// request is pending.
-// N.B.: this runtime version only *checks* the source. Publishing the source
-// into `ct->bound_cancel_token` is done exclusively by the codegen'ed
-// lowering: the binding describes the async-interruptible region that the
-// CancellationLowering pass produces around the compiled cancellation point
-// (reset_ctx), which has no interpreter equivalent.
-JL_CALLABLE(jl_f_cancellation_point)
-{
-    JL_NARGS(cancellation_point!, 1, 1);
-    jl_task_t *ct = jl_current_task;
-    jl_value_t *src = args[0];
-    // A cancellation point is also a GC safepoint (the compiled lowering
-    // emits one): keep that for the interpreted/fallback path too, so a
-    // polling loop that never reaches the specialized lowering cannot
-    // starve a stop-the-world request.
-    jl_gc_safepoint();
-    uint8_t st = 0;
-    if (src != jl_nothing) {
-        JL_TYPECHK(cancellation_point!, cancel_source, src);
-        st = jl_atomic_load_relaxed(&((jl_cancel_source_t*)src)->state);
-    }
-    // The 0x40 bit reports a pending cooperative-yield request. The
-    // compiled lowering additionally reports a delivered preempt shootdown
-    // (the reset point's setjmp returning JL_RESET_CODE_PREEMPT), which has
-    // no interpreter equivalent - just as there is no interpreted reset
-    // region - but the shootdown also sets preempt_request, so the request
-    // is never lost here.
-    if (jl_atomic_load_relaxed(&ct->preempt_request))
-        st |= 0x40;
-    return jl_box_uint8(st);
 }
 
 // apply ----------------------------------------------------------------------
@@ -3081,8 +3022,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("CodeInfo", (jl_value_t*)jl_code_info_type);
     add_builtin("LLVMPtr", (jl_value_t*)jl_llvmpointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
-    add_builtin("CancellationTokenSource", (jl_value_t*)jl_cancel_source_type);
-    add_builtin("WaitEntryN", (jl_value_t*)jl_wait_entry_type);
 
     add_builtin("AddrSpace", (jl_value_t*)jl_addrspace_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);

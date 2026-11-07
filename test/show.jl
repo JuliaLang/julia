@@ -161,6 +161,10 @@ end
 @test_repr ":(:(:(x)))"
 @test_repr "-\"\""
 @test_repr "-(<=)"
+@test_repr "-(1)"
+@test_repr "-(-1)"
+@test_repr "+(1)"
+@test_repr "-(1.5)"
 @test_repr "\$x"
 @test_repr "\$(\"x\")"
 
@@ -201,6 +205,10 @@ end
 @test_repr "(!x)↑!a"
 @test_repr "(!x).a"
 @test_repr "(!x)::a"
+@test_repr ".-x"
+@test_repr "f(.+x, .~y)"
+@test_repr "(.-x)^a"
+@test_repr ".-(-1)"
 
 # invalid UTF-8 strings
 @test_repr "\"\\ud800\""
@@ -248,8 +256,15 @@ end
 @test repr(:((a=1,3;x=2))) == ":((a = 1, 3; x = 2))"
 @test repr(:(g(a,; b))) == ":(g(a; b))"
 @test repr(:(;)) == ":((;))"
-@test repr(:(-(;x))) == ":(-(; x))"
-@test repr(:(+(1, 2;x))) == ":(+(1, 2; x))"
+@test repr(:(-(;x))) == ":((-)(; x))"
+@test repr(:(+(1, 2;x))) == ":((+)(1, 2; x))"
+@test repr(:((+)(b; a = 1))) == ":((+)(b; a = 1))"
+@test_repr "(!)(b; a = 1)"
+@test_repr "(+)(a = 1)"
+@test_repr "(<:)(; a = 1)"
+@test_repr "(>:)(b, c; a = 1)"
+@test_repr "(&)(b, c; a = 1)"
+@test_repr "==(1, 2, atol = 0.1)"
 @test repr(:(1:2...)) == ":(1:2...)"
 
 @test repr(:(1 := 2)) == ":(1 := 2)"
@@ -304,6 +319,27 @@ end
 # range syntax
 @test_repr "1:2"
 @test_repr "3:4:5"
+@test_repr "a : :b"
+@test_repr "a : b : :c"
+@test_repr "x : :end"
+@test_repr "a : (:b).c"
+@test_repr "x : :(x + 1)"
+@test_repr "a : :b + 1"
+@test_repr "a : :b'ᵀ"
+@test string(Meta.parse("a : :b")) == "a : :b"
+@test string(Meta.parse("a:(:b)[1]")) == "a:(:b)[1]"
+struct RangeEndpointShowCounter
+    calls::Ref{Int}
+end
+Base.show(io::IO, x::RangeEndpointShowCounter) = (x.calls[] += 1; print(io, 1))
+let calls = Ref(0)
+    ex = RangeEndpointShowCounter(calls)
+    for _ in 1:12
+        ex = Expr(:call, :(:), 0, ex)
+    end
+    string(ex)
+    @test calls[] == 1
+end
 let ex4 = Expr(:call, :(:), 1, 2, 3, 4),
     ex1 = Expr(:call, :(:), 1)
     @test eval(Meta.parse(repr(ex4))) == ex4
@@ -504,6 +540,7 @@ end
 @test sprint(show, Symbol("foo \"bar")) == "Symbol(\"foo \\\"bar\")"
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
+@test sprint(show, :(=>)) == ":(=>)"
 
 # make sure :var"'" prints correctly
 @test sprint(show, Symbol("'")) == "Symbol(\"'\")"
@@ -518,6 +555,10 @@ end
 @test Meta.isidentifier(Symbol("x1"))
 @test !Meta.isidentifier(Symbol("x.1"))
 @test !Meta.isidentifier(Symbol("1x"))
+@test !Meta.isidentifier("\x80")
+@test !Meta.isidentifier("a\xffb")
+@test !Meta.isoperator("'\x80")
+@test sprint(show, Symbol("\x80")) == "Symbol(\"\\x80\")"
 
 # issue #32408: Printing of names which are invalid identifiers
 # Invalid identifiers which need `var` quoting:
@@ -662,6 +703,12 @@ test_repr("let @m(x), y=z; end", true)
 @test_repr "1 => 2 => 3"
 @test_repr "1 => (2 => 3)"
 @test_repr "(1 => 2) => 3"
+
+for s in ("::(-1)", "::(!a)", "::(a + b)", "&(-1)", "\$(-1)",
+          "::(-0.0)", "&(-0.0)", "\$(-0.0)", "::(x::T)",
+          "-(-1)", "-(-0.0)", "(-1)'", "(-0.0)'")
+    @test string(Meta.parse(s)) == s
+end
 
 # pr 12008
 @test_repr "primitive type A B end"
@@ -1088,6 +1135,10 @@ end
 
 # Issue 14121
 @test_repr "(A'x)'"
+@test_repr "(-1)'"
+@test_repr "(-1.5)'ᵀ"
+@test_repr "-(-1)"
+@test_repr "-(-0.0)"
 
 
 # issue #14481
@@ -1197,6 +1248,13 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 @test_repr "Expr(:quote, Expr(:typed_hcat, Expr(:\$, :a), 1))"
 @test_repr repr(Expr(:quote, Expr(:typed_vcat, Expr(:$, :a), 1)))
 @test_repr repr(Expr(:quote, Expr(:typed_hcat, Expr(:$, :a), 1)))
+@test_repr "(a + b)[1 2]"
+@test_repr "(-a)[1;]"
+@test_repr "(a + b)[1;; 2]"
+@test string(Meta.parse("(a + b)[1 2]")) == "(a + b)[1 2]"
+@test_repr "(a + b)[x for x = xs]"
+@test_repr "(-a)[x for x = xs]"
+@test_repr "T[x for x = xs]"
 
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
@@ -1577,6 +1635,7 @@ test_repr("(:).a")
 @test repr(@NamedTuple{kw::NTuple{7, Int64}}) == "@NamedTuple{kw::NTuple{7, Int64}}"
 @test repr(@NamedTuple{a::Float64, b}) == "@NamedTuple{a::Float64, b}"
 @test repr(@NamedTuple{var"#"::Int64}) == "@NamedTuple{var\"#\"::Int64}"
+@test repr(@NamedTuple{var"+"::Int64, var"end"::Int64, in::Int64}) == "@NamedTuple{var\"+\"::Int64, var\"end\"::Int64, in::Int64}"
 # issue #60252. some abstract namedtuples cannot use this format
 @test repr(NamedTuple{(:a, :b), NTuple{N, Int64}} where N) == "NamedTuple{(:a, :b), NTuple{N, Int64}} where N"
 
@@ -1614,6 +1673,108 @@ let d = TextDisplay(IOBuffer())
     catch e
         @test e.f == show
     end
+end
+
+struct RecordingDisplay <: AbstractDisplay
+    log::Vector{Any}
+end
+RecordingDisplay() = RecordingDisplay(Any[])
+Base.display(d::RecordingDisplay, x::Int) = (push!(d.log, x); :plain)
+Base.display(d::RecordingDisplay, ::MIME"text/foo", x) = (push!(d.log, x); :foo)
+# Fails the way a display does when it can't handle a value, so lower displays get a turn.
+struct RejectingDisplay <: AbstractDisplay end
+Base.display(::RejectingDisplay, x) = show(devnull, MIME("image/x-none"), x)
+Base.display(::RejectingDisplay, m::MIME, x) = throw(MethodError(display, (m, x)))
+struct BrokenDisplay <: AbstractDisplay end
+Base.display(::BrokenDisplay, x) = error("broken display")
+Base.display(::BrokenDisplay, ::MIME, x) = error("broken display")
+
+# Which display in the stack handles each way of displaying and redisplaying a value
+@testset "display stack" begin
+    saved = copy(Base.Multimedia.displays)
+    empty!(Base.Multimedia.displays)
+    try
+        @test !displayable("text/foo")
+        @test_throws MethodError display(1)
+        @test_throws MethodError redisplay(1)
+
+        lower, upper = RecordingDisplay(), RecordingDisplay()
+        pushdisplay(lower)
+        pushdisplay(upper)
+        @test displayable("text/foo") && displayable(MIME("text/foo"))
+        @test displayable(upper, "text/foo") && !displayable(upper, "text/bar")
+        @test !displayable("text/bar")
+
+        forms = (display => :plain, redisplay => :plain,
+                 ((x -> f("text/foo", x)) => :foo for f in (display, redisplay))...,
+                 ((x -> f(MIME("text/foo"), x)) => :foo for f in (display, redisplay))...)
+        for (f, result) in forms
+            empty!(upper.log)
+            @test f(1) === result
+            @test upper.log == [1]
+            @test isempty(lower.log)
+        end
+        @test redisplay(lower, 2) === :plain
+        @test redisplay(lower, "text/foo", 3) === :foo
+        @test redisplay(lower, MIME("text/foo"), 4) === :foo
+        @test lower.log == [2, 3, 4]
+
+        # No display in the stack takes the value or the MIME type.
+        for f in (display, redisplay)
+            @test_throws MethodError f(1.5)
+            @test_throws MethodError f("text/bar", 1)
+            @test_throws MethodError f(MIME("text/bar"), 1)
+        end
+
+        # A display that can't handle the value passes it down, other errors are not hidden.
+        pushdisplay(RejectingDisplay())
+        for (f, result) in forms
+            empty!(upper.log)
+            @test f(1) === result
+            @test upper.log == [1]
+        end
+        popdisplay()
+        pushdisplay(BrokenDisplay())
+        for f in (display, redisplay)
+            @test_throws "broken display" f(1)
+            @test_throws "broken display" f("text/foo", 1)
+        end
+        @test popdisplay() === BrokenDisplay()
+
+        # The topmost copy is the one removed, and displays not in the stack are an error.
+        pushdisplay(lower)
+        @test popdisplay(lower) === lower
+        @test Base.Multimedia.displays == [lower, upper]
+        @test_throws KeyError popdisplay(RecordingDisplay())
+        @test popdisplay(lower) === lower
+        @test Base.Multimedia.displays == [upper]
+    finally
+        empty!(Base.Multimedia.displays)
+        append!(Base.Multimedia.displays, saved)
+    end
+
+    # A file stream holds output back until flushed, so this shows the flush reaches it.
+    mktemp() do path, io
+        d = TextDisplay(io)
+        display(d, 1)
+        flush(d)
+        @test read(path, String) == "1\n"
+        close(d)
+        @test !isopen(io)
+    end
+end
+
+struct BinaryShow end
+Base.show(io::IO, ::MIME"image/png", ::BinaryShow) = write(io, 0x01, 0x02)
+@testset "binary and text MIME types" begin
+    @test istextmime("text/anything")
+    @test istextmime("image/svg+xml")
+    @test istextmime(MIME("application/json"))
+    @test !istextmime("image/png")
+    @test repr("image/png", BinaryShow()) == [0x01, 0x02]
+    bytes = [0x03]
+    @test repr("image/png", bytes) === bytes
+    @test repr("application/json", "{}") == "{}"
 end
 
 struct TypeWith4Params{a,b,c,d}
@@ -3269,17 +3430,6 @@ end
     str = repr("text/plain", t)
     @test startswith(str, repr(t) * "\nshow failed Task\nStacktrace:\n")
     @test repr(t) == "Task (failed) @0x" * string(UInt(pointer_from_objref(t)), base=16, pad=Sys.WORD_SIZE>>2)
-end
-
-@testset "show CancellationTokenSource" begin
-    for (request, str) in ((Base.CANCEL_REQUEST_SAFE, "cancelled"),
-                           (Base.CANCEL_REQUEST_ABANDON_EXTERNAL, "cancelled, abandon external"),
-                           (Base.CANCEL_REQUEST_ABANDON_ALL, "cancelled, abandon all"))
-        src = Base.CancellationTokenSource()
-        @test repr(src) == "CancellationTokenSource(active)"
-        Base.cancel!(src, request)
-        @test repr(src) == "CancellationTokenSource($str)"
-    end
 end
 
 @testset "IO without context" begin

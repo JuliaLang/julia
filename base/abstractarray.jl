@@ -328,7 +328,7 @@ eachindex(A::AbstractVector) = (@inline(); axes1(A))
 # we unroll the join for easier inference
 _join_comma_and(indsA, indsB) = LazyString(indsA, " and ", indsB)
 _join_comma_and(indsA, indsB, indsC...) = LazyString(indsA, ", ", _join_comma_and(indsB, indsC...))
-@noinline function throw_eachindex_mismatch_indices(indices_str, indsA, indsBs...)
+@noinline function throw_eachindex_mismatch_indices(indices_str, indsA, indsBs::Vararg{Any,N}) where {N}
     throw(DimensionMismatch(
             LazyString("all inputs to eachindex must have the same ", indices_str, ", got ",
                 _join_comma_and(indsA, indsBs...))))
@@ -956,7 +956,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src)
         n = length(src)
         n == 0 && return dest
         @boundscheck checkbounds(dest, i)
-        @boundscheck n <= lastindex(dest) - i + 1 || throw(BoundsError(dest, i))
+        @boundscheck n <= lastindex(dest) - i + 1 || throw_boundserror(dest, i)
         for x in src
             @inbounds dest[i] = x
             i += 1
@@ -1007,7 +1007,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
     inds = LinearIndices(dest)
     sstart < 1 && throw(ArgumentError(LazyString("source start offset (",
         sstart,") is < 1")))
-    (dstart ∈ inds && n <= last(inds) - dstart + 1) || throw(BoundsError(dest, dstart))
+    (dstart ∈ inds && n <= last(inds) - dstart + 1) || throw_boundserror(dest, dstart)
     dstart = Int(dstart)
     n = Int(n)
     dmax = dstart + n - 1
@@ -1144,8 +1144,8 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
         n," elements, but n should be non-negative")))
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    (checkbounds(Bool, destinds, dstart) && n <= last(destinds) - dstart + 1) || throw(BoundsError(dest, dstart))
-    (checkbounds(Bool, srcinds, sstart)  && n <= last(srcinds) - sstart + 1)  || throw(BoundsError(src, sstart))
+    (checkbounds(Bool, destinds, dstart) && n <= last(destinds) - dstart + 1) || throw_boundserror(dest, dstart)
+    (checkbounds(Bool, srcinds, sstart)  && n <= last(srcinds) - sstart + 1)  || throw_boundserror(src, sstart)
     dstart = Int(dstart)
     sstart = Int(sstart)
     n = Int(n)

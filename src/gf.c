@@ -495,9 +495,8 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
     // increase that limit, we'll need to
     // allocate another bit for the counter.
     ct->reentrant_timing += 0b10;
-    // An asynchronous interruption in the middle of inference corrupts the
-    // compiler's state; sigatomic defers asynchronous unwinds (e.g. task
-    // abandonment) until inference has finished.
+    // An asynchronous InterruptException delivered in the middle of inference
+    // corrupts the compiler's state; defer it until inference has finished.
     JL_SIGATOMIC_BEGIN();
     JL_TRY {
         ci = (jl_code_instance_t*)jl_apply(fargs, 5);
@@ -541,8 +540,8 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
         JL_GC_POP();
     }
 
-    // end the deferral region, now that the compiler state is consistent
-    // again; keep `ci` rooted across the safepoint
+    // may rethrow a deferred InterruptException, now that the compiler state
+    // is consistent again; keep `ci` rooted across the safepoint
     fargs[0] = (jl_value_t*)ci;
     JL_SIGATOMIC_END();
     JL_GC_POP();
@@ -5239,6 +5238,27 @@ STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
     return v;
 }
 
+// Kept out of line so that the frame of every dynamic call (`jl_apply_generic`) stays small
+static NOINLINE jl_value_t *_jl_invoke_compile(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world,
+   enum internal_compilation_triggers cause) JL_CANSAFEPOINT
+{
+    int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    jl_code_instance_t *codeinst = jl_compile_method_very_internal(mfunc, world, F, args, nargs, cause);
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    if (jl_options.malloc_log)
+        jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
+    jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+    jl_value_t *res = invoke(F, args, nargs, codeinst);
+    return verify_type(res);
+}
+
 STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world,
    enum internal_compilation_triggers cause) JL_CANSAFEPOINT
 {
@@ -5248,21 +5268,7 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
         jl_value_t *res = invoke(F, args, nargs, codeinst);
         return verify_type(res);
     }
-    int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
-    int last_errno = errno;
-#ifdef _OS_WINDOWS_
-    DWORD last_error = GetLastError();
-#endif
-    codeinst = jl_compile_method_very_internal(mfunc, world, F, args, nargs, cause);
-#ifdef _OS_WINDOWS_
-    SetLastError(last_error);
-#endif
-    errno = last_errno;
-    if (jl_options.malloc_log)
-        jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
-    invoke = jl_atomic_load_acquire(&codeinst->invoke);
-    jl_value_t *res = invoke(F, args, nargs, codeinst);
-    return verify_type(res);
+    return _jl_invoke_compile(F, args, nargs, mfunc, world, cause);
 }
 
 JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
@@ -5385,6 +5391,100 @@ void call_cache_stats()
 }
 #endif
 
+// compute the entry hashes
+// use different parts of the value
+// so that a collision across all of
+// them is less likely
+STATIC_INLINE void call_cache_indices(uint32_t callsite, uint32_t cache_idx[4]) JL_NOTSAFEPOINT
+{
+    cache_idx[0] = (callsite) & (N_CALL_CACHE - 1);
+    cache_idx[1] = (callsite >> 8) & (N_CALL_CACHE - 1);
+    cache_idx[2] = (callsite >> 16) & (N_CALL_CACHE - 1);
+    cache_idx[3] = (callsite >> 24 | callsite << 8) & (N_CALL_CACHE - 1);
+}
+
+// The lookup beyond the call-site cache, kept out of line so that the frame of
+// every dynamic call (`jl_apply_generic`) stays small
+static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_value_t **args, uint32_t nargs,
+                                                             uint32_t callsite, size_t world, int for_call) JL_CANSAFEPOINT
+{
+    // recomputed rather than passed in: taking the address of the caller's array
+    // would put it on the stack and add a stack-protector check to `jl_apply_generic`
+    uint32_t cache_idx[4];
+    call_cache_indices(callsite, cache_idx);
+    jl_value_t *FT = jl_typeof(F);
+    jl_typemap_entry_t *entry = NULL;
+    jl_tupletype_t *tt = NULL;
+    int64_t last_alloc = 0;
+    // if no method was found in the associative cache, check the full cache
+    JL_TIMING(METHOD_LOOKUP_FAST, METHOD_LOOKUP_FAST);
+    jl_methcache_t *mc = jl_method_table->cache;
+    jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
+    int cache_entry_count = jl_atomic_load_relaxed(&((jl_datatype_t*)FT)->name->cache_entry_count);
+    if (leafcache != (jl_genericmemory_t*)jl_an_empty_memory_any && (cache_entry_count == 0 || cache_entry_count >= 8)) {
+        // hashing args is expensive, but so do that only if looking at mc->cache is probably even more expensive
+        tt = lookup_arg_type_tuple(F, args, nargs);
+        if (tt != NULL)
+            entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
+    }
+    if (entry == NULL) {
+        jl_typemap_t *cache = jl_atomic_load_relaxed(&mc->cache); // XXX: gc root required?
+        entry = jl_typemap_assoc_exact(cache, F, args, nargs, jl_cachearg_offset(), world);
+        if (entry == NULL) {
+            last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
+            if (tt == NULL) {
+                tt = arg_type_tuple(F, args, nargs);
+                // arg_type_tuple can allocate and hit a safepoint; a GC there may
+                // grow/replace mc->leafcache, freeing the memory `leafcache` still
+                // points at. Reload before dereferencing it in lookup_leafcache.
+                leafcache = jl_atomic_load_relaxed(&mc->leafcache);
+                entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
+            }
+        }
+    }
+    if (entry != NULL && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
+        // put the entry into the cache if it's valid for a leafsig lookup,
+        // using pick_which to slightly randomize where it ends up
+        // (intentionally not atomically synchronized, since we're just using it for randomness)
+        // TODO: use the thread's `cong` instead as a source of randomness
+        int which = jl_atomic_load_relaxed(&pick_which[cache_idx[0]]) + 1;
+        jl_atomic_store_relaxed(&pick_which[cache_idx[0]], which);
+        jl_atomic_store_release(&call_cache[cache_idx[which & 3]], entry);
+    }
+    if (entry && for_call) {
+        // mfunc was found in slow path, so log --trace-dispatch
+        jl_method_instance_t *mfunc = typemap_entry_linfo(entry);
+        record_dispatch_statement_on_first_dispatch(mfunc);
+    }
+
+    jl_method_instance_t *mfunc;
+    if (entry) {
+        mfunc = typemap_entry_linfo(entry);
+    }
+    else {
+        assert(tt);
+        // cache miss case
+        JL_GC_PUSH1(&tt);
+        mfunc = jl_mt_assoc_by_type(jl_method_table, mc, tt, world);
+        JL_GC_POP();
+        if (jl_options.malloc_log)
+            jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
+        if (for_call) {
+            if (mfunc == NULL) {
+#ifdef JL_TRACE
+                if (error_en)
+                    show_call(F, args, nargs);
+#endif
+                jl_method_error(F, args, nargs, world);
+                // unreachable
+            }
+            // mfunc was found in slow path, so log --trace-dispatch
+            record_dispatch_statement_on_first_dispatch(mfunc);
+        }
+    }
+    return mfunc;
+}
+
 STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t **args, uint32_t nargs,
                                                        uint32_t callsite, size_t world, int for_call) JL_CANSAFEPOINT
 {
@@ -5409,27 +5509,17 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
       if no generic match, use the concrete one even if inexact
       otherwise instantiate the generic method and use it
     */
-    // compute the entry hashes
-    // use different parts of the value
-    // so that a collision across all of
-    // them is less likely
-    uint32_t cache_idx[4] = {
-        (callsite) & (N_CALL_CACHE - 1),
-        (callsite >> 8) & (N_CALL_CACHE - 1),
-        (callsite >> 16) & (N_CALL_CACHE - 1),
-        (callsite >> 24 | callsite << 8) & (N_CALL_CACHE - 1)};
-    jl_typemap_entry_t *entry = NULL;
-    int i;
-    jl_tupletype_t *tt = NULL;
-    int64_t last_alloc = 0;
+    uint32_t cache_idx[4];
+    call_cache_indices(callsite, cache_idx);
+    jl_typemap_entry_t *entry;
+    jl_method_instance_t *mfunc;
     // check each cache entry to see if it matches
     //#pragma unroll
     //for (i = 0; i < 4; i++) {
     //    LOOP_BODY(i);
     //}
 #define LOOP_BODY(_i) do { \
-            i = _i; \
-            entry = jl_atomic_load_relaxed(&call_cache[cache_idx[i]]); \
+            entry = jl_atomic_load_relaxed(&call_cache[cache_idx[_i]]); \
             if (entry && nargs == jl_svec_len(entry->sig->parameters) && \
                 sig_match_fast(FT, args, jl_svec_data(entry->sig->parameters), nargs) && \
                 world >= jl_atomic_load_relaxed(&entry->min_world) && world <= jl_atomic_load_relaxed(&entry->max_world)) { \
@@ -5441,78 +5531,11 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     LOOP_BODY(2);
     LOOP_BODY(3);
 #undef LOOP_BODY
-    i = 4;
-    if (i == 4) {
-        // if no method was found in the associative cache, check the full cache
-        JL_TIMING(METHOD_LOOKUP_FAST, METHOD_LOOKUP_FAST);
-        jl_methcache_t *mc = jl_method_table->cache;
-        jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
-        entry = NULL;
-        int cache_entry_count = jl_atomic_load_relaxed(&((jl_datatype_t*)FT)->name->cache_entry_count);
-        if (leafcache != (jl_genericmemory_t*)jl_an_empty_memory_any && (cache_entry_count == 0 || cache_entry_count >= 8)) {
-            // hashing args is expensive, but so do that only if looking at mc->cache is probably even more expensive
-            tt = lookup_arg_type_tuple(F, args, nargs);
-            if (tt != NULL)
-                entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
-        }
-        if (entry == NULL) {
-            jl_typemap_t *cache = jl_atomic_load_relaxed(&mc->cache); // XXX: gc root required?
-            entry = jl_typemap_assoc_exact(cache, F, args, nargs, jl_cachearg_offset(), world);
-            if (entry == NULL) {
-                last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
-                if (tt == NULL) {
-                    tt = arg_type_tuple(F, args, nargs);
-                    // arg_type_tuple can allocate and hit a safepoint; a GC there may
-                    // grow/replace mc->leafcache, freeing the memory `leafcache` still
-                    // points at. Reload before dereferencing it in lookup_leafcache.
-                    leafcache = jl_atomic_load_relaxed(&mc->leafcache);
-                    entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
-                }
-            }
-        }
-        if (entry != NULL && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
-            // put the entry into the cache if it's valid for a leafsig lookup,
-            // using pick_which to slightly randomize where it ends up
-            // (intentionally not atomically synchronized, since we're just using it for randomness)
-            // TODO: use the thread's `cong` instead as a source of randomness
-            int which = jl_atomic_load_relaxed(&pick_which[cache_idx[0]]) + 1;
-            jl_atomic_store_relaxed(&pick_which[cache_idx[0]], which);
-            jl_atomic_store_release(&call_cache[cache_idx[which & 3]], entry);
-        }
-        if (entry && for_call) {
-            // mfunc was found in slow path, so log --trace-dispatch
-            jl_method_instance_t *mfunc = typemap_entry_linfo(entry);
-            record_dispatch_statement_on_first_dispatch(mfunc);
-        }
-    }
-
-    jl_method_instance_t *mfunc;
-    if (entry) {
+    mfunc = jl_lookup_generic_slow(F, args, nargs, callsite, world, for_call);
+    goto done;
 have_entry:
-        mfunc = typemap_entry_linfo(entry);
-    }
-    else {
-        assert(tt);
-        // cache miss case
-        jl_methcache_t *mc = jl_method_table->cache;
-        JL_GC_PUSH1(&tt);
-        mfunc = jl_mt_assoc_by_type(jl_method_table, mc, tt, world);
-        JL_GC_POP();
-        if (jl_options.malloc_log)
-            jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
-        if (for_call) {
-            if (mfunc == NULL) {
-#ifdef JL_TRACE
-                if (error_en)
-                    show_call(F, args, nargs);
-#endif
-                jl_method_error(F, args, nargs, world);
-                // unreachable
-            }
-            // mfunc was found in slow path, so log --trace-dispatch
-            record_dispatch_statement_on_first_dispatch(mfunc);
-        }
-    }
+    mfunc = typemap_entry_linfo(entry);
+done:
 
 #ifdef JL_TRACE
     if (traceen && for_call)

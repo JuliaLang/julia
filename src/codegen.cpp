@@ -1053,6 +1053,11 @@ static const auto jlinvokeoc_func = new JuliaFunction<>{
     get_func2_sig,
     get_func_attrs,
 };
+static const auto jlinvoketarget_func = new JuliaFunction<>{
+    XSTR(jl_invoke_target),
+    get_func2_sig,
+    get_func_attrs,
+};
 static const auto jlopaque_closure_call_func = new JuliaFunction<>{
     XSTR(jl_f_opaque_closure_call),
     get_func_sig,
@@ -1319,17 +1324,6 @@ static const auto jl_field_write_barrier_p13_func = new JuliaFunction<>{
             {JuliaType::get_prjlvalue_ty(C), PointerType::get(C, AddressSpace::Loaded),
              JuliaType::get_prjlvalue_ty(C)}, true); },
     getWriteBarrierAttributes,
-};
-
-static const auto jl_cancellation_point_func = new JuliaFunction<>{
-    "julia.cancellation_point",
-    [](LLVMContext &C) {
-        return FunctionType::get(getInt32Ty(C), {}, false);
-    },
-    [](LLVMContext &C) { return AttributeList::get(C,
-            Attributes(C, {Attribute::ReturnsTwice}),
-            AttributeSet(),
-            {}); }
 };
 
 static const auto jlisa_func = new JuliaFunction<>{
@@ -2231,14 +2225,6 @@ public:
     int nargs = 0;
     int nvargs = -1;
     bool is_opaque_closure = false;
-    // Index of the source statement currently being emitted, for ssaflags
-    // lookups (IR_FLAG_RESET_SAFE) by mark_reset_safe, which runs several
-    // call-emission layers below the statement loop where the index is no
-    // longer in scope. Statement-scoped context exactly like the debug
-    // location; it is reset to -1 outside statement emission so calls the
-    // compiler inserts on its own (prologue, phi copies, error paths) can
-    // never be tagged from a stale statement.
-    ssize_t current_stmt_idx = -1;
 
     Value *pgcstack = NULL;
     Instruction *topalloca = NULL;
@@ -2501,39 +2487,6 @@ static Value *emit_ptrgep(jl_codectx_t &ctx, Value *base, size_t byte_offset, co
     auto *gep = ctx.builder.CreateConstInBoundsGEP1_32(getInt8Ty(ctx.builder.getContext()), base, byte_offset);
     setName(ctx.emission_context, gep, Name);
     return gep;
-}
-
-// Check if the current statement has the reset_safe flag set
-static bool current_stmt_is_reset_safe(jl_codectx_t &ctx)
-{
-    if (ctx.current_stmt_idx < 0 || ctx.source == nullptr || ctx.source->ssaflags == nullptr)
-        return false;
-    size_t nstmts = jl_array_dim0(ctx.source->ssaflags);
-    if ((size_t)ctx.current_stmt_idx >= nstmts)
-        return false;
-    uint32_t flag = jl_array_data(ctx.source->ssaflags, uint32_t)[ctx.current_stmt_idx];
-    return (flag & IR_FLAG_RESET_SAFE) != 0;
-}
-
-// Check whether a set of encoded ipo_purity_bits proves the callee's own IPO
-// effects reset-safe. N.B.: kept in sync with Compiler/src/effects.jl
-// (encode_effects); 0 means "no recorded effects" and is treated
-// conservatively.
-static bool effects_ipo_reset_safe(uint32_t effects) JL_NOTSAFEPOINT
-{
-    return effects != 0 &&
-           ((effects >> 3) & 0x03u) == 0u && // is_effect_free
-           ((effects >> 15) & 0x03u) == 0u;  // is_reset_safe
-}
-
-// Mark a call instruction with reset_safe metadata if the current statement has the flag
-static void mark_reset_safe(jl_codectx_t &ctx, CallInst *call)
-{
-    if (call && current_stmt_is_reset_safe(ctx)) {
-        LLVMContext &llvmctx = ctx.builder.getContext();
-        MDNode *md = MDNode::get(llvmctx, {});
-        call->setMetadata("julia.reset_safe", md);
-    }
 }
 
 static Value *emit_ptrgep(jl_codectx_t &ctx, Value *base, Value *byte_offset, const Twine &Name="")
@@ -3500,6 +3453,21 @@ static void coverageAllocLine(jl_codectx_t &ctx, StringRef filename, int line, b
         return;
     }
     jl_coverage_alloc_line(filename.data(), line);
+}
+
+// The definition line and file of the method that a frame belongs to, or 0 if it has none.
+static int32_t coverageDefLine(jl_value_t *func, StringRef &file)
+{
+    if (func && jl_is_method_instance(func))
+        func = ((jl_method_instance_t*)func)->def.value;
+    if (func && jl_is_method(func)) {
+        jl_method_t *m = (jl_method_t*)func;
+        if (m->line > 0) {
+            file = jl_symbol_name(m->file);
+            return m->line;
+        }
+    }
+    return 0;
 }
 
 static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line, bool is_user_code)
@@ -5963,131 +5931,6 @@ isdefined_unknown_idx:
         return true;
     }
 
-    else if (f == BUILTIN(cancellation_point) && nargs == 1) {
-        // Only lower inline when the argument is statically known to be a
-        // token source or nothing; fall back to the runtime builtin (which
-        // also type-checks) otherwise. CancellationTokenSource is concrete
-        // (hence final), so type equality is the full subtype check; Bottom
-        // and abstract types take the runtime call.
-        jl_value_t *srct = argv[1].typ;
-        auto ok_arm = [](jl_value_t *t) {
-            return t == (jl_value_t*)jl_nothing_type ||
-                   t == (jl_value_t*)jl_cancel_source_type;
-        };
-        bool known_src = srct == (jl_value_t*)jl_cancel_source_type;
-        bool known_nothing = srct == (jl_value_t*)jl_nothing_type;
-        bool known_union = known_src || known_nothing ||
-            (jl_is_uniontype(srct) && ok_arm(((jl_uniontype_t*)srct)->a) &&
-             ok_arm(((jl_uniontype_t*)srct)->b));
-        if (!known_union)
-            return false; // emit as a runtime call for the dynamic type check
-
-        Value *ct = get_current_task(ctx);
-        Value *src = boxed(ctx, argv[1]);
-        Value *bound_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, bound_cancel_token), "bound_cancel_token");
-        Value *bound_default_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
-        jl_aliasinfo_t ai = ctx.alias().mutab_nonconst;
-        Value *nothing_val = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_nothing));
-        Type *T_int8 = getInt8Ty(ctx.builder.getContext());
-
-        BasicBlock *src_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_src", ctx.f);
-        BasicBlock *rebind_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_rebind", ctx.f);
-        BasicBlock *point_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_point", ctx.f);
-        BasicBlock *loadst_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_state", ctx.f);
-        BasicBlock *nothing_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_nothing", ctx.f);
-        BasicBlock *clear_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_clear", ctx.f);
-        BasicBlock *merge_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_merge", ctx.f);
-
-        Value *is_nothing = known_src ? ConstantInt::getFalse(ctx.builder.getContext()) :
-            known_nothing ? ConstantInt::getTrue(ctx.builder.getContext()) :
-            ctx.builder.CreateICmpEQ(decay_derived(ctx, src), decay_derived(ctx, nothing_val));
-        ctx.builder.CreateCondBr(is_nothing, nothing_bb, src_bb);
-
-        // src === nothing: clear a stale binding (store only on change)
-        ctx.builder.SetInsertPoint(nothing_bb);
-        LoadInst *bound0 = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bound_ptr, ctx.types().alignof_ptr);
-        bound0->setOrdering(AtomicOrdering::Monotonic);
-        ai.decorateInst(bound0);
-        Value *already_clear = ctx.builder.CreateICmpEQ(decay_derived(ctx, bound0), decay_derived(ctx, nothing_val));
-        ctx.builder.CreateCondBr(already_clear, point_bb, clear_bb);
-
-        ctx.builder.SetInsertPoint(clear_bb);
-        emit_write_barrier(ctx, ct, bound_ptr, nothing_val);
-        StoreInst *clear_store = ctx.builder.CreateAlignedStore(nothing_val, bound_ptr, ctx.types().alignof_ptr);
-        clear_store->setOrdering(AtomicOrdering::Monotonic);
-        ai.decorateInst(clear_store);
-        // The binding is now an explicit `nothing`, not the scoped-default
-        // cache (the skip path above keeps a matching cache intact).
-        ai.decorateInst(ctx.builder.CreateAlignedStore(ConstantInt::get(T_int8, 0), bound_default_ptr, Align(1)));
-        ctx.builder.CreateBr(point_bb);
-
-        // src is a token source: publish the binding (store only on rebind,
-        // so steady-state checks in a loop do not dirty the cache line), then
-        // load its cancellation state
-        ctx.builder.SetInsertPoint(src_bb);
-        LoadInst *bound1 = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bound_ptr, ctx.types().alignof_ptr);
-        bound1->setOrdering(AtomicOrdering::Monotonic);
-        ai.decorateInst(bound1);
-        Value *same = ctx.builder.CreateICmpEQ(decay_derived(ctx, bound1), decay_derived(ctx, src));
-        ctx.builder.CreateCondBr(same, point_bb, rebind_bb);
-
-        ctx.builder.SetInsertPoint(rebind_bb);
-        // N.B.: Do NOT annotate julia.reset_safe here. We want the LLVM pass
-        // to reset any live region before this.
-        emit_write_barrier(ctx, ct, bound_ptr, src);
-        StoreInst *bind_store = ctx.builder.CreateAlignedStore(src, bound_ptr, ctx.types().alignof_ptr);
-        bind_store->setOrdering(AtomicOrdering::Release);
-        ai.decorateInst(bind_store);
-        // A rebind publishes an explicit source: it may differ from the
-        // scoped default, so the cache flag must drop (the same-source skip
-        // path keeps a matching cache intact).
-        ai.decorateInst(ctx.builder.CreateAlignedStore(ConstantInt::get(T_int8, 0), bound_default_ptr, Align(1)));
-        ctx.builder.CreateBr(point_bb);
-
-        // The cancellation point intrinsic (which the CancellationLowering
-        // pass expands into the reset region publication) must come after all
-        // of the binding bookkeeping above: the rebind path's write barrier
-        // is an ordinary call, so the pass clears the published region before
-        // it. Emitting the intrinsic afterwards keeps the region live from
-        // here through a following reset_safe foreign call; only the state
-        // load below may follow it, so that a longjmp back onto the setjmp
-        // re-reads the now-cancelled state.
-        ctx.builder.SetInsertPoint(point_bb);
-        Value *marker = ctx.builder.CreateCall(prepare_call(jl_cancellation_point_func));
-        ctx.builder.CreateCondBr(is_nothing, merge_bb, loadst_bb);
-
-        ctx.builder.SetInsertPoint(loadst_bb);
-        Value *state_ptr = emit_ptrgep(ctx, decay_derived(ctx, src), offsetof(jl_cancel_source_t, state), "cancel_state");
-        LoadInst *st_load = ctx.builder.CreateAlignedLoad(T_int8, state_ptr, Align(1));
-        st_load->setOrdering(AtomicOrdering::Monotonic);
-        jl_aliasinfo_t ai_src = ctx.alias().mutab;
-        ai_src.decorateInst(st_load);
-        ctx.builder.CreateBr(merge_bb);
-
-        // Merge and fold in the preempt bit (0x40): set when a cooperative
-        // yield is pending (preempt_request, level-triggered) or when the
-        // marker's setjmp returned the preempt shootdown code - the
-        // shootdown that reset this point also set the request, but its
-        // store may race this load, so both sources are honored.
-        ctx.builder.SetInsertPoint(merge_bb);
-        PHINode *st = ctx.builder.CreatePHI(T_int8, 2);
-        st->addIncoming(ConstantInt::get(T_int8, 0), point_bb);
-        st->addIncoming(st_load, loadst_bb);
-        Value *is_preempt_code = ctx.builder.CreateICmpEQ(marker,
-            ConstantInt::get(getInt32Ty(ctx.builder.getContext()), JL_RESET_CODE_PREEMPT));
-        Value *preempt_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, preempt_request), "preempt_request");
-        LoadInst *preempt = ctx.builder.CreateAlignedLoad(T_int8, preempt_ptr, Align(1));
-        preempt->setOrdering(AtomicOrdering::Monotonic);
-        ai.decorateInst(preempt);
-        Value *has_preempt = ctx.builder.CreateOr(is_preempt_code,
-            ctx.builder.CreateICmpNE(preempt, ConstantInt::get(T_int8, 0)));
-        Value *pbit = ctx.builder.CreateSelect(has_preempt, ConstantInt::get(T_int8, 0x40), ConstantInt::get(T_int8, 0));
-        Value *result = ctx.builder.CreateOr(st, pbit);
-
-        *ret = mark_julia_type(ctx, result, /*boxed*/ false, (jl_value_t*)jl_uint8_type);
-        return true;
-    }
-
     return false;
 }
 
@@ -6116,10 +5959,6 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
     }
     CallInst *result = ctx.builder.CreateCall(TheTrampoline, theArgs);
     result->setAttributes(TheTrampoline->getAttributes());
-    // N.B.: no julia.reset_safe tag here even for reset_safe statements: the
-    // jlcall trampoline is implicitly-inserted runtime machinery (dispatch,
-    // builtin fallbacks), not covered by the statement's IPO contract, and
-    // CancellationLowering treats it as an unsafe point regardless.
     // TODO: we could add readonly attributes in many cases to the args
     return result;
 }
@@ -6239,14 +6078,6 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     call->setAttributes(returninfo.attrs);
     if (gcstack_arg && ctx.emission_context.use_swiftcc)
         call->setCallingConv(CallingConv::Swift);
-    // Mark as reset_safe only if the current statement has that flag AND the
-    // invoked code's own IPO effects agree: the statement flag may stem from
-    // a constant-propagation refinement stronger than the generic code being
-    // invoked here, and only callees whose own effects are reset_safe have
-    // their implicit runtime machinery instrumented to participate in a
-    // spanned reset region (see llvm-cancellation-lowering.cpp).
-    if (effects_ipo_reset_safe(effects))
-        mark_reset_safe(ctx, call);
 
     jl_cgval_t retval;
     switch (returninfo.cc) {
@@ -6399,7 +6230,10 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                     bool specsig, needsparams;
                     std::tie(specsig, needsparams) = uses_specsig(get_ci_abi(codeinst), mi, codeinst->rettype, ctx.params->prefer_specsig);
                     if (needsparams) {
-                        Value *r = emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
+                        // `jl_invoke` dispatches natively, so a foreign CI must be called through itself
+                        Value *r = codeinst->owner != jl_nothing
+                            ? emit_jlcall(ctx, jlinvoketarget_func, track_pjlvalue(ctx, literal_pointer_val(ctx, ci)), argv, nargs, julia_call2)
+                            : emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
                         result = mark_julia_type(ctx, r, true, rt);
                     }
                     else {
@@ -7323,13 +7157,6 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
 #endif
             ctx.alias().mutab_nonconst.decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
-            // This inline restore is the only scope swap not bracketed by the
-            // exception-handler save/restore, so it must invalidate the
-            // task's cached scoped-default cancellation token itself (see
-            // bound_cancel_default in julia_threads.h).
-            Value *bcd_ptr = emit_ptrgep(ctx, get_current_task(ctx), offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
-            ctx.alias().mutab_nonconst.decorateInst(
-                ctx.builder.CreateAlignedStore(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), bcd_ptr, Align(1)));
         }
     }
     else if (head == jl_pop_exception_sym) {
@@ -8012,6 +7839,12 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, j
     Value *theFarg;
 
     if (theFunc) {
+        theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
+    }
+    else if (codeinst->owner != jl_nothing) {
+        // `jl_invoke` would run the native specialization; a foreign CI must be
+        // compiled by its owner, otherwise `jl_invoke_target` errors
+        theFunc = prepare_call(jlinvoketarget_func);
         theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
     }
     else {
@@ -9714,15 +9547,6 @@ static jl_llvm_functions_t
         FnAttrs.addAttribute("julia-optimization-level", optLevelStrings[optlevel]);
     }
 
-    // A function whose own IPO effects are reset_safe (the same condition
-    // under which call sites to it may carry the julia.reset_safe tag) can
-    // execute inside a caller's still-published compiled reset region. Mark
-    // it so CancellationLowering instruments its implicitly-inserted runtime
-    // machinery (allocation, write barriers, runtime library calls) to
-    // eagerly drop that region; all other functions need no instrumentation.
-    if (codeinst && effects_ipo_reset_safe(jl_atomic_load_relaxed(&codeinst->ipo_purity_bits)))
-        FnAttrs.addAttribute("julia.ipo_reset_safe");
-
     ctx.f = f;
 
     auto in_user_mod = [] (jl_module_t *mod) {
@@ -10238,6 +10062,8 @@ static jl_llvm_functions_t
         StringRef file;
         ssize_t line;
         ssize_t line0; // if this represents pc=1, then also cover the entry to the function (pc=0)
+        StringRef deffile;
+        ssize_t defline; // for an inlined frame, the definition line of its method, covered on entry to the frame
         bool is_user_code;
         int32_t edgeid;
         bool sameframe(const DebugLineTable &other) const {
@@ -10249,6 +10075,7 @@ static jl_llvm_functions_t
     topinfo.file = ctx.file;
     topinfo.line = toplineno;
     topinfo.line0 = 0;
+    topinfo.defline = 0;
     topinfo.is_user_code = mod_is_user_mod;
     topinfo.loc = topdebugloc;
     topinfo.edgeid = 0;
@@ -10282,10 +10109,11 @@ static jl_llvm_functions_t
                     info.line = i;
                     if (pc > 0 && jl_is_string(debuginfo->linetable))
                         info.line = std::max(0, jl_cdi_firstxy(debuginfo, pc).first);
+                    info.defline = to != 0 ? coverageDefLine(func, info.deffile) : 0;
                     info.line0 = 0;
                     if (pc == 1) {
                         int32_t line0 = jl_cdi_external_firstline(debuginfo);
-                        if (line0 > 0 && info.line != line0)
+                        if (line0 > 0 && info.line != line0 && !(info.defline == line0 && info.deffile == info.file))
                             info.line0 = line0;
                     }
                     if (info.file.empty())
@@ -10463,11 +10291,16 @@ static jl_llvm_functions_t
             if (dbg >= prev_lineinfo.size() || !new_lineinfo[dbg].sameframe(prev_lineinfo[dbg]))
                 break;
         }
+        size_t first_changed = dbg;
         for (; dbg < new_lineinfo.size(); dbg++) {
             const auto &newdbg = new_lineinfo[dbg];
             if (do_coverage(newdbg.is_user_code)) {
                 if (newdbg.line0 != 0 && (dbg >= prev_lineinfo.size() || newdbg.edgeid != prev_lineinfo[dbg].edgeid || newdbg.line0 != prev_lineinfo[dbg].line))
                     coverageVisitLine(ctx, newdbg.file, newdbg.line0, newdbg.is_user_code);
+                // a standalone call covers its definition line on entry, so an inlined call does too
+                bool entered = dbg > first_changed || dbg >= prev_lineinfo.size() || newdbg.edgeid != prev_lineinfo[dbg].edgeid;
+                if (entered && newdbg.defline > 0 && !(newdbg.defline == newdbg.line && newdbg.deffile == newdbg.file))
+                    coverageVisitLine(ctx, newdbg.deffile, newdbg.defline, newdbg.is_user_code);
                 coverageVisitLine(ctx, newdbg.file, newdbg.line, newdbg.is_user_code);
             }
         }
@@ -10501,6 +10334,10 @@ static jl_llvm_functions_t
                 int32_t extraline = jl_cdi_external_firstline(debuginfo);
                 if (extraline != -1)
                     coverageAllocLine(ctx, file, extraline, is_user_code);
+                StringRef deffile;
+                int32_t defline = coverageDefLine(func, deffile);
+                if (defline > 0)
+                    coverageAllocLine(ctx, deffile, defline, is_user_code);
                 for (size_t pc = 1; 1; pc++) {
                     struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
                     if (lineidx.loc == -1)
@@ -10760,12 +10597,6 @@ static jl_llvm_functions_t
                 StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
                 ctx.alias().mutab_nonconst.decorateInst(current_scope);
                 ctx.alias().mutab_nonconst.decorateInst(scope_store);
-                // Installing a new scope invalidates the task's cached
-                // scoped-default cancellation token (see bound_cancel_default
-                // in julia_threads.h).
-                Value *bcd_ptr = emit_ptrgep(ctx, get_current_task(ctx), offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
-                ctx.alias().mutab_nonconst.decorateInst(
-                    ctx.builder.CreateAlignedStore(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), bcd_ptr, Align(1)));
                 // GC preserve the current_scope, since it is not rooted in the `jl_handler_t *`,
                 // the newly entered scope is preserved through the current_task.
                 Value *scope_token = ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), {current_scope});
@@ -10773,11 +10604,7 @@ static jl_llvm_functions_t
             }
         }
         else {
-            // statement-scoped context for mark_reset_safe (see its
-            // declaration); cleared like the debug location below
-            ctx.current_stmt_idx = cursor;
             emit_stmtpos(ctx, stmt, cursor);
-            ctx.current_stmt_idx = -1;
             mallocVisitStmt(nullptr, have_dbg_update);
         }
         find_next_stmt(cursor + 1);
@@ -11382,6 +11209,7 @@ static void init_jit_functions(void)
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
     add_named_global(jlinvoke_func, &jl_invoke);
     add_named_global(jlinvokemodify_func, &jl_invoke_modify);
+    add_named_global(jlinvoketarget_func, &jl_invoke_target);
     add_named_global(jltopeval_func, &jl_toplevel_eval);
     add_named_global(jlcopyast_func, &jl_copy_ast);
     //add_named_global(jlnsvec_func, &jl_svec);

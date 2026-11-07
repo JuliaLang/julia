@@ -1328,9 +1328,8 @@ JL_UNUSED static int valid_longjmp_target(uintptr_t sp, uintptr_t pc) JL_NOTSAFE
 // support shadow stacks, so if those are in use, you might need to use a direct
 // jl_longjmp instead to leave the signal frame instead of relying on simulating
 // it and attempting to return normally.
-int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOINT
+int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
 {
-    assert(val != 0); // setjmp's second return must be distinguishable
 #if (defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_))
     // https://github.com/llvm/llvm-project/blob/main/compiler-rt/lib/hwasan/hwasan_interceptors.cpp
     return 0;
@@ -1351,7 +1350,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     // c->MxCsr = _ctx->MxCsr;
     // c->FloatSave.ControlWord = _ctx->FpCsr;
     // c->SegGS[0] = _ctx->Frame;
-    c->Rax = val;
+    c->Rax = 1;
     c->Rsp += sizeof(void*);
     assert(c->Rsp % 16 == 0);
     return 1;
@@ -1364,7 +1363,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     c->Eip = _ctx->Eip;
     // c->SegFS[0] = _ctx->Registration;
     // c->FloatSave.ControlWord = _ctx->FpCsr;
-    c->Eax = val;
+    c->Eax = 1;
     c->Esp += sizeof(void*);
     // Scrub the interrupted x87 state to all-registers-empty (see the
     // linux i686 branch): the resumed code expects the function-boundary
@@ -1403,7 +1402,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     // ifdef PTR_DEMANGLE ?
     mc->gregs[REG_ESP] = jl_ptr_demangle(mc->gregs[REG_ESP]);
     mc->gregs[REG_EIP] = jl_ptr_demangle(mc->gregs[REG_EIP]);
-    mc->gregs[REG_EAX] = val;
+    mc->gregs[REG_EAX] = 1;
     // The simulated longjmp resumes code that expects the i386 ABI's
     // function-boundary FPU state (an empty x87 register stack), but the
     // kernel will restore the *interrupted* state - possibly mid-computation
@@ -1431,7 +1430,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->gregs[REG_RBP] = jl_ptr_demangle(mc->gregs[REG_RBP]);
     mc->gregs[REG_RSP] = jl_ptr_demangle(mc->gregs[REG_RSP]);
     mc->gregs[REG_RIP] = jl_ptr_demangle(mc->gregs[REG_RIP]);
-    mc->gregs[REG_RAX] = val;
+    mc->gregs[REG_RAX] = 1;
     return valid_longjmp_target(mc->gregs[REG_RSP], mc->gregs[REG_RIP]);
     #elif defined(_CPU_ARM_)
     // https://github.com/bminor/glibc/blame/master/sysdeps/arm/__longjmp.S
@@ -1451,7 +1450,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->arm_sp = jl_ptr_demangle(mc->arm_sp);
     mc->arm_lr = jl_ptr_demangle(mc->arm_lr);
     mc->arm_pc = mc->arm_lr;
-    mc->arm_r0 = val;
+    mc->arm_r0 = 1;
     return valid_longjmp_target(mc->arm_sp, mc->arm_pc);
     #elif defined(_CPU_AARCH64_)
     // https://github.com/bminor/glibc/blame/master/sysdeps/aarch64/__longjmp.S
@@ -1485,7 +1484,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->sp = jl_ptr_demangle(mc->sp);
     mc->regs[30] = jl_ptr_demangle(mc->regs[30]);
     mc->pc = mc->regs[30];
-    mc->regs[0] = val;
+    mc->regs[0] = 1;
     return valid_longjmp_target(mc->sp, mc->pc);
     #elif defined(_CPU_RISCV64_)
     // https://github.com/bminor/glibc/blob/master/sysdeps/riscv/bits/setjmp.h
@@ -1522,7 +1521,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->__gregs[REG_SP] = jl_ptr_demangle(mc->__gregs[REG_SP]);
     mc->__gregs[REG_RA] = jl_ptr_demangle(mc->__gregs[REG_RA]);
     mc->__gregs[REG_PC] = mc->__gregs[REG_RA];
-    mc->__gregs[REG_A0] = val;
+    mc->__gregs[REG_A0] = 1;
     return valid_longjmp_target(mc->__gregs[REG_SP], mc->__gregs[REG_PC]);
     #else
     #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown linux")
@@ -1548,7 +1547,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->__rbp = _OS_PTR_UNMUNGE(mc->__rbp);
     mc->__rsp = _OS_PTR_UNMUNGE(mc->__rsp);
     mc->__rip = _OS_PTR_UNMUNGE(mc->__rip);
-    mc->__rax = val;
+    mc->__rax = 1;
     assert(mc->__rsp % 16 == 0);
     return 1;
     #elif defined(_CPU_AARCH64_)
@@ -1586,7 +1585,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     // libunwind is broken for signed-pointers, but perhaps best not to leave the signed pointer lying around either
     mc->__pc = ptrauth_strip(mc->__lr, 0);
     mc->__pad = 0; // aka __ra_sign_state = not signed
-    mc->__x[0] = val;
+    mc->__x[0] = 1;
     assert(mc->__sp % 16 == 0);
     return 1;
     #else
@@ -1606,7 +1605,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->mc_r13 = ((long*)mctx)[5];
     mc->mc_r14 = ((long*)mctx)[6];
     mc->mc_r15 = ((long*)mctx)[7];
-    mc->mc_rax = val;
+    mc->mc_rax = 1;
     mc->mc_rsp += sizeof(void*);
     assert(mc->mc_rsp % 16 == 0);
     return 1;
@@ -1641,7 +1640,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     // AArch64 resumes from a signal at ELR, not LR, so the restored return
     // address has to be installed as the pc as well.
     mc->mc_gpregs.gp_elr = mc->mc_gpregs.gp_lr;
-    mc->mc_gpregs.gp_x[0] = val;
+    mc->mc_gpregs.gp_x[0] = 1;
     assert(mc->mc_gpregs.gp_sp % 16 == 0);
     return 1;
     #else
@@ -1678,13 +1677,13 @@ static size_t rec_backtrace_task(jl_task_t *t, bt_context_t *c, int use_ctx,  jl
         jl_jmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
 #if defined(JL_TASK_SWITCH_WINDOWS)
         memset(c, 0, sizeof(*c));
-        if (jl_simulate_longjmp(*mctx, c, 1))
+        if (jl_simulate_longjmp(*mctx, c))
             use_ctx = 1;
 #elif defined(JL_TASK_SWITCH_LIBUNWIND)
         context = t->ctx.ctx;
 #elif defined(JL_TASK_SWITCH_ASM)
         memset(c, 0, sizeof(*c));
-        if (jl_simulate_longjmp(*mctx, c, 1))
+        if (jl_simulate_longjmp(*mctx, c))
             use_ctx = 1;
 #else
      #pragma message("jl_record_backtrace not defined for unknown task system")

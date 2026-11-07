@@ -18,6 +18,12 @@ An array of the command line arguments passed to Julia, as strings.
 """
 const ARGS = String[]
 
+function uninit_args()
+    empty!(Core.ARGS)
+    empty!(ARGS)
+    nothing
+end
+
 """
     exit(code=0)
 
@@ -173,6 +179,11 @@ function init_depot_path()
     nothing
 end
 
+function uninit_depot_path()
+    empty!(DEPOT_PATH)
+    nothing
+end
+
 ## LOAD_PATH & ACTIVE_PROJECT ##
 
 # JULIA_LOAD_PATH: split on `:` (or `;` on Windows)
@@ -294,6 +305,11 @@ function init_load_path()
     append!(empty!(LOAD_PATH), paths)
 end
 
+function uninit_load_path()
+    empty!(LOAD_PATH)
+    nothing
+end
+
 function init_active_project()
     project = (JLOptions().project != C_NULL ?
         unsafe_string(JLOptions().project) :
@@ -303,6 +319,11 @@ function init_active_project()
         project == "" ? nothing :
         startswith(project, "@") ? load_path_expand(project) : abspath(expanduser(project))
     )
+end
+
+function uninit_active_project()
+    ACTIVE_PROJECT[] = nothing
+    nothing
 end
 
 function init_named_env!(path)
@@ -514,25 +535,7 @@ function _atexit(exitcode::Cint)
     # this exit came from a signal for example), then try to clear that state
     # to minimize scheduler issues later
     ct = current_task()
-    q = ct.queue
-    if q !== nothing
-        try
-            list_deletefirst!(q::StickyWorkqueue, ct)
-        catch
-            # best-effort cleanup on the way out
-        end
-    end
-    # If this task's wait registration is still armed (e.g. this exit came
-    # from a signal while parked), disarm it: the waitee-queue entry is
-    # stale and gets dropped by whoever pops it, and the sticky source
-    # registration is collected by a walk once this task is done.
-    @atomicswap ct.waiting_on = nothing
-    # We are exiting: any pending cancellation of this task's scope is moot
-    # and would only disrupt the atexit hooks - run them in a shielded scope.
-    return ScopedValues.@with(CANCEL_TOKEN => nothing, _run_atexit_hooks(exitcode))
-end
-
-function _run_atexit_hooks(exitcode::Cint)
+    q = ct.queue; q === nothing || list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
     # Don't hold the lock around the iteration, just in case any other thread executing in
     # parallel tries to register a new atexit hook while this is running. We don't want to
     # block that thread from proceeding, and we can allow it to register its hook which we
@@ -564,6 +567,52 @@ function _run_atexit_hooks(exitcode::Cint)
             println(stderr)
         end
     end
+end
+
+## system image setup ##
+
+# Seeds the current task's RNG with a fixed seed, in place of `Random.__init__` (an all-zero
+# state makes `rand(::UnitRange{Int})` hang)
+function init_build_rng()
+    task = current_task()
+    task.rngState0 = 0x5156087469e170ab
+    task.rngState1 = 0x7431eaead385992c
+    task.rngState2 = 0x503e1d32781c2608
+    task.rngState3 = 0x3a77f7189200c20b
+    task.rngState4 = 0x5502376d099035ae
+    ccall(:jl_gc_init_finalizer_rng_state, Cvoid, ())
+    nothing
+end
+
+# Limited equivalent to `__init__` that sets up enough of the runtime to run top-level
+# code "normally".
+function __init_build()
+    global _atexit_hooks_finished = false
+    init_build_rng()
+    Sys.__init_build()
+    reinit_stdio()
+    init_depot_path()
+    init_load_path()
+    init_active_project()
+    init_debuginfo_source_paths()
+    init_frontend()
+    nothing
+end
+
+# Modifications to the global heap from __init_build() are (mostly) reversed
+# here, to avoid polluting the image.
+function __uninit_build()
+    uninit_toml_cache()
+    uninit_exec_options()
+    uninit_args()
+    uninit_frontend()
+    uninit_debuginfo_source_paths()
+    uninit_active_project()
+    uninit_load_path()
+    uninit_depot_path()
+    uninit_stdio()
+    Sys.__uninit_build()
+    nothing
 end
 
 ## postoutput: register post output hooks ##

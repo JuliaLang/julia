@@ -30,7 +30,7 @@ end
 function _check_valid_region(region)
     for d in region
         isa(d, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        Int(d) < 1 && throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
+        d < 1 && throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
     end
 end
 

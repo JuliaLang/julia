@@ -1328,7 +1328,7 @@ for f in (:sin, :cos, :tan, :asin, :atan, :acos,
         xf isa typeof(x) && throw(MethodError($f, (x,)))
         return ($f)(xf)
     end
-    @eval $(f)(::Missing) = missing
+    @eval $(f)(::Missing) = $(f === :sincospi ? :(missing, missing) : (:missing))
 end
 
 for f in (:atan, :hypot, :log)

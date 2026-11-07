@@ -572,66 +572,6 @@ function serialize(s::AbstractSerializer, mc::Core.MethodCache)
     error("cannot serialize MethodCache objects")
 end
 
-# Only the (strong) parent links and the state bytes are serialized; the
-# weak intrusive child lists are rebuilt on deserialization by relinking
-# the source under its parents as if it were newly constructed (which also
-# re-inherits the parents' current cancellation state).
-function serialize(s::AbstractSerializer, src::Core.CancellationTokenSource)
-    serialize_cycle_header(s, src) && return
-    np = Int(src.nparents)
-    serialize(s, np % Int64)  # fixed width: streams are word-size independent
-    for i in 1:np
-        serialize(s, Base._cancel_parent(src, i))
-    end
-    serialize(s, @atomic src.state)
-    nothing
-end
-
-function deserialize(s::AbstractSerializer, ::Type{Core.CancellationTokenSource})
-    np = Int(deserialize(s)::Int64)
-    parents = Vector{Any}(undef, np)
-    for i in 1:np
-        parents[i] = deserialize(s)::Core.CancellationTokenSource
-    end
-    src = Core._new_cancel_source(parents...)::Core.CancellationTokenSource
-    deserialize_cycle(s, src)
-    state = deserialize(s)::UInt8
-    if state != 0x00
-        # reject severities the API cannot produce rather than letting a
-        # corrupt stream inject an unescalatable bogus level
-        if !(state == 0x1 || state == 0x3 || state == 0x4)
-            throw(ArgumentError("invalid cancellation severity $(repr(state)) in serialized CancellationTokenSource"))
-        end
-        # CAS-max with whatever the relinking inherited from the parents;
-        # severities only ever escalate
-        Base._raise_state!(src, state)
-    end
-    return src
-end
-
-# Core.WaitEntryN has a hidden variable-length slot tail that the generic
-# deserializer - which allocates only the fixed datatype size - cannot
-# reproduce (the GC would then scan a nonexistent tail). Its contents are
-# transient wait-registration state that does not round-trip: only the slot
-# count is written (plus a `nothing` task), and deserialization
-# reconstructs through the runtime allocator with fresh, free slots.
-function serialize(s::AbstractSerializer, w::Core.WaitEntryN)
-    serialize_cycle_header(s, w) && return
-    serialize(s, nothing)  # task: transient, never round-trips
-    serialize(s, Int64(w.nslots))
-    nothing
-end
-
-function deserialize(s::AbstractSerializer, ::Type{Core.WaitEntryN})
-    task = deserialize(s)::Union{Task, Nothing}
-    ns = Int(deserialize(s)::Int64)
-    0 <= ns <= typemax(UInt32) ||
-        throw(ArgumentError("invalid slot count $ns in serialized WaitEntryN"))
-    w = Base.WaitEntryN(task, ns)
-    deserialize_cycle(s, w)
-    return w
-end
-
 
 function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
