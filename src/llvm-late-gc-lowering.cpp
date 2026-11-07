@@ -1,6 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Casting.h"
 
@@ -2347,17 +2349,22 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     new StoreInst(Val, slotAddress, InsertBefore);
 }
 
-void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot,
-                                         ArrayRef<int> Colors, Value *GCFrame,
+// Reset `Count` adjacent slots to NULL, starting at `Slot`.
+void LateLowerGCFrame::PlaceGCFrameReset(unsigned Slot, unsigned Count, Value *GCFrame,
                                          Instruction *InsertBefore) {
-    // Get the slot address.
-    auto slotAddress = CallInst::Create(
-        getOrDeclare(jl_intrinsics::getGCFrameSlot),
-        {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
-        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
-    // Reset the slot to NULL.
-    Value *Val = ConstantPointerNull::get(T_prjlvalue);
-    new StoreInst(Val, slotAddress, InsertBefore);
+    IRBuilder<> builder(InsertBefore);
+    auto slotAddress = [&](unsigned CurSlot) {
+        return builder.CreateCall(getOrDeclare(jl_intrinsics::getGCFrameSlot),
+                                  {GCFrame, builder.getInt32(CurSlot)},
+                                  "gc_slot_addr_" + StringRef(std::to_string(CurSlot)));
+    };
+    if (Count >= 4) {
+        unsigned PtrSize = InsertBefore->getModule()->getDataLayout().getPointerSize();
+        builder.CreateMemSet(slotAddress(Slot), builder.getInt8(0), Count * PtrSize, Align(PtrSize));
+        return;
+    }
+    for (unsigned i = 0; i < Count; i++)
+        builder.CreateStore(ConstantPointerNull::get(T_prjlvalue), slotAddress(Slot + i));
 }
 
 void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
@@ -2374,12 +2381,17 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
         for(auto rit = BBS.Safepoints.rbegin();
               rit != BBS.Safepoints.rend(); ++rit ) {
             const LargeSparseBitVector &NowLive = S.LiveSets[*rit];
-            // reset slots which are no longer alive
+            // reset slots which are no longer alive, as runs of adjacent slots
+            SmallVector<int, 8> Dead;
             for (int Idx : *LastLive) {
-                if (Colors[Idx] >= PreAssignedColors && !HasBitSet(NowLive, Idx)) {
-                    PlaceGCFrameReset(S, Idx, MinColorRoot, Colors, GCFrame,
-                      S.ReverseSafepointNumbering[*rit]);
-                }
+                if (Colors[Idx] >= PreAssignedColors && !HasBitSet(NowLive, Idx))
+                    Dead.push_back(Colors[Idx]);
+            }
+            llvm::sort(Dead);
+            for (size_t i = 0, j; i < Dead.size(); i = j) {
+                for (j = i + 1; j < Dead.size() && Dead[j] == Dead[j - 1] + 1; j++) {}
+                PlaceGCFrameReset(Dead[i] + MinColorRoot, j - i, GCFrame,
+                                  S.ReverseSafepointNumbering[*rit]);
             }
             // store values which are alive in this safepoint but
             // haven't been stored in the GC frame before
@@ -2465,9 +2477,9 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 AllocaSlot = LLT_ALIGN(AllocaSlot, align);
             Instruction *slotAddress = CallInst::Create(
                 getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
+                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)});
             slotAddress->insertAfter(gcframe);
-            slotAddress->takeName(AI);
+            SmallString<16> Name(AI->getName());
 
             // Check for lifetime intrinsics on this alloca, we can't keep them
             // because we're changing the semantics
@@ -2486,6 +2498,29 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
             AI->replaceAllUsesWith(slotAddress);
             AI->eraseFromParent();
             AI = NULL;
+            // Recompute the address in each block that uses it, like a frame index.
+            // Keeping all slot GEPs in the entry block leaves O(N) values live across
+            // blocks (CodeGenPrepare does not sink GEPs used as call arguments), which
+            // triggers quadratic compile time in LLVM's MachineSinking pass.
+            DenseMap<BasicBlock *, Instruction *> SlotInBB;
+            for (Use &U : make_early_inc_range(slotAddress->uses())) {
+                auto *UI = cast<Instruction>(U.getUser());
+                auto *PN = dyn_cast<PHINode>(UI);
+                BasicBlock *BB = PN ? PN->getIncomingBlock(U) : UI->getParent();
+                if (BB == slotAddress->getParent())
+                    continue;
+                Instruction *&Local = SlotInBB[BB];
+                if (!Local) {
+                    Local = slotAddress->clone();
+                    Local->setName(Name);
+                    Local->insertBefore(&*BB->getFirstInsertionPt());
+                }
+                U.set(Local);
+            }
+            if (slotAddress->use_empty() && !slotAddress->isUsedByMetadata())
+                slotAddress->eraseFromParent();
+            else
+                slotAddress->setName(Name);
         };
         for (auto AI : S.ArrayAllocas) {
             replace_alloca(AI.first);
@@ -2499,7 +2534,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 auto slotAddress = CallInst::Create(
                     getOrDeclare(jl_intrinsics::getGCFrameSlot),
                     {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
-                slotAddress->insertAfter(gcframe);
+                slotAddress->insertBefore(SI);
                 auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
                 auto Elem = MaybeExtractScalar(S, ValExpr, SI);
                 assert(Elem->getType() == T_prjlvalue);
