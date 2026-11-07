@@ -24,15 +24,27 @@ configs = [
 ]
 
 compiler_path = joinpath(Sys.STDLIB, "..", "..", "Compiler")
-setupproject_command = "using Pkg; Pkg.add($(stdlibs_to_test)); Pkg.develop(path=$(repr(compiler_path)))"
+# Upgradable stdlibs and `Compiler` are registered packages, which `Pkg.add` would
+# resolve from the registry: use their in-tree copies instead, so that no registry is
+# needed
+setupproject_command = """
+    using Pkg
+    upgradable = filter(in(Pkg.Types.UPGRADABLE_STDLIBS), $(repr(stdlibs_to_test)))
+    Pkg.add(setdiff($(repr(stdlibs_to_test)), upgradable, ["Compiler"]))
+    Pkg.develop([PackageSpec(path=joinpath(Sys.STDLIB, name)) for name in upgradable])
+    Pkg.develop(path=$(repr(compiler_path)))
+    """
 compilecache_command = "using Base: CacheFlags; Base.Precompilation.precompilepkgs($(stdlibs_to_test); configs=$(configs))"
 
 # pre-compile stdlibs (into temporary depot)
 mktempdir() do tmp_depot
     # first setup the project / environment
     env_dir = joinpath(tmp_depot, "environments", "v$(VERSION.major).$(VERSION.minor)")
+    # only stdlibs and a path dependency are added, so no registry is needed: stay
+    # offline so that Pkg doesn't try to install one
     cmd = addenv(
         `$(JULIA_EXECUTABLE) --startup-file=no --project=$env_dir -e $setupproject_command`,
+        "JULIA_PKG_OFFLINE" => "true",
         ; inherit = true
     )
     run_quietly(cmd)

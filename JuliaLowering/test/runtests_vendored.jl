@@ -19,11 +19,18 @@ let old_active_project = Base.active_project()
         # `Manifest.toml` is not checked in (see `JuliaLowering/.gitignore`), so
         # resolve the environment before loading. `Project.toml` records the path to
         # the in-tree `JuliaSyntax` in its `[sources]` section, so instantiating
-        # picks up that dev copy without needing a committed manifest. Skip the
-        # registry update: the only dependencies are path-based / stdlib, so no
-        # network access is required (and tests may run with networking disabled).
-        with_output_on_failure() do output
-            Pkg.instantiate(; update_registry=false, io=output)
+        # picks up that dev copy without needing a committed manifest. The only
+        # dependencies are path-based / stdlib, so no registry or network access is
+        # required (and tests may run with networking disabled). Offline mode also
+        # keeps Pkg from installing the default registries into a depot without any.
+        offline = Pkg.OFFLINE_MODE[]
+        Pkg.offline(true)
+        try
+            with_output_on_failure() do output
+                Pkg.instantiate(; io=output)
+            end
+        finally
+            Pkg.offline(offline)
         end
 
         # restore error hints (emptied by `testdefs.jl`) so that errors print as
