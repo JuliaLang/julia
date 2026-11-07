@@ -119,11 +119,12 @@ typedef struct {
 // signals-win.c).
 //
 // `gcstack` and `eh` record the task's GC-frame chain head and innermost
-// exception handler at establishment. The interrupt may land inside a
-// reset-safe *callee* that has pushed frames of its own onto either chain;
-// those frames die with the abandoned stack region, so delivery restores
+// exception handler at establishment. A region never spans a call (every
+// call clears it), so the interrupt lands in the establishing frame itself
+// and both chains are normally unchanged; delivery nevertheless restores
 // both saved values before the longjmp (the same pair an exceptional unwind
-// restores through `jl_eh_restore_state`).
+// restores through `jl_eh_restore_state`), so the invariant does not rest
+// on that property.
 //
 // Delivery is gated on the cancellation of the task's bound token source
 // (`jl_task_t.bound_cancel_token`), which is coherent with the published
