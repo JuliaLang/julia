@@ -42,20 +42,48 @@ $(eval $(call bootstrap_sysimage_link,basecompiler,-debug))
 $(eval $(call bootstrap_sysimage_link,sysbase,))
 $(eval $(call bootstrap_sysimage_link,sysbase,-debug))
 
+ifneq "$(if $(CROSS_BOOTSTRAP_JULIA),1)" "$(if $(CROSS_BOOTSTRAP_SYSBASE),1)"
+$(error CROSS_BOOTSTRAP_JULIA and CROSS_BOOTSTRAP_SYSBASE must be set together)
+endif
+
+bootstrap_julia_flags :=
+
+ifneq ($(CROSS_BOOTSTRAP_JULIA),)
+ifeq ($(SANITIZE),1)
+ifeq ($(SANITIZE_THREAD),1)
+bootstrap_julia_flags += --target-sanitize=thread
+endif
+endif
+JULIA_BOOTSTRAP_EXECUTABLE_debug := $(CROSS_BOOTSTRAP_JULIA)
+JULIA_BOOTSTRAP_EXECUTABLE_release := $(CROSS_BOOTSTRAP_JULIA)
+else
+JULIA_BOOTSTRAP_EXECUTABLE_debug := $(build_bindir)/julia-debug$(EXE)
+JULIA_BOOTSTRAP_EXECUTABLE_release := $(build_bindir)/julia$(EXE)
+endif
+
+ifneq ($(CROSS_BOOTSTRAP_SYSBASE),)
+JULIA_BOOTSTRAP_SYSBASE_release := $(CROSS_BOOTSTRAP_SYSBASE).$(SHLIB_EXT)
+JULIA_BOOTSTRAP_SYSBASE_debug := $(CROSS_BOOTSTRAP_SYSBASE).$(SHLIB_EXT)
+else
+JULIA_BOOTSTRAP_SYSBASE_release := $(build_private_libdir)/sysbase.$(SHLIB_EXT)
+JULIA_BOOTSTRAP_SYSBASE_debug := $(build_private_libdir)/sysbase-debug.$(SHLIB_EXT)
+endif
+
 define sysimage_link
-$$(build_private_libdir)/$1$2.$$(SHLIB_EXT): $$(build_private_libdir)/$1$2-o.a $$(build_private_libdir)/sysbase$2.$$(SHLIB_EXT)
-	@$$(call PRINT_LINK, $$(call spawn,$3) -J $$(call cygpath_w,$$(build_private_libdir)/sysbase$2.$$(SHLIB_EXT)) --startup-file=no -e \
-		'Base.Linking.link_image(ARGS[1], ARGS[2]; is_sysimage=true)' -- $$(call cygpath_w,$$<) $$(call cygpath_w,$$@))
+$$(build_private_libdir)/$1$2.$$(SHLIB_EXT): $$(build_private_libdir)/$1$2-o.a
+	@$$(call PRINT_LINK, JULIA_BINDIR=$$(call cygpath_w,$$(build_bindir)) \
+		$$(call spawn,$3) -J $$(call cygpath_w,$4) --startup-file=no $$(bootstrap_julia_flags) -e \
+		'Base.Linking.link_image(ARGS[1], ARGS[2]; is_sysimage=true, debug_runtime=$(if $2,true,false))' -- $$(call cygpath_w,$$<) $$(call cygpath_w,$$@))
 	@$$(INSTALL_NAME_CMD)$$(notdir $$@) $$@
 ifeq ($$(OS), Darwin)
-	@$$(call spawn,$3) -J $$(call cygpath_w,$$(build_private_libdir)/sysbase$2.$$(SHLIB_EXT)) --startup-file=no -e \
+	@JULIA_BINDIR=$$(call cygpath_w,$$(build_bindir)) $$(call spawn,$3) -J $$(call cygpath_w,$4) --startup-file=no -e \
 		'run(`$$$$(Base.Linking.dsymutil()) $$$$(ARGS[1])`)' -- $$(call cygpath_w,$$@)
 	@rm -rf $$@.dSYM/Contents/Resources/Relocations
 endif
 endef
 
-$(eval $(call sysimage_link,sys,,$(JULIA_EXECUTABLE_release)))
-$(eval $(call sysimage_link,sys,-debug,$(JULIA_EXECUTABLE_debug)))
+$(eval $(call sysimage_link,sys,,$(JULIA_BOOTSTRAP_EXECUTABLE_release),$(JULIA_BOOTSTRAP_SYSBASE_release)))
+$(eval $(call sysimage_link,sys,-debug,$(JULIA_BOOTSTRAP_EXECUTABLE_debug),$(JULIA_BOOTSTRAP_SYSBASE_debug)))
 
 COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/Base_compiler.jl \
@@ -164,8 +192,7 @@ $$(build_private_libdir)/sysbase$1-o.a $$(build_private_libdir)/sysbase$1-bc.a :
 		false; \
 	fi )
 	@mv $$@.tmp $$@
-build_sysbase_$1 := $$(or $$(CROSS_BOOTSTRAP_SYSBASE),$$(build_private_libdir)/sysbase$1.$$(SHLIB_EXT))
-$$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(build_private_libdir)/sys$1-%.a : $$(build_sysbase_$1) $$(JULIAHOME)/contrib/generate_precompile.jl
+$$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(build_private_libdir)/sys$1-%.a : $4 $$(JULIAHOME)/contrib/generate_precompile.jl
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
 	if ! JULIA_BINDIR=$$(call cygpath_w,$(build_bindir)) \
 		 WINEPATH="$$(call cygpath_w,$$(build_bindir));$$$$WINEPATH" \
@@ -186,5 +213,5 @@ endef
 
 $(eval $(call base_builder,,-O1,$(JULIA_EXECUTABLE_release)))
 $(eval $(call base_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
-$(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release)))
-$(eval $(call sysimg_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
+$(eval $(call sysimg_builder,,-O3,$(JULIA_BOOTSTRAP_EXECUTABLE_release),$(JULIA_BOOTSTRAP_SYSBASE_release)))
+$(eval $(call sysimg_builder,-debug,-O0,$(JULIA_BOOTSTRAP_EXECUTABLE_debug),$(JULIA_BOOTSTRAP_SYSBASE_debug)))
