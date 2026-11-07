@@ -653,6 +653,14 @@ end
         @test getm(mem, 2) === v
     end
 
+    # a decoded word is returned with one copy, not a switch over its components
+    wmem = Memory{Union{Int8, Int16, Int32, Int, String}}(undef, 1)
+    @test !occursin("switch", llvm(getm, (typeof(wmem), Int)))
+    for v in (Int8(-7), Int16(-300), typemin(Int32), typemax(Int), "w" * "m")
+        setm!(wmem, 1, v)
+        @test getm(wmem, 1) === v
+    end
+
     amem = AtomicMemory{Union{Int16, String}}(undef, 1)
     agetm(m, i) = @atomic m[i]
     asetm!(m, i, v) = (@atomic m[i] = v; nothing)
