@@ -940,6 +940,25 @@ end
 # only the egality type `TypeEgal{Int}` is a ghost that codegen can elide (#61323)
 @test !occursin("jl_f_tuple", get_llvm(f34459, Tuple{Ptr{Int}, Core.TypeEgal{Int}}, true, false, false))
 
+# splatting varargs next to other arguments does not allocate
+const splat_count = Ref(0)
+@noinline splat_set(args...) = (splat_count[] = length(args); nothing)
+splat_lead(V...) = splat_set(0, V...)
+splat_trail(V...) = splat_set(V..., 0)
+splat_middle(V...) = splat_set(0, V..., 0)
+splat_twice(V...) = splat_set(V..., V...)
+splat_req(x, V...) = splat_set(x, V..., x)
+splat_call(f, xs) = f(xs...)
+splat_allocs(f, xs) = (splat_call(f, xs); @allocated splat_call(f, xs))
+for f in (splat_lead, splat_trail, splat_middle, splat_twice, splat_req)
+    @test splat_allocs(f, fill([1], 200)) == 0
+end
+splat_tuple(t) = splat_set(t...)
+let t = ntuple(i -> [i], 40)
+    splat_tuple(t)
+    @test @allocated(splat_tuple(t)) == 0
+end
+
 # issue #48394: incorrectly-inferred getproperty shouldn't introduce invalid cgval_t
 #               when dealing with unions of ghost values
 struct X48394

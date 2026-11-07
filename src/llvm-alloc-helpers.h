@@ -69,11 +69,15 @@ namespace jl_alloc {
     struct AllocUseInfo {
         llvm::SmallSet<llvm::Instruction*,16> uses;
         llvm::SmallSet<llvm::CallInst*,4> preserves;
+        llvm::SmallSet<llvm::CallInst*,4> rootcalls;
+        llvm::SmallSet<llvm::CallInst*,4> readonlycalls;
         std::map<uint32_t,Field> memops;
         // Completely unknown use
         bool escaped:1;
         // Address is leaked to functions that doesn't care where the object is allocated.
         bool addrescaped:1;
+        // Every leaked address only reaches call arguments that neither capture nor write through it.
+        bool addrescaped_readonly:1;
         // There are readers of the memory
         bool hasload:1;
         // There are uses in gc_preserve intrinsics or ccall roots
@@ -109,6 +113,7 @@ namespace jl_alloc {
         {
             escaped = false;
             addrescaped = false;
+            addrescaped_readonly = true;
             hasload = false;
             haspreserve = false;
             refload = false;
@@ -123,6 +128,8 @@ namespace jl_alloc {
             has_unknown_unboxed = false;
             uses.clear();
             preserves.clear();
+            rootcalls.clear();
+            readonlycalls.clear();
             memops.clear();
         }
         void dump(llvm::raw_ostream &OS);
