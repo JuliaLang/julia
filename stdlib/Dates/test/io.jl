@@ -708,4 +708,133 @@ end
     @test Date("-2013") == Date(-2013, 01, 01)
 end
 
+@testset "Text parses the same as a String, SubString, other string, or bytes" begin
+    # `String` and `SubString{String}` text and `Base.Parsers.parsevalue` bytes are read
+    # byte by byte, and at fixed offsets when every field has its full width; other strings
+    # are read by character. Results and errors must agree.
+    outcome(f) = try
+        (:ok, f())
+    catch e
+        (:error, typeof(e), e isa ArgumentError ? e.msg : nothing)
+    end
+    french = Dates.DateLocale(
+        ["janvier", "février", "mars", "avril", "mai", "juin",
+         "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
+        ["janv", "févr", "mars", "avr", "mai", "juin", "juil", "août", "sept", "oct", "nov", "déc"],
+        ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"],
+        ["lu", "ma", "me", "je", "ve", "sa", "di"])
+    formats = (Dates.ISODateFormat, Dates.ISODateTimeFormat, dateformat"yyyy-mm-dd HH:MM:SS.s",
+               dateformat"yyyymmddHHMMSS", dateformat"mm/dd/yyyy II:MM p", dateformat"yyyy\0mm",
+               dateformat"yyyy年mm月dd日", dateformat"HH:MM:SS.n", dateformat"u dd, yyyy",
+               DateFormat("dd u yyyy", french), DateFormat("yyyy\xe2\x82mm"), dateformat"yyyy, mm")
+    texts = ("2024-02-13", "2024-2-3", "+2024-02-13", "10000-01-01", "2024-02-13T05:28:17.123",
+             "2024-02-13T05:28:17", "2024-02-13T05:28:17.", "2024-02-13T05:28:17.1230",
+             "2024-02-13 05:28:17.5", "2024-13-01", "20240213052817", "02/13/2024 05:28 PM",
+             "02/13/2024 05:28 P\xc3M", "1900012", "2024年02月13日", "05:28:17.123456789",
+             "2024-02-1x", "2024-02-13x", "", "\xff", "Feb 13, 2024", "feb 13, 2024",
+             "13 févr 2024", "13 FÉVR 2024", "13 fév\xc3 2024", "2024\xe2\x8202",
+             "2024\xe2\x82\xac02", "2024, 02", "2024,02")
+    for df in formats, T in (Date, DateTime, Time, Dates.Timestamp{Dates.Microsecond}), s in texts
+        wrapped = string("<", s, ">")
+        sub = SubString(wrapped, 2, prevind(wrapped, lastindex(wrapped)))
+        for f in (parse, tryparse)
+            expected = outcome(() -> f(T, Test.GenericString(s), df))
+            @test outcome(() -> f(T, s, df)) == expected
+            @test outcome(() -> f(T, sub, df)) == expected
+        end
+        expected = tryparse(T, Test.GenericString(s), df)
+        buffer = Vector{UInt8}(wrapped)
+        for bytes in (codeunits(s), Vector{UInt8}(s), view(buffer, 2:length(buffer)-1))
+            v = Base.Parsers.parsevalue(T, bytes; dateformat = df)
+            @test v isa Base.Parsers.ParseFailure ? expected === nothing : isequal(v, expected)
+        end
+    end
+end
+
+@testset "Malformed text where AM or PM goes" begin
+    df = dateformat"HH:MM p"
+    @test tryparse(Time, "05:28 P\xc3", df) === nothing
+    @test tryparse(Time, Test.GenericString("05:28 \xc3M"), df) === nothing
+    @test_throws "Expected directive DatePart(p)" parse(Time, "05:28 \xc3M", df)
+    @test Base.Parsers.parsevalue(Time, codeunits("05:28 \xc3M"); dateformat = df) === Base.Parsers.INVALID
+    # An overlong encoding of a letter is not malformed, and it lowercases to the letter
+    @test parse(Time, "05:28 \xc1\x81M", df) == Time(5, 28)
+    @test parse(Time, "05:28 P\xc1\x8d", df) == Time(17, 28)
+    @test Base.Parsers.parsevalue(Time, codeunits("05:28 \xc1\x81M"); dateformat = df) == Time(5, 28)
+end
+
+@testset "A token that a package defines" begin
+    # Its reader gets the text as characters, and its value need not be an Int64: the
+    # constructor converts it
+    function Dates.tryparsenext(d::Dates.DatePart{'q'}, str, i, len)
+        val = Dates.tryparsenext_base10(str, i, len, 1, 2)
+        return val === nothing ? nothing : (Int32(first(val)), last(val))
+    end
+    try
+        Dates.CONVERSION_SPECIFIERS['q'] = Dates.Month
+        df = DateFormat("yyyy-qq-dd")
+        @test parse(Date, "2024-02-13", df) == Date(2024, 2, 13)
+        @test parse(Date, SubString("2024-2-13"), df) == Date(2024, 2, 13)
+        @test parse(Date, Test.GenericString("2024-2-13"), df) == Date(2024, 2, 13)
+        @test_throws "Month: 13 out of range" parse(Date, "2024-13-01", df)
+    finally
+        delete!(Dates.CONVERSION_SPECIFIERS, 'q')
+    end
+end
+
+@testset "Base.Parsers.parsevalue" begin
+    parsevalue = Base.Parsers.parsevalue
+    @test parsevalue(Date, codeunits("2024-02-13")) == Date(2024, 2, 13)
+    @test parsevalue(DateTime, codeunits("2024-02-13T05:28:17.123")) == DateTime(2024, 2, 13, 5, 28, 17, 123)
+    @test parsevalue(Time, codeunits("05:28:17.123456789")) == Time(5, 28, 17, 123, 456, 789)
+    @test parsevalue(Dates.Timestamp, codeunits("2024-02-13T05:28:17.123456789")) ===
+          Dates.Timestamp(2024, 2, 13, 5, 28, 17, 123, 456, 789)
+    buffer = Vector{UInt8}("1,02/13/2024 5:28 PM,x")
+    @test parsevalue(DateTime, view(buffer, 3:20); dateformat = dateformat"mm/dd/yyyy I:MM p") ==
+          DateTime(2024, 2, 13, 17, 28)
+    @test parsevalue(Date, UInt8[]) === Base.Parsers.INVALID
+    @test parsevalue(Date, codeunits("2024-02-30")) === Base.Parsers.INVALID
+    @test parsevalue(Date, codeunits("2024-02-13 ")) === Base.Parsers.INVALID
+    @test parsevalue(DateTime, codeunits("2024-02-13T05:28:17.1234"); dateformat = dateformat"yyyy-mm-ddTHH:MM:SS.n") ===
+          Base.Parsers.INVALID
+    # A Timestamp outside the range of its type overflows
+    @test parsevalue(Dates.Timestamp, codeunits("2300-01-01T00:00:00")) === Base.Parsers.OVERFLOW
+    @test parsevalue(Dates.Timestamp{Dates.Microsecond}, codeunits("2300-01-01T00:00:00")) ==
+          Dates.Timestamp{Dates.Microsecond}(2300)
+    @test parsevalue(Dates.Timestamp, codeunits("2262-04-11T23:47:16.854775807")) === typemax(Dates.Timestamp)
+    @test parsevalue(Dates.Timestamp, codeunits("2262-04-11T23:47:16.854775808")) === Base.Parsers.OVERFLOW
+    @test parsevalue(Dates.Timestamp{Dates.Second}, codeunits("2024-02-13T05:28:17.5")) === Base.Parsers.INVALID
+end
+
+@testset "Fields parse as the constructors build them" begin
+    # Parsing checks and combines the fields as the constructors do: a value where the
+    # constructor returns one, and `nothing` or a failure where it throws
+    built(f) = try f() catch e; e isa ArgumentError ? nothing : rethrow() end
+    function agrees(T, s, df, f)
+        x = built(f)
+        v = Base.Parsers.parsevalue(T, codeunits(s); dateformat = df)
+        return isequal(tryparse(T, s, df), x) && isequal(v isa T ? v : nothing, x)
+    end
+    years = (-401, -1, 0, 1, 1600, 1677, 1900, 2000, 2023, 2024, 2100, 2262, 9999, 10000)
+    df = dateformat"y-m-d"
+    @test all(agrees(Date, "$y-$m-$d", df, () -> Date(y, m, d)) for y in years, m in 0:13, d in 0:32)
+    df = dateformat"y-m-d H:M:S.s"
+    @test all(agrees(DateTime, "$y-$m-$d $h:$mi:$s.$(lpad(ms, 3, '0'))", df, () -> DateTime(y, m, d, h, mi, s, ms))
+              for y in (1, 2024), m in (1, 2), d in (1, 29), h in 0:25, mi in (0, 59, 60), s in (0, 60), ms in (0, 1))
+    df = dateformat"y-m-d I:M:S p"
+    @test all(agrees(DateTime, "2024-1-1 $h:$mi:$s $p", df,
+                     () -> DateTime(2024, 1, 1, h, mi, s, 0, p == "AM" ? Dates.AM : Dates.PM))
+              for h in 0:13, mi in (0, 60), s in (0, 60), p in ("AM", "PM"))
+    df = dateformat"H:M:S.n"
+    @test all(agrees(Time, "$h:$mi:$s.$ns", df, () -> Time(h, mi, s, 0, 0, parse(Int, rpad(ns, 9, '0'))))
+              for h in 0:24, mi in (0, 60), s in (0, 60), ns in ("0", "999999999"))
+    df = dateformat"y-m-d H:M:S.n"
+    for P in (Dates.Nanosecond, Dates.Microsecond, Dates.Second), y in years, (m, d) in ((1, 1), (2, 29), (4, 11), (4, 12), (9, 21), (12, 31)),
+        (h, mi, s, frac) in ((0, 0, 0, "0"), (12, 0, 43, "145224191"), (23, 47, 16, "854775807"), (24, 0, 0, "0"), (0, 12, 43, "5"))
+        ns = parse(Int, rpad(frac, 9, '0'))
+        @test agrees(Dates.Timestamp{P}, "$y-$m-$d $h:$mi:$s.$frac", df,
+                     () -> Dates.Timestamp{P}(y, m, d, h, mi, s, 0, 0, ns))
+    end
+end
+
 end

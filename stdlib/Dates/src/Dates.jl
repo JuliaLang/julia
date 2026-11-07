@@ -34,6 +34,8 @@ module Dates
 
 import Base: ==, isless, div, fld, mod, rem, gcd, lcm, +, -, *, /, %
 using Printf: @sprintf
+using Base: CodeUnits, require_one_based_indexing
+using Base.Parsers: ParseFailure, INVALID, OVERFLOW
 
 using Base.Iterators
 
