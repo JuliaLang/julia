@@ -133,6 +133,7 @@ function unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, b::RefArray{T})
     else
         # see comment on equivalent branch for RefValue
         p = pointerref(Ptr{Ptr{Cvoid}}(pointer(b.x, b.i)), 1, Core.sizeof(Ptr{Cvoid}))
+        tagged_word_isref(UInt(p)) || throw_unboxed_address(b)
     end
     return p
 end
