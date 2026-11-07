@@ -24,6 +24,7 @@ struct JLOptions
     startupfile::Int8
     compile_enabled::Int8
     code_coverage::Int8
+    code_coverage_mode::Int8
     malloc_log::Int8
     tracked_path::Ptr{UInt8}
     opt_level::Int8
@@ -73,6 +74,7 @@ struct JLOptions
     target_sanitize_memory::Int8
     target_sanitize_thread::Int8
     target_sanitize_address::Int8
+    coverage_exclude::Ptr{UInt8}
 end
 
 # This runs early in the sysimage when `!=` is not defined yet

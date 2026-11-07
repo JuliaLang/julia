@@ -5,7 +5,7 @@
 using Random
 using Base: remove_linenums!
 
-using_JuliaSyntax = parentmodule(Core._parse) != Core.Compiler
+using_JuliaSyntax = parentmodule(Core._parse) != Base
 
 macro test_parseerror(str, msg)
     if using_JuliaSyntax
@@ -192,8 +192,8 @@ macro test999_str(args...); args; end
 # blocks vs. tuples
 @test Meta.parse("()") == Expr(:tuple)
 @test Meta.parse("(;)") == Expr(:tuple, Expr(:parameters))
-@test Meta.parse("(;;)") == Expr(:block)
-@test Meta.parse("(;;;;)") == Expr(:block)
+@test Meta.parse("(;;)") == Expr(:block, LineNumberNode(1,:none))
+@test Meta.parse("(;;;;)") == Expr(:block, LineNumberNode(1,:none))
 @test_parseerror "(,)"
 @test_parseerror "(;,)"
 @test_parseerror "(,;)"
@@ -201,17 +201,17 @@ macro test999_str(args...); args; end
 #@test_parseerror "(1;2,)"
 #@test_parseerror "(1;2,;)"
 #@test_parseerror "(1;2,;3)"
-@test Meta.parse("(x;)") == Expr(:block, :x)
+@test Meta.parse("(x;)") == Expr(:block, LineNumberNode(1,:none), :x)
 @test Meta.parse("(;x)") == Expr(:tuple, Expr(:parameters, :x))
 @test Meta.parse("(;x,)") == Expr(:tuple, Expr(:parameters, :x))
 @test Meta.parse("(x,)") == Expr(:tuple, :x)
 @test Meta.parse("(x,;)") == Expr(:tuple, Expr(:parameters), :x)
-@test Meta.parse("(x;y)") == Expr(:block, :x, LineNumberNode(1,:none), :y)
+@test Meta.parse("(x;y)") == Expr(:block, LineNumberNode(1,:none), :x, LineNumberNode(1,:none), :y)
 @test Meta.parse("(x...;)") == Expr(:tuple, Expr(:parameters), Expr(:(...), :x))
 @test Meta.parse("(;x...)") == Expr(:tuple, Expr(:parameters, Expr(:(...), :x)))
 @test Meta.parse("(x...;y)") == Expr(:tuple, Expr(:parameters, :y), Expr(:(...), :x))
-@test Meta.parse("(x;y...)") == Expr(:block, :x, LineNumberNode(1,:none), Expr(:(...), :y))
-@test Meta.parse("(x=1;y=2)") == Expr(:block, Expr(:(=), :x, 1), LineNumberNode(1,:none), Expr(:(=), :y, 2))
+@test Meta.parse("(x;y...)") == Expr(:block, LineNumberNode(1,:none), :x, LineNumberNode(1,:none), Expr(:(...), :y))
+@test Meta.parse("(x=1;y=2)") == Expr(:block, LineNumberNode(1,:none), Expr(:(=), :x, 1), LineNumberNode(1,:none), Expr(:(=), :y, 2))
 @test Meta.parse("(x,;y)") == Expr(:tuple, Expr(:parameters, :y), :x)
 @test Meta.parse("(x,;y=1)") == Expr(:tuple, Expr(:parameters, Expr(:kw, :y, 1)), :x)
 @test Meta.parse("(x,a;y=1)") == Expr(:tuple, Expr(:parameters, Expr(:kw, :y, 1)), :x, :a)
@@ -806,6 +806,12 @@ let ex = Expr(:toplevel,
     @test only(methods(f)).debuginfo.def isa Symbol
 end
 
+# let with linenumbernode
+@test !Core.eval(@__MODULE__,
+                 Expr(:let, Expr(:block, LineNumberNode(1)),
+                      Expr(:block, :(g = 1),
+                           Expr(:isglobal, :g))))
+
 # Check qualified string macros
 Base.r"regex" == r"regex"
 
@@ -1095,6 +1101,7 @@ end === (3, String)
 @test Meta.parse("3 +̂′ 4") == Expr(:call, :+̂′, 3, 4)
 @test Meta.parse("3 +⁽¹⁾ 4") == Expr(:call, :+⁽¹⁾, 3, 4)
 @test Meta.parse("3 +₍₀₎ 4") == Expr(:call, :+₍₀₎, 3, 4)
+@test Meta.parse("3 +₝₞₟𝿐 4") == Expr(:call, :+₝₞₟𝿐, 3, 4)
 for bad in ('=', '$', ':', "||", "&&", "->", "<:")
     @test_parseerror "3 $(bad)⁽¹⁾ 4"
 end
@@ -1398,10 +1405,10 @@ end
 # cases where parens are just grouping
 @test Meta.parse("-(x)^2")     == Expr(:call, :-, Expr(:call, :^, :x, 2))
 @test Meta.parse("-(a=1)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:(=), :a, 1), 2))
-@test Meta.parse("-(x;y)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x, LineNumberNode(1,:none), :y), 2))
+@test Meta.parse("-(x;y)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:block, LineNumberNode(1,:none), :x, LineNumberNode(1,:none), :y), 2))
 @test Meta.parse("-(;)^2")     == Expr(:call, :^, Expr(:call, :-, Expr(:parameters)), 2)
-@test Meta.parse("-(;;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block), 2))
-@test Meta.parse("-(x;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x), 2))
+@test Meta.parse("-(;;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block, LineNumberNode(1,:none)), 2))
+@test Meta.parse("-(x;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block, LineNumberNode(1,:none), :x), 2))
 @test Meta.parse("+((1,2))")   == Expr(:call, :+, Expr(:tuple, 1, 2))
 
 @test_parseerror "1 -+ (a=1, b=2)"  "space before \"(\" not allowed in \"+ (\" at none:1"
@@ -1680,6 +1687,11 @@ function f32620(x::T) where T
 end
 @test f32620(0) === (Int, 2)
 
+# Static parameter reads must be separate statements in lowered IR.
+f_sparam_assign(::Val{S}) where {S} = (println(devnull, repr(begin value = S end)); S)
+@test f_sparam_assign(Val(1)) === 1
+@test isempty(Base.Compiler.validate_code(only(code_lowered(f_sparam_assign, (Val{1},)))))
+
 # issue #28044
 code28044(x) = 10x
 begin
@@ -1754,7 +1766,15 @@ end
 # #6080
 @test_loweringerror(:(ccall(:a, Cvoid, (Cint,), &x)), "invalid syntax &x")
 
-@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall/cglobal function name and library expression cannot reference local variables")
+@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall/cglobal function name and library expression cannot reference local variable")
+# #38907, #59324
+@test_loweringerror(:(let lib = nothing
+                          () -> (lib = "lib"; ccall((:a, lib), Cvoid, ()))
+                      end), "ccall/cglobal function name and library expression cannot reference local variable")
+@test_loweringerror(:(f(::Type{T}) where {T} = ccall(:a, (T where T), ())), "ccall return type cannot reference local variable")
+@test_loweringerror(:(f(T) = ccall(:a, T, ())), "ccall return type cannot reference local variable")
+@test_loweringerror(:(f(x, T) = ccall(:a, Cvoid, (T,), x)), "ccall argument type cannot reference local variable")
+@test_loweringerror(:(f(x) = ccall(:a, Cvoid, (Ref{<:Any},), x)), "ccall argument type cannot reference local variable")
 
 @test_parseerror "x.'"
 @test_parseerror "0.+1"
@@ -2851,10 +2871,10 @@ end
 end
 
 @testset "issue #37393" begin
-    @test remove_linenums!(:(for outer i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), :(;;))
+    @test remove_linenums!(:(for outer i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), Expr(:block))
     i = :i
-    @test remove_linenums!(:(for outer $i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), :(;;))
-    @test remove_linenums!(:(for outer = 1:3; end)) == Expr(:for, Expr(:(=), :outer, :(1:3)), :(;;))
+    @test remove_linenums!(:(for outer $i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), Expr(:block))
+    @test remove_linenums!(:(for outer = 1:3; end)) == Expr(:for, Expr(:(=), :outer, :(1:3)), Expr(:block))
     # TIL that this is possible
     for outer $ i = 1:3
         @test 1 $ 2 in 1:3
@@ -3289,7 +3309,7 @@ end
     @test f() == 1
     ex = Expr(:vcat)
     ex.args = fill!(Vector{Any}(undef, 600000), 1)
-    @test_throws ErrorException("syntax: expression too large") eval(ex)
+    @test_throws "expression too large" eval(ex)
 end
 
 # issue 25678
@@ -3615,7 +3635,7 @@ demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
     @test z == 5
 
     @test_throws ArgumentError begin x, y..., z = 1:1 end
-    @test_throws BoundsError begin x, y, _..., z = 1, 2 end
+    @test_throws ArgumentError begin x, y, _..., z = 1, 2 end
 
     last((a..., b)) = b
     front((a..., b)) = a
@@ -3771,14 +3791,16 @@ end
 end
 
 @testset "public keyword" begin
-    p(str) = Base.remove_linenums!(Meta.parse(str))
+    local test_mod = Module()
+    Base.set_syntax_version(test_mod, v"1.13")
+    p(str) = Base.remove_linenums!(Meta.parse(str; mod=test_mod))
     # tests ported from JuliaSyntax.jl
     @test p("function f(public)\n    public + 3\nend") == Expr(:function, Expr(:call, :f, :public), Expr(:block, Expr(:call, :+, :public, 3)))
     @test p("public A, B") == Expr(:public, :A, :B)
     @test p("if true \n public *= 4 \n end") == Expr(:if, true, Expr(:block, Expr(:*=, :public, 4)))
     @test p("module Mod\n public A, B \n end") == Expr(:module, true, :Mod, Expr(:block, Expr(:public, :A, :B)))
     @test p("module Mod2\n a = 3; b = 6; public a, b\n end") == Expr(:module, true, :Mod2, Expr(:block, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b)))
-    @test p("a = 3; b = 6; public a, b") == Expr(:toplevel, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b))
+    @test p("a = 3; b = 6; public a, b") == Expr(:toplevel, LineNumberNode(1,:none), Expr(:(=), :a, 3), LineNumberNode(1,:none), Expr(:(=), :b, 6), LineNumberNode(1,:none), Expr(:public, :a, :b))
     @test_throws Meta.ParseError p("begin \n public A, B \n end")
     @test_throws Meta.ParseError p("if true \n public A, B \n end")
     @test_throws Meta.ParseError p("public export=true foo, bar")
@@ -4780,4 +4802,41 @@ end
     :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1;b=3))
     ]
     @test_throws "invalid assignment location" Core.eval(@__MODULE__, ex)
+end
+
+# issue #20392: the calling convention of `ccall` must survive macro hygiene
+macro ccall_cdecl_20392()
+    :(ccall(:jl_get_world_counter, cdecl, UInt, ()))
+end
+macro ccall_llvmcall_20392()
+    :(ccall("llvm.donothing", llvmcall, Cvoid, ()))
+end
+macro ccall_conv_20392(conv)
+    Expr(:call, :ccall, QuoteNode(:jl_get_world_counter), esc(conv), :UInt, Expr(:tuple))
+end
+macro ccall_conv_nested_20392()
+    :(@ccall_conv_20392 cdecl)
+end
+macro cdecl_20392()
+    :cdecl
+end
+macro ccall_esc_callee_20392()
+    Expr(:call, esc(:ccall), QuoteNode(:jl_get_world_counter), :cdecl, :UInt, Expr(:tuple))
+end
+macro call_cdecl_20392()
+    :(g(cdecl))
+end
+@testset "ccall calling convention in macro (#20392)" begin
+    @test @ccall_cdecl_20392() isa UInt
+    @test @ccall_llvmcall_20392() === nothing
+    @test @ccall_conv_nested_20392() isa UInt
+    @test ccall(:jl_get_world_counter, @cdecl_20392(), UInt, ()) isa UInt
+    @test @ccall_esc_callee_20392() isa UInt
+    # hygiene must leave the convention a plain symbol for any lowerer
+    @test (@macroexpand @ccall_cdecl_20392()).args[3] === :cdecl
+    @test (@macroexpand @ccall_conv_nested_20392()).args[3] === :cdecl
+    @test (@macroexpand ccall(:jl_get_world_counter, @cdecl_20392(), UInt, ())).args[3] === :cdecl
+    @test (@macroexpand @ccall_esc_callee_20392()).args[3] === :cdecl
+    # but only there: the names are ordinary variables elsewhere
+    @test (@macroexpand @call_cdecl_20392()).args[2] == GlobalRef(@__MODULE__, :cdecl)
 end

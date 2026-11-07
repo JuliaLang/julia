@@ -882,14 +882,15 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return reinterpret(T, xu)
     else # subnormal case
-        if k <= -significand_bits(T) # underflow
+        # results with k == -significand_bits(T) are at least nextfloat(zero(T))/2, so may round up
+        if k <= -significand_bits(T) - 1 # underflow
             # overflow, for the case of integer overflow in n + k
             e > 50000 && return flipsign(T(Inf), x)
             return flipsign(T(0.0), x)
         end
-        k += significand_bits(T)
-        # z = T(2.0) ^ (-significand_bits(T))
-        z = reinterpret(T, rem(exponent_bias(T)-significand_bits(T), uinttype(T)) << significand_bits(T))
+        k += significand_bits(T) + 1
+        # z = T(2.0) ^ (-significand_bits(T) - 1)
+        z = reinterpret(T, rem(exponent_bias(T)-significand_bits(T)-1, uinttype(T)) << significand_bits(T))
         xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return z*reinterpret(T, xu)
     end
@@ -904,6 +905,9 @@ For a normalized floating-point number `x`, this corresponds to the exponent of 
 
 Throws a `DomainError` when `x` is zero, infinite, or [`NaN`](@ref).
 For any other non-subnormal floating-point number `x`, this corresponds to the exponent bits of `x`.
+
+!!! compat "Julia 1.14"
+    Calling `exponent` on a `Bool` requires Julia 1.14 or later.
 
 See also [`signbit`](@ref), [`significand`](@ref), [`frexp`](@ref), [`issubnormal`](@ref), [`log2`](@ref), [`ldexp`](@ref).
 # Examples
@@ -984,6 +988,14 @@ function exponent(x::Base.BitInteger)
     iszero(x) && throw(DomainError(x, "cannot be zero"))
     ux = Base.uabs(x)
     return 8sizeof(ux) - leading_zeros(ux) - 1
+end
+
+function exponent(x::Bool)
+    if x
+        0
+    else
+        throw(DomainError(x, "cannot be zero"))
+    end
 end
 
 """
@@ -1281,9 +1293,8 @@ Return positive part of the high word of `x` as a `UInt32`.
 include("special/cbrt.jl")
 include("special/exp.jl")
 include("special/hyperbolic.jl")
+include("special/pi_remainders.jl")
 include("special/trig.jl")
-include("special/rem_pio2.jl")
-include("special/rem2pi.jl")
 include("special/log.jl")
 include("special/pow.jl")
 
@@ -1291,7 +1302,8 @@ include("special/pow.jl")
 
 # Float16 definitions
 
-for func in (:sin,:cos,:tan,:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
+# Float16 sin, cos, sincos, and tan have dedicated methods in special/trig.jl
+for func in (:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
              :atanh,:log,:log2,:log10,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
@@ -1299,13 +1311,12 @@ for func in (:sin,:cos,:tan,:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
     end
 end
 
-for func in (:exp,:exp2,:exp10,:sinh)
+for func in (:exp,:exp2,:exp10,:sinh,:sin,:cos,:tan)
      @eval $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
 end
 
 
 atan(a::Float16,b::Float16) = Float16(atan(Float32(a),Float32(b)))
-sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
 for f in (:sin, :cos, :tan, :asin, :atan, :acos,
           :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
@@ -1316,7 +1327,7 @@ for f in (:sin, :cos, :tan, :asin, :atan, :acos,
         xf isa typeof(x) && throw(MethodError($f, (x,)))
         return ($f)(xf)
     end
-    @eval $(f)(::Missing) = missing
+    @eval $(f)(::Missing) = $(f === :sincospi ? :(missing, missing) : (:missing))
 end
 
 for f in (:atan, :hypot, :log)

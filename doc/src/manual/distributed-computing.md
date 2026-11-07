@@ -113,8 +113,10 @@ julia> fetch(s)
 
 Note that we used `1 .+ fetch(r)` instead of `1 .+ r`. This is because we do not know where the
 code will run, so in general a [`fetch`](@ref) might be required to move `r` to the process
-doing the addition. In this case, [`@spawnat`](@ref) is smart enough to perform the computation
-on the process that owns `r`, so the [`fetch`](@ref) will be a no-op (no work is done).
+doing the addition. `:any` does not take into account where `r` lives (it simply cycles through
+the workers), so in this case the addition runs on process 3 and [`fetch`](@ref) copies the
+matrix from process 2. To avoid moving the data, run the computation on the process that owns
+`r` instead, e.g. `@spawnat 2 1 .+ fetch(r)`.
 
 (It is worth noting that [`@spawnat`](@ref) is not built-in but defined in Julia as a [macro](@ref man-macros).
 It is possible to define your own such constructs.)
@@ -122,25 +124,6 @@ It is possible to define your own such constructs.)
 An important thing to remember is that, once fetched, a [`Future`](@ref Distributed.Future) will cache its value
 locally. Further [`fetch`](@ref) calls do not entail a network hop. Once all referencing [`Future`](@ref Distributed.Future)s
 have fetched, the remote stored value is deleted.
-
-[`Threads.@spawn`](@ref) is similar to [`@spawnat`](@ref), but only runs tasks on the local process. We
-use it to create a "feeder" task for each process. Each task picks the next index that needs to
-be computed, then waits for its process to finish, then repeats until we run out of indices. Note
-that the feeder tasks do not begin to execute until the main task reaches the end of the [`@sync`](@ref)
-block, at which point it surrenders control and waits for all the local tasks to complete before
-returning from the function.
-The feeder tasks are able to share state via `nextidx` because
-they all run on the same process.
-Even if `Tasks` are scheduled cooperatively, locking may still be required in some contexts, as in
-[asynchronous I/O](@ref faq-async-io).
-This means context switches only occur at well-defined points: in this case,
-when [`remotecall_fetch`](@ref) is called. This is the current state of implementation and it may change
-for future Julia versions, as it is intended to make it possible to run up to N `Tasks` on M `Process`, aka
-[M:N Threading](https://en.wikipedia.org/wiki/Thread_(computing)#Models). Then a lock acquiring/releasing
-model for `nextidx` will be needed, as it is not safe to let multiple processes read-write a resource at
-the same time.
-
-
 
 ## [Code Availability and Loading Packages](@id code-availability)
 
@@ -433,7 +416,7 @@ julia> fetch(a)+fetch(b)
 
 This example demonstrates a powerful and often-used parallel programming pattern. Many iterations
 run independently over several processes, and then their results are combined using some function.
-The combination process is called a *reduction*, since it is generally tensor-rank-reducing: a
+The combination process is called a *reduction*, since it is generally dimensionality-reducing: a
 vector of numbers is reduced to a single number, or a matrix is reduced to a single row or column,
 etc. In code, this typically looks like the pattern `x = f(x,v[i])`, where `x` is the accumulator,
 `f` is the reduction function, and the `v[i]` are the elements being reduced. It is desirable

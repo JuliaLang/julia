@@ -56,14 +56,16 @@ Look up a symbol from a shared library handle, return callable function pointer 
 If the symbol cannot be found, this method throws an error, unless the keyword argument
 `throw_error` is set to `false`, in which case this method returns `nothing`.
 """
-function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString}; throw_error::Bool = true)
+Base.@constprop :aggressive function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString}; throw_error::Bool = true)
+    # Propagate `throw_error=true` to exclude `nothing` from the inferred return type,
+    # even when string conversion makes the keyword body too costly to inline.
     hnd == C_NULL && throw(ArgumentError("NULL library handle"))
     val = Ref(Ptr{Cvoid}(0))
     symbol_found = ccall(:jl_dlsym, Cint,
         (Ptr{Cvoid}, Cstring, Ref{Ptr{Cvoid}}, Cint, Cint),
         hnd, s, val, Int64(throw_error), Int64(1)
     )
-    if symbol_found == 0
+    if symbol_found == 0 && !throw_error
         return nothing
     end
     return val[]
@@ -314,7 +316,7 @@ struct LazyLibraryPath
     pieces::Tuple{Vararg{Any}}
     LazyLibraryPath(pieces...) = new(pieces)
 end
-@inline Base.string(llp::LazyLibraryPath) = joinpath(String[string(p) for p in llp.pieces])
+@inline Base.string(llp::LazyLibraryPath) = joinpath(String[string(p)::String for p in llp.pieces])
 Base.cconvert(::Type{Cstring}, llp::LazyLibraryPath) = Base.cconvert(Cstring, string(llp))
 # Define `print` so that we can wrap this in a `LazyString`
 Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))
@@ -322,8 +324,16 @@ Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))
 # Helper to get `$(private_shlibdir)` at runtime
 struct PrivateShlibdirGetter; end
 const private_shlibdir = Base.OncePerProcess{String}() do
-    libname = ifelse(isdebugbuild(), "libjulia-internal-debug", "libjulia-internal")
-    dirname(dlpath(libname))
+    p = ccall(:jl_get_libjulia_internal_path, Cstring, ())
+    if p == C_NULL
+        # libjulia-internal is linked into the executable, so it cannot tell us
+        # where the private libraries live. Assume the installed layout, which
+        # keeps them in `$(private_shlibdir)` relative to the executable.
+        return Sys.iswindows() ? Sys.BINDIR : abspath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
+    end
+    path = unsafe_string(p)
+    Sys.iswindows() && Libc.free(p)
+    return dirname(path)
 end
 Base.string(::PrivateShlibdirGetter) = private_shlibdir()
 
@@ -344,6 +354,40 @@ const libgmp = LazyLibrary(BundledLazyLibraryPath("libgmp.so.10"))
 See also [`LazyLibrary`](@ref), [`LazyLibraryPath`](@ref).
 """
 BundledLazyLibraryPath(subpath) = LazyLibraryPath(PrivateShlibdirGetter(), subpath)
+
+function Base.show(io::IO, llp::LazyLibraryPath)
+    pieces = llp.pieces
+    # `PrivateShlibdirGetter()` dlopens. Avoid doing so in `show`.
+    # Like `Library`, avoids printing the full path when bundled.
+    if length(pieces) == 2 && pieces[1] isa PrivateShlibdirGetter
+        show(io, pieces[2])
+    else
+        print(io, "LazyLibraryPath(")
+        join(io, (sprint(show, p) for p in pieces), ", ")
+        print(io, ")")
+    end
+end
+
+"""
+    LazyLibraryCallback
+
+Abstract supertype for `on_load_callback`s of a [`LazyLibrary`](@ref) that are usable
+under `--trim`. Subtypes must be concrete and callable with no arguments:
+
+```julia
+struct MyLibOnLoad <: Libdl.LazyLibraryCallback end
+(::MyLibOnLoad)() = @ccall mylib.mylib_init()::Cvoid
+
+const mylib = LazyLibrary("libmylib"; on_load_callback = MyLibOnLoad())
+```
+
+Such Methods will be compiled unconditionally under `--trim`, even if the
+type is never instantiated or called.
+
+!!! compat "Julia 1.14"
+    `LazyLibraryCallback` was added in Julia 1.14.
+"""
+const LazyLibraryCallback = Core.LazyLibraryCallback
 
 # Small helper struct to initialize a LazyLibrary with its initial set of dependencies
 struct InitialDependencies{T}
@@ -369,7 +413,8 @@ This is a thread-safe mechanism for on-demand library initialization.
   as it is not expected that `ccall()` should result in large amounts of Julia code being run.
   You may call `ccall()` from within the `on_load_callback` but only for the current library
   and its dependencies, and user should not call `wait()` on any tasks within the on load
-  callback as they may deadlock).
+  callback as they may deadlock). To be usable under `--trim`, this must be a
+  [`LazyLibraryCallback`](@ref Libdl.LazyLibraryCallback).
 
 The dlopen operation is thread-safe: only one thread loads the library, acquired after the
 release store of the reference to each dependency from loading of each dependency. Other
@@ -431,6 +476,17 @@ mutable struct LazyLibrary
     end
 end
 
+# overrides for JuliaC under `--trim`
+@noinline _invoke_on_load_callback(@nospecialize(cb)) = cb()
+@noinline _lazy_library_path_string(@nospecialize(path)) = string(path)
+
+# Only print the path and avoid printing all the dependencies
+function Base.show(io::IO, ll::LazyLibrary)
+    print(io, "LazyLibrary(")
+    show(io, ll.path)
+    print(io, ")")
+end
+
 # We support adding dependencies only because of very special situations
 # such as LBT needing to have OpenBLAS_jll added as a dependency dynamically.
 """
@@ -472,12 +528,12 @@ function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
                 end
 
                 # Load our library
-                handle = dlopen(string(ll.path), flags; kwargs...)
+                handle = dlopen(_lazy_library_path_string(ll.path), flags; kwargs...)
                 @atomic :release ll.handle = handle
 
                 # Only the thread that loaded the library calls the `on_load_callback()`.
                 if ll.on_load_callback !== nothing
-                    ll.on_load_callback()
+                    _invoke_on_load_callback(ll.on_load_callback)
                 end
             else
                 # Another thread loaded the library while we were waiting

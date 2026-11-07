@@ -635,13 +635,13 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 if Sys.iswindows()
 
 function longpath(path::AbstractString)
-    p = cwstring(path)
+    p = cwstring(abspath(path)) # GetLongPathNameW fails on missing directories, even if a later `..` cancels them
     buf = zeros(UInt16, length(p))
     while true
         n = ccall((:GetLongPathNameW, "kernel32"), stdcall,
             UInt32, (Ptr{UInt16}, Ptr{UInt16}, UInt32),
             p, buf, length(buf))
-        windowserror(:longpath, n == 0)
+        windowserror(:longpath, n == 0, extrainfo=path)
         x = n < length(buf) # is the buffer big enough?
         resize!(buf, n) # shrink if x, grow if !x
         x && return transcode(String, buf)
@@ -893,7 +893,7 @@ is supported (not `~username`).
 
 See also: [`contractuser`](@ref).
 """
-expanduser(path::AbstractString) = expanduser(String(path))
+expanduser(path::AbstractString) = expanduser(String(path)::String)
 
 """
     contractuser(path::AbstractString)::AbstractString
@@ -975,7 +975,7 @@ function encode_uri_component(s::AbstractString)
         else
             # RFC3986 Section 2.1
             push!(out, UInt8('%'))
-            append!(out, codeunits(uppercase(string(cu, base = 16))))
+            append!(out, codeunits(uppercase(string(cu, base = 16, pad = 2))))
         end
     end
     String(out)

@@ -77,6 +77,7 @@ signed(::Type{UInt32}) = Int32
 signed(::Type{UInt64}) = Int64
 signed(::Type{UInt128}) = Int128
 signed(::Type{T}) where {T<:Signed} = T
+signed(::Type{Union{}}, slurp...) = throw(MethodError(signed, (Union{}, slurp...)))
 
 ## integer comparisons ##
 
@@ -209,7 +210,7 @@ when `abs` is applied to the minimum representable value of a signed
 integer. That is, when `x == typemin(typeof(x))`, `abs(x) == x < 0`,
 not `-x` as might be expected.
 
-See also: [`abs2`](@ref), [`unsigned`](@ref), [`sign`](@ref).
+See also: [`abs2`](@ref), [`unsigned`](@ref), [`sign`](@ref), [`Base.uabs`](@ref), [`Base.Checked.checked_abs`](@ref).
 
 # Examples
 ```jldoctest
@@ -259,6 +260,11 @@ julia> signed(unsigned(-2))
 """
 unsigned(x) = x % typeof(convert(Unsigned, zero(x)))
 unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
+
+# The difference `hi - lo` of two integers with `hi >= lo`. Fixed-width types can wrap to a
+# negative value when the operands span more than half the type, but it still fits as unsigned.
+maybe_unsigned(x::BitSigned) = unsigned(x)
+maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
 
 """
     signed(x)
@@ -331,12 +337,11 @@ function mod(x::T, y::T) where T<:Integer
     y == -1 && return T(0)   # avoid potential overflow in fld
     return x - fld(x, y) * y
 end
-# For fixed-width integers the subtraction and product above wrap on valid
-# inputs (`fld(x, y)*y` lies in `(x - y, x + y]`, e.g. `mod(typemin(Int), 3)`)
-# and the result is correct only through the double wrap-cancellation.
+# Correcting the truncated remainder is cheaper than `x - fld(x, y) * y`, and cannot overflow:
+# the correction only applies when `r` and `y` have opposite signs.
 function mod(x::T, y::T) where T<:BitSigned
-    y == -1 && return T(0)   # avoid potential overflow in fld
-    return x -% fld(x, y) *% y
+    r = rem(x, y)
+    return r + ifelse(signbit(r ⊻ y) & (r != 0), y, zero(T))
 end
 function mod(x::BitSigned, y::Unsigned)
     remval = rem(x, y) # correct iff  remval>=0
@@ -573,12 +578,29 @@ top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 (<=)(x::T, y::T) where {T<:BitSigned}   = sle_int(x, y)
 (<=)(x::T, y::T) where {T<:BitUnsigned} = ule_int(x, y)
 
-==(x::BitSigned,   y::BitUnsigned) = (x >= 0) & (unsigned(x) == y)
-==(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x == unsigned(y))
-<( x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <  y)
-<( x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <  unsigned(y))
-<=(x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <= y)
-<=(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <= unsigned(y))
+==(x::BitSigned, y::BitUnsigned) = y == x
+<(x::BitSigned, y::BitUnsigned) = !(y <= x)
+<=(x::BitSigned, y::BitUnsigned) = !(y < x)
+
+for op in (:(==), :<, :<=)
+    @eval function $op(x::BitUnsigned, y::BitSigned)
+        if Core.sizeof(x) < Core.sizeof(y)
+            $op(typeof(y)(x), y)
+        else
+            (y >= 0) & $op(x, unsigned(y) % typeof(x))
+        end
+    end
+end
+
+function max(x::S, y::T) where {S <: BitInteger, T <: BitInteger}
+    R = promote_type(S, T)
+    ifelse(x < y, y % R, x % R)
+end
+
+min(x::S, y::BitUnsigned) where S <: BitSigned = ifelse(x < y, x, y % S)
+min(x::BitUnsigned, y::T) where T <: BitSigned = ifelse(x < y, x % T, y)
+
+minmax(x::BitInteger, y::BitInteger) = (min(x, y), max(x, y))
 
 ## integer shifts ##
 
@@ -679,9 +701,12 @@ rem(x::Signed, ::Type{Unsigned}) = x % unsigned(typeof(x))
 rem(x::Unsigned, ::Type{Signed}) = x % signed(typeof(x))
 rem(x::Integer, T::Type{<:Integer}) = convert(T, x)  # `x % T` falls back to `convert`
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
+rem(x, ::Type{Union{}}, slurp...) = throw(MethodError(rem, (x, Union{}, slurp...)))
 mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
+mod(x, ::Type{Union{}}, slurp...) = throw(MethodError(mod, (x, Union{}, slurp...)))
 
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
+unsafe_trunc(::Type{Union{}}, slurp...) = throw(MethodError(unsafe_trunc, (Union{}, slurp...)))
 
 ## integer construction ##
 
@@ -804,8 +829,10 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 """
     typemin(T)
+    typemin(::T)
 
-The lowest value representable by the given (real) numeric DataType `T`.
+The lowest value representable by the given (real) numeric type `T`.
+The argument can alternatively be an instance of `T`.
 
 See also: [`floatmin`](@ref), [`maxintfloat`](@ref), [`typemax`](@ref), [`eps`](@ref).
 
@@ -834,8 +861,10 @@ function typemin end
 
 """
     typemax(T)
+    typemax(::T)
 
-The highest value representable by the given (real) numeric `DataType`.
+The highest value representable by the given (real) numeric type `T`.
+The argument can alternatively be an instance of `T`.
 
 See also: [`floatmax`](@ref), [`maxintfloat`](@ref), [`typemin`](@ref), [`eps`](@ref).
 
@@ -879,6 +908,8 @@ typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemax(::Type{UInt128}) = $(bitcast(UInt128, convert(Int128, -1)))
 @eval typemin(::Type{Int128} ) = $(convert(Int128, 1) << 127)
 @eval typemax(::Type{Int128} ) = $(bitcast(Int128, typemax(UInt128) >> 1))
+typemin(::Type{Union{}}, slurp...) = throw(MethodError(typemin, (Union{}, slurp...)))
+typemax(::Type{Union{}}, slurp...) = throw(MethodError(typemax, (Union{}, slurp...)))
 
 
 widen(::Type{Int8}) = Int16

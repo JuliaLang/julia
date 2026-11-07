@@ -101,7 +101,7 @@ controlled with boolean keyword arguments:
 See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
-    println(io, "Julia Version $VERSION")
+    println(io, "Julia Version $(Base.version_with_build_variant())")
     println(io, "Build Info:")
     if Base.isdebugbuild()
         println(io, "  DEBUG build")
@@ -114,7 +114,8 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     end
     println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
     if verbose
-        println(io, "  Sysimage: ", Sys.sysimage_target(), " (", Sys.MACHINE, ")")
+        println(io, "  Base Sysimage: ", Sys.sysimage_target(), " (", Sys.MACHINE, ")")
+        println(io, "  Matched Sysimage: ", Sys.matched_sysimage_target())
     end
     official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org release"
     if Base.GIT_VERSION_INFO.tagged_commit && !official_release
@@ -179,8 +180,11 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     println(io, "  LLVM: libLLVM-", Base.libllvm_version, " (", Sys.JIT, ", ", jit_cpu, ")")
+    virtual_cores = Sys.EFFECTIVE_CPU_THREADS != Sys.CPU_THREADS ?
+        "$(Sys.CPU_THREADS) virtual cores; $(Sys.EFFECTIVE_CPU_THREADS) effective" :
+        "$(Sys.CPU_THREADS) virtual cores"
     println(io, """Threads: $(Threads.nthreads(:default)) default, $(Threads.nthreads(:interactive)) interactive, \
-      $(Threads.ngcthreads()) GC (on $(Sys.CPU_THREADS) virtual cores)""")
+      $(Threads.ngcthreads()) GC (on $(virtual_cores))""")
 
     function is_nonverbose_env(k::String)
         return occursin(r"^JULIA_|^DYLD_|^LD_", k)

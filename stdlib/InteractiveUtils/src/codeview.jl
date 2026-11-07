@@ -139,7 +139,7 @@ function print_warntype_mi(io::IO, mi::Core.MethodInstance)
 end
 
 """
-    code_warntype([io::IO], f, types; debuginfo=:default)
+    code_warntype([io::IO], f, types; debuginfo=:default, optimize=false)
 
 Prints lowered and type-inferred ASTs for the methods matching the given generic function
 and type signature to `io` which defaults to `stdout`. The ASTs are annotated in such a way
@@ -155,13 +155,17 @@ Small unions of concrete types are usually not a concern, so these are highlight
 Keyword argument `debuginfo` may be one of `:source`, `:none` or `:default`, to specify the verbosity of code comments.
 Unless the user changes `Base.IRShow.default_debuginfo[]`, the value `:default` is equivalent to `:source`.
 
+Keyword argument `optimize` controls whether additional optimizations, such as inlining, are also
+applied (as for [`code_typed`](@ref)). It defaults to `false`, which is usually easier to relate to
+the source code.
+
 See the [`@code_warntype`](@ref man-code-warntype) section in the Performance Tips page of the manual for more information.
 
 See also: [`@code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_llvm`](@ref), [`code_native`](@ref).
 """
 function code_warntype(io::IO, arginfo::ArgInfo;
                        world=Base.get_world_counter(),
-                       interp::Base.Compiler.AbstractInterpreter=Base.Compiler.NativeInterpreter(world),
+                       interp::Union{Nothing,Base.Compiler.AbstractInterpreter}=nothing,
                        debuginfo::Symbol=:default, optimize::Bool=false, kwargs...)
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
@@ -176,12 +180,14 @@ function code_warntype(io::IO, arginfo::ArgInfo;
         return nothing
     end
     tt = arginfo.tt
-    matches = findall(tt, Base.Compiler.method_table(interp))
+    passed_interp = interp
+    interp = passed_interp === nothing ? Base.invoke_default_compiler(:_default_interp, world) : interp
+    matches = Base.invoke_interp_compiler(passed_interp, :_findall_matches, interp, tt)
     matches === nothing && Base.raise_match_failure(:code_warntype, tt)
     for match in matches.matches
         match = match::Core.MethodMatch
-        src = Base.Compiler.typeinf_code(interp, match, optimize)
-        mi = Base.Compiler.specialize_method(match)
+        src = Base.invoke_interp_compiler(passed_interp, :typeinf_code, interp, match, optimize)
+        mi = Base.specialize_method(match)
         mi.def isa Method && (nargs = (mi.def::Method).nargs)
         print_warntype_mi(io, mi)
         if src isa Core.CodeInfo
@@ -255,7 +261,7 @@ function _dump_function(arginfo::ArgInfo, native::Bool, wrapper::Bool,
         if isempty(str)
             # if that failed (or we want metadata), use LLVM to generate more accurate assembly output
             if arginfo.oc === nothing
-                src = Base.Compiler.typeinf_code(Base.Compiler.NativeInterpreter(world), mi, true)
+                src = Base.invoke_interp_compiler(nothing, :typeinf_code, Base.invoke_default_compiler(:_default_interp, world), mi, true)
             else
                 src, rt = Base.get_oc_code_rt(nothing, arginfo.oc, arginfo.tt, true)
             end
@@ -264,15 +270,21 @@ function _dump_function(arginfo::ArgInfo, native::Bool, wrapper::Bool,
         end
     else
         if arginfo.oc === nothing
-            src = Base.Compiler.typeinf_code(Base.Compiler.NativeInterpreter(world), mi, true)
+            src = Base.invoke_interp_compiler(nothing, :typeinf_code, Base.invoke_default_compiler(:_default_interp, world), mi, true)
         else
             src, rt = Base.get_oc_code_rt(nothing, arginfo.oc, arginfo.tt, true)
         end
         src isa Core.CodeInfo || error("failed to infer source for $mi")
         str = _dump_function_llvm(mi, src, wrapper, !raw, dump_module, optimize, debuginfo, llvm_options, params)
     end
-    str = warning * str
+    str = warning * fixup_stdlib_paths(str)
     return str
+end
+
+# Debug info printed by codegen refers to stdlib files by their build-time location
+function fixup_stdlib_paths(str::String)
+    Sys.BUILD_STDLIB_PATH == Sys.STDLIB && return str
+    return replace(str, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
 end
 
 function _dump_function_native_disassembly(mi::Core.MethodInstance, world::UInt,
@@ -517,6 +529,8 @@ function sys_arch_category()
         :x86
     elseif Sys.ARCH === :aarch64 || startswith(string(Sys.ARCH), "arm")
         :arm
+    elseif Sys.ARCH === :riscv64
+        :riscv
     else
         :unsupported
     end
@@ -528,9 +542,13 @@ const x86_ptr = r"^(?:(?:[xyz]mm|[dq])?word|byte|ptr|offset)$"
 const avx512flags = r"^(?:z|r[nduz]-sae|sae|1to1?\d)$"
 const arm_cond = r"^(?:eq|ne|cs|ho|cc|lo|mi|pl|vs|vc|hi|ls|[lg][te]|al|nv)$"
 const arm_keywords = r"^(?:lsl|lsr|asr|ror|rrx|!|/[zm])$"
+# rounding modes and fence orderings
+const riscv_keywords = r"^(?:rne|rtz|rdn|rup|rmm|dyn|[iorw]{1,4})$"
 
-function print_native_tokens(io, tokens, arch::Union{Val{:x86}, Val{:arm}})
+function print_native_tokens(io, tokens, arch::Union{Val{:x86}, Val{:arm}, Val{:riscv}})
     x86 = arch isa Val{:x86}
+    arm = arch isa Val{:arm}
+    riscv = arch isa Val{:riscv}
     m = match(r"^((?:[^\s:]+:|\"[^\"]+\":)?)(\s*)(.*)", tokens)
     if m !== nothing
         label, spaces, tokens = m.captures
@@ -541,7 +559,8 @@ function print_native_tokens(io, tokens, arch::Union{Val{:x86}, Val{:arm}})
     if m !== nothing
         instruction, spaces, tokens = m.captures
         printstyled_ll(io, instruction, :instruction, spaces)
-        haslabel = occursin(r"^(?:bl?|bl?\.\w{2,5}|[ct]bn?z)?$", instruction)
+        haslabel = riscv ? occursin(r"^(?:b(?:eqz?|nez?|(?:lt|ge|gt|le)[uz]?)|j|jal|call|tail|c\.(?:beqz|bnez|j))$", instruction) :
+                           occursin(r"^(?:bl?|bl?\.\w{2,5}|[ct]bn?z)?$", instruction)
     end
 
     isfuncname = false
@@ -560,7 +579,7 @@ function print_native_tokens(io, tokens, arch::Union{Val{:x86}, Val{:arm}})
             continue
         end
         m = match(r"^#([0-9a-fx.-]+)(\s*)(.*)", tokens)
-        if !x86 && m !== nothing && occursin(num_regex, m.captures[1])
+        if arm && m !== nothing && occursin(num_regex, m.captures[1])
             num, spaces, tokens = m.captures
             printstyled_ll(io, "#" * num, :number, spaces)
             continue
@@ -574,8 +593,13 @@ function print_native_tokens(io, tokens, arch::Union{Val{:x86}, Val{:arm}})
         elseif x86 && occursin(x86_ptr, token) || occursin(avx512flags, token)
             printstyled_ll(io, token, :keyword)
             isfuncname = token == "offset"
-        elseif !x86 && (occursin(arm_keywords, token) || occursin(arm_cond, token))
+        elseif arm && (occursin(arm_keywords, token) || occursin(arm_cond, token))
             printstyled_ll(io, token, :keyword)
+        elseif riscv && (occursin(riscv_keywords, token) || occursin(r"^%\w+$", token))
+            # relocation specifiers such as `%pcrel_hi`, `%pcrel_lo` or `%got_pcrel_hi`
+            printstyled_ll(io, token, :keyword)
+        elseif riscv && occursin(r"^\.L.+$", token)
+            printstyled_ll(io, token, :label)
         elseif occursin(r"^L.+$", token)
             printstyled_ll(io, token, :label)
         elseif occursin(r"^\$.+$", token)

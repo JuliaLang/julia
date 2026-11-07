@@ -30,6 +30,9 @@ using .Main.OffsetArrays
 @test foldr(-, 1:5) == 3
 @test foldr(-, 1:5; init=10) == -7
 @test foldr(+, [1]) == 1 # Issue #21493
+@test foldr(+, [true]) === 1
+@test foldr(*, ['a']) === "a"
+@test foldr(vcat, [1]) == [1]
 
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 2:5; init=10) == -4
@@ -91,9 +94,19 @@ end
 @test mapreduce(abs2, *, Float64[]) === 1.0
 @test mapreduce(abs2, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
+@test mapreduce(abs, max, Set{Float64}()) === 0.0
+@test mapfoldr(abs, max, Float64[]) === 0.0
+@test foldl(max, Iterators.map(abs, Float64[])) === 0.0
 @test_throws "reducing over an empty collection is not allowed" mapreduce(abs2, &, Float64[])
 @test_throws str -> !occursin("Closest candidates are", str) mapreduce(abs2, &, Float64[])
 @test_throws "reducing over an empty collection is not allowed" mapreduce(abs2, |, Float64[])
+
+# mapfoldl and mapfoldr use mapreduce_first
+struct MapReduceFirstTag end
+Base.mapreduce_first(::typeof(abs), ::typeof(+), ::MapReduceFirstTag) = 0
+@test mapfoldl(abs, +, [MapReduceFirstTag()]) === 0
+@test mapfoldr(abs, +, [MapReduceFirstTag()]) === 0
+@test foldl(+, Iterators.map(abs, [MapReduceFirstTag()])) === 0
 
 # mapreduce() type stability
 @test typeof(mapreduce(*, +, Int8[10])) ===
@@ -681,6 +694,18 @@ x = [j+7 for j in i]
         ((a, b), (c, d)) -> (min(a, c), max(b, d)),
         Iterators.flatten((1:2, 3:4)),
     ) == (1, 4)
+end
+
+@testset "empty reductions over flatten (#64159)" begin
+    @test @inferred(sum(Iterators.flatten([Int[], Int[]]))) === 0
+    @test @inferred(prod(Iterators.flatten([Int[], Int[]]))) === 1
+    @test @inferred(sum(Iterators.flatten(Vector{Float64}[]))) === 0.0
+    @test sum(Iterators.flatten((Int8[], Int8[]))) === 0
+    @test sum(Iterators.flatten((Int[], Float64[]))) === 0
+    @test prod(Iterators.flatten((Int[], Float64[]))) === 1
+    @test sum(Iterators.flatten(Iterators.flatten([[Int[]], [Int[], Int[]]]))) === 0
+    @test reduce(+, Iterators.flatten(x for x in [Int[], Int[]] if true)) === 0
+    @test_throws ArgumentError maximum(Iterators.flatten([Int[], Int[]]))
 end
 
 # make sure we specialize on mapfoldl(::Type, ...)

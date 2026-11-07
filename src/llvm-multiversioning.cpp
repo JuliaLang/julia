@@ -258,7 +258,7 @@ struct TargetSpec {
 static std::optional<SmallVector<TargetSpec, 0>> get_target_specs(Module &M) {
     auto md = M.getModuleFlag("julia.mv.specs");
     if (!md)
-        return None;
+        return std::nullopt;
     auto tup = cast<MDTuple>(md);
     SmallVector<TargetSpec, 0> out(tup->getNumOperands());
     for (unsigned i = 0; i < tup->getNumOperands(); i++) {
@@ -606,6 +606,15 @@ Function *CloneCtx::create_trampoline(Function *F, GlobalVariable *slot, bool au
     for (auto &arg : trampoline->args())
         Args.push_back(&arg);
     auto call = irbuilder.CreateCall(F->getFunctionType(), ptr, ArrayRef<Value *>(Args));
+    // the call must use the same calling convention as F to ensure ABI compatibility
+    call->setCallingConv(F->getCallingConv());
+    // likewise its return and argument attributes must match F's, except
+    // `julia.return_roots`: the trampoline has no gc frame of its own, and the
+    // buffer it passes on is already rooted by its caller
+    AttributeList attrs = F->getAttributes().removeFnAttributes(F->getContext());
+    for (unsigned i = 0; i < F->arg_size(); i++)
+        attrs = attrs.removeParamAttribute(F->getContext(), i, "julia.return_roots");
+    call->setAttributes(attrs);
     if (F->isVarArg()) {
         assert(!TT.isARM() && !TT.isPPC() && "musttail not supported on ARM/PPC!");
         call->setTailCallKind(CallInst::TCK_MustTail);
@@ -878,11 +887,7 @@ std::pair<uint32_t,GlobalVariable*> CloneCtx::get_reloc_slot(Function *F) const
 }
 
 template<typename Stack>
-#if JL_LLVM_VERSION >= 200000
 static Value *rewrite_inst_use(const Stack& stack, Type *T_size, Value *replace, InsertPosition& insert_before)
-#else
-static Value *rewrite_inst_use(const Stack& stack, Type *T_size, Value *replace, Instruction *insert_before)
-#endif
 {
     SmallVector<Constant*, 8> args;
     uint32_t nlevel = stack.size();
@@ -943,17 +948,9 @@ static void replaceUsesWithLoad(Function &F, Type *T_size, I2GV should_replace, 
             GlobalVariable *slot = should_replace(*use_i);
             if (!slot)
                 continue;
-#if JL_LLVM_VERSION >= 200000
             InsertPosition insert_before = use_i->getIterator();
-#else
-            Instruction *insert_before = use_i;
-#endif
             if (auto phi = dyn_cast<PHINode>(use_i))
-#if JL_LLVM_VERSION >= 200000
                 insert_before = phi->getIncomingBlock(*info.use)->getTerminator()->getIterator();
-#else
-                insert_before = phi->getIncomingBlock(*info.use)->getTerminator();
-#endif
             Instruction *ptr = new LoadInst(F.getType(), slot, "", false, insert_before);
             ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
             ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ptr->getContext(), {}));

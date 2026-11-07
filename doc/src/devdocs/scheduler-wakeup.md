@@ -88,3 +88,63 @@ java -cp tla2tools.jar tlc2.TLC -config MCFixed.cfg MCFixed.tla
 Toggling the model back to the unsound `n_threads_running` short-circuit (by
 making `Wakeup` return early when `nrun >= N`) makes TLC report a `NoLostWakeup`
 violation, confirming the danger window described above is real.
+
+## The event loop thread
+
+Outside a threaded region, only one thread (`io_loop_tid`, normally thread 0)
+runs the libuv event loop. When it has nothing else to do it publishes
+`sleeping`, runs `uv_run(loop, UV_RUN_ONCE)` under the iolock (`jl_uv_mutex`),
+and parks on its condition variable if the loop is idle afterwards (`uv_run`
+returned 0) and nobody woke it in the meantime.
+
+Other threads arm libuv handles (`uv_poll_start`, `uv_timer_start`, ...) under the
+iolock, but they don't run the loop to get those handles serviced. Instead, a
+thread that goes to sleep checks the iolock: if it is free, the thread wakes
+`io_loop_tid`, so that a handle it may have armed gets watched; if it is held, it
+leaves that to the holder. Normally every holder takes care of it: another
+thread does the same check when it goes to sleep itself, and the event loop
+thread is either about to run `uv_run` (which then sees the handle) or already
+running it.
+
+The exception is the event loop thread *after* `uv_run`. `JL_UV_UNLOCK` runs
+pending finalizers, and finalizers of libuv-backed objects (`uvfinalize`) take
+the iolock. After the unlock releases the iolock, another thread can arm a
+handle. If a finalizer then reacquires the iolock before that thread checks its
+owner, the thread skips the wake, and the event loop thread subsequently parks
+based on its earlier idle result: nobody runs the loop again.
+
+Since the unlock can invalidate the idle result, `jl_task_get_next` checks again
+that the loop is idle before parking: it takes the iolock with a trylock and
+releases it without running finalizers. If the iolock is busy, it retries instead
+of parking.
+
+The thread that armed a handle may not go to sleep for a long time, though, for
+example when the tasks of its pool keep yielding to each other. So when the check
+finds the loop idle, it also sets `jl_uv_loop_unwatched` under the iolock, and the
+scheduler clears it before it runs `uv_run`. A thread that leaves work in the loop
+while the flag is set clears it and wakes `io_loop_tid` from `jl_iolock_end`.
+
+Inside a threaded region any thread may run the loop, but a thread that goes to
+sleep still leaves it to the iolock holder, or to a thread waiting for the iolock.
+That only works if the holder is a pool thread, which comes back to the scheduler.
+Threads outside the thread pools can take the iolock too: a GC on a libuv worker
+running a `@threadcall` runs finalizers there, and `uvfinalize` takes the iolock.
+So when such a thread releases the iolock inside a threaded region, `jl_iolock_end`
+wakes `io_loop_tid`. Outside a threaded region no wake is needed, since `io_loop_tid`
+waits for the iolock instead of leaving the loop to its holder, and the thread that
+ends a threaded region wakes `io_loop_tid`.
+
+[`IoLoopWake.tla`](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/scheduler-wakeup/IoLoopWake.tla)
+models this handoff outside threaded regions, including iolock contention and
+finalizers that take the iolock before the loop runs and after its unlock. It
+abstracts away blocking inside `uv_run` and shutdown, and checks the absence of
+globally stranded armed handles, not eventual IO service while another thread
+keeps running. With `IoLoopWake.cfg`, TLC finds no `NoLostWakeup` violation for
+the given bounds; `IoLoopWakeUnfixed.cfg` leaves out that check and produces a
+counterexample:
+
+```sh
+cd doc/src/devdocs/scheduler-wakeup
+java -cp tla2tools.jar tlc2.TLC -config IoLoopWake.cfg IoLoopWake.tla
+java -cp tla2tools.jar tlc2.TLC -config IoLoopWakeUnfixed.cfg IoLoopWake.tla
+```

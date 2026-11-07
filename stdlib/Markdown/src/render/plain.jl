@@ -98,7 +98,7 @@ function plain(io::IO, md::Admonition)
     println(io)
 end
 
-function plain(io::IO, md::HorizontalRule)
+function plain(io::IO, ::HorizontalRule)
     println(io, "-" ^ 3)
 end
 
@@ -154,11 +154,11 @@ function plaininline(io::IO, md::Code)
         print(io, s, Base.startswith(md.code, "`") ? " " : "")
         print(io, md.code, endswith(md.code, "`") ? " " : "", s)
     else
-        print(io, "`", md.code, "`")
+        print(io, "`", isempty(md.code) ? " " : md.code, "`")
     end
 end
 
-plaininline(io::IO, br::LineBreak) = println(io, "\\")
+plaininline(io::IO, ::LineBreak) = println(io, "\\")
 
 plaininline(io::IO, md::HTMLInline) = print(io, md.content)
 

@@ -116,10 +116,15 @@ The log level provides a key against which potential log records may be
 filtered, before any other work is done to construct the log record data
 structure itself.
 
+The numeric level is available with `convert(Int32, level)`.
+
 # Examples
 ```jldoctest; setup = :(import Logging)
 julia> Logging.LogLevel(0) == Logging.Info
 true
+
+julia> convert(Int32, Logging.Warn)
+1000
 ```
 """
 struct LogLevel

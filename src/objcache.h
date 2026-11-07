@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <shared_mutex>
 
 #include <llvm/ADT/FunctionExtras.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
@@ -30,7 +31,7 @@ using CompileFn = llvm::unique_function<std::unique_ptr<llvm::MemoryBuffer>()>;
 
 class MDBTxn;
 
-typedef struct _jl_value_t jl_value_t;
+typedef struct JL_GC_TRACKED_TYPE _jl_value_t jl_value_t;
 
 class ObjCache {
 public:
@@ -59,6 +60,12 @@ public:
     // about, returns a short description of that reason (for display in the
     // REPL banner); otherwise returns null.  Forces initialization.
     const char *disabledNotice() JL_CANSAFEPOINT_ENTER_LEAVE;
+    // Removes the entries last used before Cutoff (seconds since the epoch).
+    // Returns the number of entries removed, or -1 on error.
+    int64_t prune(int64_t Cutoff) JL_CANSAFEPOINT_ENTER_LEAVE;
+    // Writes a copy of the database without its free pages to Dir/data.mdb,
+    // which must not exist yet. Returns an empty string or a description of the error.
+    std::string compact(const char *Dir) JL_CANSAFEPOINT_ENTER_LEAVE;
     void shutdown() JL_NOTSAFEPOINT;
 
     using Hash = std::array<uint8_t, 20>;
@@ -69,6 +76,7 @@ protected:
     bool updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
     bool maybeEvictLRU(MDBTxn &Txn, size_t RoomFor);
     size_t dbiSize(MDBTxn &Txn, MDB_dbi Dbi);
+    MDBTxn beginTxn(unsigned Flags = 0) JL_NOTSAFEPOINT;
 
 private:
     std::atomic<bool> Initialized = false;
@@ -80,6 +88,9 @@ private:
     uv_thread_t WriterThread;
     bool Started = false;
     std::atomic<bool> Exiting = false;
+    // held shared to start a transaction, and exclusively at exit to remove the semaphores
+    std::shared_mutex TxnLock;
+    bool LocksReleased = false; // guarded by TxnLock
     // Non-null MemoryBuffer -> cache miss, want to write new entry
     // Null MemoryBuffer     -> cache hit, want to update atime
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;

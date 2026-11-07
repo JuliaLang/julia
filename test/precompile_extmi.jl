@@ -96,8 +96,39 @@ precompile_test_harness() do load_path
         @test !Base.has_image_globalref(m)
         # Invalidation scanning must tolerate non-standard sources rather than
         # asserting on the `_uncompressed_ir(::Method)::CodeInfo` typeassert.
-        @test (Base.Compiler.ReinferUtils.scan_new_method!(m, false); true)
-        @test (Base.Compiler.ReinferUtils.scan_new_method!(m, true); true)
+        let w = Base.get_world_counter()
+            @test (Base.Compiler.ReinferUtils.scan_new_method!(m, w, false); true)
+            @test (Base.Compiler.ReinferUtils.scan_new_method!(m, w, true); true)
+        end
+    end
+end
+
+# A precompiled `:invoke` of a foreign CodeInstance without code must not run the
+# native method after loading, and must use the code once its owner adds it to the JIT.
+precompile_test_harness() do load_path
+    write(joinpath(load_path, "ForeignInvoke.jl"), """
+    module ForeignInvoke
+        struct Owner end
+        @noinline foo(x) = x + 1
+        baz(x) = x + 100
+        const SRC = only(code_typed(baz, (Int,)))[1]
+        const CI = Core.CodeInstance(
+            Base.method_instance(foo, (Int,)), Owner(), SRC.rettype, Any, nothing,
+            nothing, Int32(0), SRC.min_world, typemax(UInt), UInt32(0),
+            nothing, SRC.debuginfo, SRC.edges)
+        h(x) = invoke(foo, CI, x)
+        precompile(h, (Int,))
+    end
+    """)
+    Base.compilecache(Base.PkgId("ForeignInvoke"))
+
+    @eval let
+        using ForeignInvoke: h, CI, SRC
+        @test CI.invoke == C_NULL
+        @test_throws "Failed to invoke or compile external codeinst" h(1)
+        ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), CI.def, CI)
+        ccall(:jl_add_codeinsts_to_jit, Cvoid, (Any, Any), Any[CI], Any[SRC])
+        @test h(1) == 101
     end
 end
 

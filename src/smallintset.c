@@ -174,7 +174,7 @@ void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *par
     jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
     if (val + 1 >= jl_max_int(a)) {
         a = smallintset_rehash(a, hash, data, a->length, val + 1);
-        if (parent) jl_gc_wb(parent, a);
+        if (parent) jl_gc_wb(parent, (void*)pcache, a);
         jl_atomic_store_release(pcache, a);
     }
     while (1) {
@@ -195,7 +195,7 @@ void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *par
         else
             newsz = sz << 2;
         a = smallintset_rehash(a, hash, data, newsz, 0);
-        if (parent) jl_gc_wb(parent, a);
+        if (parent) jl_gc_wb(parent, (void*)pcache, a);
         jl_atomic_store_release(pcache, a);
     }
 }
@@ -211,10 +211,15 @@ void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *par
 size_t jl_ordereddict_reserve(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, size_t stride)
 {
     jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
-    // scan back from the end for the append position (entries are contiguous)
-    size_t idx = a->length < 1 + stride ? 0 : (a->length - 1) / stride;
-    while (idx > 0 && jl_genericmemory_ptr_ref(a, 1 + stride * (idx - 1)) == NULL)
-        idx--;
+    // the entries are contiguous, so bisect for the first free one
+    size_t lo = 0, idx = a->length < 1 + stride ? 0 : (a->length - 1) / stride;
+    while (lo < idx) {
+        size_t mid = lo + (idx - lo) / 2;
+        if (jl_genericmemory_ptr_ref(a, 1 + stride * mid) == NULL)
+            idx = mid;
+        else
+            lo = mid + 1;
+    }
     size_t need = 1 + stride * (idx + 1);
     if (need > a->length) {
         size_t newlen = a->length < 8 ? 8 : (a->length * 3) >> 1;
@@ -234,7 +239,7 @@ size_t jl_ordereddict_reserve(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *
             }
         }
         if (parent)
-            jl_gc_wb(parent, na);
+            jl_gc_wb(parent, (void*)pcache, na);
         jl_atomic_store_release(pcache, na);
         JL_GC_POP();
     }

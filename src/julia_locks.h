@@ -150,7 +150,13 @@ int pthread_rwlock_unlock(pthread_rwlock_t *lock) JL_NOTSAFEPOINT JL_NOTSAFEPOIN
 // this scope; that is expected for these explicit instantiations, so silence it.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdtor-name"
+#ifdef _LIBCPP_SCOPED_LOCKABLE
+// libc++ marks lock_guard scoped_lockable, so its destructor already releases
+// everything the constructor acquired, jl_notsafepoint included.
+template JL_NOTSAFEPOINT_ENTER std::lock_guard<std::mutex>::lock_guard(std::mutex&);
+#else
 JL_TSA_ANNOTATE_SCOPED_LOCK(std::lock_guard, lock_guard, std::mutex);
+#endif
 JL_TSA_ANNOTATE_LOCK(std::unique_lock, unique_lock, std::mutex);
 JL_TSA_ANNOTATE_LOCK(std::unique_lock, unique_lock, std::shared_mutex);
 JL_TSA_ANNOTATE_LOCK(std::shared_lock, shared_lock, std::shared_mutex);

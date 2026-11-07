@@ -502,6 +502,7 @@ end
 
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2
+@test_throws DomainError isqrt(big(-4))
 
 
 @testset "Exponentiation operator" begin
@@ -650,6 +651,36 @@ end
         @test T(big"2"^(n+1)) === T(Inf)
         @test T(big"2"^(n+1) - big"2"^(n-precision(T))) === T(Inf)
         @test T(big"2"^(n+1) - big"2"^(n-precision(T)) - 1) === floatmax(T)
+
+        # 2^p + 1 is halfway between 2^p and 2^p + 2, which have even and odd significands
+        p = precision(T)
+        x = big"2"^p + 1
+        lo = T(2)^p
+        hi = lo + 2
+        for s in (1, -1)
+            @test T(s * x) === s * lo
+            @test T(s * (x + 2)) === s * (lo + 4)
+            @test T(s * x, RoundNearestTiesAway) === s * hi
+            @test T(s * x, RoundToZero) === s * lo
+            @test T(s * x, RoundFromZero) === s * hi
+        end
+        @test T(x, RoundNearestTiesUp) === hi
+        @test T(-x, RoundNearestTiesUp) === -lo
+        @test T(x, RoundUp) === hi
+        @test T(-x, RoundUp) === -lo
+        @test T(x, RoundDown) === lo
+        @test T(-x, RoundDown) === -hi
+
+        # values beyond the finite range only round to floatmax(T) when rounding towards zero
+        for x in (big"2"^(n+1), big"2"^(n+2) + 1)
+            @test T(x, RoundToZero) === floatmax(T)
+            @test T(-x, RoundToZero) === -floatmax(T)
+            @test T(x, RoundDown) === floatmax(T)
+            @test T(-x, RoundDown) === T(-Inf)
+            @test T(x, RoundUp) === T(Inf)
+            @test T(-x, RoundUp) === -floatmax(T)
+            @test T(-x, RoundNearestTiesUp) === T(-Inf)
+        end
     end
 end
 
@@ -686,6 +717,19 @@ e = Rational{BigInt}(12345678901234567890123456789, 1234567890222222221211111110
         @test Base.GMP.MPQ.cmp(b, a) ==  1
         @test Base.GMP.MPQ.cmp(a, b) == -1
         @test Base.GMP.MPQ.cmp(a, a) ==  0
+    end
+
+    @testset "cmp sign and infinities (#64179, #64180)" begin
+        @test cmp(big(0)//1, big(2)^200//1) === -1
+        @test cmp(big(2)^200//1, big(0)//1) === 1
+        @test cmp(big(2)^100//3, big(5)//7) === 1
+        @test cmp(big(1)//0, big(1)//2) === 1
+        @test cmp(big(1)//2, big(1)//0) === -1
+        @test cmp(-(big(1)//0), big(-3)//1) === -1
+        vals = (-1//0, -7//2, -1//3, 0//1, 2//5, 9//1, 1//0)
+        for x in vals, y in vals
+            @test cmp(big(x), big(y)) === cmp(x, y)
+        end
     end
 
     @testset "division errors" begin
@@ -756,6 +800,24 @@ t = Rational{BigInt}(0, 1)
 
     @test aa == a && bb == b && cc == c
 
+    @testset "output aliasing an input" begin
+        # an argument may be `z` itself or `inv(z)`, which shares z's BigInts swapped
+        args = ((identity, _ -> big(1)//3), (_ -> big(1)//3, identity), (identity, identity),
+                (inv, _ -> big(3)//5), (_ -> big(3)//5, inv), (identity, inv))
+        for (op!, op) in ((Base.GMP.MPQ.add!, +), (Base.GMP.MPQ.sub!, -),
+                          (Base.GMP.MPQ.mul!, *), (Base.GMP.MPQ.div!, //)), (fx, fy) in args
+            z = big(1)//2
+            x, y = fx(z), fy(z)
+            r = op(Rational{Int}(x), Rational{Int}(y))
+            @test op!(z, x, y) == r
+            @test z == r
+        end
+        z = big(1)//2
+        @test Base.GMP.MPQ.set!(z, inv(z)) == 2
+        @test z == 2
+        @test denominator(z) == 1
+    end
+
     @testset "set" begin
         @test Base.GMP.MPQ.set!(a, b) == b
         @test a == b == bb
@@ -815,7 +877,7 @@ t = Rational{BigInt}(0, 1)
 end
 
 @testset "hashing" begin
-    for i in 1:10:100
+    for i in vcat(0, 1:10:100)
         for shift in vcat(0:8, 9:8:81)
             for sgn in (1, -1)
                 bint = sgn * (big(11)^i << shift)
@@ -825,6 +887,15 @@ end
                     @invoke(hash(bint::Real, Base.HASH_SEED))
                 @test Base.hash_integer(bint, Base.HASH_SEED) ==
                     @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
+
+                brat = bint // 3
+                for T in Base.BitInteger_types
+                    typemin(T) <= bint <= typemax(T) || continue
+                    rat = Rational{T}(brat)
+                    for h in (zero(UInt), Base.HASH_SEED, typemax(UInt))
+                        @test hash(rat, h) == hash(brat, h)
+                    end
+                end
             end
         end
     end
@@ -836,4 +907,59 @@ end
         @invoke(hash(bint::Real, Base.HASH_SEED))
     @test Base.hash_integer(bint, Base.HASH_SEED) ==
         @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
+end
+
+@testset "parse errors" begin
+    for s in ("", " ", "-", "+ ", "  -  ")
+        @test tryparse(BigInt, s) === nothing
+        @test_throws ArgumentError("input string is empty or only contains whitespace") parse(BigInt, s)
+        @test_throws ArgumentError("input string is empty or only contains whitespace") parse(BigInt, s; base=16)
+    end
+    @test tryparse(BigInt, "0x") === nothing
+    @test_throws ArgumentError("premature end of integer: \"0x\"") parse(BigInt, "0x")
+end
+
+@testset "misc BigInt methods" begin
+    @test Base.GMP.version() isa VersionNumber
+    for x in (0, 1, 2, -3, 2^62 + 1, -2^62)
+        @test big(x) % Bool === x % Bool
+        @test big(x) % Bool === (big(x) + big(2)^70) % Bool
+    end
+    for (a, b) in ((-3, 3), (3, -3), (3, 3), (-3, -3), (12, -18), (0, 5))
+        g, s, t = gcdx(big(a), big(b))
+        @test (g, s, t) == gcdx(a, b)
+        @test g == s*a + t*b
+    end
+    x, y = big(2)^100, -big(3)^70
+    @test Base.add_with_overflow(x, y) == (x + y, false)
+    @test Base.sub_with_overflow(x, y) == (x - y, false)
+    @test Base.checked_pow(3, big(50)) == big(3)^50
+    @test Base.checked_pow(big(-3), big(51)) == big(-3)^51
+    for f in (2.0, -2.0, 0.5, Inf, -Inf, 2.0^70, 1f0)
+        for n in (big(2), big(-2), big(2)^70, big(0))
+            @test cmp(f, n) == cmp(Rational{BigInt}(BigFloat(f)), n) == -cmp(n, f)
+            @test (f <= n) == (BigFloat(f) <= n)
+            @test (f < n) == (BigFloat(f) < n)
+        end
+    end
+    @test cmp(NaN, big(1)) == 1
+    @test cmp(big(1), NaN) == -1
+    @test !(NaN <= big(1)) && !(NaN < big(1)) && !(big(1) <= NaN)
+    # cmp should follow the total order of `isless`, which puts -0.0 before 0
+    @test isless(-0.0, big(0))
+    @test_broken cmp(-0.0, big(0)) == -1
+end
+
+if Base.GMP.Limb === UInt64 === UInt
+    @testset "UnsafeLimbView" begin
+        for x in (big(0x0102030405060708090a0b), big(2)^64 - 1, big(255))
+            n = cld(ndigits(x; base=2), 8)
+            v = Base.GMP.UnsafeLimbView(x, 1, n)
+            @test length(v) == n
+            @test size(v) == (n,)
+            @test collect(v) == digits(UInt8, x; base=256)
+            @test v[n] == last(digits(UInt8, x; base=256))
+            @test_throws BoundsError v[n + 1]
+        end
+    end
 end

@@ -329,6 +329,18 @@
             "summary": "nghttp2 is an implementation of HTTP/2 and its header compression algorithm HPACK in C."
         },
         {
+            "name": "PicoSAT",
+            "SPDXID": "SPDXRef-PicoSAT",
+            "downloadLocation": "git+https://github.com/JuliaLang/PicoSAT.git",
+            "filesAnalyzed": false,
+            "homepage": "https://fmv.jku.at/picosat/",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/libpicosat.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2006 - 2014, Armin Biere, Johannes Kepler University.",
+            "summary": "PicoSAT is a SAT solver for boolean satisfiability problems in conjunctive normal form."
+        },
+        {
             "name": "libunwind",
             "SPDXID": "SPDXRef-libunwind",
             "downloadLocation": "git+https://github.com/libunwind/libunwind.git",
@@ -608,6 +620,11 @@
         },
         {
             "spdxElementId": "SPDXRef-NGHTTP2",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-PicoSAT",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },

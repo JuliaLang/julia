@@ -37,7 +37,7 @@ end
 
         l_old = l
         @test l == l_old
-        @test Tokenize.eof(l)
+        @test Tokenize._eof(l)
         @test Tokenize.readchar(l) == Tokenize.EOF_CHAR
 
     end
@@ -1070,7 +1070,6 @@ const all_kws = Set([
     "abstract",
     "as",
     "doc",
-    "goto",
     "mutable",
     "outer",
     "primitive",

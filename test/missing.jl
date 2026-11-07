@@ -80,14 +80,12 @@ end
     @test isapprox(missing, 1.0, atol=1e-6) === missing
     @test isapprox(1.0, missing, rtol=1e-6) === missing
 
-    # Only assert the methods shipped with Base and the stdlibs: test files
-    # that ran earlier in the same process may have added their own isequal
-    # methods (e.g. arrayops' totally_not_five26034), and what those infer
-    # depends on the session's accumulated method tables, not on `missing`.
+    # Only Base's methods: earlier tests on this worker may have added their own (arrayops'
+    # totally_not_five26034) or loaded stdlibs that do
     let ms = collect(methods(isequal, Tuple{Any,Any})),
         rts = Base.return_types(isequal, Tuple{Any,Any})
         @test all(zip(ms, rts)) do (m, rt)
-            Base.moduleroot(parentmodule(m)) === Main || rt === Bool
+            Base.moduleroot(parentmodule(m)) !== Base || rt === Bool
         end
     end
 end
@@ -569,6 +567,12 @@ end
             sm = skipmissing(oa)
             @test sum(sm) == 0
         end
+
+        # `mapreduce_impl` returns the reduced value itself even for an imprecisely inferred
+        # array, rather than the `Union{Nothing,Some}` result of the `SkipMissing` helper
+        @test Base.infer_return_type((Any, Int)) do A, n
+            Base.mapreduce_impl(x -> x isa Pair, &, A, 1, n)
+        end === Bool
     end
 
     @testset "filter" begin

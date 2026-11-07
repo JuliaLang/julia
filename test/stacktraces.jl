@@ -233,6 +233,14 @@ struct F49231{a,b,c,d,e,f,g} end
     @test tdl(str, 105) == "F49231{Vector,Val{('}','}')},Vector{Vector{Vector{…}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}"
     @test tdl(str, 85) == "F49231{Vector,Val{…},Vector{…},Tuple{…},Int,Int,Int}"
 
+    # a brace inside quotes, also after an escaped quote, does not count as nesting
+    str = "F{Val{\"\\\"}\"},Int}"
+    @test tdl(str, 0, maxdepth = 1) == "F{…}"
+    @test tdl(str, 0, maxdepth = 2) == "F{Val{…},Int}"
+    str = "F{Val{'\\''},Val{'}'}}"
+    @test tdl(str, 0, maxdepth = 1) == "F{…}"
+    @test tdl(str, 0, maxdepth = 2) == "F{Val{…},Val{…}}"
+
     # Stacktrace
     a = UInt8(81):UInt8(160)
     b = view(a, 1:64)
@@ -391,4 +399,20 @@ let st = try f_parent3(1, 2, 3, -10) catch; stacktrace(catch_backtrace()) end
     sf = only(filter(sf -> sf.func === :f_inner3 && sf.inlined, st))
     @test sf.linfo isa Core.MethodInstance
     @test sf.linfo.def === which(f_inner3, (Int,))
+end
+
+# The generated inner method has no source location of its own.
+macro wrap_in_closure(f)
+    body = f.args[2]
+    inner = Expr(:function, :(inner()), Expr(:block, Expr(:meta, :inline), body))
+    esc(Expr(:function, f.args[1], Expr(:block, __source__, inner, :inner)))
+end
+@wrap_in_closure function f_wrapped4()
+    error("boom")
+end
+f_wrapped4_line = (@__LINE__) - 2
+let st = try f_wrapped4()() catch; stacktrace(catch_backtrace()) end
+    sf = st[findfirst(sf -> sf.line == f_wrapped4_line, st)]
+    @test sf.file === Symbol(@__FILE__)
+    @test sf.linfo.def === only(methods(f_wrapped4()))
 end

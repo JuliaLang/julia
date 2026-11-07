@@ -51,7 +51,7 @@ end
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
-7   SourceLocation::3:9
+7   SourceLocation:3
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.b %₈
     --- code_info
@@ -96,20 +96,19 @@ let
     x
 end
 #---------------------
-1   (newvar slot₁/x)
-2   TestMod.f
-3   (call %₂)
-4   TestMod.T
-5   (= slot₂/tmp %₃)
-6   (call core.isa slot₂/tmp %₄)
-7   (gotoifnot %₆ label₉)
-8   (goto label₁₁)
-9   (call top.convert %₄ slot₂/tmp)
-10  (= slot₂/tmp (call core.typeassert %₉ %₄))
-11  slot₂/tmp
-12  (= slot₁/x %₁₁)
-13  slot₁/x
-14  (return %₁₃)
+1   TestMod.f
+2   (call %₁)
+3   TestMod.T
+4   (= slot₂/tmp %₂)
+5   (call core.isa slot₂/tmp %₃)
+6   (gotoifnot %₅ label₈)
+7   (goto label₁₀)
+8   (call top.convert %₃ slot₂/tmp)
+9   (= slot₂/tmp (call core.typeassert %₈ %₃))
+10  slot₂/tmp
+11  (= slot₁/x %₁₀)
+12  slot₁/x
+13  (return %₁₂)
 
 ########################################
 # "complex lhs" of `::T` => type-assert, not decl

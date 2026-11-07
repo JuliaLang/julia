@@ -85,7 +85,7 @@ end
 sizeof(s::StringView) = length(s.data)
 ncodeunits(s::StringView) = length(s.data)
 codeunit(::StringView) = UInt8
-@propagate_inbounds codeunit(s::StringView, i::Integer) = s.data[i]
+@propagate_inbounds codeunit(s::StringView, i::Integer) = s.data[i]::UInt8
 codeunits(s::StringView) = s.data
 codeunits(s::SubString{<:StringView}) = @view s.string.data[(1 + s.offset):(s.offset + s.ncodeunits)]
 

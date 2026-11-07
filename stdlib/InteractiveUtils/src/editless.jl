@@ -142,7 +142,7 @@ function define_default_editors()
     for (editors, wait) in [
         [[r"\bemacs"], false],
         [[r"\bemacs\b.*\s(-nw|--no-window-system)\b",
-          r"\bemacsclient\b.\s*-(-?nw|t|-?tty)\b"], true],
+          r"\bemacsclient\b.*\s-(-?nw|t|-?tty)\b"], true],
     ]
         define_editor(editors; wait) do cmd, path, line, column
             `$cmd +$line:$column $path`
@@ -167,7 +167,7 @@ function define_default_editors()
     define_editor(["code", "code-insiders"]) do cmd, path, line, column
         `$cmd -g $path:$line:$column`
     end
-    define_editor(r"\bnotepad++") do cmd, path, line, column
+    define_editor(r"\bnotepad\+\+") do cmd, path, line, column
         `$cmd $path -n$line`
     end
     if Sys.iswindows()
@@ -200,15 +200,17 @@ define_default_editors()
 
 Determine the editor to use when running functions like `edit`. Returns a `Cmd`
 object. Change editor by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR`
-environment variables.
+environment variables. The value is split like a shell command (see `Base.shell_split`),
+so it may contain flags, and spaces or backslashes in the path must be quoted or escaped.
 """
 function editor()
     # Note: the editor path can include spaces (if escaped) and flags.
     for var in ["JULIA_EDITOR", "VISUAL", "EDITOR"]
         str = get(ENV, var, nothing)
         str === nothing && continue
-        isempty(str) && error("invalid editor \$$var: $(repr(str))")
-        return Cmd(shell_split(str))
+        args = shell_split(str)
+        isempty(args) && error("invalid editor \$$var: $(repr(str))")
+        return Cmd(args)
     end
     editor_file = "/etc/alternatives/editor"
     editor = (Sys.iswindows() || Sys.isapple()) ? "open" :
@@ -226,7 +228,7 @@ function find_source(path::AbstractString)
 end
 
 """
-    edit(path::AbstractString, line::Integer=0, column::Integer=0)
+    edit(path::AbstractString, line::Integer=1, column::Integer=1)
 
 Edit a file or directory optionally providing a line number to edit the file at.
 Return to the `julia` prompt when you quit the editor. The editor can be changed
