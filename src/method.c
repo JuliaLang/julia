@@ -1209,6 +1209,113 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     return m;
 }
 
+// The method that holds the code the compiler has outlined from `pm` (see
+// `outline_cold_regions!` in Compiler/src/ssair/outlining.jl), or NULL if there is
+// none yet. Each outlined region is one specialization of it. The method is not in
+// any method table, so dispatch never finds it: it is reachable only through
+// `:invoke`s of its CodeInstances in `pm`'s code, and through `pm`'s roots, which
+// keep it (and the CodeInstances the JIT holds raw pointers to) alive and carry it
+// along when `pm`'s code is serialized. The caller must hold `pm->writelock`.
+static jl_method_t *outlined_method(jl_method_t *pm) JL_NOTSAFEPOINT
+{
+    if (!pm->roots)
+        return NULL;
+    size_t n = jl_array_nrows(pm->roots);
+    for (size_t i = 0; i < n; i++) {
+        jl_value_t *r = jl_array_ptr_ref(pm->roots, i);
+        if (!jl_is_method(r))
+            continue;
+        jl_method_t *m = (jl_method_t*)r;
+        if (m != pm && m->source == NULL && m->generator == NULL &&
+                !m->is_for_opaque_closure && m->sig == (jl_value_t*)jl_anytuple_type &&
+                m->name == pm->name && m->module == pm->module)
+            return m;
+    }
+    return NULL;
+}
+
+// The CodeInstance of the region outlined from `parent`'s method whose signature
+// is `sigtype`, or `nothing`. The compiler reuses it if it holds the same code as
+// a region it is about to outline: a method instance is often optimized many
+// times (e.g. for constant propagation), and its method's specializations often
+// share a region.
+JL_DLLEXPORT jl_value_t *jl_outlined_codeinst(jl_method_instance_t *parent, jl_value_t *sigtype)
+{
+    if (!jl_is_method(parent->def.value))
+        return jl_nothing;
+    jl_method_t *pm = parent->def.method;
+    jl_method_t *m = NULL;
+    JL_GC_PUSH1(&m);
+    JL_LOCK(&pm->writelock);
+    m = outlined_method(pm);
+    JL_UNLOCK(&pm->writelock);
+    jl_value_t *found = jl_nothing;
+    if (m != NULL) {
+        jl_method_instance_t *mi = jl_specializations_get_linfo(m, sigtype, NULL);
+        jl_code_instance_t *ci = mi ? jl_atomic_load_relaxed(&mi->cache) : NULL;
+        if (ci)
+            found = (jl_value_t*)ci;
+    }
+    JL_GC_POP();
+    return found;
+}
+
+// Create the CodeInstance for a region of `parent`'s optimized code that the
+// compiler has outlined into a separate function, as the specialization of
+// `parent`'s outlined method (see `outlined_method`) for `sigtype`. `src` is the
+// region's already-optimized code, stored (compressed) as the CodeInstance's
+// inferred source. It has no static parameters: the compiler substitutes or passes
+// in those of the parent that it uses. Returns `nothing` if that specialization already has
+// code: each must hold exactly one region, since a call from not yet compiled code
+// finds it by method instance.
+JL_DLLEXPORT jl_value_t *jl_new_outlined_codeinst(
+    jl_method_instance_t *parent, jl_code_info_t *src, jl_value_t *sigtype,
+    jl_value_t *rettype, size_t min_world, size_t max_world, uint32_t effects)
+{
+    if (!jl_is_method(parent->def.value))
+        jl_error("jl_new_outlined_codeinst: parent must be a method specialization");
+    jl_method_t *pm = parent->def.method;
+    jl_method_t *m = NULL;
+    jl_method_instance_t *mi = NULL;
+    jl_code_instance_t *ci = NULL;
+    jl_value_t *inferred = NULL;
+    JL_GC_PUSH4(&m, &mi, &ci, &inferred);
+    JL_LOCK(&pm->writelock);
+    m = outlined_method(pm);
+    if (m == NULL) {
+        m = jl_new_method_uninit(pm->module);
+        // Never used for dispatch; it marks the method for `outlined_method`.
+        m->sig = (jl_value_t*)jl_anytuple_type;
+        m->name = pm->name;
+        m->file = pm->file;
+        m->line = pm->line;
+        // Each specialization takes its own arguments: their number and names are
+        // stored with its code (see `jl_compress_ir`).
+        m->nargs = 1;
+        m->isva = 0;
+        inferred = (jl_value_t*)jl_alloc_vec_any(1);
+        jl_array_ptr_set((jl_array_t*)inferred, 0, jl_symbol("#self#"));
+        inferred = jl_compress_argnames((jl_array_t*)inferred);
+        jl_gc_write(m, m->slot_syms, jl_value_t, inferred);
+        jl_atomic_store_relaxed(&m->primary_world, 1);
+        jl_add_method_root(pm, jl_precompile_toplevel_module, (jl_value_t*)m);
+    }
+    JL_UNLOCK(&pm->writelock);
+    mi = jl_specializations_get_linfo(m, sigtype, jl_emptysvec);
+    // Store the code compressed, like the code of other cached CodeInstances.
+    inferred = jl_compress_ir(m, src);
+    ci = jl_new_codeinst(mi, jl_nothing, rettype, (jl_value_t*)jl_any_type, NULL,
+        inferred, 0, min_world, max_world, effects, jl_nothing,
+        src->debuginfo, jl_emptysvec);
+    JL_LOCK(&m->writelock);
+    int taken = jl_atomic_load_relaxed(&mi->cache) != NULL;
+    if (!taken)
+        jl_mi_cache_insert(mi, ci);
+    JL_UNLOCK(&m->writelock);
+    JL_GC_POP();
+    return taken ? jl_nothing : (jl_value_t*)ci;
+}
+
 JL_DLLEXPORT void jl_check_gf(jl_value_t *gf, jl_sym_t *name)
 {
     if (!jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(gf)) && !jl_is_type(gf))
