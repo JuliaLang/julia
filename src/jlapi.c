@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "julia.h"
+#include <libgen.h> // dirname
 #include "options.h"
 #include "julia_assert.h"
 #include "julia_internal.h"
@@ -26,7 +27,21 @@ extern "C" {
 #include <fenv.h>
 #endif
 
-static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir);
+#if defined(__MINGW32__) && !defined(_UCRT) && FE_TOWARDZERO != 0xc00
+// Julia currently links msvcrt-os, whose MinGW fenv ABI uses the x87 control
+// word values. Newer MinGW headers use the UCRT/MSVC-compatible values.
+#pragma message "Using MSVCRT-compatible MinGW fenv ABI with UCRT/MSVC fenv.h rounding constants; redefining FE_* rounding constants."
+#undef FE_TONEAREST
+#undef FE_UPWARD
+#undef FE_DOWNWARD
+#undef FE_TOWARDZERO
+#define FE_TONEAREST 0x000
+#define FE_UPWARD 0x800
+#define FE_DOWNWARD 0x400
+#define FE_TOWARDZERO 0xc00
+#endif
+
+static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir) JL_NOTSAFEPOINT;
 
 /**
  * @brief Check if Julia is already initialized.
@@ -75,13 +90,16 @@ JL_DLLEXPORT jl_value_t *jl_set_ARGS(int argc, char **argv)
 }
 
 JL_DLLEXPORT void jl_init_with_image_handle(void *handle) {
+#if !defined(__clang_safetyanalysis__) && !defined(__clang_gcanalyzer__)
     if (jl_is_initialized())
         return;
+#endif
 
     const char *image_path = jl_pathname_for_handle(handle);
     jl_options.image_file = image_path;
 
-    jl_resolve_sysimg_location(JL_IMAGE_JULIA_HOME, NULL);
+    // the image is already loaded, so its path must not be re-interpreted relative to julia_bindir
+    jl_resolve_sysimg_location(JL_IMAGE_IN_MEMORY, NULL);
     jl_image_buf_t sysimage = jl_set_sysimg_so(handle);
 
     jl_init_(sysimage);
@@ -105,8 +123,10 @@ JL_DLLEXPORT void jl_init_with_image_handle(void *handle) {
 JL_DLLEXPORT void jl_init_with_image_file(const char *julia_bindir,
                                           const char *image_path)
 {
+#if !defined(__clang_safetyanalysis__) && !defined(__clang_gcanalyzer__)
     if (jl_is_initialized())
         return;
+#endif
     if (image_path != NULL)
         jl_options.image_file = image_path;
     else
@@ -122,7 +142,7 @@ JL_DLLEXPORT void jl_init_with_image_file(const char *julia_bindir,
 
 // Deprecated function, kept for backward compatibility
 JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
-                                    const char *image_path)
+                                    const char *image_path) JL_CANSAFEPOINT_ENTER
 {
     jl_init_with_image_file(julia_bindir, image_path);
 }
@@ -154,12 +174,12 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 {
     jl_value_t *r;
     jl_task_t *ct = jl_current_task;
+    jl_value_t *ast = NULL;
     JL_TRY {
-        const char filename[] = "none";
-        jl_value_t *ast = jl_parse_all(str, strlen(str),
-                filename, strlen(filename), 1);
-        JL_GC_PUSH1(&ast);
-        r = jl_toplevel_eval_in(jl_main_module, ast);
+        jl_value_t *fname = jl_cstr_to_string("none");
+        JL_GC_PUSH2(&fname, &ast);
+        ast = jl_parse(str, strlen(str), fname, jl_main_module);
+        r = jl_toplevel_eval_in(jl_main_module, jl_svecref(ast, 0));
         JL_GC_POP();
         _jl_exception_clear(ct);
     }
@@ -444,7 +464,7 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_value_t *f, jl_value_t *a,
 }
 
 /**
- * @brief Call a Julia function with three arguments.
+ * @brief Call a Julia function with four arguments.
  *
  * A specialized case of `jl_call` for simpler scenarios.
  *
@@ -547,7 +567,7 @@ JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT
 }
 
 /**
- * @brief Check if Julia has been build with assertions enabled.
+ * @brief Check if Julia has been built with assertions enabled.
  *
  * @return Returns 1 if assertions are enabled, 0 otherwise.
  */
@@ -577,7 +597,7 @@ JL_DLLEXPORT int8_t jl_is_memdebug(void) JL_NOTSAFEPOINT {
  *
  * @return A pointer to `jl_value_t` representing the directory path as a Julia string.
  */
-JL_DLLEXPORT jl_value_t *jl_get_julia_bindir(void)
+JL_DLLEXPORT jl_value_t *jl_get_julia_bindir(void) JL_CANSAFEPOINT
 {
     return jl_cstr_to_string(jl_options.julia_bindir);
 }
@@ -587,7 +607,7 @@ JL_DLLEXPORT jl_value_t *jl_get_julia_bindir(void)
  *
  * @return A pointer to `jl_value_t` representing the full path as a Julia string.
  */
-JL_DLLEXPORT jl_value_t *jl_get_julia_bin(void)
+JL_DLLEXPORT jl_value_t *jl_get_julia_bin(void) JL_CANSAFEPOINT
 {
     return jl_cstr_to_string(jl_options.julia_bin);
 }
@@ -597,7 +617,7 @@ JL_DLLEXPORT jl_value_t *jl_get_julia_bin(void)
  *
  * @return A pointer to `jl_value_t` representing the system image file path as a Julia string.
  */
-JL_DLLEXPORT jl_value_t *jl_get_image_file(void)
+JL_DLLEXPORT jl_value_t *jl_get_image_file(void) JL_CANSAFEPOINT
 {
     return jl_cstr_to_string(jl_options.image_file);
 }
@@ -697,7 +717,7 @@ JL_DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
  * @param v A pointer to `jl_value_t` representing the Julia value.
  * @return A pointer to `jl_value_t` representing the field types.
  */
-JL_DLLEXPORT jl_value_t *(jl_get_fieldtypes)(jl_value_t *v)
+JL_DLLEXPORT jl_value_t *(jl_get_fieldtypes)(jl_value_t *v) JL_CANSAFEPOINT
 {
     return (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)v);
 }
@@ -715,7 +735,7 @@ JL_DLLEXPORT int ijl_egal(jl_value_t *a, jl_value_t *b)
 }
 
 
-#ifndef __clang_gcanalyzer__
+#if !defined(__clang_gcanalyzer__) && !defined(__clang_analyzer__)
 /**
  * @brief Enter a state where concurrent garbage collection (GC) is considered unsafe.
  *
@@ -919,7 +939,7 @@ JL_DLLEXPORT int jl_set_fenv_rounding(int i)
     return fesetround(i);
 }
 
-static int exec_program(char *program)
+static int exec_program(char *program) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     JL_TRY {
@@ -952,7 +972,7 @@ static int exec_program(char *program)
     return 0;
 }
 
-static NOINLINE int true_main(int argc, char *argv[])
+static NOINLINE int true_main(int argc, char *argv[]) JL_CANSAFEPOINT
 {
     jl_set_ARGS(argc, argv);
 
@@ -1028,7 +1048,7 @@ static NOINLINE int true_main(int argc, char *argv[])
     return 0;
 }
 
-static void lock_low32(void)
+static void lock_low32(void) JL_NOTSAFEPOINT
 {
 #if defined(_OS_WINDOWS_) && defined(_P64) && defined(JL_DEBUG_BUILD)
     // Prevent usage of the 32-bit address space on Win64, to catch pointer cast errors.
@@ -1066,11 +1086,8 @@ static void lock_low32(void)
     return;
 }
 
-// Actual definition in `ast.c`
-void jl_lisp_prompt(void);
-
 #ifdef _OS_LINUX_
-static void rr_detach_teleport(void) {
+static void rr_detach_teleport(void) JL_NOTSAFEPOINT {
 #define RR_CALL_BASE 1000
 #define SYS_rrcall_detach_teleport (RR_CALL_BASE + 9)
     int err = syscall(SYS_rrcall_detach_teleport, 0, 0, 0, 0, 0, 0);
@@ -1080,6 +1097,36 @@ static void rr_detach_teleport(void) {
 }
 #endif
 
+// A parent process can request that we terminate when it exits by passing its
+// pid in JULIA_EXIT_WITH_PARENT_PID. This is used for precompilation workers,
+// which would otherwise keep running when their parent is killed abruptly.
+// On Windows, libuv normally puts spawned processes in a job object that
+// already terminates them together with their parent.
+static void exit_with_parent(void) JL_NOTSAFEPOINT
+{
+    const char *env = getenv("JULIA_EXIT_WITH_PARENT_PID");
+    if (env == NULL)
+        return;
+#ifndef _OS_WINDOWS_
+    char *endptr;
+    errno = 0;
+    long parent = strtol(env, &endptr, 10);
+    int valid = errno == 0 && *env != '\0' && *endptr == '\0' && parent > 0 && parent == (pid_t)parent;
+#endif
+    // don't pass the request on to our own children
+    uv_os_unsetenv("JULIA_EXIT_WITH_PARENT_PID");
+#ifndef _OS_WINDOWS_
+    // detaching from rr re-executes us under another parent
+    if (!valid || (jl_options.rr_detach && jl_running_under_rr(0)))
+        return;
+    jl_exit_with_parent((pid_t)parent);
+    // the parent may have exited before we started watching it
+    // (N.B.: Julia is not initialized yet, so there is nothing to clean up)
+    if (getppid() != (pid_t)parent)
+        exit(1);
+#endif
+}
+
 /**
  * @brief Entry point for the Julia REPL (Read-Eval-Print Loop).
  *
@@ -1087,16 +1134,17 @@ static void rr_detach_teleport(void) {
  * @param argv Array of command-line arguments.
  * @return An integer indicating the exit status of the REPL session.
  */
-JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
+JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_CANSAFEPOINT_ENTER_LEAVE
 {
 #ifdef USE_TRACY
     if (getenv("JULIA_WAIT_FOR_TRACY"))
         while (!TracyCIsConnected) jl_cpu_pause(); // Wait for connection
 #endif
 
-    // no-op on Windows, note that the caller must have already converted
-    // from `wchar_t` to `UTF-8` already if we're running on Windows.
-    uv_setup_args(argc, argv);
+    // Use libuv's copy: setting the process title can overwrite the original
+    // argv storage, including option strings such as the coverage output path.
+    // On Windows the caller must already have converted argv to UTF-8.
+    argv = uv_setup_args(argc, argv);
 
     // No-op on non-windows
     lock_low32();
@@ -1109,6 +1157,8 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
     }
     char **new_argv = argv;
     jl_parse_opts(&argc, (char***)&new_argv);
+
+    exit_with_parent();
 
     // The parent process requested that we detach from the rr session.
     // N.B.: In a perfect world, we would only do this for the portion of
@@ -1130,20 +1180,24 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
 
     jl_init_(sysimage);
 
+    int ret;
     if (lisp_prompt) {
         jl_current_task->world_age = jl_get_world_counter();
         jl_lisp_prompt();
-        return 0;
+        ret = 0;
+        jl_gc_safe_enter(jl_current_task->ptls); // park in gc-safe for analyzer, skipping atexit hook
     }
-    int ret = true_main(argc, (char**)new_argv);
-    jl_atexit_hook(ret);
+    else {
+        ret = true_main(argc, (char**)new_argv);
+        jl_atexit_hook(ret);
+    }
     return ret;
 }
 
 // create an absolute-path copy of the input path format string
 // formed as `joinpath(replace(pwd(), "%" => "%%"), in)`
 // unless `in` starts with `%`
-static const char *absformat(const char *in)
+static const char *absformat(const char *in) JL_NOTSAFEPOINT
 {
     if (in[0] == '%' || jl_isabspath(in))
         return in;
@@ -1170,7 +1224,7 @@ static const char *absformat(const char *in)
     return out;
 }
 
-static char *absrealpath(const char *in, int nprefix)
+static char *absrealpath(const char *in, int nprefix) JL_NOTSAFEPOINT
 { // compute an absolute realpath location, so that chdir doesn't change the file reference
   // ignores (copies directly over) nprefix characters at the start of abspath
     char *out;
@@ -1207,6 +1261,54 @@ static char *absrealpath(const char *in, int nprefix)
     return out;
 }
 
+// Make each entry of a path list absolute, optionally resolving symlinks.
+static char *abspathlist(const char *in, int resolve_symlinks) JL_NOTSAFEPOINT
+{
+    char cwd[JL_PATH_MAX];
+    size_t cwdlen = 0;
+    size_t outlen = 0;
+    char *out = (char*)malloc_s(1);
+    out[0] = '\0';
+    while (1) {
+        const char *end = strchr(in, PATHLISTSEPSTRING[0]);
+        size_t len = end ? (size_t)(end - in) : strlen(in);
+        if (len > 0) {
+            char *entry = (char*)malloc_s(len + 1);
+            memcpy(entry, in, len);
+            entry[len] = '\0';
+            if (resolve_symlinks) {
+                char *resolved = absrealpath(entry, 0);
+                free(entry);
+                entry = resolved;
+                len = strlen(entry);
+            }
+            int isabs = jl_isabspath(entry);
+            if (!isabs && cwdlen == 0) {
+                cwdlen = sizeof(cwd);
+                if (uv_cwd(cwd, &cwdlen))
+                    jl_error("fatal error: unexpected error while retrieving current working directory");
+            }
+            size_t prefix = isabs ? 0 : cwdlen + 1;
+            out = (char*)realloc_s(out, outlen + prefix + len + 2);
+            if (outlen > 0)
+                out[outlen++] = PATHLISTSEPSTRING[0];
+            if (!isabs) {
+                memcpy(out + outlen, cwd, cwdlen);
+                out[outlen + cwdlen] = PATHSEPSTRING[0];
+                outlen += prefix;
+            }
+            memcpy(out + outlen, entry, len);
+            outlen += len;
+            out[outlen] = '\0';
+            free(entry);
+        }
+        if (!end)
+            break;
+        in = end + 1;
+    }
+    return out;
+}
+
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir)
 {
     libsupport_init();
@@ -1233,7 +1335,12 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
     if (julia_bindir == NULL) {
         jl_options.julia_bindir = getenv("JULIA_BINDIR");
         if (!jl_options.julia_bindir) {
-#ifdef _OS_WINDOWS_
+#if defined(JL_LIBRARY_STATIC)
+            // no libjulia to locate: use the directory of the executable
+            char *bin = strdup(jl_options.julia_bin);
+            jl_options.julia_bindir = strdup(dirname(bin));
+            free(bin);
+#elif defined(_OS_WINDOWS_)
             jl_options.julia_bindir = strdup(jl_get_libdir());
 #else
             int written = asprintf((char**)&jl_options.julia_bindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");
@@ -1278,8 +1385,12 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
         jl_options.machine_file = absrealpath(jl_options.machine_file, 0);
     if (jl_options.output_code_coverage)
         jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
-    if (jl_options.tracked_path)
-        jl_options.tracked_path = absrealpath(jl_options.tracked_path, 0);
+    if (jl_options.tracked_path) // `@` with no path tracks the current directory
+        jl_options.tracked_path = jl_options.tracked_path[0] ? abspathlist(jl_options.tracked_path, 1) :
+                                                               absrealpath(jl_options.tracked_path, 0);
+    // symlinks are kept, since these match the paths of source files as they were loaded
+    if (jl_options.coverage_exclude)
+        jl_options.coverage_exclude = abspathlist(jl_options.coverage_exclude, 0);
 
     const char **cmdp = jl_options.cmds;
     if (cmdp) {

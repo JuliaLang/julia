@@ -1,10 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, Random, Logging, Libdl
+using Test, Distributed, Random, Logging, Libdl, Sockets
 using REPL # testing the doc lookup function should be outside of the scope of this file, but is currently tested here
 
 include("precompile_utils.jl")
 include("tempdepot.jl")
+
+# This file runs alongside the other tests, so keep its parallel precompilation to a few
+# processes; restored at the end of the file
+const original_num_precompile_tasks = get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", nothing)
+ENV["JULIA_NUM_PRECOMPILE_TASKS"] = "4"
 
 Foo_module = :Foo4b3a94a1a081a8cb
 foo_incl_dep = :foo4b3a94a1a081a8cb
@@ -233,6 +238,9 @@ precompile_test_harness(false) do dir
               const d29936a = UnionAll(Dict.var, UnionAll(Dict.body.var, Dict.body.body))
               const d29936b = UnionAll(Dict.body.var, UnionAll(Dict.var, Dict.body.body))
 
+              const gr54932 = GlobalRef(Base, gensym(:hash54932))
+              const dict54932 = Dict(gr54932 => :found)
+
               # issue #28998
               const x28998 = [missing, 2, missing, 6, missing,
                               missing, missing, missing,
@@ -269,6 +277,19 @@ precompile_test_harness(false) do dir
               const layout1 = Ptr{Int8}[Ptr{Int8}(0), Ptr{Int8}(1), Ptr{Int8}(-1)]
               const layout2 = Any[Ptr{Int8}(0), Ptr{Int16}(1), Ptr{Int32}(-1)]
               const layout3 = collect(x.match for x in eachmatch(r"..", "abcdefghijk"))::Vector{SubString{String}}
+              mutable struct PtrFields
+                  const c::Ptr{UInt8}
+                  m::Ptr{UInt8}
+                  const boxed_c::Any
+                  boxed_m::Any
+              end
+              const ptrfields = PtrFields(Ptr{UInt8}(1), Ptr{UInt8}(1), Ptr{UInt8}(1), Ptr{UInt8}(1))
+              const ptrmem = Memory{Int}(undef, 1)
+              ptrmem_ptr() = ptrmem.ptr
+              const ptrref = memoryref(ptrmem, 1)
+              ptrref_ptr() = getfield(ptrref, :ptr_or_offset)
+              precompile(ptrmem_ptr, ())
+              precompile(ptrref_ptr, ())
 
               # create a backedge that includes Type{Union{}}, to ensure lookup can handle that
               call_bottom() = show(stdout, Union{})
@@ -347,6 +368,13 @@ precompile_test_harness(false) do dir
         @test Foo.d29936a === Dict
         @test Foo.d29936b === Dict{K,V} where {V,K}
 
+        gr = Foo.gr54932
+        fresh = GlobalRef(gr.mod, gr.name)
+        @test isequal(gr, fresh)
+        @test hash(gr) == hash(fresh)
+        @test Foo.dict54932[gr] === :found
+        @test Foo.dict54932[fresh] === :found
+
         @test Foo.x28998[end] == 6
 
         @test Foo.a31488 == fill("", 100)
@@ -358,6 +386,14 @@ precompile_test_harness(false) do dir
         @test Foo.layout2 == Any[Ptr{Int8}(0), Ptr{Int16}(0), Ptr{Int32}(-1)]
         @test typeof.(Foo.layout2) == [Ptr{Int8}, Ptr{Int16}, Ptr{Int32}]
         @test Foo.layout3 == ["ab", "cd", "ef", "gh", "ij"]
+        # `const` fields keep their pointer value
+        @test Foo.ptrfields.c === Ptr{UInt8}(1)
+        @test Foo.ptrfields.m === Ptr{UInt8}(0)
+        @test Foo.ptrfields.boxed_c === Ptr{UInt8}(1)
+        @test Foo.ptrfields.boxed_m === Ptr{UInt8}(0)
+        # relocated pointers are not folded at precompile-time
+        @test Foo.ptrmem_ptr() === Foo.ptrmem.ptr
+        @test Foo.ptrref_ptr() === Foo.ptrref.ptr_or_offset
 
         @test !isopen(Foo.ch1)
         @test !isopen(Foo.ch2)
@@ -688,6 +724,9 @@ precompile_test_harness(false) do dir
         write(f, 0x076cac96) # append 4 random bytes
     end
     @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) === true
+    reasons = Dict{Symbol,Int}()
+    @test Base.compilecache_freshest_path(Base.PkgId("FooBar1"); reasons) === nothing
+    @test haskey(reasons, :checksum_invalid)
 
     # test behavior of precompile modules that throw errors
     FooBar2_file = joinpath(dir, "FooBar2.jl")
@@ -697,20 +736,36 @@ precompile_test_harness(false) do dir
           error("break me")
           end
           """)
-    @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar2)
+    redirect_stderr(devnull) do
+        @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar2)
+    end
 
     # Test that trying to eval into closed modules during precompilation is an error
     FooBar3_file = joinpath(dir, "FooBar3.jl")
     FooBar3_inc = joinpath(dir, "FooBar3_inc.jl")
     write(FooBar3_inc, "x=1\n")
-    for code in ["Core.eval(Base, :(x=1))", "Base.include(Base, \"FooBar3_inc.jl\")"]
+    for code in ["Core.eval(Base, :(x=1))",
+                 "Base.include(Base, \"FooBar3_inc.jl\")",
+                 "Core.define_method(Base, :FooBar3_closed_module_gf)"]
         write(FooBar3_file, """
         module FooBar3
         $code
         end
         """)
-        @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar3)
+        redirect_stderr(devnull) do
+            @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar3)
+        end
     end
+
+    # Declaring an already-existing generic function of a closed module is a
+    # no-op and must not error during precompilation
+    FooBar3b_file = joinpath(dir, "FooBar3b.jl")
+    write(FooBar3b_file, """
+    module FooBar3b
+    Core.eval(Main, Expr(:function, GlobalRef(Base, :length)))
+    end
+    """)
+    @test Base.require(Main, :FooBar3b) isa Module
 
     # Test transitive dependency for #21266
     FooBarT_file = joinpath(dir, "FooBarT.jl")
@@ -905,25 +960,35 @@ precompile_test_harness("code caching") do dir
         MA = getfield(@__MODULE__, RootA)
         MB = getfield(@__MODULE__, RootB)
         M = getfield(MA, RootModule)
+        function backedge_callers(mi::Core.MethodInstance)
+            callers = Any[]
+            i = 1
+            while i <= length(mi.backedges)
+                mi.backedges[i] isa Type && (i += 1)
+                caller = mi.backedges[i]
+                @assert caller isa Union{Core.MethodInstance,Core.CodeInstance}
+                push!(callers, caller)
+                i += 1
+            end
+            return callers
+        end
+        caller_method(caller::Core.MethodInstance) = caller.def::Method
+        caller_method(caller::Core.CodeInstance) = caller_method(caller.def)
         m = which(M.f, (Any,))
         for mi in Base.specializations(m)
             mi === nothing && continue
             mi = mi::Core.MethodInstance
             if mi.specTypes.parameters[2] === Int8
                 # external callers
-                mods = Module[]
-                for be in mi.backedges
-                    push!(mods, ((be.def::Core.MethodInstance).def::Method).module) # XXX
-                end
+                mods = Set(caller_method(caller).module
+                    for caller in backedge_callers(mi))
                 @test MA ∈ mods
                 @test MB ∈ mods
                 @test length(mods) == 2
             elseif mi.specTypes.parameters[2] === Int16
                 # internal callers
-                meths = Method[]
-                for be in mi.backedges
-                    push!(meths, (be.def::Method).def) # XXX
-                end
+                meths = Set(caller_method(caller)
+                    for caller in backedge_callers(mi))
                 @test which(M.g1, ()) ∈ meths
                 @test which(M.g2, ()) ∈ meths
                 @test length(meths) == 2
@@ -1083,8 +1148,9 @@ precompile_test_harness("code caching") do dir
         mi = m.specializations::Core.MethodInstance
         @test hasvalid(mi, world)       # was compiled with the new method
         m = only(methods(MA.fib))
-        mi = m.specializations::Core.MethodInstance
-        @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
+        for mi in Base.specializations(m)
+            @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
+        end
         @test MA.fib() === 2.0
 
         # Reporting test (ensure SnoopCompile works)
@@ -1114,13 +1180,19 @@ precompile_test_harness("code caching") do dir
 
         idxb = findfirst(x -> x isa Core.Binding, invalidations)
         @test invalidations[idxb+1] == "insert_backedges_callee"
-        idxv = findnext(==("verify_methods"), invalidations, idxb)
-        if invalidations[idxv-1].def.def.name === :getproperty
-            idxv = findnext(==("verify_methods"), invalidations, idxv+1)
+        # Proof flattening may change the path from the binding to `flbi`, but the
+        # downstream `useflbi` invalidation must still identify `flbi` as its cause.
+        useflbi_method = only(methods(MB.useflbi))
+        flbi_method = only(methods(MA.flbi))
+        idxv = findfirst(eachindex(invalidations)) do i
+            1 < i < length(invalidations) || return false
+            invalidations[i] == "verify_methods" || return false
+            caller = invalidations[i-1]
+            cause = invalidations[i+1]
+            return caller isa Core.CodeInstance && cause isa Core.CodeInstance &&
+                caller.def.def === useflbi_method && cause.def.def === flbi_method
         end
-        idxv = findnext(==(invalidations[idxv-1]), invalidations, idxv+1)
-        @test invalidations[idxv-1] == "verify_methods"
-        @test invalidations[idxv-2].def.def.name === :useflbi
+        @test idxv !== nothing
 
         m = only(methods(MB.map_nbits))
         @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges
@@ -1163,6 +1235,38 @@ precompile_test_harness("precompiletools") do dir
             success += sig.parameters[3] === Vector{M.MyType}
         end
         @test success == 1
+    end
+end
+
+precompile_test_harness("dispatch edge") do dir
+    KindDispatch = :KindDispatch_0x5e0bd2a4c1f7
+    write(joinpath(dir, "$KindDispatch.jl"),
+        """
+        module $KindDispatch
+            # Inference through a kind (`Type{T}`) reaches calls that match several
+            # methods, and no cached source is available for them, so the optimizer has to
+            # synthesize the call target. The dispatch edge recorded for it must not claim
+            # that the target's signature has a single fully-covering match: nothing about
+            # dispatch changes between precompiling this and loading it, so `f` must stay
+            # valid.
+            f(v::Vector{Any}) = Base.aligned_sizeof(v[1]::Type{<:Real})
+            precompile(f, (Vector{Any},))
+        end
+        """
+    )
+    pkgid = Base.PkgId(string(KindDispatch))
+    Base.compilecache(pkgid)
+    @eval using $KindDispatch
+    M = invokelatest(getglobal, @__MODULE__, KindDispatch)
+    invokelatest() do
+        world = Base.get_world_counter()
+        mi = only(Base.specializations(only(methods(M.f))))
+        @test mi.specTypes === Tuple{typeof(M.f), Vector{Any}}
+        ci = mi.cache
+        while ci.max_world < world && isdefined(ci, :next)
+            ci = ci.next
+        end
+        @test ci.max_world == typemax(UInt)
     end
 end
 
@@ -1323,9 +1427,9 @@ precompile_test_harness("invoke") do dir
         end
 
         m = get_method_for_type(M.h, Real)
-        @test nvalid(m.specializations::Core.MethodInstance) == 1
+        @test m.specializations === Core.svec()
         m = get_method_for_type(M.hnc, Real)
-        @test nvalid(m.specializations::Core.MethodInstance) == 1
+        @test m.specializations === Core.svec()
         m = only(methods(M.callq))
         @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callqnc))
@@ -1517,68 +1621,6 @@ precompile_test_harness("package_callbacks") do dir
     end
 end
 
-# Issue #19960
-(f -> f())() do # wrap in function scope, so we can test world errors
-    test_workers = addprocs(1)
-    push!(test_workers, myid())
-    save_cwd = pwd()
-    temp_path = mkdepottempdir()
-    try
-        cd(temp_path)
-        load_path = mktempdir(temp_path)
-        load_cache_path = mkdepottempdir(temp_path)
-
-        ModuleA = :Issue19960A
-        ModuleB = :Issue19960B
-
-        write(joinpath(load_path, "$ModuleA.jl"),
-            """
-            module $ModuleA
-                import Distributed: myid
-                export f
-                f() = myid()
-            end
-            """)
-
-        write(joinpath(load_path, "$ModuleB.jl"),
-            """
-            module $ModuleB
-                using $ModuleA
-                export g
-                g() = f()
-            end
-            """)
-
-        @everywhere test_workers begin
-            pushfirst!(LOAD_PATH, $load_path)
-            pushfirst!(DEPOT_PATH, $load_cache_path)
-        end
-        try
-            @eval using $ModuleB
-            invokelatest() do
-                uuid = Base.module_build_id(Base.root_module(Main, ModuleB))
-                for wid in test_workers
-                    @test Distributed.remotecall_eval(Main, wid, quote
-                            Base.module_build_id(Base.root_module(Main, $(QuoteNode(ModuleB))))
-                        end) == uuid
-                    if wid != myid() # avoid world-age errors on the local proc
-                        @test remotecall_fetch(g, wid) == wid
-                    end
-                end
-            end
-        finally
-            @everywhere test_workers begin
-                popfirst!(LOAD_PATH)
-                popfirst!(DEPOT_PATH)
-            end
-        end
-    finally
-        cd(save_cwd)
-        pop!(test_workers) # remove myid
-        rmprocs(test_workers)
-    end
-end
-
 # Ensure that module-loading plays nicely with Base.delete_method
 # wrapped in function scope, so we can test world errors
 precompile_test_harness("delete_method") do dir
@@ -1635,6 +1677,52 @@ precompile_test_harness("delete_method") do dir
     for f in (B.bpc, B.bnopc, B.bpcnc, B.bnopcnc)
         @test Base.invokelatest(f, 1) > 1
         @test Base.invokelatest(f, 1.0) > 1
+    end
+end
+
+precompile_test_harness("serialization leaves the heap unchanged") do dir
+    # The package checks, in the same process right after its image is written, that
+    # serializing it changed nothing that the image leaves out
+    write(joinpath(dir, "SerializeNoMutate.jl"),
+          """
+          module SerializeNoMutate
+          struct Wrap{T} end
+          const kept = Wrap{Int}
+          global counter::Int = 0
+          # too large to inline, and inferred while loading, so that its inferred IR is kept
+          # only to emit the image
+          function noinline_sum(n)
+              s = 0
+              for i in 1:n, j in 1:i
+                  s += i * j % 7
+              end
+              return s
+          end
+          noinline_sum(3)
+          if ccall(:jl_generating_output, Cint, ()) == 1
+              let dropped = Wrap{Float64}, # only the hook refers to it
+                  b = convert(Core.Binding, GlobalRef(@__MODULE__, :counter)),
+                  # a backedge from code outside this image, as from a dependent package
+                  edge = Base.method_instance(sin, (Float64,)).cache
+                  ccall(:jl_add_binding_backedge, Cvoid, (Any, Any), b, edge)
+                  before = copy(b.backedges)
+                  Base.postoutput() do
+                      after = b.backedges
+                      ci = Base.method_instance(noinline_sum, (Int,)).cache
+                      write(joinpath(@__DIR__, "result.txt"),
+                            "type cache: \$(Wrap{Float64} === dropped)\\n",
+                            "backedges: \$(after == before && all(map(===, after, before)))\\n",
+                            "inferred: \$(ci.inferred isa Core.CodeInfo)\\n")
+                  end
+              end
+          end
+          end
+          """)
+    Base.compilecache(Base.PkgId("SerializeNoMutate"))
+    # post-output hooks run when the image includes native code
+    if Base.JLOptions().use_pkgimages == 1
+        @test readlines(joinpath(dir, "result.txt")) ==
+            ["type cache: true", "backedges: true", "inferred: true"]
     end
 end
 
@@ -1731,6 +1819,19 @@ precompile_test_harness("Issue #25971") do load_path
     cachefile, _ = Base.compilecache(Base.PkgId("Foo25971"))
     # Check writable
     @test touch(cachefile) == cachefile
+
+    # Issue #57254: the source disappearing during precompilation must not leave
+    # an unreadable cache file behind
+    sourcefile = joinpath(load_path, "Foo57254.jl")
+    write(sourcefile, """
+        module Foo57254
+        ccall(:jl_generating_output, Cint, ()) == 1 && rm(@__FILE__)
+        end
+        """)
+    cachefile, _ = Base.compilecache(Base.PkgId("Foo57254"))
+    @test !isfile(sourcefile)
+    @test filemode(cachefile) & 0o600 == 0o600
+    @test open(Base.isvalid_cache_header, cachefile) !== nothing
 end
 
 precompile_test_harness("Issue #38312") do load_path
@@ -1799,13 +1900,17 @@ precompile_test_harness("No external edges") do load_path
           end
           """)
     Base.compilecache(Base.PkgId("NoExternalEdges"))
-    @eval begin
+    # Load in a fresh process: methods from earlier tests on this worker (e.g. SparseArrays' `hcat`) would invalidate the cached code
+    script = """
         using NoExternalEdges
-        @test (only(methods(NoExternalEdges.foo1)).specializations::Core.MethodInstance).cache.max_world != 0
-        @test (only(methods(NoExternalEdges.foo2)).specializations::Core.MethodInstance).cache.max_world != 0
-        @test (only(methods(NoExternalEdges.foo3)).specializations::Core.MethodInstance).cache.max_world != 0
-        @test (only(methods(NoExternalEdges.foo4)).specializations::Core.MethodInstance).cache.max_world != 0
-    end
+        for f in (NoExternalEdges.foo1, NoExternalEdges.foo2, NoExternalEdges.foo3, NoExternalEdges.foo4)
+            println((only(methods(f)).specializations::Core.MethodInstance).cache.max_world != 0)
+        end
+        """
+    pathsep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                 "JULIA_LOAD_PATH" => join(LOAD_PATH, pathsep), "JULIA_DEPOT_PATH" => join(DEPOT_PATH, pathsep))
+    @test readlines(cmd) == fill("true", 4)
 end
 
 @testset "issue 38149" begin
@@ -1931,6 +2036,24 @@ precompile_test_harness("Module tparams") do load_path
     end
 end
 
+# A module reached only through a type parameter must support immediate serialization.
+precompile_test_harness("Module immediate serialization") do load_path
+    write(joinpath(load_path, "ModuleImmediateInline.jl"),
+        """
+        module ModuleImmediateInline
+            const value = Val{Module(:Anon)}()
+        end
+        """)
+    Base.compilecache(Base.PkgId("ModuleImmediateInline"))
+    (@eval (using ModuleImmediateInline))
+    invokelatest() do
+        m = typeof(ModuleImmediateInline.value).parameters[1]
+        @test m isa Module
+        @test nameof(m) === :Anon
+        @test ModuleImmediateInline.value === Val(m)
+    end
+end
+
 precompile_test_harness("PkgCacheInspector") do load_path
     # Test functionality needed by PkgCacheInspector.jl
     write(joinpath(load_path, "PCI.jl"),
@@ -1952,8 +2075,8 @@ precompile_test_harness("PkgCacheInspector") do load_path
         local depmodnames
         io = open(cachefile, "r")
         try
-            # isvalid_cache_header returns checksum id or zero
-            Base.isvalid_cache_header(io) == 0 && throw(ArgumentError("Invalid header in cache file $cachefile."))
+            # isvalid_cache_header returns checksum id or nothing
+            Base.isvalid_cache_header(io) === nothing && throw(ArgumentError("Invalid header in cache file $cachefile."))
             depmodnames = Base.parse_cache_header(io, cachefile)[3]
             Base.isvalid_file_crc(io) || throw(ArgumentError("Invalid checksum in cache file $cachefile."))
         finally
@@ -1979,7 +2102,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
             cachefile, depmods, #=completeinfo=#true, "PCI")
     end
 
-    modules, init_order, internal_methods, extext_methods, new_ext_cis, new_method_roots, cache_sizes = sv
+    modules, init_order, internal_methods, extext_methods, new_method_roots, cache_sizes = sv
     for m in internal_methods::Vector{Any}
         m isa Core.MethodInstance || continue
         m = m.func::Method
@@ -1991,6 +2114,76 @@ precompile_test_harness("PkgCacheInspector") do load_path
         ci isa Core.CodeInstance || return false
         mi = ci.def::Core.MethodInstance
         return mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
+    end
+end
+
+precompile_test_harness("custom MethodTable dispatch status") do load_path
+    # Custom method-table methods loaded from a package image need dispatch fast-path bits restored.
+    pkg = :OverlayDispatchStatus
+    write(joinpath(load_path, "OverlayDispatchStatus.jl"),
+        """
+        module OverlayDispatchStatus
+        function f end
+        Base.Experimental.@MethodTable(mt)
+        Base.Experimental.@overlay mt f(x::Int) = x + 1
+        # generic code that resolves `f` through the overlay table when inferred
+        # with an overlay-aware interpreter (like GPU runtime library functions)
+        g(x) = f(x) * 2
+        end
+        """)
+    # A dependent package whose image holds CodeInstances with call edges that
+    # were resolved through the dependency's overlay table: without the dispatch
+    # bits restored on the overlay method, edge revalidation drops these CIs on
+    # image load (the whole cross-session cache of GPUCompiler-style consumers).
+    newinterp_path = abspath(joinpath(@__DIR__, "../Compiler/test/newinterp.jl"))
+    write(joinpath(load_path, "OverlayDispatchStatusUser.jl"),
+        """
+        module OverlayDispatchStatusUser
+        import OverlayDispatchStatus
+
+        module Custom
+            import Base.Compiler: Compiler
+            include($(repr(newinterp_path)))
+            @newinterp OverlayDispatchStatusInterp
+            import OverlayDispatchStatus
+            Compiler.method_table(interp::OverlayDispatchStatusInterp) =
+                Compiler.OverlayMethodTable(Compiler.get_inference_world(interp),
+                                            OverlayDispatchStatus.mt)
+        end
+
+        # a call edge directly to the dependency's overlay method
+        caller(x) = OverlayDispatchStatus.f(x)
+        # an overlay-resolved edge reached through generic code in the dependency
+        chain(x) = OverlayDispatchStatus.g(x)
+
+        let interp = Custom.OverlayDispatchStatusInterp()
+            Base.return_types(caller, (Int,); interp)
+            Base.return_types(chain, (Int,); interp)
+        end
+        end
+        """)
+    Base.compilecache(Base.PkgId(string(pkg)))
+    @eval using $pkg
+    M = invokelatest(getglobal, @__MODULE__, pkg)
+    invokelatest() do
+        ms = Base._methods_by_ftype(Tuple{typeof(M.f), Int}, M.mt, 1, Base.get_world_counter())
+        method = only(ms).method
+        @test method.module === M
+        @test !iszero(method.dispatch_status & Base.ReinferUtils.METHOD_SIG_LATEST_WHICH)
+        @test isempty(method.interferences)
+    end
+    Base.compilecache(Base.PkgId("OverlayDispatchStatusUser"))
+    @eval using OverlayDispatchStatusUser
+    invokelatest() do
+        U = OverlayDispatchStatusUser
+        owner = U.Custom.OverlayDispatchStatusInterp
+        # dependent CIs with overlay-resolved call edges must survive loading U's image
+        for m in (only(methods(U.caller)),          # edge to the overlay method itself
+                  only(methods(U.chain)),           # edge into dependency generic code
+                  only(methods(M.g)))               # dependency code with the overlay edge
+            mi = only(Base.specializations(m))
+            @test check_presence(mi, owner) !== nothing
+        end
     end
 end
 
@@ -2068,6 +2261,263 @@ precompile_test_harness("Issue #48391") do load_path
     @test_throws ErrorException isless(x, x)
 end
 
+# Scenarios that load package images run in a fresh process, so each load
+# order starts from the images alone.
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    global function trusted_edge_test_output(load_path, depot, body)
+        code = """
+            insert!(LOAD_PATH, 1, $(repr(load_path)))
+            insert!(DEPOT_PATH, 1, $(repr(depot)))
+            $body
+            """
+        return readchomp(`$exename -e $code`)
+    end
+end
+
+# whether every method a signature can match came from an image or its dependencies
+precompile_test_harness("method contributors") do load_path
+    write(joinpath(load_path, "ContribDep.jl"),
+        """
+        module ContribDep
+        f(x) = :dep
+        end
+        """)
+    write(joinpath(load_path, "ContribExt.jl"),
+        """
+        module ContribExt
+        using ContribDep
+        ContribDep.f(::Integer) = :ext
+        end
+        """)
+    Base.compilecache(Base.PkgId("ContribDep"))
+    Base.compilecache(Base.PkgId("ContribExt"))
+    depot = DEPOT_PATH[1]
+    in_deps_def = """
+        in_deps(sig, obj) = Int(0 != ccall(:jl_sig_contributors_world, Csize_t, (Any, Any, Csize_t), sig, Core.methodtable,
+                                     Base.Compiler.ReinferUtils.external_blob_index(obj)))
+        """
+    # f has methods from ContribDep and ContribExt, which are both dependencies of ContribExt only
+    out = trusted_edge_test_output(load_path, depot, in_deps_def * """
+        using ContribDep, ContribExt
+        sig = Tuple{typeof(ContribDep.f), Int}
+        print(in_deps(sig, ContribExt), " ", in_deps(sig, which(ContribDep.f, (Integer,))), " ",
+              in_deps(sig, ContribDep), " ", in_deps(sig, Base), " ", in_deps(sig, Main))
+        ctor = Tuple{Type{Int}, Int}
+        print(" ", in_deps(ctor, ContribExt))
+        # a method on a kind can match every constructor call, but no other signature
+        struct KindArg end
+        (::DataType)(::KindArg) = 0
+        print(" ", in_deps(ctor, ContribExt), " ", in_deps(sig, ContribExt))
+        # so can a Type{Union{}} method
+        (::Type{Union{}})(::Int) = 0
+        print(" ", in_deps(ctor, ContribExt))
+        # a method defined in the session is from no image
+        ContribDep.f(::Int) = :session
+        print(" ", in_deps(sig, ContribExt))
+        """)
+    @test out == "1 1 0 0 0 1 0 1 0 0"
+    # a deletion in the session leaves no method behind but marks the function
+    out = trusted_edge_test_output(load_path, depot, in_deps_def * """
+        using ContribDep
+        ContribDep.f(::Int) = :session
+        Base.delete_method(which(ContribDep.f, (Int,)))
+        using ContribExt
+        print(in_deps(Tuple{typeof(ContribDep.f), Int}, ContribExt))
+        """)
+    @test out == "0"
+end
+
+# Activation replay: a package image replays what its worker found when activating
+# each method against its dependencies, and scans live only what that record does
+# not cover. One trio of packages, loaded in several orders.
+precompile_test_harness("activation replay") do load_path
+    write(joinpath(load_path, "ActReplayDep.jl"),
+        """
+        module ActReplayDep
+        f(::Any) = :old
+        f(::Int) = :blocker
+        h(::Any) = :any
+        k(::Any, ::Any) = :any
+        g(::String) = :str
+        end
+        """)
+    write(joinpath(load_path, "ActReplayLate.jl"),
+        """
+        module ActReplayLate
+        using ActReplayDep
+        ActReplayDep.h(::Integer) = :late
+        ActReplayDep.k(::Int, ::Any) = :late
+        callh() = ActReplayDep.h(1)
+        callh()
+        callg() = ActReplayDep.g(1) # no method yet: a missing-method edge
+        precompile(callg, ())
+        end
+        """)
+    # defines its methods before loading the late dependency, so the worker activated
+    # them without it, and one after, which sees it
+    write(joinpath(load_path, "ActReplayPkg.jl"),
+        """
+        module ActReplayPkg
+        using ActReplayDep
+        ActReplayDep.f(::Real) = :new
+        ActReplayDep.h(::Int) = :pkg
+        ActReplayDep.k(::Any, ::Int) = :pkg
+        ActReplayDep.g(::Int) = :pkg
+        using ActReplayLate
+        ActReplayDep.h(::Int8) = :pkg8
+        end
+        """)
+    Base.compilecache(Base.PkgId("ActReplayDep"))
+    Base.compilecache(Base.PkgId("ActReplayLate"))
+    Base.compilecache(Base.PkgId("ActReplayPkg"))
+    # a dependency method deleted before loading must not keep shadowing the new one
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using ActReplayDep
+        Base.delete_method(which(ActReplayDep.f, (Int,)))
+        g() = ActReplayDep.f(1)
+        g()
+        using ActReplayPkg
+        print(Base.invokelatest(g))
+        """)
+    @test out == "new"
+    # the late dependency's caller is invalidated by the package's more specific
+    # method, the two `k` methods know each other as ambiguous, and the method
+    # defined after the late dependency loaded dispatches against its method
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using ActReplayLate
+        ActReplayLate.callh()
+        using ActReplayPkg, ActReplayDep
+        ambiguous = try
+            ActReplayDep.k(1, 1); false
+        catch err
+            occursin("ambiguous", sprint(showerror, err))
+        end
+        print(Base.invokelatest(ActReplayLate.callh), " ", ambiguous, " ", ActReplayDep.h(Int8(1)), " ", ActReplayDep.h(big(1)))
+        """)
+    @test out == "pkg true pkg8 late"
+    # the late dependency's caller of a then-missing method, reached through its
+    # missing-method backedge
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using ActReplayLate
+        using ActReplayPkg
+        print(Base.invokelatest(ActReplayLate.callg))
+        """)
+    @test out == "pkg"
+    # a run-time method of a signature the package also defines is not covered by
+    # the record, so the package's method replaces it, and the dependency's method,
+    # which the record covers, must still learn of the replacement
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using ActReplayDep
+        ActReplayDep.f(::Real) = :runtime
+        using ActReplayPkg
+        mint = which(ActReplayDep.f, (Real,))
+        many = which(ActReplayDep.f, (Any,))
+        inters = many.interferences
+        print(ActReplayDep.f(1.0), " ", mint.module, " ", any(i -> isassigned(inters, i) && inters[i] === mint, eachindex(inters)))
+        """)
+    @test out == "new ActReplayPkg true"
+end
+
+# Verifying an image's edges asks first whether every method under the signature's
+# typenames came from the image or its dependencies: then the worker's verdict stands.
+# Otherwise the interference sets of the expected methods are probed for newcomers,
+# passing over the dependencies' own methods, which the worker already saw.
+precompile_test_harness("edge verification: dependency methods are trusted") do load_path
+    write(joinpath(load_path, "VerifySkipDep.jl"),
+        """
+        module VerifySkipDep
+        abstract type A end
+        abstract type B <: A end
+        struct C <: B end
+        f(x) = :any
+        f(::B) = :b
+        f(::C) = :c
+        k(::Integer) = :int
+        function h end
+        h(::Integer, ::Int) = :dep
+        callh(x) = h(x, 1)
+        end
+        """)
+    # over A this method is covered by f(::B), whose interference set is not empty, so
+    # the probe cannot certify the drop and the edge needs the full lookup
+    write(joinpath(load_path, "VerifySkipOther.jl"),
+        """
+        module VerifySkipOther
+        using VerifySkipDep
+        VerifySkipDep.f(::Union{VerifySkipDep.B, Char}) = :other
+        VerifySkipDep.h(::Int, ::Signed) = :other # ambiguous with Dep's over (Int, Int)
+        end
+        """)
+    # extends f without knowing about the user below
+    write(joinpath(load_path, "VerifySkipExt.jl"),
+        """
+        module VerifySkipExt
+        using VerifySkipDep
+        VerifySkipDep.f(::Int) = :ext
+        end
+        """)
+    write(joinpath(load_path, "VerifySkipUser.jl"),
+        """
+        module VerifySkipUser
+        using VerifySkipDep, VerifySkipOther
+        callf() = VerifySkipDep.f(Base.inferencebarrier(VerifySkipDep.C())::VerifySkipDep.A)
+        calli() = VerifySkipDep.f(1)
+        callk() = VerifySkipDep.k(Base.inferencebarrier(1)::Real) # k's one method does not cover Real
+        precompile(callf, ())
+        precompile(calli, ())
+        precompile(callk, ())
+        precompile(VerifySkipDep.callh, (Int,))
+        end
+        """)
+    for name in ("VerifySkipDep", "VerifySkipOther", "VerifySkipExt", "VerifySkipUser")
+        Base.compilecache(Base.PkgId(name))
+    end
+    depot = DEPOT_PATH[1]
+    out = trusted_edge_test_output(load_path, depot, """
+        using VerifySkipDep
+        # a method of the session is in no image: it poisons the trust in every edge to f and
+        # is probed in the scan, where it intersects f(1) but not f(::A)
+        VerifySkipDep.f(::Int) = :session
+        using VerifySkipUser
+        const RU = Base.Compiler.ReinferUtils
+        Dep = VerifySkipDep
+        cache(f) = only(Base.specializations(only(methods(f)))).cache
+        # verify the edge `sig` of `ci` as code of `image` would, reporting whether it stays
+        # valid and whether that took the full lookup (which the workspace memoizes)
+        function verify(ci, sig, n, fully_covers, image)
+            edges = ci.edges # ..., nmatches::Int, sig, matches...
+            i = findfirst(j -> edges[j] isa Int && edges[j+1] === sig, 1:length(edges)-1) + 2
+            ws = RU.VerifyMethodWorkspace()
+            minw, maxw = RU.verify_call(sig, edges, i, n, Base.get_world_counter(), fully_covers, false, ws, image)
+            return (maxw == typemax(UInt), !isempty(ws.lookups))
+        end
+        blob = RU.external_blob_index
+        cif = cache(VerifySkipUser.callf)
+        sigf = Tuple{typeof(Dep.f), Dep.A}
+        print(cif.min_world == which(Dep.f, (Dep.B,)).primary_world, " ", cif.max_world == typemax(UInt))
+        # Other is a dependency of User, but not of Dep or of code in no image
+        print(" ", verify(cif, sigf, 3, true, blob(VerifySkipUser)), " ", verify(cif, sigf, 3, true, blob(Dep)), " ", verify(cif, sigf, 3, true, typemax(UInt)))
+        # only Dep has methods of k, so User trusts this edge, which no fast path resolves
+        sigk = Tuple{typeof(Dep.k), Real}
+        print(" ", verify(cache(VerifySkipUser.callk), sigk, 1, false, blob(VerifySkipUser)), " ", verify(cache(VerifySkipUser.callk), sigk, 1, false, typemax(UInt)))
+        # a trusted edge without ambiguity is valid from the method it matches
+        print(" ", cache(VerifySkipUser.callk).min_world == which(Dep.k, (Integer,)).primary_world)
+        print(" ", Base.invokelatest(VerifySkipUser.calli))
+        """)
+    @test out == "true true (true, false) (true, true) (true, true) (true, false) (true, true) true session"
+    # Ext's method is in an image that is no dependency of User, so loading User after
+    # it must probe it. The trusted edge of `callh` is ambiguous, so it is valid only from
+    # Other's world: in Dep's world `callh` still calls Dep's method.
+    out = trusted_edge_test_output(load_path, depot, """
+        using VerifySkipDep, VerifySkipExt, VerifySkipUser
+        Dep = VerifySkipDep
+        world = which(Dep.h, (Integer, Int)).primary_world
+        print(Base.invokelatest(VerifySkipUser.calli), " ", Base.invoke_in_world(world, Dep.callh, 1), " ",
+              try Dep.callh(1) catch err; nameof(typeof(err)) end)
+        """)
+    @test out == "ext dep MethodError"
+end
+
 precompile_test_harness("Generator nospecialize") do load_path
     write(joinpath(load_path, "GenNoSpec.jl"),
         """
@@ -2075,7 +2525,7 @@ precompile_test_harness("Generator nospecialize") do load_path
         @generated function f(x...)
             :((\$(Base.Meta.quot(x)),))
         end
-        @assert precompile(Tuple{typeof(which(f, (Any,Any)).generator.gen), Any, Any})
+        @assert precompile(only(methods(which(f, (Any,Any)).generator.gen)).sig)
         end
         """)
     ji, ofile = Base.compilecache(Base.PkgId("GenNoSpec"))
@@ -2123,19 +2573,10 @@ precompile_test_harness("Test flags") do load_path
           end
           """)
 
-    current_flags = Base.CacheFlags()
-    modified_flags = Base.CacheFlags(
-        current_flags.use_pkgimages,
-        current_flags.debug_level,
-        2,
-        current_flags.inline,
-        3
-    )
     ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=`--check-bounds=no -O3`)
     open(ji, "r") do io
         Base.isvalid_cache_header(io)
-        _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
-        cacheflags = Base.CacheFlags(flags)
+        _, _, _, _, _, _, cacheflags = Base.parse_cache_header(io, ji)
         @test cacheflags.check_bounds == 2
         @test cacheflags.opt_level == 3
     end
@@ -2145,9 +2586,9 @@ if Base.get_bool_env("CI", false) && (Sys.ARCH === :x86_64 || Sys.ARCH === :aarc
     @testset "Multiversioning" begin # This test isn't the most robust because it relies on being in CI,
         pkg = Base.identify_package("Test")  # but we need better target reflection to make a better one.
         cachefiles = Base.find_all_in_cache_path(pkg)
-        pkgpath = Base.locate_package(pkg)
+        pkgspec = Base.locate_package_load_spec(pkg)
         idx = findfirst(cachefiles) do cf
-            Base.stale_cachefile(pkgpath, cf) !== true
+            Base.stale_cachefile(pkgspec, cf) !== true
         end
         targets = Base.parse_image_targets(Base.parse_cache_header(cachefiles[idx])[6])
         @test length(targets) > 1
@@ -2170,6 +2611,27 @@ precompile_test_harness("No backedge precompile") do load_path
     end
 end
 
+precompile_test_harness("Method roots without spare capacity") do load_path
+    write(joinpath(load_path, "TrimmedRoots.jl"),
+          """
+          module TrimmedRoots
+          struct S{N} end
+          @noinline h(@nospecialize x) = x
+          g(::S{N}) where {N} = h(S{N})
+          for N in 1:9
+              precompile(g, (S{N},))
+          end
+          end
+          """)
+    Base.compilecache(Base.PkgId("TrimmedRoots"))
+    @eval using TrimmedRoots
+    invokelatest() do
+        m = only(methods(TrimmedRoots.g))
+        @test !isempty(m.roots)
+        @test length(m.roots) == length(m.roots.ref.mem)
+    end
+end
+
 precompile_test_harness("Pre-compile Core methods") do load_path
     # Core methods should support pre-compilation as external CI's like anything else
     # https://github.com/JuliaLang/julia/issues/58497
@@ -2183,7 +2645,8 @@ precompile_test_harness("Pre-compile Core methods") do load_path
     ji, ofile = Base.compilecache(Base.PkgId("CorePrecompilation"))
     @eval using CorePrecompilation
     invokelatest() do
-        let tt = Tuple{Type{Vector{CorePrecompilation.Foo}}, UndefInitializer, Tuple{Int}},
+        # the compiled (dispatch) specialization is the `TypeEgal`-keyed one
+        let tt = Tuple{Core.TypeEgal{Vector{CorePrecompilation.Foo}}, UndefInitializer, Tuple{Int}},
             match = first(Base._methods_by_ftype(tt, -1, Base.get_world_counter())),
             mi = Base.specialize_method(match)
             @test isdefined(mi, :cache)
@@ -2289,6 +2752,34 @@ precompile_test_harness("Binding Unique") do load_path
     invokelatest() do
         @test UniqueBinding2.thebinding === ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), UniqueBinding1, :x, true)
         @test UniqueBinding2.thebinding2 === ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), UniqueBinding2, :thebinding, true)
+    end
+end
+
+# A WeakRef from a package image must be cleared once its value is dead
+precompile_test_harness("Image WeakRef") do load_path
+    write(joinpath(load_path, "ImageWeakRef.jl"),
+        """
+        module ImageWeakRef
+            mutable struct Box; x::Int; end
+            const W = WeakRef(nothing)
+            const held = Ref{Any}(nothing)
+            @noinline set!() = (W.value = Box(1); nothing)
+            @noinline sethold!() = (W.value = held[] = Box(2); nothing)
+            @noinline cleared() = W.value === nothing
+            @noinline holds() = W.value === held[]
+        end
+        """)
+    @eval using ImageWeakRef
+    invokelatest() do
+        ImageWeakRef.set!()
+        GC.gc(true)
+        @test ImageWeakRef.cleared() skip=!Base.USING_STOCK_GC
+        ImageWeakRef.sethold!()
+        GC.gc(false); GC.gc(true); GC.gc(false)
+        @test ImageWeakRef.holds()
+        ImageWeakRef.held[] = nothing
+        GC.gc(true); GC.gc(true)
+        @test ImageWeakRef.cleared() skip=!Base.USING_STOCK_GC
     end
 end
 
@@ -2425,6 +2916,27 @@ precompile_test_harness("llvmcall validation") do load_path
     end
 end
 
+precompile_test_harness("inlined frames of code compiled after loading") do load_path
+    write(joinpath(load_path, "InlinedFrames.jl"),
+        """
+        module InlinedFrames
+        @noinline inner() = backtrace()
+        @inline middle() = inner()
+        @noinline outer() = middle()
+        outer()
+        end
+        """)
+    # Without native code in the cache, `outer` is compiled from re-inferred source
+    testcode = """
+        insert!(LOAD_PATH, 1, $(repr(load_path)))
+        insert!(DEPOT_PATH, 1, $(repr(load_path)))
+        using InlinedFrames
+        st = stacktrace(InlinedFrames.outer())
+        any(fr -> fr.func === :middle && fr.inlined && basename(String(fr.file)) == "InlinedFrames.jl", st)
+    """
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --pkgimages=no -E $(testcode)`) == "true"
+end
+
 precompile_test_harness("BindingReplaceDisallow") do load_path
     write(joinpath(load_path, "BindingReplaceDisallow.jl"),
         """
@@ -2530,8 +3042,13 @@ precompile_test_harness("Package precompilation works without manifest") do load
 end
 
 # Verify that inference / caching was not performed for any macros in the sysimage
-let m = only(methods(Base.var"@big_str"))
-    @test m.specializations === Core.svec() || !isdefined(m.specializations, :cache)
+let m = only(methods(Base.var"@lazy_str"))
+    for mi in Base.specializations(m)
+        isdefined(mi, :cache) || continue
+        ci = mi.cache
+        @test !isdefined(ci, :inferred)
+        @test !isdefined(ci, :next)
+    end
 end
 
 # Issue #58841 - make sure we don't accidentally throw away code for inference
@@ -2543,24 +3060,74 @@ end
 # Test --compiled-modules=strict in precompilepkgs
 @testset "compiled-modules=strict with dependencies" begin
     mkdepottempdir() do depot
-        # Create three packages: one that fails to precompile, one that loads it, one that doesn't
+        # Create three packages: one that fails to precompile, one that loads it, one that doesn't,
+        # plus a package that triggers an extension of the failing one and a non-project package
+        # between the failing one and the one that loads it
         project_path = joinpath(depot, "testenv")
         mkpath(project_path)
 
         # Create FailPkg - a package that can't be precompiled
         fail_pkg_path = joinpath(depot, "dev", "FailPkg")
         mkpath(joinpath(fail_pkg_path, "src"))
+        mkpath(joinpath(fail_pkg_path, "ext"))
         write(joinpath(fail_pkg_path, "Project.toml"),
               """
               name = "FailPkg"
               uuid = "10000000-0000-0000-0000-000000000001"
               version = "0.1.0"
+
+              [weakdeps]
+              TriggerPkg = "40000000-0000-0000-0000-000000000004"
+
+              [extensions]
+              FailPkgTriggerExt = "TriggerPkg"
               """)
         write(joinpath(fail_pkg_path, "src", "FailPkg.jl"),
               """
               module FailPkg
               print("Now FailPkg is running.\n")
               error("expected fail")
+              end
+              """)
+        write(joinpath(fail_pkg_path, "ext", "FailPkgTriggerExt.jl"),
+              """
+              module FailPkgTriggerExt
+              print("Now FailPkgTriggerExt is running.\n")
+              end
+              """)
+
+        # Create TriggerPkg - has no dependencies, triggers FailPkg's extension
+        trigger_pkg_path = joinpath(depot, "dev", "TriggerPkg")
+        mkpath(joinpath(trigger_pkg_path, "src"))
+        write(joinpath(trigger_pkg_path, "Project.toml"),
+              """
+              name = "TriggerPkg"
+              uuid = "40000000-0000-0000-0000-000000000004"
+              version = "0.1.0"
+              """)
+        write(joinpath(trigger_pkg_path, "src", "TriggerPkg.jl"),
+              """
+              module TriggerPkg
+              print("Now TriggerPkg is running.\n")
+              end
+              """)
+
+        # Create MidPkg - not a project dep, depends on FailPkg but doesn't load it
+        mid_pkg_path = joinpath(depot, "dev", "MidPkg")
+        mkpath(joinpath(mid_pkg_path, "src"))
+        write(joinpath(mid_pkg_path, "Project.toml"),
+              """
+              name = "MidPkg"
+              uuid = "50000000-0000-0000-0000-000000000005"
+              version = "0.1.0"
+
+              [deps]
+              FailPkg = "10000000-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(mid_pkg_path, "src", "MidPkg.jl"),
+              """
+              module MidPkg
+              print("Now MidPkg is running.\n")
               end
               """)
 
@@ -2575,6 +3142,7 @@ end
 
               [deps]
               FailPkg = "10000000-0000-0000-0000-000000000001"
+              MidPkg = "50000000-0000-0000-0000-000000000005"
               """)
         write(joinpath(loads_pkg_path, "src", "LoadsFailPkg.jl"),
               """
@@ -2611,6 +3179,7 @@ end
               [deps]
               LoadsFailPkg = "20000000-0000-0000-0000-000000000002"
               DependsOnly = "30000000-0000-0000-0000-000000000003"
+              TriggerPkg = "40000000-0000-0000-0000-000000000004"
               """)
         write(joinpath(project_path, "Manifest.toml"),
               """
@@ -2627,7 +3196,7 @@ end
               version = "0.1.0"
 
               [[LoadsFailPkg]]
-              deps = ["FailPkg"]
+              deps = ["FailPkg", "MidPkg"]
               uuid = "20000000-0000-0000-0000-000000000002"
               version = "0.1.0"
 
@@ -2638,43 +3207,102 @@ end
               version = "0.1.0"
 
               [[deps.FailPkg]]
+              weakdeps = ["TriggerPkg"]
               path = "../dev/FailPkg/"
               uuid = "10000000-0000-0000-0000-000000000001"
               version = "0.1.0"
 
+                  [deps.FailPkg.extensions]
+                  FailPkgTriggerExt = "TriggerPkg"
+
               [[deps.LoadsFailPkg]]
-              deps = ["FailPkg"]
+              deps = ["FailPkg", "MidPkg"]
               path = "../dev/LoadsFailPkg/"
               uuid = "20000000-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [[deps.MidPkg]]
+              deps = ["FailPkg"]
+              path = "../dev/MidPkg/"
+              uuid = "50000000-0000-0000-0000-000000000005"
+              version = "0.1.0"
+
+              [[deps.TriggerPkg]]
+              path = "../dev/TriggerPkg/"
+              uuid = "40000000-0000-0000-0000-000000000004"
               version = "0.1.0"
               """)
 
         # Call precompilepkgs with output redirected to a file
+        Skipped_output = joinpath(depot, "Skipped_output.txt")
         LoadsFailPkg_output = joinpath(depot, "LoadsFailPkg_output.txt")
+        NoskipExt_output = joinpath(depot, "NoskipExt_output.txt")
         DependsOnly_output = joinpath(depot, "DependsOnly_output.txt")
+        Fresh_output = joinpath(depot, "Fresh_output.txt")
+        Forced_output = joinpath(depot, "Forced_output.txt")
         original_depot_path = copy(Base.DEPOT_PATH)
         old_proj = Base.active_project()
         try
             push!(empty!(DEPOT_PATH), depot)
             Base.set_active_project(project_path)
-            precompile_capture(file, pkg) = open(file, "w") do io
+            precompile_capture(file, pkgs; kwargs...) = open(file, "w") do io
                 try
-                    r = Base.Precompilation.precompilepkgs([pkg]; io, fancyprint=true)
-                    @test r isa Vector{String}
-                    r
+                    Base.Precompilation.precompilepkgs(pkgs isa String ? [pkgs] : pkgs; io, fancyprint=true, kwargs...)
                 catch ex
                     ex isa Base.Precompilation.PkgPrecompileError || rethrow()
                     ex
                 end
             end
-            loadsfailpkg = precompile_capture(LoadsFailPkg_output, "LoadsFailPkg")
+            # By default a package whose dependency failed is skipped, not attempted. Only skipped
+            # project deps are named: MidPkg is implied by LoadsFailPkg, and FailPkg's extension
+            # is skipped too but not reported, as its parent failing implies it.
+            skipped = precompile_capture(Skipped_output, ["LoadsFailPkg", "TriggerPkg"])
+            @test skipped isa Base.Precompilation.PkgPrecompileError
+            @test occursin("2 packages were skipped because a dependency failed to precompile, including LoadsFailPkg\n", skipped.msg)
+            @test occursin("skip_dependents=false", skipped.msg)
+            @test !occursin("MidPkg", skipped.msg)
+            @test !occursin("FailPkgTriggerExt", skipped.msg)
+            loadsfailpkg = precompile_capture(LoadsFailPkg_output, "LoadsFailPkg"; skip_dependents=false)
             @test loadsfailpkg isa Base.Precompilation.PkgPrecompileError
-            dependsonly = precompile_capture(DependsOnly_output, "DependsOnly")
-            @test length(dependsonly) == 1
+            @test !occursin("skipped", loadsfailpkg.msg)
+            # the extension is never attempted, even when dependents are
+            noskipext = precompile_capture(NoskipExt_output, ["LoadsFailPkg", "TriggerPkg"]; skip_dependents=false)
+            @test noskipext isa Base.Precompilation.PkgPrecompileError
+            @test !occursin("skipped", noskipext.msg)
+            @test !occursin("FailPkgTriggerExt", noskipext.msg)
+            dependsonly = precompile_capture(DependsOnly_output, "DependsOnly"; skip_dependents=false)
+            @test dependsonly isa Vector{String} && length(dependsonly) == 1
+            # A fresh cache is reused unless `force` is passed
+            fresh = precompile_capture(Fresh_output, "DependsOnly"; skip_dependents=false)
+            @test fresh isa Vector{String} && fresh == dependsonly
+            forced = precompile_capture(Forced_output, "DependsOnly"; skip_dependents=false, force=true)
+            @test forced isa Vector{String} && length(forced) == 1
         finally
             Base.set_active_project(old_proj)
             append!(empty!(DEPOT_PATH), original_depot_path)
         end
+
+        output = read(Skipped_output, String)
+        # LoadsFailPkg is skipped once FailPkg fails, so it never runs
+        @test count("✗ FailPkg", output) > 0
+        @test count("✗ LoadsFailPkg", output) > 0
+        @test count("skipped, FailPkg failed to precompile", output) > 0
+        @test count("2 skipped because a dependency failed to precompile", output) == 1
+        @test count("Now FailPkg is running.", output) == 1
+        @test count("Now LoadsFailPkg is running.", output) == 0
+        @test count("Now TriggerPkg is running.", output) == 1
+        # MidPkg is not a project dep, so it is skipped without a line of its own
+        @test count("Now MidPkg is running.", output) == 0
+        @test count("MidPkg", output) == 0
+        # the extension of FailPkg is neither attempted nor listed
+        @test count("Now FailPkgTriggerExt is running.", output) == 0
+        @test count("FailPkgTriggerExt", output) == 0
+
+        output = read(NoskipExt_output, String)
+        @test count("Now LoadsFailPkg is running.", output) == 1
+        @test count("Now MidPkg is running.", output) == 0 # already precompiled by the run above
+        @test count("Now FailPkgTriggerExt is running.", output) == 0
+        @test count("FailPkgTriggerExt", output) == 0
 
         output = read(LoadsFailPkg_output, String)
         # LoadsFailPkg should fail because it tries to load FailPkg with --compiled-modules=strict
@@ -2684,6 +3312,7 @@ end
         @test count("✗ LoadsFailPkg", output) > 0
         @test count("Now FailPkg is running.", output) == 1
         @test count("Now LoadsFailPkg is running.", output) == 1
+        @test count("Now MidPkg is running.", output) == 1
         @test count("DependsOnly precompiling.", output) == 0
 
         # DependsOnly should succeed because it doesn't actually load FailPkg
@@ -2694,6 +3323,377 @@ end
         @test count("Precompiling DependsOnly finished.", output) == 1
         @test count("Now FailPkg is running.", output) == 0
         @test count("Now DependsOnly is running.", output) == 1
+
+        # nothing to do: the fresh cache is reused, so no package runs and no summary is printed
+        output = read(Fresh_output, String)
+        @test count("Now DependsOnly is running.", output) == 0
+        @test count("successfully precompiled", output) == 0
+        output = read(Forced_output, String)
+        @test count("Now DependsOnly is running.", output) == 1
+        @test count("1 dependency successfully precompiled", output) == 1
+    end
+end
+
+# Requesting precompilation of a package that lives in the sysimage has nothing to do
+# and must not error, even when it is the only dependency of the environment (#63189)
+@testset "precompilepkgs on a sysimage package" begin
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        mkpath(project_path)
+        sha_uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+        @test Base.in_sysimage(Base.PkgId(Base.UUID(sha_uuid), "SHA"))
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            SHA = "$sha_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.SHA]]
+            uuid = "$sha_uuid"
+            version = "1.0.0"
+            """)
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+            io = IOBuffer()
+            @test Base.Precompilation.precompilepkgs(["SHA"]; io, fancyprint=false) === nothing
+            @test Base.Precompilation.precompilepkgs(; io, fancyprint=false) === nothing
+            @test isempty(takestring!(io))
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
+# Write dev packages, given as (name, uuid, deps), into the depot, and a project that depends on all of them
+function write_precompile_env(depot, pkgs)
+    project = "[deps]\n"
+    manifest = "manifest_format = \"2.0\"\n"
+    for (name, uuid, deps) in pkgs
+        pkg_path = joinpath(depot, "dev", name)
+        mkpath(joinpath(pkg_path, "src"))
+        write(joinpath(pkg_path, "Project.toml"), """
+            name = "$name"
+            uuid = "$uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(pkg_path, "src", "$name.jl"), string("module $name\n", join(("import $dep\n" for dep in deps)), "end\n"))
+        project *= "$name = \"$uuid\"\n"
+        manifest *= """
+
+            [[deps.$name]]
+            $(isempty(deps) ? "" : "deps = [$(join(repr.(deps), ", "))]")
+            path = "../dev/$name"
+            uuid = "$uuid"
+            version = "0.1.0"
+            """
+    end
+    project_path = joinpath(depot, "project")
+    mkpath(project_path)
+    write(joinpath(project_path, "Project.toml"), project)
+    write(joinpath(project_path, "Manifest.toml"), manifest)
+    return project_path
+end
+
+function with_precompile_env(f, depot, project_path)
+    original_depot_path = copy(Base.DEPOT_PATH)
+    old_proj = Base.active_project()
+    try
+        push!(empty!(DEPOT_PATH), depot)
+        Base.set_active_project(project_path)
+        f()
+    finally
+        Base.set_active_project(old_proj)
+        append!(empty!(DEPOT_PATH), original_depot_path)
+    end
+end
+
+has_cachefile(depot, name) =
+    (dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", name); isdir(dir) && any(endswith(".ji"), readdir(dir)))
+
+# Packages in a dependency cycle, and their dependents, are reported and skipped
+@testset "precompilepkgs with circular dependencies" begin
+    mkdepottempdir() do depot
+        project_path = write_precompile_env(depot, [
+            ("CycA", "a1000000-0000-0000-0000-000000000001", ["CycB"]),
+            ("CycB", "a1000000-0000-0000-0000-000000000002", ["CycC"]),
+            ("CycC", "a1000000-0000-0000-0000-000000000003", ["CycA"]),
+            ("CycUser", "a1000000-0000-0000-0000-000000000004", ["CycA"]),
+            ("CycFree", "a1000000-0000-0000-0000-000000000005", String[]),
+        ])
+        with_precompile_env(depot, project_path) do
+            io = IOBuffer()
+            paths = Base.Precompilation.precompilepkgs(; io=IOContext(io, :color => false), fancyprint=false)
+            output = takestring!(io)
+            @test length(paths) == 1 && occursin("CycFree", only(paths))
+            @test occursin("Circular dependency detected.\nPrecompilation will be skipped for dependencies in this cycle:\n", output)
+            @test all(name -> occursin(Regex("^ [┌│└].* $name\$", "m"), output), ("CycA", "CycB", "CycC"))
+            @test occursin("which depend on the above cycle:\n  CycUser\n", output)
+            @test occursin("1 dependency successfully precompiled in", output)
+            @test occursin("4 skipped due to circular dependency", output)
+            @test !any(name -> has_cachefile(depot, name), ("CycA", "CycB", "CycC", "CycUser"))
+        end
+    end
+
+    a, b, c, d, e = (Base.PkgId(name) for name in ("A", "B", "C", "D", "E"))
+    ext = Base.PkgId("AExt")
+    ext_to_parent = Dict(ext => a)
+    io = IOContext(IOBuffer(), :color => false)
+    @test Base.Precompilation.excluded_circular_deps_explanation(io, ext_to_parent, [a, b, c, d, e, ext], [[a, b, c], [d]]) == """
+        Circular dependency detected.
+        Precompilation will be skipped for dependencies in these cycles:
+         ┌ A
+         │  B
+         └── C
+         ─ D
+        Precompilation will also be skipped for the following, which depend on the above cycles:
+          E
+          A → AExt"""
+    @test Base.Precompilation.excluded_circular_deps_explanation(io, ext_to_parent, [a, b], [[a, b]]) == """
+        Circular dependency detected.
+        Precompilation will be skipped for dependencies in this cycle:
+         ┌ A
+         └─ B
+        """
+end
+
+# TOML reads `deps = []` as a `Vector{Any}`, which must still count as no dependencies
+@testset "precompilepkgs with an empty deps list in the manifest" begin
+    mkdepottempdir() do depot
+        project_path = write_precompile_env(depot, [
+            ("EmptyDepsA", "b0000000-0000-0000-0000-000000000001", String[]),
+            ("EmptyDepsB", "b0000000-0000-0000-0000-000000000002", ["EmptyDepsA"]),
+        ])
+        manifest_path = joinpath(project_path, "Manifest.toml")
+        write(manifest_path, replace(read(manifest_path, String),
+            "path = \"../dev/EmptyDepsA\"" => "deps = []\nweakdeps = []\npath = \"../dev/EmptyDepsA\""))
+        with_precompile_env(depot, project_path) do
+            paths = Base.Precompilation.precompilepkgs(; io=IOBuffer(), fancyprint=false)
+            @test length(paths) == 2
+        end
+    end
+end
+
+# Verbose mode prints a per-package breakdown of where the precompile time went
+@testset "precompilepkgs verbose timing" begin
+    mkdepottempdir() do depot
+        project_path = write_precompile_env(depot, [
+            ("VerboseA", "b1000000-0000-0000-0000-000000000001", String[]),
+            ("VerboseB", "b1000000-0000-0000-0000-000000000002", ["VerboseA"]),
+        ])
+        with_precompile_env(depot, project_path) do
+            io = IOBuffer()
+            paths = Base.Precompilation.precompilepkgs(; io=IOContext(io, :color => false), verbose=true)
+            output = takestring!(io)
+            @test length(paths) == 2
+            @test occursin(Base.Precompilation.format_verbose_timing_header() * "\n", output)
+            for name in ("VerboseA", "VerboseB")
+                @test occursin(Regex("^ +[\\d.]+ s │ +[\\d.]+s +[\\d.]+s +[\\d.]+s │ +\\d+ +[\\d.]+s +[\\d.]+MB +(\\d+MB|-)  ✓ $name\$", "m"), output)
+            end
+            @test !occursin(Base.PRECOMPILE_VERBOSE_TIMING_MARKER, output)
+
+            # asking for the status afterwards reports the last run
+            io = IOBuffer()
+            Base.Precompilation.monitor_background_precompile(IOContext(io, :color => false))
+            @test occursin(r"^Info Background precompilation completed \d+ (seconds|minutes) ago\n    2 dependencies successfully precompiled in"m, takestring!(io))
+            @test !Base.Precompilation.stop_background_precompile()
+        end
+    end
+
+    fmt = Base.Precompilation.format_verbose_timing
+    @test fmt("", 1.0, 0, UInt64(0), false) == ""
+    @test fmt("methods=3", 1.0, 0, UInt64(0), false) == ""
+    payload = "include_ns=1500000000 deps_ns=250000000 compilation_ns=1000000000 methods=12"
+    @test fmt(payload, 2.0, 3 * 1024^2, UInt64(200 * 1024^2), false) ==
+        " │   1.50s    0.25s    1.00s │      12    0.50s     3.0MB    200MB"
+    @test fmt("include_ns=0", 0.0, 0, UInt64(0), false) ==
+        " │   0.00s    0.00s    0.00s │       0    0.00s         -        -"
+    @test occursin(Base.text_colors[:light_black], fmt("include_ns=0", 0.0, 0, UInt64(0), true))
+    @test !occursin(Base.text_colors[:light_black], fmt(payload, 2.0, 3 * 1024^2, UInt64(200 * 1024^2), true))
+end
+
+@testset "precompile worker process stats" begin
+    PC = Base.Precompilation
+    pid = Int32(getpid())
+    stats = PC.process_stats(pid)
+    @test PC.process_stats(Int32(-1)) == (cpu_ns=UInt64(0), rss_bytes=UInt64(0))
+    job = PC.PrecompileJob()
+    PC.set_pid!(job, pid)
+    jobs = Dict{PC.PkgConfig, PC.PrecompileJob}(
+        (Base.PkgId("WithPid"), `` => Base.CacheFlags()) => job,
+        (Base.PkgId("NoPid"), `` => Base.CacheFlags()) => PC.PrecompileJob())
+    cpu_pcts = Dict{Int32, Float64}()
+    rss = Dict{Int32, UInt64}()
+    prev_cpu_times = Dict{Int32, UInt64}()
+    PC.poll_process_stats!(cpu_pcts, rss, prev_cpu_times, jobs, 1.0)
+    if Sys.islinux() || Sys.isapple()
+        @test stats.cpu_ns > 0 && stats.rss_bytes > 0
+        @test cpu_pcts == Dict(pid => 0.0)
+        @test rss[pid] > 0
+        @test job.peak_rss_bytes > 0
+        @test haskey(prev_cpu_times, pid)
+        job.peak_rss_bytes = 0
+        PC.sample_peak_rss!(jobs)
+        @test job.peak_rss_bytes > 0
+        # a worker that has exited is dropped from the history
+        PC.clear_pid!(job)
+        PC.poll_process_stats!(cpu_pcts, rss, prev_cpu_times, jobs, 1.0)
+        @test isempty(cpu_pcts) && isempty(rss) && isempty(prev_cpu_times)
+    else
+        @test stats == (cpu_ns=UInt64(0), rss_bytes=UInt64(0))
+        @test isempty(cpu_pcts) && isempty(rss)
+    end
+end
+
+# Make a package mark that it has started precompiling, then wait for a signal file
+function write_blocking_pkg(depot, name, deps, started, signal)
+    write(joinpath(depot, "dev", name, "src", "$name.jl"), """
+        module $name
+        $(join(("import $dep\n" for dep in deps)))
+        touch($(repr(started)))
+        while !isfile($(repr(signal)))
+            sleep(0.05)
+        end
+        end
+        """)
+end
+
+wait_until(f) = while !f(); sleep(0.05); end
+
+# A request made while a run is going is merged into it
+@testset "precompilepkgs request merged into a running session" begin
+    mkdepottempdir() do depot
+        started = joinpath(depot, "started")
+        signal = joinpath(depot, "signal")
+        project_path = write_precompile_env(depot, [
+            ("BlockingPkg", "c1000000-0000-0000-0000-000000000001", String[]),
+            ("MergedPkg", "c1000000-0000-0000-0000-000000000002", String[]),
+        ])
+        write_blocking_pkg(depot, "BlockingPkg", String[], started, signal)
+        with_precompile_env(depot, project_path) do
+            io1 = IOBuffer()
+            io2 = IOBuffer()
+            t1 = @async Base.Precompilation.precompilepkgs(["BlockingPkg"]; io=IOContext(io1, :color => false), fancyprint=false)
+            local t2
+            try
+                wait_until(() -> isfile(started))
+                @test Base.Precompilation.is_precompiling_in_background()
+                t2 = @async Base.Precompilation.precompilepkgs(["MergedPkg"]; io=IOContext(io2, :color => false), fancyprint=false)
+                wait_until(() -> has_cachefile(depot, "MergedPkg"))
+                @test !istaskdone(t1)
+            finally
+                touch(signal)
+            end
+            paths1 = fetch(t1)
+            paths2 = fetch(t2)
+            @test any(path -> occursin("BlockingPkg", path), paths1)
+            @test length(paths2) == 1 && occursin("MergedPkg", only(paths2))
+            @test occursin("Merging precompilation request into existing run...", takestring!(io2))
+            output = takestring!(io1)
+            @test occursin("✓ MergedPkg", output) && occursin("✓ BlockingPkg", output)
+            @test occursin("2 dependencies successfully precompiled in", output)
+        end
+    end
+end
+
+# Stopping a run kills its workers, or with `graceful` lets them finish, and starts no new ones
+@testset "stop_background_precompile (graceful=$graceful)" for graceful in (false, true)
+    mkdepottempdir() do depot
+        started = joinpath(depot, "started")
+        signal = joinpath(depot, "signal")
+        project_path = write_precompile_env(depot, [
+            ("FirstPkg", "c2000000-0000-0000-0000-000000000001", String[]),
+            ("BlockingPkg", "c2000000-0000-0000-0000-000000000002", ["FirstPkg"]),
+            ("LastPkg", "c2000000-0000-0000-0000-000000000003", ["BlockingPkg"]),
+        ])
+        write_blocking_pkg(depot, "BlockingPkg", ["FirstPkg"], started, signal)
+        with_precompile_env(depot, project_path) do
+            io = IOBuffer()
+            t = @async Base.Precompilation.precompilepkgs(; io=IOContext(io, :color => false), fancyprint=false)
+            try
+                wait_until(() -> isfile(started))
+                @test Base.Precompilation.stop_background_precompile(; graceful)
+                graceful && touch(signal)
+                wait(t)
+            finally
+                touch(signal)
+            end
+            output = takestring!(io)
+            @test has_cachefile(depot, "FirstPkg")
+            @test has_cachefile(depot, "BlockingPkg") == graceful
+            @test !has_cachefile(depot, "LastPkg")
+            @test !Base.Precompilation.is_precompiling_in_background()
+            summary = graceful ? r"2 dependencies precompiled, then interrupted after \d+ seconds" :
+                                 r"1 dependency precompiled, \d+ canceled after \d+ seconds"
+            @test occursin(summary, output)
+            # asking for the status afterwards repeats the summary
+            io = IOBuffer()
+            Base.Precompilation.monitor_background_precompile(IOContext(io, :color => false))
+            @test occursin(summary, takestring!(io))
+        end
+    end
+end
+
+# A run stopped before any package finished still reports, and keeps the report for later
+@testset "stop_background_precompile with nothing finished" begin
+    mkdepottempdir() do depot
+        started = joinpath(depot, "started")
+        signal = joinpath(depot, "signal")
+        project_path = write_precompile_env(depot, [("BlockingPkg", "c2100000-0000-0000-0000-000000000001", String[])])
+        write_blocking_pkg(depot, "BlockingPkg", String[], started, signal)
+        with_precompile_env(depot, project_path) do
+            io = IOBuffer()
+            t = @async Base.Precompilation.precompilepkgs(; io=IOContext(io, :color => false), fancyprint=false)
+            try
+                wait_until(() -> isfile(started))
+                @test Base.Precompilation.stop_background_precompile(; graceful=false)
+                wait(t)
+            finally
+                touch(signal)
+            end
+            @test occursin(r"\n  0 dependencies precompiled, 1 canceled after \d+ seconds\n", takestring!(io))
+            @test !has_cachefile(depot, "BlockingPkg")
+            io = IOBuffer()
+            Base.Precompilation.monitor_background_precompile(IOContext(io, :color => false))
+            @test occursin(r"\n    0 dependencies precompiled, 1 canceled after \d+ seconds\n", takestring!(io))
+        end
+    end
+end
+
+# A package whose cache file lock is held elsewhere waits for it, and says who holds it
+@testset "precompilepkgs waits for a held cache file lock" begin
+    mkdepottempdir() do depot
+        uuid = "c3000000-0000-0000-0000-000000000001"
+        project_path = write_precompile_env(depot, [("LockedPkg", uuid, String[])])
+        with_precompile_env(depot, project_path) do
+            pidfile = Base.compilecache_pidfile_path(Base.PkgId(Base.UUID(uuid), "LockedPkg"))
+            mkpath(dirname(pidfile))
+            pidlock = Base.mkpidlock_hook(pidfile; stale_age=Base.compilecache_pidlock_stale_age)
+            io = Base.BufferStream()
+            t = @async try
+                Base.Precompilation.precompilepkgs(; io=IOContext(io, :color => false), fancyprint=false)
+            finally
+                close(io)
+            end
+            lines = String[]
+            try
+                while !eof(io)
+                    push!(lines, readline(io))
+                    occursin("Being precompiled by", last(lines)) && break
+                end
+            finally
+                close(pidlock)
+            end
+            paths = fetch(t)
+            append!(lines, readlines(io))
+            @test length(paths) == 1
+            @test "    LockedPkg Being precompiled by an async task in this process (pidfile: $pidfile)" in lines
+            @test any(startswith("  1 dependency successfully precompiled in"), lines)
+        end
     end
 end
 
@@ -2900,6 +3900,34 @@ end
         finally
             Base.set_active_project(old_proj)
             append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
+# Full workspace precompilation should find the root and recursively include member packages.
+@testset "full workspace precompilation" begin
+    workspace_path = joinpath(@__DIR__, "project", "Workspaces", "PrecompileExt")
+    nested_member_path = joinpath(workspace_path, "Nested", "Baz")
+    for active_project in (workspace_path, nested_member_path)
+        mkdepottempdir() do depot
+            original_depot_path = copy(Base.DEPOT_PATH)
+            old_proj = Base.active_project()
+            try
+                push!(empty!(DEPOT_PATH), depot)
+                Base.set_active_project(active_project)
+
+                io = IOBuffer()
+                ioc = IOContext(io, :color => false)
+                Base.Precompilation.precompilepkgs(; io=ioc, fancyprint=false, manifest=true)
+                output = String(take!(io))
+
+                @test occursin("Foo", output)
+                @test occursin("Bar", output)
+                @test occursin("Baz", output)
+            finally
+                Base.set_active_project(old_proj)
+                append!(empty!(DEPOT_PATH), original_depot_path)
+            end
         end
     end
 end
@@ -3180,6 +4208,7 @@ end
 
 # Test that warn_loaded names loaded packages and counts affected dependents
 @testset "warn_loaded names packages and counts dependents" begin
+    Sys.iswindows() || isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
     mkdepottempdir() do depot; mktempdir() do dir
         # Create LoadedDep old source — loaded at the start of the script
         loaded_dep_old_path = joinpath(dir, "dev", "LoadedDepOld")
@@ -3299,6 +4328,308 @@ end
         output = fetch(log)
         @test occursin("currently loaded", output)
         @test occursin("LoadedDep", output)
+
+        # Run `script` in a child that loads packages as in the REPL: `-i` so the loading-time
+        # precompile output is not suppressed; the script ends with `exit()` so the fallback
+        # REPL never starts on the non-tty stdin afterwards (EPIPE on CI).
+        function loading_output(script; flags=``, project=old_project_path, env=(), depot=depot)
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --color=no -i $flags --project=$project -e $script`,
+                         "JULIA_DEPOT_PATH" => depot, env...)
+            out = Base.PipeEndpoint()
+            log = @async read(out, String)
+            try
+                proc = run(pipeline(cmd, stdin=devnull, stdout=out, stderr=out))
+                @test success(proc)
+            catch
+                @show fetch(log)
+                rethrow()
+            end
+            return fetch(log)
+        end
+        conflict_script(disable_parallel) = """
+            using LoadedDep
+            Base.set_active_project($(repr(new_project_path)))
+            Base.disable_parallel_precompile = $disable_parallel
+            using DepUser
+            exit()
+            """
+        flags_message = "The existing caches were built with different compilation options"
+        check_bounds = Base.JLOptions().check_bounds == 1 ? "no" : "yes"
+
+        # Loading DepUser with the old LoadedDep still loaded recompiles it for the loaded
+        # version; the cause is explained under the header (no tty here, so no `c` to cancel
+        # offered) and not repeated in the summary.
+        output = loading_output(conflict_script(false))
+        @test occursin("LoadedDep is loaded at a different version than in the manifest, so its dependents are being precompiled.", output)
+        @test occursin("Mixing versions may violate compat requirements and cause unexpected errors.", output)
+        @test occursin("To use the manifest version instead, restart julia with `--project` set.", output)
+        @test !occursin("were precompiled", output)
+        @test !occursin("currently loaded", output)
+        @test !occursin(flags_message, output)
+
+        # With other compilation options every cache is rejected for its flags, which is explained.
+        using_depuser = "using DepUser\nexit()"
+        output = loading_output(using_depuser; flags=`--check-bounds=$check_bounds`, project=new_project_path)
+        @test occursin(flags_message, output)
+        @test !occursin("is loaded at a different version", output)
+
+        # Once the source changes, the cache left with the other options is still rejected for
+        # its flags, but that is not why DepUser is precompiling.
+        depuser_src = joinpath(depuser_path, "src", "DepUser.jl")
+        edit_depuser(line) = write(depuser_src, replace(read(depuser_src, String), "module DepUser\n" => "module DepUser\n$line\n"))
+        edit_depuser("const EDITED = true")
+        output = loading_output(using_depuser; project=new_project_path)
+        @test occursin("DepUser", output)
+        @test !occursin(flags_message, output)
+
+        # Without a parallel session, loading compiles serially and must still say so.
+        # Flip `--check-bounds` and edit DepUser again so none of the caches above can be reused.
+        edit_depuser("const EDITED_AGAIN = true")
+        output = loading_output(conflict_script(true); flags=`--check-bounds=$check_bounds`)
+        @test occursin("Info: Precompiling DepUser", output)
+
+        # With DepUser only in an environment later in the load path, the loader takes LoadedDep
+        # from the active project, at another version than DepUser's manifest gives.
+        edit_depuser("const EDITED_STACKED = true")
+        stacked = ("JULIA_LOAD_PATH" => join(["@", new_project_path, "@stdlib"], Sys.iswindows() ? ';' : ':'),)
+        output = loading_output(using_depuser; env=stacked)
+        @test occursin("DepUser is from ", output)
+        @test occursin("where LoadedDep has a different version than in the active environment,\n  so it is being precompiled against the active environment's version.", output)
+        @test occursin("To avoid this, give LoadedDep the same version in both environments.", output)
+        @test !occursin("is loaded at a different version", output)
+        output = loading_output(using_depuser; env=stacked)
+        @test !occursin("has a different version", output)
+
+        # Outside the REPL the report is brief: a header naming the package and a summary, with
+        # no line per package and no escape codes. `-q` silences it.
+        julia_without_q = `$(filter(!=("-q"), collect(Base.julia_cmd())))`
+        function noninteractive_output(flags)
+            cmd = addenv(`$julia_without_q --startup-file=no --color=no $flags --project=$new_project_path -e "using DepUser"`,
+                         "JULIA_DEPOT_PATH" => depot)
+            out = Pipe()
+            proc = run(pipeline(cmd, stdin=devnull, stdout=out, stderr=out); wait=false)
+            close(out.in)
+            output = read(out, String)
+            @test success(proc)
+            return output
+        end
+        edit_depuser("const EDITED_BRIEF = true")
+        output = noninteractive_output(``)
+        @test startswith(output, "Precompiling DepUser...\n")
+        @test occursin("1 dependency successfully precompiled", output)
+        @test !occursin("✓", output)
+        @test !occursin('\e', output)
+        edit_depuser("const EDITED_QUIET = true")
+        @test isempty(noninteractive_output(`-q`))
+
+        # On a tty the explanation offers `c`; canceling must stop the load, not load DepUser
+        # from source without a cache. DepUser's precompile sleeps so there is time to cancel.
+        if !Sys.iswindows()
+            edit_depuser("get(ENV, \"DEPUSER_SLOW\", \"\") == \"1\" && sleep(60)")
+            script = """
+                using LoadedDep
+                Base.set_active_project($(repr(new_project_path)))
+                Base.disable_parallel_precompile = false
+                try
+                    @eval using DepUser
+                catch err
+                    println("load failed: ", sprint(showerror, err))
+                end
+                println("DepUser defined: ", isdefined(Main, :DepUser))
+                exit()
+                """
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --color=no -i --project=$(old_project_path) -e $script`,
+                         "JULIA_DEPOT_PATH" => depot, "DEPUSER_SLOW" => "1", "TERM" => "dumb")
+            pts, ptm = Main.FakePTYs.open_fake_pty()
+            p = run(cmd, pts, pts, pts; wait=false)
+            Base.close_stdio(pts)
+            output = readuntil(ptm, "press `c` to cancel", keep=true)
+            write(ptm, "c")
+            sleep(0.5)
+            write(ptm, "\r")
+            buf = IOBuffer()
+            try
+                while !eof(ptm)
+                    write(buf, readavailable(ptm))
+                end
+            catch # EIO once the child has closed its end of the pty
+            end
+            wait(p)
+            close(ptm)
+            output *= String(take!(buf))
+            @test success(p)
+            @test occursin("LoadedDep is loaded at a different version", output)
+            @test occursin("load failed: Precompilation was canceled", output)
+            @test occursin("DepUser defined: false", output)
+
+            # Keys are only read on the foreground task, so a load from another task
+            # must not offer `c`.
+            edit_depuser("const EDITED_BACKGROUND = true")
+            script = """
+                using LoadedDep
+                Base.set_active_project($(repr(new_project_path)))
+                Base.disable_parallel_precompile = false
+                wait(@async @eval using DepUser)
+                println("DepUser defined: ", isdefined(Main, :DepUser))
+                exit()
+                """
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --color=no -i --project=$(old_project_path) -e $script`,
+                         "JULIA_DEPOT_PATH" => depot, "TERM" => "dumb")
+            pts, ptm = Main.FakePTYs.open_fake_pty()
+            p = run(cmd, pts, pts, pts; wait=false)
+            Base.close_stdio(pts)
+            buf = IOBuffer()
+            try
+                while !eof(ptm)
+                    write(buf, readavailable(ptm))
+                end
+            catch # EIO once the child has closed its end of the pty
+            end
+            wait(p)
+            close(ptm)
+            output = String(take!(buf))
+            @test success(p)
+            @test occursin("LoadedDep is loaded at a different version", output)
+            @test occursin("restart julia with `--project` set.", output)
+            @test !occursin("press `c`", output)
+            @test occursin("DepUser defined: true", output)
+        end
+
+        # many conflicting packages are listed five at a time
+        @test Base.Precompilation.format_names_list(["A"]) == "A"
+        @test Base.Precompilation.format_names_list(["A", "B"]) == "A and B"
+        @test Base.Precompilation.format_names_list(["A", "B", "C", "D", "E", "F", "G"]) == "A, B, C, D, E, and 2 more"
+        @test endswith(Base.Precompilation.loaded_conflicts_message(["A"], false; ongoing=true, cancelable=false, default_env=true),
+                       "  To use the manifest version instead, restart julia.")
+        @test Base.Precompilation.loaded_conflicts_message(["A", "B"], false; ongoing=false, cancelable=true, default_env=false) ==
+            "  A and B are loaded at different versions than in the manifest, so their dependents were precompiled.\n" *
+            "  Mixing versions may violate compat requirements and cause unexpected errors.\n" *
+            "  To use the manifest versions instead, restart julia with `--project` set."
+        @test Base.Precompilation.env_display_name(joinpath(DEPOT_PATH[1], "environments", "v1.14")) == "@v1.14"
+        @test Base.Precompilation.env_display_name(new_project_path) == Base.contractuser(new_project_path)
+
+        # When the manifest moves a loaded package to another version, as an update in the
+        # REPL does, loading a dependent builds only the dependent, against the loaded version.
+        mkdepottempdir() do depot
+            same_project_path = joinpath(dir, "same_project")
+            mkpath(same_project_path)
+            for file in ("Project.toml", "Manifest.toml")
+                cp(joinpath(old_project_path, file), joinpath(same_project_path, file))
+            end
+            script = """
+                using LoadedDep
+                for file in ("Project.toml", "Manifest.toml")
+                    cp(joinpath($(repr(new_project_path)), file), joinpath($(repr(same_project_path)), file); force=true)
+                end
+                using DepUser
+                println(stderr, "DepUser defined: ", isdefined(Main, :DepUser))
+                exit()
+                """
+            output = loading_output(script; project=same_project_path, depot)
+            @test occursin("LoadedDep is loaded at a different version", output)
+            @test count("✓ LoadedDep", output) == 1
+            @test !occursin("missing from the cache", output)
+            @test !occursin("failed", output)
+            @test occursin("DepUser defined: true", output)
+        end
+    end end
+end
+
+# Test that precompilepkgs recompiles a cached dependent of a loaded package when the
+# environment now resolves a different version of that package. The dependent's cache is
+# built against the loaded version, so a check that trusts loaded modules considers it fresh.
+@testset "precompilepkgs recompiles dependents of a loaded package at another version" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        for (dirname, marker, version) in (("LoadedDepOld", 1, "0.1.0"), ("LoadedDepNew", 2, "0.2.0"))
+            path = joinpath(dir, "dev", dirname)
+            mkpath(joinpath(path, "src"))
+            write(joinpath(path, "Project.toml"),
+                  """
+                  name = "LoadedDep"
+                  uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+                  version = "$version"
+                  """)
+            write(joinpath(path, "src", "LoadedDep.jl"),
+                  """
+                  module LoadedDep
+                  const _v = $marker
+                  end
+                  """)
+        end
+        depuser_path = joinpath(dir, "dev", "DepUser")
+        mkpath(joinpath(depuser_path, "src"))
+        write(joinpath(depuser_path, "Project.toml"),
+              """
+              name = "DepUser"
+              uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [deps]
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(depuser_path, "src", "DepUser.jl"),
+              """
+              module DepUser
+              import LoadedDep
+              end
+              """)
+        for (project, loaded_dep_dir, version) in (("old_project", "LoadedDepOld", "0.1.0"), ("new_project", "LoadedDepNew", "0.2.0"))
+            project_path = joinpath(dir, project)
+            mkpath(project_path)
+            write(joinpath(project_path, "Project.toml"),
+                  """
+                  [deps]
+                  DepUser = "b2b2b2b2-0000-0000-0000-000000000002"
+                  LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+                  """)
+            write(joinpath(project_path, "Manifest.toml"),
+                  """
+                  manifest_format = "2.0"
+
+                  [[deps.DepUser]]
+                  deps = ["LoadedDep"]
+                  path = "../dev/DepUser/"
+                  uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+                  version = "0.1.0"
+
+                  [[deps.LoadedDep]]
+                  path = "../dev/$loaded_dep_dir/"
+                  uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+                  version = "$version"
+                  """)
+        end
+        old_project_path = joinpath(dir, "old_project")
+        new_project_path = joinpath(dir, "new_project")
+
+        # Cache DepUser against the old LoadedDep
+        @test success(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(old_project_path) -e 'using DepUser'`,
+                             "JULIA_DEPOT_PATH" => depot))
+
+        # Load the old LoadedDep, switch to the project that resolves the new one, and precompile.
+        # DepUser has to be rebuilt against the new LoadedDep although the loaded one still matches
+        # its existing cache. Report which LoadedDep build the freshest DepUser cache requires.
+        script = """
+            using LoadedDep
+            Base.set_active_project($(repr(new_project_path)))
+            Base.Precompilation.precompilepkgs(; fancyprint=false)
+            dep = Base.identify_package("LoadedDep")
+            depuser = Base.identify_package("DepUser")
+            new_dep_build, _ = Base.parse_cache_buildid(Base.compilecache_freshest_path(dep; ignore_loaded=true))
+            depuser_cache = Base.compilecache_freshest_path(depuser; ignore_loaded=true)
+            io = open(depuser_cache)
+            Base.isvalid_cache_header(io)
+            required_modules = Base.parse_cache_header(io, depuser_cache)[3]
+            close(io)
+            required_dep_build = only(build_id for (pkg, build_id) in required_modules if pkg == dep)
+            println("DEPUSER_REBUILT_AGAINST_NEW_DEP=", required_dep_build == new_dep_build)
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(old_project_path) -e $script`,
+                     "JULIA_DEPOT_PATH" => depot)
+        logfile = joinpath(dir, "precompile.log")
+        proc = run(pipeline(ignorestatus(cmd), stdout=logfile, stderr=logfile))
+        output = read(logfile, String)
+        @test success(proc) || (println(output); false)
+        @test occursin("DEPUSER_REBUILT_AGAINST_NEW_DEP=true", output)
     end end
 end
 
@@ -3407,4 +4738,1065 @@ precompile_test_harness("Type{Union{}} inline field") do dir
     @test (@eval $TypeBottomField.X.t) === Union{}
 end
 
+# A package image activates all its methods in one world, so the dispatch cache entries
+# they shadow are invalidated in one pass afterwards. When several of its methods shadow
+# the same specialization, that pass must check each of their signatures.
+precompile_test_harness("dispatch cache entries shadowed by one image") do dir
+    write(joinpath(dir, "ShadowedBase.jl"),
+          """
+          module ShadowedBase
+              # the cache entries for other arguments are guarded against AbstractString
+              j(@nospecialize(x)) = :old
+              j(::AbstractString) = :str
+              k(@nospecialize(x)) = :old
+              k(::AbstractString) = :str
+          end
+          """)
+    write(joinpath(dir, "ShadowingMethods.jl"),
+          """
+          module ShadowingMethods
+              using ShadowedBase
+              # the guard covers one of the two new methods; the other must still
+              # invalidate, whichever of them is checked first
+              ShadowedBase.j(::Int) = :new_int
+              ShadowedBase.j(::String) = :new_string
+              ShadowedBase.k(::String) = :new_string
+              ShadowedBase.k(::Int) = :new_int
+          end
+          """)
+    @test Base.compilecache(Base.PkgId("ShadowedBase")) isa Tuple
+    @test Base.compilecache(Base.PkgId("ShadowingMethods")) isa Tuple
+    @eval using ShadowedBase
+    j, k = @eval (ShadowedBase.j, ShadowedBase.k)
+    # fill the dispatch caches
+    for fn in (j, k)
+        @test Base.invokelatest(fn, 1) === :old
+        @test Base.invokelatest(fn, :s) === :old
+        @test Base.invokelatest(fn, "s") === :str
+    end
+    @eval using ShadowingMethods
+    for fn in (j, k)
+        @test Base.invokelatest(fn, 1) === :new_int
+        @test Base.invokelatest(fn, :s) === :old
+        @test Base.invokelatest(fn, "s") === :new_string
+    end
+end
+
+# Cache rejection reasons and how they are reported when loading triggers precompilation:
+# caches left behind by another version of Julia collapse into one generic message, while
+# actionable reasons (e.g. changed source) are reported by name without version noise.
+precompile_test_harness("cache rejection reasons") do dir
+    pkgfile = joinpath(dir, "RejectReasons.jl")
+    write(pkgfile,
+          """
+          module RejectReasons
+          end
+          """)
+    cachefile, _ = Base.compilecache(Base.PkgId("RejectReasons"))
+
+    # fresh cache: nothing recorded, nothing reported
+    reasons = Dict{Symbol,Int}()
+    @test Base.stale_cachefile(pkgfile, cachefile; reasons) !== true
+    @test isempty(reasons)
+    @test Base.list_reasons(reasons) == ""
+
+    # a cache left in the depot after updating Julia fails the header check, which
+    # embeds the Julia version and commit (simulated here with junk bytes); that
+    # alone reports only the generic version message
+    oldcache = joinpath(dirname(cachefile), "RejectReasons_oldversion.ji")
+    write(oldcache, fill(0xff, 1024))
+    reasons = Dict{Symbol,Int}()
+    @test Base.stale_cachefile(pkgfile, oldcache; reasons) === true
+    @test reasons == Dict(:incompatible_header => 1)
+    @test Base.list_reasons(reasons) == " (no compatible cache for this version of Julia)"
+
+    # a cache for different flags is rejected before the rest of its header is read,
+    # so this works even for a cache file that ends right after the flags
+    if Base.CacheFlags().use_pkgimages # without pkgimages, the flags are not checked
+        flagscache = joinpath(dirname(cachefile), "RejectReasons_flagsonly.ji")
+        header = open(cachefile) do io
+            Base.isvalid_cache_header(io)
+            nbytes = position(io) + 2
+            read(seekstart(io), nbytes)
+        end
+        write(flagscache, header)
+        cf = Base.CacheFlags()
+        requested_flags = Base.CacheFlags(cf; check_bounds = cf.check_bounds == 1 ? 2 : 1)
+        reasons = Dict{Symbol,Int}()
+        @test Base.stale_cachefile(pkgfile, flagscache; reasons, requested_flags) === true
+        @test reasons == Dict(:flags_mismatch => 1)
+    end
+
+    # changing the source makes the compatible cache stale for an actionable reason
+    write(pkgfile,
+          """
+          module RejectReasons
+          f() = 1
+          end
+          """)
+    reasons = Dict{Symbol,Int}()
+    @test Base.stale_cachefile(pkgfile, cachefile; reasons) === true
+    @test length(reasons) == 1
+    @test only(keys(reasons)) in (:mtime_changed, :fsize_changed, :content_changed)
+    msg = Base.list_reasons(reasons)
+    @test startswith(msg, " (cache not reused: ")
+
+    # actionable reasons are reported over rejections of other-version caches
+    Base.record_reason(reasons, :incompatible_header)
+    @test Base.list_reasons(reasons) == msg
+
+    # a dependency loaded at a different version is reported by name
+    @test Base.list_reasons(Dict(Symbol("dep_loaded_incompatible:Foo") => 1)) ==
+        " (cache not reused: Foo is already loaded at a different version)"
+
+    # rejections of caches that weren't the ones searched for are never reported
+    @test Base.list_reasons(Dict(:buildid_mismatch => 2)) == ""
+    @test Base.list_reasons(nothing) == ""
+
+    # the full counted list, including internal reasons, is available at debug level
+    @test_logs (:debug, r"Caches not reused: 2 for different build identifier") min_level=Logging.Debug match_mode=:any Base.list_reasons(Dict(:buildid_mismatch => 2))
+end
+
+# `include(mapexpr, …)` records its non-identity `mapexpr` into a per-root-module side-table
+# (`Base.include_mapexprs`) that is serialized into the package image, so the exact transform
+# used at precompile time is recoverable after load (used by revision tools such as Revise).
+precompile_test_harness("include mapexpr persistence") do dir
+    Pkg = :IncludeMapexpr9f2c
+    write(joinpath(dir, "plain.jl"), "p = 1\n")
+    write(joinpath(dir, "named.jl"), "n = 2\n")
+    write(joinpath(dir, "closure.jl"), "c = 2\n")
+    write(joinpath(dir, "submod.jl"), "s = 2\n")
+    write(joinpath(dir, "$Pkg.jl"),
+          """
+          module $Pkg
+              # named-function transform: bump an integer rhs by 40
+              bump40(ex) = (Meta.isexpr(ex, :(=)) && ex.args[2] isa Int && (ex.args[2] = ex.args[2] + 40); ex)
+              # closure capturing state computed at load time -- the case that could NOT be
+              # reconstructed by re-parsing, only by serializing the actual object
+              const OFFSET = 40
+              addoffset = let off = OFFSET
+                  ex -> (Meta.isexpr(ex, :(=)) && ex.args[2] isa Int && (ex.args[2] = ex.args[2] + off); ex)
+              end
+
+              include("plain.jl")               # identity: must NOT be recorded
+              include(bump40, "named.jl")       # include(mapexpr, path)
+              include(addoffset, "closure.jl")  # state-capturing closure
+              module Sub end
+              Base.include(bump40, Sub, "submod.jl")  # include(mapexpr, mod, path)
+          end
+          """)
+    @test Base.compilecache(Base.PkgId(string(Pkg))) isa Tuple
+    @eval using $Pkg
+    M = @eval $Pkg
+
+    # The transforms actually executed (load-time behavior), via the package's own includes
+    @test M.p == 1                # untransformed
+    @test M.n == 42               # bump40
+    @test M.c == 42               # addoffset (closure)
+    @test M.Sub.s == 42           # include(mapexpr, mod, path)
+
+    # A package with only identity includes records nothing (the common, zero-allocation case).
+    NoMx = :IncludeMapexprNone9f2c
+    write(joinpath(dir, "$NoMx.jl"), "module $NoMx\n    include(\"plain.jl\")\nend\n")
+    @test Base.compilecache(Base.PkgId(string(NoMx))) isa Tuple
+    @eval using $NoMx
+    @test Base.include_mapexprs(@eval $NoMx) === nothing
+
+    # The side-table survived precompilation and is keyed by (including_module, abspath)
+    mapexprs = Base.include_mapexprs(M)
+    @test mapexprs isa Dict{Tuple{Module,String},Any}
+    plainpath   = normpath(joinpath(dir, "plain.jl"))
+    namedpath   = normpath(joinpath(dir, "named.jl"))
+    closurepath = normpath(joinpath(dir, "closure.jl"))
+    submodpath  = normpath(joinpath(dir, "submod.jl"))
+    @test !haskey(mapexprs, (M, plainpath))           # identity is never recorded
+    @test haskey(mapexprs, (M, namedpath))
+    @test haskey(mapexprs, (M, closurepath))
+    @test haskey(mapexprs, (M.Sub, submodpath))       # keyed by the including (sub)module
+
+    # The recorded objects are the actual functions, captured state and all: applying the
+    # deserialized closure reproduces the +OFFSET transform. `invokelatest` because the package
+    # (hence these methods) was loaded in this same world.
+    @test Base.invokelatest(mapexprs[(M, namedpath)], Expr(:(=), :z, 2)) == Expr(:(=), :z, 42)
+    @test Base.invokelatest(mapexprs[(M, closurepath)], Expr(:(=), :z, 2)) == Expr(:(=), :z, 42)
+
+    # Exactly the three non-identity includes were recorded (the identity one was not).
+    @test length(mapexprs) == 3
+end
+
+precompile_test_harness("cancellation source relinking") do dir
+    write(joinpath(dir, "CancelRelink.jl"),
+          """
+          module CancelRelink
+              using Base: CancellationToken, CancellationTokenSource
+              const ROOT = CancellationTokenSource()
+              const LEFT = CancellationTokenSource(CancellationToken(ROOT))
+              const RIGHT = CancellationTokenSource(CancellationToken(ROOT))
+              const CHILD = CancellationTokenSource(CancellationToken(LEFT), CancellationToken(RIGHT))
+          end
+          """)
+    Base.compilecache(Base.PkgId("CancelRelink"))
+    @eval using CancelRelink
+    invokelatest() do
+        # the sources were serialized into the package image with their weak
+        # child lists dropped; loading must have relinked them under their
+        # parents so that cancellation still propagates through the diamond
+        @test CancelRelink.CHILD.nparents == 2
+        @test Base._cancel_parent(CancelRelink.CHILD, 1) === CancelRelink.LEFT
+        @test !Base.iscancelled(CancelRelink.CHILD)
+        Base.cancel!(CancelRelink.ROOT)
+        @test Base.iscancelled(CancelRelink.LEFT)
+        @test Base.iscancelled(CancelRelink.RIGHT)
+        @test Base.iscancelled(CancelRelink.CHILD)
+    end
+end
+
+precompile_test_harness("cancellation relink under cancelled external parent") do dir
+    write(joinpath(dir, "CancelExtA.jl"),
+          """
+          module CancelExtA
+              using Base: CancellationTokenSource
+              const A_ROOT = CancellationTokenSource()
+          end
+          """)
+    write(joinpath(dir, "CancelExtB.jl"),
+          """
+          module CancelExtB
+              using CancelExtA
+              using Base: CancellationToken, CancellationTokenSource
+              const B_MID = CancellationTokenSource(CancellationToken(CancelExtA.A_ROOT))
+              const B_CHILD = CancellationTokenSource(CancellationToken(B_MID))
+              const B_GRAND = CancellationTokenSource(CancellationToken(B_CHILD))
+              # a cancel! interrupted mid-walk (state raised, children not
+              # visited) captured in the image: load-time propagation must
+              # not treat the already-raised state as having been walked
+              Base._raise_state!(B_CHILD, 0x01)
+          end
+          """)
+    Base.compilecache(Base.PkgId("CancelExtA"))
+    Base.compilecache(Base.PkgId("CancelExtB"))
+    @eval using CancelExtA
+    invokelatest() do
+        Base.cancel!(CancelExtA.A_ROOT)
+    end
+    @eval using CancelExtB
+    invokelatest() do
+        # CancelExtB's sources re-attached at load time under the already-
+        # cancelled A_ROOT: B_MID is born cancelled during its relink, and
+        # that state must reach every descendant regardless of the order in
+        # which the image's fixups relinked them - including through
+        # B_CHILD, whose already-cancelled (but never walked) state must
+        # not prune the propagation
+        @test Base.iscancelled(CancelExtB.B_MID)
+        @test Base.iscancelled(CancelExtB.B_CHILD)
+        @test Base.iscancelled(CancelExtB.B_GRAND)
+    end
+end
+
+precompile_test_harness("pkgimage type cache dedup") do dir
+    # Check deduplication when a type precedes its supertype in the image.
+    # The unused IFD binding preserves that order.
+    write(joinpath(dir, "DedupColors.jl"),
+          """
+          module DedupColors
+              export CAbstractGray, CGray
+              abstract type CAbstractGray{T} end
+              struct CGray{T} <: CAbstractGray{T}
+                  val::T
+              end
+              Base.adjoint(c::CAbstractGray) = c
+          end
+          """)
+    write(joinpath(dir, "DedupTrigger.jl"),
+          """
+          module DedupTrigger
+              using DedupColors
+
+              const IFD = Dict{UInt16, Any}
+
+              function readdata!(target::AbstractArray)
+                  fill!(reinterpret(UInt8, view(target, 1:length(target))), 0x00)
+              end
+
+              function load()
+                  ifd = IFD()
+                  ifd[0x0106] = UInt16(1)
+                  type = Int(ifd[0x0106]) == 2 ? Ref : CGray
+                  pixeltype = type{UInt8}
+                  cache = Array{pixeltype}(undef, 2, 2)
+                  readdata!(cache)
+                  Matrix(cache')
+              end
+
+              load()
+          end
+          """)
+    Base.compilecache(Base.PkgId("DedupColors"))
+    Base.compilecache(Base.PkgId("DedupTrigger"))
+    @eval using DedupColors
+    M = invokelatest() do
+        Memory{DedupColors.CGray{UInt8}}
+    end
+    @eval using DedupTrigger
+    invokelatest() do
+        CGrayU8 = DedupColors.CGray{UInt8}
+        for T in (Memory{CGrayU8}, DenseVector{CGrayU8})
+            tn = T.name
+            n = 0
+            for t in tn.cache
+                if t isa DataType && t.name === tn &&
+                        length(t.parameters) == length(T.parameters) &&
+                        all(i -> t.parameters[i] === T.parameters[i], eachindex(T.parameters))
+                    n += 1
+                end
+            end
+            @test n == 1
+        end
+        @test M === Memory{DedupColors.CGray{UInt8}}
+    end
+end
+
+# Interactive precompile output has to keep its colors: a TTY's implied `:color` must survive
+# the driver's conversion of a raw stream to `IOContext{IO}` (#62970 dropped it). Run a real
+# precompile in a child whose stderr is a pty and look for the color escapes in its output.
+if !Sys.iswindows() # child-on-fake-pty tests are skipped on Windows (see misc.jl)
+    @testset "precompile output to a TTY is colored" begin
+        isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+        mkdepottempdir() do depot
+            pkg_path = joinpath(depot, "dev", "ColorTTY")
+            mkpath(joinpath(pkg_path, "src"))
+            write(joinpath(pkg_path, "src", "ColorTTY.jl"), "module ColorTTY end\n")
+            write(joinpath(pkg_path, "Project.toml"),
+                """
+                name = "ColorTTY"
+                uuid = "c010f000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """)
+            write(joinpath(pkg_path, "Manifest.toml"),
+                """
+                julia_version = "$(VERSION.major).$(VERSION.minor).0"
+                manifest_format = "2.0"
+
+                [[deps.ColorTTY]]
+                path = "."
+                uuid = "c010f000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """)
+            # `stderr` is passed through untouched so the driver has to wrap the raw TTY itself
+            cmd = addenv(`$(Base.julia_cmd()) --color=yes --startup-file=no --project=$pkg_path -e 'Base.Precompilation.precompilepkgs(["ColorTTY"]; fancyprint=false)'`,
+                         "JULIA_DEPOT_PATH" => depot)
+            pts, ptm = Main.FakePTYs.open_fake_pty()
+            p = run(cmd, devnull, pts, pts; wait=false)
+            Base.close_stdio(pts)
+            output = IOBuffer()
+            try
+                while !eof(ptm)
+                    write(output, readavailable(ptm))
+                end
+            catch # EIO once the child has closed its end of the pty
+            end
+            wait(p)
+            close(ptm)
+            out = String(take!(output))
+            @test success(p)
+            @test occursin("ColorTTY", out)
+            @test occursin("\e[32m", out) # the green ✓ of the precompiled package
+        end
+    end
+end
+
+# A package loaded in this session whose cache file has since been evicted (#63187):
+# a dependent or extension precompiled afterwards cannot be built against the loaded
+# build id, so it must be loaded from source in this session rather than fail.
+# Windows keeps a loaded package's .ji open, so the eviction cannot be staged there.
+@testset "loaded dependency with evicted cache" begin
+    Sys.iswindows() && return
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        mkpath(project_path)
+        parent_uuid = "c1000000-0000-0000-0000-000000000001"
+        trigger_uuid = "c2000000-0000-0000-0000-000000000002"
+        dependent_uuid = "c3000000-0000-0000-0000-000000000003"
+
+        parent_dir = joinpath(depot, "dev", "EvictParent")
+        mkpath(joinpath(parent_dir, "src"))
+        mkpath(joinpath(parent_dir, "ext"))
+        write(joinpath(parent_dir, "Project.toml"), """
+            name = "EvictParent"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+
+            [weakdeps]
+            EvictTrigger = "$trigger_uuid"
+
+            [extensions]
+            EvictParentTriggerExt = "EvictTrigger"
+            """)
+        write(joinpath(parent_dir, "src", "EvictParent.jl"), """
+            module EvictParent
+            f(x) = error("extension not loaded")
+            end
+            """)
+        write(joinpath(parent_dir, "ext", "EvictParentTriggerExt.jl"), """
+            module EvictParentTriggerExt
+            using EvictParent, EvictTrigger
+            EvictParent.f(x::Int) = "extension loaded"
+            end
+            """)
+
+        trigger_dir = joinpath(depot, "dev", "EvictTrigger")
+        mkpath(joinpath(trigger_dir, "src"))
+        write(joinpath(trigger_dir, "Project.toml"), """
+            name = "EvictTrigger"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(trigger_dir, "src", "EvictTrigger.jl"), """
+            module EvictTrigger
+            end
+            """)
+
+        dependent_dir = joinpath(depot, "dev", "EvictDependent")
+        mkpath(joinpath(dependent_dir, "src"))
+        write(joinpath(dependent_dir, "Project.toml"), """
+            name = "EvictDependent"
+            uuid = "$dependent_uuid"
+            version = "0.1.0"
+
+            [deps]
+            EvictParent = "$parent_uuid"
+            """)
+        write(joinpath(dependent_dir, "src", "EvictDependent.jl"), """
+            module EvictDependent
+            using EvictParent
+            const parent = EvictParent
+            end
+            """)
+
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            EvictParent = "$parent_uuid"
+            EvictTrigger = "$trigger_uuid"
+            EvictDependent = "$dependent_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.EvictParent]]
+            path = "../dev/EvictParent/"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+
+            [deps.EvictParent.weakdeps]
+            EvictTrigger = "$trigger_uuid"
+
+            [deps.EvictParent.extensions]
+            EvictParentTriggerExt = "EvictTrigger"
+
+            [[deps.EvictTrigger]]
+            path = "../dev/EvictTrigger/"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+
+            [[deps.EvictDependent]]
+            deps = ["EvictParent"]
+            path = "../dev/EvictDependent/"
+            uuid = "$dependent_uuid"
+            version = "0.1.0"
+            """)
+
+        julia = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project_path`,
+                       "JULIA_DEPOT_PATH" => depot, "JULIA_LOAD_PATH" => "@")
+        run(`$julia -e "using EvictParent, EvictTrigger, EvictDependent"`)
+
+        # Load the parent, then evict every cache file, as a concurrent process compiling
+        # the same packages for other flags under JULIA_MAX_NUM_PRECOMPILE_FILES would.
+        # Only the .ji files go; a missing .ji is enough for a cache miss. The dependent
+        # and the extension then have to be recompiled against a parent whose loaded build
+        # id is no longer on disk.
+        preamble = """
+            using EvictParent
+            const parent = EvictParent
+            for (root, _, files) in walkdir(joinpath(DEPOT_PATH[1], "compiled")), file in files
+                endswith(file, ".ji") && rm(joinpath(root, file))
+            end
+            """
+        function run_after_eviction(name, body)
+            outfile = joinpath(depot, "evict_$(name)_out.txt")
+            errfile = joinpath(depot, "evict_$(name)_err.txt")
+            proc = run(pipeline(ignorestatus(`$julia -e $(preamble * body)`); stdout=outfile, stderr=errfile))
+            out = read(outfile, String)
+            err = read(errfile, String)
+            if !success(proc) || !occursin("evicted cache ok", out)
+                println(stderr, "evicted-cache $name run failed\nstdout:\n", out, "stderr:\n", err)
+            end
+            @test success(proc)
+            @test occursin("evicted cache ok", out)
+            # the strict worker must not fail outright, and the session must not load a
+            # second copy of the parent from the recompiled cache
+            @test !occursin("not available with flags", err)
+            @test !occursin("Replacing module", err)
+            @test !occursin("failed to create a usable precompiled cache file", err)
+            @test !occursin("Error during loading of extension", err)
+        end
+        run_after_eviction("dependent", """
+            using EvictDependent
+            EvictDependent.parent === parent || error("EvictDependent is bound to a different EvictParent")
+            Base.loaded_modules[Base.PkgId(parent)] === parent || error("EvictParent was replaced")
+            println("evicted cache ok")
+            """)
+        run_after_eviction("extension", """
+            using EvictTrigger
+            EvictParent.f(1) == "extension loaded" || error("extension not loaded")
+            Base.loaded_modules[Base.PkgId(parent)] === parent || error("EvictParent was replaced")
+            println("evicted cache ok")
+            """)
+    end
+end
+
+# Issue #63268: containers sharing a depot can hold different environments at the same
+# project path, so the cache file name also carries the manifest's `environment_id`
+# (the project uuid, or one Pkg generates). Loading reads file contents, so the name only
+# decides which existing file a compile overwrites.
+@testset "cache file names carry the manifest environment_id" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        dep_uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+        top_uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+        for (dirname, marker, version) in (("DepOld", 1, "0.1.0"), ("DepNew", 2, "0.2.0"))
+            path = joinpath(dir, "dev", dirname)
+            mkpath(joinpath(path, "src"))
+            write(joinpath(path, "Project.toml"),
+                  """
+                  name = "Dep"
+                  uuid = "$dep_uuid"
+                  version = "$version"
+                  """)
+            write(joinpath(path, "src", "Dep.jl"),
+                  """
+                  module Dep
+                  const _v = $marker
+                  end
+                  """)
+        end
+        top_path = joinpath(dir, "dev", "Top")
+        mkpath(joinpath(top_path, "src"))
+        write(joinpath(top_path, "Project.toml"),
+              """
+              name = "Top"
+              uuid = "$top_uuid"
+              version = "0.1.0"
+
+              [deps]
+              Dep = "$dep_uuid"
+              """)
+        function write_top(edit)
+            write(joinpath(top_path, "src", "Top.jl"),
+                  """
+                  module Top
+                  using Dep
+                  const _edit = $edit
+                  end
+                  """)
+        end
+        write_top(0)
+        project_path = joinpath(dir, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"),
+              """
+              [deps]
+              Top = "$top_uuid"
+              """)
+        # the same project path resolving one version of Dep or the other, as two
+        # containers with their projects mounted at the same path would
+        function use_dep(dirname, version, environment_id)
+            id_line = environment_id === nothing ? "" : "environment_id = \"$environment_id\""
+            write(joinpath(project_path, "Manifest.toml"),
+                  """
+                  $id_line
+                  manifest_format = "2.0"
+
+                  [[deps.Dep]]
+                  path = "../dev/$dirname/"
+                  uuid = "$dep_uuid"
+                  version = "$version"
+
+                  [[deps.Top]]
+                  deps = ["Dep"]
+                  path = "../dev/Top/"
+                  uuid = "$top_uuid"
+                  version = "0.1.0"
+                  """)
+            # A same-size rewrite can keep the same mtime on Windows, so this process's
+            # TOML cache would still return the old id
+            @lock Base.require_lock delete!(Base.TOML_CACHE.d, joinpath(project_path, "Manifest.toml"))
+        end
+        script = """
+            top = Base.identify_package("Top")
+            println("PRECOMPILED=", Base.isprecompiled(top))
+            using Top
+            println("DEP_VERSION=", Top.Dep._v)
+            """
+        function run_top()
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(project_path) -e $script`,
+                         "JULIA_DEPOT_PATH" => depot)
+            logfile = joinpath(dir, "run.log")
+            proc = run(pipeline(ignorestatus(cmd), stdout=logfile, stderr=logfile))
+            output = read(logfile, String)
+            @test success(proc) || (println(output); false)
+            return output
+        end
+        compiled = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)")
+        cachefiles(name) = filter(endswith(".ji"), readdir(joinpath(compiled, name)))
+        id_a = "c3c3c3c3-0000-0000-0000-00000000000a"
+        id_b = "c3c3c3c3-0000-0000-0000-00000000000b"
+
+        # Incompatible versions written under different ids coexist, dependents included,
+        # and alternating between them reuses the caches
+        use_dep("DepOld", "0.1.0", id_a)
+        output = run_top()
+        @test occursin("PRECOMPILED=false", output)
+        @test occursin("DEP_VERSION=1", output)
+        @test length(cachefiles("Dep")) == 1
+        @test length(cachefiles("Top")) == 1
+        use_dep("DepNew", "0.2.0", id_b)
+        output = run_top()
+        @test occursin("PRECOMPILED=false", output)
+        @test occursin("DEP_VERSION=2", output)
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+        use_dep("DepOld", "0.1.0", id_a)
+        output = run_top()
+        @test occursin("PRECOMPILED=true", output)
+        @test occursin("DEP_VERSION=1", output)
+        use_dep("DepNew", "0.2.0", id_b)
+        output = run_top()
+        @test occursin("PRECOMPILED=true", output)
+        @test occursin("DEP_VERSION=2", output)
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+
+        # A compatible cache is reused under any other id, or none
+        use_dep("DepNew", "0.2.0", "c3c3c3c3-0000-0000-0000-00000000000c")
+        output = run_top()
+        @test occursin("PRECOMPILED=true", output)
+        @test occursin("DEP_VERSION=2", output)
+        use_dep("DepNew", "0.2.0", nothing)
+        output = run_top()
+        @test occursin("PRECOMPILED=true", output)
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+
+        # A rebuild under the same id and project replaces the same file
+        use_dep("DepNew", "0.2.0", id_b)
+        top_files = cachefiles("Top")
+        write_top(1)
+        output = run_top()
+        @test occursin("PRECOMPILED=false", output)
+        @test cachefiles("Top") == top_files
+
+        # Without an id the name only depends on the project path, as before
+        pkg = Base.PkgId(Base.UUID(dep_uuid), "Dep")
+        project_file = joinpath(project_path, "Project.toml")
+        use_dep("DepNew", "0.2.0", nothing)
+        @test Base.project_environment_id(project_file) == ""
+        no_id = Base.compilecache_path(pkg, ""; project=project_file)
+        @test no_id == Base.compilecache_path(pkg, ""; project=project_file, environment_id="")
+        use_dep("DepNew", "0.2.0", id_a)
+        @test Base.project_environment_id(project_file) == id_a
+        with_a = Base.compilecache_path(pkg, ""; project=project_file)
+        @test with_a == Base.compilecache_path(pkg, ""; project=project_file, environment_id=id_a)
+        @test with_a != no_id
+        use_dep("DepNew", "0.2.0", id_b)
+        @test Base.compilecache_path(pkg, ""; project=project_file) != with_a
+        @test Base.project_environment_id("") == ""
+        @test Base.project_environment_id(joinpath(dir, "missing", "Project.toml")) == ""
+        # the pidfile path ignores the id so locking stays shared
+        @test Base.compilecache_pidfile_path(pkg) == Base.compilecache_path(pkg, ""; project="", environment_id="") * ".pidfile"
+    end end
+end
+
+precompile_test_harness("JIT names of image methods") do dir
+    # When JIT-compiled code calls into a package image, the callee's symbol is
+    # named after its method plus a counter. These names must not collide, e.g.
+    # the 21st `jitname` and the first `jitname2` used to both end in `jitname20`.
+    write(joinpath(dir, "JITNames.jl"),
+          """
+          module JITNames
+              @noinline jitname(::Val{N}, x::Int) where {N} = x + N
+              @noinline jitname2(::Val{N}, x::Int) where {N} = -x
+              for i in 0:30
+                  precompile(jitname, (Val{i}, Int))
+              end
+              precompile(jitname2, (Val{0}, Int))
+          end
+          """)
+    Base.compilecache(Base.PkgId("JITNames"))
+    @eval using JITNames
+    @test invokelatest(@eval(x -> JITNames.jitname2(Val(0), x)), 5) == -5
+    for i in 0:30
+        @test invokelatest(@eval(x -> JITNames.jitname(Val($i), x)), 5) == 5 + i
+    end
+end
+
+# A worker whose parent gets killed should not keep precompiling as an orphan
+@testset "precompilation worker exits with its parent" begin
+    julia = `$(Base.julia_cmd()) --startup-file=no`
+    # the request is not passed on to the worker's own children
+    @test readchomp(addenv(`$julia -e 'print(get(ENV, "JULIA_EXIT_WITH_PARENT_PID", "unset"))'`,
+                           "JULIA_EXIT_WITH_PARENT_PID" => getpid())) == "unset"
+    @test success(addenv(`$julia -e 'exit()'`, "JULIA_EXIT_WITH_PARENT_PID" => "invalid"))
+    if Sys.islinux() || Sys.isfreebsd() || Sys.isapple()
+        # the worker exits immediately if its parent isn't the expected one (anymore)
+        @test !success(addenv(`$julia -e 'exit()'`, "JULIA_EXIT_WITH_PARENT_PID" => typemax(Cint)))
+
+        dir = mkdepottempdir()
+        pidfile = joinpath(dir, "worker.pid")
+        # the worker connects to us, and that connection only closes once it
+        # has exited (regardless of whether its new parent reaps it)
+        server = listen(joinpath(dir, "worker.sock"))
+        write(joinpath(dir, "Orphaned.jl"), """
+            module Orphaned
+            using Sockets
+            let conn = connect($(repr(joinpath(dir, "worker.sock"))))
+                write($(repr(pidfile)) * ".tmp", string(getpid()))
+                mv($(repr(pidfile)) * ".tmp", $(repr(pidfile)))
+                # precompilation that doesn't yield, and would outlast the test
+                t = time(); while time() - t < 300; end
+                close(conn)
+            end
+            end
+            """)
+        cmd = addenv(`$julia -e 'using Orphaned'`,
+                     "JULIA_LOAD_PATH" => "$dir:@stdlib", "JULIA_DEPOT_PATH" => "$dir:")
+        accepted = @async accept(server)
+        parent = run(pipeline(cmd; stdout=devnull, stderr=devnull); wait=false)
+        closed = nothing
+        try
+            ready = timedwait(() -> isfile(pidfile) && istaskdone(accepted), 120) === :ok
+            @test ready
+            if ready
+                closed = @async read(fetch(accepted))
+                kill(parent, Base.SIGKILL)
+                wait(parent)
+                @test timedwait(() -> istaskdone(closed), 60) === :ok
+            end
+        finally
+            kill(parent, Base.SIGKILL)
+            wait(parent)
+            if (closed === nothing || !istaskdone(closed)) && isfile(pidfile)
+                worker = parse(Cint, read(pidfile, String))
+                ccall(:kill, Cint, (Cint, Cint), worker, Base.SIGKILL)
+            end
+            close(server)
+        end
+    end
+end
+
+precompile_test_harness("Ambiguities and package-image edge validation") do load_path
+    write(joinpath(load_path, "AmbigEdgeA.jl"),
+        """
+        module AmbigEdgeA
+        pruned(x::Integer, y) = 1
+        seen(x::Integer, y) = 1
+        seen(x, y::AbstractString) = 2
+        added(x::Integer, y) = 1
+        added(x, y::AbstractString) = 2
+        uncovered(x::Integer, y::Integer) = 1
+        reachable(x::Integer, y) = 1
+        reachable(x, y::AbstractString) = 2
+        removed(x::Integer, y) = 1
+        removed(x, y::AbstractString) = 2
+        pair(x::Int8, y) = 1
+        pair(x, y::AbstractString) = 2
+        pair_reachable(x::Int8, y) = 1
+        pair_reachable(x, y::AbstractString) = 2
+        end
+        """)
+    write(joinpath(load_path, "AmbigEdgeB.jl"),
+        """
+        module AmbigEdgeB
+        using AmbigEdgeA
+        pruned(x::Int8, @nospecialize(y)) = AmbigEdgeA.pruned(x, y)
+        seen(x::Int8, @nospecialize(y)) = AmbigEdgeA.seen(x, y)
+        added(x::Int8, @nospecialize(y)) = AmbigEdgeA.added(x, y)
+        uncovered(x::Int8, @nospecialize(y)) = AmbigEdgeA.uncovered(x, y)
+        reachable(x::Int8, @nospecialize(y)) = AmbigEdgeA.reachable(x, y)
+        removed(x::Int8, @nospecialize(y)) = AmbigEdgeA.removed(x, y)
+        pair(@nospecialize(x), @nospecialize(y)) = AmbigEdgeA.pair(x, y)
+        pair_reachable(@nospecialize(x), @nospecialize(y)) = AmbigEdgeA.pair_reachable(x, y)
+        precompile(pruned, (Int8, Any))
+        precompile(seen, (Int8, Any))
+        precompile(added, (Int8, Any))
+        precompile(uncovered, (Int8, Any))
+        precompile(reachable, (Int8, Any))
+        precompile(removed, (Int8, Any))
+        precompile(pair, (Any, Any))
+        precompile(pair_reachable, (Any, Any))
+        end
+        """)
+    Base.compilecache(Base.PkgId("AmbigEdgeB"))
+
+    @eval using AmbigEdgeA
+    # `pruned(x, y::AbstractString)` is fully ambiguous with `pruned(x::Integer, y)` for
+    # `(Int8, AbstractString)`, so it doesn't appear in the `ml_matches` result but should
+    # still invalidate
+    @eval AmbigEdgeA.pruned(x, y::AbstractString) = 2
+    # `seen` does not change
+    @eval AmbigEdgeA.added(x, y::AbstractChar) = 3
+    # ambiguous with each other for `(Int8, String)`
+    @eval AmbigEdgeA.uncovered(x::Union{Int8,Int16}, y::String) = 2
+    @eval AmbigEdgeA.uncovered(x::Union{Int8,Int32}, y::String) = 3
+    # more specific than `reachable(x::Integer, y)` for `(Int8, Int)`, and not ambiguous
+    @eval AmbigEdgeA.reachable(x::Int8, y::Int) = 3
+    invokelatest() do
+        Base.delete_method(which(AmbigEdgeA.removed, (Any, AbstractString)))
+    end
+    # `pair` does not change
+    # more specific than both methods for `(Int8, String)`
+    @eval AmbigEdgeA.pair_reachable(x::Int8, y::String) = 3
+    @eval using AmbigEdgeB
+
+    invokelatest() do
+        B = AmbigEdgeB
+        # the CodeInstance from the image, if it is still valid
+        function image_ci(caller, argtypes...)
+            target = Tuple{typeof(caller), argtypes...}
+            mi = nothing
+            for spec in Base.specializations(only(methods(caller)))
+                spec === nothing && continue
+                if spec.specTypes == target
+                    mi = spec
+                    break
+                end
+            end
+            @test mi !== nothing
+            ci = mi !== nothing && isdefined(mi, :cache) ? mi.cache : nothing
+            while ci !== nothing
+                ci.max_world == typemax(UInt) && return ci
+                ci = isdefined(ci, :next) ? ci.next : nothing
+            end
+            return nothing
+        end
+        # look before the call to each caller, because the call makes a new CodeInstance
+        pruned_ci = image_ci(B.pruned, Int8, Any)
+        seen_ci = image_ci(B.seen, Int8, Any)
+        added_ci = image_ci(B.added, Int8, Any)
+        uncovered_ci = image_ci(B.uncovered, Int8, Any)
+        reachable_ci = image_ci(B.reachable, Int8, Any)
+        removed_ci = image_ci(B.removed, Int8, Any)
+        pair_ci = image_ci(B.pair, Any, Any)
+        pair_reachable_ci = image_ci(B.pair_reachable, Any, Any)
+        # `inferencebarrier` prevents inference of a caller when this closure compiles
+
+        # Fully ambiguous method invalidates a not-possibly-ambiguous call
+        @test pruned_ci === nothing
+        @test_throws MethodError Base.inferencebarrier(B.pruned)(Int8(1), "hi")
+
+        # Ambiguity that inference saw keeps a possibly-ambiguous edge valid:
+        # the ambiguity already existed when the image is built, so the possibly ambiguous edge
+        # should not invalidate
+        @test seen_ci !== nothing
+        @test Base.inferencebarrier(B.seen)(Int8(1), 2) === 1
+        @test_throws MethodError Base.inferencebarrier(B.seen)(Int8(1), "hi")
+
+        # New ambiguity keeps a possibly-ambiguous edge valid
+        @test added_ci !== nothing
+        @test Base.inferencebarrier(B.added)(Int8(1), 2) === 1
+        @test_throws MethodError Base.inferencebarrier(B.added)(Int8(1), "hi")
+        @test_throws MethodError Base.inferencebarrier(B.added)(Int8(1), 'c')
+
+        # Ambiguities exclusively in the "uncovered" region of a dispatch should not cause invalidation
+        # (they already MethodError / dynamic-dispatch, even w/o ambiguity)
+        #
+        # ml_matches is overly-conservative in the presence of an ambiguity, even if it does not overlap
+        # with any valid dispatch and currently reports `has_ambig` (arguably incorrectly) so this test
+        # is broken.
+        @test_broken uncovered_ci !== nothing
+        @test Base.inferencebarrier(B.uncovered)(Int8(1), 2) === 1
+        @test_throws MethodError Base.inferencebarrier(B.uncovered)(Int8(1), "hi")
+
+        # New dispatch-reachable method invalidates a possibly-ambiguous edge
+        @test reachable_ci === nothing
+        @test Base.inferencebarrier(B.reachable)(Int8(1), 2) === 3
+        @test Base.inferencebarrier(B.reachable)(Int8(1), 1.5) === 1
+        @test_throws MethodError Base.inferencebarrier(B.reachable)(Int8(1), "hi")
+
+        # Removed ambiguity keeps a possibly-ambiguous edge valid
+        @test removed_ci !== nothing
+        @test Base.inferencebarrier(B.removed)(Int8(1), "hi") === 1
+        @test Base.inferencebarrier(B.removed)(Int8(1), 2) === 1
+
+        # Possibly-ambiguous edge with two matches:
+        # the edge stays valid while the ambiguity does not change, but a new dispatch-reachable
+        # method invalidates it
+        @test pair_ci !== nothing
+        if pair_ci !== nothing
+            edgelist = collect(Any, pair_ci.edges)
+            idx = findfirst(e -> e isa Int && e == -2, edgelist)
+            @test idx !== nothing
+            if idx !== nothing
+                @test idx > 1 && edgelist[idx-1] isa Core.PossiblyAmbiguous
+                @test edgelist[idx+1] isa Type
+                @test edgelist[idx+2] isa Core.CodeInstance
+                @test edgelist[idx+3] isa Core.CodeInstance
+            end
+            @test count(e -> e isa Core.PossiblyAmbiguous, edgelist) == 1
+        end
+        @test Base.inferencebarrier(B.pair)(Int8(1), 1.5) === 1
+        @test Base.inferencebarrier(B.pair)("a", "b") === 2
+        @test_throws MethodError Base.inferencebarrier(B.pair)(Int8(1), "hi")
+        @test pair_reachable_ci === nothing
+        @test Base.inferencebarrier(B.pair_reachable)(Int8(1), "hi") === 3
+    end
+end
+
+# A .ji paired with the .so of another build is rejected without unloading anything
+# needed later, so the package is recompiled to the same path and loaded from it.
+precompile_test_harness("mismatched package image .so is recompiled") do load_path
+    srcfile = joinpath(load_path, "MismatchedSo.jl")
+    write(srcfile, "module MismatchedSo\nf(x) = x + 1\nend\n")
+    pkg = Base.PkgId("MismatchedSo")
+    Base.compilecache(pkg)
+    cachefile = only(Base.find_all_in_cache_path(pkg))
+    ocachefile = Base.ocachefile_from_cachefile(cachefile)
+    oldso = read(ocachefile)
+    write(srcfile, "module MismatchedSo\nf(x) = x + 2\nend\n")
+    Base.compilecache(pkg)
+    @test only(Base.find_all_in_cache_path(pkg)) == cachefile
+    write(ocachefile, oldso)
+    script = "using MismatchedSo; MismatchedSo.f(1) == 3 && Base.pkgorigins[Base.PkgId(MismatchedSo)].cachepath !== nothing || exit(1)"
+    pathsep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                 "JULIA_DEPOT_PATH" => join(DEPOT_PATH, pathsep),
+                 "JULIA_LOAD_PATH" => join([load_path, "@stdlib"], pathsep))
+    @test success(pipeline(cmd; stdout, stderr))
+    @test read(ocachefile) != oldso
+end
+
+# Loading marks the accepted cache file as recently used, but only in the depot that
+# `compilecache` writes to: other depots may be read-only, shared, or bundled with Julia.
+precompile_test_harness("cache files are only touched in the primary depot") do load_path
+    function set_mtime(path, t)
+        f = Base.Filesystem.open(path, Base.Filesystem.JL_O_WRONLY)
+        try
+            Base.Filesystem.futime(f, t, t)
+        finally
+            close(f)
+        end
+        return mtime(path) # as stored by the filesystem
+    end
+    past = floor(time()) - 3600
+    cachefiles = map(("TouchPrimary", "TouchSecondary")) do name
+        mkpath(joinpath(load_path, name, "src"))
+        write(joinpath(load_path, name, "Project.toml"),
+              "name = \"$name\"\nuuid = \"$(Base.UUID(rand(UInt128)))\"\n")
+        write(joinpath(load_path, name, "src", "$name.jl"), "module $name end")
+        cachefile, _ = Base.compilecache(Base.identify_package(name))
+        # Only a file that was not the first candidate gets touched, so put an
+        # invalid cache file ahead of the real one.
+        decoy = replace(cachefile, r"_[^_]*\.ji$" => "_decoy.ji")
+        write(decoy, "not a cache file")
+        touch(Base.ocachefile_from_cachefile(decoy))
+        return cachefile
+    end
+    primary, secondary = cachefiles
+
+    pkg = Base.identify_package("TouchPrimary")
+    set_mtime(primary, past)
+    @test Base.isprecompiled(pkg)
+    @test mtime(primary) > past
+    set_mtime(primary, past)
+    @eval using TouchPrimary
+    @test Base.pkgorigins[pkg].cachepath == primary
+    @test mtime(primary) > past
+
+    mkdepottempdir() do new_primary_depot
+        pushfirst!(DEPOT_PATH, new_primary_depot)
+        try
+            pkg = Base.identify_package("TouchSecondary")
+            old = set_mtime(secondary, past)
+            @test Base.isprecompiled(pkg)
+            @eval using TouchSecondary
+            @test Base.pkgorigins[pkg].cachepath == secondary
+            @test mtime(secondary) == old
+        finally
+            filter!((≠)(new_primary_depot), DEPOT_PATH)
+        end
+    end
+
+    # not even when the bundled depot comes first
+    bundled_depot = dirname(dirname(Sys.STDLIB))
+    pkg = Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test")
+    pushfirst!(DEPOT_PATH, bundled_depot)
+    try
+        for cachefile in Base.find_all_in_cache_path(pkg)
+            startswith(cachefile, bundled_depot) || continue
+            old = mtime(cachefile)
+            Base.touch_cachefile(pkg, cachefile)
+            @test mtime(cachefile) == old
+        end
+    finally
+        popfirst!(DEPOT_PATH)
+    end
+end
+
+# Issue #63945
+@testset "timing marker after output without trailing newline" begin
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        pkg_path = joinpath(depot, "dev", "NoNewline")
+        mkpath(project_path)
+        mkpath(joinpath(pkg_path, "src"))
+        pkg_uuid = "d4000000-0000-0000-0000-000000000001"
+        write(joinpath(pkg_path, "Project.toml"), """
+            name = "NoNewline"
+            uuid = "$pkg_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(pkg_path, "src", "NoNewline.jl"), """
+            module NoNewline
+            print(stderr, "foo")
+            end
+            """)
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            NoNewline = "$pkg_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.NoNewline]]
+            path = "../dev/NoNewline"
+            uuid = "$pkg_uuid"
+            version = "0.1.0"
+            """)
+
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+            io = IOBuffer()
+            Base.Precompilation.precompilepkgs(; io=IOContext(io, :color => false), fancyprint=false)
+            output = String(take!(io))
+            @test occursin("foo", output)
+            @test !occursin(Base.PRECOMPILE_VERBOSE_TIMING_MARKER, output)
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
+@testset "jl_set_newly_inferred rejects a typed vector" begin
+    @test_throws TypeError ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.CodeInstance[])
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), Any[])
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
+end
+
 finish_precompile_test!()
+if original_num_precompile_tasks === nothing
+    delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")
+else
+    ENV["JULIA_NUM_PRECOMPILE_TASKS"] = original_num_precompile_tasks
+end

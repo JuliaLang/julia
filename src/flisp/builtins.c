@@ -8,8 +8,6 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <ctype.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <errno.h>
 
 #include "flisp.h"
@@ -325,16 +323,6 @@ static value_t fl_path_cwd(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return fl_ctx->T;
 }
 
-static value_t fl_path_exists(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
-{
-    argcount(fl_ctx, "path.exists?", nargs, 1);
-    char *str = tostring(fl_ctx, args[0], "path.exists?");
-    struct stat sbuf;
-    if (stat(str, &sbuf) == -1)
-        return fl_ctx->F;
-    return fl_ctx->T;
-}
-
 static value_t fl_os_getenv(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "os.getenv", nargs, 1);
@@ -404,7 +392,6 @@ static const builtinspec_t builtin_info[] = {
     { "time.now", fl_time_now },
 
     { "path.cwd", fl_path_cwd },
-    { "path.exists?", fl_path_exists },
 
     { "os.getenv", fl_os_getenv },
     { "os.setenv", fl_os_setenv },

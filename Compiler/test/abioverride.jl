@@ -4,7 +4,7 @@ using Base.Meta
 include("irutils.jl")
 
 # In this test, we will manually construct a CodeInstance that specializes the `myplus`
-# method on a constant for the second argument and test various, interfaces surrounding
+# method on a constant for the second argument and test various interfaces surrounding
 # CodeInstances with ABI overrides.
 myplus(x::Int, y::Int) = x + y
 

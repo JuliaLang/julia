@@ -8,6 +8,12 @@
 #    T
 #end
 #const Type = TypeEq(T) where T
+# TypeEgal{T} is the egality-based dual of TypeEq{T}: its only instance is `T`
+# itself (matched by `===`), used internally for dispatch-cache specialization.
+# Free typevars are disallowed inside TypeEgal.
+#struct TypeEgal <: AnyType
+#    T
+#end
 
 #abstract type Vararg{T} end
 
@@ -190,8 +196,8 @@
 #    sticky::UInt8
 #    priority::UInt16
 #    @atomic _isexception::UInt8
-#    pad00::UInt8
-#    pad01::UInt8
+#    @atomic preempt_request::UInt8
+#    bound_cancel_default::UInt8
 #    pad02::UInt8
 #    rngState0::UInt64
 #    rngState1::UInt64
@@ -206,6 +212,11 @@
 #    @atomic last_started_running_at::UInt64
 #    @atomic running_time_ns::UInt64
 #    @atomic finished_at::UInt64
+#    @atomic waiting_on::Any
+#    cached_wait_entry::Any
+#    cached_cancel_entry::Any
+#    invoked::Any
+#    @atomic bound_cancel_token::Union{Nothing, CancellationTokenSource}
 #end
 
 export
@@ -233,7 +244,7 @@ export
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
-    nfields, throw, tuple, ===, isdefined,
+    nfields, throw, tuple, ===, isdefined, bitsizeof,
     # access to globals
     getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
@@ -286,7 +297,26 @@ end
 function Typeof end
 ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
-      (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
+      (f::typeof(Typeof))(x) = begin
+          $(_expr(:meta,:nospecialize,:x))
+          if isa(x,Type)
+              has_free_typevars(x) ? Type{x} : TypeEgal{x}
+          else
+              typeof(x)
+          end
+      end
+      end)
+
+# like `Typeof`, but yields the equality kind `Type{x}` for type values; used
+# by lowering to spell the callee self-type of method definitions, so equal
+# UnionAll spellings share the constructor method they define
+function TypeEqOf end
+ccall(:jl_toplevel_eval_in, Any, (Any, Any),
+      Core, quote
+      (f::typeof(TypeEqOf))(x) = begin
+          $(_expr(:meta,:nospecialize,:x))
+          isa(x,Type) ? Type{x} : typeof(x)
+      end
       end)
 
 function iterate end
@@ -330,8 +360,9 @@ macro _foldable_meta()
         #=:nortcall=#true))
 end
 
-macro inline()   Expr(:meta, :inline)   end
-macro noinline() Expr(:meta, :noinline) end
+macro inline()      Expr(:meta, :inline)      end
+macro noinline()    Expr(:meta, :noinline)    end
+macro nospecializeinfer() Expr(:meta, :nospecializeinfer) end
 
 macro _boundscheck() Expr(:boundscheck) end
 
@@ -355,8 +386,6 @@ unsafe_convert(::Type{T}, x::T) where {T} = x
 # will be inserted by the frontend for closures
 _typeof_captured_variable(@nospecialize t) = (@_total_meta; t isa Type && has_free_typevars(t) ? typeof(t) : Typeof(t))
 
-has_free_typevars(@nospecialize t) = (@_total_meta; ccall(:jl_has_free_typevars, Int32, (Any,), t) === Int32(1))
-
 # dispatch token indicating a kwarg (keyword sorter) call
 function kwcall end
 # deprecated internal functions:
@@ -368,6 +397,74 @@ kwftype(@nospecialize(t)) = typeof(kwcall)
 # occasionally in user code from eltype).
 Union{}(a...) = throw(ArgumentError("cannot construct a value of type Union{} for return result"))
 kwcall(kwargs, ::Type{Union{}}, a...) = Union{}(a...)
+
+# resolve_typegroup must be defined before any struct definition, since all structs
+# are now lowered using the typegroup mechanism (for #60919 safety).
+function resolve_typegroup(mod::Module, typevars::SimpleVector, struct_infos::SimpleVector, old_types::SimpleVector)
+    n = _svec_len(typevars)
+    if n === 0
+        return ()
+    end
+    return ccall(:jl_resolve_typegroup, Any, (Any, Any, Any, Any), mod, typevars, struct_infos, old_types)
+end
+
+# n.b. TypeApp and apply_type_or_typeapp must be defined before the first
+# struct definition, whose lowered field-type thunks may call them.
+# TypeApp: lazy type application for typegroup blocks.
+# Represents a single type application step, like UnionAll represents a single where binding.
+# T{P1, P2} is TypeApp(TypeApp(T, P1), P2) -- nested left-to-right.
+# Allowed inside UnionAll; rejected by subtyping/intersection (like free typevars).
+struct TypeApp
+    head::Any            # Type constructor (TypeVar, Type, or outer TypeApp)
+    param::Any           # Single type parameter
+    function TypeApp(@nospecialize(head), @nospecialize(param))
+        return new(head, param)
+    end
+end
+
+# Check if a value contains a TypeApp anywhere in its structure
+function _contains_typeapp(@nospecialize(x))
+    if x isa TypeApp
+        return true
+    end
+    if x isa UnionAll
+        return _contains_typeapp(x.body)
+    end
+    return false
+end
+
+function apply_type_or_typeapp(@nospecialize(tc), @nospecialize params...)
+    # Head is TypeVar/TypeApp => must defer (apply_type requires UnionAll/DataType head)
+    if tc isa TypeVar || tc isa TypeApp
+        # Build nested TypeApp chain: TypeApp(TypeApp(tc, p1), p2), ...
+        n = nfields(params)
+        result = tc
+        i = 1
+        while Intrinsics.sle_int(i, n)
+            result = TypeApp(result, getfield(params, i))
+            i = Intrinsics.add_int(i, 1)
+        end
+        return result
+    end
+    # Any param contains TypeApp => must defer
+    n = nfields(params)
+    i = 1
+    while Intrinsics.sle_int(i, n)
+        if _contains_typeapp(getfield(params, i))
+            # Build nested TypeApp chain for all params
+            result = tc
+            j = 1
+            while Intrinsics.sle_int(j, n)
+                result = TypeApp(result, getfield(params, j))
+                j = Intrinsics.add_int(j, 1)
+            end
+            return result
+        end
+        i = Intrinsics.add_int(i, 1)
+    end
+    # All concrete -- real apply_type
+    return apply_type(tc, params...)
+end
 
 abstract type Exception end
 struct ErrorException <: Exception
@@ -471,9 +568,9 @@ MethodError(@nospecialize(f), @nospecialize(args)) = MethodError(f, args, typema
 
 struct AssertionError <: Exception
     msg::AbstractString
-    AssertionError(msg::AbstractString) = new(msg)
+    AssertionError(msg::AbstractString) = (@noinline; new(msg))
 end
-AssertionError() = AssertionError("")
+AssertionError() = (@noinline; AssertionError(""))
 
 struct FieldError <: Exception
     type::DataType
@@ -508,6 +605,8 @@ end
 struct TrimFailure <: Exception
     TrimFailure() = new()
 end
+# `Libdl.LazyLibraryCallback`, defined here to be visible to the compiler
+abstract type LazyLibraryCallback end
 
 String(s::String) = s  # no constructor yet
 
@@ -588,6 +687,15 @@ struct PartialOpaque
     PartialOpaque(@nospecialize(typ::Type), @nospecialize(env), parent::MethodInstance, source) = new(typ, env, parent, source)
 end
 
+struct PartialTask
+    fetch_type
+    PartialTask(@nospecialize(fetch_type)) = new(fetch_type)
+end
+
+struct PossiblyAmbiguous
+    PossiblyAmbiguous() = new()
+end
+
 eval(Core, quote
     GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
     NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))
@@ -641,10 +749,6 @@ function CodeInstance(
 end
 GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
 Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
-
-function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
-    return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
-end
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
@@ -736,6 +840,8 @@ end))
 Array{T}(::UndefInitializer, m::Int) where {T} = Array{T, 1}(undef, m)
 Array{T}(::UndefInitializer, m::Int, n::Int) where {T} = Array{T, 2}(undef, m, n)
 Array{T}(::UndefInitializer, m::Int, n::Int, o::Int) where {T} = Array{T, 3}(undef, m, n, o)
+# Guard against invalidations due to spurious `Tuple{}` intersections
+Array{T}(::UndefInitializer, ::Tuple{}) where {T} = Array{T, 0}(undef)
 Array{T}(::UndefInitializer, d::NTuple{N, Int}) where {T, N} = Array{T, N}(undef, d)
 # empty vector constructor
 (self::Type{Array{T, 1}})() where {T} = self(undef, 0)
@@ -872,8 +978,8 @@ struct CoreSTDERR <: IO
 end
 const stdout = CoreSTDOUT()
 const stderr = CoreSTDERR()
-io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
-io_pointer(::CoreSTDERR) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stderr, Ptr{Cvoid}), 1, 1)
+io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
+io_pointer(::CoreSTDERR) = Intrinsics.pointerref(cglobal(:jl_uv_stderr, Ptr{Cvoid}), 1, 1)
 
 unsafe_write(io::IO, x::Ptr{UInt8}, nb::UInt) =
     (ccall(:jl_uv_puts, Cvoid, (Ptr{Cvoid}, Ptr{UInt8}, UInt), io_pointer(io), x, nb); nb)
@@ -925,16 +1031,14 @@ eval(Core, :((NT::Type{NamedTuple{names,T}})(args::T) where {names, T <: Tuple} 
 
 # constructors for built-in types
 
-import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
+import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int,
+    slt_int, xor_int
 
 function is_top_bit_set(x)
     @inline
-    eq_int(trunc_int(UInt8, lshr_int(x, sub_int(shl_int(sizeof(x), 3), 1))), trunc_int(UInt8, 1))
-end
-
-function is_top_bit_set(x::Union{Int8,UInt8})
-    @inline
-    eq_int(lshr_int(x, 7), trunc_int(typeof(x), 1))
+    # the top bit is set iff x is negative as a signed number; Core has no
+    # `zero`, and `xor_int(x, x)` is a zero of any width
+    slt_int(x, xor_int(x, x))
 end
 
 # n.b. This function exists for CUDA to overload to configure error behavior (see #48097)
@@ -943,8 +1047,8 @@ throw_inexacterror(func::Symbol, to, val) = throw(InexactError(func, to, val))
 function check_sign_bit(::Type{To}, x) where {To}
     @inline
     # the top bit is the sign bit of x but "sign bit" sounds better in stacktraces
-    # n.b. if x is signed, then sizeof(x) === sizeof(To), otherwise sizeof(x) >= sizeof(To)
-    is_top_bit_set(x) && throw_inexacterror(sizeof(x) === sizeof(To) ? :convert : :trunc, To, x)
+    # n.b. if x is signed, then bitsizeof(x) === bitsizeof(To), otherwise bitsizeof(x) >= bitsizeof(To)
+    is_top_bit_set(x) && throw_inexacterror(bitsizeof(x) === bitsizeof(To) ? :convert : :trunc, To, x)
     x
 end
 
@@ -1127,26 +1231,27 @@ end
 # Bindings for the julia frontend.  The internal jl_parse and jl_lower will call
 # Core._parse and Core._lower respectively (if they are not `nothing`.)
 
-#    Core._parse(text, filename, lineno, offset, options)
+#    Core._parse(text, filename, lineno, offset, options, edition)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
-# it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},
-# len::Int)` for a raw unmanaged buffer. `options` should be one of `:atom`,
-# `:statement` or `:all`, indicating how much the parser will consume.
+# it to `filename`. `options` should be one of `:atom`, `:statement` or `:all`,
+# indicating how much the parser will consume.
 #
-# `_parse` must return an `svec` containing an `Expr` and the new offset as an
-# `Int`.
+# Return (ast, offset) containing an `Expr` (or `Syntax` on newer versions) and
+# the new offset as an `Int`.
 _parse = nothing
 
-#    Core._lower(code, module, filename="none", linenum=0, world=0xfff..., warn=false)
+#    Core._lower(module, code, world, warn, loc)
 #
 # Lower `code` (usually Expr), returning `svec(e::Any xs::Any...)` where `e` is
 # the lowered code, and `xs` is possible additional information from
 # JuliaLowering (TBD).
 _lower = nothing
+_toplevel_eval = nothing
 
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
 _setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
+_set_toplevel_eval!(f) = setglobal!(Core, :_toplevel_eval, f)
 
 # support for deprecated uses of builtin functions
 _apply(x...) = _apply_iterate(Main.Base.iterate, x...)
@@ -1168,71 +1273,9 @@ struct Pair{A, B}
     end
 end
 
-# TypeApp: lazy type application for typegroup blocks.
-# Represents a single type application step, like UnionAll represents a single where binding.
-# T{P1, P2} is TypeApp(TypeApp(T, P1), P2) -- nested left-to-right.
-# Allowed inside UnionAll; rejected by subtyping/intersection (like free typevars).
-struct TypeApp
-    head::Any            # Type constructor (TypeVar, Type, or outer TypeApp)
-    param::Any           # Single type parameter
-    function TypeApp(@nospecialize(head), @nospecialize(param))
-        return new(head, param)
-    end
-end
-
-# Check if a value contains a TypeApp anywhere in its structure
-function _contains_typeapp(@nospecialize(x))
-    if x isa TypeApp
-        return true
-    end
-    if x isa UnionAll
-        return _contains_typeapp(x.body)
-    end
-    return false
-end
-
-function apply_type_or_typeapp(@nospecialize(tc), @nospecialize params...)
-    # Head is TypeVar/TypeApp => must defer (apply_type requires UnionAll/DataType head)
-    if tc isa TypeVar || tc isa TypeApp
-        # Build nested TypeApp chain: TypeApp(TypeApp(tc, p1), p2), ...
-        n = nfields(params)
-        result = tc
-        i = 1
-        while sle_int(i, n)
-            result = TypeApp(result, getfield(params, i))
-            i = add_int(i, 1)
-        end
-        return result
-    end
-    # Any param contains TypeApp => must defer
-    n = nfields(params)
-    i = 1
-    while sle_int(i, n)
-        if _contains_typeapp(getfield(params, i))
-            # Build nested TypeApp chain for all params
-            result = tc
-            j = 1
-            while sle_int(j, n)
-                result = TypeApp(result, getfield(params, j))
-                j = add_int(j, 1)
-            end
-            return result
-        end
-        i = add_int(i, 1)
-    end
-    # All concrete -- real apply_type
-    return apply_type(tc, params...)
-end
-
-function resolve_typegroup(mod::Module, typevars::SimpleVector, struct_infos::SimpleVector)
-    n = _svec_len(typevars)
-    if n === 0
-        return ()
-    end
-    return ccall(:jl_resolve_typegroup, Any, (Any, Any, Any), mod, typevars, struct_infos)
-end
-
 function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
+    @nospecializeinfer
+    @noinline
     world = ccall(:jl_get_tls_world_age, UInt, ()) # tls_world_age()
     return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
 end
@@ -1274,14 +1317,24 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-# Special inference support to avoid execess specialization of these methods.
+# Special inference support to avoid excess specialization of these methods.
 # TODO: Replace this by a generic heuristic.
 (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 (!==)(@nospecialize(a), @nospecialize(b)) = Intrinsics.not_int(a === b)
 
 include(Core, "optimized_generics.jl")
 
-# Used only be the magic @VERSION macro
+"The first julia edition.  For compatibility, most julia code is assumed to be
+OLDEST_EDITION if an edition isn't known at parse time."
+const OLDEST_EDITION = (1, 13)
+
+"LATEST_STABLE_EDITION is used in the few situations (e.g. the REPL, Meta.parse)
+where the default edition is the latest.  LATEST_STABLE_EDITION may lag behind
+VERSION if VERSION corresponds to an in-development edition, or no new edition
+at all."
+const LATEST_STABLE_EDITION = (1, 14)
+
+# Used only by the magic @VERSION macro
 struct MacroSource
     lno::Any # ::LineNumberNode, but needs to be a pointer
     syntax_ver::Any # ::VersionNumber =#

@@ -12,12 +12,12 @@ end
 5   TestMod.body1
 6   TestMod.body2
 7   (goto label₁)
-8   (= slot₁/loop-exit_result core.nothing)
-9   (isdefined slot₁/loop-exit_result)
+8   (= slot₁/ core.nothing)
+9   (isdefined slot₁/)
 10  (gotoifnot %₉ label₁₂)
 11  (goto label₁₃)
-12  (= slot₁/loop-exit_result core.nothing)
-13  slot₁/loop-exit_result
+12  (= slot₁/ core.nothing)
+13  slot₁/
 14  (return %₁₃)
 
 ########################################
@@ -32,16 +32,16 @@ end
 4   (gotoifnot %₃ label₇)
 5   TestMod.body
 6   (goto label₁)
-7   (= slot₁/loop-exit_result core.nothing)
-8   (isdefined slot₁/loop-exit_result)
+7   (= slot₁/ core.nothing)
+8   (isdefined slot₁/)
 9   (gotoifnot %₈ label₁₁)
 10  (goto label₁₂)
-11  (= slot₁/loop-exit_result core.nothing)
-12  slot₁/loop-exit_result
+11  (= slot₁/ core.nothing)
+12  slot₁/
 13  (return %₁₂)
 
 ########################################
-# While loop with with break and continue
+# While loop with break and continue
 while cond
     body1
     break
@@ -58,12 +58,12 @@ end
 6   (goto label₈)
 7   TestMod.body3
 8   (goto label₁)
-9   (= slot₁/loop-exit_result core.nothing)
-10  (isdefined slot₁/loop-exit_result)
+9   (= slot₁/ core.nothing)
+10  (isdefined slot₁/)
 11  (gotoifnot %₁₀ label₁₃)
 12  (goto label₁₄)
-13  (= slot₁/loop-exit_result core.nothing)
-14  slot₁/loop-exit_result
+13  (= slot₁/ core.nothing)
+14  slot₁/
 15  (return %₁₄)
 
 ########################################
@@ -73,31 +73,31 @@ for x in xs
 end
 #---------------------
 1   TestMod.xs
-2   (= slot₁/next (call top.iterate %₁))
-3   slot₁/next
+2   (= slot₁/ (call top.iterate %₁))
+3   slot₁/
 4   (call core.=== %₃ core.nothing)
 5   (call top.not_int %₄)
 6   (gotoifnot %₅ label₁₉)
-7   slot₁/next
+7   slot₁/
 8   (= slot₂/x (call core.getfield %₇ 1))
 9   (call core.getfield %₇ 2)
 10  TestMod.body
-11  (= slot₁/next (call top.iterate %₁ %₉))
-12  slot₁/next
+11  (= slot₁/ (call top.iterate %₁ %₉))
+12  slot₁/
 13  (call core.=== %₁₂ core.nothing)
 14  (call top.not_int %₁₃)
 15  (gotoifnot %₁₄ label₁₇)
 16  (goto label₇)
-17  (= slot₄/if_val core.nothing)
+17  (= slot₄/ core.nothing)
 18  (goto label₂₀)
-19  (= slot₄/if_val core.nothing)
-20  slot₄/if_val
-21  (= slot₃/loop-exit_result %₂₀)
-22  (isdefined slot₃/loop-exit_result)
+19  (= slot₄/ core.nothing)
+20  slot₄/
+21  (= slot₃/ %₂₀)
+22  (isdefined slot₃/)
 23  (gotoifnot %₂₂ label₂₅)
 24  (goto label₂₆)
-25  (= slot₃/loop-exit_result core.nothing)
-26  slot₃/loop-exit_result
+25  (= slot₃/ core.nothing)
+26  slot₃/
 27  (return %₂₆)
 
 ########################################
@@ -107,48 +107,48 @@ for x in xs, y in ys
 end
 #---------------------
 1   TestMod.xs
-2   (= slot₂/next (call top.iterate %₁))
-3   slot₂/next
+2   (= slot₁/ (call top.iterate %₁))
+3   slot₁/
 4   (call core.=== %₃ core.nothing)
 5   (call top.not_int %₄)
 6   (gotoifnot %₅ label₃₆)
-7   slot₂/next
-8   (= slot₃/x (call core.getfield %₇ 1))
+7   slot₁/
+8   (= slot₂/x (call core.getfield %₇ 1))
 9   (call core.getfield %₇ 2)
 10  TestMod.ys
-11  (= slot₁/next (call top.iterate %₁₀))
-12  slot₁/next
+11  (= slot₃/ (call top.iterate %₁₀))
+12  slot₃/
 13  (call core.=== %₁₂ core.nothing)
 14  (call top.not_int %₁₃)
 15  (gotoifnot %₁₄ label₂₈)
-16  slot₃/x
+16  slot₂/x
 17  (= slot₄/x %₁₆)
-18  slot₁/next
+18  slot₃/
 19  (= slot₅/y (call core.getfield %₁₈ 1))
 20  (call core.getfield %₁₈ 2)
 21  (= slot₄/x 10)
-22  (= slot₁/next (call top.iterate %₁₀ %₂₀))
-23  slot₁/next
+22  (= slot₃/ (call top.iterate %₁₀ %₂₀))
+23  slot₃/
 24  (call core.=== %₂₃ core.nothing)
 25  (call top.not_int %₂₄)
 26  (gotoifnot %₂₅ label₂₈)
 27  (goto label₁₆)
-28  (= slot₂/next (call top.iterate %₁ %₉))
-29  slot₂/next
+28  (= slot₁/ (call top.iterate %₁ %₉))
+29  slot₁/
 30  (call core.=== %₂₉ core.nothing)
 31  (call top.not_int %₃₀)
 32  (gotoifnot %₃₁ label₃₄)
 33  (goto label₇)
-34  (= slot₇/if_val core.nothing)
+34  (= slot₇/ core.nothing)
 35  (goto label₃₇)
-36  (= slot₇/if_val core.nothing)
-37  slot₇/if_val
-38  (= slot₆/loop-exit_result %₃₇)
-39  (isdefined slot₆/loop-exit_result)
+36  (= slot₇/ core.nothing)
+37  slot₇/
+38  (= slot₆/ %₃₇)
+39  (isdefined slot₆/)
 40  (gotoifnot %₃₉ label₄₂)
 41  (goto label₄₃)
-42  (= slot₆/loop-exit_result core.nothing)
-43  slot₆/loop-exit_result
+42  (= slot₆/ core.nothing)
+43  slot₆/
 44  (return %₄₃)
 
 ########################################

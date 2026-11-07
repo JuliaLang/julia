@@ -28,6 +28,11 @@ const libsuitesparseconfig = LazyLibrary(
         BundledLazyLibraryPath("libsuitesparseconfig.so.7")
     else
         error("SuiteSparse_jll: Library 'libsuitesparseconfig' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
+        LazyLibrary[libgcc_s]
+    else
+        LazyLibrary[]
     end
 )
 
@@ -245,6 +250,20 @@ function eager_mode()
     dlopen(libumfpack)
 end
 is_available() = true
+
+# JLLWrappers path compatibility accessors
+get_libamd_path() = libamd_path
+get_libbtf_path() = libbtf_path
+get_libcamd_path() = libcamd_path
+get_libccolamd_path() = libccolamd_path
+get_libcholmod_path() = libcholmod_path
+get_libcolamd_path() = libcolamd_path
+get_libklu_path() = libklu_path
+get_libldl_path() = libldl_path
+get_librbio_path() = librbio_path
+get_libspqr_path() = libspqr_path
+get_libsuitesparseconfig_path() = libsuitesparseconfig_path
+get_libumfpack_path() = libumfpack_path
 
 function __init__()
     # BSD-3-Clause

@@ -2,7 +2,7 @@
 
 import Base.Docs: meta, DocStr, parsedoc, bindingexpr, namify
 
-macro var(x) # just for testing bindingexpr/nameify more conveniently
+macro var(x) # just for testing bindingexpr/namify more conveniently
     esc(bindingexpr(namify(x)))
 end
 
@@ -120,6 +120,17 @@ end
 @doc "I am a macro"  :@ModuleMacroDoc.m
 
 @test docstrings_equal(@doc(ModuleMacroDoc), doc"I am a module")
+
+# docstrings on overlay methods (`Base.Experimental.@overlay`) apply to the function binding
+module OverlayDocs
+using Base.Experimental: @MethodTable, @overlay
+@MethodTable mt
+function devfun end
+"I am an overlay method"
+@overlay mt devfun(x::Int) = 1
+end
+@test docstrings_equal(@doc(OverlayDocs.devfun), doc"I am an overlay method")
+@test isempty(methods(OverlayDocs.devfun))
 @test docstrings_equal(@doc(ModuleMacroDoc.@m), doc"I am a macro")
 
 # issue #38819
@@ -741,7 +752,7 @@ Base.collect(::Type{EmptyType{T}}) where {T} = "borked"
 end
 
 let fd = meta(I12515)[@var(Base.collect)]
-    @test fd.order[1] == (Union{Tuple{Type{I12515.EmptyType{T}}}, Tuple{T}} where T)
+    @test fd.order[1] == (Tuple{Type{I12515.EmptyType{T}}} where T)
 end
 
 # PR #12593
@@ -1432,6 +1443,13 @@ end
     """
 )
 
+module DocsTypevar
+"g vec" g(x::Vector{T}) where T = 1
+"g int" g(x::Int) = 2
+end
+@test docstrings_equal(@doc(DocsTypevar.g(::Int)), doc"g int")
+@test docstrings_equal(@doc(DocsTypevar.g(::Vector{Int})), doc"g vec")
+
 # issue #22105
 module I22105
     lineno = @__LINE__
@@ -1672,3 +1690,28 @@ Bar59949{T}
 """
 Bar59949{T} = Foo59949{T}
 @test docstrings_equal(@doc(Bar59949), doc"Bar59949{T}")
+
+# https://github.com/JuliaLang/julia/issues/60871
+"""
+    Bug60871(; x)
+
+kw constructor for `struct Bug60871`
+"""
+@kwdef struct Bug60871
+    x
+
+    @doc """
+        Bug60871(x)
+
+    normal constructor with input check
+    """
+    function Bug60871(x)
+        @assert x == 1
+        return new(x)
+    end
+end
+
+@test Bug60871 isa DataType
+@test Bug60871(1).x == 1
+@test_throws AssertionError Bug60871(2)
+@test length(fieldnames(Bug60871)) == 1

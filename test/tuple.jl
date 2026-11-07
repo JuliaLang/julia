@@ -101,6 +101,7 @@ end
         @test NTuple{40,Float64}(m) === ntuple(i -> Float64(i), Val(40))
         @test_throws ArgumentError NTuple{40,Float64}(Memory{Float64}(undef, 39))
     end
+    @test NTuple{40,Float64}(reshape(collect(1.0:40.0), 5, 8)) === ntuple(i -> Float64(i), Val(40))
 
     @test Tuple{Vararg{Float32}}(Float64[1,2,3]) === (1.0f0, 2.0f0, 3.0f0)
     @test Tuple{Int,Vararg{Float32}}(Float64[1,2,3]) === (1, 2.0f0, 3.0f0)
@@ -160,6 +161,17 @@ end
     # @test_throws ArgumentError size((), 2)
     # @test_throws ArgumentError size((1,), 2)
     # @test_throws ArgumentError size((1,2), 2)
+    @test_throws ArgumentError Base.front(())
+    @test Base.front((1,)) === ()
+    @test Base.front((1, 2, 3)) === (1, 2)
+    @test Base.front((1, 2.0, "three", :four)) === (1, 2.0, "three")
+
+    let t = ntuple(identity, Val(40))
+        @test @inferred(Base.front(t)) === ntuple(identity, Val(39))
+    end
+    let t = (1.0, ntuple(identity, Val(33))...)
+        @test @inferred(Base.front(t)) === (1.0, ntuple(identity, Val(32))...)
+    end
 end
 
 @testset "indexing" begin
@@ -227,7 +239,7 @@ end
 end
 
 
-@testset "elelement/value/key types" begin
+@testset "element/value/key types" begin
     @test eltype((1,2,3)) === Int
     @test eltype((1.0,2.0,3.0)) <: AbstractFloat
     @test eltype((true, false)) === Bool
@@ -861,6 +873,22 @@ namedtup = (;a=1, b=2, c=3)
             end
         end
     end
+end
+
+@testset "`Base.split_rest` with negative `n`" begin
+    for itr in (Any[1, 2, 3], [1, 2, 3], trues(3), view([1, 2, 3], :), (a=1, b=2), "abc", (x for x in 1:3))
+        @test_throws ArgumentError Base.split_rest(itr, -1)
+    end
+end
+
+@testset "`Base.split_rest` only splits the rest after the iteration state" begin
+    @test Base.split_rest((1, 2, 3), 1, 2) === ((2,), (3,))
+    @test_throws ArgumentError Base.split_rest((1, 2, 3), 2, 3)
+    @test_throws ArgumentError Base.split_rest((x = 1, y = 2, z = 3), 2, 3)
+    mid(t) = ((a, b..., c) = t; (a, b, c))
+    @test mid((1, 2)) === (1, (), 2)
+    @test_throws ArgumentError mid((1,))
+    @test_throws ArgumentError mid((x = 1,))
 end
 
 # Make sure that tuple iteration is foldable

@@ -18,7 +18,7 @@ This pass lowers the `julia.cpu.have_fma.(f32|f64)` intrinsic to either true or 
 
 * Filename: `llvm-demote-float16.cpp`
 * ClassName: `DemoteFloat16Pass`
-* Opt Name `function(DemoteFloat16)`
+* Opt Name: `function(DemoteFloat16)`
 
 This pass replaces [float16](https://en.wikipedia.org/wiki/Half-precision_floating-point_format) operations with float32 operations on architectures that do not natively support float16 operations. This is done by inserting `fpext` and `fptrunc` instructions around any float16 operation. On architectures that do support native float16 operations, this pass is a no-op.
 

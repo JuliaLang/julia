@@ -187,6 +187,7 @@ end
         @test LinearIndices((3,))[1:2] === 1:2
         @test LinearIndices((3,))[1:2:3] === 1:2:3
         @test_throws BoundsError LinearIndices((3,))[2:4]
+        @test LinearIndices((3:5,))[2:3] === 2:3
         @test_throws BoundsError CartesianIndices((3,))[2,2]
         #   ambiguity btw cartesian indexing and linear indexing in 1d when
         #   indices may be nontraditional
@@ -337,6 +338,8 @@ end
         end
         R = LinearIndices((Base.IdentityUnitRange(0:1), 0:1))
         @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
+        @test axes(LinearIndices((Base.IdentityUnitRange(0:1), 2))) === (Base.IdentityUnitRange(0:1), Base.OneTo(2))
+        @test axes(CartesianIndices((Base.IdentityUnitRange(0:1), 2))) === (Base.IdentityUnitRange(0:1), Base.OneTo(2))
     end
 
     @testset "show" begin
@@ -862,7 +865,7 @@ function test_ind2sub(::Type{TestAbstractArray})
     end
 end
 
-# A custom linear slow array that insists upon Cartesian indexing
+# A custom slow array that insists upon Cartesian indexing
 mutable struct TSlowNIndexes{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end
@@ -1195,6 +1198,15 @@ end
     @test Base.IndexStyle(rand(3, 3), [1; 2; 3]) == IndexLinear()
 end
 
+# The bottom-type fallback must not add IndexLinear to binary style inference.
+@testset "bottom-type IndexStyle inference" begin
+    @test Base.infer_return_type(IndexStyle, (Any, IndexCartesian)) === IndexCartesian
+    @test IndexStyle(IndexLinear(), IndexLinear()) === IndexLinear()
+    @test IndexStyle(IndexLinear(), IndexCartesian()) === IndexCartesian()
+    @test IndexStyle(IndexCartesian(), IndexLinear()) === IndexCartesian()
+    @test IndexStyle(IndexCartesian(), IndexCartesian()) === IndexCartesian()
+end
+
 @testset "promote_shape for Tuples and Dims" begin
     @test promote_shape((2, 1), (2,)) == (2, 1)
     @test_throws DimensionMismatch promote_shape((2, 3), (2,))
@@ -1520,6 +1532,13 @@ end
 
 using Base: typed_hvncat
 @testset "hvncat" begin
+    # Concatenation dimensions must not wrap before allocating and filling the result.
+    overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+    overflow_array = reshape(1:overflow_dim, 1, overflow_dim)
+    @test_throws OverflowError hvncat((1, 3), false, overflow_array, overflow_array, overflow_array)
+    @test_throws OverflowError hvncat(((1, 1, 1), (3,)), false,
+                                      overflow_array, overflow_array, overflow_array)
+
     a = fill(1, (2,3,2,4,5))
     b = fill(2, (1,1,2,4,5))
     c = fill(3, (1,2,2,4,5))
@@ -1550,6 +1569,9 @@ using Base: typed_hvncat
         @test_throws DimensionMismatch [v; v;; v; v;;; v; v;; v; v; v]
         # ensure a wrong shape with the right number of elements doesn't pass through
         @test_throws DimensionMismatch [v; v;; v; v;;; v; v; v; v]
+        # ragged lengths whose deviations from the first length cancel out are not balanced
+        @test_throws DimensionMismatch [v; v;; v;; v; v; v]
+        @test_throws DimensionMismatch [v v; v; v v v;;; v v; v; v v v]
 
         @test [v; v;; v; v] == fill(1, ndims(v) == 3 ? (2, 2, 1) : (2,2))
         @test [v; v;; v; v;;;] == fill(1, 2, 2, 1)
@@ -2040,6 +2062,15 @@ end
     @test_broken IRUtils.fully_eliminated(_has_offset_axes, Base.typesof(a, a, b, b))
 end
 
+@testset "aliasing of slices" begin
+    x = [1 2; 3 4]
+    @test Base.mightalias(x, eachrow(x))
+    @test Base.mightalias(eachrow(x), x)
+    @test Base.mightalias(eachcol(x), eachrow(x))
+    x .+= sum.(eachrow(x))
+    @test x == [4 5; 10 11]
+end
+
 # type stable [x;;] (https://github.com/JuliaLang/julia/issues/45952)
 f45952(x) = [x;;]
 @inferred f45952(1.0)
@@ -2119,6 +2150,9 @@ end
     @testset "IndexCartesian - IndexLinear" begin
         B .= 0
         copyto!(view(B, axes(B)...), A)
+        @test B == A
+        B .= 0
+        copyto!(view(B, axes(B)...), vec(A))
         @test B == A
     end
     @testset "IndexCartesian - IndexCartesian" begin
@@ -2356,4 +2390,17 @@ end
             @test A - B - zeros() == A - B
         end
     end
+end
+
+@testset "map on ReshapedArray" begin
+    R = reshape(1:4, 2, 2)
+    for T in [Float64, BigInt]
+        S = @inferred map(T, R)
+        @test S == R
+        @test eltype(S) == T
+        @test parent(S) isa AbstractRange
+    end
+    P = PermutedDimsArray(collect(reshape(1:6, 2, 3)), (2, 1))
+    @test map(identity, reshape(P, 2, 3)) isa Matrix{Int}
+    @test map(identity, reshape(P, 6)) isa Vector{Int}
 end

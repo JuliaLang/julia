@@ -42,8 +42,10 @@ end
 function print(io::IO, xs...)
     lock(io)
     try
-        for x in xs
-            print(io, x)
+        # xs[i] might be a known Union, and under --trim that gets split regardless of length.
+        # In contrast, `for x in xs` will fall back to Any for unions longer than 3.
+        for i in 1:nfields(xs)
+            print(io, xs[i])
         end
     finally
         unlock(io)
@@ -139,8 +141,8 @@ function print_to_string(xs...)
     end
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
-    for x in xs
-        print(s, x)
+    for i in 1:nfields(xs)
+        print(s, xs[i])
     end
     takestring!(s)
 end
@@ -156,8 +158,8 @@ function string_with_env(env, xs...)
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
     env_io = IOContext(s, env)
-    for x in xs
-        print(env_io, x)
+    for i in 1:nfields(xs)
+        print(env_io, xs[i])
     end
     takestring!(s)
 end
@@ -234,8 +236,13 @@ function show(
 end
 
 # optimized methods to avoid iterating over chars
-write(io::IO, s::Union{String,SubString{String}}) =
-    GC.@preserve s (unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))) % Int)::Int
+# (an explicit token is forwarded to unsafe_write, whose cancellable methods
+# accept it; the default sentinel keeps the plain call, which any IO's
+# unsafe_write method supports)
+write(io::IO, s::Union{String,SubString{String}}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    cancel === DEFAULT_CANCEL ?
+        GC.@preserve(s, (unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))) % Int)::Int) :
+        GC.@preserve(s, (unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)); cancel) % Int)::Int)
 print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 
 """
@@ -307,7 +314,9 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 Join any `iterator` into a single string, inserting the given delimiter (if any) between
 adjacent items.  If `last` is given, it will be used instead of `delim` between the last
 two items.  Each item of `iterator` is converted to a string via `print(io::IOBuffer, x)`.
-If `io` is given, the result is written to `io` rather than returned as a `String`.
+If `io` is given, the result is written to `io` rather than returned as a `String` (or as an
+[`AnnotatedString`](@ref Base.AnnotatedString) when needed to preserve annotations of the
+items, `delim` or `last`).
 
 # Examples
 ```jldoctest
@@ -364,6 +373,19 @@ function _join_preserve_annotations(iterator, args...)
     end
 end
 
+# The type of each tuple element is known, so decide by those types directly; this
+# stays precise even when the tuple length is not (e.g. `Tuple{Vararg{String}}`).
+function _join_preserve_annotations(iterator::Tuple, args...)
+    if !any(_isannotated, iterator) && !any(_isannotated, args)
+        sprint(join, iterator, args...)
+    else
+        io = AnnotatedIOBuffer()
+        join(io, iterator, args...)
+        seekstart(io)
+        read(io, AnnotatedString{String})
+    end
+end
+
 join(iterator) = _join_preserve_annotations(iterator)
 join(iterator, delim) = _join_preserve_annotations(iterator, delim)
 join(iterator, delim, last) = _join_preserve_annotations(iterator, delim, last)
@@ -386,10 +408,12 @@ characters are escaped either with their standard C escape codes, `"\\0"` for NU
 unambiguous), unicode code point (`"\\u"` prefix) or hex (`"\\x"` prefix).
 
 The optional `esc` argument specifies any additional characters that should also be
-escaped by a prepending backslash (`\"` is also escaped by default in the first form).
+escaped by a prepending backslash. In the first form, `esc` defaults to `('\"',)`, so
+`\"` is escaped unless `esc` is passed explicitly without it (e.g. `escape_string(str, ())`).
 
 The argument `keep` specifies a collection of characters which are to be kept as
-they are. Notice that `esc` has precedence here.
+they are. Notice that `esc` has precedence here, so adding `\"` to `keep` does not prevent
+it from being escaped by the default `esc` of the first form.
 
 The argument `ascii` can be set to `true` to escape all non-ASCII characters,
 whereas the default `ascii=false` outputs printable Unicode characters as-is.
@@ -415,6 +439,12 @@ julia> escape_string("aaa\\nbbb")
 
 julia> escape_string("aaa\\nbbb"; keep = '\\n')
 "aaa\\nbbb"
+
+julia> escape_string("\\"a\\"")
+"\\\\\\"a\\\\\\""
+
+julia> escape_string("\\"a\\"", ()) # do not escape `"`
+"\\"a\\""
 
 julia> escape_string("\\xfe\\xff") # invalid utf-8
 "\\\\xfe\\\\xff"
@@ -472,8 +502,8 @@ end
     unescape_string(io, s::AbstractString, keep = ())::Nothing
 
 General unescaping of traditional C and Unicode escape sequences. The first form returns
-the escaped string, the second prints the result to `io`.
-The argument `keep` specifies a collection of characters which (along with backlashes) are
+the unescaped string, the second prints the result to `io`.
+The argument `keep` specifies a collection of characters which (along with backslashes) are
 to be kept as they are.
 
 The following escape sequences are recognised:
@@ -730,7 +760,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
                 col = div(col + tabwidth, tabwidth) * tabwidth
             elseif ch == '\n'
                 # Now we need to output enough indentation
-                for i = 1:col-indent
+                for _ = 1:col-indent
                     print(buf, ' ')
                 end
                 col = 0
@@ -739,7 +769,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
                 cutting = false
                 # Now we need to output enough indentation to get to
                 # correct place
-                for i = 1:col-indent
+                for _ = 1:col-indent
                     print(buf, ' ')
                 end
                 col += 1
@@ -749,7 +779,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
             upd = div(col + tabwidth, tabwidth) * tabwidth
             # output the number of spaces that would have been seen
             # with original indentation
-            for i = 1:(upd-col)
+            for _ = 1:(upd-col)
                 print(buf, ' ')
             end
             col = upd
@@ -765,7 +795,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
     # If we were still "cutting" when we hit the end of the string,
     # we need to output the right number of spaces for the indentation
     if cutting
-        for i = 1:col-indent
+        for _ = 1:col-indent
             print(buf, ' ')
         end
     end

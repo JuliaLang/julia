@@ -23,7 +23,7 @@ import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
             significand_bits, exponent_bits, exponent_bias,
-            exponent_max, exponent_raw_max, clamp, clamp!
+            exponent_raw_max, clamp, clamp!, two_mul
 
 using Core.Intrinsics: sqrt_llvm, min_float, max_float
 
@@ -37,6 +37,9 @@ end
     throw(DomainError(x,
         LazyString(f," was called with a real argument < -1 but will only return a complex result if called with a complex argument. Try ", f,"(Complex(x)).")))
 end
+@noinline function throw_finite_domainerror(f::Symbol, x)
+    throw(DomainError(x, LazyString("`", f, "(x)` is only defined for finite `x`.")))
+end
 @noinline function throw_exp_domainerror(x)
     throw(DomainError(x, LazyString(
         "Exponentiation yielding a complex result requires a ",
@@ -45,30 +48,6 @@ end
 end
 
 # non-type specific math functions
-
-function two_mul(x::T, y::T) where {T<:Number}
-    xy = x*y
-    xy, fma(x, y, -xy)
-end
-
-@assume_effects :consistent @inline function two_mul(x::Float64, y::Float64)
-    if Core.Intrinsics.have_fma(Float64)
-        xy = x*y
-        return xy, fma(x, y, -xy)
-    end
-    return Base.twomul(x,y)
-end
-
-@assume_effects :consistent @inline function two_mul(x::T, y::T) where T<: Union{Float16, Float32}
-    if Core.Intrinsics.have_fma(T)
-        xy = x*y
-        return xy, fma(x, y, -xy)
-    end
-    xy = widen(x)*y
-    Txy = T(xy)
-    return Txy, T(xy-Txy)
-end
-
 
 """
     evalpoly(x, p)
@@ -132,13 +111,13 @@ function evalpoly(z::Complex, p::Tuple)
         end
         ai = :a0
         push!(as, :($ai = $a))
-        C = Expr(:block,
-                 :(x = real(z)),
-                 :(y = imag(z)),
-                 :(r = x + x),
-                 :(s = muladd(x, x, y*y)),
-                 as...,
-                 :(muladd($ai, z, $b)))
+        Expr(:block,
+             :(x = real(z)),
+             :(y = imag(z)),
+             :(r = x + x),
+             :(s = muladd(x, x, y*y)),
+             as...,
+             :(muladd($ai, z, $b)))
     else
         _evalpoly(z, p)
     end
@@ -239,17 +218,9 @@ function _pi_over_180(z::AbstractFloat)
 end
 
 # rounded to closest representable number where necessary
-function _180_over_pi(z::Union{Float16, Float32})
-    if z isa Float16
-        r = Float16(57.28)
-    elseif z isa Float32
-        r = 57.29578f0
-    end
-    r
-end
-function _pi_over_180(::Float16)
-    Float16(0.01746)
-end
+_180_over_pi(::Float16) = Float16(57.28)
+_180_over_pi(::Float32) = 57.29578f0
+_pi_over_180(::Float16) = Float16(0.01746)
 
 """
     rad2deg(x)
@@ -528,7 +499,7 @@ acosh(x::Number)
 
 Compute the inverse hyperbolic tangent of `x`.
 
-See also [`tanh`](@ref), [`tanh`](@ref).
+See also [`tanh`](@ref), [`atanh`](@ref).
 """
 atanh(x::Number)
 
@@ -655,7 +626,7 @@ Stacktrace:
 """
 log1p(x)
 
-@inline function sqrt(x::Union{Float32,Float64})
+@inline function sqrt(x::IEEEFloat)
     x < zero(x) && throw_complex_domainerror(:sqrt, x)
     sqrt_llvm(x)
 end
@@ -774,7 +745,7 @@ function _hypot(x, y)
 
     # Order the operands
     if ay > ax
-        axu, ayu = ayu, axu
+        axu = ayu
         ax, ay = ay, ax
     end
 
@@ -864,13 +835,8 @@ min(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(x, y
 max(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(y, x) ? x : y
 minmax(x::T, y::T) where {T<:AbstractFloat} = min(x, y), max(x, y)
 
-function min(x::T, y::T) where {T<:IEEEFloat}
-    return min_float(x, y)
-end
-
-function max(x::T, y::T) where {T<:IEEEFloat}
-    return max_float(x, y)
-end
+min(x::T, y::T) where {T<:IEEEFloat} = min_float(x, y)
+max(x::T, y::T) where {T<:IEEEFloat} = max_float(x, y)
 
 """
     ldexp(x, n)
@@ -907,7 +873,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         return flipsign(T(0.0), x)
     end
     n = e % Int
-    k += n
+    k = k +% n
     # overflow, if k is larger than maximum possible exponent
     if k >= exponent_raw_max(T)
         return flipsign(T(Inf), x)
@@ -916,14 +882,15 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return reinterpret(T, xu)
     else # subnormal case
-        if k <= -significand_bits(T) # underflow
+        # results with k == -significand_bits(T) are at least nextfloat(zero(T))/2, so may round up
+        if k <= -significand_bits(T) - 1 # underflow
             # overflow, for the case of integer overflow in n + k
             e > 50000 && return flipsign(T(Inf), x)
             return flipsign(T(0.0), x)
         end
-        k += significand_bits(T)
-        # z = T(2.0) ^ (-significand_bits(T))
-        z = reinterpret(T, rem(exponent_bias(T)-significand_bits(T), uinttype(T)) << significand_bits(T))
+        k += significand_bits(T) + 1
+        # z = T(2.0) ^ (-significand_bits(T) - 1)
+        z = reinterpret(T, rem(exponent_bias(T)-significand_bits(T)-1, uinttype(T)) << significand_bits(T))
         xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return z*reinterpret(T, xu)
     end
@@ -938,6 +905,9 @@ For a normalized floating-point number `x`, this corresponds to the exponent of 
 
 Throws a `DomainError` when `x` is zero, infinite, or [`NaN`](@ref).
 For any other non-subnormal floating-point number `x`, this corresponds to the exponent bits of `x`.
+
+!!! compat "Julia 1.14"
+    Calling `exponent` on a `Bool` requires Julia 1.14 or later.
 
 See also [`signbit`](@ref), [`significand`](@ref), [`frexp`](@ref), [`issubnormal`](@ref), [`log2`](@ref), [`ldexp`](@ref).
 # Examples
@@ -1018,6 +988,14 @@ function exponent(x::Base.BitInteger)
     iszero(x) && throw(DomainError(x, "cannot be zero"))
     ux = Base.uabs(x)
     return 8sizeof(ux) - leading_zeros(ux) - 1
+end
+
+function exponent(x::Bool)
+    if x
+        0
+    else
+        throw(DomainError(x, "cannot be zero"))
+    end
 end
 
 """
@@ -1197,7 +1175,7 @@ end
 
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # This algorithm, due to Dekker, computes the sum of two
-    # double-double numbers and return the high double. References:
+    # double-double numbers and returns the high double. References:
     # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
     # [2] https://doi.org/10.1007/BF01397083
     r = xh+yh
@@ -1315,9 +1293,8 @@ Return positive part of the high word of `x` as a `UInt32`.
 include("special/cbrt.jl")
 include("special/exp.jl")
 include("special/hyperbolic.jl")
+include("special/pi_remainders.jl")
 include("special/trig.jl")
-include("special/rem_pio2.jl")
-include("special/rem2pi.jl")
 include("special/log.jl")
 include("special/pow.jl")
 
@@ -1325,21 +1302,21 @@ include("special/pow.jl")
 
 # Float16 definitions
 
-for func in (:sin,:cos,:tan,:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:log,:log2,:log10,:sqrt,:fourthroot,:log1p)
+# Float16 sin, cos, sincos, and tan have dedicated methods in special/trig.jl
+for func in (:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
+             :atanh,:log,:log2,:log10,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
         $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
     end
 end
 
-for func in (:exp,:exp2,:exp10,:sinh)
+for func in (:exp,:exp2,:exp10,:sinh,:sin,:cos,:tan)
      @eval $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
 end
 
 
 atan(a::Float16,b::Float16) = Float16(atan(Float32(a),Float32(b)))
-sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
 for f in (:sin, :cos, :tan, :asin, :atan, :acos,
           :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
@@ -1350,7 +1327,7 @@ for f in (:sin, :cos, :tan, :asin, :atan, :acos,
         xf isa typeof(x) && throw(MethodError($f, (x,)))
         return ($f)(xf)
     end
-    @eval $(f)(::Missing) = missing
+    @eval $(f)(::Missing) = $(f === :sincospi ? :(missing, missing) : (:missing))
 end
 
 for f in (:atan, :hypot, :log)

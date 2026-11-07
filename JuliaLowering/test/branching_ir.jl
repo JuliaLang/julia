@@ -224,27 +224,19 @@ begin
 end
 #---------------------
 LoweringError:
-#= none:3 =# - Label `foo` defined multiple times
-Expression:
-  label:foo
-Containing expressions:
-  (lambda (block) (block) (block label:foo label:foo))
-  (lambda (block) (block) (block label:foo label:foo))
-  (lambda (block) (block) (block label:foo label:foo))
+begin
+    @label foo
+    @label foo
+#          └─┘ ── Label `foo` defined multiple times
+end
 
 ########################################
 # Error: using value of symbolic label
 x = @label foo
 #---------------------
 LoweringError:
-#= none:1 =# - misplaced label in value position
-Expression:
-  label:foo
-Containing expressions:
-  (lambda (block) (block) (block (call core.declare_global Main.TestMod :x true) latestworld core.nothing (= #₂ label:foo) (= #₃ (call core.get_binding_type Main.TestMod :x)) (= #₁/x (block (= #₅ #₃) (= #₄/tmp #₂) (if (call core.isa #₄/tmp #₅) core.nothing (= #₄/tmp (call top.convert #₅ #₄/tmp))) #₄/tmp)) #₂))
-  (block (block (block (call core.declare_global Main.TestMod :x true) latestworld core.nothing) (= #₂ label:foo) (= #₃ (call core.get_binding_type Main.TestMod :x)) (= #₁/x (block (= #₅ #₃) (= #₄/tmp #₂) (if (call core.isa #₄/tmp #₅) core.nothing (= #₄/tmp (call top.convert #₅ #₄/tmp))) #₄/tmp)) #₂))
-  (lambda (block) (block) (block (= #₁/x label:foo)))
-  (lambda (block) (block) (= x label:foo))
+x = @label foo
+#          └─┘ ── misplaced label in value position
 
 ########################################
 # Anonymous labeled block with valued break
@@ -255,13 +247,13 @@ Containing expressions:
 end
 #---------------------
 1   TestMod.a
-2   (= slot₁/loop-exit_result 42)
+2   (= slot₁/ 42)
 3   (goto label₆)
 4   TestMod.b
-5   (= slot₁/loop-exit_result %₄)
-6   (isdefined slot₁/loop-exit_result)
+5   (= slot₁/ %₄)
+6   (isdefined slot₁/)
 7   (gotoifnot %₆ label₉)
 8   (goto label₁₀)
-9   (= slot₁/loop-exit_result core.nothing)
-10  slot₁/loop-exit_result
+9   (= slot₁/ core.nothing)
+10  slot₁/
 11  (return %₁₀)

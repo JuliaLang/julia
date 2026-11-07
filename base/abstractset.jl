@@ -54,8 +54,12 @@ Set{Int64} with 3 elements:
 """
 function union end
 
-union(s, sets...) = union!(emptymutable(s, promote_eltype(s, sets...)), s, sets...)
+union(s, sets...) = union!(emptymutable(s, setop_eltype(s, sets...)), s, sets...)
 union(s::AbstractSet) = copy(s)
+
+# Element type of the result of a set operation. `IdSet` overrides this, since converting
+# an element would change its identity. See also #48448.
+setop_eltype(s, itrs...) = promote_eltype(s, itrs...)
 
 const ∪ = union
 
@@ -95,7 +99,9 @@ max_values(T::Union{map(X -> Type{X}, BitIntegerSmall_types)...}) = 1 << (8*size
 function max_values(T::Union)
     a = max_values(T.a)::Int
     b = max_values(T.b)::Int
-    return max(a, b, a + b)
+    r, o = add_with_overflow(a, b)
+    o && return typemax(Int)
+    return r
 end
 max_values(::Type{Bool}) = 2
 max_values(::Type{Nothing}) = 1
@@ -104,7 +110,7 @@ function union!(s::AbstractSet{T}, itr) where T
     haslength(itr) && sizehint!(s, length(s) + Int(length(itr))::Int; shrink = false)
     for x in itr
         push!(s, x)
-        length(s) == max_values(T) && break
+        eltype(itr) <: T && length(s) == max_values(T) && break
     end
     return s
 end
@@ -159,8 +165,8 @@ function intersect(s::AbstractSet, itr, itrs...)
             return intersect(s, itrs[min_idx], new_itrs...)
         end
     end
-    T = promote_eltype(s, itr, itrs...)
-    if T == promote_eltype(s, itr)
+    T = setop_eltype(s, itr, itrs...)
+    if T == setop_eltype(s, itr)
         out = intersect(s, itr)
     else
         out = union!(emptymutable(s, T), s)
@@ -171,9 +177,9 @@ end
 intersect(s) = union(s)
 function intersect(s::AbstractSet, itr)
     if haslength(itr) && hasfastin(itr) && length(s) < length(itr)
-        return mapfilter(in(itr), push!, s, emptymutable(s, promote_eltype(s, itr)))
+        return mapfilter(in(itr), push!, s, emptymutable(s, setop_eltype(s, itr)))
     else
-        return mapfilter(in(s), push!, itr, emptymutable(s, promote_eltype(s, itr)))
+        return mapfilter(in(s), push!, itr, emptymutable(s, setop_eltype(s, itr)))
     end
 end
 
@@ -200,8 +206,9 @@ intersect!(s::AbstractSet, itr) =
 """
     setdiff(s, itrs...)
 
-Construct the set of elements in `s` but not in any of the iterables in `itrs`.
-Maintain order with arrays. The result will have the same element type as `s`.
+Construct the set of distinct elements in `s` but not in any of the iterables in `itrs`.
+If `s` is not an `AbstractSet` (e.g. an array), the result is a `Vector` without duplicates
+that maintains the order in which elements first appear in `s`.
 
 See also [`setdiff!`](@ref), [`union`](@ref), [`intersect`](@ref).
 
@@ -215,6 +222,11 @@ julia> setdiff([1,2,3], [3,4,5])
 julia> setdiff([1,2,3], [1.0, 2.0])
 1-element Vector{Int64}:
  3
+
+julia> setdiff([3, 1, 1, 2, 3], [2])
+2-element Vector{Int64}:
+ 3
+ 1
 ```
 """
 setdiff(s::AbstractSet, itrs...) = setdiff!(copymutable(s), itrs...)
@@ -273,7 +285,7 @@ julia> symdiff([1,2,1], [2, 1, 2])
 Int64[]
 ```
 """
-symdiff(s, sets...) = symdiff!(emptymutable(s, promote_eltype(s, sets...)), s, sets...)
+symdiff(s, sets...) = symdiff!(emptymutable(s, setop_eltype(s, sets...)), s, sets...)
 symdiff(s) = symdiff!(copy(s))
 
 """

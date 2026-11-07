@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using LinearAlgebra
+using Test, LinearAlgebra
 
 # For curmod_*
 include("testenv.jl")
@@ -161,6 +161,10 @@ end
 @test_repr ":(:(:(x)))"
 @test_repr "-\"\""
 @test_repr "-(<=)"
+@test_repr "-(1)"
+@test_repr "-(-1)"
+@test_repr "+(1)"
+@test_repr "-(1.5)"
 @test_repr "\$x"
 @test_repr "\$(\"x\")"
 
@@ -179,6 +183,8 @@ end
 @test_repr "w = ((x, y) = z)" # parens aren't necessary, but not wrong
 @test_repr "a & b && c"
 @test_repr "a & (b && c)"
+@test_repr "a .& b .&& c"
+@test_repr "a .&& (b .|| c)"
 @test_repr "(a => b) in c"
 @test_repr "a => b in c"
 @test_repr "*(a..., b)"
@@ -193,11 +199,16 @@ end
 # Exponentiation (>= operator_precedence(:^)) and unary operators
 @test_repr "(-1)^a"
 @test_repr "(-2.1)^-1"
+@test_repr "(-0.0)^2"
 @test_repr "(-x)^a"
 @test_repr "(-a)^-1"
 @test_repr "(!x)↑!a"
 @test_repr "(!x).a"
 @test_repr "(!x)::a"
+@test_repr ".-x"
+@test_repr "f(.+x, .~y)"
+@test_repr "(.-x)^a"
+@test_repr ".-(-1)"
 
 # invalid UTF-8 strings
 @test_repr "\"\\ud800\""
@@ -245,8 +256,15 @@ end
 @test repr(:((a=1,3;x=2))) == ":((a = 1, 3; x = 2))"
 @test repr(:(g(a,; b))) == ":(g(a; b))"
 @test repr(:(;)) == ":((;))"
-@test repr(:(-(;x))) == ":(-(; x))"
-@test repr(:(+(1, 2;x))) == ":(+(1, 2; x))"
+@test repr(:(-(;x))) == ":((-)(; x))"
+@test repr(:(+(1, 2;x))) == ":((+)(1, 2; x))"
+@test repr(:((+)(b; a = 1))) == ":((+)(b; a = 1))"
+@test_repr "(!)(b; a = 1)"
+@test_repr "(+)(a = 1)"
+@test_repr "(<:)(; a = 1)"
+@test_repr "(>:)(b, c; a = 1)"
+@test_repr "(&)(b, c; a = 1)"
+@test_repr "==(1, 2, atol = 0.1)"
 @test repr(:(1:2...)) == ":(1:2...)"
 
 @test repr(:(1 := 2)) == ":(1 := 2)"
@@ -301,6 +319,27 @@ end
 # range syntax
 @test_repr "1:2"
 @test_repr "3:4:5"
+@test_repr "a : :b"
+@test_repr "a : b : :c"
+@test_repr "x : :end"
+@test_repr "a : (:b).c"
+@test_repr "x : :(x + 1)"
+@test_repr "a : :b + 1"
+@test_repr "a : :b'ᵀ"
+@test string(Meta.parse("a : :b")) == "a : :b"
+@test string(Meta.parse("a:(:b)[1]")) == "a:(:b)[1]"
+struct RangeEndpointShowCounter
+    calls::Ref{Int}
+end
+Base.show(io::IO, x::RangeEndpointShowCounter) = (x.calls[] += 1; print(io, 1))
+let calls = Ref(0)
+    ex = RangeEndpointShowCounter(calls)
+    for _ in 1:12
+        ex = Expr(:call, :(:), 0, ex)
+    end
+    string(ex)
+    @test calls[] == 1
+end
 let ex4 = Expr(:call, :(:), 1, 2, 3, 4),
     ex1 = Expr(:call, :(:), 1)
     @test eval(Meta.parse(repr(ex4))) == ex4
@@ -501,6 +540,7 @@ end
 @test sprint(show, Symbol("foo \"bar")) == "Symbol(\"foo \\\"bar\")"
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
+@test sprint(show, :(=>)) == ":(=>)"
 
 # make sure :var"'" prints correctly
 @test sprint(show, Symbol("'")) == "Symbol(\"'\")"
@@ -515,6 +555,10 @@ end
 @test Meta.isidentifier(Symbol("x1"))
 @test !Meta.isidentifier(Symbol("x.1"))
 @test !Meta.isidentifier(Symbol("1x"))
+@test !Meta.isidentifier("\x80")
+@test !Meta.isidentifier("a\xffb")
+@test !Meta.isoperator("'\x80")
+@test sprint(show, Symbol("\x80")) == "Symbol(\"\\x80\")"
 
 # issue #32408: Printing of names which are invalid identifiers
 # Invalid identifiers which need `var` quoting:
@@ -653,12 +697,18 @@ test_repr("let @m(x), y=z; end", true)
 
 @test repr(:(@m x y))    == ":(#= $(@__FILE__):$(@__LINE__) =# @m x y)"
 @test string(:(@m x y))  ==   "#= $(@__FILE__):$(@__LINE__) =# @m x y"
-@test string(:(@m x y;)) == "begin\n    #= $(@__FILE__):$(@__LINE__) =# @m x y\nend"
+@test string(:(@m x y;)) == "begin\n    #= $(@__FILE__):$(@__LINE__) =#\n    #= $(@__FILE__):$(@__LINE__) =# @m x y\nend"
 
 # issue #11436
 @test_repr "1 => 2 => 3"
 @test_repr "1 => (2 => 3)"
 @test_repr "(1 => 2) => 3"
+
+for s in ("::(-1)", "::(!a)", "::(a + b)", "&(-1)", "\$(-1)",
+          "::(-0.0)", "&(-0.0)", "\$(-0.0)", "::(x::T)",
+          "-(-1)", "-(-0.0)", "(-1)'", "(-0.0)'")
+    @test string(Meta.parse(s)) == s
+end
 
 # pr 12008
 @test_repr "primitive type A B end"
@@ -888,6 +938,112 @@ end
     @test isconcretetype(Base.infer_return_type(Base.url))
 end
 
+module MethodShowMod
+f(x::Int) = 1
+f(x::Float64) = 2
+f(x::String) = 3
+g() = 1
+struct Callable end
+(::Callable)(x::Int) = 1
+(::Callable)(x::Float64) = 2
+(::Callable)(x::String) = 3
+const h = Callable()
+Core.eval(@__MODULE__,
+          Expr(:function, Expr(:call, :nofile), Expr(:block, LineNumberNode(1, :none), nothing)))
+Core.eval(@__MODULE__, Expr(:function, Expr(:call, :noline), Expr(:block, nothing)))
+end
+
+@testset "method show: show_method_table with a maximum" begin
+    table(f, max) = split(sprint(Base.show_method_table, methods(f), max), '\n')
+    lines = table(MethodShowMod.f, 1)
+    @test length(lines) == 4
+    @test startswith(lines[1], "# 3 methods for generic function \"f\" from ")
+    @test startswith(lines[2], " [1] f(")
+    @test startswith(lines[3], "     @ ")
+    @test lines[4] == "... 2 methods not shown (use methods(f) to see them all)"
+    # a single hidden method is shown like the others
+    @test table(MethodShowMod.f, 2) == table(MethodShowMod.f, -1)
+    @test length(table(MethodShowMod.f, 0)) == 2
+    lines = table(MethodShowMod.h, 1)
+    @test startswith(lines[1], "# 3 methods for callable object")
+    @test lines[end] == "... 2 methods not shown"
+    @test startswith(sprint(Base.show_method_table, methods(MethodShowMod.f), -1, false), "\n [1] f(")
+end
+
+@testset "method show: vectors of methods" begin
+    ms = collect(methods(MethodShowMod.f))
+    lines = split(repr("text/plain", ms), '\n')
+    @test length(lines) == 3
+    for (i, m) in enumerate(ms)
+        @test lines[i] == "[$i] " * sprint(show, m)
+    end
+    @test repr("text/plain", Method[]) == "0-element Vector{Method}"
+    @test repr("text/html", Method[]) == "0-element Vector{Method}"
+    @test repr("text/html", ms) == "3-element Vector{Method}:<ul>" *
+                                   join("<li> " * repr("text/html", m) for m in ms) * "</ul>"
+    @test repr("text/html", only(methods(Core.tuple))) == "tuple(...) in Core"
+    m = only(methods(MethodShowMod.nofile))
+    @test Base.url(m) == ""
+    @test repr("text/html", m) == "nofile() in $(MethodShowMod) at none:1"
+    @test repr("text/html", only(methods(MethodShowMod.noline))) == "noline() in $(MethodShowMod)"
+    @test repr(Core.methodtable) ==
+          "Core.methodtable is a Core.MethodTable with $(length(Core.methodtable)) methods."
+end
+
+@testset "method show: url" begin
+    for (path, line) in ((:none, 1), (:string, 1), (Symbol(@__FILE__), 0), (Symbol("In[12]"), 1))
+        mod = Module()
+        Core.eval(mod, Expr(:function, Expr(:call, :k), Expr(:block, LineNumberNode(line, path), nothing)))
+        @test Base.url(only(methods(@invokelatest mod.k))) == ""
+    end
+end
+
+import LibGit2
+@testset "method show: url for a file in a git repository" begin
+    mktempdir() do dir
+        dir = realpath(dir)
+        repodir = joinpath(dir, "repö")
+        file = joinpath(repodir, "src", "UrlTest.jl")
+        mkpath(dirname(file))
+        write(file, "module UrlTest\n\nf() = 1\nend\n")
+        commit = LibGit2.with(LibGit2.init(repodir)) do repo
+            LibGit2.with(LibGit2.GitConfig(repo)) do cfg
+                LibGit2.set!(cfg, "remote.origin.url", "https://github.com/JuliaLang/Example.jl.git")
+            end
+            LibGit2.add!(repo, "src/UrlTest.jl")
+            sig = LibGit2.Signature("Test", "test@example.com")
+            string(LibGit2.commit(repo, "msg"; author=sig, committer=sig))
+        end
+        expected = "https://github.com/JuliaLang/Example.jl/tree/$commit/src/UrlTest.jl#L3"
+        mod = Base.include(Module(), file)
+        @test Base.url(only(methods(@invokelatest mod.f))) == expected
+        if !Sys.iswindows()
+            # the repository is found through a symlink whose path has a different length
+            symlink(repodir, joinpath(dir, "symlinked"))
+            mod = Base.include(Module(), joinpath(dir, "symlinked", "src", "UrlTest.jl"))
+            @test Base.url(only(methods(@invokelatest mod.f))) == expected
+        end
+        # the temporary directory may be inside a git checkout, so use a repository with no remote
+        file = joinpath(dir, "nonremote", "UrlTest.jl")
+        mkpath(dirname(file))
+        write(file, "module UrlTest\nf() = 1\nend\n")
+        close(LibGit2.init(dirname(file)))
+        mod = Base.include(Module(), file)
+        @test Base.url(only(methods(@invokelatest mod.f))) == "file://" * replace(file, '\\' => '/')
+    end
+end
+
+@testset "method show: functionloc" begin
+    m = which(MethodShowMod.g, ())
+    @test functionloc(MethodShowMod.g) == functionloc(m) == (@__FILE__, m.line)
+    mi = Base.specialize_method(m, Tuple{typeof(MethodShowMod.g)}, Core.svec())
+    @test functionloc(mi) == functionloc(m)
+    @test_throws "function has multiple methods" functionloc(MethodShowMod.f)
+    @test_throws "object is not callable" functionloc(1)
+    @test_throws "function has no definitions" functionloc(Core.eval(Module(), :(function nodefs end)))
+    @test_throws "could not determine location" functionloc(MethodShowMod.noline)
+end
+
 # Method location correction (Revise integration)
 dummyloc(m::Method) = :nofile, Int32(123456789)
 Base.methodloc_callback[] = dummyloc
@@ -979,6 +1135,10 @@ end
 
 # Issue 14121
 @test_repr "(A'x)'"
+@test_repr "(-1)'"
+@test_repr "(-1.5)'ᵀ"
+@test_repr "-(-1)"
+@test_repr "-(-0.0)"
 
 
 # issue #14481
@@ -1088,6 +1248,13 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 @test_repr "Expr(:quote, Expr(:typed_hcat, Expr(:\$, :a), 1))"
 @test_repr repr(Expr(:quote, Expr(:typed_vcat, Expr(:$, :a), 1)))
 @test_repr repr(Expr(:quote, Expr(:typed_hcat, Expr(:$, :a), 1)))
+@test_repr "(a + b)[1 2]"
+@test_repr "(-a)[1;]"
+@test_repr "(a + b)[1;; 2]"
+@test string(Meta.parse("(a + b)[1 2]")) == "(a + b)[1 2]"
+@test_repr "(a + b)[x for x = xs]"
+@test_repr "(-a)[x for x = xs]"
+@test_repr "T[x for x = xs]"
 
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
@@ -1203,7 +1370,7 @@ z856739 = [:a, :b]
 @test_broken repr(:(:(f($(($z856739)...))))) == ":(:(f(\$([:a, :b]...))))"
 @test repr(eval(:(:(f($(($z856739)...)))))) == ":(f(a, b))"
 
-# string interpolation, if this is what the comment in test_rep function
+# string interpolation, if this is what the comment in test_repr function
 # definition talk about
 @test repr(Expr(:string, "foo", :x, "bar")) == ":(\"foo\$(x)bar\")"
 @test Meta.parse(string(Expr(:string, "foo", :x, "bar"))) == Expr(:string, "foo", :x, "bar")
@@ -1468,6 +1635,7 @@ test_repr("(:).a")
 @test repr(@NamedTuple{kw::NTuple{7, Int64}}) == "@NamedTuple{kw::NTuple{7, Int64}}"
 @test repr(@NamedTuple{a::Float64, b}) == "@NamedTuple{a::Float64, b}"
 @test repr(@NamedTuple{var"#"::Int64}) == "@NamedTuple{var\"#\"::Int64}"
+@test repr(@NamedTuple{var"+"::Int64, var"end"::Int64, in::Int64}) == "@NamedTuple{var\"+\"::Int64, var\"end\"::Int64, in::Int64}"
 # issue #60252. some abstract namedtuples cannot use this format
 @test repr(NamedTuple{(:a, :b), NTuple{N, Int64}} where N) == "NamedTuple{(:a, :b), NTuple{N, Int64}} where N"
 
@@ -1505,6 +1673,108 @@ let d = TextDisplay(IOBuffer())
     catch e
         @test e.f == show
     end
+end
+
+struct RecordingDisplay <: AbstractDisplay
+    log::Vector{Any}
+end
+RecordingDisplay() = RecordingDisplay(Any[])
+Base.display(d::RecordingDisplay, x::Int) = (push!(d.log, x); :plain)
+Base.display(d::RecordingDisplay, ::MIME"text/foo", x) = (push!(d.log, x); :foo)
+# Fails the way a display does when it can't handle a value, so lower displays get a turn.
+struct RejectingDisplay <: AbstractDisplay end
+Base.display(::RejectingDisplay, x) = show(devnull, MIME("image/x-none"), x)
+Base.display(::RejectingDisplay, m::MIME, x) = throw(MethodError(display, (m, x)))
+struct BrokenDisplay <: AbstractDisplay end
+Base.display(::BrokenDisplay, x) = error("broken display")
+Base.display(::BrokenDisplay, ::MIME, x) = error("broken display")
+
+# Which display in the stack handles each way of displaying and redisplaying a value
+@testset "display stack" begin
+    saved = copy(Base.Multimedia.displays)
+    empty!(Base.Multimedia.displays)
+    try
+        @test !displayable("text/foo")
+        @test_throws MethodError display(1)
+        @test_throws MethodError redisplay(1)
+
+        lower, upper = RecordingDisplay(), RecordingDisplay()
+        pushdisplay(lower)
+        pushdisplay(upper)
+        @test displayable("text/foo") && displayable(MIME("text/foo"))
+        @test displayable(upper, "text/foo") && !displayable(upper, "text/bar")
+        @test !displayable("text/bar")
+
+        forms = (display => :plain, redisplay => :plain,
+                 ((x -> f("text/foo", x)) => :foo for f in (display, redisplay))...,
+                 ((x -> f(MIME("text/foo"), x)) => :foo for f in (display, redisplay))...)
+        for (f, result) in forms
+            empty!(upper.log)
+            @test f(1) === result
+            @test upper.log == [1]
+            @test isempty(lower.log)
+        end
+        @test redisplay(lower, 2) === :plain
+        @test redisplay(lower, "text/foo", 3) === :foo
+        @test redisplay(lower, MIME("text/foo"), 4) === :foo
+        @test lower.log == [2, 3, 4]
+
+        # No display in the stack takes the value or the MIME type.
+        for f in (display, redisplay)
+            @test_throws MethodError f(1.5)
+            @test_throws MethodError f("text/bar", 1)
+            @test_throws MethodError f(MIME("text/bar"), 1)
+        end
+
+        # A display that can't handle the value passes it down, other errors are not hidden.
+        pushdisplay(RejectingDisplay())
+        for (f, result) in forms
+            empty!(upper.log)
+            @test f(1) === result
+            @test upper.log == [1]
+        end
+        popdisplay()
+        pushdisplay(BrokenDisplay())
+        for f in (display, redisplay)
+            @test_throws "broken display" f(1)
+            @test_throws "broken display" f("text/foo", 1)
+        end
+        @test popdisplay() === BrokenDisplay()
+
+        # The topmost copy is the one removed, and displays not in the stack are an error.
+        pushdisplay(lower)
+        @test popdisplay(lower) === lower
+        @test Base.Multimedia.displays == [lower, upper]
+        @test_throws KeyError popdisplay(RecordingDisplay())
+        @test popdisplay(lower) === lower
+        @test Base.Multimedia.displays == [upper]
+    finally
+        empty!(Base.Multimedia.displays)
+        append!(Base.Multimedia.displays, saved)
+    end
+
+    # A file stream holds output back until flushed, so this shows the flush reaches it.
+    mktemp() do path, io
+        d = TextDisplay(io)
+        display(d, 1)
+        flush(d)
+        @test read(path, String) == "1\n"
+        close(d)
+        @test !isopen(io)
+    end
+end
+
+struct BinaryShow end
+Base.show(io::IO, ::MIME"image/png", ::BinaryShow) = write(io, 0x01, 0x02)
+@testset "binary and text MIME types" begin
+    @test istextmime("text/anything")
+    @test istextmime("image/svg+xml")
+    @test istextmime(MIME("application/json"))
+    @test !istextmime("image/png")
+    @test repr("image/png", BinaryShow()) == [0x01, 0x02]
+    bytes = [0x03]
+    @test repr("image/png", bytes) === bytes
+    @test repr("application/json", "{}") == "{}"
 end
 
 struct TypeWith4Params{a,b,c,d}
@@ -1545,6 +1815,24 @@ end
 
 # Test for PR 17803
 @test static_shown(Int128(-1)) == "Int128(0xffffffffffffffffffffffffffffffff)"
+
+# Ignore unused high bits when statically showing odd-bit primitives.
+primitive type StaticShowUInt63 63 end
+let m = Memory{StaticShowUInt63}(undef, 1)
+    GC.@preserve m unsafe_store!(Ptr{UInt64}(pointer(m)), typemax(UInt64))
+    shown = static_shown(m)
+    @test occursin("StaticShowUInt63(0x7fffffffffffffff)", shown)
+    @test !occursin("StaticShowUInt63(0xffffffffffffffff)", shown)
+end
+# ... and padding bytes: sizeof is 4 for these, with 1 resp. 2 bytes of padding
+primitive type StaticShowUInt24 24 end
+primitive type StaticShowUInt17 17 end
+let m = Memory{StaticShowUInt24}(undef, 1), m17 = Memory{StaticShowUInt17}(undef, 1)
+    GC.@preserve m unsafe_store!(Ptr{UInt32}(pointer(m)), typemax(UInt32))
+    @test occursin("StaticShowUInt24(0xffffff)", static_shown(m))
+    GC.@preserve m17 unsafe_store!(Ptr{UInt32}(pointer(m17)), typemax(UInt32))
+    @test occursin("StaticShowUInt17(0x01ffff)", static_shown(m17))
+end
 
 # PR #22160
 @test static_shown(:aa) == ":aa"
@@ -1818,18 +2106,23 @@ end
         end
     end
     A = Int64[1]
-    @test arrstr(A, 4) == "1-element Vector{Int64}: …"
+    @test arrstr(A, 4) == "1-element Vector{Int64}: [1]"
     @test arrstr(A, 5) == "1-element Vector{Int64}:\n 1"
     push!(A, 2)
-    @test arrstr(A, 5) == "2-element Vector{Int64}:\n ⋮"
+    @test arrstr(A, 5) == "2-element Vector{Int64}: [1, 2]"
     @test arrstr(A, 6) == "2-element Vector{Int64}:\n 1\n 2"
     push!(A, 3)
     @test arrstr(A, 6) == "3-element Vector{Int64}:\n 1\n ⋮"
+    # the summary already names the type, so the single-line form should
+    # not repeat it as an array literal prefix (on any platform)
+    @test arrstr(Int8[1, 2], 4) == "2-element Vector{Int8}: [1, 2]"
 
-    @test arrstr(zeros(4, 3), 4)  == "4×3 Matrix{Float64}: …"
-    @test arrstr(zeros(4, 30), 4) == "4×30 Matrix{Float64}: …"
-    @test arrstr(zeros(4, 3), 5)  == "4×3 Matrix{Float64}:\n ⋮      ⋱  "
-    @test arrstr(zeros(4, 30), 5) == "4×30 Matrix{Float64}:\n ⋮      ⋱  "
+    @test arrstr(zeros(4, 3), 4)  == "4×3 Matrix{Float64}: [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0]"
+    @test arrstr(zeros(4, 30), 4) == "4×30 Matrix{Float64}: [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0;…"
+    @test arrstr(zeros(4, 3), 5)  == "4×3 Matrix{Float64}: [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0]"
+    @test arrstr(zeros(4, 30), 5) == "4×30 Matrix{Float64}: [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0;…"
+    @test arrstr(zeros(1, 30), 5) == "1×30 Matrix{Float64}:\n" *
+        " 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  …  0.0  0.0  0.0  0.0  0.0  0.0  0.0"
     @test arrstr(zeros(4, 3), 6)  == "4×3 Matrix{Float64}:\n 0.0  0.0  0.0\n ⋮         "
     @test arrstr(zeros(4, 30), 6) ==
               string("4×30 Matrix{Float64}:\n",
@@ -1855,7 +2148,7 @@ end
             true
         end
         M = MyBigFill(4, (big(2)^65, 3))
-        @test arrstr(M, 3) == "36893488147419103232×3 $MyBigFill{$Int, 2}: …"
+        @test arrstr(M, 3) == "36893488147419103232×3 $MyBigFill{$Int, 2}: [4 4 4; 4 4 4; … ; 4 4 4; 4 4 4]"
         @test arrstr(M, 8) == "36893488147419103232×3 $MyBigFill{$Int, 2}:\n 4  4  4\n 4  4  4\n ⋮     \n 4  4  4"
     end
 end
@@ -2238,7 +2531,7 @@ h_line() = f_line()
 @test sprint(Base.show_unquoted, Core.Compiler.Argument(-2)) == "_-2"
 
 
-eval(Meta._parse_string("""function my_fun28173(x)
+eval(Meta.parse("""function my_fun28173(x)
     y = if x == 1
             "HI"
         elseif x == 2
@@ -2256,7 +2549,7 @@ eval(Meta._parse_string("""function my_fun28173(x)
             "three"
         end
     return y
-end""", "a"^80, 1, 1, :statement)[1]) # use parse to control the line numbers
+end""", filename="a"^80))
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     @test_throws "must be one of the following" sprint(IRShow.show_ir, src; context = :debuginfo => :_)
     @test !contains(sprint(IRShow.show_ir, src; context = :debuginfo => :source_inline), "a"^80)
@@ -2476,8 +2769,8 @@ end
 @weak_test_repr "a[begin, end, let x=1; (x+1;); end]"
 @test_broken repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
         ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
-@test_repr "a[(bla;)]"
-@test_repr "a[(;;)]"
+@weak_test_repr "a[(bla;)]"
+@weak_test_repr "a[(;;)]"
 @weak_test_repr "a[x -> f(x)]"
 
 @testset "Base.Iterators" begin
@@ -2532,6 +2825,78 @@ end
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
 @test string(Union{Array, Memory}) == "Union{Array, Memory}"
 
+# Discard strictly broader aliases, preserving other ambiguities (issue #41034).
+module M41034
+export Dog, Cat, Giraffe, Pair, CatPair, Kitten, Kitty, FloatPair, IntPair
+export IntegerAnimal, NothingPair, TuplePair, Cats, One, Ints
+struct A{T} end
+const Dog = A{String}
+const Cat = A{Int}
+const Giraffe = A{<:Number}
+const IntegerAnimal = A{<:Integer}
+struct B{T,S,U} end
+const Pair{T,S} = B{T,S,Nothing}
+const CatPair{S} = B{Int,S,Nothing}
+const NothingPair{T} = B{T,Nothing,Nothing}
+const TuplePair{T,S} = B{Tuple{T,S},Nothing,Nothing}
+struct C{T} end
+const Kitten = C{Int}
+const Kitty = C{Int}
+const Cats = C{<:Number}
+struct D{T,S} end
+const FloatPair{S} = D{Float64,S}
+const IntPair{T} = D{T,Int}
+struct Indexed{T,N} end
+const One{T} = Indexed{T,1}
+const Ints{N} = Indexed{Int,N}
+end
+
+@testset "Overlapping type aliases" begin
+    prefix = "$(curmod_prefix)M41034."
+    @test string(M41034.Cat) == "$(prefix)Cat"
+    @test replstr(M41034.Cat) == "Cat (alias for $(prefix)A{$Int})"
+    @test string(M41034.Dog) == "$(prefix)Dog"
+    @test string(M41034.Giraffe) == "$(prefix)Giraffe"
+    @test string(M41034.Giraffe{Float64}) == "$(prefix)Giraffe{Float64}"
+    @test string(M41034.A{Int8}) == "$(prefix)IntegerAnimal{Int8}"
+    @test string(M41034.CatPair) == "$(prefix)CatPair"
+    @test string(M41034.CatPair{String}) == "$(prefix)CatPair{String}"
+    @test string(M41034.Pair{Float64,String}) == "$(prefix)Pair{Float64, String}"
+    @test string(M41034.NothingPair{String}) == "$(prefix)NothingPair{String}"
+    @test string(M41034.NothingPair{Tuple{Int,Float64}}) == "$(prefix)TuplePair{$Int, Float64}"
+    @test Base.make_typealias(M41034.B{Int,Nothing,Nothing}) === nothing
+    @test Base.make_typealias(M41034.Kitten) === nothing
+    @test string(M41034.Kitten) == "$(prefix)C{$Int}"
+    @test Base.make_typealias(M41034.D{Float64,Int}) === nothing
+    @test string(M41034.D{Float64,Int}) == "$(prefix)D{Float64, $Int}"
+    @test Base.make_typealias(M41034.Indexed{Int,1}) === nothing
+    @test string(M41034.Indexed{Int,1}) == "$(prefix)Indexed{$Int, 1}"
+end
+
+# JuMP-style aliases fix backend and hook types before fixing the numeric type.
+module M41034JuMP
+export Model, GenericModel, VariableRef, GenericVariableRef
+abstract type AbstractBackend end
+struct Backend <: AbstractBackend end
+struct ConcreteModel{T<:Real,B<:AbstractBackend,H} end
+const GenericModel{T<:Real} = ConcreteModel{T,AbstractBackend,Any}
+const Model = GenericModel{Float64}
+struct VariableRefImpl{T,M<:ConcreteModel{T}} end
+const GenericVariableRef{T<:Real} = VariableRefImpl{T,GenericModel{T}}
+const VariableRef = GenericVariableRef{Float64}
+end
+
+@testset "Nested model and variable aliases" begin
+    prefix = "$(curmod_prefix)M41034JuMP."
+    @test string(M41034JuMP.Model) == "$(prefix)Model"
+    @test string(M41034JuMP.GenericModel) == "$(prefix)GenericModel"
+    @test string(M41034JuMP.GenericModel{BigFloat}) == "$(prefix)GenericModel{BigFloat}"
+    @test string(M41034JuMP.VariableRef) == "$(prefix)VariableRef"
+    @test string(M41034JuMP.GenericVariableRef) == "$(prefix)GenericVariableRef"
+    @test string(M41034JuMP.GenericVariableRef{BigFloat}) == "$(prefix)GenericVariableRef{BigFloat}"
+    @test Base.make_typealias(M41034JuMP.ConcreteModel{Float64,M41034JuMP.Backend,Nothing}) === nothing
+end
+
 # Alias printing should recover the source binder for bounded alias parameters.
 module MBoundedAlias
 export A, B, U
@@ -2556,6 +2921,13 @@ let T = TypeVar(:T, Union{}, Integer), S = TypeVar(:S, Union{}, T)
     @test string(Union{MBoundedAlias2.A{T,S}, MBoundedAlias2.B{T,S}}) ==
         "$(curmod_prefix)MBoundedAlias2.U{T, S} where {T<:Integer, S<:T}"
 end
+
+for T in (Union{Int, Vector{Vector{C}} where C}, Union{Int, Vector{Vector{C}} where C<:Real},
+          Union{Nothing, Matrix{Int}, Vector{Vector{C}} where C},
+          Union{Nothing, Vector{Vector{C}} where C<:D} where D)
+    @test eval(Meta.parse(repr(T))) == T
+end
+@test string(Union{Int64, Vector{Vector{C}} where C}) == "Union{Int64, Vector{Vector{C}} where C}"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
@@ -2964,4 +3336,257 @@ let m = only(methods(f_show_method))
     let s = sprint(show, m; context=:print_method_signature_only=>true)
         @test "f_show_method(x::T) where T<:Integer" == s
     end
+end
+
+@testset "issue #54028: Unstable SSA highlighting in code_warntype" begin
+    using InteractiveUtils
+
+    function foo_ssa_test(x)
+        y = x[1]
+        sin(y+1)
+    end
+
+    render_code_warntype(f, tt; color::Bool) = sprint(io -> begin
+        ioc = IOContext(io, :color => color)
+        code_warntype(ioc, f, tt)
+    end)
+
+    has_colored_ssa_lhs(str, color) =
+        occursin(Regex("(\\e\\[$(color)m\\e\\[1m|\\e\\[1m\\e\\[$(color)m)%\\d+(\\e\\[22m\\e\\[39m|\\e\\[39m\\e\\[22m)\\s*="), str)
+
+    has_colored_ssa_rhs(str, color) =
+        occursin(Regex("(\\e\\[$(color)m\\e\\[1m|\\e\\[1m\\e\\[$(color)m)%\\d+(\\e\\[22m\\e\\[39m|\\e\\[39m\\e\\[22m)(?!\\s*=)"), str)
+
+    @testset "strong SSA highlighted for Vector{Any}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=true)
+        @test has_colored_ssa_lhs(str, "91")
+        @test has_colored_ssa_rhs(str, "91")
+    end
+
+    @testset "strong SSA highlighted for Vector{Real}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Real},); color=true)
+        @test has_colored_ssa_lhs(str, "91")
+        @test has_colored_ssa_rhs(str, "91")
+    end
+
+    @testset "mild SSA highlighted for Vector{Union{Int, Float64}}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Union{Int, Float64}},); color=true)
+        @test has_colored_ssa_lhs(str, "33") || has_colored_ssa_lhs(str, "93")
+        @test has_colored_ssa_rhs(str, "33") || has_colored_ssa_rhs(str, "93")
+    end
+
+    @testset "no SSA highlighting with color=false" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=false)
+        @test !contains(str, "\e[91m")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
+    end
+
+    @testset "no SSA highlighting with InteractiveUtils.highlighting[:warntype]=false" begin
+        InteractiveUtils.highlighting[:warntype] = false
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=true)
+        @test !contains(str, "\e[91m")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
+        InteractiveUtils.highlighting[:warntype] = true
+    end
+
+    @testset "stable input has no unstable highlighting" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Float64},); color=true)
+        @test !contains(str, "\e[91m")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
+    end
+end
+
+# issue #62897: `show` of `Type{v}` with a non-type parameter must not be memory-unsafe
+@testset "show Type{v} with value parameter" begin
+    @test repr(Type{setindex!}) == "Type{setindex!}"
+    @test repr(Type{1}) == "Type{1}"
+    @test repr(Type{:sym}) == "Type{:sym}"
+    @test repr(Type{(1, 2)}) == "Type{(1, 2)}"
+    @test sprint(show, Type{1}; context=:compact => false) == "TypeEq{1}"
+    @test repr("text/plain", Type{setindex!}) == "Type{setindex!}"
+    @test repr("text/plain", Type{1}) == "Type{1}"
+end
+
+@testset "text/plain show falling back to show" begin
+    @test repr("text/plain", Returns(1)) == repr(Returns(1)) == "Returns{$Int}(1)"
+    @test repr("text/plain", splat(+)) == repr(splat(+)) == "splat(+)"
+    @test repr("text/plain", Union{}) == "Union{}"
+    @test repr("text/plain", 1:0) == "1:0 (empty range)"
+    @test repr("text/plain", 1:0; context=:compact => true) == "1:0"
+    oc = Base.Experimental.@opaque (x::Int) -> x
+    @test repr("text/plain", oc) == repr(oc) == "(::$Int)->◌::$Int"
+    @test sprint(show, MIME"text/plain"(), keys(Dict(1 => 2))) ==
+          "KeySet for a Dict{$Int, $Int} with 1 entry. Keys:\n  1"
+    @test sprint(show, MIME"text/plain"(), Set([1])) == "Set{$Int} with 1 element:\n  1"
+end
+
+@testset "show failed Task" begin
+    t = Task(() -> error("show failed Task"))
+    schedule(t)
+    @test_throws TaskFailedException wait(t)
+    str = repr("text/plain", t)
+    @test startswith(str, repr(t) * "\nshow failed Task\nStacktrace:\n")
+    @test repr(t) == "Task (failed) @0x" * string(UInt(pointer_from_objref(t)), base=16, pad=Sys.WORD_SIZE>>2)
+end
+
+@testset "show CancellationTokenSource" begin
+    for (request, str) in ((Base.CANCEL_REQUEST_SAFE, "cancelled"),
+                           (Base.CANCEL_REQUEST_ABANDON_EXTERNAL, "cancelled, abandon external"),
+                           (Base.CANCEL_REQUEST_ABANDON_ALL, "cancelled, abandon all"))
+        src = Base.CancellationTokenSource()
+        @test repr(src) == "CancellationTokenSource(active)"
+        Base.cancel!(src, request)
+        @test repr(src) == "CancellationTokenSource($str)"
+    end
+end
+
+@testset "IO without context" begin
+    io = IOBuffer()
+    @test !haskey(io, :compact)
+    @test !((:compact => true) in io)
+    @test_throws KeyError(:compact) io[:compact]
+    @test get(io, :compact, 1) == 1
+end
+
+@testset "operator_associativity" begin
+    for s in (:(=), :+=, :^, :→, :(=>), :<|, :||, :&&, :?, :!, :¬, :√)
+        @test Base.operator_associativity(s) === :right
+    end
+    for s in (:+, :++, :*, :<, :(==), :<:, :>:, :sin, :foo)
+        @test Base.operator_associativity(s) === :none
+    end
+    for s in (:-, :/, :|>, :⊗, :.+, ://)
+        @test Base.operator_associativity(s) === :left
+    end
+end
+
+@testset "dump SimpleVector" begin
+    @test sprint(dump, Core.svec()) == "empty SimpleVector\n"
+    @test sprint(dump, Core.svec(1, "a")) == "SimpleVector\n  1: $Int 1\n  2: String \"a\"\n"
+    @test sprint(dump, Core.svec(1, Core.svec(2)); context=:limit => false) ==
+          "SimpleVector\n  1: $Int 1\n  2: SimpleVector\n    1: $Int 2\n"
+    @test sprint(io -> dump(io, Core.svec(1, Core.svec(2)); maxdepth=1)) ==
+          "SimpleVector\n  1: $Int 1\n  2: SimpleVector\n"
+    @test sprint(dump, [1, 2]) == "Array{$Int}((2,)) [1, 2]\n"
+end
+
+@testset "demangle_function_name" begin
+    @test Base.demangle_function_name("f#kw") == "f"
+    @test Base.demangle_function_name("f#3#4") == "f"
+    @test Base.demangle_function_name("#f#1") == "#f#1"
+    @test Base.demangle_function_name("f") == "f"
+    @test Base.demangle_function_name(Symbol("g#2")) === :g
+    @test sprint((io, n, t) -> Base.show_tuple_as_call(io, n, t; demangle=true), Symbol("h#1"), Tuple) == "h(...)"
+    @test sprint(Base.show_tuple_as_call, Symbol("h#1"), Tuple) == "h#1(...)"
+end
+
+@testset "show unusual Expr forms" begin
+    @test sprint(show, Expr(:gotoifnot, :x, 3)) == ":(unless x goto %3)"
+    @test sprint(show, Expr(:null)) == ":(nothing)"
+    @test sprint(show, Expr(:meta, :push_loc, :file, :f)) == ":(# meta: location file f)"
+    @test sprint(show, Expr(:meta, :pop_loc)) == ":(# meta: pop location)"
+    @test sprint(show, Expr(:meta, :pop_loc, 2)) == ":(# meta: pop locations (2))"
+    @test sprint(show, Expr(:while, :c, :x)) == ":(while c\n      x\n  end)"
+    @test sprint(show, Expr(:try, Expr(:block, :a), :e, Expr(:block, :b), false, Expr(:block, :c))) ==
+          ":(try\n      a\n  catch e\n      b\n  else\n      c\n  end)"
+    @test sprint(print, Expr(:quote, :a, :b)) == "quote\n    a\n    b\nend"
+    @test sprint(show, Expr(:macrocall, Expr(:., :A, QuoteNode(1)), nothing)) == ":(A.1)"
+    @test sprint(show, Expr(:macrocall, 1, nothing)) == ":(1)"
+    @test sprint(Base.show_unquoted, Core.SSAValue(5), 0, 0; context=(:maxssaid => 2, :color => true)) ==
+          "\e[31m%5\e[39m"
+end
+
+@testset "showarg" begin
+    @test sprint(Base.showarg, Int, true) == "Type{$Int}"
+    @test sprint(Base.showarg, Int, false) == "::Type{$Int}"
+    @test sprint(Base.showarg, Union{}[], false) == "::Vector{Union{}}"
+    @test summary(Union{}[]) == "0-element Vector{Union{}}"
+    @test summary(reinterpret(Int32, [1.0])) == "2-element reinterpret(Int32, ::Vector{Float64})"
+    d = Dict(1 => 2)
+    @test summary(Iterators.Pairs(d, keys(d))) ==
+          "Iterators.Pairs(::Dict{$Int, $Int}, ::$(typeof(keys(d)))) with 1 entry"
+end
+
+@testset "bitstring of BitArray" begin
+    # Bits are shown in index order, a space after each byte, and ": " between 64-bit chunks.
+    function bitstring_ref(B)
+        chunks = map(Iterators.partition(B, 64)) do c
+            join(join(b ? '1' : '0' for b in byte) * (length(byte) == 8 ? " " : "")
+                 for byte in Iterators.partition(c, 8))
+        end
+        return join(chunks, ": ")
+    end
+    for B in (falses(0), trues(3), falses(8), BitVector(isodd.(1:70)), BitMatrix(iseven.(reshape(1:130, 10, 13))))
+        @test bitstring(B) == bitstring_ref(B)
+    end
+    @test bitstring(BitVector(isodd.(1:10))) == "10101010 10"
+    @test sprint(Base.print_bit_chunk, UInt64(5), 3) == "101"
+end
+
+module ShowBindings
+export c
+const c = 1
+global g::Int = 2
+global d
+x = 3
+using Base: sin
+import Base: cos
+import Base.Iterators
+import LinearAlgebra
+Core.declare_const(@__MODULE__, :uc)
+module A1
+export amb, gv
+amb = 1
+gv = 2
+end
+module A2
+export amb
+amb = 2
+end
+using .A1, .A2
+end
+
+@testset "show Binding and BindingPartition" begin
+    M = ShowBindings
+    binding(s) = convert(Core.Binding, GlobalRef(M, s))
+    partition(s) = Base.lookup_binding_partition(Base.get_world_counter(), binding(s))
+    for (s, desc) in ((:c, "[exported] - constant binding"),
+                      (:g, "- global variable with type $Int"),
+                      (:d, "- weak global binding declared using `global` (implicit type Any)"),
+                      (:x, "- global variable with type Any"),
+                      (:sin, "- explicit `using` from Base.sin"),
+                      (:cos, "- explicit `import` from Base.cos"),
+                      (:Iterators, "- explicit `import` from Base.Iterators"),
+                      (:LinearAlgebra, "- constant binding (declared with `import`)"),
+                      (:uc, "- undefined const binding"),
+                      (:amb, "- ambiguous binding - guard entry"),
+                      (:gv, "- implicit `using` resolved to global $(M.A1).gv"),
+                      (:tan, "- implicit `using` resolved to constant"),
+                      (:not_a_binding, "- undefined binding - guard entry"))
+        p = partition(s)
+        world = "$(Int(p.min_world)):∞ $desc"
+        @test repr("text/plain", p) == "BindingPartition for $M.$s\n   $world"
+        @test repr(p) == "BindingPartition(for $M.$s: $world)"
+        @test startswith(repr("text/plain", binding(s)), "Binding $M.$s\n   $world")
+    end
+    # older partitions are listed after the current one, with a finite max world
+    lines = split(repr("text/plain", binding(:g)), '\n')
+    @test length(lines) >= 3
+    @test all(l -> occursin(r"^   \d+:\d+ - ", l), lines[3:end])
+    @test repr("text/plain", binding(:never_looked_up)) == "Binding $M.never_looked_up - No partitions"
+end
+
+@testset "show EvalInto and IncludeInto" begin
+    @test repr(Core.EvalInto(Main)) == "Main.eval"
+    @test repr(Base.IncludeInto(Main)) == "Main.include"
+    @test repr(Core.EvalInto(ShowBindings)) == "$ShowBindings.eval"
+    # Base defines its own include function, so the short form does not apply
+    @test repr(Base.IncludeInto(Base)) == "Base.IncludeInto(Base)"
+    @test repr(Core.EvalInto(Base)) == "Core.EvalInto(Base)"
+    # a module may define neither eval nor include
+    @test repr(Core.EvalInto(Base.Iterators)) == "Core.EvalInto(Base.Iterators)"
+    @test repr(Base.IncludeInto(Base.Iterators)) == "Base.IncludeInto(Base.Iterators)"
 end

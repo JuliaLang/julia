@@ -26,7 +26,7 @@ export Core,
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
-    nfields, throw, tuple, ===, isdefined,
+    nfields, throw, tuple, ===, isdefined, bitsizeof,
     # access to globals
     getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
@@ -228,8 +228,11 @@ export
     ÷,
     &,
     *,
+    *%,
     +,
+    +%,
     -,
+    -%,
     /,
     //,
     <,
@@ -321,6 +324,7 @@ export
     fld1,
     fldmod,
     fldmod1,
+    cldmod1,
     flipsign,
     float,
     tryparse,
@@ -543,6 +547,7 @@ export
 
 # dequeues
     append!,
+    growat!,
     insert!,
     pop!,
     popat!,
@@ -572,6 +577,7 @@ export
     lastindex,
     filter!,
     filter,
+    filterfirst,
     foldl,
     foldr,
     foreach,
@@ -884,11 +890,13 @@ export
     ntuple,
     splat,
     tap,
+    unsplat,
 
 # I/O and events
     close,
     closewrite,
     countlines,
+    DirEntry,
     eachline,
     readeach,
     eof,
@@ -939,6 +947,7 @@ export
     unsafe_read,
     unsafe_write,
     write,
+    writepartial,
 
 # multimedia I/O
     AbstractDisplay,
@@ -981,6 +990,7 @@ export
     ctime,
     diskstat,
     download,
+    eachentry,
     filemode,
     filesize,
     gperm,
@@ -1109,6 +1119,7 @@ export
     @gensym,
     @eval,
     @deprecate,
+    @deprecate_binding,
 
     # performance annotations
     @boundscheck,

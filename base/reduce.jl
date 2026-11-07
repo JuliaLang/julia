@@ -73,7 +73,8 @@ struct _InitialValue end
     BottomRF(rf) -> rf′
 
 "Bottom" reducing function.  This is a thin wrapper around the `op` argument
-passed to `foldl`-like functions for handling the initial invocation to call
+passed to `foldl`-like functions, and any mapping of the elements (see
+`_mappingrf`), for handling the initial invocation to call
 [`reduce_first`](@ref).
 """
 struct BottomRF{T}
@@ -96,6 +97,16 @@ struct MappingRF{F, T}
 end
 
 @inline (op::MappingRF)(acc, x) = op.rf(acc, op.f(x))
+
+"""
+    _mappingrf(f, rf) -> rf′
+
+Same as `MappingRF(f, rf)`, except that a mapping applied directly to a `BottomRF`
+goes inside it, so that its `reduce_first` and `reduce_empty` calls reach
+`mapreduce_first` and `mapreduce_empty` with the bare `f` and `op`.
+"""
+_mappingrf(f::F, rf) where {F} = MappingRF(f, rf)
+_mappingrf(f::F, rf::BottomRF) where {F} = BottomRF(MappingRF(f, rf.rf))
 
 """
     FilteringRF(f, rf) -> rf′
@@ -152,7 +163,7 @@ _xfadjoint_unwrap(itr) = itr, identity
 function _xfadjoint_unwrap(itr::Generator)
     itr′, wrap = _xfadjoint_unwrap(itr.iter)
     itr.f === identity && return itr′, wrap
-    return itr′, wrap ∘ Fix1(MappingRF, itr.f)
+    return itr′, wrap ∘ Fix1(_mappingrf, itr.f)
 end
 function _xfadjoint_unwrap(itr::Filter)
     itr′, wrap = _xfadjoint_unwrap(itr.itr)
@@ -357,7 +368,9 @@ reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:BitUnsignedSmall} = one(UI
 
 reduce_empty(op::BottomRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
 reduce_empty(op::MappingRF, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf, T)
+reduce_empty(op::MappingRF{<:Any,<:FlipArgs}, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf.f, T)
 reduce_empty(op::FilteringRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
+reduce_empty(op::FlatteningRF, ::Type{T}) where {T} = reduce_empty(op.rf, eltype(T))
 reduce_empty(op::FlipArgs, ::Type{T}) where {T} = reduce_empty(op.f, T)
 
 """
@@ -379,7 +392,16 @@ mapreduce_empty_iter(f::F, op::F2, itr, ItrEltype) where {F,F2} =
     reduce_empty_iter(MappingRF(f, op), itr, ItrEltype)
 
 @inline reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
+@inline reduce_empty_iter(op::FlatteningRF, itr) = reduce_empty_iter(op.rf, Iterators.flatten(itr))
 @inline reduce_empty_iter(op, itr, ::HasEltype) = reduce_empty(op, eltype(itr))
+# a homogeneous tuple binds the element type as a static parameter, which stays
+# precise for abstract `Tuple{Vararg{T}}` queries where `eltype` of the
+# `@nospecialize`d tuple type does not (#61323). `T` is undefined only for the
+# empty tuple (vacuous `Vararg` match), whose eltype is `Union{}`; the
+# `@isdefined` guard keeps this method's intentional unbound sparam (see the
+# `detect_unbound_args` allow-list in test/ambiguous.jl), like `_eltype_ntuple`.
+@inline reduce_empty_iter(op, itr::Tuple{Vararg{T}}, ::HasEltype) where {T} =
+    reduce_empty(op, @isdefined(T) ? T : Union{})
 reduce_empty_iter(op, itr, ::EltypeUnknown) = throw(ArgumentError("""
     reducing over an empty collection of unknown element type is not allowed.
     You may be able to prevent this error by supplying an `init` value to the reducer."""))
@@ -410,6 +432,9 @@ reduce_first(::typeof(mul_prod), x::BitSignedSmall)   = Int(x)
 reduce_first(::typeof(mul_prod), x::BitUnsignedSmall) = UInt(x)
 reduce_first(::typeof(vcat), x) = vcat(x)
 reduce_first(::typeof(hcat), x) = hcat(x)
+reduce_first(op::MappingRF, x) = mapreduce_first(op.f, op.rf, x)
+reduce_first(op::MappingRF{<:Any,<:FlipArgs}, x) = mapreduce_first(op.f, op.rf.f, x)
+reduce_first(op::FlipArgs, x) = reduce_first(op.f, x)
 
 """
     Base.mapreduce_first(f, op, x)

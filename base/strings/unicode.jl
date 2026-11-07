@@ -57,8 +57,10 @@ isvalid(T,value)
 
 isvalid(c::AbstractChar) = !ismalformed(c) & !isoverlong(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
 isvalid(::Type{<:AbstractChar}, c::Unsigned) = ((c ≤  0xd7ff ) | ( 0xe000  ≤ c) & (c ≤  0x10ffff ))
-isvalid(::Type{T}, c::Integer) where {T<:AbstractChar}  = isvalid(T, Unsigned(c))
+isvalid(::Type{T}, c::Integer) where {T<:AbstractChar}  = c ≥ 0 && isvalid(T, Unsigned(c))
 isvalid(::Type{<:AbstractChar}, c::AbstractChar)     = isvalid(c)
+isvalid(::Type{Union{}}, value) = false
+isvalid(::Type{Union{}}, slurp...) = throw(MethodError(isvalid, (Union{}, slurp...)))
 
 # utf8 category constants
 const UTF8PROC_CATEGORY_CN = 0
@@ -314,7 +316,7 @@ julia> lowercase('Ö')
 ```
 """
 lowercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
-    T(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
+    T(@assume_effects :foldable :nothrow @ccall utf8proc_tolower(c::UInt32)::UInt32)
 
 lowercase(c::AnnotatedChar) = AnnotatedChar(lowercase(c.char), annotations(c))
 
@@ -335,7 +337,7 @@ julia> uppercase('ê')
 ```
 """
 uppercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
-    T(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
+    T(@assume_effects :foldable :nothrow @ccall utf8proc_toupper(c::UInt32)::UInt32)
 
 uppercase(c::AnnotatedChar) = AnnotatedChar(uppercase(c.char), annotations(c))
 
@@ -360,7 +362,7 @@ julia> uppercase('ǆ')
 ```
 """
 titlecase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
-    T(ccall(:utf8proc_totitle, UInt32, (UInt32,), c))
+    T(@assume_effects :foldable :nothrow @ccall utf8proc_totitle(c::UInt32)::UInt32)
 
 titlecase(c::AnnotatedChar) = AnnotatedChar(titlecase(c.char), annotations(c))
 
@@ -375,7 +377,7 @@ function category_code(c::AbstractChar)
 end
 
 function category_code(x::Integer)
-    x ≤ 0x10ffff ? (@assume_effects :foldable :nothrow @ccall utf8proc_category(UInt32(x)::UInt32)::Cint) : Cint(30)
+    0 ≤ x ≤ 0x10ffff ? (@assume_effects :foldable :nothrow @ccall utf8proc_category(UInt32(x)::UInt32)::Cint) : Cint(30)
 end
 
 # more human-readable representations of the category code
@@ -598,7 +600,11 @@ ispunct(c::AbstractChar) = UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_
 
 Tests whether a character is any whitespace character. Includes ASCII characters '\\t',
 '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode
-category Zs.
+categories Zs, Zl and Zp. This is the Unicode `White_Space` property.
+
+!!! compat "Julia 1.14"
+    Before Julia 1.14, U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR), the
+    only characters in categories Zl and Zp, were not considered whitespace.
 
 # Examples
 ```jldoctest
@@ -617,7 +623,7 @@ true
 """
 @inline isspace(c::AbstractChar) =
     c == ' ' || '\t' <= c <= '\r' || c == '\u85' ||
-    '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
+    '\ua0' <= c && UTF8PROC_CATEGORY_ZS <= category_code(c) <= UTF8PROC_CATEGORY_ZP
 
 """
     isprint(c::AbstractChar)::Bool
@@ -634,8 +640,6 @@ true
 ```
 """
 isprint(c::AbstractChar) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS
-
-# true in principal if a printer would use ink
 
 """
     isxdigit(c::AbstractChar)::Bool

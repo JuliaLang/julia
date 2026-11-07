@@ -33,6 +33,7 @@ extern "C" {
 #endif
 
 static uv_async_t signal_async;
+static uv_async_t signal_watch_async;
 static uv_timer_t wait_empty_worker;
 
 static void walk_print_cb(uv_handle_t *h, void *arg)
@@ -62,7 +63,7 @@ static void walk_print_cb(uv_handle_t *h, void *arg)
         jl_safe_printf(" %s[%zd] %s%p->%p\n", type, resource_id, pad, (void*)h, (void*)h->data);
 }
 
-static void wait_empty_func(uv_timer_t *t)
+static void wait_empty_func(uv_timer_t *t) JL_CANSAFEPOINT
 {
     // make sure this is hidden now, since we would auto-unref it later
     uv_unref((uv_handle_t*)&signal_async);
@@ -118,7 +119,22 @@ void jl_wake_libuv(void)
     uv_async_send(&signal_async);
 }
 
+// Called with the IO lock held. Signal handlers may still use the handle after it is closed at exit.
+void jl_init_signal_watchers(uv_async_cb cb)
+{
+    if (signal_watch_async.type != UV_ASYNC) {
+        uv_async_init(jl_io_loop, &signal_watch_async, cb);
+        uv_unref((uv_handle_t*)&signal_watch_async);
+    }
+}
+
+void jl_wake_signal_watchers(void)
+{
+    uv_async_send(&signal_watch_async);
+}
+
 jl_mutex_t jl_uv_mutex;
+int jl_uv_loop_unwatched = 0;
 
 void jl_init_uv(void)
 {
@@ -145,7 +161,7 @@ void JL_UV_LOCK(void)
 /**
  * @brief Begin an IO lock.
  */
-JL_DLLEXPORT void jl_iolock_begin(void)
+JL_DLLEXPORT void jl_iolock_begin(void) JL_CANSAFEPOINT
 {
     JL_UV_LOCK();
 }
@@ -153,13 +169,28 @@ JL_DLLEXPORT void jl_iolock_begin(void)
 /**
  * @brief End an IO lock.
  */
-JL_DLLEXPORT void jl_iolock_end(void)
+JL_DLLEXPORT void jl_iolock_end(void) JL_CANSAFEPOINT
 {
+    // if we leave work in the loop while nobody runs it, wake the event loop thread
+    // (before unlocking, which can throw)
+    if (jl_uv_mutex.count == 1 && jl_uv_loop_unwatched && uv_loop_alive(jl_io_loop)) {
+        jl_uv_loop_unwatched = 0;
+        jl_wake_io_loop_thread();
+    }
+    // a thread outside the thread pools never returns to the scheduler, so inside a threaded
+    // region it must hand the event loop back to any pool thread that went to sleep because
+    // we held the iolock
+    jl_task_t *ct = jl_current_task;
+    int handoff = jl_uv_mutex.count == 1 && jl_threadpoolid(jl_atomic_load_relaxed(&ct->tid)) == -1;
     JL_UV_UNLOCK();
+    // after the unlock, so a thread that saw the iolock held is already marked sleeping,
+    // and a threaded region entered after this load finds the iolock free
+    if (handoff && jl_atomic_load(&_threadedregion))
+        jl_wake_io_loop_thread();
 }
 
 
-static void jl_uv_call_close_callback(jl_value_t *val)
+static void jl_uv_call_close_callback(jl_value_t *val) JL_CANSAFEPOINT
 {
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 2); // val is "rooted" in the finalizer list only right now
@@ -172,7 +203,7 @@ static void jl_uv_call_close_callback(jl_value_t *val)
     JL_GC_POP();
 }
 
-static void jl_uv_closeHandle(uv_handle_t *handle)
+static void jl_uv_closeHandle(uv_handle_t *handle) JL_CANSAFEPOINT
 {
     // if the user killed a stdio handle,
     // revert back to direct stdio FILE* writes
@@ -194,7 +225,7 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
     }
     if (handle == (uv_handle_t*)&wait_empty_worker)
         handle->type = UV_UNKNOWN_HANDLE;
-    else if (handle == (uv_handle_t*)&signal_async)
+    else if (handle == (uv_handle_t*)&signal_async || handle == (uv_handle_t*)&signal_watch_async)
         return;
     else
         free(handle);
@@ -417,7 +448,7 @@ static void jl_proc_exit_cleanup_cb(uv_process_t *process, int64_t exit_status, 
  */
 JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
-    JL_UV_LOCK();
+    jl_iolock_begin();
     if (handle->type == UV_PROCESS && ((uv_process_t*)handle)->pid != 0) {
         // take ownership of this handle,
         // so we can waitpid for the resource to exit and avoid leaving zombies
@@ -445,7 +476,7 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
             uv_close(handle, &jl_uv_closeHandle);
         }
     }
-    JL_UV_UNLOCK();
+    jl_iolock_end();
 }
 
 /**
@@ -453,14 +484,14 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
  *
  * @param handle A pointer to `uv_handle_t` to be forcefully closed.
  */
-JL_DLLEXPORT void jl_forceclose_uv(uv_handle_t *handle)
+JL_DLLEXPORT void jl_forceclose_uv(uv_handle_t *handle) JL_CANSAFEPOINT
 {
     if (!uv_is_closing(handle)) { // avoid double-closing the stream
-        JL_UV_LOCK();
+        jl_iolock_begin();
         if (!uv_is_closing(handle)) { // double-check
             uv_close(handle, &jl_uv_closeHandle);
         }
-        JL_UV_UNLOCK();
+        jl_iolock_end();
     }
 }
 
@@ -517,7 +548,7 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
                           uv_loop_t *loop, uv_process_t *proc,
                           uv_stdio_container_t *stdio, int nstdio,
                           uint32_t flags, char **env, char *cwd, char* cpumask,
-                          size_t cpumask_size, uint32_t uid, uint32_t gid, uv_exit_cb cb)
+                          size_t cpumask_size, uint32_t uid, uint32_t gid, uv_exit_cb cb) JL_CANSAFEPOINT
 {
     uv_process_options_t opts = {0};
     opts.stdio = stdio;
@@ -541,9 +572,9 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
         }
     }
     opts.exit_cb = cb;
-    JL_UV_LOCK();
+    jl_iolock_begin();
     int r = uv_spawn(loop, proc, &opts);
-    JL_UV_UNLOCK();
+    jl_iolock_end();
     return r;
 }
 
@@ -687,15 +718,15 @@ JL_DLLEXPORT int jl_fs_close(uv_os_fd_t handle)
 }
 
 JL_DLLEXPORT int jl_uv_write(uv_stream_t *stream, const char *data, size_t n,
-                             uv_write_t *uvw, uv_write_cb writecb)
+                             uv_write_t *uvw, uv_write_cb writecb) JL_CANSAFEPOINT
 {
     uv_buf_t buf[1];
     buf[0].base = (char*)data;
     buf[0].len = n;
-    JL_UV_LOCK();
+    jl_iolock_begin();
     JL_SIGATOMIC_BEGIN();
     int err = uv_write(uvw, stream, buf, 1, writecb);
-    JL_UV_UNLOCK();
+    jl_iolock_end();
     JL_SIGATOMIC_END();
     return err;
 }
@@ -760,10 +791,10 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
         buf[0].base = data;
         buf[0].len = n;
         req->data = NULL;
-        JL_UV_LOCK();
+        jl_iolock_begin();
         JL_SIGATOMIC_BEGIN();
         int status = uv_write(req, stream, buf, 1, (uv_write_cb)jl_uv_writecb);
-        JL_UV_UNLOCK();
+        jl_iolock_end();
         JL_SIGATOMIC_END();
         if (status < 0) {
             jl_uv_writecb(req, status);
@@ -771,12 +802,12 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
     }
 }
 
-JL_DLLEXPORT void jl_uv_putb(uv_stream_t *stream, uint8_t b)
+JL_DLLEXPORT void jl_uv_putb(uv_stream_t *stream, uint8_t b) JL_CANSAFEPOINT
 {
     jl_uv_puts(stream, (char*)&b, 1);
 }
 
-JL_DLLEXPORT void jl_uv_putc(uv_stream_t *stream, uint32_t c)
+JL_DLLEXPORT void jl_uv_putc(uv_stream_t *stream, uint32_t c) JL_CANSAFEPOINT
 {
     char s[4];
     int n = 1;
@@ -894,51 +925,55 @@ JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, void *host,
     return uv_tcp_bind(handle, (struct sockaddr*)&addr, flags);
 }
 
-JL_DLLEXPORT int jl_tcp_getsockname(uv_tcp_t *handle, uint16_t *port,
-                                    void *host, uint32_t *family)
+static void jl_sockaddr_unpack(struct sockaddr_storage *addr, uint16_t *port,
+                               void *host, uint32_t *family)
 {
-    int namelen;
-    struct sockaddr_storage addr;
-    memset(&addr, 0, sizeof(struct sockaddr_storage));
-    namelen = sizeof addr;
-    int res = uv_tcp_getsockname(handle, (struct sockaddr*)&addr, &namelen);
-    if (res)
-        return res;
-    *family = addr.ss_family;
-    if (addr.ss_family == AF_INET) {
-        struct sockaddr_in *addr4 = (struct sockaddr_in*)&addr;
+    *family = addr->ss_family;
+    if (addr->ss_family == AF_INET) {
+        struct sockaddr_in *addr4 = (struct sockaddr_in*)addr;
         *port = addr4->sin_port;
         memcpy(host, &(addr4->sin_addr), 4);
     }
-    else if (addr.ss_family == AF_INET6) {
-        struct sockaddr_in6 *addr6 = (struct sockaddr_in6*)&addr;
+    else if (addr->ss_family == AF_INET6) {
+        struct sockaddr_in6 *addr6 = (struct sockaddr_in6*)addr;
         *port = addr6->sin6_port;
         memcpy(host, &(addr6->sin6_addr), 16);
     }
+}
+
+JL_DLLEXPORT int jl_tcp_getsockname(uv_tcp_t *handle, uint16_t *port,
+                                    void *host, uint32_t *family)
+{
+    struct sockaddr_storage addr;
+    memset(&addr, 0, sizeof(struct sockaddr_storage));
+    int namelen = sizeof addr;
+    int res = uv_tcp_getsockname(handle, (struct sockaddr*)&addr, &namelen);
+    if (res == 0)
+        jl_sockaddr_unpack(&addr, port, host, family);
     return res;
 }
 
 JL_DLLEXPORT int jl_tcp_getpeername(uv_tcp_t *handle, uint16_t *port,
                                     void *host, uint32_t *family)
 {
-    int namelen;
     struct sockaddr_storage addr;
     memset(&addr, 0, sizeof(struct sockaddr_storage));
-    namelen = sizeof addr;
+    int namelen = sizeof addr;
     int res = uv_tcp_getpeername(handle, (struct sockaddr*)&addr, &namelen);
-    if (res)
-        return res;
-    *family = addr.ss_family;
-    if (addr.ss_family == AF_INET) {
-        struct sockaddr_in *addr4 = (struct sockaddr_in*)&addr;
-        *port = addr4->sin_port;
-        memcpy(host, &(addr4->sin_addr), 4);
-    }
-    else if (addr.ss_family == AF_INET6) {
-        struct sockaddr_in6 *addr6 = (struct sockaddr_in6*)&addr;
-        *port = addr6->sin6_port;
-        memcpy(host, &(addr6->sin6_addr), 16);
-    }
+    if (res == 0)
+        jl_sockaddr_unpack(&addr, port, host, family);
+    return res;
+}
+
+JL_DLLEXPORT int jl_udp_getsockname(uv_udp_t *handle, uint16_t *port,
+                                    void *host, uint32_t *family)
+{
+    struct sockaddr_storage addr;
+    memset(&addr, 0, sizeof(struct sockaddr_storage));
+    int namelen = sizeof addr;
+    int res = uv_udp_getsockname(handle, (struct sockaddr*)&addr, &namelen);
+    if (res == 0)
+        jl_sockaddr_unpack(&addr, port, host, family);
     return res;
 }
 
@@ -1107,7 +1142,7 @@ JL_DLLEXPORT int jl_tcp_reuseport(uv_tcp_t *handle)
 #ifndef _OS_WINDOWS_
 
 JL_DLLEXPORT int jl_uv_unix_fd_is_watched(int fd, uv_poll_t *handle,
-                                          uv_loop_t *loop)
+                                          uv_loop_t *loop) JL_CANSAFEPOINT
 {
     JL_UV_LOCK();
     if (fd >= loop->nwatchers) {
@@ -1197,58 +1232,61 @@ JL_DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
     return uv_tty_set_mode(handle, mode_enum);
 }
 
-typedef int (*work_cb_t)(void *, void *, void *);
-typedef void (*notify_cb_t)(int);
+// work_func is a call wrapper that is handed work_ctx, an opaque context that
+// carries everything needed to perform the call; notify_func wakes up the
+// waiting task once the work has finished.
+typedef void (*work_cb_t)(void *);
+typedef void (*notify_cb_t)(void *, void *);
 
 struct work_baton {
     uv_work_t req;
     work_cb_t work_func;
-    void      *ccall_fptr;
-    void      *work_args;
-    void      *work_retval;
+    void      *work_ctx;
     notify_cb_t notify_func;
-    int       notify_idx;
+    void      *notify_data1;
+    void      *notify_data2;
 };
 
 #ifdef _OS_LINUX_
 #include <sys/syscall.h>
 #endif
 
-void jl_work_wrapper(uv_work_t *req)
+static void jl_work_wrapper(uv_work_t *req)
 {
     struct work_baton *baton = (struct work_baton*) req->data;
-    baton->work_func(baton->ccall_fptr, baton->work_args, baton->work_retval);
+    baton->work_func(baton->work_ctx);
 }
 
-void jl_work_notifier(uv_work_t *req, int status)
+static void jl_work_notifier(uv_work_t *req, int status)
 {
     struct work_baton *baton = (struct work_baton*) req->data;
-    baton->notify_func(baton->notify_idx);
+    baton->notify_func(baton->notify_data1, baton->notify_data2);
     free(baton);
 }
 
-JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *ccall_fptr, void *work_args, void *work_retval,
-                               notify_cb_t notify_func, int notify_idx)
+JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_ctx,
+                               notify_cb_t notify_func,
+                               void *notify_data1,
+                               void *notify_data2) JL_CANSAFEPOINT
 {
     struct work_baton *baton = (struct work_baton*)malloc_s(sizeof(struct work_baton));
     baton->req.data = (void*) baton;
     baton->work_func = work_func;
-    baton->ccall_fptr = ccall_fptr;
-    baton->work_args = work_args;
-    baton->work_retval = work_retval;
+    baton->work_ctx = work_ctx;
     baton->notify_func = notify_func;
-    baton->notify_idx = notify_idx;
+    baton->notify_data1 = notify_data1;
+    baton->notify_data2 = notify_data2;
 
-    JL_UV_LOCK();
+    jl_iolock_begin();
     uv_queue_work(jl_io_loop, &baton->req, jl_work_wrapper, jl_work_notifier);
-    JL_UV_UNLOCK();
+    jl_iolock_end();
 
     return 0;
 }
 
 #ifndef _OS_WINDOWS_
 #if defined(__APPLE__)
-int uv___stream_fd(uv_stream_t *handle);
+extern int uv___stream_fd(uv_stream_t *handle);
 #define uv__stream_fd(handle) (uv___stream_fd((uv_stream_t*)(handle)))
 #else
 #define uv__stream_fd(handle) ((handle)->io_watcher.fd)

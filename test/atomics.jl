@@ -6,6 +6,8 @@ import Base: copy
 
 const ReplaceType = ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
 
+replaceresult(T, old, success) = ReplaceType{T}((old, success))
+
 mutable struct ARefxy{T}
     @atomic x::T
     y::T
@@ -385,7 +387,7 @@ test_once_undef(ARefxy{UndefComplex{UndefComplex{Any}}})
 
 @test_throws ErrorException @macroexpand @atomic foo()
 @test_throws ErrorException @macroexpand @atomic foo += bar
-@test_throws ErrorException @macroexpand @atomic foo += bar
+@test_throws ErrorException @macroexpand @atomic foo +%= bar
 @test_throws ErrorException @macroexpand @atomic foo = bar
 @test_throws ErrorException @macroexpand @atomic foo()
 @test_throws ErrorException @macroexpand @atomic foo(bar)
@@ -409,6 +411,13 @@ let a = ARefxy(1, -1)
     @test 5 === @atomic a.x += 2
     @test 4 === @atomic :monotonic a.x -= 1
     @test 12 === @atomic :monotonic a.x *= 3
+
+    # Wrapping update operators lower through the atomic update path too.
+    @test typemax(Int) === @atomic :monotonic a.x = typemax(Int)
+    @test typemin(Int) === @atomic a.x +%= 1
+    @test typemax(Int) === @atomic :monotonic a.x -%= 1
+    @test -2 === @atomic :monotonic a.x *%= 2
+    @test 12 === @atomic :monotonic a.x = 12
 
     @test 12 === @atomic a.x
     @test (12 => 13) === @atomic a.x + 1
@@ -475,6 +484,13 @@ function _test_atomic_get_set_swap_modify(T, x, y, z)
             end
         end
     end
+end
+
+let mem = AtomicMemory{Int}(undef, 1)
+    @atomic mem[1] = typemax(Int)
+    @test (@atomic mem[1] +%= 1) == typemin(Int)
+    @test (@atomic :monotonic mem[1] -%= 1) == typemax(Int)
+    @test (@atomic :monotonic mem[1] *%= 2) == -2
 end
 
 function _test_atomic_setonce_replace(T, initial, desired)
@@ -742,6 +758,24 @@ test_global_undef(UndefComplex{Any})
 test_global_undef(UndefComplex{UndefComplex{Any}})
 test_global_undef(Int)
 
+# the read-modify-write builtins resolve the binding for writing, which never follows
+# imports, so a store through an import fails before any value is read
+module ImportedGlobalSource
+    global imported_x::Int = 1
+    global used_x::Int = 2
+end
+import .ImportedGlobalSource: imported_x
+using .ImportedGlobalSource: used_x
+for r in (:imported_x, :used_x)
+    @test_throws ErrorException swapglobal!(@__MODULE__, r, 3)
+    @test_throws ErrorException swapglobal!(@__MODULE__, r, 3, :sequentially_consistent)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, 1, 3)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, 1, 3, :sequentially_consistent)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, -1, 3) # `expected` is never compared
+end
+@test getglobal(ImportedGlobalSource, :imported_x) === 1
+@test getglobal(ImportedGlobalSource, :used_x) === 2
+
 function gen_test_globalonce(@nospecialize r)
     M = @__MODULE__
     return quote
@@ -769,6 +803,39 @@ test_globalonce(UndefComplex{Any})
 test_globalonce(UndefComplex{UndefComplex{Any}})
 test_globalonce(Int)
 
+# Test the untyped `global x`, particularly with the compiled versions which use the fallback path.
+module DeclaredGlobalCompiled
+    global declared_rmw
+    setonce(v) = setglobalonce!(@__MODULE__, :declared_rmw, v)
+    modify(v) = modifyglobal!(@__MODULE__, :declared_rmw, +, v)
+    swap(v) = swapglobal!(@__MODULE__, :declared_rmw, v)
+    replace(x, v) = replaceglobal!(@__MODULE__, :declared_rmw, x, v)
+end
+let M = DeclaredGlobalCompiled
+    @test_throws UndefVarError M.modify(1)
+    @test M.setonce(1) === true
+    @test M.setonce(2) === false
+    @test M.modify(1) === Pair{Any,Any}(1, 2)
+    @test M.swap("x") === 2
+    @test M.replace("x", 3) === replaceresult(Any, "x", true)
+    @test getglobal(M, :declared_rmw) === 3
+end
+
+# An untyped `global x` declaration leaves no restriction on the binding partition, so its
+# declared type is `Any`. The read-modify-write builtins must read that as `Any` to form the result type.
+module DeclaredGlobal
+    global declared_rmw
+end
+let M = DeclaredGlobal
+    @test Core.get_binding_type(M, :declared_rmw) === Any
+    @test_throws UndefVarError modifyglobal!(M, :declared_rmw, +, 1)
+    @test setglobalonce!(M, :declared_rmw, 1) === true
+    @test modifyglobal!(M, :declared_rmw, +, 1) === Pair{Any,Any}(1, 2)
+    @test swapglobal!(M, :declared_rmw, "x") === 2
+    @test replaceglobal!(M, :declared_rmw, "x", 3) === replaceresult(Any, "x", true)
+    @test getglobal(M, :declared_rmw) === 3
+end
+
 # test macroexpansions
 global x::Int
 let a = @__MODULE__
@@ -792,6 +859,12 @@ let a = @__MODULE__
     @test 5 === @atomic a.x += 2
     @test 4 === @atomic :monotonic a.x -= 1
     @test 12 === @atomic :monotonic a.x *= 3
+
+    @test typemax(Int) === @atomic :monotonic a.x = typemax(Int)
+    @test typemin(Int) === @atomic a.x +%= 1
+    @test typemax(Int) === @atomic :monotonic a.x -%= 1
+    @test -2 === @atomic :monotonic a.x *%= 2
+    @test 12 === @atomic :monotonic a.x = 12
 
     @test 12 === @atomic a.x
     @test (12 => 13) === @atomic a.x + 1
@@ -1277,6 +1350,81 @@ test_memory_unset_multiptr(TwoInlinePtr,   AtomicMemory{TwoInlinePtr},   Val(:un
 # atomic memory with element size > MAX_POINTERATOMIC_SIZE: clears via lock + memset
 test_memory_unset_multiptr(ThreeInlinePtr, AtomicMemory{ThreeInlinePtr}, Val(:unordered))
 
+# Test the public atomic unsetindex! overloads for memory references and memory.
+@testset "unsetindex_atomic!" begin
+    for (T, value) in Any[(Any, "value"), (Float32, 1.0f0)]
+        mem = AtomicMemory{T}(undef, 3)
+        ref = memoryref(mem, 2)
+        for order in [:unordered, :monotonic, :release, :sequentially_consistent]
+            # Unset the ref
+            @atomic :monotonic mem[2] = value
+            @test isassigned(ref) == isassigned(mem, 2) == true
+            @test Base.unsetindex_atomic!(ref, order) === ref
+            if T === Any
+                @test isassigned(ref) == isassigned(mem, 2) == false
+                @test_throws UndefRefError ref[]
+                @test_throws UndefRefError @atomic :monotonic mem[2]
+            else
+                @test isassigned(ref) == isassigned(mem, 2) == true
+                @test ref[] isa T
+                @test((@atomic :monotonic mem[2]) isa T)
+            end
+
+            # Unset the mem
+            @atomic :monotonic mem[2] = value
+            @test isassigned(ref) == isassigned(mem, 2) == true
+            @test Base.unsetindex_atomic!(mem, order, 2) === mem
+            if T === Any
+                @test isassigned(ref) == isassigned(mem, 2) == false
+                @test_throws UndefRefError ref[]
+                @test_throws UndefRefError @atomic :monotonic mem[2]
+            else
+                @test isassigned(ref) == isassigned(mem, 2) == true
+                @test ref[] isa T
+                @test((@atomic :monotonic mem[2]) isa T)
+            end
+        end
+    end
+
+    mem = AtomicMemory{Any}(undef, 1)
+    @atomic :monotonic mem[1] = "value"
+    ref = memoryref(mem, 1)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(ref, :acquire)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(ref, :acquire_release)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(ref, :not_atomic)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :acquire, 1)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :acquire_release, 1)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :not_atomic, 1)
+    @test_throws BoundsError Base.unsetindex_atomic!(mem, :release, 0)
+    @atomic :monotonic mem[1] = "value"
+    @test Base.unsetindex_atomic!(mem, :release, Int8(1)) === mem
+    @test !isassigned(mem, 1)
+    @test_throws BoundsError Base.unsetindex_atomic!(mem, :release, Int8(2))
+end
+
+# The atomic index functions convert the new value to the element type.
+@testset "atomic index functions convert values" begin
+    order = :sequentially_consistent
+    mem = AtomicMemory{Int}(undef, 2)
+    @test Base.setindex_atomic!(mem, order, 1.0, 1) === 1
+    @test Base.swapindex_atomic!(mem, order, Int32(5), 1) === 1
+    @test Base.swapindex_atomic!(mem, order, 6.0, 1) === 5
+    @test_throws InexactError Base.swapindex_atomic!(mem, order, 2.5, 1)
+    @test Base.replaceindex_atomic!(mem, order, order, 6, 7.0, 1) === (old = 6, success = true)
+    @test Base.replaceindex_atomic!(mem, order, order, 6, 8.0, 1) === (old = 7, success = false)
+    @test_throws InexactError Base.replaceindex_atomic!(mem, order, order, 7, 8.5, 1)
+    @test Base.getindex_atomic(mem, order, 1) === 7
+    @test_throws BoundsError Base.swapindex_atomic!(mem, order, 1, 3)
+
+    smem = AtomicMemory{String}(undef, 2)
+    @test Base.setindexonce_atomic!(smem, order, order, SubString("ab", 1, 1), 1)
+    @test !Base.setindexonce_atomic!(smem, order, order, SubString("ab", 2, 2), 1)
+    @test Base.getindex_atomic(smem, order, 1) === "a"
+    @test Base.replaceindex_atomic!(smem, order, order, "a", SubString("xy"), 1) == (old = "a", success = true)
+    @test Base.getindex_atomic(smem, order, 1) === "xy"
+    @test_throws MethodError Base.setindexonce_atomic!(smem, order, order, 1, 2)
+end
+
 @noinline function _test_once_undef(r)
     r = r[]
     TT = eltype(r)
@@ -1311,14 +1459,103 @@ end
 
 @test add_one57190!() == 1
 
+# A field reached only by a read-modify-write gets a stack slot when `AllocOpt` splits
+# the non-escaping allocation
+mutable struct Atomic52575
+    @atomic x::Int
+    y::Int
+end
+replace52575!() = (r = Atomic52575(1, 2); @atomicreplace r.x 1 => 2)
+@test replace52575!() === (old = 1, success = true)
+modify52575!() = (r = Atomic52575(1, 2); @atomic r.x += 10)
+@test modify52575!() === 11
+swap52575!() = (r = Atomic52575(1, 2); @atomicswap r.x = 5)
+@test swap52575!() === 1
+mutable struct AtomicAny52575
+    @atomic x::Any
+    y::Any
+end
+replaceany52575!() = (r = AtomicAny52575(1, 2); @atomicreplace r.x 1 => 2)
+@test replaceany52575!() == (old = 1, success = true)
+
+# An atomically loaded field that inlines an immutable with GC pointers stays rooted while
+# the loaded value is passed by reference, even after the field is overwritten.
+# https://github.com/JuliaLang/julia/issues/63320
+mutable struct AtomicRootObj
+    x::Int
+end
+struct AtomicRootWrap
+    obj::AtomicRootObj
+end
+mutable struct AtomicRootBox
+    @atomic wrap::AtomicRootWrap
+end
+const atomic_root_finalized = Ref(false)
+@noinline atomic_root_use(wrap::AtomicRootWrap) = wrap.obj.x
+function atomic_root_check(box::AtomicRootBox)
+    wrap = @atomic box.wrap
+    atomic_root_use(wrap)
+    @atomic box.wrap = AtomicRootWrap(AtomicRootObj(0))
+    GC.gc(); GC.gc()
+    alive = !atomic_root_finalized[]
+    return alive && atomic_root_use(wrap) == 42
+end
+let obj = AtomicRootObj(42)
+    finalizer(_ -> (atomic_root_finalized[] = true), obj)
+    global atomic_root_box = AtomicRootBox(AtomicRootWrap(obj))
+end
+@test atomic_root_check(atomic_root_box)
+
 # Test atomic Float16 operations at all optimization levels (GlobalISel miscompile on AArch64)
 # See https://github.com/JuliaLang/julia/pull/54140#issuecomment-2855794363
 for opt in 0:3
     @test success(run(```$(Base.julia_cmd()) --startup-file=no -O$opt -e '
         a = Threads.Atomic{Float16}(Float16(0))
-        a[] = Float16(1.5)
+        @atomic a[] = Float16(1.5)
         @assert a[] === Float16(1.5) "atomic Float16 store failed: got \$(a[]) expected 1.5 (opt level = -O$(Base.JLOptions().opt_level))"
-        a[] = Float16(3.25)
+        @atomic a[] = Float16(3.25)
         @assert a[] === Float16(3.25) "atomic Float16 store failed: got \$(a[]) expected 3.25 (opt level = -O$(Base.JLOptions().opt_level))"
     '```))
+end
+
+# Reference (`x[]`) form of the `@atomic` family of macros on `Threads.Atomic`
+@testset "Atomic reference indexing" begin
+    @testset for ref in [Threads.Atomic{Int}(0), Threads.Atomic{Any}(0)]
+        T, = typeof(ref).parameters
+        @test (@atomic ref[]) == 0
+        @test (@atomic :monotonic ref[]) == 0
+        @test (@atomic ref[] = 1) == 1
+        @test (@atomicreplace ref[] 1 => 2) == replaceresult(T, 1, true)
+        @test (@atomicreplace ref[] 1 => 2) == replaceresult(T, 2, false)
+        @test (@atomicreplace :monotonic ref[] 2 => 3) == replaceresult(T, 2, true)
+        @test (@atomicreplace :acquire_release :monotonic ref[] 3 => 4) ==
+              replaceresult(T, 3, true)
+        xchg = 4 => 5
+        @test (@atomicreplace ref[] xchg) == replaceresult(T, 4, true)
+        @test (@atomic ref[] += 1) == (@atomic ref[]) == 6
+        @test (@atomic :monotonic ref[] += 1) == (@atomic ref[]) == 7
+        @test (@atomic ref[] + 1) == (7 => 8)
+        @test (@atomic :monotonic ref[] + 1) == (8 => 9)
+        @test (@atomicswap ref[] = 10) == 9
+        @test (@atomicswap :monotonic ref[] = 11) == 10
+    end
+    # storing a value that must be converted to the element type
+    ref = Threads.Atomic{Int}(0)
+    @test (@atomic ref[] = 0x2) == 2
+    @test (@atomic ref[]) === 2
+    @test (@atomicswap ref[] = 0x3) === 2
+    @test (@atomicreplace ref[] 3 => 0x4) == replaceresult(Int, 3, true)
+    @test (@atomic ref[]) === 4
+end
+
+# The plain `x[] = v` store form is deprecated in favor of `@atomic x[] = v`,
+# because read-modify-write uses such as `x[] += 1` are silently non-atomic.
+# The Base test suite runs with `--depwarn=error`, so the deprecated call throws.
+if Base.JLOptions().depwarn == 2
+    a = Threads.Atomic{Int}(0)
+    @test_throws "deprecated" (a[] = 5) broken=true
+    @test_broken (@atomic a[]) == 0 # nothing stored: it errored before the store
+    @atomic a[] = 5                 # the supported replacement
+    @test (@atomic a[]) == 5
+    @test (@atomic a[] += 1) == 6   # atomic read-modify-write replacement for `a[] += 1`
 end

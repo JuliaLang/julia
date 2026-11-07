@@ -24,9 +24,10 @@ const TESTNAMES = [
         "some", "meta", "stacktraces", "docs", "gc",
         "misc", "threads", "stress", "binaryplatforms","stdlib_dependencies", "atexit",
         "enums", "cmdlineargs", "int", "interpreter",
-        "checked", "bitset", "floatfuncs", "precompile", "relocatedepot",
+        "checked", "bitset", "floatfuncs", "precompile", "precompile_distributed",
+        "relocatedepot",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
-        "channels", "iostream", "secretbuffer", "specificity",
+        "channels", "cancellation", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
         "scopedvalues", "compileall", "rebinding",
@@ -80,7 +81,7 @@ function test_path(test)
 end
 
 """
-`(; tests, net_on, exit_on_error, seed) = choosetests(choices)` selects a set of tests to be
+`(; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
 `["all"]`, all tests are selected.
 
@@ -189,7 +190,7 @@ function choosetests(choices = [])
 
     filtertests!(tests, "unicode", ["unicode/utf8"])
     filtertests!(tests, "strings", ["strings/basic", "strings/search", "strings/util",
-                   "strings/io", "strings/types", "strings/annotated"])
+                   "strings/io", "strings/types", "strings/annotated", "strings/stringview"])
     # do subarray before sparse but after linalg
     filtertests!(tests, "subarray")
     filtertests!(tests, "compiler", ["Compiler"])
@@ -204,6 +205,17 @@ function choosetests(choices = [])
         # Allow explicitly adding it for testing
         @warn "Skipping Profile tests because the architecture is ARM"
         filter!(x -> (x != "Profile"), tests)
+    end
+
+    # Avoid swapping during a full suite on small machines. Explicitly requested
+    # tests still run; measured x86-64 peaks are about 13 GiB and 9 GiB respectively.
+    memory_hungry = ("compileall" => 16, "jit" => 12) # minimum total memory, in GiB
+    total_gib = Sys.total_memory() / 2^30
+    too_hungry = [t for (t, gib) in memory_hungry if t in tests && !(t in choices) && total_gib < gib]
+    if !isempty(too_hungry)
+        @warn "Skipping tests [" * join(too_hungry, ", ") * "] because the host has only " *
+              "$(round(total_gib; digits=1)) GiB of memory (pass them by name to run them anyway)"
+        filter!(!in(too_hungry), tests)
     end
 
     if ccall(:jl_running_on_valgrind,Cint,()) != 0 && "rounding" in tests

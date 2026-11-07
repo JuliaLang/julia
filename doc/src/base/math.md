@@ -17,16 +17,15 @@ Base.div
 Base.div(::Any, ::Any, ::RoundingMode)
 Base.fld
 Base.cld
-Base.mod
 Base.rem
 Base.rem(::Any, ::Any, ::RoundingMode)
 Base.rem2pi
+Base.mod
 Base.Math.mod2pi
+Base.mod1
 Base.divrem
 Base.fldmod
-Base.fld1
-Base.mod1
-Base.fldmod1
+Base.cldmod1
 Base.:(//)
 Base.rationalize
 Base.numerator
@@ -299,12 +298,12 @@ Base.FastMath.@fastmath
 
 ## Customizable binary operators
 
-Some unicode characters can be used to define new binary operators
+Some Unicode characters can be used to define new binary operators
 that support infix notation.
 For example
 ```⊗(x,y) = kron(x,y)```
 defines the `⊗` (otimes) function to be the Kronecker product,
-and one can call it as binary operator using infix syntax:
+and one can call it as a binary operator using infix syntax:
 ```C = A ⊗ B```
 as well as with the usual prefix syntax
 ```C = ⊗(A,B)```.

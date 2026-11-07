@@ -65,12 +65,14 @@ function showerror(io::IO, exc::StringIndexError)
     if firstindex(s) <= exc.index <= ncodeunits(s)
         iprev = thisind(s, exc.index)
         inext = nextind(s, iprev)
-        escprev = escape_string(s[iprev:iprev])
-        if inext <= ncodeunits(s)
-            escnext = escape_string(s[inext:inext])
-            print(io, ", valid nearby indices [$iprev]=>'$escprev', [$inext]=>'$escnext'")
-        else
-            print(io, ", valid nearby index [$iprev]=>'$escprev'")
+        if isvalid(s, iprev)
+            escprev = escape_string(s[iprev:iprev])
+            if inext <= ncodeunits(s) && isvalid(s, inext)
+                escnext = escape_string(s[inext:inext])
+                print(io, ", valid nearby indices [$iprev]=>'$escprev', [$inext]=>'$escnext'")
+            else
+                print(io, ", valid nearby index [$iprev]=>'$escprev'")
+            end
         end
     end
 end
@@ -138,7 +140,7 @@ function unsafe_takestring(m::Memory{UInt8})
 end
 
 """
-    takestring!(x) -> String
+    takestring!(x)::AbstractString
 
 Create a string from the content of `x`, emptying `x`.
 
@@ -152,6 +154,9 @@ julia> s = takestring!(v)
 julia> isempty(v)
 true
 ```
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
 """
 takestring!(v::Vector{UInt8}) = String(v)
 
@@ -253,7 +258,7 @@ typemin(::String) = typemin(String)
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
     @inbounds b = codeunit(s, i)
     (b & 0xc0 == 0x80) & (i-1 > 0) || return i
-    (@noinline function _thisind_continued(s, i, n) # mark the rest of the function as a slow-path
+    (@noinline function _thisind_continued(s, i) # mark the rest of the function as a slow-path
         local b
         @inbounds b = codeunit(s, i-1)
         between(b, 0b11000000, 0b11110111) && return i-1
@@ -264,7 +269,7 @@ typemin(::String) = typemin(String)
         @inbounds b = codeunit(s, i-3)
         between(b, 0b11110000, 0b11110111) && return i-3
         return i
-    end)(s, i, n)
+    end)(s, i)
 end
 
 @propagate_inbounds nextind(s::String, i::Int) = _nextind_str(s, i)
@@ -335,7 +340,7 @@ end
                     as seen by all 1s in that column of table below
             3 -> One valid continuation byte needed to return to state 0
         4,5,6 -> Two valid continuation bytes needed to return to state 0
-        7,8,9 -> Three valids continuation bytes needed to return to state 0
+        7,8,9 -> Three valid continuation bytes needed to return to state 0
 
                         Current State
                     0̲  1̲  2̲  3̲  4̲  5̲  6̲  7̲  8̲  9̲
@@ -357,7 +362,7 @@ end
     The shifts that represent each state were derived using the SMT solver Z3, to ensure when encoded into
     the rows the correct shift was a result.
 
-    Each character class row is encoding 10 states with shifts as defined above. By shifting the bitsof a row by
+    Each character class row is encoding 10 states with shifts as defined above. By shifting the bits of a row by
     the current state then masking the result with 0x11110 give the shift for the new state
 
 
@@ -369,7 +374,6 @@ const _UTF8DFAState = UInt32
 const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute base
     num_classes=12
     num_states=10
-    bit_per_state = 6
 
     # These shifts were derived using a SMT solver
     state_shifts = [0, 4, 10, 14, 18, 24, 8, 20, 12, 26]
@@ -460,15 +464,15 @@ end
 function byte_string_classify(bytes::AbstractVector{UInt8})
     chunk_size = 1024
     chunk_threshold =  chunk_size + (chunk_size ÷ 2)
-    n = length(bytes)
-    if n > chunk_threshold
-        start = _find_nonascii_chunk(chunk_size,bytes,1,n)
+    first, last = firstindex(bytes), lastindex(bytes)
+    if length(bytes) > chunk_threshold
+        start = _find_nonascii_chunk(chunk_size,bytes,first,last)
         isnothing(start) && return 1
     else
-        _isascii(bytes,1,n) && return 1
-        start = 1
+        _isascii(bytes,first,last) && return 1
+        start = first
     end
-    return _byte_string_classify_nonascii(bytes,start,n)
+    return _byte_string_classify_nonascii(bytes,start,last)
 end
 
 function _byte_string_classify_nonascii(bytes::AbstractVector{UInt8}, first::Int, last::Int)
@@ -678,12 +682,13 @@ julia> repeat('A', 3)
 ```
 """
 function repeat(c::AbstractChar, r::Integer)
-    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
+    r < 0 && throw(ArgumentError(LazyString("can't repeat a character ", r, " times")))
     r = UInt(r)::UInt
     c = Char(c)::Char
     r == 0 && return ""
     u = bswap(reinterpret(UInt32, c))
     n = 4 - (leading_zeros(u | 0xff) >> 3)
+    r > typemax(UInt) ÷ UInt(n) && throw(OutOfMemoryError())
     s = _string_n(n*r)
     p = pointer(s)
     GC.@preserve s if n == 1

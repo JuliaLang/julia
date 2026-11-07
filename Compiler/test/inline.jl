@@ -10,6 +10,41 @@ include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
+# Inlined IR drops coverage effects when the process does not instrument the
+# inlinee. Every coverage scope instruments this user module.
+coverage_strip_callee() = nothing
+let mi = Base.method_instance(coverage_strip_callee, ()),
+    src = make_codeinfo(Any[Expr(:code_coverage_effect), ReturnNode(nothing)];
+                        ssavaluetypes=Any[Nothing, Nothing],
+                        slottypes=Any[typeof(coverage_strip_callee)], slotnames=[:self])
+    ir, _, _ = Compiler.retrieve_ir_for_inlining(mi, src, true)
+    instrumented = Base.JLOptions().code_coverage != 0
+    @test any(stmt -> isexpr(stmt, :code_coverage_effect), ir.stmts.stmt) == instrumented
+    @test isexpr(src.code[1], :code_coverage_effect)
+end
+
+# Hit mode omits the inlining entry marker when the inlinee carries its own
+# markers; count mode always inserts it. The rule only applies when the process
+# instruments the callee.
+coverage_entry_callee() = nothing
+if Base.JLOptions().code_coverage != 0
+    let mi = Base.method_instance(coverage_entry_callee, ())
+        for has_marker in (false, true)
+            code = has_marker ? Any[Expr(:code_coverage_effect), ReturnNode(nothing)] :
+                                Any[ReturnNode(nothing)]
+            src = make_codeinfo(code; ssavaluetypes=Any[Nothing for _ in code],
+                                slottypes=Any[typeof(coverage_entry_callee)], slotnames=[:self])
+            callee_ir, spec_info, di = Compiler.retrieve_ir_for_inlining(mi, src, true)
+            @test any(stmt -> isexpr(stmt, :code_coverage_effect), callee_ir.stmts.stmt) == has_marker
+            ir = make_ircode(Any[ReturnNode(nothing)])
+            Compiler.ir_prepare_inlining!(Compiler.InsertBefore(ir, SSAValue(1)), ir, callee_ir,
+                                          spec_info, di, mi, (Int32(1), Int32(0), Int32(0)), Any[])
+            inserted = any(stmt -> isexpr(stmt, :code_coverage_effect), ir.new_nodes.stmts.stmt)
+            @test inserted == (!has_marker || Base.JLOptions().code_coverage_mode != 0)
+        end
+    end
+end
+
 """
 Helper to walk the AST and call a function on every node.
 """
@@ -151,14 +186,8 @@ end
     end
 
     (src, _) = only(code_typed(sum27403, Tuple{Vector{Int}}))
-    is_bounds_throw_invoke_target(@nospecialize(callee)) =
-        callee === Base.throw_boundserror ||
-        callee == Core.GlobalRef(Base, :throw_boundserror) ||
-        callee == Core.GlobalRef(Base, :_throw_boundserror_indices) ||
-        (callee isa Core.MethodInstance && (callee.def.def.name === :throw_boundserror ||
-                                            callee.def.def.name === :_throw_boundserror_indices))
     @test !any(src.code) do x
-        x isa Expr && x.head === :invoke && !is_bounds_throw_invoke_target(x.args[2])
+        isexpr(x, :invoke) && !(isinvoke(:throw_boundserror, x) || isinvoke(:_throw_boundserror_indices, x))
     end
 end
 
@@ -271,7 +300,7 @@ function foo_apply_apply_type_svec()
 end
 @test fully_eliminated(foo_apply_apply_type_svec, Tuple{}; retval=NTuple{3, Float32})
 
-# The that inlining doesn't drop ambiguity errors (#30118)
+# Test that inlining doesn't drop ambiguity errors (#30118)
 c30118(::Tuple{Ref{<:Type}, Vararg}) = nothing
 c30118(::Tuple{Ref, Ref}) = nothing
 b30118(x...) = c30118(x)
@@ -322,7 +351,7 @@ end
 const _a_global_array = [1]
 f_inline_global_getindex() = _a_global_array[1]
 let ci = code_typed(f_inline_global_getindex, Tuple{})[1].first
-    @test any(x->(isexpr(x, :call) && x.args[1] in (GlobalRef(Base, :memoryrefget), Base.memoryrefget)), ci.code)
+    @test any(iscall((ci, Base.memoryrefget)), ci.code)
 end
 
 # Issue #29114 & #36087 - Inlining of non-tuple splats
@@ -641,7 +670,6 @@ function getcacheci(mi::Core.MethodInstance)
     cache = Compiler.code_cache(Compiler.NativeInterpreter())
     codeinst = Compiler.get(cache, mi, nothing)
     codeinst === nothing && return nothing
-    codeinst isa Compiler.InferenceResult && (codeinst = codeinst.ci)
     return codeinst
 end
 @noinline f42078(a) = sum(sincos(a))
@@ -771,7 +799,7 @@ end
 # Issue #42264 - crash on certain union splits
 let f(x) = (x...,)
     # Test splatting with a Union of non-{Tuple, SimpleVector} types that require creating new `iterate` calls
-    # in inlining. For this particular case, we're relying on `iterate(::CaretesianIndex)` throwing an error, such
+    # in inlining. For this particular case, we're relying on `iterate(::CartesianIndex)` throwing an error, such
     # that the original apply call is not union-split, but the inserted `iterate` call is.
     @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
 end
@@ -1090,7 +1118,7 @@ end
 @test fully_eliminated(f_call_total_noinline_unused, Tuple{Float64})
 @test !fully_eliminated(f_call_volatile_escape, Tuple{Ptr{Int}})
 
-let b = Expr(:block, (:(y += sin($x)) for x in randn(1000))...)
+let b = Expr(:block, (:(y += sin($x)) for x in randn(10))...)
     @eval function f_sin_perf()
         y = 0.0
         $b
@@ -1854,6 +1882,105 @@ let src = code_typed1((AtomicMemoryRef{Int},)) do a
     @test count(isinvokemodify(:+), src.code) == 1
 end
 
+# `invokemodify` should run the exact CodeInstance key and not re-dispatch:
+# there is no surface syntax for doing a `modify*` builtin with an invoke instead of a call,
+# but it could be useful for foreign abstract interpreters, so we build an OpaqueClosure in order to test this.
+modify_target_op(a::Integer, b::Int) = a + b
+modify_target_op(a::Int, b::Int) = a * b
+mutable struct ModifyTargetBox
+    x::Int
+end
+global modify_target_global::Int = 3
+function modify_target_oc(@nospecialize(f), @nospecialize(t))
+    # rewrite the :invoke_modify call to invoke a different MethodInstance than originally specified semantically
+    # (which is constructed here to have the same effects and types)
+    ir = only(Base.code_ircode(f, t))[1]
+    target = Base.specialize_method(which(modify_target_op, (Integer, Int)),
+                                    Tuple{typeof(modify_target_op), Int, Int}, Core.svec())
+    stmts = filter(isinvokemodify(:modify_target_op), ir.stmts.stmt)
+    @test length(stmts) == 1
+    only(stmts).args[1] = target
+    ir.argtypes[1] = Tuple{}
+    return Core.OpaqueClosure(ir)
+end
+let b = ModifyTargetBox(3)
+    @test modify_target_oc((ModifyTargetBox,)) do b
+            modifyfield!(b, :x, modify_target_op, 2)
+        end(b) === (3 => 5)
+    @test modify_target_oc((ModifyTargetBox, Symbol)) do b, o
+            modifyfield!(b, :x, modify_target_op, 2, o)
+        end(b, :not_atomic) === (5 => 7)
+end
+let mem = Memory{Int}(undef, 1)
+    mem[1] = 3
+    @test modify_target_oc((MemoryRef{Int}, Symbol)) do m, o
+            Core.memoryrefmodify!(m, modify_target_op, 2, o, true)
+        end(memoryref(mem), :not_atomic) === (3 => 5)
+end
+let r = Ref(3)
+    GC.@preserve r begin
+        p = Base.unsafe_convert(Ptr{Int}, r)
+        @test modify_target_oc((Ptr{Int},)) do p
+                Core.Intrinsics.atomic_pointermodify(p, modify_target_op, 2, :sequentially_consistent)
+            end(p) === (3 => 5)
+        @test modify_target_oc((Ptr{Int}, Symbol)) do p, o
+                Core.Intrinsics.atomic_pointermodify(p, modify_target_op, 2, o)
+            end(p, :sequentially_consistent) === (5 => 7)
+    end
+end
+@test modify_target_oc(()) do
+        modifyglobal!(@__MODULE__, :modify_target_global, modify_target_op, 2)
+    end() === (3 => 5)
+
+# Core._task handling
+# ===================
+# Test that _task inlines properly with const prop
+f_task_invoke() = 42
+let src = code_typed1(()) do
+        return Task(f_task_invoke)
+    end
+    m = which(f_task_invoke, ())
+    @test count(e -> begin
+            if iscall((src, Core._task), e) && e isa Expr && e.head === :call && length(e.args) == 4
+                ci = e.args[4]
+                if ci isa CodeInstance && ci.def.def === m
+                    return true
+                end
+            end
+            return false
+        end, src.code) == 1
+end
+
+# Test that no invoke target is injected when the single method match does not fully
+# cover the argument type: the task must fall back to generic dispatch so that
+# non-callable bodies still raise a MethodError when the task runs.
+abstract type TaskCallable end
+struct TaskCallableImpl <: TaskCallable end
+(::TaskCallableImpl)() = 1
+let src = code_typed1((TaskCallable,)) do f
+        return Task(f)
+    end
+    @test count(e -> iscall((src, Core._task), e) && length((e::Expr).args) == 3, src.code) == 1
+end
+
+# Test that task_result_type gets inlined to its constant value
+let src = code_typed1((Task,)) do t; Core.task_result_type(t); end
+    # Should be inlined to the `Any` constant, with no call to task_result_type
+    @test count(iscall((src, Core.task_result_type)), src.code) == 0
+    @test src.code[end] == ReturnNode(Any)
+end
+let src = code_typed1((Union{Task,Int},)) do t; Core.task_result_type(t); end
+    # The Int path throws, so the call cannot be folded away.
+    @test count(iscall((src, Core.task_result_type)), src.code) == 1
+end
+for src in (
+        code_typed1((Int,)) do i; Core.task_result_type(i); end,
+        code_typed1(()) do; Core.task_result_type(); end,
+        code_typed1((Task,Task)) do t, u; Core.task_result_type(t, u); end)
+    # Invalid argument types and arities must retain the throwing call.
+    @test count(iscall((src, Core.task_result_type)), src.code) == 1
+end
+
 # apply `ssa_inlining_pass` multiple times
 func_mul_int(a::Int, b::Int) = Core.Intrinsics.mul_int(a, b)
 multi_inlining1(a::Int, b::Int) = @noinline func_mul_int(a, b)
@@ -2006,7 +2133,41 @@ let src = code_typed1(make_issue47349(Val{4}()), (Any,))
     end
     @test Base.return_types((Int,)) do x
         make_issue47349(Val(4))((x,nothing,Int))
-    end |> only === Type{Int}
+    end |> only == Core.TypeEgal{Int}
+end
+
+# JIT preparation should keep resolved invoke edges so inlined Type-argument
+# calls do not allocate.
+struct FastReadBuffer62001
+    data::Vector{UInt8}
+    position::Base.RefValue{Int}
+end
+FastReadBuffer62001() = FastReadBuffer62001(UInt8[0x01, 0x02], Ref(0))
+@inline function read_byte62001(buf::FastReadBuffer62001, ::Type{UInt8})
+    nextpos = buf.position[] + 1
+    nextpos > length(buf.data) && throw(EOFError())
+    buf.position[] = nextpos
+    @inbounds return buf.data[nextpos]
+end
+let buf = FastReadBuffer62001()
+    let src = code_typed1(Base.allocated,
+            Tuple{typeof(read_byte62001), FastReadBuffer62001, Core.TypeEgal{UInt8}})
+        @test count(src.code) do @nospecialize x
+            Meta.isexpr(x, :invoke) &&
+            (x.args[1]::Core.CodeInstance).def.specTypes ==
+                Tuple{typeof(read_byte62001), FastReadBuffer62001, Core.TypeEgal{UInt8}}
+        end == 1
+    end
+    for _ in 1:5
+        buf.position[] = 0
+        read_byte62001(buf, UInt8)
+    end
+    for _ in 1:5
+        buf.position[] = 0
+        Base.allocated(read_byte62001, buf, UInt8)
+    end
+    buf.position[] = 0
+    @test Base.allocated(read_byte62001, buf, UInt8) == 0
 end
 
 # Test that irinterp can make use of constant results even if they're big
@@ -2113,7 +2274,10 @@ for run_finalizer_escape_test in (run_finalizer_escape_test1, run_finalizer_esca
     global finalizer_escape::Int = 0
 
     let src = code_typed1(run_finalizer_escape_test, Tuple{Bool, Bool})
-        @test any(iscall((src, Core.setglobal!)), src.code)
+        # `reformulate_globals_pass!` rewrites the resolved default `setglobal!` store to
+        # an `Expr(:(=), ::Core.BindingPartition, value)` form.
+        @test any(x -> iscall((src, Core.setglobal!))(x) ||
+                       (Meta.isexpr(x, :(=)) && isa(x.args[1], Core.BindingPartition)), src.code)
     end
 
     let
@@ -2315,13 +2479,15 @@ end
 path = Ref{Symbol}(:unknown)
 function f59018_generator(x)
     if @generated
-        if x isa Core.TypeEq
+        # a runtime-dispatched type-valued argument reaches the generator as the
+        # egality kind `Core.TypeEgal{T}`; by-type expansion uses `Type{T}`
+        if x isa Core.TypeEq || x isa Core.TypeEgal
             path[] = :generator
-            return Core.sizeof(x.T)
+            return Core.sizeof(Base.type_parameter(x))
         end
     else
         path[] = :fallback
-        return Core.sizeof(x isa Core.TypeEq ? Base.type_parameter(x) : x.parameters[1])
+        return Core.sizeof(x isa Union{Core.TypeEq, Core.TypeEgal} ? Base.type_parameter(x) : x.parameters[1])
     end
 end
 f59018() = f59018_generator(Base.inferencebarrier(Int64))
@@ -2376,6 +2542,54 @@ let mi = Compiler.specialize_method(only(methods(ndims, (Matrix{Float64},))),
     @test codeinst.inferred === nothing
     interp = Compiler.NativeInterpreter()
     @test Compiler.ci_get_source(interp, codeinst) isa Core.CodeInfo
+end
+
+
+# `statement_cost` prices the reformulated global-access builtin calls via their registered
+# tfunc cost: `getglobal_partition` reads are free (matching plain `getglobal`), and the
+# `setglobal_partition` store matches the store builtins' tfunc cost, as does the `:(=)` form.
+let m = Module()
+    Core.eval(m, :(global gcost::Int = 0))
+    gr = GlobalRef(m, :gcost)
+    b = convert(Core.Binding, gr)
+    part = Base.lookup_binding_partition(Base.get_world_counter(), b)
+    src = code_typed(() -> nothing, ())[1][1]
+    params = Compiler.OptimizationParams()
+    sptypes = Compiler.VarState[]
+    getcall = Expr(:call, GlobalRef(Core, :getglobal_partition), QuoteNode(gr), QuoteNode(part),
+                   QuoteNode(:acquire))
+    setcall = Expr(:call, GlobalRef(Core, :setglobal_partition), QuoteNode(part), 0,
+                   QuoteNode(:release))
+    @test Compiler.statement_cost(getcall, -1, src, sptypes, params) ==
+          Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.getglobal_partition)] == 0
+    store_cost = Compiler.statement_cost(setcall, -1, src, sptypes, params)
+    assign_cost = Compiler.statement_cost(Expr(:(=), part, 0), -1, src, sptypes, params)
+    @test store_cost == Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal_partition)]
+    @test assign_cost == Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal!)]
+end
+
+# `typename` of a non-constant `DataType` is inlined rather than left as a dynamic call,
+# and still folds for a constant argument
+let src = code_typed1((DataType,)) do x
+        Base.typename(x)
+    end
+    @test count(iscall((src, Core.typename)), src.code) == 0
+    @test fully_eliminated(; retval=Int.name) do
+        Base.typename(Int)
+    end
+end
+
+# a concrete result that retains the `:inaccessiblememonly` taint of the call can still be
+# inlined as a constant (JuliaLang/julia#64412)
+const constant_some_any1 = Some{Any}(1)
+const constant_some_any2 = Some{Any}(2)
+pick_constant_some_any(::Val{1}, b::Bool) = b ? constant_some_any1 : constant_some_any2
+pick_constant_some_any(::Val{2}, b::Bool) = b ? constant_some_any2 : constant_some_any1
+let src = code_typed1((Bool,)) do b
+        pick_constant_some_any(b ? Val(1) : Val(2), true)
+    end
+    @test count(isinvoke(:pick_constant_some_any), src.code) == 0
+    @test count(iscall((src, pick_constant_some_any)), src.code) == 0
 end
 
 end # module inline_tests

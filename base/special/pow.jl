@@ -56,35 +56,42 @@ end
 end
 
 @constprop :aggressive @inline function ^(x::Float64, n::Integer)
-    n = clamp(n, Int64)
-    n == 0 && return one(x)
-    if use_power_by_squaring(n)
-        return pow_body(x, n)
+    n64 = clamp(n, Int64)
+    n64 == 0 && return one(x)
+    return pow_int(x, n64, n)
+end
+
+# One out-of-line call keeps `^` cheap to inline into callers
+@noinline function pow_int(x::Float64, n64::Int64, n::Integer)
+    use_power_by_squaring(n64) || return pow_large_int(x, n64, n)
+    return @inline pow_body(x, n64)
+end
+
+@noinline function pow_large_int(x::Float64, n64::Int64, n::Integer)
+    isnan(x) && return x
+    s = ifelse(signbit(x) && isodd(n), -1.0, 1.0)
+    x = abs(x)
+    y = float(n64)
+    if y == n64
+        return copysign(pow_body(x, y), s)
     else
-        s = ifelse(x < 0 && isodd(n), -1.0, 1.0)
-        x = abs(x)
-        y = float(n)
-        if y == n
-            return copysign(pow_body(x, y), s)
-        else
-            n2 = n % 1024
-            y = float(n - n2)
-            return pow_body(x, y) * copysign(pow_body(x, n2), s)
-        end
+        n2 = n64 % 1024
+        y = float(n64 - n2)
+        return pow_body(x, y) * copysign(pow_body(x, n2), s)
     end
 end
 
 # @constprop aggressive to help the compiler see the switch between the integer and float
 # variants for callers with constant `y`
 @constprop :aggressive @inline function ^(x::T, n::Integer) where T <: Union{Float16, Float32}
-    n = clamp(n, Int32)
+    n32 = clamp(n, Int32)
     # Exponents greater than this will always overflow or underflow.
     # Note that NaN can pass through this, but that will end up fine.
-    n == 0 && return one(x)
-    use_power_by_squaring(n) && return pow_body(x, n)
-    s = ifelse(x < 0 && isodd(n), -one(T), one(T))
+    n32 == 0 && return one(x)
+    use_power_by_squaring(n32) && return pow_body(x, n32)
+    s = ifelse(signbit(x) && isodd(n), -one(T), one(T))
     x = abs(x)
-    return pow_body(x, widen(T)(n))
+    return copysign(pow_body(x, widen(T)(n32)), s)
 end
 
 @assume_effects :foldable @noinline function pow_body(x::Float64, y::Float64)
@@ -92,7 +99,7 @@ end
     if xu < (UInt64(1)<<52) # x is subnormal
         xu = reinterpret(UInt64, x * 0x1p52) # normalize x
         xu &= ~sign_mask(Float64)
-        xu -= UInt64(52) << 52 # mess with the exponent
+        xu -%= (UInt64(52) << 52) # mess with the exponent
     end
     logxhi,logxlo = _log_ext(xu)
     xyhi, xylo = two_mul(logxhi,y)
@@ -116,7 +123,7 @@ end
 # this method is only reliable for -2^20 < n < 2^20 (cf. #53881 #53886)
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
-    xnlo = -0.0
+    xnlo = 0.0
     ynlo = 0.0
     n == 3 && return x*x*x # keep compatibility with literal_pow
     if n < 0
@@ -138,5 +145,6 @@ end
         n >>>= 1
     end
     err = muladd(y, xnlo, x*ynlo)
-    return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), x*y)
+    # x*y when err is zero, to keep the sign of a zero result
+    return ifelse(isfinite(x) & isfinite(err) & !iszero(err), muladd(x, y, err), x*y)
 end

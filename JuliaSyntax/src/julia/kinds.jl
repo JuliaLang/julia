@@ -12,9 +12,9 @@ syntax tree nodes. We do this explicitly outside the Julia type system because
 are unityped from the Julia compiler's point of view, for efficiency.
 
 Naming rules:
-* Kinds which correspond to exactly one textural form are represented with that
+* Kinds which correspond to exactly one textual form are represented with that
   text. This includes keywords like K"for" and operators like K"*".
-* Kinds which represent many textural forms have UpperCamelCase names. This
+* Kinds which represent many textual forms have UpperCamelCase names. This
   includes kinds like K"Identifier" and K"Comment".
 * Kinds which exist merely as delimiters are all uppercase
 """
@@ -242,7 +242,6 @@ register_kinds!(JuliaSyntax, 0, [
             "abstract"
             "as"
             "doc"
-            "goto"
             "mutable"
             "outer"
             "primitive"
@@ -325,12 +324,15 @@ register_kinds!(JuliaSyntax, 0, [
     "-->"   # syntactic arrow
     ":"     # used for quoting
     "+"     # used in numeric constants
+    "+%"    # wrapping addition
     "++"    # special chaining syntax
     "*"     # special chaining syntax
+    "*%"    # wrapping multiplication
     "<"     # recovery path for :<
     ">"     # recovery path for :>
     "\$"    # interpolation
     "-"     # negated constants
+    "-%"    # wrapping subtraction
     "&"     # syntactic unary
     "∈"     # iteration syntax
     # all syntactic unary
@@ -392,26 +394,13 @@ register_kinds!(JuliaSyntax, 0, [
         "wrapper"
     "END_SYNTAX_KINDS"
 
-    # Kinds not corresponding to surface syntax in RawGreenNode, but required
-    # for parsing to a provenance-containing structure that is compatible with
-    # Expr.  May shrink with syntax evolution.
-    "BEGIN_SYNTAXTREE_KINDS"
-        # A literal Julia value of any kind, as might be inserted into the
-        # AST during macro expansion.  Only used in parsing to SyntaxTree.
-        "Value"
-        "unknown_head"
-        "flatten"
-        # QuoteNode; not quasiquote
-        "inert"
-        "inert_syntaxtree"
-    "END_SYNTAXTREE_KINDS"
-
     # Special tokens
     "TOMBSTONE"    # Empty placeholder for kind to be filled later
     "None"         # Never emitted by lexer/parser
     "EndMarker"    # EOF
 
     "BEGIN_ERRORS"
+        "incomplete"
         # Tokenization errors
         "ErrorEofMultiComment"
         "ErrorInvalidNumericConstant"
@@ -647,26 +636,21 @@ _is_op_prec(x, prec)   = kind(x) == K"Operator" && numeric_flags(head(x)) == Int
 
 is_prec_assignment(x)  = K"BEGIN_ASSIGNMENTS" <= kind(x) <= K"END_ASSIGNMENTS"
 is_prec_pair(x)        = _is_op_prec(x, PREC_PAIRARROW)
-is_prec_conditional(x) = kind(x) == K"?"
 is_prec_arrow(x)       = _is_op_prec(x, PREC_ARROW) || kind(x) == K"-->"
 is_prec_lazy_or(x)     = _is_op_prec(x, PREC_LAZYOR) || kind(x) in KSet"||"
 is_prec_lazy_and(x)    = _is_op_prec(x, PREC_LAZYAND) || kind(x) in KSet"&&"
 is_prec_comparison(x)  = _is_op_prec(x, PREC_COMPARISON) || kind(x) in KSet"<: >: in isa < > ∈"
 is_prec_pipe_lt(x)     = _is_op_prec(x, PREC_PIPE_LT)
 is_prec_pipe_gt(x)     = _is_op_prec(x, PREC_PIPE_GT)
-is_prec_pipe(x)        = is_prec_pipe_lt(x) || is_prec_pipe_gt(x)
 is_prec_colon(x)       = _is_op_prec(x, PREC_COLON) || kind(x) == K".."
-is_prec_plus(x)        = _is_op_prec(x, PREC_PLUS) || kind(x) in KSet"+ - ± ∓ $ ++"
+is_prec_plus(x)        = _is_op_prec(x, PREC_PLUS) || kind(x) in KSet"+ +% - -% ± ∓ $ ++"
 is_prec_bitshift(x)    = _is_op_prec(x, PREC_BITSHIFT)
-is_prec_times(x)       = _is_op_prec(x, PREC_TIMES) || kind(x) in KSet"* ⋆ &"
+is_prec_times(x)       = _is_op_prec(x, PREC_TIMES) || kind(x) in KSet"* *% ⋆ &"
 is_prec_rational(x)    = _is_op_prec(x, PREC_RATIONAL)
 is_prec_power(x)       = _is_op_prec(x, PREC_POWER)
-is_prec_decl(x)        = _is_op_prec(x, PREC_DECL) || kind(x) == K"::"
-is_prec_where(x)       = _is_op_prec(x, PREC_WHERE) || kind(x) == K"where"
-is_prec_dot(x)         = _is_op_prec(x, PREC_DOT) || kind(x) == K"."
 is_prec_quote(x)       = _is_op_prec(x, PREC_QUOTE) || kind(x) == K"'"
 is_syntax_kind(x)      = K"BEGIN_SYNTAX_KINDS"<= kind(x) <= K"END_SYNTAX_KINDS"
-is_prec_compound_assign(x) = _is_op_prec(x, PREC_COMPOUND_ASSIGN)
+is_prec_compound_assign(x) = is_operator(x) && numeric_flags(head(x)) == Int(PREC_COMPOUND_ASSIGN)
 
 function is_string_delim(x)
     kind(x) in (K"\"", K"\"\"\"")

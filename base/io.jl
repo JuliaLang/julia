@@ -328,6 +328,19 @@ Base.RefValue{MyStruct}(MyStruct(42.0))
 ```
 """
 function write end
+
+"""
+    writepartial(io::IO, x) -> Int
+
+Write `x` to `io` with partial-write cancellation semantics: where
+[`write`](@ref) throws the `CancellationRequest` when its governing
+cancellation token is cancelled mid-write, `writepartial` returns the
+number of bytes the stream had already accepted, and the (level-triggered)
+cancellation is delivered at the next cancellation point instead. Callers
+using it must be prepared for short counts. For IO types whose writes
+cannot block on cancellable resources it is equivalent to `write`.
+"""
+writepartial(io::IO, x) = write(io, x)
 typeof(write).name.max_methods = UInt8(1)
 
 read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
@@ -373,6 +386,7 @@ function peek(s::IO, ::Type{T}) where T
         reset(s)
     end
 end
+peek(s::IO, ::Type{Union{}}, slurp...) = throw(MethodError(peek, (s, Union{}, slurp...)))
 
 peek(s) = peek(s, UInt8)::UInt8
 
@@ -472,32 +486,56 @@ end
 function pipe_reader end
 function pipe_writer end
 
-for f in (:flush, :closewrite, :iswritable)
-    @eval $(f)(io::AbstractPipe) = $(f)(pipe_writer(io)::IO)
+iswritable(io::AbstractPipe) = iswritable(pipe_writer(io)::IO)
+# flush/closewrite/unsafe_write accept `cancel` like their LibuvStream
+# counterparts, so a keyword call on a compound pipe does not miss these
+# forwarders (only an explicit token is forwarded: the sentinel keeps the
+# plain call, which any user-defined method of the inner IO supports; see
+# readbytes! below)
+for f in (:flush, :closewrite)
+    @eval $(f)(io::AbstractPipe; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+        cancel === DEFAULT_CANCEL ? $(f)(pipe_writer(io)::IO) :
+                                    $(f)(pipe_writer(io)::IO; cancel)
 end
 write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io)::IO, byte)
+writepartial(io::AbstractPipe, x) = writepartial(pipe_writer(io)::IO, x)
 write(to::IO, from::AbstractPipe) = write(to, pipe_reader(from))
-unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io)::IO, p, nb)::Union{Int,UInt}
+unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    (cancel === DEFAULT_CANCEL ? unsafe_write(pipe_writer(io)::IO, p, nb) :
+                                 unsafe_write(pipe_writer(io)::IO, p, nb; cancel))::Union{Int,UInt}
 buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io)::IO, args...)
 
 for f in (
         # peek/mark interface
         :mark, :unmark, :reset, :ismarked,
         # Simple reader functions
-        :read, :readavailable, :bytesavailable, :reseteof, :isreadable)
+        :read, :bytesavailable, :reseteof, :isreadable)
     @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io)::IO)
 end
-read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io)::IO, byte)::UInt8
+# explicit-token-forwarding reader forwarders (same pattern as readbytes!
+# below: the sentinel keeps the plain call)
+readavailable(io::AbstractPipe; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    cancel === DEFAULT_CANCEL ? readavailable(pipe_reader(io)::IO) :
+                                readavailable(pipe_reader(io)::IO; cancel)
+read(io::AbstractPipe, byte::Type{UInt8}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    (cancel === DEFAULT_CANCEL ? read(pipe_reader(io)::IO, byte) :
+                                 read(pipe_reader(io)::IO, byte; cancel))::UInt8
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io)::IO, p, nb)
 copyuntil(out::IO, io::AbstractPipe, arg::UInt8; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
 copyuntil(out::IO, io::AbstractPipe, arg::AbstractChar; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
 copyuntil(out::IO, io::AbstractPipe, arg::AbstractString; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
 copyuntil(out::IO, io::AbstractPipe, arg::AbstractVector; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io)::IO, target, keep, out)
-readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io)::IO, target, n)
+# (only an explicit token is forwarded: the sentinel keeps the plain call,
+# which any user-defined readbytes! method supports)
+readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target); cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    cancel === DEFAULT_CANCEL ? readbytes!(pipe_reader(io)::IO, target, n) :
+                                readbytes!(pipe_reader(io)::IO, target, n; cancel)
 peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)::T
 wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io)::IO, nb)
-eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
+eof(io::AbstractPipe; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    (cancel === DEFAULT_CANCEL ? eof(pipe_reader(io)::IO) :
+                                 eof(pipe_reader(io)::IO; cancel))::Bool
 
 isopen(io::AbstractPipe) = isopen(pipe_writer(io)::IO) || isopen(pipe_reader(io)::IO)
 close(io::AbstractPipe) = (close(pipe_writer(io)::IO); close(pipe_reader(io)::IO))
@@ -545,6 +583,14 @@ typeof(read!).name.max_methods = UInt8(1)
 
 read!(filename::AbstractString, a) = open(io->read!(io, a), convert(String, filename)::String)
 
+# The generic-IO `cancel` convention (referenced as such below): in methods
+# over abstract `IO`, the inner reads/writes go through arbitrary, possibly
+# user-extended methods that need not accept a `cancel` keyword. The
+# resolved token therefore gates *between* those calls, via explicit
+# cancellation points, while any parks inside them run under the ambient
+# scope. For the same reason, `cancel` is only forwarded to such methods when
+# the caller passed it explicitly.
+
 """
     readuntil(stream::IO, delim; keep::Bool = false)
     readuntil(filename::AbstractString, delim; keep::Bool = false)
@@ -557,6 +603,9 @@ The text is assumed to be encoded in UTF-8.
 Return a `String` if `delim` is an `AbstractChar` or a string
 or otherwise return a `Vector{typeof(delim)}`.   See also [`copyuntil`](@ref)
 to instead write in-place to another stream (which can be a preallocated [`IOBuffer`](@ref)).
+
+See also [`skipchars`](@ref) to skip characters without returning them; e.g.
+`skipchars(!=('x'), io)` advances `io` to the next `'x'`, which is left unread.
 
 # Examples
 ```jldoctest
@@ -572,9 +621,16 @@ julia> rm("my_file.txt")
 ```
 """
 readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
-readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
-readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = takestring!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
-readuntil(stream::IO, delim::T; keep::Bool=false) where T = _copyuntil(Vector{T}(), stream, delim, keep)
+readuntil(stream::IO, delim::UInt8; cancel::CancelTokenArg=DEFAULT_CANCEL, kw...) =
+    _unsafe_take!(cancel === DEFAULT_CANCEL ? copyuntil(IOBuffer(sizehint=16), stream, delim; kw...) :
+                                              copyuntil(IOBuffer(sizehint=16), stream, delim; cancel, kw...))
+readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; cancel::CancelTokenArg=DEFAULT_CANCEL, kw...) =
+    takestring!(cancel === DEFAULT_CANCEL ? copyuntil(IOBuffer(sizehint=16), stream, delim; kw...) :
+                                            copyuntil(IOBuffer(sizehint=16), stream, delim; cancel, kw...))
+function readuntil(stream::IO, delim::T; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) where T
+    check_cancel_arg(cancel)
+    return _copyuntil(Vector{T}(), stream, delim, keep)
+end
 
 
 """
@@ -603,6 +659,9 @@ julia> takestring!(copyuntil(IOBuffer(), "my_file.txt", '.', keep = true))
 
 julia> rm("my_file.txt")
 ```
+
+!!! compat "Julia 1.11"
+    `copyuntil` was introduced in Julia 1.11.
 """
 copyuntil(out::IO, filename::AbstractString, delim; kw...) = open(io->copyuntil(out, io, delim; kw...), convert(String, filename)::String)
 
@@ -616,6 +675,11 @@ input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `keep` 
 false (as it is by default), these trailing newline characters are removed from the
 line before it is returned. When `keep` is true, they are returned as part of the
 line.
+
+At the end of the stream, an empty string is returned. This is indistinguishable from an
+empty line unless `keep` is true; alternatively, check [`eof`](@ref) before reading. When
+reading from a terminal, typing Ctrl-D sets the end-of-file flag of the stream, so subsequent
+calls return an empty string until [`Base.reseteof`](@ref) is called.
 
 Return a `String`.   See also [`copyline`](@ref) to instead write in-place
 to another stream (which can be a preallocated [`IOBuffer`](@ref)).
@@ -643,9 +707,13 @@ Logan
 "Logan"
 ```
 """
-readline(filename::AbstractString; keep::Bool=false) =
-    open(io -> readline(io; keep), filename)
-readline(s::IO=stdin; keep::Bool=false) = takestring!(copyline(IOBuffer(sizehint=16), s; keep))
+function readline(filename::AbstractString; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(cancel)
+    return open(io -> readline(io; keep, cancel=tok), filename)
+end
+readline(s::IO=stdin; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    takestring!(cancel === DEFAULT_CANCEL ? copyline(IOBuffer(sizehint=16), s; keep) :
+                                            copyline(IOBuffer(sizehint=16), s; keep, cancel))
 
 """
     copyline(out::IO, io::IO=stdin; keep::Bool=false)
@@ -678,15 +746,23 @@ julia> takestring!(copyline(IOBuffer(), "my_file.txt", keep=true))
 
 julia> rm("my_file.txt")
 ```
+
+!!! compat "Julia 1.11"
+    `copyline` was introduced in Julia 1.11.
 """
-copyline(out::IO, filename::AbstractString; keep::Bool=false) =
-    open(io -> copyline(out, io; keep), filename)
+function copyline(out::IO, filename::AbstractString; keep::Bool=false,
+                  cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(cancel)
+    return open(io -> copyline(out, io; keep, cancel=tok), filename)
+end
 
 # fallback to optimized methods for IOBuffer in iobuffer.jl
-function copyline(out::IO, s::IO; keep::Bool=false)
+function copyline(out::IO, s::IO; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
     if keep
-        return copyuntil(out, s, 0x0a, keep=true)
+        return cancel === DEFAULT_CANCEL ? copyuntil(out, s, 0x0a; keep=true) :
+                                           copyuntil(out, s, 0x0a; keep=true, cancel)
     else
+        check_cancel_arg(cancel)
         # more complicated to deal with CRLF logic
         while !eof(s)
             b = read(s, UInt8)
@@ -733,7 +809,8 @@ function readlines(filename::AbstractString; kw...)
         readlines(f; kw...)
     end
 end
-readlines(s=stdin; kw...) = collect(eachline(s; kw...))
+readlines(s=stdin; cancel::CancelTokenArg=DEFAULT_CANCEL, kw...) =
+    collect(eachline(s; cancel, kw...))
 
 ## byte-order mark, ntoh & hton ##
 
@@ -818,7 +895,8 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 ## binary I/O ##
 
 write(io::IO, x) = throw(MethodError(write, (io, x)))
-function write(io::IO, x1, xs...)
+function write(io::IO, x1, xs...; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    check_cancel_arg(cancel)
     written::Int = write(io, x1)
     for x in xs
         written += write(io, x)
@@ -845,7 +923,8 @@ end
 write(s::IO, x::Bool) = write(s, UInt8(x))
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
-function write(s::IO, A::AbstractArray)
+function write(s::IO, A::AbstractArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    check_cancel_arg(cancel)
     if !isbitstype(eltype(A))
         error("`write` is not supported on non-isbits arrays")
     end
@@ -858,7 +937,8 @@ function write(s::IO, A::AbstractArray)
     return nb
 end
 
-function write(s::IO, A::StridedArray)
+function write(s::IO, A::StridedArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    check_cancel_arg(cancel)
     if !isbitstype(eltype(A))
         error("`write` is not supported on non-isbits arrays")
     end
@@ -867,7 +947,7 @@ function write(s::IO, A::StridedArray)
     sz::Dims = size(A)
     st::Dims = strides(A)
     msz, mst, n = merge_adjacent_dim(sz, st)
-    mst == 1 || return invoke(write, Tuple{IO, AbstractArray}, s, A)
+    mst == 1 || return invoke(write, Tuple{IO, AbstractArray}, s, A; cancel=nothing)
     n == ndims(A) &&
         return GC.@preserve A unsafe_write(s, pointer(A), elsize(A) * length(A))
     sz′, st′ = tail(sz), tail(st)
@@ -936,7 +1016,8 @@ end
 read(s::IO, ::Type{Bool}) = (read(s, UInt8) != 0)
 read(s::IO, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(s, UInt))
 
-function read!(s::IO, A::AbstractArray{T}) where {T}
+function read!(s::IO, A::AbstractArray{T}; cancel::CancelTokenArg=DEFAULT_CANCEL) where {T}
+    check_cancel_arg(cancel)
     if isbitstype(T) && _checkcontiguous(Bool, A)
         GC.@preserve A unsafe_read(s, pointer(A), elsize(A) * length(A))
     else
@@ -955,14 +1036,35 @@ function read!(s::IO, A::AbstractArray{T}) where {T}
     return A
 end
 
-function read!(s::IO, A::StridedArray{T}) where {T}
+# bitarray.jl loads before cancellation machinery in bootstrap order, so
+# write the specialization here.
+# TODO: because the generic `write` design relies on a bug (#9498), we have to
+# explicitly add a `cancel` kwarg to avoid hitting the ::AbstractArray method
+function write(s::IO, B::BitArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    check_cancel_arg(cancel)
+    return write(s, B.chunks)
+end
+function read!(s::IO, B::BitArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    check_cancel_arg(cancel)
+    n = length(B)
+    Bc = B.chunks
+    read!(s, Bc)
+    if length(Bc) > 0 && Bc[end] & _msk_end(n) ≠ Bc[end]
+        Bc[end] &= _msk_end(n) # ensure that the BitArray is not broken
+        throw(DimensionMismatch("read mismatch, found non-zero bits after BitArray length"))
+    end
+    return B
+end
+
+function read!(s::IO, A::StridedArray{T}; cancel::CancelTokenArg=DEFAULT_CANCEL) where {T}
+    check_cancel_arg(cancel)
     if !isbitstype(T) || _checkcontiguous(Bool, A)
-        return invoke(read!, Tuple{IO, AbstractArray}, s, A)
+        return invoke(read!, Tuple{IO, AbstractArray}, s, A; cancel=nothing)
     end
     sz::Dims = size(A)
     st::Dims = strides(A)
     msz, mst, n = merge_adjacent_dim(sz, st)
-    mst == 1 || return invoke(read!, Tuple{IO, AbstractArray}, s, A)
+    mst == 1 || return invoke(read!, Tuple{IO, AbstractArray}, s, A; cancel=nothing)
     if n == ndims(A)
         GC.@preserve A unsafe_read(s, pointer(A), elsize(A) * length(A))
     else
@@ -988,9 +1090,10 @@ end
 
 function read(io::IO, ::Type{Char})
     b0 = read(io, UInt8)::UInt8
-    l = 0x08 * (0x04 - UInt8(leading_ones(b0)))
+    lo = UInt8(leading_ones(b0))
     c = UInt32(b0) << 24
-    if l ≤ 0x10
+    if 0x02 ≤ lo ≤ 0x04
+        l = 0x08 * (0x04 - lo)
         s = 16
         while s ≥ l && !eof(io)::Bool
             peek(io) & 0xc0 == 0x80 || break
@@ -1004,10 +1107,12 @@ end
 # read(io, T) is not defined for other AbstractChar: implementations
 # must provide their own encoding-specific method.
 
-function copyuntil(out::IO, s::IO, delim::AbstractChar; keep::Bool=false)
+function copyuntil(out::IO, s::IO, delim::AbstractChar; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
     if delim ≤ '\x7f'
-        return copyuntil(out, s, delim % UInt8; keep)
+        return cancel === DEFAULT_CANCEL ? copyuntil(out, s, delim % UInt8; keep) :
+                                           copyuntil(out, s, delim % UInt8; keep, cancel)
     end
+    check_cancel_arg(cancel)
     for c in readeach(s, Char)
         if c == delim
             keep && write(out, c)
@@ -1020,7 +1125,10 @@ end
 
 # note: optimized methods of copyuntil for IOStreams and delim::UInt8 in iostream.jl
 #       and for IOBuffer with delim::UInt8 in iobuffer.jl
-copyuntil(out::IO, s::IO, delim; keep::Bool=false) = _copyuntil(out, s, delim, keep)
+function copyuntil(out::IO, s::IO, delim; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    check_cancel_arg(cancel)
+    return _copyuntil(out, s, delim, keep)
+end
 
 # supports out::Union{IO, AbstractVector} for use with both copyuntil & readuntil
 function _copyuntil(out, s::IO, delim::T, keep::Bool) where T
@@ -1121,29 +1229,42 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) w
     return false
 end
 
-function copyuntil(out::IO, io::IO, target::AbstractString; keep::Bool=false)
+function copyuntil(out::IO, io::IO, target::AbstractString; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
     # small-string target optimizations
     x = Iterators.peel(target)
     isnothing(x) && return out
     c, rest = x
     if isempty(rest) && c <= '\x7f'
-        return copyuntil(out, io, c % UInt8; keep)
+        return cancel === DEFAULT_CANCEL ? copyuntil(out, io, c % UInt8; keep) :
+                                           copyuntil(out, io, c % UInt8; keep, cancel)
     end
     # convert String to a utf8-byte-iterator
     if !(target isa String) && !(target isa SubString{String})
         target = String(target)
     end
     target = codeunits(target)::AbstractVector
-    return copyuntil(out, io, target, keep=keep)
+    return cancel === DEFAULT_CANCEL ? copyuntil(out, io, target; keep) :
+                                       copyuntil(out, io, target; keep, cancel)
 end
 
-function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false) where T
+# like the vector copyuntil below: without the `cancel` keyword here, a
+# keyword call would bypass this method for the scalar-delimiter catch-all
+# above (keyword dispatch only sees keyword-accepting methods)
+function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false,
+                   cancel::CancelTokenArg=DEFAULT_CANCEL) where T
+    # entry gate only (generic-IO cancel convention)
+    check_cancel_arg(cancel)
     out = (T === UInt8 ? resize!(StringVector(16), 0) : Vector{T}())
     readuntil_vector!(io, target, keep, out)
     return out
 end
-copyuntil(out::IO, io::IO, target::AbstractVector; keep::Bool=false) =
-    (readuntil_vector!(io, target, keep, out); out)
+function copyuntil(out::IO, io::IO, target::AbstractVector; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # entry gate only, ahead of readuntil_vector!'s generic reads
+    # (generic-IO cancel convention)
+    check_cancel_arg(cancel)
+    readuntil_vector!(io, target, keep, out)
+    return out
+end
 
 """
     readchomp(x)
@@ -1161,7 +1282,12 @@ julia> readchomp("my_file.txt")
 julia> rm("my_file.txt");
 ```
 """
-readchomp(x) = chomp(read(x, String))
+function readchomp(x; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # `x` may be anything readable (a stream, file name, command): entry
+    # gate only (generic-IO cancel convention)
+    check_cancel_arg(cancel)
+    return chomp(read(x, String))
+end
 
 # read up to nb bytes into nb, returning # bytes read
 
@@ -1172,7 +1298,8 @@ Read at most `nb` bytes from `stream` into `b`, returning the number of bytes re
 The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
 and enough bytes could be read), but it will never be decreased.
 """
-function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
+function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b); cancel::CancelTokenArg=DEFAULT_CANCEL)
+    check_cancel_arg(cancel)
     require_one_based_indexing(b)
     olb = lb = length(b)
     nr = 0
@@ -1196,15 +1323,25 @@ end
 
 Read at most `nb` bytes from `s`, returning a `Vector{UInt8}` of the bytes read.
 """
-function read(s::IO, nb::Integer = typemax(Int))
+function read(s::IO, nb::Integer = typemax(Int); cancel::CancelTokenArg=DEFAULT_CANCEL)
     # Let readbytes! grow the array progressively by default
-    # instead of taking of risk of over-allocating
+    # instead of taking the risk of over-allocating
     b = Vector{UInt8}(undef, nb == typemax(Int) ? 1024 : nb)
-    nr = readbytes!(s, b, nb)
+    # an explicit token is forwarded to readbytes! (whose Base methods all
+    # accept it); the default sentinel keeps the plain call, which any
+    # user-defined readbytes! method supports
+    nr = cancel === DEFAULT_CANCEL ? readbytes!(s, b, nb) : readbytes!(s, b, nb; cancel)
     return resize!(b, nr)
 end
 
-read(s::IO, ::Type{String}) = String(read(s)::Vector{UInt8})
+function read(s::IO, ::Type{String}; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # thread the token (or an explicit `nothing` shield) into the inner
+    # read, which does the actual blocking; the sentinel keeps the plain
+    # call, which any user-defined `read` method supports
+    cancel === DEFAULT_CANCEL && return String(read(s)::Vector{UInt8})
+    cancel = check_cancel_arg(cancel)
+    return String(read(s; cancel)::Vector{UInt8})
+end
 read(s::IO, T::Type) = error("The IO stream does not support reading objects of type $T.")
 
 ## high-level iterator interfaces ##
@@ -1213,8 +1350,10 @@ struct EachLine{IOT <: IO}
     stream::IOT
     ondone::Function
     keep::Bool
-    EachLine(stream::IO=stdin; ondone::Function=()->nothing, keep::Bool=false) =
-        new{typeof(stream)}(stream, ondone, keep)
+    cancel::CancelTokenArg
+    EachLine(stream::IO=stdin; ondone::Function=()->nothing, keep::Bool=false,
+             cancel::CancelTokenArg=DEFAULT_CANCEL) =
+        new{typeof(stream)}(stream, ondone, keep, cancel)
 end
 
 """
@@ -1250,18 +1389,23 @@ julia> rm("my_file.txt");
 !!! compat "Julia 1.8"
        Julia 1.8 is required to use `Iterators.reverse` or `last` with `eachline` iterators.
 """
-function eachline(stream::IO=stdin; keep::Bool=false)
-    EachLine(stream, keep=keep)::EachLine
+function eachline(stream::IO=stdin; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    EachLine(stream; keep, cancel)::EachLine
 end
 
-function eachline(filename::AbstractString; keep::Bool=false)
+function eachline(filename::AbstractString; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
     s = open(filename)
-    EachLine(s, ondone=()->close(s), keep=keep)::EachLine
+    EachLine(s; ondone=()->close(s), keep, cancel)::EachLine
 end
 
 function iterate(itr::EachLine, state=nothing)
+    # token-gate between lines (generic-IO cancel convention)
+    cancel = itr.cancel
+    check_cancel_arg(cancel)
     eof(itr.stream) && return (itr.ondone(); nothing)
-    (readline(itr.stream, keep=itr.keep), nothing)
+    line = cancel === DEFAULT_CANCEL ? readline(itr.stream; keep=itr.keep) :
+                                       readline(itr.stream; keep=itr.keep, cancel)
+    (line, nothing)
 end
 
 eltype(::Type{<:EachLine}) = String
@@ -1311,7 +1455,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
         buf = IOBuffer(sizehint = ichunk==jchunk ? jnewline : 4096)
         while ichunk != jchunk
             write(buf, chunks[ichunk])
-            ichunk = ichunk == length(chunks) ? 1 : ichunk + 1
+            ichunk = mod1(ichunk + 1, length(chunks))
         end
         chunk = chunks[jchunk]
         write(buf, view(chunk, 1:jnewline))
@@ -1329,7 +1473,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
             write(buf, view(chunks[ichunk], inewline+1:length(chunks[ichunk])))
             i = ichunk
             while true
-                i = i == length(chunks) ? 1 : i + 1
+                i = mod1(i + 1, length(chunks))
                 i == jchunk && break
                 write(buf, chunks[i])
             end
@@ -1343,7 +1487,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
                 chunk = chunks[i]
                 p -= length(resize!(chunk, min(4096, p-p0)))
                 readbytes!(seek(r.itr.stream, p), chunk)
-                i = i == 1 ? length(chunks) : i - 1
+                i = mod1(i - 1, length(chunks))
             end
         end
 
@@ -1353,21 +1497,24 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
         while true
             inewline = something(findprev(==(UInt8('\n')), chunks[ichunk], inewline-1), 0)
             inewline > 0 && break
-            ichunk = ichunk == 1 ? length(chunks) : ichunk - 1
+            ichunk = mod1(ichunk - 1, length(chunks))
             ichunk == jchunk && break # found nothing — may need to read more chunks
             inewline = length(chunks[ichunk])+1 # start for next findprev
         end
 
-        # read more chunks to look for a newline (should rarely happen)
-        if inewline == 0 && p > p0
-            ichunk = jchunk + 1
-            while true
-                chunk = Vector{UInt8}(undef, min(4096, p-p0))
-                p -= length(chunk)
-                readbytes!(seek(r.itr.stream, p), chunk)
-                insert!(chunks, ichunk, chunk)
-                inewline = something(findlast(==(UInt8('\n')), chunk), 0)
-                (p == p0 || inewline > 0) && break
+        if inewline == 0 # no previous newline found
+            if p > p0 # read more chunks to look for a newline (should rarely happen)
+                ichunk = jchunk + 1
+                while true
+                    chunk = Vector{UInt8}(undef, min(4096, p-p0))
+                    p -= length(chunk)
+                    readbytes!(seek(r.itr.stream, p), chunk)
+                    insert!(chunks, ichunk, chunk)
+                    inewline = something(findlast(==(UInt8('\n')), chunk), 0)
+                    (p == p0 || inewline > 0) && break
+                end
+            else # first line starts at beginning of stream (p0)
+                ichunk = mod1(jchunk + 1, length(chunks))
             end
         end
     end
@@ -1409,7 +1556,8 @@ readeach(stream::IOT, T::Type) where IOT<:IO = ReadEachIterator{T,IOT}(stream)
 iterate(itr::ReadEachIterator{T}, state=nothing) where T =
     eof(itr.stream) ? nothing : (read(itr.stream, T), nothing)
 
-eltype(::Type{ReadEachIterator{T}}) where T = T
+eltype(::Type{<:ReadEachIterator{T}}) where {T} = T
+eltype(::Type{ReadEachIterator}) = Any
 
 IteratorSize(::Type{<:ReadEachIterator}) = SizeUnknown()
 
@@ -1480,6 +1628,8 @@ flush(io::IO) = nothing
 Advance the stream `io` such that the next-read character will be the first remaining for
 which `predicate` returns `false`. If the keyword argument `linecomment` is specified, all
 characters from that character until the start of the next line are ignored.
+
+See also [`readuntil`](@ref).
 
 # Examples
 ```jldoctest

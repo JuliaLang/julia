@@ -1,11 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random
-using Test: guardseed, _should_escape_call, _escape_call
+using Test: guardseed, _should_escape_call, _escape_call, _to_pair_iterator
 using Serialization
 using Distributed: RemoteException
 
-import Logging: Debug, Info, Warn, with_logger
+import Logging: Debug, Info, Warn, AboveMaxLevel, with_logger, @logmsg
 
 @test isempty(Test.detect_closure_boxes(Test))
 
@@ -264,8 +264,10 @@ end
     end
 
     # @test_nowarn with broken=true when test fails (has warning) should be Broken
-    let results = @testset NoThrowTestSet begin
-            @test_nowarn (println(stderr, "oops"); 1) broken=true
+    let results = redirect_stderr(devnull) do
+            @testset NoThrowTestSet begin
+                @test_nowarn (println(stderr, "oops"); 1) broken=true
+            end
         end
         @test length(results) == 1
         @test results[1] isa Test.Broken
@@ -348,8 +350,10 @@ end
     end
 
     # @test_nowarn failure shows expected "" and captured stderr
-    let results = @testset NoThrowTestSet begin
-            @test_nowarn println(stderr, "oops")
+    let results = redirect_stderr(devnull) do
+            @testset NoThrowTestSet begin
+                @test_nowarn println(stderr, "oops")
+            end
         end
         @test length(results) == 1
         fail = results[1]
@@ -394,39 +398,43 @@ let fails = @testset NoThrowTestSet begin
         # 16 & 17 - Fail - function with keyword
         @test isapprox(1 / 2, 2 / 1, atol=1 / 1)
         @test isapprox(1 - 2, 2 - 1; atol=1 - 1)
-        # 18 - Fail - function keyword splatting
-        k = [(:atol, 0), (:nans, true)]
-        @test isapprox(1, 2; k...)
-        # 19 - Fail - call negation
+        # 18 - 20 - Fail - function keyword splatting
+        k1 = [(:atol, 0), (:nans, true)]
+        k2 = (atol = 0, nans = true)
+        k3 = (:atol => 0, :nans => true)
+        @test isapprox(1, 2; k1...)
+        @test isapprox(1, 2; k2...)
+        @test isapprox(1, 2; k3...)
+        # 21 - Fail - call negation
         @test !isequal(1, 2 - 1)
-        # 20 - Fail - comparison negation
+        # 22 - Fail - comparison negation
         @test !(2 + 3 == 1 + 4)
-        # 21 - Fail - chained negation
+        # 23 - Fail - chained negation
         @test !(2 + 3 == 1 + 4 == 5)
-        # 22 - Fail - isempty
+        # 24 - Fail - isempty
         nonempty = [1, 2, 3]
         @test isempty(nonempty)
         str1 = "Hello"
         str2 = "World"
-        # 23 - Fail - occursin
+        # 25 - Fail - occursin
         @test occursin(str1, str2)
-        # 24 - Fail - startswith
+        # 26 - Fail - startswith
         @test startswith(str1, str2)
-        # 25 - Fail - endswith
+        # 27 - Fail - endswith
         @test endswith(str1, str2)
-        # 26 - Fail - contains
+        # 28 - Fail - contains
         @test Base.contains(str1, str2)
-        # 27 - Fail - issetequal
+        # 29 - Fail - issetequal
         @test issetequal([2, 3] .- 1, [1, 3])
-        # 28 - Fail - Type Comparison
+        # 30 - Fail - Type Comparison
         @test typeof(1) <: typeof("julia")
-        # 29 - Fail - assignment
+        # 31 - Fail - assignment
         @test (i = length([1, 2])) == 3
-        # 30 - Fail - symbol comparison
+        # 32 - Fail - symbol comparison
         @test 1 + 2 == :sym
-        # 31 - Fail - symbol in function call
+        # 33 - Fail - symbol in function call
         @test isequal(1 + 2, :sym)
-        # 32 - 35 - Fail - wrong message
+        # 34 - 37 - Fail - wrong message
         @test_throws "A test" error("a test")
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
@@ -522,90 +530,100 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[18])
-        @test occursin("Expression: isapprox(1, 2; k...)", str)
+        @test occursin("Expression: isapprox(1, 2; k1...)", str)
         @test occursin("Evaluated: isapprox(1, 2; atol = 0, nans = true)", str)
     end
 
     let str = sprint(show, fails[19])
+        @test occursin("Expression: isapprox(1, 2; k2...)", str)
+        @test occursin("Evaluated: isapprox(1, 2; atol = 0, nans = true)", str)
+    end
+
+    let str = sprint(show, fails[20])
+        @test occursin("Expression: isapprox(1, 2; k3...)", str)
+        @test occursin("Evaluated: isapprox(1, 2; atol = 0, nans = true)", str)
+    end
+
+    let str = sprint(show, fails[21])
         @test occursin("Expression: !(isequal(1, 2 - 1))", str)
         @test occursin("Evaluated: !(isequal(1, 1))", str)
     end
 
-    let str = sprint(show, fails[20])
+    let str = sprint(show, fails[22])
         @test occursin("Expression: !(2 + 3 == 1 + 4)", str)
         @test occursin("Evaluated: !(5 == 5)", str)
     end
 
-    let str = sprint(show, fails[21])
+    let str = sprint(show, fails[23])
         @test occursin("Expression: !(2 + 3 == 1 + 4 == 5)", str)
         @test occursin("Evaluated: !(5 == 5 == 5)", str)
     end
 
-    let str = sprint(show, fails[22])
+    let str = sprint(show, fails[24])
         @test occursin("Expression: isempty(nonempty)", str)
         @test occursin("Evaluated: isempty([1, 2, 3])", str)
     end
 
-    let str = sprint(show, fails[23])
+    let str = sprint(show, fails[25])
         @test occursin("Expression: occursin(str1, str2)", str)
         @test occursin("Evaluated: occursin(\"Hello\", \"World\")", str)
     end
 
-    let str = sprint(show, fails[24])
+    let str = sprint(show, fails[26])
         @test occursin("Expression: startswith(str1, str2)", str)
         @test occursin("Evaluated: startswith(\"Hello\", \"World\")", str)
     end
 
-    let str = sprint(show, fails[25])
+    let str = sprint(show, fails[27])
         @test occursin("Expression: endswith(str1, str2)", str)
         @test occursin("Evaluated: endswith(\"Hello\", \"World\")", str)
     end
 
-    let str = sprint(show, fails[26])
+    let str = sprint(show, fails[28])
         @test occursin("Expression: Base.contains(str1, str2)", str)
         @test occursin("Evaluated: Base.contains(\"Hello\", \"World\")", str)
     end
 
-    let str = sprint(show, fails[27])
+    let str = sprint(show, fails[29])
         @test occursin("Expression: issetequal([2, 3] .- 1, [1, 3])", str)
         @test occursin("Evaluated: issetequal([1, 2], [1, 3])", str)
     end
 
-    let str = sprint(show, fails[28])
+    let str = sprint(show, fails[30])
         @test occursin("Expression: typeof(1) <: typeof(\"julia\")", str)
         @test occursin("Evaluated: $(typeof(1)) <: $(typeof("julia"))", str)
     end
 
-    let str = sprint(show, fails[29])
+    let str = sprint(show, fails[31])
         @test occursin("Expression: (i = length([1, 2])) == 3", str)
         @test occursin("Evaluated: 2 == 3", str)
     end
 
     # Test that symbols are printed with : prefix
-    let str = sprint(show, fails[30])
+    let str = sprint(show, fails[32])
         @test occursin("Evaluated: 3 == :sym", str)
     end
 
-    let str = sprint(show, fails[31])
+    let str = sprint(show, fails[33])
         @test occursin("Evaluated: isequal(3, :sym)", str)
     end
 
-    let str = sprint(show, fails[32])
+    let str = sprint(show, fails[34])
         @test occursin("Expected: \"A test\"", str)
         @test occursin("Message: \"a test\"", str)
     end
 
-    let str = sprint(show, fails[33])
+    let str = sprint(show, fails[35])
         @test occursin("Expected: r\"sqrt\\([Cc]omplx\"", str)
         @test occursin(r"Message: .*Try sqrt\(Complex", str)
     end
 
-    let str = sprint(show, fails[34])
+    let str = sprint(show, fails[36])
         @test occursin("Expected: < match function >", str)
         @test occursin("Message: \"a test\"", str)
     end
 
-    let str = sprint(show, fails[35])
+    let str = sprint(show, fails[37])
         @test occursin("Expected: [\"BoundsError\", \"acquire\", \"1-element\", \"at index [2]\"]", str)
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
     end
@@ -1097,6 +1115,11 @@ uninferable_small_union(i) = (1, nothing)[i]
 @test_throws ErrorException @inferred(Missing, uninferable_small_union(1))
 @test_throws ErrorException @inferred(Missing, uninferable_small_union(2))
 @test_throws ArgumentError @inferred(nothing, uninferable_small_union(1))
+let T = Core.TypeVar(:T)
+    f_free_typevar_result() = Rational{T}
+    err = @test_throws ErrorException @inferred(f_free_typevar_result())
+    @test occursin("return type Type{Rational{T}} does not match inferred return type", err.value.msg)
+end
 
 # Ensure @inferred only evaluates the arguments once
 inferred_test_global = 0
@@ -1148,6 +1171,28 @@ end
     @test !occursin("include(", msg)
     @test occursin("at " * f * ":3", msg)
     @test occursin("at " * f * ":4", msg)
+    rm(f; force=true)
+end
+
+@testset "backtraces in exceptions thrown outside of @test" begin
+    # the backtrace is anchored at the enclosing @testset: frames below it
+    # (include machinery, script/test-harness drivers) say nothing about the
+    # failure
+    local f = tempname() * ".jl"
+    write(f,
+    """
+    using Test
+    @testset "outer" begin
+        error("boom")
+    end
+    """)
+    local msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=devnull), String)
+    @test occursin("Got exception outside of a @test", msg)
+    # frame paths contract the home dir to `~` (e.g. the temp dir on Windows)
+    @test occursin(Base.contractuser(f) * ":3", msg)
+    @test !occursin("include(", msg)
+    @test !occursin("exec_options", msg)
+    @test !occursin("_start()", msg)
     rm(f; force=true)
 end
 
@@ -1423,13 +1468,57 @@ erronce() = @error "an error" maxlog=1
         @test_logs (Warn,) match_mode=:any @info "foo"
         @test_logs (Debug,) @debug "foo"
         @test_logs (Warn,) error()
+        @test_logs (:nosuchlevel,) @info "foo"
     end
-    @test length(fails) == 4
+    @test length(fails) == 5
     @test fails[1] isa Test.LogTestFailure
     @test fails[2] isa Test.LogTestFailure
     @test fails[3] isa Test.LogTestFailure
     @test fails[4] isa Test.Error
     @test startswith(fails[4].value, "ErrorException")
+    @test occursin("Unknown log level nosuchlevel", fails[5].value)
+
+    # Other fields of the pattern, matched by value, by regex or not at all
+    @test_logs (:abovemaxlevel,) @logmsg AboveMaxLevel "foo"
+    @test_logs (:info, "foo", @__MODULE__, r"^gr", r"^my") @info "foo" _group=:group _id=:my_id
+    @test_logs (:info, "foo", Test.Ignored(), :group) @info "foo" _group=:group
+    record = Test.LogRecord(Info, "foo", @__MODULE__, :group, :id, "file", 1; key=2)
+    @test record.kwargs[:key] == 2
+    @test occursin((:info, r"^fo", @__MODULE__, r"^gr", r"^i", r"^fi", 1), record)
+    @test !occursin((:info, r"^fo", @__MODULE__, r"^nope"), record)
+end
+
+# How a failed `@test_logs` is reported, in a separate process so this suite does not fail
+@testset "@test_logs failure reporting" begin
+    run_src(src) = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e $src`), stderr=devnull), String)
+    function check_report(msg)
+        @test occursin(r"Log Test Failed at none:\d+\n", msg)
+        @test occursin("@info \"actual\"\n", msg)
+        @test occursin("Log Pattern: (:warn, \"expected\")\n", msg)
+        @test occursin("Captured Logs: \n    LogRecord(Info, \"actual\", Main,", msg)
+    end
+
+    # A test set counts the failure and carries on.
+    msg = run_src("""
+    using Test
+    @testset "Foo" begin
+        @test_logs (:warn, "expected") @info "actual"
+        println("kept going")
+    end
+    """)
+    check_report(msg)
+    @test occursin("Foo: Log Test Failed", msg)
+    @test occursin("kept going", msg)
+    @test occursin(r"Test Summary: \| Fail  Total +Time\nFoo +\| +1 +1 ", msg)
+
+    # Without a test set the failure is thrown straight away.
+    msg = run_src("""
+    using Test
+    @test_logs (:warn, "expected") @info "actual"
+    println("kept going")
+    """)
+    check_report(msg)
+    @test !occursin("kept going", msg)
 end
 
 @testset "@test_logs broken/skip keywords" begin
@@ -1482,12 +1571,26 @@ let code = quote
             42
         end
         @deprecate oldfunc newfunc
+        struct HasOldField end
+        Base.getproperty(::HasOldField, ::Symbol) = (Base.depwarn("`old` is deprecated", :old); 42)
 
         @testset "@test_deprecated" begin
             @test_deprecated oldfunc()
             @test Base.JLOptions().depwarn == 1
 
             @test (@test_deprecated oldfunc()) == 42
+
+            # A block is the expression to run, not the pattern (issue #62197)
+            @test (@test_deprecated begin
+                oldfunc()
+            end) == 42
+            @test (@test_deprecated r"deprecated" begin
+                oldfunc()
+            end) == 42
+            # so are a property access and a bare name (issue #62595)
+            @test (@test_deprecated HasOldField().old) == 42
+            @test (@test_deprecated r"`old`" HasOldField().old) == 42
+            @test macroexpand(@__MODULE__, :(@test_deprecated OldName)) isa Expr
 
             fails = @testset NoThrowTestSet "check that @test_deprecated detects bad input" begin
                 @test_deprecated newfunc()
@@ -1521,6 +1624,15 @@ let code = quote
             @test length(results) == 1
             @test results[1] isa Test.Broken
             @test results[1].test_type === :skipped
+
+            # keywords combine with a block expression
+            results = @testset NoThrowTestSet begin
+                @test_deprecated begin
+                    newfunc()
+                end broken=true
+            end
+            @test length(results) == 1
+            @test results[1] isa Test.Broken
         end
     end
     incl = "include($(repr(joinpath(@__DIR__, "nothrow_testset.jl"))))"
@@ -1872,6 +1984,18 @@ end
             result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
             @test occursin(expected, result)
         end
+    end
+    @testset "failfast with @test_logs" begin
+        src = """
+        using Test
+        @testset "Foo" failfast=true begin
+            @test_logs (:warn,) @info "wrong level"
+            println("kept going")
+        end
+        """
+        result = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e $src`), stderr=devnull), String)
+        @test occursin("Log Test Failed", result)
+        @test !occursin("kept going", result)
     end
     @testset "failfast for-loop" begin
         expected = r"""
@@ -2330,7 +2454,7 @@ end
         @test _escape_call(:(f(; y=1))) == (; func, args=[], kwargs=[:(:y => $(esc(1)))], quoted_func)
         @test _escape_call(:(f(y=1; z))) == (; func, args=[], kwargs=[:(:y => $(esc(1))), :(:z => $(esc(:z)))], quoted_func)
         @test _escape_call(:(f(; y.z))) == (; func, args=[], kwargs=[:(:z => $(esc(:(y.z))))], quoted_func)
-        @test _escape_call(:(f(; y...))) ==  (; func, args=[], kwargs=[:($(esc(:y))...)], quoted_func)
+        @test _escape_call(:(f(; y...))) ==  (; func, args=[], kwargs=[:($(_to_pair_iterator)(; $(esc(:y))...)...)], quoted_func)
     end
 
     @testset "comparison" begin
@@ -2508,5 +2632,19 @@ end
         # Should not contain verbose messages
         @test !occursin("Starting testset:", output)
         @test !occursin("Finished testset:", output)
+    end
+end
+
+# world age increments implicitly after each statement in the body of both
+# `@testset begin` and `@testset for`, as a special case
+let m = Module()
+    Core.eval(m, :(f() = 0))
+    @testset "implicit world age increment in `@testset begin`" begin
+        Core.eval(m, :(f() = 42))
+        @test m.f() == 42
+    end
+    @testset "implicit world age increment in `@testset for` ($i)" for i in 1:2
+        Core.eval(m, :(f() = $i))
+        @test m.f() == i
     end
 end

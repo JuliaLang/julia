@@ -209,12 +209,7 @@ Core.DebugInfo(di::DebugInfoStream, nstmts::Int) =
         ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), di.firstline, di.codelocs, nstmts)::String)
 
 function getdebugidx(debuginfo::DebugInfo, pc::Int)
-    if debuginfo.linetable isa String
-        # drop provenance for compatibility
-        ((pc <= 0 ? -1 : source_location(debuginfo, pc).line), 0, 0)
-    else
-        ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo, pc)
-    end
+    ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo, pc)
 end
 
 function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
@@ -228,7 +223,6 @@ function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
 end
 
 has_prev_debuginfo(di, pc::Int) = prev_debuginfo(di, pc)[1] !== nothing
-has_edge_debuginfo(di, pc::Int) = edge_debuginfo(di, pc)[1] !== nothing
 
 "(debuginfo, nextpc) from the previous step in the compiler"
 function prev_debuginfo(di, pc::Int)
@@ -295,7 +289,7 @@ on where they appear:
     ii. a `NewSSAValue` with negative `id` refers to post-compaction `new_node` node.
 
 2. In non-compacted nodes,
-    i. a `NewSSAValue` with positive `id` refers to the index of an already-compacted instructions.
+    i. a `NewSSAValue` with positive `id` refers to the index of an already-compacted instruction.
     ii. a `NewSSAValue` with negative `id` has the same meaning as in compacted nodes.
 """
 struct NewSSAValue
@@ -497,6 +491,10 @@ struct IRCode
         @assert di.codelocs === stmts.line
         return new(stmts, ir.argtypes, ir.sptypes, di, cfg, new_nodes, ir.meta, ir.valid_worlds)
     end
+    # The same IR restricted to a narrower `valid_worlds` (see `reformulate_globals_pass!`).
+    function IRCode(ir::IRCode, valid_worlds::WorldRange)
+        return new(ir.stmts, ir.argtypes, ir.sptypes, ir.debuginfo, ir.cfg, ir.new_nodes, ir.meta, valid_worlds)
+    end
     global function copy(ir::IRCode)
         di = ir.debuginfo
         stmts = copy(ir.stmts)
@@ -661,9 +659,9 @@ function is_relevant_expr(e::Expr)
     return e.head in (:call, :invoke, :invoke_modify,
                       :new, :splatnew, :(=), :(&),
                       :gc_preserve_begin, :gc_preserve_end,
-                      :foreigncall, :isdefined, :copyast,
+                      :foreigncall, :foreignglobal, :isdefined, :copyast,
                       :throw_undef_if_not,
-                      :cfunction, :method, :pop_exception,
+                      :cfunction, :pop_exception,
                       :leave,
                       :new_opaque_closure)
 end
@@ -777,6 +775,9 @@ struct CFGTransformState
     bb_rename_pred::Vector{Int}
     bb_rename_succ::Vector{Int}
     domtree::Union{Nothing, DomTree}
+    # Scratch buffers reused for the in-place domtree updates performed while
+    # killing edges. Non-`nothing` exactly when `domtree` is.
+    domtree_cache::Union{Nothing, DomTreeCache}
 end
 
 # N.B.: Takes ownership of the CFG array
@@ -812,14 +813,18 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
         let blocks = blocks, bb_rename = bb_rename
             result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
         end
+        # Reuse the same cache for the initial construction and any later
+        # in-place updates while killing edges during compaction.
+        domtree_cache = DomTreeCache()
         # TODO: This could be done by just renaming the domtree
-        domtree = construct_domtree(result_bbs)
+        domtree = construct_domtree(result_bbs; cache=domtree_cache)
     else
         bb_rename = Vector{Int}()
         result_bbs = blocks
         domtree = nothing
+        domtree_cache = nothing
     end
-    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename, domtree)
+    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename, domtree, domtree_cache)
 end
 
 mutable struct IncrementalCompact
@@ -875,7 +880,7 @@ mutable struct IncrementalCompact
         bb_rename = Vector{Int}()
         pending_nodes = NewNodeStream()
         pending_perm = Int[]
-        return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing),
+        return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing, nothing),
             ssa_rename, parent.used_ssas,
             parent.late_fixup, perm, 1,
             parent.new_new_nodes, parent.new_new_used_ssas, pending_nodes, pending_perm,
@@ -1476,13 +1481,14 @@ scan the compacted prefix when `to == active_bb`. `from` and `to` are non-rename
 """
 function kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
     # Note: We recursively kill as many edges as are obviously dead.
-    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree) = compact.cfg_transform
+    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree, domtree_cache) = compact.cfg_transform
     preds = result_bbs[bb_rename_succ[to]].preds
     succs = result_bbs[bb_rename_pred[from]].succs
     deleteat!(preds, findfirst(x::Int->x==bb_rename_pred[from], preds)::Int)
     deleteat!(succs, findfirst(x::Int->x==bb_rename_succ[to], succs)::Int)
     if domtree !== nothing
-        domtree_delete_edge!(domtree, result_bbs, bb_rename_pred[from], bb_rename_succ[to])
+        domtree_delete_edge!(domtree, result_bbs, bb_rename_pred[from], bb_rename_succ[to];
+                             cache=domtree_cache::DomTreeCache)
     end
     # Check if the block is now dead
     if length(preds) == 0 || (domtree !== nothing && bb_unreachable(domtree, bb_rename_succ[to]))
@@ -1518,7 +1524,10 @@ function kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from
             idx = first(stmts)
             while idx <= last(stmts)
                 stmt = compact.result[idx][:stmt]
-                stmt === nothing && continue
+                if stmt === nothing
+                    idx += 1
+                    continue
+                end
                 isa(stmt, PhiNode) || break
                 i = findfirst(x::Int32->x==bb_rename_pred[from], stmt.edges)
                 if i !== nothing
@@ -1548,6 +1557,17 @@ struct Refined
     Refined(@nospecialize(val)) = new(val)
 end
 
+
+# Whether `gr` names a primordial constant: a constant binding of `Core` or `Core.Intrinsics`
+# (a builtin, intrinsic, or core type) covering world age 1. The runtime keeps these immutable,
+# so a read needs no edge and codegen can embed the value.
+function world1_const(gr::GlobalRef)
+    (gr.mod === Core || gr.mod === Core.Intrinsics) || return false
+    b = convert(Core.Binding, gr)
+    isdefined(b, :partitions) || return false
+    return binding_kind(lookup_binding_partition(UInt(1), b)) === PARTITION_KIND_CONST
+end
+
 function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instruction, idx::Int, processed_idx::Int, active_bb::Int, do_rename_ssa::Bool)
     stmt = inst[:stmt]
     (; result, ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
@@ -1566,6 +1586,19 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         result[result_idx][:stmt] = GotoNode(label)
         result_idx += 1
     elseif isa(stmt, GlobalRef)
+        # Fold GlobalRef inline only when it is a world1_constant,
+        # otherwise it should be a BindingPartition before this transformation.
+        total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        flag = result[result_idx][:flag]
+        if has_flag(flag, total_flags) && world1_const(stmt)
+            ssa_rename[idx] = stmt
+        else
+            ssa_rename[idx] = SSAValue(result_idx)
+            result[result_idx][:stmt] = stmt
+            result_idx += 1
+        end
+    elseif isa(stmt, Core.BindingPartition)
+        # A constant binding can be moved into argument position.
         total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
         flag = result[result_idx][:flag]
         if has_flag(flag, total_flags)
@@ -1674,7 +1707,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 ssa_rename[idx] = pi_val
                 return result_idx
             end
-        elseif !isa(pi_val, AnySSAValue) && !isa(pi_val, GlobalRef)
+        elseif !isa(pi_val, AnySSAValue) && !isa(pi_val, GlobalRef) && !isa(pi_val, Core.BindingPartition)
             pi_val′ = isa(pi_val, QuoteNode) ? pi_val.value : pi_val
             stmttyp = stmt.typ
             if isa(stmttyp, Const) ? pi_val′ === stmttyp.val : typeof(pi_val′) === stmttyp
@@ -1805,7 +1838,7 @@ function may_replace_phi(values::Vector{Any}, phi_bb::BasicBlock, idx::Int)
     # unnecessary when DCE can remove those dead loops entirely, so this is
     # just to be safe.
     v = values[1]
-    before_def = isa(v, OldSSAValue) && idx < v.id
+    before_def = isa(v, OldSSAValue)
     return !before_def
 end
 
@@ -2181,7 +2214,7 @@ function just_fixup!(compact::IncrementalCompact, new_new_nodes_offset::Union{In
 end
 
 simple_dce!(compact::IncrementalCompact) = simple_dce!(null_dce_callback, compact)
-function simple_dce!(callback::Function, compact::IncrementalCompact)
+function simple_dce!(callback::T, compact::IncrementalCompact) where {T<:Function}
     # Perform simple DCE for unused values
     @assert isempty(compact.new_new_used_ssas) # just_fixup! wasn't run?
     extra_worklist = Int[]

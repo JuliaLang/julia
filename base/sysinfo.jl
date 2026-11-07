@@ -19,6 +19,7 @@ export BINDIR,
        cpu_info,
        cpu_summary,
        sysimage_target,
+       matched_sysimage_target,
        uptime,
        loadavg,
        free_memory,
@@ -147,10 +148,13 @@ global JIT::String
     Sys.PAGESIZE::Clong
 
 A number providing the pagesize of the given OS.  Common values being 4kb or 64kb on Linux.
+On Windows, this stores the allocation granularity, not the page size.
 """
 global PAGESIZE::Clong
 
-function __init__()
+__init__() = __init_build()
+
+function __init_build()
     env_threads = nothing
     if haskey(ENV, "JULIA_CPU_THREADS")
         env_threads = ENV["JULIA_CPU_THREADS"]
@@ -170,15 +174,21 @@ function __init__()
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
     global PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
-    __init_build()
-    nothing
-end
-# Populate the paths needed by sysimg compilation, e.g. `generate_precompile.jl`,
-# without pulling in anything unnecessary like `CPU_NAME`
-function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
     vers = "v$(string(VERSION.major)).$(string(VERSION.minor))"
     global STDLIB = abspath(BINDIR, DATAROOTDIR, "julia", "stdlib", vers)
+    nothing
+end
+
+function __uninit_build()
+    global CPU_THREADS = 1
+    global EFFECTIVE_CPU_THREADS = 1
+    global SC_CLK_TCK = 0
+    global CPU_NAME = ""
+    global JIT = ""
+    global PAGESIZE = 0
+    global BINDIR = ""
+    global STDLIB = ""
     nothing
 end
 
@@ -255,7 +265,7 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
         summary = CPUinfo(cpu[i].model,0,0,0,0,0,0)
         count = j - i + 1
         for x = i:j
-            summary.speed += cpu[i].speed
+            summary.speed += cpu[x].speed
             summary.cpu_times!user += cpu[x].cpu_times!user
             summary.cpu_times!nice += cpu[x].cpu_times!nice
             summary.cpu_times!sys += cpu[x].cpu_times!sys
@@ -286,6 +296,7 @@ function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
         if model != cpu[i].model
             _cpu_summary(io, cpu, first, i-1)
             first = i
+            model = cpu[i].model
         end
     end
     _cpu_summary(io, cpu, first, length(cpu))
@@ -311,6 +322,10 @@ function cpu_info()
     cpus = Vector{CPUinfo}(undef, count[])
     for i = 1:length(cpus)
         cpus[i] = CPUinfo(unsafe_load(UVcpus[], i))
+        if isempty(cpus[i].model) || cpus[i].model == "unknown"
+            # libuv may lack model detection where Julia's CPU detection succeeds.
+            cpus[i].model = CPU_NAME
+        end
     end
     ccall(:uv_free_cpu_info, Cvoid, (Ptr{UV_cpu_info_t}, Int32), UVcpus[], count[])
     return cpus
@@ -327,10 +342,34 @@ system image or for understanding what CPU features were enabled during compilat
 
 If the system image was built with the default settings this will return `"native"`.
 
-See also [`JULIA_CPU_TARGET`](@ref).
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+
+See also [`Sys.matched_sysimage_target`](@ref), [`JULIA_CPU_TARGET`](@ref).
 """
 function sysimage_target()
     return ccall(:jl_get_sysimage_cpu_target, Ref{String}, ())
+end
+
+"""
+    Sys.matched_sysimage_target()
+
+Return the entry of [`Sys.sysimage_target`](@ref) that was selected for the host CPU
+when the system image was loaded.
+
+If the system image was built with the default settings this will return `"native"`.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+See also [`Sys.sysimage_target`](@ref), [`JULIA_CPU_TARGET`](@ref).
+"""
+function matched_sysimage_target()
+    match_idx = let
+        idx = ccall(:jl_get_sysimage_matched_target_index, Int32, ())
+        idx == -1 ? 1 : idx + 1
+    end
+    return String(split(sysimage_target(), ";")[match_idx])
 end
 
 """
@@ -474,7 +513,7 @@ function which(program_name::String)
             push!(program_names, base_pname)
         end
 
-        # But also try appending .exe and .com`
+        # But also try appending .exe and .com
         for pe in (".exe", ".com")
             push!(program_names, string(base_pname, pe))
         end

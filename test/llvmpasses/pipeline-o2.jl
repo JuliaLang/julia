@@ -3,6 +3,8 @@
 # RUNx: julia --startup-file=no -O2 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
 # RUNx: julia --startup-file=no -O3 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
 
+# RUN: julia --startup-file=no %s %t && llvm-link -S %t/* | FileCheck %s --check-prefix=UNOPT
+
 # RUN: julia --startup-file=no -O2 --check-bounds=no %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_OFF
 # RUN: julia --startup-file=no -O3 --check-bounds=no %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_OFF
 
@@ -75,6 +77,83 @@ function multiiterate_write!(arr1, arr2)
     end
 end
 
+# COM: Preserve alias information for complete small typed copies while keeping padded and large copies as memcpy
+
+# ALL-LABEL: @"julia_copy_complex!
+# ALL: vector.body
+# UNOPT-LABEL: @"julia_copy_complex!
+# UNOPT: [[COMPLEX0:%.*copyload.*]] = load i64
+# UNOPT: [[COMPLEX1:%.*copyload.*]] = load i64
+# UNOPT: store i64 [[COMPLEX0]], ptr addrspace(13)
+# UNOPT: store i64 [[COMPLEX1]], ptr addrspace(13)
+function copy_complex!(dest, src)
+    @inbounds @simd for i in eachindex(dest, src)
+        dest[i] = src[i]
+    end
+end
+
+# ALL-LABEL: @"julia_copy_bytes!
+# ALL: vector.body
+# UNOPT-LABEL: @"julia_copy_bytes!
+# UNOPT: [[BYTES:%.*copyload.*]] = load i64
+# UNOPT: store i64 [[BYTES]], ptr addrspace(13)
+function copy_bytes!(dest, src)
+    @inbounds @simd for i in eachindex(dest, src)
+        dest[i] = src[i]
+    end
+end
+
+# ALL-LABEL: @"julia_copy_three_bytes!
+# ALL: vector.body
+# UNOPT-LABEL: @"julia_copy_three_bytes!
+# UNOPT: [[BYTES0:%.*copyload.*]] = load i8
+# UNOPT: [[BYTES1:%.*copyload.*]] = load i8
+# UNOPT: [[BYTES2:%.*copyload.*]] = load i8
+# UNOPT: store i8 [[BYTES0]], ptr addrspace(13)
+# UNOPT: store i8 [[BYTES1]], ptr addrspace(13)
+# UNOPT: store i8 [[BYTES2]], ptr addrspace(13)
+function copy_three_bytes!(dest, src)
+    @inbounds @simd for i in eachindex(dest, src)
+        dest[i] = src[i]
+    end
+end
+
+# ALL-LABEL: @"julia_copy_float3!
+# ALL: vector.body
+# UNOPT-LABEL: @"julia_copy_float3!
+# UNOPT: [[FLOAT0:%.*copyload.*]] = load i32
+# UNOPT: [[FLOAT1:%.*copyload.*]] = load i32
+# UNOPT: [[FLOAT2:%.*copyload.*]] = load i32
+# UNOPT: store i32 [[FLOAT0]], ptr addrspace(13)
+# UNOPT: store i32 [[FLOAT1]], ptr addrspace(13)
+# UNOPT: store i32 [[FLOAT2]], ptr addrspace(13)
+function copy_float3!(dest, src)
+    @inbounds @simd for i in eachindex(dest, src)
+        dest[i] = src[i]
+    end
+end
+
+struct PaddedCopy
+    x::UInt8
+    y::UInt16
+end
+
+# UNOPT-LABEL: @"julia_copy_padded!
+# UNOPT: call void @llvm.memcpy{{.*}}(ptr addrspace(13) {{.*}}, ptr{{.*}}%"split::PaddedCopy", i64 4
+function copy_padded!(dest, src)
+    @inbounds dest[1] = src[1]
+end
+
+struct LargeCopy
+    data::NTuple{17, UInt8}
+end
+
+# UNOPT-LABEL: @"julia_copy_large!
+# UNOPT: call void @llvm.memcpy{{.*}}(ptr addrspace(13) {{.*}}, ptr{{.*}}%"split::LargeCopy", i64 17
+function copy_large!(dest, src)
+    @inbounds dest[1] = src[1]
+end
+
 # COM: memset checks
 
 # COM: INT64
@@ -144,6 +223,39 @@ function memset_like(mem)
     end
 end
 
+# COM: `===` on boxed values calls `jl_egal__unboxed`, which only reads memory, so a
+# COM: loop-invariant comparison is hoisted and the loop vectorizes
+
+# ALL-LABEL: @julia_sum_if_egal
+# ALL: call i32 @jl_egal__unboxed
+# ALL: vector.body
+# ALL-NOT: call i32 @jl_egal__unboxed
+# ALL: ret i64
+function sum_if_egal(v, @nospecialize(a), @nospecialize(b))
+    s = 0
+    for i in eachindex(v)
+        if a === b
+            s += v[i]
+        end
+    end
+    s
+end
+
+# COM: Small constant-trip inner loops must be fully unrolled before IRCE splits them,
+# COM: otherwise LoopIdiomRecognize turns them into a variable-length memcpy (#62798)
+
+# ALL-LABEL: @julia_small_column_copy
+# ALL-NOT: llvm.memcpy
+# ALL: ret void
+function small_column_copy(out, u)
+    for k in axes(out, 2)
+        u_node = (u[1, k], u[2, k], u[3, k], u[4, k], u[5, k])
+        for v in 1:5
+            out[v, k] = u_node[v]
+        end
+    end
+end
+
 emit(iterate_read, Vector{Int64})
 emit(iterate_write, Vector{Int64}, Vector{Int64})
 emit(iterate_write!, Vector{Int64})
@@ -151,10 +263,16 @@ emit(iterate_write!, Vector{Int64})
 emit(multiiterate_read, Vector{Int64}, Vector{Int64})
 emit(multiiterate_write, Vector{Int64}, Vector{Int64}, Vector{Int64})
 emit(multiiterate_write!, Vector{Int64}, Vector{Int64})
+emit(copy_complex!, Vector{ComplexF64}, Vector{ComplexF64})
+emit(copy_bytes!, Vector{NTuple{8, UInt8}}, Vector{NTuple{8, UInt8}})
+emit(copy_three_bytes!, Vector{NTuple{3, UInt8}}, Vector{NTuple{3, UInt8}})
+emit(copy_float3!, Vector{NTuple{3, Float32}}, Vector{NTuple{3, Float32}})
+emit(copy_padded!, Vector{PaddedCopy}, Vector{PaddedCopy})
+emit(copy_large!, Vector{LargeCopy}, Vector{LargeCopy})
 
-emit(zeros, Type{Int64}, Int64)
-emit(zeros, Type{Int32}, Int64)
-emit(zeros, Type{Int16}, Int64)
+emit(zeros, Core.TypeEgal{Int64}, Int64)
+emit(zeros, Core.TypeEgal{Int32}, Int64)
+emit(zeros, Core.TypeEgal{Int16}, Int64)
 # COM: Int8 is hardcoded to memset anyways
 
 emit(sumloop, Int64)
@@ -165,3 +283,6 @@ emit(loopedlength, Vector{Int64})
 
 emit(memset_like, Vector{Float64})
 emit(memset_like, Memory{Float64})
+
+emit(sum_if_egal, Vector{Int64}, Any, Any)
+emit(small_column_copy, Matrix{Float64}, Matrix{Float64})

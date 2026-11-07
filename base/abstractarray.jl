@@ -21,7 +21,9 @@ convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = Abs
     size(A::AbstractArray, [dim])
 
 Return a tuple containing the dimensions of `A`. Optionally you can specify a
-dimension to just get the length of that dimension.
+dimension to just get the length of that dimension. For `dim > ndims(A)`,
+`size(A, dim)` is `1`, consistent with arrays accepting extra trailing indices
+equal to `1` (see [Omitted and extra indices](@ref)).
 
 Note that `size` may not be defined for arrays with non-standard indices, in which case [`axes`](@ref)
 may be useful. See the manual chapter on [arrays with custom indices](@ref man-custom-indices).
@@ -37,6 +39,9 @@ julia> size(A)
 
 julia> size(A, 2)
 3
+
+julia> size(A, 5)
+1
 ```
 """
 function size(t::AbstractArray, dim)
@@ -328,7 +333,7 @@ eachindex(A::AbstractVector) = (@inline(); axes1(A))
 # we unroll the join for easier inference
 _join_comma_and(indsA, indsB) = LazyString(indsA, " and ", indsB)
 _join_comma_and(indsA, indsB, indsC...) = LazyString(indsA, ", ", _join_comma_and(indsB, indsC...))
-@noinline function throw_eachindex_mismatch_indices(indices_str, indsA, indsBs...)
+@noinline function throw_eachindex_mismatch_indices(indices_str, indsA, indsBs::Vararg{Any,N}) where {N}
     throw(DimensionMismatch(
             LazyString("all inputs to eachindex must have the same ", indices_str, ", got ",
                 _join_comma_and(indsA, indsBs...))))
@@ -457,8 +462,12 @@ firstindex(a, d) = (@inline; first(axes(a, d)))
 """
     first(coll)
 
-Get the first element of an iterable collection. Return the start point of an
-[`AbstractRange`](@ref) even if it is empty.
+Get the first element of an iterable collection.
+
+!!! note
+    For an [`AbstractRange`](@ref) the start point is always returned,
+    even if the range is empty. For other empty collections, an error
+    is thrown.
 
 See also [`only`](@ref), [`firstindex`](@ref), [`last`](@ref).
 
@@ -721,7 +730,7 @@ See also [`checkbounds`](@ref).
 """
 function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{Any, Vararg})
     @inline
-    return checkindex(Bool, get(inds, 1, OneTo(1)), I[1])::Bool &&
+    return checkindex(Bool, get(inds, 1, OneTo(1)), I[1])::Bool &
         checkbounds_indices(Bool, safe_tail(inds), tail(I))
 end
 
@@ -750,7 +759,7 @@ false
 checkindex(::Type{Bool}, inds, i) = throw(ArgumentError(LazyString("unable to check bounds for indices of type ", typeof(i))))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
 checkindex(::Type{Bool}, inds::IdentityUnitRange, i::Real) = checkindex(Bool, inds.indices, i)
-checkindex(::Type{Bool}, inds::OneTo{T}, i::T) where {T<:BitInteger} = unsigned(i - one(i)) < unsigned(last(inds))
+checkindex(::Type{Bool}, inds::OneTo{T}, i::T) where {T<:BitInteger} = unsigned(i -% one(i)) < unsigned(last(inds))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Colon) = true
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Slice) = true
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::AbstractRange) =
@@ -953,7 +962,10 @@ end
 function copyto!(dest::AbstractArray, dstart::Integer, src)
     i = Int(dstart)
     if haslength(src) && length(dest) > 0
-        @boundscheck checkbounds(dest, i:(i + length(src) - 1))
+        n = length(src)
+        n == 0 && return dest
+        @boundscheck checkbounds(dest, i)
+        @boundscheck n <= lastindex(dest) - i + 1 || throw_boundserror(dest, i)
         for x in src
             @inbounds dest[i] = x
             i += 1
@@ -1001,13 +1013,13 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",n,
         ", elements, but n should be non-negative")))
     n == 0 && return dest
-    dmax = dstart + n - 1
     inds = LinearIndices(dest)
-    if (dstart ∉ inds || dmax ∉ inds) | (sstart < 1)
-        sstart < 1 && throw(ArgumentError(LazyString("source start offset (",
-            sstart,") is < 1")))
-        throw(BoundsError(dest, dstart:dmax))
-    end
+    sstart < 1 && throw(ArgumentError(LazyString("source start offset (",
+        sstart,") is < 1")))
+    (dstart ∈ inds && n <= last(inds) - dstart + 1) || throw_boundserror(dest, dstart)
+    dstart = Int(dstart)
+    n = Int(n)
+    dmax = dstart + n - 1
     y = iterate(src)
     for j = 1:(sstart-1)
         if y === nothing
@@ -1023,7 +1035,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
             "expected at least ",sstart," got ", sstart-1)))
     end
     val, st = y
-    i = Int(dstart)
+    i = dstart
     @inbounds dest[i] = val
     for val in Iterators.take(Iterators.rest(src, st), n-1)
         i += 1
@@ -1109,6 +1121,11 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
             for I in iterdest
                 @inbounds dest[I] = src[I]
             end
+        elseif axes(dest) == axes(src)
+            # Same shape: one Cartesian iteration keeps the inner loop contiguous
+            for I in CartesianIndices(dest)
+                @inbounds dest[I] = src[I]
+            end
         else
             # Dual-iterator implementation
             for (Idest, Isrc) in zip(iterdest, itersrc)
@@ -1136,8 +1153,11 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
         n," elements, but n should be non-negative")))
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
-    (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
+    (checkbounds(Bool, destinds, dstart) && n <= last(destinds) - dstart + 1) || throw_boundserror(dest, dstart)
+    (checkbounds(Bool, srcinds, sstart)  && n <= last(srcinds) - sstart + 1)  || throw_boundserror(src, sstart)
+    dstart = Int(dstart)
+    sstart = Int(sstart)
+    n = Int(n)
     src′ = unalias(dest, src)
     @inbounds for i = 0:n-1
         dest[dstart+i] = src′[sstart+i]
@@ -1239,6 +1259,8 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 iterate_starting_state(A) = iterate_starting_state(A, IndexStyle(A))
 iterate_starting_state(A, ::IndexLinear) = firstindex(A)
 iterate_starting_state(A, ::IndexStyle) = (eachindex(A),)
+# avoid fragile edges from union-splitting these helpers for abstract arrays (#61667)
+typeof(iterate_starting_state).name.max_methods = UInt8(1)
 @inline iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate_abstractarray(A, state)
 @inline function _iterate_abstractarray(A::AbstractArray, state::Tuple)
     y = iterate(state...)::Union{Nothing,Tuple}
@@ -1249,6 +1271,7 @@ end
     checkbounds(Bool, A, state) || return nothing
     A[state], state + one(state)
 end
+typeof(_iterate_abstractarray).name.max_methods = UInt8(1)
 
 isempty(a::AbstractArray) = (length(a) == 0)
 
@@ -1403,7 +1426,7 @@ function _getindex(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) w
     getindex(A, I...)
 end
 _to_subscript_indices(A::AbstractArray, i::Integer) = (@inline; _unsafe_ind2sub(A, i))
-_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@inline; fill_to_length((), 1, Val(N)))
+_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@inline; map(first, axes(A)))
 _to_subscript_indices(A::AbstractArray{T,0}) where {T} = ()
 _to_subscript_indices(A::AbstractArray{T,0}, i::Integer) where {T} = ()
 _to_subscript_indices(A::AbstractArray{T,0}, I::Integer...) where {T} = ()
@@ -1494,7 +1517,19 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) whe
     r
 end
 
-_unsetindex!(A::AbstractArray, i::Integer) = _unsetindex!(A, to_index(i))
+"""
+    unsetindex!(A::AbstractArray, i::Integer) -> A
+
+Unset the reference from `A` at index `i` to its value and return `A`.
+The value left in `A[i]`, if any, is implementation-dependent, but after
+calling this function, `A` at index `i` no longer holds any reference to a value,
+so it no longer protects any underlying resources from being freed (i.e. garbage collected,
+or finalizers run).
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+function unsetindex! end
 
 """
     parent(A)
@@ -1716,14 +1751,13 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 # but that solution currently fails (see #27188 and #27224)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
-_typed_vcat_similar(V, ::Type{T}, n) where T = similar(V[1], T, n)
+_typed_vcat_similar(V, ::Type{T}, n) where T = similar(first(V), T, n)
 _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
     _typed_vcat!(_typed_vcat_similar(V, T, sum(map(length, V))), V)
 
 function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
     pos = 1
-    for k=1:Int(length(V))::Int
-        Vk = V[k]
+    for Vk in V
         p1 = pos + Int(length(Vk))::Int - 1
         a[pos:p1] = Vk
         pos = p1+1
@@ -1745,12 +1779,10 @@ hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
 hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
 
 function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
-    nargs = length(A)
-    nrows = size(A[1], 1)
+    nrows = size(first(A), 1)
     ncols = 0
     dense = true
-    for j = 1:nargs
-        Aj = A[j]
+    for Aj in A
         if size(Aj, 1) != nrows
             throw(DimensionMismatch("number of rows of each array must match (got $(map(x->size(x,1), A)))"))
         end
@@ -1758,18 +1790,16 @@ function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
     end
-    B = similar(A[1], T, nrows, ncols)
+    B = similar(first(A), T, nrows, ncols)
     pos = 1
     if dense
-        for k=1:nargs
-            Ak = A[k]
+        for Ak in A
             n = length(Ak)
             copyto!(B, pos, Ak, 1, n)
             pos += n
         end
     else
-        for k=1:nargs
-            Ak = A[k]
+        for Ak in A
             p1 = pos+(isa(Ak,AbstractMatrix) ? size(Ak, 2) : 1)-1
             B[:, pos:p1] = Ak
             pos = p1+1
@@ -1782,18 +1812,13 @@ vcat(A::AbstractVecOrMat...) = typed_vcat(promote_eltype(A...), A...)
 vcat(A::AbstractVecOrMat{T}...) where {T} = typed_vcat(T, A...)
 
 function _typed_vcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
-    nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
-    ncols = size(A[1], 2)
-    for j = 2:nargs
-        if size(A[j], 2) != ncols
-            throw(DimensionMismatch("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
-        end
-    end
-    B = similar(A[1], T, nrows, ncols)
+    ncols = size(first(A), 2)
+    all(a -> size(a, 2) == ncols, A) ||
+        throw(DimensionMismatch("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
+    B = similar(first(A), T, nrows, ncols)
     pos = 1
-    for k=1:nargs
-        Ak = A[k]
+    for Ak in A
         p1 = pos+size(Ak,1)::Int-1
         B[pos:p1, :] = Ak
         pos = p1+1
@@ -2456,7 +2481,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     for a ∈ as
         if a isa AbstractArray
             lena = length(a)
-            copyto!(A, k, a, 1, lena)
+            copyto!(A, k, a, firstindex(a), lena)
             k += lena
         else
             A[k] = a
@@ -2646,7 +2671,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     # discover number of rows or columns
     # d1 dimension is increased by 1 to appropriately handle 0-length arrays
     for i ∈ 1:dims[d1]
-        outdims[d1] += cat_size(as[i], d1)
+        outdims[d1] = checked_add(outdims[d1], cat_size(as[i], d1))
     end
 
     # adjustment to handle 0-length arrays
@@ -2659,12 +2684,12 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     blockcount = 0
     elementcount = 0
     for i ∈ eachindex(as)
-        elementcount += cat_length(as[i])
-        currentdims[d1] += first_dim_zero ? 1 : cat_size(as[i], d1)
+        elementcount = checked_add(elementcount, cat_length(as[i]))
+        currentdims[d1] = checked_add(currentdims[d1], first_dim_zero ? 1 : cat_size(as[i], d1))
         if currentdims[d1] == outdims[d1]
             currentdims[d1] = 0
             for d ∈ (d2, 3:N...)
-                currentdims[d] += cat_size(as[i], d)
+                currentdims[d] = checked_add(currentdims[d], cat_size(as[i], d))
                 if outdims[d] == 0 # unfixed dimension
                     blockcount += 1
                     if blockcount == dims[d]
@@ -2693,7 +2718,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
         outdims[d1] = 0
     end
 
-    outlen = prod(outdims)
+    outlen = Core.checked_dims(ntuple(i -> outdims[i], Val(N))...)
     elementcount == outlen ||
         throw(DimensionMismatch("mismatched number of elements; expected $(outlen), got $(elementcount)"))
 
@@ -2746,7 +2771,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
 
     elementcount = 0
     for i ∈ eachindex(as)
-        elementcount += cat_length(as[i])
+        elementcount = checked_add(elementcount, cat_length(as[i]))
         wasstartblock = false
         for d ∈ 1:N
             ad = (d < 3 && row_first) ? (d == 1 ? 2 : 1) : d
@@ -2754,7 +2779,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
             blockcounts[d] += 1
 
             if d == 1 || i == 1 || wasstartblock
-                currentdims[d] += dsize
+                currentdims[d] = checked_add(currentdims[d], dsize)
             elseif dsize != cat_size(as[i - 1], ad)
                 throw(DimensionMismatch("argument $i has a mismatched number of elements along axis $ad; \
                                          expected $(cat_size(as[i - 1], ad)), got $dsize"))
@@ -2780,7 +2805,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
         end
     end
 
-    outlen = prod(outdims)
+    outlen = Core.checked_dims(ntuple(i -> outdims[i], Val(N))...)
     elementcount == outlen ||
         throw(ArgumentError("mismatched number of elements; expected $(outlen), got $(elementcount)"))
 
@@ -3029,7 +3054,7 @@ _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::IteratorSize, A) where {T,S}
 
 _vec_axis(A, ax=_iterator_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(length, ax; init=1))
 
-@constprop :aggressive function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
+function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
     xit = Iterators.peel(A)
     nothing === xit && return _empty_stack(dims, T, S, A)
     x1, xrest = xit
@@ -3040,29 +3065,73 @@ _vec_axis(A, ax=_iterator_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(len
     newaxis = _vec_axis(A)
     outax = ntuple(d -> d==dims ? newaxis : ax1[d - (d>dims)], N1)
     B = similar(_ensure_array(x1), T, outax...)
-
-    if dims == 1
-        _dim_stack!(Val(1), B, x1, xrest)
-    elseif dims == 2
-        _dim_stack!(Val(2), B, x1, xrest)
-    else
-        _dim_stack!(Val(dims), B, x1, xrest)
-    end
+    _dim_stack!(Int(dims), B, x1, xrest)
     B
 end
 
-function _dim_stack!(::Val{dims}, B::AbstractArray, x1, xrest) where {dims}
-    before = ntuple(Returns(Colon()), dims - 1)
-    after = ntuple(Returns(Colon()), ndims(B) - dims)
-
-    i = firstindex(B, dims)
-    copyto!(view(B, before..., i, after...), x1)
-
-    for x in xrest
-        _stack_size_check(x, _iterator_axes(x1))
-        i += 1
-        @inbounds copyto!(view(B, before..., i, after...), x)
+# Fill the preallocated output `B` with the slices `x1, xrest...`, the k'th slice going
+# to `selectdim(B, dims, k)`. `x1` is the first slice, and `xrest` iterates the rest.
+# In linear (column-major) order, B can be seen as an array of size (before, n, after), where
+# `before` and `after` are the products of the sizes of B before and after dimension `dims`,
+# and n = size(B, dims) is the number of slices. Each slice, of length before * after,
+# then occupies B[:, k, :] of this array.
+function _dim_stack!(dims::Int, B::AbstractArray, x1, xrest)
+    before = after = 1
+    for d in 1:ndims(B)
+        if d < dims
+            before *= size(B, d)
+        elseif d > dims
+            after *= size(B, d)
+        end
     end
+    # Linear distance in B between consecutive blocks of `before` elements of one slice
+    stride = before * size(B, dims)
+    # Linear index in B of the first element of the current slice
+    off = firstindex(B)
+    _dim_stack_slice!(B, x1, off, before, after, stride)
+    ax1 = _iterator_axes(x1)
+    for x in xrest
+        _stack_size_check(x, ax1)
+        off += before
+        _dim_stack_slice!(B, x, off, before, after, stride)
+    end
+    return nothing
+end
+
+# Copy the single slice `x` into `B`. With B seen as an array of size (before, n, after) as
+# in `_dim_stack!`, x is copied in `after` blocks of `before` consecutive elements each.
+# Block `hi` (counting from 0) is written to linear indices `off + hi*stride .+ (0:before-1)` of B.
+# `off` is the linear index of B where the first element of x goes.
+@inline function _dim_stack_slice!(B::AbstractArray, x, off::Int, before::Int, after::Int, stride::Int)
+    if x isa AbstractArray && IndexStyle(B, x) isa IndexLinear
+        # The size check guarantees length(x) == before * after
+        xi = firstindex(x)  # linear index in x of the start of the current block
+        if before == 1  # e.g. dims == 1: a strided copy
+            @inbounds for j in 0:after-1
+                B[off + j * stride] = x[xi + j]
+            end
+            return nothing
+        end
+        for hi in 0:after-1
+            @inbounds for lo in 0:before-1
+                B[off + lo] = x[xi + lo]
+            end
+            off += stride
+            xi += before
+        end
+    else
+        # Same as above, but for slices which can only be iterated
+        lo = 0  # position within the current block
+        for v in x
+            B[off + lo] = v
+            lo += 1
+            if lo == before
+                lo = 0
+                off += stride
+            end
+        end
+    end
+    return nothing
 end
 
 @inline function _stack_size_check(x, ax1::Tuple)
@@ -3122,6 +3191,8 @@ Return `true` when `A` is less than `B`. Vectors are first compared by
 their starting indices, and then lexicographically by their elements.
 """
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
+
+OrderStyle(::Type{<:AbstractVector{T}}) where {T} = OrderStyle(T)
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)

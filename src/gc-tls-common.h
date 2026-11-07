@@ -17,6 +17,15 @@ extern "C" {
 typedef struct {
     // variable for tracking weak references
     small_arraylist_t weak_refs;
+    // Only used by MMTk builds: registry of objects requiring weak
+    // processing on death (see jl_gc_set_needs_weak_processing) -
+    // currently cancellation token sources sitting on some parent's (weak,
+    // intrusive) child list. MMTk never visits individual dead objects, so
+    // it detects dead ones by scanning this flat registry after marking
+    // (see jl_gc_sweep_weak_processing). The stock GC needs no registry:
+    // its sweep visits every dead object's header anyway and detects them
+    // there, gated by a per-page flag.
+    small_arraylist_t weak_processing_list;
     // live tasks started on this thread
     // that are holding onto a stack from the pool
     small_arraylist_t live_tasks;

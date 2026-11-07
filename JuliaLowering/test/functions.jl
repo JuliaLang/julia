@@ -87,12 +87,44 @@ let
 end
 """) == (c=3, d=0, a=1, e=5)
 
-@test JuliaLowering.include_string(test_mod, """
+@test jl_eval(test_mod, """
 let
     kws = (;)
     kwtest(; kws..., kws...)
 end
 """) == "non-kw version of kwtest"
+
+@test jl_eval(test_mod, """
+kwtest(;)
+""") == "non-kw version of kwtest"
+
+@test jl_eval(test_mod, """
+kwtest(; Base.identity)
+""") == (identity=Base.identity,)
+
+@test jl_eval(test_mod, """
+kwtest(; :k => 1)
+""") == (k=1,)
+
+@test jl_eval(test_mod, """
+let
+    p = (:b, 2)
+    nt = (c = 3,)
+    kwtest(; :a => 1, p[1] => p[2], nt.c)
+end
+""") == (a=1, b=2, c=3)
+
+# positional and kwargs should always be evaluated left-to-right
+@test jl_eval(test_mod, """
+let
+    log = Int[]
+    f(x) = (push!(log, x); x)
+    g(args...; kws...) = nothing
+    g(f(1), f(2); a = f(3), b = f(4))
+    g(f(5), a = f(6), f(7); b = f(8))
+    log
+end
+""") == 1:8
 
 # literal_pow
 @test JuliaLowering.include_string(test_mod, """
@@ -251,6 +283,27 @@ end
 f_return_in_interpolation()
 """) === 123
 
+@test JuliaLowering.include_string(test_mod, raw"""
+function f_return_in_pparam_default(x, y=(return x), z=10)
+    (x, y, z)
+end
+(f_return_in_pparam_default(1),
+ f_return_in_pparam_default(1,2),
+ f_return_in_pparam_default(1,2,3))
+""") === (1, (1,2,10), (1,2,3))
+
+@test JuliaLowering.include_string(test_mod, raw"""
+function f_return_in_pparam_default2(x, y=(return x), z=(return y); kw=1)
+    (x, y, z, kw)
+end
+(f_return_in_pparam_default2(1),
+ f_return_in_pparam_default2(1,2),
+ f_return_in_pparam_default2(1,2,3),
+ f_return_in_pparam_default2(1;kw=0),
+ f_return_in_pparam_default2(1,2;kw=0),
+ f_return_in_pparam_default2(1,2,3;kw=0))
+""") === (1, 2, (1,2,3,1), 1, 2, (1,2,3,0))
+
 @testset "Optional positional arguments" begin
     @test JuliaLowering.include_string(test_mod, """
     begin
@@ -279,6 +332,20 @@ f_return_in_interpolation()
     @test JL.include_string(test_mod, "((x=1,y=x,z=x,va...=x)->(x,y,z,va))(2)") == (2,2,2,(2,))
     @test JL.include_string(test_mod, "((x=1,y=x,z=y+x,va...=z+y+x)->(x,y,z,va))()") == (1,1,2,(4,))
     @test JL.include_string(test_mod, "((x=1,y=x,z=y+x,va...=z+y+x)->(x,y,z,va))(2)") == (2,2,4,(8,))
+    # defaults shadowed by later args (resolution should not pick the arg)
+    @test JL.include_string(test_mod, "let x = 1; ((x=x)->(x,))(); end") == (1,)
+    @test JL.include_string(test_mod, "let x = 1; ((x=x)->(x,))(0); end") == (0,)
+    @test JL.include_string(test_mod, "let x = 1; ((x...=x)->(x,))(); end") == ((1,),)
+    @test JL.include_string(test_mod, "let x = 1; ((x...=x)->(x,))(0); end") == ((0,),)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y)->(x,y))(); end") == (2,2,)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y)->(x,y))(0); end") == (0,2,)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y)->(x,y))(0,0); end") == (0,0,)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y...=y)->(x,y))(); end") == (2,(2,),)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y...=y)->(x,y))(0); end") == (0,(2,),)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y...=y)->(x,y))(0,0); end") == (0,(0,),)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y,z=y)->(x,y,z))(); end") == (2,2,2)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y,z=y)->(x,y,z))(0); end") == (0,2,2)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y,z=y)->(x,y,z))(0,0); end") == (0,0,0)
     # defaults containing previous sparams
     @test JL.include_string(test_mod, "(((x::T=1,y=T) where T)->(x,y,T))()") == (1, Int, Int)
     @test JL.include_string(test_mod, "(((x::T=1,y=T) where T)->(x,y,T))(true)") == (true, Bool, Bool)
@@ -404,7 +471,7 @@ f_return_in_interpolation()
     end
     """) == (Complex(1), Complex(2))
 
-    # Both JL and flisp will evaluate the sparam bound multiple times
+    # flisp will evaluate the sparam bound multiple times
     let res = JuliaLowering.include_string(test_mod, """
         let eval_spbounds_counter = 0
             global function f_optarg_eval_spbounds_counter(
@@ -415,18 +482,30 @@ f_return_in_interpolation()
             f_optarg_eval_spbounds_counter(Complex(1))
         end
         """)
-        @test res == (Complex(1), 4)
-        @test_broken res == (Complex(1), 1)
+        @test res == (Complex(1), 1)
     end
 end
 
 @testset "slotflags" begin
+    # Direct and broadcast callees should be marked called for specialization.
     JuliaLowering.include_string(test_mod, """
     function f_slotflags(x, y, f, z)
         f() + x + y
     end
+
+    f_slotflags_broadcast(f, x) = f.(x)
+    f_slotflags_broadcast_kw(f, x) = f.(x; init=0)
     """)
     @test only(methods(test_mod.f_slotflags)).called == 0b0100
+    @test only(methods(test_mod.f_slotflags_broadcast)).called == 0b0001
+    @test only(methods(test_mod.f_slotflags_broadcast_kw)).called == 0b0001
+
+    JuliaLowering.include_string(test_mod, """
+    f45162(f) = f(x=1)
+    f45162_2(f) = f([]...)
+    """)
+    @test first(methods(test_mod.f45162)).called != 0
+    @test first(methods(test_mod.f45162_2)).called != 0
 end
 
 @testset "nospecialize" begin
@@ -489,6 +568,7 @@ end
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_nospecialize_single_body(a, b)
+            :nonmeta_should_not_interfere
             @nospecialize b
             (a, b)
         end
@@ -502,6 +582,7 @@ end
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_nospecialize_zero_body(a, b, c)
+            :nonmeta_should_not_interfere
             @nospecialize
             (a, b, c)
         end
@@ -511,6 +592,19 @@ end
     """) == (1, 2, 3)
     # 0-arg @nospecialize sets all bits (-1 == typemax(Int32) for nospecialize)
     @test only(methods(test_mod.f_nospecialize_zero_body)).nospecialize == -1
+
+    # @nospecialize with exceptions: what should this do?
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_nospecialize_body_exceptions(a, @specialize(b), c)
+            @nospecialize
+            @specialize c
+            (a,b,c)
+        end
+        f_nospecialize_body_exceptions(1, 2, 3)
+    end
+    """) == (1, 2, 3)
+    @test_broken only(methods(test_mod.f_nospecialize_body_exceptions)).nospecialize == 0b100
 
     # @nospecialize with default value in signature
     @test JuliaLowering.include_string(test_mod, """
@@ -531,6 +625,7 @@ end
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_body_nospecialize_default(x, y=1)
+            :nonmeta_should_not_interfere
             @nospecialize
             (x, y)
         end
@@ -546,6 +641,7 @@ end
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_body_nospecialize_nontrivial_sig(x::T, y::Vector{<:U}=[])::Any where T where U
+            :nonmeta_should_not_interfere
             @nospecialize
             (x, y)
         end
@@ -563,6 +659,7 @@ end
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_body_nospecialize_nontrivial_sig2(x::T, y::Vector{<:U}=[])::Any where T where U
+            :nonmeta_should_not_interfere
             @nospecialize x
             (x, y)
         end
@@ -572,20 +669,57 @@ end
     test_arg_unspecialized(test_mod.f_body_nospecialize_nontrivial_sig2, 1)
     test_arg_specialized(test_mod.f_body_nospecialize_nontrivial_sig2, 2)
 
+    # callable type: should compile, but nospecialize doesn't do anything
+    @test JuliaLowering.include_string(test_mod, """
+    struct nospecialize_callable_type; field; end
+    (@nospecialize(x::nospecialize_callable_type))() = (x.field,)
+    nospecialize_callable_type(0)()
+    """) == (0,)
+    @test JuliaLowering.include_string(test_mod, """
+    (@nospecialize(::nospecialize_callable_type))(x::Int) = (x,)
+    nospecialize_callable_type(0)(1)
+    """) == (1,)
+    @test JuliaLowering.include_string(test_mod, """
+    (@nospecialize(_::nospecialize_callable_type))(x::Int, y::Int) = (x,y)
+    nospecialize_callable_type(0)(1,2)
+    """) == (1,2)
+    @test JuliaLowering.include_string(test_mod, """
+    function (self::nospecialize_callable_type)(x::Int, y::Int, z::Int)
+        @nospecialize self
+        (self.field,x,y,z)
+    end
+    nospecialize_callable_type(0)(1,2,3)
+    """) == (0,1,2,3)
+    @test JuliaLowering.include_string(test_mod, """
+    (@nospecialize((;field)::nospecialize_callable_type))(x::Int, y::Int, z::Int, a::Int) = (field,x,y,z,a)
+    nospecialize_callable_type(0)(1,2,3,4)
+    """) == (0,1,2,3,4)
+    @test_throws LoweringError JuliaLowering.include_string(test_mod, """
+    (@nospecialize(x)::nospecialize_callable_type)() = 1
+    """)
+
+    # function name: should compile, but nospecialize doesn't do anything
+    @test_broken JuliaLowering.include_string(test_mod, """
+    (@nospecialize(_))(x::Int) = ()
+    func_nospecialize_self(1)
+    """) == ()
+    @test JuliaLowering.include_string(test_mod, """
+    (@nospecialize(func_nospecialize_self))(x::Int) = (x,)
+    func_nospecialize_self(1)
+    """) == (1,)
+
     # all positional arg forms
     @testset for arg0 in [:x, :(x::Type), :(::Type), :(_), :(_::Type)],
         arg1 in [arg0, Expr(:..., arg0)],
         arg2 in [arg1, Expr(:kw, arg1, :Int)],
-        expander in [fl_macroexpand, (_,x)->x]
-        # TODO: would use jl_macroexpand, but that cannot be done as a separate
-        # step due to MacroExpansionContext, and we must use jl_eval.
-        @test_broken false
+        expander in [fl_macroexpand,
+                     (m, x)->jl_macroexpand(m, x; edition=JL_NEW_EDITION)]
 
         @testset let expanded = expander(
             test_mod, :(function (specialized, @nospecialize($arg2))
                             specialized
                         end))
-            f = jl_eval(test_mod, expanded)
+            f = jl_eval(test_mod, expanded; edition=JL_NEW_EDITION)
             test_arg_specialized(f, 1)
             test_arg_unspecialized(f, 2)
         end
@@ -594,10 +728,22 @@ end
             test_mod, :(function ($arg2,)
                             @nospecialize
                         end))
-            f = jl_eval(test_mod, expanded)
+            f = jl_eval(test_mod, expanded; edition=JL_NEW_EDITION)
             test_arg_unspecialized(f, 1)
         end
     end
+
+    # nospecialize should still compile where flisp drops it
+    @test jl_eval(
+        test_mod,
+        :(let bad(@nospecialize(x) = 1) = x
+              (bad(0), bad())
+          end); edition=JL_NEW_EDITION) == (0, 1)
+    @test jl_eval(
+        test_mod,
+        :(let bad(@nospecialize(x::Int) = 1) = x
+              (bad(0), bad())
+          end); edition=JL_NEW_EDITION) == (0, 1)
 
     @testset "kwargs" for expander in [fl_macroexpand, (_,x)->x]
         local f
@@ -606,7 +752,7 @@ end
                 function (@nospecialize(a); kw=1)
                     (a, kw)
                 end
-            end))) isa Function
+            end); edition=JL_NEW_EDITION)) isa Function
         Core.@latestworld
         @test f(1, kw=2) == (1,2) && f(3) == (3,1)
         test_arg_unspecialized(f, 1)
@@ -619,7 +765,7 @@ end
                     @nospecialize a
                     (a, kw)
                 end
-            end))) isa Function
+            end); edition=JL_NEW_EDITION)) isa Function
         Core.@latestworld
         @test f(1, kw=2) == (1,2) && f(3) == (3,1)
         test_arg_unspecialized(f, 1)
@@ -632,7 +778,7 @@ end
                 function (a; @nospecialize(kw=1))
                     (a, kw)
                 end
-            end))) isa Function
+            end); edition=JL_NEW_EDITION)) isa Function
         Core.@latestworld
         @test f(1, kw=2) == (1,2) && f(3) == (3,1)
         test_arg_specialized(f, 1)
@@ -643,10 +789,51 @@ end
                 function (a; @nospecialize(kw...))
                     (a, kw...)
                 end
-            end))) isa Function
+            end); edition=JL_NEW_EDITION)) isa Function
         Core.@latestworld
         @test f(1, kw=2, a=3) == (1,:kw=>2,:a=>3)
         test_arg_specialized(f, 1)
+    end
+
+    # A closure stores a captured nospecialized argument in an `Any` field
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        f_nospecialize_capture(@nospecialize(x)) = () -> x
+        fieldtypes(typeof(f_nospecialize_capture(1)))
+    end
+    """) == (Any,)
+
+    # macros already mark all non-internal args nospecialize
+    @testset "macro definitions" begin
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x)); end); edition=JL_NEW_EDITION) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x::Int)); end); edition=JL_NEW_EDITION) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x=1)); end); edition=JL_NEW_EDITION) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x::Int=1)); end); edition=JL_NEW_EDITION) isa Function
+
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(x); @nospecialize(); end); edition=JL_NEW_EDITION) isa Function
+
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(x); @nospecialize(x); x; end); edition=JL_NEW_EDITION) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(x::Int); @nospecialize(x); x; end); edition=JL_NEW_EDITION) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(x=1); @nospecialize(x); x; end); edition=JL_NEW_EDITION) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(x::Int=1); @nospecialize(x); x; end); edition=JL_NEW_EDITION) isa Function
+
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_)); end); edition=JL_NEW_EDITION) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_::Int)); end); edition=JL_NEW_EDITION) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_=1)); end); edition=JL_NEW_EDITION) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_::Int=1)); end); edition=JL_NEW_EDITION) isa Function
     end
 end
 
@@ -1013,7 +1200,6 @@ end
                  (Vector{Int}, 2, [10]), (Vector{Int}, 2, [1]))
     end
 
-
     @testset "destructured args" begin
         @test JL.include_string(
             test_mod, "(function ((d1,d2);kw); [d1,d2,kw]; end)((1,2);kw=3)") == [1,2,3]
@@ -1031,6 +1217,46 @@ end
         @test JL.include_string(
             test_mod, "(function ((d1,d2);kw1=1,kw2=kw1); [d1,d2,kw1,kw2]; end)((1,2);kw1=9,kw2=10)") == [1,2,9,10]
     end
+end
+
+# Brittle test, needs fixing if kw_body naming or kwarg implementation changes
+@testset "(AI) kw function helper is declared in the correct module" begin
+    # Extending another module's keyword function with a new keyword method must
+    # reserve the hidden `#kw_body#...` global in the *extending* module (the
+    # call/eval site), never in the extended function's home module -- reserving
+    # it in a foreign (possibly precompiled/closed) module breaks incremental
+    # compilation.  This is most easily broken when the method name arrives as an
+    # interpolated `GlobalRef` *value* (the StatsBase/TracedSample shape), whose
+    # `:mod` attribute would otherwise steer the reservation to the owner module.
+    kwbodies(m) = filter(s -> occursin("kw_body", String(s)), names(m; all=true))
+
+    # (a) interpolated `GlobalRef` value as the method name (the regressing case)
+    OwnerA = Module()
+    JL.include_string(OwnerA, "sample(x; y=1) = x + y")
+    a_before = Set(kwbodies(OwnerA))
+    ExtA = Module()
+    @eval ExtA const OwnerA = $OwnerA
+    JL.include_string(ExtA, """
+        let fn = GlobalRef(OwnerA, :sample)
+            @eval \$fn(x::Symbol; y=1) = y
+        end
+    """)
+    @test isempty(setdiff(Set(kwbodies(OwnerA)), a_before))  # no new global in owner
+    @test !isempty(kwbodies(ExtA))                           # reserved in extender
+    @test OwnerA.sample(3; y=10) == 13                       # original method intact
+    @test OwnerA.sample(:s; y=7) == 7                        # new method dispatches
+    @test OwnerA.sample(:s) == 1                             # ...with its own default
+
+    # (b) syntactic dotted name reaches the same conclusion (guards the common path)
+    OwnerB = Module()
+    JL.include_string(OwnerB, "sample(x; y=1) = x + y")
+    b_before = Set(kwbodies(OwnerB))
+    ExtB = Module()
+    @eval ExtB const OwnerB = $OwnerB
+    JL.include_string(ExtB, "function OwnerB.sample(x::Symbol; y=1); y; end")
+    @test isempty(setdiff(Set(kwbodies(OwnerB)), b_before))
+    @test !isempty(kwbodies(ExtB))
+    @test OwnerB.sample(:s; y=7) == 7
 end
 
 @testset "pre-desugared arg::Vararg" begin
@@ -1069,6 +1295,112 @@ end
         f_vararg_nosplat((1,2),(3,),(4,))
     end
     """) == ((1, 2), (3,), (4,))
+
+    @testset "(AI) in keyword functions" begin
+        # A trailing positional `Vararg{T,N}` written with an explicit `::Vararg`
+        # annotation (rather than `...`) must still be splatted when the keyword
+        # wrappers forward it to the body method.  The zero-keyword path (defaulting
+        # sorter), the explicit-keyword path, and splatted keywords must all work,
+        # and `N` may be referenced in the signature and body.
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_N_kws(y::Integer, args::Vararg{Integer,N}; kwargs...) where {N}
+            (y, args, N, kwargs)
+        end
+        """)
+        @test test_mod.f_vararg_N_kws(1, 2, 3) === (1, (2, 3), 2, Base.pairs(NamedTuple()))
+        let r = test_mod.f_vararg_N_kws(1, 2, 3; foo=1)
+            @test (r[1], r[2], r[3]) === (1, (2, 3), 2)
+            @test r[4][:foo] == 1
+        end
+        let ekw = (a=1, b=2), r = test_mod.f_vararg_N_kws(1, 2; ekw...)
+            @test (r[1], r[2], r[3]) === (1, (2,), 1)
+            @test (r[4][:a], r[4][:b]) == (1, 2)
+        end
+
+        # `N` used as a keyword default (exercises the sorter/body kw forwarding too).
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_N_kwdefault(y::Integer, args::Vararg{Integer,N}; scale::Int=N) where {N}
+            (y, args, scale)
+        end
+        """)
+        @test test_mod.f_vararg_N_kwdefault(1, 2, 3) === (1, (2, 3), 2)
+        @test test_mod.f_vararg_N_kwdefault(1, 2, 3; scale=10) === (1, (2, 3), 10)
+
+        # `Vararg{T}` with no count, and a bare `Vararg`, plus `Vararg` on an
+        # anonymous (unnamed) positional argument.
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_T_kws(y, args::Vararg{Integer}; kwargs...)
+            (y, args, kwargs)
+        end
+        """)
+        @test test_mod.f_vararg_T_kws(1, 2, 3) === (1, (2, 3), Base.pairs(NamedTuple()))
+        @test test_mod.f_vararg_T_kws(1, 2, 3; foo=1)[3][:foo] == 1
+
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_bare_kws(y, args::Vararg; kwargs...)
+            (y, args, kwargs)
+        end
+        """)
+        @test test_mod.f_vararg_bare_kws(1, 2, 3) === (1, (2, 3), Base.pairs(NamedTuple()))
+        @test test_mod.f_vararg_bare_kws(1; z=9)[3][:z] == 9
+
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_anon_kws(y, ::Vararg{Integer,N}; kwargs...) where {N}
+            (y, N, kwargs)
+        end
+        """)
+        @test test_mod.f_vararg_anon_kws(1, 2, 3) === (1, 2, Base.pairs(NamedTuple()))
+        @test test_mod.f_vararg_anon_kws(1, 2, 3; k=1)[3][:k] == 1
+
+        # Equivalent `args::T...` and plain `args...` forms with kwargs (already
+        # handled, covered here for parity).
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_dots_typed_kws(y, args::Integer...; kwargs...)
+            (y, args, kwargs)
+        end
+        """)
+        @test test_mod.f_vararg_dots_typed_kws(1, 2, 3) === (1, (2, 3), Base.pairs(NamedTuple()))
+        @test test_mod.f_vararg_dots_typed_kws(1, 2, 3; foo=1)[3][:foo] == 1
+
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_dots_kws(y, args...; kwargs...)
+            (y, args, kwargs)
+        end
+        """)
+        @test test_mod.f_vararg_dots_kws(1, 2, 3) === (1, (2, 3), Base.pairs(NamedTuple()))
+        @test test_mod.f_vararg_dots_kws(1, 2, 3; foo=1)[3][:foo] == 1
+
+        # Vararg-annotated positional args carrying a default value (`:kw`-wrapped
+        # in the AST), both named and anonymous.
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_default_kws(y, args::Vararg{Int,N}=1; k=1) where {N}
+            (y, args, N, k)
+        end
+        """)
+        @test test_mod.f_vararg_default_kws(1, 2, 3) === (1, (2, 3), 2, 1)
+        @test test_mod.f_vararg_default_kws(1, 2, 3; k=9) === (1, (2, 3), 2, 9)
+
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_anon_default_kws(y, ::Vararg{Int,N}=1; k=1) where {N}
+            (y, N, k)
+        end
+        """)
+        @test test_mod.f_vararg_anon_default_kws(1, 2, 3) === (1, 2, 1)
+        @test test_mod.f_vararg_anon_default_kws(1, 2, 3; k=9) === (1, 2, 9)
+
+        # Callable-type method with a trailing Vararg and keywords (shape from
+        # SerializedElementArrays.jl).
+        JuliaLowering.include_string(test_mod, """
+        struct VKS{T,N}
+            dims::NTuple{N,Int}
+        end
+        function (A::Type{VKS{<:Any,N}})(::UndefInitializer, dims::Vararg{Integer,N}; kw=1) where {N}
+            (N, dims, kw)
+        end
+        """)
+        @test test_mod.VKS{<:Any,2}(undef, 3, 4) === (2, (3, 4), 1)
+        @test test_mod.VKS{<:Any,1}(undef, 7; kw=9) === (1, (7,), 9)
+    end
 end
 
 @testset "all known valid positional argument forms" begin
@@ -1131,7 +1463,7 @@ end
 
             local func_ref, func_test
             @test ((func_ref = fl_eval(test_mod, f_expr)) isa Function)
-            @test ((func_test = jl_eval(test_mod, f_st)) isa Function)
+            @test ((func_test = jl_eval(test_mod, f_st; edition=JL_NEW_EDITION)) isa Function)
             Core.@latestworld
             @test func_ref(args_i...) == func_test(args_i...)
         end
@@ -1147,7 +1479,7 @@ end
 
             local func_ref, func_test
             @test ((func_ref = fl_eval(test_mod, f_expr)) isa Function)
-            @test ((func_test = jl_eval(test_mod, f_st)) isa Function)
+            @test ((func_test = jl_eval(test_mod, f_st; edition=JL_NEW_EDITION)) isa Function)
             Core.@latestworld
             @test func_ref(args_i...) == func_test(args_i...)
             @test func_ref() == func_test()
@@ -1264,6 +1596,65 @@ end
     @test xy(0,0) == (1,9,9,9,2,0,0)
 end
 
+@testset "sparam in keyword default" begin
+    # The keyword default is evaluated in the body method, which carries all
+    # of the function's static parameters
+    @test JL.include_string(test_mod,
+        "f_kwdef_sp(y::T; k=T) where T = (y, k); f_kwdef_sp(1)") == (1, Int)
+    # ... but an sparam unused in the signature is undetermined at dispatch
+    @test_warn r"declares type variable T but does not use it" JL.include_string(
+        test_mod, "f_kwdef_sp_undet(y; k=T) where T = (y, k)")
+    @test_throws UndefVarError test_mod.f_kwdef_sp_undet(1)
+end
+
+@testset "anonymous static parameters" begin
+    # `where _` declares a static parameter which can never be referenced. In the
+    # old edition, it is mangled into an unused (but nameable) type variable for
+    # flisp compatibility (#60626), so the method definition warns.
+    @test_warn r"declares type variable _" @test jl_eval(
+        test_mod, "f_anon_sp(x) where _ = x; f_anon_sp(42)"; edition=JL_OLD_EDITION) == 42
+    @test_warn r"declares type variable _" @test jl_eval(
+        test_mod, "f_anon_sp2(x::T) where {T, _} = (x, T); f_anon_sp2(1.5)";
+        edition=JL_OLD_EDITION) == (1.5, Float64)
+    @test_throws LoweringError jl_eval(
+        test_mod, "f_anon_sp3(x) where {_, _} = x"; edition=JL_OLD_EDITION)
+
+    # In the new edition, `_` static parameters are truly anonymous
+    @test_nowarn @test jl_eval(
+        test_mod, "f_anon_sp_new(x) where _ = x; f_anon_sp_new(42)";
+        edition=JL_NEW_EDITION) == 42
+    @test_nowarn @test jl_eval(
+        test_mod, "f_anon_sp2_new(x::T) where {T, _} = (x, T); f_anon_sp2_new(1.5)";
+        edition=JL_NEW_EDITION) == (1.5, Float64)
+    @test jl_eval(
+        test_mod, "f_anon_sp3_new(x) where {_, _} = x; f_anon_sp3_new(3)";
+        edition=JL_NEW_EDITION) == 3
+end
+
+@testset "first arg `curly`" begin
+    @eval test_mod struct first_arg_curly{T, U}; x::T; y::U; end
+
+    @test jl_eval(test_mod, raw"""
+    first_arg_curly{Int, Int}() = first_arg_curly(1, 1)
+    """) === nothing
+    @test test_mod.first_arg_curly{Int, Int}() == test_mod.first_arg_curly(1,1)
+
+    @test jl_eval(test_mod, raw"""
+    @eval ($first_arg_curly{Bool, Bool})() = first_arg_curly(true, true)
+    """) === nothing
+    @test test_mod.first_arg_curly{Bool, Bool}() == test_mod.first_arg_curly(true, true)
+
+    @test jl_eval(test_mod, raw"""
+    first_arg_curly{Int}{String}() = first_arg_curly(1, "foo")
+    """) === nothing
+    @test test_mod.first_arg_curly{Int, String}() == test_mod.first_arg_curly(1,"foo")
+
+    @test jl_eval(test_mod, raw"""
+    @eval ($first_arg_curly{Bool}{String})() = first_arg_curly(true, "foo")
+    """) === nothing
+    @test test_mod.first_arg_curly{Bool, String}() == test_mod.first_arg_curly(true,"foo")
+end
+
 @testset "first arg `where`" begin
     @eval test_mod struct A12238{T} end
     Core.@latestworld
@@ -1359,15 +1750,80 @@ end
     @test JL.include_string(test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) ->(a,b))(1;b=3)") == (1,3)
     @test_throws LoweringError JL.include_string(test_mod, "(a=0;b=2;c=3)->nothing")
 
-    # `...` is the only real bad form with (function (tuple _...) _) forms
+    # `...` is the only parser-reachable bad form with (function notcall _) forms
     @test JL.include_string(test_mod, "(function (a...); (a...,); end)(1,2,3)") == (1,2,3)
+    @test JL.include_string(test_mod, "(function (a::Int...); (a...,); end)(1,2,3)") == (1,2,3)
     # test with where: need empty tv list to avoid unused sparam warning
-    ex = Expr(:call,
-              Expr(:function, Expr(:where, Expr(:where, Expr(:..., :a))),
-                   Expr(:block, Expr(:tuple, Expr(:..., :a)))),
-              1,2,3)
-    @test jl_eval(test_mod, ex) == (1,2,3)
+    @test jl_eval(test_mod,
+                  Expr(:call,
+                       Expr(:function, Expr(:where, Expr(:where, Expr(:..., :a))),
+                            Expr(:block, Expr(:tuple, Expr(:..., :a)))),
+                       1,2,3); edition=JL_NEW_EDITION) == (1,2,3)
     @test JL.include_string(test_mod, "(function (a::T) where T<:U where U<:Any; a; end)(1)") == 1
+    @test JL.include_string(test_mod, "(function (a::T...) where T<:U where U<:Any; a; end)(1,2,3)") == (1,2,3)
+end
+
+@testset "Consequences of accepting badly-parsed anonymous forms" begin
+    # empty block
+    @test jl_eval(test_mod,
+                  Expr(:call,
+                       Expr(:function, Expr(:block),
+                            Expr(:block, Expr(:tuple))),
+                       )) == ()
+
+    # unwrapped or block-wrapped arg
+    @testset for a1 in [:a, Expr(:(::), :a, :Int)],
+        a2 in [a1, Expr(:(=), :a, 0), Expr(:kw, :a, 0)],
+        wrap_where in [identity, x->Expr(:where, x), x->Expr(:where, Expr(:where, x))]
+
+        @test jl_eval(test_mod,
+                      Expr(:call,
+                           Expr(:function, wrap_where(Expr(:block, a2)),
+                                Expr(:block, Expr(:tuple, :a))),
+                           1)) == (1,)
+    end
+
+    # two-arg block
+    @test jl_eval(test_mod,
+                  Expr(:call,
+                       Expr(:function, Expr(:block, :a, :b),
+                            Expr(:block, Expr(:tuple, :a, :b))),
+                       1, Expr(:kw, :b, 2))) == (1,2)
+end
+
+@testset "assignment to where-wrapped-tuple" begin
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a,b,c::T)     where T<:U where U<:Any) = (a,b,c))(1,2,3)") == (1,2,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1)") == (1,0,0)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1,2)") == (1,2,0)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1,2,3)") == (1,2,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T...)      where T<:U where U<:Any) = (a...,))(1,2,3)") == (1,2,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T;)        where T<:U where U<:Any) = a)(1)") == 1
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T;b=2)     where T<:U where U<:Any) = (a,b))(1)") == (1,2)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T;b=2)     where T<:U where U<:Any) = (a,b))(1;b=3)") == (1,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))()") == (0,2)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1)") == (1,2)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(;b=3)") == (0,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1;b=3)") == (1,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(a=0;b=2;c=3) where T = nothing")
+    @test_throws LoweringError jl_eval(
+        test_mod,
+        Expr(:call,
+             Expr(:(=), Expr(:where, Expr(:where, Expr(:..., :a))),
+                  Expr(:block, Expr(:tuple, Expr(:..., :a)))),
+             1,2,3); edition=JL_NEW_EDITION) == (1,2,3)
 end
 
 @testset "Assigned-to arguments" begin
@@ -1376,15 +1832,15 @@ end
     # functions essentially always pass through SSA conversion on the way to the
     # optimizer, erasing these slots (potentially hiding bugs in slot handling)
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     macro m_assigned_args_1(x)
         x = x + 1
         return x
     end
     var"@m_assigned_args_1"(LineNumberNode(0, nothing), Main, 2)
-    """; expr_compat_mode=true) == 3
+    """; edition=JL_OLD_EDITION) == 3
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     macro m_assigned_args_2(x, y = 1)
         (y, x) = (x + 1, y + 1)
         return y - x
@@ -1393,67 +1849,75 @@ end
         var"@m_assigned_args_2"(LineNumberNode(0, nothing), Main, 2),
         var"@m_assigned_args_2"(LineNumberNode(0, nothing), Main, 1, 2),
     )
-    """; expr_compat_mode=true) == (1, -1)
+    """; edition=JL_OLD_EDITION) == (1, -1)
 
-    for expr_compat_mode in (false, true)
-        @test JuliaLowering.include_string(test_mod, raw"""
+    for edition in (JL_NEW_EDITION, JL_OLD_EDITION)
+        @test jl_eval(test_mod, raw"""
         macro m_assigned_args(ex)
             ex = Base.remove_linenums!(ex)
             return ex
         end
         ((@m_assigned_args 1 + 1), @m_assigned_args 1)
-        """; expr_compat_mode) == (2, 1)
+        """; edition) == (2, 1)
     end
 end
 
-@testset "Generated functions" begin; for expr_compat_mode in (false, true)
+@testset "Generated functions" begin; for edition in (JL_NEW_EDITION, JL_OLD_EDITION)
     local genfunc_s, genfunc_f
+    @eval test_mod import JuliaLowering.@legacy_quote_to_syntax
 
     @testset "returning special syntax forms" begin
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated f_gen_nothing() = nothing
             f_gen_nothing()
         end
-        """; expr_compat_mode) == nothing
+        """; edition) == nothing
 
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated f_gen_quotenothing() = :(nothing)
             f_gen_quotenothing()
         end
-        """; expr_compat_mode) == nothing
+        """; edition) == nothing
 
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated f_gen_quotenodenothing() = QuoteNode(nothing)
             f_gen_quotenodenothing()
         end
-        """; expr_compat_mode) == nothing
+        """; edition) == nothing
 
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
+        begin
+            @generated f_gen_quotenodeexpr() = QuoteNode(Expr(:begin, nothing))
+            f_gen_quotenodeexpr()
+        end
+        """; edition) == Expr(:begin, nothing)
+
+        @test jl_eval(test_mod, raw"""
         begin
             @generated f_gen_gr_nothing() = GlobalRef(Core, :nothing)
             f_gen_gr_nothing()
         end
-        """; expr_compat_mode) == nothing
+        """; edition) == nothing
 
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated f_gen_quotegr_nothing() = :(GlobalRef(Core, :nothing))
             f_gen_quotegr_nothing()
         end
-        """; expr_compat_mode) == GlobalRef(Core, :nothing)
+        """; edition) == GlobalRef(Core, :nothing)
 
-        @test JuliaLowering.include_string(test_mod, raw"""
+        @test jl_eval(test_mod, raw"""
         begin
             @generated f_gen_quotenodegr_nothing() = QuoteNode(GlobalRef(Core, :nothing))
             f_gen_quotenodegr_nothing()
         end
-        """; expr_compat_mode) == GlobalRef(Core, :nothing)
+        """; edition) == GlobalRef(Core, :nothing)
     end
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     begin
         @generated function f_gen_trivial(x)
             x
@@ -1461,9 +1925,9 @@ end
 
         f_gen_trivial(1), f_gen_trivial(Int[1])
     end
-    """; expr_compat_mode) == (Int, Vector{Int})
+    """; edition) == (Int, Vector{Int})
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     begin
         function f_gen_trivial_if(x)
             if @generated
@@ -1475,21 +1939,21 @@ end
 
         f_gen_trivial_if(1), f_gen_trivial_if(Int[1])
     end
-    """; expr_compat_mode) == (Int, Vector{Int})
+    """; edition) == (Int, Vector{Int})
 
     @testset "anonymous forms" begin
-        @test JuliaLowering.include_string(test_mod, """
+        @test jl_eval(test_mod, """
         let
             f = @generated function (x); x; end
             f(1), f(Int[1])
         end
-        """; expr_compat_mode) == (Int, Vector{Int})
-        @test JuliaLowering.include_string(test_mod, """
+        """; edition) == (Int, Vector{Int})
+        @test jl_eval(test_mod, """
         let
             f = (x)->(if @generated(); x; else; "nongen"; end)
             f(1), f(Int[1])
         end
-        """; expr_compat_mode) == (Int, Vector{Int})
+        """; edition) == (Int, Vector{Int})
     end
 
     @testset "destructured args" begin
@@ -1502,7 +1966,7 @@ end
             end
         end
         """
-        @test (genfunc_f = JL.include_string(test_mod, genfunc_s; expr_compat_mode)) isa Function
+        @test (genfunc_f = jl_eval(test_mod, genfunc_s; edition)) isa Function
         @test genfunc_f((1,2)) == (Tuple{Int, Int}, "gen")
     end
 
@@ -1516,12 +1980,52 @@ end
             end
         end
         """
-        @test (genfunc_f = JL.include_string(test_mod, genfunc_s; expr_compat_mode)) isa Function
-        @test_broken genfunc_f((1,2)) == (1, 2, Tuple{Int, Int}, "gen")
+        @test (genfunc_f = jl_eval(test_mod, genfunc_s; edition)) isa Function
+        @test genfunc_f((1,2)) == (1, 2, Tuple{Int, Int}, "gen")
+    end
+
+    @testset "(AI) destructured args: shapes" begin
+        # A destructured-tuple argument in a fully-`@generated` function whose
+        # body is a `quote`/`Expr(:block)` (not a bare single expression): the
+        # implicit `(names...) = <arg>` prologue must reach the generated code.
+        @test jl_eval(test_mod, raw"""
+            @generated function fds_named(x, (a, b)); quote a + b end; end
+            fds_named(1, (2, 3))
+        """; edition) == 5
+        # Same, with the generated body built as an explicit `Expr(:block, ...)`.
+        @test jl_eval(test_mod, raw"""
+            @generated function fds_exprblock(x, (a, b)); Expr(:block, :(a + b)); end
+            fds_exprblock(1, (2, 3))
+        """; edition) == 5
+        # Nested destructuring.
+        @test jl_eval(test_mod, raw"""
+            @generated function fds_nested(x, (a, (b, c))); quote a + b + c end; end
+            fds_nested(1, (2, (3, 4)))
+        """; edition) == 9
+        # Destructured first argument.
+        @test jl_eval(test_mod, raw"""
+            @generated function fds_first((a, b)); quote a + b end; end
+            fds_first((2, 3))
+        """; edition) == 5
+        # Positional vararg after a destructured argument.
+        @test jl_eval(test_mod, raw"""
+            @generated function fds_va((a, b), xs...); quote a + b + length(xs) end; end
+            fds_va((2, 3), 10, 20)
+        """; edition) == 7
+        # Destructured argument alongside keyword arguments.
+        @test jl_eval(test_mod, raw"""
+            @generated function fds_kw((a, b); k=0); quote a + b + k end; end
+            fds_kw((2, 3); k=10)
+        """; edition) == 15
+        # Multiple destructured args
+        @test jl_eval(test_mod, raw"""
+            @generated function fds_multi((a, b), (c, d)); quote a + b + c + d end; end
+            fds_multi((1, 2), (3, 4))
+        """; edition) == 10
     end
 
     @testset "keyword args" begin
-        genfunc_f = JL.include_string(test_mod, raw"""
+        genfunc_f = jl_eval(test_mod, raw"""
         function (parg::Tuple{T}; kw) where {T}
             if @generated
                 :($parg, $T, $kw, "gen")
@@ -1529,13 +2033,13 @@ end
                 :($parg, $T, $kw, "nongen")
             end
         end
-        """; expr_compat_mode)
+        """; edition)
 
         @test genfunc_f((1,); kw=1) ==
                 (Tuple{Int}, Int, Int, "gen")
         @test_throws UndefKeywordError genfunc_f((1,))
 
-        genfunc_f = JL.include_string(test_mod, raw"""
+        genfunc_f = jl_eval(test_mod, raw"""
         function (parg::Tuple{T}; kw::Vector{T}) where {T}
             if @generated
                 :($parg, $T, $kw, "gen")
@@ -1543,13 +2047,13 @@ end
                 :($parg, $T, $kw, "nongen")
             end
         end
-        """; expr_compat_mode)
+        """; edition)
 
         @test genfunc_f((1,); kw=[1]) == (Tuple{Int}, Int, Vector{Int}, "gen")
         @test_throws UndefKeywordError genfunc_f((1,))
         @test_throws TypeError genfunc_f((1,); kw=1)
 
-        genfunc_f = JL.include_string(test_mod, raw"""
+        genfunc_f = jl_eval(test_mod, raw"""
         function (; kw::T, rkw...) where {T}
             if @generated
                 :($T, $kw, $rkw, "gen")
@@ -1557,7 +2061,7 @@ end
                 :($T, $kw, $rkw, "nongen")
             end
         end
-        """; expr_compat_mode)
+        """; edition)
 
         @test genfunc_f(; kw=1) ==
             (Int, Int, Base.Pairs{Symbol, Union{}, Nothing, @NamedTuple{}}, "gen")
@@ -1566,7 +2070,7 @@ end
         @test_throws UndefKeywordError genfunc_f()
     end
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     begin
         @generated function f_gen(x::NTuple{N,T}) where {N,T}
             quote
@@ -1576,9 +2080,9 @@ end
 
         f_gen((1,2,3,4,5))
     end
-    """; expr_compat_mode) == (NTuple{5,Int}, 5, Int)
+    """; edition) == (NTuple{5,Int}, 5, Int)
 
-    @test JuliaLowering.include_string(test_mod, """
+    @test jl_eval(test_mod, """
     begin
         @generated function f_gen_unnamed_args(::Type{T}, y, ::Type{U}) where {T, U}
             return (T, y, U)
@@ -1586,9 +2090,9 @@ end
 
         f_gen_unnamed_args(Int, UInt8(3), Float64)
     end
-    """; expr_compat_mode) == (Int, UInt8, Float64)
+    """; edition) == (Int, UInt8, Float64)
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     begin
         function f_partially_gen(x::NTuple{N,T}) where {N,T}
             shared = :shared_stuff
@@ -1607,11 +2111,11 @@ end
 
         (f_partially_gen((1,2)), f_partially_gen((1,2,3,4,5)))
     end
-    """; expr_compat_mode) ==
+    """; edition) ==
         ((:shared_stuff, (:nongen, (NTuple{2,Int}, 2, Int))),
          (:shared_stuff, (:gen, (NTuple{5,Int}, 5, Int))))
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     begin
         @generated function f_gen_calls_macros(x::T) where {T}
             s = @raw_str "foo"
@@ -1619,13 +2123,166 @@ end
         end
         f_gen_calls_macros(1)
     end
-    """; expr_compat_mode) === "foo"
+    """; edition) === "foo"
+    @test jl_eval(test_mod, raw"""begin
+        @generated function calls_versioned_macro(::Type{T}, ::Val{i}) where {T, i}
+            i isa Integer || @goto err
+            return i
+            @label err
+            return 0
+        end
+
+        calls_versioned_macro(Tuple{Int}, Val(1))
+    end """; edition) == 1
+
+    # (AI) pkgeval reduction: `(. value macroname)` should work
+    @test (let m = Module()
+               jl_eval(m, :(module RM5b; macro mm(ex); esc(ex); end; end); edition=JL_OLD_EDITION)
+               rm = Core.eval(m, :RM5b)
+               jl_eval(m, quote
+                           @generated function fr5b(x)
+                               Expr(:macrocall, Expr(:., $rm, QuoteNode(Symbol("@mm"))),
+                                    LineNumberNode(1), :(x[1]))
+                           end
+                       end; edition=JL_OLD_EDITION)
+               jl_eval(m, :(fr5b([7, 8])); edition=JL_OLD_EDITION)
+           end) == 7
+
+    @testset "(AI) anonymous args promoted by optional/keyword args" begin
+        # A `@generated` method with >=2 anonymous args (`::T` or `_`) whose
+        # placeholder slots get promoted to `#arg#` identifiers because the
+        # method also has an optional positional or keyword arg used to fail at
+        # first call with "function argument name not unique".
+
+        @test jl_eval(test_mod, raw"""
+        begin
+            @generated function g_anon_opt(x,
+                                           ::Val{A}=Val(false),
+                                           ::Val{B}=Val(false)) where {A,B}
+                :( (x, A, B) )
+            end
+            g_anon_opt(1)
+        end
+        """; edition) === (1, false, false)
+
+        # calling the same function at two different type instantiations
+        @test jl_eval(test_mod, raw"""
+            (g_anon_opt(1, Val(:a), Val(:b)), g_anon_opt(2.0, Val(3)))
+        """; edition) === ((1, :a, :b), (2.0, 3, false))
+
+        # 2 anonymous required args forced by an unrelated keyword arg
+        @test jl_eval(test_mod, raw"""
+        begin
+            @generated function g_anon_kw(::Val{A}, ::Val{B}; kw=1) where {A,B}
+                :( (A, B, kw) )
+            end
+            g_anon_kw(Val(1), Val(2))
+        end
+        """; edition) === (1, 2, 1)
+        @test jl_eval(test_mod,
+            "g_anon_kw(Val(1), Val(2); kw=5)"; edition) === (1, 2, 5)
+
+        # underscore args (also anonymous), forced by a default
+        @test jl_eval(test_mod, raw"""
+        begin
+            @generated function g_anon_underscore(_, _, z=10)
+                :( z )
+            end
+            g_anon_underscore(:a, :b)
+        end
+        """; edition) === 10
+
+        # named + anonymous mix, with the body reading the named arg while the
+        # generator also uses the where-params
+        @test jl_eval(test_mod, raw"""
+        begin
+            @generated function g_named_anon(a, ::Val{A}, ::Val{B}=Val(0); k=7) where {A,B}
+                :( (a, A, B, k) )
+            end
+            g_named_anon("hi", Val(1))
+        end
+        """; edition) === ("hi", 1, 0, 7)
+
+        # single anonymous arg (no collision possible) still works with a kwarg
+        @test jl_eval(test_mod, raw"""
+        begin
+            @generated function g_one_anon(x, ::Val{A}; k=3) where {A}
+                :( (x, A, k) )
+            end
+            g_one_anon(1, Val(2))
+        end
+        """; edition) === (1, 2, 3)
+
+        # Pathological: a user arg literally named `#arg#` (the promotion name)
+        # must remain a real, body-referenceable slot -- the discriminator is a
+        # metadata tag on promoted anonymous args, not a name match.
+        @test jl_eval(test_mod, raw"""
+        begin
+            @generated function g_user_hasharg(var"#arg#", ::Val{A}=Val(0)) where {A}
+                :( (var"#arg#", A) )
+            end
+            g_user_hasharg(5)
+        end
+        """; edition) === (5, 0)
+    end
+
+    @testset "hygiene in generated functions" begin
+        # (AI) A generator whose returned body is a bare macrocall to an
+        # old-style macro that re-wraps `esc`'d fragments in a freshly-built,
+        # unescaped `Expr` (e.g.  `Base.Cartesian.@nif`), referencing the
+        # generated function's own arguments and static parameters. Those
+        # escaped references unwind to the generator's base layer, so the
+        # synthesized argument/sparam names of the staged method must live in
+        # that same layer -- otherwise they resolve as bogus module globals
+        # (`UndefVarError`).
+        @test jl_eval(test_mod, raw"""
+        begin
+            @generated function find_first_eq(x, itr::I) where {
+                    N, I <: Tuple{Vararg{Any, N}}
+                }
+                return :(Base.Cartesian.@nif $(N + 1) d -> (x == getfield(itr, d)) d -> (d) d -> (nothing))
+            end
+            (find_first_eq(20, (10, 20, 30)), find_first_eq(99, (10, 20, 30)))
+        end"""; edition) === (2, nothing)
+        @test jl_eval(test_mod, raw"""begin
+            @generated function nif_uses_sparam(x, ::Type{T}) where {T}
+                return :(Base.Cartesian.@nif 2 d -> (x isa T) d -> (T) d -> (nothing))
+            end
+            nif_uses_sparam(1, Int)
+        end"""; edition) === Int
+    end
+
+    @testset "global assignment in generated body (issue #33243)" begin
+        m = Module()
+        jl_eval(m, """
+        @generated function f33243()
+            :(global x33243 = 2)
+        end
+        """; edition)
+        @test_throws ErrorException jl_eval(m, "f33243()"; edition)
+        @test jl_eval(m, "global x33243::Any; (f33243(), x33243)"; edition) === (2, 2)
+    end
+
+    @testset "macros in generated body expand in the staging world" begin
+        # The generator runs in its definition world, but its result is lowered
+        # in the world it is generated for (like flisp, which uses the latest)
+        m = Module()
+        jl_eval(m, """
+        @generated gen_later_macro(x) = :(@later_macro)
+        macro later_macro() 1 end
+        macro redefined_macro() 1 end
+        @generated gen_redefined_macro(x) = :(@redefined_macro)
+        macro redefined_macro() 2 end
+        """; edition)
+        @test jl_eval(m, "gen_later_macro(0)"; edition) === 1
+        @test jl_eval(m, "gen_redefined_macro(0)"; edition) === 2
+    end
 end
 
     genfunc_quote_s = """
     begin
         function f_gen_quote_1(::Tuple{T}) where {T}
-            out = :(:x1,first)
+            out = @legacy_quote_to_syntax :(:x1,first)
             if @generated
             else
             end
@@ -1635,18 +2292,18 @@ end
         f_gen_quote_1((1,))
     end
     """
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=true) == :(:x1,first)
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
-            @ast_ [K"tuple" [K"inert" "x1"::K"Identifier"] "first"::K"Identifier"]
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_OLD_EDITION) == :(:x1,first)
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_NEW_EDITION) ≈
+            @ast_ [:tuple [:inert "x1"::identifier] "first"::identifier]
 
     genfunc_quote_s = """
     begin
         function f_gen_quote_2(::Tuple{T}) where {T}
             out = nothing
             if @generated
-                :(out = :(:x2,generated))
+                @legacy_quote_to_syntax :(out = @legacy_quote_to_syntax :(:x2,generated))
             else
                 out = (:x2,nongen)
             end
@@ -1656,11 +2313,11 @@ end
         f_gen_quote_2((1,))
     end
     """
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=true) == :(:x2,generated)
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
-            @ast_ [K"tuple" [K"inert" "x2"::K"Identifier"] "generated"::K"Identifier"]
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_OLD_EDITION) == :(:x2,generated)
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_NEW_EDITION) ≈
+            @ast_ [:tuple [:inert "x2"::identifier] "generated"::identifier]
 
     genfunc_quote_s = """
     begin
@@ -1668,26 +2325,26 @@ end
             if @generated
             else
             end
-            return :(:x4,after)
+            return @legacy_quote_to_syntax :(:x4,after)
         end
 
         f_gen_quote_3((1,))
     end
     """
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=true) == :(:x4,after)
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
-            @ast_ [K"tuple" [K"inert" "x4"::K"Identifier"] "after"::K"Identifier"]
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_OLD_EDITION) == :(:x4,after)
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_NEW_EDITION) ≈
+            @ast_ [:tuple [:inert "x4"::identifier] "after"::identifier]
 
     genfunc_quote_s = raw"""
     begin
         function f_gen_interpolate(::Tuple{T}) where {T}
             out = :(:x1,first)
             if @generated
-                out = :($out, generated)
+                out = @legacy_quote_to_syntax :($out, generated)
             else
-                out = :($out, nongen)
+                out = @legacy_quote_to_syntax :($out, nongen)
             end
             return out
         end
@@ -1695,29 +2352,32 @@ end
         f_gen_interpolate((1,))
     end
     """
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=true) == :((:x1,first),nongen)
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
-            @ast_ [K"tuple" [K"tuple"
-                             [K"inert" "x1"::K"Identifier"]
-                             "first"::K"Identifier"]
-                   "nongen"::K"Identifier"]
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_OLD_EDITION) == :((:x1,first),nongen)
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_NEW_EDITION) ≈
+            @ast_ [:tuple [:tuple
+                             [:inert "x1"::identifier]
+                             "first"::identifier]
+                   "nongen"::identifier]
 
     genfunc_quote_s = raw"""
     begin
-        @eval function f_gen_quote_1(::Tuple{T}) where {T}
+        @eval function f_gen_eval_quote_1(::Tuple{T}) where {T}
             out = $(Expr(:quote, Expr(:call, :+, 1, Expr(:if, Expr(:generated), 1, 2))))
             if @generated
             else
             end
             return out
         end
-        f_gen_quote_1((1,))
+        f_gen_eval_quote_1((1,))
     end
     """
-    @test JuliaLowering.include_string(
-        test_mod, genfunc_quote_s; expr_compat_mode=true) ==
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_OLD_EDITION) ==
+            :(1 + $(Expr(:if, Expr(:generated), 1, 2)))
+    @test jl_eval(
+        test_mod, genfunc_quote_s; edition=JL_NEW_EDITION) ==
             :(1 + $(Expr(:if, Expr(:generated), 1, 2)))
 
     # Test generated function edges to bindings
@@ -1729,6 +2389,15 @@ end
     @test test_mod.f_generated_return_delete_me() == 4
     Base.delete_binding(test_mod, :delete_me)
     @test_throws UndefVarError test_mod.f_generated_return_delete_me()
+end
+
+@testset "pre-desugared meta-generated" begin
+    @test jl_eval(test_mod, raw"""
+    @eval function meta_generated_form()
+        $(Expr(:meta, :generated, Base.identity))
+        $(Expr(:meta, :generated_only))
+    end
+    """, edition=JL_OLD_EDITION) isa Function
 end
 
 @testset "Broadcast" begin
@@ -1765,16 +2434,16 @@ end
 end
 
 @testset "method table overlays" begin
-    OverlayModule = Module()
+    OverlayModule = @newmod()
 
     @eval OverlayModule Base.Experimental.@MethodTable mt
-    @test_broken JL.include_string(OverlayModule, """
+    @test JL.include_string(OverlayModule, """
         Base.Experimental.@overlay mt function sin(x::Float64); 1; end
     """) isa Method
-    @test_broken JL.include_string(OverlayModule, """
+    @test JL.include_string(OverlayModule, """
         Base.Experimental.@overlay mt cos(x::Float64) = 2
     """) isa Method
-    @test_broken JL.include_string(OverlayModule, """
+    @test JL.include_string(OverlayModule, """
         Base.Experimental.@overlay mt tan(x::T) where {T} = 3
     """) isa Method
 
@@ -1791,4 +2460,12 @@ end
         @test isempty(ms)
     end
 
+    # anything may go in first arg
+    @test JL.include_string(OverlayModule, """
+        Base.Experimental.@overlay @__MODULE__().mt identity(x::Int) = x
+    """) isa Method
+    let ms = Base._methods_by_ftype(
+        Tuple{typeof(identity), Int}, nothing, 1, Base.get_world_counter())
+        @test only(ms).method.module === Base
+    end
 end

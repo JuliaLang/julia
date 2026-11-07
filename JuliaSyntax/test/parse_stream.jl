@@ -4,7 +4,7 @@
 # that the correct sequence of emit() and bump() produces a valid parse tree.
 
 using .JuliaSyntax: ParseStream,
-    peek, peek_token,
+    peek_token,
     bump, bump_trivia, bump_invisible,
     emit, emit_diagnostic, TRIVIA_FLAG, INFIX_FLAG,
     ParseStreamPosition, first_child_position, last_child_position,
@@ -22,54 +22,54 @@ using .JuliaSyntax: ParseStream,
     """
     st = ParseStream(code)
 
-    p1 = position(st)
-        @test peek(st) == K"for"
+    p1 = JuliaSyntax.position(st)
+        @test JuliaSyntax.peek(st) == K"for"
         bump(st, TRIVIA_FLAG)
-        p2 = position(st)
-            @test peek(st) == K"Identifier"    # 'i'
+        p2 = JuliaSyntax.position(st)
+            @test JuliaSyntax.peek(st) == K"Identifier"    # 'i'
             bump(st)
-            @test peek(st) == K"="
+            @test JuliaSyntax.peek(st) == K"="
             bump(st, TRIVIA_FLAG)
-            p3 = position(st)
-                @test peek(st) == K"Integer"   # 1
+            p3 = JuliaSyntax.position(st)
+                @test JuliaSyntax.peek(st) == K"Integer"   # 1
                 bump(st)
-                @test peek(st) == K":"
+                @test JuliaSyntax.peek(st) == K":"
                 bump(st) # :
-                @test peek(st) == K"Integer"   # 10
+                @test JuliaSyntax.peek(st) == K"Integer"   # 10
                 bump(st) # 10
             emit(st, p3, K"call", INFIX_FLAG)
         emit(st, p2, K"=")
-        @test peek(st) == K"NewlineWs"
+        @test JuliaSyntax.peek(st) == K"NewlineWs"
         bump(st, TRIVIA_FLAG)
-        p4 = position(st)
-            p5 = position(st) # [call]
-                p6 = position(st) # [ref]
-                    @test peek(st) == K"Identifier" # 'xx'
+        p4 = JuliaSyntax.position(st)
+            p5 = JuliaSyntax.position(st) # [call]
+                p6 = JuliaSyntax.position(st) # [ref]
+                    @test JuliaSyntax.peek(st) == K"Identifier" # 'xx'
                     bump(st)
-                    @test peek(st) == K"["
+                    @test JuliaSyntax.peek(st) == K"["
                     bump(st, TRIVIA_FLAG)
-                    @test peek(st) == K"Identifier" # 'i'
+                    @test JuliaSyntax.peek(st) == K"Identifier" # 'i'
                     bump(st)
-                    @test peek(st) == K"]"
+                    @test JuliaSyntax.peek(st) == K"]"
                     bump(st, TRIVIA_FLAG)
                 emit(st, p6, K"ref")
-                @test peek(st) == K"+"
+                @test JuliaSyntax.peek(st) == K"+"
                 bump(st)
-                @test peek(st) == K"Integer"        # 2
+                @test JuliaSyntax.peek(st) == K"Integer"        # 2
                 bump(st)
             emit(st, p5, K"call", INFIX_FLAG)
-            @test peek(st) == K"NewlineWs"
+            @test JuliaSyntax.peek(st) == K"NewlineWs"
             bump(st, TRIVIA_FLAG)
-            @test peek(st) == K"NewlineWs"
+            @test JuliaSyntax.peek(st) == K"NewlineWs"
             bump(st, TRIVIA_FLAG)
-            @test peek(st) == K"Identifier" # 'yy'
+            @test JuliaSyntax.peek(st) == K"Identifier" # 'yy'
             bump(st)
         emit(st, p4, K"block")
-        @test peek(st) == K"NewlineWs"
+        @test JuliaSyntax.peek(st) == K"NewlineWs"
         bump(st, TRIVIA_FLAG)
         bump(st, TRIVIA_FLAG) # end
     emit(st, p1, K"for")
-    @test peek(st) == K"NewlineWs"
+    @test JuliaSyntax.peek(st) == K"NewlineWs"
     bump(st, TRIVIA_FLAG)
     emit(st, p1, K"toplevel")
 end
@@ -107,44 +107,44 @@ end
     # indices here are one more than "might be expected". Additionally, note that
     # the byte index points to the first byte after the token.
     st = parse_sexpr("((a b) c)")
-    child1_pos = first_child_position(st, position(st))
+    child1_pos = first_child_position(st, JuliaSyntax.position(st))
     @test child1_pos == ParseStreamPosition(7, 8)
     @test first_child_position(st, child1_pos) == ParseStreamPosition(4, 4)
-    @test last_child_position(st, position(st)) == ParseStreamPosition(9, 10)
+    @test last_child_position(st, JuliaSyntax.position(st)) == ParseStreamPosition(9, 10)
     @test last_child_position(st, child1_pos) == ParseStreamPosition(6, 6)
 
     st = parse_sexpr("( (a b) c)")
-    child1_pos = first_child_position(st, position(st))
+    child1_pos = first_child_position(st, JuliaSyntax.position(st))
     @test child1_pos == ParseStreamPosition(8, 9)
     @test first_child_position(st, child1_pos) == ParseStreamPosition(5, 5)
-    @test last_child_position(st, position(st)) == ParseStreamPosition(10, 11)
+    @test last_child_position(st, JuliaSyntax.position(st)) == ParseStreamPosition(10, 11)
     @test last_child_position(st, child1_pos) == ParseStreamPosition(7, 7)
 
     st = parse_sexpr("(a (b c))")
-    @test first_child_position(st, position(st)) == ParseStreamPosition(3, 3)
-    child2_pos = last_child_position(st, position(st))
+    @test first_child_position(st, JuliaSyntax.position(st)) == ParseStreamPosition(3, 3)
+    child2_pos = last_child_position(st, JuliaSyntax.position(st))
     @test child2_pos == ParseStreamPosition(9, 10)
     @test first_child_position(st, child2_pos) == ParseStreamPosition(6, 6)
     @test last_child_position(st, child2_pos) == ParseStreamPosition(8, 8)
 
     st = parse_sexpr("( a (b c))")
-    @test first_child_position(st, position(st)) == ParseStreamPosition(4, 4)
-    child2_pos = last_child_position(st, position(st))
+    @test first_child_position(st, JuliaSyntax.position(st)) == ParseStreamPosition(4, 4)
+    child2_pos = last_child_position(st, JuliaSyntax.position(st))
     @test child2_pos == ParseStreamPosition(10, 11)
     @test first_child_position(st, child2_pos) == ParseStreamPosition(7, 7)
     @test last_child_position(st, child2_pos) == ParseStreamPosition(9, 9)
 
     st = parse_sexpr("a (b c)")
-    @test first_child_position(st, position(st)) == ParseStreamPosition(5, 5)
-    @test last_child_position(st, position(st)) == ParseStreamPosition(7, 7)
+    @test first_child_position(st, JuliaSyntax.position(st)) == ParseStreamPosition(5, 5)
+    @test last_child_position(st, JuliaSyntax.position(st)) == ParseStreamPosition(7, 7)
 
     st = parse_sexpr("(a) (b c)")
-    @test first_child_position(st, position(st)) == ParseStreamPosition(7, 8)
-    @test last_child_position(st, position(st)) == ParseStreamPosition(9, 10)
+    @test first_child_position(st, JuliaSyntax.position(st)) == ParseStreamPosition(7, 8)
+    @test last_child_position(st, JuliaSyntax.position(st)) == ParseStreamPosition(9, 10)
 
     st = parse_sexpr("(() ())")
-    @test first_child_position(st, position(st)) == ParseStreamPosition(4, 5)
-    @test last_child_position(st, position(st)) == ParseStreamPosition(7, 9)
+    @test first_child_position(st, JuliaSyntax.position(st)) == ParseStreamPosition(4, 5)
+    @test last_child_position(st, JuliaSyntax.position(st)) == ParseStreamPosition(7, 9)
 end
 
 @testset "SubString{GenericString} (issue #505)" begin

@@ -276,6 +276,8 @@ for randfun in [:randn, :randexp]
         $randfun(rng::AbstractRNG,            dims::Integer...               )           = $randfun(rng, Float64, dims...)
         $randfun(                             dims::Dims                     )           = $randfun(default_rng(), Float64, dims)
         $randfun(                             dims::Integer...               )           = $randfun(default_rng(), Float64, dims...)
+        $randfun(     ::Type{Union{}}, slurp...) = throw(MethodError($randfun, (Union{}, slurp...)))
+        $randfun(rng, ::Type{Union{}}, slurp...) = throw(MethodError($randfun, (rng, Union{}, slurp...)))
     end
 end
 

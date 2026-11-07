@@ -4,37 +4,21 @@
 # lattice utilities #
 #####################
 
-# true if Type{T} is inlineable as constant T
-# requires that T is a singleton, s.t. T == S implies T === S
-isconstType(@nospecialize t) = isType(t) && hasuniquerep(type_parameter(t))
-
-# test whether type T has a unique representation, s.t. T == S implies T === S
-function hasuniquerep(@nospecialize t)
-    # typeof(Bottom) is special since even though it is a leaftype,
-    # at runtime, it might be Type{Union{}} instead, so don't attempt inference of it
-    t === typeof(Union{}) && return false
-    t === Union{} && return true
-    isa(t, TypeVar) && return false # TypeVars are identified by address, not equality
-    if isType(t)
-        p = type_parameter(t)
-        (p === Union{} || p === typeof(Union{})) && return false
-        return !has_free_typevars(p)
-    end
-    iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
-    isconcretetype(t) && return true # these are also interned and pointer comparable
-    if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
-        return all(hasuniquerep, t.parameters)
-    end
-    return false
-end
+# true if a value of this type is known to be exactly (`===`) the type `T`, so it
+# is inlineable as the constant `T`. A general `Type{T}` is not: it also matches
+# `S == T` with `S !== T` reps, e.g. `Union{U,V} where {U<:T,V<:T}` (#61323).
+# Use `Core.TypeEgal{T}` when that exactness is required; `Type{Union{}}` is the
+# exception, since the bottom object is unique.
+isconstType(@nospecialize t) = isTypeEgal(t) || (isTypeEq(t) && type_parameter(t) === Union{})
 
 """
     isTypeDataType(@nospecialize t)::Bool
 
-For a type `t` test whether ∀S s.t. `isa(S, rewrap_unionall(Type{t}, ...))`,
-we have `isa(S, DataType)`. In particular, if a statement is typed as `Type{t}`
+For a type `t` test whether ∀S s.t. `isa(S, rewrap_unionall(Core.TypeEgal{t}, ...))`,
+we have `isa(S, DataType)`. In particular, if a statement is typed as `Core.TypeEgal{t}`
 (potentially wrapped in some `UnionAll`), then we are guaranteed that this statement
-will be a `DataType` at runtime (and not e.g. a `Union` or `UnionAll` typeequal to it).
+will be a `DataType` at runtime. Note that this does not hold for a statement typed as
+`Type{t}`, which may also be a `Union` or `UnionAll` rep that is `==` to `t` (#61323).
 """
 function isTypeDataType(@nospecialize t)
     isType(t) && return false
@@ -51,10 +35,10 @@ has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isTy
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
-isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(type_parameter(a)) || b <: a)
+isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || b <: a)
 
 function argtypes_to_type(argtypes::Vector{Any})
-    argtypes = anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst(a), argtypes)
+    argtypes = anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst_split(a), argtypes)
     filter!(@nospecialize(x) -> !isvarargtype(x) || valid_as_lattice(unwrapva(x), true), argtypes)
     all(@nospecialize(x) -> isvarargtype(x) || valid_as_lattice(x, true), argtypes) || return Bottom
     return Tuple{argtypes...}
@@ -302,7 +286,7 @@ end
 # as a cartesian product, relative to the size of the original representation.
 # Thus, we count the longest element as being roughly invariant to being inside
 # or outside of the Tuple/Union nesting, though somewhat more expensive to be
-# outside than inside because the representation is larger (because and it
+# outside than inside because the representation is larger (because it
 # informs the callee whether any splitting is possible).
 function unionsplitcost(𝕃::AbstractLattice, argtypes::Union{SimpleVector,Vector{Any}};
                         fargs::Union{Nothing,Vector{Any}}=nothing)
@@ -317,7 +301,7 @@ function unionsplitcost(𝕃::AbstractLattice, argtypes::Union{SimpleVector,Vect
         end
         ti = argtypes[i]
         if has_extended_unionsplit(𝕃) && !isvarargtype(ti)
-            ti = widenconst(ti)
+            ti = widenconst_split(ti)
         end
         if isa(ti, Union)
             nti = unionlen(ti)
@@ -444,12 +428,6 @@ function unwraptv_ub(@nospecialize t)
     end
     return t
 end
-function unwraptv_lb(@nospecialize t)
-    while isa(t, TypeVar)
-        t = t.lb
-    end
-    return t
-end
 const unwraptv = unwraptv_ub
 
 """
@@ -462,7 +440,7 @@ This query is specifically designed for `adjust_effects`, enabling it to refine 
 graph when the return value type is `is_identity_free_argtype`, ensuring that the allocated
 mutable objects are never returned.
 """
-is_identity_free_argtype(@nospecialize ty) = is_identity_free_type(widenconst(ignorelimited(ty)))
+is_identity_free_argtype(@nospecialize ty) = is_identity_free_type(widenconst_split(ignorelimited(ty)))
 is_identity_free_type(@nospecialize ty) = isidentityfree(ty)
 
 """
@@ -474,7 +452,7 @@ them to prove `:consistent`-cy of `getfield` / `isdefined` calls when applied to
 objects. Otherwise, we need to additionally prove that the non-immutable object is not a
 global object to prove the `:consistent`-cy.
 """
-is_immutable_argtype(@nospecialize argtype) = is_immutable_type(widenconst(ignorelimited(argtype)))
+is_immutable_argtype(@nospecialize argtype) = is_immutable_type(widenconst_split(ignorelimited(argtype)))
 is_immutable_type(@nospecialize ty) = _is_immutable_type(unwrap_unionall(ty))
 function _is_immutable_type(@nospecialize ty)
     if isa(ty, Union)
@@ -495,5 +473,5 @@ and is supposed to improve the analysis accuracy by not tainting the `:inaccessi
 property when there is access to mutation-free global object.
 """
 is_mutation_free_argtype(@nospecialize(argtype)) =
-    is_mutation_free_type(widenconst(ignorelimited(argtype)))
+    is_mutation_free_type(widenconst_split(ignorelimited(argtype)))
 is_mutation_free_type(@nospecialize ty) = ismutationfree(ty)

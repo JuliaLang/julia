@@ -13,7 +13,7 @@ export
 using Base: Base
 
 # imports
-import Base: ==, copy, getindex, setindex!
+import Base: ==, !=, copy, getindex, hash, setindex!
 # usings
 using Core
 using Core: Builtin, IntrinsicFunction, SimpleVector, ifelse, sizeof
@@ -23,7 +23,7 @@ using Base:       # Base definitions
     @nospecialize, @specialize, BitSet, IdDict, IdSet, UnitRange, Vector,
     delete!, empty!, enumerate, first, get, get!, hasintersect, haskey, isassigned,
     isempty, length, max, min, missing, println, push!, pushfirst!,
-    !, !==, &, *, +, -, :, <, <<, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
+    !, !==, %, &, *, +, -, :, <, <<, >, |, ⊻, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using ..Compiler: # Compiler specific definitions
     AbstractLattice, Compiler, IRCode, IR_FLAG_NOTHROW,
     argextype, argextype_widened, fieldcount_noerror, has_flag, intrinsic_nothrow,
@@ -63,7 +63,7 @@ A lattice for escape information, which holds the following properties:
   * `x.AliasInfo::Unindexable` records all the possible values that can be aliased to fields/elements of `x` without precise index information
 - `x.Liveness::BitSet`: records SSA statement numbers where `x` should be live, e.g.
   to be used as a call argument, to be returned to a caller, or preserved for `:foreigncall`:
-  * `isempty(x.Liveness)`: `x` is never be used in this call frame (the bottom)
+  * `isempty(x.Liveness)`: `x` is never used in this call frame (the bottom)
   * `0 ∈ x.Liveness` also has the special meaning that it's a call argument of the currently
     analyzed call frame (and thus it's visible from the caller immediately).
   * `pc ∈ x.Liveness`: `x` may be used at the SSA statement at `pc`
@@ -140,7 +140,6 @@ NotAnalyzed() = EscapeInfo(false, false, BOT_THROWN_ESCAPE, false, BOT_LIVENESS)
 NoEscape() = EscapeInfo(true, false, BOT_THROWN_ESCAPE, false, BOT_LIVENESS)
 ArgEscape() = EscapeInfo(true, false, BOT_THROWN_ESCAPE, true, ARG_LIVENESS)
 ReturnEscape(pc::Int) = EscapeInfo(true, true, BOT_THROWN_ESCAPE, false, BitSet(pc))
-AllReturnEscape() = EscapeInfo(true, true, BOT_THROWN_ESCAPE, false, TOP_LIVENESS)
 ThrownEscape(pc::Int) = EscapeInfo(true, false, BitSet(pc), false, BOT_LIVENESS)
 AllEscape() = EscapeInfo(true, true, TOP_THROWN_ESCAPE, true, TOP_LIVENESS)
 
@@ -157,7 +156,6 @@ has_all_escape(x::EscapeInfo) = ⊤ ⊑ₑ x
 
 # utility lattice constructors
 ignore_argescape(x::EscapeInfo) = EscapeInfo(x; Liveness=delete!(copy(x.Liveness), 0))
-ignore_thrownescapes(x::EscapeInfo) = EscapeInfo(x; ThrownEscape=BOT_THROWN_ESCAPE)
 ignore_aliasinfo(x::EscapeInfo) = EscapeInfo(x, false)
 ignore_liveness(x::EscapeInfo) = EscapeInfo(x; Liveness=BOT_LIVENESS)
 
@@ -186,7 +184,7 @@ end
 # we need to make sure this `==` operator corresponds to lattice equality rather than object equality,
 # otherwise `propagate_changes` can't detect the convergence
 x::EscapeInfo == y::EscapeInfo = begin
-    # fast pass: better to avoid top comparison
+    # fast path: better to avoid top comparison
     x === y && return true
     x.Analyzed === y.Analyzed || return false
     x.ReturnEscape === y.ReturnEscape || return false
@@ -220,13 +218,31 @@ x::EscapeInfo == y::EscapeInfo = begin
     return true
 end
 
+const hashei_seed = 0x2fe2deaeb40ac445 % UInt
+function hash(x::EscapeInfo, h::UInt)
+    h ⊻= hashei_seed
+    h = hash(x.Analyzed, h)
+    h = hash(x.ReturnEscape, h)
+    h = hash(x.ThrownEscape, h)
+    xa = x.AliasInfo
+    if isa(xa, Bool)
+        h = hash(xa, h)
+    elseif isa(xa, IndexableFields)
+        h = hash(xa.infos, h)
+    else
+        h = hash((xa::Unindexable).info, h)
+    end
+    h = hash(x.Liveness, h)
+    return h
+end
+
 """
     x::EscapeInfo ⊑ₑ y::EscapeInfo -> Bool
 
 The non-strict partial order over [`EscapeInfo`](@ref).
 """
 x::EscapeInfo ⊑ₑ y::EscapeInfo = begin
-    # fast pass: better to avoid top comparison
+    # fast path: better to avoid top comparison
     if y === ⊤
         return true
     elseif x === ⊤
@@ -285,7 +301,7 @@ end
     x::EscapeInfo ⊏ₑ y::EscapeInfo -> Bool
 
 The strict partial order over [`EscapeInfo`](@ref).
-This is defined as the irreflexive kernel of `⊏ₑ`.
+This is defined as the irreflexive kernel of `⊑ₑ`.
 """
 x::EscapeInfo ⊏ₑ y::EscapeInfo = x ⊑ₑ y && !(y ⊑ₑ x)
 
@@ -303,7 +319,7 @@ x::EscapeInfo ⋤ₑ y::EscapeInfo = !(y ⊑ₑ x)
 Computes the join of `x` and `y` in the partial order defined by [`EscapeInfo`](@ref).
 """
 x::EscapeInfo ⊔ₑ y::EscapeInfo = begin
-    # fast pass: better to avoid top join
+    # fast path: better to avoid top join
     if x === ⊤ || y === ⊤
         return ⊤
     elseif x === ⊥
@@ -584,6 +600,8 @@ function analyze_escapes(ir::IRCode, nargs::Int, 𝕃ₒ::AbstractLattice, get_e
                     escape_new!(astate, pc, stmt.args)
                 elseif head === :foreigncall
                     escape_foreigncall!(astate, pc, stmt.args)
+                elseif head === :foreignglobal
+                    escape_foreignglobal!(astate, pc, stmt.args)
                 elseif head === :throw_undef_if_not # XXX when is this expression inserted ?
                     add_escape_change!(astate, stmt.args[1], ThrownEscape(pc))
                 elseif is_meta_expr_head(head)
@@ -620,7 +638,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, 𝕃ₒ::AbstractLattice, get_e
                 escape_edges!(astate, pc, stmt.values)
             elseif isa(stmt, UpsilonNode)
                 escape_val_ifdefined!(astate, pc, stmt)
-            elseif isa(stmt, GlobalRef) # global load
+            elseif isa(stmt, GlobalRef) || isa(stmt, Core.BindingPartition) # global load
                 add_escape_change!(astate, SSAValue(pc), ⊤)
             elseif isa(stmt, SSAValue)
                 escape_val!(astate, pc, stmt)
@@ -778,9 +796,9 @@ function add_liveness_change!(astate::AnalysisState, @nospecialize(x), livepc::I
 end
 
 function add_alias_change!(astate::AnalysisState, @nospecialize(x), @nospecialize(y))
-    if isa(x, GlobalRef)
+    if isa(x, GlobalRef) || isa(x, Core.BindingPartition)
         return add_escape_change!(astate, y, ⊤)
-    elseif isa(y, GlobalRef)
+    elseif isa(y, GlobalRef) || isa(y, Core.BindingPartition)
         return add_escape_change!(astate, x, ⊤)
     end
     estate = astate.estate
@@ -884,7 +902,7 @@ is_nothrow(ir::IRCode, pc::Int) = has_flag(ir[SSAValue(pc)], IR_FLAG_NOTHROW)
 Propagates escapes via exceptions that can happen in `tryregions`.
 
 Naively it seems enough to propagate escape information imposed on `:the_exception` object,
-but actually there are several other ways to access to the exception object such as
+but actually there are several other ways to access the exception object such as
 `Base.current_exceptions` and manual catch of `rethrow`n object.
 For example, escape analysis needs to account for potential escape of the allocated object
 via `rethrow_escape!()` call in the example below:
@@ -930,7 +948,7 @@ function escape_exception!(astate::AnalysisState, tryregions::Vector{UnitRange{I
     for i in 1:length(escapes)
         x = escapes[i]
         xt = x.ThrownEscape
-        xt === TOP_THROWN_ESCAPE && @goto propagate_exception_escape # fast pass
+        xt === TOP_THROWN_ESCAPE && @goto propagate_exception_escape # fast path
         for pc in xt
             for region in tryregions
                 pc ∈ region && @goto propagate_exception_escape # early break because of AllEscape
@@ -963,8 +981,8 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
             # to consider the possibility of aliasing between them and the return value.
             for argidx = first_idx:last_idx
                 arg = args[argidx]
-                if arg isa GlobalRef
-                    continue # :effect_free guarantees that nothings escapes to the global scope
+                if arg isa GlobalRef || arg isa Core.BindingPartition
+                    continue # :effect_free guarantees that nothing escapes to the global scope
                 end
                 if !is_identity_free_argtype(argextype(arg, astate.ir))
                     add_alias_change!(astate, ret, arg)
@@ -1022,7 +1040,24 @@ function from_interprocedural(argescape::ArgEscapeInfo, pc::Int)
     return EscapeInfo(#=Analyzed=#true, #=ReturnEscape=#false, ThrownEscape, AliasInfo, Liveness)
 end
 
-# escape every argument `(args[6:length(args[3])])` and the name `args[1]`
+# the only possible 'escape' here is really just that it can return a
+# bitcast of its one (pointer) argument, but be conservative anyway
+function escape_foreignglobal!(astate::AnalysisState, pc::Int, args::Vector{Any})
+    nargs = length(args)
+    if nargs != 1
+        # invalid foreignglobal, no escape
+        return
+    end
+    name = args[1]
+    nothrow = is_nothrow(astate.ir, pc)
+    name_info = nothrow ? ⊥ : ThrownEscape(pc)
+    if !isexpr(name, :tuple)
+        add_escape_change!(astate, name, name_info)
+        add_liveness_change!(astate, name, pc)
+    end
+end
+
+# escape every argument `(args[6:5+length(args[3])])` and the name `args[1]`
 # TODO: we can apply a similar strategy like builtin calls to specialize some foreigncalls
 function escape_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
     nargs = length(args)
@@ -1174,7 +1209,7 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
     elseif isa(AliasInfo, Unindexable)
         AliasInfo = copy(AliasInfo)
         @label escape_unindexable_def
-        # fields are known partially: propagate escape information imposed on recorded possibilities to all fields values
+        # fields are known partially: propagate escape information imposed on recorded possibilities to all field values
         info = AliasInfo.info
         objinfo′ = ignore_aliasinfo(objinfo)
         for i in 2:nargs
@@ -1307,8 +1342,11 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     if isa(obj, SSAValue) || isa(obj, Argument)
         objinfo = estate[obj]
     else
-        # unanalyzable object (e.g. obj::GlobalRef): escape field value conservatively
-        add_escape_change!(astate, val, ⊤)
+        # unanalyzable object (e.g. obj::GlobalRef):
+        # escape field value conservatively. Force the change so it applies even to an
+        # identity-free value (e.g. a `String` stored into a global): the value genuinely
+        # escapes to global scope, matching the aliasing path taken when `obj` is an SSA value.
+        add_escape_change!(astate, val, ⊤, #=force=#true)
         @goto add_thrown_escapes
     end
     AliasInfo = objinfo.AliasInfo

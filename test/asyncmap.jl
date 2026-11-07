@@ -44,7 +44,7 @@ b=asyncmap(identity, c)
 @test Int[1:10...] == b
 @test size(b) == (10,)
 
-# check with an iterator that has only implements length()
+# check with an iterator that only implements length()
 len_only_iterable = (1,2,3,4,5)
 @test Base.IteratorSize(len_only_iterable) == Base.HasLength()
 @test asyncmap(identity, len_only_iterable) == map(identity, len_only_iterable)
@@ -53,6 +53,7 @@ len_only_iterable = (1,2,3,4,5)
 @test_throws ArgumentError asyncmap(identity, 1:10; batch_size=0)
 @test_throws ArgumentError asyncmap(identity, 1:10; batch_size="10")
 @test_throws ArgumentError asyncmap(identity, 1:10; ntasks="10")
+@test_throws ArgumentError asyncmap(identity, 1:10; ntasks=() -> -1)
 
 # Check that we throw a `CapturedException` holding the stacktrace if `f` throws
 f42105(i) = i == 5 ? error("captured") :  i

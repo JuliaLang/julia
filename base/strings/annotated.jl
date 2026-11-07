@@ -43,6 +43,9 @@ the combined range.
 See also [`AnnotatedChar`](@ref), [`annotatedstring`](@ref),
 [`annotations`](@ref), and [`annotate!`](@ref).
 
+!!! compat "Julia 1.11"
+    `AnnotatedString` requires at least Julia 1.11.
+
 # Constructors
 
 ```julia
@@ -50,7 +53,7 @@ AnnotatedString(s::S<:AbstractString) -> AnnotatedString{S}
 AnnotatedString(s::S<:AbstractString, annotations::Vector{$RegionAnnotation})
 ```
 
-A AnnotatedString can also be created with [`annotatedstring`](@ref), which acts much
+An AnnotatedString can also be created with [`annotatedstring`](@ref), which acts much
 like [`string`](@ref) but preserves any annotations present in the arguments.
 
 # Examples
@@ -77,6 +80,9 @@ More specifically, this is a simple wrapper around any other
 
 See also [`AnnotatedString`](@ref), [`annotatedstring`](@ref), `annotations`,
 `annotate!`.
+
+!!! compat "Julia 1.11"
+    `AnnotatedChar` requires at least Julia 1.11.
 
 # Constructors
 
@@ -158,6 +164,37 @@ eltype(::Type{<:AnnotatedString{S}}) where {S} = AnnotatedChar{eltype(S)}
 firstindex(s::AnnotatedString) = firstindex(s.string)
 lastindex(s::AnnotatedString) = lastindex(s.string)
 
+"""
+    unannotate(s::AnnotatedString{S})::S
+    unannotate(s::SubString{AnnotatedString{S}})::SubString{S}
+    unannotate(s::SubString{AnnotatedString{SubString{S}}})::SubString{S}
+
+Get the underlying string of `s`, without copying.
+
+# Examples
+```jldoctest; setup=:(using Base: AnnotatedString)
+julia> s = AnnotatedString("abcde", [(1:3, :A, 4)])
+"abcde"
+
+julia> u = Base.unannotate(s)
+"abcde"
+
+julia> typeof(u)
+String
+```
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+"""
+unannotate(s::AnnotatedString) = s.string
+
+function unannotate(s::SubString{<:AnnotatedString})
+    start_index = first(parentindices(s)[1])
+    @inbounds raw_substring(parent(s).string, start_index, ncodeunits(s))
+end
+
+
 function getindex(s::AnnotatedString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds if isvalid(s, i)
@@ -204,16 +241,14 @@ cmp(a::AnnotatedString, b::AnnotatedString) = cmp(a.string, b.string)
 # To prevent substring equality from hitting the generic fallback
 
 function ==(a::SubString{<:AnnotatedString}, b::SubString{<:AnnotatedString})
-    SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) ==
-        SubString(b.string.string, b.offset, b.ncodeunits, Val(:noshift)) &&
-        annotations(a) == annotations(b)
+    unannotate(a) == unannotate(b) && annotations(a) == annotations(b)
 end
 
 ==(a::SubString{<:AnnotatedString}, b::AnnotatedString) =
-    annotations(a) == annotations(b) && SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) == b.string
+    annotations(a) == annotations(b) && unannotate(a) == b.string
 
 ==(a::SubString{<:AnnotatedString}, b::AbstractString) =
-    isempty(annotations(a)) && SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) == b
+    isempty(annotations(a)) && unannotate(a) == b
 
 ==(a::AbstractString, b::SubString{<:AnnotatedString}) = b == a
 
@@ -229,6 +264,9 @@ This acts like [`string`](@ref), but takes care to preserve any annotations
 present (in the form of [`AnnotatedString`](@ref) or [`AnnotatedChar`](@ref) values).
 
 See also [`AnnotatedString`](@ref), [`AnnotatedChar`](@ref).
+
+!!! compat "Julia 1.11"
+    `annotatedstring` requires at least Julia 1.11.
 
 ## Examples
 
@@ -262,7 +300,7 @@ function annotatedstring(xs...)
                     push!(annotations, @inline(setindex(annot, rstart:rstop, :region)))
                 end
             end
-            print(s, SubString(x.string.string, x.offset, x.ncodeunits, Val(:noshift)))
+            print(s, unannotate(x))
         elseif x isa AnnotatedChar
             for annot in x.annotations
                 push!(annotations, (region=1+size:1+size, annot...))
@@ -349,6 +387,10 @@ To remove existing `label` annotations, use a value of `nothing`.
 
 The order in which annotations are applied to `str` is semantically meaningful,
 as described in [`AnnotatedString`](@ref).
+
+!!! compat "Julia 1.12"
+    `annotate!` requires at least Julia 1.11. Passing `label` and `value` as separate
+    arguments requires Julia 1.12; Julia 1.11 takes a `label => value` pair instead.
 """
 annotate!(s::AnnotatedString, range::UnitRange{Int}, label::Symbol, @nospecialize(val::Any)) =
     (_annotate!(s.annotations, range, label, val); s)
@@ -385,6 +427,9 @@ In accordance with the semantics documented in [`AnnotatedString`](@ref), the
 order of annotations returned matches the order in which they were applied.
 
 See also [`annotate!`](@ref).
+
+!!! compat "Julia 1.11"
+    `annotations` requires at least Julia 1.11.
 """
 annotations(s::AnnotatedString) = s.annotations
 
@@ -442,7 +487,7 @@ This works by comparing the number of code units of each character before and
 after transforming with `f`, recording and aggregating any differences, then
 applying them to the annotation regions.
 
-Returns an `AnnotatedString{String}` (regardless of the original underling
+Returns an `AnnotatedString{String}` (regardless of the original underlying
 string type of `str`).
 """
 function annotated_chartransform(f::Function, str::AnnotatedString, state=nothing)

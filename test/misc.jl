@@ -54,7 +54,7 @@ let
         @test occursin("random_object", ex.msg)
     end
 end
-# if the second argument is an expression, c
+# if the second argument is an expression, call it to generate the error message
 let deepthought(x, y) = 42
     try
         @assert 1 == 2 string("the answer to the ultimate question: ",
@@ -1402,16 +1402,16 @@ module KwdefWithEsc
                 $(esc(quote
                     e
                     f = val2
-                    g::Int2
-                    h::Int2 = val2
+                    g::Bool1
+                    h::Bool1 = val2
                 end))
 
                 $(esc(:(i = val2)))
-                $(esc(:(j::Int2)))
-                $(esc(:(k::Int2 = val2)))
+                $(esc(:(j::Bool1)))
+                $(esc(:(k::Bool1 = val2)))
 
-                l::$(esc(:Int2))
-                m::$(esc(:Int2)) = val1
+                l::$(esc(:Bool1))
+                m::$(esc(:Bool1)) = $(esc(:val2))
 
                 n = $(esc(:val2))
                 o::Int1 = $(esc(:val2))
@@ -1427,11 +1427,18 @@ end
 
 module KwdefWithEsc_TestModule
     using ..KwdefWithEsc
-    const Int2 = Int
-    const val2 = 42
+    const Bool1 = Bool
+    const val2 = true
     KwdefWithEsc.@define_struct()
 end
 @test isdefined(KwdefWithEsc_TestModule, :Struct)
+@test fieldnames(KwdefWithEsc_TestModule.Struct) ==
+    (:a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o, :p, :q, :s, :t)
+@test fieldtypes(KwdefWithEsc_TestModule.Struct) ==
+    (Any, Any, Int, Int, Any, Any, Bool, Bool, Any, Bool, Bool, Bool, Bool, Any,
+     Int, Any, Any, Int, Int)
+@test KwdefWithEsc_TestModule.Struct(
+    ; a='a',c=0,e='e',g=true,j=true,l=true,p='p',s=0) isa KwdefWithEsc_TestModule.Struct
 
 @testset "exports of modules" begin
     @testset "$mod" for (_, mod) in Base.loaded_modules
@@ -1552,6 +1559,15 @@ end
 # a function that allocates iff no constprop
 @inline maybealloc59278(n, _) = ntuple(i->rand(), n)
 
+# allocates once per iteration; the result escapes so it cannot be optimized away
+const alloc_sink_fastpath = Ref{Any}(nothing)
+@noinline function allocs_inlined_fastpath(n)
+    for i in 1:n
+        alloc_sink_fastpath[] = Ref{Int}(i)
+    end
+    nothing
+end
+
 @testset "Base/timing.jl" begin
     @test Base.jit_total_bytes() >= 0
 
@@ -1575,6 +1591,9 @@ end
     @test ((@allocated treshape59278(X, n, m))==0) == ((@allocations treshape59278(X, n, m))==0)
     # TODO: would be nice to have but not yet reliable
     #@test ((@allocated begin treshape59278(X, n, m) end)==0) == ((@allocations begin treshape59278(X, n, m) end)==0)
+
+    # test that `@allocations` counts the expected number of allocations (even on fastpaths)
+    @test (@allocations allocs_inlined_fastpath(1000)) >= 1000
 
     # test that all wrapped allocations are counted and constprop is not done
     @test (@allocated @noinline maybealloc59278(10, [])) > (@allocated maybealloc59278(10, 0)) > 0
@@ -1670,6 +1689,56 @@ let errs = IOBuffer()
     @test occursin("disable_new_worlds", String(take!(errs)))
 end
 
+# every library the runtime loads from this installation must be declared
+@testset "Base.Linking.runtime_libraries" begin
+    libs = Base.Linking.runtime_libraries()
+    @test !isempty(libs)
+    @test allunique(libs)
+    @test all(isabspath, libs)
+    @test all(isfile, libs)
+    root = normpath(Sys.BINDIR, "..")
+    @test all(p -> startswith(p, root), libs)
+    for name in ("libjulia", "libjulia-internal")
+        name = Base.isdebugbuild() ? name * "-debug" : name
+        @test any(p -> first(Base.BinaryPlatforms.parse_dl_name_version(basename(p))) == name, libs)
+    end
+    nocodegen = Base.Linking.runtime_libraries(; optional_components=())
+    @test issubset(nocodegen, libs)
+    @test !any(p -> startswith(basename(p), "libLLVM") || startswith(basename(p), "libjulia-codegen"), nocodegen)
+    # unknown components are rejected
+    @test_throws ArgumentError Base.Linking.runtime_libraries(; optional_components=(:codgen,))
+
+    # `library_files` matches whole names, not prefixes
+    internal = "libjulia-internal" * (Base.isdebugbuild() ? "-debug" : "")
+    @test !isempty(Base.Linking.library_files(internal))
+    @test issubset(Base.Linking.library_files(internal), libs)
+    @test Base.Linking.library_files("libthis-is-not-shipped-anywhere") == String[]
+    @test allunique(Base.Linking.library_files(["libjulia", "libjulia"]))
+    for name in ("libz", "libgmp", "libjulia")
+        files = basename.(Base.Linking.library_files(name))
+        @test all(f -> Base.BinaryPlatforms.parse_dl_name_version(f)[1] == name, files)
+    end
+
+    # a missing required library is an error
+    listings = Base.Linking.library_listings()
+    @test_throws "installation is incomplete" Base.Linking.resolve_libraries(["libnope"], String[], listings)
+
+    # a fresh process, so libraries other tests loaded (e.g. `libccalltest`) don't count
+    script = """
+        declared = Set(basename.(Base.Linking.runtime_libraries()))
+        root = normpath(Sys.BINDIR, "..")
+        image = normpath(Base.unsafe_string(Base.JLOptions().image_file))
+        for lib in Base.Libc.Libdl.dllist()
+            occursin(string('.', Base.Libc.Libdl.dlext), basename(lib)) || continue
+            path = normpath(lib)
+            startswith(path, root) || continue # provided by the system, not ours to ship
+            path == image && continue # the system image is not a runtime library
+            basename(path) in declared || println(path)
+        end
+    """
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == ""
+end
+
 @testset "`@constprop`, `@assume_effects` handling of an unknown setting" begin
     for x ∈ ("constprop", "assume_effects")
         try
@@ -1678,6 +1747,170 @@ end
         catch e
             e::LoadError
             @test e.error isa ArgumentError
+        end
+    end
+end
+
+# Interrupt (SIGINT/Ctrl-C) delivery: an interrupt must reach user code, not be
+# swallowed by (or crash) the internal scheduler task (issue #58689).
+if Sys.islinux()
+    const SYS_rrcall_check_presence = 1008
+    running_under_rr() = 0 == ccall(:syscall, Int,
+        (Int, Int, Int, Int, Int, Int, Int),
+        SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
+else
+    running_under_rr() = false
+end
+# rr emulates signal delivery and does not interrupt blocking syscalls the way a
+# real SIGINT does, so these tests do not pass under it (the sleeping subprocess
+# never observes the InterruptException).
+if !Sys.iswindows() && !running_under_rr()
+    # "Internal Task ERROR" is uppercased by `emphasize` when color is off
+    has_internal_err(s) = occursin(r"internal task error"i, s)
+    expect_output(output, pat; timeout=60) =
+        timedwait(() -> occursin(pat, output[]), timeout) === :ok
+    # The bare executable, not julia_cmd(): these tests probe SIGINT delivery,
+    # not the flag matrix, and the suite's `--check-bounds=yes` would make the
+    # child recompile the code paths whose timing they depend on.
+    interrupt_test_exe() = joinpath(Sys.BINDIR, Base.julia_exename())
+    function spawn_interrupt_test_repl()
+        exe = interrupt_test_exe()
+        cmd = addenv(`$exe -q -i --startup-file=no`, Dict("TERM" => "dumb"))
+        pts, ptm = Main.FakePTYs.open_fake_pty()
+        p = run(cmd, pts, pts, pts; wait=false)
+        Base.close_stdio(pts)
+        output = Ref("")
+        @async try
+            while !eof(ptm)
+                output[] *= String(readavailable(ptm))
+            end
+        catch
+        end
+        return p, ptm, output
+    end
+    function cleanup_interrupt_test_repl(p, ptm)
+        process_running(p) && kill(p, Base.SIGKILL)
+        close(ptm)
+        wait(p)
+    end
+
+    @testset "SIGINT at idle REPL prompt" begin
+        p, ptm, output = spawn_interrupt_test_repl()
+        try
+            @test expect_output(output, "julia>")
+            write(ptm, "println(\"READY_\", 1+1)\n")
+            @test expect_output(output, "READY_2")
+            sleep(2) # best-effort: let the thread park; the checks below do not depend on it
+            kill(p, 2) # SIGINT
+            # SIGINT aborts any in-flight input line, so retry with distinct markers
+            alive = false
+            # generous horizon: this asserts the session SURVIVES the press,
+            # not its latency - a cold session (first spawns after a build,
+            # slow CI hosts) can lag the first responses behind compilation
+            for attempt in 1:4
+                write(ptm, "println(\"CHECK$(attempt)_\", 1+1)\n")
+                if expect_output(output, "CHECK$(attempt)_2"; timeout=30)
+                    alive = true
+                    break
+                end
+            end
+            if !alive && process_running(p)
+                # collect diagnostics into the CI log: SIGQUIT makes the
+                # session dump all task backtraces onto the pty
+                kill(p, 3)
+                sleep(10)
+                println(stderr, "idle-SIGINT session unresponsive; transcript tail:\n",
+                        last(output[], 16000))
+            end
+            @test alive
+            @test process_running(p)
+            @test !has_internal_err(output[])
+        catch
+            sleep(1) # let the exit status arrive
+            println(stderr, "idle-SIGINT session failed: ", p, "; transcript tail:\n",
+                    last(output[], 16000))
+            rethrow()
+        finally
+            cleanup_interrupt_test_repl(p, ptm)
+        end
+    end
+
+    @testset "SIGINT during REPL evaluation of a sleep loop" begin
+        p, ptm, output = spawn_interrupt_test_repl()
+        try
+            @test expect_output(output, "julia>")
+            # compile the error-display path up front; on a loaded machine doing it
+            # lazily can delay the InterruptException output past the timeout below
+            write(ptm, "error(\"warmup_display\")\n")
+            # the pty echoes the input line (which also contains "warmup_display"),
+            # so wait for the error display to finish and the prompt to return
+            @test expect_output(output, r"ERROR.*warmup_display.*julia>"s)
+            # the marker is split so the pty echo of the input line does not match it
+            write(ptm, "println(\"LOOP\", \"START\"); while true; sleep(0.05); end\n")
+            @test expect_output(output, "LOOPSTART")
+            # ^C is delivered as a cancellation request (InterruptException is
+            # what packages may still rethrow it as); a single SIGINT can be
+            # missed on a loaded machine, so resend until it surfaces
+            interrupted = false
+            for _ in 1:5
+                kill(p, 2) # SIGINT
+                if expect_output(output, r"InterruptException|CancellationRequest"; timeout=10)
+                    interrupted = true
+                    break
+                end
+            end
+            @test interrupted
+            @test !has_internal_err(output[])
+            @test process_running(p)
+            write(ptm, "println(\"CHECK_\", 1+1)\n")
+            @test expect_output(output, "CHECK_2"; timeout=30)
+        finally
+            cleanup_interrupt_test_repl(p, ptm)
+        end
+    end
+
+    @testset "SIGINT to a non-interactive process blocked in sleep" begin
+        # Synchronize on a readiness marker printed from user code (proving the
+        # runtime is up and the SIGINT handler is armed) rather than a racy fixed
+        # sleep. See the "SIGINFO/SIGUSR1 profile triggering" test in
+        # stdlib/Profile for the same pattern.
+        script = """
+            println(stderr, "READY")
+            sleep(600)
+            """
+        iob = Base.BufferStream() # unbounded buffer, so we can read after exit
+        p = run(`$(interrupt_test_exe()) --startup-file=no -e $script`, devnull, devnull, iob; wait=false)
+        reader = @async try # monitor task to set EOF on iob after p exits
+            wait(p)
+        finally
+            closewrite(iob)
+        end
+        try
+            @test readline(iob) == "READY"
+            # A press can be missed (even 1.11 needed a 2nd SIGINT here), so
+            # resend until the interrupt visibly arrives: the child starts
+            # reporting it on stderr, or exits. Stop pressing then - a repeat
+            # press would only cancel the report in progress - and allow the
+            # report and exit a generous amount of time on a loaded machine.
+            arrived() = bytesavailable(iob) > 0 || process_exited(p)
+            for _ in 1:5
+                kill(p, 2) # SIGINT
+                timedwait(arrived, 10) === :ok && break
+            end
+            @test arrived()
+            @test timedwait(() -> process_exited(p), 120) === :ok
+            process_running(p) && kill(p, Base.SIGKILL) # so the reader below terminates
+            wait(reader) # wait for iob to reach EOF
+            err = read(iob, String)
+            # ^C is delivered as a cancellation request (InterruptException is
+            # what packages may still rethrow it as). If an early press was only
+            # slow to show, a later one may still cancel the report itself - the
+            # fallback note is an acceptable outcome.
+            @test occursin(r"InterruptException|CancellationRequest|displaying the error report failed", err)
+            @test !has_internal_err(err)
+        finally
+            process_running(p) && kill(p, Base.SIGKILL)
+            wait(p)
         end
     end
 end

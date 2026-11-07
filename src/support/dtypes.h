@@ -13,6 +13,14 @@
 #include <stdio.h>
 #include <math.h> // NAN and INF constants
 
+#if defined(__MINGW32__) && !defined(__cplusplus)
+// mingw-w64's signbit calls __signbit, whose gnu_inline definition in math.h returns 0 or
+// 0x200 on i686, while the out-of-line one in libmingwex returns 0 or 1. GCC 15 can call the
+// latter while assuming the former's return value, miscompiling e.g. `!signbit(x)`.
+#undef signbit
+#define signbit(x) __builtin_signbit(x)
+#endif
+
 #include "platform.h"
 #include "analyzer_annotations.h"
 
@@ -76,7 +84,12 @@ typedef intptr_t ssize_t;
 #  define JL_DLLEXPORT_CODEGEN __declspec(dllexport) JL_VISIBILITY_DEFAULT
 # endif
 #define JL_HIDDEN
-#define JL_DLLIMPORT   __declspec(dllimport) JL_VISIBILITY_DEFAULT
+# ifdef JL_LIBRARY_STATIC
+// static build: everything is linked into one image
+#  define JL_DLLIMPORT JL_VISIBILITY_DEFAULT
+# else
+#  define JL_DLLIMPORT __declspec(dllimport) JL_VISIBILITY_DEFAULT
+# endif
 #else
 #define STDCALL
 #define JL_DLLIMPORT __attribute__ ((visibility("default")))
@@ -118,10 +131,11 @@ typedef intptr_t ssize_t;
 #define LLT_FREE(x) free(x)
 
 #define STATIC_INLINE static inline
-#define FORCE_INLINE static inline __attribute__((always_inline))
-
-#define EXTERN_INLINE_DECLARE inline __attribute__ ((visibility("default")))
-#define EXTERN_INLINE_DEFINE extern inline JL_DLLEXPORT
+#ifdef _COMPILER_MICROSOFT_
+#  define FORCE_INLINE static __forceinline
+#else
+#  define FORCE_INLINE static inline __attribute__((always_inline))
+#endif
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 #  define NOINLINE __declspec(noinline)
@@ -304,7 +318,7 @@ typedef enum { T_INT8, T_UINT8, T_INT16, T_UINT16, T_INT32, T_UINT32,
 #define JL_FALLTHROUGH __attribute__((fallthrough))
 #elif defined(__cplusplus) && defined(__clang_major__) && \
     defined(__clang_minor__) && (__clang_major__ > 4 || __clang_minor__ >= 5)
-// We require at least clang 3.x
+// We require at least clang 3.5
 #define JL_FALLTHROUGH [[clang::fallthrough]]
 #else
 #define JL_FALLTHROUGH

@@ -134,8 +134,8 @@ rand(r::AbstractRNG, sp::SamplerTrivial{<:UniformBits{T}}) where {T} =
 # we don't call them simply `rand` as this can easily contribute to create
 # ambiguities with user-side methods (forcing the user to resort to @eval)
 
-rand_generic(r::AbstractRNG, T::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}) =
-    rand(r, UInt52Raw()) % T[]
+rand_generic(r::AbstractRNG, ::Type{T}) where {T<:Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}} =
+    rand(r, UInt52Raw()) % T
 
 rand_generic(r::AbstractRNG, ::Type{UInt64}) =
     rand(r, UInt52Raw()) << 32 ⊻ rand(r, UInt52Raw())
@@ -173,7 +173,7 @@ end
 
 ### random characters
 
-# returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - # 0x10ffff)
+# returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - 0x10ffff)
 function rand(r::AbstractRNG, ::SamplerType{T}) where {T<:AbstractChar}
     c = rand(r, 0x00000000:0x0010f7ff)
     (c < 0xd800) ? T(c) : T(c+0x800)
@@ -380,7 +380,7 @@ function SamplerRangeNDL(r::AbstractUnitRange{T}) where {T}
     isempty(r) && empty_collection_error()
     a = first(r)
     U = uint_sup(T)
-    s = (last(r) - first(r)) % unsigned(T) % U + one(U) # overflow ok
+    s = (last(r) -% first(r)) % unsigned(T) % U +% one(U) # overflow ok
     # mod(-s, s) could be put in the Sampler object for repeated calls, but
     # this would be an advantage only for very big s and number of calls
     SamplerRangeNDL(a, s)
@@ -398,7 +398,7 @@ end
 
 # similar to `randn_unlikely` : splitting this unlikely path out results in faster code
 @noinline function rand_unlikely(rng, s::U, m)::U where {U}
-    t = mod(-s, s) # as s is unsigned, -s is equal to 2^L - s in the paper
+    t = mod(-%(s), s) # as s is unsigned, -s is equal to 2^L - s in the paper
     while (m % U) < t
         x = widen(rand(rng, U))
         m = x * s
@@ -545,8 +545,6 @@ Sampler(RNG::Type{<:AbstractRNG}, str::AbstractString, n::Val{Inf}) = Sampler(RN
 Sampler(RNG::Type{<:AbstractRNG}, str::AbstractString, ::Val{1}) =
     SamplerSimple(str, Sampler(RNG, 1:_lastindex(str), Val(Inf)))
 
-isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(GC.@preserve s unsafe_load(pointer(s), i))
-isvalid_unsafe(s::AbstractString, i) = isvalid(s, i)
 _lastindex(s::String) = sizeof(s)
 _lastindex(s::AbstractString) = lastindex(s)
 
@@ -554,7 +552,7 @@ function rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractString,<:Sampler})::
     str = sp[]
     while true
         pos = rand(rng, sp.data)
-        isvalid_unsafe(str, pos) && return str[pos]
+        isvalid(str, pos) && return str[pos]
     end
 end
 

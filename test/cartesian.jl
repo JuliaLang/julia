@@ -527,7 +527,7 @@ end
     @test @inferred(CartesianIndices((false, true))) == CartesianIndices((0, 1))
 end
 
-@testset "CartedianIndex isassigned" begin
+@testset "CartesianIndex isassigned" begin
     A = rand(2, 3, 3)
     @test isassigned(A, CartesianIndex(1, 2, 3))
     @test !isassigned(A, CartesianIndex(1, 2, 5))
@@ -536,7 +536,7 @@ end
     @test !isassigned(A, CartesianIndex(5, 2), 3)
 end
 
-@testset "`CartedianIndex(x::Union{Integer,CartedianIndex}...)`'s stability" begin
+@testset "`CartesianIndex(x::Union{Integer,CartesianIndex}...)`'s stability" begin
     CI = CartesianIndex
     inds2 = (1, CI(1, 2), 1, CI(1, 2), 1, CI(1, 2), 1)
     @test (@inferred CI(inds2)) == CI(1, 1, 2, 1, 1, 2, 1, 1, 2, 1)
@@ -626,4 +626,12 @@ end
             @test !(CartesianIndex(ntuple(x->0, ndims(r)-1)...) in r)
         end
     end
+end
+
+@testset "zero-dimensional CartesianIndex with a colon" begin
+    A = collect(reshape(1:6, 2, 3))
+    @test A[:, CartesianIndex()] == A[CartesianIndex(), :] == A[:]
+    @test view(A, :, CartesianIndex()) == A[:]
+    A[:, CartesianIndex()] .= 0
+    @test iszero(A)
 end

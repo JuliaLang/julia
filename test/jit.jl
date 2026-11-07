@@ -54,6 +54,131 @@ ci = compile_no_deps(M2.bar, (Int,))
 @test check_edges_not_compiled(ci, M2.foo)
 @test invoke(M2.bar, ci, 5) == 210
 
+# Compilation batches must stay closed under invoke edges whose CodeInstance is
+# globally cached but whose source is only visible to another interpreter:
+# `return_types` infers `bar` (and its edge `foo`) into the global cache without
+# compiling anything, so the subsequent `precompile` batch sees `foo` as a
+# sourceless cached edge. It must compile `foo` alongside `bar` rather than
+# linking the call as a permanently-boxing `tojlinvoke` trampoline.
+module M3
+    @noinline foo(x) = x+1
+    bar(x) = foo(x)
+end
+Base.return_types(M3.bar, (Int,))
+let mi = Base.method_instance(M3.foo, (Int,))
+    ci = mi.cache
+    # Precondition for the scenario: inference cached foo's CodeInstance without
+    # compiling it. If this fails, the setup no longer produces a sourceless
+    # cached edge and the test needs a new way to construct one.
+    @test ci isa CodeInstance
+    @test ci.invoke == Ptr{Nothing}(0)
+    @test precompile(M3.bar, (Int,))
+    @test ci.invoke != Ptr{Nothing}(0)
+    @test ci.specptr != Ptr{Nothing}(0)
+end
+
+# A call to a foreign CodeInstance without code must not run the native method
+# instead, and must use the code once its owner adds it to the JIT.
+module M4
+    @noinline foo(x) = x+1
+    bar(x) = foo(x)
+    baz(x) = x+100
+    @noinline sp(@nospecialize(x::Vector{T})) where {T} = T
+end
+function foreign_ci(f, argtypes, source_f)
+    @nospecialize
+    # `method_instance` requires a dispatch tuple, which `(Vector,)` is not
+    mi = only(Base.method_instances(f, argtypes, Base.get_world_counter()))
+    source, _ = only(code_typed(source_f, argtypes))
+    ci = CodeInstance(
+        mi, owner, source.rettype, #=exctype=#Any, #=inferred_const=#nothing,
+        #=inferred=#nothing, #=const_flags=#Int32(0), source.min_world,
+        #=max_world=#typemax(UInt), #=effects=#UInt32(0),
+        #=analysis_results=#nothing, source.debuginfo, source.edges
+    )
+    ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, ci)
+    ci, source
+end
+# an opaque closure that calls `f` through an `:invoke` of `ci`
+function invoke_oc(ci, f, argtypes)
+    @nospecialize
+    ir, _ = only(Base.code_ircode(M4.bar, argtypes))
+    ir.stmts.stmt[findfirst(s -> Meta.isexpr(s, (:invoke, :call)), ir.stmts.stmt)] =
+        Expr(:invoke, ci, f, Core.Argument(2))
+    ir.argtypes[1] = Tuple{}
+    Core.OpaqueClosure(ir)
+end
+let (ci, source) = foreign_ci(M4.foo, (Int,), M4.baz)
+    oc = invoke_oc(ci, M4.foo, (Int,))
+    @test_throws "Failed to invoke or compile external codeinst" oc(1)
+    ccall(:jl_add_codeinsts_to_jit, Cvoid, (Any, Any), Any[ci], Any[source])
+    @test oc(1) == 101
+end
+# same for a callee that needs its static parameters at run time
+let (ci, _) = foreign_ci(M4.sp, (Vector,), M4.sp)
+    oc = invoke_oc(ci, M4.sp, (Vector,))
+    @test_throws "Failed to invoke or compile external codeinst" oc([1])
+end
+
+# When runtime dispatch caches compiled code onto an exact-signature
+# MethodInstance by copying it from the widened compileable MethodInstance
+# (`copy_to_mi_cache`), a specsig specptr must not be adopted: it is ABI'd to
+# the widened signature, and the copy would advertise
+# JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR without JL_CI_FLAGS_SPECPTR_SPECIALIZED,
+# tripping the flag-consistency assert in `JuliaOJIT::linkCISymbol` when a
+# batch later links a call target to it. Only the boxed-ABI invoke wrapper may
+# be copied.
+@noinline copyspecsig(@nospecialize(x)) = x === nothing ? 0 : 1
+let m = only(methods(copyspecsig))
+    # the exact (non-normalized) specialization runtime dispatch would mint
+    mi = ccall(:jl_specializations_get_linfo, Ref{MethodInstance},
+               (Any, Any, Any), m, Tuple{typeof(copyspecsig), Int}, Core.svec())
+    args = Any[1]
+    # TRIGGER_FOREIGN forces the copy onto `mi` even for matching sparams
+    @test ccall(:jl_invoke, Any, (Any, Ptr{Any}, UInt32, Any),
+                copyspecsig, args, length(args), mi) === 1
+    known_invokes = Ptr{Cvoid}[
+        unsafe_load(cglobal(:jl_fptr_args_addr, Ptr{Cvoid})),
+        unsafe_load(cglobal(:jl_fptr_const_return_addr, Ptr{Cvoid})),
+        unsafe_load(cglobal(:jl_fptr_sparam_addr, Ptr{Cvoid})),
+        unsafe_load(cglobal(:jl_fptr_interpret_call_addr, Ptr{Cvoid})),
+        unsafe_load(cglobal(:jl_fptr_wait_for_compiled_addr, Ptr{Cvoid})),
+    ]
+    for spec in Base.specializations(m)
+        ci = isdefined(spec, :cache, :acquire) ? (@atomic :acquire spec.cache) : nothing
+        while ci isa CodeInstance
+            flags = @atomic :acquire ci.flags
+            invoke = @atomic :acquire ci.invoke
+            specptr = @atomic :acquire ci.specptr
+            if !iszero(flags & 0x02) && invoke != C_NULL && specptr != C_NULL
+                # INVOKE_MATCHES_SPECPTR requires SPECPTR_SPECIALIZED to agree
+                # with the invoke pointer's api
+                @test (invoke ∉ known_invokes) == !iszero(flags & 0x01)
+            end
+            ci = isdefined(ci, :next, :acquire) ? (@atomic :acquire ci.next) : nothing
+        end
+    end
+end
+
+# External symbol renames must keep JITLink's external symbol map consistent.
+@testset "JITLink external symbol rename" begin
+    jitlink_rename_resolve(chunks, i, x) =
+        jitlink_rename_resolve(Base.tail(chunks), i,
+            map(tuple, x, i[1] === Colon() ? (1, (), 1) : (1, 1, ())))
+    jitlink_rename_resolve(::Tuple{}, i, x) = x
+    function jitlink_rename_reproducer(i)
+        x = jitlink_rename_resolve(Base.inferencebarrier(true) ? (1,) :
+            map(+, Tuple([]), (1, 1)), i, ((), (), ()))
+        y = Base.inferencebarrier(true) ? :a : :b
+        if y === :a; elseif y === :b
+            jitlink_rename_reproducer(x[3])
+        else
+            0[x[2]]
+        end
+    end
+    @test precompile(jitlink_rename_reproducer, (Tuple{Colon},))
+end
+
 # Each `eval` must compile (because of the ccall) a top-level thunk.  The
 # CodeInstance for this thunk becomes garbage-collectable after being invoked,
 # but before returning, because of wait().  If the invoke must return for the
@@ -67,4 +192,186 @@ function test_gc_codeinst()
     true
 end
 @test test_gc_codeinst()
+
+# A small cache must evict in bounded transactions and still exit with writes pending.
+@testset "object-cache bounded eviction and shutdown" begin
+    mktempdir() do dir
+        logfile = joinpath(dir, "objcache.log")
+        script = """
+            function compile(range)
+                for i in range
+                    f = Symbol(:objcache_eviction_, i)
+                    @eval \$f(x) = x + \$i
+                    @eval \$f(1)
+                end
+            end
+            compile(1:600)
+            enabled = ccall(:jl_objcache_kv_enabled, Cint, ()) != 0
+            if enabled
+                # The writer works through its queue in order, so once this entry is stored
+                # the evictions above are done, however far the writer had fallen behind.
+                ccall(:jl_objcache_kv_put, Cint, (Cstring, Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+                      "eviction-test", "key", 3, "value", 5)
+                for _ in 1:1200
+                    ccall(:jl_objcache_kv_get, Any, (Cstring, Ptr{UInt8}, Csize_t),
+                          "eviction-test", "key", 3) === nothing || break
+                    sleep(0.1)
+                end
+            end
+            # exit with these writes still pending
+            compile(601:700)
+            print(enabled ? "enabled" : "disabled")
+        """
+        cmd = addenv(
+            `$(Base.julia_cmd()) --startup-file=no --color=no -e $script`,
+            "JULIA_OBJCACHE" => "1",
+            "JULIA_OBJCACHE_PATH" => joinpath(dir, "cache"),
+            "JULIA_OBJCACHE_CAPACITY" => string(512 << 10),
+            "JULIA_OBJCACHE_LOG" => logfile,
+        )
+        outpath = joinpath(dir, "stdout")
+        errpath = joinpath(dir, "stderr")
+        completed = ok = false
+        open(outpath, "w") do stdout
+            open(errpath, "w") do stderr
+                proc = run(pipeline(cmd; stdout, stderr), wait=false)
+                completed = timedwait(() -> process_exited(proc), 180; pollint=0.05) === :ok
+                process_running(proc) && kill(proc, Base.SIGKILL)
+                wait(proc)
+                ok = completed && success(proc)
+            end
+        end
+        if !ok
+            @info "object-cache child failed" stdout=read(outpath, String) stderr=read(errpath, String)
+        end
+        @test completed
+        @test ok
+        status = read(outpath, String)
+        @test status in ("enabled", "disabled")
+        lines = isfile(logfile) ? readlines(logfile) : String[]
+        nevicted = count(startswith("evict,"), lines)
+        if status == "disabled"
+            @test_skip false
+        else
+            @test nevicted > 0
+            batches = [parse(Int, split(line, ',')[2]) for line in lines
+                       if startswith(line, "evict_batch,")]
+            @test length(batches) > 1
+            @test all(n -> 1 <= n <= 64, batches)
+        end
+    end
+end
+
+# The default database belongs to one target; an explicit path is used verbatim.
+@testset "object-cache per-target directory" begin
+    mktempdir() do depot
+        script = "print(ccall(:jl_objcache_kv_enabled, Cint, ()) != 0)"
+        cmd = addenv(
+            `$(Base.julia_cmd()) --startup-file=no -e $script`,
+            "JULIA_DEPOT_PATH" => depot,
+            "JULIA_OBJCACHE" => "1",
+            "JULIA_OBJCACHE_PATH" => nothing,
+        )
+        enabled = read(cmd, String)
+        @test enabled in ("true", "false")
+        if enabled == "false"
+            @test_skip false
+        else
+            cachedir = joinpath(depot, "cache", "v$(VERSION.major).$(VERSION.minor)", "objcache-lmdb1")
+            entries = readdir(cachedir)
+            @test length(entries) == 1
+            targetdir = joinpath(cachedir, only(entries))
+            @test isfile(joinpath(targetdir, "data.mdb"))
+            @test isfile(joinpath(targetdir, "lock.mdb"))
+            @test !isfile(joinpath(cachedir, "data.mdb"))
+
+            explicit = joinpath(depot, "explicit")
+            @test read(addenv(cmd, "JULIA_OBJCACHE_PATH" => explicit), String) == "true"
+            @test isfile(joinpath(explicit, "data.mdb"))
+            @test isfile(joinpath(explicit, "lock.mdb"))
+        end
+    end
+end
+
+# `Base.Experimental.prune_objcache` removes the entries not used recently and writes a
+# smaller copy of the cache.
+@testset "object-cache pruning" begin
+    mktempdir() do dir
+        cache = joinpath(dir, "cache")
+        julia(args...; path=cache) = addenv(`$(Base.julia_cmd()) --startup-file=no $args`,
+                                            "JULIA_OBJCACHE" => "1", "JULIA_OBJCACHE_PATH" => path)
+        kv_get = """ccall(:jl_objcache_kv_get, Any, (Cstring, Ptr{UInt8}, Csize_t), "prune-test", "key", 3)"""
+        # a large entry, so that removing it clearly shrinks the file
+        put_script = """
+            value = fill(0x2a, 4 << 20)
+            ccall(:jl_objcache_kv_put, Cint, (Cstring, Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+                  "prune-test", "key", 3, value, length(value))
+            # the write is queued, so wait until it is stored
+            for _ in 1:600
+                $kv_get === nothing || break
+                sleep(0.1)
+            end
+            print($kv_get !== nothing)
+        """
+        has_entry(path=cache) = read(julia("-e", "print($kv_get !== nothing)"; path), String) == "true"
+        prune(out, age) = read(julia("-e", "print(Base.Experimental.prune_objcache($(repr(out)); age=$age))"), String)
+
+        if read(julia("-e", put_script), String) != "true"
+            @test_skip false # the cache is disabled here
+            return
+        end
+        full_size = filesize(joinpath(cache, "data.mdb"))
+
+        # nothing is older than an hour, so the copy keeps every entry
+        kept = joinpath(dir, "kept")
+        @test prune(kept, 3600) == "0"
+        @test has_entry()
+        @test has_entry(kept)
+
+        # entries cannot age during a test, so remove them all with a cutoff in the future
+        pruned = joinpath(dir, "pruned")
+        @test parse(Int, prune(pruned, -10^6)) > 0
+        @test !has_entry()
+        # removing entries does not shrink the cache itself, only the copy
+        @test filesize(joinpath(cache, "data.mdb")) >= full_size
+        @test filesize(joinpath(pruned, "data.mdb")) < full_size ÷ 2
+        # the copy works as a cache
+        @test !has_entry(pruned)
+        @test read(julia("-e", put_script; path=pruned), String) == "true"
+
+        # an existing copy is not overwritten
+        out = IOBuffer()
+        cmd = julia("-e", "print(Base.Experimental.prune_objcache($(repr(pruned))))")
+        p = run(pipeline(ignorestatus(cmd); stdout=out, stderr=out))
+        msg = String(take!(out))
+        @test !success(p)
+        @test occursin("already exists", msg)
+    end
+
+    @test read(addenv(`$(Base.julia_cmd()) --startup-file=no -e "print(Base.Experimental.prune_objcache(mktempdir()))"`,
+                      "JULIA_OBJCACHE" => "0"), String) == "nothing"
+end
+
+# Processes that share a cache and exit at the same time remove its SysV semaphores.
+@testset "object-cache semaphores" begin
+    Sys.isapple() && mktempdir() do dir
+        script = "print(ccall(:jl_objcache_kv_enabled, Cint, ()) != 0 ? 'y' : 'n'); readline()"
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                     "JULIA_OBJCACHE" => "1", "JULIA_OBJCACHE_PATH" => dir)
+        procs = [open(cmd, "r+") for _ in 1:4]
+        enabled = all(p -> read(p, Char) == 'y', procs)
+        foreach(p -> close(p.in), procs)
+        foreach(wait, procs)
+        @test all(success, procs)
+        if !enabled
+            @test_skip false # the cache is disabled here
+            return
+        end
+        # the key LMDB derives the semaphore set from
+        key = ccall(:ftok, Cint, (Cstring, Cint), joinpath(dir, "lock.mdb"), Cint('M'))
+        @test key != -1
+        @test ccall(:semget, Cint, (Cint, Cint, Cint), key, 0, 0) == -1
+    end
+end
+
 sleep(5)  # Avoids problems where we don't respond to Distributed.jl fast enough

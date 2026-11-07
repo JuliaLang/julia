@@ -5,8 +5,8 @@ quote
 end
 #---------------------
 1   TestMod.x
-2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (call-i + ($ x) 1))) %₂)
+2   (call core._expr :call :+ %₁ 1)
+3   (call core._expr :block :(#= :2 =#) %₂)
 4   (return %₃)
 
 ########################################
@@ -14,9 +14,7 @@ end
 :($x)
 #---------------------
 1   TestMod.x
-2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree ($ x)) %₂)
-4   (return %₃)
+2   (return %₁)
 
 ########################################
 # Double escape
@@ -27,9 +25,12 @@ quote
 end
 #---------------------
 1   TestMod.x
-2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (quote (block (call-i + ($ ($ x)) 1))))) %₂)
-4   (return %₃)
+2   (call core._expr :$ %₁)
+3   (call core._expr :call :+ %₂ 1)
+4   (call core._expr :block :(#= :3 =#) %₃)
+5   (call core._expr :quote %₄)
+6   (call core._expr :block :(#= :2 =#) %₅)
+7   (return %₆)
 
 ########################################
 # Symbols on `.` right hand side need to be scoped correctly
@@ -39,8 +40,8 @@ end
 #---------------------
 1   1
 2   (= slot₁/x %₁)
-3   (call core.tuple slot₁/x)
-4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (. A (inert ($ x)))) %₃)
+3   (call core.QuoteNode slot₁/x)
+4   (call core._expr :. :A %₃)
 5   (return %₄)
 
 ########################################
@@ -77,12 +78,13 @@ function Base.:(==)() end
 #---------------------
 1   TestMod.Base
 2   (call top.getproperty %₁ :==)
-3   (call core.Typeof %₂)
+3   (call core.TypeEqOf %₂)
 4   (call core.svec %₃)
 5   (call core.svec)
-6   SourceLocation::1:10
+6   SourceLocation:1
 7   (call core.svec %₄ %₅ %₆)
-8   --- method core.nothing %₇
+8   (call core.define_method TestMod core.nothing %₇
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   (return core.nothing)
 9   latestworld

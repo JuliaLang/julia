@@ -40,6 +40,9 @@ function eager_mode()
 end
 is_available() = true
 
+# JLLWrappers path compatibility accessor
+get_libnghttp2_path() = libnghttp2_path
+
 function __init__()
     global libnghttp2_path = string(libnghttp2.path)
     global artifact_dir = dirname(Sys.BINDIR)

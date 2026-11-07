@@ -36,15 +36,19 @@ typedef Instruction TerminatorInst;
 namespace {
 
 struct LowerPTLS {
-    LowerPTLS(Module &M, bool imaging_mode=false)
-        : imaging_mode(imaging_mode), M(&M), TargetTriple(M.getTargetTriple())
+    LowerPTLS(Module &M, bool imaging_mode = false, bool tls_getters = false)
+        : imaging_mode(imaging_mode), tls_getters(tls_getters), M(&M), TargetTriple(M.getTargetTriple()),
+          inline_tls(TargetTriple.isOSDarwin() ? TargetTriple.isAArch64() : (bool)jl_tls_elf_support)
     {}
 
     bool run(bool *CFGModified);
 private:
     const bool imaging_mode;
+    const bool tls_getters;
     Module *M;
     Triple TargetTriple;
+    // whether `emit_pgcstack_tp` can read the frame-stack slot for this target
+    const bool inline_tls;
     MDNode *tbaa_const{nullptr};
     MDNode *tbaa_gcframe{nullptr};
     FunctionType *FT_pgcstack_getter{nullptr};
@@ -57,14 +61,14 @@ private:
     void set_pgcstack_attrs(CallInst *pgcstack) const;
     Instruction *emit_pgcstack_tp(Value *offset, Instruction *insertBefore) const;
     template<typename T> T *add_comdat(T *G) const;
-    GlobalVariable *create_hidden_global(Type *T, StringRef name) const;
+    GlobalVariable *create_slot(Type *T, StringRef name) const;
     void fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, bool or_new, bool *CFGModified);
 };
 
 void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
 {
     pgcstack->addFnAttr(Attribute::getWithMemoryEffects(pgcstack->getContext(), MemoryEffects::none()));
-    addFnAttr(pgcstack, Attribute::NoUnwind);
+    pgcstack->addFnAttr(Attribute::NoUnwind);
 }
 
 Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefore) const
@@ -75,28 +79,14 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
         // Workaround LLVM bug by hiding the offset computation
         // (and therefore the optimization opportunity) from LLVM.
         // Ref https://github.com/JuliaLang/julia/issues/17288
-        std::string const_asm_str;
-        raw_string_ostream(const_asm_str) << (TargetTriple.getArch() == Triple::x86_64 ?
-            "movq %fs:0, $0;\naddq $$" : "movl %gs:0, $0;\naddl $$")
-            << jl_tls_offset << ", $0";
-        const char *dyn_asm_str = TargetTriple.getArch() == Triple::x86_64 ?
+        const char *asm_str = TargetTriple.getArch() == Triple::x86_64 ?
             "movq %fs:0, $0;\naddq $1, $0" :
             "movl %gs:0, $0;\naddl $1, $0";
 
         // The add instruction clobbers flags
-        if (offset) {
-            SmallVector<Type*, 0> args(0);
-            args.push_back(offset->getType());
-            auto tp = InlineAsm::get(FunctionType::get(PointerType::get(builder.getContext(), 0), args, false),
-                                     dyn_asm_str, "=&r,r,~{dirflag},~{fpsr},~{flags}", false);
-            tls = builder.CreateCall(tp, {offset}, "pgcstack");
-        }
-        else {
-            auto tp = InlineAsm::get(FunctionType::get(PointerType::get(builder.getContext(), 0), false),
-                                     const_asm_str.c_str(), "=r,~{dirflag},~{fpsr},~{flags}",
-                                     false);
-            tls = builder.CreateCall(tp, {}, "tls_pgcstack");
-        }
+        auto tp = InlineAsm::get(FunctionType::get(PointerType::get(builder.getContext(), 0), {offset->getType()}, false),
+                                 asm_str, "=&r,r,~{dirflag},~{fpsr},~{flags}", false);
+        tls = builder.CreateCall(tp, {offset}, "pgcstack");
     } else {
         // AArch64/ARM doesn't seem to have this issue.
         // (Possibly because there are many more registers and the offset is
@@ -105,7 +95,10 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
         // (need to generate one or two `add` with shift) so let llvm emit
         // the add for now.
         const char *asm_str;
-        if (TargetTriple.isAArch64()) {
+        if (TargetTriple.isAArch64() && TargetTriple.isOSDarwin()) {
+            // the slot is in the pthread key array; see `JL_TLS_LOAD_ASM`
+            asm_str = "mrs $0, tpidrro_el0\n\tand $0, $0, #-8";
+        } else if (TargetTriple.isAArch64()) {
             asm_str = "mrs $0, tpidr_el0";
         } else if (TargetTriple.isARM()) {
             asm_str = "mrc p15, 0, $0, c13, c0, 3";
@@ -118,21 +111,28 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
         } else {
             llvm_unreachable("Cannot emit thread pointer for this architecture.");
         }
-        if (!offset)
-            offset = ConstantInt::getSigned(T_size, jl_tls_offset);
-        auto tp = InlineAsm::get(FunctionType::get(PointerType::get(builder.getContext(), 0), false), asm_str, "=r", false);
+        auto tp =InlineAsm::get(FunctionType::get(PointerType::get(builder.getContext(), 0), false), asm_str, "=r", false);
         tls = builder.CreateCall(tp, {}, "thread_ptr");
         tls = builder.CreateInBoundsGEP(Type::getInt8Ty(builder.getContext()), tls, {offset}, "tls_ppgcstack");
     }
     return builder.CreateLoad(T_pppjlvalue, tls, "tls_pgcstack");
 }
 
-GlobalVariable *LowerPTLS::create_hidden_global(Type *T, StringRef name) const
+// An image defines its own slots (`emit_ptls_table`); JIT code uses the runtime's
+// (`init_jit_functions`).
+GlobalVariable *LowerPTLS::create_slot(Type *T, StringRef name) const
 {
+    if (auto GV = M->getNamedGlobal(name))
+        return GV;
     auto GV = new GlobalVariable(*M, T, false, GlobalVariable::ExternalLinkage,
                                  nullptr, name);
-    GV->setVisibility(GlobalValue::HiddenVisibility);
-    GV->setDSOLocal(true);
+    if (imaging_mode) {
+        GV->setVisibility(GlobalValue::HiddenVisibility);
+        GV->setDSOLocal(true);
+    }
+    else if (TargetTriple.isOSWindows()) {
+        GV->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
+    }
     return GV;
 }
 
@@ -179,11 +179,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             adoptFunc->copyMetadata(pgcstack_getter, 0);
         }
         adopt->setCalledFunction(adoptFunc);
-#if JL_LLVM_VERSION >= 200000
         adopt->insertBefore(slowTerm->getIterator());
-#else
-        adopt->insertBefore(slowTerm);
-#endif
         phi->addIncoming(adopt, slowTerm->getParent());
         // emit fast branch code
         builder.SetInsertPoint(fastTerm->getParent());
@@ -194,11 +190,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         phi->addIncoming(pgcstack, fastTerm->getParent());
         // emit pre-return cleanup
         if (CountTrackedPointers(pgcstack->getParent()->getParent()->getReturnType()).count == 0) {
-#if JL_LLVM_VERSION >= 200000
             auto last_gc_state = PHINode::Create(Type::getInt8Ty(pgcstack->getContext()), 2, "", phi->getIterator());
-#else
-            auto last_gc_state = PHINode::Create(Type::getInt8Ty(pgcstack->getContext()), 2, "", phi);
-#endif
             // if we called jl_adopt_thread, we must end this cfunction back in the safe-state
             last_gc_state->addIncoming(ConstantInt::get(Type::getInt8Ty(M->getContext()), JL_GC_STATE_SAFE), slowTerm->getParent());
             last_gc_state->addIncoming(prior, fastTerm->getParent());
@@ -216,98 +208,62 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         }
     }
 
-    if (imaging_mode) {
-        IRBuilder<> builder(pgcstack);
-        if (jl_tls_elf_support) {
-            // if (offset != 0)
-            //     pgcstack = tp + offset; // fast
-            // else
-            //     pgcstack = getter();    // slow
-            auto offset = builder.CreateLoad(T_size, pgcstack_offset);
-            offset->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-            offset->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), {}));
-            auto cmp = builder.CreateICmpNE(offset, Constant::getNullValue(offset->getType()));
-            MDBuilder MDB(pgcstack->getContext());
-            SmallVector<uint32_t, 2> Weights{9, 1};
-            TerminatorInst *fastTerm;
-            TerminatorInst *slowTerm;
-            SplitBlockAndInsertIfThenElse(cmp, pgcstack, &fastTerm, &slowTerm,
-                                          MDB.createBranchWeights(Weights));
-            if (CFGModified)
-                *CFGModified = true;
+    IRBuilder<> builder(pgcstack);
+    if (inline_tls && !tls_getters) {
+        // if (offset != -1)
+        //     pgcstack = tp + offset; // fast
+        // else
+        //     pgcstack = getter();    // slow
+        // (0 is a valid offset: on RISC-V the executable's TLS block starts at tp.)
+        auto offset = builder.CreateLoad(T_size, pgcstack_offset);
+        offset->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+        offset->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), {}));
+        auto cmp = builder.CreateICmpNE(offset, Constant::getAllOnesValue(offset->getType()));
+        MDBuilder MDB(pgcstack->getContext());
+        SmallVector<uint32_t, 2> Weights{9, 1};
+        TerminatorInst *fastTerm;
+        TerminatorInst *slowTerm;
+        SplitBlockAndInsertIfThenElse(cmp, pgcstack, &fastTerm, &slowTerm,
+                                      MDB.createBranchWeights(Weights));
+        if (CFGModified)
+            *CFGModified = true;
 
-            auto fastTLS = emit_pgcstack_tp(offset, fastTerm);
-            // refresh the basic block in the builder
-            builder.SetInsertPoint(pgcstack);
-            auto phi = builder.CreatePHI(T_pppjlvalue, 2, "pgcstack");
-            pgcstack->replaceAllUsesWith(phi);
-#if JL_LLVM_VERSION >= 200000
-            pgcstack->moveBefore(slowTerm->getIterator());
-#else
-            pgcstack->moveBefore(slowTerm);
-#endif
-            // refresh the basic block in the builder
-            builder.SetInsertPoint(pgcstack);
-            auto getter = builder.CreateLoad(T_pgcstack_getter, pgcstack_func_slot);
-            getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-            getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), {}));
-            pgcstack->setCalledFunction(pgcstack->getFunctionType(), getter);
-            set_pgcstack_attrs(pgcstack);
-
-            phi->addIncoming(fastTLS, fastTLS->getParent());
-            phi->addIncoming(pgcstack, pgcstack->getParent());
-
-            return;
-        }
-        // In imaging mode, we emit the function address as a load of a static
-        // variable to be filled (in `staticdata.c`) at initialization time of the sysimg.
-        // This way we can bypass the extra indirection in `jl_get_pgcstack`
-        // since we may not know which getter function to use ahead of time.
+        auto fastTLS = emit_pgcstack_tp(offset, fastTerm);
+        // refresh the basic block in the builder
+        builder.SetInsertPoint(pgcstack);
+        auto phi = builder.CreatePHI(T_pppjlvalue, 2, "pgcstack");
+        pgcstack->replaceAllUsesWith(phi);
+        pgcstack->moveBefore(slowTerm->getIterator());
+        // refresh the basic block in the builder
+        builder.SetInsertPoint(pgcstack);
         auto getter = builder.CreateLoad(T_pgcstack_getter, pgcstack_func_slot);
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
         getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), {}));
-        if (TargetTriple.isOSDarwin()) {
-            auto key = builder.CreateLoad(T_size, pgcstack_key_slot);
-            key->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-            key->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), {}));
-            auto new_pgcstack = builder.CreateCall(FT_pgcstack_getter, getter, {key});
-            new_pgcstack->takeName(pgcstack);
-            pgcstack->replaceAllUsesWith(new_pgcstack);
-            pgcstack->eraseFromParent();
-            pgcstack = new_pgcstack;
-        } else {
-            pgcstack->setCalledFunction(pgcstack->getFunctionType(), getter);
-        }
+        pgcstack->setCalledFunction(pgcstack->getFunctionType(), getter);
         set_pgcstack_attrs(pgcstack);
+
+        phi->addIncoming(fastTLS, fastTLS->getParent());
+        phi->addIncoming(pgcstack, pgcstack->getParent());
+
+        return;
     }
-    else if (jl_tls_offset != -1) {
-        pgcstack->replaceAllUsesWith(emit_pgcstack_tp(nullptr, pgcstack));
+    // Calling the getter from its slot bypasses the extra indirection in `jl_get_pgcstack`.
+    auto getter = builder.CreateLoad(T_pgcstack_getter, pgcstack_func_slot);
+    getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+    getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), {}));
+    if (TargetTriple.isOSDarwin()) {
+        auto key = builder.CreateLoad(T_size, pgcstack_key_slot);
+        key->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+        key->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), {}));
+        auto new_pgcstack = builder.CreateCall(FT_pgcstack_getter, getter, {key});
+        new_pgcstack->takeName(pgcstack);
+        pgcstack->replaceAllUsesWith(new_pgcstack);
         pgcstack->eraseFromParent();
+        pgcstack = new_pgcstack;
+    } else {
+        pgcstack->setCalledFunction(pgcstack->getFunctionType(), getter);
     }
-    else {
-        // use the address of the actual getter function directly
-        jl_get_pgcstack_func *f;
-        jl_pgcstack_key_t k;
-        jl_pgcstack_getkey(&f, &k);
-        Constant *val = ConstantInt::get(T_size, (uintptr_t)f);
-        val = ConstantExpr::getIntToPtr(val, T_pgcstack_getter);
-        if (TargetTriple.isOSDarwin()) {
-            assert(sizeof(k) == sizeof(uintptr_t));
-            Constant *key = ConstantInt::get(T_size, (uintptr_t)k);
-#if JL_LLVM_VERSION >= 200000
-            auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, val, {key}, "", pgcstack->getIterator());
-#else
-            auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, val, {key}, "", pgcstack);
-#endif
-            new_pgcstack->takeName(pgcstack);
-            pgcstack->replaceAllUsesWith(new_pgcstack);
-            pgcstack->eraseFromParent();
-            pgcstack = new_pgcstack;
-        } else {
-            pgcstack->setCalledFunction(pgcstack->getFunctionType(), val);
-        }
-        set_pgcstack_attrs(pgcstack);
-    }
+    set_pgcstack_attrs(pgcstack);
 }
 
 bool LowerPTLS::run(bool *CFGModified)
@@ -330,11 +286,11 @@ bool LowerPTLS::run(bool *CFGModified)
             }
             T_pgcstack_getter = PointerType::getUnqual(FT_pgcstack_getter->getContext());
             T_pppjlvalue = cast<PointerType>(FT_pgcstack_getter->getReturnType());
-            if (imaging_mode) {
-                pgcstack_func_slot = create_hidden_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
-                pgcstack_key_slot = create_hidden_global(T_size, "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
-                pgcstack_offset = create_hidden_global(T_size, "jl_tls_offset");
-            }
+            pgcstack_func_slot = create_slot(T_pgcstack_getter, "jl_pgcstack_func_slot");
+            pgcstack_key_slot = create_slot(T_size, "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
+            // n.b. not named `jl_tls_offset`, to avoid clashing with the libjulia
+            // variable of that name when the image is linked statically with the runtime
+            pgcstack_offset = create_slot(T_size, "jl_image_tls_offset");
             need_init = false;
         }
 
@@ -368,7 +324,7 @@ bool LowerPTLS::run(bool *CFGModified)
 } // anonymous namespace
 
 PreservedAnalyses LowerPTLSPass::run(Module &M, ModuleAnalysisManager &AM) {
-    LowerPTLS lower(M, imaging_mode);
+    LowerPTLS lower(M, imaging_mode, tls_getters);
     bool CFGModified = false;
     bool modified = lower.run(&CFGModified);
 #ifdef JL_VERIFY_PASSES

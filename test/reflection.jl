@@ -459,6 +459,38 @@ const a_value = 1
 @test !Base.ispublic(@__MODULE__, :this_is_not_exported)
 end
 
+# set_binding_visibility!
+module TestBindingVisibility
+using Test
+public a_public_name
+a_public_name() = 1
+export an_exported_name
+an_exported_name() = 2
+no_decl() = 3
+
+@test Base.isexported(@__MODULE__, :an_exported_name)
+@test Base.ispublic(@__MODULE__, :a_public_name) && !Base.isexported(@__MODULE__, :a_public_name)
+@test !Base.ispublic(@__MODULE__, :no_decl)
+
+# public <-> none round trip
+Base.set_binding_visibility!(@__MODULE__, :a_public_name, :none)
+@test !Base.ispublic(@__MODULE__, :a_public_name)
+Base.set_binding_visibility!(@__MODULE__, :a_public_name, :public)
+@test Base.ispublic(@__MODULE__, :a_public_name)
+
+# an exported name is reported public; lowering it to :public clears only the export
+@test Base.ispublic(@__MODULE__, :an_exported_name)
+Base.set_binding_visibility!(@__MODULE__, :an_exported_name, :public)
+@test !Base.isexported(@__MODULE__, :an_exported_name)
+@test Base.ispublic(@__MODULE__, :an_exported_name)
+
+# promote an undeclared name to export
+Base.set_binding_visibility!(@__MODULE__, :no_decl, :export)
+@test Base.isexported(@__MODULE__, :no_decl)
+
+@test_throws ArgumentError Base.set_binding_visibility!(@__MODULE__, :no_decl, :bogus)
+end
+
 # PR 13825
 let ex = :(a + b)
     @test string(ex) == "a + b"
@@ -515,6 +547,15 @@ tlayout = TLayout(5,7,11)
 @test_throws ArgumentError fieldnames(NamedTuple{T,Tuple{Int,Int}} where T)
 @test_throws ArgumentError fieldnames(Real)
 @test_throws ArgumentError fieldnames(AbstractArray)
+
+# Common-field unions keep field-index queries structural without choosing a representative arm.
+@test fieldindex(Union{Base.RefValue{Int},Base.RefValue{Float64}}, :x) == 1
+@test hasfield(Union{Base.RefValue{Int},Base.RefValue{Float64}}, :x)
+@test Core.Compiler.try_compute_fieldidx(Union{Base.RefValue{Int},Base.RefValue{Float64}}, :x) == 1
+@test Core.Compiler.try_compute_fieldidx(Type{Base.RefValue{Int}}, :x) === nothing
+@test fieldindex(Union{Ref{Int},Ref{Float64}}, :x, false) == 0
+@test !hasfield(Union{Ref{Int},Ref{Float64}}, :x)
+@test_throws FieldError fieldindex(Union{Ref{Int},Ref{Float64}}, :x)
 
 @test fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 1) === Int
 @test fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 2) === String
@@ -713,29 +754,31 @@ fLargeTable(::Union, ::Union) = "b"
 @test length(methods(fLargeTable)) == 205
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "b"
 
-# issue #58479
+# issue #58479 (updated for #33136: a type value `v` matches `::Type{<:DataType}`
+# only if `v <: DataType`, and a `Type{X}` is no longer a subtype of any single
+# kind -- except wrapper-like classes like `Vector`, whose whole cover is `UnionAll`)
 fLargeTable(::Type) = "Type"
 fLargeTable(::Type{<:DataType}) = "DataType"
 @test fLargeTable(Type) == "Type"
 @test fLargeTable(DataType) == "DataType"
-@test fLargeTable(Type{DataType}) == "DataType"
-@test fLargeTable(Type{UnionAll}) == "DataType"
-@test fLargeTable(Type{Int}) == "DataType"
+@test fLargeTable(Type{DataType}) == "Type"
+@test fLargeTable(Type{UnionAll}) == "Type"
+@test fLargeTable(Type{Int}) == "Type"
 @test fLargeTable(Type{Vector}) == "Type"
-@test fLargeTable(Type{Type{Union{}}}) == "DataType"
+@test fLargeTable(Type{Type{Union{}}}) == "Type"
 @test fLargeTable(Type{Union{}}) == "Type"
 @test fLargeTable(Union{}) == "DataType"
 @test fLargeTable(Type{<:DataType}) == "Type"
 fLargeTable(::Type{<:UnionAll}) = "UnionAll"
 @test fLargeTable(UnionAll) == "UnionAll"
 @test fLargeTable(Type{Vector}) == "UnionAll"
-@test fLargeTable(Type{Int}) == "DataType"
-@test fLargeTable(Type{Type{Union{}}}) == "DataType"
+@test fLargeTable(Type{Int}) == "Type"
+@test fLargeTable(Type{Type{Union{}}}) == "Type"
 @test fLargeTable(Type{Union{}}) == "Type"
 @test_throws MethodError fLargeTable(Union{})
 @test fLargeTable(Type{<:DataType}) == "Type"
-@test fLargeTable(Type{Vector{T}} where T) == "DataType"
-@test fLargeTable(Union{DataType,Type{Vector{T}} where T}) == "DataType"
+@test fLargeTable(Type{Vector{T}} where T) == "Type"
+@test fLargeTable(Union{DataType,Type{Vector{T}} where T}) == "Type"
 @test fLargeTable(Union{DataType,UnionAll,Type{Vector{T}} where T}) == "Type"
 @test fLargeTable(Union{Type{Vector},Type{Vector{T}} where T}) == "Type"
 
@@ -815,11 +858,11 @@ let
 end
 
 # code_typed_by_type
-@test Base.code_typed_by_type(Tuple{Type{<:Val}})[2][2] == Val
+@test any(code -> code[2] == Val, Base.code_typed_by_type(Tuple{Type{<:Val}}))
 @test Base.code_typed_by_type(Tuple{typeof(sin), Float64})[1][2] === Float64
 
 # signature-based code_typed(...)
-@test Base.code_typed((Type{<:Val},))[2][2] == Val
+@test any(code -> code[2] == Val, Base.code_typed((Type{<:Val},)))
 @test Base.code_typed((typeof(sin), Float64))[1][2] === Float64
 
 # New reflection methods in 0.6
@@ -911,6 +954,31 @@ end
 @test_throws ArgumentError fieldcount(Real)
 @test_throws ArgumentError fieldcount(AbstractArray)
 @test_throws ArgumentError fieldcount(Tuple{Any,Vararg{Any}})
+# TypeEgal{T} has the single instance `T` (issue #62890)
+@test fieldcount(Core.TypeEgal{Int}) == nfields(Int)
+@test fieldcount(Core.TypeEgal{Type{Int}}) == nfields(Type{Int}) == 1
+@test fieldnames(Core.TypeEgal{Int}) == fieldnames(DataType)
+@test fieldname(Core.TypeEgal{Int}, 1) === fieldname(DataType, 1)
+@test fieldtypes(Core.TypeEgal{Int}) == fieldtypes(DataType)
+@test supertype(Core.TypeEgal{Int}) === Type{Int}
+@test supertype(Type{Int}) === Core.AnyType
+@test supertype(Type{<:Integer}) === Core.AnyType
+@test fieldtype(Core.TypeEgal{Int}, 1) === fieldtype(Core.TypeEgal{Int}, :name) === fieldtype(DataType, 1)
+@test fieldtype(Union{Core.TypeEgal{Int},Core.TypeEgal{Float64}}, 1) === fieldtype(DataType, 1)
+@test only(Base.return_types(() -> fieldtype(Core.TypeEgal{Int}, :name), ())) === Core.TypeEgal{fieldtype(DataType, 1)}
+@test fieldoffset(Core.TypeEgal{Int}, 2) == fieldoffset(Core.TypeEgal{Int}, :super) == fieldoffset(DataType, 2)
+@test_throws ArgumentError fieldcount(Type{Int})
+@test_throws ArgumentError fieldnames(Type{Int})
+@test_throws ArgumentError fieldname(Type{Int}, 1)
+@test_throws ArgumentError fieldtypes(Type{<:Integer})
+
+# Common-field unions are definite only when all alternatives share the field count.
+@test fieldcount(Union{Tuple{Int,Float64},Tuple{Int,Int}}) == 2
+@test fieldtypes(Union{Tuple{Int,Float64},Tuple{Int,Int}}) == (Int, Union{Float64,Int})
+@test_throws(ArgumentError("type does not have a definite number of fields"),
+             fieldcount(Union{Tuple{Int},Tuple{Int,Int}}))
+@test_throws(ArgumentError("type does not have a definite number of fields"),
+             fieldtypes(Union{Tuple{Int},Tuple{Int,Int}}))
 
 # PR #22979
 
@@ -1127,6 +1195,22 @@ end
 @test  hasmethod(f31353, Tuple{Any, Array{D}} where D<:Dict)
 @test !hasmethod(f31353, Tuple{Any, Array{D}} where D<:AbstractDict)
 
+# `hasmethod` with several argument types folds to a constant
+module HasmethodFoldable
+using Test
+struct C end
+k(::C) = 1
+for sig in (Tuple{C, Int}, Tuple{C, Int, Float64}, Tuple{C, Vararg{Int}}, Tuple{C, T} where T)
+    f = @eval () -> hasmethod(k, $sig)
+    @test Core.Compiler.is_foldable(Base.infer_effects(f, ()))
+    @test only(code_typed(f, ())).first.code == Any[Core.ReturnNode(false)]
+end
+g() = hasmethod(k, Tuple{C, Int})
+@test !g()
+k(::C, ::Int) = 2
+@test g()
+end
+
 # issue #26267
 module M26267
 import Test
@@ -1242,6 +1326,20 @@ end
     @test occursin("f2#", String(nameof(f)))
 end
 
+module BodyFunctionWorld
+const before = Base.get_world_counter()
+f(x; a=1) = x + a
+end
+
+@testset "bodyfunction world age" begin
+    m = only(methods(BodyFunctionWorld.f))
+    # the body function is found even when the calling task runs in a world age
+    # that predates its definition
+    f = Base.invoke_in_world(BodyFunctionWorld.before, Base.bodyfunction, m)
+    @test occursin("f#", String(nameof(f)))
+    @test Base.bodyfunction(m; world=m.primary_world) === f
+end
+
 
 @testset "code_typed(; world)" begin
     mod = @eval module $(gensym()) end
@@ -1277,7 +1375,6 @@ end
     @test mi1.def.name == :+
     mi2 = Base.method_instance((typeof(+), Int, Int))
     @test mi2.def.name == :+
-    # Note `jl_method_lookup` doesn't return CNull if not found
     mi3 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
     @test mi1 == mi3
     @test mi2 == mi3
@@ -1497,3 +1594,5 @@ end
 using .X1ConstConflict, .X2ConstConflict
 
 @test_throws ErrorException which(@__MODULE__, :xconstconflict)
+
+@test Base.infer_return_type(which, (Type,)) == Method

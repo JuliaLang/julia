@@ -133,6 +133,7 @@ end
 function setup_chnl_and_tasks(exec_func, ntasks, batch_size=nothing)
     if isa(ntasks, Function)
         nt = ntasks()::Int
+        nt < 0 && throw(ArgumentError(lazy"ntasks function must return a nonnegative integer. ntasks()=$nt"))
         # start at least one worker task.
         if nt == 0
             nt = 1
@@ -235,6 +236,10 @@ mutable struct AsyncCollectorState
     enum_state      # enumerator state
 end
 
+# `i` counts from 1; store into the `i`-th element of an array in linear order.
+setresult!(results::AbstractArray, v, i) = results[begin + i - 1] = v
+setresult!(results, v, i) = results[i] = v
+
 function iterate(itr::AsyncCollector)
     itr.ntasks = verify_ntasks(itr.enumerator, itr.ntasks)
     itr.batch_size = verify_batch_size(itr.batch_size)
@@ -244,17 +249,17 @@ function iterate(itr::AsyncCollector)
             indices = map(x -> x[1], batch)
             batched_args = map(x -> x[2], batch)
             res = itr.f(batched_args)
-            foreach(((j, v),) -> (itr.results[indices[j]] = v), enumerate(res))
+            foreach(((j, v),) -> setresult!(itr.results, v, indices[j]), enumerate(res))
         end
     else
-        exec_func = (i, args) -> (itr.results[i] = itr.f(args...))
+        exec_func = (i, args) -> setresult!(itr.results, itr.f(args...), i)
     end
 
     chnl, worker_tasks = setup_chnl_and_tasks(exec_func, itr.ntasks, itr.batch_size)
     return iterate(itr, AsyncCollectorState(chnl, worker_tasks, exec_func, itr.batch_size, nothing))
 end
 
-function wait_done(itr::AsyncCollector, state::AsyncCollectorState)
+function wait_done(state::AsyncCollectorState)
     close(state.chnl)
 
     # wait for all tasks to finish
@@ -272,7 +277,7 @@ function iterate(itr::AsyncCollector, state::AsyncCollectorState)
         iterate(itr.enumerator, state.enum_state) :
         iterate(itr.enumerator)
     if isnothing(y)
-        wait_done(itr, state)
+        wait_done(state)
         return nothing
     end
     (i, args), state.enum_state = y

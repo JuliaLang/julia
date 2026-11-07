@@ -5,7 +5,7 @@
 
 /*
  * This file provides convenient macros to be used to identify the platform
- * based of compiler-specific pre-defined macros. It is based on the
+ * based on compiler-specific pre-defined macros. It is based on the
  * information that can be found at the following address:
  *
  *     https://sourceforge.net/p/predef/wiki/Home/

@@ -141,7 +141,9 @@ const TEST_TYPE_MAP = Dict(
     :skipped => "@test_skip",
     :test_throws => "@test_throws",
     :test_throws_wrong => "@test_throws",
-    :test_throws_nothing => "@test_throws"
+    :test_throws_nothing => "@test_throws",
+    :test_warn => "@test_warn",
+    :test_nowarn => "@test_nowarn"
 )
 function get_test_call_str(result)
     if result.test_type === :nontest_error
@@ -263,7 +265,7 @@ function serialize_testset_result_file(dir::String, testset::Test.DefaultTestSet
     return res_file
 end
 
-# deserilalizes the results files and writes them to collated JSON files of 5000 max results
+# deserializes the results files and writes them to collated JSON files of 5000 max results
 function write_testset_json_files(dir::String, testset::Test.DefaultTestSet)
     data = Dict{String,Any}[]
     read_files = String[]

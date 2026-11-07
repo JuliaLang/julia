@@ -57,7 +57,7 @@ Displaying notes found in: .note.stapsdt
 
 ## Adding probes in libjulia
 
-Probes are declared in dtraces format in the file `src/uprobes.d`. The generated
+Probes are declared in dtrace format in the file `src/uprobes.d`. The generated
 header file is included in `src/julia_internal.h` and if you add probes you should
 provide a noop implementation there.
 

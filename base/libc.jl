@@ -7,7 +7,7 @@ Interface to libc, the C standard library.
 
 import Base: transcode, windowserror, show
 # these need to be defined separately for bootstrapping but belong to Libc
-import Base: memcpy, memmove, memset, memcmp
+import Base: memcmp, memcpy, memmove, memset
 import Core.Intrinsics: bitcast
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, memcpy,
@@ -43,7 +43,11 @@ Duplicate the file descriptor `src` so that the duplicate refers to the same OS
 resource (e.g. a file or socket). A `target` file descriptor may optionally
 be passed to use for the new duplicate.
 """
-dup(x::RawFD) = ccall((@static Sys.iswindows() ? :_dup : :dup), RawFD, (RawFD,), x)
+function dup(x::RawFD)
+    fd = ccall((@static Sys.iswindows() ? :_dup : :dup), RawFD, (RawFD,), x)
+    systemerror("dup", fd == RawFD(-1))
+    return fd
+end
 dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
     ccall((@static Sys.iswindows() ? :_dup2 : :dup2), Int32,
                 (RawFD, RawFD), src, target))
@@ -62,6 +66,7 @@ if Sys.iswindows()
     WindowsRawSocket(handle::WindowsRawSocket) = handle
 
     Base.cconvert(::Type{Ptr{Cvoid}}, fd::WindowsRawSocket) = bitcast(Ptr{Cvoid}, fd)
+    show(io::IO, fd::WindowsRawSocket) = (print(io, "WindowsRawSocket("); show(io, bitcast(UInt, fd)); print(io, ')'))  # avoids invalidation via show_default
     _get_osfhandle(fd::RawFD) = ccall(:_get_osfhandle, WindowsRawSocket, (RawFD,), fd)
     _get_osfhandle(fd::WindowsRawSocket) = fd
     function dup(src::WindowsRawSocket)

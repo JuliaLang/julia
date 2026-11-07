@@ -129,7 +129,7 @@ end
     end
     # Additional allowed cases
     return $(_char_in_set_expr(:u,
-        collect("²³¹ʰʲʳʷʸˡˢˣ˱˲ᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁᵂᵃᵅᵇᵈᵉᵋᵍᵏᵐᵒᵖᵗᵘᵛᵝᵞᵟᵠᵡᵢᵣᵤᵥᵦᵧᵨᵩᵪᶜᶠᶥᶦᶫᶰᶲᶸᶻᶿ′″‴‵‶‷⁗⁰ⁱ⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₔₕₖₗₘₙₚₛₜⱼⱽꜛꜜꜝ")))
+        collect("²³¹ʰʲʳʷʸˡˢˣ˱˲ᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁᵂᵃᵅᵇᵈᵉᵋᵍᵏᵐᵒᵖᵗᵘᵛᵝᵞᵟᵠᵡᵢᵣᵤᵥᵦᵧᵨᵩᵪᶜᶠᶥᶦᶫᶰᶲᶸᶻᶿ′″‴‵‶‷⁗⁰ⁱ⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₔₕₖₗₘₙₚₛₜ₝₞₟ⱼⱽꜛꜜꜝ𝿐")))
 end
 
 function optakessuffix(k)
@@ -281,7 +281,7 @@ Base.eltype(::Type{<:Lexer}) = RawToken
 
 
 function Base.iterate(l::Lexer)
-    l.token_startpos = position(l)
+    l.token_startpos = _position(l)
 
     t = next_token(l)
     return t, t.kind == K"EndMarker"
@@ -294,7 +294,7 @@ function Base.iterate(l::Lexer, isdone::Any)
 end
 
 function Base.show(io::IO, l::Lexer)
-    print(io, typeof(l), " at position: ", position(l))
+    print(io, typeof(l), " at position: ", _position(l))
 end
 
 """
@@ -303,13 +303,6 @@ end
 Return the latest `RawToken`'s starting position.
 """
 startpos(l::Lexer) = l.token_startpos
-
-"""
-    startpos!(l::Lexer, i::Integer)
-
-Set a new starting position.
-"""
-startpos!(l::Lexer, i::Integer) = l.token_startpos = i
 
 """
     peekchar(l::Lexer)
@@ -333,25 +326,23 @@ Returns the next three characters without changing the lexer's state.
 peekchar3(l::Lexer) = l.chars[2], l.chars[3], l.chars[4]
 
 """
-    position(l::Lexer)
+    _position(l::Lexer)
 
 Returns the current position.
 """
-Base.position(l::Lexer) = l.charspos[1]
+_position(l::Lexer) = l.charspos[1]
 
 """
-    eof(l::Lexer)
+    _eof(l::Lexer)
 
 Determine whether the end of the lexer's underlying buffer has been reached.
 """
-Base.eof(l::Lexer) = eof(l.io)
-
-Base.seek(l::Lexer, pos) = seek(l.io, pos)
+_eof(l::Lexer) = eof(l.io)
 
 """
     start_token!(l::Lexer)
 
-Updates the lexer's state such that the next  `RawToken` will start at the current
+Updates the lexer's state such that the next `RawToken` will start at the current
 position.
 """
 function start_token!(l::Lexer)
@@ -406,10 +397,10 @@ end
 """
     emit(l::Lexer, kind::Kind)
 
-Returns a `RawToken` of kind `kind` with contents `str` and starts a new `RawToken`.
+Returns a `RawToken` of kind `kind` and starts a new `RawToken`.
 """
 function emit(l::Lexer, kind::Kind)
-    tok = RawToken(kind, startpos(l), position(l) - 1, PREC_NONE)
+    tok = RawToken(kind, startpos(l), _position(l) - 1, PREC_NONE)
 
     l.last_token = kind
     return tok
@@ -422,7 +413,7 @@ function emit_operator(l::Lexer, kind::Kind, precedence::PrecedenceLevel, take_s
             kind = K"Operator"
         end
     end
-    tok = RawToken(kind, startpos(l), position(l) - 1, precedence)
+    tok = RawToken(kind, startpos(l), _position(l) - 1, precedence)
 
     l.last_token = kind
     return tok
@@ -447,8 +438,17 @@ function emit_operator_or_compound_assign(l::Lexer, kind::Kind, prec::Precedence
     return emit_operator(l, kind, prec)
 end
 
+# Emit wrapping arithmetic operators with their own kind so `+%=`, `-%=`, and
+# `*%=` can round-trip to distinct update-assignment heads.
+function emit_wrapping_operator_or_compound_assign(l::Lexer, kind::Kind, prec::PrecedenceLevel)
+    if compound_assign_follows(l)
+        return emit_operator(l, kind, PREC_COMPOUND_ASSIGN)
+    end
+    return emit_operator(l, kind, prec)
+end
+
 function emit_trivia(l::Lexer, kind::Kind)
-    tok = RawToken(kind, startpos(l), position(l) - 1, PREC_NONE)
+    tok = RawToken(kind, startpos(l), _position(l) - 1, PREC_NONE)
     l.last_token = kind
     return tok
 end
@@ -922,6 +922,8 @@ end
 function lex_plus(l::Lexer)
     if accept(l, '+')
         return emit_operator(l, K"++", PREC_PLUS)
+    elseif accept(l, '%')
+        return emit_wrapping_operator_or_compound_assign(l, K"+%", PREC_PLUS)
     end
     return emit_operator_or_compound_assign(l, K"+", PREC_PLUS)
 end
@@ -935,13 +937,17 @@ function lex_minus(l::Lexer)
         end
     elseif l.last_token != K"." && accept(l, '>')
         return emit_operator(l, K"->", PREC_ARROW)
+    elseif accept(l, '%')
+        return emit_wrapping_operator_or_compound_assign(l, K"-%", PREC_PLUS)
     end
     return emit_operator_or_compound_assign(l, K"-", PREC_PLUS)
 end
 
 function lex_star(l::Lexer)
     if accept(l, '*')
-        return emit(l, K"Error**") # "**" is an invalid operator use ^
+        return emit(l, K"Error**") # "**" is an invalid operator; use ^
+    elseif accept(l, '%')
+        return emit_wrapping_operator_or_compound_assign(l, K"*%", PREC_TIMES)
     end
     return emit_operator_or_compound_assign(l, K"*", PREC_TIMES)
 end
@@ -1005,7 +1011,7 @@ function lex_digit(l::Lexer, kind)
             accept(l, "+-−")
             if accept_batch(l, isdigit)
                 pc,ppc = dpeekchar(l)
-                if pc === '.' && !is_dottable_operator_start_char(ppc)
+                if pc === '.' && ppc != '.' && !is_dottable_operator_start_char(ppc)
                     readchar(l)
                     return emit(l, K"ErrorInvalidNumericConstant") # `1.e1.`
                 end
@@ -1026,14 +1032,14 @@ function lex_digit(l::Lexer, kind)
         accept(l, "+-−")
         if accept_batch(l, isdigit)
             pc,ppc = dpeekchar(l)
-            if pc === '.' && !is_dottable_operator_start_char(ppc)
+            if pc === '.' && ppc != '.' && !is_dottable_operator_start_char(ppc)
                 accept(l, '.')
                 return emit(l, K"ErrorInvalidNumericConstant") # `1e1.`
             end
         else
             return emit(l, K"ErrorInvalidNumericConstant") # `1e+`
         end
-    elseif position(l) - startpos(l) == 1 && l.chars[1] == '0'
+    elseif _position(l) - startpos(l) == 1 && l.chars[1] == '0'
         kind == K"Integer"
         is_bin_oct_hex_int = false
         if pc == 'x'
@@ -1055,8 +1061,8 @@ function lex_digit(l::Lexer, kind)
                 end
                 # Check for invalid trailing decimal point
                 # https://github.com/JuliaLang/julia/issues/60189
-                pc = peekchar(l)
-                if pc == '.'
+                pc,ppc = dpeekchar(l)
+                if pc == '.' && ppc != '.' && !is_dottable_operator_start_char(ppc)
                     accept_batch(l, c->(c == '.' || isdigit(c)))
                     # `0x1p3.` `0x1p3.2` `0x1.5p2.3`
                     return emit(l, K"ErrorInvalidNumericConstant")
@@ -1289,7 +1295,6 @@ K"where",
 K"abstract",
 K"as",
 K"doc",
-K"goto",
 K"mutable",
 K"outer",
 K"primitive",

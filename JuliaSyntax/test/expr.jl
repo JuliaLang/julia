@@ -516,10 +516,18 @@
     @testset "syntactic update-assignment operators" begin
         @test parsestmt("x += y") == Expr(:(+=), :x, :y)
         @test parsestmt("x .+= y") == Expr(:(.+=), :x, :y)
+        @test parsestmt("x +%= y"; version=v"1.14") == Expr(Symbol("+%="), :x, :y)
+        @test parsestmt("x -%= y"; version=v"1.14") == Expr(Symbol("-%="), :x, :y)
+        @test parsestmt("x *%= y"; version=v"1.14") == Expr(Symbol("*%="), :x, :y)
+        @test parsestmt("x .+%= y"; version=v"1.14") == Expr(Symbol(".+%="), :x, :y)
         @test parsestmt(":+=") == QuoteNode(Symbol("+="))
+        @test parsestmt(":+%="; version=v"1.14") == QuoteNode(Symbol("+%="))
         @test parsestmt(":(+=)") == QuoteNode(Symbol("+="))
+        @test parsestmt(":(+%=)"; version=v"1.14") == QuoteNode(Symbol("+%="))
         @test parsestmt(":.+=") == QuoteNode(Symbol(".+="))
+        @test parsestmt(":.+%="; version=v"1.14") == QuoteNode(Symbol(".+%="))
         @test parsestmt(":(.+=)") == QuoteNode(Symbol(".+="))
+        @test parsestmt(":(.+%=)"; version=v"1.14") == QuoteNode(Symbol(".+%="))
         @test parsestmt("x \u2212= y") == Expr(:(-=), :x, :y)
     end
 

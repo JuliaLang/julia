@@ -40,6 +40,20 @@ let
     @test withenv(f, "KEY" => "VALUE")
 end
 
+@testset "withenv with a repeated key" begin
+    key = randstring(25)
+    withenv(key => "1", key => "2") do
+        @test ENV[key] == "2"
+    end
+    @test !haskey(ENV, key)
+    withenv(key => "orig") do
+        withenv(key => "1", key => nothing) do
+            @test !haskey(ENV, key)
+        end
+        @test ENV[key] == "orig"
+    end
+end
+
 @testset "non-existent keys" begin
     key = randstring(25)
     @test !haskey(ENV,key)

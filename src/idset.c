@@ -3,6 +3,8 @@
 
 static uint_t idset_hash(size_t idx, jl_value_t *data)
 {
+    if (idx >= ((jl_genericmemory_t*)data)->length)
+        return 0; // We got a OOB access, probably due to a data race
     jl_value_t *x = jl_genericmemory_ptr_ref(data, idx);
     // x should not be NULL, unless there was concurrent corruption
     return x == NULL ? 0 : jl_object_id(x);
@@ -10,6 +12,8 @@ static uint_t idset_hash(size_t idx, jl_value_t *data)
 
 static int idset_eq(size_t idx, const void *y, jl_value_t *data, uint_t hv)
 {
+    if (idx >= ((jl_genericmemory_t*)data)->length)
+        return 0; // We got a OOB access, probably due to a data race
     jl_value_t *x = jl_genericmemory_ptr_ref(data, idx);
     // x should not be NULL, unless there was concurrent corruption
     return x == NULL ? 0 : jl_egal(x, (jl_value_t*)y);
@@ -63,12 +67,24 @@ static ssize_t idset_compact(jl_genericmemory_t *keys)
     return rehash ? -j : j;
 }
 
-jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, ssize_t *newidx)
+// Return the slot just past the last key of `keys`, for callers of
+// jl_idset_put_key that do not keep track of it themselves.
+size_t jl_idset_max(jl_genericmemory_t *keys) JL_NOTSAFEPOINT
 {
-    ssize_t l = keys->length;
-    ssize_t i = l;
+    size_t i = keys->length;
     while (i > 0 && jl_genericmemory_ptr_ref(keys, i - 1) == NULL)
         i--;
+    return i;
+}
+
+// Insert `key` at the end of the ordered set `keys` (growing and compacting
+// are insertion-order-preserving). `*max` is the slot just past the last key,
+// which the caller keeps track of (or gets from jl_idset_max), and is updated.
+jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, size_t *max, ssize_t *newidx)
+{
+    ssize_t l = keys->length;
+    ssize_t i = *max;
+    assert(i <= l && (i == 0 || jl_genericmemory_ptr_ref(keys, i - 1) != NULL));
     // i points to the place to insert
     *newidx = i;
     if (i == l) {
@@ -87,6 +103,7 @@ jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, 
     }
     assert(jl_genericmemory_ptr_ref(keys, i) == NULL);
     jl_genericmemory_ptr_set(keys, i, key);
+    *max = i + 1;
     return keys;
 }
 
@@ -107,7 +124,11 @@ jl_genericmemory_t *jl_idset_put_idx(jl_genericmemory_t *keys, jl_genericmemory_
     return jl_atomic_load_relaxed(&newidxs);
 }
 
-/* returns idx if key is in hash, otherwise -1 */
+// Removal NULLs the key's slot in place, leaving an interior hole until a
+// later insertion compacts the list. That breaks the packed-prefix guarantee
+// of the ordered-set insertion, so this must not be used on sets whose
+// consumers rely on that property for lock-free iteration (such as `Method.interferences`).
+// Returns idx if key is in hash, otherwise -1.
 ssize_t jl_idset_pop(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, jl_value_t *key) JL_NOTSAFEPOINT
 {
     uintptr_t hv = jl_object_id(key);

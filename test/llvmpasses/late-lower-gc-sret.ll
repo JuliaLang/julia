@@ -1,6 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame)' -S %s | FileCheck %s
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='function(LateLowerGCFrame)' -S %s | FileCheck %s
 
 declare ptr @julia.get_pgcstack()
 

@@ -71,17 +71,39 @@ function arg_decl_parts(m::Method, html=false)
         decls[1] = ("", sprint(show_signature_function, unwrapva(sig.parameters[1]), false, decls[1][1], html,
                                context = show_env))
     else
-        decls = Tuple{String,String}[("", "") for i = 1:length(sig.parameters::SimpleVector)]
+        decls = Tuple{String,String}[("", "") for _ = 1:length(sig.parameters::SimpleVector)]
     end
     return tv, decls, file, line
 end
 
 # NOTE: second argument is deprecated and is no longer used
-function kwarg_decl(m::Method, kwtype = nothing)
+function kwarg_decl(m::Method, kwtype = nothing; world::UInt=get_world_counter())
     if !(m.sig === Tuple || m.sig <: Tuple{Core.Builtin, Vararg}) # OpaqueClosure or Builtin
         kwtype = typeof(Core.kwcall)
-        sig = rewrap_unionall(Tuple{kwtype, NamedTuple, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
-        kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
+        sig_params = (unwrap_unionall(m.sig)::DataType).parameters
+        sig = rewrap_unionall(Tuple{kwtype, NamedTuple, sig_params...}, m.sig)
+        kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, world)
+        if kwli === nothing
+            # a compiled keyword sorter is specialized on the dispatch (egality)
+            # spelling of closed type-valued slots, so retry the lookup with
+            # `Type{X}` slots as `Core.TypeEgal{X}`
+            new_params = Any[kwtype, NamedTuple]
+            changed = false
+            for p in sig_params
+                if p isa TypeEq
+                    tp = type_parameter(p)
+                    if tp isa Type && !has_free_typevars(tp)
+                        p = Core.TypeEgal{tp}
+                        changed = true
+                    end
+                end
+                push!(new_params, p)
+            end
+            if changed
+                sig = rewrap_unionall(Tuple{new_params...}, m.sig)
+                kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, world)
+            end
+        end
         if kwli !== nothing
             kwli = kwli::Method
             slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), kwli.slot_syms)
@@ -281,12 +303,12 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
                     "generic function")
         print(io, " for ", what, " ", namedisplay, " from ")
 
-        col = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, parentmodule_before_main(tn.module))
+        col = get_stacktrace_color(parentmodule_before_main(tn.module))
 
         printstyled(io, tn.module, color=col)
     elseif '#' in sname
         print(io, " for anonymous function ", namedisplay)
-    elseif tn === _TYPE_NAME || iskindtype(tn.wrapper)
+    elseif iskindtype(tn.wrapper)
         print(io, " for type constructor")
     else
         print(io, " for callable object")
@@ -306,17 +328,12 @@ function _modulecolor(method::Method)
     # method table is shared, we now need to distinguish "primary" methods by trying to
     # check if there is a primary `DataType` to identify it with. c.f. how `jl_method_def`
     # would derive this same information (for the name).
-    ft = argument_datatype((unwrap_unionall(method.sig)::DataType).parameters[1])
-    # `ft` should be the type associated with the first argument in the method signature.
-    # If it's `Type`, try to unwrap it again.
-    if isType(ft)
-        ft = argument_datatype(type_parameter(ft))
-    end
-    if ft === nothing || parentmodule(method) === parentmodule(ft) !== Core
+    ft = argument_datatypename((unwrap_unionall(method.sig)::DataType).parameters[1])
+    if ft === nothing || parentmodule(method) === ft.module !== Core
         return nothing
     end
     m = parentmodule_before_main(method)
-    return get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+    return get_stacktrace_color(m)
 end
 
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
@@ -328,11 +345,12 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
         show_method_list_header(io, ms, str -> "\""*str*"\"")
     end
     n = rest = 0
-    local last
 
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
 
+    # Showing one hidden method takes no more room than saying that it is hidden.
+    max >= 0 && length(ms) == max + 1 && (max += 1)
     digit_align_width = length(string(max > 0 ? max : length(ms)))
 
     for meth in ms
@@ -350,18 +368,13 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             end
         else
             rest += 1
-            last = meth
         end
     end
     if rest > 0
         println(io)
-        if rest == 1
-            show_method(io, last)
-        else
-            print(io, "... $rest methods not shown")
-            if hasname
-                print(io, " (use methods($name) to see them all)")
-            end
+        print(io, "... $rest methods not shown")
+        if hasname
+            print(io, " (use methods($name) to see them all)")
         end
     end
     nothing
@@ -386,7 +399,7 @@ function url(m::Method)
     (m.file === :null || m.file === :string) && return ""
     file = string(m.file)
     line = m.line
-    line <= 0 || occursin(r"In\[[0-9]+\]"a, file) && return ""
+    (line <= 0 || occursin(r"In\[[0-9]+\]"a, file)) && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
@@ -408,8 +421,9 @@ function url(m::Method)
                         u = (match(LibGit2.GITHUB_REGEX,u)::AbstractMatch).captures[1]
                         commit = string(LibGit2.head_oid(repo))
                         root = LibGit2.path(repo)
-                        if startswith(file, root) || startswith(realpath(file), root)
-                            "https://github.com/$u/tree/$commit/"*file[length(root)+1:end]*"#L$line"
+                        path = startswith(file, root) ? file : realpath(file)
+                        if startswith(path, root)
+                            "https://github.com/$u/tree/$commit"*chopprefix(path, root)*"#L$line"
                         else
                             fileurl(file)
                         end
@@ -424,7 +438,7 @@ function url(m::Method)
 end
 
 function show(io::IO, ::MIME"text/html", m::Method)
-    tv, decls, file, line = arg_decl_parts(m, true)
+    tv, decls, _file, line = arg_decl_parts(m, true)
     sig = unwrap_unionall(m.sig)
     if sig <: Tuple{Core.Builtin, Vararg}
         print(io, m.name, "(...) in ", parentmodule(m))

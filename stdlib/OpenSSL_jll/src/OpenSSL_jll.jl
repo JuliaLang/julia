@@ -55,6 +55,10 @@ function eager_mode()
 end
 is_available() = true
 
+# JLLWrappers path compatibility accessors
+get_libcrypto_path() = libcrypto_path
+get_libssl_path() = libssl_path
+
 function __init__()
     global libcrypto_path = string(libcrypto.path)
     global libssl_path = string(libssl.path)

@@ -27,7 +27,7 @@ function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize
         t <: r || (r = Any) # final escape hatch
     end
     #@assert r === _limit_type_size(r, t, source) # this monotonicity constraint is slightly stronger than actually required,
-      # since we only actually need to demonstrate that repeated application would reaches a fixed point,
+      # since we only actually need to demonstrate that repeated application would reach a fixed point,
       #not that it is already at the fixed point
     return r
 end
@@ -54,6 +54,9 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
         # also handle the var here, since this construct bounds the mindepth to the smallest possible value
         return is_derived_type(t, c.var.ub, mindepth) || is_derived_type(t, c.body, mindepth)
     elseif isType(c)
+        if mindepth > 0
+            mindepth -= 1
+        end
         return is_derived_type(t, type_parameter(c), mindepth)
     elseif isa(c, DataType)
         if mindepth > 0
@@ -119,8 +122,9 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         end
     elseif isType(t)
         # Type is fairly important, so do not widen it as fast as other types if avoidable
+        # (this branch also covers `TypeEgal`, whose `Type{...}` widenings are supertypes)
         tt = type_parameter(t)
-        ttu = unwrap_unionall(tt) # TODO: use argument_datatype(tt) after #50692 fixed
+        ttu = unwrap_unionall(tt) # TODO: use a helper that preserves nested Type structure after #50692 is fixed
         # must forbid nesting through this if we detect that potentially occurring
         # we already know !is_derived_type_from_any so refuse to recurse here
         if isType(ttu)
@@ -270,7 +274,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     if isType(t)
         # Type is fairly important, so do not widen it as fast as other types if avoidable
         tt = type_parameter(t)
-        # ttu = unwrap_unionall(tt) # TODO: use argument_datatype(tt) after #50692 fixed
+        # ttu = unwrap_unionall(tt) # TODO: use a helper that preserves nested Type structure after #50692 is fixed
         if isType(c)
             ct = type_parameter(c)
         else
@@ -316,7 +320,7 @@ union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
 
 function issimpleenoughtype(@nospecialize t)
     ut = unwrap_unionall(t)
-    ut isa DataType && ut.name.wrapper == t && return true
+    ut isa DataType && ut.name.wrapper == t::Type && return true
     return max(unionlen(t), union_count_abstract(t) + 1) <= MAX_TYPEUNION_LENGTH &&
            unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
 end
@@ -402,6 +406,9 @@ end
             return false
         end
         return false
+    elseif typea isa PartialTask
+        typeb isa PartialTask || return false
+        return issimplertype(𝕃, typea.fetch_type, typeb.fetch_type)
     end
     return true
 end
@@ -585,6 +592,14 @@ end
 @nospecializeinfer function tmerge(𝕃::AnyMustAliasesLattice, @nospecialize(typea), @nospecialize(typeb))
     if is_valid_lattice_norec(𝕃, typea)
         typeb === Union{} && return typea
+        if is_valid_lattice_norec(𝕃, typeb) && is_same_alias(typea, typeb) &&
+                widenconst(typea.vartyp) === widenconst(typeb.vartyp)
+            # alias information is identical so simply preserve it
+            𝕃′ = widenlattice(𝕃)
+            vartyp = tmerge(𝕃′, typea.vartyp, typeb.vartyp)
+            fldtyp = tmerge(𝕃′, typea.fldtyp, typeb.fldtyp)
+            return update_mustalias(typea; vartyp, fldtyp)
+        end
         typea = widenmustalias(typea)
     end
     if is_valid_lattice_norec(𝕃, typeb)
@@ -619,6 +634,12 @@ end
         n_initialized_merged = min(n_initialized(typea), n_initialized(typeb))
         anyrefine = n_initialized_merged > fldmin
         for i = 1:nflds
+            if i == nflds && isvatuple(aty)
+                # the trailing `Vararg` element carries no information beyond `aty` itself,
+                # so keep it as is
+                fields[i] = (unwrap_unionall(aty)::DataType).parameters[end]
+                continue # `undefs[i]` stays `nothing`
+            end
             ai = getfield_tfunc(𝕃, typea, Const(i))
             bi = getfield_tfunc(𝕃, typeb, Const(i))
             ft = fieldtype(aty, i)
@@ -724,6 +745,21 @@ end
         typeb = widenlattice(wl, typeb)
     end
 
+    # type-lattice for PartialTask wrapper
+    apt = isa(typea, PartialTask)
+    bpt = isa(typeb, PartialTask)
+    if apt && bpt
+        # Both are PartialTask - merge their fetch types
+        merged_fetch_type = tmerge(lattice, typea.fetch_type, typeb.fetch_type)
+        # Any carries no additional type information - return Task
+        merged_fetch_type === Any && return Task
+        return PartialTask(merged_fetch_type)
+    elseif apt
+        typea = Task
+    elseif bpt
+        typeb = Task
+    end
+
     return tmerge(wl, typea, typeb)
 end
 
@@ -765,18 +801,18 @@ end
     heighta = 0
     while a !== Any
         heighta += 1
-        a = a.super
+        a = datatype_super(a)
     end
     b = unwrap_unionall(bname.wrapper)
     heightb = 0
     while b !== Any
         b.name === aname && return aname
         heightb += 1
-        b = b.super
+        b = datatype_super(b)
     end
     a = unwrap_unionall(aname.wrapper)
     while heighta > heightb
-        a = a.super
+        a = datatype_super(a)
         heighta -= 1
     end
     return a.name === bname ? bname : nothing
@@ -846,11 +882,11 @@ end
                         uw = unwrap_unionall(wr)::DataType
                         ui = unwrap_unionall(ti)::DataType
                         while ui.name !== ijname
-                            ui = ui.super
+                            ui = datatype_super(ui)
                         end
                         uj = unwrap_unionall(tj)::DataType
                         while uj.name !== ijname
-                            uj = uj.super
+                            uj = datatype_super(uj)
                         end
                         p = Vector{Any}(undef, length(uw.parameters))
                         usep = true

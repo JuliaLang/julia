@@ -253,13 +253,21 @@ end
         versioninfo(buf, verbose=true)
         ver = read(buf, String)
         @test startswith(ver, "Julia Version $VERSION")
+        @test startswith(ver, "Julia Version $(Base.version_with_build_variant())\n")
         @test occursin("Environment:", ver)
-    end
-    let exename = `$(Base.julia_cmd()) --startup-file=no`
-        @test !occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
-                                                    String[]), String))
-        @test  occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
-                                                    String["JULIA_CPU_THREADS=1"]), String))
+
+        let exename = `$(Base.julia_cmd()) --startup-file=no`,
+            home = Sys.iswindows() ? "USERPROFILE=$dir" : "HOME=$dir"
+            @test !occursin("Environment:", read(setenv(
+                `$exename -e 'using InteractiveUtils; versioninfo()'`, [home]), String))
+            @test occursin("Environment:", read(setenv(
+                `$exename -e 'using InteractiveUtils; versioninfo()'`,
+                [home, "JULIA_CPU_THREADS=1"]), String))
+            # when Sys.EFFECTIVE_CPU_THREADS < Sys.CPU_THREADS, both counts are reported
+            @test occursin(r"99999 virtual cores; \d+ effective\)", read(setenv(
+                `$exename -e 'using InteractiveUtils; versioninfo()'`,
+                [home, "JULIA_CPU_THREADS=99999"]), String))
+        end
     end
 end
 
@@ -270,6 +278,18 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module $curmod_str") @which this_is_not_defined
 # issue #13264
 @test (@which vcat(1...)).name === :vcat
+
+@testset "@methods" begin
+    ms = @methods sort(::AbstractVector)
+    @test ms isa Base.MethodList
+    @test ms == methods(sort, (AbstractVector,))
+    # arguments are interpreted as values, like `@which`
+    @test (@methods sort([1, 2, 3])) == methods(sort, (Vector{Int},))
+    # qualified callable
+    @test (@methods Base.sort(::AbstractVector)) == methods(sort, (AbstractVector,))
+    # unlike `@which`, lists every matching method when types are abstract
+    @test length(@methods +(::Integer, ::Integer)) > 1
+end
 
 # PR #28122, issue #25474
 @test (@which [1][1]).name === :getindex
@@ -634,7 +654,7 @@ expansion = string(@macroexpand @code_typed optimize=false max.(Ref.([5, 6])...)
 # Make sure broadcasts in nested arguments are not processed.
 v = Any[1]
 expansion = string(@macroexpand @code_typed v[1] = rand.(Ref(1)))
-@test contains(expansion, "Typeof(rand.(Ref(1)))")
+@test contains(expansion, "Core.Typeof(rand.(Ref(1)))")
 @test !contains(expansion, "(x1) =")
 
 # Issue # 45889
@@ -745,6 +765,14 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     end
 end
 
+# `Type{T}` is not a dispatch slot, make sure we still disassemble the method rather than
+# the lazy JIT placeholder
+native_type_arg(::Type{T}) where {T} = sizeof(T)
+let output = sprint(io -> code_native(io, native_type_arg, (Type{Int},); dump_module=false))
+    @test occursin("within `native_type_arg`", output)
+    @test !occursin("jl_fptr_wait_for_compiled", output)
+end
+
 @testset "error message" begin
     err = ErrorException("expression is not a function call or symbol")
     @test_throws err @code_lowered ""
@@ -755,16 +783,28 @@ end
     @test_throws "invalid keyword argument syntax" @eval @which round(1; digits(3))
 end
 
-using InteractiveUtils: editor
+using InteractiveUtils: editor, editor_matches, define_editor, find_source, EDITOR_CALLBACKS
 
 # Issue #13032
 withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
     # Make sure editor doesn't error when no ENV editor is set.
     @test isa(editor(), Cmd)
+    (Sys.iswindows() || Sys.isapple()) && @test editor() == `open`
 
     # Invalid editor
     ENV["JULIA_EDITOR"] = ""
-    @test_throws ErrorException editor()
+    @test_throws ErrorException("invalid editor \$JULIA_EDITOR: \"\"") editor()
+    ENV["JULIA_EDITOR"] = " "
+    @test_throws ErrorException("invalid editor \$JULIA_EDITOR: \" \"") editor()
+
+    # Precedence
+    ENV["JULIA_EDITOR"], ENV["VISUAL"], ENV["EDITOR"] = "a", "b", "c"
+    @test editor() == `a`
+    delete!(ENV, "JULIA_EDITOR")
+    @test editor() == `b`
+    delete!(ENV, "VISUAL")
+    @test editor() == `c`
+    delete!(ENV, "EDITOR")
 
     # Note: The following testcases should work regardless of whether these editors are
     # installed or not.
@@ -794,6 +834,188 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
 
     ENV["JULIA_EDITOR"] = "\"/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl\" -w"
     @test editor() == `'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w`
+end
+
+function with_editor_callbacks(f, callbacks...)
+    saved = copy(EDITOR_CALLBACKS)
+    copy!(EDITOR_CALLBACKS, Function[callbacks...])
+    try
+        f()
+    finally
+        copy!(EDITOR_CALLBACKS, saved)
+    end
+end
+
+@testset "define_editor" begin
+    @test editor_matches("vi", `vi`)
+    @test editor_matches("vi", `/usr/bin/vi -m`)
+    @test editor_matches("vi", `vi.exe`)
+    @test !editor_matches("vi", `vim -g`)
+    @test editor_matches(r"^'/a b/vi' -m$", `'/a b/vi' -m`)
+    @test editor_matches(["vim", r"^vi\b"], `vi -m`)
+    @test !editor_matches(["vim", r"^vim\b"], `vi -m`)
+
+    calls = []
+    fallback = (cmd, path, line, column) -> (push!(calls, (:fallback, line, column)); true)
+    failing = `$(Base.julia_cmd()) -e 'exit(1)'`
+    withenv("JULIA_EDITOR" => "myed --flag") do
+        with_editor_callbacks(fallback) do
+            # The newest match runs first, and declining passes to the next callback.
+            define_editor((cmd, path, line) -> (push!(calls, (:legacy, cmd, path, line)); nothing), "myed")
+            define_editor((cmd, path, line, column) -> (push!(calls, (:new, cmd, path, line, column)); nothing), r"--flag$")
+            define_editor((cmd, path, line, column) -> error("should not match"), "other")
+            @test edit("a.txt", 2, 3) === nothing
+            @test calls == [(:new, `myed --flag`, "a.txt", 2, 3), (:legacy, `myed --flag`, "a.txt", 2), (:fallback, 2, 3)]
+            empty!(calls)
+            define_editor((cmd, path, line, column) -> "not a command", "myed")
+            @test_logs (:warn, "invalid editor value returned") edit("a.txt")
+            @test last(calls) == (:fallback, 1, 1)
+        end
+        # A failing editor can only raise an error if julia waits for it.
+        with_editor_callbacks() do
+            define_editor((cmd, path, line, column) -> failing, "myed"; wait=true)
+            @test_throws ProcessFailedException edit("a.txt")
+        end
+        with_editor_callbacks() do
+            define_editor((cmd, path, line, column) -> failing, "myed"; wait=false)
+            @test edit("a.txt") === nothing
+        end
+        # Callbacks pushed directly may decline, and may omit the column.
+        empty!(calls)
+        with_editor_callbacks((cmd, path, line, column) -> false,
+                              (cmd, path, line) -> (push!(calls, (cmd, path, line)); true)) do
+            edit("a.txt", 5)
+        end
+        @test calls == [(`myed --flag`, "a.txt", 5)]
+        with_editor_callbacks((cmd, path, line, column) -> false) do
+            @test_throws ErrorException("no editor found") edit("a.txt")
+        end
+    end
+end
+
+@testset "find_source" begin
+    # Run from an empty directory, because the test directory has its own files.
+    mktempdir() do dir
+        cd(dir) do
+            @test find_source("missing_file.txt") == "missing_file.txt"
+            @test find_source("missing_file.jl") == "missing_file.jl"
+            @test find_source(SubString("missing_file.txt", 1)) isa String
+            base_file = find_source("int.jl")
+            @test isabspath(base_file) && isfile(base_file) && basename(base_file) == "int.jl"
+            @test find_source(base_file) == base_file
+        end
+    end
+end
+
+edit_test_one_method(x::Int) = x
+"first"
+edit_test_two_methods(x::Int) = x
+"second"
+edit_test_two_methods(x::Float64) = x
+edit_test_doc_line = @__LINE__() + 1
+"documented"
+const edit_test_documented = 1
+const edit_test_undocumented = 1
+function edit_test_no_methods end
+
+@testset "edit locations" begin
+    file, line = functionloc(edit_test_one_method, (Int,))
+    edits(f) = let calls = []
+        with_editor_callbacks(f, (cmd, path, line, column) -> (push!(calls, (path, line, column)); true))
+        calls
+    end
+    for f in (() -> edit(edit_test_one_method),
+              () -> edit(edit_test_one_method, (Int,)),
+              () -> edit(edit_test_one_method, 1),
+              () -> edit(which(edit_test_one_method, (Int,))),
+              () -> edit(Tuple{typeof(edit_test_one_method), Int}),
+              () -> edit((typeof(edit_test_one_method), Int)),
+              () -> @edit edit_test_one_method(1))
+        @test edits(f) == [(file, line, 1)]
+    end
+    @test edits(() -> edit("a.txt")) == [("a.txt", 1, 1)]
+    @test edits(() -> edit("a.txt", 2)) == [("a.txt", 2, 1)]
+    @test edits(() -> edit("a.txt", 2, 3)) == [("a.txt", 2, 3)]
+    @test edits(() -> edit(InteractiveUtils)) == [(pathof(InteractiveUtils), 1, 1)]
+    @test edits(() -> edit(@__MODULE__, :edit_test_documented)) == [(@__FILE__, edit_test_doc_line, 1)]
+    @test edits(() -> @edit edit_test_documented) == [(@__FILE__, edit_test_doc_line, 1)]
+
+    @test isempty(edits() do
+        @test length(edit(edit_test_two_methods)) == 2
+    end)
+    @test_throws "could not determine location" edit(@__MODULE__, :edit_test_undocumented)
+    @test_throws "could not determine location" edit(@__MODULE__, :edit_test_two_methods)
+    @test_throws "could not find source file" edit(nothing, 1)
+    @test_throws "function has no definitions" edit(edit_test_no_methods)
+    @test_throws "object is not callable" edit(1)
+end
+
+# Run the commands for real, but find them in a directory of fake ones.
+Sys.iswindows() || @testset "editor and pager commands" begin
+    mktempdir() do dir
+        script = joinpath(dir, "fake")
+        write(script, "#!/bin/sh\nprintf '%s\\n' \"\${0##*/}\" \"\$@\" >&2\nexit 1\n")
+        chmod(script, 0o755)
+        function spawned(f, command, env...)
+            name = joinpath(dir, first(Base.shell_split(command)))
+            islink(name) || symlink(script, name)
+            pipe = Pipe()
+            Base.link_pipe!(pipe; reader_supports_async=true, writer_supports_async=true)
+            waited = false
+            stderr_txt = @async readlines(pipe)
+            withenv("PATH" => dir, env...) do
+                try
+                    redirect_stderr(f, pipe)
+                catch e
+                    e isa ProcessFailedException || rethrow()
+                    waited = true
+                end
+            end
+            close(pipe.in)
+            return fetch(stderr_txt), waited
+        end
+        function edited(args...; editor)
+            return spawned(() -> edit(args...), editor, "JULIA_EDITOR" => editor)
+        end
+
+        p = "a.txt"
+        for (editors, wait, args) in [
+                (["vim", "vi", "nvim", "mvim"], true, ["+normal 3G4|", p]),
+                (["gvim", "gvim -f"], false, ["+normal 3G4|", p]),
+                (["nano"], true, ["+3,4", p]),
+                (["emacs", "emacs -Q", "emacsclient", "emacsclient -c"], false, ["+3:4", p]),
+                (["emacs -nw", "emacs -Q --no-window-system", "emacsclient -nw", "emacsclient -t",
+                  "emacsclient --tty", "emacsclient -a '' -t", "emacsclient -c -nw"], true, ["+3:4", p]),
+                (["gedit"], false, ["+3:4", p]),
+                (["micro", "kak"], true, ["+3", p]),
+                (["hx", "helix"], true, ["$p:3:4"]),
+                (["textmate", "mate", "kate"], false, [p, "-l", "3"]),
+                (["subl", "subl -w", "atom", "pycharm", "bbedit"], false, ["$p:3"]),
+                (["code", "code-insiders"], false, ["-g", "$p:3:4"]),
+                (["notepad++"], false, [p, "-n3"]),
+                (["notepad", "unknown-editor --flag"], false, [p]),
+            ], editor in editors
+            @test edited(p, 3, 4; editor) == ([Base.shell_split(editor)..., args...], wait)
+        end
+        @test edited(p, 3, 4; editor="open") == (Sys.isapple() ? ["open", "-t", p] : ["open", p], false)
+
+        for (editor, wait) in (("vim", true), ("gvim", false))
+            @test edited(p, 0, 0; editor) == ([editor, p], wait)
+            @test edited(p, 3, 0; editor) == ([editor, "+3", p], wait)
+            @test edited(p; editor) == ([editor, "+normal 1G1|", p], wait)
+        end
+
+        file, line = functionloc(edit_test_one_method, (Int,))
+        for (pager, env) in (("less", "PAGER" => nothing), ("mypager", "PAGER" => "mypager"))
+            paged(f) = spawned(f, pager, env)
+            @test paged(() -> less(p, 3)) == ([pager, "+3g", p], true)
+            @test paged(() -> less(p)) == ([pager, "+1g", p], true)
+            @test paged(() -> less("int.jl", 3)) == ([pager, "+3g", find_source("int.jl")], true)
+            @test paged(() -> less(edit_test_one_method)) == ([pager, "+$(line)g", file], true)
+            @test paged(() -> @less edit_test_one_method(1)) == ([pager, "+$(line)g", file], true)
+        end
+        @test spawned(() -> less(p, 3), "mypager", "PAGER" => "mypager -R") == (["mypager", "-R", "+3g", p], true)
+    end
 end
 
 # clipboard functionality
@@ -914,6 +1136,7 @@ end
                         bar(1)
                     end
                     bar(x) = x
+                    __init__() = nothing
                     end
                     """)
 
@@ -928,7 +1151,7 @@ end
                 buf = read(fname)
                 rm(fname)
 
-                @test occursin("ms  Foo3242", String(buf))
+                @test occursin(r"┌ [\d.]+ ms Foo3242\.__init__\(\)[^\n]*\n\s+[\d.]+ ms  Foo3242", String(buf))
 
                 fname = tempname()
                 f = open(fname, "w")
@@ -1061,6 +1284,82 @@ end # module
     @test_nowarn subtypes(Integer);
 end
 
+# PR #45399
+# Values of the arguments of the call that a reflection macro analyzes for `ex`
+function which_call_args(ex)
+    args = Any[]
+    function walk(x)
+        x isa Expr || return
+        if x.head === :call && (x.args[1] == :(Core.Typeof) || x.args[1] === GlobalRef(Core, :Typeof))
+            push!(args, Core.eval(@__MODULE__, x.args[2]))
+        else
+            foreach(walk, x.args)
+        end
+    end
+    walk(macroexpand(@__MODULE__, :(@which $ex)))
+    return args
+end
+
+const hvncat_x, hvncat_y, hvncat_z, hvncat_w = 1, 2.0, 0x3, 4//1
+const hvncat_v = [1, 2]
+
+@testset "hvncat/typed_hvncat" begin
+    # one-dimensional
+    @test which_call_args(:([1;;;])) == [hvncat, 3, 1]
+    @test which_call_args(:([1 ;;;; 3;;;; 9])) == [hvncat, 4, 1, 3, 9]
+    @test which_call_args(:(Int64[1;;;])) == [Base.typed_hvncat, Int64, 3, 1]
+    @test which_call_args(:(Int64[1 ;;;; 3;;;; 9])) == [Base.typed_hvncat, Int64, 4, 1, 3, 9]
+    @test which_call_args(:([string() ;;; string()])) == [hvncat, 3, "", ""]
+
+    # balanced
+    @test which_call_args(:([1 4 ;;; 3 4 ;;; 1 9])) == [hvncat, (1, 2, 3), true, 1, 4, 3, 4, 1, 9]
+    @test which_call_args(:([1 ;; 4 ;;;; 3;; 9])) == [hvncat, (1, 2, 1, 2), false, 1, 4, 3, 9]
+    @test which_call_args(:(Int64[1 4 ;;; 3 4 ;;; 1 9])) == [Base.typed_hvncat, Int64, (1, 2, 3), true, 1, 4, 3, 4, 1, 9]
+    @test which_call_args(:(Int64[1 ;; 4 ;;;; 3;; 9])) == [Base.typed_hvncat, Int64, (1, 2, 1, 2), false, 1, 4, 3, 9]
+
+    # ragged
+    @test which_call_args(:([1 4 ;;; 3 4 ;;;; 4])) ==
+        [hvncat, ((2, 2, 1), (2, 2, 1), (4, 1), (5,)), true, 1, 4, 3, 4, 4]
+    @test which_call_args(:([1; 4 ;;; 3; 4 ;;;; 4])) ==
+        [hvncat, ((2, 2, 1), (2, 2, 1), (4, 1), (5,)), false, 1, 4, 3, 4, 4]
+    @test which_call_args(:([1 2 3 ;;; 4 5; 6 ;;; 7 8; 9])) ==
+        [hvncat, ((3, 2, 1, 2, 1), (3, 3, 3), (9,)), true, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    # row lengths whose deviations from the first row cancel out
+    @test which_call_args(:([1 2; 3; 4 5 6 ;;; 7 8; 9; 10 11 12])) ==
+        [hvncat, ((2, 1, 3, 2, 1, 3), (6, 6), (12,)), true, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    @test which_call_args(:(Int64[1; 2 ;; 3 ;; 4; 5; 6])) ==
+        [Base.typed_hvncat, Int64, ((2, 1, 3), (6,)), false, 1, 2, 3, 4, 5, 6]
+    @test which_call_args(:(Int64[1 4 ;;; 3 4 ;;;; 4])) ==
+        [Base.typed_hvncat, Int64, ((2, 2, 1), (2, 2, 1), (4, 1), (5,)), true, 1, 4, 3, 4, 4]
+    @test which_call_args(:(Int64[1; 4 ;;; 3; 4 ;;;; 4])) ==
+        [Base.typed_hvncat, Int64, ((2, 2, 1), (2, 2, 1), (4, 1), (5,)), false, 1, 4, 3, 4, 4]
+
+    # elements that are not expressions
+    @test which_call_args(:([hvncat_x hvncat_y ;;; hvncat_z hvncat_w])) ==
+        [hvncat, (1, 2, 2), true, hvncat_x, hvncat_y, hvncat_z, hvncat_w]
+    @test which_call_args(:([hvncat_x ;;; hvncat_y])) == [hvncat, 3, hvncat_x, hvncat_y]
+    @test which_call_args(:(["ab" "cd" ;;; "e" "f"])) == [hvncat, (1, 2, 2), true, "ab", "cd", "e", "f"]
+    @test which_call_args(:(["ab" ;;; "cd"])) == [hvncat, 3, "ab", "cd"]
+    @test which_call_args(:([:a ;; :b ;;; :c ;; :d])) == [hvncat, (1, 2, 2), false, :a, :b, :c, :d]
+    @test which_call_args(:([nothing ;;; nothing])) == [hvncat, 3, nothing, nothing]
+
+    # the analyzed call must build the same array as the literal
+    for ex in (:([1 4 ;;; 3 4 ;;; 1 9]), :([1 ;; 4 ;;;; 3;; 9]), :(Int64[1 ;; 4 ;;;; 3;; 9]),
+               :([[1 2] 3 ;;; 4 5 6]), :([[1 2] 3; 4 5 6 ;;; 7 8 9; [10 11] 12]),
+               :([hvncat_x hvncat_y ;;; hvncat_z hvncat_w]), :(["ab" "cd" ;;; "e" "f"]))
+        f, args... = which_call_args(ex)
+        @test f(args...) == Core.eval(@__MODULE__, ex)
+    end
+
+    @test (@which [1 2 ;;; 3 4]) == which(hvncat, (Tuple{Int,Int,Int}, Bool, Int, Int, Int, Int))
+    @test (@which [hvncat_x ;;; hvncat_y]) == which(hvncat, (Int, Int, Float64))
+
+    # splatting is only supported by lowering in the one-dimensional case
+    @test (@which [hvncat_v... ;;; hvncat_v...]) == which(hvncat, (Int, Int, Int, Int, Int))
+    @test_throws "Splatting ... in an hvncat with multiple dimensions is not supported" @which [hvncat_v... 1 ;;; 2 3]
+    @test_throws "Splatting ... in an hvncat with multiple dimensions is not supported" @which [hvncat_v... ;; 1 ;;; 2 ;; 3]
+end
+
 let code = """
         using InteractiveUtils
         @activate Compiler[:codegen, :reflection]
@@ -1082,6 +1381,30 @@ var_line = @__LINE__()+1
 const _interactiveutils_some_var_ = 0
 
 @test InteractiveUtils.varloc(@__MODULE__, :_interactiveutils_some_var_) == (@__FILE__, var_line)
+
+@testset "code_llvm and code_warntype run the compiler in the typeinf world" begin
+    # Methods with broad signatures invalidate compiler code that normal inference never
+    # notices, because it runs in the frozen typeinf world. `code_llvm`, `code_native` and
+    # `code_warntype` used to run `typeinf_code` in the current world instead, so the first
+    # call after such a definition recompiled the invalidated compiler.
+    script = """
+        using InteractiveUtils
+        struct Displacement <: Integer; val::Int; end
+        Base.convert(::Type{Int64}, x::Displacement) = x.val
+        Base.Int64(x::Displacement) = x.val
+        struct NotReal; val; end
+        Base.isless(x, y::NotReal) = isless(x, y.val)
+        code_llvm(devnull, sin, (Float64,))
+        code_native(devnull, sin, (Float64,))
+        code_warntype(devnull, sin, (Float64,))
+        """
+    trace = mktemp() do path, io
+        run(pipeline(`$(Base.julia_cmd()) --startup-file=no --trace-compile=$path -e $script`, stderr=devnull))
+        read(path, String)
+    end
+    recompiled = filter(l -> occursin("# recompile", l) && occursin("Base.Compiler.", l), split(trace, '\n'))
+    @test isempty(recompiled)
+end
 
 @testset "world argument for varinfo and subtypes" begin
     # varinfo: a non-const binding added after the recorded world should not

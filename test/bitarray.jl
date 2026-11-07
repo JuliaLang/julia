@@ -6,6 +6,11 @@ using Random, Test, LinearAlgebra # Ideally, these tests should not depend on Li
 isdefined(Main, :SizedArrays) || @eval Main include("testhelpers/SizedArrays.jl")
 using .Main.SizedArrays
 
+struct ConvertsToBool
+    b::Bool
+end
+Base.convert(::Type{Bool}, x::ConvertsToBool) = x.b
+
 tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
 tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
 tc(r1::SubArray{Bool,N1,BitArray{N2}}, r2::SubArray{Bool,N1,<:Union{BitArray{N2},Array{Bool,N2}}}) where {N1,N2} = true
@@ -158,6 +163,8 @@ timesofar("promotions")
     end
 
     @testset "copyto!" begin
+        # BitArray copy bounds must not wrap their computed end indices.
+        @test_throws BoundsError copyto!(falses(2), Int8(2), trues(2), Int8(2), typemax(Int8))
         let b1 = trues(1)
             @test all(copyto!(b1, []))
         end
@@ -204,6 +211,32 @@ timesofar("promotions")
         @check_bit_operation resize!(b1, v1 ÷ 2) BitVector
         gr(b) = (resize!(b, v1)[(v1÷2):end] .= 1; b)
         @check_bit_operation gr(b1) BitVector
+
+        # Chunk rounding and reshape products must remain valid at the Int limit.
+        @test Base.num_bit_chunks(typemax(Int)) == div(typemax(Int), 64) + 1
+        overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+        @test_throws ArgumentError reshape(trues(2), 3, overflow_dim)
+
+        b1 = bitrand(v1)
+        @test_throws BoundsError resize!(b1, -1; first=true)
+        b2 = copy(b1)
+        @test resize!(b1, v1+100; first=true)[end-v1+1:end] == b2
+        @test resize!(b1, v1+200)[end-100-v1+1:end-100] == b2
+
+        b1 = bitrand(128)
+        b2 = copy(b1)
+        @test resize!(b1, 256; first=true)[end-128+1:end] == b2
+        b2 = copy(b1)
+        @test resize!(b1, 300; first=true)[end-256+1:end] == b2
+        b2 = copy(b1)
+        @test resize!(b1, 340; first=true)[end-300+1:end] == b2
+        b2 = copy(b1)
+        @test resize!(b1, 404; first=true)[end-340+1:end] == b2
+
+        b1 = bitrand(32)
+        b2 = copy(b1)
+        resize!(b1, 63; first=true)
+        @test b1[32:63] == b2
     end
 
     @testset "sizeof (issue #7515)" begin
@@ -227,6 +260,10 @@ timesofar("utils")
         end
     end
 
+    # BitArray constructors must reject dimensions whose product overflows.
+    overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+    @test_throws ArgumentError BitMatrix(undef, 3, overflow_dim)
+
     @testset "constructors from iterables" begin
         for g in ((x%7==3 for x = 1:v1),
                   (x%7==3 for x = 1:v1 if x>5),
@@ -238,7 +275,23 @@ timesofar("utils")
         @test_throws DimensionMismatch BitVector(false)
         @test_throws DimensionMismatch BitVector((iszero(i%4) for i in 1:n1, j in 1:n2))
         @test_throws DimensionMismatch BitMatrix((isodd(i) for i in 1:3))
+
+        # iterators that are not generators, and iterators longer than the internal bit cache
+        for itr in (Iterators.take(Iterators.cycle([true, false, false]), 10_000),
+                    (isodd(i) for i in 1:10_000),
+                    (isodd(i) for i in 1:10_000 if i % 3 != 0),
+                    Iterators.reverse([true false true; false false true]))
+            @test BitArray(itr) == Array{Bool}(collect(itr))
+        end
+        @test BitMatrix(Iterators.reverse([true false; false false])) == [false false; false true]
+        @test BitVector(Iterators.take([true, false, true, true], 3)) == [true, false, true]
+        @test_throws DimensionMismatch BitMatrix(Iterators.take([true], 1))
+        @test_throws DimensionMismatch BitMatrix(x for x in [true] if x)
+        @test_throws DimensionMismatch BitArray{3}(Iterators.reverse(trues(2, 2)))
     end
+
+    @test trues((Base.OneTo(2), 3)) == trues(2, 3)
+    @test falses((Base.OneTo(2), 3)) == falses(2, 3)
 
     @testset "constructor from infinite iterator" begin
         inf_iter = Base.Iterators.cycle([true])
@@ -590,6 +643,21 @@ timesofar("constructors")
         @check_bit_operation setindex!(b1, b2, n1-m1+1:n1, t2) BitMatrix
         @check_bit_operation setindex!(b1, b2, k1, t2)         BitMatrix
     end
+
+    @testset "logical setindex! with an empty Cartesian-indexed value" begin
+        b = falses(4)
+        @test_throws DimensionMismatch b[BitVector([1, 1, 1, 0])] = PermutedDimsArray(Array{Bool}(undef, 2, 0), (2, 1))
+        e = falses(1, 2, 1, 0)
+        @test setindex!(e, view(zeros(3, 3, 3), 2:1, 2:2, 2:2), falses(1, 2, 1, 0)) === e
+    end
+
+    @testset "stored values convert with convert(Bool, x)" begin
+        x = [ConvertsToBool(true), ConvertsToBool(false)]
+        @test setindex!(falses(3), x, 2:3) == [false, true, false]
+        @test fill!(view(falses(3), 2:3), x[1]) == [true, true]
+        @test (B = falses(2, 2); fill!(view(B, 1:2, 2), x[1]); B) == [false true; false true]
+        @test (b = falses(3); splice!(b, 2:3, Tuple(x)); b) == [false, true, false]
+    end
 end
 
 timesofar("indexing")
@@ -869,6 +937,26 @@ end
 
 timesofar("unary arithmetic")
 
+# Check that same-size BitArray broadcasts of ops with a chunk-level equivalent take the chunked path.
+@testset "chunked broadcast bit operations" begin
+    b1 = bitrand(130)
+    b2 = bitrand(130)
+    dest = similar(b1)
+    chunked(f, args...) = Base.Broadcast.ischunkedbroadcast(dest,
+        convert(Base.Broadcast.Broadcasted{Nothing},
+            Base.Broadcast.instantiate(Base.Broadcast.broadcasted(f, args...))))
+
+    for f in (!, ~, identity)
+        @test chunked(f, b1)
+    end
+    for f in (&, |, xor, nand, nor, *, min, max, ==, !=, <, <=, >, >=)
+        @test chunked(f, b1, b2)
+    end
+    @test chunked(nand, b1, Base.Broadcast.broadcasted(!, b2))
+    @test (dest .= b1 .== (==).(true)) == falses(130)
+    @test (dest .= b1 .!= (!=).(true)) == trues(130)
+end
+
 @testset "Binary arithmetic operators" begin
     @testset "Matrix{Bool}/Matrix{Bool}" begin
         b1 = bitrand(n1, n2)
@@ -884,6 +972,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(/, b1, b2) Matrix{Float64}
         @check_bit_operation broadcast(^, b1, b2) BitMatrix
         @check_bit_operation (/)(b1,1) Matrix{Float64}
+        @test_throws MethodError (/)(1, Array(b1))
+        @test_throws MethodError (/)(1, b1)
 
         b2 = trues(n1, n2)
         @check_bit_operation broadcast(div, b1, b2) BitMatrix
@@ -1192,6 +1282,14 @@ timesofar("binary arithmetic")
     @check_bit_operation broadcast(!=, b1, b2) BitMatrix
     @check_bit_operation broadcast(<, b1, b2) BitMatrix
     @check_bit_operation broadcast(<=, b1, b2) BitMatrix
+
+    v1, v2 = falses(100), trues(100)
+    @test cmp(v1, v2) == -1
+    @test cmp(v2, v1) == 1
+    @test cmp(v1, v1) == 0
+    @test isless(v1, v2)
+    @test !isless(v2, v1)
+    @test isless(falses(10), falses(20))
 end
 
 timesofar("binary comparison")
@@ -1215,6 +1313,18 @@ timesofar("binary comparison")
     for m = 0:v1
         b1 = bitrand(m)
         @check_bit_operation reverse(b1) BitVector
+        v = Vector{Bool}(b1)
+        @test reverse!(b1) === b1
+        @test b1 == reverse(v)
+        @test bitcheck(b1)
+    end
+
+    for sz in ((5,), (1, 5), (5, 1), (1, 1, 7), (1, 1), (3, 4), (3, 1, 4), (70, 3), (2, 70, 3))
+        b1 = bitrand(sz)
+        for d = 1:length(sz)
+            @check_bit_operation reverse(b1, dims=d) BitArray{length(sz)}
+            @check_bit_operation reverse(b1, dims=(d,)) BitArray{length(sz)}
+        end
     end
 
     b1 = bitrand(v1)
@@ -1242,6 +1352,8 @@ timesofar("binary comparison")
         @check_bit_operation selectdim(b1, 1, m) SubArray{Bool, 0}
     end
     @check_bit_operation selectdim(b1, 1, :) SubArray{Bool, 1}
+    @test circshift!(falses(0), 1) == falses(0)
+    @test circshift!(falses(0), falses(0), 1) == falses(0)
 end
 
 timesofar("datamove")
@@ -1511,6 +1623,22 @@ timesofar("reductions")
         end
     end
 
+    # Constant maps preserve destination bits beyond the input collection.
+    @testset "map! with a longer destination" begin
+        for l in [0, 1, 63, 64, 65, 127, 128, 129]
+            src = bitrand(l)
+            dest = trues(l + 65)
+            @test map!(zero, dest, src) === dest
+            @test dest == vcat(falses(l), trues(65))
+
+            dest = falses(l + 65)
+            @test map!(one, dest, src) === dest
+            @test dest == vcat(trues(l), falses(65))
+        end
+        @test_throws DimensionMismatch map!(zero, falses(1), bitrand(2))
+        @test_throws DimensionMismatch map!(one, falses(1), bitrand(2))
+    end
+
     @testset "Issue #17970" begin
         A17970 = [1,2,3] .== [3,2,1]
         B17970 = map(x -> x ? 1 : 2, A17970)
@@ -1524,7 +1652,7 @@ timesofar("reductions")
     |<------------------b2(l)------>|    extra_l     |
     |<------------------b3(l)------>|
     |<------------------b4(l+extra_l)--------------->|
-    |<--------------desk_inbetween-------->| extra÷2 |
+    |<--------------dest_inbetween-------->| extra÷2 |
     =#
     @testset "Issue #47011, map! over unequal length bitarray" begin
         for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
@@ -1652,6 +1780,8 @@ timesofar("permutedims")
     @check_bit_operation cat(0, b1, 1, 1, b1, dims=2) Array{Int,3}
     @check_bit_operation cat(3, b1, 4, 5, b1, dims=2) Array{Int,3}
     @check_bit_operation cat(false, b1, true, true, b1, dims=2) BitArray{3}
+    @check_bit_operation cat(b1, b1, dims=Int32(2)) BitArray{3}
+    @check_bit_operation cat(true, b1, dims=0x2) BitArray{3}
 
     b1 = bitrand(n1, n2)
     for m1 = 1:(n1-1), m2 = 1:(n2-1)
@@ -1818,7 +1948,7 @@ end
         @test which(fill!, (typeof(viewvector), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}}}, Any}
         @test which(fill!, (typeof(viewarray), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, Any}
         fill!(viewvector, false)
-        fill!(viewarray, false)
+        @test fill!(viewarray, false) === viewarray
         @test all(bitvector[rangein] .== false)
         @test all(bitvector[rangeout] .== true)
         @test all(bitarray[rangein, rangein] .== false)
@@ -1861,4 +1991,20 @@ end
 let b = trues(10)
     copyto!(b, view([0,0,0], :))
     @test b == [0,0,0,1,1,1,1,1,1,1]
+end
+
+@testset "filter and sizehint!" begin
+    for sz in ((0,), (1,), (v1,), (n1, n2))
+        b = bitrand(sz)
+        @check_bit_operation filter(identity, b) BitVector
+        @check_bit_operation filter(!, b) BitVector
+        @check_bit_operation filter(Returns(true), b) BitVector
+    end
+    b = bitrand(5)
+    @test sizehint!(b, 1000) === b
+    @test length(b) == 5
+    append!(b, trues(995))
+    @test length(b) == 1000 && all(b[6:end])
+    @test sizehint!(b, 0) === b
+    @test length(b) == 1000
 end

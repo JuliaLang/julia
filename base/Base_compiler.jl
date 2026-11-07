@@ -6,6 +6,7 @@ Core._import(Base, Core, :_eval_import, :_eval_import, true)
 Core._import(Base, Core, :_eval_using, :_eval_using, true)
 
 using .Core.Intrinsics, .Core.IR
+import .Core: OLDEST_EDITION, LATEST_STABLE_EDITION
 
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
@@ -144,15 +145,20 @@ include("exports.jl")
 
 function set_syntax_version end
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
-function _setup_module!(mod::Module, Core.@nospecialize syntax_ver)
+function _setup_module!(mod::Module, edition)
     # using Base
     Core._using(mod, _topmod(mod), UInt8(0))
     Core.declare_const(mod, :include, IncludeInto(mod))
     Core.declare_const(mod, :eval, Core.EvalInto(mod))
-    if syntax_ver === nothing
-        return nothing
+    if edition === nothing
+        # two cases: (1) LATEST_STABLE_EDITION is assumed in bootstrap, and (2)
+        # after bootstrap, OLDEST_EDITION module forms have no version
+        if Core._parse === nothing || Core._parse === Base.fl_parse
+            return nothing
+        end
+        edition = OLDEST_EDITION
     end
-    set_syntax_version(mod, syntax_ver)
+    set_syntax_version(mod, edition)
     return nothing
 end
 
@@ -166,9 +172,9 @@ eval(m::Module, x) = Core.eval(m, x)
 include("public.jl")
 
 if false
-    # simple print definitions for debugging. enable these if something
+    # Simple print definitions for debugging. Enable these if something
     # goes wrong during bootstrap before printing code is available.
-    # otherwise, they just just eventually get (noisily) overwritten later
+    # otherwise, they eventually get (noisily) overwritten later
     global show, print, println
     show(io::IO, x) = Core.show(io, x)
     print(io::IO, a...) = Core.print(io, a...)
@@ -228,7 +234,7 @@ include("options.jl")
 # to forward to invoke
 function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke), f, T, args...)
     @inline
-    # prepend kwargs and f to the invoked from the user
+    # prepend kwargs and f to the invoke from the user
     T = rewrap_unionall(Tuple{Core.Typeof(kwargs), Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
     return invoke(Core.kwcall, T, kwargs, f, args...)
 end
@@ -242,6 +248,8 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(applicable), @nospecialize(arg
     return applicable(Core.kwcall, kwargs, args...)
 end
 function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has a special tfunc (TODO: make this a Builtin instead like applicable)
+    Core.@nospecializeinfer
+    @noinline
     tt = rewrap_unionall(Tuple{Core.Typeof(f), (unwrap_unionall(t)::DataType).parameters...}, t)
     return Core._hasmethod(tt)
 end
@@ -302,6 +310,20 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke_in_world), world::UInt,
     return Core.invoke_in_world(world, Core.kwcall, kwargs, f, args...)
 end
 setfield!(typeof(invoke_in_world).name, :max_args, Int32(3), :monotonic) # invoke_in_world, world, f, args...
+
+struct VersionedParse
+    edition::Tuple{Int, Int}
+end
+
+function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
+    pm = parentmodule(Core._parse)
+    # hack to support old copies of JuliaSyntax
+    if !isdefined(pm, :_has_v1_14_version_hooks) && isdefined(pm, :_has_v1_10_hooks)
+        invokelatest(Core._parse, code, filename, lineno, offset, options)
+    else
+        invokelatest(Core._parse, code, filename, lineno, offset, options, vp.edition)
+    end
+end
 
 # core operations & types
 include("promotion.jl")

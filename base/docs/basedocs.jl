@@ -962,11 +962,17 @@ kw"?", kw"?:"
     for
 
 `for` loops repeatedly evaluate a block of statements while
-iterating over a sequence of values.
+iterating over a sequence of values. The sequence can be any iterable object, such as a
+range (`1:3`, or `1:2:9` with a step of 2), an array, a tuple, a string, or a
+[user-defined iterator](@ref man-interface-iteration).
+`for i = x`, `for i in x` and `for i ∈ x` are equivalent.
 
 The iteration variable is always a new variable, even if a variable of the same name
 exists in the enclosing scope.
 Use [`outer`](@ref) to reuse an existing local variable for iteration.
+
+Multiple nested loops can be combined into a single `for` by separating the iteration
+specifications with commas. A `break` inside such a loop exits all of the nested loops.
 
 # Examples
 ```jldoctest
@@ -976,6 +982,21 @@ julia> for i in [1, 4, 0]
 1
 4
 0
+
+julia> for i = 1:2:5
+           println(i)
+       end
+1
+3
+5
+
+julia> for i = 1:2, j = 3:4
+           println((i, j))
+       end
+(1, 3)
+(1, 4)
+(2, 3)
+(2, 4)
 ```
 """
 kw"for"
@@ -1279,6 +1300,9 @@ map(1:10, 11:20) do x, y
     x + y
 end
 ```
+
+Since the `do` block is an anonymous function, `return` inside it returns from that
+function, not from the enclosing one.
 """
 kw"do"
 
@@ -1472,6 +1496,17 @@ In most cases, this simply results in a call to `convert(argtype, argvalue)`.
 kw"ccall"
 
 """
+    cglobal((symbol, library) [, type=Cvoid])
+
+Obtain a pointer to a global variable in a C-exported shared library, specified
+exactly as in [`ccall`](@ref).
+Returns a `Ptr{Type}`, defaulting to `Ptr{Cvoid}` if no `Type` argument is supplied.
+The values can be read or written by [`unsafe_load`](@ref) or [`unsafe_store!`](@ref),
+respectively.
+"""
+Core.Intrinsics.cglobal
+
+"""
     llvmcall(fun_ir::String, returntype, Tuple{argtype1, ...}, argvalue1, ...)
     llvmcall((mod_ir::String, entry_fn::String), returntype, Tuple{argtype1, ...}, argvalue1, ...)
     llvmcall((mod_bc::Vector{UInt8}, entry_fn::String), returntype, Tuple{argtype1, ...}, argvalue1, ...)
@@ -1630,7 +1665,19 @@ kw"typegroup"
     new, or new{A,B,...}
 
 Special function available to inner constructors which creates a new object
-of the type. The form new{A,B,...} explicitly specifies values of parameters for parametric types.
+of the type.
+
+The form `new{A,B,...}` explicitly specifies values of parameters for parametric types.
+
+For constructors that have all of their type parameters after the function name, the
+contents between the `{...}` are passed on to the short form `new()` automatically:
+
+```julia
+struct NewExample{A,B}
+    NewExample{A,B}() where {A,B} = new()
+end
+```
+
 See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
 for more information.
 """
@@ -1654,6 +1701,9 @@ Variables can also have lower bounds:
 Vector{T} where T>:Int
 Vector{T} where Int<:T<:Real
 ```
+When only one bound is given, the variable being introduced must be on the left-hand side:
+`where Int<:T` does not introduce `T`, but a new variable named `Int` with upper bound `T`.
+
 There is also a concise syntax for nested `where` expressions. For example, this:
 
 ```julia
@@ -1742,7 +1792,8 @@ Core.TypeofBottom
 
 `Core.Type` is an abstract type which has all type objects as its instances.
 The only instance of the singleton type `Core.Type{T}` is the object
-`T`.
+`T`. This holds only when `T` is a type: if `T` is some other valid type parameter
+(e.g. a module), `Core.Type{T}` has no instances.
 
 # Examples
 ```jldoctest
@@ -2114,19 +2165,16 @@ TypeError
 """
     InterruptException()
 
-The process was stopped by a terminal interrupt (CTRL+C).
+The exception historically thrown when the process was stopped by a terminal
+interrupt (CTRL+C). A terminal interrupt is now delivered as a cancellation
+of the current ^C episode's scope and observed at cancellation points as a
+[`Base.CancellationRequest`](@ref); `InterruptException` remains for code
+that throws it explicitly (e.g. to signal an interruption to another task).
 
-Note that, in Julia script started without `-i` (interactive) option,
-`InterruptException` is not thrown by default.  Calling
-[`Base.exit_on_sigint(false)`](@ref Base.exit_on_sigint) in the script
-can recover the behavior of the REPL.  Alternatively, a Julia script
-can be started with
-
-```sh
-julia -e "include(popfirst!(ARGS))" script.jl
-```
-
-to let `InterruptException` be thrown by CTRL+C during the execution.
+Note that, in a Julia script started without the `-i` (interactive) option,
+CTRL+C terminates the process by default.  Calling
+[`Base.exit_on_sigint(false)`](@ref Base.exit_on_sigint) in the script makes
+CTRL+C observable again as a cancellation.
 """
 InterruptException
 
@@ -2153,12 +2201,13 @@ true
 applicable
 
 """
-    invoke(f, argtypes::Type, args...; kwargs...)
+    invoke(f, argtypes::Type{<:Tuple}, args...; kwargs...)
     invoke(f, argtypes::Method, args...; kwargs...)
     invoke(f, argtypes::CodeInstance, args...; kwargs...)
 
 Invoke a method for the given generic function `f` matching the specified types `argtypes` on the
-specified arguments `args` and passing the keyword arguments `kwargs`. The arguments `args` must
+specified arguments `args` and passing the keyword arguments `kwargs`. The argument types are
+given as a tuple type, e.g. `Tuple{Real}` for a single argument. The arguments `args` must
 conform with the specified types in `argtypes`, i.e. conversion is not automatically performed.
 This method allows invoking a method other than the most specific matching method, which is useful
 when the behavior of a more general definition is explicitly needed (often as part of the
@@ -2167,7 +2216,7 @@ the runtime must do more work, `invoke` is generally also slower--sometimes sign
 so--than doing normal dispatch with a regular call.
 
 Be careful when using `invoke` for functions that you don't write. What definition is used
-for given `argtypes` is an implementation detail unless the function is explicitly states
+for given `argtypes` is an implementation detail unless the function explicitly states
 that calling with certain `argtypes` is a part of public API.  For example, the change
 between `f1` and `f2` in the example below is usually considered compatible because the
 change is invisible by the caller with a normal (non-`invoke`) call.  However, the change is
@@ -2906,6 +2955,24 @@ See also [`const`](@ref).
 Core.declare_const
 
 """
+    define_method(module::Module, name::Symbol)
+    define_method(module::Module, fname_or_mt, argdata, code)
+
+Define a method. The 2-argument form declares a new generic function with the given `name`.
+The 4-argument form defines a method for a function, where `fname_or_mt` is either the function
+or its method table, `argdata` is the signature information, and `code` is the method body.
+
+This function is typically generated by lowering `function` definitions and should not
+be called directly in most cases.
+
+!!! compat "Julia 1.14"
+    This function requires Julia 1.14 or later.
+
+See also [`function`](@ref).
+"""
+Core.define_method
+
+"""
    _import(to::Module, from::Module, asname::Symbol, [sym::Symbol, imported::Bool])
 
 With all five arguments, imports `sym` from module `from` into `to` with name
@@ -3253,7 +3320,9 @@ Array{T,N}(::Missing, dims)
 Singleton type used in array initialization, indicating the array-constructor-caller
 would like an uninitialized array.
 
-See also [`undef`](@ref), an alias for `UndefInitializer()`.
+See the section in the manual on uninitialized memory.
+
+See also: [`undef`](@ref), an alias for `UndefInitializer()`.
 
 # Examples
 ```julia-repl
@@ -3273,7 +3342,9 @@ Alias for `UndefInitializer()`, which constructs an instance of the singleton ty
 [`UndefInitializer`](@ref), used in array initialization to indicate the
 array-constructor-caller would like an uninitialized array.
 
-See also [`missing`](@ref), [`similar`](@ref).
+See the section in the manual on uninitialized memory.
+
+See also: [`missing`](@ref), [`similar`](@ref).
 
 # Examples
 ```julia-repl
@@ -3324,6 +3395,30 @@ true
 (+)(x, y...)
 
 """
+    +%(x::Integer, y::Integer...)
+
+Addition operator with semantic wrapping. In the default Julia environment, this
+is equivalent to the regular addition operator `+`. However, some users may choose to overwrite
+`+` in their local environment to perform checked arithmetic instead (e.g. using
+[`Experimental.@make_all_arithmetic_checked`](@ref)). The `+%` operator may be used to indicate
+that wrapping behavior is semantically expected and correct and should thus be exempted from
+any opt-in overflow checking.
+
+# Examples
+```jldoctest
+julia> 1 +% 20 +% 4
+25
+
+julia> +%(1, 20, 4)
+25
+
+julia> typemax(Int) +% 1
+-9223372036854775808
+```
+"""
+(+%)(x, y...)
+
+"""
     -(x)
 
 Unary minus operator.
@@ -3369,6 +3464,27 @@ julia> -(2, 4.5)
 -(x, y)
 
 """
+    -%(x::Integer, y::Integer...)
+
+Subtraction operator with semantic wrapping. In the default Julia environment, this
+is equivalent to the regular subtraction operator `-`. However, some users may choose to overwrite
+`-` in their local environment to perform checked arithmetic instead (e.g. using
+[`Experimental.@make_all_arithmetic_checked`](@ref)). The `-%` operator may be used to indicate
+that wrapping behavior is semantically expected and correct and should thus be exempted from
+any opt-in overflow checking.
+
+# Examples
+```jldoctest
+julia> 2 -% 3
+-1
+
+julia> -(typemin(Int))
+-9223372036854775808
+```
+"""
+(-%)(x, y...)
+
+"""
     *(x, y...)
 
 Multiplication operator.
@@ -3405,6 +3521,30 @@ julia> x = [1, 2]; x'x  # adjoint vector * vector
 ```
 """
 (*)(x, y...)
+
+"""
+    *%(x::Integer, y::Integer, z::Integer...)
+
+Multiplication operator with semantic wrapping. In the default Julia environment, this
+is equivalent to the regular multiplication operator `*`. However, some users may choose to overwrite
+`*` in their local environment to perform checked arithmetic instead (e.g. using
+[`Experimental.@make_all_arithmetic_checked`](@ref)). The `*%` operator may be used to indicate
+that wrapping behavior is semantically expected and correct and should thus be exempted from
+any opt-in overflow checking.
+
+# Examples
+```jldoctest
+julia> 2 *% 7 *% 8
+112
+
+julia> *(2, 7, 8)
+112
+
+julia> 0xff *% 0xff
+0x01
+```
+"""
+(*%)(x, y, z...)
 
 """
     /(x, y)
@@ -4038,7 +4178,7 @@ Base.donotdelete
 """
     Base.blackbox(x) -> x
 
-Return `x` unchanged but the returned value will be treated as if it
+This function returns `x` unchanged, but treats the returned value as if it
 came from an unknowable black-box source. The optimizer may not make any
 assumptions about the output: it cannot be constant-folded, common-subexpression
 eliminated (CSE'd), or treated as loop-invariant.
@@ -4145,6 +4285,30 @@ The current differences are:
 - `Core.finalizer` returns `nothing` rather than `o`.
 """
 Core.finalizer
+
+"""
+    Core._task(f, size) -> Task
+    Core._task(f, size, invoked) -> Task
+
+Create a new `Task` that will execute function `f` with the specified stack size.
+The optional third argument `invoked` can be a `Method`, `CodeInstance`, or tuple
+`Type` that will be used for optimized task invocation via `Core.invoke`.
+
+This builtin is an implementation detail used by the `Task` constructor and should
+not be called directly by end-users. Use `Task(f)` instead. It is a low-level
+interface that bypasses safety checks and initialization performed by the public
+`Task` constructor.
+"""
+Core._task
+
+"""
+    Core.task_result_type(task) -> Type
+
+Return a conservative upper bound for the return type of the closure provided when
+`task` was created. At runtime this builtin always returns the type `Any`; however,
+inference may replace calls to it with a more precise result type.
+"""
+Core.task_result_type
 
 """
     ConcurrencyViolationError(msg) <: Exception

@@ -92,6 +92,11 @@ ERROR: MethodError: no method matching //(::Float64, ::Int64)
 
 function //(x::Rational, y::Integer)
     xn, yn = divgcd(promote(x.num, y)...)
+    # If x is infinite, the denominator below is zero and cannot carry the
+    # sign of y, so apply that sign to the numerator instead.
+    if iszero(x.den) && signbit(yn)
+        xn = checked_neg(xn)
+    end
     checked_den(xn, checked_mul(x.den, yn))
 end
 function //(x::Integer,  y::Rational)
@@ -101,6 +106,10 @@ end
 function //(x::Rational, y::Rational)
     xn,yn = divgcd(promote(x.num, y.num)...)
     xd,yd = divgcd(promote(x.den, y.den)...)
+    # See the comment in `//(::Rational, ::Integer)`.
+    if iszero(xd) && signbit(yn)
+        xn = checked_neg(xn)
+    end
     checked_den(checked_mul(xn, yd), checked_mul(xd, yn))
 end
 
@@ -259,7 +268,6 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     y = one(x)
     tolx = oftype(x, tol)
     nt, t, tt = tolx, zero(tolx), tolx
-    ia = np = nq = zero(T)
 
     # compute the successive convergents of the continued fraction
     #  np // nq = (p*a + pp) // (q*a + qq)
@@ -332,6 +340,7 @@ function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
     end
     return Rational{T}(x)
 end
+rationalize(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(rationalize, (Union{}, slurp...)))
 
 
 """
@@ -401,22 +410,42 @@ function -(x::Rational{T}) where T<:Unsigned
     x
 end
 
+-%(x::Rational) = unsafe_rational(-%(x.num), x.den)
+
 function +(x::Rational, y::Rational)
+    xp, _ = promote(x, y)::NTuple{2,Rational}
+    if isinf(x) && x == y
+        return xp
+    end
+    xd, yd = divgcd(promote(x.den, y.den)...)
+    Rational(checked_add(checked_mul(x.num, yd), checked_mul(y.num, xd)), checked_mul(x.den, yd))
+end
+
+function +%(x::Rational, y::Rational)
     xp, yp = promote(x, y)::NTuple{2,Rational}
     if isinf(x) && x == y
         return xp
     end
     xd, yd = divgcd(promote(x.den, y.den)...)
-    Rational(checked_add(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
+    Rational(+%(*%(x.num,yd), *%(y.num,xd)), *%(x.den,yd))
 end
 
 function -(x::Rational, y::Rational)
-    xp, yp = promote(x, y)::NTuple{2,Rational}
-    if isinf(x) && x == -y
+    xp, _ = promote(x, y)::NTuple{2,Rational}
+    if isinf(x) && isinf(y) && x != y
         return xp
     end
     xd, yd = divgcd(promote(x.den, y.den)...)
-    Rational(checked_sub(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
+    Rational(checked_sub(checked_mul(x.num, yd), checked_mul(y.num, xd)), checked_mul(x.den, yd))
+end
+
+function -%(x::Rational, y::Rational)
+    xp, yp = promote(x, y)::NTuple{2,Rational}
+    if isinf(x) && isinf(y) && x != y
+        return xp
+    end
+    xd, yd = divgcd(promote(x.den, y.den)...)
+    Rational(-%(*%(x.num, yd), *%(y.num, xd)), *%(x.den, yd))
 end
 
 for (op,chop) in ((:rem,:rem), (:mod,:mod))
@@ -586,7 +615,7 @@ function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {
     if iszero(denominator(x)) && !(T <: Integer)
         return convert(T, copysign(unsafe_rational(one(Tr), zero(Tr)), numerator(x)))
     end
-    convert(T, div(numerator(x), denominator(x), r))
+    _round_convert(T, div(numerator(x), denominator(x), r), x, r)
 end
 
 function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where T
@@ -668,7 +697,7 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
         end
     end
     h = hash_integer(pow, h)
-    h = hash_integer((pow > 0) ? (num << (pow % 64)) : num, h)
+    h = hash_integer((pow > 0) ? (num << (pow % 8)) : num, h)
     return h
 end
 

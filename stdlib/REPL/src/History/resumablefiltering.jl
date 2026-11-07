@@ -10,7 +10,7 @@ struct ConditionSet{S}
     modes::Vector{SubString{S}}
 end
 
-ConditionSet{S}() where {S} = ConditionSet{S}([], [], [], [], [], [], [])
+ConditionSet{S}() where {S} = ConditionSet{S}(ntuple(_ -> SubString{S}[], 7)...)
 
 """
     FILTER_SEPARATOR
@@ -140,7 +140,7 @@ function ConditionSet(spec::S) where {S <: AbstractString}
                 rang = something(findfirst('>', cond), typemax(Int))
                 if rang == something(findfirst(isspace, cond), ncodeunits(cond) + 1) - 1
                     mode = @view cond[1:prevind(cond, rang)]
-                    push!(condset.modes, SubString(lowercase(mode)))
+                    push!(condset.modes, mode)
                     cond = @view cond[rang + 1:end]
                 end
             end
@@ -219,10 +219,10 @@ struct FilterSpec
     modes::Vector{Symbol}
 end
 
-FilterSpec() = FilterSpec([], [], [], [])
+FilterSpec() = FilterSpec(String[], String[], Regex[], Symbol[])
 
 function FilterSpec(cset::ConditionSet)
-    spec = FilterSpec([], [], [], [])
+    spec = FilterSpec()
     for term in cset.exacts
         push!(spec.exacts, String(term))
     end
@@ -247,10 +247,16 @@ function FilterSpec(cset::ConditionSet)
         end
     end
     for itlsm in cset.initialisms
-        rx = Regex(join((string("(?:(?:\\b|_+)(?:\\Q", ltr, "\\E|\\Q", uppercase(ltr),
-                                "\\E)\\w+|\\p{Ll}\\Q", uppercase(ltr), "\\E)")
-                         for ltr in itlsm), "[\\W_]*?"))
-        push!(spec.regexps, rx)
+        initials = map(enumerate(itlsm)) do (i, ltr)
+            lower, upper = string("\\Q", ltr, "\\E"), string("\\Q", uppercase(ltr), "\\E")
+            # Lookbehinds let PCRE skip ahead to the first letter, but would change later matches
+            if i == 1
+                string("(?:(?<![^\\W_])(?:", lower, '|', upper, ")\\w+|(?<=\\p{Ll})", upper, ')')
+            else
+                string("(?:(?:\\b|_+)(?:", lower, '|', upper, ")\\w+|\\p{Ll}", upper, ')')
+            end
+        end
+        push!(spec.regexps, Regex(join(initials, "[\\W_]*?")))
     end
     for fuzz in cset.fuzzy
         for word in eachsplit(fuzz)
@@ -260,32 +266,27 @@ function FilterSpec(cset::ConditionSet)
         end
     end
     for mode in cset.modes
-        push!(spec.modes, Symbol(mode))
+        push!(spec.modes, Symbol(lowercase(mode)))
     end
     spec
 end
 
 
 """
-    filterchunkrev!(out, candidates, spec, seen, idx; maxtime, maxresults) -> Int
+    filterchunkrev!(out, candidates, spec, idx; maxtime, maxresults) -> Int
 
 Incrementally filter `candidates[1:idx]` in reverse order.
 
 Pushes matches onto `out` until either `maxtime` is exceeded or `maxresults`
-collected, then returns the new resume index. Only unique entries (by mode and content)
-are added to avoid showing duplicate history items.
+collected, then returns the new resume index.
 """
 function filterchunkrev!(out::Vector{HistEntry}, candidates::DenseVector{HistEntry},
-                         spec::FilterSpec, seen::Set{Tuple{Symbol,String}}, idx::Int = length(candidates);
+                         spec::FilterSpec, idx::Int = length(candidates);
                          maxtime::Float64 = Inf, maxresults::Int = length(candidates))
     batchsize = clamp(length(candidates) ÷ 512, 10, 1000)
     for batch in Iterators.partition(idx:-1:1, batchsize)
-        time() > maxtime && break
         for outer idx in batch
             entry = candidates[idx]
-            if (entry.mode, entry.content) ∈ seen
-                continue
-            end
             if !isempty(spec.modes)
                 entry.mode ∈ spec.modes || continue
             end
@@ -311,10 +312,10 @@ function filterchunkrev!(out::Vector{HistEntry}, candidates::DenseVector{HistEnt
                 end
             end
             matchfail && continue
-            push!(seen, (entry.mode, entry.content))
             pushfirst!(out, entry)
             length(out) == maxresults && break
         end
+        (length(out) >= maxresults || time() > maxtime) && break
     end
     max(0, idx - 1)
 end
@@ -343,6 +344,7 @@ function matchregions(spec::FilterSpec, candidate::AbstractString)
         i == length(matches) && break
         nextmatch = matches[i + 1]
         nxt = nextind(candidate, last(match))
+        nxt > ncodeunits(candidate) && continue
         if nextind(candidate, nxt) == first(nextmatch) && candidate[nxt] == ' '
             matches[i] = first(match):last(nextmatch)
             matches[i+1] = nextind(candidate, last(nextmatch)):last(nextmatch)

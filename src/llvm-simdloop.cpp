@@ -4,7 +4,7 @@
 #include "passes.h"
 
 // This file defines a LLVM pass that:
-// 1. Set's loop information in form of metadata
+// 1. Sets loop information in form of metadata
 // 2. If the metadata contains `julia.simdloop` finds reduction chains and marks
 //    floating-point operations as fast-math. `See enableUnsafeAlgebraIfReduction`.
 // 3. If the metadata contains `julia.ivdep` marks all memory accesses in the loop
@@ -260,7 +260,10 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution
         return false;
     ++TotalMarkedLoops;
     LLVMContext &Context = L.getHeader()->getContext();
-    LoopID = MDNode::get(Context, MDs);
+    // n.b. distinct: a uniqued node would be shared with any other `!{null}` of the
+    // context (e.g. the empty type array of a DISubroutineType), which the
+    // self-reference below would then corrupt
+    LoopID = MDNode::getDistinct(Context, MDs);
     // Set operand 0 to refer to the loop id itself
     LoopID->replaceOperandWith(0, LoopID);
     L.setLoopID(LoopID);

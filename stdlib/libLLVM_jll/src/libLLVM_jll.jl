@@ -31,6 +31,8 @@ const libLLVM = LazyLibrary(
         LazyLibrary[libz, libzstd]
     elseif Sys.isfreebsd()
         LazyLibrary[libz, libzstd, libgcc_s]
+    elseif Sys.iswindows() && Sys.WORD_SIZE == 64
+        LazyLibrary[libz, libzstd, libstdcxx]
     else
         LazyLibrary[libz, libzstd, libstdcxx, libgcc_s]
     end
@@ -45,6 +47,9 @@ function eager_mode()
     dlopen(libLLVM)
 end
 is_available() = true
+
+# JLLWrappers path compatibility accessor
+get_libLLVM_path() = libLLVM_path
 
 function __init__()
     global libLLVM_path = string(libLLVM.path)

@@ -31,6 +31,9 @@ function eager_mode()
 end
 is_available() = true
 
+# JLLWrappers path compatibility accessor
+get_libpcre2_8_path() = libpcre2_8_path
+
 function __init__()
     global libpcre2_8_path = string(libpcre2_8.path)
     global artifact_dir = dirname(Sys.BINDIR)

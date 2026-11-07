@@ -259,6 +259,8 @@ end
 
         f = findeach(isodd, Dict(1 => 2, 2 => 3, 3 => 4))
         @test only(f) == 2
+
+        @test collect(findeach([true,false,true])) == [1,3]
     end
 end
 
@@ -360,7 +362,7 @@ end
 let itr
     itr = Iterators.Stateful(Iterators.map(identity, 1:5))
     @test collect(itr) == 1:5
-    @test collect(itr) == Int[] # Stateful do not preserve shape
+    @test collect(itr) == Int[] # Stateful does not preserve shape
     itr = (i+1 for i in Base.Stateful([1, 2, 3]))
     @test collect(itr) == [2, 3, 4]
     @test collect(itr) == Int[] # Stateful do not preserve shape
@@ -547,8 +549,16 @@ end
 @test (@inferred length(flatten(1:6))) == 6
 @test collect(flatten(Any[])) == Any[]
 @test collect(flatten(())) == Union{}[]
+@test last(flatten([1:3, 5:4])) == 3
+@test_throws ArgumentError last(flatten([1:0, 5:4]))
+@test_throws ArgumentError last(flatten(UnitRange{Int}[]))
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
+
+# Flattened iterator lengths must not wrap before comprehension allocation.
+overflow_length = Int(typemax(UInt) ÷ 3 + 1)
+overflow_flatten = flatten(Iterators.repeated((1, 2, 3), overflow_length))
+@test_throws OverflowError collect(identity(x) for x in overflow_flatten)
 
 @testset "IteratorSize trait for flatten" begin
     @test (@inferred Base.IteratorSize(Base.Flatten((i for i=1:2) for j=1:1))) == Base.SizeUnknown()
@@ -730,6 +740,11 @@ end
     @test collect(product(1:1, (1, "2"))) == [(1, 1) (1, "2")]
 end
 
+@testset "product of iterators that are all done" begin
+    @test collect(product(Iterators.Stateful([1, 2]))) == [(1,), (2,)]
+    @test collect(product(eachline(IOBuffer("a\nb")))) == [("a",), ("b",)]
+end
+
 @testset "filter empty iterable #16704" begin
     arr = filter(Returns(true), 1:0)
     @test (@inferred length(arr)) == 0
@@ -837,6 +852,9 @@ end
         @test peek(a) == 3
         @test sum(a) == 7
     end
+    # the second argument of `peek` is a sentinel value here, so `Union{}` is returned like any other value
+    @test peek(Iterators.Stateful(Int[]), Union{}) === Union{}
+    @test peek(Iterators.Stateful([1]), Union{}) === 1
     @test (@inferred eltype(Iterators.Stateful("a"))) == Char
     # Interaction of zip/Stateful
     let a = Iterators.Stateful("a"), b = ""
@@ -946,6 +964,25 @@ end
     @test length(collect(Iterators.take(d,3))) == 3
     @test length(collect(d)) == 2
     @test length(collect(d)) == 0
+end
+
+@testset "zip with Take" begin
+    @test collect(zip(take(zip(1:3, 1:3), 2), 1:5)) == [((1, 1), 1), ((2, 2), 2)]
+    # isdone(::Take, state) infers as Union{Bool,Missing} here
+    f(z) = (s = 0.0; for (_, b) in z; s += b; end; s)
+    z = zip(1:100, repeated(1.0, 100))
+    f(z)
+    @test @allocated(f(z)) == 0
+    # an exhausted Take must stop zip before a preceding stateful iterator is advanced
+    c = Channel{Int}(5); foreach(i -> put!(c, i), 1:5); close(c)
+    @test collect(zip(c, take(1:10, 2))) == [(1, 1), (2, 2)]
+    @test collect(c) == [3, 4, 5]
+    # take(itr, 0) is done before iteration starts, even for a nonempty stateful itr
+    x = Iterators.Stateful([1, 2, 3])
+    @test isempty(take(x, 0))
+    y = Iterators.Stateful([10, 20, 30])
+    @test isempty(collect(zip(y, take(x, 0))))
+    @test collect(y) == [10, 20, 30]
 end
 
 @testset "only" begin
@@ -1086,6 +1123,11 @@ end
     @test Iterators.peel(1:10)[2] |> collect == 2:10
     @test Iterators.peel(x^2 for x in 2:4)[1] == 4
     @test Iterators.peel(x^2 for x in 2:4)[2] |> collect == [9, 16]
+    let (x, r) = Iterators.peel(Iterators.take(Iterators.Stateful([1, 2, 3]), 1))
+        @test x == 1
+        @test isempty(r)
+        @test collect(r) == Int[]
+    end
 end
 
 @testset "last for iterators" begin
@@ -1216,6 +1258,12 @@ end
     @test nth(finite_cycle_size_unknown, 2) == 3
     @test nth(finite_cycle_size_unknown, 20) == 9
     @test_throws BoundsError nth(finite_cycle_size_unknown, 30) # only wraps 5 times, max n is 5 * 5 = 25
+
+    # unsigned n with a negative first index
+    @test nth(Base.IdentityUnitRange(-5:-3), UInt(1)) == -5
+    # length(v) * cycles overflows Int
+    @test nth(Iterators.cycle([1, 2, 3], typemax(Int) ÷ 2), 1) == 1
+    @test nth(Iterators.cycle([1, 2, 3], typemax(Int)), typemax(Int)) == 1
 end
 
 @testset "Iterators docstrings" begin

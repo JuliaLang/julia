@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import ..Compiler: verify_typeinf_trim, NativeInterpreter, argtypes_to_type, compileable_specialization_for_call
+import ..Compiler: verify_typeinf_trim, NativeInterpreter, argtypes_to_type, compileable_specialization_for_call,
+    threads_deferred_call_type, is_threads_call_def, foreign_library_type, _libdl_dlopen, _compileable_methods, method_table
 
 using ..Compiler:
      # operators
@@ -110,7 +111,7 @@ const MAX_NESTING_DEPTH = 1
 
 function is_call_expr(codeinfo::CodeInfo, @nospecialize(stmt))
     stmt = unwrap_stmt(codeinfo, stmt)
-    return stmt isa Expr && stmt.head ∈ (:call, :invoke, :foreigncall, :new)
+    return stmt isa Expr && stmt.head ∈ (:call, :invoke, :foreigncall, :foreignglobal, :new)
 end
 
 function has_unstable_arg(codeinfo::CodeInfo, sptypes::Vector{VarState}, args, startidx::Int)
@@ -256,7 +257,7 @@ function verify_create_stackframes(codeinst::CodeInstance, stmtidx::Int, parents
         empty!(scopes)
 
         new_parent = get(parents, codeinst, nothing)
-        if haskey(visited, new_parent)
+        if new_parent === nothing || haskey(visited, new_parent)
             break
         end
         push!(visited, new_parent)
@@ -281,14 +282,33 @@ function may_dispatch(@nospecialize ftyp)
                Core.finalizer isa ftyp ||
                Core.modifyfield! isa ftyp ||
                Core.modifyglobal! isa ftyp ||
+               Core.modifyglobal_partition isa ftyp ||
                Core.memoryrefmodify! isa ftyp
     else
         return true
     end
 end
 
+# `--trim` compiles every on-load callback method, so the dynamic call is covered as long as
+# each method it may dispatch to has a single compileable specialization (and so was compiled).
+# Returns the methods that are not covered, or `nothing` if they cannot be enumerated.
+function _uncompiled_methods(interp::NativeInterpreter, @nospecialize(ftyp), caches::IdDict{MethodInstance,CodeInstance})
+    matches = _compileable_methods(method_table(interp), ftyp)
+    matches === nothing && return nothing
+    uncovered = Method[]
+    for match in matches
+        mi = match.second
+        if mi === nothing || !(get(caches, mi, nothing) isa CodeInstance)
+            push!(uncovered, match.first)
+        end
+    end
+    return uncovered
+end
+
 function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance, codeinfo::CodeInfo, inspected::IdSet{CodeInstance}, caches::IdDict{MethodInstance,CodeInstance}, parents::ParentMap, errors::ErrorList)
     mi = get_ci_mi(codeinst)
+    # The dynamic call of a `@threads` loop body is checked where the loop starts instead.
+    is_threads_call_def(mi.def) && return
     sptypes = sptypes_from_meth_instance(mi)
     src = codeinfo.code
     for i = 1:length(src)
@@ -299,6 +319,14 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
         if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             error = "unresolved invoke"
             edge = stmt.args[1]
+            atype = isexpr(stmt, :invoke) ? threads_deferred_call_type(stmt, codeinfo, sptypes) : nothing
+            if atype !== nothing
+                mi = compileable_specialization_for_call(interp, atype)
+                ci = mi === nothing ? nothing : get(caches, mi, nothing)
+                if !(ci isa CodeInstance)
+                    push!(errors, false => CallMissing(codeinst, codeinfo, sptypes, i, "unresolved `Threads.@threads` loop body"))
+                end
+            end
             if edge isa CodeInstance
                 haskey(parents, edge) || (parents[edge] = (codeinst, i))
                 edge in inspected && continue
@@ -307,6 +335,9 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                     ci = get(caches, edge_mi, nothing)
                     ci isa CodeInstance && continue # assume that only this_world matters for trim
                 end
+            elseif edge isa MethodInstance
+                ci = get(caches, edge, nothing)
+                ci isa CodeInstance && continue
             end
             # TODO: check for calls to Base.atexit?
         elseif isexpr(stmt, :call)
@@ -340,7 +371,7 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                         end
                     end
                 elseif Core.finalizer isa ftyp
-                    if length(stmt.args) == 3
+                    if 3 <= length(stmt.args) <= 5
                         finalizer = argextype(stmt.args[2], codeinfo, sptypes)
                         obj = argextype(stmt.args[3], codeinfo, sptypes)
                         atype = argtypes_to_type(Any[finalizer, obj])
@@ -350,9 +381,8 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                             ci = get(caches, mi, nothing)
                             ci isa CodeInstance && continue
                         end
-
-                        error = "unresolved finalizer registered"
                     end
+                    error = "unresolved finalizer registered"
                 elseif Core._apply isa ftyp
                     error = "trim verification not yet implemented for builtin `Core._apply`"
                 elseif Core._call_in_world_total isa ftyp
@@ -367,9 +397,22 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                     error = "trim verification not yet implemented for builtin `Core.modifyfield!`"
                 elseif Core.modifyglobal! isa ftyp
                     error = "trim verification not yet implemented for builtin `Core.modifyglobal!`"
+                elseif Core.modifyglobal_partition isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core.modifyglobal_partition`"
                 elseif Core.memoryrefmodify! isa ftyp
                     error = "trim verification not yet implemented for builtin `Core.memoryrefmodify!`"
                 else @assert false "unexpected builtin" end
+            elseif length(stmt.args) == 1 && ftyp <: Core.LazyLibraryCallback
+                # dynamic calls to `(::Core.LazyLibraryCallback)(...)` are eagerly enqueued
+                # by precompile.jl so it's worth checking if we happen to have all relevant
+                # CIs for this abstract call
+                uncompiled = _uncompiled_methods(interp, ftyp, caches)
+                uncompiled !== nothing && isempty(uncompiled) && continue
+                error = "unresolved LazyLibrary on-load callback"
+                if uncompiled !== nothing
+                    shown = Base.join(Base.map(m -> Base.sprint(Base.show, m), uncompiled), ", ")
+                    error = Base.string(error, " (no compiled specialization of ", shown, ")")
+                end
             else
                 error = "unresolved call"
             end
@@ -399,10 +442,10 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             end
 
             error = "unresolved cfunction"
-        elseif isexpr(stmt, :foreigncall)
-            foreigncall = stmt.args[1]
-            if isexpr(foreigncall, :tuple, 1)
-                foreigncall = foreigncall.args[1]
+        elseif isexpr(stmt, :foreigncall) || isexpr(stmt, :foreignglobal)
+            spec = stmt.args[1]
+            if isexpr(stmt, :foreigncall) && isexpr(spec, :tuple, 1)
+                foreigncall = spec.args[1]
                 if foreigncall isa String
                     foreigncall = QuoteNode(Symbol(foreigncall))
                 end
@@ -413,6 +456,21 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                 else
                     error = "disallowed ccall with non-constant name and no library"
                 end
+            end
+            if isempty(error)
+                # the runtime `dlopen(lib)` on first use is dispatched in this caller's world
+                library_type = foreign_library_type(spec, codeinfo, sptypes)
+                library_type === nothing && continue # no runtime `dlopen()` invocation
+                dlopen_fn = _libdl_dlopen()
+                if dlopen_fn !== nothing
+                    atype = Tuple{typeof(dlopen_fn), library_type}
+                    mi = compileable_specialization_for_call(interp, atype)
+                    if mi !== nothing
+                        ci = get(caches, mi, nothing)
+                        ci isa CodeInstance && continue
+                    end
+                end
+                error = "unresolved dlopen for ccall / cglobal"
             end
         elseif isexpr(stmt, :new_opaque_closure)
             error = "unresolved opaque closure"
@@ -438,7 +496,10 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
         item = codeinfos[i]
         if item isa CodeInstance
             push!(inspected, item)
-            if item.owner === nothing && item.min_world <= this_world <= item.max_world
+            # Trim inference caches its results under the `:trim` symbol as the owner (see
+            # `typeinf_ext_toplevel`), so the `CodeInstance`s handed to us here carry that
+            # owner rather than `nothing`.
+            if item.owner === :trim && item.min_world <= this_world <= item.max_world
                 mi = get_ci_mi(item)
                 if mi === item.def
                     caches[mi] = item
@@ -454,9 +515,7 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
         elseif item isa SimpleVector
             rt = item[1]::Type
             sig = item[2]::Type
-            mi = ccall(:jl_get_specialization1, Any,
-                        (Any, Csize_t, Cint),
-                        sig, this_world, #= mt_cache =# 0)
+            mi = ccall(:jl_get_specialization1, Any, (Any, Csize_t), sig, this_world)
             asrt = Any
             valid = if mi !== nothing
                 mi = mi::MethodInstance

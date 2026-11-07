@@ -6,9 +6,11 @@ contextual
 datastructures
 effects
 inference
+lattice
 inline
 interpreter_exec
 invalidation
+precompile
 irpasses
 newinterp
 ssair
