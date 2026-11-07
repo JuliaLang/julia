@@ -10816,7 +10816,8 @@ static jl_llvm_functions_t
             if (sret) {
                 jl_aliasinfo_t sret_ai = sret_aliasinfo(ctx, jlrettype, returninfo.all_roots);
                 if (returninfo.return_roots || !inline_roots.empty() || retvalinfo.ispointer()) {
-                    emit_unionmove(ctx, sret, jlrettype, sret_ai, retvalinfo, retvalinfo.TIndex, /*skip*/isboxed_union);
+                    if (!emit_union_slotmove(ctx, sret, jlrettype, sret_ai, retvalinfo, /*skip*/isboxed_union))
+                        emit_unionmove(ctx, sret, jlrettype, sret_ai, retvalinfo, retvalinfo.TIndex, /*skip*/isboxed_union);
                 }
                 else if (retvalinfo.V) {
                     Align align(returninfo.union_align);

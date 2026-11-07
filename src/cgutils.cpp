@@ -4484,13 +4484,16 @@ static jl_cgval_t emit_tagged_load(jl_codectx_t &ctx, Value *ptr, jl_value_t *ut
             counter);
     Value *tindex = ctx.builder.CreateSelect(isref, ref_tindex, imm_tindex);
 
-    // the payload is the value zero-extended, so its low bytes hold any immediate
+    // the payload is the value zero-extended, so its low bytes hold any
+    // immediate; it fills the slot up to a word, so that a copy of the slot
+    // (emit_union_slotmove) reads back one whole store
     bool allunbox;
     size_t min_align, nbytes, inline_roots;
     AllocaInst *slot = try_emit_union_alloca(ctx, (jl_uniontype_t*)ut, allunbox, min_align, nbytes, inline_roots);
-    assert(slot && inline_roots == 0 && payload_size <= nbytes);
+    size_t store_size = std::min(nbytes, (size_t)ctx.types().sizeof_ptr);
+    assert(slot && inline_roots == 0 && payload_size <= store_size);
     Value *payload = ctx.builder.CreateTrunc(ctx.builder.CreateLShr(bits, k),
-            Type::getIntNTy(ctx.builder.getContext(), 8 * payload_size));
+            Type::getIntNTy(ctx.builder.getContext(), 8 * store_size));
     ctx.builder.CreateAlignedStore(payload, slot, slot->getAlign());
     Value *V = ctx.builder.CreateSelect(isref, decay_derived(ctx, box), decay_derived(ctx, slot));
     jl_cgval_t ret = mark_julia_slot(V, ut, tindex, union_slot_aliasinfo(ctx, ut));
@@ -4722,6 +4725,62 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         }
         ctx.builder.SetInsertPoint(postBB);
     }
+}
+
+// the bytes that may be read at `V` for an unboxed value: the least size of the
+// stack slots `V` selects among, or 0 if it may point elsewhere; `Vboxed`, if
+// not null, is selected only for a boxed value
+static uint64_t union_slot_bytes(Value *V, Value *Vboxed, const DataLayout &DL)
+{
+    V = V->stripPointerCasts();
+    if (Vboxed && V == Vboxed->stripPointerCasts())
+        return UINT64_MAX;
+    if (auto *SI = dyn_cast<SelectInst>(V))
+        return std::min(union_slot_bytes(SI->getTrueValue(), Vboxed, DL),
+                        union_slot_bytes(SI->getFalseValue(), Vboxed, DL));
+    if (auto *AI = dyn_cast<AllocaInst>(V)) {
+        std::optional<TypeSize> size = AI->getAllocationSize(DL);
+        if (size && !size->isScalable())
+            return size->getFixedValue();
+    }
+    return 0;
+}
+
+// Copy the unboxed value of split union `src` to `dest` as the bytes of its
+// largest component, with no switch on the type index, if `src.V` points into
+// stack slots that hold that many bytes, as for a decoded tagged word or a
+// union returned by a call. `skip` must be true for every boxed value; `dest`
+// is then undefined. Returns false, emitting nothing, if this does not apply.
+static bool emit_union_slotmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
+        const jl_aliasinfo_t &dest_ai, const jl_cgval_t &src, Value *skip) JL_CANSAFEPOINT
+{
+    if (!src.TIndex || !src.V || src.constant || !src.inline_roots.empty() || jl_is_concrete_type(src.typ))
+        return false;
+    size_t nb = 0;
+    size_t align = MAX_ALIGN;
+    bool hasptr = false;
+    unsigned counter = 0;
+    for_each_uniontype_small(
+            [&](unsigned idx, jl_datatype_t *jt) JL_CANSAFEPOINT {
+                if (jl_datatype_size(jt) == 0 || !jl_subtype((jl_value_t*)jt, src.typ))
+                    return;
+                hasptr |= jl_datatype_layout(jt)->npointers != 0;
+                nb = std::max(nb, (size_t)jl_datatype_size(jt));
+                align = std::min(align, (size_t)julia_alignment((jl_value_t*)jt));
+            },
+            desttype,
+            counter);
+    // at most two words, so the copy stays a load and a store or two
+    if (hasptr || nb == 0 || nb > 2 * ctx.types().sizeof_ptr)
+        return false;
+    if (union_slot_bytes(src.V, skip ? src.Vboxed : nullptr, jl_Module->getDataLayout()) < nb)
+        return false;
+    // a skipped value copies `dest` onto itself, so no branch tests `skip`
+    Value *from = src.V;
+    if (skip)
+        from = ctx.builder.CreateSelect(skip, ctx.builder.CreateAddrSpaceCast(dest, from->getType()), from);
+    emit_memcpy(ctx, dest, dest_ai, from, src.aliasinfo, nb, Align(align), Align(align));
+    return true;
 }
 
 
