@@ -1286,6 +1286,9 @@ timesofar("binary comparison")
         @check_bit_operation reverse(b1, dims=d) BitArray{4}
     end
     @test_throws ArgumentError reverse(b1, dims=5)
+    for sz in ((0, 7), (7, 0), (0, 0), (2, 0, 3)), d = 1:length(sz)
+        @check_bit_operation reverse(falses(sz), dims=d) BitArray{length(sz)}
+    end
 
     b1 = bitrand(n1, n2)
     for k = 1:4
