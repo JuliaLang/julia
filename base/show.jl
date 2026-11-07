@@ -1346,7 +1346,7 @@ function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)
         if !first
             print(io, ", ")
         end
-        sym = syms[i]
+        sym = syms[i]::Symbol
         if isidentifier(sym)
             show_sym(io, sym)
         else
