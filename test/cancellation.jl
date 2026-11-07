@@ -1698,6 +1698,62 @@ end
     unlock(lk)
 end
 
+@testset "a throw while acquiring the wait entry releases the lock" begin
+    # Inject allocation failure to check lock cleanup in each wait path.
+    # Use a subprocess to isolate the added Base method.
+    code = """
+    using Test
+    using Base: CANCEL_TOKEN, CancellationToken, CancellationTokenSource
+    using Base.ScopedValues: with
+    const VICTIM = Ref{Any}(nothing)
+    function Base.WaitEntry2(t::Task)
+        if VICTIM[] === t
+            VICTIM[] = nothing
+            throw(OutOfMemoryError())
+        end
+        return invoke(Base.WaitEntry2, Tuple{Union{Task, Nothing}}, t)
+    end
+    # run `f` in a task whose first wait entry allocation throws
+    oom_task(f) = Threads.@spawn (VICTIM[] = current_task(); f())
+    yield_until(f) = (for _ in 1:10_000; f() && return true; yield(); end; false)
+    with(CANCEL_TOKEN => CancellationToken(CancellationTokenSource())) do
+        waitee = Threads.@spawn for _ in 1:100; yield(); end
+        waiter = oom_task(() -> wait(waitee))
+        @test yield_until(() -> istaskdone(waiter) && istaskdone(waitee))
+        @test waiter.result isa OutOfMemoryError
+
+        c = Base.ThreadSynchronizer()
+        t = oom_task() do
+            lock(c)
+            try
+                wait(c)
+            catch e
+                e isa OutOfMemoryError && islocked(c)
+            finally
+                unlock(c)
+            end
+        end
+        @test yield_until(() -> istaskdone(t))
+        @test !istaskfailed(t) && t.result === true
+
+        rl = ReentrantLock()
+        lock(rl)
+        t = oom_task(() -> lock(rl))
+        @test yield_until(() -> istaskdone(t))
+        @test t.result isa OutOfMemoryError
+        unlock(rl)
+        t = Threads.@spawn lock(Returns(true), rl)
+        @test yield_until(() -> istaskdone(t)) && t.result === true
+    end
+    """
+    p = run(pipeline(`$(Base.julia_cmd()) --startup-file=no --threads=1 -e $code`;
+                     stdout, stderr); wait=false)
+    if timedwait(() -> process_exited(p), 300.0) !== :ok
+        kill(p, Base.SIGKILL)
+    end
+    @test success(p)
+end
+
 @testset "WaitEntryN memory accounting and deepcopy" begin
     # variable-sized (like CancellationTokenSource): the type has no
     # definite size, instances charge their slot tail
