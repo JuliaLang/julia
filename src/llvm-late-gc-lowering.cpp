@@ -2616,9 +2616,9 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 AllocaSlot = LLT_ALIGN(AllocaSlot, align);
             Instruction *slotAddress = CallInst::Create(
                 getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
+                {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)});
             slotAddress->insertAfter(gcframe);
-            slotAddress->takeName(AI);
+            SmallString<16> Name(AI->getName());
 
             // Check for lifetime intrinsics on this alloca, we can't keep them
             // because we're changing the semantics
@@ -2651,13 +2651,15 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 Instruction *&Local = SlotInBB[BB];
                 if (!Local) {
                     Local = slotAddress->clone();
-                    Local->setName(slotAddress->getName());
+                    Local->setName(Name);
                     Local->insertBefore(BB->getFirstInsertionPt());
                 }
                 U.set(Local);
             }
             if (slotAddress->use_empty() && !slotAddress->isUsedByMetadata())
                 slotAddress->eraseFromParent();
+            else
+                slotAddress->setName(Name);
         };
         for (auto AI : S.ArrayAllocas) {
             replace_alloca(AI.first);
