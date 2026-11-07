@@ -1480,6 +1480,39 @@ end
     end
 end
 
+@testset "manifest recording a package as a stdlib that this julia does not ship" begin
+    mktempdir() do dir
+        uuid = "3ebd1b52-5bb0-4b27-9a04-6a1d9e4d5c71"
+        write(joinpath(dir, "Project.toml"), "[deps]\nNotAStdlib = \"$uuid\"\n")
+        manifest_file = joinpath(dir, "Manifest.toml")
+        pkg = Base.PkgId(Base.UUID(uuid), "NotAStdlib")
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [dir])
+            for (entry, former) in (("", true), ("git-tree-sha1 = \"$(repeat('0', 40))\"", false))
+                write(manifest_file, """
+                    manifest_format = "2.0"
+                    [[deps.NotAStdlib]]
+                    uuid = "$uuid"
+                    $entry
+                    """)
+                err = try
+                    Base.require(pkg)
+                catch err
+                    err
+                end
+                @test err isa ArgumentError
+                @test occursin("is required but does not seem to be installed", err.msg)
+                @test occursin("records it as a standard library", err.msg) == former
+                @test occursin("Pkg.resolve()", err.msg) == former
+                @test occursin("Pkg.instantiate()", err.msg) == !former
+            end
+        finally
+            copy!(LOAD_PATH, old_load_path)
+        end
+    end
+end
+
 @testset "Extensions" begin
     test_ext = """
     function test_ext(parent::Module, ext::Symbol)
