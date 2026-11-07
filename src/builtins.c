@@ -688,6 +688,8 @@ JL_CALLABLE(jl_f_bitsizeof)
         jl_error("Only a primitive DataType or an instance of one has a bit size.");
     if (!jl_is_primitivetype(t))
         jl_errorf("Type %s is not a primitive type and has no bit size.", jl_typename_str(t));
+    if (((jl_datatype_t*)t)->layout == NULL) // sized by a type parameter not yet known
+        jl_errorf("Primitive type %s does not have a definite bit size.", jl_typename_str(t));
     return jl_box_long(jl_datatype_nbits((jl_datatype_t*)t));
 }
 
@@ -2585,15 +2587,33 @@ JL_CALLABLE(jl_f__primitivetype)
     JL_TYPECHK(_primitivetype, symbol, args[1]);
     JL_TYPECHK(_primitivetype, simplevector, args[2]);
     jl_sym_t *name = (jl_sym_t*)args[1];
+    jl_svec_t *params = (jl_svec_t*)args[2];
     jl_value_t *vnb = args[3];
-    if (!jl_is_long(vnb))
-        jl_errorf("invalid declaration of primitive type %s",
-                  jl_symbol_name((jl_sym_t*)name));
-    ssize_t nb = jl_unbox_long(vnb);
-    if (nb < 1 || nb >= (1 << 23))
-        jl_errorf("invalid number of bits in primitive type %s",
-                  jl_symbol_name((jl_sym_t*)name));
-    jl_datatype_t *dt = jl_new_primitivetype(args[1], (jl_module_t*)args[0], NULL, (jl_svec_t*)args[2], nb);
+    jl_datatype_t *dt;
+    if (jl_is_typevar(vnb)) {
+        // the size is one of the type parameters, e.g.
+        // `primitive type BitInt{N} <: Signed N end`
+        size_t i, np = jl_svec_len(params);
+        for (i = 0; i < np && jl_svecref(params, i) != vnb; i++) ;
+        if (i == np)
+            jl_errorf("invalid declaration of primitive type %s: the number of bits must be "
+                      "a constant or one of the type parameters",
+                      jl_symbol_name(name));
+        if (i >= JL_MAX_NBITS_PARAM)
+            jl_errorf("invalid declaration of primitive type %s: the number of bits must be "
+                      "one of the first %d type parameters",
+                      jl_symbol_name(name), JL_MAX_NBITS_PARAM);
+        dt = jl_new_primitivetype_paramsize(args[1], (jl_module_t*)args[0], NULL, params, i + 1);
+    }
+    else {
+        if (!jl_is_long(vnb))
+            jl_errorf("invalid declaration of primitive type %s",
+                      jl_symbol_name(name));
+        if (!valid_primitive_nbits(vnb))
+            jl_errorf("invalid number of bits in primitive type %s",
+                      jl_symbol_name(name));
+        dt = jl_new_primitivetype(args[1], (jl_module_t*)args[0], NULL, params, jl_unbox_long(vnb));
+    }
     return dt->name->wrapper;
 }
 
@@ -2838,7 +2858,9 @@ int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT
           dta->name->mutabl == dtb->name->mutabl &&
           dta->name->n_uninitialized == dtb->name->n_uninitialized &&
           dta->isprimitivetype == dtb->isprimitivetype &&
-          (!dta->isprimitivetype || jl_datatype_nbits(dta) == jl_datatype_nbits(dtb)) &&
+          dta->name->nbits_param == dtb->name->nbits_param &&
+          (!dta->isprimitivetype || dta->name->nbits_param ||
+           jl_datatype_nbits(dta) == jl_datatype_nbits(dtb)) &&
           (dta->name->atomicfields == NULL
            ? dtb->name->atomicfields == NULL
            : (dtb->name->atomicfields != NULL &&

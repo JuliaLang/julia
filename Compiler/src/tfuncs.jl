@@ -528,13 +528,17 @@ function sizeof_nothrow(@nospecialize(x))
     return true
 end
 
+# A primitive DataType has a bit size unless it is sized by a type parameter that
+# is not yet known, as in `BitInt{N}` with `N` free: then it has no layout.
+is_sized_primitive(@nospecialize(T)) = isa(T, DataType) && isprimitivetype(T) && T.layout != C_NULL
+
 # Whether `Core.bitsizeof` is known not to throw on an argument of type `x`: it throws
-# unless the argument is a primitive DataType or an instance of one.
+# unless the argument is a sized primitive DataType or an instance of one.
 function bitsizeof_nothrow(@nospecialize(x))
     if isa(x, Const)
         v = x.val
         isa(v, Type) || return isprimitivetype(typeof(v))
-        return isa(v, DataType) && isprimitivetype(v)
+        return is_sized_primitive(v)
     end
     xu = unwrap_unionall(x)
     if isa(xu, Union)
@@ -546,7 +550,7 @@ function bitsizeof_nothrow(@nospecialize(x))
     # x must be an instance (not a Type) or is the Bottom type object
     t === Bottom && return isprimitivetype(xw)
     isType(xw) && !isconstType(xw) && return false
-    return exact && isa(t, DataType) && isprimitivetype(t)
+    return exact && is_sized_primitive(t)
 end
 
 function _const_sizeof(@nospecialize(x))
@@ -607,14 +611,18 @@ end
         exact || return Int
         x = t
     end
-    isa(x, DataType) && isprimitivetype(x) && return Const(Core.bitsizeof(x))
+    is_sized_primitive(x) && return Const(Core.bitsizeof(x))
     return Int
 end
-# Width of a type that passes `isprimitivetype`, for the intrinsic exception checks.
-# Unlike `Core.bitsizeof`, it accepts a `UnionAll` such as `Ptr{T} where T`: every
-# instance has the width of the body (this assumes the width does not depend on a
-# type parameter).
-primitive_bitsizeof(@nospecialize(T)) = Core.bitsizeof(unwrap_unionall(T))
+# Width of a type that passes `isprimitivetype`, for the intrinsic exception checks,
+# or `nothing` if it has none. Unlike `Core.bitsizeof`, it accepts a `UnionAll` such
+# as `Ptr{T} where T`, whose instances all have the width of the body; that fails
+# when the width is the type parameter, as in `BitInt{N} where N`.
+function primitive_bitsizeof(@nospecialize(T))
+    T = unwrap_unionall(T)
+    is_sized_primitive(T) || return nothing
+    return Core.bitsizeof(T)::Int
+end
 add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 1)
 add_tfunc(Core.bitsizeof, 1, 1, bitsizeof_tfunc, 1)
 @nospecs function nfields_tfunc(𝕃::AbstractLattice, x)
@@ -3432,7 +3440,8 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         if !isconcrete
             return Union{ErrorException, TypeError}
         end
-        if !(isprimitivetype(ty) && isprimitivetype(xty) && primitive_bitsizeof(ty) === primitive_bitsizeof(xty))
+        nb = primitive_bitsizeof(ty)
+        if nb === nothing || nb !== primitive_bitsizeof(xty)
             return ErrorException
         end
         return Union{}
@@ -3448,7 +3457,8 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
             return Union{ErrorException, TypeError}
         end
         xty = widenconst(argtypes[2])
-        if !(isprimitivetype(ty) && isprimitivetype(xty))
+        nbty, nbxty = primitive_bitsizeof(ty), primitive_bitsizeof(xty)
+        if nbty === nothing || nbxty === nothing
             return ErrorException
         end
 
@@ -3458,14 +3468,14 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) > Core.sizeof(xty))
             return ErrorException
         end
-        if (f === Intrinsics.sext_int || f === Intrinsics.zext_int) && !(primitive_bitsizeof(ty) > primitive_bitsizeof(xty))
+        if (f === Intrinsics.sext_int || f === Intrinsics.zext_int) && !(nbty > nbxty)
             return ErrorException
         end
         if f === Intrinsics.fptrunc &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) < Core.sizeof(xty))
             return ErrorException
         end
-        if f === Intrinsics.trunc_int && !(primitive_bitsizeof(ty) < primitive_bitsizeof(xty))
+        if f === Intrinsics.trunc_int && !(nbty < nbxty)
             return ErrorException
         end
         if (f === Intrinsics.fptoui || f === Intrinsics.fptosi) && !(xty <: CORE_FLOAT_TYPES)
@@ -3515,7 +3525,10 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
     isshift = f === shl_int || f === lshr_int || f === ashr_int
     argtype1 = widenconst(argtypes[1])
     isprimitivetype(argtype1) || return ErrorException
-    f === bswap_int && primitive_bitsizeof(argtype1) % 16 != 0 && return ErrorException
+    if f === bswap_int
+        nb1 = primitive_bitsizeof(argtype1)
+        (nb1 === nothing || nb1 % 16 != 0) && return ErrorException
+    end
     if contains_is(_FLOAT_INTRINSICS, f)
         argtype1 <: CORE_FLOAT_TYPES || return ErrorException
     end
