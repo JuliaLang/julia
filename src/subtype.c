@@ -3414,8 +3414,25 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
             vb->lb_spell = e->spell_channel;
         return var_lt(v, x, e, PARAM_NONE, vb, innervar);
     }
-    if (!subtype_ccheck(x, vb->ub, e))
+    int saved_ignore = e->ignore_lb_required;
+    if (jl_is_typevar(x))
+        e->ignore_lb_required = 1;
+    int ub_ok = subtype_ccheck(x, vb->ub, e);
+    e->ignore_lb_required = saved_ignore;
+    if (!ub_ok)
         return 0;
+    if (!e->intersection) {
+        if (vb->ub != x && !subtype_ccheck(vb->lb, x, e))
+            return 0;
+        if (vb->lb == vb->ub && vb->lb != jl_bottom_type && e->spell_channel <= vb->lb_spell)
+            return 1;
+        if (vb->lb != x) {
+            vb->lb = x;
+            vb->lb_spell = e->spell_channel;
+        }
+        vb->ub = x;
+        return 1;
+    }
     // when the var is pinned (`lb === ub`), `x <= ub` was just checked and a
     // join picking `x` proves `lb <= x`, i.e. `x` respells the same type: keep
     // the existing spelling unless `x`'s is more authoritative (see `lb_spell`)
@@ -3481,6 +3498,17 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         // Fastpath for Type == TypeVar.
         // Avoid duplicated `<:` check between adjacent `var_gt` and `var_lt`
         return equal_var((jl_tvar_t *)y, x, e);
+    }
+
+    if (e->Loffset == 0 && !e->intersection && jl_is_typevar(x) && jl_is_typevar(y)) {
+        int xinner = 0, yinner = 0;
+        jl_varbinding_t *xx = lookup_binding(e, (jl_tvar_t*)x, &xinner);
+        jl_varbinding_t *yy = lookup_binding(e, (jl_tvar_t*)y, &yinner);
+        if (xx && !xx->existential && yy && yy->existential && yy->depth0 >= xx->depth0) {
+            record_var_occurrence(xx, e, PARAM_INVARIANT);
+            record_var_occurrence(xx, e, PARAM_NONE);
+            return equal_var((jl_tvar_t *)y, x, e);
+        }
     }
 
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);

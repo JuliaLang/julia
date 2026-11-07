@@ -3718,3 +3718,19 @@ let A = Tuple{V, Tuple{S, S} where S>:Tuple{Tuple{T, T} where T<:V}} where V, B 
     @test X <: typeintersect(A, B)
     @test X <: typeintersect(B, A)
 end
+
+#issue 64718
+let A = Val, B = Val
+    for _ in 1:30
+        A = Val{X} where X<:A
+        B = Val{X} where X<:B
+    end
+    @test (Val{X} where X<:A) <: B
+end
+let A = Union{}, B = Union{}
+    for _ in 1:30
+        A = Val{X} where X>:A
+        B = Val{X} where X>:B
+    end
+    @test !((Val{X} where X>:A) <: B)
+end
