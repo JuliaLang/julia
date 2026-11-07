@@ -31,6 +31,7 @@ struct JuliaTaskDispatcher : public TaskDispatcher {
 
 protected:
   void process_tasks(jl_unique_gcsafe_lock &Lock) JL_CANSAFEPOINT_ENTER_LEAVE;
+  void run_task(jl_unique_gcsafe_lock &Lock, Task &T) JL_CANSAFEPOINT_ENTER_LEAVE;
 
 private:
   /// C++ does not support non-static thread_local variables, so this needs to
@@ -374,8 +375,10 @@ void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) { // NOLINT(julia-fi
     InCooperativeContext = true;
     {
       dispatcher_sigdefer_guard defer;
-      T->run();
+      // GC-safe, as in process_tasks: LLVM can take seconds on a large module, and every
+      // other thread would wait for it to collect garbage
       jl_unique_gcsafe_lock Lock{DispatchMutex};
+      run_task(Lock, *T);
       process_tasks(Lock);
     }
     InCooperativeContext = false;
@@ -412,14 +415,20 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
   InCooperativeContext = WasCooperative;
 }
 
+// Runs `T` with the dispatch mutex released, GC-safe (holding `Lock` keeps it so).
+// not analyzed, since it cannot represent the native unlock (normally implies a notsafepoint_leave)
+void JuliaTaskDispatcher::run_task(jl_unique_gcsafe_lock &Lock, Task &T) JL_NO_SAFEPOINT_ANALYSIS {
+    Lock.native.unlock();
+    T.run(); // n.b. JL_CANCALLBACK
+    Lock.native.lock();
+}
+
 // not analyzed, since it cannot represent the native unlock (normally implies a notsafepoint_leave)
 void JuliaTaskDispatcher::process_tasks(jl_unique_gcsafe_lock &Lock) JL_NO_SAFEPOINT_ANALYSIS {
     while (!TaskQueue.empty()) {
         auto T = TaskQueue.pop_back_val();
 
-        Lock.native.unlock();
-        T->run(); // n.b. JL_CANCALLBACK
-        Lock.native.lock();
+        run_task(Lock, *T);
 
         WorkFinishedCV.notify_all();
     }
