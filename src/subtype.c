@@ -50,6 +50,10 @@ typedef struct {
     int16_t more;
     int16_t used;
     jl_bits_stack_t stack;
+#ifdef JL_SUBTYPE_TRACE
+    int64_t trace_e;
+    int8_t trace_R;
+#endif
 } jl_unionstate_t;
 
 typedef struct {
@@ -206,6 +210,9 @@ typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
     // Used to represent the length difference between 2 vararg.
     // intersect(X, Y) ==> X = Y + Loffset
     int Loffset;
+#ifdef JL_SUBTYPE_TRACE
+    int64_t trace_id;
+#endif
 } jl_stenv_t;
 
 // state manipulation utilities
@@ -267,6 +274,45 @@ static jl_varbinding_t *lookup(jl_stenv_t *e, jl_tvar_t *v) JL_GLOBALLY_ROOTED J
     return lookup_binding(e, v, NULL);
 }
 
+// Per-var saved env layout:
+// [occurs, occurs_inv, occurs_cov, cov_diag, max_offset, lb_certainty, lb_required, lb_spell, pinned].
+#define JL_SAVEDENV_BYTES_PER_VAR 9
+
+// Combined covariance count used for diagonal-rule decisions: the max of the
+// counter for the current consistency-check scope and the largest count
+// observed in any already-closed scope. A variable is diagonal iff
+// `cov_count(vb) > 1`.
+static inline int8_t cov_count(const jl_varbinding_t *vb) JL_NOTSAFEPOINT
+{
+    return vb->occurs_cov > vb->cov_diag ? vb->occurs_cov : vb->cov_diag;
+}
+
+typedef struct {
+    int8_t *buf;
+    int rdepth;
+    int8_t _space[72]; // == 8 * JL_SAVEDENV_BYTES_PER_VAR
+    jl_gcframe_t gcframe;
+    jl_value_t *roots[24]; // == 8 * 3 (lb, ub, innervars)
+#ifdef JL_SUBTYPE_TRACE
+    int64_t trace_id;
+#endif
+} jl_savedenv_t;
+
+// Position of a subtype/intersect call within a type's structure. Determines
+// whether (and how) a typevar occurrence at this position counts toward the
+// diagonal rule (see record_var_occurrence).
+typedef enum {
+    PARAM_NONE      = 0,  // not inside a covariant/invariant context (top-level
+                          // entry, UnionAll body before any constructor, or
+                          // bound consistency recheck) — no occurrence recorded
+    PARAM_COVARIANT = 1,  // inside a covariant parameter (Tuple/Vararg element)
+    PARAM_INVARIANT = 2,  // inside an invariant parameter (most DataType
+                          // parameters, Vararg length)
+} jl_param_pos_t;
+
+#include "subtype-trace.inc"
+#include "subtype-corpus.inc"
+
 // union-stack tools
 
 static int statestack_get(jl_unionstate_t *st, int i) JL_NOTSAFEPOINT
@@ -306,18 +352,23 @@ static void statestack_set(jl_unionstate_t *st, int i, int val) JL_NOTSAFEPOINT
 static int next_union_state(jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
 {
     jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
-    if (state->more == 0)
+    if (state->more == 0) {
+        STRACE_UNEXT(e, R, 0);
         return 0;
+    }
     // reset `used` and let `pick_union_decision` clean the stack.
     state->used = state->more;
     statestack_set(state, state->used - 1, 1);
+    STRACE_UNEXT(e, R, 1);
     return 1;
 }
 
-static int pick_union_decision(jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
+// `u` (the Union being decided on) and `site` are only used for tracing.
+static int pick_union_decision(jl_stenv_t *e, int8_t R, jl_value_t *u, const char *site) JL_NOTSAFEPOINT
 {
     jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
-    if (state->depth >= state->used) {
+    int fresh = state->depth >= state->used;
+    if (fresh) {
         statestack_set(state, state->used, 0);
         state->used++;
     }
@@ -325,13 +376,14 @@ static int pick_union_decision(jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
     state->depth++;
     if (ui == 0)
         state->more = state->depth; // memorize that this was the deepest available choice
+    STRACE_UPICK(e, R, u, site, state->depth - 1, ui, fresh);
     return ui;
 }
 
 static jl_value_t *pick_union_element(jl_value_t *u JL_PROPAGATES_ROOT, jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
 {
     do {
-        if (pick_union_decision(e, R))
+        if (pick_union_decision(e, R, u, "elem"))
             u = ((jl_uniontype_t*)u)->b;
         else
             u = ((jl_uniontype_t*)u)->a;
@@ -355,6 +407,7 @@ static jl_value_t *pick_union_element(jl_value_t *u JL_PROPAGATES_ROOT, jl_stenv
             memcpy(&(saved)->stack[n], &srcstack->data, rest);       \
             srcstack = srcstack->next;                               \
         }                                                            \
+        STRACE_USTATE("usave", src);                                 \
     } while (0);
 
 #define pop_unionstate(dst, saved)                                  \
@@ -372,6 +425,7 @@ static jl_value_t *pick_union_element(jl_value_t *u JL_PROPAGATES_ROOT, jl_stenv
             memcpy(&dststack->data, &(saved)->stack[n], rest);      \
             dststack = dststack->next;                              \
         }                                                           \
+        STRACE_USTATE("urestore", dst);                             \
     } while (0);
 
 static int current_env_length(jl_stenv_t *e)
@@ -385,39 +439,6 @@ static int current_env_length(jl_stenv_t *e)
     return len;
 }
 
-// Per-var saved env layout:
-// [occurs, occurs_inv, occurs_cov, cov_diag, max_offset, lb_certainty, lb_required, lb_spell, pinned].
-#define JL_SAVEDENV_BYTES_PER_VAR 9
-
-// Combined covariance count used for diagonal-rule decisions: the max of the
-// counter for the current consistency-check scope and the largest count
-// observed in any already-closed scope. A variable is diagonal iff
-// `cov_count(vb) > 1`.
-static inline int8_t cov_count(const jl_varbinding_t *vb) JL_NOTSAFEPOINT
-{
-    return vb->occurs_cov > vb->cov_diag ? vb->occurs_cov : vb->cov_diag;
-}
-
-typedef struct {
-    int8_t *buf;
-    int rdepth;
-    int8_t _space[72]; // == 8 * JL_SAVEDENV_BYTES_PER_VAR
-    jl_gcframe_t gcframe;
-    jl_value_t *roots[24]; // == 8 * 3 (lb, ub, innervars)
-} jl_savedenv_t;
-
-// Position of a subtype/intersect call within a type's structure. Determines
-// whether (and how) a typevar occurrence at this position counts toward the
-// diagonal rule (see record_var_occurrence).
-typedef enum {
-    PARAM_NONE      = 0,  // not inside a covariant/invariant context (top-level
-                          // entry, UnionAll body before any constructor, or
-                          // bound consistency recheck) — no occurrence recorded
-    PARAM_COVARIANT = 1,  // inside a covariant parameter (Tuple/Vararg element)
-    PARAM_INVARIANT = 2,  // inside an invariant parameter (most DataType
-                          // parameters, Vararg length)
-} jl_param_pos_t;
-
 static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
 {
     jl_value_t **roots = NULL;
@@ -425,7 +446,7 @@ static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
     if (root) {
         if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
             jl_svec_t *sv = (jl_svec_t*)se->roots[0];
-            assert(jl_is_svec(sv));
+            assert(sv && jl_is_svec(sv));
             roots = jl_svec_data(sv);
             nroots = jl_svec_len(sv);
         }
@@ -455,12 +476,14 @@ static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
     }
     assert(i == nroots); (void)nroots;
     se->rdepth = e->Runions.depth;
+    STRACE_ENV_SAVE(e, se);
 }
 
 static void alloc_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     int len = current_env_length(e);
+    STRACE_ENV_ALLOC(se);
     se->gcframe.nroots = 0;
     se->gcframe.prev = NULL;
     se->roots[0] = NULL;
@@ -562,6 +585,7 @@ static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPO
     e->Runions.depth = se->rdepth;
     if (e->envout && e->envidx < e->envsz)
         memset(&e->envout[e->envidx], 0, (e->envsz - e->envidx)*sizeof(void*));
+    STRACE_ENV_RESTORE(e, se, root);
 }
 
 #define flip_offset(e) ((e)->Loffset *= -1)
@@ -1016,7 +1040,7 @@ static int push_consistency_scope(jl_stenv_t *e, int8_t *saved) JL_NOTSAFEPOINT;
 static void pop_consistency_scope(jl_stenv_t *e, const int8_t *saved, int nsaved) JL_NOTSAFEPOINT;
 
 // subtype for variable bounds consistency check. needs its own forall/exists environment.
-static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT
+static int STRACE_IMPL(subtype_ccheck)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT
 {
     if (jl_is_long(x) && jl_is_long(y))
         return jl_unbox_long(x) == jl_unbox_long(y) + e->Loffset;
@@ -1069,7 +1093,7 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAF
     return sub;
 }
 
-static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param) JL_CANSAFEPOINT
+static int STRACE_IMPL(subtype_left_var)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     if (jl_is_long(x) && jl_is_long(y))
         return jl_unbox_long(x) == jl_unbox_long(y) + e->Loffset;
@@ -1247,7 +1271,7 @@ static int subtype_singleton_typevar(jl_value_t *a, jl_tvar_t *v) JL_NOTSAFEPOIN
 }
 
 // check that type var `b` is <: `a`, and update b's upper bound.
-static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param, jl_varbinding_t *bb, int innervar) JL_CANSAFEPOINT
+static int STRACE_IMPL(var_lt)(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param, jl_varbinding_t *bb, int innervar) JL_CANSAFEPOINT
 {
     if (bb == NULL) {
         if (innervar && e->intersection)
@@ -1299,7 +1323,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
 }
 
 // check that type var `b` is >: `a`, and update b's lower bound.
-static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param, jl_varbinding_t *bb, int innervar) JL_CANSAFEPOINT
+static int STRACE_IMPL(var_gt)(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param, jl_varbinding_t *bb, int innervar) JL_CANSAFEPOINT
 {
     if (bb == NULL) {
         if (innervar && e->intersection)
@@ -1359,7 +1383,7 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     return 1;
 }
 
-static int subtype_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int R, jl_param_pos_t param, jl_varbinding_t *bb, int innervar) JL_CANSAFEPOINT
+static int STRACE_IMPL(subtype_var)(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int R, jl_param_pos_t param, jl_varbinding_t *bb, int innervar) JL_CANSAFEPOINT
 {
     if (e->intersection) {
         jl_value_t *bub = bb ? bb->ub : innervar ? ((jl_tvar_t*)b)->ub : (jl_value_t*)b;
@@ -1877,7 +1901,7 @@ static int may_capture_free_var(jl_value_t *t, jl_tvar_t *v, jl_stenv_t *e) JL_N
     return !e->closed_inputs && jl_has_typevar(t, v);
 }
 
-static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
+static int STRACE_IMPL(subtype_unionall)(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     u = unalias_unionall(u, e);
     jl_value_t *new_tvar = NULL;
@@ -1897,6 +1921,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     vb.body_occurs_inv = -1;
     vb.body = u->body;
     e->vars = &vb;
+    STRACE_BIND(e, &vb);
     int ans;
     if (R) {
         e->envidx++;
@@ -1948,6 +1973,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             ans = 0;
         }
     }
+    STRACE_UNBIND(e, &vb);
     e->vars = vb.prev;
 
     if (!ans) {
@@ -2119,7 +2145,7 @@ static int check_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e) JL_CANSA
 
 static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT;
 
-static int subtype_tuple_varargs(
+static int STRACE_IMPL(subtype_tuple_varargs)(
     jl_vararg_t *vtx, jl_vararg_t *vty,
     jl_value_t *lastx, jl_value_t *lasty,
     size_t vx, size_t vy, size_t x_reps,
@@ -2272,7 +2298,7 @@ constrain_length:
     return ans;
 }
 
-static int subtype_tuple_tail(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl_stenv_t *e, jl_param_pos_t param) JL_CANSAFEPOINT
+static int STRACE_IMPL(subtype_tuple_tail)(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl_stenv_t *e, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     size_t lx = jl_nparams(xd);
     size_t ly = jl_nparams(yd);
@@ -2372,7 +2398,7 @@ static int subtype_tuple_tail(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl
     return 1;
 }
 
-static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, jl_param_pos_t param) JL_CANSAFEPOINT
+static int STRACE_IMPL(subtype_tuple)(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     // Check tuple compatibility based on tuple length only (fastpath)
     size_t lx = jl_nparams(xd);
@@ -2901,7 +2927,7 @@ static int typeeq_is_dangling_key(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_t 
     return jl_has_free_typevars(t) && !typeeq_vars_bound_in_env(t, e, wenv);
 }
 
-static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param)
+static int STRACE_IMPL(subtype)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param)
 {
     if (jl_is_uniontype(x)) {
         if (obviously_egal(x, y))
@@ -2961,7 +2987,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             // variables lurking inside.
             // note: for forall var, there's no need to split y if it has no free typevars.
             jl_varbinding_t *xx = lookup(e, (jl_tvar_t *)x);
-            ui = ((xx && xx->existential) || jl_has_free_typevars(y)) && pick_union_decision(e, 1);
+            ui = ((xx && xx->existential) || jl_has_free_typevars(y)) && pick_union_decision(e, 1, y, "var_vs_union");
         }
         if (ui == 1)
             y = pick_union_element(y, e, 1);
@@ -3274,7 +3300,7 @@ static int is_existential_typevar(jl_value_t *x, jl_stenv_t *e)
 
 static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param) JL_CANSAFEPOINT;
 
-static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param, int limit_slow)
+static int STRACE_IMPL(local_forall_exists_subtype)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param, int limit_slow)
 {
     int16_t oldRmore = e->Runions.more;
     int sub;
@@ -3306,6 +3332,7 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         memcpy(cov_max, cov_entry, nvars);
         e->Lunions.used = 0;
         while (1) {
+            STRACE_ITER(e, 0, "local_forall");
             e->Lunions.more = 0;
             e->Lunions.depth = 0;
             set_occurs_cov(e, cov_entry);
@@ -3329,6 +3356,7 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     int count, limited = 0, ini_count = 0;
     jl_saved_unionstate_t latestLunions = {0, 0, 0, NULL};
     while (1) {
+        STRACE_ITER(e, 1, "local_exists");
         count = ini_count;
         get_occurs_cov(e, cov_max);
         if (ini_count == 0)
@@ -3336,6 +3364,7 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         else
             pop_unionstate(&e->Lunions, &latestLunions);
         while (1) {
+            STRACE_ITER(e, 0, "local_forall");
             e->Lunions.more = 0;
             e->Lunions.depth = 0;
             if (count < 4) count++;
@@ -3374,7 +3403,7 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     return sub;
 }
 
-static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
+static int STRACE_IMPL(equal_var)(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
 {
     assert(e->Loffset == 0);
     // Theoretically bounds change would be merged for union inputs.
@@ -3437,7 +3466,7 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
     return 1;
 }
 
-static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+static int STRACE_IMPL(forall_exists_equal)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     if (obviously_egal(x, y)) return 1;
 
@@ -3461,7 +3490,7 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         // For 2 unions, first try a more efficient greedy algorithm that compares the unions
         // componentwise. If failed, `exists_subtype` would memorize that this branch should be skipped.
         // Note: this is valid because the normal path checks `>:` locally.
-        if (pick_union_decision(e, 1) == 0) {
+        if (pick_union_decision(e, 1, y, "union_vs_union") == 0) {
             return forall_exists_equal(((jl_uniontype_t *)x)->a, ((jl_uniontype_t *)y)->a, e) &&
                    forall_exists_equal(((jl_uniontype_t *)x)->b, ((jl_uniontype_t *)y)->b, e);
         }
@@ -3485,10 +3514,11 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     return sub;
 }
 
-static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_savedenv_t *se, jl_param_pos_t param) JL_CANSAFEPOINT
+static int STRACE_IMPL(exists_subtype)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_savedenv_t *se, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     e->Runions.used = 0;
     while (1) {
+        STRACE_ITER(e, 1, "exists");
         e->Runions.depth = 0;
         e->Runions.more = 0;
         e->Lunions.depth = 0;
@@ -3509,7 +3539,7 @@ static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_savede
     }
 }
 
-static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param)
+static int STRACE_IMPL(forall_exists_subtype)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param)
 {
     // The depth recursion has the following shape, after simplification:
     // ∀₁
@@ -3522,6 +3552,7 @@ static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl
     e->Lunions.used = 0;
     int sub;
     while (1) {
+        STRACE_ITER(e, 0, "forall");
         sub = exists_subtype(x, y, e, &se, param);
         if (!sub || !next_union_state(e, 0))
             break;
@@ -3558,6 +3589,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->Lunions.used = 0;       e->Runions.used = 0;
     e->Lunions.stack.next = NULL;
     e->Runions.stack.next = NULL;
+    STRACE_STENV(e);
 }
 
 // subtyping entry points
@@ -3641,7 +3673,7 @@ static jl_value_t *find_var_body(jl_value_t *t, jl_tvar_t *v) JL_NOTSAFEPOINT
 // returns true if it could be easily determined, with the result in subtype
 // the approximation widens typevar bounds under the assumption they are bound
 // in the immediate caller--the caller must be conservative in handling the result
-static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *subtype)
+static int STRACE_IMPL(obvious_subtype)(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *subtype)
 {
     if (x == y || y == (jl_value_t*)jl_any_type) {
         *subtype = 1;
@@ -4013,7 +4045,7 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
 // points to a rooted array of length `jl_subtype_env_size(y)`.
 // This will be populated with the values of variables from unionall
 // types at the outer level of `y`.
-JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz)
+static int jl_subtype_env_impl(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz) JL_CANSAFEPOINT
 {
     jl_stenv_t e;
     if (y == (jl_value_t*)jl_any_type || x == jl_bottom_type)
@@ -4062,7 +4094,18 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
     return subtype;
 }
 
-static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT
+JL_DLLEXPORT int STRACE_IMPL(jl_subtype_env)(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz)
+{
+    if (__likely(!scorpus_active()))
+        return jl_subtype_env_impl(x, y, env, envsz);
+    JL_GC_PUSH2(&x, &y);
+    int result = jl_subtype_env_impl(x, y, env, envsz);
+    scorpus_record(x, y, result);
+    JL_GC_POP();
+    return result;
+}
+
+static int STRACE_IMPL(subtype_in_env)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT
 {
     jl_stenv_t e2;
     init_stenv(&e2, NULL, 0);
@@ -4085,7 +4128,7 @@ JL_DLLEXPORT int jl_subtype(jl_value_t *x, jl_value_t *y)
     return jl_subtype_env(x, y, NULL, 0);
 }
 
-JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT int STRACE_IMPL(jl_types_equal)(jl_value_t *a, jl_value_t *b)
 {
     if (a == b)
         return 1;
@@ -4228,7 +4271,7 @@ int jl_has_intersect_type_not_kind(jl_value_t *t)
 }
 
 
-JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
+JL_DLLEXPORT int STRACE_IMPL(jl_isa)(jl_value_t *x, jl_value_t *t)
 {
     if (t == (jl_value_t*)jl_any_type || jl_typetagis(x,t))
         return 1;
@@ -4293,7 +4336,7 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
 static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT;
 
 // intersect in nested union environment, similar to subtype_ccheck
-static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int depth)
+static jl_value_t *STRACE_IMPL(intersect_aside)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int depth)
 {
     // band-aid for #30335
     if (x == (jl_value_t*)jl_any_type && !jl_is_typevar(y))
@@ -4341,7 +4384,7 @@ static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, 
     return res;
 }
 
-static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
+static jl_value_t *STRACE_IMPL(intersect_union)(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     int no_free = !jl_has_free_typevars(x) && !jl_has_free_typevars((jl_value_t*)u);
     if (param == PARAM_INVARIANT || no_free) {
@@ -4367,7 +4410,7 @@ static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t 
 }
 
 // set a variable to a non-type constant
-static jl_value_t *set_var_to_const(jl_varbinding_t *bb, jl_value_t *v JL_MAYBE_UNROOTED, jl_stenv_t *e, int R) JL_CANSAFEPOINT
+static jl_value_t *STRACE_IMPL(set_var_to_const)(jl_varbinding_t *bb, jl_value_t *v JL_MAYBE_UNROOTED, jl_stenv_t *e, int R) JL_CANSAFEPOINT
 {
     int offset = R ? -e->Loffset : e->Loffset;
     if (bb->lb == jl_bottom_type && bb->ub == (jl_value_t*)jl_any_type) {
@@ -4396,7 +4439,7 @@ static jl_value_t *set_var_to_const(jl_varbinding_t *bb, jl_value_t *v JL_MAYBE_
     return v;
 }
 
-static jl_value_t *bound_var_below(jl_tvar_t *tv, jl_varbinding_t *bb, jl_stenv_t *e, int R) JL_CANSAFEPOINT {
+static jl_value_t *STRACE_IMPL(bound_var_below)(jl_tvar_t *tv, jl_varbinding_t *bb, jl_stenv_t *e, int R) JL_CANSAFEPOINT {
     if (!bb)
         return (jl_value_t*)tv;
     if (bb->depth0 != e->invdepth)
@@ -4496,7 +4539,7 @@ static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_sten
 }
 
 // subtype, treating all vars as existential
-static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT
+static int STRACE_IMPL(subtype_in_env_existential)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT
 {
     if (x == jl_bottom_type || y == (jl_value_t*)jl_any_type || obviously_in_union(y, x))
         return 1;
@@ -4518,7 +4561,7 @@ static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *
 }
 
 // subtype, treating all vars as nonexistential
-static int subtype_in_env_nonexistential(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT
+static int STRACE_IMPL(subtype_in_env_nonexistential)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT
 {
     if (x == jl_bottom_type || y == (jl_value_t*)jl_any_type || obviously_in_union(y, x))
         return 1;
@@ -4588,7 +4631,7 @@ static int check_unsat_bound(jl_value_t *t, jl_tvar_t *v, jl_stenv_t *e) JL_NOTS
 
 static int intersect_var_ccheck_in_env(jl_value_t *xlb, jl_value_t *xub, jl_value_t *ylb, jl_value_t *yub, jl_stenv_t *e, int flip) JL_CANSAFEPOINT;
 
-static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
+static jl_value_t *STRACE_IMPL(intersect_var)(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     int innervar = 0;
     jl_varbinding_t *bb = lookup_binding(e, b, &innervar);
@@ -4863,7 +4906,7 @@ static int has_typevar_via_flatten_env(jl_value_t *x, jl_tvar_t *t, jl_ivarbindi
 }
 
 // Caller might not have rooted `res`
-static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbinding_t *vb, jl_unionall_t *u, jl_stenv_t *e) JL_CANSAFEPOINT
+static jl_value_t *STRACE_IMPL(finish_unionall)(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbinding_t *vb, jl_unionall_t *u, jl_stenv_t *e) JL_CANSAFEPOINT
 {
     jl_value_t *varval = NULL, *ilb = NULL, *iub = NULL, *nivar = NULL;
     jl_tvar_t *newvar = vb->var, *ivar = NULL;
@@ -4979,10 +5022,12 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 return jl_bottom_type;
             }
             if (varval) {
+                STRACE_SAVEPOINT(sp);
                 JL_TRY {
                     *btemp->lb = jl_substitute_var(ilb, vb->var, varval);
                 }
                 JL_CATCH {
+                    STRACE_UNWIND(sp);
                     res = jl_bottom_type;
                 }
             }
@@ -5209,7 +5254,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     return res;
 }
 
-static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param, jl_varbinding_t *vb) JL_CANSAFEPOINT
+static jl_value_t *STRACE_IMPL(intersect_unionall_)(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param, jl_varbinding_t *vb) JL_CANSAFEPOINT
 {
     jl_varbinding_t *btemp = e->vars;
     int envsize = 0;
@@ -5227,6 +5272,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
         u = jl_rename_unionall(u);
     vb->var = u->var;
     e->vars = vb;
+    STRACE_BIND(e, vb);
     jl_value_t *res;
     if (R) {
         e->envidx++;
@@ -5266,6 +5312,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
         }
     }
 
+    STRACE_UNBIND(e, vb);
     e->vars = vb->prev;
 
     if (res != jl_bottom_type) {
@@ -5356,7 +5403,7 @@ static int never_occurs_in_inside_ub(jl_value_t *v, jl_tvar_t *var) JL_NOTSAFEPO
     return jl_is_typevar(v) || !jl_has_typevar(v, var);
 }
 
-static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
+static jl_value_t *STRACE_IMPL(intersect_unionall)(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     jl_value_t *res = NULL;
     jl_savedenv_t se;
@@ -5448,7 +5495,7 @@ static int intersect_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e, int8
     return 1;
 }
 
-static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t offset, jl_stenv_t *e, jl_param_pos_t param) JL_CANSAFEPOINT
+static jl_value_t *STRACE_IMPL(intersect_varargs)(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t offset, jl_stenv_t *e, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     // Vararg: covariant in first parameter, invariant in second
     jl_value_t *xp1=jl_unwrap_vararg(vmx), *xp2=jl_unwrap_vararg_num(vmx),
@@ -5531,7 +5578,7 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
 }
 
 
-static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, jl_param_pos_t param) JL_CANSAFEPOINT
+static jl_value_t *STRACE_IMPL(intersect_tuple)(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     size_t lx = jl_nparams(xd), ly = jl_nparams(yd);
     size_t llx = lx, lly = ly;
@@ -5709,7 +5756,7 @@ static void flip_vars(jl_stenv_t *e)
 }
 
 // intersection where xd nominally inherits from yd
-static jl_value_t *intersect_sub_datatype(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, int R, jl_param_pos_t param) JL_CANSAFEPOINT
+static jl_value_t *STRACE_IMPL(intersect_sub_datatype)(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, int R, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     // attempt to populate additional constraints into `e`
     // if that attempt fails, then return bottom
@@ -5725,7 +5772,7 @@ static jl_value_t *intersect_sub_datatype(jl_datatype_t *xd, jl_datatype_t *yd, 
     return (jl_value_t*)xd;
 }
 
-static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+static jl_value_t *STRACE_IMPL(intersect_invariant)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     if (e->Loffset == 0 && !jl_has_free_typevars(x) && !jl_has_free_typevars(y)) {
         return (jl_subtype(x,y) && jl_subtype(y,x)) ? y : NULL;
@@ -5765,7 +5812,7 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
 }
 
 // intersection where x == Type{...} and y is not
-static jl_value_t *intersect_type_type(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int8_t R) JL_CANSAFEPOINT
+static jl_value_t *STRACE_IMPL(intersect_type_type)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int8_t R) JL_CANSAFEPOINT
 {
     assert(e->Loffset == 0);
     // fast path: every member of a `Type{T}` is a type
@@ -5823,7 +5870,7 @@ static int compareto_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, int cmp) JL
 // Check whether the environment already asserts x <: y via recorded bounds.
 // This is used to avoid adding redundant constraints that lead to cycles.
 // Note this is a semi-predicate: 1 => is a subtype, 0 => unknown
-static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_NOTSAFEPOINT
+static int STRACE_IMPL(subtype_by_bounds)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_NOTSAFEPOINT
 {
     if (!jl_is_typevar(x) || !jl_is_typevar(y))
         return 0;
@@ -5959,7 +6006,7 @@ static int var_always_occurs_as_parameter(jl_value_t *t, jl_tvar_t *var, int par
     return 0;
 }
 
-static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param)
+static jl_value_t *STRACE_IMPL(intersect)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param)
 {
     if (x == y) return y;
     if (jl_is_typevar(x)) {
@@ -6256,10 +6303,12 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
                 else if (isy)
                     res = y;
                 else {
+                    STRACE_SAVEPOINT(sp);
                     JL_TRY {
                         res = jl_apply_type(xd->name->wrapper, newparams, np);
                     }
                     JL_CATCH {
+                        STRACE_UNWIND(sp);
                         res = jl_bottom_type;
                     }
                 }
@@ -6369,7 +6418,7 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
     return count + 1;
 }
 
-static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+static jl_value_t *STRACE_IMPL(intersect_all)(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     e->Runions.depth = 0;
     e->Runions.more = 0;
@@ -6379,6 +6428,7 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     jl_savedenv_t se, me;
     save_env(e, &se, 1);
     int niter = 0, total_iter = 0;
+    STRACE_ITER(e, 1, "intersect_all");
     is[0] = intersect(x, y, e, PARAM_NONE); // root
     if (is[0] == jl_bottom_type) {
         restore_env(e, &se, 1);
@@ -6392,6 +6442,7 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
             break;
         e->Runions.depth = 0;
         e->Runions.more = 0;
+        STRACE_ITER(e, 1, "intersect_all");
 
         is[1] = intersect(x, y, e, PARAM_NONE);
         if (is[1] == jl_bottom_type) {
@@ -6433,7 +6484,7 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 
 // type intersection entry points
 
-static jl_value_t *intersect_types(jl_value_t *x, jl_value_t *y, int emptiness_only) JL_CANSAFEPOINT
+static jl_value_t *STRACE_IMPL(intersect_types)(jl_value_t *x, jl_value_t *y, int emptiness_only) JL_CANSAFEPOINT
 {
     jl_stenv_t e;
     if (obviously_disjoint(x, y, 0))
@@ -6592,7 +6643,7 @@ static int might_intersect_concrete(jl_value_t *a) JL_NOTSAFEPOINT
 }
 
 // sets *issubty to 1 iff `a` is a subtype of `b`
-jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, int *issubty)
+jl_value_t *STRACE_IMPL(jl_type_intersection_env_s)(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, int *issubty)
 {
     if (issubty) *issubty = 0;
     if (obviously_disjoint(a, b, 0)) {
@@ -7698,6 +7749,8 @@ JL_DLLEXPORT int jl_method_morespecific(jl_method_t *ma, jl_method_t *mb)
         return 1;
     return type_morespecific_(a, b, a, b, 0, NULL);
 }
+
+#include "subtype-trace-wrappers.inc"
 
 #ifdef __cplusplus
 }

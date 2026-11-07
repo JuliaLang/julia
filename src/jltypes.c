@@ -3755,6 +3755,13 @@ void jl_init_types(void) JL_GC_DISABLED
                                         jl_emptysvec, 0, 0, 2);
     jl_intersect_type->name->mayinlinealloc = 0;
 
+    // Internal complement for the experimental inhabitation solver. Keep it
+    // out of jl_is_type and normal Union construction, like Intersect.
+    jl_not_type = jl_new_datatype(jl_symbol("Not"), core, jl_anytype_type, jl_emptysvec,
+                                  jl_perm_symsvec(1, "body"), jl_svec(1, jl_any_type),
+                                  jl_emptysvec, 0, 0, 1);
+    jl_not_type->name->mayinlinealloc = 0;
+
     // `T` must be declared `Any`: jl_valid_type_param admits non-type values
     // (`Type{1}`), so a narrower field type would be unsound (#62897)
     jl_typeeq_type = jl_new_datatype(jl_symbol("TypeEq"), core, jl_anytype_type, jl_emptysvec,
@@ -4605,6 +4612,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_typename_type);
     jl_compute_field_offsets(jl_uniontype_type);
     jl_compute_field_offsets(jl_intersect_type);
+    jl_compute_field_offsets(jl_not_type);
     jl_compute_field_offsets(jl_typeeq_type);
     jl_compute_field_offsets(jl_typeegal_type);
     jl_compute_field_offsets(jl_tvar_type);
@@ -4625,6 +4633,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_datatype_type->ismutationfree = 1;
     jl_uniontype_type->ismutationfree = 1;
     jl_intersect_type->ismutationfree = 1;
+    jl_not_type->ismutationfree = 1;
     jl_unionall_type->ismutationfree = 1;
     assert(((jl_datatype_t*)jl_array_any_type)->ismutationfree == 0);
     assert(((jl_datatype_t*)jl_array_uint8_type)->ismutationfree == 0);

@@ -566,6 +566,7 @@ $(addprefix $(BUILDDIR)/,gc-common.o gc-common.dbg.obj gc-common.static.o gc-com
 $(addprefix $(BUILDDIR)/,task.o task.dbg.obj task.static.o task.static.dbg.obj): $(SRCDIR)/builtin_proto.h
 $(addprefix $(BUILDDIR)/,APInt.o APInt.dbg.obj APInt.static.o APInt.static.dbg.obj runtime_intrinsics.o runtime_intrinsics.dbg.obj runtime_intrinsics.static.o runtime_intrinsics.static.dbg.obj): $(SRCDIR)/APInt-C.h
 $(addprefix $(BUILDDIR)/,runtime_intrinsics.o runtime_intrinsics.dbg.obj runtime_intrinsics.static.o runtime_intrinsics.static.dbg.obj): $(SRCDIR)/processor.h
+$(addprefix $(BUILDDIR)/,subtype.o subtype.dbg.obj subtype.static.o subtype.static.dbg.obj): $(addprefix $(SRCDIR)/,subtype-trace.inc subtype-trace-wrappers.inc subtype-corpus.inc subtype-corpus-filter.inc subtype-corpus-full.inc)
 
 # archive library file rules
 $(BUILDDIR)/support/libsupport.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S *.inc) $(SRCDIR)/support/*.c

@@ -66,6 +66,7 @@
     XX(interconditional_type, jl_datatype_t*) \
     XX(interrupt_exception, jl_value_t*) \
     XX(intersect_type, jl_datatype_t*) \
+    XX(not_type, jl_datatype_t*) \
     XX(intrinsic_type, jl_datatype_t*) \
     XX(anytype_type, jl_datatype_t*) \
     XX(kwcall_type, jl_datatype_t*) \

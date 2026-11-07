@@ -3640,3 +3640,624 @@ end
 @testintersect(Tuple{T, Vararg{Tuple{T, Any, Int}}} where T,
                Tuple{Any, Vararg{Tuple{Tuple{S}, S, Float64} where S}},
                Tuple{Any})
+
+# `jl_subtype_trace` writes a JSON transcript of one query (in builds with -DJL_SUBTYPE_TRACE):
+# rebuild the query's types from the flattened `atoms` and check that they reproduce it.
+module SubtypeTraceTest
+using Test
+
+subtype_trace(path, kind, a, b) = ccall(:jl_subtype_trace, Any, (Cstring, Cstring, Any, Any), path, kind, a, b)
+
+# A minimal JSON reader, sufficient for transcripts.
+function parse_json(s::String)
+    i = 1
+    peek() = codeunit(s, i)
+    skipws() = while i <= ncodeunits(s) && peek() in UInt8.((' ', '\n', '\t', '\r')); i += 1; end
+    function value()
+        skipws()
+        c = peek()
+        if c == UInt8('{')
+            i += 1
+            d = Dict{String,Any}()
+            skipws()
+            peek() == UInt8('}') && (i += 1; return d)
+            while true
+                k = value()
+                skipws(); i += 1 # ':'
+                d[k] = value()
+                skipws()
+                c = peek(); i += 1
+                c == UInt8('}') && return d
+            end
+        elseif c == UInt8('[')
+            i += 1
+            v = Any[]
+            skipws()
+            peek() == UInt8(']') && (i += 1; return v)
+            while true
+                push!(v, value())
+                skipws()
+                c = peek(); i += 1
+                c == UInt8(']') && return v
+            end
+        elseif c == UInt8('"')
+            i += 1
+            io = IOBuffer()
+            while (c = peek()) != UInt8('"')
+                if c == UInt8('\\')
+                    e = codeunit(s, i + 1)
+                    if e == UInt8('u')
+                        print(io, Char(parse(UInt16, s[i+2:i+5]; base=16)))
+                        i += 6
+                    else
+                        write(io, e)
+                        i += 2
+                    end
+                else
+                    write(io, c)
+                    i += 1
+                end
+            end
+            i += 1
+            return String(take!(io))
+        else
+            j = i
+            while i <= ncodeunits(s) && !(peek() in UInt8.((',', ']', '}', ' ')))
+                i += 1
+            end
+            tok = s[j:i-1]
+            return tok == "true" ? true : tok == "false" ? false : tok == "null" ? nothing : parse(Int, tok)
+        end
+    end
+    return value()
+end
+
+# Build a representative of atom `i`. A TypeName is resolved by its module path and name, and
+# the atoms recorded from its `wrapper` and `super` are then anchored to those exact objects, so
+# that the rebuilt types share them wherever the original types did.
+function rebuild(atoms::Vector{Any}, i::Int, memo::Dict{Int,Any}=Dict{Int,Any}())
+    if !haskey(memo, -1)
+        # resolve (and anchor) every TypeName before building anything
+        memo[-1] = nothing
+        foreach(j -> atoms[j]["kind"] == "TypeName" && rebuild(atoms, j - 1, memo), eachindex(atoms))
+    end
+    haskey(memo, i) && return memo[i]
+    a = atoms[i + 1]
+    b(j) = rebuild(atoms, j, memo)
+    k = a["kind"]
+    v = if k == "Bottom"
+        Union{}
+    elseif k == "TypeVar"
+        TypeVar(Symbol(a["name"]), b(a["lb"]), b(a["ub"]))
+    elseif k == "UnionAll"
+        # bypass the normalization in `UnionAll(...)`, which may return an equal type instead
+        new_unionall(b(a["var"]), b(a["body"]))
+    elseif k == "Union"
+        Union{b(a["a"]), b(a["b"])}
+    elseif k == "Vararg"
+        a["T"] === nothing ? Vararg : a["N"] === nothing ? Vararg{b(a["T"])} : Vararg{b(a["T"]), b(a["N"])}
+    elseif k == "TypeEq"
+        Type{b(a["T"])}
+    elseif k == "TypeEgal"
+        Core.TypeEgal{b(a["T"])}
+    elseif k == "DataType"
+        w = b(a["name"]).wrapper
+        isempty(a["params"]) ? w : w{map(b, a["params"])...}
+    elseif k == "TypeName"
+        path = a["module"]
+        m = getglobal(Main, Symbol(path[1]))::Module
+        for p in path[2:end]
+            m = getglobal(m, Symbol(p))::Module
+        end
+        tn = Base.unwrap_unionall(getglobal(m, Symbol(a["name"]))).name
+        @assert tn.name === Symbol(a["name"])
+        memo[i] = tn
+        anchor!(memo, atoms, a["wrapper"], tn.wrapper)
+        anchor!(memo, atoms, a["super"], Base.unwrap_unionall(tn.wrapper).super)
+        tn
+    elseif k == "Symbol"
+        Symbol(a["name"])
+    elseif k == "Value"
+        reinterpret(b(a["type"]), hex2bytes(a["bits"]))[1]
+    else
+        error("cannot rebuild a $k atom")
+    end
+    memo[i] = v
+    return v
+end
+
+@eval new_unionall(v, body) = $(Expr(:new, :UnionAll, :v, :body))
+
+function anchor!(memo::Dict{Int,Any}, atoms::Vector{Any}, i, @nospecialize(x))
+    (i === nothing || haskey(memo, i)) && return
+    memo[i] = x
+    a = atoms[i + 1]
+    k = a["kind"]
+    if k == "UnionAll"
+        anchor!(memo, atoms, a["var"], x.var)
+        anchor!(memo, atoms, a["body"], x.body)
+    elseif k == "TypeVar"
+        anchor!(memo, atoms, a["lb"], x.lb)
+        anchor!(memo, atoms, a["ub"], x.ub)
+    elseif k == "Union"
+        anchor!(memo, atoms, a["a"], x.a)
+        anchor!(memo, atoms, a["b"], x.b)
+    elseif k == "DataType"
+        foreach((j, p) -> anchor!(memo, atoms, j, p), a["params"], x.parameters)
+    elseif k == "Vararg"
+        isdefined(x, :T) && anchor!(memo, atoms, a["T"], x.T)
+        isdefined(x, :N) && anchor!(memo, atoms, a["N"], x.N)
+    elseif k in ("TypeEq", "TypeEgal")
+        anchor!(memo, atoms, a["T"], x.T)
+    end
+end
+
+function check_log(d)
+    atoms = d["atoms"]
+    @test all(atoms[i]["id"] == i - 1 for i in eachindex(atoms))
+    @test all(atoms[id + 1]["t"] == -1 for id in d["args"])
+    calls = Int[]
+    vbs = Set{Int}()
+    for e in d["log"]
+        if e["ev"] == "call"
+            @test all(0 <= id < length(atoms) for id in e["args"] if id !== nothing)
+            push!(calls, e["c"])
+        elseif e["ev"] == "ret"
+            @test pop!(calls) == e["c"]
+        elseif e["ev"] == "bind"
+            @test atoms[e["var"] + 1]["kind"] == "TypeVar"
+            push!(vbs, e["vb"])
+        elseif e["ev"] == "unbind"
+            @test e["vb"] in vbs
+            delete!(vbs, e["vb"])
+        elseif e["ev"] in ("bound", "flags")
+            @test e["vb"] in vbs
+        end
+    end
+    @test isempty(calls)
+    @test isempty(vbs)
+end
+
+# Re-running the query on types rebuilt from a transcript must reproduce the same transcript,
+# up to the addresses and objectids of its atoms.
+function check_replay(d)
+    memo = Dict{Int,Any}()
+    ra, rb = (rebuild(d["atoms"], id, memo) for id in d["args"])
+    # not inside a closure: a captured UnionAll may be re-boxed as a different (but equal) object
+    path = tempname()
+    subtype_trace(path, d["kind"], ra, rb)
+    d2 = parse_json(readline(path))
+    rm(path)
+    strip_ids(atoms) = [filter(p -> !(p.first in ("addr", "oid")), a) for a in atoms]
+    @test d2["result"] == d["result"]
+    @test d2["log"] == d["log"]
+    @test strip_ids(d2["atoms"]) == strip_ids(d["atoms"])
+end
+
+if ccall(:jl_subtype_trace_enabled, Cint, ()) != 0
+    @testset "subtype transcripts" begin
+        mktemp() do path, io
+            A = Tuple{Vector{T}, T} where T<:Integer
+            B = Tuple{AbstractVector{S}, S} where S
+            U = Tuple{Union{Int8, Int16}, Union{Int8, Int16}}
+            V = Union{Tuple{Int8, Union{Int8, Int16}}, Tuple{Int16, Signed}}
+            X = Tuple{Vector{T}, T} where T
+            Y = Tuple{AbstractVector{Int}, Any}
+            @test subtype_trace(path, "subtype", A, B) === true
+            @test subtype_trace(path, "subtype", B, A) === false
+            @test subtype_trace(path, "subtype", U, V) === true
+            @test subtype_trace(path, "intersect", X, Y) == Tuple{Vector{Int}, Int}
+            @test subtype_trace(path, "intersect_env", Y, X) == Core.svec(Tuple{Vector{Int}, Int}, Core.svec(Int))
+            ds = map(parse_json, readlines(io))
+            @test length(ds) == 5
+            foreach(check_log, ds)
+            foreach(check_replay, ds)
+
+            # rebuild both arguments of each query and re-run it on the rebuilt types
+            for (d, (a, b)) in zip(ds, [(A, B), (B, A), (U, V), (X, Y), (Y, X)])
+                memo = Dict{Int,Any}()
+                ra, rb = (rebuild(d["atoms"], id, memo) for id in d["args"])
+                @test ra == a && rb == b
+                if d["kind"] == "subtype"
+                    @test (ra <: rb) === d["result"]
+                elseif d["kind"] == "intersect"
+                    @test typeintersect(ra, rb) == rebuild(d["atoms"], d["result"], memo)
+                else
+                    @test typeintersect(ra, rb) == rebuild(d["atoms"], d["result"]["type"], memo)
+                    @test map(id -> rebuild(d["atoms"], id, memo), d["result"]["env"]) == [Int]
+                end
+            end
+
+            # every union decision names the Union it decides on
+            picks = filter(e -> e["ev"] == "upick", ds[3]["log"])
+            @test !isempty(picks)
+            @test all(ds[3]["atoms"][e["u"] + 1]["kind"] == "Union" for e in picks)
+        end
+    end
+else
+    @test_throws ErrorException subtype_trace(tempname(), "subtype", Int, Integer)
+end
+end
+
+# Restricted query capture: portable hierarchy, exact deduplication, nominal identity, GC, and concurrent publication.
+import TOML
+let
+corpus_workload = raw"""
+using TOML
+@assert TOML.parse("value = 1")["value"] == 1
+module CorpusFixtures
+    abstract type Root end
+    abstract type Branch <: Root end
+    primitive type Leaf <: Branch 8 end
+    primitive type Other <: Root 16 end
+    primitive type Tiny <: Root 1 end
+    struct ExcludedStruct end
+    abstract type ExcludedParam{T} end
+    primitive type ExcludedChild <: ExcludedParam{Int} 8 end
+end
+using .CorpusFixtures
+@eval rawunion(a, b) = $(Expr(:new, Union, :a, :b))
+@eval rawnot(a) = $(Expr(:new, Core.Not, :a))
+@eval rawintersect(a, b) = $(Expr(:new, Core.Intersect, :a, :b))
+# Force the public runtime entry point (rather than compiler constant folding).
+# There is no Base wrapper for querying internal Not/Intersect objects.
+query(@nospecialize(a), @nospecialize(b)) = ccall(:jl_subtype, Cint, (Any, Any), a, b)
+for name in (:Int64, :UInt128)
+    clone = Core._abstracttype(Core, name, Core.svec())
+    Core._setsuper!(clone, Any)
+    @assert query(clone, Any) == 1
+end
+@assert query(Int64, Integer) == 1
+@assert query(UInt128, Unsigned) == 1
+F = CorpusFixtures
+for _ in 1:100
+    @assert query(F.Leaf, F.Root) == 1
+    @assert query(F.Root, F.Leaf) == 0
+    @assert query(rawunion(F.Leaf, F.Other), F.Branch) == 0
+end
+# Same structure with different object sharing must deduplicate.
+u = rawunion(F.Leaf, F.Other)
+@assert query(rawunion(u, u), F.Root) == 1
+@assert query(rawunion(rawunion(F.Leaf, F.Other), rawunion(F.Leaf, F.Other)), F.Root) == 1
+# The grammar accepts internal Boolean nodes. Use only the public entrypoint's
+# Any fast path: this does not imply native subtyping implements Not semantics.
+@assert query(rawnot(F.Leaf), Any) == 1
+@assert query(rawintersect(F.Root, F.Branch), Any) == 1
+for bad in (F.ExcludedStruct, F.ExcludedChild, F.ExcludedParam, F.ExcludedParam{Int},
+            Tuple{}, Tuple{Int}, Type{Int}, TypeVar(:T))
+    query(bad, Any)
+end
+# Two distinct nominal types with identical module and name metadata.
+twin1 = Core._abstracttype(F, :Twin, Core.svec())
+twin2 = Core._abstracttype(F, :Twin, Core.svec())
+Core._setsuper!(twin1, Any)
+Core._setsuper!(twin2, Any)
+@assert twin1 !== twin2
+query(twin1, Any)
+query(twin2, Any)
+@assert query(twin1, twin2) == 0
+GC.gc(true)
+@assert query(twin1, twin2) == 0
+@sync for _ in 1:4
+    Threads.@spawn for _ in 1:100
+        @assert query(F.Leaf, F.Root) == 1
+        @assert query(F.Root, F.Leaf) == 0
+        GC.safepoint()
+    end
+end
+@assert query(Int64, Integer) == 1
+@assert query(F.Tiny, F.Root) == 1
+"""
+
+function run_clean(command)
+    errors = IOBuffer()
+    run(pipeline(command; stderr=errors))
+    @test isempty(String(take!(errors)))
+end
+
+function corpus_records(dir)
+    Dict(name => TOML.parsefile(joinpath(dir, name)) for name in readdir(dir) if endswith(name, ".toml"))
+end
+
+function node(record, id)
+    only(n for n in record["nodes"] if n["id"] == id)
+end
+
+function matches(record, left, right)
+    l, r = node(record, record["lhs"]), node(record, record["rhs"])
+    get(l, "name", l["kind"]) == left && get(r, "name", r["kind"]) == right
+end
+
+@testset "subtype corpus" begin
+    mktempdir() do parent
+        dir = joinpath(parent, "queries")
+        cmd = `$(Base.julia_cmd()) --startup-file=no --threads=4 -e $corpus_workload`
+        run_clean(addenv(cmd, "JULIA_SUBTYPE_CORPUS_DIR" => dir))
+        records = corpus_records(dir)
+        @test !isempty(records)
+        @test all(r["version"] == 1 && r["kind"] == "subtype" && r["result"] isa Bool for r in values(records))
+        @test isempty(filter(n -> startswith(n, ".query-") || endswith(n, ".conflict"), readdir(dir)))
+        for (a, b, result) in (("Leaf", "Root", true), ("Root", "Leaf", false))
+            found = filter(r -> matches(r, a, b), collect(values(records)))
+            @test length(found) == 1
+            @test only(found)["result"] === result
+        end
+        nodes = reduce(vcat, (r["nodes"] for r in values(records)))
+        @test !any(startswith(get(n, "name", ""), "Excluded") for n in nodes)
+        @test all(n["kind"] in ("Any", "Bottom", "Abstract", "Primitive", "Union", "Intersect", "Not") for n in nodes)
+        @test all(n["bits"] == 1 for n in nodes if get(n, "name", "") == "Tiny")
+        @test any(get(n, "name", "") == "Tiny" for n in nodes)
+        @test any(n["kind"] == "Not" for n in nodes)
+        @test any(n["kind"] == "Intersect" for n in nodes)
+        @test length(unique(n["nominal_id"] for n in nodes if get(n, "name", "") == "Twin")) == 2
+        twins = only(r for r in values(records) if matches(r, "Twin", "Twin"))
+        @test twins["lhs"] != twins["rhs"]
+        @test twins["result"] === false
+        @test length(filter(r -> matches(r, "Twin", "Any"), collect(values(records)))) == 2
+        # Shared and unshared copies of the same raw syntax have one file.
+        repeated = filter(collect(values(records))) do r
+            l = node(r, r["lhs"])
+            l["kind"] == "Union" && l["a"] == l["b"] && matches(r, "Union", "Root")
+        end
+        @test length(repeated) == 1
+        # Read-only image types have stable corpus identities across processes.
+        int_before = Set(k for (k,r) in records if matches(r, "Int64", "Integer"))
+        @test !isempty(int_before)
+        uint_before = Set(k for (k,r) in records if matches(r, "UInt128", "Unsigned"))
+        @test !isempty(uint_before)
+        stable = raw"ccall(:jl_subtype, Cint, (Any, Any), Int64, Integer); ccall(:jl_subtype, Cint, (Any, Any), UInt128, Unsigned)"
+        stable_cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $stable`, "JULIA_SUBTYPE_CORPUS_DIR" => dir)
+        @sync for _ in 1:3
+            @async run_clean(stable_cmd)
+        end
+        after = corpus_records(dir)
+        @test Set(k for (k,r) in after if matches(r, "Int64", "Integer")) == int_before
+        @test Set(k for (k,r) in after if matches(r, "UInt128", "Unsigned")) == uint_before
+        # Hash collisions / pre-existing unrelated files cannot suppress a query.
+        target = only(int_before)
+        original = read(joinpath(dir, target), String)
+        write(joinpath(dir, target), "unrelated payload\n")
+        run_clean(stable_cmd)
+        @test any(read(joinpath(dir, n), String) == original for n in readdir(dir) if n != target)
+        flipped = replace(original, "result = true \n" => "result = false\n"; count=1)
+        @test flipped != original
+        write(joinpath(dir, target), flipped)
+        errors = IOBuffer()
+        run(pipeline(stable_cmd; stderr=errors))
+        @test occursin("conflicting Boolean results", String(take!(errors)))
+        @test read(joinpath(dir, target), String) == flipped
+        @test TOML.parsefile(joinpath(dir, target * ".conflict"))["result"] === true
+        late_dir = joinpath(parent, "late")
+        late_script = "ENV[\"JULIA_SUBTYPE_CORPUS_DIR\"] = $(repr(late_dir)); " * stable
+        run_clean(addenv(`$(Base.julia_cmd()) --startup-file=no -e $late_script`, "JULIA_SUBTYPE_CORPUS_DIR" => ""))
+        @test !isdir(late_dir)
+        changed_dir = joinpath(parent, "changed-cwd")
+        mkdir(changed_dir)
+        relative_script = "cd($(repr(changed_dir))); module RelativeFixture; primitive type RelativeLeaf 8 end; end; " *
+                          "ccall(:jl_subtype, Cint, (Any,Any), RelativeFixture.RelativeLeaf, Any)"
+        relative_cmd = Cmd(`$(Base.julia_cmd()) --startup-file=no -e $relative_script`; dir=parent)
+        run_clean(addenv(relative_cmd, "JULIA_SUBTYPE_CORPUS_DIR" => "relative-queries"))
+        relative_records = corpus_records(joinpath(parent, "relative-queries"))
+        @test any(matches(r, "RelativeLeaf", "Any") for r in values(relative_records))
+        @test !isdir(joinpath(changed_dir, "relative-queries"))
+        # A separately cached package ensures the canonical type was not already
+        # encountered during startup before its same-name clone.
+        packages = joinpath(parent, "packages")
+        pkgsrc = joinpath(packages, "CorpusImageFixture", "src")
+        mkpath(pkgsrc)
+        write(joinpath(pkgsrc, "CorpusImageFixture.jl"), "module CorpusImageFixture\nprimitive type Leaf 8 end\nend\n")
+        image_env = ("JULIA_LOAD_PATH" => packages * (Sys.iswindows() ? ";@stdlib" : ":@stdlib"),
+                     "JULIA_DEPOT_PATH" => joinpath(parent, "depot"))
+        run(pipeline(addenv(`$(Base.julia_cmd()) --startup-file=no -e "using CorpusImageFixture"`,
+                           image_env..., "JULIA_SUBTYPE_CORPUS_DIR" => ""); stdout=devnull, stderr=devnull))
+        image_dir = joinpath(parent, "image-queries")
+        image_prefix = "using CorpusImageFixture; query(a,b) = ccall(:jl_subtype, Cint, (Any,Any), a,b); "
+        image_clone = "clone = Core._abstracttype(CorpusImageFixture, :Leaf, Core.svec()); Core._setsuper!(clone, Any); query(clone, Any); "
+        image_query = "query(CorpusImageFixture.Leaf, Any)"
+        run_clean(addenv(`$(Base.julia_cmd()) --startup-file=no -e $(image_prefix * image_clone * image_query)`,
+                         image_env..., "JULIA_SUBTYPE_CORPUS_DIR" => image_dir))
+        image_before = corpus_records(image_dir)
+        image_ids = Set(k for (k,r) in image_before if matches(r, "Leaf", "Any") &&
+                        node(r, r["lhs"])["kind"] == "Primitive")
+        @test length(image_ids) == 1
+        run_clean(addenv(`$(Base.julia_cmd()) --startup-file=no -e $(image_prefix * image_query)`,
+                         image_env..., "JULIA_SUBTYPE_CORPUS_DIR" => image_dir))
+        image_after = corpus_records(image_dir)
+        @test Set(k for (k,r) in image_after if matches(r, "Leaf", "Any") &&
+                  node(r, r["lhs"])["kind"] == "Primitive") == image_ids
+    end
+end
+
+end
+
+# Extended capture preserves tuple structure, lexical binders, bounds, and alpha-renamed query identity.
+@testset "tuple and UnionAll corpus" begin
+    mktempdir() do parent
+        script = raw"""
+        module ExtendedCorpusFixture
+            abstract type Root end
+            primitive type Leaf <: Root 8 end
+            primitive type Other <: Root 8 end
+            struct Excluded end
+        end
+        F = ExtendedCorpusFixture
+        query(a,b) = ccall(:jl_subtype, Cint, (Any,Any), a,b)
+        @eval rawunion(a,b) = $(Expr(:new, Union, :a, :b))
+        @eval rawall(v,b) = $(Expr(:new, UnionAll, :v, :b))
+        query(Tuple{F.Leaf,F.Other}, Tuple{F.Root,F.Root})
+        query(Tuple{Tuple{F.Leaf},F.Leaf}, Tuple{Tuple{F.Root},F.Root})
+        query(Tuple{}, Tuple{F.Root})
+        for name in (:T, :S, :Renamed), _ in 1:10
+            t = TypeVar(name, Union{}, F.Root)
+            diagonal = rawall(t, Tuple{t,t})
+            @assert query(Tuple{F.Leaf,F.Leaf}, diagonal) == 1
+            @assert query(Tuple{F.Leaf,F.Other}, diagonal) == 0
+            @assert query(Tuple{F.Root,F.Root}, diagonal) == 0
+            s = TypeVar(name, Union{}, t)
+            query(rawall(t,rawall(s,Tuple{t,s})), Any)
+        end
+        t = TypeVar(:T, Union{}, F.Root)
+        shared = rawall(t, Tuple{t,t})
+        query(rawunion(shared,shared), Any)
+        u = TypeVar(:U, Union{}, F.Root)
+        query(rawunion(shared,rawall(u,Tuple{u,u})), Any)
+        # A cached pointer under a binder cannot authorize its later free use.
+        query(rawunion(shared,t), Any)
+        query(Tuple{t}, Any)
+        query(Tuple{Vararg{F.Leaf}}, Any)
+        query(Tuple{Vector{F.Leaf}}, Any)
+        query(Tuple{F.Excluded}, Any)
+        query(Tuple, Any)
+        GC.gc(true)
+        """
+        function records(mode)
+            dir = joinpath(parent, mode)
+            errors = IOBuffer()
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                "JULIA_SUBTYPE_CORPUS_DIR" => dir, "JULIA_SUBTYPE_CORPUS_GRAMMAR" => mode)
+            run(pipeline(cmd; stderr=errors))
+            @test isempty(String(take!(errors)))
+            rows = [TOML.parsefile(joinpath(dir, p)) for p in readdir(dir) if endswith(p, ".toml")]
+            @test !any(endswith(p, ".conflict") for p in readdir(dir))
+            filter(r -> any(get(n,"name","") == "Leaf" &&
+                           "ExtendedCorpusFixture" in get(n,"module",[]) for n in r["nodes"]), rows)
+        end
+        nominal = records("nominal")
+        @test all(r["version"] == 1 for r in nominal)
+        tuples = records("tuples")
+        @test !isempty(tuples)
+        @test any(any(n["kind"] == "Tuple" for n in r["nodes"]) for r in tuples)
+        @test !any(any(n["kind"] in ("TypeVar", "UnionAll") for n in r["nodes"]) for r in tuples)
+        quantified = records("unionall")
+        @test length(quantified) > length(tuples)
+        node(r,id) = only(n for n in r["nodes"] if n["id"] == id)
+        diagonal = filter(quantified) do r
+            a, b = node(r,r["lhs"]), node(r,r["rhs"])
+            a["kind"] == "Tuple" && b["kind"] == "UnionAll"
+        end
+        @test length(diagonal) == 2 # Leaf/Leaf true and Leaf/Other false; Root/Root filtered out
+        @test Set(r["result"] for r in diagonal) == Set([true,false])
+        for r in diagonal
+            binder = node(r,r["rhs"])
+            body = node(r,binder["body"])
+            @test body["elements"] == [binder["var"],binder["var"]]
+        end
+        allrows = [TOML.parsefile(joinpath(parent,"unionall",p))
+                   for p in readdir(joinpath(parent,"unionall")) if endswith(p,".toml")]
+        unions = filter(r -> node(r,r["lhs"])["kind"] == "Union" &&
+            count(n -> n["kind"] == "UnionAll",r["nodes"]) == 2 &&
+            any(get(n,"name","") == "Root" for n in r["nodes"]), allrows)
+        @test length(unions) == 1 # shared versus independently allocated binders
+        @test length(unique(n["binder"] for n in only(unions)["nodes"] if n["kind"] == "TypeVar")) == 2
+        @test all(n["kind"] in ("Any","Bottom","Abstract","Primitive","Union","Intersect","Not","Tuple","TypeVar","UnionAll")
+                  for r in allrows for n in r["nodes"])
+        @test !any(get(n,"name","") == "Excluded" for r in allrows for n in r["nodes"])
+    end
+end
+
+# Version 3 captures general object graphs and distinguishes datatype, linear, and unrestricted admissions.
+@testset "general subtype corpus graphs" begin
+    mktempdir() do parent
+        script = raw"""
+        module GeneralCorpusFixture
+            struct Box{T} end
+            abstract type Probe end
+            mutable struct MutableBox
+                x::Any
+            end
+            struct Padded
+                x::UInt8
+                y::UInt64
+            end
+        end
+        F = GeneralCorpusFixture
+        query(@nospecialize(a), @nospecialize(b)) = ccall(:jl_subtype, Cint, (Any, Any), a, b)
+        @eval rawall(v,b) = $(Expr(:new, UnionAll, :v, :b))
+        @eval rawunion(a,b) = $(Expr(:new, Union, :a, :b))
+        @eval rawegal(a) = $(Expr(:new, Core.TypeEgal, :a))
+        query(F.Box{Int}, F.Probe)
+        query(F.Box{:tag}, F.Probe)
+        query(F.Box{UInt8(4)}, F.Probe)
+        query(F.Box{(:tag,:other)}, F.Probe)
+        query(Tuple{F.Box{Int}}, F.Probe)
+        query(Type{F.Box{Int}}, F.Probe)
+        t = TypeVar(:LinearT)
+        query(rawall(t, Tuple{F.Box{t}}), F.Probe)
+        query(rawall(t, Tuple{t,t}), F.Probe)
+        query(rawall(t, Int), F.Probe)
+        query(t, Any)
+        query(Tuple{Vararg{F.Box{Int}}}, F.Probe)
+        mutable_value = F.MutableBox(:marker)
+        opaque = mutable_value
+        query(rawegal(F.Box{Int}), Any)
+        query(opaque, Any)
+        query(F.Padded(1,2), Any)
+        query(Ptr{Cvoid}(UInt(0x1234)), Any)
+        query("with\0nul", Any)
+        for _ in 1:20
+            query(F.Box{Int}, F.Probe)
+            query(opaque, Any)
+        end
+        GC.gc(true)
+        query(opaque, Any)
+        if ENV["JULIA_SUBTYPE_CORPUS_GRAMMAR"] == "full"
+            let deep = F.Box{Int}
+                for _ in 1:4200
+                    deep = rawunion(deep, F.Probe)
+                end
+                query(deep, Any)
+            end
+        end
+        """
+        node(r,id) = r["nodes"][id]
+        name(n) = haskey(n,"name_hex") ? String(hex2bytes(n["name_hex"])) : ""
+        function fixture_probe(r)
+            rhs = node(r,r["rhs"])
+            rhs["kind"] == "DataType" && name(node(r,rhs["typename"])) == "Probe"
+        end
+        function capture(mode)
+            dir = joinpath(parent,mode)
+            errors = IOBuffer()
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                "JULIA_SUBTYPE_CORPUS_DIR"=>dir, "JULIA_SUBTYPE_CORPUS_GRAMMAR"=>mode)
+            process = run(pipeline(ignorestatus(cmd); stderr=errors))
+            diagnostics = String(take!(errors))
+            @test success(process)
+            @test isempty(diagnostics)
+            @test !any(endswith(p,".conflict") for p in readdir(dir))
+            [TOML.parsefile(joinpath(dir,p)) for p in readdir(dir) if endswith(p,".toml")]
+        end
+        data = capture("datatype")
+        linear = capture("linear")
+        full = capture("full")
+        @test all(r["version"] == 3 for rows in (data,linear,full) for r in rows)
+        dprobes, lprobes, fprobes = map(rows -> filter(fixture_probe,rows), (data,linear,full))
+        @test !isempty(dprobes)
+        @test count(r -> node(r,r["lhs"])["kind"] == "UnionAll", dprobes) == 0
+        @test count(r -> node(r,r["lhs"])["kind"] == "UnionAll", lprobes) == 1
+        @test count(r -> node(r,r["lhs"])["kind"] == "UnionAll", fprobes) == 3
+        @test count(r -> node(r,r["lhs"])["kind"] == "TypeEq", dprobes) == 1
+        boxqueries = filter(dprobes) do r
+            lhs = node(r,r["lhs"])
+            lhs["kind"] == "DataType" && name(node(r,lhs["typename"])) == "Box"
+        end
+        @test length(boxqueries) == 4
+        @test all(!r["result"] for r in boxqueries)
+        @test any(any(n["kind"] == "Symbol" && n["bytes"] == bytes2hex(codeunits("tag")) for n in r["nodes"]) for r in boxqueries)
+        @test any(any(n["kind"] == "Value" && haskey(n,"pointer_refs") for n in r["nodes"]) for r in boxqueries)
+        @test any(node(r,r["lhs"])["kind"] == "TypeVar" for r in full)
+        @test !any(node(r,r["lhs"])["kind"] == "TypeVar" for rows in (data,linear) for r in rows)
+        egal = filter(r -> node(r,r["lhs"])["kind"] == "TypeEgal",full)
+        @test !isempty(egal)
+        opaque = [node(r,r["lhs"]) for r in full if node(r,r["lhs"])["kind"] in ("Opaque","String")]
+        fixture_opaque = [n for n in opaque if n["kind"] == "Opaque"]
+        @test count(n -> get(n,"reason","") == "mutable-padded-or-special-layout",fixture_opaque) >= 2
+        @test any(get(n,"reason","") == "native-pointer-value" for n in opaque)
+        @test any(n["kind"] == "String" && n["bytes"] == bytes2hex(codeunits("with\0nul")) for n in opaque)
+        @test all(startswith(n["identity"],"process-") for n in opaque if n["kind"] == "Opaque")
+        @test any(length(r["nodes"]) > 4200 for r in full)
+        @test all(n["id"] == i for r in full for (i,n) in enumerate(r["nodes"]))
+        @test any(n["kind"] == "TypeName" && n["wrapper"] != 0 for r in full for n in r["nodes"])
+        @test all(!haskey(n,"field_types") && !haskey(n,"field_offsets") for r in full for n in r["nodes"] if n["kind"] == "DataType")
+    end
+end

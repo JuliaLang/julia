@@ -688,6 +688,13 @@ typedef struct JL_GC_TRACKED_TYPE {
     jl_value_t *JL_NONNULL b;
 } jl_intersecttype_t;
 
+// Internal-use-only complement node for the experimental inhabitation solver.
+// Like Intersect, this is deliberately outside the ordinary type classifier.
+typedef struct JL_GC_TRACKED_TYPE {
+    JL_DATA_TYPE
+    jl_value_t *JL_NONNULL body;
+} jl_nottype_t;
+
 typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_value_t *JL_NONNULL T;
@@ -1816,6 +1823,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_may_be_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->name->mutabl))
 #define jl_is_uniontype(v)   jl_typetagis(v,jl_uniontype_tag<<4)
 #define jl_is_intersecttype(v) jl_typetagis(v,jl_intersect_type)
+#define jl_is_nottype(v)      jl_typetagis(v,jl_not_type)
 #define jl_is_typeeq(v)      jl_typetagis(v,jl_typeeq_tag<<4)
 #define jl_is_typeegal(v)    jl_typetagis(v,jl_typeegal_tag<<4)
 #define jl_is_typevar(v)     jl_typetagis(v,jl_tvar_tag<<4)
