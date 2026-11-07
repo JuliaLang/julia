@@ -140,6 +140,27 @@ end
     @test round(9.87654321e-308, sigdigits = 10) ≈ 9.87654321e-308
     @test round(9.87654321e-308, sigdigits = 11) ≈ 9.87654321e-308
 
+    @test floor(prevfloat(1000.0), sigdigits=1) === 900.0
+    @test trunc(prevfloat(1000.0), sigdigits=1) === 900.0
+    @test floor(prevfloat(100.0), sigdigits=1) === 90.0
+    @test floor(Float16(99.94), sigdigits=1) === Float16(90)
+    @test floor(999.9999f0, sigdigits=1) === 900f0
+    for T in (Float16, Float32, Float64), k in -4:4, x in (prevfloat(T(10)^k), T(10)^k, nextfloat(T(10)^k))
+        @test Base.hidigit(x, 10) == 1 + floor(Int, log10(big(x)))
+    end
+    for x in (1e-30, 1e30), y in (prevfloat(x), x, nextfloat(x))
+        @test Base.hidigit(y, 10) == 1 + floor(Int, log10(big(y)))
+    end
+    for k in (-1_000_000, 1_000_000)
+        x = setrounding(BigFloat, RoundUp) do
+            BigFloat(10)^k
+        end
+        @test Base.hidigit(prevfloat(x), 10) == k
+        @test Base.hidigit(x, 10) == k + 1
+        @test round(x, sigdigits=1) ≈ x
+        @test @allocated(round(x, sigdigits=1)) < 100_000
+    end
+
     @inferred round(Float16(1.), sigdigits=2)
     @inferred round(Float32(1.), sigdigits=2)
     @inferred round(Float64(1.), sigdigits=2)
