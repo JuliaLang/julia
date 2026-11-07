@@ -5902,6 +5902,44 @@ end
     end
 end
 
+precompile_test_harness("Field replacement with tagged words") do load_path
+    # The value an image stores in place of a field can be an immediate of a
+    # tagged word, among them the one whose word equals the hash table's
+    # marker for a missing entry.
+    write(joinpath(load_path, "TaggedReplace.jl"),
+          """
+          module TaggedReplace
+          mutable struct Holder
+              value::Union{Int16, String}
+          end
+          struct Inner
+              value::Union{Int16, String}
+              n::Int
+          end
+          mutable struct Outer
+              inner::Inner
+          end
+          store(x, field, v) = ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any), x, field, v)
+          const seven = Holder("live")
+          const zero_word = Holder("live")
+          const reference = Holder(Int16(1))
+          const outer = Outer(Inner("live", 1))
+          store(seven, :value, Int16(7))
+          store(zero_word, :value, Int16(0))
+          store(reference, :value, "stored")
+          store(outer, :inner, Inner(Int16(0), 2))
+          end
+          """)
+    Base.compilecache(Base.PkgId("TaggedReplace"))
+    @eval using TaggedReplace
+    invokelatest() do
+        @test TaggedReplace.seven.value === Int16(7)
+        @test TaggedReplace.zero_word.value === Int16(0)
+        @test TaggedReplace.reference.value == "stored"
+        @test TaggedReplace.outer.inner === TaggedReplace.Inner(Int16(0), 2)
+    end
+end
+
 @testset "jl_set_newly_inferred rejects a typed vector" begin
     @test_throws TypeError ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.CodeInstance[])
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), Any[])

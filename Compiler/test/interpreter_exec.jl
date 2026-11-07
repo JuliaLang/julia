@@ -166,9 +166,10 @@ mutable struct ExecIMBox
     x::Int
     @atomic y::Int
     z::Any
+    t::Union{Int8, Int, String} # a tagged word
 end
 global exec_gp_m::Int = 2
-let b = ExecIMBox(3, 3, 3),
+let b = ExecIMBox(3, 3, 3, 3),
     part = Base.lookup_binding_partition(Base.get_world_counter(),
                                          convert(Core.Binding, GlobalRef(@__MODULE__, :exec_gp_m)))
     @test (@eval $(exec_im_thunk(GlobalRef(Core, :modifyglobal_partition), (QuoteNode(part),)))) === (2 => 4)
@@ -181,6 +182,11 @@ let b = ExecIMBox(3, 3, 3),
     mem = Memory{Int}(undef, 1)
     mem[1] = 3
     @test (@eval $(exec_im_thunk(GlobalRef(Core, :memoryrefmodify!), (memoryref(mem),), (QuoteNode(:not_atomic), false)))) === (3 => 5)
+    TU = Union{Int8, Int, String}
+    @test (@eval $(exec_im_thunk(GlobalRef(Core, :modifyfield!), (b, QuoteNode(:t))))) === Pair{TU,TU}(3, 5)
+    tmem = Memory{TU}(undef, 1)
+    tmem[1] = 3
+    @test (@eval $(exec_im_thunk(GlobalRef(Core, :memoryrefmodify!), (memoryref(tmem),), (QuoteNode(:not_atomic), false)))) === Pair{TU,TU}(3, 5)
     r = Ref(3)
     GC.@preserve r begin
         p = Base.unsafe_convert(Ptr{Int}, r)
