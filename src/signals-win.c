@@ -829,6 +829,10 @@ int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
     return success;
 }
 
+// Cycle count of each thread right after the sampler last resumed it (0: unknown).
+static ULONG64 *profile_resume_cycles = NULL;
+static int profile_resume_cycles_size = 0;
+
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
     // Note: illegal to use jl_* functions from this thread except for profiling-specific functions
@@ -858,6 +862,12 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
             bt_context_t c;
             int nthreads = jl_atomic_load_acquire(&jl_n_threads);
             int *randperm = profile_get_randperm(nthreads);
+            if (profile_resume_cycles_size < nthreads) {
+                profile_resume_cycles = (ULONG64*)realloc_s(profile_resume_cycles, nthreads * sizeof(ULONG64));
+                memset(profile_resume_cycles + profile_resume_cycles_size, 0,
+                       (nthreads - profile_resume_cycles_size) * sizeof(ULONG64));
+                profile_resume_cycles_size = nthreads;
+            }
             for (int idx = nthreads; idx-- > 0; ) {
                 int tid = randperm[idx];
                 if (!profile_running)
@@ -866,6 +876,19 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     jl_profile_stop_timer();
                     break;
                 }
+
+                // A suspension only takes effect once the target runs, and a
+                // resumed thread can wait for a CPU longer than the sampling
+                // interval. Suspending it again before it ran would keep it
+                // from ever executing its own code. A thread whose cycle count
+                // has not moved since it was resumed is where the previous
+                // sample found it, so skip it.
+                jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+                ULONG64 cycles;
+                if (ptls2 != NULL && profile_resume_cycles[tid] != 0 &&
+                    QueryThreadCycleTime(ptls2->system_id, &cycles) &&
+                    cycles == profile_resume_cycles[tid])
+                    continue;
 
                 // Set up timeout handler for stackwalk
                 _Atomic(int) abort_profiling = 0;
@@ -907,8 +930,12 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
 
                 // Clear abort pointer from TLS
                 jl_set_profile_abort_ptr(NULL);
-                if (timeout_data.tid != -1)
+                profile_resume_cycles[tid] = 0;
+                if (timeout_data.tid != -1) {
                     jl_thread_resume(tid);
+                    if (!QueryThreadCycleTime(ptls->system_id, &profile_resume_cycles[tid]))
+                        profile_resume_cycles[tid] = 0;
+                }
                 // Wait for callback to complete or cancel before continuing
                 if (hTimer != NULL)
                     DeleteTimerQueueTimer(hTimerQueue, hTimer, INVALID_HANDLE_VALUE);
