@@ -36,10 +36,11 @@ size in bits (`Sys.WORD_SIZE`), each component `T` is of one of two kinds:
 A union `U` is stored as a tagged word exactly when all of the following hold
 (checked by `jl_is_tagged_uniontype`):
 
-1. `U` has at least one immediate component, and at least one component that
-   is not `isbits`, hence a reference component. A union of `isbits` types
-   only, such as `Union{Nothing, Int32}`, keeps the selector-byte layout
-   described in [isbits Union Optimizations](isbitsunionarrays.md).
+1. `U` has at least one immediate component and one reference component, and
+   cannot use the selector-byte layout described in [isbits Union
+   Optimizations](isbitsunionarrays.md). For example, `Union{Nothing, Int32}`
+   keeps that layout. A union with 127 or more components cannot use it, even
+   when every component is `isbits`.
 2. `U` has at most 4 immediate components. This limit is an implementation
    choice.
 3. Every immediate component `T` satisfies `Core.bitsizeof(T) <= W - k`, with
