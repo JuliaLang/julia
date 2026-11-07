@@ -2619,6 +2619,9 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map, jl_defe
         } else {
             // Resolve the head type
             head = resolve_type_refs(head, subst_map, dcache);
+            // Applying a TypeVar is invalid, as in jl_f_apply_type
+            if (jl_is_typevar(head))
+                jl_type_error("Type{...} expression", (jl_value_t*)jl_unionall_type, head);
             // For parametric types, we need the wrapper (UnionAll), not the DataType
             if (jl_is_datatype(head) && ((jl_datatype_t*)head)->name->wrapper != NULL) {
                 head = ((jl_datatype_t*)head)->name->wrapper;
@@ -2907,6 +2910,15 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                                   jl_symbol_name(tv->name),
                                   jl_symbol_name(((jl_tvar_t*)p)->name),
                                   jl_symbol_name(ref->name));
+                    // Otherwise a TypeApp remains in a bound only where a
+                    // TypeVar is applied (e.g. the `F{Int}` in `T<:F{Int}`),
+                    // and resolving it raises the error that would have been
+                    // raised without the deferral.
+                    if (resolve_type_refs(p, &subst_map, &dcache) != p)
+                        jl_errorf("invalid type parameter bound in definition of %s: "
+                                  "bound of %s is not a type",
+                                  jl_symbol_name(tv->name),
+                                  jl_symbol_name(((jl_tvar_t*)p)->name));
                 }
             }
 
