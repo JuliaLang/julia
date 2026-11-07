@@ -2592,4 +2592,11 @@ let src = code_typed1((Bool,)) do b
     @test count(iscall((src, pick_constant_some_any)), src.code) == 0
 end
 
+@inline splat_sum_prod(t::Tuple) = +(t...) * *(t...)
+let src = code_typed1((Base.RefValue{Any},)) do r
+        splat_sum_prod(r[]::Tuple)
+    end
+    @test count(iscall((src, Core._apply_iterate)), src.code) == 0
+end
+
 end # module inline_tests

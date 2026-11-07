@@ -1883,6 +1883,12 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 return isknowntype(atyp) ? 5 : params.inline_nonleaf_penalty
             elseif f === typeassert && isconstType(argextype_widened(ex.args[3], src, sptypes))
                 return 1
+            elseif f === Core._apply_iterate && length(ex.args) >= 3
+                fa = singleton_type(argextype(ex.args[3], src, sptypes))
+                if !isa(fa, Builtin) || fa === invoke
+                    extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
+                    return extyp === Union{} ? 0 : params.inline_nonleaf_penalty
+                end
             end
             fidx = find_tfunc(f)
             if fidx === nothing
