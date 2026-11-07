@@ -840,4 +840,14 @@ end
     end
 end
 
+@testset "log" begin
+    for B in (Bidiagonal([1.0, 2, 3], [1.0, 2], :U), Bidiagonal([2.0, 3, 4, 5], [1.0, 1, 1], :U),
+              Bidiagonal([-1.0, 2, 3], [1.0, 2], :U), Bidiagonal([1.0, 2, 3], [1.0, 2], :L))
+        @test log(B) ≈ log(Matrix(B))
+    end
+    # NaNs propagate into the result instead of throwing
+    L = log(Bidiagonal([1.0, NaN, 3], [1.0, 2], :U))
+    @test isnan(L[2,2]) && L[3,3] ≈ log(3)
+end
+
 end # module TestBidiagonal
