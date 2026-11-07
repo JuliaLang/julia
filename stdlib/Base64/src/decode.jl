@@ -108,18 +108,20 @@ function Base.read(pipe::Base64DecodePipe, ::Type{UInt8})
     return read!(pipe, Ref{UInt8}())[]
 end
 
-function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb::Integer=length(data))
+function Base.readbytes!(pipe::Base64DecodePipe, data::MutableDenseArrayType{UInt8}, nb::Integer=length(data))
     require_one_based_indexing(data)
+    olb = lb = length(data)
     filled::Int = 0
-    while filled < nb && !eof(pipe)
-        if length(data) == filled
-            resize!(data, min(max(length(data) * 2, 1024), nb))
+    GC.@preserve data while filled < nb && !eof(pipe)
+        if lb == filled
+            lb = min(max(lb * 2, 1024), nb)
+            resize!(data, lb)
         end
         p = pointer(data, filled + 1)
-        p_end = read_until_end(pipe, p, UInt(min(length(data), nb) - filled))
+        p_end = read_until_end(pipe, p, UInt(min(lb, nb) - filled))
         filled += p_end - p
     end
-    resize!(data, filled)
+    lb > olb && resize!(data, max(olb, filled))
     return filled
 end
 
