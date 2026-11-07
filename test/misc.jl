@@ -1809,6 +1809,11 @@ if !Sys.iswindows() && !running_under_rr()
             @test alive
             @test process_running(p)
             @test !has_internal_err(output[])
+        catch
+            sleep(1) # let the exit status arrive
+            println(stderr, "idle-SIGINT session failed: ", p, "; transcript tail:\n",
+                    last(output[], 16000))
+            rethrow()
         finally
             cleanup_interrupt_test_repl(p, ptm)
         end
