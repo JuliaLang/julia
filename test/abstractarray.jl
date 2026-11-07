@@ -2361,6 +2361,19 @@ end
     @test sum(x for x in v2) == sum(A)
 end
 
+@testset "iterate with a non-concrete state type" begin
+    A = [1 2 3; 4 5 6]
+    P = PermutedDimsArray(A, (2, 1))
+    @test collect(x for x in P) == permutedims(A)
+    @test iterate(P, (eachindex(P),)) == iterate(P)
+    # With only `Any` known about the array, the inlined `iterate` must not splat the
+    # `Tuple{Any, Vararg{Any}}` state into dynamic `Core._apply_iterate` calls.
+    box = Ref{Any}(rand(100, 3))
+    f = () -> (n = 0; for _ in eachrow(box[]); n += 1; end; n)
+    @test f() == 100
+    @test (@allocations f()) < 500
+end
+
 @testset "self referential" begin
     v = Any[1,2,3]
     v[1] = v
