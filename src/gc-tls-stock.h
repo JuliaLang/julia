@@ -23,6 +23,8 @@ typedef struct {
 typedef struct {
     // variable for tracking young (i.e. not in `GC_OLD_MARKED`/last generation) large objects
     struct _bigval_t *young_generation_of_bigvals;
+    // old WeakRefs with an old value, only scanned on full marks (see gc-stock.c)
+    small_arraylist_t old_weak_refs;
 
     // lower bound of the number of pointers inside remembered values
     int remset_nptr;
@@ -57,7 +59,7 @@ typedef struct {
     jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;
     _Atomic(size_t) gc_sweeps_requested;
-    _Atomic(size_t) gc_stack_sweep_requested;
+    _Atomic(size_t) gc_per_thread_sweep_requested;
     arraylist_t sweep_objs;
     // dead objects requiring weak processing (currently:
     // dead-but-still-linked cancellation sources) found by this thread

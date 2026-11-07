@@ -25,7 +25,17 @@ function latex(io::IO, content::Vector)
 end
 
 function latex(io::IO, header::Header{l}) where l
-    tag = l < 4 ? "sub"^(l-1) * "section" : "sub"^(l-4) * "paragraph"
+    tag = if l == 1
+        "section"
+    elseif l == 2
+        "subsection"
+    elseif l == 3
+        "subsubsection"
+    elseif l == 4
+        "paragraph"
+    else
+        "subparagraph"
+    end
     wrapinline(io, tag) do
         latexinline(io, header.text)
     end
@@ -75,7 +85,7 @@ function latex(io::IO, md::Admonition)
         wrapinline(io, "textbf") do
             print(io, md.category)
         end
-        println(io, "\n\n", md.title, "\n")
+        println(io, "\n\n", latexesc(md.title), "\n")
         latex(io, md.content)
     end
 end
@@ -105,7 +115,7 @@ function latex(io::IO, md::List)
     end
 end
 
-function latex(io::IO, md::HorizontalRule)
+function latex(io::IO, ::HorizontalRule)
     println(io, "\\rule{\\textwidth}{1pt}")
 end
 
@@ -139,7 +149,7 @@ function latexinline(io::IO, md::Strikethrough)
     end
 end
 
-function latexinline(io::IO, br::LineBreak)
+function latexinline(io::IO, ::LineBreak)
     println(io, "\\\\")
 end
 

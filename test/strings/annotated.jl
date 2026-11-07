@@ -109,6 +109,17 @@ end
     @test Base.annotate!(chr, :attr, "m1m2") == Base.AnnotatedChar('m', [(:attr, "h0m1"), (:attr, "m1m2")])
 end
 
+@testset "Unstyled display fallback" begin
+    # In a fresh process, so that StyledStrings' `ansi_write` methods can't mask the fallback
+    script = """
+        s = SubString(Base.AnnotatedString("αb", [(1:3, :face, :red)]), 3, 3)
+        c = Base.AnnotatedChar('γ', [(:face, :red)])
+        print(any(m -> nameof(m) === :StyledStrings, Base.loaded_modules_array()), ' ',
+              String(s), sprint(print, c))
+        """
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == "false bγ"
+end
+
 @testset "Styling preservation" begin
     str = Base.AnnotatedString("some string", [(1:4, :thing, 0x01), (1:11, :all, 0x03), (6:11, :other, 0x02)])
     @test match(r".e", str).match == str[3:4]
@@ -140,6 +151,7 @@ end
                       (6:9, :label, 5)])
     @test join((String(str1), str1), ' ') ==
         Base.AnnotatedString("test test", [(6:9, :label, 5)])
+    @test join(("test", Base.AnnotatedString("case")), ' ') isa Base.AnnotatedString{String}
     @test repeat(str1, 2) == Base.AnnotatedString("testtest", [(1:8, :label, 5)])
     @test repeat(str2, 2) == Base.AnnotatedString("casecase", [(2:3, :label, "oomph"),
                                                        (6:7, :label, "oomph")])

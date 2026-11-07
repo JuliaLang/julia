@@ -71,22 +71,17 @@ function artifacts_dirs(args...)
     end
 end
 
-# Recursive function, let's not make this a closure because it then has to
-# be boxed.
-function parse_mapping(mapping::String, name::String, override_file::String)
-    if !isabspath(mapping) && !isempty(mapping)
-        mapping = tryparse(Base.SHA1, mapping)
-        if mapping === nothing
-            @error("Invalid override in '$(override_file)': entry '$(name)' must map to an absolute path or SHA1 hash!")
-        end
+# Return the target of one override, or `nothing` after logging an error if it is invalid.
+function parse_override_target(target, entry::String, override_file::String)
+    if target isa String && (isempty(target) || isabspath(target))
+        return target
     end
-    return mapping
+    hash = target isa String ? tryparse(Base.SHA1, target) : nothing
+    if hash === nothing
+        @error("Invalid override in '$(override_file)': $(entry) must map to an absolute path or SHA1 hash!")
+    end
+    return hash
 end
-function parse_mapping(mapping::Dict{String, Any}, name::String, override_file::String)
-    return Dict{String, Any}(k => parse_mapping(v, name, override_file) for (k, v) in mapping)
-end
-# Fallthrough for invalid Overrides.toml files
-parse_mapping(mapping, name::String, override_file::String) = nothing
 
 """
     ARTIFACT_OVERRIDES
@@ -131,53 +126,38 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
         depot_override_dict = parse_toml(override_file)
 
         for (k, mapping) in depot_override_dict
-            # First, parse the mapping. Is it an absolute path, a valid SHA1-hash, or neither?
-            mapping = parse_mapping(mapping, k, override_file)
-            if mapping === nothing
-                @error("Invalid override in '$(override_file)': failed to parse entry `$(k)`")
-                continue
-            end
-
-            # Next, determine if this is a hash override or a UUID/name override
-            if isa(mapping, String) || isa(mapping, SHA1)
-                # if this mapping is a direct mapping (e.g. a String), store it as a hash override
-                hash = tryparse(Base.SHA1, k)
-                if hash === nothing
-                    @error("Invalid override in '$(override_file)': Invalid SHA1 hash '$(k)'")
-                    continue
-                end
-
-                # If this mapping is the empty string, un-override it
-                if mapping isa String && isempty(mapping)
-                    delete!(overrides_hash, hash)
-                else
-                    overrides_hash[hash] = mapping
-                end
-            elseif isa(mapping, Dict{String, Any})
-                # Convert `k` into a uuid
+            if mapping isa Dict{String, Any}
+                # A table maps the artifact names bound by one package UUID
                 uuid = tryparse(Base.UUID, k)
                 if uuid === nothing
                     @error("Invalid override in '$(override_file)': Invalid UUID '$(k)'")
                     continue
                 end
-
-                # If this mapping is itself a dict, store it as a set of UUID/artifact name overrides
-                if !haskey(overrides_uuid, uuid)
-                    overrides_uuid[uuid] = Dict{String,Union{String,SHA1}}()
-                end
-
-                # For each name in the mapping, update appropriately
-                for (name, override_value) in mapping
+                uuid_overrides = get!(Dict{String,Union{String,SHA1}}, overrides_uuid, uuid)
+                for (name, value) in mapping
+                    target = parse_override_target(value, "entry '$(name)' for UUID '$(k)'", override_file)
+                    target === nothing && continue
                     # If the mapping for this name is the empty string, un-override it
-                    if override_value isa String && isempty(override_value)
-                        delete!(overrides_uuid[uuid], name)
+                    if target isa String && isempty(target)
+                        delete!(uuid_overrides, name)
                     else
-                        # Otherwise, store it!
-                        overrides_uuid[uuid][name] = override_value::Union{Base.SHA1, String}
+                        uuid_overrides[name] = target
                     end
                 end
             else
-                @error("Invalid override in '$(override_file)': unknown mapping type for '$(k)': $(typeof(mapping))")
+                hash = tryparse(Base.SHA1, k)
+                if hash === nothing
+                    @error("Invalid override in '$(override_file)': Invalid SHA1 hash '$(k)'")
+                    continue
+                end
+                target = parse_override_target(mapping, "entry '$(k)'", override_file)
+                target === nothing && continue
+                # If this mapping is the empty string, un-override it
+                if target isa String && isempty(target)
+                    delete!(overrides_hash, hash)
+                else
+                    overrides_hash[hash] = target
+                end
             end
         end
     end
@@ -445,7 +425,7 @@ collapsed artifact.  Returns `nothing` if no mapping can be found.
 function artifact_hash(name::String, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform(),
                        pkg_uuid::Union{Base.UUID,Nothing}=nothing)::Union{Nothing, SHA1}
-    meta = artifact_meta(name, artifacts_toml; platform=platform)
+    meta = artifact_meta(name, artifacts_toml; platform=platform, pkg_uuid=pkg_uuid)
     if meta === nothing
         return nothing
     end
@@ -457,6 +437,7 @@ function select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::Stri
                                        platform::AbstractPlatform = HostPlatform(),
                                        pkg_uuid::Union{Nothing,Base.UUID} = nothing,
                                        include_lazy::Bool = false)
+    process_overrides(artifact_dict, pkg_uuid)
     artifacts = Dict{String,Any}()
     for name in keys(artifact_dict)
         # Get the metadata about this name for the requested platform
@@ -602,7 +583,7 @@ function __artifact_str(__module__, artifacts_toml, name, path_tail, artifact_di
     error("Artifact $(repr(name)) was not found by looking in the $(path_str)$suggestion_str")
 end
 
-raw"""
+@doc raw"""
     split_artifact_slash(name::String)
 
 Splits an artifact indexing string by path delimiters, isolates the first path element,
@@ -758,21 +739,20 @@ artifact_meta(name::AbstractString, artifact_dict::Dict, artifacts_toml::Abstrac
 artifact_hash(name::AbstractString, artifacts_toml::AbstractString; kwargs...) =
     artifact_hash(String(name)::String, String(artifacts_toml)::String; kwargs...)
 select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::AbstractString; kwargs...) =
-    select_downloadable_artifacts(artifact_dict, String(artifacts_toml)::String, kwargs...)
+    select_downloadable_artifacts(artifact_dict, String(artifacts_toml)::String; kwargs...)
 select_downloadable_artifacts(artifacts_toml::AbstractString; kwargs...) =
-    select_downloadable_artifacts(String(artifacts_toml)::String, kwargs...)
+    select_downloadable_artifacts(String(artifacts_toml)::String; kwargs...)
 find_artifacts_toml(path::AbstractString) =
     find_artifacts_toml(String(path)::String)
 split_artifact_slash(name::AbstractString) =
     split_artifact_slash(String(name)::String)
-artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString) =
-    artifact_slash_lookup(String(name)::String, artifact_dict, String(artifacts_toml)::String)
+artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString, platform::Platform) =
+    artifact_slash_lookup(String(name)::String, artifact_dict, String(artifacts_toml)::String, platform)
 
 # Precompilation to reduce latency
 precompile(load_artifacts_toml, (String,))
 precompile(NamedTuple{(:pkg_uuid,)}, (Tuple{Base.UUID},))
 precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
-precompile(parse_mapping, (String, String, String))
-precompile(parse_mapping, (Dict{String, Any}, String, String))
+precompile(parse_override_target, (Any, String, String))
 precompile(Tuple{typeof(Artifacts.__artifact_str), Module, String, Base.SubString{String}, String, Base.Dict{String, Any}, Base.SHA1, Base.BinaryPlatforms.Platform, Base.Val{Artifacts}})
 end # module Artifacts

@@ -202,6 +202,15 @@ end
     sizehint!(A, 5)
     @test length(A) == 5
     @test A == [1:5;]
+
+    for n in (0, 10)
+        A = [1:100;]
+        empty!(A)
+        @test sizehint!(A, n; first=true) === A
+        @test isempty(A)
+        pushfirst!(A, 1)
+        @test A == [1]
+    end
 end
 @testset "reshape with colon" begin
     # Reshape with an omitted dimension
@@ -535,6 +544,56 @@ end
     insert!(v, 1, 10)
     @test v == [10]
     @test length(v.ref.mem) == 5
+
+    # test that moving data within the same memory doesn't leave stale references behind (issue #63739)
+    nassigned(v) = count(i -> isassigned(v.ref.mem, i), eachindex(v.ref.mem))
+    v = Any[]
+    for r in 1:20
+        for i in 1:48
+            push!(v, Ref(r))
+        end
+        @test nassigned(v) == length(v)
+        for i in 1:48
+            popfirst!(v)
+        end
+        @test nassigned(v) == 0
+    end
+    v = resize!(Any[1:100;], 10)
+    pushfirst!(v, 0)
+    @test length(v.ref.mem) == 100
+    @test v == 0:10
+    @test nassigned(v) == 11
+end
+
+@testset "growat!" begin
+    @test length(growat!(Int[], 1, 2)) == 2
+
+    v = [1, 2, 3, 4, 5]
+    for i = 1:6, delta = 0:3
+        vc = copy(v)
+        @test growat!(vc, i, delta) === vc
+        @test length(vc) == length(v) + delta
+        @test vc[1:i-1] == v[1:i-1]
+        @test vc[i+delta:end] == v[i:end]
+    end
+
+    # new elements of a non-isbits eltype are #undef
+    for i = 1:6, delta = 1:3, first in (false, true)
+        vc = sizehint!(Any[1:5;], 20; first)
+        growat!(vc, i, delta)
+        @test !any(j -> isassigned(vc, j), i:i+delta-1)
+        @test vc[[1:i-1; i+delta:end]] == 1:5
+        @test deleteat!(vc, i:i+delta-1) == 1:5
+    end
+
+    # errors are thrown before `vc` is modified
+    vc = copy(v)
+    @test_throws BoundsError growat!(vc, 0, 1)
+    @test_throws BoundsError growat!(vc, 7, 1)
+    @test_throws ArgumentError growat!(vc, 1, -1)
+    @test_throws ArgumentError growat!(vc, 3, -1)
+    @test_throws ArgumentError growat!(vc, 6, -1)
+    @test vc == v
 end
 
 @testset "popat!(::Vector, i, [default])" begin
@@ -1454,6 +1513,13 @@ end
     @test @views mightalias(B[1:2], A[1:2])
     @test @views !mightalias(B[1:end÷2], A[end÷2+1:end])
 
+    C = trues(5,4)
+    @test mightalias(C, reshape(C,10,2))
+    b = BitVector([1, 0, 0, 0])
+    r = reshape(b, 2, 2)
+    b[2:4] .= @view r[1:3]
+    @test b == [1, 1, 0, 0]
+
     AA = [[1],[2]]
     @test @views mightalias(AA, AA[:])
     @test @views mightalias(AA[:], AA[:])
@@ -1689,6 +1755,8 @@ end
     @test_throws BoundsError deleteat!(a, [1,13])
     @test_throws ArgumentError deleteat!(a, [3,2]) # not sorted
     @test_throws BoundsError deleteat!(a, 5:20)
+    @test_throws BoundsError deleteat!(a, 1:typemax(Int))
+    @test_throws BoundsError deleteat!(a, 2:typemax(Int))
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
     @test_throws BoundsError deleteat!(a, falses(11))
@@ -1898,6 +1966,12 @@ end
     A = [1,2]
     @test append!(A, A) == [1,2,1,2]
     @test prepend!(A, A) == [1,2,1,2,1,2,1,2]
+    A = collect(1:5)
+    @test prepend!(A, view(A, 4:5)) == [4,5,1,2,3,4,5]
+    A = collect(1:5)
+    @test prepend!(A, view(A, 5:-1:1)) == [5,4,3,2,1,1,2,3,4,5]
+    A = Any[1,2,3]
+    @test prepend!(A, view(A, 2:3)) == Any[2,3,1,2,3]
 
     # iterators with length:
     @test append!([1,2], (9,8)) == [1,2,9,8] == push!([1,2], (9,8)...)
@@ -2380,6 +2454,23 @@ end
     @test_throws BoundsError copyto!(view(zeros(Int, 2), :), 2, Iterators.repeated(1, typemax(Int)))
     @test_throws BoundsError copyto!(view(zeros(Int, 2), :), Int8(2), Iterators.repeated(1), 1, typemax(Int8))
     @test_throws BoundsError copyto!(view(zeros(Int, 2), :), Int8(2), view(ones(Int, 2), :), Int8(2), typemax(Int8))
+
+    # Memory to Memory, with the same and with different element types
+    for S in (Int, Float64, Any)
+        dest = Memory{Float64}(undef, 2)
+        src = Memory{S}(undef, 3); fill!(src, 1)
+        @test_throws BoundsError copyto!(dest, src)
+        @test_throws BoundsError copyto!(dest, 1, src, 1, 3)
+        @test_throws BoundsError copyto!(dest, 2, src, 1, 2)
+        @test_throws BoundsError copyto!(dest, 1, src, 3, 2)
+        @test_throws BoundsError copyto!(dest, 0, src, 1, 1)
+        @test_throws BoundsError copyto!(dest, 1, src, 0, 1)
+        @test_throws ArgumentError copyto!(dest, 1, src, 1, -1)
+        @test copyto!(dest, 0, src, 0, 0) === dest
+        src[3] = 2
+        @test copyto!(dest, Int8(1), src, Int8(2), Int8(2)) === dest
+        @test dest == [1.0, 2.0]
+    end
 end
 
 @testset "empty copyto!" begin
@@ -2440,6 +2531,7 @@ end
     @test IndexStyle(selectdim(A, 1, 1)) == IndexStyle(view(A, 1, :, :)) == IndexLinear()
     @test IndexStyle(selectdim(A, 2, 1)) == IndexStyle(view(A, :, 1, :)) == IndexCartesian()
     @test IndexStyle(selectdim(A, 3, 1)) == IndexStyle(view(A, :, :, 1)) == IndexLinear()
+    @test selectdim(A, 2, CartesianIndex(1, 1)) == view(A, :, CartesianIndex(1, 1), :)
 end
 
 # row/column/slice iterator tests
@@ -2711,6 +2803,10 @@ end
 # issue #14482
 @inferred map(Int8, Int[0])
 
+# map with a constructor over an abstract eltype infers a concrete array type
+@test @inferred(map(Float64, Any[1, 2.0])) == [1.0, 2.0]
+@test @inferred(collect(Iterators.map(Float64, Any[1, 2.0]))) == [1.0, 2.0]
+
 # make sure @inbounds isn't used too much
 mutable struct OOB_Callable{T}; a::T; end
 (f::OOB_Callable)(i::Int) = f.a[i]
@@ -2738,6 +2834,9 @@ end
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=1) == [1 2; 4 6]
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=2) == [1 3; 3 7]
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=3) == [1 2; 3 4]
+
+    @test_throws ArgumentError cumsum([1, 2, 3], dims=0)
+    @test_throws ArgumentError cumsum!(Vector{Int}(undef, 3), [1, 2, 3], dims=-1)
 end
 @testset "issue #18363" begin
     @test_throws DimensionMismatch cumsum!([0,0], 1:4)
@@ -2967,6 +3066,10 @@ end
 
     @test accumulate(min, [3 2 1; 3 2 1], dims=2) == [3 2 1; 3 2 1]
     @test accumulate(min, [3 2 1; 3 2 1], dims=2, init=2) == [2 2 1; 2 2 1]
+    @test accumulate(+, [1 2; 3 4], dims=3, init=10) == [11 12; 13 14]
+    @test accumulate(*, ['a' 'b'], dims=3) == ["a" "b"]
+    @test accumulate(+, fill(1), dims=1, init=10) == fill(11)
+    @test accumulate(+, [1, 2], dims=typemax(Int)) == [1, 2]
 
     @test isa(accumulate(+, Int[]), Vector{Int})
     @test isa(accumulate(+, Int[]; init=1.), Vector{Float64})
@@ -3285,6 +3388,63 @@ end
     @test setindex!(zeros(2,2), fill(1.0), CI0, 1, 1) == [1.0 0.0; 0.0 0.0]
 end
 
+@testset "setindex! at mismatched shapes" begin
+    idx_options = (
+        1,
+        1:1,
+        2:2,
+        1:0,
+        1:3,
+        [1,2,3],
+        [1 2 3],
+        [1;2;;;],
+        OffsetArray(1:3, -1),
+    )
+    A = zeros(3, 3, 3)
+    seen = Set{UInt}()
+    for (i, j, k) in Iterators.product(Iterators.repeated(idx_options, 3)...)
+        id = hash(sort([i, j, k]; by=hash))
+        in!(id, seen) && continue
+        for I in ((i, j, k), (k, j, i))
+            # don't test scalar setindex here
+            all(x -> x isa Int, I) && continue
+
+            X = ones((length(i) for i in I if i != 1)...)
+            X_trail = reshape(X, size(X)..., 1)
+            X_prepend = reshape(X, 1, size(X)...)
+            vX = vec(X)
+            cX = reshape(vX, length(vX), 1)
+            oX = OffsetArray(X, (size(X) .- 2*(ndims(X) - 1))...)
+
+            for _X in (X, X_trail, X_prepend, vX, cX, oX)
+                AI = view(A, I...)
+
+                if ((isone(ndims(_X)) || isone(ndims(AI))) && (length(_X) == length(AI))) ||
+                    all(d -> size(_X, d) == size(AI, d), 1:max(ndims(_X), ndims(AI)))
+                    @test any(isone, setindex!(A, _X, I...)) || isempty(_X)
+                    fill!(A, 0)
+                    @test any(isone, setindex!(A, _X, I..., 1)) || isempty(_X)
+                    fill!(A, 0)
+                else
+                    @test_throws DimensionMismatch setindex!(A, _X, I...)
+                    @test_throws DimensionMismatch setindex!(A, _X, I..., 1)
+                    @test_throws DimensionMismatch setindex!(A, _X, I..., :)
+                end
+            end
+        end
+    end
+end
+
+@testset "setindex! with a LogicalIndex from to_indices (#64386)" begin
+    A = zeros(4)
+    A[only(to_indices(A, ([true, false, true, false],)))] = [1.0, 2.0]
+    @test A == [1.0, 0.0, 2.0, 0.0]
+    B = zeros(2, 2)
+    B[only(to_indices(B, (BitMatrix([1 0; 0 1]),)))] = [1.0, 2.0]
+    @test B == [1.0 0.0; 0.0 2.0]
+    @test_throws DimensionMismatch A[only(to_indices(A, ([true, false, true, false],)))] = [1.0]
+end
+
 @testset "conditionally-throwing version of `checkbounds` should return `nothing` if it returns" begin
     # can not just set `typ = Any` because that would include the predicate (non-throwing) methods of `checkbounds`, because `Type{Bool} <: Any`
     for typ in (AbstractString, AbstractArray, Base.AbstractBroadcasted)
@@ -3413,6 +3573,7 @@ end
     @test_throws DimensionMismatch Base.wrap(Array, mem, (10, 10))
     @test Base.wrap(Array, mem, (5,)) == ones(Int, 5)
     @test Base.wrap(Array, mem, 2) == ones(Int, 2)
+    @test Base.wrap(Array, mem, UInt(2)) == ones(Int, 2)
     @test Base.wrap(Array, memref, 10) == ones(Int, 10)
     @test Base.wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
     @test Base.wrap(Array, mem, (5, 2)) == ones(Int, 5, 2)
@@ -3446,4 +3607,88 @@ end
     ref = memoryref(mem, 8)
     @test parent(ref) === mem
     @test Base.memoryindex(ref) === 8
+end
+
+@testset "Memory indexing and copying" begin
+    mem(T, x) = (m = Memory{T}(undef, length(x)); m .= x; m)
+
+    m = mem(Int, 1:3)
+    @test setindex!(m, 20, 2, 1) === m
+    m[3, 1, 1] = 30
+    @test m == [1, 20, 30]
+    @test_throws BoundsError m[1, 2] = 5
+    @test_throws BoundsError m[1, 1, 2] = 5
+
+    a = mem(Int, 1:5)
+    @test setindex!(a, mem(Int, [8, 9]), 2:3) === a
+    @test a == [1, 8, 9, 4, 5]
+    @test_throws DimensionMismatch a[2:4] = mem(Int, [8, 9])
+    @test_throws BoundsError a[5:6] = mem(Int, [8, 9])
+    a[3:2] = mem(Int, Int[])
+    @test a == [1, 8, 9, 4, 5]
+    @test setindex!(a, mem(Int, 10:14), :) === a
+    @test a == 10:14
+    @test_throws DimensionMismatch a[:] = mem(Int, [8, 9])
+    s = Memory{String}(undef, 0)
+    @test (s[:] = Memory{String}(undef, 0); isempty(s))
+
+    m = mem(Int, [7])
+    @test m[true:true] == [7]
+    @test m[false:false] == Int[]
+    @test m[true:true] isa Memory{Int}
+    @test m[:] == m && m[:] !== m && m[:] isa Memory{Int}
+    @test copy(m) == m && copy(m) !== m
+
+    @test similar(m, 4) isa Memory{Int} && length(similar(m, 4)) == 4
+    @test similar(m, (5,)) isa Memory{Int} && length(similar(m, (5,))) == 5
+    @test promote_type(Memory{Int}, Memory{Float64}) === Memory{Float64}
+    @test promote_type(Memory{Int}, Memory{Int}) === Memory{Int}
+
+    u = Memory{UInt8}(undef, 4)
+    @test fill!(u, 0x07) === u
+    @test u == fill(0x07, 4)
+    @test fill!(u, 200) == fill(0xc8, 4)
+    @test_throws InexactError fill!(u, 300)
+    @test fill!(Memory{Int8}(undef, 3), -1) == fill(Int8(-1), 3)
+    @test_throws InexactError fill!(Memory{Int8}(undef, 3), 200)
+    @test isempty(fill!(Memory{UInt8}(undef, 0), 1))
+
+    for (x, y) in (([1, 2], [1, 2]), ([1, 2], [1, 3]), ([1, 3], [1, 2]), ([1, 2], [1]),
+                   ([1], [1, 2]), ([], [0]), ([255], [1, 1]), ([], []))
+        @test cmp(mem(UInt8, x), mem(UInt8, y)) == cmp(Vector{UInt8}(x), Vector{UInt8}(y))
+    end
+    for T in (Int8, UInt16, Int64, UInt128)
+        x = mem(T, 1:3)
+        y = copy(x)
+        @test x == y
+        y[3] = 0
+        @test x != y
+        @test x != mem(T, 1:2)
+    end
+
+    for x in ([3, 1, 4, 1, 5, 9], [1, 2, 3, 4, 5, 6]), y in ([1, 5], [2, 5, 7], [5, 1], 9, 3)
+        yy = y isa Vector ? mem(Int, y) : y
+        @test findall(in(yy), mem(Int, x)) == findall(in(y), x)
+        @test findall(in(y isa Vector ? mem(Float64, y) : y), mem(Int, x)) == findall(in(y), x)
+    end
+
+    @test Base.indcopy((4, 5), mem(UnitRange{Int}, [2:6, 3:7])) == Base.indcopy((4, 5), [2:6, 3:7])
+    @test Base.indcopy((4, 5), mem(UnitRange{Int}, [2:6, 3:7])) == ([1:3, 1:3], [2:4, 3:5])
+
+    # copying between element types keeps unassigned entries unassigned
+    s = Memory{String}(undef, 4)
+    s[2] = "b"
+    s[4] = "d"
+    d = fill!(Memory{Any}(undef, 5), 0)
+    @test copyto!(d, 2, s, 1, 4) === d
+    @test [isassigned(d, i) for i in 1:5] == [true, false, true, false, true]
+    @test d[1] == 0 && d[3] == "b" && d[5] == "d"
+
+    m = mem(String, ["a", "b", "c"])
+    @test Base.unsetindex!(m, 2) === m
+    @test !isassigned(m, 2)
+    @test Base.unsetindex!(m, Int32(1)) === m
+    @test !isassigned(m, 1) && m[3] == "c"
+    @test_throws BoundsError Base.unsetindex!(m, 4)
+    @test_throws BoundsError Base.unsetindex!(m, big(0))
 end

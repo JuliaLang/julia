@@ -43,6 +43,12 @@ function _isself(ft::DataType)
     name = ftname.singletonname
     ftname.name === name && return false
     mod = parentmodule(ft)
+    bpart = lookup_binding_partition(tls_world_age(), GlobalRef(mod, name))
+    if binding_kind(bpart) == PARTITION_KIND_BACKDATED_CONST
+        # Read the constant directly, since `getglobal` would warn about (or with
+        # `--depwarn=error`, refuse) accessing it from a world prior to its definition
+        return ft === typeof(partition_restriction(bpart))
+    end
     return isdefinedglobal(mod, name) && ft === typeof(getglobal(mod, name))
 end
 
@@ -386,8 +392,9 @@ the properties of that stream (note that `io` can itself be an `IOContext`).
 The following properties are in common use:
 
  - `:compact`: Boolean specifying that values should be printed more compactly, e.g.
-   that numbers should be printed with fewer digits. This is set when printing array
-   elements. `:compact` output should not contain line breaks.
+   that numbers should be printed with fewer digits. Containers may set this when
+   printing their elements, e.g. when there is little space per element as in
+   multi-column matrices. `:compact` output should not contain line breaks.
  - `:limit`: Boolean specifying that containers should be truncated, e.g. showing `…` in
    place of most elements.
  - `:displaysize`: A `Tuple{Int,Int}` giving the size in rows and columns to use for text
@@ -624,7 +631,11 @@ end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
 modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
-modulesof!(s::Set{Module}, x::TypeEq) = modulesof!(s, type_parameter(x))
+function modulesof!(s::Set{Module}, x::TypeEq)
+    p = type_parameter(x)
+    # the parameter may be a non-type value, e.g. `Type{1}` (#62897)
+    p isa Union{Core.AnyType,TypeVar} ? modulesof!(s, p) : s
+end
 modulesof!(s::Set{Module}, x::Core.TypeEgal) = modulesof!(s, type_parameter(x))
 function modulesof!(s::Set{Module}, x::Type)
     x = unwrap_unionall(x)
@@ -739,7 +750,19 @@ function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
             end
         end
     end
-    if length(aliases) == 1 # TODO: select the type with the "best" (shortest?) environment
+    if length(aliases) > 1
+        # Compare the original aliases, before applying their parameters.
+        # Equivalent or incomparable aliases remain ambiguous.
+        candidates = aliases
+        aliases = filter(candidates) do (name, _)
+            alias = getglobal(name.mod, name.name)
+            !any(candidates) do (other_name, _)
+                other = getglobal(other_name.mod, other_name.name)
+                other <: alias && !(alias <: other)
+            end
+        end
+    end
+    if length(aliases) == 1
         return aliases[1]
     end
 end
@@ -996,7 +1019,7 @@ function show_unionaliases(io::IO, x::Union)
     if first && !tvar && length(aliases) == 1
         alias = aliases[1]
         env = alias[2]::SimpleVector
-        wheres = make_wheres(io, env, x)
+        wheres = make_wheres(io, env, alias[3])
         show_typealias(io, alias[1], env, wheres)
         show_wheres(io, wheres)
     else
@@ -1004,7 +1027,7 @@ function show_unionaliases(io::IO, x::Union)
             print(io, first ? "Union{" : ", ")
             first = false
             env = alias[2]::SimpleVector
-            wheres = make_wheres(io, env, x)
+            wheres = make_wheres(io, env, alias[3])
             show_typealias(io, alias[1], env, wheres)
             show_wheres(io, wheres)
         end
@@ -1343,7 +1366,12 @@ function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)
         if !first
             print(io, ", ")
         end
-        show_sym(io, syms[i])
+        sym = syms[i]
+        if isidentifier(sym)
+            show_sym(io, sym)
+        else
+            print(io, "var\"", escape_raw_string(string(sym)), '"')
+        end
         typ = types.parameters[i]
         if typ !== Any
             print(io, "::")
@@ -1603,7 +1631,7 @@ end
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 show(io::IO, v::SimpleVector) = show_delim_array(io, v, "svec(", ',', ')', false)
 
-show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
+show(io::IO, s::Symbol) = show_quoted_sym(io, s)
 
 ## Abstract Syntax Tree (AST) printing ##
 
@@ -1653,11 +1681,12 @@ show_unquoted(io::IO, ex, indent::Int, prec::Int, ::Int) = show_unquoted(io, ex,
 const indent_width = 4
 const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(===),:(=>)])
 const uni_syms = Set{Symbol}([:(::), :(<:), :(>:)])
-const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜), :(∓), :(±)])
+const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜), :(∓), :(±),
+                             :.+, :.-, :.~, :.∓, :.±])
 const expr_infix_wide = Set{Symbol}([
     :(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(^=), :(&=), :(|=), :(÷=), :(%=), :(>>>=), :(>>=), :(<<=),
     :(.=), :(.+=), :(.-=), :(.*=), :(./=), :(.\=), :(.^=), :(.&=), :(.|=), :(.÷=), :(.%=), :(.>>>=), :(.>>=), :(.<<=),
-    :(&&), :(||), :(<:), :($=), :(⊻=), :(>:), :(-->),
+    :(&&), :(||), :(.&&), :(.||), :(<:), :($=), :(⊻=), :(>:), :(-->),
     :(:=), :(≔), :(⩴), :(≕)])
 const expr_infix = Set{Symbol}([:(:), :(->), :(::)])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
@@ -1716,7 +1745,7 @@ julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Bas
 """
 function operator_associativity(s::Symbol)
     if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_pair, prec_power) ||
-        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) ||
+        (isunaryoperator(s) && !is_unary_and_binary_operator(s) && operator_precedence(s) != prec_comparison) ||
         (s === :<| || s === :|| || s == :?)
         return :right
     elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
@@ -1786,7 +1815,7 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, quote_level::In
         parens = !is_quoted(item) &&
             (first && prec >= prec_power &&
              ((item isa Expr && item.head === :call && (callee = item.args[1]; isa(callee, Symbol) && callee in uni_ops)) ||
-              (item isa Real && item < 0))) ||
+              (item isa Real && signbit(item)))) ||
             (enclose_operators && item isa Symbol && isoperator(item) && is_valid_identifier(item))
         parens && print(io, '(')
         if kw && is_expr(item, :kw, 2)
@@ -1810,20 +1839,26 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_le
 end
 
 
-# show a normal (non-operator) function call, e.g. f(x, y) or A[z]
-# kw: `=` expressions are parsed with head `kw` in this context
-function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
-    op, cl = expr_calls[head]
-    if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
+function show_callee(io::IO, head, func, indent, quote_level, func_args=())
+    if (isa(func, Symbol) && func !== :(:) &&
+            !(isoperator(func) && (head === :. || (func in uni_ops || func === :&) && any(a -> is_expr(a, :parameters) || is_expr(a, :kw), func_args)))) ||
             (isa(func, Symbol) && !is_valid_identifier(func)) ||
             (isa(func, Expr) && (func.head === :. || func.head === :curly || func.head === :macroname)) ||
-            isa(func, GlobalRef)
+            isa(func, GlobalRef) ||
+            isa(func, Core.BindingPartition)
         show_unquoted(io, func, indent, 0, quote_level)
     else
         print(io, '(')
         show_unquoted(io, func, indent, 0, quote_level)
         print(io, ')')
     end
+end
+
+# show a normal (non-operator) function call, e.g. f(x, y) or A[z]
+# kw: `=` expressions are parsed with head `kw` in this context
+function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
+    op, cl = expr_calls[head]
+    show_callee(io, head, func, indent, quote_level, func_args)
     if head === :(.)
         print(io, '.')
     end
@@ -1873,6 +1908,8 @@ show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = show_sym(io, sym, allo
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex.label)
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = show_globalref(io, ex)
+show_unquoted(io::IO, bpart::Core.BindingPartition, ::Int, ::Int) =
+    show_globalref(io, partition_owner(bpart).globalref)
 
 function show_globalref(io::IO, ex::GlobalRef; allow_macroname=false)
     print(io, ex.mod)
@@ -1909,18 +1946,21 @@ function show_unquoted(io::IO, ex::QuoteNode, indent::Int, _prec::Int)
     end
 end
 
+function show_quoted_sym(io::IO, sym::Symbol)
+    if sym in quoted_syms
+        print(io, ":(", sym, ")")
+    else
+        if isidentifier(sym) || (_isoperator(sym) && sym !== Symbol("'"))
+            print(io, ":", sym)
+        else
+            print(io, "Symbol(", repr(String(sym)), ")")
+        end
+    end
+end
+
 function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, quote_level::Int)
     if isa(value, Symbol)
-        sym = value::Symbol
-        if value in quoted_syms
-            print(io, ":(", sym, ")")
-        else
-            if isidentifier(sym) || (_isoperator(sym) && sym !== Symbol("'"))
-                print(io, ":", sym)
-            else
-                print(io, "Symbol(", repr(String(sym)), ")")
-            end
-        end
+        show_quoted_sym(io, value::Symbol)
     else
         if isa(value,Expr) && value.head === :block
             value = value::Expr
@@ -2094,7 +2134,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         head === :typed_vcat || head === :typed_hcat || head === :typed_ncat
         # print the type and defer to the untyped case
         if head === :typed_vcat || head === :typed_hcat || head === :typed_ncat
-            show_unquoted(io, args[1], indent, prec, quote_level)
+            show_callee(io, head, args[1], indent, quote_level)
             if head === :typed_vcat
                 head = :vcat
             elseif head === :typed_hcat
@@ -2131,8 +2171,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         ispostfixoperator(args[1]::Symbol) && args[1]::Symbol !== Symbol("'")
     )
         op, arg1 = head === Symbol("'") ? (head, args[1]) : (args[1], args[2])
-        if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1::Symbol))
-            show_enclosed_list(io, '(', [arg1::Union{Expr, Symbol}], ", ", ')', indent, 0)
+        if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1::Symbol)) || (isa(arg1, Real) && signbit(arg1))
+            show_enclosed_list(io, '(', Any[arg1], ", ", ')', indent, 0)
         else
             show_unquoted(io, arg1, indent, 0, quote_level)
         end
@@ -2169,7 +2209,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         elseif isa(func,Symbol) && length(func_args) == 1 && func in uni_ops
             show_unquoted(io, func, indent, 0, quote_level)
             arg1 = func_args[1]
-            if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1) && is_valid_identifier(arg1))
+            if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1) && is_valid_identifier(arg1)) ||
+                    (isa(arg1, Real) && signbit(arg1)) || (isa(arg1, Number) && func in (:+, :-))
                 show_enclosed_list(io, '(', func_args, ", ", ')', indent, func_prec)
             else
                 show_unquoted(io, arg1, indent, func_prec, quote_level)
@@ -2181,12 +2222,20 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             na = length(func_args)
             if (na == 2 || (na > 2 && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
                     all(a -> !isa(a, Expr) || a.head !== :..., func_args)
-                sep = func === :(:) ? "$func" : " $func "
-
-                if func_prec <= prec
-                    show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, quote_level, true)
+                if func === :(:)
+                    # `:` and an operand printed with a leading `:` would lex as `::`
+                    parts = String[]
+                    for a in func_args
+                        push!(parts, sprint(show_list, Any[a], "", indent, func_prec, quote_level, true; context=io))
+                    end
+                    sep = any(startswith(':'), @view parts[2:end]) ? " : " : ":"
+                    func_prec <= prec && print(io, '(')
+                    join(io, parts, sep)
+                    func_prec <= prec && print(io, ')')
+                elseif func_prec <= prec
+                    show_enclosed_list(io, '(', func_args, " $func ", ')', indent, func_prec, quote_level, true)
                 else
-                    show_list(io, func_args, sep, indent, func_prec, quote_level, true)
+                    show_list(io, func_args, " $func ", indent, func_prec, quote_level, true)
                 end
             elseif na == 1
                 # 1-argument call to normally-binary operator
@@ -2215,7 +2264,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     # comprehensions
     elseif head === :typed_comprehension && nargs == 2
-        show_unquoted(io, args[1], indent, 0, quote_level)
+        show_callee(io, head, args[1], indent, quote_level)
         print(io, '[')
         show_generator(io, args[2], indent, quote_level)
         print(io, ']')
@@ -2328,7 +2377,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     # type annotation (i.e. "::Int")
     elseif head in uni_syms && nargs == 1
         print(io, head)
-        show_unquoted(io, args[1], indent, 0, quote_level)
+        show_list(io, args, "", indent, prec_decl, quote_level)
 
     # var-arg declaration or expansion
     # (i.e. "function f(L...) end" or "f(B...)")
@@ -2377,7 +2426,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         else
             # first show the line number argument as a comment
             if isa(args[2], LineNumberNode) || is_expr(args[2], :line)
-                print(io, args[2], ' ')
+                a2 = args[2]
+                a2 isa LineNumberNode ? print(io, a2, ' ') : print(io, a2::Expr, ' ')
             end
             # Use the functional syntax unless specifically designated with
             # prec=-1 and hide the line number argument from the argument list
@@ -2445,21 +2495,18 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         if get(io, beginsym, false)
             print(io, '(')
             ind = indent + indent_width
-            for i = eachindex(ex.args)
+            # A `;` with only comments before it would parse as a NamedTuple,
+            # and a block needs at least one semicolon: `(x;)` `(;;)`
+            seen_expr = printed_semi = false
+            for (i, arg) in enumerate(ex.args)
                 if i > 1
-                    # if there was only a comment before the first semicolon, the expression would get parsed as a NamedTuple
-                    if !(i == 2 && ex.args[1] isa LineNumberNode)
-                        print(io, ';')
-                    end
+                    seen_expr && (print(io, ';'); printed_semi = true)
                     print(io, "\n", ' '^ind)
                 end
-                show_unquoted(io, ex.args[i], ind, -1, quote_level)
+                show_unquoted(io, arg, ind, -1, quote_level)
+                seen_expr |= !(arg isa LineNumberNode)
             end
-            if length(ex.args) < 2
-                print(io, isempty(ex.args) ? ";;)" : ";)")
-            else
-                print(io, ')')
-            end
+            print(io, printed_semi ? ")" : seen_expr ? ";)" : ";;)")
         else
             show_block(io, "begin", ex, indent, quote_level)
             print(io, "end")
@@ -2520,7 +2567,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             print(io, head)
             a1 = args[1]
             parens = (isa(a1,Expr) && !in(a1.head, (:tuple, :$, :vect, :braces))) ||
-                     (isa(a1,Symbol) && isoperator(a1))
+                     (isa(a1,Symbol) && isoperator(a1)) || (isa(a1,Real) && signbit(a1))
             parens && print(io, "(")
             show_unquoted(io, a1, 0, 0, quote_level)
             parens && print(io, ")")
@@ -2812,32 +2859,6 @@ function print_type_bicolor(io, str::String; color=:normal, inner_color=:light_b
             printstyled(io, str[i:end]; color=inner_color)
         end
     end
-end
-
-resolvebinding(@nospecialize(ex)) = ex
-resolvebinding(ex::QuoteNode) = ex.value
-resolvebinding(ex::Symbol) = resolvebinding(GlobalRef(Main, ex))
-function resolvebinding(ex::Expr)
-    if ex.head === :. && isa(ex.args[2], Symbol)
-        parent = resolvebinding(ex.args[1])
-        if isa(parent, Module)
-            return resolvebinding(GlobalRef(parent, ex.args[2]))
-        end
-    end
-    return nothing
-end
-function resolvebinding(ex::GlobalRef)
-    isdefined(ex.mod, ex.name) || return nothing
-    isconst(ex.mod, ex.name) || return nothing
-    m = getfield(ex.mod, ex.name)
-    isa(m, Module) || return nothing
-    return m
-end
-
-function ismodulecall(ex::Expr)
-    return ex.head === :call && (ex.args[1] === GlobalRef(Base,:getfield) ||
-                                ex.args[1] === GlobalRef(Core,:getfield)) &&
-           isa(resolvebinding(ex.args[2]), Module)
 end
 
 function show(io::IO, tv::TypeVar)
@@ -3412,7 +3433,6 @@ function bitshow(io::IO, B::BitArray)
     l = _mod64(length(B)-1) + 1
     print_bit_chunk(io, Bc[end], l)
 end
-bitshow(B::BitArray) = bitshow(stdout, B)
 
 bitstring(B::BitArray) = sprint(bitshow, B)
 
@@ -3450,14 +3470,11 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     print(io, " - ")
     kind = binding_kind(partition)
     if kind == PARTITION_KIND_BACKDATED_CONST
-        print(io, "backdated constant binding to ")
-        print(io, partition_restriction(partition))
+        print(io, "backdated constant binding")
     elseif kind == PARTITION_KIND_CONST
-        print(io, "constant binding to ")
-        print(io, partition_restriction(partition))
+        print(io, "constant binding")
     elseif kind == PARTITION_KIND_CONST_IMPORT
-        print(io, "constant binding (declared with `import`) to ")
-        print(io, partition_restriction(partition))
+        print(io, "constant binding (declared with `import`)")
     elseif kind == PARTITION_KIND_UNDEF_CONST
         print(io, "undefined const binding")
     elseif kind == PARTITION_KIND_GUARD
@@ -3470,8 +3487,7 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, "implicit `using` resolved to global ")
         print(io, partition_restriction(partition).globalref)
     elseif kind == PARTITION_KIND_IMPLICIT_CONST
-        print(io, "implicit `using` resolved to constant ")
-        print(io, partition_restriction(partition))
+        print(io, "implicit `using` resolved to constant")
     elseif kind == PARTITION_KIND_EXPLICIT
         print(io, "explicit `using` from ")
         print(io, partition_restriction(partition).globalref)
@@ -3485,17 +3501,15 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     end
 end
 
+function show(io::IO, partition::Core.BindingPartition)
+    print(io, "BindingPartition(for ", partition_owner(partition).globalref, ": ")
+    print_partition(io, partition)
+    print(io, ")")
+end
+
 function show(io::IO, ::MIME"text/plain", partition::Core.BindingPartition)
     print(io, "BindingPartition ")
-    # The chain terminates in a backreference to the owning binding, so follow
-    # `next` until we reach it to report which binding this partition belongs to.
-    owner = @atomic partition.next
-    while owner isa Core.BindingPartition
-        owner = @atomic owner.next
-    end
-    if owner isa Core.Binding
-        print(io, "for ", owner.globalref, "\n   ")
-    end
+    print(io, "for ", partition_owner(partition).globalref, "\n   ")
     print_partition(io, partition)
 end
 
@@ -3520,7 +3534,7 @@ end
 
 # Special pretty printing for EvalInto/IncludeInto
 function show(io::IO, ii::IncludeInto)
-    if getglobal(ii.m, :include) === ii
+    if isdefinedglobal(ii.m, :include) && getglobal(ii.m, :include) === ii
         print(io, ii.m)
         print(io, ".include")
     else
@@ -3529,7 +3543,7 @@ function show(io::IO, ii::IncludeInto)
 end
 
 function show(io::IO, ei::Core.EvalInto)
-    if getglobal(ei.m, :eval) === ei
+    if isdefinedglobal(ei.m, :eval) && getglobal(ei.m, :eval) === ei
         print(io, ei.m)
         print(io, ".eval")
     else

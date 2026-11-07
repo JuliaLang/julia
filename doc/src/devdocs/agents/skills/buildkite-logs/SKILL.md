@@ -1,6 +1,6 @@
 ---
 name: buildkite-logs
-description: Fetch and inspect Julia Buildkite CI logs without web sign-in. Use when debugging Julia CI failures, reviewing Buildkite jobs, or when the Buildkite MCP is unavailable.
+description: Fetch and inspect Julia Buildkite CI logs and artifacts without web sign-in, including the TTFX benchmark jobs. Use when debugging Julia CI failures, reviewing Buildkite jobs, investigating a TTFX regression, or when the Buildkite MCP is unavailable.
 ---
 
 # Reviewing Buildkite CI logs
@@ -59,9 +59,32 @@ Recipe:
    Write the stripped log to a file and search it (logs can be hundreds of KB);
    piping the whole thing into context wastes tokens.
 
+4. List and download a job's artifacts. The same frontend serves the artifact
+   list as JSON, and each artifact's URL redirects to a signed S3 URL that is
+   valid for ten minutes, so `curl -L` downloads it.
+
+   ```sh
+   curl -sS -H "Accept: application/json" \
+     "https://buildkite.com/organizations/julialang/pipelines/<PIPELINE>/builds/<BUILD>/jobs/<JOB-UUID>/artifacts" \
+     -o /tmp/bkart.json
+   python3 -c "import json; [print(a['path'],'|',a['file_size'],'|',a['url']) for a in json.load(open('/tmp/bkart.json'))]"
+   curl -sSL -H "Accept: application/json" "https://buildkite.com<url-from-listing>" -o /tmp/<name>
+   ```
+
 The log endpoint also serves still-running jobs (partial output). For a test
 job that hung, the in-tree watchdog (`.buildkite/utilities/timeout.jl`,
 `JL_TERM_TIMEOUT`) prints per-task Julia backtraces of every worker before
 killing it, and core dumps are uploaded as artifacts with an `lldb bt all`
 summary in the log — search the log for `---- Task`, `Waiting for`, and
 `core dumped`.
+
+## TTFX benchmark jobs
+
+The `TTFX` group's macOS job runs the
+[Julia-TTFX-Snippets](https://github.com/tecosaur/Julia-TTFX-Snippets) tasks
+against the build: on pull requests compared with the master build of the
+merge-base, on master builds alone (the data behind
+<https://perf.julialang.org/?tab=ci-ttfx>). Its results, report and
+trace-compile logs are job artifacts (step 4). What they contain and how the
+comparison is judged is documented with the driver in JuliaCI/julia-buildkite,
+`utilities/ttfx/README.md`.

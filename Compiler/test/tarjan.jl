@@ -168,3 +168,123 @@ end
     test_reachability(100, 150; all_checks=false)
     test_reachability(100, 1000; all_checks=false)
 end
+
+function cfg_from_succs(succs::Vector{Vector{Int}})
+    preds = [Int[] for _ in succs]
+    for (from, bb_succs) in pairs(succs), to in bb_succs
+        push!(preds[to], from)
+    end
+    return CFG(BasicBlock[BasicBlock(StmtRange(0, 0), preds[bb], succs[bb]) for bb in eachindex(succs)], Int[])
+end
+function same_as_fresh_domtree(domtree, blocks::Vector{BasicBlock})
+    fresh = Compiler.construct_domtree(blocks)
+    domtree.idoms_bb == fresh.idoms_bb == Compiler.naive_idoms(blocks) || return false
+    for bb in eachindex(blocks)
+        bb_unreachable(fresh, bb) && continue
+        domtree.nodes[bb].level == fresh.nodes[bb].level || return false
+        sort(domtree.nodes[bb].children) == sort(fresh.nodes[bb].children) || return false
+    end
+    return true
+end
+
+# Test that toggling any edge of a small CFG twice, updating the dominator tree
+# incrementally each time, matches recomputing the tree
+let graphs = [
+        [[3, 2], [5], [4], [6], Int[], [5, 3]],
+        [[2, 3], [4, 5], [4], [5], Int[]],
+        [[2], [3, 4], [2], Int[], [4]], # block 5 is unreachable
+        [[5, 6], Int[], [3], [2], [4, 2], [2, 5]],
+        [[7, 4], [4], [2, 6, 5], [6, 7, 4], [5, 3], [2, 7, 6], [6, 2, 5, 3, 4]], # deleting 2->5 changes idoms
+    ]
+    failures = Tuple{Vector{Vector{Int}},Int,Int}[]
+    for succs in graphs
+        cfg = cfg_from_succs(succs)
+        domtree = Compiler.construct_domtree(cfg)
+        for from in eachindex(succs), to in 2:length(succs), _ in 1:2
+            if to in cfg.blocks[from].succs
+                Compiler.cfg_delete_edge!(cfg, from, to)
+                Compiler.domtree_delete_edge!(domtree, cfg.blocks, from, to)
+            else
+                Compiler.cfg_insert_edge!(cfg, from, to)
+                Compiler.domtree_insert_edge!(domtree, cfg.blocks, from, to)
+            end
+            same_as_fresh_domtree(domtree, cfg.blocks) || push!(failures, (succs, from, to))
+        end
+    end
+    @test isempty(failures)
+end
+
+# Test a CFG large enough for path compression to use its worklist
+let n = 40
+    succs = [bb < n ? [bb + 1] : [2] for bb in 1:n]
+    push!(succs[10], 30)
+    push!(succs[25], 5)
+    cfg = cfg_from_succs(succs)
+    domtree = Compiler.construct_domtree(cfg)
+    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks)
+    Compiler.cfg_delete_edge!(cfg, 25, 5)
+    Compiler.domtree_delete_edge!(domtree, cfg.blocks, 25, 5)
+    @test same_as_fresh_domtree(domtree, cfg.blocks)
+end
+
+# Test dominator queries
+let cfg = cfg_from_succs([[3, 2], [5], [4], [6], Int[], [5, 3]])
+    domtree = Compiler.construct_domtree(cfg)
+    @test Compiler.nearest_common_dominator(domtree, 4, 6) == 4
+    @test Compiler.nearest_common_dominator(domtree, 6, 4) == 4
+    @test Compiler.nearest_common_dominator(domtree, 2, 6) == 1
+    @test Compiler.nearest_common_dominator(domtree, 5, 5) == 5
+    @test Compiler.nearest_common_dominator(domtree, 0, 3) == 0
+    @test Compiler.nearest_common_dominator(domtree, 3, 0) == 0
+    postdomtree = Compiler.construct_postdomtree(cfg)
+    @test Compiler.nearest_common_dominator(postdomtree, 3, 6) == 6
+    @test Compiler.nearest_common_dominator(postdomtree, 2, 3) == 5
+    function dominated_blocks(root)
+        bbs = Int[]
+        for bb in Compiler.dominated(domtree, root)
+            push!(bbs, bb)
+        end
+        return sort!(bbs)
+    end
+    @test dominated_blocks(1) == 1:6
+    @test dominated_blocks(2) == [2]
+    @test dominated_blocks(3) == [3, 4, 6]
+end
+
+# Test that renaming the blocks of a dominator tree, and dropping an unreachable
+# one, gives the tree of the renamed CFG
+let succs = [[3, 2], [5], [4], [6], Int[], [5, 3], [6]],
+    rename = [1, 6, 2, 5, 4, 3, -1]
+    domtree = Compiler.construct_domtree(cfg_from_succs(succs))
+    renamed_succs = Vector{Vector{Int}}(undef, 6)
+    for (old, new) in pairs(rename)
+        new == -1 || (renamed_succs[new] = rename[succs[old]])
+    end
+    renamed = cfg_from_succs(renamed_succs)
+    Compiler.rename_nodes!(domtree, rename)
+    fresh = Compiler.construct_domtree(renamed)
+    @test domtree.idoms_bb == [0, 1, 5, 1, 2, 1]
+    @test same_as_fresh_domtree(domtree, renamed.blocks)
+    @test domtree.dfs_tree.to_pre == fresh.dfs_tree.to_pre
+    @test domtree.dfs_tree.to_post == fresh.dfs_tree.to_post
+end
+# ... and that an unreachable block can also be kept
+let rename = [1, 2, 4, 3]
+    domtree = Compiler.construct_domtree(cfg_from_succs([[2], [3], Int[], [3]]))
+    renamed = cfg_from_succs([[2], [4], [4], Int[]])
+    Compiler.rename_nodes!(domtree, rename)
+    fresh = Compiler.construct_domtree(renamed)
+    @test domtree.idoms_bb == [0, 1, 0, 2]
+    @test same_as_fresh_domtree(domtree, renamed.blocks)
+    @test domtree.dfs_tree.to_pre == fresh.dfs_tree.to_pre
+    @test domtree.dfs_tree.to_post[[1, 2, 4]] == fresh.dfs_tree.to_post[[1, 2, 4]]
+end
+
+# Test that copies of a DFS tree are equal to it but share no storage with it
+let dfs = Compiler.construct_domtree(cfg_from_succs([[3, 2], [5], [4], [6], Int[], [5, 3]])).dfs_tree
+    fields(d) = (d.to_pre, d.from_pre, d.to_post, d.from_post, d.to_parent_pre)
+    for dfs′ in (Compiler.copy(dfs), Compiler.copy!(Compiler.DFSTree(0), dfs))
+        @test fields(dfs′) == fields(dfs)
+        @test !any(map(===, fields(dfs′), fields(dfs)))
+    end
+end

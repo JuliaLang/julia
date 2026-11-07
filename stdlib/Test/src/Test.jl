@@ -2704,7 +2704,7 @@ function detect_closure_boxes(mods::Module...)
     world = Base.get_world_counter()
     matches = Any[]
     function is_active_method(m::Method)
-        minworld, maxworld = Core.Compiler.ReinferUtils.verify_invokesig(m.sig, m, world, matches)
+        minworld, maxworld = Core.Compiler.ReinferUtils.verify_invokesig(m.sig, m, world, matches, #=image=#typemax(UInt))
         return minworld <= world <= maxworld
     end
 
@@ -3011,7 +3011,6 @@ struct GenericOrder{T}
 end
 Base.isless(x::GenericOrder, y::GenericOrder) = isless(x.val,y.val)
 
-Base.keys(a::GenericArray) = keys(a.a)
 Base.axes(a::GenericArray) = axes(a.a)
 Base.length(a::GenericArray) = length(a.a)
 Base.size(a::GenericArray) = size(a.a)

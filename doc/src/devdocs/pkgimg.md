@@ -49,3 +49,51 @@ that were created with different flags will be rejected.
 - `--pkgimages`: To allow running without object caching enabled.
 - `-O`, `--optimize`: Reject package images generated for a lower optimization level,
   but allow for higher optimization levels to be loaded.
+- `--code-coverage`, `--code-coverage-mode`: Whether the image carries coverage
+  counters, and their mode, is recorded in the cache identity. A `count` image
+  can serve `hit` mode. The coverage scope is not part of the identity: an
+  instrumented image carries counters for every statement, and the loading
+  process reports only those its scope selects (user code for `user`, files
+  under the tracked path for `@<path>`).
+
+Compatible coverage flags do not override dependency identity checks. Selecting
+a different image for an out-of-scope dependency can require rebuilding its
+dependents as well.
+
+Coverage runs create instrumented package-image variants alongside ordinary
+caches for every loaded package, independently of the requested scope. Thus
+`--code-coverage=@<path>` reuses the same images as `user` and `all`. An initial
+coverage run may need to precompile instrumented dependency images; subsequent
+runs can reuse them across selectors.
+
+Because `@<path>` only reports files under the tracked path, it can also use an
+ordinary image that contains no code from there, such as a bundled standard
+library image. An image only contains code from its own source files, from the
+package images it was built against, and from the system image. The loader
+therefore accepts an ordinary image when none of the package's source files are
+tracked, when every package dependency was accepted the same way (the image pins
+their build ids, so an instrumented dependency forces a rebuild of its
+dependents), and when the tracked path does not overlap the system image's
+sources. Code that names other files in its line information, for example
+through `include_string`, is not accounted for. Neither are system image sources
+of a relocated installation: the system image records the paths it was built
+from, so tracking the installed standard library sources is not detected as an
+overlap, but code from there is not reported under those paths either. With an
+instrumented system image, ordinary images may have been built against
+instrumented dependencies, so they are not used for coverage at all.
+
+The tracked path is part of the requested `Base.CacheFlags`, though not of the
+image's identity, so that a precompilation driver collecting no coverage itself,
+like the one `Pkg.test(coverage=true)` runs, judges the caches as the test
+process will. Precompilation workers inherit it to accept the same dependencies;
+the images they produce are instrumented as usual, but switching between
+`@<path>` and other selectors can rebuild dependents that were built against
+different dependency images.
+Instrumented package images also work with an ordinary system image. Reports
+include zero counts for instrumented lines that were not executed; precompilation
+workloads do not contribute hits.
+
+Without coverage, ordinary builds reject instrumented package images. A build
+with an instrumented system image also accepts package images with the same
+instrumentation as that system image. Allocation tracking always requires
+recompilation because images do not carry allocation counters.

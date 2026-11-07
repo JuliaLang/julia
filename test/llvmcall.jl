@@ -172,6 +172,30 @@ function kernel()
 end
 @test kernel() == 0x00
 
+# Local definitions in the IR module may be unnamed, or dropped when linking because
+# nothing references them
+function llvmcall_unreferenced_local(x::Int32)
+    Base.llvmcall(("""
+        define internal i32 @unused() {
+            ret i32 1
+        }
+        define i32 @entry(i32 %x) {
+            ret i32 %x
+        }""", "entry"), Int32, Tuple{Int32}, x)
+end
+@test llvmcall_unreferenced_local(Int32(7)) === Int32(7)
+function llvmcall_unnamed_local(x::Int32)
+    Base.llvmcall(("""
+        define internal i32 @0(i32 %x) {
+            ret i32 %x
+        }
+        define i32 @entry(i32 %x) {
+            %r = call i32 @0(i32 %x)
+            ret i32 %r
+        }""", "entry"), Int32, Tuple{Int32}, x)
+end
+@test llvmcall_unnamed_local(Int32(7)) === Int32(7)
+
 # If this test breaks, you've probably broken Cxx.jl - please check
 module LLVMCallFunctionTest
     using Base: llvmcall

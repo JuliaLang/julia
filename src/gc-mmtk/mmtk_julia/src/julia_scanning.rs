@@ -16,6 +16,21 @@ use crate::jl_gc_get_stackbase;
 use crate::jl_gc_scan_julia_exc_obj;
 
 const JL_MAX_TAGS: usize = 64; // from vm/julia/src/jl_exports.h
+
+// Frame kinds in the low bits of `jl_gcframe_t.nroots`. Must match the
+// JL_GCFRAME_* defines in julia.h.
+const JL_GCFRAME_DIRECT: usize = 0;
+const JL_GCFRAME_INDIRECT: usize = 1;
+const JL_GCFRAME_INTERP: usize = 2;
+const JL_GCFRAME_FINLIST: usize = 3;
+const JL_GCFRAME_KIND_MASK: usize = 0x3;
+
+// Must match gc_is_tagged_immediate in gc-common.h.
+const TAGGED_IMMEDIATE_MASK: usize = 0x3;
+
+fn is_tagged_immediate(value: Address) -> bool {
+    value.as_usize() & TAGGED_IMMEDIATE_MASK != 0
+}
 const OFFSET_OF_INLINED_SPACE_IN_MODULE: usize =
     offset_of!(jl_module_t, usings) + offset_of!(arraylist_t, _space);
 
@@ -466,13 +481,18 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
 
         loop {
             let rts = Address::from_mut_ptr(s).shift::<Address>(2);
+            let frame_kind = nroots.as_usize() & JL_GCFRAME_KIND_MASK;
             let mut i = 0;
             while i < nr {
-                if (nroots.as_usize() & 1) != 0 {
+                if frame_kind == JL_GCFRAME_INDIRECT {
+                    // slots hold addresses of local `jl_value_t *` variables
                     let slot = read_stack(rts.shift::<Address>(i as isize), offset, lb, ub);
                     let real_addr = get_stack_addr(slot, offset, lb, ub);
-                    process_slot(closure, real_addr);
-                } else {
+                    let value = read_stack(slot, offset, lb, ub);
+                    if !is_tagged_immediate(value) {
+                        process_slot(closure, real_addr);
+                    }
+                } else if frame_kind == JL_GCFRAME_FINLIST {
                     let real_addr =
                         get_stack_addr(rts.shift::<Address>(i as isize), offset, lb, ub);
 
@@ -493,6 +513,16 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
                     }
 
                     process_slot(closure, real_addr);
+                } else {
+                    debug_assert!(
+                        frame_kind == JL_GCFRAME_DIRECT || frame_kind == JL_GCFRAME_INTERP
+                    );
+                    let real_addr =
+                        get_stack_addr(rts.shift::<Address>(i as isize), offset, lb, ub);
+                    let value = read_stack(rts.shift::<Address>(i as isize), offset, lb, ub);
+                    if !is_tagged_immediate(value) {
+                        process_slot(closure, real_addr);
+                    }
                 }
 
                 i += 1;

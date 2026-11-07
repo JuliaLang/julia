@@ -5,8 +5,12 @@
 """
     typejoin(T, S, ...)
 
-Return the closest common ancestor of types `T` and `S`, i.e. the narrowest type from which
-they both inherit. Recurses on additional varargs.
+Return the closest common ancestor of types `T` and `S` in the declared type hierarchy
+(see [`supertype`](@ref)). Recurses on additional varargs.
+
+This is not necessarily the narrowest type from which they both inherit: no `Union` is
+formed, and type parameters that differ are left unspecified rather than being joined
+(except for the element-wise joined parameters of `Tuple` types).
 
 # Examples
 ```jldoctest
@@ -15,6 +19,12 @@ Real
 
 julia> typejoin(Int, Float64, ComplexF32)
 Number
+
+julia> typejoin(Vector{Int}, Vector{Float64})
+Vector (alias for Array{T, 1} where T)
+
+julia> typejoin(Tuple{Int}, Tuple{Float64})
+Tuple{Real}
 ```
 """
 typejoin() = Bottom
@@ -520,6 +530,7 @@ end
 rem(x::Real, y::Real) = rem(promote(x,y)...)
 mod(x::Real, y::Real) = mod(promote(x,y)...)
 mod1(x::Real, y::Real) = mod1(promote(x,y)...)
+fld1(x::Real, y::Real) = cld(promote(x,y)...)
 
 max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)

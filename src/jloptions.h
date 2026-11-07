@@ -28,6 +28,7 @@ typedef struct {
     int8_t startupfile;
     int8_t compile_enabled;
     int8_t code_coverage;
+    int8_t code_coverage_mode;
     int8_t malloc_log;
     const char *tracked_path;
     int8_t opt_level;
@@ -77,6 +78,7 @@ typedef struct {
     int8_t target_sanitize_memory;
     int8_t target_sanitize_thread;
     int8_t target_sanitize_address;
+    const char *coverage_exclude;
 } jl_options_t;
 
 #endif

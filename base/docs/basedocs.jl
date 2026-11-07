@@ -962,11 +962,17 @@ kw"?", kw"?:"
     for
 
 `for` loops repeatedly evaluate a block of statements while
-iterating over a sequence of values.
+iterating over a sequence of values. The sequence can be any iterable object, such as a
+range (`1:3`, or `1:2:9` with a step of 2), an array, a tuple, a string, or a
+[user-defined iterator](@ref man-interface-iteration).
+`for i = x`, `for i in x` and `for i ∈ x` are equivalent.
 
 The iteration variable is always a new variable, even if a variable of the same name
 exists in the enclosing scope.
 Use [`outer`](@ref) to reuse an existing local variable for iteration.
+
+Multiple nested loops can be combined into a single `for` by separating the iteration
+specifications with commas. A `break` inside such a loop exits all of the nested loops.
 
 # Examples
 ```jldoctest
@@ -976,6 +982,21 @@ julia> for i in [1, 4, 0]
 1
 4
 0
+
+julia> for i = 1:2:5
+           println(i)
+       end
+1
+3
+5
+
+julia> for i = 1:2, j = 3:4
+           println((i, j))
+       end
+(1, 3)
+(1, 4)
+(2, 3)
+(2, 4)
 ```
 """
 kw"for"
@@ -1279,6 +1300,9 @@ map(1:10, 11:20) do x, y
     x + y
 end
 ```
+
+Since the `do` block is an anonymous function, `return` inside it returns from that
+function, not from the enclosing one.
 """
 kw"do"
 
@@ -1677,6 +1701,9 @@ Variables can also have lower bounds:
 Vector{T} where T>:Int
 Vector{T} where Int<:T<:Real
 ```
+When only one bound is given, the variable being introduced must be on the left-hand side:
+`where Int<:T` does not introduce `T`, but a new variable named `Int` with upper bound `T`.
+
 There is also a concise syntax for nested `where` expressions. For example, this:
 
 ```julia
@@ -1765,7 +1792,8 @@ Core.TypeofBottom
 
 `Core.Type` is an abstract type which has all type objects as its instances.
 The only instance of the singleton type `Core.Type{T}` is the object
-`T`.
+`T`. This holds only when `T` is a type: if `T` is some other valid type parameter
+(e.g. a module), `Core.Type{T}` has no instances.
 
 # Examples
 ```jldoctest
@@ -2173,12 +2201,13 @@ true
 applicable
 
 """
-    invoke(f, argtypes::Type, args...; kwargs...)
+    invoke(f, argtypes::Type{<:Tuple}, args...; kwargs...)
     invoke(f, argtypes::Method, args...; kwargs...)
     invoke(f, argtypes::CodeInstance, args...; kwargs...)
 
 Invoke a method for the given generic function `f` matching the specified types `argtypes` on the
-specified arguments `args` and passing the keyword arguments `kwargs`. The arguments `args` must
+specified arguments `args` and passing the keyword arguments `kwargs`. The argument types are
+given as a tuple type, e.g. `Tuple{Real}` for a single argument. The arguments `args` must
 conform with the specified types in `argtypes`, i.e. conversion is not automatically performed.
 This method allows invoking a method other than the most specific matching method, which is useful
 when the behavior of a more general definition is explicitly needed (often as part of the

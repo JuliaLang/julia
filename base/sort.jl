@@ -5,7 +5,7 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype, tail,
-    sub_with_overflow, add_with_overflow, BitSigned, BitIntegerType, top_set_bit
+    sub_with_overflow, add_with_overflow, BitIntegerType, top_set_bit, uabs, maybe_unsigned
 
 import Base:
     sort,
@@ -64,6 +64,10 @@ end
 
 Test whether a collection is in sorted order. The keywords modify what
 order is considered sorted, as described in the [`sort!`](@ref) documentation.
+
+As for `sort!`, `lt` must define a strict weak order, otherwise the result may
+be unexpected: `issorted` only checks that no element is less than the one
+before it. For example, `issorted([1, 1], lt=(<=))` returns `false`.
 
 # Examples
 ```jldoctest
@@ -275,9 +279,9 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrde
         length(a)
     else
         if !(o isa ReverseOrdering)
-            fld(floor(Integer, x) - f, h) + 1
+            fld(maybe_unsigned(floor(Integer, x) - f), uabs(h)) + 1
         else
-            fld(ceil(Integer, x) - f, h) + 1
+            fld(maybe_unsigned(f - ceil(Integer, x)), uabs(h)) + 1
         end
     end
 end
@@ -291,9 +295,9 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrd
         length(a) + 1
     else
         if !(o isa ReverseOrdering)
-            cld(ceil(Integer, x) - f, h) + 1
+            cld(maybe_unsigned(ceil(Integer, x) - f), uabs(h)) + 1
         else
-            cld(floor(Integer, x) - f, h) + 1
+            cld(maybe_unsigned(f - floor(Integer, x)), uabs(h)) + 1
         end
     end
 end
@@ -463,7 +467,6 @@ true
 """
 function insorted end
 insorted(x, v::AbstractVector; kw...) = !isempty(searchsorted(v, x; kw...))
-insorted(x, r::AbstractRange) = in(x, r)
 
 ## Alternative keyword management
 
@@ -494,11 +497,12 @@ end
 """
     make_scratch(scratch::Union{Nothing, Vector}, T::Type, len::Integer)
 
-Return `(s, t)` where `t` is an `AbstractVector` of type `T` with length at least `len`
-that is backed by the `Vector` `s`. If `scratch !== nothing`, then `s === scratch`.
+Return `(s, t)` where `t` is an `AbstractVector` with eltype `T` and length at least
+`len`, backed by the `Vector` `s`.
 
-This function will allocate a new vector if `scratch === nothing`, `resize!` `scratch` if it
-is too short, and `reinterpret` `scratch` if its eltype is not `T`.
+Reuse `scratch`, resizing it if needed and reinterpreting it if its eltype differs
+from `T`. Allocate a new vector if `scratch === nothing` or the eltypes differ
+and either is not a bits type. When reusing `scratch`, `s === scratch`.
 """
 function make_scratch(scratch::Nothing, T::Type, len::Integer)
     s = Vector{T}(undef, len)
@@ -509,6 +513,7 @@ function make_scratch(scratch::Vector{T}, ::Type{T}, len::Integer) where T
     scratch, scratch
 end
 function make_scratch(scratch::Vector, T::Type, len::Integer)
+    isbitstype(eltype(scratch)) && isbitstype(T) || return make_scratch(nothing, T, len)
     len_bytes = len * sizeof(T)
     len_scratch = div(len_bytes, sizeof(eltype(scratch)))
     len_scratch > length(scratch) && resize!(scratch, len_scratch)
@@ -1079,7 +1084,7 @@ end
 ScratchQuickSort(next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(missing, missing, next)
 ScratchQuickSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}) = ScratchQuickSort(lo, hi, SMALL_ALGORITHM)
 ScratchQuickSort(lo::Union{Integer, Missing}, next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(lo, lo, next)
-ScratchQuickSort(r::OrdinalRange, next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(first(r), last(r), next)
+ScratchQuickSort(r::OrdinalRange, next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(minmax(first(r), last(r))..., next)
 
 # select a pivot, partition v[lo:hi] according
 # to the pivot, and store the result in t[lo:hi].
@@ -1440,8 +1445,6 @@ function radix_chunk_size_heuristic(lo::Integer, hi::Integer, bits::Unsigned)
     UInt8(cld(bits, cld(bits, guess)))
 end
 
-maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
-maybe_unsigned(x::BitSigned) = unsigned(x)
 function _issorted(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     @boundscheck checkbounds(v, lo:hi)
     @inbounds for i in (lo+1):hi
@@ -1851,7 +1854,7 @@ julia> v[p]
 ```
 """
 partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
-    partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs...)
+    partialsortperm!(similar(Vector{keytype(v)}, axes(v,1)), v, k; kwargs...)
 
 """
     partialsortperm!(ix, v, k; by=identity, lt=isless, rev=false)
@@ -2452,17 +2455,25 @@ function partition!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
 end
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, o::Ordering)
+    checkbounds(v, lo:hi)
+    _quicksort!(v, lo, hi, a, o)
+end
+
+function _quicksort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, o::Ordering)
     @inbounds while lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        if hi-lo <= SMALL_THRESHOLD
+            _sort!(v, SMALL_ALGORITHM, o, (; lo, hi, scratch=nothing))
+            return v
+        end
         j = partition!(v, lo, hi, o)
         if j-lo < hi-j
             # recurse on the smaller chunk
             # this is necessary to preserve O(log(n))
             # stack space in the worst case (rather than O(n))
-            lo < (j-1) && sort!(v, lo, j-1, a, o)
+            lo < (j-1) && _quicksort!(v, lo, j-1, a, o)
             lo = j+1
         else
-            j+1 < hi && sort!(v, j+1, hi, a, o)
+            j+1 < hi && _quicksort!(v, j+1, hi, a, o)
             hi = j-1
         end
     end
@@ -2473,8 +2484,17 @@ sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Orderi
     invoke(sort!, Tuple{typeof.((v, lo, hi, a, o))..., AbstractVector{T}}, v, lo, hi, a, o, t0) # For disambiguation
 function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Ordering,
         t0::Union{AbstractVector{T}, Nothing}=nothing) where T
+    checkbounds(v, lo:hi)
+    _mergesort!(v, lo, hi, a, o, t0)
+end
+
+function _mergesort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Ordering,
+        t0::Union{AbstractVector{T}, Nothing}) where T
     @inbounds if lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        if hi-lo <= SMALL_THRESHOLD
+            _sort!(v, SMALL_ALGORITHM, o, (; lo, hi, scratch=nothing))
+            return v
+        end
 
         m = midpoint(lo, hi)
 
@@ -2482,8 +2502,8 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, 
         length(t) < m-lo+1 && resize!(t, m-lo+1)
         Base.require_one_based_indexing(t)
 
-        sort!(v, lo,  m,  a, o, t)
-        sort!(v, m+1, hi, a, o, t)
+        _mergesort!(v, lo,  m,  a, o, t)
+        _mergesort!(v, m+1, hi, a, o, t)
 
         i, j = 1, lo
         while j <= m
@@ -2515,23 +2535,32 @@ end
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
                o::Ordering)
+    checkbounds(v, lo:hi)
+    _partialquicksort!(v, lo, hi, a, o)
+end
+
+function _partialquicksort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
+                            o::Ordering)
     @inbounds while lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        if hi-lo <= SMALL_THRESHOLD
+            _sort!(v, SMALL_ALGORITHM, o, (; lo, hi, scratch=nothing))
+            return v
+        end
         j = partition!(v, lo, hi, o)
 
-        if j <= first(a.k)
+        if j <= min(first(a.k), last(a.k))
             lo = j+1
-        elseif j >= last(a.k)
+        elseif j >= max(first(a.k), last(a.k))
             hi = j-1
         else
             # recurse on the smaller chunk
             # this is necessary to preserve O(log(n))
             # stack space in the worst case (rather than O(n))
             if j-lo < hi-j
-                lo < (j-1) && sort!(v, lo, j-1, a, o)
+                lo < (j-1) && _partialquicksort!(v, lo, j-1, a, o)
                 lo = j+1
             else
-                hi > (j+1) && sort!(v, j+1, hi, a, o)
+                hi > (j+1) && _partialquicksort!(v, j+1, hi, a, o)
                 hi = j-1
             end
         end
@@ -2544,11 +2573,13 @@ end
 # Support 3-, 5-, and 6-argument versions of sort! for calling into the internals in the old way
 sort!(v::AbstractVector, a::Algorithm, o::Ordering) = sort!(v, firstindex(v), lastindex(v), a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering)
+    checkbounds(v, lo:hi)
     _sort!(v, a, o, (; lo, hi, legacy_dispatch_entry=a))
     v
 end
 sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, _) = sort!(v, lo, hi, a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, scratch::Vector)
+    checkbounds(v, lo:hi)
     _sort!(v, a, o, (; lo, hi, scratch, legacy_dispatch_entry=a))
     v
 end

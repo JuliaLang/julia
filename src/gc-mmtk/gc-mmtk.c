@@ -456,38 +456,18 @@ JL_DLLEXPORT int jl_gc_mmtk_defer_alloc_if_disabled(void)
     return 1;
 }
 
-// Saved errno/last-error, passed from `jl_gc_mmtk_block_for_gc_enter` to
-// `jl_gc_mmtk_run_pending_finalizers`, which restores it.
-typedef struct {
-    int saved_errno;
-    uint32_t saved_last_error; // Windows only; always 0 elsewhere.
-} jl_gc_mmtk_saved_errno_t;
-
-// Called by `Collection::block_for_gc` right before it waits for the pause, mirroring what
-// `jl_gc_prepare_to_collect` used to do around the same wait when it ran on this same mutator:
-// save errno, and mark this task's own timing as suspended.
-JL_DLLEXPORT jl_gc_mmtk_saved_errno_t jl_gc_mmtk_block_for_gc_enter(void)
+// Called by `Collection::block_for_gc` right before it waits for the pause:
+// mark this task's own timing as suspended.
+JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_enter(void)
 {
-    jl_gc_mmtk_saved_errno_t saved;
-    saved.saved_errno = errno;
-#ifdef _OS_WINDOWS_
-    saved.saved_last_error = GetLastError();
-#else
-    saved.saved_last_error = 0;
-#endif
 #if defined(ENABLE_TIMINGS) && defined(HAVE_TIMING_SUPPORT)
     jl_timing_suspend_t suspend;
     _jl_timing_suspend_ctor(&suspend, "GC", jl_current_task);
 #endif
-    return saved;
 }
 
 // The other half of `jl_gc_mmtk_block_for_gc_enter`, called right after the wait: restore this
 // task's own timing, and tell mmtk-core this task has resumed.
-//
-// errno/last-error are NOT restored here -- pending finalizers still need to run first, and they
-// can set errno themselves, so the restore waits until after them (see
-// `jl_gc_mmtk_run_pending_finalizers` below).
 JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_leave(void)
 {
     jl_task_t *ct = jl_current_task;
@@ -501,8 +481,8 @@ JL_DLLEXPORT void jl_gc_mmtk_block_for_gc_leave(void)
 
 // Runs this mutator's pending finalizers before `Collection::block_for_gc` returns --
 // `GC.gc()` is documented/tested to have run pending finalizers by the time they
-// return. Also restores the errno/last-error `saved` carries from `jl_gc_mmtk_block_for_gc_enter`.
-JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(jl_gc_mmtk_saved_errno_t saved)
+// return.
+JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(void)
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
@@ -513,10 +493,6 @@ JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(jl_gc_mmtk_saved_errno_t sav
         run_finalizers(ct, 0);
     }
     JL_PROBE_GC_FINALIZER();
-#ifdef _OS_WINDOWS_
-    SetLastError(saved.saved_last_error);
-#endif
-    errno = saved.saved_errno;
 }
 
 // ========================================================================= //
@@ -741,6 +717,7 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
         add_node_to_roots_buffer(closure, &buf, &len, v);
     }
     add_node_to_roots_buffer(closure, &buf, &len, _jl_debug_method_invalidation);
+    add_node_to_roots_buffer(closure, &buf, &len, jl_ext_backinterferences);
 
     // constants
     add_node_to_roots_buffer(closure, &buf, &len, jl_emptytuple_type);
@@ -1312,12 +1289,14 @@ inline jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
 }
 
 // allocation wrappers that track allocation and let collection run
-JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
+void *jl_gc_counted_malloc_(size_t sz, int usable)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
     void *data = malloc(sz);
     if (data != NULL && pgcstack != NULL && ct->world_age) {
+        if (usable)
+            sz = memory_block_usable_size(data, 0);
         jl_ptls_t ptls = ct->ptls;
         malloc_maybe_collect(ptls, sz);
         jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz);
@@ -1325,17 +1304,28 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
     return data;
 }
 
-JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
+void *jl_gc_counted_calloc_(size_t nm, size_t sz, int usable)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
     void *data = calloc(nm, sz);
     if (data != NULL && pgcstack != NULL && ct->world_age) {
+        sz = usable ? memory_block_usable_size(data, 0) : nm * sz;
         jl_ptls_t ptls = ct->ptls;
-        malloc_maybe_collect(ptls, nm * sz);
-        jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, nm * sz);
+        malloc_maybe_collect(ptls, sz);
+        jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz);
     }
     return data;
+}
+
+JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
+{
+    return jl_gc_counted_malloc_(sz, 0);
+}
+
+JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
+{
+    return jl_gc_counted_calloc_(nm, sz, 0);
 }
 
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
@@ -1348,19 +1338,27 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
     }
 }
 
-JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+void *jl_gc_counted_realloc_(void *p, size_t old, size_t sz, int usable)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
     if (pgcstack && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         malloc_maybe_collect(ptls, sz);
-        if (sz < old)
-            jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, old - sz);
-        else
-            jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz - old);
     }
-    return realloc(p, sz);
+    void *data = realloc(p, sz);
+    if (pgcstack && ct->world_age && (data != NULL || sz == 0)) {
+        if (usable)
+            sz = data ? memory_block_usable_size(data, 0) : 0;
+        // wraps around when shrinking, which subtracts `old - sz` as intended
+        jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz - old);
+    }
+    return data;
+}
+
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+{
+    return jl_gc_counted_realloc_(p, old, sz, 0);
 }
 
 void *jl_gc_perm_alloc_nolock(jl_ptls_t ptls, size_t sz, int zero, unsigned align, unsigned offset) JL_NOTSAFEPOINT
@@ -1490,14 +1488,13 @@ JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOIN
     mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, ptr, (const void*) 0);
 }
 
-JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, const void *ptr) JL_NOTSAFEPOINT {
-    jl_task_t *ct = jl_current_task;
-    jl_ptls_t ptls = ct->ptls;
-    mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, ptr, (const void*) 0);
+JL_DLLEXPORT void jl_gc_wb_cold(const void *parent JL_UNUSED, void *slot JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{
+    mmtk_unreachable();
 }
 
-JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, const void *stored,
-                                        struct _jl_datatype_t *dt) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_gc_multi_wb_cold(const struct _jl_value_t *parent JL_UNUSED, void *dest JL_UNUSED,
+                                        const void *stored JL_UNUSED, struct _jl_datatype_t *dt JL_UNUSED) JL_NOTSAFEPOINT
 {
     mmtk_unreachable();
 }

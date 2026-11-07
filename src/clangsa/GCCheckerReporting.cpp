@@ -17,14 +17,14 @@ PDP GCChecker::GCBugVisitor::VisitNode(const ExplodedNode *N,
   unsigned OldGCDepth = PrevN->getState()->get<GCDepth>();
   if (NewGCDepth != OldGCDepth) {
     PathDiagnosticLocation Pos(getStmtForDiagnostics(N),
-                               BRC.getSourceManager(), N->getLocationContext());
+                               BRC.getSourceManager(), N->getStackFrame());
     return makePDP(Pos, "GC frame changed here.");
   }
   unsigned NewGCState = N->getState()->get<GCDisabledAt>();
   unsigned OldGCState = PrevN->getState()->get<GCDisabledAt>();
   if (false /*NewGCState != OldGCState*/) {
     PathDiagnosticLocation Pos(getStmtForDiagnostics(N),
-                               BRC.getSourceManager(), N->getLocationContext());
+                               BRC.getSourceManager(), N->getStackFrame());
     return makePDP(Pos, "GC enabledness changed here.");
   }
   return nullptr;
@@ -47,7 +47,7 @@ PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
         return makePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
       }
       PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
-          N->getLocationContext(), BRC.getSourceManager());
+          N->getStackFrame(), BRC.getSourceManager());
       if (Pos.isValid())
         return makePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
     } else if (NewSafepointDisabled == (unsigned)-1) {
@@ -57,7 +57,7 @@ PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
         return makePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
       }
       PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
-          N->getLocationContext(), BRC.getSourceManager());
+          N->getStackFrame(), BRC.getSourceManager());
       if (Pos.isValid())
         return makePDP(Pos, "Safepoints re-enabled here");
     }
@@ -71,7 +71,7 @@ PDP GCChecker::GCValueBugVisitor::ExplainNoPropagationFromExpr(
     const clang::Expr *FromWhere, const ExplodedNode *N,
     PathDiagnosticLocation Pos, BugReporterContext &BRC, PathSensitiveBugReport &BR) {
   const MemRegion *Region =
-      N->getState()->getSVal(FromWhere, N->getLocationContext()).getAsRegion();
+      N->getState()->getSVal(FromWhere, N->getStackFrame()).getAsRegion();
   SymbolRef Parent = walkToRoot(
       [&](SymbolRef Sym, const LivenessState *OldVState) { return !OldVState; },
       N->getState(), Region);
@@ -174,9 +174,9 @@ PDP GCChecker::GCValueBugVisitor::VisitNode(const ExplodedNode *N,
   PathDiagnosticLocation Pos;
   if (Stmt)
     Pos = PathDiagnosticLocation{Stmt, BRC.getSourceManager(),
-                                 N->getLocationContext()};
+                                 N->getStackFrame()};
   else
-    Pos = PathDiagnosticLocation::createDeclEnd(N->getLocationContext(),
+    Pos = PathDiagnosticLocation::createDeclEnd(N->getStackFrame(),
                                                 BRC.getSourceManager());
   if (!NewSymbolState)
     return nullptr;
@@ -189,7 +189,9 @@ PDP GCChecker::GCValueBugVisitor::VisitNode(const ExplodedNode *N,
             !isFDAnnotatedNotSafepoint(NewSymbolState->FD, BRC.getSourceManager());
         bool maybeUnrooted =
             declHasAnnotation(NewSymbolState->PVD, "julia_maybe_unrooted");
-        assert(isFunctionSafepoint || maybeUnrooted);
+        // `LivenessState::getForArgument` records FD/PVD only when the function
+        // is not a safepoint or the parameter is JL_MAYBE_UNROOTED.
+        assert(!isFunctionSafepoint || maybeUnrooted);
         (void)maybeUnrooted;
         Pos =
             PathDiagnosticLocation{NewSymbolState->PVD, BRC.getSourceManager()};
@@ -248,6 +250,30 @@ void GCChecker::report_value_error(CheckerContext &C, SymbolRef Sym,
     Report->addRange(range);
   }
   C.emitReport(std::move(Report));
+}
+
+// hasGCTrackedAnnotation consults JL_GC_TRACKED_TYPE only on struct and class
+// declarations and on typedefs it does not strip; report it anywhere else
+// rather than ignore it.
+void GCChecker::checkASTDecl(const Decl *D, AnalysisManager &Mgr,
+                             BugReporter &BR) const {
+  const AnnotateAttr *A = declHasAnnotation(D, "julia_gc_tracked");
+  if (!A || A->isInherited() || isa<TagDecl>(D))
+    return;
+  const char *Message = "JL_GC_TRACKED_TYPE has no effect here; annotate a "
+                        "struct, class or typedef declaration";
+  if (const auto *TD = dyn_cast<TypedefNameDecl>(D)) {
+    QualType Underlying = TD->getUnderlyingType();
+    if (stripToDeclaredType(Underlying) == Underlying)
+      return;
+    Message = "JL_GC_TRACKED_TYPE has no effect on a typedef of a pointer, "
+              "reference or array type; annotate the type it refers to";
+  }
+  BR.EmitBasicReport(D, this, "Ignored GC annotation", categories::LogicError,
+                     Message,
+                     PathDiagnosticLocation(A->getLocation(),
+                                            BR.getSourceManager()),
+                     A->getRange());
 }
 
 USED_FUNC void GCChecker::dumpState(const ProgramStateRef &State) {

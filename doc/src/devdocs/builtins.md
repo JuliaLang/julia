@@ -23,6 +23,7 @@ Core.memorynew
 Core.memoryrefnew
 Core.memoryrefoffset
 Core.memoryrefget
+Core.const_memoryrefget
 Core.memoryrefset!
 Core.memoryref_isassigned
 Core.memoryrefswap!

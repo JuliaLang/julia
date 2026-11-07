@@ -30,6 +30,7 @@ iterable type.
 Base.iterate
 Base.IteratorSize
 Base.IteratorEltype
+Base.Generator
 ```
 
 Fully implemented by:
@@ -154,6 +155,7 @@ Base.collect(::Any)
 Base.collect(::Type, ::Any)
 Base.filter
 Base.filter!
+Base.filterfirst
 Base.replace(::Any, ::Pair...)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
@@ -303,6 +305,7 @@ Base.deleteat!
 Base.keepat!
 Base.splice!
 Base.resize!
+Base.growat!
 Base.append!
 Base.prepend!
 ```

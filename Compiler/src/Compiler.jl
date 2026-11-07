@@ -38,9 +38,9 @@ else
 using Core.Intrinsics, Core.IR
 
 using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, AnyType, MethodInstance, MethodMatch,
-    MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
+    MethodTable, MethodCache, PartialOpaque, PossiblyAmbiguous, SimpleVector, TypeofVararg,
     TypeEq,
-    _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
+    _apply_iterate, apply_type, compilerbarrier, const_memoryrefget, donotdelete, memoryref_isassigned,
     memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, memoryrefunset!, print, println, show, svec,
     typename, unsafe_write, write, stdout, stderr
 
@@ -52,18 +52,18 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     EffectsOverride, Filter, Generator, NUM_EFFECTS_OVERRIDES,
     OneTo, Ordering, RefValue, _NAMEDTUPLE_NAME,
     _array_for, _bits_findnext, _defaultctors, _methods_by_ftype, _uniontypes, all, allocatedinline, any,
-    argument_datatypename, binding_kind, cconvert, copy_exprargs, datatype_arrayelem,
+    argument_datatypename, binding_kind, cconvert, copy_exprargs,
     datatype_fieldcount, datatype_fieldtypes, datatype_layoutsize, datatype_nfields,
     datatype_pointerfree, decode_effects_override, diff_names, fieldindex, visit,
     generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars, has_typevar,
     hasgenerator, hasintersect, indexed_iterate, isType, isTypeEq, isTypeEgal,
     is_file_tracked, is_function_def,
     is_meta_expr, is_meta_expr_head, is_nospecialized, is_nospecializeinfer, is_defined_const_binding,
-    is_some_const_binding, is_some_guard, is_some_imported, is_some_explicit_imported, is_some_binding_imported, is_valid_intrinsic_elptr,
+    is_some_const_binding, is_some_guard, is_some_global, is_some_imported, is_some_explicit_imported, is_some_binding_imported, is_valid_intrinsic_elptr,
     isbitsunion, isconcretedispatch, isdispatchelem, isexpr, isfieldatomic, isidentityfree,
     iskindtype, ismutabletypename, ismutationfree, issingletontype, isvarargtype, isvatuple,
-    kwerr, lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
-    partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
+    PARTITION_KIND_CONST, kwerr, lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
+    partition_owner, partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
     structdiff, tls_world_age, type_parameter, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
     _uncompressed_ir, datatype_min_ninitialized,
@@ -84,6 +84,12 @@ import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, ge
 # Needs to match UUID defined in Project.toml
 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Compiler,
     (0x807dbc54_b67e_4c79, 0x8afb_eafe4df6f2e1))
+
+# Syntax evolution bug: unset in bare modules (TODO).  This surfaces only when
+# Compiler.jl is loaded as a standalone package.
+if isdefined(Base, :end_base_include) && isdefined(Base, :set_syntax_version)
+    Base.set_syntax_version(Compiler, Base.VersionNumber(1, 14))
+end
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
@@ -165,12 +171,6 @@ else
     using Base: @show
 end
 
-# JuliaSyntax doesn't support syntax evolution in bare modules via Project.toml
-# This surfaces only when Compiler.jl is loaded as a standalone package.
-if isdefined(Base, :end_base_include) && isdefined(Base, :set_syntax_version)
-    Base.set_syntax_version(Compiler, Base.VersionNumber(1, 14))
-end
-
 include("cicache.jl")
 include("methodtable.jl")
 include("effects.jl")
@@ -244,8 +244,8 @@ end
 # `[syntax]` entry (and defining over it would error), so skip it then.
 if !isdefined(@__MODULE__, Symbol("#_internal_julia_parse"))
 function var"#_internal_julia_parse"(code, filename::String, lineno::Int, offset::Int, options::Symbol)
-    return Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options;
-                                             syntax_version=Base.VersionNumber(1, 14, 0))
+    return Base.JuliaSyntax.core_parser_hook(
+        code, filename, lineno, offset, options, (1, 14))
 end
 end
 

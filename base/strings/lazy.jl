@@ -91,9 +91,9 @@ function String(l::LazyString)
     old === nothing || return old
     str = sprint() do io
         if l.compact
-            print(IOContext(io, :compact=>true, :limit=>true), l.parts...)
+            foreach(Fix1(print, IOContext(io, :compact=>true, :limit=>true)), l.parts)
         else
-            print(io, l.parts...)
+            foreach(Fix1(print, io), l.parts)
         end
     end
     old, ok = @atomicreplace :acquire_release :acquire l.str nothing => str

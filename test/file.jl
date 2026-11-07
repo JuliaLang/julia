@@ -58,6 +58,120 @@ end
     end
 end
 
+# eachentry: lazy single-pass iteration; default String, opt into DirEntry
+@testset "eachentry" begin
+    @test_throws Base.IOError iterate(eachentry("does/not/exist"))
+    @test_throws Base.IOError iterate(eachentry("does/not/exist", DirEntry))
+
+    mktempdir() do dir
+        touch(joinpath(dir, "afile.txt"))
+        mkdir(joinpath(dir, "adir"))
+        touch(joinpath(dir, "adir", "bfile.txt"))
+
+        # Default yields String names matching readdir
+        @test sort!(collect(eachentry(dir))) == sort!(readdir(dir))
+        # DirEntry form yields DirEntry objects matching readdir(dir, DirEntry)
+        @test sort!(basename.(collect(eachentry(dir, DirEntry)))) == sort!(readdir(dir))
+        # join=true yields full paths matching readdir(dir; join=true)
+        @test sort!(collect(eachentry(dir; join=true))) == sort!(readdir(dir; join=true))
+        joined = eachentry(dir; join=true) do paths
+            collect(paths)
+        end
+        @test sort!(joined) == sort!(readdir(dir; join=true))
+
+        # Iterator type and traits
+        it = eachentry(dir)
+        @test eltype(it) === String
+        @test Base.IteratorSize(it) === Base.SizeUnknown()
+        itD = eachentry(dir, DirEntry)
+        @test eltype(itD) === Base.Filesystem.DirEntry
+
+        # Single-pass: once consumed, cannot iterate again
+        for _ in it; end
+        @test_throws ArgumentError iterate(it)
+
+        # Short-circuit via break does not error and frees resources via finalizer/close
+        for e in eachentry(dir)
+            break
+        end
+        for e in eachentry(dir, DirEntry)
+            break
+        end
+
+        # Explicit close is idempotent and disallows further iteration
+        it2 = eachentry(dir)
+        close(it2)
+        close(it2)
+        @test_throws ArgumentError iterate(it2)
+
+        # do-block forms run and clean up
+        seen = eachentry(dir) do names
+            collect(names)
+        end
+        @test sort!(seen) == sort!(readdir(dir))
+        seenD = eachentry(dir, DirEntry) do entries
+            collect(basename(e) for e in entries)
+        end
+        @test sort!(seenD) == sort!(readdir(dir))
+
+        # isempty answers correctly and does not consume an entry
+        it3 = eachentry(dir)
+        @test !isempty(it3)
+        @test !Base.isdone(it3)
+        @test sort!(collect(it3)) == sort!(readdir(dir))
+        @test Base.isdone(it3)
+        @test isempty(it3)
+        mktempdir() do empty_dir
+            it4 = eachentry(empty_dir)
+            @test isempty(it4)
+            @test isempty(it4)
+            @test collect(it4) == String[]
+            @test isempty(collect(zip(eachentry(empty_dir), 1:2)))
+        end
+        @test_throws Base.IOError isempty(eachentry("does/not/exist"))
+
+        # Accepts a DirEntry as input
+        sub = only(e for e in readdir(dir, DirEntry) if isdir(e))
+        @test sort!(collect(eachentry(sub))) == ["bfile.txt"]
+        @test sort!(basename.(collect(eachentry(sub, DirEntry)))) == ["bfile.txt"]
+        @test sort!(collect(eachentry(sub; join=true))) == [joinpath(dir, "adir", "bfile.txt")]
+    end
+end
+
+@testset "DirEntry" begin
+    F = Base.Filesystem
+    a = DirEntry("d", "n", F.UV_DIRENT_FILE)
+    @test a == DirEntry("d", "n", F.UV_DIRENT_FILE)
+    @test hash(a) == hash(DirEntry("d", "n", F.UV_DIRENT_FILE))
+    @test a != DirEntry("d2", "n", F.UV_DIRENT_FILE)
+    @test a != DirEntry("d", "n2", F.UV_DIRENT_FILE)
+    @test a != DirEntry("d", "n", F.UV_DIRENT_DIR)
+    @test length(Set([a, DirEntry("d", "n", F.UV_DIRENT_FILE), DirEntry("d", "n2", F.UV_DIRENT_FILE)])) == 2
+
+    predicates = (isfile => F.UV_DIRENT_FILE, isdir => F.UV_DIRENT_DIR, islink => F.UV_DIRENT_LINK,
+                  isfifo => F.UV_DIRENT_FIFO, issocket => F.UV_DIRENT_SOCKET,
+                  ischardev => F.UV_DIRENT_CHAR, isblockdev => F.UV_DIRENT_BLOCK)
+    for (_, rawtype) in predicates, (predicate, expected) in predicates
+        @test predicate(DirEntry("does/not", "exist", rawtype)) == (rawtype == expected)
+    end
+
+    # Symlinks and unknown types fall through to the filesystem.
+    if !Sys.iswindows()
+        mktempdir() do dir
+            Libc.mkfifo(joinpath(dir, "fifo"))
+            symlink("fifo", joinpath(dir, "fifolink"))
+            symlink("/dev/null", joinpath(dir, "nulllink"))
+            entries = Dict(basename(e) => e for e in readdir(dir, DirEntry))
+            fifo = entries["fifo"]
+            @test isfifo(fifo) && !isfile(fifo) && !ischardev(fifo)
+            @test isfifo(DirEntry(dir, "fifo", F.UV_DIRENT_UNKNOWN))
+            @test islink(entries["fifolink"]) && isfifo(entries["fifolink"])
+            @test islink(entries["nulllink"]) && ischardev(entries["nulllink"])
+            @test !isblockdev(entries["nulllink"]) && !issocket(entries["nulllink"])
+        end
+    end
+end
+
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)
@@ -596,7 +710,7 @@ function multiple_uv_errors(pfx::AbstractString, codes::AbstractVector{<:Integer
     return [Base._UVError(pfx, code) for code in codes]
 end
 
-read_linux_id_map_max(file) = parse(Int, split(strip(read(file, String)), " ", keepempty = false)[end]) % Cint
+read_linux_id_map_max(file) = parse(Cuint, split(strip(read(file, String)), " ", keepempty = false)[end]) % Cint
 if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
     uid = Libc.geteuid()
@@ -1632,6 +1746,8 @@ let f = open(file, "w")
     test_LibcFILE(Libc.FILE(f, Libc.modestr(true, false)))
 end
 
+@test_throws SystemError Libc.dup(RawFD(-1))
+
 # issue #10994: pathnames cannot contain embedded NUL chars
 for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpath,
         stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch,
@@ -1810,6 +1926,8 @@ rm(dirwalk, recursive=true)
             @test basename.(readdir(DirEntry)) == readdir()
             @test joinpath.(readdir(DirEntry)) == readdir(join=true)
             @test count(isfile, readdir(join=true)) == count(isfile, readdir(DirEntry))
+            @test sort!(collect(eachentry())) == readdir()
+            @test sort!(collect(eachentry(DirEntry))) == readdir(DirEntry)
         end
     end
 end
@@ -1867,6 +1985,69 @@ mktempdir() do dir
     # issue 54826
     namepath_dirpath = joinpath(dir, "x", "y", "z", "")
     @test mkpath(namepath_dirpath) == namepath_dirpath
+end
+
+@testset "mv and cp do not destroy the source" begin
+    mktempdir() do dir
+        # a destination that contains the source is not removed
+        pkg = joinpath(dir, "pkg")
+        src = joinpath(pkg, "pkg-1.0")
+        mkpath(joinpath(src, "src"))
+        write(joinpath(src, "src", "a.jl"), "code")
+        @test_throws ArgumentError mv(src, pkg; force=true)
+        @test_throws ArgumentError cp(src, pkg; force=true)
+        @test read(joinpath(src, "src", "a.jl"), String) == "code"
+
+        # a directory is not moved or copied into itself
+        q = joinpath(dir, "q")
+        mkpath(joinpath(q, "sub"))
+        write(joinpath(q, "f"), "f")
+        for dst in (joinpath(q, "sub", "inner"), joinpath(q, "sub")), force in (false, true)
+            @test_throws ArgumentError mv(q, dst; force)
+            @test_throws ArgumentError cp(q, dst; force)
+        end
+        @test !ispath(joinpath(q, "sub", "inner"))
+        @test isdir(joinpath(q, "sub"))
+        @test read(joinpath(q, "f"), String) == "f"
+
+        if !Sys.iswindows()
+            # also through a symlinked path
+            link = joinpath(dir, "qlink")
+            symlink(q, link)
+            @test_throws ArgumentError cp(q, joinpath(link, "sub", "inner"))
+            @test !ispath(joinpath(q, "sub", "inner"))
+
+            # a symlink as the immediate parent of the destination
+            alias = joinpath(dir, "qalias")
+            symlink(q, alias)
+            @test_throws ArgumentError cp(q, joinpath(alias, "new"))
+            @test !ispath(joinpath(q, "new"))
+
+            # `..` after a symlink is resolved by the filesystem, not lexically
+            victim = joinpath(dir, "victim")
+            mkpath(joinpath(victim, "sub"))
+            write(joinpath(victim, "sub", "f"), "keep")
+            symlink(joinpath(victim, "sub"), joinpath(dir, "subalias"))
+            @test_throws ArgumentError cp(joinpath(dir, "subalias", "..", "sub"), victim; force=true)
+            # copying a symlink's target over a directory containing it
+            @test_throws ArgumentError cp(joinpath(dir, "subalias"), victim; force=true, follow_symlinks=true)
+            @test_throws ArgumentError Base.cptree(joinpath(dir, "subalias"), victim; force=true)
+            @test read(joinpath(victim, "sub", "f"), String) == "keep"
+
+            # allowed: removing a symlink to an ancestor leaves the source alone
+            up = joinpath(dir, "up")
+            symlink(dir, up)
+            @test cp(joinpath(q, "f"), up; force=true) == up
+            @test isfile(up) && !islink(up)
+            @test read(joinpath(q, "f"), String) == "f"
+            # allowed: a destination that only looks inside the source before resolving `..`
+            mkpath(joinpath(dir, "elsewhere", "child"))
+            symlink(joinpath(dir, "elsewhere", "child"), joinpath(q, "link"))
+            out = joinpath(q, "link", "..", "out")
+            @test cp(q, out) == out
+            @test isfile(joinpath(dir, "elsewhere", "out", "f"))
+        end
+    end
 end
 @test mkpath("") == ""
 @test mkpath("/") == "/"
@@ -2032,7 +2213,17 @@ end
                 @test isempty(readdir(join=true))
                 rm(d, recursive=true)
                 @test !ispath(d)
-                @test isempty(readdir())
+                if Sys.isfreebsd()
+                    # Since FreeBSD 14.4 and 15.0, scandir(3) reports the ENOENT that
+                    # getdirentries(2) returns for a removed directory.
+                    @test try
+                        isempty(readdir())
+                    catch err
+                        err isa Base.IOError && err.code == Base.UV_ENOENT
+                    end
+                else
+                    @test isempty(readdir())
+                end
                 @test_throws Base._UVError("readdir($(repr(d)))", Base.UV_ENOENT) readdir(d)
                 @test_throws Base._UVError("pwd()", Base.UV_ENOENT) readdir(join=true)
             end
@@ -2226,3 +2417,49 @@ end
 end
 
 @test Base.infer_return_type(stat, (String,)) == Base.Filesystem.StatStruct
+
+@testset "trylockfile" begin
+    mktempdir() do dir
+        path = joinpath(dir, "file")
+        write(path, "data")
+        fopen() = Base.Filesystem.open(path, Base.Filesystem.JL_O_RDWR)
+        # whether a lock can be taken from another process
+        other_process_locks() = readchomp(`$(Base.julia_cmd()) --startup-file=no -e '
+            using Base.Filesystem: open, JL_O_RDWR, trylockfile, unlockfile
+            f = open(ARGS[1], JL_O_RDWR)
+            taken = trylockfile(f)
+            # a lock released only by exit can linger on Windows
+            taken && unlockfile(f)
+            print(taken)' $path`) == "true"
+        files = Base.Filesystem.File[]
+        try
+            a = push!(files, fopen())[end]
+            b = push!(files, fopen())[end]
+            c = push!(files, fopen())[end]
+            @test Base.Filesystem.trylockfile(a; shared=true)
+            @test Base.Filesystem.trylockfile(b; shared=true)
+            @test !Base.Filesystem.trylockfile(c)
+            @test !other_process_locks()
+            # the file can still be read and renamed while it is locked
+            @test read(path, String) == "data"
+            mv(path, path * "2")
+            mv(path * "2", path)
+            Base.Filesystem.unlockfile(a)
+            @test !Base.Filesystem.trylockfile(c)
+            Base.Filesystem.unlockfile(b)
+            Base.Filesystem.unlockfile(b) # nothing to release
+            @test Base.Filesystem.trylockfile(c)
+            @test read(path, String) == "data"
+            @test !Base.Filesystem.trylockfile(a; shared=true)
+            @test !other_process_locks()
+            Base.Filesystem.unlockfile(c)
+            @test other_process_locks()
+            # and removed
+            @test Base.Filesystem.trylockfile(c)
+            rm(path)
+        finally
+            foreach(close, files)
+        end
+        @test_throws ArgumentError Base.Filesystem.trylockfile(files[1])
+    end
+end

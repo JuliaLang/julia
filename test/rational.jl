@@ -30,6 +30,7 @@ using Base.MathConstants
     # Wrapping rational addition must use modular multiplication for cross-products.
     @test +%(1//2, 1//3) == 5//6
     @test +%(typemax(Int)//1, 1//1) == typemin(Int)//1
+    @test -%(typemin(Int)//1) == typemin(Int)//1
     @test_throws OverflowError (1//2)^63
     @test inv((1+typemin(Int))//typemax(Int)) == -1
     @test_throws OverflowError inv(typemin(Int)//typemax(Int))
@@ -46,6 +47,8 @@ using Base.MathConstants
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
+    @test_throws InexactError Rational{BigInt}(NaN)
+    @test_throws InexactError Rational(big(NaN))
     # issue 32569
     @test_throws OverflowError 1 // typemin(Int)
     @test_throws ArgumentError 0 // 0
@@ -181,6 +184,23 @@ using Base.MathConstants
     @test_throws DivideError -1//0 + 1//0
     @test Int128(1)//0 + 1//0 isa Rational{Int128}
     @test 1//0 + Int128(1)//0 isa Rational{Int128}
+    @test 0x1//0x0 - 0x1//0x1 === 0x1//0x0
+    @test -%(0x1//0x0, 0x1//0x1) === 0x1//0x0
+
+    # inf division by a negative number flips the sign (#63456)
+    @test (-1//0) // -1 === 1//0
+    @test (1//0) // -1 === -1//0
+    @test (1//0) // -3 === -1//0
+    @test (-1//0) // 2 === -1//0
+    @test (-1//0) / -1 === 1//0
+    @test (-1//0) // (-1//1) === 1//0
+    @test (1//0) // (-2//3) === -1//0
+    @test (1//0) / (-2//3) === -1//0
+    @test (-1//0) // (5//7) === -1//0
+    @test (1//0) // typemin(Int) === -1//0
+    @test typemin(Rational{Int8}) // Int8(-1) === typemax(Rational{Int8})
+    @test big(1)//0 // -1 == -1//0
+    @test (0x1//0x0) // 0x2 === 0x1//0x0
 end
 
 @testset "Rational methods" begin
@@ -485,6 +505,12 @@ end # parse
     @test floor(-13//2) == round(-13//2, RoundDown) == -7//1
     @test floor(11//3) == round(11//3, RoundDown) == 3//1
     @test floor(-11//3) == round(-11//3, RoundDown) == -4//1
+
+    # directed rounding to a float type that cannot hold the integer stays on the correct side of x
+    for (T, n) in ((Float16, 2051), (Float32, 2^24 + 3), (Float64, 2^53 + 3)), x in (n//1, -n//1)
+        @test round(T, x, RoundDown) <= x <= round(T, x, RoundUp)
+        @test abs(round(T, x, RoundToZero)) <= abs(x) <= abs(round(T, x, RoundFromZero))
+    end
 
     for T in (Float16, Float32, Float64)
         @test round(T, true//false) === convert(T, Inf)
@@ -945,5 +971,14 @@ end
             @test abs(rationalize(BigInt, x) - x) ≤ eps(x)
             @test abs(rationalize(BigInt, x, 0) - x) == 0
         end
+    end
+end
+
+@testset "rationalize(Union{}, x) throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for x in (1.5, 3//2, 1, pi, 1.5 + 2.5im)
+        @test_throws MethodError(rationalize, (Union{}, x)) rationalize(Union{}, x)
+        @test_throws MethodError(rationalize, (Union{}, x)) rationalize(Union{}, x; tol = 0.1)
+        @test which(rationalize, (Type{Union{}}, typeof(x))).sig == Tuple{typeof(rationalize), Type{Union{}}, Vararg}
     end
 end

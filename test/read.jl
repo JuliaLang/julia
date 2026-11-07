@@ -688,6 +688,76 @@ let p = Pipe()
     @test !isopen(p.out)
 end
 
+@testset "Pipe writes" begin
+    p = Pipe()
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    reader = @async read(p.out)
+    expected = UInt8[]
+    for x in ("abc", SubString("xdex", 2, 3), UInt8[1, 2], UInt16[3, 4])
+        @test writepartial(p, x) == sizeof(x)
+        append!(expected, x isa AbstractString ? codeunits(x) : reinterpret(UInt8, x))
+    end
+    @test write(p.in, UInt16[5 6]) == 4
+    append!(expected, reinterpret(UInt8, UInt16[5, 6]))
+    @test_throws "non-isbits" write(p.in, Any[1])
+    @test_throws "non-isbits" writepartial(p.in, Any[1])
+    close(p.in)
+    @test fetch(reader) == expected
+    close(p)
+end
+
+@testset "Pipe errors" begin
+    p = Pipe()
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    @test_throws "pipe is already in use" Base.link_pipe!(p)
+    # the failed attempt must leave the original pipe working
+    @test write(p, "x") == 1
+    @test read(p, UInt8) == UInt8('x')
+    # Both ends of a pipe are readable on FreeBSD, where this read would block forever.
+    Sys.iswindows() || isreadable(p.in) || @test_throws "not readable" read(p.in, UInt8)
+    close(p)
+    @test_throws "pipe is already in use" Base.open_pipe!(p.out, Base.INVALID_OS_HANDLE)
+    @test Base.start_reading(p.out) == -1
+    Sys.iswindows() || @test_throws "invalid stdio type" open(Base.INVALID_OS_HANDLE)
+end
+
+@testset "stream status strings" begin
+    p = Pipe()
+    @test occursin(" init,", sprint(show, p.out))
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    @test occursin(" open,", sprint(show, p.out))
+    reader = @async read(p.out, UInt8)
+    while p.out.status != Base.StatusActive && !istaskdone(reader)
+        yield()
+    end
+    @test occursin(" active,", sprint(show, p.out))
+    write(p.in, 0x01)
+    @test fetch(reader) == 0x01
+    # Windows stops reading outright when the read finishes, rather than pausing.
+    @test occursin(Sys.iswindows() ? " open," : " paused,", sprint(show, p.out))
+    close(p)
+    @test occursin(" closed,", sprint(show, p.out))
+
+    # states that are hard to observe on a real stream
+    live = Ptr{Cvoid}(1)
+    @testset for (handle, status, str) in (
+            (C_NULL, Base.StatusClosed, "closed"),
+            (C_NULL, Base.StatusUninit, "null"),
+            (C_NULL, Base.StatusOpen, "invalid status"),
+            (live, Base.StatusUninit, "uninit"),
+            (live, Base.StatusInit, "init"),
+            (live, Base.StatusConnecting, "connecting"),
+            (live, Base.StatusOpen, "open"),
+            (live, Base.StatusActive, "active"),
+            (live, Base.StatusPaused, "paused"),
+            (live, Base.StatusClosing, "closing"),
+            (live, Base.StatusClosed, "closed"),
+            (live, Base.StatusEOF, "eof"),
+            (live, -1, "invalid status"))
+        @test Base.uv_status_string((; handle, status)) == str
+    end
+end
+
 @testset "issue #27412" for itr in [eachline(IOBuffer("a")), readeach(IOBuffer("a"), Char)]
     @test !isempty(itr)
     # check that the earlier isempty did not consume the iterator
@@ -711,6 +781,38 @@ end
     @test reinterpret(Int, take!(out)) == fib
 end
 
+# IO types extending the documented signatures, which have no `cancel` keyword
+struct CopyUntilIO <: IO
+    b::IOBuffer
+end
+Base.eof(s::CopyUntilIO) = eof(s.b)
+Base.read(s::CopyUntilIO, ::Type{UInt8}) = read(s.b, UInt8)
+Base.copyuntil(out::IO, s::CopyUntilIO, d::UInt8; keep::Bool=false) = copyuntil(out, s.b, d; keep)
+struct ReadLineIO <: IO
+    b::IOBuffer
+end
+Base.eof(s::ReadLineIO) = eof(s.b)
+Base.readline(s::ReadLineIO; keep::Bool=false) = readline(s.b; keep)
+
+@testset "user IO methods without a cancel keyword" begin
+    io() = CopyUntilIO(IOBuffer("ab\ncd\r\nef"))
+    @test readline(io()) == "ab"
+    @test readline(io(); keep=true) == "ab\n"
+    @test readlines(io()) == ["ab", "cd", "ef"]
+    @test collect(eachline(io(); keep=true)) == ["ab\n", "cd\r\n", "ef"]
+    @test readuntil(io(), 'c') == "ab\n"
+    @test readuntil(io(), "c") == "ab\n"
+    @test readuntil(io(), 0x0a) == b"ab"
+    @test String(take!(copyline(IOBuffer(), io()))) == "ab"
+    @test String(take!(copyline(IOBuffer(), io(); keep=true))) == "ab\n"
+    @test String(take!(copyuntil(IOBuffer(), io(), 'c'))) == "ab\n"
+    let out = IOBuffer(collect(codeunits("xyz")); read=true, write=true)
+        copyline(out, CopyUntilIO(IOBuffer("ab\r\ncd")))
+        @test read(seekstart(out), String) == "abz"
+    end
+    @test collect(eachline(ReadLineIO(IOBuffer("ab\ncd")))) == ["ab", "cd"]
+end
+
 # more tests for reverse(eachline)
 @testset "reverse(eachline)" begin
     lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))
@@ -722,6 +824,12 @@ end
         @test last(eachline(seekstart(buf)),length(lines)*2) == lines
         @test reverse!(collect(Iterators.reverse(eachline(seek(buf, sum(sizeof, lines[1:100]) + 100*sizeof(eol)))))) == lines[101:end]
         @test isempty(Iterators.reverse(eachline(buf)))
+    end
+
+    # first line spanning more than one chunk (#64236)
+    for first in ("X", "XY"^3000), n in (4095, 4096, 8191, 8192, 12287)
+        lines = [first, 'a'^n]
+        @test reverse!(collect(Iterators.reverse(eachline(IOBuffer(join(lines, '\n')))))) == lines
     end
 
     let rempty = Iterators.reverse(eachline(IOBuffer()))

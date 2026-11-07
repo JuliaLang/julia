@@ -256,11 +256,13 @@ setrounding(f::Function, ::Type{BigFloat}, r::RoundingMode) =
 
 
 """
-    BigFloat(x::Union{Real, AbstractString} [, rounding::RoundingMode=rounding(BigFloat)]; [precision::Integer=precision(BigFloat)])
+    BigFloat(x::Union{Real, AbstractString} [, rounding::RoundingMode=rounding(BigFloat)];
+             [precision::Integer=precision(BigFloat)])
 
 Create an arbitrary precision floating point number from `x`, with precision
 `precision`. The `rounding` argument specifies the direction in which the result should be
 rounded if the conversion cannot be done exactly. If not provided, these are set by the current global values.
+The precision is initially set to 256 bits. Use [`setprecision`](@ref) to change the default.
 
 `BigFloat(x::Real)` is the same as `convert(BigFloat,x)`, except if `x` itself is already
 `BigFloat`, in which case it will return a value with the precision set to the current
@@ -281,6 +283,9 @@ See also:
 
 # Examples
 ```jldoctest
+julia> precision(BigFloat) # current default precision in bits
+256
+
 julia> BigFloat(2.1) # 2.1 here is a Float64
 2.100000000000000088817841970012523233890533447265625
 
@@ -391,21 +396,19 @@ BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=rounding_raw(BigFloat); 
     BigFloat(Float64(x), r; precision=precision)
 
 function BigFloat(x::Rational, r::MPFRRoundingMode=rounding_raw(BigFloat); precision::Integer=_precision_with_base_2(BigFloat))
-    r_den = _opposite_round(r)
-    setprecision(BigFloat, precision) do
-        setrounding_raw(BigFloat, r) do
-            BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x), r_den)::BigFloat
-        end
-    end
-end
-function _opposite_round(r::MPFRRoundingMode)
-    r == MPFRRoundUp && return MPFRRoundDown
-    r == MPFRRoundDown && return MPFRRoundUp
-    return r
+    # the numerator is converted exactly, so the division is the only rounding
+    num = numerator(x)
+    n = BigFloat(num; precision = ndigits(num; base = 2))
+    d = BigInt(denominator(x))
+    z = BigFloat(; precision)
+    ccall((:mpfr_div_z, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigInt}, MPFRRoundingMode), z, n, d, r)
+    return z
 end
 
 function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=_precision_with_base_2(BigFloat), rounding::MPFRRoundingMode=rounding_raw(BigFloat))
-    !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base = base)
+    base == 0 || 2 <= base <= 62 || throw(ArgumentError(lazy"invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+    !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s); base, precision, rounding)
+    Base.containsnul(s) && return nothing
     z = BigFloat(precision=precision)
     err = ccall((:mpfr_set_str, libmpfr), Int32, (Ref{BigFloat}, Cstring, Int32, MPFRRoundingMode), z, s, base, rounding)
     err == 0 ? z : nothing
@@ -426,6 +429,13 @@ BigFloat(x::AbstractString, r::RoundingMode; precision::Integer=_precision_with_
 
 ## BigFloat -> Integer
 _unchecked_cast(T, x::BigFloat, r::RoundingMode) = _unchecked_cast(T, x, convert(MPFRRoundingMode, r))
+# MPFR has no ties-away or ties-up mode, but these only differ from ties-to-even at an exact tie
+function _unchecked_cast(T, x::BigFloat, r::Union{RoundingMode{:NearestTiesAway}, RoundingMode{:NearestTiesUp}})
+    f = BigFloat(; precision=_precision_with_base_2(x))
+    ccall((:mpfr_frac, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), f, x, MPFRRoundNearest)
+    (f == 0.5 || f == -0.5) || return _unchecked_cast(T, x, MPFRRoundNearest)
+    return _unchecked_cast(T, x, r isa RoundingMode{:NearestTiesUp} ? MPFRRoundUp : MPFRRoundFromZero)
+end
 
 function _unchecked_cast(::Type{Int64}, x::BigFloat, r::MPFRRoundingMode)
     ccall((:__gmpfr_mpfr_get_sj,libmpfr), Cintmax_t, (Ref{BigFloat}, MPFRRoundingMode), x, r)
@@ -563,7 +573,7 @@ big(::Type{<:AbstractFloat}) = BigFloat
 big(x::AbstractFloat) = convert(BigFloat, x)
 
 function Rational{BigInt}(x::AbstractFloat)
-    isnan(x) && return zero(BigInt) // zero(BigInt)
+    isnan(x) && throw(InexactError(:Rational, Rational{BigInt}, x))
     isinf(x) && return copysign(one(BigInt),x) // zero(BigInt)
     iszero(x) && return zero(BigInt) // one(BigInt)
     s = max(precision(x) - exponent(x), 0)
@@ -966,14 +976,14 @@ for f in (:sin, :cos, :tan)
         function ($(Symbol(f,:d)))(x::BigFloat)
             isnan(x) && return x
             z = BigFloat()
-            ccall(($(string(:mpfr_,f,:u)), :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, x, 360, rounding_raw(BigFloat))
+            ccall(($(string(:mpfr_,f,:u)), libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, x, 360, rounding_raw(BigFloat))
             isnan(z) && throw(DomainError(x, "NaN result for non-NaN input."))
             return z
         end
         function ($(Symbol(:a,f,:d)))(x::BigFloat)
             isnan(x) && return x
             z = BigFloat()
-            ccall(($(string(:mpfr_a,f,:u)), :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, x, 360, rounding_raw(BigFloat))
+            ccall(($(string(:mpfr_a,f,:u)), libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, x, 360, rounding_raw(BigFloat))
             isnan(z) && throw(DomainError(x, "NaN result for non-NaN input."))
             return z
         end
@@ -981,7 +991,7 @@ for f in (:sin, :cos, :tan)
 end
 function atand(y::BigFloat, x::BigFloat)
     z = BigFloat()
-    ccall((:mpfr_atan2u, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, y, x, 360, rounding_raw(BigFloat))
+    ccall((:mpfr_atan2u, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, y, x, 360, rounding_raw(BigFloat))
     return z
 end
 
@@ -1214,6 +1224,7 @@ end
 function setprecision(f::Function, ::Type{BigFloat}, prec::Integer; base::Integer=2)
     Base.ScopedValues.@with(CURRENT_PRECISION => _convert_precision_from_base(prec, base), f())
 end
+setprecision(f, ::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(setprecision, (f, Union{}, slurp...)))
 
 setprecision(f::Function, prec::Integer; base::Integer=2) = setprecision(f, BigFloat, prec; base)
 

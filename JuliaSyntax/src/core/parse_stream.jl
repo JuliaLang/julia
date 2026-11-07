@@ -45,8 +45,7 @@ kind(head::SyntaxHead) = head.kind
 
 Return the flag bits of a syntactic construct. Prefer to query these with the
 predicates `is_trivia`, `is_prefix_call`, `is_infix_op_call`,
-`is_prefix_op_call`, `is_postfix_op_call`, `is_dotted`,
-`is_decorated`.
+`is_prefix_op_call`, `is_postfix_op_call`.
 
 Or extract numeric portion of the flags with `numeric_flags`.
 """
@@ -315,11 +314,11 @@ end
 # IO-based cases
 # TODO: switch ParseStream to use a Memory internally on newer versions of Julia
 VERSION < v"1.11.0-DEV.753" && function ParseStream(io::IOBuffer; version=VERSION)
-    ParseStream(io.data, io, position(io)+1, version)
+    ParseStream(io.data, io, Base.position(io)+1, version)
 end
 function ParseStream(io::Base.GenericIOBuffer; version=VERSION)
     textbuf = unsafe_wrap(Vector{UInt8}, pointer(io.data), length(io.data))
-    ParseStream(textbuf, io, position(io)+1, version)
+    ParseStream(textbuf, io, Base.position(io)+1, version)
 end
 function ParseStream(io::IO; version=VERSION)
     textbuf = read(io)
@@ -348,13 +347,6 @@ function release_positions(stream, positions)
 end
 
 #-------------------------------------------------------------------------------
-# Return true when a terminal (token) was emitted last at stream position `pos`
-function token_is_last(stream, pos)
-    # In the unified structure, check if the node at pos is a terminal
-    return pos.node_index > 0 && pos.node_index <= length(stream.output) &&
-           is_terminal(stream.output[pos.node_index])
-end
-
 function lookahead_token_first_byte(stream, i)
     i == 1 ? _next_byte(stream) : stream.lookahead[i-1].next_byte
 end
@@ -469,6 +461,8 @@ end
     error("The parser seems stuck at byte $(stream.next_byte)")
 end
 
+# `peek` and `position` are JuliaSyntax-owned rather than Base methods so their
+# docs stay out of Base help (#54749).
 """
     peek(stream::ParseStream [, n=1]; skip_newlines=false)
 
@@ -477,8 +471,8 @@ non-newline whitespace are skipped automatically. Whitespace containing a
 single newline is returned as kind `K"NewlineWs"` unless `skip_newlines` is
 true.
 """
-function Base.peek(stream::ParseStream, n::Integer=1;
-                   skip_newlines::Bool=false, skip_whitespace=true)
+function peek(stream::ParseStream, n::Integer=1;
+              skip_newlines::Bool=false, skip_whitespace=true)
     kind(peek_token(stream, n; skip_newlines=skip_newlines, skip_whitespace=skip_whitespace))
 end
 
@@ -826,7 +820,7 @@ function steal_token_bytes!(stream::ParseStream, pos::ParseStreamPosition, numby
 end
 
 # Get position of last item emitted into the output stream
-function Base.position(stream::ParseStream)
+function position(stream::ParseStream)
     byte_idx = stream.next_byte
     node_idx = length(stream.output)
 

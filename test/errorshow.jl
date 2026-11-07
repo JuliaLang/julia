@@ -834,6 +834,22 @@ catch ex
 end
 pop!(Base.Experimental._hint_handlers[Core.typename(DomainError)])  # order is undefined, don't copy this
 
+# a throwing hint handler is reported once, rather than re-run when the logged
+# exception stack (which contains the hinted exception) is shown
+struct HintRecursionException <: Exception end
+Base.showerror(io::IO, ex::HintRecursionException) = Base.Experimental.show_error_hints(io, ex)
+Base.Experimental.register_error_hint((io, exc) -> error("busted"), HintRecursionException)
+try
+    throw(HintRecursionException())
+catch ex
+    logbuf = IOBuffer()
+    Base.CoreLogging.with_logger(Base.CoreLogging.ConsoleLogger(logbuf)) do
+        showerror(IOBuffer(), ex)
+    end
+    @test count("caused an error", String(take!(logbuf))) == 1
+end
+pop!(Base.Experimental._hint_handlers[Core.typename(HintRecursionException)])
+
 struct ANumber <: Number end
 let err_str = @except_str ANumber()(3 + 4) MethodError
     @test occursin("objects of type $(curmod_prefix)ANumber are not callable", err_str)
@@ -1096,6 +1112,11 @@ end
     # Check hint message
     hintExpected = "Did you mean to access dict values using key: `:c` ? Consider using indexing syntax dict[:c]\n"
     @test occursin(hintExpected, errorMsg)
+
+    # abstract types have no fields to list, and the hint handler must not throw
+    ex = (@test_throws FieldError fieldtype(Integer, :a)).value::FieldError
+    errorMsg = @test_logs sprint(Base.showerror, ex)
+    @test errorMsg == "FieldError: type Integer has no field `a`"
 end
 
 module FieldErrorTest
@@ -1681,6 +1702,56 @@ let bt
     @test res
     bt_str = sprint(Base.show_backtrace, bt)
     @test occursin("simplify_kwargs_type(pos::$Int; kws::@Kwargs{kw1::Float64, kw2::String})", bt_str)
+end
+
+# the internal `Core.kwcall` sorter frame is hidden in favor of the demangled keyword method
+@noinline kwsorter_outer(; s = 4) = kwsorter_inner(s)
+@noinline kwsorter_inner(s) = error()
+@testset "kwcall frames" begin
+    # the trace also runs through the keyword calls of whatever invoked this test, so
+    # identify only the sorter frame belonging to `kwsorter_outer`
+    function iskwsorterframe(frame, @nospecialize(f))
+        code = frame.linfo isa Core.CodeInstance ? frame.linfo.def : frame.linfo
+        if code isa Core.MethodInstance
+            def = code.def
+            return def isa Method && def.name !== :kwcall &&
+                   def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,typeof(f),Vararg}
+        end
+        return frame.func === :kwcall
+    end
+    bt = try
+        kwsorter_outer(s = 3)
+        nothing
+    catch
+        catch_backtrace()
+    end
+    @test bt !== nothing
+    st = stacktrace(bt)
+    # the raw trace contains the keyword sorter frame ...
+    @test count(frame -> iskwsorterframe(frame, kwsorter_outer), st) == 1
+    # ... which `process_backtrace` drops
+    @test !any(((frame, _),) -> iskwsorterframe(frame, kwsorter_outer), Base.process_backtrace(st))
+    # leaving the demangled keyword method as the only frame for `kwsorter_outer`
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("kwsorter_outer(; s::$Int)", bt_str)
+    @test !occursin("kwcall", bt_str)
+    @test count(l -> occursin(r"\] kwsorter_outer\(", l), split(bt_str, '\n')) == 1
+
+    # Depending on the debug info available, the sorter frame carries a `MethodInstance`, a
+    # `CodeInstance`, or no code at all, so check every spelling rather than just the one
+    # this platform happens to produce.
+    kwframe = st[findfirst(frame -> iskwsorterframe(frame, kwsorter_outer), st)]
+    mi = kwframe.linfo isa Core.CodeInstance ? kwframe.linfo.def : kwframe.linfo
+    @test mi isa Core.MethodInstance
+    userframe = Base.StackTraces.StackFrame(:f, Symbol("user.jl"), 1)
+    kept(frame) = [f.func for (f, _) in Base.process_backtrace(Base.StackFrame[frame, userframe])]
+    @testset "linfo::$(nameof(typeof(linfo)))" for linfo in Any[mi, mi.cache]
+        # recognized by its signature, whichever way the code is attached
+        @test kept(Base.StackTraces.StackFrame(kwframe.func, kwframe.file, kwframe.line,
+                                               linfo, false, false, 0)) == [:f]
+    end
+    # with no code attached at all, the frame is recognized by name instead
+    @test kept(Base.StackTraces.StackFrame(:kwcall, Symbol("none"), 1)) == [:f]
 end
 
 # Test Base.print_with_compare in convert MethodErrors
