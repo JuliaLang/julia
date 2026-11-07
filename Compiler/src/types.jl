@@ -581,6 +581,8 @@ may_compress(::AbstractInterpreter) = true
 may_discard_trees(::AbstractInterpreter) = true
 may_discard_trees(::NativeInterpreter) =
     ccall(:jl_get_type_infer_preserve_ir, Int8, ()) == 0
+# Package images keep the edges, since an image only saves code that an edge reaches.
+discard_uninformative_call_info(::AbstractInterpreter) = !generating_output(true)
 precompile_keep_ir(::AbstractInterpreter) = false
 precompile_keep_ir(::NativeInterpreter) =
     ccall(:jl_get_precompile_keep_ir, Int8, ()) != 0
