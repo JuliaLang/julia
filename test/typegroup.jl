@@ -601,6 +601,15 @@ using Test
         @test_throws MethodError supertype(ta)
         @test_throws TypeError hasmethod(+, Tuple{ta, ta})
 
+        # A TypeVar bound may be a TypeApp (deferred in a typegroup definition)
+        tvb = TypeVar(:S, ta)
+        @test tvb.ub === ta
+        @test TypeVar(:S, ta, Any).lb === ta
+        @test fieldtype(TypeVar, :ub) == Union{Type, TypeVar, Core.TypeApp}
+        @test sprint(show, ta) == "Core.TypeApp(Vector, $Int)"
+        @test sprint(show, tvb) == "S<:Core.TypeApp(Vector, $Int)"
+        @test_throws TypeError TypeVar(:S, 1)
+
         # resolve_typegroup with empty inputs
         @test Core.resolve_typegroup(@__MODULE__, Core.svec(), Core.svec(), Core.svec()) === ()
     end
@@ -915,6 +924,61 @@ using Test
         ftB = fieldtype(TG_BoundBody, :x)
         @test !Base.has_free_typevars(ftB)
         @test ftB == Pair{S, Vector{S}} where S<:TG_BoundBody
+
+        # A group member applied to parameters in a bound is a TypeApp, which
+        # the TypeVar keeps as its bound until the group is resolved (#63827)
+        struct TG_BoundApp{T}
+            x::Vector{<:TG_BoundApp{T}}
+        end
+        ftApp = fieldtype(TG_BoundApp{Int}, :x)
+        @test ftApp == Vector{<:TG_BoundApp{Int}}
+        @test (ftApp::UnionAll).var.ub === TG_BoundApp{Int}
+        @test !Base.has_free_typevars(fieldtype(TG_BoundApp, :x))
+        @test TG_BoundApp{Int}(TG_BoundApp{Int}[]).x == TG_BoundApp{Int}[]
+        # an identical redefinition is accepted
+        struct TG_BoundApp{T}
+            x::Vector{<:TG_BoundApp{T}}
+        end
+
+        struct TG_BoundAppLB{T}
+            x::Vector{>:TG_BoundAppLB{T}}
+        end
+        @test fieldtype(TG_BoundAppLB{Int}, :x) == Vector{>:TG_BoundAppLB{Int}}
+
+        struct TG_BoundAppWhere{T}
+            x::Pair{S, Vector{S}} where S<:Union{Nothing, TG_BoundAppWhere{T}}
+        end
+        @test fieldtype(TG_BoundAppWhere{Int}, :x) ==
+            (Pair{S, Vector{S}} where S<:Union{Nothing, TG_BoundAppWhere{Int}})
+
+        struct TG_BoundAppNested{T}
+            x::Vector{<:Vector{<:TG_BoundAppNested{T}}}
+        end
+        @test fieldtype(TG_BoundAppNested{Int}, :x) == Vector{<:Vector{<:TG_BoundAppNested{Int}}}
+
+        struct TG_BoundAppSuper{T} <: Ref{Vector{<:TG_BoundAppSuper{T}}} end
+        @test supertype(TG_BoundAppSuper{Int}) == Ref{Vector{<:TG_BoundAppSuper{Int}}}
+
+        typegroup
+            struct TG_BoundAppSibA{T}
+                b::Vector{<:TG_BoundAppSibB{T}}
+            end
+            struct TG_BoundAppSibB{T}
+                a::Ref{<:TG_BoundAppSibA{T}}
+            end
+        end
+        @test fieldtype(TG_BoundAppSibA{Int}, :b) == Vector{<:TG_BoundAppSibB{Int}}
+        @test fieldtype(TG_BoundAppSibB{Int}, :a) == Ref{<:TG_BoundAppSibA{Int}}
+
+        # Such bounds on the type parameters themselves are still rejected
+        @test_throws "bound of U references TG_BoundAppParam" @eval struct TG_BoundAppParam{T, U<:TG_BoundAppParam{T}} end
+        @test !isdefined(@__MODULE__, :TG_BoundAppParam)
+        @test_throws TypeError @eval struct TG_BoundAppTVar{F, T<:F{Int}} end
+        @test !isdefined(@__MODULE__, :TG_BoundAppTVar)
+        @test_throws TypeError @eval struct TG_BoundAppTVarField{F}
+            x::Vector{<:F{Int}}
+        end
+        @test !isdefined(@__MODULE__, :TG_BoundAppTVarField)
     end
 
     @testset "type cache hygiene" begin

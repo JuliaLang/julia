@@ -2867,6 +2867,18 @@ function ismodulecall(ex::Expr)
            isa(resolvebinding(ex.args[2]), Module)
 end
 
+# A type application deferred while a typegroup is defined. This can be a TypeVar
+# bound, so it is printed without `show_default`, which would otherwise be inferred
+# along with every `show` of a TypeVar's bounds.
+function show(io::IO, x::Core.TypeApp)
+    show(io, Core.TypeApp)
+    print(io, "(")
+    show(io, x.head)
+    print(io, ", ")
+    show(io, x.param)
+    print(io, ")")
+end
+
 function show(io::IO, tv::TypeVar)
     # If we are in the `unionall_env`, the type-variable is bound
     # and the type constraints are already printed.
@@ -2874,10 +2886,11 @@ function show(io::IO, tv::TypeVar)
     # Otherwise, the lower bound should be printed if it is not `Bottom`
     # and the upper bound should be printed if it is not `Any`.
     in_env = (:unionall_env => tv) in io
-    function show_bound(io::IO, @nospecialize(b)) # b::Union{Core.AnyType,TypeVar}
+    function show_bound(io::IO, @nospecialize(b)) # b::Union{Core.AnyType,TypeVar,Core.TypeApp}
         parens = isa(b,UnionAll) && !print_without_params(b)
         parens && print(io, "(")
-        b isa TypeVar ? show(io, b) : show(io, b::Core.AnyType)
+        # a TypeApp bound is deferred while a typegroup is defined
+        b isa Union{TypeVar,Core.TypeApp} ? show(io, b) : show(io, b::Core.AnyType)
         parens && print(io, ")")
         nothing
     end

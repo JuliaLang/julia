@@ -4632,6 +4632,12 @@ void post_boot_hooks(void)
 
     // Initialize TypeApp type reference for mutually recursive types
     jl_typeapp_type = (jl_datatype_t*)core("TypeApp");
+    // While a typegroup is defined, a TypeVar bound may be a TypeApp (see
+    // jl_new_typevar), so declare the bound fields accordingly now that it exists
+    jl_value_t *bound_types[3] = { (jl_value_t*)jl_anytype_type, (jl_value_t*)jl_tvar_type, (jl_value_t*)jl_typeapp_type };
+    jl_value_t *bound_type = jl_type_union(bound_types, 3);
+    jl_svecset(jl_tvar_type->types, 1, bound_type);
+    jl_svecset(jl_tvar_type->types, 2, bound_type);
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
