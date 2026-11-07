@@ -94,7 +94,7 @@ only asks whether a type holds references needs no change. Code that
 dereferences pointer-table entries skips any word that fails
 `jl_tagged_word_isptr`; for a plain pointer that test is the usual NULL check.
 `ntaggedwords` counts how many of the `npointers` entries are tagged words, so
-`ntaggedwords > 0` tells codegen that the type needs runtime handling.
+`ntaggedwords > 0` tells codegen that the type needs special handling.
 
 The fielddesc entry of a field stored as a tagged word reports `isptr = 0` and
 the size of a pointer; there is no selector byte, and `jl_field_istagged`
