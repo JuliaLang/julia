@@ -707,9 +707,12 @@ add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
         if lb_valid && ub_valid
             tv = TypeVar(nval, lb, ub)
             return PartialTypeVar(tv, lb_certain, ub_certain)
-        elseif !lb_valid && lb_certain
+        end
+        # A TypeApp bound (deferred in a typegroup definition) is accepted, but
+        # not modeled further, as it cannot take part in subtyping
+        if !lb_valid && !isa(lb, Core.TypeApp) && lb_certain
             return Union{}
-        elseif !ub_valid && ub_certain
+        elseif !ub_valid && !isa(ub, Core.TypeApp) && ub_certain
             return Union{}
         end
     end
@@ -719,6 +722,7 @@ end
     ⊑ = partialorder(𝕃)
     b = widenconst(b)
     (b ⊑ TypeVar) && return true
+    (b ⊑ Core.TypeApp) && return true
     if isType(b) || b === typeof(Union{})
         return true
     end

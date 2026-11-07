@@ -993,8 +993,10 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
     end
     if output_tvar.lb === output_tvar.ub
         lb = output_tvar.lb
-        # `TypeVar` bounds are declared `Union{TypeVar, Type}`, so a pinned
-        # plain value (which would be egal-keyed and `Const`-able) cannot occur.
+        # `TypeVar` bounds are declared `Union{TypeVar, Type, TypeApp}`, where
+        # a `TypeApp` only occurs while a typegroup is defined (never in method
+        # signatures), so a pinned plain value (which would be egal-keyed and
+        # `Const`-able) cannot occur.
         @assert isa(lb, Union{Type, TypeVar})
         # A pinned TypeVar compares by identity (`==` is `===` for TypeVars),
         # but denotes a stable object only when it is free in `specTypes` (part
