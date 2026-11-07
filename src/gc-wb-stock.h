@@ -126,7 +126,9 @@ STATIC_INLINE void jl_gc_genericmemory_copy_ptr(const jl_value_t *owner, char *d
         for (size_t i = 0; i < n; i++) {
             for (uint32_t j = 0; j < ly->npointers; j++) {
                 size_t offset = jl_ptr_offset(dt, j);
-                if (jl_gc_wb_must_remember(owner, jl_atomic_load_relaxed(dest_p + i * stride + offset))) {
+                void *val = jl_atomic_load_relaxed(dest_p + i * stride + offset);
+                // an immediate (jl_tagged_word_isptr) has no header to read
+                if (((uintptr_t)val & 3) == 0 && jl_gc_wb_must_remember(owner, val)) {
                     jl_gc_queue_root(owner);
                     return;
                 }

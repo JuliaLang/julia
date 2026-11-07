@@ -199,8 +199,9 @@ extern jl_mutex_t finalizers_lock;
 // Outside finalizer lists, the GC ignores a value in a GC frame whose two low
 // bits are 01 or 10. Embedders can use these patterns to root their own tagged
 // immediates with JL_GC_PUSH*, as long as such values are never stored in
-// fields the GC scans itself. The pattern 11 is reserved for Julia; such values
-// are currently ignored as well, but embedders must not rely on that. Only
+// fields the GC scans itself. The pattern 11 is reserved for Julia: tagged words
+// (doc/src/devdocs/taggedwords.md) use it alongside 01, and both stay ignored
+// here, so a raw tagged word may be rooted as is. Only
 // 4-byte alignment of objects is needed, so this works on 32-bit platforms too;
 // objects are in fact 16-byte aligned (JL_HEAP_ALIGNMENT).
 STATIC_INLINE int gc_is_tagged_immediate(const void *v) JL_NOTSAFEPOINT
