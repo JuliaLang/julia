@@ -749,7 +749,10 @@ searchhistory(entries::Vector{HistEntry}, keys::String; kwargs...) =
         mktemp() do path, io
             redirect_stdout(io) do
                 searchhistory(entries, "\r")
-                searchhistory(entries, "\x19")
+                # OSC 52 keeps this away from the system clipboard, which other tests read
+                osc52 = REPL.LineEdit.TerminalProperties()
+                osc52.da1 = [62, 52]
+                searchhistory(entries, "\x19"; props = osc52)
             end
             close(io)
             @test read(path, String) == ""

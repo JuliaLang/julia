@@ -821,10 +821,16 @@ end
     script = joinpath(@__DIR__, "threadcall_iolock_wakeup.jl")
     cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=2,0 $script`
     proc = run(pipeline(cmd; stdout, stderr); wait=false)
+    timedout = false
     t = Timer(60) do _
+        timedout = true
+        # dumps the stacks, but can also wake the hang so that the child exits cleanly
+        kill(proc, Base.SIGQUIT)
+        sleep(10)
         kill(proc, Base.SIGKILL)
     end
     @test success(proc)
+    @test !timedout
     close(t)
 end
 
