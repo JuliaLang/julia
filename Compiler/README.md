@@ -43,3 +43,22 @@ This feature is particularly useful for developing or experimenting with alterna
 > When using a custom, non-`Base` version of `Compiler` implementation, it may be necessary
 > to run `InteractiveUtils.@activate Compiler` to ensure proper functionality of certain
 > reflection utilities.
+
+## Developing `Compiler` in the Julia repository
+
+`Base.Compiler` picks up changes to `Compiler/` only when Julia is rebuilt.  To
+rebuild and test it, use `make test-Compiler`.  To try changes without
+rebuilding, run from the repository root:
+
+```sh
+./usr/bin/julia --project=Compiler
+```
+
+```julia
+using InteractiveUtils
+@activate Compiler           # Reflection (`code_typed`, ...) uses the loaded Compiler
+@activate Compiler[:codegen] # Make Julia compilation use it
+```
+
+Reflection still shares the runtime's inference cache, so a broken compiler can
+corrupt runtime state.

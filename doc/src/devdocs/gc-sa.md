@@ -16,6 +16,13 @@ from Julia's toplevel directory.
 Afterwards, running the analysis over the source tree is as simple as running
 `make -C src analyzegc`.
 
+To check a single file, use the file name without its `.c`/`.cpp` extension. For example,
+`make -C src analyze-jloptions -j8` runs every check on `src/jloptions.c`: the Clang static
+analyzer, this GC-rooting checker, the thread-safety analysis, and clang-tidy. Each check can
+also be run on its own with `clang-sa-<file>`, `clang-sagc-<file>`, `clang-safety-<file>`, or
+`clang-tidy-<file>`. The whole-tree equivalents are `analyzesrc`, `analyzegc`, `safesrc`,
+`tidysrc`, and `analyze` (all of them).
+
 ## General Overview
 
 Since Julia's GC is precise, it needs to maintain correct rooting
