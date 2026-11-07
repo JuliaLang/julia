@@ -1227,6 +1227,10 @@ end
     @test vcat(Nothing[], [missing], [1.0], [Int8(1)]) isa Vector{Union{Missing, Nothing, Float64}}
 end
 
+@testset "hcat with mixed elements" begin
+    @test hcat([nothing], [missing], [1.0], [Int8(1)]) isa Matrix{Union{Missing, Nothing, Float64}}
+end
+
 @testset "sizeof" begin
     let arrUInt8 = zeros(UInt8, 10)
         @test sizeof(arrUInt8) == 10
