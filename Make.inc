@@ -25,6 +25,11 @@ JULIA_COVERAGE_IMAGES ?= 0
 # expanded because Make.user is read below.
 JULIA_COVERAGE_IMAGE_FLAGS = $(if $(filter 1,$(JULIA_COVERAGE_IMAGES)),--code-coverage=all)
 
+# Set to 0 to leave the HTML manual out of `make install` and `make binary-dist`,
+# which then do not build it. For builds nobody reads the manual from, such as CI
+# test builds.
+JULIA_INSTALL_DOCS ?= 1
+
 # Set to 1 to also bundle stdlib pkgimages for `--check-bounds=yes`.
 # Use `make checkbounds-pkgimages` to distribute these separately instead.
 JULIA_CHECK_BOUNDS_PKGIMAGES ?= 0
