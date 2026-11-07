@@ -1,3 +1,4 @@
+# -*- makefile -*-
 ## jll artifact
 PCRE_JLL_NAME := PCRE2
 
