@@ -626,7 +626,7 @@ doc = makedocs(
 )
 
 # Update this when the number of public docstrings missing from the manual changes.
-const known_missing_from_manual = 366
+const known_missing_from_manual = 293
 
 # Documenter skips the document checks when only running doctests.
 if doc.user.doctest ∉ (:fix, :only)
