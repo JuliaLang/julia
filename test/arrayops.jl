@@ -1377,6 +1377,7 @@ end
     @test @inferred(mapslices(hcat, [1 2; 3 4], dims=1)) == [1 2; 3 4] # previously an error, now allowed
     @test mapslices(identity, [1 2; 3 4], dims=(2,2)) == [1 2; 3 4] # previously an error
     @test_broken @inferred(mapslices(identity, [1 2; 3 4], dims=(2,2))) == [1 2; 3 4]
+    @test mapslices(x -> x[1] == 1 ? [7, 7] : 5, [1 2 3; 4 5 6], dims=1) == [7 5 5; 7 5 5]
 
     # type inference in mapslices
     a_ = @inferred (a -> mapslices(identity, reshape(a, size(a)..., 1, 1), dims=(3,4)))(a)
