@@ -214,6 +214,17 @@ int main()
         jl_value_t *t = jl_typeof(v);
     }
 
+    {
+        // jl_field_istagged tells a tagged word from a ghost field at its offset
+        jl_datatype_t *dt = (jl_datatype_t*)checked_eval_string(
+            "struct GhostBeforeTagged; ghost::Nothing; x::Union{Int16,String}; end; GhostBeforeTagged");
+        if (jl_field_istagged(dt, 0) || !jl_field_istagged(dt, 1)) {
+            jl_printf(jl_stderr_stream(), "jl_field_istagged misreports a field\n");
+            jl_atexit_hook(1);
+            exit(1);
+        }
+    }
+
     JL_TRY {
         jl_error("exception thrown");
     }
