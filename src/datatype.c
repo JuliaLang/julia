@@ -643,6 +643,17 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
     }
 }
 
+// the size of the C struct of a type whose Julia-visible fields are only a prefix of it,
+// so that `sizeof(T)` is the size of its instances (0 for any other type)
+static size_t hidden_struct_size(jl_datatype_t *st) JL_NOTSAFEPOINT
+{
+    if (st == jl_method_type)
+        return sizeof(jl_method_t);
+    if (st == jl_task_type)
+        return sizeof(jl_task_t);
+    return 0;
+}
+
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
     const uint64_t max_offset = (((uint64_t)1) << 32) - 1;
@@ -850,6 +861,13 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         if (LLT_ALIGN(sz, alignm) > sz) {
             haspadding = 1;
             sz = LLT_ALIGN(sz, alignm);
+        }
+        size_t structsz = hidden_struct_size(st);
+        if (structsz) {
+            // include the C-only fields after the Julia-visible ones
+            assert(structsz >= sz && structsz % alignm == 0);
+            haspadding |= structsz > sz;
+            sz = structsz;
         }
         if (should_malloc && npointers)
             pointers = (uint32_t*)malloc_s(npointers * sizeof(uint32_t));
@@ -1688,7 +1706,7 @@ static void check_new_struct_type(jl_datatype_t *type)
 {
     if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL)
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
-    // the object would have no room for the data the layout does not describe
+    // only the runtime can allocate and initialize the data the fields do not describe
     if (type->name->hiddenfields)
         jl_errorf("new: %s has hidden fields and can only be allocated by the runtime",
                   jl_symbol_name(type->name->name));

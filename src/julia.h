@@ -665,8 +665,8 @@ typedef struct JL_GC_TRACKED_TYPE {
     uint8_t abstract:1;
     uint8_t mutabl:1;
     uint8_t mayinlinealloc:1;
-    // instances hold data that the Julia-visible layout does not describe (C-only
-    // fields past it, an opaque layout, or trailing variable-sized data), so only
+    // instances hold data that the Julia-visible fields do not describe (C-only
+    // fields after them, an opaque layout, or trailing variable-sized data), so only
     // the runtime's own constructor may allocate them
     uint8_t hiddenfields:1;
     uint8_t _unused:4;

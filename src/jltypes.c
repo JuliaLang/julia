@@ -4447,12 +4447,15 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_simplevector_type);
     jl_compute_field_offsets(jl_symbol_type);
     jl_compute_field_offsets(jl_binding_partition_type);
+    // now with the size of the whole C struct (see `hidden_struct_size`)
+    jl_compute_field_offsets(jl_method_type);
+    jl_compute_field_offsets(jl_task_type);
+    assert(jl_datatype_size(jl_method_type) == sizeof(jl_method_t));
+    assert(jl_datatype_size(jl_task_type) == sizeof(jl_task_t));
 
-    // types whose instances hold data that their Julia-visible layout does not describe
+    // types whose instances hold data that their Julia-visible fields do not describe
     jl_method_type->name->hiddenfields = 1; // writelock
-    assert(jl_datatype_size(jl_method_type) < sizeof(jl_method_t));
     jl_task_type->name->hiddenfields = 1; // stack, context, gcstack, ...
-    assert(jl_datatype_size(jl_task_type) < sizeof(jl_task_t));
     jl_cancel_source_type->name->hiddenfields = 1; // trailing parent links
     jl_wait_entry_type->name->hiddenfields = 1; // trailing slots
     // opaque layouts

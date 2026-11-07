@@ -4273,9 +4273,9 @@ end
 
 end
 
-# types whose instances hold data that their Julia-visible layout does not describe
-# (fields hidden past it, an opaque layout, trailing variable-sized data) can only be
-# allocated by the runtime, since `new` would make an object with no room for that data
+# types whose instances hold data that their Julia-visible fields do not describe
+# (C-only fields after them, an opaque layout, trailing variable-sized data) can only be
+# allocated by the runtime, since `new` would not set up that data
 for x in Any[which(sin, (Float64,)), current_task(), Base.CancellationTokenSource(),
              Base.WaitEntryN(nothing, 2), Main, :sym, "str", Core.svec(1), Memory{Int}(undef, 2)]
     T = typeof(x)
@@ -4299,6 +4299,14 @@ for x in Any[which(sin, (Float64,)), current_task(), Base.CancellationTokenSourc
     @test_throws err ccall(:jl_new_struct_uninit, Any, (Any,), T)
 end
 @test !Base.datatype_hashiddenfields(Core.MethodInstance)
+# the size of a type with C-only fields after its visible ones includes them
+for T in (Method, Task)
+    n = fieldcount(T)
+    ft = fieldtype(T, n)
+    visible_end = fieldoffset(T, n) + (Base.allocatedinline(ft) ? sizeof(ft) : sizeof(Ptr{Cvoid}))
+    al = Base.datatype_alignment(T)
+    @test sizeof(T) > cld(visible_end, al) * al
+end
 # the flag is on the TypeName, so it applies even when the type is not known exactly
 let fparam = @eval T -> $(Expr(:new, :(Memory{T})))
     @test Base.infer_return_type(fparam, (Type,)) === Union{}
