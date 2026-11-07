@@ -1077,8 +1077,9 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     JL_GC_PUSH1(&v);
     // Slotnames. For regular methods, we require that m->slot_syms matches the
     // CodeInfo's slotnames, so we do not need to save it here.
-    if (m->generator) {
-        // can't optimize generated functions
+    if (m->generator || !nargsmatchesmethod) {
+        // can't optimize generated functions, or code whose arguments are not the
+        // method's (e.g. that of outlined regions, see `jl_new_outlined_codeinst`)
         v = jl_compress_argnames(code->slotnames);
         jl_encode_value_(&s, (jl_value_t*)v, 1);
     }
