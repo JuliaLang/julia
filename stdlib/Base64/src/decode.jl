@@ -115,6 +115,7 @@ end
 
 function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb::Integer=length(data))
     require_one_based_indexing(data)
+    length0 = length(data)
     filled::Int = 0
     while filled < nb && !eof(pipe)
         if length(data) == filled
@@ -124,11 +125,14 @@ function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb
         p_end = read_until_end(pipe, p, UInt(min(length(data), nb) - filled))
         filled += p_end - p
     end
-    resize!(data, filled)
+    resize!(data, max(length0, filled))
     return filled
 end
 
-Base.eof(pipe::Base64DecodePipe) = isempty(pipe.rest) && eof(pipe.io)::Bool
+function Base.eof(pipe::Base64DecodePipe)
+    isempty(pipe.rest) && unsafe_read(pipe, convert(Ptr{UInt8}, C_NULL), 0)
+    return isempty(pipe.rest)
+end
 Base.close(pipe::Base64DecodePipe) = nothing
 
 # Decode data from (b1, b2, b3, b4, buffer, input) into (ptr, rest).

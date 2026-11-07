@@ -54,6 +54,19 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
     end
     @test String(decoded) == inputText
 
+    pipe = Base64DecodePipe(IOBuffer("SGVsbG8h\n"))
+    decoded = UInt8[]
+    while !eof(pipe)
+        push!(decoded, read(pipe, UInt8))
+    end
+    @test String(decoded) == "Hello!"
+    @test readline(Base64DecodePipe(IOBuffer("SGVsbG8h\n"))) == "Hello!"
+
+    data = zeros(UInt8, 100)
+    @test readbytes!(Base64DecodePipe(IOBuffer("SGVsbG8h")), data) == 6
+    @test length(data) == 100
+    @test data[1:6] == codeunits("Hello!")
+
     buf = IOBuffer(write=false)
     pipe = Base64EncodePipe(buf)
     @test !isreadable(pipe) && !iswritable(pipe)
@@ -64,6 +77,12 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
     pipe = Base64DecodePipe(buf)
     @test !isreadable(pipe) && !iswritable(pipe)
     @test isempty(read(pipe))
+
+    pipe = Base64DecodePipe(IOBuffer(base64encode("Hello, world! more text")))
+    @test read(pipe, 6) == codeunits("Hello,")
+    @test !eof(pipe)
+    @test read(pipe) == codeunits(" world! more text")
+    @test eof(pipe)
 
 
     # Encode to string and decode
