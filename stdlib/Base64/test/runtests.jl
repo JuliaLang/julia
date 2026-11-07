@@ -90,6 +90,9 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
     @test readbytes!(Base64DecodePipe(IOBuffer("SGVsbG8h")), view(data, 1:2:12)) == 6
     @test data[1:2:end] == codeunits("Hello!")
 
+    # read(pipe, Char) needs peek
+    @test read(Base64DecodePipe(IOBuffer(base64encode("αβ"))), Char) == 'α'
+
     # Encode to string and decode
     @test String(base64decode(base64encode(inputText))) == inputText
 

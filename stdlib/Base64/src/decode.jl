@@ -108,6 +108,11 @@ function Base.read(pipe::Base64DecodePipe, ::Type{UInt8})
     return read!(pipe, Ref{UInt8}())[]
 end
 
+function Base.peek(pipe::Base64DecodePipe, ::Type{UInt8})
+    isempty(pipe.rest) && pushfirst!(pipe.rest, read(pipe, UInt8))
+    return first(pipe.rest)
+end
+
 function Base.readbytes!(pipe::Base64DecodePipe, data::MutableDenseArrayType{UInt8}, nb::Integer=length(data))
     require_one_based_indexing(data)
     olb = lb = length(data)
