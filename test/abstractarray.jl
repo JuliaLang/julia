@@ -2404,3 +2404,12 @@ end
     @test map(identity, reshape(P, 2, 3)) isa Matrix{Int}
     @test map(identity, reshape(P, 6)) isa Vector{Int}
 end
+
+@testset "unary + on AbstractArray (#58295)" begin
+    v = Bool[true, false]
+    w = view(v, :)
+    @test eltype(+w) == Int
+    @test +w == [1, 0]
+    @test +w !== w
+    @test +[[1, 2]] == [[1, 2]]
+end
