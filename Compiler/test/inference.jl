@@ -7097,6 +7097,11 @@ indirect31485(arr) = f31485(arr)
 f31485(arr::AbstractArray{T, N}) where {T, N} = indirect31485(view(arr, 1, ntuple(i -> :, Val(N-1))...))
 @test @inferred(f31485(zeros(3,3,3,3,3),)) == fill(0.0)
 
+props_walk_names(x::NamedTuple) = x
+props_walk_names(x::String) = (;)
+walk_names(x) = map(walk_names, props_walk_names(x))
+@test only(Base.return_types(walk_names, (@NamedTuple{d::String},))) === @NamedTuple{d::@NamedTuple{}}
+
 # override const-prop' return type with the concrete-eval result
 # if concrete-eval returns non-inlineable constant
 Base.@assume_effects :foldable function continue_const_prop(i, j)
