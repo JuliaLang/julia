@@ -125,7 +125,11 @@ JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::operator*();
 #endif
 
 void JITDebugInfoRegistry::add_image_info(image_info_t info) {
-    (**this->image_info)[info.base] = info;
+    auto infos = *this->image_info;
+    auto it = infos->find(info.base);
+    if (it != infos->end())
+        delete it->second.cinst_by_fptr;
+    (*infos)[info.base] = info;
 }
 
 
@@ -137,6 +141,36 @@ bool JITDebugInfoRegistry::get_image_info(uint64_t base, JITDebugInfoRegistry::i
         return true;
     }
     return false;
+}
+
+// Find the CodeInstance of the function that starts at `fptr` in the image at `base`.
+// A stack trace looks up every frame in the image, so a map of the function addresses is
+// built on the first lookup rather than searching them one by one each time.
+bool JITDebugInfoRegistry::lookup_image_codeinst(uint64_t base, void *fptr, jl_code_instance_t **ci) {
+    auto infos = *this->image_info;
+    auto it = infos->find(base);
+    if (it == infos->end())
+        return false;
+    image_info_t &image = it->second;
+    if (!image.cinst_by_fptr) {
+        auto *map = new DenseMap<uintptr_t, jl_code_instance_t *>();
+        map->reserve(image.fvars_n + image.fptrs.nclones);
+        // The first entry for an address is kept, and a function's own entry is preferred
+        // to a clone
+        for (size_t i = 0; i < image.fvars_n; i++)
+            map->try_emplace((uintptr_t)image.fptrs.ptrs[i], image.fvars_cinst[i]);
+        for (size_t i = 0; i < image.fptrs.nclones; i++) {
+            uint32_t idx = image.fptrs.clone_idxs[i] & jl_sysimg_val_mask;
+            if (idx < image.fvars_n) // items after this were cloned but not referenced directly by a method (such as our ccall PLT thunks)
+                map->try_emplace((uintptr_t)image.fptrs.clone_ptrs[i], image.fvars_cinst[idx]);
+        }
+        image.cinst_by_fptr = map;
+    }
+    auto found = image.cinst_by_fptr->find((uintptr_t)fptr);
+    if (found == image.cinst_by_fptr->end())
+        return false;
+    *ci = found->second;
+    return true;
 }
 
 JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
@@ -1273,25 +1307,10 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
         return 1;
     }
     frame0->fromC = !isImage;
-    {
-        JITDebugInfoRegistry::image_info_t image;
-        bool inimage = getJITDebugRegistry().get_image_info(fbase, &image);
-        if (isImage && saddr && inimage) {
-            for (size_t i = 0; i < image.fptrs.nclones; i++) {
-                if (saddr == image.fptrs.clone_ptrs[i]) {
-                    uint32_t idx = image.fptrs.clone_idxs[i] & jl_sysimg_val_mask;
-                    if (idx < image.fvars_n) // items after this were cloned but not referenced directly by a method (such as our ccall PLT thunks)
-                        frame0->ci = image.fvars_cinst[idx];
-                    break;
-                }
-            }
-            for (size_t i = 0; i < image.fvars_n; i++) {
-                if (saddr == image.fptrs.ptrs[i]) {
-                    frame0->ci = image.fvars_cinst[i];
-                    break;
-                }
-            }
-        }
+    if (isImage && saddr) {
+        jl_code_instance_t *ci;
+        if (getJITDebugRegistry().lookup_image_codeinst(fbase, saddr, &ci))
+            frame0->ci = ci;
     }
     return lookup_pointer(Section, context, frames, pointer, slide, isImage, noInline);
 }
