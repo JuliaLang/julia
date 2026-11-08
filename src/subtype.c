@@ -3387,6 +3387,7 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
 static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
 {
     assert(e->Loffset == 0);
+    assert(jl_is_typevar(x) || jl_is_type(x));
     // Theoretically bounds change would be merged for union inputs.
     // But intersection is not happy as splitting helps to avoid circular env.
     assert(!e->intersection || !jl_is_uniontype(x));
@@ -3421,46 +3422,24 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
     e->ignore_lb_required = saved_ignore;
     if (!ub_ok)
         return 0;
-    if (!e->intersection) {
-        if (vb->ub != x && !subtype_ccheck(vb->lb, x, e))
-            return 0;
-        if (vb->lb == vb->ub && vb->lb != jl_bottom_type && e->spell_channel <= vb->lb_spell)
-            return 1;
-        if (vb->lb != x) {
-            vb->lb = x;
-            vb->lb_spell = e->spell_channel;
-        }
-        vb->ub = x;
-        return 1;
-    }
-    // when the var is pinned (`lb === ub`), `x <= ub` was just checked and a
-    // join picking `x` proves `lb <= x`, i.e. `x` respells the same type: keep
-    // the existing spelling unless `x`'s is more authoritative (see `lb_spell`)
+    if (vb->ub != x && !subtype_ccheck(vb->lb, x, e))
+        return 0;
     int pinned = (vb->lb == vb->ub && vb->lb != jl_bottom_type);
-    jl_value_t *lb = simple_join(vb->lb, x);
+    jl_value_t *lb = vb->ub == x ? simple_join(vb->lb, x) : x;
     JL_GC_PUSH1(&lb);
     if (pinned && lb == x && e->spell_channel <= vb->lb_spell) {
-        JL_GC_POP();
-        // validate the inclusion the respell path would have checked below,
-        // then keep both existing spellings
-        if (!subtype_ccheck(vb->lb, x, e))
-            return 0;
-        return 1;
+        // keep vb->lb (and vb->ub) as-is
     }
-    if (!e->intersection || !jl_is_typevar(lb) || !reachable_var(lb, v, e)) {
+    else if (!e->intersection || !jl_is_typevar(lb) || !reachable_var(lb, v, e)) {
         if (vb->lb != lb) {
             vb->lb = lb;
             vb->lb_spell = e->spell_channel;
         }
     }
     JL_GC_POP();
-    if (vb->ub == x)
-        return 1;
-    if (!subtype_ccheck(vb->lb, x, e))
-        return 0;
-    // skip `simple_meet` here as we have proven `x <: vb->ub`
     if (!e->intersection || !reachable_var(x, v, e))
         vb->ub = x;
+    assert((vb->lb != (jl_value_t*)v) && (vb->ub != (jl_value_t*)v));
     return 1;
 }
 
