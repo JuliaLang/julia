@@ -604,6 +604,13 @@ else
     )
 end
 
+# Pkg has its own manual. Without GPL libraries the SparseArrays solvers page is left out,
+# and with it the only references to the SuiteSparse library docstrings.
+const CHECKDOCS_IGNORED_MODULES = Module[Pkg]
+if joinpath("stdlib", "SparseArrays-solvers.md") ∉ STDLIB_EXTRA_DOCS
+    push!(CHECKDOCS_IGNORED_MODULES, SparseArrays.LibSuiteSparse)
+end
+
 const output_path = joinpath(buildrootdoc, "_build", (render_pdf ? "pdf" : "html"), "en")
 doc = makedocs(
     source    = joinpath(buildrootdoc, "src"),
@@ -614,7 +621,7 @@ doc = makedocs(
     linkcheck = "linkcheck=true" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
     checkdocs = :public,
-    checkdocs_ignored_modules = [Pkg], # Pkg has its own manual
+    checkdocs_ignored_modules = CHECKDOCS_IGNORED_MODULES,
     warnonly  = :missing_docs, # the count is checked below instead
     format    = format,
     sitename  = "The Julia Language",
