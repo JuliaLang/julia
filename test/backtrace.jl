@@ -386,3 +386,26 @@ end
 @testset "`lookup` return type inference" begin
     @test Vector{StackTraces.StackFrame} === Base.infer_return_type(lookup)
 end
+
+# A backtrace taken in a callback from C has to step through the C library's frames.
+# On Apple M6, macOS system libraries use compact unwind encodings (PAuth_LR frames)
+# that LLVM libunwind versions without support for them abort on.
+const qsort_backtrace = Ref{Any}(nothing)
+function qsort_cmp_with_backtrace(a::Ptr{Cint}, b::Ptr{Cint})::Cint
+    qsort_backtrace[] === nothing && (qsort_backtrace[] = backtrace())
+    return unsafe_load(a) - unsafe_load(b)
+end
+@noinline function qsort_with_backtrace()
+    A = Cint[3, 1, 2]
+    cmp = @cfunction(qsort_cmp_with_backtrace, Cint, (Ptr{Cint}, Ptr{Cint}))
+    ccall(:qsort, Cvoid, (Ptr{Cint}, Csize_t, Csize_t, Ptr{Cvoid}), A, length(A), sizeof(Cint), cmp)
+    return A
+end
+@testset "backtrace through a C library callback" begin
+    @test qsort_with_backtrace() == Cint[1, 2, 3]
+    frames = stacktrace(qsort_backtrace[], true)
+    @test any(f -> f.func === :qsort_cmp_with_backtrace, frames)
+    if Sys.isapple() || Sys.islinux()
+        @test any(f -> f.func === :qsort_with_backtrace, frames)
+    end
+end
