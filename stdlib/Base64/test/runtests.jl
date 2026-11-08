@@ -70,6 +70,17 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
     @test readbytes!(Base64DecodePipe(IOBuffer("SGVsbG8h")), data, 3) == 3
     @test data == codeunits("Hel")
 
+    # reads decode no further than requested
+    pipe = Base64DecodePipe(IOBuffer("Zm9vA"))
+    @test read(pipe, 1) == codeunits("f")
+    @test read(pipe, 2) == codeunits("oo")
+
+    # eof accounts for buffered input and for trailing whitespace
+    data = collect(UInt8, 1:100)
+    pipe = Base64DecodePipe(IOBuffer(base64encode(data)))
+    read(pipe, 6)
+    @test read(pipe) == data[7:end]
+    @test readlines(Base64DecodePipe(IOBuffer(base64encode("ab\ncd") * "\n"))) == ["ab", "cd"]
 
     # Encode to string and decode
     @test String(base64decode(base64encode(inputText))) == inputText
