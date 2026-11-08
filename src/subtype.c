@@ -3391,6 +3391,8 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
     // Theoretically bounds change would be merged for union inputs.
     // But intersection is not happy as splitting helps to avoid circular env.
     assert(!e->intersection || !jl_is_uniontype(x));
+    if ((jl_value_t*)v == x)
+        return 1;
     int innervar = 0;
     jl_varbinding_t *vb = lookup_binding(e, v, &innervar);
     if (e->intersection && vb != NULL && vb->lb == vb->ub && jl_is_typevar(vb->lb))
@@ -3479,7 +3481,7 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         return equal_var((jl_tvar_t *)y, x, e);
     }
 
-    if (e->Loffset == 0 && !e->intersection && jl_is_typevar(x) && jl_is_typevar(y)) {
+    if (e->Loffset == 0 && jl_is_typevar(x) && jl_is_typevar(y)) {
         int xinner = 0, yinner = 0;
         jl_varbinding_t *xx = lookup_binding(e, (jl_tvar_t*)x, &xinner);
         jl_varbinding_t *yy = lookup_binding(e, (jl_tvar_t*)y, &yinner);

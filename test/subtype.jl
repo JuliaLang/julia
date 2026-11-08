@@ -3734,3 +3734,8 @@ let A = Union{}, B = Union{}
     end
     @test !((Val{X} where X>:A) <: B)
 end
+abstract type A64753{T,N} end
+struct B64753{T,N,R} <: A64753{T,N} end
+let L = Type{<:A64753{<:Real}}, R = Type{B64753{T,N,S} where {N,S<:Ref{N}}} where T
+    @test (B64753{Int,N,S} where {N,S<:Ref{N}}) isa typeintersect(L, R)
+end
