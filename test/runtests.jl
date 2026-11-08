@@ -63,7 +63,7 @@ Distributed.worker_output_hook[] = (ident, line) -> begin
     return Base.annotatedstring(prefix, line)
 end
 
-(; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
+(; tests, net_on, exit_on_error, use_revise, buildroot, seed, shuffle) = choosetests(ARGS)
 tests = unique(tests)
 
 if Sys.islinux()
@@ -161,7 +161,15 @@ function expected_rank(test)
     rank = findfirst(name -> test == name || startswith(test, name * "/"), longest_tests)
     return something(rank, length(longest_tests) + 1)
 end
-sort!(tests; by=expected_rank) # stable, so unlisted tests keep their order
+if shuffle === nothing
+    sort!(tests; by=expected_rank) # stable, so unlisted tests keep their order
+else
+    # Run the tests in a random order instead, to find tests that depend on the state
+    # other tests leave behind. Only a single worker runs them in exactly this order: with
+    # more, which worker picks up which test also depends on timing.
+    Random.shuffle!(Random.Xoshiro(shuffle), tests)
+    println("Shuffling the tests with `--shuffle=0x$(string(shuffle, base = 16))`.")
+end
 
 # `ambiguous` must be the first test on its worker, as methods defined by other tests can
 # make Base methods ambiguous
@@ -676,7 +684,10 @@ cd(@__DIR__) do
         printstyled("    FAILURE\n\n"; bold=true, color=:red)
         skipped > 0 &&
             println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure.")
-        println("The global RNG seed was 0x$(string(seed, base = 16)).\n")
+        println("The global RNG seed was 0x$(string(seed, base = 16)).")
+        shuffle === nothing || println("The tests were shuffled with `--shuffle=0x$(string(shuffle, base = 16))`; ",
+                                       "run with `JULIA_CPU_THREADS=1` to run them in exactly this order.")
+        println()
         Test.print_test_errors(o_ts)
         throw(Test.FallbackTestSetException("Test run finished with errors"))
     end
