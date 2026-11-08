@@ -3050,10 +3050,10 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
                 jl_value_t *yub = yy ? yy->ub : yinner ? ((jl_tvar_t*)y)->ub : y;
                 // find equivalence class for typevars during intersection
                 if (xub != x && ((jl_is_typevar(xub) && xub == xlb) ||
-                                  !jl_is_type(xub)))
+                                  (!jl_is_type(xub) && !jl_is_typevar(xub))))
                     return subtype(xub, y, e, param);
                 if (yub != y && ((jl_is_typevar(yub) && yub == ylb) ||
-                                  !jl_is_type(yub)))
+                                  (!jl_is_type(yub) && !jl_is_typevar(yub))))
                     return subtype(x, yub, e, param);
             }
             int xr = xx && xx->existential;  // treat free variables as "forall" (left)
