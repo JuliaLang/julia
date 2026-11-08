@@ -1055,6 +1055,10 @@ let once = OncePerThread{Int}(() -> error("expected"))
     @test_throws ErrorException("expected") once()
     @test_throws ErrorException("OncePerThread initializer failed previously") once()
 end
+let once = OncePerThread{Int}(() -> 1.5)
+    @test_throws InexactError once()
+    @test (@atomic once.ss)[threadid()] == Base.PerStateErrored
+end
 
 let once = OncePerTask(() -> return [nothing])
     @test typeof(once) <: OncePerTask{Vector{Nothing}}
