@@ -154,6 +154,7 @@ function choosetests(choices = [])
                       net_on = false,
                       exit_on_error = false,
                       use_revise = false,
+                      buildroot,
                       seed = UInt128(0))
         elseif startswith(t, "--")
             error("unknown option: $t")
