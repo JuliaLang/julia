@@ -1494,6 +1494,19 @@ function _in_range(x, r::AbstractRange)
     n = round(Integer, (x - f) / step(r)) + 1
     n >= 1 && n <= length(r) && r[n] == x
 end
+function _linrange_index(r::LinRange, x)
+    f, l = first(r), last(r)
+    s = one(r.lendiv / r.lendiv)
+    round(Integer, (s*x - s*f) / (s*l - s*f) * r.lendiv) + 1
+end
+function _in_range(x, r::LinRange)
+    isempty(r) && return false
+    f, l = first(r), last(r)
+    f <= x <= l || l <= x <= f || return false
+    f == l && return true
+    n = _linrange_index(r, x)
+    any(k -> r[k] == x, max(n - 1, 1):min(n + 1, length(r)))
+end
 in(x::Real, r::AbstractRange{<:Real}) = _in_range(x, r)
 # This method needs to be defined separately since -(::T, ::T) can be implemented
 # even if -(::T, ::Real) is not
