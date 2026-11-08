@@ -4,6 +4,9 @@ Julia v1.15 Release Notes
 New language features
 ---------------------
 
+* The width of a primitive type may be given by one of its type parameters, as in
+  `primitive type BitInt{N} <: Signed N end`, so that each instantiation has its own size ([#63095]).
+
 Language changes
 ----------------
 
