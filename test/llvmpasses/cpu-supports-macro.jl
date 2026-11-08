@@ -85,13 +85,14 @@ function assert_holds(x::Int)
 end
 emit(assert_holds, Int)
 
-# Assert false: the intrinsic folds unknown feature names to false.
+# Assert false: the intrinsic folds unknown feature names to false. (`@noinline` keeps the
+# failing assertion in the function: the error paths of small functions are outlined.)
 # CHECK-LABEL: @julia_assert_fails
 # CHECK-NOT: julia.cpu.supports
 # CHECK-NOT: jl_cpu_supports
 # CHECK-NOT: 10000
 # CHECK: AssertionError
-function assert_fails(x::Int)
+@noinline function assert_fails(x::Int)
     @assert Core.Intrinsics.cpu_supports(:not_a_real_feature)
     return x * 10000
 end
