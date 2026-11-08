@@ -560,6 +560,8 @@ static jl_gc_roots_t make_lazy_gc_roots(Value *inline_roots_ptr, size_t npointer
     return jl_gc_roots_t(inline_roots_ptr, npointers, ai);
 }
 
+static bool is_uniontype_unboxed_pointerfree(jl_value_t *typ) JL_CANSAFEPOINT;
+
 // storage_used indicates whether the consumer reads x's storage through an untracked pointer (e.g. one
 // stripped by pointer_from_objref), rather than through x's own address or a copy of its contents. Only
 // then is the address of an unboxed pointer-free value worth rooting: such a value holds no GC
@@ -569,8 +571,13 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
 {
     if (x.constant || x.typ == jl_bottom_type)
         return {};
-    if (x.Vboxed) // superset of x.isboxed
+    if (x.isboxed)
         return {x.Vboxed};
+    // the Vboxed of a split union is NULL at runtime while the value is unboxed,
+    // so the unboxed form needs its roots as well
+    SmallVector<Value*,0> roots;
+    if (x.Vboxed)
+        roots.push_back(x.Vboxed);
     if (!x.inline_roots.empty()) {
         // TODO: implement this filter operation
         //     SmallVector<unsigned,4> perm_offsets;
@@ -578,21 +585,23 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
         //     return filter(!in(perm_offsets), x.inline_roots)
         // Copy and load roots via get()
         const jl_gc_roots_t &roots_copy = x.inline_roots;
-        SmallVector<Value*,0> result(roots_copy.size());
         for (size_t i = 0; i < roots_copy.size(); i++)
-            result[i] = roots_copy.get(ctx, i);
-        return result;
+            roots.push_back(roots_copy.get(ctx, i));
+        return roots;
     }
     if (x.ispointer()) {
         if (x.V == nullptr) {
             // a union of ghost types has a tag but no data to root
             assert(x.TIndex);
-            return {};
+            return roots;
         }
         assert(x.V->getType()->getPointerAddressSpace() != AddressSpace::Tracked);
-        if (!storage_used && jl_is_pointerfree(x.typ))
-            return {};
-        return {x.V};
+        // a split union keeps only its unboxed members here; Vboxed roots the others
+        bool pointerfree = x.TIndex ? is_uniontype_unboxed_pointerfree(x.typ) : jl_is_pointerfree(x.typ);
+        if (!storage_used && pointerfree)
+            return roots;
+        roots.push_back(x.V);
+        return roots;
     }
     else if (jl_is_concrete_immutable(x.typ) && !jl_is_pointerfree(x.typ)) {
         jl_value_t *jltype = x.typ;
@@ -600,10 +609,11 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
         Value *agg = emit_unbox(ctx, T, x);
         SmallVector<unsigned,4> perm_offsets;
         find_perm_offsets((jl_datatype_t*)jltype, perm_offsets, 0);
-        return ExtractTrackedValues(ctx, agg, perm_offsets);
+        roots.append(ExtractTrackedValues(ctx, agg, perm_offsets));
+        return roots;
     }
     // nothing here to root, move along
-    return {};
+    return roots;
 }
 
 // --- emitting pointers directly into code ---
@@ -1218,6 +1228,21 @@ static bool is_uniontype_anyunboxed(jl_value_t *typ) JL_CANSAFEPOINT
     unsigned counter = 0;
     for_each_uniontype_small([&](unsigned, jl_datatype_t*) {}, typ, counter);
     return counter != 0;
+}
+
+// whether the members of `typ` that a split union holds unboxed are pointer-free
+static bool is_uniontype_unboxed_pointerfree(jl_value_t *typ) JL_CANSAFEPOINT
+{
+    bool pointerfree = true;
+    unsigned counter = 0;
+    for_each_uniontype_small(
+            [&](unsigned, jl_datatype_t *jt) {
+                if (!jl_is_datatype_singleton(jt) && jl_datatype_layout(jt)->npointers)
+                    pointerfree = false;
+            },
+            typ,
+            counter);
+    return pointerfree;
 }
 
 
