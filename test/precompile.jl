@@ -2190,15 +2190,20 @@ end
 precompile_test_harness("custom MethodTable lookups in package images") do load_path
     # Code inferred through an overlay table and cached in a package image is invalidated
     # when a method that changes one of its lookups through that table is added, whether
-    # before or after the image is loaded.
+    # before or after the image is loaded. It stays valid when the added method is one
+    # that an overlay method hides.
     newinterp_path = abspath(joinpath(@__DIR__, "../Compiler/test/newinterp.jl"))
     write(joinpath(load_path, "OverlayLookupBase.jl"),
         """
         module OverlayLookupBase
         f(x) = 1
+        g(x::Int) = 1
+        g(x::Float64) = 2
+        g(x::String) = 3
         h(x::Real) = 1
         Base.Experimental.@MethodTable mt
         Base.Experimental.@MethodTable smt by_specificity=true
+        Base.Experimental.@overlay mt g(x::Real) = 0
         Base.Experimental.@overlay smt h(x::Real) = "overlay"
         end
         """)
@@ -2219,8 +2224,10 @@ precompile_test_harness("custom MethodTable lookups in package images") do load_
                     Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), OverlayLookupBase.smt)
             end
             callf(x) = OverlayLookupBase.f(x)
+            callg(x) = OverlayLookupBase.g(x)
             callh(x) = OverlayLookupBase.h(x)
             Base.return_types(callf, (Int,); interp=Custom.OverlayLookupInterp())
+            Base.return_types(callg, (Any,); interp=Custom.OverlayLookupInterp())
             Base.return_types(callh, (Float64,); interp=Custom.SpecificLookupInterp())
             end
             """)
@@ -2228,8 +2235,9 @@ precompile_test_harness("custom MethodTable lookups in package images") do load_
     write(joinpath(load_path, "OverlayLookupExt.jl"),
         """
         module OverlayLookupExt
-        import OverlayLookupBase: f, h, mt
+        import OverlayLookupBase: f, g, h, mt
         Base.Experimental.@overlay mt f(x::Int) = 2
+        g(x::Int8) = 4
         h(x::Float64) = 2.0
         end
         """)
@@ -2249,6 +2257,10 @@ precompile_test_harness("custom MethodTable lookups in package images") do load_
     @eval using OverlayLookupUserB
     B = invokelatest(getglobal, @__MODULE__, :OverlayLookupUserB)
     @test all(isnothing, cached(B))
+    @test invokelatest() do
+        mi = only(Base.specializations(only(methods(B.callg))))
+        check_presence(mi, B.Custom.OverlayLookupInterp)
+    end !== nothing
 end
 
 precompile_test_harness("DynamicExpressions") do load_path
