@@ -8,6 +8,7 @@ isdefined(@__MODULE__, :T24Linear) || include("testhelpers/arrayindexingtypes.jl
 
 using Random, LinearAlgebra
 using Dates
+using InteractiveUtils: code_llvm
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
@@ -1656,6 +1657,13 @@ end
     A = Vector{Union{UInt8,Int8}}(undef, 3)
     fill!(A, UInt8(3))
     @test A == [0x03, 0x03, 0x03]
+    # #61870: filling a freshly allocated Array of any dimension with zero has no bounds
+    # check left and becomes a memset (besides the one clearing the GC frame)
+    for T in (Vector{Float64}, Matrix{Float64}, Array{Int32,3})
+        ir = sprint(io -> code_llvm(io, zero, (T,); debuginfo=:none))
+        @test !occursin("boundserror", ir)
+        @test any(l -> occursin("llvm.memset", l) && !occursin("gcframe", l), eachline(IOBuffer(ir)))
+    end
     # Issue #9964
     A = Array{Vector{Float64}}(undef, 2)
     fill!(A, [1, 2])

@@ -374,6 +374,12 @@ function _fill!(A::AbstractArray{T}, x::T) where T
     end
     return A
 end
+function _fill!(A::Array{T}, x::T) where T
+    for i in eachindex(A)
+        @inbounds A[i] = x
+    end
+    return A
+end
 
 """
     copy(x)
