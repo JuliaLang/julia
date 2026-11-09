@@ -730,7 +730,8 @@ function verify_call_lookup(@nospecialize(sig), lim::Int, world::UInt, workspace
     if mt === nothing
         result = _methods_by_ftype(sig, nothing, lim, world, #=ambig=#false, minworld, maxworld, has_ambig)
     else
-        lookup = findall_in_view(sig, OverlayMethodTable(world, mt); limit=lim)
+        # no limit: the view drops matches of the global table after looking them up
+        lookup = findall_in_view(sig, OverlayMethodTable(world, mt))
         if lookup === nothing
             result = nothing
         else
