@@ -2357,7 +2357,10 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
     stack = jl_aliasinfo_t(ctx, Region::unknown, tbaa.tbaa_stack);
     data = jl_aliasinfo_t(ctx, Region::anydata, tbaa.tbaa_data);
     binding = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_binding);
-    value = jl_aliasinfo_t(ctx, Region::data, tbaa.tbaa_value);
+    // A value of statically unknown type may be an `Array`, whose header is in its own
+    // region (e.g. a `Union`-typed value narrowed by union splitting keeps this alias
+    // info), so this must include `arrayhdr` to alias the stores that initialize it.
+    value = jl_aliasinfo_t(ctx, Region::data | Region::arrayhdr, tbaa.tbaa_value);
     mutab = jl_aliasinfo_t(ctx, Region::mutfields, tbaa.tbaa_field);
     mutab_nonconst = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_field);
     immut = jl_aliasinfo_t(ctx, Region::immutdata, tbaa.tbaa_field);

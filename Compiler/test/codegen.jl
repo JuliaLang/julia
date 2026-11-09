@@ -1627,3 +1627,37 @@ end
     @test isequal(Base.mapany(identity, (Union{}, 'a')), Any[Union{}, 'a'])
     @test isequal(Any[x for x in (Union{}, 1.0)], Any[Union{}, 1.0])
 end
+
+# The `Array` header (`ref` and `size`) has its own alias region, `arrayhdr`, which raw
+# `Ptr` accesses cannot reach. So its loads can be hoisted out of a loop that stores
+# through a pointer (#63782).
+function array_header_hoist(p::Ptr{Float64}, A::Vector{Float64})
+    @inbounds for i in 1:length(A)
+        unsafe_store!(p, A[i], i)
+    end
+end
+if !is_debug_build && opt_level > 0
+    let ir = get_llvm(array_header_hoist, Tuple{Ptr{Float64}, Vector{Float64}}, false)
+        # every block that stores through `p` must not reload `A.ref`
+        store_blocks = filter(b -> occursin(r"store double .*%\"p::Ptr\"|store double %\d+, ptr %\d+", b) &&
+                                   occursin("load double", b), split(ir, r"\n(?=\S+:)"))
+        @test !isempty(store_blocks)
+        @test all(b -> !occursin(r"load ptr, ptr %\"A::Array\"", b), store_blocks)
+    end
+end
+
+# An `Array` reached through a value of `Union` or abstract type is accessed with the
+# alias info of a generic value, which must still include the `arrayhdr` region so that
+# those accesses alias the stores that initialize the header (#62704).
+array_header_union(x::Union{Vector{Float64}, Matrix{Float64}}) = x isa Matrix{Float64} ? size(x, 1) : length(x)
+let ir = get_llvm(array_header_union, Tuple{Union{Vector{Float64}, Matrix{Float64}}}, true, true, false)
+    md = Dict{String,String}(m[1] => m[2] for m in eachmatch(r"^(![0-9]+) = (?:distinct )?(!\{.*\})$"m, ir))
+    arrayhdr = only(k for (k, v) in md if occursin("\"jnoalias_arrayhdr\"", v))
+    scopes(id) = [m.match for m in eachmatch(r"![0-9]+", md[id])]
+    accesses = [m for m in eachmatch(r"^.*\.size_ptr\d*\".*!alias\.scope (![0-9]+), !noalias (![0-9]+).*$"m, ir)]
+    @test !isempty(accesses)
+    for m in accesses
+        @test arrayhdr in scopes(m[1])
+        @test !(arrayhdr in scopes(m[2]))
+    end
+end
