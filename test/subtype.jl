@@ -3719,6 +3719,28 @@ let A = Tuple{V, Tuple{S, S} where S>:Tuple{Tuple{T, T} where T<:V}} where V, B 
     @test X <: typeintersect(B, A)
 end
 
+abstract type A64753{T,N} end
+struct B64753{T,N,R} <: A64753{T,N} end
+@testset "issue #64718" begin
+    let A = Val, B = Val
+        for _ in 1:30
+            A = Val{X} where X<:A
+            B = Val{X} where X<:B
+        end
+        @test (Val{X} where X<:A) <: B
+    end
+    let A = Union{}, B = Union{}
+        for _ in 1:30
+            A = Val{X} where X>:A
+            B = Val{X} where X>:B
+        end
+        @test !((Val{X} where X>:A) <: B)
+    end
+    let L = Type{<:A64753{<:Real}}, R = Type{B64753{T,N,S} where {N,S<:Ref{N}}} where T
+        @test (B64753{Int,N,S} where {N,S<:Ref{N}}) isa typeintersect(L, R)
+    end
+end
+
 # `obviously_disjoint` looks through typevar bounds in covariant positions
 # and compares invariant typevars by their bounds
 @testset "obviously_disjoint with typevar bounds" begin
