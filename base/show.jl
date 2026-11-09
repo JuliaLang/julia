@@ -631,6 +631,7 @@ end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
 modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
+modulesof!(s::Set{Module}, ::Core.TypeApp) = s
 function modulesof!(s::Set{Module}, x::TypeEq)
     p = type_parameter(x)
     # the parameter may be a non-type value, e.g. `Type{1}` (#62897)
