@@ -87,6 +87,21 @@ function _materialize_inference_edges!(edges::Vector{Any}, source::Union{Vector{
             push!(seen_proofs, edge)
             _materialize_inference_edges!(
                 edges, edge.edges, seen_proofs, standalone, invokes)
+        elseif edge isa OverlayLookup
+            @assert i < length(source)
+            next = source[i + 1]
+            if next isa Union{Int,PossiblyAmbiguous}
+                # the lookup group that follows is always kept
+                push!(edges, edge)
+                i += 1
+            else
+                # an `invoke` lookup: `prefix, signature, target`
+                @assert i + 2 <= length(source)
+                target = source[i + 2]
+                i += 3
+                record_invoke_edge!(invokes, (edge.mt, next), target) || continue
+                push!(edges, edge, next, target)
+            end
         elseif edge isa PossiblyAmbiguous
             @assert i < length(source)
             target = source[i + 1]
@@ -169,6 +184,8 @@ function materialize_inference_edges(source::Union{Vector{Any},SimpleVector})
         edge = edges[i]
         if edge isa Int
             i += 2 + abs(edge)
+        elseif edge isa OverlayLookup
+            i += edges[i + 1] isa Union{Int,PossiblyAmbiguous} ? 1 : 3
         elseif edge isa Union{Method,MethodInstance,CodeInstance,Core.Binding,PossiblyAmbiguous}
             i += 1
         else
@@ -248,6 +265,19 @@ function method_match_edge(info::MethodMatchInfo, i::Int, mi_edge::Bool)
         specialize_method(match) : match.method
 end
 
+# The overlay method table of the lookup record starting at `edges[i]`, or `nothing`: an
+# `OverlayLookup` precedes the record, before any `PossiblyAmbiguous`.
+function record_overlay_table(edges::Vector{Any}, i::Int)
+    j = i - 1
+    j >= 1 && edges[j] isa PossiblyAmbiguous && (j -= 1)
+    j >= 1 || return nothing
+    prefix = edges[j]
+    return prefix isa OverlayLookup ? prefix.mt : nothing
+end
+
+# The overlay method table to record for a lookup made with `mt`, or `nothing`.
+overlay_table(mt::MethodTable) = mt === Core.methodtable ? nothing : mt
+
 function find_encoded_lookup(edges::Vector{Any}, info::MethodMatchInfo,
                              encoded_nmatches::Int, mi_edge::Bool)
     i = 1
@@ -257,7 +287,7 @@ function find_encoded_lookup(edges::Vector{Any}, info::MethodMatchInfo,
             n = abs(entry)
             next_i = i + 2 + n
             if next_i - 1 <= length(edges) && entry === encoded_nmatches &&
-                    edges[i + 1] == info.atype
+                    edges[i + 1] == info.atype && record_overlay_table(edges, i) === overlay_table(info.mt)
                 matches = true
                 for j = 1:n
                     if edges[i + 1 + j] !== method_match_edge(info, j, mi_edge)
@@ -316,7 +346,7 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
     end
     nmatches = length(info.results)
     possibly_ambiguous = any_ambig(info)
-    if nmatches == length(info.edges) == 1 && fully_covering(info)
+    if nmatches == length(info.edges) == 1 && fully_covering(info) && overlay_table(info.mt) === nothing
         # try the optimized format for the representation, if possible and applicable
         # if this doesn't succeed, the backedge will be less precise,
         # but the forward edge will maintain the precision
@@ -339,6 +369,8 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
     encoded_nmatches = fully_covering(info) ? nmatches : -nmatches
     groupidx = find_encoded_lookup(edges, info, encoded_nmatches, mi_edge)
     if groupidx == 0
+        mt = overlay_table(info.mt)
+        mt === nothing || push!(edges, OverlayLookup(mt))
         possibly_ambiguous && push!(edges, PossiblyAmbiguous())
         push!(edges, encoded_nmatches, info.atype)
         for i = 1:nmatches
@@ -561,9 +593,26 @@ function _add_edges_impl(edges::Vector{Any}, info::InvokeCallInfo, mi_edge::Bool
         edge = (mi_edge || info.needs_mi_edge || info.result !== nothing) ?
             specialize_method(info.match) : info.match.method
     end
-    add_invoke_edge!(edges, info.atype, edge)
+    mt = overlay_table(info.mt)
+    if mt === nothing
+        add_invoke_edge!(edges, info.atype, edge)
+    else
+        add_overlay_invoke_edge!(edges, mt, info.atype, edge)
+    end
     add_result_proof!(edges, info.result, edge)
     nothing
+end
+function add_overlay_invoke_edge!(edges::Vector{Any}, mt::MethodTable, @nospecialize(atype),
+                                  edge::Union{Method,MethodInstance,CodeInstance})
+    for i = 1:length(edges)-2
+        prefix = edges[i]
+        if prefix isa OverlayLookup && prefix.mt === mt && edges[i + 2] === edge
+            sig = edges[i + 1]
+            sig isa Type && sig == atype && return nothing
+        end
+    end
+    push!(edges, OverlayLookup(mt), atype, edge)
+    return nothing
 end
 function add_invoke_edge!(edges::Vector{Any}, @nospecialize(atype), edge::Union{MethodInstance,Method})
     i = 1
