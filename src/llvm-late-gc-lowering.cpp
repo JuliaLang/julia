@@ -7,11 +7,13 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/ADT/BitVector.h>
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/SparseBitVector.h>
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SmallSet.h>
+#include <llvm/ADT/SmallString.h>
 #include "llvm/Analysis/CFG.h"
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
@@ -2669,7 +2671,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
                 getOrDeclare(jl_intrinsics::getGCFrameSlot),
                 {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)});
             slotAddress->insertAfter(gcframe);
-            slotAddress->takeName(AI);
+            SmallString<16> Name(AI->getName());
 
             // Check for lifetime intrinsics on this alloca, we can't keep them
             // because we're changing the semantics
@@ -2684,6 +2686,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
             for (CallInst *II : ToDelete) {
                 II->eraseFromParent();
             }
+            Instruction *SlotCall = slotAddress;
             if (slotAddress->getType() != AI->getType()) {
                 // If we're replacing an ArrayAlloca, the pointer element type may need to be fixed up
                 // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
@@ -2695,6 +2698,40 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
             AI->replaceAllUsesWith(slotAddress);
             AI->eraseFromParent();
             AI = NULL;
+            // Recompute the address in each block that uses it, like a frame index.
+            // Keeping all slot GEPs in the entry block leaves O(N) values live across
+            // blocks (CodeGenPrepare does not sink GEPs used as call arguments), which
+            // triggers quadratic compile time in LLVM's MachineSinking pass.
+            DenseMap<BasicBlock *, Instruction *> SlotInBB;
+            for (Use &U : make_early_inc_range(slotAddress->uses())) {
+                auto *UI = cast<Instruction>(U.getUser());
+                auto *PN = dyn_cast<PHINode>(UI);
+                BasicBlock *BB = PN ? PN->getIncomingBlock(U) : UI->getParent();
+                if (BB == slotAddress->getParent())
+                    continue;
+                Instruction *&Local = SlotInBB[BB];
+                if (!Local) {
+                    Instruction *InsertPt = &*BB->getFirstInsertionPt();
+                    Local = SlotCall->clone();
+                    Local->insertBefore(InsertPt);
+                    if (slotAddress != SlotCall) {
+                        Instruction *BC = slotAddress->clone();
+                        BC->setOperand(0, Local);
+                        BC->insertBefore(InsertPt);
+                        Local = BC;
+                    }
+                    Local->setName(Name);
+                }
+                U.set(Local);
+            }
+            if (slotAddress->use_empty() && !slotAddress->isUsedByMetadata()) {
+                slotAddress->eraseFromParent();
+                if (SlotCall != slotAddress && SlotCall->use_empty() && !SlotCall->isUsedByMetadata())
+                    SlotCall->eraseFromParent();
+            }
+            else {
+                slotAddress->setName(Name);
+            }
         };
         for (AllocaInst *AI : S.Allocas) {
             auto ns = cast<ConstantInt>(AI->getArraySize())->getZExtValue();
@@ -2713,7 +2750,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
                 auto slotAddress = CallInst::Create(
                     getOrDeclare(jl_intrinsics::getGCFrameSlot),
                     {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)});
-                slotAddress->insertAfter(gcframe);
+                slotAddress->insertBefore(SI);
                 auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
                 auto Elem = MaybeExtractScalar(S, ValExpr, SI);
                 if (Elem->getType() != T_prjlvalue) {
