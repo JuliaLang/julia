@@ -296,6 +296,12 @@ TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, con
 
 const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
 
+function uninit_toml_cache()
+    empty!(TOML_CACHE.d)
+    TOML.reinit!(TOML_CACHE.p, "")
+    nothing
+end
+
 parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
     lock(toml_lock) do
@@ -952,11 +958,11 @@ function project_get_edition(d::Dict)
             end
         end
     end
-    # Finally, if neither of those are set, default to the current Julia version.
+    # Finally, if neither of those are set, default to the newest edition.
     # N.B.: This choice is less "compatible" than defaulting to a fixed older version.
     # However, it avoids surprises from moving over scripts and REPL code to packages
     ed = if sv === nothing
-        VERSION_EDITION
+        LATEST_STABLE_EDITION
     elseif sv <= VersionNumber(OLDEST_EDITION)
         # Syntax versioning was first introduced in Julia 1.14 - we do not support
         # going back to versions before syntax version 1.13.
@@ -988,12 +994,12 @@ end
 
 function parser_for_active_project()
     project = active_project()
-    sv = VERSION_EDITION
+    sv = JL_OLD_EDITION
     if project !== nothing && isfile(project)
         try
             sv = project_get_edition(parsed_toml(project))
         catch e
-            @warn "Failed to read project $project - defaulting to latest syntax. err=$e"
+            @warn "Failed to read project $project - defaulting to syntax edition $sv. err=$e"
         end
     end
     VersionedParse(sv)
@@ -1106,18 +1112,7 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
     return nothing
 end
 
-function is_v1_format_manifest(raw_manifest::Dict{String})
-    if haskey(raw_manifest, "manifest_format")
-        mf = raw_manifest["manifest_format"]
-        if mf isa Dict{String} && haskey(mf, "uuid")
-            # the off-chance where an old format manifest has a dep called "manifest_format"
-            return true
-        end
-        return false
-    else
-        return true
-    end
-end
+is_v1_format_manifest(raw_manifest::Dict{String}) = !haskey(raw_manifest, "manifest_format")
 
 # returns a deps list for both old and new manifest formats
 function get_deps(raw_manifest::Dict)
@@ -1146,6 +1141,9 @@ end
 
 dep_stanza_get(stanza::Nothing, name::String) = nothing
 
+# TOML reads an empty array as `Any[]`, but in a manifest it is an empty list of names
+manifest_dep_names(names) = names isa Vector{Any} && isempty(names) ? String[] : names
+
 function explicit_manifest_deps_get(project_file::String, where::PkgId, name::String)::Union{Nothing,PkgId}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
@@ -1158,7 +1156,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             uuid === nothing && continue
             # deps is either a list of names (deps = ["DepA", "DepB"]) or
             # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
-            deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
+            deps = manifest_dep_names(get(entry, "deps", nothing))::Union{Vector{String}, Dict{String, Any}, Nothing}
             local dep::Union{Nothing, PkgId}
             @label resolved begin
                 if UUID(uuid) === where.uuid
@@ -1184,7 +1182,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                             # 1. Any ordinary dep of the parent package
                             # 2. Any weakdep of the parent package declared as an extension trigger
                             for deps′ in (ext_may_load_weakdep(exts, name) ?
-                                    (get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}, deps) :
+                                    (manifest_dep_names(get(entry, "weakdeps", nothing))::Union{Vector{String}, Dict{String, Any}, Nothing}, deps) :
                                     (deps,))
                                 dep = dep_stanza_get(deps′, name)
                                 dep === nothing && continue
@@ -1333,8 +1331,8 @@ function implicit_manifest_uuid_load_spec(dir::String, pkg::PkgId)::Union{Nothin
     path, project_file = entry_point_and_project_file(dir, pkg.name)
     if project_file === nothing
         pkg.uuid === nothing || return nothing
-        # Without a project file, treat as empty - which defaults to VERSION
-        return PkgLoadSpec(path, VERSION_EDITION)
+        # Without a project file, treat as empty
+        return PkgLoadSpec(path, LATEST_STABLE_EDITION)
     end
     proj = project_file_name_uuid(project_file, pkg.name)
     proj == pkg || return nothing
@@ -1361,6 +1359,10 @@ function init_debuginfo_source_paths()
     isempty(DATAROOT) || push!(paths, DATAROOT * "julia/", share)
     push!(paths, "", joinpath(share, "base"))
     ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec(paths...))
+end
+
+function uninit_debuginfo_source_paths()
+    ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec())
 end
 
 function cache_file_entry(pkg::PkgId)
@@ -1801,8 +1803,8 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                     end
                     extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
                     extensions === nothing && return
-                    weakdeps = get(Dict{String, Any}, entry, "weakdeps")::Union{Vector{String}, Dict{String,Any}}
-                    deps = get(Dict{String, Any}, entry, "deps")::Union{Vector{String}, Dict{String,Any}}
+                    weakdeps = manifest_dep_names(get(Dict{String, Any}, entry, "weakdeps"))::Union{Vector{String}, Dict{String,Any}}
+                    deps = manifest_dep_names(get(Dict{String, Any}, entry, "deps"))::Union{Vector{String}, Dict{String,Any}}
 
                     function expand_deps_list(deps′::Vector{String})
                         deps′_expanded = Dict{String, Any}()
@@ -2000,7 +2002,7 @@ end
 CacheFlags(f::UInt8, coverage::Integer, coverage_path::Union{Nothing,String}) =
     CacheFlags(CacheFlags(f, coverage); coverage_path)
 
-# The tracked path if this process collects `@path` coverage with instrumented images.
+# The tracked paths if this process collects `@path` coverage with instrumented images.
 function current_coverage_path()
     opts = JLOptions()
     opts.code_coverage == 3 && opts.malloc_log == 0 || return nothing
@@ -2097,7 +2099,8 @@ function tracked_path_overlaps_sysimage(tracked::String)
     sources = sysimage_sources()
     sources === nothing && return true
     dirs, files = sources
-    return any(dir -> path_is_tracked(dir, tracked) || path_is_tracked(tracked, dir), dirs) ||
+    entries = split(tracked, Sys.iswindows() ? ';' : ':'; keepempty=false)
+    return any(dir -> path_is_tracked(dir, tracked) || any(entry -> path_is_tracked(String(entry), dir), entries), dirs) ||
            any(file -> path_is_tracked(file, tracked), files)
 end
 
@@ -2384,11 +2387,10 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
             isfile(ocachepath) || return ArgumentError("Ocachepath $ocachepath is not a file.")
             ocachepath == ocachefile_from_cachefile(path) || return ArgumentError("$ocachepath is not the expected ocachefile")
             # TODO: Check for valid clone_targets?
-            isvalid_pkgimage_crc(io, ocachepath) || return ArgumentError("Invalid checksum in cache file $ocachepath.")
         else
             @assert ocachepath === nothing
+            isvalid_file_crc(io) || return ArgumentError("Invalid checksum in cache file $path.")
         end
-        isvalid_file_crc(io) || return ArgumentError("Invalid checksum in cache file $path.")
     finally
         close(io)
     end
@@ -2483,12 +2485,20 @@ end
                     mpre = get(preresolved_cachefiles, modkey, nothing)
                     modpaths = lazy_cachefile_candidates(modkey, modspec.path, DEPOT_PATH)
                     mpre !== nothing && (modpaths = Iterators.flatten(((mpre,), modpaths)))
+                    # a private load, such as a stdlib loaded by the REPL, still needs its cache checked against this environment
+                    privatedep = maybe_loaded_precompile(modkey, modbuild_id)
                     for modpath_to_try in modpaths
                         modtrusted = modpath_to_try === mpre
                         modstaledeps = stale_cachefile(modkey, modbuild_id, modspec, modpath_to_try;
-                                                       stalecheck = stalecheck && !modtrusted, verify_checksums = !modtrusted)
+                                                       stalecheck = stalecheck && !modtrusted, verify_checksums = !modtrusted && privatedep === nothing, split_checksums = false)
                         if modstaledeps === true
                             continue
+                        end
+                        if privatedep isa Module
+                            end_loading(modkey, privatedep)
+                            staledeps[i] = privatedep
+                            stalecheck && register_reused_module(privatedep) && push!(newdeps, modkey)
+                            continue next_dep
                         end
                         modstaledeps, modocachepath, _ = modstaledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
                         staledeps[i] = (modspec, modkey, modbuild_id, modpath_to_try, modstaledeps, modocachepath)
@@ -2497,17 +2507,12 @@ end
                     @debug "Rejecting cache file $path_to_try because required dependency $modkey with build ID $(UUID(modbuild_id)) is missing from the cache."
                     continue next_path
                 end
-                if stalecheck
-                    for dep in staledeps
-                        dep isa Module && register_reused_module(dep) && push!(newdeps, PkgId(dep))
-                    end
-                end
                 M = maybe_loaded_precompile(pkg, newbuild_id)
                 if isa(M, Module)
                     stalecheck && register_root_module(M)
                     return M
                 end
-                !trusted && checksums_invalid(path_to_try, ocachefile, newbuild_id, reasons) && continue next_path
+                !trusted && checksums_invalid(path_to_try, ocachefile, newbuild_id, reasons; split_checksums = false) && continue next_path
                 stalecheck && tried > 1 && touch_cachefile(pkg, path_to_try)
                 # finish loading module graph into staledeps
                 # n.b. this runs __init__ methods too early, so it is very unwise to have those, as they may see inconsistent loading state, causing them to fail unpredictably here
@@ -2570,7 +2575,7 @@ function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
     if loading === nothing
         loaded = stalecheck ? maybe_root_module(modkey) : nothing
         loaded isa Module && return loaded
-        if build_id != UInt128(0)
+        if !stalecheck && build_id != UInt128(0)
             loaded = maybe_loaded_precompile(modkey, build_id)
             loaded isa Module && return loaded
         end
@@ -2938,7 +2943,9 @@ function find_unsuitable_manifests_versions()
             end
             continue
         end
-        push!(unsuitable_manifests, string(manifest_file, " (v", man_julia_version, ")"))
+        # a manifest without a julia version was most likely written before Julia 1.7
+        version_str = man_julia_version isa VersionNumber ? "v$man_julia_version" : "julia version not recorded"
+        push!(unsuitable_manifests, string(manifest_file, " (", version_str, ")"))
     end
     return unsuitable_manifests, dev_manifests
 end
@@ -3089,7 +3096,7 @@ register_root_module(Main)
 # to the loaded_modules table instead of getting bindings.
 baremodule __toplevel__
 using Base
-global var"#_internal_julia_parse" = Base.VersionedParse(Base.VERSION_EDITION)
+global var"#_internal_julia_parse" = Base.VersionedParse(Base.LATEST_STABLE_EDITION)
 
 # Used for version checking of precompiled cache files only
 global _internal_syntax_version::UInt8 = 0
@@ -3222,7 +3229,7 @@ function __require_prelocked(pkg::PkgId, env)
                             # or an empty set of entries (indicating the precompile should be skipped)
                             if precompiled !== nothing
                                 isempty(precompiled) && return PrecompilableError() # oops, Precompilation forgot to report what this might actually be
-                                local cachefile = precompiled[1]
+                                local cachefile = precompiled[1]::String
                                 local ocachefile = nothing
                                 if JLOptions().use_pkgimages == 1
                                     ocachefile = ocachefile_from_cachefile(cachefile)
@@ -3289,7 +3296,7 @@ function __require_prelocked(pkg::PkgId, env)
         include(__toplevel__, path)
         loaded = maybe_root_module(pkg)
     finally
-        __toplevel__.var"#_internal_julia_parse" = VersionedParse(VERSION_EDITION)
+        __toplevel__.var"#_internal_julia_parse" = VersionedParse(LATEST_STABLE_EDITION)
         lock(require_lock)
         if uuid !== old_uuid
             ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
@@ -3396,7 +3403,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
                 sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
             end
             set_pkgorigin_version_path(this_uuidkey, sourcepath)
-            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, VERSION_EDITION), UInt128(0), false; DEPOT_PATH=depot_path)
+            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, LATEST_STABLE_EDITION), UInt128(0), false; DEPOT_PATH=depot_path)
         end
     finally
         end_loading(this_uuidkey, newm)
@@ -3619,8 +3626,7 @@ function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{In
     # When this worker is producing a native object pkgimage, retain raw
     # inferred IR on `CodeInstance.inferred` for the non-inlineable methods
     # that would otherwise be discarded, so the irgen pass can short-circuit
-    # `typeinf_ext` instead of re-inferring. `jl_finalize_precompile_inferred`
-    # clears them (and the flag) before staticdata serialization.
+    # `typeinf_ext` instead of re-inferring. The image leaves them out.
     keep_ir = JLOptions().outputo != C_NULL
     keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 1)
     # This one changes the parser behavior
@@ -3940,8 +3946,9 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
                 write(f, _crc32c(f))
             end
 
-            # inherit permission from the source file (and make them writable)
-            chmod(tmppath, filemode(spec.path) & 0o777 | 0o200)
+            # inherit permission from the source file, but keep it readable and writable
+            # (`filemode` is 0 if the source has disappeared in the meantime)
+            chmod(tmppath, filemode(spec.path) & 0o777 | 0o600)
 
             # prune the directory with cache files
             if pkg.uuid !== nothing
@@ -4052,7 +4059,7 @@ function isvalid_pkgimage_crc(f::IOStream, ocachefile::String)
 end
 
 # Cache files whose checksums passed in this process; a replaced file gets a new key.
-# Only the precompile driver's freshness scan uses it; loading always checks.
+# Only the precompile driver's freshness scan uses it; loading checks only .ji-only caches.
 const checksums_valid = Set{NTuple{2, NTuple{5, Float64}}}() # protected by require_lock
 
 file_identity(st::StatStruct) = (Float64(st.device), Float64(st.inode), Float64(st.size), st.mtime, st.ctime)
@@ -4062,7 +4069,10 @@ function checksum_key(io::IOStream, ocachefile::Union{Nothing, String})
     return (file_identity(stat(io)), oid)
 end
 
-function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{Nothing, String}, reasons)
+# With `split_checksums = false` a package image with a .so is not checksummed: the loader
+# matches the .ji to its .so through the heap checksum embedded in the .so.
+function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{Nothing, String}, reasons; split_checksums::Bool=true)
+    split_checksums || ocachefile === nothing || return false
     if !isvalid_file_crc(io)
         @debug "Rejecting cache file $cachefile because it has an invalid checksum"
         record_reason(reasons, :checksum_invalid)
@@ -4078,7 +4088,7 @@ end
 
 # With `unverified`, a file already in the record passes without being read and is added to `unverified`.
 function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}, id_build::UInt128, reasons;
-                           unverified::Union{Nothing, Set{String}}=nothing)
+                           unverified::Union{Nothing, Set{String}}=nothing, split_checksums::Bool=true)
     io = try
         open(cachefile, "r")
     catch ex
@@ -4093,7 +4103,7 @@ function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}
             @debug "Rejecting cache file $cachefile because it changed while being checked"
             return true
         end
-        unverified === nothing && return checksums_invalid(io, cachefile, ocachefile, reasons)
+        unverified === nothing && return checksums_invalid(io, cachefile, ocachefile, reasons; split_checksums)
         assert_havelock(require_lock)
         key = checksum_key(io, ocachefile)
         if key in checksums_valid
@@ -4905,7 +4915,7 @@ end
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; kwargs...)
-    return stale_cachefile(PkgLoadSpec(modpath, VERSION_EDITION), cachefile; kwargs...)
+    return stale_cachefile(PkgLoadSpec(modpath, LATEST_STABLE_EDITION), cachefile; kwargs...)
 end
 @constprop :none function stale_cachefile(modspec::PkgLoadSpec, cachefile::String; ignore_loaded::Bool = false, requested_flags::CacheFlags=CacheFlags(), reasons=nothing, verify_checksums::Bool=true)
     return stale_cachefile(PkgId(""), UInt128(0), modspec, cachefile; ignore_loaded, requested_flags, reasons, verify_checksums)
@@ -4913,7 +4923,7 @@ end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modspec::PkgLoadSpec, cachefile::String;
                                           ignore_loaded::Bool=false, requested_flags::CacheFlags=CacheFlags(),
                                           reasons::Union{Dict{Symbol,Int},Nothing}=nothing, stalecheck::Bool=true,
-                                          verify_checksums::Bool=true)
+                                          verify_checksums::Bool=true, split_checksums::Bool=true)
     # n.b.: this function does nearly all of the file validation, not just those checks related to stale, so the name is potentially unclear
     io = try
         open(cachefile, "r")
@@ -5115,7 +5125,7 @@ end
             end
         end
 
-        if verify_checksums && checksums_invalid(io, cachefile, ocachefile, reasons)
+        if verify_checksums && checksums_invalid(io, cachefile, ocachefile, reasons; split_checksums)
             return true
         end
 

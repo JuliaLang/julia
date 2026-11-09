@@ -8,10 +8,6 @@ if Threads.maxthreadid() != 1
 end
 
 if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
-Sys.__init_build()
-if !isdefined(Base, :uv_eventloop)
-    Base.reinit_stdio()
-end
 using Base.Meta
 
 ## Debugging options
@@ -125,6 +121,8 @@ precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
 precompile(Tuple{typeof(getindex), Core.SimpleVector, Int})
 precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
 precompile(Tuple{typeof(Base.display_error), Base.ExceptionStack})
+precompile(Tuple{typeof(showerror), IO, MethodError})
+precompile(Tuple{typeof(Base.showerror_methoderror), IOContext{IOBuffer}, MethodError})
 precompile(Tuple{Core.kwftype(typeof(Type)), NamedTuple{(:sizehint,), Tuple{Int}}, Type{IOBuffer}})
 precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, String, Module))
 precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, Symbol, Module))
@@ -242,7 +240,7 @@ Base.print_time_imports_report_init(Base)
 throw(InterruptException())
 """
 
-julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
+julia_exepath() = Base.unsafe_string(Base.JLOptions().julia_bin)
 
 Artifacts = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"), "Artifacts"),
@@ -428,27 +426,13 @@ end
 
 generate_precompile_statements()
 
-let stdout = Ref{IO}(stdout)
-    Base.PROGRAM_FILE = ""
-    Sys.BINDIR = ""
-    Sys.STDLIB = ""
-    empty!(Base.ARGS)
-    empty!(Core.ARGS)
-    empty!(Base.TOML_CACHE.d)
-    Base.TOML.reinit!(Base.TOML_CACHE.p, "")
+println("Outputting sysimage file...")
 
-    println("Outputting sysimage file...")
-    Base.stdout = Core.stdout
-    Base.stderr = Core.stderr
-
-    # Print report after sysimage has been saved so all time spent can be captured
-    pre_output_time = time_ns()
+# Print report after sysimage has been saved so all time spent can be captured
+let pre_output_time = time_ns()
     Base.postoutput() do
         output_time = time_ns() - pre_output_time
-        let stdout = stdout[]
-            print(stdout, "Output ────── "); Base.time_print(stdout, output_time); println(stdout)
-        end
-        stdout[] = Core.stdout
+        print(Core.stdout, "Output ────── "); Base.time_print(Core.stdout, output_time); println(Core.stdout)
     end
 end
 

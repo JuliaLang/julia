@@ -1079,6 +1079,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_methtable_t {
     jl_sym_t *name; // sometimes used for debug printing
     jl_module_t *module; // sometimes used for debug printing
     jl_genericmemory_t *backedges; // IdDict{top typenames, Vector{uncovered (sig => caller::CodeInstance)}}
+    _Atomic(jl_genericmemory_t*) contributors; // IdDict{top typename, Vector{Int32}}: linkage blobs that changed methods under it this session (-1: run time)
 } jl_methtable_t;
 
 typedef struct JL_GC_TRACKED_TYPE {
@@ -1221,6 +1222,8 @@ extern JL_HIDDEN struct jl_const_globals const_globals;
 #define XX(name, type) extern JL_DLLIMPORT type name;
 JL_EXPORTED_DATA_SYMBOLS(XX)
 #undef XX
+// offset of the frame-stack slot from the thread register, or -1 if unknown
+extern JL_DLLIMPORT ssize_t jl_tls_offset;
 
 // gc -------------------------------------------------------------------------
 
@@ -1412,7 +1415,22 @@ STATIC_INLINE size_t jl_array_len(void *a) JL_NOTSAFEPOINT
 }
 
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
-#define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
+
+// `jl_get_pgcstack()` without the call where the platform allows it, which
+// `JL_HAVE_INLINE_PGCSTACK` tells embedders.
+#if defined(JL_TLS_LOAD_ASM) && !defined(__clang_gcanalyzer__)
+#define JL_HAVE_INLINE_PGCSTACK 1
+STATIC_INLINE jl_gcframe_t **jl_get_pgcstack_inline(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
+{
+    ssize_t offset = jl_tls_offset;
+    if (__likely(offset != -1))
+        return (jl_gcframe_t**)jl_tls_load(offset);
+    return jl_get_pgcstack();
+}
+#else
+#define jl_get_pgcstack_inline() jl_get_pgcstack()
+#endif
+#define jl_current_task (container_of(jl_get_pgcstack_inline(), jl_task_t, gcstack))
 
 STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT;
@@ -2476,7 +2494,6 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
 JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t *newly_inferred) JL_CANSAFEPOINT;
-JL_DLLEXPORT void jl_finalize_precompile_inferred(int8_t cleanup_keep_ir);
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t *ci) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_set_inference_entrance_backtraces(jl_value_t *inference_entrance_backtraces) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_push_inference_entrance_backtraces(jl_value_t *ci) JL_CANSAFEPOINT;
@@ -2484,9 +2501,8 @@ JL_DLLEXPORT void jl_write_compiler_output(void) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
                                   jl_module_t *inmodule) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
-                                  const char *file, int line, size_t world,
-                                  bool_t warn) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_lower(jl_module_t *inmodule, jl_value_t *expr, size_t world,
+                                  bool_t warn, jl_value_t *loc) JL_CANSAFEPOINT;
 
 // external libraries
 enum JL_RTLD_CONSTANT {
@@ -2561,11 +2577,6 @@ JL_DLLEXPORT int jl_operator_precedence(const char *sym) JL_CANSAFEPOINT;
 STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
 {
     return (vi&16)!=0;
-}
-
-STATIC_INLINE int jl_vinfo_usedundef(uint8_t vi)
-{
-    return (vi&32)!=0;
 }
 
 // calling into julia ---------------------------------------------------------

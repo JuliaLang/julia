@@ -33,10 +33,9 @@ end
 2   (call top.indexed_iterate %₁ 1)
 3   (= slot₁/x (call core.getfield %₂ 1))
 4   (= slot₃/ (call core.getfield %₂ 2))
-5   slot₃/
-6   (call top.indexed_iterate %₁ 2 %₅)
-7   (= slot₂/y (call core.getfield %₆ 1))
-8   (return core.nothing)
+5   (call top.indexed_iterate %₁ 2 slot₃/)
+6   (= slot₂/y (call core.getfield %₅ 1))
+7   (return core.nothing)
 
 ########################################
 # let syntax with named tuple on lhs creates locals for the unpacked vars
@@ -444,7 +443,7 @@ end
 27  SourceLocation:3
 28  (call core.svec %₂₅ %₂₆ %₂₇)
 29  --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   (captured_local 1)
     2   (call core.isdefined %₁ :contents)
     3   (gotoifnot %₂ label₅)
@@ -480,7 +479,7 @@ end
 12  SourceLocation:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   TestMod.+
     2   (captured_local 1)
     3   (call core.isdefined %₂ :contents)

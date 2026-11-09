@@ -85,7 +85,7 @@ function create_prompt(events::Channel{Symbol}, term, prefix::String = "\e[90m",
     # Share the main REPL's terminal_properties so that DA1/OSC responses
     # parsed by the keymap during history search update the same object.
     istate.terminal_properties = terminal_properties
-    pstate = istate.mode_state[prompt]
+    pstate = istate.mode_state[prompt]::REPL.LineEdit.PromptState
     (; term, prompt, istate, pstate)
 end
 
@@ -114,15 +114,15 @@ function runprompt!((; term, prompt, pstate, istate), events::Channel{Symbol},
             elseif status === :ignore
                 istate.last_action = istate.current_action
             elseif status === :done
-                print("\e[F")
+                print(term.out_stream, "\e[F")
                 push!(events, :confirm)
                 break
             elseif status === :copy
-                print("\e[1G\e[J")
+                print(term.out_stream, "\e[1G\e[J")
                 push!(events, status)
                 break
             elseif status === :save
-                print("\e[1G\e[J")
+                print(term.out_stream, "\e[1G\e[J")
                 dest = savedest(term, terminal_properties)
                 if isnothing(dest)
                     push!(events, :redraw)

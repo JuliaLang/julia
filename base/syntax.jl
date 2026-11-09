@@ -409,6 +409,33 @@ end
 remove_scope(st::Syntax) =
     remove_scope(st, Dict{SyntaxContext, SyntaxContext}())
 
+# premature optimization: If a large piece of parsed code contains macrocalls
+# that embed syntax into IR, size (of the source text, but mostly the green
+# tree) becomes an issue.  Ideally we would store the big stuff in a known place
+# once and refer to it from all lowered code, but for now haphazardly delete
+# information.  Keep sourceref, and sourceref of unexpanded if !trim_unexpanded
+function _trim_provenance(st::Syntax, trim_unexpanded, scmap)
+    st_sc = st.context
+    sc2 = get(scmap, st_sc, nothing)
+    if isnothing(sc2)
+        ux = st_sc.unexpanded === nothing || trim_unexpanded ?
+            nothing : _trim_provenance(st_sc.unexpanded, false, scmap)
+        sc2 = scmap[st_sc] = st_sc.unexpanded === ux ? st_sc :
+            SyntaxContext(st_sc.layer, ux, st_sc.edition, st_sc.internal)
+    end
+    if is_leaf(st) || numchildren(st) == 0
+        source = sourceref(st)
+        sc2 === st_sc && !(st.source isa Syntax) ? st :
+            @mknode(st; context=sc2, source, jl_source=st.jl_source)
+    else
+        @mknode(st; context=sc2, source=sourceref(st), jl_source=st.jl_source,
+                children=Syntax[_trim_provenance(
+                    c, trim_unexpanded, scmap) for c in children(st)])
+    end
+end
+trim_provenance(st::Syntax, trim_unexpanded) =
+    _trim_provenance(st, trim_unexpanded, Dict{SyntaxContext, SyntaxContext}())
+
 function Base.show(io::IO, ::MIME"text/plain", sl::ScopeLayer)
     color = isnothing(sl.escaped) ? :normal : :cyan
     printstyled(io, "SL("; color)
@@ -568,7 +595,11 @@ first_linenode(lnn::LineNumberNode) = lnn
 # provenance (but still removed).
 
 function _first_linenode(e::Expr)
-    e.head in (:macrocall, :quote, :inert) || for a in e.args
+    if e.head === :macrocall
+        loc = length(e.args) >= 2 ? e.args[2] : nothing
+        return loc isa LineNumberNode ? loc : nothing
+    end
+    e.head in (:quote, :inert) || for a in e.args
         a isa LineNumberNode && return a
         if a isa Expr
             a_out = _first_linenode(a)
@@ -613,9 +644,11 @@ isa_lowering_ast_node(@nospecialize(e)) =
     e isa Symbol || e isa QuoteNode || e isa Expr || e isa GlobalRef
 
 function expr_to_syntax(@nospecialize(e),
-                        src::Union{LineNumberNode, SourceRef}=
-                            e isa Expr ? first_linenode(e) : LineNumberNode(0, :var""),
+                        src::Union{LineNumberNode, SourceRef}=LineNumberNode(0, :var""),
                         context=SyntaxContext(nothing, nothing, JL_OLD_EDITION, false))
+    if e isa Expr && src isa LineNumberNode && (src.line == 0 || src.file === :none)
+        src = something(_first_linenode(e), src)
+    end
     _expr_to_syntax(e, context, src, false)[1]
 end
 function expr_to_syntax(@nospecialize(e), src::Syntax)
@@ -760,25 +793,6 @@ function syntax_to_expr(s::Syntax, suppress_linenodes=false)
     end
 end
 
-# convenience function for `jl_parse`
-function _c_parseall_expr(code::Core.SimpleVector, filename::String,
-                          lineno::Int, mod::Union{Module, Nothing})
-    (ptr, len) = code
-    str = unsafe_string(ptr, len)
-    pfm = Meta.parser_for_module(mod)
-    ex, offset = Meta._parse_string(str, filename, lineno, 1, :all, Expr, pfm)
-    return Core.svec(ex, offset-1)
-end
-
-function fl_toplevel_eval(mod::Module, @nospecialize(x))
-    ex = if x isa Syntax
-        Expr(:toplevel, first_linenode(x), syntax_to_expr(x))
-    else
-        x
-    end
-    ccall(:jl_toplevel_eval, Any, (Any, Any), mod, ex)
-end
-
 #-------------------------------------------------------------------------------
 # Printing
 
@@ -890,4 +904,20 @@ end
 function Base.show(io::IO, node::Syntax)
     assert_syntax(node)
     _show_syntax_tree_sexpr(io, node)
+end
+
+#-------------------------------------------------------------------------------
+# generated functions produced by JuliaLowering.  TODO: consolidate with
+# GeneratedFunctionStub
+
+struct SyntaxGeneratedFunctionStub
+    syntax_context::SyntaxContext
+    gen::Function
+    srcref::Union{LineNumberNode,SourceRef}
+    argnames::Core.SimpleVector
+    spnames::Core.SimpleVector
+end
+
+function (g::SyntaxGeneratedFunctionStub)(world::UInt, source::Method, @nospecialize args...)
+    Base.JuliaLowering.lower_generated_code(g, world, source, args...)
 end

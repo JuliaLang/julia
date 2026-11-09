@@ -222,7 +222,7 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
         jl_pgcstack_getkey((jl_get_pgcstack_func_t*)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
 
         size_t *tls_offset_idx = pointers->ptls->tls_offset;
-        *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
+        *tls_offset_idx = (uintptr_t)jl_tls_offset;
     }
 
     res.jl_small_typeof = pointers->jl_small_typeof;
@@ -393,12 +393,35 @@ static void disable_native_bf16_codegen(std::string &features) JL_NOTSAFEPOINT
 static void disable_native_bf16_codegen(std::string &) JL_NOTSAFEPOINT {}
 #endif
 
+#if defined(_CPU_RISCV64_)
+// Generated code must follow the runtime's float ABI (see
+// `createTargetMachine`). For a target without the extensions it needs, LLVM
+// falls back to the soft-float ABI with only a warning, so always enable them
+// (and `zicsr`, which F implies).
+static void enable_float_abi_features(std::string &features) JL_NOTSAFEPOINT
+{
+#if defined(__riscv_float_abi_double)
+    const char *abi_features = "+zicsr,+f,+d";
+#elif defined(__riscv_float_abi_single)
+    const char *abi_features = "+zicsr,+f";
+#else
+    const char *abi_features = "";
+#endif
+    if (*abi_features && !features.empty())
+        features += ',';
+    features += abi_features;
+}
+#else
+static void enable_float_abi_features(std::string &) JL_NOTSAFEPOINT {}
+#endif
+
 // Apply Julia's adjustments to the LLVM feature string of a resolved target.
 // Every target whose features reach code generation (the JIT, multiversioning
 // clones, `@cpu_supports` CPU models) goes through this.
 static void finalize_codegen_target(tp::LLVMTargetSpec &spec) JL_NOTSAFEPOINT
 {
     disable_native_bf16_codegen(spec.cpu_features);
+    enable_float_abi_features(spec.cpu_features);
 }
 
 static std::vector<tp::LLVMTargetSpec> resolve_codegen_targets(const std::string &targets) JL_NOTSAFEPOINT
@@ -819,6 +842,11 @@ extern "C" jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
         auto &s = specs[i];
         jl_target_spec_t &ele = result.specs[i];
         ele.cpu_name = strdup(s.cpu_name.c_str());
+#if defined(_CPU_RISCV64_)
+        // Image code is linked by lld, which shrinks calls and jumps (`auipc`+`jalr` to
+        // `jal`) when the object marks them relaxable. The JIT keeps its target unchanged.
+        s.cpu_features += ",+relax";
+#endif
         ele.cpu_features = strdup(s.cpu_features.c_str());
         ele.base = s.base;
         ele.clone_all = (s.flags & tp::TF_CLONE_ALL) != 0;

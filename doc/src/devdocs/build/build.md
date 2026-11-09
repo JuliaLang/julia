@@ -334,7 +334,8 @@ Normal builds include stdlib package images for the default bounds-checking mode
 same system image and CPU targets as the normal build. These additional caches
 are kept outside `usr`, so they are not included by `make binary-dist` or installers.
 Build the normal distribution before the companion archive: `make binary-dist`
-removes existing distribution archives.
+removes existing distribution archives. To build both kinds of caches at the same
+time, run `make release stdlibs-cache-checkbounds`.
 
 Without the companion, stdlibs are precompiled for `--check-bounds=yes` on first use
 and stored in the first depot, like any other package. The companion avoids this.
@@ -413,9 +414,13 @@ Although it may result in some differences, a debug build can be built much
 quicker by bootstrapping from a release build:
 
 ```sh
-$ make julia-src-release julia-sysbase-release
-$ make julia-sysimg-debug CROSS_BOOTSTRAP_JULIA=$PWD/usr/bin/julia CROSS_BOOTSTRAP_SYSBASE=$PWD/usr/lib/julia/sysbase.so
+$ make julia-sysbase-release
+$ make debug CROSS_BOOTSTRAP_JULIA=$PWD/usr/bin/julia CROSS_BOOTSTRAP_SYSBASE=$PWD/usr/lib/julia/sysbase
 ```
+
+Note that `CROSS_BOOTSTRAP_JULIA` and `CROSS_BOOTSTRAP_SYSBASE` are used only to
+build `julia-sysimg-debug`. Later steps, such as Base cache generation and stdlib
+precompilation, use the newly built debug executable.
 
 ## Building 32-bit Julia on a 64-bit machine
 

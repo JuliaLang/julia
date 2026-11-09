@@ -612,10 +612,6 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
         [:var"with-static-parameters" lam sps...] ->
             dst_raw_lambda(ctx, lam, sps)
         [:lambda _ _] -> dst_raw_lambda(ctx, st, SyntaxTree[])
-        [:copyast [:inert ex]] -> @ast _ st [:call
-            interpolate_expr::value
-            [:inert(st[1]) ex]
-        ]
         [:symboliclabel [:identifier]] -> _dst_symboliclabel(ctx, st)
         [:symbolicgoto [:identifier]] -> _dst_symboliclabel(ctx, st)
         [:symbolicblock id body] -> let l = @ast _ id [:symboliclabel id]

@@ -60,17 +60,46 @@ end
 A HashArrayMappedTrie that optionally supports persistence.
 """
 mutable struct HAMT{K, V}
-    const data::Vector{Union{Leaf{K, V}, HAMT{K, V}}}
+    # `data` is never mutated in place, since it may be shared with other tries;
+    # updates replace it with a new `Memory`
+    data::Memory{Union{Leaf{K, V}, HAMT{K, V}}}
     bitmap::BITMAP
     HAMT{K,V}(data, bitmap) where {K,V} = new{K,V}(data, bitmap)
-    HAMT{K, V}() where {K, V} = new{K,V}(Vector{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 0), zero(BITMAP))
+    HAMT{K, V}() where {K, V} = new{K,V}(Memory{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 0), zero(BITMAP))
 end
 
 Base.@assume_effects :nothrow :effect_free function init_hamt(K, V, k, v)
     # For a single element we can't have a 'hash-collision
-    trie = HAMT{K,V}(Vector{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 1), zero(BITMAP))
-    trie.data[1] = Leaf{K,V}(k,v)
-    return trie
+    data = Memory{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 1)
+    data[1] = Leaf{K,V}(k,v)
+    return HAMT{K,V}(data, zero(BITMAP))
+end
+
+function setindex_copy(data::Memory, x, i)
+    new = copy(data)
+    @inbounds new[i] = x
+    return new
+end
+
+function insert_copy(data::Memory{T}, i, x) where {T}
+    n = length(data)
+    new = Memory{T}(undef, n + 1)
+    @inbounds begin
+        unsafe_copyto!(new, 1, data, 1, i - 1)
+        new[i] = x
+        unsafe_copyto!(new, i + 1, data, i, n - i + 1)
+    end
+    return new
+end
+
+function deleteat_copy(data::Memory{T}, i) where {T}
+    n = length(data)
+    new = Memory{T}(undef, n - 1)
+    @inbounds begin
+        unsafe_copyto!(new, 1, data, 1, i - 1)
+        unsafe_copyto!(new, i, data, i + 1, n - i)
+    end
+    return new
 end
 
 Base.@assume_effects :effect_free function HAMT{K,V}((k,v)::Pair{K,V}) where {K, V}
@@ -157,7 +186,7 @@ new persistent tree.
 """
 @inline Base.@assume_effects :noub :terminates_locally function path(trie::HAMT{K,V}, h::HashState, copy=false) where {K, V}
     if copy
-        trie = top = HAMT{K,V}(Base.copy(trie.data), trie.bitmap)
+        trie = top = HAMT{K,V}(trie.data, trie.bitmap)
     else
         trie = top = trie
     end
@@ -172,9 +201,9 @@ new persistent tree.
                 return found, true, trie, i, bi, top, h
             end
             if copy
-                next = HAMT{K,V}(Base.copy(next.data), next.bitmap)
+                next = HAMT{K,V}(next.data, next.bitmap)
                 # :noub because entry_index is guaranteed to be inbounds for trie.data
-                @inbounds trie.data[i] = next
+                trie.data = setindex_copy(trie.data, next, i)
             end
             trie = next::HAMT{K,V}
         else
@@ -193,9 +222,9 @@ or grows the HAMT by inserting a new trie instead.
     if found # we found a slot, just set it to the new leaf
         # replace or insert
         if present # replace
-            @inbounds trie.data[i] = Leaf{K, V}(h.key, val)
+            trie.data = setindex_copy(trie.data, Leaf{K, V}(h.key, val), i)
         else
-            Base.insert!(trie.data, i, Leaf{K, V}(h.key, val))
+            trie.data = insert_copy(trie.data, i, Leaf{K, V}(h.key, val))
         end
         set!(trie, bi)
     else
@@ -209,10 +238,10 @@ or grows the HAMT by inserting a new trie instead.
         while true
             new_trie = HAMT{K, V}()
             if present
-                @inbounds trie.data[i] = new_trie
+                trie.data = setindex_copy(trie.data, new_trie, i)
             else
                 i = entry_index(trie, bi)
-                Base.insert!(trie.data, i, new_trie)
+                trie.data = insert_copy(trie.data, i, new_trie)
             end
             set!(trie, bi)
 
@@ -226,12 +255,15 @@ or grows the HAMT by inserting a new trie instead.
                 present = false
                 continue
             end
-            i_new = entry_index(new_trie, bi_new)
-            Base.insert!(new_trie.data, i_new, Leaf{K, V}(h.key, val))
+            new_leaf = Leaf{K, V}(h.key, val)
+            data = Memory{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 2)
+            if bi_new.x < bi_old.x
+                data[1] = new_leaf; data[2] = leaf
+            else
+                data[1] = leaf; data[2] = new_leaf
+            end
+            new_trie.data = data
             set!(new_trie, bi_new)
-
-            i_old = entry_index(new_trie, bi_old)
-            Base.insert!(new_trie.data, i_old, leaf)
             set!(new_trie, bi_old)
 
             break

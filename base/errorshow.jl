@@ -62,7 +62,7 @@ function showerror(io::IO, ex::BoundsError)
             if ex.i isa AbstractRange
                 print(io, ex.i)
             elseif ex.i isa AbstractString
-                show(io, ex.i)
+                show(io, inferencebarrier(ex.i))
             else
                 for (i, x) in enumerate(ex.i)
                     i > 1 && print(io, ", ")
@@ -259,6 +259,19 @@ end
 
 function showerror(io::IO, ex::MethodError)
     @nospecialize io
+    # Render into a buffer so that the printer is compiled for one concrete IO type and is
+    # not invalidated by packages adding `write` methods for their own IO types
+    buf = IOBuffer()
+    ctx = IOContext(IOContext(buf, io), :displaysize => displaysize(io))::IOContext{IOBuffer}
+    try
+        showerror_methoderror(ctx, ex)
+    finally
+        print(io, takestring!(buf))
+    end
+    nothing
+end
+
+function showerror_methoderror(io::IOContext{IOBuffer}, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.
     is_arg_types = !isa(ex.args, Tuple)
@@ -517,9 +530,9 @@ function show_namedtuple_diff(io::IO, @nospecialize(sig), @nospecialize(called),
     length(sig.parameters) == 2 && length(called.parameters) == 2 || return false
     s_syms, s_types = sig.parameters
     c_syms, c_types = called.parameters
-    s_syms isa Tuple && c_syms isa Tuple && s_syms == c_syms || return false
+    s_syms isa Tuple && c_syms isa Tuple && s_syms === c_syms || return false
     s_types isa DataType && c_types isa DataType || return false
-    n = length(s_syms)
+    n = length(s_syms)::Int
     length(s_types.parameters) == n == length(c_types.parameters) || return false
     (isvatuple(s_types) || isvatuple(c_types)) && return false
     top_level && print(io, "::")
@@ -654,7 +667,6 @@ function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::
 end
 
 function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
-    @nospecialize io
     is_arg_types = !isa(ex.args, Tuple)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
     arg_types_param = Any[(unwrap_unionall(arg_types)::DataType).parameters...]
@@ -844,13 +856,15 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     end
 
     if !isempty(lines) # Display up to three closest candidates
+        # build the header here so the closure below does not capture (and specialize on) `f`
+        header = if show_constructor_hint
+            sprint(print, "\n\nHint: constructors are defined for `", (f::DataType).name.wrapper,
+                "`, but not for `", f::DataType, "`:"; context=io)
+        else
+            "\n\nClosest candidates are:"
+        end
         Base.with_output_color(:normal, io) do io
-            if show_constructor_hint
-                print(io, "\n\nHint: constructors are defined for `", f.name.wrapper,
-                    "`, but not for `", f, "`:")
-            else
-                print(io, "\n\nClosest candidates are:")
-            end
+            print(io, header)
             permute!(lines, sortperm(line_score))
             i = 0
             for line in lines
@@ -1131,6 +1145,7 @@ Stacktrace processing pipeline:
 3. Originator trims frames related to itself (e.g. REPL removes REPL-specific frames)
    - CapturedException only keeps a limit of 100 frames by processing before display
 4. `process_backtrace` filters a trace for internal implementation or redundant frames and summarizes repeated single frames:
+    - frames from a `__script_exit*` to the next `__script_entry*` removed
     - `kwcall` frames removed
     - `include`-related stack frames removed
     - code loading (`using`/`import`) stack frames collapsed to the frame that entered loading
@@ -1300,8 +1315,6 @@ function _is_loading_frame(frame::StackFrame)
            (func in _LOADING_INTERNAL_FUNCS || func in _LOADING_ANCHOR_FUNCS)
 end
 
-_is_loading_anchor(frame::StackFrame) = frame.func in _LOADING_ANCHOR_FUNCS
-
 # For improved user experience, collapse runs of frames belonging to the code loading
 # machinery down to the single frame that entered it - see #52988. Unlike hiding
 # everything thrown through `require`, this keeps frames for user code that runs
@@ -1408,6 +1421,7 @@ function _backtrace_collapse_repeated_locations!(trace)
 end
 
 function process_backtrace(t::Vector{StackFrame})
+    t = remove_driver_spans!(copy(t), false)
     tracecount = _backtrace_collapse_and_count_repeated_frames(t)
     process_backtrace(tracecount)
 end

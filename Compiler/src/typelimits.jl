@@ -54,6 +54,9 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
         # also handle the var here, since this construct bounds the mindepth to the smallest possible value
         return is_derived_type(t, c.var.ub, mindepth) || is_derived_type(t, c.body, mindepth)
     elseif isType(c)
+        if mindepth > 0
+            mindepth -= 1
+        end
         return is_derived_type(t, type_parameter(c), mindepth)
     elseif isa(c, DataType)
         if mindepth > 0
@@ -317,7 +320,7 @@ union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
 
 function issimpleenoughtype(@nospecialize t)
     ut = unwrap_unionall(t)
-    ut isa DataType && ut.name.wrapper == t && return true
+    ut isa DataType && ut.name.wrapper == t::Type && return true
     return max(unionlen(t), union_count_abstract(t) + 1) <= MAX_TYPEUNION_LENGTH &&
            unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
 end
@@ -595,7 +598,7 @@ end
             𝕃′ = widenlattice(𝕃)
             vartyp = tmerge(𝕃′, typea.vartyp, typeb.vartyp)
             fldtyp = tmerge(𝕃′, typea.fldtyp, typeb.fldtyp)
-            return AnyMustAlias(typea; vartyp, fldtyp)
+            return update_mustalias(typea; vartyp, fldtyp)
         end
         typea = widenmustalias(typea)
     end

@@ -12,17 +12,21 @@ SRCS := hashing timefuncs ptrhash strhash operators utf8 ios htable bitvector \
 	int2str libsupportinit arraylist strtod rle eytzinger
 ifeq ($(OS),WINNT)
 SRCS += asprintf strptime
-ifeq ($(ARCH),i686)
-SRCS += _setjmp.win32
-else ifeq ($(ARCH),x86_64)
-SRCS += _setjmp.win64
+endif
+
+# assembly sources in src/arch/$(ARCH)
+ARCH_SRCDIR := $(JULIAHOME)/src/arch/$(ARCH)
+ARCH_SRCS :=
+ifeq ($(OS),WINNT)
+ifneq ($(filter $(ARCH),i686 x86_64),)
+ARCH_SRCS += win_setjmp
 endif
 endif
 
 HEADERS := $(wildcard *.h) $(wildcard *.inc) $(LIBUV_INC)/uv.h
 
-OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
-DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
+OBJS := $(SRCS:%=$(BUILDDIR)/%.o) $(ARCH_SRCS:%=$(BUILDDIR)/%.o)
+DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj) $(ARCH_SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
 FLAGS_COMMON := $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -DJL_LIBRARY_EXPORTS_INTERNAL -DUTF8PROC_EXPORTS
 FLAGS_COMMON += -Wall -Wno-strict-aliasing $(JL_VISIBILITY_FLAGS) -Wpointer-arith -Wundef
@@ -40,9 +44,9 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.o: $(SRCDIR)/%.S | $(BUILDDIR)
+$(BUILDDIR)/%.o: $(ARCH_SRCDIR)/%.S | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(SHIPFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.S | $(BUILDDIR)
+$(BUILDDIR)/%.dbg.obj: $(ARCH_SRCDIR)/%.S | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 $(BUILDDIR)/host/Makefile:
@@ -88,14 +92,13 @@ regenerate-compile_commands:
 		first=true; \
 		for src in $(SRCS); do \
 			[ "$$first" = "true" ] && first=false || echo ","; \
-			if [ -f $(SRCDIR)/$$src.S ]; then \
-				cmd="$${CLANG_TOOLING_S_FLAGS}, \"$$src.S\""; \
-				file_path="$$src.S"; \
-			else \
-				cmd="$${CLANG_TOOLING_C_FLAGS}, \"$$src.c\""; \
-				file_path="$$src.c"; \
-			fi; \
-			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$file_path" "$$cmd"; \
+			cmd="$${CLANG_TOOLING_C_FLAGS}, \"$$src.c\""; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$src.c" "$$cmd"; \
+		done; \
+		for src in $(ARCH_SRCS); do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			cmd="$${CLANG_TOOLING_S_FLAGS}, \"$$src.S\""; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(ARCH_SRCDIR))" "$$src.S" "$$cmd"; \
 		done; \
 		for included_pair in $(INCLUDED_SUPPORT_FILES); do \
 			[ "$$first" = "true" ] && first=false || echo ","; \

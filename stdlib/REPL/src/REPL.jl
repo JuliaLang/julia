@@ -135,7 +135,6 @@ import .LineEdit:
     history_prev_prefix,
     history_first,
     history_last,
-    history_search,
     setmodifiers!,
     terminal,
     MIState,
@@ -155,8 +154,6 @@ using .History
 histsearch(args...) = runsearch(args...)
 
 include("Pkg_beforeload.jl")
-
-@nospecialize # use only declared type signatures
 
 answer_color(::AbstractREPL) = ""
 
@@ -209,7 +206,7 @@ end
 function _softscope(s::Syntax)
     h = head(s)
     if h === :toplevel
-        @mknode(s; children=map(_softscope, children(s)))
+        @mknode(s; children=Syntax[_softscope(c) for c in children(s)])
     elseif h in (:module, :error, :incomplete, :thunk)
         s
     else
@@ -275,7 +272,7 @@ function add_locals!(locals, ast::Symbol)
     return nothing
 end
 
-function collect_names_to_warn!(warnings, locals, current_module::Module, ast)
+function collect_names_to_warn!(warnings, locals, current_module::Module, @nospecialize ast)
     ast isa Expr || return
 
     # don't recurse through module definitions
@@ -619,7 +616,7 @@ struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
     repl::Repl
 end
 
-function show_limited(io::IO, mime::MIME, x)
+function show_limited(io::IO, mime::MIME, @nospecialize x)
     try
         # We wrap in a LimitIO to limit the amount of printing.
         # We unpack `IOContext`s, since we will pass the properties on the outside.
@@ -633,7 +630,7 @@ function show_limited(io::IO, mime::MIME, x)
     end
 end
 
-function display(d::REPLDisplay, mime::MIME"text/plain", x)
+function display(d::REPLDisplay, mime::MIME"text/plain", @nospecialize x)
     x = Ref{Any}(x)
     with_repl_linfo(d.repl) do io
         io = IOContext(io, :limit => true, :module => Base.active_module(d)::Module)
@@ -655,9 +652,9 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
     return nothing
 end
 
-display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
+display(d::REPLDisplay, @nospecialize x) = display(d, MIME("text/plain"), x)
 
-show_repl(io::IO, mime::MIME"text/plain", x) = show(io, mime, x)
+show_repl(io::IO, mime::MIME"text/plain", @nospecialize x) = show(io, mime, x)
 
 function show_repl(io::IO, mime::MIME"text/plain", c::AbstractChar)
     show(io, mime, c) # Call the original Base.show
@@ -673,7 +670,7 @@ show_repl(io::IO, ::MIME"text/plain", ex::Expr) =
     print(io, JuliaSyntaxHighlighting.highlight(
         sprint(show, ex, context=IOContext(io, :color => false))))
 
-function print_response(repl::AbstractREPL, response, show_value::Bool, have_color::Bool)
+function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
         io = IOContext(io, :module => Base.active_module(repl)::Module)
@@ -683,8 +680,8 @@ function print_response(repl::AbstractREPL, response, show_value::Bool, have_col
 end
 
 # N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
-__repl_entry_display(val) = Base.invokelatest(display, val)
-__repl_entry_display(specialdisplay::Union{AbstractDisplay,Nothing}, val) = Base.invokelatest(display, specialdisplay, val)
+__repl_entry_display(@nospecialize val) = Base.invokelatest(display, val)
+__repl_entry_display(specialdisplay::Union{AbstractDisplay,Nothing}, @nospecialize val) = Base.invokelatest(display, specialdisplay, val)
 
 function __repl_entry_display_error(errio::IO, @nospecialize errval)
     # this will be set to true if types in the stacktrace are truncated
@@ -698,7 +695,7 @@ function __repl_entry_display_error(errio::IO, @nospecialize errval)
     return nothing
 end
 
-function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
+function print_response(errio::IO, @nospecialize(response), backend::Union{REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
     val, iserr = response
     if !iserr
@@ -1177,59 +1174,6 @@ history_next_prefix(s::LineEdit.PrefixSearchState, hist::REPLHistoryProvider, pr
 history_prev_prefix(s::LineEdit.PrefixSearchState, hist::REPLHistoryProvider, prefix::AbstractString) =
     history_move_prefix(s, hist, prefix, true)
 
-function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, response_buffer::IOBuffer,
-                        backwards::Bool=false, skip_current::Bool=false)
-
-    qpos = position(query_buffer)
-    qpos > 0 || return true
-    searchdata = beforecursor(query_buffer)
-    response_str = takestring!(copy(response_buffer))
-
-    # Alright, first try to see if the current match still works
-    a = position(response_buffer) + 1 # position is zero-indexed
-    # FIXME: I'm pretty sure this is broken since it uses an index
-    # into the search data to index into the response string
-    b = a + sizeof(searchdata)
-    b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
-    b = min(lastindex(response_str), b) # ensure that b is valid
-
-    searchstart = backwards ? b : a
-    if searchdata == response_str[a:b]
-        if skip_current
-            searchstart = backwards ? prevind(response_str, b) : nextind(response_str, a)
-        else
-            return true
-        end
-    end
-
-    # Start searching
-    # First the current response buffer
-    if 1 <= searchstart <= lastindex(response_str)
-        match = backwards ? findprev(searchdata, response_str, searchstart) :
-                            findnext(searchdata, response_str, searchstart)
-        if match !== nothing
-            seek(response_buffer, first(match) - 1)
-            return true
-        end
-    end
-
-    # Now search all the other buffers
-    idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):1:length(hist.history))
-    for idx in idxs
-        h = hist.history[idx].content
-        match = backwards ? findlast(searchdata, h) : findfirst(searchdata, h)
-        if match !== nothing && h != response_str && haskey(hist.mode_mapping, hist.history[idx].mode)
-            truncate(response_buffer, 0)
-            write(response_buffer, h)
-            seek(response_buffer, first(match) - 1)
-            hist.cur_idx = idx
-            return true
-        end
-    end
-
-    return false
-end
-
 function history_reset_state(hist::REPLHistoryProvider)
     if hist.cur_idx != length(hist.history) + 1
         hist.last_idx = hist.cur_idx
@@ -1255,9 +1199,12 @@ function return_callback(s)
     end
     buf = LineEdit.buffer(s)
     incomplete(takestring!(copy(buf))) && return false
-    # The input may only be complete thanks to automatically inserted closing brackets after
-    # the cursor, so continue on a new line if it isn't without them (e.g. `[|]`)
-    return !(LineEdit.only_auto_closed_after_cursor(s) && incomplete(LineEdit.before_cursor(buf)))
+    # Behave as if automatically inserted closing brackets after the cursor weren't there,
+    # i.e. continue on a new line if the input is incomplete without them (e.g. `[|]`)
+    n = sizeof(LineEdit.auto_closed_after_cursor(s))
+    n == 0 && return true
+    pos = position(buf)
+    return !incomplete(LineEdit.content(buf, 0 => pos) * LineEdit.content(buf, pos + n => buf.size))
 end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",
@@ -1268,7 +1215,7 @@ backend(r::AbstractREPL) = hasproperty(r, :backendref) && isdefined(r, :backendr
 
 
 # Keep request and response channels paired across asynchronous interrupts.
-function exchange_on_backend(backend::REPLBackendRef, request)
+function exchange_on_backend(backend::REPLBackendRef, @nospecialize request)
     # A response can be stale if an interrupt lands after enqueueing but before
     # `sent` is recorded.
     while isready(backend.response_channel)
@@ -1695,7 +1642,7 @@ function setup_interface(
                         isprompt_paste = true
                         curr_prompt_len = sizeof(detected_pkg_prompt)
                         oldpos += curr_prompt_len
-                        Base.active_repl.interface.modes[1].keymap_dict[']'](s, o...)
+                        julia_prompt.keymap_dict[']'](s, o...)
                         pasting_help = false
                     # Check if input line starts with "shell> ", remove it if we are in prompt paste mode and switch mode
                     elseif (firstline || isprompt_paste) && startswith(substr, SHELL_PROMPT)
@@ -1842,7 +1789,9 @@ function setup_interface(
 end
 
 # A write to a hung-up terminal fails with EIO (Linux) or ENXIO (FreeBSD).
+# A read from it can fail with EIO too. That error comes wrapped by the reader task.
 terminal_gone(@nospecialize e) =
+    e isa TaskFailedException ? terminal_gone(e.task.exception) :
     e isa Base.IOError && e.code in (Base.UV_EIO, Base.UV_ENXIO, Base.UV_EPIPE)
 
 function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)

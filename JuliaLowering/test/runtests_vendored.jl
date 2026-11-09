@@ -35,6 +35,8 @@ let old_active_project = Base.active_project()
         # of "JuliaLowering.SomeType")
         @eval Main using JuliaLowering
         Core.include(Main, joinpath(@__DIR__, "runtests.jl")) # run the actual tests
+        # Later tests on this worker (e.g. REPL) need `ans` and `err` in `Main` untouched
+        @test all(s -> which(Main, s) === Base.MainInclude, (:ans, :err))
     finally
         # Restore original load path and active project
         Base.set_active_project(old_active_project)

@@ -375,15 +375,18 @@ end
     @test result_conv == [1.0, 2.0, 3.0, 4.0, 5.0]
 
     # Typed threaded comprehension should have O(nthreads) allocs, not O(n)
-    t1() = @threads Int[i for i in 1:1]
-    t1()
-    t2() = @threads :static Int[i for i in 1:1]
-    t2()
-    t3() = @threads :dynamic Int[i for i in 1:1]
-    t3()
-    @test @allocations(t1()) < 100  # ~35 allocs in practice
-    @test @allocations(t2()) < 100
-    @test @allocations(t3()) < 100
+    t1(n) = @threads Int[i for i in 1:n]
+    t2(n) = @threads :static Int[i for i in 1:n]
+    t3(n) = @threads :dynamic Int[i for i in 1:n]
+    alloc_budget = 100 + 10 * Threads.threadpoolsize(:default)
+    for f in (t1, t2, t3)
+        f(1)
+        f(10_000)
+        small_allocs = @allocations f(1)
+        large_allocs = @allocations f(10_000)
+        @test small_allocs < alloc_budget
+        @test large_allocs < small_allocs + 100
+    end
 end
 
 # Test non-1-based indexing preserves axes

@@ -303,12 +303,12 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
     nc8 = (nc >>> 3) << 3
     if nc8 > 0
         ind8 = 1
-        P8 = Ptr{UInt64}(pointer(C, ind)) # unaligned i64 pointer
+        ref = C.ref
         @inbounds for _ = 1:nc8
             c = UInt64(0)
             for j = 0:7
-                # unaligned load
-                c |= (pack8bools(unsafe_load(P8, ind8)) << (j<<3))
+                word = Core.unsafe_memoryrefload(ref, UInt64, ind - 1 + (ind8 - 1) * sizeof(UInt64), true)
+                c |= (pack8bools(word) << (j<<3))
                 ind8 += 1
             end
             Bc[bind] = c
@@ -458,8 +458,8 @@ function _copyto_int!(dest::BitArray, doffs::Int, src::Union{BitArray,Array}, so
     n < 0 && throw(ArgumentError("Number of elements to copy must be non-negative."))
     soffs < 1 && throw(BoundsError(src, soffs))
     doffs < 1 && throw(BoundsError(dest, doffs))
-    n > length(src) - soffs + 1 && throw(BoundsError(src, length(src)+1))
-    n > length(dest) - doffs + 1 && throw(BoundsError(dest, length(dest)+1))
+    n > length(src) - soffs + 1 && throw_boundserror(src, length(src)+1)
+    n > length(dest) - doffs + 1 && throw_boundserror(dest, length(dest)+1)
     return unsafe_copyto!(dest, doffs, src, soffs, n)
 end
 
@@ -1023,19 +1023,20 @@ function deleteat!(B::BitVector, inds::AbstractVector{Bool})
     length(inds) == length(B) || throw(BoundsError(B, inds))
 
     n = new_l = length(B)
+    o = firstindex(inds) - 1
     y = findfirst(inds)
     y === nothing && return B
 
     Bc = B.chunks
 
-    p = y
+    p = y - o
     s = y + 1
     checkbounds(B, p)
     q = p + 1
     new_l -= 1
     y = findnext(inds, s)
     while y !== nothing
-        i = y
+        i = y - o
         s = y + 1
         new_l -= 1
         if i > q
@@ -1208,6 +1209,15 @@ function (==)(A::BitArray, B::BitArray)
     return A.chunks == B.chunks
 end
 
+function cmp(A::BitVector, B::BitVector)
+    Ac, Bc = A.chunks, B.chunks
+    @inbounds for i in 1:min(length(Ac), length(Bc))
+        d = xor(Ac[i], Bc[i])
+        iszero(d) || return iszero(Bc[i] & d & -d) ? 1 : -1
+    end
+    return cmp(length(A), length(B))
+end
+
 
 ## Data movement ##
 
@@ -1218,7 +1228,7 @@ function _reverse(A::BitArray, d::Int)
     nd = ndims(A)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
-    sd == 1 && return copy(A)
+    (sd == 1 || isempty(A)) && return copy(A)
 
     B = similar(A)
 
@@ -1418,6 +1428,7 @@ function _circshift_int!(dest::BitVector, src::BitVector, i::Int)
     i = Int(i)
     length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
     n = length(dest)
+    n == 0 && return dest
     i %= n
     i == 0 && return (src === dest ? src : copyto!(dest, src))
     Bc = (src === dest ? copy(src.chunks) : src.chunks)

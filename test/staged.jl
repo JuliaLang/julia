@@ -487,6 +487,21 @@ end
 mt_edge_target(::String) = 2
 @test mt_edge_caller() == 2
 
+# Older packages (e.g. Zygote 0.6) attach edges as a `Vector{MethodInstance}`.
+typed_edge_target(x) = x + 1
+function typed_edge_generator(world::UInt, source::Method, _, _)
+    ci = generate_lambda_ex(world, source, (:typed_edge_caller, :x), (), :(return typed_edge_target(x)))
+    ci.edges = Core.MethodInstance[Base.method_instance(typed_edge_target, Tuple{Int}; world)]
+    return ci
+end
+@eval function typed_edge_caller(x)
+    $(Expr(:meta, :generated, typed_edge_generator))
+    $(Expr(:meta, :generated_only))
+end
+@test typed_edge_caller(1) == 2
+typed_edge_target(x::Int) = x + 2
+@test typed_edge_caller(1) == 3
+
 # Test the module resolution scope of generated methods that are type constructors
 module GeneratedScope57417
     using Test

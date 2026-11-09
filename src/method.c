@@ -274,9 +274,9 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         jl_value_t *cc = jl_quotenode_value(jl_exprarg(e, 4));
         if (!jl_is_symbol(cc)) {
             JL_TYPECHK(ccall method definition, tuple, cc);
-            if (jl_nfields(cc) < 3 || jl_nfields(cc) > 5) {
+            if (jl_nfields(cc) < 3 || jl_nfields(cc) > 4) {
                 jl_error("In ccall calling convention, expected a symbol or a "
-                         "(cconv, effects, gc_safe[, cancel_handler[, reset_safe]]) tuple.");
+                         "(cconv, effects, gc_safe[, cancel_handler]) tuple.");
             }
             JL_TYPECHK(ccall method definition, symbol, jl_get_nth_field(cc, 0));
             JL_TYPECHK(ccall method definition, uint16, jl_get_nth_field(cc, 1));
@@ -641,7 +641,7 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
     jl_gc_write(li, li->ssavaluetypes, jl_value_t, jl_box_long(nssavalue));
 
     // Flags that need to be copied to slotflags
-    const uint8_t vinfo_mask = 8 | 16 | 32 | 64;
+    const uint8_t vinfo_mask = 8 | 16 | 64;
     int i;
     for (i = 0; i < nslots; i++) {
         jl_value_t *vi = jl_array_ptr_ref(vis, i);

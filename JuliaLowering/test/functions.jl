@@ -1764,19 +1764,12 @@ end
 end
 
 @testset "Consequences of accepting badly-parsed anonymous forms" begin
-    # kw
-    @test jl_eval(test_mod,
-                  Expr(:call,
-                       Expr(:function, Expr(:kw, :a, 1),
-                            Expr(:block, Expr(:tuple, :a))),
-                       ); edition=JL_NEW_EDITION) == (1,)
-
     # empty block
     @test jl_eval(test_mod,
                   Expr(:call,
                        Expr(:function, Expr(:block),
                             Expr(:block, Expr(:tuple))),
-                       ); edition=JL_NEW_EDITION) == ()
+                       )) == ()
 
     # unwrapped or block-wrapped arg
     @testset for a1 in [:a, Expr(:(::), :a, :Int)],
@@ -1785,14 +1778,9 @@ end
 
         @test jl_eval(test_mod,
                       Expr(:call,
-                           Expr(:function, wrap_where(a2),
-                                Expr(:block, Expr(:tuple, :a))),
-                           1); edition=JL_NEW_EDITION) == (1,)
-        @test jl_eval(test_mod,
-                      Expr(:call,
                            Expr(:function, wrap_where(Expr(:block, a2)),
                                 Expr(:block, Expr(:tuple, :a))),
-                           1); edition=JL_NEW_EDITION) == (1,)
+                           1)) == (1,)
     end
 
     # two-arg block
@@ -1800,7 +1788,7 @@ end
                   Expr(:call,
                        Expr(:function, Expr(:block, :a, :b),
                             Expr(:block, Expr(:tuple, :a, :b))),
-                       1, Expr(:kw, :b, 2)); edition=JL_NEW_EDITION) == (1,2)
+                       1, Expr(:kw, :b, 2))) == (1,2)
 end
 
 @testset "assignment to where-wrapped-tuple" begin
@@ -2273,6 +2261,21 @@ end
         """; edition)
         @test_throws ErrorException jl_eval(m, "f33243()"; edition)
         @test jl_eval(m, "global x33243::Any; (f33243(), x33243)"; edition) === (2, 2)
+    end
+
+    @testset "macros in generated body expand in the staging world" begin
+        # The generator runs in its definition world, but its result is lowered
+        # in the world it is generated for (like flisp, which uses the latest)
+        m = Module()
+        jl_eval(m, """
+        @generated gen_later_macro(x) = :(@later_macro)
+        macro later_macro() 1 end
+        macro redefined_macro() 1 end
+        @generated gen_redefined_macro(x) = :(@redefined_macro)
+        macro redefined_macro() 2 end
+        """; edition)
+        @test jl_eval(m, "gen_later_macro(0)"; edition) === 1
+        @test jl_eval(m, "gen_redefined_macro(0)"; edition) === 2
     end
 end
 

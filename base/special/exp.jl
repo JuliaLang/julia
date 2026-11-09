@@ -391,6 +391,8 @@ exp10(x)
 @inline function exp2(x::Base.BitInteger)
     if x > 1023
         Inf64
+    elseif x < -1074
+        0.0
     elseif x <= -1023
         # if -1073 < x <= -1023 then Result will be a subnormal number
         # Hex literal with padding must be used to work on 32bit machine

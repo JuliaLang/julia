@@ -7,20 +7,47 @@ New language features
 Language changes
 ----------------
 
+* `Slices` exposes `dataids` of its parent array to properly identify aliasing in broadcasting ([#49182]).
+
 Compiler/Runtime improvements
 -----------------------------
+
+* After a sweep, Julia's default garbage collector now lets any thread reuse the free cells of
+  pages that still hold live objects, instead of only the thread that allocated the page. This
+  reduces the memory footprint of workloads that allocate many small objects on many threads and
+  keep few of them, such as a language server that runs type inference repeatedly ([#63512]).
 
 Command-line option changes
 ---------------------------
 
+* `--code-coverage=-<paths>` records no coverage for files under the given paths, and
+  optimizes their code as if coverage were off, so that instrumenting a test suite does not change
+  how its own functions are compiled.
+* `--code-coverage=@<paths>` and `--track-allocation=@<paths>` accept a list of paths ([#54698]).
+
 Multi-threading changes
 -----------------------
+
+* `--threads=auto`, `--procs=auto`, `JULIA_NUM_THREADS=auto` and the default number of GC threads
+  now honour `JULIA_CPU_THREADS`, matching `Sys.EFFECTIVE_CPU_THREADS` ([#64613]).
+* With `JULIA_EXCLUSIVE=1`, default-pool threads are pinned to the CPUs of the inherited affinity
+  mask, in order, instead of to CPUs `0` to `N-1`. Their number is limited by that mask rather
+  than by `Sys.EFFECTIVE_CPU_THREADS` ([#64613]).
 
 Build system changes
 --------------------
 
+* `base/userimg.jl` is no longer supported, and the build now fails if it exists. To build a
+  system image with additional code, use PackageCompiler.jl, or run a script on top of an existing
+  system image with `julia --sysimage <image> --output-o <file> <script>`.
+
 New library functions
 ---------------------
+
+* `bitsizeof(x)` returns the declared width in bits of a primitive type, or of the primitive type
+  of `x`, excluding the padding that `sizeof` includes. It throws for any other type or value ([#61359]).
+* `filterfirst(f, itr)` returns the first element of `itr` for which `f` returns `true` ([#60913]).
+* `growat!(a::Vector, i, delta)` grows `a` by `delta` uninitialized elements inserted at index `i` ([#63573]).
 
 New library features
 --------------------
@@ -55,6 +82,12 @@ Standard library changes
 #### Test
 
 #### TOML
+
+#### UUIDs
+
+* `uuid5` now hashes the bytes of `name` as specified by RFC 4122, instead of first processing
+  backslash escape sequences in it with `unescape_string`. This changes the result for names
+  containing a backslash, which previously could also throw an `ArgumentError`.
 
 External dependencies
 ---------------------

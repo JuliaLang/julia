@@ -856,7 +856,7 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
 
 ```
 """
-broadcast(f::Tf, As...) where {Tf} = materialize(broadcasted(f, As...))
+broadcast(f::Tf, As::Vararg{Any,N}) where {Tf,N} = materialize(broadcasted(f, As...))
 
 # special cases defined for performance
 @inline broadcast(f, x::Number...) = f(x...)
@@ -1240,6 +1240,9 @@ broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::UnitRange) = big(r.start):
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::StepRange) = big(r.start):big(r.step):big(last(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::StepRangeLen) = StepRangeLen(big(r.ref), big(r.step), length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::LinRange) = LinRange(big(r.start), big(r.stop), length(r))
+
+# Defined here because `range.jl` is loaded before broadcasting exists.
+Base.lerpi(j::Integer, d::Integer, a::T, b::T) where {T} = T(Base._lerp.(j/d, a, b))
 
 ## CartesianIndices
 broadcasted(::typeof(+), I::CartesianIndices{N}, j::CartesianIndex{N}) where N =

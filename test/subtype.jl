@@ -2757,6 +2757,36 @@ end
 @test !<:(Tuple{Type{Int}, Int}, Tuple{Type{Union{Int, T}}, T} where T<:Union{Int8,Int16})
 @test <:(Tuple{Type{Int}, Int}, Tuple{Type{Union{Int, T}}, T} where T<:Union{Int8,Int})
 
+# Disjoint union branches, shared typevars, and backtracking (#63974).
+@testset "union intersection pruning" begin
+    A = Tuple{Union{Vector{T}, Ref{T}, Set{T}}, T} where T
+    B = Tuple{Union{Vector{Int}, Ref{Float64}}, Float64}
+    @testintersect(A, B, Tuple{Ref{Float64},Float64})
+
+    A = Tuple{Union{Vector{T}, Ref{T}, Set{T}}, Ref{T}} where T
+    B = Tuple{Vector{S}, Union{Vector{S}, Ref{S}, Set{S}}} where S
+    @testintersect(A, B, Tuple{Vector{T},Ref{T}} where T)
+
+    B = Tuple{V,V} where V<:Union{Array{Int},Array{Float64}}
+    @testintersect(A, B, Union{})
+
+    A = Tuple{Union{Ref{T},Set{T}}} where T<:Int
+    B = Tuple{Ref{S}} where S<:Float64
+    @testintersect(A, B, Tuple{Ref{Union{}}})
+
+    T = TypeVar(:T)
+    U = Union{(Array{T,n} for n in 1:20)...}
+    A = UnionAll(T, Tuple{U,U,U})
+    B = Tuple{Vector,Matrix,Array{Float64,3}}
+    @testintersect(A, B, Tuple{Vector{Float64},Matrix{Float64},Array{Float64,3}})
+    @testintersect(A, Tuple{Vector{Int},Matrix,Array{Float64,3}}, Union{})
+
+    # an empty Vararg element intersection still admits the empty tuple
+    A = Tuple{Tuple{Vararg{Union{Int8, Vector{T}}}}, T} where T
+    @testintersect(A, Tuple{Tuple{Vararg{Vector{Int}}}, Float64}, Tuple{Tuple{}, Float64})
+    @test typeintersect(A, Tuple{Tuple{Vararg{Union{Vector{Int}, Int16}}}, Float64}) != Union{}
+end
+
 #issue #49354 (requires assertions enabled)
 @test !<:(Tuple{Type{Union{Int, Val{1}}}, Int}, Tuple{Type{Union{Int, T1}}, T1} where T1<:Val)
 @test !<:(Tuple{Type{Union{Int, Val{1}}}, Int}, Tuple{Type{Union{Int, T1}}, T1} where T1<:Union{Val,Pair})
@@ -3640,3 +3670,75 @@ end
 @testintersect(Tuple{T, Vararg{Tuple{T, Any, Int}}} where T,
                Tuple{Any, Vararg{Tuple{Tuple{S}, S, Float64} where S}},
                Tuple{Any})
+
+let A = Tuple{Ref{X}, Ref{Y}} where {Y, X<:Union{Nothing, Y}}, B = Tuple{Ref{X}, Ref{Y}} where {Y, X>:Y}
+    @test Tuple{Ref{Union{Nothing, Int}}, Ref{Int}} <: typeintersect(A, B)
+    @test Tuple{Ref{Union{Nothing, Int}}, Ref{Int}} <: typeintersect(B, A)
+end
+
+let A = Ref{Tuple{Union{Nothing, T}, T}} where T, B = Ref{Tuple{S, Union{Nothing, S}}} where S
+    @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(A, B)
+    @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(B, A)
+end
+
+@testset "stack overflows in type intersection" begin
+    let A = Tuple{Union{Nothing, S2}, Int, Tuple{S1, S1}} where {S1, S2<:S1}, B = Tuple{T, T, Tuple{T, T}} where T
+        @test Tuple{Int, Int, Tuple{Int, Int}} <: typeintersect(A, B)
+        @test Tuple{Int, Int, Tuple{Int, Int}} <: typeintersect(B, A)
+    end
+
+    let A = Ref{Tuple{T, T}} where T, B = Ref{Tuple{Union{Nothing, Int}, Union{X, Y}}} where {X, Y}
+        @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(A, B)
+        @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(B, A)
+    end
+
+    @testintersect(Tuple{Tuple{T}, T, T} where T, Tuple{S, Tuple{S}, S} where S, Union{})
+end
+
+# an outer existential var below an inner forall var is bounded by its lower bound
+@testset "existential below an inner forall lower bound" begin
+    @test Ref{Ref{S} where S>:Int} <: (Ref{Ref{S} where S>:T} where T)
+    @test Ref{Ref{S} where S>:Int} <: (Ref{Ref{S} where S>:T} where Int<:T<:Int)
+    @test Ref{Pair{S, S} where S>:Int} <: (Ref{Pair{S, S} where S>:T} where T)
+    @test !(Ref{Ref{S} where S>:Int} <: (Ref{Ref{S} where S>:T} where T<:String))
+    @test !(Ref{Ref{S} where S>:Integer} <: (Ref{Ref{S} where S>:T} where T<:Int))
+    let s = TypeVar(:s, Real), S = TypeVar(:S, s, Any)
+        A = UnionAll(s, AbstractVecOrMat{UnionAll(S, Ref{S})})
+        B = UnionAll(s, Vector{UnionAll(S, Ref{S})})
+        @test B <: A
+        @test !(A <: B)
+        @test A != B
+    end
+end
+
+# a var in the upper bound of a binder nested in a lower bound occurs in a triangular position
+let A = Tuple{V, Tuple{S, S} where S>:Tuple{Tuple{T, T} where T<:V}} where V, B = Tuple{Int, Any}
+    X = Tuple{Int, Tuple{S, S} where S>:Tuple{Tuple{T, T} where T<:Integer}}
+    @test X <: A && X <: B
+    @test X <: typeintersect(A, B)
+    @test X <: typeintersect(B, A)
+end
+
+# `obviously_disjoint` looks through typevar bounds in covariant positions
+# and compares invariant typevars by their bounds
+@testset "obviously_disjoint with typevar bounds" begin
+    f = typeof(identity)
+    for (a, b, empty) in Any[
+            (Tuple{f, Type{Int8}, Type{UInt8}}, Tuple{f, Core.TypeEgal{Int64}, Core.TypeEgal{Float64}}, true),
+            (Tuple{f, Type{T}} where T<:Integer, Tuple{f, Type{Int}}, false),
+            (Tuple{f, Type{T}} where T<:AbstractFloat, Tuple{f, Type{Int}}, true),
+            (Tuple{f, Type{T}} where T, Tuple{f, DataType}, false),
+            (Tuple{f, Type{Vector{T}}} where T, Tuple{f, Type{Int}}, true),
+            (Tuple{f, IO, Vector{T}} where T, Tuple{f, IOBuffer, Vector{String}}, false),
+            (Tuple{f, IO, Array{T,2}} where T, Tuple{f, IOBuffer, Vector{String}}, true),
+            (Tuple{f, Vector{<:Integer}}, Tuple{f, Vector{Int}}, false),
+            (Tuple{f, Vector{<:AbstractFloat}}, Tuple{f, Vector{Int}}, true),
+            (Tuple{f, Val{N}} where N, Tuple{f, Val{Int}}, false),
+            (Tuple{f, T, T} where T<:AbstractString, Tuple{f, Int, Nothing}, true),
+            (Tuple{f, Union{T, Nothing}} where T<:AbstractString, Tuple{f, Int}, true),
+            (Tuple{f, Union{T, Nothing}} where T<:Integer, Tuple{f, Int}, false),
+            (Tuple{f, Ref{T}} where T<:AbstractString, Tuple{f, Ref{S}} where S<:Integer, false)]
+        @test (typeintersect(a, b) === Union{}) == empty
+        @test (typeintersect(b, a) === Union{}) == empty
+    end
+end

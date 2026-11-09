@@ -21,19 +21,13 @@ include(joinpath(BASE_TEST_PATH, "testenv.jl"))
 include("FakeTerminals.jl")
 import .FakeTerminals.FakeTerminal
 
-function kill_timer(delay)
-    # Give ourselves a generous timer here, just to prevent
-    # this causing e.g. a CI hang when there's something unexpected in the output.
-    # This is really messy and leaves the process in an undefined state.
-    # the proper and correct way to do this in real code would be to destroy the
-    # IO handles: `close(stdout_read); close(stdin_write)`
-    test_task = current_task()
+# Fail instead of hanging on unexpected output: on expiry, close `ios` so blocked reads
+# return EOF. (Throwing into the test task does not work: an enclosing `@test` catches it.)
+# Callers test `isopen` on the timer before closing it, so an expired timer fails the test.
+function kill_timer(delay, ios...)
     function kill_test(t)
-        # **DON'T COPY ME.**
-        # The correct way to handle timeouts is to close the handle:
-        # e.g. `close(stdout_read); close(stdin_write)`
-        schedule(test_task, "hard kill repl test"; error=true)
-        print(stderr, "WARNING: attempting hard kill of repl test after exceeding timeout\n")
+        print(stderr, "WARNING: closing the IO of the repl test after exceeding timeout\n")
+        foreach(close, ios)
     end
     return Timer(kill_test, delay)
 end
@@ -84,7 +78,7 @@ function fake_repl(@nospecialize(f);
     repl.options = options
     repl.options.semantic_prompts = semantic_prompts
 
-    hard_kill = kill_timer(900) # Your debugging session starts now. You have 15 minutes. Go.
+    hard_kill = kill_timer(900, input, output, err) # Your debugging session starts now. You have 15 minutes. Go.
     f(input.in, output.out, repl)
     t = @async begin
         close(input.in)
@@ -94,6 +88,7 @@ function fake_repl(@nospecialize(f);
     @test read(err.out, String) == ""
     #display(read(output.out, String))
     Base.wait(t)
+    @test isopen(hard_kill) # not fired
     close(hard_kill)
     nothing
 end
@@ -458,10 +453,11 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true,style_input=fa
     write(stdin_write, "1+1\n") # populate history with a trivial input
     readline(stdout_read)
     write(stdin_write, "\e[A\n")
-    let t = kill_timer(60)
+    let t = kill_timer(60, stdin_write, stdout_read)
         # yield make sure this got processed
         readuntil(stdout_read, "1+1")
         readuntil(stdout_read, "\n\n")
+        @test isopen(t)
         close(t) # cancel timeout
     end
 
@@ -1178,6 +1174,181 @@ fake_repl() do stdin_write, stdout_read, repl
     readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     Base.wait(repltask)
+end
+
+# Alt-m activates the module named around the cursor, and on an empty line toggles back.
+@eval Main module ActivateModuleTest; module Inner; end; end
+fake_repl() do stdin_write, stdout_read, repl
+    repl.history_file = false
+    repl.interface = REPL.setup_interface(repl)
+    repl.mistate = LineEdit.init_state(repl.t, repl.interface)
+    Base.active_repl = repl
+    try
+        repltask = @async REPL.run_repl(repl)
+        function active_module_after(keys)
+            write(stdin_write, keys * "\x15nameof(Base.active_module())\r")
+            s = readuntil(stdout_read, "\n\n")
+            return Symbol(rsplit(s, ':'; limit=2)[end])
+        end
+        readuntil(stdout_read, "julia> ")
+
+        # the cursor can be anywhere inside the dotted name, and the rest of the line goes away
+        @test active_module_after("1; ActivateModuleTest.Inner * 3\eb\eb\eb\e[C\em") === :Inner
+        readuntil(stdout_read, "(Main.ActivateModuleTest.Inner) julia> ")
+        @test active_module_after("\em") === :Main
+        readuntil(stdout_read, "julia> ")
+        @test active_module_after("\em") === :Inner
+        readuntil(stdout_read, "julia> ")
+
+        # names that are not another module change nothing, and the input stays
+        @test active_module_after("\em") === :Main
+        readuntil(stdout_read, "julia> ")
+        for bad in ("ActivateModuleTest.nothere", "sqrt", "1 +", "Main")
+            write(stdin_write, bad * "\em\x15nameof(Base.active_module())\r")
+            s = readuntil(stdout_read, "\n\n")
+            @test endswith(s, ":Main")
+            readuntil(stdout_read, "julia> ")
+        end
+
+        write(stdin_write, '\x04')
+        Base.wait(repltask)
+    finally
+        Base.active_repl = nothing
+    end
+end
+
+@testset "current_word_with_dots" begin
+    word(str, pos) = (buf = IOBuffer(str); seekend(buf); seek(buf, pos); LineEdit.current_word_with_dots(buf))
+    @test word("", 0) == ""
+    for pos in 3:7
+        @test word("X; A.B.C*3", pos) == "A.B.C"
+    end
+    @test word("Foo.Bar", 7) == "Foo.Bar"
+    @test word("α.β", 0) == "α.β"
+    @test word("α.β", 3) == "α.β"
+end
+
+# Keys that reach the modes and history of the REPL through the real input loop.
+function press_repl!(setup, keys)
+    term = FakeTerminal(IOBuffer(keys * "\r"), IOBuffer(), IOBuffer(), false)
+    repl = REPL.LineEditREPL(term, false)
+    repl.history_file = false
+    repl.options = REPL.Options(confirm_exit=false, style_input=false, hint_tab_completes=false,
+                                auto_insert_closing_bracket=true)
+    repl.interface = REPL.setup_interface(repl)
+    s = repl.mistate = LineEdit.init_state(term, repl.interface)
+    setup(repl, s)
+    LineEdit.prompt!(term, repl.interface, s)
+    return repl, s
+end
+press_repl!(keys) = press_repl!((_...) -> nothing, keys)
+
+@testset "REPL mode keys" begin
+    julia_mode(repl) = repl.interface.modes[1]
+    shell_mode(repl) = repl.interface.modes[2]
+    input(s) = LineEdit.input_string(LineEdit.state(s))
+
+    # `;` and `?` only change mode at the start of the input, and backspace goes back with the text
+    for (key, modeidx) in ((';', 2), ('?', 3))
+        repl, s = press_repl!("$(key)ls")
+        @test LineEdit.mode(s) === repl.interface.modes[modeidx]
+        @test input(s) == "ls"
+        repl, s = press_repl!("x$(key)")
+        @test LineEdit.mode(s) === julia_mode(repl)
+        @test input(s) == "x$key"
+        repl, s = press_repl!("$(key)ls\x01\x7f")
+        @test LineEdit.mode(s) === julia_mode(repl)
+        @test input(s) == "ls"
+        repl, s = press_repl!("$(key)\x7f")
+        @test LineEdit.mode(s) === julia_mode(repl)
+        repl, s = press_repl!("$(key)ls\x7f")
+        @test LineEdit.mode(s) === repl.interface.modes[modeidx]
+        @test input(s) == "l"
+    end
+    # backspace removes an inserted bracket pair, also in the other modes
+    repl, s = press_repl!("[\x7f")
+    @test input(s) == ""
+    repl, s = press_repl!(";[\x7f")
+    @test LineEdit.mode(s) === shell_mode(repl)
+    @test input(s) == ""
+
+    # backspace at the start of the main mode doesn't depend on any global REPL
+    repl, s = press_repl!("\x7fab\x01\x7f")
+    @test LineEdit.mode(s) === julia_mode(repl)
+    @test input(s) == "ab"
+    # neither does pasting a pkg prompt
+    repl, s = press_repl!("\e[200~pkg> st\e[201~")
+    @test LineEdit.mode(s) === repl.interface.modes[4]
+    @test input(s) == "st"
+
+    # ^C leaves a mode and drops the input
+    repl, s = press_repl!(";ls\x03")
+    @test LineEdit.mode(s) === julia_mode(repl)
+    @test input(s) == ""
+    @test occursin("^C\n\n", String(take!(repl.t.out_stream)))
+
+    # `]` inside the input is plain text and moves over an inserted bracket
+    repl, s = press_repl!("x]")
+    @test input(s) == "x]"
+    repl, s = press_repl!("[]+1")
+    @test input(s) == "[]+1"
+
+    # shift-tab also offers names that the module didn't define, for that one press
+    @eval Main module ShiftTabTest; const sina = 1; end
+    repl, s = press_repl!("ShiftTabTest.sin\t")
+    @test input(s) == "ShiftTabTest.sina"
+    repl, s = press_repl!("ShiftTabTest.sin\e[Z")
+    @test input(s) == "ShiftTabTest.sin"
+    repl, s = press_repl!("ShiftTabTest.sin\e[Z\t")
+    @test input(s) == "ShiftTabTest.sina"
+end
+
+@testset "history keys" begin
+    function press_history(keys)
+        hist_path = tempname()
+        write(hist_path, fakehistory)
+        repl, s = press_repl!(keys) do repl, s
+            modes = repl.interface.modes
+            hp = modes[1].hist
+            hp.history = REPL.History.HistoryFile(hist_path)
+            REPL.history_do_initialize(hp)
+            REPL.history_reset_state(hp)
+        end
+        close(repl.interface.modes[1].hist.history)
+        rm(hist_path)
+        return LineEdit.input_string(LineEdit.state(s)), LineEdit.mode(s), repl.interface.modes
+    end
+    up, down, pageup, pagedown = "\e[A", "\e[B", "\e[5~", "\e[6~"
+    # newest entries first; the `foobar` entries are not in the mode mapping and get skipped
+    for (keys, expected, modeidx) in (
+            ("\x10", "2 + 2", 1),                # ^P
+            ("\x10\x10", "ls", 2),               # skips the `foobar` entry and changes mode
+            ("\x10\x10\x0e", "2 + 2", 1),        # ^N
+            ("wip\x10\x0e", "wip", 1),           # back to the input in progress
+            ("\ep", "2 + 2", 1),
+            ("\ep\ep\en", "2 + 2", 1),
+            ("$pageup", "2 + 2", 1),
+            ("$pageup$pageup$pagedown", "2 + 2", 1),
+            ("\e<", "é", 1),
+            ("\e<\e>", "", 1),
+            # at the ends of the history nothing changes
+            ("\e<\ep", "é", 1),
+            ("\en", "", 1),
+            # arrows search by the prefix before the cursor, in any mode
+            ("$up", "2 + 2", 1),
+            ("1$up", "1 + 1", 1),
+            ("1$up$down", "1", 1),
+            ("sh\x10", "shell", 1),
+            ("sh\x10\x0e", "sh", 1),
+            # any other key leaves the search and acts on the result
+            ("1$up|", "1| + 1", 1),
+            ("\e.", "2", 1),                     # alt-. takes the last word of the last entry
+            ("x\e.", "x2", 1),
+        )
+        text, mode, modes = press_history(keys)
+        @test (keys => text) == (keys => expected)
+        @test mode === modes[modeidx]
+    end
 end
 
 help_result(line, mod::Module=Base) = Core.eval(mod, REPL._helpmode(IOBuffer(), line, mod))
@@ -1925,6 +2096,21 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
 end
+# Hints and Enter with automatically inserted closing brackets
+fake_repl(options=REPL.Options(confirm_exit=false, style_input=false, auto_insert_closing_bracket=true)) do stdin_write, stdout_read, repl
+    repltask = @async REPL.run_repl(repl)
+    write(stdin_write, "f(reada")
+    readuntil(stdout_read, "reada")
+    # the hint is shown before the auto-inserted `)`, after making room for it
+    s1 = readuntil(stdout_read, "vailable")
+    @test contains(s1, "\e[8@")
+    write(stdin_write, "\x15")
+    # the `)` was typed, so moving back over it and pressing Enter runs the input
+    write(stdin_write, "(\"A\" * \"B\")\e[D\r")
+    readuntil(stdout_read, "\"AB\"")
+    write(stdin_write, "\x04")
+    Base.wait(repltask)
+end
 ## hints disabled
 fake_repl(options=REPL.Options(confirm_exit=false,hascolor=true,hint_tab_completes=false,style_input=false,auto_insert_closing_bracket=false)) do stdin_write, stdout_read, repl
     repltask = @async begin
@@ -2004,6 +2190,74 @@ end
     @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{REPL.Terminals.UnixTerminal})
 end
 
+import REPL.Terminals
+
+struct BareTerminal <: Terminals.TextTerminal end
+
+# What a terminal type gets by default from the abstract terminal interface
+@testset "TextTerminal defaults" begin
+    t = BareTerminal()
+    @test !Terminals.hascolor(t)
+    for f in (flush, Terminals.beep, Terminals.enable_bracketed_paste, Terminals.disable_bracketed_paste)
+        @test f(t) === nothing
+    end
+    for f in (Base.pipe_reader, Base.pipe_writer, displaysize, Terminals.width, Terminals.height,
+              Terminals.getX, Terminals.getY, Terminals.pos, Terminals.clear, Terminals.clear_line,
+              t -> Terminals.clear_line(t, 1), t -> Terminals.cmove(t, 1, 1), t -> Terminals.raw!(t, true))
+        @test_throws "Unimplemented" f(t)
+    end
+end
+
+# escape sequences of the unix terminal
+@testset "UnixTerminal output" begin
+    t = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    for (f, args, expected) in (
+            (Terminals.cmove_up, (), "\e[1A"),
+            (Terminals.cmove_up, (3,), "\e[3A"),
+            (Terminals.cmove_down, (), "\e[1B"),
+            (Terminals.cmove_down, (3,), "\e[3B"),
+            (Terminals.cmove_right, (), "\e[1C"),
+            (Terminals.cmove_right, (3,), "\e[3C"),
+            (Terminals.cmove_left, (), "\e[1D"),
+            (Terminals.cmove_left, (3,), "\e[3D"),
+            (Terminals.cmove_line_up, (), "\e[1A\r"),
+            (Terminals.cmove_line_up, (2,), "\e[2A\r"),
+            (Terminals.cmove_line_down, (), "\e[1B\r"),
+            (Terminals.cmove_line_down, (2,), "\e[2B\r"),
+            (Terminals.cmove_col, (1,), "\r"),
+            (Terminals.cmove_col, (5,), "\r\e[4C"),
+            (Terminals.enable_bracketed_paste, (), "\e[?2004h"),
+            (Terminals.disable_bracketed_paste, (), "\e[?2004l"),
+            (Terminals.end_keypad_transmit_mode, (), "\e[?1l\e>"),
+            (Terminals.clear, (), "\e[H\e[2J"),
+            (Terminals.clear_line, (), "\r\e[0K"))
+        f(t, args...)
+        @test String(take!(t.out_stream)) == expected
+    end
+    Terminals.beep(t)
+    @test String(take!(t.err_stream)) == "\a"
+    @test isempty(take!(t.out_stream))
+end
+
+# Switching a real terminal device in and out of raw mode
+Sys.iswindows() || @testset "TTYTerminal raw!" begin
+    with_fake_pty() do pts, ptm
+        tty = Base.TTY(pts)
+        term = Terminals.TTYTerminal("xterm", tty, tty, tty)
+        Terminals.raw!(term, true) || error("could not enter raw mode")
+        # raw mode: no echo, no line buffering
+        write(ptm, "a")
+        @test read(tty, Char) == 'a'
+        write(tty, "b")
+        @test read(ptm, Char) == 'b'
+        Terminals.raw!(term, false) || error("could not leave raw mode")
+        write(ptm, "c\n")
+        @test readline(ptm) == "c"
+        @test readline(tty) == "c"
+        close(tty)
+    end
+end
+
 @testset "Dummy Pkg prompt" begin
     # do this in an empty depot to test default for new users
     withenv("JULIA_DEPOT_PATH" => mktempdir() * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => nothing) do
@@ -2033,6 +2287,90 @@ end
 
     write(proj_file, "name = \"Bar\"\n")
     @test get_prompt("--project=$proj_file") == "(Bar) pkg> "
+
+    # The rest don't need a process each. They only change state that they restore at the end.
+    old_project, old_load_path, old_depot_path = Base.ACTIVE_PROJECT[], copy(LOAD_PATH), copy(DEPOT_PATH)
+    function prompt_for(project)
+        Base.set_active_project(project)
+        return REPL.Pkg_promptf()
+    end
+    function write_project(dir, contents)
+        mkpath(dir)
+        project = joinpath(dir, "Project.toml")
+        write(project, contents)
+        return project
+    end
+    mktempdir() do root
+        root = realpath(root)
+        try
+            # projects without a usable name are named after their directory
+            @test prompt_for(joinpath(root, "new", "Project.toml")) == "(new) pkg> "
+            @test prompt_for(write_project(joinpath(root, "bad"), "name = [")) == "(bad) pkg> "
+            @test prompt_for(write_project(joinpath(root, "badname"), "name = 3")) == "(badname) pkg> "
+
+            # long names are shortened
+            @test prompt_for(write_project(joinpath(root, "len"), "name = \"$("a"^30)\"")) == "($("a"^30)) pkg> "
+            @test prompt_for(write_project(joinpath(root, "len2"), "name = \"$("b"^31)\"")) == "($("b"^27)...) pkg> "
+
+            # environments in a depot get a `@`
+            pushfirst!(DEPOT_PATH, joinpath(root, "depot"))
+            @test prompt_for(write_project(joinpath(root, "depot", "environments", "env"), "")) == "(@env) pkg> "
+            @test prompt_for(write_project(joinpath(root, "depot", "environments", "env2"), "name = \"X\"")) == "(@X) pkg> "
+            @test prompt_for(write_project(joinpath(root, "depot", "environments-old", "env"), "")) == "(env) pkg> " # same prefix only
+            popfirst!(DEPOT_PATH)
+
+            # a workspace member shows the root project and its path from there
+            ws = joinpath(root, "ws")
+            write_project(ws, "name = \"Root\"\n[workspace]\nprojects = [\"sub\", \"sub/nested\"]\n")
+            sub = write_project(joinpath(ws, "sub"), "name = \"Sub\"\n")
+            nested = write_project(joinpath(ws, "sub", "nested"), "name = \"Nested\"\n")
+            @test prompt_for(joinpath(ws, "Project.toml")) == "(Root) pkg> "
+            @test prompt_for(sub) == "(Root/sub) pkg> "
+            @test prompt_for(nested) == "(Root/$(joinpath("sub", "nested"))) pkg> "
+            @test REPL.find_root_base_project(nested) == joinpath(ws, "Project.toml")
+            @test REPL.relative_project_path(joinpath(ws, "Project.toml"), nested) == joinpath("sub", "nested", "Project.toml")
+            # not listed by the parent project, so not a member
+            @test prompt_for(write_project(joinpath(ws, "other"), "name = \"Other\"\n")) == "(Other) pkg> "
+
+            # the name is cached until the file's modification time changes
+            cached = write_project(joinpath(root, "cached"), "name = \"Old\"\n")
+            function set_mtime(path, t)
+                f = Base.Filesystem.open(path, Base.Filesystem.JL_O_RDWR)
+                try
+                    Base.Filesystem.futime(f, t, t)
+                finally
+                    close(f)
+                end
+            end
+            set_mtime(cached, 1.0e9)
+            @test prompt_for(cached) == "(Old) pkg> "
+            write(cached, "name = \"New\"\n")
+            set_mtime(cached, 1.0e9)
+            @test REPL.Pkg_promptf() == "(Old) pkg> "
+            set_mtime(cached, 1.0e9 + 2)
+            @test REPL.Pkg_promptf() == "(New) pkg> "
+            @test prompt_for(write_project(joinpath(root, "other"), "")) == "(other) pkg> "
+            @test prompt_for(cached) == "(New) pkg> "
+
+            # symlinks in the path are resolved, even for a path that doesn't exist yet
+            @test REPL.safe_realpath("") == ""
+            if !Sys.iswindows()
+                link = joinpath(root, "link")
+                symlink(root, link)
+                @test REPL.safe_realpath(joinpath(link, "nothere", "x")) == joinpath(root, "nothere", "x")
+            end
+
+            # no project at all
+            Base.ACTIVE_PROJECT[] = nothing
+            empty!(LOAD_PATH)
+            @test REPL.find_project_file() === nothing
+            @test REPL.Pkg_promptf() == "pkg> "
+        finally
+            Base.ACTIVE_PROJECT[] = old_project
+            copy!(LOAD_PATH, old_load_path)
+            copy!(DEPOT_PATH, old_depot_path)
+        end
+    end
 end
 
 # Issue #58158 add alias for Char display in REPL

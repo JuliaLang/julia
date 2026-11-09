@@ -1452,83 +1452,16 @@ JL_NO_ASAN static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *
     tsan_switch_to_ctx(t);
     jl_start_fiber_set(t); // doesn't return
 }
+// Defined in arch/<arch>/start_fiber.S
+extern JL_NORETURN void jl_start_fiber_on_stack(char *stack_top, void (*fn)(void) JL_CANSAFEPOINT);
+
 JL_NO_ASAN static void NOINLINE jl_start_fiber_set(jl_ucontext_t *t)
 {
 CFI_NORETURN
     char *stk = (char*)t->stkbuf;
     size_t ssize = t->bufsz;
-    uintptr_t fn = (uintptr_t)&start_task;
     stk += ssize;
-#ifdef _CPU_X86_64_
-    asm volatile (
-        " movq %0, %%rsp;\n"
-        " movq %1, %%rax;\n"
-        " xorq %%rbp, %%rbp;\n"
-        " push %%rbp;\n" // instead of RSP
-        " jmpq *%%rax;\n" // call `fn` with fake stack frame
-        " ud2"
-        : : "r"(stk), "r"(fn) : "memory" );
-#elif defined(_CPU_X86_)
-    asm volatile (
-        " movl %0, %%esp;\n"
-        " movl %1, %%eax;\n"
-        " xorl %%ebp, %%ebp;\n"
-        " push %%ebp;\n" // instead of ESP
-        " jmpl *%%eax;\n" // call `fn` with fake stack frame
-        " ud2"
-        : : "r"(stk), "r"(fn) : "memory" );
-#elif defined(_CPU_AARCH64_)
-    asm volatile(
-        " mov sp, %0;\n"
-        " mov x29, xzr;\n" // Clear frame pointer (x29)
-        " mov x30, xzr;\n" // and link register (x30) to terminate unwinder.
-        " br %1;\n" // call `fn` with fake stack frame
-        " brk #0x1" // abort
-        : : "r" (stk), "r"(fn) : "memory" );
-#elif defined(_CPU_ARM_)
-    // A "i" constraint on `&start_task` works only on clang and not on GCC.
-    asm(" mov sp, %0;\n"
-        " mov lr, #0;\n" // Clear link register (lr)
-        " mov fp, #0;\n" // and frame pointer (fp) to terminate unwinder.
-        " bx %1;\n" // call `fn` with fake stack frame.  While `bx` can change
-                    // the processor mode to thumb, this will never happen
-                    // because all our addresses are word-aligned.
-        " udf #0" // abort
-        : : "r" (stk), "r"(fn) : "memory" );
-#elif defined(_CPU_RISCV64_)
-    asm volatile(
-        " mv sp, %0;\n"
-        " mv ra, zero;\n" // Clear return address register
-        " mv fp, zero;\n" // Clear frame pointer
-        " jr %1;\n" // call `fn` with fake stack frame
-        " ebreak" // abort
-        : : "r"(stk), "r"(fn) : "memory" );
-#elif defined(_CPU_PPC64_)
-    // N.B.: There is two iterations of the PPC64 ABI.
-    // v2 is current and used here. Make sure you have the
-    // correct version of the ABI reference when working on this code.
-    asm volatile(
-        // Move stack (-0x30 for initial stack frame) to stack pointer
-        " addi 1, %0, -0x30;\n"
-        // Build stack frame
-        // Skip local variable save area
-        " std 2, 0x28(1);\n" // Save TOC
-        // Clear link editor/compiler words
-        " std 0, 0x20(1);\n"
-        " std 0, 0x18(1);\n"
-        // Clear LR/CR save area
-        " std 0, 0x10(1);\n"
-        " std 0, 0x8(1);\n"
-        " std 0, 0x0(1); \n" // Clear back link to terminate unwinder
-        " mtlr 0; \n"        // Clear link register
-        " mr 12, %1; \n"     // Set up target global entry point
-        " mtctr 12; \n"      // Move jump target to counter register
-        " bctr; \n"          // branch to counter (lr update disabled)
-        " trap; \n"
-        : : "r"(stk), "r"(fn) : "memory");
-#else
-#error JL_TASK_SWITCH_ASM defined but not implemented for this CPU type
-#endif
+    jl_start_fiber_on_stack(stk, &start_task);
     __builtin_unreachable();
 }
 #endif

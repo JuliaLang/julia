@@ -1203,7 +1203,9 @@ mutable struct Struct_huge5_ppc64_hva
     v2::V2xF64
 end
 
-if Sys.ARCH === :x86_64
+# SIMD tuples use vector registers in both directions, including the i686
+# register-to-stack transition after three vector arguments.
+if Sys.ARCH === :x86_64 || Sys.ARCH === :i686
     function test_sse(a1::V4xF32, a2::V4xF32, a3::V4xF32, a4::V4xF32)
         ccall((:test_m128, libccalltest), V4xF32, (V4xF32, V4xF32, V4xF32, V4xF32), a1, a2, a3, a4)
     end
@@ -1216,11 +1218,12 @@ if Sys.ARCH === :x86_64
 
     for s in [Float32, Int32]
         T = NTuple{4, VecElement{s}}
+        callback = s === Float32 ? :test_m128_cb : :test_m128i_cb
         @eval function rt_sse(a1::$T, a2::$T, a3::$T, a4::$T)
             return ccall(
-                @cfunction(foo_ams, $T, ($T, $T, $T, $T)),
-                $T, ($T, $T, $T, $T),
-                     a1, a2, a3, a4)
+                ($(QuoteNode(callback)), libccalltest),
+                $T, (Ptr{Cvoid}, $T, $T, $T, $T),
+                @cfunction(foo_ams, $T, ($T, $T, $T, $T)), a1, a2, a3, a4)
         end
 
         a1 = VecReg(ntuple(i -> VecElement(s(1i)), 4))
@@ -1699,11 +1702,11 @@ for i in 1:100
 end
 
 # issue #20835
-@test_throws(ErrorException("could not evaluate ccall argument type (it might depend on a local variable)"),
+@test_throws(ErrorException("syntax: ccall argument type cannot reference local variable"),
              eval(:(f20835(x) = ccall(:fn, Cvoid, (Ptr{typeof(x)},), x))))
-@test_throws(UndefVarError(:Something_not_defined_20835, @__MODULE__),
+@test_throws(ErrorException("syntax: ccall argument type cannot reference local variable"),
              eval(:(f20835(x) = ccall(:fn, Something_not_defined_20835, (Ptr{typeof(x)},), x))))
-@test isempty(methods(f20835))
+@test !isdefined(@__MODULE__, :f20835)
 
 @test_throws(ErrorException("ccall method definition: argument 1 type doesn't correspond to a C type"),
              @eval f21104(::Type{T}) where {T} = ccall(:fn, Cvoid, (Some{T},), Some(0)))
@@ -2014,27 +2017,6 @@ using Base: ccall_macro_parse, ccall_macro_lower
                                  :( foo(x::Cint)::Cvoid )))
     @test optexpr == (:((:foo,)), :Cvoid, Any[:Cint], Any[:x], true, (:h, :s), 0)
 
-    # `Base.@assume_effects :reset_safe @ccall`: the plain call with the
-    # reset_safe flag in the calling-convention tuple - no cancellation
-    # point is implied; the caller places one before the call to establish
-    # the region
-    rscall = macroexpand(@__MODULE__,
-        :(Base.@assume_effects :reset_safe @ccall foo(x::Cint)::Cvoid))
-    @test Meta.isexpr(rscall, :call) && rscall.args[1] === :ccall
-    @test rscall.args[3].args[1] == (:ccall, UInt16(0), false, false, true)
-    # ... composing with other effect settings, which stay in the standard
-    # effects-override slot
-    rscall = macroexpand(@__MODULE__,
-        :(Base.@assume_effects :nothrow :reset_safe @ccall foo(x::Cint)::Cvoid))
-    @test rscall.args[3].args[1] == (:ccall, Base.encode_effects_override(Base.EffectsOverride(nothrow=true)), false, false, true)
-    # ... and with the cancel_handler option
-    rscall = macroexpand(@__MODULE__,
-        :(Base.@assume_effects :reset_safe @ccall cancel_handler=(h, s) foo(x::Cint)::Cvoid))
-    @test rscall.args[3].args[1] == (:ccall, UInt16(0), false, true, true)
-    # :reset_safe is only applicable to @ccall
-    @test_throws ArgumentError macroexpand(@__MODULE__,
-        :(Base.@assume_effects :reset_safe f() = 1))
-
     # the cancel_handler lowering: a plain foreigncall with (fn, state)
     # prepended - the annotation implies no cancellation point of its own
     callx = ccall_macro_lower(:ccall, ccall_macro_parse((:(cancel_handler = (h, s)),
@@ -2130,6 +2112,10 @@ end
     @test str == "α+β=15"
     str = GC.@preserve buffer unsafe_string(Cwstring(pointer(buffer)))
     @test str == "α+β=15"
+    cw = Cwstring(Ptr{Cwchar_t}(C_NULL))
+    @test Ptr{Cvoid}(cw) === Ptr{Cvoid}(C_NULL)
+    @test convert(Ptr{Cvoid}, cw) === Ptr{Cvoid}(C_NULL)
+    @test_throws "must be NUL terminated" Base.cconvert(Cwstring, Cwchar_t[])
 end
 
 # issue #36458
@@ -2219,6 +2205,11 @@ end
     @test unsafe_load(cglobal_runtime_type(Cint)) == 1
 end
 
+module CGlobalLib
+import ..libccalltest
+const lib = libccalltest
+end
+
 @testset "cglobal interpreter matches compiler" begin
     # The `cglobal(...)` calls written directly in `@test` run at top-level, i.e. through
     # the interpreter; wrapping the same call in a function and calling it forces codegen.
@@ -2231,6 +2222,8 @@ end
     compiled_str_T()    = cglobal("sin", Cint)
     compiled_ptr(p)     = cglobal(p)
     compiled_ptr_T(p)   = cglobal(p, Cfloat)
+    compiled_dot()      = cglobal((:global_var, CGlobalLib.lib))
+    compiled_dot_T()    = cglobal((:global_var, CGlobalLib.lib), Cint)
 
     typed_ptr = convert(Ptr{Cint}, cglobal((:global_var, libccalltest)))
 
@@ -2242,6 +2235,8 @@ end
     @test cglobal("sin", Cint)                        === compiled_str_T()
     @test cglobal(typed_ptr)                          === compiled_ptr(typed_ptr)
     @test cglobal(typed_ptr, Cfloat)                  === compiled_ptr_T(typed_ptr)
+    @test cglobal((:global_var, CGlobalLib.lib))      === compiled_dot()
+    @test cglobal((:global_var, CGlobalLib.lib), Cint) === compiled_dot_T()
 
     # the no-type form always normalizes its result to Ptr{Cvoid}, even from a typed pointer
     @test cglobal((:global_var, libccalltest)) isa Ptr{Cvoid}
@@ -2395,4 +2390,12 @@ const prefix = "Zstd version: "
 const sym = :ZSTD_versionString
 get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
 @test startswith(get_zstd_version(), "Zstd")
+end
+
+# PLT thunks keep a frame pointer: on Windows, the unwind info shared by JIT code assumes one
+let f() = ccall((:foo, "libnonexistent"), Cvoid, ())
+    ir = sprint(io -> code_llvm(io, f, (); raw=true, dump_module=true))
+    m = match(r"define [^\n]*@jlplt_foo_\d+\([^\n]*#(\d+)", ir)
+    @test m !== nothing
+    @test occursin(Regex("attributes #$(m[1]) = [^\n]*\"frame-pointer\"=\"all\""), ir)
 end

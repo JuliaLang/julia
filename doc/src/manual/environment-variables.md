@@ -193,6 +193,21 @@ $(DEPOT_PATH[1])/logs/repl_history.jl
 
 Sets the maximum number of different instances of a single package that are to be stored in the precompile cache (default = 10).
 
+### [`JULIA_OBJCACHE`](@id JULIA_OBJCACHE)
+
+Julia keeps machine code compiled by the JIT in a native code cache, so that later sessions
+that compile the same code can load it instead. Setting `JULIA_OBJCACHE` to `0` disables the
+cache.
+
+The cache is stored in `cache/v<major>.<minor>/objcache-lmdb1/<target>` in the first depot of
+[`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), or in the directory given by
+`JULIA_OBJCACHE_PATH`. It is disabled on network file systems.
+
+`JULIA_OBJCACHE_CAPACITY` sets the size in bytes at which the least recently used entries
+start to be removed (512 MiB by default, 32 MiB on 32-bit systems). The file keeps its size
+after entries are removed; `Base.Experimental.prune_objcache` removes the entries not used
+recently and writes a smaller copy of the file, for example to save between CI jobs.
+
 ### [`JULIA_VERBOSE_LINKING`](@id JULIA_VERBOSE_LINKING)
 
 If set to true, linker commands will be displayed during precompilation.
@@ -353,7 +368,9 @@ To use Visual Studio Code on Windows, set `$JULIA_EDITOR` to `code.cmd`.
 ### [`JULIA_CPU_THREADS`](@id JULIA_CPU_THREADS)
 
 Overrides the global variable [`Base.Sys.CPU_THREADS`](@ref), the number of
-logical CPU cores available.
+logical CPU cores available. It also caps [`Sys.EFFECTIVE_CPU_THREADS`](@ref), which is
+what `auto` means for `--threads`, `--procs` and [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS),
+and which bounds the default number of GC threads.
 
 ### [`JULIA_WORKER_TIMEOUT`](@id JULIA_WORKER_TIMEOUT)
 
@@ -369,7 +386,7 @@ non-positive integer, or if the number of CPU threads cannot be determined
 through system calls, then the number of threads is set to `1`.
 
 If `$JULIA_NUM_THREADS` is set to `auto`, then the number of threads will be set
-to the number of CPU threads. It can also be set to a comma-separated string to
+to [`Sys.EFFECTIVE_CPU_THREADS`](@ref). It can also be set to a comma-separated string to
 specify the size of the `:default` and `:interactive` [threadpools](@ref
 man-threadpools), respectively:
 ```bash
@@ -428,8 +445,11 @@ A boolean value that determines if detailed timing information is printed during
 
 If set to anything besides `0`, then Julia's thread policy is consistent with
 running on a dedicated machine: each thread in the default threadpool is
-affinitized.  [Interactive threads](@ref man-threadpools) remain under the
-control of the operating system scheduler.
+pinned to its own CPU, in order, from the CPUs the process is allowed to run on
+(on platforms that support thread affinity, i.e. not macOS). Requesting more
+default-pool threads than there are such CPUs is an error.
+[Interactive threads](@ref man-threadpools) remain under the control of the
+operating system scheduler.
 
 Otherwise, Julia lets the operating system handle thread policy.
 

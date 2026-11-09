@@ -244,7 +244,7 @@ export
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
-    nfields, throw, tuple, ===, isdefined,
+    nfields, throw, tuple, ===, isdefined, bitsizeof,
     # access to globals
     getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
@@ -1241,7 +1241,7 @@ end
 # the new offset as an `Int`.
 _parse = nothing
 
-#    Core._lower(code, module, filename="none", linenum=0, world=0xfff..., warn=false)
+#    Core._lower(module, code, world, warn, loc)
 #
 # Lower `code` (usually Expr), returning `svec(e::Any xs::Any...)` where `e` is
 # the lowered code, and `xs` is possible additional information from
@@ -1324,9 +1324,15 @@ typename(union::UnionAll) = typename(union.body)
 
 include(Core, "optimized_generics.jl")
 
+"The first julia edition.  For compatibility, most julia code is assumed to be
+OLDEST_EDITION if an edition isn't known at parse time."
 const OLDEST_EDITION = (1, 13)
-const VERSION_EDITION =
-    (Int(ccall(:jl_ver_major, Int32, ())), Int(ccall(:jl_ver_minor, Int32, ())))
+
+"LATEST_STABLE_EDITION is used in the few situations (e.g. the REPL, Meta.parse)
+where the default edition is the latest.  LATEST_STABLE_EDITION may lag behind
+VERSION if VERSION corresponds to an in-development edition, or no new edition
+at all."
+const LATEST_STABLE_EDITION = (1, 14)
 
 # Used only by the magic @VERSION macro
 struct MacroSource

@@ -27,7 +27,7 @@ const FF = LatticeTestFields
 
 plain_elements() = Any[
     Union{}, Any, Int, String, Nothing, Union{Int,String}, Union{Int,Nothing}, Integer,
-    Const(1), Const("x"), Const(nothing), Const(true), Bool,
+    Const(1), Const("x"), Const(nothing), Const(true), Const(false), Bool,
     PartialStruct(Compiler.fallback_lattice, FF, Any[Int, Any]),
     PartialStruct(Compiler.fallback_lattice, FF, Any[Const(1), Any]),
     PartialStruct(Compiler.fallback_lattice, F, Any[Int]),
@@ -41,6 +41,9 @@ alias_elements(::Type{MustAlias}) = Any[
     MustAlias(2, 0, FF, 1, Union{Int,Nothing}),
     MustAlias(2, 0, FF, 2, Any),
     MustAlias(3, 0, F, 1, Union{Int,String}),
+    # aliases of different definitions of the same slot
+    MustAlias(2, 1, F, 1, Int),
+    MustAlias(2, 2, F, 1, Union{Int,String}),
 ]
 alias_elements(::Type{InterMustAlias}) = Any[
     InterMustAlias(2, F, 1, Union{Int,String}),
@@ -62,19 +65,6 @@ conditional_elements(::Type{InterConditional}) = Any[
     InterConditional(3, Int, String),
 ]
 
-# `tmerge(Const(true), cnd::Conditional)` correctly gives `Conditional(slot, Any, cnd.elsetype)`,
-# but `⊑` only places `Const(true)` below the degenerate `Conditional(slot, Any, Union{})`,
-# although the else branch is irrelevant for a value that is always `true` (and likewise for
-# `Const(false)`)
-function known_conditional_upper_bound_issue(@nospecialize(a), @nospecialize(b))
-    function issue(@nospecialize(c), @nospecialize(cnd))
-        c isa Const && cnd isa Union{Conditional,InterConditional} || return false
-        return (c.val === true && cnd.elsetype !== Union{}) ||
-               (c.val === false && cnd.thentype !== Union{})
-    end
-    return issue(a, b) || issue(b, a)
-end
-
 function check_lattice_properties(𝕃, elements)
     ⊑(@nospecialize(a), @nospecialize(b)) = Compiler.:⊑(𝕃, a, b)
     tmerge(@nospecialize(a), @nospecialize(b)) = Compiler.tmerge(𝕃, a, b)
@@ -86,10 +76,6 @@ function check_lattice_properties(𝕃, elements)
     for a in elements, b in elements
         m = tmerge(a, b)
         # `tmerge` is an upper bound of both of its arguments
-        if known_conditional_upper_bound_issue(a, b)
-            @test_broken a ⊑ m && b ⊑ m
-            continue
-        end
         @test a ⊑ m
         @test b ⊑ m
         # merged aliases still alias a field of a container with a definite layout

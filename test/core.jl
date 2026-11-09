@@ -42,7 +42,7 @@ for (T, c) in (
         (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :flags, :time_compile]),
         (Core.Method, [:primary_world, :did_scan_source, :dispatch_status, :interferences]),
         (Core.MethodInstance, [:cache, :flags, :dispatch_status, :precompile]),
-        (Core.MethodTable, [:defs]),
+        (Core.MethodTable, [:defs, :contributors]),
         (Core.MethodCache, [:leafcache, :cache, :var""]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
@@ -9213,8 +9213,10 @@ end
 @test M57638_3.x === 1
 
 @testset "no unnecessary methods for comparison functions with generically correct and performant fallback methods" begin
-    @test (isone ∘ length ∘ methods)(>, Tuple{Any, Any})
-    @test (isone ∘ length ∘ methods)(>=, Tuple{Any, Any})
+    # only count Base's methods: tests that ran earlier on this worker may have added others
+    base_methods(f) = filter(m -> m.module === Base, methods(f, Tuple{Any, Any}))
+    @test (isone ∘ length ∘ base_methods)(>)
+    @test (isone ∘ length ∘ base_methods)(>=)
 end
 
 module GlobalBindingMulti
@@ -9498,4 +9500,38 @@ end
     # again, now from the filled caches
     @test all(i -> Base.invokelatest(OrderedDictGrowth.f, Ts[i]()) == i, eachindex(Ts))
     @test all(i -> Base.invokelatest(OrderedDictGrowth.g, Ts[i]()) === Ts[i], eachindex(Ts))
+end
+
+# Byte accesses support unaligned, cross-element loads and stores.
+@testset "MemoryRef byte access" begin
+    for value in (UInt32(0x12345678), 1.25 + 2.5im, ntuple(i -> UInt64(i), 256))
+        T = typeof(value)
+        bytes = fill!(Memory{UInt8}(undef, sizeof(T) + 2), 0xff)
+        ref = memoryref(bytes)
+        @test Core.unsafe_memoryrefstore!(ref, value, 1, true) === value
+        @test bytes[1] == bytes[end] == 0xff
+        expected = reinterpret(NTuple{sizeof(T),UInt8}, value)
+        @test Tuple(bytes[2:end-1]) === expected
+        @test Core.unsafe_memoryrefload(ref, T, 1, true) === value
+        shifted = memoryref(bytes, 2)
+        @test Core.unsafe_memoryrefload(shifted, T, 0, true) === value
+    end
+    bytes = fill!(Memory{UInt8}(undef, 8), 0x00)
+    bytes[1] = 0xff
+    ref = memoryref(bytes)
+    @test Core.unsafe_memoryrefload(memoryref(bytes, 2), UInt8, -1, true) === 0xff
+    @test Core.unsafe_memoryrefload(ref, Nothing, 0, true) === nothing
+    @test Core.unsafe_memoryrefstore!(ref, nothing, 0, true) === nothing
+    @test_throws BoundsError Core.unsafe_memoryrefload(ref, UInt32, 6, true)
+    @test_throws BoundsError Core.unsafe_memoryrefstore!(memoryref(bytes, 2), 0x00, typemax(Int), true)
+    @test_throws ErrorException Core.unsafe_memoryrefload(ref, String, 0, true)
+    @test_throws ErrorException Core.unsafe_memoryrefload(ref, Union{UInt8,UInt16}, 0, true)
+    @test_throws ErrorException Core.unsafe_memoryrefstore!(ref, "value", 0, true)
+    @test_throws TypeError Core.unsafe_memoryrefload(bytes, UInt8, 0, true)
+    @test_throws TypeError Core.unsafe_memoryrefstore!(ref, 0x00, 0.0, true)
+    for mem in (Memory{Any}(undef, 1), Memory{Union{UInt8,UInt16}}(undef, 1),
+                Memory{Nothing}(undef, 1), AtomicMemory{UInt8}(undef, 1))
+        @test_throws ErrorException Core.unsafe_memoryrefload(memoryref(mem), UInt8, 0, true)
+        @test_throws ErrorException Core.unsafe_memoryrefstore!(memoryref(mem), 0x00, 0, true)
+    end
 end

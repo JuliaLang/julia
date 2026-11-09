@@ -1077,6 +1077,46 @@ end
     expect_cancelled(tm)
 end
 
+@testset "disable_sigint shields its region" begin
+    # disable_sigint marks code that must not be unwound (e.g. a Julia callback
+    # under a C frame): cancellation of the scoped token lands after the
+    # region, and reenable_sigint restores the token the region shielded
+    done() = (Base.@cancel_check; :done)
+    function outcome(f)
+        try
+            f()
+        catch e
+            e isa CancellationRequest || rethrow()
+            :cancelled
+        end
+    end
+    src = CancellationTokenSource()
+    cancel!(src)
+    # tested outside the cancelled scope, where a failure can be printed
+    r = with(CANCEL_TOKEN => CancellationToken(src)) do
+        # a bare sigatomic region has no shielded token to restore
+        Base.sigatomic_begin()
+        bare = try
+            outcome(() -> reenable_sigint(done))
+        finally
+            Base.sigatomic_end()
+        end
+        (; shielded = outcome(() -> disable_sigint(done)),
+           after = outcome(done),
+           reenabled = outcome(() -> disable_sigint(() -> reenable_sigint(done))),
+           nested = outcome(() -> disable_sigint(() -> disable_sigint(() -> reenable_sigint(done)))),
+           renested = outcome(() -> disable_sigint(() -> reenable_sigint(() -> disable_sigint(done)))),
+           bare)
+    end
+    @test r.shielded === :done
+    @test r.after === :cancelled
+    @test r.reenabled === :cancelled
+    @test r.nested === :done
+    @test r.renested === :done
+    @test r.bare === :cancelled
+    @test @inferred(disable_sigint(() -> reenable_sigint(() -> 1))) == 1
+end
+
 # a parked watcher keeps the watched source reachable through its live
 # token reference alone (no local rooting in the caller's frame)
 @noinline function _spawn_watcher_on_child(parent)
@@ -1658,6 +1698,62 @@ end
     unlock(lk)
 end
 
+@testset "a throw while acquiring the wait entry releases the lock" begin
+    # Inject allocation failure to check lock cleanup in each wait path.
+    # Use a subprocess to isolate the added Base method.
+    code = """
+    using Test
+    using Base: CANCEL_TOKEN, CancellationToken, CancellationTokenSource
+    using Base.ScopedValues: with
+    const VICTIM = Ref{Any}(nothing)
+    function Base.WaitEntry2(t::Task)
+        if VICTIM[] === t
+            VICTIM[] = nothing
+            throw(OutOfMemoryError())
+        end
+        return invoke(Base.WaitEntry2, Tuple{Union{Task, Nothing}}, t)
+    end
+    # run `f` in a task whose first wait entry allocation throws
+    oom_task(f) = Threads.@spawn (VICTIM[] = current_task(); f())
+    yield_until(f) = (for _ in 1:10_000; f() && return true; yield(); end; false)
+    with(CANCEL_TOKEN => CancellationToken(CancellationTokenSource())) do
+        waitee = Threads.@spawn for _ in 1:100; yield(); end
+        waiter = oom_task(() -> wait(waitee))
+        @test yield_until(() -> istaskdone(waiter) && istaskdone(waitee))
+        @test waiter.result isa OutOfMemoryError
+
+        c = Base.ThreadSynchronizer()
+        t = oom_task() do
+            lock(c)
+            try
+                wait(c)
+            catch e
+                e isa OutOfMemoryError && islocked(c)
+            finally
+                unlock(c)
+            end
+        end
+        @test yield_until(() -> istaskdone(t))
+        @test !istaskfailed(t) && t.result === true
+
+        rl = ReentrantLock()
+        lock(rl)
+        t = oom_task(() -> lock(rl))
+        @test yield_until(() -> istaskdone(t))
+        @test t.result isa OutOfMemoryError
+        unlock(rl)
+        t = Threads.@spawn lock(Returns(true), rl)
+        @test yield_until(() -> istaskdone(t)) && t.result === true
+    end
+    """
+    p = run(pipeline(`$(Base.julia_cmd()) --startup-file=no --threads=1 -e $code`;
+                     stdout, stderr); wait=false)
+    if timedwait(() -> process_exited(p), 300.0) !== :ok
+        kill(p, Base.SIGKILL)
+    end
+    @test success(p)
+end
+
 @testset "WaitEntryN memory accounting and deepcopy" begin
     # variable-sized (like CancellationTokenSource): the type has no
     # definite size, instances charge their slot tail
@@ -1774,6 +1870,58 @@ end
     # an explicit token stays with the iterator
     itr = eachline(IOBuffer("ab\n"); cancel=ctok)
     @test_throws CancellationRequest with(() -> iterate(itr), CANCEL_TOKEN => nothing)
+end
+
+@testset "IO methods check a cancelled token before touching the stream" begin
+    # rejected before any read or write; `cancel = nothing` still runs, also
+    # through the fallbacks that array `read!` and `write` invoke
+    src = CancellationTokenSource()
+    cancel!(src)
+    ctok = CancellationToken(src)
+    reads = Any[
+        (io; kw...) -> eof(io; kw...),
+        (io; kw...) -> readavailable(io; kw...),
+        (io; kw...) -> readuntil(io, 0x0a; kw...),
+        (io; kw...) -> readuntil(io, '\n'; kw...),
+        (io; kw...) -> readuntil(io, b"ne"; kw...),
+        (io; kw...) -> readline(io; kw...),
+        (io; kw...) -> copyuntil(IOBuffer(), io, 0x0a; kw...),
+        (io; kw...) -> copyline(IOBuffer(), io; kw...),
+        (io; kw...) -> read(io, 3; kw...),
+        (io; kw...) -> readbytes!(io, zeros(UInt8, 3); kw...),
+        (io; kw...) -> read!(io, zeros(UInt8, 3); kw...),
+        (io; kw...) -> read!(io, view(zeros(UInt8, 6), 1:2:6); kw...),
+    ]
+    writes = Any[
+        (io; kw...) -> write(io, UInt8[0x01, 0x02]; kw...),
+        (io; kw...) -> write(io, 0x01, 0x02; kw...),
+    ]
+    mktemp() do path, io
+        write(io, "line1\nline2\n")
+        for op in reads
+            seekstart(io)
+            @test_throws CancellationRequest op(io; cancel=ctok)
+            @test_throws CancellationRequest with(() -> op(io), CANCEL_TOKEN => ctok)
+            @test position(io) == 0
+        end
+        for op in writes
+            seekend(io)
+            n = position(io)
+            @test_throws CancellationRequest op(io; cancel=ctok)
+            @test_throws CancellationRequest with(() -> op(io), CANCEL_TOKEN => ctok)
+            @test position(io) == n
+            @test with(() -> op(io; cancel=nothing), CANCEL_TOKEN => ctok) == 2
+        end
+    end
+    mktemp() do path, io
+        write(io, zeros(UInt8, 64))
+        seekstart(io)
+        A = zeros(Float64, 2)
+        B = zeros(Float64, 4)
+        @test with(() -> read!(io, A; cancel=nothing), CANCEL_TOKEN => ctok) === A
+        @test with(() -> read!(io, view(B, 1:2:4); cancel=nothing), CANCEL_TOKEN => ctok) isa SubArray
+        @test with(() -> write(io, view(B, 1:2:4); cancel=nothing), CANCEL_TOKEN => ctok) == 16
+    end
 end
 
 @testset "explicit tokens and shields thread through call chains" begin
@@ -2006,86 +2154,6 @@ end
     end
     @test threw
     @test cell3[] === (Int64(0), Int64(0))
-end
-
-@testset "BigInt/GMP cancellation via reset regions" begin
-    # No explicit cancellation points in the loop body: cancellation reaches
-    # it through the annotated MPZ entry points - either their own
-    # cancellation point, an asynchronous reset landing inside audited
-    # libgmp compute (the reset region stays published across the annotated
-    # call), or the allocation hooks republishing the region on exit.
-    function bigmul_loop(nbits)
-        b = big(3)^(nbits ÷ 2)
-        m = big(10)^(nbits ÷ 8)
-        while true
-            b = (b * b) % m
-        end
-    end
-    if Threads.nthreads(:default) >= 2
-        t, src = cancellable_spawn(() -> bigmul_loop(1_000_000))
-        sleep(1.0) # let it get into the multiply/mod cycle
-        cancel!(src)
-        @test wait_cancelled(t, src)
-        @test istaskfailed(t)
-        @test t.result isa CancellationRequest
-        # the library stays healthy: correct arithmetic after the cancellation
-        @test factorial(big(30)) == prod(big(1):big(30))
-        @test string(big(2)^128) == "340282366920938463463374607431768211456"
-
-        # Allocation-churn storm: small, allocation-dominated BigInt work
-        # hammered by cancellation. Deliveries frequently race the
-        # jl_gmp_counted_* hooks, exercising their unpublish/republish path;
-        # correctness is "no crash, no corruption, clean arithmetic
-        # afterwards".
-        deadline = time() + 8
-        rounds = 0
-        while time() < deadline
-            gsrc = CancellationTokenSource()
-            gt = with(CANCEL_TOKEN => CancellationToken(gsrc)) do
-                Threads.@spawn begin
-                    b = big(1)
-                    m = big(10)^60
-                    while true
-                        b = (b + big(12345))^2 % m
-                    end
-                end
-            end
-            rounds % 3 == 0 || sleep(0.02)
-            cancel!(gsrc)
-            @test wait_cancelled(gt, gsrc)
-            @test istaskfailed(gt)
-            rounds += 1
-        end
-        @test rounds > 0
-        @test factorial(big(20)) == 2432902008176640000
-    end
-end
-
-@testset "cancellation lands inside audited libgmp compute" begin
-    # A single long computation-carrying GMP call: the reset region
-    # published by the annotated call's own cancellation point must survive
-    # into the call (the point's binding bookkeeping - a task's first point
-    # under a new source takes the write-barrier path - must come before the
-    # region publication), and an asynchronous cancellation unwinds out of
-    # the foreign computation promptly instead of waiting for it to finish.
-    if Threads.nthreads(:default) >= 2
-        started = Base.Event()
-        t, src = cancellable_spawn() do
-            notify(started)
-            # ~tens of seconds of uninterrupted libgmp compute if not cancelled
-            Base.GMP.MPZ.fac_ui(UInt(40_000_000))
-        end
-        wait(started)
-        sleep(1.0) # let it get deep into the fac_ui call
-        t0 = time()
-        cancel!(src)
-        @test wait_cancelled(t, src)
-        @test istaskfailed(t)
-        @test t.result isa CancellationRequest
-        @test time() - t0 < 15.0 # cancelled promptly, not at call completion
-        # the library stays healthy afterwards
-        @test factorial(big(25)) == prod(big(1):big(25))
-    end
 end
 
 # BLAS cancellation handler: it executes on the thread blocked in the dgemm,
@@ -2664,7 +2732,8 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
                 kill(p, 3) # SIGQUIT
                 timedwait(() -> istaskdone(reader), 20.0) # pty EOF: dump drained
             end
-            @error "expect timed out" needle tail=snapshot()[max(1, cursor[]):end]
+            @error "expect timed out" needle
+            print(stderr, snapshot()[max(1, cursor[]):end]) # logging would truncate the task dump
         end
         @test status == :ok
     end
@@ -2681,7 +2750,8 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
     expect("julia> ")
 
     # ^C interrupts a sleeping REPL evaluation and reports it
-    sendline("println(\"EVAL-1\"); sleep(1000)")
+    # the markers are split so that they don't match the echo of the typed input
+    sendline("println(\"EVAL\", \"-1\"); sleep(1000)")
     expect("EVAL-1") # the evaluation is running (robust under load)
     sleep(0.5)       # ... and parked in sleep(1000)
     kill(p, Base.SIGINT)
@@ -2699,7 +2769,7 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
     sendline("global bgc = Ref(0); global bg = @async while true; sleep(0.01); bgc[] += 1; end; println(\"BG-UP\")")
     expect("BG-UP")
     expect("julia> ")
-    sendline("println(\"EVAL-4\"); sleep(1000)")
+    sendline("println(\"EVAL\", \"-4\"); sleep(1000)")
     expect("EVAL-4")
     sleep(0.5)
     kill(p, Base.SIGINT)
@@ -2711,7 +2781,7 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
 
     # ^C during an in-evaluation terminal read recovers the prompt
     # (the class of issue #58105's "Install package?" prompt)
-    sendline("println(\"EVAL-5\"); readline()")
+    sendline("println(\"EVAL\", \"-5\"); readline()")
     expect("EVAL-5")
     sleep(0.5)
     kill(p, Base.SIGINT)
@@ -2720,7 +2790,7 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
 
     # ^C while parked in a server accept recovers, leaving the server
     # usable (the class of issue #58689)
-    sendline("using Sockets; global srv = listen(Sockets.localhost, 0); println(\"LISTENING\"); accept(srv)")
+    sendline("using Sockets; global srv = listen(Sockets.localhost, 0); println(\"LISTEN\", \"ING\"); accept(srv)")
     expect("LISTENING")
     sleep(0.5)
     kill(p, Base.SIGINT)
@@ -2732,13 +2802,11 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
 
     # cancelling a BigInt computation never yanks control out of libgmp in
     # an unsafe spot the way the old asynchronous InterruptException
-    # delivery could (corrupting the heap - issue #56545): the loop is
-    # deliberately checkless, so delivery lands on an MPZ entry point's own
-    # cancellation point, inside audited libgmp compute (unwound via the
-    # published reset region), or when an allocation hook republishes the
-    # region on exit - and BigInt arithmetic in the session works correctly
-    # afterwards
-    sendline("println(\"EVAL-6\"); let b = big(3); while true; b = b*b % (big(10)^200); end; end")
+    # delivery could (corrupting the heap - issue #56545): delivery lands at
+    # the loop's own cancellation point, and every libgmp call clears the
+    # reset region before it runs - and BigInt arithmetic in the session
+    # works correctly afterwards
+    sendline("println(\"EVAL\", \"-6\"); let b = big(3); while true; Base.@cancel_check; b = b*b % (big(10)^200); end; end")
     expect("EVAL-6")
     sleep(0.5)
     kill(p, Base.SIGINT)
