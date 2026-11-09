@@ -616,13 +616,11 @@ function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
     r = dot(x₁, A[1,1], y[1])
     @inbounds for j in 2:m
         yj = y[j]
-        if !iszero(yj)
-            temp = adjoint(A[1,j]) * x₁
-            @simd for i in 2:j
-                temp += adjoint(A[i,j]) * x[i]
-            end
-            r += dot(temp, yj)
+        temp = adjoint(A[1,j]) * x₁
+        @simd for i in 2:j
+            temp += adjoint(A[i,j]) * x[i]
         end
+        r += dot(temp, yj)
     end
     return r
 end
@@ -637,14 +635,12 @@ function dot(x::AbstractVector, A::UnitUpperTriangular, y::AbstractVector)
     r = dot(x₁, y[1])
     @inbounds for j in 2:m
         yj = y[j]
-        if !iszero(yj)
-            temp = adjoint(A[1,j]) * x₁
-            @simd for i in 2:j-1
-                temp += adjoint(A[i,j]) * x[i]
-            end
-            r += dot(temp, yj)
-            r += dot(x[j], yj)
+        temp = adjoint(A[1,j]) * x₁
+        @simd for i in 2:j-1
+            temp += adjoint(A[i,j]) * x[i]
         end
+        r += dot(temp, yj)
+        r += dot(x[j], yj)
     end
     return r
 end
@@ -658,13 +654,11 @@ function dot(x::AbstractVector, A::LowerTriangular, y::AbstractVector)
     r = zero(typeof(dot(first(x), first(A), first(y))))
     @inbounds for j in 1:m
         yj = y[j]
-        if !iszero(yj)
-            temp = adjoint(A[j,j]) * x[j]
-            @simd for i in j+1:m
-                temp += adjoint(A[i,j]) * x[i]
-            end
-            r += dot(temp, yj)
+        temp = adjoint(A[j,j]) * x[j]
+        @simd for i in j+1:m
+            temp += adjoint(A[i,j]) * x[i]
         end
+        r += dot(temp, yj)
     end
     return r
 end
@@ -678,13 +672,11 @@ function dot(x::AbstractVector, A::UnitLowerTriangular, y::AbstractVector)
     r = zero(typeof(dot(first(x), first(y))))
     @inbounds for j in 1:m
         yj = y[j]
-        if !iszero(yj)
-            temp = x[j]
-            @simd for i in j+1:m
-                temp += adjoint(A[i,j]) * x[i]
-            end
-            r += dot(temp, yj)
+        temp = x[j]
+        @simd for i in j+1:m
+            temp += adjoint(A[i,j]) * x[i]
         end
+        r += dot(temp, yj)
     end
     return r
 end
@@ -868,17 +860,22 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
 end
 
 # multiplication
-generic_trimatmul!(c::StridedVector{T}, uploc, isunitc, tfun::Function, A::StridedMatrix{T}, b::AbstractVector{T}) where {T<:BlasFloat} =
-    BLAS.trmv!(uploc, tfun === identity ? 'N' : tfun === transpose ? 'T' : 'C', isunitc, A, c === b ? c : copyto!(c, b))
+function generic_trimatmul!(c::StridedVector{T}, uploc, isunitc, tfun::Function, A::StridedMatrix{T}, b::AbstractVector{T}) where {T<:BlasFloat}
+    if stride(A,1) == 1 && _fullstride2(A)
+        BLAS.trmv!(uploc, tfun === identity ? 'N' : tfun === transpose ? 'T' : 'C', isunitc, A, c === b ? c : copyto!(c, b))
+    else # incompatible with BLAS
+        @invoke generic_trimatmul!(c::AbstractVecOrMat, uploc, isunitc, tfun::Function, A::AbstractMatrix, b::AbstractVecOrMat)
+    end
+end
 function generic_trimatmul!(C::StridedMatrix{T}, uploc, isunitc, tfun::Function, A::StridedMatrix{T}, B::AbstractMatrix{T}) where {T<:BlasFloat}
-    if stride(C,1) == stride(A,1) == 1
+    if stride(C,1) == stride(A,1) == 1 && _fullstride2(C) && _fullstride2(A)
         BLAS.trmm!('L', uploc, tfun === identity ? 'N' : tfun === transpose ? 'T' : 'C', isunitc, one(T), A, C === B ? C : copyto!(C, B))
     else # incompatible with BLAS
         @invoke generic_trimatmul!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A::AbstractMatrix, B::AbstractMatrix)
     end
 end
 function generic_mattrimul!(C::StridedMatrix{T}, uploc, isunitc, tfun::Function, A::AbstractMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat}
-    if stride(C,1) == stride(B,1) == 1
+    if stride(C,1) == stride(B,1) == 1 && _fullstride2(C) && _fullstride2(B)
         BLAS.trmm!('R', uploc, tfun === identity ? 'N' : tfun === transpose ? 'T' : 'C', isunitc, one(T), B, C === A ? C : copyto!(C, A))
     else # incompatible with BLAS
         @invoke generic_mattrimul!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A::AbstractMatrix, B::AbstractMatrix)
@@ -886,14 +883,14 @@ function generic_mattrimul!(C::StridedMatrix{T}, uploc, isunitc, tfun::Function,
 end
 # division
 function generic_trimatdiv!(C::StridedVecOrMat{T}, uploc, isunitc, tfun::Function, A::StridedMatrix{T}, B::AbstractVecOrMat{T}) where {T<:BlasFloat}
-    if stride(C,1) == stride(A,1) == 1
+    if stride(C,1) == stride(A,1) == 1 && _fullstride2(C) && _fullstride2(A)
         LAPACK.trtrs!(uploc, tfun === identity ? 'N' : tfun === transpose ? 'T' : 'C', isunitc, A, C === B ? C : copyto!(C, B))
     else # incompatible with LAPACK
         @invoke generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, tfun::Function, A::AbstractMatrix, B::AbstractVecOrMat)
     end
 end
 function generic_mattridiv!(C::StridedMatrix{T}, uploc, isunitc, tfun::Function, A::AbstractMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat}
-    if stride(C,1) == stride(B,1) == 1
+    if stride(C,1) == stride(B,1) == 1 && _fullstride2(C) && _fullstride2(B)
         BLAS.trsm!('R', uploc, tfun === identity ? 'N' : tfun === transpose ? 'T' : 'C', isunitc, one(T), B, C === A ? C : copyto!(C, A))
     else # incompatible with BLAS
         @invoke generic_mattridiv!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A::AbstractMatrix, B::AbstractMatrix)
@@ -1394,7 +1391,7 @@ function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, ::Function, xA:
                 for i in 2:m
                     C[i,k] = oA \ B[i,k] - _ustrip(conj(A[i,1])) * C1
                 end
-                for j in 1:m
+                for j in 2:m
                     Cj = C[j,k]
                     for i in j+1:m
                         C[i,k] -= _ustrip(conj(A[i,j])) * Cj

@@ -171,6 +171,62 @@ Random.seed!(100)
                 @test_throws DimensionMismatch BLAS.her!('U',α,Vector{elty}(undef,n+1),copy(A))
             end
         end
+        @testset "ger, her, syr with non-contiguous columns" begin
+            # stride(A, 1) must be 1, and the parent must not be written to
+            x, y = rand(elty, n), rand(elty, n)
+            P = rand(elty, 2n, n)
+            P0 = copy(P)
+            A = view(P, 1:2:2n, :)
+            α = rand(elty)
+            @test_throws ErrorException BLAS.ger!(α, x, y, A)
+            @test_throws ErrorException BLAS.syr!('U', α, x, A)
+            if elty <: Complex
+                @test_throws ErrorException BLAS.her!('U', real(α), x, A)
+            end
+            @test P == P0
+        end
+        @testset "level 2 with reversed columns" begin
+            # stride(A, 2) must be at least size(A, 1), and the parent must not be written to
+            x, y = rand(elty, n), rand(elty, n)
+            P, Pb = rand(elty, n, n), rand(elty, 2, n)
+            P0, Pb0 = copy(P), copy(Pb)
+            A, Ab = view(P, :, n:-1:1), view(Pb, :, n:-1:1) # full and banded storage
+            α, β = rand(elty), rand(elty)
+            @test_throws ErrorException BLAS.gbmv!('N', n, 1, 0, α, Ab, x, β, copy(y))
+            @test_throws ErrorException BLAS.symv!('U', α, A, x, β, copy(y))
+            @test_throws ErrorException BLAS.trmv!('U', 'N', 'N', A, copy(x))
+            @test_throws ErrorException BLAS.trsv!('U', 'N', 'N', A, copy(x))
+            @test_throws ErrorException BLAS.ger!(α, x, y, A)
+            @test_throws ErrorException BLAS.syr!('U', α, x, A)
+            if elty <: Complex
+                @test_throws ErrorException BLAS.hemv!('U', α, A, x, β, copy(y))
+                @test_throws ErrorException BLAS.hbmv!('U', 1, α, Ab, x, β, copy(y))
+                @test_throws ErrorException BLAS.her!('U', real(α), x, A)
+            else
+                @test_throws ErrorException BLAS.sbmv!('U', 1, α, Ab, x, β, copy(y))
+            end
+            @test P == P0
+            @test Pb == Pb0
+            # for a single column, stride(A, 2) is irrelevant
+            M = rand(elty, n, 1)
+            M0 = copy(M)
+            a = view(M, :, 1:-1:1)
+            @test stride(a, 2) < 0
+            @test BLAS.ger!(α, x, y[1:1], a) ≈ M0 + α * x * y[1:1]'
+            # for a single row, stride(A, 1) is irrelevant
+            M = rand(elty, 2, n)
+            M0 = copy(M)
+            a = view(M, 1:2:1, :)
+            @test stride(a, 1) == 2
+            @test BLAS.ger!(α, x[1:1], y, a) ≈ M0[1:1, :] + α * x[1:1] * y'
+            @test M[2, :] == M0[2, :]
+            @test BLAS.syr!('U', α, x[1:1], view(M, 1:2:1, 1:1))[1] ≈ M0[1] + α * x[1]^2 + α * x[1] * y[1]'
+            @test BLAS.symv!('U', α, view(M, 1:2:1, 1:1), x[1:1], false, zeros(elty, 1)) ≈ α * M[1:1, 1:1] * x[1:1]
+            # empty matrices are not accessed
+            @test BLAS.ger!(α, elty[], y, view(P, 1:0, n:-1:1)) == zeros(elty, 0, n)
+            @test BLAS.ger!(α, x[1:2], elty[], view(P, 1:2:3, 1:0)) == zeros(elty, 2, 0)
+            @test P == P0
+        end
         @testset "copy" begin
             x1 = randn(elty, n)
             x2 = randn(elty, n)
