@@ -1644,20 +1644,29 @@ if !is_debug_build && opt_level > 0
         @test !isempty(store_blocks)
         @test all(b -> !occursin(r"load ptr, ptr %\"A::Array\"", b), store_blocks)
     end
+    # the same for an `Array` narrowed from a `Union` by union splitting (reading through
+    # `pointer`, which has no bounds check that `--check-bounds=yes` would keep in the loop)
+    function array_header_hoist_union(p::Ptr{Float64}, x::Union{Vector{Float64}, Vector{Int}}, n::Int)
+        if x isa Vector{Float64}
+            for i in 1:n
+                unsafe_store!(p, unsafe_load(pointer(x, i)), i)
+            end
+        end
+    end
+    let ir = get_llvm(array_header_hoist_union, Tuple{Ptr{Float64}, Union{Vector{Float64}, Vector{Int}}, Int}, false)
+        store_blocks = filter(b -> occursin("store double", b) && occursin("load double", b),
+                              split(ir, r"\n(?=\S+:)"))
+        @test !isempty(store_blocks)
+        @test all(b -> !occursin(r"load ptr, ptr %\"x::", b), store_blocks)
+    end
 end
 
-# An `Array` reached through a value of `Union` or abstract type is accessed with the
-# alias info of a generic value, which must still include the `arrayhdr` region so that
-# those accesses alias the stores that initialize the header (#62704).
-array_header_union(x::Union{Vector{Float64}, Matrix{Float64}}) = x isa Matrix{Float64} ? size(x, 1) : length(x)
-let ir = get_llvm(array_header_union, Tuple{Union{Vector{Float64}, Matrix{Float64}}}, true, true, false)
-    md = Dict{String,String}(m[1] => m[2] for m in eachmatch(r"^(![0-9]+) = (?:distinct )?(!\{.*\})$"m, ir))
-    arrayhdr = only(k for (k, v) in md if occursin("\"jnoalias_arrayhdr\"", v))
-    scopes(id) = [m.match for m in eachmatch(r"![0-9]+", md[id])]
-    accesses = [m for m in eachmatch(r"^.*\.size_ptr\d*\".*!alias\.scope (![0-9]+), !noalias (![0-9]+).*$"m, ir)]
-    @test !isempty(accesses)
-    for m in accesses
-        @test arrayhdr in scopes(m[1])
-        @test !(arrayhdr in scopes(m[2]))
-    end
+# An `Array` narrowed from a `Union` must still alias the stores that initialize its
+# header (#62704). This only miscompiled with bounds checks forced on.
+let code = """
+    mkunion(b::Bool) = b ? fill(1.0, 1, 1) : fill(1.0 + 0im, 1, 1)
+    f(b::Bool, D::Int) = sum(reshape(mkunion(b)[:, end], D, D))
+    print(f(true, 1) === 1.0 && f(false, 1) === 1.0 + 0.0im)
+    """
+    @test read(`$(Base.julia_cmd()) --startup-file=no --check-bounds=yes -e $code`, String) == "true"
 end

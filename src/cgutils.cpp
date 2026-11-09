@@ -3537,7 +3537,10 @@ static jl_aliasinfo_t best_field_aliasinfo(jl_codectx_t &ctx, const jl_cgval_t &
         if (idx == 1)
             return ctx.alias().memoryptr;
     }
-    if (ai.tbaa == ctx.tbaa().tbaa_array && jl_is_array_type(jt)) {
+    // A value of statically unknown type (`alias.value`) that is now known to be an
+    // `Array`, e.g. after union splitting, is a boxed `Array` too: its header fields
+    // are only in `arrayhdr`, which keeps them apart from raw `Ptr` accesses.
+    if ((ai.tbaa == ctx.tbaa().tbaa_array || ai.tbaa == ctx.tbaa().tbaa_value) && jl_is_array_type(jt)) {
         if (idx == 0)
             return ctx.alias().arrayptr;
         if (idx == 1)
