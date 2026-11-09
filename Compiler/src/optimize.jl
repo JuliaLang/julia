@@ -4,13 +4,7 @@
 # constants #
 #############
 
-# The slot has uses that are not statically dominated by any assignment
-# This is implied by `SLOT_USEDUNDEF`.
-# If this is not set, all the uses are (statically) dominated by the defs.
-# In particular, if a slot has `AssignedOnce && !StaticUndef`, it is an SSA.
-const SLOT_STATICUNDEF  = 1 # slot might be used before it is defined (structurally)
 const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
-const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 # const SLOT_CALLED      = 64
 
 # NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
@@ -269,7 +263,10 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     nbbstate = zeros(Int, nslots)
     bb_states = Union{BBEntryState,Nothing}[
         BBEntryState(VarState[
-            VarState(slottypes[slot], typemin(Int), src.slotflags[slot] & SLOT_USEDUNDEF != 0)
+            # Conservatively assume non-argument slots may be undefined at
+            # entry (matching inference's initial state); slotflags carry no
+            # trustworthy used-undef information.
+            VarState(slottypes[slot], typemin(Int), slot > Int(src.nargs))
             for slot = 1:nslots
         ], nbbstate)
         for _ = 1:length(cfg.blocks)]
@@ -1872,10 +1869,10 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
-            elseif (f === Core.memoryrefget || f === Core.const_memoryrefget || f === Core.memoryref_isassigned) && length(ex.args) >= 3
+            elseif (f === Core.memoryrefget || f === Core.const_memoryrefget || f === Core.memoryref_isassigned || f === Core.unsafe_memoryrefload) && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
                 return isknowntype(atyp) ? 1 : params.inline_nonleaf_penalty
-            elseif f === Core.memoryrefset! && length(ex.args) >= 3
+            elseif (f === Core.memoryrefset! || f === Core.unsafe_memoryrefstore!) && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
                 return isknowntype(atyp) ? 5 : params.inline_nonleaf_penalty
             elseif f === Core.memoryrefunset! && length(ex.args) >= 3

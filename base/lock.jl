@@ -997,7 +997,7 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                     @atomic :monotonic ss[tid] = PerStateConcurrent
                     result = try
                         unlock(PerThreadLock)
-                        once.initializer()
+                        convert(T, once.initializer())
                     catch
                         lock(PerThreadLock)
                         ss = @atomic :monotonic once.ss
