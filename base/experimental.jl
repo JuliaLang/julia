@@ -395,7 +395,8 @@ overlays every definition in the block; definitions may carry docstrings and oth
 
     Considering this, it is important to understand that in compilations using an overlay
     method table like the following, the method dispatched by `callx(x)` is not the regular
-    method `callx(::Float64)`, but the overlay method `callx(x::Real)`:
+    method `callx(::Float64)`, but the overlay method `callx(x::Real)` (unless the table was
+    created with `@MethodTable SOME_OVERLAY_MT by_specificity=true`):
     ```julia
     callx(::Real) = :real
     @overlay SOME_OVERLAY_MT callx(::Real) = :overlay_real
@@ -498,21 +499,35 @@ function overlay_def!(mt, @nospecialize ex)
     return ex
 end
 
-let new_mt(name::Symbol, mod::Module) = begin
+let new_mt(name::Symbol, mod::Module, by_specificity::Bool) = begin
         ccall(:jl_check_top_level_effect, Cvoid, (Any, Cstring), mod, "@MethodTable")
-        ccall(:jl_new_method_table, Any, (Any, Any), name, mod)
+        ccall(:jl_new_method_table_by_specificity, Any, (Any, Any, Cint), name, mod, by_specificity)
     end
-    @eval macro MethodTable(name::Symbol)
-        esc(:(const $name = $$new_mt($(quot(name)), $(__module__))))
+    @eval macro MethodTable(name::Symbol, options...)
+        by_specificity = false
+        for opt in options
+            if isexpr(opt, :(=), 2) && opt.args[1] === :by_specificity && opt.args[2] isa Bool
+                by_specificity = opt.args[2]
+            else
+                throw(ArgumentError(string("invalid @MethodTable option: ", opt)))
+            end
+        end
+        esc(:(const $name = $$new_mt($(quot(name)), $(__module__), $by_specificity)))
     end
 end
 
 """
-    Base.Experimental.@MethodTable name
+    Base.Experimental.@MethodTable name [by_specificity=false]
 
 Create a new MethodTable in the current module, bound to `name`. This method table can be
 used with the [`Base.Experimental.@overlay`](@ref) macro to define methods for a function
 without adding them to the global method table.
+
+By default, compilation through [`Core.Compiler.OverlayMethodTable`](@ref) prefers the
+methods of this table over global methods. With `by_specificity=true`, it ranks them by
+specificity instead, as if they were added to the global method table: an overlay method
+replaces a global method with the same signature, a more specific global method wins over
+an overlay method, and a call that neither one wins is ambiguous.
 """
 :@MethodTable
 

@@ -896,8 +896,10 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
                     else {
                         assert(i < l);
                         ex = data[i++];
-                        if (jl_is_mtable(ex)) // abstract dispatch (`invokesig, mt`)
+                        if (ex == (jl_value_t*)jl_method_table) // abstract dispatch (`invokesig, mt`)
                             jl_method_table_add_backedge(kind, ci);
+                        else if (jl_is_mtable(ex)) // a lookup merging an overlay table with the global one
+                            jl_method_table_add_merged_backedge(kind, ex, ci);
                         else if (jl_is_code_instance(ex))
                             jl_method_instance_add_backedge(jl_get_ci_mi((jl_code_instance_t*)ex), kind, ci);
                         else if (jl_is_method_instance(ex))

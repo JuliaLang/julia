@@ -27,7 +27,7 @@ static void jl_rebuild_methtables(arraylist_t *MIs, htable_t *mtables) JL_CANSAF
         if ((jl_value_t *)old_mt == jl_nothing)
             continue;
         if (!ptrhash_has(mtables, old_mt))
-            ptrhash_put(mtables, old_mt, jl_new_method_table(old_mt->name, old_mt->module));
+            ptrhash_put(mtables, old_mt, jl_new_method_table_by_specificity(old_mt->name, old_mt->module, old_mt->by_specificity));
         jl_methtable_t *mt = (jl_methtable_t*)ptrhash_get(mtables, old_mt);
         //TODO: should this be a function like unsafe_insert_method, since all that is wanted is the jl_typemap_insert on a copy of the existing entry
         // as `jl_method_table_add`, for a method already in another table

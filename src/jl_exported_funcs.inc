@@ -235,6 +235,7 @@
     XX(jl_gf_invoke_lookup) \
     XX(jl_method_lookup) \
     XX(jl_gf_invoke_lookup_worlds) \
+    XX(jl_gf_invoke_lookup_worlds_merged) \
     XX(jl_global_event_loop) \
     XX(jl_has_empty_intersection) \
     XX(jl_has_free_typevars) \
@@ -303,10 +304,12 @@
     XX(jl_malloc) \
     XX(jl_malloc_stack) \
     XX(jl_matching_methods) \
+    XX(jl_matching_methods_merged) \
     XX(jl_maxrss) \
     XX(jl_method_def) \
     XX(jl_method_instance_add_backedge) \
     XX(jl_method_table_add_backedge) \
+    XX(jl_method_table_add_merged_backedge) \
     XX(jl_method_table_disable) \
     XX(jl_method_table_for) \
     XX(jl_method_table_insert) \
@@ -335,6 +338,7 @@
     XX(jl_reinit_foreign_type) \
     XX(jl_new_method_instance_uninit) \
     XX(jl_new_method_table) \
+    XX(jl_new_method_table_by_specificity) \
     XX(jl_new_method_uninit) \
     XX(jl_new_module) \
     XX(jl_begin_new_module) \

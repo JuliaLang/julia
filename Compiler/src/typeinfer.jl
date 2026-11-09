@@ -937,8 +937,10 @@ const CI_FLAGS_UNIQUE_BACKEDGES = 0b10000
 function add_backedge!(caller::CodeInstance, @nospecialize(invokesig), @nospecialize(item))
     if item isa Core.Binding
         maybe_add_binding_backedge!(item, caller)
-    elseif item isa MethodTable
+    elseif item === Core.methodtable
         ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any), invokesig, caller)
+    elseif item isa MethodTable
+        ccall(:jl_method_table_add_merged_backedge, Cvoid, (Any, Any, Any), invokesig, item, caller)
     else
         item::MethodInstance
         ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)

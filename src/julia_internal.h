@@ -1565,6 +1565,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t*) JL_CANSAFEPOINT;
 jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_using_core, uint8_t self_name) JL_CANSAFEPOINT;
 jl_module_t *jl_add_standard_imports(jl_module_t *m) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_methtable_t *jl_new_method_table_by_specificity(jl_sym_t *name, jl_module_t *module, int by_specificity) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_methcache_t *jl_new_method_cache(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp) JL_CANSAFEPOINT JL_PROPAGATES_ROOT;
@@ -1577,6 +1578,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(
 jl_method_instance_t *jl_specializations_get_or_insert(jl_method_instance_t *mi_ins JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_value_t *invokesig, jl_code_instance_t *caller) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_value_t *typ, jl_code_instance_t *caller) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_method_table_add_merged_backedge(jl_value_t *typ, jl_value_t *mt, jl_code_instance_t *caller) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi,
                                      jl_code_instance_t *ci JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi,

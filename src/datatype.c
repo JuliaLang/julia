@@ -53,6 +53,11 @@ JL_DLLEXPORT jl_methcache_t *jl_new_method_cache(void)
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module)
 {
+    return jl_new_method_table_by_specificity(name, module, 0);
+}
+
+JL_DLLEXPORT jl_methtable_t *jl_new_method_table_by_specificity(jl_sym_t *name, jl_module_t *module, int by_specificity)
+{
     jl_methcache_t *mc = jl_new_method_cache();
     JL_GC_PUSH1(&mc);
     jl_task_t *ct = jl_current_task;
@@ -64,6 +69,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     mt->module = module;
     mt->backedges = (jl_genericmemory_t*)jl_an_empty_memory_any;
     jl_atomic_store_relaxed(&mt->contributors, (jl_genericmemory_t*)jl_an_empty_memory_any);
+    mt->by_specificity = by_specificity != 0;
     JL_GC_POP();
     return mt;
 }
