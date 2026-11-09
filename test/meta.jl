@@ -468,7 +468,7 @@ end
 
     @test_throws Meta.ParseError Meta.parse(tg)
     @test Meta.isexpr(Meta.parseall(tg).args[end], :error)
-    @test Meta.isexpr(Meta.parse(tg; mod=Module(:MetaTGDefault)), :typegroup)
+    @test_throws Meta.ParseError Meta.parse(tg; mod=Module(:MetaTGDefault))
 
     # 1.13 parser
     p13 = Base.VersionedParse(Base.OLDEST_EDITION)
@@ -479,4 +479,9 @@ end
     m13 = Module(:MetaTG13)
     Base.set_syntax_version(m13, v"1.13")
     @test_throws Meta.ParseError invokelatest(Meta.parse, tg; mod=m13)
+
+    # 1.14 module
+    m14 = Module(:MetaTG14)
+    Base.set_syntax_version(m14, v"1.14")
+    @test Meta.isexpr(Meta.parse(tg; mod=m14), :typegroup)
 end

@@ -754,10 +754,9 @@ JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports, ui
     // TODO: should we prohibit this during incremental compilation?
     // TODO: the parent module is a lie
     jl_module_t *m = jl_new_module_(
-        name, jl_main_module, jl_get_module_edition(jl_main_module),
-        default_names, default_names);
+        name, jl_main_module, OLDEST_EDITION, default_names, default_names);
     JL_GC_PUSH1(&m);
-    if (std_imports)
+    if (std_imports && jl_base_module != NULL)
         jl_add_standard_imports(m);
     JL_GC_POP();
     // TODO: should we somehow try to gc-root this correctly?

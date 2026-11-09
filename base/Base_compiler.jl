@@ -144,13 +144,8 @@ import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_s
 include("exports.jl")
 
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
-function _setup_module!(mod::Module, _)
-    # using Base
-    Core._using(mod, _topmod(mod), UInt8(0))
-    Core.declare_const(mod, :include, IncludeInto(mod))
-    Core.declare_const(mod, :eval, Core.EvalInto(mod))
-    return nothing
-end
+
+function _setup_module! end # Revise/JuliaInterpreter compat
 
 # core docsystem
 include("docs/core.jl")
@@ -306,7 +301,7 @@ struct VersionedParse
 end
 
 function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
-    pm = parentmodule(Core._parse)
+    pm = parentmodule(typeof(Core._parse))
     # hack to support old copies of JuliaSyntax
     if !isdefined(pm, :_has_v1_14_version_hooks) && isdefined(pm, :_has_v1_10_hooks)
         invokelatest(Core._parse, code, filename, lineno, offset, options)
