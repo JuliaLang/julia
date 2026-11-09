@@ -655,6 +655,77 @@ end
     end
 end
 
+@testset "Array and convenience constructors" begin
+    A = [1 2; 3 4]
+    for S in (SharedArray{Float64}(A), SharedArray{Float64,2}(A), convert(SharedMatrix{Float64}, A))
+        @test S isa SharedMatrix{Float64}
+        @test S == A
+        @test similar(S) isa Matrix{Float64}
+        @test size(similar(S)) == size(A)
+    end
+    @test_throws InexactError SharedArray{Int}([1.5])
+    @test size(SharedArray{Int}(1, 2, 3, 4)) == (1, 2, 3, 4)
+    @test size(SharedArray{Int}(Int8(2))) == (2,)
+    @test size(SharedArray{Int}(Int8(2), Int8(3))) == (2, 3)
+    @test size(SharedArray{Int}((Int8(2), Int8(3)))) == (2, 3)
+    @test size(SharedArray{Int,2}(Int8(2), Int8(3))) == (2, 3)
+
+    for (S, T, sz) in ((SharedArrays.shmem_rand(1:3, 4), Int, (4,)),
+                       (SharedArrays.shmem_rand(1:3, 4, 2), Int, (4, 2)),
+                       (SharedArrays.shmem_rand(Int8, 4), Int8, (4,)),
+                       (SharedArrays.shmem_rand(Int8, 4, 2), Int8, (4, 2)),
+                       (SharedArrays.shmem_rand(4), Float64, (4,)),
+                       (SharedArrays.shmem_rand(4, 2), Float64, (4, 2)),
+                       (SharedArrays.shmem_randn(4), Float64, (4,)),
+                       (SharedArrays.shmem_randn(4, 2), Float64, (4, 2)),
+                       (SharedArrays.shmem_randn((4, 2)), Float64, (4, 2)))
+        @test eltype(S) === T
+        @test size(S) == sz
+    end
+    @test all(in(1:3), SharedArrays.shmem_rand(1:3, 100))
+    @test all(<(1), SharedArrays.shmem_rand(100))
+    @test any(<(0), SharedArrays.shmem_randn(100))
+end
+
+@testset "indexpids" begin
+    S = SharedArray{Int}(3)
+    @test indexpids(S) == 0
+    @test [remotecall_fetch(indexpids, p, S) for p in procs(S)] == eachindex(procs(S))
+    S = SharedArray{Int}(3; pids=id_others[1:1])
+    @test remotecall_fetch(indexpids, id_others[2], S) == 0
+    @test SharedArray{Int}(3; pids=[myid()]) |> indexpids == 1
+end
+
+@testset "reduce with concatenation" begin
+    v = collect(1:10)
+    S = SharedArray{Int}(v)
+    @test reduce(vcat, S) == reduce(vcat, v)
+    @test reduce(hcat, S) == reduce(hcat, v)
+
+    # Workers holding no elements have nothing to add to the result.
+    v = collect(1:(length(workers()) - 1))
+    S = SharedArray{Int}(v)
+    @test reduce(vcat, S) == reduce(vcat, v)
+    @test reduce(hcat, S) == reduce(hcat, v)
+    @test reduce(max, S) == maximum(v)
+    @test reduce(+, SharedArray{Int}(0)) == 0
+end
+
+@testset "argument errors" begin
+    file = abspath(tempname())
+    @test_throws ArgumentError SharedArray{Int,1}("relative_path", (2,))
+    @test_throws ArgumentError SharedArray{Vector{Int},1}(file, (2,))
+    write(file, zeros(Int, 2))
+    S = SharedArray{Int,1}(file, (2,); mode="r")
+    @test S == [0, 0]
+    @test_throws ArgumentError SharedArray{Int,1}(file, (2,); mode="r", init=_ -> nothing)
+    close(S)
+    rm(file)
+
+    S1, S2 = SharedArray{Int}(3; pids=id_others[1:1]), SharedArray{Int}(3; pids=id_others[2:2])
+    @test_throws ArgumentError map!(identity, S1, S2)
+end
+
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(SharedArrays))
 end

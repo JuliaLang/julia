@@ -27,11 +27,13 @@ Sockets.TCPSocket
 Sockets.UDPSocket
 Sockets.accept
 Sockets.listenany
-Sockets.bind
+Sockets.bind(::Union{Sockets.TCPServer, Sockets.UDPSocket, Sockets.TCPSocket}, ::Sockets.IPAddr, ::Integer)
 Sockets.send
 Sockets.recv
 Sockets.recvfrom
 Sockets.setopt
 Sockets.nagle
 Sockets.quickack
+Sockets.join_multicast_group
+Sockets.leave_multicast_group
 ```

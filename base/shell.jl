@@ -174,7 +174,7 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
             fd = nothing
             if !word_has_special && length(arg) == 1 && isa(arg[1], AbstractString) &&
                     !isempty(arg[1]::AbstractString) && all(isdigit, arg[1]::AbstractString)
-                fd = parse(Int, arg[1]::AbstractString)
+                fd = parse(Int, String(arg[1]::AbstractString)::String)
                 empty!(arg)
                 word_has_special = false
             elseif !isempty(arg)
@@ -283,8 +283,8 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                     append!(arg, user_parts)
                 elseif isempty(user_parts)
                     push!(arg, :(expanduser("~")))
-                elseif length(user_parts) == 1 && isa(user_parts[1], AbstractString)
-                    push!(arg, :(expanduser($("~" * user_parts[1]))))
+                elseif length(user_parts) == 1 && (u = user_parts[1]; u isa AbstractString)
+                    push!(arg, :(expanduser($("~" * u))))
                 else
                     push!(arg, :(let _u = string($(user_parts...)); isempty(_u) ? "~" : expanduser(string('~', _u)) end))
                 end

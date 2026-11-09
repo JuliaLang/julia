@@ -290,7 +290,7 @@ end
 @assume_effects :foldable repeat(s::String, r::BitInteger) = @invoke repeat(s::String, r::Integer)
 
 function repeat(s::Union{String, SubString{String}}, r::Integer)
-    r < 0 && throw(ArgumentError("can't repeat a string $r times"))
+    r < 0 && throw(ArgumentError(LazyString("can't repeat a string ", r, " times")))
     r = UInt(r)::UInt
     r == 0 && return ""
     r == 1 && return String(s)

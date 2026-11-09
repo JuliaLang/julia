@@ -62,6 +62,19 @@ end
 @test JuliaLowering.include_string(test_mod, """
 collect((z=y; y=100; z) for y in 1:3 for x in 1:2)
 """) == [1, 1, 2, 2, 3, 3]
+@test JuliaLowering.include_string(test_mod, """
+collect((z=y; y=100; z) for y in 1:3 if y > 0 for x in 1:2)
+""") == [1, 1, 2, 2, 3, 3]
+
+# Filtered outer iteration with a non-call filter condition
+@test JuliaLowering.include_string(test_mod, """
+[x for j in [[1,2],[3]] if true for x in j]
+""") == [1, 2, 3]
+@test JuliaLowering.include_string(test_mod, """
+let flag = true
+    [x for j in [[1,2],[3]] if flag for x in j]
+end
+""") == [1, 2, 3]
 
 # Simple typed comprehension lowered to for loops
 @test JuliaLowering.include_string(test_mod, """
@@ -290,6 +303,20 @@ end
     @test (jeval("(_ for _ in 1:3)")).f === Base.identity
     @test (feval("(f(_) for _ in 1:3)")).f === test_mod.f
     @test (jeval("(f(_) for _ in 1:3)")).f === test_mod.f
+end
+
+# flisp only checks the outermost generator body for disallowed return :(
+@testset "compat: `return` in flattened generators" begin
+    local jeval(str; edition) = jl_eval(test_mod, parsestmt(SyntaxTree, str); edition)
+    s = "collect((return x + y) for x in 1:2 for y in 1:2)"
+    @test jeval(s; edition=JL_OLD_EDITION) == [2, 3, 3, 4]
+    @test_throws LoweringError jeval(s; edition=JL_NEW_EDITION)
+    @test_throws LoweringError jeval("collect((return x) for x in 1:2)"; edition=JL_OLD_EDITION)
+    # flisp checks the whole (outermost) generator, not only its body
+    for edition in (JL_OLD_EDITION, JL_NEW_EDITION)
+        @test_throws LoweringError jeval("collect(x for x in 1:2 if (return true))"; edition)
+        @test_throws LoweringError jeval("collect(x for x in (return 1:2))"; edition)
+    end
 end
 
 @testset "a comprehension may contain a non-syntactic generator" begin

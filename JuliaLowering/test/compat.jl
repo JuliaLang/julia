@@ -46,10 +46,16 @@ end
 
 # ignore_linenums=false is good for checking, but too noisy to use much
 function expr_equal_forgiving(e1, e2; ignore_linenums=true)
-    if e1 isa QuoteNode && e2 isa QuoteNode
+    typeof(e1) == typeof(e2) || return false
+    if e1 isa QuoteNode
         return expr_equal_forgiving(e1.value, e2.value; ignore_linenums)
+    elseif e1 isa LineNumberNode && !ignore_linenums
+        e1.file === nothing && (e1 = LineNumberNode(e1.line, :var""))
+        e2.file === nothing && (e2 = LineNumberNode(e2.line, :var""))
+    elseif e1 isa Core.MacroSource
+        return true # todo: remove this case
     end
-    !(e1 isa Expr && e2 isa Expr) && return e1 == e2
+    !(e1 isa Expr) && return e1 == e2
     if ignore_linenums
         e1, e2 = let e1b = Expr(e1.head), e2b = Expr(e2.head)
             e1b.args = filter(x->!(x isa LineNumberNode), e1.args)
@@ -100,7 +106,7 @@ end
     ]
 
     # TODO: `@ast_` escaping is broken
-    unused = JuliaSyntax.parsestmt(JuliaSyntax.SyntaxTree, "foo")
+    unused = JuliaSyntax.parsestmt(SyntaxTree, "foo")
     local st_wrappers = Function[
         x->(@ast _ unused (x::value))
         x->(@ast _ unused [:inert x::value])
@@ -262,6 +268,17 @@ end
 
     @testset "bulk parsed code, no linenodes" begin
         test_each_in_path(roundtrip_eq, JL_DIR)
+    end
+
+    @testset "SSAValue, SlotNumber" begin
+        @test_throws "should not occur in an AST" jl_lower(
+            test_mod, Expr(:block, Core.SSAValue(1)))
+        @test_throws "should not occur in an AST" jl_lower(
+            test_mod, Expr(:block, Core.SlotNumber(1)))
+        @test jl_eval(test_mod, Expr(:block, QuoteNode(Core.SSAValue(1)))) ==
+            fl_eval(test_mod, Expr(:block, QuoteNode(Core.SSAValue(1))))
+        @test jl_eval(test_mod, Expr(:block, QuoteNode(Core.SlotNumber(1)))) ==
+            fl_eval(test_mod, Expr(:block, QuoteNode(Core.SlotNumber(1))))
     end
 end
 
@@ -493,7 +510,9 @@ test_toplevel_programs = [
                 a,b,c
             end
             """
-            @test JL.est_to_expr(JS.parsestmt(SyntaxTree, s)) == JS.parsestmt(Expr, s)
+            @test expr_equal_forgiving(
+                JL.est_to_expr(JS.parsestmt(SyntaxTree, s)),
+                JS.parsestmt(Expr, s); ignore_linenums=false)
         end
         @testset "linenodes equal in `for`" begin
             s = """
@@ -501,7 +520,9 @@ test_toplevel_programs = [
                 a,b,c
             end
             """
-            @test JL.est_to_expr(JS.parsestmt(SyntaxTree, s)) == JS.parsestmt(Expr, s)
+            @test expr_equal_forgiving(
+                JL.est_to_expr(JS.parsestmt(SyntaxTree, s)),
+                JS.parsestmt(Expr, s); ignore_linenums=false)
         end
     end
 
@@ -532,12 +553,10 @@ end
         Expr(:ssavalue, 5)
 
     # ssavalue references inside a lambda body should lower successfully
-    lambda = Expr(:lambda, Any[:x],
+    @test jl_eval(test_mod, Expr(:lambda, Any[:x],
         Expr(:block,
             Expr(:(=), Expr(:ssavalue, 0), Expr(:call, GlobalRef(Core, :typeof), :x)),
-            Expr(:return, Expr(:ssavalue, 0))))
-    out = JL.core_lowering_hook(lambda, test_mod)
-    @test out isa Core.SimpleVector && out[1] isa Core.CodeInfo
+            Expr(:return, Expr(:ssavalue, 0))))) isa Core.CodeInfo
 end
 
 @testset "expr compat: #self# becomes `thisfunction`" begin
@@ -666,7 +685,11 @@ end
 
     let ex = parsestmt(SyntaxTree, "let q = p; q ^= 2; q end")
         @test fl_eval(pow_mod, ex) == (:literal, 2)
-        @test_broken jl_eval(pow_mod, ex; edition=JL_OLD_EDITION) == (:literal, 2)
+        @test jl_eval(pow_mod, ex; edition=JL_OLD_EDITION) == (:literal, 2)
+    end
+    let ex = parsestmt(SyntaxTree, "let q = Any[p]; q .^= 2; q end")
+        @test fl_eval(pow_mod, ex) == [(:literal, 2)]
+        @test jl_eval(pow_mod, ex; edition=JL_OLD_EDITION) == [(:literal, 2)]
     end
 end
 

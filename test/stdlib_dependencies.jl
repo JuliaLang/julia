@@ -1,20 +1,25 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Libdl
+using Pkg
 using Test
 
-# Load ObjectFile.jl from the vendored jlutilities depot
+# ObjectFile.jl must not be installed into the normal depots, as that corrupts state for the Pkg tests.
+# A source tree has a depot for this. CI tests an installed Julia, so it uses a temporary one.
 buildroot = get(ENV, "JULIA_TEST_BUILDROOT", joinpath(@__DIR__, ".."))
 depspath = joinpath(buildroot, "deps", "jlutilities")
-if ispath(depspath)
-    depspath = realpath(depspath)
-    # With a source-tree use the vendored depot
-    pushfirst!(DEPOT_PATH, joinpath(depspath, "depot"))
-    using Pkg
+objectfile_depot = if ispath(depspath)
+    joinpath(realpath(depspath), "depot")
+elseif Base.get_bool_env("JULIA_TEST_IS_BASE_CI", false)
+    # Windows cannot delete a pkgimage while it is loaded
+    mktempdir(; cleanup = !Sys.iswindows())
+end
+if objectfile_depot !== nothing
+    pushfirst!(DEPOT_PATH, objectfile_depot)
     old_active_project = Base.active_project()
     Base.redirect_stdout(devnull) do
         Base.redirect_stderr(devnull) do
-            Pkg.activate(realpath(joinpath(@__DIR__, "..", "deps", "jlutilities", "objectfile")))
+            Pkg.activate(joinpath(@__DIR__, "stdlib_dependencies"))
             Pkg.instantiate()
         end
     end
@@ -22,7 +27,7 @@ if ispath(depspath)
     popfirst!(DEPOT_PATH)
     Base.set_active_project(old_active_project)
 else
-    # Without a source-tree - expect that the user has installed it for us - warn otherwise
+    # Otherwise expect that the user has installed it for us - warn if not
     ObjectFile_pkgid = Base.PkgId(Base.UUID("d8793406-e978-5875-9003-1fc021f44a92"), "ObjectFile")
     if Base.locate_package(ObjectFile_pkgid) !== nothing
         @eval using ObjectFile
@@ -256,6 +261,10 @@ else
                         if "libpcre2-8" in missing_deps && "libpcre2" in extraneous_deps
                             missing_deps = setdiff(missing_deps, ["libpcre2-8"])
                             extraneous_deps = setdiff(extraneous_deps, ["libpcre2"])
+                        end
+                        # These stdlibs do not depend on CompilerSupportLibraries_jll, so they cannot declare this
+                        if Sys.WORD_SIZE == 32 && stdlib_name in ("Zlib_jll", "libpicosat_jll")
+                            missing_deps = setdiff(missing_deps, ["libgcc_s_sjlj"])
                         end
                     end
 

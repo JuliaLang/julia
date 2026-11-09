@@ -5,7 +5,7 @@ using Test: guardseed, _should_escape_call, _escape_call, _to_pair_iterator
 using Serialization
 using Distributed: RemoteException
 
-import Logging: Debug, Info, Warn, with_logger
+import Logging: Debug, Info, Warn, AboveMaxLevel, with_logger, @logmsg
 
 @test isempty(Test.detect_closure_boxes(Test))
 
@@ -1468,13 +1468,57 @@ erronce() = @error "an error" maxlog=1
         @test_logs (Warn,) match_mode=:any @info "foo"
         @test_logs (Debug,) @debug "foo"
         @test_logs (Warn,) error()
+        @test_logs (:nosuchlevel,) @info "foo"
     end
-    @test length(fails) == 4
+    @test length(fails) == 5
     @test fails[1] isa Test.LogTestFailure
     @test fails[2] isa Test.LogTestFailure
     @test fails[3] isa Test.LogTestFailure
     @test fails[4] isa Test.Error
     @test startswith(fails[4].value, "ErrorException")
+    @test occursin("Unknown log level nosuchlevel", fails[5].value)
+
+    # Other fields of the pattern, matched by value, by regex or not at all
+    @test_logs (:abovemaxlevel,) @logmsg AboveMaxLevel "foo"
+    @test_logs (:info, "foo", @__MODULE__, r"^gr", r"^my") @info "foo" _group=:group _id=:my_id
+    @test_logs (:info, "foo", Test.Ignored(), :group) @info "foo" _group=:group
+    record = Test.LogRecord(Info, "foo", @__MODULE__, :group, :id, "file", 1; key=2)
+    @test record.kwargs[:key] == 2
+    @test occursin((:info, r"^fo", @__MODULE__, r"^gr", r"^i", r"^fi", 1), record)
+    @test !occursin((:info, r"^fo", @__MODULE__, r"^nope"), record)
+end
+
+# How a failed `@test_logs` is reported, in a separate process so this suite does not fail
+@testset "@test_logs failure reporting" begin
+    run_src(src) = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e $src`), stderr=devnull), String)
+    function check_report(msg)
+        @test occursin(r"Log Test Failed at none:\d+\n", msg)
+        @test occursin("@info \"actual\"\n", msg)
+        @test occursin("Log Pattern: (:warn, \"expected\")\n", msg)
+        @test occursin("Captured Logs: \n    LogRecord(Info, \"actual\", Main,", msg)
+    end
+
+    # A test set counts the failure and carries on.
+    msg = run_src("""
+    using Test
+    @testset "Foo" begin
+        @test_logs (:warn, "expected") @info "actual"
+        println("kept going")
+    end
+    """)
+    check_report(msg)
+    @test occursin("Foo: Log Test Failed", msg)
+    @test occursin("kept going", msg)
+    @test occursin(r"Test Summary: \| Fail  Total +Time\nFoo +\| +1 +1 ", msg)
+
+    # Without a test set the failure is thrown straight away.
+    msg = run_src("""
+    using Test
+    @test_logs (:warn, "expected") @info "actual"
+    println("kept going")
+    """)
+    check_report(msg)
+    @test !occursin("kept going", msg)
 end
 
 @testset "@test_logs broken/skip keywords" begin
@@ -1527,12 +1571,26 @@ let code = quote
             42
         end
         @deprecate oldfunc newfunc
+        struct HasOldField end
+        Base.getproperty(::HasOldField, ::Symbol) = (Base.depwarn("`old` is deprecated", :old); 42)
 
         @testset "@test_deprecated" begin
             @test_deprecated oldfunc()
             @test Base.JLOptions().depwarn == 1
 
             @test (@test_deprecated oldfunc()) == 42
+
+            # A block is the expression to run, not the pattern (issue #62197)
+            @test (@test_deprecated begin
+                oldfunc()
+            end) == 42
+            @test (@test_deprecated r"deprecated" begin
+                oldfunc()
+            end) == 42
+            # so are a property access and a bare name (issue #62595)
+            @test (@test_deprecated HasOldField().old) == 42
+            @test (@test_deprecated r"`old`" HasOldField().old) == 42
+            @test macroexpand(@__MODULE__, :(@test_deprecated OldName)) isa Expr
 
             fails = @testset NoThrowTestSet "check that @test_deprecated detects bad input" begin
                 @test_deprecated newfunc()
@@ -1566,6 +1624,15 @@ let code = quote
             @test length(results) == 1
             @test results[1] isa Test.Broken
             @test results[1].test_type === :skipped
+
+            # keywords combine with a block expression
+            results = @testset NoThrowTestSet begin
+                @test_deprecated begin
+                    newfunc()
+                end broken=true
+            end
+            @test length(results) == 1
+            @test results[1] isa Test.Broken
         end
     end
     incl = "include($(repr(joinpath(@__DIR__, "nothrow_testset.jl"))))"
@@ -1917,6 +1984,18 @@ end
             result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
             @test occursin(expected, result)
         end
+    end
+    @testset "failfast with @test_logs" begin
+        src = """
+        using Test
+        @testset "Foo" failfast=true begin
+            @test_logs (:warn,) @info "wrong level"
+            println("kept going")
+        end
+        """
+        result = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e $src`), stderr=devnull), String)
+        @test occursin("Log Test Failed", result)
+        @test !occursin("kept going", result)
     end
     @testset "failfast for-loop" begin
         expected = r"""

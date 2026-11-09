@@ -18,9 +18,7 @@
         """
     ]
     for thunk in thunks
-        stream = JuliaSyntax.ParseStream(thunk)
-        JuliaSyntax.parse!(stream; rule=:all)
-        st0 = JuliaSyntax.build_tree(SyntaxTree, stream; filename=@__FILE__)
+        st0 = JuliaSyntax.parseall(SyntaxTree, thunk; filename="precompile.jl")
         lwrst = lower(@__MODULE__, st0[1])
         lwr = to_lowered_expr(lwrst)
         @assert Meta.isexpr(lwr, :thunk) && only(lwr.args) isa Core.CodeInfo
@@ -50,6 +48,10 @@
         _precompile_usemac(3)
         _precompile_genf(1.0)
         """
-        include_string(@__MODULE__, workload, @__FILE__)
+        # Pin the workload to the 1.14 edition, since its macro returns an
+        # `Expr`, which is not allowed in newer editions.
+        st = JuliaSyntax.parseall(SyntaxTree, workload; filename="precompile.jl",
+                                  version=VersionNumber(JL_OLD_EDITION))
+        eval(@__MODULE__, st)
     end
 end

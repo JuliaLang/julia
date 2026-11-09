@@ -309,6 +309,38 @@ JL_DLLEXPORT FLOAT16_RET_TYPE julia__truncdfhf2(double param)
     return FLOAT16_RET_FROM_UINT16(res);
 }
 
+#ifdef __SIZEOF_INT128__
+// 128-bit integer <-> Float16 conversions, which libgcc_s does not export on all platforms.
+// Integers of magnitude >= 65520 round to infinity, and smaller ones are exact as Float32,
+// so clamping and converting via Float32 rounds only once.
+JL_DLLEXPORT FLOAT16_RET_TYPE julia__floattihf(__int128 param)
+{
+    int32_t x = param > 65536 ? 65536 : param < -65536 ? -65536 : (int32_t)param;
+    uint16_t res = float_to_half((float)x);
+    return FLOAT16_RET_FROM_UINT16(res);
+}
+
+JL_DLLEXPORT FLOAT16_RET_TYPE julia__floatuntihf(unsigned __int128 param)
+{
+    uint32_t x = param > 65536 ? 65536 : (uint32_t)param;
+    uint16_t res = float_to_half((float)x);
+    return FLOAT16_RET_FROM_UINT16(res);
+}
+
+// Results for NaN, Inf and other out-of-range inputs are unspecified (poison in LLVM)
+JL_DLLEXPORT __int128 julia__fixhfti(FLOAT16_ARG_TYPE param)
+{
+    float x = half_to_float(FLOAT16_ARG_TO_UINT16(param));
+    return x > -65536 && x < 65536 ? (int32_t)x : 0;
+}
+
+JL_DLLEXPORT unsigned __int128 julia__fixunshfti(FLOAT16_ARG_TYPE param)
+{
+    float x = half_to_float(FLOAT16_ARG_TO_UINT16(param));
+    return x > -1 && x < 65536 ? (uint32_t)x : 0;
+}
+#endif
+
 
 // bfloat16 conversion helpers
 
@@ -404,7 +436,7 @@ JL_DLLEXPORT BFLOAT16_TYPE julia__truncdfbf2(double param) JL_NOTSAFEPOINT
 
 
 // run time version of bitcast intrinsic
-JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
+jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
 {
     JL_TYPECHK(bitcast, datatype, ty);
     if (!jl_is_concrete_type(ty) || !jl_is_primitivetype(ty))
@@ -421,7 +453,7 @@ JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
 }
 
 // run time version of pointerref intrinsic (warning: i is not rooted)
-JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align)
+jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align)
 {
     JL_TYPECHK(pointerref, pointer, p);
     JL_TYPECHK(pointerref, long, i)
@@ -441,7 +473,7 @@ JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t 
 }
 
 // run time version of pointerset intrinsic (warning: x is not gc-rooted)
-JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i, jl_value_t *align)
+jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i, jl_value_t *align)
 {
     JL_TYPECHK(pointerset, pointer, p);
     JL_TYPECHK(pointerset, long, i);
@@ -464,7 +496,7 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
     return p;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order)
+jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order)
 {
     JL_TYPECHK(atomic_pointerref, pointer, p);
     JL_TYPECHK(atomic_pointerref, symbol, order)
@@ -484,7 +516,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order)
     }
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *order)
+jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *order)
 {
     JL_TYPECHK(atomic_pointerset, pointer, p);
     JL_TYPECHK(atomic_pointerset, symbol, order);
@@ -507,7 +539,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_v
     return p;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_value_t *order)
+jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_value_t *order)
 {
     JL_TYPECHK(atomic_pointerswap, pointer, p);
     JL_TYPECHK(atomic_pointerswap, symbol, order);
@@ -531,7 +563,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_
     return y;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order)
+jl_value_t *jl_atomic_pointermodify_invoke(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order, jl_value_t *op_target)
 {
     JL_TYPECHK(atomic_pointermodify, pointer, p);
     JL_TYPECHK(atomic_pointermodify, symbol, order)
@@ -555,7 +587,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, j
     args[0] = expected;
     while (1) {
         args[1] = x;
-        jl_value_t *y = jl_apply_generic(f, args, 2);
+        jl_value_t *y = jl_apply_modifyop(f, args, op_target);
         args[1] = y;
         if (ety == (jl_value_t*)jl_any_type) {
             if (jl_atomic_cmpswap((_Atomic(jl_value_t*)*)pp, &expected, y))
@@ -583,8 +615,11 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, j
     return args[0];
 }
 
+jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order) {
+    return jl_atomic_pointermodify_invoke(p, f, x, order, NULL);
+}
 
-JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *expected, jl_value_t *x, jl_value_t *success_order_sym, jl_value_t *failure_order_sym)
+jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *expected, jl_value_t *x, jl_value_t *success_order_sym, jl_value_t *failure_order_sym)
 {
     JL_TYPECHK(atomic_pointerreplace, pointer, p);
     JL_TYPECHK(atomic_pointerreplace, symbol, success_order_sym);
@@ -634,7 +669,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
     return result;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym, jl_value_t *syncscope_sym)
+jl_value_t *jl_atomic_fence(jl_value_t *order_sym, jl_value_t *syncscope_sym)
 {
     JL_TYPECHK(fence, symbol, order_sym);
     JL_TYPECHK(fence, symbol, syncscope_sym);
@@ -675,7 +710,7 @@ jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v)
 }
 
 // The auto-switching behavior here is deprecated, but preserved for Core.Intrinsics.cglobal
-JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty) {
+jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty) {
     JL_TYPECHK(cglobal, type, ty);
     jl_value_t *rt =
         ty == (jl_value_t*)jl_nothing_type ? (jl_value_t*)jl_voidpointer_type : // a common case
@@ -697,7 +732,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty) {
     return r;
 }
 
-JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v) {
+jl_value_t *jl_cglobal_auto(jl_value_t *v) {
     return jl_cglobal(v, (jl_value_t*)jl_nothing_type);
 }
 
@@ -1338,8 +1373,8 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     return cmp ? jl_true : jl_false; \
 }
 
-#define ter_fintrinsic(OP16, OP, name) \
-    ter_intrinsic_bfloat(OP16, name) \
+#define ter_fintrinsic(OPBF16, OP16, OP, name) \
+    ter_intrinsic_bfloat(OPBF16, name) \
     ter_intrinsic_half(OP16, name) \
     ter_intrinsic_ctype(OP, name, 32, float) \
     ter_intrinsic_ctype(OP, name, 64, double) \
@@ -1533,12 +1568,14 @@ double julia_fma(double a, double b, double c) {
                 b *= 4.503599627370496e15;
             a = bitcast_u2d((bitcast_d2u(a) & 0x800fffffffffffff) | 0x3ff0000000000000);
             b = bitcast_u2d((bitcast_d2u(b) & 0x800fffffffffffff) | 0x3ff0000000000000);
-            c = c_denorm;
+            // if c underflowed when rescaled, only its sign matters (to break ties)
+            c = ldexp(c_denorm, bias) == c ? c_denorm : copysign(0x1p-1022, c);
             two_mul(&abhi, &ablo, a, b);
             r = abhi+c;
             s = fma_correction(abhi, ablo, c, r);
             double sumhi = r+s;
-            if (issubnormal(ldexp(sumhi, bias))) {
+            // decide before rounding, which can carry the result to 0 or floatmin
+            if (sumhi != 0 && -bias-exponent(sumhi)-1022 > 0) {
                 double sumlo = r-sumhi+s;
                 int bits_lost = -bias-exponent(sumhi)-1022;
                 if ((bits_lost != 1) ^ ((bitcast_d2u(sumhi)&1) == 1))
@@ -1562,9 +1599,12 @@ double julia_fma(double a, double b, double c) {
 #endif
 
 #define muladd(a, b, c) a * b + c
-#define muladd_narrow(a, b, c) (double)((a) * (b) + (c))
-ter_fintrinsic(fma_narrow,fma,fma_float)
-ter_fintrinsic(muladd_narrow,muladd,muladd_float)
+// round the product separately, as compiled code does: computing a * b + c in
+// float and then rounding to 16 bits would round twice
+#define muladd_half(a, b, c) (double)(half_to_float(float_to_half((a) * (b))) + (c))
+#define muladd_bfloat(a, b, c) (double)(bfloat_to_float(float_to_bfloat((a) * (b))) + (c))
+ter_fintrinsic(fma_narrow,fma_narrow,fma,fma_float)
+ter_fintrinsic(muladd_bfloat,muladd_half,muladd,muladd_float)
 
 // same-type comparisons
 #define eq(a,b) a == b
@@ -1788,13 +1828,21 @@ un_fintrinsic(sqrt_float,sqrt_llvm_fast)
 
 JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
 {
-    JL_TYPECHK(have_fma, datatype, typ); // TODO what about float16/bfloat16?
-    if (typ == (jl_value_t*)jl_float32_type)
+    JL_TYPECHK(have_fma, datatype, typ); // TODO what about bfloat16?
+    if (typ == (jl_value_t*)jl_float16_type)
+        return jl_cpu_has_fma(16);
+    else if (typ == (jl_value_t*)jl_float32_type)
         return jl_cpu_has_fma(32);
     else if (typ == (jl_value_t*)jl_float64_type)
         return jl_cpu_has_fma(64);
     else
         return jl_false;
+}
+
+JL_DLLEXPORT jl_value_t *jl_cpu_supports(jl_value_t *feat)
+{
+    JL_TYPECHK(cpu_supports, symbol, feat);
+    return jl_cpu_has_features(jl_symbol_name((jl_sym_t*)feat)) ? jl_true : jl_false;
 }
 
 JL_DLLEXPORT jl_value_t *jl_add_ptr(jl_value_t *ptr, jl_value_t *offset)

@@ -8,10 +8,6 @@ if Threads.maxthreadid() != 1
 end
 
 if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
-Sys.__init_build()
-if !isdefined(Base, :uv_eventloop)
-    Base.reinit_stdio()
-end
 using Base.Meta
 
 ## Debugging options
@@ -32,7 +28,6 @@ precompile(Base._atexit, (Cint,))
 # used by REPL
 precompile(Tuple{typeof(Base.getproperty), Base.Terminals.TTYTerminal, Symbol})
 precompile(Tuple{typeof(Base.reseteof), Base.Terminals.TTYTerminal})
-precompile(Tuple{typeof(Base.Terminals.enable_bracketed_paste), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.Terminals.width), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.Terminals.height), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.write), Base.Terminals.TTYTerminal, Array{UInt8, 1}})
@@ -126,6 +121,8 @@ precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
 precompile(Tuple{typeof(getindex), Core.SimpleVector, Int})
 precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
 precompile(Tuple{typeof(Base.display_error), Base.ExceptionStack})
+precompile(Tuple{typeof(showerror), IO, MethodError})
+precompile(Tuple{typeof(Base.showerror_methoderror), IOContext{IOBuffer}, MethodError})
 precompile(Tuple{Core.kwftype(typeof(Type)), NamedTuple{(:sizehint,), Tuple{Int}}, Type{IOBuffer}})
 precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, String, Module))
 precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, Symbol, Module))
@@ -237,10 +234,13 @@ for x in (Float16(1.0), 1.0f0, 1.0)
     show(buf, x)
     show(IOContext(buf, :compact => true), x)
 end
+# `@time_imports` report printing
+Base.print_time_imports_report(Base)
+Base.print_time_imports_report_init(Base)
 throw(InterruptException())
 """
 
-julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
+julia_exepath() = Base.unsafe_string(Base.JLOptions().julia_bin)
 
 Artifacts = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"), "Artifacts"),
@@ -316,6 +316,8 @@ function generate_precompile_statements()
             """
             module $pkgname
             println("Precompiling $pkgname")
+            # like a package using Preferences.jl, so that writing the preferences into the cache is traced
+            Base.record_compiletime_preference(Base.UUID("$pkguuid"), "unset_preference")
             end
             """)
         write(joinpath(pkgpath, "Project.toml"),
@@ -389,7 +391,8 @@ function generate_precompile_statements()
     n_succeeded = 0
     executed = Set{String}()
     for statement in statements
-        statement = strip(statement)
+        # package precompilation traces put the compile time in a leading `#= ... =#`
+        statement = strip(replace(statement, r"^#=.*?=#" => ""))
         # the hardcoded statements are written as a commented block
         (isempty(statement) || startswith(statement, '#')) && continue
         # Main should be completely clean
@@ -423,27 +426,13 @@ end
 
 generate_precompile_statements()
 
-let stdout = Ref{IO}(stdout)
-    Base.PROGRAM_FILE = ""
-    Sys.BINDIR = ""
-    Sys.STDLIB = ""
-    empty!(Base.ARGS)
-    empty!(Core.ARGS)
-    empty!(Base.TOML_CACHE.d)
-    Base.TOML.reinit!(Base.TOML_CACHE.p, "")
+println("Outputting sysimage file...")
 
-    println("Outputting sysimage file...")
-    Base.stdout = Core.stdout
-    Base.stderr = Core.stderr
-
-    # Print report after sysimage has been saved so all time spent can be captured
-    pre_output_time = time_ns()
+# Print report after sysimage has been saved so all time spent can be captured
+let pre_output_time = time_ns()
     Base.postoutput() do
         output_time = time_ns() - pre_output_time
-        let stdout = stdout[]
-            print(stdout, "Output ────── "); Base.time_print(stdout, output_time); println(stdout)
-        end
-        stdout[] = Core.stdout
+        print(Core.stdout, "Output ────── "); Base.time_print(Core.stdout, output_time); println(Core.stdout)
     end
 end
 

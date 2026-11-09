@@ -8,6 +8,64 @@ using .Main: TSlow, WrapperArray
 isdefined(Main, :StridedArrays) || @eval Main include("testhelpers/StridedArrays.jl")
 using .Main.StridedArrays
 
+struct ReinterpretShrinkValue
+    parent::Vector{UInt8}
+end
+function Base.convert(::Type{UInt32}, value::ReinterpretShrinkValue)
+    empty!(value.parent)
+    return UInt32(0)
+end
+
+# Reinterpretation follows resizing, including during value conversion.
+@testset "dense reinterpret storage" begin
+    function resize_during_reinterpret!(a)
+        values = zeros(eltype(a), 2)
+        for i in eachindex(values)
+            if i == 2
+                resize!(parent(a), 4096)
+                fill!(parent(a), 0x00)
+                GC.gc()
+            end
+            values[i] = a[1]
+            a[1] = values[1] + one(values[1])
+        end
+        return Tuple(values)
+    end
+    p = zeros(UInt8, 8)
+    a = reinterpret(UInt16, view(p, UInt(3):UInt(6)))
+    a[2] = reinterpret(UInt16, (0xa1, 0xb2))
+    @test p == [0x00, 0x00, 0x00, 0x00, 0xa1, 0xb2, 0x00, 0x00]
+
+    p = copyto!(Memory{UInt8}(undef, 8), 0x01:0x08)
+    a = reinterpret(UInt16, view(p, 3:6))
+    @test a[1] === reinterpret(UInt16, (0x03, 0x04))
+    a[2] = reinterpret(UInt16, (0xa1, 0xb2))
+    @test Tuple(p) === (0x01, 0x02, 0x03, 0x04, 0xa1, 0xb2, 0x07, 0x08)
+
+    p = zeros(UInt8, 4)
+    @test_throws BoundsError setindex!(reinterpret(UInt32, p), ReinterpretShrinkValue(p), 1)
+
+    p = collect(UInt8, 1:8)
+    a = reinterpret(UInt32, p)
+    expected = reinterpret(UInt32, (0x01, 0x02, 0x03, 0x04))
+    @test resize_during_reinterpret!(a) === (expected, UInt32(0))
+    @test a[1] == expected + UInt32(1)
+
+    p = collect(UInt8, 1:8)
+    a = reinterpret(UInt16, p)
+    resize!(p, 6; first=true)
+    @test a[1] == reinterpret(UInt16, (0x03, 0x04))
+    a[1] = reinterpret(UInt16, (0xa1, 0xb2))
+    @test p[1:2] == [0xa1, 0xb2]
+
+    for p in (fill(nothing, 3), Memory{Nothing}(undef, 3))
+        a = reinterpret(UInt8, p)
+        @test isempty(a)
+        @test_throws BoundsError a[1]
+        @test_throws BoundsError setindex!(a, 0x01, 1)
+    end
+end
+
 tslow(a::AbstractArray) = TSlow(a)
 wrapper(a::AbstractArray) = WrapperArray(a)
 fcviews(a::AbstractArray) = view(a, ntuple(Returns(:),ndims(a)-1)..., axes(a)[end])
@@ -907,6 +965,35 @@ end
     c = collect(b)
     @test c[5] == b[5] == 0x00
     @test vec(c) == reinterpret(UInt8, a)
+    r = reinterpret(reshape, Int8, OffsetArray(reinterpret(reshape, UInt8, UInt16[0x0201, 0x0403, 0x0605]), 0, 0))
+    @test map(identity, r) == Int8[1 3 5; 2 4 6]
+end
+
+@testset "nested reshaped reinterpret (#64160)" begin
+    a = UInt32[0x04030201, 0x08070605, 0x0c0b0a09]
+    b = reinterpret(reshape, UInt16, a)
+    c = @inferred reinterpret(reshape, UInt8, b)
+    @test size(c) == (2, 2, 3)
+    @test c == reinterpret(reshape, UInt8, collect(b))
+    @test collect(c) == reshape(UInt8.(1:12), 2, 2, 3)
+    @test c[2, 1, 3] == 0x0a
+    c[1, 2, 3] = 0xff
+    @test a == UInt32[0x04030201, 0x08070605, 0x0cff0a09]
+    @test reinterpret(reshape, UInt32, b) === a
+    @test reinterpret(reshape, UInt16, b) === b
+    @test reinterpret(reshape, UInt16, c) === b
+    @test_throws ArgumentError reinterpret(reshape, UInt32, c)
+    @test_throws ArgumentError reinterpret(reshape, UInt64, reinterpret(reshape, UInt16, UInt32[1 2 3; 4 5 6]))
+
+    x = UInt8.(reshape(1:8, 2, 2, 2))
+    y = @inferred reinterpret(reshape, UInt32, reinterpret(reshape, UInt16, x))
+    @test y == collect(y) == UInt32[0x04030201, 0x08070605]
+    y[2] = 0x0d0c0b0a
+    @test x[:, :, 2] == UInt8[0x0a 0x0c; 0x0b 0x0d]
+
+    a = UInt64[1]
+    b = reinterpret(reshape, Tuple{UInt8,UInt32}, a)
+    @test reinterpret(reshape, UInt32, b) === reinterpret(reshape, UInt32, a)
 end
 
 @testset "BitArray from and into a reshaped reinterpret" begin

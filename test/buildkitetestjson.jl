@@ -141,7 +141,9 @@ const TEST_TYPE_MAP = Dict(
     :skipped => "@test_skip",
     :test_throws => "@test_throws",
     :test_throws_wrong => "@test_throws",
-    :test_throws_nothing => "@test_throws"
+    :test_throws_nothing => "@test_throws",
+    :test_warn => "@test_warn",
+    :test_nowarn => "@test_nowarn"
 )
 function get_test_call_str(result)
     if result.test_type === :nontest_error

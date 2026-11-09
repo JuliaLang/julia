@@ -33,171 +33,9 @@ function est_syntax_name(st, default)
     head(st) === :identifier ? st.value::String : default
 end
 
-function _scavenge_lnn(e::Expr)
-    e.head in (:macrocall, :quote, :inert) || for a in e.args
-        a isa LineNumberNode && return a
-        if a isa Expr
-            a_out = _scavenge_lnn(a)
-            a_out isa LineNumberNode && return a_out
-        end
-    end
-    return nothing
-end
-scavenge_lnn(@nospecialize(e)) =
-    something(e isa Expr ? _scavenge_lnn(e) : nothing,
-              LineNumberNode(0, :none))
-
-_unescape_lnn(@nospecialize(e)) =
-    e isa LineNumberNode ? e :
-    (e isa Expr &&
-    (e.head === :escape || e.head === Symbol("hygienic-scope")) &&
-    length(e.args) > 0) ? _unescape_lnn(e.args[1]) : nothing
-
-function _get_inner_lnn(e::Expr, default::LineNumberNode)
-    e.head in (:function, :macro, :module, :(=)) || return default
-    length(e.args) >= 2 || return default
-    b = e.args[end]
-    b isa Expr || return default
-    b.head === :block || return default
-    length(b.args) >= 1 || return default
-    b_lnn = _unescape_lnn(b.args[1])
-    return b_lnn isa LineNumberNode ? b_lnn : default
-end
-
-# List of Expr-AST forms that are always converted to some SyntaxTree form and
-# never inserted as an opaque `:value`. Note no LineNumberNode, which appears
-# unwrapped in a macrocall (possibly generated functions too, TODO check)
-isa_lowering_ast_node(@nospecialize(e)) =
-    e isa Symbol || e isa QuoteNode || e isa Expr || e isa GlobalRef
-
-function expr_to_est(@nospecialize(e), src::Union{LineNumberNode, SourceRef}=scavenge_lnn(e),
-                     context=SyntaxContext(nothing, nothing, JL_OLD_EDITION, false))
-    _expr_to_est(e, context, src, false)[1]
-end
-function expr_to_est(@nospecialize(e), src::SyntaxTree)
-    _expr_to_est(e, src.context, src, false)[1]
-end
-
-# Adding more cases to this function is almost certainly wrong, since this
-# operates on arbitrary heads and arguments throughout macro expansion, not
-# well-formed syntax after expansion is done.  Most of the complexity here is
-# LineNumberNode absorption logic: linenodes are always considered provenance if
-# unquoted, then removed in certain forms.  If `src` is not an linenode, it is
-# assumed to be a better provenance source, so linenodes in `e` are not used for
-# provenance (but still removed).
-function _expr_to_est(@nospecialize(e), context::SyntaxContext,
-                      src::SourceAttrType, quoted::Bool)
-    st = if e isa Symbol
-        @mknode(;head=:identifier, value=String(e), source=src, context)
-    elseif e isa QuoteNode
-        cid, _ = _expr_to_est(e.value, context, src, true)
-        @mknode(;head=:inert, source=src, children=SyntaxList(cid), context)
-    elseif e isa Expr
-        h = e.head
-        if h === :value || h === :identifier
-            error("expr heads :value and :identifier are reserved")
-        end
-        src = old_src = src isa LineNumberNode ? _get_inner_lnn(e, src) : src
-        cs = SyntaxTree[]
-        rm_linenodes = h in (:block, :toplevel)
-        quoted |= h in (:quote, :inert)
-        for arg in e.args
-            if rm_linenodes && (lnn = quoted ? arg : _unescape_lnn(arg);
-                                lnn isa LineNumberNode)
-                src isa LineNumberNode && (src = lnn)
-            else
-                cid, src = _expr_to_est(arg, context, src, quoted)
-                push!(cs, cid)
-            end
-        end
-        @mknode(;head=h, source=old_src, children=cs, context)
-    elseif e isa GlobalRef
-        # Represent globalref as :identifier with :mod attribute
-        @mknode(;head=:identifier, source=src, value=string(e.name),
-                mod=e.mod, context)
-    else
-        # We may want additional special cases for other types where
-        # `Base.isa_ast_node(e)`, but `:value` should be fine for most, since
-        # most are produced in or after lowering
-        if e isa LineNumberNode && src isa LineNumberNode
-            # linenode outside of block or toplevel
-            src = e
-        end
-        @mknode(;head=:value, value=e, source=src, context)
-    end
-    @jl_assert isa_lowering_ast_node(e) || head(st) === :value st
-
-    return st, src
-end
-
-# @__doc__ is brittle
-_is_meta_doc_block(st) = @stm st begin
-    [:block [:meta [:identifier]] _] -> syntax_name(st[1][1]) == "doc"
-    _ -> false
-end
-
-# `suppress_linenodes` is true if `st`'s parent knows `st` is an exception to
-# normal linenode rules.  It only applies to `st`, and not transitively to its
-# children.
-function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
-    h = head(st)
-    if h === :identifier
-        # @jl_assert scope layer is base
-        n = Symbol(syntax_name(st))
-        mod = st.mod
-        !isnothing(mod) ? GlobalRef(mod, n) : n
-    elseif h === :value
-        v = st.value
-        # Let `st.value isa Symbol` (or other AST node).  Since we enforce that
-        # this is never produced by the reverse Expr->SyntaxTree transformation,
-        # there is no lonely Expr for which `st` is the only SyntaxTree
-        # representation.  This means we can pick some other expr this
-        # represents, namely Expr(`(inert ,st.value)) rather than
-        # Expr(st.value).
-        isa_lowering_ast_node(v) ? QuoteNode(v) : v
-    elseif h === :inert
-        QuoteNode(est_to_expr(st[1]))
-    else
-        # TODO: should handle post-lowering forms as well
-        @jl_assert !is_leaf(st) (st, "est_to_expr should only be used pre-desugaring")
-        # In a partially-expanded or quoted AST, there may be heads with no
-        # corresponding kind
-        out = Expr(h)
-
-        # (Move the following assumptions to the docs if they turn out accurate)
-        # The only mandatory LineNumberNode is the second macrocall argument.
-        # Other than that, optional linenodes may show up anywhere within:
-        # - `block`, unless the block is the first child of `for` or `let`
-        # - `toplevel`
-        # Macro authors are responsible for handling any linenodes that follow
-        # the rules above (but the presence of optional linenodes can't be
-        # counted upon).
-        need_lnns = h in (:block, :toplevel) && !suppress_linenodes &&
-            !_is_meta_doc_block(st)
-        for (i, c) in enumerate(children(st))
-            need_lnns && push!(out.args, source_location(LineNumberNode, c))
-            let suppress_c = i == 1 && (h == :for || h == :let)
-                push!(out.args, est_to_expr(c, suppress_c))
-            end
-        end
-        # Add extra linenodes to some blocks for better provenance
-        if h === :block && length(out.args) == 0 && !suppress_linenodes
-            push!(out.args, source_location(LineNumberNode, st))
-        elseif h in (:module, :function, :macro) && length(out.args) > 0
-            let b = out.args[end]
-                b isa Expr && b.head === :block && pushfirst!(
-                    b.args, source_location(LineNumberNode, st))
-            end
-        elseif h in (:for, :while) && length(out.args) > 0
-            let b = out.args[end]
-                b isa Expr && b.head === :block && push!(
-                    b.args, source_location(
-                        LineNumberNode, sourcefile(st), last_byte(st)))
-            end
-        end
-        out
-    end
-end
+# TODO remove
+const est_to_expr = Base.syntax_to_expr
+const expr_to_est = Base.expr_to_syntax
 
 #-------------------------------------------------------------------------------
 # EST->DST
@@ -477,7 +315,6 @@ function apply_32026_hack(st, orig)
 end
 
 function collect_body_meta(st)
-    argmeta_all = nothing
     argmeta = nothing
     mmetas = nothing
     for c in children(st)
@@ -487,7 +324,8 @@ function collect_body_meta(st)
         if spec in ("specialize", "nospecialize")
             meta = Symbol(spec)
             if numchildren(c) == 1
-                isnothing(argmeta_all) && (argmeta_all = meta)
+                isnothing(mmetas) && (mmetas = SyntaxList())
+                push!(mmetas, @mknode(c[1]; head=:symbol))
             else
                 isnothing(argmeta) && (argmeta = Dict{String, Symbol}())
                 for id in c[2:end]
@@ -508,7 +346,7 @@ function collect_body_meta(st)
             end
         end
     end
-    (isnothing(argmeta_all) ? argmeta : argmeta_all), mmetas
+    argmeta, mmetas
 end
 
 # Absorb `meta` nodes from arguments and the function body into syntax `.meta`
@@ -530,6 +368,20 @@ function dst_raw_lambda(ctx, st, sps)
     argl = map(x->expr_to_est(x::Symbol, st[1]), st[1].value::Vector)
     @ast _ st [:lambda [:block argl...] [:block sps...]
         est_to_dst(with(ctx; toplevel=false), st[2])]
+end
+
+# Using special forms rather than stripped-hygiene-magic-identifiers would be
+# preferable
+function symbolic_label_context(id)
+    name = syntax_name(id)
+    name === "loop-cont" || name === "loop-exit" ?
+        escape_layer(id.context, true) : id.context
+end
+
+function _dst_symboliclabel(ctx, st)
+    @jl_assert head(st) === :symboliclabel || head(st) === :symbolicgoto st
+    @mknode(st; context=symbolic_label_context(st[1]),
+            value=syntax_name(st[1]), children=nothing)
 end
 
 """
@@ -739,7 +591,8 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
         # Heads not emitted from parsing
         ([:meta s vs...],
          when=(meta=est_syntax_name(s, "");
-               !ctx.toplevel && meta in ("nospecialize", "specialize"))) ->
+               !ctx.toplevel && numchildren(st) > 1 &&
+               meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case
              newleaf(st, :nothing)
         ([:meta s gen], when=est_syntax_name(s, "") === "generated") ->
@@ -749,28 +602,20 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
                 s->(head(s) === :identifier ? @mknode(s; head=:symbol) : s),
                 syms)...
            ]
+        [:throw_undef_if_not [:identifier] cond] ->
+            @ast _ st [:throw_undef_if_not @mknode(st[1]; head=:symbol) rec(ctx, cond)]
         [:boundscheck x] -> @mknode(st; children=SyntaxList())
-        [:inbounds [:identifier]] -> newnode(st, :inbounds_pop, SyntaxList())
+        [:inbounds [:identifier]] -> @mknode(st; head=:inbounds_pop, children=SyntaxList())
         [:core x] -> newleaf(st, :core, syntax_name(x))
         [:top x] -> newleaf(st, :top, syntax_name(x))
         [:static_parameter x] -> newleaf(st, :static_parameter, x.value::IdTag)
         [:var"with-static-parameters" lam sps...] ->
             dst_raw_lambda(ctx, lam, sps)
         [:lambda _ _] -> dst_raw_lambda(ctx, st, SyntaxTree[])
-        [:copyast [:inert ex]] -> @ast _ st [:call
-            interpolate_expr::value
-            [:inert(st[1]) ex]
-        ]
-        [:symbolicgoto lab] ->
-            @mknode(st; value=syntax_name(lab), children=nothing)
-        [:symboliclabel lab] ->
-            @mknode(st; value=syntax_name(lab), children=nothing)
-        [:symbolicblock id body] -> let s = syntax_name(id)
-            if is_writeonly_est_name(s)
-                @ast _ st [:symbolicblock id=>:placeholder rec(ctx, body)]
-            else
-                @ast _ st [:symbolicblock id=>:symboliclabel rec(ctx, body)]
-            end
+        [:symboliclabel [:identifier]] -> _dst_symboliclabel(ctx, st)
+        [:symbolicgoto [:identifier]] -> _dst_symboliclabel(ctx, st)
+        [:symbolicblock id body] -> let l = @ast _ id [:symboliclabel id]
+            @ast _ st [:symbolicblock _dst_symboliclabel(ctx, l) rec(ctx, body)]
         end
         [:var"latestworld-if-toplevel"] -> newleaf(st, :latestworld_if_toplevel)
         [:var"scope-block" cs...] ->

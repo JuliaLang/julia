@@ -307,6 +307,9 @@ function get_compare_strategy(p::Platform, key::String, default = compare_defaul
 end
 get_compare_strategy(p::AbstractPlatform, key::String, default = compare_default) = default
 
+# Tags for which absence is meaningful: a platform without the tag only matches
+# platforms that also lack it (rather than acting as a wildcard).
+const strict_presence_tags = ("sanitize",)
 
 
 """
@@ -871,21 +874,37 @@ this function returns `"libfoo", v"3.2"`.  If the path name is not a
 valid dynamic library, this method throws an error.  If no soversion
 can be extracted from the filename, as in "libbar.so" this method
 returns `"libbar", nothing`.
+
+A soversion may carry a trailing tag, as Julia's own LLVM does; the tag is not part of the
+name and is not reported.
+
+# Examples
+```jldoctest
+julia> parse_dl_name_version("lib/libfoo.so.3.2", "linux")
+("libfoo", v"3.2.0")
+
+julia> parse_dl_name_version("libbar.so", "linux")
+("libbar", nothing)
+
+julia> parse_dl_name_version("libLLVM.so.21.1jl", "linux")
+("libLLVM", v"21.1.0")
+```
 """
 function parse_dl_name_version(path::String, os::String=_this_os_name())
     # Use an extraction regex that matches the given OS
+    # A tag may follow the soversion (`libLLVM.so.21.1jl`), but only after a version.
     local dlregex
     # Keep this up to date with _this_os_name
     if os == "windows"
         # On Windows, libraries look like `libnettle-6.dll`.
         # Stay case-insensitive, the suffix might be `.DLL`.
-        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"isa
+        dlregex = r"^(.*?)(?:-(?:((?:[\.\d]+)+)([A-Za-z][\w\.]*)?)?)?\.dll$"isa
     elseif os == "macos"
         # On OSX, libraries look like `libnettle.6.3.dylib`
-        dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"sa
+        dlregex = r"^(.*?)(?:((?:\.[\d]+)+)([A-Za-z][\w\-]*)?)?\.dylib$"sa
     else
         # On Linux and other BSDs, libraries look like `libnettle.so.6.3.0`
-        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"sa
+        dlregex = r"^(.*?)\.so(?:((?:\.[\d]+)+)([A-Za-z][\w\-]*)?)?$"sa
     end
 
     m = match(dlregex, basename(path))
@@ -1052,15 +1071,16 @@ function detect_cxxstring_abi()
 end
 
 """
-    host_triplet()
+    host_triplet(build_triplet::String = Base.BUILD_TRIPLET, ext_tags::String = Base.BUILD_EXT_TAGS)
 
 Build host triplet out of `Sys.MACHINE` and various introspective utilities that
 detect compiler ABI values such as `libgfortran_version`, `libstdcxx_version` and
 `cxxstring_abi`.  We do this without using any `Platform` tech as it must run before
-we have much of that built.
+we have much of that built.  Extended tags recorded by the build (e.g. `-sanitize+address`)
+are appended after the compiler ABI tags, as the triplet grammar requires.
 """
-function host_triplet()
-    str = Base.BUILD_TRIPLET
+function host_triplet(build_triplet::String = Base.BUILD_TRIPLET, ext_tags::String = Base.BUILD_EXT_TAGS)
+    str = build_triplet
 
     if !occursin("-libgfortran", str)
         libgfortran_version = detect_libgfortran_version()
@@ -1082,6 +1102,9 @@ function host_triplet()
             str = string(str, "-libstdcxx", libstdcxx_version.patch)
         end
     end
+
+    # Add on any extended tags recorded by the build
+    str = string(str, ext_tags)
 
     # Add on julia_version extended tag
     if !occursin("-julia_version+", str)
@@ -1121,14 +1144,22 @@ The reserved tags `os_version` and `libstdcxx_version` use this mechanism to pro
 bounded version constraints, where an artifact can specify that it was built using APIs
 only available in macOS `v"10.11"` and later, or an artifact can state that it requires
 a libstdc++ that is at least `v"3.4.22"`, etc...
+
+Keys present in only one of `a` or `b` are normally ignored, with the exception of the
+`sanitize` tag: a sanitized platform (e.g. `x86_64-linux-gnu-sanitize+memory`) never
+matches a platform without a `sanitize` tag, since instrumented and uninstrumented
+binaries cannot be mixed.
 """
 function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
     for k in union(keys(tags(a)::Dict{String,String}), keys(tags(b)::Dict{String,String}))
         ak = get(tags(a), k, nothing)
         bk = get(tags(b), k, nothing)
 
-        # Only continue if both `ak` and `bk` are not `nothing`
+        # A tag missing from one side acts as a wildcard, except for strict tags
         if ak === nothing || bk === nothing
+            if k in strict_presence_tags
+                return false
+            end
             continue
         end
 

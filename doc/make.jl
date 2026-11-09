@@ -36,6 +36,7 @@ end
 
 using Documenter
 import LibGit2
+using Logging: with_logger, NullLogger
 
 baremodule GenStdLib end
 
@@ -45,7 +46,9 @@ symlink_q(tgt, link) = isfile(link) || symlink(tgt, link)
 cp_q(src, dest) = isfile(dest) || cp(src, dest)
 
 # make links for stdlib package docs, this is needed until #552 in Documenter.jl is finished
+link_stdlib_doc(src, dest) = Sys.iswindows() ? cp_q(src, dest) : symlink_q(src, dest)
 const STDLIB_DOCS = []
+const STDLIB_EXTRA_DOCS = String[]
 const EXT_STDLIB_DOCS = ["Pkg"]
 cd(joinpath(buildrootdoc, "src")) do
     Base.rm("stdlib"; recursive=true, force=true)
@@ -60,12 +63,15 @@ cd(joinpath(buildrootdoc, "src")) do
         if isfile(sourcefile)
             targetfile = joinpath("stdlib", dir * ".md")
             push!(STDLIB_DOCS, (stdlib = Symbol(dir), targetfile = targetfile))
-            if Sys.iswindows()
-                cp_q(sourcefile, targetfile)
-            else
-                symlink_q(sourcefile, targetfile)
-            end
+            link_stdlib_doc(sourcefile, targetfile)
         end
+    end
+    # The solvers need GPL libraries, so their docs are a separate page
+    solverfile = joinpath(STDLIB_DIR, "SparseArrays", "docs", "src", "solvers.md")
+    if Base.USE_GPL_LIBS && isfile(solverfile)
+        targetfile = joinpath("stdlib", "SparseArrays-solvers.md")
+        push!(STDLIB_EXTRA_DOCS, targetfile)
+        link_stdlib_doc(solverfile, targetfile)
     end
 end
 
@@ -400,12 +406,12 @@ BaseDocs = [
     "base/simd-types.md",
 ]
 
-StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
+StdlibDocs = [[stdlib.targetfile for stdlib in STDLIB_DOCS]; STDLIB_EXTRA_DOCS]
 
 # HACK: get nicer sorting here, even though we don't have the header
 # of the .md files at hand.
 sort!(StdlibDocs, by=function(x)
-    x = replace(x, "stdlib/" => "")
+    x = chopsuffix(replace(x, "stdlib/" => ""), ".md")
     startswith(x, "Libdl") && return lowercase("Dynamic Linker")
     startswith(x, "Test") && return lowercase("Unit Testing")
     return lowercase(x)
@@ -598,8 +604,15 @@ else
     )
 end
 
+# Pkg has its own manual. Without GPL libraries the SparseArrays solvers page is left out,
+# and with it the only references to the SuiteSparse library docstrings.
+const CHECKDOCS_IGNORED_MODULES = Module[Pkg]
+if joinpath("stdlib", "SparseArrays-solvers.md") ∉ STDLIB_EXTRA_DOCS
+    push!(CHECKDOCS_IGNORED_MODULES, SparseArrays.LibSuiteSparse)
+end
+
 const output_path = joinpath(buildrootdoc, "_build", (render_pdf ? "pdf" : "html"), "en")
-makedocs(
+doc = makedocs(
     source    = joinpath(buildrootdoc, "src"),
     build     = output_path,
     modules   = [Main, Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
@@ -607,14 +620,39 @@ makedocs(
     doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=only" in ARGS) ? (:only) : ("doctest=true" in ARGS) ? true : false,
     linkcheck = "linkcheck=true" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
-    checkdocs = :none,
+    checkdocs = :public,
+    checkdocs_ignored_modules = CHECKDOCS_IGNORED_MODULES,
+    warnonly  = :missing_docs, # the count is checked below instead
     format    = format,
     sitename  = "The Julia Language",
     authors   = "The Julia Project",
     pages     = PAGES,
     remotes   = documenter_stdlib_remotes,
     meta      = Dict(:DocTestSyntax => VERSION),
+    debug     = true, # makes makedocs return the Document for the check below
 )
+
+# Update this when the number of public docstrings missing from the manual changes.
+const known_missing_from_manual = 293
+
+# Documenter skips the document checks when only running doctests.
+if doc.user.doctest ∉ (:fix, :only)
+    # The list was already logged during `makedocs`; only the count is needed here.
+    missing_from_manual = with_logger(NullLogger()) do
+        Documenter.missingdocs(doc)
+    end
+    if missing_from_manual > known_missing_from_manual
+        error("""
+            $(missing_from_manual - known_missing_from_manual) public docstring(s) are not included in the manual \
+            (expected $known_missing_from_manual, found $missing_from_manual). See the `missing_docs` \
+            warning above for the full list, and add the new ones to the manual.""")
+    elseif missing_from_manual < known_missing_from_manual
+        error("""
+            The number of public docstrings missing from the manual has decreased from \
+            $known_missing_from_manual to $missing_from_manual. Update `known_missing_from_manual` \
+            in doc/make.jl to $missing_from_manual.""")
+    end
+end
 
 # Update URLs to external stdlibs (JuliaLang/julia#43199)
 for (root, _, files) in walkdir(output_path), file in joinpath.(root, files)

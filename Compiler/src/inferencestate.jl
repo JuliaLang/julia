@@ -663,7 +663,22 @@ function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{Basic
 end
 
 # check if coverage mode is enabled
-should_insert_coverage(mod::Module, debuginfo::DebugInfo) = should_instrument(mod, debuginfo, true)
+should_insert_coverage(mod::Module, debuginfo::DebugInfo) =
+    should_instrument(mod, debuginfo, true) && !is_coverage_excluded(debuginfo)
+
+# Images are instrumented for every path, so exclusions do not apply while generating one.
+# Allocation tracking relies on the same markers, so they stay while it is on.
+function is_coverage_excluded(debuginfo::DebugInfo)
+    (generating_output() || JLOptions().coverage_exclude == C_NULL || JLOptions().malloc_log != 0) && return false
+    file = debuginfo_file(debuginfo)
+    return file isa Symbol && ccall(:jl_is_file_coverage_excluded, Cint, (Any,), file) != 0
+end
+
+debuginfo_file(info::DebugInfo) = debuginfo_file(info.def)
+debuginfo_file(file::Symbol) = file
+debuginfo_file(m::Method) = m.file
+debuginfo_file(mi::MethodInstance) = debuginfo_file(mi.def)
+debuginfo_file(::Any) = nothing
 
 function should_instrument(mod::Module, debuginfo::DebugInfo, only_if_affects_optimizer::Bool=false)
     instrumentation_enabled(mod, only_if_affects_optimizer) && return true
@@ -978,8 +993,10 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
     end
     if output_tvar.lb === output_tvar.ub
         lb = output_tvar.lb
-        # `TypeVar` bounds are declared `Union{TypeVar, Type}`, so a pinned
-        # plain value (which would be egal-keyed and `Const`-able) cannot occur.
+        # `TypeVar` bounds are declared `Union{TypeVar, Type, TypeApp}`, where
+        # a `TypeApp` only occurs while a typegroup is defined (never in method
+        # signatures), so a pinned plain value (which would be egal-keyed and
+        # `Const`-able) cannot occur.
         @assert isa(lb, Union{Type, TypeVar})
         # A pinned TypeVar compares by identity (`==` is `===` for TypeVars),
         # but denotes a stable object only when it is free in `specTypes` (part
@@ -1402,9 +1419,6 @@ end
 add_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.ssaflags[sv.currpc] |= flag
 add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = add_flag!(sv.ir.stmts[sv.curridx], flag)
 
-sub_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.ssaflags[sv.currpc] &= ~flag
-sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sub_flag!(sv.ir.stmts[sv.curridx], flag)
-
 function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects)
     if effects.effect_free === EFFECT_FREE_GLOBALLY
         # This tracks the global effects
@@ -1523,7 +1537,7 @@ function Future{T}(f, immediate::Bool, interp::AbstractInterpreter, sv::AbsIntSt
     if immediate
         return Future{T}(f(interp, sv))
     else
-        @assert applicable(f, interp, sv)
+        @assert Core._hasmethod(Tuple{Core.Typeof(f), typeof(interp), typeof(sv)})
         result = Future{T}()
         push!(sv.tasks, function (interp, sv)
             result[] = f(interp, sv)
@@ -1539,7 +1553,7 @@ function Future{T}(f, prev::Future{S}, interp::AbstractInterpreter, sv::AbsIntSt
     else
         @assert Core._hasmethod(Tuple{Core.Typeof(f), S, typeof(interp), typeof(sv)})
         result = Future{T}()
-        @assert !isa(sv, InferenceState) || interp === sv.interp
+        @assert !isa(sv, InferenceState) || sv.interp::typeof(interp) === interp
         push!(sv.tasks, function (interp, sv)
             result[] = f(later[], interp, sv) # capture just later, instead of all of prev
             return true
@@ -1563,7 +1577,9 @@ function doworkloop(interp::AbstractInterpreter, sv::AbsIntState)
     prevcallstack = length(sv.callstack)
     prev == 0 && return false
     task = pop!(tasks)
-    completed = task(interp, sv)
+    # pass the field (already boxed) rather than `interp`, which may be a concrete
+    # immutable that this dynamic call would box again
+    completed = task(sv.interp, sv)
     tasks = sv.tasks # allow dropping gc root over the previous call
     completed isa Bool || throw(TypeError(:return, "", Bool, task)) # print the task on failure as part of the error message, instead of just "@ workloop:line"
     if !completed

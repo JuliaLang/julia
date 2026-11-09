@@ -1097,6 +1097,36 @@ static void rr_detach_teleport(void) JL_NOTSAFEPOINT {
 }
 #endif
 
+// A parent process can request that we terminate when it exits by passing its
+// pid in JULIA_EXIT_WITH_PARENT_PID. This is used for precompilation workers,
+// which would otherwise keep running when their parent is killed abruptly.
+// On Windows, libuv normally puts spawned processes in a job object that
+// already terminates them together with their parent.
+static void exit_with_parent(void) JL_NOTSAFEPOINT
+{
+    const char *env = getenv("JULIA_EXIT_WITH_PARENT_PID");
+    if (env == NULL)
+        return;
+#ifndef _OS_WINDOWS_
+    char *endptr;
+    errno = 0;
+    long parent = strtol(env, &endptr, 10);
+    int valid = errno == 0 && *env != '\0' && *endptr == '\0' && parent > 0 && parent == (pid_t)parent;
+#endif
+    // don't pass the request on to our own children
+    uv_os_unsetenv("JULIA_EXIT_WITH_PARENT_PID");
+#ifndef _OS_WINDOWS_
+    // detaching from rr re-executes us under another parent
+    if (!valid || (jl_options.rr_detach && jl_running_under_rr(0)))
+        return;
+    jl_exit_with_parent((pid_t)parent);
+    // the parent may have exited before we started watching it
+    // (N.B.: Julia is not initialized yet, so there is nothing to clean up)
+    if (getppid() != (pid_t)parent)
+        exit(1);
+#endif
+}
+
 /**
  * @brief Entry point for the Julia REPL (Read-Eval-Print Loop).
  *
@@ -1127,6 +1157,8 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_CANSAFEPOINT_ENTE
     }
     char **new_argv = argv;
     jl_parse_opts(&argc, (char***)&new_argv);
+
+    exit_with_parent();
 
     // The parent process requested that we detach from the rr session.
     // N.B.: In a perfect world, we would only do this for the portion of
@@ -1229,6 +1261,54 @@ static char *absrealpath(const char *in, int nprefix) JL_NOTSAFEPOINT
     return out;
 }
 
+// Make each entry of a path list absolute, optionally resolving symlinks.
+static char *abspathlist(const char *in, int resolve_symlinks) JL_NOTSAFEPOINT
+{
+    char cwd[JL_PATH_MAX];
+    size_t cwdlen = 0;
+    size_t outlen = 0;
+    char *out = (char*)malloc_s(1);
+    out[0] = '\0';
+    while (1) {
+        const char *end = strchr(in, PATHLISTSEPSTRING[0]);
+        size_t len = end ? (size_t)(end - in) : strlen(in);
+        if (len > 0) {
+            char *entry = (char*)malloc_s(len + 1);
+            memcpy(entry, in, len);
+            entry[len] = '\0';
+            if (resolve_symlinks) {
+                char *resolved = absrealpath(entry, 0);
+                free(entry);
+                entry = resolved;
+                len = strlen(entry);
+            }
+            int isabs = jl_isabspath(entry);
+            if (!isabs && cwdlen == 0) {
+                cwdlen = sizeof(cwd);
+                if (uv_cwd(cwd, &cwdlen))
+                    jl_error("fatal error: unexpected error while retrieving current working directory");
+            }
+            size_t prefix = isabs ? 0 : cwdlen + 1;
+            out = (char*)realloc_s(out, outlen + prefix + len + 2);
+            if (outlen > 0)
+                out[outlen++] = PATHLISTSEPSTRING[0];
+            if (!isabs) {
+                memcpy(out + outlen, cwd, cwdlen);
+                out[outlen + cwdlen] = PATHSEPSTRING[0];
+                outlen += prefix;
+            }
+            memcpy(out + outlen, entry, len);
+            outlen += len;
+            out[outlen] = '\0';
+            free(entry);
+        }
+        if (!end)
+            break;
+        in = end + 1;
+    }
+    return out;
+}
+
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir)
 {
     libsupport_init();
@@ -1305,8 +1385,12 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
         jl_options.machine_file = absrealpath(jl_options.machine_file, 0);
     if (jl_options.output_code_coverage)
         jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
-    if (jl_options.tracked_path)
-        jl_options.tracked_path = absrealpath(jl_options.tracked_path, 0);
+    if (jl_options.tracked_path) // `@` with no path tracks the current directory
+        jl_options.tracked_path = jl_options.tracked_path[0] ? abspathlist(jl_options.tracked_path, 1) :
+                                                               absrealpath(jl_options.tracked_path, 0);
+    // symlinks are kept, since these match the paths of source files as they were loaded
+    if (jl_options.coverage_exclude)
+        jl_options.coverage_exclude = abspathlist(jl_options.coverage_exclude, 0);
 
     const char **cmdp = jl_options.cmds;
     if (cmdp) {

@@ -27,7 +27,7 @@ int main(void)
 {
     // Empty tree: nothing is in range.
     {
-        eyt_tree_t t; eyt_tree_init(&t);
+        eyt_tree_t t; eyt_tree_init(&t, free);
         assert(!in_range(&t, 0));
         assert(!in_range(&t, 100));
         assert(find(&t, 100) == EYT_NOTFOUND);
@@ -35,7 +35,7 @@ int main(void)
 
     // Single range [100, 200): start inclusive, end exclusive.
     {
-        eyt_tree_t t; eyt_tree_init(&t);
+        eyt_tree_t t; eyt_tree_init(&t, free);
         eyt_tree_add_range(&t, 100, 200, (void*)0x10);
         assert(!in_range(&t, 96));   // before
         assert(!in_range(&t, 100));  // start (exclusive: blob base is a tag word)
@@ -50,7 +50,7 @@ int main(void)
 
     // Two disjoint ranges [100, 200) and [300, 400).
     {
-        eyt_tree_t t; eyt_tree_init(&t);
+        eyt_tree_t t; eyt_tree_init(&t, free);
         eyt_tree_add_range(&t, 100, 200, (void*)0x10);
         eyt_tree_add_range(&t, 300, 400, (void*)0x20);
         assert(!in_range(&t, 100));
@@ -68,7 +68,7 @@ int main(void)
     // to the *first* range (a trailing zero-size singleton of blob 1, never an
     // object of blob 2, whose base is its first object's tag word).
     {
-        eyt_tree_t t; eyt_tree_init(&t);
+        eyt_tree_t t; eyt_tree_init(&t, free);
         eyt_tree_add_range(&t, 100, 200, (void*)0x10);
         eyt_tree_add_range(&t, 200, 300, (void*)0x20);
         assert(!in_range(&t, 100));
@@ -79,9 +79,22 @@ int main(void)
         assert(!in_range(&t, 304));
     }
 
+    // Ranges are numbered in insertion order, and their data is found by number.
+    {
+        eyt_tree_t t; eyt_tree_init(&t, free);
+        assert(eyt_tree_nranges(&t) == 0);
+        assert(eyt_tree_range_data(&t, 0) == EYT_NOTFOUND);
+        assert(eyt_tree_add_range(&t, 300, 400, (void*)0x20) == 0);
+        assert(eyt_tree_add_range(&t, 100, 200, (void*)0x10) == 1);
+        assert(eyt_tree_nranges(&t) == 2);
+        assert(eyt_tree_range_data(&t, 0) == (void*)0x20);
+        assert(eyt_tree_range_data(&t, 1) == (void*)0x10);
+        assert(eyt_tree_range_data(&t, 2) == EYT_NOTFOUND);
+    }
+
     // Ranges added out of address order are still handled correctly.
     {
-        eyt_tree_t t; eyt_tree_init(&t);
+        eyt_tree_t t; eyt_tree_init(&t, free);
         eyt_tree_add_range(&t, 300, 400, (void*)0x20);
         eyt_tree_add_range(&t, 100, 200, (void*)0x10);
         eyt_tree_add_range(&t, 200, 300, (void*)0x30);  // abuts both neighbors
@@ -101,7 +114,7 @@ int main(void)
             int nr = 1 + rand() % 6;
             rng_t ranges[8];
             uintptr_t cur = 4 * (1 + rand() % 10);
-            eyt_tree_t t; eyt_tree_init(&t);
+            eyt_tree_t t; eyt_tree_init(&t, free);
             for (int i = 0; i < nr; i++) {
                 uintptr_t gap = 4 * (rand() % 4);      // 0 (abut) .. 12
                 uintptr_t len = 4 * (1 + rand() % 8);  // 4 .. 32

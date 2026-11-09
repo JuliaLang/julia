@@ -26,12 +26,13 @@ JL_DLLEXPORT char *jl_genericmemory_typetagdata(jl_genericmemory_t *m) JL_NOTSAF
 
 #define MAXINTVAL (((size_t)-1)>>1)
 
-// ONLY USE FROM CODEGEN. It only partially initializes the mem
+// Leaves the length and the data uninitialized. Before the next safepoint, the caller must set
+// the length, and zero the data if the element type requires it.
 JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls, size_t nbytes, jl_datatype_t *mtype)
 {
-    size_t tot = nbytes + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
-
-    int pooled = tot <= GC_MAX_SZCLASS;
+    // LateLowerGCFrame inlines the pooled case for constant sizes; dynamic sizes still get here
+    int pooled = jl_genericmemory_data_inline(nbytes);
+    size_t tot = nbytes + JL_GENERICMEMORY_INLINE_DATA_OFFSET;
     char *data;
     jl_genericmemory_t *m;
     if (!pooled) {
@@ -40,15 +41,13 @@ JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls
     }
     m = (jl_genericmemory_t*)jl_gc_alloc(ptls, tot, mtype);
     if (pooled) {
-        // N.B. if this offset changes, also update emit_const_len_memorynew in cgutils.cpp
-        data = (char*)m + JL_SMALL_BYTE_ALIGNMENT;
+        data = (char*)m + JL_GENERICMEMORY_INLINE_DATA_OFFSET;
     }
     else {
         int isaligned = 1; // jl_gc_managed_malloc is always aligned
         jl_gc_track_malloced_genericmemory(ptls, m, isaligned);
         jl_genericmemory_data_owner_field(m) = (jl_value_t*)m;
     }
-    // length set by codegen
     m->ptr = data;
     return m;
 }
@@ -254,7 +253,7 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
 
 // genericmemory primitives -----------------------------------------------------------
 
-JL_DLLEXPORT jl_value_t *jl_genericmemoryref(jl_genericmemory_t *mem, size_t i)
+jl_value_t *jl_genericmemoryref(jl_genericmemory_t *mem, size_t i)
 {
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(mem))->layout;
     int isatomic = layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked;
@@ -264,7 +263,7 @@ JL_DLLEXPORT jl_value_t *jl_genericmemoryref(jl_genericmemory_t *mem, size_t i)
     return jl_memoryrefget(m, isatomic);
 }
 
-JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t *mem, void *data, size_t len)
+jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t *mem, void *data, size_t len)
 {
     jl_value_t *mtype = (jl_value_t*)jl_typetagof(mem);
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)mtype)->layout;
@@ -287,7 +286,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t 
     return new_mem;
 }
 
-JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy(jl_genericmemory_t *mem)
+jl_genericmemory_t *jl_genericmemory_copy(jl_genericmemory_t *mem)
 {
     jl_value_t *mtype = (jl_value_t*)jl_typetagof(mem);
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)mtype)->layout;
@@ -309,7 +308,7 @@ jl_genericmemoryref_t *jl_new_memoryref(jl_value_t *typ, jl_genericmemory_t *mem
 }
 
 // memoryref primitives
-JL_DLLEXPORT jl_genericmemoryref_t jl_memoryrefindex(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, size_t idx)
+jl_genericmemoryref_t jl_memoryrefindex(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, size_t idx)
 {
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;
     if ((layout->flags.arrayelem_isboxed || !layout->flags.arrayelem_isunion) && layout->size != 0) {
@@ -334,7 +333,7 @@ static jl_value_t *jl_ptrmemrefget(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, i
     return elt;
 }
 
-JL_DLLEXPORT jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m, int isatomic)
+jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m, int isatomic)
 {
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;
     assert(isatomic == (layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked));
@@ -395,12 +394,12 @@ static int _jl_memoryref_isassigned(jl_genericmemoryref_t m, int isatomic)
     return (isatomic ? jl_atomic_load(elem) : jl_atomic_load_relaxed(elem)) != NULL;
 }
 
-JL_DLLEXPORT jl_value_t *jl_memoryref_isassigned(jl_genericmemoryref_t m, int isatomic)
+jl_value_t *jl_memoryref_isassigned(jl_genericmemoryref_t m, int isatomic)
 {
     return _jl_memoryref_isassigned(m, isatomic) ? jl_true : jl_false;
 }
 
-JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
+void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
 {
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;
     assert(isatomic == (layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked));
@@ -444,7 +443,7 @@ JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
     }
 }
 
-JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *rhs JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED, int isatomic)
+void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *rhs JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED, int isatomic)
 {
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;
     assert(isatomic == (layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked));
@@ -503,7 +502,7 @@ JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *rhs JL_RO
     }
 }
 
-JL_DLLEXPORT jl_value_t *jl_memoryrefswap(jl_genericmemoryref_t m, jl_value_t *rhs, int isatomic)
+jl_value_t *jl_memoryrefswap(jl_genericmemoryref_t m, jl_value_t *rhs, int isatomic)
 {
     jl_value_t *eltype = normalize_typeofbottom_layout_alias(jl_tparam1(jl_typetagof(m.mem)));
     if (eltype != (jl_value_t*)jl_any_type && !jl_typeis(rhs, eltype)) {
@@ -537,7 +536,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefswap(jl_genericmemoryref_t m, jl_value_t *r
     return swap_bits(eltype, data, psel, owner, rhs, isatomic ? isatomic_field : isatomic_none);
 }
 
-JL_DLLEXPORT jl_value_t *jl_memoryrefmodify(jl_genericmemoryref_t m, jl_value_t *op, jl_value_t *rhs, int isatomic)
+jl_value_t *jl_memoryrefmodify(jl_genericmemoryref_t m, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_value_t *op_target)
 {
     jl_value_t *eltype = normalize_typeofbottom_layout_alias(jl_tparam1(jl_typetagof(m.mem)));
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;
@@ -545,7 +544,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefmodify(jl_genericmemoryref_t m, jl_value_t 
     char *data = (char*)m.ptr_or_offset;
     if (layout->flags.arrayelem_isboxed) {
         assert(data - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
-        return modify_value(eltype, (_Atomic(jl_value_t*)*)data, owner, op, rhs, isatomic);
+        return modify_value(eltype, (_Atomic(jl_value_t*)*)data, owner, op, rhs, isatomic, op_target);
     }
     size_t fsz = layout->size;
     uint8_t *psel = NULL;
@@ -557,10 +556,10 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefmodify(jl_genericmemoryref_t m, jl_value_t 
         psel = (uint8_t*)jl_genericmemory_typetagdata(m.mem) + i;
         data = (char*)m.mem->ptr + i * fsz;
     }
-    return modify_bits(eltype, data, psel, owner, op, rhs, isatomic ? isatomic_field : isatomic_none);
+    return modify_bits(eltype, data, psel, owner, op, rhs, isatomic ? isatomic_field : isatomic_none, op_target);
 }
 
-JL_DLLEXPORT jl_value_t *jl_memoryrefreplace(jl_genericmemoryref_t m, jl_value_t *expected, jl_value_t *rhs, int isatomic)
+jl_value_t *jl_memoryrefreplace(jl_genericmemoryref_t m, jl_value_t *expected, jl_value_t *rhs, int isatomic)
 {
     jl_value_t *eltype = normalize_typeofbottom_layout_alias(jl_tparam1(jl_typetagof(m.mem)));
     if (eltype != (jl_value_t*)jl_any_type && !jl_typeis(rhs, eltype)) {
@@ -586,7 +585,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefreplace(jl_genericmemoryref_t m, jl_value_t
     return replace_bits(eltype, data, psel, owner, expected, rhs, isatomic ? isatomic_field : isatomic_none);
 }
 
-JL_DLLEXPORT jl_value_t *jl_memoryrefsetonce(jl_genericmemoryref_t m, jl_value_t *rhs, int isatomic)
+jl_value_t *jl_memoryrefsetonce(jl_genericmemoryref_t m, jl_value_t *rhs, int isatomic)
 {
     jl_value_t *eltype = normalize_typeofbottom_layout_alias(jl_tparam1(jl_typetagof(m.mem)));
     if (eltype != (jl_value_t*)jl_any_type && !jl_typeis(rhs, eltype)) {

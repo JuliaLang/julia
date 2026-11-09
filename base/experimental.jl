@@ -9,7 +9,7 @@
 """
 module Experimental
 
-using Base: Threads, sync_varname, is_function_def
+using Base: Threads, ScopedValues, sync_varname, is_function_def
 using Base: GenericCondition
 using Base.Meta
 
@@ -335,6 +335,9 @@ function register_error_hint(@nospecialize(handler), @nospecialize(exct::Type))
 end
 
 const _hint_handlers = IdDict{Core.TypeName,Vector{Any}}()
+# set while reporting a failed hint handler, so that showing the logged exception
+# stack (which may contain the exception being hinted) cannot re-run the handler
+const _hints_disabled = ScopedValues.ScopedValue(false)
 
 """
     Experimental.show_error_hints(io, ex, args...)
@@ -350,6 +353,7 @@ the handler for that type.
 """
 function show_error_hints(io, ex, args...)
     @nospecialize
+    _hints_disabled[] && return
     ex_supertype = typeof(ex)
     while ex_supertype != Any
         hinters = get(_hint_handlers, Core.typename(ex_supertype), Any[])
@@ -360,7 +364,9 @@ function show_error_hints(io, ex, args...)
                 @invokelatest handler(io, ex, args...)
             catch
                 tn = typeof(handler).name
-                @error "Hint-handler $handler for $(ex_supertype) in $(tn.module) caused an error" exception=current_exceptions()
+                ScopedValues.@with _hints_disabled => true begin
+                    @error "Hint-handler $handler for $(ex_supertype) in $(tn.module) caused an error" exception=current_exceptions()
+                end
             end
         end
         ex_supertype = supertype(ex_supertype)
@@ -511,10 +517,10 @@ without adding them to the global method table.
 :@MethodTable
 
 """
-   Experimental.@make_all_arithmetic_checked()
+    Experimental.@make_all_arithmetic_checked
 
-This macro defines methods that overwrite the base definition of basic arithmetic (+,-,*),
-to use their checked variants instead. Explicitly overflowing arithmetic operators (+%,-%,*%)
+This macro defines methods that overwrite the base definition of basic arithmetic (`+`, `-`, `*`),
+to use their checked variants instead. Explicitly overflowing arithmetic operators (`+%`, `-%`, `*%`)
 are not affected.
 
 !!! warning
@@ -529,7 +535,6 @@ macro make_all_arithmetic_checked()
         Base.:(+)(x::Base.Int, y::Base.Int)                    = Base.Checked.checked_add(x, y)
         Base.:(+)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_add(x, y)
         Base.:(*)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_mul(x, y)
-        Base.:(-)(x::Base.AbstractChar, y::Base.AbstractChar)  = Base.Int(x) - Base.Int(y)
     end)
 end
 
@@ -828,6 +833,31 @@ function var"@VERSION"(__source__::Union{LineNumberNode, Core.MacroSource}, __mo
     else
         return :((; syntax = $(__source__.syntax_ver), runtime = VERSION))
     end
+end
+
+"""
+    Base.Experimental.prune_objcache(dir::AbstractString; age::Real=7*24*60*60) -> Int
+
+Remove the entries of the native code cache that were not used within the last `age`
+seconds, then write a copy of the cache without its free space to `dir`, which must not
+already hold a cache. Return the number of entries removed, or `nothing` if the cache is
+disabled.
+
+The cache file never shrinks by itself. To save a small cache, for example between CI jobs,
+save the copy in `dir`, either directly as a `JULIA_OBJCACHE_PATH` directory or with its
+`data.mdb` moved over the one in the cache once no Julia process is using it.
+
+!!! warning
+    This interface is experimental and subject to change or removal without notice.
+"""
+function prune_objcache(dir::AbstractString; age::Real=7*24*60*60)
+    ccall(:jl_objcache_kv_enabled, Cint, ()) == 0 && return nothing
+    # waiting for the database's write lock and copying it can take a while, so let GC run
+    removed = @ccall gc_safe=true jl_objcache_prune((floor(Int64, time() - age))::Int64)::Int64
+    removed < 0 && error("could not prune the native code cache")
+    err = @ccall gc_safe=true jl_objcache_compact(dir::Cstring)::Cstring
+    err == C_NULL || error("could not copy the native code cache to ", dir, ": ", unsafe_string(err))
+    return Int(removed)
 end
 
 end # module

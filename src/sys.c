@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <ctype.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -105,6 +106,69 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 
 JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
 JL_DLLEXPORT char *jl_uv_fs_t_path(uv_fs_t *req) { return (char*)req->path; }
+
+// --- streaming directory iteration ---
+// These wrap libuv's opendir/readdir/closedir so Julia does not depend on the uv_dir_t layout.
+
+JL_DLLEXPORT int jl_uv_fs_opendir(const char *path, uv_dir_t **dir_out) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    uv_fs_t req;
+    JL_SIGATOMIC_BEGIN();
+    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
+    int ret = uv_fs_opendir(unused_uv_loop_arg, &req, path, NULL);
+    jl_gc_safe_leave(ct->ptls, gc_state);
+    *dir_out = ret < 0 ? NULL : (uv_dir_t*)req.ptr;
+    uv_fs_req_cleanup(&req);
+    JL_SIGATOMIC_END();
+    return ret;
+}
+
+// Read one entry and return its name as a String, storing the entry type in *status.
+// Returns nothing at end of directory (*status == 0) or on error (*status is the libuv error code).
+JL_DLLEXPORT jl_value_t *jl_uv_fs_readdir1(uv_dir_t *dir, int *status) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    uv_fs_t req;
+    uv_dirent_t ent = { NULL, UV_DIRENT_UNKNOWN };
+    jl_value_t *name = jl_nothing;
+    dir->dirents = &ent;
+    dir->nentries = 1;
+    JL_SIGATOMIC_BEGIN();
+    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
+    int ret = uv_fs_readdir(unused_uv_loop_arg, &req, dir, NULL);
+    jl_gc_safe_leave(ct->ptls, gc_state);
+    JL_SIGATOMIC_END();
+    JL_GC_PUSH1(&name);
+    if (ret > 0) {
+        // Allocation is not allowed while signals are deferred. If it throws, only this entry's name leaks.
+        name = jl_cstr_to_string(ent.name);
+        *status = ent.type;
+    }
+    else {
+        *status = ret;
+    }
+    JL_SIGATOMIC_BEGIN();
+    uv_fs_req_cleanup(&req);
+    JL_SIGATOMIC_END();
+    JL_GC_POP();
+    dir->dirents = NULL;
+    dir->nentries = 0;
+    return name;
+}
+
+JL_DLLEXPORT int jl_uv_fs_closedir(uv_dir_t *dir) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    uv_fs_t req;
+    JL_SIGATOMIC_BEGIN();
+    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
+    int ret = uv_fs_closedir(unused_uv_loop_arg, &req, dir, NULL);
+    jl_gc_safe_leave(ct->ptls, gc_state);
+    uv_fs_req_cleanup(&req);
+    JL_SIGATOMIC_END();
+    return ret;
+}
 
 // --- stat ---
 JL_DLLEXPORT int jl_sizeof_stat(void) { return sizeof(uv_stat_t); }
@@ -445,12 +509,53 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 #endif
 }
 
+// Parse `JULIA_CPU_THREADS` like `tryparse(Int, ...)` does in `Sys.__init__`;
+// returns 0 for invalid values, which Base already warns about. Digits are
+// parsed by hand because `strtol` accepts prefixes and signs of its own.
+static int parse_cpu_threads(const char *cp) JL_NOTSAFEPOINT
+{
+    while (isspace((unsigned char)*cp))
+        cp++;
+    if (*cp == '+')
+        cp++;
+    int base = 10;
+    if (cp[0] == '0' && (cp[1] == 'x' || cp[1] == 'o' || cp[1] == 'b')) {
+        base = cp[1] == 'x' ? 16 : cp[1] == 'o' ? 8 : 2;
+        cp += 2;
+    }
+    const char *digits = cp;
+    int64_t n = 0;
+    for (; *cp; cp++) {
+        unsigned char c = *cp;
+        int d = isdigit(c) ? c - '0' : isxdigit(c) ? tolower(c) - 'a' + 10 : base;
+        if (d >= base)
+            break;
+        n = n * base + d;
+        if (n > INT_MAX) // larger than any CPU count
+            return 0;
+    }
+    if (cp == digits)
+        return 0;
+    while (isspace((unsigned char)*cp))
+        cp++;
+    return *cp == '\0' ? (int)n : 0;
+}
+
 JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT
 {
-    // We want the more conservative estimate of the two.
-    int cpu_threads = jl_cpu_threads();
+    // Minimum of the hardware CPU count, the OS limits (affinity, CPU quota) and a
+    // valid JULIA_CPU_THREADS, matching `Sys.EFFECTIVE_CPU_THREADS`.
+    int n = jl_cpu_threads();
     int available_parallelism = uv_available_parallelism();
-    return available_parallelism < cpu_threads ? available_parallelism : cpu_threads;
+    if (available_parallelism < n)
+        n = available_parallelism;
+    const char *cp = getenv(CPU_THREADS_NAME);
+    if (cp) {
+        int env_threads = parse_cpu_threads(cp);
+        if (env_threads > 0 && env_threads < n)
+            n = env_threads;
+    }
+    return n;
 }
 
 // -- precompile jobserver --
@@ -752,8 +857,8 @@ static int dlinfo_helper(struct dl_phdr_info *info, size_t size, void *vdata)
 // into Julia, and may be used from a JL_NOTSAFEPOINT function.
 static void *jl_dlopen_noload(const char *filename) JL_NOTSAFEPOINT
 {
-#ifdef __clang_gcanalyzer__
-    // hidden from the checker, which only knows the general contract of jl_dlopen
+#if defined(__clang_gcanalyzer__) || defined(__clang_safetyanalysis__)
+    // hidden from the checkers, which only know the general contract of jl_dlopen
     return NULL;
 #else
     return jl_dlopen(filename, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD);

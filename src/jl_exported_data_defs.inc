@@ -18,3 +18,6 @@ JL_CONST_GLOBAL_VARS(XX)
 #define XX(name, type)    JL_DLLEXPORT type name;
 JL_EXPORTED_DATA_SYMBOLS(XX)
 #undef XX
+
+// -1 until the runtime has checked the offset (0 is valid on RISC-V)
+JL_DLLEXPORT ssize_t jl_tls_offset = -1;

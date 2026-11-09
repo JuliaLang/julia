@@ -8,6 +8,25 @@ include $(JULIAHOME)/deps/llvm-ver.make
 
 TAGGED_RELEASE_BANNER := ""
 
+# Build metadata tag for a build that behaves differently from a regular build of the
+# same source (e.g. `opt` for the PGO/LTO builds of `contrib/optimized`).  It is shown
+# as `+tag` after the version in the banner and in `versioninfo()`.
+JULIA_BUILD_VARIANT :=
+
+# Extended platform tags (`-key+value`) describing this build, appended to the host
+# triplet after the detected compiler ABI tags.  Currently records which sanitizer
+# (if any) this build uses, so that `HostPlatform()` selects matching sanitized artifacts
+BUILD_EXT_TAGS :=
+ifeq ($(SANITIZE),1)
+ifeq ($(SANITIZE_MEMORY),1)
+BUILD_EXT_TAGS := -sanitize+memory
+else ifeq ($(SANITIZE_ADDRESS),1)
+BUILD_EXT_TAGS := -sanitize+address
+else ifeq ($(SANITIZE_THREAD),1)
+BUILD_EXT_TAGS := -sanitize+thread
+endif
+endif
+
 all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony features_h.jl file_constants.jl uv_constants.jl version_git.jl.phony)
 
 PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+|\([\-0-9]+\)
@@ -68,6 +87,7 @@ endif
 	@printf "%s\n" "const libllvm_name = \"$(LLVM_SHARED_LIB_NAME)\"" >> $@
 	@printf "%s\n" "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@
 	@printf "%s\n" "const TAGGED_RELEASE_BANNER = \"$(TAGGED_RELEASE_BANNER)\"" >> $@
+	@printf "%s\n" "const BUILD_VARIANT = \"$(JULIA_BUILD_VARIANT)\"" >> $@
 	@printf "%s\n" "const SYSCONFDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(sysconfdir_rel)))) >> $@
 	@printf "%s\n" "const DATAROOTDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(datarootdir_rel)))) >> $@
 	@printf "%s\n" "const DOCDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(docdir_rel)))) >> $@
@@ -88,6 +108,16 @@ ifeq ($(OS), Darwin)
 	@printf "%s\n" "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --sdk macosx --show-sdk-version)\"" >> $@
 endif
 	@printf "%s\n" "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
+	@printf "%s\n" "const BUILD_EXT_TAGS = \"$(BUILD_EXT_TAGS)\"" >> $@
+	@printf "%s\n" "const COMPRESS_PKGIMAGE_DEBUG_SECTIONS = \"$(COMPRESS_PKGIMAGE_DEBUG_SECTIONS)\"" >> $@
+
+	@# From `JL_RUNTIME_LIBS` in Make.inc. A trailing `*` marks a prefix.
+	@printf "%s\n" "const RUNTIME_LIBRARY_NAMES = String[" >> $@
+	@$(foreach lib,$(JL_RUNTIME_LIBS),printf "%s\n" "    \"$(lib)\"," >> $@;)
+	@printf "%s\n" "]" >> $@
+	@printf "%s\n" "const CODEGEN_LIBRARY_NAMES = String[" >> $@
+	@$(foreach lib,$(JL_RUNTIME_CODEGEN_LIBS),printf "%s\n" "    \"$(lib)\"," >> $@;)
+	@printf "%s\n" "]" >> $@
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible
@@ -306,6 +336,7 @@ $(eval $(call symlink_system_library,LIBSSH2,libssh2))
 $(eval $(call symlink_system_library,NGHTTP2,libnghttp2))
 $(eval $(call symlink_system_library,CURL,libcurl))
 $(eval $(call symlink_system_library,LIBGIT2,libgit2))
+$(eval $(call symlink_system_library,LIBPICOSAT,libpicosat))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libamd))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libcamd))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libccolamd))

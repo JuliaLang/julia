@@ -471,6 +471,15 @@ let x = UInt63(0xc000_ba98_8765_4321), y = Int63(-1)
     end
 end
 
+# bitsizeof is only defined for primitive types and their instances
+@test Core.bitsizeof(true) == 8
+@test Core.bitsizeof(C_NULL) == Sys.WORD_SIZE
+for x in (Pair{Int32,Int16}, Tuple{UInt63}, Tuple{}, (), nothing, "abc", :abc, zeros(UInt8, 3),
+          Memory{UInt8}(undef, 3), Union{Int8,Int16}, Ptr, Integer, Union{}, DataType)
+    @test_throws ErrorException Core.bitsizeof(x)
+end
+@test_throws "Type Pair is not a primitive type" Core.bitsizeof(Pair{Int32,Int16})
+
 # test nonsensical valid conversions and errors
 
 compiled_addi(x, y) = Core.Intrinsics.add_int(x, y)
@@ -537,6 +546,57 @@ end
 @test Base.invokelatest(Core.Intrinsics.fptrunc, Core.BFloat16, 1 + 0x1p-8 + 0x1p-40) === reinterpret(Core.BFloat16, 0x3f81)
 # 1.75 * 0.578125 - 2^-40 is just below a BFloat16 halfway point
 @test Base.invokelatest(Core.Intrinsics.fma_float, reinterpret.(Core.BFloat16, (0x3fe0, 0x3f14, 0xab80))...) === reinterpret(Core.BFloat16, 0x3f81)
+@noinline compiled_fma(a, b, c) = Core.Intrinsics.fma_float(a, b, c)
+let fma_cases = (
+        (0x3fe0, 0x3f14, 0xab80) => 0x3f81, # rounds incorrectly via Float32
+        (0x3fc0, 0x3f81, 0x8d80) => 0x3fc1, # 1.5 * (1 + 2^-7) is a halfway point, -2^-100 breaks the tie (lost in Float64)
+        (0x5f80, 0x5fc0, 0xff7f) => 0x7f01, # 1.5 * 2^128 overflows Float32, but -floatmax(BFloat16) brings it back
+    )
+    for (args, res) in fma_cases
+        a, b, c = reinterpret.(Core.BFloat16, args)
+        @test compiled_fma(a, b, c) === reinterpret(Core.BFloat16, res)
+        @test Base.invokelatest(Core.Intrinsics.fma_float, a, b, c) === reinterpret(Core.BFloat16, res)
+    end
+end
+# integer to BFloat16 conversions must not double round through Float32
+@noinline compiled_sitofp(::Type{T}, x) where {T} = Core.Intrinsics.sitofp(T, x)
+@noinline compiled_uitofp(::Type{T}, x) where {T} = Core.Intrinsics.uitofp(T, x)
+@test compiled_sitofp(Core.BFloat16, Int32(2^24 + 2^16 + 1)) === reinterpret(Core.BFloat16, 0x4b81)
+@test compiled_sitofp(Core.BFloat16, -Int32(2^24 + 2^16 + 1)) === reinterpret(Core.BFloat16, 0xcb81)
+@test compiled_uitofp(Core.BFloat16, UInt64(2)^60 + UInt64(2)^52 + 1) === reinterpret(Core.BFloat16, 0x5d81)
+let vals = Any[Int8(-128), Int16(-32768), typemin(Int32), typemax(Int32), typemin(Int64), typemax(Int64),
+               typemin(Int128), typemax(Int128), typemax(UInt32), typemax(UInt64), typemax(UInt128), 0, -1, 1]
+    for T in (Int16, Int32, Int64, Int128, UInt16, UInt32, UInt64, UInt128), _ in 1:200
+        # BFloat16 halfway points (9 significant bits, the last one set), and their neighbors
+        h = T(rand(0x0101:0x0002:0x01ff)) << rand(0:8sizeof(T) - 9 - (T <: Signed))
+        push!(vals, h, h - one(T), h + one(T))
+        T <: Signed && push!(vals, -h, -h - one(T), -h + one(T))
+    end
+    for n in vals
+        cvt = n isa Signed ? Core.Intrinsics.sitofp : Core.Intrinsics.uitofp
+        compiled = n isa Signed ? compiled_sitofp : compiled_uitofp
+        @test compiled(Core.BFloat16, n) === Base.invokelatest(cvt, Core.BFloat16, n)
+    end
+end
+# 128-bit integer <-> Float16 conversions may lower to libcalls (e.g. `__floattihf`)
+@noinline compiled_fptosi_f16(::Type{T}, x) where {T} = Core.Intrinsics.fptosi(T, x)
+@noinline compiled_fptoui_f16(::Type{T}, x) where {T} = Core.Intrinsics.fptoui(T, x)
+for n in Int128[0, 3, 2049, 2051, 65504, 65519, 65520, 65536, typemax(Int128)]
+    @test compiled_sitofp(Float16, n) === Float16(n)
+    @test compiled_sitofp(Float16, -n) === Float16(-n)
+    @test compiled_uitofp(Float16, UInt128(n)) === Float16(UInt128(n))
+end
+@test compiled_sitofp(Float16, typemin(Int128)) === -Inf16
+@test compiled_uitofp(Float16, typemax(UInt128)) === Inf16
+# LLVM miscompiles negative f16 -> i128 on Win64 with avx512fp16 (zero-extends the i64 result):
+# llvm/llvm-project#230703, fix in llvm/llvm-project#230779
+fptosi_f16_i128_broken = Sys.iswindows() && Sys.ARCH === :x86_64 &&
+    occursin("+avx512fp16", ccall(:jl_get_cpu_features, String, ()))
+for x in Float16[0, 0.5, 2.5, 5, 2049, 65504]
+    @test compiled_fptosi_f16(Int128, x) === trunc(Int128, x)
+    @test compiled_fptosi_f16(Int128, -x) === trunc(Int128, -x) broken=(fptosi_f16_i128_broken && x >= 1)
+    @test compiled_fptoui_f16(UInt128, x) === trunc(UInt128, x)
+end
 @static if Sys.ARCH === :x86_64 || Sys.ARCH === :i686
     script = """
         using InteractiveUtils
@@ -791,6 +851,10 @@ end
     @test Float16(0x1.004p0)*Float16(1.25)+Float16(0x1p-12) === Float16(0x1.404p0) # for comparison
     # a*b+c rounded to Float32 is exactly halfway between two Float16 values
     @test_intrinsic Core.Intrinsics.fma_float Float16(-336.0) Float16(-37.25) Float16(0.0003653) Float16(1.252e4)
+    # muladd must be either fma(x, y, z) or x*y + z, not a*b+c rounded to Float32 then to Float16
+    let (x, y, z) = reinterpret.(Float16, (0x8d2e, 0x7258, 0x85fe))
+        @test Base.invokelatest(Core.Intrinsics.muladd_float, x, y, z) === x * y + z
+    end
 
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float16(3.3) Float16(3.3) true
@@ -1042,3 +1106,40 @@ tofloat(x) = Core.Intrinsics.uitofp(Float64, x)
 # https://github.com/JuliaLang/julia/issues/61436
 primitive type UIntN256 <: Unsigned 256 end
 @test tofloat(reinterpret(UIntN256, (zeros(UInt8, 32)...,))) == 0.0
+
+@testset "cpu_supports runtime fallback agrees with constant folding" begin
+    CPUID = Base.BinaryPlatforms.CPUID
+    @noinline runtime_cpu_supports(s::Symbol) = Core.Intrinsics.cpu_supports(s)
+    function check(query::Symbol)
+        folded = @eval () -> Core.Intrinsics.cpu_supports($(QuoteNode(query)))
+        @test Base.invokelatest(folded) === runtime_cpu_supports(query)
+    end
+    for name in CPUID._codegen_feature_names()
+        check(name)
+    end
+    # Feature lists, as the macro emits for CPU models; names of other architectures are skipped
+    for cpu in ("generic", "x86-64-v3", "haswell", "sapphirerapids", "diamondrapids", "cortex-a78", "neoverse-v2")
+        features = CPUID._cpu_model_features(cpu)
+        features === nothing && continue
+        query = Symbol(join(features, ','))
+        check(query)
+        @test runtime_cpu_supports(query) === all(runtime_cpu_supports, features)
+    end
+    # Features Julia deliberately keeps out of codegen always test false
+    @static if Sys.ARCH === :x86_64
+        for name in (:rdrnd, :rdseed, :xsaveopt, :avx512bf16, :avxneconvert, Symbol("avx10.1"), Symbol("avx10.2"))
+            @test name in CPUID._codegen_feature_names()
+            folded = @eval () -> Core.Intrinsics.cpu_supports($(QuoteNode(name)))
+            @test !Base.invokelatest(folded)
+            @test !runtime_cpu_supports(name)
+        end
+    end
+    @test !runtime_cpu_supports(Symbol(""))
+    @test !runtime_cpu_supports(Symbol("sse2,not_a_real_feature"))
+    # Code for any target must use the runtime's hard-float calling convention (lp64d)
+    @static if Sys.ARCH === :riscv64
+        for cpu in ("generic", "generic-rv64")
+            @test :d in CPUID._cpu_model_features(cpu)
+        end
+    end
+end

@@ -4,6 +4,32 @@ using Test, Printf
 
 @test isempty(Test.detect_closure_boxes(Printf))
 
+# A number type that is formatted from the decimal digits it hands to the generic fallback
+struct DigitsNumber <: Real
+    x::Float64
+end
+Base.round(d::DigitsNumber; sigdigits) = DigitsNumber(round(d.x; sigdigits))
+function Printf.ini_dec(d::DigitsNumber, n, buf)
+    m, e = split(Printf.@sprintf("%.*e", n - 1, abs(d.x)), 'e')
+    digits = replace(m, "." => "")
+    copyto!(buf, codeunits(digits))
+    return length(digits), parse(Int, e) + 1, signbit(d.x)
+end
+function Printf.fix_dec(d::DigitsNumber, prec, buf)
+    ip, fp = split(Printf.@sprintf("%.*f", prec, abs(d.x)) * (prec == 0 ? "." : ""), '.')
+    if ip == "0"
+        digits = lstrip(fp, '0')
+        pt = length(digits) - length(fp)
+        isempty(digits) && ((digits, pt) = ("0", 1))
+    else
+        digits, pt = ip * fp, length(ip)
+    end
+    copyto!(buf, codeunits(digits))
+    return length(digits), pt, signbit(d.x)
+end
+Printf.fmt(buf, pos, arg::DigitsNumber, spec::Printf.Spec{T}) where {T <: Printf.Floats} =
+    Printf.fmtfallback(buf, pos, arg, spec)
+
 @testset "Printf" begin
 
 @testset "%p" begin
@@ -37,6 +63,13 @@ end
     @test (Printf.@sprintf "%a" big"1.5") == "0x1.8p+0"
     @test (Printf.@sprintf "%#.0a" 1.5) == "0x2.p+0"
     @test (Printf.@sprintf "%+30a" 1/3) == "         +0x1.5555555555555p-2"
+    @test (Printf.@sprintf "%a" NaN) == "NaN"
+    @test (Printf.@sprintf "% a" NaN) == " NaN"
+    @test (Printf.@sprintf "%-8A" NaN) == "NaN     "
+    @test (Printf.@sprintf "%a" Inf) == "Inf"
+    @test (Printf.@sprintf "%+a" Inf) == "+Inf"
+    @test (Printf.@sprintf "%A" -Inf) == "-Inf"
+    @test (Printf.@sprintf "%08a" Inf) == "     Inf"
 
     @test Printf.@sprintf("%a", 1.5) == "0x1.8p+0"
     @test Printf.@sprintf("%a", 3.14) == "0x1.91eb851eb851fp+1"
@@ -48,6 +81,11 @@ end
     @test Printf.@sprintf("%#.1a", 3.14) == "0x1.9p+1"
     @test Printf.@sprintf("%#.2a", 3.14) == "0x1.92p+1"
     @test Printf.@sprintf("%.6a", 1.5) == "0x1.800000p+0"
+    # the precision must not overflow the scaling for narrow types
+    for prec in 0:15, x in (1.5, -3.14, 0x1.ffcp15, 0x1p-24, 0x1.ffcp-15)
+        @test Printf.@sprintf("%.*a", prec, Float16(x)) == Printf.@sprintf("%.*a", prec, Float64(Float16(x)))
+        @test Printf.@sprintf("%.*a", prec, Float32(x)) == Printf.@sprintf("%.*a", prec, Float64(Float32(x)))
+    end
 
 end
 
@@ -154,6 +192,10 @@ end
     @test Printf.@sprintf("%-8.1f", 1.234) == "1.2     "
     @test Printf.@sprintf("%08.1f", -1.234) == "-00001.2"
     @test Printf.@sprintf("%09.1f", -1.234) == "-000001.2"
+    # the zeros go after the sign of -0.0 too
+    @test Printf.@sprintf("%08.2f", -0.0) == "-0000.00"
+    @test Printf.@sprintf("%011.2e", -0.0) == "-000.00e+00"
+    @test Printf.@sprintf("%012.2a", -0.0) == "-0x000.00p+0"
     @test Printf.@sprintf("%09.1f", 1.234) == "0000001.2"
     @test Printf.@sprintf("%+09.1f", 1.234) == "+000001.2"
     @test Printf.@sprintf("% 09.1f", 1.234) == " 000001.2"
@@ -268,6 +310,9 @@ end
     @test (Printf.@sprintf "%#s" :test) == ":test"
     @test (Printf.@sprintf "%#8s" :test) == "   :test"
     @test (Printf.@sprintf "%#-8s" :test) == ":test   "
+    @test (Printf.@sprintf "%#s" "test") == "\"test\""
+    @test (Printf.@sprintf "%#8s" "test") == "  \"test\""
+    @test (Printf.@sprintf "%#-8s" "test") == "\"test\"  "
 
     @test (Printf.@sprintf "%8.3s" "test") == "     tes"
     @test (Printf.@sprintf "%#8.3s" "test") == "     \"te"
@@ -347,6 +392,21 @@ end
     @test Printf.@sprintf("1%%2%%3") == "1%2%3"
     @test Printf.@sprintf("GAP[%%]") == "GAP[%]"
     @test Printf.@sprintf("hey there") == "hey there"
+    @test Printf.format(Printf.Format("%d "^17 * "100%%"), 1:17...) == join(1:17, " ") * " 100%"
+    @test Printf.@sprintf("%d", 1.5) == "2"
+    @test Printf.@sprintf("%5d", 3.0) == "    3"
+    @test repr(Printf.Format("%-+5.2f").formats[1]) == "%-+5.2f"
+    let err = try Printf.Format("ab %y cd") catch e; e end
+        @test err isa Printf.InvalidFormatStringError
+        @test sprint(showerror, err) == """
+            InvalidFormatStringError: 'y' is not a valid type specifier
+                "ab %y cd"
+                    -^
+            """
+        @test sprint(showerror, err; context=:color => true) ==
+            "InvalidFormatStringError: 'y' is not a valid type specifier\n" *
+            "    \"ab \e[31m%y\e[39m cd\"\n\e[31m        -^\e[39m\n"
+    end
     @test_throws Printf.InvalidFormatStringError Printf.Format("%+")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%.")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%.0")
@@ -802,6 +862,13 @@ end
     @test Printf.@sprintf("%*.*d", 10, 4, 12)    == "      0012"
     @test Printf.@sprintf("%+*.*d", 10, 4, 12)   == "     +0012"
     @test Printf.@sprintf("%0*.*d", 10, 4, 12)   == "      0012"
+    @test Printf.@sprintf("%.*d", -6, 42)        == "42"
+    @test Printf.@sprintf("%.*d", -24, typemax(Int64)) == string(typemax(Int64))
+    @test Printf.@sprintf("%.*s", -6, "abc")     == "abc"
+    @test Printf.@sprintf("%.*f", -1, 1.25)      == "1.250000"
+    @test Printf.@sprintf("%.*e", -1, 1.25)      == "1.250000e+00"
+    @test Printf.@sprintf("%.*g", -1, 1.25)      == "1.25"
+    @test Printf.@sprintf("%.*a", -1, 1.25)      == "0x1.4p+0"
 
     @test Printf.@sprintf("%*d%*d%*d", 4, 12, 4, 13, 4, 14)  == "  12  13  14"
     @test Printf.@sprintf("%*d%*d%*d", 4, 12, 5, 13, 6, 14)  == "  12   13    14"
@@ -1145,6 +1212,21 @@ end
     @test (Printf.@sprintf("%10s%n", "😉", x); Printf.@sprintf("%*s%n", 10, "😉", y); x[] == y[])
     @test (Printf.@sprintf("%10s%n", "1234", x); Printf.@sprintf("%*s%n", 10, "1234", y); x[] == y[])
 
+end
+
+@testset "generic float fallback" begin
+    for f in ("%f", "%.2f", "%.0f", "%#.0f", "%+f", "% f", "%e", "%.3e", "%E", "%+.1e", "%#.0e",
+              "%g", "%G", "%.3g", "%#.3g", "%#g"),
+        x in (0.0, -0.0, 1.5, -2.25, 12.0, 123456.789, 0.000123, 1e-7, 3.0e12, 1e100, -1e-100)
+        fmt = Printf.Format(f)
+        @test Printf.format(fmt, DigitsNumber(x)) == Printf.format(fmt, x)
+    end
+    for f in ("%10.3f", "%-10.3f", "%010.2f", "%+010.2f", "%10.0f", "%#10.0f", "%12.2e", "%-12.2e",
+              "%012.2e", "%10g", "%-10g", "%010g", "%#12g", "%12G"),
+        x in (0.0, 0.5, 1.5, -2.25, 12.0, 123456.789, 0.000123, 1e-7, 3.0e12, 1e100, -1e-100)
+        fmt = Printf.Format(f)
+        @test Printf.format(fmt, DigitsNumber(x)) == Printf.format(fmt, x)
+    end
 end
 
 # Format buffer estimates must not wrap before direct writers fill the buffer.

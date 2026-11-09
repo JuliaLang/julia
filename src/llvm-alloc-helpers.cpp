@@ -5,6 +5,7 @@
 #include "llvm-codegen-shared.h"
 #include "julia_assert.h"
 
+#include <llvm/Analysis/LoopInfo.h>
 #include <llvm/IR/IntrinsicInst.h>
 
 #define DEBUG_TYPE "escape-analysis"
@@ -397,7 +398,7 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
             required.use_info.escaped = true;
             return;
         }
-        if (!options.valid_set || options.valid_set->contains(inst->getParent())) {
+        if (!options.valid_loop || options.valid_loop->contains(inst->getParent())) {
             if (!check_inst(inst, use))
                 return;
             required.use_info.uses.insert(inst);

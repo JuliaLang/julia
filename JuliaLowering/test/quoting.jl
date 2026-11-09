@@ -166,7 +166,7 @@ end
                             Expr(:$, :a, :b)))))
         ; edition=JL_NEW_EDITION)
     @test st isa SyntaxTree
-    @test JuliaSyntax.numchildren(st) == 3
+    @test numchildren(st) == 3
     st = jl_eval(
         test_mod,
         Expr(:let, Expr(:block, Expr(:(=), :a, 1), Expr(:(=), :b, [2, [3, [4]]])),
@@ -178,7 +178,7 @@ end
                             Expr(:$, :a, Expr(:..., :b))))))
         ; edition=JL_NEW_EDITION)
     @test st isa SyntaxTree
-    @test JuliaSyntax.numchildren(st) == 4
+    @test numchildren(st) == 4
     st = jl_eval(
         test_mod,
         Expr(:let, Expr(:block, Expr(:(=), :a, 1), Expr(:(=), :b, [2, [3, [4]]])),
@@ -190,7 +190,7 @@ end
                             Expr(:$, :a, Expr(:..., Expr(:..., :b)))))))
         ; edition=JL_NEW_EDITION)
     @test st isa SyntaxTree
-    @test JuliaSyntax.numchildren(st) == 5
+    @test numchildren(st) == 5
 end
 
 ex = jl_eval(test_mod, """
@@ -297,23 +297,23 @@ let
 end
 """)
 
-err = try
+multi_interp_err = try
     JuliaLowering.eval(test_mod, multi_interp_ex)
     nothing
 catch exc
     @test exc isa LoweringError
     sprint(io->Base.showerror(io, exc, show_detail=false))
 end
-@test contains(err, raw"More than one value in bare `$` expression")
+@test contains(multi_interp_err, raw"More than one value in bare `$` expression")
 
-err = try
+multi_interp_err = try
     jl_eval(test_mod, multi_interp_ex; edition=JL_OLD_EDITION)
     nothing
 catch exc
     @test exc isa LoweringError
     sprint(io->Base.showerror(io, exc, show_detail=false))
 end
-@test contains(err, raw"More than one value in bare `$` expression")
+@test contains(multi_interp_err, raw"More than one value in bare `$` expression")
 
 # Symbol should be interpolated (converted from expr)
 @eval test_mod using JuliaLowering

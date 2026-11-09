@@ -1,7 +1,7 @@
-From f95cc314e8044f30ef370e56d20d4a2c2df21342 Mon Sep 17 00:00:00 2001
+From 14d1a79c93835e084a7e36ecc8ffd516c17933da Mon Sep 17 00:00:00 2001
 From: Keno Fischer <Keno@users.noreply.github.com>
 Date: Sun, 19 Jul 2026 02:02:09 +0000
-Subject: [PATCH 2/3] Refuse to open environments on network filesystems
+Subject: [PATCH 1/2] Refuse to open environments on network filesystems
 
 LMDB environments rely on coherent shared memory mappings of the
 lockfile and on advisory file locks on the data and lock files.
@@ -23,7 +23,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
  2 files changed, 75 insertions(+), 1 deletion(-)
 
 diff --git a/libraries/liblmdb/lmdb.h b/libraries/liblmdb/lmdb.h
-index 641a3d5..1e34fd7 100644
+index 164caa9..9693f08 100644
 --- a/libraries/liblmdb/lmdb.h
 +++ b/libraries/liblmdb/lmdb.h
 @@ -540,8 +540,10 @@ typedef enum MDB_cursor_op {
@@ -39,10 +39,10 @@ index 641a3d5..1e34fd7 100644
  
  /** @brief Statistics for a database in the environment */
 diff --git a/libraries/liblmdb/mdb.c b/libraries/liblmdb/mdb.c
-index 4da2542..985323a 100644
+index c20786d..cff8140 100644
 --- a/libraries/liblmdb/mdb.c
 +++ b/libraries/liblmdb/mdb.c
-@@ -1925,6 +1925,7 @@ static char *const mdb_errstr[] = {
+@@ -1927,6 +1927,7 @@ static char *const mdb_errstr[] = {
  	"MDB_ENV_BUSY: Environment is busy, can't use previous snapshot",
  	"MDB_IS_READONLY: Can't write in readonly txn or environment",
  	"MDB_ADDR_BUSY: Requested map address is unavailable",
@@ -50,7 +50,7 @@ index 4da2542..985323a 100644
  };
  
  char *
-@@ -6227,6 +6228,73 @@ mdb_env_envflags(MDB_env *env)
+@@ -6249,6 +6250,73 @@ mdb_env_envflags(MDB_env *env)
  # error "Persistent DB flags & env flags overlap, but both go in mm_flags"
  #endif
  
@@ -124,7 +124,7 @@ index 4da2542..985323a 100644
  int ESECT
  mdb_env_open(MDB_env *env, const char *path, unsigned int flags, mdb_mode_t mode)
  {
-@@ -6282,6 +6350,10 @@ mdb_env_open(MDB_env *env, const char *path, unsigned int flags, mdb_mode_t mode
+@@ -6304,6 +6372,10 @@ mdb_env_open(MDB_env *env, const char *path, unsigned int flags, mdb_mode_t mode
  			flags |= MDB_RAWPART | MDB_NOSUBDIR;
  	}
  #endif

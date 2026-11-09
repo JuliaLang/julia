@@ -72,9 +72,9 @@ If a name is qualified, then it is always *accessible*, and in case of a functio
 methods added to it by using the qualified name as the function name.
 
 Within a module, a variable name can be “reserved” without assigning to it by declaring it as
-`global x`. This prevents name conflicts for globals initialized after load time. The syntax
-`M.x = y` does not work to assign a global in another module; global assignment is always
-module-local.
+`global x`. This prevents name conflicts for globals initialized after load time. A global in
+another module can be assigned using its qualified name, as in `M.x = y`, but only if `x` has
+already been declared or assigned in `M`; new globals cannot be created this way.
 
 ### Export lists
 
@@ -119,6 +119,10 @@ syntactic top level within a file or module. This limitation exists for compatib
 as `public` was introduced as a new keyword in Julia 1.11 while `export` has existed since Julia
 1.0. However, this restriction on `public` may be lifted in future releases, so do not use `public`
 as an identifier.
+
+Tools can use these declarations to tell the public API apart from internals. For example,
+[tab completion](@ref "Tab completion") in the REPL lists a module's public names before its other
+names.
 
 ### Standalone `using` and `import`
 

@@ -2,8 +2,9 @@
 module Trimmability
 
 using Sockets
-using SparseArrays
-using LinearAlgebra
+using Dates: Date, DateTime, @dateformat_str
+
+include("linalg.jl")
 
 world::String = "world!"
 const str = OncePerProcess{String}() do
@@ -104,6 +105,30 @@ end
     return (fin_total[], total)
 end
 
+# Test that `dlopen(...)` for user-provided library types in `ccall` / `cglobal` works
+struct CustomLib end
+const custom_lib = CustomLib()
+function Base.Libc.Libdl.dlopen(::CustomLib)
+    print(Core.stdout, "custom_library_ccall: ")
+    return ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Ptr{UInt8}, UInt32, Cint),
+                 "libjulia", Base.Libc.Libdl.RTLD_LAZY, Cint(0))
+end
+function user_library_ccall()
+    println(Core.stdout, ccall((:jl_ver_major, custom_lib), Cint, ()))
+end
+
+# Test that a `LazyLibrary` runs its `LazyLibraryCallback` once, on first use in a `ccall`.
+# `libjulia` is already loaded, so this picks up the existing handle.
+const on_load_count = Base.RefValue{Int}(0)
+struct CountOnLoad <: Base.Libc.Libdl.LazyLibraryCallback end
+(::CountOnLoad)() = (on_load_count[] += 1; nothing)
+const counted_lib = Base.Libc.Libdl.LazyLibrary("libjulia"; on_load_callback = CountOnLoad())
+function lazy_library_ccall()
+    major = ccall((:jl_ver_major, counted_lib), Cint, ())
+    ccall((:jl_ver_major, counted_lib), Cint, ())
+    println(Core.stdout, "lazy_library_ccall: ", major, " ", on_load_count[])
+end
+
 function _test_cat()
     # hcat
     _cat1a = hcat(randn(3), rand(3), randn(3))
@@ -172,91 +197,27 @@ end
 # keeps in a merged union: each `print` must still resolve statically.
 @noinline interpolate_many(r, x, s, c) = "got $(r) vs $(first(r)) with $(x) and $(s) and $(c)"
 
-function _test_sparse_constructors()
-    A = sparse([1, 2, 3], [1, 2, 3], [1.0, 2.0, 3.0])
-    B = spdiagm(0 => ones(3), 1 => ones(2))
-    C = sparse([1, 1, 2], [1, 1, 2], [1.0, 2.0, 3.0], 2, 2, +)
-    println(Core.stdout, "sparse constructors: ", nnz(A), " ", nnz(B), " ", nnz(C), " ", C[1, 1])
+# Parsing with a `DateFormat`, whose error path prints the directive that failed:
+# that `print` must resolve statically too.
+function _test_dates()
+    day = Date("2026-03-08")
+    time = DateTime("2026-03-08 16:00:00.5", dateformat"yyyy-mm-dd HH:MM:SS.s")
+    println(Core.stdout, "dates: ", day, " ", time)
 end
 
-# A = [1 0 4; 0 2 0; 0 0 3]
-const SPARSE_A = sparse([1, 2, 3, 1], [1, 2, 3, 3], [1.0, 2.0, 3.0, 4.0])
-const SPARSE_X = [1.0, 2.0, 3.0]
-
-function _test_sparse_products()
-    A, x = SPARSE_A, SPARSE_X
-    matvec = sum(A * x)
-    y = zeros(3)
-    mul!(y, A, x)
-    matmat = nnz(A * A)
-    kronecker = nnz(kron(A, A))
-    println(Core.stdout, "sparse products: ", matvec, " ", sum(y), " ", matmat, " ", kronecker)
+@noinline function sum_eachindex5(a, b, c, d, e)
+    s = 0.0
+    for i in eachindex(a, b, c, d, e)
+        s += a[i] + b[i] + c[i] + d[i] + e[i]
+    end
+    return s
 end
-
-function _test_sparse_structure()
-    A = SPARSE_A
-    transposed = nnz(sparse(transpose(A)))
-    indexed = A[1, 3] + A[2, 2]
-    B = copy(A)
-    B[2, 1] = 5.0
-    B[1, 1] = 0.0
-    dropped = nnz(dropzeros!(B))
-    permuted = nnz(permute(A, [3, 1, 2], [1, 2, 3]))
-    println(Core.stdout, "sparse structure: ", transposed, " ", indexed, " ", dropped, " ", permuted)
-end
-
-function _test_sparse_broadcast()
-    A = SPARSE_A
-    scaled = nnz(A .* 2.0) + nnz(A .+ A)
-    densified = sum(A .+ 1.0)
-    found = length(findnz(A)[1])
-    concatenated = nnz([A A; A A])
-    println(Core.stdout, "sparse broadcast: ", scaled, " ", densified, " ", found, " ", concatenated)
-end
-
-function _test_sparse_vectors()
-    A = SPARSE_A
-    v = sparsevec([1, 3], [2.0, 4.0], 5)
-    dotted = dot(v, v .* 2.0)
-    added = nnz(v + v)
-    diagonal = sum(diag(A))
-    densesum = sum(Matrix(A))
-    println(Core.stdout, "sparse vectors: ", dotted, " ", added, " ", diagonal, " ", densesum)
-end
-
-function _test_sparse_reductions()
-    A = SPARSE_A
-    total = sum(A)
-    firstrow = sum(A, dims = 2)[1]
-    trace = tr(A)
-    frobenius = norm(A)
-    println(Core.stdout, "sparse reductions: ", total, " ", firstrow, " ", trace, " ", frobenius)
-end
-
-function _test_sparse_nested_reductions()
-    A = SPARSE_A
-    onenorm = opnorm(A, 1)
-    colnorm = maximum(norm(view(A, :, j)) for j in axes(A, 2))
-    nested = sum(a -> sum(b -> a * b, nonzeros(A), init = 0.0), nonzeros(A), init = 0.0)
-    println(Core.stdout, "sparse nested reductions: ", onenorm, " ", colnorm, " ", nested)
-end
-
-function _test_sparse_solves()
-    A, x = SPARSE_A, SPARSE_X
-    triangular = round(sum(UpperTriangular(A) \ x), digits = 6)
-    backslash = round(sum(A \ x), digits = 6)
-    lusolve = round(sum(lu(A) \ x), digits = 6)
-    println(Core.stdout, "sparse solves: ", triangular, " ", backslash, " ", lusolve)
-end
-
-function _test_sparse_factorizations()
-    A, x = SPARSE_A, SPARSE_X
-    S = sparse([2.0 1.0; 1.0 2.0])
-    b = [1.0, 1.0]
-    cholsolve = round(sum(cholesky(S) \ b), digits = 6)
-    ldltsolve = round(sum(ldlt(S) \ b), digits = 6)
-    qrsolve = round(sum(qr(A) \ x), digits = 6)
-    println(Core.stdout, "sparse factorizations: ", cholsolve, " ", ldltsolve, " ", qrsolve)
+@noinline function sum_eachindex3(a, b, c)
+    s = 0.0
+    for i in eachindex(a, b, c)
+        s += a[i] + b[i] + c[i]
+    end
+    return s
 end
 
 function _test_threads()
@@ -310,17 +271,11 @@ function @main(args::Vector{String})::Cint
     println(Core.stdout, "collected: ", kept[], " kept, ", dropped[], " dropped")
 
     println(Core.stdout, interpolate_many(1:3, 2.5, :sym, 'c'))
-    _test_sparse_constructors()
-    _test_sparse_products()
-    _test_sparse_structure()
-    _test_sparse_broadcast()
-    _test_sparse_vectors()
-    _test_sparse_reductions()
-    _test_sparse_nested_reductions()
+    let x = [1.0, 2.0]
+        println(Core.stdout, "eachindex: ", sum_eachindex5(x, x, x, x, x), " ", sum_eachindex3(x, x, x))
+    end
+    _test_linalg()
     _test_threads()
-    # TODO(#62912): SuiteSparse libraries cannot be loaded under --trim yet
-    # _test_sparse_solves()
-    # _test_sparse_factorizations()
 
     try
         sock = connect("localhost", 4900)
@@ -331,6 +286,11 @@ function @main(args::Vector{String})::Cint
         end
     catch
     end
+
+    user_library_ccall() # prints as a side effect
+    lazy_library_ccall()
+    println(Core.stdout, "symbols: ", repr(:sym), " ", repr(Symbol("a b")), " ", repr(:(::)))
+    _test_dates()
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
 

@@ -105,6 +105,26 @@ if Sys.isunix()
         @test occursin("==== Thread ", err_s)
         @test occursin("==== Done", err_s)
     end
+
+    # issue #50743
+    @testset "abort backtrace reaches Julia" begin
+        script = """
+            mutable struct RLimit
+                cur::Int64
+                max::Int64
+            end
+            const RLIMIT_CORE = 4 # from /usr/include/sys/resource.h
+            ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_CORE, Ref(RLimit(0, 0)))
+            @noinline abort_from_julia() = ccall(:abort, Cvoid, ())
+            abort_from_julia()
+        """
+        exename = `$(Base.julia_cmd()) --startup-file=no --color=no --compile=yes -g1`
+        errp = PipeBuffer()
+        p = run(pipeline(ignorestatus(`$exename -e $script`), stderr=errp))
+        err_s = read(errp, String)
+        @test Base.process_signaled(p) && p.termsignal == 6 # SIGABRT
+        @test occursin("abort_from_julia at none:", err_s)
+    end
 end
 
 @testset "julia_cmd" begin
@@ -207,6 +227,15 @@ end
         @test occursin("Available CPU targets:", v[2])
         @test occursin("Host CPU:", v[2])
     end
+
+    # Test an incompatible `cpu_target` names the missing features
+    if Sys.ARCH === :x86_64
+        let v = readchomperrors(`$(Base.julia_cmd(; cpu_target="native,-sse2")) --startup-file=no -e ''`)
+            @test !v[1]
+            @test occursin("Unable to find compatible target in cached code image. It was compiled for", v[3])
+            @test occursin(r"lacks: [^.]*\bsse2\b", v[3])
+        end
+    end
 end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`,
@@ -262,45 +291,38 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`,
     end
     real_threads = string(ccall(:jl_cpu_threads, Int32, ()))
     for nc in ("0", "-2", "x", "2x", " ", "")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
+        v = readchomperrors(addenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
         @test v == (true, real_threads,
             "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $real_threads.")
     end
     for nc in ("1", " 1 ", " +1 ", " 0x1 ")
-        @testset let v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
+        @testset let v = readchomperrors(addenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
             @test v[1]
             @test v[2] == "1"
             @test isempty(v[3])
         end
     end
 
-    @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options", "HOME" => homedir()))
+    @testset let v = readchomperrors(addenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options"))
         @test v[1]
         @test contains(v[2], r"print-options + = 1")
         @test contains(v[2], r"combiner-store-merge-dependence-limit + = 4")
         @test contains(v[2], r"enable-tail-merge + = 2")
         @test isempty(v[3])
     end
-    @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -combiner-store-merge-dependence-limit=6", "HOME" => homedir()))
+    @testset let v = readchomperrors(addenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -combiner-store-merge-dependence-limit=6"))
         @test v[1]
         @test contains(v[2], r"print-options + = 1")
         @test contains(v[2], r"combiner-store-merge-dependence-limit + = 6")
         @test contains(v[2], r"enable-tail-merge + = 1")
         @test isempty(v[3])
     end
-    if Base.libllvm_version < v"15" #LLVM over 15 doesn't care for multiple options
-        @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
-            @test !v[1]
-            @test isempty(v[2])
-            @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
-        end
-    end
     @testset "time-trace" begin
         mktempdir() do dir
             tracefile = joinpath(dir, "test_trace.json")
             # Use forward slashes on Windows to avoid LLVM command line parser issues with backslashes
             tracefile_arg = Sys.iswindows() ? replace(tracefile, "\\" => "/") : tracefile
-            v = readchomperrors(setenv(`$exename -e "1+1"`, "JULIA_LLVM_ARGS" => "-time-trace -time-trace-file=$tracefile_arg", "HOME" => homedir()))
+            v = readchomperrors(addenv(`$exename -e "1+1"`, "JULIA_LLVM_ARGS" => "-time-trace -time-trace-file=$tracefile_arg"))
             @test v[1]
             @test isfile(tracefile)
             content = read(tracefile, String)
@@ -331,7 +353,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         let expanded = abspath(expanduser("~/foo/Project.toml"))
             @test expanded == readchomp(`$exename --project='~/foo' -e 'println(Base.active_project())'`)
             @test expanded == readchomp(`$exename -P '~/foo' -e 'println(Base.active_project())'`)
-            @test expanded == readchomp(setenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "~/foo", "HOME" => homedir()))
+            @test expanded == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "~/foo"))
         end
     end
 
@@ -359,7 +381,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test tempdir() == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@temp", "HOME" => homedir()))[1:lastindex(tempdir())]
 
     # --quiet, --banner
-    let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))"
+    # without the `-q` that `julia_cmd()` passes on from a quiet parent
+    let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))",
+        exename = `$(filter(!=("-q"), collect(exename)))`
         @test read(`$exename                   -e $p`, String) == "(0, -1)"
         @test read(`$exename -q                -e $p`, String) == "(1, 0)"
         @test read(`$exename --quiet           -e $p`, String) == "(1, 0)"
@@ -445,6 +469,25 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         read(`$exename --threads=auto -e $code`, String) ==
         read(`$exename -tauto -e $code`, String) ==
         read(`$exename -t auto -e $code`, String)
+    # `auto` agrees with Sys.EFFECTIVE_CPU_THREADS, which honours JULIA_CPU_THREADS
+    let code = "print(Threads.threadpoolsize() == Sys.EFFECTIVE_CPU_THREADS)"
+        for nc in ("1", "2")
+            cmd = addenv(`$exename -t auto -e $code`, "JULIA_CPU_THREADS" => nc)
+            @test read(cmd, String) == "true"
+            cmd = addenv(`$exename -e $code`, "JULIA_CPU_THREADS" => nc,
+                         "JULIA_NUM_THREADS" => "auto")
+            @test read(cmd, String) == "true"
+        end
+        @test read(addenv(`$exename -t auto -e $code2`, "JULIA_CPU_THREADS" => "1"), String) == "2"
+    end
+    # the runtime parses JULIA_CPU_THREADS like Base (checked without starting
+    # an uncapped `auto` pool)
+    let code = "print(ccall(:jl_effective_threads, Int32, ()) == Sys.EFFECTIVE_CPU_THREADS)"
+        for nc in ("1", " +1 ", " 0x1 ", "0b10", "010", "0x0x1", "0b0x1", "0b0b1", "0x", "99999", "0", "-1", "+-1", "1x", "invalid", "")
+            cmd = addenv(`$exename -t1 -e $code`, "JULIA_CPU_THREADS" => nc)
+            @test read(pipeline(cmd; stderr=devnull), String) == "true"
+        end
+    end
     for nt in (nothing, "1")
         withenv("JULIA_NUM_THREADS" => nt) do
             @test read(`$exename --threads=2 -e $code`, String) ==
@@ -497,6 +540,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             read(`$exename --threads=auto -e $code`, String) ==
             read(`$exename -tauto -e $code`, String) ==
             read(`$exename -t auto -e $code`, String)
+        withenv("JULIA_NUM_GC_THREADS" => nothing) do
+            @test read(addenv(`$exename -t auto -e $code`, "JULIA_CPU_THREADS" => "1"), String) == "1"
+        end
         for nt in (nothing, "1")
             withenv("JULIA_NUM_GC_THREADS" => nt) do
                 @test test_read_success(`$exename --gcthreads=2 -e $code`) == "2"
@@ -715,6 +761,57 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foobar $srcfile`)
             @test contains(read(outfile, String), realpath(srcfile))
             rm(outfile)
+            # a path list tracks files under any entry, and entries are resolved separately
+            sep = Sys.iswindows() ? ';' : ':'
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foo$sep$foobar $srcfile`)
+            @test contains(read(outfile, String), realpath(srcfile))
+            rm(outfile)
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foo$sep$(joinpath(parent, "Foob")) $srcfile`)
+            @test !contains(read(outfile, String), realpath(srcfile))
+            rm(outfile)
+            cd(foo) do
+                @test readchomp(`$cov_exename -e 'print(unsafe_string(Base.JLOptions().tracked_path))' --code-coverage=@.$sep../Foobar`) == "$foo$sep$foobar"
+                @test readchomp(`$cov_exename -e 'print(unsafe_string(Base.JLOptions().tracked_path))' --track-allocation=@.$sep../Foobar`) == "$foo$sep$foobar"
+            end
+            @test contains(readchomp(`$cov_exename --code-coverage=@$foo$sep$foobar -e 'print(Base.julia_cmd())'`),
+                           "--code-coverage=@$foo$sep$foobar")
+            # any entry inside the system image's sources rules out plain caches
+            basefile = abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", "Base.jl")
+            @test !Base.tracked_path_overlaps_sysimage("$foo$sep$foobar")
+            @test Base.tracked_path_overlaps_sysimage("$foo$sep$basefile")
+        end
+
+        # excluded files record nothing and are optimized as without coverage
+        mktempdir() do parent
+            excluded = realpath(mkdir(joinpath(parent, "excluded")))
+            other = realpath(mkdir(joinpath(parent, "other")))
+            libfile = joinpath(other, "lib.jl")
+            write(libfile, "g(x) = x + 1\n")
+            srcfile = joinpath(excluded, "main.jl")
+            write(srcfile, """
+                include($(repr(libfile)))
+                h(x) = (x, x)
+                g(h(1)[1])
+                print(Base.Compiler.is_effect_free(Base.infer_effects(h, (Int,))))
+                """)
+            outfile = joinpath(parent, "exclude.info")
+            @test readchomp(`$cov_exename_hit --code-coverage=$outfile $srcfile`) == "false"
+            @test contains(read(outfile, String), "SF:$srcfile")
+            rm(outfile)
+            # a list ending in `.info` must not be taken for a tracefile
+            exclude = join([excluded, joinpath(parent, "missing.info")], Sys.iswindows() ? ';' : ':')
+            @test readchomp(`$cov_exename_hit --code-coverage=$outfile --code-coverage=-$exclude $srcfile`) == "true"
+            report = read(outfile, String)
+            @test !contains(report, "SF:$srcfile")
+            @test contains(report, "SF:$libfile")
+            rm(outfile)
+            # allocation tracking still sees the file as instrumented
+            @test readchomp(`$cov_exename_hit --code-coverage=$outfile --code-coverage=-$exclude --track-allocation=@$excluded $srcfile`) == "false"
+            pidfile = joinpath(parent, "exclude-%p.info")
+            @test contains(readchomp(`$cov_exename_hit --code-coverage=$pidfile --code-coverage=-$excluded -e 'print(Base.julia_cmd())'`),
+                           "--code-coverage=-$excluded")
+            @test readchomp(`$cov_exename_hit --code-coverage=-$excluded -e 'print(Base.JLOptions().code_coverage)'`) == "2"
+            @test !success(pipeline(`$cov_exename_hit --code-coverage=- -e 0`, stderr=devnull))
         end
 
         # Source and report filenames must support Unicode on Windows as well.
@@ -969,7 +1066,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             end
             do_test()
             """), """
-            DA:1,1
+            DA:1,2
             DA:2,1
             DA:3,1
             DA:5,1
@@ -1182,9 +1279,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             info = read(joinpath(dir, only(infos())), String)
             @test occursin(r"^SF:.*CovDep\.jl$"m, info)
             rm(joinpath(dir, only(infos())))
-            # count mode needs its own native image
+            # count mode needs its own native image, but the dependency outside the
+            # tracked path can use its plain image (unless the sysimage is instrumented)
             @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=@$pkgdir --code-coverage-mode=count -e $probe`) == "2 1 0 2"
             @test njis() == 3
+            instrumented_sysimage = Base.match_cache_coverage(Base.CacheFlags(coverage=0), Base.CacheFlags(coverage=1))
+            @test ndepjis() == (instrumented_sysimage ? 3 : 2)
             rm(joinpath(dir, only(infos())))
             # `all` uses the same variants; the sysimage is used as built either way
             @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=all -e $probe`) == "1 1 0 2"
@@ -1610,8 +1710,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # issue #12671, starting from a non-directory
     # rm(dir) fails on windows with Permission denied
-    # and was an upstream bug in llvm <= v3.3
-    if !Sys.iswindows() && Base.libllvm_version > v"3.3"
+    if !Sys.iswindows()
         testdir = mktempdir()
         cd(testdir) do
             rm(testdir)
@@ -1663,6 +1762,14 @@ end
         # Local builds will likely be "native" but CI shouldn't be.
         invalid_results = Base.get_bool_env("CI", false) ? ("", "native", "sysimage") : ("", "sysimage",)
         @test !in(v, invalid_results)
+    end
+
+    # The clone selected at load time is one of the `;`-separated targets the
+    # system image was built with.
+    let matched = Sys.matched_sysimage_target()
+        @test matched isa String
+        @test !isempty(matched)
+        @test matched in split(Sys.sysimage_target(), ";")
     end
 end
 
@@ -1900,7 +2007,7 @@ end
 # test --bug-report=rr
 if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these platforms
     mktempdir() do temp_trace_dir
-        cmd = setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
+        cmd = addenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
                      "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
                      "_RR_TRACE_DIR" => temp_trace_dir)
         success, out, err = readchomperrors(cmd)
@@ -2113,4 +2220,4 @@ let n = 6000
 end
 
 # https://github.com/JuliaLang/julia/issues/59103
-@test test_read_success(setenv(`$(Base.julia_cmd()) -g2 -e 'println("done")'`, "ENABLE_GDBLISTENER" => "1")) == "done"
+@test test_read_success(addenv(`$(Base.julia_cmd()) -g2 -e 'println("done")'`, "ENABLE_GDBLISTENER" => "1")) == "done"

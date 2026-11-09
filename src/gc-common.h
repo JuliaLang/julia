@@ -7,7 +7,7 @@
 #include "julia_internal.h"
 #ifndef _OS_WINDOWS_
 #include <sys/mman.h>
-#ifndef MADV_HUGEPAGE
+#if defined(_OS_LINUX_) && !defined(MADV_HUGEPAGE)
 #define MADV_HUGEPAGE 14 //  Compatibility for kernels < 2.6.38 (as in numpy implementation)
 #endif
 #if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)

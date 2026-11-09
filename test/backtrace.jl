@@ -297,6 +297,26 @@ let code = """
     @test occursin("InterpreterIP in top-level CodeInfo for Main.A", bt_str)
 end
 
+# Interpreted method and generated function frames show their method
+module InterpFrames
+Base.Experimental.@compiler_options compile=min infer=false
+foo() = error("Expected")
+@generated gen(x) = :(error("Expected"))
+end
+# the method's own frame is outermost (a generated body comes as a macro expansion)
+function interp_frame(f)
+    bt = try f() catch; catch_backtrace() end
+    return last(lookup(bt[findfirst(ip -> ip isa Base.InterpreterIP, bt)]))
+end
+let sf = interp_frame(InterpFrames.foo)
+    @test sprint(show, sf) == "foo() at backtrace.jl:$(only(methods(InterpFrames.foo)).line)"
+    @test parentmodule(sf) === InterpFrames
+end
+let sf = interp_frame(() -> InterpFrames.gen(1))
+    @test sprint(show, sf) == "gen(x::$Int) at backtrace.jl:$(only(methods(InterpFrames.gen)).line)"
+    @test parentmodule(sf) === InterpFrames
+end
+
 """
     _reformat_sp(bt_data...) -> sp::Vector{Ptr{Cvoid}}
 
@@ -385,4 +405,27 @@ end
 
 @testset "`lookup` return type inference" begin
     @test Vector{StackTraces.StackFrame} === Base.infer_return_type(lookup)
+end
+
+# A backtrace taken in a callback from C has to step through the C library's frames.
+# On Apple M6, macOS system libraries use compact unwind encodings (PAuth_LR frames)
+# that LLVM libunwind versions without support for them abort on.
+const qsort_backtrace = Ref{Any}(nothing)
+function qsort_cmp_with_backtrace(a::Ptr{Cint}, b::Ptr{Cint})::Cint
+    qsort_backtrace[] === nothing && (qsort_backtrace[] = backtrace())
+    return unsafe_load(a) - unsafe_load(b)
+end
+@noinline function qsort_with_backtrace()
+    A = Cint[3, 1, 2]
+    cmp = @cfunction(qsort_cmp_with_backtrace, Cint, (Ptr{Cint}, Ptr{Cint}))
+    ccall(:qsort, Cvoid, (Ptr{Cint}, Csize_t, Csize_t, Ptr{Cvoid}), A, length(A), sizeof(Cint), cmp)
+    return A
+end
+@testset "backtrace through a C library callback" begin
+    @test qsort_with_backtrace() == Cint[1, 2, 3]
+    frames = stacktrace(qsort_backtrace[], true)
+    @test any(f -> f.func === :qsort_cmp_with_backtrace, frames)
+    if Sys.isapple() || Sys.islinux()
+        @test any(f -> f.func === :qsort_with_backtrace, frames)
+    end
 end

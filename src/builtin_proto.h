@@ -32,7 +32,7 @@ extern "C" {
     XX(compilerbarrier,"compilerbarrier") \
     XX(const_memoryrefget,"const_memoryrefget") \
     XX(current_scope,"current_scope") \
-    XX(depwarn_partition,"depwarn_partition") \
+    XX(depwarn_binding,"depwarn_binding") \
     XX(donotdelete,"donotdelete") \
     XX(fieldtype,"fieldtype") \
     XX(finalizer,"finalizer") \
@@ -57,10 +57,12 @@ extern "C" {
     XX(memoryrefnew,"memoryrefnew") \
     XX(memoryref_isassigned,"memoryref_isassigned") \
     XX(memoryrefget,"memoryrefget") \
+    XX(unsafe_memoryrefload,"unsafe_memoryrefload") \
     XX(memoryrefmodify,"memoryrefmodify!") \
     XX(memoryrefoffset,"memoryrefoffset") \
     XX(memoryrefreplace,"memoryrefreplace!") \
     XX(memoryrefset,"memoryrefset!") \
+    XX(unsafe_memoryrefstore,"unsafe_memoryrefstore!") \
     XX(memoryrefsetonce,"memoryrefsetonce!") \
     XX(memoryrefunset,"memoryrefunset!") \
     XX(memoryrefswap,"memoryrefswap!") \

@@ -1,10 +1,40 @@
+@testset "validationresult" begin
+    local (; validation_errors, validation_ok, is_known) = JuliaLowering
+    local pass = JuliaLowering.pass()
+    local unkn = JuliaLowering.unknown()
+    local fail = JuliaLowering.valid_st1(JuliaLowering.expr_to_est(Expr(:invalid_expr)))
+
+    @test pass | unkn == pass
+    @test unkn | pass == pass
+    @test pass | fail == pass
+    @test fail | pass == pass
+    @test unkn | fail == fail
+    @test fail | unkn == fail
+
+    @test pass | pass == pass
+    @test unkn | unkn == unkn
+    @test fail | fail == fail
+
+    @test pass & unkn == unkn
+    @test unkn & pass == unkn
+    @test pass & fail == fail
+    @test fail & pass == fail
+    @test unkn & fail == fail
+    @test fail & unkn == fail
+
+    @test pass & pass == pass
+    @test unkn & unkn == unkn
+    let f2 = fail & fail
+        @test is_known(f2)
+        @test !validation_ok(f2)
+    end
+end
+
 # Basic tests that the validator accepts or rejects a given form.  For testing
 # error messages, write an IR test instead.
-
 function vst1_ok(x::Expr)
     est = JuliaLowering.expr_to_est(x)
-    est = JuliaSyntax.fill_context(est, JuliaSyntax.SyntaxContext(@__MODULE__, OLDEST_EDITION))
-    JuliaLowering.valid_st1(est).ok
+    JuliaLowering.validation_ok(JuliaLowering.valid_st1(est))
 end
 
 let
@@ -114,7 +144,7 @@ let
     end
     @testset for h in standalone_heads
         ex = Expr(Symbol(h))
-        @test !Meta.isexpr(:error, Meta.lower(@__MODULE__, ex))
+        @test !Meta.isexpr(fl_lower(@__MODULE__, ex), :error)
         @test vst1_ok(ex)
     end
 end
@@ -149,6 +179,17 @@ end
 @test vst1_ok(:(using Mod: cglobal))
 @test vst1_ok(:(Mod.cglobal))
 @test vst1_ok(:(Mod._ = 1))
+
+@test !vst1_ok(:(local cglobal::Int))
+@test !vst1_ok(:(let ccall; end))
+@test !vst1_ok(:(let ccall::Int; end))
+@test !vst1_ok(:(try; catch ccall; end))
+
+@test !vst1_ok(Expr(:const, Expr(:global, :x)))
+
+# calldecl name should be syntax
+@test !vst1_ok(Expr(:function, Expr(:call, Base.view, :A), Expr(:block)))
+@test !vst1_ok(Expr(:(=), Expr(:call, Base.view, :A, :idx), 2))
 
 @testset "underscores that should probably not be valid" begin
     @test vst1_ok(:(Mod._))
@@ -185,4 +226,11 @@ end
     # not an import path
     @test !vst1_ok(Expr(:import, Expr(:call, :f)))
     @test !vst1_ok(Expr(:import, 42))
+end
+
+@testset "toplevel" begin
+    @test !vst1_ok(Expr(:function, Expr(:tuple), Expr(:block, Expr(:toplevel))))
+    @test !vst1_ok(Expr(:->, Expr(:tuple), Expr(:block, Expr(:toplevel))))
+    @test !vst1_ok(Expr(:(=), Expr(:call, :f), Expr(:block, Expr(:toplevel))))
+    @test vst1_ok(Expr(:let, Expr(:block), Expr(:block, Expr(:toplevel))))
 end

@@ -318,7 +318,7 @@ function du_visit!(ctx, state::DefUseState, e)
     elseif is_leaf(e) || is_quoted(e) ||
         k in (:local, :always_defined, :meta, :inbounds, :boundscheck, :noinline,
               :loopinfo, :decl, :with_static_parameters, :toplevel_butfirst, :global,
-              :globalref, :constdecl, :atomic, :isdefined, :toplevel, :module, :error,
+              :globalref, :constdecl, :atomic, :toplevel, :module, :error,
               :gc_preserve_begin, :gc_preserve_end, :export, :public, :inline)
 
         # Forms that don't interact with locals or affect control flow (likely more than is necessary).
@@ -335,11 +335,9 @@ function du_visit!(ctx, state::DefUseState, e)
 end
 
 function _analyze_lambda_vars!(ctx::VariableAnalysisContext, ex)
-    # Collect candidate variables: captured and single-assigned
     candidates = Set{IdTag}()
     for (id, from_outer_lambda) in lambda_bindings(ex[1]).locals_capt
         b = get_binding(ctx, id)
-        !b.is_captured && continue
         from_outer_lambda && continue
         if b.is_assigned_once && b.kind in (:local, :argument)
             push!(candidates, id)

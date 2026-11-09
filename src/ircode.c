@@ -1481,7 +1481,13 @@ JL_DLLEXPORT jl_locspan_t jl_cdi_bytespan(jl_debuginfo_t *di, int32_t pc) JL_NOT
     return out;
 }
 
-/* O(line_starts); could binary search instead */
+static inline int32_t sbt_line_start(const char *lines, size_t i, int byte_encl) JL_NOTSAFEPOINT
+{
+    const char *ptr = lines + i * byte_encl;
+    return _take_u32(&ptr, byte_encl);
+}
+
+/* Binary search over the (sorted) line starts */
 JL_DLLEXPORT jl_locspan_t jl_cdi_byte_to_xy(jl_debuginfo_t *di, int32_t b) JL_NOTSAFEPOINT
 {
     cdi_deref(&di, NULL, 1);
@@ -1489,20 +1495,21 @@ JL_DLLEXPORT jl_locspan_t jl_cdi_byte_to_xy(jl_debuginfo_t *di, int32_t b) JL_NO
     sbt_parseheader(di->linetable, &h);
     size_t off = SBT_HEADER_SIZE + h.nlocs * (h.byte_encl + h.span_encl);
     size_t n_lines = (jl_string_len(di->linetable) - off) / h.byte_encl;
-    jl_locspan_t out = {h.line_offset-1, -1};
-    const char *ptr = jl_string_data(di->linetable) + off;
-    for (int i = 0; i < n_lines; i++) {
-        int32_t line_start = _take_u32(&ptr, h.byte_encl);
-        if (line_start + h.byte_offset <= b) {
-            out.second = b - (line_start + h.byte_offset) + 1;
-            out.first++;
-        } else if (i == 0) { // b too small
-            return (jl_locspan_t){-1, -1};
-        } else {
-            break;
-        }
+    if (n_lines == 0)
+        return (jl_locspan_t){h.line_offset-1, -1};
+    const char *lines = jl_string_data(di->linetable) + off;
+    size_t lo = 0, hi = n_lines;
+    while (lo < hi) {
+        size_t mid = lo + (hi - lo) / 2;
+        if (sbt_line_start(lines, mid, h.byte_encl) + h.byte_offset <= b)
+            lo = mid + 1;
+        else
+            hi = mid;
     }
-    return out;
+    if (lo == 0) // b too small
+        return (jl_locspan_t){-1, -1};
+    int32_t line_start = sbt_line_start(lines, lo - 1, h.byte_encl);
+    return (jl_locspan_t){h.line_offset - 1 + (int32_t)lo, b - (line_start + h.byte_offset) + 1};
 }
 
 /* First (line, col) at the given pc, where col=-1 if unavailable */

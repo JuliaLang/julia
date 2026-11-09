@@ -1,113 +1,9 @@
-attrsummary(name, _value) = string(name)
-attrsummary(name, value::Number) = "$name=$value"
-attrsummary(name, value::LineNumberNode) = "$name=L$(value.line)"
-attrsummary(name, value::Module) = "$name=$value"
-
-function _value_string(ex)
-    k = head(ex)
-    str = k == :identifier  ? syntax_name(ex)           :
-          k == :placeholder ? syntax_name(ex)           :
-          k == :ssavalue    ? "%"                   :
-          k == :bindingid   ? "#"                   :
-          k == :label       ? "label"               :
-          k == :nothing     ? "core.nothing"        :
-          k == :core        ? "core.$(syntax_name(ex))" :
-          k == :top         ? "top.$(syntax_name(ex))"  :
-          k == :symbol      ? ":$(syntax_name(ex))" :
-          k == :globalref   ? "$(ex.mod).$(syntax_name(ex))" :
-          k == :slot        ? "slot" :
-          k == :slots       ? "Slots" :
-          k == :lambdabindings ? "LambdaBindings" :
-          k == :latestworld ? "latestworld" :
-          k == :static_parameter ? "static_parameter" :
-          k == :symboliclabel ? "label:$(syntax_name(ex))" :
-          k == :symbolicgoto ? "goto:$(syntax_name(ex))" :
-          k == :sourcelocation ?
-              "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
-              k == :value ?
-              (ex.value isa SourceRef ?
-              "SourceRef:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
-              ex.value isa SyntaxContext ? "SyntaxContext(#=omitted=#)" : repr(ex.value)) :
-              ex.value !== nothing ? repr(ex.value) : "::$k"
-
-    if head(ex) in (:bindingid, :slot, :ssavalue, :static_parameter, :label)
-        idstr = subscript_str(syntax_id(ex))
-        str = "$(str)$idstr"
-    end
-    if k == :slot || k == :bindingid
-        for p in provenance(ex)
-            if head(p) == :identifier
-                str = "$(str)/$(syntax_name(p))"
-                break
-            end
-        end
-    end
-    return str
-end
-
 # Within JL, :placeholder is used for never-read identifiers, but this magic
 # symbol is used in the IR (its write-only properties are enforced in codegen).
 const UNUSED = "#unused#"
-
-function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
-    nodestr = !is_leaf(ex) ? "[$(string(head(ex)))]" : _value_string(ex)
-
-    treestr = rpad(string(indent, nodestr), 40)
-    if show_kinds && is_leaf(ex)
-        treestr = treestr*" :: "*string(head(ex))
-    end
-
-    std_attrs = Set([:value,:head,:syntax_flags,:source,:context])
-    attrstr = join([attrsummary(n, getproperty(ex, n))
-                    for n in fieldnames(typeof(ex)) if n ∉ std_attrs &&
-                        getproperty(ex, n) !== nothing], ",")
-    print(io, rpad(treestr, 60))
-    print(io, " | ")
-    sc = ex.context
-    if sc !== parent_sc
-        print(io, sc)
-        print(io, ",")
-    end
-    print(io, attrstr)
-    println(io)
-
-    if !is_leaf(ex)
-        new_indent = indent*"  "
-        for n in children(ex)
-            _show_syntax_tree(io, n, new_indent, show_kinds, sc)
-        end
-    end
-end
-
-function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree, show_kinds=true)
-    assert_syntaxtree(ex)
-    _show_syntax_tree(io, ex, "", show_kinds, nothing)
-end
-function _show_syntax_tree_sexpr(io, ex)
-    if is_leaf(ex)
-        print(io, _value_string(ex))
-    else
-        print(io, "(", string(head(ex)))
-        for n in children(ex)
-            print(io, ' ')
-            _show_syntax_tree_sexpr(io, n)
-        end
-        print(io, ')')
-    end
-end
-
-function Base.show(io::IO, ::MIME"text/x.sexpression", node::SyntaxTree)
-    assert_syntaxtree(node)
-    _show_syntax_tree_sexpr(io, node)
-end
-
-function Base.show(io::IO, node::SyntaxTree)
-    assert_syntaxtree(node)
-    _show_syntax_tree_sexpr(io, node)
-end
-
-#-------------------------------------------------------------------------------
-# Error handling
+# Method printing does stupid stuff with slot names; ideally move to provenance
+# instead of reverse-engineering flisp slot naming
+const ERASE_SLOTNAME_PREFIX = "#arg#"
 
 TODO(msg::AbstractString) = throw(ErrorException("Lowering TODO: $msg"))
 TODO(ex::SyntaxTree, msg="") = throw(LoweringError(ex, "Lowering TODO: $msg"))
@@ -118,7 +14,7 @@ message per tree.  If `!internal`, caused by bad user code in `syntax` (flisp:
 `Expr(:error, msg)`).
 """
 struct LoweringError <: Exception
-    sts::SyntaxList
+    sts::Vector{SyntaxTree}
     msgs::Vector{String}
     internal::Bool
 end
@@ -132,7 +28,13 @@ function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
         st = exc.sts[i]
         msg = exc.msgs[i]
         src = sourceref(st)
-        highlight(io, src; note=msg)
+        if src isa LineNumberNode
+            l_str = (src.file === nothing || src.file === :var"") ?
+                "line " : "$(src.file):"
+            println(io, " at $(l_str)$(src.line): $msg")
+        else
+            highlight(io, src; note=msg)
+        end
         if exc.internal || src isa LineNumberNode
             print(io, "\nExpression:\n  ")
             show(io, MIME"text/x.sexpression"(), st)
@@ -147,7 +49,7 @@ function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
         i !== lastindex(exc.sts) && print(io, "\n\n")
     end
 
-    if (show_detail || exc.internal) && !isempty(exc.sts)
+    if (exc.internal) && !isempty(exc.sts)
         print(io, "\n\nDetailed provenance:\n  ")
         _show_provtree(io, exc.sts[1], "  ")
     end
@@ -163,17 +65,15 @@ function _show_provtree(io::IO, ex::SyntaxTree, indent)
     print(io, "\n")
 
     src = ex.source
-    msrc = JuliaSyntax.macro_prov(ex)
+    msrc = macro_prov(ex)
     printstyled(io, string(
         indent, msrc === nothing ? "└─ " : "├─ "); color=:light_black)
     if src isa SyntaxTree
         _show_provtree(io, src, string(indent, msrc === nothing ? "   " : "│  "))
     else
         @jl_assert ex.source isa Union{LineNumberNode, SourceRef} ex
-        src = sourceref(ex)
-        fn = filename(src)
-        line, _ = source_location(src)
-        printstyled(io, "@ $fn:$line\n", color=:light_black)
+        lno = first_linenode(ex)
+        printstyled(io, "@ $(lno.file):$(lno.line)\n", color=:light_black)
     end
     if msrc isa SyntaxTree
         printstyled(io, string(indent, "└─ "); color=:light_black)
@@ -197,7 +97,7 @@ function showprov(io::IO, exs::AbstractVector;
 
         if include_location
             line, _ = source_location(sr)
-            locstr = "$(filename(sr)):$line"
+            locstr = "$(filename(ex)):$line"
             JuliaSyntax._printstyled(io, "\n# @ $locstr", fgcolor=:light_black)
         end
     end
@@ -273,7 +173,6 @@ function _print_ir(io::IO, ex0, indent)
             slot.is_nospecialize   && push!(flags, "nospecialize")
             !slot.is_read          && push!(flags, "!read")
             slot.is_single_assign  && push!(flags, "single_assign")
-            slot.is_maybe_undef    && push!(flags, "maybe_undef")
             slot.is_called         && push!(flags, "called")
             if !isempty(flags)
                 print(io, "($(join(flags, ",")))")
@@ -374,8 +273,12 @@ function _find_assigned_ssavars!(ctx, ssamap, st)
     (is_leaf(st) || is_quoted(st)) && return
     if head(st) == :(=) && head(st[1]) == :bindingid
         b = get_binding(ctx, st[1])
-        b.is_ssa || return
-        ssamap[b.id] = syntax_id(ssavar(ctx, st[1], b.name))
+        if b.is_ssa
+            ssamap[b.id] = syntax_id(ssavar(ctx, st[1], b.name))
+        elseif b.kind == :typevar
+            ssamap[b.id] = _new_binding(
+                ctx.bindings, b.node_id, b.name, :typevar).id
+        end
     end
     foreach(e->_find_assigned_ssavars!(ctx, ssamap, e), children(st))
 end

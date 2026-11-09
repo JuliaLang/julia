@@ -208,7 +208,7 @@ define swiftcc ptr addrspace(10) @insert_element(ptr swiftself "gcstack" %0) {
 ; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 10)
   call void null(ptr sret([2 x [5 x ptr addrspace(10)]]) "julia.return_roots"="10" %2, ptr null, ptr addrspace(11) null, ptr null)
   %4 = insertelement <4 x ptr> zeroinitializer, ptr %2, i32 0
-; CHECK: [[gc_slot_addr_:%.*]] = insertelement <4 x ptr> zeroinitializer, ptr [[gc_slot_addr_:%.*]], i32 0
+; CHECK: [[gc_slot_addr_:%.*]] = insertelement <4 x ptr> {{zeroinitializer|splat \(ptr null\)}}, ptr [[gc_slot_addr_:%.*]], i32 0
 ; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
   ret ptr addrspace(10) null
 }
@@ -283,6 +283,235 @@ define void @overaligned_gc_padding(<4 x ptr addrspace(10)> %values) {
 
 
 declare void @aligned_short_root_array(ptr align 64)
+
+; Calls tagged "julia.safepoint" by codegen carry memory effects derived from
+; Julia's inferred effects (add_fn_attrs_for_effects). They can still reach a
+; GC safepoint, so a tracked value live across such a call needs a root
+; whatever the effects claim (JuliaLang/julia#62613), and the effects must be
+; stripped so post-lowering passes see the frame stores as observable.
+
+declare i64 @safepoint_callee(i64)
+declare i64 @safepoint_gcstack_callee({}*** "gcstack", i64)
+declare i64 @readonly_helper(i64) #12
+
+; memory(argmem: read) on the call site.
+define {} addrspace(10)* @root_across_safepoint_argmem(i64 %a) {
+top:
+; CHECK-LABEL: @root_across_safepoint_argmem
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT1:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT1]]
+; CHECK-NEXT: call i64 @safepoint_callee(i64 %a) [[ATTRS_STRIPPED:#[0-9]+]]
+  %r = call i64 @safepoint_callee(i64 %a) #10
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; memory(read) on the call site.
+define {} addrspace(10)* @root_across_safepoint_readonly(i64 %a) {
+top:
+; CHECK-LABEL: @root_across_safepoint_readonly
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT2:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT2]]
+; CHECK-NEXT: call i64 @safepoint_callee(i64 %a) [[ATTRS_STRIPPED]]
+  %r = call i64 @safepoint_callee(i64 %a) #11
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; Indirect call carrying the attributes on the call site.
+define {} addrspace(10)* @root_across_safepoint_indirect(i64 %a, ptr %fp) {
+top:
+; CHECK-LABEL: @root_across_safepoint_indirect
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT3:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT3]]
+; CHECK-NEXT: call i64 %fp(i64 %a) [[ATTRS_STRIPPED]]
+  %r = call i64 %fp(i64 %a) #10
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; The readnone on the gcstack argument must be stripped as well: after this
+; pass the frame link store through pgcstack has to stay visible to the call.
+define {} addrspace(10)* @root_across_safepoint_gcstack(i64 %a) {
+top:
+; CHECK-LABEL: @root_across_safepoint_gcstack
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT4:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT4]]
+; CHECK-NEXT: call i64 @safepoint_gcstack_callee(ptr "gcstack" %pgcstack, i64 %a) [[ATTRS_STRIPPED]]
+  %r = call i64 @safepoint_gcstack_callee({}*** readnone "gcstack" %pgcstack, i64 %a) #10
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; Negative control: a genuinely readonly helper without "julia.safepoint" is
+; not a safepoint and must not force a frame.
+define {} addrspace(10)* @no_root_across_readonly_helper(i64 %a) {
+top:
+; CHECK-LABEL: @no_root_across_readonly_helper
+; CHECK-NOT: @julia.new_gc_frame
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+  %r = call i64 @readonly_helper(i64 %a)
+; CHECK: ret ptr addrspace(10) %v
+  ret {} addrspace(10)* %v
+}
+
+; A vector of untracked pointers can be addrspacecast to tracked:
+; the loop vectorizer can form this from the scalar case.
+define void @vector_literal_cast(ptr %p, ptr %q, i64 %x) {
+top:
+; CHECK-LABEL: @vector_literal_cast
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 3)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %a = load ptr, ptr %p
+  %b = load ptr, ptr %q
+  %va = insertelement <2 x ptr> poison, ptr %a, i64 0
+  %vb = insertelement <2 x ptr> %va, ptr %b, i64 1
+; CHECK: %v = addrspacecast <2 x ptr> %vb to <2 x ptr addrspace(10)>
+  %v = addrspacecast <2 x ptr> %vb to <2 x ptr addrspace(10)>
+; CHECK: extractelement <2 x ptr addrspace(10)> %v, i32 0
+; CHECK-NEXT: store ptr addrspace(10)
+; CHECK: extractelement <2 x ptr addrspace(10)> %v, i32 1
+; CHECK-NEXT: store ptr addrspace(10)
+  %boxed = call {} addrspace(10)* @jl_box_int64(i64 signext %x)
+; CHECK: call void @jl_safepoint()
+  call void @jl_safepoint()
+  %e0 = extractelement <2 x ptr addrspace(10)> %v, i32 0
+  %e1 = extractelement <2 x ptr addrspace(10)> %v, i32 1
+  call void @boxed_simple({} addrspace(10)* %e0, {} addrspace(10)* %e1)
+  call void @boxed_simple({} addrspace(10)* %boxed, {} addrspace(10)* %e1)
+  ret void
+}
+
+define void @coalesce_dead_slot_runs(i64 %a, i1 %cond) {
+top:
+; CHECK-LABEL: @coalesce_dead_slot_runs
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 6)
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %v0 = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  %v1 = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  %v2 = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  %v3 = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  %v4 = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  %v5 = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  call void @jl_safepoint()
+  br i1 %cond, label %use_all, label %keep_one
+
+use_all:
+  call void @boxed_simple(ptr addrspace(10) %v0, ptr addrspace(10) %v1)
+  call void @boxed_simple(ptr addrspace(10) %v2, ptr addrspace(10) %v3)
+  call void @boxed_simple(ptr addrspace(10) %v4, ptr addrspace(10) %v5)
+  ret void
+
+keep_one:
+; CHECK: keep_one:
+; CHECK-NEXT: [[RUN_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: call void @llvm.memset.p0.i{{32|64}}(ptr align {{4|8}} [[RUN_SLOT]], i8 0, i{{32|64}} {{16|32}}, i1 false)
+; CHECK-NEXT: [[SINGLE_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 5)
+; CHECK-NEXT: store ptr addrspace(10) null, ptr [[SINGLE_SLOT]]
+; CHECK-NEXT: call void @jl_safepoint()
+  call void @jl_safepoint()
+  call void @boxed_simple(ptr addrspace(10) %v4, ptr addrspace(10) %v4)
+  ret void
+}
+
+define void @recompute_alloca_per_use_block(i1 %c1, i1 %c2, ptr addrspace(10) %val) {
+top:
+; CHECK-LABEL: @recompute_alloca_per_use_block
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 2)
+; CHECK-NOT: @julia.get_gc_frame_slot
+; FINAL-LABEL: @recompute_alloca_per_use_block
+; FINAL: %gcframe = alloca ptr addrspace(10), i32 4, align 16
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %local = alloca ptr addrspace(10), align 8
+; CHECK: br i1 %c1, label %dom, label %exit
+; FINAL: br i1 %c1, label %dom, label %exit
+  br i1 %c1, label %dom, label %exit
+
+dom:
+; CHECK: dom:
+; CHECK-NEXT: br i1 %c2, label %left, label %right
+; FINAL: dom:
+; FINAL-NEXT: br i1 %c2, label %left, label %right
+  br i1 %c2, label %left, label %right
+
+left:
+; CHECK: left:
+; CHECK-NEXT: [[LOCAL_L:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %val, ptr [[LOCAL_L]], align 8
+; FINAL: left:
+; FINAL-NEXT: [[FINAL_L:%.*]] = getelementptr inbounds {{(nuw )?}}ptr addrspace(10), ptr %gcframe, i32 2
+; FINAL-NEXT: store ptr addrspace(10) %val, ptr [[FINAL_L]], align 8
+  store ptr addrspace(10) %val, ptr %local, align 8
+  call void @jl_safepoint()
+  %lval = load ptr addrspace(10), ptr %local, align 8
+  call void @boxed_simple(ptr addrspace(10) %lval, ptr addrspace(10) %lval)
+  br label %exit
+
+right:
+; CHECK: right:
+; CHECK-NEXT: [[LOCAL_R:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %val, ptr [[LOCAL_R]], align 8
+; FINAL: right:
+; FINAL-NEXT: [[FINAL_R:%.*]] = getelementptr inbounds {{(nuw )?}}ptr addrspace(10), ptr %gcframe, i32 2
+; FINAL-NEXT: store ptr addrspace(10) %val, ptr [[FINAL_R]], align 8
+  store ptr addrspace(10) %val, ptr %local, align 8
+  call void @jl_safepoint()
+  %rval = load ptr addrspace(10), ptr %local, align 8
+  call void @boxed_simple(ptr addrspace(10) %rval, ptr addrspace(10) %rval)
+  br label %exit
+
+exit:
+; CHECK: exit:
+; CHECK-NEXT: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret void
+}
+
+define void @tracked_store_slot_placement(i1 %cond, ptr addrspace(10) %val) {
+top:
+; CHECK-LABEL: @tracked_store_slot_placement
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+; CHECK-NOT: @julia.get_gc_frame_slot
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %buf = alloca [2 x i64], align 8
+; CHECK: br i1 %cond, label %store_bb, label %exit
+  br i1 %cond, label %store_bb, label %exit
+
+store_bb:
+; CHECK: store_bb:
+; CHECK-NEXT: [[TS_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %val, ptr [[TS_SLOT]]
+; CHECK-NEXT: store ptr addrspace(10) %val, ptr %buf, align 8
+  store ptr addrspace(10) %val, ptr %buf, align 8
+  call void @jl_safepoint()
+  br label %exit
+
+exit:
+; CHECK: exit:
+; CHECK-NEXT: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret void
+}
+
+attributes #10 = { nounwind willreturn memory(argmem: read) "julia.safepoint" }
+attributes #11 = { nounwind willreturn memory(read) "julia.safepoint" }
+attributes #12 = { nounwind willreturn memory(argmem: read) }
+; CHECK: attributes [[ATTRS_STRIPPED]] = { nounwind willreturn "julia.safepoint" }
 
 !0 = !{i64 0, i64 23}
 !1 = !{!1}

@@ -100,6 +100,9 @@ function getproperty(T::DataType, s::Symbol)
     return getfield(T, s)
 end
 supertype(T::UnionAll) = (@_foldable_meta; UnionAll(T.var, supertype(T.body)))
+# `TypeEgal{T}` (instance `T` by egality) refines `Type{T}`, which sits directly below `AnyType`
+supertype(::TypeEq) = Core.AnyType
+supertype(T::Core.TypeEgal) = Type{type_parameter(T)}
 
 ## generic comparison ##
 
@@ -1342,6 +1345,8 @@ i.e. given a function returns a new function that takes one argument and splats
 it into the original function. This is useful as an adaptor to pass a
 multi-argument function in a context that expects a single argument, but passes
 a tuple as that single argument.
+
+See also [`unsplat`](@ref).
 
 # Examples
 ```jldoctest

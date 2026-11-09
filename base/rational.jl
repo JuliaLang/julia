@@ -340,6 +340,7 @@ function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
     end
     return Rational{T}(x)
 end
+rationalize(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(rationalize, (Union{}, slurp...)))
 
 
 """
@@ -409,6 +410,8 @@ function -(x::Rational{T}) where T<:Unsigned
     x
 end
 
+-%(x::Rational) = unsafe_rational(-%(x.num), x.den)
+
 function +(x::Rational, y::Rational)
     xp, _ = promote(x, y)::NTuple{2,Rational}
     if isinf(x) && x == y
@@ -429,7 +432,7 @@ end
 
 function -(x::Rational, y::Rational)
     xp, _ = promote(x, y)::NTuple{2,Rational}
-    if isinf(x) && x == -y
+    if isinf(x) && isinf(y) && x != y
         return xp
     end
     xd, yd = divgcd(promote(x.den, y.den)...)
@@ -438,7 +441,7 @@ end
 
 function -%(x::Rational, y::Rational)
     xp, yp = promote(x, y)::NTuple{2,Rational}
-    if isinf(x) && x == -y
+    if isinf(x) && isinf(y) && x != y
         return xp
     end
     xd, yd = divgcd(promote(x.den, y.den)...)
@@ -612,7 +615,7 @@ function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {
     if iszero(denominator(x)) && !(T <: Integer)
         return convert(T, copysign(unsafe_rational(one(Tr), zero(Tr)), numerator(x)))
     end
-    convert(T, div(numerator(x), denominator(x), r))
+    _round_convert(T, div(numerator(x), denominator(x), r), x, r)
 end
 
 function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where T

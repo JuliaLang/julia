@@ -169,7 +169,7 @@ julia> @noinline function grandparent()
            try
                parent()
            catch err
-               println("ERROR: ", err.msg)
+               println("ERROR: ", sprint(showerror, err))
                stacktrace(catch_backtrace())
            end
        end

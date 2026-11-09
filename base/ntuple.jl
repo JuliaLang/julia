@@ -63,8 +63,7 @@ julia> ntuple(i -> 2*i, Val(4))
 ```
 """
 @inline function ntuple(f::F, ::Val{N}) where {F,N}
-    N::Int
-    (N >= 0) || throw(ArgumentError(LazyString("tuple length should be ≥ 0, got ", N)))
+    (N::Int >= 0) || throw(ArgumentError(LazyString("tuple length should be ≥ 0, got ", N)))
     if @generated
         :(@ntuple $N i -> f(i))
     else

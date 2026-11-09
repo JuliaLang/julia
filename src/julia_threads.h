@@ -16,6 +16,7 @@
 #endif
 #include "gc-tls-common.h"
 #include "julia_atomics.h"
+#include <stdalign.h>
 #ifndef _OS_WINDOWS_
 #include <pthread.h>
 #endif
@@ -179,7 +180,8 @@ typedef struct _jl_tls_states_t {
     int8_t threadpoolid;
     uint64_t rngseed;
     _Atomic(volatile size_t *) safepoint; // may be changed to the suspend page by any thread
-    _Atomic(int8_t) sleep_check_state; // read/write from foreign threads
+    // polled by every thread in jl_wakeup_threadpool, so keep it on its own cache line
+    alignas(JL_CACHE_BYTE_ALIGNMENT) _Atomic(int8_t) sleep_check_state; // read/write from foreign threads
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_UNSAFE 0
     // gc_state = 0 means the thread is running Julia code and is not
@@ -194,7 +196,7 @@ typedef struct _jl_tls_states_t {
     // gc_state = 3 means the thread is a parallel collector thread (i.e. never runs Julia code)
 #define JL_GC_CONCURRENT_COLLECTOR_THREAD 4
     // gc_state = 4 means the thread is a concurrent collector thread (background sweeper thread that never runs Julia code)
-    _Atomic(int8_t) gc_state; // read from foreign threads
+    alignas(JL_CACHE_BYTE_ALIGNMENT) _Atomic(int8_t) gc_state; // read from foreign threads
     // execution of certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)
@@ -604,6 +606,15 @@ JL_DLLEXPORT void *jl_get_ptls_states(void);
 #  define jl_cpu_suspend() __asm__ volatile ("wfe" ::: "memory")
 #  define jl_cpu_wake() __asm__ volatile ("sev" ::: "memory")
 #  define JL_CPU_WAKE_NOOP 0
+#elif defined(_CPU_RISCV64_)
+// Zihintpause `pause`, spelled as the FENCE encoding it reserves (pred=W, succ=none)
+// so that it assembles without the extension in -march and executes as a harmless
+// fence on cores that do not implement the hint. RISC-V has no wfe/sev analogue
+// without Zawrs, so suspend and wake stay no-ops.
+#  define jl_cpu_pause() __asm__ volatile (".insn i 0x0F, 0, x0, x0, 0x010" ::: "memory")
+#  define jl_cpu_suspend() ((void)0)
+#  define jl_cpu_wake() ((void)0)
+#  define JL_CPU_WAKE_NOOP 1
 #else
 #  define jl_cpu_pause() ((void)0)
 #  define jl_cpu_suspend() ((void)0)

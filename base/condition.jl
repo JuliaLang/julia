@@ -132,7 +132,7 @@ unlock(c::GenericCondition) = unlock(c.lock)
 trylock(c::GenericCondition) = trylock(c.lock)
 islocked(c::GenericCondition) = islocked(c.lock)
 
-lock(f, c::GenericCondition) = lock(f, c.lock)
+lock(f::F, c::GenericCondition) where {F} = lock(f, c.lock)
 
 ## GenericCondition as a waitable (see base/park.jl): the lock-carried
 ## kind - its lock is caller-held from before phase 4 into the suspend
@@ -262,6 +262,9 @@ Block the current task until some event occurs.
 * [`Task`](@ref): Wait for a `Task` to finish. See the `Task`-specific docstring of `wait` for
   the exact behavior.
 * [`RawFD`](@ref): Wait for changes on a file descriptor (see the `FileWatching` package).
+* [`Timer`](@ref), [`AsyncCondition`](@ref Base.AsyncCondition): Wait for the timer to trigger or
+  the condition to be notified. Throws an [`EOFError`](@ref) if the object has been closed; see
+  their docstrings for the exact behavior.
 
 If no argument is passed, the task blocks for an undefined period. A task can only be
 restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
@@ -344,30 +347,31 @@ function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
     end
     if src === nothing
         ws = (c,)
-        w = _cached_wait_entry(ct)
     elseif cancel_value
-        # Watcher-mode registration: fresh single-use entry (the cache
-        # contract in base/park.jl - a cache slot may only carry ordinary
-        # cancellable-park registrations).
         ws = (c, WatcherWait(src, max(min_severity, 0x01)))
-        w = WaitEntry2(ct)
     else
         ws = (c, SourceWait(src, min_severity))
-        w = _cancel_wait_entry(ct, src, min_severity)
     end
-    local parked::Bool
+    local w::WaitEntry, parked::Bool
     try
+        w = if src === nothing
+            _cached_wait_entry(ct)
+        elseif cancel_value
+            # Watcher-mode registration: fresh single-use entry (the cache
+            # contract in base/park.jl - a cache slot may only carry
+            # ordinary cancellable-park registrations).
+            WaitEntry2(ct)
+        else
+            _cancel_wait_entry(ct, src, min_severity)
+        end
         parked = park!(ws, w, first)
     catch
-        # an arm-phase throw (contract misuse: this task already carries
-        # a foreign registration) happens before any suspend. Nothing is
-        # enqueued to settle, but this frame's lock level must still be
-        # consumed like every other throw out of this layer - the
-        # caller's `locked && unlock` idiom would otherwise leak a held
-        # lock, and a leaked SpinLock wedges the process on the next
-        # lock of the same object
-        disarm!(ct, w)
-        withdraw!(ws, w, WAKE_FIRED)
+        # Release this frame's lock level even if entry allocation or arming
+        # throws: callers rely on this layer to unlock before throwing.
+        if @isdefined(w)
+            disarm!(ct, w)
+            withdraw!(ws, w, WAKE_FIRED)
+        end
         unlock(c.lock)
         rethrow()
     end

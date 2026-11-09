@@ -268,7 +268,8 @@ LoweringError:
 ]
 #---------------------
 LoweringError:
-#= line 1 =# - Badly nested rows in `ncat`
+ at line 1: Badly nested rows in `ncat`
+
 Expression:
   (nrow 1 1)
 
@@ -285,7 +286,8 @@ Expression:
 ]
 #---------------------
 LoweringError:
-#= line 1 =# - 2D `nrow` cannot be mixed with `row` in `ncat`
+ at line 1: 2D `nrow` cannot be mixed with `row` in `ncat`
+
 Expression:
   (nrow 2 (row 1))
 
@@ -301,7 +303,8 @@ Expression:
 ]
 #---------------------
 LoweringError:
-#= line 1 =# - Badly nested rows in `ncat`
+ at line 1: Badly nested rows in `ncat`
+
 Expression:
   (row 1)
 

@@ -35,6 +35,9 @@ Base.Memory
 Base.Memory(::UndefInitializer, ::Int)
 Base.memoryref
 Base.memoryindex
+Base.unsetindex!
+Base.unsetindex_atomic!
+Base.AbstractSlices
 Base.Slices
 Base.RowSlices
 Base.ColumnSlices
@@ -44,6 +47,7 @@ Base.ones
 Base.BitArray
 Base.BitArray(::UndefInitializer, ::Integer...)
 Base.BitArray(::Any)
+Base.BitVector(::Tuple{Vararg{Bool}})
 Base.trues
 Base.falses
 Base.fill
@@ -118,6 +122,7 @@ Base.CartesianIndices
 Base.Dims
 Base.LinearIndices
 Base.to_indices
+Base.to_index
 Base.checkbounds
 Base.checkindex
 Base.elsize
@@ -181,6 +186,10 @@ Base.findnext(::Any, ::Integer)
 Base.findnext(::Function, ::Any, ::Integer)
 Base.findprev(::Any, ::Integer)
 Base.findprev(::Function, ::Any, ::Integer)
+Base.findfirst(::AbstractVector{<:Union{Int8, UInt8}}, ::AbstractVector{<:Union{Int8, UInt8}})
+Base.findnext(::AbstractVector{<:Union{Int8, UInt8}}, ::AbstractVector{<:Union{Int8, UInt8}}, ::Integer)
+Base.findlast(::AbstractVector{<:Union{Int8, UInt8}}, ::AbstractVector{<:Union{Int8, UInt8}})
+Base.findprev(::AbstractVector{<:Union{Int8, UInt8}}, ::AbstractVector{<:Union{Int8, UInt8}}, ::Integer)
 Base.permutedims
 Base.permutedims!
 Base.PermutedDimsArray
@@ -215,6 +224,7 @@ Base.isperm
 Base.permute!(::Any, ::AbstractVector)
 Base.invpermute!
 Base.reverse(::AbstractVector; kwargs...)
+Base.reverse(::AbstractVector, ::Integer, ::Integer)
 Base.reverseind
 Base.reverse!
 ```
