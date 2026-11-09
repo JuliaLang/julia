@@ -2644,7 +2644,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
             // Keeping all slot GEPs in the entry block leaves O(N) values live across
             // blocks (CodeGenPrepare does not sink GEPs used as call arguments), which
             // triggers quadratic compile time in LLVM's MachineSinking pass.
-            SmallDenseMap<BasicBlock *, Instruction *, 4> SlotInBB;
+            DenseMap<BasicBlock *, Instruction *> SlotInBB;
             for (Use &U : make_early_inc_range(slotAddress->uses())) {
                 auto *UI = cast<Instruction>(U.getUser());
                 auto *PN = dyn_cast<PHINode>(UI);
