@@ -941,7 +941,9 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     # try constant prop'
     new_result = const_prop_call(interp, mi, result, arginfo, sv, concrete_eval_result)
     new_result === nothing && return nothing
-    if eligibility === :none
+    # running a call that never returns gains nothing, and if it also cannot throw,
+    # its code is unreachable and may be undefined behavior
+    if eligibility === :none && new_result.rt !== Bottom
         # const-prop' may have refined effects to be foldable when the original
         # call was not; in that case, prefer concrete eval over the const-prop' result
         new_eligibility = _concrete_eval_eligible(
