@@ -770,7 +770,7 @@ function take!(io::IOBuffer)
         elseif io.writable
             data = wrap(Array, memoryref(io.data, io.ptr), nbytes)
         else
-            error("Unreachable IOBuffer state")
+            data = read!(io, StringVector(nbytes))
         end
     end
     if io.writable

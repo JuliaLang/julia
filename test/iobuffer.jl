@@ -205,6 +205,12 @@ end
     @test read(buf, UInt8) == 0x61
     @test take!(buf) == b"bcd"
 
+    # Taking from a closed, unseekable buffer should still return unread data.
+    buf = new_unseekable_buffer()
+    write(buf, "abc")
+    closewrite(buf)
+    @test take!(buf) == b"abc"
+
     # Compaction is reset after take!
     buf = Base.GenericIOBuffer(Memory{UInt8}(), true, true, false, true, 100, false)
     write(buf, rand(UInt8, 50))
