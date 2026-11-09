@@ -1,36 +1,17 @@
-using Pkg
+let old_active_project = Base.active_project(),
+    juliasyntax_path = normpath(joinpath(@__DIR__, "..", "..", "JuliaSyntax")),
+    pushed_load_path = false
 
-function with_output_on_failure(f)
-    output = IOBuffer()
-    try
-        return f(output)
-    catch
-        seekstart(output)
-        write(stderr, read(output))
-        rethrow()
-    end
-end
-
-let old_active_project = Base.active_project()
     try
         # test local (dev) copy of JuliaLowering, not the copy vendored into Base
         Base.set_active_project(joinpath(@__DIR__, "..", "Project.toml"))
 
-        # `Manifest.toml` is not checked in (see `JuliaLowering/.gitignore`), so
-        # resolve the environment before loading. `Project.toml` records the path to
-        # the in-tree `JuliaSyntax` in its `[sources]` section, so instantiating
-        # picks up that dev copy without needing a committed manifest. The only
-        # dependencies are path-based / stdlib, so no registry or network access is
-        # required (and tests may run with networking disabled). Offline mode also
-        # keeps Pkg from installing the default registries into a depot without any.
-        offline = Pkg.OFFLINE_MODE[]
-        Pkg.offline(true)
-        try
-            with_output_on_failure() do output
-                Pkg.instantiate(; io=output)
-            end
-        finally
-            Pkg.offline(offline)
+        # There is no manifest to say where the in-tree JuliaSyntax (the only non-stdlib
+        # dependency) is, so put it in `LOAD_PATH`. It has to precede the active project,
+        # since the search for a dependency that a project names stops at that project.
+        if juliasyntax_path ∉ LOAD_PATH
+            pushfirst!(LOAD_PATH, juliasyntax_path)
+            pushed_load_path = true
         end
 
         # restore error hints (emptied by `testdefs.jl`) so that errors print as
@@ -46,6 +27,10 @@ let old_active_project = Base.active_project()
         @test all(s -> which(Main, s) === Base.MainInclude, (:ans, :err))
     finally
         # Restore original load path and active project
+        if pushed_load_path
+            i = findfirst(==(juliasyntax_path), LOAD_PATH)
+            i === nothing || deleteat!(LOAD_PATH, i)
+        end
         Base.set_active_project(old_active_project)
     end
 end
