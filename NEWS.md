@@ -18,7 +18,7 @@ Compiler/Runtime improvements
   keep few of them, such as a language server that runs type inference repeatedly ([#63512]).
 * `Base.Experimental.@MethodTable name by_specificity=true` creates an overlay method table whose
   methods rank by specificity against global methods, as if they were global methods, instead of
-  taking precedence over them.
+  taking precedence over them ([#64728]).
 
 Command-line option changes
 ---------------------------
