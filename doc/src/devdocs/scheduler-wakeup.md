@@ -129,7 +129,10 @@ sleep still leaves it to the iolock holder, or to a thread waiting for the ioloc
 That only works if the holder is a pool thread, which comes back to the scheduler.
 Threads outside the thread pools can take the iolock too: a GC on a libuv worker
 running a `@threadcall` runs finalizers there, and `uvfinalize` takes the iolock.
-So when such a thread releases the iolock, `jl_iolock_end` wakes `io_loop_tid`.
+So when such a thread releases the iolock inside a threaded region, `jl_iolock_end`
+wakes `io_loop_tid`. Outside a threaded region no wake is needed, since `io_loop_tid`
+waits for the iolock instead of leaving the loop to its holder, and the thread that
+ends a threaded region wakes `io_loop_tid`.
 
 [`IoLoopWake.tla`](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/scheduler-wakeup/IoLoopWake.tla)
 models this handoff outside threaded regions, including iolock contention and
