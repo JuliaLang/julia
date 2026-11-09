@@ -61,8 +61,6 @@ function is_effect_free(ex)
     is_identifier_like(ex) || k == :symbol ||
         k == :inert || k == :syntaxinert || k == :top ||
         k == :core || k == :value || k == :nothing
-    # flisp also includes `a.b` with simple `a`, but this seems like a bug
-    # because this calls the user-defined getproperty?
 end
 
 function check_no_parameters(ex::SyntaxTree, msg)
