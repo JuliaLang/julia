@@ -730,9 +730,9 @@ size_t jl_genericmemory_nbytes(jl_genericmemory_t *a) JL_NOTSAFEPOINT;
 size_t memory_block_usable_size(void *mem, int isaligned) JL_NOTSAFEPOINT;
 // Counted allocators behind `jl_malloc` and friends; with `usable` set they count the usable
 // size of the block instead of the requested size.
-void *jl_gc_counted_malloc_(size_t sz, int usable) JL_CANSAFEPOINT;
-void *jl_gc_counted_calloc_(size_t nm, size_t sz, int usable) JL_CANSAFEPOINT;
-void *jl_gc_counted_realloc_(void *p, size_t old, size_t sz, int usable) JL_CANSAFEPOINT;
+void *jl_gc_counted_malloc_(size_t sz, int usable) JL_NOTSAFEPOINT;
+void *jl_gc_counted_calloc_(size_t nm, size_t sz, int usable) JL_NOTSAFEPOINT;
+void *jl_gc_counted_realloc_(void *p, size_t old, size_t sz, int usable) JL_NOTSAFEPOINT;
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT;
 void jl_gc_run_all_finalizers(jl_task_t *ct) JL_CANSAFEPOINT;
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
