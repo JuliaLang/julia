@@ -2070,6 +2070,11 @@ void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
     cantFail(JD.define(orc::absoluteSymbols({{mangle(Name), {ExecutorAddr::fromPtr((void*)Addr), JITSymbolFlags::Exported}}})));
 }
 
+void JuliaOJIT::addSharedGlobalMapping(StringRef Name, uint64_t Addr)
+{
+    cantFail(GlobalJD.define(orc::absoluteSymbols({{mangle(Name), {ExecutorAddr::fromPtr((void*)Addr), JITSymbolFlags::Exported}}})));
+}
+
 
 #ifdef ENABLE_TIMINGS
 static void timing_print_module_names(jl_timing_block_t *block,
@@ -2819,6 +2824,11 @@ void jl_decorate_llvm_module_impl(LLVMModuleRef m) JL_NOTSAFEPOINT
 void add_named_global(StringRef name, void *addr)
 {
     jl_ExecutionEngine->addGlobalMapping(name, (uint64_t)(uintptr_t)addr);
+}
+
+void add_shared_named_global(StringRef name, void *addr)
+{
+    jl_ExecutionEngine->addSharedGlobalMapping(name, (uint64_t)(uintptr_t)addr);
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN

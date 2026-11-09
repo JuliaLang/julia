@@ -1,12 +1,12 @@
 # Non-incremental lowering API for non-toplevel non-module expressions.
 # May be removed?
 
-function lower(mod::Module, ex_in::SyntaxTree; soft_scope::Union{Nothing,Bool}=nothing)
+function lower(mod::Module, ex_in::SyntaxTree, softscope::Bool=false)
     ex0 = rebase_layers(ex_in, mod)
     world = Base.get_world_counter()
     ex1 = expand_forms_1(ex0, world, true)
     ctx2, ex2 = expand_forms_2(ex1, world)
-    ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
+    ctx3, ex3 = resolve_scopes(ctx2, ex2, false, softscope)
     ctx4, ex4 = convert_closures(ctx3, ex3)
     _ctx5, ex5 = linearize_ir(ctx4, ex4)
     ex5
@@ -15,14 +15,15 @@ end
 function macroexpand(mod::Module, ex_in::SyntaxTree; recursive::Bool=true)
     # TODO: prevent this from being called in macro bodies
     ex0 = rebase_layers(ex_in, mod)
-    expand_forms_1(ex0, Base.get_world_counter(), recursive)
+    __script_exit_invoke_in_lowering_world(
+        expand_forms_1, ex0, Base.get_world_counter(), recursive)::Syntax
 end
 
 "May be used in macros or from any module"
 function macroexpand(st::SyntaxTree)
     DEBUG && assert_expandable(st)
     ctx = MacroExpansionContext(st, Base.get_world_counter(), true)
-    expand_forms_1(ctx, st)
+    __script_exit_invoke_in_lowering_world(expand_forms_1, ctx, st)::Syntax
 end
 
 # If a top-level thunk has any existing layer, we can assume all syntax has the
@@ -96,8 +97,8 @@ function lower_init(ex::SyntaxTree)
     LoweringIterator([(ex, false, 0)])
 end
 
-function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
-                    soft_scope::Union{Nothing,Bool}=nothing)
+function lower_step(iter::LoweringIterator, mod::Module, world::UInt,
+                    softscope::Bool)
     if isempty(iter.todo)
         return Core.svec(:done)
     end
@@ -110,7 +111,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         elseif is_module_body
             return Core.svec(:end_module)
         else
-            return lower_step(iter, mod, world; soft_scope)
+            return lower_step(iter, mod, world, softscope)
         end
     else
         ex = top_ex
@@ -124,7 +125,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
     end
     if k == :toplevel
         push!(iter.todo, (ex, false, 1))
-        return lower_step(iter, mod, world; soft_scope)
+        return lower_step(iter, mod, world, softscope)
     elseif k == :module
         (version, notbare, mname, body) = @stm ex begin
             [:module version nb_st mname body] ->
@@ -151,7 +152,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         end
         coverage_visit_line(mod, ex)
          ctx2, ex2 = expand_forms_2(ex, world)
-         ctx3, ex3 = resolve_scopes(ctx2, ex2, !is_module_body; soft_scope)
+         ctx3, ex3 = resolve_scopes(ctx2, ex2, !is_module_body, softscope)
          ctx4, ex4 = convert_closures(ctx3, ex3)
         _ctx5, ex5 = linearize_ir(ctx4, ex4)
         out = to_lowered_expr(ex5)
@@ -605,7 +606,6 @@ function to_code_info(ex::SyntaxTree)
         slotflags[i] =                   # Inference          | Codegen
             slot.is_read          << 3 | # SLOT_USED          | jl_vinfo_sa
             slot.is_single_assign << 4 | # SLOT_ASSIGNEDONCE  | -
-            slot.is_maybe_undef   << 5 | # SLOT_USEDUNDEF     | jl_vinfo_usedundef
             slot.is_called        << 6   # SLOT_CALLED        | -
     end
 
@@ -802,6 +802,10 @@ function _to_lowered_expr(ex::SyntaxTree)
         for e in children(ex)
             push!(ret.args, _to_lowered_expr(e))
         end
+        # hack: protect the interpreter on 32-bit
+        length(ret.args) > 520000 &&
+            throw(LoweringError(
+                @mknode(ex; children=Syntax[]), "expression too large"))
         return ret
     end
 end
@@ -815,12 +819,11 @@ function _foreignsymbol_expr(ex)
     end
 end
 
-@fzone "JL: eval" function eval(mod::Module, @nospecialize(ex);
-                                soft_scope::Union{Nothing,Bool}=nothing)
+@fzone "JL: eval" function eval(mod::Module, @nospecialize(ex), softscope::Bool=false)
     if !(ex isa SyntaxTree)
         ex = expr_to_est(ex)
     end
-    return _eval(mod, lower_init(ex), false, soft_scope)
+    return _eval(mod, lower_init(ex), false, softscope)
 end
 
 # TODO: Consumers expect LoadError from macros and ErrorException from lowering,
@@ -838,15 +841,20 @@ function to_compatible_exception(@nospecialize(exc))
     end
 end
 
+__script_entry_eval_thunk(mod::Module, code::Core.CodeInfo) =
+    @ccall jl_eval_thunk(mod::Any, code::Any, #=fast=#1::Cint)::Any
+__script_entry_end_module(mod::Module) =
+    @ccall jl_end_new_module(mod::Module)::Cvoid
+
 function _eval(mod::Module, iter::LoweringIterator,
-               error_compat::Bool, soft_scope::Union{Nothing,Bool})
+               error_compat::Bool, softscope::Bool)
     modules = Module[mod]
     result = nothing
     while true
         thunk = try
-            invoke_in_lowering_world(
+            __script_exit_invoke_in_lowering_world(
                 ()->lower_step(iter, modules[end],
-                               Base.get_world_counter(); soft_scope))::Core.SimpleVector
+                               Base.get_world_counter(), softscope))::Core.SimpleVector
         catch exc
             error_compat ? rethrow(to_compatible_exception(exc)) : rethrow()
         end
@@ -861,15 +869,14 @@ function _eval(mod::Module, iter::LoweringIterator,
                 filename::Cstring, loc.line::Cint)::Module
             push!(modules, mod)
         elseif type == :end_module
-            @ccall jl_end_new_module(modules[end]::Module)::Cvoid
+            __script_entry_end_module(modules[end]) # __init__ frames
             result = pop!(modules)
         elseif type == :thunk
             code = thunk[2]
             if !(Meta.isexpr(code, :thunk, 1) && code.args[1] isa Core.CodeInfo)
                 throw(ErrorException("syntax: expected (thunk x::CodeInfo)"))
             end
-            result = @ccall jl_eval_thunk(
-                modules[end]::Any, code.args[1]::Any, #=fast=#1::Cint)::Any
+            result = __script_entry_eval_thunk(modules[end], code.args[1])
         elseif type == :value
             result = thunk[2]
         end

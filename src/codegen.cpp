@@ -5100,6 +5100,64 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
+    else if ((f == BUILTIN(unsafe_memoryrefload) || f == BUILTIN(unsafe_memoryrefstore)) && nargs == 4) {
+        const jl_cgval_t &ref = argv[1];
+        jl_value_t *rty = jl_unwrap_unionall(ref.typ);
+        if (!jl_is_genericmemoryref_type(rty) || !jl_is_concrete_type(rty) ||
+            jl_tparam0(rty) != (jl_value_t*)jl_not_atomic_sym || !jl_isbits(jl_tparam1(rty)))
+            return false;
+        jl_value_t *addrspace = jl_tparam2(rty);
+        if (!jl_is_addrspacecore(addrspace) || jl_unbox_uint8(addrspace) != 0)
+            return false;
+        jl_datatype_t *mty = (jl_datatype_t*)jl_field_type_concrete((jl_datatype_t*)rty, 1);
+        const jl_datatype_layout_t *layout = mty->layout;
+        if (layout->size == 0)
+            return false;
+        bool isget = f == BUILTIN(unsafe_memoryrefload);
+        jl_value_t *ety = isget ? argv[2].constant : argv[2].typ;
+        if (!ety || !jl_isbits(ety))
+            return false;
+        emit_typecheck(ctx, argv[3], (jl_value_t*)jl_long_type,
+                       isget ? "unsafe_memoryrefload" : "unsafe_memoryrefstore!");
+        emit_typecheck(ctx, argv[4], (jl_value_t*)jl_bool_type,
+                       isget ? "unsafe_memoryrefload" : "unsafe_memoryrefstore!");
+        Value *offset = emit_unbox(ctx, ctx.types().T_size, argv[3]);
+        Value *ptr = emit_memoryref_ptr(ctx, ref, layout);
+        if (memoryref_bounds_check_enabled(ctx, argv[4].constant)) {
+            Value *mem = emit_memoryref_mem(ctx, ref, layout);
+            Value *base = emit_genericmemoryptr(ctx, mem, layout, 0);
+            Value *data = CreateSimplifiedExtractValue(ctx, emit_memoryref_FCA(ctx, ref, layout), 0);
+            Value *pos = ctx.builder.CreateSub(ctx.builder.CreatePtrToInt(data, ctx.types().T_size),
+                                              ctx.builder.CreatePtrToInt(base, ctx.types().T_size));
+            Value *len = ctx.builder.CreateNUWMul(emit_genericmemorylen(ctx, mem, ref.typ),
+                                                ConstantInt::get(ctx.types().T_size, layout->size));
+            Value *size = ConstantInt::get(ctx.types().T_size, jl_datatype_size(ety));
+            Value *start = ctx.builder.CreateAdd(pos, offset);
+            Value *valid = ctx.builder.CreateAnd(ctx.builder.CreateICmpULE(pos, len),
+                ctx.builder.CreateAnd(ctx.builder.CreateICmpULE(size, len),
+                                      ctx.builder.CreateICmpULE(start, ctx.builder.CreateSub(len, size))));
+            BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "oob", ctx.f);
+            BasicBlock *endBB = BasicBlock::Create(ctx.builder.getContext(), "byteaccess", ctx.f);
+            ctx.builder.CreateCondBr(valid, endBB, failBB);
+            ctx.builder.SetInsertPoint(failBB);
+            ctx.builder.CreateCall(prepare_call(jlboundserror_func),
+                { mark_callee_rooted(ctx, boxed(ctx, ref)), offset });
+            ctx.builder.CreateUnreachable();
+            ctx.builder.SetInsertPoint(endBB);
+        }
+        ptr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptr, offset);
+        if (isget) {
+            *ret = typed_load(ctx, ptr, nullptr, ety, memorybuf_aliasinfo(ctx, layout), nullptr,
+                              false, AtomicOrdering::NotAtomic, false, 1);
+        }
+        else {
+            *ret = typed_store(ctx, ptr, argv[2], jl_cgval_t(), ety, memorybuf_aliasinfo(ctx, layout),
+                               nullptr, nullptr, false, AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic,
+                               1, nullptr, StoreKind::Set, false, nullptr, "unsafe_memoryrefstore!", nullptr, nullptr);
+        }
+        return true;
+    }
+
     else if ((f == BUILTIN(memoryrefget) || f == BUILTIN(const_memoryrefget)) && nargs == 3) {
         // only const_memoryrefget loads may carry the current aliasscope (see Base.Experimental.Const)
         bool isconstload = f == BUILTIN(const_memoryrefget);
@@ -9571,7 +9629,7 @@ static jl_llvm_functions_t
         jl_varinfo_t &varinfo = ctx.slots[i];
         uint8_t flags = jl_array_uint8_ref(src->slotflags, i);
         varinfo.isSA = (jl_vinfo_sa(flags) != 0) || varinfo.isArgument;
-        varinfo.usedUndef = (jl_vinfo_usedundef(flags) != 0) || !varinfo.isArgument;
+        varinfo.usedUndef = !varinfo.isArgument;
         if (!varinfo.isArgument) {
             varinfo.value = mark_julia_type(ctx, (Value*)NULL, false, (jl_value_t*)jl_any_type);
         }
@@ -10478,7 +10536,10 @@ static jl_llvm_functions_t
         cursor = -1;
     };
 
-    auto do_coverage = [&] (bool in_user_code) {
+    auto do_coverage = [&] (bool in_user_code, StringRef file) {
+        // Images are instrumented for every path, so exclusions do not apply to them.
+        if (!ctx.emission_context.imaging_mode && jl_path_is_coverage_excluded(file.data()))
+            return false;
         return (coverage_mode == JL_LOG_ALL ||
                 (in_user_code && (coverage_mode == JL_LOG_USER || coverage_mode == JL_LOG_PATH)));
     };
@@ -10499,7 +10560,7 @@ static jl_llvm_functions_t
         size_t first_changed = dbg;
         for (; dbg < new_lineinfo.size(); dbg++) {
             const auto &newdbg = new_lineinfo[dbg];
-            if (do_coverage(newdbg.is_user_code)) {
+            if (do_coverage(newdbg.is_user_code, newdbg.file)) {
                 if (newdbg.line0 != 0 && (dbg >= prev_lineinfo.size() || newdbg.edgeid != prev_lineinfo[dbg].edgeid || newdbg.line0 != prev_lineinfo[dbg].line))
                     coverageVisitLine(ctx, newdbg.file, newdbg.line0, newdbg.is_user_code);
                 // a standalone call covers its definition line on entry, so an inlined call does too
@@ -10535,7 +10596,7 @@ static jl_llvm_functions_t
             if (file.empty())
                 file = "<missing>";
             bool is_user_code = frame_is_user_code(modu, file);
-            if (do_coverage(is_user_code)) {
+            if (do_coverage(is_user_code, file)) {
                 int32_t extraline = jl_cdi_external_firstline(debuginfo);
                 if (extraline != -1)
                     coverageAllocLine(ctx, file, extraline, is_user_code);
@@ -11469,10 +11530,14 @@ static void init_jit_functions(void)
     add_named_global(jlunlockfield_func, &jl_unlock_field);
     add_named_global(jlgetabiconverter_func, &jl_get_abi_converter);
 
-    jl_get_pgcstack_func_t get_pgcstack;
-    jl_pgcstack_key_t pgcstack_key;
-    jl_pgcstack_getkey(&get_pgcstack, &pgcstack_key);
-    add_named_global("jl_get_pgcstack_resolved", get_pgcstack);
+    // the JIT's counterpart of an image's `jl_ptls_table`
+    static jl_get_pgcstack_func_t pgcstack_func_slot;
+    static uintptr_t pgcstack_key_slot;
+    static_assert(sizeof(jl_pgcstack_key_t) <= sizeof(pgcstack_key_slot), "TLS key doesn't fit its slot");
+    jl_pgcstack_getkey(&pgcstack_func_slot, (jl_pgcstack_key_t*)&pgcstack_key_slot);
+    add_shared_named_global("jl_pgcstack_func_slot", (void*)&pgcstack_func_slot);
+    add_shared_named_global("jl_pgcstack_key_slot", (void*)&pgcstack_key_slot);
+    add_shared_named_global("jl_image_tls_offset", (void*)&jl_tls_offset);
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)

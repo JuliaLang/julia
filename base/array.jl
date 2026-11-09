@@ -185,8 +185,6 @@ function vect(X...)
     return T[X...]
 end
 
-asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
-
 allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
 """
@@ -301,9 +299,9 @@ function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Arr
     n == 0 && return dest
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs)
-    @boundscheck n <= length(dest) - doffs + 1 || throw(BoundsError(dest, length(dest) + 1))
+    @boundscheck n <= length(dest) - doffs + 1 || throw_boundserror(dest, length(dest) + 1)
     @boundscheck checkbounds(src, soffs)
-    @boundscheck n <= length(src) - soffs + 1 || throw(BoundsError(src, length(src) + 1))
+    @boundscheck n <= length(src) - soffs + 1 || throw_boundserror(src, length(src) + 1)
     doffs = Int(doffs)
     soffs = Int(soffs)
     n = Int(n)
@@ -1427,6 +1425,19 @@ function append!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
     return a
 end
 
+function append!(a::Vector{T}, x::AbstractVector{<:T}, y::AbstractVector{<:T}, items::AbstractVector{<:T}...) where T
+    # take every length before growing `a`, since a collection may share memory with `a`
+    items = (x, y, items...)
+    ns = map(length, items)
+    pos = length(a) + 1
+    _growend!(a, sum(ns))
+    for (v, n) in zip(items, ns)
+        copyto!(a, pos, v, firstindex(v), n)
+        pos += n
+    end
+    return a
+end
+
 append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
 push!(a::AbstractVector, iter...) = append!(a, iter)
 append!(a::AbstractVector, iter...) = (foreach(v -> append!(a, v), iter); a)
@@ -1489,6 +1500,19 @@ function prepend!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
     # in case of aliasing, the _growbeg might have shifted our data, so copy
     # just the last n elements instead of all of them from the first
     copyto!(a, 1, items, lastindex(items)-n+1, n)
+    return a
+end
+
+function prepend!(a::Vector{T}, x::AbstractVector{<:T}, y::AbstractVector{<:T}, items::AbstractVector{<:T}...) where T
+    # growing at the front moves the data of `a`, so copy any collection that shares it first
+    items = map(v -> unalias(a, v), (x, y, items...))
+    ns = map(length, items)
+    _growbeg!(a, sum(ns))
+    pos = 1
+    for (v, n) in zip(items, ns)
+        copyto!(a, pos, v, firstindex(v), n)
+        pos += n
+    end
     return a
 end
 
@@ -1570,6 +1594,52 @@ function resize!(a::Vector, nl_::Integer; first::Bool=false)
         end
         first ? _deletebeg!(a, l-nl) : _deleteend!(a, l-nl)
     end
+    return a
+end
+
+"""
+    growat!(a::Vector, i::Integer, delta::Integer) -> a
+
+Grow `a` by `delta` elements inserted at index `i`, so that the new elements occupy
+`i:i+delta-1` and the elements previously at `i:end` move to `i+delta:end`. `i` must be
+between `1` and `length(a) + 1`, and `delta` must be non-negative. As with
+[`resize!`](@ref), the new elements are not guaranteed to be initialized.
+
+If `a` has spare capacity at the end nearer to `i`, only the elements between `i` and that
+end are moved, so growing near either end of `a` is cheap.
+
+`growat!(a, i, delta)` is undone by `deleteat!(a, i:i+delta-1)`.
+
+See also [`resize!`](@ref), [`insert!`](@ref), [`deleteat!`](@ref).
+
+!!! compat "Julia 1.15"
+    This function requires at least Julia 1.15.
+
+# Examples
+```jldoctest
+julia> a = Any[1, 2, 3];
+
+julia> growat!(a, 2, 2)
+5-element Vector{Any}:
+   1
+ #undef
+ #undef
+   2
+   3
+
+julia> a[2:3] = ["x", "y"];
+
+julia> a
+5-element Vector{Any}:
+ 1
+  "x"
+  "y"
+ 2
+ 3
+```
+"""
+function growat!(a::Vector, i::Integer, delta::Integer)
+    _growat!(a, i, delta)
     return a
 end
 

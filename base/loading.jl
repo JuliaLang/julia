@@ -296,6 +296,12 @@ TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, con
 
 const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
 
+function uninit_toml_cache()
+    empty!(TOML_CACHE.d)
+    TOML.reinit!(TOML_CACHE.p, "")
+    nothing
+end
+
 parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
     lock(toml_lock) do
@@ -1355,6 +1361,10 @@ function init_debuginfo_source_paths()
     ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec(paths...))
 end
 
+function uninit_debuginfo_source_paths()
+    ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec())
+end
+
 function cache_file_entry(pkg::PkgId)
     uuid = pkg.uuid
     return joinpath(
@@ -1992,7 +2002,7 @@ end
 CacheFlags(f::UInt8, coverage::Integer, coverage_path::Union{Nothing,String}) =
     CacheFlags(CacheFlags(f, coverage); coverage_path)
 
-# The tracked path if this process collects `@path` coverage with instrumented images.
+# The tracked paths if this process collects `@path` coverage with instrumented images.
 function current_coverage_path()
     opts = JLOptions()
     opts.code_coverage == 3 && opts.malloc_log == 0 || return nothing
@@ -2089,7 +2099,8 @@ function tracked_path_overlaps_sysimage(tracked::String)
     sources = sysimage_sources()
     sources === nothing && return true
     dirs, files = sources
-    return any(dir -> path_is_tracked(dir, tracked) || path_is_tracked(tracked, dir), dirs) ||
+    entries = split(tracked, Sys.iswindows() ? ';' : ':'; keepempty=false)
+    return any(dir -> path_is_tracked(dir, tracked) || any(entry -> path_is_tracked(String(entry), dir), entries), dirs) ||
            any(file -> path_is_tracked(file, tracked), files)
 end
 

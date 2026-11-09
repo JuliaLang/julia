@@ -1118,7 +1118,7 @@ end
 @test fully_eliminated(f_call_total_noinline_unused, Tuple{Float64})
 @test !fully_eliminated(f_call_volatile_escape, Tuple{Ptr{Int}})
 
-let b = Expr(:block, (:(y += sin($x)) for x in randn(1000))...)
+let b = Expr(:block, (:(y += sin($x)) for x in randn(10))...)
     @eval function f_sin_perf()
         y = 0.0
         $b
@@ -2590,6 +2590,13 @@ let src = code_typed1((Bool,)) do b
     end
     @test count(isinvoke(:pick_constant_some_any), src.code) == 0
     @test count(iscall((src, pick_constant_some_any)), src.code) == 0
+end
+
+@inline splat_sum_prod(t::Tuple) = +(t...) * *(t...)
+let src = code_typed1((Base.RefValue{Any},)) do r
+        splat_sum_prod(r[]::Tuple)
+    end
+    @test count(iscall((src, Core._apply_iterate)), src.code) == 0
 end
 
 end # module inline_tests

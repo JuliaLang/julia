@@ -1075,22 +1075,6 @@ function record_slot_assign!(sv::InferenceState)
     return nothing
 end
 
-# find the dominating assignment to the slot `id` in the block containing statement `idx`,
-# returns `nothing` otherwise
-function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
-    block = block_for_inst(sv.cfg, idx)
-    for pc in reverse(sv.cfg.blocks[block].stmts) # N.B. reverse since the last assignment is dominating this block
-        pc < idx || continue # N.B. needs pc ≠ idx as `id` can be assigned at `idx`
-        stmt = sv.src.code[pc]
-        isexpr(stmt, :(=)) || continue
-        lhs = stmt.args[1]
-        isa(lhs, SlotNumber) || continue
-        slot_id(lhs) == id || continue
-        return pc
-    end
-    return nothing
-end
-
 # annotate types of all symbols in AST, preparing for optimization
 function type_annotate!(::AbstractInterpreter, sv::InferenceState)
     # widen slot wrappers from `slottypes`

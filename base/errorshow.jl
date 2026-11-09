@@ -1145,6 +1145,7 @@ Stacktrace processing pipeline:
 3. Originator trims frames related to itself (e.g. REPL removes REPL-specific frames)
    - CapturedException only keeps a limit of 100 frames by processing before display
 4. `process_backtrace` filters a trace for internal implementation or redundant frames and summarizes repeated single frames:
+    - frames from a `__script_exit*` to the next `__script_entry*` removed
     - `kwcall` frames removed
     - `include`-related stack frames removed
     - code loading (`using`/`import`) stack frames collapsed to the frame that entered loading
@@ -1314,8 +1315,6 @@ function _is_loading_frame(frame::StackFrame)
            (func in _LOADING_INTERNAL_FUNCS || func in _LOADING_ANCHOR_FUNCS)
 end
 
-_is_loading_anchor(frame::StackFrame) = frame.func in _LOADING_ANCHOR_FUNCS
-
 # For improved user experience, collapse runs of frames belonging to the code loading
 # machinery down to the single frame that entered it - see #52988. Unlike hiding
 # everything thrown through `require`, this keeps frames for user code that runs
@@ -1422,6 +1421,7 @@ function _backtrace_collapse_repeated_locations!(trace)
 end
 
 function process_backtrace(t::Vector{StackFrame})
+    t = remove_driver_spans!(copy(t), false)
     tracecount = _backtrace_collapse_and_count_repeated_frames(t)
     process_backtrace(tracecount)
 end

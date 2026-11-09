@@ -167,6 +167,7 @@ JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT
                         0, // target_sanitize_memory
                         0, // target_sanitize_thread
                         0, // target_sanitize_address
+                        NULL, // coverage_exclude
     };
     jl_options_initialized = 1;
 }
@@ -286,11 +287,15 @@ static const char opts[]  =
     // instrumentation options
     " --code-coverage[={none*|user|all}]            Record coverage for source lines (omitting setting is\n"
     "                                               equivalent to `user`)\n"
-    " --code-coverage=@<path>                       Record coverage only for files that fall under the\n"
-    "                                               given file path/directory. The `@` prefix is\n"
-    "                                               required to select this option. A `@` with no path\n"
-    "                                               will track the current directory.\n"
+    " --code-coverage=@<paths>                      Record coverage only for files that fall under the\n"
+    "                                               given files/directories, separated by `:` (`;` on\n"
+    "                                               Windows). The `@` prefix is required to select this\n"
+    "                                               option. A `@` with no path will track the current\n"
+    "                                               directory.\n"
 
+    " --code-coverage=-<paths>                      Record no coverage for files under these paths,\n"
+    "                                               separated by `:` (`;` on Windows). Without another\n"
+    "                                               setting, coverage is recorded for all other files.\n"
     " --code-coverage=tracefile.info                Append coverage information to the LCOV tracefile\n"
     "                                               (filename supports format tokens)\n"
     " --code-coverage-mode={hit*|count}             Record whether each line ran (`hit`, the default)\n"
@@ -299,8 +304,9 @@ static const char opts[]  =
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
     " --track-allocation[={none*|user|all}]         Count bytes allocated by each source line (omitting\n"
     "                                               setting is equivalent to `user`)\n"
-    " --track-allocation=@<path>                    Count bytes but only in files that fall under the\n"
-    "                                               given file path/directory. The `@` prefix is required\n"
+    " --track-allocation=@<paths>                   Count bytes but only in files that fall under the\n"
+    "                                               given files/directories, separated by `:` (`;` on\n"
+    "                                               Windows). The `@` prefix is required\n"
     "                                               to select this option. A `@` with no path will track\n"
     "                                               the current directory.\n"
     " --bug-report=KIND                             Launch a bug report session. It can be used to start\n"
@@ -824,6 +830,11 @@ restart_switch:
                     codecov = JL_LOG_ALL;
                 else if (!strcmp(optarg, "none"))
                     codecov = JL_LOG_NONE;
+                else if (optarg[0] == '-' && optarg[1] != '\0') {
+                    if (codecov == JL_LOG_NONE)
+                        codecov = JL_LOG_ALL;
+                    jl_options.coverage_exclude = optarg + 1; // skip `-`
+                }
                 else if (endof > 5 && !strcmp(optarg + endof - 5, ".info")) {
                     if (codecov == JL_LOG_NONE)
                         codecov = JL_LOG_ALL;

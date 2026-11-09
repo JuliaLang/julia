@@ -734,6 +734,8 @@ on methods exported from the `Dates` module.
 
 ```@docs
 Dates.Period
+Dates.DatePeriod
+Dates.TimePeriod
 Dates.CompoundPeriod
 Dates.Instant
 Dates.UTInstant

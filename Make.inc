@@ -25,6 +25,11 @@ JULIA_COVERAGE_IMAGES ?= 0
 # expanded because Make.user is read below.
 JULIA_COVERAGE_IMAGE_FLAGS = $(if $(filter 1,$(JULIA_COVERAGE_IMAGES)),--code-coverage=all)
 
+# Set to 0 to leave the HTML manual out of `make install` and `make binary-dist`,
+# which then do not build it. For builds nobody reads the manual from, such as CI
+# test builds.
+JULIA_INSTALL_DOCS ?= 1
+
 # Set to 1 to also bundle stdlib pkgimages for `--check-bounds=yes`.
 # Use `make checkbounds-pkgimages` to distribute these separately instead.
 JULIA_CHECK_BOUNDS_PKGIMAGES ?= 0
@@ -878,8 +883,6 @@ ifneq ($(OS), Darwin)
 endif
 endif
 
-bootstrap_julia_flags :=
-
 ifeq ($(SANITIZE),1)
 SANITIZE_OPTS :=
 SANITIZE_LDFLAGS :=
@@ -897,9 +900,6 @@ endif
 ifeq ($(SANITIZE_THREAD),1)
 SANITIZE_OPTS += -fsanitize=thread -fsanitize-ignorelist=$(JULIAHOME)/contrib/tsan/ignorelist.txt
 SANITIZE_LDFLAGS += -fsanitize=thread
-ifneq ($(CROSS_BOOTSTRAP_JULIA),)
-bootstrap_julia_flags += --target-sanitize=thread
-endif
 endif
 ifeq ($(SANITIZE_OPTS),)
 $(error SANITIZE=1, but no sanitizer selected, set either SANITIZE_MEMORY, SANITIZE_THREAD, or SANITIZE_ADDRESS)
@@ -2005,15 +2005,9 @@ JULIA_BUILD_MODE := debug
 endif
 endif
 
-ifneq ($(CROSS_BOOTSTRAP_JULIA),)
-JULIA_EXECUTABLE_debug := $(CROSS_BOOTSTRAP_JULIA)
-JULIA_EXECUTABLE_release := $(CROSS_BOOTSTRAP_JULIA)
-JULIA_EXECUTABLE := $(CROSS_BOOTSTRAP_JULIA)
-else
 JULIA_EXECUTABLE_debug := $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release := $(build_bindir)/julia$(EXE)
 JULIA_EXECUTABLE := $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
-endif
 
 JULIA_SYSIMG_debug := $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 JULIA_SYSIMG_release := $(build_private_libdir)/sys.$(SHLIB_EXT)

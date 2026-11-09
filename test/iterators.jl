@@ -1244,6 +1244,10 @@ end
     empty_cycle = Iterators.cycle([])
     @test_throws BoundsError nth(empty_cycle, 42)
 
+    @test nth(zip(), 5) === ()
+    @test_throws BoundsError nth(zip(), 0)
+    @test_throws BoundsError nth(zip(), -3)
+
     # test the size unknown branch for cycles
     # only generate odd numbers so we know the actual length
     # but the iterator is still SizeUnknown()
@@ -1261,6 +1265,9 @@ end
 
     # unsigned n with a negative first index
     @test nth(Base.IdentityUnitRange(-5:-3), UInt(1)) == -5
+    # length(v) * cycles overflows Int
+    @test nth(Iterators.cycle([1, 2, 3], typemax(Int) ÷ 2), 1) == 1
+    @test nth(Iterators.cycle([1, 2, 3], typemax(Int)), typemax(Int)) == 1
 end
 
 @testset "Iterators docstrings" begin

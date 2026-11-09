@@ -21,7 +21,7 @@ end
 
 using Test
 using Distributed
-using Dates
+using Dates: Dates
 using Printf: @sprintf
 using StyledStrings: @styled_str
 using Base: Experimental
@@ -281,7 +281,7 @@ cd(@__DIR__) do
         lock(print_lock)
         try
             printstyled(master_stdout, name, at, " |", " "^elapsed_align, color=:white)
-            printstyled(master_stdout, "started at $(now())",
+            printstyled(master_stdout, "started at $(Dates.now())",
                     (pid > 0 ? " on pid $pid" : ""),
                     "\n", color=:light_black)
         finally
@@ -295,7 +295,7 @@ cd(@__DIR__) do
         try
             printstyled(master_stdout, name, color=:red)
             printstyled(master_stdout, lpad("($wrkr)", name_align - textwidth(name) + 1, " "), " |",
-                " "^elapsed_align, " failed at $(now())\n", color=:red)
+                " "^elapsed_align, " failed at $(Dates.now())\n", color=:red)
             if isa(e, Test.TestSetException)
                 for t in e.errors_and_fails
                     show(master_stdout, t)
@@ -319,7 +319,7 @@ cd(@__DIR__) do
     try
         # Monitor stdin and kill this task on ^C
         # but don't do this on Windows, because it may deadlock in the kernel
-        running_tests = Dict{String, DateTime}()
+        running_tests = Dict{String, Dates.DateTime}()
 
         # Track timeout timers for each test
         test_timers = Dict{String, Timer}()
@@ -432,7 +432,7 @@ cd(@__DIR__) do
                             println("Currently running: ")
                             tests = sort(collect(running_tests), by=x->x[2])
                             foreach(tests) do (test, date)
-                                println(test, " (running for ", round(now()-date, Minute), ")")
+                                println(test, " (running for ", round(Dates.now()-date, Dates.Minute), ")")
                             end
                         end
                     end
@@ -451,7 +451,7 @@ cd(@__DIR__) do
                     push!(all_tasks, current_task())
                     while length(tests) > 0
                         test = popfirst!(tests)
-                        running_tests[test] = now()
+                        running_tests[test] = Dates.now()
                         wrkr = p
                         running_on[test] = wrkr
                         @lock worker_prefixes_lock (worker_prefixes[wrkr] = output_prefix(test, wrkr))
@@ -460,7 +460,7 @@ cd(@__DIR__) do
                         test_timers[test] = Timer(longrunning_delay, interval=longrunning_interval) do timer
                             if haskey(running_tests, test)  # Check test is still running
                                 start_time = running_tests[test]
-                                elapsed = now() - start_time
+                                elapsed = Dates.now() - start_time
                                 elapsed_minutes = elapsed.value ÷ (1000 * 60)
 
                                 elapsed_str = if elapsed_minutes >= 60
@@ -471,8 +471,8 @@ cd(@__DIR__) do
                                 end
 
                                 @lock print_lock begin
-                                    print(master_stdout, test)
-                                    print(master_stdout, lpad("($(wrkr))", name_align - textwidth(test) + 1, " "), " | ")
+                                    printstyled(master_stdout, test, color=:white)
+                                    printstyled(master_stdout, lpad("($(wrkr))", name_align - textwidth(test) + 1, " "), " | ", color=:white)
                                     # Calculate total width of data columns: "Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)"
                                     # This is: elapsed_align + 3 + gc_align + 3 + percent_align + 3 + alloc_align + 3 + rss_align
                                     data_width = elapsed_align + gc_align + percent_align + alloc_align + rss_align + 12  # 12 = 4 * " | "
@@ -507,7 +507,7 @@ cd(@__DIR__) do
                                 # the worker encountered some failure, recycle it
                                 # so future tests get a fresh environment
                                 rmprocs_with_testenv(wrkr, waitfor=rmwait_timeout)
-                                p = addprocs_with_testenv(1)[1]
+                                p = addprocs_with_testenv(1; pool_size=n)[1]
                                 remotecall_fetch(include, p, "testdefs.jl")
                                 if use_revise
                                     Distributed.remotecall_eval(Main, p, revise_init_expr)
@@ -521,7 +521,7 @@ cd(@__DIR__) do
                                 # with a smaller working set and a fresh environment
                                 if n > 1
                                     rmprocs_with_testenv(wrkr, waitfor=rmwait_timeout)
-                                    p = addprocs_with_testenv(1)[1]
+                                    p = addprocs_with_testenv(1; pool_size=n)[1]
                                     remotecall_fetch(include, p, "testdefs.jl")
                                     if use_revise
                                         Distributed.remotecall_eval(Main, p, revise_init_expr)

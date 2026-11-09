@@ -541,6 +541,11 @@ JL_DLLEXPORT int jl_is_file_tracked(jl_sym_t *path)
     return jl_path_is_tracked(jl_symbol_name(path));
 }
 
+JL_DLLEXPORT int jl_is_file_coverage_excluded(jl_sym_t *path)
+{
+    return jl_path_is_coverage_excluded(jl_symbol_name(path));
+}
+
 static void jl_set_io_wait(int v)
 {
     jl_task_t *ct = jl_current_task;

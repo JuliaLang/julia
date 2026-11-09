@@ -965,7 +965,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src)
         n = length(src)
         n == 0 && return dest
         @boundscheck checkbounds(dest, i)
-        @boundscheck n <= lastindex(dest) - i + 1 || throw(BoundsError(dest, i))
+        @boundscheck n <= lastindex(dest) - i + 1 || throw_boundserror(dest, i)
         for x in src
             @inbounds dest[i] = x
             i += 1
@@ -1016,7 +1016,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
     inds = LinearIndices(dest)
     sstart < 1 && throw(ArgumentError(LazyString("source start offset (",
         sstart,") is < 1")))
-    (dstart ∈ inds && n <= last(inds) - dstart + 1) || throw(BoundsError(dest, dstart))
+    (dstart ∈ inds && n <= last(inds) - dstart + 1) || throw_boundserror(dest, dstart)
     dstart = Int(dstart)
     n = Int(n)
     dmax = dstart + n - 1
@@ -1153,8 +1153,8 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
         n," elements, but n should be non-negative")))
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    (checkbounds(Bool, destinds, dstart) && n <= last(destinds) - dstart + 1) || throw(BoundsError(dest, dstart))
-    (checkbounds(Bool, srcinds, sstart)  && n <= last(srcinds) - sstart + 1)  || throw(BoundsError(src, sstart))
+    (checkbounds(Bool, destinds, dstart) && n <= last(destinds) - dstart + 1) || throw_boundserror(dest, dstart)
+    (checkbounds(Bool, srcinds, sstart)  && n <= last(srcinds) - sstart + 1)  || throw_boundserror(src, sstart)
     dstart = Int(dstart)
     sstart = Int(sstart)
     n = Int(n)
@@ -3496,7 +3496,7 @@ values in the slice without affecting `A`.
 end
 
 @noinline function _inner_mapslices!(R, indices, f, A, dim_mask, Aslice, safe_for_reuse)
-    must_extend = any(dim_mask .& size(R) .> 1)
+    must_extend = any(dim_mask .& (size(R) .> 1))
     if safe_for_reuse
         # when f returns an array, R[ridx...] = f(Aslice) line copies elements,
         # so we can reuse Aslice
@@ -3506,7 +3506,7 @@ end
             r = f(Aslice)
             if r isa AbstractArray || must_extend
                 ridx = ifelse.(dim_mask, Slice.(axes(R)), Tuple(I))
-                R[ridx...] = r
+                concatenate_setindex!(R, r, ridx...)
             else
                 ridx = ifelse.(dim_mask, first.(axes(R)), Tuple(I))
                 R[ridx...] = r

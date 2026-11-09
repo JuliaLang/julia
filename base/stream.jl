@@ -313,6 +313,20 @@ function init_stdio(handle::Ptr{Cvoid})
     return io
 end
 
+# Detaches `io` from its libuv handle without closing the handle
+function uninit_stdio(io::IO)
+    io isa IOContext && return uninit_stdio(io.io)
+    io isa LibuvStream || return
+    io.handle == C_NULL && return
+    flush(io)
+    iolock_begin()
+    disassociate_julia_struct(io.handle)
+    io.handle = C_NULL
+    io.status = StatusClosed
+    iolock_end()
+    nothing
+end
+
 """
     open(fd::OS_HANDLE)::IO
 
@@ -2310,26 +2324,8 @@ function readbytes!(s::BufferStream, a::Vector{UInt8}, nb::Int; cancel::CancelTo
     end
 
     bytes = lock(s.cond) do
-        if nb <= SZ_UNBUFFERED_IO # Under this limit we are OK with copying the array from the stream's buffer
-            wait_locked(s, sbuf, nb, tok)
-        end
-        if bytesavailable(sbuf) >= nb
-            nread = readbytes!(sbuf, a, nb)
-        else
-            initsize = length(a)
-            newbuf = _truncated_pipebuffer(a; maxsize=nb)
-            nread = try
-                s.buffer = newbuf
-                write(newbuf, sbuf)
-                wait_locked(s, newbuf, nb, tok)
-                bytesavailable(newbuf)
-            finally
-                s.buffer = sbuf
-            end
-            _take!(a, _unsafe_take!(newbuf))
-            length(a) >= initsize || resize!(a, initsize)
-        end
-        return nread
+        wait_locked(s, sbuf, nb, tok)
+        return readbytes!(sbuf, a, nb)
     end
     return bytes
 end
@@ -2401,6 +2397,9 @@ function write(s::BufferStream, a::Array; cancel::CancelTokenArg=DEFAULT_CANCEL)
     end
     return invoke(write, Tuple{IO, AbstractArray}, s, a)
 end
+writepartial(s::BufferStream, a::Vector{UInt8}; cancel::CancelTokenArg=DEFAULT_CANCEL) = write(s, a; cancel)
+writepartial(s::BufferStream, str::Union{String, SubString{String}}; cancel::CancelTokenArg=DEFAULT_CANCEL) = write(s, str; cancel)
+writepartial(s::BufferStream, a::Array; cancel::CancelTokenArg=DEFAULT_CANCEL) = write(s, a; cancel)
 function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
     # entry gate only (see the BufferStream `write` methods above)
     precheck_cancel_arg(cancel)
@@ -2435,7 +2434,7 @@ function flush(s::BufferStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
     end
 end
 
-skip(s::BufferStream, n) = skip(s.buffer, n)
+skip(s::BufferStream, n) = (skip(s.buffer, n); s)
 
 function reseteof(s::BufferStream)
     lock(s.cond) do

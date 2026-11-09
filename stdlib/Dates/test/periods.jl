@@ -42,6 +42,10 @@ end
     @test div(Dates.Year(10), Dates.Year(4)) == 2
     @test div(Dates.Year(10), 4) == Dates.Year(2)
     @test Dates.Year(10) / Dates.Year(4) == 2.5
+    @test div(Dates.Hour(1), Dates.Minute(25), RoundUp) == 3
+    @test div(Dates.Hour(1), Dates.Minute(25), RoundDown) == 2
+    @test div(Dates.Year(1), Dates.Month(5), RoundNearest) == 2
+    @test_throws ErrorException div(Dates.Hour(1), Dates.Month(1), RoundDown)
 
     @test mod(Dates.Year(10), Dates.Year(4)) == Dates.Year(2)
     @test mod(Dates.Year(-10), Dates.Year(4)) == Dates.Year(2)
@@ -230,6 +234,8 @@ end
     @test Dates.string(Dates.Year(1)) == "1 year"
     @test Dates.string(Dates.Year(-1)) == "-1 year"
     @test Dates.string(Dates.Year(2)) == "2 years"
+    @test sprint(show, MIME("text/plain"), Dates.Hour(-2)) == "-2 hours"
+    @test endswith(repr(Dates.Hour(-2)), "Hour(-2)")
     @test isfinite(Dates.Year)
     @test isfinite(Dates.Year(0))
     @test zero(Dates.Year) == Dates.Year(0)
@@ -391,6 +397,16 @@ end
     @test -Dates.CompoundPeriod() == Dates.CompoundPeriod()
     @test -(d - h) == -23h
     @test (d - h) - (d - h) == Dates.CompoundPeriod()
+    @test Dates.periods(Dates.CompoundPeriod(Dates.Time(1, 2, 0, 4, 0, 6))) ==
+        Dates.Period[Dates.Hour(1), Dates.Minute(2), Dates.Millisecond(4), Dates.Nanosecond(6)]
+    @test isempty(Dates.periods(Dates.CompoundPeriod(Dates.Time(0))))
+    # the comparison with a Period is canonicalized and works in either argument order
+    @test 23h + 60mi == d
+    @test d == 23h + 60mi
+    @test d != 23h + 59mi
+    @test m != d + Dates.CompoundPeriod()
+    @test Dates.days(Dates.Week(1) + d) === 8.0
+    @test Dates.days(Dates.CompoundPeriod()) === 0.0
 end
 @testset "compound period simplification" begin
     # reduce compound periods into the most basic form

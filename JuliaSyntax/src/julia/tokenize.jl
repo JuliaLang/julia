@@ -305,13 +305,6 @@ Return the latest `RawToken`'s starting position.
 startpos(l::Lexer) = l.token_startpos
 
 """
-    startpos!(l::Lexer, i::Integer)
-
-Set a new starting position.
-"""
-startpos!(l::Lexer, i::Integer) = l.token_startpos = i
-
-"""
     peekchar(l::Lexer)
 
 Returns the next character without changing the lexer's state.

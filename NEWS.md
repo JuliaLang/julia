@@ -12,8 +12,18 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* After a sweep, Julia's default garbage collector now lets any thread reuse the free cells of
+  pages that still hold live objects, instead of only the thread that allocated the page. This
+  reduces the memory footprint of workloads that allocate many small objects on many threads and
+  keep few of them, such as a language server that runs type inference repeatedly ([#63512]).
+
 Command-line option changes
 ---------------------------
+
+* `--code-coverage=-<paths>` records no coverage for files under the given paths, and
+  optimizes their code as if coverage were off, so that instrumenting a test suite does not change
+  how its own functions are compiled.
+* `--code-coverage=@<paths>` and `--track-allocation=@<paths>` accept a list of paths ([#54698]).
 
 Multi-threading changes
 -----------------------
@@ -27,12 +37,17 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* `base/userimg.jl` is no longer supported, and the build now fails if it exists. To build a
+  system image with additional code, use PackageCompiler.jl, or run a script on top of an existing
+  system image with `julia --sysimage <image> --output-o <file> <script>`.
+
 New library functions
 ---------------------
 
 * `bitsizeof(x)` returns the declared width in bits of a primitive type, or of the primitive type
   of `x`, excluding the padding that `sizeof` includes. It throws for any other type or value ([#61359]).
 * `filterfirst(f, itr)` returns the first element of `itr` for which `f` returns `true` ([#60913]).
+* `growat!(a::Vector, i, delta)` grows `a` by `delta` uninitialized elements inserted at index `i` ([#63573]).
 
 New library features
 --------------------

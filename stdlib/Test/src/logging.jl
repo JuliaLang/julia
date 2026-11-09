@@ -167,7 +167,8 @@ function record(ts::DefaultTestSet, t::LogTestFailure)
         println()
     end
     # Hack: convert to `Fail` so that test summarization works correctly
-    push!(ts.results, Fail(:test, t.orig_expr, t.logs, nothing, nothing, t.source, false))
+    @lock ts.results_lock push!(ts.results, Fail(:test, t.orig_expr, t.logs, nothing, nothing, t.source, false))
+    ts.failfast && throw(FailFastError())
     return t
 end
 
