@@ -3582,6 +3582,10 @@ wait_until(f) = while !f(); sleep(0.05); end
             try
                 wait_until(() -> isfile(started))
                 @test Base.Precompilation.is_precompiling_in_background()
+                # other tasks see a change to the environment made while the run is going
+                push!(LOAD_PATH, depot)
+                @test depot in Base.load_path()
+                pop!(LOAD_PATH)
                 t2 = @async Base.Precompilation.precompilepkgs(["MergedPkg"]; io=IOContext(io2, :color => false), fancyprint=false)
                 wait_until(() -> has_cachefile(depot, "MergedPkg"))
                 @test !istaskdone(t1)
