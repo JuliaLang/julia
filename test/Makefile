@@ -95,3 +95,5 @@ clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
 	@$(MAKE) -C gcext $@ $(GCEXT_ARGS)
 	@$(MAKE) -C llvmpasses $@
+	@# test depots that a killed test run left behind
+	@rm -rf "$(BUILDROOT)/tmp"/depot.*
