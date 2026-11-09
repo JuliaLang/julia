@@ -1918,6 +1918,10 @@ JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, void *slot JL_UNUSED, const 
 {
     if (ptr == NULL)
         return;
+    // Image objects are never freed, and marking does not trace through them, so no
+    // edge to one needs to be remembered, not even from an image object.
+    if (jl_astaggedvalue(ptr)->bits.in_image != 0)
+        return;
     if (jl_astaggedvalue(parent)->bits.in_image != 1 /* GC_IN_IMAGE_NOT_REMSET */ && // parent is not an unmarked image object
         (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) != 0) // ptr is old
         return;
