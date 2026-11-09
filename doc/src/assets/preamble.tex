@@ -2,10 +2,19 @@
 %%
 %%  With patch:
 %%  - inserting a custom cover
+%%  - minted cache directory from `JULIA_MINTED_CACHEDIR`
 
 
 %% Default preamble BEGIN
 \documentclass[oneside, a4paper]{memoir}
+
+% Reuse highlighted code blocks across builds (Documenter compiles in a fresh directory).
+\ifdefined\directlua
+\edef\JuliaMintedCache{\directlua{tex.sprint(os.getenv("JULIA_MINTED_CACHEDIR") or "")}}
+\ifx\JuliaMintedCache\empty\else
+\edef\x{\noexpand\PassOptionsToPackage{cachedir=\JuliaMintedCache}{minted}}\x
+\fi
+\fi
 
 \usepackage{./documenter}
 \usepackage{./custom}

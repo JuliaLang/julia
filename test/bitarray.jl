@@ -1304,6 +1304,9 @@ timesofar("binary comparison")
         @check_bit_operation reverse(b1, dims=d) BitArray{4}
     end
     @test_throws ArgumentError reverse(b1, dims=5)
+    for sz in ((0, 7), (7, 0), (0, 0), (2, 0, 3)), d = 1:length(sz)
+        @check_bit_operation reverse(falses(sz), dims=d) BitArray{length(sz)}
+    end
 
     b1 = bitrand(n1, n2)
     for k = 1:4
@@ -1936,6 +1939,25 @@ end
     for n in 1:20, _ in 1:100
         @test test_equivalence(n)
     end
+end
+
+@testset "deleteat! and splice! with empty ranges (#64148)" begin
+    for r in (0:-1, 1:0, 4:3, 5:4)
+        b = BitVector([false, true, false])
+        v = Array(b)
+        @test deleteat!(b, r) == deleteat!(v, r) == [false, true, false]
+        @test bitcheck(b)
+
+        b = BitVector([false, true, false])
+        v = Array(b)
+        removed = splice!(b, r)
+        @test removed isa BitVector
+        @test removed == splice!(v, r) == Bool[]
+        @test b == v == [false, true, false]
+        @test bitcheck(b)
+    end
+    # An empty range with insertion still needs a valid position.
+    @test_throws BoundsError splice!(BitVector([false, true, false]), 5:4, [true])
 end
 
 @testset "fill! for BitArray with contiguous view (#42795)" begin

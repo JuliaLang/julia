@@ -471,8 +471,8 @@ cd(@__DIR__) do
                                 end
 
                                 @lock print_lock begin
-                                    print(master_stdout, test)
-                                    print(master_stdout, lpad("($(wrkr))", name_align - textwidth(test) + 1, " "), " | ")
+                                    printstyled(master_stdout, test, color=:white)
+                                    printstyled(master_stdout, lpad("($(wrkr))", name_align - textwidth(test) + 1, " "), " | ", color=:white)
                                     # Calculate total width of data columns: "Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)"
                                     # This is: elapsed_align + 3 + gc_align + 3 + percent_align + 3 + alloc_align + 3 + rss_align
                                     data_width = elapsed_align + gc_align + percent_align + alloc_align + rss_align + 12  # 12 = 4 * " | "
@@ -507,7 +507,7 @@ cd(@__DIR__) do
                                 # the worker encountered some failure, recycle it
                                 # so future tests get a fresh environment
                                 rmprocs_with_testenv(wrkr, waitfor=rmwait_timeout)
-                                p = addprocs_with_testenv(1)[1]
+                                p = addprocs_with_testenv(1; pool_size=n)[1]
                                 remotecall_fetch(include, p, "testdefs.jl")
                                 if use_revise
                                     Distributed.remotecall_eval(Main, p, revise_init_expr)
@@ -521,7 +521,7 @@ cd(@__DIR__) do
                                 # with a smaller working set and a fresh environment
                                 if n > 1
                                     rmprocs_with_testenv(wrkr, waitfor=rmwait_timeout)
-                                    p = addprocs_with_testenv(1)[1]
+                                    p = addprocs_with_testenv(1; pool_size=n)[1]
                                     remotecall_fetch(include, p, "testdefs.jl")
                                     if use_revise
                                         Distributed.remotecall_eval(Main, p, revise_init_expr)

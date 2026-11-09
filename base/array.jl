@@ -1425,6 +1425,19 @@ function append!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
     return a
 end
 
+function append!(a::Vector{T}, x::AbstractVector{<:T}, y::AbstractVector{<:T}, items::AbstractVector{<:T}...) where T
+    # take every length before growing `a`, since a collection may share memory with `a`
+    items = (x, y, items...)
+    ns = map(length, items)
+    pos = length(a) + 1
+    _growend!(a, sum(ns))
+    for (v, n) in zip(items, ns)
+        copyto!(a, pos, v, firstindex(v), n)
+        pos += n
+    end
+    return a
+end
+
 append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
 push!(a::AbstractVector, iter...) = append!(a, iter)
 append!(a::AbstractVector, iter...) = (foreach(v -> append!(a, v), iter); a)
@@ -1487,6 +1500,19 @@ function prepend!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
     # in case of aliasing, the _growbeg might have shifted our data, so copy
     # just the last n elements instead of all of them from the first
     copyto!(a, 1, items, lastindex(items)-n+1, n)
+    return a
+end
+
+function prepend!(a::Vector{T}, x::AbstractVector{<:T}, y::AbstractVector{<:T}, items::AbstractVector{<:T}...) where T
+    # growing at the front moves the data of `a`, so copy any collection that shares it first
+    items = map(v -> unalias(a, v), (x, y, items...))
+    ns = map(length, items)
+    _growbeg!(a, sum(ns))
+    pos = 1
+    for (v, n) in zip(items, ns)
+        copyto!(a, pos, v, firstindex(v), n)
+        pos += n
+    end
     return a
 end
 

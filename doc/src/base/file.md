@@ -19,6 +19,7 @@ Base.Filesystem.chmod
 Base.Filesystem.chown
 Base.RawFD
 Base.stat
+Base.Filesystem.StatStruct
 Base.Filesystem.diskstat
 Base.Filesystem.lstat
 Base.Filesystem.ctime
