@@ -229,6 +229,11 @@ RT_LIBS := $(call whole_archive,$(LIBUV)) $(call whole_archive,$(LIBUTF8PROC)) $
 CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) $(LIBLMDB)
 endif
 
+ifeq ($(OS),Darwin)
+# otherwise environment variables change when CoreFoundation is loaded
+RT_LIBS += -framework CoreFoundation
+endif
+
 ifeq ($(USEGCC),1)
 ifeq ($(USE_RT_STATIC_LIBGCC),1)
 RT_LIBS += -static-libgcc
