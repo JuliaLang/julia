@@ -179,13 +179,9 @@ JL_DLLEXPORT int jl_path_is_coverage_excluded(const char *path) JL_NOTSAFEPOINT
     return path_is_under_any(path, list);
 }
 
-// the tracked path as given, made absolute: files loaded through its symlinks match it
-const char *jl_tracked_path_unresolved = NULL;
-
 JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT
 {
-    return jl_path_is_tracked_by(path, jl_options.tracked_path) ||
-           jl_path_is_tracked_by(path, jl_tracked_path_unresolved);
+    return jl_path_is_tracked_by(path, jl_options.tracked_path);
 }
 
 JL_DLLEXPORT int jl_coverage_enabled_for(jl_module_t *m, const char *filename) JL_NOTSAFEPOINT
