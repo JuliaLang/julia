@@ -2170,6 +2170,19 @@ let buf = FastReadBuffer62001()
     @test Base.allocated(read_byte62001, buf, UInt8) == 0
 end
 
+# a callee that takes a type in an unspecialized slot is compiled once
+struct TypeArgWrapper{S} end
+@noinline type_arg_nparams(T, w) = length(T.parameters) + w
+type_arg_outer(::Type{TypeArgWrapper{S}}, w) where {S} = type_arg_nparams(S, w)
+let types = (Tuple{Int}, Tuple{Float64}, Tuple{Int,Int}, Tuple{String})
+    for T in types
+        @test Base.invokelatest(type_arg_outer, TypeArgWrapper{T}, 1) == length(T.parameters) + 1
+    end
+    @test count(Base.specializations(only(methods(type_arg_nparams)))) do mi
+        isdefined(mi, :cache) && mi.cache.invoke != C_NULL
+    end == 1
+end
+
 # Test that irinterp can make use of constant results even if they're big
 # Check that pure functions with non-inlineable results still get deleted
 struct BigSemi
