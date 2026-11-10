@@ -44,6 +44,15 @@ outer_scope(x) = inner_scope(x)
         @test occursin("inlinedAt:", ir) == scopes
     end
 
+    # the JIT's own code keeps them only in assert builds or for a debugger
+    let cmd = `$(Base.julia_cmd()) --startup-file=no -e 'print(unsafe_load(
+                  cglobal(:jl_default_cgparams, Base.CodegenParams)).debug_info_inline_scopes)'`
+        asserts = ccall(:jl_is_assertsbuild, Int8, ()) != 0
+        no_listener = ("ENABLE_GDBLISTENER" => "0", "ENABLE_JITPROFILING" => "0")
+        @test readchomp(addenv(cmd, no_listener...)) == string(Int(asserts))
+        @test readchomp(addenv(cmd, "ENABLE_GDBLISTENER" => "1")) == "1"
+    end
+
     # IR consumers retain inline scopes during precompilation, independently of
     # Julia's internal parameters for generating the package image.
     mktempdir() do dir
