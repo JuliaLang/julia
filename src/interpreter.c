@@ -120,7 +120,9 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     size_t i;
     for (i = 0; i < nargs; i++)
         argv[i] = eval_value(args[i], s);
-    jl_value_t *result = jl_apply(argv, nargs);
+    // the call expression's arguments identify the call site
+    jl_value_t *result = jl_apply_generic_site(argv[0], &argv[1], nargs - 1,
+                                               jl_int32hash_fast((uint32_t)((uintptr_t)args >> 3)));
     JL_GC_POP();
     return result;
 }
