@@ -1073,6 +1073,17 @@ jl_array_t *jl_get_loaded_modules(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree) JL_CANSAFEPOINT;
 int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
 
+// can the generic struct constructors (`new`) allocate an instance of `type`? Not if
+// it is not concrete, or if its instances hold data that its layout does not describe
+// (`hiddenfields`); they throw for those
+STATIC_INLINE int jl_is_generic_new_type(jl_value_t *type) JL_NOTSAFEPOINT
+{
+    if (!jl_is_datatype(type))
+        return 0;
+    jl_datatype_t *dt = (jl_datatype_t*)type;
+    return dt->isconcretetype && dt->layout != NULL && !dt->name->hiddenfields;
+}
+
 jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs, const char *msg) JL_CANSAFEPOINT;
 void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_value_t *ty);
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong) JL_CANSAFEPOINT;

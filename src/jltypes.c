@@ -3640,7 +3640,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                                     "names", "atomicfields", "constfields",
                                                     "wrapper", "Typeofwrapper", "cache", "linearcache",
                                                     "partial", "hash", "max_args", "n_uninitialized",
-                                                    "flags", // "abstract", "mutable", "mayinlinealloc",
+                                                    "flags", // "abstract", "mutable", "mayinlinealloc", "hiddenfields",
                                                     "cache_entry_count", "max_methods", "constprop_heuristic",
                                                     "concrete_only");
     const static uint32_t typename_constfields[1]  = { 0b0000110100001001011 }; // TODO: put back atomicfields and constfields in this list
@@ -4545,6 +4545,21 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_simplevector_type);
     jl_compute_field_offsets(jl_symbol_type);
     jl_compute_field_offsets(jl_binding_partition_type);
+    // now with the size of the whole C struct (see `hidden_struct_size`)
+    jl_compute_field_offsets(jl_method_type);
+    jl_compute_field_offsets(jl_task_type);
+    assert(jl_datatype_size(jl_method_type) == sizeof(jl_method_t));
+    assert(jl_datatype_size(jl_task_type) == sizeof(jl_task_t));
+
+    // types whose instances hold data that their Julia-visible fields do not describe
+    jl_method_type->name->hiddenfields = 1; // writelock
+    jl_task_type->name->hiddenfields = 1; // stack, context, gcstack, ...
+    // opaque layouts
+    jl_module_type->name->hiddenfields = 1;
+    jl_symbol_type->name->hiddenfields = 1;
+    jl_string_type->name->hiddenfields = 1;
+    jl_simplevector_type->name->hiddenfields = 1;
+    jl_genericmemory_typename->hiddenfields = 1;
 
     // override ismutationfree for builtin types that are mutable for identity
     jl_string_type->ismutationfree = jl_string_type->isidentityfree = 1;
