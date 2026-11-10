@@ -144,6 +144,23 @@ JL_DLLEXPORT jl_array_t* jl_compute_new_used_ci(void) JL_CANSAFEPOINT
     return new_used;
 }
 
+// Infer the `precompile` hints recorded while generating output. With native code
+// output this happens while selecting what to compile; without it nothing else does.
+static void jl_infer_precompile_hints(size_t world) JL_CANSAFEPOINT
+{
+    if (newly_inferred == NULL)
+        return;
+    size_t n = jl_array_nrows(newly_inferred);
+    for (size_t i = 0; i < n; i++) {
+        jl_value_t *v = jl_array_ptr_ref(newly_inferred, i);
+        if (!jl_is_method_instance(v))
+            continue;
+        jl_method_instance_t *mi = (jl_method_instance_t*)v;
+        if (jl_is_method(mi->def.value) && jl_atomic_load_relaxed(&mi->def.method->primary_world) <= world)
+            (void)jl_type_infer(mi, world, SOURCE_MODE_NOT_REQUIRED, 0);
+    }
+}
+
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
 {
     if (!newly_inferred)

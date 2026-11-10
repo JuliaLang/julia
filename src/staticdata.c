@@ -3729,11 +3729,12 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     int64_t checksumpos = write_header(f, (worklist ? JI_FLAG_PKGIMAGE : 0) |
                                               (emit_split ? JI_FLAG_SPLIT : 0));
     if (worklist) {
-        if (_native_data != NULL) {
-            if (suppress_precompile)
-                newly_inferred = NULL;
+        if (suppress_precompile)
+            newly_inferred = NULL;
+        if (_native_data != NULL)
             *_native_data = jl_create_native(NULL, 0, 1, jl_atomic_load_acquire(&jl_world_counter), NULL, suppress_precompile ? (jl_array_t*)jl_an_empty_vec_any : worklist, 0, module_init_order, ext_foreign_cis);
-        }
+        else
+            jl_infer_precompile_hints(jl_atomic_load_acquire(&jl_world_counter));
         jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos);
     }
     else if (_native_data != NULL) {
@@ -3770,6 +3771,21 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
                 jl_array_ptr_1d_push(new_ext, (jl_value_t*)ci);
         }
         arraylist_free(&CIs);
+        if (!native_functions) {
+            // Without native code there is no list of compiled code instances,
+            // so keep the newly inferred ones that the worklist uses instead
+            new_ext = jl_compute_new_used_ci();
+            size_t n = jl_array_nrows(new_ext), nkeep = 0;
+            for (size_t i = 0; i < n; i++) {
+                jl_value_t *v = jl_array_ptr_ref(new_ext, i);
+                if (!jl_is_code_instance(v))
+                    continue;
+                jl_code_instance_t *ci = (jl_code_instance_t*)v;
+                if (jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0 && ci_not_internal_cache(ci))
+                    jl_array_ptr_set(new_ext, nkeep++, v);
+            }
+            jl_array_del_end(new_ext, n - nkeep);
+        }
         // Merge foreign & external CIs
         size_t n_ext = jl_array_nrows(ext_foreign_cis);
         for (size_t i = 0; i < n_ext; i++)
