@@ -124,10 +124,11 @@ const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
     @_safeindex
 
 This internal macro converts:
-- `getindex(xs::Tuple, i::Int)` -> `__safe_getindex(xs, i)`
-- `setindex!(xs::Vector{T}, x, i::Int)` -> `__safe_setindex!(xs, x, i)`
+- `getindex(xs::Tuple, i::Int)` -> `__inbounds_getindex(xs, i)`
+- `setindex!(xs::Vector{T}, x, i::Int)` -> `__inbounds_setindex!(xs, x, i)`
 to tell the compiler that indexing operations within the applied expression are always
-inbounds and do not need to taint `:consistent` and `:nothrow`.
+inbounds and do not need to taint `:noub`. The assertion is made on each call, rather than
+on these methods, since it holds only where this macro is applied, not for any input.
 """
 macro _safeindex(ex)
     return esc(_safeindex(ex))
@@ -139,20 +140,42 @@ function _safeindex(ex)
         if isa(lhs, Expr) && lhs.head === :ref # xs[i] = x
             rhs = ex.args[2]
             xs = lhs.args[1]
-            args = Vector{Any}(undef, length(lhs.args)-1)
+            args = Vector{Any}(undef, length(lhs.args)+1)
+            args[1] = xs
+            args[2] = _safeindex(rhs)
             for i = 2:length(lhs.args)
-                args[i-1] = _safeindex(lhs.args[i])
+                args[i+1] = _safeindex(lhs.args[i])
             end
-            return Expr(:call, GlobalRef(@__MODULE__, :__safe_setindex!), xs, _safeindex(rhs), args...)
+            return _safeindex_call(GlobalRef(@__MODULE__, :__inbounds_setindex!), args)
         end
     elseif ex.head === :ref # xs[i]
-        return Expr(:call, GlobalRef(@__MODULE__, :__safe_getindex), ex.args...)
+        return _safeindex_call(GlobalRef(@__MODULE__, :__inbounds_getindex), ex.args)
     end
     args = Vector{Any}(undef, length(ex.args))
     for i = 1:length(ex.args)
         args[i] = _safeindex(ex.args[i])
     end
     return Expr(ex.head, args...)
+end
+# like `@assume_effects :noub f(args...)`, but evaluating `args` outside the annotated region
+function _safeindex_call(f::GlobalRef, args::Vector{Any})
+    bindings = Vector{Any}(undef, length(args))
+    tmps = Vector{Any}(undef, length(args))
+    for i = 1:length(args)
+        tmps[i] = gensym(:safeindex)
+        bindings[i] = Expr(:(=), tmps[i], args[i])
+    end
+    val = gensym(:safeindex)
+    return Expr(:let, Expr(:block, bindings...),
+        Expr(:block,
+            Expr(:purity, # as in `@_noub_meta`
+                #=:consistent=#false, #=:effect_free=#false, #=:nothrow=#false,
+                #=:terminates_globally=#false, #=:terminates_locally=#false,
+                #=:notaskstate=#false, #=:inaccessiblememonly=#false, #=:noub=#true,
+                #=:noub_if_noinbounds=#false, #=:consistent_overlay=#false, #=:nortcall=#false),
+            Expr(:local, Expr(:(=), val, Expr(:call, f, tmps...))),
+            Expr(:purity), # region end token
+            val))
 end
 
 vect() = Vector{Any}()
@@ -1050,12 +1073,14 @@ function _setindex!(A::Array{T}, x::T, i1::Int, i2::Int, I::Int...) where {T}
     return A
 end
 
-__safe_setindex!(A::Vector{Any}, @nospecialize(x), i::Int) = (@inline; @_nothrow_noub_meta;
+# skips the bounds check entirely, rather than with `@inbounds`, whose `@boundscheck` keeps
+# the call from being `:consistent` or `:nothrow` (see `@_safeindex`)
+__inbounds_setindex!(A::Vector{Any}, @nospecialize(x), i::Int) = (@inline;
     memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false); return A)
-__safe_setindex!(A::Vector{T}, x::T, i::Int) where {T} = (@inline; @_nothrow_noub_meta;
+__inbounds_setindex!(A::Vector{T}, x::T, i::Int) where {T} = (@inline;
     memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false); return A)
-__safe_setindex!(A::Vector{T}, x,    i::Int) where {T} = (@inline;
-    __safe_setindex!(A, convert(T, x)::T, i))
+__inbounds_setindex!(A::Vector{T}, x,    i::Int) where {T} = (@inline;
+    __inbounds_setindex!(A, convert(T, x)::T, i))
 
 # This is redundant with the abstract fallbacks but needed and helpful for bootstrap
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
