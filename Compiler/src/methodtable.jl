@@ -91,7 +91,9 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable;
     overlay_matches = result.matches
     filtered = filter(fallback_result.matches) do base_match::MethodMatch
         dominated = any(overlay_matches) do overlay_match::MethodMatch
-            base_match.method.sig <: overlay_match.method.sig
+            # an overlay method with guards only hides a method where its guards hold
+            base_match.method.sig <: overlay_match.method.sig &&
+                (overlay_match.method.guards === nothing || overlay_match.fully_covers)
         end
         return !dominated
     end

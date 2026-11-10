@@ -496,6 +496,11 @@ function expected_dominates_sig(meth::Method, mi::Union{Nothing,MethodInstance})
     return isempty(meth.interferences)
 end
 
+# Whether the methods `sig` can match may have guards (`Base.Experimental.@guarded`). Which of
+# them apply then also depends on the trait tables, so that the shortcuts below, which reason
+# from methods and their signatures alone, do not hold: only a lookup verifies such an edge.
+sig_may_have_guards(@nospecialize(sig)) = ccall(:jl_sig_may_have_guards, Cint, (Any,), sig) != 0
+
 # Check if `m` is one of the expected methods of this run
 function method_in_expecteds(m::Method, expected::Vector{Method})
     for meth in expected
@@ -746,7 +751,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         if _jl_debug_method_invalidation[] === nothing && world == get_world_counter()
             return UInt(1), UInt(0)
         end
-    else # n >= 1
+    elseif !sig_may_have_guards(sig) # n >= 1
         if n == 1
             # first, fast-path a check if the expected method simply dominates its sig anyways
             # so the result of ml_matches is already simply known
@@ -895,7 +900,8 @@ function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UIn
     @assert invokesig isa Type "corrupt edges list"
     local minworld::UInt, maxworld::UInt
     empty!(matches)
-    if invokesig === expected.sig && method_is_latest_which(expected)
+    guards = sig_may_have_guards(invokesig)
+    if !guards && invokesig === expected.sig && method_is_latest_which(expected)
         # the invoke match is `expected` for `expected->sig`, unless `expected` is replaced
         minworld = expected.primary_world
         @assert minworld ≤ world "expected method not present in verification world"
@@ -905,7 +911,7 @@ function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UIn
         if mt === nothing
             minworld = 1
             maxworld = 0
-        elseif method_is_latest_which(expected) && sig_contributors_world(invokesig, mt, image) != 0
+        elseif !guards && method_is_latest_which(expected) && sig_contributors_world(invokesig, mt, image) != 0
             # the target still stands and nothing outside `image` could have displaced it
             minworld = expected.primary_world
             @assert minworld ≤ world "expected method not present in verification world"
