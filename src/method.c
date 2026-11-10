@@ -1091,6 +1091,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->constprop = 0;
     m->purity.bits = 0;
     m->max_varargs = UINT8_MAX;
+    m->guards = jl_nothing;
     JL_MUTEX_INIT(&m->writelock, "method->writelock");
     return m;
 }
@@ -1278,16 +1279,51 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     assert(jl_is_svec(tvars));
     size_t nargs = jl_svec_len(atypes);
     assert(nargs > 0);
-    int isva = jl_is_vararg(jl_svecref(atypes, nargs - 1));
-    jl_value_t *ft = jl_svecref(atypes, 0);
-    if (!jl_is_type(ft) || (isva && nargs == 1))
-        jl_error("function type in method definition is not a type");
+    jl_value_t *ft = NULL;
     jl_sym_t *name;
     jl_method_t *m = NULL;
     jl_value_t *argtype = NULL;
-    JL_GC_PUSH4(&ft, &f, &m, &argtype);
+    jl_svec_t *guards = NULL;
+    JL_GC_PUSH6(&ft, &f, &m, &argtype, &atypes, &guards);
     size_t i, na = jl_svec_len(atypes);
 
+    // An argument declared as a `Core.Guard`, or the function itself, has the
+    // type the guard wraps, and gives the method a guard. Arguments can be
+    // nested guards on several traits.
+    size_t nguards = 0;
+    for (i = 0; i < na; i++) {
+        for (jl_value_t *elt = jl_svecref(atypes, i); jl_typetagis(elt, jl_guard_type); elt = ((jl_guard_t*)elt)->typ)
+            nguards++;
+    }
+    if (nguards > 0) {
+        atypes = jl_svec_copy(atypes);
+        guards = jl_alloc_svec(3 * nguards);
+        nguards = 0;
+        for (i = 0; i < na; i++) {
+            jl_value_t *elt = jl_svecref(atypes, i);
+            for (; jl_typetagis(elt, jl_guard_type); elt = ((jl_guard_t*)elt)->typ) {
+                jl_guard_t *g = (jl_guard_t*)elt;
+                if (!jl_is_type(g->bound))
+                    jl_type_error("method definition", (jl_value_t*)jl_type_type, g->bound);
+                for (size_t j = 0; j < nguards; j++) {
+                    if ((size_t)jl_unbox_long(jl_svecref(guards, 3 * j)) == i && jl_svecref(guards, 3 * j + 1) == (jl_value_t*)g->trait)
+                        jl_error("a method can only have one guard per argument and trait");
+                }
+                jl_svecset(guards, 3 * nguards, jl_box_long(i));
+                jl_svecset(guards, 3 * nguards + 1, (jl_value_t*)g->trait);
+                jl_svecset(guards, 3 * nguards + 2, g->bound);
+                nguards++;
+            }
+            if (elt != jl_svecref(atypes, i) && jl_is_vararg(elt))
+                jl_error("guards on a Vararg argument are not supported");
+            jl_svecset(atypes, i, elt);
+        }
+    }
+
+    int isva = jl_is_vararg(jl_svecref(atypes, nargs - 1));
+    ft = jl_svecref(atypes, 0);
+    if (!jl_is_type(ft) || (isva && nargs == 1))
+        jl_error("function type in method definition is not a type");
     argtype = jl_apply_tuple_type(atypes, 1);
     if (!jl_is_datatype(argtype))
         jl_error("invalid type in method definition (Union{})");
@@ -1377,6 +1413,13 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     m->file = file;
     m->line = line;
     jl_method_set_source(m, f);
+
+    if (guards != NULL) {
+        if (jl_guarded_function_typename(argtype) == NULL)
+            jl_errorf("method definition for %s at %s:%d has guards, but the type of its function is not known",
+                      jl_symbol_name(name), jl_symbol_name(file), line);
+        jl_gc_write(m, m->guards, jl_value_t, (jl_value_t*)guards);
+    }
 
     jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)

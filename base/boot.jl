@@ -696,6 +696,29 @@ struct PossiblyAmbiguous
     PossiblyAmbiguous() = new()
 end
 
+# A trait gives every type a label, a concrete subtype of `top`: the fixed label its table has
+# for the type family, the label of the type parameter the table delegates to, or `default`.
+# See `Base.Experimental.@trait`.
+mutable struct Trait
+    const name::Symbol
+    const mod::Module
+    const top
+    const default
+    entries::Memory{Any}
+    Trait(name::Symbol, mod::Module, @nospecialize(top), @nospecialize(default)) =
+        ccall(:jl_new_trait, Any, (Any, Any, Any, Any), name, mod, top, default)::Trait
+end
+
+# In the argument types of a method definition: an argument of type `typ`, to which the method
+# only applies if `trait` gives its type a label that is a subtype of `bound`.
+# See `Base.Experimental.@guarded`.
+struct Guard
+    typ
+    trait::Trait
+    bound
+    Guard(@nospecialize(typ), trait::Trait, @nospecialize(bound)) = new(typ, trait, bound)
+end
+
 eval(Core, quote
     GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
     NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))
