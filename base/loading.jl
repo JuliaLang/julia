@@ -4916,19 +4916,21 @@ end
 toml_egal(@nospecialize(A), @nospecialize(B)) = A === B
 toml_egal(A::BigInt, B::BigInt) = A == B # a large integer is parsed to a new object each time
 
-function toml_egal(A::AbstractArray, B::AbstractArray)
-    axes(A) != axes(B) && return false
-    for (a, b) in zip(A, B)
-        !toml_egal(a, b) && return false
+# Restrict these methods to the container types produced by the TOML parser, so that
+# methods added by packages cannot invalidate the loading code through them.
+function toml_egal(A::Vector, B::Vector)
+    length(A) != length(B) && return false
+    for i in eachindex(A, B)
+        !toml_egal(A[i], B[i]) && return false
     end
     return true
 end
 
-function toml_egal(A::AbstractDict, B::AbstractDict)
-    isa(A,IdDict) != isa(B,IdDict) && return false
-    length(A)::Int != length(B)::Int && return false
-    for pair in A
-        !in(pair, B, toml_egal) && return false
+function toml_egal(A::Dict{String,Any}, B::Dict{String,Any})
+    length(A) != length(B) && return false
+    for (k, v) in A
+        haskey(B, k) || return false
+        !toml_egal(v, B[k]) && return false
     end
     return true
 end
