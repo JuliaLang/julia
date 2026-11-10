@@ -2588,6 +2588,38 @@ end
     end
 end
 
+@testset "path coverage through a symlink rejects plain caches of tracked files" begin
+    (Sys.iswindows() || Base.match_cache_coverage(Base.CacheFlags(coverage=0), Base.CacheFlags(coverage=1))) && return
+    mkdepottempdir() do depot; mktempdir() do dir
+        real = mkdir(joinpath(realpath(dir), "real"))
+        link = joinpath(realpath(dir), "link")
+        symlink(real, link)
+        mkpath(joinpath(real, "CovLink", "src"))
+        write(joinpath(real, "CovLink", "Project.toml"), """
+            name = "CovLink"
+            uuid = "5a1c7e02-9b3d-4f6a-8c1e-2d4f6a8b0c1e"
+            version = "0.1.0"
+            """)
+        write(joinpath(real, "CovLink", "src", "CovLink.jl"), """
+            module CovLink
+            f(x) = x + 1
+            precompile(f, (Int,))
+            end
+            """)
+        compiled = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovLink")
+        ncaches() = count(endswith(".ji"), readdir(compiled))
+        outfile = joinpath(dir, "cov.info")
+        # the package is loaded through the symlink it is tracked by
+        covcmd(cov, code) = addenv(`$(Base.julia_cmd()[1]) --startup-file=no --pkgimages=yes $cov -e $code`,
+                                   "JULIA_DEPOT_PATH" => depot * ":", "JULIA_LOAD_PATH" => link * ":@stdlib")
+        @test success(covcmd(`--code-coverage=none`, "using CovLink"))
+        @test ncaches() == 1
+        @test success(covcmd(`--code-coverage=$outfile --code-coverage=@$link`, "using CovLink; CovLink.f(1)"))
+        @test ncaches() == 2
+        @test contains(read(outfile, String), "SF:" * joinpath(link, "CovLink", "src", "CovLink.jl"))
+    end end
+end
+
 @testset "command-line flags" begin
     mkdepottempdir() do depot_path mktempdir() do dir
         # generate a Parent.jl and Child.jl package, with Parent depending on Child
