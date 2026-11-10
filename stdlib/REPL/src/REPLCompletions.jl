@@ -560,13 +560,22 @@ struct REPLInterpreter <: CC.AbstractInterpreter
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
     inf_cache::CC.InferenceCache
+    # the repl frame, which is not on the callstack, so is no frame's parent
+    repl_frame::Base.RefValue{Union{Nothing,CC.InferenceState}}
+    # whether to keep forcing `:consistent`-cy after an effect was skipped
+    fold_stale::Bool
+    # whether it did so
+    folded_stale::Base.RefValue{Bool}
     function REPLInterpreter(limit_aggressive_inference::Bool=false;
+                             fold_stale::Bool = true,
                              world::UInt = Base.get_world_counter(),
                              inf_params::CC.InferenceParams = CC.InferenceParams(;
                                  aggressive_constant_propagation=true),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
                              inf_cache::CC.InferenceCache = CC.InferenceCache())
-        return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache)
+        return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache,
+                   Base.RefValue{Union{Nothing,CC.InferenceState}}(nothing), fold_stale,
+                   Base.RefValue(false))
     end
 end
 CC.InferenceParams(interp::REPLInterpreter) = interp.inf_params
@@ -600,6 +609,11 @@ CC.bail_out_toplevel_call(::REPLInterpreter, ::CC.InferenceLoopState, ::CC.Infer
 # Aggressive concrete evaluation allows us to get accurate type information about complex
 # expressions that otherwise can not be constant folded, in a safe way, i.e. it still
 # doesn't evaluate effectful expressions like `pop!(xs)`.
+# Memory after a skipped effect is not what the code would observe there (`length(v)` after
+# `push!(v, x)`), so folding against it gives a stale result. That is safe to run, since `:noub`
+# (inferred or asserted) holds for any input, but the stale state may contradict itself and make
+# the whole expression look like it throws, in which case it is inferred again without folding
+# after a skipped effect.
 # Similarly to the aggressive binding resolution, aggressive concrete evaluation doesn't
 # present any cache validation issues because "repl-frame" is never cached.
 
@@ -615,17 +629,33 @@ function is_call_stack_uncached(sv::CC.InferenceState)
     return is_call_stack_uncached(parent::CC.InferenceState)
 end
 
+is_aggressive_frame(interp::REPLInterpreter, sv::CC.InferenceState) =
+    interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_stack_uncached(sv)
+
+function has_skipped_effects(interp::REPLInterpreter, sv::CC.InferenceState)
+    CC.is_effect_free(sv.ipo_effects) || return true
+    parent = CC.frame_parent(sv)
+    if parent === nothing
+        repl_frame = interp.repl_frame[]
+        return repl_frame !== nothing && repl_frame !== sv && !CC.is_effect_free(repl_frame.ipo_effects)
+    end
+    return has_skipped_effects(interp, parent::CC.InferenceState)
+end
+
 # aggressive global binding resolution within `repl_frame`
 function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, bailed::Bool,
                                     sv::CC.InferenceState)
     # Ignore saw_latestworld
-    if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_stack_uncached(sv))
+    if is_aggressive_frame(interp, sv)
         partition = CC.abstract_eval_binding_partition!(interp, g, sv)
-        if Core.isdefinedglobal_partition(partition, :monotonic)
-            value = Core.getglobal_partition(g, partition, :monotonic)
-            return CC.RTEffects(Const(value), Union{}, CC.EFFECTS_TOTAL)
+        if !Core.isdefinedglobal_partition(partition, :monotonic)
+            return CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS)
         end
-        return CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS)
+        if !interp.folded_stale[] && !Base.is_some_const_binding(CC.binding_kind(partition))
+            interp.folded_stale[] = has_skipped_effects(interp, sv)
+        end
+        rt = Const(Core.getglobal_partition(g, partition, :monotonic))
+        return CC.RTEffects(rt, Union{}, CC.constant_effects(rt))
     end
     return @invoke CC.abstract_eval_globalref(interp::CC.AbstractInterpreter, g::GlobalRef, bailed::Bool,
                                               sv::CC.InferenceState)
@@ -635,10 +665,16 @@ end
 function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
                                    result::CC.MethodCallResult, arginfo::CC.ArgInfo,
                                    sv::CC.InferenceState)
-    if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_stack_uncached(sv))
-        neweffects = CC.Effects(result.effects; consistent=CC.ALWAYS_TRUE)
-        result = CC.MethodCallResult(result.rt, result.exct, neweffects, result.edge,
-                                     result.edgecycle, result.edgelimited, result.call_result)
+    stale = false
+    if is_aggressive_frame(interp, sv) && !CC.is_consistent(result.effects)
+        stale = has_skipped_effects(interp, sv)
+        if interp.fold_stale || !stale
+            neweffects = CC.Effects(result.effects; consistent=CC.ALWAYS_TRUE)
+            result = CC.MethodCallResult(result.rt, result.exct, neweffects, result.edge,
+                                         result.edgecycle, result.edgelimited, result.call_result)
+        else
+            stale = false
+        end
     end
     ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter, f::Any,
                                             result::CC.MethodCallResult, arginfo::CC.ArgInfo,
@@ -649,6 +685,8 @@ function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
         # this ensures we don't inadvertently enter irinterp
         ret = :none
     end
+    # record that a fold read memory after an effect was skipped
+    stale && ret === :concrete_eval && (interp.folded_stale[] = true)
     return ret
 end
 
@@ -728,17 +766,24 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressiv
     src = lwr.args[1]::Core.CodeInfo
 
     mi = construct_toplevel_mi(src, context_module)
-    interp = REPLInterpreter(limit_aggressive_inference)
-    result = CC.InferenceResult(mi)
-    frame = CC.InferenceState(result, src, #=cache=#:no, interp)
+    result, folded_stale = repl_typeinf(mi, copy(src), limit_aggressive_inference, #=fold_stale=#true)
+    if result === Union{} && folded_stale
+        # the stale state may contradict itself, e.g. by unlocking a lock whose `lock` was skipped
+        result, _ = repl_typeinf(mi, src, limit_aggressive_inference, #=fold_stale=#false)
+    end
+    result === Union{} && return nothing # for whatever reason, callers expect this as the Bottom and/or Top type instead
+    return result
+end
 
+function repl_typeinf(mi::Core.MethodInstance, src::Core.CodeInfo, limit_aggressive_inference::Bool,
+                      fold_stale::Bool)
+    interp = REPLInterpreter(limit_aggressive_inference; fold_stale)
+    frame = CC.InferenceState(CC.InferenceResult(mi), src, #=cache=#:no, interp)
+    interp.repl_frame[] = frame
     # NOTE Use the fixed world here to make `REPLInterpreter` robust against
     #      potential invalidations of `Core.Compiler` methods.
     Base.invoke_in_world(COMPLETION_WORLD[], CC.typeinf, interp, frame)
-
-    result = frame.result.result
-    result === Union{} && return nothing # for whatever reason, callers expect this as the Bottom and/or Top type instead
-    return result
+    return frame.result.result, interp.folded_stale[]
 end
 
 # `COMPLETION_WORLD[]` will be initialized within `__init__`

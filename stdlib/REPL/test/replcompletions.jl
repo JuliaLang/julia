@@ -2300,6 +2300,17 @@ let empty_mem = Issue64794Elem[].ref.mem
     @test res
     @test length(empty_mem) == 0
 end
+# folding after the skipped `lock` sees the lock unheld, so `unlock` looks like it throws
+const issue64794_lock = ReentrantLock()
+@test REPLCompletions.repl_eval_ex(:((lock(issue64794_lock); unlock(issue64794_lock); 1)),
+                                   @__MODULE__) == Core.Const(1)
+
+# https://github.com/JuliaLang/julia/issues/62864
+function issue62864(inline; k=1); @nospecialize(inline); end
+let s = "Base.uncompressed_ast(which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(issue62864), Any))).inli"
+    c, r, res = test_complete_context(s)
+    @test "inlining" in c
+end
 
 # https://github.com/JuliaLang/julia/issues/51499
 # allow aggressive concrete evaluation for child uncached frames
