@@ -143,9 +143,7 @@ two distinct references.
 
 One case calls the runtime instead, which boxes an immediate it is passed or
 returns: every access to a tagged word whose union has an immediate component
-outside the 127 components that a union index can name, or a reference
-component that codegen unboxes although it holds references itself, such as
-`Some{String}` in `Union{Int16, Some{String}}`.
+outside the 127 components that a union index can name.
 
 A struct embedding a tagged word cannot be passed to or returned from `ccall`
 by value, since C would receive the raw word.

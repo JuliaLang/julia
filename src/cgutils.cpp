@@ -4450,24 +4450,20 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
 // A loaded tagged word becomes a split union over its union type: TIndex names
 // an immediate component, whose value is copied to a stack slot, or is
 // UNION_BOX_MARKER for a reference, kept in Vboxed. As for any split union, a
-// reference to a small component (a singleton such as Nothing, or an isbits
-// type such as Int) also carries that component's index. A store encodes an
-// immediate without boxing it.
+// reference to a small component (a singleton such as Nothing, an isbits type
+// such as Int, or a struct such as Some{String}) also carries that component's
+// index, and the references such a component holds itself as inline roots. A
+// store encodes an immediate without boxing it.
 
 // whether codegen accesses the tagged words of union `ut` itself: every
-// immediate needs a union index, which runs out after 127 small components,
-// and a decoded reference brings no inline roots, so no small component may
-// hold pointers
+// immediate needs a union index, which runs out after 127 small components
 static bool tagged_union_has_codegen(jl_value_t *ut)
 {
     for (unsigned i = 0; jl_datatype_t *jt = jl_nth_immediate_component(ut, i); i++) {
         if (get_box_tindex(jt, ut) == 0)
             return false;
     }
-    bool allunbox;
-    size_t nbytes, align, min_align, inline_roots;
-    union_alloca_type((jl_uniontype_t*)ut, allunbox, nbytes, align, min_align, inline_roots);
-    return inline_roots == 0;
+    return true;
 }
 
 // whether codegen accesses the elements of Memory{ety} with `layout` itself
@@ -4540,6 +4536,15 @@ static jl_cgval_t emit_tagged_decode(jl_codectx_t &ctx, Value *word, jl_value_t 
     Value *imm_tindex = ctx.builder.CreateTrunc(
             ctx.builder.CreateLShr(ConstantInt::get(T_size, table), ctx.builder.CreateShl(i, 3)), T_int8);
 
+    bool allunbox;
+    size_t min_align, nbytes, nroots;
+    AllocaInst *slot = try_emit_union_alloca(ctx, (jl_uniontype_t*)ut, allunbox, min_align, nbytes, nroots);
+
+    // Root j of a reference to a small component is loaded from where that
+    // component keeps it, and from a slot holding null for anything else.
+    Type *T_prjlvalue = ctx.types().T_prjlvalue;
+    SmallVector<Value*, 0> rootaddrs(nroots, nullptr);
+    Value *nullslot = nullptr;
     Value *ref_tindex = ConstantInt::get(T_int8, UNION_BOX_MARKER);
     Value *tag = nullptr;
     unsigned counter = 0;
@@ -4552,24 +4557,37 @@ static jl_cgval_t emit_tagged_decode(jl_codectx_t &ctx, Value *word, jl_value_t 
                     tag = emit_typeof(ctx, box, /*maybenull*/true, /*justtag*/true);
                 Value *cmp = ctx.builder.CreateICmpEQ(emit_tagfrom(ctx, jt), tag);
                 ref_tindex = ctx.builder.CreateSelect(cmp, ConstantInt::get(T_int8, UNION_BOX_MARKER | idx), ref_tindex);
+                if (jl_is_datatype_singleton(jt))
+                    return;
+                for (size_t j = 0; j < jl_datatype_layout(jt)->npointers; j++) {
+                    if (!nullslot) {
+                        AllocaInst *nulls = emit_static_alloca(ctx, T_prjlvalue, Align(sizeof(void*)));
+                        ctx.builder.CreateAlignedStore(Constant::getNullValue(T_prjlvalue), nulls, nulls->getAlign());
+                        nullslot = decay_derived(ctx, nulls);
+                    }
+                    Value *fld = emit_ptrgep(ctx, decay_derived(ctx, box), jl_ptr_offset(jt, j) * sizeof(void*));
+                    rootaddrs[j] = ctx.builder.CreateSelect(cmp, fld, rootaddrs[j] ? rootaddrs[j] : nullslot);
+                }
             },
             ut,
             counter);
     Value *tindex = ctx.builder.CreateSelect(isref, ref_tindex, imm_tindex);
+    SmallVector<Value*, 0> roots(nroots, Constant::getNullValue(T_prjlvalue));
+    for (size_t j = 0; j < nroots; j++) {
+        if (rootaddrs[j])
+            roots[j] = ctx.builder.CreateAlignedLoad(T_prjlvalue, rootaddrs[j], Align(sizeof(void*)));
+    }
 
     // the payload is the value zero-extended, so its low bytes hold any
     // immediate; it fills the slot up to a word, so that a copy of the slot
     // (emit_union_slotmove) reads back one whole store
-    bool allunbox;
-    size_t min_align, nbytes, inline_roots;
-    AllocaInst *slot = try_emit_union_alloca(ctx, (jl_uniontype_t*)ut, allunbox, min_align, nbytes, inline_roots);
     size_t store_size = std::min(nbytes, (size_t)ctx.types().sizeof_ptr);
-    assert(slot && inline_roots == 0 && payload_size <= store_size);
+    assert(slot && payload_size <= store_size);
     Value *payload = ctx.builder.CreateTrunc(ctx.builder.CreateLShr(bits, k),
             Type::getIntNTy(ctx.builder.getContext(), 8 * store_size));
     ctx.builder.CreateAlignedStore(payload, slot, slot->getAlign());
     Value *V = ctx.builder.CreateSelect(isref, decay_derived(ctx, box), decay_derived(ctx, slot));
-    jl_cgval_t ret = mark_julia_slot(V, ut, tindex, union_slot_aliasinfo(ctx, ut));
+    jl_cgval_t ret = mark_julia_slot(V, ut, tindex, union_slot_aliasinfo(ctx, ut), jl_gc_roots_t(std::move(roots)));
     ret.Vboxed = box;
     return ret;
 }

@@ -774,6 +774,11 @@ replacex!(m::AtomicMemory, e, v) = Core.memoryrefreplace!(memoryref(m), e, v, :s
 modifyx!(m::AtomicMemory, f, v) = Core.memoryrefmodify!(memoryref(m), f, v, :sequentially_consistent, true)
 oncex!(m::AtomicMemory, v) = Core.memoryrefsetonce!(memoryref(m), v, :sequentially_consistent, :sequentially_consistent, true)
 
+struct Holds  # unboxed as a reference component, although it holds a reference
+    s::String
+end
+const RootsU = Union{Nothing, Bool, Int16, Holds, Tuple{Int, String}, String}
+
 # the generic builtins, which the runtime implements, with every type hidden
 hidden(f, args...) = Base.invokelatest(f, map(Base.inferencebarrier, args)...)
 orders(::Union{Slot, Memory}, n) = ntuple(Returns(:not_atomic), n)
@@ -792,12 +797,12 @@ rtload(o) = try builtin(o, o isa GenericMemory ? Core.memoryrefget : getfield, 1
 @testset "codegen: swap, replace, modify and setonce" begin
     outcome(f) = try f() catch e; typeof(e) end
     keepstring(a, b) = a isa String ? a : b
-    for T in (Union{Int16, String},
-              Union{Nothing, Int8, Int, String},  # Nothing and Int are reference components
-              Union{Bool, Symbol})                # every reference is egal only to itself
-        vs = T === Union{Int16, String} ? (Int16(0), Int16(-1), "a" * "b", "") :
-             T === Union{Bool, Symbol} ? (true, false, :a, :b) :
-             (nothing, Int8(-3), 0, typemin(Int), "a" * "b")
+    for (T, vs) in (Union{Int16, String} => (Int16(0), Int16(-1), "a" * "b", ""),
+                    # Nothing and Int are reference components
+                    Union{Nothing, Int8, Int, String} => (nothing, Int8(-3), 0, typemin(Int), "a" * "b"),
+                    # every reference is egal only to itself
+                    Union{Bool, Symbol} => (true, false, :a, :b),
+                    RootsU => (nothing, true, Int16(-2), Holds("a" * "b"), (3, "c" * "d"), "e" * "f"))
         for fresh in (() -> Slot{T}(), () -> AtomicSlot{T}(), () -> Memory{T}(undef, 1), () -> AtomicMemory{T}(undef, 1)),
             init in (missing, vs...), v in vs
             # two containers in the same state, one per implementation
@@ -810,7 +815,8 @@ rtload(o) = try builtin(o, o isa GenericMemory ? Core.memoryrefget : getfield, 1
             @test agree(oncex!, rtoncex!, v)
             @test agree(modifyx!, rtmodifyx!, keepstring, v)
             # expected values: members, an egal copy of a String, and a value outside the union
-            copies = init isa String ? (String(collect(init)),) : ()
+            copies = init isa String ? (String(collect(init)),) :
+                     init isa Holds ? (Holds(String(collect(init.s))),) : ()
             @test all(e -> agree(replacex!, rtreplacex!, e, v), (vs..., copies..., 1.5))
         end
         a = Slot{T}()
@@ -1105,34 +1111,26 @@ struct EmbedsBig
     x::BigU
     n::Int
 end
-struct EmbedsSome  # codegen unboxes `Some{String}`, which holds a reference itself
-    x::Union{Int16, Some{String}}
-end
-mutable struct HoldsRuntime
+mutable struct HoldsBig
     b::EmbedsBig
-    s::EmbedsSome
-    HoldsRuntime() = new()
+    HoldsBig() = new()
 end
 
-# Only the runtime encodes and decodes these words. A struct embedding one is
+# Only the runtime encodes and decodes this word. A struct embedding it is
 # unboxed all the same.
-@testset "codegen: structs embedding words left to the runtime" begin
-    @test istagged(Union{Int16, Some{String}})
+@testset "codegen: structs embedding a word left to the runtime" begin
     mkbig(i) = EmbedsBig(i % 3 == 0 ? i % Int16 : i % 3 == 1 ? string("b", i) : Val(129), i)
-    mksome(i) = EmbedsSome(isodd(i) ? i % Int16 : Some(string("s", i)))
-    hs = [HoldsRuntime() for _ in 1:300]
+    hs = [HoldsBig() for _ in 1:300]
     bs = Vector{EmbedsBig}(undef, 300)
-    @test !isdefined(hs[1], :b) && !isdefined(hs[1], :s) && !isassigned(bs, 1)
+    @test !isdefined(hs[1], :b) && !isassigned(bs, 1)
     @test_throws UndefRefError hs[1].b
     function refresh!(hs, bs, r)
         for i in eachindex(hs)
             hs[i].b = mkbig(i + r)
-            hs[i].s = mksome(i + r)
             bs[i] = mkbig(i + r)
         end
     end
-    matches(hs, bs, r) = all(i -> hs[i].b === mkbig(i + r) && hs[i].s === mksome(i + r) &&
-                                  bs[i] === mkbig(i + r), eachindex(hs))
+    matches(hs, bs, r) = all(i -> hs[i].b === mkbig(i + r) && bs[i] === mkbig(i + r), eachindex(hs))
     GC.gc(true); GC.gc(true)  # promote the parents
     for r in 1:5
         refresh!(hs, bs, r)
@@ -1140,7 +1138,63 @@ end
         churn()
         @test matches(hs, bs, r)
     end
-    @test mkbig(4) !== mkbig(7) && mksome(2) !== mksome(4) && mksome(1) !== mksome(2)
+    @test mkbig(4) !== mkbig(7)
+end
+
+struct EmbedsRoots
+    x::RootsU
+    n::Int
+end
+describe(x) = x isa Nothing ? "nothing" : x isa Union{Bool, Int16} ? string(x) : x isa Holds ? x.s :
+              x isa Tuple ? string(x[1], x[2]) : x
+function describe_later(o, c)  # through a variable, a collection and a phi node
+    x = o.x
+    GC.gc(false)
+    y = c ? x : o.x
+    describe(y)
+end
+
+# A reference to a component such as `Holds` is decoded with the references
+# that component holds as roots, as when its box is split anywhere else.
+@testset "codegen: reference components holding references" begin
+    @test istagged(RootsU)
+    @test !occursin("get_nth_field", llvm(getx, (Slot{RootsU},)))
+    @test !occursin("store_tagged_word", llvm(setx!, (Slot{RootsU}, RootsU)))
+    vs = (nothing, true, Int16(-2), Holds("a" * "b"), (3, "c" * "d"), "e" * "f")
+    o = Slot{RootsU}()
+    mem = Memory{RootsU}(undef, 1)
+    @test_throws UndefRefError getx(o)
+    for v in vs
+        setx!(o, v)
+        setm!(mem, 1, v)
+        @test getx(o) === v && getm(mem, 1) === v
+        @test describe(getx(o)) == describe(v) == describe_later(o, true) == describe_later(o, false)
+        setx_any!(o, v)
+        @test getx(o) === v
+    end
+
+    # the same out of an unboxed struct, without boxing anything
+    es = [EmbedsRoots(vs[mod1(i, 6)], i) for i in 1:600]
+    weigh(x) = x isa Holds ? sizeof(x.s) : x isa Tuple ? x[1] : x isa Union{Bool, Int16} ? Int(x) : 0
+    total(es) = sum(e -> weigh(e.x) + e.n, es)
+    @test total(es) == sum(i -> weigh(vs[mod1(i, 6)]) + i, 1:600)
+    @test (@allocated total(es)) == 0
+    @test es[4] === EmbedsRoots(Holds("ab"), 4) && es[4] !== es[10]
+
+    # fresh boxes stored into old parents survive a young collection
+    os = [Slot{RootsU}() for _ in 1:300]
+    GC.gc(true); GC.gc(true)  # promote the parents
+    fresh(i, r) = i % 3 == 0 ? Holds(string("h", r, "_", i)) : i % 3 == 1 ? (i, string("t", r)) : isodd(i)
+    refresh!(os, es, r) = for i in eachindex(os)
+        os[i].x = fresh(i, r)
+        es[i] = EmbedsRoots(fresh(i, r), r)
+    end
+    for r in 1:5
+        refresh!(os, es, r)
+        GC.gc(false)
+        churn()
+        @test all(i -> os[i].x === fresh(i, r) && es[i] === EmbedsRoots(fresh(i, r), r), eachindex(os))
+    end
 end
 
 # The 128th small component cannot be represented in a union index.
