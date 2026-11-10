@@ -3756,3 +3756,29 @@ end
         @test (typeintersect(b, a) === Union{}) == empty
     end
 end
+
+struct Q61645{T,S} end
+@testset "intersection typevar with a typevar upper bound" begin
+    let X = Ref{Tuple{Type{Q61645{T}},T}} where T,
+        Y = Ref{Tuple{Type{Q61645{T,S} where S<:T},T}} where T,
+        V = Ref{Tuple{Type{Q61645{Any}},Any}}
+        @test V <: typeintersect(X, Y)
+        @test V <: typeintersect(Y, X)
+    end
+    let X = Ref{Tuple{Type{Q61645{T,Tuple{S}} where S},T}} where T,
+        Y = Ref{Tuple{Type{Q61645{T,Tuple{S}} where S<:T},T}} where T,
+        V = Ref{Tuple{Type{Q61645{Any,Tuple{S}} where S},Any}}
+        @test V <: typeintersect(X, Y)
+        @test V <: typeintersect(Y, X)
+    end
+    let X = Ref{Type{Q61645{T,S} where S<:T}} where T<:Real,
+        Y = Ref{Type{Q61645{T,S} where Int<:S<:Union{Int,T}}} where T>:Int
+        @test typeintersect(X, Y) === Union{}
+        @test typeintersect(Y, X) === Union{}
+    end
+    let X = Ref{Type{Q61645{T,Tuple{S}} where S<:T}} where T<:Real,
+        Y = Ref{Type{Q61645{T,Tuple{S}} where Int<:S<:Union{Int,T}}} where T>:Int
+        @test typeintersect(X, Y) === Union{}
+        @test typeintersect(Y, X) === Union{}
+    end
+end
