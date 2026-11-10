@@ -546,6 +546,9 @@ end |> !Compiler.is_inaccessiblememonly
 @test Base.infer_effects((Int,)) do v
     constant_mutable_global[] = v
 end |> !Compiler.is_inaccessiblememonly
+@test Base.infer_effects() do
+    Core.current_scope()
+end |> !Compiler.is_inaccessiblememonly
 module ConsistentModule
 const global constant_global::Int = 42
 const global ConstantType = Ref
