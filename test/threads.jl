@@ -525,6 +525,63 @@ end
     close(t)
 end
 
+@testset "GC does not wait for another thread's LLVM run" begin
+    # One thread compiles a large function while another keeps collecting. Every collection
+    # waits for all threads to reach a safepoint, so if LLVM ran GC-unsafe, one collection
+    # would take about as long as the whole compilation.
+    program = raw"""
+        # a long chain of dependent operations: quick to infer, slow for LLVM
+        function define_big(n)
+            body = Expr(:block)
+            for i in 1:n
+                push!(body.args, :(x = x * $(i % 7 + 3) + y))
+                push!(body.args, :(y = xor(y, x >> $(i % 13 + 1))))
+            end
+            push!(body.args, :(return x + y))
+            @eval big(x::Int, y::Int) = $body
+        end
+        define_big(3000)
+        function main()
+            done = Threads.Atomic{Bool}(false)
+            compile_time = Ref(0.0)
+            compile_thread = Ref(0)
+            t = Threads.@spawn try
+                compile_thread[] = Threads.threadid()
+                # a dynamic call, so that `big` is compiled here, not along with `main`
+                compile_time[] = @elapsed Base.invokelatest(big, 1, 2)
+            finally
+                done[] = true
+            end
+            longest = 0.0
+            collections = 0
+            while !done[]
+                longest = max(longest, @elapsed GC.gc(false))
+                collections += 1
+                Libc.systemsleep(0.01) # doesn't yield, so `t` runs on another thread
+            end
+            wait(t)
+            compile_thread[] == Threads.threadid() && error("compiled on the collecting thread")
+            println(compile_time[], " ", longest, " ", collections)
+        end
+        main()
+    """
+    # without the objcache, which would skip LLVM after the first run
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=2 -e $program`
+    cmd = addenv(cmd, "JULIA_OBJCACHE" => "0")
+    output = IOBuffer()
+    proc = run(pipeline(cmd; stdout=output, stderr); wait=false)
+    t = Timer(300) do _
+        kill(proc, Base.SIGKILL)
+    end
+    @test success(proc)
+    close(t)
+    compile_time, longest, collections = split(String(take!(output)))
+    compile_time, longest = parse.(Float64, (compile_time, longest))
+    @test parse(Int, collections) >= 2
+    # a few seconds of LLVM, and a few ms per collection
+    @test longest < compile_time / 4
+end
+
 @testset "event loop thread wakeup with busy workers" begin
     # A timer or `@threadcall` started on a pool whose threads never sleep must still
     # get serviced by the event loop thread (#63882).
