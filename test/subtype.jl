@@ -3262,6 +3262,17 @@ let unbound(e) = e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]::Bool,
         @test intersection_env(Tuple{Ref{Union{Int,String}},Ref{String}}, rhs)[2] === Core.svec(Int, String)
         @test intersection_env(Tuple{Ref{Union{Int,String}},Ref{String},Any}, Tuple{Ref{Union{T,U}},Ref{U},Any} where {T,U})[2] === Core.svec(Int, String)
     end
+    # ... and for a union with free typevars of the left side below an invariant
+    # constructor: an instance has a different union there, whose components may
+    # be absorbed (`V = Missing`) or come in another order (`V = Float64`)
+    let rhs = Tuple{Vector{Union{Missing,S}}} where S
+        @test unbound(only(intersection_env(Tuple{Vector{Union{Missing,V}} where V}, rhs)[2]))
+        @test intersection_env(Tuple{Vector{Union{Missing,Int}},Any}, Tuple{Vector{Union{Missing,S}},Any} where S)[2] === Core.svec(Int)
+    end
+    let rhs = Tuple{Ref{Union{T,U}}} where {T,U}
+        e = intersection_env(Tuple{Ref{Union{V,Int}} where V}, rhs)[2]
+        @test unknown(e[1]) && unknown(e[2])
+    end
     # A union for which an instance may choose differently does not affect later
     # unions that share no vars with it
     let rhs = Tuple{Union{Nothing,A},Union{Nothing,B}} where {A,B}
