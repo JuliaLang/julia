@@ -4623,7 +4623,7 @@ static Value *emit_tagged_encode(jl_codectx_t &ctx, const jl_cgval_t &rhs, jl_va
     jl_cgval_t v = convert_julia_type_to_union(ctx, rhs, ut, false);
     if (v.typ == jl_bottom_type) {
         *ref = nullptr;
-        return UndefValue::get(ctx.types().T_prjlvalue);
+        return PoisonValue::get(ctx.types().T_prjlvalue);
     }
     Value *tindex = ctx.builder.CreateAnd(v.TIndex, ConstantInt::get(T_int8, 0x7f));
     BasicBlock *refBB = BasicBlock::Create(ctx.builder.getContext(), "tagged_ref", ctx.f);
