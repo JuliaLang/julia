@@ -484,7 +484,11 @@ of F77), can be mirrored in Julia by creating a `struct` definition with the sam
 field layout.
 
 When used recursively, `isbits` types are stored inline. All other types are stored as a pointer
-to the data. When mirroring a struct used by-value inside another struct in C, it is imperative
+to the data, with one exception: a field whose type is a `Union` of reference types with small
+primitive types, such as `Union{Int16, String}`, holds either such a pointer or the primitive
+value itself (see the developer documentation on tagged word Union optimizations), and a struct
+with such a field cannot be passed to or returned from C by value.
+When mirroring a struct used by-value inside another struct in C, it is imperative
 that you do not attempt to manually copy the fields over, as this will not preserve the correct
 field alignment. Instead, declare an `isbits` struct type and use that instead. Unnamed structs
 are not possible in the translation to Julia.
