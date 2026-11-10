@@ -585,6 +585,7 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
         //     return filter(!in(perm_offsets), x.inline_roots)
         // Copy and load roots via get()
         const jl_gc_roots_t &roots_copy = x.inline_roots;
+        roots.reserve(roots.size() + roots_copy.size());
         for (size_t i = 0; i < roots_copy.size(); i++)
             roots.push_back(roots_copy.get(ctx, i));
         return roots;
@@ -1237,7 +1238,7 @@ static bool is_uniontype_unboxed_pointerfree(jl_value_t *typ) JL_CANSAFEPOINT
     unsigned counter = 0;
     for_each_uniontype_small(
             [&](unsigned, jl_datatype_t *jt) {
-                if (!jl_is_datatype_singleton(jt) && jl_datatype_layout(jt)->npointers)
+                if (!jl_is_pointerfree((jl_value_t*)jt))
                     pointerfree = false;
             },
             typ,
