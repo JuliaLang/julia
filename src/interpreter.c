@@ -81,7 +81,30 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 #endif
 
 
-static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s) JL_CANSAFEPOINT;
+static jl_value_t *eval_value_full(jl_value_t *e, interpreter_state *s) JL_CANSAFEPOINT;
+
+// Evaluate the leaves that most expressions are made of here, without the frame of
+// eval_value_full, which evaluates everything else (and reports these when they are invalid).
+STATIC_INLINE jl_value_t *eval_value(jl_value_t *e, interpreter_state *s) JL_CANSAFEPOINT
+{
+    if (jl_is_ssavalue(e)) {
+        size_t id = ((jl_ssavalue_t*)e)->id - 1;
+        if (id < s->nssa && s->locals != NULL)
+            return s->locals[s->nslots + id];
+    }
+    else if (jl_is_slotnumber(e) || jl_is_argument(e)) {
+        size_t n = jl_slot_number(e) - 1;
+        if (n < s->nslots && s->locals != NULL) {
+            jl_value_t *v = s->locals[n];
+            if (v != NULL)
+                return v;
+        }
+    }
+    else if (jl_is_quotenode(e)) {
+        return jl_quotenode_value(e);
+    }
+    return eval_value_full(e, s);
+}
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel) JL_CANSAFEPOINT;
 
 // method definition form
@@ -262,7 +285,7 @@ static jl_value_t *eval_expr_tuple(jl_expr_t *ex, interpreter_state *s) JL_CANSA
     return v;
 }
 
-static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
+static NOINLINE jl_value_t *eval_value_full(jl_value_t *e, interpreter_state *s)
 {
     jl_code_info_t *src = s->src;
     if (jl_is_ssavalue(e)) {
@@ -1174,6 +1197,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e
     jl_value_t **locals;
     JL_GC_PUSHFRAME(s, locals, 0);
     (void)locals;
+    s->locals = NULL;
     frame_set_src(s, src);
     s->module = m;
     s->sparam_vals = sparam_vals;
