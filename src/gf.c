@@ -5612,7 +5612,9 @@ jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t n
 {
     _Atomic(jl_value_t*) *slot = &((_Atomic(jl_value_t*)*)jl_genericmemory_ptr_data(sites))[i];
     jl_svec_t *site = (jl_svec_t*)jl_atomic_load_acquire(slot);
-    if (site != NULL && jl_svec_len(site) == nargs + 2 && site_key_matches(jl_svecref(site, 1), F)) {
+    // (the interpreter keeps other things at a site, which are never a typemap entry)
+    if (site != NULL && jl_svec_len(site) == nargs + 2 && site_key_matches(jl_svecref(site, 1), F) &&
+            jl_typetagis(jl_svecref(site, 0), jl_typemap_entry_type)) {
         uint32_t j;
         for (j = 0; j < nargs; j++) {
             if (!site_key_matches(jl_svecref(site, j + 2), args[j]))

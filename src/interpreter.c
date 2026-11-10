@@ -144,6 +144,36 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s) JL_CANSAF
 
 // expression evaluator
 
+// Core.apply_type at a statement whose dispatch cache (see call_sites) remembers its last
+// application instead: svec(apply_type, arguments..., result). The type cache gives the
+// same type for the same arguments, so arguments identical to those make a hit, as in a
+// keyword call's NamedTuple{names}, which applies the same constant names every time.
+static jl_value_t *apply_type_cached(jl_value_t **argv, size_t nargs, jl_genericmemory_t *sites, size_t i) JL_CANSAFEPOINT
+{
+    _Atomic(jl_value_t*) *slot = &((_Atomic(jl_value_t*)*)jl_genericmemory_ptr_data(sites))[i];
+    jl_svec_t *site = (jl_svec_t*)jl_atomic_load_acquire(slot);
+    if (site != NULL && jl_svec_len(site) == nargs + 1 && jl_svecref(site, 0) == argv[0]) {
+        size_t j;
+        for (j = 1; j < nargs; j++) {
+            if (jl_svecref(site, j) != argv[j])
+                break;
+        }
+        if (j == nargs)
+            return jl_svecref(site, nargs);
+    }
+    jl_value_t *result = jl_f_apply_type(NULL, &argv[1], nargs - 1);
+    site = NULL;
+    JL_GC_PUSH2(&result, &site);
+    site = jl_alloc_svec(nargs + 1);
+    for (size_t j = 0; j < nargs; j++)
+        jl_svecset(site, j, argv[j]);
+    jl_svecset(site, nargs, result);
+    jl_atomic_store_release(slot, (jl_value_t*)site);
+    jl_gc_wb(sites, slot, site);
+    JL_GC_POP();
+    return result;
+}
+
 static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s) JL_CANSAFEPOINT
 {
     jl_value_t **argv;
@@ -154,9 +184,13 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
         argv[i] = eval_value(args[i], s);
     // the call expression's arguments identify the call site
     uint32_t callsite = jl_int32hash_fast((uint32_t)((uintptr_t)args >> 3));
-    jl_value_t *result = s->sites != NULL && 2 * s->ip + 1 < s->sites->length ?
-        jl_apply_generic_cached(argv[0], &argv[1], nargs - 1, s->sites, 2 * s->ip, callsite, frame_world(s)) :
-        jl_apply_generic_site(argv[0], &argv[1], nargs - 1, callsite);
+    jl_value_t *result;
+    if (s->sites == NULL || 2 * s->ip + 1 >= s->sites->length)
+        result = jl_apply_generic_site(argv[0], &argv[1], nargs - 1, callsite);
+    else if (argv[0] == BUILTIN(apply_type) && nargs > 1)
+        result = apply_type_cached(argv, nargs, s->sites, 2 * s->ip);
+    else
+        result = jl_apply_generic_cached(argv[0], &argv[1], nargs - 1, s->sites, 2 * s->ip, callsite, frame_world(s));
     JL_GC_POP();
     return result;
 }
