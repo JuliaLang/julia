@@ -65,11 +65,13 @@ typedef struct {
 // strongest contribution wins (see `jl_varbinding_t.lb_certainty`).
 typedef enum {
     BOUND_NONE  = 0, // no (non-Bottom) lower-bound contribution yet
-    BOUND_ARM   = 1, // made while matching a right-side union alternative that
-                     // some instances of the query may not choose (see
-                     // `union_choice_unstable`). Those instances never make this
-                     // contribution, so nothing recorded on this channel, not
-                     // even an invariant occurrence, holds for every instance
+    BOUND_ARM   = 1, // made during a match that some instances of the query
+                     // skip: of a right-side union alternative that they may
+                     // not choose (see `union_choice_unstable`), or of an
+                     // element of a left-side tuple tail that they may lack.
+                     // Those instances never make this contribution, so
+                     // nothing recorded on this channel, not even an invariant
+                     // occurrence, holds for every instance
     BOUND_PROXY = 2, // derives from another variable's declared bounds: a
                      // `==`-equal rep of the query need not bind this var at all
     BOUND_EQ    = 3, // derives from a query value reached through an `==`
@@ -205,7 +207,8 @@ typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
                               // x-term (whose bindings derive from another var's
                               // declared bounds rather than from a query value),
                               // to BOUND_ARM inside a right-side union alternative
-                              // that some instances of the query may not choose
+                              // that some instances of the query may not choose,
+                              // or inside a tuple element that some of them lack
     int value_descent;        // true inside a bounds-consistency check on a closed
                               // x-term: the x-term is then a concrete type OBJECT
                               // (a candidate variable bound), so structural descent
@@ -1095,6 +1098,8 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param, int limit_slow) JL_CANSAFEPOINT;
 
 static void note_union_match(jl_value_t *x, jl_value_t *u, jl_stenv_t *e) JL_NOTSAFEPOINT;
+static void enter_alternative(jl_stenv_t *e, int *saved) JL_NOTSAFEPOINT;
+static void leave_alternative(jl_stenv_t *e, const int *saved) JL_NOTSAFEPOINT;
 
 static int is_leaf_typevar(jl_tvar_t *v) JL_NOTSAFEPOINT;
 
@@ -2414,11 +2419,32 @@ static int subtype_tuple_varargs(
                 return 0;
         }
         else {
+            // If the left-side tuple has a free length, an instance may have no
+            // element here at all. It then makes none of the bindings that matching
+            // this element records, so record them on the BOUND_ARM channel. Below
+            // an invariant constructor the tuple type is a type parameter, which
+            // every instance has unchanged, tail included, unless its length is a
+            // typevar of the left side: each instance substitutes that, possibly
+            // by zero. Such a parameter is compared in both directions, so that
+            // typevar may be the length on either side here.
+            int optional = 0;
+            if (e->instance_envout && e->invdepth == 0)
+                optional = !(xp1 && jl_is_long(xl));
+            else if (e->instance_envout)
+                optional = (xp1 && jl_is_typevar(xp1) && !jl_is_long(xl) && !(xlv && xlv->existential)) ||
+                           (yp1 && jl_is_typevar(yp1) && !jl_is_long(yl) && !(ylv && ylv->existential));
+            int saved[3];
+            if (optional)
+                enter_alternative(e, saved);
             // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
             // simulate the possibility of multiple arguments, which is needed
             // to implement the diagonal rule correctly.
-            if (!subtype(xp0, yp0, e, param)) return 0;
-            if (x_reps < 2 && !subtype(xp0, yp0, e, PARAM_COVARIANT)) return 0;
+            int sub = subtype(xp0, yp0, e, param) &&
+                      (x_reps >= 2 || subtype(xp0, yp0, e, PARAM_COVARIANT));
+            if (optional)
+                leave_alternative(e, saved);
+            if (!sub)
+                return 0;
         }
     }
 constrain_length:
@@ -3317,10 +3343,11 @@ static int union_choice_unstable(jl_value_t *x, jl_value_t *u, jl_value_t *arm, 
     return 1;
 }
 
-// Enter the match of a right-side union alternative that some instances may not
-// choose. Everything established inside it is recorded on the BOUND_ARM channel,
-// no tuple element inside it counts as present in every instance
-// (`ignore_lb_required`), and the search is marked `diverged`.
+// Enter a match that some instances skip: of a right-side union alternative they
+// may not choose, or of a left-side tuple tail element they may lack. Everything
+// established inside it is recorded on the BOUND_ARM channel, no tuple element
+// inside it counts as present in every instance (`ignore_lb_required`), and the
+// search is marked `diverged`.
 static void enter_alternative(jl_stenv_t *e, int *saved) JL_NOTSAFEPOINT
 {
     saved[0] = e->bound_channel;

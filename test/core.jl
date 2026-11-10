@@ -9379,6 +9379,32 @@ g_type_key_tag(x::S, y::Union{Set{S},S}) where {S} = S
 @test (r -> g_type_key_tag(r[], Float64))(Ref{DataType}(Int)) === g_type_key_tag(Int, Float64) ===
     Union{Core.TypeEgal{Int},Core.TypeEgal{Float64}}
 
+# A call inferred for a variable number of arguments must leave a static parameter
+# that only those arguments bind undefined when there are none
+f_vararg_tail(x::S...) where {S} = @isdefined(S) ? S : :undef
+@test (v -> f_vararg_tail(v...))(Int[]) === f_vararg_tail() === :undef
+@test (v -> f_vararg_tail(v...))([1, 2]) === f_vararg_tail(1, 2) === Int
+g_vararg_tail(x::Vector{S}...) where {S} = @isdefined(S) ? S : :undef
+@test (v -> g_vararg_tail(v...))(Vector{Int}[]) === g_vararg_tail() === :undef
+@test (v -> g_vararg_tail(v...))([[1]]) === Int
+h_vararg_tail(t::Tuple{Vararg{S}}) where {S} = @isdefined(S) ? S : :undef
+@test (r -> h_vararg_tail(r[]))(Ref{Tuple{Vararg{Int}}}(())) === h_vararg_tail(()) === :undef
+@test (r -> h_vararg_tail(r[]))(Ref{Tuple{Vararg{Int}}}((1, 2))) === Int
+k_vararg_tail(x::S, y::S...) where {S} = S
+@test (v -> k_vararg_tail(1, v...))(Int[]) === Int
+# also when the number of elements of a tuple type parameter is not known
+l_vararg_tail(::Ref{NTuple{N,S}}) where {S,N} = @isdefined(S) ? S : :undef
+@test (r -> l_vararg_tail(r[]))(Ref{Ref{NTuple{N,Int}} where N}(Ref{Tuple{}}(()))) ===
+    l_vararg_tail(Ref{Tuple{}}(())) === :undef
+@test (r -> l_vararg_tail(r[]))(Ref{Ref{NTuple{N,Int}} where N}(Ref((1, 2)))) === Int
+# Arguments that may be absent do not make a static parameter egal to the type they
+# would bind it to, if another argument binds it up to type equality only
+t_vararg_tail(::Type{T}, xs::Vector{T}...) where {T} = T === Tuple{Int}
+let T = Tuple{S} where S<:Int, call(r, xs) = t_vararg_tail(r[], xs...)
+    @test call(Ref{Type{Tuple{Int}}}(T), Vector{Tuple{Int}}[]) === t_vararg_tail(T) === false
+    @test call(Ref{Type{Tuple{Int}}}(T), [Tuple{Int}[]]) === t_vararg_tail(T, Tuple{Int}[])
+end
+
 # Static parameters constrained indirectly through other static-parameter bounds
 # are defined.
 f1_sparam_defined_62099(t::Type{E}) where E = @isdefined(E)

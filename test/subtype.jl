@@ -3346,6 +3346,57 @@ let bound_by(e, T) = e isa Core.SimpleVector && e[1] isa TypeVar && e[2]::Bool &
         @test e isa Core.SimpleVector && e[1] isa TypeVar && e[2] && Core.TypeEgal{Int} <: e[1].ub
     end
 end
+# An instance of a tuple with a free length may have no elements in its tail, and
+# then makes none of the bindings that matching a tail element records: `()`
+# leaves `S` unbound
+let optional(e, T) = e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]::Bool && e[1].lb === e[1].ub === T
+    @test optional(only(intersection_env(Tuple{Vararg{Int}}, Tuple{Vararg{S}} where S)[2]), Int)
+    @test optional(only(intersection_env(Tuple{Vararg{Int,N}} where N, Tuple{Vararg{S}} where S)[2]), Int)
+    @test optional(only(intersection_env(Tuple{String,Vararg{Int}}, Tuple{Any,Vararg{S}} where S)[2]), Int)
+    @test optional(only(intersection_env(Tuple{Tuple{Vararg{Int}}}, Tuple{Tuple{Vararg{S}}} where S)[2]), Int)
+    @test optional(only(intersection_env(Tuple{Vararg{Tuple{Int}}}, Tuple{Vararg{Tuple{S}}} where S)[2]), Int)
+    # also through an invariant occurrence, and through a declared bound
+    @test optional(only(intersection_env(Tuple{Vararg{Vector{Int}}}, Tuple{Vararg{Vector{S}}} where S)[2]), Int)
+    @test optional(intersection_env(Tuple{Tuple{Vararg{Int}}}, Tuple{T} where {S,T<:Tuple{Vararg{S}}})[2][1], Int)
+    let e = only(intersection_env(Tuple{Vararg{Real}}, Tuple{Vararg{S}} where S)[2])
+        @test e isa Core.SimpleVector && !e[2] && e[1].ub === Real
+    end
+    # an element before the tail is one that every instance has
+    @test intersection_env(Tuple{Int,Vararg{Int}}, Tuple{Vararg{S}} where S)[2] === Core.svec(Int)
+    @test intersection_env(Tuple{Tuple{Int,Vararg{Int}}}, Tuple{Tuple{Vararg{S}}} where S)[2] === Core.svec(Int)
+    @test intersection_env(Tuple{Int,Int}, Tuple{Vararg{S}} where S)[2] === Core.svec(Int)
+    # below an invariant constructor, every instance has exactly that tuple type
+    @test intersection_env(Tuple{Ref{Tuple{Vararg{Int}}}}, Tuple{Ref{Tuple{Vararg{S}}}} where S)[2] === Core.svec(Int)
+    # ... unless its length is a typevar of the left side, which an instance may
+    # substitute by zero: `Ref{Tuple{}}` leaves `S` unbound
+    let rhs = Tuple{Ref{NTuple{N,S}}} where {S,N}
+        e = intersection_env(Tuple{Ref{NTuple{N,Int}} where N}, rhs)[2][1]
+        @test e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]
+        @test intersection_env(Tuple{Ref{NTuple{2,Int}}}, rhs)[2] === Core.svec(Int, 2)
+    end
+    # (such a parameter is compared in both directions, and neither of them pins
+    # a var that occurs invariantly in the tail element)
+    @test optional(intersection_env(Tuple{Ref{NTuple{N,Ref{Int}}} where N}, Tuple{Ref{NTuple{N,Ref{S}}}} where {S,N})[2][1], Int)
+    let e = intersection_env(Tuple{Any,Float64}, Tuple{Ref{NTuple{N,Ref{S}}},Any} where {S,N})[2][1]
+        @test e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]
+    end
+    # `N` is bound in every instance, whatever the length
+    let e = intersection_env(Tuple{Tuple{Vararg{Int}}}, Tuple{Tuple{Vararg{S,N}}} where {S,N})[2]
+        @test optional(e[1], Int) && e[2] === Vararg
+    end
+    # tail elements make the var diagonal, which widens the keys of type arguments
+    # to their tag; the instance without tail elements keeps its key
+    let rhs = Tuple{S2,Vararg{S1}} where {S1,S2<:S1}
+        e = intersection_env(Tuple{Core.TypeEgal{Float64},Vararg{Core.TypeEgal{Float64}}}, rhs)[2][1]
+        @test e isa Core.SimpleVector && e[2] && e[1].lb === Union{} && e[1].ub === DataType
+        @test intersection_env(Tuple{Core.TypeEgal{Float64}}, rhs)[2][1] === Core.TypeEgal{Float64}
+    end
+    # `(1,)` binds `S` to `Int`, so the value that a tail element pins `S` to does
+    # not hold for every instance
+    let e = only(intersection_env(Tuple{Int,Vararg{Vector{Integer}}}, Tuple{S,Vararg{Vector{S}}} where S)[2])
+        @test e isa Core.SimpleVector && e[2] && e[1].lb === Union{} && e[1].ub === Any
+    end
+end
 # A fixed tuple prefix before a free vararg length guarantees a matching
 # right-side tuple element exists, but range and maybe-empty tuple tails do not.
 let rhs = Tuple{typeof(intersection_env), Type{<:Tuple{Vararg{E}}}} where E

@@ -1036,6 +1036,19 @@ end
 # matched position determines the value by identity. Propagate that outwards
 # (alongside the `svec(tvar, constrained)` markers) instead of re-deriving it
 # syntactically here.
+# Could matching an argument against the signature slot `t` bind `v`? That is the case
+# if `t` mentions `v`, or mentions a typevar whose declared bounds do (the bounds are
+# checked against the binding of that typevar).
+function slot_reaches_sparam(@nospecialize(t), v::TypeVar, depth::Int=0)
+    has_typevar(t, v) && return true
+    depth > 8 && return true # give up on deeply nested bounds
+    for w in find_free_typevars(t)
+        w = w::TypeVar
+        (slot_reaches_sparam(w.lb, v, depth + 1) || slot_reaches_sparam(w.ub, v, depth + 1)) && return true
+    end
+    return false
+end
+
 function sparam_definitely_egal_from_spec(v::TypeVar, sigtypes::Core.SimpleVector,
                                           @nospecialize(specTypes))
     spec = unwrap_unionall(specTypes)
@@ -1043,6 +1056,33 @@ function sparam_definitely_egal_from_spec(v::TypeVar, sigtypes::Core.SimpleVecto
     for i = 1:min(length(sigtypes), length(spec.parameters))
         sigarg = sigtypes[i]
         specarg = spec.parameters[i]
+        if sigarg isa Core.TypeofVararg
+            # each argument matched by the vararg tail binds `v` like a separate slot
+            isdefined(sigarg, :T) || continue
+            sigelt = sigarg.T
+            tail_egal = has_invariant_sparam_occurrence(sigelt, v)
+            if !tail_egal && unwrap_unionall(sigelt) === v
+                tail_egal = true
+                for j = i:length(spec.parameters)
+                    tail_egal &= isdispatchelem(unwrapva(spec.parameters[j]))
+                end
+            end
+            tail_egal || continue
+            # That only tells the value of `v` for a call that has such an argument.
+            # One exists if the spec has a fixed element here. Otherwise a call without
+            # one leaves `v` to the other slots, which may bind it up to `==` only,
+            # unless none of them can bind it at all (`v` is then undefined).
+            for j = i:length(spec.parameters)
+                isvarargtype(spec.parameters[j]) || return true
+            end
+            only_tail = true
+            for k = 1:length(sigtypes)
+                k == i && continue
+                only_tail &= !slot_reaches_sparam(sigtypes[k], v)
+            end
+            only_tail && return true
+            continue
+        end
         sigarg_unwrapped = unwrap_unionall(sigarg)
         if sigarg_unwrapped === v
             isdispatchelem(specarg) && return true

@@ -8731,4 +8731,15 @@ memoryref_at_offset(i::Int) = Core.memoryrefoffset(Core.memoryrefnew(memoryref_a
     Any[Core.Const(memoryref_at_const), Int, Core.Const(true)], nothing) === MemoryRef{Int}
 @test memoryref_at_offset(3) == 3
 
+# A static parameter read from a `Vararg` slot is known up to egality if the tail has
+# an argument, or if no other slot can bind it. A tail that may be empty does not
+# tell that for a parameter which another slot binds up to type equality only.
+vararg_tail_only_sp(x::S...) where {S} = S
+@test Base.infer_return_type(v -> vararg_tail_only_sp(v...), (Vector{Int},)) == Core.TypeEgal{Int}
+vararg_tail_type_sp(::Type{T}, xs::Vector{T}...) where {T} = T
+@test Base.infer_return_type((r, xs) -> vararg_tail_type_sp(r[], xs...),
+    (Base.RefValue{Type{Tuple{Int}}}, Vector{Vector{Tuple{Int}}})) == Type{Tuple{Int}}
+@test Base.infer_return_type((r, x, xs) -> vararg_tail_type_sp(r[], x, xs...),
+    (Base.RefValue{Type{Tuple{Int}}}, Vector{Tuple{Int}}, Vector{Vector{Tuple{Int}}})) == Core.TypeEgal{Tuple{Int}}
+
 end # module inference
