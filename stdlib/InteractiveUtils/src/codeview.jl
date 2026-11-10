@@ -102,7 +102,7 @@ function print_warntype_mi(io::IO, mi::Core.MethodInstance)
             sig = sig::UnionAll
             name = sig.var.name
             val = mi.sparam_vals[i]
-            # Env entries from intersection may be wrapped as svec(tvar, constrained_bool)
+            # Env entries from intersection may be wrapped as svec(tvar, constrained, egal)
             if val isa Core.SimpleVector
                 val = val[1]
             end

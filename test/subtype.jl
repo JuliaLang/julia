@@ -2460,7 +2460,7 @@ function equal_envs(env1, env2)
     for i = 1:length(env1)
         a = env1[i]
         b = env2[i]
-        # Unwrap `svec(tvar, constrained)` markers for equality comparison.
+        # Unwrap `svec(tvar, constrained, egal)` markers for equality comparison.
         a isa Core.SimpleVector && (a = a[1])
         b isa Core.SimpleVector && (b = b[1])
         if a isa TypeVar
@@ -3397,6 +3397,26 @@ let optional(e, T) = e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]::Bool 
         @test e isa Core.SimpleVector && e[2] && e[1].lb === Union{} && e[1].ub === Any
     end
 end
+# The `egal` bit of a pinned env marker says whether each instance that defines the
+# var binds it to that very object, rather than to some `==` spelling of it
+let pinned(e) = e isa Core.SimpleVector && e[1] isa TypeVar && e[1].lb === e[1].ub,
+    egal(e) = pinned(e) && e[3]::Bool
+    # a bare `Type{T}` slot binds the argument itself, which is only `==` to `Int`
+    e = only(intersection_env(Tuple{Type{Int}}, Tuple{Type{T}} where T)[2])
+    @test pinned(e) && !e[3]
+    # the parameter of a type is canonical, even below `Type{...}`
+    @test egal(only(intersection_env(Tuple{Type{Vector{Int}}}, Tuple{Type{Vector{T}}} where T)[2]))
+    # and displaces an `==`-only spelling of the same binding, in either order
+    @test egal(only(intersection_env(Tuple{Type{Int},Type{Vector{Int}}}, Tuple{Type{T},Type{Vector{T}}} where T)[2]))
+    @test egal(only(intersection_env(Tuple{Type{Vector{Int}},Type{Int}}, Tuple{Type{Vector{T}},Type{T}} where T)[2]))
+    # a var bound only by tail elements that an instance may lack, which bind it
+    # to a type tag or to a type parameter
+    @test egal(only(intersection_env(Tuple{Vararg{Int}}, Tuple{Vararg{S}} where S)[2]))
+    @test egal(only(intersection_env(Tuple{Vararg{Vector{Int}}}, Tuple{Vararg{Vector{S}}} where S)[2]))
+    # ... but not by tail elements that are only `==`-known values
+    e = only(intersection_env(Tuple{Vararg{Type{Int}}}, Tuple{Vararg{Type{S}}} where S)[2])
+    @test pinned(e) && !e[3]
+end
 # A fixed tuple prefix before a free vararg length guarantees a matching
 # right-side tuple element exists, but range and maybe-empty tuple tails do not.
 let rhs = Tuple{typeof(intersection_env), Type{<:Tuple{Vararg{E}}}} where E
@@ -3690,7 +3710,7 @@ _typeegal_id(::Type{T}) where {T} = T
     # bound being consistency-checked is a concrete type object, not an
     # argument-slot spelling, so its structural descent keeps identity. An
     # `==`-only `Type`-slotted query must still produce a pinned uncertainty
-    # marker (`svec(tvar, constrained)`).
+    # marker (`svec(tvar, constrained, egal)`).
     let sig = Tuple{Type{<:Type{Val{S}}}, Type{<:Type{Val{f}}}} where {S,f}
         X = Tuple{Tuple{Int}}
         _, E = intersection_env(Tuple{TE{Type{Val{X}}}, TE{Type{Val{:x}}}}, sig)
