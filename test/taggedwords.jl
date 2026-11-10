@@ -747,6 +747,119 @@ end
     @test (@allocated sum_imm(wmem)) == 0
 end
 
+mutable struct Slot{T}
+    x::T
+    Slot{T}() where T = new()
+end
+mutable struct AtomicSlot{T}
+    @atomic x::T
+    AtomicSlot{T}() where T = new()
+end
+const seqcst = :sequentially_consistent
+swapx!(o::Slot, v) = swapfield!(o, :x, v)
+replacex!(o::Slot, e, v) = replacefield!(o, :x, e, v)
+modifyx!(o::Slot, f, v) = modifyfield!(o, :x, f, v)
+oncex!(o::Slot, v) = setfieldonce!(o, :x, v)
+swapx!(o::AtomicSlot, v) = swapfield!(o, :x, v, :sequentially_consistent)
+replacex!(o::AtomicSlot, e, v) = replacefield!(o, :x, e, v, :sequentially_consistent, :sequentially_consistent)
+modifyx!(o::AtomicSlot, f, v) = modifyfield!(o, :x, f, v, :sequentially_consistent)
+oncex!(o::AtomicSlot, v) = setfieldonce!(o, :x, v, :sequentially_consistent, :sequentially_consistent)
+swapx!(m::Memory, v) = Core.memoryrefswap!(memoryref(m), v, :not_atomic, true)
+replacex!(m::Memory, e, v) = Core.memoryrefreplace!(memoryref(m), e, v, :not_atomic, :not_atomic, true)
+modifyx!(m::Memory, f, v) = Core.memoryrefmodify!(memoryref(m), f, v, :not_atomic, true)
+oncex!(m::Memory, v) = Core.memoryrefsetonce!(memoryref(m), v, :not_atomic, :not_atomic, true)
+unsetx!(m::Memory) = Core.memoryrefunset!(memoryref(m), :not_atomic, true)
+swapx!(m::AtomicMemory, v) = Core.memoryrefswap!(memoryref(m), v, :sequentially_consistent, true)
+replacex!(m::AtomicMemory, e, v) = Core.memoryrefreplace!(memoryref(m), e, v, :sequentially_consistent, :sequentially_consistent, true)
+modifyx!(m::AtomicMemory, f, v) = Core.memoryrefmodify!(memoryref(m), f, v, :sequentially_consistent, true)
+oncex!(m::AtomicMemory, v) = Core.memoryrefsetonce!(memoryref(m), v, :sequentially_consistent, :sequentially_consistent, true)
+
+# the generic builtins, which the runtime implements, with every type hidden
+hidden(f, args...) = Base.invokelatest(f, map(Base.inferencebarrier, args)...)
+orders(::Union{Slot, Memory}, n) = ntuple(Returns(:not_atomic), n)
+orders(::Union{AtomicSlot, AtomicMemory}, n) = ntuple(Returns(seqcst), n)
+builtin(o::Union{Slot, AtomicSlot}, f, n, args...) = hidden(f, o, :x, args..., orders(o, n)...)
+builtin(m::GenericMemory, f, n, args...) = hidden(f, memoryref(m), args..., orders(m, n)..., true)
+rtswapx!(o, v) = builtin(o, o isa GenericMemory ? Core.memoryrefswap! : swapfield!, 1, v)
+rtreplacex!(o, e, v) = builtin(o, o isa GenericMemory ? Core.memoryrefreplace! : replacefield!, 2, e, v)
+rtmodifyx!(o, f, v) = builtin(o, o isa GenericMemory ? Core.memoryrefmodify! : modifyfield!, 1, f, v)
+rtoncex!(o, v) = builtin(o, o isa GenericMemory ? Core.memoryrefsetonce! : setfieldonce!, 2, v)
+rtstore!(o, v) = builtin(o, o isa GenericMemory ? Core.memoryrefset! : setfield!, 1, v)
+rtload(o) = try builtin(o, o isa GenericMemory ? Core.memoryrefget : getfield, 1) catch; missing end
+
+# Compiled code performs these on the word itself. Every outcome, an error
+# included, is that of the generic builtin.
+@testset "codegen: swap, replace, modify and setonce" begin
+    outcome(f) = try f() catch e; typeof(e) end
+    keepstring(a, b) = a isa String ? a : b
+    for T in (Union{Int16, String},
+              Union{Nothing, Int8, Int, String},  # Nothing and Int are reference components
+              Union{Bool, Symbol})                # every reference is egal only to itself
+        vs = T === Union{Int16, String} ? (Int16(0), Int16(-1), "a" * "b", "") :
+             T === Union{Bool, Symbol} ? (true, false, :a, :b) :
+             (nothing, Int8(-3), 0, typemin(Int), "a" * "b")
+        for fresh in (() -> Slot{T}(), () -> AtomicSlot{T}(), () -> Memory{T}(undef, 1), () -> AtomicMemory{T}(undef, 1)),
+            init in (missing, vs...), v in vs
+            # two containers in the same state, one per implementation
+            make() = map(o -> (init === missing || rtstore!(o, init); o), (fresh(), fresh()))
+            agree(op, rtop, args...) = begin
+                a, b = make()
+                outcome(() -> op(a, args...)) === outcome(() -> rtop(b, args...)) && rtload(a) === rtload(b)
+            end
+            @test agree(swapx!, rtswapx!, v)
+            @test agree(oncex!, rtoncex!, v)
+            @test agree(modifyx!, rtmodifyx!, keepstring, v)
+            # expected values: members, an egal copy of a String, and a value outside the union
+            copies = init isa String ? (String(collect(init)),) : ()
+            @test all(e -> agree(replacex!, rtreplacex!, e, v), (vs..., copies..., 1.5))
+        end
+        a = Slot{T}()
+        @test_throws TypeError swapx!(a, 1.5)
+        @test_throws TypeError oncex!(a, 1.5)
+        @test_throws TypeError replacex!(a, vs[1], 1.5)
+        rtstore!(a, vs[1])
+        @test_throws TypeError modifyx!(a, Returns(1.5), vs[1])
+    end
+
+    # nothing is left to the builtins, and no immediate is boxed
+    U = Union{Int16, String}
+    for types in ((Slot{U}, Int16), (Slot{U}, U), (AtomicSlot{U}, String), (Memory{U}, U), (AtomicMemory{U}, Int16))
+        @test !occursin("jl_f_", llvm(swapx!, types))
+        @test !occursin("jl_f_", llvm(oncex!, types))
+        @test !occursin("jl_f_", llvm(replacex!, (types[1], U, types[2])))
+        @test !occursin("jl_f_", llvm(modifyx!, (types[1], typeof(keepstring), types[2])))
+    end
+    @test !occursin("jl_f_", llvm(unsetx!, (Memory{U},)))
+    count!(o, n) = for _ in 1:n
+        old = swapx!(o, Int16(0))::Int16
+        replacex!(o, Int16(0), old + Int16(1)).success || error()
+    end
+    for o in (Slot{U}(), AtomicSlot{U}(), Memory{U}(undef, 1), AtomicMemory{U}(undef, 1))
+        rtstore!(o, Int16(0))
+        count!(o, 1000)
+        @test rtload(o) === Int16(1000)
+        @test (@allocated count!(o, 1000)) == 0
+    end
+    v = Union{Int16, String}["a" * "b", Int16(1)]
+    @test pop!(v) === Int16(1) && pop!(v) == "ab" && isempty(v)
+
+    # a concurrent replace retries when it finds an egal copy of the expected String
+    a = AtomicSlot{U}()
+    rtstore!(a, "0")
+    function advance!(a, n)
+        done = 0
+        while done < n
+            old = @atomic a.x
+            cur = old isa Int16 ? Int(old) : parse(Int, old)
+            new = iseven(cur) ? (cur + 1) % Int16 : string(cur + 1)
+            expected = old isa String ? String(collect(old)) : old
+            replacex!(a, expected, new).success && (done += 1)
+        end
+    end
+    foreach(wait, [Threads.@spawn advance!(a, 2500) for _ in 1:4])
+    @test (@atomic a.x) == "10000"
+end
+
 @testset "codegen: write barrier" begin
     # fresh strings stored by compiled code into old parents survive a young
     # collection only through the remembered set

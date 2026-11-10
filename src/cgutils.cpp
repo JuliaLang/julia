@@ -2744,6 +2744,10 @@ static jl_cgval_t emit_tagged_load(jl_codectx_t &ctx, Value *ptr, jl_value_t *ut
                                    AtomicOrdering Order, bool maybe_null, Value **nullcheck) JL_CANSAFEPOINT;
 static void emit_tagged_store(jl_codectx_t &ctx, Value *parent, Value *ptr, const jl_cgval_t &rhs,
                               jl_value_t *ut, const jl_aliasinfo_t &ai, AtomicOrdering Order) JL_CANSAFEPOINT;
+static jl_cgval_t emit_tagged_op(jl_codectx_t &ctx, Value *parent, Value *ptr,
+        jl_cgval_t rhs, jl_cgval_t cmpop, jl_value_t *ut, const jl_aliasinfo_t &ai,
+        AtomicOrdering Order, AtomicOrdering FailOrder, StoreKind op,
+        bool maybe_null, const jl_cgval_t *modifyop, const Twine &fname) JL_CANSAFEPOINT;
 
 static jl_cgval_t typed_store(jl_codectx_t &ctx,
         Value *ptr, jl_cgval_t rhs, jl_cgval_t cmpop,
@@ -4695,22 +4699,20 @@ static Value *emit_tagged_encode(jl_codectx_t &ctx, const jl_cgval_t &rhs, jl_va
     return word;
 }
 
-// store `rhs` into the tagged word of union type `ut` at `ptr`, owned by
-// `parent`, which is null if the store needs no write barrier
-static void emit_tagged_store(jl_codectx_t &ctx, Value *parent, Value *ptr, const jl_cgval_t &rhs,
-                              jl_value_t *ut, const jl_aliasinfo_t &ai, AtomicOrdering Order)
+// The pre-write barrier, as in typed_store, for storing a word into the tagged
+// word at `ptr`, owned by `parent`, which is null if the store needs none.
+// `ref` is the reference the new word holds: null for an immediate, and
+// possibly a null pointer at runtime if `ref_maybe_null`.
+static void emit_tagged_write_barrier(jl_codectx_t &ctx, Value *parent, Value *ptr, Value *ref, bool ref_maybe_null)
 {
-    Value *ref;
-    bool ref_maybe_null;
-    Value *word = emit_tagged_encode(ctx, rhs, ut, &ref, &ref_maybe_null);
-    // pre-write barrier, as in typed_store
+    if (!parent)
+        return;
 #ifdef GC_BARRIER_SNAPSHOT
     // the old word may be a reference whatever is stored; this barrier ignores
     // the child
-    if (parent)
-        emit_write_barrier(ctx, parent, ptr, ref ? ref : Constant::getNullValue(ctx.types().T_prjlvalue));
+    emit_write_barrier(ctx, parent, ptr, ref ? ref : Constant::getNullValue(ctx.types().T_prjlvalue));
 #else
-    if (parent && ref && ref_maybe_null) {
+    if (ref && ref_maybe_null) {
         // the barrier loads the child's tag, so skip it for an immediate
         BasicBlock *wbBB = BasicBlock::Create(ctx.builder.getContext(), "tagged_wb", ctx.f);
         BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_tagged_wb", ctx.f);
@@ -4720,10 +4722,21 @@ static void emit_tagged_store(jl_codectx_t &ctx, Value *parent, Value *ptr, cons
         ctx.builder.CreateBr(postBB);
         ctx.builder.SetInsertPoint(postBB);
     }
-    else if (parent && ref) {
+    else if (ref) {
         emit_write_barrier(ctx, parent, ptr, ref);
     }
 #endif
+}
+
+// store `rhs` into the tagged word of union type `ut` at `ptr`, owned by
+// `parent`, which is null if the store needs no write barrier
+static void emit_tagged_store(jl_codectx_t &ctx, Value *parent, Value *ptr, const jl_cgval_t &rhs,
+                              jl_value_t *ut, const jl_aliasinfo_t &ai, AtomicOrdering Order)
+{
+    Value *ref;
+    bool ref_maybe_null;
+    Value *word = emit_tagged_encode(ctx, rhs, ut, &ref, &ref_maybe_null);
+    emit_tagged_write_barrier(ctx, parent, ptr, ref, ref_maybe_null);
     // a plain store of a word that may hold a reference releases, as for a
     // boxed field
     StoreInst *store = ctx.builder.CreateAlignedStore(word, ptr, ctx.types().alignof_ptr);
@@ -5059,12 +5072,16 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
     unsigned align = jl_field_align(sty, idx0);
     bool maybe_null = field_may_be_null(strct, sty, idx0);
     if (!isboxed && jl_is_tagged_uniontype(jfty)) {
-        // other operations take the generic builtin path
-        assert(op == StoreKind::Set);
         if (tagged_union_has_codegen(jfty)) {
-            emit_tagged_store(ctx, wb ? boxed(ctx, strct) : nullptr, addr, rhs, jfty, ai, Order);
+            Value *parent = wb ? boxed(ctx, strct) : nullptr;
+            if (op != StoreKind::Set)
+                return emit_tagged_op(ctx, parent, addr, rhs, cmp, jfty, ai, Order, FailOrder, op,
+                                      maybe_null, modifyop, fname);
+            emit_tagged_store(ctx, parent, addr, rhs, jfty, ai, Order);
             return rhs;
         }
+        // other operations take the generic builtin path
+        assert(op == StoreKind::Set);
         ctx.builder.CreateCall(prepare_call(jlstoretaggedword_func),
                 { boxed(ctx, strct), ConstantInt::get(ctx.types().T_size, byte_offset),
                   literal_pointer_val(ctx, jfty), boxed(ctx, rhs),

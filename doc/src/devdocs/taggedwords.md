@@ -135,19 +135,17 @@ the barrier only for the words that are references.
 
 Loading a field or element decodes its word into the representation codegen
 uses for a small union elsewhere: the index of the component, plus the payload
-or the reference. `getfield`, `setfield!`, `isdefined`, `memoryrefget`,
-`memoryrefset!`, `memoryref_isassigned` and `new` are compiled this way and box
-no immediate, and `===` compares two words as they are. The following call the
-runtime instead, which boxes an immediate it is passed or returns:
+or the reference. `getfield`, `setfield!`, `swapfield!`, `replacefield!`,
+`modifyfield!`, `setfieldonce!`, `isdefined`, their `memoryref` counterparts
+and `new` are compiled this way and box no immediate. `===` and the expected
+value of a replace compare two words as they are, and call `jl_egal` only for
+two distinct references.
 
-* `swapfield!`, `modifyfield!`, `replacefield!` and `setfieldonce!` on a field
-  that is a tagged word, and their `memoryref` counterparts on an element that
-  is one. A field or element whose type is a struct embedding a tagged word
-  is not affected.
-* Every access to a tagged word whose union has an immediate component outside
-  the 127 components that a union index can name, or a reference component
-  that codegen unboxes although it holds references itself, such as
-  `Some{String}` in `Union{Int16, Some{String}}`.
+One case calls the runtime instead, which boxes an immediate it is passed or
+returns: every access to a tagged word whose union has an immediate component
+outside the 127 components that a union index can name, or a reference
+component that codegen unboxes although it holds references itself, such as
+`Some{String}` in `Union{Int16, Some{String}}`.
 
 A struct embedding a tagged word cannot be passed to or returned from `ccall`
 by value, since C would receive the raw word.
