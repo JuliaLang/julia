@@ -308,8 +308,10 @@ end
     copyto!(a, 2, a, 1, 4)
     @test a[2] === Widest1(UInt(1)) && a[3] == "s2"
 
-    @test_throws ArgumentError Base.unsafe_wrap(Memory{Union{Widest1, String}},
-                                                convert(Ptr{Union{Widest1, String}}, C_NULL), 0)
+    # the error names the reason, for a struct element too
+    @test_throws "tagged word" unsafe_wrap(Memory{Union{Widest1, String}},
+                                           convert(Ptr{Union{Widest1, String}}, C_NULL), 0)
+    @test_throws "tagged word" unsafe_wrap(Vector{STU}, convert(Ptr{STU}, C_NULL), 0)
 
     # struct elements containing tagged words
     memS = Memory{STU}(undef, 3)
