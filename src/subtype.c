@@ -235,6 +235,11 @@ typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
                               // the left side did. From then on, that instance may
                               // carry different bindings than this search records
                               // (see `union_choice_unstable`)
+    int inv_open;             // true inside a left-side type parameter (of the
+                              // innermost invariant constructor) that has free
+                              // typevars. Each instance substitutes those typevars,
+                              // so it has a different type parameter here, which
+                              // may also be structured differently
     int closed_inputs;        // true iff the top-level inputs have no free typevars, so a
                               // UnionAll var can only alias one already in `vars`;
                               // -1 until computed from `inputs` (see `may_capture_free_var`)
@@ -3058,7 +3063,7 @@ static int typeeq_is_dangling_key(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_t 
 //  - may carry different bindings than the left side from then on (`diverged`).
 
 // Does every instance of the left side have exactly `x` at this position? That is
-// the case for a closed type below an invariant constructor (a type parameter),
+// the case for a part of a closed type parameter (below an invariant constructor),
 // and for a dispatch key in covariant position: a `TypeEgal`, or a concrete type
 // other than a kind (a kind stands for the `TypeEgal` keys of all types of that
 // kind). It is never the case for the whole left side: `instance_envout` is only
@@ -3067,7 +3072,9 @@ static int instance_rigid(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT
 {
     if (jl_has_free_typevars(x) || x == e->inputs[0])
         return 0;
-    return e->invdepth > 0 || jl_is_typeegal(x) || (jl_is_concrete_type(x) && !jl_is_kind(x));
+    if (e->invdepth > 0)
+        return !e->inv_open;
+    return jl_is_typeegal(x) || (jl_is_concrete_type(x) && !jl_is_kind(x));
 }
 
 // Some instance may bind the vars that occur in `t` to values this search never
@@ -3477,9 +3484,12 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             e->bound_channel = BOUND_EQ;
         if (param != PARAM_INVARIANT && !e->value_descent && e->spell_channel > BOUND_EQ)
             e->spell_channel = BOUND_EQ;
+        int saved_open = e->inv_open;
+        e->inv_open = e->instance_envout && jl_has_free_typevars(jl_typeeq_T(x));
         e->invdepth++;
         int ans = forall_exists_equal(jl_typeeq_T(x), jl_typeeq_T(y), e);
         e->invdepth--;
+        e->inv_open = saved_open;
         e->bound_channel = saved_channel;
         e->spell_channel = saved_spell;
         return ans;
@@ -3547,14 +3557,19 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             return subtype_tuple(xd, yd, e, param);
         size_t i, np = jl_nparams(xd);
         int ans = 1;
+        int saved_open = e->inv_open;
         e->invdepth++;
         for (i=0; i < np; i++) {
             jl_value_t *xi = jl_tparam(xd, i), *yi = jl_tparam(yd, i);
-            if (!(xi == yi || forall_exists_equal(xi, yi, e))) {
+            if (xi == yi)
+                continue;
+            e->inv_open = e->instance_envout && jl_has_free_typevars(xi);
+            if (!forall_exists_equal(xi, yi, e)) {
                 ans = 0; break;
             }
         }
         e->invdepth--;
+        e->inv_open = saved_open;
         return ans;
     }
     if (jl_is_type(y))
@@ -3781,6 +3796,21 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     }
 
     if ((jl_is_uniontype(x) && jl_is_uniontype(y))) {
+        if (e->instance_envout && e->inv_open) {
+            // An instance has a different union here, whose components need not
+            // line up with those of `x` (some may be absorbed, or come in another
+            // order), so it may solve this equation in its own way. Mark the vars
+            // of the equation, and match it on the BOUND_ARM channel.
+            mark_alt_occurs(x, e);
+            mark_alt_occurs(y, e);
+            if (e->bound_channel > BOUND_ARM) {
+                int saved[3];
+                enter_alternative(e, saved);
+                int sub = forall_exists_equal(x, y, e);
+                leave_alternative(e, saved);
+                return sub;
+            }
+        }
         // For 2 unions, first try a more efficient greedy algorithm that compares the unions
         // componentwise. If failed, `exists_subtype` would memorize that this branch should be skipped.
         // Note: this is valid because the normal path checks `>:` locally.
@@ -3899,6 +3929,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->ignore_lb_required = 0;
     e->instance_envout = 0;
     e->diverged = 0;
+    e->inv_open = 0;
     e->closed_inputs = 0;
     e->inputs[0] = e->inputs[1] = NULL;
     e->intersecting = NULL;

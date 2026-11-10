@@ -9355,6 +9355,12 @@ let a = Ref{Union{Int,String}}(1), b = Ref{String}("hello")
     args = Tuple{Ref{Union{Int,String}},Ref{<:Union{Int,String}}}[(a, b)]
     @test (v -> y63514(v[1]...))(args) === y63514(a, b) === Int
 end
+z63514(::Vector{Union{Missing,S}}) where {S} = @isdefined(S) ? S : false
+@test (r -> z63514(r[]))(Ref{Vector{Union{Missing,V}} where V}(Missing[])) === z63514(Missing[]) === false
+@test (r -> z63514(r[]))(Ref{Vector{Union{Missing,V}} where V}(Union{Missing,Int}[])) === Int
+zz63514(::Ref{Union{T,U}}) where {T,U} = (T, U)
+@test (r -> zz63514(r[]))(Ref{Ref{Union{V,Int}} where V}(Ref{Union{Float64,Int}}(1))) ===
+    zz63514(Ref{Union{Float64,Int}}(1)) === (Float64, Int)
 
 # Static parameters constrained indirectly through other static-parameter bounds
 # are defined.
