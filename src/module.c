@@ -639,10 +639,12 @@ static void jl_add_default_names(jl_module_t *m, uint8_t default_using_core, uin
     }
 }
 
-jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_using_core, uint8_t self_name)
+jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint32_t edition,
+                            uint8_t default_using_core, uint8_t self_name)
 {
     jl_module_t *m = jl_new_module__(name, parent);
     JL_GC_PUSH1(&m);
+    jl_set_module_edition(m, edition);
     JL_LOCK(&world_counter_lock);
     jl_add_default_names(m, default_using_core, self_name);
     JL_UNLOCK(&world_counter_lock);
@@ -738,7 +740,8 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
 
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent)
 {
-    return jl_new_module_(name, parent, 1, 1);
+    uint32_t edition = parent ? jl_get_module_edition(parent) : OLDEST_EDITION;
+    return jl_new_module_(name, parent, edition, 1, 1);
 }
 
 JL_DLLEXPORT uint32_t jl_module_next_counter(jl_module_t *m)
@@ -750,13 +753,24 @@ JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports, ui
 {
     // TODO: should we prohibit this during incremental compilation?
     // TODO: the parent module is a lie
-    jl_module_t *m = jl_new_module_(name, jl_main_module, default_names, default_names);
+    jl_module_t *m = jl_new_module_(
+        name, jl_main_module, OLDEST_EDITION, default_names, default_names);
     JL_GC_PUSH1(&m);
-    if (std_imports)
+    if (std_imports && jl_base_module != NULL)
         jl_add_standard_imports(m);
     JL_GC_POP();
     // TODO: should we somehow try to gc-root this correctly?
     return (jl_value_t*)m;
+}
+
+JL_DLLEXPORT void jl_set_module_edition(jl_module_t *m, uint32_t ed)
+{
+    jl_atomic_store_relaxed(&m->edition, ed);
+}
+
+JL_DLLEXPORT uint32_t jl_get_module_edition(jl_module_t *m)
+{
+    return jl_atomic_load_relaxed(&m->edition);
 }
 
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on)

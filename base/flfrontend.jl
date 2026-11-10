@@ -4,7 +4,7 @@
 # byte buffer or string.
 function fl_parse(text::Union{Core.SimpleVector,String},
                   filename::String, lineno, offset, options, edition)
-    if edition != (1, 14)
+    if edition != FLISP_EDITION
         error("Edition $edition not supported by flisp parser (expected 1.14)")
     end
     if text isa Core.SimpleVector
@@ -28,6 +28,8 @@ function fl_lower(mod::Module, @nospecialize(ex), world::UInt, warn::Bool,
           mod, ex, world, warn, loc)
 end
 
+# flisp lowering treats all syntax as FLISP_EDITION, so opt-in to flisp also
+# opts out of editions >FLISP_EDITION.
 function fl_toplevel_eval(mod::Module, @nospecialize(x))
     ex = if x isa Syntax
         Expr(:toplevel, first_linenode(x), syntax_to_expr(x))

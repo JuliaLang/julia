@@ -141,6 +141,7 @@ end
             try
                 parse_in(mod, str) = Meta.parse(str; mod=mod, raise=false)
                 m = Module(:Mod)
+                Core.set_edition(m, VERSION)
                 w0 = Base.get_world_counter()
                 typegroup_src = "typegroup struct T end end"
                 @test Meta.isexpr(invokelatest(parse_in, m, typegroup_src), :typegroup)
