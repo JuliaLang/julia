@@ -2214,11 +2214,19 @@ end
 # should sync with the types of arguments of `stale_cachefile`
 const StaleCacheKey = Tuple{PkgId, UInt128, PkgLoadSpec, String, Bool, CacheFlags}
 
+# The cache files to try for `pkg`. With `remember`, a listing made here is kept in
+# `cachepath_cache` for the next query of the same package.
+function cachepaths_to_try(pkg::PkgId, cachepath_cache::Dict{PkgId, Vector{String}}, remember::Bool)
+    remember && return get!(() -> find_all_in_cache_path(pkg), cachepath_cache, pkg)
+    return get(() -> find_all_in_cache_path(pkg), cachepath_cache, pkg)
+end
+
 function compilecache_freshest_path(pkg::PkgId;
         ignore_loaded::Bool=false,
         stale_cache::Dict{StaleCacheKey,Bool}=Dict{StaleCacheKey, Bool}(),
         cachepath_cache::Dict{PkgId, Vector{String}}=Dict{PkgId, Vector{String}}(),
-        cachepaths::Vector{String}=get(() -> find_all_in_cache_path(pkg), cachepath_cache, pkg),
+        remember_cachepaths::Bool=false,
+        cachepaths::Vector{String}=cachepaths_to_try(pkg, cachepath_cache, remember_cachepaths),
         sourcespec::Union{PkgLoadSpec,Nothing}=Base.locate_package_load_spec(pkg),
         flags::CacheFlags=CacheFlags(),
         # skipping the full-file corruption checks is only safe for advisory
@@ -2258,8 +2266,8 @@ function compilecache_freshest_path(pkg::PkgId;
             @label next_dep for dep in staledeps
                 dep isa Module && continue
                 modspec, modkey, modbuild_id = dep::Tuple{PkgLoadSpec, PkgId, UInt128}
-                modpaths = get(() -> find_all_in_cache_path(modkey), cachepath_cache, modkey)
-                for modpath_to_try in modpaths::Vector{String}
+                modpaths = cachepaths_to_try(modkey, cachepath_cache, remember_cachepaths)
+                for modpath_to_try in modpaths
                     stale_cache_key = (modkey, modbuild_id, modspec, modpath_to_try, ignore_loaded, flags)::StaleCacheKey
                     if get!(() -> stale_cachefile(modkey, modbuild_id, modspec, modpath_to_try; ignore_loaded, requested_flags=flags, verify_checksums) === true,
                             stale_cache, stale_cache_key)
@@ -2298,8 +2306,47 @@ fresh julia session specify `ignore_loaded=true`.
     This function requires at least Julia 1.10.
 """
 function isprecompiled(pkg::PkgId; ignore_loaded::Bool=false)
+    in_sysimage(pkg) && return true
     path = compilecache_freshest_path(pkg; ignore_loaded, verify_checksums=false)
     return !isnothing(path)
+end
+
+"""
+    Base.isprecompiled(pkgs::AbstractVector{PkgId}; ignore_loaded::Bool=false) -> Vector{Bool}
+
+Return whether each of `pkgs` is precompiled, like `isprecompiled(pkg)` does for a single
+package. A dependency that several of the packages share is only checked once, which makes
+this much cheaper than asking about the packages one at a time.
+
+A package whose source cannot be located is reported as not precompiled.
+
+!!! compat "Julia 1.15"
+    This method requires at least Julia 1.15.
+"""
+function isprecompiled(pkgs::AbstractVector{PkgId}; ignore_loaded::Bool=false)
+    precompiled = Vector{Bool}(undef, length(pkgs))
+    stale_cache = Dict{StaleCacheKey, Bool}()
+    cachepath_cache = Dict{PkgId, Vector{String}}()
+    @lock require_lock begin
+        # one loading cache for all packages, so that each one is only located once
+        set_cache = LOADING_CACHE[] === nothing
+        set_cache && (LOADING_CACHE[] = LoadingCache())
+        try
+            for (i, pkg) in enumerate(pkgs)
+                precompiled[i] = if in_sysimage(pkg)
+                    true
+                else
+                    sourcespec = locate_package_load_spec(pkg)
+                    sourcespec !== nothing &&
+                        compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, sourcespec,
+                                                   remember_cachepaths=true, verify_checksums=false) !== nothing
+                end
+            end
+        finally
+            set_cache && (LOADING_CACHE[] = nothing)
+        end
+    end
+    return precompiled
 end
 
 """
