@@ -134,6 +134,9 @@ typedef struct jl_varbinding_t {
                          // did not choose for the query, but that an instance may
                          // choose instead. That instance binds the var there, to
                          // a value this search never computed
+    int8_t arm_occurs;   // some occurrence was matched on the BOUND_ARM channel, so
+                         // an instance may have fewer occurrences of the var than
+                         // this search found
     int8_t lb_spell;     // spelling authority (`jl_stenv_t.spell_channel`) of the
                          // contribution that supplied the current `lb` OBJECT.
                          // Among `==`-equal spellings the runtime binding takes
@@ -432,8 +435,8 @@ static int current_env_length(jl_stenv_t *e)
 
 // Per-var saved env layout:
 // [occurs, occurs_inv, occurs_cov, cov_diag, max_offset, lb_certainty, lb_required, lb_spell, pinned,
-//  inv_certainty, alt_occurs].
-#define JL_SAVEDENV_BYTES_PER_VAR 11
+//  inv_certainty, alt_occurs, arm_occurs].
+#define JL_SAVEDENV_BYTES_PER_VAR 12
 
 // Combined covariance count used for diagonal-rule decisions: the max of the
 // counter for the current consistency-check scope and the largest count
@@ -448,7 +451,7 @@ typedef struct {
     int8_t *buf;
     int rdepth;
     int diverged;
-    int8_t _space[88]; // == 8 * JL_SAVEDENV_BYTES_PER_VAR
+    int8_t _space[96]; // == 8 * JL_SAVEDENV_BYTES_PER_VAR
     jl_gcframe_t gcframe;
     jl_value_t *roots[24]; // == 8 * 3 (lb, ub, innervars)
 } jl_savedenv_t;
@@ -509,6 +512,7 @@ static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
         se->buf[j++] = v->pinned;
         se->buf[j++] = v->inv_certainty;
         se->buf[j++] = v->alt_occurs;
+        se->buf[j++] = v->arm_occurs;
         v = v->prev;
     }
     assert(i == nroots); (void)nroots;
@@ -617,6 +621,7 @@ static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPO
         v->pinned = se->buf[j++];
         v->inv_certainty = se->buf[j++];
         v->alt_occurs = se->buf[j++];
+        v->arm_occurs = se->buf[j++];
         v = v->prev;
     }
     assert(i == nroots); (void)nroots;
@@ -1222,6 +1227,8 @@ static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, jl_param_p
         // saturate counters at 2; we don't need values bigger than that
         if (vb->occurs < 2)
             vb->occurs++;
+        if (e->bound_channel == BOUND_ARM)
+            vb->arm_occurs = 1;
         if (param == PARAM_INVARIANT && e->invdepth > vb->depth0) {
             if (vb->occurs_inv < 2)
                 vb->occurs_inv++;
@@ -1551,6 +1558,7 @@ static typeeq_varctx_t *typeeq_lookup_var(typeeq_varctx_t *env, jl_tvar_t *v) JL
 static int typeeq_vars_bound_in_env(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_t *wenv) JL_NOTSAFEPOINT;
 static int typeeq_kind_mask(jl_value_t *t) JL_NOTSAFEPOINT;
 static int typeeq_mask_le(int mask, jl_value_t *y) JL_NOTSAFEPOINT;
+static jl_value_t *widen_Type_tags(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_t *wenv) JL_CANSAFEPOINT;
 
 // The concrete tag containing `t` when `t` pins one object: `typeof(T)` for a
 // `TypeEgal{T}` (sole member `T`), for `Type{Union{}}` (`== TypeofBottom`),
@@ -1984,12 +1992,16 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
             return lb;
         }
         if (constrained && !jl_has_free_typevars(t) && !jl_has_free_typevars(lb) &&
-            (jl_is_concrete_type(t) ||
+            ((jl_is_concrete_type(t) && !jl_is_tuple_type(t)) ||
              (jl_is_datatype(t) && ((jl_datatype_t*)t)->isdispatchtuple))) {
             // If the LHS is concrete, e.g. Type{Tuple{Ref}} vs Type{Tuple{S}} where {S<:T}, we'd like to still
             // choose the least solution like below, so that our `constrained` logic below is correct.
             // Also accept dispatchtuples, which cover singleton-like LHSes such as
             // `Tuple{typeof(f), Type{X}}` where the Type{} parameter pins to one runtime value.
+            // This excludes concrete tuples that are not dispatch tuples: such a tuple
+            // has a kind (e.g. `DataType`) among its elements, which stands for the
+            // `TypeEgal` keys of all types of that kind, so the tuple has instances
+            // other than itself.
             // Refuse when `lb` references universally-quantified vars from the
             // current subtype environment: exposing it directly would leak sibling
             // `where`-bound typevars (e.g. `where {S, T>:S}` would expose `S`).
@@ -2039,13 +2051,13 @@ static int may_capture_free_var(jl_value_t *t, jl_tvar_t *v, jl_stenv_t *e) JL_N
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     u = unalias_unionall(u, e);
-    jl_value_t *new_tvar = NULL;
+    jl_value_t *new_tvar = NULL, *tags = NULL;
     jl_varbinding_t vb;
     memset(&vb, 0, sizeof(vb));
     vb.existential = R;
     vb.depth0 = e->invdepth;
     vb.prev = e->vars;
-    JL_GC_PUSH5(&u, &vb.lb, &vb.ub, &vb.innervars, &new_tvar);
+    JL_GC_PUSH6(&u, &vb.lb, &vb.ub, &vb.innervars, &new_tvar, &tags);
     // a free input typevar sharing `u->var`'s identity is not in `e->vars`, so
     // `unalias_unionall` cannot see it; closed inputs have no such occurrences
     if (may_capture_free_var(t, u->var, e))
@@ -2202,6 +2214,22 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         jl_value_t *lb = widened_lb;
         if (vb.pinned && has_existential_typevar(vb.lb, e) && !has_env_typevar(vb.ub, e))
             lb = vb.ub;
+        // Where an abstract left side has an argument of type `Type{X}`, each of its
+        // instances has a `TypeEgal` key. If the var's occurrences widen a single
+        // key (`widen_lb`), the instance binds the var to the tag of its key;
+        // otherwise it binds the var to the key itself. Whether an instance widens
+        // depends on its own occurrences of the var, and with `arm_occurs` these
+        // may be fewer than the ones this search found, so it may decide otherwise
+        // than the left side. In that case, and whenever the left side does not
+        // widen, the reported bound covers both the keys and their tags.
+        int keep_keys = !widen_lb || vb.arm_occurs;
+        if (e->instance_envout && !vb.occurs_inv && vb.occurs_cov) {
+            jl_value_t *keys = keep_keys ? vb.lb : lb;
+            tags = widen_Type_tags(keys, e, NULL);
+            if (keep_keys && tags != keys)
+                tags = simple_join(keys, tags);
+            lb = tags;
+        }
         // A var bound only through another variable's declared bounds (BOUND_PROXY)
         // need not be pinned by every call: matching `Type{<:Tuple{Vararg{E}}}`
         // against `Type{S} where S<:NInt` reaches `E` through `S`'s bound, but the
@@ -2239,6 +2267,16 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             // occurrence, such an instance leaves it unbound instead, and the
             // pinned value is still right for the instances that do bind it.)
             val = wrap_tvar_env((jl_value_t*)u->var, eff_constrained);
+        }
+        else if (e->instance_envout && !vb.occurs_inv && !jl_has_free_typevars(lb) &&
+                 (jl_is_typeeq(lb) || (keep_keys && is_kind_or_anytype(lb)))) {
+            // `lb` describes the keys that the instances have here: `Type{X}`
+            // stands for the `TypeEgal` keys of all types `==` to `X`, and a kind
+            // (where keys are not widened) for the keys of all types of that kind.
+            // Different instances bind the var to different keys, so report `lb`
+            // as an upper bound, not as the value of the var.
+            new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, lb);
+            val = wrap_tvar_env(new_tvar, eff_constrained);
         }
         else {
             val = subtype_unionall_envout_value(t, u, e, &vb, lb, &new_tvar, eff_constrained);
@@ -2942,6 +2980,65 @@ static jl_datatype_t *typeeq_kind_datatype(int bit) JL_NOTSAFEPOINT
     default:                   assert(bit == TYPEEQ_KIND_TYPEEGAL);
                                return jl_typeegal_type;
     }
+}
+
+// Replace each part of `t` whose members are types by the tags of their dispatch
+// keys. An argument of type `Type{X}` is some type `X'` that is `==` to `X`. Its
+// dispatch key is `TypeEgal{X'}`, which a covariant occurrence widens to the tag
+// `typeof(X')` (see `widen_pinned_Type`). `widen_Type_if_concrete` looks for the
+// single tag that a diagonal variable could take; this instead collects every tag
+// that an instance of an abstract query may bind the variable to.
+static jl_value_t *widen_Type_tags(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_t *wenv) JL_CANSAFEPOINT
+{
+    jl_value_t *w = widen_pinned_Type(t, e, wenv);
+    if (w != NULL)
+        return w;
+    if (jl_is_typevar(t)) {
+        // a left-side var can be any subtype of its upper bound, so use the
+        // tags of that bound
+        jl_varbinding_t *b = lookup(e, (jl_tvar_t*)t);
+        if (b == NULL || !b->existential) {
+            jl_value_t *ub = ((jl_tvar_t*)t)->ub;
+            w = widen_Type_tags(ub, e, wenv);
+            if (w != ub)
+                return w;
+        }
+        return t;
+    }
+    if (jl_is_typeeq(t)) {
+        jl_value_t *T = jl_typeeq_T(t);
+        if (jl_is_typevar(T))
+            return (jl_value_t*)jl_anytype_type;
+        int mask = typeeq_kind_mask(T);
+        jl_value_t *kinds[6];
+        size_t n = 0;
+        for (int i = 0; i < 6; i++) {
+            if (mask & typeeq_kind_bits[i])
+                kinds[n++] = (jl_value_t*)typeeq_kind_datatype(typeeq_kind_bits[i]);
+        }
+        return n == 1 ? kinds[0] : jl_type_union(kinds, n);
+    }
+    if (jl_is_uniontype(t)) {
+        jl_value_t *wa = NULL, *wb = NULL;
+        JL_GC_PUSH2(&wa, &wb);
+        wa = widen_Type_tags(((jl_uniontype_t*)t)->a, e, wenv);
+        wb = widen_Type_tags(((jl_uniontype_t*)t)->b, e, wenv);
+        if (wa != ((jl_uniontype_t*)t)->a || wb != ((jl_uniontype_t*)t)->b)
+            wa = simple_join(wa, wb);
+        else
+            wa = t;
+        JL_GC_POP();
+        return wa;
+    }
+    if (jl_is_unionall(t)) {
+        // vars bound by binders we walk past are not dangling
+        jl_unionall_t *u = (jl_unionall_t*)t;
+        typeeq_varctx_t ctx = { u->var, 0, wenv };
+        jl_value_t *body = widen_Type_tags(u->body, e, &ctx);
+        if (body != u->body && !jl_has_typevar(body, u->var))
+            return body;
+    }
+    return t;
 }
 
 // Resolve a `Type{T}` typevar parameter whose bounds pin it to a single

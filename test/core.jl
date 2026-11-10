@@ -9367,6 +9367,18 @@ zz63514(::Ref{Union{T,U}}) where {T,U} = (T, U)
 f_abandoned_match(a::S2, b::S1, c::Union{Type{S2},S1,S2}) where {S1,S2} = (S1, S2)
 @test f_abandoned_match(1, 1, (1, 1)) === (Int, Union{Int,Tuple{Int,Int}})
 
+# A call inferred for an argument of type `Type{X}` binds the parameter of a plain
+# argument slot to the tag of the argument (e.g. `DataType`), as the direct call
+# does
+f_type_key_tag(x::S) where {S} = S
+@test (r -> f_type_key_tag(r[]))(Ref{Type{Int}}(Int)) === f_type_key_tag(Int) === DataType
+@test (r -> f_type_key_tag(r[]) === DataType)(Ref{Type{Int}}(Int))
+@test (r -> f_type_key_tag(r[]))(Ref{Type{<:Real}}(Int)) === DataType
+@test (r -> f_type_key_tag(r[]))(Ref{Type{<:AbstractVector}}(Vector)) === f_type_key_tag(Vector) === UnionAll
+g_type_key_tag(x::S, y::Union{Set{S},S}) where {S} = S
+@test (r -> g_type_key_tag(r[], Float64))(Ref{DataType}(Int)) === g_type_key_tag(Int, Float64) ===
+    Union{Core.TypeEgal{Int},Core.TypeEgal{Float64}}
+
 # Static parameters constrained indirectly through other static-parameter bounds
 # are defined.
 f1_sparam_defined_62099(t::Type{E}) where E = @isdefined(E)
