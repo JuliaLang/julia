@@ -32,7 +32,7 @@ default:
 
 .PHONY: $(TESTS)
 $(TESTS):
-	+@cd $(SRCDIR) && \
+	@cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) $@)
 
 .PHONY: install-revise-deps
