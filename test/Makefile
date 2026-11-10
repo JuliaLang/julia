@@ -37,6 +37,7 @@ $(TESTS):
 
 .PHONY: install-revise-deps
 install-revise-deps:
+	cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) --revise --help-list install_revise_deps)
 
 .PHONY: $(addprefix revise-, $(TESTS))
