@@ -9795,7 +9795,7 @@ static jl_llvm_functions_t
         FnAttrs.addAttribute(llvm::Attribute::SanitizeThread);
 
     // add the optimization level specified for this module, if any
-    int optlevel = jl_get_module_optlevel(ctx.module);
+    int optlevel = jl_requested_optlevel(lam);
     if (optlevel >= 0 && optlevel <= 3) {
         static const char* const optLevelStrings[] = { "0", "1", "2", "3" };
         FnAttrs.addAttribute("julia-optimization-level", optLevelStrings[optlevel]);
@@ -11288,6 +11288,14 @@ static jl_llvm_functions_t jl_emit_oc_wrapper(jl_codegen_output_t &out, jl_metho
 }
 
 
+// The optimization level requested for `mi` (e.g. via `@optlevel`), or -1 for the
+// default. The JIT groups code by this, so it must match the function attribute.
+int jl_requested_optlevel(jl_method_instance_t *mi)
+{
+    return jl_get_module_optlevel(jl_is_method(mi->def.method) ? mi->def.method->module
+                                                              : mi->def.module);
+}
+
 std::optional<jl_llvm_functions_t> jl_emit_codeinst(
         jl_codegen_output_t &out,
         jl_code_instance_t *codeinst,
@@ -11383,6 +11391,11 @@ void emit_always_inline(jl_codegen_output_t &out,
                 if (decls.invoke)
                     decls.invoke->setLinkage(linkage);
                 decls.specptr->setLinkage(linkage);
+                // This body is emitted only to be inlined away, so it must not
+                // influence the module's optimization level: it may come from a
+                // differently annotated module (e.g. `@optlevel 0`) than the
+                // batch that owns this module.
+                decls.specptr->removeFnAttr("julia-optimization-level");
             }
 
             // TODO: jl_promote_method_roots?
