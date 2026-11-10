@@ -2054,6 +2054,12 @@ static void recache_method(
         struct jl_typemap_assoc search = {tt ? (jl_value_t*)tt : compilationsig, world, NULL};
         assert(cache);
         jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(cache), &search, offs, /*subtype*/1);
+        if (entry && typemap_entry_linfo(entry)->def.method != definition) {
+            // Another method owns this signature. Inference also matches methods
+            // it cannot tell are shadowed (`Type{Int} <: DataType` is false).
+            if (mc) JL_UNLOCK(&mc->writelock);
+            return;
+        }
         if (entry && jl_subtype((jl_value_t*)entry->sig, (jl_value_t*)newmeth->specTypes)) {
             jl_gc_write_atomic(entry, *(_Atomic(jl_method_instance_t*)*)&entry->func.linfo,
                    jl_method_instance_t, newmeth, release);
