@@ -1226,6 +1226,40 @@ end
 @test repr(Base.CmdRedirect(``, devnull, 1, true)) == "pipeline(``, stdout<Base.DevNull())"
 @test repr(Base.CmdRedirect(``, devnull, 11, true)) == "pipeline(``, 11<Base.DevNull())"
 
+@testset "show pipelines and redirects in backtick syntax" begin
+    @test repr(`echo hello | sort`) == "`echo hello | sort`"
+    @test repr(`a | b | c`) == "`a | b | c`"
+    @test repr(`cat < in.txt`) == "`cat < in.txt`"
+    @test repr(`ls > out.txt`) == "`ls > out.txt`"
+    @test repr(`ls >> out.txt`) == "`ls >> out.txt`"
+    @test repr(`make 2> errs.txt`) == "`make 2> errs.txt`"
+    @test repr(`make 2>> errs.txt`) == "`make 2>> errs.txt`"
+    @test repr(`sort 2> e.txt > o.txt < i.txt`) == "`sort < i.txt > o.txt 2> e.txt`"
+    @test repr(`a < i.txt | b 2> e.txt | c > o.txt`) == "`a < i.txt | b 2> e.txt | c > o.txt`"
+    @test repr(`cat 'a b' > 'c d|e'`) == "`cat 'a b' > 'c d|e'`"
+    @test repr(`cat > '~x'`) == "`cat > '~x'`"
+    @test repr(pipeline(`a`, "out`s")) == "`a > out\\`s`"
+    # A pipeline's stdin is its first command's, and its stdout its last command's.
+    @test repr(pipeline(pipeline(`a`, `b`), stdin="i.txt", stdout="o.txt")) == "`a < i.txt | b > o.txt`"
+    # A redirect replaces any enclosing redirect of the same stream when spawned.
+    @test repr(pipeline(pipeline(`a`, stdout="inner.txt"), stdout="outer.txt")) == "`a > inner.txt`"
+    @test repr(pipeline(pipeline(`a`, pipeline(`b`, "inner.txt")), stdout="outer.txt")) == "`a | b > inner.txt`"
+    # Everything else keeps the `pipeline(...)` form.
+    @test repr(pipeline(pipeline(`a`, `b`), stderr="e.txt")) == "pipeline(`a | b`, stderr>Base.FileRedirect(\"e.txt\", false))"
+    @test repr(pipeline(`a`, stderr=`b`)) == "pipeline(`a`, stderr=`b`)"
+    @test repr(pipeline(`a`, stdout=devnull)) == "pipeline(`a`, stdout>Base.DevNull())"
+    @test repr(pipeline(`a`, stdout=IOBuffer())) |> startswith("pipeline(`a`, stdout>")
+    @test repr(pipeline(Cmd(`a`, dir="/tmp"), `b`)) == "pipeline(setenv(`a`; dir=\"/tmp\"), stdout=`b`)"
+    @test repr(pipeline(`a` & `b`, `c`)) == "pipeline(`a` & `b`, stdout=`c`)"
+    @test repr(Base.CmdRedirect(`a`, Base.FileRedirect("", false), 1)) |> startswith("pipeline(")
+    # Shown commands parse back to themselves.
+    for str in ("echo hello | sort", "a < i.txt | b 2>> e.txt | c >> o.txt", "cat '~x' > '~y'",
+                "cat '{a,b}' > 'x|y'")
+        cmd = eval(Meta.parse("`" * str * "`"))
+        @test repr(eval(Meta.parse(repr(cmd)))) == repr(cmd)
+    end
+end
+
 
 # Issue #37070
 @testset "addenv()" begin
