@@ -3909,25 +3909,33 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 
 static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_savedenv_t *se, jl_param_pos_t param) JL_CANSAFEPOINT
 {
+    // `envout` holds the values found for the left-side union branches matched
+    // before this one, and `subtype_unionall` merges the values for this branch
+    // into them. A failed attempt at this branch may already have assigned some
+    // values (an inner var is assigned before an outer one rejects the attempt).
+    // Those are not values for this branch, so restore the previous ones before
+    // the next attempt.
+    int nenv = e->envout != NULL && e->envidx < e->envsz ? e->envsz - e->envidx : 0;
+    jl_value_t **envout0;
+    JL_GC_PUSHARGS(envout0, nenv);
+    if (nenv)
+        memcpy(envout0, &e->envout[e->envidx], nenv * sizeof(void*));
     e->Runions.used = 0;
     while (1) {
         e->Runions.depth = 0;
         e->Runions.more = 0;
         e->Lunions.depth = 0;
         e->Lunions.more = 0;
-        if (subtype(x, y, e, param))
-            return 1;
-        if (next_union_state(e, 1)) {
-            // We preserve `envout` here as `subtype_unionall` needs previous assigned env values.
-            int oldidx = e->envidx;
-            e->envidx = e->envsz;
-            restore_env(e, se, 1);
-            e->envidx = oldidx;
+        int sub = subtype(x, y, e, param);
+        int more = !sub && next_union_state(e, 1);
+        if (!sub)
+            restore_env(e, se, 1); // this also clears `envout` from `envidx` on
+        if (!more) {
+            JL_GC_POP();
+            return sub;
         }
-        else {
-            restore_env(e, se, 1);
-            return 0;
-        }
+        if (nenv)
+            memcpy(&e->envout[e->envidx], envout0, nenv * sizeof(void*));
     }
 }
 

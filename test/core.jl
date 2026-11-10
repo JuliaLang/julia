@@ -9362,6 +9362,11 @@ zz63514(::Ref{Union{T,U}}) where {T,U} = (T, U)
 @test (r -> zz63514(r[]))(Ref{Ref{Union{V,Int}} where V}(Ref{Union{Float64,Int}}(1))) ===
     zz63514(Ref{Union{Float64,Int}}(1)) === (Float64, Int)
 
+# A failed first attempt at matching the signature must not leave a static
+# parameter undefined
+f_abandoned_match(a::S2, b::S1, c::Union{Type{S2},S1,S2}) where {S1,S2} = (S1, S2)
+@test f_abandoned_match(1, 1, (1, 1)) === (Int, Union{Int,Tuple{Int,Int}})
+
 # Static parameters constrained indirectly through other static-parameter bounds
 # are defined.
 f1_sparam_defined_62099(t::Type{E}) where E = @isdefined(E)
