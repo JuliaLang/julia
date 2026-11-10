@@ -123,7 +123,7 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
         argv[i] = eval_value(args[i], s);
     // the call expression's arguments identify the call site
     uint32_t callsite = jl_int32hash_fast((uint32_t)((uintptr_t)args >> 3));
-    jl_value_t *result = s->sites != NULL && s->ip < s->sites->length ?
+    jl_value_t *result = s->sites != NULL && s->ip + 1 < s->sites->length ?
         jl_apply_generic_cached(argv[0], &argv[1], nargs - 1, s->sites, s->ip, callsite) :
         jl_apply_generic_site(argv[0], &argv[1], nargs - 1, callsite);
     JL_GC_POP();
@@ -933,24 +933,31 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
 }
 
 // Each method body's cache of the dispatch at each of its statements (see
-// jl_apply_generic_cached), a Memory{Any} by statement index, found by the code it runs.
-// Top-level thunks, which mostly run once, have none.
+// jl_apply_generic_cached), a Memory{Any} by statement index followed by the code itself,
+// found by that code. The method remembers the caches it last used, which a frame running
+// the same code finds without the lock. Top-level thunks, which mostly run once, have none.
 jl_genericmemory_t *jl_interp_call_sites JL_GLOBALLY_ROOTED = NULL;
 jl_mutex_t jl_interp_call_sites_lock;
 
-static jl_genericmemory_t *call_sites(jl_code_info_t *src, size_t nstmts) JL_CANSAFEPOINT
+static jl_genericmemory_t *call_sites(jl_method_t *m, jl_code_info_t *src, size_t nstmts) JL_CANSAFEPOINT
 {
+    jl_genericmemory_t *last = m ? jl_atomic_load_acquire(&m->interp_sites) : NULL;
+    if (last != NULL && jl_genericmemory_ptr_ref(last, last->length - 1) == (jl_value_t*)src)
+        return last;
     JL_LOCK(&jl_interp_call_sites_lock);
     if (jl_interp_call_sites == NULL)
         jl_interp_call_sites = (jl_genericmemory_t*)jl_an_empty_memory_any;
     jl_genericmemory_t *sites = (jl_genericmemory_t*)jl_eqtable_get(jl_interp_call_sites, (jl_value_t*)src, NULL);
     if (sites == NULL) {
         JL_GC_PUSH1(&sites);
-        sites = jl_alloc_memory_any(nstmts);
+        sites = jl_alloc_memory_any(nstmts + 1);
+        jl_genericmemory_ptr_set(sites, nstmts, (jl_value_t*)src);
         jl_interp_call_sites = jl_eqtable_put(jl_interp_call_sites, (jl_value_t*)src, (jl_value_t*)sites, NULL);
         JL_GC_POP();
     }
     JL_UNLOCK(&jl_interp_call_sites_lock);
+    if (m)
+        jl_atomic_store_release(&m->interp_sites, sites);
     return sites;
 }
 
@@ -1005,7 +1012,7 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->continue_at = 0;
     s->mi = mi;
     s->ci = ci;
-    s->sites = call_sites(src, jl_array_nrows(stmts));
+    s->sites = call_sites(jl_is_method(mi->def.value) ? mi->def.method : NULL, src, jl_array_nrows(stmts));
     locals[2] = (jl_value_t*)s->sites;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 0);

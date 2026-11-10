@@ -496,6 +496,9 @@ typedef struct JL_GC_TRACKED_TYPE _jl_method_t {
 
 // hidden fields:
     jl_mutex_t writelock;
+    // the interpreter's caches for the code of this method it last ran (see interpreter.c),
+    // kept alive by jl_interp_call_sites; zeroed when serialized
+    _Atomic(jl_genericmemory_t*) interp_sites;
 } jl_method_t;
 
 // This type is a placeholder to cache data for a specType signature specialization of a Method
