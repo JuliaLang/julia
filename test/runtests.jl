@@ -137,12 +137,36 @@ end
 
 # These leave state behind on their worker (`precompile`: packages loaded and methods
 # added to Base, `threads`: exited adopted threads), which breaks later tests on the
-# same worker, so the worker is replaced once they finish
+# same worker, so the worker is replaced once they finish. Order matters, since these
+# are moved to node1 when workers are not available
 const recycle_worker_tests = ["precompile", "threads"]
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
+
+# `net_on` implies that we have access to the loopback interface which is
+# necessary for Distributed multi-processing. There are some test
+# environments that do not allow access to loopback, so we must disable
+# addprocs when `net_on` is false. Note that there exist build environments,
+# including Nix, where `net_on` is false but we still have access to the
+# loopback interface. It would be great to make this check more specific to
+# identify those situations somehow. See
+#   * https://github.com/JuliaLang/julia/issues/6722
+#   * https://github.com/JuliaLang/julia/pull/29384
+#   * https://github.com/JuliaLang/julia/pull/40348
+# If the `JULIA_TEST_USE_MULTIPLE_WORKERS` environment variable is set to `true`, we use
+# multiple worker processes regardless of the value of `net_on`.
+# Otherwise, we use multiple worker processes if and only if `net_on` is true.
+const use_workers = net_on || Base.get_bool_env("JULIA_TEST_USE_MULTIPLE_WORKERS", false)
+
+# Without workers, nothing can replace the process that the tests in
+# `recycle_worker_tests` leave state behind in, so run them after all other tests
+if !use_workers
+    for test_to_move in recycle_worker_tests
+        move_to_node1(test_to_move)
+    end
+end
 
 # Start the longest tests first, so that they don't end up running alone at the end while
 # the other workers sit idle. Roughly in decreasing order of their duration on CI (Linux,
@@ -172,22 +196,8 @@ end
 
 import LinearAlgebra
 cd(@__DIR__) do
-    # `net_on` implies that we have access to the loopback interface which is
-    # necessary for Distributed multi-processing. There are some test
-    # environments that do not allow access to loopback, so we must disable
-    # addprocs when `net_on` is false. Note that there exist build environments,
-    # including Nix, where `net_on` is false but we still have access to the
-    # loopback interface. It would be great to make this check more specific to
-    # identify those situations somehow. See
-    #   * https://github.com/JuliaLang/julia/issues/6722
-    #   * https://github.com/JuliaLang/julia/pull/29384
-    #   * https://github.com/JuliaLang/julia/pull/40348
     n = 1
-    JULIA_TEST_USE_MULTIPLE_WORKERS = Base.get_bool_env("JULIA_TEST_USE_MULTIPLE_WORKERS", false)
-    # If the `JULIA_TEST_USE_MULTIPLE_WORKERS` environment variable is set to `true`, we use
-    # multiple worker processes regardless of the value of `net_on`.
-    # Otherwise, we use multiple worker processes if and only if `net_on` is true.
-    if net_on || JULIA_TEST_USE_MULTIPLE_WORKERS
+    if use_workers
         n = min(Sys.EFFECTIVE_CPU_THREADS, length(tests))
         n > 1 && addprocs_with_testenv(n)
         LinearAlgebra.BLAS.set_num_threads(1)
@@ -453,6 +463,16 @@ cd(@__DIR__) do
                         test = popfirst!(tests)
                         running_tests[test] = Dates.now()
                         wrkr = p
+                        # when testing in a single process, a test that leaves state behind
+                        # still runs on a worker of its own, so later tests do not see it
+                        own_worker = wrkr == 1 && use_workers && test in recycle_worker_tests
+                        if own_worker
+                            wrkr = addprocs_with_testenv(1)[1]
+                            remotecall_fetch(include, wrkr, "testdefs.jl")
+                            if use_revise
+                                Distributed.remotecall_eval(Main, wrkr, revise_init_expr)
+                            end
+                        end
                         running_on[test] = wrkr
                         @lock worker_prefixes_lock (worker_prefixes[wrkr] = output_prefix(test, wrkr))
 
@@ -498,6 +518,7 @@ cd(@__DIR__) do
                             delete!(test_timers, test)
                         end
                         push!(results, (test, resp, duration))
+                        own_worker && rmprocs_with_testenv(wrkr, waitfor=rmwait_timeout)
                         if length(resp) == 1
                             print_testworker_errored(test, wrkr, exit_on_error ? nothing : resp[1])
                             if exit_on_error
@@ -515,7 +536,7 @@ cd(@__DIR__) do
                             end
                         else
                             print_testworker_stats(test, wrkr, resp)
-                            if resp[end] > max_worker_rss || test in recycle_worker_tests
+                            if !own_worker && (resp[end] > max_worker_rss || test in recycle_worker_tests)
                                 # the worker has reached the max-rss limit or holds state
                                 # left behind by the test, recycle it so future tests start
                                 # with a smaller working set and a fresh environment
