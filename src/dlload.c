@@ -351,7 +351,7 @@ void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL
         handle = dlopen(path, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
     }
     if (handle != NULL && close)
-        dlclose(handle); // Undo ref count increment from `dlopen`
+        jl_dlclose(handle); // Undo ref count increment from `dlopen`
 #endif
     return handle;
 }
