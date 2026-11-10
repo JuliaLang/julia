@@ -24,6 +24,7 @@ typedef struct JL_GC_TRACKED_TYPE {
     size_t ip; // Leak the currently-evaluating statement index to backtrace capture
     int preevaluation; // use special rules for pre-evaluating expressions (deprecated--only for ccall handling)
     int continue_at; // statement index to jump to after leaving exception handler (0 if none)
+    jl_genericmemory_t *sites; // each statement's dispatch cache (see call_sites), or NULL
 } interpreter_state;
 
 
@@ -121,8 +122,10 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     for (i = 0; i < nargs; i++)
         argv[i] = eval_value(args[i], s);
     // the call expression's arguments identify the call site
-    jl_value_t *result = jl_apply_generic_site(argv[0], &argv[1], nargs - 1,
-                                               jl_int32hash_fast((uint32_t)((uintptr_t)args >> 3)));
+    uint32_t callsite = jl_int32hash_fast((uint32_t)((uintptr_t)args >> 3));
+    jl_value_t *result = s->sites != NULL && s->ip < s->sites->length ?
+        jl_apply_generic_cached(argv[0], &argv[1], nargs - 1, s->sites, s->ip, callsite) :
+        jl_apply_generic_site(argv[0], &argv[1], nargs - 1, callsite);
     JL_GC_POP();
     return result;
 }
@@ -929,6 +932,28 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
     return (jl_code_info_t*)code_or_ci;
 }
 
+// Each method body's cache of the dispatch at each of its statements (see
+// jl_apply_generic_cached), a Memory{Any} by statement index, found by the code it runs.
+// Top-level thunks, which mostly run once, have none.
+jl_genericmemory_t *jl_interp_call_sites JL_GLOBALLY_ROOTED = NULL;
+jl_mutex_t jl_interp_call_sites_lock;
+
+static jl_genericmemory_t *call_sites(jl_code_info_t *src, size_t nstmts) JL_CANSAFEPOINT
+{
+    JL_LOCK(&jl_interp_call_sites_lock);
+    if (jl_interp_call_sites == NULL)
+        jl_interp_call_sites = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    jl_genericmemory_t *sites = (jl_genericmemory_t*)jl_eqtable_get(jl_interp_call_sites, (jl_value_t*)src, NULL);
+    if (sites == NULL) {
+        JL_GC_PUSH1(&sites);
+        sites = jl_alloc_memory_any(nstmts);
+        jl_interp_call_sites = jl_eqtable_put(jl_interp_call_sites, (jl_value_t*)src, (jl_value_t*)sites, NULL);
+        JL_GC_POP();
+    }
+    JL_UNLOCK(&jl_interp_call_sites_lock);
+    return sites;
+}
+
 // interpreter entry points
 
 jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
@@ -951,12 +976,12 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     }
     jl_array_t *stmts = src->code;
     assert(jl_typetagis(stmts, jl_array_any_type));
-    unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 2;
+    unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 3;
     jl_value_t **locals = NULL;
     JL_GC_PUSHFRAME(s, locals, nroots);
     locals[0] = (jl_value_t*)src;
     locals[1] = (jl_value_t*)stmts;
-    s->locals = locals + 2;
+    s->locals = locals + 3;
     s->src = src;
     if (jl_is_module(mi->def.value)) {
         s->module = mi->def.module;
@@ -980,6 +1005,8 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->continue_at = 0;
     s->mi = mi;
     s->ci = ci;
+    s->sites = call_sites(src, jl_array_nrows(stmts));
+    locals[2] = (jl_value_t*)s->sites;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
@@ -1030,6 +1057,7 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     s->continue_at = 0;
     s->mi = NULL;
     s->ci = NULL;
+    s->sites = NULL;
     size_t defargs = source->nargs;
     int isva = source->isva;
     assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
@@ -1062,6 +1090,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     s->continue_at = 0;
     s->mi = NULL;
     s->ci = NULL;
+    s->sites = NULL;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 1);
     JL_GC_POP();
@@ -1084,6 +1113,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e
     s->continue_at = 0;
     s->mi = NULL;
     s->ci = NULL;
+    s->sites = NULL;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *v = eval_value(e, s);
     assert(v);

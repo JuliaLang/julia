@@ -5413,7 +5413,8 @@ STATIC_INLINE void call_cache_indices(uint32_t callsite, uint32_t cache_idx[4]) 
 // The lookup beyond the call-site cache, kept out of line so that the frame of
 // every dynamic call (`jl_apply_generic`) stays small
 static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_value_t **args, uint32_t nargs,
-                                                             uint32_t callsite, size_t world, int for_call) JL_CANSAFEPOINT
+                                                             uint32_t callsite, size_t world, int for_call,
+                                                             jl_typemap_entry_t **entry_out) JL_CANSAFEPOINT
 {
     // recomputed rather than passed in: taking the address of the caller's array
     // would put it on the stack and add a stack-protector check to `jl_apply_generic`
@@ -5467,6 +5468,8 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
     jl_method_instance_t *mfunc;
     if (entry) {
         mfunc = typemap_entry_linfo(entry);
+        if (entry_out)
+            *entry_out = entry;
     }
     else {
         assert(tt);
@@ -5493,7 +5496,8 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
 }
 
 STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t **args, uint32_t nargs,
-                                                       uint32_t callsite, size_t world, int for_call) JL_CANSAFEPOINT
+                                                       uint32_t callsite, size_t world, int for_call,
+                                                       jl_typemap_entry_t **entry_out) JL_CANSAFEPOINT
 {
 #ifdef JL_GF_PROFILE
     ncalls++;
@@ -5538,10 +5542,12 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     LOOP_BODY(2);
     LOOP_BODY(3);
 #undef LOOP_BODY
-    mfunc = jl_lookup_generic_slow(F, args, nargs, callsite, world, for_call);
+    mfunc = jl_lookup_generic_slow(F, args, nargs, callsite, world, for_call, entry_out);
     goto done;
 have_entry:
     mfunc = typemap_entry_linfo(entry);
+    if (entry_out)
+        *entry_out = entry;
 done:
 
 #ifdef JL_TRACE
@@ -5557,7 +5563,7 @@ jl_method_instance_t *jl_apply_lookup(jl_value_t **args, size_t nargs, size_t wo
 {
     assert(nargs);
     return jl_lookup_generic_(args[0], &args[1], nargs - 1,
-            jl_int32hash_fast(jl_return_address()), world, 0);
+            jl_int32hash_fast(jl_return_address()), world, 0, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
@@ -5565,7 +5571,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
     size_t world = jl_current_task->world_age;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
-                                                     world, 1);
+                                                     world, 1, NULL);
     JL_GC_PROMISE_ROOTED(mfunc);
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
 }
@@ -5575,7 +5581,73 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
 jl_value_t *jl_apply_generic_site(jl_value_t *F, jl_value_t **args, uint32_t nargs, uint32_t callsite)
 {
     size_t world = jl_current_task->world_age;
-    jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1);
+    jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1, NULL);
+    JL_GC_PROMISE_ROOTED(mfunc); // as in jl_apply_generic
+    return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
+}
+
+// What a call site's cache matches an argument on: its type, or TypeEgal{T} for an argument
+// that is the type T, on whose value dispatch can depend (NULL for a T with free typevars,
+// which is not cached). No argument has a TypeEgal{T} as its type, so the two cannot be confused.
+static jl_value_t *site_key(jl_value_t *a) JL_CANSAFEPOINT
+{
+    jl_value_t *t = jl_typeof(a);
+    if (!jl_is_kind(t))
+        return t;
+    return jl_has_free_typevars(a) ? NULL : jl_wrap_TypeEgal(a);
+}
+
+STATIC_INLINE int site_key_matches(jl_value_t *k, jl_value_t *a) JL_NOTSAFEPOINT
+{
+    return jl_typeof(a) == k || (jl_is_typeegal(k) && jl_typeegal_T(k) == a);
+}
+
+// jl_apply_generic for an interpreted call site with a cache of one dispatch, `sites[i]`:
+// svec(typemap entry, key of F, key of each argument), or NULL. A hit costs a comparison
+// per argument and a world check; on a miss the call is dispatched as usual, and replaces
+// what the site holds when its lookup found a method cache entry.
+jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t nargs,
+                                    jl_genericmemory_t *sites, size_t i, uint32_t callsite)
+{
+    size_t world = jl_current_task->world_age;
+    _Atomic(jl_value_t*) *slot = &((_Atomic(jl_value_t*)*)jl_genericmemory_ptr_data(sites))[i];
+    jl_svec_t *site = (jl_svec_t*)jl_atomic_load_acquire(slot);
+    if (site != NULL && jl_svec_len(site) == nargs + 2 && site_key_matches(jl_svecref(site, 1), F)) {
+        uint32_t j;
+        for (j = 0; j < nargs; j++) {
+            if (!site_key_matches(jl_svecref(site, j + 2), args[j]))
+                break;
+        }
+        jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_svecref(site, 0);
+        if (j == nargs && world >= jl_atomic_load_relaxed(&entry->min_world) &&
+                world <= jl_atomic_load_relaxed(&entry->max_world)) {
+            jl_method_instance_t *mfunc = typemap_entry_linfo(entry);
+            // owned by its method, not by `site`, which another thread may replace
+            JL_GC_PROMISE_ROOTED(mfunc);
+            return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
+        }
+    }
+    jl_typemap_entry_t *entry = NULL;
+    jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1, &entry);
+    if (entry != NULL) {
+        jl_value_t *k = NULL;
+        site = NULL;
+        JL_GC_PUSH4(&entry, &mfunc, &site, &k);
+        site = jl_alloc_svec(nargs + 2);
+        jl_svecset(site, 0, (jl_value_t*)entry);
+        uint32_t j;
+        for (j = 0; j <= nargs; j++) {
+            k = site_key(j == 0 ? F : args[j - 1]);
+            if (k == NULL)
+                break;
+            jl_svecset(site, j + 1, k);
+        }
+        if (j > nargs) {
+            jl_atomic_store_release(slot, (jl_value_t*)site);
+            jl_gc_wb(sites, slot, site);
+        }
+        JL_GC_POP();
+    }
     JL_GC_PROMISE_ROOTED(mfunc); // as in jl_apply_generic
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
 }
