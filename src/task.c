@@ -1779,7 +1779,7 @@ JL_NORETURN void jl_abandon_task_cb(void) JL_CANSAFEPOINT
 // jl_abandon_task_cb, which publishes the task state and settles the slot.
 // On refusal (or no pending request) 0 is returned; the requester observes
 // REFUSED and settles. Async-signal-safe: loads, stores and CAS only.
-int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
+int jl_abandon_try_commit(jl_ptls_t ptls2, int refuse) JL_NOTSAFEPOINT
 {
     uint8_t st = JL_ABANDON_PENDING;
     if (!jl_atomic_cmpswap(&ptls2->abandon_state, &st, JL_ABANDON_TAKEN))
@@ -1803,13 +1803,17 @@ int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
     //    finalizers on this thread);
     //  - the victim is in a signal-deferral region (sigatomic; this also
     //    covers the inference entry point);
+    //  - the victim waits at a safepoint or runs Julia's exception handler,
+    //    which hold locks and must run to completion (`refuse` reports
+    //    similar states the caller found in its frozen context);
     //  - the victim is inside the scheduler's sleep transition
     //    (sleep_check_state != not_sleeping): abandonment bypasses the
     //    JL_CATCH in jl_task_get_next that would restore the sleep state
     //    and running count, so the rescue task would re-enter the
     //    scheduler with sleep bookkeeping still claimed by the victim.
-    if (ct != t ||
+    if (refuse || ct != t ||
         jl_atomic_load_relaxed(&ptls2->gc_state) != 0 ||
+        jl_atomic_load_relaxed(&ptls2->fault_handling) != 0 ||
         ptls2->in_task_switch ||
         ptls2->locks.len != 0 ||
         ptls2->in_finalizer ||
