@@ -411,11 +411,12 @@ begin
     @label lab
 end
 #---------------------
-LoweringError:
+`goto` out of a `try` block is not permitted with `finally`
+@ :3
 begin
     try
         @goto lab
-#             └─┘ ── `goto` out of a `try` block is not permitted with `finally`
+#             └─┘
     finally
     end
 
@@ -430,11 +431,12 @@ begin
     @label lab
 end
 #---------------------
-LoweringError:
+`goto` out of a `catch` block is not permitted with `finally`
+@ :4
     try
     catch
         @goto lab
-#             └─┘ ── `goto` out of a `catch` block is not permitted with `finally`
+#             └─┘
     finally
     end
 
@@ -450,10 +452,11 @@ begin
     @label lab
 end
 #---------------------
-LoweringError:
+`goto` out of an `else` block is not permitted with `finally`
+@ :5
     catch
     else
         @goto lab
-#             └─┘ ── `goto` out of an `else` block is not permitted with `finally`
+#             └─┘
     finally
     end

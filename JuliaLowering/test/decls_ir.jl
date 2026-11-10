@@ -67,9 +67,10 @@ end
 # Error: Global declaration not allowed in value position
 y = global x
 #---------------------
-LoweringError:
+global declaration doesn't read the variable and can't return a value
+@ :1
 y = global x
-#          ╙ ── global declaration doesn't read the variable and can't return a value
+#          ╙
 
 ########################################
 # const
@@ -185,11 +186,12 @@ begin
     local x::S = 1
 end
 #---------------------
-LoweringError:
+multiple type declarations found for `x`
+@ :3
 begin
     local x::T = 1
     local x::S = 1
-#        └───────┘ ── multiple type declarations found for `x`
+#        └───────┘
 end
 
 ########################################
@@ -199,11 +201,12 @@ begin
     x::Int = 1
 end
 #---------------------
-LoweringError:
+multiple type declarations found for `x`
+@ :3
 begin
     local x::Int = 1
     x::Int = 1
-#   └────────┘ ── multiple type declarations found for `x`
+#   └────────┘
 end
 
 ########################################
@@ -237,49 +240,55 @@ end
 # Error: const ref
 const x[] = 1
 #---------------------
-LoweringError:
+cannot declare this form constant
+@ :1
 const x[] = 1
-#     └─┘ ── cannot declare this form constant
+#     └─┘
 
 ########################################
 # Error: const ref
 const x[2] = 1
 #---------------------
-LoweringError:
+cannot declare this form constant
+@ :1
 const x[2] = 1
-#     └──┘ ── cannot declare this form constant
+#     └──┘
 
 ########################################
 # Error: const setproperty
 const Main.x = 1
 #---------------------
-LoweringError:
+cannot declare this form constant
+@ :1
 const Main.x = 1
-#     └────┘ ── cannot declare this form constant
+#     └────┘
 
 ########################################
 # Error: const ref, tuple-nested
 const (a, (b, x[])) = (1, (2, 3))
 #---------------------
-LoweringError:
+cannot declare this form constant
+@ :1
 const (a, (b, x[])) = (1, (2, 3))
-#             └─┘ ── cannot declare this form constant
+#             └─┘
 
 ########################################
 # Error: const setproperty, tuple-nested
 const (a, (b, x.y)) = (1, (2, 3))
 #---------------------
-LoweringError:
+cannot declare this form constant
+@ :1
 const (a, (b, x.y)) = (1, (2, 3))
-#             └─┘ ── cannot declare this form constant
+#             └─┘
 
 ########################################
 # Error: Const not supported on locals
 const local x = 1
 #---------------------
-LoweringError:
+unsupported `const local` declaration
+@ :1
 const local x = 1
-#    └──────────┘ ── unsupported `const local` declaration
+#    └──────────┘
 
 ########################################
 # Error: Const not supported on locals
@@ -287,10 +296,11 @@ let
     const x = 1
 end
 #---------------------
-LoweringError:
+unsupported `const` declaration on local variable
+@ :2
 let
     const x = 1
-#        └────┘ ── unsupported `const` declaration on local variable
+#        └────┘
 end
 
 ########################################
@@ -300,11 +310,12 @@ begin
     const x = 1
 end
 #---------------------
-LoweringError:
+unsupported `const` declaration on local variable
+@ :3
 begin
     local x
     const x = 1
-#        └────┘ ── unsupported `const` declaration on local variable
+#        └────┘
 end
 
 ########################################
@@ -312,9 +323,10 @@ end
 let local a = 1
 end
 #---------------------
-LoweringError:
+expected identifier or assignment
+@ :1
 let local a = 1
-#   └─────────┘ ── expected identifier or assignment
+#   └─────────┘
 end
 
 ########################################
@@ -322,9 +334,10 @@ end
 let global a = 1
 end
 #---------------------
-LoweringError:
+expected identifier or assignment
+@ :1
 let global a = 1
-#   └──────────┘ ── expected identifier or assignment
+#   └──────────┘
 end
 
 ########################################
@@ -332,9 +345,10 @@ end
 let const a = 1
 end
 #---------------------
-LoweringError:
+expected identifier or assignment
+@ :1
 let const a = 1
-#   └─────────┘ ── expected identifier or assignment
+#   └─────────┘
 end
 
 ########################################
@@ -342,9 +356,10 @@ end
 let function foo end
 end
 #---------------------
-LoweringError:
+expected identifier or assignment
+@ :1
 let function foo end
-#   └──────────────┘ ── expected identifier or assignment
+#   └──────────────┘
 end
 
 ########################################
@@ -352,18 +367,20 @@ end
 let function foo(x); x; end
 end
 #---------------------
-LoweringError:
+expected identifier or assignment
+@ :1
 let function foo(x); x; end
-#   └─────────────────────┘ ── expected identifier or assignment
+#   └─────────────────────┘
 end
 
 ########################################
 # Error: Const not supported in function scope
 function (); global g; const g = 1; end
 #---------------------
-LoweringError:
+unsupported `const` inside function
+@ :1
 function (); global g; const g = 1; end
-#                      └─────────┘ ── unsupported `const` inside function
+#                      └─────────┘
 
 ########################################
 # Type decl on function argument
@@ -417,10 +434,11 @@ function f()
     global x::Int
 end
 #---------------------
-LoweringError:
+type declarations for global variables must be at top level, not inside a function
+@ :2
 function f()
     global x::Int
-#          └────┘ ── type declarations for global variables must be at top level, not inside a function
+#          └────┘
 end
 
 ########################################
@@ -429,10 +447,11 @@ function f()
     global x::Int = 1
 end
 #---------------------
-LoweringError:
+type declarations for global variables must be at top level, not inside a function
+@ :2
 function f()
     global x::Int = 1
-#         └─────────┘ ── type declarations for global variables must be at top level, not inside a function
+#         └─────────┘
 end
 
 ########################################
@@ -442,11 +461,12 @@ function f()
     x::Int = 1
 end
 #---------------------
-LoweringError:
+type declarations for global variables must be at top level, not inside a function
+@ :3
 function f()
     global x
     x::Int = 1
-#   └────────┘ ── type declarations for global variables must be at top level, not inside a function
+#   └────────┘
 end
 
 ########################################
@@ -550,8 +570,9 @@ function f()
     global (x::Int, y) = 1,2
 end
 #---------------------
-LoweringError:
+type declarations for global variables must be at top level, not inside a function
+@ :2
 function f()
     global (x::Int, y) = 1,2
-#         └────────────────┘ ── type declarations for global variables must be at top level, not inside a function
+#         └────────────────┘
 end

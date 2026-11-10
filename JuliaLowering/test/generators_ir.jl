@@ -149,9 +149,10 @@
 # Error: Use of placeholders in body
 (_ for _ in xs)
 #---------------------
-LoweringError:
+all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :1
 (_ for _ in xs)
-#╙ ── all-underscore identifiers are write-only and their values cannot be used in expressions
+#╙
 
 ########################################
 # 1D generator with destructuring
@@ -221,9 +222,10 @@ LoweringError:
 # Error: `return` not permitted in generator body
 ((return x) + y for x in iter)
 #---------------------
-LoweringError:
+`return` not allowed inside comprehension or generator
+@ :1
 ((return x) + y for x in iter)
-# └──────┘ ── `return` not allowed inside comprehension or generator
+# └──────┘
 
 ########################################
 # Error: `break` out of comprehension body inside `@label` block
@@ -231,10 +233,11 @@ LoweringError:
     Int[(x > 1 && break; x) for x in 1:3]
 end
 #---------------------
-LoweringError:
+unlabeled `break` outside of a `while` or `for` loop
+@ :2
 @label begin
     Int[(x > 1 && break; x) for x in 1:3]
-#                 └───┘ ── unlabeled `break` outside of a `while` or `for` loop
+#                 └───┘
 end
 
 ########################################

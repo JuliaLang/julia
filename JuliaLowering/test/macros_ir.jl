@@ -100,9 +100,10 @@ end
 macro mmm(a; b=2)
 end
 #---------------------
-LoweringError:
+macros cannot accept keyword arguments
+@ :1
 macro mmm(a; b=2)
-#         ╙ ── macros cannot accept keyword arguments
+#         ╙
 end
 
 ########################################
@@ -110,9 +111,10 @@ end
 macro mmm(a::T) where T
 end
 #---------------------
-LoweringError:
+`where` not allowed in macro signatures
+@ :1
 macro mmm(a::T) where T
-#     └───────────────┘ ── `where` not allowed in macro signatures
+#     └───────────────┘
 end
 
 ########################################
@@ -120,9 +122,10 @@ end
 macro mmm[](ex)
 end
 #---------------------
-LoweringError:
+invalid macro name
+@ :1
 macro mmm[](ex)
-#     └───┘ ── invalid macro name
+#     └───┘
 end
 
 ########################################
@@ -132,12 +135,13 @@ let
     end
 end
 #---------------------
-LoweringError:
+macro is only allowed in global scope
+@ :2
 let
 #   ┌────────────
     macro foo(ex)
     end
-#─────┘ ── macro is only allowed in global scope
+#─────┘
 end
 
 ########################################
@@ -147,12 +151,13 @@ function f()
     end
 end
 #---------------------
-LoweringError:
+this syntax is only allowed at top level
+@ :2
 function f()
 #   ┌──────────
     macro foo()
     end
-#─────┘ ── this syntax is only allowed at top level
+#─────┘
 end
 
 ########################################
@@ -162,8 +167,7 @@ _never_exist = @m_not_exist 42
 MacroExpansionError while expanding @m_not_exist in module Main.TestMod:
 _never_exist = @m_not_exist 42
 #              └──────────┘ ── Macro not found
-Caused by:
-UndefVarError: `@m_not_exist` not defined in `Main.TestMod`
+Caused by: UndefVarError: `@m_not_exist` not defined in `Main.TestMod`
 Suggestion: check for spelling errors or missing imports.
 
 ########################################
@@ -287,17 +291,19 @@ end
 # Error: thisfunction disallowed in comprehension/generator
 [@__FUNCTION__() for x in 1:2]
 #---------------------
-LoweringError:
+current function not defined in comprehension or generator
+@ :1
 [@__FUNCTION__() for x in 1:2]
-#└─────────────┘ ── current function not defined in comprehension or generator
+#└─────────────┘
 
 ########################################
 # Error: thisfunction disallowed in comprehension/generator
 f(@__FUNCTION__() for x in 1:2)
 #---------------------
-LoweringError:
+current function not defined in comprehension or generator
+@ :1
 f(@__FUNCTION__() for x in 1:2)
-# └─────────────┘ ── current function not defined in comprehension or generator
+# └─────────────┘
 
 ########################################
 # Error: thisfunction disallowed outside of function
@@ -305,10 +311,11 @@ let
     @__FUNCTION__()
 end
 #---------------------
-LoweringError:
+can only be used inside a function
+@ :2
 let
     @__FUNCTION__()
-#   └─────────────┘ ── can only be used inside a function
+#   └─────────────┘
 end
 
 ########################################

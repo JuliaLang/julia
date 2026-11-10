@@ -92,9 +92,10 @@ end
 let f[]::T = rhs
 end
 #---------------------
-LoweringError:
+Invalid assignment location in let syntax
+@ :1
 let f[]::T = rhs
-#   └─┘ ── Invalid assignment location in let syntax
+#   └─┘
 end
 
 ########################################
@@ -102,9 +103,10 @@ end
 let f[] = rhs
 end
 #---------------------
-LoweringError:
+Invalid assignment location in let syntax
+@ :1
 let f[] = rhs
-#   └─┘ ── Invalid assignment location in let syntax
+#   └─┘
 end
 
 ########################################
@@ -112,9 +114,10 @@ end
 let (obj::Callable)() = rhs
 end
 #---------------------
-LoweringError:
+Function signature does not define a local function name
+@ :1
 let (obj::Callable)() = rhs
-#   └───────────────┘ ── Function signature does not define a local function name
+#   └───────────────┘
 end
 
 ########################################
@@ -223,9 +226,10 @@ end
 function f(x, x)
 end
 #---------------------
-LoweringError:
+function argument name not unique
+@ :1
 function f(x, x)
-#             ╙ ── function argument name not unique
+#             ╙
 end
 
 ########################################
@@ -233,9 +237,10 @@ end
 function f(x, (x,))
 end
 #---------------------
-LoweringError:
+destructured argument name `x` conflicts with an existing argument from the same scope
+@ :1
 function f(x, (x,))
-#              ╙ ── destructured argument name `x` conflicts with an existing argument from the same scope
+#              ╙
 end
 
 ########################################
@@ -243,9 +248,10 @@ end
 function f(::T) where T where T
 end
 #---------------------
-LoweringError:
+function static parameter name not unique
+@ :1
 function f(::T) where T where T
-#                     ╙ ── function static parameter name not unique
+#                     ╙
 end
 
 ########################################
@@ -253,9 +259,10 @@ end
 function f(x::x) where x
 end
 #---------------------
-LoweringError:
+static parameter name `x` conflicts with an existing argument from the same scope
+@ :1
 function f(x::x) where x
-#                      ╙ ── static parameter name `x` conflicts with an existing argument from the same scope
+#                      ╙
 end
 
 ########################################
@@ -263,9 +270,10 @@ end
 function f((x,), (x,))
 end
 #---------------------
-LoweringError:
+destructured argument name `x` conflicts with an existing local variable from the same scope
+@ :1
 function f((x,), (x,))
-#                 ╙ ── destructured argument name `x` conflicts with an existing local variable from the same scope
+#                 ╙
 end
 
 ########################################
@@ -275,11 +283,12 @@ let
     global x
 end
 #---------------------
-LoweringError:
+global variable name `x` conflicts with an existing local variable from the same scope
+@ :3
 let
     local x
     global x
-#          ╙ ── global variable name `x` conflicts with an existing local variable from the same scope
+#          ╙
 end
 
 ########################################
@@ -288,10 +297,11 @@ function f(x)
     local x
 end
 #---------------------
-LoweringError:
+local variable name `x` conflicts with an existing argument from the same scope
+@ :2
 function f(x)
     local x
-#         ╙ ── local variable name `x` conflicts with an existing argument from the same scope
+#         ╙
 end
 
 ########################################
@@ -300,10 +310,11 @@ function f(x)
     global x
 end
 #---------------------
-LoweringError:
+global variable name `x` conflicts with an existing argument from the same scope
+@ :2
 function f(x)
     global x
-#          ╙ ── global variable name `x` conflicts with an existing argument from the same scope
+#          ╙
 end
 
 ########################################
@@ -313,10 +324,11 @@ function f((x,))
     global x
 end
 #---------------------
-LoweringError:
+global variable name `x` conflicts with an existing local variable from the same scope
+@ :2
 function f((x,))
     global x
-#          ╙ ── global variable name `x` conflicts with an existing local variable from the same scope
+#          ╙
 end
 
 ########################################
@@ -325,10 +337,11 @@ function f(::T) where T
     local T
 end
 #---------------------
-LoweringError:
+local variable name `T` conflicts with an existing static parameter from the same scope
+@ :2
 function f(::T) where T
     local T
-#         ╙ ── local variable name `T` conflicts with an existing static parameter from the same scope
+#         ╙
 end
 
 ########################################
@@ -337,10 +350,11 @@ function f(::T) where T
     global T
 end
 #---------------------
-LoweringError:
+global variable name `T` conflicts with an existing static parameter from the same scope
+@ :2
 function f(::T) where T
     global T
-#          ╙ ── global variable name `T` conflicts with an existing static parameter from the same scope
+#          ╙
 end
 
 ########################################
@@ -351,11 +365,12 @@ function f(::T) where T
     end
 end
 #---------------------
-LoweringError:
+cannot overwrite a static parameter
+@ :3
 function f(::T) where T
     let
         T = rhs
-#       ╙ ── cannot overwrite a static parameter
+#       ╙
     end
 end
 
@@ -366,10 +381,11 @@ function f(g)
     end
 end
 #---------------------
-LoweringError:
+Cannot add method to a function argument
+@ :2
 function f(g)
     function g()
-#            ╙ ── Cannot add method to a function argument
+#            ╙
     end
 end
 
@@ -381,11 +397,12 @@ function f()
     end
 end
 #---------------------
-LoweringError:
+Global method definition needs to be placed at the top level, or use `eval()`
+@ :3
 function f()
     global global_method
     function global_method()
-#            └───────────┘ ── Global method definition needs to be placed at the top level, or use `eval()`
+#            └───────────┘
     end
 end
 
