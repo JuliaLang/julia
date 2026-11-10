@@ -5,7 +5,8 @@ components with a few small *primitive* components is stored as a single
 pointer-sized *tagged word*: a value of a reference component as a plain object
 pointer, a value of a primitive component as the value itself plus a few tag
 bits. Storing or loading a small primitive value then involves no allocation
-and no pointer chasing. This complements the [isbits Union
+and no pointer chasing ([Compiled code](@ref tagged-words-compiled-code) lists
+the operations that still box one). This complements the [isbits Union
 Optimizations](isbitsunionarrays.md), which cover unions of `isbits` types
 only.
 
@@ -18,7 +19,16 @@ with `jl_get_nth_field` and `jl_set_nth_field`, or reads `Memory` elements with
 the words directly relies on the encoding. The boxed-element accessors
 `jl_genericmemory_ptr_ref`, `jl_array_ptr_ref` and their `_set` counterparts
 assert `arrayelem_isboxed`, so they do not apply to such `Memory`, as they do
-not apply to isbits union `Memory` either.
+not apply to isbits union `Memory` either. No exported function stores an
+element: C code writes the encoded word itself. Immediately before the store
+it takes the write barrier as for a boxed element, `jl_gc_wb(owner, slot,
+child)`, with the word as `child` if it is a reference and `NULL` if it is an
+immediate. The barrier is due for an immediate as well, since a collector may
+need to see the reference that the store overwrites.
+
+`julia.h` declares the layout fields and `jl_field_istagged`. The other C
+functions this page names, among them `jl_is_tagged_uniontype` and
+`jl_tagged_word_isptr`, are internal to the runtime (`julia_internal.h`).
 
 ## Which unions qualify
 
@@ -95,7 +105,7 @@ only asks whether a type holds references needs no change. Code that
 dereferences pointer-table entries skips any word that fails
 `jl_tagged_word_isptr`; for a plain pointer that test is the usual NULL check.
 `ntaggedwords` counts how many of the `npointers` entries are tagged words, so
-`ntaggedwords > 0` tells codegen that the type needs special handling.
+`ntaggedwords == 0` tells such code that every entry is a plain pointer.
 
 The fielddesc entry of a field stored as a tagged word reports `isptr = 0` and
 the size of a pointer; there is no selector byte, and `jl_field_istagged`
@@ -114,16 +124,47 @@ constrained exactly like structs holding references: they are never
 `pointerfree` or `isbits`, and an inline field of such a type is `#undef` when
 its first pointer is the zero word.
 
+## [Compiled code](@id tagged-words-compiled-code)
+
+Compiled code holds a tagged word as a GC-tracked pointer, whatever the word
+holds: that roots a reference, and the GC skips a root that is an immediate. A
+value of a struct that embeds a tagged word is therefore unboxed like any
+struct holding a reference, with the word among its roots. A write barrier
+reads the header of the object being stored, so storing such a struct takes
+the barrier only for the words that are references.
+
+Loading a field or element decodes its word into the representation codegen
+uses for a small union elsewhere: the index of the component, plus the payload
+or the reference. `getfield`, `setfield!`, `isdefined`, `memoryrefget`,
+`memoryrefset!`, `memoryref_isassigned` and `new` are compiled this way and box
+no immediate, and `===` compares two words as they are. The following call the
+runtime instead, which boxes an immediate it is passed or returns:
+
+* `swapfield!`, `modifyfield!`, `replacefield!` and `setfieldonce!` on a field
+  that is a tagged word, and their `memoryref` counterparts on an element that
+  is one. A field or element whose type is a struct embedding a tagged word
+  is not affected.
+* Every access to a tagged word whose union has an immediate component outside
+  the 127 components that a union index can name, or a reference component
+  that codegen unboxes although it holds references itself, such as
+  `Some{String}` in `Union{Int16, Some{String}}`.
+
+A struct embedding a tagged word cannot be passed to or returned from `ccall`
+by value, since C would receive the raw word.
+
 ## Notes
 
 * Data races on non-atomic tagged words are undefined behavior, as for any
   non-atomic Julia field; the two halves of a decoded word (kind and payload)
-  come from one atomic word load in the runtime.
+  come from one load of the word, in the runtime and in compiled code.
 * A conservative stack scanner, as a GC extension builds one on
   `jl_gc_internal_obj_base_ptr`, sees an immediate as it sees any other integer
   on the stack. That function resolves an address inside an object whether or
   not it is aligned, so at worst the immediate keeps an unrelated object alive.
 * The encoding assumes little-endian payload extraction, like the rest of the
   runtime.
-* `unsafe_wrap` refuses element types holding tagged words: a foreign buffer
-  cannot hold GC-managed references.
+* `unsafe_wrap` throws an `ArgumentError` for an element type that is or
+  embeds a tagged word, as it does for an isbits union. Before this layout
+  such a buffer held a pointer in every slot, and wrapping one unchanged would
+  break the rule that a value of an immediate component is always stored as
+  an immediate.
