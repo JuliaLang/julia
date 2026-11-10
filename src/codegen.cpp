@@ -1738,17 +1738,6 @@ static bool jl_is_pointerfree(jl_value_t* t)
     return layout && layout->npointers == 0;
 }
 
-// whether the layout embeds tagged words, which codegen accesses itself only
-// as a field of a heap object or as a Memory element (emit_tagged_load and
-// emit_tagged_store); other uses go through the runtime
-static bool type_has_taggedwords(jl_value_t *t)
-{
-    if (!jl_is_datatype(t))
-        return false;
-    const jl_datatype_layout_t *layout = ((jl_datatype_t*)t)->layout;
-    return layout && layout->ntaggedwords > 0;
-}
-
 static bool allpointers(size_t size, size_t npointers)
 {
     return size == npointers * sizeof(void*);
@@ -1768,11 +1757,6 @@ static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut) JL_CANSAFEPOIN
 static bool deserves_stack(jl_value_t* t) JL_CANSAFEPOINT
 {
     if (!jl_is_concrete_immutable(t))
-        return false;
-    // TODO: stack representation of tagged words (a root that may hold an
-    // immediate does not fit the split bits/roots scheme yet); keep such
-    // types boxed
-    if (type_has_taggedwords(t))
         return false;
     jl_datatype_t *dt = (jl_datatype_t*)t;
     return jl_is_datatype_singleton(dt) || jl_datatype_isinlinealloc(dt, /* (require) pointerfree */ 0);
@@ -4246,6 +4230,44 @@ static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const 
 
 static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2) JL_CANSAFEPOINT;
 
+// whether every reference component among the components `t` of tagged union
+// `ut` is egal only to itself
+static bool tagged_refs_pointer_egal(jl_value_t *ut, jl_value_t *t)
+{
+    if (jl_is_uniontype(t))
+        return tagged_refs_pointer_egal(ut, ((jl_uniontype_t*)t)->a) &&
+               tagged_refs_pointer_egal(ut, ((jl_uniontype_t*)t)->b);
+    unsigned imm;
+    if (jl_is_datatype(t) && jl_immediate_component_index(ut, (jl_datatype_t*)t, &imm))
+        return true;
+    return jl_pointer_egal(t);
+}
+
+// Whether two tagged words of union type `ut` hold egal values. Immediates
+// have one encoding each, so they and #undef compare by word; references
+// compare by content.
+static Value *emit_tagged_egal(jl_codectx_t &ctx, Value *word1, bool maybe_null1,
+                               Value *word2, bool maybe_null2, jl_value_t *ut) JL_CANSAFEPOINT
+{
+    Value *bits1 = emit_tagged_bits(ctx, word1, maybe_null1);
+    Value *bits2 = emit_tagged_bits(ctx, word2, maybe_null2);
+    Value *same = ctx.builder.CreateICmpEQ(bits1, bits2);
+    if (tagged_refs_pointer_egal(ut, ut))
+        return same;
+    Value *bothrefs = emit_tagged_isref(ctx, ctx.builder.CreateOr(bits1, bits2));
+    if (maybe_null1)
+        bothrefs = ctx.builder.CreateAnd(bothrefs, ctx.builder.CreateIsNotNull(bits1));
+    if (maybe_null2)
+        bothrefs = ctx.builder.CreateAnd(bothrefs, ctx.builder.CreateIsNotNull(bits2));
+    Value *differ = ctx.builder.CreateAnd(ctx.builder.CreateNot(same), bothrefs);
+    return emit_guarded_test(ctx, differ, same, [&] () JL_CANSAFEPOINT {
+        return emit_box_compare(ctx,
+                mark_julia_type(ctx, word1, true, jl_any_type),
+                mark_julia_type(ctx, word2, true, jl_any_type),
+                nullptr, nullptr);
+    });
+}
+
 static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2) JL_CANSAFEPOINT
 {
     ++EmittedBitsUnionCompares;
@@ -4377,6 +4399,14 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
                 jl_value_t *fldty = jl_svecref(types, i);
                 if (type_is_ghost(julia_type_to_llvm(ctx, fldty)))
                     continue;
+                if (jl_is_tagged_uniontype(fldty) && !is_undef_value(arg1) && !is_undef_value(arg2)) {
+                    Value *word1 = emit_tagged_field_word(ctx, arg1, i, sty, AtomicOrdering::Unordered);
+                    Value *word2 = emit_tagged_field_word(ctx, arg2, i, sty, AtomicOrdering::Unordered);
+                    Value *egal = emit_tagged_egal(ctx, word1, field_may_be_null(arg1, sty, i),
+                                                   word2, field_may_be_null(arg2, sty, i), fldty);
+                    answer = ctx.builder.CreateAnd(answer, egal);
+                    continue;
+                }
                 Value *nullcheck1 = nullptr;
                 Value *nullcheck2 = nullptr;
                 auto fld1 = emit_getfield_knownidx(ctx, arg1, i, sty, jl_memory_order_notatomic, &nullcheck1);
@@ -4450,10 +4480,9 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
         return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
 
     // can compare any concrete immutable by bits, except for UnionAll, which
-    // has a special non-bits based egal, and for types embedding tagged
-    // words, whose reference components compare by contents, not by word
-    bool justbits1 = jl_is_concrete_immutable(rt1) && !jl_is_kind(rt1) && !type_has_taggedwords(rt1);
-    bool justbits2 = jl_is_concrete_immutable(rt2) && !jl_is_kind(rt2) && !type_has_taggedwords(rt2);
+    // has a special non-bits based egal
+    bool justbits1 = jl_is_concrete_immutable(rt1) && !jl_is_kind(rt1);
+    bool justbits2 = jl_is_concrete_immutable(rt2) && !jl_is_kind(rt2);
     if (justbits1 || justbits2) { // whether this type is unique'd by value
         return emit_nullcheck_guard2(ctx, nullcheck1, nullcheck2, [&] () JL_CANSAFEPOINT -> Value* {
             jl_datatype_t *typ = (jl_datatype_t*)(justbits1 ? rt1 : rt2);
@@ -4560,11 +4589,6 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             if (jl_is_tagged_uniontype(ft) && op != StoreKind::Set) {
                 // TODO: direct codegen for swap/modify/replace/setonce of a
                 // tagged word; the generic builtin handles them
-                return false;
-            }
-            if (!jl_field_isptr(uty, idx) && type_has_taggedwords(ft)) {
-                // an inline value embedding tagged words needs a barrier over
-                // the references they hold, which only the runtime does
                 return false;
             }
             if (!jl_has_free_typevars(ft)) {
@@ -5056,8 +5080,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             *ret = ghostValue(ctx, jl_emptytuple_type);
             return true;
         }
-        if (jl_is_tuple_type(rt) && jl_is_concrete_type(rt) && nargs == jl_datatype_nfields(rt) &&
-            !type_has_taggedwords(rt)) {
+        if (jl_is_tuple_type(rt) && jl_is_concrete_type(rt) && nargs == jl_datatype_nfields(rt)) {
             *ret = emit_new_struct(ctx, rt, nargs, argv.drop_front(), is_promotable);
             return true;
         }
@@ -6009,14 +6032,8 @@ isdefined_unknown_idx:
         }
         else if (jl_is_tagged_uniontype(jl_field_type(stt, fieldidx))) {
             // a tagged word is defined iff it is nonzero
-            assert(obj.ispointer());
-            size_t offs = jl_field_offset(stt, fieldidx);
-            auto ai = best_field_aliasinfo(ctx, obj, stt, fieldidx, offs);
-            Value *ptr = data_pointer(ctx, obj);
-            Value *addr = offs == 0 ? ptr : emit_ptrgep(ctx, ptr, offs);
-            LoadInst *w = ctx.builder.CreateAlignedLoad(ctx.types().T_size, addr, ctx.types().alignof_ptr);
-            w->setOrdering(order <= jl_memory_order_notatomic ? AtomicOrdering::Unordered : get_llvm_atomic_order(order));
-            ai.decorateInst(w);
+            Value *w = emit_tagged_field_word(ctx, obj, fieldidx, stt,
+                    order <= jl_memory_order_notatomic ? AtomicOrdering::Unordered : get_llvm_atomic_order(order));
             Value *isdef = ctx.builder.CreateIsNotNull(w);
             setName(ctx.emission_context, isdef, "isdefined");
             *ret = mark_julia_type(ctx, isdef, false, jl_bool_type);

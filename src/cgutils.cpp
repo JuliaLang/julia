@@ -401,6 +401,25 @@ static void find_perm_offsets(jl_datatype_t *typ, SmallVectorImpl<unsigned> &res
     }
 }
 
+// find the offsets of the tagged words of `typ`, an inline value at `offset`
+static void find_tagged_offsets(jl_datatype_t *typ, SmallVectorImpl<unsigned> &res, unsigned offset) JL_CANSAFEPOINT
+{
+    if (!typ->layout || typ->layout->ntaggedwords == 0)
+        return;
+    jl_svec_t *types = jl_get_fieldtypes(typ);
+    size_t nf = jl_svec_len(types);
+    for (size_t i = 0; i < nf; i++) {
+        if (jl_field_isptr(typ, i))
+            continue;
+        jl_value_t *fld = jl_svecref(types, i);
+        unsigned fldoffset = offset + jl_field_offset(typ, i);
+        if (jl_is_datatype(fld))
+            find_tagged_offsets((jl_datatype_t*)fld, res, fldoffset);
+        else if (jl_is_tagged_uniontype(fld))
+            res.push_back(fldoffset);
+    }
+}
+
 static Value *CreateSimplifiedExtractValue(jl_codectx_t &ctx, Value *Agg, ArrayRef<unsigned> Idxs)
 {
     // aka IRBuilder<InstSimplifyFolder>
@@ -1065,18 +1084,11 @@ static Type *_julia_struct_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, 
                 abort();
             }
             Type *lty;
-            if (jl_field_isptr(jst, i)) {
+            if (jl_field_isptr(jst, i) || jl_is_tagged_uniontype(ty)) {
+                // a tagged word is a tracked pointer too: that roots a
+                // reference, and the GC skips an immediate
                 lty = JuliaType::get_prjlvalue_ty(ctxt);
                 isvector = false;
-            }
-            else if (jl_is_tagged_uniontype(ty)) {
-                // a tagged word; access goes through typed loads/stores
-                // keyed on its low bits, never through this slot as a tracked pointer
-                latypes.push_back(bitstype_to_llvm((jl_value_t*)jl_long_type, ctxt));
-                isvector = false;
-                isarray = false;
-                allghost = false;
-                continue;
             }
             else if (jl_is_uniontype(ty)) {
                 // pick an Integer type size such that alignment will generally be correct,
@@ -1543,7 +1555,9 @@ static std::pair<ssize_t,ssize_t> split_value_field(jl_datatype_t *typ, unsigned
             if (ptr >= fldoff + jl_field_size(typ, idx))
                 break;
             jl_value_t *ft = jl_field_type(typ, idx);
-            bool onlyptr = jl_field_isptr(typ, idx) || (jl_is_datatype(ft) && allpointers((jl_datatype_t*)ft));
+            // a Union field holding a pointer is a tagged word
+            bool onlyptr = jl_field_isptr(typ, idx) || jl_is_uniontype(ft) ||
+                           (jl_is_datatype(ft) && allpointers((jl_datatype_t*)ft));
             return std::make_pair(onlyptr ? -1 : (ssize_t)fldoff, (ssize_t)i);
         }
     }
@@ -2724,6 +2738,8 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         const jl_aliasinfo_t &dst_ai, const jl_cgval_t &src, Value *tindex, Value *skip, bool isVolatile=false) JL_CANSAFEPOINT;
 static bool tagged_union_has_codegen(jl_value_t *ut) JL_CANSAFEPOINT;
+static jl_cgval_t emit_tagged_decode(jl_codectx_t &ctx, Value *word, jl_value_t *ut,
+                                     bool maybe_null, Value **nullcheck) JL_CANSAFEPOINT;
 static jl_cgval_t emit_tagged_load(jl_codectx_t &ctx, Value *ptr, jl_value_t *ut, const jl_aliasinfo_t &ai,
                                    AtomicOrdering Order, bool maybe_null, Value **nullcheck) JL_CANSAFEPOINT;
 static void emit_tagged_store(jl_codectx_t &ctx, Value *parent, Value *ptr, const jl_cgval_t &rhs,
@@ -2835,8 +2851,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (FailOrder == AtomicOrdering::Release)
             FailOrder = AtomicOrdering::Monotonic;
         nb = isboxed ? sizeof(void*) : jl_datatype_size(jltype);
-        // tagged words lower to integers, so CountTrackedPointers misses them
-        tracked_pointers = isboxed || CountTrackedPointers(elty).count > 0 || type_has_taggedwords(jltype);
+        tracked_pointers = isboxed || CountTrackedPointers(elty).count > 0;
         if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
             intcast_eltyp = elty;
             elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb);
@@ -2879,10 +2894,6 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     auto emit_store_pre_barrier = [&](Value *r, const jl_cgval_t &rhs) JL_CANSAFEPOINT {
         if (parent == NULL || !tracked_pointers)
             return;
-        // the multibarrier misses references in tagged words, integers to
-        // LLVM; emit_f_opfield and memory_has_codegen leave such stores to the
-        // runtime
-        assert(isboxed || !type_has_taggedwords(jltype));
         if (isboxed) {
             // Insertion-barrier optimization: skip when the new value is perm-allocated.
             // Invalid under SATB (GC_BARRIER_SNAPSHOT), which must snapshot the old value.
@@ -2960,7 +2971,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         store_ai.decorateInst(store);
         instr = store;
     }
-    else if (op == StoreKind::Modify && modifyop && !needlock && Order != AtomicOrdering::NotAtomic && !isboxed && realelty == elty && !intcast && elty->isIntegerTy() && !jl_type_hasptr(jltype) && !type_has_taggedwords(jltype)) {
+    else if (op == StoreKind::Modify && modifyop && !needlock && Order != AtomicOrdering::NotAtomic && !isboxed && realelty == elty && !intcast && elty->isIntegerTy() && !jl_type_hasptr(jltype)) {
         // emit this only if we have a possibility of optimizing it
         if (Order == AtomicOrdering::Unordered)
             Order = AtomicOrdering::Monotonic;
@@ -3603,6 +3614,34 @@ static jl_aliasinfo_t best_field_aliasinfo(jl_codectx_t &ctx, const jl_cgval_t &
     return ai;
 }
 
+// the tagged word in field `idx` of `strct`, whose value is not an UndefValue
+static Value *emit_tagged_field_word(jl_codectx_t &ctx, const jl_cgval_t &strct, unsigned idx,
+                                     jl_datatype_t *jt, AtomicOrdering Order) JL_CANSAFEPOINT
+{
+    size_t byte_offset = jl_field_offset(jt, idx);
+    if (!strct.inline_roots.empty())
+        return strct.inline_roots.get(ctx, split_value_field(jt, idx).second);
+    if (strct.ispointer()) {
+        Value *addr = emit_ptrgep(ctx, data_pointer(ctx, strct), byte_offset);
+        // one load yields kind and payload together
+        LoadInst *word = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, addr, ctx.types().alignof_ptr);
+        word->setOrdering(Order);
+        best_field_aliasinfo(ctx, strct, jt, idx, byte_offset).decorateInst(word);
+        setName(ctx.emission_context, word, "tagged_word");
+        return word;
+    }
+    Type *T = strct.V->getType();
+    assert(isa<ArrayType>(T) || isa<StructType>(T)); // a Union field keeps a VecElement wrapped
+    unsigned st_idx = isa<ArrayType>(T) ? idx : convert_struct_offset(ctx, T, byte_offset);
+    return ctx.builder.CreateExtractValue(strct.V, ArrayRef<unsigned>(st_idx));
+}
+
+// whether `v` is a value codegen left undefined, as after an error
+static bool is_undef_value(const jl_cgval_t &v)
+{
+    return v.inline_roots.empty() && !v.ispointer() && v.V && isa<UndefValue>(v.V);
+}
+
 // If `nullcheck` is not NULL and a pointer NULL check is necessary
 // store the pointer to be checked in `*nullcheck` instead of checking it
 static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &strct,
@@ -3631,22 +3670,21 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
     }
     if (type_is_ghost(julia_type_to_llvm(ctx, jfty)))
         return ghostValue(ctx, jfty);
-    bool istagged = jl_is_tagged_uniontype(jfty);
-    if (istagged && strct.inline_roots.empty() && strct.ispointer() && tagged_union_has_codegen(jfty)) {
-        size_t byte_offset = jl_field_offset(jt, idx);
-        Value *addr = emit_ptrgep(ctx, data_pointer(ctx, strct), byte_offset);
-        return emit_tagged_load(ctx, addr, jfty, best_field_aliasinfo(ctx, strct, jt, idx, byte_offset),
-                order <= jl_memory_order_notatomic ? AtomicOrdering::Unordered : get_llvm_atomic_order(order),
-                field_may_be_null(strct, jt, idx), nullcheck);
-    }
-    // Otherwise decode through the runtime (throws UndefRefError for the zero
-    // word). That includes the #undef check of an inline value whose first
-    // pointer is a tagged word, an integer to LLVM.
-    if (istagged ||
-        (!jl_field_isptr(jt, idx) && type_has_taggedwords(jfty) && field_may_be_null(strct, jt, idx))) {
-        Value *fld = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func),
-                { boxed(ctx, strct), ConstantInt::get(ctx.types().T_size, idx) });
-        return mark_julia_type(ctx, fld, true, jfty);
+    // codegen goes by the field type, the runtime by the layout, which an
+    // abstract GenericMemory type lacks
+    assert(!jt->layout || jl_field_istagged(jt, idx) == (jl_is_tagged_uniontype(jfty) != 0));
+    if (jl_is_tagged_uniontype(jfty)) {
+        if (!tagged_union_has_codegen(jfty)) {
+            // decode through the runtime (throws UndefRefError for the zero word)
+            Value *fld = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func),
+                    { boxed(ctx, strct), ConstantInt::get(ctx.types().T_size, idx) });
+            return mark_julia_type(ctx, fld, true, jfty);
+        }
+        if (is_undef_value(strct))
+            return jl_cgval_t();
+        Value *word = emit_tagged_field_word(ctx, strct, idx, jt,
+                order <= jl_memory_order_notatomic ? AtomicOrdering::Unordered : get_llvm_atomic_order(order));
+        return emit_tagged_decode(ctx, word, jfty, field_may_be_null(strct, jt, idx), nullcheck);
     }
     Value *needlock = nullptr;
     if (isatomic && !jl_field_isptr(jt, idx) && jl_datatype_size(jfty) > MAX_ATOMIC_SIZE) {
@@ -4428,30 +4466,61 @@ static bool tagged_union_has_codegen(jl_value_t *ut)
     return inline_roots == 0;
 }
 
-// whether codegen accesses the elements of Memory{ety} with `layout` itself;
-// elements embedding tagged words in a struct go through the runtime
+// whether codegen accesses the elements of Memory{ety} with `layout` itself
 static bool memory_has_codegen(const jl_datatype_layout_t *layout, jl_value_t *ety) JL_CANSAFEPOINT
 {
-    if (layout->ntaggedwords == 0)
-        return true;
-    return layout->flags.arrayelem_istagged && tagged_union_has_codegen(ety);
+    return !layout->flags.arrayelem_istagged || tagged_union_has_codegen(ety);
 }
 
-static jl_cgval_t emit_tagged_load(jl_codectx_t &ctx, Value *ptr, jl_value_t *ut, const jl_aliasinfo_t &ai,
-                                   AtomicOrdering Order, bool maybe_null, Value **nullcheck)
+// whether a field of `sty` is a tagged word that only the runtime stores
+static bool has_runtime_tagged_field(jl_datatype_t *sty) JL_CANSAFEPOINT
+{
+    if (sty->layout->ntaggedwords == 0)
+        return false;
+    for (size_t i = 0, nf = jl_datatype_nfields(sty); i < nf; i++) {
+        jl_value_t *ft = jl_field_type(sty, i);
+        if (!jl_field_isptr(sty, i) && jl_is_tagged_uniontype(ft) && !tagged_union_has_codegen(ft))
+            return true;
+    }
+    return false;
+}
+
+// A tagged word is a tracked pointer wherever it is a value: that roots a
+// reference, and the GC skips an immediate. These give its bits, and whether
+// such bits are a reference (or #undef) rather than an immediate.
+static Value *emit_tagged_bits(jl_codectx_t &ctx, Value *word, bool maybe_null=false)
+{
+    Value *bits = ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, word), ctx.types().T_size);
+    if (maybe_null) // julia.pointer_from_objref is poison for #undef
+        bits = ctx.builder.CreateSelect(ctx.builder.CreateIsNull(word), ConstantInt::get(ctx.types().T_size, 0), bits);
+    return bits;
+}
+
+static Value *emit_tagged_isref(jl_codectx_t &ctx, Value *bits)
+{
+    return ctx.builder.CreateIsNull(ctx.builder.CreateAnd(bits, ConstantInt::get(ctx.types().T_size, 3)));
+}
+
+// The child a write barrier sees for tagged word `word`, which is not #undef.
+// The barrier reads its child's header, which an immediate lacks; `parent` in
+// its place never triggers the barrier.
+static Value *emit_tagged_barrier_child(jl_codectx_t &ctx, Value *parent, Value *word)
+{
+    Value *isref = emit_tagged_isref(ctx, emit_tagged_bits(ctx, word));
+    return ctx.builder.CreateSelect(isref, word, maybe_decay_untracked(ctx, parent));
+}
+
+// the value of union type `ut` that tagged word `word` holds
+static jl_cgval_t emit_tagged_decode(jl_codectx_t &ctx, Value *word, jl_value_t *ut,
+                                     bool maybe_null, Value **nullcheck) JL_CANSAFEPOINT
 {
     Type *T_size = ctx.types().T_size;
     IntegerType *T_int8 = getInt8Ty(ctx.builder.getContext());
-    // one load yields kind and payload together; as a tracked pointer it roots
-    // a reference, and the GC skips an immediate
-    LoadInst *word = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, ptr, ctx.types().alignof_ptr);
-    word->setOrdering(Order);
-    ai.decorateInst(word);
-    setName(ctx.emission_context, word, "tagged_word");
     if (maybe_null)
         null_pointer_check(ctx, word, nullcheck);
-    Value *bits = ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, word), T_size);
-    Value *isref = ctx.builder.CreateIsNull(ctx.builder.CreateAnd(bits, ConstantInt::get(T_size, 3)));
+    // a caller that takes `nullcheck` tests for #undef only later
+    Value *bits = emit_tagged_bits(ctx, word, maybe_null && nullcheck);
+    Value *isref = emit_tagged_isref(ctx, bits);
     Value *box = ctx.builder.CreateSelect(isref, word, Constant::getNullValue(ctx.types().T_prjlvalue));
 
     // tag 2i + 1 selects immediate component i, whose index a table packed one
@@ -4499,6 +4568,17 @@ static jl_cgval_t emit_tagged_load(jl_codectx_t &ctx, Value *ptr, jl_value_t *ut
     jl_cgval_t ret = mark_julia_slot(V, ut, tindex, union_slot_aliasinfo(ctx, ut));
     ret.Vboxed = box;
     return ret;
+}
+
+// the value of union type `ut` in the tagged word at `ptr`
+static jl_cgval_t emit_tagged_load(jl_codectx_t &ctx, Value *ptr, jl_value_t *ut, const jl_aliasinfo_t &ai,
+                                   AtomicOrdering Order, bool maybe_null, Value **nullcheck)
+{
+    LoadInst *word = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, ptr, ctx.types().alignof_ptr);
+    word->setOrdering(Order);
+    ai.decorateInst(word);
+    setName(ctx.emission_context, word, "tagged_word");
+    return emit_tagged_decode(ctx, word, ut, maybe_null, nullcheck);
 }
 
 // the tagged word holding immediate `v` of component `jt`, as an integer
@@ -4911,13 +4991,20 @@ static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *dst
                                     Value *agg, jl_value_t *jltype)
 {
     SmallVector<unsigned, 4> perm_offsets;
+    SmallVector<unsigned, 4> tagged_offsets;
     // Permanent children can be skipped by insertion barriers, but not snapshot barriers.
+    if (jltype && jl_is_datatype(jltype) && ((jl_datatype_t*)jltype)->layout) {
 #ifndef GC_BARRIER_SNAPSHOT
-    if (jltype && jl_is_datatype(jltype) && ((jl_datatype_t*)jltype)->layout)
         find_perm_offsets((jl_datatype_t*)jltype, perm_offsets, 0);
 #endif
+        find_tagged_offsets((jl_datatype_t*)jltype, tagged_offsets, 0);
+    }
     SmallVector<unsigned, 4> offsets;
     auto ptrs = ExtractTrackedValues(ctx, agg, perm_offsets, &offsets);
+    for (size_t i = 0; i < ptrs.size(); i++) {
+        if (is_contained(tagged_offsets, offsets[i]))
+            ptrs[i] = emit_tagged_barrier_child(ctx, parent, ptrs[i]);
+    }
     emit_field_write_barrier(ctx, parent, dst, ptrs, offsets);
 }
 
@@ -4927,9 +5014,11 @@ static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *dst
     const auto &roots = x.inline_roots;
     assert(jl_is_concrete_type(x.typ) && roots.size() == dt->layout->npointers);
     SmallVector<unsigned, 4> perm_offsets;
+    SmallVector<unsigned, 4> tagged_offsets;
 #ifndef GC_BARRIER_SNAPSHOT
     find_perm_offsets(dt, perm_offsets, 0);
 #endif
+    find_tagged_offsets(dt, tagged_offsets, 0);
     SmallVector<Value*, 4> children;
     SmallVector<unsigned, 4> offsets;
     // Match the field order used by recombine_value when storing these roots.
@@ -4937,7 +5026,10 @@ static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *dst
         unsigned offset = jl_ptr_offset(dt, i) * ctx.types().sizeof_ptr;
         if (std::find(perm_offsets.begin(), perm_offsets.end(), offset) != perm_offsets.end())
             continue;
-        children.push_back(roots.get(ctx, i));
+        Value *child = roots.get(ctx, i);
+        if (is_contained(tagged_offsets, offset))
+            child = emit_tagged_barrier_child(ctx, parent, child);
+        children.push_back(child);
         offsets.push_back(offset);
     }
     emit_field_write_barrier(ctx, parent, dst, children, offsets);
@@ -5004,7 +5096,8 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
     };
     size_t nf = jl_datatype_nfields(sty);
     if (nf > 0 || sty->name->mutabl) {
-        if (deserves_stack(ty)) {
+        // the runtime stores into an object, so such a value starts out boxed
+        if (deserves_stack(ty) && !has_runtime_tagged_field(sty)) {
             Type *lt = julia_type_to_llvm(ctx, ty);
             unsigned na = nargs < nf ? nargs : nf;
 
@@ -5088,7 +5181,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     // and use memcpy instead
                     Instruction *inst = strct && offs >= 0 ? cast<Instruction>(ctx.builder.CreateConstInBoundsGEP1_32(getInt8Ty(ctx.builder.getContext()), strct, offs)) : nullptr;
                     if (!inline_roots.empty() && ptrsoffs >= 0)
-                        roots = MutableArrayRef(inline_roots).slice(ptrsoffs, jl_field_isptr(sty, i) ? 1 : ((jl_datatype_t*)jtype)->layout->npointers);
+                        roots = MutableArrayRef(inline_roots).slice(ptrsoffs, jl_field_isptr(sty, i) || jl_is_uniontype(jtype) ? 1 : ((jl_datatype_t*)jtype)->layout->npointers);
                     dest = inst;
                     // Our promotion point needs to come before
                     //  A) All of our arguments' promotion points
@@ -5115,6 +5208,15 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                         else {
                             roots[0] = fval;
                         }
+                        roots = roots.slice(0, 0);
+                    }
+                }
+                else if (jl_is_tagged_uniontype(jtype)) {
+                    Value *ref;
+                    bool ref_maybe_null;
+                    fval = emit_tagged_encode(ctx, fval_info, jtype, &ref, &ref_maybe_null);
+                    if (!init_as_value) {
+                        roots[0] = fval;
                         roots = roots.slice(0, 0);
                     }
                 }
@@ -5207,7 +5309,8 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             }
             if (init_as_value) {
                 for (size_t i = nargs; i < nf; i++) {
-                    if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
+                    jl_value_t *ft = jl_field_type(sty, i);
+                    if (!jl_field_isptr(sty, i) && jl_is_uniontype(ft) && !jl_is_tagged_uniontype(ft)) {
                         ssize_t offs = jl_field_offset(sty, i);
                         ssize_t ptrsoffs = -1;
                         if (!inline_roots.empty())
@@ -5256,7 +5359,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 if (jl_is_tagged_uniontype(jl_field_type(sty, i))) {
                     // the zero word is #undef
                     auto *store = ctx.builder.CreateAlignedStore(
-                            ConstantInt::get(ctx.types().T_size, 0),
+                            Constant::getNullValue(ctx.types().T_prjlvalue),
                             emit_ptrgep(ctx, strct, jl_field_offset(sty, i)),
                             Align(sizeof(void*)));
                     ai.decorateInst(store);

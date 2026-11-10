@@ -629,6 +629,10 @@ const never_set = NeverSet()
     for u in (UInt(0), typemax(UInt) >> 1)
         @test UInt(getx(mkstu(Widest1(u)))) == u
     end
+    # an object whose tagged word is only tested for #undef is never allocated
+    isundef() = !isdefined(MTU(), :x)
+    @test isundef()
+    @test (@allocated isundef()) == 0
     # the word of a constant object is loaded when asked: it can be stored later
     @test !late_ref_assigned()
     late_ref[] = Int16(7)
@@ -771,6 +775,195 @@ end
     @test bad == 0
 end
 
+mutable struct Finalized
+    v::Int
+end
+struct EmbedsObj
+    x::Union{Int16, Finalized}
+end
+mutable struct AtomicEmbedsObj
+    @atomic p::EmbedsObj
+end
+struct Embeds
+    x::Union{Int16, String}
+end
+mutable struct HoldsEmbeds
+    p::Embeds
+    HoldsEmbeds() = new()
+    HoldsEmbeds(p) = new(p)
+end
+mutable struct AtomicEmbeds
+    @atomic p::Embeds
+end
+struct EmbedsWide
+    a::Union{Int16, String}
+    n::Int
+    b::Union{Int8, Int32, String}
+    s::String
+end
+struct MaybeUndef  # boxed, since its tagged word may be #undef
+    x::Union{Int16, String}
+    MaybeUndef() = new()
+    MaybeUndef(x) = new(x)
+end
+@noinline newstring(i) = string("embedded", i)
+@noinline gc_frees(ptr::Ptr{Embeds}, wr::WeakRef) = (GC.gc(); wr.value === nothing)
+ccall_gc_frees(ptr::Ptr{Embeds}, @nospecialize(wr)) = Cint(gc_frees(ptr, wr::WeakRef))
+@noinline pass(p) = p
+@noinline widen(p::Embeds, n) = EmbedsWide(p.x, n, p.x isa Int16 ? Int8(n) : "b", "s")
+@noinline maybe(p::Embeds, c) = c ? p : nothing
+
+# Values of a struct embedding a tagged word are unboxed in compiled code: the
+# word is one of the value's roots, whatever it holds.
+@testset "codegen: inline structs embedding tagged words" begin
+    # the reference stays rooted through an atomic load
+    finalized = Ref(0)
+    @noinline function newatomic(i)
+        o = Finalized(i)
+        finalizer(_ -> (finalized[] += 1; nothing), o)
+        AtomicEmbedsObj(EmbedsObj(o))
+    end
+    @noinline function load_gc_read(h)
+        p = @atomic h.p
+        @atomic h.p = EmbedsObj(Int16(1))
+        GC.gc(); GC.gc()
+        n = finalized[]
+        (n, n == 0 ? (p.x::Finalized).v : -1)
+    end
+    @test load_gc_read(newatomic(42)) == (0, 42)
+
+    # ... and while its container is preserved or passed to ccall by reference
+    function preserved_frees()
+        s = newstring(1)
+        wr = WeakRef(s)
+        r = Ref(Embeds(s))
+        GC.@preserve r gc_frees(Base.unsafe_convert(Ptr{Embeds}, r), wr)
+    end
+    @test !preserved_frees()
+    cfun = @cfunction(ccall_gc_frees, Cint, (Ptr{Embeds}, Any))
+    function ccall_frees()
+        s = newstring(2)
+        wr = WeakRef(s)
+        ccall(cfun, Cint, (Ref{Embeds}, Any), Embeds(s), wr)
+    end
+    @test ccall_frees() == 0
+
+    # neither kind of word is boxed on the way in or out of a container
+    function sumx(ps)
+        s = 0
+        for p in ps
+            x = p.x
+            s += x isa Int16 ? Int(x) : sizeof(x)
+        end
+        s
+    end
+    sumheld(hs) = sum(h -> (x = h.p.x; x isa Int16 ? Int(x) : sizeof(x)), hs)
+    sumfirst(ts) = sum(t -> (x = t[1].x; x isa Int16 ? Int(x) : sizeof(x)) + t[2], ts)
+    function refill!(ps, strs)
+        for i in eachindex(ps)
+            ps[i] = Embeds(isodd(i) ? i % Int16 : strs[i])
+        end
+    end
+    function hold!(hs, ps)
+        for i in eachindex(hs)
+            hs[i].p = ps[i]
+        end
+    end
+    strs = [newstring(i) for i in 1:1000]
+    ps = Vector{Embeds}(undef, 1000)
+    hs = [HoldsEmbeds() for _ in 1:1000]
+    @test !isassigned(ps, 1)
+    @test_throws UndefRefError ps[1]
+    @test !isdefined(hs[1], :p)
+    @test_throws UndefRefError hs[1].p
+    refill!(ps, strs)
+    hold!(hs, ps)
+    ts = [(p, 1) for p in ps]
+    expected = sum(i -> isodd(i) ? i : sizeof(strs[i]), 1:1000)
+    @test sumx(ps) == sumheld(hs) == sumfirst(ts) - 1000 == expected
+    @test (@allocated sumx(ps)) == 0
+    @test (@allocated sumheld(hs)) == 0
+    @test (@allocated sumfirst(ts)) == 0
+    @test (@allocated refill!(ps, strs)) == 0
+    @test (@allocated hold!(hs, ps)) == 0
+    for ir in (llvm(sumx, (Vector{Embeds},)), llvm(refill!, (Vector{Embeds}, Vector{String})))
+        @test !occursin("get_nth_field", ir)
+        @test !occursin("jl_f_", ir)
+    end
+
+    # egal compares references by content and immediates by word
+    eq(a, b) = a === b
+    @test eq(Embeds(newstring(1)), Embeds(newstring(1)))
+    @test !eq(Embeds(newstring(1)), Embeds(newstring(2)))
+    @test eq(Embeds(Int16(-1)), Embeds(Int16(-1)))
+    @test !eq(Embeds(Int16(1)), Embeds(Int16(2)))
+    @test !eq(Embeds(Int16(1)), Embeds(newstring(1)))
+    @test (@allocated eq(ps[1], ps[2])) == 0
+    @test eq(MaybeUndef(), MaybeUndef())
+    @test !eq(MaybeUndef(), MaybeUndef(Int16(0)))
+    @test !eq(MaybeUndef(), MaybeUndef(newstring(1)))
+    @test !eq(MaybeUndef(newstring(1)), MaybeUndef())
+    @test eq(MaybeUndef(newstring(1)), MaybeUndef(newstring(1)))
+    @test objectid(Embeds(newstring(1))) == objectid(pass(Embeds(newstring(1))))
+
+    # arguments, returns, union returns and phi nodes
+    roundtrip(v, n) = (w = widen(pass(Embeds(v)), n); (w.a, w.n, w.b, w.s))
+    @test roundtrip(Int16(7), 3) === (Int16(7), 3, Int8(3), "s")
+    @test roundtrip(newstring(3), 4) == (newstring(3), 4, "b", "s")
+    @test maybe(Embeds(Int16(7)), false) === nothing
+    @test maybe(Embeds(newstring(4)), true) === Embeds(newstring(4))
+    pick(c, s) = (p = c ? Embeds(Int16(1)) : Embeds(s); GC.gc(false); p.x)
+    @test pick(true, newstring(5)) === Int16(1)
+    @test pick(false, newstring(5)) == newstring(5)
+
+    # swap, replace and modify of an inline value
+    h = HoldsEmbeds(Embeds(Int16(1)))
+    @test (@atomicswap :not_atomic h.p = Embeds(newstring(6))) === Embeds(Int16(1))
+    @test (@atomicreplace :not_atomic h.p Embeds(newstring(6)) => Embeds(Int16(2))) ===
+          (old = Embeds(newstring(6)), success = true)
+    @test (@atomicreplace :not_atomic h.p Embeds(Int16(3)) => Embeds(Int16(4))) ===
+          (old = Embeds(Int16(2)), success = false)
+    a = AtomicEmbeds(Embeds(Int16(1)))
+    @test (@atomicswap a.p = Embeds(newstring(7))) === Embeds(Int16(1))
+    @test (@atomicreplace a.p Embeds(newstring(7)) => Embeds(Int16(2))) ===
+          (old = Embeds(newstring(7)), success = true)
+    @test (@atomic a.p = Embeds(newstring(8))) === Embeds(newstring(8))
+    sized(p, n) = Embeds((sizeof(p.x::String) + n) % Int16)
+    @test (@atomic a.p sized 1) === (Embeds(newstring(8)) => Embeds(Int16(10)))
+    @test (@atomic a.p) === Embeds(Int16(10))
+    amem = AtomicMemory{Embeds}(undef, 2)
+    @atomic amem[1] = Embeds(Int16(1))
+    @test (@atomicswap amem[1] = Embeds(newstring(9))) === Embeds(Int16(1))
+    @test (@atomicreplace amem[1] Embeds(newstring(9)) => Embeds(Int16(2))).success
+    @test (@atomic amem[1]) === Embeds(Int16(2))
+    @test (@atomiconce amem[2] = Embeds(newstring(9)))
+    @test !(@atomiconce amem[2] = Embeds(Int16(3)))
+    @test (@atomic amem[2]) === Embeds(newstring(9))
+
+    # fresh strings stored into old parents survive a young collection only
+    # through the remembered set
+    GC.gc(true); GC.gc(true)  # promote the parents
+    function refresh!(ps, hs, r)
+        for i in eachindex(ps)
+            p = Embeds(isodd(i) ? i % Int16 : string("p", r, "_", i))
+            ps[i] = p
+            hs[i].p = p
+        end
+    end
+    bad = 0
+    for r in 1:10
+        refresh!(ps, hs, r)
+        GC.gc(false)
+        churn()
+        for i in eachindex(ps)
+            v = isodd(i) ? i % Int16 : string("p", r, "_", i)
+            ps[i].x == v || (bad += 1)
+            hs[i].p.x == v || (bad += 1)
+        end
+    end
+    @test bad == 0
+end
+
 # Int16 sorts after the 127 small components codegen's union index can name
 const BigU = Union{(Val{i} for i in 1:130)..., Int16, String}
 mutable struct MBig
@@ -791,6 +984,48 @@ setbigm!(mem, v) = (mem[1] = v; nothing)
         setbigm!(mem, v)
         @test getbigm(mem) === v
     end
+end
+
+struct EmbedsBig
+    x::BigU
+    n::Int
+end
+struct EmbedsSome  # codegen unboxes `Some{String}`, which holds a reference itself
+    x::Union{Int16, Some{String}}
+end
+mutable struct HoldsRuntime
+    b::EmbedsBig
+    s::EmbedsSome
+    HoldsRuntime() = new()
+end
+
+# Only the runtime encodes and decodes these words. A struct embedding one is
+# unboxed all the same.
+@testset "codegen: structs embedding words left to the runtime" begin
+    @test istagged(Union{Int16, Some{String}})
+    mkbig(i) = EmbedsBig(i % 3 == 0 ? i % Int16 : i % 3 == 1 ? string("b", i) : Val(129), i)
+    mksome(i) = EmbedsSome(isodd(i) ? i % Int16 : Some(string("s", i)))
+    hs = [HoldsRuntime() for _ in 1:300]
+    bs = Vector{EmbedsBig}(undef, 300)
+    @test !isdefined(hs[1], :b) && !isdefined(hs[1], :s) && !isassigned(bs, 1)
+    @test_throws UndefRefError hs[1].b
+    function refresh!(hs, bs, r)
+        for i in eachindex(hs)
+            hs[i].b = mkbig(i + r)
+            hs[i].s = mksome(i + r)
+            bs[i] = mkbig(i + r)
+        end
+    end
+    matches(hs, bs, r) = all(i -> hs[i].b === mkbig(i + r) && hs[i].s === mksome(i + r) &&
+                                  bs[i] === mkbig(i + r), eachindex(hs))
+    GC.gc(true); GC.gc(true)  # promote the parents
+    for r in 1:5
+        refresh!(hs, bs, r)
+        GC.gc(false)
+        churn()
+        @test matches(hs, bs, r)
+    end
+    @test mkbig(4) !== mkbig(7) && mksome(2) !== mksome(4) && mksome(1) !== mksome(2)
 end
 
 # The 128th small component cannot be represented in a union index.
