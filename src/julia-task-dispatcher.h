@@ -31,7 +31,6 @@ struct JuliaTaskDispatcher : public TaskDispatcher {
 
 protected:
   void process_tasks(jl_unique_gcsafe_lock &Lock) JL_CANSAFEPOINT_ENTER_LEAVE;
-  void run_task(jl_unique_gcsafe_lock &Lock, Task &T) JL_CANSAFEPOINT_ENTER_LEAVE;
 
 private:
   /// C++ does not support non-static thread_local variables, so this needs to
@@ -364,7 +363,9 @@ struct dispatcher_sigdefer_guard {
   }
 };
 
-void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) { // NOLINT(julia-first-decl-annotations)
+// not analyzed, since it cannot represent moving the gc-safe region into the lock (the moved-from
+// region's destructor looks like a second gc_safe_leave)
+void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) JL_NO_SAFEPOINT_ANALYSIS { // NOLINT(julia-first-decl-annotations)
   if (!InCooperativeContext) {
     // Not inside work_until/process_tasks — run inline to prevent deadlock
     // with callers that block on std::future (e.g. LocalTrampolinePool::reenter).
@@ -377,8 +378,9 @@ void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) { // NOLINT(julia-fi
       dispatcher_sigdefer_guard defer;
       // GC-safe, as in process_tasks: LLVM can take seconds on a large module, and every
       // other thread would wait for it to collect garbage
-      jl_unique_gcsafe_lock Lock{DispatchMutex};
-      run_task(Lock, *T);
+      jl_gcsafe_region GCSafe;
+      T->run(); // n.b. JL_CANCALLBACK
+      jl_unique_gcsafe_lock Lock{DispatchMutex, std::move(GCSafe)};
       process_tasks(Lock);
     }
     InCooperativeContext = false;
@@ -415,20 +417,14 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
   InCooperativeContext = WasCooperative;
 }
 
-// Runs `T` with the dispatch mutex released, GC-safe (holding `Lock` keeps it so).
-// not analyzed, since it cannot represent the native unlock (normally implies a notsafepoint_leave)
-void JuliaTaskDispatcher::run_task(jl_unique_gcsafe_lock &Lock, Task &T) JL_NO_SAFEPOINT_ANALYSIS {
-    Lock.native.unlock();
-    T.run(); // n.b. JL_CANCALLBACK
-    Lock.native.lock();
-}
-
 // not analyzed, since it cannot represent the native unlock (normally implies a notsafepoint_leave)
 void JuliaTaskDispatcher::process_tasks(jl_unique_gcsafe_lock &Lock) JL_NO_SAFEPOINT_ANALYSIS {
     while (!TaskQueue.empty()) {
         auto T = TaskQueue.pop_back_val();
 
-        run_task(Lock, *T);
+        Lock.native.unlock();
+        T->run(); // n.b. JL_CANCALLBACK
+        Lock.native.lock();
 
         WorkFinishedCV.notify_all();
     }
