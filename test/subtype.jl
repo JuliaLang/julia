@@ -3253,6 +3253,17 @@ let unbound(e) = e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]::Bool,
         @test unknown(e[1]) && e[1][2]
         @test unbound(e[2]) && unbound(e[3])
     end
+    # ... unless the var occurs only in argument slots, and every instance binds it
+    # at one of them: an instance that also binds it through the other alternative
+    # makes it diagonal, so it keeps the value it is already bound to
+    let rhs = Tuple{S,Union{S,T}} where {S,T}
+        @test intersection_env(Tuple{Int,Any}, rhs)[2][1] === Int
+        e = intersection_env(Tuple{Integer,Int}, rhs)[2][1]
+        @test bound(e) && e[1].ub === Integer
+        # `(1, Ref{Any}(1))` binds `S` to `Any` through the invariant occurrence
+        e = intersection_env(Tuple{Int,Any}, Tuple{S,Union{Ref{S},T}} where {S,T})[2][1]
+        @test unknown(e) && e[2]
+    end
     # The same goes for the componentwise match of two unions, which the left side
     # abandons because of a later conflict: with `U == String` in the second
     # element, `Union{Int,String} == Union{T,U}` is solved by `T == Int`.
