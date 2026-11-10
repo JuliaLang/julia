@@ -3478,6 +3478,42 @@ end
     end
 end
 
+# Workers are handed what the driver resolved for their dependencies
+@testset "precompilepkgs hands its resolution to workers" begin
+    mkdepottempdir() do depot
+        project_path = write_precompile_env(depot, [
+            ("PreresA", "b1000000-0000-0000-0000-000000000001", String[]),
+            ("PreresB", "b1000000-0000-0000-0000-000000000002", ["PreresA"]),
+        ])
+        write(joinpath(depot, "dev", "PreresB", "src", "PreresB.jl"), """
+            module PreresB
+            import PreresA
+            let A = Base.PkgId(PreresA), table = Base.preresolved_table()
+                table.names[(Base.PkgId(PreresB), "PreresA")] == A || error("name not handed over")
+                haskey(table.specs, A) && haskey(table.cachefiles, A) || error("location not handed over")
+                isempty(table.exts[A]) || error("extensions not handed over")
+                # the table only describes the load path the worker started with
+                push!(LOAD_PATH, "@stdlib")
+                Base.preresolved_table() === nothing || error("table used on another load path")
+                pop!(LOAD_PATH)
+            end
+            end
+            """)
+        with_precompile_env(depot, project_path) do
+            paths = Base.Precompilation.precompilepkgs(; io=IOBuffer(), fancyprint=false)
+            @test length(paths) == 2
+        end
+    end
+
+    a, b = Base.PkgId(Base.UUID(1), "A"), Base.PkgId(Base.UUID(2), "B")
+    entries = [Base.PreresolvedPkg(a, [b, a], Base.PkgLoadSpec("/src/\$A.jl", (1, 14)), "/A.ji", ["AExt" => [b]]),
+               Base.PreresolvedPkg(b, Base.PkgId[], nothing, nothing, nothing)]
+    roundtrip = Core.eval(Main, Meta.parse(Base._preresolved_str(entries)))
+    @test roundtrip isa Vector{Base.PreresolvedPkg}
+    @test all(e -> all(f -> getfield(e[1], f) == getfield(e[2], f), fieldnames(Base.PreresolvedPkg)), zip(entries, roundtrip))
+    @test isempty(Core.eval(Main, Meta.parse(Base._preresolved_str(Base.PreresolvedPkg[]))))
+end
+
 # Verbose mode prints a per-package breakdown of where the precompile time went
 @testset "precompilepkgs verbose timing" begin
     mkdepottempdir() do depot

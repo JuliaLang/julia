@@ -266,6 +266,9 @@ Base.@kwdef mutable struct PrecompileSession
     ext_to_parent::Dict{PkgId, PkgId}
     parent_to_exts::Dict{PkgId, Vector{PkgId}}
     triggers::Dict{PkgId, Vector{PkgId}}
+    loadable::Dict{PkgId, Vector{PkgId}}
+    extensions::Dict{PkgId, Vector{Pair{String, Vector{PkgId}}}}
+    env_path::String # the environment the graph was built from, or "" if there are several
     project_deps::Vector{PkgId}
     serial_deps::Vector{PkgId}
     circular_deps::Vector{PkgId}
@@ -289,6 +292,7 @@ Base.@kwdef mutable struct PrecompileSession
     was_processed::Dict{PkgConfig, Base.Event}
     stale_cache::Dict{StaleCacheKey, Bool}         = Dict{StaleCacheKey,Bool}()
     cachepath_cache::Dict{PkgId, Vector{String}}   = Dict{PkgId,Vector{String}}()
+    sourcespecs::Dict{PkgId, Union{Nothing,Base.PkgLoadSpec}} = Dict{PkgId,Union{Nothing,Base.PkgLoadSpec}}()
     # cache files accepted without reading them, because their checksums passed earlier in this process
     unverified::Set{String}                        = Set{String}()
     pkg_queue::Vector{PkgConfig}                   = PkgConfig[]
@@ -764,12 +768,17 @@ function ExplicitEnv(envpath::String)
     end
 
     for (pkg, exts) in extensions
+        # a trigger names one of the package's own dependencies, which matters when a name is not unique
+        own = Dict{String, UUID}()
+        for d in (weakdeps_expanded, deps_expanded), uuid in get(Vector{UUID}, d, pkg)
+            own[names[uuid]] = uuid
+        end
         exts_expanded = Dict{String, Vector{UUID}}()
         for (ext, triggers) in exts
             triggers_expanded = UUID[]
             sizehint!(triggers_expanded, length(triggers))
             for trigger in triggers
-                push!(triggers_expanded, name_to_uuid[trigger])
+                push!(triggers_expanded, get(() -> name_to_uuid[trigger], own, trigger))
             end
             exts_expanded[ext] = triggers_expanded
         end
@@ -892,6 +901,8 @@ function fixup_stdlib_deps!(deps::Dict{UUID, Vector{UUID}}, weakdeps::Dict{UUID,
             get!(names, dep_uuid, dep_name)
         end
         pkg_extensions = get!(Dict{String, Vector{UUID}}, extensions, uuid)
+        # an entry that is loaded from here has the extensions listed here
+        lookup_strategy[uuid] === nothing && empty!(pkg_extensions)
         for (ext, triggers) in project_extensions
             haskey(pkg_extensions, ext) && continue
             triggers = triggers isa String ? [triggers] : triggers::Vector{String}
@@ -1016,12 +1027,15 @@ function visit_indirect_deps!(direct_deps::Dict{PkgId, Vector{PkgId}}, visited::
 end
 
 # Build dependency graph from an ExplicitEnv.
-# Returns a NamedTuple of (direct_deps, ext_to_parent, parent_to_exts, triggers, project_deps, serial_deps).
+# Returns a NamedTuple of (direct_deps, ext_to_parent, parent_to_exts, triggers, loadable, extensions, project_deps, serial_deps).
 function build_dep_graph(env::ExplicitEnv, manifest::Bool, _from_loading::Bool, requested_pkgids::Vector{PkgId})
     direct_deps = Dict{PkgId, Vector{PkgId}}()
     parent_to_exts = Dict{PkgId, Vector{PkgId}}()
     ext_to_parent = Dict{PkgId, PkgId}()
     triggers = Dict{PkgId, Vector{PkgId}}()
+    # What code loading resolves for each node, which workers are handed instead of looking it up:
+    loadable = Dict{PkgId, Vector{PkgId}}() # the packages it may load by name
+    extensions = Dict{PkgId, Vector{Pair{String, Vector{PkgId}}}}() # all its extensions and their triggers
 
     # Determine which packages to consider for precompilation by walking
     # transitive dependencies from the appropriate roots.
@@ -1037,10 +1051,15 @@ function build_dep_graph(env::ExplicitEnv, manifest::Bool, _from_loading::Bool, 
         pkg = PkgId(dep, env.names[dep])
         Base.in_sysimage(pkg) && continue
         deps = [PkgId(x, env.names[x]) for x in env.deps[dep]]
+        # a name is the first dependency listed with it, as in the manifest
+        loadable[pkg] = unique(d -> d.name, deps)
         direct_deps[pkg] = filter!(!Base.in_sysimage, deps)
+        extensions[pkg] = Pair{String, Vector{PkgId}}[]
         for (ext_name, trigger_uuids) in get(Dict{String, Vector{UUID}}, env.extensions, dep)
             ext_uuid = Base.uuid5(pkg.uuid, ext_name)
             ext = PkgId(ext_uuid, ext_name)
+            ext_triggers = PkgId[PkgId(x, env.names[x]) for x in trigger_uuids]
+            push!(extensions[pkg], ext_name => ext_triggers)
             triggers[ext] = PkgId[pkg]
             all_triggers_available = true
             for trigger_uuid in trigger_uuids
@@ -1054,6 +1073,9 @@ function build_dep_graph(env::ExplicitEnv, manifest::Bool, _from_loading::Bool, 
             end
             all_triggers_available || continue
             ext_to_parent[ext] = pkg
+            # an extension may load its parent, its triggers, and what its parent may load
+            loadable[ext] = unique(d -> d.name, PkgId[pkg; ext_triggers; loadable[pkg]])
+            extensions[ext] = Pair{String, Vector{PkgId}}[]
             direct_deps[ext] = filter(!Base.in_sysimage, triggers[ext])
             if !haskey(parent_to_exts, pkg)
                 parent_to_exts[pkg] = PkgId[ext]
@@ -1135,7 +1157,7 @@ function build_dep_graph(env::ExplicitEnv, manifest::Bool, _from_loading::Bool, 
         end
     end
 
-    return (; direct_deps, ext_to_parent, parent_to_exts, triggers, project_deps, serial_deps)
+    return (; direct_deps, ext_to_parent, parent_to_exts, triggers, loadable, extensions, project_deps, serial_deps)
 end
 
 # Detect circular dependencies and notify their Events so waiting tasks can skip them.
@@ -1187,10 +1209,42 @@ function filter_dep_graph!(direct_deps, pkg_names, ext_to_parent, requested_pkgi
     return isempty(direct_deps)
 end
 
-# Include only cache files that are ready for workers.
-function preresolved_snapshot(s::PrecompileSession)
-    paths = @lock s.cache_lock Pair{Base.PkgId,String}[k => first(v) for (k, v) in s.cachepath_cache if !isempty(v)]
-    return filter!(kv -> checked_now!(s, kv.second), paths)
+# What this session resolved for everything a worker precompiling `pkg` may load, so that
+# the worker does not look any of it up again. The dependencies of `pkg` are done by now.
+function preresolved_closure(s::PrecompileSession, pkg::PkgId)
+    load_path = Base.load_path()
+    # the graph only says what the environment it was built from resolves
+    resolved = !isempty(load_path) && abspath(load_path[1]) == s.env_path
+    nodes = PkgId[pkg]
+    seen = Set{PkgId}(nodes)
+    loadable = Vector{PkgId}[]
+    extensions = Union{Nothing, Vector{Pair{String, Vector{PkgId}}}}[]
+    @lock s.print_lock begin # the drainer extends the graph under this lock
+        i = 0
+        while i < length(nodes)
+            node = nodes[i += 1]
+            for dep in get(Vector{PkgId}, s.direct_deps, node)
+                dep in seen && continue
+                push!(seen, dep)
+                push!(nodes, dep)
+            end
+            push!(loadable, resolved ? get(Vector{PkgId}, s.loadable, node) : PkgId[])
+            push!(extensions, resolved ? get(s.extensions, node, nothing) : nothing)
+        end
+    end
+    sourcespecs = Vector{Union{Nothing, Base.PkgLoadSpec}}(nothing, length(nodes))
+    cachefiles = Vector{Union{Nothing, String}}(nothing, length(nodes))
+    @lock s.cache_lock for (i, node) in enumerate(nodes)
+        resolved && (sourcespecs[i] = get(s.sourcespecs, node, nothing))
+        freshpaths = get(s.cachepath_cache, node, nothing)
+        freshpaths === nothing || isempty(freshpaths) || (cachefiles[i] = first(freshpaths))
+    end
+    for (i, path) in enumerate(cachefiles)
+        path === nothing || checked_now!(s, path) || (cachefiles[i] = nothing)
+    end
+    return Base.PreresolvedPkg[
+        Base.PreresolvedPkg(nodes[i], loadable[i], sourcespecs[i], cachefiles[i], extensions[i])
+        for i in eachindex(nodes)]
 end
 
 # Workers and loading trust these paths without checks, so check a file the scan did not read.
@@ -2680,6 +2734,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
     batch_tasks = Task[]
     sourcespecs = Dict{PkgId,Union{Nothing,Base.PkgLoadSpec}}(pkg => Base.locate_package_load_spec(pkg) for pkg in keys(direct_deps))
     priorities = SchedulePriorities(direct_deps, sourcespecs)
+    @lock s.cache_lock merge!(s.sourcespecs, sourcespecs)
     for (pkg, deps) in direct_deps
         cachepaths = Base.find_all_in_cache_path(pkg)
         freshpaths = String[]
@@ -2802,7 +2857,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
                                                   pid_channel=pid_ch, report_timing=true,
-                                                  preresolved=preresolved_snapshot(s))
+                                                  preresolved=preresolved_closure(s, pkg))
                             end
                         else
                             fullname = full_name(s.ext_to_parent, pkg)
@@ -2828,7 +2883,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
                                                   pid_channel=pid_ch, report_timing=true,
-                                                  preresolved=preresolved_snapshot(s))
+                                                  preresolved=preresolved_closure(s, pkg))
                             end
                         end
                         if ret isa Exception
@@ -2949,6 +3004,9 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
                     merge!(s.ext_to_parent, new_graph.ext_to_parent)
                     merge!(s.parent_to_exts, new_graph.parent_to_exts)
                     merge!(s.triggers, new_graph.triggers)
+                    merge!(s.loadable, new_graph.loadable)
+                    merge!(s.extensions, new_graph.extensions)
+                    new_env.path == s.env_path || (s.env_path = "")
                     union!(s.project_deps, new_graph.project_deps)
                     union!(s.serial_deps, new_graph.serial_deps)
                     union!(s.requested_pkgids, effective_pkgids)
@@ -3424,7 +3482,8 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
         start_loaded_modules=Set{PkgId}(keys(Base.loaded_modules)), requested_pkgids, requested_all,
         direct_deps=graph.direct_deps,
         ext_to_parent=graph.ext_to_parent, parent_to_exts=graph.parent_to_exts,
-        triggers=graph.triggers, project_deps=graph.project_deps,
+        triggers=graph.triggers, loadable=graph.loadable, extensions=graph.extensions,
+        env_path=env.path, project_deps=graph.project_deps,
         serial_deps=graph.serial_deps, circular_deps,
         n_total=length(graph.direct_deps) * nconfigs,
         printloop_should_exit=!fancyprint, target,
