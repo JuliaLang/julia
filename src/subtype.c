@@ -1930,6 +1930,43 @@ static jl_value_t *eq_pinned_envout_marker(jl_unionall_t *u, jl_varbinding_t *vb
     return NULL;
 }
 
+// Does `v` occur in `t` only in argument slots, i.e. only as a tuple element or as
+// an alternative of a union that is a tuple element? An occurrence below any other
+// type constructor, in a `Vararg` length, or in the bounds of another var (whose
+// bounds check is a separate scope for the diagonal rule) does not count as one.
+static int var_occurs_in_slots_only(jl_value_t *t, jl_tvar_t *v) JL_NOTSAFEPOINT
+{
+    if (t == (jl_value_t*)v)
+        return 1;
+    if (jl_is_uniontype(t))
+        return var_occurs_in_slots_only(((jl_uniontype_t*)t)->a, v) &&
+               var_occurs_in_slots_only(((jl_uniontype_t*)t)->b, v);
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *ua = (jl_unionall_t*)t;
+        if (ua->var == v)
+            return 1; // `v` is shadowed, so it does not occur below here
+        if (jl_has_typevar(ua->var->lb, v) || jl_has_typevar(ua->var->ub, v))
+            return 0;
+        return var_occurs_in_slots_only(ua->body, v);
+    }
+    if (jl_is_tuple_type(t)) {
+        size_t i, np = jl_nparams(t);
+        for (i = 0; i < np; i++) {
+            jl_value_t *p = jl_tparam(t, i);
+            if (jl_is_vararg(p)) {
+                jl_value_t *N = jl_unwrap_vararg_num(p);
+                if (N && jl_has_typevar(N, v))
+                    return 0;
+                p = jl_unwrap_vararg(p);
+            }
+            if (p && !var_occurs_in_slots_only(p, v))
+                return 0;
+        }
+        return 1;
+    }
+    return !jl_has_typevar(t, v);
+}
+
 static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e,
                                                  jl_varbinding_t *vb, jl_value_t *lb,
                                                  jl_value_t **new_tvar JL_REQUIRE_ROOTED_SLOT,
@@ -2184,8 +2221,16 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         int eff_constrained = (inv_certain ||
             (cov_occurs && vb.lb_certainty > BOUND_PROXY) ||
             ((cov_occurs || vb.occurs_inv) && vb.lb_required));
+        // `alt_occurs` can be ignored for a var that occurs only in argument slots,
+        // and that every instance binds at one of them. If an instance also binds
+        // it through another alternative, that is a second argument slot, which
+        // makes the var diagonal for that instance: either it stays the concrete
+        // type it is already bound to, or that alternative rejects the instance.
+        int alt_occurs = vb.alt_occurs &&
+            !(cov_occurs && !vb.occurs_inv && vb.lb_required && vb.lb_certainty > BOUND_PROXY &&
+              var_occurs_in_slots_only(u->body, u->var));
         jl_value_t *val;
-        if (!inv_certain && (vb.alt_occurs || (vb.occurs_inv &&
+        if (!inv_certain && (alt_occurs || (vb.occurs_inv &&
                 (cov_count(&vb) || vb.lb_certainty > BOUND_ARM)))) {
             // No value holds for every instance: an instance may bind the var
             // through an alternative that the left side did not choose, or skip
