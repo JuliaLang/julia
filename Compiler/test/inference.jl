@@ -8724,4 +8724,11 @@ const SPLAT_SVEC_NAMES = ntuple(i -> Symbol(:a, i), 33)
 splat_svec_caller(vals) = splat_svec_outer(SPLAT_SVEC_NAMES, vals)
 @test Base.infer_return_type(splat_svec_caller, (NTuple{33,Int},)) === NamedTuple{SPLAT_SVEC_NAMES, NTuple{33,Int}}
 
+# a reference at a non-constant index of a constant `MemoryRef` is not that constant
+const memoryref_at_const = Core.memoryrefnew(Memory{Int}(undef, 4))
+memoryref_at_offset(i::Int) = Core.memoryrefoffset(Core.memoryrefnew(memoryref_at_const, i, true))
+@test Compiler.builtin_tfunction(Compiler.NativeInterpreter(), Core.memoryrefnew,
+    Any[Core.Const(memoryref_at_const), Int, Core.Const(true)], nothing) === MemoryRef{Int}
+@test memoryref_at_offset(3) == 3
+
 end # module inference
