@@ -85,12 +85,9 @@ function tryparse(::Type{UUID}, s::AbstractString)
     return u isa UUID ? u : nothing
 end
 
-let
-    @noinline throw_malformed_uuid(s) = throw(ArgumentError("Malformed UUID string: $(repr(s))"))
-    function Base.parse(::Type{UUID}, s::AbstractString)
-        uuid = tryparse(UUID, s)
-        return uuid === nothing ? throw_malformed_uuid(s) : uuid
-    end
+function parse(::Type{UUID}, s::AbstractString)
+    uuid = tryparse(UUID, s)
+    return uuid === nothing ? throw(ArgumentError("Malformed UUID string: $(repr(s))")) : uuid
 end
 
 UUID(s::AbstractString) = parse(UUID, s)
