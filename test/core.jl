@@ -537,6 +537,22 @@ let W = Union{S1,S2} where {S1<:Int,S2<:Int}
     @test pinnedspell_fold_62001(Ref(1), W) === true
     @test pinnedspell_caller_62001(Ref(1), Ref{Any}(W)) === true
 end
+# The same holds for a parameter of a type below `Type{...}`: the type cache
+# identifies types whose parameters are `==`, so that parameter is canonical
+# although the argument is only known up to `==`
+pinnedspell3_62001(y::Type{T}, x::Type{Vector{T}}) where {T} = T
+pinnedspell4_62001(x::Type{Vector{T}}, y::Type{T}) where {T} = T
+pinnedspell_fold2_62001(y::Type{T}, x::Type{Vector{T}}) where {T} = T === Int
+pinnedspell_caller2_62001(r) = pinnedspell_fold2_62001(r[]::Type{Int}, Vector{Int})
+let W = Union{S1,S2} where {S1<:Int,S2<:Int}
+    @test W == Int
+    @test W !== Int
+    @test pinnedspell3_62001(W, Vector{Int}) === Int
+    @test pinnedspell4_62001(Vector{Int}, W) === Int
+    # inference takes `T` to be `Int` itself, as the call binds it
+    @test pinnedspell_fold2_62001(W, Vector{Int}) === true
+    @test pinnedspell_caller2_62001(Ref{Any}(W)) === true
+end
 
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)

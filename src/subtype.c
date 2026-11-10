@@ -226,7 +226,9 @@ typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
                               // egal-known, yet `Type{B}` constrains `B` only up
                               // to `==`, so `A`'s spelling must not displace a
                               // canonical (type-tag-derived) spelling of the same
-                              // binding (see `jl_varbinding_t.lb_spell`)
+                              // binding (see `jl_varbinding_t.lb_spell`). Raised
+                              // from BOUND_EQ back to BOUND_EGAL inside the
+                              // parameters of a non-tuple type, which are canonical
     int intersection;         // true iff subtype is being called from intersection
     int emptiness_only;       // true iff intersection only needs to test for emptiness
     int triangular;           // when intersecting Ref{X} with Ref{<:Y}
@@ -3727,6 +3729,16 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         size_t i, np = jl_nparams(xd);
         int ans = 1;
         int saved_open = e->inv_open;
+        // The parameters of a non-tuple type are canonical: the type cache returns
+        // one object for types whose parameters are `==` (`Ref{S} === Ref{Int}` for
+        // `S == Int`), so the parameter objects are the same in every type `==` to
+        // `xd`. That holds even below an equality wrapper `Type{A}`, where `A`
+        // itself is only known up to `==`. Give a spelling found here full
+        // authority, so that it displaces an `==`-only spelling of the same binding
+        // in either argument order (see `jl_varbinding_t.lb_spell`).
+        int saved_spell = e->spell_channel;
+        if (e->spell_channel == BOUND_EQ)
+            e->spell_channel = BOUND_EGAL;
         e->invdepth++;
         for (i=0; i < np; i++) {
             jl_value_t *xi = jl_tparam(xd, i), *yi = jl_tparam(yd, i);
@@ -3739,6 +3751,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         }
         e->invdepth--;
         e->inv_open = saved_open;
+        e->spell_channel = saved_spell;
         return ans;
     }
     if (jl_is_type(y))
