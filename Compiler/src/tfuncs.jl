@@ -2981,6 +2981,31 @@ function is_const_field_argtype(@nospecialize(obj), @nospecialize(name))
     return fidx !== nothing && isconst(objt, fidx)
 end
 
+# whether the field of `s00` named by `name` is known to exist (it may still be undefined)
+@nospecs function getfield_inbounds(s00, name)
+    widenconst(s00) <: Module && return true # a global is looked up, and checked
+    isa(name, Const) || return false
+    if isa(s00, Const)
+        return try_compute_fieldidx(typeof(s00.val), name.val) !== nothing
+    elseif isconstType(s00)
+        return try_compute_fieldidx(typeof(type_parameter(s00)), name.val) !== nothing
+    end
+    s0 = widenconst_split(s00)
+    s = unwrap_unionall(s0)
+    if isa(s, Union)
+        return getfield_inbounds(rewrap_unionall(s.a, s00), name) &&
+               getfield_inbounds(rewrap_unionall(s.b, s00), name)
+    elseif isa(s, Core.TypeEgal)
+        s = s0 = typeof(type_parameter(s)) # the only instance is the parameter
+    end
+    isa(s, DataType) && !isabstracttype(s) || return false
+    if isvatuple(s)
+        # only the fields before the `Vararg` are known to exist
+        return isa(name.val, Int) && 1 <= name.val <= datatype_min_ninitialized(s)
+    end
+    return try_compute_fieldidx(s0, name.val) !== nothing
+end
+
 function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     length(argtypes) < 2 && return EFFECTS_THROWS
     obj = argtypes[1]
@@ -3005,21 +3030,18 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
     else
         consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
     end
-    noub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(argtypes)
     nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
-    if !nothrow
-        if bcheck !== :on
-            # If we cannot independently prove inboundsness, taint `:noub`.
-            # The inbounds-ness assertion requires dynamic reachability,
-            # while `:noub` needs to be true for all input values.
-            # However, as a special exception, we do allow literal `:boundscheck`.
-            # `:noub` will be tainted in any caller using `@inbounds`
-            # based on the `:noinbounds` effect.
-            # N.B. We do not taint for `--check-bounds=no` here.
-            # That is handled in concrete evaluation.
-            noub = ALWAYS_FALSE
-        end
+    # Without a bounds check, accessing a field not known to exist, by index or by name, is
+    # undefined behavior (a field that may be undefined is still checked), and `:noub` needs
+    # to hold for all input values. Post-optimization analysis refines this to
+    # `NOUB_IF_NOINBOUNDS` for a literal `:boundscheck` (see `is_conditional_noub`).
+    # N.B. We do not taint for `--check-bounds=no` here.
+    # That is handled in concrete evaluation.
+    if bcheck === :unsafe ? !nothrow : bcheck !== :on && !getfield_inbounds(argtypes[1], argtypes[2])
+        noub = ALWAYS_FALSE
+    else
+        noub = ALWAYS_TRUE
     end
     if hasintersect(widenconst(obj), Module)
         # Modeled more precisely in abstract_eval_getglobal

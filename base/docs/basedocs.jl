@@ -2619,7 +2619,7 @@ compatible with the stores to that location.
 Otherwise, if not declared as `@atomic`, this parameter must be `:not_atomic` if specified.
 
 The bounds check may be disabled, in which case the behavior of this function is
-undefined if `i` is out of bounds.
+undefined if `i` is out of bounds or `name` is not a field of `value`.
 
 See also [`getproperty`](@ref Base.getproperty), [`fieldnames`](@ref).
 

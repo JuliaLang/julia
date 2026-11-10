@@ -1299,6 +1299,19 @@ callgetfield_inbounds(x, f) = @inbounds callgetfield2(x, f)
 @test Base.infer_effects(callgetfield_inbounds, (Some{Any},Symbol)).noub ===
       Base.infer_effects(callgetfield_inbounds, (Some{Any},Symbol)).noub ===
       Compiler.ALWAYS_FALSE
+# an unchecked `getfield` at an index that may be out of bounds is undefined behavior, not a throw
+uncheckedgetfield(t, i) = getfield(t, i, false)
+@test !Compiler.is_noub(Base.infer_effects(uncheckedgetfield, (Tuple{Int,Int},Int)))
+@test Compiler.is_noub(Base.infer_effects(t -> getfield(t, 2, false), (Tuple{Int,Int},)))
+@test !Compiler.is_noub(Base.infer_effects(t -> getfield(t, 3, false), (Tuple{Int,Int},)))
+@test !Compiler.is_noub(Base.infer_effects(t -> getfield(t, 2, false), (Tuple{Vararg{Int}},)))
+@test !Compiler.is_noub(Base.infer_effects(t -> getfield(t, 2, false), (Union{Tuple{Int},Tuple{Int,Int}},)))
+@test !Compiler.is_noub(Base.infer_effects(uncheckedgetfield, (Some{Int},Symbol)))
+# a field known to exist is checked when it is undefined, and may be read without an order when atomic
+mutable struct UncheckedGetfieldUndef; x::Any; UncheckedGetfieldUndef() = new(); end
+@test Compiler.is_noub(Base.infer_effects(x -> getfield(x, 1, false), (UncheckedGetfieldUndef,)))
+mutable struct UncheckedGetfieldAtomic; @atomic x::Int; end
+@test Compiler.is_noub(Base.infer_effects(x -> getfield(x, :x, false), (UncheckedGetfieldAtomic,)))
 
 # noub modeling for memory ops
 let (memoryrefnew, memoryrefget, const_memoryrefget, memoryref_isassigned, memoryrefset!) =

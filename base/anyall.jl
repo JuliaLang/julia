@@ -138,9 +138,9 @@ function _any(::typeof(identity), itr::Tuple{Vararg{Bool}}, ::Colon)
     @_terminates_locally_meta
     r = false
     for i in eachindex(itr)
-        # Avoid bounds checking to help vectorization. Use `getfield` directly,
+        # Avoid bounds checking to help vectorization. Use `@_safeindex`,
         # instead of `@inbounds itr[i]`, for better effects.
-        v = getfield(itr, i, false)
+        v = @_safeindex itr[i]
         r |= v
     end
     r
@@ -225,9 +225,9 @@ function _all(::typeof(identity), itr::Tuple{Vararg{Bool}}, ::Colon)
     @_terminates_locally_meta
     r = true
     for i in eachindex(itr)
-        # Avoid bounds checking to help vectorization. Use `getfield` directly,
+        # Avoid bounds checking to help vectorization. Use `@_safeindex`,
         # instead of `@inbounds itr[i]`, for better effects.
-        v = getfield(itr, i, false)
+        v = @_safeindex itr[i]
         r &= v
     end
     r
