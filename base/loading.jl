@@ -4874,8 +4874,8 @@ end
 toml_egal(@nospecialize(A), @nospecialize(B)) = A === B
 toml_egal(A::BigInt, B::BigInt) = A == B # a large integer is parsed to a new object each time
 
-# only the containers the TOML parser produces, so these bodies are fully typed and
-# packages that add methods can't invalidate the loading code through them
+# Restrict these methods to the container types produced by the TOML parser, so that
+# methods added by packages cannot invalidate the loading code through them.
 function toml_egal(A::Vector, B::Vector)
     length(A) != length(B) && return false
     for i in eachindex(A, B)
