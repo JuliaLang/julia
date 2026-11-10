@@ -168,7 +168,7 @@ function format_ir_for_test(mod, case)
         if exc isa InterruptException
             rethrow()
         elseif case.expect_error && (exc isa LoweringError)
-            return sprint(io->Base.showerror(io, exc, show_detail=false))
+            return sprint(io->Base.showerror(io, exc))
         elseif case.expect_error && (exc isa MacroExpansionError)
             return sprint(io->Base.showerror(io, exc))
         else

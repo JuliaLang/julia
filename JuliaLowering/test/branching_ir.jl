@@ -210,10 +210,11 @@ begin
     @goto foo
 end
 #---------------------
-LoweringError:
+label `foo` referenced but not defined
+@ :2
 begin
     @goto foo
-#         └─┘ ── label `foo` referenced but not defined
+#         └─┘
 end
 
 ########################################
@@ -223,20 +224,22 @@ begin
     @label foo
 end
 #---------------------
-LoweringError:
+Label `foo` defined multiple times
+@ :3
 begin
     @label foo
     @label foo
-#          └─┘ ── Label `foo` defined multiple times
+#          └─┘
 end
 
 ########################################
 # Error: using value of symbolic label
 x = @label foo
 #---------------------
-LoweringError:
+misplaced label in value position
+@ :1
 x = @label foo
-#          └─┘ ── misplaced label in value position
+#          └─┘
 
 ########################################
 # Anonymous labeled block with valued break

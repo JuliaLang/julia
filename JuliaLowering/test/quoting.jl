@@ -302,7 +302,7 @@ multi_interp_err = try
     nothing
 catch exc
     @test exc isa LoweringError
-    sprint(io->Base.showerror(io, exc, show_detail=false))
+    sprint(io->Base.showerror(io, exc))
 end
 @test contains(multi_interp_err, raw"More than one value in bare `$` expression")
 
@@ -311,7 +311,7 @@ multi_interp_err = try
     nothing
 catch exc
     @test exc isa LoweringError
-    sprint(io->Base.showerror(io, exc, show_detail=false))
+    sprint(io->Base.showerror(io, exc))
 end
 @test contains(multi_interp_err, raw"More than one value in bare `$` expression")
 

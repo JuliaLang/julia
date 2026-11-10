@@ -50,10 +50,11 @@ quote
     $$x + 1
 end
 #---------------------
-LoweringError:
+`$` expression outside string or quote
+@ :2
 quote
     $$x + 1
-#    └┘ ── `$` expression outside string or quote
+#    └┘
 end
 
 ########################################

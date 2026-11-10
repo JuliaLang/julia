@@ -16,12 +16,9 @@
                 push!(msgs.args, string(a))
             end
         end
-        # just add assertion string to first msg
-        msgs.args[2] = Expr(
-            :string, "`jl_assert($cond, _)`: ", Expr(:(::), msgs.args[2], String))
-        :($(esc(cond)) ? nothing : begin
-              throw(LoweringError($(esc(sts)), $(esc(msgs)), true))
-          end)
+        msg = "@jl_assert failed `$cond`"
+        :($(esc(cond)) ? nothing :
+            throw(LoweringError($msg, $(esc(sts)), $(esc(msgs)), true)))
     end
 else
     # allow @jl_assert false in value position to not change rettype

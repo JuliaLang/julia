@@ -4664,14 +4664,14 @@ end
     # surface only one error until we have pretty-printing for multiple
     if !validation_ok(vr)
         errors = validation_errors(vr)
-        throw(LoweringError(errors[1].sts, errors[1].msgs, false))
+        throw(LoweringError(errors[1].msgs[1], errors[1].sts, [nothing], false))
     end
     ex_out = expand_forms_2(ctx_out, est_to_dst(ex))
     if DEBUG
         vr = valid_st2(ex_out)
         if !validation_ok(vr)
             errors = validation_errors(vr)
-            throw(LoweringError(errors[1].sts, errors[1].msgs, true))
+            throw(LoweringError(errors[1].msgs[1], errors[1].sts, [nothing], true))
         end
     end
     ctx_out, ex_out
