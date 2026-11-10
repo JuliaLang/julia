@@ -152,7 +152,12 @@ typedef struct jl_varbinding_t {
                          // `==`-authoritative only) must not displace a canonical
                          // type-tag-derived spelling: that keeps the binding agreed
                          // between by-type queries and the runtime MethodInstances
-                         // they cover (#61323)
+                         // they cover (#61323). This is only enforced for a pinned
+                         // var (`lb === ub`, see `var_gt` and `equal_var`): where a
+                         // type tag left the var unpinned, an equality wrapper
+                         // matched after it still replaces the spelling
+                         // (`f(x::S, ::Type{S})`), and the binding of a call may
+                         // then differ from the one its by-type query reports
     int8_t tainted_inner; // 1 if this var's bounds reference a TypeVar from a vb that
                           // was pushed at depth0 *strictly greater* than this var's
                           // depth0 and has since been popped. Such "inner" tvars
@@ -1961,14 +1966,19 @@ static int var_occurs_covariant_only(jl_value_t *t, jl_tvar_t *var) JL_NOTSAFEPO
 //
 // A value that is not certain for every instance can still be canonically
 // spelled: the binding of each instance that defines the var is then this very
-// object, which the marker's `egal` bit records. That is the case when the
-// spelling of `lb` has full authority (it came from a type tag or from the
-// parameter of a type, see `jl_varbinding_t.lb_spell`): every instance makes
-// that contribution, which displaces any other spelling. It is also the case
-// when every contribution binds a canonical spelling (`ident_eq` unset), even
-// if some instances skip some of them (BOUND_ARM, BOUND_PROXY): an instance
-// that defines the var makes one of them. A value that the search derived
-// from `vb->lb` (a tag, or `vb->ub`) is not one whose spelling was tracked.
+// object, which the marker's `egal` bit records. That is taken to be the case
+// when the spelling of `lb` has full authority (`jl_varbinding_t.lb_spell`).
+// For a value that is not certain, such a spelling was found in the parameters
+// of a type below an equality wrapper: every instance makes that contribution,
+// which is an invariant occurrence and pins the var, and a pinned var keeps the
+// spelling with more authority whichever is matched first. It is also taken to
+// be the case when every contribution binds a canonical spelling (`ident_eq`
+// unset), even if some instances skip some of them (BOUND_ARM, BOUND_PROXY): an
+// instance that defines the var makes one of them. Both rest on the parameters
+// of a type being canonical, so the exception to that applies here too (see the
+// datatype case of `subtype`): an instance that is a `UnionAll` spelling of the
+// type may bind another spelling. A value that the search derived from `vb->lb`
+// (a tag, or `vb->ub`) is not one whose spelling was tracked.
 static jl_value_t *eq_pinned_envout_marker(jl_unionall_t *u, jl_varbinding_t *vb, jl_value_t *lb,
                                            jl_value_t **new_tvar JL_REQUIRE_ROOTED_SLOT,
                                            int constrained) JL_CANSAFEPOINT
@@ -3780,11 +3790,14 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         int saved_open = e->inv_open;
         // The parameters of a non-tuple type are canonical: the type cache returns
         // one object for types whose parameters are `==` (`Ref{S} === Ref{Int}` for
-        // `S == Int`), so the parameter objects are the same in every type `==` to
-        // `xd`. That holds even below an equality wrapper `Type{A}`, where `A`
-        // itself is only known up to `==`. Give a spelling found here full
-        // authority, so that it displaces an `==`-only spelling of the same binding
-        // in either argument order (see `jl_varbinding_t.lb_spell`).
+        // `S == Int`), so every datatype `==` to `xd` is `xd` itself, with these
+        // parameter objects. That holds even below an equality wrapper `Type{A}`,
+        // where `A` itself is only known up to `==`. Give a spelling found here
+        // full authority, so that it displaces an `==`-only spelling of the same
+        // binding in either argument order (see `jl_varbinding_t.lb_spell`).
+        // This does not cover a type `==` to `xd` that is not a datatype: a
+        // `UnionAll` with a pinned var (`Ref{S} where W<:S<:W`) binds the bound `W`
+        // of that var here, which is another spelling unless `W` is canonical.
         int saved_spell = e->spell_channel;
         int saved_ident_spell = e->ident_spell;
         if (e->spell_channel == BOUND_EQ)
