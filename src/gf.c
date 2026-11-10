@@ -1819,6 +1819,17 @@ JL_DLLEXPORT jl_typemap_entry_t *jl_mt_find_cache_entry(jl_methcache_t *cache, j
     return mt_find_cache_entry(&cache->cache, &cache->leafcache, tt, world, jl_cachearg_offset());
 }
 
+// `jl_typemap_assoc_exact` matches `TypeEgal{A}` slots from the argument values, while
+// the leafcache needs the argument tuple type to be built first (#60701)
+static int has_typeegal_param(jl_tupletype_t *tt) JL_NOTSAFEPOINT
+{
+    size_t i, np = jl_nparams(tt);
+    for (i = 0; i < np; i++)
+        if (jl_is_typeegal(jl_tparam(tt, i)))
+            return 1;
+    return 0;
+}
+
 static jl_value_t *compute_simplett(jl_tupletype_t *cachett) JL_CANSAFEPOINT
 {
     // now scan `cachett` and ensure that `Type{T}` in the cache will be matched exactly by `typeof(T)`
@@ -1875,7 +1886,7 @@ static void cache_insert(
     JL_GC_PUSH2(&simplett, &newentry);
     simplett = (jl_datatype_t*)compute_simplett(cachett);
     newentry = jl_typemap_alloc(cachett, simplett, guardsigs, (jl_value_t*)newmeth, min_valid, max_valid);
-    if (mc && tt && cachett == tt && tt->hash && !tt->hasfreetypevars) {
+    if (mc && tt && cachett == tt && tt->hash && !tt->hasfreetypevars && !has_typeegal_param(tt)) {
         // we check `tt->hash` exists, since otherwise the NamedTuple
         // constructor and `structdiff` method pollutes this lookup with a lot
         // of garbage in the linear table search
