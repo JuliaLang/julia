@@ -1299,6 +1299,16 @@ end
             merge!(Base.COMPILETIME_PREFERENCES, old_compiletime_prefs)
         end
     end
+
+    # a package adding a broad `!=` method must not invalidate the loading code
+    script = """
+        log = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+        struct NotEq end
+        Base.:(!=)(::NotEq, ::Any) = true
+        ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+        print(any(x -> x isa Core.MethodInstance && x.def isa Method && x.def.name === :stale_prefs, log))
+        """
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == "false"
 end
 
 @testset "Loading with incomplete manifest/depot #45977" begin
