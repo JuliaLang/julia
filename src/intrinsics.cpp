@@ -893,7 +893,8 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) 
             Value *thePtr = emit_unbox(ctx, PointerType::getUnqual(ptrty->getContext()), e);
             thePtr = ctx.builder.CreateInBoundsGEP(ptrty, thePtr, im1);
             auto load = typed_load(ctx, thePtr, nullptr, ety, ctx.alias().data, nullptr, isboxed, AtomicOrdering::NotAtomic, false, align_nb);
-            setName(ctx.emission_context, load.V, "pointerref");
+            if (load.V) // null when ety has no bits beside its inline_roots
+                setName(ctx.emission_context, load.V, "pointerref");
             return load;
         }
         else {
