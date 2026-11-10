@@ -6815,7 +6815,7 @@ let x = TypeVar(:x)
     @test only(Base.return_types(applytypevar62001, (TypeVar,))) == Type
     @test only(Base.return_types(applytypevar62001c, (TypeVar,))) == Core.TypeofVararg
 end
-# A pinned-TypeVar env marker (`svec(TypeVar(name, w, w), constrained)`) keeps
+# A pinned-TypeVar env marker (`svec(TypeVar(name, w, w), constrained, egal)`) keeps
 # `Const` identity only when `w` is free in `specTypes`: there the object is
 # part of the call's own types. A pinned var that is not free in `specTypes`
 # gets rewrapped and stands for a different binding per instantiation, so it is
@@ -6824,13 +6824,13 @@ pinnedtv62001(::Type{Vector{T}}) where T = T
 let m = only(methods(pinnedtv62001))
     tv = TypeVar(:tv)
     atype = Tuple{typeof(pinnedtv62001), Type{Vector{tv}}}
-    mi = Compiler.specialize_method(m, atype, Core.svec(Core.svec(TypeVar(:T, tv, tv), true)))
+    mi = Compiler.specialize_method(m, atype, Core.svec(Core.svec(TypeVar(:T, tv, tv), true, false)))
     st = only(Compiler.sptypes_from_meth_instance(mi))
     @test st.typ isa Core.Const && st.typ.val === tv
 
     S = TypeVar(:S)
     atype = UnionAll(S, Tuple{typeof(pinnedtv62001), Type{Vector{S}}})
-    mi = Compiler.specialize_method(m, atype, Core.svec(Core.svec(TypeVar(:T, S, S), true)))
+    mi = Compiler.specialize_method(m, atype, Core.svec(Core.svec(TypeVar(:T, S, S), true, false)))
     st = only(Compiler.sptypes_from_meth_instance(mi))
     @test !(st.typ isa Core.Const)
     @test st.typ == (Core.TypeEq{X} where X)
@@ -6838,12 +6838,12 @@ end
 
 # Expanding a generated function whose MethodInstance carries a pinned sparam
 # uncertainty marker must hand the generator the marker's `==`-representative,
-# not the raw `svec(tvar, constrained)` env entry.
+# not the raw `svec(tvar, constrained, egal)` env entry.
 @generated pinnedstaged62001(::Type{Val{S}}) where {S} = QuoteNode(S)
 let m = only(methods(pinnedstaged62001))
     X = Tuple{Tuple{Int}}
     atype = Tuple{typeof(pinnedstaged62001), Core.TypeEgal{Val{X}}}
-    mi = Compiler.specialize_method(m, atype, Core.svec(Core.svec(TypeVar(:S, X, X), true)))
+    mi = Compiler.specialize_method(m, atype, Core.svec(Core.svec(TypeVar(:S, X, X), true, false)))
     src = ccall(:jl_code_for_staged, Any, (Any, UInt, Ptr{Cvoid}), mi, Base.get_world_counter(), C_NULL)
     @test src isa Core.CodeInfo
     retvals = Any[v isa QuoteNode ? v.value : v for v in

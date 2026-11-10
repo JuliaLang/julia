@@ -1015,99 +1015,6 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
     return rewrap_free_typevars(TypeEq{output_tvar}, find_free_typevars(specTypes))
 end
 
-function type_arg_parameter(@nospecialize(t))
-    t = unwrap_unionall(t)
-    isType(t) || return nothing
-    return type_parameter(t)
-end
-
-function has_invariant_sparam_occurrence(@nospecialize(t), v::TypeVar)
-    t = unwrap_unionall(t)
-    t isa DataType || return false
-    t.name === Tuple.name && return false
-    for p in t.parameters
-        has_typevar(p, v) && return true
-    end
-    return false
-end
-
-# TODO: This analysis should move into subtyping, which already has this
-# information when it computes the env: it knows for each binding whether the
-# matched position determines the value by identity. Propagate that outwards
-# (alongside the `svec(tvar, constrained)` markers) instead of re-deriving it
-# syntactically here.
-# Could matching an argument against the signature slot `t` bind `v`? That is the case
-# if `t` mentions `v`, or mentions a typevar whose declared bounds do (the bounds are
-# checked against the binding of that typevar).
-function slot_reaches_sparam(@nospecialize(t), v::TypeVar, depth::Int=0)
-    has_typevar(t, v) && return true
-    depth > 8 && return true # give up on deeply nested bounds
-    for w in find_free_typevars(t)
-        w = w::TypeVar
-        (slot_reaches_sparam(w.lb, v, depth + 1) || slot_reaches_sparam(w.ub, v, depth + 1)) && return true
-    end
-    return false
-end
-
-function sparam_definitely_egal_from_spec(v::TypeVar, sigtypes::Core.SimpleVector,
-                                          @nospecialize(specTypes))
-    spec = unwrap_unionall(specTypes)
-    spec isa DataType || return false
-    for i = 1:min(length(sigtypes), length(spec.parameters))
-        sigarg = sigtypes[i]
-        specarg = spec.parameters[i]
-        if sigarg isa Core.TypeofVararg
-            # each argument matched by the vararg tail binds `v` like a separate slot
-            isdefined(sigarg, :T) || continue
-            sigelt = sigarg.T
-            tail_egal = has_invariant_sparam_occurrence(sigelt, v)
-            if !tail_egal && unwrap_unionall(sigelt) === v
-                tail_egal = true
-                for j = i:length(spec.parameters)
-                    tail_egal &= isdispatchelem(unwrapva(spec.parameters[j]))
-                end
-            end
-            tail_egal || continue
-            # That only tells the value of `v` for a call that has such an argument.
-            # One exists if the spec has a fixed element here. Otherwise a call without
-            # one leaves `v` to the other slots, which may bind it up to `==` only,
-            # unless none of them can bind it at all (`v` is then undefined).
-            for j = i:length(spec.parameters)
-                isvarargtype(spec.parameters[j]) || return true
-            end
-            only_tail = true
-            for k = 1:length(sigtypes)
-                k == i && continue
-                only_tail &= !slot_reaches_sparam(sigtypes[k], v)
-            end
-            only_tail && return true
-            continue
-        end
-        sigarg_unwrapped = unwrap_unionall(sigarg)
-        if sigarg_unwrapped === v
-            isdispatchelem(specarg) && return true
-            continue
-        end
-        if sigarg_unwrapped isa TypeVar && has_invariant_sparam_occurrence(sigarg_unwrapped.ub, v)
-            return true
-        end
-        if has_invariant_sparam_occurrence(sigarg, v)
-            return true
-        end
-        sig_type_arg = type_arg_parameter(sigarg)
-        sig_type_arg === nothing && continue
-        if sig_type_arg === v
-            specarg isa Core.TypeEgal && return true
-            continue
-        end
-        if sig_type_arg isa TypeVar && has_invariant_sparam_occurrence(sig_type_arg.ub, v)
-            return true
-        end
-        has_invariant_sparam_occurrence(sig_type_arg, v) && return true
-    end
-    return false
-end
-
 function is_free_typevar_in_spec(v::TypeVar, @nospecialize(specTypes))
     for tv in find_free_typevars(specTypes)
         tv === v && return true
@@ -1120,7 +1027,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
     isa(def, Method) || return EMPTY_SPTYPES # toplevel
     sig = def.sig
     # mi is unspecialized: no subtyping has run, so we don't have the
-    # `svec(tvar, constrained)` markers that specialized env entries carry.
+    # `svec(tvar, constrained, egal)` markers that specialized env entries carry.
     isempty(mi.sparam_vals) && return sptypes_from_unspecialized(sig)
     sigtypes = (unwrap_unionall(sig)::DataType).parameters
     spvals = mi.sparam_vals
@@ -1130,17 +1037,22 @@ function sptypes_from_meth_instance(mi::MethodInstance)
     for i = 1:nvals
         v = spvals[i]
         undef = true
-        # An `svec(inner, constrained)` marker from subtyping/intersection
+        # An `svec(inner, constrained, egal)` marker from subtyping/intersection
         # means the sparam value is uncertain; `inner` is either the env
         # TypeVar (carrying identity and bounds) or a DataType with free
         # typevars (when the var got pinned to a value that still contains
         # call-site tvars). `constrained` is true iff every concrete subtype
-        # of the call site will pin this var to a definite value.
+        # of the call site will pin this var to a definite value. `egal` is
+        # true iff `inner` is a pinned TypeVar whose value every concrete
+        # subtype that defines the var binds it to by identity, so that a
+        # type value is `TypeEgal`- rather than only `==`-known.
         v_tvar = nothing
         v_constrained = false
+        v_marker_egal = false
         if isa(v, SimpleVector)
             v_inner = v[1]
             v_constrained = v[2]::Bool
+            v_marker_egal = v[3]::Bool
             if isa(v_inner, TypeVar)
                 v_tvar = v_inner
             else
@@ -1160,7 +1072,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
         elseif v_tvar !== nothing || has_free_typevars(v)
             vᵢ = (temp::UnionAll).var
             if v_tvar !== nothing
-                v_egal = sparam_definitely_egal_from_spec(vᵢ, sigtypes, mi.specTypes)
+                v_egal = v_marker_egal
                 ty = sptype_for_tvar(vᵢ, v_tvar, sigtypes, mi.specTypes, v_egal)
             else
                 ty = rewrap_free_typevars(TypeEq{v}, find_free_typevars(mi.specTypes))

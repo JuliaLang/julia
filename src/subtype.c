@@ -139,6 +139,11 @@ typedef struct jl_varbinding_t {
     int8_t arm_occurs;   // some occurrence was matched on the BOUND_ARM channel, so
                          // an instance may have fewer occurrences of the var than
                          // this search found
+    int8_t ident_eq;     // some lower-bound contribution was spelled with less than
+                         // BOUND_EGAL authority as far as the object it binds is
+                         // concerned (`jl_stenv_t.ident_spell`): an instance that
+                         // binds the var only through such contributions may bind
+                         // another `==` spelling than this search found
     int8_t lb_spell;     // spelling authority (`jl_stenv_t.spell_channel`) of the
                          // contribution that supplied the current `lb` OBJECT.
                          // Among `==`-equal spellings the runtime binding takes
@@ -229,6 +234,13 @@ typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
                               // binding (see `jl_varbinding_t.lb_spell`). Raised
                               // from BOUND_EQ back to BOUND_EGAL inside the
                               // parameters of a non-tuple type, which are canonical
+    int ident_spell;          // the `spell_channel` without the lowering to BOUND_ARM
+                              // or BOUND_PROXY, which says whether an instance makes
+                              // a match at all, not which object it binds there. It
+                              // is lowered only by an equality wrapper and raised in
+                              // the parameters of a type, like `spell_channel`, and
+                              // tells whether a contribution binds a canonical
+                              // spelling in each instance that makes it
     int intersection;         // true iff subtype is being called from intersection
     int emptiness_only;       // true iff intersection only needs to test for emptiness
     int triangular;           // when intersecting Ref{X} with Ref{<:Y}
@@ -440,8 +452,8 @@ static int current_env_length(jl_stenv_t *e)
 
 // Per-var saved env layout:
 // [occurs, occurs_inv, occurs_cov, cov_diag, max_offset, lb_certainty, lb_required, lb_spell, pinned,
-//  inv_certainty, alt_occurs, arm_occurs].
-#define JL_SAVEDENV_BYTES_PER_VAR 12
+//  inv_certainty, alt_occurs, arm_occurs, ident_eq].
+#define JL_SAVEDENV_BYTES_PER_VAR 13
 
 // Combined covariance count used for diagonal-rule decisions: the max of the
 // counter for the current consistency-check scope and the largest count
@@ -456,7 +468,7 @@ typedef struct {
     int8_t *buf;
     int rdepth;
     int diverged;
-    int8_t _space[96]; // == 8 * JL_SAVEDENV_BYTES_PER_VAR
+    int8_t _space[104]; // == 8 * JL_SAVEDENV_BYTES_PER_VAR
     jl_gcframe_t gcframe;
     jl_value_t *roots[24]; // == 8 * 3 (lb, ub, innervars)
 } jl_savedenv_t;
@@ -518,6 +530,7 @@ static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
         se->buf[j++] = v->inv_certainty;
         se->buf[j++] = v->alt_occurs;
         se->buf[j++] = v->arm_occurs;
+        se->buf[j++] = v->ident_eq;
         v = v->prev;
     }
     assert(i == nroots); (void)nroots;
@@ -627,6 +640,7 @@ static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPO
         v->inv_certainty = se->buf[j++];
         v->alt_occurs = se->buf[j++];
         v->arm_occurs = se->buf[j++];
+        v->ident_eq = se->buf[j++];
         v = v->prev;
     }
     assert(i == nroots); (void)nroots;
@@ -1462,6 +1476,8 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     record_var_pin(bb, a, e, param);
     if (a != jl_bottom_type && bb->lb_certainty < e->bound_channel)
         bb->lb_certainty = e->bound_channel;
+    if (a != jl_bottom_type && e->ident_spell < BOUND_EGAL)
+        bb->ident_eq = 1;
     if (bb->lb == a) {
         if (bb->lb_spell < e->spell_channel)
             bb->lb_spell = e->spell_channel;
@@ -1666,13 +1682,22 @@ static jl_value_t *widen_Type_to_union(jl_value_t *t, jl_value_t *bound, jl_sten
 
 static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int want_inv) JL_NOTSAFEPOINT;
 
-// wrap a TypeVar env entry as svec(tvar, constrained): preserves TypeVar
-// identity while carrying the "constrained by any concrete subtype" bit.
+// wrap a TypeVar env entry as svec(tvar, constrained, egal): preserves TypeVar
+// identity while carrying what is known about the value for the concrete
+// subtypes of the LHS.
 // `tvar` is the uncertain value (something with has_free_typevars)
 // `constrained` is 1 if all concrete subtypes of the LHS will pin this var to a definite value.
+// `egal` is 1 only for a pinned marker (`tvar.lb === tvar.ub`) whose value every
+// concrete subtype of the LHS that defines the var binds it to by identity (`===`),
+// not just up to `==` (see `eq_pinned_envout_marker`).
+static jl_value_t *wrap_tvar_env_egal(jl_value_t *tvar, int constrained, int egal) JL_CANSAFEPOINT
+{
+    return (jl_value_t*)jl_svec(3, tvar, constrained ? jl_true : jl_false, egal ? jl_true : jl_false);
+}
+
 static jl_value_t *wrap_tvar_env(jl_value_t *tvar, int constrained) JL_CANSAFEPOINT
 {
-    return (jl_value_t*)jl_svec2(tvar, constrained ? jl_true : jl_false);
+    return wrap_tvar_env_egal(tvar, constrained, 0);
 }
 
 // See `Core.Compiler.pin_grade`: is `v` pinned to a `typeof`-produced argument
@@ -1933,14 +1958,26 @@ static int var_occurs_covariant_only(jl_value_t *t, jl_tvar_t *var) JL_NOTSAFEPO
 // marker. A BOUND_EQ channel still marks it defined (constrained) for every
 // `==`-equal call. Returns NULL for other values: free-typevar values keep the
 // legacy plain binding (#61242), egality-certain values stay unwrapped.
+//
+// A value that is not certain for every instance can still be canonically
+// spelled: the binding of each instance that defines the var is then this very
+// object, which the marker's `egal` bit records. That is the case when the
+// spelling of `lb` has full authority (it came from a type tag or from the
+// parameter of a type, see `jl_varbinding_t.lb_spell`): every instance makes
+// that contribution, which displaces any other spelling. It is also the case
+// when every contribution binds a canonical spelling (`ident_eq` unset), even
+// if some instances skip some of them (BOUND_ARM, BOUND_PROXY): an instance
+// that defines the var makes one of them. A value that the search derived
+// from `vb->lb` (a tag, or `vb->ub`) is not one whose spelling was tracked.
 static jl_value_t *eq_pinned_envout_marker(jl_unionall_t *u, jl_varbinding_t *vb, jl_value_t *lb,
                                            jl_value_t **new_tvar JL_REQUIRE_ROOTED_SLOT,
                                            int constrained) JL_CANSAFEPOINT
 {
     if (jl_is_type(lb) && lb != jl_bottom_type && vb->lb_certainty < BOUND_EGAL &&
         !jl_has_free_typevars(lb)) {
+        int egal = lb == vb->lb && (vb->lb_spell == BOUND_EGAL || !vb->ident_eq);
         *new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, lb, lb);
-        return wrap_tvar_env(*new_tvar, constrained || vb->lb_certainty == BOUND_EQ);
+        return wrap_tvar_env_egal(*new_tvar, constrained || vb->lb_certainty == BOUND_EQ, egal);
     }
     return NULL;
 }
@@ -2311,16 +2348,20 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             if (oldrep != NULL && newrep != NULL && jl_egal(oldrep, newrep)) {
                 if (!jl_is_svec(oldval))
                     e->envout[e->envidx] = val;
+                else if (jl_is_svec(val) && jl_svecref(val, 2) != jl_true)
+                    // the instances of this branch need not bind that very
+                    // object, so neither marker's `egal` bit holds for all
+                    e->envout[e->envidx] = val;
                 // else keep oldval, which is already the marker spelling
             }
             else {
                 int old_iter_constrained;
-                if (jl_is_svec(oldval) && jl_svec_len((jl_svec_t*)oldval) == 2)
+                if (jl_is_svec(oldval) && jl_svec_len((jl_svec_t*)oldval) == 3)
                     old_iter_constrained = jl_svecref(oldval, 1) == jl_true;
                 else
                     old_iter_constrained = 1; // oldval is a concrete value: iter pinned var
                 int new_iter_constrained;
-                if (jl_is_svec(val) && jl_svec_len((jl_svec_t*)val) == 2)
+                if (jl_is_svec(val) && jl_svec_len((jl_svec_t*)val) == 3)
                     new_iter_constrained = jl_svecref(val, 1) == jl_true;
                 else
                     new_iter_constrained = 1;
@@ -3620,12 +3661,16 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             // bindings keep their certainty (the descent of the one object `A`
             // is deterministic), while `A`'s spelling is only `==`-authoritative
             int saved_spell = e->spell_channel;
+            int saved_ident_spell = e->ident_spell;
             if (e->spell_channel > BOUND_EQ)
                 e->spell_channel = BOUND_EQ;
+            if (e->ident_spell > BOUND_EQ)
+                e->ident_spell = BOUND_EQ;
             e->invdepth++;
             int ans = forall_exists_equal(A, jl_typeeq_T(y), e);
             e->invdepth--;
             e->spell_channel = saved_spell;
+            e->ident_spell = saved_ident_spell;
             return ans;
         }
         return subtype(jl_typeof(A), y, e, param);
@@ -3651,10 +3696,13 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         // the incoming certainty.
         int saved_channel = e->bound_channel;
         int saved_spell = e->spell_channel;
+        int saved_ident_spell = e->ident_spell;
         if (param != PARAM_INVARIANT && !e->value_descent && e->bound_channel > BOUND_EQ)
             e->bound_channel = BOUND_EQ;
         if (param != PARAM_INVARIANT && !e->value_descent && e->spell_channel > BOUND_EQ)
             e->spell_channel = BOUND_EQ;
+        if (param != PARAM_INVARIANT && !e->value_descent && e->ident_spell > BOUND_EQ)
+            e->ident_spell = BOUND_EQ;
         int saved_open = e->inv_open;
         e->inv_open = e->instance_envout && jl_has_free_typevars(jl_typeeq_T(x));
         e->invdepth++;
@@ -3663,6 +3711,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         e->inv_open = saved_open;
         e->bound_channel = saved_channel;
         e->spell_channel = saved_spell;
+        e->ident_spell = saved_ident_spell;
         return ans;
     }
     if (jl_is_typeeq(x) && jl_is_datatype(y)) {
@@ -3737,8 +3786,11 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         // authority, so that it displaces an `==`-only spelling of the same binding
         // in either argument order (see `jl_varbinding_t.lb_spell`).
         int saved_spell = e->spell_channel;
+        int saved_ident_spell = e->ident_spell;
         if (e->spell_channel == BOUND_EQ)
             e->spell_channel = BOUND_EGAL;
+        if (e->ident_spell == BOUND_EQ)
+            e->ident_spell = BOUND_EGAL;
         e->invdepth++;
         for (i=0; i < np; i++) {
             jl_value_t *xi = jl_tparam(xd, i), *yi = jl_tparam(yd, i);
@@ -3752,6 +3804,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         e->invdepth--;
         e->inv_open = saved_open;
         e->spell_channel = saved_spell;
+        e->ident_spell = saved_ident_spell;
         return ans;
     }
     if (jl_is_type(y))
@@ -3924,6 +3977,8 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
     record_var_pin(vb, x, e, PARAM_INVARIANT);
     if (x != jl_bottom_type && vb->lb_certainty < e->bound_channel)
         vb->lb_certainty = e->bound_channel;
+    if (x != jl_bottom_type && e->ident_spell < BOUND_EGAL)
+        vb->ident_eq = 1;
     if (vb->lb == x) {
         if (vb->lb_spell < e->spell_channel)
             vb->lb_spell = e->spell_channel;
@@ -4112,6 +4167,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->invdepth = 0;
     e->bound_channel = BOUND_EGAL;
     e->spell_channel = BOUND_EGAL;
+    e->ident_spell = BOUND_EGAL;
     e->value_descent = 0;
     e->intersection = 0;
     e->emptiness_only = 0;
@@ -6778,10 +6834,14 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
             // as in the subtype rule: `A` is egal-known, but `Type{B}` pins `B`
             // only up to `==`, so `A`'s spelling is only `==`-authoritative
             int saved_spell = e->spell_channel;
+            int saved_ident_spell = e->ident_spell;
             if (e->spell_channel > BOUND_EQ)
                 e->spell_channel = BOUND_EQ;
+            if (e->ident_spell > BOUND_EQ)
+                e->ident_spell = BOUND_EQ;
             jl_value_t *ii = R ? intersect_invariant(yp, A, e) : intersect_invariant(A, yp, e);
             e->spell_channel = saved_spell;
+            e->ident_spell = saved_ident_spell;
             return (ii == NULL || ii == jl_bottom_type) ? jl_bottom_type : x;
         }
         // `A` lies in `y` iff the singleton `typeof(A)` does; `jl_subtype` also
@@ -6960,6 +7020,9 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
             me->buf[m+7] = v->lb_spell;
         if (!v->pinned)
             me->buf[m+8] = 0;
+        // and only canonical if every merged branch bound a canonical spelling
+        if (v->ident_eq)
+            me->buf[m+12] = 1;
         m = m + JL_SAVEDENV_BYTES_PER_VAR;
         n = n + 3;
         v = v->prev;
