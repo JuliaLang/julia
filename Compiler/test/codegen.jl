@@ -1660,3 +1660,21 @@ end
     @test isequal(Base.mapany(identity, (Union{}, 'a')), Any[Union{}, 'a'])
     @test isequal(Any[x for x in (Union{}, 1.0)], Any[Union{}, 1.0])
 end
+
+# a value split out of a union keeps its box when it is boxed again, and gets a
+# new box when it arrived unboxed
+@noinline getu_union(v, i) = i == 0 ? v[1]::Union{Int, String} : i
+function recopy_union!(w, v, i)
+    y = getu_union(v, i)
+    if y isa Int
+        w[1] = y
+    end
+    nothing
+end
+let v = Any[typemax(Int)], w = Any[nothing]
+    recopy_union!(w, v, 0)
+    @test w[1] === typemax(Int)
+    @test (@allocated recopy_union!(w, v, 0)) == 0
+    recopy_union!(w, v, 1000)
+    @test w[1] === 1000
+end
