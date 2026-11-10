@@ -134,7 +134,14 @@ signature(expr::Expr) = signature!([], expr)
 signature(@nospecialize other) = signature!([], other)
 
 function argtype(expr::Expr)
-    isexpr(expr, :(::))  && return expr.args[end]
+    if isexpr(expr, :(::))
+        T = expr.args[end]
+        # an argument with a guard (`Base.Experimental.@guarded`) is declared as `Core.Guard(T, ...)`
+        while isexpr(T, :call) && T.args[1] == GlobalRef(Core, :Guard)
+            T = T.args[2]
+        end
+        return T
+    end
     isexpr(expr, :(...)) && return :(Vararg{$(argtype(expr.args[1]))})
     if isexpr(expr, :meta) && length(expr.args) == 2
         a1 = expr.args[1]

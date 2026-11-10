@@ -425,6 +425,188 @@ macro overlay(mt, def)
 end
 
 """
+    Base.Experimental.@trait name::Top = Default
+    Base.Experimental.@trait name(Family) = Label
+    Base.Experimental.@trait name(Family{A, B, P}) = name(P)
+
+Declare a *trait*, or an entry in its table. A trait gives every type a *label*, a concrete
+subtype of `Top`, which methods can dispatch on with [`Base.Experimental.@guarded`](@ref).
+The label of a type is determined by its type family:
+
+- `@trait name(Family) = Label` gives the types of `Family` the label `Label`. If `Family`
+  is abstract, so do all its subtypes, which then cannot have entries of their own.
+- `@trait name(Family{A, B, P}) = name(P)` gives a type of `Family` the label of its
+  parameter `P`. `Family` must not be abstract. The parameters are named in the order
+  `Family` takes them, and trailing ones can be left out.
+- The types of other families have the label `Default`.
+
+An entry is for a whole type family, such as `SubArray`: it cannot restrict the parameters.
+Declaring the entry a family already has does nothing. Otherwise, only the module that
+declared an entry can replace it, or delete it with
+[`Base.Experimental.delete_trait_entry`](@ref).
+
+`name(T)` returns the label of the type `T`. A type parameter has the label all its values
+share, or `Default` if they do not share one: `name(Family{..., AbstractArray})` is `Default`
+unless every `AbstractArray` has the same label.
+
+# Examples
+```julia
+abstract type Backend end
+struct CPU <: Backend end
+struct GPU <: Backend end
+
+@trait backend::Backend = CPU
+@trait backend(GPUArray) = GPU
+@trait backend(SubArray{T,N,P}) = backend(P)
+
+backend(typeof(view(GPUArray(...), 1:2))) # GPU
+```
+"""
+macro trait(ex)
+    usage = "@trait expects `name::Top = Default`, `name(Family) = Label` or `name(Family{...}) = name(P)`"
+    isexpr(ex, :(=)) && length(ex.args) == 2 || error(usage)
+    lhs, rhs = ex.args
+    rhs = Meta.unblock(rhs)
+    if isexpr(lhs, :(::)) && length(lhs.args) == 2 && lhs.args[1] isa Symbol
+        name, top = lhs.args
+        return :(const $(esc(name)) = $Trait($(QuoteNode(name)), $__module__, $(esc(top)), $(esc(rhs))))
+    end
+    isexpr(lhs, :call) && length(lhs.args) == 2 || error(usage)
+    trait, family = lhs.args
+    if isexpr(rhs, :call) && length(rhs.args) == 2 && rhs.args[1] == trait
+        param = rhs.args[2]
+        params = isexpr(family, :curly) ? family.args[2:end] : Any[]
+        all(p -> p isa Symbol, params) && count(==(param), params) == 1 ||
+            error("@trait: `$param` must be the name of exactly one parameter of `$family`")
+        k = findfirst(==(param), params)
+        head = family.args[1]
+        return :($set_trait_entry($(esc(trait)), $(esc(head)), TRAIT_DELEGATE,
+                                  $trait_parameter_index($(esc(head)), $(length(params)), $k), $__module__))
+    end
+    return :($set_trait_entry($(esc(trait)), $(esc(family)), TRAIT_FIXED, $(esc(rhs)), $__module__))
+end
+
+using Core: Trait, Guard
+
+Base.show(io::IO, t::Trait) = print(io, t.name)
+
+(t::Trait)(@nospecialize(T)) =
+    ccall(:jl_trait_label, Any, (Any, Any, UInt), t, T, Base.tls_world_age())
+
+const TRAIT_FIXED = Cint(0)
+const TRAIT_DELEGATE = Cint(1)
+
+set_trait_entry(t::Trait, @nospecialize(family), kind::Cint, @nospecialize(value), mod::Module) =
+    ccall(:jl_trait_set_entry, Cvoid, (Any, Any, Cint, Any, Any), t, family, kind, value, mod)
+
+"""
+    Base.Experimental.delete_trait_entry(mod::Module, trait, Family)
+
+Delete the entry of the type family `Family` in the table of `trait`, which `mod` declared
+with [`Base.Experimental.@trait`](@ref).
+"""
+delete_trait_entry(mod::Module, t::Trait, @nospecialize(family)) =
+    set_trait_entry(t, family, TRAIT_FIXED, nothing, mod)
+
+# the position, in the type family `F`, of its parameter number `k` of `n`
+function trait_parameter_index(@nospecialize(F), n::Int, k::Int)
+    tvs = Any[TypeVar(Symbol("#", i)) for i = 1:n]
+    body = Base.unwrap_unionall(F{tvs...})
+    i = body isa DataType ? findfirst(p -> p === tvs[k], body.parameters) : nothing
+    i === nothing && error("@trait: `$F` does not take its parameter number $k as a parameter")
+    return i
+end
+
+"""
+    Base.Experimental.@guarded function f(args...) where {trait(arg)::Bound, ...}
+        ...
+    end
+
+Define a *guarded method*. Each `where` entry of the form `trait(arg)::Bound` is a guard:
+the method only applies to a call if `trait`, declared with
+[`Base.Experimental.@trait`](@ref), gives the type of the argument `arg` a label that is a
+subtype of `Bound`. For a type argument `X`, that is the label of `X`. The other `where`
+entries are ordinary static parameters. `Bound` is evaluated when the method is defined.
+
+A method is more specific than another if its signature is more specific or equal and its
+guards at least as narrow, as usual. Where that does not order two methods, the one that
+requires narrower labels of its arguments is more specific, whatever the signatures: a
+method requires the labels its guard allows, among those of the types its signature
+matches. Signatures order the methods that require the same labels. So with
+
+```julia
+f(x::AbstractArray) = 1
+@guarded f(x::AbstractArray) where {backend(x)::GPU} = 2
+f(x::SubArray) = 3
+f(x::GPUArray) = 4
+```
+
+a view of a `GPUArray` calls the second method, which requires a label where the third
+does not, and a `GPUArray` calls the fourth, as every `GPUArray` has one particular label.
+Methods that differ only in their guards do not replace each other.
+
+A guard can also be on the function itself, declared as `(f::T)(args...)`. Guards on a
+`Vararg` argument are not supported. A method that leaves out an optional argument is
+defined without the guards on it.
+"""
+macro guarded(def)
+    def = copy(def)
+    inner = Base.unwrap_macrocalls(def)
+    is_function_def(inner) || error("@guarded requires a function definition")
+    guards = Any[]
+    sig = strip_guards!(guards, inner.args[1])
+    isempty(guards) && error("@guarded requires a guard `trait(arg)::Bound` in the `where` clause")
+    call = sig
+    while isexpr(call, :where)
+        call = call.args[1]
+    end
+    isexpr(call, :(::)) && (call = call.args[1]) # a return type
+    isexpr(call, :call) || error("@guarded: could not find the method signature")
+    for g in guards
+        trait, name = g.args[1].args
+        guard_argument!(call.args, name, trait, g.args[2])
+    end
+    inner.args[1] = sig
+    return esc(def)
+end
+
+# move the guards `trait(arg)::Bound` of (nested) `where` clauses to `guards`
+function strip_guards!(guards::Vector{Any}, ex)
+    isexpr(ex, :where) || return ex
+    body = strip_guards!(guards, ex.args[1])
+    params = Any[]
+    for p in ex.args[2:end]
+        isguard = isexpr(p, :(::)) && length(p.args) == 2 &&
+                  isexpr(p.args[1], :call) && length(p.args[1].args) == 2
+        push!(isguard ? guards : params, p)
+    end
+    return isempty(params) ? body : Expr(:where, body, params...)
+end
+
+# Declare the argument `name` of the call signature `args`, or the function if it is
+# declared as `(name::T)(...)`, as `name::Core.Guard(T, trait, bound)`, which the method
+# definition takes as an argument of type `T` with a guard.
+function guard_argument!(args::Vector{Any}, name, trait, bound)
+    for i = 1:length(args)
+        a = args[i]
+        isexpr(a, :parameters) && continue # keyword arguments
+        holder, k = args, i
+        while isexpr(a, :macrocall) || isexpr(a, :kw) # e.g. `@nospecialize(x)`, `x = default`
+            holder, k = a.args, isexpr(a, :kw) ? 1 : length(a.args)
+            a = holder[k]
+        end
+        isexpr(a, :...) && (isexpr(a.args[1], :(::)) ? a.args[1].args[1] : a.args[1]) === name &&
+            error("@guarded: guards on a Vararg argument are not supported")
+        argname, T = isexpr(a, :(::)) ? (length(a.args) == 2 ? a.args : (nothing, a.args[1])) :
+                     i == 1 ? (nothing, a) : (a, :Any)
+        argname === name || continue
+        holder[k] = Expr(:(::), name, Expr(:call, GlobalRef(Core, :Guard), T, trait, bound))
+        return
+    end
+    error("@guarded: `$name` is not an argument")
+end
+
+"""
     Base.Experimental.@consistent_overlay mt def
 
 This macro operates almost identically to [`Base.Experimental.@overlay`](@ref), defining a

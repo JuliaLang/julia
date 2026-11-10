@@ -428,6 +428,7 @@ DevDocs = [
         "devdocs/callconv.md",
         "devdocs/compiler.md",
         "devdocs/functions.md",
+        "devdocs/traits.md",
         "devdocs/cartesian.md",
         "devdocs/meta.md",
         "devdocs/subarrays.md",
