@@ -123,8 +123,8 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
         argv[i] = eval_value(args[i], s);
     // the call expression's arguments identify the call site
     uint32_t callsite = jl_int32hash_fast((uint32_t)((uintptr_t)args >> 3));
-    jl_value_t *result = s->sites != NULL && s->ip + 1 < s->sites->length ?
-        jl_apply_generic_cached(argv[0], &argv[1], nargs - 1, s->sites, s->ip, callsite) :
+    jl_value_t *result = s->sites != NULL && 2 * s->ip + 1 < s->sites->length ?
+        jl_apply_generic_cached(argv[0], &argv[1], nargs - 1, s->sites, 2 * s->ip, callsite) :
         jl_apply_generic_site(argv[0], &argv[1], nargs - 1, callsite);
     JL_GC_POP();
     return result;
@@ -173,6 +173,45 @@ jl_value_t *jl_eval_globalref(jl_globalref_t *g, size_t world)
     jl_value_t *v = jl_get_globalref_value(g, world);
     if (v == NULL)
         jl_undefined_var_error(g->name, (jl_value_t*)g->mod);
+    return v;
+}
+
+// The value of a global that the current statement reads, through the statement's cache
+// of the constants it read (see call_sites): svec(world, gr, value, gr, value, ...), for one
+// world. A global that is not a constant there is read as usual each time.
+static jl_value_t *eval_globalref_cached(jl_globalref_t *g, interpreter_state *s, size_t world) JL_CANSAFEPOINT
+{
+    jl_genericmemory_t *sites = s->sites;
+    _Atomic(jl_value_t*) *slot = &((_Atomic(jl_value_t*)*)jl_genericmemory_ptr_data(sites))[2 * s->ip + 1];
+    jl_svec_t *cache = (jl_svec_t*)jl_atomic_load_acquire(slot);
+    size_t n = 0;
+    if (cache != NULL && jl_unbox_ulong(jl_svecref(cache, 0)) == world) {
+        n = jl_svec_len(cache);
+        for (size_t i = 1; i < n; i += 2) {
+            if (jl_svecref(cache, i) == (jl_value_t*)g)
+                return jl_svecref(cache, i + 1);
+        }
+    }
+    jl_value_t *v = jl_get_globalref_const_quiet(g, world);
+    if (v == NULL)
+        return jl_eval_globalref(g, world);
+    jl_svec_t *grown = NULL;
+    JL_GC_PUSH3(&cache, &v, &grown);
+    grown = jl_alloc_svec(n == 0 ? 3 : n + 2);
+    if (n == 0) {
+        jl_value_t *w = jl_box_ulong(world);
+        jl_svecset(grown, 0, w);
+    }
+    else {
+        for (size_t i = 0; i < n; i++)
+            jl_svecset(grown, i, jl_svecref(cache, i));
+    }
+    size_t m = jl_svec_len(grown);
+    jl_svecset(grown, m - 2, (jl_value_t*)g);
+    jl_svecset(grown, m - 1, v);
+    jl_atomic_store_release(slot, (jl_value_t*)grown);
+    jl_gc_wb(sites, slot, grown);
+    JL_GC_POP();
     return v;
 }
 
@@ -231,7 +270,10 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_quotenode_value(e);
     }
     if (jl_is_globalref(e)) {
-        return jl_eval_globalref((jl_globalref_t*)e, jl_current_task->world_age);
+        size_t world = jl_current_task->world_age;
+        if (s->sites != NULL && 2 * s->ip + 2 < s->sites->length)
+            return eval_globalref_cached((jl_globalref_t*)e, s, world);
+        return jl_eval_globalref((jl_globalref_t*)e, world);
     }
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
         return jl_eval_global_var(s->module, (jl_sym_t*)e, jl_current_task->world_age);
@@ -932,9 +974,10 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
     return (jl_code_info_t*)code_or_ci;
 }
 
-// Each method body's cache of the dispatch at each of its statements (see
-// jl_apply_generic_cached), a Memory{Any} by statement index followed by the code itself,
-// found by that code. The method remembers the caches it last used, which a frame running
+// Each method body's caches for each of its statements, found by the code it runs: a
+// Memory{Any} holding, for statement i, the dispatch of its call at 2i (see
+// jl_apply_generic_cached) and the constant globals it read at 2i + 1 (see
+// eval_globalref_cached), and last the code itself. The method remembers the caches it last used, which a frame running
 // the same code finds without the lock. Top-level thunks, which mostly run once, have none.
 jl_genericmemory_t *jl_interp_call_sites JL_GLOBALLY_ROOTED = NULL;
 jl_mutex_t jl_interp_call_sites_lock;
@@ -950,8 +993,8 @@ static jl_genericmemory_t *call_sites(jl_method_t *m, jl_code_info_t *src, size_
     jl_genericmemory_t *sites = (jl_genericmemory_t*)jl_eqtable_get(jl_interp_call_sites, (jl_value_t*)src, NULL);
     if (sites == NULL) {
         JL_GC_PUSH1(&sites);
-        sites = jl_alloc_memory_any(nstmts + 1);
-        jl_genericmemory_ptr_set(sites, nstmts, (jl_value_t*)src);
+        sites = jl_alloc_memory_any(2 * nstmts + 1);
+        jl_genericmemory_ptr_set(sites, 2 * nstmts, (jl_value_t*)src);
         jl_interp_call_sites = jl_eqtable_put(jl_interp_call_sites, (jl_value_t*)src, (jl_value_t*)sites, NULL);
         JL_GC_POP();
     }
