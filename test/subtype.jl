@@ -3710,3 +3710,75 @@ end
         @test A != B
     end
 end
+
+abstract type A64753{T,N} end
+struct B64753{T,N,R} <: A64753{T,N} end
+@testset "issue #64718" begin
+    let A = Val, B = Val
+        for _ in 1:30
+            A = Val{X} where X<:A
+            B = Val{X} where X<:B
+        end
+        @test (Val{X} where X<:A) <: B
+    end
+    let A = Union{}, B = Union{}
+        for _ in 1:30
+            A = Val{X} where X>:A
+            B = Val{X} where X>:B
+        end
+        @test !((Val{X} where X>:A) <: B)
+    end
+    let L = Type{<:A64753{<:Real}}, R = Type{B64753{T,N,S} where {N,S<:Ref{N}}} where T
+        @test (B64753{Int,N,S} where {N,S<:Ref{N}}) isa typeintersect(L, R)
+    end
+end
+
+# `obviously_disjoint` looks through typevar bounds in covariant positions
+# and compares invariant typevars by their bounds
+@testset "obviously_disjoint with typevar bounds" begin
+    f = typeof(identity)
+    for (a, b, empty) in Any[
+            (Tuple{f, Type{Int8}, Type{UInt8}}, Tuple{f, Core.TypeEgal{Int64}, Core.TypeEgal{Float64}}, true),
+            (Tuple{f, Type{T}} where T<:Integer, Tuple{f, Type{Int}}, false),
+            (Tuple{f, Type{T}} where T<:AbstractFloat, Tuple{f, Type{Int}}, true),
+            (Tuple{f, Type{T}} where T, Tuple{f, DataType}, false),
+            (Tuple{f, Type{Vector{T}}} where T, Tuple{f, Type{Int}}, true),
+            (Tuple{f, IO, Vector{T}} where T, Tuple{f, IOBuffer, Vector{String}}, false),
+            (Tuple{f, IO, Array{T,2}} where T, Tuple{f, IOBuffer, Vector{String}}, true),
+            (Tuple{f, Vector{<:Integer}}, Tuple{f, Vector{Int}}, false),
+            (Tuple{f, Vector{<:AbstractFloat}}, Tuple{f, Vector{Int}}, true),
+            (Tuple{f, Val{N}} where N, Tuple{f, Val{Int}}, false),
+            (Tuple{f, T, T} where T<:AbstractString, Tuple{f, Int, Nothing}, true),
+            (Tuple{f, Union{T, Nothing}} where T<:AbstractString, Tuple{f, Int}, true),
+            (Tuple{f, Union{T, Nothing}} where T<:Integer, Tuple{f, Int}, false),
+            (Tuple{f, Ref{T}} where T<:AbstractString, Tuple{f, Ref{S}} where S<:Integer, false)]
+        @test (typeintersect(a, b) === Union{}) == empty
+        @test (typeintersect(b, a) === Union{}) == empty
+    end
+end
+
+struct Q61645{T,S} end
+@testset "intersection typevar with a typevar upper bound" begin
+    let X = Ref{Tuple{Type{Q61645{T}},T}} where T,
+        Y = Ref{Tuple{Type{Q61645{T,S} where S<:T},T}} where T,
+        V = Ref{Tuple{Type{Q61645{Any}},Any}}
+        @test V <: typeintersect(X, Y)
+        @test V <: typeintersect(Y, X)
+    end
+    let X = Ref{Tuple{Type{Q61645{T,Tuple{S}} where S},T}} where T,
+        Y = Ref{Tuple{Type{Q61645{T,Tuple{S}} where S<:T},T}} where T,
+        V = Ref{Tuple{Type{Q61645{Any,Tuple{S}} where S},Any}}
+        @test V <: typeintersect(X, Y)
+        @test V <: typeintersect(Y, X)
+    end
+    let X = Ref{Type{Q61645{T,S} where S<:T}} where T<:Real,
+        Y = Ref{Type{Q61645{T,S} where Int<:S<:Union{Int,T}}} where T>:Int
+        @test typeintersect(X, Y) === Union{}
+        @test typeintersect(Y, X) === Union{}
+    end
+    let X = Ref{Type{Q61645{T,Tuple{S}} where S<:T}} where T<:Real,
+        Y = Ref{Type{Q61645{T,Tuple{S}} where Int<:S<:Union{Int,T}}} where T>:Int
+        @test typeintersect(X, Y) === Union{}
+        @test typeintersect(Y, X) === Union{}
+    end
+end
