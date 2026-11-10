@@ -3308,6 +3308,44 @@ end
 # diagonal rule rejects `S1`) is not a value of the branch that matches
 @test intersection_env(Tuple{Int,Int,Tuple{Int,Int}}, Tuple{S2,S1,Union{Type{S2},S1,S2}} where {S1,S2})[2] ===
     Core.svec(Int, Union{Int,Tuple{Int,Int}})
+# An argument of type `Type{X}` has a `TypeEgal` key in each instance of the left
+# side, and a covariant occurrence binds the var to the tag of that key: `Int`
+# binds `S` to `DataType`, not to `Type{Int}`
+let bound_by(e, T) = e isa Core.SimpleVector && e[1] isa TypeVar && e[2]::Bool && e[1].lb === Union{} && e[1].ub == T
+    @test bound_by(only(intersection_env(Tuple{Type{Int}}, Tuple{S} where S)[2]), Union{DataType,UnionAll})
+    @test bound_by(only(intersection_env(Tuple{Type{Int},Any}, Tuple{S,Any} where S)[2]), Union{DataType,UnionAll})
+    @test bound_by(only(intersection_env(Tuple{Type{Int},Type{Int}}, Tuple{S,S} where S)[2]), Union{DataType,UnionAll})
+    @test bound_by(only(intersection_env(Tuple{Type{<:Real}}, Tuple{S} where S)[2]), Core.AnyType)
+    # also when it reaches the var through a var of the left side
+    @test bound_by(only(intersection_env(Tuple{Type{<:Real},Any}, Tuple{S,S} where S)[2]), Core.AnyType)
+    # a single tag covers `Type{Vector}`, and a key widens to the tag of its type
+    @test intersection_env(Tuple{Type{Vector}}, Tuple{S} where S)[2] === Core.svec(UnionAll)
+    @test intersection_env(Tuple{Core.TypeEgal{Int},Any}, Tuple{S,Any} where S)[2] === Core.svec(DataType)
+    @test intersection_env(Tuple{DataType}, Tuple{S} where S)[2] === Core.svec(DataType)
+    # a type parameter is a value, not a key
+    @test intersection_env(Tuple{Ref{Type{Int}}}, Tuple{Ref{S}} where S)[2] === Core.svec(Type{Int})
+    let e = only(intersection_env(Tuple{Type{Int}}, Tuple{Type{S}} where S)[2])
+        @test e isa Core.SimpleVector && e[2] && e[1].lb === e[1].ub === Int
+    end
+    # Where the keys are not widened (two occurrences, which the invariant one in
+    # the signature keeps from being diagonal), a kind stands for the keys of all
+    # types of that kind: `(Int, Float64)` binds `S` to the union of two keys
+    let rhs = Tuple{S,Union{Set{S},S}} where S
+        @test intersection_env(Tuple{Core.TypeEgal{Int},Core.TypeEgal{Float64}}, rhs)[2] ===
+            Core.svec(Union{Core.TypeEgal{Int},Core.TypeEgal{Float64}})
+        @test bound_by(only(intersection_env(Tuple{DataType,Core.TypeEgal{Float64}}, rhs)[2]), DataType)
+    end
+    # ... and so does `Type{X}` for a var that it reaches through a declared bound
+    @test bound_by(intersection_env(Tuple{Type{Int}}, Tuple{Union{Vector{S2},S2,S1}} where {S1,S2<:Union{Nothing,S1}})[2][1], Type{Int})
+    # An instance that lacks one of the occurrences found for the left side widens
+    # its key after all: `(1.0, Float64)` binds `S` to `DataType`
+    @test bound_by(only(intersection_env(Tuple{Number,Core.TypeEgal{Float64}}, Tuple{Union{Float64,S},Union{AbstractVector{S},S}} where S)[2]),
+                   Union{Number,DataType,Core.TypeEgal{Float64}})
+    # a concrete tuple with a kind among its elements is not its own only instance
+    let e = only(intersection_env(Tuple{Int,Vector{Float64},DataType}, Tuple{Real,Union{Ref{S},S},S} where S)[2])
+        @test e isa Core.SimpleVector && e[1] isa TypeVar && e[2] && Core.TypeEgal{Int} <: e[1].ub
+    end
+end
 # A fixed tuple prefix before a free vararg length guarantees a matching
 # right-side tuple element exists, but range and maybe-empty tuple tails do not.
 let rhs = Tuple{typeof(intersection_env), Type{<:Tuple{Vararg{E}}}} where E
