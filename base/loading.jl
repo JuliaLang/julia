@@ -2442,8 +2442,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
     io = open(path, "r")
     try
         isvalid_cache_header(io) === nothing && return ArgumentError("Incompatible header in cache file $path.")
-        _, (includes, _, _), depmodnames, _, _, clone_targets, _ = parse_cache_header(io, path)
-
+        _, _, depmodnames, _, _, clone_targets, _ = _parse_cache_header(io, path)
 
         pkgimage = !isempty(clone_targets)
         if pkgimage
@@ -5019,7 +5018,9 @@ end
             return true
         end
         seek(io, header_start)
-        modules, (includes, _, requires), required_modules, srctextpos, prefs_blob, clone_targets, _, syntax_version = parse_cache_header(io, cachefile)
+        # only the source checks below need the include paths resolved against the depots
+        parse_header = stalecheck || coverage_mismatch ? parse_cache_header : _parse_cache_header
+        modules, (includes, _, requires), required_modules, srctextpos, prefs_blob, clone_targets, _, syntax_version = parse_header(io, cachefile)
         if isempty(modules)
             return true # ignore empty file
         end
