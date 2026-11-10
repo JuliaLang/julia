@@ -31,12 +31,11 @@ end
 #---------------------
 1   TestMod.rhs
 2   (call top.indexed_iterate %₁ 1)
-3   (= slot₂/x (call core.getfield %₂ 1))
-4   (= slot₁/iterstate (call core.getfield %₂ 2))
-5   slot₁/iterstate
-6   (call top.indexed_iterate %₁ 2 %₅)
-7   (= slot₃/y (call core.getfield %₆ 1))
-8   (return core.nothing)
+3   (= slot₁/x (call core.getfield %₂ 1))
+4   (= slot₃/ (call core.getfield %₂ 2))
+5   (call top.indexed_iterate %₁ 2 slot₃/)
+6   (= slot₂/y (call core.getfield %₅ 1))
+7   (return core.nothing)
 
 ########################################
 # let syntax with named tuple on lhs creates locals for the unpacked vars
@@ -207,13 +206,14 @@ end
     slots: [slot₁/#self#(!read) slot₂/z]
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
-    3   (gotoifnot true label₅)
-    4   (call top.setindex! %₂ slot₂/z :z)
-    5   (isdefined static_parameter₁)
-    6   (gotoifnot %₅ label₉)
-    7   static_parameter₁
-    8   (call top.setindex! %₂ %₇ :T)
-    9   (return %₂)
+    3   (isdefined slot₂/z)
+    4   (gotoifnot %₃ label₆)
+    5   (call top.setindex! %₂ slot₂/z :z)
+    6   (isdefined static_parameter₁)
+    7   (gotoifnot %₆ label₁₀)
+    8   static_parameter₁
+    9   (call top.setindex! %₂ %₈ :T)
+    10  (return %₂)
 11  latestworld
 12  TestMod.f
 13  (return %₁₂)
@@ -397,9 +397,10 @@ end
 #---------------------
 1   1
 2   (= slot₁/x %₁)
-3   (call core.isdefinedglobal TestMod :y)
-4   (call core.tuple true %₃)
-5   (return %₄)
+3   (isdefined slot₁/x)
+4   (call core.isdefinedglobal TestMod :y)
+5   (call core.tuple %₃ %₄)
+6   (return %₅)
 
 ########################################
 # Global function defined inside let (let over lambda)
@@ -442,7 +443,7 @@ end
 27  SourceLocation:3
 28  (call core.svec %₂₅ %₂₆ %₂₇)
 29  --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   (captured_local 1)
     2   (call core.isdefined %₁ :contents)
     3   (gotoifnot %₂ label₅)
@@ -478,7 +479,7 @@ end
 12  SourceLocation:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   TestMod.+
     2   (captured_local 1)
     3   (call core.isdefined %₂ :contents)

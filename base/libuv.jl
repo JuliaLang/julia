@@ -71,7 +71,7 @@ end
     v = get(uvhandles, x, 0)::Int
     if v == 0
         unlock(preserve_handle_lock)
-        error("unbalanced call to unpreserve_handle for $(typeof(x))")
+        error(lazy"unbalanced call to unpreserve_handle for $(typeof(x))")
     elseif v == 1
         pop!(uvhandles, x)
     else
@@ -111,6 +111,7 @@ uverrorname(err::Int32) = unsafe_string(ccall(:uv_err_name, Cstring, (Int32,), e
 
 uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix), c)
 uv_error(prefix::AbstractString, c::Integer) = c < 0 ? _uv_error(prefix, c) : nothing
+uv_error(prefix::AbstractString, c::Bool) = error("uv_error: Bool argument is a mistake, pass the raw error code instead")
 _uv_error(prefix::AbstractString, c::Integer) = throw(_UVError(prefix, c))
 
 ## event loop ##
@@ -140,11 +141,11 @@ function uv_shutdowncb_task end
 function uv_return_spawn end
 function uv_asynccb end
 function uv_timercb end
+function uv_signalcb end
 
-reinit_stdio() = _reinit_stdio()
-# we need this so it can be called by codegen to print errors, even after
-# reinit_stdio has been redefined by the juliac build script.
-function _reinit_stdio()
+function reinit_stdio()
+    # detach old stdio objects, so their finalizers don't close the handles
+    uninit_stdio()
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))::IO
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))::IO
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))::IO
@@ -158,6 +159,16 @@ function _reinit_stdio()
             global stderr = IOContext(stderr, :color => color::Bool)
         end
     end
+    nothing
+end
+
+function uninit_stdio()
+    uninit_stdio(stdin)
+    uninit_stdio(stdout)
+    uninit_stdio(stderr)
+    global stdin = devnull
+    global stdout = Core.stdout
+    global stderr = Core.stderr
     nothing
 end
 

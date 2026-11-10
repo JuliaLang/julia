@@ -18,6 +18,13 @@ import Base.MPFR
         @test precision(x) == 10
         @test x == big"1.1015625"
     end
+    # embedded NUL must not throw from the Cstring conversion
+    @test tryparse(BigFloat, "1\0") === nothing
+    # out-of-range bases must throw instead of tripping an MPFR assertion
+    for b in (-2, 1, 63)
+        @test_throws ArgumentError tryparse(BigFloat, "1"; base=b)
+        @test_throws ArgumentError parse(BigFloat, "1"; base=b)
+    end
 
     @test typeof(BigFloat(typemax(Int8))) == BigFloat
     @test typeof(BigFloat(typemax(Int16))) == BigFloat
@@ -42,7 +49,18 @@ import Base.MPFR
     @test typeof(BigFloat(one(Rational{BigInt}))) == BigFloat
     rat = 1 // (big(2)^300 + 1)
     @test BigFloat(rat, RoundDown) < rat < BigFloat(rat, RoundUp)
-    @test BigFloat(-rat, RoundUp) < -rat < BigFloat(-rat, RoundDown)
+    @test BigFloat(-rat, RoundDown) < -rat < BigFloat(-rat, RoundUp)
+    @test BigFloat(rat, RoundToZero) < rat < BigFloat(rat, RoundFromZero)
+    @test BigFloat(-rat, RoundFromZero) < -rat < BigFloat(-rat, RoundToZero)
+    @test BigFloat(rat, RoundUp) == nextfloat(BigFloat(rat, RoundDown))
+    @test BigFloat(-rat, RoundUp) == nextfloat(BigFloat(-rat, RoundDown))
+    @test precision(BigFloat(rat, RoundDown; precision = 1000)) == 1000
+    @test setrounding(() -> BigFloat(-rat), BigFloat, RoundUp) == BigFloat(-rat, RoundUp)
+    # round to nearest: numerator and denominator do not fit in the precision
+    let q = 67791108892893798120704962534465999653053//83244536729286249343016707354319677432458237197532535129548036539018489675706763, z = BigFloat(q, RoundNearest)
+        @test abs(Rational{BigInt}(z) - q) <= abs(Rational{BigInt}(nextfloat(z)) - q)
+        @test abs(Rational{BigInt}(z) - q) <= abs(Rational{BigInt}(prevfloat(z)) - q)
+    end
 
     # BigFloat constructor respects global precision when not specified
     let prec = precision(BigFloat) < 16 ? 256 : precision(BigFloat) ÷ 2
@@ -501,6 +519,13 @@ Base.setprecision(::Type{DeprecatedSetprecType}, p::Integer) = (_deprec_setprec[
     @test_deprecated setprecision(() -> precision(DeprecatedSetprecType), DeprecatedSetprecType, 5)
     @test _deprec_setprec[] == 10   # precision was restored afterwards
 end
+@testset "setprecision(f, Union{}, prec) throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    f = () -> 1
+    @test_throws MethodError(setprecision, (f, Union{}, 5)) setprecision(f, Union{}, 5)
+    @test_throws MethodError(setprecision, (f, Union{}, 5)) setprecision(f, Union{}, 5; base = 10)
+    @test which(setprecision, (typeof(f), Type{Union{}}, Int)).sig == Tuple{typeof(setprecision), Any, Type{Union{}}, Vararg}
+end
 @testset "isinteger" begin
     @test !isinteger(BigFloat(1.2))
     @test isinteger(BigFloat(12))
@@ -562,6 +587,29 @@ end
     @test cmp(big(1.0), big(NaN)) == -1
     @test cmp(big(NaN), big(NaN)) == 0
     @test cmp(big(NaN), big(1.0)) == 1
+
+    # cmp with other number types, against exact rational comparison
+    xs = BigFloat[-Inf, -2.0^70, -3, -1.5, 1, 2.5, 3, 2.0^70, Inf]
+    ys = Any[-3, 0, 1, 3, Int8(-1), typemax(Int), typemin(Int), 0x0, 0x3, typemax(UInt), UInt16(2),
+             big(-3), big(3), big(2)^70, -big(2)^70, Int128(3), typemax(UInt128),
+             -1.5, 2.5, 0.0, 3.0f0, Float16(-3), 2.0^70, -Inf, Inf]
+    exactcmp(x, y) = isinf(x) || isinf(y) ? cmp(Float64(x), Float64(y)) : cmp(Rational(x), Rational(BigFloat(y, precision=256)))
+    for x in xs, y in ys
+        @test cmp(x, y) == exactcmp(x, y)
+        @test cmp(y, x) == -exactcmp(x, y)
+    end
+    for y in (1, 0x1, big(1), Int128(1), 1.0, 1.0f0, Inf)
+        @test cmp(big(NaN), y) == 1
+        @test cmp(y, big(NaN)) == -1
+        @test cmp(big(1.0), NaN) == -1
+        @test cmp(NaN, big(1.0)) == 1
+    end
+    @test cmp(big(NaN), NaN) == 0
+    @test cmp(NaN32, big(NaN)) == 0
+    # cmp should follow the total order of `isless`, which puts -0.0 before 0
+    @test isless(big(-0.0), 0) && isless(big(-0.0), 0.0)
+    @test_broken cmp(big(-0.0), 0) == -1
+    @test_broken cmp(big(-0.0), 0.0) == -1
 end
 @testset "signbit" begin
     @test signbit(BigFloat(-1.0)) == 1
@@ -918,6 +966,48 @@ end
     @test div(big"1.0",0.1) == 9
     @test div(big"1",big"0.1") == 9
     @test div(big"1",0.1) == 9
+
+    # compare with the exact truncated quotient of the rational values
+    xs = BigFloat[7.5, -7.5, 7, -7, 0.1, -0.1, 1e30, -1e30, 2.0^-20]
+    ys = Any[3, -3, 0x3, 0x2, big(3), big(-2), 2.5, -2.5, 0.1f0, big"0.1", BigFloat(-4), Int128(5)]
+    for x in xs, y in ys
+        q = trunc(BigInt, Rational(x) / Rational(y))
+        z = div(x, y)
+        @test z isa BigFloat
+        @test z == q
+        @test signbit(z) == (signbit(x) ⊻ signbit(y))
+        q = trunc(BigInt, Rational(y) / Rational(x))
+        z = div(y, x)
+        @test z isa BigFloat
+        @test z == q
+        @test signbit(z) == (signbit(x) ⊻ signbit(y))
+    end
+    # the result does not depend on the global rounding mode
+    for r in (RoundUp, RoundDown, RoundFromZero, RoundToZero)
+        setrounding(BigFloat, r) do
+            @test div(big"1.0", big"0.1") == 9
+            @test div(big"-1.0", big"0.1") == -9
+            @test div(BigFloat(-7), 0x2) == -3
+            @test div(BigFloat(7), -2) == -3
+            @test div(BigFloat(7), big(-2)) == -3
+            @test div(0x7, BigFloat(-2)) == -3
+            @test div(-7, BigFloat(2)) == -3
+        end
+    end
+    # a finite dividend over an infinite divisor gives a signed zero
+    for y in (Inf, big(Inf))
+        @test isequal(div(BigFloat(5), y), big(0.0))
+        @test isequal(div(BigFloat(-5), y), big(-0.0))
+        @test isequal(div(5, BigFloat(y)), big(0.0))
+        @test isequal(div(0x5, -BigFloat(y)), big(-0.0))
+    end
+    for (x, y) in ((big(NaN), 1), (big(NaN), 0x1), (big(NaN), 1.0), (big(NaN), big(1)), (big(NaN), big(1.0)),
+                   (1, big(NaN)), (0x1, big(NaN)), (1.0, big(NaN)), (big(0.0), big(0.0)))
+        @test isnan(div(x, y))
+    end
+    # without a rounding mode, an infinite quotient gives Inf, but with RoundToZero it gives NaN
+    @test_broken isequal(div(big(Inf), big(2.0)), div(big(Inf), big(2.0), RoundToZero))
+    @test_broken isequal(div(big(1.0), big(0.0)), div(big(1.0), big(0.0), RoundToZero))
 end
 @testset "issue #5963" begin
     @test typemax(Int128) == convert(BigFloat, typemax(Int128))
@@ -1127,3 +1217,100 @@ end
 end
 
 @test_throws FieldError BigFloat(1).notfield = 1
+
+@testset "BigFloat to integer conversions" begin
+    for x in (3.7, -3.7, 0.9, -0.9, 0.0, 100.5, -100.5)
+        for T in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128, BigInt)
+            T <: Unsigned && x <= -1 && continue
+            y = unsafe_trunc(T, BigFloat(x))
+            @test y isa T && y == trunc(x)
+        end
+    end
+    @test unsafe_trunc(Int128, BigFloat(2)^100 + 0.5) == Int128(2)^100
+    @test unsafe_trunc(UInt128, BigFloat(2)^127 + 0.5) == UInt128(2)^127
+    @test unsafe_trunc(BigInt, -BigFloat(2)^200 - 0.75) == -big(2)^200
+    @test unsafe_trunc(UInt64, BigFloat(2)^64 - 1) == typemax(UInt64)
+
+    @test Bool(big(0.0)) === false
+    @test Bool(big(-0.0)) === false
+    @test Bool(big(1.0)) === true
+    for x in (2.0, -1.0, 0.5, NaN, Inf)
+        @test_throws InexactError Bool(BigFloat(x))
+    end
+end
+
+@testset "round to integer with each rounding mode" begin
+    modes = (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundToZero,
+             RoundFromZero, RoundUp, RoundDown)
+    for r in modes, x in (2.5, -2.5, 3.5, -3.5, 0.5, -0.5, 0.3, -1.7, 0.0, -0.0, 1e20 + 0.5)
+        @test isequal(round(BigFloat(x), r), BigFloat(round(x, r)))
+        for T in (Int, Int8, UInt8, Int128, UInt128, BigInt, Integer)
+            fx = round(x, r)
+            if T <: Base.BitInteger && !(typemin(T) <= fx <= typemax(T))
+                @test_throws InexactError round(T, BigFloat(x), r)
+            else
+                @test round(T, BigFloat(x), r) == fx
+            end
+        end
+        @test_throws InexactError round(Int, big(NaN), r)
+        @test_throws InexactError round(BigInt, big(-Inf), r)
+    end
+    # ties are detected exactly, whatever the default precision
+    setprecision(1000) do
+        h = BigFloat(2)^300
+        tie = h + 0.5
+        above = tie + BigFloat(2)^-500
+        below = tie - BigFloat(2)^-500
+        mtie, mabove = -tie, -above
+        setprecision(64) do
+            @test round(BigInt, tie, RoundNearestTiesAway) == big(2)^300 + 1
+            @test round(BigInt, mtie, RoundNearestTiesAway) == -big(2)^300 - 1
+            @test round(BigInt, tie, RoundNearestTiesUp) == big(2)^300 + 1
+            @test round(BigInt, mtie, RoundNearestTiesUp) == -big(2)^300
+            @test round(BigInt, mabove, RoundNearestTiesUp) == -big(2)^300 - 1
+            @test round(BigInt, below, RoundNearestTiesAway) == big(2)^300
+        end
+    end
+end
+
+@testset "convert MPFR rounding modes" begin
+    for m in instances(MPFR.MPFRRoundingMode)
+        if m == MPFR.MPFRRoundFaithful
+            @test_throws ArgumentError convert(RoundingMode, m)
+        else
+            @test convert(MPFR.MPFRRoundingMode, convert(RoundingMode, m)) == m
+        end
+    end
+    old = rounding(BigFloat)
+    try
+        setrounding(BigFloat, RoundUp)
+        @test rounding(BigFloat) == RoundUp
+        @test BigFloat(1) / 3 > 1//3
+        setrounding(BigFloat, RoundDown)
+        @test rounding(BigFloat) == RoundDown
+        @test BigFloat(1) / 3 < 1//3
+    finally
+        setrounding(BigFloat, old)
+    end
+    @test rounding(BigFloat) == old
+end
+
+@testset "miscellaneous" begin
+    @test MPFR.big_ln2() == log(BigFloat(2))
+    setprecision(100) do
+        @test precision(MPFR.big_ln2()) == 100
+        @test MPFR.big_ln2() == log(BigFloat(2))
+    end
+    @test widen(BigFloat) === BigFloat
+    @test !issubnormal(big(1e-310)) && !issubnormal(big(0.0))
+    @test signbit(BigFloat(-NaN, precision=10))
+    @test !signbit(BigFloat(NaN, precision=10))
+    @test_throws DomainError log1p(big(-2.0))
+    @test_throws FieldError BigFloat(1).notfield
+    @test MPFR.get_emin_min() <= MPFR.get_emin_max()
+    @test MPFR.get_emax_min() <= MPFR.get_emax_max()
+    # a mantissa without a decimal point
+    @test MPFR._prettify_bigfloat("3e+00") == "3.0"
+    @test MPFR._prettify_bigfloat("-3e+10") == "-3.0e10"
+    @test MPFR._string(big(3.0), 0) == "3.0"
+end

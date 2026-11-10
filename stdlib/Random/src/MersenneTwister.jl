@@ -587,10 +587,10 @@ function _advance_n!(r::MersenneTwister, n::Int64, work::Vector{Float64})
     @assert n >= ms
     lw = ms + n % ms
     resize!(work, lw)
-    GC.@preserve work fill_array!(r, pointer(work), lw, CloseOpen12())
+    GC.@preserve work fill_array!(r, pointer(work), lw % Int, CloseOpen12())
     c::Int64 = lw
     GC.@preserve work while n > c
-        fill_array!(r, pointer(work), ms, CloseOpen12())
+        fill_array!(r, pointer(work), ms % Int, CloseOpen12())
         c += ms
     end
     @assert n == c

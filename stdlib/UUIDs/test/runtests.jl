@@ -109,6 +109,11 @@ end
     end
 end
 
+@testset "uuid5 hashes the name bytes" begin
+    @test uuid5(UUIDs.namespace_dns, "a\\nb") == UUID("3784d226-71a4-55f7-92af-c39aeea8698f")
+    @test uuid5(UUIDs.namespace_dns, "C:\\Users\\julia") == UUID("a12d4ac5-f9f5-5f0b-a1fb-67ceba6217c3")
+end
+
 @testset "Use of Random.RandomDevice (#35860)" begin
     Random.seed!(Random.default_rng(), 10)
     u1 = uuid1()

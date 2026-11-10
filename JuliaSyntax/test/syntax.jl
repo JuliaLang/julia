@@ -16,6 +16,12 @@ const DUMMY_CONTEXT = SyntaxContext(@__MODULE__, (0,0))
     # Malformed literals become ErrorVal-valued leaves rather than identifiers
     @test parsestmt(Syntax, "1.e"; ignore_errors=true) isa Syntax
     @test parsestmt(Syntax, "x = 1._"; ignore_errors=true) isa Syntax
+    # A `try` with a malformed subclause keeps its body
+    let st = parsestmt(Syntax, "try\n    r.\n    if c\n    end\ncatch\nend"; ignore_errors=true)
+        @test st isa Syntax
+        @test head(st) === :try
+        @test any(c -> head(c) === :., children(st[1]))
+    end
 end
 
 @testset "Syntax compound assignment heads" begin

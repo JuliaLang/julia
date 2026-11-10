@@ -5,6 +5,7 @@
 .SHELLFLAGS := -ec
 
 STAGE0_BUILD:=$(CURDIR)/toolchain
+STAGE0_TARGET_BUILD:=$(CURDIR)/toolchain-target
 STAGE1_BUILD:=$(CURDIR)/pgo-instrumented.build
 STAGE2_BUILD:=$(CURDIR)/optimized.build
 
@@ -19,11 +20,6 @@ BOLT_PROFRAW_FILES:=$(wildcard $(BOLT_PROFILE_DIR)/*-prof.[0-9]*.fdata)
 JULIA_ROOT:=$(CURDIR)/../..
 CONTRIB_DIR_REL:=contrib/$(notdir $(CURDIR))
 
-# Stage 1 only exists to profile the compiler, so it does not need a system
-# image for every CPU target of a release build. Stage 2 uses whatever
-# JULIA_CPU_TARGET the caller passes.
-STAGE1_CPU_TARGET ?= generic
-
 # Ask the regular build system about the platform it would build for, so that
 # the staged builds agree with it. BUILD_MACHINE is the target triple recorded
 # in the system image (Sys.MACHINE); the stage-0 clang spells it differently
@@ -31,12 +27,21 @@ STAGE1_CPU_TARGET ?= generic
 # and a plain `make binary-dist` of the optimized build would then consider
 # build_h.jl stale and rebuild the system image.
 # Preserve command-line variables, but omit flags such as -n from the probe.
-JULIA_BUILD_VARS:=$(shell MAKEFLAGS='-- $(subst ','"'"',$(MAKEOVERRIDES))' $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-OS print-ARCH print-BINARY print-EXE print-BUILD_MACHINE)
+JULIA_BUILD_VARS:=$(shell MAKEFLAGS='-- $(subst ','"'"',$(MAKEOVERRIDES))' $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-OS print-ARCH print-BINARY print-EXE print-BUILD_MACHINE print-COMPRESS_DEBUG_SECTIONS print-XC_HOST print-BUILD_OS print-MARCH print-MCPU print-JULIA_CPU_TARGET)
 HOST_OS:=$(patsubst OS=%,%,$(filter OS=%,$(JULIA_BUILD_VARS)))
 HOST_ARCH:=$(patsubst ARCH=%,%,$(filter ARCH=%,$(JULIA_BUILD_VARS)))
 HOST_BINARY:=$(patsubst BINARY=%,%,$(filter BINARY=%,$(JULIA_BUILD_VARS)))
 EXE:=$(patsubst EXE=%,%,$(filter EXE=%,$(JULIA_BUILD_VARS)))
 BUILD_MACHINE:=$(patsubst BUILD_MACHINE=%,%,$(filter BUILD_MACHINE=%,$(JULIA_BUILD_VARS)))
+COMPRESS_DEBUG_SECTIONS:=$(patsubst COMPRESS_DEBUG_SECTIONS=%,%,$(filter COMPRESS_DEBUG_SECTIONS=%,$(JULIA_BUILD_VARS)))
+XC_HOST:=$(patsubst XC_HOST=%,%,$(filter XC_HOST=%,$(JULIA_BUILD_VARS)))
+BUILD_OS:=$(patsubst BUILD_OS=%,%,$(filter BUILD_OS=%,$(JULIA_BUILD_VARS)))
+MARCH:=$(patsubst MARCH=%,%,$(filter MARCH=%,$(JULIA_BUILD_VARS)))
+MCPU:=$(patsubst MCPU=%,%,$(filter MCPU=%,$(JULIA_BUILD_VARS)))
+# Stage 1 only exists to profile the compiler, so it only needs the first CPU
+# target. That one is the baseline, which on riscv64 must include the runtime's
+# floating-point ABI. Stage 2 uses all of JULIA_CPU_TARGET.
+STAGE1_CPU_TARGET ?= $(firstword $(subst ;, ,$(patsubst JULIA_CPU_TARGET=%,%,$(filter JULIA_CPU_TARGET=%,$(JULIA_BUILD_VARS)))))
 ifeq (,$(HOST_OS))
 $(error Could not determine the build platform: `$(MAKE) -C $(JULIA_ROOT) print-OS` \
         failed. Run it to see why; a XC_HOST without a matching OS is one way.)
@@ -54,6 +59,19 @@ USE_BOLT ?= 1
 endif
 endif
 USE_BOLT ?= 0
+
+# Backends of the stage-0 toolchain when cross-compiling.
+LLVM_BACKEND_x86_64 := X86
+LLVM_BACKEND_i686 := X86
+LLVM_BACKEND_aarch64 := AArch64
+LLVM_BACKEND_armv7l := ARM
+LLVM_BACKEND_powerpc64le := PowerPC
+LLVM_BACKEND_riscv64 := RISCV
+STAGE0_LLVM_TARGETS ?= host;$(LLVM_BACKEND_$(HOST_ARCH))
+# compiler-rt's name for the target architecture, where it differs.
+COMPILER_RT_ARCH_i686 := i386
+COMPILER_RT_ARCH_armv7l := armhf
+COMPILER_RT_ARCH := $(or $(COMPILER_RT_ARCH_$(HOST_ARCH)),$(HOST_ARCH))
 
 # Each concurrent ThinLTO backend holds a module and the PGO profile.
 # Limit their number on 32-bit targets so wide hosts do not exhaust the
@@ -186,6 +204,26 @@ STAGE0_POST = find $(STAGE0_BUILD) -name 'libclang_rt.profile-*.a' -exec $(LLVM_
 STAGE1_PLATFORM_FLAGS:=
 # Which C/C++ runtime headers and libraries to build against.
 SYSROOT_FLAGS:=
+# The target, which the regular build passes through CC and CXX as well. When
+# cross-compiling, the default configuration files below are for the build
+# machine, so skip them.
+TARGET_FLAGS:=$(if $(XC_HOST),--no-default-config --target=$(XC_HOST)) $(if $(MARCH),-march=$(MARCH)) $(if $(MCPU),-mcpu=$(MCPU))
+# When cross-compiling, tools for the build machine get the stage flags too,
+# which only clang accepts.
+ifneq (,$(XC_HOST))
+CROSS_FLAGS:="HOSTCC=$(STAGE0_TOOLS)clang" "HOSTCXX=$(STAGE0_TOOLS)clang++"
+# Those tools, and the stage-0 compiler-rt, need the build machine's GCC
+# installation and sysroot, for the reasons given with SYSROOT_FLAGS below.
+# HOSTCC has to be a plain command, so the stage-0 clang gets them from its
+# default configuration files.
+STAGE0_CONFIG_DIR:=$(STAGE0_BUILD)/clang-config
+BUILD_CC:=$(patsubst HOSTCC=%,%,$(shell MAKEFLAGS='-- $(subst ','"'"',$(MAKEOVERRIDES))' $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-HOSTCC))
+ifeq (,$(if $(BUILD_CC),$(shell $(BUILD_CC) -dM -E -x c /dev/null 2>/dev/null | grep __clang__),clang))
+BUILD_GCC_INSTALL_DIR:=$(patsubst %/,%,$(dir $(wildcard $(shell LANG=C $(BUILD_CC) -print-libgcc-file-name 2>/dev/null))))
+BUILD_SYSROOT:=$(shell $(BUILD_CC) -print-sysroot 2>/dev/null)
+endif
+BUILD_SYSROOT_FLAGS:=$(if $(BUILD_GCC_INSTALL_DIR),--gcc-install-dir=$(BUILD_GCC_INSTALL_DIR) $(if $(BUILD_SYSROOT),--sysroot=$(BUILD_SYSROOT)))
+endif
 # How a stage's own shared libraries are made findable by the tools built
 # during it. 1: that stage's build directory.
 STAGE_PATH =
@@ -260,7 +298,7 @@ SYSROOT_FLAGS:=--gcc-install-dir=$(TOOLCHAIN_GCC_INSTALL_DIR) $(if $(TOOLCHAIN_S
 # own: it can live in a system library directory (e.g. with a distribution GCC),
 # whose other libraries would then take precedence over the stage's own, such as
 # an older libzstd over the one Julia's zstd executable requires.
-STAGE_LIBSTDCXX = $(realpath $(wildcard $(shell $(STAGE0_TOOLS)clang++ $(SYSROOT_FLAGS) -print-file-name=libstdc++.so.6)))
+STAGE_LIBSTDCXX = $(realpath $(wildcard $(shell $(STAGE0_TOOLS)clang++ $(TARGET_FLAGS) $(SYSROOT_FLAGS) -print-file-name=libstdc++.so.6)))
 STAGE_LIBSTDCXX_DIR:=$(STAGE0_BUILD)/libstdcxx
 STAGE_PATH_SETUP = rm -rf $(STAGE_LIBSTDCXX_DIR)$(if $(STAGE_LIBSTDCXX), && mkdir -p $(STAGE_LIBSTDCXX_DIR) && ln -s $(STAGE_LIBSTDCXX) $(STAGE_LIBSTDCXX_DIR)/libstdc++.so.6)
 STAGE_PATH = LD_LIBRARY_PATH="$(STAGE_LIBSTDCXX_DIR)$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}"
@@ -271,16 +309,22 @@ endif
 # the build uses those: the loader in cli/, for one, compiles and links with
 # JCFLAGS/JLDFLAGS only.
 TOOLCHAIN_FLAGS = $\
-	"CC=$(strip $(STAGE0_TOOLS)clang$(EXE) $(SYSROOT_FLAGS))" $\
+	"CC=$(strip $(STAGE0_TOOLS)clang$(EXE) $(TARGET_FLAGS) $(SYSROOT_FLAGS))" $\
 	"BUILD_MACHINE=$(BUILD_MACHINE)" $\
-	"CXX=$(strip $(STAGE0_TOOLS)clang++$(EXE) $(SYSROOT_FLAGS))" $\
+	"CXX=$(strip $(STAGE0_TOOLS)clang++$(EXE) $(TARGET_FLAGS) $(SYSROOT_FLAGS))" $\
 	"LD=$(LINKER)" $\
 	"AR=$(STAGE0_TOOLS)llvm-ar$(EXE)" $\
 	"RANLIB=$(STAGE0_TOOLS)llvm-ranlib$(EXE)" $\
 	"CFLAGS+=$(STAGE_CFLAGS)" $\
 	"CXXFLAGS+=$(STAGE_CXXFLAGS)" $\
 	"LDFLAGS+=$(LINKER_FLAGS) $(LINK_ONLY_FLAGS) $(STAGE_LDFLAGS)" $\
-	$(PLATFORM_FLAGS)
+	$(CROSS_FLAGS) $(PLATFORM_FLAGS)
+
+# Shown as `+opt` after the version in the banner and `versioninfo()` of the optimized
+# build. Pass the same value to any later make in the stage-2 build (e.g. binary-dist),
+# or build_h.jl changes and the system image is rebuilt.
+JULIA_BUILD_VARIANT ?= opt
+STAGE2_FLAGS = "JULIA_BUILD_VARIANT=$(JULIA_BUILD_VARIANT)"
 
 # Profile data worth keeping, as globs relative to the Julia source root; CI
 # archives these so that a build can be reproduced or a regression bisected.
@@ -301,15 +345,34 @@ else
 all: stage2
 endif
 
-$(STAGE0_BUILD) $(STAGE1_BUILD) $(STAGE2_BUILD):
+$(STAGE0_BUILD) $(STAGE0_TARGET_BUILD) $(STAGE1_BUILD) $(STAGE2_BUILD):
 	$(MAKE) -C $(JULIA_ROOT) O=$@ configure
 
 # Stage 0: download the toolchain.
+ifeq (,$(XC_HOST))
 stage0: export USE_BINARYBUILDER_LLVM=1
 stage0: | $(STAGE0_BUILD)
 	@echo "--- Stage 0: toolchain"
 	# The toolchain links against zstd, which macOS does not provide.
 	$(MAKE) -C $(STAGE0_BUILD)/deps $(STAGE0_EXTRA_FLAGS) install-clang install-llvm install-lld install-llvm-tools install-zstd $(STAGE0_EXTRA_TARGETS)
+else
+# When cross-compiling, the downloaded toolchain only runs on the target, and
+# the build machine's lacks the target's backend. Build one from source
+# instead, and add the target's profile runtime.
+stage0: | $(STAGE0_BUILD) $(STAGE0_TARGET_BUILD)
+	@echo "--- Stage 0: toolchain"
+	mkdir -p $(STAGE0_CONFIG_DIR)
+	echo '$(BUILD_SYSROOT_FLAGS)' > $(STAGE0_CONFIG_DIR)/clang.cfg
+	echo '$(BUILD_SYSROOT_FLAGS)' > $(STAGE0_CONFIG_DIR)/clang++.cfg
+	$(MAKE) -C $(STAGE0_BUILD)/deps XC_HOST= OS=$(BUILD_OS) ARCH= MARCH= MCPU= \
+		USE_BINARYBUILDER_LLVM=0 BUILD_LLVM_CLANG=1 BUILD_LLD=1 \
+		CLANG_CONFIG_FILE_SYSTEM_DIR=$(STAGE0_CONFIG_DIR) \
+		"LLVM_TARGETS=$(STAGE0_LLVM_TARGETS)" "LLVM_ENABLE_PROJECTS=clang;lld" \
+		install-llvm install-zstd
+	$(MAKE) -C $(STAGE0_TARGET_BUILD)/deps USE_BINARYBUILDER_LLVM=1 install-clang
+	mkdir -p $$($(STAGE0_TOOLS)clang -print-resource-dir)/lib/linux
+	cp $(STAGE0_TARGET_BUILD)/usr/lib/clang/*/lib/linux/libclang_rt.profile-$(COMPILER_RT_ARCH).a $$($(STAGE0_TOOLS)clang -print-resource-dir)/lib/linux/
+endif
 ifeq ($(USE_BOLT),1)
 	$(MAKE) -C $(STAGE0_BUILD)/deps install-BOLT
 endif
@@ -366,7 +429,7 @@ stage2: stage0
 endif
 stage2: | $(STAGE2_BUILD) stage-path
 	@echo "--- Stage 2: optimized build"
-	$(call STAGE_PATH,$(STAGE2_BUILD)) $(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS) $(STAGE2_TARGETS)
+	$(call STAGE_PATH,$(STAGE2_BUILD)) $(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(STAGE2_FLAGS) $(BOLT_FLAGS) $(STAGE2_TARGETS)
 	touch $@
 
 # Keep a copy of the libraries as linked, since both the instrumentation and
@@ -400,7 +463,7 @@ bolt-train: bolt-instrument | stage-path
 	@echo "--- BOLT: training build"
 	# Keep $(BOLT_FLAGS) here: anything relinked during this stage must carry
 	# --emit-relocs, or the later BOLT rewrite of it fails.
-	$(call STAGE_PATH,$(STAGE2_BUILD)) $(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS)
+	$(call STAGE_PATH,$(STAGE2_BUILD)) $(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(STAGE2_FLAGS) $(BOLT_FLAGS)
 	touch $@
 
 bolt-merge: bolt-train $(BOLT_PROFRAW_FILES)
@@ -412,7 +475,9 @@ bolt-merge: bolt-train $(BOLT_PROFRAW_FILES)
 
 # Reuse old text segments to reduce library size, except for libjulia-internal:
 # BOLT does not fully support its computed gotos (llvm/llvm-project#89117).
-# Preserve mtimes so the rewrite does not trigger dependent builds.
+# Compress the debug info here, as `make install` leaves BOLT-rewritten libraries
+# alone, and with llvm-objcopy: GNU objcopy breaks the segment layout of BOLT's
+# output. Preserve mtimes so the rewrite does not trigger dependent builds.
 bolt: bolt-merge
 	@echo "--- BOLT: rewrite the libraries"
 	for link in $(SYMLINKS_TO_OPTIMIZE); do \
@@ -420,6 +485,7 @@ bolt: bolt-merge
 		abs_file=$(STAGE2_BUILD)/usr/lib/$$file; \
 		if [ "$$link" = libjulia-internal.so ]; then extra_args=; else extra_args="--use-old-text $(BOLT_SPLIT_STRATEGY)"; fi; \
 		$(LLVM_BOLT) "$$abs_file.original" -data "$(BOLT_PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS) $$extra_args; \
+		$(if $(filter-out none,$(COMPRESS_DEBUG_SECTIONS)),$(LLVM_OBJCOPY) --compress-debug-sections=$(COMPRESS_DEBUG_SECTIONS) $$abs_file;) \
 		touch -r "$$abs_file.original" $$abs_file; \
 	done
 	touch $@

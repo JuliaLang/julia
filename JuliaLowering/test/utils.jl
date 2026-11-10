@@ -405,17 +405,42 @@ macro newmod(name="newmod_$(string(__source__))", parentmod=__module__,
          Expr(Symbol("latestworld-if-toplevel")), :mod)
 end
 
+function with_lowering(f, enable::Bool)
+    lowerer = Core._lower
+    toplevel_eval = Core._toplevel_eval
+    world = JuliaLowering._lowering_world[]
+    try
+        JuliaLowering.activate!(enable)
+        f()
+    finally
+        Core._setlowerer!(lowerer)
+        Core._set_toplevel_eval!(toplevel_eval)
+        JuliaLowering._lowering_world[] = world
+    end
+end
+
+with_flisp(f) = with_lowering(f, false)
+
 function fl_macroexpand(mod::Module, x::Expr)
-    ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, mod, true, false, true)
+    with_flisp() do
+        ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, mod, true, false, true)
+    end
 end
 
 function fl_lower(mod::Module, x::Expr)
-    Base.fl_lower(x, mod, @__FILE__, @__LINE__, Base.get_world_counter())[1]
+    with_flisp() do
+        Base.fl_lower(mod, x, Base.get_world_counter(), false, Base.first_linenode(x))[1]
+    end
 end
 
 function fl_eval(mod::Module, x::Expr)
-    Core.eval(mod, fl_lower(mod, x))
+    with_flisp() do
+        Core.eval(mod, x)
+    end
 end
+
+fl_eval(mod::Module, code::AbstractString) =
+    fl_eval(mod, Meta.parseall(code; filename="string", mod))
 
 function _force_syntax(x, mod, edition::Tuple{Int, Int})
     if x isa SyntaxTree
@@ -424,7 +449,7 @@ function _force_syntax(x, mod, edition::Tuple{Int, Int})
         # note macroexpand/lower aren't particularly useful with parseall
         JuliaSyntax.parseall(SyntaxTree, x; version=VersionNumber(edition), ignore_warnings=true)
     elseif x isa Expr
-        JuliaLowering.expr_to_est(x, LineNumberNode(0),
+        JuliaLowering.expr_to_est(x, Base.first_linenode(x),
                                   SyntaxContext(mod, edition))
     else
         error("expected string or AST, got $x")

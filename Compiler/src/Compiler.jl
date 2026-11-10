@@ -42,7 +42,7 @@ using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, AnyType, Meth
     TypeEq,
     _apply_iterate, apply_type, compilerbarrier, const_memoryrefget, donotdelete, memoryref_isassigned,
     memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, memoryrefunset!, print, println, show, svec,
-    typename, unsafe_write, write, stdout, stderr
+    typename, unsafe_memoryrefload, unsafe_memoryrefstore!, unsafe_write, write, stdout, stderr
 
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
     PARTITION_KIND_GLOBAL, PARTITION_KIND_UNDEF_CONST, PARTITION_KIND_BACKDATED_CONST, PARTITION_KIND_DECLARED,
@@ -52,7 +52,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     EffectsOverride, Filter, Generator, NUM_EFFECTS_OVERRIDES,
     OneTo, Ordering, RefValue, _NAMEDTUPLE_NAME,
     _array_for, _bits_findnext, _defaultctors, _methods_by_ftype, _uniontypes, all, allocatedinline, any,
-    argument_datatypename, binding_kind, cconvert, copy_exprargs, datatype_arrayelem,
+    argument_datatypename, binding_kind, cconvert, copy_exprargs,
     datatype_fieldcount, datatype_fieldtypes, datatype_layoutsize, datatype_nfields,
     datatype_pointerfree, decode_effects_override, diff_names, fieldindex, visit,
     generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars, has_typevar,
@@ -84,6 +84,12 @@ import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, ge
 # Needs to match UUID defined in Project.toml
 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Compiler,
     (0x807dbc54_b67e_4c79, 0x8afb_eafe4df6f2e1))
+
+# Syntax evolution bug: unset in bare modules (TODO).  This surfaces only when
+# Compiler.jl is loaded as a standalone package.
+if isdefined(Base, :end_base_include) && isdefined(Base, :set_syntax_version)
+    Base.set_syntax_version(Compiler, Base.VersionNumber(1, 14))
+end
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
@@ -163,12 +169,6 @@ if !isdefined(Base, :end_base_include)
     end
 else
     using Base: @show
-end
-
-# JuliaSyntax doesn't support syntax evolution in bare modules via Project.toml
-# This surfaces only when Compiler.jl is loaded as a standalone package.
-if isdefined(Base, :end_base_include) && isdefined(Base, :set_syntax_version)
-    Base.set_syntax_version(Compiler, Base.VersionNumber(1, 14))
 end
 
 include("cicache.jl")

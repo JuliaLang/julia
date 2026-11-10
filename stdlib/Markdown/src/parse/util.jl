@@ -95,7 +95,7 @@ function matchstart(stream::IO, r::Regex; eat::Bool = true, padding::Bool = fals
     seek(stream, start)
     m = match(r, line)
     if eat && m !== nothing
-        for i in 1:length(m.match)
+        for _ in 1:length(m.match)
             read(stream, Char)
         end
     end
@@ -264,11 +264,4 @@ function parse_inline_wrapper(stream::IO, delimiter::AbstractString;
             end
         end
     end
-end
-
-function showrest(io::IO)
-    start = position(io)
-    show(read(io, String))
-    println()
-    seek(io, start)
 end

@@ -1261,7 +1261,7 @@
 
 (define (expand-let e (hard? #t))
   (let ((ex    (caddr e))
-        (binds (let-binds e))
+        (binds (filter (lambda (x) (not (linenum? x))) (let-binds e)))
         (hs    (if hard? '((hardscope)) '())))
     (expand-forms
      (if
@@ -1318,7 +1318,6 @@
                                           (= ,(cadar binds) ,tmp)
                                           ,blk)))))))
                (else (error "invalid let syntax"))))
-             ((linenum? (car binds)) (loop (cdr binds) blk))
              (else (error "invalid let syntax")))))))))
 
 (define (valid-macro-def-name? e)
@@ -4103,8 +4102,8 @@ f(x) = yt(x)
         (unused (table))  ;; variables not (yet) used (read from) in the current block
         (live   (table))  ;; variables that have been set in the current block
         (seen   (table))) ;; all variables we've seen assignments to
-    ;; Collect candidate variables: those that are captured (and hence we want to optimize)
-    ;; and only assigned once. This populates the initial `unused` table.
+    ;; Collect candidate variables: those that are only assigned once.
+    ;; This populates the initial `unused` table.
     (for-each (lambda (v)
                 (if (vinfo:sa v)
                     (put! unused (car v) #t)))
@@ -4277,7 +4276,7 @@ f(x) = yt(x)
        ((symbol? e)
         (define (new-undef-var name)
           (let ((g (named-gensy name)))
-            (set-car! (lam:vinfo lam) (append (car (lam:vinfo lam)) `((,g Any 32))))
+            (set-car! (lam:vinfo lam) (append (car (lam:vinfo lam)) `((,g Any 0))))
             g))
         (define (get-box-contents box typ)
           ; lower in an UndefVar check to a similarly named variable (ref #20016)
@@ -4801,8 +4800,9 @@ f(x) = yt(x)
               x)))
       (define (actually-return x)
         (let* ((x (begin0 (emit- x)
-                          ;; if we are adding an implicit return then mark it as having no location
-                          (if (not (eq? tail 'explicit))
+                          ;; if we are adding an implicit return of `nothing` then mark it as having no location,
+                          ;; since the last location might not have run; a returned value keeps its line
+                          (if (and (not (eq? tail 'explicit)) (equal? x '(null)))
                               (emit '(line #f)))))
                (x (if rett
                       (compile (convert-for-type-decl x rett #t lam) '() #t #f)
@@ -5641,7 +5641,7 @@ f(x) = yt(x)
                           ;; that should not be counted as belonging to the previous marked location,
                           ;; for example `return` after a not-executed `if` arm in tail position.
                           (set! nowhere #t))
-                         ((and (= current-line 0) (length= e 2) (pair? linetable))
+                         ((and (= current-line 0) (length= e 2) (pair? locstack))
                           ;; (line n) after push_loc just updates the line for the new file
                           (begin (set-lineno! (car linetable) (cadr e))
                                  (set! current-line (cadr e))))
@@ -5696,6 +5696,17 @@ f(x) = yt(x)
     (define nslots (length (car (lam:vinfo lam))))
     (define slot-table (symbol-to-idx-map (map car (car (lam:vinfo lam)))))
     (define sp-table (symbol-to-idx-map (lam:sp lam)))
+    ;; the function name and library expression, return type and argument types
+    ;; are evaluated at method definition and cannot reference local variables
+    (define (check-foreigncall-operands e local-ref?)
+      (define (check x what)
+        (if (expr-contains-p local-ref? x)
+            (error (string what " cannot reference local variable"))))
+      (if (tuple-syntax? (cadr e))
+          (check (cadr e) "ccall/cglobal function name and library expression"))
+      (if (eq? (car e) 'foreigncall)
+          (begin (check (caddr e) "ccall return type")
+                 (check (cadddr e) "ccall argument type"))))
     (define (renumber-stuff e)
       (cond ((eq? e UNUSED) (error "Attempted to use slot marked unused"))
             ((symbol? e)
@@ -5724,13 +5735,14 @@ f(x) = yt(x)
             ((eq? (car e) 'lambda)
              (renumber-lambda e 'none 0))
             (else
-             (let ((e (cons (car e)
-                            (map renumber-stuff (cdr e)))))
-               (if (and (memq (car e) '(foreigncall foreignglobal))
-                        (tuple-syntax? (cadr e))
-                        (expr-contains-p (lambda (x) (or (ssavalue? x) (slot? x))) (cadr e))) ;; TODO: use allow-list here
-                   (error "ccall/cglobal function name and library expression cannot reference local variables"))
-               e))))
+             (let ((foreign? (memq (car e) '(foreigncall foreignglobal))))
+               ;; reject SSA values before renumbering: temporaries inside these operands
+               ;; have no statement number
+               (if foreign? (check-foreigncall-operands e ssavalue?))
+               (let ((e (cons (car e)
+                              (map renumber-stuff (cdr e)))))
+                 (if foreign? (check-foreigncall-operands e slot?))
+                 e)))))
     (let ((body (renumber-stuff (lam:body lam)))
           (vi   (lam:vinfo lam)))
       (listify-lambda

@@ -546,12 +546,8 @@ static int lookup_pointer(
             if (havelock) {
                 auto lineinfo = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
                 jl_unlock_profile_wr();
-#if JL_LLVM_VERSION < 210000
-                info = std::move(lineinfo);
-#else
                 if (lineinfo)
                     info = std::move(*lineinfo);
-#endif
             }
         }
 
@@ -773,6 +769,12 @@ static inline void ignoreError(T &err) JL_NOTSAFEPOINT
 #if !defined(NDEBUG) // Needed only with LLVM assertion build
     consumeError(err.takeError());
 #endif
+}
+
+// Malformed DWARF should not add LLVM diagnostics to Julia's backtrace output.
+static void ignoreDWARFDiag(llvm::Error E) JL_NOTSAFEPOINT
+{
+    consumeError(std::move(E));
 }
 
 static void get_function_name_and_base(llvm::object::SectionRef Section, std::map<uintptr_t, StringRef, std::greater<size_t>> *symbolmap,
@@ -1078,7 +1080,9 @@ static jl_object_file_entry_t find_object_file(uint64_t fbase, StringRef fname) 
             slide = -fbase;
         }
 
-        auto context = DWARFContext::create(*debugobj).release();
+        auto context = DWARFContext::create(*debugobj,
+                DWARFContext::ProcessDebugRelocations::Process, nullptr, "",
+                ignoreDWARFDiag, ignoreDWARFDiag).release();
         auto binary = errorobj->takeBinary();
         binary.first.release();
         binary.second.release();
@@ -1101,7 +1105,14 @@ static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *o
   for (object::SectionRef Sec : obj->sections()) {
       if (!Sec.isText() || Sec.isVirtual())
           continue;
-      if (Address >= Sec.getAddress() && Address < Sec.getAddress() + Sec.getSize())
+      uint64_t Size = Sec.getSize();
+      // A dSYM keeps the section headers but not their contents, and LLVM clamps
+      // the size of a section that extends past the end of the file, so use the
+      // size from the header instead (https://github.com/llvm/llvm-project/pull/197286).
+      if (auto *MO = dyn_cast<const object::MachOObjectFile>(obj))
+          Size = MO->is64Bit() ? MO->getSection64(Sec.getRawDataRefImpl()).size
+                               : MO->getSection(Sec.getRawDataRefImpl()).size;
+      if (Address >= Sec.getAddress() && Address < Sec.getAddress() + Size)
           return Sec;
   }
   return object::SectionRef();
@@ -1324,7 +1335,9 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
             *Section = *std::next(lazyobject->object->section_begin(), fit->second.SectionIndex);
             if (context) {
                 if (lazyobject->context == nullptr)
-                    lazyobject->context = DWARFContext::create(*lazyobject->object);
+                    lazyobject->context = DWARFContext::create(*lazyobject->object,
+                            DWARFContext::ProcessDebugRelocations::Process, nullptr, "",
+                            ignoreDWARFDiag, ignoreDWARFDiag);
                 *context = lazyobject->context.get();
             }
         }

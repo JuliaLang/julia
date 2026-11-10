@@ -63,6 +63,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     mt->name = name;
     mt->module = module;
     mt->backedges = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    jl_atomic_store_relaxed(&mt->contributors, (jl_genericmemory_t*)jl_an_empty_memory_any);
     JL_GC_POP();
     return mt;
 }
@@ -1285,6 +1286,29 @@ JL_DLLEXPORT void jl_atomic_store_bits(char *dst, const jl_value_t *src, int nb)
         abort();
 }
 
+static void atomic_swap_bits_into(jl_value_t *y, char *dst, const jl_value_t *src, int nb) JL_NOTSAFEPOINT
+{
+    // dst must have the required alignment for an atomic of the given size
+    if (nb == 1)
+        *(uint8_t*)y = jl_atomic_exchange((_Atomic(uint8_t)*)dst, *(uint8_t*)src);
+    else if (nb == 2)
+        *(uint16_t*)y = jl_atomic_exchange((_Atomic(uint16_t)*)dst, *(uint16_t*)src);
+    else if (nb <= 4)
+        *(uint32_t*)y = jl_atomic_exchange((_Atomic(uint32_t)*)dst, zext_read32(src, nb));
+#if MAX_POINTERATOMIC_SIZE >= 8
+    else if (nb <= 8)
+        *(uint64_t*)y = jl_atomic_exchange((_Atomic(uint64_t)*)dst, zext_read64(src, nb));
+#endif
+#if MAX_POINTERATOMIC_SIZE >= 16
+    else if (nb <= 12)
+        assign_uint128(y, jl_atomic_exchange((_Atomic(jl_uint128_t)*)dst, zext_read128(src, nb)), 12);
+    else if (nb <= 16)
+        *(jl_uint128_t*)y = jl_atomic_exchange((_Atomic(jl_uint128_t)*)dst, zext_read128(src, nb));
+#endif
+    else
+        abort();
+}
+
 JL_DLLEXPORT jl_value_t *jl_atomic_swap_bits(jl_value_t *dt, char *dst, const jl_value_t *src, int nb)
 {
     // dst must have the required alignment for an atomic of the given size
@@ -1312,24 +1336,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_swap_bits(jl_value_t *dt, char *dst, const jl
     jl_value_t *v = jl_gc_alloc(ct->ptls, jl_datatype_size(bt), bt);
     if (bt->smalltag)
         jl_set_typetagof(v, bt->smalltag, 0);
-    if (nb == 1)
-        *(uint8_t*)v = jl_atomic_exchange((_Atomic(uint8_t)*)dst, *(uint8_t*)src);
-    else if (nb == 2)
-        *(uint16_t*)v = jl_atomic_exchange((_Atomic(uint16_t)*)dst, *(uint16_t*)src);
-    else if (nb <= 4)
-        *(uint32_t*)v = jl_atomic_exchange((_Atomic(uint32_t)*)dst, zext_read32(src, nb));
-#if MAX_POINTERATOMIC_SIZE >= 8
-    else if (nb <= 8)
-        *(uint64_t*)v = jl_atomic_exchange((_Atomic(uint64_t)*)dst, zext_read64(src, nb));
-#endif
-#if MAX_POINTERATOMIC_SIZE >= 16
-    else if (nb <= 12)
-        assign_uint128(v, jl_atomic_exchange((_Atomic(jl_uint128_t)*)dst, zext_read128(src, nb)), 12);
-    else if (nb <= 16)
-        *(jl_uint128_t*)v = jl_atomic_exchange((_Atomic(jl_uint128_t)*)dst, zext_read128(src, nb));
-#endif
-    else
-        abort();
+    atomic_swap_bits_into(v, dst, src, nb);
     return v;
 }
 
@@ -1528,7 +1535,7 @@ JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl
     extern jl_value_t *jl_permbox##nb(jl_datatype_t *t, uintptr_t tag, uint##nb##_t x) JL_NOTSAFEPOINT \
     {   /* n.b. t must be a concrete isbits datatype of the right size */               \
         jl_task_t *ct = jl_current_task;                                                \
-        jl_value_t *v = jl_gc_permobj(ct->ptls, LLT_ALIGN(nb, sizeof(void*)), t, 0);    \
+        jl_value_t *v = jl_gc_permobj(ct->ptls, LLT_ALIGN(sizeof(uint##nb##_t), sizeof(void*)), t, 0); \
         assert(tag);                                                                    \
         jl_set_typetagof(v, tag, GC_OLD_MARKED);                                        \
         *(uint##nb##_t*)jl_data_ptr(v) = x;                                             \
@@ -2002,9 +2009,17 @@ inline jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t 
     assert(!isatomic || jl_typeis(rhs, ty));
     jl_value_t *r;
     if (isatomic && !needlock) {
-        if (hasptr)
+        if (hasptr) {
+            jl_task_t *ct = jl_current_task;
+            r = jl_gc_alloc(ct->ptls, fsz, rty);
+            if (((jl_datatype_t*)rty)->smalltag)
+                jl_set_typetagof(r, ((jl_datatype_t*)rty)->smalltag, 0);
             jl_gc_multi_wb(parent, v, rhs); // rhs is immutable
-        r = jl_atomic_swap_bits(rty, v, rhs, fsz);
+            atomic_swap_bits_into(r, v, rhs, fsz);
+        }
+        else {
+            r = jl_atomic_swap_bits(rty, v, rhs, fsz);
+        }
     }
     else {
         if (needlock) {
@@ -2604,6 +2619,9 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map, jl_defe
         } else {
             // Resolve the head type
             head = resolve_type_refs(head, subst_map, dcache);
+            // Applying a TypeVar is invalid, as in jl_f_apply_type
+            if (jl_is_typevar(head))
+                jl_type_error("Type{...} expression", (jl_value_t*)jl_unionall_type, head);
             // For parametric types, we need the wrapper (UnionAll), not the DataType
             if (jl_is_datatype(head) && ((jl_datatype_t*)head)->name->wrapper != NULL) {
                 head = ((jl_datatype_t*)head)->name->wrapper;
@@ -2892,6 +2910,15 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                                   jl_symbol_name(tv->name),
                                   jl_symbol_name(((jl_tvar_t*)p)->name),
                                   jl_symbol_name(ref->name));
+                    // Otherwise a TypeApp remains in a bound only where a
+                    // TypeVar is applied (e.g. the `F{Int}` in `T<:F{Int}`),
+                    // and resolving it raises the error that would have been
+                    // raised without the deferral.
+                    if (resolve_type_refs(p, &subst_map, &dcache) != p)
+                        jl_errorf("invalid type parameter bound in definition of %s: "
+                                  "bound of %s is not a type",
+                                  jl_symbol_name(tv->name),
+                                  jl_symbol_name(((jl_tvar_t*)p)->name));
                 }
             }
 

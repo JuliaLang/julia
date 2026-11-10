@@ -96,6 +96,23 @@ static int Elf32_locate_symbol(Elf32_Ehdr *hdr, const char *symbol)
     return 0;
 }
 
+// Match only ELF files for the loader's target architecture.
+#if defined(_CPU_X86_64_)
+#define JL_ELF_MACHINE EM_X86_64
+#elif defined(_CPU_X86_)
+#define JL_ELF_MACHINE EM_386
+#elif defined(_CPU_AARCH64_)
+#define JL_ELF_MACHINE EM_AARCH64
+#elif defined(_CPU_ARM_)
+#define JL_ELF_MACHINE EM_ARM
+#elif defined(_CPU_RISCV64_)
+#define JL_ELF_MACHINE EM_RISCV
+#elif defined(_CPU_PPC64_)
+#define JL_ELF_MACHINE EM_PPC64
+#elif defined(_CPU_PPC_)
+#define JL_ELF_MACHINE EM_PPC
+#endif
+
 int jl_loader_locate_symbol(const char *library, const char *symbol)
 {
     size_t library_sz;
@@ -105,14 +122,37 @@ int jl_loader_locate_symbol(const char *library, const char *symbol)
 
     int found = 0;
     const char *hdr = (const char *)elf_file;
-    if (strncmp(hdr, ELFMAG, SELFMAG) != 0)
+    if (library_sz < EI_NIDENT || memcmp(hdr, ELFMAG, SELFMAG) != 0)
         goto bail;
 
-    assert(hdr[5] == ELFDATA2LSB);
-    if (hdr[4] == ELFCLASS32) {
-        found = Elf32_locate_symbol((Elf32_Ehdr *)hdr, symbol);
-    } else if (hdr[4] == ELFCLASS64) {
-        found = Elf64_locate_symbol((Elf64_Ehdr *)hdr, symbol);
+    if (hdr[EI_DATA] != ELFDATA2LSB)
+        goto bail;
+    // Only accept libraries for this loader's pointer size.
+#ifdef _P64
+    if (hdr[EI_CLASS] != ELFCLASS64)
+        goto bail;
+#else
+    if (hdr[EI_CLASS] != ELFCLASS32)
+        goto bail;
+#endif
+    if (hdr[EI_CLASS] == ELFCLASS32) {
+        if (library_sz < sizeof(Elf32_Ehdr))
+            goto bail;
+        Elf32_Ehdr *ehdr = (Elf32_Ehdr *)hdr;
+#ifdef JL_ELF_MACHINE
+        if (ehdr->e_machine != JL_ELF_MACHINE)
+            goto bail;
+#endif
+        found = Elf32_locate_symbol(ehdr, symbol);
+    } else if (hdr[EI_CLASS] == ELFCLASS64) {
+        if (library_sz < sizeof(Elf64_Ehdr))
+            goto bail;
+        Elf64_Ehdr *ehdr = (Elf64_Ehdr *)hdr;
+#ifdef JL_ELF_MACHINE
+        if (ehdr->e_machine != JL_ELF_MACHINE)
+            goto bail;
+#endif
+        found = Elf64_locate_symbol(ehdr, symbol);
     }
 
 bail:

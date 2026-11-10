@@ -88,28 +88,49 @@ function dsymutil(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
     return Cmd(Cmd([dsymutil_path()]); env)
 end
 
-function ld()
+function ld(; strict_definitions::Bool = false)
     default_args = ``
     @static if Sys.iswindows()
         # From`x86_64-w64-mingw32-gcc -shared -Wl,--verbose`
         flavor = "gnu"
         m = Sys.ARCH == :x86_64 ? "i386pep" : "i386pe"
         entry = Sys.ARCH == :x86_64 ? "DllMainCRTStartup" : "_DllMainCRTStartup"
-        default_args = `-m $m -Bdynamic -e $entry --enable-auto-image-base --allow-multiple-definition --disable-auto-import --disable-runtime-pseudo-reloc`
+        default_args = `-m $m -Bdynamic -e $entry --enable-auto-image-base --disable-auto-import --disable-runtime-pseudo-reloc`
+        if !strict_definitions
+            default_args = `$default_args --allow-multiple-definition`
+        end
     elseif Sys.isapple()
         flavor = "darwin"
         arch = Sys.ARCH == :aarch64 ? :arm64 : Sys.ARCH
-        default_args = `-arch $arch -undefined dynamic_lookup -platform_version macos $(Base.MACOS_PRODUCT_VERSION) $(Base.MACOS_PLATFORM_VERSION)`
+        default_args = `-arch $arch -platform_version macos $(Base.MACOS_PRODUCT_VERSION) $(Base.MACOS_PLATFORM_VERSION)`
+        if !strict_definitions
+            default_args = `$default_args -undefined dynamic_lookup`
+        end
         # due to an lld bug: https://github.com/llvm/llvm-project/issues/193646
         # we must make sure the syslibroot does not point to the system or else
         # it will not respect the provided `libSystem.tbd` file
         default_args = `$default_args -syslibroot $(private_libdir())`
     else
         flavor = "gnu"
-        # From `gcc -shared -Wl,--verbose`; `-z defs` added to enforce that all symbols
-        # the pkgimage references are resolvable at link time (catches regressions early
-        # instead of deferring to first-call crashes at runtime).
-        default_args = `--build-id --eh-frame-hdr --hash-style=gnu --as-needed -z relro -z defs`
+        # From `gcc -shared -Wl,--verbose`
+        # `--discard-locals` drops assembler-local `.L` labels, which RISC-V objects carry
+        # in their symbol tables (every `auipc` pair has one) and which profilers would
+        # otherwise report instead of the enclosing function.
+        default_args = `--build-id --eh-frame-hdr --hash-style=gnu --as-needed -z relro --discard-locals`
+        # Sanitizer runtimes are provided by the main executable, so instrumented
+        # images must leave their runtime callbacks undefined until load time.
+        # Otherwise, enforce that all symbols an image references are resolvable at link
+        # time (catches regressions early instead of deferring to first-call crashes at runtime).
+        opts = Base.JLOptions()
+        target_sanitized = opts.target_sanitize_memory != 0 ||
+                           opts.target_sanitize_thread != 0 ||
+                           opts.target_sanitize_address != 0
+        if !target_sanitized
+            default_args = `$default_args -z defs`
+        end
+        if !isempty(Base.COMPRESS_PKGIMAGE_DEBUG_SECTIONS)
+            default_args = `$default_args --compress-debug-sections=$(Base.COMPRESS_PKGIMAGE_DEBUG_SECTIONS)`
+        end
     end
 
     `$(lld()) -flavor $flavor $default_args`
@@ -169,12 +190,14 @@ function _find_loaded(re::Regex)
     error("no loaded shared object matching $re")
 end
 
-function link_image_cmd(path, out)
+function link_image_cmd(path, out; is_sysimage::Bool = false, debug_runtime::Bool = isdebugbuild())
     PRIVATE_LIBDIR = "-L$(private_libdir())"
     LIBDIR = "-L$(libdir())"
     SHLIBDIR = "-L$(shlibdir())"
     LIBS = String[]
-    if isdebugbuild()
+    # `debug_runtime` describes the runtime the produced image will be loaded
+    # by, which may differ from this process when cross-bootstrapping.
+    if debug_runtime
         push!(LIBS, "-ljulia-debug")
         push!(LIBS, "-ljulia-internal-debug")
     else
@@ -192,7 +215,7 @@ function link_image_cmd(path, out)
         append!(LIBS,     String["-lpthread", "-ladvapi32", "-lshell32", "-luser32"])
         append!(crtbegin, String[_find_static("dllcrt2.o"), _find_static("crtbegin.o")])
         append!(crtend,   String[_find_static("crtend.o")])
-        isdebugbuild() && push!(LIBS, "-lssp")
+        debug_runtime && push!(LIBS, "-lssp")
         append!(LIBS,     String["-lmingwex", "-lmsvcrt-os", "-lmingw32", "-lmingwex", "-lmsvcrt-os"])
     elseif Sys.isapple()
         # From `clang -dynamiclib -Wl,-v`
@@ -212,11 +235,12 @@ function link_image_cmd(path, out)
     end
 
     V = verbose_linking() ? "--verbose" : ""
-    `$(ld()) $V $SHARED -o $out $crtbegin $(whole_archive(path)) $PRIVATE_LIBDIR $LIBDIR $SHLIBDIR $LIBS $crtend`
+    `$(ld(; strict_definitions = is_sysimage)) $V $SHARED -o $out $crtbegin $(whole_archive(path)) $PRIVATE_LIBDIR $LIBDIR $SHLIBDIR $LIBS $crtend`
 end
 
-function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout)
-    run(link_image_cmd(path, out), Base.DevNull(), internal_stderr, internal_stdout)
+function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout;
+                    is_sysimage::Bool = false, debug_runtime::Bool = isdebugbuild())
+    run(link_image_cmd(path, out; is_sysimage, debug_runtime), Base.DevNull(), internal_stderr, internal_stdout)
 end
 
 

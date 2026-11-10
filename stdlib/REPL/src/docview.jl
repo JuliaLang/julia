@@ -50,7 +50,7 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main, internal_acce
             line = "#"
         end
     end
-    x = Meta.parse(line, raise = false, depwarn = false)
+    x = Meta.parse(line; raise = false, depwarn = false, mod)
     assym = Symbol(line)
     expr =
         if haskey(keywords, assym) || Base.isoperator(assym) || isexpr(x, :error) ||
@@ -490,7 +490,6 @@ function repl_corrections(io::IO, s, mod::Module)
     end
     print_correction(io, s, mod)
 end
-repl_corrections(s) = repl_corrections(stdout, s)
 
 # inverse of latex_symbols Dict, lazily created as needed
 const symbols_latex = Dict{String,String}()
@@ -901,8 +900,9 @@ function accessible(mod::Module)
     bindings = Set(AccessibleBinding(s) for s in names(mod; all=true, imported=true)
                    if !isdeprecated(mod, s))
     for used in moduleusings(mod)
-        union!(bindings, (AccessibleBinding(used, s) for s in names(used)
-                          if !isdeprecated(used, s)))
+        m = used::Module
+        union!(bindings, (AccessibleBinding(m, s) for s in names(m)
+                          if !isdeprecated(m, s)))
     end
     union!(bindings, (AccessibleBinding(k) for k in keys(Base.Docs.keywords)))
     filter!(b -> !occursin('#', b.name), bindings)

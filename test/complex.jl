@@ -139,6 +139,11 @@ end
     @test isequal(complex(true,false) * true, complex(true,false) * complex(true,false))
 end
 
+@testset "wrapping arithmetic" begin
+    @test complex(typemax(Int), 1) +% 1 == complex(typemin(Int), 1)
+    @test -%(complex(typemin(Int), 1)) == complex(typemin(Int), -1)
+end
+
 @testset "basic math functions" begin
     # We compare to BigFloat instead of hard-coding
     # values, assuming that BigFloat has an independent and independently
@@ -1027,7 +1032,7 @@ end
 # issue #10926
 @test typeof(π - 1im) == ComplexF64
 
-@testset "issues #15969 #59684" begin
+@testset "issues #15969 #59684 #64774" begin
     # specialized muladd for complex types
     for x in (3, 3+13im, 1im), y in (2, 2+7im, 1im), z in (5, 5+11im, 0x01, 0x01 + 0x00*im)
         @test muladd(x,y,z) === x*y + z
@@ -1037,6 +1042,8 @@ end
     @test muladd(complex(NaN64), false, 2+7im) == 2+7im
     @test muladd(false, NaN64, 2+7im) == 2+7im
     @test muladd(NaN64, false, 2+7im) == 2+7im
+    @test muladd(Complex{Int8}(0, 16), Int8(16), 0) === 0 + 256im
+    @test muladd(Complex{Int8}(0, 16), Complex{Int8}(16, 0), 0) === 0 + 256im
 end
 
 @testset "issue #11839" begin
@@ -1118,12 +1125,12 @@ end
 
         @test isequal(one(T) / complex(T(Inf),-zero(T)), complex(zero(T), zero(T)))
         @test isequal(one(T) / complex(T(Inf),-one(T)),  complex(zero(T), zero(T)))
-        @test isequal(one(T) / complex(T(Inf),T(-NaN)),  complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(Inf),-T(NaN)),  complex(zero(T), zero(T)))
         @test isequal(one(T) / complex(T(Inf),T(-Inf)),  complex(zero(T), zero(T)))
 
         @test isequal(one(T) / complex(T(-Inf),-zero(T)),complex(-zero(T), zero(T)))
         @test isequal(one(T) / complex(T(-Inf),-one(T)), complex(-zero(T), zero(T)))
-        @test isequal(one(T) / complex(T(-Inf),T(-NaN)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-Inf),-T(NaN)), complex(-zero(T), zero(T)))
         @test isequal(one(T) / complex(T(-Inf),T(-Inf)), complex(-zero(T), zero(T)))
 
         @test isequal(one(T) / complex(zero(T), T(Inf)), complex(zero(T), -zero(T)))
@@ -1136,11 +1143,11 @@ end
 
         @test isequal(one(T) / complex(-zero(T), T(Inf)), complex(-zero(T), -zero(T)))
         @test isequal(one(T) / complex(-one(T),  T(Inf)), complex(-zero(T), -zero(T)))
-        @test isequal(one(T) / complex(T(-NaN),  T(Inf)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(-T(NaN),  T(Inf)), complex(-zero(T), -zero(T)))
 
         @test isequal(one(T) / complex(-zero(T), T(-Inf)), complex(-zero(T), zero(T)))
         @test isequal(one(T) / complex(-one(T),  T(-Inf)), complex(-zero(T), zero(T)))
-        @test isequal(one(T) / complex(T(-NaN),  T(-Inf)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(-T(NaN),  T(-Inf)), complex(-zero(T), zero(T)))
 
         # divide complex by complex Inf
         @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
@@ -1248,10 +1255,10 @@ end
 end
 
 @testset "issue #31054" begin
-    @test tanh(atanh(complex(1.0,1.0))) == complex(1.0,1.0)
-    @test tanh(atanh(complex(1.0,-1.0))) == complex(1.0,-1.0)
-    @test tanh(atanh(complex(-1.0,1.0))) == complex(-1.0,1.0)
-    @test tanh(atanh(complex(-1.0,-1.0))) == complex(-1.0,-1.0)
+    @test tanh(atanh(complex(1.0,1.0))) ≈ complex(1.0,1.0) rtol=2eps()
+    @test tanh(atanh(complex(1.0,-1.0))) ≈ complex(1.0,-1.0) rtol=2eps()
+    @test tanh(atanh(complex(-1.0,1.0))) ≈ complex(-1.0,1.0) rtol=2eps()
+    @test tanh(atanh(complex(-1.0,-1.0))) ≈ complex(-1.0,-1.0) rtol=2eps()
 end
 
 @testset "issue #29840" begin

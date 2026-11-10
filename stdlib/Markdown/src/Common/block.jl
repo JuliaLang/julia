@@ -61,7 +61,7 @@ function hashheader(stream::IO, md::MD)
 
         # handle Windows line ends
         if c == '\r'
-            peek(stream, Char) == '\n' && read(stream, Char)
+            !eof(stream) && peek(stream, Char) == '\n' && read(stream, Char)
             c = '\n'
         end
 
@@ -189,7 +189,7 @@ function footnote(stream::IO, block::MD)
         if m === nothing
             return false
         else
-            ref = m.captures[1]
+            ref = something(m.captures[1])
             buffer = IOBuffer()
             write(buffer, readline(stream, keep=true))
             while !eof(stream)
@@ -266,11 +266,12 @@ function admonition(stream::IO, block::MD)
                 if occursin(untitled, line)
                     m = match(untitled, line)::AbstractMatch
                     # When no title is provided we use CATEGORY_NAME, capitalising it.
-                    m.captures[1], uppercasefirst(m.captures[1])
+                    category = something(m.captures[1])
+                    category, uppercasefirst(category)
                 elseif occursin(titled, line)
                     m = match(titled, line)::AbstractMatch
                     # To have a blank TITLE provide an explicit empty string as TITLE.
-                    m.captures[1], m.captures[2]
+                    something(m.captures[1]), something(m.captures[2])
                 else
                     # Admonition header is invalid so we give up parsing here and move
                     # on to the next parser.
@@ -312,7 +313,7 @@ List(xs...) = List(vcat(xs...))
 isordered(list::List) = list.ordered >= 0
 
 const BULLETS = r"^ {0,3}(\*|\+|-)( |$)"
-const NUM_OR_BULLETS = r"^ {0,3}(\*|\+|-|(\d+)(\.|\)))( |$)"
+const NUM_OR_BULLETS = r"^ {0,3}(\*|\+|-|([0-9]{1,9})(\.|\)))( |$)"
 
 @breaking true ->
 function list(stream::IO, block::MD)
@@ -327,10 +328,10 @@ function list(stream::IO, block::MD)
                 -1, Regex("^ {0,3}(\\$(m.captures[1]))( |\$)")
             elseif m.captures[3] == "."
                 # An ordered list with `1. ` style numbering.
-                Base.parse(Int, m.captures[2]), r"^ {0,3}(\d+)\.( |$)"
+                Base.parse(Int, something(m.captures[2])), r"^ {0,3}([0-9]{1,9})\.( |$)"
             elseif m.captures[3] == ")"
                 # An ordered list with `1) ` style numbering.
-                Base.parse(Int, m.captures[2]), r"^ {0,3}(\d+)\)( |$)"
+                Base.parse(Int, something(m.captures[2])), r"^ {0,3}([0-9]{1,9})\)( |$)"
             else
                 # Failed to match any list marker. This branch shouldn't actually be needed
                 # since the `NUM_OR_BULLETS` regex should cover this, but we include it
@@ -342,14 +343,15 @@ function list(stream::IO, block::MD)
         list = List(initial)
 
         buffer = IOBuffer() # For capturing nested text for recursive parsing.
-        newline = false     # For checking if we have two consecutive newlines: end of list.
+        blank = false
         count = 0           # Count of list items. Used to check if we need to push remaining
                             # content in `buffer` after leaving the `while` loop.
         while !eof(stream)
             if blankline(stream)
                 println(buffer)
-                list.loose = true
+                blank = true
             elseif startswith(stream, " "^indent)
+                list.loose |= blank
                 # Indented text that is part of the current list item.
                 print(buffer, readline(stream, keep=true))
             else
@@ -359,6 +361,7 @@ function list(stream::IO, block::MD)
                     pushitem!(list, buffer)
                     break
                 end
+                list.loose |= blank
 
                 # Start of a new list item.
                 count += 1

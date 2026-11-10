@@ -37,6 +37,13 @@ Use [`Base.include`](@ref) to evaluate a file into another module.
     is *syntactic*. I.e. assigning `const myinclude = include` may require
     an explicit `@Core.latestworld` call after `myinclude`.
 
+!!! note
+    `include` always evaluates the file in global scope, even when called inside a function:
+    the included code cannot see or assign the function's local variables, and its new
+    definitions are not visible to the rest of the calling function except via
+    [`invokelatest`](@ref) (see [the world age mechanism](@ref man-world-age)). Thus,
+    `include` should normally only be called at top level.
+
 !!! compat "Julia 1.5"
     Julia 1.5 is required for passing the `mapexpr` argument.
 """
@@ -57,22 +64,17 @@ const eval = Core.EvalInto(Main)
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (Main, abspath(@__FILE__)))
 
-# set up depot & load paths to be able to find stdlib packages
-Base.init_depot_path()
-Base.init_load_path()
-
 if Base.is_primary_base_module
+isfile("userimg.jl") && error("""
+    `base/userimg.jl` is no longer supported. To build a system image that includes \
+    additional code, use PackageCompiler.jl, or run a script on top of an existing \
+    system image with `julia --sysimage <image> --output-o <file> <script>`.""")
+
+Base.__init_build()
+atexit(Base.__uninit_build)
+
 # load some stdlib packages but don't put their names in Main
 let
-    # Loading here does not call __init__(). This leads to uninitialized RNG
-    # state which causes rand(::UnitRange{Int}) to hang. This is a workaround:
-    task = current_task()
-    task.rngState0 = 0x5156087469e170ab
-    task.rngState1 = 0x7431eaead385992c
-    task.rngState2 = 0x503e1d32781c2608
-    task.rngState3 = 0x3a77f7189200c20b
-    task.rngState4 = 0x5502376d099035ae
-
     # Stdlibs sorted in dependency, then alphabetical, order by contrib/print_sorted_stdlibs.jl
     # Run with the `--exclude-jlls` option to filter out all JLL packages
     if isdefined(Base.BuildSettings, :INCLUDE_STDLIBS)
@@ -125,36 +127,17 @@ let
         print_time("Stdlibs total", tot_time_stdlib)
     end
 
-    # Clear global state
-    empty!(Core.ARGS)
-    empty!(Base.ARGS)
-    empty!(LOAD_PATH)
-    Base.init_load_path() # want to be able to find external packages in userimg.jl
-
     ccall(:jl_clear_implicit_imports, Cvoid, (Any,), Main)
 
-    tot_time_userimg = @elapsed (isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
-
     tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)
-    tot_time = tot_time_base + tot_time_stdlib + tot_time_userimg
+    tot_time = tot_time_base + tot_time_stdlib
 
     println("Sysimage built. Summary:")
     print("Base ──────── "); Base.time_print(stdout, tot_time_base    * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_base    / tot_time) * 100); println("%")
     print("Stdlibs ───── "); Base.time_print(stdout, tot_time_stdlib  * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_stdlib  / tot_time) * 100); println("%")
-    if isfile("userimg.jl")
-    print("Userimg ───── "); Base.time_print(stdout, tot_time_userimg * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg / tot_time) * 100); println("%")
-    end
     print("Total ─────── "); Base.time_print(stdout, tot_time         * 10^9); println();
-
-    empty!(LOAD_PATH)
-    empty!(DEPOT_PATH)
 end
 
-empty!(Base.TOML_CACHE.d)
-Base.TOML.reinit!(Base.TOML_CACHE.p, "")
 @eval Base BUILDROOT = ""
-@eval Sys begin
-    BINDIR = ""
-    STDLIB = ""
-end
+Base.Compiler.set_typeinf_world!()
 end

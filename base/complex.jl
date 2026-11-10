@@ -190,7 +190,7 @@ Union{Missing, Complex{Int64}}
 complex(::Type{T}) where {T<:Real} = Complex{T}
 complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
 complex(::Type{Union{}}) = Union{}
-# Keep the slurp signature for bottom-type dispatch pruning (typemap_slurp_search),
+# Keep the slurp signature for bottom-type dispatch pruning,
 # but do not let invalid arities contribute a successful result to inference.
 complex(::Type{Union{}}, slurp...) = throw(MethodError(complex, (Union{}, slurp...)))
 
@@ -294,8 +294,16 @@ inv(z::Complex{<:Integer}) = inv(float(z))
 *(z::Complex, w::Complex) = Complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
 
+-%(z::Complex) = Complex(-%(real(z)), -%(imag(z)))
++%(z::Complex, w::Complex) = Complex(real(z) +% real(w), imag(z) +% imag(w))
+-%(z::Complex, w::Complex) = Complex(real(z) -% real(w), imag(z) -% imag(w))
+*%(z::Complex, w::Complex) = Complex(real(z) *% real(w) -% imag(z) *% imag(w),
+                                     real(z) *% imag(w) +% imag(z) *% real(w))
+
 _mulsub(a, b, c) = _mulsub(promote(a, b, c)...)
 _mulsub(a::T, b::T, c::T) where {T<:Real} = muladd(a, b, -c)
+_muladdz(a, b, c) = _muladdz(promote(a, b, c)...)
+_muladdz(a::T, b::T, c::T) where {T<:Real} = a * b
 muladd(z::Complex, w::Complex, x::Complex) =
     Complex(muladd(real(z), real(w), -_mulsub(imag(z), imag(w), real(x))),
             muladd(real(z), imag(w), muladd(imag(z), real(w), imag(x))))
@@ -340,13 +348,13 @@ end
 *(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
 
 muladd(x::Real, z::Complex, y::Union{Real,Complex}) = muladd(z, x, y)
-muladd(z::Complex, x::Real, y::Real) = Complex(muladd(real(z),x,y), imag(z)*x)
+muladd(z::Complex, x::Real, y::Real) = Complex(muladd(real(z),x,y), _muladdz(imag(z), x, y))
 muladd(z::Complex, x::Real, w::Complex) =
     Complex(muladd(real(z),x,real(w)), muladd(imag(z),x,imag(w)))
 muladd(x::Real, y::Real, z::Complex) = Complex(muladd(x,y,real(z)), imag(z))
 muladd(z::Complex, w::Complex, x::Real) =
     Complex(muladd(real(z), real(w), -_mulsub(imag(z), imag(w), x)),
-            muladd(real(z), imag(w), imag(z) * real(w)))
+            muladd(real(z), imag(w), _muladdz(imag(z), real(w), x)))
 
 /(a::R, z::S) where {R<:Real,S<:Complex} = (T = promote_type(R,S); a*inv(T(z)))
 /(z::Complex, x::Real) = Complex(real(z)/x, imag(z)/x)
@@ -1094,15 +1102,18 @@ breaking ties using the specified [`RoundingMode`](@ref)s. The first
 [`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.
 
-
-`RoundingModeReal` and `RoundingModeImaginary` default to [`RoundNearest`](@ref),
-which rounds to the nearest integer, with ties (fractional values of 0.5)
-being rounded to the nearest even integer.
+`RoundingModeReal` defaults to [`RoundNearest`](@ref), which rounds to the nearest
+integer, with ties (fractional values of 0.5) being rounded to the nearest even
+integer. `RoundingModeImaginary` defaults to `RoundingModeReal`, so a single
+[`RoundingMode`](@ref) is used for both components.
 
 # Examples
 ```jldoctest
 julia> round(3.14 + 4.5im)
 3.0 + 4.0im
+
+julia> round(3.14 + 4.5im, RoundUp)
+4.0 + 5.0im
 
 julia> round(3.14 + 4.5im, RoundUp, RoundNearestTiesUp)
 4.0 + 5.0im

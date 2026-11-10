@@ -466,6 +466,42 @@ end
 @test first(only(code_typed((Int,)) do x; @inline overdub54341(x, 1); end)) isa Core.CodeInfo
 @test_throws "Wrong number of arguments" overdub54341(1, 2, 3)
 
+# Generated functions may attach method-table edges as `(invokesig, mt)` pairs, the form
+# inference emits. Registering them when the source is cached for the interpreter used to
+# treat the `MethodTable` as a `MethodInstance` and hang trying to take its lock.
+mt_edge_target(::Int) = 1
+function mt_edge_generator(world::UInt, source::Method, _)
+    sig = Tuple{typeof(mt_edge_target), Any}
+    nmethods = length(Base._methods_by_ftype(sig, -1, world))
+    ci = generate_lambda_ex(world, source, (:mt_edge_caller,), (), :(return $nmethods))
+    ci.edges = Any[sig, Core.methodtable]
+    ci.min_world = 1
+    ci.max_world = typemax(UInt)
+    return ci
+end
+@eval function mt_edge_caller()
+    $(Expr(:meta, :generated, mt_edge_generator))
+    $(Expr(:meta, :generated_only))
+end
+@test mt_edge_caller() == 1
+mt_edge_target(::String) = 2
+@test mt_edge_caller() == 2
+
+# Older packages (e.g. Zygote 0.6) attach edges as a `Vector{MethodInstance}`.
+typed_edge_target(x) = x + 1
+function typed_edge_generator(world::UInt, source::Method, _, _)
+    ci = generate_lambda_ex(world, source, (:typed_edge_caller, :x), (), :(return typed_edge_target(x)))
+    ci.edges = Core.MethodInstance[Base.method_instance(typed_edge_target, Tuple{Int}; world)]
+    return ci
+end
+@eval function typed_edge_caller(x)
+    $(Expr(:meta, :generated, typed_edge_generator))
+    $(Expr(:meta, :generated_only))
+end
+@test typed_edge_caller(1) == 2
+typed_edge_target(x::Int) = x + 2
+@test typed_edge_caller(1) == 3
+
 # Test the module resolution scope of generated methods that are type constructors
 module GeneratedScope57417
     using Test

@@ -22,8 +22,8 @@ import Base: isexpr
 
 ## AST decoding helpers ##
 
-is_id_start_char(c::AbstractChar) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
-is_id_char(c::AbstractChar) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
+is_id_start_char(c::AbstractChar) = isvalid(c) && ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
+is_id_char(c::AbstractChar) = isvalid(c) && ccall(:jl_id_char, Cint, (UInt32,), c) != 0
 
 """
      isidentifier(s) -> Bool
@@ -55,7 +55,7 @@ function isidentifier(s::AbstractString)
 end
 isidentifier(s::Symbol) = isidentifier(string(s))
 
-is_op_suffix_char(c::AbstractChar) = ccall(:jl_op_suffix_char, Cint, (UInt32,), c) != 0
+is_op_suffix_char(c::AbstractChar) = isvalid(c) && ccall(:jl_op_suffix_char, Cint, (UInt32,), c) != 0
 
 _isoperator(s) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
 
@@ -272,7 +272,8 @@ Takes the expression `x` and returns an equivalent expression in lowered form
 for executing in module `m`.
 See also [`code_lowered`](@ref).
 """
-lower(m::Module, @nospecialize(x)) = Core._lower(x, m, "none", 0, typemax(Csize_t), false)[1]
+lower(m::Module, @nospecialize(x)) =
+    Core._lower(m, x, typemax(Csize_t), false, LineNumberNode(0, :none))[1]
 
 """
     @lower [m] x
@@ -308,19 +309,25 @@ function parser_for_module(mod::Union{Module, Nothing})
     if mod isa Module && invokelatest(isdefined, mod, Symbol("#_internal_julia_parse"))
         invokelatest(getglobal, mod, Symbol("#_internal_julia_parse"))
     else
-        Base.VersionedParse(Base.VERSION_EDITION)
+        Base.VersionedParse(Base.LATEST_STABLE_EDITION)
     end
 end
 
 function _parse_string(text::AbstractString, filename::AbstractString,
-                       lineno::Integer, index::Integer, options,
+                       lineno::Integer, index::Integer, options, type,
                        _parse=parser_for_module(nothing))
     if index < 1 || index > ncodeunits(text) + 1
         throw(BoundsError(text, index))
     end
     ex, offset::Int = _parse(text, filename, lineno, index-1, options)
+    if isdefined(Base, :Syntax) && type == Expr && ex isa Base.Syntax
+        ex = Base.syntax_to_expr(ex)
+    end
     ex, offset+1
 end
+
+_is_parse_error(@nospecialize(ex)) = isexpr(ex, :error) ||
+    (isdefined(Base, :Syntax) && ex isa Base.Syntax && Base.head(ex) === :error)
 
 """
     parse(str, start; greedy=true, raise=true, depwarn=true, filename="none")
@@ -355,10 +362,13 @@ julia> Meta.parse("(α, β) = 3, 5", 11, greedy=false)
 ```
 """
 function parse(str::AbstractString, pos::Integer;
-               filename="none", greedy::Bool=true, raise::Bool=true, depwarn::Bool=true, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
-    ex, pos = _parse_string(str, String(filename), 1, pos, greedy ? :statement : :atom, _parse)
-    if raise && isexpr(ex, :error)
-        err = ex.args[1]
+               filename="none", greedy::Bool=true, raise::Bool=true,
+               depwarn::Bool=true, mod::Union{Nothing, Module}=nothing,
+               type=Expr, _parse = parser_for_module(mod))
+    ex, pos = _parse_string(str, String(filename), 1, pos,
+                            greedy ? :statement : :atom, type, _parse)
+    if raise && _is_parse_error(ex)
+        err = (ex isa Expr ? ex : Base.syntax_to_expr(ex)).args[1]
         if err isa String
             err = ParseError(err) # For flisp parser
         end
@@ -395,28 +405,32 @@ julia> Meta.parse("x = ")
 ```
 """
 function parse(str::AbstractString;
-               filename="none", raise::Bool=true, depwarn::Bool=true, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
-    ex, pos = parse(str, 1; filename, greedy=true, raise, depwarn, _parse)
-    if isexpr(ex, :error)
+               filename="none", raise::Bool=true, depwarn::Bool=true,
+               mod::Union{Nothing, Module}=nothing, type=Expr,
+               _parse = parser_for_module(mod))
+    ex, pos = parse(str, 1; filename, greedy=true, raise, depwarn, type, _parse)
+    if _is_parse_error(ex)
         return ex
     end
     if pos <= ncodeunits(str)
         raise && throw(ParseError("extra token after end of expression"))
-        return Expr(:error, "extra token after end of expression")
+        err = Expr(:error, "extra token after end of expression")
+        return type == Expr ? err :
+            Base.expr_to_syntax(err, LineNumberNode(1, Symbol(filename)))
     end
     return ex
 end
 
 function parseatom(text::AbstractString, pos::Integer; filename="none",
-                   lineno=1, mod::Union{Nothing, Module}=nothing,
+                   lineno=1, mod::Union{Nothing, Module}=nothing, type=Expr,
                    _parse = parser_for_module(mod))
-    return _parse_string(text, String(filename), lineno, pos, :atom, _parse)
+    return _parse_string(text, String(filename), lineno, pos, :atom, type, _parse)
 end
 
 function parseall(text::AbstractString; filename="none", lineno=1,
-                  mod::Union{Nothing, Module}=nothing,
+                  mod::Union{Nothing, Module}=nothing, type=Expr,
                   _parse = parser_for_module(mod))
-    ex,_ = _parse_string(text, String(filename), lineno, 1, :all, _parse)
+    ex,_ = _parse_string(text, String(filename), lineno, 1, :all, type, _parse)
     return ex
 end
 
@@ -486,7 +500,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
     if isa(x, Core.PhiNode)
         partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
                           slot_offset, statement_offset, boundscheck)
-        x.edges .+= slot_offset
+        x.edges .+= statement_offset
         return x
     end
     if isa(x, Core.UpsilonNode)
@@ -499,8 +513,16 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         )
     end
     if isa(x, Core.PhiCNode)
-        _partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
-                           slot_offset, statement_offset, boundscheck)
+        partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
+                          slot_offset, statement_offset, boundscheck)
+        return x
+    end
+    if isa(x, Core.PiNode)
+        return Core.PiNode(
+            _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck),
+            x.typ,
+        )
     end
     if isa(x, Core.ReturnNode)
        # Unreachable doesn't have val defined
@@ -521,10 +543,11 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         )
     end
     if isa(x, Core.EnterNode)
-        if x.catch_dest == 0
-            return x
-        end
-        return Core.EnterNode(x, x.catch_dest + statement_offset)
+        catch_dest = x.catch_dest == 0 ? 0 : x.catch_dest + statement_offset
+        isdefined(x, :scope) || return Core.EnterNode(catch_dest)
+        return Core.EnterNode(catch_dest,
+            _partially_inline!(x.scope, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck))
     end
     if isa(x, Expr)
         head = x.head
@@ -553,8 +576,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                     @assert isa(x.args[4], Int)
                 elseif i == 5
                     @assert isa((x.args[5]::QuoteNode).value,
-                                Union{Symbol, Tuple{Symbol, UInt16, Bool}, Tuple{Symbol, UInt16, Bool, Bool},
-                                      Tuple{Symbol, UInt16, Bool, Bool, Bool}})
+                                Union{Symbol, Tuple{Symbol, UInt16, Bool}, Tuple{Symbol, UInt16, Bool, Bool}})
                 else
                     x.args[i] = _partially_inline!(x.args[i], slot_replacements,
                                                    type_signature, static_param_values,
@@ -652,10 +674,10 @@ was escaped, the unescaped expression is wrapped in `:escape` again.
 """
 function reescape(@nospecialize(unescaped_expr), @nospecialize(original_expr))
     if isexpr(original_expr, :escape)
-        return reescape(Expr(:escape, unescaped_expr), original_expr.args[1])
+        return Expr(:escape, reescape(unescaped_expr, original_expr.args[1]))
     elseif isexpr(original_expr, :var"hygienic-scope")
         next, ctx... = original_expr.args
-        return reescape(Expr(:var"hygienic-scope", unescaped_expr, ctx...), next)
+        return Expr(:var"hygienic-scope", reescape(unescaped_expr, next), ctx...)
     else
         return unescaped_expr
     end

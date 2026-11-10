@@ -30,10 +30,13 @@ let os = ccall(:jl_get_UNAME, Any, ())
     end
 end
 
+# meta.jl uses this to convert parse results
+function syntax_to_expr end
+
 # metaprogramming
 include("meta.jl")
 using .Meta
-using .Meta: is_id_char, parser_for_module
+using .Meta: is_id_char
 
 # Strings
 include("multimedia.jl")
@@ -100,6 +103,17 @@ include("set.jl")
 
 include("syntax.jl")
 
+# Convenience function for `jl_parse`. Note that bootstrap `include` also goes through
+# `jl_parse`, which uses this as soon as it is defined.
+function _c_parseall_expr(code::Core.SimpleVector, filename::String,
+                          lineno::Int, mod::Union{Module, Nothing})
+    (ptr, len) = code
+    str = unsafe_string(ptr, len)
+    pfm = Meta.parser_for_module(mod)
+    ex, offset = Meta._parse_string(str, filename, lineno, 1, :all, Expr, pfm)
+    return Core.svec(ex, offset-1)
+end
+
 # Dynamic scopes (types only; the ScopedValues API is included much later)
 include("scope.jl")
 # Cancellation tokens (the `cancel` keyword-argument machinery is used from
@@ -144,6 +158,7 @@ using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
 # More strings & printing
 include("regex.jl")
+include("parsers/Parsers.jl")
 include("parse.jl")
 include("shell.jl")
 const IRShow = Compiler.IRShow # an alias for compatibility
@@ -290,6 +305,10 @@ include("initdefs.jl")
 # worker threads
 include("threadcall.jl")
 
+# Compatibility with when Compiler was in Core
+@eval Core const Compiler = $Base.Compiler
+@eval Compiler const fl_parse = $Base.fl_parse
+
 # code loading
 include("uuid.jl")
 include("pkgid.jl")
@@ -299,6 +318,8 @@ include("loading.jl")
 
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
 include("binaryplatforms.jl")
+
+using .BinaryPlatforms.CPUID: @cpu_supports
 
 # misc useful functions & macros
 include("timing.jl")
@@ -310,6 +331,14 @@ include("deprecated.jl")
 #
 # Some additional basic documentation
 include("docs/basedocs.jl")
+
+# Compiler frontend
+include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
+JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
+set_syntax_version(Base, v"1.14")
+
+include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
+JuliaLowering.activate!(false; freeze_world_age=false)
 
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
@@ -337,20 +366,6 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 @noinline include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
 (this::IncludeInto)(fname::AbstractString) = include(identity, this.m, fname)
 (this::IncludeInto)(mapexpr::Function, fname::AbstractString) = include(mapexpr, this.m, fname)
-
-# Compatibility with when Compiler was in Core
-@eval Core const Compiler = $Base.Compiler
-@eval Compiler const fl_parse = $Base.fl_parse
-
-# Compiler frontend
-Core.println("JuliaSyntax/src/JuliaSyntax.jl")
-include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
-JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
-
-# May be replaced in incremental sysimage build after-the-fact
-const JuliaLowering = nothing
-
-set_syntax_version(Base, VERSION)
 
 end_base_include = time_ns()
 
@@ -419,6 +434,9 @@ const _sigint_episode = Ref{Tuple{Union{Nothing, CancellationTokenSource}, UInt6
 # has no published token binding, and Distributed points it at the handler
 # of the most recent remotely-submitted request.
 const _sigint_foreground_task = Ref{Union{Nothing, Task}}(nothing)
+# The token a `disable_sigint` region shields, for `reenable_sigint` to
+# restore; unset outside any region.
+const _sigint_shielded_token = ScopedValues.ScopedValue{Union{Nothing, CancellationToken}}()
 
 @doc """
     Base.sigint_new_episode!([src::CancellationTokenSource]) -> CancellationToken
@@ -594,6 +612,7 @@ function __init__()
     init_depot_path()
     init_load_path()
     init_active_project()
+    init_debuginfo_source_paths()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
     empty!(checksums_valid)
@@ -612,19 +631,8 @@ function __init__()
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
-    if get_bool_env("JULIA_USE_FLISP_PARSER", false) === true
-        JuliaSyntax.enable_in_core!(false)
-    else
-        JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
-    end
-
-    if JuliaLowering !== nothing && get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
-        # This is not available by default, but JuliaLowering can be added to
-        # Base after-the-fact via an incremental sysimage build.
-        JuliaLowering.activate!()
-    end
-
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())
+    init_frontend()
     nothing
 end
 

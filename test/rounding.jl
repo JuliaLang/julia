@@ -459,6 +459,28 @@ end
     # More comprehensive testing is present in test/floatfuncs.jl
 end
 
+@testset "rounding to Union{} throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for f in (trunc, floor, ceil, round, unsafe_trunc), x in (1.5, 1, big(1.5))
+        @test_throws MethodError(f, (Union{}, x)) f(Union{}, x)
+        @test which(f, (Type{Union{}}, typeof(x))).sig == Tuple{typeof(f), Type{Union{}}, Vararg}
+    end
+    for f in (trunc, floor, ceil, round)
+        @test_throws MethodError(f, (Union{}, 1.5)) f(Union{}, 1.5; digits = 1)
+    end
+    @test_throws MethodError(round, (Union{}, 1.5, RoundDown)) round(Union{}, 1.5, RoundDown)
+end
+
+@testset "rounding mode of Union{} throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    f = () -> 1
+    @test_throws MethodError(rounding, (Union{},)) rounding(Union{})
+    @test which(rounding, (Type{Union{}},)).sig == Tuple{typeof(rounding), Type{Union{}}, Vararg}
+    @test_throws MethodError(setrounding, (f, Union{}, RoundDown)) setrounding(f, Union{}, RoundDown)
+    @test which(setrounding, (typeof(f), Type{Union{}}, typeof(RoundDown))).sig ==
+          Tuple{typeof(setrounding), Any, Type{Union{}}, Vararg}
+end
+
 @testset "floor(<:AbstractFloat, large_number) (#52355)" begin
     @test floor(Float32, 0xffff_ffff) == prevfloat(2f0^32) <= 0xffff_ffff
     @test trunc(Float16, typemax(UInt128)) == floatmax(Float16)

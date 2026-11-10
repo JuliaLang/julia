@@ -244,7 +244,7 @@ export
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
-    nfields, throw, tuple, ===, isdefined,
+    nfields, throw, tuple, ===, isdefined, bitsizeof,
     # access to globals
     getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
@@ -605,6 +605,8 @@ end
 struct TrimFailure <: Exception
     TrimFailure() = new()
 end
+# `Libdl.LazyLibraryCallback`, defined here to be visible to the compiler
+abstract type LazyLibraryCallback end
 
 String(s::String) = s  # no constructor yet
 
@@ -1232,23 +1234,24 @@ end
 #    Core._parse(text, filename, lineno, offset, options, edition)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
-# it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},
-# len::Int)` for a raw unmanaged buffer. `options` should be one of `:atom`,
-# `:statement` or `:all`, indicating how much the parser will consume.
+# it to `filename`. `options` should be one of `:atom`, `:statement` or `:all`,
+# indicating how much the parser will consume.
 #
-# `_parse` must return an `svec` containing an `Expr` and the new offset as an
-# `Int`.
+# Return (ast, offset) containing an `Expr` (or `Syntax` on newer versions) and
+# the new offset as an `Int`.
 _parse = nothing
 
-#    Core._lower(code, module, filename="none", linenum=0, world=0xfff..., warn=false)
+#    Core._lower(module, code, world, warn, loc)
 #
 # Lower `code` (usually Expr), returning `svec(e::Any xs::Any...)` where `e` is
 # the lowered code, and `xs` is possible additional information from
 # JuliaLowering (TBD).
 _lower = nothing
+_toplevel_eval = nothing
 
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
 _setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
+_set_toplevel_eval!(f) = setglobal!(Core, :_toplevel_eval, f)
 
 # support for deprecated uses of builtin functions
 _apply(x...) = _apply_iterate(Main.Base.iterate, x...)
@@ -1321,9 +1324,15 @@ typename(union::UnionAll) = typename(union.body)
 
 include(Core, "optimized_generics.jl")
 
+"The first julia edition.  For compatibility, most julia code is assumed to be
+OLDEST_EDITION if an edition isn't known at parse time."
 const OLDEST_EDITION = (1, 13)
-const VERSION_EDITION =
-    (Int(ccall(:jl_ver_major, Int32, ())), Int(ccall(:jl_ver_minor, Int32, ())))
+
+"LATEST_STABLE_EDITION is used in the few situations (e.g. the REPL, Meta.parse)
+where the default edition is the latest.  LATEST_STABLE_EDITION may lag behind
+VERSION if VERSION corresponds to an in-development edition, or no new edition
+at all."
+const LATEST_STABLE_EDITION = (1, 14)
 
 # Used only by the magic @VERSION macro
 struct MacroSource

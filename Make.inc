@@ -25,6 +25,15 @@ JULIA_COVERAGE_IMAGES ?= 0
 # expanded because Make.user is read below.
 JULIA_COVERAGE_IMAGE_FLAGS = $(if $(filter 1,$(JULIA_COVERAGE_IMAGES)),--code-coverage=all)
 
+# Set to 0 to leave the HTML manual out of `make install` and `make binary-dist`,
+# which then do not build it. For builds nobody reads the manual from, such as CI
+# test builds.
+JULIA_INSTALL_DOCS ?= 1
+
+# Set to 1 to also bundle stdlib pkgimages for `--check-bounds=yes`.
+# Use `make checkbounds-pkgimages` to distribute these separately instead.
+JULIA_CHECK_BOUNDS_PKGIMAGES ?= 0
+
 # Set FORCE_ASSERTIONS to 1 to enable assertions in the C and C++ portions
 # of the Julia code base. You may also want to set LLVM_ASSERTIONS to 1,
 # which will enable assertions in LLVM.
@@ -603,15 +612,15 @@ JCXXFLAGS_CLANG    = $(JCXXFLAGS_COMMON) -pedantic
 JCXXFLAGS_GCC      = $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
 DEBUGFLAGS_COMMON  = -O0 -DJL_DEBUG_BUILD -fstack-protector
-DEBUGFLAGS_CLANG   = $(DEBUGFLAGS_COMMON) -g
-DEBUGFLAGS_GCC     = $(DEBUGFLAGS_COMMON) -ggdb2
+DEBUGFLAGS_CLANG   = $(DEBUGFLAGS_COMMON) -gdwarf-5
+DEBUGFLAGS_GCC     = $(DEBUGFLAGS_COMMON) -ggdb2 -gdwarf-5
 
 ifeq ($(filter 1 2,$(RUNTIME_DEBUG_LEVEL)),)
 $(error RUNTIME_DEBUG_LEVEL must be 1 or 2, got '$(RUNTIME_DEBUG_LEVEL)')
 endif
 SHIPFLAGS_COMMON   = -O3
-SHIPFLAGS_CLANG    = $(SHIPFLAGS_COMMON) $(if $(filter 2,$(RUNTIME_DEBUG_LEVEL)),-g,-gline-tables-only)
-SHIPFLAGS_GCC      = $(SHIPFLAGS_COMMON) -ggdb$(RUNTIME_DEBUG_LEVEL) -falign-functions
+SHIPFLAGS_CLANG    = $(SHIPFLAGS_COMMON) -gdwarf-5 $(if $(filter 2,$(RUNTIME_DEBUG_LEVEL)),-g,-gline-tables-only)
+SHIPFLAGS_GCC      = $(SHIPFLAGS_COMMON) -gdwarf-5 -ggdb$(RUNTIME_DEBUG_LEVEL) -falign-functions
 
 
 BOLT_LDFLAGS :=
@@ -678,49 +687,16 @@ ifeq ($(OS),WINNT)
 JL_VISIBILITY_FLAGS :=
 endif
 
-ifeq ($(USECCACHE), 1)
-# Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
-CC_ARG   := $(CC)
-CXX_ARG  := $(CXX)
-FC_ARG   := $(FC)
-# Expand CC, CXX and FC here already to avoid recursive referencing.
-CC_FULL  := ccache $(CC)
-CXX_FULL := ccache $(CXX)
-FC_FULL  := ccache $(FC)
-# Add an extra indirection to make CC/CXX/FC non-simple vars
-# (because of how -m$(BINARY) is added later on).
-CC       := $(CC_FULL)
-CXX      := $(CXX_FULL)
-FC       := $(FC_FULL)
-CC_BASE  := ccache
-CXX_BASE := ccache
-FC_BASE  := ccache
-ifeq ($(USECLANG),1)
-# ccache and Clang don't do well together
-# https://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
-CC += -Qunused-arguments
-CXX += -Qunused-arguments
-# https://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
-export CCACHE_CPP2 := yes
-endif
-else #USECCACHE
-CC_BASE := $(shell printf "%s\n" $(call shell_escape,$(CC)) | cut -d' ' -f1)
-CC_ARG := $(shell printf "%s\n" $(call shell_escape,$(CC)) | cut -s -d' ' -f2-)
-CXX_BASE := $(shell printf "%s\n" $(call shell_escape,$(CXX)) | cut -d' ' -f1)
-CXX_ARG := $(shell printf "%s\n" $(call shell_escape,$(CXX)) | cut -s -d' ' -f2-)
-FC_BASE := $(shell printf "%s\n" $(call shell_escape,$(FC)) 2>/dev/null | cut -d' ' -f1)
-FC_ARG := $(shell printf "%s\n" $(call shell_escape,$(FC)) 2>/dev/null | cut -s -d' ' -f2-)
-endif
-
 JFFLAGS := -O2 $(fPIC)
-CPP := $(CC) -E
+CPP = $(CC) -E
 AR := $(CROSS_COMPILE)ar
 AS := $(CROSS_COMPILE)as
 LD := $(CROSS_COMPILE)ld
 RANLIB := $(CROSS_COMPILE)ranlib
 OBJCOPY := $(CROSS_COMPILE)objcopy
+READELF := $(CROSS_COMPILE)readelf
 
-CPP_STDOUT := $(CPP) -P
+CPP_STDOUT = $(CPP) -P
 
 # file extensions
 ifeq ($(OS), WINNT)
@@ -809,6 +785,67 @@ ifeq (exists, $(shell [ -e $(BUILDROOT)/$(MAKE_USER_FNAME) ] && echo exists ))
 include $(BUILDROOT)/$(MAKE_USER_FNAME)
 endif
 
+# Wrap CC/CXX/FC with ccache, if requested. This must happen after the second
+# inclusion of Make.user above, which may (re)define CC/CXX/FC: doing this
+# earlier would drop the ccache prefix again and desync CC/CXX from
+# CC_BASE/CXX_BASE (#64494).
+ifeq ($(USECCACHE), 1)
+# Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
+CC_ARG   := $(CC)
+CXX_ARG  := $(CXX)
+FC_ARG   := $(FC)
+# Expand CC, CXX and FC here already to avoid recursive referencing.
+CC_FULL  := ccache $(CC)
+CXX_FULL := ccache $(CXX)
+FC_FULL  := ccache $(FC)
+# Add an extra indirection to make CC/CXX/FC non-simple vars
+# (because of how -m$(BINARY) is added later on). Overriding is required
+# to change these variables at all when the user defined them with
+# `override` in Make.user or on the command line, but avoid it otherwise,
+# so that later plain `+=` appends (e.g. -march=...) keep working.
+ifneq (,$(filter command override,$(origin CC)))
+override CC := $(CC_FULL)
+else
+CC := $(CC_FULL)
+endif
+ifneq (,$(filter command override,$(origin CXX)))
+override CXX := $(CXX_FULL)
+else
+CXX := $(CXX_FULL)
+endif
+ifneq (,$(filter command override,$(origin FC)))
+override FC := $(FC_FULL)
+else
+FC := $(FC_FULL)
+endif
+CC_BASE  := ccache
+CXX_BASE := ccache
+FC_BASE  := ccache
+ifeq ($(USECLANG),1)
+# ccache and Clang don't do well together
+# https://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
+ifneq (,$(filter command override,$(origin CC)))
+override CC += -Qunused-arguments
+else
+CC += -Qunused-arguments
+endif
+ifneq (,$(filter command override,$(origin CXX)))
+override CXX += -Qunused-arguments
+else
+CXX += -Qunused-arguments
+endif
+# https://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
+export CCACHE_CPP2 := yes
+endif
+else #USECCACHE
+CC_BASE := $(shell printf "%s\n" $(call shell_escape,$(CC)) | cut -d' ' -f1)
+CC_ARG := $(shell printf "%s\n" $(call shell_escape,$(CC)) | cut -s -d' ' -f2-)
+CXX_BASE := $(shell printf "%s\n" $(call shell_escape,$(CXX)) | cut -d' ' -f1)
+CXX_ARG := $(shell printf "%s\n" $(call shell_escape,$(CXX)) | cut -s -d' ' -f2-)
+FC_BASE := $(shell printf "%s\n" $(call shell_escape,$(FC)) 2>/dev/null | cut -d' ' -f1)
+FC_ARG := $(shell printf "%s\n" $(call shell_escape,$(FC)) 2>/dev/null | cut -s -d' ' -f2-)
+endif
+
 # A bit of a kludge to work around libraries linking to FreeBSD's outdated system libgcc_s
 # Instead, let's link to the libgcc_s corresponding to the installation of gfortran
 ifeq ($(OS),FreeBSD)
@@ -846,8 +883,6 @@ ifneq ($(OS), Darwin)
 endif
 endif
 
-bootstrap_julia_flags :=
-
 ifeq ($(SANITIZE),1)
 SANITIZE_OPTS :=
 SANITIZE_LDFLAGS :=
@@ -865,9 +900,6 @@ endif
 ifeq ($(SANITIZE_THREAD),1)
 SANITIZE_OPTS += -fsanitize=thread -fsanitize-ignorelist=$(JULIAHOME)/contrib/tsan/ignorelist.txt
 SANITIZE_LDFLAGS += -fsanitize=thread
-ifneq ($(CROSS_BOOTSTRAP_JULIA),)
-bootstrap_julia_flags += --target-sanitize=thread
-endif
 endif
 ifeq ($(SANITIZE_OPTS),)
 $(error SANITIZE=1, but no sanitizer selected, set either SANITIZE_MEMORY, SANITIZE_THREAD, or SANITIZE_ADDRESS)
@@ -1017,9 +1049,9 @@ endif
 
 ifneq ($(findstring $(OS),Linux FreeBSD),)
 COMPRESS_DEBUG_SECTIONS ?= zlib
+ifeq ($(USE_SYSTEM_LLVM)$(USE_SYSTEM_LLD),00)
+COMPRESS_PKGIMAGE_DEBUG_SECTIONS ?= zstd
 endif
-ifneq ($(COMPRESS_DEBUG_SECTIONS),)
-JLDFLAGS += -Wl,--compress-debug-sections=$(COMPRESS_DEBUG_SECTIONS)
 endif
 
 # ===========================================================================
@@ -1670,6 +1702,10 @@ else
   DSYMUTIL := true -ignore
 endif
 
+# $(call dsymutil,binary[,bundle]): also drop the bundle's Relocations directory,
+# which only dsymutil itself reads back (to relink mergeable libraries).
+dsymutil = $(DSYMUTIL) -o $(or $(2),$(1).dSYM) $(1) && rm -rf $(or $(2),$(1).dSYM)/Contents/Resources/Relocations
+
 # shared library runtime paths
 ifneq (,$(filter $(OS),WINNT emscripten))
   RPATH :=
@@ -1989,16 +2025,20 @@ endif
 ifeq ($(BUILD_OS), WINNT) # MSYS
 spawn = $(1)
 cygpath_w = `cygpath -w $(1)`
+cygpath_m = `cygpath -m $(1)`
 else ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # Cygwin
 spawn = $(1)
 cygpath_w = `cygpath -w $(1)`
+cygpath_m = `cygpath -m $(1)`
 else
 ifeq ($(OS), WINNT) # unix-to-Windows cross-compile
 spawn = $(WINE) $(1)
 cygpath_w = `$(WINE) winepath.exe -w $(1)`
+cygpath_m = $(1)
 else # not Windows
 spawn = $(1)
 cygpath_w = $(1)
+cygpath_m = $(1)
 endif
 endif
 
@@ -2011,15 +2051,9 @@ JULIA_BUILD_MODE := debug
 endif
 endif
 
-ifneq ($(CROSS_BOOTSTRAP_JULIA),)
-JULIA_EXECUTABLE_debug := $(CROSS_BOOTSTRAP_JULIA)
-JULIA_EXECUTABLE_release := $(CROSS_BOOTSTRAP_JULIA)
-JULIA_EXECUTABLE := $(CROSS_BOOTSTRAP_JULIA)
-else
 JULIA_EXECUTABLE_debug := $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release := $(build_bindir)/julia$(EXE)
 JULIA_EXECUTABLE := $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
-endif
 
 JULIA_SYSIMG_debug := $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 JULIA_SYSIMG_release := $(build_private_libdir)/sys.$(SHLIB_EXT)
@@ -2157,10 +2191,11 @@ JL_RUNTIME_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
 JL_RUNTIME_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
 JL_RUNTIME_LIBS-$(USE_SYSTEM_GMP) += libgmp
 JL_RUNTIME_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
-JL_RUNTIME_LIBS-$(USE_SYSTEM_LIBUV) += libuv
 JL_RUNTIME_LIBS-$(USE_SYSTEM_ZLIB) += libz
 JL_RUNTIME_LIBS-$(USE_SYSTEM_ZSTD) += libzstd
+ifneq ($(OS),WINNT)
 JL_RUNTIME_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
+endif
 ifeq ($(USE_SYSTEM_LIBM),0)
 JL_RUNTIME_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm
 endif

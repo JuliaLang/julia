@@ -757,11 +757,12 @@ DLLEXPORT void *test_echo_p(void *p) {
     return p;
 }
 
-#if defined(_CPU_X86_64_)
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 
 #include <xmmintrin.h>
 
-DLLEXPORT __m128i test_m128i(__m128i a, __m128i b, __m128i c, __m128i d)
+DLLEXPORT __attribute__((target("sse2")))
+__m128i test_m128i(__m128i a, __m128i b, __m128i c, __m128i d)
 {
     // 64-bit x86 has only level 2 SSE, which does not have a <4 x int32> multiplication,
     // so we use floating-point instead, and assume caller knows about the hack.
@@ -770,9 +771,24 @@ DLLEXPORT __m128i test_m128i(__m128i a, __m128i b, __m128i c, __m128i d)
                                                     _mm_cvtepi32_ps(_mm_sub_epi32(c,d)))));
 }
 
-DLLEXPORT __m128 test_m128(__m128 a, __m128 b, __m128 c, __m128 d)
+DLLEXPORT __attribute__((target("sse2")))
+__m128 test_m128(__m128 a, __m128 b, __m128 c, __m128 d)
 {
     return _mm_add_ps(a, _mm_mul_ps(b, _mm_sub_ps(c, d)));
+}
+
+DLLEXPORT __attribute__((target("sse2")))
+__m128 test_m128_cb(__m128 (*f)(__m128, __m128, __m128, __m128),
+                    __m128 a, __m128 b, __m128 c, __m128 d)
+{
+    return f(a, b, c, d);
+}
+
+DLLEXPORT __attribute__((target("sse2")))
+__m128i test_m128i_cb(__m128i (*f)(__m128i, __m128i, __m128i, __m128i),
+                      __m128i a, __m128i b, __m128i c, __m128i d)
+{
+    return f(a, b, c, d);
 }
 
 #endif
@@ -1044,6 +1060,16 @@ DLLEXPORT int abi_probe_va_i128_regs = 1;
                 abi_probe.d[4] = d4; abi_probe.d[5] = d5; abi_probe.d[6] = d6;
 #define ABI_S8D ABI_S7D abi_probe.d[7] = d7;
 
+// GCC (13 to at least 16) passes a `_Float16` that it loads directly from a
+// locally bound symbol, under -fPIC, in a floating-point register without
+// NaN-boxing it, which RISC-V CPUs with Zfh then read as NaN
+// (JuliaLang/julia#63880). Hide the buffer's address from it.
+static inline const char *abi_probe_src(void)
+{
+    const char *buf = abi_probe.buf;
+    __asm__("" : "+r"(buf));
+    return buf;
+}
 #define ABI_PROBE(name, T, G, F) \
     DLLEXPORT void test_abi_arg_##name##_##G##_##F(ABI_P##G##I ABI_P##F##D T x, int64_t s1, double s2) { \
         ABI_S##G##I ABI_S##F##D \
@@ -1052,7 +1078,7 @@ DLLEXPORT int abi_probe_va_i128_regs = 1;
         ABI_S##G##I ABI_S##F##D abi_probe.s1 = s1; \
         T r; memcpy(&r, abi_probe.buf, sizeof(r)); return r; } \
     DLLEXPORT void test_abi_cbarg_##name##_##G##_##F(void (*cb)(ABI_P##G##I ABI_P##F##D T, int64_t, double)) { \
-        T x; memcpy(&x, abi_probe.buf, sizeof(x)); cb(ABI_A##G##I ABI_A##F##D x, -77, 3.25); } \
+        T x; memcpy(&x, abi_probe_src(), sizeof(x)); cb(ABI_A##G##I ABI_A##F##D x, -77, 3.25); } \
     DLLEXPORT void test_abi_cbret_##name##_##G##_##F(T (*cb)(ABI_P##G##I ABI_P##F##D int64_t)) { \
         T r = cb(ABI_A##G##I ABI_A##F##D -77); memcpy(abi_probe.buf, &r, sizeof(r)); }
 // Vary the leading arguments to exercise register-pair alignment and spills.

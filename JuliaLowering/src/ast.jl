@@ -5,8 +5,8 @@
     macro jl_assert(cond, args...)
         usage = "usage: @jl_assert(condition, tree|(tree, message)...)"
         @assert(!isempty(args), usage)
-        sts = Expr(:call, SyntaxList)
-        msgs = Expr(:call, Base.vect)
+        sts = Expr(:ref, Syntax)
+        msgs = Expr(:ref, String)
         for a in args
             if Meta.isexpr(a, :tuple, 2)
                 push!(sts.args, a.args[1])
@@ -18,7 +18,7 @@
         end
         # just add assertion string to first msg
         msgs.args[2] = Expr(
-            :string, "`jl_assert(", QuoteNode(cond), ", _)`: ", msgs.args[2])
+            :string, "`jl_assert($cond, _)`: ", Expr(:(::), msgs.args[2], String))
         :($(esc(cond)) ? nothing : begin
               throw(LoweringError($(esc(sts)), $(esc(msgs)), true))
           end)
@@ -56,13 +56,16 @@ newleaf(prov::SyntaxTree, k::Symbol) =
     @mknode(;source=prov, context=prov.context, head=k)
 
 # TODO: redundant, `map` should be fine
-function mapsyntax(f, exs::AbstractVector{SyntaxTree})
+function mapsyntax(f, exs::SyntaxView)
     out = SyntaxList()
     for ex in exs
         push!(out, f(ex))
     end
     out
 end
+# Funnel vectors through the view method so recursive callers (`est_to_dst`,
+# ...) don't get `exs` widened to an abstract `SubArray`
+mapsyntax(f, exs::Vector{SyntaxTree}) = mapsyntax(f, view(exs, 1:length(exs)))
 
 function mapindex(sl::Vector{SyntaxTree}, i::Int)
     out = SyntaxList()
@@ -226,7 +229,7 @@ function _expand_ast_tree(ctx, srcref, tree, jl_line::QuoteNode)
     elseif Meta.isexpr(tree, :macrocall)
         tree
     elseif tree isa Expr
-        Expr(tree.head, map(a->_expand_ast_tree(ctx, srcref, a, jl_line), tree.args)...)
+        Expr(tree.head, Any[_expand_ast_tree(ctx, srcref, a, jl_line) for a in tree.args]...)
     else
         tree
     end

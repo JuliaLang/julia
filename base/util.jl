@@ -227,6 +227,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
                 push!(addflags, "--code-coverage=@$(unsafe_string(opts.tracked_path))")
             end
             isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
+            opts.coverage_exclude == C_NULL ||
+                push!(addflags, "--code-coverage=-$(unsafe_string(opts.coverage_exclude))")
         end
     end
     opts.code_coverage_mode == 1 && push!(addflags, "--code-coverage-mode=count")
@@ -241,6 +243,9 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
         push!(addflags, "--color=yes")
     elseif opts.color == 2
         push!(addflags, "--color=no")
+    end
+    if opts.quiet != 0
+        push!(addflags, "-q")
     end
     if opts.startupfile == 2
         push!(addflags, "--startup-file=no")
@@ -718,7 +723,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.EFFECTIVE_CPU_THR
     delete!(ENV2, "JULIA_PROJECT")
     project_flag = propagate_project ? `--project` : ``
     try
-        run(setenv(`$(julia_cmd()) $julia_args $project_flag $(joinpath(Sys.BINDIR,
+        run(setenv(`$(julia_cmd()) -q $julia_args $project_flag $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
         nothing
     catch

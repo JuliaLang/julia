@@ -4,13 +4,7 @@
 # constants #
 #############
 
-# The slot has uses that are not statically dominated by any assignment
-# This is implied by `SLOT_USEDUNDEF`.
-# If this is not set, all the uses are (statically) dominated by the defs.
-# In particular, if a slot has `AssignedOnce && !StaticUndef`, it is an SSA.
-const SLOT_STATICUNDEF  = 1 # slot might be used before it is defined (structurally)
 const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
-const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 # const SLOT_CALLED      = 64
 
 # NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
@@ -269,7 +263,10 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     nbbstate = zeros(Int, nslots)
     bb_states = Union{BBEntryState,Nothing}[
         BBEntryState(VarState[
-            VarState(slottypes[slot], typemin(Int), src.slotflags[slot] & SLOT_USEDUNDEF != 0)
+            # Conservatively assume non-argument slots may be undefined at
+            # entry (matching inference's initial state); slotflags carry no
+            # trustworthy used-undef information.
+            VarState(slottypes[slot], typemin(Int), slot > Int(src.nargs))
             for slot = 1:nslots
         ], nbbstate)
         for _ = 1:length(cfg.blocks)]
@@ -333,13 +330,13 @@ end
 function widen_all_consts!(src::CodeInfo)
     ssavaluetypes = src.ssavaluetypes::Vector{Any}
     for i = 1:length(ssavaluetypes)
-        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
+        ssavaluetypes[i] = widenconst_split(ssavaluetypes[i])
     end
 
     for i = 1:length(src.code)
         x = src.code[i]
         if isa(x, PiNode)
-            src.code[i] = PiNode(x.val, widenconst(x.typ))
+            src.code[i] = PiNode(x.val, widenconst_split(x.typ))
         end
     end
 
@@ -355,10 +352,46 @@ _topmod(sv::OptimizationState) = _topmod(sv.mod)
 is_stmt_inline(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_INLINE)
 is_stmt_noinline(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_NOINLINE)
 
+# `Expr(:new)` throws unless the value of `Targ` is a `DataType`, but a `Type{T}`-typed value
+# may be a `UnionAll` or `Union` rep that is `==` to `T` (#61323). So we require the type of
+# `Targ` to be a subtype of `DataType`, or `Targ` to be the result of `Core.apply_type` fully
+# applying a constant `UnionAll` type constructor whose body is a non-tuple `DataType`.
+# Other `Core.apply_type` calls may return something else, e.g. `Core.apply_type(Union, T)`
+# returns `T` itself.
+function is_new_type_datatype(@nospecialize(atyp), @nospecialize(Targ),
+                              src::Union{IRCode,IncrementalCompact})
+    widenconst(atyp) <: DataType && return true
+    def = apply_type_unionall_def(Targ, src)
+    def === nothing && return false
+    stmt, body, tvars = def
+    isa(body, DataType) && body.name !== Tuple.name || return false
+    return length(stmt.args) - 2 == length(tvars)
+end
+
+# If `Targ` is defined by a `Core.apply_type` call on a constant `UnionAll` type constructor,
+# return the call together with the body of the type constructor and its type variables.
+function apply_type_unionall_def(@nospecialize(Targ), src::Union{IRCode,IncrementalCompact})
+    isa(Targ, SSAValue) || return nothing
+    stmt = src[Targ][:stmt]
+    is_known_call(stmt, Core.apply_type, src) || return nothing
+    length(stmt.args) ≥ 2 || return nothing
+    tc = argextype(stmt.args[2], src)
+    isa(tc, Const) || return nothing
+    body = tc.val
+    isa(body, UnionAll) || return nothing
+    tvars = TypeVar[]
+    while isa(body, UnionAll)
+        push!(tvars, body.var)
+        body = body.body
+    end
+    return stmt::Expr, body, tvars
+end
+
 function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
     Targ = args[1]
     atyp = argextype(Targ, src)
     # `Expr(:new)` of unknown type could raise arbitrary TypeError.
+    is_new_type_datatype(atyp, Targ, src) || return (false, false, false)
     typ, isexact = instanceof_tfunc(atyp, true)
     if !isexact
         atyp = unwrap_unionall(widenconst(atyp))
@@ -562,7 +595,7 @@ end
         src::Union{IRCode,IncrementalCompact,CodeInfo}, sptypes::Vector{VarState})
     isa(x, GlobalRef) && return globalref_rt_widened(x, src)
     isa(x, Core.BindingPartition) && return partition_rt_widened(x)
-    return widenconst(argextype(x, src, sptypes))
+    return widenconst_split(argextype(x, src, sptypes))
 end
 @inline argextype_widened(@nospecialize(x), ir::IRCode) = argextype_widened(x, ir, ir.sptypes)
 @inline argextype_widened(@nospecialize(x), compact::IncrementalCompact) =
@@ -1143,15 +1176,28 @@ function optional_order_arg(stmt::Expr, i::Int, ir::IRCode)
     return o === nothing ? QuoteNode(nothing) : o
 end
 
+# The callee of a `:call` or `:invoke_modify` statement as a singleton, or nothing.
+function global_callee(@nospecialize(stmt), ir::IRCode)
+    isa(stmt, Expr) || return nothing
+    if stmt.head === :call
+        length(stmt.args) >= 1 && return _global_call_singleton(stmt.args[1], ir)
+    elseif stmt.head === :invoke_modify
+        length(stmt.args) >= 2 && return _global_call_singleton(stmt.args[2], ir)
+    end
+    return nothing
+end
+
 # Recognize a statement that reads a global binding value.
-function recognize_global_read(@nospecialize(stmt), ir::IRCode)
+# `f` is the statement's callee, as computed by `global_callee`.
+function recognize_global_read(@nospecialize(stmt), @nospecialize(f), ir::IRCode)
     if isa(stmt, GlobalRef)
         return Pair{GlobalRef,Any}(stmt, QuoteNode(:unordered))
     end
-    isa(stmt, Expr) && stmt.head === :call || return nothing
+    # separate checks, so that `stmt` is known to be an `Expr` below
+    isa(stmt, Expr) || return nothing
+    stmt.head === :call || return nothing
     na = length(stmt.args)
     (na == 3 || na == 4) || return nothing
-    f = _global_call_singleton(stmt.args[1], ir)
     if f === Core.getglobal
         M = _global_call_singleton(stmt.args[2], ir)
         s = _global_call_singleton(stmt.args[3], ir)
@@ -1210,7 +1256,7 @@ end
 # `modifyglobal!` upgrades like the rest, in both the plain call form and the `:invoke_modify`
 # form the inliner gives it -- the code instance that node carries for the reduce function
 # rides along on the upgraded one.
-function recognize_global_write(@nospecialize(stmt), ir::IRCode)
+function recognize_global_write(@nospecialize(stmt), @nospecialize(f), ir::IRCode)
     if isexpr(stmt, :call)
         base = 1
         invoke = nothing
@@ -1222,7 +1268,6 @@ function recognize_global_write(@nospecialize(stmt), ir::IRCode)
     end
     na = length(stmt.args) - base
     3 <= na <= 6 || return nothing # cheap arity check for the narrowest and widest list accepted below
-    f = _global_call_singleton(stmt.args[base], ir)
     if f === Core.modifyglobal! && (na == 4 || na == 5)
         g = _global_write_target(stmt, base, ir)
         g === nothing && return nothing
@@ -1260,10 +1305,10 @@ end
 # `isdefinedglobal(M, s[, allow_import[, order]])` or `isdefined(M::Module, s)`.
 # Only an `allow_import === true` query reformulates (it walks imports to the leaf, matching the resolution below).
 # An `allow_import === false` query is left on the runtime path (if not already folded by inference), which is conservatively correct.
-function recognize_global_isdefined(@nospecialize(stmt), ir::IRCode)
-    isa(stmt, Expr) && stmt.head === :call || return nothing
+function recognize_global_isdefined(@nospecialize(stmt), @nospecialize(f), ir::IRCode)
+    isa(stmt, Expr) || return nothing
+    stmt.head === :call || return nothing
     na = length(stmt.args)
-    f = _global_call_singleton(stmt.args[1], ir)
     if f === Core.isdefinedglobal && (3 <= na <= 5)
         M = _global_call_singleton(stmt.args[2], ir)
         s = _global_call_singleton(stmt.args[3], ir)
@@ -1372,7 +1417,8 @@ function _reformulate_globals!(ir::IRCode, opt::OptimizationState)
     for idx = 1:length(ir.stmts)
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
-        r = recognize_global_read(stmt, ir)
+        f = global_callee(stmt, ir)
+        r = recognize_global_read(stmt, f, ir)
         if r !== nothing
             rr = reformulate_read(r.first, opt, world, edges, read_cache)
             if rr !== nothing
@@ -1384,20 +1430,22 @@ function _reformulate_globals!(ir::IRCode, opt::OptimizationState)
                          QuoteNode(r.first), QuoteNode(p), r.second) : p
                 inst[:stmt] = stmt
                 r.second isa QuoteNode && continue # optimize the loop in the common case
+                f = nothing
             end
             # fall through: a read call may still contain nested `GlobalRef` operands worth rewriting (including for `order`).
         end
-        d = recognize_global_isdefined(stmt, ir)
+        d = recognize_global_isdefined(stmt, f, ir)
         if d !== nothing
             rr = reformulate_read(d.first, opt, world, edges, read_cache)
             if rr !== nothing
                 stmt = Expr(:call, GlobalRef(Core, :isdefinedglobal_partition), QuoteNode(rr[1]), d.second)
                 inst[:stmt] = stmt
                 d.second isa QuoteNode && continue # optimize the loop in the common case
+                f = nothing
             end
             # fall through: as for a read, a non-constant `order` operand may still be a `GlobalRef` worth rewriting.
         end
-        w = recognize_global_write(stmt, ir)
+        w = recognize_global_write(stmt, f, ir)
         if w !== nothing
             part = reformulate_write(w.g, opt, world, edges, write_cache)
             if part !== nothing
@@ -1443,6 +1491,17 @@ function _reformulate_globals!(ir::IRCode, opt::OptimizationState)
         end
 
         # Rewrite (effect-free) `GlobalRef` operands nested inside this statement.
+        if isa(stmt, Expr) && (stmt.head === :invoke || stmt.head === :call)
+            # the common case, as `userefs` would, without its generic operand access
+            args = stmt.args
+            for i = 1:length(args)
+                use = args[i]
+                isa(use, GlobalRef) || continue
+                rr = reformulate_read(use, opt, world, edges, read_cache)
+                rr === nothing || (args[i] = rr[1])
+            end
+            continue
+        end
         urs = userefs(stmt)
         changed = false
         for ur in urs
@@ -1775,25 +1834,24 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 minarg, maxarg, = T_IFUNC[iidx]
                 nargs = length(ex.args)
                 if minarg + 1 <= nargs <= maxarg + 1
-                    # With mostly constant arguments, all Intrinsics tend to become very cheap
+                    # With mostly constant arguments, many Intrinsics tend to become very cheap
                     # and are likely to combine with the operations around them,
                     # so reduce their cost by half.
                     cost = T_IFUNC_COST[iidx]
                     if cost == 0 || nargs < 3 || f === Intrinsics.llvmcall
-                        # holds malformed IR, so argextype will crash on it
+                        # llvmcall holds malformed IR, so argextype will crash on it
                         return cost
                     end
-                    aty2 = widenconditional(argextype(ex.args[2], src, sptypes))
-                    nconst = Int(aty2 isa Const)
-                    for i = 3:nargs
+                    nconst = 0
+                    for i = 2:nargs
                         aty = widenconditional(argextype(ex.args[i], src, sptypes))
-                        if widenconst(aty) != widenconst(aty2)
-                            nconst = 0
-                            break
+                        aty′ = widenconst_split(aty)
+                        if !isdispatchelem(aty′)
+                            return cost
                         end
-                        nconst += aty isa Const
+                        nconst += aty isa Const && isconcretedispatch(aty′)
                     end
-                    if nconst + 2 >= nargs
+                    if nconst > 0 && nconst + 2 >= nargs
                         cost = (cost - 1) ÷ 2
                     end
                     return cost
@@ -1811,10 +1869,10 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
-            elseif (f === Core.memoryrefget || f === Core.const_memoryrefget || f === Core.memoryref_isassigned) && length(ex.args) >= 3
+            elseif (f === Core.memoryrefget || f === Core.const_memoryrefget || f === Core.memoryref_isassigned || f === Core.unsafe_memoryrefload) && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
                 return isknowntype(atyp) ? 1 : params.inline_nonleaf_penalty
-            elseif f === Core.memoryrefset! && length(ex.args) >= 3
+            elseif (f === Core.memoryrefset! || f === Core.unsafe_memoryrefstore!) && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
                 return isknowntype(atyp) ? 5 : params.inline_nonleaf_penalty
             elseif f === Core.memoryrefunset! && length(ex.args) >= 3
@@ -1822,6 +1880,12 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 return isknowntype(atyp) ? 5 : params.inline_nonleaf_penalty
             elseif f === typeassert && isconstType(argextype_widened(ex.args[3], src, sptypes))
                 return 1
+            elseif f === Core._apply_iterate && length(ex.args) >= 3
+                fa = singleton_type(argextype(ex.args[3], src, sptypes))
+                if !isa(fa, Builtin) || fa === invoke
+                    extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
+                    return extyp === Union{} ? 0 : params.inline_nonleaf_penalty
+                end
             end
             fidx = find_tfunc(f)
             if fidx === nothing

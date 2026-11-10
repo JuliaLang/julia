@@ -14,6 +14,7 @@ Base.IOStream
 Base.IOBuffer
 Base.take!(::Base.GenericIOBuffer)
 Base.takestring!
+Base.AbstractPipe
 Base.Pipe
 Base.link_pipe!
 Base.fdio
@@ -39,6 +40,7 @@ Base.unmark
 Base.reset(::IO)
 Base.ismarked
 Base.eof
+Base.reseteof
 Base.isreadonly
 Base.iswritable
 Base.isreadable
@@ -68,6 +70,7 @@ Base.IOContext(::IO, ::IOContext)
 ```@docs
 Base.show(::IO, ::Any)
 Base.summary
+Base.showarg
 Base.print
 Base.println
 Base.printstyled

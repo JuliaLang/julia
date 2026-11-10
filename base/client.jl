@@ -72,7 +72,8 @@ function repl_cmd(cmd::AbstractCmd, out)
         if !Sys.iswindows()
             shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
             shell_escape_cmd = shell_escape_posixly(cmd)
-            cmd = `$shell -c $shell_escape_cmd`
+            original_cmd = cmd
+            cmd = Cmd(`$shell -c $shell_escape_cmd`, original_cmd.ignorestatus, original_cmd.flags, original_cmd.env, original_cmd.dir, original_cmd.cpus, original_cmd.uid, original_cmd.gid)
         end
         try
             run(ignorestatus(cmd))
@@ -109,21 +110,41 @@ is_driver_entry(frame) = !frame.from_c &&
     (startswith(String(frame.func), "__repl_entry") ||
      startswith(String(frame.func), "__script_entry"))
 
+is_driver_exit(frame) = !frame.from_c && startswith(String(frame.func), "__script_exit")
+
+function remove_driver_spans!(bt::Vector{StackFrame}, unpaired::Bool)
+    while (exit_ind = findlast(is_driver_exit, bt)) !== nothing
+        entry_ind = findprev(is_driver_entry, bt, exit_ind)
+        if entry_ind === nothing
+            unpaired && deleteat!(bt, 1:exit_ind)
+            break
+        end
+        deleteat!(bt, entry_ind:exit_ind)
+    end
+    return bt
+end
+
 # `eval`/`include` machinery a driver entry runs user code through; directly
 # above the cut these frames cannot belong to user code
 function is_driver_machinery(frame)
     frame.from_c && return false
     mod = parentmodule(frame)
     (mod === Base || mod === Core || mod === nothing) || return false
-    return frame.func in (:eval, :include_string, :_include, :include)
+    return frame.func in (:eval, :include_string, :_include, :include, :fl_toplevel_eval)
 end
 
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
         bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
+        remove_driver_spans!(bt, true)
         # remove REPL/driver frames from interactive printing
         eval_ind = findlast(is_driver_entry, bt)
         if eval_ind !== nothing
+            while eval_ind > 1 && bt[eval_ind-1].inlined &&
+                    bt[eval_ind-1].func === Symbol("macro expansion") &&
+                    bt[eval_ind-1].pointer == bt[eval_ind].pointer
+                eval_ind -= 1
+            end
             deleteat!(bt, eval_ind:length(bt))
             while !isempty(bt) && is_driver_machinery(bt[end])
                 pop!(bt)
@@ -155,7 +176,6 @@ end
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
 # N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
-__repl_entry_client_lower(mod::Module, @nospecialize(ast)) = Meta.lower(mod, ast)
 __repl_entry_client_eval(mod::Module, @nospecialize(ast)) = Core.eval(mod, ast)
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
@@ -180,7 +200,6 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                     sigint_close_episode!()
                 end
             else
-                ast = __repl_entry_client_lower(Main, ast)
                 value = __repl_entry_client_eval(Main, ast)
                 setglobal!(Base.MainInclude, :ans, value)
                 if !(value === nothing) && show_value
@@ -213,63 +232,36 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     nothing
 end
 
-function _parse_input_line_core(s::String, filename::String, mod::Union{Module, Nothing})
-    ex = Meta.parseall(s; filename, _parse=invokelatest(Meta.parser_for_module, mod))
-    if ex isa Expr && ex.head === :toplevel
-        if isempty(ex.args)
-            return nothing
-        end
-        last = ex.args[end]
-        if last isa Expr && (last.head === :error || last.head === :incomplete)
+function _parse_input_line_core(s::String, filename::String, mod::Union{Module, Nothing}, type)
+    ex = Meta.parseall(s; filename, mod, type)
+    if ex isa Syntax && head(ex) === :toplevel && numchildren(ex) > 0
+        last = ex[end]
+        if (head(last) === :error || head(last) === :incomplete)
             # if a parse error happens in the middle of a multi-line input
             # return only the error, so that none of the input is evaluated.
+            return last
+        end
+    elseif ex isa Expr && ex.head === :toplevel && length(ex.args) > 0
+        last = ex.args[end]
+        if last isa Expr && (last.head === :error || last.head === :incomplete)
             return last
         end
     end
     return ex
 end
 
-function parse_input_line(s::String; filename::String="none", depwarn=true, mod::Union{Module, Nothing}=nothing)
+function parse_input_line(s::String; filename::String="none", depwarn=true, mod::Union{Module, Nothing}=nothing, type=Expr)
     # For now, assume all parser warnings are depwarns
     ex = if depwarn
-        _parse_input_line_core(s, filename, mod)
+        _parse_input_line_core(s, filename, mod, type)
     else
         with_logger(NullLogger()) do
-            _parse_input_line_core(s, filename, mod)
+            _parse_input_line_core(s, filename, mod, type)
         end
     end
     return ex
 end
 parse_input_line(s::AbstractString; kwargs...) = parse_input_line(String(s); kwargs...)
-
-# detect the reason which caused an :incomplete expression
-# from the error message
-# NOTE: the error messages are defined in src/julia-parser.scm
-function fl_incomplete_tag(msg::AbstractString)
-    occursin("string", msg) && return :string
-    occursin("comment", msg) && return :comment
-    occursin("requires end", msg) && return :block
-    occursin("\"`\"", msg) && return :cmd
-    occursin("character", msg) && return :char
-    return :other
-end
-
-incomplete_tag(ex) = :none
-function incomplete_tag(ex::Expr)
-    if ex.head !== :incomplete
-        return :none
-    elseif isempty(ex.args)
-        return :other
-    else
-        a = ex.args[1]
-        if a isa String
-            return fl_incomplete_tag(a)::Symbol
-        else
-            return incomplete_tag(a)::Symbol
-        end
-    end
-end
-incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 
 function exec_options(opts)
     startup               = (opts.startupfile != 2)
@@ -388,6 +380,13 @@ function exec_options(opts)
     return repl
 end
 
+function uninit_exec_options()
+    global PROGRAM_FILE = ""
+    global have_color = nothing
+    global is_interactive = false
+    nothing
+end
+
 function _global_julia_startup_file()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
     # If it is not found, then continue on to the relative path based on Sys.BINDIR
@@ -477,11 +476,11 @@ function run_fallback_repl(interactive::Bool)
     let input = stdin
         if isa(input, File) || isa(input, IOStream)
             # for files, we can slurp in the whole thing at once
-            ex = parse_input_line(read(input, String); mod=Main)
-            if Meta.isexpr(ex, :toplevel)
+            ex = parse_input_line(read(input, String); mod=Main, type=Syntax)
+            if head(ex) === :toplevel
                 # if we get back a list of statements, eval them sequentially
                 # as if we had parsed them sequentially
-                for stmt in ex.args
+                for stmt in children(ex)
                     eval_user_input(stderr, stmt, true)
                 end
             else
@@ -499,8 +498,8 @@ function run_fallback_repl(interactive::Bool)
                     ex = nothing
                     while !eof(input)
                         line *= readline(input, keep=true)
-                        ex = parse_input_line(line; mod=Main)
-                        if !(isa(ex, Expr) && ex.head === :incomplete)
+                        ex = parse_input_line(line; mod=Main, type=Syntax)
+                        if !(isa(ex, Syntax) && head(ex) === :incomplete)
                             break
                         end
                     end
@@ -592,7 +591,8 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
-const main_parser = Base.ScopedValues.ScopedValue{Any}(Base.VersionedParse(Base.VERSION_EDITION))
+const main_parser = Base.ScopedValues.ScopedValue{Any}(
+    Base.VersionedParse(Base.LATEST_STABLE_EDITION))
 function var"#_internal_julia_parse"(args...)
     main_parser[](args...)
 end
@@ -669,11 +669,32 @@ function cancel_session_work!()
     return true
 end
 
+function init_frontend()
+    JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
+    if get_bool_env("JULIA_USE_FLISP_LOWERING", true) === true
+        JuliaLowering.activate!(false)
+    else
+        JuliaLowering.activate!(true; freeze_world_age=true)
+    end
+end
+
+function uninit_frontend()
+    JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
+    JuliaLowering.activate!(false; freeze_world_age=false)
+    nothing
+end
+
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
     # clear any postoutput hooks that were saved in the sysimage
     empty!(Base.postoutput_hooks)
+    if generating_output(false)
+        # `__init__` does not run when writing a system image, so set up enough to run user
+        # code here, and undo it before the image is written
+        __init_build()
+        atexit(__uninit_build)
+    end
     local ret = 0
     # `--project` has been processed at this point - latch the active project's syntax
     # version and use it for `-L`, `argfile`, etc. If launched, the REPL will re-evaluate

@@ -424,7 +424,19 @@ let program = """
         new_env["JULIA_NUM_THREADS"] = string(test_nthreads, ",", test_nthreadsi)
         threads_config = "$test_nthreads,$test_nthreadsi"
         with_output_on_failure() do output
-            run(pipeline(setenv(cmd1, new_env); stdout=output, stderr=output))
+            proc = run(pipeline(setenv(cmd1, new_env); stdout=output, stderr=output); wait=false)
+            # a run takes up to ~10 min; stop a hung one early so its task dump gets printed
+            watchdog = Timer(1800) do _
+                kill(proc, Base.SIGQUIT)
+                sleep(30)
+                process_running(proc) && kill(proc, Base.SIGKILL)
+            end
+            try
+                wait(proc)
+            finally
+                close(watchdog)
+            end
+            success(proc) || throw(ProcessFailedException([proc]))
         end
         println("threads_exec.jl with JULIA_NUM_THREADS == $threads_config passed")
         # threads set via env var
@@ -481,7 +493,7 @@ function get_nthreads(options = ``; cpus = nothing, exclusive = false)
     cmd = `$(Base.julia_cmd()) --startup-file=no $(options)`
     cmd = `$cmd -e "print(Threads.threadpoolsize())"`
     cmd = addenv(cmd, "JULIA_EXCLUSIVE" => exclusive ? "1" : "0",
-        "JULIA_NUM_THREADS" => "auto")
+        "JULIA_NUM_THREADS" => "auto", "JULIA_CPU_THREADS" => nothing)
     if cpus !== nothing
         cmd = setcpuaffinity(cmd, cpus)
     end
@@ -505,6 +517,33 @@ end
                 @test get_nthreads(cpus = allowed_cpus[1:2:3]) == 2
                 @test get_nthreads(cpus = allowed_cpus[2:3])   == 2
             end
+        end
+    end
+end
+
+@testset "JULIA_EXCLUSIVE pins threads within the CPU affinity mask" begin
+    if AFFINITY_SUPPORTED
+        allowed_cpus = findall(uv_thread_getaffinity())
+        if length(allowed_cpus) ≥ 3
+            script = joinpath(@__DIR__, "print_process_affinity.jl")
+            code = """
+                include($(repr(script)))
+                cpus = Vector{String}(undef, Threads.nthreads())
+                Threads.@threads :static for i in 1:Threads.nthreads()
+                    cpus[i] = join(findall(uv_thread_getaffinity()), ",")
+                end
+                join(stdout, cpus, " ")
+                """
+            cpus = allowed_cpus[2:3]
+            for threads in ("2,0", "2,1")
+                cmd = `$(Base.julia_cmd()) --startup-file=no --threads=$threads -e $code`
+                # JULIA_CPU_THREADS caps `auto`, not the CPUs available for pinning
+                cmd = addenv(cmd, "JULIA_EXCLUSIVE" => "1", "JULIA_CPU_THREADS" => "1")
+                @test read(setcpuaffinity(cmd, cpus), String) == "$(cpus[1]) $(cpus[2])"
+            end
+            cmd = `$(Base.julia_cmd()) --startup-file=no --threads=3 -e ""`
+            cmd = addenv(cmd, "JULIA_EXCLUSIVE" => "1")
+            @test !success(pipeline(setcpuaffinity(cmd, cpus); stderr=devnull))
         end
     end
 end
@@ -777,6 +816,130 @@ end
     close(t)
 end
 
+@testset "event loop thread wakeup after a libuv worker takes the iolock" begin
+    # if this fails, the child hangs with a `@threadcall` completion stuck in the event loop
+    script = joinpath(@__DIR__, "threadcall_iolock_wakeup.jl")
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=2,0 $script`
+    proc = run(pipeline(cmd; stdout, stderr); wait=false)
+    timedout = false
+    t = Timer(60) do _
+        timedout = true
+        # dumps the stacks, but can also wake the hang so that the child exits cleanly
+        kill(proc, Base.SIGQUIT)
+        sleep(10)
+        kill(proc, Base.SIGKILL)
+    end
+    @test success(proc)
+    @test !timedout
+    close(t)
+end
+
+@testset "GC with a foreign thread reusing an exited thread's pthread id" begin
+    # if this fails, the child hangs waiting for the foreign thread to reach a safepoint
+    script = joinpath(@__DIR__, "foreign_thread_reuse.jl")
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --timeout-for-safepoint-straggler=10 $script`
+    proc = run(pipeline(cmd; stdout, stderr); wait=false)
+    t = Timer(60) do _
+        kill(proc, Base.SIGKILL)
+    end
+    @test success(proc)
+    close(t)
+end
+
+@testset "GC does not wait for another thread's LLVM run" begin
+    # One thread compiles a large function while another keeps collecting. Every collection
+    # waits for all threads to reach a safepoint, so if LLVM ran GC-unsafe, one collection
+    # would take about as long as the whole compilation.
+    program = raw"""
+        # a long chain of dependent operations: quick to infer, slow for LLVM
+        function define_big(n)
+            body = Expr(:block)
+            for i in 1:n
+                push!(body.args, :(x = x * $(i % 7 + 3) + y))
+                push!(body.args, :(y = xor(y, x >> $(i % 13 + 1))))
+            end
+            push!(body.args, :(return x + y))
+            @eval big(x::Int, y::Int) = $body
+        end
+        define_big(3000)
+        function main()
+            done = Threads.Atomic{Bool}(false)
+            compile_time = Ref(0.0)
+            compile_thread = Ref(0)
+            t = Threads.@spawn try
+                compile_thread[] = Threads.threadid()
+                # a dynamic call, so that `big` is compiled here, not along with `main`
+                compile_time[] = @elapsed Base.invokelatest(big, 1, 2)
+            finally
+                done[] = true
+            end
+            longest = 0.0
+            collections = 0
+            while !done[]
+                longest = max(longest, @elapsed GC.gc(false))
+                collections += 1
+                Libc.systemsleep(0.01) # doesn't yield, so `t` runs on another thread
+            end
+            wait(t)
+            compile_thread[] == Threads.threadid() && error("compiled on the collecting thread")
+            println(compile_time[], " ", longest, " ", collections)
+        end
+        main()
+    """
+    # without the objcache, which would skip LLVM after the first run
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=2 -e $program`
+    cmd = addenv(cmd, "JULIA_OBJCACHE" => "0")
+    output = IOBuffer()
+    proc = run(pipeline(cmd; stdout=output, stderr); wait=false)
+    t = Timer(300) do _
+        kill(proc, Base.SIGKILL)
+    end
+    @test success(proc)
+    close(t)
+    compile_time, longest, collections = split(String(take!(output)))
+    compile_time, longest = parse.(Float64, (compile_time, longest))
+    @test parse(Int, collections) >= 2
+    # a few seconds of LLVM, and a few ms per collection
+    @test longest < compile_time / 4
+end
+
+@testset "event loop thread wakeup with busy workers" begin
+    # A timer or `@threadcall` started on a pool whose threads never sleep must still
+    # get serviced by the event loop thread (#63882).
+    script = """
+    # The ^C listener keeps the event loop alive, so the event loop thread never
+    # sleeps. Close it so the loop can go idle.
+    hooks = filter(f -> hasproperty(f, :listeners) && hasproperty(f, :cond) &&
+                        getproperty(f, :cond) isa Base.AsyncCondition, Base.atexit_hooks)
+    isdefined(Base, :start_sigint_listener) && length(hooks) != 1 && error("^C listener not found")
+    for f in hooks
+        ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        close(f.cond)
+    end
+    const done = Threads.Atomic{Bool}(false)
+    # keep the only default thread busy: it yields, but never sleeps
+    spinner = Threads.@spawn :default begin
+        t_end = time_ns() + 30_000_000_000
+        while !done[]
+            time_ns() > t_end && return false
+            yield()
+        end
+        return true
+    end
+    waiter = Threads.@spawn :default begin
+        for _ in 1:3
+            sleep(0.001)
+            @threadcall(:jl_getpagesize, Clong, ())
+        end
+        done[] = true
+    end
+    wait(waiter)
+    fetch(spinner) || exit(1)
+    """
+    cmd = `$(Base.julia_cmd()) --startup-file=no --threads=1,1 -e $script`
+    @test success(pipeline(cmd; stdout, stderr))
+end
+
 @testset "--timeout-for-safepoint-straggler command-line flag" begin
     program = "
         function main()
@@ -948,6 +1111,10 @@ end
 let once = OncePerThread{Int}(() -> error("expected"))
     @test_throws ErrorException("expected") once()
     @test_throws ErrorException("OncePerThread initializer failed previously") once()
+end
+let once = OncePerThread{Int}(() -> 1.5)
+    @test_throws InexactError once()
+    @test (@atomic once.ss)[threadid()] == Base.PerStateErrored
 end
 
 let once = OncePerTask(() -> return [nothing])

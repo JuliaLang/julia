@@ -92,6 +92,53 @@ using Test, Base.BinaryPlatforms, Base.BinaryPlatforms.CPUID
     @test "sve" in values(mapping_aarch64)
 end
 
+@testset "@cpu_supports" begin
+    expand(ex) = macroexpand(@__MODULE__, ex)
+    is_single_query(ex) = Meta.isexpr(ex, :call, 2) && ex.args[2] isa QuoteNode &&
+        Core.eval(@__MODULE__, ex.args[1]) === Core.Intrinsics.cpu_supports
+
+    foreign = Sys.ARCH === :x86_64 ? :aarch64 : :x86_64
+    @test expand(:(Base.@cpu_supports $foreign not_validated)) === false
+    @test_throws "usage is" expand(:(Base.@cpu_supports))
+    @test_throws "usage is" expand(:(Base.@cpu_supports sse2))
+    @test_throws "first argument must be one of" expand(:(Base.@cpu_supports xtensa sse2))
+    # Names are checked to be literals on every host
+    for arch in (:x86_64, :aarch64)
+        @test_throws "expected a literal name" expand(:(Base.@cpu_supports $arch 1))
+    end
+
+    if Sys.ARCH in CPUID._CPU_SUPPORTS_ARCHES
+        @test_throws "neither a hardware feature nor a CPU model" expand(:(Base.@cpu_supports $(Sys.ARCH) not_a_real_feature))
+        # Names of other architectures are skipped
+        for cpu in ("sapphirerapids", "diamondrapids", "znver4", "haswell", "neoverse-v2", "cortex-a78")
+            features = CPUID._cpu_model_features(cpu)
+            features === nothing && continue
+            # The expansion is what a clone for `cpu` is compiled with
+            @test all(in(CPUID._codegen_feature_names()), features)
+            # Julia disables x86 BF16 codegen, and with it AVX10, which implies AVX512BF16
+            @test !any(in((:avx512bf16, :avxneconvert, Symbol("avx10.1"), Symbol("avx10.2"))), features)
+            @test is_single_query(expand(:(Base.@cpu_supports $(Sys.ARCH) $cpu)))
+            # A helper guarded by a CPU model stays cheap enough to inline
+            f = @eval () -> Base.@cpu_supports $(Sys.ARCH) $cpu
+            g = @eval () -> $f()
+            @test !any(s -> Meta.isexpr(s, :invoke), first(only(code_typed(g, ()))).code)
+        end
+    end
+    if Sys.ARCH === :x86_64
+        # Tuning hints and privileged instructions are not queryable
+        for name in ("fast-gather", "prefer-256-bit", "invpcid", "xsaves")
+            @test_throws "neither a hardware feature nor a CPU model" expand(:(Base.@cpu_supports x86_64 $name))
+        end
+    elseif Sys.ARCH === :aarch64
+        # CPU names that LLVM also uses for tuning features resolve as CPU models
+        for cpu in ("apple-a14", "cortex-x1", "a64fx")
+            @test !(Symbol(cpu) in CPUID._codegen_feature_names())
+            query = expand(:(Base.@cpu_supports aarch64 $cpu)).args[2].value
+            @test occursin(',', String(query))
+        end
+    end
+end
+
 # Helper constructor to create a Platform with `validate_strict` set to `true`.
 P(args...; kwargs...) = Platform(args...; validate_strict=true, kwargs...)
 
@@ -216,6 +263,14 @@ end
     @test all(haskey.(Ref(t), ("arch", "os", "libc")))
     @test haskey(tags(P("x86_64", "linux"; customtag="foo")), "customtag")
     @test tags(HostPlatform())["julia_version"] == string(VERSION.major, ".", VERSION.minor, ".", VERSION.patch)
+
+    # Extended tags recorded by the build (e.g. for sanitizer builds) are appended after
+    # any compiler ABI tags detected at runtime, so that the host triplet still parses
+    sanitized_host = parse(Platform, BinaryPlatforms.host_triplet("x86_64-linux-gnu-libgfortran5-cxx11", "-sanitize+address"))
+    @test tags(sanitized_host)["sanitize"] == "address"
+    @test tags(sanitized_host)["julia_version"] == string(VERSION.major, ".", VERSION.minor, ".", VERSION.patch)
+    @test platforms_match(HostPlatform(sanitized_host), P("x86_64", "linux"; sanitize="address"))
+    @test !platforms_match(HostPlatform(sanitized_host), P("x86_64", "linux"))
 
     # Test that we can modify tags at will using the dict-like interface:
     p = P("x86_64", "linux")
@@ -402,6 +457,18 @@ end
     @test platforms_match(host, P("x86_64", "macos"; os_version=v"10", libstdcxx_version="3.4.18"))
     @test !platforms_match(host, P("x86_64", "macos"; os_version=v"10", libstdcxx_version="3.4.27"))
     @test !platforms_match(host, P("x86_64", "macos"; os_version=v"14", libstdcxx_version=v"4"))
+
+    # A `sanitize` tag present on only one side is a mismatch, not a wildcard
+    msan = P("x86_64", "linux"; sanitize="memory")
+    @test !platforms_match(msan, linux)
+    @test !platforms_match(linux, msan)
+    @test !platforms_match("x86_64-linux-gnu-sanitize+memory", "x86_64-linux-gnu")
+    @test !platforms_match("x86_64-linux-gnu", "x86_64-linux-gnu-sanitize+memory")
+    @test !platforms_match(msan, P("x86_64", "linux"; sanitize="thread"))
+    @test !platforms_match(HostPlatform(msan), linux)
+    @test platforms_match(HostPlatform(P("x86_64", "linux"; sanitize="memory")), msan)
+    # Other extended tags are still wildcards
+    @test platforms_match(P("x86_64", "linux"; cuda="10.1"), linux)
 end
 
 @testset "DL name/version parsing" begin
@@ -512,6 +579,9 @@ end
     )
     @test select_platform(platforms, P("x86_64", "linux")) == "normal"
     @test select_platform(platforms, P("x86_64", "linux"; sanitize="memory")) == "sanitized"
+    # Sanitized and unsanitized platforms never stand in for one another
+    @test select_platform(Dict(P("x86_64", "linux"; sanitize="memory") => "sanitized"), P("x86_64", "linux")) === nothing
+    @test select_platform(Dict(P("x86_64", "linux") => "normal"), P("x86_64", "linux"; sanitize="memory")) === nothing
 
     # Ties are broken by reverse-sorting by triplet:
     platforms = Dict(

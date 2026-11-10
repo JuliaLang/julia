@@ -118,6 +118,7 @@ function GenericIOBuffer{T}(
     ) where T<:AbstractVector{UInt8}
     require_one_based_indexing(data)
     mz = Int(maxsize)::Int
+    mz < 0 && throw(ArgumentError("negative maxsize"))
     len = Int(length(data))::Int
     if !truncate && mz < len
         throw(ArgumentError("maxsize must not be smaller than data length"))
@@ -146,6 +147,7 @@ function GenericIOBuffer(data::Vector{UInt8}, readable::Bool, writable::Bool, se
     # The user may pass a vector of length <= maxsize, but where the underlying memory
     # is larger than maxsize. Don't throw an error in that case.
     mz = Int(maxsize)::Int
+    mz < 0 && throw(ArgumentError("negative maxsize"))
     if !truncate && mz < length(data)
         throw(ArgumentError("maxsize must not be smaller than data length"))
     end
@@ -413,8 +415,6 @@ function peek(from::GenericIOBuffer, T::MultiByteBitNumberType)
     return load_from_array(T, from.data, from.ptr)
 end
 
-# This method can use a pointer, since the underlying buffer is dense
-# and memory backed
 function peek(from::GenericIOBuffer{<:MutableDenseArrayType}, T::MultiByteBitNumberType)
     from.readable || _throw_not_readable()
     avail = bytesavailable(from)
@@ -422,11 +422,8 @@ function peek(from::GenericIOBuffer{<:MutableDenseArrayType}, T::MultiByteBitNum
     if nb > avail
         throw(EOFError())
     end
-    GC.@preserve from begin
-        ptr::Ptr{T} = pointer(from.data, from.ptr)
-        x = unsafe_load(ptr)
-    end
-    return x
+    ref, offset = _memoryref_and_byteoffset(from.data)
+    return Core.unsafe_memoryrefload(ref, T, offset + from.ptr - 1, false)
 end
 
 function read(from::GenericIOBuffer, T::MultiByteBitNumberType)
@@ -793,6 +790,7 @@ This function is meant to be used when the buffer is only used as a temporary
 string builder, which is discarded after the string is built.
 """
 function unsafe_takestring!(io::IOBuffer)
+    io.mark = -1
     used_span = get_used_span(io)
     nbytes = length(used_span)
     from = first(used_span)
@@ -842,7 +840,6 @@ function takestring!(io::IOBuffer)
     return if io.writable
         s = unsafe_takestring!(io)
         io.reinit = true
-        io.mark = -1
         io.ptr = 1
         io.size = 0
         io.offset_or_compacted = 0
@@ -851,6 +848,7 @@ function takestring!(io::IOBuffer)
         # If the buffer is not writable, taking will NOT remove the buffer,
         # so if we just converted the buffer to a string, garbage collecting
         # the string would free the memory underneath the iobuffer
+        io.mark = -1
         used_span = get_used_span(io)
         mem = StringMemory(length(used_span))
         unsafe_copyto!(mem, 1, io.data, first(used_span), length(used_span))
@@ -1008,8 +1006,7 @@ function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false,
 end
 
 function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
-    tok = resolve_cancel_token(cancel)
-    @cancel_check tok
+    tok = check_cancel_arg(cancel)
     # If the data is copied into the middle of the buffer of `out` instead of appended to the end,
     # and !keep, and the line copied ends with \r\n, then the copyuntil (even if keep=false)
     # will overwrite one too many bytes with the new \r byte.

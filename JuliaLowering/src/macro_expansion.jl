@@ -13,43 +13,73 @@ function MacroExpansionContext(st, world, recursive)
         world, recursive)
 end
 
-function collect_unquoted!(ctx, unquoted, ex, depth)
-    if head(ex) == :$ && depth == 0
-        # children(ex) is usually length 1, but for double interpolation it may
-        # be longer and the children may contain :... expressions. Wrapping
-        # in a tuple groups the arguments together correctly in those cases.
-        push!(unquoted, @ast ctx ex [:tuple children(ex)...])
-    else
-        inner_depth = head(ex) == :quote ? depth + 1 :
-                      head(ex) == :$     ? depth - 1 :
-                      depth
-        for e in children(ex)
-            collect_unquoted!(ctx, unquoted, e, inner_depth)
-        end
-    end
-    return unquoted
+# Used to briefly have Syntax quoted in Expr, since syntax_to_expr is needed for
+# proper linenode placement, but each `($ x)` should be Syntax for provenance.
+mutable struct ExprQuote
+    const syntax::Syntax
 end
 
-# TODO: Implementing interpolations with a macro could give us better provenance
-function expand_quote(ctx, st)
-    unquoted = SyntaxList()
-    collect_unquoted!(ctx, unquoted, st, 0)
-    # not just optimizations; expected e.g. in `(. mod (quote field))`
-    if head(st) === :value
-        @jl_assert isempty(unquoted) st
-        st
-    elseif head(st) === :$
+function replace_unquoted(eqset, st, d)
+    d2 = head(st) == :quote ? d + 1 : head(st) == :$ ? d - 1 : d
+    cs = Syntax[]
+    found = false
+    for c in children(st)
+        if head(c) === :$ && d2 == 0
+            found = true
+            for cc in children(c)
+                eq = ExprQuote(cc)
+                push!(cs, @ast(_, cc, eq::value))
+                push!(eqset, eq)
+            end
+        else
+            c2, c_found = replace_unquoted(eqset, c, d2)
+            push!(cs, c2)
+            found |= c_found
+        end
+    end
+    (found ? @mknode(st; children=cs) : st), found
+end
+
+function exprquote_inert(prov, @nospecialize(x))
+    if x isa Symbol
+        @ast _ prov [:inert String(x)::identifier]
+    elseif x isa LineNumberNode || !Base.isa_ast_node(x)
+        @ast _ prov x::value
+    else
+        @ast _ prov [:copyast expr_to_est(QuoteNode(x))]
+    end
+end
+
+# Code constructing `ex`, or `nothing` if `ex` contains no unquoted expressions
+function exprquote_builder(eqset, prov, @nospecialize(ex))
+    if ex isa ExprQuote && ex in eqset
+        ex.syntax
+    elseif ex isa Expr
+        cs = Any[exprquote_builder(eqset, prov, a) for a in ex.args]
+        all(isnothing, cs) && return nothing
+        args = Syntax[isnothing(c) ? exprquote_inert(prov, a) : c
+                      for (c, a) in zip(cs, ex.args)]
+        @ast _ prov [:call [:core "_expr"::identifier]
+                     [:inert String(ex.head)::identifier] args...]
+    elseif ex isa QuoteNode
+        c = exprquote_builder(eqset, prov, ex.value)
+        isnothing(c) ? nothing :
+            @ast _ prov [:call [:core "QuoteNode"::identifier] c]
+    end
+end
+
+function expand_exprquote(ctx, st)
+    if head(st) === :$
         numchildren(st) != 1 && throw(LoweringError(
             st, raw"More than one value in bare `$` expression"))
         head(st[1]) === :... && throw(LoweringError(
             st, raw"unexpected `...` in bare `$` expression"))
-        @ast ctx st st[1]
-    elseif head(st) === :identifier && st.mod === nothing
-        @jl_assert isempty(unquoted) st
-        @ast ctx st [:inert st]
-    else
-        @ast ctx st [:call interpolate_expr::value [:inert st] unquoted...]
+        return st[1]
     end
+    eqset = Set{ExprQuote}() # theoretically ExprQuote can show up in input
+    st2, _ = replace_unquoted(eqset, st, 0)
+    ex = est_to_expr(st2)
+    isempty(eqset) ? exprquote_inert(st, ex) : exprquote_builder(eqset, st, ex)
 end
 
 function collect_syntaxunquote!(ctx, unquoted, st, depth)
@@ -82,27 +112,20 @@ function expand_syntaxquote(ctx, st)
                  [:syntaxinert st] unquoted...]
 end
 
-# Passed to the user as an implicit macro argument
-struct MacroContext <: AbstractLoweringContext
-    macrocall::SyntaxTree
-end
-
 struct MacroExpansionError <: Exception
     context::Union{Nothing,MacroContext}
     ex::SyntaxTree
     msg::String
-    "The source position relative to the node - may be `:begin` or `:end` or `:all`"
-    position::Symbol
     "Error that occurred inside the macro function call (`nothing` if no inner exception)"
     err
     MacroExpansionError(
-        context::Union{Nothing,MacroContext}, ex::SyntaxTree, msg::AbstractString, position::Symbol,
+        context::Union{Nothing,MacroContext}, ex::SyntaxTree, msg::AbstractString,
         @nospecialize err = nothing
-    ) = new(context, ex, msg, position, err)
+    ) = new(context, ex, msg, err)
 end
 
-function MacroExpansionError(ex::SyntaxTree, msg::AbstractString; position=:all)
-    MacroExpansionError(nothing, ex, msg, position)
+function MacroExpansionError(ex::SyntaxTree, msg::AbstractString)
+    MacroExpansionError(nothing, ex, msg)
 end
 
 function Base.showerror(io::IO, exc::MacroExpansionError)
@@ -119,23 +142,13 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
               " in module ", syntax_module(ctx.macrocall))
     end
     print(io, ":\n")
-    # TODO: Display niceties:
-    # * Show the full provenance tree somehow, in addition to the primary
-    #   source location we're showing here?
-    # * What if the expression doesn't arise from a source file?
-    # * How to deal with highlighting trivia? Could provide a token kind or
-    #   child position within the raw tree? How to abstract this??
     src = sourceref(exc.ex)
     if src isa LineNumberNode
         highlight(io, src, note=exc.msg)
     else
         fb = first_byte(src)
         lb = last_byte(src)
-        pos = exc.position
-        byterange = pos == :all     ? (fb:lb)   :
-            pos == :begin   ? (fb:fb-1) :
-            pos == :end     ? (lb+1:lb) :
-            error("Unknown position $pos")
+        byterange = fb:lb
         highlight(io, JuliaSyntax.SourceFile(src.code), byterange, note=exc.msg)
     end
     if !isnothing(exc.err)
@@ -144,17 +157,20 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     end
 end
 
+__script_entry_macro(@nospecialize(f), @nospecialize(args...)) = f(args...)
+
 function _eval_dot(world::UInt, ex::SyntaxTree)
     if head(ex) === :. && numchildren(ex) == 2
         lhs = _eval_dot(world, ex[1])
         lhs isa Module || return nothing
         rhs = head(ex[2]) === :inert ? ex[2][1] : ex[2]
         (head(rhs) === :identifier || head(rhs) === :symbol) || return nothing
-        _invoke_in_world(world, getproperty, lhs, Symbol(syntax_name(rhs)))
+        _invoke_in_world(world, __script_entry_macro, getproperty, lhs,
+                         Symbol(syntax_name(rhs)))
     elseif head(ex) === :value
         ex.value
     elseif head(ex) === :identifier
-        _invoke_in_world(world, getproperty,
+        _invoke_in_world(world, __script_entry_macro, getproperty,
                          syntax_module(ex), Symbol(syntax_name(ex)))
     else
         nothing
@@ -177,14 +193,14 @@ function eval_macro_name(ctx, mctx::MacroContext, st0::SyntaxTree)
             # Instead, we repeat the latter parts of `lower()` here.
             mod = syntax_module(st)::Module
             ctx2, st2 = expand_forms_2(st, ctx.world)
-            ctx3, st3 = resolve_scopes(ctx2, st2)
+            ctx3, st3 = resolve_scopes(ctx2, st2, false, false)
             ctx4, st4 = convert_closures(ctx3, st3)
             _ctx5, st5 = linearize_ir(ctx4, st4)
             expr_form  = to_lowered_expr(st5)
             ccall(:jl_toplevel_eval, Any, (Any, Any), mod, expr_form)
         end
     catch err
-        throw(MacroExpansionError(mctx, st, "Macro not found", :all, err))
+        rethrow(MacroExpansionError(mctx, st, "Macro not found", err))
     end
 end
 
@@ -223,15 +239,12 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
     has_new_macro = hasmethod(macfunc, Tuple{typeof(mctx), typeof.(raw_args)...}; world=macro_world)
 
     if has_new_macro
-        macro_args = [mctx, raw_args...]
+        macro_args = Any[mctx, raw_args...]
         macro_mi = lookup_method_instance(macfunc, macro_args, macro_world)
         expanded = try
-            _invoke_in_world(ctx.world, macfunc, macro_args...)
+            _invoke_in_world(ctx.world, __script_entry_macro, macfunc, macro_args...)
         catch exc
-            newexc = exc isa MacroExpansionError ?
-                MacroExpansionError(mctx, exc.ex, exc.msg, exc.position, exc.err) :
-                MacroExpansionError(mctx, st, "Error expanding macro", :all, exc)
-            rethrow(newexc)
+            rethrow(MacroExpansionError(mctx, st, "Error expanding macro", exc))
         end
         st_out = if expanded isa SyntaxTree
             expanded
@@ -250,7 +263,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
         end
         macro_mi = lookup_method_instance(macfunc, macro_args, macro_world)
         st_out = try
-            _invoke_in_world(ctx.world, macfunc, macro_args...)
+            _invoke_in_world(ctx.world, __script_entry_macro, macfunc, macro_args...)
         catch exc
             if exc isa MethodError && exc.f === macfunc && !isempty(
                 methods_in_world(macfunc, Tuple{typeof(mctx), Vararg{Any}}, ctx.world, st))
@@ -259,9 +272,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
                 # rather than any old-style macro methods which might exist
                 exc = MethodError(macfunc, (mctx, raw_args...,), ctx.world)
             end
-            rethrow(LoadError(
-                string(macro_lnn.file), macro_lnn.line,
-                MacroExpansionError(mctx, st, "Error expanding macro", :all, exc)))
+            rethrow(MacroExpansionError(mctx, st, "Error expanding macro", exc))
         end
         st_out = expr_to_est(st_out, macro_lnn)
     end
@@ -294,9 +305,9 @@ invariant that all layers have the same root after every expansion, so
 
 Implementation notes:
 
-- `escape` can never be resolved to a layer inside a macrocall, since we must
-  expand to know whether (old) more escapes will surround it or (new) the macro
-  moves the escape to another layer.
+- `escape` in an argument of a macrocall cannot be resolved to a layer, since we
+  must expand to know whether (old) more escapes will surround it or (new) the
+  macro moves the escape to another layer.
 
 - `escape` nodes coming in usually have no layer (old expansion).  New
   expansions can't create escapes, but can pass an argument containing `escape`
@@ -377,7 +388,7 @@ function expand_forms_1(ctx::MacroExpansionContext, st::SyntaxTree)
         if numchildren(st) !== 1
             throw(LoweringError(st, "`quote` requires one argument"))
         end
-        expand_forms_1(ctx, expand_quote(ctx, st[1]))
+        expand_forms_1(ctx, expand_exprquote(ctx, st[1]))
     elseif k === :syntaxquote
         if numchildren(st) !== 1
             throw(LoweringError(st, "`syntaxquote` requires one argument"))

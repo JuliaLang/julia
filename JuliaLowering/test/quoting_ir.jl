@@ -5,8 +5,8 @@ quote
 end
 #---------------------
 1   TestMod.x
-2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_expr (inert (block (call + ($ x) 1))) %₂)
+2   (call core._expr :call :+ %₁ 1)
+3   (call core._expr :block :(#= :2 =#) %₂)
 4   (return %₃)
 
 ########################################
@@ -25,9 +25,12 @@ quote
 end
 #---------------------
 1   TestMod.x
-2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_expr (inert (block (quote (block (call + ($ ($ x)) 1))))) %₂)
-4   (return %₃)
+2   (call core._expr :$ %₁)
+3   (call core._expr :call :+ %₂ 1)
+4   (call core._expr :block :(#= :3 =#) %₃)
+5   (call core._expr :quote %₄)
+6   (call core._expr :block :(#= :2 =#) %₅)
+7   (return %₆)
 
 ########################################
 # Symbols on `.` right hand side need to be scoped correctly
@@ -37,8 +40,8 @@ end
 #---------------------
 1   1
 2   (= slot₁/x %₁)
-3   (call core.tuple slot₁/x)
-4   (call JuliaLowering.interpolate_expr (inert (. A (inert ($ x)))) %₃)
+3   (call core.QuoteNode slot₁/x)
+4   (call core._expr :. :A %₃)
 5   (return %₄)
 
 ########################################

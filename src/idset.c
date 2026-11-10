@@ -67,37 +67,24 @@ static ssize_t idset_compact(jl_genericmemory_t *keys)
     return rehash ? -j : j;
 }
 
-// Find a free slot: gallop back from the end over the free tail, then bisect.
-// Any NULL slot whose predecessor is used (or index 0) is a valid slot, so holes
-// left by jl_idset_pop don't matter; returns l when the last slot is used.
-static ssize_t idset_free_slot(jl_genericmemory_t *keys) JL_NOTSAFEPOINT
+// Return the slot just past the last key of `keys`, for callers of
+// jl_idset_put_key that do not keep track of it themselves.
+size_t jl_idset_max(jl_genericmemory_t *keys) JL_NOTSAFEPOINT
 {
-    ssize_t l = keys->length;
-    if (l == 0 || jl_genericmemory_ptr_ref(keys, l - 1) != NULL)
-        return l;
-    ssize_t hi = l - 1; // known NULL
-    ssize_t step = 1;
-    while (hi - step >= 0 && jl_genericmemory_ptr_ref(keys, hi - step) == NULL) {
-        hi -= step;
-        step <<= 1;
-    }
-    ssize_t lo = hi - step < 0 ? -1 : hi - step; // known used (or -1)
-    while (hi - lo > 1) {
-        ssize_t mid = lo + (hi - lo) / 2;
-        if (jl_genericmemory_ptr_ref(keys, mid) == NULL)
-            hi = mid;
-        else
-            lo = mid;
-    }
-    return hi;
+    size_t i = keys->length;
+    while (i > 0 && jl_genericmemory_ptr_ref(keys, i - 1) == NULL)
+        i--;
+    return i;
 }
 
-// Insert `key` into the first free slot at the end of the ordered set
-// `keys` (growing and compacting are insertion-order-preserving).
-jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, ssize_t *newidx)
+// Insert `key` at the end of the ordered set `keys` (growing and compacting
+// are insertion-order-preserving). `*max` is the slot just past the last key,
+// which the caller keeps track of (or gets from jl_idset_max), and is updated.
+jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, size_t *max, ssize_t *newidx)
 {
     ssize_t l = keys->length;
-    ssize_t i = idset_free_slot(keys);
+    ssize_t i = *max;
+    assert(i <= l && (i == 0 || jl_genericmemory_ptr_ref(keys, i - 1) != NULL));
     // i points to the place to insert
     *newidx = i;
     if (i == l) {
@@ -116,6 +103,7 @@ jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, 
     }
     assert(jl_genericmemory_ptr_ref(keys, i) == NULL);
     jl_genericmemory_ptr_set(keys, i, key);
+    *max = i + 1;
     return keys;
 }
 

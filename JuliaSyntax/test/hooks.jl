@@ -83,6 +83,7 @@ end
     end
 
     @testset "enable_in_core!" begin
+        orig_parser = Core._parse
         JuliaSyntax.enable_in_core!()
 
         @test Meta.parse("x + 1") == :(x + 1)
@@ -129,12 +130,13 @@ end
             @test err.args[1] isa String
         end
 
-        JuliaSyntax.enable_in_core!(false)
+        JuliaSyntax._set_core_parse_hook(orig_parser)
     end
 
     if isdefined(Base, :VersionedParse) && isdefined(Base, :set_syntax_version)
         @test VERSION > v"1.13"
         @testset "`activate!` and `Base.set_syntax_version` should work together" begin
+            orig_parser = Core._parse
             JuliaSyntax.enable_in_core!()
             try
                 parse_in(mod, str) = Meta.parse(str; mod=mod, raise=false)
@@ -162,7 +164,7 @@ end
                     JuliaSyntax._set_core_parse_hook(old_parser)
                 end
             finally
-                JuliaSyntax.enable_in_core!(false)
+                JuliaSyntax._set_core_parse_hook(orig_parser)
             end
         end
     end

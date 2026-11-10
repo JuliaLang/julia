@@ -145,9 +145,6 @@
     XX(jl_gc_counted_free_with_size) \
     XX(jl_gc_counted_malloc) \
     XX(jl_gc_counted_realloc_with_old_size) \
-    XX(jl_gmp_counted_free_with_size) \
-    XX(jl_gmp_counted_malloc) \
-    XX(jl_gmp_counted_realloc_with_old_size) \
     XX(jl_gc_diff_total_bytes) \
     XX(jl_gc_enable) \
     XX(jl_gc_enable_conservative_gc_support) \
@@ -426,6 +423,13 @@
     XX(jl_set_zero_subnormals) \
     XX(jl_sigatomic_begin) \
     XX(jl_sigatomic_end) \
+    XX(jl_signal_is_reserved) \
+    XX(jl_signal_name) \
+    XX(jl_signal_take_pending) \
+    XX(jl_signal_watch_start) \
+    XX(jl_signal_watch_stop) \
+    XX(jl_sigrtmax) \
+    XX(jl_sigrtmin) \
     XX(jl_spawn) \
     XX(jl_sparam_slot_value) \
     XX(jl_specializations_get_linfo) \
@@ -530,6 +534,7 @@
     YY(jl_get_llvm_module) \
     YY(jl_get_LLVM_VERSION) \
     YY(jl_dump_native) \
+    YY(jl_free_native) \
     YY(jl_get_llvm_gvs) \
     YY(jl_get_llvm_gv_inits) \
     YY(jl_get_llvm_external_fns) \
@@ -550,9 +555,12 @@
     YY(jl_objcache_kv_get) \
     YY(jl_objcache_kv_put) \
     YY(jl_objcache_kv_enabled) \
+    YY(jl_objcache_prune) \
+    YY(jl_objcache_compact) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
     YY(jl_dump_emitted_mi_name) \
+    YY(jl_set_debuginfo_source_paths) \
     YY(jl_dump_llvm_opt) \
     YY(jl_dump_fptr_asm) \
     YY(jl_emit_native) \

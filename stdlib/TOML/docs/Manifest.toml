@@ -214,7 +214,7 @@ version = "1.0.10"
     julia_version = "1.0.0"
 
 [[deps.Pkg]]
-deps = ["ArgTools", "Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "Random", "SHA", "TOML", "Tar", "UUIDs", "Zstd_jll", "p7zip_jll"]
+deps = ["ArgTools", "Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Mmap", "Printf", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "Zstd_jll", "libpicosat_jll", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 version = "1.14.0"
 weakdeps = ["REPL"]
@@ -333,6 +333,14 @@ version = "1.5.7+1"
     [deps.Zstd_jll.syntax]
     julia_version = "1.6.0"
 
+[[deps.libpicosat_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "6b231c3b-13f8-5ced-86ae-8860c7f75d86"
+version = "965.0.3+0"
+
+    [deps.libpicosat_jll.syntax]
+    julia_version = "1.6.0"
+
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
@@ -344,7 +352,7 @@ version = "1.70.0+0"
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "17.8.3+0"
+version = "17.8.4+0"
 
     [deps.p7zip_jll.syntax]
     julia_version = "1.6.0"

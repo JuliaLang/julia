@@ -30,6 +30,7 @@ iterable type.
 Base.iterate
 Base.IteratorSize
 Base.IteratorEltype
+Base.Generator
 ```
 
 Fully implemented by:
@@ -105,6 +106,8 @@ Fully implemented by:
 ```@docs
 Base.in
 Base.:∉
+Base.:∋(::Any, ::Any)
+Base.:∋(::Any)
 Base.hasfastin
 Base.eltype
 Base.indexin
@@ -134,11 +137,16 @@ Base.prod
 Base.prod!
 Base.any(::Any)
 Base.any(::AbstractArray, ::Any)
+Base.any(::AbstractArray)
+Base.any(::Any, ::AbstractArray)
 Base.any!
 Base.all(::Any)
 Base.all(::AbstractArray, ::Any)
+Base.all(::AbstractArray)
+Base.all(::Any, ::AbstractArray)
 Base.all!
 Base.count
+Base.count!
 Base.foreach
 Base.map
 Base.map!
@@ -154,6 +162,7 @@ Base.collect(::Any)
 Base.collect(::Type, ::Any)
 Base.filter
 Base.filter!
+Base.filterfirst
 Base.replace(::Any, ::Pair...)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
@@ -273,8 +282,11 @@ Base.symdiff!
 Base.intersect!
 Base.issubset
 Base.in!
+Base.:⊇(::Any)
 Base.:⊈
+Base.:⊉(::Any)
 Base.:⊊
+Base.:⊋(::Any)
 Base.issetequal
 Base.isdisjoint
 ```
@@ -303,6 +315,7 @@ Base.deleteat!
 Base.keepat!
 Base.splice!
 Base.resize!
+Base.growat!
 Base.append!
 Base.prepend!
 ```

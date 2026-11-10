@@ -2,34 +2,25 @@
     test_mod = Module()
 
     @testset "`core_lowering_hook`" begin
-        # Non-AST types are often sent through lowering
-        stuff = Any[LineNumberNode(1), 123, 123.123, true, "foo", test_mod]
-        for s in stuff
-            @test JL.core_lowering_hook(s, test_mod) == Core.svec(s)
-        end
+        with_lowering(true) do
+            # Non-AST types are often sent through lowering
+            stuff = Any[LineNumberNode(1), 123, 123.123, true, "foo", test_mod]
+            for s in stuff
+                @test Meta.lower(test_mod, s) == s
+            end
 
-        for ast_type in (Expr, SyntaxTree)
-            ex = parsestmt(ast_type, "[1,2,3] .+= 1")
-            out = JL.core_lowering_hook(ex, test_mod)
-            @test out isa Core.SimpleVector && out[1] isa Expr
-            val = Core.eval(test_mod, out[1])
-            @test val == [2,3,4]
+            for ast_type in (Expr, SyntaxTree)
+                ex = parsestmt(ast_type, "[1,2,3] .+= 1")
+                out = Meta.lower(test_mod, ex)
+                @test out isa Expr
+                val = Core.eval(test_mod, out)
+                @test val == [2,3,4]
+            end
         end
-
-        # file argument mismatch with embedded linenumbernodes shouldn't crash
-        ex = Expr(:block, LineNumberNode(111), :(x = 1), LineNumberNode(222), :(x + 1))
-        lwr = JuliaLowering.core_lowering_hook(ex, test_mod, "foo.jl", 333)[1]
-        @test Core.eval(test_mod, lwr) === 2
     end
 
-    function jeval(str)
-        prog = parseall(Expr, str)
-        try
-            JL.activate!()
-            return Core.eval(test_mod, prog)
-        finally
-            JL.activate!(false)
-        end
+    jeval(str) = with_lowering(true) do
+        Core.eval(test_mod, parseall(Expr, str))
     end
     @testset "integration: `JuliaLowering.activate!`" begin
         out = jeval("global asdf = 1")
@@ -78,6 +69,13 @@
         @test isdefined(test_mod.M5.M5_inner, :asdf)
 
         @test jeval("Base.@propagate_inbounds @inline meta_double_quote_issue(x) = x") isa Function
+
+        # Errors use flisp's exception types (although this may change)
+        jeval("macro throws_in_expansion(); error(\"in macro\"); end")
+        err = try; jeval("@throws_in_expansion"); catch e; e; end
+        @test err isa LoadError && err.error == ErrorException("in macro")
+        err = try; jeval("function f_dup_arg(x, x) end"); catch e; e; end
+        @test err isa ErrorException && startswith(err.msg, "syntax: ")
     end
 
     @testset "(AI) `include_string` with `mapexpr`" begin

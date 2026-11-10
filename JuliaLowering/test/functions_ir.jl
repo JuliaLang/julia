@@ -479,6 +479,20 @@ end
 10  (return core.nothing)
 
 ########################################
+# Error: Function with module ref in name not at top level
+function f()
+    function A.g()
+    end
+end
+#---------------------
+LoweringError:
+function f()
+    function A.g()
+#            └─┘ ── global method definition must be placed at top level, or use eval
+    end
+end
+
+########################################
 # Error: Invalid dotop function name
 function (.+)(x,y)
 end
@@ -932,7 +946,7 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.f %₈
     --- code_info
-    slots: [slot₁/#self#]
+    slots: [slot₁/#self#(called)]
     1   (call core.tuple 1 2)
     2   (call core._apply_iterate top.iterate slot₁/#self# %₁)
     3   (return %₂)
@@ -968,14 +982,13 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.f %₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/destructured#3 slot₄/w(!read) slot₅/iterstate(single_assign) slot₆/y(!read,single_assign) slot₇/z(!read,single_assign)]
-    1   (call top.indexed_iterate slot₃/destructured#3 1)
-    2   (= slot₆/y (call core.getfield %₁ 1))
-    3   (= slot₅/iterstate (call core.getfield %₁ 2))
-    4   slot₅/iterstate
-    5   (call top.indexed_iterate slot₃/destructured#3 2 %₄)
-    6   (= slot₇/z (call core.getfield %₅ 1))
-    7   (return core.nothing)
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/#arg#destructured#3 slot₄/w(!read) slot₅/y(!read,single_assign) slot₆/z(!read,single_assign) slot₇/(single_assign)]
+    1   (call top.indexed_iterate slot₃/#arg#destructured#3 1)
+    2   (= slot₅/y (call core.getfield %₁ 1))
+    3   (= slot₇/ (call core.getfield %₁ 2))
+    4   (call top.indexed_iterate slot₃/#arg#destructured#3 2 slot₇/)
+    5   (= slot₆/z (call core.getfield %₄ 1))
+    6   (return core.nothing)
 10  latestworld
 11  TestMod.f
 12  (return %₁₁)
@@ -1010,8 +1023,8 @@ end
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  (call core.define_method TestMod TestMod.f %₁₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/destructured#2 slot₃/x(!read,single_assign)]
-    1   (call top.indexed_iterate slot₂/destructured#2 1)
+    slots: [slot₁/#self#(!read) slot₂/#arg#destructured#2 slot₃/x(!read,single_assign)]
+    1   (call top.indexed_iterate slot₂/#arg#destructured#2 1)
     2   (= slot₃/x (call core.getfield %₁ 1))
     3   (return core.nothing)
 20  latestworld
@@ -1231,10 +1244,10 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.f %₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/destructured#2 slot₃/destructured#3]
-    1   (call top.indexed_iterate slot₂/destructured#2 1)
+    slots: [slot₁/#self#(!read) slot₂/#arg#destructured#2 slot₃/#arg#destructured#3]
+    1   (call top.indexed_iterate slot₂/#arg#destructured#2 1)
     2   (call core.getfield %₁ 1)
-    3   (call top.indexed_iterate slot₃/destructured#3 1)
+    3   (call top.indexed_iterate slot₃/#arg#destructured#3 1)
     4   (call core.getfield %₃ 1)
     5   (return core.nothing)
 10  latestworld
@@ -1314,6 +1327,22 @@ function f_bad_nospecialize(;@nospecialize(x)::T); end
 LoweringError:
 function f_bad_nospecialize(;@nospecialize(x)::T); end
 #                            └──────────────┘ ── expected identifier
+
+########################################
+# Error: nospecialize wrapping function is invalid
+@nospecialize function f_bad_nospecialize(); end
+#---------------------
+LoweringError:
+@nospecialize function f_bad_nospecialize(); end
+#             └────────────────────────────────┘ ── `nospecialize` cannot wrap a function definition; apply it to individual arguments, e.g. `function f(@nospecialize(x)); end`
+
+########################################
+# Error: nospecialize wrapping non-arg assignment is invalid
+@nospecialize x = 1
+#---------------------
+LoweringError:
+@nospecialize x = 1
+#            └────┘ ── expected identifier
 
 ########################################
 # Function return without arguments
@@ -1722,10 +1751,10 @@ end
 30  (call core.svec %₂₇ %₂₈ %₂₉)
 31  (call core.define_method TestMod TestMod.f_kw_slurp_simple %₃₀
     --- code_info
-    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self#]
-    1   (call top.pairs slot₂/kws)
+    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/all_kws...(single_assign)]
+    1   (= slot₄/all_kws... (call top.pairs slot₂/kws))
     2   TestMod.#f_kw_slurp_simple#kw_body#2
-    3   (call %₂ %₁ slot₃/#self#)
+    3   (call %₂ slot₄/all_kws... slot₃/#self#)
     4   (return %₃)
 32  latestworld
 33  TestMod.f_kw_slurp_simple
@@ -1782,7 +1811,7 @@ end
 30  (call core.svec %₂₇ %₂₈ %₂₉)
 31  (call core.define_method TestMod TestMod.f_kw_slurp %₃₀
     --- code_info
-    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/x(!read) slot₅/#kwtmp#]
+    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/x(!read) slot₅/#kwtmp# slot₆/non_x_kws...(single_assign)]
     1   (newvar slot₄/x)
     2   (newvar slot₅/#kwtmp#)
     3   (call core.isdefined slot₂/kws :x)
@@ -1795,9 +1824,9 @@ end
     10  (call core.tuple :x)
     11  (call core.apply_type core.NamedTuple %₁₀)
     12  (call top.structdiff slot₂/kws %₁₁)
-    13  (call top.pairs %₁₂)
+    13  (= slot₆/non_x_kws... (call top.pairs %₁₂))
     14  TestMod.#f_kw_slurp#kw_body#3
-    15  (call %₁₄ %₉ %₁₃ slot₃/#self#)
+    15  (call %₁₄ %₉ slot₆/non_x_kws... slot₃/#self#)
     16  (return %₁₅)
 32  latestworld
 33  TestMod.f_kw_slurp
@@ -1860,7 +1889,7 @@ end
 30  (call core.svec %₂₇ %₂₈ %₂₉)
 31  (call core.define_method TestMod TestMod.f_kw_slurp_dep %₃₀
     --- code_info
-    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/#kwtmp# slot₅/a(single_assign) slot₆/b(single_assign)]
+    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/#kwtmp# slot₅/a(single_assign) slot₆/b(single_assign) slot₇/kws...(single_assign)]
     1   (newvar slot₄/#kwtmp#)
     2   (call core.isdefined slot₂/kws :a)
     3   (gotoifnot %₂ label₆)
@@ -1880,9 +1909,9 @@ end
     17  (call core.tuple :a :b)
     18  (call core.apply_type core.NamedTuple %₁₇)
     19  (call top.structdiff slot₂/kws %₁₈)
-    20  (call top.pairs %₁₉)
+    20  (= slot₇/kws... (call top.pairs %₁₉))
     21  TestMod.#f_kw_slurp_dep#kw_body#4
-    22  (call %₂₁ slot₅/a slot₆/b %₂₀ slot₃/#self#)
+    22  (call %₂₁ slot₅/a slot₆/b slot₇/kws... slot₃/#self#)
     23  (return %₂₂)
 32  latestworld
 33  TestMod.f_kw_slurp_dep
@@ -2008,9 +2037,9 @@ end
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  (call core.define_method TestMod TestMod.#f_kw_slurp#kw_body#6 %₁₃
     --- code_info
-    slots: [slot₁/#f_kw_slurp#kw_body#6(!read) slot₂/kw1(nospecialize,!read) slot₃/kw2(nospecialize,!read) slot₄/restkw(nospecialize,!read) slot₅/#self#(!read) slot₆/a(nospecialize,!read)]
-    1   (meta :nospecialize slot₂/kw1 slot₃/kw2 slot₄/restkw slot₆/a)
-    2   (meta :nkw 3)
+    slots: [slot₁/#f_kw_slurp#kw_body#6(!read) slot₂/kw1(!read) slot₃/kw2(!read) slot₄/restkw(!read) slot₅/#self#(!read) slot₆/a(!read)]
+    1   (meta :nkw 3)
+    2   (meta :nospecialize)
     3   (return core.nothing)
 15  latestworld
 16  TestMod.f_kw_slurp
@@ -2021,7 +2050,7 @@ end
 21  (call core.svec %₁₈ %₁₉ %₂₀)
 22  (call core.define_method TestMod TestMod.f_kw_slurp %₂₁
     --- code_info
-    slots: [slot₁/#self# slot₂/a(nospecialize)]
+    slots: [slot₁/#self# slot₂/a]
     1   (meta :nospecialize)
     2   TestMod.#f_kw_slurp#kw_body#6
     3   (call core.UndefKeywordError :kw1)
@@ -2040,11 +2069,11 @@ end
 30  (call core.svec %₂₇ %₂₈ %₂₉)
 31  (call core.define_method TestMod TestMod.f_kw_slurp %₃₀
     --- code_info
-    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/a(nospecialize) slot₅/kw1(!read) slot₆/kw2(!read) slot₇/#kwtmp#]
-    1   (meta :nospecialize slot₄/a)
-    2   (newvar slot₅/kw1)
-    3   (newvar slot₆/kw2)
-    4   (newvar slot₇/#kwtmp#)
+    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/a slot₅/kw1(!read) slot₆/kw2(!read) slot₇/#kwtmp# slot₈/restkw...(single_assign)]
+    1   (newvar slot₅/kw1)
+    2   (newvar slot₆/kw2)
+    3   (newvar slot₇/#kwtmp#)
+    4   (meta :nospecialize)
     5   (call core.isdefined slot₂/kws :kw1)
     6   (gotoifnot %₅ label₉)
     7   (= slot₇/#kwtmp# (call core.getfield slot₂/kws :kw1))
@@ -2061,9 +2090,9 @@ end
     18  (call core.tuple :kw1 :kw2)
     19  (call core.apply_type core.NamedTuple %₁₈)
     20  (call top.structdiff slot₂/kws %₁₉)
-    21  (call top.pairs %₂₀)
+    21  (= slot₈/restkw... (call top.pairs %₂₀))
     22  TestMod.#f_kw_slurp#kw_body#6
-    23  (call %₂₂ %₁₁ %₁₇ %₂₁ slot₃/#self# slot₄/a)
+    23  (call %₂₂ %₁₁ %₁₇ slot₈/restkw... slot₃/#self# slot₄/a)
     24  (return %₂₃)
 32  latestworld
 33  TestMod.f_kw_slurp
@@ -2163,7 +2192,7 @@ end
 21  (call core.define_method TestMod TestMod.f_only_generated %₂₀
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/y(!read)]
-    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub SyntaxContext(#=omitted=#) TestMod.#f_only_generated@generator##0 SourceRef:1 (call core.svec :#self# :x :y) (call core.svec)))
+    1   (meta :generated (new Base.SyntaxGeneratedFunctionStub SyntaxContext(#=omitted=#) #f_only_generated@generator##0 SourceRef:1 (call core.svec :#self# :x :y) (call core.svec)))
     2   (meta :generated_only)
     3   (return core.nothing)
 22  latestworld
@@ -2200,9 +2229,9 @@ end
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(nospecialize,!read) slot₄/x(nospecialize,!read) slot₅/y(nospecialize,!read)]
     1   (meta :nospecialize slot₃/#self# slot₄/x slot₅/y)
-    2   (call JuliaLowering.interpolate_expr (inert (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
+    2   (copyast (inert (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
     3   (call core.tuple %₂)
-    4   (call JuliaLowering.interpolate_syntax (syntaxinert (block (= nongen_stuff (call bothgen x y)) (syntaxunquote (block (call JuliaLowering.interpolate_expr (inert (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple nongen_stuff maybe_gen_stuff))) %₃)
+    4   (call JuliaLowering.interpolate_syntax (syntaxinert (block (= nongen_stuff (call bothgen x y)) (syntaxunquote (block (copyast (inert (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple nongen_stuff maybe_gen_stuff))) %₃)
     5   (return %₄)
 14  latestworld
 15  TestMod.f_partially_generated
@@ -2214,15 +2243,13 @@ end
 21  (call core.define_method TestMod TestMod.f_partially_generated %₂₀
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/maybe_gen_stuff(single_assign) slot₅/nongen_stuff(single_assign)]
-    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub SyntaxContext(#=omitted=#) TestMod.#f_partially_generated@generator##0 SourceRef:1 (call core.svec :#self# :x :y) (call core.svec)))
+    1   (meta :generated (new Base.SyntaxGeneratedFunctionStub SyntaxContext(#=omitted=#) #f_partially_generated@generator##0 SourceRef:1 (call core.svec :#self# :x :y) (call core.svec)))
     2   TestMod.bothgen
     3   (= slot₅/nongen_stuff (call %₂ slot₂/x slot₃/y))
     4   TestMod.some_nongen_stuff
     5   (= slot₄/maybe_gen_stuff (call %₄ slot₂/x slot₃/y))
-    6   slot₅/nongen_stuff
-    7   slot₄/maybe_gen_stuff
-    8   (call core.tuple %₆ %₇)
-    9   (return %₈)
+    6   (call core.tuple slot₅/nongen_stuff slot₄/maybe_gen_stuff)
+    7   (return %₆)
 22  latestworld
 23  TestMod.f_partially_generated
 24  (return %₂₃)
