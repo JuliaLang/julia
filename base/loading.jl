@@ -4874,16 +4874,12 @@ end
 toml_egal(@nospecialize(A), @nospecialize(B)) = A === B
 toml_egal(A::BigInt, B::BigInt) = A == B # a large integer is parsed to a new object each time
 
-# the values the TOML parser produces. Asserting it keeps these comparisons
-# inferred, so packages that add methods can't invalidate the loading code.
-const TOMLValue = Union{String, Bool, Int64, UInt64, Int128, UInt128, BigInt, Float64,
-    TOML.Date, TOML.Time, TOML.DateTime, Dict{String,Any},
-    Vector{Any}, Vector{String}, Vector{Bool}, Vector{Int64}, Vector{UInt64}, Vector{Float64}}
-
+# only the containers the TOML parser produces, so these bodies are fully typed and
+# packages that add methods can't invalidate the loading code through them
 function toml_egal(A::Vector, B::Vector)
     length(A) != length(B) && return false
     for i in eachindex(A, B)
-        !toml_egal(A[i]::TOMLValue, B[i]::TOMLValue) && return false
+        !toml_egal(A[i], B[i]) && return false
     end
     return true
 end
@@ -4892,7 +4888,7 @@ function toml_egal(A::Dict{String,Any}, B::Dict{String,Any})
     length(A) != length(B) && return false
     for (k, v) in A
         haskey(B, k) || return false
-        !toml_egal(v::TOMLValue, B[k]::TOMLValue) && return false
+        !toml_egal(v, B[k]) && return false
     end
     return true
 end
@@ -4908,7 +4904,7 @@ function stale_prefs(prefs_blob::String)
         for (key, val) in observed::Dict{String,Any}
             # any set preferences should have the same value
             !haskey(curr, key) && return true
-            !toml_egal(curr[key]::TOMLValue, val::TOMLValue) && return true
+            !toml_egal(curr[key], val) && return true
         end
     end
     if haskey(prefs_data, "unset")
