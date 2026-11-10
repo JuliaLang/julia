@@ -8754,6 +8754,16 @@ code_typed(caller63844, ())
 @test f63844(1, 2, 3, 4, 5, 6, (7, 8)) === 2
 @test caller63844() === 2
 
+# issue #64751: both methods are partial matches with the same compilation signature;
+# recording the varargs one must leave dispatch to the tuple one alone
+f64751(::DataType, ::Tuple) = :tuple
+f64751(::DataType, xs...) = :varargs
+g64751(::Vector{T}) where {T<:Union{Float32,Float64}} = f64751(T, (1, 2))
+h64751(r) = g64751(r[])
+code_typed(h64751, (Ref{Vector{<:Union{Float32,Float64}}},))
+@test f64751(Float32, (1, 2)) === :tuple
+@test f64751(Float32, 1, 2) === :varargs
+
 f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
 @test f48950(1, 1, 1) == 1
 
