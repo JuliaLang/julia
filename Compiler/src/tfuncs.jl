@@ -3135,9 +3135,13 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     end
 
     # if this builtin call deterministically throws,
-    # don't bother to taint the other effects other than :nothrow:
-    # note this is safe only if we accounted for :noub already
-    rt === Bottom && return EFFECTS_THROWS
+    # don't bother to taint the other effects other than :nothrow and :noub
+    if rt === Bottom
+        # the runtime always checks bounds, so this may be an unchecked out-of-bounds access,
+        # which compiled code does not check: it cannot return, but it is undefined behavior
+        is_memoryop(f) && !memoryop_noub(f, argtypes) && return Effects(EFFECTS_THROWS; noub=ALWAYS_FALSE)
+        return EFFECTS_THROWS
+    end
 
     if f === isdefined
         return isdefined_effects(𝕃, argtypes)
@@ -3227,7 +3231,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
                     instanceof_tfunc(_memoryref_elemtype(argtypes[1]), true)[1]
                 isprimitivetype(T) && T !== Bool && (noub = ALWAYS_TRUE)
             end
-        elseif f === memoryrefnew || f === memoryrefget || f === const_memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
+        elseif is_memoryop(f)
             noub = memoryop_noub(f, argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
         else
             noub = ALWAYS_TRUE
@@ -3235,6 +3239,9 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly, noub)
     end
 end
+
+is_memoryop(@nospecialize f) = f === memoryrefnew || f === memoryrefget || f === const_memoryrefget ||
+    f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
 
 function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
     nargs = length(argtypes)

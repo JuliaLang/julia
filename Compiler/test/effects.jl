@@ -1339,6 +1339,14 @@ let (memoryrefnew, memoryrefget, const_memoryrefget, memoryref_isassigned, memor
     @test Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Any,Symbol,Int]))
     @test !Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Any,Symbol,Vararg{Bool}]))
     @test !Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Vararg{Any}]))
+    # the runtime always checks bounds, so folding an unchecked out-of-bounds access
+    # must not turn its undefined behavior into a `:noub` throw
+    let ref = Core.Const(memoryrefnew(Memory{Int}(undef, 0)))
+        @test builtin_effects(memoryrefnew, Any[ref,Core.Const(1),Core.Const(true)]) === Compiler.EFFECTS_THROWS
+        argtypes = Any[ref,Core.Const(1),Core.Const(false)]
+        @test Compiler.builtin_tfunction(Compiler.NativeInterpreter(), memoryrefnew, argtypes, nothing) === Union{}
+        @test !Compiler.is_noub(builtin_effects(memoryrefnew, argtypes))
+    end
     # `:boundscheck` taint should be refined by post-opt analysis
     @test Base.infer_effects() do xs::Vector{Any}, i::Int
         memoryrefget(memoryrefnew(getfield(xs, :ref), i, Base.@_boundscheck), :not_atomic, Base.@_boundscheck)
