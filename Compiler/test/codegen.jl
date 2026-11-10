@@ -1627,3 +1627,46 @@ end
     @test isequal(Base.mapany(identity, (Union{}, 'a')), Any[Union{}, 'a'])
     @test isequal(Any[x for x in (Union{}, 1.0)], Any[Union{}, 1.0])
 end
+
+# The `Array` header (`ref` and `size`) has its own alias region, `arrayhdr`, which raw
+# `Ptr` accesses cannot reach. So its loads can be hoisted out of a loop that stores
+# through a pointer (#63782).
+function array_header_hoist(p::Ptr{Float64}, A::Vector{Float64})
+    @inbounds for i in 1:length(A)
+        unsafe_store!(p, A[i], i)
+    end
+end
+if !is_debug_build && opt_level > 0
+    let ir = get_llvm(array_header_hoist, Tuple{Ptr{Float64}, Vector{Float64}}, false)
+        # every block that stores through `p` must not reload `A.ref`
+        store_blocks = filter(b -> occursin(r"store double .*%\"p::Ptr\"|store double %\d+, ptr %\d+", b) &&
+                                   occursin("load double", b), split(ir, r"\n(?=\S+:)"))
+        @test !isempty(store_blocks)
+        @test all(b -> !occursin(r"load ptr, ptr %\"A::Array\"", b), store_blocks)
+    end
+    # the same for an `Array` narrowed from a `Union` by union splitting (reading through
+    # `pointer`, which has no bounds check that `--check-bounds=yes` would keep in the loop)
+    function array_header_hoist_union(p::Ptr{Float64}, x::Union{Vector{Float64}, Vector{Int}}, n::Int)
+        if x isa Vector{Float64}
+            for i in 1:n
+                unsafe_store!(p, unsafe_load(pointer(x, i)), i)
+            end
+        end
+    end
+    let ir = get_llvm(array_header_hoist_union, Tuple{Ptr{Float64}, Union{Vector{Float64}, Vector{Int}}, Int}, false)
+        store_blocks = filter(b -> occursin("store double", b) && occursin("load double", b),
+                              split(ir, r"\n(?=\S+:)"))
+        @test !isempty(store_blocks)
+        @test all(b -> !occursin(r"load ptr, ptr %\"x::", b), store_blocks)
+    end
+end
+
+# An `Array` narrowed from a `Union` must still alias the stores that initialize its
+# header (#62704). This only miscompiled with bounds checks forced on.
+let code = """
+    mkunion(b::Bool) = b ? fill(1.0, 1, 1) : fill(1.0 + 0im, 1, 1)
+    f(b::Bool, D::Int) = sum(reshape(mkunion(b)[:, end], D, D))
+    print(f(true, 1) === 1.0 && f(false, 1) === 1.0 + 0.0im)
+    """
+    @test read(`$(Base.julia_cmd()) --startup-file=no --check-bounds=yes -e $code`, String) == "true"
+end
