@@ -166,4 +166,11 @@ $(eval $(call bb-install,unwind,UNWIND,false))
 
 $(eval $(call bb-install,llvmunwind,LLVMUNWIND,false))
 
+# Xcode's linker looks up the libunwind that libSystem re-exports on the -L
+# paths, so a libLLVM linked once this is installed binds unwinder symbols
+# like `__register_frame` to LLVM's libunwind instead of the system one.
+ifeq ($(USE_SYSTEM_LLVM)$(USE_BINARYBUILDER_LLVM),00)
+$(build_prefix)/manifest/llvmunwind: | $(build_prefix)/manifest/llvm
+endif
+
 endif
