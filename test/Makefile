@@ -14,8 +14,12 @@ unexport JULIA_BINDIR :=
 # Like `Base.runtests`, run the tests with a fresh depot, followed by the default depots so
 # that the bundled stdlib caches can still be loaded, instead of writing to the bundled depot.
 # The depot is kept in the build tree rather than $TMPDIR, which may be a small tmpfs.
+# This ends in `|| exit 1;` rather than `&&`, as `PRINT_JULIA` expands to two commands, the
+# second of which would otherwise run the tests with the bundled depot if this failed. Not
+# every shell runs the `EXIT` trap when it is killed by a signal, hence the other two traps.
 TEST_DEPOT = mkdir -p "$(BUILDROOT)/tmp" && depot=$$(mktemp -d "$(BUILDROOT)/tmp/depot.XXXXXX") && \
-	trap 'rm -rf "$$depot"' EXIT && export JULIA_DEPOT_PATH="$(call cygpath_w,$$depot)$(PATHSEP)" &&
+	trap 'rm -rf "$$depot"' EXIT && trap 'exit 129' HUP && trap 'exit 143' TERM && \
+	export JULIA_DEPOT_PATH="$(call cygpath_w,$$depot)$(PATHSEP)" || exit 1;
 
 TESTGROUPS = unicode strings compiler Compiler JuliaSyntax JuliaLowering
 TESTS = all default stdlib $(TESTGROUPS) \
