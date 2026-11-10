@@ -1432,14 +1432,23 @@ function _precompile_for_loading(into::Module, names::Vector{Symbol})
     reasons = Dict{Symbol,Int}()
     stale_cache = Dict{Base.StaleCacheKey,Bool}()
     cachepath_cache = Dict{PkgId, Vector{String}}()
-    for pkg in pkgs
-        fresh = try
-            Base.compilecache_freshest_path(pkg; ignore_loaded=false, stale_cache, cachepath_cache,
-                                            verify_checksums=false, reasons) !== nothing
-        catch
-            true # e.g. no source located: leave it to `require` to report
+    @lock Base.require_lock begin
+        # one loading cache for all packages, so that each one is only located once
+        set_cache = Base.LOADING_CACHE[] === nothing
+        set_cache && (Base.LOADING_CACHE[] = Base.LoadingCache())
+        try
+            for pkg in pkgs
+                fresh = try
+                    Base.compilecache_freshest_path(pkg; ignore_loaded=false, stale_cache, cachepath_cache,
+                                                    remember_cachepaths=true, verify_checksums=false, reasons) !== nothing
+                catch
+                    true # e.g. no source located: leave it to `require` to report
+                end
+                fresh || push!(stale, pkg)
+            end
+        finally
+            set_cache && (Base.LOADING_CACHE[] = nothing)
         end
-        fresh || push!(stale, pkg)
     end
     isempty(stale) && return
 

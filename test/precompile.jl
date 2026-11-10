@@ -5673,6 +5673,29 @@ precompile_test_harness("mismatched package image .so is recompiled") do load_pa
     @test read(ocachefile) != oldso
 end
 
+# Asking about several packages at once gives the same answers as asking about each one.
+precompile_test_harness("isprecompiled for several packages") do load_path
+    depfile = joinpath(load_path, "BatchDep.jl")
+    write(depfile, "module BatchDep\nend\n")
+    write(joinpath(load_path, "BatchTop.jl"), "module BatchTop\nusing BatchDep\nend\n")
+    write(joinpath(load_path, "BatchOther.jl"), "module BatchOther\nend\n")
+    top, dep, other = Base.PkgId("BatchTop"), Base.PkgId("BatchDep"), Base.PkgId("BatchOther")
+    nosource = Base.PkgId("BatchNoSource")
+    pkgs = [top, dep, other, nosource]
+    @test Base.isprecompiled(pkgs) == [false, false, false, false]
+    Base.compilecache(top)
+    @test Base.isprecompiled(pkgs) == [true, true, false, false]
+    @test Base.isprecompiled(pkgs) == [Base.isprecompiled(top), Base.isprecompiled(dep), Base.isprecompiled(other), false]
+    @test Base.isprecompiled(Base.PkgId[]) == Bool[]
+    # a package in the system image never has to be precompiled
+    sysimage_pkg = first(pkg for pkg in keys(Base.loaded_modules) if Base.in_sysimage(pkg))
+    @test Base.isprecompiled(sysimage_pkg)
+    @test Base.isprecompiled([sysimage_pkg, top]) == [true, true]
+    # changing a dependency makes its dependents stale as well
+    write(depfile, "module BatchDep\nconst changed = true\nend\n")
+    @test Base.isprecompiled(pkgs) == [false, false, false, false]
+end
+
 # Loading marks the accepted cache file as recently used, but only in the depot that
 # `compilecache` writes to: other depots may be read-only, shared, or bundled with Julia.
 precompile_test_harness("cache files are only touched in the primary depot") do load_path
