@@ -534,7 +534,8 @@ static void _fieldpath_for_slot(void *obj, void *slot, ios_t *result) JL_NOTSAFE
             ios_puts(jl_symbol_name(name), result);
         }
 
-        if (!jl_field_isptr(objtype, i)) {
+        // a slot in a Union field is a tagged word, with nothing to descend into
+        if (!jl_field_isptr(objtype, i) && !jl_is_uniontype(jl_field_type_concrete(objtype, i))) {
             // Tail recurse
             ios_putc('.', result);
             obj = (void*)((char*)obj + jl_field_offset(objtype, i));

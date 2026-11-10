@@ -690,6 +690,29 @@ end
         @test filesize(out_file) > 0
     end
 end
+
+# a reference held in a tagged word is an edge named after its field
+@testset "HeapSnapshot of tagged word fields" begin
+    mktempdir() do tmpdir
+        out_file = joinpath(tmpdir, "tagged.heapsnapshot")
+        script = """
+            using Profile
+            struct TaggedInner
+                tagged_inner_field::Union{Int16,String}
+            end
+            mutable struct TaggedOuter
+                tagged_outer_field::Union{Int16,String}
+                inner::TaggedInner
+            end
+            const keep = TaggedOuter(string("a", 1), TaggedInner(string("b", 2)))
+            Profile.take_heap_snapshot(ARGS[1])
+            """
+        run(`$(Base.julia_cmd()) --startup-file=no -e $script $out_file`)
+        sshot = read(out_file, String)
+        @test contains(sshot, "\"tagged_outer_field\"")
+        @test contains(sshot, "\"inner.tagged_inner_field\"")
+    end
+end
 end
 
 @testset "PageProfile" begin
