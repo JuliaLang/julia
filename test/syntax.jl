@@ -3815,6 +3815,17 @@ end
     @test p("public() = 6") == Expr(:(=), Expr(:call, :public), Expr(:block, 6))
 end
 
+# Nested property access in updating assignments is evaluated once (issue #62436).
+struct PropertyCounter62436
+    x::Base.RefValue{Int}
+    calls::Base.RefValue{Int}
+end
+
+function Base.getproperty(a::PropertyCounter62436, name::Symbol)
+    getfield(a, :calls)[] += 1
+    getfield(a, name)
+end
+
 @testset "removing argument side effects" begin
     # Allow let blocks in broadcasted LHSes, but only evaluate them once:
     execs = 0
@@ -3840,6 +3851,18 @@ end
     @test (f60152([1, 2, 3], (pa_execs+=1); kw=(kw_execs+=1)) .*= 2) == [2,4,6]
     @test pa_execs === 1
     @test kw_execs === 1
+
+    calls = Ref(0)
+    value = Ref(1)
+    a = PropertyCounter62436(value, calls)
+    @test (a.x.x += 1) == 2
+    @test (calls[], value[]) == (1, 2)
+
+    # Preserve property targets in tuple updating assignments.
+    let (+) = (x, y) -> map(Base.:+, x, y), a = Ref(1), b = Ref(2)
+        (a.x, b.x) += (3, 4)
+        @test (a[], b[]) == (4, 6)
+    end
 end
 
 # Allow GlobalRefs in macro definition
