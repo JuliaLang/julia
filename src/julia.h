@@ -775,7 +775,7 @@ typedef struct {
 typedef struct JL_GC_TRACKED_TYPE _jl_datatype_t {
     JL_DATA_TYPE
     jl_typename_t *name;
-    struct _jl_datatype_t *super;
+    _Atomic(struct _jl_datatype_t*) super;
     jl_svec_t *parameters;
     jl_svec_t *types;
     jl_value_t *instance;  // for singletons

@@ -123,7 +123,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->isidentityfree = 0;
     t->smalltag = 0;
     t->name = NULL;
-    t->super = NULL;
+    jl_atomic_store_relaxed(&t->super, NULL);
     t->parameters = NULL;
     t->layout = NULL;
     t->types = NULL;
@@ -995,7 +995,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
 
     // init enough before possibly calling jl_new_typename_in
     t = jl_new_uninitialized_datatype();
-    jl_gc_write(t, t->super, jl_datatype_t, super);
+    jl_gc_write_atomic(t, t->super, jl_datatype_t, super, relaxed);
     jl_gc_write(t, t->parameters, jl_svec_t, parameters);
     jl_gc_write(t, t->types, jl_svec_t, ftypes);
 
@@ -2907,7 +2907,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             tn->n_uninitialized = (int32_t)(jl_svec_len(fieldnames) - min_initialized);
 
             // Set up initial values
-            datatypes[i]->super = jl_any_type;
+            jl_atomic_store_relaxed(&datatypes[i]->super, jl_any_type);
             datatypes[i]->parameters = jl_emptysvec;
             datatypes[i]->types = NULL;
 
@@ -3004,7 +3004,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                     datatypes[i]->name == ((jl_datatype_t*)resolved_super)->name)
                     jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
                 jl_check_valid_supertype(resolved_super, type_name);
-                jl_gc_write(datatypes[i], datatypes[i]->super, jl_datatype_t, (jl_datatype_t*)resolved_super);
+                jl_gc_write_atomic(datatypes[i], datatypes[i]->super, jl_datatype_t, (jl_datatype_t*)resolved_super, relaxed);
                 JL_GC_POP();
             }
         }
@@ -3062,7 +3062,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                     // exactly. references_name has the precise affects_layout
                     // handling required for e.g. circular type parameters that
                     // do not affect the layout (issue #33954).
-                    if (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 0, 1)) {
+                    if (nf == 0 || !references_name((jl_value_t*)jl_atomic_load_relaxed(&dt->super), dt->name, 0, 1)) {
                         int mayinlinealloc = 1;
                         for (size_t j = 0; j < nf && mayinlinealloc; j++) {
                             jl_value_t *fld = jl_svecref(dt->types, j);
@@ -3080,7 +3080,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                     // visited set) instead.
                     htable_t visited;
                     htable_new(&visited, 8);
-                    int super_refs = is_typename_reachable((jl_value_t*)dt->super, dt->name, &visited);
+                    int super_refs = is_typename_reachable((jl_value_t*)jl_atomic_load_relaxed(&dt->super), dt->name, &visited);
                     htable_free(&visited);
                     if (nf == 0 || !super_refs) {
                         htable_new(&visited, 8);

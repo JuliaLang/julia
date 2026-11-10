@@ -53,7 +53,7 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
         jl_datatype_t *dt = (jl_datatype_t*)t;
         // the image being loaded is not in the image tree yet, so this tests the header bit
         assert(jl_astaggedvalue(dt->name)->bits.perm && "type_in_worklist mistake?");
-        jl_datatype_t *super = dt->super;
+        jl_datatype_t *super = jl_atomic_load_relaxed(&dt->super);
         // fast-path: check if super is in news, since then we must be new also
         // (it is also possible that super is indeterminate or NULL right now,
         // waiting for `t` to be resolved, then will be determined later as
@@ -70,7 +70,7 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
                break; // the rest must all be non-new
             // otherwise super might be something that was not cached even though a later supertype might be
             // for example while handling `Type{Mask{4, U} where U}`, if we have `Mask{4, U} <: AbstractSIMDVector{4}`
-            super = super->super;
+            super = jl_atomic_load_relaxed(&super->super);
         }
         jl_svec_t *tt = dt->parameters;
         size_t i, l = jl_svec_len(tt);

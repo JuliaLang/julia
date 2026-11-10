@@ -2581,7 +2581,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     top.prev = stack;
     stack = &top;
     jl_gc_write(ndt, ndt->name, jl_typename_t, tn);
-    ndt->super = NULL;
+    jl_atomic_store_relaxed(&ndt->super, NULL);
     jl_gc_write(ndt, ndt->parameters, jl_svec_t, p);
     ndt->types = NULL; // to be filled in below
     int invalid = 0;
@@ -2679,29 +2679,29 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     // so ordinary recursive types are unaffected. Field types stay eager: a
     // concrete type must publish with its layout, and only the supertype
     // declaration can force an infinite graph through abstract levels.
-    int defer_super = check && !istuple && !isnamedtuple && dt->super != NULL &&
+    int defer_super = check && !istuple && !isnamedtuple && jl_atomic_load_relaxed(&dt->super) != NULL &&
         typename_on_stack(top.prev, tn) &&
-        typename_occurs_in((jl_value_t*)primarydt->super, tn);
+        typename_occurs_in((jl_value_t*)jl_atomic_load_relaxed(&primarydt->super), tn);
     if (istuple || isnamedtuple) {
-        ndt->super = jl_any_type;
+        jl_atomic_store_relaxed(&ndt->super, jl_any_type);
     }
     else if (defer_super) {
         // deferred (see above)
     }
-    else if (dt->super) {
-        jl_value_t *super = inst_type_w_((jl_value_t*)dt->super, env, stack, check, nothrow, dcache);
+    else if (jl_atomic_load_relaxed(&dt->super)) {
+        jl_value_t *super = inst_type_w_((jl_value_t*)jl_atomic_load_relaxed(&dt->super), env, stack, check, nothrow, dcache);
         if (nothrow && super == NULL) {
             if (cacheable && !defer)
                 JL_UNLOCK(&typecache_lock);
             JL_GC_POP();
             return NULL;
         }
-        jl_gc_write(ndt, ndt->super, jl_datatype_t, (jl_datatype_t *)super);
+        jl_gc_write_atomic(ndt, ndt->super, jl_datatype_t, (jl_datatype_t *)super, relaxed);
     }
     jl_svec_t *ftypes = dt->types;
     if (ftypes == NULL)
         ftypes = primarydt->types;
-    if (ftypes == NULL || dt->super == NULL) {
+    if (ftypes == NULL || jl_atomic_load_relaxed(&dt->super) == NULL) {
         // in the process of creating this type definition:
         // need to instantiate the super and types fields later
         if (tn->partial == NULL) {
@@ -3273,14 +3273,14 @@ JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROP
 {
     // one-time lazy initialization; the acquire pairs with the releasing
     // compare-and-swap below and makes the computed object graph visible
-    _Atomic(jl_datatype_t*) *superp = (_Atomic(jl_datatype_t*)*)&ndt->super;
+    _Atomic(jl_datatype_t*) *superp = &ndt->super;
     jl_datatype_t *super = jl_atomic_load_acquire(superp);
     if (super != NULL)
         return super;
     if (ndt->name->wrapper == NULL)
         return NULL; // too early in bootstrap
     jl_datatype_t *primarydt = (jl_datatype_t*)jl_unwrap_unionall(ndt->name->wrapper);
-    if (primarydt == ndt || primarydt->super == NULL)
+    if (primarydt == ndt || jl_atomic_load_relaxed(&primarydt->super) == NULL)
         return NULL; // definition in progress
     size_t nparams = jl_svec_len(ndt->parameters), pi;
     jl_typeenv_t *penv = (jl_typeenv_t*)alloca(nparams * sizeof(jl_typeenv_t));
@@ -3290,7 +3290,7 @@ JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROP
         penv[pi].prev = pi == 0 ? NULL : &penv[pi - 1];
     }
     jl_typestack_t stop = { ndt, NULL };
-    jl_value_t *s = inst_type_w_((jl_value_t*)primarydt->super,
+    jl_value_t *s = inst_type_w_((jl_value_t*)jl_atomic_load_relaxed(&primarydt->super),
                                  nparams == 0 ? NULL : &penv[nparams - 1],
                                  &stop, 1, 0, NULL);
     // concurrent first queries compute equal values; the compare-and-swap
@@ -3343,7 +3343,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dca
         for (i = 0; i < n; i++)
             env[i].val = jl_svecref(ndt->parameters, i);
 
-        jl_gc_write(ndt, ndt->super, jl_datatype_t, (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, &env[n - 1], &top, 1, 0, dcache));
+        jl_gc_write_atomic(ndt, ndt->super, jl_datatype_t, (jl_datatype_t*)inst_type_w_((jl_value_t*)jl_atomic_load_relaxed(&t->super), &env[n - 1], &top, 1, 0, dcache), relaxed);
     }
 
     if (t->types != jl_emptysvec) {
@@ -3455,7 +3455,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svec_set_len_unsafe(jl_emptysvec, 0);
 
     jl_any_type = (jl_datatype_t*)jl_new_abstracttype((jl_value_t*)jl_symbol("Any"), core, NULL, jl_emptysvec);
-    jl_any_type->super = jl_any_type;
+    jl_atomic_store_relaxed(&jl_any_type->super, jl_any_type);
 
     jl_anytype_type = jl_new_abstracttype((jl_value_t*)jl_symbol("AnyType"), core, jl_any_type, jl_emptysvec);
     jl_type_type = (jl_unionall_t*)jl_any_type; // replaced with TypeEq(T) where T below
@@ -3465,7 +3465,7 @@ void jl_init_types(void) JL_GC_DISABLED
     // NOTE: types are not actually mutable, but we want to ensure they are heap-allocated with stable addresses
     jl_datatype_type->name = jl_new_typename_in(jl_symbol("DataType"), core, 0, 1);
     jl_datatype_type->name->wrapper = (jl_value_t*)jl_datatype_type;
-    jl_datatype_type->super = jl_anytype_type;
+    jl_atomic_store_relaxed(&jl_datatype_type->super, jl_anytype_type);
     jl_datatype_type->parameters = jl_emptysvec;
     // only `name` is guaranteed initialized: `super` of a deferred
     // self-referential instantiation stays NULL until
@@ -3498,7 +3498,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_typename_type->name = jl_new_typename_in(jl_symbol("TypeName"), core, 0, 1);
     jl_typename_type->name->wrapper = (jl_value_t*)jl_typename_type;
-    jl_typename_type->super = jl_any_type;
+    jl_atomic_store_relaxed(&jl_typename_type->super, jl_any_type);
     jl_typename_type->parameters = jl_emptysvec;
     jl_typename_type->name->n_uninitialized = 19 - 2;
     jl_typename_type->name->names = jl_perm_symsvec(19, "name", "module", "singletonname",
@@ -3529,7 +3529,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_methcache_type->name = jl_new_typename_in(jl_symbol("MethodCache"), core, 0, 1);
     jl_methcache_type->name->wrapper = (jl_value_t*)jl_methcache_type;
-    jl_methcache_type->super = jl_any_type;
+    jl_atomic_store_relaxed(&jl_methcache_type->super, jl_any_type);
     jl_methcache_type->parameters = jl_emptysvec;
     jl_methcache_type->name->n_uninitialized = 4 - 2;
     jl_methcache_type->name->names = jl_perm_symsvec(4, "leafcache", "cache", "", "");
@@ -3540,7 +3540,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_methtable_type->name = jl_new_typename_in(jl_symbol("MethodTable"), core, 0, 1);
     jl_methtable_type->name->wrapper = (jl_value_t*)jl_methtable_type;
-    jl_methtable_type->super = jl_any_type;
+    jl_atomic_store_relaxed(&jl_methtable_type->super, jl_any_type);
     jl_methtable_type->parameters = jl_emptysvec;
     jl_methtable_type->name->n_uninitialized = 0;
     jl_methtable_type->name->names = jl_perm_symsvec(6, "defs", "cache", "name", "module", "backedges", "contributors");
@@ -3553,7 +3553,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_symbol_type->name = jl_new_typename_in(jl_symbol("Symbol"), core, 0, 1);
     jl_symbol_type->name->wrapper = (jl_value_t*)jl_symbol_type;
-    jl_symbol_type->super = jl_any_type;
+    jl_atomic_store_relaxed(&jl_symbol_type->super, jl_any_type);
     jl_symbol_type->parameters = jl_emptysvec;
     jl_symbol_type->name->n_uninitialized = 0;
     jl_symbol_type->name->names = jl_emptysvec;
@@ -3562,7 +3562,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_simplevector_type->name = jl_new_typename_in(jl_symbol("SimpleVector"), core, 0, 1);
     jl_simplevector_type->name->wrapper = (jl_value_t*)jl_simplevector_type;
-    jl_simplevector_type->super = jl_any_type;
+    jl_atomic_store_relaxed(&jl_simplevector_type->super, jl_any_type);
     jl_simplevector_type->parameters = jl_emptysvec;
     jl_simplevector_type->name->n_uninitialized = 0;
     jl_simplevector_type->name->names = jl_emptysvec;
@@ -3668,7 +3668,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_anytuple_type->maybe_subtype_of_cache = 0;
     jl_anytuple_type->layout = NULL;
 
-    jl_typeofbottom_type->super = jl_anytype_type;
+    jl_atomic_store_relaxed(&jl_typeofbottom_type->super, jl_anytype_type);
     jl_emptytuple_type = (jl_datatype_t*)jl_apply_tuple_type(jl_emptysvec, 0);
     jl_emptytuple = jl_gc_permobj(ct->ptls, 0, jl_emptytuple_type, 0);
     jl_emptytuple_type->instance = jl_emptytuple;
@@ -4552,13 +4552,13 @@ void post_boot_hooks(void)
     jl_datatype_t *jl_unsigned_type = (jl_datatype_t*)core("Unsigned");
     jl_datatype_t *jl_integer_type = (jl_datatype_t*)core("Integer");
 
-    jl_gc_write(jl_bool_type, jl_bool_type->super, jl_datatype_t, jl_integer_type);
-    jl_gc_write(jl_uint8_type, jl_uint8_type->super, jl_datatype_t, jl_unsigned_type);
-    jl_gc_write(jl_uint16_type, jl_uint16_type->super, jl_datatype_t, jl_unsigned_type);
-    jl_gc_write(jl_uint32_type, jl_uint32_type->super, jl_datatype_t, jl_unsigned_type);
-    jl_gc_write(jl_uint64_type, jl_uint64_type->super, jl_datatype_t, jl_unsigned_type);
-    jl_gc_write(jl_int32_type, jl_int32_type->super, jl_datatype_t, jl_signed_type);
-    jl_gc_write(jl_int64_type, jl_int64_type->super, jl_datatype_t, jl_signed_type);
+    jl_gc_write_atomic(jl_bool_type, jl_bool_type->super, jl_datatype_t, jl_integer_type, relaxed);
+    jl_gc_write_atomic(jl_uint8_type, jl_uint8_type->super, jl_datatype_t, jl_unsigned_type, relaxed);
+    jl_gc_write_atomic(jl_uint16_type, jl_uint16_type->super, jl_datatype_t, jl_unsigned_type, relaxed);
+    jl_gc_write_atomic(jl_uint32_type, jl_uint32_type->super, jl_datatype_t, jl_unsigned_type, relaxed);
+    jl_gc_write_atomic(jl_uint64_type, jl_uint64_type->super, jl_datatype_t, jl_unsigned_type, relaxed);
+    jl_gc_write_atomic(jl_int32_type, jl_int32_type->super, jl_datatype_t, jl_signed_type, relaxed);
+    jl_gc_write_atomic(jl_int64_type, jl_int64_type->super, jl_datatype_t, jl_signed_type, relaxed);
 
     jl_stackovf_exception       = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
     jl_diverror_exception       = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));

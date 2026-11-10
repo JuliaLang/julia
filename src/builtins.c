@@ -2660,12 +2660,12 @@ static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super) JL_CANSA
     // which calls jl_subtype and would crash walking the supertype chain of a
     // type with super == NULL.
     const char *type_name = jl_symbol_name(tt->name->name);
-    if (tt->super != NULL)
+    if (jl_atomic_load_relaxed(&tt->super) != NULL)
         jl_errorf("invalid subtyping in definition of %s: type already has a supertype.", type_name);
     if (jl_is_datatype(super) && tt->name == ((jl_datatype_t*)super)->name)
         jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
     jl_check_valid_supertype(super, type_name);
-    jl_gc_write(tt, tt->super, jl_datatype_t, (jl_datatype_t*)super);
+    jl_gc_write_atomic(tt, tt->super, jl_datatype_t, (jl_datatype_t*)super, relaxed);
 }
 
 JL_CALLABLE(jl_f__setsuper)
@@ -2855,7 +2855,7 @@ JL_CALLABLE(jl_f__typebody)
         // able to compute the layout of the object before needing to
         // publish it, so we must assume it cannot be inlined, if that
         // check passes, then we also still need to check the fields too.
-        if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 0, 1))) {
+        if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)jl_atomic_load_relaxed(&dt->super), dt->name, 0, 1))) {
             int mayinlinealloc = 1;
             size_t i;
             for (i = 0; i < nf; i++) {
@@ -2910,8 +2910,8 @@ int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT
     jl_value_t *a=NULL, *b=NULL;
     int ok = 1;
     JL_GC_PUSH2(&a, &b);
-    a = jl_rewrap_unionall((jl_value_t*)dta->super, dta->name->wrapper);
-    b = jl_rewrap_unionall((jl_value_t*)dtb->super, dtb->name->wrapper);
+    a = jl_rewrap_unionall((jl_value_t*)jl_atomic_load_relaxed(&dta->super), dta->name->wrapper);
+    b = jl_rewrap_unionall((jl_value_t*)jl_atomic_load_relaxed(&dtb->super), dtb->name->wrapper);
     // if tb recursively refers to itself in its supertype, assume that it refers to ta
     // before checking whether the supertypes are equal
     b = jl_substitute_datatype(b, dtb, dta);

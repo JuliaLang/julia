@@ -794,7 +794,7 @@ static int datatype_may_contain_types(jl_datatype_t *d) JL_NOTSAFEPOINT
         if (d == jl_anytype_type)
             return 1;
         // raw read: a deferred (unset) supertype conservatively proves nothing
-        d = d->super;
+        d = jl_atomic_load_relaxed(&d->super);
         if (d == NULL)
             return 1;
     }
@@ -807,7 +807,7 @@ static jl_datatype_t *super_with_name(jl_datatype_t *t, jl_typename_t *name) JL_
     while (t != jl_any_type && t->name != name) {
         // raw read: this heuristic must not reach a safepoint, so a
         // deferred (unset) supertype conservatively proves nothing
-        t = t->super;
+        t = jl_atomic_load_relaxed(&t->super);
         if (t == NULL)
             return NULL;
     }
@@ -2804,7 +2804,7 @@ static int typeeq_kind_le(jl_datatype_t *k, jl_value_t *y) JL_NOTSAFEPOINT
     while (k != jl_any_type) {
         if (k == yd)
             return 1;
-        k = k->super;
+        k = jl_atomic_load_relaxed(&k->super);
     }
     return yd == jl_any_type;
 }
@@ -3896,7 +3896,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                     // raw read: this heuristic must not reach a safepoint, so
                     // a deferred (unset) supertype stays undecided and the
                     // full algorithm resolves it
-                    temp = temp->super;
+                    temp = jl_atomic_load_relaxed(&temp->super);
                     if (temp == NULL)
                         return 0;
                     if (temp == jl_any_type) {

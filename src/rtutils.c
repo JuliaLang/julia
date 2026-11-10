@@ -910,7 +910,7 @@ static int jl_static_is_function_(jl_datatype_t *vt) JL_NOTSAFEPOINT {
         } else if (vt == jl_function_type) {
             return 1;
         }
-        vt = vt->super;
+        vt = jl_atomic_load_relaxed(&vt->super);
         _iter_count += 1;
     }
     return 0;
@@ -1697,7 +1697,7 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
         return n;
     }
     if ((jl_nparams(ftype) == 0 || ftype == ((jl_datatype_t*)ftype)->name->wrapper) &&
-            !jl_is_some_Type(ftype) && !jl_is_some_Type((jl_value_t*)((jl_datatype_t*)ftype)->super)) { // aka !iskind
+            !jl_is_some_Type(ftype) && !jl_is_some_Type((jl_value_t*)jl_atomic_load_relaxed(&((jl_datatype_t*)ftype)->super))) { // aka !iskind
         n += jl_static_show_symbol(s, ((jl_datatype_t*)ftype)->name->singletonname);
     }
     else {
