@@ -3788,6 +3788,19 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
             return forall_exists_equal(((jl_uniontype_t *)x)->a, ((jl_uniontype_t *)y)->a, e) &&
                    forall_exists_equal(((jl_uniontype_t *)x)->b, ((jl_uniontype_t *)y)->b, e);
         }
+        // The componentwise match was abandoned for `x`, either right here or
+        // because it led to a conflict later on. It may still succeed for an
+        // instance, which then binds the vars of the equation differently than
+        // the general match below. Only if a pair of components is obviously
+        // unequal does it fail for every instance.
+        if (e->instance_envout &&
+            (jl_has_free_typevars(x) || jl_has_free_typevars(y)) &&
+            !obviously_unequal(((jl_uniontype_t *)x)->a, ((jl_uniontype_t *)y)->a) &&
+            !obviously_unequal(((jl_uniontype_t *)x)->b, ((jl_uniontype_t *)y)->b)) {
+            mark_alt_occurs(x, e);
+            mark_alt_occurs(y, e);
+            e->diverged = 1;
+        }
     }
 
     if (e->Loffset == 0 && jl_is_typevar(y) && jl_is_type(x) && (!e->intersection || !jl_is_uniontype(x))) {

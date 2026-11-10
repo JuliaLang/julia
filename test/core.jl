@@ -9348,6 +9348,13 @@ w63514(x::Union{Tuple{S,Int},Tuple{Any,S}}) where {S} = S
 x63514(x::S, y::Union{T,U}) where {S,T<:Ref{S},U} = S
 @test ((r1, r2) -> x63514(r1[], r2[]) <: Real)(Ref{Real}(1), Ref{Any}(Ref{Any}(1))) ===
     (x63514(1, Ref{Any}(1)) <: Real) === false
+# an equation between `Union`s is solved for the concrete argument types, not
+# for the abstract ones
+y63514(::Ref{Union{T,U}}, ::Ref{U}) where {T,U} = T
+let a = Ref{Union{Int,String}}(1), b = Ref{String}("hello")
+    args = Tuple{Ref{Union{Int,String}},Ref{<:Union{Int,String}}}[(a, b)]
+    @test (v -> y63514(v[1]...))(args) === y63514(a, b) === Int
+end
 
 # Static parameters constrained indirectly through other static-parameter bounds
 # are defined.
