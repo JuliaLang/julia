@@ -734,9 +734,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in a different directory
-        tdir = mktempdir() # a dir that contains no code
+        tdir = realpath(mktempdir()) # a dir that contains no code
         @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
-            --code-coverage=$covfile --code-coverage=@$tdir`) == "(3, $(repr(realpath(tdir))))"
+            --code-coverage=$covfile --code-coverage=@$tdir`) == "(3, $(repr(tdir)))"
         @test isfile(covfile)
         got = read(covfile, String)
         @test isempty(got)
@@ -834,6 +834,24 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                         @test covered context=(tracked, loaded)
                     end
                 end
+                # the tracked path lists the resolved path, then the given one if it differs
+                print_tracked = "print(unsafe_string(Base.JLOptions().tracked_path))"
+                both = "$real:$link"
+                @test readchomp(`$cov_exename --code-coverage=@$real -e $print_tracked`) == real
+                @test readchomp(`$cov_exename --track-allocation=@$link -e $print_tracked`) == both
+                # which is the list a process started with `Base.julia_cmd()` is given
+                @test readchomp(`$cov_exename --code-coverage=@$both -e $print_tracked`) == both
+                @test readchomp(`$cov_exename --code-coverage=@$real:$link:$real -e $print_tracked`) == both
+                @test readchomp(`$cov_exename --code-coverage=@: -e $print_tracked`) == ""
+                # so a child process tracks files loaded through the symlink as well
+                srcfile = joinpath(link, "linked.jl")
+                child = "run(`\$(Base.julia_cmd()) --startup-file=no \$(ARGS[1])`)"
+                pidfile = joinpath(parent, "child-%p.info")
+                run(`$cov_exename --code-coverage=$pidfile --code-coverage=@$link -e $child $srcfile`)
+                reports = filter(endswith(".info"), readdir(parent, join=true))
+                @test any(f -> contains(read(f, String), "SF:$srcfile"), reports)
+                run(`$cov_exename --code-coverage=@$link -e $child $srcfile`)
+                @test any(f -> startswith(f, "linked.jl.") && endswith(f, ".cov"), readdir(real))
             end
         end
 
