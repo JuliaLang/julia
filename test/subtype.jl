@@ -3253,6 +3253,15 @@ let unbound(e) = e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]::Bool,
         @test unknown(e[1]) && e[1][2]
         @test unbound(e[2]) && unbound(e[3])
     end
+    # The same goes for the componentwise match of two unions, which the left side
+    # abandons because of a later conflict: with `U == String` in the second
+    # element, `Union{Int,String} == Union{T,U}` is solved by `T == Int`.
+    let rhs = Tuple{Ref{Union{T,U}},Ref{U}} where {T,U}
+        e = intersection_env(Tuple{Ref{Union{Int,String}},Ref{<:Union{Int,String}}}, rhs)[2]
+        @test unknown(e[1])
+        @test intersection_env(Tuple{Ref{Union{Int,String}},Ref{String}}, rhs)[2] === Core.svec(Int, String)
+        @test intersection_env(Tuple{Ref{Union{Int,String}},Ref{String},Any}, Tuple{Ref{Union{T,U}},Ref{U},Any} where {T,U})[2] === Core.svec(Int, String)
+    end
     # A union for which an instance may choose differently does not affect later
     # unions that share no vars with it
     let rhs = Tuple{Union{Nothing,A},Union{Nothing,B}} where {A,B}
