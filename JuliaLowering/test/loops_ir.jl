@@ -155,17 +155,19 @@ end
 # Error: break outside for/while
 break
 #---------------------
-LoweringError:
+unlabeled `break` outside of a `while` or `for` loop
+@ :1
 break
-└───┘ ── unlabeled `break` outside of a `while` or `for` loop
+└───┘
 
 ########################################
 # Error: continue outside for/while
 continue
 #---------------------
-LoweringError:
+`continue` outside of a `while` or `for` loop
+@ :1
 continue
-└──────┘ ── `continue` outside of a `while` or `for` loop
+└──────┘
 
 ########################################
 # Error: `outer` without outer local variable
@@ -176,9 +178,10 @@ let
     i
 end
 #---------------------
-LoweringError:
+`outer` annotations must match with a local variable in an outer scope but no such variable was found
+@ :2
 let
     for outer i = 1:2
-#             ╙ ── `outer` annotations must match with a local variable in an outer scope but no such variable was found
+#             ╙
         nothing
     end

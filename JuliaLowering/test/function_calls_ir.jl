@@ -43,9 +43,10 @@ f(; ks1..., ks2...)
 # Error: Call with repeated keywords
 f(x; a=1, a=2)
 #---------------------
-LoweringError:
+Repeated keyword argument name
+@ :1
 f(x; a=1, a=2)
-#         ╙ ── Repeated keyword argument name
+#         ╙
 
 ########################################
 # literal_pow lowering
@@ -71,11 +72,9 @@ x^42.0
 # Error: Call with no function name
 @ast_ [:call]
 #---------------------
-LoweringError:
- at line 1: malformed `call`
-
-Expression:
-  (call)
+malformed `call`
+@ :1
+└───Expression: ::tombstone
 
 ########################################
 # Simple broadcast
@@ -428,33 +427,37 @@ ccall(:printf, Cint, (Cstring, Cstring...), "%s = %s\n", "2 + 2", "5")
 # Error: ccall with too few arguments
 ccall(:foo, Csize_t)
 #---------------------
-LoweringError:
+too few arguments to ccall
+@ :1
 ccall(:foo, Csize_t)
-└──────────────────┘ ── too few arguments to ccall
+└──────────────────┘
 
 ########################################
 # Error: ccall with calling conv and too few arguments
 ccall(:foo, thiscall, Csize_t)
 #---------------------
-LoweringError:
+too few arguments to ccall with calling convention specified
+@ :1
 ccall(:foo, thiscall, Csize_t)
-└────────────────────────────┘ ── too few arguments to ccall with calling convention specified
+└────────────────────────────┘
 
 ########################################
 # Error: ccall without tuple for argument types
 ccall(:foo, Csize_t, Cstring)
 #---------------------
-LoweringError:
+ccall argument types must be a tuple; try `(T,)`
+@ :1
 ccall(:foo, Csize_t, Cstring)
-#                    └─────┘ ── ccall argument types must be a tuple; try `(T,)`
+#                    └─────┘
 
 ########################################
 # Error: ccall without tuple for argument types
 ccall(:foo, (Csize_t,), "arg")
 #---------------------
-LoweringError:
+ccall argument types must be a tuple; try `(T,)` and check if you specified a correct return type
+@ :1
 ccall(:foo, (Csize_t,), "arg")
-#           └────────┘ ── ccall argument types must be a tuple; try `(T,)` and check if you specified a correct return type
+#           └────────┘
 
 ########################################
 # Error: ccall with library name which is a local variable
@@ -462,10 +465,11 @@ let libc = "libc"
     ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
 end
 #---------------------
-LoweringError:
+function name and library expression cannot reference local variable
+@ :2
 let libc = "libc"
     ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
-#                   └──┘ ── function name and library expression cannot reference local variable
+#                   └──┘
 end
 
 ########################################
@@ -474,10 +478,11 @@ let Csize_t = 1
     ccall(:strlen, Csize_t, (Cstring,), "asdfg")
 end
 #---------------------
-LoweringError:
+ccall return type cannot reference local variable
+@ :2
 let Csize_t = 1
     ccall(:strlen, Csize_t, (Cstring,), "asdfg")
-#                  └─────┘ ── ccall return type cannot reference local variable
+#                  └─────┘
 end
 
 ########################################
@@ -486,43 +491,48 @@ let Cstring = 1
     ccall(:strlen, Csize_t, (Cstring,), "asdfg")
 end
 #---------------------
-LoweringError:
+ccall argument type cannot reference local variable
+@ :2
 let Cstring = 1
     ccall(:strlen, Csize_t, (Cstring,), "asdfg")
-#                            └─────┘ ── ccall argument type cannot reference local variable
+#                            └─────┘
 end
 
 ########################################
 # Error: ccall with too few arguments
 ccall(:strlen, Csize_t, (Cstring,))
 #---------------------
-LoweringError:
+Too few arguments in ccall compared to argument types
+@ :1
 ccall(:strlen, Csize_t, (Cstring,))
-└─────────────────────────────────┘ ── Too few arguments in ccall compared to argument types
+└─────────────────────────────────┘
 
 ########################################
 # Error: ccall with too many arguments
 ccall(:strlen, Csize_t, (Cstring,), "asdfg", "blah")
 #---------------------
-LoweringError:
+More arguments than types in ccall
+@ :1
 ccall(:strlen, Csize_t, (Cstring,), "asdfg", "blah")
-└──────────────────────────────────────────────────┘ ── More arguments than types in ccall
+└──────────────────────────────────────────────────┘
 
 ########################################
 # Error: ccall varargs with too few args
 ccall(:foo, Csize_t, (Cstring...,), "asdfg")
 #---------------------
-LoweringError:
+C ABI prohibits vararg without one required argument
+@ :1
 ccall(:foo, Csize_t, (Cstring...,), "asdfg")
-#                     └────────┘ ── C ABI prohibits vararg without one required argument
+#                     └────────┘
 
 ########################################
 # Error: ccall with multiple varargs
 ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 #---------------------
-LoweringError:
+only the trailing ccall argument type should have `...`
+@ :1
 ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
-#                     └────────┘ ── only the trailing ccall argument type should have `...`
+#                     └────────┘
 
 ########################################
 # cglobal special support for (sym, lib) tuple
@@ -552,42 +562,47 @@ cglobal(f(), Int)
 # Error: cglobal too many arguments
 cglobal(:sym, Int, blah)
 #---------------------
-LoweringError:
+cglobal must have one or two arguments
+@ :1
 cglobal(:sym, Int, blah)
-└──────────────────────┘ ── cglobal must have one or two arguments
+└──────────────────────┘
 
 ########################################
 # Error: assigning to `cglobal`
 cglobal = 10
 #---------------------
-LoweringError:
+invalid syntax in left-hand side of assignment
+@ :1
 cglobal = 10
-└─────┘ ── invalid syntax in left-hand side of assignment
+└─────┘
 
 ########################################
 # Error: assigning to `ccall`
 ccall = 10
 #---------------------
-LoweringError:
+invalid syntax in left-hand side of assignment
+@ :1
 ccall = 10
-└───┘ ── invalid syntax in left-hand side of assignment
+└───┘
 
 ########################################
 # Error: assigning to `var"ccall"`
 var"ccall" = 10
 #---------------------
-LoweringError:
+invalid syntax in left-hand side of assignment
+@ :1
 var"ccall" = 10
-#   └───┘ ── invalid syntax in left-hand side of assignment
+#   └───┘
 
 ########################################
 # Error: Invalid function name ccall
 function ccall()
 end
 #---------------------
-LoweringError:
+ccall is a reserved identifier
+@ :1
 function ccall()
-#        └───┘ ── ccall is a reserved identifier
+#        └───┘
 end
 
 ########################################
@@ -595,9 +610,10 @@ end
 function A.ccall()
 end
 #---------------------
-LoweringError:
+ccall is a reserved identifier
+@ :1
 function A.ccall()
-#          └───┘ ── ccall is a reserved identifier
+#          └───┘
 end
 
 ########################################
@@ -605,9 +621,10 @@ end
 function ccall{<:T}()
 end
 #---------------------
-LoweringError:
+ccall is a reserved identifier
+@ :1
 function ccall{<:T}()
-#        └───┘ ── ccall is a reserved identifier
+#        └───┘
 end
 
 ########################################
@@ -661,7 +678,8 @@ tuple(((xs...)...)...)
 # Error: Standalone splat expression
 (xs...)
 #---------------------
-LoweringError:
-(xs...)
-#└───┘ ── unexpected `...`
+unexpected `...`
 splatting can only be done into a `call`, `tuple`, `curly`, or array-like expression
+@ :1
+(xs...)
+#└───┘

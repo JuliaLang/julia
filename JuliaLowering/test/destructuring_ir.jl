@@ -81,9 +81,10 @@ end
 # Error: Slurping multiple args
 (xs..., ys...) = x
 #---------------------
-LoweringError:
+multiple `...` in destructuring assignment are ambiguous
+@ :1
 (xs..., ys...) = x
-└────────────┘ ── multiple `...` in destructuring assignment are ambiguous
+└────────────┘
 
 ########################################
 # Recursive destructuring
@@ -275,17 +276,19 @@ end
 # Error: Destructuring with tuple elimination and too few RHS elements
 (x,) = ()
 #---------------------
-LoweringError:
+More variables on left hand side than right hand in tuple assignment
+@ :1
 (x,) = ()
-└───────┘ ── More variables on left hand side than right hand in tuple assignment
+└───────┘
 
 ########################################
 # Error: Destructuring with tuple elimination, slurping, and too few RHS elements
 (x,y,ys...) = (1,)
 #---------------------
-LoweringError:
+More variables on left hand side than right hand in tuple assignment
+@ :1
 (x,y,ys...) = (1,)
-└────────────────┘ ── More variables on left hand side than right hand in tuple assignment
+└────────────────┘
 
 ########################################
 # Destructuring with tuple elimination but not in value position never creates
@@ -362,14 +365,16 @@ end
 # Error: Property destructuring with frankentuple
 (x ; a, b) = rhs
 #---------------------
-LoweringError:
+property destructuring must use a single `;` before the property names, e.g. `(; a, b) = rhs`
+@ :1
 (x ; a, b) = rhs
-# └─────┘ ── property destructuring must use a single `;` before the property names, e.g. `(; a, b) = rhs`
+# └─────┘
 
 ########################################
 # Error: Property destructuring with values for properties
 (; a=1, b) = rhs
 #---------------------
-LoweringError:
+expected identifier or `identifier::type`
+@ :1
 (; a=1, b) = rhs
-#  └─┘ ── expected identifier or `identifier::type`
+#  └─┘

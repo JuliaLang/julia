@@ -32,17 +32,19 @@
 # Error: vect syntax with parameters
 [10, 20; 30]
 #---------------------
-LoweringError:
+unexpected semicolon
+@ :1
 [10, 20; 30]
-#      └──┘ ── unexpected semicolon
+#      └──┘
 
 ########################################
 # Error: vect syntax with embedded assignments
 [a=20, 30]
 #---------------------
-LoweringError:
+assignment is not allowed in array expression
+@ :1
 [a=20, 30]
-#└──┘ ── assignment is not allowed in array expression
+#└──┘
 
 ########################################
 # hcat syntax
@@ -84,9 +86,10 @@ T[x xs...]
 # Error: hcat syntax with embedded assignments
 [10 20 a=40]
 #---------------------
-LoweringError:
+assignment is not allowed in array expression
+@ :1
 [10 20 a=40]
-#     └───┘ ── assignment is not allowed in array expression
+#     └───┘
 
 ########################################
 # vcat syntax
@@ -129,9 +132,10 @@ LoweringError:
 # Error: vcat syntax with assignments
 [a=20; 30]
 #---------------------
-LoweringError:
+assignment is not allowed in array expression
+@ :1
 [a=20; 30]
-#└──┘ ── assignment is not allowed in array expression
+#└──┘
 
 ########################################
 # typed_vcat syntax
@@ -250,9 +254,10 @@ T[10 ; 20 ; 30 ;;; 40 ; 50 ; 60]
 # Error: splatting with multi-dimensional ncat
 [xs ; ys ;;; zs...]
 #---------------------
-LoweringError:
+Splatting ... in an `ncat` with multiple dimensions is not supported
+@ :1
 [xs ; ys ;;; zs...]
-#            └───┘ ── Splatting ... in an `ncat` with multiple dimensions is not supported
+#            └───┘
 
 ########################################
 # Error: bad nrow nesting
@@ -267,11 +272,9 @@ LoweringError:
     ]
 ]
 #---------------------
-LoweringError:
- at line 1: Badly nested rows in `ncat`
-
-Expression:
-  (nrow 1 1)
+Badly nested rows in `ncat`
+@ :1
+└───Expression: ::tombstone
 
 ########################################
 # Error: bad nrow nesting
@@ -285,11 +288,9 @@ Expression:
     ]
 ]
 #---------------------
-LoweringError:
- at line 1: 2D `nrow` cannot be mixed with `row` in `ncat`
-
-Expression:
-  (nrow 2 (row 1))
+2D `nrow` cannot be mixed with `row` in `ncat`
+@ :1
+└───Expression: ::tombstone
 
 ########################################
 # Error: bad nrow nesting
@@ -302,11 +303,9 @@ Expression:
     ]
 ]
 #---------------------
-LoweringError:
- at line 1: Badly nested rows in `ncat`
-
-Expression:
-  (row 1)
+Badly nested rows in `ncat`
+@ :1
+└───Expression: ::tombstone
 
 ########################################
 # Simple getindex
@@ -403,9 +402,10 @@ b[a[begin, end], begin, end]
 # Error: parameters in array ref
 a[i, j; w=1]
 #---------------------
-LoweringError:
+unexpected semicolon
+@ :1
 a[i, j; w=1]
-#     └───┘ ── unexpected semicolon
+#     └───┘
 
 ########################################
 # simple setindex!
