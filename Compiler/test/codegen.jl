@@ -744,7 +744,40 @@ end
         return val
     end
     @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f8, Tuple{Some{Int}}, true, false, false))
+    # nor the stack slot of a split union whose unboxed members are pointer-free: only its box
+    function f9(i, s)
+        val = i == 0 ? s : i
+        GC.@preserve val begin end
+        return i
+    end
+    @test f9(1, "s") == 1
+    @test occursin(r"gc_preserve_begin\(ptr addrspace\(10\) %[^,()]+\)", get_llvm(f9, Tuple{Int, String}, true, false, false))
 end
+
+# GC.@preserve of a split union roots the references of its unboxed form,
+# whose box pointer is NULL at runtime
+mutable struct PreservedObj
+    x::Int
+end
+struct PreservedFields
+    o::PreservedObj
+    k::Int
+end
+const preserved_weakref = Ref{WeakRef}()
+@noinline function preserved_obj(i)
+    o = PreservedObj(i)
+    preserved_weakref[] = WeakRef(o)
+    return o
+end
+@noinline function preserve_union_phi(i, s)
+    u = i == 0 ? s : PreservedFields(preserved_obj(i), i) # ::Union{String, PreservedFields}
+    GC.@preserve u begin
+        GC.gc()
+        freed = preserved_weakref[].value === nothing
+    end
+    return freed
+end
+@test !preserve_union_phi(Base.inferencebarrier(1)::Int, "s")
 
 # issue #32843
 function f32843(vals0, v)
