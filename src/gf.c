@@ -5607,9 +5607,9 @@ STATIC_INLINE int site_key_matches(jl_value_t *k, jl_value_t *a) JL_NOTSAFEPOINT
 // per argument and a world check; on a miss the call is dispatched as usual, and replaces
 // what the site holds when its lookup found a method cache entry.
 jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t nargs,
-                                    jl_genericmemory_t *sites, size_t i, uint32_t callsite)
+                                    jl_genericmemory_t *sites, size_t i, uint32_t callsite,
+                                    size_t world)
 {
-    size_t world = jl_current_task->world_age;
     _Atomic(jl_value_t*) *slot = &((_Atomic(jl_value_t*)*)jl_genericmemory_ptr_data(sites))[i];
     jl_svec_t *site = (jl_svec_t*)jl_atomic_load_acquire(slot);
     if (site != NULL && jl_svec_len(site) == nargs + 2 && site_key_matches(jl_svecref(site, 1), F)) {
