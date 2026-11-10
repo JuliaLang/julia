@@ -3304,6 +3304,10 @@ let unbound(e) = e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]::Bool,
         @test unknown(e) && e[2]
     end
 end
+# A value assigned by a search attempt that then fails (here to `S2`, before the
+# diagonal rule rejects `S1`) is not a value of the branch that matches
+@test intersection_env(Tuple{Int,Int,Tuple{Int,Int}}, Tuple{S2,S1,Union{Type{S2},S1,S2}} where {S1,S2})[2] ===
+    Core.svec(Int, Union{Int,Tuple{Int,Int}})
 # A fixed tuple prefix before a free vararg length guarantees a matching
 # right-side tuple element exists, but range and maybe-empty tuple tails do not.
 let rhs = Tuple{typeof(intersection_env), Type{<:Tuple{Vararg{E}}}} where E
