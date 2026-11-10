@@ -576,18 +576,12 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
-const main_parser = Base.ScopedValues.ScopedValue{Any}(
-    Base.VersionedParse(Base.LATEST_STABLE_EDITION))
-function var"#_internal_julia_parse"(args...)
-    main_parser[](args...)
-end
-
 # Used for memoizing require_stdlib of these modules
 global InteractiveUtils::Module
 global Distributed::Module
 
 # weakly exposes ans and err variables to Main
-export ans, err, var"#_internal_julia_parse"
+export ans, err
 end
 
 function should_use_main_entrypoint()
@@ -624,10 +618,9 @@ function _start()
         atexit(__uninit_build)
     end
     local ret = 0
-    # `--project` has been processed at this point - latch the active project's syntax
-    # version and use it for `-L`, `argfile`, etc. If launched, the REPL will re-evaluate
-    # at each prompt.
-    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() try
+    # `--project` has been processed, so use its edition if specified
+    Core.set_edition(Main, edition_for_active_project(LATEST_EDITION))
+    try
         repl_was_requested = exec_options(JLOptions())
         if invokelatest(should_use_main_entrypoint) && !is_interactive
             main = invokelatest(getglobal, Main, :main)

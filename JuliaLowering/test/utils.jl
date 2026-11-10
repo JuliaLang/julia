@@ -15,13 +15,14 @@ import FileWatching
 using Markdown
 import REPL
 
-using Base: OLDEST_EDITION, JL_OLD_EDITION, JL_NEW_EDITION,
+using Base: OLDEST_EDITION,
     SyntaxContext, adopt_scope, remove_scope, syntax_module, fill_context,
     assert_syntax, @mknode
 
 using .JuliaSyntax: sourcetext
 
-using .JuliaLowering: @ast, LoweringError, MacroExpansionError, SyntaxTree,
+using .JuliaLowering: JL_OLD_EDITION, JL_NEW_EDITION,
+    @ast, LoweringError, MacroExpansionError, SyntaxTree,
     children, flattened_provenance, head, is_leaf, mapchildren, numchildren,
     syntax_name, syntax_id
 

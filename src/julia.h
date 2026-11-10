@@ -989,6 +989,7 @@ struct JL_GC_TRACKED_TYPE _jl_module_t {
     jl_uuid_t build_id;
     jl_uuid_t uuid;
     _Atomic(uint32_t) counter;
+    _Atomic(uint32_t) edition;
     int32_t nospecialize;  // global bit flags: initialization for new methods
     int8_t optlevel;
     int8_t compile;
@@ -2307,6 +2308,8 @@ JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s);
 
 // modules and global variables
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_set_module_edition(jl_module_t *m, uint32_t value);
+JL_DLLEXPORT uint32_t jl_get_module_edition(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl);
 JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m);

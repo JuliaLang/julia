@@ -262,6 +262,11 @@ and wherefrom to load a julia package.
 struct PkgLoadSpec
     path::String
     julia_edition::Tuple{Int, Int}
+
+    function PkgLoadSpec(path::String, julia_edition::Tuple{Int, Int})
+        @assert normalized_edition(julia_edition) == julia_edition
+        new(path, julia_edition)
+    end
 end
 
 struct LoadingCache
@@ -933,7 +938,8 @@ function project_file_ext_load_spec(project_file::String, ext::PkgId)
     if exts !== nothing
         if ext.name in keys(exts) && ext.uuid == uuid5(UUID(d["uuid"]::String), ext.name)
             # Syntax version of the main package applies to its extensions
-            return PkgLoadSpec(find_ext_path(p, ext.name), project_get_edition(d))
+            return PkgLoadSpec(find_ext_path(p, ext.name),
+                               something(project_get_edition(d), OLDEST_EDITION))
         end
     end
     return nothing
@@ -950,34 +956,19 @@ end
 
 function project_get_edition(d::Dict)
     # Syntax Evolution. First check syntax.julia_version entry
-    sv = nothing
     ds = get(d, "syntax", nothing)
     if ds !== nothing
-        sv = VersionNumber(get(ds, "julia_version", nothing))::VersionNumber
+        return normalized_edition(VersionNumber(get(ds, "julia_version", nothing)))
     end
-    # If not found, default to minimum(compat["julia"])
-    if sv === nothing
-        cs = get(d, "compat", nothing)
-        if cs !== nothing
-            jv = get(cs, "julia", nothing)
-            if jv !== nothing
-                sv = VersionNumber(minimum(semver_spec(jv)).t...)::VersionNumber
-            end
+    # If not found, try minimum(compat["julia"])
+    cs = get(d, "compat", nothing)
+    if cs !== nothing
+        jv = get(cs, "julia", nothing)
+        if jv !== nothing
+            return normalized_edition(VersionNumber(minimum(semver_spec(jv)).t...))
         end
     end
-    # Finally, if neither of those are set, default to the newest edition.
-    # N.B.: This choice is less "compatible" than defaulting to a fixed older version.
-    # However, it avoids surprises from moving over scripts and REPL code to packages
-    ed = if sv === nothing
-        LATEST_STABLE_EDITION
-    elseif sv <= VersionNumber(OLDEST_EDITION)
-        # Syntax versioning was first introduced in Julia 1.14 - we do not support
-        # going back to versions before syntax version 1.13.
-        OLDEST_EDITION
-    else
-        EditionNumber(sv::VersionNumber)
-    end
-    return ed
+    nothing
 end
 
 function project_file_load_spec(project_file::String, name::String)
@@ -987,8 +978,8 @@ function project_file_load_spec(project_file::String, name::String)
     if entryfile === nothing
         entryfile = get(d, "entryfile", nothing)::Union{String, Nothing}
     end
-    sv = project_get_edition(d)
-    return PkgLoadSpec(entry_path(dirname(project_file), name, entryfile), sv)
+    PkgLoadSpec(entry_path(dirname(project_file), name, entryfile),
+                something(project_get_edition(d), OLDEST_EDITION))
 end
 
 function workspace_manifest(project_file)
@@ -999,17 +990,16 @@ function workspace_manifest(project_file)
     return nothing
 end
 
-function parser_for_active_project()
+function edition_for_active_project(default)
     project = active_project()
-    sv = JL_OLD_EDITION
-    if project !== nothing && isfile(project)
-        try
-            sv = project_get_edition(parsed_toml(project))
-        catch e
-            @warn "Failed to read project $project - defaulting to syntax edition $sv. err=$e"
-        end
+    project !== nothing && isfile(project) || return default
+    ed = default
+    try
+        ed = something(project_get_edition(parsed_toml(project)), ed)
+    catch e
+        @warn "Failed to read project $project - defaulting to edition $ed. err=$e"
     end
-    VersionedParse(sv)
+    ed
 end
 
 # find project file's corresponding manifest file
@@ -1281,12 +1271,8 @@ function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, en
     edition = OLDEST_EDITION
     syntax_table = get(entry, "syntax", nothing)
     if syntax_table !== nothing
-        edition = EditionNumber(
+        edition = normalized_edition(
             VersionNumber(get(syntax_table, "julia_version", nothing)))
-        # Clamp to minimum supported syntax version
-        if VersionNumber(edition) <= VersionNumber(OLDEST_EDITION)
-            edition = OLDEST_EDITION
-        end
     end
 
     # Resolve path
@@ -1350,11 +1336,12 @@ function implicit_manifest_uuid_load_spec(dir::String, pkg::PkgId)::Union{Nothin
     if project_file === nothing
         pkg.uuid === nothing || return nothing
         # Without a project file, treat as empty
-        return PkgLoadSpec(path, LATEST_STABLE_EDITION)
+        return PkgLoadSpec(path, OLDEST_EDITION)
     end
     proj = project_file_name_uuid(project_file, pkg.name)
     proj == pkg || return nothing
-    return PkgLoadSpec(path, project_get_edition(parsed_toml(project_file)))
+    PkgLoadSpec(path, something(project_get_edition(parsed_toml(project_file)),
+                                OLDEST_EDITION))
 end
 
 ## other code loading functionality ##
@@ -3155,7 +3142,6 @@ register_root_module(Main)
 # to the loaded_modules table instead of getting bindings.
 baremodule __toplevel__
 using Base
-global var"#_internal_julia_parse" = Base.VersionedParse(Base.LATEST_STABLE_EDITION)
 
 # Used for version checking of precompiled cache files only
 global _internal_syntax_version::UInt8 = 0
@@ -3349,13 +3335,14 @@ function __require_prelocked(pkg::PkgId, env)
     if uuid !== old_uuid
         ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
     end
-    __toplevel__.var"#_internal_julia_parse" = VersionedParse(spec.julia_edition)
+    old_toplevel_edition = Core.get_edition(__toplevel__)
+    Core.set_edition(__toplevel__, spec.julia_edition)
     unlock(require_lock)
     try
         include(__toplevel__, path)
         loaded = maybe_root_module(pkg)
     finally
-        __toplevel__.var"#_internal_julia_parse" = VersionedParse(LATEST_STABLE_EDITION)
+        Core.set_edition(__toplevel__, old_toplevel_edition)
         lock(require_lock)
         if uuid !== old_uuid
             ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
@@ -3462,7 +3449,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
                 sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
             end
             set_pkgorigin_version_path(this_uuidkey, sourcepath)
-            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, LATEST_STABLE_EDITION), UInt128(0), false; DEPOT_PATH=depot_path)
+            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, LATEST_EDITION), UInt128(0), false; DEPOT_PATH=depot_path)
         end
     finally
         end_loading(this_uuidkey, newm)
@@ -3623,11 +3610,7 @@ julia> rm("testfile.jl")
 function evalfile(path::AbstractString, args::Vector{String}=String[])
     m = Module(:__anon__)
     return Core.eval(m,
-        Expr(:toplevel,
-             :(const ARGS = $args),
-             :(const include = $(Base.IncludeInto(m))),
-             :(const eval = $(Core.EvalInto(m))),
-             :(include($path))))
+        Expr(:toplevel, :(const ARGS = $args), :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
@@ -3689,7 +3672,7 @@ function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{In
     keep_ir = JLOptions().outputo != C_NULL
     keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 1)
     # This one changes the parser behavior
-    __toplevel__.var"#_internal_julia_parse" = VersionedParse(edition)
+    Core.set_edition(__toplevel__, edition)
     # This one is the compatibility marker for cache loading
     __toplevel__._internal_syntax_version = cache_edition(edition)
     cumulative_compile_timing(true)
@@ -4974,7 +4957,7 @@ end
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; kwargs...)
-    return stale_cachefile(PkgLoadSpec(modpath, LATEST_STABLE_EDITION), cachefile; kwargs...)
+    return stale_cachefile(PkgLoadSpec(modpath, OLDEST_EDITION), cachefile; kwargs...)
 end
 @constprop :none function stale_cachefile(modspec::PkgLoadSpec, cachefile::String; ignore_loaded::Bool = false, requested_flags::CacheFlags=CacheFlags(), reasons=nothing, verify_checksums::Bool=true)
     return stale_cachefile(PkgId(""), UInt128(0), modspec, cachefile; ignore_loaded, requested_flags, reasons, verify_checksums)

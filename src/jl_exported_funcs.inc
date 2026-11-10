@@ -208,6 +208,7 @@
     XX(jl_get_julia_bindir) \
     XX(jl_get_libjulia_internal_path) \
     XX(jl_get_module_compile) \
+    XX(jl_get_module_edition) \
     XX(jl_get_module_infer) \
     XX(jl_get_module_of_binding) \
     XX(jl_get_module_optlevel) \
@@ -405,6 +406,7 @@
     XX(jl_set_global) \
     XX(jl_set_istopmod) \
     XX(jl_set_module_compile) \
+    XX(jl_set_module_edition) \
     XX(jl_set_module_infer) \
     XX(jl_set_module_nospecialize) \
     XX(jl_set_module_optlevel) \

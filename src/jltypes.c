@@ -3956,7 +3956,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_globalref_type->name->mayinlinealloc = 0; // not at all worthwhile, since the only constructor returns a boxed object
     XX(globalref);
 
-    jl_core_module = jl_new_module(jl_symbol("Core"), NULL);
+    jl_core_module = jl_new_module_(jl_symbol("Core"), NULL, BOOTSTRAP_EDITION, 1, 1);
 
     tv = jl_svec1(tvar("Backend"));
     jl_addrspace_typename =
