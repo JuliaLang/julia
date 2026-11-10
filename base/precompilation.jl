@@ -1257,7 +1257,7 @@ precompiles only the given packages and their dependencies (unless
   package loading system. When `true` (not default): returns early instead of
   throwing when packages are not found; suppresses progress messages when not
   in an interactive session; allows packages outside the current environment to
-  be added as serial precompilation jobs; skips LOADING_CACHE initialization;
+  be added as serial precompilation jobs; skips the session's loading cache;
   and changes cachefile locking behavior.
 
 - `_reasons::Dict{Symbol,Int}`: Internal, with `_from_loading`: why the loader rejected
@@ -3047,11 +3047,6 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
 end
 
 function report_precompile_results!(s::PrecompileSession)
-    if !s._from_loading
-        @lock Base.require_lock begin
-            Base.LOADING_CACHE[] = nothing
-        end
-    end
     notify(s.first_started) # in cases of no-op or !fancyprint
     # a cancel that lands while the last job runs is not seen by the job loop
     should_stop(s)
@@ -3447,28 +3442,27 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     end
 
     try
-        if !_from_loading
-            @lock Base.require_lock begin
-                Base.LOADING_CACHE[] = Base.LoadingCache()
-            end
+        # only tasks started here see the cache, since the environment can change while this runs
+        cache = _from_loading ? nothing : Base.LoadingCache()
+        Base.ScopedValues.@with Base.SESSION_LOADING_CACHE => cache begin
+            @debug "precompile: starting precompilation loop" graph.direct_deps graph.project_deps
+
+            # Initial pass
+            initial_tasks = spawn_precompile_tasks!(s;
+                direct_deps=graph.direct_deps, was_processed, configs, circular_deps,
+                requested_pkgids, pkg_names, requested_pkgs, from_loading=_from_loading)
+            append!(s.tasks, initial_tasks)
+
+            # Concurrent drainer for injected requests
+            drainer = drain_work_channel!(s, work_channel)
+
+            waitall(initial_tasks; failfast=false, throw=false)
+            @lock BG close(work_channel)
+            wait(drainer)
+            append!(s.tasks, s.injected_tasks)
+            waitall(s.injected_tasks; failfast=false, throw=false)
+            waitall(s.result_waiters; failfast=false, throw=false)
         end
-        @debug "precompile: starting precompilation loop" graph.direct_deps graph.project_deps
-
-        # Initial pass
-        initial_tasks = spawn_precompile_tasks!(s;
-            direct_deps=graph.direct_deps, was_processed, configs, circular_deps,
-            requested_pkgids, pkg_names, requested_pkgs, from_loading=_from_loading)
-        append!(s.tasks, initial_tasks)
-
-        # Concurrent drainer for injected requests
-        drainer = drain_work_channel!(s, work_channel)
-
-        waitall(initial_tasks; failfast=false, throw=false)
-        @lock BG close(work_channel)
-        wait(drainer)
-        append!(s.tasks, s.injected_tasks)
-        waitall(s.injected_tasks; failfast=false, throw=false)
-        waitall(s.result_waiters; failfast=false, throw=false)
 
         # Final output
         s.interrupted_or_done = true

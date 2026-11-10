@@ -163,7 +163,7 @@ const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
 
 function dummy_uuid(project_file::String)
     @lock require_lock begin
-    cache = LOADING_CACHE[]
+    cache = loading_cache()
     if cache !== nothing
         uuid = get(cache.dummy_uuid, project_file, nothing)
         uuid === nothing || return uuid
@@ -285,6 +285,13 @@ LoadingCache() = LoadingCache(
     Dict{String, Union{Nothing, Tuple{PkgId, String}}}(),
     Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{PkgLoadSpec, String}, Nothing}}()
 )
+# a precompile session's cache, seen by its own tasks only; also protected by require_lock
+const SESSION_LOADING_CACHE = ScopedValues.ScopedValue{Union{LoadingCache, Nothing}}(nothing)
+function loading_cache()
+    cache = LOADING_CACHE[]
+    cache === nothing || return cache
+    return SESSION_LOADING_CACHE[]
+end
 
 
 struct TOMLCache{Dates}
@@ -305,7 +312,7 @@ end
 parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
     lock(toml_lock) do
-        cache = LOADING_CACHE[]
+        cache = loading_cache()
         dd = if !haskey(toml_cache.d, project_file)
             d = CachedTOMLDict(toml_cache.p, project_file)
             toml_cache.d[project_file] = d
@@ -374,7 +381,7 @@ function identify_package_env(where::PkgId, name::String)
 
     # Check if we have a cached answer for this
     assert_havelock(require_lock)
-    cache = LOADING_CACHE[]
+    cache = loading_cache()
     cache_key = (where, name)
     if cache !== nothing
         pkg_env = get(cache.identified_where, cache_key, missing)
@@ -411,7 +418,7 @@ end
 function identify_package_env(where::Nothing, name::String)
     # Check if we have a cached answer for this
     assert_havelock(require_lock)
-    cache = LOADING_CACHE[]
+    cache = loading_cache()
     if cache !== nothing
         pkg_env = get(cache.identified, name, missing)
         pkg_env === missing || return pkg_env
@@ -485,7 +492,7 @@ identify_package(name::String)                = @lock require_lock _nothing_or_f
 
 function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Union{Nothing,Tuple{PkgLoadSpec, String}}
     assert_havelock(require_lock)
-    cache = LOADING_CACHE[]
+    cache = loading_cache()
     if cache !== nothing
         specenv = get(cache.located, (pkg, stopenv), missing)
         specenv === missing || return specenv
@@ -709,7 +716,7 @@ end
 #  - `path`: the path of an explicit project file
 function env_project_file(env::String)::Union{Bool,String}
     @lock require_lock begin
-    cache = LOADING_CACHE[]
+    cache = loading_cache()
     if cache !== nothing
         project_file = get(cache.env_project_file, env, nothing)
         project_file === nothing || return project_file
@@ -1008,7 +1015,7 @@ end
 # find project file's corresponding manifest file
 function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     @lock require_lock begin
-    cache = LOADING_CACHE[]
+    cache = loading_cache()
     if cache !== nothing
         manifest_path = get(cache.project_file_manifest_path, project_file, missing)
         manifest_path === missing || return manifest_path
@@ -2224,7 +2231,7 @@ function compilecache_freshest_path(pkg::PkgId;
         reasons::Union{Dict{Symbol,Int},Nothing}=nothing)
     isnothing(sourcespec) && error("Cannot locate source for $(repr(MIME"text/plain"(), pkg))")
     @lock require_lock begin
-    set_cache = LOADING_CACHE[] === nothing
+    set_cache = loading_cache() === nothing
     set_cache && (LOADING_CACHE[] = LoadingCache())
     try
     try_build_ids = UInt128[UInt128(0)]
@@ -2982,7 +2989,7 @@ function require(uuidkey::PkgId)
 end
 function __require(uuidkey::PkgId)
     @lock require_lock begin
-    set_cache = LOADING_CACHE[] === nothing
+    set_cache = loading_cache() === nothing
     set_cache && (LOADING_CACHE[] = LoadingCache())
     try
         return _require_prelocked(uuidkey)
