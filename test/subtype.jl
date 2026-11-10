@@ -3186,6 +3186,93 @@ end
 let e = only(intersection_env(Tuple{Real}, Tuple{T} where T >: Int)[2])
     @test e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]
 end
+# The env must hold for every instance of the left side (each dispatch tuple below
+# it), but it is computed by choosing one alternative of each right-side union for
+# the left side as a whole. An instance chooses another alternative when one that
+# it tries earlier accepts it: `Nothing` matches `Union{Nothing,S}` through
+# `Nothing`, leaving `S` unbound (#63514).
+let unbound(e) = e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]::Bool,
+    bound(e) = e isa Core.SimpleVector && e[1] isa TypeVar && e[2]::Bool,
+    # nothing is known about the value: the entry has the bounds of the declared var
+    unknown(e) = e isa Core.SimpleVector && e[1] isa TypeVar && e[1].lb === Union{} && e[1].ub === Any
+    for (lhs, rhs) in ((Tuple{Any}, Tuple{Union{Nothing,S}} where S),
+                       (Tuple{Real}, Tuple{Union{Int,S}} where S),
+                       (Tuple{Any,Any}, Tuple{Union{Nothing,S},Any} where S),
+                       (Tuple{Any}, Tuple{Union{Nothing,Ref{S},S}} where S),
+                       # `(1, nothing)` matches the closed alternative
+                       (Tuple{Tuple{Int,Any}}, Tuple{Union{Tuple{Int,Nothing},Tuple{S,Any}}} where S),
+                       # the instances of `DataType` include the `Type{Int}` key
+                       (Tuple{DataType}, Tuple{Union{Type{Int},S}} where S),
+                       # an invariant occurrence pins the var only for the instances that
+                       # choose its alternative; `Vector{Int}` takes the other one, being
+                       # egal to it
+                       (Tuple{AbstractVector{Int}}, Tuple{Union{AbstractVector{S},Vector{Int}}} where S),
+                       (Tuple{AbstractVector{Int},Any}, Tuple{Union{AbstractVector{S},Vector{Int}},Any} where S))
+        @test unbound(only(intersection_env(lhs, rhs)[2]))
+    end
+    # no instance of the left side is accepted by another alternative
+    for (lhs, rhs) in ((Tuple{Real}, Tuple{Union{Nothing,S}} where S),
+                       (Tuple{Number}, Tuple{Union{Missing,Nothing,S}} where S),
+                       (Tuple{Ref}, Tuple{Union{Nothing,Ref{S}}} where S),
+                       # instances of `Integer` are never type objects
+                       (Tuple{Integer}, Tuple{Union{Type{S},S}} where S))
+        @test bound(only(intersection_env(lhs, rhs)[2]))
+    end
+    # a closed alternative rejects every instance that has the exact type it rejected
+    @test intersection_env(Tuple{Any,Int}, Tuple{Any,Union{Nothing,S}} where S)[2] === Core.svec(Int)
+    @test intersection_env(Tuple{Any,Vector{Any}}, Tuple{Any,Vector{Union{Nothing,S}}} where S)[2] === Core.svec(Any)
+    @test intersection_env(Tuple{Any,Vector{Union{Float64,String}}}, Tuple{Any,Vector{Union{S,String}}} where S)[2] === Core.svec(Float64)
+    @test intersection_env(Tuple{Any,Core.TypeEgal{Int}}, Tuple{Any,Union{Type{String},S}} where S)[2] === Core.svec(DataType)
+    # an occurrence outside the union pins the var for every instance
+    @test intersection_env(Tuple{Vector{Any},Any}, Tuple{Vector{S},Union{Nothing,S}} where S)[2] === Core.svec(Any)
+    @test intersection_env(Tuple{Any,Vector{Int}}, Tuple{Union{Nothing,Vector{S}},Vector{S}} where S)[2] === Core.svec(Int)
+    # a dispatch tuple is its own only instance, so its env stays exact
+    @test intersection_env(Tuple{Tuple{Int,DataType}}, Tuple{Union{Tuple{Int,Type{Int}},Tuple{S,Any}}} where S)[2] === Core.svec(Int)
+    @test intersection_env(Tuple{Core.TypeEgal{Float64}}, Tuple{Union{Type{Int},Type{S}}} where S)[2] === Core.svec(Float64)
+    @test intersection_env(Tuple{Vector{Int}}, Tuple{Union{AbstractVector{S},Vector{Float64}}} where S)[2] === Core.svec(Int)
+    # An instance that chooses another alternative binds the vars which that one
+    # mentions, to values this match never computed: `("a", 1)` binds `S` to
+    # `String`.
+    let rhs = Tuple{Union{Tuple{S,Int},Tuple{Any,S}}} where S
+        e = only(intersection_env(Tuple{Tuple{String,Integer}}, rhs)[2])
+        @test unknown(e) && e[2]
+        @test intersection_env(Tuple{Tuple{String,Int8}}, rhs)[2] === Core.svec(Int8)
+    end
+    let rhs = Tuple{Union{Type{T},T}} where T
+        # `Int` is a `DataType`, and binds `T` to `Int` through `Type{T}`
+        e = only(intersection_env(Tuple{DataType}, rhs)[2])
+        @test unknown(e) && e[2]
+        @test only(intersection_env(Tuple{Type{Int}}, rhs)[2])[1].ub === Int
+        @test intersection_env(Tuple{Float64}, rhs)[2] === Core.svec(Float64)
+    end
+    # ... and with them the outer vars that their declared bounds mention:
+    # `(1, Ref{Any}(1))` binds `T` through the first alternative, and thereby `S`
+    # to `Any`
+    let rhs = Tuple{S,Union{T,U}} where {S,T<:Ref{S},U}
+        e = intersection_env(Tuple{Real,Any}, rhs)[2]
+        @test unknown(e[1]) && e[1][2]
+        @test unbound(e[2]) && unbound(e[3])
+    end
+    # A union for which an instance may choose differently does not affect later
+    # unions that share no vars with it
+    let rhs = Tuple{Union{Nothing,A},Union{Nothing,B}} where {A,B}
+        e = intersection_env(Tuple{Any,Float64}, rhs)[2]
+        @test unbound(e[1]) && e[2] === Float64
+        e = intersection_env(Tuple{Any,Real}, rhs)[2]
+        @test unbound(e[1]) && bound(e[2])
+    end
+    let rhs = Tuple{Union{Nothing,A},Union{Type{T},T}} where {A,T}
+        @test intersection_env(Tuple{Any,Float64}, rhs)[2][2] === Float64
+        @test intersection_env(Tuple{Any,Core.TypeEgal{Int}}, rhs)[2][2] === Int
+        e = intersection_env(Tuple{Any,Type{Int}}, rhs)[2][2]
+        @test bound(e) && e[1].lb === e[1].ub === Int
+    end
+    # ... unlike one that shares a var with it
+    let rhs = Tuple{Union{Nothing,T},Union{Type{T},T}} where T
+        e = only(intersection_env(Tuple{Any,Type{Int}}, rhs)[2])
+        @test unknown(e) && e[2]
+    end
+end
 # A fixed tuple prefix before a free vararg length guarantees a matching
 # right-side tuple element exists, but range and maybe-empty tuple tails do not.
 let rhs = Tuple{typeof(intersection_env), Type{<:Tuple{Vararg{E}}}} where E

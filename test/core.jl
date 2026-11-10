@@ -9320,6 +9320,35 @@ end
 f_value_typevar_with_lowerbound(x::T) where {T>:Int} = T
 @test_throws UndefVarError(:T, :static_parameter) f_value_typevar_with_lowerbound(1.0)
 
+# A call inferred for an abstract argument type must behave like a call dispatched
+# on the argument's concrete type: a static parameter that a `Union` in the
+# signature binds only for some arguments may be undefined (#63514)
+f63514(x::Union{Nothing,S}) where {S} = @isdefined(S) ? S : false
+g63514(r) = f63514(r[])
+@test g63514(Ref{Any}(nothing)) === false
+@test g63514(Ref{Any}(1)) === Int
+@test g63514(Ref{Real}(1.0)) === Float64
+# ... and is not bound to the value found for the abstract argument type
+t63514(x::Union{Type{Int},S}) where {S} = @isdefined(S) ? S : false
+@test (r -> t63514(r[]))(Ref{DataType}(Int)) === t63514(Int) === false
+@test (r -> t63514(r[]))(Ref{DataType}(Float64)) === DataType
+u63514(x::Union{Tuple{Int,Nothing},Tuple{S,Any}}) where {S} = @isdefined(S) ? S : false
+@test (r -> u63514(r[]))(Ref{Tuple{Int,Any}}((1, nothing))) === u63514((1, nothing)) === false
+@test (r -> u63514(r[]))(Ref{Tuple{Int,Any}}((1, 2.0))) === u63514((1, 2.0)) === Int
+# the same with an invariant occurrence inside the `Union`
+v63514(x::Union{AbstractVector{S},Vector{Int}}) where {S} = @isdefined(S) ? S : false
+@test (r -> v63514(r[]))(Ref{AbstractVector{Int}}([1])) === v63514([1]) === false
+@test (r -> v63514(r[]))(Ref{AbstractVector{Int}}(1:2)) === v63514(1:2) === Int
+# a concrete argument may bind the parameter through a different member of the
+# `Union` than the abstract type does
+w63514(x::Union{Tuple{S,Int},Tuple{Any,S}}) where {S} = S
+@test (r -> w63514(r[]) <: Integer)(Ref{Tuple{String,Integer}}(("a", 1))) === (w63514(("a", 1)) <: Integer) === false
+@test (r -> w63514(r[]) <: Integer)(Ref{Tuple{String,Integer}}(("a", 0x1))) === (w63514(("a", 0x1)) <: Integer) === true
+# ... or through the declared bound of a parameter that such a member binds
+x63514(x::S, y::Union{T,U}) where {S,T<:Ref{S},U} = S
+@test ((r1, r2) -> x63514(r1[], r2[]) <: Real)(Ref{Real}(1), Ref{Any}(Ref{Any}(1))) ===
+    (x63514(1, Ref{Any}(1)) <: Real) === false
+
 # Static parameters constrained indirectly through other static-parameter bounds
 # are defined.
 f1_sparam_defined_62099(t::Type{E}) where E = @isdefined(E)

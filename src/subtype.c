@@ -65,12 +65,17 @@ typedef struct {
 // strongest contribution wins (see `jl_varbinding_t.lb_certainty`).
 typedef enum {
     BOUND_NONE  = 0, // no (non-Bottom) lower-bound contribution yet
-    BOUND_PROXY = 1, // derives from another variable's declared bounds: a
+    BOUND_ARM   = 1, // made while matching a right-side union alternative that
+                     // some instances of the query may not choose (see
+                     // `union_choice_unstable`). Those instances never make this
+                     // contribution, so nothing recorded on this channel, not
+                     // even an invariant occurrence, holds for every instance
+    BOUND_PROXY = 2, // derives from another variable's declared bounds: a
                      // `==`-equal rep of the query need not bind this var at all
-    BOUND_EQ    = 2, // derives from a query value reached through an `==`
+    BOUND_EQ    = 3, // derives from a query value reached through an `==`
                      // equality wrapper (`Type{A}`): every `==`-equal rep of the
                      // query also binds this var, but only to an `==`-equal value
-    BOUND_EGAL  = 3, // derives from an egality-pinned position (`TypeEgal`/type
+    BOUND_EGAL  = 4, // derives from an egality-pinned position (`TypeEgal`/type
                      // tag): the value is `===`-certain
 } jl_bound_certainty_t;
 
@@ -121,6 +126,14 @@ typedef struct jl_varbinding_t {
     int8_t lb_required;  // a lower-bound contribution came from a covariant tuple
                          // element that is present in every concrete member of
                          // the current left-side branch
+    int8_t inv_certainty; // strongest channel (jl_bound_certainty_t) on which an
+                          // invariant occurrence was matched. If that is only
+                          // BOUND_ARM, the occurrence pins the var just for the
+                          // instances that make that match, not for all of them
+    int8_t alt_occurs;   // occurs in a right-side union alternative that the search
+                         // did not choose for the query, but that an instance may
+                         // choose instead. That instance binds the var there, to
+                         // a value this search never computed
     int8_t lb_spell;     // spelling authority (`jl_stenv_t.spell_channel`) of the
                          // contribution that supplied the current `lb` OBJECT.
                          // Among `==`-equal spellings the runtime binding takes
@@ -187,7 +200,9 @@ typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
                               // (`Type{A}` matched by `==`), to BOUND_PROXY inside
                               // a bounds-consistency check on a typevar-containing
                               // x-term (whose bindings derive from another var's
-                              // declared bounds rather than from a query value)
+                              // declared bounds rather than from a query value),
+                              // to BOUND_ARM inside a right-side union alternative
+                              // that some instances of the query may not choose
     int value_descent;        // true inside a bounds-consistency check on a closed
                               // x-term: the x-term is then a concrete type OBJECT
                               // (a candidate variable bound), so structural descent
@@ -210,6 +225,16 @@ typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
     int emptiness_only;       // true iff intersection only needs to test for emptiness
     int triangular;           // when intersecting Ref{X} with Ref{<:Y}
     int ignore_lb_required;   // true while checking a variable's declared bound
+    int instance_envout;      // true iff `envout` must hold for every instance of an
+                              // abstract left side, i.e. for every dispatch tuple
+                              // below it. Set by `jl_subtype_env` unless the left
+                              // side is itself a dispatch tuple, and so its own
+                              // only instance
+    int diverged;             // true once some instance of the left side may have
+                              // chosen a different right-side union alternative than
+                              // the left side did. From then on, that instance may
+                              // carry different bindings than this search records
+                              // (see `union_choice_unstable`)
     int closed_inputs;        // true iff the top-level inputs have no free typevars, so a
                               // UnionAll var can only alias one already in `vars`;
                               // -1 until computed from `inputs` (see `may_capture_free_var`)
@@ -401,8 +426,9 @@ static int current_env_length(jl_stenv_t *e)
 }
 
 // Per-var saved env layout:
-// [occurs, occurs_inv, occurs_cov, cov_diag, max_offset, lb_certainty, lb_required, lb_spell, pinned].
-#define JL_SAVEDENV_BYTES_PER_VAR 9
+// [occurs, occurs_inv, occurs_cov, cov_diag, max_offset, lb_certainty, lb_required, lb_spell, pinned,
+//  inv_certainty, alt_occurs].
+#define JL_SAVEDENV_BYTES_PER_VAR 11
 
 // Combined covariance count used for diagonal-rule decisions: the max of the
 // counter for the current consistency-check scope and the largest count
@@ -416,7 +442,8 @@ static inline int8_t cov_count(const jl_varbinding_t *vb) JL_NOTSAFEPOINT
 typedef struct {
     int8_t *buf;
     int rdepth;
-    int8_t _space[72]; // == 8 * JL_SAVEDENV_BYTES_PER_VAR
+    int diverged;
+    int8_t _space[88]; // == 8 * JL_SAVEDENV_BYTES_PER_VAR
     jl_gcframe_t gcframe;
     jl_value_t *roots[24]; // == 8 * 3 (lb, ub, innervars)
 } jl_savedenv_t;
@@ -475,10 +502,13 @@ static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
         se->buf[j++] = v->lb_required;
         se->buf[j++] = v->lb_spell;
         se->buf[j++] = v->pinned;
+        se->buf[j++] = v->inv_certainty;
+        se->buf[j++] = v->alt_occurs;
         v = v->prev;
     }
     assert(i == nroots); (void)nroots;
     se->rdepth = e->Runions.depth;
+    se->diverged = e->diverged;
 }
 
 static void alloc_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_CANSAFEPOINT
@@ -580,10 +610,13 @@ static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPO
         v->lb_required = se->buf[j++];
         v->lb_spell = se->buf[j++];
         v->pinned = se->buf[j++];
+        v->inv_certainty = se->buf[j++];
+        v->alt_occurs = se->buf[j++];
         v = v->prev;
     }
     assert(i == nroots); (void)nroots;
     e->Runions.depth = se->rdepth;
+    e->diverged = se->diverged;
     if (e->envout && e->envidx < e->envsz)
         memset(&e->envout[e->envidx], 0, (e->envsz - e->envidx)*sizeof(void*));
 }
@@ -1051,6 +1084,8 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
 
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param, int limit_slow) JL_CANSAFEPOINT;
 
+static void note_union_match(jl_value_t *x, jl_value_t *u, jl_stenv_t *e) JL_NOTSAFEPOINT;
+
 static int is_leaf_typevar(jl_tvar_t *v) JL_NOTSAFEPOINT;
 
 // Check whether env (variable bounds & diagonality) changed compared to saved env.
@@ -1107,8 +1142,10 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAF
         return 1;
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
-    if (obviously_in_union(y, x))
+    if (obviously_in_union(y, x)) {
+        note_union_match(x, y, e);
         return 1;
+    }
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
     // Consistency check for a typevar bound: covariant occurrences inside this
     // call should not accumulate into the surrounding scope's diagonality
@@ -1180,8 +1217,12 @@ static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, jl_param_p
         // saturate counters at 2; we don't need values bigger than that
         if (vb->occurs < 2)
             vb->occurs++;
-        if (param == PARAM_INVARIANT && e->invdepth > vb->depth0 && vb->occurs_inv < 2)
-            vb->occurs_inv++;
+        if (param == PARAM_INVARIANT && e->invdepth > vb->depth0) {
+            if (vb->occurs_inv < 2)
+                vb->occurs_inv++;
+            if (vb->inv_certainty < e->bound_channel)
+                vb->inv_certainty = e->bound_channel;
+        }
         else if (param == PARAM_COVARIANT && vb->occurs_cov < 2)
             vb->occurs_cov++;
         // Always set `max_offset` to `-1` during the 1st round intersection.
@@ -2127,11 +2168,37 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         // however, is present in every concrete member even when the tuple tail
         // length is free, so a statically constraining right-side element at that
         // position records `lb_required` while matching that tuple element.
-        int eff_constrained = (vb.occurs_inv ||
-            (cov_count(&vb) && u->var->lb == jl_bottom_type &&
-             (vb.lb_certainty > BOUND_PROXY || vb.lb_required)));
-        jl_value_t *val = subtype_unionall_envout_value(t, u, e, &vb, lb, &new_tvar,
-                                                        eff_constrained);
+        // The same holds for a var bound only inside a right-side union alternative
+        // that some instances may not choose (BOUND_ARM): `Any <: Union{Nothing,S}`
+        // binds `S`, but the argument `nothing` matches `Nothing` and leaves `S`
+        // unbound. Unlike a declared bound, which is always checked, such an
+        // alternative need not be matched at all, so an invariant occurrence
+        // inside it does not pin the var for every instance either.
+        int inv_certain = vb.inv_certainty > BOUND_ARM;
+        int cov_occurs = cov_count(&vb) && u->var->lb == jl_bottom_type;
+        int eff_constrained = (inv_certain ||
+            (cov_occurs && vb.lb_certainty > BOUND_PROXY) ||
+            ((cov_occurs || vb.occurs_inv) && vb.lb_required));
+        jl_value_t *val;
+        if (!inv_certain && (vb.alt_occurs || (vb.occurs_inv &&
+                (cov_count(&vb) || vb.lb_certainty > BOUND_ARM)))) {
+            // No value holds for every instance: an instance may bind the var
+            // through an alternative that the left side did not choose, or skip
+            // the match that pinned the var here and bind it to a smaller type
+            // through its other occurrences. (If the var has no other
+            // occurrence, such an instance leaves it unbound instead, and the
+            // pinned value is still right for the instances that do bind it.)
+            val = wrap_tvar_env((jl_value_t*)u->var, eff_constrained);
+        }
+        else {
+            val = subtype_unionall_envout_value(t, u, e, &vb, lb, &new_tvar, eff_constrained);
+            // A plain value claims that every instance binds the var to exactly
+            // that value. Something established only by some instances cannot
+            // back that claim, so report the declared var instead.
+            if (!jl_is_svec(val) && !inv_certain && vb.lb_certainty <= BOUND_ARM &&
+                (vb.occurs_inv || vb.lb_certainty == BOUND_ARM))
+                val = wrap_tvar_env((jl_value_t*)u->var, eff_constrained);
+        }
         jl_value_t *oldval = e->envout[e->envidx];
         // if we try to assign different variable values (due to checking
         // multiple union members), consider the value unknown. Use AND
@@ -2970,6 +3037,174 @@ static int typeeq_is_dangling_key(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_t 
     return jl_has_free_typevars(t) && !typeeq_vars_bound_in_env(t, e, wenv);
 }
 
+// --- right-side union decisions and the instances of the query ---------------
+//
+// An instance of the left side is a dispatch tuple below it: the concrete argument
+// types of one call that the left side covers. Inference, the inliner and codegen
+// read `envout` as a statement about every instance, but the search computes it
+// by choosing one alternative of each right-side union for the left side as a
+// whole.
+//
+// An instance is matched by the same search, which may choose differently for it.
+// It tries the alternatives in the same order, except that it first takes a closed
+// alternative that it is egal to, if any (`obviously_in_union`). So it ends up in
+// the alternative chosen for the left side, unless an alternative it tries earlier
+// accepts it (which can happen even if that alternative rejected the left side as
+// a whole). Such an instance
+//  - makes none of the bindings made inside the left side's alternative, which
+//    are therefore recorded on the BOUND_ARM channel;
+//  - binds the vars that its own alternative mentions, to values this search never
+//    computed (`alt_occurs`);
+//  - may carry different bindings than the left side from then on (`diverged`).
+
+// Does every instance of the left side have exactly `x` at this position? That is
+// the case for a closed type below an invariant constructor (a type parameter),
+// and for a dispatch key in covariant position: a `TypeEgal`, or a concrete type
+// other than a kind (a kind stands for the `TypeEgal` keys of all types of that
+// kind). It is never the case for the whole left side: `instance_envout` is only
+// set when the left side has instances other than itself.
+static int instance_rigid(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT
+{
+    if (jl_has_free_typevars(x) || x == e->inputs[0])
+        return 0;
+    return e->invdepth > 0 || jl_is_typeegal(x) || (jl_is_concrete_type(x) && !jl_is_kind(x));
+}
+
+// Some instance may bind the vars that occur in `t` to values this search never
+// computed, e.g. because it chooses `t` as its union alternative. Mark those vars
+// `alt_occurs`, along with the outer vars that their declared bounds mention: the
+// bounds are checked against the instance's bindings, so the outer vars may end
+// up bound differently too.
+static void mark_alt_occurs(jl_value_t *t, jl_stenv_t *e) JL_NOTSAFEPOINT
+{
+    for (jl_varbinding_t *v = e->vars; v != NULL; v = v->prev) {
+        if (!v->existential || v->alt_occurs || v->var == NULL)
+            continue;
+        v->alt_occurs = jl_has_typevar(t, v->var);
+        for (jl_varbinding_t *in = e->vars; in != v && !v->alt_occurs; in = in->prev) {
+            if (in->alt_occurs && in->var != NULL &&
+                (jl_has_typevar(in->var->lb, v->var) || jl_has_typevar(in->var->ub, v->var)))
+                v->alt_occurs = 1;
+        }
+    }
+}
+
+// Could what `t` accepts depend on a binding made so far, either by this search or
+// by an instance that diverged from it?
+static int depends_on_bindings(jl_value_t *t, jl_stenv_t *e) JL_NOTSAFEPOINT
+{
+    for (jl_varbinding_t *v = e->vars; v != NULL; v = v->prev) {
+        if (v->existential && v->var != NULL && jl_has_typevar(t, v->var) &&
+            (v->occurs || v->alt_occurs || v->lb != v->var->lb || v->ub != v->var->ub ||
+             jl_has_free_typevars(v->var->lb) || jl_has_free_typevars(v->var->ub)))
+            return 1;
+    }
+    return 0;
+}
+
+// Helper for `union_choice_unstable`: walk the alternatives of `u` in search order
+// and return whether an instance of `x` may choose one of them instead of the one
+// chosen for `x`. `*before` stays true until the walk reaches that alternative.
+// That `x` ended up there means that every alternative before it rejected `x`,
+// and that it accepts every instance with the same bindings as `x`. So an
+// instance may choose
+//  - an alternative before it, unless that alternative is closed and every
+//    instance has `x` itself here (`rigid`): the verdict of a closed alternative
+//    then depends on `x` alone, and it rejected `x`;
+//  - an alternative after it only by being egal to it (which requires `x` not to
+//    be `rigid`, and the alternative to be a closed concrete type or `TypeEgal`),
+//    or if the instance has different bindings than `x` and the chosen
+//    alternative depends on them, so that it may reject the instance
+//    (`search_on`).
+// No instance chooses an alternative that is disjoint from `x`.
+static int union_alternatives(jl_value_t *x, jl_value_t *u, jl_value_t *arm, int rigid,
+                              int search_on, int *before, jl_stenv_t *e) JL_NOTSAFEPOINT
+{
+    if (jl_is_uniontype(u)) {
+        int a = union_alternatives(x, ((jl_uniontype_t*)u)->a, arm, rigid, search_on, before, e);
+        int b = union_alternatives(x, ((jl_uniontype_t*)u)->b, arm, rigid, search_on, before, e);
+        return a | b;
+    }
+    if (arm ? u == arm : obviously_egal(u, x)) {
+        *before = 0;
+        return 0;
+    }
+    int closed = !jl_has_free_typevars(u);
+    if (*before ? closed && rigid :
+        !search_on && (rigid || !closed || !(jl_is_concrete_type(u) || jl_is_typeegal(u))))
+        return 0;
+    if (obviously_disjoint(x, u, 0))
+        return 0;
+    if (!closed)
+        mark_alt_occurs(u, e);
+    return 1;
+}
+
+// For `x <: u` with a right-side union `u`, could an instance of `x` choose another
+// alternative of `u` than the one chosen for `x`? `arm` is that alternative, or
+// NULL if `x` was matched without a search (because it is egal to an alternative,
+// or was matched against `u` as a whole). Also marks the vars that such an
+// instance may bind differently (`alt_occurs`).
+static int union_choice_unstable(jl_value_t *x, jl_value_t *u, jl_value_t *arm, jl_stenv_t *e) JL_NOTSAFEPOINT
+{
+    int xclosed = !jl_has_free_typevars(x);
+    if (xclosed && !jl_has_free_typevars(u))
+        return 0; // no alternative binds anything
+    int rigid = instance_rigid(x, e);
+    // If every instance has `x` itself here, and `x` was matched without a search,
+    // every instance is matched the same way. Not so below an equality wrapper:
+    // there an instance is only `==` to `x`, so it need not be egal to the
+    // alternative that `x` is egal to.
+    if (rigid && arm == NULL && e->bound_channel != BOUND_EQ)
+        return 0;
+    int before = 1;
+    int search_on = e->diverged && arm != NULL && depends_on_bindings(arm, e);
+    if (!union_alternatives(x, u, arm, rigid, search_on, &before, e))
+        return 0;
+    // vars in `x` may have taken their bounds from the alternative chosen for `x`,
+    // which an instance that chooses otherwise does not share
+    if (!xclosed)
+        mark_alt_occurs(x, e);
+    return 1;
+}
+
+// Enter the match of a right-side union alternative that some instances may not
+// choose. Everything established inside it is recorded on the BOUND_ARM channel,
+// no tuple element inside it counts as present in every instance
+// (`ignore_lb_required`), and the search is marked `diverged`.
+static void enter_alternative(jl_stenv_t *e, int *saved) JL_NOTSAFEPOINT
+{
+    saved[0] = e->bound_channel;
+    saved[1] = e->spell_channel;
+    saved[2] = e->ignore_lb_required;
+    e->bound_channel = BOUND_ARM;
+    e->spell_channel = BOUND_ARM;
+    e->ignore_lb_required = 1;
+    e->diverged = 1;
+}
+
+static void leave_alternative(jl_stenv_t *e, const int *saved) JL_NOTSAFEPOINT
+{
+    e->bound_channel = saved[0];
+    e->spell_channel = saved[1];
+    e->ignore_lb_required = saved[2];
+}
+
+// `x` (or each of its union components) matched the right-side union `u` without
+// a search. Mark the search `diverged` if an instance may match differently.
+static void note_union_match(jl_value_t *x, jl_value_t *u, jl_stenv_t *e) JL_NOTSAFEPOINT
+{
+    if (!e->instance_envout)
+        return;
+    if (jl_is_uniontype(x)) {
+        note_union_match(((jl_uniontype_t*)x)->a, u, e);
+        note_union_match(((jl_uniontype_t*)x)->b, u, e);
+    }
+    else if (union_choice_unstable(x, u, NULL, e)) {
+        e->diverged = 1;
+    }
+}
+
 static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param)
 {
     if (jl_is_uniontype(x)) {
@@ -3002,8 +3237,10 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         x = pick_union_element(x, e, 0);
     }
     if (jl_is_uniontype(y)) {
-        if (obviously_in_union(y, x))
+        if (obviously_in_union(y, x)) {
+            note_union_match(x, y, e);
             return 1;
+        }
         // The members of a `Type{T}` straddle several kinds, so e.g.
         // `Type{Int} <: Union{DataType,UnionAll}` holds without holding for
         // either branch alone; check the kind cover against the whole union
@@ -3017,8 +3254,10 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             // a dangling-var dispatch key has a single tag, found by the
             // per-branch decomposition instead
             if (!jl_is_typevar(xp0) && !typeeq_is_dangling_key(xp0, e, NULL) &&
-                typeeq_subtype_kind_cover(xp0, y))
+                typeeq_subtype_kind_cover(xp0, y)) {
+                note_union_match(x, y, e);
                 return 1;
+            }
         }
         if (jl_is_unionall(x))
             return subtype_unionall(y, (jl_unionall_t*)x, e, 0, param);
@@ -3032,8 +3271,17 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             jl_varbinding_t *xx = lookup(e, (jl_tvar_t *)x);
             ui = ((xx && xx->existential) || jl_has_free_typevars(y)) && pick_union_decision(e, 1);
         }
-        if (ui == 1)
-            y = pick_union_element(y, e, 1);
+        if (ui == 1) {
+            jl_value_t *arm = pick_union_element(y, e, 1);
+            if (e->instance_envout && union_choice_unstable(x, y, arm, e)) {
+                int saved[3];
+                enter_alternative(e, saved);
+                int sub = subtype(x, arm, e, param);
+                leave_alternative(e, saved);
+                return sub;
+            }
+            y = arm;
+        }
     }
     // An internal `Intersect` meet node is only ever produced as an existential
     // upper bound, so it can appear on the right (`x <: a ∩ b`) but never on the
@@ -3354,8 +3602,10 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     int16_t oldRmore = e->Runions.more;
     int sub;
     // fast-path for #49857
-    if (obviously_in_union(y, x))
+    if (obviously_in_union(y, x)) {
+        note_union_match(x, y, e);
         return 1;
+    }
     int kindx = !jl_has_free_typevars(x);
     int kindy = !jl_has_free_typevars(y);
     if (kindx && kindy)
@@ -3634,6 +3884,8 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->emptiness_only = 0;
     e->triangular = 0;
     e->ignore_lb_required = 0;
+    e->instance_envout = 0;
+    e->diverged = 0;
     e->closed_inputs = 0;
     e->inputs[0] = e->inputs[1] = NULL;
     e->intersecting = NULL;
@@ -4135,6 +4387,7 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
         obvious_subtype = 3;
     }
     init_stenv(&e, env, envsz);
+    e.instance_envout = envsz > 0 && !jl_is_dispatch_tupletype(x);
     e.closed_inputs = -1;
     e.inputs[0] = x;
     e.inputs[1] = y;
