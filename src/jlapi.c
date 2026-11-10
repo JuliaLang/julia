@@ -1261,9 +1261,7 @@ static char *absrealpath(const char *in, int nprefix) JL_NOTSAFEPOINT
     return out;
 }
 
-// Make each entry of a path list absolute. With `resolve_symlinks`, an entry is listed
-// resolved and then as given, which matches files loaded through its symlinks as well.
-// Entries under an earlier one are dropped, so parsing the result again yields the same.
+// Make each entry of a path list absolute, optionally resolving symlinks.
 static char *abspathlist(const char *in, int resolve_symlinks) JL_NOTSAFEPOINT
 {
     char cwd[JL_PATH_MAX];
@@ -1271,7 +1269,6 @@ static char *abspathlist(const char *in, int resolve_symlinks) JL_NOTSAFEPOINT
     size_t outlen = 0;
     char *out = (char*)malloc_s(1);
     out[0] = '\0';
-    int resolve = resolve_symlinks;
     while (1) {
         const char *end = strchr(in, PATHLISTSEPSTRING[0]);
         size_t len = end ? (size_t)(end - in) : strlen(in);
@@ -1279,7 +1276,7 @@ static char *abspathlist(const char *in, int resolve_symlinks) JL_NOTSAFEPOINT
             char *entry = (char*)malloc_s(len + 1);
             memcpy(entry, in, len);
             entry[len] = '\0';
-            if (resolve) {
+            if (resolve_symlinks) {
                 char *resolved = absrealpath(entry, 0);
                 free(entry);
                 entry = resolved;
@@ -1292,7 +1289,6 @@ static char *abspathlist(const char *in, int resolve_symlinks) JL_NOTSAFEPOINT
                     jl_error("fatal error: unexpected error while retrieving current working directory");
             }
             size_t prefix = isabs ? 0 : cwdlen + 1;
-            size_t prev = outlen;
             out = (char*)realloc_s(out, outlen + prefix + len + 2);
             if (outlen > 0)
                 out[outlen++] = PATHLISTSEPSTRING[0];
@@ -1305,19 +1301,7 @@ static char *abspathlist(const char *in, int resolve_symlinks) JL_NOTSAFEPOINT
             outlen += len;
             out[outlen] = '\0';
             free(entry);
-            if (prev > 0) {
-                out[prev] = '\0';
-                if (jl_path_is_tracked_by(out + prev + 1, out))
-                    outlen = prev;
-                else
-                    out[prev] = PATHLISTSEPSTRING[0];
-            }
         }
-        if (resolve) {
-            resolve = 0;
-            continue;
-        }
-        resolve = resolve_symlinks;
         if (!end)
             break;
         in = end + 1;
