@@ -627,6 +627,7 @@ precompile_test_harness(false) do dir
           """)
 
     @test Base.compilecache(Base.PkgId("Baz")) == Base.PrecompilableError() # due to __precompile__(false)
+    @test occursin("__precompile__(false)", sprint(show, Base.PrecompilableError()))
 
     OverwriteMethodError_file = joinpath(dir, "OverwriteMethodError.jl")
     write(OverwriteMethodError_file,
@@ -2855,6 +2856,14 @@ precompile_test_harness("No package module") do load_path
     @test occursin(
         "`using/import Printf` outside of a Module detected. Importing a package outside of a module is not allowed during package precompilation.",
         String(take!(io)))
+
+    write(joinpath(load_path, "RequireStdlibInPackage.jl"), """
+    module RequireStdlibInPackage
+    Base.require_stdlib(Base.PkgId(Base.UUID("de0858da-6303-5e67-8744-51eddeeeb8d7"), "Printf"))
+    end
+    """)
+    @test_throws r"Failed to precompile RequireStdlibInPackage" Base.compilecache(Base.identify_package("RequireStdlibInPackage"), io, io)
+    @test occursin("package code should instead use it directly from that stdlib", String(take!(io)))
 end
 
 precompile_test_harness("Constprop CodeInstance invalidation") do load_path
@@ -3765,6 +3774,46 @@ precompile_test_harness("invalidation for 'foreign-keyed' Preferences") do load_
         @test Base.stale_cachefile(pkg_file, cachefile) !== true
         # Setting a previously-unset preference also causes staleness
         Base.set_active_project(env_unset_set)
+        @test Base.stale_cachefile(pkg_file, cachefile) === true
+    finally
+        Base.set_active_project(old_proj)
+    end
+end
+
+precompile_test_harness("invalidation for Array and Dict Preferences") do load_path
+    # A cache stays valid for equal structured values and goes stale for changed ones
+    uuid_str = "c6e1d3a8-4b57-4a0f-9f43-0a6f4f1c2b11"
+    write(joinpath(load_path, "PkgStructuredPrefs.jl"),
+          """
+          module PkgStructuredPrefs
+              Base.record_compiletime_preference(Base.UUID("$uuid_str"), "levels")
+              Base.record_compiletime_preference(Base.UUID("$uuid_str"), "options")
+          end
+          """)
+    function env(prefs)
+        project = joinpath(mkpath(joinpath(load_path, "env_$(hash(prefs))")), "Project.toml")
+        write(project, """
+              [deps]
+              PkgStructured = "$uuid_str"
+
+              [preferences.PkgStructured]
+              $prefs
+              """)
+        return project
+    end
+    levels = "levels = [1, 2]"
+    options = "options = {a = 1, b = [\"x\", {c = true}]}"
+    old_proj = Base.active_project()
+    try
+        Base.set_active_project(env("$levels\n$options"))
+        cachefile, _ = Base.compilecache(Base.PkgId("PkgStructuredPrefs"))
+        pkg_file = joinpath(load_path, "PkgStructuredPrefs.jl")
+        @test Base.stale_cachefile(pkg_file, cachefile) !== true
+        Base.set_active_project(env("$levels\noptions = {b = [\"x\", {c = true}], a = 1}"))
+        @test Base.stale_cachefile(pkg_file, cachefile) !== true
+        Base.set_active_project(env("levels = [1, 2, 3]\n$options"))
+        @test Base.stale_cachefile(pkg_file, cachefile) === true
+        Base.set_active_project(env("$levels\noptions = {a = 1, b = [\"x\", {c = false}]}"))
         @test Base.stale_cachefile(pkg_file, cachefile) === true
     finally
         Base.set_active_project(old_proj)

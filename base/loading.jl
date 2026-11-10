@@ -2134,7 +2134,8 @@ function Base.parse(::Type{CacheFlags}, s::AbstractString)
     e = Meta.parse(s)
     if !(e isa Expr && e.head === :call && length(e.args) == 2 &&
         e.args[1] === :CacheFlags &&
-        e.args[2] isa Expr && e.args[2].head == :parameters)
+        e.args[2] isa Expr && e.args[2].head == :parameters &&
+        all(p -> p isa Expr && p.head === :kw, e.args[2].args))
         throw(ArgumentError("Malformed CacheFlags string"))
     end
     params = Dict{Symbol, Any}(p.args[1] => p.args[2] for p in e.args[2].args)
@@ -3341,6 +3342,9 @@ function __require_prelocked(pkg::PkgId, env)
     try
         include(__toplevel__, path)
         loaded = maybe_root_module(pkg)
+    catch
+        unreference_module(pkg) # later loads must not find the partly defined module
+        rethrow()
     finally
         Core.set_edition(__toplevel__, old_toplevel_edition)
         lock(require_lock)
@@ -4910,6 +4914,7 @@ end
 # compares mutable containers structurally. This allows us to differentiate
 # `1.0` / `1` / `true` in Preferences, despite these being normally `isequal`
 toml_egal(@nospecialize(A), @nospecialize(B)) = A === B
+toml_egal(A::BigInt, B::BigInt) = A == B # a large integer is parsed to a new object each time
 
 function toml_egal(A::AbstractArray, B::AbstractArray)
     axes(A) != axes(B) && return false
