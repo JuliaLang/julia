@@ -8099,6 +8099,14 @@ end === Union{ErrorException, TypeError, UndefVarError}
     replaceglobal!(m, s, 1, x)
 end === Union{ErrorException, TypeError, UndefVarError}
 
+# `isdefinedglobal` throws a `TypeError` for a non-`Bool` import flag or a non-`Symbol` order
+@test Base.infer_return_type(() -> isdefinedglobal(@__MODULE__, :x, 1)) === Union{}
+@test Base.infer_exception_type(() -> isdefinedglobal(@__MODULE__, :x, 1)) === TypeError
+@test TypeError <: Base.infer_exception_type(() -> isdefinedglobal(@__MODULE__, :x, true, 1))
+@test Base.infer_exception_type((Module, Symbol, Any)) do m, s, b
+    isdefinedglobal(m, s, b)
+end === Union{TypeError, UndefVarError}
+
 # Issue #58257 - Hang in inference during BindingPartition resolution
 module A58257
     module B58257
