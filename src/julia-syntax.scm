@@ -525,6 +525,7 @@
                       (map (lambda (x) (make-ssavalue)) keynames)
                       keynames))
          (tempslot (gensy))
+         (ret (make-ssavalue))
          ;; list of function's initial line number and meta nodes (empty if none)
          (prologue (extract-method-prologue body))
          ;; body statements
@@ -599,60 +600,68 @@
                      `(meta ,(cadr m) ,@(filter (lambda (v) (not (memq v keynames)))
                                                 (cddr m))))
                    (filter nospecialize-meta? prologue))
-            ;; If not using slots for the keyword argument values, still declare them
-            ;; for reflection purposes.
-            ,@(if ssa-keyvars?
-                  (map (lambda (v) `(local ,v)) (reverse keynames))
-                  '())
-            ,((if ssa-keyvars? make-assignments scopenest)
-              keyvars
-              (map (lambda (v dflt)
-                     (let* ((k     (decl-var v))
-                            (rval0 `(call (core getfield) ,kw (inert ,k)))
-                            ;; note: if the "declared" type of a KW arg includes something
-                            ;; from keyword-sparams then don't assert it here, since those
-                            ;; static parameters don't have values yet. instead, the type
-                            ;; will be picked up when the underlying method is called.
-                            (rval (if (and (decl? v)
-                                           (not (any (lambda (s)
-                                                       (expr-contains-eq (car s) (caddr v)))
-                                                     keyword-sparams)))
-                                      (let ((T    (caddr v))
-                                            (temp (make-ssavalue)))
-                                        `(block (= ,temp ,rval0)
-                                                (if (call (core isa) ,temp ,T)
-                                                    (null)
-                                                    (call (core throw)
-                                                          (new (core TypeError)
-                                                               (inert |keyword argument|)
-                                                               (inert ,k)
-                                                               ,T
-                                                               ,temp)))
-                                                ,temp))
-                                      rval0)))
-                       `(block (if (call (core isdefined) ,kw (quote ,k))
-                                   (= ,tempslot ,rval)
-                                   (= ,tempslot ,dflt))
-                               ,tempslot)))
-                   vars vals)
-              `(block
-                ,(if (null? restkw)
-                      `(if (call (top isempty)
-                                 (call (top diff_names)
-                                       (call (top keys) ,kw)
-                                       (tuple ,@(map quotify keynames))))
-                            (null)
-                            (call (top kwerr) ,kw ,@(map arg-name pargl) ,@splatted-vararg))
-                      `(= ,rkw (call (top pairs)
-                                     ,(if (null? keynames)
-                                          kw
-                                          `(call (top structdiff) ,kw (curly (core NamedTuple)
-                                                                             (tuple ,@(map quotify keynames))))))))
-                (return (call ,mangled  ;; finally, call the core function
-                              ,@keyvars
-                              ,@(if (null? restkw) '() (list rkw))
-                              ,@(map arg-name pargl)
-                              ,@splatted-vararg))))))
+            (= ,ret
+               ,((if ssa-keyvars? make-assignments scopenest)
+                 keyvars
+                 (map (lambda (v dflt)
+                        (let* ((k     (decl-var v))
+                               (rval0 `(call (core getfield) ,kw (inert ,k)))
+                               ;; note: if the "declared" type of a KW arg includes something
+                               ;; from keyword-sparams then don't assert it here, since those
+                               ;; static parameters don't have values yet. instead, the type
+                               ;; will be picked up when the underlying method is called.
+                               (rval (if (and (decl? v)
+                                              (not (any (lambda (s)
+                                                          (expr-contains-eq (car s) (caddr v)))
+                                                        keyword-sparams)))
+                                         (let ((T    (caddr v))
+                                               (temp (make-ssavalue)))
+                                           `(block (= ,temp ,rval0)
+                                                   (if (call (core isa) ,temp ,T)
+                                                       (null)
+                                                       (call (core throw)
+                                                             (new (core TypeError)
+                                                                  (inert |keyword argument|)
+                                                                  (inert ,k)
+                                                                  ,T
+                                                                  ,temp)))
+                                                   ,temp))
+                                         rval0)))
+                          `(block (if (call (core isdefined) ,kw (quote ,k))
+                                      (= ,tempslot ,rval)
+                                      (= ,tempslot ,dflt))
+                                  ,tempslot)))
+                      vars vals)
+                 `(block
+                   ,(if (null? restkw)
+                         `(if (call (top isempty)
+                                    (call (top diff_names)
+                                          (call (top keys) ,kw)
+                                          (tuple ,@(map quotify keynames))))
+                               (null)
+                               (call (top kwerr) ,kw ,@(map arg-name pargl) ,@splatted-vararg))
+                         `(= ,rkw (call (top pairs)
+                                        ,(if (null? keynames)
+                                             kw
+                                             `(call (top structdiff) ,kw (curly (core NamedTuple)
+                                                                                (tuple ,@(map quotify keynames))))))))
+                   (call ,mangled  ;; finally, call the core function
+                         ,@keyvars
+                         ,@(if (null? restkw) '() (list rkw))
+                         ,@(map arg-name pargl)
+                         ,@splatted-vararg))))
+            ;; Declare the keyword names for reflection (`Base.kwarg_decl`), which
+            ;; reads them off the sorter's first local slots: one unused slot per
+            ;; keyword argument, in order, then the `rest...` slot. The slot after
+            ;; those has no name (`tempslot`), which ends the list, so that the
+            ;; locals of the default value expressions are not taken for keywords.
+            ;; The `local`s of a scope get their slots in reverse order, ahead of
+            ;; every other local, so these go last. The gensyms keep the names out
+            ;; of the scope of the defaults, and print as the keyword names.
+            ,@(if (null? keynames) '() `((local ,tempslot)))
+            ,@(if (null? restkw) '() `((local ,rkw)))
+            ,@(map (lambda (v) `(local ,(named-gensy v))) (reverse keynames))
+            (return ,ret)))
         ;; return primary function
         ,(if (not (symbol? name))
              '(null) name)))))

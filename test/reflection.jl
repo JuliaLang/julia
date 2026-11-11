@@ -1189,6 +1189,67 @@ end
 @test hasmethod(h, Tuple{}, (:a, :b, :c, :d))
 end
 
+# issue #64800: the locals of a keyword sorter, such as those that the default
+# values introduce, are not keyword arguments
+module KwargNames64800
+using Test
+kwnames(f) = Base.kwarg_decl(only(methods(f)))
+glob = 10
+
+f1(x; y = begin z = 0; z end) = x + y
+@test kwnames(f1) == [:y]
+@test hasmethod(f1, Tuple{Int}, (:y,))
+@test !hasmethod(f1, Tuple{Int}, (:z,))
+@test occursin("f1(x; y)", sprint(show, only(methods(f1))))
+@test f1(1) == 1
+@test f1(1; y = 2) == 3
+@test_throws MethodError f1(1; z = 0)
+
+f2(x; a = (t = 2x; t), b = a + t, rest...) = (a, b, keys(rest))
+@test kwnames(f2) == [:a, :b, Symbol("rest...")]
+@test hasmethod(f2, Tuple{Int}, (:a, :b, :t, :anything))
+@test f2(1) == (2, 4, ())
+@test f2(1; b = 0, c = 3) == (2, 0, (:c,))
+@test_throws UndefVarError f2(1; a = 0)
+
+# a local with the name of a later keyword argument, and an assigned argument
+f3(x; a = (b = 1; b), b = (x = 2; b + x)) = (x, a, b)
+@test kwnames(f3) == [:a, :b]
+@test !hasmethod(f3, Tuple{Int}, (:x,))
+@test f3(0) == (2, 1, 3)
+@test f3(0; b = 5) == (0, 1, 5)
+
+f4(; c, a = 1, b::Int = 2) = (c, a, b)
+@test kwnames(f4) == [:c, :a, :b]
+f5(; c, a = c, b::Int = a) = (c, a, b)
+@test kwnames(f5) == [:c, :a, :b]
+f6(; rest...) = rest
+@test kwnames(f6) == [Symbol("rest...")]
+f7(; var"a#b" = 1, c = 2) = (var"a#b", c)
+@test kwnames(f7) == [Symbol("a#b"), :c]
+
+# the default of `a` refers to the global, not to the keyword argument after it
+f8(; a = glob, glob = 2) = (a, glob)
+@test kwnames(f8) == [:a, :glob]
+@test f8() == (10, 2)
+@test f8(; glob = 3) == (10, 3)
+
+f9(n; a = (s = 0; for i in 1:n; s += i; end; s),
+      b = try error() catch err; 1 end,
+      c = Int[q for q in 1:n],
+      d = let v = n; v + 1 end,
+      e = (local w = 3; w)) = (a, b, c, d, e)
+@test kwnames(f9) == [:a, :b, :c, :d, :e]
+@test !hasmethod(f9, Tuple{Int}, (:s,))
+@test f9(2) == (3, 1, [1, 2], 3, 3)
+
+let k = 2
+    g(x; y = (z = k; z)) = x + y
+    @test kwnames(g) == [:y]
+    @test g(1) == 3
+end
+end
+
 # issue #31353
 function f31353(f, x::Array{<:Dict})
 end

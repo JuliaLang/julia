@@ -105,16 +105,7 @@ function kwarg_decl(m::Method, kwtype = nothing; world::UInt=get_world_counter()
             end
         end
         if kwli !== nothing
-            kwli = kwli::Method
-            slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), kwli.slot_syms)
-            kws = filter(x -> !(x === empty_sym || '#' in string(x)), slotnames[(kwli.nargs + 1):end])
-            # ensure the kwarg... is always printed last. The order of the arguments are not
-            # necessarily the same as defined in the function
-            i = findfirst(x -> endswith(string(x)::String, "..."), kws)
-            if i !== nothing
-                push!(kws, kws[i])
-                deleteat!(kws, i)
-            end
+            kws = kwsorter_kwnames(kwli::Method)
             isempty(kws) && push!(kws,  :var"...")
             return kws
         end

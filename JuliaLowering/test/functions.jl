@@ -875,6 +875,30 @@ end
         @test exc.args == ((; not_present=100), test_mod.f_kw_simple, 20, 1.0)
     end
 
+    @testset "(AI) keyword names for reflection" begin
+        # `Base.kwarg_decl` reads the keyword names off the first local slots of
+        # the keyword sorter, and the locals of the default values (`t`, `b`,
+        # the reassigned `x`) must not be taken for keywords
+        JuliaLowering.include_string(test_mod, """
+        begin
+            f_kw_names_1(x; a = (t = 2x; t), b = a + t, rest...) = (a, b, keys(rest))
+            f_kw_names_2(x; a = (b = 1; b), b = (x = 2; b + x)) = (x, a, b)
+            f_kw_names_3(; c, a = 1, b::Int = 2) = (c, a, b)
+            f_kw_names_4(; rest...) = rest
+        end
+        """)
+        kwnames(f) = Base.kwarg_decl(only(methods(f)))
+        @test kwnames(test_mod.f_kw_names_1) == [:a, :b, Symbol("rest...")]
+        @test test_mod.f_kw_names_1(1) == (2, 4, ())
+        @test test_mod.f_kw_names_1(1; b = 0, c = 3) == (2, 0, (:c,))
+        @test kwnames(test_mod.f_kw_names_2) == [:a, :b]
+        @test !hasmethod(test_mod.f_kw_names_2, Tuple{Int}, (:x,))
+        @test test_mod.f_kw_names_2(0) == (2, 1, 3)
+        @test test_mod.f_kw_names_2(0; b = 5) == (0, 1, 5)
+        @test kwnames(test_mod.f_kw_names_3) == [:c, :a, :b]
+        @test kwnames(test_mod.f_kw_names_4) == [Symbol("rest...")]
+    end
+
     @testset "anonymous forms" begin
         f = JL.include_string(test_mod, "function (;kw); kw; end")
         @test f(;kw=1) == 1

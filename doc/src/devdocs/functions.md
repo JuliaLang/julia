@@ -187,6 +187,12 @@ function (::Core.kwcall)(kws, circle, center, radius)
 end
 ```
 
+Reflection (for example `methods`, or `hasmethod` with keyword names) reads the names of a method's
+keyword arguments from this definition: its first local variables are declared with the names of
+the keyword arguments, in the order of their declaration, followed by the rest keyword argument
+under the name `options...`. These variables are otherwise unused. The variable after them has no
+name, which separates them from the variables that the default value expressions introduce.
+
 
 ## [Compiler efficiency issues](@id compiler-efficiency-issues)
 

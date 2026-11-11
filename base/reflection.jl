@@ -1129,13 +1129,29 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
     tt = rewrap_unionall(Tuple{typeof(Core.kwcall), NamedTuple, ft, u.parameters...}, t)
     match = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world)
     match === nothing && return false
-    kws = ccall(:jl_uncompress_argnames, Array{Symbol,1}, (Any,), (match::Method).slot_syms)
-    kws = kws[((match::Method).nargs + 1):end] # remove positional arguments
+    kws = kwsorter_kwnames(match::Method)
     isempty(kws) && return true # some kwfuncs simply forward everything directly
-    for kw in kws
-        endswith(String(kw), "...") && return true
-    end
+    endswith(String(last(kws)), "...") && return true
     return issubset(kwnames, kws)
+end
+
+# The names of the keyword arguments that the keyword sorter `kwm` (a method of
+# `Core.kwcall`) accepts, in the order of their declaration. A slurping `kws...`
+# comes last, under the name `kws...`. Lowering declares these names as the first
+# local slots of the sorter, and the list ends at the first slot without a name:
+# the slots after that one are the sorter's own, such as the locals of the default
+# value expressions.
+function kwsorter_kwnames(kwm::Method)
+    slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), kwm.slot_syms)
+    kws = Symbol[]
+    for i = (kwm.nargs + 1):length(slotnames)
+        kw = slotnames[i]
+        name = String(kw)
+        isempty(name) && break
+        push!(kws, kw)
+        endswith(name, "...") && break
+    end
+    return kws
 end
 
 """

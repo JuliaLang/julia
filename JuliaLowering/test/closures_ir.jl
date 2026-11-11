@@ -736,9 +736,9 @@ end
 44  (call core.svec %₄₁ %₄₂ %₄₃)
 45  (call core.define_method TestMod core.nothing %₄₄
     --- code_info
-    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/x(!read) slot₅/#kwtmp#]
+    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/x(!read) slot₅/#arg#kwtmp]
     1   (newvar slot₄/x)
-    2   (newvar slot₅/#kwtmp#)
+    2   (newvar slot₅/#arg#kwtmp)
     3   (call core.isdefined slot₂/kws :x)
     4   (gotoifnot %₃ label₁₅)
     5   (call core.getfield slot₂/kws :x)
@@ -749,11 +749,11 @@ end
     10  TestMod.X
     11  (new core.TypeError :keyword argument :x %₁₀ %₅)
     12  (call core.throw %₁₁)
-    13  (= slot₅/#kwtmp# %₅)
+    13  (= slot₅/#arg#kwtmp %₅)
     14  (goto label₁₇)
     15  TestMod.x_default
-    16  (= slot₅/#kwtmp# %₁₅)
-    17  slot₅/#kwtmp#
+    16  (= slot₅/#arg#kwtmp %₁₅)
+    17  slot₅/#arg#kwtmp
     18  (call top.keys slot₂/kws)
     19  (call core.tuple :x)
     20  (call top.diff_names %₁₈ %₁₉)

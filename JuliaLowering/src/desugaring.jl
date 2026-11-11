@@ -2870,7 +2870,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, o
                 !any(val->contains_unquoted(e->head(e) == :(=), val), kw_defaults)
         kw_temps = use_ssa_kw_temps ?
             mapsyntax(x->ssavar(ctx, x, syntax_name(x)), kw_names) : kw_names
-        tempslot = newsym(ctx, kws, "#kwtmp#")
+        tempslot = newsym(ctx, kws, ERASE_SLOTNAME_PREFIX*"kwtmp")
         keyword_only_spnames = mapindex(unused_typevars(pargl, sparams), 1)
 
         kw_assigns = SyntaxList()
@@ -2898,11 +2898,28 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, o
                 tempslot]])
         end
 
+        # Declare the keyword names for reflection (`Base.kwarg_decl`), which
+        # reads them off the first local slots of this method: one unused slot
+        # per keyword argument, in order, then the `rest...` slot.  The slot
+        # after those has no name (`tempslot`), which ends the list, so that
+        # the locals of the default value expressions are not taken for
+        # keywords.  Explicit locals get their slots in the order of
+        # declaration, ahead of every other local, so these go first.  `newsym`
+        # keeps the names out of the scope of the defaults.
+        kwname_decls = SyntaxList()
+        for n in kw_names
+            push!(kwname_decls, @ast ctx n [:local newsym(ctx, n, syntax_name(n))])
+        end
+        # could be an ssavalue, but show(::Method) expects this...
+        excess_kw = isempty(restkw) ? nothing : newsym(
+            ctx, restkw[1][1], string(syntax_name(restkw[1][1]), "..."))
+        isnothing(excess_kw) ||
+            push!(kwname_decls, @ast ctx excess_kw [:local excess_kw])
+        isempty(kw_names) ||
+            push!(kwname_decls, @ast ctx tempslot [:local tempslot])
+
         # bundle and forward excess if there's a restkw, else throw kwerr
         handle_excess = if !isempty(restkw)
-            # could be an ssavalue, but show(::Method) expects this...
-            excess_kw = newsym(
-                ctx, restkw[1][1], string(syntax_name(restkw[1][1]), "..."))
             @ast ctx src [:(=)
                 excess_kw
                 [:call "pairs"::top
@@ -2924,15 +2941,13 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, o
             isempty(restkw) ? nothing : excess_kw
             forward_pargl...]
         kwcall_body = if use_ssa_kw_temps
-            for n in kw_names
-                # If not using slots for the keyword argument values, still
-                # declare them for reflection purposes
-                push!(kw_assigns, @ast ctx n [:local setmeta(n, :is_internal, true)])
-            end
-            @ast(ctx, src, [:block kw_assigns... handle_excess final_call])
+            @ast(ctx, src, [:block
+                kwname_decls... kw_assigns... handle_excess final_call])
         else
-            scope_nest(ctx, kw_assigns,
-                       @ast ctx src [:block handle_excess final_call])
+            @ast ctx src [:block
+                kwname_decls...
+                scope_nest(ctx, kw_assigns,
+                           @ast ctx src [:block handle_excess final_call])]
         end
         kwcall_body = prepend_method_metas(ctx, src, kwcall_body, prop_metas)
         # Core.kwcall method has its own first argument.  Ensure closure
