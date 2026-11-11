@@ -42,11 +42,6 @@ using .JuliaSyntax:
     byte_range,
     char_range
 
-if VERSION < v"1.6"
-    # Compat stuff which might not be in Base for older versions
-    using JuliaSyntax: isnothing, only
-end
-
 function toks(str)
     ts = [JuliaSyntax.Tokenize.untokenize(t, str)=>kind(t)
           for t in JuliaSyntax.Tokenize.tokenize(str)]
