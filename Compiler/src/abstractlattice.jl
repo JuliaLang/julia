@@ -279,7 +279,7 @@ External lattice `𝕃ᵢ::ExternalLattice` may overload:
 function widenreturn end, function widenreturn_noslotwrapper end
 
 @nospecializeinfer is_valid_lattice(𝕃::AbstractLattice, @nospecialize(elem)) =
-    is_valid_lattice_norec(𝕃, elem) && is_valid_lattice(widenlattice(𝕃), elem)
+    is_valid_lattice_norec(𝕃, elem) || is_valid_lattice(widenlattice(𝕃), elem)
 @nospecializeinfer is_valid_lattice(𝕃::JLTypeLattice, @nospecialize(elem)) = is_valid_lattice_norec(𝕃, elem)
 
 has_conditional(𝕃::AbstractLattice) = has_conditional(widenlattice(𝕃))

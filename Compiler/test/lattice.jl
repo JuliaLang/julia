@@ -109,4 +109,26 @@ end
     check_lattice_properties(𝕃, elements)
 end
 
+@testset "is_valid_lattice" begin
+    intra = Compiler.typeinf_lattice(Compiler.NativeInterpreter())
+    ipo = Compiler.ipo_lattice(Compiler.NativeInterpreter())
+    limited = Compiler.LimitedAccuracy(Int, Compiler.IdSet{Compiler.InferenceState}())
+    # an element is valid in a lattice when any layer of the lattice has it
+    for (elem, in_intra, in_ipo) in Any[
+        (Int, true, true),
+        (Const(1), true, true),
+        (PartialStruct(Compiler.fallback_lattice, F, Any[Int]), true, true),
+        (limited, true, true),
+        (Conditional(2, 0, Int, String), true, false),
+        (InterConditional(2, Int, String), false, true),
+        (MustAlias(2, 0, F, 1, Int), Compiler.has_mustalias(intra), false),
+        (1, false, false),
+    ]
+        @test Compiler.is_valid_lattice(intra, elem) === in_intra
+        @test Compiler.is_valid_lattice(ipo, elem) === in_ipo
+    end
+    @test Compiler.is_valid_lattice(Compiler.JLTypeLattice(), Int)
+    @test !Compiler.is_valid_lattice(Compiler.JLTypeLattice(), Const(1))
+end
+
 end # module lattice
