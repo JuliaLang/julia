@@ -2454,7 +2454,8 @@ end
     memoryref_builtin_common_errorcheck(ref, Const(:not_atomic), boundscheck) || return Bottom
     hasintersect(widenconst(idx), Int) || return Bottom
     hasintersect(widenconst(ref), GenericMemory) && return memoryref_tfunc(𝕃, ref)
-    return ref
+    # a reference at another index, so not the constant `ref` itself
+    return widenconst(ref)
 end
 add_tfunc(memoryrefnew, 1, 3, memoryref_tfunc, 1)
 
