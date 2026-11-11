@@ -104,6 +104,11 @@ end
     @test isapprox(1, 2, atol=0; atol)
     @test isapprox(1, 3, atol=0; atol) atol=1
 end
+@testset "malformed test macro calls" begin
+    # arguments after the test expression must be keyword arguments
+    @test_throws "invalid test macro call: @test 1 == 1 foo" macroexpand(@__MODULE__, :(@test 1 == 1 foo))
+    @test_throws "invalid test macro call: @test 1 == 1 broken(true)" macroexpand(@__MODULE__, :(@test 1 == 1 broken(true)))
+end
 @testset "@test should only evaluate the arguments once" begin
     g = Int[]
     f = (x) -> (push!(g, x); x)
