@@ -1556,6 +1556,12 @@ mktempdir() do dir
                 LibGit2.add!(repo, test_file)
                 LibGit2.update!(repo, test_file)
                 @test LibGit2.count(idx) == 1
+
+                # reloading the index discards changes that were not written
+                LibGit2.remove!(idx, test_file)
+                @test LibGit2.count(idx) == 0
+                @test LibGit2.need_update(repo) === nothing
+                @test LibGit2.count(idx) == 1
             end
 
             # check non-existent file status
