@@ -207,6 +207,14 @@ end
         end
         @test has_all_escape(result.state[Argument(2)])
     end
+
+    let # :foreignglobal
+        result = code_escapes() do
+            cglobal(Symbol("jl_n_threads"), Cint)
+        end
+        i = only(findall(x -> Meta.isexpr(x, :foreignglobal), result.ir.stmts.stmt))
+        @test has_no_escape(result.state[SSAValue(i)])
+    end
 end
 
 @testset "builtins" begin
@@ -1728,8 +1736,34 @@ end
                            EscapeInfo(NoEscape(), Unindexable())]))
 end
 
-using .EscapeAnalysis: AInfo, ⊑ₑ
+using .EscapeAnalysis: AInfo, ⊑ₑ, ⊏ₑ, ⋤ₑ, ⊔ₑ
 @testset "EscapeInfo lattice order" begin
+    fields(infos...) = IndexableFields(AInfo[AInfo(Any[x...]) for x in infos])
+    elements = EscapeInfo[
+        EscapeAnalysis.NotAnalyzed(), NoEscape(), ArgEscape(), ReturnEscape(1),
+        ThrownEscape(1), ThrownEscape(2), AllEscape(),
+        EscapeInfo(ReturnEscape(1); Liveness=BitSet(1:2)),
+        EscapeInfo(NoEscape(); Liveness=EscapeAnalysis.TOP_LIVENESS),
+        EscapeInfo(NoEscape(); ThrownEscape=EscapeAnalysis.TOP_THROWN_ESCAPE),
+        EscapeInfo(NoEscape(), true),
+        EscapeInfo(NoEscape(), IndexableFields(0)),
+        EscapeInfo(NoEscape(), fields((), ())),
+        EscapeInfo(NoEscape(), fields((1,), ())),
+        EscapeInfo(NoEscape(), fields((1,), (2,))),
+        EscapeInfo(NoEscape(), fields((1,))),
+        EscapeInfo(NoEscape(), Unindexable()),
+        EscapeInfo(NoEscape(), Unindexable(AInfo(Any[1]))),
+        EscapeInfo(NoEscape(), Unindexable(AInfo(Any[1, 2]))),
+    ]
+    for x in elements, y in elements
+        @test (x == y) == (x ⊑ₑ y && y ⊑ₑ x)
+        @test (x ⊏ₑ y) == (x ⊑ₑ y && !(y ⊑ₑ x))
+        x ⊑ₑ y && @test (x ⋤ₑ y) == (x ⊏ₑ y)
+        j = x ⊔ₑ y
+        @test x ⊑ₑ j && y ⊑ₑ j
+        x ⊑ₑ y && @test j == y
+    end
+
     # each field's aliases must be a subset of the unindexable aliases, not just the last field's
     x = EscapeInfo(NoEscape(), IndexableFields([AInfo(Any[1]), AInfo()]))
     @test !(x ⊑ₑ EscapeInfo(NoEscape(), Unindexable()))
