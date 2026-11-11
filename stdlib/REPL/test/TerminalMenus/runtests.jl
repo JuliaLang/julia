@@ -32,3 +32,13 @@ include("pager.jl")
 include("legacytests/old_radio_menu.jl")
 include("legacytests/old_multiselect_menu.jl")
 include("legacytests/config.jl")
+
+@testset "readkey ESC H and ESC F" begin
+    for (seq, key) in ("\eH" => TerminalMenus.HOME_KEY, "\eF" => TerminalMenus.END_KEY,
+                       "\eOH" => TerminalMenus.HOME_KEY, "\eOF" => TerminalMenus.END_KEY)
+        io = IOBuffer(seq * "x")
+        @test TerminalMenus.readkey(io) == UInt32(key)
+        @test read(io, Char) == 'x'
+        @test TerminalMenus.readkey(IOBuffer(seq)) == UInt32(key)
+    end
+end
