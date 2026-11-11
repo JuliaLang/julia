@@ -645,6 +645,55 @@ const never_set = NeverSet()
     @test !never_set_defined()
 end
 
+mutable struct TwoWords  # every field of one union
+    a::Union{Int16, String}
+    b::Union{Int16, String}
+    TwoWords(a) = new(a)
+    TwoWords(a, b) = new(a, b)
+end
+mutable struct MixedWords  # references and tagged words of different unions
+    a::Union{Int16, String}
+    b::Vector{Int}
+    c::Union{Bool, Int8, Symbol}
+    d::Any
+    MixedWords(a, b, c) = new(a, b, c)
+end
+
+# A field index known only at run time selects a word, as for a struct of
+# references. An immediate is decoded if every field has the same union.
+@testset "codegen: field at a runtime index" begin
+    nthfield(x, i) = getfield(x, i)
+    function sumfields(x, is)
+        s = 0
+        for i in is
+            v = getfield(x, i)
+            s += v isa Int16 ? Int(v) : sizeof(v)
+        end
+        s
+    end
+    t = TwoWords(Int16(1000), "abc")
+    is = repeat([1, 2], 64)
+    @test nthfield(t, 1) === Int16(1000) && nthfield(t, 2) === t.b
+    @test sumfields(t, is) == 64 * 1003
+    @test (@allocated sumfields(t, is)) == 0
+    @test !occursin("get_nth_field", llvm(sumfields, (TwoWords, Vector{Int})))
+    @test_throws UndefRefError nthfield(TwoWords(Int16(1)), 2)
+    @test_throws BoundsError nthfield(t, 3)
+
+    m = MixedWords("abc", [1], Int8(-3))
+    same(m) = all(i -> nthfield(m, i) === Base.invokelatest(getfield, m, i), 1:3)
+    @test same(m)
+    @test nthfield(m, 3) === Int8(-3) && nthfield(m, 2) === m.b
+    m.a = Int16(5); m.c = :sym
+    @test same(m)
+    m.c = true
+    @test same(m)
+    @test_throws UndefRefError nthfield(m, 4)
+    @test_throws BoundsError nthfield(m, 5)
+    m.d = Int16(9)
+    @test nthfield(m, 4) === Int16(9)
+end
+
 @testset "codegen: Memory" begin
     mem = Memory{Union{Nothing, Int16, Int, String}}(undef, 2)
     @test !occursin("memoryrefget", llvm(getm, (typeof(mem), Int)))
