@@ -600,6 +600,8 @@ end
         )
         @test Markdown.rst(input) == output
     end
+    # RST transitions must use ASCII punctuation
+    @test Markdown.rst(Markdown.parse("a\n\n---\n\nb")) == "a\n\n-----\n\nb\n"
 end
 
 @testset "Interpolation / Custom types" begin
