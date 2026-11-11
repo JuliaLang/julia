@@ -326,7 +326,7 @@ function printmenu(out::IO, m::AbstractMenu, cursoridx::Int; oldstate=nothing, i
 
     if init
         # like clamp, except this takes the min if max < min
-        m.pageoffset = max(0, min(cursoridx - m.pagesize ÷ 2, lastoption - m.pagesize))
+        m.pageoffset = max(0, min(cursoridx - max(m.pagesize ÷ 2, 1), lastoption - m.pagesize))
     else
         print(buf, "\r")
         if ncleared > 0
