@@ -274,7 +274,7 @@ Splatting ... in an `ncat` with multiple dimensions is not supported
 #---------------------
 Badly nested rows in `ncat`
 @ :1
-└───Expression: (nrow 1 1)
+└───Expression: ::tombstone
 
 ########################################
 # Error: bad nrow nesting
@@ -290,7 +290,7 @@ Badly nested rows in `ncat`
 #---------------------
 2D `nrow` cannot be mixed with `row` in `ncat`
 @ :1
-└───Expression: (nrow 2 (row 1))
+└───Expression: ::tombstone
 
 ########################################
 # Error: bad nrow nesting
@@ -305,7 +305,7 @@ Badly nested rows in `ncat`
 #---------------------
 Badly nested rows in `ncat`
 @ :1
-└───Expression: (row 1)
+└───Expression: ::tombstone
 
 ########################################
 # Simple getindex

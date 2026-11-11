@@ -36,7 +36,7 @@ x."b"
 #---------------------
 invalid syntax: unknown form `.` or number of arguments 3
 @ :1
-└───Expression: (. x a 3)
+└───Expression: ::tombstone
 
 ########################################
 # Error: Placeholder value used
@@ -267,7 +267,7 @@ x::T
 #---------------------
 expected (if cond body) or (if cond body else)
 @ :1
-└───Expression: (if)
+└───Expression: ::tombstone
 
 ########################################
 # Error: @atomic in wrong position
