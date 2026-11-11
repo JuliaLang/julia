@@ -656,7 +656,7 @@ end
 @inline getindex(x::UseRef) = _useref_getindex(x.urs.stmt, x.op)
 
 function is_relevant_expr(e::Expr)
-    return e.head in (:call, :invoke, :invoke_modify,
+    return e.head in (:call, :invoke, :invoke_modify, :invoke_apply,
                       :new, :splatnew, :(=), :(&),
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :foreignglobal, :isdefined, :copyast,

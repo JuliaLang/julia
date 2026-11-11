@@ -279,10 +279,7 @@ for (f, tt, nexprargs) in (
         (invoke_apply_prefix, Tuple{NTuple{33,Float32}}, 6),
         (invoke_apply_multiple, Tuple{NTuple{33,Float32},NTuple{33,Float32}}, 6))
     let src = code_typed1(f, tt)
-        is_invoke_apply(stmt) =
-            isexpr(stmt, :invoke) &&
-                singleton_type(argextype(stmt.args[2], src)) === Core._apply_iterate
-        i = only(findall(is_invoke_apply, src.code))
+        i = only(findall(stmt -> isexpr(stmt, :invoke_apply), src.code))
         @test length((src.code[i]::Expr).args) == nexprargs
         shown = sprint(io -> Compiler.IRShow.show_ir(io, src))
         @test occursin("invoke apply", shown)

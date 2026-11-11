@@ -2098,7 +2098,7 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
     for i = 1:length(src)
         stmt = src[i]
         isexpr(stmt, :(=)) && (stmt = stmt.args[2])
-        if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
+        if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify) || isexpr(stmt, :invoke_apply)
             edge = stmt.args[1]
             # If this CodeInstance is already compiled in the image, and we can
             # link to it, we should do that instead of compiling it again.  With

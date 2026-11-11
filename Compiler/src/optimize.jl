@@ -69,7 +69,7 @@ has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
 function iscallstmt(@nospecialize stmt)
     stmt isa Expr || return false
     head = stmt.head
-    return head === :call || head === :invoke || head === :foreigncall || head === :foreignglobal
+    return head === :call || head === :invoke || head === :invoke_apply || head === :foreigncall || head === :foreignglobal
 end
 
 function flags_for_effects(effects::Effects)
@@ -1912,7 +1912,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         return 20
     elseif head === :foreignglobal
         return 1
-    elseif head === :invoke || head === :invoke_modify
+    elseif head === :invoke || head === :invoke_modify || head === :invoke_apply
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
         # run-time of the function, we omit them from

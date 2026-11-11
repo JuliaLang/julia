@@ -133,12 +133,6 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     size_t i;
     for (i = 1; i < nargs; i++)
         argv[i-1] = eval_value(args[i], s);
-    if (argv[0] == BUILTIN(_apply_iterate) && jl_is_code_instance(args[0])) {
-        // `args[0]` is the flattened `f(args...)` target: flatten, then invoke it.
-        jl_value_t *result = jl_apply_iterate_codeinst(args[0], &argv[1], nargs - 2);
-        JL_GC_POP();
-        return result;
-    }
     jl_value_t *result = jl_invoke_target(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, args[0]);
     JL_GC_POP();
     return result;
@@ -155,6 +149,22 @@ static jl_value_t *do_invoke_modify(jl_value_t **args, size_t nargs, interpreter
     for (i = 1; i < nargs; i++)
         argv[i-1] = eval_value(args[i], s);
     jl_value_t *result = jl_invoke_modify(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, args[0]);
+    JL_GC_POP();
+    return result;
+}
+
+// `:invoke_apply`: an `_apply_iterate` call whose flattened `f(args...)` call the compiler
+// resolved to the `CodeInstance` or `MethodInstance` in `args[0]`.
+static jl_value_t *do_invoke_apply(jl_value_t **args, size_t nargs, interpreter_state *s) JL_CANSAFEPOINT
+{
+    jl_value_t **argv;
+    assert(nargs >= 4);
+    JL_GC_PUSHARGS(argv, nargs - 1);
+    size_t i;
+    for (i = 1; i < nargs; i++)
+        argv[i-1] = eval_value(args[i], s);
+    assert(argv[0] == BUILTIN(_apply_iterate));
+    jl_value_t *result = jl_invoke_apply(args[0], &argv[1], nargs - 2);
     JL_GC_POP();
     return result;
 }
@@ -270,6 +280,9 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     }
     else if (head == jl_invoke_modify_sym) {
         return do_invoke_modify(args, nargs, s);
+    }
+    else if (head == jl_invoke_apply_sym) {
+        return do_invoke_apply(args, nargs, s);
     }
     else if (head == jl_isdefined_sym) {
         jl_value_t *sym = args[0];

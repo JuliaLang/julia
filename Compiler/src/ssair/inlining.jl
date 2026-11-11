@@ -1063,9 +1063,9 @@ function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::Optimizatio
 end
 
 # When concrete tuple splats are too long to flatten in IR, encode the resolved call
-# as `Expr(:invoke, ci, _apply_iterate, iterate, f, xs...)`. The code instance is for
-# the flattened `f(xs[1]..., xs[2]..., ...)` signature; codegen unpacks the tuples,
-# while the interpreters execute an ordinary apply.
+# as `Expr(:invoke_apply, ci, _apply_iterate, iterate, f, xs...)`. The code instance is
+# for the flattened `f(xs[1]..., xs[2]..., ...)` signature, and `args[2:end]` remain a
+# valid `_apply_iterate` call. Every `xs[i]` is a concrete tuple, so `iterate` is unused.
 function try_invoke_apply!(ir::IRCode, idx::Int, stmt::Expr, argtypes::Vector{Any},
                            info::ApplyCallInfo, state::InliningState)
     length(argtypes) >= 4 || return nothing
@@ -1079,7 +1079,7 @@ function try_invoke_apply!(ir::IRCode, idx::Int, stmt::Expr, argtypes::Vector{An
     ci = call.edges[1]
     isa(ci, CodeInstance) || return nothing
     add_inlining_edge!(InliningEdgeTracker(state), ci)
-    stmt.head = :invoke
+    stmt.head = :invoke_apply
     pushfirst!(stmt.args, ci)
     ir.stmts[idx][:info] = NoCallInfo()
     return nothing

@@ -3900,7 +3900,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, ssta
         return abstract_eval_cfunction(interp, e, sstate, sv)
     elseif ehead === :copyast
         return abstract_eval_copyast(interp, e, sstate, sv)
-    elseif ehead === :invoke || ehead === :invoke_modify
+    elseif ehead === :invoke || ehead === :invoke_modify || ehead === :invoke_apply
         error("type inference data-flow error: tried to double infer a function")
     elseif ehead === :isdefined
         return abstract_eval_isdefined_expr(interp, e, sstate, sv)
