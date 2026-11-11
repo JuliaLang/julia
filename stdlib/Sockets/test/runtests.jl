@@ -173,6 +173,8 @@ sockets_watchdog_timer = Timer(_ -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"
     @test_throws ArgumentError parse(IPv4, "256.256.256.256")
     # too many fields
     @test_throws ArgumentError parse(IPv6, "256:256:256:256:256:256:256:256:256:256:256:256")
+    @test_throws "too many fields in IPv6 address" parse(IPv6, "1:2:3:4:5:6:7:8:9")
+    @test_throws "empty field in IPv4 address" parse(IPv4, "1..2.3")
 
     @test_throws ArgumentError IPv4(-1)
     @test_throws ArgumentError IPv4(typemax(UInt32) + Int64(1))
@@ -236,6 +238,7 @@ end
     @test repr(ip"2001:db8::1:1:1:1:1") == "ip\"2001:db8:0:1:1:1:1:1\""
     @test repr(ip"2001:db8:0:0:1:0:0:1") == "ip\"2001:db8::1:0:0:1\""
     @test repr(ip"2001:0:0:1:0:0:0:1") == "ip\"2001:0:0:1::1\""
+    @test repr(ip"1:0:0:0:0:0:0:0") == "ip\"1::\""
 end
 
 defaultport = rand(2000:4000)
@@ -409,6 +412,8 @@ end
     let localhost = getnameinfo(ip"127.0.0.1")::String
         @test !isempty(localhost) && localhost != "127.0.0.1"
         @test !isempty(getalladdrinfo(localhost)::Vector{IPAddr})
+        @test getalladdrinfo(SubString(localhost)) == getalladdrinfo(localhost)
+        @test getaddrinfo(SubString(localhost), IPv4) == getaddrinfo(localhost, IPv4)
         @test getaddrinfo(localhost, IPv4)::IPv4 != ip"0.0.0.0"
         @test try
             getaddrinfo(localhost, IPv6)::IPv6 != ip"::"
@@ -462,6 +467,14 @@ end
     set_sockets_watchdog_state("UDP socket display")
     # test show() function for UDPSocket()
     @test repr(UDPSocket()) ∈ ("Sockets.UDPSocket(init)", "UDPSocket(init)")
+
+    let s = UDPSocket()
+        @test bind(s, ip"127.0.0.1", 0)
+        @test Sockets.setopt(s; multicast_loop = false, multicast_ttl = 2, ttl = 3) === nothing
+        close(s)
+        @test_throws "UDPSocket is not initialized and open" recvfrom(s)
+        @test_throws "UDPSocket is not initialized and open" send(s, ip"127.0.0.1", 1, "x")
+    end
 
     let
         set_sockets_watchdog_state("UDP IPv4 bind";
@@ -797,6 +810,41 @@ end
         r = @async close(s)
         @test_throws Base._UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
         fetch(r)
+    end
+
+    # connecting by port alone or by host name
+    let srv = listen(ip"127.0.0.1", 0)
+        port = getsockname(srv)[2]
+        # a non-blocking accept fails until the event loop has seen the connection
+        @test_throws Base._UVError("accept", Base.UV_EAGAIN) Sockets.accept_nonblock(srv)
+        a = connect(TCPSocket(), port)
+        b = Sockets.connect!(TCPSocket(), "127.0.0.1", port)
+        Sockets.wait_connected(b)
+        @test_throws "not in initialization state" connect(a, port)
+        @test_throws "not in initialization state" Sockets.connect!(a, "127.0.0.1", port)
+        @test_throws "not in initialization state" Sockets.connect!(a, Sockets.InetAddr(ip"127.0.0.1", port))
+        @test_throws "not in initialization state" bind(srv, ip"127.0.0.1", 0)
+        for _ in 1:2
+            c = accept(srv)
+            @test getpeername(c)[2] in (getsockname(a)[2], getsockname(b)[2])
+            close(c)
+        end
+        close.((a, b, srv))
+    end
+    @test_throws "make sure \"listen\" has been called" accept(Sockets.TCPServer())
+
+    mktempdir() do tmpdir
+        path = Sys.iswindows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
+        srv = Sockets.PipeServer()
+        @test bind(srv, path)
+        Sys.iswindows() || @test !bind(Sockets.PipeServer(), path)
+        listen(srv)
+        @test_throws Base._UVError("accept", Base.UV_EAGAIN) Sockets.accept_nonblock(srv)
+        client = connect(path)
+        server_side = accept(srv)
+        write(client, "hi")
+        @test read(server_side, 2) == b"hi"
+        close.((client, server_side, srv))
     end
 end
 
