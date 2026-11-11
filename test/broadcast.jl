@@ -1379,3 +1379,13 @@ end
 
     @test identity.(BottomEltypeIndices62564()) == Union{}[]
 end
+
+@testset "complex ranges (issue #32792)" begin
+    xx = range(-10, 10; length=1000)
+    r = xx .- im .* xx
+    @test r isa AbstractRange
+    @test r ≈ collect(xx) .- im .* collect(xx)
+    z = (1 + 2im) .* xx
+    @test z .+ z isa AbstractRange
+    @test z .+ z ≈ 2 .* collect(z)
+end

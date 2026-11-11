@@ -1293,3 +1293,10 @@ end
         @test isapprox(atanh(1+im*floatmin(T)), Complex{T}(atanh(1+im*big(floatmin(T)))))
     end
 end
+
+@testset "precision" begin
+    @test precision(ComplexF64) == 53
+    @test precision(ComplexF32) == 24
+    @test precision(ComplexF16) == 11
+    @test precision(ComplexF64; base=10) == precision(Float64; base=10)
+end
