@@ -1231,6 +1231,13 @@ end
     @test hcat([nothing], [missing], [1.0], [Int8(1)]) isa Matrix{Union{Missing, Nothing, Float64}}
 end
 
+@testset "vcat of a vector and a scalar is specialized" begin
+    allocs(xs::Vararg{Any,N}) where {N} = (vcat(xs...); @allocated vcat(xs...))
+    for (v, x) in ((["a"], "b"), ([:a], :b), ([1], 2), (Any[1], 2))
+        @test allocs(v, x) <= allocs(v, eltype(v)[x])
+    end
+end
+
 @testset "sizeof" begin
     let arrUInt8 = zeros(UInt8, 10)
         @test sizeof(arrUInt8) == 10

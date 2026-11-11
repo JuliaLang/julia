@@ -1893,7 +1893,9 @@ function dims2cat(dims)
     ntuple(in(dims), maximum(dims))
 end
 
-_cat(dims, X...) = _cat_t(dims, promote_eltypeof(X...), X...)
+# `_cat` and `__cat` are inlined so that a call with few arguments reaches `__cat_offset!`
+# with concrete types: on their own they would be compiled for `Vararg{Any}`
+@inline _cat(dims, X...) = _cat_t(dims, promote_eltypeof(X...), X...)
 
 @inline function _cat_t(dims, ::Type{T}, X...) where {T}
     catdims = dims2cat(dims)
@@ -1909,7 +1911,8 @@ end
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
 
 # Why isn't this called `__cat!`?
-__cat(A, shape, catdims, X...) = __cat_offset!(A, shape, catdims, ntuple(Returns(0), length(shape)), X...)
+@inline __cat(A, shape, catdims, X...) =
+    __cat_offset!(A, shape, catdims, ntuple(Returns(0), length(shape)), X...)
 
 function __cat_offset!(A, shape, catdims, offsets, x, X...)
     # splitting the "work" on x from X... may reduce latency (fewer costly specializations)
@@ -2159,7 +2162,7 @@ julia> a * b
 """
 @inline cat(A...; dims) = _cat(dims, A...)
 # `@constprop :aggressive` allows `catdims` to be propagated as constant improving return type inference
-@constprop :aggressive _cat(catdims, A::AbstractArray{T}...) where {T} = _cat_t(catdims, T, A...)
+@constprop :aggressive @inline _cat(catdims, A::AbstractArray{T}...) where {T} = _cat_t(catdims, T, A...)
 
 # The specializations for 1 and 2 inputs are important
 # especially when running with --inline=no, see #11158
