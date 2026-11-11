@@ -52,3 +52,23 @@ radio_menu = RadioMenu(string.(1:3), pagesize=1, charset=:ascii)
 @test simulate_input(radio_menu, :down, :down, :down, :down, :enter) == 3
 radio_menu = RadioMenu(["apple", "banana", "cherry"]; keybindings=collect('a':'c'), charset=:ascii)
 @test simulate_input(radio_menu, 'b') == 2
+
+# paging, home/end and cancelling
+radio_menu = RadioMenu(string.(1:30), pagesize=5, charset=:ascii)
+@test simulate_input(radio_menu, "\e[6~", "\e[6~", :enter) == 11
+@test simulate_input(radio_menu, "\e[F", "\e[5~", :enter) == 25
+@test simulate_input(radio_menu, "\e[F", "\e[H", :enter) == 1
+@test radio_menu.pageoffset == 0
+@test simulate_input(radio_menu, 'q') == -1
+@test_throws InterruptException simulate_input(radio_menu, '\x03')
+@test simulate_input(RadioMenu(["a", "b"]; ctrl_c_interrupt=false, charset=:ascii), '\x03') == -1
+
+# with output and a message; the input is not a TTY, so raw mode is unavailable
+let new_stdin = Base.BufferStream(), out = IOBuffer()
+    write(new_stdin, "\e[B\r")
+    term = TerminalMenus.default_terminal(; in=new_stdin, out=out)
+    radio_menu = RadioMenu(["a", "b", "c", "d"], pagesize=2, charset=:ascii)
+    @test (@test_logs (:warn, r"Unable to enter raw mode") request(term, "Pick one:", radio_menu)) == 2
+    # a page with options above and below it shows both arrows
+    @test String(take!(out)) == "Pick one:\n\e[2K > a\r\n\e[2Kv  b\r\e[1A\e[2K^> b\r\n\e[2Kv  c\n"
+end

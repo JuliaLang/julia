@@ -37,3 +37,10 @@ let p = Pager(content)
     @test contains(str, "(10 / 22)  45%")
     @test endswith(str, "leo in vitae turpis massa sed. Elementum facilisis leo vel fringilla est.")
 end
+
+let new_stdin = Base.BufferStream(), out = IOBuffer()
+    write(new_stdin, "q")
+    term = TerminalMenus.default_terminal(; in=new_stdin, out=out)
+    @test (@test_logs (:warn, r"Unable to enter raw mode") TerminalMenus.pager(term, collect(1:100))) === nothing
+    @test contains(String(take!(out)), "100-element Vector{$Int}:")
+end
