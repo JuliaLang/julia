@@ -249,6 +249,33 @@ function finish_nocycle(::AbstractInterpreter, frame::InferenceState, time_befor
     return nothing
 end
 
+# Inside a cycle, a call to a function that is still being inferred can only
+# record an edge to its MethodInstance. Once the cycle is done, point those edges
+# to the finished CodeInstance instead. Then package caches save that code together
+# with its caller, and invalidating it also invalidates the caller.
+function link_cycle_ci_edges!(frames::Vector{AbsIntState}, cycleid::Int)
+    members = IdDict{MethodInstance,CodeInstance}()
+    for frameid = cycleid:length(frames)
+        caller = frames[frameid]::InferenceState
+        if !iszero(caller.cache_mode & CACHE_MODE_GLOBAL) && isdefined(caller.result, :ci)
+            members[caller.linfo] = caller.result.ci
+        end
+    end
+    isempty(members) && return nothing
+    for frameid = cycleid:length(frames)
+        caller = frames[frameid]::InferenceState
+        opt = caller.result.src
+        edges = isa(opt, OptimizationState) ? opt.inlining.edges : caller.edges
+        for i = 1:length(edges)
+            edge = edges[i]
+            (edge isa MethodInstance && edge !== caller.linfo) || continue
+            ci = get(members, edge, nothing)
+            ci === nothing || (edges[i] = ci)
+        end
+    end
+    return nothing
+end
+
 function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cycleid::Int, time_before::UInt64)
     cycle_valid_worlds = WorldRange()
     cycle_valid_effects = EFFECTS_TOTAL
@@ -289,6 +316,7 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cyclei
     end
     empty!(opt_cache)
     share_tombstoned_cycle_edges!(frames, cycleid)
+    link_cycle_ci_edges!(frames, cycleid)
     cycletop = frames[cycleid]::InferenceState
     time_start = cycletop.time_start
     validation_world = get_world_counter()
