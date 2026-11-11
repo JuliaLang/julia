@@ -12,28 +12,9 @@ ReshapedArray(parent::AbstractArray{T}, dims::NTuple{N,Int}, mi) where {T,N} = R
 # IndexLinear ReshapedArray
 const ReshapedArrayLF{T,N,P<:AbstractArray} = ReshapedArray{T,N,P,Tuple{}}
 
-# Fast iteration on ReshapedArrays: use the parent iterator
-struct ReshapedArrayIterator{I,M}
-    iter::I
-    mi::NTuple{M,SignedMultiplicativeInverse{Int}}
-end
-ReshapedArrayIterator(A::ReshapedArray) = _rs_iterator(parent(A), A.mi)
-function _rs_iterator(P, mi::NTuple{M}) where M
-    iter = eachindex(P)
-    ReshapedArrayIterator{typeof(iter),M}(iter, mi)
-end
-
 struct ReshapedIndex{T}
     parentindex::T
 end
-
-# eachindex(A::ReshapedArray) = ReshapedArrayIterator(A)  # TODO: uncomment this line
-@inline function iterate(R::ReshapedArrayIterator, i...)
-    item, inext = iterate(R.iter, i...)
-    ReshapedIndex(item), inext
-end
-length(R::ReshapedArrayIterator) = length(R.iter)
-eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
 
 @noinline throw_dmrsa(dims, len) =
     throw(DimensionMismatch(LazyString("new dimensions ", dims, " must be consistent with array length ", len)))
@@ -48,17 +29,6 @@ eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedI
     ref = a.ref
     # or we could use `a = Array{T,N}(undef, ntuple(i->0, Val(N))); a.ref = ref; a.size = dims; return a` here to avoid the eval
     return $(Expr(:new, :(Array{T,N}), :ref, :dims))
-end
-
-## reshape!(::Array, ::Dims) returns the original array, but the new dimensions must have the same total length as the original
-# see also resize! for a similar operation that can change the length
-function reshape!(a::Array{T,N}, dims::NTuple{N,Int}) where {T,N}
-    len = Core.checked_dims(dims...) # make sure prod(dims) doesn't overflow (and because of the comparison to length(a))
-    if len != length(a)
-        throw_dmrsa(dims, length(a))
-    end
-    setfield!(a, :dims, dims)
-    return a
 end
 
 
