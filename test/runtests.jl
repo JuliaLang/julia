@@ -74,14 +74,16 @@ function move_to_node1(t)
 end
 
 # Base.compilecache only works from node 1, so precompile test is handled specially
-move_to_node1("ccall")
 move_to_node1("precompile")
 move_to_node1("SharedArrays")
 move_to_node1("threads")
 move_to_node1("Distributed")
-move_to_node1("gc")
-# Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
-move_to_node1("stress")
+if Sys.WORD_SIZE == 32
+    # On 32-bit workers that have used a lot of memory, `@threadcall` fails to allocate
+    # signal stacks (`ccall`) and allocations fail (`gc`)
+    move_to_node1("ccall")
+    move_to_node1("gc")
+end
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
@@ -97,7 +99,7 @@ const longest_tests = [
     "LinearAlgebra/matmul", "LinearAlgebra/special", "LinearAlgebra/bunchkaufman",
     "LinearAlgebra/addmul", "sorting", "LinearAlgebra/lu", "subarray", "cmdlineargs",
     "loading", "bitarray", "Profile", "broadcast", "arrayops", "LibGit2/libgit2",
-    "LinearAlgebra/cholesky", "reducedim",
+    "LinearAlgebra/cholesky", "reducedim", "gc", "ccall",
 ]
 function expected_rank(test)
     rank = findfirst(name -> test == name || startswith(test, name * "/"), longest_tests)
