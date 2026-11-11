@@ -141,9 +141,15 @@ and `new` are compiled this way and box no immediate. `===` and the expected
 value of a replace compare two words as they are, and call `jl_egal` only for
 two distinct references.
 
-One case calls the runtime instead, which boxes an immediate it is passed or
-returns: every access to a tagged word whose union has an immediate component
-outside the 127 components that a union index can name.
+Two cases call the runtime instead, which boxes an immediate it is passed or
+returns:
+
+* Every access to a tagged word whose union has an immediate component outside
+  the 127 components that a union index can name.
+* `getfield` with a field index known only at run time. For a struct in memory
+  whose fields are all references or tagged words, compiled code still loads
+  the word itself: a reference is the result, and an immediate is decoded if
+  all fields have the same type.
 
 A struct embedding a tagged word cannot be passed to or returned from `ccall`
 by value, since C would receive the raw word.

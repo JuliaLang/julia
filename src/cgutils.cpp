@@ -1193,6 +1193,17 @@ static bool is_datatype_all_pointers(jl_datatype_t *dt)
     return true;
 }
 
+// whether every field is one word: a reference or a tagged word
+static bool is_datatype_all_words(jl_datatype_t *dt) JL_CANSAFEPOINT
+{
+    size_t i, l = jl_datatype_nfields(dt);
+    for (i = 0; i < l; i++) {
+        if (!jl_field_isptr(dt, i) && !jl_is_tagged_uniontype(jl_field_type(dt, i)))
+            return false;
+    }
+    return true;
+}
+
 static bool is_tupletype_homogeneous(jl_svec_t *t, bool allow_va = false)
 {
     size_t i, l = jl_svec_len(t);
@@ -2738,6 +2749,8 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         const jl_aliasinfo_t &dst_ai, const jl_cgval_t &src, Value *tindex, Value *skip, bool isVolatile=false) JL_CANSAFEPOINT;
 static bool tagged_union_has_codegen(jl_value_t *ut) JL_CANSAFEPOINT;
+static Value *emit_tagged_bits(jl_codectx_t &ctx, Value *word, bool maybe_null);
+static Value *emit_tagged_isref(jl_codectx_t &ctx, Value *bits);
 static jl_cgval_t emit_tagged_decode(jl_codectx_t &ctx, Value *word, jl_value_t *ut,
                                      bool maybe_null, Value **nullcheck) JL_CANSAFEPOINT;
 static jl_cgval_t emit_tagged_load(jl_codectx_t &ctx, Value *ptr, jl_value_t *ut, const jl_aliasinfo_t &ai,
@@ -3493,6 +3506,45 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
             maybe_mark_load_dereferenceable(fld, maybe_null, minimum_field_size, minimum_align);
             if (maybe_null)
                 null_pointer_check(ctx, fld, nullptr);
+            *ret = mark_julia_type(ctx, fld, true, jl_any_type);
+            return true;
+        }
+        else if (is_datatype_all_words(stt)) {
+            // as above, with tagged words among the fields
+            jl_value_t *ut = jl_field_type(stt, 0);
+            for (size_t i = 1; ut && i < nfields; i++) {
+                if (!jl_egal(ut, jl_field_type(stt, i)))
+                    ut = nullptr;
+            }
+            Value *idx0based = idx0();
+            Value *fldptr = ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, data_pointer(ctx, strct), idx0based);
+            setName(ctx.emission_context, fldptr, "getfield_ptr");
+            if (ut && jl_is_tagged_uniontype(ut) && tagged_union_has_codegen(ut)) {
+                // one union for every field: decode the word without a box
+                *ret = emit_tagged_load(ctx, fldptr, ut, strct.aliasinfo, AtomicOrdering::Unordered, maybe_null, nullptr);
+                return true;
+            }
+            LoadInst *word = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, fldptr, Align(sizeof(void*)));
+            setName(ctx.emission_context, word, "getfield");
+            word->setOrdering(AtomicOrdering::Unordered);
+            strct.aliasinfo.decorateInst(word);
+            if (maybe_null)
+                null_pointer_check(ctx, word, nullptr);
+            // a reference is the value; which union an immediate belongs to
+            // depends on the index, so the runtime boxes it
+            Value *isref = emit_tagged_isref(ctx, emit_tagged_bits(ctx, word, false));
+            BasicBlock *refBB = ctx.builder.GetInsertBlock();
+            BasicBlock *immBB = BasicBlock::Create(ctx.builder.getContext(), "getfield_immediate", ctx.f);
+            BasicBlock *doneBB = BasicBlock::Create(ctx.builder.getContext(), "getfield_done", ctx.f);
+            ctx.builder.CreateCondBr(isref, doneBB, immBB);
+            ctx.builder.SetInsertPoint(immBB);
+            Value *box = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func), { boxed(ctx, strct), idx0based });
+            immBB = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateBr(doneBB);
+            ctx.builder.SetInsertPoint(doneBB);
+            PHINode *fld = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
+            fld->addIncoming(word, refBB);
+            fld->addIncoming(box, immBB);
             *ret = mark_julia_type(ctx, fld, true, jl_any_type);
             return true;
         }
