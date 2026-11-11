@@ -9,6 +9,8 @@ using TOML: ParserError
     path, io = mktemp(); write(io, str); close(io)
     invalid_path, io = mktemp(); write(io, invalid_str); close(io)
     p = TOML.Parser()
+    @test TOML.parse(TOML.Parser(str)) == TOML.parse(TOML.Parser(IOBuffer(str))) == dict
+    @test TOML.tryparse(TOML.Parser(invalid_str)) isa ParserError
     # TOML.parse
     @test TOML.parse(str) == TOML.parse(SubString(str)) ==
           TOML.parse(IOBuffer(str)) ==

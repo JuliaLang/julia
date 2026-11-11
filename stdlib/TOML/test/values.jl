@@ -227,6 +227,9 @@ end
 @testset "Array" begin
     @test testval("[1,2,3]", Int64[1,2,3])
     @test testval("[1.0, 2.0, 3.0]", Float64[1.0, 2.0, 3.0])
+    @test testval("[0x1, 0x2]", UInt64[1, 2])
+    @test testval("[true, false]", Bool[true, false])
+    @test testval("[\"a\", \"b\"]", String["a", "b"])
     @test testval("[1.0, 2.0, 3]", Any[1.0, 2.0, Int64(3)])
     @test testval("[1.0, 2, \"foo\"]", Any[1.0, Int64(2), "foo"])
     # Base's parser stores dates in internal structs
