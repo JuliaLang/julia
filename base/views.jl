@@ -14,7 +14,8 @@ should transform to
     A[B[lastindex(B)]]
 
 """
-replace_ref_begin_end!(__module__::Module, @nospecialize ex) = replace_ref_begin_end_!(__module__, ex, nothing, false, 0)[1]
+replace_ref_begin_end!(__module__::Module, @nospecialize ex) =
+    replace_ref_begin_end_!(__module__, macroexpand!(__module__, ex), nothing, false, 0)[1]
 # replace_ref_begin_end_!(...) returns (new ex, whether withex was used)
 function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_context::Bool, escs::Int)
     @nospecialize
@@ -22,6 +23,14 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
     function escapes(@nospecialize(ex), escs::Int)
         for _ = 1:escs
             ex = esc(ex)
+        end
+        return ex
+    end
+    # retrieve `ex` at depth `escs`
+    function unwrap_scopes(@nospecialize(ex), escs::Int)
+        while isexpr(ex, :var"hygienic-scope") || (escs > 0 && isexpr(ex, :escape))
+            escs += isexpr(ex, :escape) ? -1 : 1
+            ex = (ex::Expr).args[1]
         end
         return ex
     end
@@ -34,6 +43,16 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
         used_S = false # whether we actually need S
         # new :ref, so redefine withex
         nargs = length(ref_ex.args) - 1
+        need_temps = false # whether any arg needs temporaries
+
+        # First pass: determine if any argument will needs temporaries
+        for j = 2:nargs+1
+            exj = unwrap_scopes(ref_ex.args[j], escs)
+            if isexpr(exj, :...)
+                ref_ex.args[j] = Expr(:..., Meta.reescape(exj.args[1], ref_ex.args[j]))
+                need_temps = true
+            end
+        end
         if nargs == 0
             return main_ex, used_withex
         elseif nargs == 1
@@ -43,16 +62,6 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
             ni = 1
             nx = 0
             J = nargs + 1
-            need_temps = false # whether any arg needs temporaries
-
-            # First pass: determine if any argument will needs temporaries
-            for j = 2:J
-                exj = ref_ex.args[j]
-                if isexpr(exj, :...)
-                    need_temps = true
-                    break
-                end
-            end
 
             # Second pass: if any need temps, create temps for all args
             temp_vars = Tuple{Int,Symbol}[]
@@ -86,6 +95,8 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
                     if isva
                         exj = exj.args[1]
                     end
+                    # like S, at depth 0, since `withex` may refer to it
+                    temp_var = escapes(temp_var, escs)
                     push!(assignments, :(local $temp_var = $exj))
                     ref_ex.args[j] = isva ? Expr(:..., temp_var) : temp_var
                 end
@@ -99,15 +110,6 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
             main_ex = :(local $S = $S0; $(assignments...); $main_ex)
         end
         return main_ex, used_withex
-    end
-    if ex isa Expr && ex.head === :macrocall
-        # Blithely modifying the arguments to another macro is unwise, so call
-        # macroexpand first on it.
-        # Unfortunately, macroexpand itself corrupts the scope of variables in
-        # the result by calling macroexpand.scm before returning which cannot be
-        # avoided since `jl_expand_macros` is private and somewhat difficult to
-        # reimplement correctly.
-        ex = macroexpand(__module__, ex)
     end
     if isa(ex,Symbol)
         if !in_quote_context
@@ -137,7 +139,11 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
             escs -= 1
         elseif ex.head === :meta || ex.head === :inert
             return ex, used_withex
-        elseif !in_quote_context && last(string(ex.head)) == '=' && Meta.isexpr(ex.args[1], :ref)
+        elseif !in_quote_context && last(string(ex.head)) == '=' &&
+               Meta.isexpr(unwrap_scopes(ex.args[1], escs), :ref)
+            lhs = ex.args[1]
+            ref_ex = ex.args[1] = unwrap_scopes(lhs, escs)::Expr
+            ref_ex.args = Any[Meta.reescape(a, lhs) for a in ref_ex.args]
             for i = eachindex(ex.args)
                 if i == 1
                     # we'll deal with the ref expression later
@@ -146,7 +152,7 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
                 ex.args[i], used = replace_ref_begin_end_!(__module__, ex.args[i], withex, in_quote_context, escs)
                 used_withex |= used
             end
-            ex, used = handle_refexpr!(__module__, ex.args[1]::Expr, ex, withex, in_quote_context, escs)
+            ex, used = handle_refexpr!(__module__, ref_ex, ex, withex, in_quote_context, escs)
             used_withex |= used
             return ex, used_withex
         end
