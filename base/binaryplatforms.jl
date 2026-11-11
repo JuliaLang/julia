@@ -201,10 +201,10 @@ function Base.show(io::IO, p::Platform)
     show(io, arch(p))
     print(io, ", ")
     show(io, os(p))
-    print(io, "; ")
     # Sort tags so that the output does not depend on `Dict` iteration order
     other_tags = sort!(filter!(kv -> kv[1] ∉ ("arch", "os"), collect(tags(p))); by=first)
-    join(io, ("$(k) = $(repr(v))" for (k, v) in other_tags), ", ")
+    isempty(other_tags) || print(io, "; ")
+    join(io,("$(k) = $(repr(v))" for (k, v) in other_tags), ", ")
     print(io, ")")
 end
 
