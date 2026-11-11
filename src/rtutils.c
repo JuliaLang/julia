@@ -910,7 +910,8 @@ static int jl_static_is_function_(jl_datatype_t *vt) JL_NOTSAFEPOINT {
         } else if (vt == jl_function_type) {
             return 1;
         }
-        vt = jl_atomic_load_relaxed(&vt->super);
+        jl_datatype_t *super = jl_atomic_load_relaxed(&vt->super);
+        vt = super ? super : jl_typename_super(vt->name);
         _iter_count += 1;
     }
     return 0;
