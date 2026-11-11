@@ -792,6 +792,17 @@ mktempdir() do dir
     end
 end
 
+# A redirect target can be followed by more arguments or by a pipe
+let f = "a"
+    @test repr(`cat < in.txt -n`) == repr(pipeline(`cat -n`, stdin="in.txt"))
+    @test repr(`cat 2> $f.txt -n`) == repr(pipeline(`cat -n`, stderr="a.txt"))
+    @test repr(`cat < x$f | wc`) == repr(pipeline(pipeline(`cat`, stdin="xa"), `wc`))
+    @test repr(`cat > out.txt | wc`) == repr(pipeline(pipeline(`cat`, stdout="out.txt"), `wc`))
+    @test_throws "unsupported fd 3 in redirection" Base.shell_parse("echo 3> f")
+    @test_throws "unsupported fd 3 in redirection" Base.shell_parse("echo 3< f")
+    @test_throws "special characters \";\" must be quoted" Base.shell_parse("echo a;b", true; special=";")
+end
+
 let roundtrip(s) = first(Base.shell_split(Base.shell_escape(s))) == s
     @test roundtrip("foo'bar\\\$baz")
     @test roundtrip("foo'bar\\\"baz")

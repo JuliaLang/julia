@@ -2715,6 +2715,10 @@ end
     rot13proj = joinpath(@__DIR__, "project", "Rot13")
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no --project=$rot13proj -m Rot13 --project nowhere ABJURER`) == "--cebwrpg abjurer NOWHERE "
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no --project=$rot13proj -m Rot13.Rot26 --project nowhere ABJURER`) == "--project nowhere ABJURER "
+    err = IOBuffer()
+    p = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --project=$rot13proj -m Rot13.NoMain`); stderr=err))
+    @test p.exitcode == 1
+    @test occursin("`main` in `Rot13.NoMain` not declared as entry point (use `@main` to do so)", String(take!(err)))
 end
 
 @testset "workspace loading" begin

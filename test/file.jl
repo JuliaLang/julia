@@ -2340,6 +2340,34 @@ end
     @test s === lstat((f,))
     @test s === stat(".", f)
     @test s === lstat(".", f)
+    @test hash(s) == hash(stat(f))
+    @test hash(s) != hash(Base.Filesystem.StatStruct())
+    @test ctime(s) === s.ctime
+end
+
+@testset "StatStruct permission accessors and ismount" begin
+    mktempdir() do dir
+        f = joinpath(dir, "file")
+        touch(f)
+        if !Sys.iswindows()
+            chmod(f, 0o640)
+            s = stat(f)
+            @test (uperm(s), gperm(s), operm(s)) == (0x6, 0x4, 0x0)
+            @test !issetuid(s) && !issetgid(s) && !issticky(s)
+            symlink(dir, joinpath(dir, "link"))
+            @test !ismount(dir, "link")
+        end
+        @test !ismount(f)
+        @test !ismount(dir)
+        @test !ismount(joinpath(dir, "missing"))
+    end
+    # chmod may drop the setuid, setgid and sticky bits, so check them on given modes
+    withmode(mode) = Base.Filesystem.StatStruct("", 0, 0, mode, 0, 0, 0, 0, 0, 0, 0, 0.0, 0.0, Int32(0))
+    @test issetuid(withmode(0o104640)) && !issetuid(withmode(0o100640))
+    @test issetgid(withmode(0o102640)) && !issetgid(withmode(0o100640))
+    @test issticky(withmode(0o041700)) && !issticky(withmode(0o040700))
+    # the root directory is its own parent
+    Sys.iswindows() || @test ismount("/")
 end
 
 mutable struct URI50890; f::String; end

@@ -903,3 +903,29 @@ end
     write(io, 'a')
     @test write(io, 'a') == 0
 end
+
+@testset "peek, truncate and take! edge cases" begin
+    @test_throws EOFError peek(IOBuffer(UInt8[1]), Int32)
+    @test_throws EOFError peek(IOBuffer(UInt8[]), UInt8)
+    @test peek(IOBuffer(reinterpret(UInt8, [1.5])), Float64) === 1.5
+
+    # truncate a buffer whose data was just taken
+    io = IOBuffer()
+    write(io, "abc")
+    take!(io)
+    @test take!(truncate(io, 2)) == [0x00, 0x00]
+
+    # a non-seekable buffer only gives the bytes not read yet
+    p = PipeBuffer()
+    write(p, "abcd")
+    read(p, UInt8)
+    @test String(take!(p)) == "bcd"
+
+    # writing into a buffer backed by a non-dense vector
+    v = view(zeros(UInt8, 8), 1:8)
+    io = IOBuffer(v; read=true, write=true, truncate=true)
+    @test bytesavailable(io) == 0
+    write(io, "hello")
+    @test String(take!(io)) == "hello"
+    @test v[1:5] == b"hello"
+end
