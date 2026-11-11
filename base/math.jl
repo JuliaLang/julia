@@ -1289,6 +1289,20 @@ Return positive part of the high word of `x` as a `UInt32`.
 @inline poshighword(x::UInt64)  = highword(x) & 0x7fffffff
 @inline poshighword(x::Float32) = highword(x) & 0x7fffffff
 
+# magic rounding constant: 1.5*2^52 Adding, then subtracting it from a float rounds it to an Int.
+# This works because eps(MAGIC_ROUND_CONST(T)) == one(T), so adding it to a smaller number aligns the lsb to the 1s place.
+# Values for which this trick doesn't work are going to have outputs of 0 or Inf.
+MAGIC_ROUND_CONST(::Type{Float64}) = 6.755399441055744e15
+MAGIC_ROUND_CONST(::Type{Float32}) = 1.048576f7
+
+# round(a*c) as a float and as an Int64, for |a*c| < 2^51 (Float64) or 2^21 (Float32), using
+# MAGIC_ROUND_CONST: the integer is then also the low bits of the sum, which avoids separate round
+# and float-to-int instructions.
+@inline function roundmul(a::T, c::T) where T<:Union{Float32, Float64}
+    t = muladd(a, c, MAGIC_ROUND_CONST(T))
+    return t - MAGIC_ROUND_CONST(T), Int64(reinterpret(Signed, t) - reinterpret(Signed, MAGIC_ROUND_CONST(T)))
+end
+
 # More special functions
 include("special/cbrt.jl")
 include("special/exp.jl")

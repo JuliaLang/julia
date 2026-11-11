@@ -1,11 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# magic rounding constant: 1.5*2^52 Adding, then subtracting it from a float rounds it to an Int.
-# This works because eps(MAGIC_ROUND_CONST(T)) == one(T), so adding it to a smaller number aligns the lsb to the 1s place.
-# Values for which this trick doesn't work are going to have outputs of 0 or Inf.
-MAGIC_ROUND_CONST(::Type{Float64}) = 6.755399441055744e15
-MAGIC_ROUND_CONST(::Type{Float32}) = 1.048576f7
-
 # max, min, and subnormal arguments
 # max_exp = T(exponent_bias(T)*log(base, big(2)) + log(base, 2 - big(2.0)^-significand_bits(T)))
 MAX_EXP(n::Val{2}, ::Type{Float32}) = 128.0f0
@@ -62,11 +56,17 @@ LogBL(::Val{2}, ::Type{Float32}) = 0.0f0
 LogBL(::Val{:ℯ}, ::Type{Float32}) = 0.00021219444f0
 LogBL(::Val{10}, ::Type{Float32}) = 0.00023953558f0
 
+# -log(base, 2) as a single Float32, for the Float16 methods
+LogB(::Val{2}, ::Type{Float16}) = -1.0f0
+LogB(::Val{:ℯ}, ::Type{Float16}) = -0.6931472f0
+LogB(::Val{10}, ::Type{Float16}) = -0.30103f0
+
 # Range reduced kernels, base^x - 1 on the reduced range.
-# For bases 2 and 10 the leading term x*c1 goes into a single fma rather than computing
+# For bases 2 and 10 the leading term x*c1 goes into a muladd rather than computing
 # x*q(x) with q ≈ c1 rounded first: a one-ulp step in q times |x| can outweigh a one-ulp step
-# in x times c1, which made exp2 and exp10 non-monotone just below 0. Base ℯ has no such
-# violations in the cheaper form.
+# in x times c1, which made exp2 and exp10 non-monotone just below 0. This relies on the muladd
+# being fused: on hardware without FMA a few non-monotone inputs remain. Base ℯ has no such
+# violations in the cheaper form, with or without FMA.
 function expm1b_kernel(::Val{2}, x::Float64)
     return muladd(x, 0.6931471805599393, (x*x) * evalpoly(x, (0.24022650695910058,
                             0.05550411502333161, 0.009618129548366803)))
@@ -182,15 +182,28 @@ const J_TABLE = (0x0000000000000000, 0xaac00b1afa5abcbe, 0x9b60163da9fb3335, 0xa
                  0xa12f7bfdad9cbe13, 0xaeef91d802243c88, 0x874fa7c1819e90d8, 0xacdfbdba3692d513, 0x62efd3c22b8f71f1, 0x74afe9d96b2a23d9)
 
 # :nothrow needed since the compiler can't prove `ind` is inbounds.
-Base.@assume_effects :nothrow function table_unpack(::Type{Float64}, ind::Int32)
+Base.@assume_effects :nothrow function table_unpack(ind::Int32)
     ind = ind & 255 + 1 # 255 == length(J_TABLE) - 1
     j = getfield(J_TABLE, ind) # use getfield so the compiler can prove consistent
     jU = reinterpret(Float64, JU_CONST | (j&JU_MASK))
     jL = reinterpret(Float64, JL_CONST | (j>>8))
     return jU, jL
 end
+table_unpack(::Type{Float64}, ind::Int32) = table_unpack(ind)
 
-# 2^(j/64) for j = 0:63, each stored as a Float32 hi part (upper 32 bits) and lo part (lower 32 bits)
+# 2^(j/64) for j = 0:63, each stored as a Float32 hi part (upper 32 bits) and lo part (lower 32 bits).
+# Unlike J_TABLE, the hi part is rounded to nearest, so the lo part can have either sign.
+#function make_table_f32(size)
+#    t_array = zeros(UInt64, size)
+#    for j in 1:size
+#        val = 2.0^(BigFloat(j-1)/size)
+#        valU = Float32(val)
+#        valL = Float32(val-valU)
+#        t_array[j] = UInt64(reinterpret(UInt32, valU)) << 32 | reinterpret(UInt32, valL)
+#    end
+#    return Tuple(t_array)
+#end
+#const J_TABLE_F32 = make_table_f32(64);
 const J_TABLE_F32 = (0x3f80000000000000, 0x3f8164d2b1c43fd0, 0x3f82cd87b34ea7a9, 0x3f843a29b2f14c87, 0x3f85aac3334f9891,
                      0x3f871f62b352c2e6, 0x3f88980fb37eda4b, 0x3f8a14d5336a92de, 0x3f8b95c2b260aba1, 0x3f8d1adf3336fcb7,
                      0x3f8ea43ab3697465, 0x3f9031dc330628cd, 0x3f91c3d333675624, 0x3f935a2b32bc4f9c, 0x3f94f4f0b32e0212,
@@ -206,7 +219,7 @@ const J_TABLE_F32 = (0x3f80000000000000, 0x3f8164d2b1c43fd0, 0x3f82cd87b34ea7a9,
                      0x3ff5257d32292436, 0x3ff7d0df336615a2, 0x3ffa83b3b2923758, 0x3ffd3e0c31cf486c)
 
 # :nothrow needed since the compiler can't prove `ind` is inbounds.
-Base.@assume_effects :nothrow function table_unpack(::Type{Float32}, ind::Int32)
+@assume_effects :nothrow function table_unpack(::Type{Float32}, ind::Int32)
     j = getfield(J_TABLE_F32, ind & 63 + 1)
     return reinterpret(Float32, (j >> 32) % UInt32), reinterpret(Float32, j % UInt32)
 end
@@ -221,28 +234,25 @@ end
 #
 # 3. Scale back: b^x = 2^k * 2^(j/S) * (1 + p_b(r))
 #    2^(j/S) is stored for every j as a sum of two floats, so the result only rounds once to good accuracy.
-#    Float32 does all of its arithmetic in Float32 so that the method vectorizes well.
 # If b^x is subnormal, a little extra care needs to be taken: the scaling back is done in 2 steps,
 # since just messing with the exponent wouldn't work.
 
-# Returns N = k*S + j and r from step 1, for |x| small enough that N fits in the magic rounding constant.
+# Step 1: returns k, the two parts of 2^(j/S), and r, for |x| small enough for roundmul.
 @inline function exp_reduce(x::T, base) where T<:Union{Float32,Float64}
     S = T(1 << EXP_TABLE_BITS(T)) # the scalings by S are exact and fold to constants
-    N_float = muladd(x, S*LogBINV(base, T), MAGIC_ROUND_CONST(T))
-    N = (reinterpret(uinttype(T), N_float) - reinterpret(uinttype(T), MAGIC_ROUND_CONST(T))) % Int32
-    N_float -= MAGIC_ROUND_CONST(T) # N_float now equals round(x*S*LogBINV(base, T))
+    N_float, N = roundmul(x, S*LogBINV(base, T)) # N = k*S + j
     r = muladd(N_float, LogBU(base, T)/S, x)
     if !iszero(LogBL(base, T)) # for base 2, LogBU is exact
         r = muladd(N_float, LogBL(base, T)/S, r)
     end
-    return N, r
+    jU, jL = table_unpack(T, N % Int32)
+    return (N % Int32) >> EXP_TABLE_BITS(T), jU, jL, r
 end
 
 # Returns k and small_part such that base^x ≈ 2^k * small_part, with 2^(-1/(2S)) <= small_part <= 2^(1 - 1/(2S))
 @inline function exp_kernel(x::T, base) where T<:Union{Float32,Float64}
-    N, r = exp_reduce(x, base)
-    jU, jL = table_unpack(T, N)
-    return N >> EXP_TABLE_BITS(T), muladd(jU, expm1b_kernel(base, r), jL) + jU
+    k, jU, jL, r = exp_reduce(x, base)
+    return k, muladd(jU, expm1b_kernel(base, r), jL) + jU
 end
 
 @inline function exp_impl(x::Float64, base)
@@ -265,9 +275,7 @@ end
 # Computes base^(x+xlo). Used for pow.
 @inline function exp_impl(x::Float64, xlo::Float64, base)
     T = Float64
-    N, r = exp_reduce(x, base)
-    k = N >> EXP_TABLE_BITS(T)
-    jU, jL = table_unpack(T, N)
+    k, jU, jL, r = exp_reduce(x, base)
     kern = expm1b_kernel(base, r)
     very_small = muladd(kern, jU*xlo, jL)
     hi, lo = Base.canonicalize2(1.0, kern)
@@ -288,11 +296,9 @@ end
 end
 @inline function exp_impl_fast(x::Float64, base)
     T = Float64
-    x >= MAX_EXP(base, T) && return Inf
+    !(x < MAX_EXP(base, T)) && return x + Inf # overflow, or NaN
     x <= -SUBNORM_EXP(base, T) && return 0.0
-    N, r = exp_reduce(x, base)
-    k = N >> EXP_TABLE_BITS(T)
-    jU, _ = table_unpack(T, N)
+    k, jU, _, r = exp_reduce(x, base)
     small_part =  muladd(jU, expm1b_kernel(base, r), jU)
     twopk = Int64(k) << 52
     return reinterpret(T, twopk + reinterpret(Int64, small_part))
@@ -327,10 +333,9 @@ end
 @inline function exp_impl(a::Float16, base)
     T = Float32
     x = T(a)
-    # Float16 needs only a single-word log(base, 2), so the Float32 reduction constants are combined
     N_float = round(x*LogBINV(base, T))
     N = unsafe_trunc(Int32, N_float)
-    r = muladd(N_float, LogBU(base, T) + LogBL(base, T), x)
+    r = muladd(N_float, LogB(base, Float16), x)
     small_part = expb_kernel(base, r)
     if !(abs(x) <= 25)
         x > 16 && return Inf16
@@ -446,9 +451,8 @@ function expm1(x::Float64)
         x < MIN_EXP(Float64) && return -1.0
     end
 
-    N, r = exp_reduce(x, Val(:ℯ))
-    k = Int64(N >> EXP_TABLE_BITS(T))
-    jU, jL = table_unpack(T, N)
+    k, jU, jL, r = exp_reduce(x, Val(:ℯ))
+    k = Int64(k)
     p = expm1b_kernel(Val(:ℯ), r)
     twopk  = reinterpret(Float64, (1023+k) << 52)
     twopnk = reinterpret(Float64, (1023-k) << 52)
@@ -461,19 +465,20 @@ end
 function expm1(x::Float32)
     # Computed in Float64 using the Float64 exp table: with x = (k + j/256 + r/256)*log(2),
     # expm1(x) = scale*(1 + p) - 1 where scale = 2^k*2^(j/256) and p = 2^(r/256) - 1.
-    # scale - 1 is exact whenever it cancels, so the result rounds (almost) only once.
+    # scale - 1 is exact whenever it cancels, so the result rounds (almost) only once, and the
+    # final muladd does not need to be fused.
     if (reinterpret(UInt32, x) << 1) >= 0x8700_0000 # |x| >= 256, ±Inf, or NaN
         isnan(x) && return x
         return x > 0 ? Inf32 : -1.0f0
     end
-    t = Float64(x) * (256*LogBINV(Val(:ℯ), Float64))
-    N_float = t + MAGIC_ROUND_CONST(Float64)
-    N = reinterpret(UInt64, N_float) % Int32
-    r = t - (N_float - MAGIC_ROUND_CONST(Float64)) # exact, |r| <= 1/2
-    jU, _ = table_unpack(Float64, N)
-    scale = reinterpret(Float64, reinterpret(Int64, jU) + (Int64(N >> EXP_TABLE_BITS(Float64)) << 52))
+    S = Float64(1 << EXP_TABLE_BITS(Float64))
+    xd = Float64(x)
+    N_float, N = roundmul(xd, S*LogBINV(Val(:ℯ), Float64))
+    r = muladd(xd, S*LogBINV(Val(:ℯ), Float64), -N_float) # |r| <= 1/2 (up to rounding)
+    jU, _ = table_unpack(Float64, N % Int32)
+    scale = reinterpret(Float64, reinterpret(Int64, jU) + ((N >> EXP_TABLE_BITS(Float64)) << 52))
     p = r * evalpoly(r, (0.0027076061740622863, 3.6655655969101062e-6, 3.3083026805413713e-9))
-    return copysign(Float32(fma(scale, p, scale - 1.0)), x) # copysign keeps expm1(-0.0) == -0.0
+    return copysign(Float32(muladd(scale, p, scale - 1.0)), x) # copysign keeps expm1(-0.0) == -0.0
 end
 
 function expm1(a::Float16)
@@ -485,7 +490,7 @@ function expm1(a::Float16)
     iszero(a) && return a # keeps the sign of zero
     x = Float32(a)
     N = round(x*LogBINV(Val(:ℯ), Float32))
-    r = muladd(N, LogBU(Val(:ℯ), Float32) + LogBL(Val(:ℯ), Float32), x) # single-word -log(2), as in exp_impl(::Float16)
+    r = muladd(N, LogB(Val(:ℯ), Float16), x)
     r2 = r*r
     # e^r - 1 = r*(1 + r*q(r)) with q a degree 4 Taylor polynomial, evaluated with Estrin's scheme.
     # Computing p in this form (rather than as r + r^2*q(r)) matters: it rounds every Float16
@@ -493,7 +498,7 @@ function expm1(a::Float16)
     q = muladd(r2, muladd(r2, 0.0013888889f0, muladd(r, 0.008333334f0, 0.041666668f0)), muladd(r, 0.16666667f0, 0.5f0))
     p = r * muladd(r, q, 1f0)
     twopk = reinterpret(Float32, (unsafe_trunc(Int32, N) + Int32(127)) << Int32(23))
-    return Float16(fma(twopk, p, twopk - 1f0))
+    return Float16(muladd(twopk, p, twopk - 1f0))
 end
 
 """

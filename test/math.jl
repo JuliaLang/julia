@@ -436,7 +436,9 @@ end
             for x in X
                 y, yb = func(x), func(widen(x))
                 if isfinite(eps(T(yb)))
-                    @test abs(y-yb) <= 1.2*eps(T(yb))
+                    # Float32 results round twice when subnormal
+                    tol = T != Float32 ? 1.2 : issubnormal(T(yb)) ? 0.76 : 0.56
+                    @test abs(y-yb) <= tol*eps(T(yb))
                 end
             end
         end
@@ -448,6 +450,46 @@ end
             @test func(T(5000.0)) === T(Inf)
             @test func(T(-5000.0)) === T(0.0)
         end
+    end
+end
+
+@testset "exponential functions are monotonic" begin
+    function ismonotonic(f, lo, hi)
+        x, y = lo, f(lo)
+        while x < hi
+            x = nextfloat(x)
+            ynew = f(x)
+            ynew < y && return false
+            y = ynew
+        end
+        return true
+    end
+    # Ranges that used to contain non-monotonic inputs. They are chosen to also be monotonic
+    # when muladd is not fused, which exp2 and exp10 are not everywhere.
+    @test ismonotonic(exp, -0.0158f0, -0.0155f0)
+    @test ismonotonic(exp2, -0.0019f0, -0.00185f0)
+    @test ismonotonic(exp10, 0.17f0, 0.176f0)
+    for x in (-0.0009299494385971679, -0.0004723650529622104)
+        @test ismonotonic(exp2, prevfloat(x, 1000), nextfloat(x, 1000))
+    end
+    for x in (-0.0005793577968287017, -0.0004143682059846671)
+        @test ismonotonic(exp10, prevfloat(x, 1000), nextfloat(x, 1000))
+    end
+end
+
+@testset "exp tables" begin
+    for j in 0:255
+        hi, lo = Base.Math.table_unpack(Float64, Int32(j))
+        val = big(2.0)^(big(j)/256)
+        @test hi === Float64(val, RoundDown)
+        # the packed lo part keeps 60 significant bits of val
+        @test abs(big(hi) + lo - val) < 0x1p-60
+    end
+    for j in 0:63
+        hi, lo = Base.Math.table_unpack(Float32, Int32(j))
+        val = big(2.0)^(big(j)/64)
+        @test hi === Float32(val)
+        @test lo === Float32(val - hi)
     end
 end
 
