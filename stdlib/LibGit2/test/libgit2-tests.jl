@@ -101,6 +101,7 @@ end
     @test_throws ArgumentError LibGit2.GitHash(Ptr{UInt8}(C_NULL))
     @test_throws ArgumentError LibGit2.GitHash(rand(UInt8, 2*LibGit2.OID_RAWSZ))
     @test_throws ArgumentError LibGit2.GitHash("a")
+    @test Dict(z => 1)[LibGit2.GitHash(rs)] == 1
 end
 
 @testset "StrArrayStruct" begin
@@ -132,6 +133,9 @@ end
         @test LibGit2.getconfig("fake.property", "") == ""
         LibGit2.set!(cfg, "fake.property", "AAAA")
         @test LibGit2.getconfig("fake.property", "") == "AAAA"
+        LibGit2.with(LibGit2.GitConfig(LibGit2.Consts.CONFIG_LEVEL_GLOBAL)) do global_cfg
+            @test LibGit2.get(global_cfg, "fake.property", "") == "AAAA"
+        end
     end
 end
 
@@ -371,6 +375,7 @@ end
             """
         cred = read!(IOBuffer(str), LibGit2.GitCredential())
         @test cred == LibGit2.GitCredential("", "", "", "", "")
+        @test hash(cred) == hash(LibGit2.GitCredential("", "", "", "", ""))
         @test sprint(write, cred) == str
         Base.shred!(cred)
     end
@@ -624,7 +629,15 @@ mktempdir() do dir
                 @test value == (count == 1 ? "store" : "cache")
             end
             @test count == 2
+
+            values = [unsafe_string(e.value) for e in LibGit2.GitConfigIter(cfg, "credential.helper", r"^ca")]
+            @test values == ["cache"]
+            names = [unsafe_string(e.name) for e in LibGit2.GitConfigIter(cfg)]
+            @test sum(==("credential.helper"), names) == 2
+            @test "credential.username" in names
         end
+        @test_logs (:warn, "LibGit2.GitConfig thrown exception:") LibGit2.with_warn(
+            _ -> error("boom"), LibGit2.GitConfig, config_path, LibGit2.Consts.CONFIG_LEVEL_APP)
     end
 
     @testset "Initializing repository" begin
@@ -818,6 +831,7 @@ mktempdir() do dir
                 @test LibGit2.is_ancestor_of(string(commit_oid1), string(commit_oid2), repo)
                 @test LibGit2.iscommit(string(commit_oid1), repo)
                 @test !LibGit2.iscommit(string(commit_oid1)*"fake", repo)
+                @test !LibGit2.iscommit("not a hash", repo)
                 @test LibGit2.iscommit(string(commit_oid2), repo)
 
                 # lookup commits
@@ -861,6 +875,7 @@ mktempdir() do dir
                     LibGit2.with(LibGit2.GitCommit(repo, commit_oid3)) do cmt3
                         @test LibGit2.parentcount(cmt3) == 1
                         @test LibGit2.parent_id(cmt3, 1) == commit_oid1
+                        @test_throws "parent 1 does not exist" LibGit2.parent_id(cmt3, 2)
                         @test LibGit2.GitHash(LibGit2.parent(cmt3, 1)) == commit_oid1
                     end
 
@@ -1149,6 +1164,30 @@ mktempdir() do dir
                 @test LibGit2.GitHash(tree1) == LibGit2.GitHash(tree2)
                 @test LibGit2.count(tree1) == LibGit2.count(tree2)
 
+                LibGit2.with(LibGit2.GitCommit(repo, "HEAD")) do cmt
+                    @test LibGit2.repository(cmt) === repo
+                    @test LibGit2.GitHash(LibGit2.GitTree(cmt)) == tree_hash
+                    @test LibGit2.GitHash(LibGit2.peel(cmt)) == tree_hash
+                end
+                @test haskey(tree, test_file)
+                @test LibGit2.objtype(LibGit2.Consts.OBJ_TAG) == LibGit2.GitTag
+                @test LibGit2.objtype(LibGit2.Consts.OBJ_ANY) == LibGit2.GitUnknownObject
+                @test_throws "OBJ_BAD is not supported" LibGit2.objtype(LibGit2.Consts.OBJ_BAD)
+                @test LibGit2.Consts.OBJECT(LibGit2.GitUnknownObject) == LibGit2.Consts.OBJ_ANY
+
+                # a positive return from the callback skips the children of an entry
+                for (post, skip, expected) in (
+                        (false, 0, [("", test_dir), ("$test_dir/", "testfile")]),
+                        (true,  0, [("$test_dir/", "testfile"), ("", test_dir)]),
+                        (false, 1, [("", test_dir)]))
+                    walked = Tuple{String,String}[]
+                    LibGit2.treewalk(tree, post) do root, entry
+                        push!(walked, (root, LibGit2.filename(entry)))
+                        return skip
+                    end
+                    @test walked == expected
+                end
+
                 # a negative return from the callback stops the walk, even after another error
                 @test !haskey(tree, "nonexistent")
                 walked = Tuple{String,String}[]
@@ -1226,6 +1265,9 @@ mktempdir() do dir
             LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
                 diff_str = "diff --git a/test.txt b/test.txt\nindex 0000000..1111111 100644\n"
                 @test_throws LibGit2.GitError LibGit2.GitDiff(diff_str)
+                diff = LibGit2.GitDiff(diff_str * "--- a/test.txt\n+++ b/test.txt\n@@ -1 +1 @@\n-old\n+new\n")
+                @test LibGit2.count(diff) == 1
+                @test diff[1].status == Cint(LibGit2.Consts.DELTA_MODIFIED)
 
                 tree1 = LibGit2.GitTree(repo, "HEAD~1^{tree}")
                 tree2 = LibGit2.GitTree(repo, "HEAD^{tree}")
