@@ -5,7 +5,7 @@
     @test ps("XX"; fgcolor=42)   == "\e[38;5;42mXX\e[0;0m"
     @test ps("XX"; fgcolor=(10,100,200)) == "\e[38;2;10;100;200mXX\e[0;0m"
 
-    ps("XX"; bgcolor=:red) == "\e[41mXX\e[0;0m"
+    @test ps("XX"; bgcolor=:red) =="\e[41mXX\e[0;0m"
     @test ps("XX"; bgcolor=42) == "\e[48;5;42mXX\e[0;0m"
     @test ps("XX"; bgcolor=(10,100,200)) == "\e[48;2;10;100;200mXX\e[0;0m"
 
