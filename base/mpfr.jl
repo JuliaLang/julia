@@ -859,7 +859,7 @@ function ldexp(x::BigFloat, n::Culong)
 end
 ldexp(x::BigFloat, n::ClongMax) = ldexp(x, convert(Clong, n))
 ldexp(x::BigFloat, n::CulongMax) = ldexp(x, convert(Culong, n))
-ldexp(x::BigFloat, n::Integer) = x * exp2(BigFloat(n))
+ldexp(x::BigFloat, n::Integer) = ldexp(x, clamp(n, Clong))
 
 function factorial(x::BigFloat)
     if x < 0 || !isinteger(x)
