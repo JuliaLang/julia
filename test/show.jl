@@ -30,6 +30,11 @@ end
 @test replstr(Array{Any}(undef, 2)) == "2-element Vector{Any}:\n #undef\n #undef"
 @test replstr(Array{Any}(undef, 2,2)) == "2×2 Matrix{Any}:\n #undef  #undef\n #undef  #undef"
 @test replstr(Array{Any}(undef, 2,2,2)) == "2×2×2 Array{Any, 3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
+# long trailing dimensions only show the first and last few slices
+let s = replstr(collect(reshape(1:200, 1, 1, 2, 100)))
+    @test occursin("[:, :, 2, 3] =\n 6\n\n;;;; … \n\n[:, :, 1, 98] =\n 195", s)
+    @test !occursin("[:, :, 1, 4] =", s)
+end
 @test replstr([1f10]) == "1-element Vector{Float32}:\n 1.0f10"
 
 # alignment of elided strings
@@ -3414,6 +3419,11 @@ end
     @test sprint(show, Type{1}; context=:compact => false) == "TypeEq{1}"
     @test repr("text/plain", Type{setindex!}) == "Type{setindex!}"
     @test repr("text/plain", Type{1}) == "Type{1}"
+    # the generic type printer agrees with the specialized methods
+    for T in (Type{1}, Core.TypeEgal{Int}, Union{})
+        @test sprint(Base._show_type, T) == repr(T)
+    end
+    @test repr(Core.TypeEgal{Int}) == "Core.TypeEgal{$Int}"
 end
 
 @testset "text/plain show falling back to show" begin
@@ -3530,6 +3540,30 @@ end
     end
     @test bitstring(BitVector(isodd.(1:10))) == "10101010 10"
     @test sprint(Base.print_bit_chunk, UInt64(5), 3) == "101"
+end
+
+@testset "show helpers that default to stdout" begin
+    out = mktemp() do path, io
+        redirect_stdout(io) do
+            Base.print_bit_chunk(UInt64(5), 3)
+            Base.print_bit_chunk(UInt64(5))
+            Base.show_supertypes(Int8)
+        end
+        close(io)
+        read(path, String)
+    end
+    @test out == "101" * sprint(Base.print_bit_chunk, UInt64(5)) * sprint(Base.show_supertypes, Int8)
+end
+
+@testset "small show internals" begin
+    @test Base.IteratorSize(Base.ANSIIterator) == Base.SizeUnknown()
+    @test eltype(Base.ANSIIterator("")) == Pair{Int, Union{Char, Base.ANSIDelimiter}}
+    @test [i => (c isa Char ? c : c.del) for (i, c) in collect(Base.ANSIIterator("\e[31mab"))] ==
+        [1 => "\e[31m", 6 => 'a', 7 => 'b']
+    io = IOContext(IOBuffer())
+    @test convert(IOContext{IOBuffer}, io) === io
+    @test Base.is_core_macro(GlobalRef(Core, Symbol("@doc")), "@doc")
+    @test !Base.is_core_macro(:x, "@doc")
 end
 
 module ShowBindings

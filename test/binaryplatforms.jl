@@ -182,6 +182,8 @@ P(args...; kwargs...) = Platform(args...; validate_strict=true, kwargs...)
     @test_throws ArgumentError P("x86_64", "freebsd"; libc="crazy_libc")
     @test_throws ArgumentError P("x86_64", "freebsd"; call_abi="crazy_abi")
     @test_throws ArgumentError P("x86_64", "freebsd"; call_abi="eabihf")
+    @test_throws "Invalid os/libc combination: freebsd/glibc" P("x86_64", "freebsd"; libc="glibc")
+    @test_throws "Invalid character in tag name" P("x86_64", "linux"; var"a-b"="1")
     @test_throws ArgumentError P("x86_64", "linux"; arch="i686")
     @test_throws ArgumentError P("x86_64", "linux"; ARCH="i686")
     @test_throws ArgumentError P("x86_64", "linux"; os="windows")
@@ -238,6 +240,13 @@ end
     @test triplet(P("x86_64", "macos"; os_version=v"16")) == "x86_64-apple-darwin16"
     @test triplet(P("x86_64", "freebsd")) == "x86_64-unknown-freebsd"
     @test triplet(P("i686", "freebsd")) == "i686-unknown-freebsd"
+    @test triplet(P("x86_64", "freebsd"; os_version=v"13.2")) == "x86_64-unknown-freebsd13.2"
+    @test triplet(P("x86_64", "openbsd")) == "x86_64-unknown-openbsd"
+
+    @test sprint(show, MIME("text/plain"), P("x86_64", "linux"; libgfortran_version=v"5", cuda="11.0")) ==
+        "Linux x86_64 {cuda=11.0, libc=glibc, libgfortran_version=5.0.0}"
+    @test sprint(show, MIME("text/plain"), P("aarch64", "macos")) == "macOS aarch64"
+    @test tags(Platform("x86_64", "linux"; foo=SubString("bar")))["foo"] == "bar"
 
     # Now test libgfortran/cxxstring ABIs
     @test triplet(P("x86_64", "linux"; libgfortran_version=v"3", cxxstring_abi="cxx11")) == "x86_64-linux-gnu-libgfortran3-cxx11"
@@ -266,6 +275,9 @@ end
 
     # Extended tags recorded by the build (e.g. for sanitizer builds) are appended after
     # any compiler ABI tags detected at runtime, so that the host triplet still parses
+    if !isnothing(detect_libgfortran_version())
+        @test occursin("-libgfortran", BinaryPlatforms.host_triplet("x86_64-linux-gnu", ""))
+    end
     sanitized_host = parse(Platform, BinaryPlatforms.host_triplet("x86_64-linux-gnu-libgfortran5-cxx11", "-sanitize+address"))
     @test tags(sanitized_host)["sanitize"] == "address"
     @test tags(sanitized_host)["julia_version"] == string(VERSION.major, ".", VERSION.minor, ".", VERSION.patch)
@@ -348,6 +360,10 @@ end
     @test parse(Platform, "aarch64-linux-gnueabihf") == Platform("aarch64", "linux"; call_abi="eabihf")
     @test_throws ArgumentError R("aarch64-linux-gnueabihf")
     @test_throws ArgumentError R("x86_64-w32-mingw64")
+    @test tryparse(Platform, "x86_64-linux-gnu") == P("x86_64", "linux")
+    @test tryparse(Platform, "invalid-triplet-here") === nothing
+    @test parse(Platform, SubString("x86_64-unknown-freebsd13.2")) == P("x86_64", "freebsd"; os_version=v"13.2")
+    @test R("x86_64-unknown-openbsd7.4") == P("x86_64", "openbsd"; os_version=v"7.4")
 
     # Test extended attributes
     @test R("x86_64-linux-gnu-march+avx2") == P("x86_64", "linux"; march="avx2")
@@ -423,6 +439,9 @@ end
         # Also test auto-string-parsing
         @test platforms_match(triplet(linux), p)
         @test platforms_match(linux, triplet(p))
+        @test platforms_match(SubString(triplet(linux)), p)
+        @test platforms_match(linux, SubString(triplet(p)))
+        @test platforms_match(SubString(triplet(linux)), SubString(triplet(p)))
     end
 
     # Test that Julia version is matched only on major.minor by default
@@ -512,6 +531,7 @@ end
     @test parse_dl_name_version("libmp3lame.so", "linux") == ("libmp3lame", nothing)
     @test parse_dl_name_version("libmp3lame.dll", "windows") == ("libmp3lame", nothing)
     @test parse_dl_name_version("libfoo-bar.dll", "windows") == ("libfoo-bar", nothing)
+    @test parse_dl_name_version(SubString("libfoo.so.1"), SubString("linux")) == ("libfoo", v"1")
 end
 
 @testset "Sys.is* overloading" begin
@@ -525,6 +545,12 @@ end
     @test Sys.isbsd(P("aarch64", "macos"))
     @test Sys.isbsd(P("x86_64", "freebsd"))
     @test !Sys.isbsd(P("x86_64", "linux"; libc="musl"))
+    @test Sys.isfreebsd(P("x86_64", "freebsd"))
+    @test !Sys.isfreebsd(P("x86_64", "openbsd"))
+    @test Sys.isopenbsd(P("x86_64", "openbsd"))
+    @test Sys.isunix(P("x86_64", "openbsd"))
+    @test Sys.isunix(P("x86_64", "linux"))
+    @test !Sys.isunix(P("x86_64", "windows"))
 end
 
 @testset "Compiler ABI detection" begin
@@ -653,4 +679,17 @@ end
     @test !platforms_match(ac, bc)
     @test platforms_match(ac, ac)
     @test platforms_match(bc, bc)
+
+    # Two different custom strategies for the same tag cannot be reconciled
+    odd = Platform("x86_64", "linux"; vally="2", compare_strategies=Dict("vally" => matches_oddness))
+    @test_throws "two different non-default comparison strategies" platforms_match(ac, odd)
+
+    @test_throws "nonexistent tag nope" BinaryPlatforms.set_compare_strategy!(a, "nope", matches_oddness)
+    @test_throws "nonexistent tag nope" BinaryPlatforms.get_compare_strategy(a, "nope")
+
+    # Two requested version caps must be equal; two unrequested ones compare in order
+    @test BinaryPlatforms.compare_version_cap("1.0", "1.0", true, true)
+    @test !BinaryPlatforms.compare_version_cap("1.0", "2.0", true, true)
+    @test BinaryPlatforms.compare_version_cap("1.0", "2.0", false, false)
+    @test !BinaryPlatforms.compare_version_cap("2.0", "1.0", false, false)
 end
