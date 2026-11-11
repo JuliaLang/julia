@@ -40,14 +40,12 @@ function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
     end
 end
 
-function _source_node(src)
-    SyntaxTree(:tombstone, nothing, nothing, src,
-               SyntaxContext(JuliaLowering, JL_NEW_EDITION))
-end
-
+# TODO: `:tombstone` prints in IR tests instead of real tree, which is harmless
+# in real use, but we shouldn't be using this macro.
 macro ast_(tree)
     quote
-        srcref = _source_node($(QuoteNode(__source__)))
+        srcref = $(@mknode(;head=:tombstone, source=__source__,
+                           context=SyntaxContext(JuliaLowering, JL_NEW_EDITION)))
         @ast _ srcref $tree
     end
 end

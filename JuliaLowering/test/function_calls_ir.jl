@@ -74,7 +74,7 @@ x^42.0
 #---------------------
 malformed `call`
 @ :1
-└───Expression: (call)
+└───Expression: ::tombstone
 
 ########################################
 # Simple broadcast

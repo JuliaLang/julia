@@ -1173,4 +1173,4 @@ end
 #---------------------
 Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
 @ :1
-└───Expression: (call JuliaLowering.eval_closure_type Main.TestMod :#11#12 (call core.svec) (call core.svec) (call core.svec))
+└───Expression: ::tombstone

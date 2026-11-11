@@ -39,7 +39,7 @@ function Base.showerror(io::IO, exc::LoweringError)
                 print(io, "$msg\n    ")
             end
             print(io, "Expression: ")
-            show(io, MIME"text/x.sexpression"(), st)
+            show(io, MIME"text/x.sexpression"(), prov_end(st))
         else
             highlight(io, src; note=msg)
         end
