@@ -378,6 +378,7 @@ end
     # Also test round-tripping through `repr()`:
     p = Platform("aarch64", "macos"; os_version=v"20", march="armv8_4_crypto_sve")
     @test eval(Meta.parse(repr(p))) == p
+    @test repr(Platform("x86_64", "openbsd")) == "Platform(\"x86_64\", \"openbsd\")"
 end
 
 @testset "Deterministic serialization" begin
