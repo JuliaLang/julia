@@ -1382,6 +1382,8 @@ end
     end
     @test ("julia>", :markdown_julia_prompt) ∈
         codefaces(Markdown.MD(Markdown.Code("julia-repl", "julia> x")))
+    @test ("ERROR:", :error) ∈
+        codefaces(Markdown.MD(Markdown.Code("julia-repl", "julia> error(1)\nERROR: 1")))
 end
 
 @testset "table rendering with term #25213" begin
