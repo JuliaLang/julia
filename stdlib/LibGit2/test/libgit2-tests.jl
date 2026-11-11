@@ -1148,6 +1148,15 @@ mktempdir() do dir
                 @test isa(tree2, LibGit2.GitTree)
                 @test LibGit2.GitHash(tree1) == LibGit2.GitHash(tree2)
                 @test LibGit2.count(tree1) == LibGit2.count(tree2)
+
+                # a negative return from the callback stops the walk, even after another error
+                @test !haskey(tree, "nonexistent")
+                walked = Tuple{String,String}[]
+                LibGit2.treewalk(tree) do root, entry
+                    push!(walked, (root, LibGit2.filename(entry)))
+                    return -1
+                end
+                @test walked == [("", test_dir)]
             end
         end
 
