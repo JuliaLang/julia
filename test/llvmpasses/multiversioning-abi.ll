@@ -1,8 +1,8 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='JuliaMultiVersioning' -S %s | FileCheck %s
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaMultiVersioning' -S %s | FileCheck %s
 ; COM: gc lowering must accept the trampolines as well
-; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='JuliaMultiVersioning,function(LateLowerGCFrame)' -S %s -o /dev/null
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaMultiVersioning,function(LateLowerGCFrame)' -S %s -o /dev/null
 
 ; COM: trampolines must call the selected clone with the calling convention
 ; COM: and argument attributes (e.g. `byval`) of the original function
