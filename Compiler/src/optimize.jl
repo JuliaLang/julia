@@ -1919,7 +1919,18 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         # consideration. This way, non-inlined error branches do not
         # prevent inlining.
         extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
-        return extyp === Union{} ? 0 : UNKNOWN_CALL_COST
+        extyp === Union{} && return 0
+        if head === :invoke_apply
+            # codegen passes every tuple element separately, so the call site's machine
+            # code grows with the flattened argument count
+            nflat = 0
+            for i = 5:length(ex.args)
+                t = widenconst(argextype(ex.args[i], src, sptypes))
+                isa(t, DataType) && (nflat += length(t.parameters))
+            end
+            return max(UNKNOWN_CALL_COST, nflat)
+        end
+        return UNKNOWN_CALL_COST
     elseif head === :(=)
         # A resolved store to a global should cost the same or less than the `setglobal!` tfunc declared.
         lhs = ex.args[1]
