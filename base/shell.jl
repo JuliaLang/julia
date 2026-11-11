@@ -7,7 +7,7 @@ const shell_special = "#{}()[]<>|&*?;"
 (@doc raw"""
     rstrip_shell(s::AbstractString)
 
-Strip trailing whitespace from a shell command string, while respecting a trailing backslash followed by a space ("\\ ").
+Strip trailing whitespace from a shell command string, while respecting a trailing backslash followed by a whitespace character (e.g. "\\ ").
 
 ```jldoctest
 julia> Base.rstrip_shell("echo 'Hello World' \\ ")
@@ -21,7 +21,7 @@ function rstrip_shell(s::AbstractString)
     c_old = nothing
     for (i, c) in Iterators.reverse(pairs(s))
         i::Int; c::AbstractChar
-        ((c == '\\') && c_old == ' ') && return SubString(s, 1, i+1)
+        ((c == '\\') && c_old !== nothing) && return SubString(s, 1, nextind(s, i))
         isspace(c) || return SubString(s, 1, i)
         c_old = c
     end
@@ -217,7 +217,7 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                 word_has_special = true
                 if !isempty(st) && (peek(st)::P)[2] in ('\n', '\r')
                     i = consume_upto!(arg, s, i, j) + 1
-                    if popfirst!(st)[2] == '\r' && (peek(st)::P)[2] == '\n'
+                    if popfirst!(st)[2] == '\r' && !isempty(st) && (peek(st)::P)[2] == '\n'
                         i += 1
                         popfirst!(st)
                     end
@@ -486,7 +486,8 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
                     break
                 end
             end
-            if isword
+            if isword && !(first && arg in ("case", "do", "done", "elif", "else", "esac", "fi", "for",
+                                            "if", "in", "then", "until", "while", "function", "select", "time"))
                 have_single && (arg = replace(arg, '\'' => "\\'"))
                 have_double && (arg = replace(arg, '"' => "\\\""))
                 print(io, arg)
