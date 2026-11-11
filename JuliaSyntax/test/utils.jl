@@ -14,6 +14,9 @@
 
     @test ps("XX", fgcolor=:red, bgcolor=:green, href="https://www.example.com") ==
         "\e]8;;https://www.example.com\e\\\e[31m\e[42mXX\e[0;0m\e]8;;\e\\"
+
+    @test_throws ErrorException ps("XX"; fgcolor=:no_such_color)
+    @test_throws ErrorException ps("XX"; bgcolor=256)
 end
 
 @testset "ambiguities" begin

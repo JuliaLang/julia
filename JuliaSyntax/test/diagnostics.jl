@@ -263,6 +263,10 @@ end
         # Error @ line 1:8
         a -- b -- c
         #      └┘ ── invalid operator"""
+    @test sprint(JuliaSyntax.show_diagnostics, stream.diagnostics[1:1], "a -- b -- c") == """
+        # Error @ line 1:3
+        a -- b -- c
+        # └┘ ── invalid operator"""
 
     stream = JuliaSyntax.ParseStream("a -- b")
     JuliaSyntax.parse!(stream)

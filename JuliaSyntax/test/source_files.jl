@@ -45,6 +45,9 @@
     # source_line convenience function
     @test source_line(SourceFile("a\nb\n"), 2) == 1
     @test source_line(SourceFile("a\nb\n"), 3) == 2
+
+    node = parsestmt(SyntaxNode, "f(a,\n  b)"; filename="f.jl")
+    @test source_location(LineNumberNode, node[3]) == LineNumberNode(2, Symbol("f.jl"))
 end
 
 @testset "SourceFile position indexing" begin
@@ -79,6 +82,11 @@ end
     module Foo
     end"""
     @test sourcetext(srcf) == "module Foo\nend"
+
+    # Long files are cut to fit half the display height
+    tall = SourceFile(join(1:40, "\n"))
+    @test sprint(show, MIME("text/plain"), tall; context=(:limit=>true, :displaysize=>(10, 80))) ==
+        "## SourceFile ##\n1\n2\n3\n⋮\n"
 end
 
 

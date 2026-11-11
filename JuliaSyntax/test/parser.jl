@@ -1203,6 +1203,13 @@ tests = [
         "`\xf5`"      =>  "(cmdstring-r (ErrorInvalidUTF8))"
         "10.0e1000'"  =>  "(ErrorNumericOverflow)"
         "10.0f100'"   =>  "(ErrorNumericOverflow)"
+        # error recovery
+        "(1:)"        =>  "(parens (call-i 1 : (error)))"
+        "(1:2:)"      =>  "(parens (call-i 1 : 2 (error)))"
+        "[x for x\nin xs]" => "(comprehension (generator x (iteration (in x xs))))"
+        "[x for x xs]" => "(comprehension (generator x (iteration (in x (error xs)))))"
+        "[a; ;b]"     =>  "(error (ncat-2 a (error-t) b))"
+        "\"\$1\""     =>  "(string (error) \"1\")"
     ],
     JuliaSyntax.parse_stmts => with_version.(v"1.11", [
         "function f(public)\n    public + 3\nend"       => "(function (call f public) (block (call-i public + 3)))"

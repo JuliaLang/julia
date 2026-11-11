@@ -75,6 +75,29 @@ end
         ex = JuliaSyntax.core_parser_hook("x.", "somefile", 0, 0, :all)[1]
         @test ex.head == :toplevel
         @test ex.args[2].head == :incomplete
+
+        if JuliaSyntax._has_v1_14_version_hooks
+            ex = JuliaSyntax.new_core_parser_hook("a\n)\nc", "somefile", 1, 0, :all,
+                                                  JuliaSyntax.LATEST_EDITION)[1]
+            @test head(ex) === :toplevel
+            @test head.(children(ex)) == [:identifier, :error]
+        end
+    end
+
+    @testset "code input types" begin
+        code = "x + 1"
+        GC.@preserve code begin
+            @test JuliaSyntax.core_parser_hook(Core.svec(pointer(code), sizeof(code)),
+                                               "somefile", 1, 0, :statement) == Core.svec(:(x + 1), 5)
+        end
+        @test JuliaSyntax.core_parser_hook(Test.GenericString(code), "somefile", 1, 0,
+                                           :statement) == Core.svec(:(x + 1), 5)
+    end
+
+    @testset "fl_parse" begin
+        @test JuliaSyntax.fl_parse("x\ny"; raise=false) == Expr(:error, "extra token after end of expression")
+        @test_throws Meta.ParseError JuliaSyntax.fl_parse("x\ny")
+        @test_throws BoundsError JuliaSyntax.fl_parse("x", 5)
     end
 
     @testset "enable_in_core!" begin
