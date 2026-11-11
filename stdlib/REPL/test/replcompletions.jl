@@ -1210,14 +1210,11 @@ let s, c, r
             @test r == 5:sizeof(s)
             @test s[r] == joinpath(path, prefix)
 
-            # `~ completes to ~/ for current user plus ~name/ for other real users
+            # `~ completes to ~/ only: other users are not enumerated
             me = Sys.username()
             s_bare = "`ls ~"
             c_bare, r_bare = test_complete(s_bare)
-            @test "~/" in c_bare              # current user always offered as ~/
-            @test !("~$me/" in c_bare)        # current user NOT listed by name (covered by ~/)
-            @test allunique(c_bare)           # no duplicates
-            @test all(c -> startswith(c, "~"), c_bare)
+            @test c_bare == ["~/"]
             @test s_bare[r_bare] == "~"
 
             # `~/prefix completes to ~/dname/ keeping the tilde form
@@ -1249,14 +1246,29 @@ let s, c, r
                 rm(dotdir)
             end
 
-            # `~letter completes to matching usernames including the current user's name
+            # `~prefix completes to the current user's name only, if it matches
             first_char = string(first(me))
             s_prefix = "`ls ~$first_char"
             c_prefix, r_prefix = test_complete(s_prefix)
-            @test "~$me/" in c_prefix             # current user included by name
-            @test !("~/" in c_prefix)             # ~/ shorthand NOT offered for non-empty prefix
-            @test all(c -> startswith(c, "~$first_char"), c_prefix)
+            @test c_prefix == ["~$me/"]
             @test s_prefix[r_prefix] == "~$first_char"
+            c_other, _ = test_complete("`ls ~$(me)_not_a_user")
+            @test isempty(c_other)
+
+            # `~name/prefix completes paths in that user's home directory, which is
+            # looked up by name rather than taken from HOME (set to `tmphome` here)
+            myhome = homedir(me)
+            entries = myhome === nothing || !isdir(myhome) ? String[] :
+                filter(e -> isascii(e) && all(c -> isletter(c) || isdigit(c) || c in "._-", e),
+                       readdir(myhome))
+            if !isempty(entries)
+                entry = first(entries)
+                s_named = "`ls ~$me/" * entry
+                c_named, r_named = test_complete(s_named)
+                @test any(c -> rstrip(c, '/') == joinpath(myhome, entry) ||
+                               endswith(rstrip(c, '/'), "/" * entry), c_named)
+                @test s_named[r_named] == "~$me/" * entry
+            end
 
             # Shell mode: ~/prefix completes with tilde preserved, not escaped
             s_shell = "ls ~/" * prefix
