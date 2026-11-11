@@ -1715,6 +1715,8 @@ using Base: typed_hvncat
     @test_throws ArgumentError hvncat(0, "a", "b")
     @test_throws ArgumentError hvncat(0, [1], [2])
     @test_throws "argument count does not match specified shape (expected 4, got 3)" hvncat((2, 2), true, 1, 2, 3)
+    @test_throws "argument count does not match specified shape (expected 4, got 3)" hvncat((1, 2, 2), false, [1 2], [3 4], [5 6])
+    @test_throws "argument count does not match specified shape (expected 4, got 5)" hvncat((1, 2, 2), false, [1 2], [3 4], [5 6], [7 8], [9 10])
     @test hvncat(1, [1], [2.0]) == [1.0, 2.0]
     @test_throws ArgumentError typed_hvncat(Float64, 0)
     @test typed_hvncat(Float64, 0, 1) == fill(1.0)
