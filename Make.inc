@@ -2224,6 +2224,19 @@ endif # VERBOSE
 print-%:
 	@printf "%s\n" $(call shell_escape,$*)=$(call shell_escape,$(subst $(newline),\n,$($*)))
 
+# DO NOT MERGE: build with BUILD_PATH_PREFIX_MAP on CI unless one is given. The
+# source prefix must be %-encoded (the Windows drive colon) and must use the native
+# Windows path spelling: MSYS make's JULIAHOME is the /c/... POSIX form, which never
+# matches the C:... paths julia and gcc see.
+ifeq ($(BUILD_PATH_PREFIX_MAP),)
+ifeq ($(OS), WINNT)
+BUILD_PATH_PREFIX_MAP_SRC := $(subst \,/,$(shell echo $(call cygpath_w,$(JULIAHOME))))
+else
+BUILD_PATH_PREFIX_MAP_SRC := $(JULIAHOME)
+endif
+BUILD_PATH_PREFIX_MAP := /julia=$(subst :,%.,$(subst =,%+,$(subst %,%\#,$(BUILD_PATH_PREFIX_MAP_SRC))))
+endif
+
 # Apply BUILD_PATH_PREFIX_MAP to C/C++ debug info and __FILE__, so native
 # frames use the same mapped paths as the runtime. Each dst=src pair in the map
 # becomes -ffile-prefix-map=src=dst. The JCFLAGS variables are recursively
