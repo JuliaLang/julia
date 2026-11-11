@@ -291,7 +291,7 @@ function replace(out::AnnotatedIOBuffer, str::AnnotatedString, pat_f::Pair...; c
     # replacements ordered by their match start position.
     # This means that the start of `.region`s in
     # `replacements` is monotonically increasing.
-    isappending || _clear_annotations_in_region!(out.annotations, first(replacements).offset:position(out))
+    isappending || _clear_annotations_in_region!(out.annotations, first(replacements).offset+1:position(out))
     for (; region, label, value) in str.annotations
         start, stop = first(region), last(region)
         prioridx = searchsortedlast(

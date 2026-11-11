@@ -835,6 +835,15 @@ end
             # Check that green annotation is offset correctly
             green_annots = filter(a -> a.value == :green, Base.annotations(result3))
             @test all(a -> first(a.region) >= pos + 1, green_annots)
+
+            # Replacing mid-buffer keeps the annotations of the preceding byte
+            buf4 = Base.AnnotatedIOBuffer()
+            write(buf4, astr("XYZW", (1:1, :red), (2:4, :green)))
+            seek(buf4, 1)
+            replace(buf4, astr("ab", (1:2, :blue)), "a" => "c")
+            @test Base.annotations(buf4) == [(region=1:1, label=:face, value=:red),
+                                             (region=4:4, label=:face, value=:green),
+                                             (region=3:3, label=:face, value=:blue)]
         end
     end
 end
