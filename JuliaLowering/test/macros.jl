@@ -707,6 +707,17 @@ expanded = JuliaLowering.macroexpand(test_mod, ex)
     "@inner"
     "(y, z)"
 ]
+let s = sprint(JuliaLowering.showprov, expanded[2])
+    @test count("in macro expansion", s) == 2
+    @test contains(s, "in source")
+    @test endswith(s, "# @ foo.jl:1")
+end
+let s = sprint(showerror, LoweringError(JuliaLowering.SyntaxList(expanded[2]), ["msg"], true))
+    @test startswith(s, "internal lowering bug:")
+    @test contains(s, "Expression:\n  (tuple y z)")
+    @test contains(s, "Detailed provenance:")
+    @test contains(s, "@ foo.jl:1")
+end
 
 @testset "expansion special case: macrocall in do expression" for edition in [JL_OLD_EDITION, JL_NEW_EDITION]
     @test jl_eval(test_mod, raw"""
@@ -891,6 +902,71 @@ let (err, st) = try
     end
     # Check that `catch_backtrace` can capture the stacktrace of the macro function
     @test any(sf->sf.func===:ccall_macro_parse, st)
+end
+
+@test JuliaLowering.include_string(test_mod, "@ccall :strlen(\"abc\"::Cstring)::Csize_t") == 3
+@testset "macro argument errors: $code" for (code, msg) in [
+        "@ccall()" => "@ccall needs a function signature with a return type"
+        "@ccall cancel_handler=1 strlen(\"x\"::Cstring)::Csize_t" => "bad cancel handler"
+        "@ccall gc_safe=true cancel_handler=(a, b) strlen(\"x\"::Cstring)::Csize_t" =>
+            "too many options provided to @ccall"
+        "@generated 1" => "Expected a function argument to `@generated`"
+    ]
+    err = try
+        JuliaLowering.include_string(test_mod, code)
+    catch e
+        e
+    end
+    @test err isa MacroExpansionError
+    @test contains(sprint(showerror, err.err), msg)
+end
+
+@testset "syntax quoting macros" begin
+    @test JuliaLowering.include_string(test_mod, "JuliaLowering.@inert :(x + y)") ==
+        Expr(:quote, :(x + y))
+    for m in ("syntaxquote", "syntaxinert")
+        st = JuliaLowering.include_string(test_mod, "JuliaLowering.@$m f(x)")
+        @test st isa SyntaxTree
+        @test JuliaLowering.est_to_expr(st) == :(f(x))
+    end
+    # Without JuliaLowering, `@edition` gives the old edition
+    @test fl_eval(test_mod, :(JuliaLowering.@edition)) == JL_OLD_EDITION
+    err = try fl_eval(test_mod, :(JuliaLowering.@edition v"1.14" macro m() end)) catch e; e; end
+    @test err isa LoadError && err.error == ArgumentError("@edition requires JuliaLowering")
+end
+
+# A closure capturing two locals with the same name, one from a macro
+JuliaLowering.include_string(test_mod, raw"""
+macro closure_over_x(ex)
+    @legacy_quote_to_syntax quote
+        let x = 1
+            () -> (x, $ex)
+        end
+    end
+end
+""")
+@test JuliaLowering.include_string(test_mod, "let x = 2; @closure_over_x(x)(); end") == (1, 2)
+
+@testset "computed macro names" begin
+    lnn = LineNumberNode(1)
+    m = Expr(:., :M, QuoteNode(Symbol("@recursive")))
+    @test jl_eval(test_mod, Expr(:macrocall, Expr(:ref, Expr(:vect, m), 1), lnn, 0)) == 0
+    err = try
+        jl_eval(test_mod, Expr(:macrocall, Symbol("@no_such_macro"), LineNumberNode(7, :ff)))
+    catch e
+        e
+    end
+    @test err isa MacroExpansionError
+    @test contains(sprint(showerror, err), "#= ff:7 =# - Macro not found")
+end
+
+@testset "malformed expansion forms: $msg" for (ex, msg) in [
+        Expr(:escape, :x) => "`escape` node in outer context"
+        Expr(:quote, 1, 2) => "`quote` requires one argument"
+        Expr(:syntaxquote, 1, 2) => "`syntaxquote` requires one argument"
+    ]
+    err = try jl_eval(test_mod, ex) catch e; e; end
+    @test err isa LoweringError && err.msgs == [msg]
 end
 
 # Tests for interop between old and new-style macros
