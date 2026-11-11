@@ -248,6 +248,13 @@ end
     @test read(seekstart(newaio), String) == "abyss abbie abbie"
     @test sort(Base.annotations(newaio)) ==
         sort(vcat(Base.annotations(aio), vec2ann([(13:13, :tag, 2), (14:16, :hey, 'a'), (17:17, :tag, 2)])))
+    # Overwriting from another buffer leaves the byte before the write untouched
+    let src = Base.AnnotatedIOBuffer(), dst = Base.AnnotatedIOBuffer()
+        write(src, Base.AnnotatedString("abc", [(1:3, :s, 1)]))
+        write(dst, Base.AnnotatedString("XYZW", [(1:1, :p, 1), (2:4, :d, 2)]))
+        @test write(seek(dst, 1), seekstart(src)) == 3
+        @test Base.annotations(dst) == vec2ann([(1:1, :p, 1), (2:4, :s, 1)])
+    end
     # The `_insert_annotations!` cautious-merging optimisation
     aio = Base.AnnotatedIOBuffer()
     @test write(aio, Base.AnnotatedChar('a', [(:a, 1), (:b, 2)])) == 1
