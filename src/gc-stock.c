@@ -1508,10 +1508,8 @@ static void sweep_per_thread_loop(void) JL_NOTSAFEPOINT
     jl_atomic_fetch_add(&gc_n_threads_sweeping_per_thread, -1);
 }
 
-// Idle pooled stacks are given back at most once per STACK_POOL_TRIM_INTERVAL_NS,
-// so how many survive does not depend on how often the GC runs, or on an
-// explicit collection, which is followed by a second one right away. `force`
-// (an explicit full collection) gives them back regardless.
+// Idle pooled stacks are trimmed at most once per STACK_POOL_TRIM_INTERVAL_NS,
+// independent of GC frequency, or when `force` (explicit full collection).
 static void gc_sweep_stack_pools(jl_ptls_t ptls, int force) JL_NOTSAFEPOINT
 {
     // initialize ptls index for the parallel per-thread sweep

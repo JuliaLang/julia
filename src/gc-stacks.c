@@ -115,11 +115,8 @@ const unsigned pool_sizes[] = {
 
 static_assert(sizeof(pool_sizes) == JL_N_STACK_POOLS * sizeof(pool_sizes[0]), "JL_N_STACK_POOLS size mismatch");
 
-// Pooled stacks beyond what a thread keeps for itself (MAX_LOCAL_STACKS_PER_POOL,
-// or idle ones at a stack sweep). A thread whose own pool is empty takes from
-// here before mapping a new stack: tasks often finish, and release their stack,
-// on a different thread than the one that started them, so with per-thread
-// pools alone one thread keeps mapping stacks while another accumulates them.
+// Overflow and idle stacks from the per-thread pools, shared since tasks often
+// release their stack on a different thread than the one that allocated it.
 static small_arraylist_t shared_free_stacks[JL_N_STACK_POOLS];
 // stacks in each shared pool that stayed unused since the last trim
 static size_t shared_free_stacks_lowwater[JL_N_STACK_POOLS];
@@ -143,9 +140,6 @@ static void push_free_stack(jl_ptls_t ptls, unsigned pool_id, void *stkbuf) JL_N
     void *oldest = pool->items[0];
     memmove(pool->items, pool->items + 1, (pool->len - 1) * sizeof(void*));
     pool->items[pool->len - 1] = stkbuf;
-    size_t *lowwater = &ptls->gc_tls_common.heap.free_stacks_lowwater[pool_id];
-    if (*lowwater > 0)
-        (*lowwater)--;
     uv_mutex_lock(&shared_free_stacks_lock);
     small_arraylist_push(&shared_free_stacks[pool_id], oldest);
     uv_mutex_unlock(&shared_free_stacks_lock);
@@ -158,42 +152,28 @@ void gc_share_free_stacks(small_arraylist_t *al, unsigned pool_id, size_t n) JL_
         return;
     uv_mutex_lock(&shared_free_stacks_lock);
     small_arraylist_t *shared = &shared_free_stacks[pool_id];
-    // they already went unused in the thread's pool, so they join the idle
-    // stacks at the bottom of the shared pool
     size_t len = shared->len;
     small_arraylist_grow(shared, n);
-    if (shared->len == len + n) {
-        memmove(shared->items + n, shared->items, len * sizeof(void*));
-        memcpy(shared->items, al->items, n * sizeof(void*));
-        shared_free_stacks_lowwater[pool_id] += n;
-    }
-    else {
-        // out of memory to grow the shared pool
-        for (size_t i = 0; i < n; i++)
-            free_stack(al->items[i], pool_sizes[pool_id]);
-    }
+    memcpy(shared->items + len, al->items, n * sizeof(void*));
     uv_mutex_unlock(&shared_free_stacks_lock);
     memmove(al->items, al->items + n, (al->len - n) * sizeof(void*));
     al->len -= n;
 }
 
-// Give half of the shared stacks that went unused since the last trim back to
-// the OS, oldest first. Called during a stack sweep, after the threads' pools
-// were shared.
+// Give back half as many shared stacks as went unused since the last trim.
+// Called during a stack sweep, after the threads' pools were shared.
 void gc_trim_shared_free_stacks(void) JL_NOTSAFEPOINT
 {
+    uv_mutex_lock(&shared_free_stacks_lock);
     for (int p = 0; p < JL_N_STACK_POOLS; p++) {
         small_arraylist_t *shared = &shared_free_stacks[p];
         size_t n = shared_free_stacks_lowwater[p] / 2;
         assert(n <= shared->len);
-        if (n > 0) {
-            for (size_t i = 0; i < n; i++)
-                free_stack(shared->items[i], pool_sizes[p]);
-            memmove(shared->items, shared->items + n, (shared->len - n) * sizeof(void*));
-            shared->len -= n;
-        }
+        for (size_t i = 0; i < n; i++)
+            free_stack(small_arraylist_pop(shared), pool_sizes[p]);
         shared_free_stacks_lowwater[p] = shared->len;
     }
+    uv_mutex_unlock(&shared_free_stacks_lock);
 }
 
 static unsigned select_pool(size_t nb) JL_NOTSAFEPOINT
