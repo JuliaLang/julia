@@ -244,29 +244,49 @@ void ObjCache::initDB()
         goto cleanup;
     }
 
-    {
-        MDBTxn Txn{Env};
+    // Every process starts here on its first lookup, so only take LMDB's
+    // cross-process write lock when the databases still need to be created:
+    // writers in other processes can hold it for a long time.
+    for (unsigned TxnFlags : {(unsigned)MDB_RDONLY, 0u}) {
+        MDBTxn Txn{Env, TxnFlags};
         if (!Txn.Txn)
             goto cleanup_env;
-        if (checkMDB(mdb_dbi_open(Txn.Txn, "objcache", MDB_CREATE, &ObjCacheDbi)))
-            goto cleanup_env;
-        if (checkMDB(mdb_dbi_open(Txn.Txn, "objmeta", MDB_CREATE, &ObjMetaDbi)))
+        unsigned DbiFlags = TxnFlags & MDB_RDONLY ? 0 : MDB_CREATE;
+        int Err = mdb_dbi_open(Txn.Txn, "objcache", DbiFlags, &ObjCacheDbi);
+        if (!Err)
+            Err = mdb_dbi_open(Txn.Txn, "objmeta", DbiFlags, &ObjMetaDbi);
+        if (Err == MDB_NOTFOUND && (TxnFlags & MDB_RDONLY))
+            continue;
+        if (checkMDB(Err))
             goto cleanup_env;
 
         MDB_stat Stat;
-        checkMDB(mdb_stat(Txn.Txn, ObjCacheDbi, &Stat));
+        if (checkMDB(mdb_stat(Txn.Txn, ObjCacheDbi, &Stat)))
+            goto cleanup_env;
         PageSize = Stat.ms_psize;
 
         int Version = OBJCACHE_SCHEMA;
         MDB_val Key = mdbVal("schema");
         MDB_val Ver = mdbVal(Version);
-        int Err = mdb_put(Txn.Txn, ObjMetaDbi, &Key, &Ver, MDB_NOOVERWRITE);
-        if (Err == MDB_KEYEXIST && *static_cast<int *>(Ver.mv_data) != OBJCACHE_SCHEMA)
+        if (TxnFlags & MDB_RDONLY)
+            Err = mdb_get(Txn.Txn, ObjMetaDbi, &Key, &Ver);
+        else
+            Err = mdb_put(Txn.Txn, ObjMetaDbi, &Key, &Ver, MDB_NOOVERWRITE);
+        if (Err == MDB_NOTFOUND && (TxnFlags & MDB_RDONLY))
+            continue;
+        if (Err && Err != MDB_KEYEXIST) {
+            checkMDB(Err);
+            goto cleanup_env;
+        }
+        if (Ver.mv_size != sizeof Version || memcmp(Ver.mv_data, &Version, sizeof Version))
             goto cleanup_env;
 
-        checkMDB(Txn.commit());
+        // Committing (also a read-only transaction) keeps the database
+        // handles open for the environment.
+        if (checkMDB(Txn.commit()))
+            goto cleanup_env;
+        break;
     }
-
 
 #ifndef __clang_gcanalyzer__
     uv_thread_create(
