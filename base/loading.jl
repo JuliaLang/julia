@@ -2029,10 +2029,12 @@ end
 
 # Image instrumentation is independent of the collecting process's scope, but a
 # tracked path is kept so that workers accept the same plain dependency images.
+# The scope only selects what a worker reports, so `all` is passed on as well.
 function coverage_cache_options(cf::CacheFlags)
     cf.coverage == 0 && return ["--code-coverage=none"]
     mode = cf.coverage == 2 ? "count" : "hit"
-    scope = cf.coverage_path === nothing ? "user" : "@" * cf.coverage_path
+    scope = cf.coverage_path !== nothing ? "@" * cf.coverage_path :
+            JLOptions().code_coverage == 2 ? "all" : "user"
     return ["--code-coverage=" * scope, "--code-coverage-mode=" * mode]
 end
 

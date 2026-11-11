@@ -1200,6 +1200,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 g(x) = x - 1
                 precompile(f, (Int,))
                 precompile(g, (Int,))
+                CovDep.h(1)
                 end
                 """)
             write(joinpath(depdir, "Project.toml"), """
@@ -1230,6 +1231,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 """
             covfile = replace(joinpath(dir, "pkg-%p.info"), "%" => "%%")
             infos() = filter(endswith(".info"), readdir(dir))
+            function readinfos()
+                files = map(f -> joinpath(dir, f), infos())
+                info = join(map(f -> read(f, String), files))
+                foreach(rm, files)
+                return info
+            end
             cachedir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovPkg")
             depcachedir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovDep")
             njis() = count(endswith(".ji"), readdir(cachedir))
@@ -1238,19 +1245,19 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test readchomp(`$pkg_exename -e $probe`) == "0 0 1 2"
             @test njis() == 1
             @test ndepjis() == 1
-            # `user` precompiles a compatible instrumented variant; only the
-            # collecting process writes coverage output, not the worker
+            # `user` precompiles a compatible instrumented variant
             @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=user -e $probe`) == "1 1 0 2"
             @test njis() == 2
             @test ndepjis() == 2
-            @test length(infos()) == 1
-            info = read(joinpath(dir, only(infos())), String)
+            info = readinfos()
             record = only(filter(contains(r"^SF:.*CovPkg\.jl$"m), split(info, "end_of_record")))
             @test occursin(r"^DA:3,1$"m, record) # f, called
             @test occursin(r"^DA:4,0$"m, record) # g, instrumented but not called
             @test occursin(r"^SF:.*CovDep\.jl$"m, info) # the dependency is user code
             @test !occursin(r"^SF:.*[/\\]base[/\\]"m, info) # Base is not user code
-            rm(joinpath(dir, only(infos())))
+            # only the worker for CovPkg runs the dependency's image code
+            deprecords = filter(contains(r"^SF:.*CovDep\.jl$"m), split(info, "end_of_record"))
+            @test any(contains(r"^DA:2,1$"m), deprecords)
             # the plain variant is untouched (on a build with an instrumented
             # sysimage the plain process may pick the equally instrumented
             # variant instead, with its cached effects, but does not collect its counters)
@@ -1261,38 +1268,35 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             # may pick an equally instrumented variant, with its cached effects)
             @test occursin(r"^0 0 [01] 2$", readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=user --track-allocation=user -e $probe`))
             @test njis() == 2
-            foreach(f -> rm(joinpath(dir, f)), infos())
+            readinfos()
             # `@path` reuses the same package and dependency images as `user`,
             # but excludes dependency counters from the report.
             @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=@$pkgdir -e $probe`) == "1 1 0 2"
             @test njis() == 2
             @test ndepjis() == 2
-            info = read(joinpath(dir, only(infos())), String)
+            info = readinfos()
             record = only(filter(contains(r"^SF:.*CovPkg\.jl$"m), split(info, "end_of_record")))
             @test occursin(r"^DA:3,1$"m, record) # f, called
             @test !occursin(r"^SF:.*CovDep\.jl$"m, info) # outside the tracked path
-            rm(joinpath(dir, only(infos())))
             # Widening the report scope also reports the dependency.
             @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=@$dir -e $probe`) == "1 1 0 2"
             @test njis() == 2
             @test ndepjis() == 2
-            info = read(joinpath(dir, only(infos())), String)
-            @test occursin(r"^SF:.*CovDep\.jl$"m, info)
-            rm(joinpath(dir, only(infos())))
+            @test occursin(r"^SF:.*CovDep\.jl$"m, readinfos())
             # count mode needs its own native image, but the dependency outside the
             # tracked path can use its plain image (unless the sysimage is instrumented)
             @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=@$pkgdir --code-coverage-mode=count -e $probe`) == "2 1 0 2"
             @test njis() == 3
             instrumented_sysimage = Base.match_cache_coverage(Base.CacheFlags(coverage=0), Base.CacheFlags(coverage=1))
             @test ndepjis() == (instrumented_sysimage ? 3 : 2)
-            rm(joinpath(dir, only(infos())))
+            readinfos()
             # `all` uses the same variants; the sysimage is used as built either way
             @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=all -e $probe`) == "1 1 0 2"
             @test njis() == 3
-            rm(joinpath(dir, only(infos())))
+            readinfos()
             @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=all --code-coverage-mode=count -e $probe`) == "2 1 0 2"
             @test njis() == 3
-            rm(joinpath(dir, only(infos())))
+            readinfos()
         end
     end
 

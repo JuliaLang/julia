@@ -20,10 +20,15 @@ JULIA_PRECOMPILE ?= 1
 # whatever the scope, but carry the instrumentation overhead in every use.
 # Intended for coverage CI, not for released builds.
 JULIA_COVERAGE_IMAGES ?= 0
+# Set to an LCOV tracefile pattern containing `%p`, e.g. `$(PWD)/lcov-build-%p.info`,
+# to also record which image code the build itself runs. Without it, the
+# image-generating processes write no coverage.
+JULIA_COVERAGE_IMAGES_TRACEFILE ?=
 # The generating processes instrument only the images they compile, and the
 # pkgimage workers inherit the setting through `Base.CacheFlags`. Recursively
 # expanded because Make.user is read below.
-JULIA_COVERAGE_IMAGE_FLAGS = $(if $(filter 1,$(JULIA_COVERAGE_IMAGES)),--code-coverage=all)
+JULIA_COVERAGE_IMAGE_FLAGS = $(if $(filter 1,$(JULIA_COVERAGE_IMAGES)),--code-coverage=all \
+	$(if $(JULIA_COVERAGE_IMAGES_TRACEFILE),--code-coverage=$(call cygpath_w,$(JULIA_COVERAGE_IMAGES_TRACEFILE))))
 
 # Set to 0 to leave the HTML manual out of `make install` and `make binary-dist`,
 # which then do not build it. For builds nobody reads the manual from, such as CI
