@@ -2442,8 +2442,10 @@ Sys.isunix() && @testset "^C" begin
         # A readiness marker printed from user code proves the runtime is up
         # (signal handling armed, the script started) before any SIGINT is
         # sent - on a loaded machine startup alone can outlast the first delay
-        # and an early SIGINT kills the child with no output at all.
-        code = "println(\"CHILD-READY\")\n" * code
+        # and an early SIGINT kills the child with no output at all. A
+        # scenario that must reach a certain point before the SIGINT prints
+        # the marker itself; output before the marker is kept.
+        occursin("CHILD-READY", code) || (code = "println(\"CHILD-READY\")\n" * code)
         out = Pipe()
         cmd = threads > 0 ?
             `$exe --startup-file=no --threads=$threads -e $code` :
@@ -2452,7 +2454,7 @@ Sys.isunix() && @testset "^C" begin
         p = run(pipeline(cmd, stdin=inpipe, stdout=out, stderr=out), wait=false)
         close(out.in)
         open_stdin && close(inpipe.out)
-        readuntil(out, "CHILD-READY\n") # returns early (at EOF) if the child dies
+        pre = readuntil(out, "CHILD-READY\n") # returns early (at EOF) if the child dies
         reader = @async read(out, String)
         killer = @async begin
             for d in delays
@@ -2463,7 +2465,7 @@ Sys.isunix() && @testset "^C" begin
         wait(p)
         open_stdin && close(inpipe.in)
         wait(killer)
-        return fetch(reader), p
+        return pre * fetch(reader), p
     end
 
     # Catching ^C in a script: continuing requires re-arming a fresh ^C
@@ -2506,11 +2508,16 @@ Sys.isunix() && @testset "^C" begin
     @test occursin("CompositeException", output)
     @test p.exitcode == 0
 
-    # ^C with a stray @async task pending is catchable and the script exits
+    # ^C after starting a stray @async task is catchable and the script exits
     # cleanly - historically a "fatal: error thrown and no exception handler
-    # available" (issues #29369, #45055)
+    # available" (issues #29369, #45055). As in #29369, the stray task runs
+    # while the main task sleeps and has printed by the time ^C arrives: an
+    # earlier ^C would cancel its println.
     output, p = run_with_sigint("""
-        @async println("Hello!")
+        @async begin
+            println("Hello!")
+            println("CHILD-READY")
+        end
         try
             println("Hit ctrl-c!")
             sleep(10)
