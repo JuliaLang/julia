@@ -91,7 +91,7 @@ function rst(io::IO, md::Admonition)
 end
 
 function rst(io::IO, ::HorizontalRule)
-    println(io, "–" ^ 5)
+    println(io, "-" ^ 5)
 end
 
 function rst(io::IO, l::LaTeX)
