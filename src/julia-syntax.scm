@@ -1918,8 +1918,6 @@
       (let ((a '()))
         (define (arg-to-temp x)
           (cond ((effect-free? x) x)
-                ;; Simple property targets in tuple assignments must remain assignable.
-                ((and (tuple-syntax? e) (sym-dot? x)) x)
                 ((eq? (car x) '...)
                  `(... ,(arg-to-temp (cadr x))))
                 ((eq? (car x) 'kw)

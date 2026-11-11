@@ -3858,11 +3858,46 @@ end
     @test (a.x.x += 1) == 2
     @test (calls[], value[]) == (1, 2)
 
-    # Preserve property targets in tuple updating assignments.
-    let (+) = (x, y) -> map(Base.:+, x, y), a = Ref(1), b = Ref(2)
-        (a.x, b.x) += (3, 4)
-        @test (a[], b[]) == (4, 6)
-    end
+    @test_throws "syntax:" Core.eval(@__MODULE__, :((a.x, b.x) += rhs))
+    @test_throws "syntax:" Core.eval(@__MODULE__, :((a[], b[]) += rhs))
+end
+
+mutable struct PropLog64814
+    log::Vector{Symbol}
+    v::Vector{Int}
+    i::Int
+    f::Any
+end
+
+function Base.getproperty(p::PropLog64814, name::Symbol)
+    push!(getfield(p, :log), name)
+    getfield(p, name)
+end
+
+@testset "property reads are not repeatable (#64814)" begin
+    log = Symbol[]
+    note(s) = (push!(log, s); s)
+    p = PropLog64814(log, [1, 2], 1, (args...; kws...) -> nothing)
+
+    # the callee `p.f` and the argument `p.i` are read in source order
+    p.f(p.i, note(:b); k=note(:k))
+    @test log == [:f, :i, :b, :k]
+
+    # `a.b[i] += rhs` executes `p.v` and `tmp[p.i]` once each
+    empty!(log)
+    p.v[p.i] += note(:rhs) === :rhs ? 10 : 0
+    @test log == [:v, :i, :rhs]
+    @test getfield(p, :v) == [11, 2]
+
+    # ...so when `rhs` mutates `p.v`, the old `p.v` receives the update
+    old = getfield(p, :v)
+    p.v[1] += (setfield!(p, :v, [100, 200]); 5)
+    @test old == [16, 2]
+    @test getfield(p, :v) == [100, 200]
+
+    # these shouldn't mention "SSAValue" (broken in flisp lowering)
+    @test_throws "syntax:" Core.eval(@__MODULE__, :(Base.f64814(; a=1, a=2)))
+    @test_throws "syntax:" Core.eval(@__MODULE__, :(const a.b.c::Int = 1))
 end
 
 # Allow GlobalRefs in macro definition
