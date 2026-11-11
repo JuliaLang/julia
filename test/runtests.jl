@@ -124,14 +124,16 @@ function move_to_node1(t)
     nothing
 end
 
-move_to_node1("ccall")
 # These add worker processes, which only node 1 can do
 move_to_node1("precompile_distributed")
 move_to_node1("SharedArrays")
 move_to_node1("Distributed")
-move_to_node1("gc")
-# Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
-move_to_node1("stress")
+if Sys.WORD_SIZE == 32
+    # On 32-bit workers that have used a lot of memory, `@threadcall` fails to allocate
+    # signal stacks (`ccall`) and allocations fail (`gc`)
+    move_to_node1("ccall")
+    move_to_node1("gc")
+end
 
 # These leave state behind on their worker (`precompile`: packages loaded and methods
 # added to Base, `threads`: exited adopted threads, `SparseArrays`/`SuiteSparse`: methods
@@ -154,7 +156,7 @@ const longest_tests = [
     "Random", "abstractarray", "iterators", "core", "ranges", "LibGit2/libgit2",
     "FileWatching", "atomics", "math", "rounding", "apint", "JuliaSyntax",
     "Compiler/inference", "reducedim", "numbers", "misc", "broadcast", "REPL", "Profile",
-    "rational", "InteractiveUtils", "sets",
+    "rational", "gc", "InteractiveUtils", "sets", "ccall",
 ]
 function expected_rank(test)
     rank = findfirst(name -> test == name || startswith(test, name * "/"), longest_tests)
