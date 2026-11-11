@@ -9377,6 +9377,16 @@ z63514(::Vector{Union{Missing,S}}) where {S} = @isdefined(S) ? S : false
 zz63514(::Ref{Union{T,U}}) where {T,U} = (T, U)
 @test (r -> zz63514(r[]))(Ref{Ref{Union{V,Int}} where V}(Ref{Union{Float64,Int}}(1))) ===
     zz63514(Ref{Union{Float64,Int}}(1)) === (Float64, Int)
+# a var that is one alternative of a `Union` in a type parameter is bound to the
+# smallest type that the other lower bounds of the call allow
+u63514(x::Union{T,U}, y::Ref{Union{Int,T}}) where {T,U} = T
+v63514(y::Ref{Union{T,Int}}, x::T...) where {T} = T
+let y = Ref{Union{Int,String}}(1)
+    @test ((rx, ry) -> u63514(rx[], ry[]))(Ref{Number}(1), Ref(y)) === u63514(1, y) === Union{Int,String}
+    @test ((rx, ry) -> u63514(rx[], ry[]))(Ref{Number}(1.0), Ref(y)) === u63514(1.0, y) === String
+    @test ((ry, xs) -> v63514(ry[], xs...))(Ref(y), Int[]) === v63514(y) === String
+    @test ((ry, xs) -> v63514(ry[], xs...))(Ref(y), Int[1]) === v63514(y, 1) === Union{Int,String}
+end
 
 # A failed first attempt at matching the signature must not leave a static
 # parameter undefined

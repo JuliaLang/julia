@@ -3273,6 +3273,46 @@ let unbound(e) = e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]::Bool,
         @test intersection_env(Tuple{Ref{Union{Int,String}},Ref{String}}, rhs)[2] === Core.svec(Int, String)
         @test intersection_env(Tuple{Ref{Union{Int,String}},Ref{String},Any}, Tuple{Ref{Union{T,U}},Ref{U},Any} where {T,U})[2] === Core.svec(Int, String)
     end
+    # A var that is one alternative of a union in a type parameter is not pinned by
+    # it: `Union{Int,String} == Union{Int,T}` holds for `T == String` and for
+    # `T == Union{Int,String}`, and a call binds the smallest type that its other
+    # lower bounds on `T` allow. `(1, Ref{Union{Int,String}}(1))` binds `T` through
+    # the first alternative of `Union{T,U}`, which rules out `T == String`.
+    let rhs = Tuple{Union{T,U},Ref{Union{Int,T}}} where {T,U},
+        R = Base.RefValue{Union{Int,String}}
+        @test unknown(intersection_env(Tuple{Number,R}, rhs)[2][1])
+        @test intersection_env(Tuple{Int,R}, rhs)[2][1] === Union{Int,String}
+        @test intersection_env(Tuple{Float64,R}, rhs)[2] === Core.svec(String, Float64)
+        # ... also where the union is an element of a tuple that is the parameter
+        e = intersection_env(Tuple{Number,Ref{Tuple{Union{Int,String}}}}, Tuple{Union{T,U},Ref{Tuple{Union{Int,T}}}} where {T,U})[2]
+        @test unknown(e[1])
+        # ... but not if the var is equated with a component of the union before any
+        # alternative mentions it: then that alternative accepts no other type
+        rhs = Tuple{Ref{Union{Int,T}},Union{T,U}} where {T,U}
+        @test intersection_env(Tuple{R,Number}, rhs)[2][1] === String
+        @test intersection_env(Tuple{R,Int}, rhs)[2] === Core.svec(String, Int)
+    end
+    # The same goes for the lower bound of an argument slot, where an instance has
+    # a smaller type than the left side: `("a", Ref{Union{Int,String}}(1))` binds
+    # `T` to `String`, and `(1, Ref{Union{Int,String}}(1))` to `Union{Int,String}`.
+    let rhs = Tuple{T,Ref{Union{Int,T}}} where T, R = Base.RefValue{Union{Int,String}}
+        e = only(intersection_env(Tuple{Union{Int,String},R}, rhs)[2])
+        @test unknown(e) && e[2]
+        @test only(intersection_env(Tuple{Int,R}, rhs)[2]) === Union{Int,String}
+        @test only(intersection_env(Tuple{String,R}, rhs)[2]) === String
+        # the join of the left side's lower bounds is an upper bound of the binding
+        e = only(intersection_env(Tuple{Union{Int,String},Ref{Tuple{Union{Int,String}}}}, Tuple{T,Ref{Tuple{Union{Int,T}}}} where T)[2])
+        @test bound(e) && e[1].lb === Union{} && e[1].ub === Union{Int,String}
+        # ... and for the lower bound of a tail element that an instance may lack
+        rhs = Tuple{Ref{Union{Int,T}},Vararg{T}} where T
+        e = only(intersection_env(Tuple{R,Vararg{Int}}, rhs)[2])
+        @test unknown(e) && e[2]
+        @test only(intersection_env(Tuple{R}, rhs)[2]) === String
+        @test only(intersection_env(Tuple{R,Int}, rhs)[2]) === Union{Int,String}
+    end
+    # If nothing else bounds the var, every instance binds it to the same type
+    @test intersection_env(Tuple{Vector{Union{Missing,Int}},Any}, Tuple{Vector{Union{S,Missing}},Any} where S)[2] === Core.svec(Int)
+    @test intersection_env(Tuple{Ref{Tuple{Union{Int,String}}},Any}, Tuple{Ref{Tuple{Union{Int,T}}},Any} where T)[2] === Core.svec(String)
     # ... and for a union with free typevars of the left side below an invariant
     # constructor: an instance has a different union there, whose components may
     # be absorbed (`V = Missing`) or come in another order (`V = Float64`)
