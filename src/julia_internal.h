@@ -2088,6 +2088,60 @@ extern jl_mutex_t world_counter_lock;
 typedef uint_t (*smallintset_hash)(size_t val, jl_value_t *data);
 typedef int (*smallintset_eq)(size_t val, const void *key, jl_value_t *data, uint_t hv);
 ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_value_t *data, uint_t hv, int pop);
+
+// probe sequence, shared by lookup and insert
+#define smallintset_max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
+#define smallintset_h2index(hv, sz) (size_t)((hv) & ((sz)-1))
+
+FORCE_INLINE ssize_t smallintset_probe_(jl_genericmemory_t *cache, smallintset_eq eq JL_NOTSAFEPOINT, const void *key, jl_value_t *data, uint_t hv, int pop, size_t w) JL_NOTSAFEPOINT
+{
+    size_t sz = cache->length;
+    size_t maxprobe = smallintset_max_probe(sz);
+    size_t tombstone = w == 1 ? UINT8_MAX : w == 2 ? UINT16_MAX : UINT32_MAX;
+    size_t index = smallintset_h2index(hv, sz);
+    size_t orig = index;
+    void *ix = cache->ptr;
+    for (size_t iter = 0; iter <= maxprobe; iter++) {
+        size_t val1 = w == 1 ? jl_atomic_load_acquire(&((_Atomic(uint8_t)*)ix)[index]) :
+                      w == 2 ? jl_atomic_load_acquire(&((_Atomic(uint16_t)*)ix)[index]) :
+                               jl_atomic_load_acquire(&((_Atomic(uint32_t)*)ix)[index]);
+        if (val1 == 0)
+            return -1;
+        if (val1 != tombstone && eq(val1 - 1, key, data, hv)) {
+            if (pop) { // replace with tombstone
+                if (w == 1)
+                    jl_atomic_store_release(&((_Atomic(uint8_t)*)ix)[index], UINT8_MAX);
+                else if (w == 2)
+                    jl_atomic_store_release(&((_Atomic(uint16_t)*)ix)[index], UINT16_MAX);
+                else
+                    jl_atomic_store_release(&((_Atomic(uint32_t)*)ix)[index], UINT32_MAX);
+            }
+            return val1 - 1;
+        }
+        index = (index + 1) & (sz - 1);
+        if (index == orig)
+            break;
+    }
+    return -1;
+}
+
+// `jl_smallintset_lookup` without the GC frame: if `eq` can safepoint, the caller must
+// root `cache` (as `jl_smallintset_lookup` does). With a constant `eq` the comparison
+// is inlined, and the index width is dispatched once.
+FORCE_INLINE ssize_t smallintset_lookup_(jl_genericmemory_t *cache, smallintset_eq eq JL_NOTSAFEPOINT, const void *key, jl_value_t *data, uint_t hv, int pop) JL_NOTSAFEPOINT
+{
+    if (cache->length == 0)
+        return -1;
+    jl_value_t *el = (jl_value_t*)jl_typetagof(cache);
+    if (el == jl_memory_uint8_type)
+        return smallintset_probe_(cache, eq, key, data, hv, pop, 1);
+    if (el == jl_memory_uint16_type)
+        return smallintset_probe_(cache, eq, key, data, hv, pop, 2);
+    if (el == jl_memory_uint32_type)
+        return smallintset_probe_(cache, eq, key, data, hv, pop, 4);
+    abort();
+}
+
 void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_value_t *data) JL_CANSAFEPOINT;
 size_t jl_ordereddict_reserve(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, size_t stride) JL_CANSAFEPOINT;
 jl_genericmemory_t* smallintset_rehash(jl_genericmemory_t* a, smallintset_hash hash, jl_value_t *data, size_t newsz, size_t np) JL_CANSAFEPOINT;
