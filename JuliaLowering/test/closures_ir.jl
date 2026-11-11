@@ -599,6 +599,16 @@ Base.Experimental.@opaque (x; y=1)->2x
 #                         └──────┘ ── opaque closure cannot have optional or keyword arguments
 
 ########################################
+# Error: Opaque closure with argument types given twice
+Base.Experimental.@opaque Tuple{Int}->Any (x::Int)->x
+#---------------------
+LoweringError:
+ at line 1: opaque closure argument type may not be specified both in the method signature and separately
+
+Expression:
+  (:: x Int)
+
+########################################
 # Mutually recursive closures
 let
     function recursive_a()

@@ -87,6 +87,13 @@ end
     @test Base.isconst(mod, sym)
     @test getproperty(mod, sym) === 1
 
+    # `const` with no value can only come from a macro
+    @gensym sym
+    @test run(mod, Expr(:const, sym)) === nothing
+    Core.@latestworld
+    @test !Base.isdefinedglobal(mod, sym)
+    @test Base.binding_kind(mod, sym) === Base.PARTITION_KIND_UNDEF_CONST
+
     @testset for wrap in [identity, x->Expr(:let, Expr(:block), Expr(:block, x))]
         @gensym sym
         @test run(mod, wrap(:(global $sym = 1))) === 1

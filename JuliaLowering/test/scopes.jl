@@ -473,6 +473,22 @@ end
     @test all(b -> b.is_internal, kw_body_bindings)
 end
 
+@testset "BindingInfo printing" begin
+    flags = (:is_const, :is_ssa, :is_internal, :is_ambiguous_local, :unboxed,
+             :is_nospecialize, :is_specialize, :is_read, :is_called, :is_assigned,
+             :is_assigned_once, :is_captured, :is_always_defined)
+    node = @ast_ "x"::identifier
+    b = JuliaLowering.BindingInfo(JuliaLowering.Bindings(), "x", :global, node;
+                                  mod=Main, type=node, lambda_id=2,
+                                  (f => true for f in flags)...)
+    s = repr(b)
+    @test startswith(s, "BindingInfo(1, \"x\", :global, ")
+    @test contains(s, ", mod=Main, type=")
+    @test contains(s, ", lambda_id=2")
+    @test all(f -> contains(s, ", $f=true"), flags)
+    @test endswith(s, ")")
+end
+
 @testset "explicit-module definition names share one binding" begin
     # Definition names pinned to a module via an explicit `mod` (compat-mode
     # macro names, struct names) resolve every mention to the single

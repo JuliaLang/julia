@@ -166,6 +166,14 @@ X{S, T=w}
 #   └──┘ ── assignment is not allowed in type parameter list
 
 ########################################
+# Error: empty type parameter list in type alias
+A{} = Int
+#---------------------
+LoweringError:
+A{} = Int
+└─┘ ── empty type parameter list in type alias
+
+########################################
 # Simple abstract type definition
 abstract type A end
 #---------------------
