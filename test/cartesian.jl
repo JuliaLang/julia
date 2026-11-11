@@ -14,6 +14,36 @@ ex = Base.Cartesian.exprresolve(:(if 5 > 4; :x; else :y; end))
     ex2 = Expr(:ref, [1, 2, 3], "non-real-index")
     result2 = Base.Cartesian.exprresolve(ex2)
     @test result2 == ex2
+    @test Base.Cartesian.exprresolve(:(f(x))) == :(f(x))
+    @test Base.Cartesian.exprresolve(:(if x; 1; else 2; end)).head === :if
+    @test Base.Cartesian.exprresolve(:(if true; 1; else 2; end)) isa Expr
+    @test Base.Cartesian.poplinenum(:x) === :x
+end
+using Base.Cartesian: @nextract, @nall, @nany, @nloops, _nloops, inlineanonymous, lreplace, lreplace_string!, LReplace
+@testset "Base.Cartesian macros and replacement" begin
+    t = (5, 6)
+    @nextract 2 x t
+    @test (x_1, x_2) == (5, 6)
+    @nextract 2 y d->10d
+    @test (y_1, y_2) == (10, 20)
+
+    @test_throws "second argument must be an anonymous function expression to compute the range" @macroexpand(@nloops 2 i (1:2) begin end)
+    @test_throws "number of arguments must be 1 ≤ length(args) ≤ 3, got 4" _nloops(2, :i, true, :(d->1:2), :(a()), :(b()), :(c()), :(d()))
+    @test_throws "second argument must be an anonymous function expression yielding the criterion" @macroexpand(@nall 2 (i > 1))
+    @test_throws "Second argument must be an anonymous function expression yielding the criterion" @macroexpand(@nany 2 (i > 1))
+    @test_throws "not an anonymous function" inlineanonymous(:(x + 1), 1)
+    @test_throws "not a single-argument anonymous function" inlineanonymous(:((x, y) -> x), 1)
+
+    # a partial match of the pattern restarts the search
+    @test lreplace_string!("a_cox_col", LReplace{String}(:col, "col", 1)) == "a_cox_1"
+    # `x_{...}` gives a symbol when the index resolves to an integer, and stays a curly otherwise
+    @test lreplace(:(x_{d+1}), :d, 1) === :x_2
+    @test lreplace(:(x_{d+y}), :d, 1) == :(x_{1+y})
+    @test lreplace(Expr(:meta, :d), :d, 1) == Expr(:meta, :d)
+    # code inside another macro's hygienic scope is left alone, except where it is escaped
+    @test lreplace(Expr(:var"hygienic-scope", :(d + 1), Main), :d, 1) == Expr(:var"hygienic-scope", :(d + 1), Main)
+    @test lreplace(Expr(:var"hygienic-scope", Expr(:escape, :d), Main), :d, 1) == Expr(:var"hygienic-scope", Expr(:escape, 1), Main)
+    @test lreplace(Expr(:quote, :(d + $(Expr(:$, :d)))), :d, 1) == Expr(:quote, :(1 + $(Expr(:$, 1))))
 end
 @testset "CartesianIndices constructions" begin
     @testset "AbstractUnitRange" begin
@@ -646,4 +676,40 @@ end
     @test view(A, :, CartesianIndex()) == A[:]
     A[:, CartesianIndex()] .= 0
     @test iszero(A)
+end
+
+@testset "CartesianIndex and CartesianIndices helpers" begin
+    @test eltype(CartesianIndex{2}) === Int
+    @test length(CartesianIndex{3}) == 3
+    @test Base._ind2sub((2, 3), CartesianIndex(1, 2)) == (1, 2)
+    @test (1, 2, 3)[CartesianIndex(2)] == 2
+    @test Base.IteratorsMD.split(CartesianIndex(1, 2, 3), Val(1)) == (CartesianIndex(1), CartesianIndex(2, 3))
+    @test Base.IteratorsMD.split(CartesianIndices((2, 3, 4)), Val(2)) == (CartesianIndices((2, 3)), CartesianIndices((4,)))
+
+    R = CartesianIndices((2, 3))
+    @test sprint(show, MIME"text/plain"(), R) == "CartesianIndices((2, 3))"
+    @test convert(Tuple{}, CartesianIndices(())) === ()
+    @test convert(Tuple{Vararg{AbstractUnitRange}}, R) == (Base.OneTo(2), Base.OneTo(3))
+    @test R != CartesianIndices((2,))
+    @test CartesianIndex(1) ∉ R
+    @test isassigned(R, 1, 2) && !isassigned(R, 3, 2)
+    @test R ⊆ CartesianIndices((3, 3))
+    @test reverse(CartesianIndices((1:3,)); dims=1) == CartesianIndices((3:-1:1,))
+    @test collect(Iterators.reverse(CartesianIndices(()))) == fill(CartesianIndex())
+
+    @test isassigned(zeros(2, 2), CartesianIndex(1), 2)
+    @test circshift!(zeros(2), [1.0, 2.0], ()) == [1.0, 2.0]
+    @test_throws "must have same size (got (3, 3) and (2, 2))" copyto!(zeros(2, 2), CartesianIndices((2, 2)), ones(3, 3), CartesianIndices((3, 3)))
+    @test_throws "must have the same sizes (got (3,) and (2,))" Base.circcopy!(zeros(2), zeros(3))
+    L = Base.LogicalIndex([true, false, true])
+    @test sprint(show, L) == "[1, 3]"
+    @test endswith(sprint(show, MIME"text/plain"(), L), ":\n 1\n 3")
+    @test trues(4, 4)[1:2, 1] == trues(2)
+
+    # views alias only if every dimension's indices can overlap
+    A = rand(4, 4)
+    @test !Base.mightalias(view(A, 1:2, 1:2), view(A, 3:4, 1:2))
+    @test !Base.mightalias(view(A, [1, 2], 1), view(A, [3], 1))
+    @test !Base.mightalias(view(A, [1], 1), view(A, [3, 4], 1))
+    @test Base.mightalias(view(A, [1, 2], 1), view(A, [2, 3], 1))
 end
