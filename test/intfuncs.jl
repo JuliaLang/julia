@@ -397,6 +397,8 @@ end
     @test powermod(511, 1, 0x00000021) === 0x00000010
     @test powermod(Int8(-1), 0xff, Int8(33)) === Int8(32)
     @test powermod(0, 10, -5) === 0
+    @test powermod(3, 0, 1) == 0
+    @test !Base._powermod_mi_legal(big(2))
 end
 
 @testset "nextpow/prevpow" begin
@@ -432,6 +434,8 @@ end
 end
 
 @testset "ndigits/ndigits0z" begin
+    @test Base.ndigits0z(Int8(-100)) == 3
+    @test Base.ndigits0z(big(123)) == 3
     @testset "issue #8266" begin
         @test ndigits(-15, base=10) == 2
         @test ndigits(-15, base=-10) == 2
@@ -668,6 +672,7 @@ end
     @test factorial(Int8(3)) === 6
     @test_throws DomainError factorial(-3)
     @test_throws DomainError factorial(Int8(-3))
+    @test factorial(true) === true
 end
 
 @testset "isqrt" begin
