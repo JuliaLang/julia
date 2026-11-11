@@ -3313,6 +3313,15 @@ let unbound(e) = e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]::Bool,
     # If nothing else bounds the var, every instance binds it to the same type
     @test intersection_env(Tuple{Vector{Union{Missing,Int}},Any}, Tuple{Vector{Union{S,Missing}},Any} where S)[2] === Core.svec(Int)
     @test intersection_env(Tuple{Ref{Tuple{Union{Int,String}}},Any}, Tuple{Ref{Tuple{Union{Int,T}}},Any} where T)[2] === Core.svec(String)
+    # A var with no lower bound is bound to `Union{}` if its upper bounds leave
+    # nothing else. Not so if one of them is from a tail element that an instance
+    # may lack: `(Ref(1),)` leaves `S` unbound.
+    let rhs = Tuple{Ref{Union{Int,S}},Vararg{Ref{Union{Nothing,String,S}}}} where S,
+        R = Base.RefValue{Union{Nothing,String}}
+        @test unbound(only(intersection_env(Tuple{Base.RefValue{Int},Vararg{R}}, rhs)[2]))
+        @test unbound(only(intersection_env(Tuple{Base.RefValue{Int}}, rhs)[2]))
+        @test only(intersection_env(Tuple{Base.RefValue{Int},R}, rhs)[2]) === Union{}
+    end
     # ... and for a union with free typevars of the left side below an invariant
     # constructor: an instance has a different union there, whose components may
     # be absorbed (`V = Missing`) or come in another order (`V = Float64`)

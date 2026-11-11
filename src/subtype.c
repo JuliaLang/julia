@@ -2385,8 +2385,11 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             // A plain value claims that every instance binds the var to exactly
             // that value. Something established only by some instances cannot
             // back that claim, so report the declared var instead.
+            // Nor can a value that no lower bound backs (`Union{}`, where the
+            // upper bounds of the var leave nothing else), if one of those
+            // upper bounds may be from such a match.
             if (!jl_is_svec(val) && !inv_certain && vb.lb_certainty <= BOUND_ARM &&
-                (vb.occurs_inv || vb.lb_certainty == BOUND_ARM))
+                (vb.occurs_inv || vb.lb_certainty == BOUND_ARM || vb.arm_occurs))
                 val = wrap_tvar_env((jl_value_t*)u->var, eff_constrained);
         }
         jl_value_t *oldval = e->envout[e->envidx];

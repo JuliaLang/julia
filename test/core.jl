@@ -9387,6 +9387,12 @@ let y = Ref{Union{Int,String}}(1)
     @test ((ry, xs) -> v63514(ry[], xs...))(Ref(y), Int[]) === v63514(y) === String
     @test ((ry, xs) -> v63514(ry[], xs...))(Ref(y), Int[1]) === v63514(y, 1) === Union{Int,String}
 end
+# ... and is not bound by a tail element that the call lacks
+b63514(::Ref{Union{Int,S}}, ::Ref{Union{Nothing,String,S}}...) where {S} = @isdefined(S) ? S : nothing
+let R = Base.RefValue{Union{Nothing,String}}
+    @test ((r, t) -> b63514(r, t...))(Ref(1), R[]) === b63514(Ref(1)) === nothing
+    @test ((r, t) -> b63514(r, t...))(Ref(1), R[R("a")]) === b63514(Ref(1), R("a")) === Union{}
+end
 
 # A failed first attempt at matching the signature must not leave a static
 # parameter undefined
