@@ -41,6 +41,18 @@ import Base: show
 
     @test md"**foo *bar* baz**" == MD(Paragraph(Bold(["foo ", Italic("bar"), " baz"])))
     @test md"*foo **bar** baz*" == MD(Paragraph(Italic(["foo ", Bold("bar"), " baz"])))
+
+    @test MD(Header("x")) == md"# x"
+    @test MD(Markdown.BlockQuote()) == md"> "
+    let l = Markdown.List("a", "b")
+        @test l.items == ["a", "b"]
+        @test l.ordered == -1
+    end
+    mktemp() do path, io
+        write(io, "# title")
+        close(io)
+        @test Markdown.parse_file(path) == md"# title"
+    end
 end
 
 @testset "intraword emphasis" begin
@@ -272,6 +284,7 @@ end
     ---
     World""" |> Markdown.plain == "Hello\n\n---\n\nWorld\n"
     @test md"[*a*](b)" |> Markdown.plain == "[*a*](b)\n"
+    @test md"~~a~~" |> Markdown.plain == "~~a~~\n"
     @test md"""
     > foo
     >
@@ -331,6 +344,28 @@ end
         |---|
         | L |
     """) == "  │ Tables in admonitions\n  │\n  │  R\n  │  –\n  │  L"
+
+    for (input, output) in (
+        "<div>\na\n</div>"                    => "<div>\na\n</div>",
+        "a[^1]\n\n[^1]: note text\n"          => "  a[^1]\n\n  │ [^1]\n  │\n  │  note\n  │  text",
+        "a\n\n---\n\nb"                       => "  a\n\n  ────────────────\n\n  b",
+        "a ``x^2`` b"                         => "  a x^2 b",
+        "a <span>x</span> b"                  => "  a <span>x</span> b",
+        "```styled\n{red:hi}\n```"            => "  hi",
+        "# aaaa bbbb cccc dddd eeee ffff"     => "  aaaa bbbb\n  cccc dddd\n  eeee ffff\n  ≡≡≡≡≡≡≡≡≡",
+        )
+        @test sprint(Markdown.term, Markdown.parse(input), 20) == output
+    end
+    @test sprint(Markdown.term, MD(Paragraph([Code("styled", "{red:hi}")]))) == "  hi"
+    @test sprint(Markdown.terminline, "a", "b") == "ab"
+    # each admonition category has its own colour, apart from info and note
+    categories = ("danger", "info", "warning", "tip", "compat", "todo", "other")
+    outs = map(categories) do c
+        out = sprint(Markdown.term, Markdown.parse("!!! $c\n    body\n"); context = :color => true)
+        @test endswith(replace(out, r"\e\[[0-9;]*m" => ""), "│ $(titlecase(c))\n  │\n  │  body")
+        out
+    end
+    @test allunique(outs)
 end
 
 @testset "Issue #38275" begin
@@ -440,6 +475,23 @@ end
     <p>not
     == =</p>
     """
+
+    @test html(Markdown.parse("```styled\n{red:hi}\n```")) == "<pre><code>hi\n</code></pre>\n"
+    @test html(Markdown.MD(Markdown.Paragraph([Markdown.Code("styled", "{red:hi}")]))) ==
+        "<p><code>hi</code></p>\n"
+    @test Markdown.htmlesc(:a_b) == "a_b"
+    @test sprint(Markdown.htmlesc, "<", :b) == "&lt;b"
+    @test Markdown.encode_uri_component(:a) == "a"
+    # line endings are normalised
+    @test html(Markdown.parse("a\r\nb\rc")) == "<p>a\nb\nc</p>\n"
+    # unterminated HTML comments, processing instructions, declarations and CDATA are text
+    for s in ("<!-- b", "<? b", "<!X b", "<![CDATA[ b")
+        @test html(Markdown.parse("a $s")) == "<p>a &lt;$(replace(s[2:end], "--" => "–"))</p>\n"
+    end
+    # objects that only show as PNG are inlined as data URIs
+    struct PNGOnly end
+    Base.show(io::IO, ::MIME"image/png", ::PNGOnly) = write(io, "png")
+    @test html(Markdown.MD([PNGOnly()])) == "<img src=\"data:image/png;base64,cG5n\" />\n"
 end
 
 @testset "the 'book' example input" begin
@@ -467,6 +519,7 @@ end
     """
     @test latex(table) ==
         "\\begin{tabular}\n{l | l}\na & b \\\\\n\\hline\n1 & 2 \\\\\n\\end{tabular}\n"
+    @test latex(md"### Title") == "\\subsubsection{Title}\n"
     @test latex(md"#### Title") == "\\paragraph{Title}\n"
     @test latex(md"###### Title") == "\\subparagraph{Title}\n"
     @test latex(md"`a_b`") == "\\texttt{a\\_b}\n\n"
@@ -602,6 +655,23 @@ end
     end
     # RST transitions must use ASCII punctuation
     @test Markdown.rst(Markdown.parse("a\n\n---\n\nb")) == "a\n\n-----\n\nb\n"
+    for (input, output) in (
+        "```jldoctest\njulia> 1\n1\n```" => ".. doctest::\n\n    julia> 1\n    1\n",
+        "```rst\n.. note:: hi\n```"      => "    .. note:: hi\n",
+        "```styled\n{red:hi}\n```"       => "::\n\n    hi\n",
+        "```python\nx\n```"              => "::\n\n    x\n",
+        "a\\\nb"                         => "a\nb\n",
+        "| a | b |\n|---|--:|\n| 1 | 22 |\n| x | y |\n" =>
+            "+-----+-----+\n| a   |   b |\n+=====+=====+\n| 1   |  22 |\n+-----+-----+\n| x   |   y |\n+-----+-----+\n",
+        )
+        @test Markdown.rst(Markdown.parse(input)) == output
+    end
+    @test Markdown.rstinline(md"*x*") == "*x*\n"
+    # other objects are shown as text/rst
+    struct RSTOnly end
+    Base.show(io::IO, ::MIME"text/rst", ::RSTOnly) = print(io, "rst!")
+    @test Markdown.rst(Markdown.MD([RSTOnly()])) == "rst!"
+    @test Markdown.rst(Markdown.MD(Markdown.Paragraph(["a ", RSTOnly()]))) == "a rst!\n"
 end
 
 @testset "Interpolation / Custom types" begin
