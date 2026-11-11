@@ -33,6 +33,13 @@ end
                        "\e[9~" => '\e', "\e[Z" => '\e', "\e[2" => '\e', "\eXY" => '\e')
         @test TerminalMenus.readkey(IOBuffer(seq)) == UInt32(key)
     end
+    for (seq, key) in ("\eH" => TerminalMenus.HOME_KEY, "\eF" => TerminalMenus.END_KEY,
+                       "\eOH" => TerminalMenus.HOME_KEY, "\eOF" => TerminalMenus.END_KEY)
+        io = IOBuffer(seq * "x")
+        @test TerminalMenus.readkey(io) == UInt32(key)
+        @test read(io, Char) == 'x'
+        @test TerminalMenus.readkey(IOBuffer(seq)) == UInt32(key)
+    end
 end
 
 include("radio_menu.jl")
