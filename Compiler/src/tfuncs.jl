@@ -1145,8 +1145,8 @@ end
     if isa(s, Union)
         return getfield_nothrow(𝕃, rewrap_unionall(s.a, s00), name, boundscheck) &&
                getfield_nothrow(𝕃, rewrap_unionall(s.b, s00), name, boundscheck)
-    elseif isa(s, Core.TypeEgal) && isTypeDataType(type_parameter(s))
-        s = s0 = DataType
+    elseif isa(s, Core.TypeEgal)
+        s = s0 = typeof(type_parameter(s)) # the only instance is the parameter
     end
     if isa(s, DataType)
         # Can't say anything about abstract types

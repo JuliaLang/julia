@@ -3290,6 +3290,8 @@ let 𝕃ᵢ = Compiler.InferenceLattice(Compiler.MustAliasesLattice(Compiler.Bas
     @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Type{Bool}) === Const(false)
     @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Int, Int) === Int
     @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Int, Int) === Union{}
+    @test Compiler.getfield_nothrow(𝕃ᵢ, MustAlias(2, 0, AliasableField{Any}, 1, Core.TypeEgal{Union{Int,Float64}}),
+                                    Const(:a), true)
 
     # `tmeet` with a type narrows the field type and keeps the alias, or gives `Union{}` if
     # they are disjoint, or just the field type if it is already constant
