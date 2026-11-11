@@ -24,8 +24,6 @@ for (T, c) in (
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
         (Core.TypeName, [:name, :module, :names, :wrapper, :hash, :n_uninitialized, :flags]),
-        # `super` is filled lazily for instantiations of self-referential
-        # definitions (issue #61347), so it is deliberately non-const (and atomic)
         (DataType, [:name, :parameters, :instance, :hash]),
         (TypeVar, [:name, :ub, :lb]),
         (Core.Memory, [:length, :ptr]),
@@ -9497,120 +9495,37 @@ let f = (x...) -> length(x)
     @test ccall(:jl_array_copy, Ref{Matrix{Int}}, (Any,), m3) == m3
 end
 
-# issue #61347 (supertype half): every level of a structurally increasing
-# recursive supertype graph must be correct independently of instantiation
-# order, and deferred (lazily computed) supertypes must present the same
-# field-access semantics to compiled and interpreted code. (The field-type
-# analogue `struct S1{T}; x::S1{A{T}}; end` still hangs on instantiation;
-# a concrete type must publish with its layout, so its fix needs more.)
+# issue #61347 (supertype half): a supertype declaration that applies the type
+# being defined at structurally increasing parameters has an infinite supertype
+# graph, and the definition is refused instead of hanging (or, in a `typegroup`,
+# caching wrong supertypes)
 module Issue61347
 abstract type A{T} end
-struct S2{T} <: A{S2{A{T}}} end
+abstract type C{Y, Z} end
+struct Swap{T, U} <: C{Swap{U, T}, U} end  # finite: the parameters only move
 end
-let A = Issue61347.A, S2 = Issue61347.S2
-    @test supertype(S2{Int}) === A{S2{A{Int}}}
-    # deep levels materialize lazily, one per demand, and stay correct
-    deep = S2{A{A{Int}}}
-    @test supertype(deep) === A{S2{A{A{A{Int}}}}}
-    # reaching the same interned type by walking or by direct construction
-    # yields the same supertype
-    walked = getfield(supertype(S2{Int}), :parameters)[1]
-    walked = getfield(supertype(walked), :parameters)[1]
-    @test walked === S2{A{A{Int}}}
-    @test supertype(walked) === supertype(deep)
-    @test S2{A{A{A{Int}}}} <: A
-    # compiled and interpreted field access agree on the deferred slot. The
-    # slot can be filled at any moment by unrelated activity, so bracket the
-    # interpreted read with compiled reads and require monotone agreement
-    # (an unfilled slot can only become filled, never the reverse)
-    lazy = getfield(supertype(S2{A{A{A{A{Int}}}}}), :parameters)[1]
-    @noinline compiled_isdef(x::DataType) = isdefined(x, :super)
-    c1 = compiled_isdef(Base.inferencebarrier(lazy))
-    itp = Core.eval(@__MODULE__, :(isdefined($lazy, :super)))
-    c2 = compiled_isdef(Base.inferencebarrier(lazy))
-    @test c1 <= itp <= c2
-    @test supertype(lazy) isa Type # forcing accessor
-    @test isdefined(lazy, :super)
-    @test getfield(lazy, :super) === supertype(lazy)
+let M = Issue61347
+    @test_throws "structurally increasing" @eval M struct S2{T} <: A{S2{A{T}}} end
+    @test !isdefined(M, :S2)
+    @test_throws "structurally increasing" @eval M struct F{T} <: A{F{Tuple{T}}}; x::T; end
+    # ... also when its field types instantiate it before the definition completes
+    @test_throws "structurally increasing" @eval M struct G{T} <: A{G{Tuple{T}}}; x::G{Tuple{Int}}; end
+    @test_throws "structurally increasing" @eval M struct Rank{T, N} <: C{Rank{Tuple{T}, N}, N} end
+    @test_throws "structurally increasing" @eval M typegroup
+        struct S{T} <: A{R{Tuple{T}}} end
+        struct R{T} <: A{S{Tuple{T}}} end
+    end
+    @test !isdefined(M, :S) && !isdefined(M, :R)
+    @test supertype(M.Swap{Int, Float64}) === M.C{M.Swap{Float64, Int}, Float64}
 end
 
-# A lazy supertype can be computed from inside an instantiation, by the
-# subtyping that compares keys in a type cache lookup. When its own
-# instantiation reaches the type being built, it must find it (on the
-# instantiation stack) instead of creating a second copy.
-module LazySuperInProgress
-abstract type A{Y} end
-abstract type Z{W} end
-const U0 = Union{Nothing, Int}  # no stable hash: keys holding it are compared by subtyping
-abstract type R{T} <: A{R{Tuple{T}}} end
-abstract type S{T} <: A{Tuple{T, S{Tuple{T}}, Union{R{Tuple{T}}, Type{Int}}, U0, Z{U0}}} end
-end
-let A = LazySuperInProgress.A, Z = LazySuperInProgress.Z, U0 = LazySuperInProgress.U0,
-    R = LazySuperInProgress.R, S = LazySuperInProgress.S
-    R{Tuple{Tuple{Int}}}      # creates R{Tuple{Tuple{Tuple{Int}}}} with its supertype deferred
-    S{Int}                    # creates X = S{Tuple{Int}} with its supertype deferred
-    X = S{Tuple{Int}}
-    K2 = S{Tuple{Tuple{Tuple{Int}}}}
-    # comparing this key with the supertype key of `S{Tuple{Tuple{Int}}}` walks
-    # the supertype of `X`, which contains `S{Tuple{Tuple{Int}}}` itself
-    A{Tuple{Tuple{Tuple{Int}}, K2, Union{X, Type{Int}}, U0, Z{W}} where W}
-    @test !isdefined(Base.inferencebarrier(X), :super)
-    K = S{Tuple{Tuple{Int}}}
-    @test isdefined(Base.inferencebarrier(X), :super)
-    Ksuper = supertype(X).parameters[1].parameters[2]
-    @test Ksuper == K
-    # `===` compares abstract types structurally, so check the object identity
-    @test pointer_from_objref(Ksuper) == pointer_from_objref(K)
-end
-# the substitution into a dependent bound continues the stack too
+# substituting into a dependent bound continues the instantiation stack
 module LazySuperBound
 struct NewT end
 struct Foo{T, S<:Union{Nothing, Val{T}}} end
 struct Bar{T}; x::Foo{T, Nothing}; end
 end
 @test fieldtype(LazySuperBound.Bar{LazySuperBound.NewT}, :x) === LazySuperBound.Foo{LazySuperBound.NewT, Nothing}
-
-# A level of a self-referential definition (#61347) is instantiated from a
-# template whose own supertype is deferred. It is a complete type, not part of
-# a definition in progress: its field types are computed with it, and it does
-# not accumulate on the typename's `partial` list.
-module DeferredSuperLevels
-abstract type A{X} end
-struct F{T} <: A{F{Tuple{T}}}
-    x::T
-end
-abstract type G{T} <: A{G{Tuple{T}}} end
-struct E{T} <: A{E{Tuple{T}}} end
-end
-let F = DeferredSuperLevels.F, A = DeferredSuperLevels.A,
-    G = DeferredSuperLevels.G, E = DeferredSuperLevels.E
-    level2 = supertype(F{Tuple{Int}}).parameters[1]
-    @test level2 === F{Tuple{Tuple{Int}}}
-    @test isdefined(level2, :types)
-    @test fieldtype(level2, 1) === Tuple{Tuple{Int}}
-    @test supertype(level2) === A{F{Tuple{Tuple{Tuple{Int}}}}}
-    @test supertype(supertype(G{Int}).parameters[1]) === A{G{Tuple{Tuple{Int}}}}
-    @test supertype(supertype(E{Int}).parameters[1]) === A{E{Tuple{Tuple{Int}}}}
-    # drained when the definition completes, and nothing is added afterwards
-    @test !isdefined(F.body.name, :partial)
-    @test !isdefined(G.body.name, :partial)
-    @test !isdefined(E.body.name, :partial)
-end
-
-# The cycle can run through several declarations, each of which mentions only
-# the next typename.
-module DeferredSuperMutual
-abstract type A{X} end
-typegroup
-struct S{T} <: A{R{Tuple{T}}} end
-struct R{T} <: A{S{Tuple{T}}} end
-end
-end
-let A = DeferredSuperMutual.A, S = DeferredSuperMutual.S, R = DeferredSuperMutual.R
-    @test supertype(S{Int}) === A{R{Tuple{Int}}}
-    @test supertype(R{Tuple{Int}}) === A{S{Tuple{Tuple{Int}}}}
-    @test !isdefined(S.body.name, :partial)
-end
 
 # Method tables and dispatch caches keep their entries in insertion-ordered dicts that
 # grow by appending. Every entry must stay reachable as a dict grows through many sizes.

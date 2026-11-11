@@ -2353,20 +2353,37 @@ static jl_value_t *lookup_deferred_type(jl_deferred_typecache_t *dcache, jl_type
 }
 
 
-static int typename_on_stack(jl_typestack_t *stack, jl_typename_t *tn) JL_NOTSAFEPOINT
+// the number of instantiations of `tn` in progress on `stack`, up to `max`
+static int typename_depth_on_stack(jl_typestack_t *stack, jl_typename_t *tn, int max) JL_NOTSAFEPOINT
 {
-    while (stack != NULL) {
+    int depth = 0;
+    while (stack != NULL && depth < max) {
         if (stack->tt && stack->tt->name == tn)
-            return 1;
+            depth++;
         stack = stack->prev;
     }
-    return 0;
+    return depth;
+}
+
+// is a definition still proving its supertype graph: are the field types of
+// `primarydt` still being evaluated, or is `stack` draining a definition's `partial`
+// list (`jl_reinstantiate_inner_types`, whose bottom frame is a primary type)?
+static int definition_in_progress(jl_datatype_t *primarydt, jl_typestack_t *stack) JL_NOTSAFEPOINT
+{
+    if (primarydt->types == NULL)
+        return 1;
+    if (stack == NULL)
+        return 0;
+    while (stack->prev != NULL)
+        stack = stack->prev;
+    jl_datatype_t *tt = stack->tt;
+    return tt != NULL && (jl_value_t*)tt == jl_unwrap_unionall(tt->name->wrapper);
 }
 
 // does `t` (a type or parameter value) mention an application of `tn`? Used to
 // recognize self-referential definitions, whose supertype/field-type graph may
 // have no finite materialization when the recursive applications are
-// structurally increasing (issue #61347), and is completed lazily instead.
+// structurally increasing (issue #61347), and is refused instead.
 static int typename_visit(jl_value_t *t, int pos, jl_typeenv_t *binders, void *tn) JL_NOTSAFEPOINT
 {
     return jl_is_datatype(t) && ((jl_datatype_t*)t)->name == (jl_typename_t*)tn;
@@ -2387,7 +2404,7 @@ static int typename_occurs_in(jl_value_t *t, jl_typename_t *tn) JL_NOTSAFEPOINT
 // `struct R{T} <: A{S{Tuple{T}}}`)?
 static int super_cycle_on_stack(jl_typestack_t *stack, jl_typename_t *tn, jl_value_t *decl) JL_NOTSAFEPOINT
 {
-    if (!typename_on_stack(stack, tn))
+    if (!typename_depth_on_stack(stack, tn, 1))
         return 0;
     for (; stack != NULL; stack = stack->prev) {
         if (stack->tt == NULL)
@@ -2789,32 +2806,30 @@ static jl_value_t *inst_datatype_complete(jl_datatype_t *dt, jl_datatype_t *ndt,
     if (primarydt->layout && !defer)
         jl_compute_field_offsets(ndt);
 
-    // A definition whose supertype declaration recursively applies the type
-    // being defined at structurally increasing parameters (issue #61347, e.g.
-    // `struct S{T} <: A{S{Tuple{T}}} end`), directly or through other
-    // declarations, has an infinite supertype graph: eagerly instantiating
-    // each level's supertype creates the next level. When another
-    // instantiation of this typename is already in flight above this one
-    // (`stack` has `ndt` itself on top) and the supertype template mentions
-    // the typename or one instantiated since (`super_cycle_on_stack`), defer
-    // the supertype and complete it lazily, one
-    // level per demand (`jl_datatype_compute_super`). Same-parameter
-    // self-references never get here (`lookup_type_stack` ties that knot),
-    // so ordinary recursive types are unaffected. Field types stay eager: a
-    // concrete type must publish with its layout, and only the supertype
-    // declaration can force an infinite graph through abstract levels.
-    int in_definition = jl_atomic_load_relaxed(&primarydt->super) == NULL;
-    int defer_super = !istuple && !isnamedtuple && !in_definition &&
-        super_cycle_on_stack(stack->prev, tn, (jl_value_t*)jl_atomic_load_relaxed(&primarydt->super));
+    // A supertype declaration that applies the type being defined at structurally
+    // increasing parameters (issue #61347, e.g. `struct S{T} <: A{S{Tuple{T}}} end`),
+    // directly or through other declarations, has an infinite supertype graph. Until the
+    // definition has its field types and has instantiated its template levels, the
+    // declaration is refused once the typename is this deep on the stack, which a finite
+    // graph does not reach. Any later graph substitutes into a finite one, so it is not
+    // counted.
+    // Same-parameter self-references never get here (`lookup_type_stack` ties that knot).
+    // the supertype declaration is still being evaluated: the definition fills in the
+    // supertypes of the types made meanwhile when it completes (`partial`)
+    int super_pending = jl_atomic_load_relaxed(&primarydt->super) == NULL;
     if (istuple || isnamedtuple) {
         jl_atomic_store_relaxed(&ndt->super, jl_any_type);
     }
-    else if (defer_super) {
-        // deferred (see above)
-    }
-    else if (!in_definition) {
-        // from the declaration, not from `dt`: it may be a template whose own
-        // supertype is deferred (unset), or was computed while the definition
+    else if (!super_pending) {
+        if (super_cycle_on_stack(stack->prev, tn, (jl_value_t*)jl_atomic_load_relaxed(&primarydt->super)) &&
+                typename_depth_on_stack(stack->prev, tn, 64) == 64 && definition_in_progress(primarydt, stack)) {
+            if (nothrow)
+                return NULL;
+            jl_errorf("supertype declaration of %s applies it at structurally increasing parameters, "
+                      "so its supertypes cannot be instantiated", jl_symbol_name(tn->name));
+        }
+        // from the declaration, not from `dt`: it may be a template loaded from an
+        // image, with its supertype unset, or was computed while the definition
         // still held a placeholder
         jl_value_t *super = inst_declared_super(primarydt, ndt, stack, check, nothrow, dcache);
         if (nothrow && super == NULL)
@@ -2829,8 +2844,8 @@ static jl_value_t *inst_datatype_complete(jl_datatype_t *dt, jl_datatype_t *ndt,
         ftypes = primarydt->types;
     // `partial` is drained only when the definition completes, so a type made
     // afterwards never goes there, even from a template whose supertype is
-    // deferred (unset): its supertype and field types are computed lazily
-    if (ftypes == NULL || in_definition) {
+    // unset: its supertype and field types are computed lazily
+    if (ftypes == NULL || super_pending) {
         // in the process of creating this type definition:
         // need to instantiate the super and types fields later
         if (tn->partial == NULL) {
@@ -3393,10 +3408,8 @@ JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_RO
 }
 
 
-// Complete the deferred supertype of an instantiation of a self-referential
-// definition (issue #61347): eager instantiation of a structurally increasing
-// supertype graph would not terminate, so it is materialized lazily, one
-// level per demand. Returns NULL if the type's definition is still in
+// Fill in the supertype of an instantiation that does not have it yet, from
+// its type's declaration. Returns NULL if the type's definition is still in
 // progress. Consumers that do not funnel through here (raw `getfield`,
 // direct C reads) see either the published value or an undefined field: the
 // Julia-side metadata declares `super` maybe-undefined, non-const and atomic,
