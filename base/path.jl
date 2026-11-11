@@ -678,19 +678,21 @@ function realpath(path::AbstractString)
     end
 end
 
+# The current user's passwd entry, or `nothing` if it cannot be looked up.
+function _current_passwd()
+    try
+        return Libc.getpw()
+    catch err
+        err isa IOError || rethrow()
+        return nothing
+    end
+end
+
 if Sys.iswindows()
 
 function homedir(username::AbstractString)
-    # For the current user, just return homedir().
-    current_user = try
-        Sys.username()
-    catch err
-        err isa IOError || rethrow()
-        nothing
-    end
-    if username == current_user
-        return homedir()
-    end
+    current = _current_passwd()
+    current !== nothing && username == current.username && return current.homedir
     # Look up the user's SID, then query the registry for their profile path.
     # This is the same approach Go uses (os/user.Lookup on Windows).
     home = _win_profile_from_registry(username)
@@ -698,9 +700,8 @@ function homedir(username::AbstractString)
     # Fallback: assume profiles are siblings in the same parent directory,
     # but only if the current user's home follows the <parent>/<username>
     # convention. If not, we can't guess reliably.
-    userhome = homedir()
-    if current_user !== nothing && basename(userhome) == current_user
-        home = joinpath(dirname(userhome), username)
+    if current !== nothing && basename(current.homedir) == current.username
+        home = joinpath(dirname(current.homedir), username)
         isdir(home) && return home
     end
     return nothing
@@ -779,6 +780,8 @@ end
 else # !Sys.iswindows()
 
 function homedir(username::AbstractString)
+    current = _current_passwd()
+    current !== nothing && username == current.username && return current.homedir
     # Thread-safe user lookup via getpwnam_r.
     # pwd_storage holds the struct passwd; 256 bytes is a generous upper bound
     # for all supported platforms (Linux x86-64: ~56 bytes, macOS arm64: ~80 bytes).
