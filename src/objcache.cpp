@@ -1,6 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 #include "objcache.h"
 
+#include <chrono>
+
 #include <llvm/Support/Endian.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/SHA1.h>
@@ -290,7 +292,14 @@ void ObjCache::initDB()
 
 #ifndef __clang_gcanalyzer__
     uv_thread_create(
-        &WriterThread, [](void *arg) { static_cast<ObjCache *>(arg)->writerThread(); },
+        &WriterThread,
+        [](void *arg) {
+            auto *OC = static_cast<ObjCache *>(arg);
+            OC->writerThread();
+            std::unique_lock<std::mutex> Lock{OC->WriterExitMutex};
+            OC->WriterExited = true;
+            OC->WriterExitCond.notify_all();
+        },
         this);
 #endif
     Started = true;
@@ -705,13 +714,22 @@ void ObjCache::shutdown()
             ObjQueue.clear();
         }
         QueueCond.notify_one();
-        uv_thread_join(&WriterThread);
-        Started = false;
+        // The writer checks Exiting between steps, but it cannot be
+        // interrupted while it waits for LMDB's write lock, which other
+        // processes may hold for a long time, or while it commits. Leave it
+        // to process exit in that case: an unfinished transaction is never
+        // published, and LMDB recovers the lock from a dead owner.
+        std::unique_lock<std::mutex> Lock{WriterExitMutex};
+        if (WriterExitCond.wait_for(Lock, std::chrono::milliseconds(100),
+                                    [this] { return WriterExited; })) {
+            uv_thread_join(&WriterThread);
+            Started = false;
+        }
     }
 
 #ifdef MDB_HAVE_ENV_RELEASE_LOCKS
     // we never close the environment, so SysV semaphores (Apple) would outlive the process
-    {
+    if (!Started) {
         std::unique_lock<std::mutex> InitLock{Mutex};
         std::unique_lock<std::shared_mutex> Lock{TxnLock};
         LocksReleased = true;
