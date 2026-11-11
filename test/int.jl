@@ -471,6 +471,15 @@ end
     @test div(-typemax(Int64), 2, RoundNearestTiesUp) == -4611686018427387903
     @test div(typemax(Int)-2, typemax(Int), RoundNearest) === 1
 
+    @test rem(7, 2, RoundNearestTiesAway) === -1
+    @test rem(Int8(7), Int8(2), RoundNearestTiesUp) === Int8(-1)
+    @test divrem(7, 2, RoundUp) === (4, -1)
+    @test divrem(big(7), big(2), RoundUp) == (4, -1)
+    for r in (RoundUp, RoundNearest, RoundNearestTiesAway)
+        @test div(true, true, r) === true
+    end
+    @test div(7, 2.0, RoundDown) === 3.0
+
     # Exhaustively test (U)Int8 to catch any overflow-style issues
     for r in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundFromZero)
         for T in (UInt8, Int8)
