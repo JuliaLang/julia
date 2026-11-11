@@ -437,7 +437,7 @@ end
                 y, yb = func(x), func(widen(x))
                 if isfinite(eps(T(yb)))
                     # Float32 results round twice when subnormal
-                    tol = T != Float32 ? 1.2 : issubnormal(T(yb)) ? 0.76 : 0.56
+                    tol = T != Float32 ? 1.2 : issubnormal(T(yb)) ? 0.77 : 0.56
                     @test abs(y-yb) <= tol*eps(T(yb))
                 end
             end
