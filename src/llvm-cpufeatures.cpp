@@ -167,6 +167,17 @@ static bool lowerCPUFeatures(Module &M, const TargetMachine *TM) JL_NOTSAFEPOINT
                 Materialized.push_back(I);
             }
         }
+        if (TT.isAArch64()) {
+        Attribute FSAttr = F.getFnAttribute("target-features");
+        StringRef FS =
+            FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetFeatureString();
+        SmallVector<StringRef, 128> Features;
+        FS.split(Features, ',');
+        for (StringRef Feature : Features) {
+            if (Feature == "sve")
+                F.addFnAttr(llvm::Attribute::getWithVScaleRangeArgs(M.getContext(), 1, 16)); //Hardcode for now
+        }
+        }
     }
 
     if (Materialized.empty())
