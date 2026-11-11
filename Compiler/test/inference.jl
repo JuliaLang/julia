@@ -166,6 +166,26 @@ let
     @test scheduled.needs_mi_edge
 end
 
+# printing of the inference objects that show up when debugging the compiler
+let interp = Compiler.NativeInterpreter(Base.get_world_counter())
+    mi = Base.method_instance(LimitedSrcTombstoneProof62338.entry, ())
+    result = Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp))
+    sv = Compiler.InferenceState(result, Compiler.CACHE_MODE_LOCAL, interp)
+    @test sprint(show, sv) == "InferenceState for " * sprint(show, mi)
+    @test startswith(sprint(show, result), "entry(")
+    @test sprint(show, interp) == "Compiler.NativeInterpreter(...)"
+    @test endswith(sprint(show, Compiler.method_table(interp)), "(0 entries)")
+    causes = Compiler.IdSet{Compiler.InferenceState}()
+    push!(causes, sv)
+    @test sprint(show, Compiler.LimitedAccuracy(Int, causes)) ==
+          "LimitedAccuracy($Int, #= 1 cause(s) =#)"
+    thunk = Meta.lower(@__MODULE__, :(1 + 1)).args[1]
+    thunk_mi = ccall(:jl_method_instance_for_thunk, Ref{Core.MethodInstance}, (Any, Any),
+                     thunk, @__MODULE__)
+    @test startswith(sprint(show, Compiler.InferenceResult(thunk_mi)),
+                     "Toplevel MethodInstance thunk from ")
+end
+
 let
     world = Base.get_world_counter()
     inf_params = Compiler.InferenceParams(; cache_owner=LimitedSrcTombstoneProof62338)
@@ -4041,6 +4061,35 @@ let apply_type_tfunc = Compiler.apply_type_tfunc
     @test apply_type_tfunc(𝕃, Const(Pair), Base.rewrap_unionall(Type{Pair.body.body},Pair), Type{Pair{Pair{Pair{Pair{A,B},C},D},E}} where {A,B,C,D,E}) == Type{Pair{Pair{A, B}, Pair{C, D}}} where {A, B, C, D}
     @test apply_type_tfunc(𝕃, Const(Val), Type{Union{Int,Pair{Pair{Pair{Pair{A,B},C},D},E}}} where {A,B,C,D,E}) == Type{Val{_A}} where _A
 end
+
+# `apply_type` of `TypeEq` and `TypeEgal` with valid and invalid parameters
+let (; TypeEq, TypeEgal, apply_type) = Core
+    for (f, argtypes, rt, nothrow) in Any[
+        (() -> apply_type(TypeEq, Int), (), TypeEgal{Type{Int}}, true),
+        (() -> apply_type(TypeEq, 1), (), TypeEgal{Type{1}}, true),
+        (() -> apply_type(TypeEq, "s"), (), Union{}, false),
+        (() -> apply_type(TypeEq, Int, Int), (), Union{}, false),
+        (T -> apply_type(TypeEq, T), (Type,), TypeEq, true),
+        (T -> apply_type(TypeEq, T), (Type{Int},), Type{Type{Int}}, true),
+        (T -> apply_type(TypeEq, T), (TypeEgal{Int},), TypeEgal{Type{Int}}, true),
+        (x -> apply_type(TypeEq, x), (String,), Union{}, false),
+        (x -> apply_type(TypeEq, x), (Int,), TypeEq, true),
+        (x -> apply_type(TypeEq, x), (Any,), TypeEq, false),
+        (tv -> apply_type(TypeEq, tv), (TypeVar,), TypeEq, true),
+        (ub -> apply_type(TypeEq, TypeVar(:T, ub)), (Type,), TypeEq, false),
+        (() -> apply_type(TypeEgal, Int), (), TypeEgal{TypeEgal{Int}}, true),
+        (() -> apply_type(TypeEgal, 1), (), Union{}, false),
+        (() -> apply_type(TypeEgal, Int, Int), (), Union{}, false),
+        (T -> apply_type(TypeEgal, T), (Type,), TypeEgal, false),
+    ]
+        @test Base.infer_return_type(f, argtypes) === rt
+        @test Compiler.is_nothrow(Base.infer_effects(f, argtypes)) === nothrow
+    end
+    # a `TypeVar` with known bounds gives the `TypeEq` of that very `TypeVar`
+    rt = Base.infer_return_type(() -> apply_type(TypeEq, TypeVar(:T)))
+    @test Compiler.isType(rt) && Compiler.isType(Base.type_parameter(rt)) &&
+          Base.type_parameter(Base.type_parameter(rt)) isa TypeVar
+end
 @test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
 @test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{Array{Int, N}} where N
 @test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{<:Real}},))) == Vector{Array{T, N}} where {T<:Real, N}
@@ -6972,6 +7021,13 @@ Base.@assume_effects :foldable _recur_irinterp2(x, y) = @noinline recur_irinterp
 end |> only === Tuple{Int,Symbol}
 @test last(recur_irinterp2(0, :y)) === :y
 
+# concrete evaluation of an `invoke` call must run the invoked method, not the most specific one
+Base.@assume_effects :foldable @noinline concrete_invoke_target(x::Integer) = x * 2
+Base.@assume_effects :foldable @noinline concrete_invoke_target(x::Int) = x * 3
+@test Base.infer_return_type() do
+    Val(invoke(concrete_invoke_target, Tuple{Integer}, 3))
+end === Val{6}
+
 # test Conditional Union splitting of info derived from fieldtype (e.g. in abstract setproperty! handling)
 @test only(Base.return_types((Int, Pair{Int,Nothing}, Symbol)) do a, x, s
     T = fieldtype(typeof(x), s)
@@ -8107,6 +8163,53 @@ end === Union{ErrorException, TypeError, UndefVarError}
     isdefinedglobal(m, s, b)
 end === Union{TypeError, UndefVarError}
 
+# global builtins with arguments of the wrong type, or the wrong number of arguments
+let VS = Tuple{Vararg{Symbol}}, VI = Tuple{Vararg{Int}}
+    CVE = ConcurrencyViolationError
+    for (f, argtypes, rt, exct) in Any[
+        (() -> getglobal(1, :x), (), Union{}, TypeError),
+        ((x, s) -> getglobal(x, s), (Int, Symbol), Union{}, TypeError),
+        ((m, s) -> getglobal(m, s), (Any, Symbol), Any, Union{TypeError, UndefVarError}),
+        ((m, s) -> getglobal(m, s, :monotonic, 1), (Module, Symbol), Union{}, ArgumentError),
+        ((m, xs) -> getglobal(m, :x, :monotonic, 1, xs...), (Module, VI), Union{}, ArgumentError),
+        ((m, xs) -> getglobal(m, xs...), (Module, VS), Any, Union{ArgumentError, CVE, TypeError, UndefVarError}),
+        (() -> Core.get_binding_type(1, :x), (), Union{}, TypeError),
+        (() -> Core.get_binding_type(Base, :pi), (), Core.TypeEgal{Any}, Union{}),
+        ((x, s) -> Core.get_binding_type(x, s), (Int, Symbol), Union{}, TypeError),
+        ((m, s) -> Core.get_binding_type(m, s), (Any, Symbol), Type, TypeError),
+        ((m, s) -> Core.get_binding_type(m, s, 1), (Module, Symbol), Union{}, ArgumentError),
+        ((m, xs) -> Core.get_binding_type(m, :x, 1, xs...), (Module, VI), Union{}, ArgumentError),
+        ((m, xs) -> Core.get_binding_type(m, xs...), (Module, VS), Type, Union{ArgumentError, TypeError}),
+        (v -> setglobal!(1, :x, v), (Int,), Union{}, Union{ErrorException, TypeError}),
+        ((x, s, v) -> setglobal!(x, s, v), (Int, Symbol, Int), Union{}, TypeError),
+        ((m, s, v) -> setglobal!(m, s, v, :monotonic, 1), (Module, Symbol, Int), Union{}, ArgumentError),
+        ((m, xs) -> setglobal!(m, :x, 1, :monotonic, 1, xs...), (Module, VI), Union{}, ArgumentError),
+        ((m, xs) -> setglobal!(m, xs...), (Module, VS), Any, Union{ArgumentError, CVE, ErrorException, TypeError}),
+        (v -> swapglobal!(1, :x, v), (Int,), Union{}, TypeError),
+        ((x, s, v) -> swapglobal!(x, s, v), (Int, Symbol, Int), Union{}, TypeError),
+        ((m, s) -> swapglobal!(m, s), (Module, Symbol), Union{}, ArgumentError),
+        ((m, xs) -> swapglobal!(m, :x, 1, :monotonic, 1, xs...), (Module, VI), Union{}, ArgumentError),
+        ((m, xs) -> swapglobal!(m, xs...), (Module, VS), Any, Union{ArgumentError, CVE, ErrorException, TypeError, UndefVarError}),
+        ((m, s) -> setglobalonce!(m, s), (Module, Symbol), Union{}, ArgumentError),
+        ((m, xs) -> setglobalonce!(m, :x, 1, :monotonic, :monotonic, 1, xs...), (Module, VI), Union{}, ArgumentError),
+        ((m, xs) -> setglobalonce!(m, xs...), (Module, VS), Bool, Union{ArgumentError, CVE, ErrorException, TypeError}),
+        ((m, s) -> replaceglobal!(m, s, 1), (Module, Symbol), Union{}, ArgumentError),
+        ((m, xs) -> replaceglobal!(m, :x, 1, 2, :monotonic, :monotonic, 1, xs...), (Module, VI), Union{}, ArgumentError),
+        ((m, xs) -> replaceglobal!(m, xs...), (Module, VS), Any, Union{ArgumentError, CVE, ErrorException, TypeError, UndefVarError}),
+        (() -> isdefinedglobal(1, :x), (), Union{}, TypeError),
+        ((x, s) -> isdefinedglobal(x, s), (Int, Symbol), Union{}, TypeError),
+        ((m, s) -> isdefinedglobal(m, s), (Any, Symbol), Bool, Union{TypeError, UndefVarError}),
+        ((m, s, o) -> isdefinedglobal(m, s, true, o), (Module, Symbol, Symbol), Bool, Union{CVE, UndefVarError}),
+        ((m, s) -> isdefinedglobal(m, s, true, :not_an_order), (Module, Symbol), Bool, Union{CVE, UndefVarError}),
+        ((m, s) -> isdefinedglobal(m, s, true, :unordered, 1), (Module, Symbol), Union{}, ArgumentError),
+        ((m, xs) -> isdefinedglobal(m, :x, true, :unordered, 1, xs...), (Module, VI), Union{}, ArgumentError),
+        ((m, xs) -> isdefinedglobal(m, xs...), (Module, VS), Bool, Union{CVE, TypeError, UndefVarError}),
+    ]
+        @test Base.infer_return_type(f, argtypes) === rt
+        @test Base.infer_exception_type(f, argtypes) === exct
+    end
+end
+
 # Issue #58257 - Hang in inference during BindingPartition resolution
 module A58257
     module B58257
@@ -8648,6 +8751,18 @@ end == Type
 @test Base.infer_return_type() do
     Compiler.return_type(Tuple)
 end == Type
+
+# the runtime methods of `Compiler.return_type`, called dynamically so inference cannot fold them
+let world = Base.get_world_counter(), oc = Base.Experimental.@opaque Tuple{Int}->Real x -> 2x
+    # these infer in the typeinf world, which only has `Base.Compiler`
+    if Compiler === Base.Compiler
+        @test Base.invokelatest(Compiler.return_type, sin, Tuple{Float64}, world) === Float64
+        @test Base.invokelatest(Compiler.return_type, Tuple{typeof(sin), Float64}) === Float64
+        @test Base.invokelatest(Compiler.return_type, Tuple{typeof(sin), Float64}, world) === Float64
+    end
+    @test Base.invokelatest(Compiler.return_type, oc, Tuple{Int}, world) === Real
+    @test Base.invokelatest(Compiler.return_type, oc, Tuple{String}, world) === Union{}
+end
 
 @test Base.infer_return_type(Core.task_result_type, (Task,)) === Type
 task_returner() = Task(() -> "hello")
