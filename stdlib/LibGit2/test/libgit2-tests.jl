@@ -1147,6 +1147,31 @@ mktempdir() do dir
                 tree2 = LibGit2.GitTree(repo, tree_hash)
                 @test isa(tree2, LibGit2.GitTree)
                 @test LibGit2.GitHash(tree1) == LibGit2.GitHash(tree2)
+
+                LibGit2.with(LibGit2.GitCommit(repo, "HEAD")) do cmt
+                    @test LibGit2.repository(cmt) === repo
+                    @test LibGit2.GitHash(LibGit2.GitTree(cmt)) == tree_hash
+                    @test LibGit2.GitHash(LibGit2.peel(cmt)) == tree_hash
+                end
+                @test haskey(tree, test_file)
+                @test LibGit2.objtype(LibGit2.Consts.OBJ_TAG) == LibGit2.GitTag
+                @test LibGit2.objtype(LibGit2.Consts.OBJ_ANY) == LibGit2.GitUnknownObject
+                @test_throws "OBJ_BAD is not supported" LibGit2.objtype(LibGit2.Consts.OBJ_BAD)
+                @test LibGit2.Consts.OBJECT(LibGit2.GitUnknownObject) == LibGit2.Consts.OBJ_ANY
+
+                # a positive return from the callback skips the children of an entry
+                for (post, skip, expected) in (
+                        (false, 0, [("", test_dir), ("$test_dir/", "testfile")]),
+                        (true,  0, [("$test_dir/", "testfile"), ("", test_dir)]),
+                        (false, 1, [("", test_dir)]))
+                    walked = Tuple{String,String}[]
+                    LibGit2.treewalk(tree, post) do root, entry
+                        push!(walked, (root, LibGit2.filename(entry)))
+                        return skip
+                    end
+                    @test walked == expected
+                end
+
                 @test LibGit2.count(tree1) == LibGit2.count(tree2)
             end
         end
