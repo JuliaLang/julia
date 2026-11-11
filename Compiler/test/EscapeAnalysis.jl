@@ -1728,4 +1728,13 @@ end
                            EscapeInfo(NoEscape(), Unindexable())]))
 end
 
+using .EscapeAnalysis: AInfo, ⊑ₑ
+@testset "EscapeInfo lattice order" begin
+    # each field's aliases must be a subset of the unindexable aliases, not just the last field's
+    x = EscapeInfo(NoEscape(), IndexableFields([AInfo(Any[1]), AInfo()]))
+    @test !(x ⊑ₑ EscapeInfo(NoEscape(), Unindexable()))
+    @test x ⊑ₑ EscapeInfo(NoEscape(), Unindexable(AInfo(Any[1])))
+    @test EscapeInfo(NoEscape(), IndexableFields(0)) ⊑ₑ EscapeInfo(NoEscape(), Unindexable())
+end
+
 end # module test_EA
