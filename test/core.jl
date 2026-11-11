@@ -361,7 +361,30 @@ Type{AbstractSet}  # cache this
     Tuple{Int8,Vararg{Integer}}
 @test typejoin(Union{Int,AbstractString}, Int) == Union{Int,AbstractString}
 @test typejoin(Union{Int,AbstractString}, Int8) == Any
+@test typejoin(Int8, Union{Int16,Int32}) == Signed
 @test typejoin(Tuple{}, Tuple{Int}) == Tuple{Vararg{Int}}
+@test typejoin() === Union{}
+@test typejoin(Int) === Int
+@test typejoin(Tuple{Vararg{Int}}, Tuple{Int, Vararg{Int}}) === Tuple{Vararg{Int}}
+@test typejoin(Tuple{Int, Vararg{Int,2}}, Tuple{Int}) === Tuple{Int, Vararg{Int}}
+@test typejoin(Tuple{Int, Vararg{Float64}}, Tuple{Int, Int, Int}) === Tuple{Int, Vararg{Real}}
+
+# promotion with 0, 1 and more than 3 arguments
+@test promote() === ()
+@test promote(1) === (1,)
+@test Base.promote_typeof(1) === Int
+@test promote(1, 2.0, 3//1, 4f0) === (1.0, 2.0, 3.0, 4.0)
+@test_throws "promotion of types $Int, String, $Int and $Int failed" promote(1, "a", 2, 3)
+@test promote_rule(Union{}, Int) === promote_rule(Int, Union{}) === Int
+@test promote_rule(Union{}, Union{}) === Union{}
+@test minmax(2, 1.5) === minmax(1.5, 2) === (1.5, 2.0)
+@test 3 *% 0x2 === 6
+@test 3 -% 0x5 === -2
+struct NoOpsNumber <: Number end
+for (f, name) in ((*, "*"), (-, "-"), (^, "^"))
+    @test_throws ErrorException("$name not defined for $NoOpsNumber") f(NoOpsNumber(), NoOpsNumber())
+end
+@test_throws ErrorException("fma not defined for $NoOpsNumber") fma(NoOpsNumber(), NoOpsNumber(), NoOpsNumber())
 
 # typejoin associativity
 abstract type Foo____{K} end
