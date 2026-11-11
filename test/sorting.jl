@@ -68,6 +68,11 @@ end
             @test perm_idx == perm
         end
     end
+    for A in (zeros(0, 3), zeros(2, 0, 30)), dims in 1:ndims(A)
+        @test sort(A; dims) == A
+        @test sort!(copy(A); dims) == A
+        @test sortperm(A; dims) == LinearIndices(A)
+    end
     @test_throws ArgumentError sortperm!(zeros(Int, 3, 3), rand(3, 3);)
     @test_throws ArgumentError sortperm!(zeros(Int, 3, 3), rand(3, 3); dims=3)
     @test_throws ArgumentError sortperm!(zeros(Int, 3, 4), rand(4, 4); dims=1)
