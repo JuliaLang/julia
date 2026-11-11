@@ -590,7 +590,8 @@ Stacktrace:
 ```
 """
 macro kwdef(expr)
-    expr = macroexpand(__module__, expr) # to expand @static
+    expr_orig = macroexpand(__module__, expr; legacyscope=false) # to expand @static
+    expr = Meta.unescape(expr_orig)
     isexpr(expr, :struct) || error("Invalid usage of @kwdef")
     _, T, fieldsblock = expr.args
     if T isa Expr && T.head === :<:
@@ -615,7 +616,7 @@ macro kwdef(expr)
         if T_no_esc isa Symbol
             sig = Expr(:call, T, Expr(:parameters, parameters...))
             body = Expr(:block, __source__, Expr(:call, T, fieldnames...))
-            kwdefs = esc(Expr(:function, sig, body))
+            kwdefs = Expr(:function, sig, body)
         elseif isexpr(T_no_esc, :curly)
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
@@ -630,17 +631,18 @@ macro kwdef(expr)
             body2 = Expr(:block, __source__, Expr(:call, SQ, fieldnames...))
             sig2 = :($(Expr(:call, SQ, Expr(:parameters, parameters...))) where {$(P...)})
             def2 = Expr(:function, sig2, body2)
-            kwdefs = esc(Expr(:block, def1, def2))
+            kwdefs = Expr(:block, def1, def2)
         else
             error("Invalid usage of @kwdef")
         end
     else
         kwdefs = nothing
     end
-    return quote
-        $(esc(:($Base.@__doc__ $expr)))
-        $kwdefs
-    end
+    def = Expr(:struct, expr.args...)
+    expr.head = :block
+    # place the constructors in the right escape/hygienic-scope layer
+    expr.args = Any[:($Base.@__doc__ $def), kwdefs]
+    return esc(expr_orig)
 end
 
 # @kwdef helper function
@@ -654,7 +656,7 @@ function extract_names_and_defvals_from_kwdef_fieldblock!(block, names, defvals)
             extract_names_and_defvals_from_kwdef_fieldblock!(item, names, defvals)
             for j in n+1:length(defvals)
                 if !isnothing(defvals[j])
-                    defvals[j] = Expr(item.head, defvals[j])
+                    defvals[j] = Expr(item.head, defvals[j], item.args[2:end]...)
                 end
             end
         else
@@ -681,7 +683,9 @@ function def_name_defval_from_kwdef_fielddef(kwdef)
         return Expr(kwdef.head, def), name, defval
     elseif kwdef isa Expr && kwdef.head in (:escape, :var"hygienic-scope")
         def, name, defval = @something(def_name_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
-        return Expr(kwdef.head, def), name, isnothing(defval) ? defval : Expr(kwdef.head, defval)
+        return (Expr(kwdef.head, def, kwdef.args[2:end]...),
+                name,
+                isnothing(defval) ? defval : Expr(kwdef.head, defval, kwdef.args[2:end]...))
     end
 end
 
