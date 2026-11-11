@@ -82,21 +82,32 @@ move_to_node1("stress")
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Move LinearAlgebra, Pkg and SparseArrays tests to the front, because they take a
-# while, so we might as well get them all started early. SparseArrays in particular
-# runs as a single test set for close to an hour on slow platforms (e.g. i686) and
-# dominates the critical path if started late.
-# The ambiguity test must run before any worker has finished the SparseArrays tests:
-# SparseArrays' test module defines constructors (e.g. `Counting`) that are ambiguous
-# with Base's `Type` constructors, and once loaded on a worker they are picked up by
-# `detect_ambiguities(Core, Base)` in any test that later runs on the same worker.
-# Placing "ambiguous" last here schedules it first, so it completes while every
-# other worker is still busy with the long front-loaded test sets.
-for prependme in ["LinearAlgebra", "Pkg", "SparseArrays", "ambiguous"]
-    prependme_test_ids = findall(x->occursin(prependme, x), tests)
-    prependme_tests = tests[prependme_test_ids]
-    deleteat!(tests, prependme_test_ids)
-    prepend!(tests, prependme_tests)
+# Start the longest tests first, so that they don't end up running alone at the end while
+# the other workers sit idle. Roughly in decreasing order of their duration on this
+# branch's Linux CI (November 2026); tests that are not listed keep their order and run
+# after these. A package name also covers its test groups.
+const longest_tests = [
+    "SparseArrays", "Pkg", "LinearAlgebra/triangular2", "LinearAlgebra/triangular3",
+    "cmdlineargs", "LinearAlgebra/bidiag", "LinearAlgebra/unitful",
+    "LinearAlgebra/diagonal", "LinearAlgebra/special", "LinearAlgebra/dense",
+    "LinearAlgebra/symmetric", "LinearAlgebra/addmul", "LinearAlgebra/lu", "compileall",
+    "LinearAlgebra/matmul", "subarray", "sorting", "loading",
+    "Compiler/AbstractInterpreter", "LinearAlgebra/bunchkaufman", "LinearAlgebra/cholesky",
+    "LibGit2/libgit2", "Profile", "bitarray", "LinearAlgebra/triangular",
+    "LinearAlgebra/tridiag", "Compiler/inference", "arrayops", "abstractarray",
+    "LinearAlgebra/qr",
+]
+function expected_rank(test)
+    rank = findfirst(name -> test == name || startswith(test, name * "/"), longest_tests)
+    return something(rank, length(longest_tests) + 1)
+end
+sort!(tests; by=expected_rank) # stable, so unlisted tests keep their order
+
+# `ambiguous` must be the first test on its worker, as methods defined by other tests can
+# make Base methods ambiguous
+if "ambiguous" in tests
+    splice!(tests, findfirst(isequal("ambiguous"), tests))
+    pushfirst!(tests, "ambiguous")
 end
 
 import LinearAlgebra
