@@ -1975,6 +1975,8 @@ function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, quo
     end
 end
 
+is_generator_expr(@nospecialize x) = isa(x, Expr) && (x.head === :generator || x.head === :flatten)
+
 function show_generator(io, ex::Expr, indent, quote_level)
     if ex.head === :flatten
         fg::Expr = ex
@@ -2264,13 +2266,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         show_call(head === :ref ? IOContext(io, beginsym=>true) : io, head, args[1], funcargslike, indent, quote_level, head !== :curly)
 
     # comprehensions
-    elseif head === :typed_comprehension && nargs == 2
+    elseif head === :typed_comprehension && nargs == 2 && is_generator_expr(args[2])
         show_callee(io, head, args[1], indent, quote_level)
         print(io, '[')
         show_generator(io, args[2], indent, quote_level)
         print(io, ']')
 
-    elseif head === :comprehension && nargs == 1
+    elseif head === :comprehension && nargs == 1 && is_generator_expr(args[1])
         print(io, '[')
         show_generator(io, args[1], indent, quote_level)
         print(io, ']')
