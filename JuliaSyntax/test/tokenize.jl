@@ -370,6 +370,15 @@ end
     io = IOBuffer()
     show(io, collect(tokenize("\"abc\nd\"ef"))[2])
     @test String(take!(io)) == "1-5        String         "
+    @test endswith(repr(Tokenize.Lexer("abc")), "Lexer{IOBuffer} at position: 0")
+end
+
+@testset "RawToken constructors and kind names" begin
+    @test RawToken() == RawToken(K"error", 0, 0)
+    @test kind(RawToken(K"Identifier", 1, 2)) == K"Identifier"
+    # Kinds that several tokens share have no unique name
+    @test JuliaSyntax.untokenize(K"Identifier") === nothing
+    @test JuliaSyntax.untokenize(K"Identifier"; unique=false) == "Identifier"
 end
 
 ~(tok::RawToken, t::Tuple) = tok.kind == t[1] && untokenize(tok, t[3]) == t[2]
