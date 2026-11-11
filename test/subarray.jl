@@ -1093,7 +1093,29 @@ end
         @test isassigned(v, 1, 1) # inbounds and assigned
         @test !isassigned(v, 1, 2) # inbounds but not assigned
         @test !isassigned(v, 3, 3) # out-of-bounds
+        @test isassigned(v, 1) && !isassigned(v, 2) && !isassigned(v, 10) # linear indexing
     end
+end
+
+@testset "view helpers" begin
+    # views of float ranges index them directly, giving ranges
+    @test view(0.0:0.5:5.0, 2:3) === 0.5:0.5:1.0
+    @test view(LinRange(0, 1, 11), 2:2:6) == LinRange(0.1, 0.5, 3)
+    A = reshape(collect(1:16), 4, 4)
+    V = view(A, 2:3, 1:2)
+    @test pointer(V, CartesianIndex(2, 2)) == pointer(A, LinearIndices(A)[3, 2])
+    @test_throws "strides is invalid for SubArrays with indices of type Vector{$Int}" strides(view(A, [1, 2], 1))
+    @test_throws "invalid strided index type Vector{$Int}" Base.compute_stride1(1, (1:2,), ([1, 2],))
+    @test Base.axes1(view(A, 1, 1)) == Base.OneTo(1)
+    # arrays of CartesianIndex{1} are reindexed into the parent like integer indices
+    W = view(view(A, :, 1), [CartesianIndex(1), CartesianIndex(3)])
+    @test parent(W) === A
+    @test W == [1, 3]
+    U = Base.unaliascopy(view(A, [3, 1], 2:3))
+    @test U == [7 11; 5 9]
+    @test parent(U) !== A
+    b = UInt8[1, 2, 3, 4]
+    @test unsafe_wrap(Vector{UInt8}, view(b, 2:3)) == [0x02, 0x03]
 end
 
 @testset "aliasing checks with shared indices" begin

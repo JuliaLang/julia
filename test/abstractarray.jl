@@ -998,6 +998,13 @@ end
     @test ndims(Matrix) == 2
     @test ndims(Array{<:Any, 0}) == 0
     @test_throws MethodError ndims(Array)
+    for f in (ndims, keytype, valtype)
+        @test_throws "Union{} does not have elements" f(Union{})
+    end
+    @test !Base.has_offset_axes()
+    @test Base.axes1(fill(1)) === Base.OneTo(1)
+    @test keys(IndexLinear(), [1, 2], [3, 4]) == 1:2
+    @test keys(IndexCartesian(), [1 2], [3 4]) == CartesianIndices((1, 2))
 end
 
 @testset "Issue #17811" begin
@@ -1015,6 +1022,11 @@ end
 
 @testset "_sub2ind for empty tuple" begin
     @test Base._sub2ind(()) == 1
+    @test Base._sub2ind((Base.OneTo(3),), 2) == 2
+    @test Base._sub2ind((Base.OneTo(3),), 2, 1) == 2
+    @test Base._ind2sub((), 1) == ()
+    @test_throws BoundsError Base._ind2sub((), 2)
+    @test Base._unsafe_ind2sub((), 1) == ()
 end
 
 @testset "to_shape" begin
@@ -1022,6 +1034,8 @@ end
     @test Base.to_shape(1) === 1
     @test Base.to_shape(big(1)) === Base.to_shape(1)
     @test Base.to_shape(Int8(1)) === Base.to_shape(1)
+    @test Base.to_shape(Base.OneTo(3)) === 3
+    @test Base.to_shape(2:4) === 2:4
 end
 
 @testset "issue #39923: similar" begin
@@ -1228,6 +1242,10 @@ end
 
 @testset "vcat with mixed elements" begin
     @test vcat(Nothing[], [missing], [1.0], [Int8(1)]) isa Vector{Union{Missing, Nothing, Float64}}
+    @test vcat(view([1, 2], 1:2), 3:4) == 1:4
+    @test_throws ErrorException Base.promote_eltypeof()
+    @test_throws ErrorException Base.promote_eltype()
+    @test Base.promote_eltypeof([1]) === Base.promote_eltype([1]) === Int
 end
 
 @testset "hcat with mixed elements" begin
@@ -1451,6 +1469,9 @@ push_slightly_abstract_namedtuple(v::Vector{@NamedTuple{x::Int,y::Any}}, x::Int,
     tpa = TestPushArray{Int, 2}(a_orig)
     pushfirst!(tpa, 6, 5, 4, 3, 2)
     @test tpa.data == reverse(collect(1:6))
+    tpa = TestPushArray{Int, 2}([3])
+    pushfirst!(tpa, 1, 2)
+    @test tpa.data == [1, 2, 3]
 
     let src = code_typed1(push_slightly_abstract_namedtuple, (Vector{@NamedTuple{x::Int,y::Any}},Int,Any))
         # After optimization, all `push!` and `convert` calls should have been inlined
@@ -1690,6 +1711,11 @@ using Base: typed_hvncat
     @test hvncat(0, 1) == fill(1)
     @test hvncat(0, [1]) == [1]
     @test_throws ArgumentError hvncat(0, 1, 1)
+    @test hvncat(0, "a") == fill("a")
+    @test_throws ArgumentError hvncat(0, "a", "b")
+    @test_throws ArgumentError hvncat(0, [1], [2])
+    @test_throws "argument count does not match specified shape (expected 4, got 3)" hvncat((2, 2), true, 1, 2, 3)
+    @test hvncat(1, [1], [2.0]) == [1.0, 2.0]
     @test_throws ArgumentError typed_hvncat(Float64, 0)
     @test typed_hvncat(Float64, 0, 1) == fill(1.0)
     @test typed_hvncat(Float64, 0, [1]) == Float64[1.0]
@@ -2085,6 +2111,22 @@ end
     @test x == [4 5; 10 11]
 end
 
+struct SharedWrapVector <: AbstractVector{Int}
+    parent::Vector{Int}
+end
+Base.size(w::SharedWrapVector) = size(w.parent)
+Base.getindex(w::SharedWrapVector, i::Int) = w.parent[i]
+Base.dataids(w::SharedWrapVector) = Base.dataids(w.parent)
+
+@testset "unaliasing" begin
+    v = [1, 2]
+    @test_throws "shares memory with another argument" Base.unalias(v, SharedWrapVector(v))
+    @test Base.unaliascopy(1) === 1
+    @test Base._isdisjoint((), ())
+    @test Base._isdisjoint((), (UInt(1), UInt(2)))
+    @test Base._isdisjoint((UInt(1), UInt(2)), ())
+end
+
 # type stable [x;;] (https://github.com/JuliaLang/julia/issues/45952)
 f45952(x) = [x;;]
 @inferred f45952(1.0)
@@ -2174,6 +2216,13 @@ end
         copyto!(view(B, axes(B)...), view(A, axes(A)...))
         @test B == A
     end
+    @testset "explicit IndexStyles" begin
+        B .= 0
+        @test copyto!(IndexLinear(), B, IndexCartesian(), A) === B
+        @test B == A
+        @test copyto!(IndexLinear(), B, IndexLinear(), Float64[]) == A
+    end
+    @test_throws "source and destination must have same size (got 3 and 2)" copyto!(zeros(3, 3), 1:2, 1:2, ones(3, 3), 1:3, 1:2)
 end
 
 @testset "reshape for offset arrays" begin
@@ -2270,6 +2319,7 @@ end
     A .= 0
     copyto!(A, 1, x, 1)
     @test A == axes(A,1)
+    @test_throws "source has fewer elements than required, expected at least 2 got 1" copyto!(A, 1, (i for i in 1:1), 2, 1)
 end
 
 @testset "reshape with Integer sizes" begin
