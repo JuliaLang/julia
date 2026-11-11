@@ -4277,7 +4277,8 @@ end
 # (C-only fields after them, an opaque layout, trailing variable-sized data) can only be
 # allocated by the runtime, since `new` would not set up that data
 for x in Any[which(sin, (Float64,)), current_task(), Base.CancellationTokenSource(),
-             Base.WaitEntryN(nothing, 2), Main, :sym, "str", Core.svec(1), Memory{Int}(undef, 2)]
+             Base.WaitEntryN(nothing, 2), Main, :sym, "str", Core.svec(1), Memory{Int}(undef, 2),
+             Vector{T} where T]
     T = typeof(x)
     @test Base.datatype_hashiddenfields(T)
     vals = Any[getfield(x, i) for i in 1:(fieldcount(T) - T.name.n_uninitialized)]
@@ -4300,7 +4301,7 @@ for x in Any[which(sin, (Float64,)), current_task(), Base.CancellationTokenSourc
 end
 @test !Base.datatype_hashiddenfields(Core.MethodInstance)
 # the size of a type with C-only fields after its visible ones includes them
-for T in (Method, Task)
+for T in (Method, Task, UnionAll)
     n = fieldcount(T)
     ft = fieldtype(T, n)
     visible_end = fieldoffset(T, n) + (Base.allocatedinline(ft) ? sizeof(ft) : sizeof(Ptr{Cvoid}))
