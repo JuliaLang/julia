@@ -207,6 +207,11 @@ end
 end
 
 @test_throws KeyError Dict("a"=>2)[Base.secret_table_token]
+# the value type must not be widened by the lookup sentinel
+@test Base.infer_return_type((Dict{Int,Vector{Int}}, Pair{Int,Vector{Int}})) do d, p
+    v = get(d, p.first, Base.secret_table_token)
+    v !== Base.secret_table_token ? v : nothing
+end == Union{Nothing,Vector{Int}}
 
 @testset "issue #1821" begin
     d = Dict{String, Vector{Int}}()
