@@ -215,9 +215,13 @@ static int64_t live_bytes = 0;
 static int64_t promoted_bytes = 0;
 // Multiplier on the promotion/growth allowances that trigger an automatic full sweep.
 // Doubled (up to MAX_FULL_SWEEP_BACKOFF) each time an automatic full sweep turns out to
-// reclaim almost no old memory, and reset once one does.
+// reclaim almost no old memory, and reset once any full sweep does.
 static int full_sweep_backoff = 1;
 #define MAX_FULL_SWEEP_BACKOFF 4
+// Marked bytes that the last full sweep kept, all of which it left as `GC_OLD`, and the
+// old bytes the mark after it found still live. Both count object sizes as marking does.
+static int64_t kept_by_last_full_sweep = 0;
+static int64_t old_live_after_full_sweep = 0;
 static int prev_sweep_full_auto = 0; // the last collection did a full sweep chosen by the heuristics
 static int prev_collection_forced = 0; // the last collection was a `JL_GC_FULL` request
 static int64_t last_live_bytes = 0; // live_bytes at last collection
@@ -3704,17 +3708,14 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_stats_big_obj();
     }
     gc_num.total_allocd += gc_num.allocd;
-    if (prev_sweep_full_auto) {
-        // The full sweep left every survivor unmarked, so this mark visited all live
-        // old objects: compare them to what was live after that sweep to see how much
-        // old memory the full collection is reclaiming.
-        if (promoted_now >= heap_size_after_last_full_gc * 0.95) {
-            if (full_sweep_backoff < MAX_FULL_SWEEP_BACKOFF)
-                full_sweep_backoff *= 2;
-        }
-        else {
+    if (prev_sweep_full) {
+        // The full sweep left everything it kept as `GC_OLD`, so this mark old-marks
+        // exactly the part of it that is still live.
+        old_live_after_full_sweep = promoted_now;
+        if (promoted_now < kept_by_last_full_sweep * 0.95)
             full_sweep_backoff = 1;
-        }
+        else if (prev_sweep_full_auto && full_sweep_backoff < MAX_FULL_SWEEP_BACKOFF)
+            full_sweep_backoff *= 2;
     }
     // promoted_bytes are the bytes that reached the oldest generation, which only a full
     // sweep frees, since the last full sweep. A quick collection marks old only the objects
@@ -3724,6 +3725,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     // re-marked, so that collection says nothing about promotion.
     if (!prev_sweep_full)
         promoted_bytes += promoted_now;
+    int64_t young_marked = scanned_bytes;
     scanned_bytes = 0;
     // 4. next collection decision
     int remset_nptr = 0;
@@ -3754,9 +3756,14 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         sweep_full = 0;
     }
     // Forced collections (and the recollect that follows one) say nothing about whether
-    // the heuristics are scheduling full sweeps well, so keep them out of the backoff.
-    int sweep_full_auto = sweep_full && collection == JL_GC_AUTO && !prev_collection_forced &&
+    // the heuristics are scheduling full sweeps well, so they can only reset the backoff.
+    int sweep_full_auto = sweep_full && collection != JL_GC_FULL && !prev_collection_forced &&
         !jl_options.gc_sweep_always_full;
+    if (sweep_full) {
+        // The oldest generation (live after the last full sweep plus promoted since)
+        // and the young objects marked now all become `GC_OLD`.
+        kept_by_last_full_sweep = old_live_after_full_sweep + promoted_bytes + young_marked;
+    }
     // 5. start sweeping
     uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
@@ -3922,7 +3929,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     // For this we use the overallocation function to see what a reasonable rate of growth is,
     // or if there is too much memory that has not seen a full GC after being promoted to old.
     // Both allowances are scaled by `full_sweep_backoff` so that heaps that only grow
-    // do not keep paying for full collections that free nothing.
+    // do not keep paying for full collections that free nothing. The heap stays bounded
+    // by `MAX_FULL_SWEEP_BACKOFF` times the growth allowance until a full sweep that
+    // reclaims old memory resets the backoff.
+    if (jl_options.hard_heap_limit != 0)
+        full_sweep_backoff = 1;
     double old_ratio = (double)promoted_bytes/(double)heap_size;
     double expected_heap_size = full_sweep_backoff * (double)overallocation(heap_size_after_last_full_gc, 0, UINT64_MAX) + heap_size_after_last_full_gc;
     double last_full_gc_heap_ratio = (double)heap_size/expected_heap_size;
