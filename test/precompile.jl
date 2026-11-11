@@ -2899,6 +2899,32 @@ precompile_test_harness("Constprop CodeInstance invalidation") do load_path
     end
 end
 
+# Inferred code for methods of other packages, and for `precompile` directives, is cached with and without native code
+precompile_test_harness("inferred code with and without pkgimages") do load_path
+    write(joinpath(load_path, "InferredCache.jl"),
+        """
+        module InferredCache
+        struct T; x::Int; end
+        @noinline own(x) = sum(abs2, [x, x + 1])
+        findT(x, list) = findfirst(==(Base.inferencebarrier(x)), Base.inferencebarrier(list))
+        findT(T(2), [T(1), T(2)])
+        precompile(sum, (Vector{T},))
+        precompile(own, (Int,))
+        end
+        """)
+    testcode = """
+        insert!(LOAD_PATH, 1, $(repr(load_path)))
+        insert!(DEPOT_PATH, 1, $(repr(load_path)))
+        using InferredCache
+        cached(f, T) = any(mi -> isdefined(mi, :cache) && mi.cache.max_world == typemax(UInt) && T in mi.specTypes.parameters,
+                           (mi for m in methods(f) for mi in Base.specializations(m)))
+        (cached(findfirst, Vector{InferredCache.T}), cached(sum, Vector{InferredCache.T}), cached(InferredCache.own, Int))
+    """
+    for pkgimages in ("yes", "no")
+        @test readchomp(`$(Base.julia_cmd()) --startup-file=no --pkgimages=$pkgimages -E $(testcode)`) == "(true, true, true)"
+    end
+end
+
 precompile_test_harness("llvmcall validation") do load_path
     write(joinpath(load_path, "LLVMCall.jl"),
         """
