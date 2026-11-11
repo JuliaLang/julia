@@ -1072,16 +1072,35 @@ function getfield_boundscheck(argtypes::Vector{Any})
     return :unsafe
 end
 
+# whether the field of `s00` named by `name` may be `@atomic`
+@nospecs function getfield_may_be_atomic(s00, name)
+    s = unwrap_unionall(widenconst(s00))
+    if isa(s, Union)
+        return getfield_may_be_atomic(rewrap_unionall(s.a, s00), name) ||
+               getfield_may_be_atomic(rewrap_unionall(s.b, s00), name)
+    elseif isa(s, Core.TypeEgal)
+        s = typeof(type_parameter(s)) # the only instance is the parameter
+    end
+    isa(s, DataType) && !isabstracttype(s) || return true
+    s.name.atomicfields === C_NULL && return false
+    isa(name, Const) || return true
+    field = try_compute_fieldidx(s, name.val)
+    return field !== nothing && isfieldatomic(s, field)
+end
+
 function getfield_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, boundscheck::Symbol=getfield_boundscheck(argtypes))
     boundscheck === :unsafe && return false
     ordering = Const(:not_atomic)
+    explicit_ordering = false
     if length(argtypes) == 3
         isvarargtype(argtypes[3]) && return false
         if widenconst(argtypes[3]) !== Bool
             ordering = argtypes[3]
+            explicit_ordering = true
         end
     elseif length(argtypes) == 4
         ordering = argtypes[3]
+        explicit_ordering = true
     elseif length(argtypes) ≠ 2
         return false
     end
@@ -1091,6 +1110,8 @@ function getfield_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, boundsch
     if ordering !== :not_atomic # TODO: this is assuming not atomic
         return false
     end
+    # an explicit `:not_atomic` order throws for an `@atomic` field
+    explicit_ordering && getfield_may_be_atomic(argtypes[1], argtypes[2]) && return false
     return getfield_nothrow(𝕃, argtypes[1], argtypes[2], !(boundscheck === :off))
 end
 @nospecs function getfield_nothrow(𝕃::AbstractLattice, s00, name, boundscheck::Bool)
@@ -1161,7 +1182,6 @@ end
         isa(name, Const) || return false
         field = try_compute_fieldidx(s, name.val)
         field === nothing && return false
-        isfieldatomic(s, field) && return false # TODO: currently we're only testing for ordering === :not_atomic
         field <= datatype_min_ninitialized(s) && return true
         # `try_compute_fieldidx` already check for field index bound.
         !isvatuple(s) && isbitstype(fieldtype(s0, field)) && return true

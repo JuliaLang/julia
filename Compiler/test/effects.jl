@@ -504,6 +504,19 @@ end |> !Compiler.is_nothrow
 @test Base.infer_effects((Some{Any},Any)) do some, boundscheck
     getfield(some, 1, :not_atomic, boundscheck)
 end |> !Compiler.is_nothrow
+mutable struct GetfieldNothrowAtomic; @atomic x::Int; end
+@test Base.infer_effects((GetfieldNothrowAtomic,)) do a
+    getfield(a, 1, :not_atomic, false)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((GetfieldNothrowAtomic,)) do a
+    getfield(a, 1, false)
+end |> Compiler.is_nothrow
+@test Base.infer_effects((GetfieldNothrowAtomic,)) do a
+    getfield(a, :x)
+end |> Compiler.is_nothrow
+@test Base.infer_effects((Tuple{Vararg{Int}},Int)) do t, i
+    getfield(t, i, :not_atomic, false)
+end |> Compiler.is_nothrow
 
 @test Compiler.is_consistent(Base.infer_effects(setindex!, (Base.RefValue{Int}, Int)))
 
