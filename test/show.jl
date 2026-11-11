@@ -295,6 +295,8 @@ for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
     @test eval(Meta.parse(repr(ex))) == ex
 end
 
+@test repr(Expr(:comprehension, 1)) == ":(\$(Expr(:comprehension, 1)))"
+@test repr(Expr(:typed_comprehension, :T, :x)) == ":(\$(Expr(:typed_comprehension, :T, :x)))"
 @test repr(Expr(:using, :Foo)) == ":(\$(Expr(:using, :Foo)))"
 @test repr(Expr(:using, Expr(:(.), ))) == ":(\$(Expr(:using, :(\$(Expr(:.))))))"
 @test repr(Expr(:import, :Foo)) == ":(\$(Expr(:import, :Foo)))"
