@@ -1851,6 +1851,11 @@ function generating_output(incremental::Union{Bool,Nothing}=nothing)
     return true
 end
 
+# Map source metadata while generating an image. Never apply this to values a program
+# computes from paths (e.g. `@__FILE__`); default log record locations are the one
+# exception, as they only describe where the message came from.
+map_build_path(path::String) = ccall(:jl_map_build_path, Any, (Any,), path)::String
+
 const SLOT_USED = 0x8
 ast_slotflag(@nospecialize(code), i) = ccall(:jl_ir_slotflag, UInt8, (Any, Csize_t), code, i - 1)
 

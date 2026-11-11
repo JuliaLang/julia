@@ -9454,8 +9454,18 @@ static jl_datatype_t *compute_va_type(jl_value_t *sig, size_t nreq) JL_CANSAFEPO
 // Images keep the recorded paths, as they may be relocated or used on another machine.
 // Only Base and Core record paths relative to `base`; a relative name in user code
 // (e.g. from `include_string`) must not be resolved to an unrelated Base file.
+// BUILD_PATH_PREFIX_MAP covers any recorded path, including files outside Julia's own
+// sources (and does nothing unless generating output).
 static DIFile *get_difile(jl_codectx_t &ctx, DIBuilder &dbuilder, StringRef file, bool is_user_code)
 {
+    size_t maplen;
+    if (char *mapped = jl_maybe_map_build_path_cstr(file.data(), file.size(), &maplen)) {
+        std::string path(mapped, maplen);
+        free(mapped);
+        if (sys::path::is_absolute(file))
+            return dbuilder.createFile(sys::path::filename(path), sys::path::parent_path(path));
+        return dbuilder.createFile(path, ".");
+    }
     if (!ctx.emission_context.imaging_mode && (!is_user_code || sys::path::is_absolute(file))) {
         auto [dir, name] = resolve_source_path(file);
         if (!dir.empty())

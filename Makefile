@@ -252,7 +252,7 @@ $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(buil
 julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir)/julia
 	@JULIA_BINDIR=$(call cygpath_w,$(build_bindir)) JULIA_FALLBACK_REPL=1 WINEPATH="$(call cygpath_w,$(build_bindir));$$WINEPATH" \
 		$(call spawn, $(JULIA_EXECUTABLE) --startup-file=no $(call cygpath_w,$(JULIAHOME)/contrib/write_base_cache.jl) \
-		$(call cygpath_w,$(build_datarootdir)/julia/base.cache))
+		$(call cygpath_w,$(build_datarootdir)/julia/base.cache) $(call cygpath_w,$(BUILDROOT)/base/sysimg$(if $(filter debug,$(JULIA_BUILD_MODE)),-debug).sources))
 
 # public libraries, that are installed in $(prefix)/lib
 ifeq ($(JULIA_BUILD_MODE),release)
@@ -504,6 +504,7 @@ ifneq ($(JULIA_INSTALL_DOCS),0)
 endif
 	# Remove various files which should not be installed
 	-rm -f $(DESTDIR)$(datarootdir)/julia/base/version_git.sh
+	-rm -f $(DESTDIR)$(datarootdir)/julia/base/sysimg.sources $(DESTDIR)$(datarootdir)/julia/base/sysimg-debug.sources
 	-rm -f $(DESTDIR)$(datarootdir)/julia/test/Makefile
 	-rm -f $(DESTDIR)$(datarootdir)/julia/base/*/source-extracted
 	-rm -f $(DESTDIR)$(datarootdir)/julia/base/*/build-configured

@@ -672,8 +672,12 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
 {
     jl_queue_for_serialization(s, m->name);
     jl_queue_for_serialization(s, m->parent);
-    if (!jl_options.strip_metadata)
-        jl_queue_for_serialization(s, m->file);
+    if (!jl_options.strip_metadata) {
+        jl_sym_t *file = jl_maybe_map_build_path_sym(m->file);
+        if (file != m->file)
+            record_field_change((jl_value_t*)m, (jl_value_t**)&m->file, (jl_value_t*)file);
+        jl_queue_for_serialization(s, file);
+    }
     jl_queue_for_serialization(s, jl_atomic_load_relaxed(&m->bindingkeyset));
     if (jl_options.trim) {
         jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->bindings), 0, 1);
@@ -738,6 +742,45 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     jl_queue_for_serialization_(s, (jl_value_t*)t, 1, immediate);
     const jl_datatype_layout_t *layout = t->layout;
 
+    // remap source paths per BUILD_PATH_PREFIX_MAP; not under strip-metadata,
+    // which registers its own replacements for these fields
+    if (!jl_options.strip_metadata) {
+        if (jl_is_method(v)) {
+            jl_method_t *m = (jl_method_t*)v;
+            jl_sym_t *file = jl_maybe_map_build_path_sym(m->file);
+            if (file != m->file) {
+                record_field_change((jl_value_t*)m, (jl_value_t**)&m->file, (jl_value_t*)file);
+                jl_queue_for_serialization(s, file);
+            }
+        }
+        else if (jl_is_debuginfo(v)) {
+            jl_debuginfo_t *di = (jl_debuginfo_t*)v;
+            if (jl_is_symbol(di->def)) {
+                jl_sym_t *def = jl_maybe_map_build_path_sym((jl_sym_t*)di->def);
+                if ((jl_value_t*)def != di->def) {
+                    record_field_change((jl_value_t*)di, &di->def, (jl_value_t*)def);
+                    jl_queue_for_serialization(s, def);
+                }
+            }
+        }
+    }
+    // remap LineNumberNode files in quoted-AST method roots. Substituting the slots in
+    // place keeps root indices valid for compressed IR. Roots survive strip-metadata, so
+    // map them regardless, but respect a NULL replacement from strip-ir.
+    if (prefix_map_state == PREFIX_MAP_ACTIVE && jl_is_method(v)) {
+        jl_method_t *m = (jl_method_t*)v;
+        jl_array_t *mroots = (jl_array_t*)get_replaceable_field((jl_value_t**)&m->roots, 0);
+        if (mroots) {
+            jl_value_t **roots = jl_array_data(mroots, jl_value_t*);
+            for (size_t i = 0, n = jl_array_nrows(mroots); i < n; i++) {
+                jl_value_t *mapped = maybe_map_build_path_in_ast(roots[i], 0);
+                if (mapped) {
+                    record_field_change((jl_value_t*)mroots->ref.mem, &roots[i], mapped);
+                    jl_queue_for_serialization(s, mapped);
+                }
+            }
+        }
+    }
     if (!recursive) {
 #ifndef NDEBUG
         ptrhash_put(&queued_without_refs, v, v);
@@ -998,6 +1041,13 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                                 while (rle_iter_increment(&rootiter, nroots, rletable, nblocks2)) {
                                     if (rootiter.key == s->worklist_key) {
                                         jl_value_t *newroot = jl_array_ptr_ref(def->roots, rootiter.i);
+                                        // in-image methods never reach the roots remap in
+                                        // jl_insert_into_serialization_queue, so map here
+                                        if (prefix_map_state == PREFIX_MAP_ACTIVE) {
+                                            jl_value_t *mapped = maybe_map_build_path_in_ast(newroot, 0);
+                                            if (mapped)
+                                                newroot = mapped;
+                                        }
                                         jl_queue_for_serialization(s, newroot);
                                         jl_array_ptr_set(newroots, k++, newroot);
                                     }
@@ -1453,7 +1503,7 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     arraylist_push(&s->relocs_list, (void*)backref_id(s, jl_atomic_load_relaxed(&m->bindingkeyset), s->link_ids_relocs));
     newm->file = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, file)));
-    arraylist_push(&s->relocs_list, (void*)backref_id(s, jl_options.strip_metadata ? jl_empty_sym : m->file , s->link_ids_relocs));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, jl_options.strip_metadata ? (jl_value_t*)jl_empty_sym : get_replaceable_field((jl_value_t**)&m->file, 0), s->link_ids_relocs));
     if (jl_options.strip_metadata)
         newm->line = 0;
     newm->usings_backedges = NULL;
@@ -3251,6 +3301,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 #endif
     queueing_done = 0;
     htable_new(&memory_trims, 0);
+    htable_new(&prefix_map_ast_memo, 0);
     // the replacements recorded below are only reachable from these tables
     int en = jl_gc_enable(0);
     if (worklist)
@@ -3322,6 +3373,15 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_get_llvm_gv_inits(native_functions, &num_gvars, NULL);
         arraylist_grow(&gvars, num_gvars);
         jl_get_llvm_gv_inits(native_functions, &num_gvars, gvars.items);
+        // native code references its literals through these slots, bypassing the method
+        // roots, so map them too (the memo gives both the same replacement)
+        if (prefix_map_state == PREFIX_MAP_ACTIVE) {
+            for (size_t gi = 0; gi < num_gvars; gi++) {
+                jl_value_t *mapped = maybe_map_build_path_in_ast((jl_value_t*)gvars.items[gi], 0);
+                if (mapped)
+                    gvars.items[gi] = mapped;
+            }
+        }
         jl_get_llvm_external_fns(native_functions, &num_external_fns, NULL);
         arraylist_grow(&external_fns, num_external_fns);
         jl_get_llvm_external_fns(native_functions, &num_external_fns,
@@ -3662,6 +3722,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     htable_free(&queued_without_refs);
 #endif
     htable_free(&memory_trims);
+    htable_free(&prefix_map_ast_memo);
     htable_free(&serialization_order);
     content_dedup_list = NULL;
     content_dedup_keyset = NULL;
@@ -3721,6 +3782,8 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
                                              jl_array_t *module_init_order)
 {
     JL_TIMING(SYSIMG_DUMP, SYSIMG_DUMP);
+
+    prefix_map_active(); // parse BUILD_PATH_PREFIX_MAP now; a malformed map fails the build
 
     jl_task_t *ct = jl_current_task;
     ios_t *f = (ios_t*)malloc_s(sizeof(ios_t));
