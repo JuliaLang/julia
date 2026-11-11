@@ -6,13 +6,26 @@
 
 # Does not currently handle floating point flags (inexact, div-by-zero, etc).
 
-logb(::Type{Float32},::Val{2})  = 1.4426950408889634
-logb(::Type{Float32},::Val{:ℯ}) = 1.0
-logb(::Type{Float32},::Val{10}) = 0.4342944819032518
-logbU(::Type{Float64},::Val{2})  = 1.4426950408889634
-logbL(::Type{Float64},::Val{2})  = 2.0355273740931033e-17
-logbU(::Type{Float64},::Val{10}) = 0.4342944819032518
-logbL(::Type{Float64},::Val{10}) = 1.098319650216765e-17
+# log_b(ℯ) as hi + lo
+_invlog(::Val{2})  = (1.4426950408889634, 2.0355273740931033e-17)
+_invlog(::Val{10}) = (0.4342944819032518, 1.098319650216765e-17)
+
+# Convert a natural logarithm to base `base`, with one form per precision.
+# Float64: the logarithm is hi + lo
+@inline _log_scale(hi::Float64, lo::Float64, ::Val{:ℯ}) = hi + lo
+@inline function _log_scale(hi::Float64, lo::Float64, base)
+    m_hi, m_lo = _invlog(base)
+    return fma(m_hi, hi, fma(m_hi, lo, m_lo*hi))
+end
+
+# Float32: the logarithm is a Float64
+@inline _log_scale(y::Float64, ::Val{:ℯ}) = y
+@inline _log_scale(y::Float64, base) = _invlog(base)[1] * y
+
+# Float16: the logarithm is k*log(2) + p in Float32
+@inline _log_scale(k::Float32, p::Float32, ::Val{:ℯ}) = muladd(k, 0.6931472f0, p) # log(2)
+@inline _log_scale(k::Float32, p::Float32, ::Val{2}) = muladd(p, Float32(_invlog(Val(2))[1]), k)
+@inline _log_scale(k::Float32, p::Float32, ::Val{10}) = muladd(k, 0.30103f0, p * Float32(_invlog(Val(10))[1])) # log10(2)
 
 @noinline log2(x::Float16)  = _log(x, Val(2),  :log2)
 @noinline log(x::Float16)   = _log(x, Val(:ℯ), :log)
@@ -26,7 +39,7 @@ logbL(::Type{Float64},::Val{10}) = 1.098319650216765e-17
 
 @inline function _log(x::Float64, base, func::Symbol)
     xu = reinterpret(UInt64, x)
-    # x <= 0 (including -0.0), subnormal, +Inf, or NaN
+    # x <= 0, subnormal, +Inf, or NaN
     if xu - 0x0010_0000_0000_0000 >= 0x7fe0_0000_0000_0000
         return _log_special(x, base, func)
     end
@@ -38,44 +51,41 @@ end
     isnan(x) && return NaN
     x == Inf && return x
     x < 0.0 && throw_complex_domainerror(func, x)
-    # x is subnormal: normalize it; the kernel's signed shift handles the exponent field going below zero
+    # subnormal: scale by 2^54 and take 54 back off the exponent
     hi, lo = _log_kernel(reinterpret(UInt64, x * 0x1p54) -% (UInt64(54) << 52))
     return _log_scale(hi, lo, base)
 end
-@inline function _log_scale(hi::Float64, lo::Float64, base)
-    base === Val(:ℯ) && return hi + lo
-    m_hi = logbU(Float64, base)
-    m_lo = logbL(Float64, base)
-    return fma(m_hi, hi, fma(m_hi, lo, m_lo*hi))
-end
 
 @inline function _log(x::Float32, base, func::Symbol)
-    d = Float64(x)
-    # x <= 0 (including -0.0), +Inf, or NaN. Float32 subnormals are normal in Float64, so the kernel
-    # handles them; the test is on `d` since they widen to zero under `set_zero_subnormals(true)`.
-    if reinterpret(UInt64, d) - 0x0010_0000_0000_0000 >= 0x7fe0_0000_0000_0000
-        return _log_special(x, func)
+    # x <= 0, subnormal, +Inf, or NaN
+    if reinterpret(UInt32, x) - 0x0080_0000 >= 0x7f00_0000
+        return _log_special(x, base, func)
     end
-    return Float32(logb(Float32, base) * _log_kernel_f32(d))
+    return Float32(_log_scale(_log_kernel_f32(Float64(x)), base))
 end
-@noinline function _log_special(x::T, func::Symbol) where {T<:Union{Float16,Float32}}
-    x == 0 && return T(-Inf)
-    isnan(x) && return T(NaN)
-    x == Inf && return x
+@noinline function _log_special(x::Float32, base, func::Symbol)
+    x == 0 && return -Inf32 # includes subnormals under `set_zero_subnormals(true)`
+    isnan(x) && return NaN32
+    x == Inf32 && return x
+    x < 0 && throw_complex_domainerror(func, x)
+    # subnormal
+    return Float32(_log_scale(_log_kernel_f32(Float64(x)), base))
+end
+@noinline function _log_special(x::Float16, func::Symbol)
+    x == 0 && return -Inf16
+    isnan(x) && return NaN16
+    x == Inf16 && return x
     throw_complex_domainerror(func, x)
 end
 
-# Float16 needs no table: in Float32, x = 2^k m with m in [sqrt(2)/2, sqrt(2)) and f = m - 1 exact,
-# then log1p(f) from one polynomial.
+# Float16 needs no table: x = 2^k m with m in [sqrt(2)/2, sqrt(2)), then one polynomial in f = m - 1
 @inline function _log_f16_reduce(x::Float32)
     xu = reinterpret(UInt32, x)
     tmp = reinterpret(Int32, xu - 0x3f3504f3) # sqrt(2)/2
     m = reinterpret(Float32, xu - (reinterpret(UInt32, tmp) & 0xff80_0000))
     return tmp >> 23, m - 1f0
 end
-# log1p(f) for f in [sqrt(2)/2 - 1, sqrt(2) - 1], relative error 2^-22.3. The coefficients are the
-# degree 8 polynomial with linear coefficient 1 that minimizes the maximum relative error on that
-# interval, rounded to Float32.
+# log1p(f) on [sqrt(2)/2 - 1, sqrt(2) - 1]: degree 8 minimax fit (relative error 2^-22.3)
 @inline function _log1p_f16_poly(f::Float32)
     f2 = f*f
     f4 = f2*f2
@@ -84,26 +94,21 @@ end
     return muladd(f2, q, f)
 end
 @inline function _log(x::Float16, base, func::Symbol)
-    # x <= 0 (including -0.0), +Inf, or NaN; positive subnormals are normal in Float32
+    # x <= 0, +Inf, or NaN
     if reinterpret(UInt16, x) - 0x0001 >= 0x7bff
         return _log_special(x, func)
     end
     k, f = _log_f16_reduce(Float32(x))
     p = _log1p_f16_poly(f)
-    return Float16(_log_f16_scale(Float32(k), p, base))
+    return Float16(_log_scale(Float32(k), p, base))
 end
-# k*log_b(2) + p*log_b(ℯ), for p = log(m)
-@inline _log_f16_scale(k::Float32, p::Float32, ::Val{:ℯ}) = muladd(k, 0.6931472f0, p) # log(2)
-@inline _log_f16_scale(k::Float32, p::Float32, ::Val{2}) = muladd(p, 1.442695f0, k) # log2(ℯ)
-@inline _log_f16_scale(k::Float32, p::Float32, ::Val{10}) = muladd(k, 0.30103f0, p * 0.4342945f0) # log10(2), log10(ℯ)
 
 
 function log1p(x::Float64)
-    # log1p(x) == x - x^2/2 to within 2^-80 relative; this also keeps the sign of zero. Below, the
-    # correction d would be too large relative to the result for its approximation.
+    # log1p(x) == x - x^2/2 to within 2^-80, and the sign of zero is kept
     abs(x) < 0x1p-40 && return fma(x, -0.5 * x, x)
     s = 1.0 + x
-    # x <= -1, NaN, or +Inf (s is +Inf only for x == Inf)
+    # x <= -1, NaN, or +Inf
     if reinterpret(UInt64, s) - 0x0000_0000_0000_0001 >= 0x7fef_ffff_ffff_ffff
         x == -1.0 && return -Inf
         isnan(x) && return NaN
@@ -112,14 +117,12 @@ function log1p(x::Float64)
     end
     c = ifelse(x > 1.0, 1.0 - (s - x), x - (s - 1.0)) # 1 + x == s + c exactly
     tmp, z, k, invc, logc, logctail = _log_tab_reduce(reinterpret(UInt64, s))
-    # 1 + x == 2^k (z + c*2^-k), so its reduced argument is r + d with d = c*2^-k*invc. 2^-k is formed
-    # as 2^(1-k)/2, since 2^(1-k) is normal for every k here except k == 1024, where it becomes 0 and
-    # c no longer matters.
+    # the reduced argument of 1 + x is r + d, with d = c*2^-k*invc and 2^-k formed as 2^(1-k)/2
     scale2 = reinterpret(Float64, 0x4000000000000000 -% (tmp & 0xfff0000000000000))
     r = fma(z, invc, -1.0)
     d = (c * scale2) * (0.5 * invc)
     hi, lo = _log_tab_finish(k, logc, logctail, r)
-    # log1p(r + d) ≈ log1p(r) + d*(1 - r), keeping d off the polynomial's critical path
+    # log1p(r + d) ≈ log1p(r) + d*(1 - r)
     return hi + (lo + fma(-d, r, d))
 end
 
@@ -132,16 +135,16 @@ function log1p(x::Float32)
     x == Inf32 && return x
     d = Float64(x)
     s = 1.0 + d # exact unless |x| < 2^-29 or x >= 2^53
-    # 1 + x == s + c, so log1p(x) ≈ log(s) + c/s. The correction only matters when s ≈ 1.
+    # 1 + x == s + c, so log1p(x) ≈ log(s) + c/s, which only matters when s ≈ 1
     c = ifelse(s < 2.0, d - (s - 1.0), 0.0)
-    # copysign keeps log1p(-0.0) == -0.0
+    # copysign for log1p(-0.0)
     return copysign(Float32(_log_kernel_f32(s) + c), x)
 end
 
 function log1p(x::Float16)
     xf = Float32(x)
     s = 1f0 + xf # exact unless |x| < 2^-13
-    # x <= -1, NaN, or +Inf (s is +Inf only for x == Inf)
+    # x <= -1, NaN, or +Inf
     if reinterpret(UInt32, s) - 0x0000_0001 >= 0x7f7f_ffff
         x == -1 && return -Inf16
         isnan(x) && return NaN16
@@ -149,10 +152,10 @@ function log1p(x::Float16)
         throw_complex_domainerror_neg1(:log1p, x)
     end
     k, f = _log_f16_reduce(s)
-    # with k == 0, x itself is the reduced argument, which is exact even where s is not
+    # for k == 0 use x itself, which is exact even where s is not
     f = ifelse(k == 0, xf, f)
-    # copysign keeps log1p(-0.0) == -0.0
-    return Float16(copysign(_log_f16_scale(Float32(k), _log1p_f16_poly(f), Val(:ℯ)), xf))
+    # copysign for log1p(-0.0)
+    return Float16(copysign(_log_scale(Float32(k), _log1p_f16_poly(f), Val(:ℯ)), xf))
 end
 
 #function make_compact_table(N)
@@ -307,8 +310,7 @@ const t_log_table_compact = (
     return (reinterpret(Float64, invc), reinterpret(Float64, logc))
 end
 
-# Reduction shared by the logarithms: x = 2^k z with z in [0x1.69555p-1, 0x1.69555p0), and the
-# table entry (1/c, log(c) as a sum of two terms) for the subinterval containing z.
+# x = 2^k z with z in [0x1.69555p-1, 0x1.69555p0), and the table entry (1/c, log(c)) for z
 @inline function _log_tab_reduce(xu::UInt64)
     tmp = reinterpret(Int64, xu -% 0x3fe6955500000000) # 0x1.69555p-1
     z = reinterpret(Float64, xu -% (tmp & 0xfff0000000000000))
@@ -322,15 +324,12 @@ end
 
 # k*log(2) + log(c) + log1p(r) as an unevaluated sum hi + lo, accurate to about 2^-60 relative.
 @inline function _log_tab_finish(k::Float64, logc::Float64, logctail::Float64, r::Float64)
-    # log(2) is split so that the high part has 11 trailing zero bits, which makes k*hi exact
+    # the high part of log(2) has 11 trailing zero bits, so k*hi is exact
     t1 = muladd(k, 0.6931471805598903, logc)
     tl = muladd(k, 5.497923018708371e-14, logctail)
     r2 = r*r
     r4 = r2*r2
-    # log1p(r) - r. The coefficients are the minimax fit (not the Taylor series) from the `poly`
-    # table of ARM's pow_log_data.c, which `_log_ext` also uses, there with -r^3/2 factored out.
-    # Next to 1 the table has c == 1, so there |r| < 0.0053 while the result is about r, which
-    # needs all of degree 8.
+    # log1p(r) - r, with the minimax coefficients of ARM's pow_log_data.c (as in `_log_ext`)
     p = r2 * (muladd(r, 0x1.555555555556p-2, -0.5) +
               r2 * muladd(r, 0x1.999999959554ep-3, -0x1.0000000000006p-2) +
               r4 * muladd(r2, -0x1.0002b8b263fc3p-3, muladd(r, 0x1.2495b9b4845e9p-3, -0x1.555555529a47ap-3)))
@@ -348,8 +347,7 @@ end
 # log(x) for positive normal Float64 x, accurate to about 2^-32 (enough for Float32 results).
 @inline function _log_kernel_f32(x::Float64)
     _, z, k, invc, logc, _ = _log_tab_reduce(reinterpret(UInt64, x))
-    # |r| < 0.0058. No fma is needed: for Float32 x the product z*invc is exact, and for the
-    # Float64 sums that `log1p` passes it is exact wherever r is not negligible next to the result.
+    # |r| < 0.0058, and z*invc is exact wherever r matters, so no fma is needed
     r = muladd(z, invc, -1.0)
     hi = muladd(k, 0.6931471805599453, logc)
     r2 = r*r
@@ -364,9 +362,6 @@ end
 # Copyright (c) 2018-2020, Arm Limited. (which is also MIT licensed)
 # note that this isn't an exact translation as this version compacts the table to reduce cache pressure.
 function _log_ext(xu::UInt64)
-    # x = 2^k z; where z is in range [0x1.69555p-1,0x1.69555p-0) and exact.
-    # The range is split into N subintervals.
-    # The ith subinterval contains z and c is near the center of the interval.
     # log(x) = k*Ln2 + log(c) + log1p(z/c-1).
     _, z, k, invc, logc, logctail = _log_tab_reduce(xu)
     # Note: invc is j/N or j/N/2 where j is an integer in [N,2N) and
