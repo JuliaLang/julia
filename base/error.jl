@@ -71,7 +71,8 @@ exception will continue propagation as if it had not been caught.
     described in [`current_exceptions`](@ref).
 """
 rethrow() = ccall(:jl_rethrow, Bottom, ())
-rethrow(@nospecialize(e)) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
+rethrow(@nospecialize(e); drop_above = 0, drop_below = 0) =
+    ccall(:jl_rethrow_other, Bottom, (Any, Int, Int), e, drop_above, drop_below)
 
 struct InterpreterIP
     code::Union{CodeInfo,Core.MethodInstance,Core.CodeInstance,Nothing}
@@ -125,6 +126,16 @@ function backtrace()
     skip = 1
     bt1, bt2 = ccall(:jl_backtrace_from_here, Ref{SimpleVector}, (Cint, Cint), false, skip)
     return _reformat_bt(bt1::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
+end
+
+# TODO: dedicate some simpler :jl_backtrace_size.
+function tracemark()
+    @noinline
+    skip = 1
+    # HELP: the results I am getting here seem not always consistent
+    # with the backtraces actually processed during `jl_rethrow_other`?
+    bt1, _ = ccall(:jl_backtrace_from_here, Ref{SimpleVector}, (Cint, Cint), false, skip)
+    return length(bt1) # TODO: protect result in opaque struct to disallow arithmetic.
 end
 
 """
