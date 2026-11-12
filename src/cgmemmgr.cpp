@@ -590,11 +590,11 @@ protected:
 #endif
 
 #ifndef _OS_WINDOWS_
-    // It's really important the writeable view of our RX blocks is at an
+    // It's really important the writable view of our RX blocks is at an
     // unpredictable address.  Attackers can't write to our executable pages if
-    // they know only the address of the code, but if we mmap the writeable
+    // they know only the address of the code, but if we mmap the writable
     // view, it is fairly predictable.  We choose a random base where we put all
-    // the writeable views.
+    // the writable views.
     static uintptr_t random_wr_hint() JL_NOTSAFEPOINT
     {
 #if defined(_P64) && !defined(_COMPILER_ASAN_ENABLED_) && \
