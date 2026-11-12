@@ -118,6 +118,10 @@ struct AndCmds <: AbstractCmd
     AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
 end
 
+hash(x::OrCmds, h::UInt) = hash(x.a, hash(x.b, hash(OrCmds, h)))
+==(x::OrCmds, y::OrCmds) = x.a == y.a && x.b == y.b
+hash(x::ErrOrCmds, h::UInt) = hash(x.a, hash(x.b, hash(ErrOrCmds, h)))
+==(x::ErrOrCmds, y::ErrOrCmds) = x.a == y.a && x.b == y.b
 hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
 ==(x::AndCmds, y::AndCmds) = x.a == y.a && x.b == y.b
 
@@ -268,6 +272,9 @@ struct CmdRedirect <: AbstractCmd
     readable::Bool
 end
 CmdRedirect(cmd, handle, stream_no) = CmdRedirect(cmd, handle, stream_no, stream_no == STDIN_NO)
+hash(x::CmdRedirect, h::UInt) = hash(x.cmd, hash(x.handle, hash(x.stream_no, hash(x.readable, h))))
+==(x::CmdRedirect, y::CmdRedirect) = x.cmd == y.cmd && x.handle == y.handle &&
+                                     x.stream_no == y.stream_no && x.readable == y.readable
 
 function show(io::IO, cr::CmdRedirect)
     _show_as_backticks(io, cr) && return

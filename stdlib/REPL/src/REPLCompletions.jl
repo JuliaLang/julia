@@ -1378,7 +1378,7 @@ function shell_completions(str, pos, hint::Bool=false; escape_backticks::Bool=fa
     # First parse everything up to the current position
     scs = str[1:pos]
     args, last_arg_start = try
-        Base.shell_parse(scs, true)::Tuple{Expr,Int}
+        Base.shell_parse(scs, true; partial=true)::Tuple{Expr,Int}
     catch ex
         ex isa ArgumentError || ex isa ErrorException || rethrow()
         return Completion[], 1:0, false

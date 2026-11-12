@@ -1150,6 +1150,13 @@ let s, c, r
     @test r == 1:4
     @test s[r] == "/tmp"
 
+    # After a pipe or a redirection, the command being typed is completed.
+    for s in ("echo hi | cat /t", "echo hi > /t", "cat </t", "echo hi 2>>/t")
+        c,r = test_scomplete(s)
+        @test "/tmp/" in c
+        @test s[r] == "/t"
+    end
+
     # This should match things that are inside the tmp directory
     s = tempdir()
     if !endswith(s, "/")
