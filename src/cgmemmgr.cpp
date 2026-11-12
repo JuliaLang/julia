@@ -735,12 +735,6 @@ public:
         if (alloc.sz == 0)
             return;
 
-        // Note: on some aarch64 platforms, like Apple CPUs, we need read
-        // permission in order to invalidate instruction cache lines.  We are
-        // not guaranteed to have read permission on the wr_addr when using
-        // DualMapAllocator.
-        sys::Memory::InvalidateInstructionCache(alloc.rt_addr, alloc.sz);
-
         if (rx_block.in_block(alloc)) {
             rx_mapper->finalize(rx_block, alloc);
         }
@@ -754,6 +748,12 @@ public:
                 completed.erase(it);
             }
         }
+
+        // Note: on some aarch64 platforms, like Apple CPUs, we need read
+        // permission in order to invalidate instruction cache lines.  We are
+        // not guaranteed to have read permission on the wr_addr when using
+        // DualMapAllocator.
+        sys::Memory::InvalidateInstructionCache(alloc.rt_addr, alloc.sz);
     }
 
 protected:
