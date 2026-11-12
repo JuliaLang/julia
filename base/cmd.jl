@@ -681,6 +681,46 @@ function arg_gen(head, tail...)
     return vals
 end
 
+# Escape the characters that a glob would treat as special, so that the text is matched
+# literally: `*`, `?` and `[`, and on Unix, where it is the escape character, `\`. Bracket
+# expressions such as `[*]` are used instead of backslashes, which are path separators on
+# Windows.
+function glob_escape(s::AbstractString)
+    any(c -> c in "*?[\\", s) || return String(s)
+    io = IOBuffer()
+    for c in s
+        if c in "*?[" || (c == '\\' && !Sys.iswindows())
+            print(io, '[', c, ']')
+        else
+            print(io, c)
+        end
+    end
+    return String(take!(io))
+end
+
+# The text an interpolated value adds to a glob, escaped: one string for each argument it
+# would produce on its own.
+cmd_glob_escape(x) = map(glob_escape, arg_gen(x))
+
+# Expand the glob patterns a word in a command produces, by calling the `cmd_glob` function
+# visible in the module `mod` where the command appears with each pattern split into path
+# components. Each pattern must match at least one path.
+function cmd_glob_expand(mod::Module, patterns::Vector{String})
+    isdefined(mod, :cmd_glob) || error("an unquoted `*`, `?` or `[` in a command is a glob, ",
+        "which needs a `cmd_glob` function, such as the one the Glob package provides with ",
+        "`using Glob`; quote the character to use it literally")
+    f = getglobal(mod, :cmd_glob)
+    args = String[]
+    for pattern in patterns
+        paths = f(splitpath(pattern))
+        isempty(paths) && error("no files match the glob `$pattern` in a command")
+        for path in paths
+            push!(args, cmd_interpolate(path))
+        end
+    end
+    return args
+end
+
 function cmd_gen(parsed)
     args = String[]
     if length(parsed) >= 1 && isa(parsed[1], Tuple{Cmd})
