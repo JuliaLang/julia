@@ -9536,6 +9536,23 @@ struct S{T} <: A{B{S{T}}} end
 end
 @test_throws "circular type parameter constraint" SuperSeesItself.S{Int}
 
+# A type cached while another one is being built, and which mentions it, is
+# cached only once that one is complete: a failed construction leaves nothing
+# behind that mentions the type it did not make
+module OrphanInProgress
+abstract type A{X, Y} end
+abstract type B{X<:Integer} end
+struct K{T} <: A{Vector{K{T}}, B{T}} end
+end
+let K = OrphanInProgress.K
+    @test_throws TypeError K{String}
+    @test_throws TypeError K{String}
+    tn = Array.body.body.name
+    @test !any(t -> t isa DataType && any(p -> p isa DataType && p.name === K.body.name, t.parameters),
+               [tn.cache..., tn.linearcache...])
+    @test supertype(K{Int}).parameters[1] === Vector{K{Int}}
+end
+
 # Method tables and dispatch caches keep their entries in insertion-ordered dicts that
 # grow by appending. Every entry must stay reachable as a dict grows through many sizes.
 module OrderedDictGrowth
