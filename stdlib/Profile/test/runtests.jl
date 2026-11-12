@@ -631,6 +631,7 @@ end
 end
 
 include("allocs.jl")
+include("dispatch.jl")
 
 @testset "Docstrings" begin
     undoc = Docs.undocumented_names(Profile)

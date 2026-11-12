@@ -267,6 +267,9 @@ typedef struct _jl_tls_states_t {
 #define JL_SIGNAL_REQ_PREEMPT 0x02
 #define JL_SIGNAL_REQ_ABANDON 0x04
     _Atomic(uint8_t) signal_request_flags;
+    // How the last slow dispatch on this thread found its target, for the
+    // dispatch profiler (JL_DISPATCH_PATH_*); reset when it is recorded.
+    uint8_t dispatch_profile_path;
     // (vestigial: this let the old sigint force-throw be raised
     // asynchronously during synchronous IO; nothing reads it anymore)
     volatile sig_atomic_t io_wait;
