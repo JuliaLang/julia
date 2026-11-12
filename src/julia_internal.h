@@ -1103,6 +1103,14 @@ JL_DLLEXPORT int jl_get_binding_partition_boundp(jl_binding_partition_t *bpart) 
 JL_DLLEXPORT jl_value_t *jl_get_binding_partition_leaf_value(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_leaf_partition_depwarn(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_leaf_binding_partition(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT, size_t world, int depwarn) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
+jl_value_t *jl_apply_generic_site(jl_value_t *F, jl_value_t **args, uint32_t nargs, uint32_t callsite) JL_CANSAFEPOINT;
+jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t nargs,
+                                    jl_genericmemory_t *sites, size_t i, uint32_t callsite,
+                                    size_t world) JL_CANSAFEPOINT;
+// the interpreter's dispatch caches, by the code they are for (see interpreter.c)
+extern jl_genericmemory_t *jl_interp_call_sites JL_GLOBALLY_ROOTED;
+extern jl_mutex_t jl_interp_call_sites_lock;
+jl_value_t *jl_get_globalref_const_quiet(jl_globalref_t *gr JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,

@@ -4489,7 +4489,7 @@ void jl_init_types(void) JL_GC_DISABLED
     assert(jl_datatype_size(jl_unionall_type) == sizeof(jl_unionall_t));
 
     // types whose instances hold data that their Julia-visible fields do not describe
-    jl_method_type->name->hiddenfields = 1; // writelock
+    jl_method_type->name->hiddenfields = 1; // writelock, interp_sites
     jl_task_type->name->hiddenfields = 1; // stack, context, gcstack, ...
     jl_unionall_type->name->hiddenfields = 1; // flags
     jl_cancel_source_type->name->hiddenfields = 1; // trailing parent links

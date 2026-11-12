@@ -1829,6 +1829,21 @@ jl_value_t *jl_get_globalref_value(jl_globalref_t *gr, size_t world)
     return jl_get_binding_value_depwarn(b, world);
 }
 
+// The value of `gr` in `world` if it is a constant whose reading cannot warn about a
+// deprecation, else NULL: a value a reader can keep for that world.
+jl_value_t *jl_get_globalref_const_quiet(jl_globalref_t *gr, size_t world)
+{
+    jl_binding_t *b = gr->binding;
+    if (!b)
+        b = jl_get_module_binding(gr->mod, gr->name, 1);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+    int depwarn = 0;
+    jl_walk_binding_inplace_depwarn(&b, &bpart, world, PARTITION_FLAG_DEPWARN, &depwarn, 0);
+    if (depwarn || !jl_bkind_is_real_constant(jl_binding_kind(bpart)))
+        return NULL;
+    return bpart->restriction;
+}
+
 // get the value (or null) in the world
 jl_value_t *jl_get_global_value(jl_module_t *m, jl_sym_t *var, size_t world)
 {
