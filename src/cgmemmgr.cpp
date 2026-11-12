@@ -607,10 +607,9 @@ class SelfMemMapper : public ROBlockMapper {
 public:
     static std::unique_ptr<ROBlockMapper> Create() JL_NOTSAFEPOINT
     {
-        int fd = get_self_mem_fd();
-        if (fd == -1)
+        if (get_self_mem_fd() == -1)
             return {};
-        return std::unique_ptr<ROBlockMapper>(new SelfMemMapper(fd));
+        return std::unique_ptr<ROBlockMapper>(new SelfMemMapper());
     }
 
     SplitPtrBlock map(uintptr_t addr, size_t size) override
@@ -651,10 +650,7 @@ public:
     void cleanup(SplitPtrBlock &block) override {}
 
 protected:
-    SelfMemMapper(int self_fd) JL_NOTSAFEPOINT : self_fd(self_fd) {}
-
-private:
-    int self_fd;
+    SelfMemMapper() JL_NOTSAFEPOINT = default;
 };
 #endif // _OS_LINUX_
 
