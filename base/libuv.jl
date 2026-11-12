@@ -124,6 +124,12 @@ function uv_unref(h::Ptr{Cvoid})
     iolock_end()
 end
 
+function uv_ref(h::Ptr{Cvoid})
+    iolock_begin()
+    ccall(:uv_ref, Cvoid, (Ptr{Cvoid},), h)
+    iolock_end()
+end
+
 function process_events()
     return ccall(:jl_process_events, Int32, ())
 end

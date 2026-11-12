@@ -671,6 +671,12 @@ end
     t = Timer(1.0, interval = 0.5)
     @test t.timeout == 1.0
     @test t.interval == 0.5
+    has_ref(t) = ccall(:uv_has_ref, Cint, (Ptr{Cvoid},), t.handle) != 0
+    @test has_ref(t)
+    Base.uv_unref(t.handle)
+    @test !has_ref(t)
+    Base.uv_ref(t.handle)
+    @test has_ref(t)
     close(t)
     @test !isopen(t)
     @test t.timeout == 1.0
