@@ -985,6 +985,7 @@ function occursin(delim::UInt8, buf::GenericIOBuffer)
 end
 
 function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
+    io.readable || _throw_not_readable()
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
@@ -1040,6 +1041,7 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false)
 end
 
 function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false)
+    io.readable || _throw_not_readable()
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
