@@ -430,6 +430,7 @@ end
     @test convert(Bool, BigFloat(0.0)) == false
     @test convert(Bool, BigFloat(1.0)) == true
     @test_throws InexactError convert(Bool, BigFloat(0.1))
+    @test Rational{BigInt}(BigFloat(3//2 + 1//big(2)^301, precision=1000)) == 3//2 + 1//big(2)^301
 
     @test signbit(Float64(BigFloat(NaN))) == 0
     @test signbit(Float64(-BigFloat(NaN))) == 1
@@ -569,6 +570,11 @@ end
 
     @test !isequal(BigFloat(0.0),BigFloat(-0.0))
     @test isequal(z, BigFloat(NaN))
+    v = BigFloat(big(2)^300 + 1, precision=301)
+    @test v == (big(2)^300 + 1)//1
+    @test v != big(2)^300//1
+    @test BigFloat((big(2)^300 + 1)//2, precision=301) == (big(2)^300 + 1)//2
+    @test !isequal(BigFloat(3//2 + 1//big(2)^301, precision=1000), 3//2)
 
     # total ordering
     @test isless(big(-0.0), big(0.0))
