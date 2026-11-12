@@ -188,6 +188,10 @@ uintptr_t map_rw(uintptr_t addr, size_t size)
     // MemExtendedParameterAddressRequirements.
     return 0;
 #else
+    // The range covers the whole address space, so any address will do.
+    if (range_bits >= (int)(8 * sizeof(uintptr_t)))
+        return map_reserve(size);
+
     size_t half_range = (size_t)1 << (range_bits - 1);
     uintptr_t lo = target + target_size - half_range;
     uintptr_t hi = target + half_range - size;
@@ -195,7 +199,7 @@ uintptr_t map_rw(uintptr_t addr, size_t size)
     if (lo >= target || hi < target + target_size)
         return map_reserve(size);
 
-    auto inrange = [=](uintptr_t addr) { return addr >= lo && addr < hi; };
+    auto inrange = [=](uintptr_t addr) { return addr >= lo && addr <= hi; };
     uint64_t seed = target ^ 0xdeadbeefdeadbeef;
     uintptr_t hint = target + target_size;
     for (int i = 0; i < 10; ++i) {
