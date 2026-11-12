@@ -3497,9 +3497,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         write_section(f, payload_start, &h.fixup_types, &fixup_types, "fixup_types");
         write_section(f, payload_start, &h.fixup_objs, &fixup_objs, "fixup_objs");
         write_section(f, payload_start, &h.fptrs, &fptr_record, "fptrs");
-        ios_seek(f, JI_SECTIONS_OFFSET);
-        ios_write(f, (const char*)&h, sizeof(h));
-        ios_seek_end(f);
+        ((jl_ji_header_t*)f->buf)->sections = h;
     }
 
     assert(object_worklist.len == 0);
@@ -3701,13 +3699,11 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
         payload_end = ios_pos(f);
     }
 
-    ios_seek(f, JI_CHECKSUM_OFFSET);
-    write_uint32(f, checksum);
-    ios_seek(f, JI_PREFERRED_BASE_OFFSET);
-    write_uint64(f, preferred_base);
-    write_uint64(f, payload_start);
-    write_uint64(f, payload_end - payload_start);
-    ios_seek(f, payload_end);
+    jl_ji_header_t *header = (jl_ji_header_t*)f->buf;
+    header->checksum = checksum;
+    header->preferred_base = preferred_base;
+    header->payload_start = payload_start;
+    header->payload_size = payload_end - payload_start;
 
     destroy_query_cache(&query_cache);
 
@@ -4295,7 +4291,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     // step 1: read the section table
     assert(ios_pos(f) == 0 && f->bm == bm_mem);
     jl_image_sections_t h;
-    memcpy(&h, f->buf + JI_SECTIONS_OFFSET, sizeof(h));
+    memcpy(&h, f->buf + offsetof(jl_ji_header_t, sections), sizeof(h));
     size_t nwords = bitmap_nwords(h.pointer_free_offset);
     char *image_base = heap;
     size_t sizeof_sysimg = h.heap_size;
@@ -4634,7 +4630,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, const jl_image_buf_t *buf, j
                                  flags & JI_FLAG_PKGIMAGE ? "pkgimage" : "system image");
 
     if (depmods) {
-        ios_seek(f, JI_HEADER_SIZE);
+        ios_seek(f, sizeof(jl_ji_header_t));
         // Syntax version mismatch is not fatal to load
         if (!jl_match_cache_flags_current(read_uint8(f)))
             return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
@@ -4792,7 +4788,7 @@ int jl_adopt_image_constants(jl_image_buf_t buf) JL_CANSAFEPOINT
     size_t i, n = sizeof(jl_image_specials) / sizeof(jl_image_specials[0]);
     if (!buf.heap)
         return 0;
-    memcpy(&h, buf.data + JI_SECTIONS_OFFSET, sizeof(h));
+    memcpy(&h, buf.data + offsetof(jl_ji_header_t, sections), sizeof(h));
     const uintptr_t *specials = (const uintptr_t*)image_section(buf.loader, &h, h.specials);
     for (i = 0; i < n; i++) {
         if (jl_image_specials[i] == &jl_nothing)
