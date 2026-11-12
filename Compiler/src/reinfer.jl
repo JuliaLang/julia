@@ -364,6 +364,39 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                 recursive_index += 1
 
                 if edge isa CodeInstance
+                    max_valid2 = edge.max_world
+                    if max_valid2 ≠ WORLD_AGE_REVALIDATION_SENTINEL
+                        # This callee is already validated, like most (those of the images loaded
+                        # before this one): fold its range into this one's here, as
+                        # `:return_to_parent` would after a child state that returns it at once.
+                        min_valid2 = edge.min_world
+                        result = workspace.result_states[current_depth]
+                        minworld, maxworld = result.result_minworld, result.result_maxworld
+                        if min_valid2 ≤ minworld ≤ max_valid2 && maxworld ≤ max_valid2
+                            continue # it constrains nothing
+                        end
+                        cause = work.cause
+                        if minworld < min_valid2
+                            minworld = min_valid2
+                        end
+                        if minworld > max_valid2
+                            max_valid2 = 0
+                        end
+                        if maxworld > max_valid2
+                            cause = edge
+                            maxworld = max_valid2
+                        end
+                        workspace.result_states[current_depth] = VerifyMethodResultState(result.child_cycle, minworld, maxworld)
+                        if max_valid2 == 0
+                            # found what we were looking for, so terminate early
+                            work = VerifyMethodWorkState(work.depth, cause, recursive_index, :cleanup)
+                            workspace.work_states[current_depth] = work
+                            found_child = true
+                            break
+                        end
+                        work = VerifyMethodWorkState(work.depth, cause, recursive_index, :recursive_phase)
+                        continue
+                    end
                     # Create child state and add to stack
                     workspace.work_states[current_depth] = VerifyMethodWorkState(work.depth, work.cause, recursive_index, :recursive_phase)
                     push!(workspace.initial_states, VerifyMethodInitialState(edge))
