@@ -494,6 +494,11 @@ typedef struct JL_GC_TRACKED_TYPE _jl_method_t {
     // forcing the conclusion to always true.
     _jl_purity_overrides_t purity;
 
+    // `nothing`, or a flat svec of (argpos, trait, bound) triples: the method only
+    // applies if the label `trait` gives the type of argument `argpos` is a
+    // subtype of `bound` (see doc/src/devdocs/traits.md)
+    jl_value_t *guards;
+
 // hidden fields:
     jl_mutex_t writelock;
 } jl_method_t;
@@ -686,6 +691,7 @@ typedef struct JL_GC_TRACKED_TYPE {
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
     uint8_t constprop_heustic; // override for inference's constprop heuristic
     uint8_t concrete_only; // Bool: inference refuses to commit (records no backedge) at non-concrete call sites
+    _Atomic(uint8_t) trait_flags; // JL_TN_GUARDED | JL_TN_CONSULTED (see "traits" in gf.c)
 } jl_typename_t;
 
 typedef struct JL_GC_TRACKED_TYPE {
@@ -1074,6 +1080,27 @@ typedef struct JL_GC_TRACKED_TYPE _jl_typemap_level_t {
     // finally, start a new level if the type at offs is Any
     _Atomic(jl_typemap_t*) any;
 } jl_typemap_level_t;
+
+// A trait gives every type a label, a concrete subtype of `top` (Core.Trait)
+typedef struct JL_GC_TRACKED_TYPE _jl_trait_t {
+    JL_DATA_TYPE
+    jl_sym_t *name;
+    struct _jl_module_t *module;
+    jl_value_t *top;
+    jl_value_t *dflt; // the label of type families without an entry
+    // IdDict of TypeName => flat svec of (kind, value, module, min_world, max_world)
+    // records, replaced copy-on-write under world_counter_lock
+    _Atomic(jl_genericmemory_t*) entries;
+} jl_trait_t;
+
+// An argument declared with type `typ` whose `trait` label must be a subtype of
+// `bound`; only appears in the argument types of a method definition (Core.Guard)
+typedef struct JL_GC_TRACKED_TYPE _jl_guard_t {
+    JL_DATA_TYPE
+    jl_value_t *typ;
+    jl_trait_t *trait;
+    jl_value_t *bound;
+} jl_guard_t;
 
 typedef struct JL_GC_TRACKED_TYPE _jl_methcache_t {
     JL_DATA_TYPE

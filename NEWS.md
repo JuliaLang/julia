@@ -4,6 +4,11 @@ Julia v1.15 Release Notes
 New language features
 ---------------------
 
+* Experimental support for dispatching on *traits*: `Base.Experimental.@trait` declares a table
+  that gives every type a label, which array wrappers can inherit from the type they wrap, and
+  `Base.Experimental.@guarded` defines a method that only applies to arguments with a given
+  label ([#63828]).
+
 Language changes
 ----------------
 

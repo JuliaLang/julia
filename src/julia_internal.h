@@ -1141,6 +1141,21 @@ JL_DLLEXPORT jl_methcache_t *jl_method_get_cache(
 
 JL_DLLEXPORT int jl_pointer_egal(jl_value_t *t);
 JL_DLLEXPORT jl_value_t *jl_nth_slot_type(jl_value_t *sig JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+// traits and guarded methods (see gf.c)
+#define JL_TN_GUARDED         1 // on the type family of a function: some method of it has guards,
+#define JL_TN_GUARDED_SUBTYPE 2 // or some method of it or of a subtype has
+#define JL_TN_CONSULTED       4 // on a type family: a lookup depended on its entry in a trait table
+extern jl_array_t *jl_output_traits JL_GLOBALLY_ROOTED;
+jl_typename_t *jl_guarded_function_typename(jl_value_t *sig JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+void jl_method_guards_activated(jl_method_t *method) JL_NOTSAFEPOINT;
+jl_array_t *jl_trait_prepare_serialization(void) JL_CANSAFEPOINT;
+void jl_trait_activate_entries(jl_array_t *ext, size_t world, const char *pkgname) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_sig_may_have_guards(jl_value_t *sig) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_trait_t *jl_new_trait(jl_sym_t *name, jl_module_t *module, jl_value_t *top, jl_value_t *dflt) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_trait_set_entry(jl_trait_t *trait, jl_value_t *T, int kind, jl_value_t *value, jl_module_t *module) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_trait_label(jl_trait_t *trait, jl_value_t *T, size_t world) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_trait_region(jl_trait_t *trait, jl_value_t *sig, size_t pos, size_t world) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_method_morespecific_guarded(jl_method_t *a, jl_method_t *b) JL_CANSAFEPOINT;
 void jl_compute_field_offsets(jl_datatype_t *st) JL_CANSAFEPOINT;
 void jl_check_valid_supertype(jl_value_t *super, const char *type_name) JL_CANSAFEPOINT;
 void jl_check_field_types(jl_svec_t *ftypes, jl_sym_t *type_name);

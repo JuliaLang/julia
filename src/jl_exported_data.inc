@@ -54,6 +54,7 @@
     XX(binding_type, jl_datatype_t*) \
     XX(binding_partition_type, jl_datatype_t*) \
     XX(globalref_type, jl_datatype_t*) \
+    XX(guard_type, jl_datatype_t*) \
     XX(gotoifnot_type, jl_datatype_t*) \
     XX(enternode_type, jl_datatype_t*) \
     XX(gotonode_type, jl_datatype_t*) \
@@ -127,6 +128,7 @@
     XX(symbol_type, jl_datatype_t*) \
     XX(task_type, jl_datatype_t*) \
     XX(top_module, jl_module_t*) \
+    XX(trait_type, jl_datatype_t*) \
     XX(trimfailure_type, jl_datatype_t*) \
     XX(tuple_typename, jl_typename_t*) \
     XX(tvar_type, jl_datatype_t*) \

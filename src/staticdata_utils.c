@@ -921,6 +921,8 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *records, jl_ar
         else if (jl_is_method(obj)) {
             jl_method_t *m = (jl_method_t*)obj;
             assert(jl_atomic_load_relaxed(&m->primary_world) == ~(size_t)0);
+            if (m->guards != jl_nothing)
+                jl_method_guards_activated(m); // the supertypes of its function are in other images
             jl_atomic_store_release(&m->primary_world, world);
         }
         else if (jl_is_code_instance(obj)) {

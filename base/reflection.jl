@@ -1192,6 +1192,47 @@ function bodyfunction(basemethod::Method; world::UInt=get_world_counter())
     return nothing
 end
 
+# The bound `m` places on the label `trait` gives its argument `pos` (`Any` if it has no
+# such guard), see `Base.Experimental.@guarded`.
+function guard_bound(m::Method, pos::Int, trait::Core.Trait)
+    g = m.guards
+    g === nothing && return Any
+    for i = 1:3:length(g)
+        g[i] === pos && g[i+1] === trait && return g[i+2]
+    end
+    return Any
+end
+
+# `isambiguous` on the intersection `ti` of the signatures of two methods, if a guarded method
+# matches it. Both methods apply where, for each guard, the label of the argument is in the
+# bounds of both. They are ambiguous if such labels exist and, of the methods that apply to
+# all those calls, none is more specific than every other. Methods that only apply to some
+# of those calls are not considered.
+function isambiguous_guarded(m1::Method, m2::Method, @nospecialize(ti), world::UInt)
+    region(pos, trait) = ccall(:jl_trait_region, Any, (Any, Any, Int, UInt), trait, ti, pos, world)
+    # the labels of an argument for which both methods apply, per guard `(pos, trait)`
+    labels = IdDict{Any,Any}()
+    for m in (m1, m2), i = 1:3:length(something(m.guards, ()))
+        pos, trait = m.guards[i]::Int, m.guards[i+1]::Core.Trait
+        l = get!(labels, (pos, trait)) do
+            typeintersect(region(pos, trait),
+                          typeintersect(guard_bound(m1, pos, trait), guard_bound(m2, pos, trait)))
+        end
+        l === Bottom && return false
+    end
+    candidates = Method[m1, m2]
+    for match in _methods_by_ftype(ti, -1, world)::Vector{Any}
+        m = (match::Core.MethodMatch).method
+        (m === m1 || m === m2 || !(ti <: m.sig)) && continue
+        g = something(m.guards, ())
+        all(1:3:length(g)) do i
+            pos, trait = g[i]::Int, g[i+1]::Core.Trait
+            get(() -> region(pos, trait), labels, (pos, trait)) <: g[i+2]
+        end && push!(candidates, m)
+    end
+    return !any(w -> all(m -> m === w || morespecific(w, m), candidates), candidates)
+end
+
 """
     Base.isambiguous(m1, m2; ambiguous_bottom=false)::Bool
 
@@ -1290,6 +1331,12 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         else
             return false # report that the type system failed to decide if it was ambiguous by saying they definitely are not
         end
+    end
+    if ccall(:jl_sig_may_have_guards, Cint, (Any,), ti) != 0 &&
+            any(m -> (m::Core.MethodMatch).method.guards !== nothing, _methods_by_ftype(ti, -1, get_world_counter())::Vector{Any})
+        # the method matcher does not order matches that include a guarded method
+        !ambiguous_bottom && has_bottom_parameter(ti) && return false
+        return isambiguous_guarded(m1, m2, ti, get_world_counter())
     end
     inner(ti) || return false
     # otherwise type-intersection reported an ambiguity we couldn't solve
