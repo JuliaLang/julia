@@ -461,7 +461,7 @@ struct Block {
 
     bool in_block(const Allocation &a)
     {
-        return a.rt_addr >= ptr && a.rt_addr < ptr + total;
+        return a.rt_addr >= ptr && a.rt_addr < ptr + (total - avail);
     }
 };
 
