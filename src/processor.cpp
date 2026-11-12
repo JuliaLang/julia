@@ -39,7 +39,6 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Processor);
     jl_image_t res{};
-    res.is_split = image.is_split;
     res.coverage = image.coverage;
 
     if (image.kind != JL_IMAGE_KIND_SO)
