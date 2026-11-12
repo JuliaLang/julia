@@ -4700,10 +4700,14 @@ jl_value_t *jl_gc_permobj(jl_ptls_t _ptls, size_t sz, void *ty, unsigned align) 
         align = ((sz == 0) ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
                                                  sizeof(void*) * 2 : 16));
     }
-    jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0, align,
-                                                              sizeof(void*) % align);
-    jl_value_t* v = jl_valueof(o);
-    jl_set_typeof(v, (void*)(((uintptr_t)(ty) | GC_OLD_MARKED)));
+    // like an image object, a mutable one keeps its `objectid` in the word before its header
+    jl_datatype_t *dt = (jl_datatype_t*)ty;
+    size_t idsz = dt && jl_is_datatype(dt) && dt->name && dt->name->mutabl ? sizeof(void*) : 0;
+    char *p = (char*)jl_gc_perm_alloc(allocsz + idsz, 0, align, (idsz + sizeof(void*)) % align);
+    jl_value_t *v = jl_valueof(p + idsz);
+    if (idsz)
+        ((uintptr_t*)v)[-2] = inthash((uintptr_t)v);
+    jl_set_typeof(v, (void*)(((uintptr_t)(ty) | GC_PERM_BITS)));
     return v;
 }
 

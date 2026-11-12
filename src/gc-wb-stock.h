@@ -17,9 +17,10 @@ JL_DLLEXPORT void jl_gc_multi_wb_cold(const struct _jl_value_t *parent, void *de
                                         struct _jl_datatype_t *dt) JL_NOTSAFEPOINT;
 
 // Whether storing `ptr` into `parent`, an old object not in the remset, must put `parent` in the
-// remset. Image objects are never freed and marking does not trace through them, so an edge to one
-// never needs remembering; any other edge does if `ptr` is young or `parent` is an image object not
-// yet in the `image_remset`. Codegen's inline barrier (`FinalLowerGC::lowerWriteBarrier`) mirrors this.
+// remset. Permanent objects (with the `GC_IN_IMAGE` bit: image objects and those from `jl_gc_permobj`)
+// are never freed and marking does not trace through them, so an edge to one never needs remembering;
+// any other edge does if `ptr` is young or `parent` is permanent but not yet in the `image_remset`.
+// Codegen's inline barrier (`FinalLowerGC::lowerWriteBarrier`) mirrors this.
 // Only `jl_gc_wb_object`, whose callers store no object to check, remembers `parent` regardless.
 STATIC_INLINE int jl_gc_wb_must_remember(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
