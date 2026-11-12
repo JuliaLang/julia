@@ -1926,10 +1926,9 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
         assert(!isatomic);
         size_t fsz = jl_field_size(st, i);
         uint8_t sel = ((uint8_t*)v)[offs + fsz - 1];
-        ty = jl_nth_union_component(ty, sel);
-        jl_value_t *layout_ty = normalize_typeofbottom_layout_alias(ty);
-        if (jl_is_datatype_singleton((jl_datatype_t*)layout_ty))
-            return ((jl_datatype_t*)layout_ty)->instance;
+        ty = jl_nth_union_layout_component(ty, sel);
+        if (jl_is_datatype_singleton((jl_datatype_t*)ty))
+            return ((jl_datatype_t*)ty)->instance;
     }
     jl_value_t *layout_ty = normalize_typeofbottom_layout_alias(ty);
     jl_value_t *r;
@@ -2061,7 +2060,7 @@ inline jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t 
             unlock(v, parent, needlock, isatomic);
         }
         else {
-            r = jl_new_bits(isunion ? normalize_typeofbottom_layout_alias(jl_nth_union_component(ty, *psel)) : layout_ty, v);
+            r = jl_new_bits(isunion ? jl_nth_union_layout_component(ty, *psel) : layout_ty, v);
             if (isunion) {
                 unsigned nth = 0;
                 if (!jl_find_union_component(ty, rty, &nth))
@@ -2152,7 +2151,7 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
     JL_GC_PUSHARGS(args, 2);
     while (1) {
         jl_value_t *r;
-        jl_value_t *rty = isunion ? normalize_typeofbottom_layout_alias(jl_nth_union_component(ty, *psel)) : layout_ty;
+        jl_value_t *rty = isunion ? jl_nth_union_layout_component(ty, *psel) : layout_ty;
         size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the initial copy
         int needlock = (isatomic && fsz > MAX_ATOMIC_SIZE);
         if (isatomic && !needlock) {
@@ -2194,7 +2193,7 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
                 success = jl_egal__bits((jl_value_t*)px, r, (jl_datatype_t*)rty);
             if (success) {
                 if (isunion) {
-                    success = (rty == normalize_typeofbottom_layout_alias(jl_nth_union_component(ty, *psel)));
+                    success = (rty == jl_nth_union_layout_component(ty, *psel));
                     if (success) {
                         unsigned nth = 0;
                         if (!jl_find_union_component(ty, yty, &nth))
@@ -2299,7 +2298,7 @@ inline jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value
     else {
         char *px = lock(p, parent, needlock, isatomic);
         if (isunion)
-            rty = normalize_typeofbottom_layout_alias(jl_nth_union_component(rty, *psel));
+            rty = jl_nth_union_layout_component(rty, *psel);
         size_t rsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the compare
         memcpy((char*)r, px, rsz); // copy field // TODO: make this a memmove_refs if relevant
         if (isunion)

@@ -1319,6 +1319,14 @@ STATIC_INLINE jl_value_t *normalize_typeofbottom_layout_alias(jl_value_t *ty JL_
     return ty;
 }
 
+// The member of an isbits union `ty` that selector byte `sel` picks, in the normalized
+// form that carries its layout. Every read of an inline union value must use this, not
+// `jl_nth_union_component`, which returns the declared member.
+STATIC_INLINE jl_value_t *jl_nth_union_layout_component(jl_value_t *ty JL_PROPAGATES_ROOT, uint8_t sel) JL_NOTSAFEPOINT
+{
+    return normalize_typeofbottom_layout_alias(jl_nth_union_component(ty, sel));
+}
+
 STATIC_INLINE size_t jl_vararg_length(jl_value_t *v) JL_NOTSAFEPOINT
 {
     assert(jl_is_vararg(v));
