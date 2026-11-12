@@ -198,6 +198,8 @@ const JULIA_PROMPT = "julia> "
 const PKG_PROMPT = "pkg> "
 const SHELL_PROMPT = "shell> "
 const HELP_PROMPT = "help?> "
+# Printed by `LineEdit.prompt!` right after it puts the terminal back in raw mode
+const BRACKETED_PASTE_ON = "\e[?2004h"
 
 # Printing the current state
 let
@@ -368,6 +370,12 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
                     readuntil(output_copy, "\n")
                     # wait for the next prompt-like to appear
                     readuntil(output_copy, "\n")
+                    # A committed line makes the REPL re-enter `prompt!`, which enables bracketed paste
+                    # right after raw mode (and after both newlines above). Wait for it to skip prompt-like
+                    # output, e.g. the `julia> ` examples in the `reinterpret` docstring, and to not type
+                    # into a cooked-mode terminal, where `^C` discards the input. `^C` lines stay in
+                    # `prompt!` and produce no new marker.
+                    endswith(l, CTRL_C) || readuntil(output_copy, BRACKETED_PASTE_ON)
                     strbuf = ""
                     while !eof(output_copy)
                         strbuf *= String(readavailable(output_copy))
