@@ -2130,11 +2130,22 @@ STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq2) JL_
     return c;
 }
 
+// Sysimage objects are never swept, and `gc_queue_remset` restores the old bit of those the
+// write barrier queued, so all of them are old and marked while marking. Recognizing them by
+// address avoids loading their headers, which often misses the cache: in inference and Pkg
+// operations, many references the mark loop follows point into the sysimage.
+STATIC_INLINE int gc_in_sysimg(const void *obj) JL_NOTSAFEPOINT
+{
+    int in_sysimg = (uintptr_t)obj - jl_sysimage_start - 1 < jl_sysimage_size;
+    assert(!in_sysimg || (jl_astaggedvalue(obj)->bits.in_image && jl_astaggedvalue(obj)->bits.gc == GC_OLD_MARKED));
+    return in_sysimg;
+}
+
 // Enqueue an unmarked obj. last bit of `nptr` is set if `_obj` is young
 STATIC_INLINE void gc_try_claim_and_push(jl_gc_markqueue_t *mq, void *_obj,
                            uintptr_t *nptr) JL_NOTSAFEPOINT
 {
-    if (_obj == NULL)
+    if (_obj == NULL || gc_in_sysimg(_obj))
         return;
     jl_value_t *obj = (jl_value_t *)jl_assume(_obj);
     jl_taggedvalue_t *o = jl_astaggedvalue(obj);
@@ -2165,9 +2176,14 @@ STATIC_INLINE jl_value_t *gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_
             else {
                 // Unroll marking of last item to avoid pushing
                 // and popping it right away
-                jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
-                nptr |= !gc_old(o->header);
-                if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
+                if (gc_in_sysimg(new_obj)) {
+                    new_obj = NULL;
+                }
+                else {
+                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                    nptr |= !gc_old(o->header);
+                    if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
+                }
             }
             gc_heap_snapshot_record_object_edge((jl_value_t*)obj8_parent, slot);
         }
@@ -2197,9 +2213,14 @@ STATIC_INLINE jl_value_t *gc_mark_obj16(jl_ptls_t ptls, char *obj16_parent, uint
             else {
                 // Unroll marking of last item to avoid pushing
                 // and popping it right away
-                jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
-                nptr |= !gc_old(o->header);
-                if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
+                if (gc_in_sysimg(new_obj)) {
+                    new_obj = NULL;
+                }
+                else {
+                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                    nptr |= !gc_old(o->header);
+                    if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
+                }
             }
             gc_heap_snapshot_record_object_edge((jl_value_t*)obj16_parent, slot);
         }
@@ -2229,9 +2250,14 @@ STATIC_INLINE jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint
             else {
                 // Unroll marking of last item to avoid pushing
                 // and popping it right away
-                jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
-                nptr |= !gc_old(o->header);
-                if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
+                if (gc_in_sysimg(new_obj)) {
+                    new_obj = NULL;
+                }
+                else {
+                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                    nptr |= !gc_old(o->header);
+                    if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
+                }
             }
             gc_heap_snapshot_record_object_edge((jl_value_t*)obj32_parent, slot);
         }
@@ -2259,11 +2285,13 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
             if (new_obj != NULL) {
                 verify_parent2("obj array", obj_parent, obj_begin, "elem(%d)",
                                gc_slot_to_arrayidx(obj_parent, obj_begin));
-                jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
-                if (!gc_old(o->header))
-                    nptr |= 1;
-                if (!gc_marked(o->header))
-                    break;
+                if (!gc_in_sysimg(new_obj)) {
+                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                    if (!gc_old(o->header))
+                        nptr |= 1;
+                    if (!gc_marked(o->header))
+                        break;
+                }
                 gc_heap_snapshot_record_array_edge(obj_parent, slot);
             }
         }
@@ -2329,12 +2357,14 @@ STATIC_INLINE void gc_mark_memory8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_v
                 if (new_obj != NULL) {
                     verify_parent2("array", ary8_parent, &new_obj, "elem(%d)",
                                 gc_slot_to_arrayidx(ary8_parent, ary8_begin));
-                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
-                    if (!gc_old(o->header))
-                        nptr |= 1;
-                    if (!gc_marked(o->header)){
-                        early_end = 1;
-                        break;
+                    if (!gc_in_sysimg(new_obj)) {
+                        jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                        if (!gc_old(o->header))
+                            nptr |= 1;
+                        if (!gc_marked(o->header)){
+                            early_end = 1;
+                            break;
+                        }
                     }
                     gc_heap_snapshot_record_array_edge(ary8_parent, slot);
                 }
@@ -2406,12 +2436,14 @@ STATIC_INLINE void gc_mark_memory16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl
                 if (new_obj != NULL) {
                     verify_parent2("array", ary16_parent, &new_obj, "elem(%d)",
                                 gc_slot_to_arrayidx(ary16_parent, ary16_begin));
-                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
-                    if (!gc_old(o->header))
-                        nptr |= 1;
-                    if (!gc_marked(o->header)){
-                        early_end = 1;
-                        break;
+                    if (!gc_in_sysimg(new_obj)) {
+                        jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                        if (!gc_old(o->header))
+                            nptr |= 1;
+                        if (!gc_marked(o->header)){
+                            early_end = 1;
+                            break;
+                        }
                     }
                     gc_heap_snapshot_record_array_edge(ary16_parent, slot);
                 }
