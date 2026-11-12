@@ -3752,7 +3752,171 @@ struct activate_env {
     size_t interferences_max; // of the new method's interference set
     int dispatch_bits; // of the new method
     int invalidated;
+    jl_activation_batch_t *batch; // or NULL
 };
+
+// Activating a method tests its signature against every specialization of each method it
+// intersects without being less specific, to find those whose dispatch it changes. For the
+// broad methods of Base (`getproperty(::Any, ::Symbol)`, `convert(::Type{T}, ::T)`, ...) that
+// is thousands of specializations per new method, nearly all of them disjoint from it, and
+// each test loads the MethodInstance, its signature and that signature's argument types.
+// When the methods of an image are activated together, a digest of each such specialization
+// is kept for the batch, from which most of the tests are decided with a few bit operations.
+//
+// A digest describes the leading argument types of a tuple type with Bloom filters:
+// - `own` and `chain` have one filter per slot, of the typename of the argument type and of
+//   the typenames of it and all its supertypes. They are set for a slot whose argument type
+//   is a DataType, a UnionAll of one, or a type variable bounded by one, other than Any. A
+//   type in two such types has both typenames among its supertypes, so one of the two
+//   typenames is a supertype of the other: a slot where neither typename is in the other
+//   side's chain shows the two tuple types disjoint.
+// - `params` has one filter for each of the second and the third slot, of the leading type
+//   parameters of the argument type together with their position and its typename. A
+//   signature has the parameters that are concrete types, if its argument type has no
+//   subtypes of another typename. A specialization has all the parameters of a concrete
+//   argument type, unless one is a type that is not concrete, which may equal a concrete type
+//   without being it; in that case, and for a slot that is not a concrete type, all bits are
+//   set. A concrete type is the only one of its typename to have, or in a tuple to match, a
+//   given concrete parameter, so a signature bit that a specialization lacks shows the two
+//   disjoint.
+typedef struct {
+    uint64_t own;
+    uint64_t chain;
+    uint64_t params;
+} spec_digest_t;
+
+#define SPEC_DIGEST_SLOTS 4
+static const int spec_digest_shift[SPEC_DIGEST_SLOTS] = {0, 8, 36, 56};
+static const int spec_digest_bits[SPEC_DIGEST_SLOTS] = {8, 28, 20, 8};
+static const int spec_digest_pshift[2] = {0, 40};
+static const int spec_digest_pbits[2] = {40, 24};
+#define SPEC_DIGEST_NPARAMS 6
+// no digest sets every bit of `own`
+#define SPEC_DIGEST_UNSET (~(uint64_t)0)
+// below this many specializations, testing them one by one is as fast
+#define SPEC_DIGEST_MIN_SPECS 64
+
+static uint64_t spec_digest_typename(jl_typename_t *tn, int slot) JL_NOTSAFEPOINT
+{
+    uint64_t h = ((uintptr_t)tn >> 4) * (uint64_t)0x9E3779B97F4A7C15ull;
+    int nbits = spec_digest_bits[slot];
+    uint64_t d = (uint64_t)1 << (((h >> 32) * nbits) >> 32);
+    if (nbits > 8)
+        d |= (uint64_t)1 << ((((h >> 8) & 0xFFFFFF) * nbits) >> 24);
+    return d << spec_digest_shift[slot];
+}
+
+static uint64_t spec_digest_param(jl_typename_t *tn, size_t k, jl_value_t *param, int slot) JL_NOTSAFEPOINT
+{
+    uint64_t h = (((uintptr_t)tn >> 4) ^ (((uintptr_t)param >> 4) * 31) ^ (k * 0x51ed27)) * (uint64_t)0x9E3779B97F4A7C15ull;
+    return ((uint64_t)1 << (((h >> 32) * spec_digest_pbits[slot - 1]) >> 32)) << spec_digest_pshift[slot - 1];
+}
+
+// The digest of the tuple type `tt`, a method signature if `sig` and else the signature of a specialization
+static spec_digest_t spec_digest(jl_value_t *tt, int sig) JL_NOTSAFEPOINT
+{
+    spec_digest_t d = {0, 0, sig ? 0 : ~(uint64_t)0};
+    tt = jl_unwrap_unionall(tt);
+    if (!jl_is_datatype(tt))
+        return d;
+    size_t np = jl_nparams(tt);
+    for (int i = 0; i < np && i < SPEC_DIGEST_SLOTS; i++) {
+        jl_value_t *t = jl_tparam(tt, i);
+        if (jl_is_vararg(t))
+            break;
+        // a type variable only admits subtypes of its upper bound
+        while (jl_is_typevar(t))
+            t = ((jl_tvar_t*)t)->ub;
+        t = jl_unwrap_unionall(t);
+        if (!jl_is_datatype(t) || t == (jl_value_t*)jl_any_type)
+            continue;
+        jl_datatype_t *dt = (jl_datatype_t*)t;
+        uint64_t chain = 0;
+        jl_datatype_t *super = dt;
+        while (super != NULL && super != jl_any_type) {
+            chain |= spec_digest_typename(super->name, i);
+            super = super->super;
+        }
+        if (super == NULL)
+            continue; // a supertype that is not instantiated yet (of a type recursive in its supertype)
+        d.own |= spec_digest_typename(dt->name, i);
+        d.chain |= chain;
+        if ((i == 1 || i == 2) && (sig ? !dt->name->abstract : dt->isconcretetype)) {
+            uint64_t params = 0;
+            int exact = 1;
+            size_t l = jl_nparams(dt);
+            for (size_t k = 0; k < l && k < SPEC_DIGEST_NPARAMS; k++) {
+                jl_value_t *param = jl_tparam(dt, k);
+                if (jl_is_datatype(param) && ((jl_datatype_t*)param)->isconcretetype)
+                    params |= spec_digest_param(dt->name, k, param, i);
+                else if (!sig && jl_is_type(param))
+                    exact = 0;
+                else if (!sig)
+                    params |= spec_digest_param(dt->name, k, param, i); // not a type, so equal to none
+            }
+            if (sig) {
+                d.params |= params;
+            }
+            else if (exact) {
+                uint64_t mask = (((uint64_t)1 << spec_digest_pbits[i - 1]) - 1) << spec_digest_pshift[i - 1];
+                d.params = (d.params & ~mask) | params;
+            }
+        }
+    }
+    return d;
+}
+
+// Whether the digests of a signature and of a specialization show their types disjoint
+static int spec_digests_disjoint(spec_digest_t sig, spec_digest_t spec) JL_NOTSAFEPOINT
+{
+    if ((sig.params & ~spec.params) != 0)
+        return 1;
+    uint64_t a = sig.own & ~spec.chain; // set in the slots where the signature's typename is not a supertype of the specialization's
+    uint64_t b = spec.own & ~sig.chain; // and the reverse
+    if (a == 0 || b == 0)
+        return 0;
+    for (int i = 0; i < SPEC_DIGEST_SLOTS; i++) {
+        uint64_t mask = (((uint64_t)1 << spec_digest_bits[i]) - 1) << spec_digest_shift[i];
+        if ((a & mask) != 0 && (b & mask) != 0)
+            return 1;
+    }
+    return 0;
+}
+
+void jl_activation_batch_init(jl_activation_batch_t *batch) JL_NOTSAFEPOINT
+{
+    batch->deferred = NULL;
+    batch->digested = NULL;
+    htable_new(&batch->digests, 0);
+}
+
+void jl_activation_batch_free(jl_activation_batch_t *batch) JL_NOTSAFEPOINT
+{
+    for (size_t i = 0; i < batch->digests.size; i += 2) {
+        if (batch->digests.table[i + 1] != HT_NOTFOUND)
+            free(batch->digests.table[i + 1]);
+    }
+    htable_free(&batch->digests);
+}
+
+// The digests of the `l` specializations in the svec `specs`, each unset until it is first
+// asked for. The batch keeps `specs` alive, so that no other svec can take its address.
+static spec_digest_t *batch_spec_digests(jl_activation_batch_t *batch, jl_value_t *specs JL_MAYBE_UNROOTED, size_t l) JL_CANSAFEPOINT
+{
+    void *digests = ptrhash_get(&batch->digests, (void*)specs);
+    if (digests != HT_NOTFOUND)
+        return (spec_digest_t*)digests;
+    JL_GC_PUSH1(&specs);
+    if (batch->digested == NULL)
+        batch->digested = jl_alloc_vec_any(0);
+    jl_array_ptr_1d_push(batch->digested, specs);
+    JL_GC_POP();
+    spec_digest_t *d = (spec_digest_t*)malloc_s(l * sizeof(spec_digest_t));
+    for (size_t i = 0; i < l; i++)
+        d[i].own = SPEC_DIGEST_UNSET;
+    ptrhash_put(&batch->digests, (void*)specs, (void*)d);
+    return d;
+}
 
 // The specializations of `m`: `*specs` receives `m->specializations`, which keeps
 // the returned slots alive; each of the `l` slots at `*data` is a MethodInstance or `nothing`.
@@ -3809,6 +3973,8 @@ static jl_genericmemory_t *activate_against_methods(struct activate_env *env, jl
     jl_value_t *isect2 = NULL;
     JL_GC_PUSH4(&interferences, &specs, &isect, &isect2);
     size_t j;
+    spec_digest_t type_digest = {0, 0, 0};
+    int have_type_digest = 0;
     // Compute the morespec values not given upfront
     for (j = nknown; j < n; j++)
         morespec[j] = (char)jl_type_morespecific(d[j]->sig, type);
@@ -3874,10 +4040,26 @@ static jl_genericmemory_t *activate_against_methods(struct activate_env *env, jl
             continue;
         _Atomic(jl_method_instance_t*) *data;
         size_t l = method_specializations(m, &specs, &data);
+        spec_digest_t *digests = NULL;
+        if (env->batch != NULL && l >= SPEC_DIGEST_MIN_SPECS) {
+            if (!have_type_digest) {
+                type_digest = spec_digest(type, 1);
+                have_type_digest = 1;
+            }
+            if (type_digest.own != 0)
+                digests = batch_spec_digests(env->batch, specs, l);
+        }
         for (size_t i = 0; i < l; i++) {
             jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
             if ((jl_value_t*)mi == jl_nothing)
                 continue;
+            if (digests != NULL) {
+                // a slot is only ever filled once, so its digest stays that of this specialization
+                if (digests[i].own == SPEC_DIGEST_UNSET)
+                    digests[i] = spec_digest(mi->specTypes, 0);
+                if (spec_digests_disjoint(type_digest, digests[i]))
+                    continue;
+            }
             if (jl_type_intersection2(type, mi->specTypes, &isect, &isect2)) {
                 // Replacing a method--see if this really was the selected method previously
                 // over the intersection (not ambiguous) and the new method will be selected now (morespec).
@@ -3918,11 +4100,12 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
 
 // Activate `newentry`, a method of the image at linkage blob `image` (or -1),
 // replaying `record` (the ext_backinterferences of its method, or NULL) for the
-// dependencies of that image. With `deferred`, the dispatch cache invalidations are
+// dependencies of that image. With a `batch` that has `deferred`, the dispatch cache invalidations are
 // not applied but recorded in it as (MethodInstance, signature) pairs, to be applied
 // later in one pass for all the methods activated in this world.
-void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array_t *record, size_t image, jl_array_t *deferred) JL_CANSAFEPOINT
+void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array_t *record, size_t image, jl_activation_batch_t *batch) JL_CANSAFEPOINT
 {
+    jl_array_t *deferred = batch ? batch->deferred : NULL;
     JL_TIMING(ADD_METHOD, ADD_METHOD);
     jl_method_t *method = newentry->func.method;
     jl_methtable_t *mt = jl_method_get_table(method);
@@ -4022,6 +4205,7 @@ void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array
         // Always set LATEST_WHICH and carry over NO_LOSERS from initialization and across precompilation
         METHOD_SIG_LATEST_WHICH | (precompiled_status & METHOD_SIG_NO_LOSERS),
         /* .invalidated = */ 0,
+        batch,
     };
     if (oldvalue && replaced) {
         jl_method_t *m = replaced->func.method;

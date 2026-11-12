@@ -1883,6 +1883,54 @@ precompile_test_harness("Renamed Imports") do load_path
 end
 
 # issue #41872 (example from #38983)
+precompile_test_harness("Activating image methods against many specializations") do load_path
+    # Activation tests a new method against the specializations of the broad methods it is
+    # more specific than, filtering most of them by a digest when there are many.
+    write(joinpath(load_path, "DigestBase.jl"),
+          """
+          module DigestBase
+          struct Box{A,B} end
+          abstract type A{T} end
+          struct S2{T} <: A{S2{A{T}}} end
+          f(x) = 1
+          end
+          """)
+    write(joinpath(load_path, "DigestExt.jl"),
+          """
+          module DigestExt
+          using DigestBase
+          DigestBase.f(::DigestBase.Box{Tuple{Int},T}) where {T} = 2
+          end
+          """)
+    Base.compilecache(Base.PkgId("DigestBase"))
+    Base.compilecache(Base.PkgId("DigestExt"))
+    script = """
+        using DigestBase
+        using DigestBase: f, Box, A, S2
+        struct W{N} end
+        for i in 1:80
+            f(W{i}())
+        end
+        g(x) = f(x)
+        b1 = Box{Tuple{Int},Int}()
+        b2 = Box{Tuple{Float64},Int}()
+        g(b1), g(b2)
+        # a specialization made without a call can have an argument type whose supertype
+        # is not instantiated yet
+        supertype(S2{Int})
+        lazy = getfield(supertype(S2{A{A{A{A{Int}}}}}), :parameters)[1]
+        lazy = getfield(supertype(lazy), :parameters)[1]
+        ccall(:jl_specializations_get_linfo, Any, (Any, Any, Any), only(methods(f)), Tuple{typeof(f), lazy}, Core.svec())
+        println(!isdefined(lazy, :super))
+        using DigestExt
+        println((g(b1), g(b2), f(b1), f(b2)))
+        """
+    pathsep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                 "JULIA_LOAD_PATH" => join(LOAD_PATH, pathsep), "JULIA_DEPOT_PATH" => join(DEPOT_PATH, pathsep))
+    @test readlines(cmd) == ["true", "(2, 1, 2, 1)"]
+end
+
 precompile_test_harness("No external edges") do load_path
     write(joinpath(load_path, "NoExternalEdges.jl"),
           """
