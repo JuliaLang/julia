@@ -3154,11 +3154,10 @@ static void write_relocs_section(ios_t *f, size_t payload, jl_image_section_t *o
 }
 
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
-static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
+static void jl_save_system_image_to_stream(ios_t *f, jl_ji_header_t *h, jl_array_t *mod_array,
                                            jl_array_t *module_init_order,
                                            jl_array_t *worklist, jl_array_t *extext_methods,
-                                           jl_array_t *extext_records, jl_array_t *new_ext, jl_query_cache *query_cache,
-                                           uint64_t preferred_base) JL_CANSAFEPOINT
+                                           jl_array_t *extext_records, jl_array_t *new_ext, jl_query_cache *query_cache) JL_CANSAFEPOINT
 {
     htable_new(&serialization_order, 25000);
     htable_new(&field_replace, 0);
@@ -3273,7 +3272,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     }
 
     bits_start = 0;
-    heap_base = preferred_base;
+    heap_base = h->preferred_base;
     htable_new(&fptr_to_id, jl_n_builtins);
     uintptr_t i;
     for (i = 0; i < jl_n_builtins; i++) {
@@ -3431,7 +3430,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_build_symtab(&s);
     }
 
-    jl_image_sections_t h = {0};
     { // step 2: build all the sysimg sections
         if (s.incremental) {
             // add the imports of the types that need uniquing first, in the order the loader
@@ -3459,9 +3457,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             write_reloc(&s, &specials, (jl_value_t*)global_roots_keyset);
             write_reloc(&s, &specials, (jl_value_t*)s.ptls->root_task->tls);
             write_reloc(&s, &specials, s.symtab.len ? (jl_value_t*)s.symtab.items[s.symtab.len / 2] : NULL);
-            h.world = jl_atomic_load_acquire(&jl_world_counter);
-            h.typeinf_world = jl_typeinf_world;
-            h.gensym_counter = jl_get_gs_ctr();
+            h->world = jl_atomic_load_acquire(&jl_world_counter);
+            h->typeinf_world = jl_typeinf_world;
+            h->gensym_counter = jl_get_gs_ctr();
         }
         else {
             write_reloc(&s, &specials, (jl_value_t*)worklist);
@@ -3476,7 +3474,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             write_reloc(&s, &specials, (jl_value_t*)extext_records);
             write_reloc(&s, &specials, (jl_value_t*)s.method_roots_list);
         }
-        h.gvar_objects = write_gvars(&s, &gvar_refs, &gvars, &external_fns);
+        h->gvar_objects = write_gvars(&s, &gvar_refs, &gvars, &external_fns);
         // write the records, at the offsets their imports were given
         for (size_t i = 0; i < uniquing_records.len; i++) {
             jl_value_t *v = (jl_value_t*)uniquing_records.items[i];
@@ -3540,24 +3538,21 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         ios_t fixup_types, fixup_objs;
         ios_static_buffer(&fixup_types, (char*)s.fixup_types.items, s.fixup_types.len * sizeof(void*));
         ios_static_buffer(&fixup_objs, (char*)s.fixup_objs.items, s.fixup_objs.len * sizeof(void*));
-        h.pointer_free_offset = bits_start;
+        h->pointer_free_offset = bits_start;
         jl_image_section_t heap;
         write_section(f, payload_start, &heap, &sysimg, "heap");
         assert(heap.offset == 0);
-        h.heap_size = heap.size;
-        write_section(f, payload_start, &h.imports, &imports, "imports");
-        write_section(f, payload_start, &h.auxdata, &auxdata, "auxdata");
-        write_section(f, payload_start, &h.strtab, &symbols, "strtab");
-        write_relocs_section(f, payload_start, &h.binds, &maps.binds, "binds");
-        write_relocs_section(f, payload_start, &h.slides, &maps.slides, "slides");
-        write_section(f, payload_start, &h.specials, &specials, "specials");
-        write_section(f, payload_start, &h.gvars, &gvar_refs, "gvars");
-        write_section(f, payload_start, &h.fixup_types, &fixup_types, "fixup_types");
-        write_section(f, payload_start, &h.fixup_objs, &fixup_objs, "fixup_objs");
-        write_section(f, payload_start, &h.fptrs, &fptr_record, "fptrs");
-        ios_seek(f, JI_SECTIONS_OFFSET);
-        ios_write(f, (const char*)&h, sizeof(h));
-        ios_seek_end(f);
+        h->heap_size = heap.size;
+        write_section(f, payload_start, &h->imports, &imports, "imports");
+        write_section(f, payload_start, &h->auxdata, &auxdata, "auxdata");
+        write_section(f, payload_start, &h->strtab, &symbols, "strtab");
+        write_relocs_section(f, payload_start, &h->binds, &maps.binds, "binds");
+        write_relocs_section(f, payload_start, &h->slides, &maps.slides, "slides");
+        write_section(f, payload_start, &h->specials, &specials, "specials");
+        write_section(f, payload_start, &h->gvars, &gvar_refs, "gvars");
+        write_section(f, payload_start, &h->fixup_types, &fixup_types, "fixup_types");
+        write_section(f, payload_start, &h->fixup_objs, &fixup_objs, "fixup_objs");
+        write_section(f, payload_start, &h->fptrs, &fptr_record, "fptrs");
     }
 
     assert(object_worklist.len == 0);
@@ -3651,6 +3646,7 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     ext_foreign_cis = jl_alloc_vec_any(0);
 
     mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
+    jl_ji_header_t h;
     if (worklist) {
         uint32_t flags = JI_FLAG_PKGIMAGE | (emit_split ? JI_FLAG_SPLIT : 0);
         if (_native_data != NULL) {
@@ -3664,11 +3660,13 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
                 compress = 0;
             }
         }
-        write_header(f, flags);
+        h = ji_header_init(flags);
+        ios_write(f, (const char *)&h, sizeof(h));
         jl_write_header_for_incremental(f, worklist, mod_array, udeps, emit_split);
     }
     else {
-        write_header(f, emit_split ? JI_FLAG_SPLIT : 0);
+        h = ji_header_init(emit_split ? JI_FLAG_SPLIT : 0);
+        ios_write(f, (const char *)&h, sizeof(h));
         if (_native_data != NULL)
             *_native_data = jl_create_native(NULL, jl_options.trim, 0, jl_atomic_load_acquire(&jl_world_counter), mod_array, NULL, jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL, module_init_order, ext_foreign_cis);
     }
@@ -3733,17 +3731,15 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     // is user address space on every 64-bit platform we support with 47 or more bits of it, and
     // above MMTk's heap range, which must not contain the image.
 #ifdef _P64
-    uint64_t preferred_base = !worklist ? 0x400000000000 + payload_start : 0;
-#else
-    uint64_t preferred_base = 0;
+    h.preferred_base = !worklist ? 0x400000000000 + payload_start : 0;
 #endif
 
     jl_query_cache query_cache;
     init_query_cache(&query_cache);
     // IR retained only to generate native code is not serialized (see jl_queue_for_serialization)
     jl_set_precompile_keep_ir(0);
-    jl_save_system_image_to_stream(f, mod_array, module_init_order, worklist,
-                                   extext_methods, extext_records, new_ext, &query_cache, preferred_base);
+    jl_save_system_image_to_stream(f, &h, mod_array, module_init_order, worklist,
+                                   extext_methods, extext_records, new_ext, &query_cache);
     if (_native_data != NULL)
         native_functions = NULL;
     // make sure we don't run any Julia code concurrently before this point
@@ -3768,13 +3764,10 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
         payload_end = ios_pos(f);
     }
 
-    ios_seek(f, JI_CHECKSUM_OFFSET);
-    write_uint32(f, checksum);
-    ios_seek(f, JI_PREFERRED_BASE_OFFSET);
-    write_uint64(f, preferred_base);
-    write_uint64(f, payload_start);
-    write_uint64(f, payload_end - payload_start);
-    ios_seek(f, payload_end);
+    h.checksum = checksum;
+    h.payload_start = payload_start;
+    h.payload_size = payload_end - payload_start;
+    memcpy(f->buf, &h, sizeof(h));
 
     destroy_query_cache(&query_cache);
 
@@ -3800,12 +3793,15 @@ extern const jl_image_pointers_t jl_image_pointers;
 // header failed verification.
 static int64_t jl_image_read_header(ios_t *s, jl_image_buf_t *image) JL_NOTSAFEPOINT
 {
-    int64_t size, heap_size;
-    if (jl_read_verify_header(s, &image->flags, &image->checksum, &image->preferred_base,
-                              &image->payload_start, &size, &heap_size) != 0)
+    jl_ji_header_t h;
+    if (!jl_read_verify_header(s, &h))
         return 0;
-    image->heap_size = heap_size;
-    return image->payload_start + size;
+    image->flags = h.flags;
+    image->checksum = h.checksum;
+    image->preferred_base = h.preferred_base;
+    image->payload_start = h.payload_start;
+    image->heap_size = h.heap_size;
+    return h.payload_start + h.payload_size;
 }
 
 static int jl_image_read_ji(ios_t *s, jl_image_buf_t *image, int map) JL_NOTSAFEPOINT;
@@ -4328,7 +4324,7 @@ static int all_usings_unchanged_implicit(jl_module_t *mod)
 }
 
 // The address of a section, in the loader data that follows the heap
-static char *image_section(const char *loader, const jl_image_sections_t *h, jl_image_section_t sec) JL_NOTSAFEPOINT
+static char *image_section(const char *loader, const jl_ji_header_t *h, jl_image_section_t sec) JL_NOTSAFEPOINT
 {
     return (char*)(loader + (sec.offset - h->heap_size));
 }
@@ -4361,8 +4357,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
 
     // step 1: read the section table
     assert(ios_pos(f) == 0 && f->bm == bm_mem);
-    jl_image_sections_t h;
-    memcpy(&h, f->buf + JI_SECTIONS_OFFSET, sizeof(h));
+    jl_ji_header_t h;
+    memcpy(&h, f->buf, sizeof(h));
     size_t nwords = bitmap_nwords(h.pointer_free_offset);
     char *image_base = heap;
     size_t sizeof_sysimg = h.heap_size;
@@ -4696,7 +4692,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, const jl_image_buf_t *buf, j
                                  flags & JI_FLAG_PKGIMAGE ? "pkgimage" : "system image");
 
     if (depmods) {
-        ios_seek(f, JI_HEADER_SIZE);
+        ios_seek(f, sizeof(jl_ji_header_t));
         // Syntax version mismatch is not fatal to load
         if (!jl_match_cache_flags_current(read_uint8(f)))
             return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
@@ -4849,10 +4845,10 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
 // is loaded.
 int jl_adopt_image_constants(jl_image_buf_t buf) JL_CANSAFEPOINT
 {
-    jl_image_sections_t h;
+    jl_ji_header_t h;
     if (!buf.heap)
         return 0;
-    memcpy(&h, buf.data + JI_SECTIONS_OFFSET, sizeof(h));
+    memcpy(&h, buf.data, sizeof(h));
     const uintptr_t *specials = (const uintptr_t*)image_section(buf.loader, &h, h.specials);
     assert(jl_image_specials[0] == &jl_nothing);
     jl_nothing = (jl_value_t*)(buf.heap + (specials[0] - buf.preferred_base));

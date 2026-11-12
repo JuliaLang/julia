@@ -4239,13 +4239,8 @@ const JI_PAYLOAD_START_OFFSET = 160
 
 function isvalid_cache_header(f::IOStream, flags::Ref{UInt32}=Ref{UInt32}())
     checksum = Ref{UInt32}()
-    err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{UInt64}, Ptr{Int64}, Ptr{Int64}, Ptr{Int64}), f.ios, flags, checksum, Ref{UInt64}(), Ref{Int64}(), Ref{Int64}(), Ref{Int64}())
-
-    if err == 0 && (flags[] & JI_FLAG_PKGIMAGE == 0)
-        @debug "Cache header was for a system image"
-        return nothing # We somehow read the header for a system image
-    end
-    return err == 0 ? checksum[] : nothing
+    ok = ccall(:jl_read_verify_pkgimage_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}), f.ios, flags, checksum)
+    return ok != 0 ? checksum[] : nothing
 end
 isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == read(f, UInt32))
 
