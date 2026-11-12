@@ -1658,7 +1658,17 @@ end
                 @test isempty(readdir(join=true))
                 rm(d, recursive=true)
                 @test !ispath(d)
-                @test isempty(readdir())
+                if Sys.isfreebsd()
+                    # Since FreeBSD 14.4 and 15.0, scandir(3) reports the ENOENT that
+                    # getdirentries(2) returns for a removed directory.
+                    @test try
+                        isempty(readdir())
+                    catch err
+                        err isa Base.IOError && err.code == Base.UV_ENOENT
+                    end
+                else
+                    @test isempty(readdir())
+                end
                 @test_throws Base._UVError("readdir($(repr(d)))", Base.UV_ENOENT) readdir(d)
                 @test_throws Base._UVError("pwd()", Base.UV_ENOENT) readdir(join=true)
             end

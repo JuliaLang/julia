@@ -1,3 +1,6 @@
+"""
+A simple utility tool for creating advisory pidfiles (lock files).
+"""
 module Pidfile
 
 
@@ -349,3 +352,5 @@ function Base.close(lock::LockMonitor)
 end
 
 end # module
+
+public Pidfile
