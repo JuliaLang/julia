@@ -579,6 +579,12 @@ function Rational{BigInt}(x::AbstractFloat)
     BigInt(ldexp(x,s)) // (BigInt(1) << s)
 end
 
+function Rational{BigInt}(x::BigFloat)
+    isnan(x) && throw(InexactError(:Rational, Rational{BigInt}, x))
+    num, pow, den = decompose(x)
+    pow >= 0 ? (num << pow) // den : num // (BigInt(den) << -pow)
+end
+
 # Basic arithmetic without promotion
 for (fJ, fC) in ((:+,:add), (:*,:mul))
     @eval begin
@@ -1026,6 +1032,15 @@ cmp(x::CdoubleMax, y::BigFloat) = -cmp(y,x)
 ==(x::Integer, y::BigFloat)    = y == x
 ==(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) == 0
 ==(x::CdoubleMax, y::BigFloat) = y == x
+
+function ==(x::BigFloat, y::Rational)
+    isone(y.den) && return x == y.num
+    isfinite(x) || return x == y.num/y.den
+    ispow2(y.den) || return false
+    setprecision(BigFloat, precision(x)) do
+        ldexp(x, trailing_zeros(y.den)) == y.num
+    end
+end
 
 <(x::BigFloat, y::Integer)    = !isnan(x) && cmp(x,y) < 0
 <(x::Integer, y::BigFloat)    = !isnan(y) && cmp(y,x) > 0
