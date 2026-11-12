@@ -682,7 +682,7 @@ public:
         std::unique_ptr<ROBlockMapper> rx_mapper;
         char *mapper_type = getenv("JULIA_CGMEMMGR_MAP_TYPE");
         for (auto [name, mapfn] : mappers)
-            if ((mapper_type && !strcmp(mapper_type, name)) || !mapper_type)
+            if ((!mapper_type || !strcmp(mapper_type, name)) && !rx_mapper)
                 rx_mapper = mapfn();
         if (!rx_mapper && mapper_type && strcmp(mapper_type, "fallback"))
             jl_errorf("Unsupported JULIA_CGMEMMGR_MAP_TYPE: %s", mapper_type);
