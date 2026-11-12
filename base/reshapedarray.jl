@@ -414,12 +414,29 @@ function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{StridedSubArr
     )
 end
 
-_checkcontiguous(::Type{Bool}, A::AbstractArray) = false
-# `strides(A::DenseArray)` calls `size_to_strides` by default.
-# Thus it's OK to assume all `DenseArray`s are contiguously stored.
-_checkcontiguous(::Type{Bool}, A::DenseArray) = true
-_checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))
-_checkcontiguous(::Type{Bool}, A::FastContiguousSubArray) = _checkcontiguous(Bool, parent(A))
+# TODO: Views along a constant-step `AbstractRange{<:AbstractCartesianIndex}` are
+# also strided in memory; however, `strides` and `cconvert`
+# do not yet support this.
+function isstrided(::Type{A}) where {T,N,P,A<:SubArray{T,N,P,<:Tuple{Vararg{StridedSubArrayIndex}}}}
+    # Some subarrays may be strided even if the
+    # parent is not strided
+    islinearstrided(A) || isstrided(P)
+end
+function islinearstrided(::Type{A}) where {T,N,P,A<:FastSubArray{T,N,P}}
+    isdense(A) || _islinearstrided_or_trivial(P)
+end
+function isdense(::Type{<:FastContiguousSubArray{T,N,P}}) where {T,N,P}
+    isdense(P)
+end
+
+isunsafeloadable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = isunsafeloadable(P)
+isunsafestorable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = isunsafestorable(P)
+islinearstrided(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = _islinearstrided_or_trivial(P)
+isdense(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = isdense(P)
+
+# Contiguous with the exact byte layout of the equivalent Array and matching elsize
+_checkcontiguous(::Type{Bool}, A::AbstractArray{T}) where {T} =
+    isdense(typeof(A)) && elsize(typeof(A)) == elsize(Array{T})
 
 function strides(a::ReshapedArray)
     _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
