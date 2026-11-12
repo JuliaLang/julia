@@ -23,8 +23,13 @@ JL_DLLEXPORT void jl_gc_multi_wb_cold(const struct _jl_value_t *parent, void *de
 // Only `jl_gc_wb_object`, whose callers store no object to check, remembers `parent` regardless.
 STATIC_INLINE int jl_gc_wb_must_remember(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
-    if (ptr == NULL || jl_astaggedvalue(ptr)->bits.in_image != 0)
+    if (ptr == NULL)
         return 0;
+    if (jl_astaggedvalue(ptr)->bits.in_image != 0) {
+        // codegen relies on this to test both bits on the AND of several child tags
+        assert((jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) && "image object is not marked");
+        return 0;
+    }
     return (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) == 0 || // ptr is young
            jl_astaggedvalue(parent)->bits.in_image == 1 /* GC_IN_IMAGE_NOT_REMSET */;
 }

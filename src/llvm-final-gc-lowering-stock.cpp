@@ -79,21 +79,20 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     mayTrigTerm->getParent()->setName("may_trigger_wb");
     // The same rule as `jl_gc_wb_must_remember`: remember the parent if a child
     // is young, or if the parent is an image object not yet in the image remset
-    // and a child is not an image object (image objects are always marked).
+    // and a child is not an image object. Image objects are always marked, so
+    // "some child is not marked/not an image" is a clear bit in the AND of the tags.
     auto parInImage = builder.CreateAnd(parTag, ConstantInt::get(T_size, GC_IN_IMAGE | GC_IN_IMAGE_REMSET), "parent_in_image");
     auto parIsImage = builder.CreateICmpEQ(parInImage, ConstantInt::get(T_size, GC_IN_IMAGE_NOT_REMSET), "parent_is_image");
-    Value *anyChldNotMarked = NULL;
-    Value *anyChldNotImage = NULL;
+    Value *chldTags = NULL;
     for (Value *child : children) {
         Value *chldTag = EmitLoadTag(builder, T_size, child, tbaa_tag);
-        Value *chldBit = builder.CreateAnd(chldTag, GC_MARKED, "child_bit");
-        Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0), "child_not_marked");
-        anyChldNotMarked = anyChldNotMarked ? builder.CreateOr(anyChldNotMarked, chldNotMarked) : chldNotMarked;
-        Value *chldImage = builder.CreateAnd(chldTag, GC_IN_IMAGE, "child_in_image");
-        Value *chldNotImage = builder.CreateICmpEQ(chldImage, ConstantInt::get(T_size, 0), "child_not_image");
-        anyChldNotImage = anyChldNotImage ? builder.CreateOr(anyChldNotImage, chldNotImage) : chldNotImage;
+        chldTags = chldTags ? builder.CreateAnd(chldTags, chldTag, "child_tags") : chldTag;
     }
-    assert(anyChldNotMarked && anyChldNotImage); // children is non-empty
+    assert(chldTags); // children is non-empty
+    Value *chldBit = builder.CreateAnd(chldTags, GC_MARKED, "child_bit");
+    Value *anyChldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0), "child_not_marked");
+    Value *chldImage = builder.CreateAnd(chldTags, GC_IN_IMAGE, "child_in_image");
+    Value *anyChldNotImage = builder.CreateICmpEQ(chldImage, ConstantInt::get(T_size, 0), "child_not_image");
     auto parImageEdge = builder.CreateAnd(parIsImage, anyChldNotImage, "parent_image_edge");
     auto shouldTrigger = builder.CreateOr(parImageEdge, anyChldNotMarked, "should_trigger_wb");
     MDBuilder MDB(parent->getContext());
