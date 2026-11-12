@@ -804,6 +804,18 @@ mktempdir() do dir
     end
 end
 
+# equality of pipelines and redirections
+let a = pipeline(`a`, `b`), b = pipeline(`a`, `b`)
+    @test a == b && hash(a) == hash(b)
+    @test pipeline(`a`, stdout="f") == pipeline(`a`, stdout="f")
+    @test hash(pipeline(`a`, stdout="f")) == hash(pipeline(`a`, stdout="f"))
+    @test pipeline(`a`, stdout="f") != pipeline(`a`, stdout="g")
+    @test pipeline(`a`, stdout="f") != pipeline(`a`, stderr="f")
+    @test pipeline(`a`, stdout="f") != pipeline(`a`, stdout=Base.FileRedirect("f", true))
+    @test pipeline(`a`, stdout=`b`) != pipeline(`a`, stderr=`b`)
+    @test (`a` & `b`) == (`a` & `b`) != (`a` & `c`)
+end
+
 let roundtrip(s) = first(Base.shell_split(Base.shell_escape(s))) == s
     @test roundtrip("foo'bar\\\$baz")
     @test roundtrip("foo'bar\\\"baz")
