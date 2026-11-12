@@ -41,6 +41,13 @@ Build system changes
   system image with additional code, use PackageCompiler.jl, or run a script on top of an existing
   system image with `julia --sysimage <image> --output-o <file> <script>`.
 
+* Julia no longer builds or ships openlibm, and links against the system libm instead. The
+  `USE_SYSTEM_LIBM` and `USE_SYSTEM_OPENLIBM` build options are gone, and `OpenLibm_jll` is no longer
+  a standard library. Packages that need it can depend on it as a regular package. Math functions
+  that used to resolve to openlibm across the process, including those called with `ccall` or by
+  binary dependencies, now come from the system libm, so their results can differ slightly.
+  `Base.libm_name` names that library, which is `ucrtbase` on Windows ([#56875]).
+
 New library functions
 ---------------------
 

@@ -3,7 +3,7 @@
 environment_id = "66bc455b-a42e-4ee7-933e-b71daf3215a2"  # generated
 julia_version = "1.14.0-DEV"
 manifest_format = "2.2"
-project_hash = "4cf4a371f11a32424c6567c8834df6cfd25ae82a"
+project_hash = "687881a4724cc6d5822f381e9f3be3dcf8dfd3da"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -78,11 +78,11 @@ version = "1.8.0"
 
 [[deps.JuliaC]]
 deps = ["LIEF_Patchelf_jll", "LazyArtifacts", "Libdl", "Mmap", "ObjectFile", "PackageCompiler", "Pkg", "Preferences", "RelocatableFolders", "SHA", "StructIO", "TOML"]
-git-tree-sha1 = "95c6ebed7a181c7cc75d76eb7a85db66f73325c6"
-repo-rev = "main"
+git-tree-sha1 = "0ee373bbaee6e838c61831237efa1548a1f5c7e0"
+repo-rev = "vs/no-openlibm-link"
 repo-url = "https://github.com/JuliaLang/JuliaC.jl.git"
 uuid = "acedd4c2-ced6-4a15-accc-2607eb759ba2"
-version = "0.3.10"
+version = "0.3.12"
 
     [deps.JuliaC.syntax]
     julia_version = "1.10.0"
