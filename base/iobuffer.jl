@@ -118,6 +118,7 @@ function GenericIOBuffer{T}(
     ) where T<:AbstractVector{UInt8}
     require_one_based_indexing(data)
     mz = Int(maxsize)::Int
+    mz < 0 && throw(ArgumentError("negative maxsize"))
     len = Int(length(data))::Int
     if !truncate && mz < len
         throw(ArgumentError("maxsize must not be smaller than data length"))
@@ -146,6 +147,7 @@ function GenericIOBuffer(data::Vector{UInt8}, readable::Bool, writable::Bool, se
     # The user may pass a vector of length <= maxsize, but where the underlying memory
     # is larger than maxsize. Don't throw an error in that case.
     mz = Int(maxsize)::Int
+    mz < 0 && throw(ArgumentError("negative maxsize"))
     if !truncate && mz < length(data)
         throw(ArgumentError("maxsize must not be smaller than data length"))
     end

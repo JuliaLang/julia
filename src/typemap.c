@@ -345,13 +345,28 @@ static uint_t mtcache_hash(size_t p, jl_value_t *data) JL_NOTSAFEPOINT
     return key == NULL ? 0 : (uint_t)jl_object_id(key);
 }
 
-static int mtcache_eq(size_t p, const void *key, jl_value_t *data, uint_t hv) JL_NOTSAFEPOINT
+// The lookup key, with the key slots loaded once rather than after every index probe
+typedef struct {
+    jl_value_t *ty;
+    _Atomic(jl_value_t*) *data;
+    size_t len;
+} mtcache_key_t;
+
+static int mtcache_eq(size_t p, const void *key, jl_value_t *cache, uint_t hv) JL_NOTSAFEPOINT
 {
+    const mtcache_key_t *mk = (const mtcache_key_t*)key;
     size_t ki = MTCACHE_KEY_SLOT(p);
-    if (ki >= ((jl_genericmemory_t*)data)->length)
+    if (ki >= mk->len)
         return 0; // OOB access, probably due to a data race
-    jl_value_t *k = jl_genericmemory_ptr_ref(data, ki);
-    return k != NULL && jl_egal(k, (jl_value_t*)key);
+    jl_value_t *k = jl_atomic_load_relaxed(&mk->data[ki]);
+    return k != NULL && jl_egal(k, mk->ty);
+}
+
+static int mtcache_eq_id(size_t p, const void *key, jl_value_t *cache, uint_t hv) JL_NOTSAFEPOINT
+{
+    const mtcache_key_t *mk = (const mtcache_key_t*)key;
+    size_t ki = MTCACHE_KEY_SLOT(p);
+    return ki < mk->len && jl_atomic_load_relaxed(&mk->data[ki]) == mk->ty;
 }
 
 static ssize_t mtcache_hash_peek(jl_genericmemory_t *cache JL_PROPAGATES_ROOT, jl_value_t *ty) JL_NOTSAFEPOINT
@@ -360,9 +375,14 @@ static ssize_t mtcache_hash_peek(jl_genericmemory_t *cache JL_PROPAGATES_ROOT, j
         return -1;
     jl_genericmemory_t *idxs = (jl_genericmemory_t*)jl_genericmemory_ptr_ref(cache, 0); // acquire
     JL_GC_PROMISE_ROOTED(idxs);
-    // mtcache_eq does not safepoint, so this lookup is safe from JL_NOTSAFEPOINT callers
-    ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq JL_NOTSAFEPOINT, const void *key, jl_value_t *data, uint_t hv, int pop) JL_NOTSAFEPOINT;
-    return jl_smallintset_lookup(idxs, mtcache_eq, ty, (jl_value_t*)cache, (uint_t)jl_object_id(ty), 0);
+    assert(ty != NULL);
+    mtcache_key_t key = {ty, (_Atomic(jl_value_t*)*)cache->ptr, cache->length};
+    uintptr_t tag = jl_typetagof(ty);
+    uint_t hv = (uint_t)jl_object_id_(tag, ty);
+    // TypeName keys are compared by identity
+    if (tag == (uintptr_t)jl_typename_type)
+        return smallintset_lookup_(idxs, mtcache_eq_id, &key, (jl_value_t*)cache, hv, 0);
+    return smallintset_lookup_(idxs, mtcache_eq, &key, (jl_value_t*)cache, hv, 0);
 }
 
 static _Atomic(jl_value_t*) *mtcache_hash_lookup_bp(jl_genericmemory_t *cache JL_PROPAGATES_ROOT, jl_value_t *ty) JL_NOTSAFEPOINT

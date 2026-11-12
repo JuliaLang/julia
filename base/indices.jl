@@ -490,10 +490,8 @@ LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 _convert2ind(i::Integer) = oneto(i)
 _convert2ind(ind::AbstractUnitRange) = ind
 
-function indices_promote_type(::Type{Tuple{R1,Vararg{R1,N}}}, ::Type{Tuple{R2,Vararg{R2,N}}}) where {R1,R2,N}
-    R = promote_type(R1, R2)
-    return Tuple{R, Vararg{R, N}}
-end
+indices_promote_type(::Type{R1}, ::Type{R2}) where {N, R1<:NTuple{N,Any}, R2<:NTuple{N,Any}} =
+    Tuple{map(promote_type, fieldtypes(R1), fieldtypes(R2))...}
 
 promote_rule(::Type{LinearIndices{N,R1}}, ::Type{LinearIndices{N,R2}}) where {N,R1,R2} =
     LinearIndices{N,indices_promote_type(R1,R2)}

@@ -204,6 +204,7 @@ static int mark_reset_age = 0;
 static int64_t scanned_bytes; // young bytes scanned while marking
 static int64_t perm_scanned_bytes; // old bytes scanned while marking
 static int64_t heap_size_after_last_full_gc = 0;
+static int have_full_gc_baseline = 0; // heap_size_after_last_full_gc is set
 int prev_sweep_full = 1;
 int current_sweep_full = 0;
 int next_sweep_full = 0;
@@ -1745,6 +1746,10 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
 JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
 {
     if (ptr == NULL)
+        return;
+    // Image objects are never freed, and marking does not trace through them, so no
+    // edge to one needs to be remembered, not even from an image object.
+    if (jl_astaggedvalue(ptr)->bits.in_image != 0)
         return;
     if (jl_astaggedvalue(parent)->bits.in_image != 1 /* GC_IN_IMAGE_NOT_REMSET */ && // parent is not an unmarked image object
         (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) != 0) // ptr is old
@@ -3649,12 +3654,13 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         target_heap = heap_size + jl_options.heap_target_increment;
         jl_atomic_store_relaxed(&gc_heap_stats.heap_target, target_heap);
     }
-    if (sweep_full) {
+    if (sweep_full || !have_full_gc_baseline) {
         // these are the difference between the number of gc-perm bytes scanned
         // on the first collection after sweep_full, and the current scan
         perm_scanned_bytes = 0;
         promoted_bytes = 0;
         heap_size_after_last_full_gc = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
+        have_full_gc_baseline = 1;
     }
     // We want to trigger full GCs either if the heap size has grown a lot since the last full GC.
     // For this we use the overallocation function to see what a reasonable rate of growth is,

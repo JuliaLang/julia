@@ -638,7 +638,19 @@ typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_tvar_t *JL_NONNULL var;
     jl_value_t *JL_NONNULL body;
+// hidden fields (see `hiddenfields`; allocated by `jl_new_unionall` only):
+    // structural facts about this node, memoized on first query (each bit
+    // pair is "known" + value; 0 means nothing computed yet). The facts depend
+    // only on the (immutable) structure, so they may be serialized as found.
+    _Atomic(uint32_t) flags;
 } jl_unionall_t;
+#define JL_UNIONALL_FREEVARS_KNOWN  0x1
+#define JL_UNIONALL_FREEVARS        0x2  // the type has free typevars
+#define JL_UNIONALL_OCCURSINV_KNOWN 0x4
+#define JL_UNIONALL_OCCURSINV       0x8  // the binder occurs in an invariant position of `body`
+#define JL_UNIONALL_ALWAYSCOV_KNOWN 0x10
+#define JL_UNIONALL_ALWAYSCOV       0x20 // the binder has a guaranteed covariant occurrence in `body`
+                                         // (in a covariant context), and none inside an inner binder's upper bound
 
 // represents the "name" part of a DataType, describing the syntactic structure
 // of a type and storing all data common to different instantiations of the type,
@@ -665,7 +677,11 @@ typedef struct JL_GC_TRACKED_TYPE {
     uint8_t abstract:1;
     uint8_t mutabl:1;
     uint8_t mayinlinealloc:1;
-    uint8_t _unused:5;
+    // instances hold data that the Julia-visible fields do not describe (C-only
+    // fields after them, an opaque layout, or trailing variable-sized data), so only
+    // the runtime's own constructor may allocate them
+    uint8_t hiddenfields:1;
+    uint8_t _unused:4;
     _Atomic(uint8_t) cache_entry_count; // (approximate counter of TypeMapEntry for heuristics)
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
     uint8_t constprop_heustic; // override for inference's constprop heuristic
@@ -989,6 +1005,7 @@ struct JL_GC_TRACKED_TYPE _jl_module_t {
     jl_uuid_t build_id;
     jl_uuid_t uuid;
     _Atomic(uint32_t) counter;
+    _Atomic(uint32_t) edition;
     int32_t nospecialize;  // global bit flags: initialization for new methods
     int8_t optlevel;
     int8_t compile;
@@ -2307,6 +2324,8 @@ JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s);
 
 // modules and global variables
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_set_module_edition(jl_module_t *m, uint32_t value);
+JL_DLLEXPORT uint32_t jl_get_module_edition(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl);
 JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m);

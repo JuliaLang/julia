@@ -627,6 +627,7 @@ precompile_test_harness(false) do dir
           """)
 
     @test Base.compilecache(Base.PkgId("Baz")) == Base.PrecompilableError() # due to __precompile__(false)
+    @test occursin("__precompile__(false)", sprint(show, Base.PrecompilableError()))
 
     OverwriteMethodError_file = joinpath(dir, "OverwriteMethodError.jl")
     write(OverwriteMethodError_file,
@@ -2855,6 +2856,14 @@ precompile_test_harness("No package module") do load_path
     @test occursin(
         "`using/import Printf` outside of a Module detected. Importing a package outside of a module is not allowed during package precompilation.",
         String(take!(io)))
+
+    write(joinpath(load_path, "RequireStdlibInPackage.jl"), """
+    module RequireStdlibInPackage
+    Base.require_stdlib(Base.PkgId(Base.UUID("de0858da-6303-5e67-8744-51eddeeeb8d7"), "Printf"))
+    end
+    """)
+    @test_throws r"Failed to precompile RequireStdlibInPackage" Base.compilecache(Base.identify_package("RequireStdlibInPackage"), io, io)
+    @test occursin("package code should instead use it directly from that stdlib", String(take!(io)))
 end
 
 precompile_test_harness("Constprop CodeInstance invalidation") do load_path
@@ -3582,6 +3591,10 @@ wait_until(f) = while !f(); sleep(0.05); end
             try
                 wait_until(() -> isfile(started))
                 @test Base.Precompilation.is_precompiling_in_background()
+                # other tasks see a change to the environment made while the run is going
+                push!(LOAD_PATH, depot)
+                @test depot in Base.load_path()
+                pop!(LOAD_PATH)
                 t2 = @async Base.Precompilation.precompilepkgs(["MergedPkg"]; io=IOContext(io2, :color => false), fancyprint=false)
                 wait_until(() -> has_cachefile(depot, "MergedPkg"))
                 @test !istaskdone(t1)
@@ -3761,6 +3774,46 @@ precompile_test_harness("invalidation for 'foreign-keyed' Preferences") do load_
         @test Base.stale_cachefile(pkg_file, cachefile) !== true
         # Setting a previously-unset preference also causes staleness
         Base.set_active_project(env_unset_set)
+        @test Base.stale_cachefile(pkg_file, cachefile) === true
+    finally
+        Base.set_active_project(old_proj)
+    end
+end
+
+precompile_test_harness("invalidation for Array and Dict Preferences") do load_path
+    # A cache stays valid for equal structured values and goes stale for changed ones
+    uuid_str = "c6e1d3a8-4b57-4a0f-9f43-0a6f4f1c2b11"
+    write(joinpath(load_path, "PkgStructuredPrefs.jl"),
+          """
+          module PkgStructuredPrefs
+              Base.record_compiletime_preference(Base.UUID("$uuid_str"), "levels")
+              Base.record_compiletime_preference(Base.UUID("$uuid_str"), "options")
+          end
+          """)
+    function env(prefs)
+        project = joinpath(mkpath(joinpath(load_path, "env_$(hash(prefs))")), "Project.toml")
+        write(project, """
+              [deps]
+              PkgStructured = "$uuid_str"
+
+              [preferences.PkgStructured]
+              $prefs
+              """)
+        return project
+    end
+    levels = "levels = [1, 2]"
+    options = "options = {a = 1, b = [\"x\", {c = true}]}"
+    old_proj = Base.active_project()
+    try
+        Base.set_active_project(env("$levels\n$options"))
+        cachefile, _ = Base.compilecache(Base.PkgId("PkgStructuredPrefs"))
+        pkg_file = joinpath(load_path, "PkgStructuredPrefs.jl")
+        @test Base.stale_cachefile(pkg_file, cachefile) !== true
+        Base.set_active_project(env("$levels\noptions = {b = [\"x\", {c = true}], a = 1}"))
+        @test Base.stale_cachefile(pkg_file, cachefile) !== true
+        Base.set_active_project(env("levels = [1, 2, 3]\n$options"))
+        @test Base.stale_cachefile(pkg_file, cachefile) === true
+        Base.set_active_project(env("$levels\noptions = {a = 1, b = [\"x\", {c = false}]}"))
         @test Base.stale_cachefile(pkg_file, cachefile) === true
     finally
         Base.set_active_project(old_proj)
@@ -5602,6 +5655,29 @@ precompile_test_harness("mismatched package image .so is recompiled") do load_pa
                  "JULIA_LOAD_PATH" => join([load_path, "@stdlib"], pathsep))
     @test success(pipeline(cmd; stdout, stderr))
     @test read(ocachefile) != oldso
+end
+
+# Asking about several packages at once gives the same answers as asking about each one.
+precompile_test_harness("isprecompiled for several packages") do load_path
+    depfile = joinpath(load_path, "BatchDep.jl")
+    write(depfile, "module BatchDep\nend\n")
+    write(joinpath(load_path, "BatchTop.jl"), "module BatchTop\nusing BatchDep\nend\n")
+    write(joinpath(load_path, "BatchOther.jl"), "module BatchOther\nend\n")
+    top, dep, other = Base.PkgId("BatchTop"), Base.PkgId("BatchDep"), Base.PkgId("BatchOther")
+    nosource = Base.PkgId("BatchNoSource")
+    pkgs = [top, dep, other, nosource]
+    @test Base.isprecompiled(pkgs) == [false, false, false, false]
+    Base.compilecache(top)
+    @test Base.isprecompiled(pkgs) == [true, true, false, false]
+    @test Base.isprecompiled(pkgs) == [Base.isprecompiled(top), Base.isprecompiled(dep), Base.isprecompiled(other), false]
+    @test Base.isprecompiled(Base.PkgId[]) == Bool[]
+    # a package in the system image never has to be precompiled
+    sysimage_pkg = first(pkg for pkg in keys(Base.loaded_modules) if Base.in_sysimage(pkg))
+    @test Base.isprecompiled(sysimage_pkg)
+    @test Base.isprecompiled([sysimage_pkg, top]) == [true, true]
+    # changing a dependency makes its dependents stale as well
+    write(depfile, "module BatchDep\nconst changed = true\nend\n")
+    @test Base.isprecompiled(pkgs) == [false, false, false, false]
 end
 
 # Loading marks the accepted cache file as recently used, but only in the depot that

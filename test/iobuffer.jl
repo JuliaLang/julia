@@ -16,6 +16,8 @@ new_unseekable_buffer() = Base.GenericIOBuffer(Memory{UInt8}(), true, true, fals
 @testset "Basic tests" begin
     @test_throws ArgumentError IOBuffer(;maxsize=-1)
     @test_throws ArgumentError IOBuffer([0x01]; maxsize=-1)
+    @test_throws ArgumentError IOBuffer(Memory{UInt8}(undef, 2); write=true, maxsize=-1)
+    @test_throws ArgumentError IOBuffer(UInt8[]; write=true, maxsize=-1)
 
     # Test that sizehint actually will sizehint the vector,
     v = UInt8[]

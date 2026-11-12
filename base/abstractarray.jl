@@ -3487,7 +3487,7 @@ values in the slice without affecting `A`.
 end
 
 @noinline function _inner_mapslices!(R, indices, f, A, dim_mask, Aslice, safe_for_reuse)
-    must_extend = any(dim_mask .& size(R) .> 1)
+    must_extend = any(dim_mask .& (size(R) .> 1))
     if safe_for_reuse
         # when f returns an array, R[ridx...] = f(Aslice) line copies elements,
         # so we can reuse Aslice
@@ -3497,7 +3497,7 @@ end
             r = f(Aslice)
             if r isa AbstractArray || must_extend
                 ridx = ifelse.(dim_mask, Slice.(axes(R)), Tuple(I))
-                R[ridx...] = r
+                concatenate_setindex!(R, r, ridx...)
             else
                 ridx = ifelse.(dim_mask, first.(axes(R)), Tuple(I))
                 R[ridx...] = r

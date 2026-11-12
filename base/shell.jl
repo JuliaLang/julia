@@ -94,7 +94,7 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
             atom, j = :var, stpos+3
         else
             # use parseatom instead of parse to respect filename (#28188)
-            atom, j = Meta.parseatom(s, stpos, filename=filename)
+            atom, j = Meta.parseatom(s, stpos, filename=filename, mod=Base)
         end
         interp_pos = stpos + s.offset
         s = SubString(s, j)

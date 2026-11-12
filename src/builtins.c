@@ -2148,11 +2148,14 @@ JL_CALLABLE(jl_f__expr)
 }
 
 // Typevar constructor for internal use
+// A bound may also be a TypeApp (a type application deferred while a typegroup
+// is defined, see jl_resolve_typegroup), which resolve_type_refs rebuilds into
+// a TypeVar with real bounds once the group types exist.
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
 {
-    if (lb != jl_bottom_type && !jl_is_type(lb) && !jl_is_typevar(lb))
+    if (lb != jl_bottom_type && !jl_is_type(lb) && !jl_is_typevar(lb) && !jl_is_typeapp(lb))
         jl_type_error_rt("TypeVar", "lower bound", (jl_value_t *)jl_type_type, lb);
-    if (ub != (jl_value_t *)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub))
+    if (ub != (jl_value_t *)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub) && !jl_is_typeapp(ub))
         jl_type_error_rt("TypeVar", "upper bound", (jl_value_t *)jl_type_type, ub);
     jl_task_t *ct = jl_current_task;
     jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ct->ptls, sizeof(jl_tvar_t), jl_tvar_type);
@@ -2944,7 +2947,8 @@ void jl_init_intrinsic_properties(void)
 
 void jl_init_intrinsic_functions(void)
 {
-    jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module, 0, 1);
+    jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module,
+                                      jl_get_module_edition(jl_core_module), 0, 1);
     jl_set_initial_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm, 0);
     jl_mk_builtin_func(jl_intrinsic_type, jl_symbol("IntrinsicFunction"), jl_f_intrinsic_call);
 

@@ -88,7 +88,7 @@ VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
         map(x->x isa Integer ? UInt64(x) : String(x), pre),
         map(x->x isa Integer ? UInt64(x) : String(x), bld))
 
-VersionNumber(v::Tuple) = VersionNumber(v...)
+VersionNumber(v::Tuple) = VersionNumber(v...)::VersionNumber
 VersionNumber(v::VersionNumber) = v
 
 function print(io::IO, v::VersionNumber)
@@ -759,6 +759,12 @@ const ver_regs =
 ]
 
 # Interaction with language edition: there is at most one edition per minor
-# version, and any version should specify some default edition.
-EditionNumber(v::VersionNumber) = (Int(v.major), Int(v.minor))
-VersionedParse(v::VersionNumber) = VersionedParse(EditionNumber(v))
+# version, and any version corresponds to some edition.  All editions correspond
+# to a julia release (the first release supporting them) except for
+# EXPERIMENTAL_EDITION.
+normalized_edition(v::VersionNumber) = normalized_edition((Int(v.major), Int(v.minor)))
+VersionedParse(v::VersionNumber) = VersionedParse(normalized_edition(v))
+
+const set_syntax_version = Core.set_edition # todo: deprecate
+Core.set_edition(mod::Module, v::VersionNumber) =
+    Core.set_edition(mod, normalized_edition(v))

@@ -1562,7 +1562,7 @@ let A = [1]
 end
 
 # Module() constructor
-@test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
+@test names(Module(:anonymous), all = true, imported = true) == [:anonymous, :eval, :include]
 @test names(Module(:anonymous, false), all = true, imported = true) == [:anonymous]
 @test invokelatest(getglobal, Module(:anonymous, false, true), :Core) == Core
 @test_throws UndefVarError invokelatest(getglobal, Module(:anonymous, false, false), :Core)
@@ -4271,6 +4271,47 @@ end
 @test_throws TypeError("new", DataType, Complex) eval(Expr(:splatnew, Complex, ()))
 @test_throws TypeError("new", DataType, Complex.body) eval(Expr(:splatnew, Complex.body, ()))
 
+end
+
+# types whose instances hold data that their Julia-visible fields do not describe
+# (C-only fields after them, an opaque layout, trailing variable-sized data) can only be
+# allocated by the runtime, since `new` would not set up that data
+for x in Any[which(sin, (Float64,)), current_task(),
+             Main, :sym, "str", Core.svec(1), Memory{Int}(undef, 2),
+             Vector{T} where T]
+    T = typeof(x)
+    @test Base.datatype_hashiddenfields(T)
+    vals = Any[getfield(x, i) for i in 1:(fieldcount(T) - T.name.n_uninitialized)]
+    args = Any[QuoteNode(v) for v in vals]
+    err = ErrorException("new: $(T.name.name) has hidden fields and can only be allocated by the runtime")
+    @test_throws err Core.eval(@__MODULE__, Expr(:new, T, args...))
+    fnew = @eval () -> $(Expr(:new, T, args...))
+    @test_throws err Base.invokelatest(fnew)
+    @test Base.infer_return_type(fnew, ()) === Union{}
+    @test !Core.Compiler.is_nothrow(Base.infer_effects(fnew, ()))
+    fdyn = @eval T -> $(Expr(:new, :T, args...))
+    @test_throws err Base.invokelatest(fdyn, T)
+    fsplat = @eval () -> $(Expr(:splatnew, T, Expr(:tuple, args...)))
+    @test_throws err Base.invokelatest(fsplat)
+    @test Base.infer_return_type(fsplat, ()) === Union{}
+    @test !Core.Compiler.is_nothrow(Base.infer_effects(fsplat, ()))
+    @test_throws err ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, vals, length(vals))
+    @test_throws err ccall(:jl_new_structt, Any, (Any, Any), T, Tuple(vals))
+    @test_throws err ccall(:jl_new_struct_uninit, Any, (Any,), T)
+end
+@test !Base.datatype_hashiddenfields(Core.MethodInstance)
+# the size of a type with C-only fields after its visible ones includes them
+for T in (Method, Task, UnionAll)
+    n = fieldcount(T)
+    ft = fieldtype(T, n)
+    visible_end = fieldoffset(T, n) + (Base.allocatedinline(ft) ? sizeof(ft) : sizeof(Ptr{Cvoid}))
+    al = Base.datatype_alignment(T)
+    @test sizeof(T) > cld(visible_end, al) * al
+end
+# the flag is on the TypeName, so it applies even when the type is not known exactly
+let fparam = @eval T -> $(Expr(:new, :(Memory{T})))
+    @test Base.infer_return_type(fparam, (Type,)) === Union{}
+    @test_throws ErrorException Base.invokelatest(fparam, Int)
 end
 
 # don't allow redefining types if n_uninitialized changes
@@ -8753,6 +8794,16 @@ caller63844() = f63844(1, 2, 3, 4, 5, 6, (7, 8))
 code_typed(caller63844, ())
 @test f63844(1, 2, 3, 4, 5, 6, (7, 8)) === 2
 @test caller63844() === 2
+
+# issue #64751: both methods are partial matches with the same compilation signature;
+# recording the varargs one must leave dispatch to the tuple one alone
+f64751(::DataType, ::Tuple) = :tuple
+f64751(::DataType, xs...) = :varargs
+g64751(::Vector{T}) where {T<:Union{Float32,Float64}} = f64751(T, (1, 2))
+h64751(r) = g64751(r[])
+code_typed(h64751, (Ref{Vector{<:Union{Float32,Float64}}},))
+@test f64751(Float32, (1, 2)) === :tuple
+@test f64751(Float32, 1, 2) === :varargs
 
 f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
 @test f48950(1, 1, 1) == 1

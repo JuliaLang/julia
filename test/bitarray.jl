@@ -1909,6 +1909,25 @@ end
     end
 end
 
+@testset "deleteat! and splice! with empty ranges (#64148)" begin
+    for r in (0:-1, 1:0, 4:3, 5:4)
+        b = BitVector([false, true, false])
+        v = Array(b)
+        @test deleteat!(b, r) == deleteat!(v, r) == [false, true, false]
+        @test bitcheck(b)
+
+        b = BitVector([false, true, false])
+        v = Array(b)
+        removed = splice!(b, r)
+        @test removed isa BitVector
+        @test removed == splice!(v, r) == Bool[]
+        @test b == v == [false, true, false]
+        @test bitcheck(b)
+    end
+    # An empty range with insertion still needs a valid position.
+    @test_throws BoundsError splice!(BitVector([false, true, false]), 5:4, [true])
+end
+
 @testset "fill! for BitArray with contiguous view (#42795)" begin
     # change values in range `rangein`, `rangeout` should stay unchanged
     for (rangein, rangeout) in ((1:5, 6:10), (5:10, 1:4))
