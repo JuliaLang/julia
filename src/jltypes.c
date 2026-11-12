@@ -4034,6 +4034,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
     }
 
     assert(t->types != jl_emptysvec || jl_field_names(t) == jl_emptysvec);
+    jl_deferred_typecache_t *region = typecache_region_held();
     for (j = 0; j < jl_array_nrows(partial); j++) {
         jl_datatype_t *ndt = (jl_datatype_t*)jl_array_ptr_ref(partial, j);
         if (ndt == NULL)
@@ -4046,10 +4047,12 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
         // the stack so lookup_type_stack can find it and return the
         // in-progress type instead of recursing infinitely.
         jl_typestack_t ndt_top = { ndt, &top };
-        jl_publish_fieldtypes(ndt, inst_ftypes(t->types, &env[n - 1], &ndt_top, typecache_region_held() == NULL, NULL));
-        if (ndt->isconcretetype) { // cacheable
+        jl_publish_fieldtypes(ndt, inst_ftypes(t->types, &env[n - 1], &ndt_top, region == NULL, NULL));
+        // in a region, the layout is computed at publication, once every
+        // instantiation of the group has its field types
+        if (region == NULL && ndt->isconcretetype)
             jl_compute_field_offsets(ndt);
-        }
+        assert(region == NULL || !ndt->isconcretetype || ptrhash_get(&region->pending, ndt) != HT_NOTFOUND);
         jl_array_ptr_set(partial, j, NULL);
     }
     jl_gc_write(t->name, t->name->partial, jl_array_t, NULL);
