@@ -54,15 +54,23 @@ static jl_sym_t *symtab_lookup(_Atomic(jl_sym_t*) *ptree, const char *str, size_
     jl_sym_t *node = jl_atomic_load_relaxed(ptree); // consume
     uintptr_t h = hash_symbol(str, len);
 
-    // Tree nodes sorted by major key of (int(hash)) and minor key of (str).
+    // Tree nodes are sorted by major key of (unsigned hash) and minor key of
+    // (name, in strcmp order), which is a strict total order on symbols.
     while (node != NULL) {
-        intptr_t x = (intptr_t)(h - node->hash);
-        if (x == 0) {
-            x = strncmp(str, jl_symbol_name(node), len);
-            if (x == 0 && jl_symbol_name(node)[len] == 0) {
-                if (slot != NULL)
-                    *slot = ptree;
-                return node;
+        int x;
+        if (h != node->hash) {
+            x = h < node->hash ? -1 : 1;
+        }
+        else {
+            const char *name = jl_symbol_name(node);
+            x = strncmp(str, name, len);
+            if (x == 0) {
+                if (name[len] == 0) {
+                    if (slot != NULL)
+                        *slot = ptree;
+                    return node;
+                }
+                x = -1; // str is a prefix of name
             }
         }
         if (x < 0)
