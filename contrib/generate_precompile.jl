@@ -79,7 +79,7 @@ foo(x) = 1
 @time @eval foo(1)
 ; pwd
 $CTRL_C
-$CTRL_R$CTRL_C
+$CTRL_R$CTRL_C#
 ? reinterpret
 using Ra\t$CTRL_C
 \\alpha\t$CTRL_C
@@ -361,7 +361,10 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
                     bytesavailable(output_copy) > 0 && readavailable(output_copy)
                     # push our input
                     write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
-                    write(ptm, l, "\n")
+                    # If the line ends with a CTRL_C, don't write an extra newline, which would
+                    # cause a second empty prompt. Our code below expects one new prompt per
+                    # input line and can race out of sync with the unexpected second line.
+                    endswith(l, CTRL_C) ? write(ptm, l) : write(ptm, l, "\n")
                     readuntil(output_copy, "\n")
                     # wait for the next prompt-like to appear
                     readuntil(output_copy, "\n")
