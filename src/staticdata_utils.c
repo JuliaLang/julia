@@ -603,14 +603,12 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags_current(uint8_t flags)
     return jl_match_cache_flags(jl_cache_flags(), flags);
 }
 
-// Base.GIT_VERSION_INFO.commit, which package images must have been built with.  It is read
-// once the system image is restored, so that reading a header never reaches a safepoint.
 static const char *jl_git_commit = NULL;
 
 static void jl_init_git_commit(void) JL_CANSAFEPOINT
 {
     jl_value_t *info = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO")) : NULL;
-    if (info) // absent from the bootstrap images, which no package image is built against
+    if (info)
         jl_git_commit = jl_string_data(jl_get_field(info, "commit"));
 }
 
@@ -624,39 +622,37 @@ typedef struct {
     uint64_t offset, size;
 } jl_image_section_t;
 
-// The end of the header, ending with the section table, which is in the order of the sections in
-// the payload and whose offsets are relative to the payload (see doc/src/devdocs/sysimg.md)
+#define JI_COMPAT_SIZE 128
+
 typedef struct {
-    uint64_t heap_size;              // the heap starts the payload
-    uint64_t pointer_free_offset;    // a heap offset
+    char magic[8];
+    uint16_t format_version;
+    uint16_t bom;
+    uint8_t pointer_size;
+    uint8_t reserved[3];
+    uint32_t flags;
+    uint32_t checksum;
+    char compat[JI_COMPAT_SIZE];
+    uint64_t preferred_base;
+    uint64_t payload_start;
+    uint64_t payload_size;
+    uint64_t heap_size;
+    uint64_t pointer_free_offset;
     uint64_t gvar_objects;
     uint64_t world, typeinf_world, gensym_counter;
     jl_image_section_t imports, auxdata, strtab, binds, slides, specials, gvars, fixup_types, fixup_objs, fptrs;
-} jl_image_sections_t;
-
-// The header has a fixed size, with every field at a fixed offset, so that the loader can
-// read it before the rest of the image
-#define JI_FORMAT_VERSION_OFFSET 8
-#define JI_BOM_OFFSET 10
-#define JI_POINTER_SIZE_OFFSET 12
-#define JI_FLAGS_OFFSET 16
-#define JI_CHECKSUM_OFFSET 20
-#define JI_COMPAT_OFFSET 24
-#define JI_COMPAT_SIZE 128
-#define JI_PREFERRED_BASE_OFFSET 152
-#define JI_PAYLOAD_START_OFFSET 160
-#define JI_PAYLOAD_SIZE_OFFSET 168
-#define JI_SECTIONS_OFFSET 176
-#define JI_HEADER_SIZE (JI_SECTIONS_OFFSET + sizeof(jl_image_sections_t))
+} jl_ji_header_t;
+static_assert(sizeof(jl_ji_header_t) == 384, "the header has no padding");
+static_assert(offsetof(jl_ji_header_t, payload_start) == 160 &&
+              offsetof(jl_ji_header_t, payload_size) == 168,
+              "update base/loading.jl if these offsets change");
 
 // This .ji is for an incremental image and not a system image.
 static const uint32_t JI_FLAG_PKGIMAGE = 1 << 0;
 // This .ji must be loaded from the associated native image (.so/.dylib/.dll).
 static const uint32_t JI_FLAG_SPLIT = 1 << 1;
 
-// The strings an image must have been built with to be loaded by this Julia, separated by `;`
-// and padded with NUL.  Returns 0 if they do not fit.
-static int jl_image_compat(char compat[JI_COMPAT_SIZE], uint32_t flags) JL_NOTSAFEPOINT
+static void jl_image_compat(char compat[JI_COMPAT_SIZE], uint32_t flags) JL_NOTSAFEPOINT
 {
     assert(!(flags & JI_FLAG_PKGIMAGE) || jl_git_commit);
     memset(compat, 0, JI_COMPAT_SIZE);
@@ -664,32 +660,20 @@ static int jl_image_compat(char compat[JI_COMPAT_SIZE], uint32_t flags) JL_NOTSA
                      JULIA_VERSION_STRING, jl_gc_image_abi(),
                      (flags & JI_FLAG_PKGIMAGE) ? ";" : "",
                      (flags & JI_FLAG_PKGIMAGE) ? jl_git_commit : "");
-    return n >= 0 && n < JI_COMPAT_SIZE;
+    assert(n >= 0 && n < JI_COMPAT_SIZE);
+    (void)n;
 }
 
-// Write the header, leaving the checksum, the preferred base, the payload bounds and the section table
-// to be filled in once the payload has been written
-static void write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT
+static jl_ji_header_t ji_header_init(uint32_t flags) JL_CANSAFEPOINT
 {
-    char compat[JI_COMPAT_SIZE];
-    if (!jl_image_compat(compat, flags))
-        jl_error("Image compatibility string does not fit in the image header.");
-    assert(ios_pos(s) == 0);
-    ios_write(s, JI_MAGIC, strlen(JI_MAGIC));
-    write_uint16(s, JI_FORMAT_VERSION);
-    ios_write(s, (char *) &BOM, 2);
-    write_uint8(s, sizeof(void*));
-    static const char reserved[JI_FLAGS_OFFSET - JI_POINTER_SIZE_OFFSET - 1] = {0};
-    ios_write(s, reserved, sizeof(reserved));
-    write_uint32(s, flags);
-    write_uint32(s, 0); // checksum of the payload (build_id.hi)
-    ios_write(s, compat, JI_COMPAT_SIZE);
-    write_uint64(s, 0); // preferred_base
-    write_uint64(s, 0); // payload_start
-    write_uint64(s, 0); // payload_size
-    jl_image_sections_t h = {0};
-    ios_write(s, (char*)&h, sizeof(h));
-    assert(ios_pos(s) == JI_HEADER_SIZE);
+    jl_ji_header_t h = {0};
+    jl_image_compat(h.compat, flags);
+    memcpy(h.magic, JI_MAGIC, sizeof(h.magic));
+    h.format_version = JI_FORMAT_VERSION;
+    h.bom = BOM;
+    h.pointer_size = sizeof(void*);
+    h.flags = flags;
+    return h;
 }
 
 static int is_serialization_root_module(jl_module_t *mod) JL_NOTSAFEPOINT
@@ -972,31 +956,28 @@ static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *depmods) JL_CANSAF
     }
 }
 
-// Read and check the header, leaving `s` just past it
-JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *checksum, uint64_t *preferred_base, int64_t *payload_start, int64_t *payload_size, int64_t *heap_size) JL_NOTSAFEPOINT
+static int jl_verify_header(const jl_ji_header_t *h) JL_NOTSAFEPOINT
 {
-    char header[JI_HEADER_SIZE];
-    if (ios_readall(s, header, JI_HEADER_SIZE) != JI_HEADER_SIZE)
-        return -1;
-    uint16_t version, bom;
-    memcpy(&version, header + JI_FORMAT_VERSION_OFFSET, sizeof(version));
-    memcpy(&bom, header + JI_BOM_OFFSET, sizeof(bom));
-    if (memcmp(header, JI_MAGIC, strlen(JI_MAGIC)) != 0 || version != JI_FORMAT_VERSION ||
-        bom != BOM || (uint8_t)header[JI_POINTER_SIZE_OFFSET] != sizeof(void*))
-        return -1;
-    memcpy(flags, header + JI_FLAGS_OFFSET, sizeof(*flags));
     char compat[JI_COMPAT_SIZE];
-    if (!jl_image_compat(compat, *flags) ||
-        memcmp(header + JI_COMPAT_OFFSET, compat, JI_COMPAT_SIZE) != 0)
-        return -1;
-    memcpy(checksum, header + JI_CHECKSUM_OFFSET, sizeof(*checksum));
-    memcpy(preferred_base, header + JI_PREFERRED_BASE_OFFSET, sizeof(*preferred_base));
-    memcpy(payload_start, header + JI_PAYLOAD_START_OFFSET, sizeof(*payload_start));
-    memcpy(payload_size, header + JI_PAYLOAD_SIZE_OFFSET, sizeof(*payload_size));
-    jl_image_sections_t h;
-    memcpy(&h, header + JI_SECTIONS_OFFSET, sizeof(h));
-    *heap_size = h.heap_size;
-    return 0;
+    jl_image_compat(compat, h->flags);
+    return memcmp(h->magic, JI_MAGIC, sizeof(h->magic)) == 0 &&
+           h->format_version == JI_FORMAT_VERSION && h->bom == BOM &&
+           h->pointer_size == sizeof(void *) &&
+           memcmp(h->compat, compat, JI_COMPAT_SIZE) == 0;
+}
+
+static int jl_read_verify_header(ios_t *s, jl_ji_header_t *h) JL_NOTSAFEPOINT
+{
+    return ios_readall(s, (char*)h, sizeof(*h)) == sizeof(*h) && jl_verify_header(h);
+}
+
+JL_DLLEXPORT int jl_read_verify_pkgimage_header(ios_t *s, uint32_t *checksum) JL_NOTSAFEPOINT
+{
+    jl_ji_header_t h;
+    if (!jl_read_verify_header(s, &h) || !(h.flags & JI_FLAG_PKGIMAGE))
+        return 0;
+    *checksum = h.checksum;
+    return 1;
 }
 
 // Returns `depmodidxs` where `j = depmodidxs[i]` corresponds to the blob `depmods[j]` in `write_mod_list`
