@@ -638,7 +638,23 @@ end
 @test `{a}` == Cmd(["{a}"])             # single item: no expansion (literal)
 @test `{}` == Cmd(["{}"])               # empty braces: no expansion (literal)
 @test `x{y}z` == Cmd(["x{y}z"])        # no comma: literal
-@test `{a,{b,c},d}` == Cmd(["a", "{b,c}", "d"])  # nested braces: inner not expanded
+@test `{a,{b,c},d}` == Cmd(["a", "b", "c", "d"])  # nested braces
+@test `a{x,b{c,d}}e` == Cmd(["axe", "abce", "abde"])
+@test `{a,{1..3}}` == Cmd(["a", "1", "2", "3"])
+@test `{a,{b}c}` == Cmd(["a", "{b}c"])  # inner braces without a comma are literal
+@test `{a,{b}` == Cmd(["{a,{b}"])       # no matching `}`: literal
+# the text inside braces follows the same rules as the rest of the command
+@test `{a,$(")")}x` == Cmd(["ax", ")x"])
+@test @cmd("{a,b\\\nc}") == Cmd(["a", "bc"])  # line continuation
+@test `{~,x}` == Cmd([homedir(), "x"])
+let v = ["x", "y"]
+    @test `{a,$v}` == Cmd(["a", "x", "y"])  # an interpolated collection is expanded
+    @test `{a,pre$v}` == Cmd(["a", "prex", "prey"])
+end
+@test_throws "unterminated double quote" Base.shell_parse("{a,\"b\$}")
+@test_throws "must be quoted" eval(:(`{a,b*}`))
+@test_throws "unquoted `|` inside braces" eval(:(`{a,b|c}`))
+@test_throws "unquoted `>` inside braces" eval(:(`{a,b>c}`))
 # brace expansion works through shell mode path
 let echostr = Base.shell_escape(echocmd)
     mktempdir() do dir
@@ -814,6 +830,43 @@ let a = pipeline(`a`, `b`), b = pipeline(`a`, `b`)
     @test pipeline(`a`, stdout="f") != pipeline(`a`, stdout=Base.FileRedirect("f", true))
     @test pipeline(`a`, stdout=`b`) != pipeline(`a`, stderr=`b`)
     @test (`a` & `b`) == (`a` & `b`) != (`a` & `c`)
+end
+
+# Parsing of pipelines and redirections
+let sp(s) = eval(Base.shell_parse(s; special=Base.shell_special)[1])
+    # a word right before an operator ends like any other word
+    @test sp("cat >a<b") == pipeline(`cat`, stdin="b", stdout="a")
+    @test sp("cat \"q\">  x") == pipeline(`cat q`, stdout="x")
+    @test sp("cat ''>f") == pipeline(`cat ''`, stdout="f")  # an empty quoted argument is kept
+    @test sp("cat <in>out") == pipeline(`cat`, stdin="in", stdout="out")
+    @test sp("cat 2>a>b") == pipeline(`cat`, stdout="b", stderr="a")
+    @test sp("cat 2>>e") == pipeline(`cat`, stderr=Base.FileRedirect("e", true))
+    @test sp("a | b >f | c") == pipeline(`a`, pipeline(`b`, stdout="f"), `c`)
+    # an interpolation is not an fd number, and a line continuation is removed
+    @test sp("cat \$(\"2\")>f") == pipeline(`cat 2`, stdout="f")
+    @test sp("cat 2\\\n>f") == pipeline(`cat`, stderr="f")
+    @test sp("cat \\\n>f") == pipeline(`cat`, stdout="f")
+    @test_throws "redirect operator without filename" sp("cat > | wc")
+    @test_throws "redirect operator without filename" sp("cat >>> f")
+    @test_throws "redirect operator without filename" sp("cat < > f")
+    @test_throws "redirect operator without filename" sp("cat >")
+    @test_throws "redirect operator without filename" sp("cat 2>2>a")  # the second `2` is an fd
+    @test_throws "stdout is redirected more than once" sp("cat >a>b")
+    @test_throws "stdout is redirected more than once" sp("cat >a 1>>b")
+    @test_throws "stderr is redirected more than once" sp("cat 2>a 2>b")
+    @test_throws "stdin is redirected more than once" sp("cat <a <b | wc")
+    @test_throws "empty command in pipeline" sp("| wc")
+    @test_throws "empty command in pipeline" sp("cat |")
+    @test_throws "empty command in pipeline" sp("cat | | wc")
+    @test_throws "redirection without a command" sp("> f")
+    @test_throws "brace expansion in a redirection target" sp("cat > {a,b}")
+    # a partial parse, for REPL completion, accepts a command that ends early and returns
+    # the words of the last command, including redirection targets
+    pp(s) = Base.shell_parse(s; partial=true)[1]
+    @test pp("cat |") == Expr(:tuple, Expr(:tuple))
+    @test pp("echo hi | gr") == :((("gr",),))
+    @test pp("cat 2>> lo") == :((("cat",), ("lo",)))
+    @test pp("cat >") == :((("cat",),))
 end
 
 let roundtrip(s) = first(Base.shell_split(Base.shell_escape(s))) == s
