@@ -629,7 +629,7 @@ public:
     Allocation alloc(SplitPtrBlock &block, size_t size, size_t align) override
     {
         Allocation a = block.alloc(size, align);
-        a.wr_addr = size > 0 ? (char *)malloc(size) : nullptr;
+        a.wr_addr = size > 0 ? (char *)calloc(size) : nullptr;
         ++block.in_flight;
         return a;
     }
