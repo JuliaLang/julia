@@ -82,7 +82,13 @@ LLVM_EXPERIMENTAL_TARGETS :=
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
 LLVM_CPPFLAGS :=
-LLVM_LDFLAGS := "-L$(build_shlibdir)" # hacky way to force zlib to be found when linking against libLLVM and sysroot is set
+LLVM_LDFLAGS :=
+# Find our zlib when linking against libLLVM with a sysroot toolchain. ld64 does not
+# need this, and must not get the `-L`: it looks there first for the libraries that
+# libSystem re-exports, and would bind libLLVM's `__register_frame` to our libunwind.
+ifneq ($(OS),Darwin)
+LLVM_LDFLAGS += "-L$(build_shlibdir)"
+endif
 LLVM_CMAKE :=
 
 LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
