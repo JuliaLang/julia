@@ -58,16 +58,16 @@ using namespace llvm;
  * distance for relocations on the current architecture, putting the code and
  * data sections inside this block:
  *
- *     v-- 2^JULIA_CGMEM_BLOCK_SIZE --v
+ *     v-- 2^JULIA_CGMEMMGR_BLOCK_SIZE --v
  *
- *  ---+---------------------+--------+----
- *     | RX                  | RW     |
- *  ---+---------------------+--------+----
+ *  ---+------------------------+--------+----
+ *     | RX                     | RW     |
+ *  ---+------------------------+--------+----
  *
  * We make allocations inside the RX and RW regions (read-only data goes into
  * the RX region for compactness) until one or the other is full, then we unmap
  * unused pages and make a new block elsewhere.  The size of a block can be set
- * with JULIA_CGMEM_BLOCK_SIZE, while the ratio of RX to RW within the block is
+ * with JULIA_CGMEMMGR_BLOCK_SIZE, while the ratio of RX to RW within the block is
  * fixed, based on empirical measurements.  If an allocation requires more space
  * than is available in a single block, contiguous pages are allocated at an
  * arbitrary address for it.
@@ -513,7 +513,7 @@ public:
         b.ptr = (char *)MapViewOfFile(hdl, FILE_MAP_ALL_ACCESS | FILE_MAP_EXECUTE, 0, 0, size);
         assert(b.ptr && "Cannot map RX view");
         DWORD file_mode;
-        VirtualProtect(b.ptr, size, PAGE_EXECUTE_READ | FILE_MAP_EXECUTE, &file_mode);
+        VirtualProtect(b.ptr, size, PAGE_EXECUTE_READ, &file_mode);
 
         b.wr_ptr = (char *)MapViewOfFile(hdl, FILE_MAP_ALL_ACCESS, 0, 0, size);
         assert(b.wr_ptr && "Cannot map RW view");
