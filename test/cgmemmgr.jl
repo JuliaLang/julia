@@ -11,8 +11,9 @@ for i in 1:100
 end
 """
 
+# /proc/self/mem must be accessible so we can test SelfMemMapper
 map_types = Sys.islinux() ? ["dual", "selfmem", "fallback"] : ["dual", "fallback"]
-block_sizes = [16, 22]
+block_sizes = [s for s in [14, 16, 22] if s > log2(Sys.PAGESIZE)]
 
 for block_size in block_sizes
     for map_type in map_types

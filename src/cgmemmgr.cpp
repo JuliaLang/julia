@@ -764,7 +764,7 @@ protected:
         if (block_size_bits > (CALL_RANGE - 1))
             jl_error("JULIA_CGMEMMGR_BLOCK_SIZE is too big for call relocations");
         else if (((size_t)1 << block_size_bits) <= jl_page_size)
-            jl_error("JULIA_CGMEMMGR_BLOCK_SIZE is smaller than page size");
+            jl_error("JULIA_CGMEMMGR_BLOCK_SIZE must be larger than page size");
 
         int pages = ((size_t)1 << block_size_bits) / jl_page_size;
         int rx_pages = pages * DEFAULT_TEXT_DATA_RATIO / (1 + DEFAULT_TEXT_DATA_RATIO);
