@@ -306,6 +306,16 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         edge = sig
                     elseif edge isa Core.Binding
                         j += 1
+                        if isdefined(edge, :partitions)
+                            # The usual case: the binding still has the leaf partition it had at
+                            # the require world. The access range is then that partition's, which
+                            # constrains neither end of the range found so far.
+                            let p = edge.partitions
+                                if p.min_world <= get_require_world() && p.max_world == typemax(UInt) && is_leaf_partition(p)
+                                    continue
+                                end
+                            end
+                        end
                         # Check that what of and how this code accessed the leaf partition is still valid.
                         wr = binding_access_range_at(edge, validation_world)
                         if min_world(wr) > get_require_world()
