@@ -9527,6 +9527,15 @@ struct Bar{T}; x::Foo{T, Nothing}; end
 end
 @test fieldtype(LazySuperBound.Bar{LazySuperBound.NewT}, :x) === LazySuperBound.Foo{LazySuperBound.NewT, Nothing}
 
+# the bound check of an instantiation's supertype needs that supertype: a circular
+# constraint, as for a definition, not an infinite recursion
+module SuperSeesItself
+abstract type A{X} end
+abstract type B{X<:A} end
+struct S{T} <: A{B{S{T}}} end
+end
+@test_throws "circular type parameter constraint" SuperSeesItself.S{Int}
+
 # Method tables and dispatch caches keep their entries in insertion-ordered dicts that
 # grow by appending. Every entry must stay reachable as a dict grows through many sizes.
 module OrderedDictGrowth

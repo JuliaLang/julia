@@ -3410,7 +3410,7 @@ JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_RO
 
 // Fill in the supertype of an instantiation that does not have it yet, from
 // its type's declaration. Returns NULL if the type's definition is still in
-// progress. Consumers that do not funnel through here (raw `getfield`,
+// progress, or if its own instantiation is still computing it. Consumers that do not funnel through here (raw `getfield`,
 // direct C reads) see either the published value or an undefined field: the
 // Julia-side metadata declares `super` maybe-undefined, non-const and atomic,
 // so an unfilled slot reads as `UndefRefError`, never as garbage.
@@ -3430,7 +3430,13 @@ JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROP
     // nested in an instantiation of the current task (through the subtyping
     // of a cache lookup), continue its stack: a type that instantiation is
     // still building is found there instead of being created a second time
-    jl_typestack_t stop = { ndt, typecache_stack_held() };
+    jl_typestack_t *held = typecache_stack_held();
+    // computing it again would reach the same demand (`struct S{T} <: A{B{S{T}}}`
+    // with `B{X<:A}`): as for a definition, subtyping reports the circularity
+    for (jl_typestack_t *st = held; st != NULL; st = st->prev)
+        if (st->tt == ndt)
+            return NULL;
+    jl_typestack_t stop = { ndt, held };
     jl_value_t *s = inst_declared_super(primarydt, ndt, &stop, 1, 0, NULL);
     // concurrent first queries compute equal values; the compare-and-swap
     // keeps a single winner
