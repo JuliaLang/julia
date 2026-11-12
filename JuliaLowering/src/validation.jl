@@ -283,6 +283,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [:generated_lambda _...] -> vst1_generated_lambda(vcx, st)
     [:var"with-static-parameters" lam sps...] ->
         vst1_raw_lambda(vcx, lam) & allv(vst1_ident_lhs, vcx, sps)
+    [:toplevel_pure lam] -> @stm lam begin
+        [:var"with-static-parameters" _...] -> vst1(vcx, lam)
+        lam -> vst1_raw_lambda(vcx, lam)
+    end
     [:softscope _] -> pass()
     [:softscope] -> pass()
     [:generated] -> pass()
