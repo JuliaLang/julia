@@ -1925,7 +1925,7 @@ end
     end
 end
 
-@testset "loading from source again after a failure" begin
+@testset "retrying a failed extension load" begin
     mktempdir() do dir
         parent_uuid = "e3000000-0000-0000-0000-000000000001"
         dep_uuid = "e3000000-0000-0000-0000-000000000002"
@@ -1939,10 +1939,14 @@ end
             RetryDep = "$dep_uuid"
             [extensions]
             RetryExt = "RetryDep"
+            RetryBodyExt = "RetryDep"
             """)
         write(joinpath(dir, "RetryParent", "src", "RetryParent.jl"), "module RetryParent end\n")
         extfile = joinpath(dir, "RetryParent", "ext", "RetryExt.jl")
-        write(extfile, "module RetryExt\nerror(\"broken extension\")\nend\n")
+        # fail before the module is created, so the retry reads the file again
+        write(extfile, "error(\"broken extension\")\nmodule RetryExt end\n")
+        bodyextfile = joinpath(dir, "RetryParent", "ext", "RetryBodyExt.jl")
+        write(bodyextfile, "module RetryBodyExt\nerror(\"broken extension body\")\nend\n")
         write(joinpath(dir, "RetryDep", "Project.toml"), """
             name = "RetryDep"
             uuid = "$dep_uuid"
@@ -1952,10 +1956,12 @@ end
         script = """
             loads_broken() = try Base.require(Main, :RetryBroken); true; catch; false; end
             loads_broken() && error("broken package loaded")
-            loads_broken() && error("broken package loaded on the second attempt")
+            # a second load finds the partly defined module
+            loads_broken() || error("the partly defined module was dropped")
             using RetryParent, RetryDep
             isext() = Base.get_extension(RetryParent, :RetryExt) isa Module
             isext() && error("extension loaded")
+            write($(repr(bodyextfile)), "module RetryBodyExt\nfixed() = true\nend\n")
             Base.retry_load_extensions()
             isext() && error("extension loaded on retry")
             length(Base.EXT_DORMITORY_FAILED) == 1 || error("the failed extension was forgotten")
@@ -1964,6 +1970,8 @@ end
             isext() || error("extension did not load on retry")
             isempty(Base.EXT_DORMITORY_FAILED) || error("the extension is still listed as failed")
             ext = Base.get_extension(RetryParent, :RetryExt)
+            bodyext = Base.get_extension(RetryParent, :RetryBodyExt)
+            println(stderr, "body extension reread: ", bodyext isa Module && isdefined(bodyext, :fixed))
             ms = UInt64(1_000_000)
             Base.print_time_imports_report(ext, 2ms, 1ms, ms ÷ 200)
             Base.print_time_imports_report(RetryDep, 2ms, UInt64(0), UInt64(0))
@@ -1980,6 +1988,8 @@ end
         @test ok
         @test count("Error during loading of extension RetryExt of RetryParent, use `Base.retry_load_extensions()` to retry", errtext) == 2
         @test occursin("broken extension", errtext)
+        # the retry returns the partly defined module without reading the fixed file (#25720)
+        @test_broken occursin("body extension reread: true", errtext)
         lines = split(String(take!(out)), '\n'; keepempty=false)
         @test strip.(lines) == [
             "2.0 ms  RetryParent → RetryExt 50.00% compilation time (<1% recompilation)",

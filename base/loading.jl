@@ -3336,9 +3336,6 @@ function __require_prelocked(pkg::PkgId, env)
     try
         include(__toplevel__, path)
         loaded = maybe_root_module(pkg)
-    catch
-        unreference_module(pkg) # later loads must not find the partly defined module
-        rethrow()
     finally
         Core.set_edition(__toplevel__, old_toplevel_edition)
         lock(require_lock)
