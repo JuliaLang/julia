@@ -80,7 +80,14 @@ end
     @test isapprox(missing, 1.0, atol=1e-6) === missing
     @test isapprox(1.0, missing, rtol=1e-6) === missing
 
-    @test all(==(Bool), Base.return_types(isequal, Tuple{Any,Any}))
+    # Only Base's methods: earlier tests on this worker may have added their own (arrayops'
+    # totally_not_five26034) or loaded stdlibs that do (Random loads SparseArrays)
+    let ms = collect(methods(isequal, Tuple{Any,Any})),
+        rts = Base.return_types(isequal, Tuple{Any,Any})
+        @test all(zip(ms, rts)) do (m, rt)
+            Base.moduleroot(parentmodule(m)) !== Base || rt === Bool
+        end
+    end
 end
 
 @testset "arithmetic operators" begin
