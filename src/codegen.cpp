@@ -1991,6 +1991,11 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
     // runtime values) if `(TIndex & UNION_BOX_MARKER) != 0`, then `Vboxed == V` (by value).
     // For convenience, we also set this value of isboxed values, in which case
     // it is equal (at compile time) to V.
+    // An unboxed value (no TIndex, not isboxed) may also carry a box of itself that exists
+    // only on some paths: then, at runtime, `Vboxed` is either NULL or a box holding this
+    // value. `boxed` returns that box instead of allocating, and `convert_julia_type_to_union`
+    // uses it as the union's box. A value narrowed from a split union, for example, keeps the
+    // union's box pointer.
 
     // If this is non-NULL (at compile time), it is always of type `T_prjlvalue`.
     // N.B.: In general we expect this to always be a dereferenceable pointer at runtime.
@@ -2882,6 +2887,15 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
             if (!allow_mismatch)
                 CreateTrap(ctx.builder);
             return jl_cgval_t();
+        }
+        if (v.Vboxed) {
+            // keep the box only where it holds this value, so that boxing the
+            // value again can reuse it
+            jl_cgval_t ret(v, typ, NULL);
+            Value *isboxed = ctx.builder.CreateICmpEQ(v.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()),
+                    UNION_BOX_MARKER | get_box_tindex((jl_datatype_t*)typ, v.typ)));
+            ret.Vboxed = ctx.builder.CreateSelect(isboxed, v.Vboxed, Constant::getNullValue(ctx.types().T_prjlvalue));
+            return ret;
         }
     }
     return jl_cgval_t(v, typ, NULL);
@@ -7678,9 +7692,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         jl_value_t *ty = argv[0].typ;
         // requires an egality-pinned type value: the constructed instance must
         // have exactly the runtime type object, not an `==`-equal rep (#61323)
-        if (is_uniquerep_Type(ty) &&
-                jl_is_datatype(jl_some_Type_T(ty)) &&
-                jl_is_concrete_type(jl_some_Type_T(ty))) {
+        // (any other type takes the runtime call, which throws)
+        if (is_uniquerep_Type(ty) && jl_is_generic_new_type(jl_some_Type_T(ty))) {
             jl_value_t *tp0 = jl_some_Type_T(ty);
             assert(nargs <= jl_datatype_nfields(tp0) + 1);
             jl_cgval_t res = emit_new_struct(ctx, tp0, nargs - 1, ArrayRef<jl_cgval_t>(argv).drop_front(), is_promotable);

@@ -11,6 +11,8 @@ CHECKBOUNDS_DEPOT := $(CHECKBOUNDS_DIR)/share/julia
 # set some influential environment variables
 export JULIA_DEPOT_PATH := $(shell echo $(call cygpath_w,$(DEPOTDIR)))
 export JULIA_LOAD_PATH := @stdlib$(PATHSEP)$(shell echo $(call cygpath_w,$(JULIAHOME)/stdlib))
+# The objcache would otherwise be created in the build depot
+export JULIA_OBJCACHE := 0
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
 

@@ -2,7 +2,7 @@ module Tokenize
 
 export tokenize, untokenize
 
-using ..JuliaSyntax: JuliaSyntax, Kind, @K_str, @KSet_str, @callsite_inline,
+using ..JuliaSyntax: JuliaSyntax, Kind, @K_str, @KSet_str,
     generic_operators_by_level, PrecedenceLevel, PREC_NONE, PREC_ASSIGNMENT,
     PREC_PAIRARROW, PREC_CONDITIONAL, PREC_ARROW, PREC_LAZYOR, PREC_LAZYAND,
     PREC_COMPARISON, PREC_PIPE_LT, PREC_PIPE_GT, PREC_COLON, PREC_PLUS,
@@ -1213,14 +1213,14 @@ function lex_identifier(l::Lexer, c)
             @inbounds if (pc_byte == UInt8('!') && ppc == '=') || !ascii_is_identifier_char[pc_byte+1]
                 break
             end
-        elseif @callsite_inline Unicode.isgraphemebreak!(graphemestate, c, pc)
+        elseif @inline Unicode.isgraphemebreak!(graphemestate, c, pc)
             if (pc == '!' && ppc == '=') || !is_identifier_char(pc)
                 break
             end
         elseif pc in ('\u200c','\u200d') # ZWNJ/ZWJ control characters
             # ZWJ/ZWNJ only within grapheme sequences, not at end
             graphemestate_peek[] = graphemestate[]
-            if @callsite_inline Unicode.isgraphemebreak!(graphemestate_peek, pc, ppc)
+            if @inline Unicode.isgraphemebreak!(graphemestate_peek, pc, ppc)
                 break
             end
         end

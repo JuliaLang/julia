@@ -1286,13 +1286,35 @@ end
 end
 
 
-let S = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [TypeVar(:T), Any], 2),
+let S = ccall(:jl_new_unionall, Any, (Any, Any), TypeVar(:T), Any),
     VS = TypeVar(:T),
-    T = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [VS, VS], 2)
+    T = ccall(:jl_new_unionall, Any, (Any, Any), VS, VS)
     # check (T where T) == (Any where T)
     # these types are not normally valid, but check them just to make sure subtyping is robust
     @test T <: S
     @test S <: T
+end
+
+# `UnionAll` memoizes structural facts in a hidden flag word on first query
+@test fieldnames(UnionAll) === (:var, :body)
+let T = TypeVar(:T), S = TypeVar(:S)
+    closed = Vector{T} where T
+    open = Pair{T, S} where T # `S` is free
+    for _ in 1:2 # the second round reads the memo
+        @test !Base.has_free_typevars(closed)
+        @test Base.has_free_typevars(open)
+        @test !Base.has_free_typevars(Tuple{Int, closed})
+        @test Base.has_free_typevars(Tuple{Int, open})
+        @test !Base.has_free_typevars(UnionAll(S, Tuple{closed, open}))
+        @test Base.has_free_typevars(Tuple{closed, Union{Int, open}})
+        @test !Base.has_typevar(Tuple{closed, open}, T)
+        @test Base.has_typevar(Tuple{closed, open}, S)
+    end
+    # a raw node (not normalized by the constructor) starts with nothing memoized
+    U = ccall(:jl_new_unionall, Any, (Any, Any), S, Pair{S, T})
+    @test Base.has_free_typevars(U)
+    @test Base.has_free_typevars(U)
+    @test !Base.has_free_typevars(UnionAll(T, U))
 end
 
 # issue #20121
@@ -3762,5 +3784,31 @@ end
             (Tuple{f, Ref{T}} where T<:AbstractString, Tuple{f, Ref{S}} where S<:Integer, false)]
         @test (typeintersect(a, b) === Union{}) == empty
         @test (typeintersect(b, a) === Union{}) == empty
+    end
+end
+
+struct Q61645{T,S} end
+@testset "intersection typevar with a typevar upper bound" begin
+    let X = Ref{Tuple{Type{Q61645{T}},T}} where T,
+        Y = Ref{Tuple{Type{Q61645{T,S} where S<:T},T}} where T,
+        V = Ref{Tuple{Type{Q61645{Any}},Any}}
+        @test V <: typeintersect(X, Y)
+        @test V <: typeintersect(Y, X)
+    end
+    let X = Ref{Tuple{Type{Q61645{T,Tuple{S}} where S},T}} where T,
+        Y = Ref{Tuple{Type{Q61645{T,Tuple{S}} where S<:T},T}} where T,
+        V = Ref{Tuple{Type{Q61645{Any,Tuple{S}} where S},Any}}
+        @test V <: typeintersect(X, Y)
+        @test V <: typeintersect(Y, X)
+    end
+    let X = Ref{Type{Q61645{T,S} where S<:T}} where T<:Real,
+        Y = Ref{Type{Q61645{T,S} where Int<:S<:Union{Int,T}}} where T>:Int
+        @test typeintersect(X, Y) === Union{}
+        @test typeintersect(Y, X) === Union{}
+    end
+    let X = Ref{Type{Q61645{T,Tuple{S}} where S<:T}} where T<:Real,
+        Y = Ref{Type{Q61645{T,Tuple{S}} where Int<:S<:Union{Int,T}}} where T>:Int
+        @test typeintersect(X, Y) === Union{}
+        @test typeintersect(Y, X) === Union{}
     end
 end

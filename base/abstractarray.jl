@@ -1752,10 +1752,15 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
 _typed_vcat_similar(V, ::Type{T}, n) where T = similar(first(V), T, n)
-_typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
-    _typed_vcat!(_typed_vcat_similar(V, T, sum(map(length, V))), V)
+function _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T
+    n = 0
+    for Vk in V
+        n += Int(length(Vk))::Int
+    end
+    return _typed_vcat!(_typed_vcat_similar(V, T, n), V)
+end
 
-function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
+function _typed_vcat!(a::AbstractArray{T}, V::AbstractVecOrTuple{AbstractArray}) where T
     pos = 1
     for Vk in V
         p1 = pos + Int(length(Vk))::Int - 1
@@ -1781,31 +1786,13 @@ hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
 function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
     nrows = size(first(A), 1)
     ncols = 0
-    dense = true
     for Aj in A
         if size(Aj, 1) != nrows
-            throw(DimensionMismatch("number of rows of each array must match (got $(map(x->size(x,1), A)))"))
+            throw(DimensionMismatch("number of rows of each array must match (got $nrows and $(size(Aj, 1)))"))
         end
-        dense &= isa(Aj,Array)
-        nd = ndims(Aj)
-        ncols += (nd==2 ? size(Aj,2) : 1)
+        ncols += size(Aj, 2)
     end
-    B = similar(first(A), T, nrows, ncols)
-    pos = 1
-    if dense
-        for Ak in A
-            n = length(Ak)
-            copyto!(B, pos, Ak, 1, n)
-            pos += n
-        end
-    else
-        for Ak in A
-            p1 = pos+(isa(Ak,AbstractMatrix) ? size(Ak, 2) : 1)-1
-            B[:, pos:p1] = Ak
-            pos = p1+1
-        end
-    end
-    return B
+    return _typed_vcat!(similar(first(A), T, nrows, ncols), A)
 end
 
 vcat(A::AbstractVecOrMat...) = typed_vcat(promote_eltype(A...), A...)
@@ -1906,7 +1893,9 @@ function dims2cat(dims)
     ntuple(in(dims), maximum(dims))
 end
 
-_cat(dims, X...) = _cat_t(dims, promote_eltypeof(X...), X...)
+# `_cat` and `__cat` are inlined so that a call with few arguments reaches `__cat_offset!`
+# with concrete types: on their own they would be compiled for `Vararg{Any}`
+@inline _cat(dims, X...) = _cat_t(dims, promote_eltypeof(X...), X...)
 
 @inline function _cat_t(dims, ::Type{T}, X...) where {T}
     catdims = dims2cat(dims)
@@ -1922,7 +1911,8 @@ end
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
 
 # Why isn't this called `__cat!`?
-__cat(A, shape, catdims, X...) = __cat_offset!(A, shape, catdims, ntuple(Returns(0), length(shape)), X...)
+@inline __cat(A, shape, catdims, X...) =
+    __cat_offset!(A, shape, catdims, ntuple(Returns(0), length(shape)), X...)
 
 function __cat_offset!(A, shape, catdims, offsets, x, X...)
     # splitting the "work" on x from X... may reduce latency (fewer costly specializations)
@@ -2172,7 +2162,7 @@ julia> a * b
 """
 @inline cat(A...; dims) = _cat(dims, A...)
 # `@constprop :aggressive` allows `catdims` to be propagated as constant improving return type inference
-@constprop :aggressive _cat(catdims, A::AbstractArray{T}...) where {T} = _cat_t(catdims, T, A...)
+@constprop :aggressive @inline _cat(catdims, A::AbstractArray{T}...) where {T} = _cat_t(catdims, T, A...)
 
 # The specializations for 1 and 2 inputs are important
 # especially when running with --inline=no, see #11158

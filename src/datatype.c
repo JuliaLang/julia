@@ -87,6 +87,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->abstract = abstract;
     tn->mutabl = mutabl;
     tn->mayinlinealloc = 0;
+    tn->hiddenfields = 0;
     tn->partial = NULL;
     tn->atomicfields = NULL;
     tn->constfields = NULL;
@@ -642,6 +643,19 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
     }
 }
 
+// the size of the C struct of a type whose Julia-visible fields are only a prefix of it,
+// so that `sizeof(T)` is the size of its instances (0 for any other type)
+static size_t hidden_struct_size(jl_datatype_t *st) JL_NOTSAFEPOINT
+{
+    if (st == jl_method_type)
+        return sizeof(jl_method_t);
+    if (st == jl_task_type)
+        return sizeof(jl_task_t);
+    if (st == jl_unionall_type)
+        return sizeof(jl_unionall_t);
+    return 0;
+}
+
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
     const uint64_t max_offset = (((uint64_t)1) << 32) - 1;
@@ -850,6 +864,13 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             haspadding = 1;
             sz = LLT_ALIGN(sz, alignm);
         }
+        size_t structsz = hidden_struct_size(st);
+        if (structsz) {
+            // include the C-only fields after the Julia-visible ones
+            assert(structsz >= sz && structsz % alignm == 0);
+            haspadding |= structsz > sz;
+            sz = structsz;
+        }
         if (should_malloc && npointers)
             pointers = (uint32_t*)malloc_s(npointers * sizeof(uint32_t));
         else
@@ -950,7 +971,7 @@ static void jl_setup_type_wrapper(jl_typename_t *tn, jl_svec_t *parameters, jl_v
     jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
     int np = jl_svec_len(parameters);
     for (int i = np - 1; i >= 0; i--) {
-        *wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters, i), *wrapper);
+        *wrapper = jl_new_unionall((jl_tvar_t*)jl_svecref(parameters, i), *wrapper);
         jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
     }
 }
@@ -1083,6 +1104,7 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     desc->markfunc = markfunc;
     desc->sweepfunc = sweepfunc;
     bt->layout = layout;
+    bt->name->hiddenfields = 1; // allocated by their own code
     jl_gc_write(bt, bt->instance, jl_value_t, NULL);
     return bt;
 }
@@ -1490,7 +1512,7 @@ JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl
     // n.b.: this does not spuriously fail
     // n.b.: hasptr == 1 therefore nb >= sizeof(void*), because ((jl_datatype_t*)ty)->layout->has_ptr >= 0
     int success;
-#ifdef _P64
+#ifndef _P64
     if (nb <= 4) {
         uint32_t y32 = 0;
         uint32_t z32 = zext_read32(src, nb);
@@ -1680,12 +1702,23 @@ JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x)
 
 // struct constructors --------------------------------------------------------
 
+// can the generic struct constructors (`new`) allocate an instance of `type`?
+// (the conditions of `jl_is_generic_new_type`)
+static void check_new_struct_type(jl_datatype_t *type)
+{
+    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL)
+        jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
+    // only the runtime can allocate and initialize the data the fields do not describe
+    if (type->name->hiddenfields)
+        jl_errorf("new: %s has hidden fields and can only be allocated by the runtime",
+                  jl_symbol_name(type->name->name));
+    assert(!jl_is_layout_opaque(type->layout));
+}
+
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...) JL_ROOTED_VARARGS
 {
     jl_task_t *ct = jl_current_task;
-    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout)) {
-        jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
-    }
+    check_new_struct_type(type);
     if (type->instance != NULL)
         return type->instance;
     va_list args;
@@ -1707,9 +1740,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...) JL_ROOTED_VARAR
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na)
 {
     jl_task_t *ct = jl_current_task;
-    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout)) {
-        jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
-    }
+    check_new_struct_type(type);
     size_t nf = jl_datatype_nfields(type);
     if (nf - type->name->n_uninitialized > na || na > nf)
         jl_error("invalid struct allocation");
@@ -1746,8 +1777,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
     jl_task_t *ct = jl_current_task;
     if (!jl_is_tuple(tup))
         jl_type_error("new", (jl_value_t*)jl_tuple_type, tup);
-    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout))
-        jl_type_error("new", (jl_value_t *)jl_datatype_type, (jl_value_t *)type);
+    check_new_struct_type(type);
     size_t nargs = jl_nfields(tup);
     size_t nf = jl_datatype_nfields(type);
     JL_NARGS(new, nf, nf);
@@ -1793,9 +1823,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
 {
     jl_task_t *ct = jl_current_task;
-    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout)) {
-        jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
-    }
+    check_new_struct_type(type);
     if (type->instance != NULL)
         return type->instance;
     size_t size = jl_datatype_size(type);

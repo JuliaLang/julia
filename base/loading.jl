@@ -163,7 +163,7 @@ const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
 
 function dummy_uuid(project_file::String)
     @lock require_lock begin
-    cache = LOADING_CACHE[]
+    cache = loading_cache()
     if cache !== nothing
         uuid = get(cache.dummy_uuid, project_file, nothing)
         uuid === nothing || return uuid
@@ -262,6 +262,11 @@ and wherefrom to load a julia package.
 struct PkgLoadSpec
     path::String
     julia_edition::Tuple{Int, Int}
+
+    function PkgLoadSpec(path::String, julia_edition::Tuple{Int, Int})
+        @assert normalized_edition(julia_edition) == julia_edition
+        new(path, julia_edition)
+    end
 end
 
 struct LoadingCache
@@ -285,6 +290,13 @@ LoadingCache() = LoadingCache(
     Dict{String, Union{Nothing, Tuple{PkgId, String}}}(),
     Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{PkgLoadSpec, String}, Nothing}}()
 )
+# a precompile session's cache, seen by its own tasks only; also protected by require_lock
+const SESSION_LOADING_CACHE = ScopedValues.ScopedValue{Union{LoadingCache, Nothing}}(nothing)
+function loading_cache()
+    cache = LOADING_CACHE[]
+    cache === nothing || return cache
+    return SESSION_LOADING_CACHE[]
+end
 
 
 struct TOMLCache{Dates}
@@ -305,7 +317,7 @@ end
 parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
     lock(toml_lock) do
-        cache = LOADING_CACHE[]
+        cache = loading_cache()
         dd = if !haskey(toml_cache.d, project_file)
             d = CachedTOMLDict(toml_cache.p, project_file)
             toml_cache.d[project_file] = d
@@ -374,7 +386,7 @@ function identify_package_env(where::PkgId, name::String)
 
     # Check if we have a cached answer for this
     assert_havelock(require_lock)
-    cache = LOADING_CACHE[]
+    cache = loading_cache()
     cache_key = (where, name)
     if cache !== nothing
         pkg_env = get(cache.identified_where, cache_key, missing)
@@ -411,7 +423,7 @@ end
 function identify_package_env(where::Nothing, name::String)
     # Check if we have a cached answer for this
     assert_havelock(require_lock)
-    cache = LOADING_CACHE[]
+    cache = loading_cache()
     if cache !== nothing
         pkg_env = get(cache.identified, name, missing)
         pkg_env === missing || return pkg_env
@@ -485,7 +497,7 @@ identify_package(name::String)                = @lock require_lock _nothing_or_f
 
 function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Union{Nothing,Tuple{PkgLoadSpec, String}}
     assert_havelock(require_lock)
-    cache = LOADING_CACHE[]
+    cache = loading_cache()
     if cache !== nothing
         specenv = get(cache.located, (pkg, stopenv), missing)
         specenv === missing || return specenv
@@ -709,7 +721,7 @@ end
 #  - `path`: the path of an explicit project file
 function env_project_file(env::String)::Union{Bool,String}
     @lock require_lock begin
-    cache = LOADING_CACHE[]
+    cache = loading_cache()
     if cache !== nothing
         project_file = get(cache.env_project_file, env, nothing)
         project_file === nothing || return project_file
@@ -926,7 +938,8 @@ function project_file_ext_load_spec(project_file::String, ext::PkgId)
     if exts !== nothing
         if ext.name in keys(exts) && ext.uuid == uuid5(UUID(d["uuid"]::String), ext.name)
             # Syntax version of the main package applies to its extensions
-            return PkgLoadSpec(find_ext_path(p, ext.name), project_get_edition(d))
+            return PkgLoadSpec(find_ext_path(p, ext.name),
+                               something(project_get_edition(d), OLDEST_EDITION))
         end
     end
     return nothing
@@ -943,34 +956,19 @@ end
 
 function project_get_edition(d::Dict)
     # Syntax Evolution. First check syntax.julia_version entry
-    sv = nothing
     ds = get(d, "syntax", nothing)
     if ds !== nothing
-        sv = VersionNumber(get(ds, "julia_version", nothing))::VersionNumber
+        return normalized_edition(VersionNumber(get(ds, "julia_version", nothing)))
     end
-    # If not found, default to minimum(compat["julia"])
-    if sv === nothing
-        cs = get(d, "compat", nothing)
-        if cs !== nothing
-            jv = get(cs, "julia", nothing)
-            if jv !== nothing
-                sv = VersionNumber(minimum(semver_spec(jv)).t...)::VersionNumber
-            end
+    # If not found, try minimum(compat["julia"])
+    cs = get(d, "compat", nothing)
+    if cs !== nothing
+        jv = get(cs, "julia", nothing)
+        if jv !== nothing
+            return normalized_edition(VersionNumber(minimum(semver_spec(jv)).t...))
         end
     end
-    # Finally, if neither of those are set, default to the newest edition.
-    # N.B.: This choice is less "compatible" than defaulting to a fixed older version.
-    # However, it avoids surprises from moving over scripts and REPL code to packages
-    ed = if sv === nothing
-        LATEST_STABLE_EDITION
-    elseif sv <= VersionNumber(OLDEST_EDITION)
-        # Syntax versioning was first introduced in Julia 1.14 - we do not support
-        # going back to versions before syntax version 1.13.
-        OLDEST_EDITION
-    else
-        EditionNumber(sv::VersionNumber)
-    end
-    return ed
+    nothing
 end
 
 function project_file_load_spec(project_file::String, name::String)
@@ -980,8 +978,8 @@ function project_file_load_spec(project_file::String, name::String)
     if entryfile === nothing
         entryfile = get(d, "entryfile", nothing)::Union{String, Nothing}
     end
-    sv = project_get_edition(d)
-    return PkgLoadSpec(entry_path(dirname(project_file), name, entryfile), sv)
+    PkgLoadSpec(entry_path(dirname(project_file), name, entryfile),
+                something(project_get_edition(d), OLDEST_EDITION))
 end
 
 function workspace_manifest(project_file)
@@ -992,23 +990,22 @@ function workspace_manifest(project_file)
     return nothing
 end
 
-function parser_for_active_project()
+function edition_for_active_project(default)
     project = active_project()
-    sv = JL_OLD_EDITION
-    if project !== nothing && isfile(project)
-        try
-            sv = project_get_edition(parsed_toml(project))
-        catch e
-            @warn "Failed to read project $project - defaulting to syntax edition $sv. err=$e"
-        end
+    project !== nothing && isfile(project) || return default
+    ed = default
+    try
+        ed = something(project_get_edition(parsed_toml(project)), ed)
+    catch e
+        @warn "Failed to read project $project - defaulting to edition $ed. err=$e"
     end
-    VersionedParse(sv)
+    ed
 end
 
 # find project file's corresponding manifest file
 function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     @lock require_lock begin
-    cache = LOADING_CACHE[]
+    cache = loading_cache()
     if cache !== nothing
         manifest_path = get(cache.project_file_manifest_path, project_file, missing)
         manifest_path === missing || return manifest_path
@@ -1263,12 +1260,8 @@ function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, en
     edition = OLDEST_EDITION
     syntax_table = get(entry, "syntax", nothing)
     if syntax_table !== nothing
-        edition = EditionNumber(
+        edition = normalized_edition(
             VersionNumber(get(syntax_table, "julia_version", nothing)))
-        # Clamp to minimum supported syntax version
-        if VersionNumber(edition) <= VersionNumber(OLDEST_EDITION)
-            edition = OLDEST_EDITION
-        end
     end
 
     # Resolve path
@@ -1332,11 +1325,12 @@ function implicit_manifest_uuid_load_spec(dir::String, pkg::PkgId)::Union{Nothin
     if project_file === nothing
         pkg.uuid === nothing || return nothing
         # Without a project file, treat as empty
-        return PkgLoadSpec(path, LATEST_STABLE_EDITION)
+        return PkgLoadSpec(path, OLDEST_EDITION)
     end
     proj = project_file_name_uuid(project_file, pkg.name)
     proj == pkg || return nothing
-    return PkgLoadSpec(path, project_get_edition(parsed_toml(project_file)))
+    PkgLoadSpec(path, something(project_get_edition(parsed_toml(project_file)),
+                                OLDEST_EDITION))
 end
 
 ## other code loading functionality ##
@@ -2130,7 +2124,8 @@ function Base.parse(::Type{CacheFlags}, s::AbstractString)
     e = Meta.parse(s)
     if !(e isa Expr && e.head === :call && length(e.args) == 2 &&
         e.args[1] === :CacheFlags &&
-        e.args[2] isa Expr && e.args[2].head == :parameters)
+        e.args[2] isa Expr && e.args[2].head == :parameters &&
+        all(p -> p isa Expr && p.head === :kw, e.args[2].args))
         throw(ArgumentError("Malformed CacheFlags string"))
     end
     params = Dict{Symbol, Any}(p.args[1] => p.args[2] for p in e.args[2].args)
@@ -2206,11 +2201,19 @@ end
 # should sync with the types of arguments of `stale_cachefile`
 const StaleCacheKey = Tuple{PkgId, UInt128, PkgLoadSpec, String, Bool, CacheFlags}
 
+# The cache files to try for `pkg`. With `remember`, a listing made here is kept in
+# `cachepath_cache` for the next query of the same package.
+function cachepaths_to_try(pkg::PkgId, cachepath_cache::Dict{PkgId, Vector{String}}, remember::Bool)
+    remember && return get!(() -> find_all_in_cache_path(pkg), cachepath_cache, pkg)
+    return get(() -> find_all_in_cache_path(pkg), cachepath_cache, pkg)
+end
+
 function compilecache_freshest_path(pkg::PkgId;
         ignore_loaded::Bool=false,
         stale_cache::Dict{StaleCacheKey,Bool}=Dict{StaleCacheKey, Bool}(),
         cachepath_cache::Dict{PkgId, Vector{String}}=Dict{PkgId, Vector{String}}(),
-        cachepaths::Vector{String}=get(() -> find_all_in_cache_path(pkg), cachepath_cache, pkg),
+        remember_cachepaths::Bool=false,
+        cachepaths::Vector{String}=cachepaths_to_try(pkg, cachepath_cache, remember_cachepaths),
         sourcespec::Union{PkgLoadSpec,Nothing}=Base.locate_package_load_spec(pkg),
         flags::CacheFlags=CacheFlags(),
         # skipping the full-file corruption checks is only safe for advisory
@@ -2223,7 +2226,7 @@ function compilecache_freshest_path(pkg::PkgId;
         reasons::Union{Dict{Symbol,Int},Nothing}=nothing)
     isnothing(sourcespec) && error("Cannot locate source for $(repr(MIME"text/plain"(), pkg))")
     @lock require_lock begin
-    set_cache = LOADING_CACHE[] === nothing
+    set_cache = loading_cache() === nothing
     set_cache && (LOADING_CACHE[] = LoadingCache())
     try
     try_build_ids = UInt128[UInt128(0)]
@@ -2250,8 +2253,8 @@ function compilecache_freshest_path(pkg::PkgId;
             @label next_dep for dep in staledeps
                 dep isa Module && continue
                 modspec, modkey, modbuild_id = dep::Tuple{PkgLoadSpec, PkgId, UInt128}
-                modpaths = get(() -> find_all_in_cache_path(modkey), cachepath_cache, modkey)
-                for modpath_to_try in modpaths::Vector{String}
+                modpaths = cachepaths_to_try(modkey, cachepath_cache, remember_cachepaths)
+                for modpath_to_try in modpaths
                     stale_cache_key = (modkey, modbuild_id, modspec, modpath_to_try, ignore_loaded, flags)::StaleCacheKey
                     if get!(() -> stale_cachefile(modkey, modbuild_id, modspec, modpath_to_try; ignore_loaded, requested_flags=flags, verify_checksums) === true,
                             stale_cache, stale_cache_key)
@@ -2290,8 +2293,47 @@ fresh julia session specify `ignore_loaded=true`.
     This function requires at least Julia 1.10.
 """
 function isprecompiled(pkg::PkgId; ignore_loaded::Bool=false)
+    in_sysimage(pkg) && return true
     path = compilecache_freshest_path(pkg; ignore_loaded, verify_checksums=false)
     return !isnothing(path)
+end
+
+"""
+    Base.isprecompiled(pkgs::AbstractVector{PkgId}; ignore_loaded::Bool=false) -> Vector{Bool}
+
+Return whether each of `pkgs` is precompiled, like `isprecompiled(pkg)` does for a single
+package. A dependency that several of the packages share is only checked once, which makes
+this much cheaper than asking about the packages one at a time.
+
+A package whose source cannot be located is reported as not precompiled.
+
+!!! compat "Julia 1.15"
+    This method requires at least Julia 1.15.
+"""
+function isprecompiled(pkgs::AbstractVector{PkgId}; ignore_loaded::Bool=false)
+    precompiled = Vector{Bool}(undef, length(pkgs))
+    stale_cache = Dict{StaleCacheKey, Bool}()
+    cachepath_cache = Dict{PkgId, Vector{String}}()
+    @lock require_lock begin
+        # one loading cache for all packages, so that each one is only located once
+        set_cache = LOADING_CACHE[] === nothing
+        set_cache && (LOADING_CACHE[] = LoadingCache())
+        try
+            for (i, pkg) in enumerate(pkgs)
+                precompiled[i] = if in_sysimage(pkg)
+                    true
+                else
+                    sourcespec = locate_package_load_spec(pkg)
+                    sourcespec !== nothing &&
+                        compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, sourcespec,
+                                                   remember_cachepaths=true, verify_checksums=false) !== nothing
+                end
+            end
+        finally
+            set_cache && (LOADING_CACHE[] = nothing)
+        end
+    end
+    return precompiled
 end
 
 """
@@ -2378,8 +2420,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
     io = open(path, "r")
     try
         isvalid_cache_header(io) === nothing && return ArgumentError("Incompatible header in cache file $path.")
-        _, (includes, _, _), depmodnames, _, _, clone_targets, _ = parse_cache_header(io, path)
-
+        _, _, depmodnames, _, _, clone_targets, _ = _parse_cache_header(io, path)
 
         pkgimage = !isempty(clone_targets)
         if pkgimage
@@ -2981,7 +3022,7 @@ function require(uuidkey::PkgId)
 end
 function __require(uuidkey::PkgId)
     @lock require_lock begin
-    set_cache = LOADING_CACHE[] === nothing
+    set_cache = loading_cache() === nothing
     set_cache && (LOADING_CACHE[] = LoadingCache())
     try
         return _require_prelocked(uuidkey)
@@ -3096,7 +3137,6 @@ register_root_module(Main)
 # to the loaded_modules table instead of getting bindings.
 baremodule __toplevel__
 using Base
-global var"#_internal_julia_parse" = Base.VersionedParse(Base.LATEST_STABLE_EDITION)
 
 # Used for version checking of precompiled cache files only
 global _internal_syntax_version::UInt8 = 0
@@ -3290,13 +3330,14 @@ function __require_prelocked(pkg::PkgId, env)
     if uuid !== old_uuid
         ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
     end
-    __toplevel__.var"#_internal_julia_parse" = VersionedParse(spec.julia_edition)
+    old_toplevel_edition = Core.get_edition(__toplevel__)
+    Core.set_edition(__toplevel__, spec.julia_edition)
     unlock(require_lock)
     try
         include(__toplevel__, path)
         loaded = maybe_root_module(pkg)
     finally
-        __toplevel__.var"#_internal_julia_parse" = VersionedParse(LATEST_STABLE_EDITION)
+        Core.set_edition(__toplevel__, old_toplevel_edition)
         lock(require_lock)
         if uuid !== old_uuid
             ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
@@ -3403,7 +3444,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
                 sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
             end
             set_pkgorigin_version_path(this_uuidkey, sourcepath)
-            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, LATEST_STABLE_EDITION), UInt128(0), false; DEPOT_PATH=depot_path)
+            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, LATEST_EDITION), UInt128(0), false; DEPOT_PATH=depot_path)
         end
     finally
         end_loading(this_uuidkey, newm)
@@ -3564,11 +3605,7 @@ julia> rm("testfile.jl")
 function evalfile(path::AbstractString, args::Vector{String}=String[])
     m = Module(:__anon__)
     return Core.eval(m,
-        Expr(:toplevel,
-             :(const ARGS = $args),
-             :(const include = $(Base.IncludeInto(m))),
-             :(const eval = $(Core.EvalInto(m))),
-             :(include($path))))
+        Expr(:toplevel, :(const ARGS = $args), :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
@@ -3630,7 +3667,7 @@ function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{In
     keep_ir = JLOptions().outputo != C_NULL
     keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 1)
     # This one changes the parser behavior
-    __toplevel__.var"#_internal_julia_parse" = VersionedParse(edition)
+    Core.set_edition(__toplevel__, edition)
     # This one is the compatibility marker for cache loading
     __toplevel__._internal_syntax_version = cache_edition(edition)
     cumulative_compile_timing(true)
@@ -3759,7 +3796,7 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
-        Base.track_nested_precomp($(_pkg_str(vcat(Base.precompilation_stack, pkg))))
+        Base.track_nested_precomp($(_pkg_str(push!(copy(precompilation_stack), pkg))))
         Base.loadable_extensions = $(_pkg_str(loadable_exts))
         Base.precompiling_extension = $(loading_extension)
         Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input.path))), $(repr(input.julia_edition)), $(repr(depot_path)), $(repr(dl_load_path)),
@@ -4868,20 +4905,23 @@ end
 # compares mutable containers structurally. This allows us to differentiate
 # `1.0` / `1` / `true` in Preferences, despite these being normally `isequal`
 toml_egal(@nospecialize(A), @nospecialize(B)) = A === B
+toml_egal(A::BigInt, B::BigInt) = A == B # a large integer is parsed to a new object each time
 
-function toml_egal(A::AbstractArray, B::AbstractArray)
-    axes(A) != axes(B) && return false
-    for (a, b) in zip(A, B)
-        !toml_egal(a, b) && return false
+# Restrict these methods to the container types produced by the TOML parser, so that
+# methods added by packages cannot invalidate the loading code through them.
+function toml_egal(A::Vector, B::Vector)
+    length(A) != length(B) && return false
+    for i in eachindex(A, B)
+        !toml_egal(A[i], B[i]) && return false
     end
     return true
 end
 
-function toml_egal(A::AbstractDict, B::AbstractDict)
-    isa(A,IdDict) != isa(B,IdDict) && return false
-    length(A)::Int != length(B)::Int && return false
-    for pair in A
-        !in(pair, B, toml_egal) && return false
+function toml_egal(A::Dict{String,Any}, B::Dict{String,Any})
+    length(A) != length(B) && return false
+    for (k, v) in A
+        haskey(B, k) || return false
+        !toml_egal(v, B[k]) && return false
     end
     return true
 end
@@ -4915,7 +4955,7 @@ end
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; kwargs...)
-    return stale_cachefile(PkgLoadSpec(modpath, LATEST_STABLE_EDITION), cachefile; kwargs...)
+    return stale_cachefile(PkgLoadSpec(modpath, OLDEST_EDITION), cachefile; kwargs...)
 end
 @constprop :none function stale_cachefile(modspec::PkgLoadSpec, cachefile::String; ignore_loaded::Bool = false, requested_flags::CacheFlags=CacheFlags(), reasons=nothing, verify_checksums::Bool=true)
     return stale_cachefile(PkgId(""), UInt128(0), modspec, cachefile; ignore_loaded, requested_flags, reasons, verify_checksums)
@@ -4959,7 +4999,9 @@ end
             return true
         end
         seek(io, header_start)
-        modules, (includes, _, requires), required_modules, srctextpos, prefs_blob, clone_targets, _, syntax_version = parse_cache_header(io, cachefile)
+        # only the source checks below need the include paths resolved against the depots
+        parse_header = stalecheck || coverage_mismatch ? parse_cache_header : _parse_cache_header
+        modules, (includes, _, requires), required_modules, srctextpos, prefs_blob, clone_targets, _, syntax_version = parse_header(io, cachefile)
         if isempty(modules)
             return true # ignore empty file
         end

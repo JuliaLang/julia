@@ -769,14 +769,6 @@ macro reexport(ex)
     return esc(calls)
 end
 
-function Base.set_syntax_version(m::Module, edition::Tuple{Int, Int})
-    parser = Base.VersionedParse(edition)
-    Core.declare_const(m, Symbol("#_internal_julia_parse"), parser)
-    nothing
-end
-Base.set_syntax_version(mod, e::VersionNumber) =
-    Base.set_syntax_version(mod, Base.EditionNumber(e))
-
 """
     Base.Experimental.@set_syntax_version ver
 

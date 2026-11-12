@@ -231,6 +231,9 @@ static void *to_seroder_entry(size_t idx) JL_NOTSAFEPOINT
 static htable_t new_methtables;
 //static size_t precompilation_world;
 
+uintptr_t jl_sysimage_start = 0;
+uintptr_t jl_sysimage_size = 0;
+
 // Query if a Julia object is in a permalloc region (due to part of a sys- pkg-image)
 static size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
 {
@@ -1976,6 +1979,13 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     jl_atomic_store_relaxed(&newbpart->min_world, 1);
                     jl_atomic_store_relaxed(&newbpart->max_world, 0);
                 }
+            }
+            else if (jl_is_unionall(v)) {
+                assert(f == s->s);
+                // hidden field: the memoized facts are structural, so they stay valid
+                write_padding(f, offsetof(jl_unionall_t, flags) - tot);
+                write_uint32(f, jl_atomic_load_relaxed(&((jl_unionall_t*)v)->flags));
+                write_padding(f, sizeof(jl_unionall_t) - offsetof(jl_unionall_t, flags) - sizeof(uint32_t));
             }
             else if (jl_is_method(v)) {
                 assert(f == s->s);
@@ -4910,6 +4920,10 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         (uintptr_t)image_base + sizeof_sysimg,
         (void*)meta);
     meta->deps = image_deps_new(meta->idx, depmods);
+    if (!s.incremental) {
+        jl_sysimage_start = (uintptr_t)image_base;
+        jl_sysimage_size = sizeof_sysimg;
+    }
     jl_timing_counter_inc(JL_TIMING_COUNTER_ImageSize, sizeof_sysimg + sizeof(uintptr_t));
 
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", n_linkage_blobs());

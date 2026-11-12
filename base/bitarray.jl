@@ -796,7 +796,7 @@ prepend!(B::BitVector, items) = prepend!(B, BitArray(items))
 prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, Array(items))
 
 function sizehint!(B::BitVector, sz::Integer)
-    sizehint!(B.chunks, num_bit_chunks(sz))
+    sizehint!(B.chunks, num_bit_chunks(Int(sz)))
     return B
 end
 
@@ -953,6 +953,7 @@ function deleteat!(B::BitVector, i::Integer)
 end
 
 function deleteat!(B::BitVector, r::AbstractUnitRange{Int})
+    isempty(r) && return B
     n = length(B)
     i_f = first(r)
     i_l = last(r)
@@ -1086,6 +1087,7 @@ function splice!(B::BitVector, r::Union{AbstractUnitRange{Int}, Integer}, ins::A
 end
 
 function _splice_int!(B::BitVector, r, ins)
+    isempty(r) && isempty(ins) && return BitVector()
     n = length(B)
     i_f, i_l = first(r), last(r)
     1 <= i_f <= n+1 || throw(BoundsError(B, i_f))

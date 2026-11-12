@@ -204,6 +204,7 @@ static int mark_reset_age = 0;
 static int64_t scanned_bytes; // young bytes scanned while marking
 static int64_t perm_scanned_bytes; // old bytes scanned while marking
 static int64_t heap_size_after_last_full_gc = 0;
+static int have_full_gc_baseline = 0; // heap_size_after_last_full_gc is set
 int prev_sweep_full = 1;
 int current_sweep_full = 0;
 int next_sweep_full = 0;
@@ -213,6 +214,17 @@ int gc_disable_auto_full_sweep = 0; // when set, automatic full collections are 
 // Full collection heuristics
 static int64_t live_bytes = 0;
 static int64_t promoted_bytes = 0;
+// Multiplier on the promotion/growth allowances that trigger an automatic full sweep.
+// Doubled (up to MAX_FULL_SWEEP_BACKOFF) each time an automatic full sweep turns out to
+// reclaim almost no old memory, and reset once any full sweep does.
+static int full_sweep_backoff = 1;
+#define MAX_FULL_SWEEP_BACKOFF 4
+// Marked bytes that the last full sweep kept, all of which it left as `GC_OLD`, and the
+// old bytes the mark after it found still live. Both count object sizes as marking does.
+static int64_t kept_by_last_full_sweep = 0;
+static int64_t old_live_after_full_sweep = 0;
+static int prev_sweep_full_auto = 0; // the last collection did a full sweep chosen by the heuristics
+static int prev_collection_forced = 0; // the last collection was a `JL_GC_FULL` request
 static int64_t last_live_bytes = 0; // live_bytes at last collection
 #ifdef __GLIBC__
 // maxrss at last malloc_trim
@@ -1918,6 +1930,10 @@ JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, void *slot JL_UNUSED, const 
 {
     if (ptr == NULL)
         return;
+    // Image objects are never freed, and marking does not trace through them, so no
+    // edge to one needs to be remembered, not even from an image object.
+    if (jl_astaggedvalue(ptr)->bits.in_image != 0)
+        return;
     if (jl_astaggedvalue(parent)->bits.in_image != 1 /* GC_IN_IMAGE_NOT_REMSET */ && // parent is not an unmarked image object
         (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) != 0) // ptr is old
         return;
@@ -2114,11 +2130,22 @@ STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq2) JL_
     return c;
 }
 
+// Sysimage objects are never swept, and `gc_queue_remset` restores the old bit of those the
+// write barrier queued, so all of them are old and marked while marking. Recognizing them by
+// address avoids loading their headers, which often misses the cache: in inference and Pkg
+// operations, many references the mark loop follows point into the sysimage.
+STATIC_INLINE int gc_in_sysimg(const void *obj) JL_NOTSAFEPOINT
+{
+    int in_sysimg = (uintptr_t)obj - jl_sysimage_start - 1 < jl_sysimage_size;
+    assert(!in_sysimg || (jl_astaggedvalue(obj)->bits.in_image && jl_astaggedvalue(obj)->bits.gc == GC_OLD_MARKED));
+    return in_sysimg;
+}
+
 // Enqueue an unmarked obj. last bit of `nptr` is set if `_obj` is young
 STATIC_INLINE void gc_try_claim_and_push(jl_gc_markqueue_t *mq, void *_obj,
                            uintptr_t *nptr) JL_NOTSAFEPOINT
 {
-    if (_obj == NULL)
+    if (_obj == NULL || gc_in_sysimg(_obj))
         return;
     jl_value_t *obj = (jl_value_t *)jl_assume(_obj);
     jl_taggedvalue_t *o = jl_astaggedvalue(obj);
@@ -2149,9 +2176,14 @@ STATIC_INLINE jl_value_t *gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_
             else {
                 // Unroll marking of last item to avoid pushing
                 // and popping it right away
-                jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
-                nptr |= !gc_old(o->header);
-                if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
+                if (gc_in_sysimg(new_obj)) {
+                    new_obj = NULL;
+                }
+                else {
+                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                    nptr |= !gc_old(o->header);
+                    if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
+                }
             }
             gc_heap_snapshot_record_object_edge((jl_value_t*)obj8_parent, slot);
         }
@@ -2181,9 +2213,14 @@ STATIC_INLINE jl_value_t *gc_mark_obj16(jl_ptls_t ptls, char *obj16_parent, uint
             else {
                 // Unroll marking of last item to avoid pushing
                 // and popping it right away
-                jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
-                nptr |= !gc_old(o->header);
-                if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
+                if (gc_in_sysimg(new_obj)) {
+                    new_obj = NULL;
+                }
+                else {
+                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                    nptr |= !gc_old(o->header);
+                    if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
+                }
             }
             gc_heap_snapshot_record_object_edge((jl_value_t*)obj16_parent, slot);
         }
@@ -2213,9 +2250,14 @@ STATIC_INLINE jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint
             else {
                 // Unroll marking of last item to avoid pushing
                 // and popping it right away
-                jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
-                nptr |= !gc_old(o->header);
-                if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
+                if (gc_in_sysimg(new_obj)) {
+                    new_obj = NULL;
+                }
+                else {
+                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                    nptr |= !gc_old(o->header);
+                    if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
+                }
             }
             gc_heap_snapshot_record_object_edge((jl_value_t*)obj32_parent, slot);
         }
@@ -2243,11 +2285,13 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
             if (new_obj != NULL) {
                 verify_parent2("obj array", obj_parent, obj_begin, "elem(%d)",
                                gc_slot_to_arrayidx(obj_parent, obj_begin));
-                jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
-                if (!gc_old(o->header))
-                    nptr |= 1;
-                if (!gc_marked(o->header))
-                    break;
+                if (!gc_in_sysimg(new_obj)) {
+                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                    if (!gc_old(o->header))
+                        nptr |= 1;
+                    if (!gc_marked(o->header))
+                        break;
+                }
                 gc_heap_snapshot_record_array_edge(obj_parent, slot);
             }
         }
@@ -2313,12 +2357,14 @@ STATIC_INLINE void gc_mark_memory8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_v
                 if (new_obj != NULL) {
                     verify_parent2("array", ary8_parent, &new_obj, "elem(%d)",
                                 gc_slot_to_arrayidx(ary8_parent, ary8_begin));
-                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
-                    if (!gc_old(o->header))
-                        nptr |= 1;
-                    if (!gc_marked(o->header)){
-                        early_end = 1;
-                        break;
+                    if (!gc_in_sysimg(new_obj)) {
+                        jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                        if (!gc_old(o->header))
+                            nptr |= 1;
+                        if (!gc_marked(o->header)){
+                            early_end = 1;
+                            break;
+                        }
                     }
                     gc_heap_snapshot_record_array_edge(ary8_parent, slot);
                 }
@@ -2390,12 +2436,14 @@ STATIC_INLINE void gc_mark_memory16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl
                 if (new_obj != NULL) {
                     verify_parent2("array", ary16_parent, &new_obj, "elem(%d)",
                                 gc_slot_to_arrayidx(ary16_parent, ary16_begin));
-                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
-                    if (!gc_old(o->header))
-                        nptr |= 1;
-                    if (!gc_marked(o->header)){
-                        early_end = 1;
-                        break;
+                    if (!gc_in_sysimg(new_obj)) {
+                        jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                        if (!gc_old(o->header))
+                            nptr |= 1;
+                        if (!gc_marked(o->header)){
+                            early_end = 1;
+                            break;
+                        }
                     }
                     gc_heap_snapshot_record_array_edge(ary16_parent, slot);
                 }
@@ -3385,6 +3433,8 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
     gc_heap_snapshot_record_gc_roots((jl_value_t*)_jl_debug_method_invalidation, "debug_method_invalidation");
     gc_try_claim_and_push(mq, jl_ext_backinterferences, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_ext_backinterferences, "ext_backinterferences");
+    gc_try_claim_and_push(mq, jl_interp_call_sites, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_interp_call_sites, "interp_call_sites");
     // constants
     gc_try_claim_and_push(mq, jl_emptytuple_type, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_emptytuple_type, "emptytuple_type");
@@ -3697,6 +3747,15 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_stats_big_obj();
     }
     gc_num.total_allocd += gc_num.allocd;
+    if (prev_sweep_full) {
+        // The full sweep left everything it kept as `GC_OLD`, so this mark old-marks
+        // exactly the part of it that is still live.
+        old_live_after_full_sweep = promoted_now;
+        if (promoted_now < kept_by_last_full_sweep * 0.95)
+            full_sweep_backoff = 1;
+        else if (prev_sweep_full_auto && full_sweep_backoff < MAX_FULL_SWEEP_BACKOFF)
+            full_sweep_backoff *= 2;
+    }
     // promoted_bytes are the bytes that reached the oldest generation, which only a full
     // sweep frees, since the last full sweep. A quick collection marks old only the objects
     // that already survived one collection (`GC_OLD` -> `GC_OLD_MARKED`), so its old-marked
@@ -3705,6 +3764,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     // re-marked, so that collection says nothing about promotion.
     if (!prev_sweep_full)
         promoted_bytes += promoted_now;
+    int64_t young_marked = scanned_bytes;
     scanned_bytes = 0;
     // 4. next collection decision
     int remset_nptr = 0;
@@ -3733,6 +3793,15 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     }
     if (gc_disable_auto_full_sweep && collection != JL_GC_FULL) {
         sweep_full = 0;
+    }
+    // Forced collections (and the recollect that follows one) say nothing about whether
+    // the heuristics are scheduling full sweeps well, so they can only reset the backoff.
+    int sweep_full_auto = sweep_full && collection != JL_GC_FULL && !prev_collection_forced &&
+        !jl_options.gc_sweep_always_full;
+    if (sweep_full) {
+        // The oldest generation (live after the last full sweep plus promoted since)
+        // and the young objects marked now all become `GC_OLD`.
+        kept_by_last_full_sweep = old_live_after_full_sweep + promoted_bytes + young_marked;
     }
     // 5. start sweeping
     uint64_t start_sweep_time = jl_hrtime();
@@ -3888,24 +3957,31 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         target_heap = heap_size + jl_options.heap_target_increment;
         jl_atomic_store_relaxed(&gc_heap_stats.heap_target, target_heap);
     }
-    if (sweep_full) {
+    if (sweep_full || !have_full_gc_baseline) {
         // these are the difference between the number of gc-perm bytes scanned
         // on the first collection after sweep_full, and the current scan
         perm_scanned_bytes = 0;
         promoted_bytes = 0;
         heap_size_after_last_full_gc = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
+        have_full_gc_baseline = 1;
     }
     // We want to trigger full GCs either if the heap size has grown a lot since the last full GC.
     // For this we use the overallocation function to see what a reasonable rate of growth is,
     // or if there is too much memory that has not seen a full GC after being promoted to old.
+    // Both allowances are scaled by `full_sweep_backoff` so that heaps that only grow
+    // do not keep paying for full collections that free nothing. The heap stays bounded
+    // by `MAX_FULL_SWEEP_BACKOFF` times the growth allowance until a full sweep that
+    // reclaims old memory resets the backoff.
+    if (jl_options.hard_heap_limit != 0)
+        full_sweep_backoff = 1;
     double old_ratio = (double)promoted_bytes/(double)heap_size;
-    double expected_heap_size = overallocation(heap_size_after_last_full_gc, 0, UINT64_MAX) + heap_size_after_last_full_gc;
+    double expected_heap_size = full_sweep_backoff * (double)overallocation(heap_size_after_last_full_gc, 0, UINT64_MAX) + heap_size_after_last_full_gc;
     double last_full_gc_heap_ratio = (double)heap_size/expected_heap_size;
     if (heap_size > user_max) {
         next_sweep_full = 1;
         gc_record_full_sweep_reason(FULL_SWEEP_REASON_USER_MAX_EXCEEDED);
     }
-    else if (old_ratio > 0.15) {
+    else if (old_ratio > 0.15 * full_sweep_backoff) {
         next_sweep_full = 1;
         gc_record_full_sweep_reason(FULL_SWEEP_REASON_LARGE_PROMOTION_RATE);
     }
@@ -4003,6 +4079,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     }
 
     prev_sweep_full = sweep_full;
+    prev_sweep_full_auto = sweep_full_auto;
+    prev_collection_forced = collection == JL_GC_FULL;
     gc_num.pause += !recollect;
     gc_num.total_time += pause;
     gc_num.allocd = 0;

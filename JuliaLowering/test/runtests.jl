@@ -2,7 +2,6 @@ using Test, JuliaLowering
 
 @test isempty(Test.detect_closure_boxes(JuliaLowering))
 
-Base.ScopedValues.@with Base.MainInclude.main_parser => Base.VersionedParse(Base.JL_OLD_EDITION) begin
 include("utils.jl")
 
 @testset "JuliaLowering.jl" begin
@@ -34,5 +33,3 @@ include("utils.jl")
     @testset "compat" include("compat.jl")
     @testset "hooks" include("hooks.jl")
 end
-
-end # @with main_parser

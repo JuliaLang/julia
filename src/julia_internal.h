@@ -1045,6 +1045,17 @@ jl_array_t *jl_get_loaded_modules(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree) JL_CANSAFEPOINT;
 int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
 
+// can the generic struct constructors (`new`) allocate an instance of `type`? Not if
+// it is not concrete, or if its instances hold data that its layout does not describe
+// (`hiddenfields`); they throw for those
+STATIC_INLINE int jl_is_generic_new_type(jl_value_t *type) JL_NOTSAFEPOINT
+{
+    if (!jl_is_datatype(type))
+        return 0;
+    jl_datatype_t *dt = (jl_datatype_t*)type;
+    return dt->isconcretetype && dt->layout != NULL && !dt->name->hiddenfields;
+}
+
 jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs, const char *msg) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(1) JL_MAYBE_UNROOTED, enum jl_partition_kind, size_t new_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
@@ -1092,6 +1103,14 @@ JL_DLLEXPORT int jl_get_binding_partition_boundp(jl_binding_partition_t *bpart) 
 JL_DLLEXPORT jl_value_t *jl_get_binding_partition_leaf_value(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_leaf_partition_depwarn(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_leaf_binding_partition(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT, size_t world, int depwarn) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
+jl_value_t *jl_apply_generic_site(jl_value_t *F, jl_value_t **args, uint32_t nargs, uint32_t callsite) JL_CANSAFEPOINT;
+jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t nargs,
+                                    jl_genericmemory_t *sites, size_t i, uint32_t callsite,
+                                    size_t world) JL_CANSAFEPOINT;
+// the interpreter's dispatch caches, by the code they are for (see interpreter.c)
+extern jl_genericmemory_t *jl_interp_call_sites JL_GLOBALLY_ROOTED;
+extern jl_mutex_t jl_interp_call_sites_lock;
+jl_value_t *jl_get_globalref_const_quiet(jl_globalref_t *gr JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
@@ -1456,6 +1475,35 @@ FORCE_INLINE int jl_type_walk_node(jl_value_t *t, int pos, jl_typeenv_t *binders
     }
 }
 
+// allocate a UnionAll node (no normalization or validation: see `jl_type_unionall`)
+JL_DLLEXPORT jl_value_t *jl_new_unionall(jl_tvar_t *var, jl_value_t *body) JL_CANSAFEPOINT;
+
+// a memoized `UnionAll` fact (`JL_UNIONALL_*` bit pair): 1 or 0 when known, -1 if
+// not computed yet
+STATIC_INLINE int jl_unionall_flag(jl_unionall_t *u, uint32_t known, uint32_t bit) JL_NOTSAFEPOINT
+{
+    uint32_t f = jl_atomic_load_relaxed(&u->flags);
+    return (f & known) ? (f & bit) != 0 : -1;
+}
+
+// record a computed `UnionAll` fact (racing writers store the same value)
+STATIC_INLINE int jl_unionall_set_flag(jl_unionall_t *u, uint32_t known, uint32_t bit, int value) JL_NOTSAFEPOINT
+{
+    jl_atomic_fetch_or_relaxed(&u->flags, known | (value ? bit : 0));
+    return value;
+}
+
+// is `t` known, without walking it, to have no free typevars? (a datatype's
+// flag, or a UnionAll's memo once computed.) A walk looking for occurrences
+// of variables bound outside `t` may skip such a subterm.
+STATIC_INLINE int jl_is_known_closed(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    if (jl_is_datatype(t))
+        return !((jl_datatype_t*)t)->hasfreetypevars;
+    return jl_is_unionall(t) &&
+        jl_unionall_flag((jl_unionall_t*)t, JL_UNIONALL_FREEVARS_KNOWN, JL_UNIONALL_FREEVARS) == 0;
+}
+
 // define `static int name(jl_value_t *t, int pos, jl_typeenv_t *binders, void *ctx)`,
 // the walk with the visitor `visit`; start it as `name(t, 0, NULL, ctx)`
 #define JL_TYPE_WALKER(name, visit) \
@@ -1542,6 +1590,10 @@ void jl_gc_safe_enter_from_nonmutator(jl_ptls_t ptls) JL_CANSAFEPOINT_LEAVE;
 
 // Query if this object is perm-allocated in an image.
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
+// Objects in the sysimage occupy (jl_sysimage_start, jl_sysimage_start + jl_sysimage_size];
+// the range is empty until the sysimage is loaded.
+extern uintptr_t jl_sysimage_start;
+extern uintptr_t jl_sysimage_size;
 // The linkage blob (image) owning `v`, or -1 for an object of no image.
 JL_DLLEXPORT size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 // The world in which `blob` activated its methods if it is `image`, the sysimage, or a dependency of `image`, else 0.
@@ -1562,7 +1614,10 @@ _Atomic(jl_value_t*) *jl_table_peek_bp(jl_genericmemory_t *a, jl_value_t *key) J
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t*) JL_CANSAFEPOINT;
 
-jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_using_core, uint8_t self_name) JL_CANSAFEPOINT;
+#define OLDEST_EDITION (((uint32_t)1 << 16) | ((uint32_t)13))
+#define BOOTSTRAP_EDITION (((uint32_t)1 << 16) | ((uint32_t)14))
+
+jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint32_t edition, uint8_t default_using_core, uint8_t self_name) JL_CANSAFEPOINT;
 jl_module_t *jl_add_standard_imports(jl_module_t *m) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_methcache_t *jl_new_method_cache(void) JL_CANSAFEPOINT;
@@ -2045,6 +2100,60 @@ extern jl_mutex_t world_counter_lock;
 typedef uint_t (*smallintset_hash)(size_t val, jl_value_t *data);
 typedef int (*smallintset_eq)(size_t val, const void *key, jl_value_t *data, uint_t hv);
 ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_value_t *data, uint_t hv, int pop);
+
+// probe sequence, shared by lookup and insert
+#define smallintset_max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
+#define smallintset_h2index(hv, sz) (size_t)((hv) & ((sz)-1))
+
+FORCE_INLINE ssize_t smallintset_probe_(jl_genericmemory_t *cache, smallintset_eq eq JL_NOTSAFEPOINT, const void *key, jl_value_t *data, uint_t hv, int pop, size_t w) JL_NOTSAFEPOINT
+{
+    size_t sz = cache->length;
+    size_t maxprobe = smallintset_max_probe(sz);
+    size_t tombstone = w == 1 ? UINT8_MAX : w == 2 ? UINT16_MAX : UINT32_MAX;
+    size_t index = smallintset_h2index(hv, sz);
+    size_t orig = index;
+    void *ix = cache->ptr;
+    for (size_t iter = 0; iter <= maxprobe; iter++) {
+        size_t val1 = w == 1 ? jl_atomic_load_acquire(&((_Atomic(uint8_t)*)ix)[index]) :
+                      w == 2 ? jl_atomic_load_acquire(&((_Atomic(uint16_t)*)ix)[index]) :
+                               jl_atomic_load_acquire(&((_Atomic(uint32_t)*)ix)[index]);
+        if (val1 == 0)
+            return -1;
+        if (val1 != tombstone && eq(val1 - 1, key, data, hv)) {
+            if (pop) { // replace with tombstone
+                if (w == 1)
+                    jl_atomic_store_release(&((_Atomic(uint8_t)*)ix)[index], UINT8_MAX);
+                else if (w == 2)
+                    jl_atomic_store_release(&((_Atomic(uint16_t)*)ix)[index], UINT16_MAX);
+                else
+                    jl_atomic_store_release(&((_Atomic(uint32_t)*)ix)[index], UINT32_MAX);
+            }
+            return val1 - 1;
+        }
+        index = (index + 1) & (sz - 1);
+        if (index == orig)
+            break;
+    }
+    return -1;
+}
+
+// `jl_smallintset_lookup` without the GC frame: if `eq` can safepoint, the caller must
+// root `cache` (as `jl_smallintset_lookup` does). With a constant `eq` the comparison
+// is inlined, and the index width is dispatched once.
+FORCE_INLINE ssize_t smallintset_lookup_(jl_genericmemory_t *cache, smallintset_eq eq JL_NOTSAFEPOINT, const void *key, jl_value_t *data, uint_t hv, int pop) JL_NOTSAFEPOINT
+{
+    if (cache->length == 0)
+        return -1;
+    jl_value_t *el = (jl_value_t*)jl_typetagof(cache);
+    if (el == jl_memory_uint8_type)
+        return smallintset_probe_(cache, eq, key, data, hv, pop, 1);
+    if (el == jl_memory_uint16_type)
+        return smallintset_probe_(cache, eq, key, data, hv, pop, 2);
+    if (el == jl_memory_uint32_type)
+        return smallintset_probe_(cache, eq, key, data, hv, pop, 4);
+    abort();
+}
+
 void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_value_t *data) JL_CANSAFEPOINT;
 size_t jl_ordereddict_reserve(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, size_t stride) JL_CANSAFEPOINT;
 jl_genericmemory_t* smallintset_rehash(jl_genericmemory_t* a, smallintset_hash hash, jl_value_t *data, size_t newsz, size_t np) JL_CANSAFEPOINT;

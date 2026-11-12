@@ -42,11 +42,6 @@ using .JuliaSyntax:
     byte_range,
     char_range
 
-if VERSION < v"1.6"
-    # Compat stuff which might not be in Base for older versions
-    using JuliaSyntax: isnothing, only
-end
-
 function toks(str)
     ts = [JuliaSyntax.Tokenize.untokenize(t, str)=>kind(t)
           for t in JuliaSyntax.Tokenize.tokenize(str)]
@@ -466,7 +461,7 @@ function _Meta_parse_string(text::AbstractString, filename::AbstractString,
     if isdefined(Base, :Syntax)
         # The hook installed by `enable_in_core!` here returns `Syntax`
         ex, offset::Int = JuliaSyntax.new_core_parser_hook(
-            text, filename, lineno, index-1, options, JuliaSyntax.LATEST_STABLE_EDITION)
+            text, filename, lineno, index-1, options, JuliaSyntax.LATEST_EDITION)
         ex isa Base.Syntax && (ex = Base.syntax_to_expr(ex))
     else
         ex, offset = JuliaSyntax.core_parser_hook(text, filename, lineno, index-1, options)
