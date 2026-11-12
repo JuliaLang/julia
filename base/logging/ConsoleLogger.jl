@@ -101,7 +101,7 @@ function termlength(str)
             if c == '\e'
                 in_esc = true
             else
-                N += 1
+                N += textwidth(c)
             end
         end
     end
@@ -166,14 +166,14 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     minsuffixpad = 2
     buf = IOBuffer()
     iob = IOContext(buf, stream)
-    nonpadwidth = 2 + (isempty(prefix) || length(msglines) > 1 ? 0 : length(prefix)+1) +
+    nonpadwidth = 2 + (isempty(prefix) || length(msglines) > 1 ? 0 : textwidth(prefix)+1) +
                   msglines[end].indent + termlength(msglines[end].msg) +
-                  (isempty(suffix) ? 0 : length(suffix)+minsuffixpad)
+                  (isempty(suffix) ? 0 : textwidth(suffix)+minsuffixpad)
     justify_width = min(logger.right_justify, dsize[2])
     if nonpadwidth > justify_width && !isempty(suffix)
         push!(msglines, (indent=0, msg=SubString("")))
         minsuffixpad = 0
-        nonpadwidth = 2 + length(suffix)
+        nonpadwidth = 2 + textwidth(suffix)
     end
     for (i, (indent, msg)) in enumerate(msglines)
         boxstr = length(msglines) == 1 ? "[ " :
