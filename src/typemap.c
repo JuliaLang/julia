@@ -487,19 +487,19 @@ exit:
     }
 }
 
-static unsigned jl_supertype_height(jl_datatype_t *dt) JL_CANSAFEPOINT
+static unsigned jl_supertype_height(jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     unsigned height = 1;
-    while (dt != NULL && dt != jl_any_type) {
+    while (dt != jl_any_type) {
         height++;
-        dt = jl_datatype_compute_super(dt);
+        dt = dt->super;
     }
     return height;
 }
 
 // return true if a and b might intersect in the type domain (taken over just b's type-name):
 // whether the supertype chains of `a` and `b.wrapper` meet.
-static int tname_intersection_dt(jl_datatype_t *a, jl_typename_t *bname, unsigned ha) JL_CANSAFEPOINT
+static int tname_intersection_dt(jl_datatype_t *a, jl_typename_t *bname, unsigned ha) JL_NOTSAFEPOINT
 {
     if (a == jl_any_type)
         return 1;
@@ -510,37 +510,35 @@ static int tname_intersection_dt(jl_datatype_t *a, jl_typename_t *bname, unsigne
         (jl_is_kind((jl_value_t*)a) && (b == jl_typeeq_type || b == jl_typeegal_type)))
         return 1;
     unsigned hb = 1;
-    while (b != NULL && b != jl_any_type) {
+    while (b != jl_any_type) {
         if (a->name == b->name)
             return 1;
         hb++;
-        b = jl_datatype_compute_super(b);
+        b = b->super;
     }
     while (ha > hb) {
-        a = jl_datatype_compute_super(a);
+        a = a->super;
         ha--;
-        if (a == NULL)
-            return 1; // definition in progress: conservatively may intersect
     }
     return a->name == bname;
 }
 
 // The bucket after `super` in a `tname` walk that ends at `Any` (or NULL): the supertype
 // chain for datatype, with an added parent for TypeofBottom.
-static jl_datatype_t *tname_super(jl_datatype_t *super JL_PROPAGATES_ROOT) JL_CANSAFEPOINT
+static jl_datatype_t *tname_super(jl_datatype_t *super JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     if (super == jl_any_type)
         return NULL;
     if (super == jl_typeofbottom_type)
         return jl_typeeq_type;
-    return jl_datatype_compute_super(super); // NULL if the definition is in progress
+    return super->super; // NULL if the definition is in progress
 }
 
 // Return true if `a` might intersect a type named `bname` (tparam 0), or `Type{X}` or
 // `TypeEgal{X}` for some `X` named `bname` (tparam 1), over just the type-names: `a` may be
 // any type, including a kind, union, typevar or wrapper, and a `Type{...}` parameter that is
 // a typevar, union or nested wrapper is treated covariantly, which is conservative
-static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam) JL_CANSAFEPOINT
+static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam) JL_NOTSAFEPOINT
 {
     if (a == (jl_value_t*)jl_any_type)
         return 1;
@@ -1083,9 +1081,7 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                         }
                         if (super == jl_any_type)
                             break;
-                        super = jl_datatype_compute_super(super);
-                        if (super == NULL)
-                            break; // definition in progress
+                        super = super->super;
                     }
                 }
                 else {
@@ -1343,9 +1339,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                             }
                             if (super == jl_any_type || !subtype)
                                 break;
-                            super = jl_datatype_compute_super(super);
-                            if (super == NULL)
-                                break; // definition in progress
+                            super = super->super;
                         }
                     }
                 }
@@ -1529,9 +1523,7 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
                 if (ml) return ml;
                 if (ty == (jl_value_t*)jl_any_type)
                     break;
-                ty = (jl_value_t*)jl_datatype_compute_super((jl_datatype_t*)ty);
-                if (ty == NULL)
-                    break; // definition in progress
+                ty = (jl_value_t*)((jl_datatype_t*)ty)->super;
             }
         }
     }

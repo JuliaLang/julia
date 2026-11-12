@@ -545,6 +545,10 @@ int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
     return success;
 }
 
+// Cycle count of each thread when the sampler last resumed it (0: unknown).
+static ULONG64 *profile_resume_cycles = NULL;
+static int profile_resume_cycles_size = 0;
+
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
     // Note: illegal to use jl_* functions from this thread except for profiling-specific functions
@@ -574,6 +578,12 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
             bt_context_t c;
             int nthreads = jl_atomic_load_acquire(&jl_n_threads);
             int *randperm = profile_get_randperm(nthreads);
+            if (profile_resume_cycles_size < nthreads) {
+                profile_resume_cycles = (ULONG64*)realloc_s(profile_resume_cycles, nthreads * sizeof(ULONG64));
+                memset(profile_resume_cycles + profile_resume_cycles_size, 0,
+                       (nthreads - profile_resume_cycles_size) * sizeof(ULONG64));
+                profile_resume_cycles_size = nthreads;
+            }
             for (int idx = nthreads; idx-- > 0; ) {
                 int tid = randperm[idx];
                 if (!profile_running)
@@ -581,6 +591,23 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 if (jl_profile_is_buffer_full()) {
                     jl_profile_stop_timer();
                     break;
+                }
+
+                // A suspension only takes effect once the target is dispatched,
+                // and a resumed thread can wait for a CPU longer than the
+                // sampling interval. Suspending it again before then would keep
+                // it from ever running its own code, so skip a thread whose
+                // cycle count shows it has not been dispatched since.
+                jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+                if (profile_resume_cycles[tid] != 0) {
+                    ULONG64 cycles;
+                    jl_lock_profile(); // keeps a live thread's system_id valid
+                    int waiting = jl_atomic_load_relaxed(&ptls->current_task) != NULL &&
+                                  QueryThreadCycleTime(ptls->system_id, &cycles) &&
+                                  cycles == profile_resume_cycles[tid];
+                    jl_unlock_profile();
+                    if (waiting)
+                        continue;
                 }
 
                 // Set up timeout handler for stackwalk
@@ -607,7 +634,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     continue;
                 }
 
-                jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
                 jl_task_t *t2 = jl_atomic_load_relaxed(&ptls->current_task);
                 int state = jl_atomic_load_relaxed(&ptls->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
 
@@ -623,8 +649,14 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
 
                 // Clear abort pointer from TLS
                 jl_set_profile_abort_ptr(NULL);
-                if (timeout_data.tid != -1)
+                profile_resume_cycles[tid] = 0;
+                if (timeout_data.tid != -1) {
+                    // Read the count before resuming: leaving the suspension takes
+                    // cycles, so it moves even for a thread that only returns to a wait.
+                    if (!QueryThreadCycleTime(ptls->system_id, &profile_resume_cycles[tid]))
+                        profile_resume_cycles[tid] = 0;
                     jl_thread_resume(tid);
+                }
                 // Wait for callback to complete or cancel before continuing
                 if (hTimer != NULL)
                     DeleteTimerQueueTimer(hTimerQueue, hTimer, INVALID_HANDLE_VALUE);

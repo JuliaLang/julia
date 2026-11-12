@@ -795,9 +795,15 @@ end
 
         # not SIGTERM: its exit can hang if it lands while the child is still compiling (#64410)
         @testset "observing $name" for (name, sig) in (("SIGHUP", Base.SIGHUP), ("SIGINT", Base.SIGINT))
+            # SIGINT interrupts whichever task runs on thread 1 next, which can be the callback
+            # task the same signal just woke. So observe SIGINT by waiting after the interrupt,
+            # and keep spawned tasks off thread 1 (`--threads=1,1`) so only the main task runs there.
+            setup, after_interrupt = sig == Base.SIGINT ?
+                ("s = Base.SignalCondition($sig)", """wait(s); Core.println("observed")""") :
+                ("""s = Base.SignalCondition(_ -> Core.println("observed"), $sig)""", "")
             script = """
                 Base.exit_on_sigint(false)
-                s = Base.SignalCondition(_ -> Core.println("observed"), $sig)
+                $setup
                 try
                     # The interrupt can arrive while this print still waits for its write.
                     println("ready")
@@ -805,9 +811,10 @@ end
                 catch e
                     Core.println(e isa InterruptException ? "interrupted" : "unexpected")
                 end
+                $after_interrupt
                 """
             errfile = tempname()
-            p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`, stderr=errfile), "r")
+            p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no --threads=1,1 -e $script`, stderr=errfile), "r")
             watchdog = Timer(300) do _
                 kill(p, Base.SIGKILL)
             end

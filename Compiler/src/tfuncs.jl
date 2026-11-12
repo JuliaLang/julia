@@ -1201,9 +1201,7 @@ function _getfield_tfunc_const(@nospecialize(sv), name::Const)
     nv === nothing && return Bottom
     # relocated pointers change between processes, so their value can't be folded
     is_relocatable_ptr_field(Const(sv), name) && return nothing
-    # `types` and `super` are write-once: non-const (filled lazily), but once
-    # a defined value is observed it can never change, so folding it is sound
-    if isa(sv, DataType) && (nv == DATATYPE_TYPES_FIELDINDEX || nv == DATATYPE_SUPER_FIELDINDEX) && isdefined(sv, nv)
+    if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
         return Const(getfield(sv, nv))
     end
     if !isa(sv, Module) && isconst(typeof(sv), nv)
@@ -1301,14 +1299,10 @@ end
         else
             sv = type_parameter(s)
             if isa(sv, DataType) && isa(name, Const) && name.val === :super &&
-               # read without forcing: on a deferred instantiation whose slot
-               # is still unset the modeled `getfield` throws, so no precision
-               # is lost by falling through (see issue #61347)
-               isdefined(sv, :super) &&
-               (svsuper = getfield(sv, :super); !has_free_typevars(svsuper))
+               !has_free_typevars(sv.super)
                 # only `DataType` reps reach `.super` without throwing, and the
                 # `.super`s of `==`-equal `DataType`s are `==`-equal (if not egal)
-                return Type{svsuper}
+                return Type{sv.super}
             end
             if isTypeDataType(sv) && isa(name, Const)
                 nv = _getfield_fieldindex(DataType, name)
@@ -2454,7 +2448,8 @@ end
     memoryref_builtin_common_errorcheck(ref, Const(:not_atomic), boundscheck) || return Bottom
     hasintersect(widenconst(idx), Int) || return Bottom
     hasintersect(widenconst(ref), GenericMemory) && return memoryref_tfunc(𝕃, ref)
-    return ref
+    # a reference at another index, so not the constant `ref` itself
+    return widenconst(ref)
 end
 add_tfunc(memoryrefnew, 1, 3, memoryref_tfunc, 1)
 

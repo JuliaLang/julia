@@ -231,6 +231,9 @@ static void *to_seroder_entry(size_t idx) JL_NOTSAFEPOINT
 static htable_t new_methtables;
 //static size_t precompilation_world;
 
+uintptr_t jl_sysimage_start = 0;
+uintptr_t jl_sysimage_size = 0;
+
 // Query if a Julia object is in a permalloc region (due to part of a sys- pkg-image)
 static size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
 {
@@ -1138,7 +1141,7 @@ done_fields: ;
         // which would order the supertype before its own parameters in the queue. Defer it
         // until the recursion unwinds; any forward reference this creates in the image is
         // handled at load time by the uniquing_super/delay_list machinery.
-        if (dt->super && jl_needs_serialization(s, (jl_value_t*)dt->super))
+        if (jl_needs_serialization(s, (jl_value_t*)dt->super))
             arraylist_push(&deferred_supers, (void*)dt->super);
         immediate = 0;
         char *data = (char*)jl_data_ptr(v);
@@ -2077,7 +2080,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                         ios_write(s->const_data, (char*)&dyn, sizeof(jl_fielddescdyn_t));
                     }
                 }
-                void *superidx = dt->super ? ptrhash_get(&serialization_order, dt->super) : HT_NOTFOUND;
+                void *superidx = ptrhash_get(&serialization_order, dt->super);
                 if (s->incremental && superidx != HT_NOTFOUND && from_seroder_entry(superidx) > item && needs_uniquing((jl_value_t*)dt->super, s->query_cache))
                     arraylist_push(&s->uniquing_super, dt->super);
             }
@@ -4865,6 +4868,10 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         (uintptr_t)image_base + sizeof_sysimg,
         (void*)meta);
     meta->deps = image_deps_new(meta->idx, depmods);
+    if (!s.incremental) {
+        jl_sysimage_start = (uintptr_t)image_base;
+        jl_sysimage_size = sizeof_sysimg;
+    }
     jl_timing_counter_inc(JL_TIMING_COUNTER_ImageSize, sizeof_sysimg + sizeof(uintptr_t));
 
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", n_linkage_blobs());
