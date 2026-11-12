@@ -1021,7 +1021,6 @@ typedef struct {
 } jl_deferred_typecache_t;
 void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_datatype_super(jl_datatype_t *dt) JL_CANSAFEPOINT;
 // The supertype of `dt`, computed on first use if it was deferred; NULL while the definition is in progress.
 STATIC_INLINE jl_datatype_t *jl_get_super(jl_datatype_t *dt JL_PROPAGATES_ROOT) JL_CANSAFEPOINT
 {

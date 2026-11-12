@@ -3448,16 +3448,6 @@ JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROP
     return super;
 }
 
-// forcing accessor for Julia-visible supertype reads
-JL_DLLEXPORT jl_value_t *jl_datatype_super(jl_datatype_t *dt)
-{
-    jl_datatype_t *super = jl_datatype_compute_super(dt);
-    if (super == NULL)
-        jl_errorf("supertype of %s is not defined yet (type definition in progress)",
-                  jl_symbol_name(dt->name->name));
-    return (jl_value_t*)super;
-}
-
 void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dcache) // can throw!
 {
     assert(jl_is_datatype(t));

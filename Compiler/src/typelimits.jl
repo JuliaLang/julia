@@ -801,18 +801,18 @@ end
     heighta = 0
     while a !== Any
         heighta += 1
-        a = datatype_super(a)
+        a = supertype(a)
     end
     b = unwrap_unionall(bname.wrapper)
     heightb = 0
     while b !== Any
         b.name === aname && return aname
         heightb += 1
-        b = datatype_super(b)
+        b = supertype(b)
     end
     a = unwrap_unionall(aname.wrapper)
     while heighta > heightb
-        a = datatype_super(a)
+        a = supertype(a)
         heighta -= 1
     end
     return a.name === bname ? bname : nothing
@@ -882,11 +882,11 @@ end
                         uw = unwrap_unionall(wr)::DataType
                         ui = unwrap_unionall(ti)::DataType
                         while ui.name !== ijname
-                            ui = datatype_super(ui)
+                            ui = supertype(ui)
                         end
                         uj = unwrap_unionall(tj)::DataType
                         while uj.name !== ijname
-                            uj = datatype_super(uj)
+                            uj = supertype(uj)
                         end
                         p = Vector{Any}(undef, length(uw.parameters))
                         usep = true
