@@ -1619,6 +1619,10 @@ void jl_gc_safe_enter_from_nonmutator(jl_ptls_t ptls) JL_CANSAFEPOINT_LEAVE;
 
 // Query if this object is perm-allocated in an image.
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
+// Objects in the sysimage occupy (jl_sysimage_start, jl_sysimage_start + jl_sysimage_size];
+// the range is empty until the sysimage is loaded.
+extern uintptr_t jl_sysimage_start;
+extern uintptr_t jl_sysimage_size;
 // The linkage blob (image) owning `v`, or -1 for an object of no image.
 JL_DLLEXPORT size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 // The world in which `blob` activated its methods if it is `image`, the sysimage, or a dependency of `image`, else 0.
