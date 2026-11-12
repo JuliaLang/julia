@@ -239,12 +239,11 @@ static bool check_fd_or_close(int fd) JL_NOTSAFEPOINT
     }
     // macOS allows us to MAP_SHARED, but not with R-X permissions.  We need to
     // mprotect in a second step.
-    if (mprotect(ptr, jl_page_size, PROT_EXEC | PROT_READ) == -1) {
-        close(fd);
-        return false;
-    }
+    bool ok = mprotect(ptr, jl_page_size, PROT_EXEC | PROT_READ) == 0;
     munmap(ptr, jl_page_size);
-    return true;
+    if (!ok)
+        close(fd);
+    return ok;
 }
 
 static intptr_t init_anon_hdl(void) JL_NOTSAFEPOINT
