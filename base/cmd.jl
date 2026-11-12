@@ -96,9 +96,9 @@ This can then be passed to the `Cmd` constructor to modify its settings, e.g.
 """
 Cmd
 
-hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, hash(x.uid, hash(x.gid, h)))))))
+hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, hash(x.cpus, hash(x.uid, hash(x.gid, h))))))))
 ==(x::Cmd, y::Cmd) = x.exec == y.exec && x.env == y.env && x.ignorestatus == y.ignorestatus &&
-                     x.dir == y.dir && isequal(x.flags, y.flags) && x.uid == y.uid && x.gid == y.gid
+                     x.dir == y.dir && isequal(x.flags, y.flags) && x.cpus == y.cpus && x.uid == y.uid && x.gid == y.gid
 
 struct OrCmds <: AbstractCmd
     a::AbstractCmd
@@ -199,18 +199,11 @@ function show(io::IO, cmd::Cmd)
     print_uid && print(io, "setuid(")
 
     print(io, '`')
-    join(io, map(cmd.exec) do arg
-        replace(sprint(context=io) do io
-            with_output_color(:underline, io) do io
-                # A leading `~` would be expanded when the command is parsed back.
-                print_shell_word(io, arg, startswith(arg, '~') ? shell_special * '~' : shell_special)
-            end
-        end, '`' => "\\`")
-    end, ' ')
+    join(io, map(arg -> sprint(_show_cmd_word, arg, true; context=io), cmd.exec), ' ')
     print(io, '`')
 
-    print_uid && (print(io, ", "); show(io, Int32(cmd.uid)); print(io, ")"))
-    print_gid && (print(io, ", "); show(io, Int32(cmd.gid)); print(io, ")"))
+    print_uid && (print(io, ", "); show(io, Int64(cmd.uid)); print(io, ")"))
+    print_gid && (print(io, ", "); show(io, Int64(cmd.gid)); print(io, ")"))
     if print_cpus
         print(io, ", ")
         show(io, collect(Int, something(cmd.cpus)))
@@ -225,6 +218,7 @@ function show(io::IO, cmd::Cmd)
 end
 
 function show(io::IO, cmds::Union{OrCmds,ErrOrCmds})
+    _show_as_backticks(io, cmds) && return
     print(io, "pipeline(")
     show(io, cmds.a)
     print(io, ", ")
@@ -276,6 +270,7 @@ end
 CmdRedirect(cmd, handle, stream_no) = CmdRedirect(cmd, handle, stream_no, stream_no == STDIN_NO)
 
 function show(io::IO, cr::CmdRedirect)
+    _show_as_backticks(io, cr) && return
     print(io, "pipeline(")
     show(io, cr.cmd)
     print(io, ", ")
@@ -291,6 +286,69 @@ function show(io::IO, cr::CmdRedirect)
     print(io, cr.readable ? "<" : ">")
     show(io, cr.handle)
     print(io, ")")
+end
+
+## showing commands in backtick syntax ##
+
+# Print `word` as it would appear in a backtick literal.
+function _show_cmd_word(io::IO, word::AbstractString, underline::Bool)
+    # A leading `~` would be expanded when the command is parsed back.
+    special = startswith(word, '~') ? _shell_display_special * '~' : _shell_display_special
+    s = sprint(context=io) do io
+        if underline
+            with_output_color(print_shell_word, :underline, io, word, special)
+        else
+            print_shell_word(io, word, special)
+        end
+    end
+    print(io, replace(s, '`' => "\\`"))
+end
+
+# Print `cmd` as one backtick literal if it can be written that way, returning whether it was.
+function _show_as_backticks(io::IO, cmd::AbstractCmd)
+    buf = IOBuffer()
+    _show_backtick_body(IOContext(buf, io), cmd, (nothing, nothing, nothing)) || return false
+    print(io, '`')
+    write(io, take!(buf))
+    print(io, '`')
+    return true
+end
+
+# Print the body of a backtick literal for `cmd`, given the file redirects of enclosing
+# `CmdRedirect`s that apply to it, indexed by stream number. Returns `false` if `cmd` has
+# no backtick form, in which case the output is meaningless.
+_show_backtick_body(::IO, ::AbstractCmd, redirects) = false
+
+function _show_backtick_body(io::IO, cmd::Cmd, redirects)
+    # Anything that `show` wraps around the backticks, like `setenv(...)`, has no shell syntax.
+    (cmd.env === nothing || get_show_env_mode(io) === :none) && isempty(cmd.dir) &&
+        cmd.uid === nothing && cmd.gid === nothing && cmd.cpus === nothing || return false
+    join(io, map(arg -> sprint(_show_cmd_word, arg, true; context=io), cmd.exec), ' ')
+    for (op, r) in zip(("<", ">", "2>"), redirects)
+        r === nothing && continue
+        print(io, ' ', op, op != "<" && r.append ? ">" : "", ' ')
+        _show_cmd_word(io, r.filename, false)
+    end
+    return true
+end
+
+function _show_backtick_body(io::IO, cmds::OrCmds, redirects)
+    # A pipeline's stdin is the first command's and its stdout the last one's, but its
+    # stderr goes to every command, which `cmd 2> file` cannot express.
+    redirect_in, redirect_out, redirect_err = redirects
+    redirect_err === nothing || return false
+    _show_backtick_body(io, cmds.a, (redirect_in, nothing, nothing)) || return false
+    print(io, " | ")
+    return _show_backtick_body(io, cmds.b, (nothing, redirect_out, nothing))
+end
+
+function _show_backtick_body(io::IO, cr::CmdRedirect, redirects)
+    handle = cr.handle
+    handle isa FileRedirect && !isempty(handle.filename) &&
+        cr.stream_no in (STDIN_NO, STDOUT_NO, STDERR_NO) &&
+        cr.readable == (cr.stream_no == STDIN_NO) || return false
+    # When spawning, a redirect replaces any enclosing one of the same stream.
+    return _show_backtick_body(io, cr.cmd, setindex(redirects, handle, cr.stream_no + 1))
 end
 
 """

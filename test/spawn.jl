@@ -607,6 +607,84 @@ withenv("OLDPWD" => nothing) do
     end
 end
 
+# Brace expansion in backtick commands
+@test `{a,b,c}` == Cmd(["a", "b", "c"])
+@test `echo {a,b,c}` == Cmd(["echo", "a", "b", "c"])
+@test `{a,b}.txt` == Cmd(["a.txt", "b.txt"])
+@test `echo {a,b}.txt` == Cmd(["echo", "a.txt", "b.txt"])
+@test `{a,b}.{x,y}` == Cmd(["a.x", "a.y", "b.x", "b.y"])
+@test `echo pre{a,b}suf` == Cmd(["echo", "preasuf", "prebsuf"])
+@test `{a,b} {c,d}` == Cmd(["a", "b", "c", "d"])
+@test `{a,,c}` == Cmd(["a", "", "c"])  # empty alternative
+let x = "foo"
+    @test `{$x,bar}` == Cmd(["foo", "bar"])
+    @test `{$x,bar}.txt` == Cmd(["foo.txt", "bar.txt"])
+end
+let xs = "a b"
+    @test `{$xs,c}` == Cmd(["a b", "c"])  # interpolated value is not word-split
+end
+@test `{"hello world",bye}` == Cmd(["hello world", "bye"])  # quoted space in braces ok
+@test_throws "unquoted space inside braces" eval(:(`{a b,c}`))  # unquoted space is an error
+@test `{a\,b,c}` == Cmd(["a,b", "c"])  # escaped comma
+@test `'{a,b}'` == Cmd(["{a,b}"])       # braces in single quotes: no expansion
+@test `"{a,b}"` == Cmd(["{a,b}"])       # braces in double quotes: no expansion
+@test `{a}` == Cmd(["{a}"])             # single item: no expansion (literal)
+@test `{}` == Cmd(["{}"])               # empty braces: no expansion (literal)
+@test `x{y}z` == Cmd(["x{y}z"])        # no comma: literal
+@test `{a,{b,c},d}` == Cmd(["a", "{b,c}", "d"])  # nested braces: inner not expanded
+# brace expansion works through shell mode path
+let echostr = Base.shell_escape(echocmd)
+    mktempdir() do dir
+        f = joinpath(dir, "out.txt")
+        fstr = Base.shell_escape(f)
+        shell_mode_run("$echostr {a,b,c} > $fstr")
+        @test read(f, String) == "a b c\n"
+    end
+end
+
+# Brace range expansion
+@test `{1..5}` == Cmd(["1", "2", "3", "4", "5"])
+@test `{a..e}` == Cmd(["a", "b", "c", "d", "e"])
+@test `{1..10..3}` == Cmd(["1", "4", "7", "10"])      # step
+@test `{a..z..5}` == Cmd(["a", "f", "k", "p", "u", "z"])
+@test `{10..1}` == Cmd(["10", "9", "8", "7", "6", "5", "4", "3", "2", "1"])
+@test `{z..a..5}` == Cmd(["z", "u", "p", "k", "f", "a"])
+@test `{01..05}` == Cmd(["01", "02", "03", "04", "05"])  # zero-padding
+@test `{001..3}` == Cmd(["001", "002", "003"])
+@test `{-2..2}` == Cmd(["-2", "-1", "0", "1", "2"])
+@test `{-03..3}` == Cmd(["-03", "-02", "-01", "000", "001", "002", "003"])
+@test `{-3..03}` == Cmd(["-3", "-2", "-1", "00", "01", "02", "03"])
+@test `{03..-3}` == Cmd(["03", "02", "01", "00", "-1", "-2", "-3"])
+@test `{-03..-1}` == Cmd(["-03", "-02", "-01"])
+@test `{5..1..2}` == Cmd(["5", "3", "1"])
+@test `{3..3}` == Cmd(["3"])
+@test `{1..10..-3}` == Cmd(["1", "4", "7", "10"])  # step sign is ignored, as in bash
+@test `{e..a..-2}` == Cmd(["e", "c", "a"])
+@test `file{1..3}.txt` == Cmd(["file1.txt", "file2.txt", "file3.txt"])
+@test `{1..3}.{a..c}` == Cmd(["1.a", "1.b", "1.c", "2.a", "2.b", "2.c",
+                               "3.a", "3.b", "3.c"])
+@test `{a,b}.{1..3}` == Cmd(["a.1", "a.2", "a.3", "b.1", "b.2", "b.3"])
+@test_throws "invalid brace range expansion" eval(:(`{a..1}`))
+@test_throws "invalid brace range expansion" eval(:(`{a..Z}`))  # cross-case
+@test_throws "invalid brace range expansion" eval(:(`{A..z}`))
+@test `{A..E}` == Cmd(["A", "B", "C", "D", "E"])
+@test `{-2..+3}` == Cmd(["-2", "-1", "+0", "+1", "+2", "+3"])  # plus sign
+@test `{+1..+3}` == Cmd(["+1", "+2", "+3"])
+@test `{+3..-1}` == Cmd(["+3", "+2", "+1", "+0", "-1"])
+@test `{-1..+1}` == Cmd(["-1", "+0", "+1"])
+@test `{-02..+3}` == Cmd(["-02", "-01", "+00", "+01", "+02", "+03"])  # plus with padding
+@test `{-2..+03}` == Cmd(["-02", "-01", "+00", "+01", "+02", "+03"])
+@test `{-2..+4..2}` == Cmd(["-2", "+0", "+2", "+4"])  # plus with step
+# range expansion works through shell mode path
+let echostr = Base.shell_escape(echocmd)
+    mktempdir() do dir
+        f = joinpath(dir, "out.txt")
+        fstr = Base.shell_escape(f)
+        shell_mode_run("$echostr {1..3} > $fstr")
+        @test read(f, String) == "1 2 3\n"
+    end
+end
+
 # Pipeline and redirection operators in backtick command literals
 (!Sys.iswindows() || havebb) &&
 mktempdir() do dir
@@ -779,6 +857,16 @@ if !Sys.iswindows()
     @test string(cmd_uid) == "setuid(`echo test`, 1001)"
     cmd_both = setuid(setgid(`echo test`, 1000), 1001)
     @test string(cmd_both) == "setgid(setuid(`echo test`, 1001), 1000)"
+    @test string(setuid(setgid(`echo test`, typemax(UInt32)), 0x80000000)) ==
+        "setgid(setuid(`echo test`, 2147483648), 4294967295)"
+end
+
+# Cmd equality and hashing take CPU affinity into account
+let a = setcpuaffinity(`ls`, [1]), b = `ls`
+    @test a != b
+    @test hash(a) != hash(b)
+    @test a == setcpuaffinity(`ls`, [1])
+    @test hash(a) == hash(setcpuaffinity(`ls`, [1]))
 end
 
 # test redaction of sensitive env vars in Cmd display
@@ -947,6 +1035,34 @@ let p = run(`$sleepcmd 100`, wait=false)
     kill(p)
 end
 
+@testset "signal numbers and names" begin
+    if !Sys.iswindows()
+        for name in (:SIGHUP, :SIGINT, :SIGQUIT, :SIGKILL, :SIGUSR1, :SIGUSR2, :SIGPIPE, :SIGALRM,
+                     :SIGTERM, :SIGCHLD, :SIGCONT, :SIGWINCH, :SIGINFO)
+            name === :SIGINFO && !Sys.isbsd() && continue
+            @test Base.signal_name(getglobal(Base, name)) == String(name)
+        end
+    end
+    @test Base.signal_name(0) === nothing
+    @test Base.signal_name(typemax(Int)) === nothing
+    if Sys.islinux()
+        @test 32 < Base.sigrtmin() < Base.sigrtmax()
+        @test Base.signal_name(Base.sigrtmin() + 2) == "SIGRTMIN+2"
+    elseif Sys.isapple() || Sys.iswindows()
+        @test_throws ErrorException Base.sigrtmin()
+    end
+end
+
+# `kill` by process ID
+let p = run(`$sleepcmd 100`, wait=false)
+    kill(getpid(p), 0) # only checks that the process exists
+    @test_throws Base.IOError kill(getpid(p), typemax(Cint))
+    kill(getpid(p))
+    wait(p)
+    @test !success(p)
+    @test_throws Base.IOError kill(getpid(p))
+end
+
 # Second return of shell_parse
 let s = "   \$abc   "
     @test Base.shell_parse(s)[2] === findfirst('a', s)
@@ -1109,6 +1225,40 @@ end
 @test repr(Base.CmdRedirect(``, devnull, 0, false)) == "pipeline(``, stdin>Base.DevNull())"
 @test repr(Base.CmdRedirect(``, devnull, 1, true)) == "pipeline(``, stdout<Base.DevNull())"
 @test repr(Base.CmdRedirect(``, devnull, 11, true)) == "pipeline(``, 11<Base.DevNull())"
+
+@testset "show pipelines and redirects in backtick syntax" begin
+    @test repr(`echo hello | sort`) == "`echo hello | sort`"
+    @test repr(`a | b | c`) == "`a | b | c`"
+    @test repr(`cat < in.txt`) == "`cat < in.txt`"
+    @test repr(`ls > out.txt`) == "`ls > out.txt`"
+    @test repr(`ls >> out.txt`) == "`ls >> out.txt`"
+    @test repr(`make 2> errs.txt`) == "`make 2> errs.txt`"
+    @test repr(`make 2>> errs.txt`) == "`make 2>> errs.txt`"
+    @test repr(`sort 2> e.txt > o.txt < i.txt`) == "`sort < i.txt > o.txt 2> e.txt`"
+    @test repr(`a < i.txt | b 2> e.txt | c > o.txt`) == "`a < i.txt | b 2> e.txt | c > o.txt`"
+    @test repr(`cat 'a b' > 'c d|e'`) == "`cat 'a b' > 'c d|e'`"
+    @test repr(`cat > '~x'`) == "`cat > '~x'`"
+    @test repr(pipeline(`a`, "out`s")) == "`a > out\\`s`"
+    # A pipeline's stdin is its first command's, and its stdout its last command's.
+    @test repr(pipeline(pipeline(`a`, `b`), stdin="i.txt", stdout="o.txt")) == "`a < i.txt | b > o.txt`"
+    # A redirect replaces any enclosing redirect of the same stream when spawned.
+    @test repr(pipeline(pipeline(`a`, stdout="inner.txt"), stdout="outer.txt")) == "`a > inner.txt`"
+    @test repr(pipeline(pipeline(`a`, pipeline(`b`, "inner.txt")), stdout="outer.txt")) == "`a | b > inner.txt`"
+    # Everything else keeps the `pipeline(...)` form.
+    @test repr(pipeline(pipeline(`a`, `b`), stderr="e.txt")) == "pipeline(`a | b`, stderr>Base.FileRedirect(\"e.txt\", false))"
+    @test repr(pipeline(`a`, stderr=`b`)) == "pipeline(`a`, stderr=`b`)"
+    @test repr(pipeline(`a`, stdout=devnull)) == "pipeline(`a`, stdout>Base.DevNull())"
+    @test repr(pipeline(`a`, stdout=IOBuffer())) |> startswith("pipeline(`a`, stdout>")
+    @test repr(pipeline(Cmd(`a`, dir="/tmp"), `b`)) == "pipeline(setenv(`a`; dir=\"/tmp\"), stdout=`b`)"
+    @test repr(pipeline(`a` & `b`, `c`)) == "pipeline(`a` & `b`, stdout=`c`)"
+    @test repr(Base.CmdRedirect(`a`, Base.FileRedirect("", false), 1)) |> startswith("pipeline(")
+    # Shown commands parse back to themselves.
+    for str in ("echo hello | sort", "a < i.txt | b 2>> e.txt | c >> o.txt", "cat '~x' > '~y'",
+                "cat '{a,b}' > 'x|y'")
+        cmd = eval(Meta.parse("`" * str * "`"))
+        @test repr(eval(Meta.parse(repr(cmd)))) == repr(cmd)
+    end
+end
 
 
 # Issue #37070

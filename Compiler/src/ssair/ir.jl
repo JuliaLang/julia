@@ -223,7 +223,6 @@ function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
 end
 
 has_prev_debuginfo(di, pc::Int) = prev_debuginfo(di, pc)[1] !== nothing
-has_edge_debuginfo(di, pc::Int) = edge_debuginfo(di, pc)[1] !== nothing
 
 "(debuginfo, nextpc) from the previous step in the compiler"
 function prev_debuginfo(di, pc::Int)
@@ -1839,7 +1838,7 @@ function may_replace_phi(values::Vector{Any}, phi_bb::BasicBlock, idx::Int)
     # unnecessary when DCE can remove those dead loops entirely, so this is
     # just to be safe.
     v = values[1]
-    before_def = isa(v, OldSSAValue) && idx < v.id
+    before_def = isa(v, OldSSAValue)
     return !before_def
 end
 

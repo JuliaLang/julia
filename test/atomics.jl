@@ -385,6 +385,44 @@ test_once_undef(ARefxy{Union{Nothing,Integer}})
 test_once_undef(ARefxy{UndefComplex{Any}})
 test_once_undef(ARefxy{UndefComplex{UndefComplex{Any}}})
 
+# An atomic field that is one reference stored inline is a single word: setonce
+# compares that word alone, whatever the field after it holds.
+struct OneInlinePtr
+    a::Any
+end
+@noinline function _test_once_oneptr_field(r)
+    r = r[]
+    x, y = OneInlinePtr(:x), OneInlinePtr(:y)
+    r.y = y
+    @test setfieldonce!(r, :x, x, :sequentially_consistent) === true
+    @test getfield(r, :x, :sequentially_consistent) === x
+    @test setfieldonce!(r, :x, y, :sequentially_consistent) === false
+    @test getfield(r, :x, :sequentially_consistent) === x
+    @test r.y === y
+    nothing
+end
+_test_once_oneptr_field(Ref(ARefxy{OneInlinePtr}()))
+_test_once_oneptr_field(Ref{Any}(ARefxy{OneInlinePtr}()))
+
+# While the reference of a wider atomic field is undefined, its other bits are
+# whatever the object's memory held before: setonce succeeds regardless.
+struct InlinePtrAndInt
+    a::Any
+    n::Int
+end
+@noinline once_dirty_heap(n) = (length(Any[Refxy((-1, -1), (-1, -1)) for _ in 1:n]); GC.gc())
+@noinline once_fresh(n) = [ARefxy{InlinePtrAndInt}() for _ in 1:n]
+@noinline function _test_once_dirty(rs)
+    x = InlinePtrAndInt(:x, 1)
+    @test all(r -> setfieldonce!(r, :x, x, :sequentially_consistent), rs)
+    @test all(r -> getfield(r, :x, :sequentially_consistent) === x, rs)
+    nothing
+end
+once_dirty_heap(1000)
+_test_once_dirty(once_fresh(1000))
+once_dirty_heap(1000)
+_test_once_dirty(Any[once_fresh(1000)...])
+
 @test_throws ErrorException @macroexpand @atomic foo()
 @test_throws ErrorException @macroexpand @atomic foo += bar
 @test_throws ErrorException @macroexpand @atomic foo +%= bar
@@ -1396,6 +1434,33 @@ test_memory_unset_multiptr(ThreeInlinePtr, AtomicMemory{ThreeInlinePtr}, Val(:un
     @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :acquire_release, 1)
     @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :not_atomic, 1)
     @test_throws BoundsError Base.unsetindex_atomic!(mem, :release, 0)
+    @atomic :monotonic mem[1] = "value"
+    @test Base.unsetindex_atomic!(mem, :release, Int8(1)) === mem
+    @test !isassigned(mem, 1)
+    @test_throws BoundsError Base.unsetindex_atomic!(mem, :release, Int8(2))
+end
+
+# The atomic index functions convert the new value to the element type.
+@testset "atomic index functions convert values" begin
+    order = :sequentially_consistent
+    mem = AtomicMemory{Int}(undef, 2)
+    @test Base.setindex_atomic!(mem, order, 1.0, 1) === 1
+    @test Base.swapindex_atomic!(mem, order, Int32(5), 1) === 1
+    @test Base.swapindex_atomic!(mem, order, 6.0, 1) === 5
+    @test_throws InexactError Base.swapindex_atomic!(mem, order, 2.5, 1)
+    @test Base.replaceindex_atomic!(mem, order, order, 6, 7.0, 1) === (old = 6, success = true)
+    @test Base.replaceindex_atomic!(mem, order, order, 6, 8.0, 1) === (old = 7, success = false)
+    @test_throws InexactError Base.replaceindex_atomic!(mem, order, order, 7, 8.5, 1)
+    @test Base.getindex_atomic(mem, order, 1) === 7
+    @test_throws BoundsError Base.swapindex_atomic!(mem, order, 1, 3)
+
+    smem = AtomicMemory{String}(undef, 2)
+    @test Base.setindexonce_atomic!(smem, order, order, SubString("ab", 1, 1), 1)
+    @test !Base.setindexonce_atomic!(smem, order, order, SubString("ab", 2, 2), 1)
+    @test Base.getindex_atomic(smem, order, 1) === "a"
+    @test Base.replaceindex_atomic!(smem, order, order, "a", SubString("xy"), 1) == (old = "a", success = true)
+    @test Base.getindex_atomic(smem, order, 1) === "xy"
+    @test_throws MethodError Base.setindexonce_atomic!(smem, order, order, 1, 2)
 end
 
 @noinline function _test_once_undef(r)
@@ -1420,6 +1485,23 @@ test_once_undef(Any)
 test_once_undef(Union{Nothing,Integer})
 test_once_undef(UndefComplex{Any})
 test_once_undef(UndefComplex{UndefComplex{Any}})
+
+# setonce of an element that is one reference stored inline leaves the element
+# after it out of the comparison
+@noinline function _test_once_oneptr_memory(mem)
+    mem = mem[]
+    x, y = OneInlinePtr(:x), OneInlinePtr(:y)
+    r = GenericMemoryRef(mem, 1)
+    memoryrefset!(GenericMemoryRef(mem, 2), y, :sequentially_consistent, true)
+    @test memoryrefsetonce!(r, x, :sequentially_consistent, :sequentially_consistent, true) === true
+    @test memoryrefget(r, :sequentially_consistent, true) === x
+    @test memoryrefsetonce!(r, y, :sequentially_consistent, :sequentially_consistent, true) === false
+    @test memoryrefget(r, :sequentially_consistent, true) === x
+    @test memoryrefget(GenericMemoryRef(mem, 2), :sequentially_consistent, true) === y
+    nothing
+end
+_test_once_oneptr_memory(Ref(AtomicMemory{OneInlinePtr}(undef, 2)))
+_test_once_oneptr_memory(Ref{Any}(AtomicMemory{OneInlinePtr}(undef, 2)))
 
 mutable struct Atomic57190
     @atomic x::Int

@@ -47,7 +47,7 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
     end
     close(pipe)
     pipe = Base64DecodePipe(IOBuffer(take!(buf)))
-    @test isreadable(ipipe) && !iswritable(ipipe)
+    @test isreadable(pipe) && !iswritable(pipe)
     decoded = UInt8[]
     while !eof(pipe)
         push!(decoded, read(pipe, UInt8))
@@ -64,6 +64,11 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
     pipe = Base64DecodePipe(buf)
     @test !isreadable(pipe) && !iswritable(pipe)
     @test isempty(read(pipe))
+
+    # readbytes! into an empty buffer grows it
+    data = UInt8[]
+    @test readbytes!(Base64DecodePipe(IOBuffer("SGVsbG8h")), data, 3) == 3
+    @test data == codeunits("Hel")
 
 
     # Encode to string and decode

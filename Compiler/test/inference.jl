@@ -1587,6 +1587,11 @@ tpara18457(::Type{AbstractMyType18457{I}}) where {I} = I
 tpara18457(::Type{A}) where {A<:AbstractMyType18457} = tpara18457(supertype(A))
 @test tpara18457(MyType18457{true}) === true
 
+struct ShiftTri{A,B,C} end
+shift_tri(::Type{ShiftTri{A,B,C}}, n::Int) where {A,B,C} = n == 0 ? Val(A) : shift_tri(ShiftTri{B,C,C}, n - 1)
+@test only(Base.return_types(n -> shift_tri(ShiftTri{Int8,Int16,Vector{Int}}, n), (Int,))) ==
+    Union{Val{Int8}, Val{Int16}, Val{Vector{Int}}}
+
 @testset "type inference error #19322" begin
     Y_19322 = reshape(round.(Int, abs.(randn(5*1000))) .+ 1, 1000, 5)
 
@@ -2283,6 +2288,28 @@ let nfields_tfunc(@nospecialize xs...) =
     @test sizeof_tfunc(Type{Ptr}) === Const(sizeof(Ptr))
     @test bitsizeof_tfunc(Type{BitsizeofUInt17}) === Const(17)
     @test bitsizeof_tfunc(DataType) === Int
+    @test bitsizeof_tfunc(Core.TypeEgal{BitsizeofUInt17}) === Const(17)
+    @test bitsizeof_tfunc(BitsizeofUInt17) === Const(17)
+    @test bitsizeof_tfunc(Const(0x01)) === Const(8)
+    @test bitsizeof_tfunc(Const(Pair{Int32,Int16})) === Int
+    @test bitsizeof_tfunc(Core.TypeEgal{Union{Int8,Int16}}) === Int
+    @test bitsizeof_tfunc(Tuple{Int}) === Int
+    bitsizeof_nothrow(@nospecialize xs...) = Compiler.bitsizeof_nothrow(xs...)
+    @test bitsizeof_nothrow(Const(Int))
+    @test bitsizeof_nothrow(Const(1.0))
+    @test bitsizeof_nothrow(Core.TypeEgal{BitsizeofUInt17})
+    @test bitsizeof_nothrow(Union{Int8, Ptr, Core.TypeEgal{Float32}})
+    @test !bitsizeof_nothrow(Type{BitsizeofUInt17})
+    @test !bitsizeof_nothrow(Const(Ptr))
+    @test !bitsizeof_nothrow(Core.TypeEgal{Ptr})
+    @test !bitsizeof_nothrow(Const(Pair{Int32,Int16}))
+    @test !bitsizeof_nothrow(Core.TypeEgal{Tuple{Int}})
+    @test !bitsizeof_nothrow(Core.TypeEgal{Union{Int8,Int16}})
+    @test !bitsizeof_nothrow(Const("abc"))
+    @test !bitsizeof_nothrow(String)
+    @test !bitsizeof_nothrow(Union{Int, String})
+    @test !bitsizeof_nothrow(DataType)
+    @test !bitsizeof_nothrow(Any)
     @test !sizeof_nothrow(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}})
     @test sizeof_nothrow(Union{Ptr, Int, Core.TypeEgal{Ptr{Int8}}, Core.TypeEgal{Int}})
     @test sizeof_nothrow(Const(Ptr))
@@ -2415,6 +2442,32 @@ let memoryref_tfunc(@nospecialize xs...) = Compiler.memoryref_tfunc(Compiler.fal
     @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{MemoryRef}]) == Int
     @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{Any}]) == Int
     @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{Memory}]) == Union{}
+end
+
+# Byte access types come from the requested type/value, rather than the storage element type.
+@testset "MemoryRef byte access inference" begin
+    loadbytes(args...) = Compiler.unsafe_memoryrefload_tfunc(Compiler.fallback_lattice, args...)
+    storebytes(args...) = Compiler.unsafe_memoryrefstore!_tfunc(Compiler.fallback_lattice, args...)
+    @test loadbytes(MemoryRef{UInt8}, Const(Int32), Int, Bool) === Int32
+    @test loadbytes(MemoryRef{UInt8}, Type{ComplexF64}, Const(1), Bool) === ComplexF64
+    @test loadbytes(MemoryRef{UInt8}, Const(String), Int, Bool) === Union{}
+    W = Union{T,U} where {T<:Int32,U<:Int32}
+    @test loadbytes(MemoryRef{UInt8}, Type{W}, Int, Bool) == Int32
+    @test loadbytes(MemoryRef{UInt8}, Core.TypeEgal{W}, Int, Bool) === Union{}
+    @test storebytes(MemoryRef{UInt8}, Int32, Int, Bool) === Int32
+    @test storebytes(MemoryRef{UInt8}, Const(Int32(7)), Int, Bool) === Const(Int32(7))
+    @test storebytes(MemoryRef{UInt8}, String, Int, Bool) === Union{}
+    for f in (Core.unsafe_memoryrefload, Core.unsafe_memoryrefstore!)
+        value = f === Core.unsafe_memoryrefload ? Const(Int32) : Int32
+        @test Compiler.builtin_nothrow(Compiler.fallback_lattice, f,
+                                      Any[MemoryRef{UInt8}, value, Int, Const(false)], Int32)
+        @test !Compiler.builtin_nothrow(Compiler.fallback_lattice, f,
+                                       Any[MemoryRef{Any}, value, Int, Const(false)], Int32)
+    end
+    @test Compiler.builtin_nothrow(Compiler.fallback_lattice, Core.unsafe_memoryrefload,
+                                  Any[MemoryRef{UInt8}, Core.TypeEgal{Int32}, Int, Const(false)], Int32)
+    @test !Compiler.builtin_nothrow(Compiler.fallback_lattice, Core.unsafe_memoryrefload,
+                                   Any[MemoryRef{UInt8}, Type{Int32}, Int, Const(false)], Int32)
 end
 
 let tuple_tfunc(@nospecialize xs...) =
@@ -2862,6 +2915,23 @@ let S = (Union{T, U} where {T<:Int, U<:Int})
     @test fapply61323(S) === 1
     @test call_type_int61323(fapply61323, S) === 1
     @test Base.return_types(fapply61323, (Type{Int},)) == Any[Int]
+    # only `DataType` reps have the fields of `DataType`, while `UnionAll` and `Union`
+    # reps reach the fields of their own types
+    getvar61323(x) = getfield(x, :var)
+    getfield1_61323(x) = getfield(x, 1)
+    @test call_type_int61323(getvar61323, S) isa TypeVar
+    @test call_type_int61323(getfield1_61323, S) isa TypeVar
+    @test Base.infer_return_type(getvar61323, (Type{Int},)) == TypeVar
+    @test Base.infer_return_type(getvar61323, (Core.TypeEgal{Int},)) == Union{}
+    @test TypeVar <: Base.infer_return_type(getfield1_61323, (Type{Int},))
+    @test Union{} != Base.infer_return_type(supertype, (Type{Int},))
+    let 𝕃 = Compiler.fallback_lattice
+        @test Compiler.getfield_tfunc(𝕃, Type{Int}, Compiler.Const(:name)) === Compiler.Const(Int.name)
+        @test Compiler.getfield_tfunc(𝕃, Type{Int}, Compiler.Const(:super)) === Type{Signed}
+        @test Compiler.getfield_tfunc(𝕃, Type{Int}, Compiler.Const(:foo)) === Union{}
+        @test Compiler.getfield_tfunc(𝕃, Type{Int}, Compiler.Const(1.0)) === Union{}
+    end
+    @test Base.infer_return_type(x -> getfield(x, 1.0), (Type{Int},)) == Union{}
 end
 
 # Defined type-valued static parameters should retain egality so DataType
@@ -3033,6 +3103,11 @@ end
         iszero_simple(0) ? nothing : missing
     end |> only === Nothing
 end
+sigisint(x::Integer, c::Bool) = c ? x isa Int : true
+sigisint(x::String, c::Bool) = false
+@test Base.return_types((Union{Int,String}, Bool)) do x, c
+    sigisint(x, c) ? x : nothing
+end |> only == Union{Nothing,Int}
 
 @testset "branching on conditional object" begin
     # simple
@@ -3217,11 +3292,12 @@ let 𝕃ᵢ = Compiler.InferenceLattice(Compiler.MustAliasesLattice(Compiler.Bas
     @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Int, Int) === Union{}
 
     # `tmeet` with a type narrows the field type and keeps the alias, or gives `Union{}` if
-    # they are disjoint
+    # they are disjoint, or just the field type if it is already constant
     let m = Compiler.tmeet(𝕃ᵢ, MustAlias(2, 0, AliasableField{Any}, 1, Union{Int,String}), Integer)
         @test m isa MustAlias && m.slot == 2 && m.fldidx == 1 && m.fldtyp === Int
     end
     @test Compiler.tmeet(𝕃ᵢ, MustAlias(2, 0, AliasableField{Any}, 1, Int), String) === Union{}
+    @test Compiler.tmeet(𝕃ᵢ, MustAlias(2, 0, AliasableField{Any}, 1, Union{Int,Nothing}), Nothing) === Nothing
 
     # a limited field type makes the constructor return that `LimitedAccuracy`, without the alias
     let causes = Compiler.IdSet{Compiler.InferenceState}()
@@ -3229,12 +3305,12 @@ let 𝕃ᵢ = Compiler.InferenceLattice(Compiler.MustAliasesLattice(Compiler.Bas
         @test l isa Compiler.LimitedAccuracy && l.typ === Int
     end
 
-    # `narrow_mustalias(x, y)` returns the alias `y` with field type `x` if `x ⊑ y.fldtyp`,
-    # otherwise `x` itself
+    # `narrow_mustalias(x, y)` gives the alias `y` with field type `x`
     let alias = MustAlias(2, 0, AliasableField{Any}, 1, Union{Int,String})
         narrow(@nospecialize(x), @nospecialize(y) = alias) = Compiler.narrow_mustalias(𝕃ᵢ, x, y)
-        # `Union{}` and slot wrappers are not narrowed
-        for x in Any[Union{}, alias, MustAlias(3, 0, AliasableField{Any}, 1, Int), Conditional(2, 0, Int, String)]
+        # `Union{}`, constants and slot wrappers are not narrowed
+        for x in Any[Union{}, Const(1), Nothing,
+                     alias, MustAlias(3, 0, AliasableField{Any}, 1, Int), Conditional(2, 0, Int, String)]
             @test narrow(x) === x
         end
         # a narrowed result keeps the limitation of `x` and of `y`
@@ -3244,7 +3320,7 @@ let 𝕃ᵢ = Compiler.InferenceLattice(Compiler.MustAliasesLattice(Compiler.Bas
         l = narrow(Int, Compiler.LimitedAccuracy(alias, causes))
         @test l isa Compiler.LimitedAccuracy && l.typ == MustAlias(2, 0, AliasableField{Any}, 1, Int)
         # `x` gets the alias even if it is not ⊑ the field type
-        @test narrow(Nothing) == MustAlias(2, 0, AliasableField{Any}, 1, Nothing)
+        @test narrow(Float64) == MustAlias(2, 0, AliasableField{Any}, 1, Float64)
     end
 end
 
@@ -3257,6 +3333,57 @@ f63677(x, y) = typeof(x) === typeof(y)
 g63677(b, s) = f63677(b.a, pick63677(b, s))
 @test only(code_typed(g63677, (Box63677, String))).first.code[end] != ReturnNode(true) # not folded
 @test !g63677(Box63677(1), "y")
+
+# an alias of an earlier definition of a slot must not be merged into an alias of its
+# current definition
+@noinline function stale_alias_join(b1::AliasableField{Union{Int,String}}, b2::AliasableField{Union{Int,String}},
+                                    c1::Bool, c2::Bool)
+    y = b1
+    x = getfield(y, :f)
+    y = b2
+    if c1
+        x = getfield(y, :f)
+    elseif c2
+        x = getfield(y, :f)
+    else
+        Base.donotdelete(x) # `x` still is the field of `b1` here
+    end
+    if (x::Union{Int,String}) isa Int
+        return getfield(y, :f)
+    end
+    return 0
+end
+let T = AliasableField{Union{Int,String}}
+    @test Base.infer_return_type(stale_alias_join, (T, T, Bool, Bool)) == Union{Int,String}
+    @test stale_alias_join(T(1), T("s"), false, false) == "s"
+end
+
+# an alias doesn't hide the value of a field that is known to be constant
+@test Base.infer_return_type((AliasableField{Bool},)) do a
+    x = a.f
+    if x === true
+        return x ? 1 : "unreachable"
+    end
+    return 2
+end === Int
+check_aliased_field(a, v) = (x = a.f; x === v || throw("unexpected"); x)
+@test Base.infer_return_type((AliasableField{Bool},)) do a
+    return check_aliased_field(a, true) ? 1 : "unreachable"
+end === Int
+
+# call-site refinement of a slot holding an alias
+takes_int_only(::Int) = nothing
+@test Base.infer_return_type((AliasableField{Union{Int,String}},)) do a
+    x = a.f
+    takes_int_only(x)
+    return x
+end === Int
+@test Base.infer_return_type((AliasableField{Union{Int,String}},)) do a
+    x = a.f
+    y = x
+    takes_int_only(x)
+    return y
+end === Int
 
 # `conditional_change` on a slot holding a limited alias narrows the field type, and keeps
 # both the alias and the limitation
@@ -3850,6 +3977,13 @@ end
 tail_is_ntuple_val((@nospecialize t::Tuple)) = Val(tail_is_ntuple(t))
 @test Base.return_types(tail_is_ntuple, (Tuple,)) |> only === Bool
 @test Base.return_types(tail_is_ntuple_val, (Tuple,)) |> only === Val{true}
+function condgoto(x, q)
+    h = x isa Int
+    q && @goto a
+    @label b; h = false
+    @label a; h = false; @goto b
+end
+@test Base.infer_return_type(condgoto, (Any, Bool)) === Union{}
 
 # https://github.com/JuliaLang/julia/issues/47435
 is_closed_ex(e::InvalidStateException) = true
@@ -5268,6 +5402,46 @@ end == Int
         end
         return nothing
     end == Union{Nothing, String}
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        if b isa Int
+            return y
+        end
+        return nothing
+    end == Any
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        typeassert(b, Int)
+        return y
+    end == Any
+    # after the swap, `x` does hold `b` and should still be refined
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        if b isa Int
+            return x
+        end
+        return nothing
+    end == Union{Nothing, Int}
+    @test Base.infer_return_type((Any, Any, Bool)) do a, b, c
+        x = a
+        y = b
+        y, z = x, (c && (x = 1; true); y)
+        if x isa Int
+            return y
+        end
+        return nothing
+    end == Any
+    @test Base.infer_return_type((Any,)) do a
+        x = y = identity(a)
+        z = x
+        if x isa Int
+            return z
+        end
+        return nothing
+    end == Union{Nothing, Int}
     # typeassert-based refinement should also propagate to aliases
     @test Base.infer_return_type((Any,)) do x
         y = x
@@ -8542,5 +8716,19 @@ irinterp_scan_d1(t) = irinterp_scan_derivative(irinterp_scan_square, t)
 irinterp_scan_d2(t) = irinterp_scan_derivative(irinterp_scan_d1, t)
 @test Base.infer_return_type(irinterp_scan_d2, (Int,)) === Int
 @test irinterp_scan_d2(2) == 2
+
+# irinterp must keep splats precise after the optimizer turns them into `Core.svec` calls
+const SPLAT_SVEC_NAMES = ntuple(i -> Symbol(:a, i), 33)
+@inline splat_svec_inner(names, vals...) = NamedTuple{names}(vals)
+@inline splat_svec_outer(names, vals::Tuple) = splat_svec_inner(names, vals...)
+splat_svec_caller(vals) = splat_svec_outer(SPLAT_SVEC_NAMES, vals)
+@test Base.infer_return_type(splat_svec_caller, (NTuple{33,Int},)) === NamedTuple{SPLAT_SVEC_NAMES, NTuple{33,Int}}
+
+# a reference at a non-constant index of a constant `MemoryRef` is not that constant
+const memoryref_at_const = Core.memoryrefnew(Memory{Int}(undef, 4))
+memoryref_at_offset(i::Int) = Core.memoryrefoffset(Core.memoryrefnew(memoryref_at_const, i, true))
+@test Compiler.builtin_tfunction(Compiler.NativeInterpreter(), Core.memoryrefnew,
+    Any[Core.Const(memoryref_at_const), Int, Core.Const(true)], nothing) === MemoryRef{Int}
+@test memoryref_at_offset(3) == 3
 
 end # module inference

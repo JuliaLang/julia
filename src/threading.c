@@ -7,6 +7,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "processor.h"
 
 #ifdef _COMPILER_TSAN_ENABLED_
 #include <sanitizer/tsan_interface.h>
@@ -97,16 +98,27 @@ JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 #endif
 
 
+#ifdef JL_TLS_LOAD_ASM
+// `jl_tls_load` kept in order with the stores around it, for checking an
+// offset at startup
+static void *jl_tls_load_ordered(intptr_t offset) JL_NOTSAFEPOINT
+{
+    void *p;
+    __asm__ volatile(JL_TLS_LOAD_ASM : "=&r"(p) : "r"(offset) : "memory");
+    return p;
+}
+#endif
+
 // The tls_states buffer:
 //
 // On platforms that do not use ELF (i.e. where `__thread` is emulated with
-// lower level API) (Windows), we use the platform runtime API to create
+// lower level API) (Windows, macOS), we use the platform runtime API to create
 // TLS variable directly.
 // This is functionally equivalent to using `__thread` but can be
 // more efficient since we can have better control over the creation and
 // initialization of the TLS buffer.
 //
-// On platforms that support native TLS (ELF platforms + Macos) we use a `__thread` variable
+// On ELF platforms we use a `__thread` variable
 // as the fallback in the shared object. For better efficiency, we also
 // create a `__thread` variable in the main executable using a static TLS
 // model.
@@ -205,6 +217,52 @@ JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func_t *f, DWORD k)
     jl_safe_printf("ERROR: Attempt to change TLS address.\n");
 }
 
+#elif defined(_OS_DARWIN_)
+// A `__thread` variable costs a call to `_tlv_get_addr` on every access, in
+// the executable as much as here. A pthread key's slot is one load from the
+// thread register instead.
+static pthread_key_t jl_pgcstack_key;
+
+static __attribute__((constructor)) void jl_init_pgcstack_key(void)
+{
+    if (pthread_key_create(&jl_pgcstack_key, NULL) != 0)
+        abort();
+}
+
+JL_DLLEXPORT jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
+{
+    return (jl_gcframe_t**)pthread_getspecific(jl_pgcstack_key);
+}
+
+void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
+{
+    pthread_setspecific(jl_pgcstack_key, (void*)pgcstack);
+}
+
+void jl_pgcstack_getkey(jl_get_pgcstack_func_t *f, jl_pgcstack_key_t *k)
+{
+    // for codegen; sysimage code passes `k`, which `jl_get_pgcstack` ignores
+    *f = jl_get_pgcstack;
+    *k = jl_pgcstack_key;
+}
+
+// `pthread_getspecific(key)` loads slot `key` of an array at the thread
+// register. Publish that slot's offset only if an inline read of it sees what
+// `pthread_setspecific` stored, so that a macOS which keeps keys elsewhere
+// falls back to the call.
+static void jl_check_tls(void) JL_NOTSAFEPOINT
+{
+#ifdef JL_TLS_LOAD_ASM
+    static char probe;
+    intptr_t offset = (intptr_t)(jl_pgcstack_key * sizeof(void*));
+    void *saved = pthread_getspecific(jl_pgcstack_key);
+    pthread_setspecific(jl_pgcstack_key, &probe);
+    void *seen = jl_tls_load_ordered(offset);
+    pthread_setspecific(jl_pgcstack_key, saved);
+    if (seen == &probe)
+        jl_tls_offset = offset;
+#endif
+}
 
 #else
 // We use the faster static version in the main executable to replace
@@ -355,8 +413,10 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     if (pthread_getspecific(jl_task_exit_key))
         abort();
 #endif
-    if (jl_get_pgcstack() != NULL)
+    if (jl_get_pgcstack() != NULL) {
+        fprintf(stderr, "fatal: jl_init_threadtls called on a thread that already belongs to the runtime\n");
         abort();
+    }
     jl_ptls_t ptls;
 #if defined(_OS_WINDOWS_)
     ptls = (jl_ptls_t)_aligned_malloc(sizeof(jl_tls_states_t), alignof(jl_tls_states_t));
@@ -481,10 +541,24 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     return &ct->gcstack;
 }
 
+static int is_unloaded_image(void *image) JL_NOTSAFEPOINT
+{
+    jl_image_pointers_t *pointers;
+    if (!jl_dlsym(image, "jl_image_pointers", (void **)&pointers, 0, 0))
+        return 0;
+    // Loading an image stores the runtime's pgcstack getter into the
+    // image's `jl_pgcstack_func_slot`; until then the slot holds the image's
+    // built-in default getter.
+    jl_get_pgcstack_func_t getter;
+    jl_pgcstack_key_t key;
+    jl_pgcstack_getkey(&getter, &key);
+    return *(jl_get_pgcstack_func_t*)pointers->ptls->pgcstack_func_slot != getter;
+}
+
 JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void) JL_CANSAFEPOINT_ENTER
 {
+    void *retaddr = __builtin_extract_return_addr(__builtin_return_address(0));
     if (!jl_is_initialized()) {
-        void *retaddr = __builtin_extract_return_addr(__builtin_return_address(0));
         void *handle = jl_find_dynamic_library_by_addr(retaddr, 0, 0);
         if (handle == NULL) {
             fprintf(stderr, "error: runtime auto-initialization failed due to bad sysimage lookup\n"
@@ -496,6 +570,21 @@ JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void) JL_CANSAFEPOINT_E
         jl_init_options();
         jl_init_with_image_handle(handle);
         return &jl_get_current_task()->gcstack;
+    }
+
+    // NULL for JIT-compiled cfunctions, which are not in any library
+    void *handle = jl_find_dynamic_library_by_addr(retaddr, 0, 1);
+    if (jl_get_pgcstack() != NULL || (handle != NULL && is_unloaded_image(handle))) {
+        const char *caller = jl_pathname_for_symbol(retaddr);
+        const char *loaded = jl_options.image_file;
+        fprintf(stderr, "error: a Julia runtime is already initialized in this process with image\n"
+                        "           %s\n"
+                        "       so the image\n"
+                        "           %s\n"
+                        "       cannot also be initialized. Loading two Julia images into one process\n"
+                        "       requires each to use its own private copy of libjulia.\n",
+                        loaded ? loaded : "<unknown>", caller ? caller : "<unknown>");
+        abort();
     }
 
     return jl_adopt_thread();
@@ -623,8 +712,6 @@ static void jl_delete_thread(void *value)
 
 jl_mutex_t typecache_lock;
 
-JL_DLLEXPORT ssize_t jl_tls_offset = -1;
-
 #ifdef JL_ELF_TLS_VARIANT
 JL_DLLEXPORT const int jl_tls_elf_support = 1;
 // Optimize TLS access in codegen if the TLS buffer is using a IE or LE model.
@@ -721,6 +808,15 @@ static void jl_check_tls(void) JL_NOTSAFEPOINT
     ssize_t offset = jl_check_tls_bound(tp, k0, data.total_size);
     if (offset == -1)
         return;
+#ifdef JL_TLS_LOAD_ASM
+    // the inline read must find the slot `k0` points to
+    jl_gcframe_t **saved = *k0;
+    *k0 = (jl_gcframe_t**)&saved;
+    void *seen = jl_tls_load_ordered(offset);
+    *k0 = saved;
+    if (seen != (void*)&saved)
+        return;
+#endif
     jl_tls_offset = offset;
 }
 #else
@@ -742,7 +838,7 @@ void jl_init_threading(void)
         uv_mutex_init(&jl_mutex_park[i].mtx);
         uv_cond_init(&jl_mutex_park[i].cond);
     }
-#ifdef JL_ELF_TLS_VARIANT
+#if defined(JL_ELF_TLS_VARIANT) || defined(_OS_DARWIN_)
     jl_check_tls();
 #endif
 
@@ -852,6 +948,17 @@ void jl_init_threading(void)
 
 uv_barrier_t thread_init_done;
 
+// The first CPU after `cpu` in the affinity mask `allowed`, or simply the next one if
+// the mask is unknown.
+static int next_allowed_cpu(const char *allowed, int masksize, int cpu)
+{
+    do {
+        cpu++;
+    } while (allowed && cpu < masksize && !allowed[cpu]);
+    assert(cpu < masksize);
+    return cpu;
+}
+
 void jl_start_threads(void)
 {
     int nthreads = jl_atomic_load_relaxed(&jl_n_threads);
@@ -873,11 +980,27 @@ void jl_start_threads(void)
     if (cp && strcmp(cp, "0") != 0)
         exclusive = 1;
 
-    // exclusive use: affinitize threads, master thread on proc 0, threads in
-    // default pool according to a 'compact' policy
+    // exclusive use: pin each default pool thread to its own CPU, in order,
+    // from the CPUs this process may run on ('compact' policy)
     // non-exclusive: no affinity settings; let the kernel move threads about
+    char *allowed = NULL; // inherited affinity mask, NULL if unknown (macOS)
+    int cpu = -1;
     if (exclusive) {
-        if (ndefault_threads > jl_effective_threads()) {
+        // Each thread needs a CPU of its own, so check against the affinity mask, not
+        // against the parallelism budget (CPU quota, JULIA_CPU_THREADS) that `auto` uses.
+        allowed = (char*)alloca(cpumasksize);
+        memset(allowed, 0, cpumasksize); // libuv only fills uv_cpumask_size() entries
+        uvtid = uv_thread_self();
+        int ncpus = 0;
+        if (uv_thread_getaffinity(&uvtid, allowed, cpumasksize) == 0) {
+            for (i = 0; i < cpumasksize; i++)
+                ncpus += allowed[i] != 0;
+        }
+        else { // affinity mask unavailable (macOS): fall back to CPUs 0 to N-1
+            allowed = NULL;
+            ncpus = jl_cpu_threads();
+        }
+        if (ndefault_threads > ncpus) {
             jl_printf(JL_STDERR, "ERROR: Too many threads requested for %s option.\n", MACHINE_EXCLUSIVE_NAME);
             exit(1);
         }
@@ -886,10 +1009,10 @@ void jl_start_threads(void)
         // If there are no interactive threads, the master thread is in the
         // default pool and we must affinitize it
         if (ninteractive_threads == 0) {
-            mask[0] = 1;
-            uvtid = uv_thread_self();
+            cpu = next_allowed_cpu(allowed, cpumasksize, cpu);
+            mask[cpu] = 1;
             uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
-            mask[0] = 0;
+            mask[cpu] = 0;
         }
     }
 
@@ -904,12 +1027,12 @@ void jl_start_threads(void)
         uv_thread_create(&uvtid, jl_threadfun, t); // NOLINT[julia-first-decl-annotations]
 
         // Interactive pool threads get the low IDs, so check if this is a
-        // default pool thread.  The master thread is already on CPU 0.
+        // default pool thread.
         if (exclusive && i >= ninteractive_threads) {
-            assert(i - ninteractive_threads < cpumasksize);
-            mask[i - ninteractive_threads] = 1;
+            cpu = next_allowed_cpu(allowed, cpumasksize, cpu);
+            mask[cpu] = 1;
             uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
-            mask[i - ninteractive_threads] = 0;
+            mask[cpu] = 0;
         }
     }
 }

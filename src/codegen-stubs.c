@@ -11,7 +11,7 @@
 #define UNAVAILABLE { jl_errorf("%s: not available in this build of Julia", __func__); }
 
 #ifdef JL_LIBRARY_STATIC
-#include "jl_static_codegen_fallbacks.inc"
+#include <jl_static_codegen_fallbacks.inc>
 #endif
 
 JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
@@ -121,6 +121,16 @@ JL_DLLEXPORT int jl_objcache_kv_put_fallback(const char *ns, const uint8_t *key,
 JL_DLLEXPORT int jl_objcache_kv_enabled_fallback(void)
 {
     return 0;
+}
+
+JL_DLLEXPORT int64_t jl_objcache_prune_fallback(int64_t cutoff)
+{
+    return 0;
+}
+
+JL_DLLEXPORT const char *jl_objcache_compact_fallback(const char *dir)
+{
+    return "the native code cache is not available";
 }
 
 JL_DLLEXPORT void jl_jit_register_ci_fallback(jl_code_instance_t *ci)

@@ -1562,7 +1562,7 @@ let A = [1]
 end
 
 # Module() constructor
-@test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
+@test names(Module(:anonymous), all = true, imported = true) == [:anonymous, :eval, :include]
 @test names(Module(:anonymous, false), all = true, imported = true) == [:anonymous]
 @test invokelatest(getglobal, Module(:anonymous, false, true), :Core) == Core
 @test_throws UndefVarError invokelatest(getglobal, Module(:anonymous, false, false), :Core)
@@ -4271,6 +4271,47 @@ end
 @test_throws TypeError("new", DataType, Complex) eval(Expr(:splatnew, Complex, ()))
 @test_throws TypeError("new", DataType, Complex.body) eval(Expr(:splatnew, Complex.body, ()))
 
+end
+
+# types whose instances hold data that their Julia-visible fields do not describe
+# (C-only fields after them, an opaque layout, trailing variable-sized data) can only be
+# allocated by the runtime, since `new` would not set up that data
+for x in Any[which(sin, (Float64,)), current_task(), Base.CancellationTokenSource(),
+             Base.WaitEntryN(nothing, 2), Main, :sym, "str", Core.svec(1), Memory{Int}(undef, 2),
+             Vector{T} where T]
+    T = typeof(x)
+    @test Base.datatype_hashiddenfields(T)
+    vals = Any[getfield(x, i) for i in 1:(fieldcount(T) - T.name.n_uninitialized)]
+    args = Any[QuoteNode(v) for v in vals]
+    err = ErrorException("new: $(T.name.name) has hidden fields and can only be allocated by the runtime")
+    @test_throws err Core.eval(@__MODULE__, Expr(:new, T, args...))
+    fnew = @eval () -> $(Expr(:new, T, args...))
+    @test_throws err Base.invokelatest(fnew)
+    @test Base.infer_return_type(fnew, ()) === Union{}
+    @test !Core.Compiler.is_nothrow(Base.infer_effects(fnew, ()))
+    fdyn = @eval T -> $(Expr(:new, :T, args...))
+    @test_throws err Base.invokelatest(fdyn, T)
+    fsplat = @eval () -> $(Expr(:splatnew, T, Expr(:tuple, args...)))
+    @test_throws err Base.invokelatest(fsplat)
+    @test Base.infer_return_type(fsplat, ()) === Union{}
+    @test !Core.Compiler.is_nothrow(Base.infer_effects(fsplat, ()))
+    @test_throws err ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, vals, length(vals))
+    @test_throws err ccall(:jl_new_structt, Any, (Any, Any), T, Tuple(vals))
+    @test_throws err ccall(:jl_new_struct_uninit, Any, (Any,), T)
+end
+@test !Base.datatype_hashiddenfields(Core.MethodInstance)
+# the size of a type with C-only fields after its visible ones includes them
+for T in (Method, Task, UnionAll)
+    n = fieldcount(T)
+    ft = fieldtype(T, n)
+    visible_end = fieldoffset(T, n) + (Base.allocatedinline(ft) ? sizeof(ft) : sizeof(Ptr{Cvoid}))
+    al = Base.datatype_alignment(T)
+    @test sizeof(T) > cld(visible_end, al) * al
+end
+# the flag is on the TypeName, so it applies even when the type is not known exactly
+let fparam = @eval T -> $(Expr(:new, :(Memory{T})))
+    @test Base.infer_return_type(fparam, (Type,)) === Union{}
+    @test_throws ErrorException Base.invokelatest(fparam, Int)
 end
 
 # don't allow redefining types if n_uninitialized changes
@@ -8754,6 +8795,16 @@ code_typed(caller63844, ())
 @test f63844(1, 2, 3, 4, 5, 6, (7, 8)) === 2
 @test caller63844() === 2
 
+# issue #64751: both methods are partial matches with the same compilation signature;
+# recording the varargs one must leave dispatch to the tuple one alone
+f64751(::DataType, ::Tuple) = :tuple
+f64751(::DataType, xs...) = :varargs
+g64751(::Vector{T}) where {T<:Union{Float32,Float64}} = f64751(T, (1, 2))
+h64751(r) = g64751(r[])
+code_typed(h64751, (Ref{Vector{<:Union{Float32,Float64}}},))
+@test f64751(Float32, (1, 2)) === :tuple
+@test f64751(Float32, 1, 2) === :varargs
+
 f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
 @test f48950(1, 1, 1) == 1
 
@@ -9213,8 +9264,10 @@ end
 @test M57638_3.x === 1
 
 @testset "no unnecessary methods for comparison functions with generically correct and performant fallback methods" begin
-    @test (isone ∘ length ∘ methods)(>, Tuple{Any, Any})
-    @test (isone ∘ length ∘ methods)(>=, Tuple{Any, Any})
+    # only count Base's methods: tests that ran earlier on this worker may have added others
+    base_methods(f) = filter(m -> m.module === Base, methods(f, Tuple{Any, Any}))
+    @test (isone ∘ length ∘ base_methods)(>)
+    @test (isone ∘ length ∘ base_methods)(>=)
 end
 
 module GlobalBindingMulti
@@ -9498,4 +9551,38 @@ end
     # again, now from the filled caches
     @test all(i -> Base.invokelatest(OrderedDictGrowth.f, Ts[i]()) == i, eachindex(Ts))
     @test all(i -> Base.invokelatest(OrderedDictGrowth.g, Ts[i]()) === Ts[i], eachindex(Ts))
+end
+
+# Byte accesses support unaligned, cross-element loads and stores.
+@testset "MemoryRef byte access" begin
+    for value in (UInt32(0x12345678), 1.25 + 2.5im, ntuple(i -> UInt64(i), 256))
+        T = typeof(value)
+        bytes = fill!(Memory{UInt8}(undef, sizeof(T) + 2), 0xff)
+        ref = memoryref(bytes)
+        @test Core.unsafe_memoryrefstore!(ref, value, 1, true) === value
+        @test bytes[1] == bytes[end] == 0xff
+        expected = reinterpret(NTuple{sizeof(T),UInt8}, value)
+        @test Tuple(bytes[2:end-1]) === expected
+        @test Core.unsafe_memoryrefload(ref, T, 1, true) === value
+        shifted = memoryref(bytes, 2)
+        @test Core.unsafe_memoryrefload(shifted, T, 0, true) === value
+    end
+    bytes = fill!(Memory{UInt8}(undef, 8), 0x00)
+    bytes[1] = 0xff
+    ref = memoryref(bytes)
+    @test Core.unsafe_memoryrefload(memoryref(bytes, 2), UInt8, -1, true) === 0xff
+    @test Core.unsafe_memoryrefload(ref, Nothing, 0, true) === nothing
+    @test Core.unsafe_memoryrefstore!(ref, nothing, 0, true) === nothing
+    @test_throws BoundsError Core.unsafe_memoryrefload(ref, UInt32, 6, true)
+    @test_throws BoundsError Core.unsafe_memoryrefstore!(memoryref(bytes, 2), 0x00, typemax(Int), true)
+    @test_throws ErrorException Core.unsafe_memoryrefload(ref, String, 0, true)
+    @test_throws ErrorException Core.unsafe_memoryrefload(ref, Union{UInt8,UInt16}, 0, true)
+    @test_throws ErrorException Core.unsafe_memoryrefstore!(ref, "value", 0, true)
+    @test_throws TypeError Core.unsafe_memoryrefload(bytes, UInt8, 0, true)
+    @test_throws TypeError Core.unsafe_memoryrefstore!(ref, 0x00, 0.0, true)
+    for mem in (Memory{Any}(undef, 1), Memory{Union{UInt8,UInt16}}(undef, 1),
+                Memory{Nothing}(undef, 1), AtomicMemory{UInt8}(undef, 1))
+        @test_throws ErrorException Core.unsafe_memoryrefload(memoryref(mem), UInt8, 0, true)
+        @test_throws ErrorException Core.unsafe_memoryrefstore!(memoryref(mem), 0x00, 0, true)
+    end
 end

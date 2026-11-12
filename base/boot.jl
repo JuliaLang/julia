@@ -244,7 +244,7 @@ export
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
-    nfields, throw, tuple, ===, isdefined,
+    nfields, throw, tuple, ===, isdefined, bitsizeof,
     # access to globals
     getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
@@ -1024,15 +1024,12 @@ NamedTuple() = NamedTuple{(),Tuple{}}(())
 eval(Core, :(NamedTuple{names}(args::Tuple) where {names} =
              $(Expr(:splatnew, :(NamedTuple{names,typeof(args)}), :args))))
 
-using .Intrinsics: sle_int, add_int
+using .Intrinsics: sle_int, add_int, eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int, or_int, slt_int, xor_int
 
 eval(Core, :((NT::Type{NamedTuple{names,T}})(args::T) where {names, T <: Tuple} =
              $(Expr(:splatnew, :NT, :args))))
 
 # constructors for built-in types
-
-import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int,
-    slt_int, xor_int
 
 function is_top_bit_set(x)
     @inline
@@ -1241,7 +1238,7 @@ end
 # the new offset as an `Int`.
 _parse = nothing
 
-#    Core._lower(code, module, filename="none", linenum=0, world=0xfff..., warn=false)
+#    Core._lower(module, code, world, warn, loc)
 #
 # Lower `code` (usually Expr), returning `svec(e::Any xs::Any...)` where `e` is
 # the lowered code, and `xs` is possible additional information from
@@ -1324,9 +1321,29 @@ typename(union::UnionAll) = typename(union.body)
 
 include(Core, "optimized_generics.jl")
 
+const JULIA_EDITIONS = svec(
+    (1, 13),
+    (1, 14),
+    (1, 15),
+    (1, 25), # TODO: fix JuliaSyntax overflow and make this bigger
+)
 const OLDEST_EDITION = (1, 13)
-const VERSION_EDITION =
-    (Int(ccall(:jl_ver_major, Int32, ())), Int(ccall(:jl_ver_minor, Int32, ())))
+const FLISP_EDITION = (1, 14)
+const EXPERIMENTAL_EDITION = _svec_ref(JULIA_EDITIONS, _svec_len(JULIA_EDITIONS))
+# const LATEST_EDITION, defined later, is the last entry <= VERSION
+
+function set_edition(mod::Module, ed::Tuple{Int, Int})
+    maj = shl_int(UInt32(getfield(ed, 1)), 16)
+    min = UInt32(getfield(ed, 2))
+    n = or_int(maj, min)
+    ccall(:jl_set_module_edition, Nothing, (Any, UInt32), mod, n)
+end
+function get_edition(mod::Module)
+    n = ccall(:jl_get_module_edition, UInt32, (Any,), mod)
+    maj = Int(lshr_int(n, 16))
+    min = Int(trunc_int(UInt16, n))
+    (maj, min)
+end
 
 # Used only by the magic @VERSION macro
 struct MacroSource

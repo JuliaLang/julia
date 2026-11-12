@@ -11,6 +11,8 @@ CHECKBOUNDS_DEPOT := $(CHECKBOUNDS_DIR)/share/julia
 # set some influential environment variables
 export JULIA_DEPOT_PATH := $(shell echo $(call cygpath_w,$(DEPOTDIR)))
 export JULIA_LOAD_PATH := @stdlib$(PATHSEP)$(shell echo $(call cygpath_w,$(JULIAHOME)/stdlib))
+# The objcache would otherwise be created in the build depot
+export JULIA_OBJCACHE := 0
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
 
@@ -53,11 +55,15 @@ $(BUILDDIR)/stdlib/debug.image: $(build_private_libdir)/sys-debug.$(SHLIB_EXT) \
 # contain only the ordinary images. The second depot supplies relocatable
 # stdlib sources. Force regeneration so even builds that already bundle the
 # checked images produce a complete, independent companion.
-.PHONY: checkbounds-pkgimages
+.PHONY: stdlibs-cache-checkbounds checkbounds-pkgimages
+stdlibs-cache-checkbounds: $(BUILDDIR)/stdlib/checkbounds-$(JULIA_BUILD_MODE).image
 checkbounds-pkgimages: $(BUILDDIR)/stdlib/checkbounds-$(JULIA_BUILD_MODE).image
 	cd $(CHECKBOUNDS_DIR) && $(TAR) -zcf $(abspath $(JULIA_BINARYDIST_FILENAME)).checkbounds.tar.gz share/julia/compiled
 
-$(BUILDDIR)/stdlib/checkbounds-$(JULIA_BUILD_MODE).image: $(BUILDDIR)/stdlib/$(JULIA_BUILD_MODE).image $(JULIAHOME)/pkgimage.mk
+# Same inputs as the normal images, but not those images themselves: these caches are
+# written to their own depot, so both can be built at the same time.
+$(BUILDDIR)/stdlib/checkbounds-$(JULIA_BUILD_MODE).image: $(JULIA_SYSIMG) $(JULIAHOME)/stdlib/Project.toml \
+    $(JULIAHOME)/stdlib/Manifest.toml $(INDEPENDENT_STDLIBS_SRCS) $(JULIAHOME)/pkgimage.mk
 	rm -rf $(CHECKBOUNDS_DIR)
 	mkdir -p $(CHECKBOUNDS_DEPOT)
 	@$(call PRINT_JULIA, JULIA_CPU_TARGET="sysimage" JULIA_DEPOT_PATH="$(call cygpath_w,$(CHECKBOUNDS_DEPOT))$(PATHSEP)$(call cygpath_w,$(DEPOTDIR))" $(call spawn,$(JULIA_EXECUTABLE)) $(JULIA_COVERAGE_IMAGE_FLAGS) --startup-file=no -e \

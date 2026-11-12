@@ -1221,6 +1221,16 @@ end
     @test find_method_ci(ref).purity === find_method_ci(our).purity
     @test find_method_ci(ref).inlining === find_method_ci(our).inlining
 
+    prog = "Base.@inline foo(x)::Int = x + 1"
+    ref = fl_lower(test_mod, Meta.parse(prog))
+    our = jlower_e(prog)
+    @test find_method_ci(ref).inlining === find_method_ci(our).inlining
+
+    prog = "Base.@noinline foo(x)::Int = x + 1"
+    ref = fl_lower(test_mod, Meta.parse(prog))
+    our = jlower_e(prog)
+    @test find_method_ci(ref).inlining === find_method_ci(our).inlining
+
     # TODO: no api for option retrieval, just check that it compiles
     let options_mod = Module()
         @test fl_eval(options_mod, :(Base.Experimental.@optlevel 1)) == nothing

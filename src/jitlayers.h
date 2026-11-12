@@ -508,6 +508,7 @@ jl_returninfo_t get_specsig_function(jl_codegen_output_t &ctx, Module *M, Value 
                                      unsigned nreq = 0) JL_CANSAFEPOINT;
 
 void add_named_global(StringRef name, void *addr) JL_NOTSAFEPOINT;
+void add_shared_named_global(StringRef name, void *addr) JL_NOTSAFEPOINT;
 
 Constant *literal_pointer_val_slot(jl_codegen_output_t &out, jl_value_t *p) JL_CANSAFEPOINT;
 
@@ -766,6 +767,7 @@ public:
 
     orc::SymbolStringPtr mangle(StringRef Name) JL_NOTSAFEPOINT;
     void addGlobalMapping(StringRef Name, uint64_t Addr) JL_NOTSAFEPOINT;
+    void addSharedGlobalMapping(StringRef Name, uint64_t Addr) JL_NOTSAFEPOINT;
     void addOutput(jl_emitted_output_t O) JL_NOTSAFEPOINT;
 
     // Methods mainly for the C API
@@ -818,6 +820,12 @@ public:
     }
     int objCacheKVEnabled() JL_CANSAFEPOINT_ENTER_LEAVE {
         return OCache.kvEnabled();
+    }
+    int64_t objCachePrune(int64_t Cutoff) JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.prune(Cutoff);
+    }
+    std::string objCacheCompact(const char *Dir) JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.compact(Dir);
     }
 
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {

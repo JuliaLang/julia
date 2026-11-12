@@ -37,15 +37,14 @@ end
 
         l_old = l
         @test l == l_old
-        @test Tokenize.eof(l)
+        @test Tokenize._eof(l)
         @test Tokenize.readchar(l) == Tokenize.EOF_CHAR
 
     end
 end # testset
 
 @testset "tokenize unicode" begin
-    # FIXME: rm VERSION check once we implement our own is_identifier_char
-    emoji = VERSION < v"1.5" ? "😄" : "\U1F3F3\UFE0F\U200D\U1F308" # 🏳️‍🌈 requires newer Unicode
+    emoji = "\U1F3F3\UFE0F\U200D\U1F308" # 🏳️‍🌈
     str = "𝘋 =2"*emoji
     for s in [str, IOBuffer(str)]
         l = tokenize(s)
@@ -901,9 +900,6 @@ for op in _all_symbolic_operators()
     for (arity, container) in strs
         for str in container
             expr = JuliaSyntax.fl_parse(str, raise = false)
-            if VERSION < v"1.7" && str == "a .&& b"
-                expr = Expr(Symbol(".&&"), :a, :b)
-            end
             if expr isa Expr && (expr.head != :error && expr.head != :incomplete)
                 tokens = collect(tokenize(str))
                 exop = expr.head == :call ? expr.args[1] : expr.head
@@ -1014,20 +1010,12 @@ end
         raw"^ ↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓ ⥉ ⥌ ⥍ ⥏ ⥑ ⥔ ⥕ ⥘ ⥙ ⥜ ⥝ ⥠ ⥡ ⥣ ⥥ ⥮ ⥯ ￪ ￬"
         raw"::"
         raw"."
+        raw"<-- <--> ¦ ⌿"
+        "−"
+        "\u00b7 \u0387"
+        "⫪ ⫫"
+        "⥷ ⥺ ⟇"
     ]
-    if VERSION >= v"1.6.0"
-        push!(ops, raw"<-- <--> ¦ ⌿")
-    end
-    if VERSION >= v"1.7.0"
-        append!(ops, [
-            "−"
-            "\u00b7 \u0387"
-            "⫪ ⫫"
-        ])
-    end
-    if VERSION >= v"1.10-DEV"
-        push!(ops, "⥷ ⥺ ⟇")
-    end
     allops = split(join(ops, " "), " ")
     @test all(s->Base.isoperator(Symbol(s)) == is_operator(first(collect(tokenize(s))).kind), allops)
 

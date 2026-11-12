@@ -769,14 +769,6 @@ macro reexport(ex)
     return esc(calls)
 end
 
-function Base.set_syntax_version(m::Module, edition::Tuple{Int, Int})
-    parser = Base.VersionedParse(edition)
-    Core.declare_const(m, Symbol("#_internal_julia_parse"), parser)
-    nothing
-end
-Base.set_syntax_version(mod, e::VersionNumber) =
-    Base.set_syntax_version(mod, Base.EditionNumber(e))
-
 """
     Base.Experimental.@set_syntax_version ver
 
@@ -833,6 +825,31 @@ function var"@VERSION"(__source__::Union{LineNumberNode, Core.MacroSource}, __mo
     else
         return :((; syntax = $(__source__.syntax_ver), runtime = VERSION))
     end
+end
+
+"""
+    Base.Experimental.prune_objcache(dir::AbstractString; age::Real=7*24*60*60) -> Int
+
+Remove the entries of the native code cache that were not used within the last `age`
+seconds, then write a copy of the cache without its free space to `dir`, which must not
+already hold a cache. Return the number of entries removed, or `nothing` if the cache is
+disabled.
+
+The cache file never shrinks by itself. To save a small cache, for example between CI jobs,
+save the copy in `dir`, either directly as a `JULIA_OBJCACHE_PATH` directory or with its
+`data.mdb` moved over the one in the cache once no Julia process is using it.
+
+!!! warning
+    This interface is experimental and subject to change or removal without notice.
+"""
+function prune_objcache(dir::AbstractString; age::Real=7*24*60*60)
+    ccall(:jl_objcache_kv_enabled, Cint, ()) == 0 && return nothing
+    # waiting for the database's write lock and copying it can take a while, so let GC run
+    removed = @ccall gc_safe=true jl_objcache_prune((floor(Int64, time() - age))::Int64)::Int64
+    removed < 0 && error("could not prune the native code cache")
+    err = @ccall gc_safe=true jl_objcache_compact(dir::Cstring)::Cstring
+    err == C_NULL || error("could not copy the native code cache to ", dir, ": ", unsafe_string(err))
+    return Int(removed)
 end
 
 end # module

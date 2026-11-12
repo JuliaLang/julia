@@ -225,24 +225,8 @@ static inline int jl_addr_is_win_restore_trigger(uintptr_t addr)
 // The return target rigged under the trampoline. An asm stub (rather than a
 // C function) so that no prologue moves Rsp before the faulting read: at the
 // fault, Rsp still points just below the saved CONTEXT.
+// Defined in arch/<arch>/win_restore_trigger.S
 extern void jl_win_restore_trigger(void);
-#if defined(_CPU_X86_64_)
-__asm__(
-    "  .globl jl_win_restore_trigger\n"
-    "jl_win_restore_trigger:\n"
-    "  movq jl_win_restore_page(%rip), %r11\n"
-    "  movq (%r11), %r11\n" // EXCEPTION_ACCESS_VIOLATION here
-    "  ud2\n"               // should never reach here
-);
-#elif defined(_CPU_X86_)
-__asm__(
-    "  .globl _jl_win_restore_trigger\n"
-    "_jl_win_restore_trigger:\n"
-    "  movl _jl_win_restore_page, %eax\n"
-    "  movl (%eax), %eax\n" // EXCEPTION_ACCESS_VIOLATION here
-    "  ud2\n"               // should never reach here
-);
-#endif
 
 // Runs on the interrupted thread with the interrupted CONTEXT saved on the
 // stack below: invoke the registered cancellation handler with its
@@ -270,6 +254,8 @@ static void jl_win_call_in_context(CONTEXT *ctx, void (*fptr)(void), uintptr_t a
     ctx->Rsp = sp;
     ctx->Rip = (uintptr_t)fptr;
     ctx->Rcx = arg0;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    ctx->EFlags &= ~0x400;
 #elif defined(_CPU_X86_)
     uintptr_t sp = (uintptr_t)ctx->Esp;
     sp = (sp - sizeof(CONTEXT)) & ~(uintptr_t)15;
@@ -281,6 +267,8 @@ static void jl_win_call_in_context(CONTEXT *ctx, void (*fptr)(void), uintptr_t a
     *(uintptr_t*)sp = (uintptr_t)&jl_win_restore_trigger;
     ctx->Esp = sp;
     ctx->Eip = (uintptr_t)fptr;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    ctx->EFlags &= ~0x400;
 #endif
 }
 
@@ -516,6 +504,16 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
 
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
+    // libuv reports these console events as the same signals.
+    int watched = wsig == CTRL_C_EVENT ? SIGINT :
+                  wsig == CTRL_BREAK_EVENT ? SIGBREAK :
+                  wsig == CTRL_CLOSE_EVENT ? SIGHUP : 0;
+    if (jl_notify_signal_watchers(watched)) {
+        // windows ends the process once this returns, so give the watcher time to run
+        if (wsig == CTRL_CLOSE_EVENT)
+            Sleep(INFINITE);
+        return 1;
+    }
     int sig;
     //windows signals use different numbers from unix (raise)
     switch(wsig) {
@@ -708,6 +706,56 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
 
+// libuv reports these console events as signals.
+JL_DLLEXPORT int jl_signal_is_reserved(int sig)
+{
+    return !(sig == SIGINT || sig == SIGBREAK || sig == SIGHUP || sig == SIGWINCH);
+}
+
+// Console resizes come only from libuv, which reports them to its own signal watchers.
+static uv_signal_t *winch_signal;
+
+static void winch_cb(uv_signal_t *handle, int sig)
+{
+    jl_notify_signal_watchers(sig);
+}
+
+static int jl_signal_watch_install(int sig)
+{
+    if (sig != SIGWINCH)
+        return 0;
+    if (winch_signal == NULL) {
+        // Allocated, because closing all handles at exit frees them.
+        winch_signal = (uv_signal_t*)malloc_s(sizeof(uv_signal_t));
+        int err = uv_signal_init(jl_io_loop, winch_signal);
+        if (err != 0) {
+            free(winch_signal);
+            winch_signal = NULL;
+            return err;
+        }
+        // libuv leaves `data` unset, but exit cleanup takes a non-NULL `data` for a Julia object
+        winch_signal->data = NULL;
+        uv_unref((uv_handle_t*)winch_signal);
+    }
+    return uv_signal_start(winch_signal, winch_cb, SIGWINCH);
+}
+
+static void jl_signal_watch_uninstall(int sig)
+{
+    if (sig == SIGWINCH)
+        uv_signal_stop(winch_signal);
+}
+
+JL_DLLEXPORT int jl_sigrtmin(void)
+{
+    return -1;
+}
+
+JL_DLLEXPORT int jl_sigrtmax(void)
+{
+    return -1;
+}
+
 static TIMECAPS timecaps;
 static HANDLE hBtThread = 0;
 static uv_cond_t bt_data_prof_cond = CONDITION_VARIABLE_INIT;
@@ -781,6 +829,10 @@ int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
     return success;
 }
 
+// Cycle count of each thread when the sampler last resumed it (0: unknown).
+static ULONG64 *profile_resume_cycles = NULL;
+static int profile_resume_cycles_size = 0;
+
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
     // Note: illegal to use jl_* functions from this thread except for profiling-specific functions
@@ -810,6 +862,12 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
             bt_context_t c;
             int nthreads = jl_atomic_load_acquire(&jl_n_threads);
             int *randperm = profile_get_randperm(nthreads);
+            if (profile_resume_cycles_size < nthreads) {
+                profile_resume_cycles = (ULONG64*)realloc_s(profile_resume_cycles, nthreads * sizeof(ULONG64));
+                memset(profile_resume_cycles + profile_resume_cycles_size, 0,
+                       (nthreads - profile_resume_cycles_size) * sizeof(ULONG64));
+                profile_resume_cycles_size = nthreads;
+            }
             for (int idx = nthreads; idx-- > 0; ) {
                 int tid = randperm[idx];
                 if (!profile_running)
@@ -817,6 +875,23 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 if (jl_profile_is_buffer_full()) {
                     jl_profile_stop_timer();
                     break;
+                }
+
+                // A suspension only takes effect once the target is dispatched,
+                // and a resumed thread can wait for a CPU longer than the
+                // sampling interval. Suspending it again before then would keep
+                // it from ever running its own code, so skip a thread whose
+                // cycle count shows it has not been dispatched since.
+                jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+                if (profile_resume_cycles[tid] != 0) {
+                    ULONG64 cycles;
+                    jl_lock_profile(); // keeps a live thread's system_id valid
+                    int waiting = jl_atomic_load_relaxed(&ptls->current_task) != NULL &&
+                                  QueryThreadCycleTime(ptls->system_id, &cycles) &&
+                                  cycles == profile_resume_cycles[tid];
+                    jl_unlock_profile();
+                    if (waiting)
+                        continue;
                 }
 
                 // Set up timeout handler for stackwalk
@@ -843,7 +918,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     continue;
                 }
 
-                jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
                 jl_task_t *t2 = jl_atomic_load_relaxed(&ptls->current_task);
                 int state = jl_atomic_load_relaxed(&ptls->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
 
@@ -859,8 +933,14 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
 
                 // Clear abort pointer from TLS
                 jl_set_profile_abort_ptr(NULL);
-                if (timeout_data.tid != -1)
+                profile_resume_cycles[tid] = 0;
+                if (timeout_data.tid != -1) {
+                    // Read the count before resuming: leaving the suspension takes
+                    // cycles, so it moves even for a thread that only returns to a wait.
+                    if (!QueryThreadCycleTime(ptls->system_id, &profile_resume_cycles[tid]))
+                        profile_resume_cycles[tid] = 0;
                     jl_thread_resume(tid);
+                }
                 // Wait for callback to complete or cancel before continuing
                 if (hTimer != NULL)
                     DeleteTimerQueueTimer(hTimerQueue, hTimer, INVALID_HANDLE_VALUE);

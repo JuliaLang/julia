@@ -187,6 +187,7 @@ end
         @test LinearIndices((3,))[1:2] === 1:2
         @test LinearIndices((3,))[1:2:3] === 1:2:3
         @test_throws BoundsError LinearIndices((3,))[2:4]
+        @test LinearIndices((3:5,))[2:3] === 2:3
         @test_throws BoundsError CartesianIndices((3,))[2,2]
         #   ambiguity btw cartesian indexing and linear indexing in 1d when
         #   indices may be nontraditional
@@ -337,6 +338,8 @@ end
         end
         R = LinearIndices((Base.IdentityUnitRange(0:1), 0:1))
         @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
+        @test axes(LinearIndices((Base.IdentityUnitRange(0:1), 2))) === (Base.IdentityUnitRange(0:1), Base.OneTo(2))
+        @test axes(CartesianIndices((Base.IdentityUnitRange(0:1), 2))) === (Base.IdentityUnitRange(0:1), Base.OneTo(2))
     end
 
     @testset "show" begin
@@ -1224,6 +1227,17 @@ end
     @test vcat(Nothing[], [missing], [1.0], [Int8(1)]) isa Vector{Union{Missing, Nothing, Float64}}
 end
 
+@testset "hcat with mixed elements" begin
+    @test hcat([nothing], [missing], [1.0], [Int8(1)]) isa Matrix{Union{Missing, Nothing, Float64}}
+end
+
+@testset "vcat of a vector and a scalar is specialized" begin
+    allocs(xs::Vararg{Any,N}) where {N} = (vcat(xs...); @allocated vcat(xs...))
+    for (v, x) in ((["a"], "b"), ([:a], :b), ([1], 2), (Any[1], 2))
+        @test allocs(v, x) <= allocs(v, eltype(v)[x])
+    end
+end
+
 @testset "sizeof" begin
     let arrUInt8 = zeros(UInt8, 10)
         @test sizeof(arrUInt8) == 10
@@ -2059,6 +2073,15 @@ end
     @test_broken IRUtils.fully_eliminated(_has_offset_axes, Base.typesof(a, a, b, b))
 end
 
+@testset "aliasing of slices" begin
+    x = [1 2; 3 4]
+    @test Base.mightalias(x, eachrow(x))
+    @test Base.mightalias(eachrow(x), x)
+    @test Base.mightalias(eachcol(x), eachrow(x))
+    x .+= sum.(eachrow(x))
+    @test x == [4 5; 10 11]
+end
+
 # type stable [x;;] (https://github.com/JuliaLang/julia/issues/45952)
 f45952(x) = [x;;]
 @inferred f45952(1.0)
@@ -2138,6 +2161,9 @@ end
     @testset "IndexCartesian - IndexLinear" begin
         B .= 0
         copyto!(view(B, axes(B)...), A)
+        @test B == A
+        B .= 0
+        copyto!(view(B, axes(B)...), vec(A))
         @test B == A
     end
     @testset "IndexCartesian - IndexCartesian" begin

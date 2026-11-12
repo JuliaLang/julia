@@ -203,14 +203,50 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
     return need_more_space;
 }
 
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+// Some libsystem_kernel syscall stubs have no unwind info but leave SP and
+// callee-saved registers unchanged. Try LR once when unwinding stops at the
+// first frame. Missing unwind info does not prove this assumption.
+static int jl_unw_lr_context(bt_cursor_t *cursor, bt_context_t *context,
+                             bt_context_t *caller) JL_NOTSAFEPOINT
+{
+    unw_proc_info_t pi;
+    if (unw_get_proc_info(cursor, &pi) != UNW_ENOINFO)
+        return 0;
+    // Only the GPR prefix is guaranteed here (see jl_to_bt_context).
+    arm_thread_state64_t *state = (arm_thread_state64_t*)caller;
+    memset(caller, 0, sizeof(*caller));
+    memcpy(state, context, sizeof(*state));
+    if (state->__lr <= 1)
+        return 0;
+    // Use LR - 1 for lookup and recording, matching a normal caller.
+    state->__pc = state->__lr - 1;
+    return 1;
+}
+#endif
+
 NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
                                   bt_context_t *context, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT
 {
     bt_cursor_t cursor;
     if (!jl_unw_init(&cursor, context, 1))
         return 0;
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    bt_context_t caller;
+    int try_lr = jl_unw_lr_context(&cursor, context, &caller);
+#endif
     size_t bt_size = 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    // This needs a new cursor: setting the IP does not clear libunwind's
+    // missing-info state.
+    if (try_lr && bt_size == 1 && bt_data[0].uintptr != 0 &&
+        jl_unw_init(&cursor, &caller, 1)) {
+        size_t n = 0;
+        jl_unw_stepn(&cursor, bt_data + 1, &n, NULL, maxsize - 1, 0, &pgcstack, 1);
+        bt_size += n;
+    }
+#endif
     return bt_size;
 }
 
@@ -1317,6 +1353,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     // c->SegGS[0] = _ctx->Frame;
     c->Rax = val;
     c->Rsp += sizeof(void*);
+    // the interrupted code may have set the direction flag, which C code expects clear
+    c->EFlags &= ~0x400;
     assert(c->Rsp % 16 == 0);
     return 1;
     #elif defined(_CPU_X86_)
@@ -1330,6 +1368,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     // c->FloatSave.ControlWord = _ctx->FpCsr;
     c->Eax = val;
     c->Esp += sizeof(void*);
+    // the interrupted code may have set the direction flag, which C code expects clear
+    c->EFlags &= ~0x400;
     // Scrub the interrupted x87 state to all-registers-empty (see the
     // linux i686 branch): the resumed code expects the function-boundary
     // FPU state. Both the legacy FNSAVE area and the FXSAVE area (used by
@@ -1368,6 +1408,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->gregs[REG_ESP] = jl_ptr_demangle(mc->gregs[REG_ESP]);
     mc->gregs[REG_EIP] = jl_ptr_demangle(mc->gregs[REG_EIP]);
     mc->gregs[REG_EAX] = val;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    mc->gregs[REG_EFL] &= ~0x400;
     // The simulated longjmp resumes code that expects the i386 ABI's
     // function-boundary FPU state (an empty x87 register stack), but the
     // kernel will restore the *interrupted* state - possibly mid-computation
@@ -1396,6 +1438,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->gregs[REG_RSP] = jl_ptr_demangle(mc->gregs[REG_RSP]);
     mc->gregs[REG_RIP] = jl_ptr_demangle(mc->gregs[REG_RIP]);
     mc->gregs[REG_RAX] = val;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    mc->gregs[REG_EFL] &= ~0x400;
     return valid_longjmp_target(mc->gregs[REG_RSP], mc->gregs[REG_RIP]);
     #elif defined(_CPU_ARM_)
     // https://github.com/bminor/glibc/blame/master/sysdeps/arm/__longjmp.S
@@ -1513,6 +1557,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->__rsp = _OS_PTR_UNMUNGE(mc->__rsp);
     mc->__rip = _OS_PTR_UNMUNGE(mc->__rip);
     mc->__rax = val;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    mc->__rflags &= ~0x400;
     assert(mc->__rsp % 16 == 0);
     return 1;
     #elif defined(_CPU_AARCH64_)
@@ -1572,6 +1618,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->mc_r15 = ((long*)mctx)[7];
     mc->mc_rax = val;
     mc->mc_rsp += sizeof(void*);
+    // the interrupted code may have set the direction flag, which C code expects clear
+    mc->mc_rflags &= ~0x400;
     assert(mc->mc_rsp % 16 == 0);
     return 1;
     #elif defined(_CPU_AARCH64_)

@@ -145,9 +145,6 @@
     XX(jl_gc_counted_free_with_size) \
     XX(jl_gc_counted_malloc) \
     XX(jl_gc_counted_realloc_with_old_size) \
-    XX(jl_gmp_counted_free_with_size) \
-    XX(jl_gmp_counted_malloc) \
-    XX(jl_gmp_counted_realloc_with_old_size) \
     XX(jl_gc_diff_total_bytes) \
     XX(jl_gc_enable) \
     XX(jl_gc_enable_conservative_gc_support) \
@@ -215,6 +212,7 @@
     XX(jl_get_julia_bindir) \
     XX(jl_get_libjulia_internal_path) \
     XX(jl_get_module_compile) \
+    XX(jl_get_module_edition) \
     XX(jl_get_module_infer) \
     XX(jl_get_module_of_binding) \
     XX(jl_get_module_optlevel) \
@@ -412,6 +410,7 @@
     XX(jl_set_global) \
     XX(jl_set_istopmod) \
     XX(jl_set_module_compile) \
+    XX(jl_set_module_edition) \
     XX(jl_set_module_infer) \
     XX(jl_set_module_nospecialize) \
     XX(jl_set_module_optlevel) \
@@ -426,6 +425,13 @@
     XX(jl_set_zero_subnormals) \
     XX(jl_sigatomic_begin) \
     XX(jl_sigatomic_end) \
+    XX(jl_signal_is_reserved) \
+    XX(jl_signal_name) \
+    XX(jl_signal_take_pending) \
+    XX(jl_signal_watch_start) \
+    XX(jl_signal_watch_stop) \
+    XX(jl_sigrtmax) \
+    XX(jl_sigrtmin) \
     XX(jl_spawn) \
     XX(jl_sparam_slot_value) \
     XX(jl_specializations_get_linfo) \
@@ -551,6 +557,8 @@
     YY(jl_objcache_kv_get) \
     YY(jl_objcache_kv_put) \
     YY(jl_objcache_kv_enabled) \
+    YY(jl_objcache_prune) \
+    YY(jl_objcache_compact) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
     YY(jl_dump_emitted_mi_name) \

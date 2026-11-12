@@ -1053,6 +1053,11 @@ static const auto jlinvokeoc_func = new JuliaFunction<>{
     get_func2_sig,
     get_func_attrs,
 };
+static const auto jlinvoketarget_func = new JuliaFunction<>{
+    XSTR(jl_invoke_target),
+    get_func2_sig,
+    get_func_attrs,
+};
 static const auto jlopaque_closure_call_func = new JuliaFunction<>{
     XSTR(jl_f_opaque_closure_call),
     get_func_sig,
@@ -1983,9 +1988,14 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
     // For unions, we may need to keep a reference to the boxed part individually.
     // If this is non-NULL, then, at runtime, we satisfy the invariant that (for the corresponding
-    // runtime values) if `(TIndex | UNION_BOX_MARKER) != 0`, then `Vboxed == V` (by value).
+    // runtime values) if `(TIndex & UNION_BOX_MARKER) != 0`, then `Vboxed == V` (by value).
     // For convenience, we also set this value of isboxed values, in which case
     // it is equal (at compile time) to V.
+    // An unboxed value (no TIndex, not isboxed) may also carry a box of itself that exists
+    // only on some paths: then, at runtime, `Vboxed` is either NULL or a box holding this
+    // value. `boxed` returns that box instead of allocating, and `convert_julia_type_to_union`
+    // uses it as the union's box. A value narrowed from a split union, for example, keeps the
+    // union's box pointer.
 
     // If this is non-NULL (at compile time), it is always of type `T_prjlvalue`.
     // N.B.: In general we expect this to always be a dereferenceable pointer at runtime.
@@ -2081,8 +2091,10 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
         promotion_point(v.promotion_point),
         promotion_ssa(v.promotion_ssa)
     {
-        if (Vboxed)
+        if (Vboxed) {
             assert(Vboxed->getType() == JuliaType::get_prjlvalue_ty(Vboxed->getContext()));
+            assert(V);
+        }
         // this constructor expects we had a badly or equivalently typed version
         // make sure we aren't discarding the actual type information
         if (v.TIndex) {
@@ -2115,7 +2127,7 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
                 allunbox = true;
             }
             assert(v.TIndex || inline_roots.size() == inline_roots_count);
-            if (V == nullptr && constant == nullptr && !isghost && (inline_roots_count == 0 || (!tindex && !justpointers)))
+            if (V == nullptr && constant == nullptr && !isghost && !tindex && !justpointers)
                 *this = jl_cgval_t(); // no data to populate this value
             else if (inline_roots_count < inline_roots.size())
                 inline_roots.truncate(inline_roots_count); // drop excess roots
@@ -2658,10 +2670,14 @@ static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_value_t *typ)
     if (jl_is_some_Type(typ)) {
         // only `TypeEgal{T}` and `Type{Union{}}` have a single (constant) value
         assert(is_uniquerep_Type(typ) || jl_some_Type_T(typ) == jl_bottom_type);
+        if (jl_some_Type_T(typ) == jl_bottom_type) {
+            // `Union{}` is the instance of the singleton `TypeofBottom`, and so a ghost like any other
+            jl_cgval_t ghost((jl_value_t*)jl_typeofbottom_type);
+            ghost.typ = typ;
+            return ghost;
+        }
         jl_cgval_t constant(NULL, true, typ, NULL, best_aliasinfo(ctx, typ), jl_gc_roots_t());
         constant.constant = jl_some_Type_T(typ);
-        if (constant.constant == jl_bottom_type)
-            constant.isghost = true;
         return constant;
     }
     return jl_cgval_t(typ);
@@ -2871,6 +2887,15 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
             if (!allow_mismatch)
                 CreateTrap(ctx.builder);
             return jl_cgval_t();
+        }
+        if (v.Vboxed) {
+            // keep the box only where it holds this value, so that boxing the
+            // value again can reuse it
+            jl_cgval_t ret(v, typ, NULL);
+            Value *isboxed = ctx.builder.CreateICmpEQ(v.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()),
+                    UNION_BOX_MARKER | get_box_tindex((jl_datatype_t*)typ, v.typ)));
+            ret.Vboxed = ctx.builder.CreateSelect(isboxed, v.Vboxed, Constant::getNullValue(ctx.types().T_prjlvalue));
+            return ret;
         }
     }
     return jl_cgval_t(v, typ, NULL);
@@ -3494,6 +3519,21 @@ static void coverageAllocLine(jl_codectx_t &ctx, StringRef filename, int line, b
         return;
     }
     jl_coverage_alloc_line(filename.data(), line);
+}
+
+// The definition line and file of the method that a frame belongs to, or 0 if it has none.
+static int32_t coverageDefLine(jl_value_t *func, StringRef &file)
+{
+    if (func && jl_is_method_instance(func))
+        func = ((jl_method_instance_t*)func)->def.value;
+    if (func && jl_is_method(func)) {
+        jl_method_t *m = (jl_method_t*)func;
+        if (m->line > 0) {
+            file = jl_symbol_name(m->file);
+            return m->line;
+        }
+    }
+    return 0;
 }
 
 static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line, bool is_user_code)
@@ -4227,7 +4267,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
 {
     ++EmittedBitsCompares;
     if (arg1.typ == jl_bottom_type || arg2.typ == jl_bottom_type)
-        return UndefValue::get(getInt1Ty(ctx.builder.getContext()));
+        return PoisonValue::get(getInt1Ty(ctx.builder.getContext()));
 
     jl_value_t *argty = (arg1.constant ? jl_typeof(arg1.constant) : arg1.typ);
     bool isboxed;
@@ -4274,8 +4314,9 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
             // these roots may seem a bit overkill, but we want to make sure
             // that a!=b implies (a,)!=(b,) even if a and b are unused and
             // therefore could be freed and then the memory for a reused for b
-            gc_uses.append(get_gc_roots_for(ctx, arg1));
-            gc_uses.append(get_gc_roots_for(ctx, arg2));
+            // memcmp reads the storage through pointers that no longer carry the object
+            gc_uses.append(get_gc_roots_for(ctx, arg1, /*storage_used*/true));
+            gc_uses.append(get_gc_roots_for(ctx, arg2, /*storage_used*/true));
             OperandBundleDef OpBundle("jl_roots", gc_uses);
             auto answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
                         varg1,
@@ -5071,6 +5112,64 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             *ret = emit_memoryref_offset(ctx, ref, layout);
             return true;
         }
+    }
+
+    else if ((f == BUILTIN(unsafe_memoryrefload) || f == BUILTIN(unsafe_memoryrefstore)) && nargs == 4) {
+        const jl_cgval_t &ref = argv[1];
+        jl_value_t *rty = jl_unwrap_unionall(ref.typ);
+        if (!jl_is_genericmemoryref_type(rty) || !jl_is_concrete_type(rty) ||
+            jl_tparam0(rty) != (jl_value_t*)jl_not_atomic_sym || !jl_isbits(jl_tparam1(rty)))
+            return false;
+        jl_value_t *addrspace = jl_tparam2(rty);
+        if (!jl_is_addrspacecore(addrspace) || jl_unbox_uint8(addrspace) != 0)
+            return false;
+        jl_datatype_t *mty = (jl_datatype_t*)jl_field_type_concrete((jl_datatype_t*)rty, 1);
+        const jl_datatype_layout_t *layout = mty->layout;
+        if (layout->size == 0)
+            return false;
+        bool isget = f == BUILTIN(unsafe_memoryrefload);
+        jl_value_t *ety = isget ? argv[2].constant : argv[2].typ;
+        if (!ety || !jl_isbits(ety))
+            return false;
+        emit_typecheck(ctx, argv[3], (jl_value_t*)jl_long_type,
+                       isget ? "unsafe_memoryrefload" : "unsafe_memoryrefstore!");
+        emit_typecheck(ctx, argv[4], (jl_value_t*)jl_bool_type,
+                       isget ? "unsafe_memoryrefload" : "unsafe_memoryrefstore!");
+        Value *offset = emit_unbox(ctx, ctx.types().T_size, argv[3]);
+        Value *ptr = emit_memoryref_ptr(ctx, ref, layout);
+        if (memoryref_bounds_check_enabled(ctx, argv[4].constant)) {
+            Value *mem = emit_memoryref_mem(ctx, ref, layout);
+            Value *base = emit_genericmemoryptr(ctx, mem, layout, 0);
+            Value *data = CreateSimplifiedExtractValue(ctx, emit_memoryref_FCA(ctx, ref, layout), 0);
+            Value *pos = ctx.builder.CreateSub(ctx.builder.CreatePtrToInt(data, ctx.types().T_size),
+                                              ctx.builder.CreatePtrToInt(base, ctx.types().T_size));
+            Value *len = ctx.builder.CreateNUWMul(emit_genericmemorylen(ctx, mem, ref.typ),
+                                                ConstantInt::get(ctx.types().T_size, layout->size));
+            Value *size = ConstantInt::get(ctx.types().T_size, jl_datatype_size(ety));
+            Value *start = ctx.builder.CreateAdd(pos, offset);
+            Value *valid = ctx.builder.CreateAnd(ctx.builder.CreateICmpULE(pos, len),
+                ctx.builder.CreateAnd(ctx.builder.CreateICmpULE(size, len),
+                                      ctx.builder.CreateICmpULE(start, ctx.builder.CreateSub(len, size))));
+            BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "oob", ctx.f);
+            BasicBlock *endBB = BasicBlock::Create(ctx.builder.getContext(), "byteaccess", ctx.f);
+            ctx.builder.CreateCondBr(valid, endBB, failBB);
+            ctx.builder.SetInsertPoint(failBB);
+            ctx.builder.CreateCall(prepare_call(jlboundserror_func),
+                { mark_callee_rooted(ctx, boxed(ctx, ref)), offset });
+            ctx.builder.CreateUnreachable();
+            ctx.builder.SetInsertPoint(endBB);
+        }
+        ptr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptr, offset);
+        if (isget) {
+            *ret = typed_load(ctx, ptr, nullptr, ety, memorybuf_aliasinfo(ctx, layout), nullptr,
+                              false, AtomicOrdering::NotAtomic, false, 1);
+        }
+        else {
+            *ret = typed_store(ctx, ptr, argv[2], jl_cgval_t(), ety, memorybuf_aliasinfo(ctx, layout),
+                               nullptr, nullptr, false, AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic,
+                               1, nullptr, StoreKind::Set, false, nullptr, "unsafe_memoryrefstore!", nullptr, nullptr);
+        }
+        return true;
     }
 
     else if ((f == BUILTIN(memoryrefget) || f == BUILTIN(const_memoryrefget)) && nargs == 3) {
@@ -6392,7 +6491,10 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                     bool specsig, needsparams;
                     std::tie(specsig, needsparams) = uses_specsig(get_ci_abi(codeinst), mi, codeinst->rettype, ctx.params->prefer_specsig);
                     if (needsparams) {
-                        Value *r = emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
+                        // `jl_invoke` dispatches natively, so a foreign CI must be called through itself
+                        Value *r = codeinst->owner != jl_nothing
+                            ? emit_jlcall(ctx, jlinvoketarget_func, track_pjlvalue(ctx, literal_pointer_val(ctx, ci)), argv, nargs, julia_call2)
+                            : emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
                         result = mark_julia_type(ctx, r, true, rt);
                     }
                     else {
@@ -6879,6 +6981,9 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r) J
                         decay_derived(ctx, ptr_phi),
                         decay_derived(ctx, phi));
                 }
+                else {
+                    ptr = decay_derived(ctx, ptr_phi);
+                }
             }
             jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, ai, jl_gc_roots_t(ArrayRef(roots)));
             val.Vboxed = ptr_phi;
@@ -7209,7 +7314,7 @@ static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const T
             track_pjlvalue(ctx, literal_pointer_val(ctx, jl_false)));
     }
     // not a boolean (unreachable dead code)
-    return UndefValue::get(getInt1Ty(ctx.builder.getContext()));
+    return PoisonValue::get(getInt1Ty(ctx.builder.getContext()));
 }
 
 static Value *emit_condition(jl_codectx_t &ctx, jl_value_t *cond, const Twine &msg) JL_CANSAFEPOINT
@@ -7587,9 +7692,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         jl_value_t *ty = argv[0].typ;
         // requires an egality-pinned type value: the constructed instance must
         // have exactly the runtime type object, not an `==`-equal rep (#61323)
-        if (is_uniquerep_Type(ty) &&
-                jl_is_datatype(jl_some_Type_T(ty)) &&
-                jl_is_concrete_type(jl_some_Type_T(ty))) {
+        // (any other type takes the runtime call, which throws)
+        if (is_uniquerep_Type(ty) && jl_is_generic_new_type(jl_some_Type_T(ty))) {
             jl_value_t *tp0 = jl_some_Type_T(ty);
             assert(nargs <= jl_datatype_nfields(tp0) + 1);
             jl_cgval_t res = emit_new_struct(ctx, tp0, nargs - 1, ArrayRef<jl_cgval_t>(argv).drop_front(), is_promotable);
@@ -7750,7 +7854,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
         SmallVector<Value*, 0> vals;
         for (size_t i = 0; i < nargs; ++i) {
-            vals.append(get_gc_roots_for(ctx, argv[i]));
+            // nothing reads the preserved values themselves; only their lifetimes matter
+            vals.append(get_gc_roots_for(ctx, argv[i], /*storage_used*/false));
         }
         Value *token = vals.empty()
             ? (Value*)ConstantTokenNone::get(ctx.builder.getContext())
@@ -8001,6 +8106,12 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, j
     Value *theFarg;
 
     if (theFunc) {
+        theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
+    }
+    else if (codeinst->owner != jl_nothing) {
+        // `jl_invoke` would run the native specialization; a foreign CI must be
+        // compiled by its owner, otherwise `jl_invoke_target` errors
+        theFunc = prepare_call(jlinvoketarget_func);
         theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
     }
     else {
@@ -9531,7 +9642,7 @@ static jl_llvm_functions_t
         jl_varinfo_t &varinfo = ctx.slots[i];
         uint8_t flags = jl_array_uint8_ref(src->slotflags, i);
         varinfo.isSA = (jl_vinfo_sa(flags) != 0) || varinfo.isArgument;
-        varinfo.usedUndef = (jl_vinfo_usedundef(flags) != 0) || !varinfo.isArgument;
+        varinfo.usedUndef = !varinfo.isArgument;
         if (!varinfo.isArgument) {
             varinfo.value = mark_julia_type(ctx, (Value*)NULL, false, (jl_value_t*)jl_any_type);
         }
@@ -10227,6 +10338,8 @@ static jl_llvm_functions_t
         StringRef file;
         ssize_t line;
         ssize_t line0; // if this represents pc=1, then also cover the entry to the function (pc=0)
+        StringRef deffile;
+        ssize_t defline; // for an inlined frame, the definition line of its method, covered on entry to the frame
         bool is_user_code;
         int32_t edgeid;
         bool sameframe(const DebugLineTable &other) const {
@@ -10238,6 +10351,7 @@ static jl_llvm_functions_t
     topinfo.file = ctx.file;
     topinfo.line = toplineno;
     topinfo.line0 = 0;
+    topinfo.defline = 0;
     topinfo.is_user_code = mod_is_user_mod;
     topinfo.loc = topdebugloc;
     topinfo.edgeid = 0;
@@ -10271,10 +10385,11 @@ static jl_llvm_functions_t
                     info.line = i;
                     if (pc > 0 && jl_is_string(debuginfo->linetable))
                         info.line = std::max(0, jl_cdi_firstxy(debuginfo, pc).first);
+                    info.defline = to != 0 ? coverageDefLine(func, info.deffile) : 0;
                     info.line0 = 0;
                     if (pc == 1) {
                         int32_t line0 = jl_cdi_external_firstline(debuginfo);
-                        if (line0 > 0 && info.line != line0)
+                        if (line0 > 0 && info.line != line0 && !(info.defline == line0 && info.deffile == info.file))
                             info.line0 = line0;
                     }
                     if (info.file.empty())
@@ -10434,7 +10549,10 @@ static jl_llvm_functions_t
         cursor = -1;
     };
 
-    auto do_coverage = [&] (bool in_user_code) {
+    auto do_coverage = [&] (bool in_user_code, StringRef file) {
+        // Images are instrumented for every path, so exclusions do not apply to them.
+        if (!ctx.emission_context.imaging_mode && jl_path_is_coverage_excluded(file.data()))
+            return false;
         return (coverage_mode == JL_LOG_ALL ||
                 (in_user_code && (coverage_mode == JL_LOG_USER || coverage_mode == JL_LOG_PATH)));
     };
@@ -10452,11 +10570,16 @@ static jl_llvm_functions_t
             if (dbg >= prev_lineinfo.size() || !new_lineinfo[dbg].sameframe(prev_lineinfo[dbg]))
                 break;
         }
+        size_t first_changed = dbg;
         for (; dbg < new_lineinfo.size(); dbg++) {
             const auto &newdbg = new_lineinfo[dbg];
-            if (do_coverage(newdbg.is_user_code)) {
+            if (do_coverage(newdbg.is_user_code, newdbg.file)) {
                 if (newdbg.line0 != 0 && (dbg >= prev_lineinfo.size() || newdbg.edgeid != prev_lineinfo[dbg].edgeid || newdbg.line0 != prev_lineinfo[dbg].line))
                     coverageVisitLine(ctx, newdbg.file, newdbg.line0, newdbg.is_user_code);
+                // a standalone call covers its definition line on entry, so an inlined call does too
+                bool entered = dbg > first_changed || dbg >= prev_lineinfo.size() || newdbg.edgeid != prev_lineinfo[dbg].edgeid;
+                if (entered && newdbg.defline > 0 && !(newdbg.defline == newdbg.line && newdbg.deffile == newdbg.file))
+                    coverageVisitLine(ctx, newdbg.deffile, newdbg.defline, newdbg.is_user_code);
                 coverageVisitLine(ctx, newdbg.file, newdbg.line, newdbg.is_user_code);
             }
         }
@@ -10486,10 +10609,14 @@ static jl_llvm_functions_t
             if (file.empty())
                 file = "<missing>";
             bool is_user_code = frame_is_user_code(modu, file);
-            if (do_coverage(is_user_code)) {
+            if (do_coverage(is_user_code, file)) {
                 int32_t extraline = jl_cdi_external_firstline(debuginfo);
                 if (extraline != -1)
                     coverageAllocLine(ctx, file, extraline, is_user_code);
+                StringRef deffile;
+                int32_t defline = coverageDefLine(func, deffile);
+                if (defline > 0)
+                    coverageAllocLine(ctx, deffile, defline, is_user_code);
                 for (size_t pc = 1; 1; pc++) {
                     struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
                     if (lineidx.loc == -1)
@@ -10913,8 +11040,12 @@ static jl_llvm_functions_t
                 if (VN) {
                     if (new_union.Vboxed)
                         V = new_union.Vboxed;
-                    else if (new_union.constant)
+                    else if (new_union.isboxed) {
+                        // The box bit of the tag, and the `emit_unionmove` below, follow `isboxed`
+                        // too: a boxed value is in no slot, and lives only in this box.
+                        assert(new_union.constant); // its box is made on demand
                         V = boxed(ctx, new_union);
+                    }
                     else
                         V = Constant::getNullValue(ctx.types().T_prjlvalue);
                 }
@@ -10999,7 +11130,7 @@ static jl_llvm_functions_t
 
     for (PHINode *PN : ToDelete) {
         // This basic block is statically unreachable, thus so is this PHINode
-        PN->replaceAllUsesWith(UndefValue::get(PN->getType()));
+        PN->replaceAllUsesWith(PoisonValue::get(PN->getType()));
         PN->eraseFromParent();
     }
 
@@ -11367,6 +11498,7 @@ static void init_jit_functions(void)
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
     add_named_global(jlinvoke_func, &jl_invoke);
     add_named_global(jlinvokemodify_func, &jl_invoke_modify);
+    add_named_global(jlinvoketarget_func, &jl_invoke_target);
     add_named_global(jltopeval_func, &jl_toplevel_eval);
     add_named_global(jlcopyast_func, &jl_copy_ast);
     //add_named_global(jlnsvec_func, &jl_svec);
@@ -11411,10 +11543,14 @@ static void init_jit_functions(void)
     add_named_global(jlunlockfield_func, &jl_unlock_field);
     add_named_global(jlgetabiconverter_func, &jl_get_abi_converter);
 
-    jl_get_pgcstack_func_t get_pgcstack;
-    jl_pgcstack_key_t pgcstack_key;
-    jl_pgcstack_getkey(&get_pgcstack, &pgcstack_key);
-    add_named_global("jl_get_pgcstack_resolved", get_pgcstack);
+    // the JIT's counterpart of an image's `jl_ptls_table`
+    static jl_get_pgcstack_func_t pgcstack_func_slot;
+    static uintptr_t pgcstack_key_slot;
+    static_assert(sizeof(jl_pgcstack_key_t) <= sizeof(pgcstack_key_slot), "TLS key doesn't fit its slot");
+    jl_pgcstack_getkey(&pgcstack_func_slot, (jl_pgcstack_key_t*)&pgcstack_key_slot);
+    add_shared_named_global("jl_pgcstack_func_slot", (void*)&pgcstack_func_slot);
+    add_shared_named_global("jl_pgcstack_key_slot", (void*)&pgcstack_key_slot);
+    add_shared_named_global("jl_image_tls_offset", (void*)&jl_tls_offset);
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)

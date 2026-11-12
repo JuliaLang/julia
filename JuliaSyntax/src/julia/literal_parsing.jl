@@ -332,8 +332,7 @@ end
 # stdlib under the name `Unicode.julia_chartransform`. See
 # https://github.com/JuliaLang/julia/pull/42561
 #
-# To allow use on older Julia versions and to workaround the bug
-# https://github.com/JuliaLang/julia/issues/45716
+# To work around the bug https://github.com/JuliaLang/julia/issues/45716
 # we reproduce a specialized version of that logic here.
 
 # static wrapper around user callback function

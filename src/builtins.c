@@ -681,20 +681,14 @@ JL_CALLABLE(jl_f_bitsizeof)
 {
     JL_NARGS(bitsizeof, 1, 1);
     jl_value_t *x = args[0];
-    if (jl_is_unionall(x) || jl_is_uniontype(x))
-        return jl_box_long(jl_unbox_long(jl_f_sizeof(F, args, 1)) * 8);
-    if (jl_is_datatype(x)) {
-        jl_datatype_t *dx = (jl_datatype_t*)x;
-        if (jl_is_primitivetype(dx))
-            return jl_box_long(jl_datatype_nbits(dx));
-        return jl_box_long(jl_unbox_long(jl_f_sizeof(F, args, 1)) * 8);
-    }
-    if (x == jl_bottom_type)
-        jl_error("The empty type does not have a definite size since it does not have instances.");
-    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
-    if (jl_is_primitivetype(dt))
-        return jl_box_long(jl_datatype_nbits(dt));
-    return jl_box_long(jl_unbox_long(jl_f_sizeof(F, args, 1)) * 8);
+    // Only primitive types have a bit size: for anything else, padding bits could be
+    // counted or excluded, and either choice would be hard to revise once relied upon.
+    jl_value_t *t = jl_is_type(x) ? x : jl_typeof(x);
+    if (!jl_is_datatype(t))
+        jl_error("Only a primitive DataType or an instance of one has a bit size.");
+    if (!jl_is_primitivetype(t))
+        jl_errorf("Type %s is not a primitive type and has no bit size.", jl_typename_str(t));
+    return jl_box_long(jl_datatype_nbits((jl_datatype_t*)t));
 }
 
 JL_CALLABLE(jl_f_issubtype)
@@ -2213,11 +2207,14 @@ JL_CALLABLE(jl_f__expr)
 }
 
 // Typevar constructor for internal use
+// A bound may also be a TypeApp (a type application deferred while a typegroup
+// is defined, see jl_resolve_typegroup), which resolve_type_refs rebuilds into
+// a TypeVar with real bounds once the group types exist.
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
 {
-    if (lb != jl_bottom_type && !jl_is_type(lb) && !jl_is_typevar(lb))
+    if (lb != jl_bottom_type && !jl_is_type(lb) && !jl_is_typevar(lb) && !jl_is_typeapp(lb))
         jl_type_error_rt("TypeVar", "lower bound", (jl_value_t *)jl_type_type, lb);
-    if (ub != (jl_value_t *)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub))
+    if (ub != (jl_value_t *)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub) && !jl_is_typeapp(ub))
         jl_type_error_rt("TypeVar", "upper bound", (jl_value_t *)jl_type_type, ub);
     jl_task_t *ct = jl_current_task;
     jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ct->ptls, sizeof(jl_tvar_t), jl_tvar_type);
@@ -2350,6 +2347,60 @@ JL_CALLABLE(jl_f_memoryrefget)
 JL_CALLABLE(jl_f_const_memoryrefget)
 {
     return jl_f_memoryrefget(F, args, nargs);
+}
+
+static char *unsafe_memoryref_ptr(jl_genericmemoryref_t *ref, intptr_t offset,
+                                 size_t size, int boundscheck) JL_CANSAFEPOINT
+{
+    jl_datatype_t *mty = (jl_datatype_t*)jl_typetagof(ref->mem);
+    jl_value_t *addrspace = jl_tparam2(mty);
+    if (jl_tparam0(mty) != (jl_value_t*)jl_not_atomic_sym ||
+        !jl_is_addrspacecore(addrspace) || jl_unbox_uint8(addrspace) != 0 ||
+        !jl_isbits(jl_tparam1(mty)) || mty->layout->size == 0)
+        jl_error("memoryref byte access requires non-atomic CPU memory with nonzero-size isbits elements");
+    if (boundscheck) {
+        size_t len = mty->layout->size * ref->mem->length;
+        size_t pos = (uintptr_t)ref->ptr_or_offset - (uintptr_t)ref->mem->ptr;
+        size_t start = pos + (size_t)offset;
+        if (pos > len || size > len || start > len - size)
+            jl_bounds_error_int((jl_value_t*)ref, offset);
+    }
+    return (char*)ref->ptr_or_offset + offset;
+}
+
+JL_CALLABLE(jl_f_unsafe_memoryrefload)
+{
+    JL_NARGS(unsafe_memoryrefload, 4, 4);
+    JL_TYPECHK(unsafe_memoryrefload, genericmemoryref, args[0]);
+    JL_TYPECHK(unsafe_memoryrefload, long, args[2]);
+    JL_TYPECHK(unsafe_memoryrefload, bool, args[3]);
+    jl_genericmemoryref_t *ref = (jl_genericmemoryref_t*)args[0];
+    if (!jl_isbits(args[1]))
+        jl_error("unsafe_memoryrefload: target type must be an isbits type");
+    size_t size = jl_datatype_size((jl_datatype_t*)args[1]);
+    char *ptr = unsafe_memoryref_ptr(ref, jl_unbox_long(args[2]), size, args[3] == jl_true);
+    if (size <= 16) {
+        JL_ALIGNED_ATTR(16) char data[16];
+        memcpy(data, ptr, size);
+        return jl_new_bits(args[1], data);
+    }
+    return jl_new_bits(args[1], ptr);
+}
+
+JL_CALLABLE(jl_f_unsafe_memoryrefstore)
+{
+    JL_NARGS(unsafe_memoryrefstore!, 4, 4);
+    JL_TYPECHK(unsafe_memoryrefstore!, genericmemoryref, args[0]);
+    JL_TYPECHK(unsafe_memoryrefstore!, long, args[2]);
+    JL_TYPECHK(unsafe_memoryrefstore!, bool, args[3]);
+    jl_genericmemoryref_t *ref = (jl_genericmemoryref_t*)args[0];
+    jl_value_t *typ = jl_typeof(args[1]);
+    if (!jl_isbits(typ))
+        jl_error("unsafe_memoryrefstore!: value must have an isbits type");
+    size_t size = jl_datatype_size(typ);
+    char *ptr = unsafe_memoryref_ptr(ref, jl_unbox_long(args[2]), size, args[3] == jl_true);
+    memcpy(ptr, jl_data_ptr(args[1]), size);
+    return args[1];
 }
 
 JL_CALLABLE(jl_f_memoryrefset)
@@ -3009,7 +3060,8 @@ void jl_init_intrinsic_properties(void)
 
 void jl_init_intrinsic_functions(void)
 {
-    jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module, 0, 1);
+    jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module,
+                                      jl_get_module_edition(jl_core_module), 0, 1);
     jl_set_initial_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm, 0);
     jl_mk_builtin_func(jl_intrinsic_type, jl_symbol("IntrinsicFunction"), jl_f_intrinsic_call);
 

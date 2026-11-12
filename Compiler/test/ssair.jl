@@ -199,6 +199,207 @@ let code = Any[
     @test_throws ["IR verification failed.", "Code location: "] Compiler.verify_ir(ir, false)
 end
 
+# Test that the verifier rejects each kind of malformed IR, and says why
+function verifier_output(f)
+    return mktemp() do path, io
+        err = redirect_stdio(; stdout=io, stderr=io) do
+            try
+                f()
+            catch err
+                err
+            end
+        end
+        flush(io)
+        return err, read(path, String)
+    end
+end
+function set_bb_stmts!(ir::Compiler.IRCode, bb::Int, first::Int, last::Int)
+    (; preds, succs) = ir.cfg.blocks[bb]
+    ir.cfg.blocks[bb] = BasicBlock(Compiler.StmtRange(first, last), preds, succs)
+    return ir
+end
+function retarget_edge!(ir::Compiler.IRCode, from::Int, old::Int, new::Int)
+    blocks = ir.cfg.blocks
+    replace!(blocks[from].succs, old => new)
+    filter!(!=(from), blocks[old].preds)
+    push!(blocks[new].preds, from)
+    return ir
+end
+tuple_call(args...) = Expr(:call, GlobalRef(Core, :tuple), args...)
+branch_ir() = make_ircode(Any[GotoIfNot(true, 3), ReturnNode(1), ReturnNode(2)])
+enter_ir() = make_ircode(Any[EnterNode(3), ReturnNode(1), ReturnNode(2)])
+modified(f, ir::Compiler.IRCode=branch_ir()) = (f(ir); ir)
+let cases = Pair{String,Compiler.IRCode}[
+        "CFG index length (0) does not correspond to # of blocks 3" =>
+            modified(ir -> empty!(ir.cfg.index)),
+        "IR type length is invalid 4 / 3" => modified(ir -> push!(ir.stmts.type, Any)),
+        "IR info length is invalid 4 / 3" => modified(ir -> push!(ir.stmts.info, Compiler.NoCallInfo())),
+        "IR line length is invalid 10 / 9" => modified(ir -> push!(ir.stmts.line, 0)),
+        "IR flag length is invalid 4 / 3" => modified(ir -> push!(ir.stmts.flag, 0x0)),
+        "Predecessor 9 of block 2 out of bounds for IR" =>
+            modified(ir -> push!(ir.cfg.blocks[2].preds, 9)),
+        "Predecessor 2 of block 3 not in successor list" =>
+            modified(ir -> push!(ir.cfg.blocks[3].preds, 2)),
+        "Double edge from 1 to 2 not correctly accounted" =>
+            modified(ir -> (ir.cfg.blocks[1].succs .= 2; empty!(ir.cfg.blocks[3].preds))),
+        "Successor 9 of block 2 out of bounds for IR" =>
+            modified(ir -> push!(ir.cfg.blocks[2].succs, 9)),
+        "Successor 3 of block 2 not in predecessor list" =>
+            modified(ir -> push!(ir.cfg.blocks[2].succs, 3)),
+        "First statement of BB 3 (0) out of bounds for IR (length=3)" =>
+            modified(ir -> set_bb_stmts!(ir, 3, 0, 3)),
+        "Last statement of BB 3 (9) out of bounds for IR (length=3)" =>
+            modified(ir -> set_bb_stmts!(ir, 3, 3, 9)),
+        "End of BB 1 (1) is not one less than CFG index (3)" =>
+            modified(ir -> (ir.cfg.index[1] = 3)),
+        "First statement of BB 2 (3) does not match end of previous (1)" =>
+            modified(ir -> (set_bb_stmts!(ir, 2, 3, 3); ir.cfg.index[2] = 4)),
+        "Block 2 ends in return or unreachable, but has successors" =>
+            modified(ir -> (push!(ir.cfg.blocks[2].succs, 3); push!(ir.cfg.blocks[3].preds, 2))),
+        "does not match GotoNode terminator (3)" =>
+            modified(ir -> retarget_edge!(ir, 1, 3, 2),
+                make_ircode(Any[GotoNode(3), ReturnNode(1), ReturnNode(2)])),
+        "Block 1 terminator forms a double edge to block 2" =>
+            make_ircode(Any[GotoIfNot(true, 2), ReturnNode(1)]; verify=false),
+        "does not match GotoIfNot terminator" => modified(ir -> retarget_edge!(ir, 1, 3, 1)),
+        "does not match :enter terminator" =>
+            modified(ir -> (filter!(!=(3), ir.cfg.blocks[1].succs); empty!(ir.cfg.blocks[3].preds)),
+                enter_ir()),
+        "does not match :enter terminator" => modified(ir -> (ir.stmts.stmt[1] = EnterNode(2)), enter_ir()),
+        "does not match fall-through terminator %2" =>
+            modified(ir -> retarget_edge!(ir, 2, 3, 1),
+                make_ircode(Any[GotoIfNot(true, 3), tuple_call(), ReturnNode(1)])),
+        # an `:enter` must end its block too
+        "does not match fall-through terminator %2" =>
+            modified(make_ircode(Any[EnterNode(4), tuple_call(), ReturnNode(1), ReturnNode(2)])) do ir
+                set_bb_stmts!(ir, 1, 1, 2)
+                set_bb_stmts!(ir, 2, 3, 3)
+                ir.cfg.index[1] = 3
+            end,
+        "End of last BB 1 does not match last IR statement 2" =>
+            modified(ir -> (empty!(ir.cfg.index); resize!(ir.cfg.blocks, 1)),
+                make_ircode(Any[ReturnNode(1), ReturnNode(2)])),
+        "φ node 4 is not at the beginning of the basic block 3" =>
+            make_ircode(Any[GotoIfNot(true, 3), GotoNode(3), tuple_call(),
+                PhiNode(Int32[1, 2], Any[1, 2]), ReturnNode(SSAValue(4))]; verify=false),
+        "Edge list φ node 3 in bb 3 not unique (double edge?)" =>
+            make_ircode(Any[GotoIfNot(true, 3), GotoNode(3),
+                PhiNode(Int32[1, 1], Any[1, 2]), ReturnNode(SSAValue(3))]; verify=false),
+        "of φ node 3 not in predecessor list" =>
+            modified(ir -> (ir.stmts.stmt[3] = PhiNode(Int32[1, 3], Any[1, 2])),
+                make_ircode(Any[GotoIfNot(true, 3), GotoNode(3),
+                    PhiNode(Int32[1, 2], Any[1, 2]), ReturnNode(SSAValue(3))])),
+        # a non-φ statement among the φ nodes is checked like an operand
+        "Left over slot detected in converted IR" =>
+            make_ircode(Any[GotoIfNot(true, 3), GotoNode(3), PhiNode(Int32[1, 2], Any[1, 2]),
+                SlotNumber(2), PhiNode(Int32[1, 2], Any[1, 2]), tuple_call(),
+                ReturnNode(SSAValue(3))]; verify=false),
+        "Operand 1 of PhiC node 1 must be an SSA Value." =>
+            make_ircode(Any[PhiCNode(Any[1]), ReturnNode(1)]; verify=false),
+        "Operand 1 of PhiC node 2 must reference an Upsilon node." =>
+            make_ircode(Any[tuple_call(), PhiCNode(Any[SSAValue(1)]), ReturnNode(1)]; verify=false),
+        "Terminator 1 in bb 1 is not the last statement in the block" =>
+            modified(ir -> (ir.stmts.stmt[1] = ReturnNode(2)),
+                make_ircode(Any[tuple_call(), ReturnNode(1)])),
+        "Explicit terminators (other than ReturnNode) must have `Any` type" =>
+            modified(ir -> (ir.stmts.type[1] = Int), make_ircode(Any[GotoNode(2), ReturnNode(1)])),
+        "Assignment should have been removed during SSA conversion" =>
+            make_ircode(Any[Expr(:(=), SSAValue(1), 1), ReturnNode(1)]; verify=false),
+        "malformed isdefined" =>
+            make_ircode(Any[Expr(:isdefined, Argument(1), 1, 2), ReturnNode(1)]; verify=false),
+        "malformed throw_undef_if_not" =>
+            make_ircode(Any[Expr(:throw_undef_if_not, :x, true, 1, 2), ReturnNode(1)]; verify=false),
+        "Malformed :leave - Expected `Nothing` or SSAValue" =>
+            make_ircode(Any[Expr(:leave, 1), ReturnNode(1)]; verify=false),
+        "Malformed :leave - argument ssavalue should point to `nothing` or :enter" =>
+            make_ircode(Any[tuple_call(), Expr(:leave, SSAValue(1)), ReturnNode(1)]; verify=false),
+        "Def (0) is invalid in final IR" =>
+            make_ircode(Any[tuple_call(SSAValue(0)), ReturnNode(1)]; verify=false),
+        "Def (-1) is invalid in final IR" =>
+            make_ircode(Any[tuple_call(SSAValue(-1)), ReturnNode(1)]; verify=false),
+        "Def (5) points to non-existent new node" =>
+            make_ircode(Any[tuple_call(SSAValue(5)), ReturnNode(1)]; verify=false),
+        "Def (2) does not dominate use (1) in same BB" =>
+            make_ircode(Any[tuple_call(SSAValue(2)), tuple_call(), ReturnNode(1)]; verify=false),
+        "Def (4) does not dominate use (1) in same BB" =>
+            modified(make_ircode(Any[tuple_call(), tuple_call(), ReturnNode(1)])) do ir
+                new = Compiler.insert_node!(ir, 2, Compiler.NewInstruction(tuple_call(), Any))
+                ir.stmts.stmt[1] = tuple_call(new)
+            end,
+        "Basic Block 2 does not dominate block 3 (tried to use value %2 at %4)" =>
+            make_ircode(Any[GotoIfNot(true, 4), tuple_call(), ReturnNode(1),
+                tuple_call(SSAValue(2)), ReturnNode(1)]; verify=false),
+        "At statement %2: Invalid use of value statement or terminator %1" =>
+            make_ircode(Any[GotoNode(2), tuple_call(SSAValue(1)), ReturnNode(1)]; verify=false),
+        "Basic Block 2 does not dominate block 3 (tried to use value %2 at %4)" =>
+            make_ircode(Any[GotoIfNot(true, 4), tuple_call(), ReturnNode(1),
+                ReturnNode(SSAValue(2))]; verify=false),
+        "Basic Block 2 does not dominate block 3 (tried to use value %2 at %4)" =>
+            make_ircode(Any[GotoIfNot(true, 4), tuple_call(), ReturnNode(1),
+                GotoIfNot(SSAValue(2), 6), ReturnNode(1), ReturnNode(2)]; verify=false),
+        "At statement %2: Invalid use of value statement or terminator %1" =>
+            make_ircode(Any[GotoNode(2), ReturnNode(SSAValue(1))]; verify=false),
+        "At statement %1: Left over SSA marker" =>
+            make_ircode(Any[tuple_call(Compiler.OldSSAValue(1)), ReturnNode(1)]; verify=false),
+        "At statement %1: Left over SSA marker" =>
+            make_ircode(Any[tuple_call(NewSSAValue(1)), ReturnNode(1)]; verify=false),
+    ]
+    @testset "$msg" for (msg, ir) in cases
+        err, out = verifier_output(() -> Compiler.verify_ir(ir))
+        @test err isa ErrorException && startswith(err.msg, "IR verification failed.")
+        @test occursin(msg, out)
+    end
+end
+# Test that the error names the method instance, and that the IR is printed
+let ir = modified(ir -> push!(ir.cfg.blocks[2].succs, 3)),
+    mi = Base.method_instance(identity, (Int,))
+    err, out = verifier_output() do
+        Compiler.verify_ir(ir, true, false, Compiler.SimpleInferenceLattice.instance, mi)
+    end
+    @test occursin("Method instance: $mi", err.msg)
+    @test occursin("goto #3 if not true", out)
+end
+# Test that nothing is printed when printing is turned off
+let ir = modified(ir -> push!(ir.cfg.blocks[2].succs, 3))
+    err, out = verifier_output(() -> Compiler.verify_ir(ir, false))
+    @test err isa ErrorException
+    @test isempty(out)
+end
+# Test that a debuginfo edge index with no matching edge is reported
+let di = Compiler.DebugInfoStream(Int32[0, 0, 0, 0, 1, 0])
+    @test verifier_output(() -> Compiler.verify_linetable(di, 2)) ==
+        (nothing, "Malformed debuginfo index into edges\n")
+end
+
+# Test unusual IR that the verifier accepts
+let cases = Compiler.IRCode[
+        # a block ending in a call known to throw may have no successors
+        modified(make_ircode(Any[GotoIfNot(true, 3), tuple_call(), ReturnNode(1)])) do ir
+            empty!(ir.cfg.blocks[2].succs)
+            filter!(!=(2), ir.cfg.blocks[3].preds)
+            ir.stmts.type[2] = Union{}
+        end,
+        # a φ edge from an unreachable block
+        make_ircode(Any[GotoNode(3), GotoNode(3), PhiNode(Int32[1, 2], Any[1, 2]),
+            ReturnNode(SSAValue(3))]; verify=false),
+        # globals that are only tested for definedness, and a GC preserve token
+        make_ircode(Any[Expr(:isdefined, GlobalRef(Main, :undefined_global_verify_ir)),
+            Expr(:throw_undef_if_not, GlobalRef(Main, :undefined_global_verify_ir), SSAValue(1)),
+            Expr(:gc_preserve_begin), Expr(:gc_preserve_end, SSAValue(3)), ReturnNode(1)];
+            verify=false),
+        # a constant of a top module, as lowering emits it
+        make_ircode(Any[tuple_call(GlobalRef(Base, :pi)), ReturnNode(1)]),
+        # a use of a node that is still pending insertion
+        modified(make_ircode(Any[tuple_call(), tuple_call(), ReturnNode(1)])) do ir
+            new = Compiler.insert_node!(ir, 2, Compiler.NewInstruction(tuple_call(), Any))
+            ir.stmts.stmt[2] = tuple_call(new)
+        end,
+    ]
+    for ir in cases
+        @test Compiler.verify_ir(ir) === nothing
+    end
+end
+
 # Issue #29107
 let code = Any[
         # Block 1

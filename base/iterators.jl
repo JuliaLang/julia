@@ -730,7 +730,7 @@ function peel(itr)
 end
 
 @propagate_inbounds iterate(i::Rest, st=i.st) = iterate(i.itr, st)
-isdone(i::Rest, st...) = isdone(i.itr, st...)
+isdone(i::Rest, st=i.st) = isdone(i.itr, st)
 
 eltype(::Type{<:Rest{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{<:Rest{I}}) where {I} = IteratorEltype(I)
@@ -821,7 +821,7 @@ take_iteratorsize(a) = HasLength()
 take_iteratorsize(::SizeUnknown) = SizeUnknown()
 IteratorSize(::Type{Take{I}}) where {I} = take_iteratorsize(IteratorSize(I))
 length(t::Take) = _min_length(t.xs, 1:t.n, IteratorSize(t.xs), HasLength())
-isdone(t::Take) = isdone(t.xs)
+isdone(t::Take) = (t.n <= 0) | isdone(t.xs)
 isdone(t::Take, state) = (state[1] <= 0) | isdone(t.xs, tail(state)...)
 
 @propagate_inbounds function iterate(it::Take, state=(it.n,))
@@ -1202,6 +1202,7 @@ iterate(::ProductIterator{Tuple{}}) = (), true
 iterate(::ProductIterator{Tuple{}}, state) = nothing
 
 @inline isdone(P::ProductIterator) = any(isdone, P.iterators)
+@inline _pisdone(::Tuple{}, ::Tuple{}) = true
 @inline function _pisdone(iters, states)
     iter1 = first(iters)
     done1 = isdone(iter1, first(states)[2]) # check step
@@ -1753,7 +1754,7 @@ julia> first(stateful)
 nth(itr, n::Integer) = _nth(IteratorSize(itr), itr, n)
 nth(itr::Cycle{I}, n::Integer) where I = _nth(IteratorSize(I), itr, n)
 nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where O = _nth(IteratorSize(O), itr, n)
-@propagate_inbounds nth(itr::AbstractArray, n::Integer) = itr[begin + n - 1]
+@propagate_inbounds nth(itr::AbstractArray, n::Integer) = itr[begin + Int(n) - 1]
 
 function _nth(::Union{HasShape, HasLength}, itr::Cycle{I}, n::Integer) where {I}
     N = length(itr.xs)
@@ -1768,7 +1769,7 @@ function _nth(::Union{HasShape, HasLength}, itr::Flatten{Take{Repeated{O}}}, n::
     cycles = itr.it.n
     torepeat = itr.it.xs.x
     k = length(torepeat)
-    (n > k*cycles || k == 0) && throw(BoundsError(itr, n))
+    (k == 0 || cld(n, k) > cycles) && throw(BoundsError(itr, n))
 
     # prevent wrap around behaviour and inherit the error handling
     return nth(torepeat, n > 0 ? mod1(n, k) : n)
@@ -1786,7 +1787,10 @@ function _nth(::IteratorSize, itr, n::Integer)
     y[1]
 end
 
-_nth(::IteratorSize, z::Zip, n::Integer) = Base.map(nth(n), z.is)
+function _nth(::IteratorSize, z::Zip, n::Integer)
+    n > 0 || throw(BoundsError(z, n))
+    return Base.map(nth(n), z.is)
+end
 
 """
     nth(n::Integer)

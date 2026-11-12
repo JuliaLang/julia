@@ -187,12 +187,6 @@ free_match_data(match_data) =
 free_re(re) =
     ccall((:pcre2_code_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), re)
 
-free_jit_stack(stack) =
-    ccall((:pcre2_jit_stack_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), stack)
-
-free_match_context(context) =
-    ccall((:pcre2_match_context_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), context)
-
 function err_message(errno::Integer)
     buffer = Vector{UInt8}(undef, 1024)
     ret = ccall((:pcre2_get_error_message_8, PCRE_LIB), Cint,
@@ -202,31 +196,41 @@ function err_message(errno::Integer)
     return GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
-exec(re, subject::DenseUTF8String, offset, options, match_data) =
-    _exec(re, subject, offset, options, match_data)
-exec(re, subject, offset, options, match_data) =
-    _exec(re, String(subject)::String, offset, options, match_data)
+match_subject(subject::DenseUTF8String) = subject
+match_subject(subject) = String(subject)::String
 
-function _exec(re, subject, offset, options, match_data)
-    rc = ccall((:pcre2_match_8, PCRE_LIB), Cint,
-               (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Csize_t, UInt32, Ptr{Cvoid}, Ptr{Cvoid}),
-               re, subject, ncodeunits(subject), offset, options, match_data, get_local_match_context())
-    # rc == -1 means no match, -2 means partial match.
+# pcre2_match's return code: >= 0 for a match, -1 for none, -2 for a partial match, below
+# that an error. The arguments are converted already, so this does not throw.
+function match_rc(re, subject, offset::Csize_t, options::UInt32, match_data, context)
+    return ccall((:pcre2_match_8, PCRE_LIB), Cint,
+                 (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Csize_t, UInt32, Ptr{Cvoid}, Ptr{Cvoid}),
+                 re, subject, ncodeunits(subject), offset, options, match_data, context)
+end
+
+function match_result(rc)
     rc < -2 && error("PCRE.exec error: $(err_message(rc))")
     return rc >= 0
 end
 
+exec(re, subject, offset, options, match_data) =
+    match_result(match_rc(re, match_subject(subject), Csize_t(offset), UInt32(options), match_data, get_local_match_context()))
+
+# Everything that can throw happens before the match data is allocated or after it is
+# freed, so it never leaks, without a try on every match
 function exec_r(re, subject, offset, options)
+    s, off, opts, context = match_subject(subject), Csize_t(offset), UInt32(options), get_local_match_context()
     match_data = create_match_data(re)
-    ans = exec(re, subject, offset, options, match_data)
+    rc = match_rc(re, s, off, opts, match_data, context)
     free_match_data(match_data)
-    return ans
+    return match_result(rc)
 end
 
 function exec_r_data(re, subject, offset, options)
+    s, off, opts, context = match_subject(subject), Csize_t(offset), UInt32(options), get_local_match_context()
     match_data = create_match_data(re)
-    ans = exec(re, subject, offset, options, match_data)
-    return ans, match_data
+    rc = match_rc(re, s, off, opts, match_data, context)
+    rc < -2 && free_match_data(match_data)
+    return match_result(rc), match_data
 end
 
 function create_match_data(re)
@@ -250,15 +254,6 @@ function substring_length_bynumber(match_data, number)
         rc == ERROR_UNSET && return 0
         error("PCRE error: $(err_message(rc))")
     end
-    return Int(s[])
-end
-
-function substring_copy_bynumber(match_data, number, buf, buf_size)
-    s = RefValue{Csize_t}(buf_size)
-    rc = ccall((:pcre2_substring_copy_bynumber_8, PCRE_LIB), Cint,
-               (Ptr{Cvoid}, UInt32, Ptr{UInt8}, Ref{Csize_t}),
-               match_data, number, buf, s)
-    rc < 0 && error("PCRE error: $(err_message(rc))")
     return Int(s[])
 end
 

@@ -24,6 +24,7 @@ end
 # CHECK-LABEL: @julia_loop_alloc
 # CHECK: phi
 # CHECK-NOT: phi
+# CHECK: {{^}}}
 function loop_alloc(N)
     ref = Ref(zero(typeof(N)))
     N <= zero(typeof(N)) && return ref
@@ -37,6 +38,7 @@ end
 # COM: that the loop is meaningless and delete it
 # CHECK-LABEL: @julia_loop_const
 # CHECK-NOT: br
+# CHECK: {{^}}}
 function loop_const()
     ref = Ref(0)
     for i in 1:1000

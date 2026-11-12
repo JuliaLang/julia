@@ -2,7 +2,7 @@ module Tokenize
 
 export tokenize, untokenize
 
-using ..JuliaSyntax: JuliaSyntax, Kind, @K_str, @KSet_str, @callsite_inline,
+using ..JuliaSyntax: JuliaSyntax, Kind, @K_str, @KSet_str,
     generic_operators_by_level, PrecedenceLevel, PREC_NONE, PREC_ASSIGNMENT,
     PREC_PAIRARROW, PREC_CONDITIONAL, PREC_ARROW, PREC_LAZYOR, PREC_LAZYAND,
     PREC_COMPARISON, PREC_PIPE_LT, PREC_PIPE_GT, PREC_COLON, PREC_PLUS,
@@ -281,7 +281,7 @@ Base.eltype(::Type{<:Lexer}) = RawToken
 
 
 function Base.iterate(l::Lexer)
-    l.token_startpos = position(l)
+    l.token_startpos = _position(l)
 
     t = next_token(l)
     return t, t.kind == K"EndMarker"
@@ -294,7 +294,7 @@ function Base.iterate(l::Lexer, isdone::Any)
 end
 
 function Base.show(io::IO, l::Lexer)
-    print(io, typeof(l), " at position: ", position(l))
+    print(io, typeof(l), " at position: ", _position(l))
 end
 
 """
@@ -303,13 +303,6 @@ end
 Return the latest `RawToken`'s starting position.
 """
 startpos(l::Lexer) = l.token_startpos
-
-"""
-    startpos!(l::Lexer, i::Integer)
-
-Set a new starting position.
-"""
-startpos!(l::Lexer, i::Integer) = l.token_startpos = i
 
 """
     peekchar(l::Lexer)
@@ -333,20 +326,18 @@ Returns the next three characters without changing the lexer's state.
 peekchar3(l::Lexer) = l.chars[2], l.chars[3], l.chars[4]
 
 """
-    position(l::Lexer)
+    _position(l::Lexer)
 
 Returns the current position.
 """
-Base.position(l::Lexer) = l.charspos[1]
+_position(l::Lexer) = l.charspos[1]
 
 """
-    eof(l::Lexer)
+    _eof(l::Lexer)
 
 Determine whether the end of the lexer's underlying buffer has been reached.
 """
-Base.eof(l::Lexer) = eof(l.io)
-
-Base.seek(l::Lexer, pos) = seek(l.io, pos)
+_eof(l::Lexer) = eof(l.io)
 
 """
     start_token!(l::Lexer)
@@ -409,7 +400,7 @@ end
 Returns a `RawToken` of kind `kind` and starts a new `RawToken`.
 """
 function emit(l::Lexer, kind::Kind)
-    tok = RawToken(kind, startpos(l), position(l) - 1, PREC_NONE)
+    tok = RawToken(kind, startpos(l), _position(l) - 1, PREC_NONE)
 
     l.last_token = kind
     return tok
@@ -422,7 +413,7 @@ function emit_operator(l::Lexer, kind::Kind, precedence::PrecedenceLevel, take_s
             kind = K"Operator"
         end
     end
-    tok = RawToken(kind, startpos(l), position(l) - 1, precedence)
+    tok = RawToken(kind, startpos(l), _position(l) - 1, precedence)
 
     l.last_token = kind
     return tok
@@ -457,7 +448,7 @@ function emit_wrapping_operator_or_compound_assign(l::Lexer, kind::Kind, prec::P
 end
 
 function emit_trivia(l::Lexer, kind::Kind)
-    tok = RawToken(kind, startpos(l), position(l) - 1, PREC_NONE)
+    tok = RawToken(kind, startpos(l), _position(l) - 1, PREC_NONE)
     l.last_token = kind
     return tok
 end
@@ -1048,7 +1039,7 @@ function lex_digit(l::Lexer, kind)
         else
             return emit(l, K"ErrorInvalidNumericConstant") # `1e+`
         end
-    elseif position(l) - startpos(l) == 1 && l.chars[1] == '0'
+    elseif _position(l) - startpos(l) == 1 && l.chars[1] == '0'
         kind == K"Integer"
         is_bin_oct_hex_int = false
         if pc == 'x'
@@ -1222,14 +1213,14 @@ function lex_identifier(l::Lexer, c)
             @inbounds if (pc_byte == UInt8('!') && ppc == '=') || !ascii_is_identifier_char[pc_byte+1]
                 break
             end
-        elseif @callsite_inline Unicode.isgraphemebreak!(graphemestate, c, pc)
+        elseif @inline Unicode.isgraphemebreak!(graphemestate, c, pc)
             if (pc == '!' && ppc == '=') || !is_identifier_char(pc)
                 break
             end
         elseif pc in ('\u200c','\u200d') # ZWNJ/ZWJ control characters
             # ZWJ/ZWNJ only within grapheme sequences, not at end
             graphemestate_peek[] = graphemestate[]
-            if @callsite_inline Unicode.isgraphemebreak!(graphemestate_peek, pc, ppc)
+            if @inline Unicode.isgraphemebreak!(graphemestate_peek, pc, ppc)
                 break
             end
         end

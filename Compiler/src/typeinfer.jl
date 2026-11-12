@@ -110,7 +110,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
     caller.src.min_world = min_world
     caller.src.max_world = max_world
     if isdefined(result, :ci)
-        edges = result_edges(interp, caller)
+        # A tombstoned CI is never published nor used as an edge: its callers copy its
+        # internal edges instead. So there is no need to materialize its edges.
+        edges = result.tombstone ? Core.svec() : result_edges(interp, caller)
         #@assert max_world <= get_world_counter() || isempty(edges)
         ci = result.ci
         mi = result.linfo
@@ -190,9 +192,10 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         ipo_effects = encode_effects(result.ipo_effects)
         time_now = _time_ns()
         time_self_ns = caller.time_self_ns + (time_now - time_before)
+        time_before = time_now
         time_total = (time_now - caller.time_start - caller.time_paused) * 1e-9
         ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
-            ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
+            ci, widenconst_split(result_type), widenconst_split(result.exc_result), rettype_const, inferred_result,
             const_flags, min_world, max_world,
             ipo_effects, result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
         if unique_backedges
@@ -201,7 +204,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
     elseif caller.cache_mode === CACHE_MODE_LOCAL
         result.src = transform_result_for_local_cache(interp, result)
     end
-    nothing
+    return time_before
 end
 
 function promotecache!(interp::AbstractInterpreter, caller::InferenceState)
@@ -321,7 +324,7 @@ function finish_nocycle(interp::AbstractInterpreter, frame::InferenceState{I}, t
     end
     empty!(opt_cache)
     validation_world = get_world_counter()
-    finish!(interp::I, frame, validation_world, time_before)
+    time_before = finish!(interp::I, frame, validation_world, time_before)
     promotecache!(interp::I, frame)
     if (!iszero(frame.cache_mode & CACHE_MODE_GLOBAL) &&
             isdefined(frame.result, :ci))
@@ -335,7 +338,7 @@ function finish_nocycle(interp::AbstractInterpreter, frame::InferenceState{I}, t
         @assert frames[end] === frame
         pop!(frames)
     end
-    return nothing
+    return time_before
 end
 
 function propagate_unpublished_cycle_proof!(
@@ -343,10 +346,14 @@ function propagate_unpublished_cycle_proof!(
         cycle_valid_worlds::WorldRange
     ) where {I<:AbstractInterpreter}
     unpublished = InferenceState{I}[]
+    anchor = nothing
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
         if iszero(caller.cache_mode & CACHE_MODE_GLOBAL)
             push!(unpublished, caller)
+        elseif (anchor === nothing && isdefined(caller.result, :ci) &&
+                caller.linfo.def isa Method)
+            anchor = caller
         end
     end
     isempty(unpublished) && return nothing
@@ -368,9 +375,50 @@ function propagate_unpublished_cycle_proof!(
             push!(consumers, caller)
         end
     end
-    for caller in consumers
-        add_inference_proof!(internal_result_edges(caller), cycle_proof)
-        update_valid_age!(caller, world, proof_worlds(cycle_proof))
+    if anchor === nothing
+        for caller in consumers
+            add_inference_proof!(internal_result_edges(caller), cycle_proof)
+            update_valid_age!(caller, world, proof_worlds(cycle_proof))
+        end
+    else
+        # A published member, the anchor, carries the SCC-wide proof once. Its CI is then
+        # invalidated whenever any SCC dependency changes, and so is every caller whose
+        # edges contain that CI. So the other consumers can depend on the anchor CI instead
+        # of copying the proof.
+        add_inference_proof!(internal_result_edges(anchor), cycle_proof)
+        update_valid_age!(anchor, world, proof_worlds(cycle_proof))
+        anchor_ci = anchor.result.ci
+        for caller in consumers
+            caller === anchor && continue
+            add_inference_proof!(internal_result_edges(caller), anchor_ci)
+            update_valid_age!(caller, world, proof_worlds(cycle_proof))
+        end
+    end
+    return nothing
+end
+
+# Inside a cycle, a call to a function that is still being inferred can only
+# record an edge to its MethodInstance. Once the cycle is done, point those edges
+# to the finished CodeInstance instead. Then package caches save that code together
+# with its caller, and invalidating it also invalidates the caller.
+function link_cycle_ci_edges!(frames::Vector{AbsIntState{I}}, cycleid::Int) where {I<:AbstractInterpreter}
+    members = IdDict{MethodInstance,CodeInstance}()
+    for frameid = cycleid:length(frames)
+        caller = frames[frameid]::InferenceState
+        if !iszero(caller.cache_mode & CACHE_MODE_GLOBAL) && isdefined(caller.result, :ci)
+            members[caller.linfo] = caller.result.ci
+        end
+    end
+    isempty(members) && return nothing
+    for frameid = cycleid:length(frames)
+        caller = frames[frameid]::InferenceState
+        edges = internal_result_edges(caller)
+        for i = 1:length(edges)
+            edge = edges[i]
+            (edge isa MethodInstance && edge !== caller.linfo) || continue
+            ci = get(members, edge, nothing)
+            ci === nothing || (edges[i] = ci)
+        end
     end
     return nothing
 end
@@ -423,6 +471,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}
     # source was tombstoned), preserve the SCC's external dependencies explicitly.
     # One shared proof for the whole SCC avoids constructing a cyclic proof graph.
     propagate_unpublished_cycle_proof!(frames, cycleid, world, cycle_valid_worlds)
+    link_cycle_ci_edges!(frames, cycleid)
     empty!(opt_cache)
     cycletop = frames[cycleid]::InferenceState
     time_start = cycletop.time_start
@@ -434,7 +483,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}
         caller.time_caches = time_caches
         caller.time_paused = time_paused
         update_valid_age!(caller, world, cycle_valid_worlds)
-        finish!(caller.interp::I, caller, validation_world, time_before)
+        time_before = finish!(caller.interp::I, caller, validation_world, time_before)
     end
     if cycletop.parentid != 0
         parent = frames[cycletop.parentid]
@@ -455,7 +504,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}
     # validity.
     ccall(:jl_promote_cis_to_current, Cvoid, (Ptr{CodeInstance}, Csize_t, UInt), cis, length(cis), validation_world)
     resize!(frames, cycleid - 1)
-    return nothing
+    return time_before
 end
 
 function adjust_cycle_frame!(sv::InferenceState, world::UInt, cycle_valid_worlds::WorldRange, cycle_valid_effects::Effects)
@@ -564,7 +613,7 @@ function transform_result_for_cache(interp::AbstractInterpreter, result::Inferen
     if isa(src, OptimizationState)
         opt = src
         inlining_cost = compute_inlining_cost(interp, result, opt.optresult)
-        discard_optimized_result(interp, inlining_cost) && return nothing
+        discard_optimized_result(interp, opt.linfo, inlining_cost) && return nothing
         src = ir_to_codeinf!(opt)
     end
     if isa(src, CodeInfo)
@@ -578,12 +627,18 @@ function transform_result_for_cache(interp::AbstractInterpreter, result::Inferen
     return src
 end
 
-function discard_optimized_result(interp::AbstractInterpreter, inlining_cost::InlineCostType)
+function discard_optimized_result(interp::AbstractInterpreter, mi::MethodInstance, inlining_cost::InlineCostType)
     may_discard_trees(interp) || return false
     inlining_cost == MAX_INLINE_COST || return false
     precompile_keep_ir(interp) && return false
+    keep_source_for_output(mi) && return false
     return true
 end
+
+# A cache without native code needs the source of every compileable signature, or
+# loading it means inferring them all again. Caches with native code drop it on save.
+keep_source_for_output(mi::MethodInstance) =
+    ccall(:jl_generating_output, Cint, ()) != 0 && isa_compileable_sig(mi)
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
     def = mi.def
@@ -593,9 +648,9 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance
     if can_discard_trees && !inlineable
         # Precompile-keep-ir mode: retain non-inlineable IR as raw CodeInfo so
         # irgen's typeinf_ext can reuse it instead of re-inferring.
-        # jl_finalize_precompile_inferred nulls it before save.
+        # The image leaves it out.
         precompile_keep_ir(interp) && return ci
-        return nothing
+        keep_source_for_output(mi) || return nothing
     end
     # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
     may_compress(interp) && return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
@@ -752,7 +807,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
     ipo_effects = result.ipo_effects = me.ipo_effects = adjust_effects(me)
     result.exc_result = me.exc_bestguess = refine_exception_type(me.exc_bestguess, ipo_effects)
     src = me.src
-    src.rettype = widenconst(ignorelimited(bestguess))
+    src.rettype = widenconst_split(ignorelimited(bestguess))
     src.ssaflags = me.ssaflags
     valid_worlds = me.valid_worlds
     result.valid_worlds = valid_worlds
@@ -989,9 +1044,12 @@ function compute_edges!(sv::InferenceState)
     for i in 1:length(sv.stmt_info)
         add_edges!(edges, sv.stmt_info[i])
     end
-    user_edges = sv.src.edges::Union{Nothing, SimpleVector, Vector{Any}}
-    if user_edges !== nothing && user_edges !== empty_edges
-        append!(edges, user_edges)
+    user_edges = sv.src.edges
+    if user_edges isa Union{SimpleVector, Vector{Any}}
+        user_edges === empty_edges || append!(edges, user_edges)
+    elseif user_edges !== nothing
+        # Generated functions in older packages store a narrowly typed vector here.
+        append!(edges, user_edges::Vector)
     end
     nothing
 end
@@ -1041,22 +1099,6 @@ function record_slot_assign!(sv::InferenceState)
         end
     end
     sv.src.slottypes = slottypes
-    return nothing
-end
-
-# find the dominating assignment to the slot `id` in the block containing statement `idx`,
-# returns `nothing` otherwise
-function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
-    block = block_for_inst(sv.cfg, idx)
-    for pc in reverse(sv.cfg.blocks[block].stmts) # N.B. reverse since the last assignment is dominating this block
-        pc < idx || continue # N.B. needs pc ≠ idx as `id` can be assigned at `idx`
-        stmt = sv.src.code[pc]
-        isexpr(stmt, :(=)) || continue
-        lhs = stmt.args[1]
-        isa(lhs, SlotNumber) || continue
-        slot_id(lhs) == id || continue
-        return pc
-    end
     return nothing
 end
 

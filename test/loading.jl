@@ -820,6 +820,15 @@ end
             # Base.active_manifest() should never return a file that doesn't exist:
             @test isfile(Base.active_manifest(proj))
 
+            # A `manifest` entry in the project takes priority, if that file exists:
+            custom = joinpath(dir, "custom", "M.toml")
+            write(proj, "manifest = \"custom/M.toml\"\n")
+            @test Base.active_manifest(proj) == manif
+            mkpath(dirname(custom))
+            touch(custom)
+            @test Base.active_manifest(proj) == custom
+            rm(custom)
+
             # If the manifest file exists but the project file does not, active_manifest(proj) should return `nothing`:
             rm(proj)
             @test Base.active_manifest(proj) === nothing
@@ -969,6 +978,17 @@ end
     end
 end
 
+@testset "evalfile passes ARGS to the file" begin
+    mktempdir() do dir
+        file = joinpath(dir, "args.jl")
+        write(file, "ARGS")
+        @test evalfile(file) == String[]
+        @test evalfile(file, ["a"]) == ["a"]
+        args = evalfile(file, Any["a", SubString("bc", 1, 1)])
+        @test args == ["a", "b"] && args isa Vector{String}
+    end
+end
+
 @testset "`Base.project_names` and friends" begin
     # Some functions in Pkg assumes that these tuples have the same length
     n = length(Base.project_names)
@@ -1001,6 +1021,101 @@ end
         raw_manifest = Base.parsed_toml(manifest_file)
         @test Base.is_v1_format_manifest(raw_manifest) == false
         @test Base.get_deps(raw_manifest) == deps
+    end
+end
+
+# TOML reads `deps = []` as a `Vector{Any}`, which must still count as no dependencies
+@testset "Manifest entry with an empty deps list" begin
+    mkdepottempdir() do depot
+        uuid = "e1000000-0000-0000-0000-000000000001"
+        trigger_uuid = "e1000000-0000-0000-0000-000000000002"
+        for (name, pkg_uuid) in (("EmptyDeps", uuid), ("EmptyDepsTrigger", trigger_uuid))
+            mkpath(joinpath(depot, "dev", name, "src"))
+            write(joinpath(depot, "dev", name, "Project.toml"), """
+                name = "$name"
+                uuid = "$pkg_uuid"
+                version = "0.1.0"
+                """)
+            write(joinpath(depot, "dev", name, "src", "$name.jl"), "module $name end\n")
+        end
+        mkpath(joinpath(depot, "dev", "EmptyDeps", "ext"))
+        write(joinpath(depot, "dev", "EmptyDeps", "ext", "EmptyDepsExt.jl"), "module EmptyDepsExt end\n")
+        project_path = joinpath(depot, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            EmptyDeps = "$uuid"
+            EmptyDepsTrigger = "$trigger_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.EmptyDeps]]
+            deps = []
+            path = "../dev/EmptyDeps"
+            uuid = "$uuid"
+            version = "0.1.0"
+            weakdeps = ["EmptyDepsTrigger"]
+
+                [deps.EmptyDeps.extensions]
+                EmptyDepsExt = "EmptyDepsTrigger"
+
+            [[deps.EmptyDepsTrigger]]
+            deps = []
+            path = "../dev/EmptyDepsTrigger"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+            weakdeps = []
+            """)
+        old_load_path = copy(LOAD_PATH)
+        old_depot_path = copy(DEPOT_PATH)
+        try
+            copy!(LOAD_PATH, [project_path])
+            push!(empty!(DEPOT_PATH), depot)
+            pkg = Base.PkgId(Base.UUID(uuid), "EmptyDeps")
+            @test Base.identify_package(pkg, "EmptyDepsTrigger") === nothing
+            @test Base.identify_package(pkg, "EmptyDeps") == pkg
+            EmptyDeps = Base.require(pkg)
+            Base.require(Base.PkgId(Base.UUID(trigger_uuid), "EmptyDepsTrigger"))
+            @test Base.get_extension(EmptyDeps, :EmptyDepsExt) isa Module
+        finally
+            copy!(LOAD_PATH, old_load_path)
+            copy!(DEPOT_PATH, old_depot_path)
+        end
+    end
+end
+
+@testset "Manifest with two entries for a dependency listed by name" begin
+    mktempdir() do dir
+        parent_uuid = "e2000000-0000-0000-0000-000000000001"
+        project = joinpath(dir, "Project.toml")
+        write(project, """
+            [deps]
+            Parent = "$parent_uuid"
+            """)
+        write(joinpath(dir, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.Parent]]
+            deps = ["Dep"]
+            path = "Parent"
+            uuid = "$parent_uuid"
+
+                [deps.Parent.extensions]
+                ParentExt = "Dep"
+
+            [[deps.Dep]]
+            path = "Dep1"
+            uuid = "e2000000-0000-0000-0000-000000000002"
+
+            [[deps.Dep]]
+            path = "Dep2"
+            uuid = "e2000000-0000-0000-0000-000000000003"
+            """)
+        parent = Base.PkgId(Base.UUID(parent_uuid), "Parent")
+        msg = "expected a single entry for \"Dep\" in $(repr(project))"
+        @test_throws msg Base.explicit_manifest_deps_get(project, parent, "Dep")
+        @test_throws msg @lock Base.require_lock Base.insert_extension_triggers(project, parent)
     end
 end
 
@@ -1310,12 +1425,70 @@ end
                 end
                 copy!(LOAD_PATH, [joinpath(dir, "Project.toml")])
             end
+
+            # Array and Dict preferences are compared by value, whatever the table order
+            function use_prefs(prefs)
+                project = joinpath(mktempdir(), "Project.toml")
+                write(project, """
+                [deps]
+                PkgA = "$(pkg_uuid)"
+
+                [preferences.PkgA]
+                $prefs
+                """)
+                copy!(LOAD_PATH, [project])
+            end
+            arr = "arr = [1, 2.0, \"x\"]"
+            tbl = "tbl = {a = 1, b = [true, {c = 1.5}]}"
+            use_prefs("$arr\n$tbl")
+            empty!(Base.COMPILETIME_PREFERENCES)
+            Base.record_compiletime_preference(pkg_uuid, "arr")
+            Base.record_compiletime_preference(pkg_uuid, "tbl")
+            blob = Base.get_preferences_blob()
+            @test !Base.stale_prefs(blob)
+            use_prefs("$tbl\n$arr")
+            @test !Base.stale_prefs(blob)
+            use_prefs("$arr\ntbl = {b = [true, {c = 1.5}], a = 1}")
+            @test !Base.stale_prefs(blob)
+            for changed in ("arr = [1, 2.0]\n$tbl",
+                            "arr = [1, 2.0, \"x\", 3]\n$tbl",
+                            "arr = [1, 2, \"x\"]\n$tbl",
+                            "arr = {a = 1}\n$tbl",
+                            "$arr\ntbl = [1]",
+                            "$arr\ntbl = {a = 1}",
+                            "$arr\ntbl = {a = 1, z = [true, {c = 1.5}]}",
+                            "$arr\ntbl = {a = 1, b = [1, {c = 1.5}]}",
+                            "$arr\ntbl = {a = 1, b = [true, {c = 2.5}]}",
+                            "$arr\ntbl = {a = 1, b = [true, {c = 1.5}], d = 0}")
+                use_prefs(changed)
+                @test Base.stale_prefs(blob)
+            end
+            @test !Base.toml_egal(Dict("a" => 1), IdDict("a" => 1))
+
+            # integers too large for Int128 parse to a new BigInt each time
+            use_prefs("big = 170141183460469231731687303715884105728")
+            empty!(Base.COMPILETIME_PREFERENCES)
+            Base.record_compiletime_preference(pkg_uuid, "big")
+            blob = Base.get_preferences_blob()
+            @test !Base.stale_prefs(blob)
+            use_prefs("big = 170141183460469231731687303715884105729")
+            @test Base.stale_prefs(blob)
         finally
             copy!(LOAD_PATH, old_load_path)
             empty!(Base.COMPILETIME_PREFERENCES)
             merge!(Base.COMPILETIME_PREFERENCES, old_compiletime_prefs)
         end
     end
+
+    # a package adding a broad `!=` method must not invalidate the loading code
+    script = """
+        log = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+        struct NotEq end
+        Base.:(!=)(::NotEq, ::Any) = true
+        ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+        print(any(x -> x isa Core.MethodInstance && x.def isa Method && x.def.name === :stale_prefs, log))
+        """
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == "false"
 end
 
 @testset "Loading with incomplete manifest/depot #45977" begin
@@ -1373,6 +1546,48 @@ end
         finally
             copy!(LOAD_PATH, old_load_path)
             copy!(DEPOT_PATH, old_depot_path)
+        end
+    end
+end
+
+# A package loading something that is not its dependency points at manifests resolved by another julia
+@testset "missing dependency error lists manifests from other julia versions" begin
+    mktempdir() do dir
+        this_version = isempty(VERSION.prerelease) ? string(VERSION) :
+            string(Base.thispatch(VERSION), "-", VERSION.prerelease[1])
+        envs = Dict{String, String}()
+        for (name, julia_version) in (("old", "1.0.0"), ("prerelease", string(Base.thispatch(VERSION), "-zzz")),
+                                      ("current", this_version), ("unversioned", nothing))
+            env = joinpath(dir, name)
+            mkpath(env)
+            write(joinpath(env, "Project.toml"), "[deps]\n")
+            write(joinpath(env, "Manifest.toml"), julia_version === nothing ? "" : """
+                julia_version = "$julia_version"
+                manifest_format = "2.0"
+                """)
+            envs[name] = joinpath(env, "Manifest.toml")
+        end
+        noproject = joinpath(dir, "noproject")
+        mkpath(noproject)
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [joinpath(dir, name) for name in ("old", "prerelease", "current", "unversioned", "noproject")])
+            err = try
+                Base.require(Test, :NotADependency)
+            catch err
+                err
+            end
+            @test err isa ArgumentError
+            @test startswith(err.msg, "Cannot load (`using/import`) module NotADependency into module Test in package Test\n")
+            @test occursin("resolved with a different\n  julia version", err.msg)
+            @test occursin("\n    $(envs["old"]) (v1.0.0)\n", err.msg)
+            @test occursin("\n    $(envs["prerelease"]) (v$(Base.thispatch(VERSION))-zzz)\n", err.msg)
+            @test occursin("\n    $(envs["unversioned"]) (julia version not recorded)\n", err.msg)
+            @test occursin("different DEV version", err.msg) == (this_version == "$(Base.thispatch(VERSION))-DEV")
+            @test occursin("\n    $(envs["current"])\n", err.msg) == (this_version == "$(Base.thispatch(VERSION))-DEV")
+            @test occursin("Try `Pkg.instantiate()`", err.msg)
+        finally
+            copy!(LOAD_PATH, old_load_path)
         end
     end
 end
@@ -1710,6 +1925,70 @@ end
     end
 end
 
+@testset "loading from source again after a failure" begin
+    mktempdir() do dir
+        parent_uuid = "e3000000-0000-0000-0000-000000000001"
+        dep_uuid = "e3000000-0000-0000-0000-000000000002"
+        mkpath(joinpath(dir, "RetryParent", "src"))
+        mkpath(joinpath(dir, "RetryParent", "ext"))
+        mkpath(joinpath(dir, "RetryDep", "src"))
+        write(joinpath(dir, "RetryParent", "Project.toml"), """
+            name = "RetryParent"
+            uuid = "$parent_uuid"
+            [weakdeps]
+            RetryDep = "$dep_uuid"
+            [extensions]
+            RetryExt = "RetryDep"
+            """)
+        write(joinpath(dir, "RetryParent", "src", "RetryParent.jl"), "module RetryParent end\n")
+        extfile = joinpath(dir, "RetryParent", "ext", "RetryExt.jl")
+        write(extfile, "module RetryExt\nerror(\"broken extension\")\nend\n")
+        write(joinpath(dir, "RetryDep", "Project.toml"), """
+            name = "RetryDep"
+            uuid = "$dep_uuid"
+            """)
+        write(joinpath(dir, "RetryDep", "src", "RetryDep.jl"), "module RetryDep end\n")
+        write(joinpath(dir, "RetryBroken.jl"), "module RetryBroken\nerror(\"broken package\")\nend\n")
+        script = """
+            loads_broken() = try Base.require(Main, :RetryBroken); true; catch; false; end
+            loads_broken() && error("broken package loaded")
+            loads_broken() && error("broken package loaded on the second attempt")
+            using RetryParent, RetryDep
+            isext() = Base.get_extension(RetryParent, :RetryExt) isa Module
+            isext() && error("extension loaded")
+            Base.retry_load_extensions()
+            isext() && error("extension loaded on retry")
+            length(Base.EXT_DORMITORY_FAILED) == 1 || error("the failed extension was forgotten")
+            write($(repr(extfile)), "module RetryExt end")
+            Base.retry_load_extensions()
+            isext() || error("extension did not load on retry")
+            isempty(Base.EXT_DORMITORY_FAILED) || error("the extension is still listed as failed")
+            ext = Base.get_extension(RetryParent, :RetryExt)
+            ms = UInt64(1_000_000)
+            Base.print_time_imports_report(ext, 2ms, 1ms, ms ÷ 200)
+            Base.print_time_imports_report(RetryDep, 2ms, UInt64(0), UInt64(0))
+            Base.print_time_imports_report_init(RetryDep, 1, 2ms, 1ms, ms ÷ 2)
+            Base.print_time_imports_report_init(RetryDep, 2, 2ms, UInt64(0), UInt64(0))
+            """
+        # without caches, so that these modules load from source
+        cmd = addenv(`$(Base.julia_cmd()) --compiled-modules=no --startup-file=no --color=no -e $script`,
+                     "JULIA_LOAD_PATH" => dir)
+        out, err = IOBuffer(), IOBuffer()
+        ok = success(pipeline(cmd; stdout=out, stderr=err))
+        errtext = String(take!(err))
+        ok || println(errtext)
+        @test ok
+        @test count("Error during loading of extension RetryExt of RetryParent, use `Base.retry_load_extensions()` to retry", errtext) == 2
+        @test occursin("broken extension", errtext)
+        lines = split(String(take!(out)), '\n'; keepempty=false)
+        @test strip.(lines) == [
+            "2.0 ms  RetryParent → RetryExt 50.00% compilation time (<1% recompilation)",
+            "2.0 ms  RetryDep",
+            "┌ 2.0 ms RetryDep.__init__() 50.00% compilation time (50% recompilation)",
+            "├ 2.0 ms RetryDep.__init__()"]
+    end
+end
+
 pkgimage(val) = val == 1 ? `--pkgimages=yes` : `--pkgimages=no`
 opt_level(val) = `-O$val`
 debug_level(val) = `-g$val`
@@ -2041,6 +2320,43 @@ end
     end
 end
 
+@testset "coverage of an inlined function with a compiled copy in a package image" begin
+    mkdepottempdir() do depot
+        mktempdir() do dir
+            dir = realpath(dir) # the tracked path is resolved but the source paths are not
+            pkgdir = joinpath(dir, "CovInline")
+            mkpath(joinpath(pkgdir, "src"))
+            write(joinpath(pkgdir, "Project.toml"), """
+                name = "CovInline"
+                uuid = "3c9f1e2a-5b7d-4e8f-a0b1-c2d3e4f5a6b7"
+                version = "0.1.0"
+                """)
+            srcfile = joinpath(pkgdir, "src", "CovInline.jl")
+            write(srcfile, """
+                module CovInline
+                @inline function inner(x)
+                    y = x + 1
+                    return y * 2
+                end
+                @noinline outer(x) = inner(x)
+                precompile(outer, (Int,))
+                precompile(inner, (Int,))
+                end
+                """)
+            outfile = joinpath(dir, "cov.info")
+            sep = Sys.iswindows() ? ';' : ':'
+            cmd = `$(Base.julia_cmd()[1]) --startup-file=no --pkgimages=yes --code-coverage=$outfile --code-coverage=@$dir -e 'using CovInline; CovInline.outer(parse(Int, "1"))'`
+            @test success(addenv(cmd, "JULIA_DEPOT_PATH" => depot * sep, "JULIA_LOAD_PATH" => dir * sep * "@stdlib"))
+            record = only(filter(contains("SF:" * srcfile), split(read(outfile, String), "end_of_record")))
+            hits = Dict(parse(Int, m[1]) => parse(Int, m[2]) for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
+            # the inlined call covers the definition line, as a call to the compiled copy would
+            for ln in (2, 3, 4)
+                @test get(hits, ln, 0) > 0 context=ln
+            end
+        end
+    end
+end
+
 @testset "CacheFlags coverage path" begin
     cf = Base.CacheFlags(Base.CacheFlags(coverage=1); coverage_path="/a \"b\"")
     @test parse(Base.CacheFlags, sprint(show, cf)) == cf
@@ -2052,6 +2368,91 @@ end
     @test Base.CacheFlags(cf; opt_level=0).coverage_path == cf.coverage_path
     # the path is no part of the cache's identity
     @test Base.compilecache_path(Base.PkgId("Foo"), ""; flags=cf) == Base.compilecache_path(Base.PkgId("Foo"), ""; flags=plain)
+    for malformed in ("CacheFlags", "CacheFlags(1)", "Flags(; opt_level=1)", "CacheFlags(; coverage_path=1)", "CacheFlags(; opt_level)")
+        @test_throws "Malformed CacheFlags string" parse(Base.CacheFlags, malformed)
+    end
+end
+
+@testset "path coverage helpers" begin
+    # a tracked path selects whole path components
+    tracked = abspath("cov", "pkg")
+    @test Base.path_is_tracked(tracked, tracked)
+    @test Base.path_is_tracked(joinpath(tracked, "src", "a.jl"), tracked)
+    @test Base.path_is_tracked(joinpath(tracked, "a.jl"), tracked * "/")
+    @test !Base.path_is_tracked(tracked * "2", tracked)
+    @test !Base.path_is_tracked(dirname(tracked), tracked)
+    @test Base.path_is_tracked(tracked, "/")
+    @test !Base.path_is_tracked(joinpath("rel", "a.jl"), "/")
+
+    # plain caches can inline system image code, so tracking any of it rules them out
+    sources = Base.sysimage_sources()
+    basedir = abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base")
+    untracked = mktempdir()
+    @test Base.tracked_path_overlaps_sysimage(basedir)
+    @test Base.tracked_path_overlaps_sysimage(joinpath(basedir, "loading.jl"))
+    @test Base.tracked_path_overlaps_sysimage(dirname(basedir))
+    @test Base.tracked_path_overlaps_sysimage(untracked) == (sources === nothing)
+    sources === nothing || for pkg in Base._sysimage_modules
+        pkg.uuid === nothing && continue
+        @test Base.tracked_path_overlaps_sysimage(Base.pkgorigins[pkg].path)
+    end
+
+    requested = Base.CacheFlags(Base.CacheFlags(); coverage=1, coverage_path=untracked)
+    plain = Base.CacheFlags(requested; coverage=0)
+    plain_sysimage = @ccall(jl_sysimage_coverage_config()::UInt8) == 0
+    @test Base.can_use_plain_coverage_cache(requested, plain) == (plain_sysimage && sources !== nothing)
+    @test !Base.can_use_plain_coverage_cache(requested, requested)
+    @test !Base.can_use_plain_coverage_cache(plain, plain)
+    @test !Base.can_use_plain_coverage_cache(Base.CacheFlags(requested; coverage_path=basedir), plain)
+    @test !Base.can_use_plain_coverage_cache(Base.CacheFlags(requested; coverage_path=nothing), plain)
+
+    build_id = rand(UInt128)
+    @test !Base.plain_coverage_cache_accepted(build_id)
+    Base.accept_plain_coverage_cache(build_id)
+    @test Base.plain_coverage_cache_accepted(build_id)
+    @test !Base.plain_coverage_cache_accepted(build_id ⊻ 1)
+    @test !Base.plain_coverage_cache_accepted(build_id ⊻ (UInt128(1) << 64))
+end
+
+@testset "show(::ImageTarget)" begin
+    @test sprint(show, Base.ImageTarget("generic", Int32(0), Int32(-1), "", "", "")) == "generic; flags=0"
+    @test sprint(show, Base.ImageTarget("cpu", Int32(3), Int32(0), "-a", "+b", "+c")) ==
+        "cpu,-a; base=0; flags=3; features_en=(+b); features_dis=(+c)"
+    current = first(Base.current_image_targets())
+    @test startswith(sprint(show, current), current.name)
+end
+
+@testset "isprecompilable and inactive precompile statements" begin
+    identity_any(x) = x
+    only_int(x::Int) = x
+    @test Base.isprecompilable(identity_any, (Int,))
+    @test Base.isprecompilable(Tuple{typeof(identity_any), Int})
+    @test !Base.isprecompilable(identity_any, (Any,)) # would specialize, so not compilable as written
+    @test Base.isprecompilable(only_int, (Any,)) # narrows to the only method
+    @test !Base.isprecompilable(only_int, (String,))
+    @test !Base.isprecompilable(identity_any, (Int, Int))
+
+    @test Base.ENABLE_PRECOMPILE_WARNINGS[] == false
+    Base.ENABLE_PRECOMPILE_WARNINGS[] = true
+    try
+        @test !(@test_logs (:warn, "Inactive precompile statement") precompile(only_int, (String,)))
+        @test (@test_logs precompile(only_int, (Int,)))
+    finally
+        Base.ENABLE_PRECOMPILE_WARNINGS[] = false
+    end
+end
+
+@testset "registering a different module under a loaded name warns" begin
+    key = Base.PkgId("ReplacedRootModule")
+    m1, m2 = Module(:ReplacedRootModule), Module(:ReplacedRootModule)
+    try
+        Base.register_root_module(m1)
+        @test_logs Base.register_root_module(m1)
+        @test_logs (:warn, "Replacing module `ReplacedRootModule`") Base.register_root_module(m2)
+        @test Base.root_module(key) === m2
+    finally
+        Base.unreference_module(key)
+    end
 end
 
 # with an instrumented system image, path coverage cannot use plain caches
@@ -2132,14 +2533,14 @@ end
             [[deps.CovDep]]
             deps = ["Printf"]
             path = $(repr(depdir))
-            syntax.julia_version = "$(VERSION.major).$(VERSION.minor)"
+            syntax.julia_version = "$(join(Base.OLDEST_EDITION, '.'))"
             uuid = "7d5e6c1a-3f0b-4e8e-9d6c-1a2b3c4d5e6f"
             version = "0.1.0"
 
             [[deps.CovTop]]
             deps = ["CovDep"]
             path = $(repr(topdir))
-            syntax.julia_version = "$(VERSION.major).$(VERSION.minor)"
+            syntax.julia_version = "$(join(Base.OLDEST_EDITION, '.'))"
             uuid = "0b9d4d0e-6a43-4c86-9d2b-3c8e1f7a5b42"
             version = "0.1.0"
 
@@ -2479,6 +2880,50 @@ end
     end
 end
 
+@testset "dependency loaded with require_stdlib is checked against the environment" begin
+    # A manifest from before JuliaSyntaxHighlighting changed its UUID (#59365).
+    depot_path = mkdepottempdir()
+    dir = mktempdir()
+    write(joinpath(dir, "Project.toml"), """
+        [deps]
+        InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+        """)
+    write(joinpath(dir, "Manifest.toml"), """
+        manifest_format = "2.0"
+
+        [[deps.InteractiveUtils]]
+        deps = ["Markdown"]
+        uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+
+        [[deps.Markdown]]
+        deps = ["JuliaSyntaxHighlighting", "StyledStrings"]
+        uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+
+        [[deps.JuliaSyntaxHighlighting]]
+        deps = ["StyledStrings"]
+        uuid = "dc6e5ff7-fb65-4e79-a425-ec3bc9c03011"
+
+        [[deps.StyledStrings]]
+        uuid = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
+        """)
+    # Test itself depends on Markdown, so it cannot be loaded in this environment.
+    script = """
+    Markdown_key = Base.PkgId(Base.UUID("d6f4376e-aef5-505a-96c1-9c027394607a"), "Markdown")
+    Base.require_stdlib(Markdown_key)
+    loaded = try
+        @eval using InteractiveUtils
+        true
+    catch
+        false
+    end
+    exit(loaded || haskey(Base.loaded_modules, Markdown_key))
+    """
+    sep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --check-bounds=auto --startup-file=no --project=$dir -e $script`,
+                 "JULIA_DEPOT_PATH" => depot_path * sep, "JULIA_LOAD_PATH" => "@$(sep)@stdlib")
+    @test success(pipeline(cmd; stdout, stderr=devnull))
+end
+
 # Test `import Package as M`
 module M57965
     import Random as R
@@ -2508,8 +2953,8 @@ module M58272_to end
         @test invokelatest(getglobal, (@eval (using Versioned2; Versioned2)), :ver) == v"1.14"
         # Inherited from compat.julia = "1.13-2"
         @test invokelatest(getglobal, (@eval (using Versioned3; Versioned3)), :ver) == v"1.13"
-        # No syntax.julia_version, falls back to current VERSION
-        @test invokelatest(getglobal, (@eval (using Versioned4; Versioned4)), :ver) == VersionNumber(VERSION.major, VERSION.minor)
+        # No syntax.julia_version or compat.julia, falls back to OLDEST_EDITION
+        @test invokelatest(getglobal, (@eval (using Versioned4; Versioned4)), :ver) == VersionNumber(Base.OLDEST_EDITION...)
         # Inherited from compat.julia = "1.14-2"
         @test invokelatest(getglobal, (@eval (using Versioned5; Versioned5)), :ver) == v"1.14"
     finally

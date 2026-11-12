@@ -16,6 +16,8 @@ new_unseekable_buffer() = Base.GenericIOBuffer(Memory{UInt8}(), true, true, fals
 @testset "Basic tests" begin
     @test_throws ArgumentError IOBuffer(;maxsize=-1)
     @test_throws ArgumentError IOBuffer([0x01]; maxsize=-1)
+    @test_throws ArgumentError IOBuffer(Memory{UInt8}(undef, 2); write=true, maxsize=-1)
+    @test_throws ArgumentError IOBuffer(UInt8[]; write=true, maxsize=-1)
 
     # Test that sizehint actually will sizehint the vector,
     v = UInt8[]
@@ -349,6 +351,26 @@ end
     write(buf, "abcde")
     read(buf, UInt16)
     @test takestring!(buf) == "cde"
+
+    # The mark must not bring back already-read bytes
+    buf = new_unseekable_buffer()
+    write(buf, "abcdef")
+    mark(buf)
+    read(buf, UInt16)
+    @test takestring!(buf) == "cdef"
+
+    buf = new_unseekable_buffer()
+    write(buf, "abcdef")
+    closewrite(buf)
+    mark(buf)
+    read(buf, UInt16)
+    @test takestring!(buf) == "cdef"
+
+    buf = new_unseekable_buffer()
+    write(buf, "abcdef")
+    mark(buf)
+    read(buf, UInt16)
+    @test Base.unsafe_takestring!(buf) == "cdef"
 end
 
 @testset "Read/write readonly IOBuffer" begin
@@ -614,6 +636,113 @@ end
     @test flag[] == true
 end
 
+# Yield until a task reading from `s` is parked on its condition, or has failed.
+function wait_for_bufferstream_reader(s::Base.BufferStream, reader::Task)
+    while !istaskdone(reader) && @lock(s.cond, isempty(s.cond))
+        yield()
+    end
+end
+
+@testset "BufferStream writes" begin
+    s = Base.BufferStream()
+    @test write(s, 0x41) == 1
+    @test write(s, "BC") == 2
+    @test write(s, SubString("xDx", 2, 2)) == 1
+    @test write(s, UInt8[0x45]) == 1
+    @test write(s, Int32[1, 2]) == 8
+    @test write(s, UInt16[3 4]) == 4
+    @test_throws "non-isbits" write(s, Any[1])
+    @test String(read(s, 5)) == "ABCDE"
+    @test reinterpret(Int32, read(s, 8)) == [1, 2]
+    @test reinterpret(UInt16, read(s, 4)) == [3, 4]
+    close(s)
+    @test_throws Base.IOError write(s, 0x41)
+    @test_throws Base.IOError flush(s)
+    @test eof(s)
+    @test_throws EOFError read(s, UInt8)
+end
+
+@testset "BufferStream skip" begin
+    s = Base.BufferStream()
+    write(s, "abc")
+    @test skip(s, 1) === s
+    @test read(s, UInt8) == UInt8('b')
+end
+
+@testset "BufferStream writepartial" begin
+    s = Base.BufferStream()
+    @test writepartial(s, "ab") == 2
+    @test writepartial(s, SubString("xcx", 2, 2)) == 1
+    @test writepartial(s, UInt8[0x64]) == 1
+    @test writepartial(s, UInt8[0x65]; cancel=nothing) == 1
+    @test writepartial(s, [0x0066, 0x0067]) == 4
+    close(s)
+    @test read(s) == [b"abcde"; reinterpret(UInt8, [0x0066, 0x0067])]
+end
+
+@testset "BufferStream large read does not drop a longer write" begin
+    nb = Base.SZ_UNBUFFERED_IO + 100
+    data = rand(UInt8, 3nb)
+    s = Base.BufferStream()
+    a = UInt8[]
+    reader = @async readbytes!(s, a, nb)
+    wait_for_bufferstream_reader(s, reader)
+    @test write(s, data) == length(data)
+    @test fetch(reader) == nb
+    @test a == data[1:nb]
+    close(s)
+    @test read(s) == data[nb+1:end]
+end
+
+@testset "BufferStream buffer_writes" begin
+    # The bytes are readable at once, but a parked reader only wakes on flush or close.
+    s = Base.BufferStream()
+    @test Base.buffer_writes(s) === s
+    reader = @async read(s, UInt8)
+    wait_for_bufferstream_reader(s, reader)
+    write(s, "ab")
+    @test bytesavailable(s) == 2
+    yield()
+    @test !istaskdone(reader)
+    flush(s)
+    @test fetch(reader) == UInt8('a')
+    @test read(s, UInt8) == UInt8('b')
+
+    reader = @async read(s)
+    wait_for_bufferstream_reader(s, reader)
+    write(s, "cd")
+    close(s)
+    @test fetch(reader) == b"cd"
+end
+
+@testset "BufferStream blocked reads" begin
+    function readbytes_short(s)
+        a = zeros(UInt8, 8)
+        return readbytes!(s, a, 8), a
+    end
+    function readbytes_grow(s)
+        a = UInt8[]
+        return readbytes!(s, a, 100), a
+    end
+    @testset for (f, expected) in (
+            (s -> readuntil(s, UInt8('d')), b"abc"),
+            (s -> readuntil(s, UInt8('x'); keep=true), b"abcdef\n"),
+            (readline, "abcdef"),
+            (read, b"abcdef\n"),
+            (s -> read(s, 100), b"abcdef\n"),
+            (readbytes_short, (7, [b"abcdef\n"; 0x00])),
+            (readbytes_grow, (7, b"abcdef\n")))
+        s = Base.BufferStream()
+        reader = @async f(s)
+        wait_for_bufferstream_reader(s, reader)
+        write(s, "abc")
+        yield()
+        write(s, "def\n")
+        close(s)
+        @test fetch(reader) == expected
+    end
+end
+
 @test flush(IOBuffer()) === nothing # should be a no-op
 
 # pr #19461
@@ -707,6 +836,24 @@ end
     @test_throws MethodError(peek, (io, Union{})) peek(io, Union{})
     @test which(peek, (typeof(io), Type{Union{}})).sig == Tuple{typeof(peek), IO, Type{Union{}}, Vararg}
     close(io)
+end
+
+# Multi-byte peek respects view offsets and shifted Array storage.
+@testset "dense multi-byte peek" begin
+    value = UInt32(0x12345678)
+    data = [0xaa, reinterpret(NTuple{4,UInt8}, value)..., 0xbb]
+    padded = [0xcc, 0xdd, data..., 0xee]
+    paddedmem = copyto!(Memory{UInt8}(undef, length(padded)), padded)
+    shifted = [0xcc, 0xdd, data...]
+    resize!(shifted, length(data); first=true)
+    for storage in (view(padded, 3:length(padded)-1),
+                    view(paddedmem, 3:length(paddedmem)-1), shifted)
+        io = Base.GenericIOBuffer{typeof(storage)}(
+            storage, true, false, true, false, typemax(Int), false)
+        seek(io, 1)
+        @test peek(io, UInt32) === value
+        @test position(io) == 1
+    end
 end
 
 @testset "bytesavailable devnull" begin

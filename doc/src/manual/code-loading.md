@@ -438,41 +438,51 @@ Preferences in environments higher up in the environment stack get overridden by
 This allows depot-wide preference defaults to exist, with active projects able to merge or even completely overwrite these inherited preferences.
 See the docstring for `Preferences.set_preferences!()` for the full details of how to set preferences to allow or disallow merging.
 
-### [Syntax Versioning](@id syntax-versioning)
+### [Editions](@id loading-editions)
 
-Syntax versioning allows packages to specify which version of Julia's syntax they use. In particular, different
-packages can use different versions of the Julia syntax. This allows evolution of Julia's syntax in a non-breaking
-way, while allowing packages to upgrade at their own pace. The syntax version is determined from the package's
-corresponding Project.toml and propagates to all modules defined in the package.
+Packages may specify what edition of julia they use. This allows evolution of
+the Julia language in a non-breaking way, while allowing packages to upgrade at
+their own pace. The edition is determined from the package's corresponding
+Project.toml and propagates to all modules defined in the package.
 
-#### Syntax Version Determination
+Each stable edition is named after the first minor julia version it's supported
+in (which is unique per edition).  Not every minor release has a corresponding
+edition.
 
-The syntax version for a package is determined by the loading mechanism in the following order of precedence:
+#### Edition Determination
 
-1. If a `syntax.julia_version` field is present in the project file, it is used directly:
+The edition of a package is determined by the loading mechanism in the following
+order of precedence:
+
+1. If a `syntax.julia_version` field is present in the project file, it is used
+   directly:
    ```toml
    name = "MyPackage"
    uuid = "..."
-   syntax.julia_version = "1.14"
+   syntax.julia_version = "1.14" # edition 1.14
    ```
 
-2. Otherwise, if a `[compat]` section specifies a Julia version constraint, the minimum compatible version is used:
+2. Otherwise, if a `[compat]` section specifies a Julia version constraint, the
+   minimum compatible version is used:
    ```toml
    [compat]
-   julia = "1.13-2"  # implies syntax version 1.13.0
+   julia = "1.13 - 2"  # implies edition 1.13
    ```
 
-3. If neither is specified, the current Julia version is used.
+3. Otherwise, the oldest supported edition is used.
 
 #### In scripts and the REPL
 
-Scripts and the REPL use the active project's syntax version. This determination happens:
+Scripts and the REPL also default to the active project's edition, but fall back
+to the newest edition instead of the oldest.  This determination happens:
 
 1. At startup after processing `--project`
 2. Before parsing any REPL input, once for each prompt
 
-In particular, a manual `set_active_project` in a script will not change the syntax version used for the rest of the script. However, doing so at the REPL (explicitly or implicitly via the Pkg
-REPL mode) will affect the syntax version used to parse the *next* REPL input.
+In particular, a manual `set_active_project` in a script will not change the
+edition used for the rest of the script. However, doing so at the REPL
+(explicitly or implicitly via the Pkg REPL mode) will affect the edition used to
+parse the *next* REPL input.
 
 ## Conclusion
 

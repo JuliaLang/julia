@@ -110,6 +110,20 @@ is_driver_entry(frame) = !frame.from_c &&
     (startswith(String(frame.func), "__repl_entry") ||
      startswith(String(frame.func), "__script_entry"))
 
+is_driver_exit(frame) = !frame.from_c && startswith(String(frame.func), "__script_exit")
+
+function remove_driver_spans!(bt::Vector{StackFrame}, unpaired::Bool)
+    while (exit_ind = findlast(is_driver_exit, bt)) !== nothing
+        entry_ind = findprev(is_driver_entry, bt, exit_ind)
+        if entry_ind === nothing
+            unpaired && deleteat!(bt, 1:exit_ind)
+            break
+        end
+        deleteat!(bt, entry_ind:exit_ind)
+    end
+    return bt
+end
+
 # `eval`/`include` machinery a driver entry runs user code through; directly
 # above the cut these frames cannot belong to user code
 function is_driver_machinery(frame)
@@ -122,9 +136,15 @@ end
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
         bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
+        remove_driver_spans!(bt, true)
         # remove REPL/driver frames from interactive printing
         eval_ind = findlast(is_driver_entry, bt)
         if eval_ind !== nothing
+            while eval_ind > 1 && bt[eval_ind-1].inlined &&
+                    bt[eval_ind-1].func === Symbol("macro expansion") &&
+                    bt[eval_ind-1].pointer == bt[eval_ind].pointer
+                eval_ind -= 1
+            end
             deleteat!(bt, eval_ind:length(bt))
             while !isempty(bt) && is_driver_machinery(bt[end])
                 pop!(bt)
@@ -360,6 +380,13 @@ function exec_options(opts)
     return repl
 end
 
+function uninit_exec_options()
+    global PROGRAM_FILE = ""
+    global have_color = nothing
+    global is_interactive = false
+    nothing
+end
+
 function _global_julia_startup_file()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
     # If it is not found, then continue on to the relative path based on Sys.BINDIR
@@ -564,17 +591,12 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
-const main_parser = Base.ScopedValues.ScopedValue{Any}(Base.VersionedParse(Base.VERSION_EDITION))
-function var"#_internal_julia_parse"(args...)
-    main_parser[](args...)
-end
-
 # Used for memoizing require_stdlib of these modules
 global InteractiveUtils::Module
 global Distributed::Module
 
 # weakly exposes ans and err variables to Main
-export ans, err, var"#_internal_julia_parse"
+export ans, err
 end
 
 function should_use_main_entrypoint()
@@ -650,15 +672,26 @@ function init_frontend()
     end
 end
 
+function uninit_frontend()
+    JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
+    JuliaLowering.activate!(false; freeze_world_age=false)
+    nothing
+end
+
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
     # clear any postoutput hooks that were saved in the sysimage
     empty!(Base.postoutput_hooks)
+    if generating_output(false)
+        # `__init__` does not run when writing a system image, so set up enough to run user
+        # code here, and undo it before the image is written
+        __init_build()
+        atexit(__uninit_build)
+    end
     local ret = 0
-    # `--project` has been processed at this point - latch the active project's syntax
-    # version and use it for `-L`, `argfile`, etc. If launched, the REPL will re-evaluate
-    # at each prompt.
+    # `--project` has been processed, so use its edition if specified
+    Core.set_edition(Main, edition_for_active_project(LATEST_EDITION))
     # The whole foreground execution runs as a ^C episode: a SIGINT (with
     # exit-on-sigint disabled) cancels the episode token's scope. An
     # interactive session installs its own per-evaluation episodes later
@@ -666,7 +699,7 @@ function _start()
     # standalone root, not a session child - see the `sigint_new_episode!`
     # docstring.
     sigint_tok = sigint_new_episode!()
-    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() CANCEL_TOKEN=>sigint_tok try
+    @Base.ScopedValues.with CANCEL_TOKEN=>sigint_tok try
         repl_was_requested = exec_options(JLOptions())
         if invokelatest(should_use_main_entrypoint) && !is_interactive
             main = invokelatest(getglobal, Main, :main)
@@ -714,7 +747,6 @@ function _start()
             e isa IOError || rethrow()
         end
     end
-    generating_output(false) && init_frontend()
     return ret
 end
 

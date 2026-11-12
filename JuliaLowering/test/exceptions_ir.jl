@@ -57,7 +57,7 @@ end
 8   (pop_exception %₂)
 9   (return 20)
 10  (pop_exception %₂)
-11  slot₁/try_result
+11  slot₁/
 12  (leave %₁)
 13  (return %₁₁)
 14  (pop_exception %₁)
@@ -115,19 +115,18 @@ let
     end
 end
 #---------------------
-1   (newvar slot₁/z)
-2   (enter label₈)
-3   TestMod.a
-4   (leave %₂)
-5   TestMod.c
-6   (= slot₂/try_result %₅)
-7   (goto label₁₁)
-8   TestMod.b
-9   (= slot₂/try_result %₈)
-10  (pop_exception %₂)
-11  slot₂/try_result
-12  (= slot₁/z %₁₁)
-13  (return %₁₁)
+1   (enter label₇)
+2   TestMod.a
+3   (leave %₁)
+4   TestMod.c
+5   (= slot₂/ %₄)
+6   (goto label₁₀)
+7   TestMod.b
+8   (= slot₂/ %₇)
+9   (pop_exception %₁)
+10  slot₂/
+11  (= slot₁/z %₁₀)
+12  (return %₁₀)
 
 ########################################
 # try/catch/else, not value/tail
@@ -161,9 +160,9 @@ finally
 end
 #---------------------
 1   (enter label₇)
-2   (= slot₁/finally_tag -1)
-3   (= slot₂/returnval_via_finally TestMod.a)
-4   (= slot₁/finally_tag 1)
+2   (= slot₁/ -1)
+3   (= slot₂/ TestMod.a)
+4   (= slot₁/ 1)
 5   (leave %₁)
 6   (goto label₁₁)
 7   TestMod.b
@@ -171,7 +170,7 @@ end
 9   (pop_exception %₁)
 10  (return core.nothing)
 11  TestMod.b
-12  slot₂/returnval_via_finally
+12  slot₂/
 13  (return %₁₂)
 
 ########################################
@@ -215,21 +214,20 @@ let
     end
 end
 #---------------------
-1   (newvar slot₁/z)
-2   (enter label₈)
-3   (= slot₃/finally_tag -1)
-4   TestMod.a
-5   (= slot₂/try_result %₄)
-6   (leave %₂)
-7   (goto label₁₂)
-8   TestMod.b
-9   (call top.rethrow)
-10  (pop_exception %₂)
-11  (return core.nothing)
-12  TestMod.b
-13  slot₂/try_result
-14  (= slot₁/z %₁₃)
-15  (return %₁₃)
+1   (enter label₇)
+2   (= slot₃/ -1)
+3   TestMod.a
+4   (= slot₂/ %₃)
+5   (leave %₁)
+6   (goto label₁₁)
+7   TestMod.b
+8   (call top.rethrow)
+9   (pop_exception %₁)
+10  (return core.nothing)
+11  TestMod.b
+12  slot₂/
+13  (= slot₁/z %₁₂)
+14  (return %₁₂)
 
 ########################################
 # basic try/finally, not value/tail
@@ -243,7 +241,7 @@ begin
 end
 #---------------------
 1   (enter label₆)
-2   (= slot₁/finally_tag -1)
+2   (= slot₁/ -1)
 3   TestMod.a
 4   (leave %₁)
 5   (goto label₁₀)
@@ -268,9 +266,9 @@ end
 #---------------------
 1   (gotoifnot true label₁₉)
 2   (enter label₁₀)
-3   (= slot₂/finally_tag -1)
+3   (= slot₂/ -1)
 4   TestMod.a
-5   (= slot₂/finally_tag 1)
+5   (= slot₂/ 1)
 6   (leave %₂)
 7   (goto label₁₄)
 8   (leave %₂)
@@ -280,16 +278,16 @@ end
 12  (pop_exception %₂)
 13  (return core.nothing)
 14  TestMod.b
-15  (call core.=== slot₂/finally_tag 1)
+15  (call core.=== slot₂/ 1)
 16  (gotoifnot %₁₅ label₁₈)
 17  (goto label₂₀)
 18  (goto label₁)
-19  (= slot₁/loop-exit_result core.nothing)
-20  (isdefined slot₁/loop-exit_result)
+19  (= slot₁/ core.nothing)
+20  (isdefined slot₁/)
 21  (gotoifnot %₂₀ label₂₃)
 22  (goto label₂₄)
-23  (= slot₁/loop-exit_result core.nothing)
-24  slot₁/loop-exit_result
+23  (= slot₁/ core.nothing)
+24  slot₁/
 25  (return %₂₄)
 
 ########################################
@@ -303,17 +301,17 @@ finally
 end
 #---------------------
 1   (enter label₁₅)
-2   (= slot₁/finally_tag -1)
+2   (= slot₁/ -1)
 3   (enter label₈)
 4   TestMod.a
-5   (= slot₂/try_result %₄)
+5   (= slot₂/ %₄)
 6   (leave %₃)
 7   (goto label₁₁)
 8   TestMod.b
-9   (= slot₂/try_result %₈)
+9   (= slot₂/ %₈)
 10  (pop_exception %₃)
-11  (= slot₃/returnval_via_finally slot₂/try_result)
-12  (= slot₁/finally_tag 1)
+11  (= slot₃/ slot₂/)
+12  (= slot₁/ 1)
 13  (leave %₁)
 14  (goto label₁₉)
 15  TestMod.c
@@ -321,7 +319,7 @@ end
 17  (pop_exception %₁)
 18  (return core.nothing)
 19  TestMod.c
-20  slot₃/returnval_via_finally
+20  slot₃/
 21  (return %₂₀)
 
 ########################################
@@ -340,34 +338,34 @@ finally
 end
 #---------------------
 1   (enter label₃₂)
-2   (= slot₁/finally_tag -1)
+2   (= slot₁/ -1)
 3   (enter label₁₅)
-4   (= slot₃/finally_tag -1)
+4   (= slot₃/ -1)
 5   TestMod.x
 6   (gotoifnot %₅ label₁₁)
-7   (= slot₄/returnval_via_finally TestMod.a)
-8   (= slot₃/finally_tag 1)
+7   (= slot₄/ TestMod.a)
+8   (= slot₃/ 1)
 9   (leave %₃)
 10  (goto label₂₁)
 11  TestMod.b
-12  (= slot₂/try_result %₁₁)
+12  (= slot₂/ %₁₁)
 13  (leave %₃)
 14  (goto label₂₁)
 15  TestMod.c
 16  (call top.rethrow)
-17  (= slot₁/finally_tag 1)
+17  (= slot₁/ 1)
 18  (pop_exception %₃)
 19  (leave %₁)
 20  (goto label₃₆)
 21  TestMod.c
-22  (call core.=== slot₃/finally_tag 1)
+22  (call core.=== slot₃/ 1)
 23  (gotoifnot %₂₂ label₂₈)
-24  (= slot₅/returnval_via_finally slot₄/returnval_via_finally)
-25  (= slot₁/finally_tag 2)
+24  (= slot₅/ slot₄/)
+25  (= slot₁/ 2)
 26  (leave %₁)
 27  (goto label₃₆)
-28  (= slot₆/returnval_via_finally slot₂/try_result)
-29  (= slot₁/finally_tag 3)
+28  (= slot₆/ slot₂/)
+29  (= slot₁/ 3)
 30  (leave %₁)
 31  (goto label₃₆)
 32  TestMod.d
@@ -375,13 +373,13 @@ end
 34  (pop_exception %₁)
 35  (return core.nothing)
 36  TestMod.d
-37  (call core.=== slot₁/finally_tag 3)
+37  (call core.=== slot₁/ 3)
 38  (gotoifnot %₃₇ label₄₁)
-39  slot₆/returnval_via_finally
+39  slot₆/
 40  (return %₃₉)
-41  (call core.=== slot₁/finally_tag 2)
+41  (call core.=== slot₁/ 2)
 42  (gotoifnot %₄₁ label₄₅)
-43  slot₅/returnval_via_finally
+43  slot₅/
 44  (return %₄₃)
 45  (return core.nothing)
 

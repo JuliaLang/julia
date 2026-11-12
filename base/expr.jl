@@ -625,7 +625,6 @@ The following `setting`s are supported.
 - `:noub`
 - `:noub_if_noinbounds`
 - `:nortcall`
-- `:reset_safe`
 - `:foldable`
 - `:removable`
 - `:total`
@@ -868,25 +867,6 @@ the following other `setting`s:
     recommended over the use of `:total`.
 
 ---
-## `:reset_safe`
-
-The `:reset_safe` asserts that it is safe to abandon execution of the annotated
-function at any point. For functions so inferred, the compiler may extend the
-reset region of a cancellation point through the `:reset_safe` regions. It thus
-in particular implies `:effect_free`, but is a stronger assertion. For example,
-an `:effect_free` function could in principle take a read-only lock (under appropriate
-assumptions on how this is implemented and annotated), but a `:reset_safe` function
-may not, because it could be abandoned inside the critical section.
-
-The same also applies to many implicitly inserted intrinsics and thus codegen for
-a `:reset_safe` function requires cooperation by the code generator to uphold the
-invariant throughout the entire body of the generated code.
-
-As such, annotating a function as `:reset_safe` is currently ignored as an effect
-override and will only apply to [`@ccall`](@ref) sites. See the ccall documentation
-for further details on this interaction.
-
----
 ## Negated effects
 
 Effect names may be prefixed by `!` to indicate that the effect should be removed
@@ -897,24 +877,9 @@ macro assume_effects(args...)
     lastex = args[end]
     settings = args[begin:end-1]
     if isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
-        # `:reset_safe` is a foreigncall-only setting (it marks the call for
-        # the cancellation lowering, not the enclosing method): peel it off
-        # and carry it in a dedicated bit above the standard effects
-        # overrides in the `@ccall_effects` word.
-        reset_safe = false
-        rest = ()
-        for st in settings
-            if st === QuoteNode(:reset_safe)
-                reset_safe = true
-            else
-                rest = (rest..., st)
-            end
-        end
-        override = compute_assumed_settings(rest)
-        word = encode_effects_override(override)
-        reset_safe && (word |= CCALL_EFFECT_RESET_SAFE)
+        override = compute_assumed_settings(settings)
         lastex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
-        insert!(lastex.args, 3, word)
+        insert!(lastex.args, 3, encode_effects_override(override))
         return esc(lastex)
     end
     override = compute_assumed_settings(settings)
@@ -988,9 +953,6 @@ function EffectsOverride(
 end
 
 const NUM_EFFECTS_OVERRIDES = 11 # sync with julia.h
-
-# `:reset_safe` is ccall_only at the moment.
-const CCALL_EFFECT_RESET_SAFE = 0x0800
 
 function compute_assumed_setting(override::EffectsOverride, @nospecialize(setting), val::Bool=true)
     if isexpr(setting, :call) && setting.args[1] === :(!)
@@ -1187,7 +1149,6 @@ function pushmeta!(ex::Expr, tag::Union{Symbol,Expr})
 end
 
 popmeta!(body, sym) = _getmeta(body, sym, true)
-peekmeta(body, sym) = _getmeta(body, sym, false)
 
 function _getmeta(body::Expr, sym::Symbol, delete::Bool)
     body.head === :block || return false, []
@@ -1884,8 +1845,8 @@ quoted(@nospecialize(x)) = isa_ast_node(x) ? QuoteNode(x) : x
 
 # Implementation of generated functions
 function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool, loc::LineNumberNode)
-    ci = ccall(:jl_fl_lower, Any, (Any, Any, Ptr{UInt8}, Csize_t, Csize_t, Cint),
-               ex, defmod, loc.file, loc.line, typemax(Csize_t), 0)[1]
+    ci = ccall(:jl_fl_lower, Any, (Any, Any, Csize_t, Cint, Any),
+               defmod, ex, typemax(Csize_t), 0, loc)[1]
     if !isa(ci, CodeInfo)
         if isa(ci, Expr) && ci.head === :error
             msg = ci.args[1]
@@ -1916,17 +1877,15 @@ function (g::Core.GeneratedFunctionStub)(world::UInt, source::Method, @nospecial
     body = g.gen(args...)
     file = source.file
     file isa Symbol || (file = :none)
-    loc = LineNumberNode(Int(source.line), source.file)
+    loc = LineNumberNode(Int(source.line), file)
     lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
                Expr(:var"scope-block",
-                    Expr(:block,
-                         loc,
-                         Expr(:meta, :push_loc, file, :var"@generated body"),
-                         Expr(:return, Expr(:toplevel_pure, body)),
-                         Expr(:meta, :pop_loc))))
-    spnames = g.spnames
+                    Expr(:block, loc, Expr(:return, body))))
+    if g.spnames !== Core.svec()
+        lam = Expr(Symbol("with-static-parameters"), lam, g.spnames...)
+    end
     return generated_body_to_codeinfo(
-        spnames === Core.svec() ? lam : Expr(Symbol("with-static-parameters"), lam, spnames...),
+        Expr(:toplevel_pure, lam),
         source.module,
         source.isva,
         loc)

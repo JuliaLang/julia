@@ -182,13 +182,12 @@ end
 # BigFloat interface
 @inline function Base.getproperty(x::BigFloat, s::Symbol)
     d = getfield(x, :d)
-    p = Base.unsafe_convert(Ptr{Limb}, d)
     if s === :prec
-        return GC.@preserve d unsafe_load(Ptr{Clong}(p) + offset_prec)
+        return Core.unsafe_memoryrefload(memoryref(d), Clong, offset_prec, false)
     elseif s === :sign
-        return GC.@preserve d unsafe_load(Ptr{Cint}(p) + offset_sign)
+        return Core.unsafe_memoryrefload(memoryref(d), Cint, offset_sign, false)
     elseif s === :exp
-        return GC.@preserve d unsafe_load(Ptr{Clong}(p) + offset_exp)
+        return Core.unsafe_memoryrefload(memoryref(d), Clong, offset_exp, false)
     elseif s === :d
         return BigFloatData(d)
     else
@@ -256,11 +255,13 @@ setrounding(f::Function, ::Type{BigFloat}, r::RoundingMode) =
 
 
 """
-    BigFloat(x::Union{Real, AbstractString} [, rounding::RoundingMode=rounding(BigFloat)]; [precision::Integer=precision(BigFloat)])
+    BigFloat(x::Union{Real, AbstractString} [, rounding::RoundingMode=rounding(BigFloat)];
+             [precision::Integer=precision(BigFloat)])
 
 Create an arbitrary precision floating point number from `x`, with precision
 `precision`. The `rounding` argument specifies the direction in which the result should be
 rounded if the conversion cannot be done exactly. If not provided, these are set by the current global values.
+The precision is initially set to 256 bits. Use [`setprecision`](@ref) to change the default.
 
 `BigFloat(x::Real)` is the same as `convert(BigFloat,x)`, except if `x` itself is already
 `BigFloat`, in which case it will return a value with the precision set to the current
@@ -281,6 +282,9 @@ See also:
 
 # Examples
 ```jldoctest
+julia> precision(BigFloat) # current default precision in bits
+256
+
 julia> BigFloat(2.1) # 2.1 here is a Float64
 2.100000000000000088817841970012523233890533447265625
 
@@ -391,21 +395,19 @@ BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=rounding_raw(BigFloat); 
     BigFloat(Float64(x), r; precision=precision)
 
 function BigFloat(x::Rational, r::MPFRRoundingMode=rounding_raw(BigFloat); precision::Integer=_precision_with_base_2(BigFloat))
-    r_den = _opposite_round(r)
-    setprecision(BigFloat, precision) do
-        setrounding_raw(BigFloat, r) do
-            BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x), r_den)::BigFloat
-        end
-    end
-end
-function _opposite_round(r::MPFRRoundingMode)
-    r == MPFRRoundUp && return MPFRRoundDown
-    r == MPFRRoundDown && return MPFRRoundUp
-    return r
+    # the numerator is converted exactly, so the division is the only rounding
+    num = numerator(x)
+    n = BigFloat(num; precision = ndigits(num; base = 2))
+    d = BigInt(denominator(x))
+    z = BigFloat(; precision)
+    ccall((:mpfr_div_z, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigInt}, MPFRRoundingMode), z, n, d, r)
+    return z
 end
 
 function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=_precision_with_base_2(BigFloat), rounding::MPFRRoundingMode=rounding_raw(BigFloat))
+    base == 0 || 2 <= base <= 62 || throw(ArgumentError(lazy"invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s); base, precision, rounding)
+    Base.containsnul(s) && return nothing
     z = BigFloat(precision=precision)
     err = ccall((:mpfr_set_str, libmpfr), Int32, (Ref{BigFloat}, Cstring, Int32, MPFRRoundingMode), z, s, base, rounding)
     err == 0 ? z : nothing
@@ -426,6 +428,13 @@ BigFloat(x::AbstractString, r::RoundingMode; precision::Integer=_precision_with_
 
 ## BigFloat -> Integer
 _unchecked_cast(T, x::BigFloat, r::RoundingMode) = _unchecked_cast(T, x, convert(MPFRRoundingMode, r))
+# MPFR has no ties-away or ties-up mode, but these only differ from ties-to-even at an exact tie
+function _unchecked_cast(T, x::BigFloat, r::Union{RoundingMode{:NearestTiesAway}, RoundingMode{:NearestTiesUp}})
+    f = BigFloat(; precision=_precision_with_base_2(x))
+    ccall((:mpfr_frac, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), f, x, MPFRRoundNearest)
+    (f == 0.5 || f == -0.5) || return _unchecked_cast(T, x, MPFRRoundNearest)
+    return _unchecked_cast(T, x, r isa RoundingMode{:NearestTiesUp} ? MPFRRoundUp : MPFRRoundFromZero)
+end
 
 function _unchecked_cast(::Type{Int64}, x::BigFloat, r::MPFRRoundingMode)
     ccall((:__gmpfr_mpfr_get_sj,libmpfr), Cintmax_t, (Ref{BigFloat}, MPFRRoundingMode), x, r)
@@ -563,11 +572,17 @@ big(::Type{<:AbstractFloat}) = BigFloat
 big(x::AbstractFloat) = convert(BigFloat, x)
 
 function Rational{BigInt}(x::AbstractFloat)
-    isnan(x) && return zero(BigInt) // zero(BigInt)
+    isnan(x) && throw(InexactError(:Rational, Rational{BigInt}, x))
     isinf(x) && return copysign(one(BigInt),x) // zero(BigInt)
     iszero(x) && return zero(BigInt) // one(BigInt)
     s = max(precision(x) - exponent(x), 0)
     BigInt(ldexp(x,s)) // (BigInt(1) << s)
+end
+
+function Rational{BigInt}(x::BigFloat)
+    isnan(x) && throw(InexactError(:Rational, Rational{BigInt}, x))
+    num, pow, den = decompose(x)
+    pow >= 0 ? (num << pow) // den : num // (BigInt(den) << -pow)
 end
 
 # Basic arithmetic without promotion
@@ -850,7 +865,7 @@ function ldexp(x::BigFloat, n::Culong)
 end
 ldexp(x::BigFloat, n::ClongMax) = ldexp(x, convert(Clong, n))
 ldexp(x::BigFloat, n::CulongMax) = ldexp(x, convert(Culong, n))
-ldexp(x::BigFloat, n::Integer) = x * exp2(BigFloat(n))
+ldexp(x::BigFloat, n::Integer) = ldexp(x, clamp(n, Clong))
 
 function factorial(x::BigFloat)
     if x < 0 || !isinteger(x)
@@ -1017,6 +1032,15 @@ cmp(x::CdoubleMax, y::BigFloat) = -cmp(y,x)
 ==(x::Integer, y::BigFloat)    = y == x
 ==(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) == 0
 ==(x::CdoubleMax, y::BigFloat) = y == x
+
+function ==(x::BigFloat, y::Rational)
+    isone(y.den) && return x == y.num
+    isfinite(x) || return x == y.num/y.den
+    ispow2(y.den) || return false
+    setprecision(BigFloat, precision(x)) do
+        ldexp(x, trailing_zeros(y.den)) == y.num
+    end
+end
 
 <(x::BigFloat, y::Integer)    = !isnan(x) && cmp(x,y) < 0
 <(x::Integer, y::BigFloat)    = !isnan(y) && cmp(y,x) > 0

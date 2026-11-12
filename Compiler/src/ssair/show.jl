@@ -930,8 +930,6 @@ function inline_linfo_printer(code::Union{IRCode,CodeInfo})
     end
 end
 
-_strip_color(s::String) = replace(s, r"\e\[\d+m"a => "")
-
 statementidx_lineinfo_printer(f, code::IRCode) = f(code.debuginfo, :var"unknown scope")
 statementidx_lineinfo_printer(f, code::CodeInfo) = f(code.debuginfo, :var"unknown scope")
 statementidx_lineinfo_printer(code) = statementidx_lineinfo_printer(DILineInfoPrinter, code)

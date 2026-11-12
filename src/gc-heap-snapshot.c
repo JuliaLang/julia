@@ -374,6 +374,7 @@ static size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
 
     ios_t str_;
     int ios_need_close = 0;
+    int unbounded_name = 0;
 
     // Insert a new Node
     size_t self_size = 0;
@@ -385,6 +386,9 @@ static size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     if (jl_is_string(a)) {
         node_type = "String";
         name = gc_heap_snapshot_redact_data ? "<redacted>" : jl_string_data(a);
+        // the contents have no size bound: write them out without copying them
+        // into the `names` table, at the cost of duplicates in the output
+        unbounded_name = !gc_heap_snapshot_redact_data;
         self_size = jl_string_len(a);
     }
     else if (jl_is_symbol(a)) {
@@ -466,7 +470,8 @@ static size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
 
     Node node = {
         (uint32_t)st_find_or_create(&g_snapshot->node_types, node_type), // size_t type;
-        st_serialize(&g_snapshot->names, g_snapshot->strings, name), // size_t name;
+        unbounded_name ? st_serialize(&g_snapshot->names, g_snapshot->strings, name)
+                       : st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, name), // size_t name;
         (size_t)a,     // size_t id;
         // We add 1 to self-size for the type tag that all heap-allocated objects have.
         // Also because the Chrome Snapshot viewer ignores size-0 leaves!
@@ -502,7 +507,7 @@ static size_t record_pointer_to_gc_snapshot(void *a, size_t bytes, const char *n
 
     Node node = {
         (uint32_t)st_find_or_create(&g_snapshot->node_types, "object"), // size_t type;
-        st_serialize(&g_snapshot->names, g_snapshot->strings, name), // size_t name;
+        st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, name), // size_t name;
         (size_t)a,     // size_t id;
         bytes,         // size_t self_size;
         0,             // size_t trace_node_id (unused)
@@ -544,7 +549,7 @@ static void _fieldpath_for_slot(void *obj, void *slot, ios_t *result) JL_NOTSAFE
 void _gc_heap_snapshot_record_root(jl_value_t *root, char *name) JL_NOTSAFEPOINT
 {
     size_t to_node_idx = record_node_to_gc_snapshot(root);
-    size_t edge_label = st_serialize(&g_snapshot->names, g_snapshot->strings, name);
+    size_t edge_label = st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, name);
 
     _record_gc_just_edge("internal", g_snapshot->internal_root_idx, to_node_idx, edge_label);
 }
@@ -552,7 +557,7 @@ void _gc_heap_snapshot_record_root(jl_value_t *root, char *name) JL_NOTSAFEPOINT
 void _gc_heap_snapshot_record_gc_roots(jl_value_t *root, char *name) JL_NOTSAFEPOINT
 {
     size_t to_node_idx = record_node_to_gc_snapshot(root);
-    size_t edge_label = st_serialize(&g_snapshot->names, g_snapshot->strings, name);
+    size_t edge_label = st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, name);
 
     _record_gc_just_edge("internal", g_snapshot->_gc_root_idx, to_node_idx, edge_label);
 }
