@@ -2478,7 +2478,7 @@ typedef enum {
 typedef struct {
     jl_image_kind_t kind;
     const void *pointers; // jl_image_pointers_t *
-    const char *data;
+    const char *data;     // begins with the .ji header, if `heap` is set
     size_t size;
     uint64_t base;
     uint32_t heap_checksum;
@@ -2488,10 +2488,6 @@ typedef struct {
     size_t heap_size;
     const char *loader;   // the loader data, after the heap; needed only while loading
     bool_t data_owned;    // `data` can be freed after loading
-    uint32_t flags;
-    uint32_t checksum;
-    uint64_t preferred_base;
-    int64_t payload_start;
 } jl_image_buf_t;
 
 struct _jl_image_t;
