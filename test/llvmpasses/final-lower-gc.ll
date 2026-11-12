@@ -97,8 +97,8 @@ top:
   ret {} addrspace(10)* %v
 }
 
-; A barrier with several children tests the AND of their tags, so the image-object
-; rule costs one `and` per child (`jl_gc_wb_must_remember` is the reference).
+; A barrier with several children compares the AND of their tags, the lowest child level,
+; with the parent's threshold (`jl_gc_wb_must_remember` is the reference).
 declare void @julia.object_write_barrier({} addrspace(10)*, ...)
 
 define void @write_barrier_children({} addrspace(10)* %parent, {} addrspace(10)* %a, {} addrspace(10)* %b) {
@@ -107,14 +107,10 @@ top:
   %pgcstack = call {}*** @julia.get_pgcstack()
   call void ({} addrspace(10)*, ...) @julia.object_write_barrier({} addrspace(10)* %parent, {} addrspace(10)* %a, {} addrspace(10)* %b)
 ; CHECK: may_trigger_wb:
-; CHECK: %parent_is_image = icmp eq i64 %parent_in_image, 4
+; CHECK-NEXT: %parent_threshold = and i64 %{{.*}}, 4
 ; CHECK: %child_tags = and i64
-; CHECK-NEXT: %child_bit = and i64 %child_tags, 1
-; CHECK-NEXT: %child_not_marked = icmp eq i64 %child_bit, 0
-; CHECK-NEXT: %child_in_image = and i64 %child_tags, 4
-; CHECK-NEXT: %child_not_image = icmp eq i64 %child_in_image, 0
-; CHECK-NEXT: %parent_image_edge = and i1 %parent_is_image, %child_not_image
-; CHECK-NEXT: %should_trigger_wb = or i1 %parent_image_edge, %child_not_marked
+; CHECK-NEXT: %child_level = and i64 %child_tags, 9
+; CHECK-NEXT: %should_trigger_wb = icmp ule i64 %child_level, %parent_threshold
 ; CHECK: trigger_wb:
 ; CHECK-NEXT: call void @ijl_gc_queue_root(ptr addrspace(10) %parent)
   ret void

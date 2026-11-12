@@ -17,7 +17,7 @@ JL_DLLEXPORT void jl_gc_multi_wb_cold(const struct _jl_value_t *parent, void *de
                                         struct _jl_datatype_t *dt) JL_NOTSAFEPOINT;
 
 // Whether storing `ptr` into `parent`, an old object not in the remset, must put `parent` in the
-// remset. Permanent objects (with the `GC_IN_IMAGE` bit: image objects and those from `jl_gc_permobj`)
+// remset. Permanent objects (with the `GC_PERM` bit: image objects and those from `jl_gc_permobj`)
 // are never freed and marking does not trace through them, so an edge to one never needs remembering;
 // any other edge does if `ptr` is young or `parent` is permanent but not yet in the `image_remset`.
 // Codegen's inline barrier (`FinalLowerGC::lowerWriteBarrier`) mirrors this.
@@ -26,13 +26,11 @@ STATIC_INLINE int jl_gc_wb_must_remember(const void *parent, const void *ptr) JL
 {
     if (ptr == NULL)
         return 0;
-    if (jl_astaggedvalue(ptr)->bits.in_image != 0) {
-        // codegen relies on this to test both bits on the AND of several child tags
-        assert((jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) && "image object is not marked");
-        return 0;
-    }
-    return (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) == 0 || // ptr is young
-           jl_astaggedvalue(parent)->bits.in_image == 1 /* GC_IN_IMAGE_NOT_REMSET */;
+    // `ptr` is young 0, old 1 or permanent 9, and `parent` needs 0, or 4 if it is permanent but not
+    // in the `image_remset`. Codegen compares the AND of several tags, which takes the minimum.
+    uintptr_t level = jl_astaggedvalue(ptr)->header & (8 /* GC_PERM */ | 1 /* GC_MARKED */);
+    assert(level != 8 && "permanent object is not marked");
+    return level <= (jl_astaggedvalue(parent)->header & 4 /* GC_PERM_NOT_REMSET */);
 }
 
 STATIC_INLINE void jl_gc_wb(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT
@@ -71,7 +69,7 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, void *dest, const jl_value
     if (__likely(jl_astaggedvalue(parent)->bits.gc != 3 /* GC_OLD_MARKED */))
         return; // parent is young or in remset
     if (__likely(jl_astaggedvalue(ptr)->bits.gc == 3 /* GC_OLD_MARKED */ &&
-                 jl_astaggedvalue(parent)->bits.in_image != 1 /* GC_IN_IMAGE_NOT_REMSET */))
+                 !(jl_astaggedvalue(parent)->header & 4 /* GC_PERM_NOT_REMSET */)))
         return; // ptr is old and not in remset (thus it does not point to young)
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(ptr);
     const jl_datatype_layout_t *ly = dt->layout;

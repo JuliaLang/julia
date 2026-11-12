@@ -440,7 +440,7 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
             pe = pe->prev;
         }
         uintptr_t bits = jl_astaggedvalue(v)->header;
-        if (bits & GC_IN_IMAGE)
+        if (bits & GC_PERM)
             return ((uintptr_t*)v)[-2];
         return inthash((uintptr_t)v);
     }
@@ -565,7 +565,7 @@ static uintptr_t NOINLINE jl_object_id__cold(uintptr_t tv, jl_value_t *v) JL_NOT
             return m->hash;
         }
         uintptr_t bits = jl_astaggedvalue(v)->header;
-        if (bits & GC_IN_IMAGE)
+        if (bits & GC_PERM)
             return ((uintptr_t*)v)[-2];
         return inthash((uintptr_t)v);
     }

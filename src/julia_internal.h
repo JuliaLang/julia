@@ -389,14 +389,15 @@ static inline void memassign_safe(int hasptr, char *dst, const jl_value_t *src, 
 #define GC_CLEAN  0 // freshly allocated
 #define GC_MARKED 1 // reachable and young
 #define GC_OLD    2 // if it is reachable it will be marked as old
+// permanent and not yet in the `image_remset` (only with `GC_PERM`); it is the lower bit so
+// that the write barrier can compare levels (see `jl_gc_wb_must_remember`)
+#define GC_PERM_NOT_REMSET 4
 // permanent (in an image or from `jl_gc_permobj`): never freed, nor traced except from the
 // `image_remset`; `jl_object_in_image` tells which objects are in an image
-#define GC_IN_IMAGE 4
-#define GC_IN_IMAGE_REMSET 8
+#define GC_PERM 8
 
 #define GC_OLD_MARKED (GC_OLD | GC_MARKED) // reachable and old
-#define GC_IN_IMAGE_NOT_REMSET (GC_IN_IMAGE) // permalloc'd and not yet modified
-#define GC_PERM_BITS (GC_OLD_MARKED | GC_IN_IMAGE) // for retagging a `jl_gc_permobj` object
+#define GC_PERM_BITS (GC_OLD_MARKED | GC_PERM | GC_PERM_NOT_REMSET) // a new permanent object
 
 // data structures for runtime codegen
 typedef struct _jl_abi_t {

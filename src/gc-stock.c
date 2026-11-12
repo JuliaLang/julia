@@ -1905,9 +1905,9 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
         ptls->gc_tls.heap.remset_nptr++; // conservative
         // Image objects are analogous to a third "permanent" GC
         // generation, so here we maintain the remset for them.
-        if (__unlikely((header & GC_IN_IMAGE) && !(header & GC_IN_IMAGE_REMSET))) {
-            header = jl_atomic_fetch_or_relaxed((_Atomic(uintptr_t) *)&o->header, GC_IN_IMAGE_REMSET);
-            if (!(header & GC_IN_IMAGE_REMSET)) {
+        if (__unlikely(header & GC_PERM_NOT_REMSET)) {
+            header = jl_atomic_fetch_and_relaxed((_Atomic(uintptr_t) *)&o->header, ~(uintptr_t)GC_PERM_NOT_REMSET);
+            if (header & GC_PERM_NOT_REMSET) {
                 int last_errno = errno; // waiting on a lock can affect errno
 #ifdef _OS_WINDOWS_
                 DWORD last_error = GetLastError();
@@ -2104,7 +2104,7 @@ STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq2) JL_
 STATIC_INLINE int gc_in_sysimg(const void *obj) JL_NOTSAFEPOINT
 {
     int in_sysimg = (uintptr_t)obj - jl_sysimage_start - 1 < jl_sysimage_size;
-    assert(!in_sysimg || (jl_astaggedvalue(obj)->bits.in_image && jl_astaggedvalue(obj)->bits.gc == GC_OLD_MARKED));
+    assert(!in_sysimg || (jl_astaggedvalue(obj)->bits.perm && jl_astaggedvalue(obj)->bits.gc == GC_OLD_MARKED));
     return in_sysimg;
 }
 
@@ -2710,7 +2710,8 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         uint8_t bits = (gc_old(o->header) && !mark_reset_age) ? GC_OLD_MARKED : GC_MARKED;
         int update_meta = __likely(!remset_object && !(GC_VERIFY_ENABLED && gc_verifying));
         int foreign_alloc = 0;
-        if (update_meta && o->bits.in_image) {
+        // a permanent object (from an image or `jl_gc_permobj`) has no page metadata to update
+        if (update_meta && o->bits.perm) {
             foreign_alloc = 1;
             update_meta = 0;
         }

@@ -77,24 +77,18 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, target, false);
     builder.SetInsertPoint(mayTrigTerm);
     mayTrigTerm->getParent()->setName("may_trigger_wb");
-    // The same rule as `jl_gc_wb_must_remember`: remember the parent if a child
-    // is young, or if the parent is an image object not yet in the image remset
-    // and a child is not an image object. Image objects are always marked, so
-    // "some child is not marked/not an image" is a clear bit in the AND of the tags.
-    auto parInImage = builder.CreateAnd(parTag, ConstantInt::get(T_size, GC_IN_IMAGE | GC_IN_IMAGE_REMSET), "parent_in_image");
-    auto parIsImage = builder.CreateICmpEQ(parInImage, ConstantInt::get(T_size, GC_IN_IMAGE_NOT_REMSET), "parent_is_image");
+    // The same rule as `jl_gc_wb_must_remember`: remember the parent if the lowest
+    // child level (young 0, old 1, permanent 9; the AND of the tags takes the minimum)
+    // is at most the parent's threshold (4 if permanent but not in the image remset, else 0).
+    auto parThreshold = builder.CreateAnd(parTag, GC_PERM_NOT_REMSET, "parent_threshold");
     Value *chldTags = NULL;
     for (Value *child : children) {
         Value *chldTag = EmitLoadTag(builder, T_size, child, tbaa_tag);
         chldTags = chldTags ? builder.CreateAnd(chldTags, chldTag, "child_tags") : chldTag;
     }
     assert(chldTags); // children is non-empty
-    Value *chldBit = builder.CreateAnd(chldTags, GC_MARKED, "child_bit");
-    Value *anyChldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0), "child_not_marked");
-    Value *chldImage = builder.CreateAnd(chldTags, GC_IN_IMAGE, "child_in_image");
-    Value *anyChldNotImage = builder.CreateICmpEQ(chldImage, ConstantInt::get(T_size, 0), "child_not_image");
-    auto parImageEdge = builder.CreateAnd(parIsImage, anyChldNotImage, "parent_image_edge");
-    auto shouldTrigger = builder.CreateOr(parImageEdge, anyChldNotMarked, "should_trigger_wb");
+    auto chldLevel = builder.CreateAnd(chldTags, GC_PERM | GC_MARKED, "child_level");
+    auto shouldTrigger = builder.CreateICmpULE(chldLevel, parThreshold, "should_trigger_wb");
     MDBuilder MDB(parent->getContext());
     SmallVector<uint32_t, 2> Weights{1, 9};
     auto trigTerm = SplitBlockAndInsertIfThen(shouldTrigger, mayTrigTerm, false,
