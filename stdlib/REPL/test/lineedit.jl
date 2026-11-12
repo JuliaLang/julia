@@ -20,6 +20,14 @@ function new_state()
     LineEdit.init_state(term, LineEdit.ModalInterface([LineEdit.Prompt("test> ")]))
 end
 
+# Run `keys` through the real input loop of a prompt. The final `\r` ends the prompt.
+function press(keys; prompt=LineEdit.Prompt("test> "))
+    term = FakeTerminal(IOBuffer(keys * "\r"), IOBuffer(), IOBuffer(), false)
+    s = LineEdit.init_state(term, LineEdit.ModalInterface(LineEdit.TextInterface[prompt]))
+    LineEdit.prompt!(term, s.interface, s)
+    return s
+end
+
 # Normal and prefix history search prompts emit one marker pair without changing their width.
 @testset "semantic prompt rendering" begin
     for markers in (REPL.OSC_133_MARKERS, REPL.OSC_633_MARKERS),
@@ -61,6 +69,7 @@ mutable struct MockHistoryProvider <: LineEdit.HistoryProvider
 end
 
 REPL.histsearch(::MockHistoryFile, args...) = (mode = :pkg, text = "status")
+LineEdit.add_history(::MockHistoryProvider, s) = nothing
 
 @testset "history search initializes dynamic modes" begin
     term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
@@ -82,6 +91,21 @@ REPL.histsearch(::MockHistoryFile, args...) = (mode = :pkg, text = "status")
     LineEdit.history_search(mistate)
     @test mistate.current_mode === pkg_mode
     @test String(take!(copy(LineEdit.buffer(mistate)))) == "status"
+
+    # Both search keys start the search from the keymap and leave the result in the buffer.
+    prompt_keymap = LineEdit.keymap([LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults])
+    for key in ("\x12", "\x13")
+        main_mode = LineEdit.Prompt("julia> "; keymap_dict=prompt_keymap)
+        pkg_mode = LineEdit.Prompt("pkg> "; keymap_dict=prompt_keymap)
+        main_mode.hist = pkg_mode.hist = MockHistoryProvider(MockHistoryFile(), IOBuffer(), nothing,
+            Dict(:julia => main_mode, :pkg => pkg_mode))
+        term = FakeTerminal(IOBuffer(key * "\r"), IOBuffer(), IOBuffer(), false)
+        mistate = LineEdit.init_state(term, LineEdit.ModalInterface(LineEdit.TextInterface[main_mode, pkg_mode]))
+        mistate.terminal_properties.da1 = Int[]
+        LineEdit.prompt!(term, mistate.interface, mistate)
+        @test mistate.current_mode === pkg_mode
+        @test LineEdit.input_string(LineEdit.state(mistate)) == "status"
+    end
 end
 
 end # module HistorySearchDynamicMode
@@ -1034,6 +1058,205 @@ end
     @test getcompletion(named2) ==
         "\033[0B\n" * "\rfoo\r\e[5Cfoo\n" ^ 3 * "\rInternal:\n" * "\rinternal\r\e[10Cinternal\n" ^ 3
     @test getcompletion([LineEdit.NamedCompletion("x", "x", true)]) == "\033[0B\n\rInternal:\n\rx\n"
+end
+
+# Each binding of the default keymap, with `|` typed at the end to show where the cursor is.
+@testset "default keymap" begin
+    left, right, up, down = "\e[D", "\e[C", "\e[A", "\e[B"
+    newline = "\e\r"
+    for (keys, expected) in Pair{String,String}[
+            # cursor movement
+            "abc$left|" => "ab|c",
+            "abc$left$left$right|" => "ab|c",
+            "abc\x02|" => "ab|c", # ^B
+            "abc\x02\x02\x06|" => "ab|c", # ^F
+            "ab\e[H|" => "|ab",
+            "ab\e[H\e[F|" => "ab|",
+            "ab cd\x01\x05|" => "ab cd|", # ^A, ^E
+            "a$(newline)bc$up|" => "a|\nbc",
+            "a$(newline)bc$up$down|" => "a\nb|c",
+            "a$(newline)bc\x10|" => "a|\nbc", # ^P
+            "a$(newline)bc\x10\x0e|" => "a\nb|c", # ^N
+            "ab cd\eb|" => "ab |cd",
+            "ab cd\eb\ef|" => "ab cd|",
+            "ab cd\e[1;5D|" => "ab |cd",
+            "ab cd\e[1;5D\e[1;5C|" => "ab cd|",
+            "ab cd\eOd|" => "ab |cd",
+            "ab cd\eOd\eOc|" => "ab cd|",
+            # deleting and killing
+            "ab cd\e\b" => "ab ",
+            "ab cd\e\x7f" => "ab ",
+            "ab\e[H\x04" => "b", # ^D on a non-empty buffer
+            "ab\e[H\e[3~" => "b",
+            "ab cd\x17" => "ab ", # ^W
+            "ab cd\x01\ed" => " cd",
+            "ab cd\x02\x02\x0b" => "ab ", # ^K
+            "ab cd\x02\x02\x15" => "cd", # ^U
+            "ab cd\x02\x02\x0b\x01\x19" => "cdab ", # ^Y
+            "ab cd\x17\x19\x19" => "ab cdcd",
+            "ab\x17 cd\x17\x19\ey" => " ab", # alt-y cycles through the kill ring
+            # the region: ^space twice activates it
+            "abc\0\x02\x02\x7f" => "bc",
+            "abc\0\0\x02\x02\x7f" => "a",
+            "abc\0\0\x02\x02\x07\x7f" => "bc", # ^G cancels it
+            "ab\0\x01\x18\x18|" => "ab|", # ^X^X
+            "abc\0\x02\ew\x05\x19" => "abcc",
+            "abc\0\x02\eW|" => "ab|",
+            "abc\e[1;2D\e[1;2D\x7f" => "a",
+            "abc\x01\e[1;2C\x7f" => "bc",
+            "a$(newline)b\e[1;2A\x7f" => "a",
+            "a$(newline)b\x01\x10\e[1;2B\x7f" => "b",
+            # moving and indenting lines
+            "l1$(newline)l2\e[1;3A" => "l2\nl1",
+            "l1$(newline)l2\e[1;3A\e[1;3B" => "l1\nl2",
+            "l1$(newline)l2\e[1;3B" => "l1\nl2",
+            "l1$(newline)l2$(newline)l3\0\0\x02\x02\x10\e[1;3A" => "l2\nl3\nl1", # the whole region moves
+            "l1$(newline)l2$(newline)l3\e[A\0\0\x02\x02\x10\e[1;3B" => "l3\nl1\nl2",
+            "ab\e[1;3C" => " ab",
+            "    ab\e[1;3D" => "   ab",
+            "ab\e[1;3D" => "ab",
+            # other edits
+            "ab\x14" => "ba", # ^T
+            "ab cd\x01\et" => "cd ab",
+            "abc\x01\eu" => "ABC",
+            "ABC\x01\el" => "abc",
+            "abc\x01\ec" => "Abc",
+            "\e[200~ a\r  b\e[201~" => "a\n b",
+            # alt-. needs a history, and this prompt has none
+            "ab\e." => "ab",
+            "\x0c" => "",
+            "a\x0cb" => "ab",
+            "a\x03b" => "b",
+        ]
+        @test (keys => content(press(keys))) == (keys => expected)
+    end
+
+    term_output(s) = String(take!(LineEdit.terminal(s).out_stream))
+    @test occursin("\e[H\e[2J", term_output(press("\x0c")))
+    @test occursin("^C\n\n", term_output(press("a\x03")))
+    @test occursin("press ^C again to cancel all in-flight work", term_output(press("\x03\x03")))
+
+    # ^Z asks the caller to suspend and keeps the input.
+    if Sys.isunix()
+        term = FakeTerminal(IOBuffer("ab\x1a"), IOBuffer(), IOBuffer(), false)
+        s = LineEdit.init_state(term, LineEdit.ModalInterface(LineEdit.TextInterface[LineEdit.Prompt("test> ")]))
+        buf, ok, suspend = LineEdit.prompt!(term, s.interface, s)
+        @test ok && suspend
+        @test content(buf) == "ab"
+    end
+
+    # ^D on an empty prompt asks for confirmation on the terminal when that is enabled.
+    let repl = REPL.LineEditREPL(FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer(), false), false)
+        repl.options = REPL.Options(confirm_exit=true)
+        prompt = LineEdit.Prompt("test> "; repl)
+        term = FakeTerminal(IOBuffer("\x04\x04"), IOBuffer(), IOBuffer(), false)
+        s = LineEdit.init_state(term, LineEdit.ModalInterface(LineEdit.TextInterface[prompt]))
+        buf, ok, suspend = LineEdit.prompt!(term, s.interface, s)
+        @test !ok && s.aborted
+        @test occursin("Type ^D again to exit.", term_output(s))
+    end
+
+    # A key that changes nothing must not leave a step in the undo history.
+    for noop in ("\x7f", "\e\b", "\x17", "\x15", "\e[1;3D", "\eW")
+        @test content(press("ab\x01$noop\x1f")) == "a"
+    end
+    for noop in ("\x04", "\e[3~", "\ed", "\x0b")
+        @test content(press("ab$noop\x1f")) == "a"
+    end
+    @test content(press("ab\x1f")) == "a"
+    @test content(press("abc\x1f\x1f\e_")) == "ab"
+    @test content(press("abc\x1f\x1f\e_\e_\e_")) == "abc" # redo stops at the newest edit
+    @test content(press("ab\x1fc\e_")) == "ac" # redo needs an undo right before it
+    @test content(press("\x1f")) == ""
+end
+
+@testset "show" begin
+    prompt = LineEdit.Prompt(() -> "test> ")
+    @test occursin("test> ", repr(prompt))
+    s = LineEdit.init_state(FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer()), LineEdit.ModalInterface([prompt]))
+    @test repr(s) == "MI State ($(repr(prompt)) active)"
+end
+
+struct StaticCompletions <: LineEdit.CompletionProvider
+    completions::Any
+    should_complete::Bool
+end
+# Hints run on another task and would race with the key presses.
+function LineEdit.complete_line(c::StaticCompletions, s; hint::Bool=false)
+    hint && return LineEdit.NamedCompletion[], "", false
+    word = last(split("x " * LineEdit.input_string(s)[1:position(s)], ' '))
+    return c.completions, String(word), c.should_complete
+end
+
+@testset "completion keys" begin
+    function complete(keys, completions; should_complete=true)
+        s = press(keys; prompt=LineEdit.Prompt("test> "; complete=StaticCompletions(completions, should_complete)))
+        return content(s), String(take!(LineEdit.terminal(s).out_stream))
+    end
+    listed(out) = occursin("\n\rfoo", out)
+
+    # one choice replaces the word, and undo brings it back
+    @test complete("f\t", ["foo"])[1] == "foo"
+    @test complete("x f\t|", ["foo"])[1] == "x foo|"
+    @test complete("f\t\x1f", ["foo"])[1] == "f"
+    @test complete("f\e[Z", ["foo"])[1] == "foo"
+
+    # several choices complete their common prefix, then list on the next press
+    named = LineEdit.NamedCompletion.(["foo1", "foo2"])
+    for completions in (["foo1", "foo2"], named)
+        text, out = complete("f\t", completions)
+        @test text == "foo"
+        @test !listed(out)
+        text, out = complete("f\t\t", completions)
+        @test text == "foo"
+        @test listed(out)
+    end
+    @test complete("f\t", ["αβγ", "αβδ"])[1] == "αβ"
+    @test complete("f\t", ["αβ", "αβγ"])[1] == "αβ"
+    @test complete("f\t", ["", "foo"])[1] == "f"
+    @test complete("f\t", ["abc", "xyz"])[1] == "f"
+
+    # should_complete only lists, even for one choice
+    text, out = complete("f\t", ["foo"]; should_complete=false)
+    @test text == "f"
+    @test occursin("foo", out)
+
+    # no choice leaves the input alone
+    @test complete("f\t", String[])[1] == "f"
+
+    # right arrow at the end of the input accepts a single completion, in either return format
+    @test complete("fo\e[C", ["foo"])[1] == "foo"
+    @test complete("fo\e[C", LineEdit.NamedCompletion.(["foo"]))[1] == "foo"
+    @test complete("fo\e[C", ["foo", "fob"])[1] == "fo"
+    @test complete("f\e[C", ["foo"])[1] == "f"
+    @test complete("fo\e[C", ["foo"]; should_complete=false)[1] == "fo"
+    @test complete("fo\x01\e[C|", ["foo"])[1] == "f|o"
+end
+
+@testset "beep" begin
+    term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer(), true)
+    prompt = LineEdit.Prompt("test> "; prompt_prefix="\e[1m")
+    s = LineEdit.init_state(term, prompt)
+    # disabled when not interactive
+    LineEdit.beep(s, 0.01, 0.001, 0.01; colors=["\e[41m"], use_current=true)
+    @test s.beeping == 0.0
+    @test isempty(take!(term.out_stream))
+
+    old = isinteractive()
+    @eval Base is_interactive = true
+    try
+        LineEdit.beep(s, 100.0, 0.001, 0.005; colors=["\e[41m"], use_current=true)
+        @test s.beeping == 0.005 # capped
+        yield() # let it start, so that the wait below sees it running
+        LineEdit.cancel_beep(s)
+    finally
+        @eval Base is_interactive = $old
+    end
+    @test s.beeping <= 0.0
+    @test prompt.prompt_prefix == "\e[1m"
+    out = String(take!(term.out_stream))
+    @test occursin("\e[41m", out)
+    @test endswith(first(out, findlast('>', out)), "\e[0K\e[1m\e[1mtest>") # the last redraw restored the prefix
 end
 
 @testset "Hints at the terminal edge" begin

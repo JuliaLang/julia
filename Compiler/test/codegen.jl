@@ -70,6 +70,25 @@ outer_scope(x) = inner_scope(x)
     end
 end
 
+# Regression tests for #51658 and #48801.
+@testset "ReinterpretArray vectorization" begin
+    zigzag_bytes(n) = (n >> one(n)) ⊻ -(n & one(n))
+    function zigzag_reinterpret!(a)
+        @simd for i in eachindex(a)
+            a[i] = zigzag_bytes(a[i])
+        end
+        nothing
+    end
+    increment_reinterpret!(a) = (a .+= Int32(1); nothing)
+    for (f, T) in ((zigzag_reinterpret!, Int16), (increment_reinterpret!, Int32))
+        if !is_debug_build && opt_level >= 2 && !coverage && Sys.ARCH in (:x86_64, :i686, :aarch64)
+            ir = get_llvm(f, Tuple{typeof(reinterpret(T, UInt8[]))})
+            @test occursin(r"load <[0-9]+ x i(16|32)>", ir)
+            @test occursin(r"store <[0-9]+ x i(16|32)>", ir)
+        end
+    end
+end
+
 if !is_debug_build && opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
     @test !occursin(" call ", strip_debug_calls(get_llvm(identity, Tuple{String})))
@@ -725,7 +744,40 @@ end
         return val
     end
     @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f8, Tuple{Some{Int}}, true, false, false))
+    # nor the stack slot of a split union whose unboxed members are pointer-free: only its box
+    function f9(i, s)
+        val = i == 0 ? s : i
+        GC.@preserve val begin end
+        return i
+    end
+    @test f9(1, "s") == 1
+    @test occursin(r"gc_preserve_begin\(ptr addrspace\(10\) %[^,()]+\)", get_llvm(f9, Tuple{Int, String}, true, false, false))
 end
+
+# GC.@preserve of a split union roots the references of its unboxed form,
+# whose box pointer is NULL at runtime
+mutable struct PreservedObj
+    x::Int
+end
+struct PreservedFields
+    o::PreservedObj
+    k::Int
+end
+const preserved_weakref = Ref{WeakRef}()
+@noinline function preserved_obj(i)
+    o = PreservedObj(i)
+    preserved_weakref[] = WeakRef(o)
+    return o
+end
+@noinline function preserve_union_phi(i, s)
+    u = i == 0 ? s : PreservedFields(preserved_obj(i), i) # ::Union{String, PreservedFields}
+    GC.@preserve u begin
+        GC.gc()
+        freed = preserved_weakref[].value === nothing
+    end
+    return freed
+end
+@test !preserve_union_phi(Base.inferencebarrier(1)::Int, "s")
 
 # issue #32843
 function f32843(vals0, v)
@@ -1573,4 +1625,56 @@ scale_forwarding!(b::ForwardingMatrix, a::ForwardingMatrix) = (b .= 2.0 .* a)
     if Sys.ARCH in (:x86_64, :aarch64)
         @test occursin(r"<\d+ x double>", get_llvm(scale_forwarding!, Tuple{ForwardingMatrix, ForwardingMatrix}))
     end
+end
+
+# A union phi whose incoming value is a singleton constant that the union stores unboxed
+# must not carry a box pointer (regression from #55045)
+struct UnionPhiStart end
+function union_phi_singleton(x::Vector{Int})
+    acc = UnionPhiStart()
+    for v in x
+        if isodd(v)
+            acc = acc isa UnionPhiStart ? v : acc + v
+        end
+    end
+    return acc
+end
+function union_phi_nothing(x::Vector{Int})
+    acc = nothing
+    for v in x
+        if isodd(v)
+            acc = acc === nothing ? v : acc + v
+        end
+    end
+    return acc
+end
+@testset "union phi with an unboxed singleton constant" begin
+    for f in (union_phi_singleton, union_phi_nothing)
+        @test !occursin("= phi ptr", get_llvm(f, Tuple{Vector{Int}}))
+    end
+    @test union_phi_singleton([2, 4]) === UnionPhiStart()
+    @test union_phi_singleton([1, 2, 3]) === 4
+    @test union_phi_nothing(Int[]) === nothing
+    @test union_phi_nothing([1, 2, 3]) === 4
+    # `Union{}` (typed `Type{Union{}}`) is an unboxed ghost of `TypeofBottom`
+    @test isequal(Base.mapany(identity, (Union{}, 'a')), Any[Union{}, 'a'])
+    @test isequal(Any[x for x in (Union{}, 1.0)], Any[Union{}, 1.0])
+end
+
+# a value split out of a union keeps its box when it is boxed again, and gets a
+# new box when it arrived unboxed
+@noinline getu_union(v, i) = i == 0 ? v[1]::Union{Int, String} : i
+function recopy_union!(w, v, i)
+    y = getu_union(v, i)
+    if y isa Int
+        w[1] = y
+    end
+    nothing
+end
+let v = Any[typemax(Int)], w = Any[nothing]
+    recopy_union!(w, v, 0)
+    @test w[1] === typemax(Int)
+    @test (@allocated recopy_union!(w, v, 0)) == 0
+    recopy_union!(w, v, 1000)
+    @test w[1] === 1000
 end

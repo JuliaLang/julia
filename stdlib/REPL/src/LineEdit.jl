@@ -1127,7 +1127,7 @@ function edit_move_right(m::MIState)
         refresh_line(s)
         return true
     else
-        completions, reg, should_complete = complete_line(s.p.complete, s, m.active_module)
+        completions, reg, should_complete = complete_line_named(s.p.complete, s, m.active_module)
         if should_complete && eof(buf) && length(completions) == 1 && reg.second - reg.first > 1
             # Replace word by completion
             prev_pos = position(s)
@@ -1923,7 +1923,6 @@ history_prev(::EmptyHistoryProvider) = ("", false)
 history_next(::EmptyHistoryProvider) = ("", false)
 history_first(::EmptyHistoryProvider) = ("", false)
 history_last(::EmptyHistoryProvider) = ("", false)
-history_search(::EmptyHistoryProvider, args...) = false
 add_history(::EmptyHistoryProvider, s) = nothing
 add_history(s::PromptState) = add_history(mode(s).hist, s)
 history_next_prefix(s, hist, prefix) = false
@@ -1955,7 +1954,6 @@ end
 refresh_line(s::BufferLike) = refresh_multi_line(s)
 refresh_line(s::BufferLike, termbuf::AbstractTerminal) = refresh_multi_line(termbuf, s)
 
-default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
 write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
@@ -2620,9 +2618,7 @@ let
             return edit_kill_region(s)
         elseif isempty(s) || position(buffer(s)) == 0
             # Handle transitioning to main mode
-            repl = Base.active_repl
-            mirepl = isdefined(repl, :mi) ? repl.mi : repl
-            main_mode = mirepl.interface.modes[1]
+            main_mode = s.interface.modes[1]
             local buf = copy(buffer(s))
             transition(s, main_mode) do
                 state(s, main_mode).input_buffer = buf
@@ -2842,7 +2838,9 @@ function move_line_end(buf::IOBuffer)
 end
 
 function edit_insert_last_word(s::MIState)
-    hist = mode(s).hist.history
+    hp = mode(s).hist
+    hp isa EmptyHistoryProvider && return 0
+    hist = hp.history
     isempty(hist) && return 0
     isempty(hist.records) && return 0
     edit_insert(s, get_last_word(IOBuffer(hist[end].content)))
@@ -2944,7 +2942,7 @@ function edit_abort(s::MIState, confirm::Bool=options(s).confirm_exit; key="^D")
         println(terminal(s))
         return :abort
     else
-        println("Type $key again to exit.\n")
+        println(terminal(s), "Type $key again to exit.\n")
         return refresh_line(s)
     end
 end

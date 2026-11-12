@@ -236,6 +236,46 @@ end
     @test FIN_BACKTRACE_FRAMES[] > 0
 end
 
+# Quick collections must see stores into old WeakRefs, whether the new value
+# dies young or survives.
+mutable struct WeakRefBox
+    x::Int
+end
+@noinline function old_weakrefs(n)
+    vals = [WeakRefBox(i) for i in 1:n]
+    wrs = [WeakRef(v) for v in vals]
+    GC.gc(true); GC.gc(false); GC.gc(false)
+    return vals, wrs
+end
+@noinline store_young_weakref!(wr) = (wr.value = WeakRefBox(-1); nothing)
+@noinline function store_young_weakrefs!(held, wrs)
+    for wr in wrs
+        v = WeakRefBox(0)
+        push!(held, v)
+        wr.value = v
+    end
+end
+@noinline weakrefs_hold(wrs, vals) = all(i -> wrs[i].value === vals[i], eachindex(wrs, vals))
+@noinline weakrefs_cleared(wrs) = all(wr -> wr.value === nothing, wrs)
+
+function weakref_generations_test()
+    vals, wrs = old_weakrefs(100)
+    foreach(store_young_weakref!, wrs)
+    GC.gc(false)
+    @test weakrefs_cleared(wrs)
+
+    vals, wrs = old_weakrefs(100)
+    held = WeakRefBox[]
+    store_young_weakrefs!(held, wrs)
+    for _ in 1:4
+        GC.gc(false)
+        @test weakrefs_hold(wrs, held)
+    end
+    empty!(held)
+    GC.gc(true); GC.gc(true)
+    @test weakrefs_cleared(wrs)
+end
+
 #FIXME: Issue #57103 disabling tests for MMTk, since
 # they rely on information that is specific to the stock GC.
 @static if Base.USING_STOCK_GC
@@ -250,6 +290,10 @@ end
 
 @testset "Full GC reasons" begin
     full_sweep_reasons_test()
+end
+
+@testset "WeakRef generations" begin
+    weakref_generations_test()
 end
 
 @testset "GC concurrent sweep reuse stress smoke" begin

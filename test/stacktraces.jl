@@ -235,6 +235,14 @@ struct F49231{a,b,c,d,e,f,g} end
     @test tdl("A{'\\\\'}B{C}", 0, maxdepth = 1) == "A{…}B{…}"
     @test tdl("f(::Val{Symbol(\"\\\\\")}, ::Vector{Vector{Int64}})", 30) == "f(::Val{…}, ::Vector{…})"
 
+    # a brace inside quotes, also after an escaped quote, does not count as nesting
+    str = "F{Val{\"\\\"}\"},Int}"
+    @test tdl(str, 0, maxdepth = 1) == "F{…}"
+    @test tdl(str, 0, maxdepth = 2) == "F{Val{…},Int}"
+    str = "F{Val{'\\''},Val{'}'}}"
+    @test tdl(str, 0, maxdepth = 1) == "F{…}"
+    @test tdl(str, 0, maxdepth = 2) == "F{Val{…},Val{…}}"
+
     # Stacktrace
     a = UInt8(81):UInt8(160)
     b = view(a, 1:64)

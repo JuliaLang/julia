@@ -1754,7 +1754,7 @@ julia> first(stateful)
 nth(itr, n::Integer) = _nth(IteratorSize(itr), itr, n)
 nth(itr::Cycle{I}, n::Integer) where I = _nth(IteratorSize(I), itr, n)
 nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where O = _nth(IteratorSize(O), itr, n)
-@propagate_inbounds nth(itr::AbstractArray, n::Integer) = itr[begin + n - 1]
+@propagate_inbounds nth(itr::AbstractArray, n::Integer) = itr[begin + Int(n) - 1]
 
 function _nth(::Union{HasShape, HasLength}, itr::Cycle{I}, n::Integer) where {I}
     N = length(itr.xs)
@@ -1769,7 +1769,7 @@ function _nth(::Union{HasShape, HasLength}, itr::Flatten{Take{Repeated{O}}}, n::
     cycles = itr.it.n
     torepeat = itr.it.xs.x
     k = length(torepeat)
-    (n > k*cycles || k == 0) && throw(BoundsError(itr, n))
+    (k == 0 || cld(n, k) > cycles) && throw(BoundsError(itr, n))
 
     # prevent wrap around behaviour and inherit the error handling
     return nth(torepeat, n > 0 ? mod1(n, k) : n)
@@ -1787,7 +1787,10 @@ function _nth(::IteratorSize, itr, n::Integer)
     y[1]
 end
 
-_nth(::IteratorSize, z::Zip, n::Integer) = Base.map(nth(n), z.is)
+function _nth(::IteratorSize, z::Zip, n::Integer)
+    n > 0 || throw(BoundsError(z, n))
+    return Base.map(nth(n), z.is)
+end
 
 """
     nth(n::Integer)

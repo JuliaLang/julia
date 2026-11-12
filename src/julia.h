@@ -638,7 +638,19 @@ typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_tvar_t *JL_NONNULL var;
     jl_value_t *JL_NONNULL body;
+// hidden fields (see `hiddenfields`; allocated by `jl_new_unionall` only):
+    // structural facts about this node, memoized on first query (each bit
+    // pair is "known" + value; 0 means nothing computed yet). The facts depend
+    // only on the (immutable) structure, so they may be serialized as found.
+    _Atomic(uint32_t) flags;
 } jl_unionall_t;
+#define JL_UNIONALL_FREEVARS_KNOWN  0x1
+#define JL_UNIONALL_FREEVARS        0x2  // the type has free typevars
+#define JL_UNIONALL_OCCURSINV_KNOWN 0x4
+#define JL_UNIONALL_OCCURSINV       0x8  // the binder occurs in an invariant position of `body`
+#define JL_UNIONALL_ALWAYSCOV_KNOWN 0x10
+#define JL_UNIONALL_ALWAYSCOV       0x20 // the binder has a guaranteed covariant occurrence in `body`
+                                         // (in a covariant context), and none inside an inner binder's upper bound
 
 // represents the "name" part of a DataType, describing the syntactic structure
 // of a type and storing all data common to different instantiations of the type,
@@ -665,7 +677,11 @@ typedef struct JL_GC_TRACKED_TYPE {
     uint8_t abstract:1;
     uint8_t mutabl:1;
     uint8_t mayinlinealloc:1;
-    uint8_t _unused:5;
+    // instances hold data that the Julia-visible fields do not describe (C-only
+    // fields after them, an opaque layout, or trailing variable-sized data), so only
+    // the runtime's own constructor may allocate them
+    uint8_t hiddenfields:1;
+    uint8_t _unused:4;
     _Atomic(uint8_t) cache_entry_count; // (approximate counter of TypeMapEntry for heuristics)
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
     uint8_t constprop_heustic; // override for inference's constprop heuristic
@@ -989,6 +1005,7 @@ struct JL_GC_TRACKED_TYPE _jl_module_t {
     jl_uuid_t build_id;
     jl_uuid_t uuid;
     _Atomic(uint32_t) counter;
+    _Atomic(uint32_t) edition;
     int32_t nospecialize;  // global bit flags: initialization for new methods
     int8_t optlevel;
     int8_t compile;
@@ -2310,6 +2327,8 @@ JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s);
 
 // modules and global variables
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_set_module_edition(jl_module_t *m, uint32_t value);
+JL_DLLEXPORT uint32_t jl_get_module_edition(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl);
 JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m);
@@ -2494,7 +2513,6 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
 JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t *newly_inferred) JL_CANSAFEPOINT;
-JL_DLLEXPORT void jl_finalize_precompile_inferred(int8_t cleanup_keep_ir);
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t *ci) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_set_inference_entrance_backtraces(jl_value_t *inference_entrance_backtraces) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_push_inference_entrance_backtraces(jl_value_t *ci) JL_CANSAFEPOINT;
@@ -2502,9 +2520,8 @@ JL_DLLEXPORT void jl_write_compiler_output(void) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
                                   jl_module_t *inmodule) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
-                                  const char *file, int line, size_t world,
-                                  bool_t warn) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_lower(jl_module_t *inmodule, jl_value_t *expr, size_t world,
+                                  bool_t warn, jl_value_t *loc) JL_CANSAFEPOINT;
 
 // external libraries
 enum JL_RTLD_CONSTANT {
@@ -2579,11 +2596,6 @@ JL_DLLEXPORT int jl_operator_precedence(const char *sym) JL_CANSAFEPOINT;
 STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
 {
     return (vi&16)!=0;
-}
-
-STATIC_INLINE int jl_vinfo_usedundef(uint8_t vi)
-{
-    return (vi&32)!=0;
 }
 
 // calling into julia ---------------------------------------------------------

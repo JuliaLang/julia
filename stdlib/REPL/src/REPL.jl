@@ -135,7 +135,6 @@ import .LineEdit:
     history_prev_prefix,
     history_first,
     history_last,
-    history_search,
     setmodifiers!,
     terminal,
     MIState,
@@ -1175,59 +1174,6 @@ history_next_prefix(s::LineEdit.PrefixSearchState, hist::REPLHistoryProvider, pr
 history_prev_prefix(s::LineEdit.PrefixSearchState, hist::REPLHistoryProvider, prefix::AbstractString) =
     history_move_prefix(s, hist, prefix, true)
 
-function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, response_buffer::IOBuffer,
-                        backwards::Bool=false, skip_current::Bool=false)
-
-    qpos = position(query_buffer)
-    qpos > 0 || return true
-    searchdata = beforecursor(query_buffer)
-    response_str = takestring!(copy(response_buffer))
-
-    # Alright, first try to see if the current match still works
-    a = position(response_buffer) + 1 # position is zero-indexed
-    # FIXME: I'm pretty sure this is broken since it uses an index
-    # into the search data to index into the response string
-    b = a + sizeof(searchdata)
-    b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
-    b = min(lastindex(response_str), b) # ensure that b is valid
-
-    searchstart = backwards ? b : a
-    if searchdata == response_str[a:b]
-        if skip_current
-            searchstart = backwards ? prevind(response_str, b) : nextind(response_str, a)
-        else
-            return true
-        end
-    end
-
-    # Start searching
-    # First the current response buffer
-    if 1 <= searchstart <= lastindex(response_str)
-        match = backwards ? findprev(searchdata, response_str, searchstart) :
-                            findnext(searchdata, response_str, searchstart)
-        if match !== nothing
-            seek(response_buffer, first(match) - 1)
-            return true
-        end
-    end
-
-    # Now search all the other buffers
-    idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):1:length(hist.history))
-    for idx in idxs
-        h = hist.history[idx].content
-        match = backwards ? findlast(searchdata, h) : findfirst(searchdata, h)
-        if match !== nothing && h != response_str && haskey(hist.mode_mapping, hist.history[idx].mode)
-            truncate(response_buffer, 0)
-            write(response_buffer, h)
-            seek(response_buffer, first(match) - 1)
-            hist.cur_idx = idx
-            return true
-        end
-    end
-
-    return false
-end
-
 function history_reset_state(hist::REPLHistoryProvider)
     if hist.cur_idx != length(hist.history) + 1
         hist.last_idx = hist.cur_idx
@@ -1237,13 +1183,17 @@ function history_reset_state(hist::REPLHistoryProvider)
 end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
+const _last_active_project = Ref{Union{String, Nothing}}(nothing)
 function parse_repl_input_line(line::String, repl; kwargs...)
     # N.B.: This re-latches the syntax version for `Main`. If `Base.active_module` is not `Main`,
     # then this does not affect the parser used for that module. We could probably skip this step
     # in that case, but let's just be consistent on the off chance that the active module tries
     # to `include(Main, ...)` or similar.
-    @Base.ScopedValues.with Base.MainInclude.main_parser=>Base.parser_for_active_project() Base.parse_input_line(line;
-        mod=Base.active_module(repl), type=Syntax, kwargs...)
+    if _last_active_project[] !== Base.active_project()
+        _last_active_project[] = Base.active_project()
+        Core.set_edition(Main, Base.edition_for_active_project(Base.LATEST_EDITION))
+    end
+    Base.parse_input_line(line; mod=Base.active_module(repl), type=Syntax, kwargs...)
 end
 
 function return_callback(s)
@@ -1696,7 +1646,7 @@ function setup_interface(
                         isprompt_paste = true
                         curr_prompt_len = sizeof(detected_pkg_prompt)
                         oldpos += curr_prompt_len
-                        Base.active_repl.interface.modes[1].keymap_dict[']'](s, o...)
+                        julia_prompt.keymap_dict[']'](s, o...)
                         pasting_help = false
                     # Check if input line starts with "shell> ", remove it if we are in prompt paste mode and switch mode
                     elseif (firstline || isprompt_paste) && startswith(substr, SHELL_PROMPT)

@@ -84,12 +84,16 @@ Base.big
 Base.signed
 Base.unsigned
 Base.float(::Any)
+Base.float(::AbstractArray{<:AbstractFloat})
+Base.float(::Type{T}) where {T<:Number}
 Base.Math.significand
 Base.Math.exponent
 Base.Math.frexp
 Base.Math.ldexp
 Base.decompose
 Base.complex(::Complex)
+Base.complex(::AbstractArray{<:Complex})
+Base.complex(::Type{T}) where {T<:Real}
 Base.bswap
 Base.hex2bytes
 Base.hex2bytes!
@@ -142,6 +146,7 @@ Base.:(<<)
 Base.:(>>)
 Base.:(>>>)
 Base.bitrotate
+Base.bitreverse
 Base.:(~)
 Base.:(&)
 Base.:(|)

@@ -493,7 +493,7 @@ function get_nthreads(options = ``; cpus = nothing, exclusive = false)
     cmd = `$(Base.julia_cmd()) --startup-file=no $(options)`
     cmd = `$cmd -e "print(Threads.threadpoolsize())"`
     cmd = addenv(cmd, "JULIA_EXCLUSIVE" => exclusive ? "1" : "0",
-        "JULIA_NUM_THREADS" => "auto")
+        "JULIA_NUM_THREADS" => "auto", "JULIA_CPU_THREADS" => nothing)
     if cpus !== nothing
         cmd = setcpuaffinity(cmd, cpus)
     end
@@ -517,6 +517,33 @@ end
                 @test get_nthreads(cpus = allowed_cpus[1:2:3]) == 2
                 @test get_nthreads(cpus = allowed_cpus[2:3])   == 2
             end
+        end
+    end
+end
+
+@testset "JULIA_EXCLUSIVE pins threads within the CPU affinity mask" begin
+    if AFFINITY_SUPPORTED
+        allowed_cpus = findall(uv_thread_getaffinity())
+        if length(allowed_cpus) ≥ 3
+            script = joinpath(@__DIR__, "print_process_affinity.jl")
+            code = """
+                include($(repr(script)))
+                cpus = Vector{String}(undef, Threads.nthreads())
+                Threads.@threads :static for i in 1:Threads.nthreads()
+                    cpus[i] = join(findall(uv_thread_getaffinity()), ",")
+                end
+                join(stdout, cpus, " ")
+                """
+            cpus = allowed_cpus[2:3]
+            for threads in ("2,0", "2,1")
+                cmd = `$(Base.julia_cmd()) --startup-file=no --threads=$threads -e $code`
+                # JULIA_CPU_THREADS caps `auto`, not the CPUs available for pinning
+                cmd = addenv(cmd, "JULIA_EXCLUSIVE" => "1", "JULIA_CPU_THREADS" => "1")
+                @test read(setcpuaffinity(cmd, cpus), String) == "$(cpus[1]) $(cpus[2])"
+            end
+            cmd = `$(Base.julia_cmd()) --startup-file=no --threads=3 -e ""`
+            cmd = addenv(cmd, "JULIA_EXCLUSIVE" => "1")
+            @test !success(pipeline(setcpuaffinity(cmd, cpus); stderr=devnull))
         end
     end
 end
@@ -794,10 +821,16 @@ end
     script = joinpath(@__DIR__, "threadcall_iolock_wakeup.jl")
     cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=2,0 $script`
     proc = run(pipeline(cmd; stdout, stderr); wait=false)
+    timedout = false
     t = Timer(60) do _
+        timedout = true
+        # dumps the stacks, but can also wake the hang so that the child exits cleanly
+        kill(proc, Base.SIGQUIT)
+        sleep(10)
         kill(proc, Base.SIGKILL)
     end
     @test success(proc)
+    @test !timedout
     close(t)
 end
 
@@ -811,6 +844,63 @@ end
     end
     @test success(proc)
     close(t)
+end
+
+@testset "GC does not wait for another thread's LLVM run" begin
+    # One thread compiles a large function while another keeps collecting. Every collection
+    # waits for all threads to reach a safepoint, so if LLVM ran GC-unsafe, one collection
+    # would take about as long as the whole compilation.
+    program = raw"""
+        # a long chain of dependent operations: quick to infer, slow for LLVM
+        function define_big(n)
+            body = Expr(:block)
+            for i in 1:n
+                push!(body.args, :(x = x * $(i % 7 + 3) + y))
+                push!(body.args, :(y = xor(y, x >> $(i % 13 + 1))))
+            end
+            push!(body.args, :(return x + y))
+            @eval big(x::Int, y::Int) = $body
+        end
+        define_big(3000)
+        function main()
+            done = Threads.Atomic{Bool}(false)
+            compile_time = Ref(0.0)
+            compile_thread = Ref(0)
+            t = Threads.@spawn try
+                compile_thread[] = Threads.threadid()
+                # a dynamic call, so that `big` is compiled here, not along with `main`
+                compile_time[] = @elapsed Base.invokelatest(big, 1, 2)
+            finally
+                done[] = true
+            end
+            longest = 0.0
+            collections = 0
+            while !done[]
+                longest = max(longest, @elapsed GC.gc(false))
+                collections += 1
+                Libc.systemsleep(0.01) # doesn't yield, so `t` runs on another thread
+            end
+            wait(t)
+            compile_thread[] == Threads.threadid() && error("compiled on the collecting thread")
+            println(compile_time[], " ", longest, " ", collections)
+        end
+        main()
+    """
+    # without the objcache, which would skip LLVM after the first run
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=2 -e $program`
+    cmd = addenv(cmd, "JULIA_OBJCACHE" => "0")
+    output = IOBuffer()
+    proc = run(pipeline(cmd; stdout=output, stderr); wait=false)
+    t = Timer(300) do _
+        kill(proc, Base.SIGKILL)
+    end
+    @test success(proc)
+    close(t)
+    compile_time, longest, collections = split(String(take!(output)))
+    compile_time, longest = parse.(Float64, (compile_time, longest))
+    @test parse(Int, collections) >= 2
+    # a few seconds of LLVM, and a few ms per collection
+    @test longest < compile_time / 4
 end
 
 @testset "event loop thread wakeup with busy workers" begin
@@ -1021,6 +1111,10 @@ end
 let once = OncePerThread{Int}(() -> error("expected"))
     @test_throws ErrorException("expected") once()
     @test_throws ErrorException("OncePerThread initializer failed previously") once()
+end
+let once = OncePerThread{Int}(() -> 1.5)
+    @test_throws InexactError once()
+    @test (@atomic once.ss)[threadid()] == Base.PerStateErrored
 end
 
 let once = OncePerTask(() -> return [nothing])

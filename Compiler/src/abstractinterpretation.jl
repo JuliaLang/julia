@@ -881,12 +881,6 @@ function matches_sv(parent::AbsIntState, sv::AbsIntState)
             method_for_inference_limit_heuristics(sv) === method_for_inference_limit_heuristics(parent))
 end
 
-function is_method_recursed(method::Method, caller::AbsIntState)
-    return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
-        return method === frame_instance(sv).def
-    end
-end
-
 function is_constprop_edge_recursed(edge::MethodInstance, caller::AbsIntState)
     return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
         return edge === frame_instance(sv) && is_constproped(sv)
@@ -990,7 +984,9 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     # try constant prop'
     new_result = const_prop_call(interp, mi, result, arginfo, sv, concrete_eval_result)
     new_result === nothing && return nothing
-    if eligibility === :none
+    # running a call that never returns gains nothing, and if it also cannot throw,
+    # its code is unreachable and may be undefined behavior
+    if eligibility === :none && new_result.rt !== Bottom
         # const-prop' may have refined effects to be foldable when the original
         # call was not; in that case, prefer concrete eval over the const-prop' result
         proof = inference_proof(new_result.const_result)
@@ -3471,6 +3467,8 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
     argtype = abstract_eval_value(interp, e.args[1], sstate, sv)
     rt, _... = instanceof_tfunc(argtype, true)
     ut = unwrap_unionall(rt)
+    # only the runtime may allocate such a type (see `check_new_struct_type`)
+    isa(ut, DataType) && datatype_hashiddenfields(ut) && return RTEffects(Bottom, ErrorException, EFFECTS_THROWS)
     exct = Union{ErrorException,TypeError}
     if isa(ut, DataType) && !isabstracttype(ut)
         ismutable = ismutabletype(ut)
@@ -3572,6 +3570,9 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
     𝕃ᵢ = typeinf_lattice(interp)
     argtype = abstract_eval_value(interp, e.args[1], sstate, sv)
     rt, isexact = instanceof_tfunc(argtype, true)
+    ut = unwrap_unionall(rt)
+    # only the runtime may allocate such a type (see `check_new_struct_type`)
+    isa(ut, DataType) && datatype_hashiddenfields(ut) && return RTEffects(Bottom, ErrorException, EFFECTS_THROWS)
     # `:splatnew` throws on a `UnionAll` or `Union` rep that is only `==` to `rt` (#61323)
     isexact = isexact && widenconst(argtype) <: DataType
     nothrow = false
@@ -3975,8 +3976,7 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
     end
     cconv = e.args[5]
     if isa(cconv, QuoteNode) && (v = cconv.value;
-        isa(v, Union{Tuple{Symbol, UInt16, Bool}, Tuple{Symbol, UInt16, Bool, Bool},
-                     Tuple{Symbol, UInt16, Bool, Bool, Bool}}))
+        isa(v, Union{Tuple{Symbol, UInt16, Bool}, Tuple{Symbol, UInt16, Bool, Bool}}))
         override = decode_effects_override(v[2])
         effects = override_effects(effects, override)
     end
@@ -4009,11 +4009,6 @@ function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, sstate::St
         rt = tmerge(typeinf_lattice(interp), rt, thisval)
     end
     return rt
-end
-
-function stmt_taints_inbounds_consistency(sv::AbsIntState)
-    propagate_inbounds(sv) && return true
-    return has_curr_ssaflag(sv, IR_FLAG_INBOUNDS)
 end
 
 function merge_override_effects!(interp::AbstractInterpreter, effects::Effects, sv::InferenceState)

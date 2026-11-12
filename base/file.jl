@@ -804,22 +804,28 @@ function _tempname(parent::AbstractString, suffix::AbstractString, max_tries::In
 end
 
 if Sys.iswindows()
-# While this isn't a true analog of `mkstemp`, it _does_ create an
-# empty file for us, ensuring that other simultaneous calls to
-# `_win_mkstemp()` won't collide, so it's a better name for the
-# function than `tempname()`.
+# Create an empty file with a random name and return its path.
+# GetTempFileNameW is avoided: it takes names from a 16-bit counter, so when other
+# processes create temporary files in the same directory, it can hand back names
+# that this process deleted moments earlier.
 function _win_mkstemp(temppath::AbstractString)
-    tempp = cwstring(temppath)
-    temppfx = cwstring(temp_prefix)
-    tname = Vector{UInt16}(undef, 32767)
-    uunique = ccall(:GetTempFileNameW, stdcall, UInt32,
-                    (Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt16}),
-                    tempp, temppfx, UInt32(0), tname)
-    windowserror("GetTempFileName", uunique == 0)
-    lentname = something(findfirst(iszero, tname))
-    @assert lentname > 0 "unexpected index"
-    resize!(tname, lentname - 1)
-    return transcode(String, tname)
+    req = Libc.malloc(_sizeof_uv_fs)
+    try
+        ret = ccall(:uv_fs_mkstemp, Cint,
+                    (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                    C_NULL, req, joinpath(temppath, temp_prefix * "XXXXXX"), C_NULL)
+        if ret < 0
+            uv_fs_req_cleanup(req)
+            uv_error("mktemp($(repr(temppath)))", ret)
+        end
+        handle = ccall(:uv_fs_get_result, Cssize_t, (Ptr{Cvoid},), req)
+        path = unsafe_string(ccall(:jl_uv_fs_t_path, Cstring, (Ptr{Cvoid},), req))
+        uv_fs_req_cleanup(req)
+        close(File(OS_HANDLE(Ptr{Cvoid}(handle))))
+        return path
+    finally
+        Libc.free(req)
+    end
 end
 
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
@@ -1232,9 +1238,11 @@ mutable struct DirEntryIterator{T}
     @atomic uvdir::Ptr{Cvoid}
     const status::RefValue{Cint}
     closed::Bool
+    # The next name, when it was read ahead to check for the end of the directory
+    peeked::Union{Nothing, String}
     function DirEntryIterator{T}(dir::AbstractString, join::Bool=false) where {T}
         T === String || T === DirEntry || throw(ArgumentError("element type must be String or DirEntry"))
-        finalizer(close, new{T}(String(dir), join, C_NULL, RefValue{Cint}(0), false))
+        finalizer(close, new{T}(String(dir), join, C_NULL, RefValue{Cint}(0), false, nothing))
     end
 end
 
@@ -1260,23 +1268,41 @@ function Base.close(it::DirEntryIterator)
         ccall(:jl_uv_fs_closedir, Cint, (Ptr{Cvoid},), uvdir)
     end
     it.closed = true
+    it.peeked = nothing
     return
 end
 
 Base.IteratorSize(::Type{<:DirEntryIterator}) = Base.SizeUnknown()
 Base.eltype(::Type{DirEntryIterator{T}}) where {T} = T
-Base.isdone(it::DirEntryIterator, _=nothing) = it.closed
 
-function Base.iterate(it::DirEntryIterator{T}, _=nothing) where {T}
+function _eachentry_read!(it::DirEntryIterator)
     _eachentry_open!(it)
-    name = ccall(:jl_uv_fs_readdir1, Any, (Ptr{Cvoid}, Ptr{Cint}), it.uvdir, it.status)
-    if name === nothing
+    name = ccall(:jl_uv_fs_readdir1, Any, (Ptr{Cvoid}, Ptr{Cint}), it.uvdir, it.status)::Union{Nothing, String}
+    if name === nothing && it.status[] < 0
         err = it.status[]
         close(it)
-        err < 0 && uv_error("eachentry($(repr(it.dir)))", err)
-        return nothing
+        uv_error("eachentry($(repr(it.dir)))", err)
     end
-    name = name::String
+    return name
+end
+
+function Base.isdone(it::DirEntryIterator, _=nothing)
+    it.closed && return true
+    it.peeked === nothing || return false
+    it.peeked = _eachentry_read!(it)
+    return it.peeked === nothing
+end
+
+function Base.iterate(it::DirEntryIterator{T}, _=nothing) where {T}
+    name = it.peeked
+    if name === nothing
+        name = _eachentry_read!(it)
+        if name === nothing
+            close(it)
+            return nothing
+        end
+    end
+    it.peeked = nothing
     value = T === DirEntry ? DirEntry(it.dir, name, it.status[]) :
             it.join ? joinpath(it.dir, name) : name
     return value, nothing

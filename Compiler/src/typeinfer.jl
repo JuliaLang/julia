@@ -397,6 +397,32 @@ function propagate_unpublished_cycle_proof!(
     return nothing
 end
 
+# Inside a cycle, a call to a function that is still being inferred can only
+# record an edge to its MethodInstance. Once the cycle is done, point those edges
+# to the finished CodeInstance instead. Then package caches save that code together
+# with its caller, and invalidating it also invalidates the caller.
+function link_cycle_ci_edges!(frames::Vector{AbsIntState{I}}, cycleid::Int) where {I<:AbstractInterpreter}
+    members = IdDict{MethodInstance,CodeInstance}()
+    for frameid = cycleid:length(frames)
+        caller = frames[frameid]::InferenceState
+        if !iszero(caller.cache_mode & CACHE_MODE_GLOBAL) && isdefined(caller.result, :ci)
+            members[caller.linfo] = caller.result.ci
+        end
+    end
+    isempty(members) && return nothing
+    for frameid = cycleid:length(frames)
+        caller = frames[frameid]::InferenceState
+        edges = internal_result_edges(caller)
+        for i = 1:length(edges)
+            edge = edges[i]
+            (edge isa MethodInstance && edge !== caller.linfo) || continue
+            ci = get(members, edge, nothing)
+            ci === nothing || (edges[i] = ci)
+        end
+    end
+    return nothing
+end
+
 function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}}, cycleid::Int, time_before::UInt64) where {I<:AbstractInterpreter}
     world = get_inference_world(interp::I)
     cycle_valid_worlds = WorldRange()
@@ -445,6 +471,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}
     # source was tombstoned), preserve the SCC's external dependencies explicitly.
     # One shared proof for the whole SCC avoids constructing a cyclic proof graph.
     propagate_unpublished_cycle_proof!(frames, cycleid, world, cycle_valid_worlds)
+    link_cycle_ci_edges!(frames, cycleid)
     empty!(opt_cache)
     cycletop = frames[cycleid]::InferenceState
     time_start = cycletop.time_start
@@ -621,7 +648,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance
     if can_discard_trees && !inlineable
         # Precompile-keep-ir mode: retain non-inlineable IR as raw CodeInfo so
         # irgen's typeinf_ext can reuse it instead of re-inferring.
-        # jl_finalize_precompile_inferred nulls it before save.
+        # The image leaves it out.
         precompile_keep_ir(interp) && return ci
         keep_source_for_output(mi) || return nothing
     end
@@ -1017,9 +1044,12 @@ function compute_edges!(sv::InferenceState)
     for i in 1:length(sv.stmt_info)
         add_edges!(edges, sv.stmt_info[i])
     end
-    user_edges = sv.src.edges::Union{Nothing, SimpleVector, Vector{Any}}
-    if user_edges !== nothing && user_edges !== empty_edges
-        append!(edges, user_edges)
+    user_edges = sv.src.edges
+    if user_edges isa Union{SimpleVector, Vector{Any}}
+        user_edges === empty_edges || append!(edges, user_edges)
+    elseif user_edges !== nothing
+        # Generated functions in older packages store a narrowly typed vector here.
+        append!(edges, user_edges::Vector)
     end
     nothing
 end
@@ -1069,22 +1099,6 @@ function record_slot_assign!(sv::InferenceState)
         end
     end
     sv.src.slottypes = slottypes
-    return nothing
-end
-
-# find the dominating assignment to the slot `id` in the block containing statement `idx`,
-# returns `nothing` otherwise
-function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
-    block = block_for_inst(sv.cfg, idx)
-    for pc in reverse(sv.cfg.blocks[block].stmts) # N.B. reverse since the last assignment is dominating this block
-        pc < idx || continue # N.B. needs pc ≠ idx as `id` can be assigned at `idx`
-        stmt = sv.src.code[pc]
-        isexpr(stmt, :(=)) || continue
-        lhs = stmt.args[1]
-        isa(lhs, SlotNumber) || continue
-        slot_id(lhs) == id || continue
-        return pc
-    end
     return nothing
 end
 

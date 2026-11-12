@@ -876,6 +876,13 @@ end
     end
 end
 
+@testset "show(::LibuvServer)" begin
+    _, server = listenany(ip"127.0.0.1", 11011)
+    @test occursin(r"TCPServer\(.* active\)$", sprint(show, server))
+    close(server)
+    @test occursin(r"TCPServer\(.* closed\)$", sprint(show, server))
+end
+
 @testset "getipaddrs" begin
     @test getipaddr() in getipaddrs()
 

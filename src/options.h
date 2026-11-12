@@ -134,6 +134,9 @@
 // threadpools specification
 #define THREADPOOLS_NAME                "JULIA_THREADPOOLS"
 
+// caps `auto` thread counts, see `jl_effective_threads`
+#define CPU_THREADS_NAME                "JULIA_CPU_THREADS"
+
 // GC threads
 #define NUM_GC_THREADS_NAME             "JULIA_NUM_GC_THREADS"
 

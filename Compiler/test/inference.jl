@@ -2444,6 +2444,32 @@ let memoryref_tfunc(@nospecialize xs...) = Compiler.memoryref_tfunc(Compiler.fal
     @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{Memory}]) == Union{}
 end
 
+# Byte access types come from the requested type/value, rather than the storage element type.
+@testset "MemoryRef byte access inference" begin
+    loadbytes(args...) = Compiler.unsafe_memoryrefload_tfunc(Compiler.fallback_lattice, args...)
+    storebytes(args...) = Compiler.unsafe_memoryrefstore!_tfunc(Compiler.fallback_lattice, args...)
+    @test loadbytes(MemoryRef{UInt8}, Const(Int32), Int, Bool) === Int32
+    @test loadbytes(MemoryRef{UInt8}, Type{ComplexF64}, Const(1), Bool) === ComplexF64
+    @test loadbytes(MemoryRef{UInt8}, Const(String), Int, Bool) === Union{}
+    W = Union{T,U} where {T<:Int32,U<:Int32}
+    @test loadbytes(MemoryRef{UInt8}, Type{W}, Int, Bool) == Int32
+    @test loadbytes(MemoryRef{UInt8}, Core.TypeEgal{W}, Int, Bool) === Union{}
+    @test storebytes(MemoryRef{UInt8}, Int32, Int, Bool) === Int32
+    @test storebytes(MemoryRef{UInt8}, Const(Int32(7)), Int, Bool) === Const(Int32(7))
+    @test storebytes(MemoryRef{UInt8}, String, Int, Bool) === Union{}
+    for f in (Core.unsafe_memoryrefload, Core.unsafe_memoryrefstore!)
+        value = f === Core.unsafe_memoryrefload ? Const(Int32) : Int32
+        @test Compiler.builtin_nothrow(Compiler.fallback_lattice, f,
+                                      Any[MemoryRef{UInt8}, value, Int, Const(false)], Int32)
+        @test !Compiler.builtin_nothrow(Compiler.fallback_lattice, f,
+                                       Any[MemoryRef{Any}, value, Int, Const(false)], Int32)
+    end
+    @test Compiler.builtin_nothrow(Compiler.fallback_lattice, Core.unsafe_memoryrefload,
+                                  Any[MemoryRef{UInt8}, Core.TypeEgal{Int32}, Int, Const(false)], Int32)
+    @test !Compiler.builtin_nothrow(Compiler.fallback_lattice, Core.unsafe_memoryrefload,
+                                   Any[MemoryRef{UInt8}, Type{Int32}, Int, Const(false)], Int32)
+end
+
 let tuple_tfunc(@nospecialize xs...) =
         Compiler.tuple_tfunc(Compiler.fallback_lattice, Any[xs...])
     # only the egality kind `TypeEgal{X}` pins the element's `typeof` (#61323)
@@ -8697,5 +8723,12 @@ const SPLAT_SVEC_NAMES = ntuple(i -> Symbol(:a, i), 33)
 @inline splat_svec_outer(names, vals::Tuple) = splat_svec_inner(names, vals...)
 splat_svec_caller(vals) = splat_svec_outer(SPLAT_SVEC_NAMES, vals)
 @test Base.infer_return_type(splat_svec_caller, (NTuple{33,Int},)) === NamedTuple{SPLAT_SVEC_NAMES, NTuple{33,Int}}
+
+# a reference at a non-constant index of a constant `MemoryRef` is not that constant
+const memoryref_at_const = Core.memoryrefnew(Memory{Int}(undef, 4))
+memoryref_at_offset(i::Int) = Core.memoryrefoffset(Core.memoryrefnew(memoryref_at_const, i, true))
+@test Compiler.builtin_tfunction(Compiler.NativeInterpreter(), Core.memoryrefnew,
+    Any[Core.Const(memoryref_at_const), Int, Core.Const(true)], nothing) === MemoryRef{Int}
+@test memoryref_at_offset(3) == 3
 
 end # module inference

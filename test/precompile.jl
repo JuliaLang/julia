@@ -627,6 +627,7 @@ precompile_test_harness(false) do dir
           """)
 
     @test Base.compilecache(Base.PkgId("Baz")) == Base.PrecompilableError() # due to __precompile__(false)
+    @test occursin("__precompile__(false)", sprint(show, Base.PrecompilableError()))
 
     OverwriteMethodError_file = joinpath(dir, "OverwriteMethodError.jl")
     write(OverwriteMethodError_file,
@@ -1680,6 +1681,52 @@ precompile_test_harness("delete_method") do dir
     end
 end
 
+precompile_test_harness("serialization leaves the heap unchanged") do dir
+    # The package checks, in the same process right after its image is written, that
+    # serializing it changed nothing that the image leaves out
+    write(joinpath(dir, "SerializeNoMutate.jl"),
+          """
+          module SerializeNoMutate
+          struct Wrap{T} end
+          const kept = Wrap{Int}
+          global counter::Int = 0
+          # too large to inline, and inferred while loading, so that its inferred IR is kept
+          # only to emit the image
+          function noinline_sum(n)
+              s = 0
+              for i in 1:n, j in 1:i
+                  s += i * j % 7
+              end
+              return s
+          end
+          noinline_sum(3)
+          if ccall(:jl_generating_output, Cint, ()) == 1
+              let dropped = Wrap{Float64}, # only the hook refers to it
+                  b = convert(Core.Binding, GlobalRef(@__MODULE__, :counter)),
+                  # a backedge from code outside this image, as from a dependent package
+                  edge = Base.method_instance(sin, (Float64,)).cache
+                  ccall(:jl_add_binding_backedge, Cvoid, (Any, Any), b, edge)
+                  before = copy(b.backedges)
+                  Base.postoutput() do
+                      after = b.backedges
+                      ci = Base.method_instance(noinline_sum, (Int,)).cache
+                      write(joinpath(@__DIR__, "result.txt"),
+                            "type cache: \$(Wrap{Float64} === dropped)\\n",
+                            "backedges: \$(after == before && all(map(===, after, before)))\\n",
+                            "inferred: \$(ci.inferred isa Core.CodeInfo)\\n")
+                  end
+              end
+          end
+          end
+          """)
+    Base.compilecache(Base.PkgId("SerializeNoMutate"))
+    # post-output hooks run when the image includes native code
+    if Base.JLOptions().use_pkgimages == 1
+        @test readlines(joinpath(dir, "result.txt")) ==
+            ["type cache: true", "backedges: true", "inferred: true"]
+    end
+end
+
 precompile_test_harness("Issues #19030 and #25279") do load_path
     ModuleA = :Issue19030
     write(joinpath(load_path, "$ModuleA.jl"),
@@ -1854,13 +1901,17 @@ precompile_test_harness("No external edges") do load_path
           end
           """)
     Base.compilecache(Base.PkgId("NoExternalEdges"))
-    @eval begin
+    # Load in a fresh process: methods from earlier tests on this worker (e.g. SparseArrays' `hcat`) would invalidate the cached code
+    script = """
         using NoExternalEdges
-        @test (only(methods(NoExternalEdges.foo1)).specializations::Core.MethodInstance).cache.max_world != 0
-        @test (only(methods(NoExternalEdges.foo2)).specializations::Core.MethodInstance).cache.max_world != 0
-        @test (only(methods(NoExternalEdges.foo3)).specializations::Core.MethodInstance).cache.max_world != 0
-        @test (only(methods(NoExternalEdges.foo4)).specializations::Core.MethodInstance).cache.max_world != 0
-    end
+        for f in (NoExternalEdges.foo1, NoExternalEdges.foo2, NoExternalEdges.foo3, NoExternalEdges.foo4)
+            println((only(methods(f)).specializations::Core.MethodInstance).cache.max_world != 0)
+        end
+        """
+    pathsep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                 "JULIA_LOAD_PATH" => join(LOAD_PATH, pathsep), "JULIA_DEPOT_PATH" => join(DEPOT_PATH, pathsep))
+    @test readlines(cmd) == fill("true", 4)
 end
 
 @testset "issue 38149" begin
@@ -2475,7 +2526,7 @@ precompile_test_harness("Generator nospecialize") do load_path
         @generated function f(x...)
             :((\$(Base.Meta.quot(x)),))
         end
-        @assert precompile(Tuple{typeof(which(f, (Any,Any)).generator.gen), Any, Any})
+        @assert precompile(only(methods(which(f, (Any,Any)).generator.gen)).sig)
         end
         """)
     ji, ofile = Base.compilecache(Base.PkgId("GenNoSpec"))
@@ -2805,6 +2856,14 @@ precompile_test_harness("No package module") do load_path
     @test occursin(
         "`using/import Printf` outside of a Module detected. Importing a package outside of a module is not allowed during package precompilation.",
         String(take!(io)))
+
+    write(joinpath(load_path, "RequireStdlibInPackage.jl"), """
+    module RequireStdlibInPackage
+    Base.require_stdlib(Base.PkgId(Base.UUID("de0858da-6303-5e67-8744-51eddeeeb8d7"), "Printf"))
+    end
+    """)
+    @test_throws r"Failed to precompile RequireStdlibInPackage" Base.compilecache(Base.identify_package("RequireStdlibInPackage"), io, io)
+    @test occursin("package code should instead use it directly from that stdlib", String(take!(io)))
 end
 
 precompile_test_harness("Constprop CodeInstance invalidation") do load_path
@@ -2837,6 +2896,44 @@ precompile_test_harness("Constprop CodeInstance invalidation") do load_path
     @eval DefineTheMethod.the_method_val(::Val{1}) = Int(0)
     invokelatest() do
         @test Int(0) == CallTheMethod.call_the_method()
+    end
+end
+
+precompile_test_harness("Invalidation through a cached recursion cycle") do load_path
+    write(joinpath(load_path, "CycleUp.jl"),
+        """
+        module CycleUp
+            struct Thing
+                payload::Any
+            end
+            describe(x) = 1
+            inner(t::Thing) = describe(t.payload)
+            function f(t::Thing; flag = false)
+                t.payload isa Thing && return f(t.payload; flag = flag)
+                return inner(t)
+            end
+        end
+        """)
+    write(joinpath(load_path, "CycleMid.jl"),
+        """
+        module CycleMid
+            using CycleUp
+            go(t::CycleUp.Thing, @nospecialize(flag)) = CycleUp.f(t; flag = flag)
+            ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
+            go(CycleUp.Thing(CycleUp.Thing(1)), Base.inferencebarrier(false))
+            ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
+        end
+        """)
+    Base.compilecache(Base.PkgId("CycleMid"))
+    @eval using CycleUp, CycleMid
+    @eval begin
+        struct CycleB2 end
+        CycleUp.describe(::CycleB2) = "three"
+        cycle_loose(t, @nospecialize(flag)) = CycleUp.f(t; flag = flag)
+    end
+    invokelatest() do
+        @test Base.infer_return_type(cycle_loose, (CycleUp.Thing, Any)) == Union{Int, String}
+        @test cycle_loose(CycleUp.Thing(CycleB2()), Base.inferencebarrier(false)) == "three"
     end
 end
 
@@ -3532,6 +3629,10 @@ wait_until(f) = while !f(); sleep(0.05); end
             try
                 wait_until(() -> isfile(started))
                 @test Base.Precompilation.is_precompiling_in_background()
+                # other tasks see a change to the environment made while the run is going
+                push!(LOAD_PATH, depot)
+                @test depot in Base.load_path()
+                pop!(LOAD_PATH)
                 t2 = @async Base.Precompilation.precompilepkgs(["MergedPkg"]; io=IOContext(io2, :color => false), fancyprint=false)
                 wait_until(() -> has_cachefile(depot, "MergedPkg"))
                 @test !istaskdone(t1)
@@ -3711,6 +3812,46 @@ precompile_test_harness("invalidation for 'foreign-keyed' Preferences") do load_
         @test Base.stale_cachefile(pkg_file, cachefile) !== true
         # Setting a previously-unset preference also causes staleness
         Base.set_active_project(env_unset_set)
+        @test Base.stale_cachefile(pkg_file, cachefile) === true
+    finally
+        Base.set_active_project(old_proj)
+    end
+end
+
+precompile_test_harness("invalidation for Array and Dict Preferences") do load_path
+    # A cache stays valid for equal structured values and goes stale for changed ones
+    uuid_str = "c6e1d3a8-4b57-4a0f-9f43-0a6f4f1c2b11"
+    write(joinpath(load_path, "PkgStructuredPrefs.jl"),
+          """
+          module PkgStructuredPrefs
+              Base.record_compiletime_preference(Base.UUID("$uuid_str"), "levels")
+              Base.record_compiletime_preference(Base.UUID("$uuid_str"), "options")
+          end
+          """)
+    function env(prefs)
+        project = joinpath(mkpath(joinpath(load_path, "env_$(hash(prefs))")), "Project.toml")
+        write(project, """
+              [deps]
+              PkgStructured = "$uuid_str"
+
+              [preferences.PkgStructured]
+              $prefs
+              """)
+        return project
+    end
+    levels = "levels = [1, 2]"
+    options = "options = {a = 1, b = [\"x\", {c = true}]}"
+    old_proj = Base.active_project()
+    try
+        Base.set_active_project(env("$levels\n$options"))
+        cachefile, _ = Base.compilecache(Base.PkgId("PkgStructuredPrefs"))
+        pkg_file = joinpath(load_path, "PkgStructuredPrefs.jl")
+        @test Base.stale_cachefile(pkg_file, cachefile) !== true
+        Base.set_active_project(env("$levels\noptions = {b = [\"x\", {c = true}], a = 1}"))
+        @test Base.stale_cachefile(pkg_file, cachefile) !== true
+        Base.set_active_project(env("levels = [1, 2, 3]\n$options"))
+        @test Base.stale_cachefile(pkg_file, cachefile) === true
+        Base.set_active_project(env("$levels\noptions = {a = 1, b = [\"x\", {c = false}]}"))
         @test Base.stale_cachefile(pkg_file, cachefile) === true
     finally
         Base.set_active_project(old_proj)
@@ -5621,6 +5762,29 @@ precompile_test_harness("mismatched package image .so is recompiled") do load_pa
                  "JULIA_LOAD_PATH" => join([load_path, "@stdlib"], pathsep))
     @test success(pipeline(cmd; stdout, stderr))
     @test read(ocachefile) != oldso
+end
+
+# Asking about several packages at once gives the same answers as asking about each one.
+precompile_test_harness("isprecompiled for several packages") do load_path
+    depfile = joinpath(load_path, "BatchDep.jl")
+    write(depfile, "module BatchDep\nend\n")
+    write(joinpath(load_path, "BatchTop.jl"), "module BatchTop\nusing BatchDep\nend\n")
+    write(joinpath(load_path, "BatchOther.jl"), "module BatchOther\nend\n")
+    top, dep, other = Base.PkgId("BatchTop"), Base.PkgId("BatchDep"), Base.PkgId("BatchOther")
+    nosource = Base.PkgId("BatchNoSource")
+    pkgs = [top, dep, other, nosource]
+    @test Base.isprecompiled(pkgs) == [false, false, false, false]
+    Base.compilecache(top)
+    @test Base.isprecompiled(pkgs) == [true, true, false, false]
+    @test Base.isprecompiled(pkgs) == [Base.isprecompiled(top), Base.isprecompiled(dep), Base.isprecompiled(other), false]
+    @test Base.isprecompiled(Base.PkgId[]) == Bool[]
+    # a package in the system image never has to be precompiled
+    sysimage_pkg = first(pkg for pkg in keys(Base.loaded_modules) if Base.in_sysimage(pkg))
+    @test Base.isprecompiled(sysimage_pkg)
+    @test Base.isprecompiled([sysimage_pkg, top]) == [true, true]
+    # changing a dependency makes its dependents stale as well
+    write(depfile, "module BatchDep\nconst changed = true\nend\n")
+    @test Base.isprecompiled(pkgs) == [false, false, false, false]
 end
 
 # Loading marks the accepted cache file as recently used, but only in the depot that

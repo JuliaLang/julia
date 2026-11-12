@@ -1099,6 +1099,33 @@ end
     @test _pointerset_trigger(0) == (Int[1,2,3], 42, Int[1,2,3], 42)
 end
 
+# unsafe_load of inline immutables that hold only references, so no bits
+# remain beside the inline_roots
+@testset "pointerref of all-pointer structs" begin
+    struct PointerrefOneRef
+        x::Any
+    end
+    struct PointerrefThreeRefs
+        a::String
+        b::Any
+        c::Vector{Int}
+    end
+    struct PointerrefRefAndBits
+        a::Vector{Int}
+        b::Int
+    end
+    _pointerref_load(v, i) = GC.@preserve v unsafe_load(pointer(v), i)
+    for v in ([PointerrefOneRef("a"), PointerrefOneRef([1])],
+              [PointerrefThreeRefs("a", 1, [1]), PointerrefThreeRefs("b", :c, [2, 3])],
+              [("a",), ("b",)],
+              [PointerrefRefAndBits([1], 2), PointerrefRefAndBits([3], 4)])
+        @test Base.allocatedinline(eltype(v))
+        for i in eachindex(v)
+            @test _pointerref_load(v, i) === v[i]
+        end
+    end
+end
+
 # https://github.com/JuliaLang/julia/issues/61436
 tofloat(x) = Core.Intrinsics.uitofp(Float64, x)
 @test tofloat(UInt128(0)) == 0.0

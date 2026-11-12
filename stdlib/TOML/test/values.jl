@@ -56,6 +56,8 @@ end
     @test testval("2_0.0"       , 20.0)
     @test testval("2_0.0_0e0_0" , 20.0)
     @test testval("2_0.1_0e1_0" , 20.1e10)
+    @test testval("6.022_140_76e23", 6.02214076e23)
+    @test testval("1_000e3"        , 1e6)
 
     @test testval("1_0"    , 10    |> Int64)
     @test testval("1_0_0"  , 100   |> Int64)

@@ -707,9 +707,12 @@ add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
         if lb_valid && ub_valid
             tv = TypeVar(nval, lb, ub)
             return PartialTypeVar(tv, lb_certain, ub_certain)
-        elseif !lb_valid && lb_certain
+        end
+        # A TypeApp bound (deferred in a typegroup definition) is accepted, but
+        # not modeled further, as it cannot take part in subtyping
+        if !lb_valid && !isa(lb, Core.TypeApp) && lb_certain
             return Union{}
-        elseif !ub_valid && ub_certain
+        elseif !ub_valid && !isa(ub, Core.TypeApp) && ub_certain
             return Union{}
         end
     end
@@ -719,6 +722,7 @@ end
     ⊑ = partialorder(𝕃)
     b = widenconst(b)
     (b ⊑ TypeVar) && return true
+    (b ⊑ Core.TypeApp) && return true
     if isType(b) || b === typeof(Union{})
         return true
     end
@@ -2420,6 +2424,26 @@ add_tfunc(Core.memoryrefmodify!, 5, 5, memoryrefmodify!_tfunc, 20)
 add_tfunc(Core.memoryrefreplace!, 6, 6, memoryrefreplace!_tfunc, 20)
 add_tfunc(Core.memoryrefsetonce!, 5, 5, memoryrefsetonce!_tfunc, 20)
 
+@nospecs function unsafe_memoryrefload_tfunc(𝕃::AbstractLattice, mem, typ, offset, boundscheck)
+    hasintersect(widenconst(mem), MemoryRef) || return Bottom
+    hasintersect(widenconst(offset), Int) || return Bottom
+    hasintersect(widenconst(boundscheck), Bool) || return Bottom
+    T, exact = instanceof_tfunc(typ, true)
+    egal = typ isa Const || isTypeEgal(widenconst(typ))
+    exact && (egal || isconcretetype(T)) && !isbitstype(T) && return Bottom
+    return T
+end
+@nospecs function unsafe_memoryrefstore!_tfunc(𝕃::AbstractLattice, mem, item, offset, boundscheck)
+    hasintersect(widenconst(mem), MemoryRef) || return Bottom
+    hasintersect(widenconst(offset), Int) || return Bottom
+    hasintersect(widenconst(boundscheck), Bool) || return Bottom
+    T = widenconst(item)
+    isconcretetype(T) && !isbitstype(T) && return Bottom
+    return item
+end
+add_tfunc(unsafe_memoryrefload, 4, 4, unsafe_memoryrefload_tfunc, 20)
+add_tfunc(unsafe_memoryrefstore!, 4, 4, unsafe_memoryrefstore!_tfunc, 20)
+
 @nospecs function memoryref_isassigned_tfunc(𝕃::AbstractLattice, mem, order, boundscheck)
     return _memoryref_isassigned_tfunc(𝕃, mem, order, boundscheck)
 end
@@ -2453,7 +2477,8 @@ end
     memoryref_builtin_common_errorcheck(ref, Const(:not_atomic), boundscheck) || return Bottom
     hasintersect(widenconst(idx), Int) || return Bottom
     hasintersect(widenconst(ref), GenericMemory) && return memoryref_tfunc(𝕃, ref)
-    return ref
+    # a reference at another index, so not the constant `ref` itself
+    return widenconst(ref)
 end
 add_tfunc(memoryrefnew, 1, 3, memoryref_tfunc, 1)
 
@@ -2599,6 +2624,26 @@ function memoryrefop_builtin_common_nothrow(𝕃::AbstractLattice, argtypes::Vec
     return false
 end
 
+function unsafe_memoryref_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, isget::Bool)
+    length(argtypes) == 4 || return false
+    boundscheck = argtypes[4]
+    boundscheck isa Const && boundscheck.val === false || return false
+    memtype = widenconst(argtypes[1])
+    isconcretetype(memtype) && memtype <: MemoryRef || return false
+    S = memtype.parameters[2]
+    isbitstype(S) && sizeof(S) > 0 || return false
+    widenconst(argtypes[3]) <: Int || return false
+    if isget
+        typ = argtypes[2]
+        typ isa Const || isconstType(typ) || return false
+        T, exact, _, istype = instanceof_tfunc(typ, true)
+        exact && istype || return false
+    else
+        T = widenconst(argtypes[2])
+    end
+    return isbitstype(T)
+end
+
 @nospecs function memoryref_builtin_common_typecheck(𝕃::AbstractLattice, boundscheck, memtype, order)
     ⊑ = partialorder(𝕃)
     return boundscheck ⊑ Bool && memtype ⊑ GenericMemoryRef && order ⊑ Symbol
@@ -2635,6 +2680,8 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
         length(argtypes) == 1 || return false
         memtype = widenconst(argtypes[1])
         return memtype ⊑ GenericMemoryRef
+    elseif f === unsafe_memoryrefload || f === unsafe_memoryrefstore!
+        return unsafe_memoryref_nothrow(𝕃, argtypes, f === unsafe_memoryrefload)
     elseif f === memoryrefset!
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryrefunset!
@@ -2758,6 +2805,7 @@ const _EFFECT_FREE_BUILTINS = [
     memoryrefoffset,
     memoryrefget,
     const_memoryrefget,
+    unsafe_memoryrefload,
     memoryref_isassigned,
     isdefined,
     Core.bitsizeof,
@@ -2808,6 +2856,8 @@ const _ARGMEM_BUILTINS = Any[
     const_memoryrefget,
     memoryref_isassigned,
     memoryrefset!,
+    unsafe_memoryrefload,
+    unsafe_memoryrefstore!,
     memoryrefunset!,
     modifyfield!,
     replacefield!,
@@ -3020,6 +3070,8 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     memoryref_isassigned,
     memoryrefget,
     const_memoryrefget,
+    unsafe_memoryrefload,
+    unsafe_memoryrefstore!,
     # Core.memoryrefmodify!,
     memoryrefnew,
     memoryrefoffset,
@@ -3147,14 +3199,14 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
-        elseif f === memoryrefget || f === const_memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
+        elseif f === memoryrefget || f === const_memoryrefget || f === unsafe_memoryrefload || f === unsafe_memoryrefstore! || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
         elseif f === Core._typevar || f === Core.memorynew
             consistent = CONSISTENT_IF_NOTRETURNED
         else
             consistent = ALWAYS_FALSE
         end
-        if f === setfield! || f === memoryrefset! || f === memoryrefunset!
+        if f === setfield! || f === memoryrefset! || f === unsafe_memoryrefstore! || f === memoryrefunset!
             effect_free = EFFECT_FREE_IF_INACCESSIBLEMEMONLY
         elseif contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
             effect_free = ALWAYS_TRUE
@@ -3169,7 +3221,14 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         else
             inaccessiblememonly = ALWAYS_FALSE
         end
-        if f === memoryrefnew || f === memoryrefget || f === const_memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
+        if f === unsafe_memoryrefload || f === unsafe_memoryrefstore!
+            noub = ALWAYS_FALSE
+            if length(argtypes) == 4 && memoryop_noub(f, argtypes)
+                T = f === unsafe_memoryrefload ? instanceof_tfunc(argtypes[2], true)[1] :
+                    instanceof_tfunc(_memoryref_elemtype(argtypes[1]), true)[1]
+                isprimitivetype(T) && T !== Bool && (noub = ALWAYS_TRUE)
+            end
+        elseif f === memoryrefnew || f === memoryrefget || f === const_memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
             noub = memoryop_noub(f, argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
         else
             noub = ALWAYS_TRUE
@@ -3193,7 +3252,7 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
     elseif f === memoryrefget || f === const_memoryrefget || f === memoryref_isassigned || f === memoryrefunset!
         expected_nargs = 3
     else
-        @assert f === memoryrefset! "unexpected memoryop is given"
+        @assert f === memoryrefset! || f === unsafe_memoryrefload || f === unsafe_memoryrefstore! "unexpected memoryop is given"
         expected_nargs = 4
     end
     if nargs == expected_nargs && !isva
@@ -3835,8 +3894,6 @@ add_tfunc(Core.task_result_type, 1, 1, task_result_type_tfunc, 0)
 # N.B. the `abstract_eval` callback below allows us to use these queries
 # both during abstract interpret and optimization
 
-const FOREIGNCALL_ARG_START = 6
-
 function foreigncall_effects(@nospecialize(abstract_eval), ::Expr)
     # `:foreigncall` can potentially perform all sorts of operations, including calling
     # overlay methods, but the `:foreigncall` itself is not dispatched, and there is no
@@ -3844,24 +3901,4 @@ function foreigncall_effects(@nospecialize(abstract_eval), ::Expr)
     # be executed using the wrong method table due to concrete evaluation, so using
     # `EFFECTS_UNKNOWN` here and not tainting with `:nonoverlayed` is fine
     return EFFECTS_UNKNOWN
-end
-
-function new_genericmemory_nothrow(@nospecialize(abstract_eval), args::Vector{Any})
-    length(args) ≥ 1+FOREIGNCALL_ARG_START || return false
-    mtype = instanceof_tfunc(abstract_eval(args[FOREIGNCALL_ARG_START]))[1]
-    isa(mtype, DataType) || return false
-    isdefined(mtype, :instance) || return false
-    elsz = Int(datatype_layoutsize(mtype))
-    arrayelem = datatype_arrayelem(mtype)
-    dim = abstract_eval(args[1+FOREIGNCALL_ARG_START])
-    isa(dim, Const) || return false
-    dimval = dim.val
-    isa(dimval, Int) || return false
-    0 < dimval < typemax(Int) || return false
-    tot, ovflw = Intrinsics.checked_smul_int(dimval, elsz)
-    ovflw && return false
-    isunion = 2
-    tot, ovflw = Intrinsics.checked_sadd_int(tot, arrayelem == isunion ? 1 + dimval : 1)
-    ovflw && return false
-    return true
 end

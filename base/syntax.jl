@@ -71,9 +71,6 @@ function SyntaxContext(mod::Module, edition::Tuple{Int, Int})
     SyntaxContext(ScopeLayer(mod, nothing), nothing, edition, false)
 end
 
-const JL_NEW_EDITION = (1, 15)
-const JL_OLD_EDITION = (1, 14)
-
 function Syntax(head::Symbol, children, @nospecialize(value), source, context)
     Syntax(head, children, value, source, context,
                nothing, nothing, nothing, UInt16(0))
@@ -349,7 +346,7 @@ end
 syntax_name(s::Syntax) = s.value::String
 
 edition(st::Syntax) = st.context.edition
-edition(@nospecialize(st)) = JL_OLD_EDITION
+edition(@nospecialize(st)) = FLISP_EDITION
 
 _with_context(st, sc) =
     @mknode(st; context=sc, source=st.source, jl_source=st.jl_source)
@@ -449,11 +446,10 @@ end
 Base.show(io::IO, sl::ScopeLayer) = Base.show(io::IO, MIME"text/plain"(), sl)
 
 function Base.show(io::IO, ::MIME"text/plain", sc::SyntaxContext)
-    color = sc.internal ? :light_black :
-        sc.edition == JL_NEW_EDITION ? :normal : :blue
+    color = sc.internal ? :light_black : :normal
     printstyled(io, "["; color)
-    if sc.edition != JL_NEW_EDITION
-        printstyled(io, "old,"; color)
+    if sc.edition != EXPERIMENTAL_EDITION
+        printstyled(io, "$(sc.edition[1]).$(sc.edition[2]),"; color)
     end
     if sc.internal
         printstyled(io, "internal,"; color)
@@ -645,7 +641,7 @@ isa_lowering_ast_node(@nospecialize(e)) =
 
 function expr_to_syntax(@nospecialize(e),
                         src::Union{LineNumberNode, SourceRef}=LineNumberNode(0, :var""),
-                        context=SyntaxContext(nothing, nothing, JL_OLD_EDITION, false))
+                        context=SyntaxContext(nothing, nothing, FLISP_EDITION, false))
     if e isa Expr && src isa LineNumberNode && (src.line == 0 || src.file === :none)
         src = something(_first_linenode(e), src)
     end
@@ -793,25 +789,6 @@ function syntax_to_expr(s::Syntax, suppress_linenodes=false)
     end
 end
 
-# convenience function for `jl_parse`
-function _c_parseall_expr(code::Core.SimpleVector, filename::String,
-                          lineno::Int, mod::Union{Module, Nothing})
-    (ptr, len) = code
-    str = unsafe_string(ptr, len)
-    pfm = Meta.parser_for_module(mod)
-    ex, offset = Meta._parse_string(str, filename, lineno, 1, :all, Expr, pfm)
-    return Core.svec(ex, offset-1)
-end
-
-function fl_toplevel_eval(mod::Module, @nospecialize(x))
-    ex = if x isa Syntax
-        Expr(:toplevel, first_linenode(x), syntax_to_expr(x))
-    else
-        x
-    end
-    ccall(:jl_toplevel_eval, Any, (Any, Any), mod, ex)
-end
-
 #-------------------------------------------------------------------------------
 # Printing
 
@@ -923,4 +900,20 @@ end
 function Base.show(io::IO, node::Syntax)
     assert_syntax(node)
     _show_syntax_tree_sexpr(io, node)
+end
+
+#-------------------------------------------------------------------------------
+# generated functions produced by JuliaLowering.  TODO: consolidate with
+# GeneratedFunctionStub
+
+struct SyntaxGeneratedFunctionStub
+    syntax_context::SyntaxContext
+    gen::Function
+    srcref::Union{LineNumberNode,SourceRef}
+    argnames::Core.SimpleVector
+    spnames::Core.SimpleVector
+end
+
+function (g::SyntaxGeneratedFunctionStub)(world::UInt, source::Method, @nospecialize args...)
+    Base.JuliaLowering.lower_generated_code(g, world, source, args...)
 end

@@ -485,8 +485,6 @@ end
 const PROGRESS_BAR_TIME_GRANULARITY = Ref(1 / 30.0) # 30 fps
 const PROGRESS_BAR_PERCENTAGE_GRANULARITY = Ref(0.1)
 
-start_progress(io::IO, _::MiniProgressBar) = print(io, ansi_disablecursor)
-
 function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagereturn=true)
     if p.max == 0
         perc = 0.0
@@ -536,8 +534,6 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
     # Print everything in one call
     print(io, to_print)
 end
-
-end_progress(io, p::MiniProgressBar) = print(io, ansi_enablecursor, ansi_clearline)
 
 print_progress_bottom(io::IO) = print(io, "\e[S", ansi_moveup(1), ansi_clearline, ansi_movecol1)
 
@@ -1261,7 +1257,7 @@ precompiles only the given packages and their dependencies (unless
   package loading system. When `true` (not default): returns early instead of
   throwing when packages are not found; suppresses progress messages when not
   in an interactive session; allows packages outside the current environment to
-  be added as serial precompilation jobs; skips LOADING_CACHE initialization;
+  be added as serial precompilation jobs; skips the session's loading cache;
   and changes cachefile locking behavior.
 
 - `_reasons::Dict{Symbol,Int}`: Internal, with `_from_loading`: why the loader rejected
@@ -1436,14 +1432,23 @@ function _precompile_for_loading(into::Module, names::Vector{Symbol})
     reasons = Dict{Symbol,Int}()
     stale_cache = Dict{Base.StaleCacheKey,Bool}()
     cachepath_cache = Dict{PkgId, Vector{String}}()
-    for pkg in pkgs
-        fresh = try
-            Base.compilecache_freshest_path(pkg; ignore_loaded=false, stale_cache, cachepath_cache,
-                                            verify_checksums=false, reasons) !== nothing
-        catch
-            true # e.g. no source located: leave it to `require` to report
+    @lock Base.require_lock begin
+        # one loading cache for all packages, so that each one is only located once
+        set_cache = Base.LOADING_CACHE[] === nothing
+        set_cache && (Base.LOADING_CACHE[] = Base.LoadingCache())
+        try
+            for pkg in pkgs
+                fresh = try
+                    Base.compilecache_freshest_path(pkg; ignore_loaded=false, stale_cache, cachepath_cache,
+                                                    remember_cachepaths=true, verify_checksums=false, reasons) !== nothing
+                catch
+                    true # e.g. no source located: leave it to `require` to report
+                end
+                fresh || push!(stale, pkg)
+            end
+        finally
+            set_cache && (Base.LOADING_CACHE[] = nothing)
         end
-        fresh || push!(stale, pkg)
     end
     isempty(stale) && return
 
@@ -3051,11 +3056,6 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
 end
 
 function report_precompile_results!(s::PrecompileSession)
-    if !s._from_loading
-        @lock Base.require_lock begin
-            Base.LOADING_CACHE[] = nothing
-        end
-    end
     notify(s.first_started) # in cases of no-op or !fancyprint
     # a cancel that lands while the last job runs is not seen by the job loop
     should_stop(s)
@@ -3451,28 +3451,27 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     end
 
     try
-        if !_from_loading
-            @lock Base.require_lock begin
-                Base.LOADING_CACHE[] = Base.LoadingCache()
-            end
+        # only tasks started here see the cache, since the environment can change while this runs
+        cache = _from_loading ? nothing : Base.LoadingCache()
+        Base.ScopedValues.@with Base.SESSION_LOADING_CACHE => cache begin
+            @debug "precompile: starting precompilation loop" graph.direct_deps graph.project_deps
+
+            # Initial pass
+            initial_tasks = spawn_precompile_tasks!(s;
+                direct_deps=graph.direct_deps, was_processed, configs, circular_deps,
+                requested_pkgids, pkg_names, requested_pkgs, from_loading=_from_loading)
+            append!(s.tasks, initial_tasks)
+
+            # Concurrent drainer for injected requests
+            drainer = drain_work_channel!(s, work_channel)
+
+            waitall(initial_tasks; failfast=false, throw=false)
+            @lock BG close(work_channel)
+            wait(drainer)
+            append!(s.tasks, s.injected_tasks)
+            waitall(s.injected_tasks; failfast=false, throw=false)
+            waitall(s.result_waiters; failfast=false, throw=false)
         end
-        @debug "precompile: starting precompilation loop" graph.direct_deps graph.project_deps
-
-        # Initial pass
-        initial_tasks = spawn_precompile_tasks!(s;
-            direct_deps=graph.direct_deps, was_processed, configs, circular_deps,
-            requested_pkgids, pkg_names, requested_pkgs, from_loading=_from_loading)
-        append!(s.tasks, initial_tasks)
-
-        # Concurrent drainer for injected requests
-        drainer = drain_work_channel!(s, work_channel)
-
-        waitall(initial_tasks; failfast=false, throw=false)
-        @lock BG close(work_channel)
-        wait(drainer)
-        append!(s.tasks, s.injected_tasks)
-        waitall(s.injected_tasks; failfast=false, throw=false)
-        waitall(s.result_waiters; failfast=false, throw=false)
 
         # Final output
         s.interrupted_or_done = true

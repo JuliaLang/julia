@@ -333,7 +333,7 @@ eachindex(A::AbstractVector) = (@inline(); axes1(A))
 # we unroll the join for easier inference
 _join_comma_and(indsA, indsB) = LazyString(indsA, " and ", indsB)
 _join_comma_and(indsA, indsB, indsC...) = LazyString(indsA, ", ", _join_comma_and(indsB, indsC...))
-@noinline function throw_eachindex_mismatch_indices(indices_str, indsA, indsBs...)
+@noinline function throw_eachindex_mismatch_indices(indices_str, indsA, indsBs::Vararg{Any,N}) where {N}
     throw(DimensionMismatch(
             LazyString("all inputs to eachindex must have the same ", indices_str, ", got ",
                 _join_comma_and(indsA, indsBs...))))
@@ -965,7 +965,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src)
         n = length(src)
         n == 0 && return dest
         @boundscheck checkbounds(dest, i)
-        @boundscheck n <= lastindex(dest) - i + 1 || throw(BoundsError(dest, i))
+        @boundscheck n <= lastindex(dest) - i + 1 || throw_boundserror(dest, i)
         for x in src
             @inbounds dest[i] = x
             i += 1
@@ -1016,7 +1016,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
     inds = LinearIndices(dest)
     sstart < 1 && throw(ArgumentError(LazyString("source start offset (",
         sstart,") is < 1")))
-    (dstart ∈ inds && n <= last(inds) - dstart + 1) || throw(BoundsError(dest, dstart))
+    (dstart ∈ inds && n <= last(inds) - dstart + 1) || throw_boundserror(dest, dstart)
     dstart = Int(dstart)
     n = Int(n)
     dmax = dstart + n - 1
@@ -1153,8 +1153,8 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
         n," elements, but n should be non-negative")))
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    (checkbounds(Bool, destinds, dstart) && n <= last(destinds) - dstart + 1) || throw(BoundsError(dest, dstart))
-    (checkbounds(Bool, srcinds, sstart)  && n <= last(srcinds) - sstart + 1)  || throw(BoundsError(src, sstart))
+    (checkbounds(Bool, destinds, dstart) && n <= last(destinds) - dstart + 1) || throw_boundserror(dest, dstart)
+    (checkbounds(Bool, srcinds, sstart)  && n <= last(srcinds) - sstart + 1)  || throw_boundserror(src, sstart)
     dstart = Int(dstart)
     sstart = Int(sstart)
     n = Int(n)
@@ -1752,10 +1752,15 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
 _typed_vcat_similar(V, ::Type{T}, n) where T = similar(first(V), T, n)
-_typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
-    _typed_vcat!(_typed_vcat_similar(V, T, sum(map(length, V))), V)
+function _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T
+    n = 0
+    for Vk in V
+        n += Int(length(Vk))::Int
+    end
+    return _typed_vcat!(_typed_vcat_similar(V, T, n), V)
+end
 
-function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
+function _typed_vcat!(a::AbstractArray{T}, V::AbstractVecOrTuple{AbstractArray}) where T
     pos = 1
     for Vk in V
         p1 = pos + Int(length(Vk))::Int - 1
@@ -1781,31 +1786,13 @@ hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
 function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
     nrows = size(first(A), 1)
     ncols = 0
-    dense = true
     for Aj in A
         if size(Aj, 1) != nrows
-            throw(DimensionMismatch("number of rows of each array must match (got $(map(x->size(x,1), A)))"))
+            throw(DimensionMismatch("number of rows of each array must match (got $nrows and $(size(Aj, 1)))"))
         end
-        dense &= isa(Aj,Array)
-        nd = ndims(Aj)
-        ncols += (nd==2 ? size(Aj,2) : 1)
+        ncols += size(Aj, 2)
     end
-    B = similar(first(A), T, nrows, ncols)
-    pos = 1
-    if dense
-        for Ak in A
-            n = length(Ak)
-            copyto!(B, pos, Ak, 1, n)
-            pos += n
-        end
-    else
-        for Ak in A
-            p1 = pos+(isa(Ak,AbstractMatrix) ? size(Ak, 2) : 1)-1
-            B[:, pos:p1] = Ak
-            pos = p1+1
-        end
-    end
-    return B
+    return _typed_vcat!(similar(first(A), T, nrows, ncols), A)
 end
 
 vcat(A::AbstractVecOrMat...) = typed_vcat(promote_eltype(A...), A...)
@@ -1906,7 +1893,9 @@ function dims2cat(dims)
     ntuple(in(dims), maximum(dims))
 end
 
-_cat(dims, X...) = _cat_t(dims, promote_eltypeof(X...), X...)
+# `_cat` and `__cat` are inlined so that a call with few arguments reaches `__cat_offset!`
+# with concrete types: on their own they would be compiled for `Vararg{Any}`
+@inline _cat(dims, X...) = _cat_t(dims, promote_eltypeof(X...), X...)
 
 @inline function _cat_t(dims, ::Type{T}, X...) where {T}
     catdims = dims2cat(dims)
@@ -1922,7 +1911,8 @@ end
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
 
 # Why isn't this called `__cat!`?
-__cat(A, shape, catdims, X...) = __cat_offset!(A, shape, catdims, ntuple(Returns(0), length(shape)), X...)
+@inline __cat(A, shape, catdims, X...) =
+    __cat_offset!(A, shape, catdims, ntuple(Returns(0), length(shape)), X...)
 
 function __cat_offset!(A, shape, catdims, offsets, x, X...)
     # splitting the "work" on x from X... may reduce latency (fewer costly specializations)
@@ -2172,7 +2162,7 @@ julia> a * b
 """
 @inline cat(A...; dims) = _cat(dims, A...)
 # `@constprop :aggressive` allows `catdims` to be propagated as constant improving return type inference
-@constprop :aggressive _cat(catdims, A::AbstractArray{T}...) where {T} = _cat_t(catdims, T, A...)
+@constprop :aggressive @inline _cat(catdims, A::AbstractArray{T}...) where {T} = _cat_t(catdims, T, A...)
 
 # The specializations for 1 and 2 inputs are important
 # especially when running with --inline=no, see #11158
@@ -3054,7 +3044,7 @@ _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::IteratorSize, A) where {T,S}
 
 _vec_axis(A, ax=_iterator_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(length, ax; init=1))
 
-@constprop :aggressive function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
+function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
     xit = Iterators.peel(A)
     nothing === xit && return _empty_stack(dims, T, S, A)
     x1, xrest = xit
@@ -3065,29 +3055,73 @@ _vec_axis(A, ax=_iterator_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(len
     newaxis = _vec_axis(A)
     outax = ntuple(d -> d==dims ? newaxis : ax1[d - (d>dims)], N1)
     B = similar(_ensure_array(x1), T, outax...)
-
-    if dims == 1
-        _dim_stack!(Val(1), B, x1, xrest)
-    elseif dims == 2
-        _dim_stack!(Val(2), B, x1, xrest)
-    else
-        _dim_stack!(Val(dims), B, x1, xrest)
-    end
+    _dim_stack!(Int(dims), B, x1, xrest)
     B
 end
 
-function _dim_stack!(::Val{dims}, B::AbstractArray, x1, xrest) where {dims}
-    before = ntuple(Returns(Colon()), dims - 1)
-    after = ntuple(Returns(Colon()), ndims(B) - dims)
-
-    i = firstindex(B, dims)
-    copyto!(view(B, before..., i, after...), x1)
-
-    for x in xrest
-        _stack_size_check(x, _iterator_axes(x1))
-        i += 1
-        @inbounds copyto!(view(B, before..., i, after...), x)
+# Fill the preallocated output `B` with the slices `x1, xrest...`, the k'th slice going
+# to `selectdim(B, dims, k)`. `x1` is the first slice, and `xrest` iterates the rest.
+# In linear (column-major) order, B can be seen as an array of size (before, n, after), where
+# `before` and `after` are the products of the sizes of B before and after dimension `dims`,
+# and n = size(B, dims) is the number of slices. Each slice, of length before * after,
+# then occupies B[:, k, :] of this array.
+function _dim_stack!(dims::Int, B::AbstractArray, x1, xrest)
+    before = after = 1
+    for d in 1:ndims(B)
+        if d < dims
+            before *= size(B, d)
+        elseif d > dims
+            after *= size(B, d)
+        end
     end
+    # Linear distance in B between consecutive blocks of `before` elements of one slice
+    stride = before * size(B, dims)
+    # Linear index in B of the first element of the current slice
+    off = firstindex(B)
+    _dim_stack_slice!(B, x1, off, before, after, stride)
+    ax1 = _iterator_axes(x1)
+    for x in xrest
+        _stack_size_check(x, ax1)
+        off += before
+        _dim_stack_slice!(B, x, off, before, after, stride)
+    end
+    return nothing
+end
+
+# Copy the single slice `x` into `B`. With B seen as an array of size (before, n, after) as
+# in `_dim_stack!`, x is copied in `after` blocks of `before` consecutive elements each.
+# Block `hi` (counting from 0) is written to linear indices `off + hi*stride .+ (0:before-1)` of B.
+# `off` is the linear index of B where the first element of x goes.
+@inline function _dim_stack_slice!(B::AbstractArray, x, off::Int, before::Int, after::Int, stride::Int)
+    if x isa AbstractArray && IndexStyle(B, x) isa IndexLinear
+        # The size check guarantees length(x) == before * after
+        xi = firstindex(x)  # linear index in x of the start of the current block
+        if before == 1  # e.g. dims == 1: a strided copy
+            @inbounds for j in 0:after-1
+                B[off + j * stride] = x[xi + j]
+            end
+            return nothing
+        end
+        for hi in 0:after-1
+            @inbounds for lo in 0:before-1
+                B[off + lo] = x[xi + lo]
+            end
+            off += stride
+            xi += before
+        end
+    else
+        # Same as above, but for slices which can only be iterated
+        lo = 0  # position within the current block
+        for v in x
+            B[off + lo] = v
+            lo += 1
+            if lo == before
+                lo = 0
+                off += stride
+            end
+        end
+    end
+    return nothing
 end
 
 @inline function _stack_size_check(x, ax1::Tuple)
@@ -3452,7 +3486,7 @@ values in the slice without affecting `A`.
 end
 
 @noinline function _inner_mapslices!(R, indices, f, A, dim_mask, Aslice, safe_for_reuse)
-    must_extend = any(dim_mask .& size(R) .> 1)
+    must_extend = any(dim_mask .& (size(R) .> 1))
     if safe_for_reuse
         # when f returns an array, R[ridx...] = f(Aslice) line copies elements,
         # so we can reuse Aslice
@@ -3462,7 +3496,7 @@ end
             r = f(Aslice)
             if r isa AbstractArray || must_extend
                 ridx = ifelse.(dim_mask, Slice.(axes(R)), Tuple(I))
-                R[ridx...] = r
+                concatenate_setindex!(R, r, ridx...)
             else
                 ridx = ifelse.(dim_mask, first.(axes(R)), Tuple(I))
                 R[ridx...] = r

@@ -368,7 +368,9 @@ To use Visual Studio Code on Windows, set `$JULIA_EDITOR` to `code.cmd`.
 ### [`JULIA_CPU_THREADS`](@id JULIA_CPU_THREADS)
 
 Overrides the global variable [`Base.Sys.CPU_THREADS`](@ref), the number of
-logical CPU cores available.
+logical CPU cores available. It also caps [`Sys.EFFECTIVE_CPU_THREADS`](@ref), which is
+what `auto` means for `--threads`, `--procs` and [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS),
+and which bounds the default number of GC threads.
 
 ### [`JULIA_WORKER_TIMEOUT`](@id JULIA_WORKER_TIMEOUT)
 
@@ -384,7 +386,7 @@ non-positive integer, or if the number of CPU threads cannot be determined
 through system calls, then the number of threads is set to `1`.
 
 If `$JULIA_NUM_THREADS` is set to `auto`, then the number of threads will be set
-to the number of CPU threads. It can also be set to a comma-separated string to
+to [`Sys.EFFECTIVE_CPU_THREADS`](@ref). It can also be set to a comma-separated string to
 specify the size of the `:default` and `:interactive` [threadpools](@ref
 man-threadpools), respectively:
 ```bash
@@ -443,8 +445,11 @@ A boolean value that determines if detailed timing information is printed during
 
 If set to anything besides `0`, then Julia's thread policy is consistent with
 running on a dedicated machine: each thread in the default threadpool is
-affinitized.  [Interactive threads](@ref man-threadpools) remain under the
-control of the operating system scheduler.
+pinned to its own CPU, in order, from the CPUs the process is allowed to run on
+(on platforms that support thread affinity, i.e. not macOS). Requesting more
+default-pool threads than there are such CPUs is an error.
+[Interactive threads](@ref man-threadpools) remain under the control of the
+operating system scheduler.
 
 Otherwise, Julia lets the operating system handle thread policy.
 

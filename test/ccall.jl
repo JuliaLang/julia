@@ -2017,27 +2017,6 @@ using Base: ccall_macro_parse, ccall_macro_lower
                                  :( foo(x::Cint)::Cvoid )))
     @test optexpr == (:((:foo,)), :Cvoid, Any[:Cint], Any[:x], true, (:h, :s), 0)
 
-    # `Base.@assume_effects :reset_safe @ccall`: the plain call with the
-    # reset_safe flag in the calling-convention tuple - no cancellation
-    # point is implied; the caller places one before the call to establish
-    # the region
-    rscall = macroexpand(@__MODULE__,
-        :(Base.@assume_effects :reset_safe @ccall foo(x::Cint)::Cvoid))
-    @test Meta.isexpr(rscall, :call) && rscall.args[1] === :ccall
-    @test rscall.args[3].args[1] == (:ccall, UInt16(0), false, false, true)
-    # ... composing with other effect settings, which stay in the standard
-    # effects-override slot
-    rscall = macroexpand(@__MODULE__,
-        :(Base.@assume_effects :nothrow :reset_safe @ccall foo(x::Cint)::Cvoid))
-    @test rscall.args[3].args[1] == (:ccall, Base.encode_effects_override(Base.EffectsOverride(nothrow=true)), false, false, true)
-    # ... and with the cancel_handler option
-    rscall = macroexpand(@__MODULE__,
-        :(Base.@assume_effects :reset_safe @ccall cancel_handler=(h, s) foo(x::Cint)::Cvoid))
-    @test rscall.args[3].args[1] == (:ccall, UInt16(0), false, true, true)
-    # :reset_safe is only applicable to @ccall
-    @test_throws ArgumentError macroexpand(@__MODULE__,
-        :(Base.@assume_effects :reset_safe f() = 1))
-
     # the cancel_handler lowering: a plain foreigncall with (fn, state)
     # prepended - the annotation implies no cancellation point of its own
     callx = ccall_macro_lower(:ccall, ccall_macro_parse((:(cancel_handler = (h, s)),
@@ -2226,6 +2205,11 @@ end
     @test unsafe_load(cglobal_runtime_type(Cint)) == 1
 end
 
+module CGlobalLib
+import ..libccalltest
+const lib = libccalltest
+end
+
 @testset "cglobal interpreter matches compiler" begin
     # The `cglobal(...)` calls written directly in `@test` run at top-level, i.e. through
     # the interpreter; wrapping the same call in a function and calling it forces codegen.
@@ -2238,6 +2222,8 @@ end
     compiled_str_T()    = cglobal("sin", Cint)
     compiled_ptr(p)     = cglobal(p)
     compiled_ptr_T(p)   = cglobal(p, Cfloat)
+    compiled_dot()      = cglobal((:global_var, CGlobalLib.lib))
+    compiled_dot_T()    = cglobal((:global_var, CGlobalLib.lib), Cint)
 
     typed_ptr = convert(Ptr{Cint}, cglobal((:global_var, libccalltest)))
 
@@ -2249,6 +2235,8 @@ end
     @test cglobal("sin", Cint)                        === compiled_str_T()
     @test cglobal(typed_ptr)                          === compiled_ptr(typed_ptr)
     @test cglobal(typed_ptr, Cfloat)                  === compiled_ptr_T(typed_ptr)
+    @test cglobal((:global_var, CGlobalLib.lib))      === compiled_dot()
+    @test cglobal((:global_var, CGlobalLib.lib), Cint) === compiled_dot_T()
 
     # the no-type form always normalizes its result to Ptr{Cvoid}, even from a typed pointer
     @test cglobal((:global_var, libccalltest)) isa Ptr{Cvoid}
@@ -2402,4 +2390,12 @@ const prefix = "Zstd version: "
 const sym = :ZSTD_versionString
 get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
 @test startswith(get_zstd_version(), "Zstd")
+end
+
+# PLT thunks keep a frame pointer: on Windows, the unwind info shared by JIT code assumes one
+let f() = ccall((:foo, "libnonexistent"), Cvoid, ())
+    ir = sprint(io -> code_llvm(io, f, (); raw=true, dump_module=true))
+    m = match(r"define [^\n]*@jlplt_foo_\d+\([^\n]*#(\d+)", ir)
+    @test m !== nothing
+    @test occursin(Regex("attributes #$(m[1]) = [^\n]*\"frame-pointer\"=\"all\""), ir)
 end

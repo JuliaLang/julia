@@ -61,8 +61,6 @@ function is_effect_free(ex)
     is_identifier_like(ex) || k == :symbol ||
         k == :inert || k == :syntaxinert || k == :top ||
         k == :core || k == :value || k == :nothing
-    # flisp also includes `a.b` with simple `a`, but this seems like a bug
-    # because this calls the user-defined getproperty?
 end
 
 function check_no_parameters(ex::SyntaxTree, msg)
@@ -2531,17 +2529,6 @@ function pos_opt_args(argl::Vector{SyntaxTree})
     argl[opt_start:opt_end]
 end
 
-# (_typevar name lb ub) -> (local (= name (call core TypeVar...)))
-function assign_sparams(ctx, tvs)
-    out = SyntaxList()
-    for tv in tvs
-        @jl_assert head(tv) === :_typevar tv
-        push!(out, @ast ctx tv [:local tv[1]])
-        push!(out, @ast ctx tv [:(=) tv[1] bounds_to_typevar(ctx, tv)])
-    end
-    out
-end
-
 function method_def_sparams(ctx, src, tvs)
     out = SyntaxList()
     for tv in tvs
@@ -2672,7 +2659,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     nongen_mdef = let
         nongen_body = @ast ctx body[2] [:block [:meta "generated"::symbol
             [:new
-                GeneratedFunctionStub::value # Use stub type from JuliaLowering
+                Base.SyntaxGeneratedFunctionStub::value
                 SyntaxContext(ctx.layer.mod, sc.edition)::value
                 gen_name
                 # Truncate provenance to just the source file range, as this
@@ -4578,7 +4565,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ex2 = @ast ctx ex [:block
             [:assert "toplevel_only"::symbol [:syntaxinert ex]]
             [:(=) tmp [:call
-             eval::value
+                at_eval_hook::value
                 # a macro expanding to toplevel does not change the eval module,
                 # but does change the name resolution module
                 ctx.layer.mod::value
