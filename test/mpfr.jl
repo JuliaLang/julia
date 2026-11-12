@@ -815,6 +815,10 @@ end
         @test ldexp(BigFloat(24.5), UInt(72)) == ldexp(24.5, 72)
         @test ldexp(BigFloat(24.5), 0x48) == ldexp(24.5, 72)
     end
+    setprecision(2) do
+        @test ldexp(BigFloat(1), Int128(5)) == 32
+    end
+    @test ldexp(BigFloat(0), big(2)^70) == 0
 end
 @testset "ceil / floor / trunc" begin
     x = BigFloat(12.042)
