@@ -168,6 +168,7 @@ emit(f7, Tuple{Int,Int})
 # CHECK: %parent_old_marked
 # CHECK: %child_bit
 # CHECK: %child_not_marked
+# CHECK: %child_not_image
 emit(f8, Barrier, Int)
 
 # CHECK: define {{(swiftcc )?}}nonnull ptr @julia_Barrier

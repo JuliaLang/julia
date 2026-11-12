@@ -77,19 +77,25 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, target, false);
     builder.SetInsertPoint(mayTrigTerm);
     mayTrigTerm->getParent()->setName("may_trigger_wb");
-    // At every generational boundary above the youngest, the "child marked"
-    // optimization does not apply so we can only check whether the parent
-    // is already in the relevant remset or not.
+    // The same rule as `jl_gc_wb_must_remember`: remember the parent if a child
+    // is young, or if the parent is an image object not yet in the image remset
+    // and a child is not an image object (image objects are always marked).
     auto parInImage = builder.CreateAnd(parTag, ConstantInt::get(T_size, GC_IN_IMAGE | GC_IN_IMAGE_REMSET), "parent_in_image");
     auto parIsImage = builder.CreateICmpEQ(parInImage, ConstantInt::get(T_size, GC_IN_IMAGE_NOT_REMSET), "parent_is_image");
     Value *anyChldNotMarked = NULL;
+    Value *anyChldNotImage = NULL;
     for (Value *child : children) {
-        Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, T_size, child, tbaa_tag), GC_MARKED, "child_bit");
+        Value *chldTag = EmitLoadTag(builder, T_size, child, tbaa_tag);
+        Value *chldBit = builder.CreateAnd(chldTag, GC_MARKED, "child_bit");
         Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0), "child_not_marked");
         anyChldNotMarked = anyChldNotMarked ? builder.CreateOr(anyChldNotMarked, chldNotMarked) : chldNotMarked;
+        Value *chldImage = builder.CreateAnd(chldTag, GC_IN_IMAGE, "child_in_image");
+        Value *chldNotImage = builder.CreateICmpEQ(chldImage, ConstantInt::get(T_size, 0), "child_not_image");
+        anyChldNotImage = anyChldNotImage ? builder.CreateOr(anyChldNotImage, chldNotImage) : chldNotImage;
     }
-    assert(anyChldNotMarked); // children is non-empty
-    auto shouldTrigger = builder.CreateOr(parIsImage, anyChldNotMarked, "should_trigger_wb");
+    assert(anyChldNotMarked && anyChldNotImage); // children is non-empty
+    auto parImageEdge = builder.CreateAnd(parIsImage, anyChldNotImage, "parent_image_edge");
+    auto shouldTrigger = builder.CreateOr(parImageEdge, anyChldNotMarked, "should_trigger_wb");
     MDBuilder MDB(parent->getContext());
     SmallVector<uint32_t, 2> Weights{1, 9};
     auto trigTerm = SplitBlockAndInsertIfThen(shouldTrigger, mayTrigTerm, false,

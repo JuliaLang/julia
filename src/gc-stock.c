@@ -1928,50 +1928,17 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
 
 JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
 {
-    if (ptr == NULL)
-        return;
-    // Image objects are never freed, and marking does not trace through them, so no
-    // edge to one needs to be remembered, not even from an image object.
-    if (jl_astaggedvalue(ptr)->bits.in_image != 0)
-        return;
-    if (jl_astaggedvalue(parent)->bits.in_image != 1 /* GC_IN_IMAGE_NOT_REMSET */ && // parent is not an unmarked image object
-        (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) != 0) // ptr is old
-        return;
-    jl_gc_queue_root((jl_value_t*)parent);
+    if (jl_gc_wb_must_remember(parent, ptr))
+        jl_gc_queue_root((jl_value_t*)parent);
 }
 
 void jl_gc_multi_wb_cold(const jl_value_t *parent, void *dest JL_UNUSED, const void *ptr, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
-    const jl_datatype_layout_t *ly = dt->layout;
-    uint32_t npointers = ly->npointers;
-    //if (npointers == 0) // this was checked by the caller
-    //    return;
-    jl_value_t *ptrf = ((jl_value_t**)ptr)[ly->first_ptr];
-    if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
-        // this pointer is young
-        jl_gc_wb_object(parent);
-        return;
-    }
-    assert(ly->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
-    const uint8_t *ptrs8 = (const uint8_t *)jl_dt_layout_ptrs(ly);
-    const uint16_t *ptrs16 = (const uint16_t *)jl_dt_layout_ptrs(ly);
-    const uint32_t *ptrs32 = (const uint32_t*)jl_dt_layout_ptrs(ly);
-    for (size_t i = 1; i < npointers; i++) {
-        uint32_t fld;
-        if (ly->flags.fielddesc_type == JL_FIELDDESC_8) {
-            fld = ptrs8[i];
-        }
-        else if (ly->flags.fielddesc_type == JL_FIELDDESC_16) {
-            fld = ptrs16[i];
-        }
-        else {
-            assert(ly->flags.fielddesc_type == JL_FIELDDESC_32);
-            fld = ptrs32[i];
-        }
-        jl_value_t *ptrf = ((jl_value_t**)ptr)[fld];
-        if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
-            // this pointer is young
-            jl_gc_wb_object(parent);
+    // the caller checked that parent is old and not in the remset, and that npointers != 0
+    size_t npointers = dt->layout->npointers;
+    for (size_t i = 0; i < npointers; i++) {
+        if (jl_gc_wb_must_remember(parent, ((jl_value_t**)ptr)[jl_ptr_offset(dt, i)])) {
+            jl_gc_queue_root(parent);
             return;
         }
     }
