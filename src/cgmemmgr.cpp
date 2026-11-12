@@ -531,10 +531,12 @@ public:
         if (mprotect((void *)addr, size, PROT_READ | PROT_EXEC) == -1)
             goto fail;
 
-        b.wr_ptr = (char *)mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, anon_hdl,
-                                map_offset);
+        b.wr_ptr = (char *)mmap((void *)wr_hint, size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                                anon_hdl, map_offset);
         if (b.wr_ptr == MAP_FAILED)
             goto fail;
+        if (wr_hint != 0)
+            wr_hint += size;
 
         map_offset += size;
 
@@ -588,6 +590,24 @@ protected:
 #endif
 
 #ifndef _OS_WINDOWS_
+    // It's really important the writeable view of our RX blocks is at an
+    // unpredictable address.  Attackers can't write to our executable pages if
+    // they know only the address of the code, but if we mmap the writeable
+    // view, it is fairly predictable.  We choose a random base where we put all
+    // the writeable views.
+    static uintptr_t random_wr_hint() JL_NOTSAFEPOINT
+    {
+#if defined(_P64) && !defined(_COMPILER_ASAN_ENABLED_) && \
+    !defined(_COMPILER_MSAN_ENABLED_) && !defined(_COMPILER_TSAN_ENABLED_)
+        // If we pick a hint outside the usable address space, it's ignored.
+        uint64_t r;
+        uintptr_t half = (uintptr_t)1 << 45;
+        if (uv_random(nullptr, nullptr, &r, sizeof(r), 0, nullptr) == 0)
+            return (half | (r & (half - 1))) & ~(uintptr_t)(jl_page_size - 1);
+#endif
+        return 0;
+    }
+
     void grow_map(size_t size)
     {
         size = std::max(LLT_ALIGN(size, jl_page_size), get_map_size_inc());
@@ -605,6 +625,7 @@ private:
     intptr_t anon_hdl;
     size_t map_offset = 0;
     size_t map_size = 0;
+    uintptr_t wr_hint = random_wr_hint();
 #endif
 };
 
