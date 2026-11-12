@@ -318,8 +318,8 @@ if bc_opt == bc_default
     for T in [Memory, Vector]
         for ET in [Int, Float32, Union{Int, Float64}]
             no_allocate(T{ET}) #compile
-            # allocations aren't removed for Union eltypes which they theoretically could be eventually
-            test_alloc(T{ET}, broken=(ET==Union{Int, Float64}))
+            # on 1.12, the allocation of a Vector with a Union eltype is not removed
+            test_alloc(T{ET}, broken=(T===Vector && ET==Union{Int, Float64}))
         end
     end
     function f() # this was causing a bug on an in progress version of #55913.

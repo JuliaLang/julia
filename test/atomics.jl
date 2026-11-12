@@ -1115,3 +1115,31 @@ function add_one57190!()
 end
 
 @test add_one57190!() == 1
+
+# An atomically loaded field that inlines an immutable with GC pointers stays rooted while
+# the loaded value is passed by reference, even after the field is overwritten.
+# https://github.com/JuliaLang/julia/issues/63320
+mutable struct AtomicRootObj
+    x::Int
+end
+struct AtomicRootWrap
+    obj::AtomicRootObj
+end
+mutable struct AtomicRootBox
+    @atomic wrap::AtomicRootWrap
+end
+const atomic_root_finalized = Ref(false)
+@noinline atomic_root_use(wrap::AtomicRootWrap) = wrap.obj.x
+function atomic_root_check(box::AtomicRootBox)
+    wrap = @atomic box.wrap
+    atomic_root_use(wrap)
+    @atomic box.wrap = AtomicRootWrap(AtomicRootObj(0))
+    GC.gc(); GC.gc()
+    alive = !atomic_root_finalized[]
+    return alive && atomic_root_use(wrap) == 42
+end
+let obj = AtomicRootObj(42)
+    finalizer(_ -> (atomic_root_finalized[] = true), obj)
+    global atomic_root_box = AtomicRootBox(AtomicRootWrap(obj))
+end
+@test atomic_root_check(atomic_root_box)
