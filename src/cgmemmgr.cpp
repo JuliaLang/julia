@@ -518,6 +518,8 @@ public:
         b.wr_ptr = (char *)MapViewOfFile(hdl, FILE_MAP_ALL_ACCESS, 0, 0, size);
         assert(b.wr_ptr && "Cannot map RW view");
 
+        CloseHandle(hdl);
+
         return b;
 #else
         if (__unlikely(map_offset + size > map_size))
@@ -564,8 +566,13 @@ fail:
 
     void cleanup(SplitPtrBlock &block) override
     {
-        if (block.total > 0)
-            map_remove((uintptr_t)block.wr_ptr, block.total);
+        if (block.total == 0)
+            return;
+#ifdef _OS_WINDOWS_
+        UnmapViewOfFile(block.wr_ptr);
+#else
+        map_remove((uintptr_t)block.wr_ptr, block.total);
+#endif
     }
 
     ~DualBlockMapper()
