@@ -204,7 +204,8 @@ end
 Create a [`SignalCondition`](@ref) that calls `callback` when the process receives the
 signal `signum`. See there for what `intercept` does. Several deliveries that arrive before the callback runs are reported once,
 so the number of calls is not a count of signals. The `callback` is passed one argument, the
-condition object itself.
+condition object itself. `SIGINT` can throw its [`InterruptException`](@ref) into the callback
+itself; if uncaught, it ends the callback task, so `callback` is not called for later signals.
 
 # Examples
 ```julia
