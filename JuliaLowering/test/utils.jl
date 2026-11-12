@@ -50,46 +50,6 @@ macro ast_(tree)
     end
 end
 
-#-------------------------------------------------------------------------------
-function _format_as_ast_macro(io, ex, indent)
-    k = head(ex)
-    kind_str = repr(k)
-    if !is_leaf(ex)
-        println(io, indent, "[", kind_str)
-        ind2 = indent*"    "
-        for c in children(ex)
-            _format_as_ast_macro(io, c, ind2)
-        end
-        println(io, indent, "]")
-    else
-        val_str = if k == :identifier || k == :core || k == :top
-            repr(syntax_name(ex))
-        elseif k == :bindingid
-            repr(syntax_id(ex))
-        else
-            repr(get(ex, :value, nothing))
-        end
-        println(io, indent, val_str, "::", k)
-    end
-end
-
-function format_as_ast_macro(io::IO, ex)
-    print(io, "@ast_ ")
-    _format_as_ast_macro(io, ex, "")
-end
-
-"""
-    format_as_ast_macro(ex)
-
-Format AST `ex` as a Julia source code call to the `@ast_` macro for generating
-test case comparisons with the `≈` function.
-"""
-format_as_ast_macro(ex) = format_as_ast_macro(stdout, ex)
-
-#-------------------------------------------------------------------------------
-
-# Test tools
-
 function uncomment_description(desc)
     replace(desc, r"^# ?"m=>"")
 end
