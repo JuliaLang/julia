@@ -124,6 +124,11 @@ _char(p::_ShellParser) = p.s[p.pos]
 _next!(p::_ShellParser) = (p.pos = nextind(p.s, p.pos); nothing)
 _at(p::_ShellParser, c::AbstractChar) = !_at_end(p) && _char(p) == c
 
+# An unquoted glob character, `*`, `?`, `[` or `]`, in a word being parsed.
+struct _GlobChar
+    c::Char
+end
+
 # Add the literal text from `p.lit` up to, but not including, position `j` to `word`.
 function _flush!(p::_ShellParser, word::Vector{Any}, j::Int = p.pos)
     j > p.lit && push!(word, String(p.s[p.lit:prevind(p.s, j)]))
@@ -305,9 +310,10 @@ end
 # level, a word ends before unquoted whitespace or a pipeline or redirection operator. In a
 # brace expansion, it ends before a `,` or `}` that ends the alternative, and unquoted
 # whitespace and operators are reported in `bad` instead. Returns `(; stop, special, expanded,
-# dotdot, bad)`: the character the word ended before (`'\0'` at the end of the command),
+# dotdot, bad, glob)`: the character the word ended before (`'\0'` at the end of the command),
 # whether the word has quoted, escaped or expanded text, whether it has a brace expansion,
-# whether it has an unquoted `..`, and the first bad character or `'\0'`.
+# whether it has an unquoted `..`, the first bad character or `'\0'`, and whether the word
+# is a glob, in which case `word` holds the single expression that expands it.
 function _parse_word!(p::_ShellParser, word::Vector{Any})
     special = expanded = dotdot = false
     bad = '\0'
@@ -350,6 +356,17 @@ function _parse_word!(p::_ShellParser, word::Vector{Any})
         elseif p.in_brace > 0 && c == '}'
             depth -= 1
             _next!(p)
+        elseif p.interpolate && !p.partial && c in "*?[]"
+            if p.in_brace > 0
+                # Glob characters inside braces are not supported: quote them.
+                c != ']' && bad == '\0' && (bad = c)
+                c == ']' && c in p.special && bad == '\0' && _special_error(p)
+            else
+                _flush!(p, word)
+                push!(word, _GlobChar(c))
+                p.lit = nextind(p.s, p.pos)
+            end
+            _next!(p)
         elseif p.in_brace > 0 && depth == 0 && c == '.' &&
                 (n = nextind(p.s, p.pos); n <= lastindex(p.s) && p.s[n] == '.')
             dotdot = true
@@ -358,7 +375,7 @@ function _parse_word!(p::_ShellParser, word::Vector{Any})
         elseif c in p.special && bad == '\0'
             # After a bad character, the braces are not an expansion and the text is parsed
             # again outside them, where this character may be allowed, as in `{ ~#`.
-            error("parsing command `$(p.str)`: special characters \"$(p.special)\" must be quoted in commands")
+            _special_error(p)
         else
             _next!(p)
         end
@@ -366,7 +383,37 @@ function _parse_word!(p::_ShellParser, word::Vector{Any})
     _flush!(p, word)
     p.lit = p.pos
     stop = _at_end(p) ? '\0' : _char(p)
-    return (; stop, special, expanded, dotdot, bad)
+    glob = p.in_brace == 0 && _glob_word!(p, word)
+    special |= glob
+    return (; stop, special, expanded, dotdot, bad, glob)
+end
+
+_special_error(p::_ShellParser) =
+    error("parsing command `$(p.str)`: special characters \"$(p.special)\" must be quoted in commands")
+
+# Turn a word with unquoted glob characters into the expression that expands it at run time.
+# A word with an unquoted `*`, `?` or `[` is a glob: its other text is escaped, so that it is
+# matched literally, and each word it produces is passed to `cmd_glob_expand`. Without one,
+# a `]` is an ordinary character, unless it is special. Returns whether the word is a glob.
+function _glob_word!(p::_ShellParser, word::Vector{Any})
+    any(x -> x isa _GlobChar, word) || return false
+    if !any(x -> x isa _GlobChar && x.c != ']', word)
+        ']' in p.special && _special_error(p)
+        map!(x -> x isa _GlobChar ? string(x.c) : x, word, word)
+        return false
+    end
+    parts = Any[]
+    for x in word
+        push!(parts, x isa _GlobChar ? string(x.c) :
+                     x isa String ? glob_escape(x) :
+                     x isa Vector{String} ? map(glob_escape, x) :
+                     Expr(:call, GlobalRef(Base, :cmd_glob_escape), x))
+    end
+    mod = Expr(:macrocall, GlobalRef(Base, Symbol("@__MODULE__")), nothing)
+    ex = Expr(:call, GlobalRef(Base, :cmd_glob_expand), mod, Expr(:call, GlobalRef(Base, :arg_gen), parts...))
+    empty!(word)
+    push!(word, ex)
+    return true
 end
 
 # Parse a brace expansion, `{a,b}` or a range such as `{1..3}`; `p.pos` is at the `{`.
@@ -463,6 +510,7 @@ function _finish_word!(p::_ShellParser, seg::_ShellSegment, word::Vector{Any}, w
         push!(seg.args, isempty(word) ? Any[""] : copy(word))
     else
         w.expanded && error("parsing command `$(p.str)`: brace expansion in a redirection target")
+        w.glob && error("parsing command `$(p.str)`: glob in a redirection target")
         target = if length(word) == 1 && word[1] isa String
             word[1]
         elseif length(word) == 1
