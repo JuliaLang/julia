@@ -1925,7 +1925,7 @@ end
     end
 end
 
-@testset "loading from source again after a failure" begin
+@testset "retrying a failed extension load" begin
     mktempdir() do dir
         parent_uuid = "e3000000-0000-0000-0000-000000000001"
         dep_uuid = "e3000000-0000-0000-0000-000000000002"
@@ -1942,7 +1942,8 @@ end
             """)
         write(joinpath(dir, "RetryParent", "src", "RetryParent.jl"), "module RetryParent end\n")
         extfile = joinpath(dir, "RetryParent", "ext", "RetryExt.jl")
-        write(extfile, "module RetryExt\nerror(\"broken extension\")\nend\n")
+        # fail before the module is created, so the retry reads the file again
+        write(extfile, "error(\"broken extension\")\nmodule RetryExt end\n")
         write(joinpath(dir, "RetryDep", "Project.toml"), """
             name = "RetryDep"
             uuid = "$dep_uuid"
@@ -1952,7 +1953,8 @@ end
         script = """
             loads_broken() = try Base.require(Main, :RetryBroken); true; catch; false; end
             loads_broken() && error("broken package loaded")
-            loads_broken() && error("broken package loaded on the second attempt")
+            # a second load finds the partly defined module
+            loads_broken() || error("the partly defined module was dropped")
             using RetryParent, RetryDep
             isext() = Base.get_extension(RetryParent, :RetryExt) isa Module
             isext() && error("extension loaded")
