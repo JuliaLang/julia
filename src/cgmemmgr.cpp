@@ -497,7 +497,7 @@ public:
     SplitPtrBlock map(uintptr_t addr, size_t size) override
     {
         SplitPtrBlock b;
-        assert(size % jl_page_size == 0);
+        assert(size > 0 && size % jl_page_size == 0);
 #ifdef _OS_WINDOWS_
         HANDLE hdl = CreateFileMapping(INVALID_HANDLE_VALUE, nullptr,
                                        PAGE_EXECUTE_READWRITE, 0, size, nullptr);
@@ -546,8 +546,7 @@ fail:
 
     Allocation alloc(SplitPtrBlock &block, size_t size, size_t align) override
     {
-        if (size == 0)
-            return {};
+        assert(size > 0);
         Allocation a = block.alloc(size, align);
         a.wr_addr = (a.rt_addr - block.ptr) + block.wr_ptr;
         ++block.in_flight;
@@ -613,7 +612,7 @@ public:
     SplitPtrBlock map(uintptr_t addr, size_t size) override
     {
         SplitPtrBlock b{};
-        assert(size % jl_page_size == 0);
+        assert(size > 0 && size % jl_page_size == 0);
         b.ptr = (char *)addr;
         b.avail = b.total = size;
 
@@ -628,8 +627,9 @@ public:
 
     Allocation alloc(SplitPtrBlock &block, size_t size, size_t align) override
     {
+        assert(size > 0);
         Allocation a = block.alloc(size, align);
-        a.wr_addr = size > 0 ? (char *)calloc(size) : nullptr;
+        a.wr_addr = (char *)calloc(1, size);
         ++block.in_flight;
         return a;
     }
@@ -711,9 +711,11 @@ public:
             size_rx = LLT_ALIGN(LLT_ALIGN(size_rx, align_rx), jl_page_size);
             size_rw = LLT_ALIGN(LLT_ALIGN(size_rw, align_rw), jl_page_size);
             uintptr_t base = map_reserve(size_rx + size_rw);
-            new_rx = rx_mapper->map(base, size_rx);
+            if (size_rx > 0) {
+                new_rx = rx_mapper->map(base, size_rx);
+                rx = &*new_rx;
+            }
             new_rw = Block::map(base + size_rx, size_rw);
-            rx = &*new_rx;
             rw = &*new_rw;
         }
         else if (!rx_block.can_alloc(size_rx, align_rx) ||
@@ -721,8 +723,10 @@ public:
             alloc_blocks();
         }
 
-        std::pair<Allocation, Allocation> ret{rx_mapper->alloc(*rx, size_rx, align_rx),
-                                              rw->alloc(size_rw, align_rw)};
+        Allocation rx_alloc;
+        if (size_rx > 0)
+            rx_alloc = rx_mapper->alloc(*rx, size_rx, align_rx);
+        std::pair<Allocation, Allocation> ret{rx_alloc, rw->alloc(size_rw, align_rw)};
         if (new_rx)
             completed.push_back(std::move(*new_rx));
 
