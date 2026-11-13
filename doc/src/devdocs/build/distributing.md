@@ -47,7 +47,8 @@ created only after the artifacts have been built, validated, and published
 (see [Tagging the release](#tagging-the-release)). Instead, passing
 `JULIA_RELEASE_BUILD=1` to `make` declares the build to be the release build
 of the version in the `VERSION` file, producing the same artifacts that
-building from the tag would (release naming, `tagged_commit` set). It refuses
+building from the tag would (release naming, `tagged_commit` set), with a
+build number of zero even if commits landed after the `VERSION` bump. It refuses
 to run when `VERSION` carries a `-DEV` (or legacy `-pre`) suffix.
 
 Target Architectures

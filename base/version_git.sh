@@ -102,8 +102,11 @@ esac
 if [ "${JULIA_RELEASE_BUILD:-0}" = "1" ]; then
     # Declared release build (see JULIA_RELEASE_BUILD in Make.inc): report the
     # state that building from the (possibly not yet created) release tag would.
+    # Commits after the VERSION bump (fixes found during the release) must not
+    # show up as a build number.
     tagged_commit="true"
-elif [ $(git describe --tags --exact-match 2> /dev/null) ]; then
+    build_number=0
+elif [ -n "$(git tag --points-at HEAD --list "v$(cat "$topdir/VERSION")")" ]; then
     tagged_commit="true"
 else
     tagged_commit="false"
