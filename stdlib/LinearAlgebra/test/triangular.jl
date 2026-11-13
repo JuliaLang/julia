@@ -940,6 +940,43 @@ end
     @test rdiv!(B2v, U) ≈ rdiv!(B2vc, U)
 end
 
+@testset "triangular matrices with non-contiguous or negatively strided parents" for T in (Float64, ComplexF64, Float32, ComplexF32)
+    n = 5
+    # views equal to M, with stride(·, 1) == 2 or with stride(·, 2) < 0, respectively
+    rowstep(M) = (P = zeros(T, 2size(M, 1), size(M, 2)); P[1:2:end, :] = M; view(P, 1:2:size(P, 1), :))
+    colrev(M) = (P = zeros(T, size(M)); P[:, end:-1:1] = M; view(P, :, size(P, 2):-1:1))
+    M = rand(T, n, n) + n*I
+    b, B = rand(T, n), rand(T, n, n)
+    @testset for fM in (rowstep, colrev), t in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular), op in (identity, transpose, adjoint)
+        A, Ad = op(t(fM(M))), op(t(M))
+        @test A * b ≈ Ad * b
+        @test A \ b ≈ Ad \ b
+        @test A * B ≈ Ad * B
+        @test A \ B ≈ Ad \ B
+        @test B * A ≈ B * Ad
+        @test B / A ≈ B / Ad
+        # the destination may also be incompatible with BLAS
+        @test mul!(colrev(zero(B)), A, B) ≈ Ad * B
+        @test mul!(colrev(zero(B)), B, A) ≈ B * Ad
+        @test ldiv!(colrev(zero(B)), A, B) ≈ Ad \ B
+        @test lmul!(A, colrev(B)) ≈ Ad * B
+        @test rmul!(colrev(B), A) ≈ B * Ad
+        @test ldiv!(A, colrev(B)) ≈ Ad \ B
+        @test rdiv!(colrev(B), A) ≈ B / Ad
+        if T <: Complex
+            # a real operand is copied into the complex destination, so this also
+            # dispatches to the methods that call BLAS
+            br, Br = real(b), real(B)
+            @test A * br ≈ Ad * br
+            @test A \ br ≈ Ad \ br
+            @test A * Br ≈ Ad * Br
+            @test A \ Br ≈ Ad \ Br
+            @test Br * A ≈ Br * Ad
+            @test Br / A ≈ Br / Ad
+        end
+    end
+end
+
 @testset "indexing checks" begin
     P = [1 2; 3 4]
     @testset "getindex" begin
@@ -1020,12 +1057,66 @@ end
 Base.size(A::MyTriangular) = size(A.data)
 Base.getindex(A::MyTriangular, i::Int, j::Int) = A.data[i,j]
 
+@testset "3-arg dot: zeros in y are not strong zeros (#1836)" begin
+    n = 3
+    @testset for TT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+        for i in 1:n, j in 1:n
+            A = ones(n, n); A[i, j] = Inf
+            T = TT(A)
+            # only test entries that are actually stored (and not implicitly unit)
+            isinf(T[i, j]) || continue
+            y = ones(n); y[j] = 0
+            @test isnan(dot(ones(n), T, y))
+        end
+    end
+end
+
 @testset "diagonal mul for generic triangular" begin
     @testset for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
         M = MyTriangular(T(rand(4,4)))
         D = Diagonal(randn(4))
         @test D * M ≈ D * M.data
         @test M * D ≈ M.data * D
+    end
+end
+
+@testset "log with banded parents and with NaN" begin
+    # the logarithm fills the upper triangle, which a banded parent can't hold
+    B = Bidiagonal([1.0, 100, 3], [5.0, 2], :U)
+    for A in (UpperTriangular(B), UnitUpperTriangular(B), Tridiagonal([0.0, 0], [1.0, 100, 3], [5.0, 2]))
+        @test log(A) ≈ log(Matrix(A))
+    end
+    # NaNs propagate into the result instead of throwing
+    for T in (Float64, ComplexF64)
+        L = log(UpperTriangular(T[1 2 3; 0 NaN 4; 0 0 5]))
+        @test isnan(L[2,2]) && isnan(L[1,2]) && isnan(L[2,3])
+        @test L[1,1] == 0 && L[3,3] ≈ log(5)
+        L = log(UpperTriangular(T[1 NaN 3; 0 2 4; 0 0 5]))
+        @test isnan(L[1,2]) && isnan(L[1,3])
+        @test diag(L) ≈ log.([1, 2, 5])
+    end
+end
+
+@testset "log doesn't read the parent below the diagonal" begin
+    # log_quasitriu overwrites a copy of its argument, and the square roots in it read the parent
+    # of that copy below the diagonal, which held what the parent of the argument stores there;
+    # this gave NaNs or wrong results
+    A = UpperTriangular(Matrix(Bidiagonal(fill(1.5, 200), fill(0.1, 199), :U)))
+    for _ in 1:3
+        L = log(A)
+        @test all(isfinite, L)
+        @test exp(Matrix(L)) ≈ A
+    end
+    for A0 in (A, UnitUpperTriangular(A), UpperTriangular(Bidiagonal([1.0, 2], [3.0], :U)))
+        @test iszero(tril(parent(LinearAlgebra._log_quasitriu_copy(Float64, A0)), -1))
+    end
+    # the result doesn't depend on what is stored below the diagonal of the parent
+    for d in (1.5, -1.5)
+        M = Matrix(Bidiagonal(fill(d, 200), fill(0.1, 199), :U))
+        Mnan = copy(M)
+        Mnan[CartesianIndices(M)[[i > j for i in 1:200, j in 1:200]]] .= NaN
+        @test isequal(log(UpperTriangular(Mnan)), log(UpperTriangular(M)))
+        @test isequal(log(UnitUpperTriangular(Mnan)), log(UnitUpperTriangular(M)))
     end
 end
 
@@ -1039,6 +1130,19 @@ end
         @test parent(A) == M
         @test V ≈ F.vectors
         @test A * F.vectors ≈ F.vectors * Diagonal(F.values)
+    end
+end
+
+@testset "issue #1749: ldiv! with lazy adjoint/transpose parent" begin
+    M = ComplexF64[1 2+3im 1im; 4-1im 5 2-im; 3+im 2im 7]
+    b = ComplexF64[1, 2, 3]
+    B = ComplexF64[1 4; 2 5; 3 6]
+    for P in (transpose(M'), adjoint(transpose(M)), transpose(M), M')
+        for W in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+            A = W(P)
+            @test A \ b ≈ Matrix(A) \ b ≈ lu(Matrix(A)) \ b
+            @test A \ B ≈ Matrix(A) \ B ≈ lu(Matrix(A)) \ B
+        end
     end
 end
 
