@@ -458,16 +458,15 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
         return;
 
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
-    const char *name = name_from_method_instance(jl_get_ci_mi(codeinsts[len - 1]));
-    auto ctx = std::make_unique<LLVMContext>();
     auto &dl = jl_ExecutionEngine->getDataLayout();
     auto &tt = jl_ExecutionEngine->getTargetTriple();
-    auto mod = jl_create_llvm_module(name, *ctx, dl, tt);
-    jl_codegen_output_t out{*mod};
-    out.get_context().setDiscardValueNames(true);
-    out.imaging_mode = false;
-    JL_GC_PUSH1(&out.temporary_roots);
-
+    auto &ES = jl_ExecutionEngine->getExecutionSession();
+    // Each CodeInstance gets a module of its own: which ones are compiled together depends
+    // on what has been compiled already, which varies from run to run, and the object
+    // cache only finds a module with the same contents. The modules are added to the JIT
+    // together, so that none of them is linked before the others are there to be called
+    // directly.
+    SmallVector<jl_emitted_output_t, 0> outputs;
     for (int i = 0; i < len; ++i) {
         jl_code_instance_t *codeinst = codeinsts[i];
         jl_code_info_t *src = srcs[i];
@@ -476,8 +475,14 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
         if (jl_atomic_load_relaxed(&codeinst->invoke))
             continue;
 
+        auto ctx = std::make_unique<LLVMContext>();
+        auto mod = jl_create_llvm_module(name_from_method_instance(mi), *ctx, dl, tt);
+        jl_codegen_output_t out{*mod};
+        out.get_context().setDiscardValueNames(true);
+        out.imaging_mode = false;
         out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
-        out.temporary_roots_set.clear();
+        JL_GC_PUSH1(&out.temporary_roots);
+
         if (!jl_emit_codeinst(out, codeinst, src)) { // contains safepoints
             JL_GC_POP();
             return;
@@ -492,21 +497,19 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
         // here.
         if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
             jl_as_global_root((jl_value_t*)mi, 1);
+
+        out.temporary_roots = nullptr;
+        out.temporary_roots_set.clear();
+        JL_GC_POP();
+
+        if (out.ci_funcs.empty())
+            continue;
+
+        emit_llvmcall_modules(out);
+
+        outputs.push_back(out.finish(std::move(ctx), std::move(mod), *ES.getSymbolStringPool()));
     }
-
-    out.temporary_roots = nullptr;
-    out.temporary_roots_set.clear();
-    JL_GC_POP();
-
-    if (out.ci_funcs.empty())
-        return;
-
-    emit_llvmcall_modules(out);
-
-    auto &ES = jl_ExecutionEngine->getExecutionSession();
-    jl_emitted_output_t emitted =
-        out.finish(std::move(ctx), std::move(mod), *ES.getSymbolStringPool());
-    jl_ExecutionEngine->addOutput(std::move(emitted));
+    jl_ExecutionEngine->addOutputs(outputs);
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -2090,16 +2093,25 @@ static void timing_print_module_names(jl_timing_block_t *block,
 
 void JuliaOJIT::addOutput(jl_emitted_output_t O)
 {
+    addOutputs(MutableArrayRef<jl_emitted_output_t>(O));
+}
+
+// Adds them all at once: no other thread links code in between, which could otherwise
+// find some of them in the JIT but not the others it calls.
+void JuliaOJIT::addOutputs(MutableArrayRef<jl_emitted_output_t> Os)
+{
     JL_TIMING(LLVM_JIT, JIT_Total);
-    ++ModulesAdded;
-#ifdef ENABLE_TIMINGS
-    timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, *O.module);
-#endif
-    std::unique_lock Lock{LinkerMutex};
-    auto MU = std::make_unique<JLMaterializationUnit>(
-        JLMaterializationUnit::Create(*this, ObjectLayer, std::move(O)));
     ExitOnError check{"Failed to add objectfile to JIT!"};
-    check(JD.define(MU, JD.getDefaultResourceTracker()));
+    std::unique_lock Lock{LinkerMutex};
+    for (auto &O : Os) {
+        ++ModulesAdded;
+#ifdef ENABLE_TIMINGS
+        timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, *O.module);
+#endif
+        auto MU = std::make_unique<JLMaterializationUnit>(
+            JLMaterializationUnit::Create(*this, ObjectLayer, std::move(O)));
+        check(JD.define(MU, JD.getDefaultResourceTracker()));
+    }
 }
 
 orc::JITDylib& JuliaOJIT::createJITDylib(StringRef NamePrefix)
