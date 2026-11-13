@@ -23,6 +23,10 @@ end
     @test MonthlyDate(Dates.UTInstant(Month(10))) - MonthlyDate(Dates.UTInstant(Month(1))) == Month(9)
     # ... and between two same-type AbstractDateTimes
     @test OtherTime(Dates.UTInstant(Nanosecond(2))) - OtherTime(Dates.UTInstant(Nanosecond(1))) == Nanosecond(1)
+    @test +Date(1) == Date(1)
+    @test +Dates.UTInstant(Day(1)) == Dates.UTInstant(Day(1))
+    r = Date(2000, 1, 1):Day(1):Date(2000, 1, 3)
+    @test r - r == fill(Day(0), 3)
 end
 
 @testset "Wrapping arithmetic for Months" begin

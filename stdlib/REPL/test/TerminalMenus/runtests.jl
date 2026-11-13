@@ -22,6 +22,19 @@ function simulate_input(menu::TerminalMenus.AbstractMenu, keys...; kwargs...)
     return request(terminal, menu; suppress_output=true, kwargs...)
 end
 
+@testset "readkey escape sequences" begin
+    for (seq, key) in ("\e[1~" => TerminalMenus.HOME_KEY, "\e[7~" => TerminalMenus.HOME_KEY,
+                       "\e[H" => TerminalMenus.HOME_KEY, "\e[4~" => TerminalMenus.END_KEY,
+                       "\e[8~" => TerminalMenus.END_KEY, "\e[F" => TerminalMenus.END_KEY,
+                       "\e[3~" => TerminalMenus.DEL_KEY, "\e[5~" => TerminalMenus.PAGE_UP,
+                       "\e[6~" => TerminalMenus.PAGE_DOWN, "\e[C" => TerminalMenus.ARROW_RIGHT,
+                       "\e[D" => TerminalMenus.ARROW_LEFT, "\eOA" => TerminalMenus.ARROW_UP,
+                       # unknown or incomplete sequences read as a plain escape
+                       "\e[9~" => '\e', "\e[Z" => '\e', "\e[2" => '\e', "\eXY" => '\e')
+        @test TerminalMenus.readkey(IOBuffer(seq)) == UInt32(key)
+    end
+end
+
 include("radio_menu.jl")
 include("multiselect_menu.jl")
 include("dynamic_menu.jl")

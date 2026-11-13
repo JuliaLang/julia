@@ -1,5 +1,6 @@
 using Test
 using Profile: Allocs
+using Base.StackTraces: StackFrame
 
 Allocs.clear()
 let iobuf = IOBuffer()
@@ -8,6 +9,21 @@ let iobuf = IOBuffer()
     end
     # kwargs that allocation profiles don't support must error rather than be silently ignored
     @test_throws MethodError Allocs.print(iobuf; groupby = :task)
+end
+
+@testset "printing synthetic allocation results" begin
+    sf(func, file, line) = StackFrame(func, Symbol(file), line, nothing, false, false, UInt64(0))
+    st = [sf(:f1, "/a/file1.jl", 1), sf(:f2, "/a/file2.jl", 2), sf(:f1, "/a/file1.jl", 1), sf(:f3, "/a/file3.jl", 3)]
+    a = Allocs.Alloc(Vector{Int}, st, 16, C_NULL, UInt64(0))
+    @test repr(a) == "Profile.Allocs.Alloc(Vector{$Int}, $StackFrame[f1 at file1.jl:1, ...], 16)"
+    results = Allocs.AllocResults([a, Allocs.Alloc(String, st[3:4], 8, C_NULL, UInt64(0))])
+    io = IOBuffer()
+    Allocs.print(IOContext(io, :displaysize => (50, 120)), results; format = :tree, recur = :flat)
+    @test split(String(take!(io)), '\n')[3:5] == [
+        "  ╎24 /a/file3.jl:3  f3",
+        "24╎ 24 /a/file1.jl:1  f1",
+        "  ╎  16 /a/file2.jl:2  f2"]
+    @test_throws "output format :bogus not recognized" Allocs.print(io, results; format = :bogus)
 end
 
 # Issue #57103: This test does not work with MMTk because of fastpath
