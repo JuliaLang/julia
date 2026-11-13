@@ -647,22 +647,22 @@ function catch_live_object(n)
     end
     return r.x
 end
-@testset "a mutation in a try is seen by the catch without a ϒ" begin
-    # inlining can leave the IR in this shape: the object reaches the catch only as an SSA value
-    ir = only(Base.code_ircode(catch_live_object, (Int,)))[1]
-    alloc = findfirst(i -> Meta.isexpr(ir.stmts[i][:stmt], :new), 1:length(ir.stmts))
-    for i in 1:length(ir.stmts)
-        stmt = ir.stmts[i][:stmt]
-        if stmt isa Core.UpsilonNode || stmt isa Core.PhiCNode
-            ir.stmts[i][:stmt] = nothing
-        elseif stmt isa Core.PhiNode
-            ir.stmts[i][:stmt] = Core.SSAValue(alloc)
-        end
+function catch_live_phi(c, n)
+    r = c ? CatchLiveObject(0) : CatchLiveObject(1)
+    try
+        r.x = n
+        catch_live_throw(n)
+        r.x = 2n
+    catch
     end
-    ir.argtypes[1] = Tuple{}
-    oc = Core.OpaqueClosure(ir; do_compile=true)
-    @test oc(5) == 5
-    @test oc(0) == 0
+    return r.x
+end
+@testset "a mutation in a try is seen by the catch without a ϒ" begin
+    # the object reaches the catch only as an SSA value
+    @test !any(stmt -> stmt isa Core.UpsilonNode, first(only(code_typed(catch_live_object, (Int,)))).code)
+    @test catch_live_object(5) == 5
+    # ... or only through a `phi` of allocations
+    @test catch_live_phi(true, 5) == 5
 end
 
 @testset "#37262" begin
