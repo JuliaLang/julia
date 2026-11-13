@@ -1220,6 +1220,19 @@ STATIC_INLINE int jl_bkind_is_real_constant(enum jl_partition_kind kind) JL_NOTS
     return kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT;
 }
 
+// The newest partition of `b` if it holds `world`, else NULL: the common case of
+// `jl_get_binding_partition`, which otherwise searches the older partitions and may resolve
+// an implicit import.
+STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_if_newest(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED
+{
+    jl_binding_partition_t *bpart = jl_atomic_load_relaxed(&b->partitions);
+    if (bpart != NULL && jl_is_binding_partition((jl_value_t*)bpart) &&
+            world >= jl_atomic_load_relaxed(&bpart->min_world) &&
+            world <= jl_atomic_load_relaxed(&bpart->max_world))
+        return bpart;
+    return NULL;
+}
+
 STATIC_INLINE int jl_bpart_is_exported(size_t flags) JL_NOTSAFEPOINT {
     return (flags & (PARTITION_FLAG_EXPORTED | PARTITION_FLAG_IMPLICITLY_EXPORTED)) != 0;
 }

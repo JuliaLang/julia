@@ -551,11 +551,18 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b 
     }
 }
 
+static NOINLINE jl_binding_partition_t *jl_get_binding_partition_slow(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED
+{
+    // Duplicate the code for the entry frame for branch prediction
+    return jl_get_binding_partition_(b, (jl_value_t*)b, &b->partitions, world, ~(size_t)0, NULL);
+}
+
 jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) {
     if (!b)
         return NULL;
-    // Duplicate the code for the entry frame for branch prediction
-    return jl_get_binding_partition_(b, (jl_value_t*)b, &b->partitions, world, ~(size_t)0, NULL);
+    // without the frame of the search when the newest partition holds `world`
+    jl_binding_partition_t *bpart = jl_get_binding_partition_if_newest(b, world);
+    return bpart ? bpart : jl_get_binding_partition_slow(b, world);
 }
 
 jl_binding_partition_t *jl_get_binding_partition_with_hint(jl_binding_t *b, jl_binding_partition_t *prev, size_t world) JL_GLOBALLY_ROOTED {
