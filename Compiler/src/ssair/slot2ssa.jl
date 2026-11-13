@@ -547,6 +547,20 @@ struct NewPhiCNode2
     insert::NewSlotPhi{PhiCNode}
 end
 
+# Whether `slot` is assigned inside the `try` whose catch block is `catch_bb`. If not, the catch
+# block sees the value at the `enter`, which reaches it along the CFG edge without a `PhiCNode`.
+function assigned_in_try(code::Vector{Any}, cfg::CFG, handler_info::Union{Nothing,HandlerInfo},
+                         slot::SlotInfo, catch_bb::Int)
+    for def in slot.defs
+        def == 0 && continue
+        for enter_idx in EnclosingEnters(handler_info, def)
+            catch_dest = (code[enter_idx]::EnterNode).catch_dest
+            catch_dest != 0 && block_for_inst(cfg, catch_dest) == catch_bb && return true
+        end
+    end
+    return false
+end
+
 function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                         domtree::DomTree, defuses::Vector{SlotInfo},
                         𝕃ₒ::AbstractLattice)
@@ -602,7 +616,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         for li in live.live_in_bbs
             push!(live_slots[li], idx)
             cidx = findfirst(x::TryCatchRegion->x.leave_block==li, catch_entry_blocks)
-            if cidx !== nothing
+            if cidx !== nothing && assigned_in_try(code, cfg, handler_info, slot, li)
                 # The slot is live-in into this block. We need to
                 # Create a PhiC node in the catch entry block and
                 # an upsilon node in the corresponding enter block
@@ -785,9 +799,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                         end
                         incoming_vals[id] = Pair{Any, Any}(thisval, thisdef)
                         has_pinode[id] = false
-                        enter_idx = idx
-                        while (handler = gethandler(handler_info, enter_idx)) !== nothing
-                            enter_idx = get_enter_idx(handler)
+                        for enter_idx in EnclosingEnters(handler_info, idx)
                             enter_node = code[enter_idx]::EnterNode
                             leave_block = block_for_inst(cfg, enter_node.catch_dest)
                             cidx = findfirst((; slot)::NewPhiCNode2->slot_id(slot)==id,
