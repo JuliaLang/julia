@@ -545,24 +545,24 @@ end
     end
 end
 
-# Rounding throws an InexactError when the result does not fit, instead of wrapping.
+# Rounding throws an OverflowError when the result does not fit, instead of wrapping.
 @testset "Rounding at storage limits" begin
     for P in (Second, Millisecond, Microsecond, Nanosecond)
         T = Timestamp{P}
         lo, hi = typemin(T), typemax(T)
-        @test_throws InexactError floor(lo, Second(10))
-        @test_throws InexactError ceil(hi, Second(10))
+        @test_throws OverflowError floor(lo, Second(10))
+        @test_throws OverflowError ceil(hi, Second(10))
         @test lo < ceil(lo, Second(10)) < lo + Second(10)
         @test hi - Second(10) < floor(hi, Second(10)) < hi
-        @test_throws InexactError Dates.floorceil(lo, Second(10))
-        @test_throws InexactError Dates.floorceil(hi, Second(10))
+        @test_throws OverflowError Dates.floorceil(lo, Second(10))
+        @test_throws OverflowError Dates.floorceil(hi, Second(10))
         @test Dates.floorceil(lo, P(1)) === (lo, lo)
         @test Dates.floorceil(hi, P(1)) === (hi, hi)
         @test round(lo, P(1)) === lo
         @test round(hi, P(1)) === hi
         for Q in (Year, Quarter, Month, Week, Day)
-            @test_throws InexactError floor(lo, Q(typemax(Int64)))
-            @test_throws InexactError ceil(T(1970), Q(typemax(Int64)))
+            @test_throws OverflowError floor(lo, Q(typemax(Int64)))
+            @test_throws OverflowError ceil(T(1970), Q(typemax(Int64)))
         end
         if P !== Nanosecond
             for Q in (Year, Quarter, Month)
@@ -727,7 +727,9 @@ end
             nearest = x - f < c - x ? f : c
             for (op, result) in ((floor, f), (ceil, c), (round, nearest))
                 ticks, remainder = divrem(result, scale)
-                if iszero(remainder) && typemin(Int128) <= ticks <= typemax(Int128)
+                if !(big(typemin(Int128)) * scale <= result <= big(typemax(Int128)) * scale)
+                    @test_throws OverflowError op(t, p)
+                elseif iszero(remainder)
                     @test Dates.value(op(t, p)) == ticks
                 else
                     @test_throws InexactError op(t, p)
@@ -740,7 +742,7 @@ end
         y = year(t)
         ns = (Dates.totaldays(big(y), 1, 1) - Dates.totaldays(1970, 1, 1)) * 86400000000000
         @test Dates.value(floor(t, Year)) == ns ÷ TimestampHelpers.timestamp_scale(U)
-        @test_throws InexactError ceil(t, Year)
+        @test_throws OverflowError ceil(t, Year)
     end
 end
 
@@ -779,8 +781,8 @@ end
     @test typemax(T) + TestPicosecond(1) === typemin(T)
     @test typemin(T) - TestPicosecond(1) === typemax(T)
     @test typemax(T) - typemin(T) === TestPicosecond(-1)
-    @test_throws InexactError ceil(typemax(T), Nanosecond)
-    @test_throws InexactError floor(typemin(T), Nanosecond)
+    @test_throws OverflowError ceil(typemax(T), Nanosecond)
+    @test_throws OverflowError floor(typemin(T), Nanosecond)
     @test typemin(T) < typemin(Timestamp)
     @test typemax(T) > typemax(Timestamp)
     for n in (typemin(Int128), Int128(-1), Int128(0), Int128(1), typemax(Int128))
@@ -804,5 +806,101 @@ end
     @test_throws ArgumentError T(Year(2026), TestPicosecond(1))
     @test_throws ArgumentError T(TestPicosecond(1))
     @test isempty(Test.detect_ambiguities(TimestampPeriodExtensionTests; recursive=true))
+end
+
+# A day of more ticks than half of typemax(Int128), and counts beyond Int128
+struct TestBigNanosecond <: Dates.TimePeriod
+    value::BigInt
+end
+Base.typemin(::Type{TestBigNanosecond}) = TestBigNanosecond(-big(10)^200)
+Base.typemax(::Type{TestBigNanosecond}) = TestBigNanosecond(big(10)^200)
+Dates.tons(x::TestBigNanosecond) = Dates.value(x)
+
+@testset "Rounding wide Timestamp counts to calendar periods" begin
+    P = TestNanosecond{1 // Int128(10)^24}
+    T = Timestamp{P}
+    tpd = TimestampHelpers.timestamp_ticks_per_day(P)
+    @test tpd > typemax(Int128) ÷ 2
+    @test round(T(Dates.UTInstant(P(tpd - 1))), Day) === T(Dates.UTInstant(P(tpd)))
+    @test round(T(Dates.UTInstant(P(tpd + 1))), Day) === T(Dates.UTInstant(P(tpd)))
+    t = Timestamp{TestBigNanosecond}(Dates.UTInstant(TestBigNanosecond(big(10)^100)))
+    months(x) = 12 * big(year(x)) + month(x) - 1
+    for p in (Month(typemax(Int64)), Quarter(Int64(2)^62), Year(Int64(2)^62), Month(1))
+        f, c = Dates.floorceil(t, p)
+        step = big(Dates.value(p)) * (p isa Year ? 12 : p isa Quarter ? 3 : 1)
+        @test f <= t < c
+        @test iszero(mod(months(f), step)) && months(c) - months(f) == step
+        @test day(f) == day(c) == 1 && iszero(Dates.nsofday(f)) && iszero(Dates.nsofday(c))
+    end
+    # A day has more ticks than Int128 holds, while the count only spans hours around the epoch
+    P = TestNanosecond{1 // Int128(10)^25}
+    t = Timestamp{P}(Dates.UTInstant(P(0)))
+    @test floor(t, Day) === ceil(t, Day) === round(t, Day) === round(t, Month) === t
+end
+
+# Seconds stored in narrow and in unbounded integers. Narrow counts get a 32-bit scale, as on 32-bit.
+struct TestCountSecond{T <: Integer} <: Dates.TimePeriod
+    value::T
+end
+Base.typemin(::Type{TestCountSecond{T}}) where {T} = TestCountSecond{T}(typemin(T))
+Base.typemax(::Type{TestCountSecond{T}}) where {T} = TestCountSecond{T}(typemax(T))
+Dates.tons(x::TestCountSecond) = Dates.value(x) * Int32(1000000000)
+
+@testset "Rounding unsigned Timestamp counts to calendar periods" begin
+    P = TestCountSecond{UInt64}
+    t = Timestamp{P}(Dates.UTInstant(P(10 * 86400)))
+    @test Date(round(t, Week)) == Date(1970, 1, 12)
+    @test Date(floor(t, Week)) == Date(1970, 1, 5)
+    # The floor lies before the Unix epoch, so only the ceiling is representable
+    P = TestCountSecond{UInt128}
+    t = Timestamp{P}(Dates.UTInstant(P(0)))
+    @test Date(round(t, Year(2000))) == Date(ceil(t, Year(2000))) == Date(2000)
+    @test_throws OverflowError floor(t, Year(2000))
+    @test_throws OverflowError floor(t, Hour(7))
+    # Days and years are signed, also before the start of an unsigned count
+    for C in (UInt64, UInt128)
+        T = Timestamp{TestCountSecond{C}}
+        @test year(T(2026)) == 2026 && year(T(2026)) isa Signed
+    end
+end
+
+# A 64-bit count of ticks so short that the epoch offset in ticks exceeds Int128
+struct TestTinyTick <: Dates.TimePeriod
+    value::Int64
+end
+Base.typemin(::Type{TestTinyTick}) = TestTinyTick(typemin(Int64))
+Base.typemax(::Type{TestTinyTick}) = TestTinyTick(typemax(Int64))
+Dates.tons(x::TestTinyTick) = Dates.value(x) // Int128(10)^25
+# Ticks whose length in nanoseconds is unsigned. Only the length of one tick is asked for.
+struct TestUnsignedTick{S} <: Dates.TimePeriod
+    value::Int64
+end
+Base.typemin(::Type{TestUnsignedTick{S}}) where {S} = TestUnsignedTick{S}(typemin(Int64))
+Base.typemax(::Type{TestUnsignedTick{S}}) where {S} = TestUnsignedTick{S}(typemax(Int64))
+Dates.tons(::TestUnsignedTick{S}) where {S} = S
+
+@testset "Rounding to unsigned and very fine periods" begin
+    t = Timestamp{Second}(1969, 12, 31, 23, 59, 57)
+    @test floor(t, TestCountSecond{UInt64}(2)) == floor(t, Second(2)) == Timestamp{Second}(1969, 12, 31, 23, 59, 56)
+    @test ceil(t, TestCountSecond{UInt64}(2)) == ceil(t, Second(2))
+    P = TestCountSecond{Int8}
+    @test floor(Timestamp{P}(Dates.UTInstant(P(5))), Second(2)) === Timestamp{P}(Dates.UTInstant(P(4)))
+    T = Timestamp{TestTinyTick}
+    tick(n) = T(Dates.UTInstant(TestTinyTick(n)))
+    @test floor(tick(7), Second(86_400)) === tick(0)
+    @test_throws ArgumentError T(Date(1970), Dates.Time(23))
+    for S in (UInt8(250), UInt64(1) // UInt64(2))
+        u = Timestamp(Dates.UTInstant(TestUnsignedTick{S}(-4)))
+        @test floor(u, Nanosecond) === u
+    end
+    for op in (floor, ceil, round)
+        @test op(tick(0), TestTinyTick(1)) === tick(0)
+    end
+    @test floor(tick(7), TestTinyTick(5)) === tick(5) && ceil(tick(7), TestTinyTick(5)) === tick(10)
+    @test floor(tick(7), Nanosecond(1)) === tick(0)
+    @test_throws OverflowError ceil(tick(7), Nanosecond(1))
+    # A bound less than a tick past the end lies outside the type, although its truncated tick does not
+    @test_throws OverflowError ceil(typemax(Timestamp{Second}), Millisecond(700))
+    @test_throws InexactError floor(typemax(Timestamp{Second}), Millisecond(700))
 end
 end

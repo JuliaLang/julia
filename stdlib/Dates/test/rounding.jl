@@ -5,6 +5,66 @@ module RoundingTests
 using Test
 using Dates
 
+# Package periods: a date period with its own `floor` for Date, a time period that converts to
+# milliseconds, and a time period with its own `floor`
+struct Fortnight <: Dates.DatePeriod
+    value::Int64
+end
+Dates.days(p::Fortnight) = 14 * p.value
+for T in (Date, DateTime)
+    @eval Base.:+(d::$T, p::Fortnight) = d + Day(14 * p.value)
+    @eval Base.:-(d::$T, p::Fortnight) = d - Day(14 * p.value)
+end
+Base.floor(d::Date, p::Fortnight) = floor(d, Day(14 * p.value))
+struct Jiffy <: Dates.TimePeriod
+    value::Int64
+end
+Base.convert(::Type{Millisecond}, p::Jiffy) = Millisecond(10 * p.value)
+Base.:+(t::DateTime, p::Jiffy) = t + Millisecond(p)
+struct WholeSecond <: Dates.TimePeriod
+    value::Int64
+end
+Base.convert(::Type{Millisecond}, p::WholeSecond) = Millisecond(1000 * p.value)
+Base.floor(t::DateTime, p::WholeSecond) = t - Millisecond(millisecond(t))
+Base.:+(t::DateTime, p::WholeSecond) = t + Second(p.value)
+# A date period with only `floorceil`, which `round` uses
+struct HalfMonth <: Dates.DatePeriod
+    value::Int64
+end
+Dates.floorceil(d::Date, ::HalfMonth) = day(d) < 16 ? (Date(year(d), month(d), 1), Date(year(d), month(d), 16)) :
+    (Date(year(d), month(d), 16), firstdayofmonth(d) + Month(1))
+
+@testset "Rounding to package periods" begin
+    for x in (Date(2026, 1, 20), DateTime(2026, 1, 20, 12), DateTime(2026, 1, 21))
+        for op in (floor, ceil, round)
+            @test op(x, Fortnight(1)) == op(x, Day(14))
+        end
+        @test Dates.floorceil(x, Fortnight(1)) == Dates.floorceil(x, Day(14))
+    end
+    t = DateTime(2026, 1, 20, 12, 0, 0, 37)
+    for op in (floor, ceil, round)
+        @test op(t, Jiffy(3)) == op(t, Millisecond(30))
+    end
+    @test Dates.floorceil(t, Jiffy(3)) == Dates.floorceil(t, Millisecond(30))
+    # ceil, round, and floorceil build on a package's own floor
+    t = DateTime(2026, 1, 1, 20, 0, 1, 200)
+    f = floor(t, WholeSecond(2))
+    @test f == DateTime(2026, 1, 1, 20, 0, 1)
+    @test Dates.floorceil(t, WholeSecond(2)) == (f, ceil(t, WholeSecond(2))) == (f, f + Second(2))
+    @test round(t, WholeSecond(2)) == f
+    @test round(Date(2020, 1, 2), HalfMonth(1)) == Date(2020, 1, 1)
+    @test round(Date(2020, 1, 12), HalfMonth(1)) == Date(2020, 1, 16)
+    # A ceiling past the end of the type throws instead of wrapping around
+    t = DateTime(Dates.UTM(typemax(Int64)))
+    @test_throws OverflowError ceil(t, Jiffy(1))
+    @test_throws OverflowError Dates.floorceil(t, Jiffy(1))
+    @test_throws OverflowError round(t, Jiffy(1))
+    @test_throws OverflowError round(t - Millisecond(5), Jiffy(1))
+    @test_throws OverflowError floor(DateTime(Dates.UTM(typemin(Int64))), Fortnight(1))
+    # while a Time wraps around at midnight
+    @test ceil(Time(23, 59, 59, 500), Second) == Time(0)
+end
+
 @testset "conversion to and from the rounding epoch (ISO 8601 year 0000)" begin
     @test Dates.epochdays2date(-1) == Dates.Date(-1, 12, 31)
     @test Dates.epochdays2date(0) == Dates.Date(0, 1, 1)
@@ -121,6 +181,52 @@ end
     @test ceil(dt, Dates.Hour(2)) == DateTime(-1, 12, 29, 20)
     @test ceil(dt, Dates.Minute(2)) == DateTime(-1, 12, 29, 19, 20)
     @test ceil(dt, Dates.Second(2)) == DateTime(-1, 12, 29, 19, 19, 20)
+end
+@testset "Rounding at the ends of the stored count" begin
+    dmin, dmax = Date(Dates.UTD(typemin(Int64))), Date(Dates.UTD(typemax(Int64)))
+    tmin, tmax = DateTime(Dates.UTM(typemin(Int64))), DateTime(Dates.UTM(typemax(Int64)))
+    @test floor(dmax, Dates.Week) == dmax - Dates.Day(6)
+    @test floor(dmax, Dates.Day(3)) == dmax
+    @test Dates.value(floor(tmax, Dates.Hour(5))) == 9223372036854000000
+    @test Dates.value(floor(tmax, Dates.Second)) == 9223372036854775000
+    for (x, p, epoch) in ((dmax, Dates.Week(3), Date(0, 1, 3)), (dmin + Dates.Day(30), Dates.Day(7), Date(0)),
+                          (tmax, Dates.Millisecond(7), DateTime(0)),
+                          (tmin + Dates.Day(1), Dates.Hour(5), DateTime(0)))
+        unit = x isa Date ? Dates.days(p) : Dates.toms(p)
+        f = floor(x, p)
+        @test 0 <= big(Dates.value(x)) - Dates.value(f) < unit
+        @test iszero(mod(big(Dates.value(f)) - Dates.value(epoch), unit))
+    end
+    # Only the returned bound must lie within the type
+    @test_throws OverflowError floor(dmin, Dates.Week)
+    @test_throws OverflowError Dates.floorceil(dmin, Dates.Week(1))
+    @test ceil(dmin, Dates.Week) == round(dmin, Dates.Week) == dmin + Dates.Day(2)
+    @test_throws OverflowError ceil(dmax, Dates.Week)
+    @test_throws OverflowError round(dmax, Dates.Week)
+    @test round(dmax - Dates.Day(4), Dates.Week) == floor(dmax, Dates.Week)
+    @test_throws OverflowError floor(dmin, Dates.Month)
+    c = ceil(dmin, Dates.Month)
+    @test Dates.day(c) == 1 && dmin < c <= dmin + Dates.Day(31)
+    for p in (Dates.Hour(1), Dates.Day(1), Dates.Week(1), Dates.Year(1))
+        @test_throws OverflowError floor(tmin, p)
+        @test_throws OverflowError ceil(tmax, p)
+        @test 0 < Dates.value(ceil(tmin, p)) - Dates.value(tmin) <= Dates.toms(p)
+        @test 0 <= Dates.value(tmax) - Dates.value(floor(tmax, p)) < Dates.toms(p)
+    end
+    # Periods longer than the type have at most one bound within it
+    @test floor(Dates.DateTime(2026), Dates.Week(Int64(2)^40)) == Dates.DateTime(0, 1, 3)
+    @test_throws OverflowError ceil(Dates.DateTime(2026), Dates.Week(Int64(2)^40))
+    @test floor(Dates.Date(2026), Dates.Year(typemax(Int64))) == Dates.Date(0)
+    @test_throws OverflowError ceil(Dates.Date(2026), Dates.Year(typemax(Int64)))
+    @test floor(Dates.Date(2026), Dates.Week(Int64(2)^61)) == Dates.Date(0, 1, 3)
+    @test floor(Dates.DateTime(2026), Dates.Hour(Int64(2)^61)) == Dates.DateTime(0)
+    @test_throws OverflowError ceil(Dates.DateTime(2026), Dates.Hour(Int64(2)^61))
+    # Timestamps round to days and calendar periods in days, with ties up
+    t = Dates.Timestamp(2026, 3, 1, 12)
+    @test round(t, Dates.Day) == Dates.Timestamp(2026, 3, 2)
+    @test round(t - Dates.Nanosecond(1), Dates.Day) == Dates.Timestamp(2026, 3, 1)
+    @test round(t, Dates.Month) == Dates.Timestamp(2026, 3, 1)
+    @test round(Dates.Timestamp(2026, 7, 2, 12), Dates.Year) == Dates.Timestamp(2027)
 end
 @testset "Rounding for dates that should not need rounding" begin
     for dt in [Dates.DateTime(2016, 1, 1), Dates.DateTime(-2016, 1, 1)]

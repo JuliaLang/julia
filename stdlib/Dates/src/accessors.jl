@@ -137,6 +137,7 @@ end
 value(dt::TimeType) = dt.instant.periods.value
 value(dt::Timestamp) = value(dt.instant.periods)
 value(t::Time) = t.instant.value
+withvalue(x, v) = typeof(x)(UTInstant(typeof(x.instant.periods)(v)))
 days(dt::Date) = value(dt)
 days(dt::DateTime) = fld(value(dt), 86400000)
 days(dt::Timestamp{P}) where {P} = signedcount(fld(value(dt), timestamp_ticks_per_day(P))) + UNIXEPOCHDAYS

@@ -281,6 +281,9 @@ function timestamp_period_scale(::Type{P}) where {P<:Period}
     scale = tons(oneunit(P))
     scale isa Union{Integer,Rational} ||
         throw(ArgumentError("Timestamp period scale must be an Integer or Rational number of nanoseconds"))
+    # A signed scale keeps its products with signed counts signed
+    scale isa Unsigned && return signed(widen(scale))
+    scale isa Rational{<:Unsigned} && return signed(widen(numerator(scale))) // signed(widen(denominator(scale)))
     return scale
 end
 # Nanoseconds per unit of P (a Rational below a nanosecond), and units of P per day
@@ -336,8 +339,16 @@ function totaldays(y, m, d)
     return d + mdays + 365z + fld(z, 4) - fld(z, 100) + fld(z, 400) - 306
 end
 
-# Nanoseconds per day, and the Rata Die day number of the Unix epoch 1970-01-01
-const NS_PER_DAY = 86400000000000
+# Integer literals are Int32 on 32-bit systems, where products such as NS_PER_DAY would overflow
+const SECONDS_PER_MINUTE = Int64(60)
+const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE
+const SECONDS_PER_DAY = 24 * SECONDS_PER_HOUR
+const MS_PER_SECOND = Int64(1000)
+const NS_PER_SECOND = Int64(1000000000)
+const MS_PER_DAY = MS_PER_SECOND * SECONDS_PER_DAY
+const NS_PER_DAY = NS_PER_SECOND * SECONDS_PER_DAY
+const DAYS_PER_LEAP_YEAR = Int64(366)
+# The Rata Die day number of the Unix epoch 1970-01-01
 const UNIXEPOCHDAYS = totaldays(1970, 1, 1)
 
 # If the year is divisible by 4, except for every 100 years, except for every 400 years

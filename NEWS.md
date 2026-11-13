@@ -76,6 +76,9 @@ Standard library changes
   the day count, for example `BigInt` for a `Timestamp` with a package-defined period.
 * `week`, `isoyear`, and `isoweekdate` now return correct ISO 8601 results for every `Date`,
   including years before 1.
+* `floor`, `ceil`, and `round` of a `Date`, `DateTime`, or `Timestamp` now throw an `OverflowError`
+  when the result lies outside the type. Before, `Date` and `DateTime` wrapped around, and
+  `Timestamp` threw an `InexactError`, which it still throws for a result that is not a whole tick.
 
 #### InteractiveUtils
 
