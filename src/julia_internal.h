@@ -1110,7 +1110,6 @@ jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t n
 // the interpreter's dispatch caches, by the code they are for (see interpreter.c)
 extern jl_genericmemory_t *jl_interp_call_sites JL_GLOBALLY_ROOTED;
 extern jl_mutex_t jl_interp_call_sites_lock;
-jl_value_t *jl_get_globalref_const_quiet(jl_globalref_t *gr JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
