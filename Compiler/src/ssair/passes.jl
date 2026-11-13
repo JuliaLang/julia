@@ -1802,9 +1802,26 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
     return nothing
 end
 
+# Whether some `setfield!` in `du` lies in a `try` whose catch block the field is live into.
+# The CFG has no edge from inside the `try` to its catch, so lifting such a field would let the
+# catch see it as it was at the `enter`.
+function written_in_try_live_into_catch(ir::IRCode, handler_info::HandlerInfo, du::SSADefUse,
+                                        defidx::Int, live_in_bbs::Vector{Int})
+    for def in du.defs
+        def == defidx && continue
+        for enter_idx in EnclosingEnters(handler_info, def)
+            catch_dest = (ir[SSAValue(enter_idx)][:stmt]::EnterNode).catch_dest
+            catch_dest != 0 && catch_dest in live_in_bbs && return true
+        end
+    end
+    return false
+end
+
 function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}, used_ssas::Vector{Int}, lazydomtree::LazyDomtree, inlining::Union{Nothing,InliningState})
     𝕃ₒ = inlining === nothing ? SimpleInferenceLattice.instance : optimizer_lattice(inlining.interp)
     lazypostdomtree = LazyPostDomtree(ir)
+    handler_info = nothing # computed on first need
+    handler_info_computed = false
     function find_finalizer_useidx(defuse::SSADefUse)
         finalizer_useidx = nothing
         for (useidx, use) in enumerate(defuse.uses)
@@ -1913,6 +1930,17 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
             isempty(du.uses) && continue
             push!(du.defs, defidx)
             ldu = compute_live_ins(ir.cfg, du)
+            live_in_bbs = ldu.live_in_bbs::Vector{Int}
+            if !isempty(live_in_bbs) && length(du.defs) > 1
+                if !handler_info_computed
+                    handler_info = compute_trycatch(ir)
+                    handler_info_computed = true
+                end
+                if handler_info !== nothing &&
+                   written_in_try_live_into_catch(ir, handler_info, du, defidx, live_in_bbs)
+                    @goto skip
+                end
+            end
             if isempty(ldu.live_in_bbs)
                 phiblocks = Int[]
             else
