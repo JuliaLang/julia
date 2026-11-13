@@ -135,11 +135,14 @@ end
     end
 
     # Test empty `cpu_target` gives a helpful error message, issue #52209.
-    io = IOBuffer()
-    p = run(pipeline(`$(Base.julia_cmd(; cpu_target="")) --startup-file=no -e ''`; stderr=io); wait=false)
-    wait(p)
-    @test p.exitcode == 1
-    @test occursin("empty CPU name", String(take!(io)))
+    let err = Pipe(),
+        p = run(pipeline(`$(Base.julia_cmd(; cpu_target="")) --startup-file=no -e ''`; stderr=err); wait=false)
+        close(err.in)
+        # Read to EOF: `wait(p)` does not wait for output redirected to an `IOBuffer`.
+        @test occursin("empty CPU name", read(err, String))
+        wait(p)
+        @test p.exitcode == 1
+    end
 end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
