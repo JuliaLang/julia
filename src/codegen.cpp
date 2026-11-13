@@ -10356,7 +10356,8 @@ static jl_llvm_functions_t
     topinfo.loc = topdebugloc;
     topinfo.edgeid = 0;
     SmallVector<DebugLineTable, 0> prev_lineinfo, new_lineinfo;
-    const bool inline_scopes = ctx.params->debug_info_inline_scopes;
+    // toplevel code has no CodeInstance for a backtrace to rebuild its frames from
+    const bool inline_scopes = ctx.params->debug_info_inline_scopes || !jl_is_method(ctx.linfo->def.method);
     auto update_lineinfo = [&](size_t outerpc) {
         std::function<bool(jl_debuginfo_t *, jl_value_t *, size_t, size_t, bool)>
             append_lineinfo = [&](jl_debuginfo_t *debuginfo, jl_value_t *func, size_t to,
@@ -11655,12 +11656,11 @@ extern "C" void jl_init_llvm(void)
     jl_default_debug_info_kind = jl_default_cgparams.debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     jl_default_cgparams.debug_info_level = (int) jl_options.debug_level;
     // Backtraces rebuild inlined frames from the CodeInstance debuginfo, using the
-    // statement index in the DWARF column, so image code (sysimage and pkgimages)
-    // only needs a line table for the outermost frame, which saves most of its
-    // DWARF. Other processes and assert builds keep the inline scopes for gdb,
-    // perf, and code_llvm/code_native.
+    // statement index in the DWARF column, so code only needs a line table for the
+    // outermost frame, which saves most of its DWARF. Assert builds keep the inline
+    // scopes, and so does the JIT when a debugger or profiler listens to it.
 #ifdef JL_NDEBUG
-    jl_default_cgparams.debug_info_inline_scopes = !jl_generating_output();
+    jl_default_cgparams.debug_info_inline_scopes = 0;
 #else
     jl_default_cgparams.debug_info_inline_scopes = 1;
 #endif
@@ -11766,6 +11766,7 @@ extern "C" void jl_init_llvm(void)
     if (jit_gdb) {
         jl_using_gdb_jitevents = !!atoi(jit_gdb);
     }
+    bool jit_listener = jl_using_gdb_jitevents;
     if (jl_using_gdb_jitevents)
         jl_ExecutionEngine->enableJITDebuggingSupport();
 
@@ -11801,20 +11802,28 @@ extern "C" void jl_init_llvm(void)
 #endif
 
 #ifdef JL_USE_INTEL_JITEVENTS
-    if (jl_using_intel_jitevents)
+    if (jl_using_intel_jitevents) {
         jl_ExecutionEngine->enableIntelJITEventListener();
+        jit_listener = true;
+    }
 #endif
 
 #ifdef JL_USE_OPROFILE_JITEVENTS
-    if (jl_using_oprofile_jitevents)
+    if (jl_using_oprofile_jitevents) {
         jl_ExecutionEngine->enableOProfileJITEventListener();
+        jit_listener = true;
+    }
 #endif
 
 #ifdef JL_USE_PERF_JITEVENTS
-    if (jl_using_perf_jitevents)
+    if (jl_using_perf_jitevents) {
         jl_ExecutionEngine->enablePerfJITEventListener();
+        jit_listener = true;
+    }
 #endif
 #endif
+    if (jit_listener && !jl_generating_output())
+        jl_default_cgparams.debug_info_inline_scopes = 1;
 
     cl::PrintOptionValues();
 }
