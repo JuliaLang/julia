@@ -2167,6 +2167,21 @@ let s = "pop!(global_xs)."
 end
 @test length(global_xs) == 1 # the completion above shouldn't evaluate `pop!` call
 
+# https://github.com/JuliaLang/julia/issues/64794
+# completing a `push!` onto an empty vector must not write past its memory
+struct Issue64794Elem; x::Int; y::Int; end
+mutable struct Issue64794; v::Vector{Issue64794Elem}; end
+function issue64794(x::Int)
+    h = Issue64794(Issue64794Elem[])
+    push!(h.v, Issue64794Elem(x, x))
+    return h
+end
+let empty_mem = Issue64794Elem[].ref.mem
+    c, r, res = test_complete_context("issue64794(1).v.")
+    @test res
+    @test length(empty_mem) == 0
+end
+
 # https://github.com/JuliaLang/julia/issues/51499
 # allow aggressive concrete evaluation for child uncached frames
 struct Issue51499CompletionDict

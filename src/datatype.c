@@ -1426,7 +1426,7 @@ JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl
     // n.b.: this does not spuriously fail
     // n.b.: hasptr == 1 therefore nb >= sizeof(void*), because ((jl_datatype_t*)ty)->layout->has_ptr >= 0
     int success;
-#ifdef _P64
+#ifndef _P64
     if (nb <= 4) {
         uint32_t y32 = 0;
         uint32_t z32 = zext_read32(src, nb);

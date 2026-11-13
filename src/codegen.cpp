@@ -2248,15 +2248,11 @@ static void undef_derived_strct(jl_codectx_t &ctx, Value *ptr, jl_datatype_t *st
     size_t first_offset = sty->layout->nfields ? jl_field_offset(sty, 0) : 0;
     if (first_offset != 0)
         ctx.builder.CreateMemSet(ptr, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), first_offset, MaybeAlign(0));
-    if (sty->layout->first_ptr < 0)
-        return;
-    size_t i, np = sty->layout->npointers;
-    auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx.builder.getContext());
-    for (i = 0; i < np; i++) {
-        Value *fld = emit_ptrgep(ctx, ptr, jl_ptr_offset(sty, i) * sizeof(jl_value_t*));
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-        ai.decorateInst(ctx.builder.CreateStore(Constant::getNullValue(T_prjlvalue), fld));
-    }
+    // GC pointer fields are now zeroed by LateLowerGCFrame based on the
+    // julia.gc_alloc_ptr_offsets operand bundle on the allocation call.
+    // This ensures zeroing happens after allocation lowering, preventing
+    // optimization passes from sinking it past safepoints.
+    (void)tbaa;
 }
 
 static Value *emit_inttoptr(jl_codectx_t &ctx, Value *v, Type *ty)
@@ -3606,12 +3602,10 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
         jl_datatype_t *sty = (jl_datatype_t*)argty;
         size_t sz = jl_datatype_size(sty);
         if (sz > 512 && !sty->layout->flags.haspadding && sty->layout->flags.isbitsegal) {
-            Value *varg1 = arg1.inline_roots.empty() && arg1.ispointer() ? data_pointer(ctx, arg1) :
-                value_to_pointer(ctx, arg1).V;
-            Value *varg2 = arg2.inline_roots.empty() && arg2.ispointer() ? data_pointer(ctx, arg2) :
-                value_to_pointer(ctx, arg2).V;
-            varg1 = emit_pointer_from_objref(ctx, varg1);
-            varg2 = emit_pointer_from_objref(ctx, varg2);
+            jl_cgval_t parg1 = value_to_pointer(ctx, arg1);
+            jl_cgval_t parg2 = value_to_pointer(ctx, arg2);
+            Value *varg1 = emit_pointer_from_objref(ctx, data_pointer(ctx, parg1));
+            Value *varg2 = emit_pointer_from_objref(ctx, data_pointer(ctx, parg2));
             SmallVector<Value*, 0> gc_uses;
             // these roots may seem a bit overkill, but we want to make sure
             // that a!=b implies (a,)!=(b,) even if a and b are unused and
@@ -3625,17 +3619,20 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                         ConstantInt::get(ctx.types().T_size, sz) },
                     ArrayRef<OperandBundleDef>(&OpBundle, gc_uses.empty() ? 0 : 1));
 
-            if (arg1.tbaa || arg2.tbaa) {
+            // If either argument is in the mixed pointer/data split form,
+            // value_to_pointer will copy it to a fresh alloca in the canonical
+            // layout.  We need to use the copied version's tbaa.
+            if (parg1.tbaa || parg2.tbaa) {
                 jl_aliasinfo_t ai;
-                if (!arg1.tbaa) {
-                    ai = jl_aliasinfo_t::fromTBAA(ctx, arg2.tbaa);
+                if (!parg1.tbaa) {
+                    ai = jl_aliasinfo_t::fromTBAA(ctx, parg2.tbaa);
                 }
-                else if (!arg2.tbaa) {
-                    ai = jl_aliasinfo_t::fromTBAA(ctx, arg1.tbaa);
+                else if (!parg2.tbaa) {
+                    ai = jl_aliasinfo_t::fromTBAA(ctx, parg1.tbaa);
                 }
                 else {
-                    jl_aliasinfo_t arg1_ai = jl_aliasinfo_t::fromTBAA(ctx, arg1.tbaa);
-                    jl_aliasinfo_t arg2_ai = jl_aliasinfo_t::fromTBAA(ctx, arg2.tbaa);
+                    jl_aliasinfo_t arg1_ai = jl_aliasinfo_t::fromTBAA(ctx, parg1.tbaa);
+                    jl_aliasinfo_t arg2_ai = jl_aliasinfo_t::fromTBAA(ctx, parg2.tbaa);
                     ai = arg1_ai.merge(arg2_ai);
                 }
                 ai.decorateInst(answer);
@@ -4331,11 +4328,16 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             *ret = mark_julia_const(ctx, (jl_value_t*)jl_emptysvec);
             return true;
         }
-        Value *svec = emit_allocobj(ctx, ctx.types().sizeof_ptr * (nargs + 1), ctx.builder.CreateIntToPtr(emit_tagfrom(ctx, jl_simplevector_type), ctx.types().T_pjlvalue), true, julia_alignment((jl_value_t*)jl_simplevector_type));
+        // Svec layout: [length] [ptr0] [ptr1] ... [ptr_n-1]
+        // Use zeroinit_region to zero the pointer array - this must happen before
+        // any safepoint (e.g., boxed() below) to prevent GC from seeing uninitialized pointers
+        AllocZeroinitRegion zeroinit(sizeof(jl_svec_t), ctx.types().sizeof_ptr * nargs);
+        Value *svec = emit_allocobj(ctx, ctx.types().sizeof_ptr * (nargs + 1),
+                                    ctx.builder.CreateIntToPtr(emit_tagfrom(ctx, jl_simplevector_type), ctx.types().T_pjlvalue),
+                                    true, julia_alignment((jl_value_t*)jl_simplevector_type),
+                                    {}, zeroinit);
         Value *svec_derived = decay_derived(ctx, svec);
         ctx.builder.CreateAlignedStore(ConstantInt::get(ctx.types().T_size, nargs), svec_derived, Align(ctx.types().sizeof_ptr));
-        Value *svec_data = emit_ptrgep(ctx, svec_derived, ctx.types().sizeof_ptr);
-        ctx.builder.CreateMemSet(svec_data, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), ctx.types().sizeof_ptr * nargs, Align(ctx.types().sizeof_ptr));
         for (size_t i = 0; i < nargs; i++) {
             Value *elem = boxed(ctx, argv[i + 1]);
             Value *elem_ptr = emit_ptrgep(ctx, svec_derived, ctx.types().sizeof_ptr * (i + 1));

@@ -1505,7 +1505,9 @@ function concrete_result_item(result::ConcreteResult, @nospecialize(info::CallIn
         et = InliningEdgeTracker(state)
         return compileable_specialization(result.edge, result.effects, et, info, state)
     end
-    @assert result.effects === EFFECTS_TOTAL
+    # a successful concrete evaluation may retain the `:inaccessiblememonly` taint of the call
+    # (see `_concrete_eval_call`), which doesn't matter for replacing it with the constant
+    @assert Effects(result.effects; inaccessiblememonly=ALWAYS_TRUE) === EFFECTS_TOTAL
     return ConstantCase(quoted(result.result), result.edge)
 end
 

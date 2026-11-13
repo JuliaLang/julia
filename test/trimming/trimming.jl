@@ -29,6 +29,7 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     @test lines[11] == "got 1:3 vs 1 with 2.5 and sym and c"
     @test lines[12] == "initialized: true"
     @test lines[13] == "threads: 4160 204"
+    @test lines[14] == "dates: 2026-03-08 2026-03-08T16:00:00.500"
 
     basic_jll_exe = joinpath(bindir, "basic_jll" * exe_suffix)
     lines = split(readchomp(`$basic_jll_exe`), "\n")

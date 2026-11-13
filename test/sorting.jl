@@ -800,6 +800,10 @@ end
         @test sort!(copy(v)) == sort!(copy(v); scratch)
         @test sortperm(v) == sortperm(v; scratch=[4])
         @test sortperm!(Vector{Int}(undef, n), v) == sortperm!(Vector{Int}(undef, n), v; scratch=[4])
+        for T in (Float32, Int32)
+            w = Union{Missing,T}[missing; rand(T, n)]
+            @test isequal(sort!(copy(w); scratch=similar(w)), sort(w))
+        end
 
         n > 100 && continue
         M = rand(n, n)
