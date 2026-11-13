@@ -954,6 +954,7 @@ must be either:
   `Type{U}` slot is not enough, since it also admits `==`-equal but non-`===`
   argument values; `Type{Union{}}` is the exception, the bottom object being
   unique)
+- `typeof(Union{})`, the other spelling of `Type{Union{}}`
 
 !!! note
     A dispatch tuple is relevant for method dispatch because it has no inhabited
