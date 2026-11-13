@@ -170,7 +170,7 @@ extern "C" {
 
 struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
-    uintptr_t in_image:2;
+    uintptr_t perm:2;
 #ifdef _P64
     uintptr_t tag:60;
 #else
