@@ -680,6 +680,30 @@ let m = only(methods(anytype_compilesig_61915))
     end
 end
 
+# the compilation signature of a dispatch tuple is compileable, and both spellings of
+# `Union{}` (`typeof(Union{})` and `Type{Union{}}`) widen alike
+compilesig_any(x) = 1
+compilesig_called(x) = x()
+compilesig_nospec(@nospecialize(x::Union{DataType,Int})) = 1
+compilesig_typeT(::Type{T}) where {T} = 1
+compilesig_typeunion(x::Union{Type,Int}) = 1
+compilesig_typetypeT(::Type{Type{T}}) where {T} = 1
+let sparams(m, sig) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), sig, m.sig)[2],
+    compsig(m, sig) = ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Cint), sig, sparams(m, sig), m, 0),
+    iscompileable(m, sig) = ccall(:jl_isa_compileable_sig, Cint, (Any, Any, Any), sig, sparams(m, sig), m) == 1
+    for (f, x) in ((compilesig_any, Union{}), (compilesig_called, Type{Int}),
+                   (compilesig_nospec, Int), (compilesig_typeT, Type{Type{Int}}),
+                   (compilesig_typeunion, Type{Int}), (compilesig_typetypeT, Type{Type{Int}}))
+        m = only(methods(f))
+        S = compsig(m, Tuple{typeof(f), Core.TypeEgal{x}})
+        @test iscompileable(m, S)
+        @test compsig(m, S) == S
+    end
+    m = only(methods(compilesig_any))
+    @test compsig(m, Tuple{typeof(compilesig_any), Core.TypeofBottom}) == Tuple{typeof(compilesig_any), Type}
+    @test compsig(m, Tuple{typeof(compilesig_any), Type{Union{}}}) == Tuple{typeof(compilesig_any), Type}
+end
+
 @test promote_type(Bool,Bottom) === Bool
 
 # type declarations

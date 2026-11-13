@@ -1172,6 +1172,42 @@ static int very_general_type(jl_value_t *t) JL_CANSAFEPOINT
     return (t == (jl_value_t*)jl_any_type || jl_types_equal(t, (jl_value_t*)jl_type_type));
 }
 
+// The type value that a signature slot holds an argument to be: exactly, for
+// `TypeEgal{A}`, or up to `==`, for `Type{A}`. `Union{}` has two `==` spellings, the
+// dispatch key `typeof(Union{})` and `Type{Union{}}`, which share its rules.
+static jl_value_t *slot_type_value(jl_value_t *elt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    if (elt == (jl_value_t*)jl_typeofbottom_type)
+        return jl_bottom_type;
+    if (jl_is_some_Type(elt))
+        return jl_some_Type_T(elt);
+    return NULL;
+}
+
+// What a nested `Type{Type{...}}` argument is widened to, when it is not specialized
+// on: the slot's declared type `type_i` restricted to `Type`, or `Type` if that is a
+// kind (issue #11355: DataType has a UID and so would take precedence in the cache).
+static jl_value_t *nested_type_widening(jl_value_t *type_i) JL_CANSAFEPOINT
+{
+    jl_value_t *di = jl_type_intersection(type_i, (jl_value_t*)jl_type_type);
+    assert(di != (jl_value_t*)jl_bottom_type);
+    return jl_is_kind(di) ? (jl_value_t*)jl_type_type : di;
+}
+
+// Whether `elt` (not a type value) is a `nested_type_widening` of a slot of declared
+// type `type_i` that a nested `Type{Type{...}}` argument can be widened to.
+static int is_nested_type_widening(jl_value_t *elt, jl_value_t *type_i) JL_CANSAFEPOINT
+{
+    jl_value_t *body = jl_unwrap_unionall(elt);
+    if (!jl_is_some_Type(body) || !jl_is_some_Type(jl_unwrap_unionall(jl_some_Type_T(body))))
+        return 0;
+    jl_value_t *di = jl_type_intersection(type_i, (jl_value_t*)jl_type_type);
+    JL_GC_PUSH1(&di);
+    int iswidening = !jl_is_kind(di) && jl_types_equal(di, elt);
+    JL_GC_POP();
+    return iswidening;
+}
+
 jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i) JL_NOTSAFEPOINT
 {
     sig = jl_unwrap_unionall(sig);
@@ -1316,26 +1352,30 @@ static void jl_compilation_sig(
 
         if (jl_is_vararg(elt))
             elt = jl_unwrap_vararg(elt);
+        jl_value_t *tval = slot_type_value(elt);
+        int decl_closed = !jl_has_free_typevars(decl_i);
 
         if (jl_is_kind(type_i)) {
             // if we can prove the match was against the kind (not a Type)
             // we want to put that in the cache instead
             if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
             elt = type_i;
+            tval = NULL;
             jl_svecset(*newparams, i, elt);
         }
-        else if (jl_is_some_Type(elt)) {
+        else if (tval) {
             // if the declared type was not Any or Union{Type, ...},
             // then the match must been with the kind (e.g. UnionAll or DataType)
             // and the result of matching the type signature
             // needs to be restricted to the concrete type 'kind'
-            jl_value_t *kind = jl_typeof(jl_some_Type_T(elt));
-            if (!jl_has_free_typevars(decl_i) &&
+            jl_value_t *kind = jl_typeof(tval);
+            if (decl_closed &&
                     jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
                 // if we can prove the match was against the kind (not a Type)
                 // it's simpler (and thus better) to put that cache instead
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                 elt = kind;
+                tval = NULL;
                 jl_svecset(*newparams, i, elt);
             }
         }
@@ -1343,26 +1383,21 @@ static void jl_compilation_sig(
             // not triggered for isdispatchtuple(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
             // if we get a kind, where we don't expect to accept one, widen it to something more expected (Type{T})
-            if (elt == (jl_value_t*)jl_typeofbottom_type) {
-                // Preserve the singleton `Type{Union{}}` dispatch key. Widening it to
-                // `Type` loses static parameters for compiled calls to `::Type{T}`.
-            }
-            else if (!(jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))) {
+            if (!(jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))) {
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                 elt = (jl_value_t*)jl_type_type;
                 jl_svecset(*newparams, i, elt);
             }
         }
 
-
-        if (jl_is_kind(elt)) {
+        if (jl_is_kind(elt) && !tval) {
             // kind slots always need guard entries (checking for subtypes of Type)
             continue;
         }
 
         if (i_arg > 0 && i_arg <= sizeof(definition->nospecialize) * 8 &&
                 (definition->nospecialize & (1 << (i_arg - 1)))) {
-            if (!jl_has_free_typevars(decl_i) && !jl_is_kind(decl_i)) {
+            if (decl_closed && !jl_is_kind(decl_i)) {
                 if (decl_i != elt) {
                     if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                     // n.b. it is possible here that !(elt <: decl_i), if elt was something unusual from intersection
@@ -1373,18 +1408,23 @@ static void jl_compilation_sig(
             }
         }
 
+        int iscalled = i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)));
         if (jl_types_equal(elt, (jl_value_t*)jl_type_type)) { // elt == Type{T} where T
             // not triggered for isdispatchtuple(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
         }
-        else if (!jl_is_some_Type(elt) && !jl_is_datatype(elt) && jl_subtype(elt, (jl_value_t*)jl_type_type)) { // elt <: Type{T}
+        else if (!tval && !jl_is_datatype(elt) && jl_subtype(elt, (jl_value_t*)jl_type_type)) { // elt <: Type{T}
             // not triggered for isdispatchtuple(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
-            if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-            jl_svecset(*newparams, i, jl_type_type);
+            // (except for the widening of a nested `Type{Type{...}}`, which is kept)
+            if ((i >= nargs && definition->isva) || (jl_is_typeeq(decl_i) && decl_closed) ||
+                    !is_nested_type_widening(elt, type_i)) {
+                if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
+                jl_svecset(*newparams, i, jl_type_type);
+            }
         }
-        else if (jl_is_some_Type(elt)) { // elt isa Type{T} / TypeEgal{T}
-            if (!jl_has_free_typevars(decl_i) && very_general_type(type_i)) {
+        else if (tval) { // elt isa Type{T} / TypeEgal{T}
+            if (decl_closed && very_general_type(type_i) && !iscalled) {
                 /*
                   Here's a fairly simple heuristic: if this argument slot's
                   declared type is general (Type or Any),
@@ -1404,19 +1444,16 @@ static void jl_compilation_sig(
 
                   But don't apply this heuristic if the argument is called (issue #36783).
                 */
-                int iscalled = i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)));
-                if (!iscalled) {
-                    if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-                    jl_svecset(*newparams, i, jl_type_type);
-                }
+                if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
+                jl_svecset(*newparams, i, jl_type_type);
             }
-            else if (jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i)) {
+            else if (jl_is_typeeq(decl_i) && decl_closed) {
                 // the slot is declared as a concrete `Type{X}`, so only one type
                 // matches it and the dispatch key `TypeEgal{A}` is kept
             }
-            else if (jl_is_some_Type(jl_some_Type_T(elt)) &&
+            else if (jl_is_some_Type(tval) &&
                      // try to give up on specializing type parameters for Type{Type{Type{...}}}
-                     (jl_is_some_Type(jl_some_Type_T(jl_some_Type_T(elt))) || !jl_has_free_typevars(decl_i))) {
+                     (jl_is_some_Type(jl_some_Type_T(tval)) || decl_closed)) {
                 /*
                   actual argument was Type{...}, we computed its type as
                   Type{Type{...}}. we like to avoid unbounded nesting here, so
@@ -1426,18 +1463,10 @@ static void jl_compilation_sig(
                   intersection.
                 */
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-                if (i < nargs || !definition->isva) {
-                    jl_value_t *di = jl_type_intersection(type_i, (jl_value_t*)jl_type_type);
-                    assert(di != (jl_value_t*)jl_bottom_type);
-                    // issue #11355: DataType has a UID and so would take precedence in the cache
-                    if (jl_is_kind(di))
-                        jl_svecset(*newparams, i, (jl_value_t*)jl_type_type);
-                    else
-                        jl_svecset(*newparams, i, di);
-                }
-                else {
+                if (i < nargs || !definition->isva)
+                    jl_svecset(*newparams, i, nested_type_widening(type_i));
+                else
                     jl_svecset(*newparams, i, (jl_value_t*)jl_type_type);
-                }
             }
         }
 
@@ -1581,10 +1610,35 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
 
         jl_value_t *decl_i = jl_nth_slot_type(decl, i);
         type_i = jl_rewrap_unionall(decl_i, decl);
+        int decl_closed = !jl_has_free_typevars(decl_i);
+        jl_value_t *tval = slot_type_value(elt);
+
+        // jl_compilation_sig puts the kind of a type value in a slot that admits it
+        // only through that kind (such as a slot declared as a kind)
+        if (tval) {
+            if (decl_closed && jl_subtype(jl_typeof(tval), type_i) &&
+                    !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
+                if (tval == jl_bottom_type)
+                    continue; // either spelling of `Union{}` is its kind
+                JL_GC_POP();
+                return 0;
+            }
+        }
+        else if (jl_is_kind(elt)) {
+            // kind slots always get guard entries (checking for subtypes of Type)
+            if (jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))
+                continue;
+            JL_GC_POP();
+            return 0;
+        }
+        if (jl_is_kind(type_i)) {
+            JL_GC_POP();
+            return 0;
+        }
 
         if (i_arg > 0 && i_arg <= sizeof(definition->nospecialize) * 8 &&
                 (definition->nospecialize & (1 << (i_arg - 1)))) {
-            if (!jl_has_free_typevars(decl_i) && !jl_is_kind(decl_i)) {
+            if (decl_closed && !jl_is_kind(decl_i)) {
                 if (jl_egal(elt, decl_i))
                     continue;
                 JL_GC_POP();
@@ -1592,107 +1646,47 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             }
         }
 
-        // a closed type-valued dispatch slot is spelled by egality (`TypeEgal{A}`).
-        // The equality spelling `Type{A}` admits non-egal argument values, so it is
-        // compileable only where the method declares the slot as concrete
-        // `Type{X}` (no static parameter can distinguish those values).
-        // `Type{Union{}}` is exempt: the bottom object is the unique instance of
-        // its `Type` (and `TypeEgal{Union{}}` cannot be spelled; it normalizes to
-        // `typeof(Union{})`).
-        int decl_concrete = jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i);
-        if (!jl_is_vararg(jl_tparam(type, i)) && !jl_has_free_typevars(elt)) {
-            if (jl_is_typeeq(elt) && !decl_concrete && jl_typeeq_T(elt) != jl_bottom_type) {
-                JL_GC_POP();
-                return 0;
-            }
-        }
-
-        if (jl_is_kind(elt)) {
-            if (elt == (jl_value_t*)jl_typeofbottom_type && jl_subtype(elt, type_i))
-                continue;
-            // kind slots always get guard entries (checking for subtypes of Type)
-            if (jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))
-                continue;
-            // jl_compilation_sig keeps a slot declared as a concrete kind (e.g.
-            // `::DataType`) equal to that kind, making it the canonical form
-            if (jl_is_kind(type_i) && jl_egal(elt, type_i))
-                continue;
-            // TODO: other code paths that could reach here?
-            JL_GC_POP();
-            return 0;
-        }
-        else if (jl_is_kind(type_i)) {
+        // the equality key `Type{A}` admits all `==`-equal argument values, so it is
+        // compileable only where no static parameter can tell them apart (the
+        // dispatch key is the egality key `TypeEgal{A}`). `Type{Union{}}` is the
+        // other spelling of the dispatch key `typeof(Union{})`.
+        if (jl_is_typeeq(elt) && tval != jl_bottom_type && !decl_closed &&
+                !jl_is_vararg(jl_tparam(type, i))) {
             JL_GC_POP();
             return 0;
         }
 
         // `elt` can be either equal representation of `Type` (specializations are
         // deduplicated by type-equality): both take the `jl_types_equal(elt,
-        // jl_type_type)` path; an `AnyType` elt must not reach `jl_some_Type_T` below
-        if (jl_is_some_Type(jl_unwrap_unionall(elt)) || elt == (jl_value_t*)jl_anytype_type) {
-            int iscalled = (i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)))) ||
-                           jl_has_free_typevars(decl_i);
+        // jl_type_type)` path
+        if (tval || jl_is_some_Type(jl_unwrap_unionall(elt)) || elt == (jl_value_t*)jl_anytype_type) {
+            int iscalled = i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)));
             if (jl_types_equal(elt, (jl_value_t*)jl_type_type)) {
-                if (!iscalled && very_general_type(type_i))
+                // the widening of an uncalled type value in a general slot, or of a
+                // nested `Type{Type{...}}` in a slot that admits every type
+                if (jl_subtype((jl_value_t*)jl_type_type, type_i))
                     continue;
                 if (i >= nargs && definition->isva)
                     continue;
                 JL_GC_POP();
                 return 0;
             }
-            if (!iscalled && very_general_type(type_i)) {
+            if (decl_closed && !iscalled && very_general_type(type_i)) {
+                JL_GC_POP();
+                return 0; // widened to `Type`
+            }
+            if (tval) {
+                if (jl_is_typeeq(decl_i) && decl_closed)
+                    continue; // jl_compilation_sig keeps the dispatch key for these slots
+                if (!(jl_is_some_Type(tval) &&
+                      (jl_is_some_Type(jl_some_Type_T(tval)) || decl_closed)))
+                    continue; // not a nested `Type{Type{...}}`, so it is kept
+            }
+            // a nested `Type{Type{...}}` is a fixed point only as its widening
+            if ((i >= nargs && definition->isva) || (jl_is_typeeq(decl_i) && decl_closed) ||
+                    !is_nested_type_widening(elt, type_i)) {
                 JL_GC_POP();
                 return 0;
-            }
-            if (!jl_is_datatype(elt) && !jl_is_some_Type(elt)) {
-                JL_GC_POP();
-                return 0;
-            }
-
-            // if the declared type was not Any or Union{Type, ...},
-            // then the match must been with kind, such as UnionAll or DataType,
-            // and the result of matching the type signature
-            // needs to be corrected to the concrete type 'kind' (and not to Type)
-            jl_value_t *kind = jl_typeof(jl_some_Type_T(elt));
-            if (kind == jl_bottom_type) {
-                JL_GC_POP();
-                return 0; // Type{Union{}} gets normalized to typeof(Union{})
-            }
-            if (!jl_has_free_typevars(decl_i) &&
-                    jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
-                JL_GC_POP();
-                return 0; // gets turned into a kind
-            }
-            else if (decl_concrete) {
-                // jl_compilation_sig keeps the dispatch key for these slots
-            }
-            else if (jl_is_some_Type(jl_some_Type_T(elt)) &&
-                     // give up on specializing static parameters for Type{Type{Type{...}}}
-                     (jl_is_some_Type(jl_some_Type_T(jl_some_Type_T(elt))) || !jl_has_free_typevars(decl_i))) {
-                /*
-                  actual argument was Type{...}, we computed its type as
-                  Type{Type{...}}. we must avoid unbounded nesting here, so
-                  cache the signature as Type{T}, unless something more
-                  specific like Type{Type{Int32}} was actually declared.
-                  this can be determined using a type intersection.
-                */
-                if (i < nargs || !definition->isva) {
-                    type_i = jl_type_intersection(type_i, (jl_value_t*)jl_type_type);
-                    assert(type_i != (jl_value_t*)jl_bottom_type);
-                    if (jl_is_kind(type_i)) {
-                        JL_GC_POP();
-                        return 0;
-                    }
-                    else if (!jl_types_equal(type_i, elt)) {
-                        JL_GC_POP();
-                        return 0;
-                    }
-                    continue;
-                }
-                else {
-                    JL_GC_POP();
-                    return 0;
-                }
             }
             continue;
         }
@@ -5036,18 +5030,11 @@ static jl_tupletype_t *egal_normalize_hint_types(jl_tupletype_t *types JL_PROPAG
     size_t i, np = jl_nparams(types);
     for (i = 0; i < np; i++) {
         jl_value_t *elt = jl_tparam(types, i);
-        if (!jl_is_vararg(elt)) {
-            if (elt == (jl_value_t*)jl_typeofbottom_type) {
-                if (!newparams)
-                    newparams = jl_svec_copy(types->parameters);
-                jl_svecset(newparams, i, jl_wrap_Type(jl_bottom_type));
-            }
-            else if (jl_is_typeeq(elt) && !jl_has_free_typevars(elt) &&
-                     jl_typeeq_T(elt) != jl_bottom_type) {
-                if (!newparams)
-                    newparams = jl_svec_copy(types->parameters);
-                jl_svecset(newparams, i, jl_wrap_TypeEgal(jl_typeeq_T(elt)));
-            }
+        if (!jl_is_vararg(elt) && jl_is_typeeq(elt) && !jl_has_free_typevars(elt) &&
+                jl_typeeq_T(elt) != jl_bottom_type) {
+            if (!newparams)
+                newparams = jl_svec_copy(types->parameters);
+            jl_svecset(newparams, i, jl_wrap_TypeEgal(jl_typeeq_T(elt)));
         }
     }
     if (newparams)
