@@ -316,6 +316,15 @@ typedef struct {
     int8_t incremental;
 } jl_serializer_state;
 
+// The specials of an incremental image
+typedef struct {
+    jl_array_t *worklist;
+    jl_array_t *module_init_order;
+    jl_array_t *extext_methods;
+    jl_array_t *extext_records;
+    jl_array_t *method_roots_list;
+} jl_pkgimage_specials_t;
+
 static jl_value_t *jl_bigint_type = NULL;
 static jl_debuginfo_t *jl_nulldebuginfo;
 static int gmp_limb_size = 0;
@@ -3266,17 +3275,14 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             h.gensym_counter = jl_get_gs_ctr();
         }
         else {
-            write_reloc(&s, &specials, (jl_value_t*)worklist);
-            // save module initialization order
             size_t i, l = jl_array_len(module_init_order);
             for (i = 0; i < l; i++) {
                 // verify that all these modules were saved
                 assert(ptrhash_get(&serialization_order, jl_array_ptr_ref(module_init_order, i)) != HT_NOTFOUND);
             }
-            write_reloc(&s, &specials, (jl_value_t*)module_init_order);
-            write_reloc(&s, &specials, (jl_value_t*)extext_methods);
-            write_reloc(&s, &specials, (jl_value_t*)extext_records);
-            write_reloc(&s, &specials, (jl_value_t*)s.method_roots_list);
+            jl_pkgimage_specials_t pkg = {worklist, module_init_order, extext_methods, extext_records, s.method_roots_list};
+            for (i = 0; i < sizeof(pkg) / sizeof(void*); i++)
+                write_reloc(&s, &specials, ((jl_value_t**)&pkg)[i]);
         }
         h.gvar_objects = write_gvars(&s, &gvar_refs, &gvars, &external_fns);
         // write the records, at the offsets their imports were given
@@ -4126,18 +4132,14 @@ static char *image_section(const char *loader, const jl_image_sections_t *h, jl_
 
 static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_image_t *image,
                                                  jl_array_t *depmods,
-                                /* outputs */    jl_array_t **restored JL_REQUIRE_ROOTED_SLOT,
-                                                 jl_array_t **init_order JL_REQUIRE_ROOTED_SLOT,
-                                                 jl_array_t **extext_methods JL_REQUIRE_ROOTED_SLOT,
-                                                 jl_array_t **extext_records JL_REQUIRE_ROOTED_SLOT,
+                                /* outputs */    jl_pkgimage_specials_t *pkg,
                                                  jl_array_t **internal_methods JL_REQUIRE_ROOTED_SLOT,
-                                                 jl_array_t **method_roots_list JL_REQUIRE_ROOTED_SLOT,
                                                  image_metadata_t **meta_out) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     jl_task_t *ct = jl_current_task;
     int en = jl_gc_enable(0);
     jl_serializer_state s = {0};
-    s.incremental = restored != NULL;
+    s.incremental = pkg != NULL;
     s.ptls = ct->ptls;
 
     if (jl_options.use_sysimage_native_code != JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES || IMAGE_NATIVE_CODE_TAINTED) {
@@ -4216,7 +4218,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
     // step 3: get references to special values
     jl_resolve_relocs(&s, (uintptr_t*)(image_section(loader, &h, h.specials)), h.specials.size / sizeof(void*), heap_delta);
     jl_value_t **specials = (jl_value_t**)(image_section(loader, &h, h.specials));
-    if (!s.incremental) {
+    if (pkg == NULL) {
         size_t i;
         for (i = 0; i < sizeof(jl_image_specials) / sizeof(jl_image_specials[0]); i++)
             *jl_image_specials[i] = *specials++;
@@ -4233,13 +4235,8 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
         jl_set_gs_ctr((uint32_t)h.gensym_counter);
     }
     else {
-        assert(restored && init_order && extext_methods && extext_records && internal_methods && method_roots_list);
-        *restored = (jl_array_t*)*specials++;
-        *init_order = (jl_array_t*)*specials++;
-        *extext_methods = (jl_array_t*)*specials++;
-        *extext_records = (jl_array_t*)*specials++;
-        *method_roots_list = (jl_array_t*)*specials++;
-        assert(*restored && *init_order && *extext_methods && *extext_records && *method_roots_list);
+        *pkg = *(jl_pkgimage_specials_t*)specials;
+        specials += sizeof(*pkg) / sizeof(void*);
         *internal_methods = jl_alloc_vec_any(0);
     }
     assert((char*)specials == image_section(loader, &h, h.specials) + h.specials.size);
@@ -4411,17 +4408,17 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
     meta->deps = NULL; // until the blob index is known
     // the sysimage's methods are active by jl_require_world; a package image's
     // are activated by the caller, which records the world
-    jl_atomic_store_relaxed(&meta->world, restored == NULL ? jl_require_world : 0);
+    jl_atomic_store_relaxed(&meta->world, s.incremental ? 0 : jl_require_world);
     if (meta_out)
         *meta_out = meta;
     // adopt the image's coverage counters
     meta->coverage_compatible = jl_register_image_coverage(image->coverage, !s.incremental);
-    if (restored == NULL) {
+    if (pkg == NULL) {
         meta->top_mod = jl_top_module;
     } else {
-        size_t len = jl_array_nrows(*restored);
+        size_t len = jl_array_nrows(pkg->worklist);
         assert(len > 0);
-        jl_module_t *topmod = (jl_module_t*)jl_array_ptr_ref(*restored, len-1);
+        jl_module_t *topmod = (jl_module_t*)jl_array_ptr_ref(pkg->worklist, len-1);
         // Ordinarily set during deserialization, but our compiler stub image,
         // just returns a reference to the sysimage version, so we set it here.
         topmod->build_id.hi = checksum;
@@ -4445,8 +4442,8 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
 
     jl_gc_enable(en);
 
-    if (s.incremental)
-        jl_add_methods(*extext_methods);
+    if (pkg)
+        jl_add_methods(pkg->extext_methods);
 
 }
 
@@ -4509,25 +4506,26 @@ static jl_value_t *jl_restore_incremental_from_buf(const jl_image_buf_t *buf, jl
     if (verify_fail)
         return verify_fail;
 
-    jl_value_t *restored = NULL;
-    jl_array_t *init_order = NULL, *extext_methods = NULL, *extext_records = NULL, *internal_methods = NULL, *method_roots_list = NULL;
+    jl_value_t *restored;
+    jl_pkgimage_specials_t pkg = {0};
+    jl_array_t *internal_methods = NULL;
     jl_svec_t *cachesizes_sv = NULL;
-    JL_GC_PUSH7(&restored, &init_order, &extext_methods, &extext_records, &internal_methods, &method_roots_list, &cachesizes_sv);
+    JL_GC_PUSH7(&pkg.worklist, &pkg.module_init_order, &pkg.extext_methods, &pkg.extext_records, &pkg.method_roots_list, &internal_methods, &cachesizes_sv);
 
     {
         JL_SIGATOMIC_BEGIN();
         image_metadata_t *meta = NULL;
-        jl_restore_system_image_from_stream_(buf, image, depmods, (jl_array_t**)&restored, &init_order, &extext_methods, &extext_records, &internal_methods, &method_roots_list, &meta);
+        jl_restore_system_image_from_stream_(buf, image, depmods, &pkg, &internal_methods, &meta);
         JL_SIGATOMIC_END();
 
         // Add roots to methods
-        int failed = jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+        int failed = jl_copy_roots(pkg.method_roots_list, jl_worklist_key(pkg.worklist));
         if (failed != 0) {
             jl_printf(JL_STDERR, "Error copying roots to methods from Module: %s\n", pkgname);
             abort();
         }
         // Insert method extensions and handle edges
-        int new_methods = jl_array_nrows(extext_methods) > 0;
+        int new_methods = jl_array_nrows(pkg.extext_methods) > 0;
         if (!new_methods) {
             size_t i, l = jl_array_nrows(internal_methods);
             for (i = 0; i < l; i++) {
@@ -4544,7 +4542,7 @@ static jl_value_t *jl_restore_incremental_from_buf(const jl_image_buf_t *buf, jl
         if (new_methods)
             world += 1;
         jl_atomic_store_relaxed(&meta->world, world); // before activation, which asks about this image's dependencies
-        jl_activate_methods(extext_methods, extext_records, internal_methods, world, pkgname, meta->idx);
+        jl_activate_methods(pkg.extext_methods, pkg.extext_records, internal_methods, world, pkgname, meta->idx);
         // TODO: inject internal_methods into caches here, so the system can see them immediately as potential candidates (before validation)
         // allow users to start running in this updated world
         if (new_methods)
@@ -4569,10 +4567,10 @@ static jl_value_t *jl_restore_incremental_from_buf(const jl_image_buf_t *buf, jl
             // `extext_methods` contains all worklist methods; `internal_methods`
             // only partially overlaps it and exists only for per-object world-stamp
             // updates during the fixup walk.
-            restored = (jl_value_t*)jl_svec(6, restored, init_order, internal_methods, extext_methods, method_roots_list, cachesizes_sv);
+            restored = (jl_value_t*)jl_svec(6, pkg.worklist, pkg.module_init_order, internal_methods, pkg.extext_methods, pkg.method_roots_list, cachesizes_sv);
         }
         else {
-            restored = (jl_value_t*)jl_svec(3, restored, init_order, internal_methods);
+            restored = (jl_value_t*)jl_svec(3, pkg.worklist, pkg.module_init_order, internal_methods);
         }
     }
 
@@ -4631,7 +4629,7 @@ JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
         jl_value_t *exc = jl_validate_cache_file(&buf, NULL);
         if (exc)
             jl_throw(exc);
-        jl_restore_system_image_from_stream_(&buf, image, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        jl_restore_system_image_from_stream_(&buf, image, NULL, NULL, NULL, NULL);
         jl_init_git_commit();
     }
     if (buf.data_owned) {
