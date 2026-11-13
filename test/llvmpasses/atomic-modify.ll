@@ -5,6 +5,11 @@
 declare {i8, i8} @julia.atomicmodify.i8(ptr, ptr, i8, i8, ...)
 declare {double, double} @julia.atomicmodify.f64(ptr, ptr, i8, i8, ...)
 declare double @llvm.maxnum.f64(double %Val0, double %Val1)
+declare ptr @julia.get_pgcstack()
+declare void @throw_err() noreturn
+declare void @julia.safepoint(ptr)
+declare void @collect()
+declare ptr addrspace(10) @allocate()
 
 define i8 @add.i8(i8 %x, i8 %y) {
     %z = add i8 %x, %y
@@ -57,6 +62,44 @@ define i8 @xchgshl.i8(i8 %x, i8 %y) {
 define double @fadd.f64(double %x, double %y) {
     %z = fadd double %y, %x
     ret double %z
+}
+
+define double @fmul.f64(double %x, double %y) {
+    %z = fmul double %x, %y
+    %w = fmul double %z, %y
+    ret double %w
+}
+
+define i8 @add.i8.pgcstack(i8 %x, i8 %y) {
+    %pgcstack = call ptr @julia.get_pgcstack()
+    %z = add i8 %x, %y
+    ret i8 %z
+}
+
+define i8 @xchgthrow.i8(i8 %x, i8 %y) {
+    call void @throw_err()
+    unreachable
+}
+
+define i8 @idstore.i8(i8 %x, ptr %p) {
+    store i8 42, ptr %p
+    ret i8 %x
+}
+
+define i8 @mulsafepoint.i8(i8 %x, ptr %safepoint) {
+    call void @julia.safepoint(ptr %safepoint)
+    %z = mul i8 %x, 2
+    ret i8 %z
+}
+
+define i8 @mulcall.i8(i8 %x, i8 %y) {
+    call void @collect()
+    %z = mul i8 %x, %y
+    ret i8 %z
+}
+
+define double @id.f64(double %x) {
+    ret double %x
 }
 
 define double @fmax.f64(double %x, double %y) {
@@ -145,7 +188,7 @@ top:
 
 define i8 @mod_i8_subx(ptr %a, i8 %b) {
 ; CHECK-LABEL: @mod_i8_subx
-; CHECK: [[newval:%.*]] = call i8 @subx.i8(i8 %loaded, i8 %b)
+; CHECK: [[newval:%.*]] = sub i8 %b, %loaded
 ; CHECK: [[success:%.*]] = cmpxchg ptr %a, i8 %loaded, i8 [[newval]]
 ; CHECK: [[oldval:%.*]] = extractvalue { i8, i1 } [[success:%.*]], 0
 ; CHECK: ret i8 [[oldval]]
@@ -157,7 +200,7 @@ top:
 
 define i8 @mod_i8_subx_new(ptr %a, i8 %b) {
 ; CHECK-LABEL: @mod_i8_subx_new
-; CHECK: [[newval:%.*]] = call i8 @subx.i8(i8 %loaded, i8 %b)
+; CHECK: [[newval:%.*]] = sub i8 %b, %loaded
 ; CHECK: [[oldval:%.*]] = cmpxchg ptr %a, i8 %loaded, i8 [[newval]]
 ; CHECK: ret i8 [[newval]]
 top:
@@ -301,4 +344,145 @@ top:
   %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @2, i8 5, i8 1, i8 %b, ptr @0)
   %oldval = extractvalue {i8, i8} %oldnew, 0
   ret i8 %oldval
+}
+
+define i8 @mod_i8_add_pgcstack(ptr %a, i8 %b) {
+; CHECK-LABEL: @mod_i8_add_pgcstack
+; CHECK: %0 = atomicrmw add ptr %a, i8 %b release, align 1
+; CHECK: ret i8 %0
+top:
+  %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @add.i8.pgcstack, i8 5, i8 1, i8 %b)
+  %oldval = extractvalue {i8, i8} %oldnew, 0
+  ret i8 %oldval
+}
+
+define i8 @mod_i8_xchgthrow(ptr %a, i8 %b) {
+; CHECK-LABEL: @mod_i8_xchgthrow
+; CHECK-NOT: atomicrmw xchg
+; CHECK: cmpxchg ptr %a
+top:
+  %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @xchgthrow.i8, i8 5, i8 1, i8 %b)
+  %oldval = extractvalue {i8, i8} %oldnew, 0
+  ret i8 %oldval
+}
+
+define double @mod_f64_faddfence(ptr %a) {
+; CHECK-LABEL: @mod_f64_faddfence
+; CHECK: [[old:%.*]] = atomicrmw or ptr %a, i64 0 release, align 8
+; CHECK-NEXT: [[oldval:%.*]] = bitcast i64 [[old]] to double
+; CHECK-NEXT: ret double [[oldval]]
+top:
+  %oldnew = call {double, double} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.f64(ptr align(8) %a, ptr @fadd.f64, i8 5, i8 1, double -0.0)
+  %oldval = extractvalue {double, double} %oldnew, 0
+  ret double %oldval
+}
+
+define double @mod_f64_fmul(ptr %a, double %b) {
+; CHECK-LABEL: @mod_f64_fmul
+; CHECK-NOT: call
+; CHECK: [[mul1:%.*]] = fmul double %{{.*}}, %b
+; CHECK-NEXT: [[newval:%.*]] = fmul double [[mul1]], %b
+; CHECK: cmpxchg ptr %a, i64
+; CHECK: ret double [[newval]]
+top:
+  %oldnew = call {double, double} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.f64(ptr align(8) %a, ptr @fmul.f64, i8 5, i8 1, double %b)
+  %newval = extractvalue {double, double} %oldnew, 1
+  ret double %newval
+}
+
+define i8 @mod_i8_idstore(ptr %a) {
+; CHECK-LABEL: @mod_i8_idstore
+; CHECK: store i8 42, ptr %a
+; CHECK-NEXT: %0 = atomicrmw or ptr %a, i8 0 release, align 1
+; CHECK-NEXT: ret i8 %0
+top:
+  %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @idstore.i8, i8 5, i8 1, ptr %a)
+  %oldval = extractvalue {i8, i8} %oldnew, 0
+  ret i8 %oldval
+}
+
+define i8 @mod_i8_mulsafepoint(ptr %a, ptr %safepoint) {
+; CHECK-LABEL: @mod_i8_mulsafepoint
+; CHECK: [[newval:%.*]] = call i8 @mulsafepoint.i8(i8 %loaded, ptr %safepoint)
+; CHECK: cmpxchg ptr %a, i8 %loaded, i8 [[newval]]
+top:
+  %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @mulsafepoint.i8, i8 5, i8 1, ptr %safepoint)
+  %newval = extractvalue {i8, i8} %oldnew, 1
+  ret i8 %newval
+}
+
+define i8 @mod_i8_mulnested(ptr %a, ptr %q) {
+; CHECK-LABEL: @mod_i8_mulnested
+; CHECK: [[newval:%.*]] = call i8 @mulnested.i8(i8 %loaded, ptr %q)
+; CHECK: cmpxchg ptr %a, i8 %loaded, i8 [[newval]]
+top:
+  %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @mulnested.i8, i8 5, i8 1, ptr %q)
+  %newval = extractvalue {i8, i8} %oldnew, 1
+  ret i8 %newval
+}
+
+; defined after its user, so that its own julia.atomicmodify is not expanded yet
+define i8 @mulnested.i8(i8 %x, ptr %q) {
+    %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %q, ptr @add.i8, i8 5, i8 1, i8 1)
+    %n = extractvalue {i8, i8} %oldnew, 1
+    %z = mul i8 %x, %n
+    ret i8 %z
+}
+
+define i8 @mod_i8_xchgnested(ptr %a, ptr %q) {
+; CHECK-LABEL: @mod_i8_xchgnested
+; CHECK-NOT: atomicrmw xchg
+; CHECK: [[newval:%.*]] = call i8 @xchgnested.i8(i8 %loaded, ptr %q)
+; CHECK: cmpxchg ptr %a, i8 %loaded, i8 [[newval]]
+top:
+  %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @xchgnested.i8, i8 5, i8 1, ptr %q)
+  %newval = extractvalue {i8, i8} %oldnew, 1
+  ret i8 %newval
+}
+
+; defined after its user, so that its own julia.atomicmodify is not expanded yet
+define i8 @xchgnested.i8(i8 %x, ptr %q) {
+    %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %q, ptr @add.i8, i8 5, i8 1, i8 1)
+    %n = extractvalue {i8, i8} %oldnew, 1
+    ret i8 %n
+}
+
+define i8 @mod_i8_xchgroots(ptr %a) {
+; CHECK-LABEL: @mod_i8_xchgroots
+; CHECK-NOT: atomicrmw xchg
+; CHECK: [[newval:%.*]] = call i8 @xchgroots.i8(i8 %loaded)
+; CHECK: cmpxchg ptr %a, i8 %loaded, i8 [[newval]]
+top:
+  %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @xchgroots.i8, i8 5, i8 1)
+  %newval = extractvalue {i8, i8} %oldnew, 1
+  ret i8 %newval
+}
+
+; %obj needs a GC root across the call to @collect
+define i8 @xchgroots.i8(i8 %x) {
+    %obj = call ptr addrspace(10) @allocate()
+    call void @collect()
+    %v = load i8, ptr addrspace(10) %obj
+    ret i8 %v
+}
+
+define i8 @mod_i8_mulcall(ptr %a, i8 %b) {
+; CHECK-LABEL: @mod_i8_mulcall
+; CHECK: [[newval:%.*]] = call i8 @mulcall.i8(i8 %loaded, i8 %b)
+; CHECK: cmpxchg ptr %a, i8 %loaded, i8 [[newval]]
+top:
+  %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @mulcall.i8, i8 5, i8 1, i8 %b)
+  %newval = extractvalue {i8, i8} %oldnew, 1
+  ret i8 %newval
+}
+
+define {double, double} @mod_f64_idpair(ptr %a) {
+; CHECK-LABEL: @mod_f64_idpair
+; CHECK: [[old:%.*]] = atomicrmw or ptr %a, i64 0 release, align 8
+; CHECK-NEXT: [[oldval:%.*]] = bitcast i64 [[old]] to double
+; CHECK-NEXT: [[pair:%.*]] = insertvalue { double, double } undef, double [[oldval]], 0
+; CHECK-NEXT: insertvalue { double, double } [[pair]], double [[oldval]], 1
+top:
+  %oldnew = call {double, double} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.f64(ptr align(8) %a, ptr @id.f64, i8 5, i8 1)
+  ret {double, double} %oldnew
 }
