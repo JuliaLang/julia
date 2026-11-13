@@ -27,6 +27,8 @@ using Test
     @test Dates.yearmonth(1) == (1, 1)
     @test Dates.monthday(1) == (1, 1)
     @test Dates.yearmonthday(730120) == (2000, 1, 1)
+    @test Dates.yearmonthday(big(730120)) == (2000, 1, 1)
+    @test Dates.yearmonthday(Int16(-1)) == (0, 12, 30)
 end
 @testset "year/month/day" begin
     # year, month, and day return the individual components
@@ -210,6 +212,12 @@ end
     @test Dates.weeksinyear(Dates.Year(2011)) == 52
     @test Dates.weeksinyear(Dates.Year(2010)) == 52
     @test Dates.weeksinyear(Dates.Year(2009)) == 53
+    # Years at the ends of Date, which lie partly outside it
+    for d in (Dates.Date(Dates.UTD(typemin(Int64))), Dates.Date(Dates.UTD(typemax(Int64))))
+        y = Dates.year(d)
+        @test Dates.weeksinyear(Dates.Year(y)) == Dates.weeksinyear(Dates.Year(mod(y, 400)))
+    end
+    @test Dates.weeksinyear(Dates.Year(Dates.year(Dates.Date(Dates.UTD(typemin(Int64)))))) == 53
 
     # From python datetime isocalendar
     @test Dates.isoweekdate(Dates.Date(2023, 03, 06)) == (2023, 10, 1)
@@ -255,6 +263,26 @@ end
     @test Dates.isoweekdate(Dates.Date(2018, 12, 31)) == (2019, 1, 1)
     @test Dates.isoweekdate(Dates.Date(2019, 01, 01)) == (2019, 1, 2)
     @test Dates.isoweekdate(Dates.Date(2019, 01, 02)) == (2019, 1, 3)
+
+    # The ISO year and week are those of the Thursday in the same week, also before year 1
+    function isoreference(d)
+        t = d + Dates.Day(4 - Dates.dayofweek(d))
+        return Dates.year(t), (Dates.dayofyear(t) - 1) ÷ 7 + 1, Dates.dayofweek(d)
+    end
+    @test all(d -> Dates.isoweekdate(d) == isoreference(d), Dates.Date(-400, 1, 1):Dates.Day(1):Dates.Date(1, 12, 31))
+    for d in (Dates.Date(10^9, 6, 1), Dates.Date(-10^9, 1, 1), Dates.Date(Int64(10)^12, 12, 31))
+        @test Dates.isoweekdate(d) == isoreference(d)
+        @test Dates.isoyear(d) == Dates.Year(isoreference(d)[1])
+    end
+    @test Dates.isoweekdate(Dates.DateTime(-1, 1, 1, 12)) == isoreference(Dates.Date(-1, 1, 1))
+    @test Dates.week(typemin(Int64)) == Dates.week(typemin(Int64) + 1) == 23
+    @test Dates.week(typemax(Int64)) == Dates.week(typemax(Int64) - 1) == 30
+    # The Thursday of the week at the lower end lies outside Date
+    for (v, iso) in ((typemin(Int64), (-25252734927766554, 23, 6)), (typemax(Int64), (25252734927766555, 30, 7)))
+        d = Dates.Date(Dates.UTD(v))
+        @test Dates.isoweekdate(d) == iso
+        @test Dates.isoyear(d) == Dates.Year(iso[1])
+    end
 end
 @testset "Vectorized accessors" begin
     a = Dates.Date(2014, 1, 1)

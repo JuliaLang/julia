@@ -71,6 +71,12 @@ Standard library changes
 
 #### Dates
 
+* The `year`, `month`, `day`, and related accessors are faster and return correct results for every
+  `Date`. The month and day are now always an `Int64`, as documented. Before, they had the type of
+  the day count, for example `BigInt` for a `Timestamp` with a package-defined period.
+* `week`, `isoyear`, and `isoweekdate` now return correct ISO 8601 results for every `Date`,
+  including years before 1.
+
 #### InteractiveUtils
 
 #### JuliaSyntaxHighlighting

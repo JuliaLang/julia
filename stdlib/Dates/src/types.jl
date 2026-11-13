@@ -291,7 +291,8 @@ function timestamp_scale(::Type{P}) where {P<:Period}
     return scale
 end
 timestamp_scale(::Type{Timestamp{P}}) where {P} = timestamp_scale(P)
-timestamp_ticks_per_day(::Type{P}) where {P} = NS_PER_DAY ÷ timestamp_scale(P)
+# Units of P per day. A day of ticks shorter than a nanosecond can exceed the count type.
+timestamp_ticks_per_day(::Type{P}) where {P} = timestamp_ticks(P, NS_PER_DAY)
 # Prefer the finer resolution, then wider count storage; otherwise use period promotion.
 function timestamp_finer(::Type{P}, ::Type{Q}) where {P,Q}
     p, q = timestamp_scale(P), timestamp_scale(Q)
@@ -304,7 +305,13 @@ function timestamp_finer(::Type{P}, ::Type{Q}) where {P,Q}
 end
 
 # `ns` nanoseconds as a count of P. Throws an InexactError if `ns` has more precision than P.
+# Ticks shorter than a nanosecond widen the count where it overflows.
 function timestamp_ticks(::Type{P}, ns::Real, scale=timestamp_scale(P)) where {P}
+    if scale isa Rational
+        d = denominator(scale)
+        n, huge = ns isa Integer ? Base.Checked.mul_with_overflow(promote(ns, d)...) : (ns * d, false)
+        ns, scale = huge ? widemul(ns, d) : n, numerator(scale)
+    end
     ticks, remainder = divrem(ns, scale)
     iszero(remainder) || throw(InexactError(:convert, Timestamp{P}, ns))
     return ticks
