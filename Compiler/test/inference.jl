@@ -6485,6 +6485,45 @@ g_concrete_only(x) = f_concrete_only(x)
 @test only(Base.return_types(g_concrete_only, Tuple{Int})) === Int
 @test only(Base.return_types(g_concrete_only, Tuple{Integer})) === Any
 
+# An uninformative call that must stay dynamic records no edge. One the optimizer can
+# invoke, inline or partly split off, or one with a concrete signature, keeps it.
+@noinline f_uninformative(x) = Base.inferencebarrier(identity)(x)
+@noinline f_uninformative_nsp(@nospecialize x) = Base.inferencebarrier(identity)(x)
+@inline f_uninformative_inl(x) = Base.inferencebarrier(identity)(x)
+@noinline f_uninformative_mixed(x) = Base.inferencebarrier(identity)(x)
+@noinline f_uninformative_mixed(x::Int) = Base.inferencebarrier(identity)(x)
+g_uninformative(x) = f_uninformative(x)
+g_uninformative_nsp(x) = f_uninformative_nsp(x)
+g_uninformative_inl(x) = f_uninformative_inl(x)
+g_uninformative_mixed(x) = f_uninformative_mixed(x)
+function has_edge_to(src, f)
+    ms = methods(f)
+    return any(src.edges) do @nospecialize e
+        e isa Core.CodeInstance && (e = Compiler.get_ci_mi(e))
+        e in ms || (e isa MethodInstance && e.def in ms)
+    end
+end
+let src = code_typed1(g_uninformative, (Integer,))
+    @test count(iscall((src, f_uninformative)), src.code) == 1
+    @test !has_edge_to(src, f_uninformative)
+    @test has_edge_to(code_typed1(g_uninformative, (Int,)), f_uninformative)
+    src = code_typed1(g_uninformative_inl, (Integer,))
+    @test count(iscall((src, f_uninformative_inl)), src.code) == 0
+    @test has_edge_to(src, f_uninformative_inl)
+    src = code_typed1(g_uninformative_nsp, (Integer,))
+    @test count(isinvoke(:f_uninformative_nsp), src.code) == 1
+    @test has_edge_to(src, f_uninformative_nsp)
+    src = code_typed1(g_uninformative_mixed, (Integer,))
+    @test count(isinvoke(:f_uninformative_mixed), src.code) == 1
+    @test has_edge_to(src, f_uninformative_mixed)
+end
+# An interpreter can keep the edges.
+@newinterp KeepUninformativeInterp
+Compiler.discard_uninformative_call_info(::KeepUninformativeInterp) = false
+let src = only(Base.code_typed(g_uninformative, (Integer,); interp=KeepUninformativeInterp()))[1]
+    @test has_edge_to(src, f_uninformative)
+end
+
 # Test that a module-wise `@max_methods` works as expected
 module Test43370
 using Test
