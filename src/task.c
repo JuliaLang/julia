@@ -1136,7 +1136,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     jl_atomic_store_relaxed(&t->bound_cancel_token, jl_nothing);
     t->bound_cancel_default = 0;
     jl_atomic_store_relaxed(&t->reset_ctx, NULL);
-    jl_atomic_store_relaxed(&t->cancel_handler_ctx, NULL);
 
     if (t->ctx.copy_stack)
         t->ctx.copy_ctx = NULL;
@@ -1548,7 +1547,6 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     jl_atomic_store_relaxed(&ct->bound_cancel_token, jl_nothing);
     ct->bound_cancel_default = 0;
     jl_atomic_store_relaxed(&ct->reset_ctx, NULL);
-    jl_atomic_store_relaxed(&ct->cancel_handler_ctx, NULL);
     ptls->abandon_to = NULL;
     ptls->abandon_notify = NULL;
     ptls->root_task = ct;
@@ -1653,10 +1651,6 @@ JL_NORETURN void jl_abandon_task_cb(void) JL_CANSAFEPOINT
     // can then roll the commit back with nothing published, and a poller
     // that sees `:abandoned` never reads a half-staged outcome.
     jl_atomic_store_release(&ct->_state, JL_TASK_STATE_ABANDONED);
-
-    // A cancellation-handler delivery in flight on this thread dies with the
-    // abandoned task; disarm so future deliveries are not blocked.
-    ptls->cancel_handler_armed = 0;
 
     // Ordinary switch-exit bookkeeping that the redirect bypassed: the
     // timing block on the discarded stack must be exited before that stack
