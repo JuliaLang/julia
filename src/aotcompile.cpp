@@ -1793,6 +1793,27 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     return out;
 }
 
+namespace {
+// Set an LLVM boolean command line option for the lifetime of this object.
+struct ScopedBoolOption {
+    cl::opt<bool> *opt;
+    bool old = false;
+    ScopedBoolOption(StringRef name, bool value) JL_NOTSAFEPOINT
+      : opt(static_cast<cl::opt<bool>*>(cl::getRegisteredOptions().lookup(name)))
+    {
+        if (opt) {
+            old = opt->getValue();
+            opt->setValue(value);
+        }
+    }
+    ~ScopedBoolOption() JL_NOTSAFEPOINT
+    {
+        if (opt)
+            opt->setValue(old);
+    }
+};
+}  // anonymous namespace
+
 // serialize module to bitcode
 static auto serializeModule(const Module &M) {
     assert(!verifyLLVMIR(M) && "Serializing invalid module!");
@@ -2065,6 +2086,10 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     module_released(M);
 
     output_timer.startTimer();
+
+    // The shards read back bitcode that was just written above. Do not run the IR
+    // verifier over each of them to look for outdated debug info.
+    ScopedBoolOption no_upgrade("disable-auto-upgrade-debug-info", true);
 
     // Compile the partitions with a pool of worker threads pulling from a
     // shared queue. The partition count fixes the shard layout; the pool size
