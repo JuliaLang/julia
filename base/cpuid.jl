@@ -106,20 +106,6 @@ function feature_names(arch::String, isa::ISA)
 end
 
 """
-    _lookup_cpu(name::String) -> ISA
-
-Look up hardware features for the named CPU on the host architecture.
-Returns an empty ISA if the CPU name is not found.
-"""
-function _lookup_cpu(name::String)
-    nbytes = ccall(:jl_cpufeatures_nbytes, Csize_t, ())
-    buf = Vector{UInt8}(undef, nbytes)
-    ret = ccall(:jl_cpufeatures_lookup, Cint, (Cstring, Ptr{UInt8}, Csize_t), name, buf, nbytes)
-    ret != 0 && return ISA(Set{UInt32}())
-    return _featurebytes_to_isa(buf)
-end
-
-"""
     _host_isa() -> ISA
 
 Get the hardware features of the host CPU from the cpufeatures library.

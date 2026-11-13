@@ -234,6 +234,20 @@ let
     @test any(edge -> edge === binding, ci.edges)
 end
 
+let
+    interp = Compiler.NativeInterpreter(Base.get_world_counter())
+    mi = Base.method_instance(LimitedSrcTombstoneProof62338.entry, ())
+    frame = Compiler.InferenceState(
+        Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp)), Compiler.CACHE_MODE_LOCAL, interp)
+    out = mktemp() do path, io
+        redirect_stdout(() -> Compiler.print_callstack(frame), io)
+        close(io)
+        read(path, String)
+    end
+    @test startswith(out, "=================== Callstack: ==================\n*[0] MethodInstance entry() from entry()")
+    @test endswith(out, "================= End callstack ==================\n")
+end
+
 # Local constant inference keeps its dependency proof separate from the executable target.
 module LocalProofConstpropCache
     const SINK = Ref{Any}()
