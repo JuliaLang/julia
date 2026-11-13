@@ -183,11 +183,19 @@ end
 # Complete method collection implementation
 function collect_all_method_defs(newmodules, mod_array)
     allmeths = Any[]
+    worklist = newmodules === nothing ? nothing : newmodules::Vector{Any}
 
-    function method_visitor(method)
+    function method_visitor(@nospecialize(method))
         method = method::Method
-        if newmodules !== nothing
-            method.module in newmodules || return true
+        if worklist !== nothing
+            found = false
+            for mod in worklist
+                if mod === method.module
+                    found = true
+                    break
+                end
+            end
+            found || return true
         end
         if isdefined(method, :external_mt)
             return true  # Continue iteration

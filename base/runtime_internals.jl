@@ -2015,47 +2015,58 @@ hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Botto
 
 # high-level, more convenient method lookup functions
 
-function visit(f, mt::Core.MethodTable)
-    mt.defs !== nothing && visit(f, mt.defs)
+function visit(f::F, mt::Core.MethodTable) where F
+    defs = mt.defs
+    defs === nothing || visit_typemap(f, defs)
     nothing
 end
-function visit(f, mc::Core.TypeMapLevel)
-    function avisit(f, e::Memory{Any})
-        # slot 1 holds the smallintset index; key/value pairs follow, so values
-        # live on the odd slots starting at 3 (see mtcache layout in src/typemap.c)
-        for i in 3:2:length(e)
-            isassigned(e, i) || continue
-            ei = e[i]
-            if ei isa Memory{Any}
-                for j in 3:2:length(ei)
-                    isassigned(ei, j) || continue
-                    visit(f, ei[j])
-                end
-            else
-                visit(f, ei)
+# a typemap node is either a `TypeMapEntry` list or a `TypeMapLevel`
+function visit_typemap(f::F, @nospecialize(node)) where F
+    if node isa Core.TypeMapEntry
+        visit(f, node)
+    else
+        visit(f, node::Core.TypeMapLevel)
+    end
+    nothing
+end
+function visit_typemap_table(f::F, e::Memory{Any}) where F
+    # slot 1 holds the smallintset index; key/value pairs follow, so values
+    # live on the odd slots starting at 3 (see mtcache layout in src/typemap.c)
+    for i in 3:2:length(e)
+        isassigned(e, i) || continue
+        ei = e[i]
+        if ei isa Memory{Any}
+            for j in 3:2:length(ei)
+                isassigned(ei, j) || continue
+                visit_typemap(f, ei[j])
             end
+        else
+            visit_typemap(f, ei)
         end
     end
-    if mc.targ !== nothing
-        avisit(f, mc.targ::Memory{Any})
-    end
-    if mc.arg1 !== nothing
-        avisit(f, mc.arg1::Memory{Any})
-    end
-    if mc.tname !== nothing
-        avisit(f, mc.tname::Memory{Any})
-    end
-    if mc.name1 !== nothing
-        avisit(f, mc.name1::Memory{Any})
-    end
-    mc.list !== nothing && visit(f, mc.list)
-    mc.any !== nothing && visit(f, mc.any)
     nothing
 end
-function visit(f, d::Core.TypeMapEntry)
-    while d !== nothing
+function visit(f::F, mc::Core.TypeMapLevel) where F
+    targ = mc.targ
+    targ === nothing || visit_typemap_table(f, targ::Memory{Any})
+    arg1 = mc.arg1
+    arg1 === nothing || visit_typemap_table(f, arg1::Memory{Any})
+    tname = mc.tname
+    tname === nothing || visit_typemap_table(f, tname::Memory{Any})
+    name1 = mc.name1
+    name1 === nothing || visit_typemap_table(f, name1::Memory{Any})
+    list = mc.list
+    list === nothing || visit(f, list::Core.TypeMapEntry)
+    any = mc.any
+    any === nothing || visit_typemap(f, any)
+    nothing
+end
+function visit(f::F, d::Core.TypeMapEntry) where F
+    while true
         f(d.func)
-        d = d.next
+        next = d.next
+        next === nothing && break
+        d = next::Core.TypeMapEntry
     end
     nothing
 end
