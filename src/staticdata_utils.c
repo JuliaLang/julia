@@ -1017,21 +1017,3 @@ static jl_array_t *image_to_depmodidx(jl_array_t *depmods) JL_CANSAFEPOINT
     }
     return depmodidxs;
 }
-
-// Returns `imageidxs` where `j = imageidxs[i]` is the blob corresponding to `depmods[j]`
-static jl_array_t *depmod_to_imageidx(jl_array_t *depmods) JL_CANSAFEPOINT
-{
-    if (!depmods)
-        return NULL;
-    size_t ldeps = jl_array_nrows(depmods);
-    jl_array_t *imageidxs = jl_alloc_array_1d(jl_array_int32_type, ldeps + 1);
-    int32_t *imgidxs = jl_array_data(imageidxs, int32_t);
-    imgidxs[0] = 0;
-    for (size_t i = 0; i < ldeps; i++) {
-        jl_value_t *depmod = jl_array_ptr_ref(depmods, i);
-        size_t j = external_blob_index(depmod);
-        assert(j < INT32_MAX);
-        imgidxs[i + 1] = (int32_t)j;
-    }
-    return imageidxs;
-}
