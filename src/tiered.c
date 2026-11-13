@@ -10,7 +10,8 @@
 
   - a budget per MethodInstance of statements interpreted in its frames
     (jl_tier_work_threshold, 20000). Once it is spent, the specialization is compiled
-    through the normal pipeline the next time it is dispatched to. Each specialization
+    through the normal pipeline, by a dedicated compile thread, while it goes on running
+    interpreted (see "Background compilation" below). Each specialization
     has its own budget: a rarely reached, cheap specialization of a much-called
     method stays interpreted, and is compiled as part of its callers instead.
 
@@ -51,6 +52,7 @@
 #include <string.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "threading.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -60,6 +62,9 @@ JL_DLLEXPORT int jl_tier_enabled = 0;
 JL_DLLEXPORT uint32_t jl_tier_work_threshold = 20000;
 JL_DLLEXPORT uint32_t jl_tier_loop_threshold = 20000;
 static uint32_t tier_small_cost = 300; // the cap on a small method's budget (see above)
+static int tier_background = 1;        // off only in tests, and if the compile thread can't start
+static uv_mutex_t tier_queue_mutex;    // the background compile queue (see below)
+static uv_cond_t tier_queue_cond;
 static __thread int tier_compiling_continuation = 0; // in jl_tier_continuation_in_world
 
 void jl_init_tiered(void)
@@ -73,6 +78,8 @@ void jl_init_tiered(void)
     // that observes how code executes stays on the compiled path.
     if (jl_options.code_coverage != JL_LOG_NONE || jl_options.malloc_log != JL_LOG_NONE)
         jl_tier_enabled = 0;
+    uv_mutex_init(&tier_queue_mutex);
+    uv_cond_init(&tier_queue_cond);
 }
 
 // The statement budget of a specialization of `m` (see the top of this file).
@@ -245,6 +252,12 @@ static int tier_may_interpret(jl_method_instance_t *mi) JL_CANSAFEPOINT
     return JL_TIER_INTERPRET;
 }
 
+// Code being compiled in the background is interpreted until it is ready, unless it can't be.
+int jl_tier_interpretable(jl_method_instance_t *mi) JL_CANSAFEPOINT
+{
+    return tier_may_interpret(mi) == JL_TIER_INTERPRET;
+}
+
 // The tier gate, consulted on dynamic dispatch to a MethodInstance with no
 // compiled code: should this call run in the interpreter? Returns JL_TIER_INTERPRET if so,
 // and otherwise why it must be compiled.
@@ -274,8 +287,15 @@ void jl_tier_add_work(jl_method_instance_t *mi, uint64_t n) JL_NOTSAFEPOINT
 {
     uint32_t budget = tier_budget(mi->def.method);
     uint32_t work = jl_atomic_load_relaxed(&mi->tier_work);
-    if (work >= budget)
+    if (work >= budget) {
+        // queued for a background compile, and still interpreted until it is done: keep
+        // counting, since how fast the count grows decides its place in the queue
+        if (jl_atomic_load_relaxed(&mi->flags) & MI_FLAG_TIER_QUEUED) {
+            uint32_t room = UINT32_MAX - work;
+            jl_atomic_fetch_add_relaxed(&mi->tier_work, n < room ? (uint32_t)n : room);
+        }
         return;
+    }
     jl_atomic_fetch_add_relaxed(&mi->tier_work, n < budget ? (uint32_t)n : budget);
 }
 
@@ -344,6 +364,404 @@ JL_DLLEXPORT int jl_tier_lazy_callees(jl_method_instance_t *root, jl_method_inst
         (tier_compiling_continuation && jl_is_method(root->def.value) &&
          root->def.method->is_for_opaque_closure);
     return root_ran && !tier_has_run(mi);
+}
+
+// Background compilation. A specialization whose
+// budget is spent is not compiled by the thread that finds it so: it is queued, and keeps
+// running interpreted until a dedicated compile thread has compiled it, after which dispatch
+// finds the compiled code as usual. Compiling still takes as long, but a cell that triggers
+// a compile no longer waits for it.
+//
+// The compile thread is an OS thread the runtime starts on the first compile queued, adopted
+// into the runtime (inference runs Julia code), in no threadpool: user tasks never run on it.
+// Idle threads of the default pool help, taking jobs when they run out of tasks
+// (jl_tier_steal_task).
+// It takes the queued specialization whose interpreted work has grown most since it was
+// queued (the queue keeps its work counter running), so that hot code compiles first.
+//
+// The queue mutex is a uv mutex, paired with a condition variable so that the compile thread
+// can wait without spinning, and a thread blocked on it waits GC-unsafe: it is never held
+// across a safepoint, so the queue is malloc'd, holding MethodInstances rooted through their
+// methods' specializations. (After JuliaLang/julia#61888, whose compile thread this follows.)
+//
+// Loop continuations compile in the background too: a hot loop queues a job
+// (Base.Tiered.ContinuationJob) and keeps running interpreted, entering the continuation once
+// it is ready (see _tier_loop). The queue holds the job unrooted, as it does MethodInstances;
+// the loop's cache entry keeps it alive until it is done. Continuation jobs are taken first,
+// since a hot loop is waiting for each.
+typedef struct {
+    jl_method_instance_t *mi; // the specialization to compile, or NULL for a continuation
+    jl_value_t *cont;         // the continuation job, if `mi` is NULL
+    uint32_t work0; // its work counter when queued
+} tier_job_t;
+static tier_job_t *tier_jobs;
+static size_t tier_njobs, tier_jobs_cap;
+static _Atomic(size_t) tier_queued = 0; // tier_njobs, for checks without the queue mutex
+static uv_thread_t tier_worker_thread;
+static _Atomic(int) tier_worker_started = 0;
+static _Atomic(int) tier_worker_stop = 0;
+static _Atomic(int) tier_pause = 0; // holders of jl_tier_quiesce
+static _Atomic(int) tier_busy = 0;  // compiles in flight on the compile thread
+static __thread int tier_on_worker = 0; // compiling from the queue, on this thread
+extern _Atomic(int) n_threads_running;
+
+int jl_tier_background_on(void) JL_NOTSAFEPOINT
+{
+    return tier_background && !jl_atomic_load_relaxed(&tier_worker_stop) && !jl_generating_output();
+}
+
+JL_DLLEXPORT void jl_tier_set_background(int on) JL_NOTSAFEPOINT
+{
+    tier_background = on != 0;
+}
+
+JL_DLLEXPORT int jl_tier_get_background(void) JL_NOTSAFEPOINT
+{
+    return tier_background;
+}
+
+static void tier_start_worker(void) JL_NOTSAFEPOINT;
+
+// Queue `mi`, whose budget is spent, for the compile thread, unless it is queued already.
+// Returns whether help is wanted: it was queued while a compile is in progress, so an idle
+// thread of the default pool could take it (jl_tier_steal_task).
+int jl_tier_enqueue(jl_method_instance_t *mi) JL_NOTSAFEPOINT
+{
+    uint8_t prior = jl_atomic_fetch_or_relaxed(&mi->flags, MI_FLAG_TIER_QUEUED);
+    if (prior & (MI_FLAG_TIER_QUEUED | MI_FLAG_TIER_FAILED))
+        return 0;
+    uv_mutex_lock(&tier_queue_mutex);
+    if (tier_njobs == tier_jobs_cap) {
+        size_t cap = tier_jobs_cap ? 2 * tier_jobs_cap : 64;
+        tier_job_t *jobs = (tier_job_t*)realloc_s(tier_jobs, cap * sizeof(tier_job_t));
+        tier_jobs = jobs;
+        tier_jobs_cap = cap;
+    }
+    tier_jobs[tier_njobs].mi = mi;
+    tier_jobs[tier_njobs].cont = NULL;
+    tier_jobs[tier_njobs].work0 = jl_atomic_load_relaxed(&mi->tier_work);
+    tier_njobs++;
+    jl_atomic_store_relaxed(&tier_queued, tier_njobs);
+    uv_mutex_unlock(&tier_queue_mutex);
+    uv_cond_signal(&tier_queue_cond);
+    if (!jl_atomic_load_relaxed(&tier_worker_started))
+        tier_start_worker();
+    return jl_atomic_load_relaxed(&tier_busy) != 0;
+}
+
+// Queue the continuation job `job` (from Base.Tiered._tier_loop), which is queued once per loop
+// and live-in types.
+JL_DLLEXPORT void jl_tier_enqueue_continuation(jl_value_t *job) JL_NOTSAFEPOINT
+{
+    uv_mutex_lock(&tier_queue_mutex);
+    if (tier_njobs == tier_jobs_cap) {
+        size_t cap = tier_jobs_cap ? 2 * tier_jobs_cap : 64;
+        tier_job_t *jobs = (tier_job_t*)realloc_s(tier_jobs, cap * sizeof(tier_job_t));
+        tier_jobs = jobs;
+        tier_jobs_cap = cap;
+    }
+    tier_jobs[tier_njobs].mi = NULL;
+    tier_jobs[tier_njobs].cont = job;
+    tier_jobs[tier_njobs].work0 = 0;
+    tier_njobs++;
+    jl_atomic_store_relaxed(&tier_queued, tier_njobs);
+    uv_mutex_unlock(&tier_queue_mutex);
+    uv_cond_signal(&tier_queue_cond);
+    if (!jl_atomic_load_relaxed(&tier_worker_started))
+        tier_start_worker();
+    if (jl_atomic_load_relaxed(&tier_busy) != 0)
+        jl_wakeup_threadpool(JL_THREADPOOL_ID_DEFAULT); // to take it, if one is idle
+}
+
+// Whether a compile from the queue is in progress on a thread other than this one, which
+// may be compiling code this thread is about to call along with what was queued.
+int jl_tier_compiling_elsewhere(void) JL_NOTSAFEPOINT
+{
+    return !tier_on_worker && jl_atomic_load_relaxed(&tier_busy) != 0;
+}
+
+// The earliest continuation job, or else the job whose work has grown most since it was
+// queued, the earliest of equals. Called with the queue mutex held, and the queue not empty.
+static tier_job_t tier_take_locked(void) JL_NOTSAFEPOINT
+{
+    size_t best = 0;
+    uint32_t most = 0;
+    for (size_t i = 0; i < tier_njobs; i++) {
+        if (tier_jobs[i].mi == NULL) {
+            best = i;
+            break;
+        }
+        uint32_t grown = jl_atomic_load_relaxed(&tier_jobs[i].mi->tier_work) - tier_jobs[i].work0;
+        if (i == 0 || grown > most) {
+            best = i;
+            most = grown;
+        }
+    }
+    tier_job_t job = tier_jobs[best];
+    memmove(&tier_jobs[best], &tier_jobs[best + 1], (tier_njobs - best - 1) * sizeof(tier_job_t));
+    tier_njobs--;
+    jl_atomic_store_relaxed(&tier_queued, tier_njobs);
+    return job;
+}
+
+// The compile thread counts as running (in n_threads_running) only while it compiles: while
+// it waits for work it must not, or `jl_task_wait_empty` would wait for it forever, and it
+// must while it compiles, or that would proceed with a compile in flight. As the scheduler
+// does when a thread sleeps (jl_task_get_next), the thread that brings the count to zero
+// wakes thread 0, which may be waiting for exactly that; and incrementing happens under
+// thread 0's sleep_lock, where the scheduler's wakeup expects it. Lock order: the queue
+// mutex, then thread 0's sleep_lock.
+static void tier_worker_park(void) JL_NOTSAFEPOINT
+{
+    if (jl_atomic_fetch_add_relaxed(&n_threads_running, -1) == 1) {
+        jl_ptls_t ptls0 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+        uv_mutex_lock(&ptls0->sleep_lock);
+        uv_cond_signal(&ptls0->wake_signal);
+        uv_mutex_unlock(&ptls0->sleep_lock);
+    }
+}
+
+static void tier_worker_unpark(void) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls0 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+    uv_mutex_lock(&ptls0->sleep_lock);
+    jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
+    uv_mutex_unlock(&ptls0->sleep_lock);
+}
+
+// Compile `mi` on the compile thread, as `_jl_invoke_gated` would have on the thread that
+// spent its budget.
+static void tier_compile_background(jl_method_instance_t *mi) JL_CANSAFEPOINT
+{
+    jl_code_instance_t *ci = NULL;
+    JL_GC_PUSH1(&ci);
+    jl_task_t *ct = jl_current_task;
+    size_t world = jl_get_world_counter();
+    ct->world_age = world;
+    if (jl_method_compiled(mi, world) != NULL) {
+        jl_atomic_fetch_and_relaxed(&mi->flags, (uint8_t)~MI_FLAG_TIER_QUEUED);
+        JL_GC_POP();
+        return;
+    }
+    JL_TRY {
+        ci = jl_compile_method_internal(mi, world);
+    }
+    JL_CATCH {
+        ci = NULL;
+    }
+    // Done: if it is invalidated later, it is interpreted again and queued again once its
+    // budget is spent. If the compile failed, it stays interpreted. (Code another thread is
+    // still compiling, as part of a batch, is not a failure: that thread finishes it.)
+    if (ci == NULL || jl_atomic_load_relaxed(&ci->invoke) == NULL)
+        jl_atomic_fetch_or_relaxed(&mi->flags, MI_FLAG_TIER_FAILED);
+    jl_atomic_fetch_and_relaxed(&mi->flags, (uint8_t)~MI_FLAG_TIER_QUEUED);
+    JL_GC_POP();
+}
+
+// Compile a continuation job on the compile thread (Base.Tiered._tier_compile_job), as
+// _tier_loop would have on the thread whose loop got hot. It runs compiled, as the compiler
+// does, rather than tiered.
+static _Atomic(jl_value_t*) tier_cont_fn = NULL;
+static void tier_compile_continuation(jl_value_t *job) JL_CANSAFEPOINT
+{
+    jl_value_t *fn = jl_atomic_load_acquire(&tier_cont_fn);
+    if (fn == NULL) {
+        fn = jl_get_global(jl_base_module, jl_symbol("_tier_compile_job"));
+        if (fn == NULL)
+            return;
+        jl_atomic_store_release(&tier_cont_fn, fn);
+    }
+    jl_task_t *ct = jl_current_task;
+    ct->world_age = jl_get_world_counter();
+    uint8_t compiled = ct->tier_compiled;
+    ct->tier_compiled = 1;
+    JL_TRY {
+        jl_value_t *args[2] = { fn, job };
+        jl_apply(args, 2);
+    }
+    JL_CATCH {
+    }
+    ct->tier_compiled = compiled;
+}
+
+// Run a job taken from the queue.
+static void tier_run_job(tier_job_t job) JL_CANSAFEPOINT
+{
+    if (job.mi != NULL)
+        tier_compile_background(job.mi);
+    else
+        tier_compile_continuation(job.cont);
+}
+
+// The compile thread alternates waiting for work, GC-safe, and compiling, GC-unsafe, which
+// the safepoint analysis cannot follow.
+static void tier_worker(void *arg) JL_NO_SAFEPOINT_ANALYSIS
+{
+    (void)arg;
+    jl_adopt_thread();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    tier_on_worker = 1;
+    // user finalizers run on user threads, not here
+    jl_gc_enable_finalizers(ct, 0);
+    while (1) {
+        // wait, GC-safe, until there is work (or the thread is to stop)
+        int8_t gc_state = jl_gc_safe_enter(ptls);
+        uv_mutex_lock(&tier_queue_mutex);
+        while (!jl_atomic_load_relaxed(&tier_worker_stop) &&
+               (jl_atomic_load_relaxed(&tier_pause) || tier_njobs == 0)) {
+            tier_worker_park();
+            uv_cond_wait(&tier_queue_cond, &tier_queue_mutex);
+            tier_worker_unpark();
+        }
+        int stop = jl_atomic_load_relaxed(&tier_worker_stop);
+        uv_mutex_unlock(&tier_queue_mutex);
+        if (stop)
+            return; // counted as running: the thread's exit uncounts it
+        jl_gc_safe_leave(ptls, gc_state);
+        // Take the job GC-unsafe, after that safepoint, so that it is rooted before the next
+        // one. (Until then, it is reachable from its method's specializations.) The critical
+        // section has no safepoint, as everywhere the queue mutex is held.
+        tier_job_t job = {NULL, NULL, 0};
+        int taken = 0;
+        uv_mutex_lock(&tier_queue_mutex);
+        if (!jl_atomic_load_relaxed(&tier_pause) && tier_njobs != 0) {
+            job = tier_take_locked();
+            taken = 1;
+            // under the queue mutex, so that jl_tier_quiesce sees either this or the pause
+            jl_atomic_fetch_add_relaxed(&tier_busy, 1);
+        }
+        uv_mutex_unlock(&tier_queue_mutex);
+        if (!taken)
+            continue;
+        JL_GC_PUSH2(&job.mi, &job.cont);
+        tier_run_job(job);
+        JL_GC_POP();
+        jl_atomic_fetch_add_relaxed(&tier_busy, -1);
+    }
+}
+
+static void tier_start_worker(void) JL_NOTSAFEPOINT
+{
+    if (jl_atomic_exchange_relaxed(&tier_worker_started, 1))
+        return;
+    if (uv_thread_create(&tier_worker_thread, tier_worker, NULL) != 0) {
+        // compile on the thread that spends the budget, as without background compiling
+        tier_background = 0;
+        jl_safe_printf("WARNING: could not start the tiered compile thread\n");
+    }
+}
+
+// Work stealing: a thread of the default pool that has run out of tasks, and would otherwise
+// spin and sleep in the scheduler, is handed a task of its own that compiles queued jobs until
+// none are left (Base.Tiered._tier_steal), rather than compiling on the stack of whatever
+// task it was waiting in, whose wakeup a wait inside a compile could take. Threads of the
+// interactive pool never compile, nor does the main thread, which is in it.
+static __thread int tier_stealing = 0; // a stealing task of this thread is running
+static _Atomic(jl_value_t*) tier_steal_fn = NULL;
+
+jl_task_t *jl_tier_steal_task(jl_ptls_t ptls) JL_CANSAFEPOINT
+{
+    if (jl_atomic_load_relaxed(&tier_queued) == 0 || jl_atomic_load_relaxed(&tier_pause) ||
+        tier_stealing || !jl_tier_background_on())
+        return NULL;
+    if (jl_threadpoolid(ptls->tid) != JL_THREADPOOL_ID_DEFAULT)
+        return NULL;
+    jl_value_t *fn = jl_atomic_load_acquire(&tier_steal_fn);
+    if (fn == NULL) {
+        if (jl_base_module == NULL)
+            return NULL;
+        fn = jl_get_global(jl_base_module, jl_symbol("_tier_steal"));
+        if (fn == NULL)
+            return NULL;
+        jl_atomic_store_release(&tier_steal_fn, fn);
+    }
+    tier_stealing = 1;
+    jl_task_t *t = jl_new_task(fn, jl_nothing, 0);
+    // run it here, where there is nothing else to run
+    t->sticky = 1;
+    jl_atomic_store_relaxed(&t->tid, ptls->tid);
+    return t;
+}
+
+// Take a job from the queue and compile it, on the stealing task. Returns whether it did.
+JL_DLLEXPORT int jl_tier_steal_one(void) JL_CANSAFEPOINT
+{
+    if (jl_atomic_load_relaxed(&tier_pause))
+        return 0;
+    tier_job_t job = {NULL, NULL, 0};
+    int taken = 0;
+    uv_mutex_lock(&tier_queue_mutex);
+    if (!jl_atomic_load_relaxed(&tier_pause) && tier_njobs != 0) {
+        job = tier_take_locked();
+        taken = 1;
+        jl_atomic_fetch_add_relaxed(&tier_busy, 1);
+    }
+    uv_mutex_unlock(&tier_queue_mutex);
+    if (!taken)
+        return 0;
+    JL_GC_PUSH2(&job.mi, &job.cont);
+    tier_on_worker = 1;
+    tier_run_job(job);
+    tier_on_worker = 0;
+    JL_GC_POP();
+    jl_atomic_fetch_add_relaxed(&tier_busy, -1);
+    return 1;
+}
+
+JL_DLLEXPORT void jl_tier_steal_done(void) JL_NOTSAFEPOINT
+{
+    tier_stealing = 0;
+}
+
+// Pause the compile thread, and wait for the compile in flight. Measurements that read
+// process-wide counters (`@allocated`, `@time`) do this, since the compile thread allocates
+// and compiles concurrently with what they measure. Pauses nest; jl_tier_resume ends one.
+JL_DLLEXPORT void jl_tier_quiesce(void) JL_CANSAFEPOINT
+{
+    jl_atomic_fetch_add(&tier_pause, 1);
+    // the compile thread itself (a generator run while compiling) has nothing to wait for
+    if (!jl_atomic_load_relaxed(&tier_worker_started) || tier_on_worker)
+        return;
+    // after this, the compile thread has either seen the pause or counted itself busy
+    uv_mutex_lock(&tier_queue_mutex);
+    uv_mutex_unlock(&tier_queue_mutex);
+    while (jl_atomic_load_acquire(&tier_busy) != 0) {
+        jl_gc_safepoint(); // the compile in flight may need a collection to finish
+        jl_cpu_pause();
+    }
+}
+
+JL_DLLEXPORT void jl_tier_resume(void) JL_NOTSAFEPOINT
+{
+    if (jl_atomic_fetch_add(&tier_pause, -1) != 1)
+        return;
+    if (jl_atomic_load_relaxed(&tier_worker_started)) {
+        uv_mutex_lock(&tier_queue_mutex);
+        uv_cond_broadcast(&tier_queue_cond);
+        uv_mutex_unlock(&tier_queue_mutex);
+    }
+}
+
+// Stop the compile thread for good, before the runtime is torn down (jl_atexit_hook):
+// finish the compile in flight, leave the rest of the queue, and join the thread.
+JL_DLLEXPORT void jl_tier_stop_worker(void) JL_CANSAFEPOINT
+{
+    if (jl_atomic_exchange(&tier_worker_stop, 1) || !jl_atomic_load_relaxed(&tier_worker_started))
+        return;
+    uv_mutex_lock(&tier_queue_mutex);
+    uv_cond_broadcast(&tier_queue_cond);
+    uv_mutex_unlock(&tier_queue_mutex);
+    // join GC-safe: the compile in flight may need a collection to finish
+    jl_task_t *ct = jl_get_current_task();
+    if (ct != NULL) {
+        int8_t gc_state = jl_gc_safe_enter(ct->ptls);
+        uv_thread_join(&tier_worker_thread);
+        jl_gc_safe_leave(ct->ptls, gc_state);
+    }
+    else {
+        uv_thread_join(&tier_worker_thread);
+    }
 }
 
 #ifdef __cplusplus

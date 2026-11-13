@@ -281,7 +281,13 @@ macro force_compile(ex)
     quote
         $(Expr(:meta, :force_compile))
         local tier_old = ccall(:jl_tier_compiled_enter, UInt8, ())
-        $(Expr(:tryfinally, esc(ex), :(ccall(:jl_tier_compiled_leave, Cvoid, (UInt8,), tier_old))))
+        # the background compile thread pauses, so that measurements of `ex` don't count its
+        # allocations and compile time
+        ccall(:jl_tier_quiesce, Cvoid, ())
+        $(Expr(:tryfinally, esc(ex), quote
+            ccall(:jl_tier_resume, Cvoid, ())
+            ccall(:jl_tier_compiled_leave, Cvoid, (UInt8,), tier_old)
+        end))
     end
 end
 

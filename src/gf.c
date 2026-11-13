@@ -5242,15 +5242,29 @@ static int tier_compiled_elsewhere(jl_method_instance_t *mi, size_t world) JL_CA
         jl_atomic_fetch_or_relaxed(&mi->flags, MI_FLAG_TIER_COMPILABLE);
         return 0;
     }
+    // code a compile from the queue is still producing doesn't serve it yet: interpret it
+    // until it does, as in _jl_invoke_gated, rather than wait for the compile to finish
     jl_code_instance_t *ci2 = NULL;
-    return jl_method_compiled_callptr(mi2, world, &ci2) != NULL;
+    jl_callptr_t invoke2 = jl_method_compiled_callptr(mi2, world, &ci2);
+    if (invoke2 == jl_fptr_wait_for_compiled_addr && jl_tier_compiling_elsewhere())
+        return 0;
+    return invoke2 != NULL;
 }
 
 // Everything _jl_invoke_gated does besides calling compiled code: kept out of line, so that
 // the call to compiled code inlines into dispatch as it does without tiering.
 static NOINLINE jl_value_t *_jl_invoke_slow(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world,
-   enum internal_compilation_triggers cause, int gated) JL_CANSAFEPOINT
+   enum internal_compilation_triggers cause, int gated, jl_code_instance_t *codeinst, jl_callptr_t invoke) JL_CANSAFEPOINT
 {
+    // Code being compiled in the background, whether it was queued itself or is compiled
+    // along with what was, is interpreted until it is ready, rather than waiting for the
+    // compile to finish (see tiered.c).
+    if (invoke == jl_fptr_wait_for_compiled_addr && gated &&
+        ((jl_atomic_load_relaxed(&mfunc->flags) & MI_FLAG_TIER_QUEUED) || jl_tier_compiling_elsewhere()) &&
+        jl_tier_interpretable(mfunc))
+        return verify_type(jl_interpret_mi(F, args, nargs, mfunc));
+    if (invoke)
+        return verify_type(invoke(F, args, nargs, codeinst));
     // Tiered execution: dynamic dispatch is the tier boundary. A callee that is
     // not compiled yet runs in the interpreter until its method is hot.
     // Statically resolved calls (TRIGGER_FOREIGN) always compile, except those whose
@@ -5259,20 +5273,28 @@ static NOINLINE jl_value_t *_jl_invoke_slow(jl_value_t *F, jl_value_t **args, ui
         int why = jl_tier_gate(mfunc);
         if (why == JL_TIER_INTERPRET)
             return verify_type(jl_interpret_mi(F, args, nargs, mfunc));
+        // a spent budget queues it for the compile thread, and it runs interpreted meanwhile
+        if (why == JL_TIER_WHY_BUDGET && jl_tier_background_on() &&
+            !(jl_atomic_load_relaxed(&mfunc->flags) & MI_FLAG_TIER_FAILED)) {
+            if (jl_tier_enqueue(mfunc))
+                jl_wakeup_threadpool(JL_THREADPOOL_ID_DEFAULT); // to take it, if one is idle
+            jl_tier_add_work(mfunc, 1);
+            return verify_type(jl_interpret_mi(F, args, nargs, mfunc));
+        }
     }
     int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    jl_code_instance_t *codeinst = jl_compile_method_very_internal(mfunc, world, F, args, nargs, cause);
+    codeinst = jl_compile_method_very_internal(mfunc, world, F, args, nargs, cause);
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
     errno = last_errno;
     if (jl_options.malloc_log)
         jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
-    jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+    invoke = jl_atomic_load_acquire(&codeinst->invoke);
     return verify_type(invoke(F, args, nargs, codeinst));
 }
 
@@ -5282,9 +5304,9 @@ STATIC_INLINE jl_value_t *_jl_invoke_gated(jl_value_t *F, jl_value_t **args, uin
 {
     jl_code_instance_t *codeinst = NULL;
     jl_callptr_t invoke = jl_method_compiled_callptr(mfunc, world, &codeinst);
-    if (__likely(invoke != NULL))
+    if (__likely(invoke != NULL && invoke != jl_fptr_wait_for_compiled_addr))
         return verify_type(invoke(F, args, nargs, codeinst));
-    return _jl_invoke_slow(F, args, nargs, mfunc, world, cause, gated);
+    return _jl_invoke_slow(F, args, nargs, mfunc, world, cause, gated, codeinst, invoke);
 }
 
 STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world,
