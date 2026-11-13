@@ -363,17 +363,6 @@ static_assert(sizeof(jl_type_record_t) % sizeof(void*) == 0 && sizeof(jl_binding
 static_assert(sizeof(jl_datatype_t) == offsetof(jl_datatype_t, hash) + 2 * sizeof(uint32_t), "the bit fields of jl_datatype_t fit in the 4 bytes after `hash`");
 #define TYPE_FLAGS(dt) ((char*)&(dt)->hash + sizeof((dt)->hash))
 
-// Reporting to PkgCacheInspector
-typedef struct {
-    size_t sysdata;
-    size_t isbitsdata;
-    size_t symboldata;
-    size_t tagslist;
-    size_t reloclist;
-    size_t gvarlist;
-    size_t fptrlist;
-} pkgcachesizes;
-
 // --- Static Compile ---
 static jl_image_buf_t jl_sysimage_buf = { JL_IMAGE_KIND_NONE };
 
@@ -4143,7 +4132,6 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
                                                  jl_array_t **extext_records JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **internal_methods JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **method_roots_list JL_REQUIRE_ROOTED_SLOT,
-                                                 pkgcachesizes *cachesizes,
                                                  image_metadata_t **meta_out) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     jl_task_t *ct = jl_current_task;
@@ -4410,17 +4398,6 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
 
     jl_update_all_gvars(&s, image, gvars, h.gvars.size / sizeof(void*), h.gvar_objects);
 
-
-    if (cachesizes) {
-        cachesizes->sysdata = h.pointer_free_offset;
-        cachesizes->isbitsdata = h.heap_size - h.pointer_free_offset;
-        cachesizes->symboldata = h.strtab.size;
-        cachesizes->tagslist = h.imports.size + h.binds.size;
-        cachesizes->reloclist = h.slides.size + h.fixup_types.size + h.fixup_objs.size;
-        cachesizes->gvarlist = h.gvars.size;
-        cachesizes->fptrlist = h.fptrs.size;
-    }
-
     jl_update_all_fptrs(image, image_base, (const uintptr_t*)image_section(loader, &h, h.fptrs),
                         h.fptrs.size / sizeof(uintptr_t));
 
@@ -4539,9 +4516,8 @@ static jl_value_t *jl_restore_incremental_from_buf(const jl_image_buf_t *buf, jl
 
     {
         JL_SIGATOMIC_BEGIN();
-        pkgcachesizes cachesizes;
         image_metadata_t *meta = NULL;
-        jl_restore_system_image_from_stream_(buf, image, depmods, (jl_array_t**)&restored, &init_order, &extext_methods, &extext_records, &internal_methods, &method_roots_list, &cachesizes, &meta);
+        jl_restore_system_image_from_stream_(buf, image, depmods, (jl_array_t**)&restored, &init_order, &extext_methods, &extext_records, &internal_methods, &method_roots_list, &meta);
         JL_SIGATOMIC_END();
 
         // Add roots to methods
@@ -4577,14 +4553,17 @@ static jl_value_t *jl_restore_incremental_from_buf(const jl_image_buf_t *buf, jl
         JL_UNLOCK(&world_counter_lock);
 
         if (completeinfo) {
+            // the sizes of the image's parts, for PkgCacheInspector
+            jl_image_sections_t h;
+            memcpy(&h, buf->data + offsetof(jl_ji_header_t, sections), sizeof(h));
             cachesizes_sv = jl_alloc_svec(7);
-            jl_svecset(cachesizes_sv, 0, jl_box_long(cachesizes.sysdata));
-            jl_svecset(cachesizes_sv, 1, jl_box_long(cachesizes.isbitsdata));
-            jl_svecset(cachesizes_sv, 2, jl_box_long(cachesizes.symboldata));
-            jl_svecset(cachesizes_sv, 3, jl_box_long(cachesizes.tagslist));
-            jl_svecset(cachesizes_sv, 4, jl_box_long(cachesizes.reloclist));
-            jl_svecset(cachesizes_sv, 5, jl_box_long(cachesizes.gvarlist));
-            jl_svecset(cachesizes_sv, 6, jl_box_long(cachesizes.fptrlist));
+            jl_svecset(cachesizes_sv, 0, jl_box_long(h.pointer_free_offset));
+            jl_svecset(cachesizes_sv, 1, jl_box_long(h.heap_size - h.pointer_free_offset));
+            jl_svecset(cachesizes_sv, 2, jl_box_long(h.strtab.size));
+            jl_svecset(cachesizes_sv, 3, jl_box_long(h.imports.size + h.binds.size));
+            jl_svecset(cachesizes_sv, 4, jl_box_long(h.slides.size + h.fixup_types.size + h.fixup_objs.size));
+            jl_svecset(cachesizes_sv, 5, jl_box_long(h.gvars.size));
+            jl_svecset(cachesizes_sv, 6, jl_box_long(h.fptrs.size));
             // Surface extext_methods to external inspectors (e.g.
             // PkgCacheInspector.jl). With the single global jl_method_table,
             // `extext_methods` contains all worklist methods; `internal_methods`
@@ -4652,7 +4631,7 @@ JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
         jl_value_t *exc = jl_validate_cache_file(&buf, NULL);
         if (exc)
             jl_throw(exc);
-        jl_restore_system_image_from_stream_(&buf, image, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        jl_restore_system_image_from_stream_(&buf, image, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         jl_init_git_commit();
     }
     if (buf.data_owned) {
