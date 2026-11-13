@@ -45,7 +45,9 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/ValueHandle.h>
+#include <llvm/Analysis/AliasAnalysis.h>
 #include <llvm/Analysis/InstructionSimplify.h>
+#include <llvm/Analysis/ValueTracking.h>
 
 // support
 #include <llvm/ADT/BitmaskEnum.h>
@@ -2224,6 +2226,7 @@ public:
     std::map<int, SmallVector<int, 0>> phic_slots_for_catch; // catch_dest (1-based) -> PhiC statement indices
     std::map<int, std::pair<Value*, Value*> > scope_restore;
     std::map<jl_value_t*, AllocaInst*> eh_buffers;
+    SmallVector<std::pair<CallInst*, BasicBlock*>, 0> catch_entries; // each setjmp and the block its second return enters
     SmallVector<jl_cgval_t, 0> SAvalues;
     SmallVector<std::tuple<jl_cgval_t, BasicBlock *, AllocaInst *, PHINode *, SmallVector<PHINode*,0>, jl_value_t *>, 0> PhiNodes;
     SmallVector<bool, 0> ssavalue_assigned;
@@ -9468,6 +9471,28 @@ static DIFile *get_difile(jl_codectx_t &ctx, DIBuilder &dbuilder, StringRef file
     return dbuilder.createFile(file, ".");
 }
 
+// The blocks `Def` is live into: walk back from each use until reaching its definition.
+static void live_in_blocks(Instruction *Def, SmallPtrSetImpl<BasicBlock *> &LiveIn)
+{
+    BasicBlock *DefBB = Def->getParent();
+    SmallVector<BasicBlock *, 8> Worklist;
+    for (Use &U : Def->uses()) {
+        // a phi uses its operand at the end of the incoming block
+        auto *PN = dyn_cast<PHINode>(U.getUser());
+        BasicBlock *BB = PN ? PN->getIncomingBlock(U) : cast<Instruction>(U.getUser())->getParent();
+        if (BB != DefBB)
+            Worklist.push_back(BB);
+    }
+    while (!Worklist.empty()) {
+        BasicBlock *BB = Worklist.pop_back_val();
+        if (!LiveIn.insert(BB).second)
+            continue;
+        for (BasicBlock *Pred : predecessors(BB))
+            if (Pred != DefBB)
+                Worklist.push_back(Pred);
+    }
+}
+
 // Compile to LLVM IR, using a specialized signature if applicable.
 static jl_llvm_functions_t
     emit_function(
@@ -10843,6 +10868,7 @@ static jl_llvm_functions_t
                 Value *isz = ctx.builder.CreateICmpEQ(sj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
                 BasicBlock *tryblk = BasicBlock::Create(ctx.builder.getContext(), "try", f);
                 BasicBlock *catchpop = BasicBlock::Create(ctx.builder.getContext(), "catch_enter", f);
+                ctx.catch_entries.push_back({sj, catchpop});
                 BasicBlock *handlr = NULL;
                 handlr = BB[lname];
                 workstack.push_back(lname - 1);
@@ -11141,8 +11167,11 @@ static jl_llvm_functions_t
 
     // step 11b. A longjmp reaches the catch block along no edge LLVM can see, so
     // the slots it reads escape just before every setjmp: every later call may
-    // then read them, and the second return may have written them.
-    {
+    // then read them, and the second return may have written them. So does each
+    // fresh object live into the catch block, whose stores in the try body the
+    // catch may read even when no `φᶜ` carries the object there (as after
+    // inlining a callee whose own catch did not use it).
+    if (!ctx.catch_entries.empty()) {
         SmallSetVector<Value *, 8> catch_slots;
         auto add_slot = [&](jl_varinfo_t &vi) {
             if (!vi.isCatchLive)
@@ -11155,12 +11184,50 @@ static jl_llvm_functions_t
             add_slot(vi);
         for (auto &it : ctx.phic_slots)
             add_slot(it.second);
-        if (!catch_slots.empty()) {
-            Function *escape = prepare_call(catch_escape_func);
-            for (auto &BB : *ctx.f)
-                for (auto &I : BB)
-                    if (auto *CI = dyn_cast<CallInst>(&I); CI && CI->canReturnTwice())
-                        CallInst::Create(escape, catch_slots.getArrayRef(), "", CI->getIterator());
+        // Only gc allocations: FinalLowerGC finds them rooted in the frame
+        // across the setjmp by then, and drops them from the escape again.
+        auto is_fresh = [](const Value *V) {
+            return isNoAliasCall(V) && V->getType()->getPointerAddressSpace() == AddressSpace::Tracked;
+        };
+        SmallVector<SmallSetVector<Value *, 4>, 0> catch_objects(ctx.catch_entries.size());
+        DominatorTree DT(*ctx.f);
+        SmallVector<const Value *, 4> Objs;
+        SmallPtrSet<BasicBlock *, 16> live;
+        for (auto &BB : *ctx.f) {
+            for (auto &I : BB) {
+                if (!I.getType()->isPointerTy())
+                    continue;
+                // capture tracking looks through `phi` and `select`, so this must too
+                Objs.clear();
+                getUnderlyingObjects(&I, Objs, nullptr, /*MaxLookup*/0);
+                if (none_of(Objs, is_fresh))
+                    continue;
+                live.clear();
+                live_in_blocks(&I, live);
+                for (size_t i = 0; i < ctx.catch_entries.size(); i++) {
+                    auto [sj, catchbb] = ctx.catch_entries[i];
+                    if (!live.count(catchbb))
+                        continue;
+                    for (const Value *Obj : Objs) {
+                        if (!is_fresh(Obj))
+                            continue;
+                        // an allocation on only some paths to the setjmp escapes through `I`
+                        if (DT.dominates(cast<Instruction>(Obj), sj))
+                            catch_objects[i].insert(const_cast<Value *>(Obj));
+                        else if (DT.dominates(&I, sj))
+                            catch_objects[i].insert(&I);
+                    }
+                }
+            }
+        }
+        Function *escape = prepare_call(catch_escape_func);
+        for (size_t i = 0; i < ctx.catch_entries.size(); i++) {
+            CallInst *sj = ctx.catch_entries[i].first;
+            SmallVector<Value *, 8> args(catch_slots.begin(), catch_slots.end());
+            for (Value *Base : catch_objects[i])
+                args.push_back(Base);
+            if (!args.empty())
+                CallInst::Create(escape, args, "", sj->getIterator());
         }
     }
 

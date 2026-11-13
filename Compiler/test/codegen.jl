@@ -635,6 +635,36 @@ function f37262(x)
         GC.gc()
     end
 end
+mutable struct CatchLiveObject; x::Int; end
+@noinline catch_live_throw(n) = n > 0 ? error("intentional") : nothing
+function catch_live_object(n)
+    r = CatchLiveObject(0)
+    try
+        r.x = n
+        catch_live_throw(n)
+        r.x = 2n
+    catch
+    end
+    return r.x
+end
+@testset "a mutation in a try is seen by the catch without a ϒ" begin
+    # inlining can leave the IR in this shape: the object reaches the catch only as an SSA value
+    ir = only(Base.code_ircode(catch_live_object, (Int,)))[1]
+    alloc = findfirst(i -> Meta.isexpr(ir.stmts[i][:stmt], :new), 1:length(ir.stmts))
+    for i in 1:length(ir.stmts)
+        stmt = ir.stmts[i][:stmt]
+        if stmt isa Core.UpsilonNode || stmt isa Core.PhiCNode
+            ir.stmts[i][:stmt] = nothing
+        elseif stmt isa Core.PhiNode
+            ir.stmts[i][:stmt] = Core.SSAValue(alloc)
+        end
+    end
+    ir.argtypes[1] = Tuple{}
+    oc = Core.OpaqueClosure(ir; do_compile=true)
+    @test oc(5) == 5
+    @test oc(0) == 0
+end
+
 @testset "#37262" begin
     str_opaque = "getelementptr inbounds i8, ptr %.roots.phic, i32 8\n  store volatile ptr null"
     llvmstr = get_llvm(f37262, (Bool,), false, false, false)
