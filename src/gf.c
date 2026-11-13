@@ -1515,10 +1515,15 @@ static void jl_compilation_sig(
                 break;
             }
         }
-        if (all_are_subtypes) {
-            // avoid Vararg{Type{Type{...}}}
-            if (jl_is_some_Type(type_i) && jl_is_some_Type(jl_some_Type_T(type_i)))
-                type_i = (jl_value_t*)jl_type_type;
+        if (all_are_subtypes && jl_is_some_Type(type_i) && jl_is_some_Type(jl_some_Type_T(type_i))) {
+            // avoid Vararg{Type{Type{...}}}, by the declared tail when that does not
+            // admit every type (such as one sharing a static parameter): `Type` would
+            // not be a fixed point there, since the intersection with `decl` narrows it
+            type_i = inst_varargp_in_env(decl, sparams);
+            if (jl_subtype((jl_value_t*)jl_type_type, jl_unwrap_vararg(type_i)))
+                type_i = (jl_value_t*)jl_wrap_vararg((jl_value_t*)jl_type_type, (jl_value_t*)NULL, 1, 0); // this cannot throw for these inputs
+        }
+        else if (all_are_subtypes) {
             type_i = (jl_value_t*)jl_wrap_vararg(type_i, (jl_value_t*)NULL, 1, 0); // this cannot throw for these inputs
         }
         else {
@@ -1604,6 +1609,10 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             if (jl_is_some_Type(elt) && jl_is_some_Type(jl_some_Type_T(elt))) {
                 JL_GC_POP();
                 return 0; // elt would be set equal to jl_type_type instead
+            }
+            if (!jl_subtype(elt, jl_unwrap_vararg(type_i))) {
+                JL_GC_POP();
+                return 0; // the limited tail is narrowed to the declared one instead
             }
             // else, elt also needs to meet the usual rules
         }
