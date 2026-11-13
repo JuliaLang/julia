@@ -14,6 +14,10 @@
 # Set to zero to turn off extra precompile (e.g. for the REPL)
 JULIA_PRECOMPILE ?= 1
 
+# Set to zero to write the heap of the system image into sys.$(SHLIB_EXT) instead of
+# sys.ji beside it
+SPLIT_SYSIMAGE ?= 1
+
 # Set to 1 to compile coverage instrumentation into the sysimage and the
 # stdlib pkgimages. The resulting images collect coverage without recompiling
 # any image code when run with `--code-coverage` in the default `hit` mode,

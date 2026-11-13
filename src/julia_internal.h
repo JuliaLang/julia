@@ -447,11 +447,6 @@ typedef enum {
     JL_SYMBOL_SPECPTR_IMG,
 } jl_symbol_prefix_t;
 
-static inline int jl_jlcall_specptr_is_native(jl_invoke_api_t type) JL_NOTSAFEPOINT
-{
-    return type == JL_INVOKE_ARGS || type == JL_INVOKE_SPARAM || type == JL_INVOKE_SPECSIG;
-}
-
 static inline jl_invoke_api_t jl_callptr_invoke_api(jl_callptr_t ptr) JL_NOTSAFEPOINT
 {
     if (ptr == jl_fptr_args_addr)
@@ -1517,6 +1512,8 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi) JL_
 void jl_init_serializer(void) JL_CANSAFEPOINT;
 void jl_init_uv(void) JL_NOTSAFEPOINT;
 void jl_init_box_caches(void) JL_NOTSAFEPOINT;
+int jl_adopt_image_constants(jl_image_buf_t buf) JL_CANSAFEPOINT;
+void jl_set_symtab(jl_sym_t *root) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT;
 
 extern JL_DLLEXPORT const int jl_tls_elf_support;
