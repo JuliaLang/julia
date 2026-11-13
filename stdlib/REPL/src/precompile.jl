@@ -5,13 +5,15 @@ module Precompile
 import ..REPL
 
 # Ugly hack for our cache file to not have a dependency edge on the FakePTYs file.
-Base._track_dependencies[] = false
-try
-    Base.include(@__MODULE__, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testhelpers", "FakePTYs.jl"))
-    @Core.latestworld
-    import .FakePTYs: open_fake_pty
-finally
-    Base._track_dependencies[] = true
+let track_dependencies = Base._track_dependencies[]
+    Base._track_dependencies[] = false
+    try
+        Base.include(@__MODULE__, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testhelpers", "FakePTYs.jl"))
+        @Core.latestworld
+        import .FakePTYs: open_fake_pty
+    finally
+        Base._track_dependencies[] = track_dependencies
+    end
 end
 
 function repl_workload()
