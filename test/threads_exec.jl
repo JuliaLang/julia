@@ -1913,6 +1913,52 @@ if threadpoolsize() >= 2
         GC.gc(false)
     end
 
+    # On macOS, the reply to a safepoint fault could undo the redirect after the
+    # abandonment committed, hanging `unsafe_abandon!`. Collections on another
+    # thread make the victim fault at safepoints. Both loops are pinned to other
+    # threads, since this one yields while waiting. The collector pauses as long
+    # as each collection took: back-to-back collections keep a safepoint page
+    # protected, which would refuse every attempt.
+    nt = Threads.nthreads(:default) + Threads.nthreads(:interactive)
+    nt >= 3 && @testset "abandonment during collections" begin
+        function pinned(f, tid)
+            t = Task(f)
+            t.sticky = true
+            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid)
+            return schedule(t)
+        end
+        stop = Threads.Atomic{Bool}(false)
+        collector = pinned(nt - 2) do
+            while !stop[]
+                t0 = time_ns()
+                GC.gc(false)
+                t1 = time_ns()
+                while time_ns() - t1 < t1 - t0
+                    GC.safepoint()
+                end
+            end
+        end
+        for _ in 1:200
+            spins = Threads.Atomic{Int}(0)
+            victim = pinned(nt - 1) do
+                while true
+                    Threads.atomic_add!(spins, 1)
+                    GC.safepoint()
+                end
+            end
+            while spins[] < 10
+                yield()
+            end
+            rescue() = (t = Task(() -> (while true; wait(); end)); t.sticky = false; t)
+            while !Base.unsafe_abandon!(victim, rescue())
+                yield()
+            end
+            @test victim.state === :abandoned
+        end
+        stop[] = true
+        wait(collector)
+    end
+
     # Linux-only: blocks the abandon signal by number (SIGUSR2 == 12) and uses
     # Linux's SIG_BLOCK/SIG_UNBLOCK values.
     Sys.islinux() && @testset "an undelivered abandonment withdraws cleanly" begin
