@@ -4645,7 +4645,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             }
         }
         // the layouts of the types that mention them, which may fail, before
-        // the other threads are suspended
+        // anything is published
         jl_typecache_region_layouts(&region);
     }
     JL_CATCH {
@@ -4667,8 +4667,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         o->header |= GC_PERM | GC_PERM_NOT_REMSET;
     }
     arraylist_grow(&cleanup_list, -cleanup_list.len);
-    // finally cache all our new types now
-    jl_safepoint_suspend_all_threads(ct); // past this point, it is now not safe to observe the intermediate states on other threads via reflection, so temporarily pause those
+    // finally cache all our new types now: each is complete, and the lock
+    // keeps other threads from making a type that is still unpublished
     { JL_TRY {
         jl_typecache_region_end(&region, 1);
         for (size_t i = 0; i < s.fixup_types.len; i++) {
@@ -4691,15 +4691,14 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         }
     }
     JL_CATCH {
-        // the region is closed, but the other threads must not stay suspended
+        // the region is closed, but the lock must not stay held
         JL_UNLOCK(&typecache_lock); // Might GC
-        jl_safepoint_resume_all_threads(ct);
         arraylist_free(&cleanup_list);
         htable_free(&new_dt_objs);
         jl_rethrow();
     } }
+    // TODO: make the MethodInstance allocations below appear to other threads together with the types, but we would need to acquire all jl_specializations_get_linfo and jl_module_globalref locks, which is hard
     JL_UNLOCK(&typecache_lock); // Might GC
-    jl_safepoint_resume_all_threads(ct); // TODO: move this later to also protect MethodInstance allocations, but we would need to acquire all jl_specializations_get_linfo and jl_module_globalref locks, which is hard
     // Perform fixups: things like updating world ages, inserting methods & specializations, etc.
     for (size_t i = 0; i < s.uniquing_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.uniquing_objs.items[i];
