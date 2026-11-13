@@ -800,7 +800,7 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
     cached = get(code_cache(state), mi_invoke, nothing)
     if cached isa CodeInstance
         code = cached
-    elseif !(code isa CodeInstance && code.def === mi_invoke)
+    else
         #println("missing code for ", mi_invoke, " for ", mi)
         code = mi_invoke
     end
@@ -1188,14 +1188,13 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
     sig::Signature, state::InliningState)
     # InvokeCICallInfo indicates that `abstract_invoke` already analyzed the call
     # and determined it is of the form `invoke(f, ::CodeInstance, args...)`
-    # where the argtypes and worldages are valid for the context, and the invoke
-    # pointer is set. Therefore, we can simply transform this into an
-    # `Expr(:invoke, ...)`
+    # where the worldages are valid for the context. If the argtypes are valid too,
+    # we can transform this into an `Expr(:invoke, ...)` of exactly that CodeInstance,
+    # which must not be replaced with the one for its compilation signature (or by the native one)
     if info isa InvokeCICallInfo
+        invoke_ci_argtypes_valid(argtypes_to_type(invoke_rewrite(sig.argtypes)), info.edge) || return nothing
         stmt.head = :invoke
         stmt.args = [info.edge, stmt.args[2], stmt.args[4:end]...]
-        # Transformed to :invoke, now handle it as such
-        handle_invoke_expr!(todo, ir, idx, stmt, info, flag, sig, state)
         return nothing
     end
     nspl = nsplit(info)

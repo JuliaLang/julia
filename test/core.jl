@@ -9198,6 +9198,20 @@ let this_world = Base.get_world_counter()
     @atomic mysin_ci.min_world = this_world + 10
     @test_throws ErrorException f(1.0)
 end
+# the argument check is kept when the argument types are not known to pass it
+f_invoke_int(x::Int) = x + 1
+@test f_invoke_int(1) == 2
+const f_invoke_int_ci = Base.specialize_method(Base._which(Tuple{typeof(f_invoke_int), Int})).cache
+f_call_int(@nospecialize x) = invoke(f_invoke_int, f_invoke_int_ci, x)
+@test f_call_int(1) == 2
+@test_throws TypeError f_call_int("a")
+# a foreign `CodeInstance` without code throws, even if it claims not to
+struct InvokeCIOwner end
+const f_invoke_foreign_ci = Core.CodeInstance(f_invoke_int_ci.def, InvokeCIOwner(), Int, Union{},
+    nothing, nothing, Int32(0), Base.get_world_counter(), typemax(UInt), UInt32(0), nothing, nothing, Core.svec())
+f_call_foreign(x::Int) = invoke(f_invoke_int, f_invoke_foreign_ci, x)
+@test ErrorException <: Base.infer_exception_type(f_call_foreign, (Int,))
+@test_throws "Failed to invoke or compile external codeinst" f_call_foreign(1)
 
 
 myfun57023a(::Type{T}) where {T} = (x = @ccall mycfun()::Ptr{T}; x)
