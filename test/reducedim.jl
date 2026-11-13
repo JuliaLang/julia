@@ -375,7 +375,6 @@ for (tup, rval, rind) in [((1,), [NaN 2.0 4.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(minimum(A, dims=tup), rval)
     @test isequal(minimum!(similar(rval), A), rval)
     @test isequal(minimum!(copy(rval), A, init=false), rval)
-    @test isequal(Base.reducedim!(min, copy(rval), A), rval)
 end
 
 for (tup, rval, rind) in [((1,), [NaN 3.0 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
@@ -387,7 +386,6 @@ for (tup, rval, rind) in [((1,), [NaN 3.0 6.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(maximum(A, dims=tup), rval)
     @test isequal(maximum!(similar(rval), A), rval)
     @test isequal(maximum!(copy(rval), A, init=false), rval)
-    @test isequal(Base.reducedim!(max, copy(rval), A), rval)
 end
 
 # issue #28320

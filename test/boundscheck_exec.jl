@@ -243,7 +243,7 @@ end
 if bc_opt != bc_off
     Base.@propagate_inbounds op58200(a, b) = (1, 2)[a] + (1, 2)[b]
     @test_throws BoundsError accumulate(op58200, 1:10)
-    @test_throws BoundsError Base.accumulate_pairwise(op58200, 1:10)
+    @test_throws BoundsError Base.accumulate_pairwise!(op58200, Vector{Int}(undef, 10), 1:10)
 end
 
 # Ensure iteration over arrays is vectorizable
