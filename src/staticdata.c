@@ -3434,7 +3434,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     s.link_ids_gctags = jl_alloc_array_1d(jl_array_int32_type, 0);
     s.link_ids_gvars = jl_alloc_array_1d(jl_array_int32_type, 0);
     s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_int32_type, 0);
-    s.method_roots_list = NULL;
     htable_new(&s.method_roots_index, 0);
     if (worklist) {
         s.method_roots_list = jl_alloc_vec_any(0);
@@ -4869,7 +4868,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
     jl_timing_counter_inc(JL_TIMING_COUNTER_ImageSize, sizeof_sysimg + sizeof(uintptr_t));
 
-    // jl_printf(JL_STDOUT, "%ld blobs to link against\n", n_linkage_blobs());
     jl_gc_enable(en);
 
     if (s.incremental)
