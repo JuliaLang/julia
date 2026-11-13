@@ -65,7 +65,7 @@ GC_SRCS += gc-stock gc-debug gc-pages gc-page-profiler
 endif
 
 SRCS := \
-	jltypes gf typemap smallintset ast builtins module interpreter symbol \
+	jltypes gf typemap smallintset ast builtins module interpreter tiered symbol \
 	dlload sys init task array genericmemory staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile jloptions mtarraylist \
 	threading scheduler stackwalk static_exports \

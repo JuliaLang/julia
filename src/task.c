@@ -1127,6 +1127,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->ptls = NULL;
     t->world_age = ct->world_age;
     t->reentrant_timing = 0;
+    t->tier_compiled = ct->tier_compiled;
     t->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
     jl_atomic_store_relaxed(&t->first_enqueued_at, 0);
     jl_atomic_store_relaxed(&t->last_started_running_at, 0);
@@ -1531,6 +1532,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
     ct->reentrant_timing = 0;
+    ct->tier_compiled = 0;
     jl_atomic_store_relaxed(&ct->running_time_ns, 0);
     jl_atomic_store_relaxed(&ct->finished_at, 0);
     ct->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
