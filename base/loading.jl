@@ -3247,6 +3247,8 @@ function __require_prelocked(pkg::PkgId, env)
 
                     unlock(require_lock)
                     try
+                        # precompile output and its key handling need a clean line and the terminal in its normal mode
+                        undo_early_prompt()
                         # a cache-fetch hook gets one chance to materialize a
                         # cachefile before we spend time compiling; returning
                         # `nothing` retries the cache search from the top

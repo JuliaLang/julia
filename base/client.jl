@@ -520,6 +520,120 @@ function run_fallback_repl(interactive::Bool)
     nothing
 end
 
+function repl_banner(io::IO = stdout; short = false)
+    if GIT_VERSION_INFO.tagged_commit
+        commit_string = TAGGED_RELEASE_BANNER
+    elseif isempty(GIT_VERSION_INFO.commit)
+        commit_string = ""
+    else
+        days = Int(floor((ccall(:jl_clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
+        days = max(0, days)
+        unit = days == 1 ? "day" : "days"
+        distance = GIT_VERSION_INFO.fork_master_distance
+        commit = GIT_VERSION_INFO.commit_short
+
+        if distance == 0
+            commit_string = "Commit $(commit) ($(days) $(unit) old master)"
+        else
+            branch = GIT_VERSION_INFO.branch
+            commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
+        end
+    end
+
+    version = version_with_build_variant()
+    commit_date = isempty(GIT_VERSION_INFO.date_string) ? "" : " ($(split(GIT_VERSION_INFO.date_string)[1]))"
+
+    if get(io, :color, false)::Bool
+        c = text_colors
+        tx = c[:normal] # text
+        jl = c[:normal] # julia
+        d1 = c[:bold] * c[:blue]    # first dot
+        d2 = c[:bold] * c[:red]     # second dot
+        d3 = c[:bold] * c[:green]   # third dot
+        d4 = c[:bold] * c[:magenta] # fourth dot
+
+        if short
+            print(io,"""
+              $(d3)o$(tx)  | Version $(version)$(commit_date)
+             $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
+            """)
+        else
+            print(io,"""               $(d3)_$(tx)
+               $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
+              $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
+               $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
+              $(jl)| | | | | | |/ _` |$(tx)  |
+              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(version)$(commit_date)
+             $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
+            $(jl)|__/$(tx)                   |
+
+            """)
+        end
+    else
+        if short
+            print(io,"""
+              o  |  Version $(version)$(commit_date)
+             o o |  $(commit_string)
+            """)
+        else
+            print(io,"""
+                           _
+               _       _ _(_)_     |  Documentation: https://docs.julialang.org
+              (_)     | (_) (_)    |
+               _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
+              | | | | | | |/ _` |  |
+              | | |_| | | | (_| |  |  Version $(version)$(commit_date)
+             _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
+            |__/                   |
+
+            """)
+        end
+    end
+    objcache_notice(io)
+    return nothing
+end
+
+# Warn about conditions (that the user can potentially do something about)
+# which forced the compiled-code cache off for this session.
+function objcache_notice(io::IO)
+    notice = ccall(:jl_objcache_disabled_notice, Ptr{UInt8}, ())
+    notice == C_NULL && return nothing
+    msg = "Note: The compiled-code cache is disabled: $(unsafe_string(notice)).\n\n"
+    if get(io, :color, false)::Bool
+        printstyled(io, msg; color=warn_color())
+    else
+        print(io, msg)
+    end
+    return nothing
+end
+
+# set when a placeholder prompt was drawn before the REPL stdlib loaded
+global early_prompt_shown::Bool = false
+
+# Show the banner and prompt before the REPL stdlib loads, so the session looks ready sooner.
+# Raw mode stops the terminal echoing keys typed meanwhile. The REPL reads them once it starts.
+function show_early_prompt(banner::Symbol)
+    Sys.iswindows() && return false
+    stdin isa TTY && stdout isa TTY || return false
+    get(ENV, "TERM", "dumb") == "dumb" && return false
+    # hooks registered by a startup file may change the prompt
+    isempty(repl_hooks) || return false
+    ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid}, Int32), stdin.handle, 1) == 0 || return false
+    color = get(stdout, :color, false)::Bool
+    banner == :no || repl_banner(stdout; short=banner==:short)
+    print(stdout, color ? text_colors[:green] * text_colors[:bold] * "julia> " * text_colors[:normal] : "julia> ")
+    global early_prompt_shown = true
+    return true
+end
+
+function undo_early_prompt()
+    early_prompt_shown || return
+    print(stdout, "\r\e[K")
+    ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid}, Int32), stdin.handle, 0)
+    global early_prompt_shown = false
+    nothing
+end
+
 function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::Bool)
     term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
     term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
@@ -553,7 +667,9 @@ end
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool)
     fallback_repl = parse(Bool, get(ENV, "JULIA_FALLBACK_REPL", "false"))
+    early_banner = false
     if !fallback_repl && interactive
+        early_banner = REPL_MODULE_REF[] === Base && show_early_prompt(banner)
         load_InteractiveUtils()
         REPL = REPL_MODULE_REF[]
         if REPL === Base
@@ -562,8 +678,9 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
     end
     REPL = REPL_MODULE_REF[]
     if !fallback_repl && interactive && REPL !== Base
-        invokelatest(run_std_repl, REPL, quiet, banner, history_file)
+        invokelatest(run_std_repl, REPL, quiet, early_banner ? :no : banner, history_file)
     else
+        undo_early_prompt()
         if !fallback_repl && interactive && !quiet
             @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Sys.iswindows() ? ';' : ':')
         end

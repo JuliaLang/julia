@@ -1810,12 +1810,12 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     end
     repl.backendref = backend
     repl.mistate = LineEdit.init_state(terminal(repl), interface)
-    LineEdit.query_colors(repl.mistate.terminal_properties, terminal(repl))
     # Copy prompt_ready_event from repl to mistate (used by precompilation)
     if isdefined(repl, :prompt_ready_event) && repl.prompt_ready_event !== nothing
         repl.mistate.prompt_ready_event = repl.prompt_ready_event
     end
     try
+        LineEdit.query_colors(repl.mistate.terminal_properties, terminal(repl))
         run_interface(terminal(repl), interface, repl.mistate)
     catch e
         # The terminal went away (e.g. its window was closed): end the session
@@ -1861,92 +1861,7 @@ function ends_with_semicolon(code)
     return semi
 end
 
-function banner(io::IO = stdout; short = false)
-    if Base.GIT_VERSION_INFO.tagged_commit
-        commit_string = Base.TAGGED_RELEASE_BANNER
-    elseif isempty(Base.GIT_VERSION_INFO.commit)
-        commit_string = ""
-    else
-        days = Int(floor((ccall(:jl_clock_now, Float64, ()) - Base.GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
-        days = max(0, days)
-        unit = days == 1 ? "day" : "days"
-        distance = Base.GIT_VERSION_INFO.fork_master_distance
-        commit = Base.GIT_VERSION_INFO.commit_short
-
-        if distance == 0
-            commit_string = "Commit $(commit) ($(days) $(unit) old master)"
-        else
-            branch = Base.GIT_VERSION_INFO.branch
-            commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
-        end
-    end
-
-    version = Base.version_with_build_variant()
-    commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
-
-    if get(io, :color, false)::Bool
-        c = Base.text_colors
-        tx = c[:normal] # text
-        jl = c[:normal] # julia
-        d1 = c[:bold] * c[:blue]    # first dot
-        d2 = c[:bold] * c[:red]     # second dot
-        d3 = c[:bold] * c[:green]   # third dot
-        d4 = c[:bold] * c[:magenta] # fourth dot
-
-        if short
-            print(io,"""
-              $(d3)o$(tx)  | Version $(version)$(commit_date)
-             $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
-            """)
-        else
-            print(io,"""               $(d3)_$(tx)
-               $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
-              $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
-               $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
-              $(jl)| | | | | | |/ _` |$(tx)  |
-              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(version)$(commit_date)
-             $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
-            $(jl)|__/$(tx)                   |
-
-            """)
-        end
-    else
-        if short
-            print(io,"""
-              o  |  Version $(version)$(commit_date)
-             o o |  $(commit_string)
-            """)
-        else
-            print(io,"""
-                           _
-               _       _ _(_)_     |  Documentation: https://docs.julialang.org
-              (_)     | (_) (_)    |
-               _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
-              | | | | | | |/ _` |  |
-              | | |_| | | | (_| |  |  Version $(version)$(commit_date)
-             _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
-            |__/                   |
-
-            """)
-        end
-    end
-    objcache_notice(io)
-    return nothing
-end
-
-# Warn about conditions (that the user can potentially do something about)
-# which forced the compiled-code cache off for this session.
-function objcache_notice(io::IO)
-    notice = ccall(:jl_objcache_disabled_notice, Ptr{UInt8}, ())
-    notice == C_NULL && return nothing
-    msg = "Note: The compiled-code cache is disabled: $(unsafe_string(notice)).\n\n"
-    if get(io, :color, false)::Bool
-        printstyled(io, msg; color=Base.warn_color())
-    else
-        print(io, msg)
-    end
-    return nothing
-end
+banner(io::IO = stdout; short = false) = Base.repl_banner(io; short)
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     repl.frontend_task = current_task()
