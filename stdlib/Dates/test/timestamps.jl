@@ -335,6 +335,27 @@ end
     @test last(r53) == a + Nanosecond(Int64(2)^55 + 5)
     @test reverse(a:Nanosecond(250):(a + Microsecond(1))) == (a + Microsecond(1)):Nanosecond(-250):a
     @test (a:Nanosecond(250):(a + Microsecond(1)))[2:3] == [a + Nanosecond(250), a + Nanosecond(500)]
+    # steps of more nanoseconds than fit in Int64
+    @test collect(Timestamp(1970):Day(200000):Timestamp(1971)) == [Timestamp(1970)]
+    @test collect(Timestamp(1971):Day(-200000):Timestamp(1970)) == [Timestamp(1971)]
+    r2 = typemin(Timestamp):Day(150000):typemax(Timestamp)
+    @test length(r2) == Base.checked_length(r2) == 2
+    @test collect(r2) == [typemin(Timestamp), typemin(Timestamp) + Day(150000)]
+    @test last(r2) in r2
+    @test !(typemax(Timestamp) in r2)
+    @test r2[2] == last(r2)
+    @test_throws BoundsError r2[3]
+    # indexing does not depend on the length, which wraps around for the full span
+    r3 = typemin(Timestamp):Nanosecond(1):typemax(Timestamp)
+    @test r3[typemax(Int64)] == typemin(Timestamp) + Nanosecond(typemax(Int64) - 1)
+    @test r3[big(2)^64] == typemax(Timestamp)
+    @test_throws BoundsError r3[0]
+    @test r3[2:3] == [typemin(Timestamp) + Nanosecond(1), typemin(Timestamp) + Nanosecond(2)]
+    @test_throws OverflowError r3[1:0]
+    @test_throws OverflowError reverse(r3)[1:0]
+    # An empty range never takes its step
+    @test isempty(Timestamp{Second}(2026):Millisecond(1):Timestamp{Second}(2025))
+    @test_throws InexactError Timestamp{Second}(2025):Millisecond(1):Timestamp{Second}(2026)
 end
 
 @testset "Parsing and formatting" begin
@@ -470,7 +491,9 @@ end
         @test length(x:Month(1):(x + Month(3))) == 4
         @test x + P(2) in x:P(1):(x + P(3))
         @test length((typemax(T) - P(3)):P(1):typemax(T)) == 4
-        @test_throws OverflowError length(T(1970):P(1):(T(1970) + P(typemax(Int64))))
+        @test length(T(1970):P(1):(T(1970) + P(typemax(Int64)))) == length(0:1:typemax(Int64))
+        @test_throws OverflowError Base.checked_length(T(1970):P(1):(T(1970) + P(typemax(Int64))))
+        @test length(typemin(T):P(3):typemax(T)) == length(typemin(Int64):3:typemax(Int64))
         @test length(T(1970):P(1):(T(1970) + P(typemax(Int64) - 1))) == typemax(Int64)
         @test typemax(T) + P(1) === typemin(T)
         @test typemin(T) - P(1) === typemax(T)
@@ -864,6 +887,33 @@ end
 Base.typemin(::Type{TestCountSecond{T}}) where {T} = TestCountSecond{T}(typemin(T))
 Base.typemax(::Type{TestCountSecond{T}}) where {T} = TestCountSecond{T}(typemax(T))
 Dates.tons(x::TestCountSecond) = Dates.value(x) * Int32(1000000000)
+
+@testset "Fixed-step ranges of narrow and unbounded counts" begin
+    # Lengths promote to Int like those of integer ranges
+    for C in (Int8, Int32, UInt32)
+        P = TestCountSecond{C}
+        r = Timestamp{P}(Dates.UTInstant(P(0))):Second(1):Timestamp{P}(Dates.UTInstant(P(typemax(C))))
+        # The full count of a UInt32 does not fit in a 32-bit Int, as for integer ranges
+        n, L = big(typemax(C)) + 1, promote_type(C, Int)
+        @test length(r) === n % L
+        n <= typemax(L) ? (@test Base.checked_length(r) === L(n)) : (@test_throws OverflowError Base.checked_length(r))
+        C === Int8 && @test length(collect(r)) == 128
+    end
+    P = TestCountSecond{Int8}
+    ts(n) = Timestamp{P}(Dates.UTInstant(P(n)))
+    @test collect(ts(0):P(5):ts(10)) == [ts(0), ts(5), ts(10)]
+    T = Timestamp{TestBigNanosecond}
+    r = T(Dates.UTInstant(TestBigNanosecond(0))):Nanosecond(1):T(Dates.UTInstant(TestBigNanosecond(10)))
+    @test length(r) == 11
+    @test collect(r) == [r[i] for i in 1:11]
+    @test last(r) == T(Dates.UTInstant(TestBigNanosecond(10))) in r
+    # Like for integer ranges, no empty range starts at an end of the count type
+    for (C, n, st) in ((Int8, typemin(Int8), Second(1)), (Int32, typemax(Int32), Second(-1)), (UInt32, typemax(UInt32), Second(-1)))
+        t = Timestamp{TestCountSecond{C}}(Dates.UTInstant(TestCountSecond{C}(n)))
+        @test_throws OverflowError (t:st:t)[1:0]
+        @test isempty((t:-st:t)[1:0])
+    end
+end
 
 @testset "Rounding unsigned Timestamp counts to calendar periods" begin
     P = TestCountSecond{UInt64}

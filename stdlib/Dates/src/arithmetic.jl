@@ -65,9 +65,12 @@ end
 (-)(x::DateTime, y::Period) = return DateTime(UTM(value(x) - toms(y)))
 (+)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) + tons(y)))
 (-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
+# The period `y` as a count of P and the nanoseconds left over
+timestamp_period_divrem(::Type{P}, y::Union{FixedPeriod,TimePeriod}) where {P} =
+    divrem(widen(value(y)) * widen(timestamp_period_scale(typeof(y))), timestamp_scale(P))
 # The period `y` as a count of P. Throws an InexactError if `y` has more precision than P.
 function timestamp_period_ticks(::Type{P}, y::Union{FixedPeriod,TimePeriod}) where {P}
-    ticks, remainder = divrem(widen(value(y)) * timestamp_period_scale(typeof(y)), timestamp_scale(P))
+    ticks, remainder = timestamp_period_divrem(P, y)
     iszero(remainder) || throw(InexactError(:convert, P, y))
     return ticks
 end

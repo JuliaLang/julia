@@ -5,8 +5,6 @@ module RangesTest
 using Test
 using Dates
 
-using InteractiveUtils: subtypes
-
 let
     for T in (Dates.Date, Dates.DateTime)
         f1 = T(2014); l1 = T(2013, 12, 31)
@@ -14,7 +12,8 @@ let
         f3 = T(-2000); l3 = T(2000)
         f4 = typemin(T); l4 = typemax(T)
 
-        for P in subtypes(Dates.DatePeriod)
+        # Built-in periods only, as other test files define package periods
+        for P in (Dates.Year, Dates.Quarter, Dates.Month, Dates.Week, Dates.Day)
             for pos_step in (P(1), P(2), P(50), P(2048), P(10000))
                 # empty range
                 dr = f1:pos_step:l1
@@ -55,7 +54,7 @@ let
                     @test maximum(dr) == last(dr)
                     @test dr[1] == f
                     @test dr[end] <= l
-                    @test iterate(dr) == (first(dr), (length(dr), 1))
+                    @test iterate(dr)[1] == first(dr)
 
                     if len < 10000
                         dr1 = [i for i in dr]
@@ -113,7 +112,7 @@ let
                     @test maximum(dr) == first(dr)
                     @test dr[1] == l
                     @test dr[end] >= f
-                    @test iterate(dr) == (first(dr), (length(dr), 1))
+                    @test iterate(dr)[1] == first(dr)
 
                     if len < 10000
                         dr1 = [i for i in dr]
@@ -131,7 +130,7 @@ let
             end
         end
         if T == Dates.DateTime
-            for P in subtypes(Dates.TimePeriod)
+            for P in (Dates.Hour, Dates.Minute, Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond)
                 P in (Dates.Microsecond, Dates.Nanosecond) && continue
                 for pos_step in (P(1), P(2), P(50), P(2048), P(10000))
                     # empty range
@@ -173,7 +172,7 @@ let
                         @test maximum(dr) == last(dr)
                         @test dr[1] == f
                         @test dr[end] <= l
-                        @test iterate(dr) == (first(dr), (length(dr), 1))
+                        @test iterate(dr)[1] == first(dr)
 
                         if len < 10000
                             dr1 = [i for i in dr]
@@ -231,7 +230,7 @@ let
                         @test maximum(dr) == first(dr)
                         @test dr[1] == l
                         @test dr[end] >= f
-                        @test iterate(dr) == (first(dr), (length(dr), 1))
+                        @test iterate(dr)[1] == first(dr)
 
                         if len < 10000
                             dr1 = [i for i in dr]
@@ -434,6 +433,83 @@ b = Dates.Date(2013, 2, 1)
 @test length(typemin(Dates.DateTime):Dates.Minute(1):typemax(Dates.DateTime)) == 153722866950720
 @test length(typemin(Dates.DateTime):Dates.Second(1):typemax(Dates.DateTime)) == 9223372017043200
 @test length(typemin(DateTime):Dates.Millisecond(1):typemax(DateTime)) == 9223372017043199001
+# Steps larger than the range of the stored count
+for r in (Dates.Date(2000):Dates.Week(Int64(2)^61):Dates.Date(2001),
+          Dates.Date(2001):Dates.Week(-Int64(2)^61):Dates.Date(2000),
+          Dates.DateTime(2000):Dates.Week(Int64(2)^41):Dates.DateTime(2001))
+    @test length(r) == 1
+    @test collect(r) == [first(r)]
+    @test last(reverse(r)) == first(r)
+    @test_throws BoundsError r[2]
+end
+# Slices start at the parent's element and keep the number of indices
+let t = Dates.DateTime(2026), k = 6 * Int64(10)^18
+    r = Dates.DateTime(0):Dates.Microsecond(1000):Dates.DateTime(200_000_000)
+    @test r[k:(k + 1)] == [r[k], r[k + 1]]
+    @test (t:Dates.Microsecond(1500):t)[true:true] == [t]
+    r = Dates.Date(2026):Dates.Day(-1):Dates.Date(2025)
+    @test r[UInt(2):UInt(3)] == [Dates.Date(2025, 12, 31), Dates.Date(2025, 12, 30)]
+    @test isempty(r[UInt(3):UInt(2)])
+end
+# Time zone rules can end in the future, so an empty slice next to the end stays before it
+struct CutoffTime <: Dates.TimeType
+    dt::Dates.DateTime
+end
+Dates.value(x::CutoffTime) = Dates.value(x.dt)
+const CUTOFF = Dates.DateTime(2038)
+Base.:+(x::CutoffTime, p::Dates.Period) =
+    (y = x.dt + p; y < CUTOFF ? CutoffTime(y) : throw(ArgumentError("$y is past the cutoff")))
+Base.:-(x::CutoffTime, p::Dates.Period) = x + -p
+Base.:-(x::CutoffTime, y::CutoffTime) = x.dt - y.dt
+let x = CutoffTime(CUTOFF - Dates.Millisecond(1))
+    for st in (Dates.Hour(1), Dates.Hour(-1))
+        @test isempty((x:st:x)[1:0])
+    end
+    @test_throws ArgumentError range(CutoffTime(Dates.DateTime(2037, 12, 30)); step = Dates.Day(1), length = 3)
+end
+# An empty slice starts at its first index, like integer ranges
+let r = Dates.Date(2026):Dates.Day(1):Dates.Date(2026, 1, 5)
+    @test first(r[3:2]) == r[3] && first(r[3:-1:4]) == r[3]
+end
+# A slice step that does not fit in the period is never taken by at most one element
+let r = Dates.Date(2000):Dates.Day(2):Dates.Date(2001)
+    @test collect(r[1:Int64(2)^62:1]) == [r[1]]
+    @test isempty(r[2:Int64(2)^62:1])
+end
+# Integer selectors whose step is not an integer
+let r = Dates.Date(2026, 1, 1):Dates.Day(1):Dates.Date(2026, 1, 10)
+    s = r[LinRange{Int}(1, 5, 3)]
+    @test s isa Vector{Dates.Date} && s == r[1:2:5]
+    r = Dates.Date(Dates.UTD(typemin(Int64))):Dates.Day(1):Dates.Date(Dates.UTD(typemax(Int64)))
+    @test r[LinRange{Int}(1, 3, 3)] == r[1:3]
+end
+# A selector step can be wider than its elements
+let r = Dates.Date(2000):Dates.Day(1):Dates.Date(2000, 1, 3)
+    @test collect(r[StepRange(Int8(1), 100_000, Int8(1))]) == [r[1]]
+    @test isempty(r[StepRange(Int8(1), 100_000, Int8(0))])
+    @test r[StepRange(Int8(3), -1, Int8(1))] == reverse(r)
+end
+# Their float step or reference loses precision and can round their elements unevenly
+let r = Dates.Date(Dates.UTD(0)):Dates.Day(1):Dates.Date(Dates.UTD(Int64(2)^55)), n = Int64(2)^53 + 2
+    for s in (LinRange{Int64}(1, n, 2), LinRange{Int64}(n, 1, 2), LinRange{Int64}(n - 2, n, 3),
+              StepRangeLen{Int64}(Float64(n - 2), 1, 3))
+        @test collect(r[s]) == [r[i] for i in s]
+    end
+    @test collect(LinRange{Int64}(n - 2, n, 3)) == [n - 2, n - 2, n]
+    @test collect(StepRangeLen{Int64}(Float64(n - 2), 1, 3)) == [n - 2, n - 2, n]
+end
+# They index from the start without forming the offset as a period, which would overflow
+let r = Dates.DateTime(0):Dates.Nanosecond(1_000_000):Dates.DateTime(300), n = length(r)
+    for s in (LinRange{Int64}(n - 2, n, 3), StepRangeLen(n - 2, 1, 3))
+        @test collect(r[s]) == [r[i] for i in s]
+    end
+end
+# The elements of an integer StepRangeLen can wrap around between valid ends
+let r = Dates.Date(2026, 1, 1):Dates.Day(1):Dates.Date(2026, 1, 7), s = StepRangeLen(1, typemin(Int64) + 1, 3)
+    @test collect(s) == [1, typemin(Int64) + 2, 3]
+    @test_throws BoundsError r[s]
+    @test r[StepRangeLen(2, 2, 3)] === r[2:2:6]
+end
 
 c = Dates.Date(2013, 6, 1)
 @test length(a:Dates.Month(1):c) == 6
@@ -573,6 +649,22 @@ a = Dates.Time(23, 1, 1)
 @test all(x->sort(x) == (step(x) < zero(step(x)) ? reverse(x) : x), drs)
 @test all(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x), drs)
 
+# Slices of Time ranges, also with a step of a whole day, which returns to the same Time
+for r in (Dates.Time(1):Dates.Hour(12):Dates.Time(13), Dates.Time(13):Dates.Hour(-12):Dates.Time(1),
+          typemin(Dates.Time):Dates.Hour(12):typemax(Dates.Time),
+          typemax(Dates.Time):Dates.Hour(-12):typemin(Dates.Time))
+    for s in (1:0, 1:2:0, 3:-2:4, 1:1, 2:2, 1:2, 2:-1:1)
+        # Like for integer ranges, no empty range starts at an end of the day
+        if isempty(s) && first(s) == 1 && first(r) in (typemin(Dates.Time), typemax(Dates.Time))
+            @test_throws OverflowError r[s]
+        else
+            @test collect(r[s]) == [r[i] for i in s]
+        end
+    end
+end
+
+# A far-away value lies outside the bounds, also for calendar steps
+@test !(typemin(Dates.Date) in Dates.Date(2026):Dates.Month(1):Dates.Date(2027))
 @test !(1 in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
 @test !(Complex(1, 0) in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
 @test !(π in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
@@ -614,7 +706,8 @@ end
     epoch = Date(Date(1) - Day(1))
     dmax = epoch + Day(typemax(fieldtype(Day, :value)))
     dmin = epoch + Day(typemin(fieldtype(Day, :value)))
-    @test_throws OverflowError StepRange(dmin, Day(1), dmax)
+    @test last(StepRange(dmin, Day(1), dmax)) == dmax
+    @test_throws OverflowError Base.checked_length(StepRange(dmin, Day(1), dmax))
 end
 
 end  # RangesTest module

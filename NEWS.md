@@ -74,6 +74,10 @@ Standard library changes
 * The `year`, `month`, `day`, and related accessors are faster and return correct results for every
   `Date`. The month and day are now always an `Int64`, as documented. Before, they had the type of
   the day count, for example `BigInt` for a `Timestamp` with a package-defined period.
+* Ranges of `Date`, `DateTime`, and `Timestamp` with a fixed step such as `Day` or `Hour` now behave
+  like the corresponding integer ranges: they no longer throw an `OverflowError` when their endpoints
+  are far apart, `length` has the type of the stored count promoted to `Int` and wraps around if the
+  element count does not fit in it, and `Base.checked_length` throws an `OverflowError` instead.
 * `week`, `isoyear`, and `isoweekdate` now return correct ISO 8601 results for every `Date`,
   including years before 1.
 * `floor`, `ceil`, and `round` of a `Date`, `DateTime`, or `Timestamp` now throw an `OverflowError`
