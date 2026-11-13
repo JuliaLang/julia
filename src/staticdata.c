@@ -1442,60 +1442,33 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     // (for .incremental) or before jl_require_world, so reset this flag.
     jl_atomic_store_relaxed(&newm->export_set_changed_since_require_world, 0);
 
-    // write out the usings list
+    // write out the usings list: in `usings._space`, or after the module if it does not fit there
     memset(&newm->usings._space, 0, sizeof(newm->usings._space));
-    if (m->usings.items == &m->usings._space[0]) {
-        newm->usings.items = &newm->usings._space[0];
-        // the target is this Module, plus the offset written to `usings.items` below
-        record_reloc(s, reloc_offset + offsetof(jl_module_t, usings.items),
-                     item);
-        size_t i;
-        for (i = 0; i < module_usings_length(m); i++) {
-            struct _jl_module_using *newm_data = module_usings_getidx(newm, i);
-            struct _jl_module_using *data = module_usings_getidx(m, i);
-            // TODO: Remove dead entries
-            newm_data->min_world = data->min_world;
-            newm_data->max_world = data->max_world;
-            newm_data->flags = data->flags;
-            if (s->incremental) {
-                if (data->max_world != ~(size_t)0)
-                    newm_data->max_world = 0;
-                newm_data->min_world = jl_require_world;
-            }
-            record_pointerfield(s, data->mod,
-                                reloc_offset + offsetof(jl_module_t, usings._space[4 * i]));
-        }
-        newm->usings.items = (void**)offsetof(jl_module_t, usings._space);
+    static_assert(sizeof(struct _jl_module_using) == 4*sizeof(void*), "_jl_module_using mismatch");
+    size_t usings = offsetof(jl_module_t, usings._space);
+    if (m->usings.items != &m->usings._space[0]) {
+        usings = tot;
+        tot += module_usings_max(m) * sizeof(struct _jl_module_using);
+        write_padding(s->s, tot - usings);
+        newm = (jl_module_t*)&s->s->buf[reloc_offset]; // the stream may have moved
     }
-    else {
-        newm->usings.items = (void**)tot;
-        record_reloc(s, reloc_offset + offsetof(jl_module_t, usings.items),
-                     item);
-        newm = NULL; // `write_*(s->s)` below may invalidate `newm`, so defensively set it
-                     // to NULL
-        size_t i;
-        for (i = 0; i < module_usings_length(m); i++) {
-            struct _jl_module_using *data = module_usings_getidx(m, i);
-            write_pointerfield(s, (jl_value_t*)data->mod);
-            if (s->incremental) {
-                // TODO: Drop dead ones entirely?
-                write_uint(s->s, jl_require_world);
-                write_uint(s->s, data->max_world == ~(size_t)0 ? ~(size_t)0 : 1);
-            } else {
-                write_uint(s->s, data->min_world);
-                write_uint(s->s, data->max_world);
-            }
-            write_uint(s->s, data->flags);
-            static_assert(sizeof(struct _jl_module_using) == 4*sizeof(void*), "_jl_module_using mismatch");
-            tot += sizeof(struct _jl_module_using);
+    newm->usings.items = (void**)usings;
+    // the target is this Module, plus the offset written to `usings.items`
+    record_reloc(s, reloc_offset + offsetof(jl_module_t, usings.items), item);
+    for (size_t i = 0; i < module_usings_length(m); i++) {
+        struct _jl_module_using *data = module_usings_getidx(m, i);
+        size_t pos = reloc_offset + usings + i * sizeof(struct _jl_module_using);
+        struct _jl_module_using *newdata = (struct _jl_module_using*)&s->s->buf[pos];
+        newdata->min_world = data->min_world;
+        newdata->max_world = data->max_world;
+        newdata->flags = data->flags;
+        if (s->incremental) {
+            // TODO: Drop dead ones entirely?
+            if (data->max_world != ~(size_t)0)
+                newdata->max_world = 0;
+            newdata->min_world = jl_require_world;
         }
-        for (; i < module_usings_max(m); i++) {
-            write_pointer(s->s);
-            write_uint(s->s, 0);
-            write_uint(s->s, 0);
-            write_uint(s->s, 0);
-            tot += sizeof(struct _jl_module_using);
-        }
+        record_pointerfield(s, data->mod, pos);
     }
     assert(ios_pos(s->s) - reloc_offset == tot);
 }
