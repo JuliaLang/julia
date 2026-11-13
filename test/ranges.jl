@@ -505,6 +505,16 @@ end
         end
         # indices that do not fit in `Int` throw rather than wrap
         @test_throws InexactError findfirst(==(Int128(typemax(Int)) + 1), Int128(0):Int128(typemax(Int)) + 2)
+        # step ranges with non-integer elements (#64956)
+        for r in (0//12:1//12:2//1, 2//1:-1//12:0//1, StepRange('a', 2, 'k'), StepRange('k', -2, 'a'))
+            v = collect(r)
+            for x in (v..., first(r) + step(r), last(r) + step(r), first(r) - step(r))
+                @test findfirst(==(x), r) === findfirst(==(x), v)
+                @test findfirst(isequal(x), r) === findfirst(isequal(x), v)
+            end
+        end
+        @test findfirst(==(1//24), 0//12:1//12:2//1) === nothing
+        @test findfirst(==('b'), StepRange('a', 2, 'k')) === nothing
     end
     @testset "findlast" begin
         @test findlast(==(1), Base.IdentityUnitRange(-1:1)) == 1
