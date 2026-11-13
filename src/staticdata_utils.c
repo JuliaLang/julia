@@ -51,7 +51,8 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
     }
     else if (jl_is_datatype(t)) {
         jl_datatype_t *dt = (jl_datatype_t*)t;
-        assert(jl_astaggedvalue(dt->name)->bits.in_image && "type_in_worklist mistake?");
+        // the image being loaded is not in the image tree yet, so this tests the header bit
+        assert(jl_astaggedvalue(dt->name)->bits.perm && "type_in_worklist mistake?");
         jl_datatype_t *super = dt->super;
         // fast-path: check if super is in news, since then we must be new also
         // (it is also possible that super is indeterminate or NULL right now,
