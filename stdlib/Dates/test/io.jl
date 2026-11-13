@@ -39,6 +39,8 @@ end
     ]
 
     for (t, (printed, shown)) in tests
+        @test repr("text/plain", t) == printed
+        @test sprint(show, t; context=:compact => true) == printed
         @test sprint(print, t) == printed
         @test string(t) == printed
         @test sprint(show, t) == shown
@@ -76,6 +78,9 @@ end
     @test sprint(show, DateFormat("mmzzdd").tokens[2]) == "Delim(zz)"
     @test sprint(show, DateFormat("ddxmm").tokens[2]) == "Delim(x)"
     @test sprint(show, DateFormat("xxmmxx").tokens[2]) == "DatePart(mm)"
+    # escaped format letters
+    @test sprint(show, dateformat"\y\y") == "dateformat\"\\y\\y\""
+    @test sprint(show, dateformat"yyyy\m") == "dateformat\"yyyy\\m\""
 end
 
 @testset "Common Parsing Patterns" begin

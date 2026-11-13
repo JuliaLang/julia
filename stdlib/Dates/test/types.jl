@@ -118,6 +118,13 @@ end
                      Dates.Microsecond(20), Dates.Nanosecond(25)) == Dates.Time(4, 0, 10, 15, 20, 25)
 end
 
+@testset "conversion from TOML dates and times" begin
+    @test Date(Base.TOML.Date(2020, 1, 2)) == Date(2020, 1, 2)
+    @test Time(Base.TOML.Time(1, 2, 3, 4)) == Time(1, 2, 3, 4)
+    @test DateTime(Base.TOML.DateTime(Base.TOML.Date(2020, 1, 2), Base.TOML.Time(1, 2, 3, 4))) ==
+        DateTime(2020, 1, 2, 1, 2, 3, 4)
+end
+
 @testset "various input types for Date/DateTime" begin
     test = Dates.Date(1, 1, 1)
     @test Dates.Date(Int8(1), Int8(1), Int8(1)) == test

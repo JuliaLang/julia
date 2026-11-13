@@ -762,3 +762,50 @@ end
     @test new_d[:m] isa Memory
     @test new_d[:m][5] == 125
 end
+
+function serialize_roundtrip(x)
+    buf = IOBuffer()
+    serialize(buf, x)
+    seekstart(buf)
+    return deserialize(buf)
+end
+
+module SerializeMethodFields
+serrec(x) = x
+end
+
+@testset "serialization errors" begin
+    @test_throws "cannot serialize MethodCache objects" serialize(IOBuffer(), Core.methodtable.cache)
+    @test_throws "GenericMemory{:atomic} currently cannot be serialized" serialize(IOBuffer(), AtomicMemory{Int}(undef, 1))
+end
+
+@testset "MethodInstance, MethodTable and PhiNode" begin
+    m = which(SerializeMethodFields.serrec, (Int,))
+    mi = Base.specialize_method(m, Tuple{typeof(SerializeMethodFields.serrec), Int}, Core.svec())
+    mi2 = serialize_roundtrip(mi)
+    @test mi2 isa Core.MethodInstance
+    @test mi2.specTypes == mi.specTypes
+    @test mi2.def.sig == m.sig
+    @test serialize_roundtrip(Core.methodtable) === Core.methodtable
+    phi = Core.PhiNode(Int32[1, 2], Any[3, 4])
+    phi2 = serialize_roundtrip(phi)
+    @test phi2.edges == phi.edges && phi2.values == phi.values
+end
+
+@testset "finished Tasks" begin
+    t = Task(() -> error("task failed"))
+    schedule(t)
+    @test_throws TaskFailedException wait(t)
+    t2 = serialize_roundtrip(t)
+    @test istaskfailed(t2)
+    @test t2.result.ex == ErrorException("task failed")
+end
+
+@testset "reset_state" begin
+    s = Serializer(IOBuffer())
+    serialize(s, [1, 2])
+    @test s.counter > 0
+    @test Serialization.reset_state(s) === s
+    @test s.counter == 0
+    @test isempty(s.backref_table)
+end
