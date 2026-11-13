@@ -1233,6 +1233,28 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_if_newest(jl_bind
     return NULL;
 }
 
+// The value of `b` in `world` when the newest partition of it, and of each binding its
+// imports name, holds `world` without a deprecation; else NULL, for the full lookup, which
+// also reports an unset global. `seqcst` selects the ordering of a global's load.
+STATIC_INLINE jl_value_t *jl_get_binding_value_if_newest(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world, int seqcst) JL_NOTSAFEPOINT
+{
+    while (1) {
+        jl_binding_partition_t *bpart = jl_get_binding_partition_if_newest(b, world);
+        if (bpart == NULL || (bpart->kind & PARTITION_FLAG_DEPWARN))
+            return NULL;
+        enum jl_partition_kind kind = jl_binding_kind(bpart);
+        if (jl_bkind_is_real_constant(kind))
+            return bpart->restriction;
+        if (jl_bkind_is_some_global(kind))
+            return seqcst ? jl_atomic_load(&b->value) : jl_atomic_load_relaxed(&b->value);
+        // an explicit import names the binding it was made from, which may be an import itself;
+        // an implicit one names the global it resolved to
+        if (!jl_bkind_is_some_binding_import(kind))
+            return NULL;
+        b = (jl_binding_t*)bpart->restriction;
+    }
+}
+
 STATIC_INLINE int jl_bpart_is_exported(size_t flags) JL_NOTSAFEPOINT {
     return (flags & (PARTITION_FLAG_EXPORTED | PARTITION_FLAG_IMPLICITLY_EXPORTED)) != 0;
 }

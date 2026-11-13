@@ -1054,11 +1054,17 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value(jl_binding_t *b)
     return jl_get_binding_value_in_world(b, jl_current_task->world_age);
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_binding_value_in_world(jl_binding_t *b, size_t world)
+static NOINLINE jl_value_t *jl_get_binding_value_in_world_slow(jl_binding_t *b, size_t world) JL_CANSAFEPOINT
 {
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
     jl_walk_binding_inplace(&b, &bpart, world);
     return binding_leaf_value(b, bpart, 0);
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_binding_value_in_world(jl_binding_t *b, size_t world)
+{
+    jl_value_t *v = jl_get_binding_value_if_newest(b, world, 0);
+    return v ? v : jl_get_binding_value_in_world_slow(b, world);
 }
 
 // Read the value of an already-resolved leaf binding partition `bpart`.
@@ -1100,11 +1106,17 @@ JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_leaf_partition_depwarn(jl_bi
 
 // Read a binding's value at `world`, warning if it is deprecated (unless reached through an
 // explicit import, which `jl_walk_binding_inplace_depwarn` suppresses).
-static jl_value_t *jl_get_binding_value_depwarn_(jl_binding_t *b, size_t world, int seqcst) JL_CANSAFEPOINT
+static NOINLINE jl_value_t *jl_get_binding_value_depwarn_slow(jl_binding_t *b, size_t world, int seqcst) JL_CANSAFEPOINT
 {
-    assert(b); // alloc=1 parameter ensured that jl_get_module_binding returns a valid binding
     jl_binding_partition_t *bpart = jl_get_binding_leaf_partition_depwarn(b, world);
     return binding_leaf_value(NULL, bpart, seqcst);
+}
+
+STATIC_INLINE jl_value_t *jl_get_binding_value_depwarn_(jl_binding_t *b, size_t world, int seqcst) JL_CANSAFEPOINT
+{
+    assert(b); // alloc=1 parameter ensured that jl_get_module_binding returns a valid binding
+    jl_value_t *v = jl_get_binding_value_if_newest(b, world, seqcst);
+    return v ? v : jl_get_binding_value_depwarn_slow(b, world, seqcst);
 }
 
 static jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b, size_t world) JL_CANSAFEPOINT
