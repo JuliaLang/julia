@@ -261,7 +261,14 @@ static DIType *_julia_type_to_di(jl_codegen_output_t *ctx, jl_debugcache_t &debu
     const char *tname = jl_symbol_name(jdt->name->name);
     if (jl_is_primitivetype(jt)) {
         uint64_t SizeInBits = jl_datatype_nbits(jdt);
-        ditype = dbuilder->createBasicType(tname, SizeInBits, llvm::dwarf::DW_ATE_unsigned);
+        unsigned encoding = llvm::dwarf::DW_ATE_unsigned;
+        if (jdt == jl_float16_type || jdt == jl_float32_type || jdt == jl_float64_type)
+            encoding = llvm::dwarf::DW_ATE_float;
+        else if (jdt == jl_bool_type)
+            encoding = llvm::dwarf::DW_ATE_boolean;
+        else if (jdt == jl_int8_type || jdt == jl_int16_type || jdt == jl_int32_type || jdt == jl_int64_type)
+            encoding = llvm::dwarf::DW_ATE_signed;
+        ditype = dbuilder->createBasicType(tname, SizeInBits, encoding);
     }
     else if (jl_is_structtype(jt) && !jl_is_layout_opaque(jdt->layout) && !jl_is_array_type(jdt)) {
         size_t ntypes = jl_datatype_nfields(jdt);
@@ -274,7 +281,23 @@ static DIType *_julia_type_to_di(jl_codegen_output_t *ctx, jl_debugcache_t &debu
             // TODO: elseif jl_islayout_inline
             else
                 di = _julia_type_to_di(ctx, debuginfo, el, dbuilder, false);
-            Elements[i] = di;
+            // describe the field as a member, so that debuggers can show its value
+            std::string fname;
+            jl_svec_t *fnames = jl_is_tuple_type(jt) ? jl_emptysvec : jl_field_names(jdt);
+            if (i < jl_svec_len(fnames) && jl_is_symbol(jl_svecref(fnames, i)))
+                fname = jl_symbol_name((jl_sym_t*)jl_svecref(fnames, i));
+            else
+                fname = std::to_string(i + 1);
+            Elements[i] = dbuilder->createMemberType(
+                    NULL,                       // Scope
+                    fname,                      // Name
+                    NULL,                       // File
+                    0,                          // LineNumber
+                    8 * (uint64_t)jl_field_size(jdt, i),   // SizeInBits
+                    0,                          // AlignInBits
+                    8 * (uint64_t)jl_field_offset(jdt, i), // OffsetInBits
+                    DINode::FlagZero,           // Flags
+                    di);                        // Type
         }
         DINodeArray ElemArray = dbuilder->getOrCreateArray(Elements);
         std::string unique_name;
