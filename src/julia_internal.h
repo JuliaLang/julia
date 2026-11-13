@@ -823,6 +823,8 @@ JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *src
 
 jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth) JL_CANSAFEPOINT;
 jl_value_t *jl_invoke_fromdispatch(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_invoke_tiered(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_tier_lazy_callees(jl_method_instance_t *root, jl_method_instance_t *mi) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi, jl_value_t *owner) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
@@ -2599,6 +2601,7 @@ JL_DLLIMPORT int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int 
 JL_DLLIMPORT uint64_t jl_getUnwindInfo(uint64_t dwBase) JL_NOTSAFEPOINT;
 JL_DLLIMPORT void jl_jit_register_ci(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 JL_DLLIMPORT void jl_jit_unregister_ci(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
+JL_DLLIMPORT void jl_jit_link_tier_stubs(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

@@ -2228,11 +2228,19 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     workqueue = CompilationQueue(; interp)
     push!(workqueue, ci)
     codeinsts, srcs = Any[], Any[]
+    root = get_ci_mi(ci)
     while !isempty(workqueue)
         # ci_has_real_invoke(ci) && return ci # optimization: cease looping if ci happens to get compiled (not just jl_fptr_wait_for_compiled, but fully jl_is_compiled_codeinst)
         callee = pop!(workqueue)
         ci_has_invoke(callee) && continue
         isinspected(workqueue, callee) && continue
+        # With tiering, a callee that has never run is left to be called through a stub,
+        # once the root has run interpreted (see the top of src/tiered.c).
+        if get_ci_mi(callee) !== root &&
+                ccall(:jl_tier_lazy_callees, Cint, (Any, Any), root, get_ci_mi(callee)) != 0
+            markinspected!(workqueue, callee)
+            continue
+        end
         if !has_valid_abi_sparams(get_ci_mi(callee))
             markinspected!(workqueue, callee)
             continue

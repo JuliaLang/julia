@@ -629,3 +629,60 @@ end
     end
     @test iscompiled(f, Float64)
 end
+
+@testset "callees that never ran" begin
+    # `cold` is called only for negative arguments, which the first calls never pass
+    callees() = (fresh(:(function _(x) @noinline; x + 1 end)),
+                 fresh(:(function _(x) @noinline; x < -10^9 ? error("very cold") : -x end)))
+    caller(hot, cold) = fresh(:(function _(x) x >= 0 ? $hot(x) : $cold(x) end))
+    # compiled after running interpreted: the batch leaves out the callee that never ran
+    hot, cold = callees()
+    f = caller(hot, cold)
+    with_tiering(; work=20, loop=10^6) do
+        for i in 1:10
+            Base.invokelatest(f, i)
+        end
+    end
+    @test iscompiled(f, Int)
+    @test iscompiled(hot, Int)
+    @test !iscompiled(cold, Int)
+    # which runs interpreted when the compiled caller first reaches it, then compiles
+    with_tiering(; work=20, loop=10^6) do
+        @test Base.invokelatest(f, -1) == 1
+        @test mi_work(cold, Int) > 0
+        @test !iscompiled(cold, Int)
+        for i in 1:10
+            @test Base.invokelatest(f, -i) == i
+        end
+    end
+    @test iscompiled(cold, Int)
+    # and from then on the caller calls its compiled code directly, as without tiering:
+    # through `jl_invoke` the call would box its argument and result
+    allocs(f, x) = @allocated f(x)
+    Base.invokelatest(allocs, f, -10^6)
+    @test Base.invokelatest(allocs, f, -10^6) == 0
+    @test_throws ErrorException Base.invokelatest(f, -10^9 - 1)
+    # the same for a callee that returns references to heap objects
+    cold = fresh(:(function _(x) @noinline; x < -10^9 ? error("very cold") : (x, string(x), [x]) end))
+    f = fresh(:(function _(x) x >= 0 ? (x, "", Int[]) : $cold(x) end))
+    with_tiering(; work=20, loop=10^6) do
+        for i in 1:10
+            Base.invokelatest(f, i)
+        end
+        @test !iscompiled(cold, Int)
+        for i in 1:20
+            @test Base.invokelatest(f, -i) == (-i, string(-i), [-i])
+        end
+    end
+    @test iscompiled(cold, Int)
+    GC.gc()
+    @test Base.invokelatest(f, -7) == (-7, "-7", [-7])
+    # compiled without running first, it compiles all its callees, as without tiering
+    hot, cold = callees()
+    f = caller(hot, cold)
+    with_tiering() do
+        precompile(f, (Int,))
+    end
+    @test iscompiled(f, Int)
+    @test iscompiled(cold, Int)
+end

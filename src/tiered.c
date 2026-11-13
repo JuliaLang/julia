@@ -32,6 +32,19 @@
   Counters only ever decide *when* something gets compiled, never *what*: the
   code generated for a MethodInstance is exactly what the normal pipeline
   produces, so steady-state performance is unchanged by construction.
+
+  Compiling a function normally compiles, in the same batch, every function it calls
+  statically that has no code yet, and their callees in turn, including those on paths that
+  never run, such as error handling. Without tiering most of them have code already, since
+  everything that has run is compiled. With tiering, code that ran interpreted has none, and
+  the first compile that reaches it statically compiles all of it at once. So when the
+  function being compiled has run interpreted (a budget compile or a loop continuation), the
+  batch only takes in callees that have run (see jl_tier_lazy_callees); calls to the others
+  go through a stub that dispatches to them like the interpreter does (jl_invoke_tiered), so
+  they are interpreted or compiled by their own budgets if they ever run. Once a callee is
+  compiled, the stub is pointed at its code (see linkTierStubs in jitlayers.cpp), and calls
+  to it cost an indirect jump more than without tiering. Inlining is decided before any of
+  this, so the code compiled for each function is otherwise unchanged.
 */
 
 #include <stdlib.h>
@@ -47,6 +60,7 @@ JL_DLLEXPORT int jl_tier_enabled = 0;
 JL_DLLEXPORT uint32_t jl_tier_work_threshold = 20000;
 JL_DLLEXPORT uint32_t jl_tier_loop_threshold = 20000;
 static uint32_t tier_small_cost = 300; // the cap on a small method's budget (see above)
+static __thread int tier_compiling_continuation = 0; // in jl_tier_continuation_in_world
 
 void jl_init_tiered(void)
 {
@@ -298,7 +312,38 @@ JL_DLLEXPORT void jl_tier_note_loop_cache(jl_method_t *m) JL_NOTSAFEPOINT
 // so this only re-infers after an invalidation.
 JL_DLLEXPORT jl_value_t *jl_tier_continuation_in_world(jl_value_t *argt, jl_value_t *rt, jl_value_t *source) JL_CANSAFEPOINT
 {
-    return (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argt, jl_bottom_type, rt, source, NULL, 0, 1);
+    tier_compiling_continuation++;
+    jl_value_t *oc = (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argt, jl_bottom_type, rt, source, NULL, 0, 1);
+    tier_compiling_continuation--;
+    return oc;
+}
+
+// Whether `mi` has run: interpreted, or compiled code for some world.
+static int tier_has_run(jl_method_instance_t *mi) JL_NOTSAFEPOINT
+{
+    if (jl_atomic_load_relaxed(&mi->tier_work) > 0)
+        return 1;
+    for (jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache); ci != NULL;
+         ci = jl_atomic_load_relaxed(&ci->next)) {
+        if (jl_atomic_load_relaxed(&ci->invoke) != NULL)
+            return 1;
+    }
+    return 0;
+}
+
+// Asked by the compiler (`add_codeinsts_to_jit!`) for each callee `mi` it would compile
+// together with `root`: should calls to it go through a stub instead (see the top of this
+// file)? Only when `root` has run interpreted, so that there is evidence of which of its
+// callees run, and `mi` has not run at all. A root compiled because it must be (it needs
+// the compiler, or is a generated function) has no such evidence, and compiles its callees.
+JL_DLLEXPORT int jl_tier_lazy_callees(jl_method_instance_t *root, jl_method_instance_t *mi) JL_NOTSAFEPOINT
+{
+    if (!jl_tier_enabled || jl_generating_output())
+        return 0;
+    int root_ran = jl_atomic_load_relaxed(&root->tier_work) > 0 ||
+        (tier_compiling_continuation && jl_is_method(root->def.value) &&
+         root->def.method->is_for_opaque_closure);
+    return root_ran && !tier_has_run(mi);
 }
 
 #ifdef __cplusplus

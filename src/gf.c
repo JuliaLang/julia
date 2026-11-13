@@ -5253,7 +5253,8 @@ static NOINLINE jl_value_t *_jl_invoke_slow(jl_value_t *F, jl_value_t **args, ui
 {
     // Tiered execution: dynamic dispatch is the tier boundary. A callee that is
     // not compiled yet runs in the interpreter until its method is hot.
-    // Statically resolved calls (TRIGGER_FOREIGN) always compile.
+    // Statically resolved calls (TRIGGER_FOREIGN) always compile, except those whose
+    // callee the compiler left out of its caller's batch (jl_invoke_tiered).
     if (gated && jl_tier_enabled && !tier_compiled_elsewhere(mfunc, world)) {
         int why = jl_tier_gate(mfunc);
         if (why == JL_TIER_INTERPRET)
@@ -5296,6 +5297,19 @@ JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t na
 {
     size_t world = jl_current_task->world_age;
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_FOREIGN);
+}
+
+// A call from compiled code to `codeinst`, which the compiler left out of its caller's batch
+// because it had never run (see jl_tier_lazy_callees in tiered.c): run it like a dispatch
+// from the interpreter, interpreted until its budget is spent. Once it is compiled, by this
+// call or otherwise, the trampoline that made the call is pointed at the compiled code, so
+// later calls go straight there.
+JL_DLLEXPORT jl_value_t *jl_invoke_tiered(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+{
+    size_t world = jl_current_task->world_age;
+    jl_value_t *res = _jl_invoke_gated(F, args, nargs, jl_get_ci_mi(codeinst), world, TRIGGER_FOREIGN, 1);
+    jl_jit_link_tier_stubs(codeinst);
+    return res;
 }
 
 jl_value_t *jl_invoke_target(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_value_t *target)
