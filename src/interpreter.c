@@ -304,7 +304,8 @@ static NOINLINE jl_value_t *eval_value_full(jl_value_t *e, interpreter_state *s)
     }
     if (jl_is_globalref(e)) {
         size_t world = frame_world(s);
-        return jl_eval_globalref((jl_globalref_t*)e, world);
+        jl_value_t *v = jl_get_binding_value_if_newest(((jl_globalref_t*)e)->binding, world, 0);
+        return v ? v : jl_eval_globalref((jl_globalref_t*)e, world);
     }
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
         return jl_eval_global_var(s->module, (jl_sym_t*)e, jl_current_task->world_age);
