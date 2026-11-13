@@ -37,6 +37,16 @@ end
     @test Compiler.isempty(bsbmp)
 end
 
+@testset "IntDisjointSet" begin
+    IntDisjointSet = Compiler.EscapeAnalysis.IntDisjointSet
+    s = IntDisjointSet{Int}(2)
+    @test push!(s) == 3
+    @test length(s) == 3
+    @test s.ngroups == 3
+    @test Compiler.EscapeAnalysis.find_root!(s, 3) == 3
+    @test_throws "the maximum number of elements in IntDisjointSet{Int8} is 127" push!(IntDisjointSet{Int8}(127))
+end
+
 @testset "basic heap functionality" begin
     v = [2,3,1]
     @test Compiler.heapify!(v, Compiler.Forward) === v
