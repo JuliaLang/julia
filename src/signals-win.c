@@ -473,7 +473,7 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     // callback is what publishes the abandoned task state, so an
     // unredirected victim resumes untouched. On refusal the requester
     // observes the verdict and withdraws.
-    if (jl_abandon_try_commit(ptls2)) {
+    if (jl_abandon_try_commit(ptls2, 0)) {
         // Redirect the thread to call jl_abandon_task_cb (which never
         // returns) on a minimal fake frame.
 #if defined(_CPU_X86_64_)

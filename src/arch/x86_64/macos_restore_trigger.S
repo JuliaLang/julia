@@ -35,8 +35,15 @@ CNAME(jl_mach_restore_trigger):
     nop                         // the return address is past this (&jl_mach_restore_trigger + 1), so that
                                 // unwinders that look up a return address less one find this function
     movq    CNAME(jl_mach_restore_page)(%rip), %r11
+L_jl_mach_restore_trigger_fault:
     movq    (%r11), %r11        // EXC_BAD_ACCESS here
     ud2                         // should never reach here
     .cfi_endproc
+
+    // Exported so that signal senders can tell a thread is stopped on the
+    // faulting load (a global label can't be placed inside the CFI region)
+    .globl CNAME(jl_mach_restore_trigger_fault)
+    HIDDEN(jl_mach_restore_trigger_fault)
+    .set CNAME(jl_mach_restore_trigger_fault), L_jl_mach_restore_trigger_fault
 
 #endif

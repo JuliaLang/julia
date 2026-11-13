@@ -861,7 +861,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         // redirect into the abandon callback (which must not return) to
         // switch to ptls->abandon_to. On refusal the requester observes the
         // verdict and withdraws; the current task continues untouched.
-        if (jl_abandon_try_commit(ptls)) {
+        if (jl_abandon_try_commit(ptls, 0)) {
             jl_call_in_ctx(ptls, jl_abandon_task_cb, sig, ctx);
         }
     }

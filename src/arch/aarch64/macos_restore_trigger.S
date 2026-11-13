@@ -36,8 +36,15 @@ CNAME(jl_mach_restore_trigger):
                                 // unwinders that look up a return address less one find this function
     adrp    x16, PAGE(CNAME(jl_mach_restore_page))
     ldr     x16, [x16, PAGEOFF(CNAME(jl_mach_restore_page))]
+L_jl_mach_restore_trigger_fault:
     ldr     x17, [x16]          // EXC_BAD_ACCESS here
     brk     #1                  // should never reach here
     .cfi_endproc
+
+    // Exported so that signal senders can tell a thread is stopped on the
+    // faulting load (a global label can't be placed inside the CFI region)
+    .globl CNAME(jl_mach_restore_trigger_fault)
+    HIDDEN(jl_mach_restore_trigger_fault)
+    .set CNAME(jl_mach_restore_trigger_fault), L_jl_mach_restore_trigger_fault
 
 #endif

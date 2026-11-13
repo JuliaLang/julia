@@ -309,6 +309,7 @@ static void mach_safepoint_trampoline(jl_ptls_t ptls) JL_CANSAFEPOINT
 
 // Defined in arch/<arch>/macos_restore_trigger.S
 extern void jl_mach_restore_trigger(void);
+extern void jl_mach_restore_trigger_fault(void); // its faulting load
 
 // Set up state to call fptr(arg0) on the target thread.
 static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void),
@@ -775,10 +776,27 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     host_thread_state_t state;
     unsigned int count = MACH_THREAD_STATE_COUNT;
     memset(&state, 0, sizeof(state));
-    if (thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count) != KERN_SUCCESS) {
-        // cannot redirect; leave the request pending for a retry/withdraw
-    }
-    else if (jl_abandon_try_commit(ptls2)) {
+    int ok = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count) == KERN_SUCCESS;
+#if defined(_CPU_X86_64_)
+    uintptr_t pc = state.__rip;
+#elif defined(_CPU_AARCH64_)
+    uintptr_t pc = state.__pc;
+#endif
+    // Refuse when the state cannot be read: nothing would retry the
+    // delivery, and the requester would wait forever.
+    //
+    // Also refuse while the thread may be stopped on a fault that the
+    // exception listener has yet to answer. The reply carries the thread
+    // state from when the fault was raised, and the kernel installs it over
+    // our rewrite, so the redirect would be lost after the request committed.
+    // This only catches the common cases: a protected safepoint page (a
+    // collection waits for threads that fault at a managed safepoint), and
+    // the restore trigger's load. A fault taken when leaving a GC-safe region
+    // or just before a suspended thread is resumed can outlive the page's
+    // protection, and faults that throw are not covered at all (#63985).
+    int refuse = !ok || jl_safepoint_any_enabled() ||
+                 pc == (uintptr_t)&jl_mach_restore_trigger_fault;
+    if (jl_abandon_try_commit(ptls2, refuse)) {
         jl_noreturn_call_in_state(&state, (void (*)(void))&jl_abandon_task_cb, 0, 0);
         if (thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count) != KERN_SUCCESS) {
             // Roll the commit back: nothing observable was published yet

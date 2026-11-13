@@ -31,7 +31,8 @@ char *jl_safepoint_pages = NULL;
 // The initialization of the `safepoint` pointer is done `ti_initthread`
 // in `threading.c`.
 // The fourth page is the count of suspended threads
-uint16_t jl_safepoint_enable_cnt[4] = {0, 0, 0, 0};
+// Atomic only so that `jl_safepoint_any_enabled` can read it without the lock
+_Atomic(uint16_t) jl_safepoint_enable_cnt[4] = {0, 0, 0, 0};
 
 // This lock should be acquired before enabling/disabling the safepoint
 // or accessing one of the following variables:
@@ -50,11 +51,13 @@ static void jl_safepoint_enable(int idx) JL_NOTSAFEPOINT
 {
     // safepoint_lock should be held
     assert(0 <= idx && idx <= 3);
-    if (jl_safepoint_enable_cnt[idx]++ != 0) {
+    uint16_t cnt = jl_atomic_load_relaxed(&jl_safepoint_enable_cnt[idx]);
+    jl_atomic_store_relaxed(&jl_safepoint_enable_cnt[idx], cnt + 1);
+    if (cnt != 0) {
         // We expect this to be enabled at most twice
         // one for the GC, one for SIGINT.
         // Update this if this is not the case anymore in the future.
-        assert(jl_safepoint_enable_cnt[idx] <= (idx == 3 ? INT16_MAX : 2));
+        assert(cnt + 1 <= (idx == 3 ? INT16_MAX : 2));
         return;
     }
     // Now that we are requested to mprotect the page and it wasn't already.
@@ -72,10 +75,11 @@ static void jl_safepoint_disable(int idx) JL_NOTSAFEPOINT
 {
     // safepoint_lock should be held
     assert(0 <= idx && idx <= 3);
-    if (--jl_safepoint_enable_cnt[idx] != 0) {
-        assert(jl_safepoint_enable_cnt[idx] > 0);
+    uint16_t cnt = jl_atomic_load_relaxed(&jl_safepoint_enable_cnt[idx]);
+    assert(cnt > 0);
+    jl_atomic_store_relaxed(&jl_safepoint_enable_cnt[idx], cnt - 1);
+    if (cnt != 1)
         return;
-    }
     // Now that we are requested to un-mprotect the page and no one else
     // want it to be kept protected.
     char *pageaddr = jl_safepoint_pages + jl_page_size * idx;
@@ -86,6 +90,16 @@ static void jl_safepoint_disable(int idx) JL_NOTSAFEPOINT
     int r = mprotect(pageaddr, jl_page_size, PROT_READ);
     (void)r; //if (r) perror("mprotect");
 #endif
+}
+
+// Whether any safepoint page is protected, read without the safepoint lock.
+int jl_safepoint_any_enabled(void) JL_NOTSAFEPOINT
+{
+    for (int i = 0; i < 4; i++) {
+        if (jl_atomic_load_relaxed(&jl_safepoint_enable_cnt[i]) != 0)
+            return 1;
+    }
+    return 0;
 }
 
 void jl_safepoint_init(void)
