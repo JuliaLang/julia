@@ -478,7 +478,7 @@ module DeprecatedImporterTest
     # Each `Base.deprecate` is its own top-level statement, so that it sees the partition
     # the previous one created, rather than the one from the world a block started in,
     # due to the bug being fixed in #63468.
-    getci(f) = first(methods(f)).specializations.cache
+    getci(f) = (precompile(f, ()); first(methods(f)).specializations.cache)
     ci = getci(getdg)
     Base.deprecate(@__MODULE__, :dg)
     @test ci.max_world != typemax(UInt)

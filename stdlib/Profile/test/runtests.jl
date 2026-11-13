@@ -333,6 +333,8 @@ import InteractiveUtils
     return :(x)
 end
 @testset "Module short names" begin
+    # the profiler only sees compiled frames
+    tier = Base.Tiered.compiled_tier!()
     Profile.clear()
     @profile begin
         @eval compile_takes_1_second(1) # to increase chance of profiling hitting compilation code
@@ -349,6 +351,7 @@ end
     @test occursin("@LinearAlgebra" * slash, str)
     @test occursin("@juliasrc" * slash, str)
     @test occursin("@julialib" * slash, str)
+    Base.Tiered.compiled_tier!(tier)
 end
 
 function run_with_watchdog(cmd, timeout=600)

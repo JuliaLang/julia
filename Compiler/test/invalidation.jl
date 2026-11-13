@@ -416,7 +416,7 @@ end
     # Run the test in a subprocess because Base.drop_all_caches() is extreme.
     # Drain stderr concurrently: the trace-compile output can exceed the pipe
     # buffer, and the child blocks in its atexit uv loop until it is read.
-    result = run(pipeline(`$(Base.julia_cmd()[1]) --startup-file=no --trace-compile=stderr -e "$script"`, stderr=io), wait=false)
+    result = run(pipeline(`$(Base.julia_cmd()[1]) --startup-file=no --tiered=no --trace-compile=stderr -e "$script"`, stderr=io), wait=false)
     close(io.in)
     reader = @async read(io, String)
     @test success(result)

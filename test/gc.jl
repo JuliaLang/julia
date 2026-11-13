@@ -285,6 +285,8 @@ end
 end
 
 @testset "issue-54275" begin
+    # compiled, since an interpreted frame keeps the discarded strings alive until it returns
+    precompile(issue_54275_test, ())
     issue_54275_test()
 end
 

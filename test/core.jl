@@ -282,6 +282,8 @@ k11840(::Type{Union{Tuple{Int32}, Tuple{Int64}}}) = '2'
 @test k11840(Union{Tuple{Int32}, Tuple{Int64}}) == '2'
 
 # issue #59327
+# (the specializations checked are the ones that compiling the callers creates)
+tier59327 = Base.Tiered.compiled_tier!()
 @noinline f59327(f, x) = Any[f, x]
 g59327(x) = f59327(+, Any[x][1])
 g59327(1)
@@ -337,6 +339,7 @@ o59327(1)
     mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), typeof(+), Int},
     methods(n59327)[1].specializations
 )
+Base.Tiered.compiled_tier!(tier59327)
 
 # issue #20511
 f20511(x::DataType) = 0
@@ -587,7 +590,7 @@ anytype_dispatch_61915(::AnyTypeCache61915b) = 5
 let r = Ref{Any}(Int)
     @noinline callit() = anytype_dispatch_61915(r[])
     @test callit() == 2          # dispatches to the `::Core.AnyType` method
-    callit()                     # warmup: populate the method cache
+    @allocated callit()          # warmup: compile, and populate the method cache
     @test @allocated(callit()) == 0
 end
 
@@ -611,11 +614,11 @@ let f = Ref{Any}(anytype_levelsplit_61915), r = Ref{Any}(Int)
     end
     r[] = Int                      # typeof(Int) === DataType: the `::DataType` method
     @test callit() == 8
-    callit()
+    @allocated callit()
     @test @allocated(callit()) == 0
     r[] = Union{Int,Char}          # typeof is the `Union` kind: the `::AnyType` method
     @test callit() == 9
-    callit()
+    @allocated callit()
     @test @allocated(callit()) == 0
 end
 # union-mixed queries take the full-scan intersection path over the method definitions,
@@ -9173,6 +9176,8 @@ end
 @test @inferred(g56692()) == "true"
 
 # `invoke` of `CodeInstance`
+# (the `CodeInstance`s invoked are the ones that calling the methods compiles)
+tier_ci = Base.Tiered.compiled_tier!()
 f_invalidate_me() = return 1
 f_invoke_me() = return f_invalidate_me()
 @test f_invoke_me() == 1
@@ -9198,6 +9203,7 @@ let this_world = Base.get_world_counter()
     @atomic mysin_ci.min_world = this_world + 10
     @test_throws ErrorException f(1.0)
 end
+Base.Tiered.compiled_tier!(tier_ci)
 
 
 myfun57023a(::Type{T}) where {T} = (x = @ccall mycfun()::Ptr{T}; x)
@@ -9468,6 +9474,8 @@ mutable struct Issue52533 end
     GC.gc(true); GC.gc(true)
     return freed[]
 end
+# (compiled: an interpreted frame keeps its values alive until it returns)
+precompile(issue52533, (Base.RefValue{Bool}, Bool))
 @test issue52533(Ref(false), false)  # normal exit from the try region
 @test issue52533(Ref(false), true)   # exit through the catch block
 
@@ -9489,6 +9497,7 @@ end
     GC.gc(true); GC.gc(true)
     return freed[]
 end
+precompile(issue52533_beside, (Base.RefValue{Bool},))
 @test issue52533_beside(Ref(false))
 
 # `jl_new_method_uninit` must satisfy Method's min-initialized invariant:

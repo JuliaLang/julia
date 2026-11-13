@@ -1303,6 +1303,7 @@ end
     @test lazy"$(collect(1:1000))"c == repr(collect(1:1000), context=:limit=>true) # :limit=>true
 
     # Bound allocations for construction and first materialization of a short lazy string.
+    @allocations(String(lazy"item: $(1000)")) # compile
     @test @allocations(String(lazy"item: $(1000)")) <= 7
 end
 

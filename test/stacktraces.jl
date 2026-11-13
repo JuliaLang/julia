@@ -4,6 +4,9 @@
 
 using Serialization, Base.StackTraces
 
+# Inlined frames and inference entry backtraces only come from compiled code.
+Base.Tiered.compiled_tier!()
+
 let
     @noinline child() = stacktrace()
     @noinline parent() = child()
