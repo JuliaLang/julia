@@ -362,7 +362,7 @@ static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
 }
 
 static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, MaybeAlign align = MaybeAlign()) JL_CANSAFEPOINT;
-static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value* dest, const jl_aliasinfo_t &ai_dest, MaybeAlign align_src, Align align_dst, bool isVolatile=false) JL_CANSAFEPOINT;
+static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value* dest, const jl_aliasinfo_t &ai_dest, MaybeAlign align_src, Align align_dst) JL_CANSAFEPOINT;
 
 static bool type_is_permalloc(jl_value_t *typ)
 {
@@ -502,7 +502,7 @@ static bool ai_is_private(const jl_aliasinfo_t &ai)
     return ai.isConstant() || ai.region == Region::gcframe;
 }
 
-static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, Value *data_pointer, jl_datatype_t *typ, size_t npointers, const jl_aliasinfo_t &roots_ai, bool isVolatile=false)
+static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, Value *data_pointer, jl_datatype_t *typ, size_t npointers, const jl_aliasinfo_t &roots_ai)
 {
     SmallVector<Value*,0> gcroots(npointers);
     if (npointers) {
@@ -510,7 +510,7 @@ static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, Value *da
         bool isprivatemem = isa<AllocaInst>(data_pointer->stripInBoundsOffsets()) || ai_is_private(roots_ai);
         for (size_t i = 0; i < npointers; i++) {
             Value *field_ptr = emit_ptrgep(ctx, data_pointer, jl_ptr_offset(typ, i) * sizeof(jl_value_t*));
-            LoadInst *root = ctx.builder.CreateAlignedLoad(T_prjlvalue, field_ptr, Align(sizeof(void*)), isVolatile);
+            LoadInst *root = ctx.builder.CreateAlignedLoad(T_prjlvalue, field_ptr, Align(sizeof(void*)));
             if (!isprivatemem)
                 root->setOrdering(AtomicOrdering::Unordered);
             roots_ai.decorateInst(root);
@@ -1270,12 +1270,12 @@ static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut)
 
 static bool try_emit_typed_copy(jl_codectx_t &ctx, Value *dst, const jl_aliasinfo_t &dst_ai,
                                 Value *src, const jl_aliasinfo_t &src_ai, jl_value_t *typ,
-                                uint64_t sz, Align align_dst, Align align_src, bool is_volatile) JL_CANSAFEPOINT
+                                uint64_t sz, Align align_dst, Align align_src) JL_CANSAFEPOINT
 {
     // A memcpy cannot carry separate source and destination alias metadata.
     // Limit aggregate scalarization to small values commonly carried in registers.
     constexpr uint64_t max_typed_copy_size = 16;
-    if (sz == 0 || is_volatile || sz > max_typed_copy_size || !jl_is_pointerfree(typ))
+    if (sz == 0 || sz > max_typed_copy_size || !jl_is_pointerfree(typ))
         return false;
     jl_datatype_t *dt = (jl_datatype_t*)typ;
     if (dt->layout->flags.haspadding || sz != jl_datatype_size(dt))
@@ -1312,7 +1312,7 @@ static bool try_emit_typed_copy(jl_codectx_t &ctx, Value *dst, const jl_aliasinf
 }
 
 static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst_ai, Value *src,
-                             jl_aliasinfo_t const &src_ai, uint64_t sz, Align align_dst, Align align_src, bool is_volatile)
+                             jl_aliasinfo_t const &src_ai, uint64_t sz, Align align_dst, Align align_src)
 {
     if (sz == 0)
         return;
@@ -1322,26 +1322,26 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
     // part (dst_ai) different alias info, so one claim must cover both; see
     // `jl_aliasinfo_t::merge`.
     auto merged_ai = dst_ai.merge(src_ai);
-    ctx.builder.CreateMemCpy(dst, align_dst, src, align_src, sz, is_volatile,
+    ctx.builder.CreateMemCpy(dst, align_dst, src, align_src, sz, /*isVolatile*/false,
                              merged_ai.toAAMDNodes());
 }
 
 template<typename T1>
 static void emit_memcpy(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst_ai, Value *src,
-                        jl_aliasinfo_t const &src_ai, T1 &&sz, Align align_dst, Align align_src, bool is_volatile=false)
+                        jl_aliasinfo_t const &src_ai, T1 &&sz, Align align_dst, Align align_src)
 {
-    emit_memcpy_llvm(ctx, dst, dst_ai, src, src_ai, sz, align_dst, align_src, is_volatile);
+    emit_memcpy_llvm(ctx, dst, dst_ai, src, src_ai, sz, align_dst, align_src);
 }
 
 template<typename T1>
 static void emit_memcpy(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst_ai, const jl_cgval_t &src,
-                        T1 &&sz, Align align_dst, Align align_src, bool is_volatile=false) JL_CANSAFEPOINT
+                        T1 &&sz, Align align_dst, Align align_src) JL_CANSAFEPOINT
 {
     auto [src_ptr, src_ai] = data_pointer_ai(ctx, src);
     if (try_emit_typed_copy(ctx, dst, dst_ai, src_ptr, src_ai, src.typ, sz,
-                            align_dst, align_src, is_volatile))
+                            align_dst, align_src))
         return;
-    emit_memcpy_llvm(ctx, dst, dst_ai, src_ptr, src_ai, sz, align_dst, align_src, is_volatile);
+    emit_memcpy_llvm(ctx, dst, dst_ai, src_ptr, src_ai, sz, align_dst, align_src);
 }
 
 // compute the space required by split_value_into, by simulating it
@@ -1365,17 +1365,17 @@ static std::pair<size_t,size_t> split_value_size(jl_datatype_t *typ)
     return std::make_pair(size, npointers);
 }
 
-static void store_all_roots(jl_codectx_t &ctx, const jl_gc_roots_t &inline_roots, Value *inline_roots_ptr, jl_aliasinfo_t const &roots_ai, bool isVolatileStore)
+static void store_all_roots(jl_codectx_t &ctx, const jl_gc_roots_t &inline_roots, Value *inline_roots_ptr, jl_aliasinfo_t const &roots_ai)
 {
     // TODO: often we could skip stores of NULL
     for (size_t i = 0; i < inline_roots.size(); i++) {
         Value *unbox = inline_roots.get(ctx, i);
-        roots_ai.decorateInst(ctx.builder.CreateAlignedStore(unbox, emit_ptrgep(ctx, inline_roots_ptr, i * sizeof(void*)), Align(sizeof(void*)), isVolatileStore));
+        roots_ai.decorateInst(ctx.builder.CreateAlignedStore(unbox, emit_ptrgep(ctx, inline_roots_ptr, i * sizeof(void*)), Align(sizeof(void*))));
     }
 }
 
 // take a value `x` and split its bits into dst and the roots into inline_roots
-static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align_src, Value *dst, Align align_dst, jl_aliasinfo_t const &dst_ai, Value *inline_roots_ptr, jl_aliasinfo_t const &roots_ai, bool isVolatileStore=false) JL_CANSAFEPOINT
+static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align_src, Value *dst, Align align_dst, jl_aliasinfo_t const &dst_ai, Value *inline_roots_ptr, jl_aliasinfo_t const &roots_ai) JL_CANSAFEPOINT
 {
     if (x.isghost)
         return;
@@ -1384,15 +1384,15 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
     jl_aliasinfo_t src_ai = x.aliasinfo;
     Type *T_prjlvalue = ctx.types().T_prjlvalue;
     if (inline_roots_ptr == nullptr) {
-        emit_unbox_store(ctx, x, dst, dst_ai, align_src, align_dst, isVolatileStore);
+        emit_unbox_store(ctx, x, dst, dst_ai, align_src, align_dst);
         return;
     }
     if (!x.inline_roots.empty()) {
         auto sizes = split_value_size(typ);
         if (sizes.first > 0)
-            emit_memcpy(ctx, dst, dst_ai, x.V, src_ai, sizes.first, align_dst, align_src, isVolatileStore);
+            emit_memcpy(ctx, dst, dst_ai, x.V, src_ai, sizes.first, align_dst, align_src);
         assert(x.inline_roots.size() <= sizes.second);
-        store_all_roots(ctx, x.inline_roots, inline_roots_ptr, roots_ai, isVolatileStore);
+        store_all_roots(ctx, x.inline_roots, inline_roots_ptr, roots_ai);
         return;
     }
     if (x.V == nullptr && x.constant == nullptr)
@@ -1416,8 +1416,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
                 src_ai,
                 ptr - off,
                 align_dst,
-                align_src,
-                isVolatileStore);
+                align_src);
         }
         if (last)
             break;
@@ -1425,7 +1424,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
         if (!isprivatemem)
             load->setOrdering(AtomicOrdering::Unordered);
         src_ai.decorateInst(load);
-        roots_ai.decorateInst(ctx.builder.CreateAlignedStore(load, emit_ptrgep(ctx, inline_roots_ptr, i * sizeof(void*)), Align(sizeof(void*)), isVolatileStore));
+        roots_ai.decorateInst(ctx.builder.CreateAlignedStore(load, emit_ptrgep(ctx, inline_roots_ptr, i * sizeof(void*)), Align(sizeof(void*))));
         align_src = align_dst = Align(sizeof(void*));
         off = ptr + sizeof(void*);
         if (off < shrunken_size) {
@@ -1433,13 +1432,12 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
             dst_ai.decorateInst(ctx.builder.CreateAlignedStore(
                 ctx.builder.getInt(APInt::getAllOnes(sizeof(void*) * 8)),
                 emit_ptrgep(ctx, dst, ptr),
-                Align(sizeof(void*)),
-                isVolatileStore));
+                Align(sizeof(void*))));
         }
     }
 }
 
-static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align_src, Value *dst, Align align_dst, jl_aliasinfo_t const &dst_ai, bool isVolatileStore) JL_CANSAFEPOINT
+static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align_src, Value *dst, Align align_dst, jl_aliasinfo_t const &dst_ai) JL_CANSAFEPOINT
 {
     if (x.isghost)
         return;
@@ -1449,7 +1447,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
     if (!x.inline_roots.empty()) {
         auto sizes = split_value_size(typ);
         if (sizes.first > 0)
-            emit_memcpy(ctx, dst, dst_ai, x.V, src_ai, sizes.first, align_dst, align_src, isVolatileStore);
+            emit_memcpy(ctx, dst, dst_ai, x.V, src_ai, sizes.first, align_dst, align_src);
         return;
     }
     if (x.V == nullptr && x.constant == nullptr)
@@ -1472,8 +1470,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
                 src_ai,
                 ptr - off,
                 align_dst,
-                align_src,
-                isVolatileStore);
+                align_src);
         }
         if (last)
             break;
@@ -1484,8 +1481,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
             dst_ai.decorateInst(ctx.builder.CreateAlignedStore(
                 ctx.builder.getInt(APInt::getAllOnes(sizeof(void*) * 8)),
                 emit_ptrgep(ctx, dst, ptr),
-                Align(sizeof(void*)),
-                isVolatileStore));
+                Align(sizeof(void*))));
         }
     }
 }
@@ -1516,7 +1512,7 @@ static std::tuple<Value*, jl_gc_roots_t, jl_aliasinfo_t> split_value(jl_codectx_
         // write-once copy takes the access tag of what it holds, as the no-copy
         // paths above already do.
         jl_aliasinfo_t dst_ai = private_copy_aliasinfo(ctx, x.aliasinfo, x.typ);
-        split_value_into(ctx, x, x_alignment, alloca, align_dst, dst_ai, false);
+        split_value_into(ctx, x, x_alignment, alloca, align_dst, dst_ai);
         return std::make_tuple(alloca, std::move(roots), dst_ai);
     }
     return std::make_tuple(bits, std::move(roots), best_aliasinfo(ctx, x.typ));
@@ -1543,7 +1539,7 @@ static std::pair<ssize_t,ssize_t> split_value_field(jl_datatype_t *typ, unsigned
 
 // Copy `x` to `dst`, where `x` was a split value and dst needs to have a native layout, copying any inlined roots back into their native location.
 // This does not emit a write barrier; callers must supply one when required.
-static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, jl_aliasinfo_t const &dst_ai, Align alignment, bool isVolatileStore)
+static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, jl_aliasinfo_t const &dst_ai, Align alignment)
 {
     jl_datatype_t *typ = (jl_datatype_t*)x.typ;
     assert(jl_is_concrete_type(x.typ) && !x.isghost);
@@ -1569,13 +1565,12 @@ static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, 
                 src_ai,
                 copy_end - off,
                 align_dst,
-                align_src,
-                isVolatileStore);
+                align_src);
         }
         if (last)
             break;
         auto *root = inline_roots.get(ctx, i);
-        auto *store = ctx.builder.CreateAlignedStore(root, emit_ptrgep(ctx, dst, ptr), Align(sizeof(void*)), isVolatileStore);
+        auto *store = ctx.builder.CreateAlignedStore(root, emit_ptrgep(ctx, dst, ptr), Align(sizeof(void*)));
         if (!isprivatemem)
             store->setOrdering(AtomicOrdering::Unordered);
         dst_ai.decorateInst(store);
@@ -2713,7 +2708,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
 
 static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, const jl_cgval_t &modifyop, jl_value_t *jltype, Type *elty, jl_cgval_t rhs, const Twine &fname, bool gcstack_arg) JL_CANSAFEPOINT;
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
-        const jl_aliasinfo_t &dst_ai, const jl_cgval_t &src, Value *tindex, Value *skip, bool isVolatile=false) JL_CANSAFEPOINT;
+        const jl_aliasinfo_t &dst_ai, const jl_cgval_t &src, Value *tindex, Value *skip) JL_CANSAFEPOINT;
 
 static jl_cgval_t typed_store(jl_codectx_t &ctx,
         Value *ptr, jl_cgval_t rhs, jl_cgval_t cmpop,
@@ -4368,7 +4363,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
 // copy src to dest, if src is justbits. if skip is true, the value of dest is undefined
 // TODO: rename this to just `emit_typed_move`
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
-        const jl_aliasinfo_t &dest_ai, const jl_cgval_t &src, Value *tindex, Value *skip, bool isVolatile)
+        const jl_aliasinfo_t &dest_ai, const jl_cgval_t &src, Value *tindex, Value *skip)
 {
     if (AllocaInst *ai = dyn_cast<AllocaInst>(dest))
         // TODO: make this a lifetime_end & dereferenceable annotation?
@@ -4380,7 +4375,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         if (jl_is_concrete_immutable(typ)) {
             emit_guarded_test(ctx, skip ? ctx.builder.CreateNot(skip) : nullptr, nullptr, [&] () JL_CANSAFEPOINT {
                 unsigned alignment = julia_alignment(typ);
-                split_value_into(ctx, mark_julia_const(ctx, src.constant), Align(alignment), dest, Align(alignment), dest_ai, isVolatile);
+                split_value_into(ctx, mark_julia_const(ctx, src.constant), Align(alignment), dest, Align(alignment), dest_ai);
                 return nullptr;
             });
         }
@@ -4390,7 +4385,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         if (jl_is_concrete_immutable(src.typ)) {
             emit_guarded_test(ctx, skip ? ctx.builder.CreateNot(skip) : nullptr, nullptr, [&] () JL_CANSAFEPOINT {
                 unsigned alignment = julia_alignment(src.typ);
-                split_value_into(ctx, src, Align(alignment), dest, Align(alignment), dest_ai, isVolatile);
+                split_value_into(ctx, src, Align(alignment), dest, Align(alignment), dest_ai);
                 return nullptr;
             });
         }
@@ -4416,7 +4411,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
                     if (nb > 0) {
                         jl_cgval_t src_pi = update_julia_type(ctx, src, (jl_value_t*)jt);
                         if (src_pi.typ != jl_bottom_type) {
-                            split_value_into(ctx, src_pi, Align(alignment), dest, Align(alignment), dest_ai, isVolatile);
+                            split_value_into(ctx, src_pi, Align(alignment), dest, Align(alignment), dest_ai);
                         }
                     }
                     tempBB = ctx.builder.GetInsertBlock();
@@ -4829,7 +4824,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     else {
                         if (!roots.empty() && fval_info.inline_roots.empty())
                             fval_info = value_to_pointer(ctx, fval_info);
-                        split_value_into(ctx, fval_info, align_src, dest, align_dst, strct_ai, false);
+                        split_value_into(ctx, fval_info, align_src, dest, align_dst, strct_ai);
                         if (!roots.empty()) {
                             auto inline_roots = extract_gc_roots(ctx, fval_info, roots.size());
                             for (size_t i = 0; i < inline_roots.size(); i++)
