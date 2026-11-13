@@ -11774,6 +11774,13 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "0", 1);
 
+    // Below debug level 2 no variable locations are emitted, so there is nothing for
+    // the instruction-referencing LiveDebugValues analysis (the x86-64 default) to
+    // track, but it still solves its dataflow problem for every function.
+    clopt = llvmopts.lookup("experimental-debug-variable-locations");
+    if (clopt && clopt->getNumOccurrences() == 0 && jl_options.debug_level < 2)
+        cl::ProvidePositionalOption(clopt, "false", 1);
+
     clopt = llvmopts.lookup("time-passes");
     if (clopt && clopt->getNumOccurrences() > 0)
         jl_is_timing_passes = 1;
