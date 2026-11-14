@@ -5,7 +5,7 @@
     @test ps("XX"; fgcolor=42)   == "\e[38;5;42mXX\e[0;0m"
     @test ps("XX"; fgcolor=(10,100,200)) == "\e[38;2;10;100;200mXX\e[0;0m"
 
-    ps("XX"; bgcolor=:red) == "\e[41mXX\e[0;0m"
+    @test ps("XX"; bgcolor=:red) =="\e[41mXX\e[0;0m"
     @test ps("XX"; bgcolor=42) == "\e[48;5;42mXX\e[0;0m"
     @test ps("XX"; bgcolor=(10,100,200)) == "\e[48;2;10;100;200mXX\e[0;0m"
 
@@ -14,6 +14,9 @@
 
     @test ps("XX", fgcolor=:red, bgcolor=:green, href="https://www.example.com") ==
         "\e]8;;https://www.example.com\e\\\e[31m\e[42mXX\e[0;0m\e]8;;\e\\"
+
+    @test_throws ErrorException ps("XX"; fgcolor=:no_such_color)
+    @test_throws ErrorException ps("XX"; bgcolor=256)
 end
 
 @testset "ambiguities" begin

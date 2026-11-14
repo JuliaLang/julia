@@ -8,6 +8,10 @@
             for s in stuff
                 @test Meta.lower(test_mod, s) == s
             end
+            # Errors in user code are returned as `Expr(:error)`
+            out = Meta.lower(test_mod, Expr(:continue))
+            @test Meta.isexpr(out, :error)
+            @test contains(out.args[1], "`continue` outside of a `while` or `for` loop")
 
             for ast_type in (Expr, SyntaxTree)
                 ex = parsestmt(ast_type, "[1,2,3] .+= 1")

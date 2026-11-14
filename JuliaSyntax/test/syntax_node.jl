@@ -53,6 +53,11 @@
     @test length(children(node)) == 2
     node[2] = parsestmt(SyntaxNode, "y")
     @test sourcetext(node[2]) == "y"
+    @test_throws ErrorException push!(node[2], parsestmt(SyntaxNode, "z"))
+    @test_throws ArgumentError JuliaSyntax.leaf_string(node)
+
+    # Old name for the first byte of a node
+    @test parsestmt(SyntaxNode, "a + bb")[3].data.position == 5
 
     # SyntaxNode with offsets
     t,_ = parsestmt(SyntaxNode, "begin a end\nbegin b end", 13)

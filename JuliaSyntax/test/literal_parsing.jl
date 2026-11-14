@@ -136,6 +136,9 @@ octint(s) = parse_uint_literal(s, K"OctInt")
         @test octint("0o0000000000000000000000000000000000000000000") === UInt128(0)
         @test (n = octint("0o00000000000000000000000000000000000000000000");
                n isa BigInt && n == 0)
+        # Fits in UInt128, but has too many digits for it
+        @test (n = octint("0o00000000000000000000002000000000000000000000");
+               n isa BigInt && n == big(2)^64)
     end
 
     @testset "Underscore separators" begin
@@ -237,6 +240,9 @@ end
     @test unesc_raw("x\\\\\\`x",  true) == "x\\`x"
     # '\\ ' ==> '\\ '
     @test unesc_raw("\\\\ ",      true) == "\\\\ "
+
+    # Literal \r and \r\n become \n
+    @test unesc_raw("a\r\nb\rc",  false) == "a\nb\nc"
 end
 
 @testset "Normalization of identifiers" begin

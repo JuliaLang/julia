@@ -145,6 +145,19 @@ end
     st = parse_sexpr("(() ())")
     @test first_child_position(st, JuliaSyntax.position(st)) == ParseStreamPosition(4, 5)
     @test last_child_position(st, JuliaSyntax.position(st)) == ParseStreamPosition(7, 9)
+
+    # No non-trivia children or tokens
+    st = parse_sexpr("()")
+    @test first_child_position(st, JuliaSyntax.position(st)) == ParseStreamPosition(0, 0)
+    @test last_child_position(st, JuliaSyntax.position(st)) == ParseStreamPosition(0, 0)
+
+    # `empty!` keeps or restores the sentinel node
+    for clear_output in (false, true)
+        clear_output && empty!(st.output)
+        empty!(st)
+        @test length(st.output) == 1 && kind(st.output[1]) == K"TOMBSTONE"
+        @test st.next_byte == 1
+    end
 end
 
 @testset "SubString{GenericString} (issue #505)" begin
@@ -165,4 +178,32 @@ end
     @test_throws JuliaSyntax.ParseError parseall(GreenNode, "do ")
     @test_throws JuliaSyntax.ParseError parseall(GreenNode, " do")
     @test_throws JuliaSyntax.ParseError parseall(GreenNode, "do\n")
+end
+
+@testset "ParseStream printing and tree cursors" begin
+    st = ParseStream("a + b")
+    parse!(st; rule=:statement)
+    @test sprint(show, MIME("text/plain"), st) == "ParseStream at position 6\n"
+    @test repr(st.output[2]) == "Identifier (1 bytes, orig_kind=Identifier)"
+    @test repr(st.output[end]) == "call (5 bytes, 5 children)"
+    tok = JuliaSyntax.SyntaxToken(SyntaxHead(K"Identifier", EMPTY_FLAGS), K"Identifier", false, 3)
+    @test repr(tok) == "Identifier      |3"
+
+    gc = JuliaSyntax.GreenTreeCursor(st)
+    @test repr(gc) == "call @7"
+    @test repr.(collect(Iterators.reverse(gc))) ==
+        ["Identifier @6", "Whitespace @5", "Identifier @4", "Whitespace @3", "Identifier @2"]
+    rc = RedTreeCursor(st)
+    @test startswith(repr(rc), "call @7 [")
+    @test JuliaSyntax.treesize(rc) == 5
+    @test [byte_range(c) for c in collect(Iterators.reverse(rc))] == [5:5, 4:4, 3:3, 2:2, 1:1]
+
+    # A partial parse with several top level nodes is wrapped
+    st = ParseStream("a b")
+    parse!(st; rule=:atom)
+    JuliaSyntax.bump_trivia(st)
+    parse!(st; rule=:atom)
+    t = build_tree(GreenNode, st)
+    @test kind(t) == K"wrapper"
+    @test kind.(children(t)) == [K"Identifier", K"Whitespace", K"Identifier"]
 end

@@ -478,6 +478,14 @@ let s = test_mod.S6(2)
 end
 @test docstrings_equal(@doc(test_mod.S6), Markdown.doc"struct docs")
 
+@test JuliaLowering.include_string(test_mod, """
+struct NewTooManyArgs
+    x
+    NewTooManyArgs() = new(1, 2)
+end
+""") === nothing
+@test_throws ArgumentError("too many arguments in `new` (expected 1)") test_mod.NewTooManyArgs()
+
 # User defined inner constructors and helper functions for structs with type params
 @test JuliaLowering.include_string(test_mod, """
 struct S7{S,T}
@@ -825,6 +833,20 @@ typegroup
 end
 """; edition=JL_OLD_EDITION) === nothing
 @test test_mod.TG_SuperA <: AbstractVector{test_mod.TG_SuperB}
+
+# typegroup: inner constructor
+@test jl_eval(test_mod, """
+typegroup
+    struct TG_CNode
+        edges::Vector{TG_CEdge}
+        TG_CNode() = new(TG_CEdge[])
+    end
+    struct TG_CEdge
+        to::TG_CNode
+    end
+end
+"""; edition=JL_OLD_EDITION) === nothing
+@test test_mod.TG_CNode().edges == test_mod.TG_CEdge[]
 
 # bad test: flisp will scan the struct for assigned fields to throw errors, but
 # runs a `flatten-blocks` pass before collecting the real fields, so

@@ -234,3 +234,57 @@ end
     @test !vst1_ok(Expr(:(=), Expr(:call, :f), Expr(:block, Expr(:toplevel))))
     @test vst1_ok(Expr(:let, Expr(:block), Expr(:block, Expr(:toplevel))))
 end
+
+@testset "rare valid forms" for ex in [
+        Expr(:softscope), Expr(:generated), Expr(:boundscheck, true),
+        Expr(:the_exception), Expr(:top, :x),
+        Expr(:function, Expr(:call, Expr(:., :A, "f")), Expr(:block)),
+        Expr(:function, Expr(:call, Expr(:., Base, QuoteNode(:f))), Expr(:block)),
+    ]
+    @test vst1_ok(ex)
+end
+
+# Malformed forms that macros could produce, with the error each should give
+@testset "malformed forms" begin
+    blk = Expr(:block)
+    @testset "$msg" for (ex, msg) in [
+            Expr(:break, :lab) => "labeled `break` outside of loop or symbolic block"
+            Expr(:try, blk) => "try without catch or finally"
+            Expr(:function, Expr(:call, Expr(:., :A, Expr(:tuple))), blk) =>
+                "dotcall syntax not valid here"
+            Expr(:function, Expr(:call, Expr(:., :A, Expr(:call, :g))), blk) =>
+                "invalid `.` syntax"
+            Expr(:while, true, Expr(:break, 1)) => "expected identifier"
+            Expr(:->, Expr(:block, :a, :b, :c), blk) => "more than one semicolon in signature"
+            Expr(:function, Expr(:call, :f, Expr(:kw, :x)), blk) =>
+                "malformed optional positional parameter; expected `=`"
+            Expr(:struct, false, :S, Expr(:block, Expr(:(=), :x, 1))) =>
+                "assignment syntax in structure fields is reserved"
+            Expr(:call, :f, Expr(:..., 1, 2)) => "expected one argument to `...`"
+            Expr(:for, Expr(:call, :f), blk) => "expected one of `=`, `in`, `∈`"
+            Expr(:flatten, 1) => "expected `generator`"
+            Expr(:lambda, 1) => "malformed `lambda`"
+            Expr(:var"with-static-parameters", 1) => "expected `lambda`"
+            Expr(:generated_lambda, 1) => "malformed `generated_lambda`"
+            Expr(:meta, Expr(:call, :f)) => "unsupported `meta` argument"
+        ]
+        errs = JuliaLowering.validation_errors(
+            JuliaLowering.valid_st1(JuliaLowering.expr_to_est(ex)))
+        @test !isnothing(errs) && msg in [m for e in errs for m in e.msgs]
+    end
+end
+
+@testset "unexpanded syntax (valid_st0)" begin
+    vst0_ok(x) = JuliaLowering.valid_st0(JuliaLowering.expr_to_est(x))
+    lnn = LineNumberNode(1)
+    @test vst0_ok(Expr(:macrocall, Symbol("@m"), lnn, :x))
+    # Errors inside macrocalls are left to the macro
+    @test vst0_ok(Expr(:macrocall, Symbol("@m"), 1, :x))
+    @test vst0_ok(Expr(:call, :f, Expr(:macrocall, Symbol("@m"), lnn, Expr(:..., 1, 2))))
+    @test !vst0_ok(Expr(:call, :f, Expr(:..., 1, 2)))
+    @test vst0_ok(Expr(:quote, Expr(:call, :f, Expr(:$, :x))))
+    @test !vst0_ok(Expr(:quote, Expr(:call, :f, Expr(:$, Expr(:..., 1, 2)))))
+    # Only an interpolation at the outermost quote level is checked
+    @test vst0_ok(Expr(:quote, Expr(:quote, Expr(:$, Expr(:..., 1, 2)))))
+    @test !vst0_ok(Expr(:quote, Expr(:quote, Expr(:$, Expr(:$, Expr(:..., 1, 2))))))
+end
