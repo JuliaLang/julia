@@ -1400,6 +1400,17 @@ function _defaultctor_typeinfo(@nospecialize(ty::Type))
     return dt, tvars, fts
 end
 
+function _is_all_underscore(s::Symbol)
+    p = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), s)
+    c = pointerref(p, 1, 1)
+    i = 1
+    while c === 0x5f
+        i = add_int(i, 1)
+        c = pointerref(p, i, 1)
+    end
+    return c === 0x00 && i !== 1
+end
+
 # Default constructor generation for structs without explicit inner constructors.
 # Called by lowered code from struct definitions (both flisp and JuliaLowering).
 # Uses jl_method_def directly with type objects, avoiding type-to-expression conversion.
@@ -1416,16 +1427,15 @@ function _defaultctors(@nospecialize(ty), functionloc)
 
     is_parametric = nparams !== 0
 
-    # Build argument names using actual field names for slot names (better debugging).
-    # The body references arguments via Core.Argument(N) to avoid issues with
-    # all-underscore field names being write-only in lowering.
     self = Symbol("#ctor-self#")
     argnames = Array{Any,1}(Core.undef, n + 1)
     @inbounds argnames[1] = self
     i = 1
     nany = 0
     while i !== n + 1
-        @inbounds argnames[i + 1] = names[i]::Symbol
+        @inbounds argnames[i + 1] = let n = names[i]::Symbol
+            _is_all_underscore(n) ? ccall(:jl_gensym, Ref{Symbol}, ()) : n
+        end
         if fts[i] === Any
             nany = nany + 1
         end
@@ -1446,13 +1456,13 @@ function _defaultctors(@nospecialize(ty), functionloc)
             end
             new_target = Expr(:curly, curly_args...)
         else
-            new_target = Core.Argument(1)
+            new_target = argnames[1]
         end
         new_args = Array{Any,1}(Core.undef, n + 1)
         @inbounds new_args[1] = new_target
         i = 1
         while i !== n + 1
-            @inbounds new_args[i + 1] = Core.Argument(i + 1)
+            @inbounds new_args[i + 1] = argnames[i + 1]
             i = i + 1
         end
         new_expr = Expr(:new, new_args...)
@@ -1493,7 +1503,6 @@ function _defaultctors(@nospecialize(ty), functionloc)
     end
 
     # Inner constructor: (::Type{T{A,B,...}})(x, y, ...) with convert calls
-    # Build lambda body using Core.Argument references
     nstmts = ((n - nany) + (n - nany)) + 1
     body_args = Array{Any,1}(Core.undef, nstmts)
     new_args = Array{Any,1}(Core.undef, n)
@@ -1502,7 +1511,7 @@ function _defaultctors(@nospecialize(ty), functionloc)
     while i !== n + 1
         ft = fts[i]
         if ft === Any
-            @inbounds new_args[i] = Core.Argument(i + 1)
+            @inbounds new_args[i] = argnames[i + 1]
         else
             # Use an isa check to avoid depending on convert inlining.
             # This matches the old convert-for-type-decl pattern:
@@ -1511,20 +1520,20 @@ function _defaultctors(@nospecialize(ty), functionloc)
             # convert methods (e.g. convert(::Any, v::T) = v) that prevent the
             # optimizer from inlining convert(fieldtype(self, i), arg) when the
             # field type is Any after specialization.
-            ft_expr = Expr(:call, GlobalRef(Core, :fieldtype), Core.Argument(1), i)
+            ft_expr = Expr(:call, GlobalRef(Core, :fieldtype), argnames[1], i)
             ft_ssa = Expr(:ssavalue, bidx)
             cnvt_ssa = Expr(:ssavalue, bidx + 1)
-            isa_check = Expr(:call, GlobalRef(Core, :isa), Core.Argument(i + 1), ft_ssa)
-            convert_expr = Expr(:call, GlobalRef(Base, :convert), ft_ssa, Core.Argument(i + 1))
+            isa_check = Expr(:call, GlobalRef(Core, :isa), argnames[i + 1], ft_ssa)
+            convert_expr = Expr(:call, GlobalRef(Base, :convert), ft_ssa, argnames[i + 1])
             @inbounds body_args[bidx] = Expr(:(=), ft_ssa, ft_expr)
             @inbounds body_args[bidx + 1] = Expr(:(=), cnvt_ssa, Expr(:if, isa_check,
-                                               Core.Argument(i + 1), convert_expr))
+                                               argnames[i + 1], convert_expr))
             @inbounds new_args[i] = cnvt_ssa
             bidx = bidx + 2
         end
         i = i + 1
     end
-    body_args[nstmts] = Expr(:return, Expr(:new, Core.Argument(1), new_args...))
+    body_args[nstmts] = Expr(:return, Expr(:new, argnames[1], new_args...))
     lambda = Expr(:lambda, argnames,
         Expr(:block, functionloc, body_args...))
     ci = ccall(:jl_lower, Any, (Any, Any, UInt, Int32, Any),
