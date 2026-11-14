@@ -1136,19 +1136,7 @@ static void drop_all_methcache(jl_methcache_t *mc) JL_CANSAFEPOINT
 {
     JL_LOCK(&mc->writelock);
     jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_all_entries, NULL);
-    jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
-    size_t i, l = leafcache->length;
-    for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
-        jl_typemap_entry_t *oldentry = (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(leafcache, i);
-        if (oldentry) {
-            while ((jl_value_t*)oldentry != jl_nothing) {
-                invalidate_all_entries(oldentry, NULL);
-                oldentry = jl_atomic_load_relaxed(&oldentry->next);
-            }
-        }
-    }
     jl_gc_write_atomic(mc, mc->cache, jl_value_t, jl_nothing, relaxed);
-    jl_gc_write_atomic(mc, mc->leafcache, jl_genericmemory_t, (jl_genericmemory_t*)jl_an_empty_memory_any, relaxed);
     JL_UNLOCK(&mc->writelock);
 }
 
@@ -1721,96 +1709,8 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
     return 1;
 }
 
-
-static int concretesig_equal(jl_value_t *tt, jl_value_t *simplesig) JL_NOTSAFEPOINT
+static jl_typemap_entry_t *mt_find_cache_entry(_Atomic(jl_typemap_t*) *cache JL_PROPAGATES_ROOT, jl_datatype_t *tt, size_t world, int offs) JL_CANSAFEPOINT
 {
-    jl_value_t **types = jl_svec_data(((jl_datatype_t*)tt)->parameters);
-    jl_value_t **sigs = jl_svec_data(((jl_datatype_t*)simplesig)->parameters);
-    size_t i, lensig = jl_nparams(simplesig);
-    assert(lensig == jl_nparams(tt));
-    assert(lensig > 0 && !jl_is_vararg(jl_tparam(simplesig, lensig - 1)));
-    for (i = 0; i < lensig; i++) {
-        jl_value_t *decl = sigs[i];
-        jl_value_t *a = types[i];
-        if (a != decl && decl != (jl_value_t*)jl_any_type) {
-            if (!(jl_is_some_Type(a) && jl_typeof(jl_some_Type_T(a)) == decl))
-                return 0;
-        }
-    }
-    return 1;
-}
-
-// The leafcache is an insertion-ordered dictionary stored inline in a Memory{Any}:
-// slot [0] holds a `smallintset` mapping each key's hash to its logical entry
-// index, and entry `p` (0-based) is stored densely at slot `1 + p`. The key of
-// each entry is derivable from its value (`entry->sig == tt`), so no separate key
-// column is needed.
-static uint_t leafcache_hash(size_t p, jl_value_t *data) JL_NOTSAFEPOINT
-{
-    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(data, 1 + p);
-    // entry should not be NULL, unless there was concurrent corruption
-    return entry == NULL ? 0 : (uint_t)jl_object_id((jl_value_t*)entry->sig);
-}
-
-static int leafcache_eq(size_t p, const void *tt, jl_value_t *data, uint_t hv) JL_NOTSAFEPOINT
-{
-    size_t i = 1 + p;
-    if (i >= ((jl_genericmemory_t*)data)->length)
-        return 0; // OOB access, probably due to a data race
-    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(data, i);
-    return entry != NULL && jl_egal((jl_value_t*)entry->sig, (jl_value_t*)tt);
-}
-
-// find the logical index of the chain whose entries have `entry->sig == tt`, or -1
-static ssize_t leafcache_peek(jl_genericmemory_t *leafcache JL_PROPAGATES_ROOT, jl_value_t *tt) JL_NOTSAFEPOINT
-{
-    if (leafcache == (jl_genericmemory_t*)jl_an_empty_memory_any)
-        return -1;
-    jl_genericmemory_t *idxs = (jl_genericmemory_t*)jl_genericmemory_ptr_ref(leafcache, 0); // acquire
-    JL_GC_PROMISE_ROOTED(idxs);
-    // leafcache_eq does not safepoint, so declare this lookup is safe from JL_NOTSAFEPOINT callers
-    ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq JL_NOTSAFEPOINT, const void *key, jl_value_t *data, uint_t hv, int pop) JL_NOTSAFEPOINT;
-    return jl_smallintset_lookup(idxs, leafcache_eq, tt, (jl_value_t*)leafcache, (uint_t)jl_object_id(tt), 0);
-}
-
-// append `entry` as a new chain and publish it in the index (caller holds the write lock)
-static void leafcache_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, jl_typemap_entry_t *entry) JL_CANSAFEPOINT
-{
-    size_t p = jl_ordereddict_reserve(pcache, parent, 1); // reserve one entry
-    jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
-    jl_genericmemory_ptr_set(a, 1 + p, (jl_value_t*)entry); // release
-    // publish the entry last, so a concurrent lookup that observes it in the
-    // index also observes the entry written above
-    jl_smallintset_insert((_Atomic(jl_genericmemory_t*)*)a->ptr, (jl_value_t*)a, leafcache_hash, p, (jl_value_t*)a);
-}
-
-// if available, returns a TypeMapEntry in the "leafcache" that matches `tt` (by type-equality) and is valid during `world`
-static inline jl_typemap_entry_t *lookup_leafcache(jl_genericmemory_t *leafcache JL_PROPAGATES_ROOT, jl_value_t *tt, size_t world) JL_NOTSAFEPOINT
-{
-    ssize_t p = leafcache_peek(leafcache, tt);
-    jl_typemap_entry_t *entry = p == -1 ? NULL : (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(leafcache, 1 + p);
-    if (entry) {
-        // search tail of the linked-list (including the returned entry) for an entry intersecting world
-        //
-        // n.b. this entire chain is type-equal to tt (by construction), so it is unnecessary to call `tt<:entry->sig`
-        do {
-            if (jl_atomic_load_relaxed(&entry->min_world) <= world && world <= jl_atomic_load_relaxed(&entry->max_world)) {
-                if (entry->simplesig == (void*)jl_nothing || concretesig_equal(tt, (jl_value_t*)entry->simplesig))
-                    return entry;
-            }
-            entry = jl_atomic_load_relaxed(&entry->next);
-        } while ((jl_value_t*)entry != jl_nothing);
-    }
-    return NULL;
-}
-
-static jl_typemap_entry_t *mt_find_cache_entry(_Atomic(jl_typemap_t*) *cache JL_PROPAGATES_ROOT, _Atomic(jl_genericmemory_t*) *leafcache JL_PROPAGATES_ROOT, jl_datatype_t *tt, size_t world, int offs) JL_CANSAFEPOINT
-{
-    if (leafcache) {
-        jl_typemap_entry_t *entry = lookup_leafcache(jl_atomic_load_relaxed(leafcache), (jl_value_t*)tt, world);
-        if (entry)
-            return entry;
-    }
     struct jl_typemap_assoc search = {(jl_value_t*)tt, world, NULL};
     assert(cache);
     jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(cache), &search, offs, /*subtype*/1);
@@ -1819,7 +1719,7 @@ static jl_typemap_entry_t *mt_find_cache_entry(_Atomic(jl_typemap_t*) *cache JL_
 
 JL_DLLEXPORT jl_typemap_entry_t *jl_mt_find_cache_entry(jl_methcache_t *cache, jl_datatype_t *tt, size_t world) JL_CANSAFEPOINT
 { // exported only for debugging purposes, not for casual use
-    return mt_find_cache_entry(&cache->cache, &cache->leafcache, tt, world, jl_cachearg_offset());
+    return mt_find_cache_entry(&cache->cache, tt, world, jl_cachearg_offset());
 }
 
 static jl_value_t *compute_simplett(jl_tupletype_t *cachett) JL_CANSAFEPOINT
@@ -1859,9 +1759,8 @@ static jl_value_t *compute_simplett(jl_tupletype_t *cachett) JL_CANSAFEPOINT
 }
 
 static void cache_insert(
-        jl_methtable_t *mt, jl_methcache_t *mc, _Atomic(jl_typemap_t*) *cache, jl_value_t *parent JL_PROPAGATES_ROOT,
+        jl_methcache_t *mc, _Atomic(jl_typemap_t*) *cache, jl_value_t *parent JL_PROPAGATES_ROOT,
         jl_method_t *definition,
-        jl_tupletype_t *tt, // the original tupletype of the signature
         size_t min_valid, size_t max_valid, size_t current_world,
         jl_tupletype_t *cachett,
         jl_svec_t *guardsigs,
@@ -1878,47 +1777,7 @@ static void cache_insert(
     JL_GC_PUSH2(&simplett, &newentry);
     simplett = (jl_datatype_t*)compute_simplett(cachett);
     newentry = jl_typemap_alloc(cachett, simplett, guardsigs, (jl_value_t*)newmeth, min_valid, max_valid);
-    // a type-valued callee (a constructor) is always filed in the typemap, which indexes it
-    // by the name of that type, matched straight from the value
-    int type_callee = jl_nparams(cachett) && jl_is_some_Type(jl_tparam0(cachett));
-    if (mc && tt && cachett == tt && tt->hash && !tt->hasfreetypevars && !type_callee) {
-        // we check `tt->hash` exists, since otherwise the NamedTuple
-        // constructor and `structdiff` method pollutes this lookup with a lot
-        // of garbage in the linear table search
-        if (jl_lookup_cache_type_(tt) == NULL) {
-            // if this type isn't normally in the cache, force it in there now
-            // anyways so that we can depend on it as a token (especially since
-            // we just cached it in memory as this method signature anyways)
-            JL_LOCK(&typecache_lock);
-            if (jl_lookup_cache_type_(tt) == NULL)
-                jl_cache_type_(tt);
-            JL_UNLOCK(&typecache_lock); // Might GC
-        }
-        jl_genericmemory_t *oldcache = jl_atomic_load_relaxed(&mc->leafcache);
-        ssize_t p = leafcache_peek(oldcache, (jl_value_t*)tt);
-        jl_typemap_entry_t *old = p == -1 ? (jl_typemap_entry_t*)jl_nothing
-                                          : (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(oldcache, 1 + p);
-        jl_gc_write_atomic(newentry, newentry->next, jl_typemap_entry_t, old, relaxed);
-        if (p != -1) {
-            // prepend to the existing chain by replacing its head in place (release,
-            // so a concurrent lookup sees a consistent, world-versioned chain)
-            jl_genericmemory_ptr_set(oldcache, 1 + p, (jl_value_t*)newentry);
-        }
-        else {
-            leafcache_insert(&mc->leafcache, (jl_value_t*)mc, newentry);
-        }
-    }
-    else {
-         jl_typemap_insert(cache, parent, newentry, offs);
-         if (mt && !type_callee) { // the count is only read for callees that are not types
-             jl_typename_t *tn = jl_nth_argument_datatypename((jl_value_t*)(tt ? tt : cachett), 1);
-             if (tn) {
-                 int cache_entry_count = jl_atomic_load_relaxed(&tn->cache_entry_count);
-                 if (cache_entry_count < 31)
-                     jl_atomic_store_relaxed(&tn->cache_entry_count, cache_entry_count + 1);
-             }
-         }
-    }
+    jl_typemap_insert(cache, parent, newentry, offs);
     if (mc) {
         jl_method_cache_inserted();
         JL_UNLOCK(&mc->writelock); // before acquiring world_counter_lock
@@ -1970,7 +1829,7 @@ static jl_method_instance_t *cache_result(
     int8_t offs = mc ? jl_cachearg_offset() : 1;
     // short-circuit (now that we hold the lock) if this entry is already present
     if (!tt_known_absent) {
-        jl_typemap_entry_t *entry = mt_find_cache_entry(cache, mc ? &mc->leafcache : NULL, tt, world, offs);
+        jl_typemap_entry_t *entry = mt_find_cache_entry(cache, tt, world, offs);
         if (entry) {
             if (mc) JL_UNLOCK(&mc->writelock);
             return typemap_entry_linfo(entry);
@@ -1995,7 +1854,7 @@ static jl_method_instance_t *cache_result(
 
     newmeth = jl_specializations_get_linfo(definition, (jl_value_t*)tt, sparams);
     JL_GC_PUSH1(&newmeth);
-    cache_insert(mt, mc, cache, parent, definition, tt, min_valid, max_valid, current_world, tt,
+    cache_insert(mc, cache, parent, definition, min_valid, max_valid, current_world, tt,
         jl_emptysvec, newmeth, offs);
     JL_GC_POP();
     return newmeth;
@@ -2026,18 +1885,6 @@ static void recache_method(
     // check each cache this might be present in, and update it there
     // TODO: should/how do we check min/max valid on the previous entry before updating to newmeth?
     int orig_in_cache = 0;
-    if (mc && tt != NULL) {
-        jl_typemap_entry_t *entry = lookup_leafcache(jl_atomic_load_relaxed(&mc->leafcache), (jl_value_t*)tt, world);
-        if (entry) {
-            jl_gc_write_atomic(entry, *(_Atomic(jl_method_instance_t*)*)&entry->func.linfo,
-                   jl_method_instance_t, newmeth, release);
-            orig_in_cache = 1;
-            if (jl_egal((jl_value_t*)tt, (jl_value_t*)newmeth->specTypes)) {
-                if (mc) JL_UNLOCK(&mc->writelock);
-                return; // cache entry already sufficient
-            }
-        }
-    }
     { // scope block
         struct jl_typemap_assoc search = {tt ? (jl_value_t*)tt : compilationsig, world, NULL};
         assert(cache);
@@ -2051,6 +1898,7 @@ static void recache_method(
         if (entry && jl_subtype((jl_value_t*)entry->sig, (jl_value_t*)newmeth->specTypes)) {
             jl_gc_write_atomic(entry, *(_Atomic(jl_method_instance_t*)*)&entry->func.linfo,
                    jl_method_instance_t, newmeth, release);
+            orig_in_cache = tt && jl_egal((jl_value_t*)entry->sig, (jl_value_t*)tt);
             if (entry->simplesig == (void*)jl_nothing || jl_egal((jl_value_t*)entry->simplesig, compute_simplett((jl_tupletype_t*)newmeth->specTypes))) {
                 if (mc) JL_UNLOCK(&mc->writelock);
                 return; // cache entry already sufficient
@@ -2069,7 +1917,7 @@ static void recache_method(
         cache_with_orig = 1;
     if (cache_with_orig && (orig_in_cache || tt == NULL)) {
         if (mc) JL_UNLOCK(&mc->writelock);
-        return; // leafcache entry alone is sufficient (or no orig tt to cache with)
+        return; // the entry for `tt` alone is sufficient (or no orig tt to cache with)
     }
 
     jl_value_t *matches = NULL;
@@ -2158,12 +2006,12 @@ static void recache_method(
             if (orig_in_cache || tt == NULL) {
                 if (mc) JL_UNLOCK(&mc->writelock);
                 JL_GC_POP();
-                return; // leafcache entry alone is sufficient (or no orig tt to cache with)
+                return; // the entry for `tt` alone is sufficient (or no orig tt to cache with)
             }
         }
     }
 
-    cache_insert(mt, mc, cache, parent, definition, tt, min_valid, max_valid, current_world, (jl_tupletype_t*)cachett,
+    cache_insert(mc, cache, parent, definition, min_valid, max_valid, current_world, (jl_tupletype_t*)cachett,
         guardsigs, newmeth, offs);
     JL_GC_POP();
     return;
@@ -2297,9 +2145,7 @@ static jl_method_instance_t *jl_mt_assoc_by_type(
     jl_methtable_t *mt, jl_methcache_t *mc JL_PROPAGATES_ROOT, jl_datatype_t *tt, size_t world) JL_CANSAFEPOINT
 {
     size_t cache_insert_generation = jl_method_cache_insert_generation_load();
-    jl_typemap_entry_t *entry = mt_find_cache_entry(&mc->cache,
-         tt->isdispatchtuple ? &mc->leafcache : NULL,
-         tt, world, jl_cachearg_offset());
+    jl_typemap_entry_t *entry = mt_find_cache_entry(&mc->cache, tt, world, jl_cachearg_offset());
     if (entry)
         return typemap_entry_linfo(entry);
     assert(tt->isdispatchtuple || tt->hasfreetypevars);
@@ -2311,9 +2157,7 @@ static jl_method_instance_t *jl_mt_assoc_by_type(
     // lock-free probe above.
     int tt_known_absent = jl_method_cache_insert_generation_load() == cache_insert_generation;
     if (!tt_known_absent) {
-        entry = mt_find_cache_entry(&mc->cache,
-         tt->isdispatchtuple ? &mc->leafcache : NULL,
-         tt, world, jl_cachearg_offset());
+        entry = mt_find_cache_entry(&mc->cache, tt, world, jl_cachearg_offset());
         if (entry)
             mi = typemap_entry_linfo(entry);
     }
@@ -3137,23 +2981,6 @@ static void invalidate_mt_cache_shadowed(jl_methcache_t *mc, jl_value_t *type, j
     JL_GC_POP();
 }
 
-// End the validity of every entry in the leafcache at `max_world`, and empty it.
-static void invalidate_leafcache(jl_methcache_t *mc, size_t max_world) JL_NOTSAFEPOINT
-{
-    jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
-    size_t i, l = leafcache->length;
-    for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
-        jl_value_t *entry = jl_genericmemory_ptr_ref(leafcache, i);
-        if (entry) {
-            while (entry != jl_nothing) {
-                jl_atomic_store_relaxed(&((jl_typemap_entry_t*)entry)->max_world, max_world);
-                entry = (jl_value_t*)jl_atomic_load_relaxed(&((jl_typemap_entry_t*)entry)->next);
-            }
-        }
-    }
-    jl_gc_write_atomic(mc, mc->leafcache, jl_genericmemory_t, (jl_genericmemory_t*)jl_an_empty_memory_any, relaxed);
-}
-
 // Apply the dispatch cache invalidations that methods activated together in one world
 // recorded instead of applying.
 void jl_method_table_invalidate_deferred(jl_array_t *deferred, size_t max_world) JL_CANSAFEPOINT
@@ -3172,7 +2999,6 @@ void jl_method_table_invalidate_deferred(jl_array_t *deferred, size_t max_world)
             ;
         invalidate_mt_cache_shadowed(mc, type, &pairs[2 * i], j - i, 2, max_world);
     }
-    invalidate_leafcache(mc, max_world);
     JL_UNLOCK(&mc->writelock);
 }
 
@@ -3212,17 +3038,6 @@ static void _method_table_invalidate(jl_methcache_t *mc, void *env0) JL_CANSAFEP
 {
     // drop this method from mc->cache
     jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), disable_mt_cache, env0);
-    jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
-    size_t i, l = leafcache->length;
-    for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
-        jl_typemap_entry_t *oldentry = (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(leafcache, i);
-        if (oldentry) {
-            while ((jl_value_t*)oldentry != jl_nothing) {
-                disable_mt_cache(oldentry, env0);
-                oldentry = jl_atomic_load_relaxed(&oldentry->next);
-            }
-        }
-    }
 }
 
 // Invalidate everything compiled against `replaced`. `deleted` is set when the
@@ -4076,9 +3891,7 @@ void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array
             }
         }
         else {
-            // drop leafcache and search mc->cache and drop anything that might overlap with the new method
             invalidate_mt_cache_shadowed(mc, type, jl_array_ptr_data(oldmi), jl_array_nrows(oldmi), 1, max_world);
-            invalidate_leafcache(mc, max_world);
         }
     }
     JL_UNLOCK(&mc->writelock);
@@ -4146,11 +3959,6 @@ void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_method_error(jl_value_t *f, jl_valu
 jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs)
 {
     return jl_inst_arg_tuple_type(arg1, args, nargs, 1);
-}
-
-static jl_tupletype_t *lookup_arg_type_tuple(jl_value_t *arg1 JL_PROPAGATES_ROOT, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT
-{
-    return jl_lookup_arg_tuple_type(arg1, args, nargs, 1);
 }
 
 // hook provided for caching-enhanced fast method instance lookup
@@ -4485,19 +4293,6 @@ JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *src
         if (unspecialized == NULL)
             continue;
         invalidate_mt_cache_shadowed(mc, mi->specTypes, (jl_value_t**)&unspecialized, 1, 1, 0);
-        jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
-        size_t i, l = leafcache->length;
-        for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
-            jl_value_t *entry = jl_genericmemory_ptr_ref(leafcache, i);
-            if (entry) {
-                while (entry != jl_nothing) {
-                    jl_method_instance_t *cacheli = typemap_entry_linfo((jl_typemap_entry_t*)entry);
-                    if (cacheli == unspecialized)
-                        jl_atomic_store_relaxed(&((jl_typemap_entry_t*)entry)->max_world, 0);
-                    entry = (jl_value_t*)jl_atomic_load_relaxed(&((jl_typemap_entry_t*)entry)->next);
-                }
-            }
-        }
     }
     JL_UNLOCK(&mc->writelock);
 }
@@ -5344,38 +5139,17 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
     // would put it on the stack and add a stack-protector check to `jl_apply_generic`
     uint32_t cache_idx[4];
     call_cache_indices(callsite, cache_idx);
-    jl_value_t *FT = jl_typeof(F);
     jl_typemap_entry_t *entry = NULL;
     jl_tupletype_t *tt = NULL;
     int64_t last_alloc = 0;
     // if no method was found in the associative cache, check the full cache
     JL_TIMING(METHOD_LOOKUP_FAST, METHOD_LOOKUP_FAST);
     jl_methcache_t *mc = jl_method_table->cache;
-    jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
-    // a type-valued callee is never in the leafcache (see `cache_insert`)
-    int type_callee = jl_is_kind(FT);
-    int cache_entry_count = type_callee ? 0 : jl_atomic_load_relaxed(&((jl_datatype_t*)FT)->name->cache_entry_count);
-    if (!type_callee && leafcache != (jl_genericmemory_t*)jl_an_empty_memory_any && (cache_entry_count == 0 || cache_entry_count >= 8)) {
-        // hashing args is expensive, but so do that only if looking at mc->cache is probably even more expensive
-        tt = lookup_arg_type_tuple(F, args, nargs);
-        if (tt != NULL)
-            entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
-    }
+    jl_typemap_t *cache = jl_atomic_load_relaxed(&mc->cache); // XXX: gc root required?
+    entry = jl_typemap_assoc_exact(cache, F, args, nargs, jl_cachearg_offset(), world);
     if (entry == NULL) {
-        jl_typemap_t *cache = jl_atomic_load_relaxed(&mc->cache); // XXX: gc root required?
-        entry = jl_typemap_assoc_exact(cache, F, args, nargs, jl_cachearg_offset(), world);
-        if (entry == NULL) {
-            last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
-            if (tt == NULL) {
-                tt = arg_type_tuple(F, args, nargs);
-                // arg_type_tuple can allocate and hit a safepoint; a GC there may
-                // grow/replace mc->leafcache, freeing the memory `leafcache` still
-                // points at. Reload before dereferencing it in lookup_leafcache.
-                leafcache = jl_atomic_load_relaxed(&mc->leafcache);
-                if (!type_callee)
-                    entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
-            }
-        }
+        last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
+        tt = arg_type_tuple(F, args, nargs);
     }
     if (entry != NULL && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
         // put the entry into the cache if it's valid for a leafsig lookup,
@@ -6358,57 +6132,28 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
     JL_GC_PUSH6(&env.t, &env.matc, &env.match.env, &search.env, &env.match.ti, &isect2);
 
     if (mc) {
-        // first check the leaf cache if the type might have been put in there
-        if (((jl_datatype_t*)unw)->isdispatchtuple) {
-            jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
-            jl_typemap_entry_t *entry = lookup_leafcache(leafcache, (jl_value_t*)type, world);
-            if (entry) {
-                // leafcache found a match, construct the MethodMatch by computing the effective
-                // types + sparams and the world bounds
-                jl_method_instance_t *mi = typemap_entry_linfo(entry);
-                jl_method_t *meth = mi->def.method;
-                if (!jl_is_unionall(meth->sig)) {
-                    env.match.env = jl_emptysvec;
-                    env.match.ti = unw;
-                }
-                else if (jl_egal((jl_value_t*)type, mi->specTypes)) {
-                    env.match.env = mi->sparam_vals;
-                    env.match.ti = mi->specTypes;
-                }
-                else {
-                    // this just calls jl_subtype_env (since we know that `type <: meth->sig` by transitivity)
-                    env.match.ti = jl_type_intersection_env((jl_value_t*)type, (jl_value_t*)meth->sig, &env.match.env);
-                }
-                env.matc = make_method_match((jl_tupletype_t*)env.match.ti,
-                    env.match.env, meth, 1);
-                env.t = (jl_value_t*)jl_alloc_vec_any(1);
-                jl_array_ptr_set(env.t, 0, env.matc);
-                size_t min_world = jl_atomic_load_relaxed(&entry->min_world);
-                size_t max_world = jl_atomic_load_relaxed(&entry->max_world);
-                if (*min_valid < min_world)
-                    *min_valid = min_world;
-                if (*max_valid > max_world)
-                    *max_valid = max_world;
-                JL_GC_POP();
-                return env.t;
-            }
-        }
-
-        // then check the full cache if it seems profitable
+        // first check the cache, for a dispatch tuple
         if (((jl_datatype_t*)unw)->isdispatchtuple) {
             jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(&mc->cache), &search, jl_cachearg_offset(), /*subtype*/1);
-            if (entry && (((jl_datatype_t*)unw)->isdispatchtuple || entry->guardsigs == jl_emptysvec)) {
-                // full cache found a match, construct the MethodMatch by computing the effective
+            if (entry) {
+                // found a match, construct the MethodMatch by computing the effective
                 // types + sparams and the world bounds
                 jl_method_instance_t *mi = typemap_entry_linfo(entry);
                 jl_method_t *meth = mi->def.method;
                 size_t min_world = jl_atomic_load_relaxed(&entry->min_world);
-                // only return this if it appears min_would is fully computed, otherwise do the full lookup to compute min_world exactly
-                if (min_world == jl_atomic_load_relaxed(&meth->primary_world)) {
+                // the world bounds of an entry for exactly `type` were computed for it, but only
+                // return another if it appears min_world is fully computed, otherwise do the full
+                // lookup to compute min_world exactly
+                int exact = jl_egal((jl_value_t*)entry->sig, (jl_value_t*)type);
+                if (exact || min_world == jl_atomic_load_relaxed(&meth->primary_world)) {
                     size_t max_world = jl_atomic_load_relaxed(&entry->max_world);
-                    if (!jl_is_unionall(meth->sig) && ((jl_datatype_t*)unw)->isdispatchtuple) {
+                    if (!jl_is_unionall(meth->sig)) {
                         env.match.env = jl_emptysvec;
                         env.match.ti = unw;
+                    }
+                    else if (exact && jl_egal((jl_value_t*)type, mi->specTypes)) {
+                        env.match.env = mi->sparam_vals;
+                        env.match.ti = mi->specTypes;
                     }
                     else {
                         // this just calls jl_subtype_env (since we know that `type <: meth->sig` by transitivity)
