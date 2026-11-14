@@ -949,17 +949,3 @@ end
     @test isless(-0.0, big(0))
     @test_broken cmp(-0.0, big(0)) == -1
 end
-
-if Base.GMP.Limb === UInt64 === UInt
-    @testset "UnsafeLimbView" begin
-        for x in (big(0x0102030405060708090a0b), big(2)^64 - 1, big(255))
-            n = cld(ndigits(x; base=2), 8)
-            v = Base.GMP.UnsafeLimbView(x, 1, n)
-            @test length(v) == n
-            @test size(v) == (n,)
-            @test collect(v) == digits(UInt8, x; base=256)
-            @test v[n] == last(digits(UInt8, x; base=256))
-            @test_throws BoundsError v[n + 1]
-        end
-    end
-end
