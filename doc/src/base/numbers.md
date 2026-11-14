@@ -80,6 +80,12 @@ Base.ndigits
 Base.bitstring
 Base.parse
 Base.tryparse
+Base.Parsers
+Base.Parsers.parsevalue
+Base.Parsers.ParseFailure
+Base.Parsers.INVALID
+Base.Parsers.OVERFLOW
+Base.Parsers.UNDERFLOW
 Base.big
 Base.signed
 Base.unsigned
