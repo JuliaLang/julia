@@ -5,7 +5,7 @@ version = "2.0.0-DEV"
 
 [compat]
 Serialization = "1.0"
-julia = "1.0"
+julia = "1.10"
 
 [extras]
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"

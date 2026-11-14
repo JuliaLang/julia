@@ -419,6 +419,8 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro(0)], [SeedHashe
     @test size(z2) == (2, 3)
     z3 = bitrand(rng..., b2, u3)        ::BitArray{2}
     @test size(z3) == (b2, u3)
+    @test size(bitrand(rng..., (2, 3))::BitArray{2}) == (2, 3)
+    @test size(randn(rng..., (2, 3))::Matrix{Float64}) == (2, 3)
     z4 = rand!(rng..., BitVector(undef, 5))     ::BitArray{1}
     @test size(z4) == (5,)
     z5 = rand!(rng..., BitMatrix(undef, 2, 3))  ::BitArray{2}
@@ -706,6 +708,7 @@ let b = ['0':'9';'A':'Z';'a':'z']
     for rng = [[], [MersenneTwister(0)]]
         @test length(randstring(rng...)) == 8
         @test length(randstring(rng..., 20)) == 20
+        @test length(randstring(rng..., 'a':'c', Int8(5))) == 5
         @test issubset(randstring(rng...), b)
         for c = ['a':'z', "qwèrtï", Set(codeunits("gcat"))],
                 len = [8, 20]
@@ -908,6 +911,23 @@ end
     @test shuffle!(a) === a
     a = rand(Int, 1)
     @test shuffle(a) == a
+    @test sort(shuffle(Xoshiro(1), Base.OneTo(5))) == 1:5
+    # long vectors need wider indices
+    @test sort(shuffle(Xoshiro(1), collect(1:70000))) == 1:70000
+end
+
+@testset "bulk Float16 and Float32 from Xoshiro" begin
+    for T in (Float16, Float32)
+        A = rand!(Xoshiro(1), zeros(T, 1000))
+        @test all(x -> 0 <= x < 1, A)
+        @test length(unique(A)) > 100
+    end
+end
+
+@testset "default RNG arguments" begin
+    @test TaskLocalRNG(nothing) === TaskLocalRNG()
+    S = Int[]
+    @test randsubseq!(S, 1:10, 1.0) === S == 1:10
 end
 
 struct ZeroWords <: AbstractRNG end

@@ -256,6 +256,12 @@ using Random
     end
 end
 
+@testset "mktemp in a missing directory" begin
+    mktempdir() do d
+        @test_throws Union{Base.IOError,SystemError} mktemp(joinpath(d, "missing"))
+    end
+end
+
 @testset "tempname with parent" begin
     t = tempname()
     @test dirname(t) == tempdir()

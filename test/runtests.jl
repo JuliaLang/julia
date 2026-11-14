@@ -136,9 +136,10 @@ if Sys.WORD_SIZE == 32
 end
 
 # These leave state behind on their worker (`precompile`: packages loaded and methods
-# added to Base, `threads`: exited adopted threads), which breaks later tests on the
-# same worker, so the worker is replaced once they finish
-const recycle_worker_tests = ["precompile", "threads"]
+# added to Base, `threads`: exited adopted threads, `SparseArrays`/`SuiteSparse`: methods
+# added to Base functions like `hvcat`), which breaks later tests on the same worker, so
+# the worker is replaced once they finish
+const recycle_worker_tests = ["precompile", "threads", "SparseArrays", "SuiteSparse"]
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
@@ -471,8 +472,8 @@ cd(@__DIR__) do
                                 end
 
                                 @lock print_lock begin
-                                    print(master_stdout, test)
-                                    print(master_stdout, lpad("($(wrkr))", name_align - textwidth(test) + 1, " "), " | ")
+                                    printstyled(master_stdout, test, color=:white)
+                                    printstyled(master_stdout, lpad("($(wrkr))", name_align - textwidth(test) + 1, " "), " | ", color=:white)
                                     # Calculate total width of data columns: "Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)"
                                     # This is: elapsed_align + 3 + gc_align + 3 + percent_align + 3 + alloc_align + 3 + rss_align
                                     data_width = elapsed_align + gc_align + percent_align + alloc_align + rss_align + 12  # 12 = 4 * " | "

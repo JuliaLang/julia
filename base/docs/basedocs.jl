@@ -2350,7 +2350,7 @@ Abstract supertype for all integers (e.g. [`Signed`](@ref), [`Unsigned`](@ref), 
 See also [`isinteger`](@ref), [`trunc`](@ref), [`div`](@ref).
 
 # Examples
-```
+```jldoctest
 julia> 42 isa Integer
 true
 
@@ -2379,7 +2379,7 @@ Built-in unsigned integers are printed in hexadecimal, with prefix `0x`,
 and can be entered in the same way.
 
 # Examples
-```
+```jldoctest
 julia> typemax(UInt8)
 0xff
 

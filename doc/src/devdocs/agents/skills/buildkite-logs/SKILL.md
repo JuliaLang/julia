@@ -84,7 +84,8 @@ The `TTFX` group's macOS job runs the
 [Julia-TTFX-Snippets](https://github.com/tecosaur/Julia-TTFX-Snippets) tasks
 against the build: on pull requests compared with the master build of the
 merge-base, on master builds alone (the data behind
-<https://perf.julialang.org/?tab=ci-ttfx>). Its results, report and
+<https://perf.julialang.org/ttfx>, which the `perf-site` skill reads without
+downloading artifacts). Its results, report and
 trace-compile logs are job artifacts (step 4). What they contain and how the
 comparison is judged is documented with the driver in JuliaCI/julia-buildkite,
 `utilities/ttfx/README.md`.

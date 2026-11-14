@@ -479,7 +479,7 @@ packages.
     returned vector.
 """
 function load_path()
-    cache = LOADING_CACHE[]
+    cache = loading_cache()
     cache !== nothing && return cache.load_path
     paths = String[]
     for env in LOAD_PATH

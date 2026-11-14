@@ -22,6 +22,24 @@ get_help_standard(input) = string(eval(REPL.helpmode(IOBuffer(), input)))
     @test all(duplicates .∈ Ref(keys(REPLCompletions.symbols_latex_canonical)))
 end
 
+@testset "help for comments, broadcast booleans and LaTeX" begin
+    @test startswith(get_help_standard("#= text"), "```julia\n#= =#\n```")
+    @test startswith(get_help_standard("# text"), "```julia\n#\n```")
+    @test get_help_standard("x .|| y") ==
+        "`x .|| y` broadcasts the boolean operator `||` to `x` and `y`. See [`broadcast`](@ref).\n"
+    @test sprint(REPL.repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
+    @test sprint(io -> Markdown.term(io, REPL.Message("hi"), 80)) == "hi"
+    @test first(string.(REPL.doc_completions(:sin))) == "sin"
+end
+
+@testset "docsearch" begin
+    @test REPL.docsearch(:abc, "b")
+    @test !REPL.docsearch(nothing, "b")
+    @test REPL.docsearch(["x", :yb], "b")
+    @test !REPL.docsearch(["x"], "b")
+    @test (@test_logs (:warn, "Unable to search documentation of type $Int") REPL.docsearch(1, "b")) == false
+end
+
 @testset "quoting in doc search" begin
     str = get_help_io("mutable s")
     @test occursin("'mutable struct'", str)

@@ -9,10 +9,6 @@
 #endif
 #include "julia_assert.h"
 
-// compute empirical max-probe for a given size
-#define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
-#define h2index(hv, sz) (size_t)((hv) & ((sz)-1))
-
 // a set of small positive integers representing the indices into another set
 // (or dict) where the hash is derived from the keys in the set via the lambdas
 // `hash` and `eq` supports concurrent calls to jl_smallintset_lookup (giving
@@ -37,23 +33,6 @@ static inline size_t jl_intref(const jl_genericmemory_t *arr, size_t idx) JL_NOT
         return ignore_tombstone(jl_atomic_load_relaxed(&((_Atomic(uint16_t)*)arr->ptr)[idx]), (uint16_t)-1);
     else if (el == jl_memory_uint32_type)
         return ignore_tombstone(jl_atomic_load_relaxed(&((_Atomic(uint32_t)*)arr->ptr)[idx]), UINT32_MAX);
-    else
-        abort();
-}
-
-static inline size_t acquire_tombstone(size_t val, size_t tombstone) JL_NOTSAFEPOINT
-{
-    return val == tombstone ? (size_t)-1 : val;
-}
-static inline size_t jl_intref_acquire(const jl_genericmemory_t *arr, size_t idx) JL_NOTSAFEPOINT
-{
-    jl_value_t *el = (jl_value_t*)jl_typetagof(arr);
-    if (el == jl_memory_uint8_type)
-        return acquire_tombstone(jl_atomic_load_acquire(&((_Atomic(uint8_t)*)arr->ptr)[idx]), (uint8_t)-1);
-    else if (el == jl_memory_uint16_type)
-        return acquire_tombstone(jl_atomic_load_acquire(&((_Atomic(uint16_t)*)arr->ptr)[idx]), (uint16_t)-1);
-    else if (el == jl_memory_uint32_type)
-        return acquire_tombstone(jl_atomic_load_acquire(&((_Atomic(uint32_t)*)arr->ptr)[idx]), UINT32_MAX);
     else
         abort();
 }
@@ -120,31 +99,12 @@ static jl_genericmemory_t *jl_alloc_int_1d(size_t np, size_t len) JL_CANSAFEPOIN
 
 ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_value_t *data, uint_t hv, int pop)
 {
-    size_t sz = cache->length;
-    if (sz == 0)
+    if (cache->length == 0)
         return -1;
-    JL_GC_PUSH1(&cache);
-    size_t maxprobe = max_probe(sz);
-    size_t index = h2index(hv, sz);
-    size_t orig = index;
-    size_t iter = 0;
-    do {
-        size_t val1 = jl_intref_acquire(cache, index);
-        if (val1 == 0) {
-            JL_GC_POP();
-            return -1;
-        }
-        if (val1 != -1 && eq(val1 - 1, key, data, hv)) {
-            JL_GC_POP();
-            if (pop)
-                jl_intset_release(cache, index, (size_t)-1); // replace with tombstone
-            return val1 - 1;
-        }
-        index = (index + 1) & (sz - 1);
-        iter++;
-    } while (iter <= maxprobe && index != orig);
+    JL_GC_PUSH1(&cache); // `eq` may safepoint
+    ssize_t idx = smallintset_lookup_(cache, eq, key, data, hv, pop);
     JL_GC_POP();
-    return -1;
+    return idx;
 }
 
 static int smallintset_insert_(jl_genericmemory_t *a, uint_t hv, size_t val1) JL_NOTSAFEPOINT
@@ -154,9 +114,9 @@ static int smallintset_insert_(jl_genericmemory_t *a, uint_t hv, size_t val1) JL
         return 0;
     size_t orig, index, iter;
     iter = 0;
-    index = h2index(hv, sz);
+    index = smallintset_h2index(hv, sz);
     orig = index;
-    size_t maxprobe = max_probe(sz);
+    size_t maxprobe = smallintset_max_probe(sz);
     do {
         if (jl_intref(a, index) == 0) {
             jl_intset_release(a, index, val1);

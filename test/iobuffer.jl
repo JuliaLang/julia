@@ -16,6 +16,8 @@ new_unseekable_buffer() = Base.GenericIOBuffer(Memory{UInt8}(), true, true, fals
 @testset "Basic tests" begin
     @test_throws ArgumentError IOBuffer(;maxsize=-1)
     @test_throws ArgumentError IOBuffer([0x01]; maxsize=-1)
+    @test_throws ArgumentError IOBuffer(Memory{UInt8}(undef, 2); write=true, maxsize=-1)
+    @test_throws ArgumentError IOBuffer(UInt8[]; write=true, maxsize=-1)
 
     # Test that sizehint actually will sizehint the vector,
     v = UInt8[]
@@ -319,6 +321,16 @@ end
     @test close(io) === nothing
     @test_throws ArgumentError write(io, UInt8[0])
     @test_throws ArgumentError seek(io, 0)
+end
+
+@testset "line reading from a non-readable IOBuffer throws" begin
+    io = IOBuffer(read=false, write=true)
+    write(io, "ab\ncd")
+    seekstart(io)
+    @test_throws ArgumentError readuntil(io, 0x0a)
+    @test_throws ArgumentError readline(io)
+    @test_throws ArgumentError copyline(IOBuffer(), io)
+    @test position(io) == 0
 end
 
 @testset "takestring!" begin
@@ -834,6 +846,24 @@ end
     @test_throws MethodError(peek, (io, Union{})) peek(io, Union{})
     @test which(peek, (typeof(io), Type{Union{}})).sig == Tuple{typeof(peek), IO, Type{Union{}}, Vararg}
     close(io)
+end
+
+# Multi-byte peek respects view offsets and shifted Array storage.
+@testset "dense multi-byte peek" begin
+    value = UInt32(0x12345678)
+    data = [0xaa, reinterpret(NTuple{4,UInt8}, value)..., 0xbb]
+    padded = [0xcc, 0xdd, data..., 0xee]
+    paddedmem = copyto!(Memory{UInt8}(undef, length(padded)), padded)
+    shifted = [0xcc, 0xdd, data...]
+    resize!(shifted, length(data); first=true)
+    for storage in (view(padded, 3:length(padded)-1),
+                    view(paddedmem, 3:length(paddedmem)-1), shifted)
+        io = Base.GenericIOBuffer{typeof(storage)}(
+            storage, true, false, true, false, typemax(Int), false)
+        seek(io, 1)
+        @test peek(io, UInt32) === value
+        @test position(io) == 1
+    end
 end
 
 @testset "bytesavailable devnull" begin

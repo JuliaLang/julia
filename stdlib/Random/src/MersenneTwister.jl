@@ -163,10 +163,6 @@ idxmask(::Type{<:Union{Int32,UInt32}}) = 3
 idxmask(::Type{<:Union{Int64,UInt64}}) = 1
 idxmask(::Type{<:Union{Int128,UInt128}}) = 0
 
-
-mt_avail(r::MersenneTwister, ::Type{T}) where {T<:BitInteger} =
-    r.idxI >> logsizeof(T)
-
 function mt_setfull!(r::MersenneTwister, ::Type{<:BitInteger})
     r.adv_ints = r.adv
     ints = r.ints

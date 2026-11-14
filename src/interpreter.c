@@ -24,7 +24,16 @@ typedef struct JL_GC_TRACKED_TYPE {
     size_t ip; // Leak the currently-evaluating statement index to backtrace capture
     int preevaluation; // use special rules for pre-evaluating expressions (deprecated--only for ccall handling)
     int continue_at; // statement index to jump to after leaving exception handler (0 if none)
+    jl_genericmemory_t *sites; // each statement's dispatch cache (see call_sites), or NULL
+    size_t nslots, nssa; // the slots and SSA values of src (see frame_set_src)
+    size_t world; // the world the frame runs in, which a method body cannot change, or 0
+                  // for a top-level thunk, which moves to the latest world as it goes
 } interpreter_state;
+
+STATIC_INLINE size_t frame_world(interpreter_state *s) JL_NOTSAFEPOINT
+{
+    return s->world ? s->world : jl_current_task->world_age;
+}
 
 
 // general alloca rules are incompatible on C and C++, so define a macro that deals with the difference
@@ -72,7 +81,30 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 #endif
 
 
-static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s) JL_CANSAFEPOINT;
+static jl_value_t *eval_value_full(jl_value_t *e, interpreter_state *s) JL_CANSAFEPOINT;
+
+// Evaluate the leaves that most expressions are made of here, without the frame of
+// eval_value_full, which evaluates everything else (and reports these when they are invalid).
+STATIC_INLINE jl_value_t *eval_value(jl_value_t *e, interpreter_state *s) JL_CANSAFEPOINT
+{
+    if (jl_is_ssavalue(e)) {
+        size_t id = ((jl_ssavalue_t*)e)->id - 1;
+        if (id < s->nssa && s->locals != NULL)
+            return s->locals[s->nslots + id];
+    }
+    else if (jl_is_slotnumber(e) || jl_is_argument(e)) {
+        size_t n = jl_slot_number(e) - 1;
+        if (n < s->nslots && s->locals != NULL) {
+            jl_value_t *v = s->locals[n];
+            if (v != NULL)
+                return v;
+        }
+    }
+    else if (jl_is_quotenode(e)) {
+        return jl_quotenode_value(e);
+    }
+    return eval_value_full(e, s);
+}
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel) JL_CANSAFEPOINT;
 
 // method definition form
@@ -112,6 +144,36 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s) JL_CANSAF
 
 // expression evaluator
 
+// Core.apply_type at a statement whose dispatch cache (see call_sites) remembers its last
+// application instead: svec(apply_type, arguments..., result). The type cache gives the
+// same type for the same arguments, so arguments identical to those make a hit, as in a
+// keyword call's NamedTuple{names}, which applies the same constant names every time.
+static jl_value_t *apply_type_cached(jl_value_t **argv, size_t nargs, jl_genericmemory_t *sites, size_t i) JL_CANSAFEPOINT
+{
+    _Atomic(jl_value_t*) *slot = &((_Atomic(jl_value_t*)*)jl_genericmemory_ptr_data(sites))[i];
+    jl_svec_t *site = (jl_svec_t*)jl_atomic_load_acquire(slot);
+    if (site != NULL && jl_svec_len(site) == nargs + 1 && jl_svecref(site, 0) == argv[0]) {
+        size_t j;
+        for (j = 1; j < nargs; j++) {
+            if (jl_svecref(site, j) != argv[j])
+                break;
+        }
+        if (j == nargs)
+            return jl_svecref(site, nargs);
+    }
+    jl_value_t *result = jl_f_apply_type(NULL, &argv[1], nargs - 1);
+    site = NULL;
+    JL_GC_PUSH2(&result, &site);
+    site = jl_alloc_svec(nargs + 1);
+    for (size_t j = 0; j < nargs; j++)
+        jl_svecset(site, j, argv[j]);
+    jl_svecset(site, nargs, result);
+    jl_atomic_store_release(slot, (jl_value_t*)site);
+    jl_gc_wb(sites, slot, site);
+    JL_GC_POP();
+    return result;
+}
+
 static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s) JL_CANSAFEPOINT
 {
     jl_value_t **argv;
@@ -120,7 +182,15 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     size_t i;
     for (i = 0; i < nargs; i++)
         argv[i] = eval_value(args[i], s);
-    jl_value_t *result = jl_apply(argv, nargs);
+    // the call expression's arguments identify the call site
+    uint32_t callsite = jl_int32hash_fast((uint32_t)((uintptr_t)args >> 3));
+    jl_value_t *result;
+    if (s->sites == NULL || 2 * s->ip + 1 >= s->sites->length)
+        result = jl_apply_generic_site(argv[0], &argv[1], nargs - 1, callsite);
+    else if (argv[0] == BUILTIN(apply_type) && nargs > 1)
+        result = apply_type_cached(argv, nargs, s->sites, 2 * s->ip);
+    else
+        result = jl_apply_generic_cached(argv[0], &argv[1], nargs - 1, s->sites, 2 * s->ip, callsite, frame_world(s));
     JL_GC_POP();
     return result;
 }
@@ -171,6 +241,45 @@ jl_value_t *jl_eval_globalref(jl_globalref_t *g, size_t world)
     return v;
 }
 
+// The value of a global that the current statement reads, through the statement's cache
+// of the constants it read (see call_sites): svec(world, gr, value, gr, value, ...), for one
+// world. A global that is not a constant there is read as usual each time.
+static jl_value_t *eval_globalref_cached(jl_globalref_t *g, interpreter_state *s, size_t world) JL_CANSAFEPOINT
+{
+    jl_genericmemory_t *sites = s->sites;
+    _Atomic(jl_value_t*) *slot = &((_Atomic(jl_value_t*)*)jl_genericmemory_ptr_data(sites))[2 * s->ip + 1];
+    jl_svec_t *cache = (jl_svec_t*)jl_atomic_load_acquire(slot);
+    size_t n = 0;
+    if (cache != NULL && jl_unbox_ulong(jl_svecref(cache, 0)) == world) {
+        n = jl_svec_len(cache);
+        for (size_t i = 1; i < n; i += 2) {
+            if (jl_svecref(cache, i) == (jl_value_t*)g)
+                return jl_svecref(cache, i + 1);
+        }
+    }
+    jl_value_t *v = jl_get_globalref_const_quiet(g, world);
+    if (v == NULL)
+        return jl_eval_globalref(g, world);
+    jl_svec_t *grown = NULL;
+    JL_GC_PUSH3(&cache, &v, &grown);
+    grown = jl_alloc_svec(n == 0 ? 3 : n + 2);
+    if (n == 0) {
+        jl_value_t *w = jl_box_ulong(world);
+        jl_svecset(grown, 0, w);
+    }
+    else {
+        for (size_t i = 0; i < n; i++)
+            jl_svecset(grown, i, jl_svecref(cache, i));
+    }
+    size_t m = jl_svec_len(grown);
+    jl_svecset(grown, m - 2, (jl_value_t*)g);
+    jl_svecset(grown, m - 1, v);
+    jl_atomic_store_release(slot, (jl_value_t*)grown);
+    jl_gc_wb(sites, slot, grown);
+    JL_GC_POP();
+    return v;
+}
+
 static int jl_source_nslots(jl_code_info_t *src) JL_NOTSAFEPOINT
 {
     return jl_array_nrows(src->slotflags);
@@ -181,10 +290,17 @@ static int jl_source_nssavalues(jl_code_info_t *src) JL_NOTSAFEPOINT
     return jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_nrows(src->ssavaluetypes);
 }
 
+static void frame_set_src(interpreter_state *s, jl_code_info_t *src) JL_NOTSAFEPOINT
+{
+    s->src = src;
+    s->nslots = src ? jl_source_nslots(src) : 0;
+    s->nssa = src ? jl_source_nssavalues(src) : 0;
+}
+
 static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s) JL_CANSAFEPOINT
 {
     jl_value_t *res = eval_value(stmt, s);
-    s->locals[jl_source_nslots(s->src) + s->ip] = res;
+    s->locals[s->nslots + s->ip] = res;
 }
 
 static jl_value_t *eval_expr_tuple(jl_expr_t *ex, interpreter_state *s) JL_CANSAFEPOINT
@@ -203,19 +319,19 @@ static jl_value_t *eval_expr_tuple(jl_expr_t *ex, interpreter_state *s) JL_CANSA
     return v;
 }
 
-static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
+static NOINLINE jl_value_t *eval_value_full(jl_value_t *e, interpreter_state *s)
 {
     jl_code_info_t *src = s->src;
     if (jl_is_ssavalue(e)) {
         ssize_t id = ((jl_ssavalue_t*)e)->id - 1;
-        if (src == NULL || id >= jl_source_nssavalues(src) || id < 0 || s->locals == NULL)
+        if (src == NULL || id >= s->nssa || id < 0 || s->locals == NULL)
             jl_error("access to invalid SSAValue");
         else
-            return s->locals[jl_source_nslots(src) + id];
+            return s->locals[s->nslots + id];
     }
     if (jl_is_slotnumber(e) || jl_is_argument(e)) {
         ssize_t n = jl_slot_number(e);
-        if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
+        if (src == NULL || n > s->nslots || n < 1 || s->locals == NULL)
             jl_error("access to invalid slot number");
         jl_value_t *v = s->locals[n - 1];
         if (v == NULL)
@@ -226,7 +342,10 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_quotenode_value(e);
     }
     if (jl_is_globalref(e)) {
-        return jl_eval_globalref((jl_globalref_t*)e, jl_current_task->world_age);
+        size_t world = frame_world(s);
+        if (s->sites != NULL && 2 * s->ip + 2 < s->sites->length)
+            return eval_globalref_cached((jl_globalref_t*)e, s, world);
+        return jl_eval_globalref((jl_globalref_t*)e, world);
     }
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
         return jl_eval_global_var(s->module, (jl_sym_t*)e, jl_current_task->world_age);
@@ -271,7 +390,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         assert(nargs == 1 && "malformed IR");
         if (jl_is_slotnumber(sym) || jl_is_argument(sym)) {
             ssize_t n = jl_slot_number(sym);
-            if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
+            if (src == NULL || n > s->nslots || n < 1 || s->locals == NULL)
                 jl_error("access to invalid slot number");
             defined = s->locals[n - 1] != NULL;
         }
@@ -458,7 +577,7 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
     nphiblockstmts = last_phi;
     ip = to + last_phi;
     if (nphiblockstmts) {
-        jl_value_t **dest = &s->locals[jl_source_nslots(s->src) + to];
+        jl_value_t **dest = &s->locals[s->nslots + to];
         jl_value_t **phis; // = (jl_value_t**)alloca(sizeof(jl_value_t*) * nphiblockstmts);
         JL_GC_PUSHARGS(phis, nphiblockstmts);
         for (unsigned i = 0; i < nphiblockstmts; i++) {
@@ -652,10 +771,10 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             jl_value_t *val = jl_fieldref_noalloc(stmt, 0);
             if (val)
                 val = eval_value(val, s);
-            jl_value_t *phic = s->locals[jl_source_nslots(s->src) + ip];
+            jl_value_t *phic = s->locals[s->nslots + ip];
             assert(jl_is_ssavalue(phic));
             ssize_t id = ((jl_ssavalue_t*)phic)->id - 1;
-            s->locals[jl_source_nslots(s->src) + id] = val;
+            s->locals[s->nslots + id] = val;
         }
         else if (jl_is_enternode(stmt)) {
             jl_enter_handler(ct, &__eh);
@@ -682,14 +801,14 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                         assert(jl_is_ssavalue(val));
                         size_t upsilon = ((jl_ssavalue_t*)val)->id - 1;
                         assert(jl_is_upsilonnode(jl_array_ptr_ref(stmts, upsilon)));
-                        s->locals[jl_source_nslots(s->src) + upsilon] = jl_box_ssavalue(catch_ip + 1);
+                        s->locals[s->nslots + upsilon] = jl_box_ssavalue(catch_ip + 1);
                     }
-                    s->locals[jl_source_nslots(s->src) + catch_ip] = NULL;
+                    s->locals[s->nslots + catch_ip] = NULL;
                     catch_ip += 1;
                 }
                 // store current top of exception stack for restore in pop_exception.
             }
-            s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state(ct));
+            s->locals[s->nslots + ip] = jl_box_ulong(jl_excstack_state(ct));
             if (jl_enternode_scope(stmt)) {
                 jl_value_t *old_scope = ct->scope; // Identical to __eh.scope
                 // GC preserve the old_scope, since it is not rooted in the `jl_handler_t *`,
@@ -738,7 +857,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 jl_value_t *rhs = eval_value(jl_exprarg(stmt, 1), s);
                 if (jl_is_slotnumber(lhs)) {
                     ssize_t n = jl_slot_number(lhs);
-                    assert(n <= jl_source_nslots(s->src) && n > 0);
+                    assert(n <= s->nslots && n > 0);
                     s->locals[n - 1] = rhs;
                 }
                 else if (jl_is_binding_partition(lhs)) {
@@ -746,7 +865,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     jl_binding_t *bnd = jl_binding_partition_owner(bpart);
                     jl_module_t *mod = bnd->globalref->mod;
                     jl_sym_t *name = bnd->globalref->name;
-                    s->locals[jl_source_nslots(s->src) + s->ip] = rhs;
+                    s->locals[s->nslots + s->ip] = rhs;
                     jl_check_binding_currently_writable(bnd, bpart, mod, name);
                     jl_checked_assignment(bnd, bpart, mod, name, rhs);
                 }
@@ -794,11 +913,11 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             else if (toplevel) {
                 if (head == jl_method_sym && jl_expr_nargs(stmt) > 1) {
                     jl_value_t *res = eval_methoddef((jl_expr_t*)stmt, s);
-                    s->locals[jl_source_nslots(s->src) + s->ip] = res;
+                    s->locals[s->nslots + s->ip] = res;
                 }
                 else if (head == jl_toplevel_sym) {
                     jl_value_t *res = jl_toplevel_eval(s->module, stmt);
-                    s->locals[jl_source_nslots(s->src) + s->ip] = res;
+                    s->locals[s->nslots + s->ip] = res;
                 }
                 else if (head == jl_latestworld_sym) {
                     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
@@ -849,7 +968,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             jl_value_t *var = jl_fieldref(stmt, 0);
             assert(jl_is_slotnumber(var));
             ssize_t n = jl_slot_number(var);
-            assert(n <= jl_source_nslots(s->src) && n > 0);
+            assert(n <= s->nslots && n > 0);
             s->locals[n - 1] = NULL;
         }
         else if (toplevel && jl_is_linenode(stmt)) {
@@ -927,6 +1046,36 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
     return (jl_code_info_t*)code_or_ci;
 }
 
+// Each method body's caches for each of its statements, found by the code it runs: a
+// Memory{Any} holding, for statement i, the dispatch of its call at 2i (see
+// jl_apply_generic_cached) and the constant globals it read at 2i + 1 (see
+// eval_globalref_cached), and last the code itself. The method remembers the caches it last used, which a frame running
+// the same code finds without the lock. Top-level thunks, which mostly run once, have none.
+jl_genericmemory_t *jl_interp_call_sites JL_GLOBALLY_ROOTED = NULL;
+jl_mutex_t jl_interp_call_sites_lock;
+
+static jl_genericmemory_t *call_sites(jl_method_t *m, jl_code_info_t *src, size_t nstmts) JL_CANSAFEPOINT
+{
+    jl_genericmemory_t *last = m ? jl_atomic_load_acquire(&m->interp_sites) : NULL;
+    if (last != NULL && jl_genericmemory_ptr_ref(last, last->length - 1) == (jl_value_t*)src)
+        return last;
+    JL_LOCK(&jl_interp_call_sites_lock);
+    if (jl_interp_call_sites == NULL)
+        jl_interp_call_sites = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    jl_genericmemory_t *sites = (jl_genericmemory_t*)jl_eqtable_get(jl_interp_call_sites, (jl_value_t*)src, NULL);
+    if (sites == NULL) {
+        JL_GC_PUSH1(&sites);
+        sites = jl_alloc_memory_any(2 * nstmts + 1);
+        jl_genericmemory_ptr_set(sites, 2 * nstmts, (jl_value_t*)src);
+        jl_interp_call_sites = jl_eqtable_put(jl_interp_call_sites, (jl_value_t*)src, (jl_value_t*)sites, NULL);
+        JL_GC_POP();
+    }
+    JL_UNLOCK(&jl_interp_call_sites_lock);
+    if (m)
+        jl_atomic_store_release(&m->interp_sites, sites);
+    return sites;
+}
+
 // interpreter entry points
 
 jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
@@ -949,13 +1098,13 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     }
     jl_array_t *stmts = src->code;
     assert(jl_typetagis(stmts, jl_array_any_type));
-    unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 2;
+    unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 3;
     jl_value_t **locals = NULL;
     JL_GC_PUSHFRAME(s, locals, nroots);
     locals[0] = (jl_value_t*)src;
     locals[1] = (jl_value_t*)stmts;
-    s->locals = locals + 2;
-    s->src = src;
+    s->locals = locals + 3;
+    frame_set_src(s, src);
     if (jl_is_module(mi->def.value)) {
         s->module = mi->def.module;
     }
@@ -978,6 +1127,9 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->continue_at = 0;
     s->mi = mi;
     s->ci = ci;
+    s->world = world;
+    s->sites = call_sites(jl_is_method(mi->def.value) ? mi->def.method : NULL, src, jl_array_nrows(stmts));
+    locals[2] = (jl_value_t*)s->sites;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
@@ -1021,13 +1173,15 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     JL_GC_PROMISE_ROOTED(code);
     locals[2] = (jl_value_t*)oc->captures;
     s->locals = locals + 2;
-    s->src = code;
+    frame_set_src(s, code);
     s->module = source->module;
     s->sparam_vals = NULL;
     s->preevaluation = 0;
     s->continue_at = 0;
     s->mi = NULL;
     s->ci = NULL;
+    s->sites = NULL;
+    s->world = 0;
     size_t defargs = source->nargs;
     int isva = source->isva;
     assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
@@ -1054,12 +1208,14 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     JL_GC_PUSHFRAME(s, s->locals, nroots);
     jl_array_t *stmts = src->code;
     assert(jl_typetagis(stmts, jl_array_any_type));
-    s->src = src;
+    frame_set_src(s, src);
     s->module = m;
     s->sparam_vals = jl_emptysvec;
     s->continue_at = 0;
     s->mi = NULL;
     s->ci = NULL;
+    s->sites = NULL;
+    s->world = 0;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 1);
     JL_GC_POP();
@@ -1075,13 +1231,16 @@ jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e
     jl_value_t **locals;
     JL_GC_PUSHFRAME(s, locals, 0);
     (void)locals;
-    s->src = src;
+    s->locals = NULL;
+    frame_set_src(s, src);
     s->module = m;
     s->sparam_vals = sparam_vals;
     s->preevaluation = (sparam_vals != NULL);
     s->continue_at = 0;
     s->mi = NULL;
     s->ci = NULL;
+    s->sites = NULL;
+    s->world = 0;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *v = eval_value(e, s);
     assert(v);
