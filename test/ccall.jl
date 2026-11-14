@@ -1937,6 +1937,10 @@ ccall_byref27813(@nospecialize(x), ::Union{Nothing,Ref{S}}) where {S} =
     ccall(C_NULL, Int, (CCallByRef27813{S},), x)
 @test_throws UndefVarError(:S, :static_parameter) ccall_byref27813(CCallByRef27813{Int}(1, 2, 3, 4, 5), nothing)
 
+# a `ccall` return type that uses an undefined static parameter (#63046)
+ccall_undef_rettype63046(x::Union{Nothing,Ref{S}}) where {S} = ccall(:jl_value_ptr, Ptr{S}, (Any,), x)
+@test_throws UndefVarError(:S, :static_parameter) ccall_undef_rettype63046(nothing)
+
 # issue #27215
 function once_removed()
     function mycompare(a, b)::Cint
