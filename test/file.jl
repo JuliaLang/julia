@@ -314,6 +314,52 @@ child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $co
     @test !ispath(t)
 end
 
+# Exercise test-boundary cleanup in a subprocess without disturbing this test's files.
+@testset "test runner temporary cleanup" begin
+    code = quote
+        print_testworker_started(args...) = nothing
+        include($(joinpath(@__DIR__, "testdefs.jl")))
+        fixture = mktempdir()
+        try
+            script = joinpath(fixture, "testcase")
+            marker = joinpath(fixture, "paths")
+            for outcome in ("@test true", "@test false", "error(\"test error\")")
+                write(script * ".jl", """
+                    directory = mktempdir()
+                    file, io = mktemp()
+                    close(io)
+                    write($(repr(marker)), directory, '\\n', file)
+                    $outcome
+                    """)
+                result = @test_logs (:warn, "Test set left temporary paths behind") begin
+                    redirect_stdout(devnull) do
+                        runtests("temporary cleanup", script)
+                    end
+                end
+                paths = readlines(marker)
+                @test all(!ispath, paths)
+                @test all(p -> !haskey(Base.Filesystem.TEMP_CLEANUP, p), paths)
+                @test isdir(fixture)
+                @test haskey(Base.Filesystem.TEMP_CLEANUP, fixture)
+                @test result[1].pass == (outcome == "@test true")
+                @test result[1].fail + result[1].error == (outcome != "@test true")
+            end
+            write(script * ".jl", "mktempdir() do dir; @test isdir(dir); end")
+            @test_logs runtests("clean temporary directory", script)
+            write(script * ".jl", "write($(repr(marker)), mktempdir(cleanup=false))")
+            @test_logs runtests("explicit cleanup opt-out", script)
+            unregistered = read(marker, String)
+            @test isdir(unregistered)
+            rm(unregistered)
+        finally
+            rm(fixture; recursive=true, force=true)
+        end
+    end
+    cmd = `$(Base.julia_cmd()) --startup-file=no -e $("using Distributed, Test; " * string(code))`
+    cmd = addenv(cmd, "JULIA_TEST_FAILFAST" => "false", "CI" => "false")
+    @test success(pipeline(cmd; stdout=stdout, stderr=stderr))
+end
+
 import Base.Filesystem: TEMP_CLEANUP_MIN, TEMP_CLEANUP_MAX, TEMP_CLEANUP
 
 function with_temp_cleanup(f::Function, n::Int)
