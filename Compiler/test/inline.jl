@@ -268,6 +268,25 @@ f_identity_splat(t) = (t...,)
 f_splat_with_empties(t) = (()..., t..., ()..., ()...)
 @test fully_eliminated(f_splat_with_empties, (NTuple{200,UInt8},))
 
+# Long splats with prefixes or multiple tuple containers use the compact invoke-apply form.
+@noinline invoke_apply_target(xs...) = (xs[1], xs[end])
+invoke_apply_single(t::NTuple{33,Float32}) = invoke_apply_target(t...)
+invoke_apply_prefix(t::NTuple{33,Float32}) = invoke_apply_target(0.0f0, t...)
+invoke_apply_multiple(a::NTuple{33,Float32}, b::NTuple{33,Float32}) =
+    invoke_apply_target(a..., b...)
+for (f, tt, nexprargs) in (
+        (invoke_apply_single, Tuple{NTuple{33,Float32}}, 5),
+        (invoke_apply_prefix, Tuple{NTuple{33,Float32}}, 6),
+        (invoke_apply_multiple, Tuple{NTuple{33,Float32},NTuple{33,Float32}}, 6))
+    let src = code_typed1(f, tt)
+        i = only(findall(stmt -> isexpr(stmt, :invoke_apply), src.code))
+        @test length((src.code[i]::Expr).args) == nexprargs
+        shown = sprint(io -> Compiler.IRShow.show_ir(io, src))
+        @test occursin("invoke apply", shown)
+        @test !occursin("Core._apply_iterate::", shown)
+    end
+end
+
 # check that <: can be fully eliminated
 struct SomeArbitraryStruct; end
 function f_subtype()

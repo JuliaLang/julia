@@ -1048,6 +1048,11 @@ static const auto jlinvokemodify_func = new JuliaFunction<>{
     get_func2_sig,
     get_func_attrs,
 };
+static const auto jlinvokeapply_func = new JuliaFunction<>{
+    XSTR(jl_invoke_apply),
+    get_func_sig,
+    get_func_attrs,
+};
 static const auto jlinvokeoc_func = new JuliaFunction<>{
     XSTR(jl_invoke_oc),
     get_func2_sig,
@@ -4947,8 +4952,19 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 }
             }
         }
-        // optimization for _apply_iterate when there is one argument and it is a SimpleVector
+        // Fast path for a single concrete tuple: extract its fields and call f directly.
         const jl_cgval_t &arg = argv[3];
+        if (jl_is_concrete_type(arg.typ) && jl_is_tuple_type(arg.typ)) {
+            size_t nf = jl_datatype_nfields(arg.typ);
+            SmallVector<jl_cgval_t, 8> call_args;
+            call_args.push_back(argv[2]);
+            for (size_t i = 0; i < nf; i++)
+                call_args.push_back(emit_getfield_knownidx(ctx, arg, i, (jl_datatype_t*)arg.typ, jl_memory_order_notatomic));
+            Value *r = emit_jlcall(ctx, jlapplygeneric_func, nullptr, call_args, nf + 1, julia_call);
+            *ret = mark_julia_type(ctx, r, true, jl_any_type);
+            return true;
+        }
+        // optimization for _apply_iterate when there is one argument and it is a SimpleVector
         if (arg.typ == (jl_value_t*)jl_simplevector_type) {
             Value *theF = boxed(ctx, argv[2]);
             Value *svec_val = boxed(ctx, arg);
@@ -6440,6 +6456,50 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt) 
     return emit_invoke(ctx, lival, argv, nargs, rt, false);
 }
 
+// `:invoke_apply`: `args[0]` targets the flattened `f(xs...)` call, while the operands
+// are `_apply_iterate(iterate, f, xs...)`. Flatten the tuples to match the target's ABI.
+static jl_cgval_t emit_invoke_apply(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt) JL_CANSAFEPOINT
+{
+    jl_value_t **args = jl_array_data(ex->args, jl_value_t*);
+    size_t arglen = jl_array_dim0(ex->args);
+    size_t nargs = arglen - 1;
+    assert(arglen >= 5);
+
+    jl_cgval_t lival = emit_expr(ctx, args[0]);
+    SmallVector<jl_cgval_t, 0> argv(nargs);
+    for (size_t i = 0; i < nargs; ++i) {
+        argv[i] = emit_expr(ctx, args[i + 1]);
+        if (argv[i].typ == jl_bottom_type)
+            return jl_cgval_t();
+    }
+    size_t nflat = 1;
+    bool all_tuples = true;
+    for (size_t i = 3; i < nargs; i++) {
+        const jl_cgval_t &tup = argv[i];
+        if (!jl_is_concrete_type(tup.typ) || !jl_is_tuple_type(tup.typ)) {
+            all_tuples = false;
+            break;
+        }
+        nflat += jl_datatype_nfields(tup.typ);
+    }
+    if (all_tuples) {
+        SmallVector<jl_cgval_t, 8> flat;
+        flat.reserve(nflat);
+        flat.push_back(argv[2]);
+        for (size_t i = 3; i < nargs; i++) {
+            const jl_cgval_t &tup = argv[i];
+            size_t nf = jl_datatype_nfields(tup.typ);
+            for (size_t j = 0; j < nf; j++)
+                flat.push_back(emit_getfield_knownidx(ctx, tup, j, (jl_datatype_t*)tup.typ, jl_memory_order_notatomic));
+        }
+        return emit_invoke(ctx, lival, flat, flat.size(), rt, false);
+    }
+    // Never pass unflattened arguments to the target; flatten at runtime instead.
+    Value *r = emit_jlcall(ctx, jlinvokeapply_func, boxed(ctx, lival),
+                           ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, julia_call);
+    return mark_julia_type(ctx, r, true, rt);
+}
+
 static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayRef<jl_cgval_t> argv, size_t nargs, jl_value_t *rt, bool always_inline)
 {
     ++EmittedInvokes;
@@ -7595,6 +7655,12 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         jl_value_t *expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
             jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
         return emit_invoke_modify(ctx, ex, expr_t);
+    }
+    else if (head == jl_invoke_apply_sym) {
+        assert(ssaidx_0based >= 0);
+        jl_value_t *expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
+            jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
+        return emit_invoke_apply(ctx, ex, expr_t);
     }
     else if (head == jl_call_sym) {
         jl_value_t *expr_t;
@@ -11500,6 +11566,7 @@ static void init_jit_functions(void)
     add_named_global(jlinvoke_func, &jl_invoke);
     add_named_global(jlinvokemodify_func, &jl_invoke_modify);
     add_named_global(jlinvoketarget_func, &jl_invoke_target);
+    add_named_global(jlinvokeapply_func, &jl_invoke_apply);
     add_named_global(jltopeval_func, &jl_toplevel_eval);
     add_named_global(jlcopyast_func, &jl_copy_ast);
     //add_named_global(jlnsvec_func, &jl_svec);

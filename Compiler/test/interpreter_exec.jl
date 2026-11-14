@@ -190,3 +190,22 @@ end
 # the builtin names its target with a partition, and only that
 @test_throws TypeError Core.modifyglobal_partition(GlobalRef(@__MODULE__, :exec_gp_m), +, 1)
 @test exec_gp_m === 6
+
+# Long tuple splats become `Expr(:invoke_apply, ci, Core._apply_iterate, ...)`; the
+# interpreter must flatten the containers and invoke `ci` (#62742).
+@noinline interp_invoke_apply_target(xs...) = (xs[1], xs[end], length(xs))
+interp_invoke_apply_prefix(t::NTuple{33,Float32}) =
+    interp_invoke_apply_target(0.0f0, t...)
+interp_invoke_apply_multiple(a::NTuple{33,Float32}, b::NTuple{33,Float32}) =
+    interp_invoke_apply_target(a..., b...)
+let t = ntuple(Float32, 33)
+    for (f, tt, args, expected) in (
+            (interp_invoke_apply_prefix, (NTuple{33,Float32},), (t,), (0.0f0, 33.0f0, 34)),
+            (interp_invoke_apply_multiple, (NTuple{33,Float32}, NTuple{33,Float32}), (t, t), (1.0f0, 33.0f0, 66)))
+        ir = first(only(Base.code_ircode(f, tt)))
+        @test any(stmt -> Meta.isexpr(stmt, :invoke_apply), ir.stmts.stmt)
+        ir.argtypes[1] = Tuple{}
+        oc = Core.OpaqueClosure(ir; do_compile=false)
+        @test oc(args...) === expected
+    end
+end

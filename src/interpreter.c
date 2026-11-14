@@ -223,6 +223,22 @@ static jl_value_t *do_invoke_modify(jl_value_t **args, size_t nargs, interpreter
     return result;
 }
 
+// `:invoke_apply`: an `_apply_iterate` call whose flattened `f(args...)` call the compiler
+// resolved to the `CodeInstance` or `MethodInstance` in `args[0]`.
+static jl_value_t *do_invoke_apply(jl_value_t **args, size_t nargs, interpreter_state *s) JL_CANSAFEPOINT
+{
+    jl_value_t **argv;
+    assert(nargs >= 4);
+    JL_GC_PUSHARGS(argv, nargs - 1);
+    size_t i;
+    for (i = 1; i < nargs; i++)
+        argv[i-1] = eval_value(args[i], s);
+    assert(argv[0] == BUILTIN(_apply_iterate));
+    jl_value_t *result = jl_invoke_apply(args[0], &argv[1], nargs - 2);
+    JL_GC_POP();
+    return result;
+}
+
 // get the global (throwing if null) in the current world
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e, size_t world)
 {
@@ -383,6 +399,9 @@ static NOINLINE jl_value_t *eval_value_full(jl_value_t *e, interpreter_state *s)
     }
     else if (head == jl_invoke_modify_sym) {
         return do_invoke_modify(args, nargs, s);
+    }
+    else if (head == jl_invoke_apply_sym) {
+        return do_invoke_apply(args, nargs, s);
     }
     else if (head == jl_isdefined_sym) {
         jl_value_t *sym = args[0];
