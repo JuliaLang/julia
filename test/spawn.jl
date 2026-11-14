@@ -560,6 +560,13 @@ end
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
+# Line continuation after non-ASCII text in a shifted substring
+@test Base.shell_split("    é\\\n x") == ["éx"]
+let x = "X"
+    @test `ls é $x \
+     --flag`.exec == ["ls", "é", "X", "--flag"]
+end
+
 # Tilde expansion in backtick commands
 @test samepath(only(`~`.exec), homedir())
 @test samepath(only(`~/foo`.exec), joinpath(homedir(), "foo"))
@@ -679,9 +686,14 @@ mktempdir() do dir
     run(`$echocmd '2' > $outfile`)
     @test read(outfile, String) == "2\n"
 
+    # Empty quoted word directly before > is still an argument
+    @test (`$echocmd ''>$devnull`).cmd == `$echocmd ''`
+    @test (`$echocmd ""> $devnull`).cmd == `$echocmd ""`
+
     # simple commands still return Cmd (not wrapped in pipeline)
     @test `$echocmd hello` isa Cmd
     @test Meta.isexpr(Base.shell_parse("echo hello")[1], :tuple)
+    @test_throws "redirect operator without filename" Base.shell_parse("echo a > | cat")
 
     # Shell mode end-to-end tests
     # Use shell-escaped commands and paths so that shell_parse handles
@@ -1195,6 +1207,10 @@ end
     @test cmd.env == ["a=b=c"]
     cmd = addenv(cmd, "b"=>"b")
     @test issetequal(cmd.env, ["b=b", "a=b=c"])
+    # names starting with a multi-byte character
+    cmd = addenv(setenv(``, "é" => "1"), "A" => "2"; inherit=false)
+    @test issetequal(cmd.env, ["é=1", "A=2"])
+    @test addenv(``, ["éa=1"], inherit=false).env == ["éa=1"]
 end
 
 @testset "setenv with dir (with tests for #42131)" begin

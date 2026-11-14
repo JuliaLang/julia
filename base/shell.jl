@@ -157,6 +157,8 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                 empty!(arg)
             elseif redirect_mode == :none && (!isempty(arg) || word_has_special)
                 append_2to1!(args, arg)
+            elseif redirect_mode != :none
+                error("parsing command `$str`: redirect operator without filename")
             end
             seg_tuple = Expr(:tuple)
             for a in args; push!(seg_tuple.args, Expr(:tuple, a...)); end
@@ -176,10 +178,10 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                     !isempty(arg[1]::AbstractString) && all(isdigit, arg[1]::AbstractString)
                 fd = parse(Int, String(arg[1]::AbstractString)::String)
                 empty!(arg)
-                word_has_special = false
-            elseif !isempty(arg)
+            elseif !isempty(arg) || word_has_special
                 append_2to1!(args, arg)
             end
+            word_has_special = false
             if c == '>'
                 append = false
                 if !isempty(st) && (peek(st)::P).second == '>'
@@ -222,7 +224,7 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                         popfirst!(st)
                     end
                     while !isempty(st) && (peek(st)::P)[2] in (' ', '\t')
-                        i = nextind(str, i)
+                        i = nextind(s, i)
                         _ = popfirst!(st)
                     end
                 elseif in_double_quotes

@@ -111,7 +111,7 @@ function _truncate_at_width_or_chars(ignore_ANSI::Bool, str::AbstractString, wid
     I = ignore_ANSI ? ANSIIterator(str) : pairs(str)
     for (i, c) in I
         if c isa ANSIDelimiter
-            truncidx == 0 && (needANSIend = c != "\033[0m")
+            truncidx == 0 && (needANSIend = c.del != "\033[0m")
             lastidx = i + ncodeunits(c) - 1
         else
             stop && break
