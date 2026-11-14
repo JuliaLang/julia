@@ -1824,10 +1824,10 @@ JL_DLLEXPORT jl_typemap_entry_t *jl_mt_find_cache_entry(jl_methcache_t *cache, j
 
 static jl_value_t *compute_simplett(jl_tupletype_t *cachett) JL_CANSAFEPOINT
 {
-    // now scan `cachett` and ensure that `Type{T}` in the cache will be matched exactly by `typeof(T)`
-    // and also reduce the complexity of rejecting this entry in the cache
+    // now scan `cachett` and reduce the complexity of rejecting this entry in the cache
     // by replacing non-simple types with jl_any_type to build a new `type`
-    // (for example, if the signature contains jl_function_type)
+    // (for example, if the signature contains jl_function_type), but not `Type{T}`
+    // or `TypeEgal{T}`, which are matched by comparing with `T` directly
     // TODO: this is also related to how we should handle partial matches
     //       (which currently might miss detection of a MethodError)
     jl_value_t *simplett = jl_nothing;
@@ -1839,15 +1839,7 @@ static jl_value_t *compute_simplett(jl_tupletype_t *cachett) JL_CANSAFEPOINT
     JL_GC_PUSH1(&newparams);
     for (i = 0; i < np; i++) {
         jl_value_t *elt = jl_svecref(cachett->parameters, i);
-        if (jl_is_vararg(elt)) {
-        }
-        else if (jl_is_some_Type(elt)) {
-            // TODO: if (!jl_is_singleton(elt)) ...
-            jl_value_t *kind = jl_typeof(jl_some_Type_T(elt));
-            if (!newparams) newparams = jl_svec_copy(cachett->parameters);
-            jl_svecset(newparams, i, kind);
-        }
-        else if (!jl_is_concrete_type(elt)) { // for example, jl_function_type or jl_tuple_type
+        if (!jl_is_vararg(elt) && !jl_is_some_Type(elt) && !jl_is_concrete_type(elt)) { // for example, jl_function_type or jl_tuple_type
             if (!newparams) newparams = jl_svec_copy(cachett->parameters);
             jl_svecset(newparams, i, jl_any_type);
         }
