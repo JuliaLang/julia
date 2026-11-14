@@ -9460,6 +9460,40 @@ end
 end
 @test issue52533_beside(Ref(false))
 
+# ... and for a value the catch reads that the try never assigns, which reaches
+# the catch as an SSA value, rooted across the setjmp instead of in a PhiC slot
+@noinline function issue52533_ssa(freed::Ref{Bool})
+    x = Issue52533()
+    finalizer(_ -> (freed[] = true), x)
+    try
+        Base.inferencebarrier(identity)(nothing)
+    catch
+        Base.donotdelete(x)
+    end
+    GC.gc(true); GC.gc(true)
+    return freed[]
+end
+@test issue52533_ssa(Ref(false))
+
+# ... but a value still preserved where the try region ends stays rooted
+@noinline function issue52533_preserve(n)
+    s = fill(n, 1000)
+    r = 0
+    GC.@preserve s begin
+        p = pointer(s)
+        try
+            Base.inferencebarrier(identity)(nothing)
+        catch
+            r = -1
+        end
+        GC.gc(true)
+        Base.donotdelete([fill(0, 1000) for _ in 1:100])
+        r += unsafe_load(p, 500)
+    end
+    return r
+end
+@test issue52533_preserve(7) == 7
+
 # `jl_new_method_uninit` must satisfy Method's min-initialized invariant:
 # fields in the initialized prefix (e.g. `sig`, `name`) are assumed non-null
 # by codegen, which omits undef checks when loading them.

@@ -298,11 +298,17 @@ struct State {
     // LiveSets, LiveIfLiveOut, and CalleeRoots.
     SmallVector<Instruction*, 0> SafepointNumbering;
 
-    // Safepoint number of instructions that can return twice. For now, all
-    // values live at these instructions will get their own, dedicated GC frame
-    // slots, because they have unobservable control flow, so we can't be sure
-    // where they're actually live.
+    // Safepoint number of instructions that can return twice, whose second
+    // return is reached along no edge the liveness sees.
     SmallVector<int, 0> ReturnsTwice;
+    // Values live at one of those whose region could not be bounded
+    // (`ExtendReturnsTwiceLiveness`): each gets a GC frame slot of its own for
+    // the whole function.
+    LargeSparseBitVector PermanentRoots;
+    // Where each bounded region ends, with the values kept live through it.
+    SmallVector<std::pair<Instruction *, LargeSparseBitVector>, 0> ReturnsTwiceEnds;
+    // At the end of a region nested in others, what the enclosing ones still keep.
+    DenseMap<Instruction *, LargeSparseBitVector> ReturnsTwiceKeptAt;
 
     // The set of values live at a particular safepoint
     SmallVector<LargeSparseBitVector, 0> LiveSets;
@@ -355,6 +361,7 @@ private:
     State LocalScan(Function &F);
     void ComputeLiveness(State &S);
     void ComputeLiveSets(State &S);
+    void ExtendReturnsTwiceLiveness(State &S);
     std::pair<SmallVector<int, 0>, int> ColorRoots(const State &S);
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame, Instruction *InsertBefore);
     void PlaceGCFrameStores(State &S, unsigned MinColorRoot, ArrayRef<int> Colors, int PreAssignedColors, Value *GCFrame);
