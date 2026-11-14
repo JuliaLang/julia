@@ -280,12 +280,13 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
             q, qq = nq, q
         catch e
             isa(e,InexactError) || isa(e,OverflowError) || rethrow()
-            (a ≤ 2 || ((-p == p) && (p < 0))) && return p // q
+            (a < 2 || ((-p == p) && (p < 0))) && return p // q
             # find best semiconvergent that fits in T
             ia_p = iszero(p) ? typemax(T) : fld(typemax(T) - abs(pp), abs(p))
             ia_q = iszero(q) ? typemax(T) : fld(typemax(T) - qq, q)
             ia = min(ia_p, ia_q)
-            return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
+            cond = 2ia > a || 2ia == a && qq*y > q*r
+            return cond ? (ia*p + pp) // (ia*q + qq) : p // q
         end
 
         # naive approach of using
@@ -330,11 +331,12 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
         return np // nq
     catch e
         isa(e,InexactError) || isa(e,OverflowError) || rethrow()
-        (a ≤ 2 || ((-p == p) && (p < 0))) && return p // q
+        (a < 2 || ((-p == p) && (p < 0))) && return p // q
         ia_p = iszero(p) ? typemax(T) : fld(typemax(T) - abs(pp), abs(p))
         ia_q = iszero(q) ? typemax(T) : fld(typemax(T) - qq, q)
         ia = min(ia_p, ia_q)
-        return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
+        cond = 2ia > a || 2ia == a && qq*x > q*y
+        return cond ? (ia*p + pp) // (ia*q + qq) : p // q
     end
 end
 rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)
