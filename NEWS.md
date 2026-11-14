@@ -52,6 +52,10 @@ New library functions
 New library features
 --------------------
 
+* Unary `+` on an `AbstractArray` now applies `+` elementwise, like unary `-`
+  does, so `+view(Bool[1, 0], :)` returns an `Int` array rather than the same
+  object ([#58295]).
+
 Standard library changes
 ------------------------
 
