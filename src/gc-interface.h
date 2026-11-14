@@ -247,14 +247,13 @@ JL_DLLEXPORT struct _jl_value_t *jl_gc_big_alloc_reset_safe(struct _jl_tls_state
 JL_DLLEXPORT void *jl_gc_alloc_typed_reset_safe(struct _jl_tls_states_t *ptls, size_t sz,
                                                 void *ty) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_gc_queue_root_reset_safe(const struct _jl_value_t *ptr);
-// Wrapper around Libc malloc that updates Julia allocation counters.
-JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz) JL_CANSAFEPOINT;
-// Wrapper around Libc calloc that updates Julia allocation counters.
-JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT;
-// Wrapper around Libc free that updates Julia allocation counters.
-JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz);
-// Wrapper around Libc realloc that updates Julia allocation counters.
-JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_CANSAFEPOINT;
+// Wrappers around Libc malloc, calloc, free and realloc that update Julia allocation counters.
+// They must never collect or reach a safepoint: libraries call them while holding their own
+// locks, from gc-safe regions concurrently with a collection, and from foreign threads.
+JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_NOTSAFEPOINT;
 // Wrapper around Libc malloc that's used to dynamically allocate memory for Arrays and
 // Strings. It increments Julia allocation counters and should check whether we're close to
 // the Julia heap target, and therefore, whether we should run a collection. Note that this

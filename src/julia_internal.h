@@ -734,9 +734,9 @@ size_t jl_genericmemory_nbytes(jl_genericmemory_t *a) JL_NOTSAFEPOINT;
 size_t memory_block_usable_size(void *mem, int isaligned) JL_NOTSAFEPOINT;
 // Counted allocators behind `jl_malloc` and friends; with `usable` set they count the usable
 // size of the block instead of the requested size.
-void *jl_gc_counted_malloc_(size_t sz, int usable) JL_CANSAFEPOINT;
-void *jl_gc_counted_calloc_(size_t nm, size_t sz, int usable) JL_CANSAFEPOINT;
-void *jl_gc_counted_realloc_(void *p, size_t old, size_t sz, int usable) JL_CANSAFEPOINT;
+void *jl_gc_counted_malloc_(size_t sz, int usable) JL_NOTSAFEPOINT;
+void *jl_gc_counted_calloc_(size_t nm, size_t sz, int usable) JL_NOTSAFEPOINT;
+void *jl_gc_counted_realloc_(void *p, size_t old, size_t sz, int usable) JL_NOTSAFEPOINT;
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT;
 void jl_gc_run_all_finalizers(jl_task_t *ct) JL_CANSAFEPOINT;
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
@@ -1950,7 +1950,7 @@ void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void *jl_get_library_(const char *f_lib, int throw_err) JL_CANSAFEPOINT;
 JL_DLLEXPORT void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL_NOTSAFEPOINT;
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
-JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd) JL_CANSAFEPOINT;
+JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd) JL_CANSAFEPOINT_ENTER_LEAVE;
 JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_value_t *fobj, jl_datatype_t *result, htable_t *cache, jl_svec_t *fill,
