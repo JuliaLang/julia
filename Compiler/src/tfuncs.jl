@@ -1072,16 +1072,35 @@ function getfield_boundscheck(argtypes::Vector{Any})
     return :unsafe
 end
 
+# whether the field of `s00` named by `name` may be `@atomic`
+@nospecs function getfield_may_be_atomic(s00, name)
+    s = unwrap_unionall(widenconst(s00))
+    if isa(s, Union)
+        return getfield_may_be_atomic(rewrap_unionall(s.a, s00), name) ||
+               getfield_may_be_atomic(rewrap_unionall(s.b, s00), name)
+    elseif isa(s, Core.TypeEgal)
+        s = typeof(type_parameter(s)) # the only instance is the parameter
+    end
+    isa(s, DataType) && !isabstracttype(s) || return true
+    s.name.atomicfields === C_NULL && return false
+    isa(name, Const) || return true
+    field = try_compute_fieldidx(s, name.val)
+    return field !== nothing && isfieldatomic(s, field)
+end
+
 function getfield_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, boundscheck::Symbol=getfield_boundscheck(argtypes))
     boundscheck === :unsafe && return false
     ordering = Const(:not_atomic)
+    explicit_ordering = false
     if length(argtypes) == 3
         isvarargtype(argtypes[3]) && return false
         if widenconst(argtypes[3]) !== Bool
             ordering = argtypes[3]
+            explicit_ordering = true
         end
     elseif length(argtypes) == 4
         ordering = argtypes[3]
+        explicit_ordering = true
     elseif length(argtypes) ≠ 2
         return false
     end
@@ -1091,6 +1110,8 @@ function getfield_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, boundsch
     if ordering !== :not_atomic # TODO: this is assuming not atomic
         return false
     end
+    # an explicit `:not_atomic` order throws for an `@atomic` field
+    explicit_ordering && getfield_may_be_atomic(argtypes[1], argtypes[2]) && return false
     return getfield_nothrow(𝕃, argtypes[1], argtypes[2], !(boundscheck === :off))
 end
 @nospecs function getfield_nothrow(𝕃::AbstractLattice, s00, name, boundscheck::Bool)
@@ -1145,8 +1166,8 @@ end
     if isa(s, Union)
         return getfield_nothrow(𝕃, rewrap_unionall(s.a, s00), name, boundscheck) &&
                getfield_nothrow(𝕃, rewrap_unionall(s.b, s00), name, boundscheck)
-    elseif isa(s, Core.TypeEgal) && isTypeDataType(type_parameter(s))
-        s = s0 = DataType
+    elseif isa(s, Core.TypeEgal)
+        s = s0 = typeof(type_parameter(s)) # the only instance is the parameter
     end
     if isa(s, DataType)
         # Can't say anything about abstract types
@@ -1161,7 +1182,6 @@ end
         isa(name, Const) || return false
         field = try_compute_fieldidx(s, name.val)
         field === nothing && return false
-        isfieldatomic(s, field) && return false # TODO: currently we're only testing for ordering === :not_atomic
         field <= datatype_min_ninitialized(s) && return true
         # `try_compute_fieldidx` already check for field index bound.
         !isvatuple(s) && isbitstype(fieldtype(s0, field)) && return true
@@ -2982,6 +3002,31 @@ function is_const_field_argtype(@nospecialize(obj), @nospecialize(name))
     return fidx !== nothing && isconst(objt, fidx)
 end
 
+# whether the field of `s00` named by `name` is known to exist (it may still be undefined)
+@nospecs function getfield_inbounds(s00, name)
+    widenconst(s00) <: Module && return true # a global is looked up, and checked
+    isa(name, Const) || return false
+    if isa(s00, Const)
+        return try_compute_fieldidx(typeof(s00.val), name.val) !== nothing
+    elseif isconstType(s00)
+        return try_compute_fieldidx(typeof(type_parameter(s00)), name.val) !== nothing
+    end
+    s0 = widenconst_split(s00)
+    s = unwrap_unionall(s0)
+    if isa(s, Union)
+        return getfield_inbounds(rewrap_unionall(s.a, s00), name) &&
+               getfield_inbounds(rewrap_unionall(s.b, s00), name)
+    elseif isa(s, Core.TypeEgal)
+        s = s0 = typeof(type_parameter(s)) # the only instance is the parameter
+    end
+    isa(s, DataType) && !isabstracttype(s) || return false
+    if isvatuple(s)
+        # only the fields before the `Vararg` are known to exist
+        return isa(name.val, Int) && 1 <= name.val <= datatype_min_ninitialized(s)
+    end
+    return try_compute_fieldidx(s0, name.val) !== nothing
+end
+
 function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     length(argtypes) < 2 && return EFFECTS_THROWS
     obj = argtypes[1]
@@ -3006,21 +3051,18 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
     else
         consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
     end
-    noub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(argtypes)
     nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
-    if !nothrow
-        if bcheck !== :on
-            # If we cannot independently prove inboundsness, taint `:noub`.
-            # The inbounds-ness assertion requires dynamic reachability,
-            # while `:noub` needs to be true for all input values.
-            # However, as a special exception, we do allow literal `:boundscheck`.
-            # `:noub` will be tainted in any caller using `@inbounds`
-            # based on the `:noinbounds` effect.
-            # N.B. We do not taint for `--check-bounds=no` here.
-            # That is handled in concrete evaluation.
-            noub = ALWAYS_FALSE
-        end
+    # Without a bounds check, accessing a field not known to exist, by index or by name, is
+    # undefined behavior (a field that may be undefined is still checked), and `:noub` needs
+    # to hold for all input values. Post-optimization analysis refines this to
+    # `NOUB_IF_NOINBOUNDS` for a literal `:boundscheck` (see `is_conditional_noub`).
+    # N.B. We do not taint for `--check-bounds=no` here.
+    # That is handled in concrete evaluation.
+    if bcheck === :unsafe ? !nothrow : bcheck !== :on && !getfield_inbounds(argtypes[1], argtypes[2])
+        noub = ALWAYS_FALSE
+    else
+        noub = ALWAYS_TRUE
     end
     if hasintersect(widenconst(obj), Module)
         # Modeled more precisely in abstract_eval_getglobal
@@ -3136,9 +3178,13 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     end
 
     # if this builtin call deterministically throws,
-    # don't bother to taint the other effects other than :nothrow:
-    # note this is safe only if we accounted for :noub already
-    rt === Bottom && return EFFECTS_THROWS
+    # don't bother to taint the other effects other than :nothrow and :noub
+    if rt === Bottom
+        # the runtime always checks bounds, so this may be an unchecked out-of-bounds access,
+        # which compiled code does not check: it cannot return, but it is undefined behavior
+        is_memoryop(f) && !memoryop_noub(f, argtypes) && return Effects(EFFECTS_THROWS; noub=ALWAYS_FALSE)
+        return EFFECTS_THROWS
+    end
 
     if f === isdefined
         return isdefined_effects(𝕃, argtypes)
@@ -3228,7 +3274,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
                     instanceof_tfunc(_memoryref_elemtype(argtypes[1]), true)[1]
                 isprimitivetype(T) && T !== Bool && (noub = ALWAYS_TRUE)
             end
-        elseif f === memoryrefnew || f === memoryrefget || f === const_memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
+        elseif is_memoryop(f)
             noub = memoryop_noub(f, argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
         else
             noub = ALWAYS_TRUE
@@ -3236,6 +3282,9 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly, noub)
     end
 end
+
+is_memoryop(@nospecialize f) = f === memoryrefnew || f === memoryrefget || f === const_memoryrefget ||
+    f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
 
 function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
     nargs = length(argtypes)
