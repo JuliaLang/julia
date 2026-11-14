@@ -923,28 +923,69 @@ end
 end
 
 @testset "log/log1p" begin
-    # using Tang's algorithm, should be accurate to within 0.56 ulps
+    # the table-based kernels should be accurate to within 0.51 ulps
     X = rand(100)
     for x in X
         for n = -5:5
             xn = ldexp(x,n)
 
             for T in (Float32,Float64)
-                xt = T(x)
+                xt = T(xn)
 
-                y = log(xt)
-                yb = log(big(xt))
-                @test abs(y-yb) <= 0.56*eps(T(yb))
-
-                y = log1p(xt)
-                yb = log1p(big(xt))
-                @test abs(y-yb) <= 0.56*eps(T(yb))
+                for f in (log, log2, log10, log1p)
+                    y = f(xt)
+                    yb = f(big(xt))
+                    @test abs(y-yb) <= 0.51*eps(T(yb))
+                end
 
                 if n <= 0
                     y = log1p(-xt)
                     yb = log1p(big(-xt))
-                    @test abs(y-yb) <= 0.56*eps(T(yb))
+                    @test abs(y-yb) <= 0.51*eps(T(yb))
                 end
+            end
+        end
+    end
+
+    @testset "Float16 $f" for f in (log, log2, log10, log1p)
+        # exhaustive over the domain
+        maxerr = 0.0
+        for u in 0x0000:0xffff
+            x = reinterpret(Float16, u)
+            (isfinite(x) && x > (f === log1p ? -1 : 0)) || continue
+            yb = f(Float64(x))
+            maxerr = max(maxerr, abs(Float64(f(x)) - yb) / eps(Float16(yb)))
+        end
+        @test maxerr <= 0.501
+    end
+
+    @testset "log1p edge cases" begin
+        for T in (Float16, Float32, Float64)
+            @test log1p(T(-0.0)) === T(-0.0)
+            @test log1p(T(0.0)) === T(0.0)
+            @test log1p(T(Inf)) === T(Inf)
+            @test log1p(floatmax(T)) == log(floatmax(T))
+            @test log1p(nextfloat(T(-1))) == T(log(big(eps(T))/2))
+            for x in (floatmin(T), eps(T)^2, eps(T)/4)
+                @test log1p(x) == x
+                @test log1p(-x) == -x
+            end
+        end
+        # around the small-argument cutoff of the Float64 method
+        for x in (0x1.fffffffffffffp-41, 0x1p-40, 0x1.23456789abcdep-40, 0x1p-27), y in (x, -x)
+            yb = log1p(big(y))
+            @test abs(log1p(y) - yb) <= 0.51*eps(Float64(yb))
+        end
+    end
+
+    @testset "Float32 subnormals flushed to zero" begin
+        if set_zero_subnormals(true)
+            try
+                for x in Float32[1f-40, nextfloat(0f0), prevfloat(floatmin(Float32))]
+                    @test log(x) == log2(x) == log10(x) == -Inf32
+                end
+            finally
+                set_zero_subnormals(false)
             end
         end
     end
@@ -959,7 +1000,7 @@ end
         @test log(2,big(2)^400) == 400
     end
 
-    for T in (Float32,Float64)
+    for T in (Float16,Float32,Float64)
         @test log(zero(T)) == -Inf
         @test isnan_type(T, log(T(NaN)))
         @test_throws DomainError log(-one(T))
