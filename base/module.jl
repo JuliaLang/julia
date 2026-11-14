@@ -9,6 +9,9 @@ for m in methods(_eval_using)
     delete_method(m)
 end
 
+# The `require` call below may define new modules and bindings, which are not visible in
+# the world age the import statement started in. As top-level code following the `require`
+# would, resolve the rest of the path (and perform the import) in the latest world.
 function eval_import_path(at::Module, from::Union{Module, Nothing}, path::Expr, keyword::String)
     isempty(path.args) && error("malformed import statement")
 
@@ -48,7 +51,7 @@ function eval_import_path(at::Module, from::Union{Module, Nothing}, path::Expr, 
     while true
         v === :. && error("invalid $keyword path: \".\" in identifier path")
         i[] > lastindex(path.args) && break
-        m = getglobal(m, v)
+        m = invokelatest(getglobal, m, v)
         m isa Module || error("invalid $keyword path: \"$v\" does not name a module")
         v = next!()
     end
@@ -58,7 +61,7 @@ end
 function eval_import_path_all(at::Module, path::Expr, keyword::String)
     m, v = eval_import_path(at, nothing, path, keyword)
     if v !== nothing
-        m = getglobal(m, v)
+        m = invokelatest(getglobal, m, v)
         m isa Module || error("invalid $keyword path: \"$v\" does not name a module")
     end
     m
@@ -112,7 +115,7 @@ function _eval_import(imported::Bool, to::Module, from::Union{Expr, Nothing}, pa
         if name !== nothing
             asname = asname === nothing ? name : asname
             check_macro_rename(name, asname, keyword)
-            Core._import(to, m, asname, name, imported)
+            invokelatest(Core._import, to, m, asname, name, imported)
         else
             Core._import(to, m, asname === nothing ? nameof(m) : asname)
         end

@@ -3134,3 +3134,34 @@ end
             """))
     end
 end
+
+@testset "import from a submodule of a package loaded from source (#64555)" begin
+    mkdepottempdir() do depot
+        dir = mktempdir()
+        # One package per statement, so that each statement's `require` defines the
+        # modules (and bindings) that the rest of that same statement imports from.
+        for i in 1:5
+            write(joinpath(dir, "Outer64555_$i.jl"), """
+                module Outer64555_$i
+                module Inside
+                    export x$i
+                    x$i = $i
+                end
+                end
+                """)
+        end
+        code = """
+            using Outer64555_1.Inside: x1
+            import Outer64555_2.Inside: x2
+            import Outer64555_3.Inside.x3
+            using Outer64555_4.Inside
+            import Outer64555_5.Inside
+            print((x1, x2, x3, x4, Inside.x5))
+            """
+        cmd = `$(Base.julia_cmd()) --startup-file=no --compiled-modules=no --depwarn=error -e $code`
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => dir, "JULIA_DEPOT_PATH" => depot)
+        err = IOBuffer()
+        @test readchomp(pipeline(cmd; stderr=err)) == "(1, 2, 3, 4, 5)"
+        @test !occursin("WARNING", String(take!(err)))
+    end
+end
