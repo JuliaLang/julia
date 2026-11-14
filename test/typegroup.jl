@@ -439,6 +439,28 @@ using Test
         @test TG_SuperRefA <: AbstractVector{TG_SuperRefB}
     end
 
+    @testset "member supertypes are unset until resolved" begin
+        abstract type TG_UnsetAbs end
+        abstract type TG_UnsetA{T} end
+        abstract type TG_UnsetBounded{T <: TG_UnsetAbs} end
+        # building the Union asks whether the in-progress member is an `Int`
+        typegroup
+            struct TG_UnsetUnionA <: TG_UnsetA{Union{TG_UnsetUnionB, Int}} end
+            struct TG_UnsetUnionB <: TG_UnsetAbs
+                a::TG_UnsetUnionA
+            end
+        end
+        @test supertype(TG_UnsetUnionA) === TG_UnsetA{Union{TG_UnsetUnionB, Int}}
+        # a bound checked before the member's supertype is set cannot be
+        # decided: the declarations are resolved in order
+        @test_throws "circular type parameter constraint" @eval typegroup
+            struct TG_UnsetEarlyA <: TG_UnsetBounded{TG_UnsetEarlyB} end
+            struct TG_UnsetEarlyB <: TG_UnsetAbs
+                a::TG_UnsetEarlyA
+            end
+        end
+    end
+
     @testset "self-referential supertype parameter" begin
         # Node{T} <: AbstractVector{Node{T}} -- type references itself in supertype params
         typegroup
@@ -533,6 +555,50 @@ using Test
         @test t.data[2] === nothing
         t2 = TG_TupleUnion((99, t))
         @test t2.data[2].data[1] == 42
+
+        # an instantiation of a member whose parameters do not mention the group
+        # is laid out with the group, not before it
+        typegroup
+            struct TG_LayoutParam{T}
+                b::T
+            end
+            struct TG_LayoutUser
+                x::TG_LayoutParam{Int}
+                y::Tuple{TG_LayoutParam{Int8}, Int}
+            end
+        end
+        @test isbitstype(TG_LayoutParam{Int}) && isbitstype(TG_LayoutParam{Int8})
+        @test isbitstype(Tuple{TG_LayoutParam{Int8}, Int}) && isbitstype(TG_LayoutUser)
+        typegroup
+            struct TG_LayoutNested{T}
+                n::TG_LayoutLeaf
+                b::T
+            end
+            struct TG_LayoutLeaf
+                x::Int
+            end
+            struct TG_LayoutOuter
+                x::TG_LayoutNested{Int}
+            end
+        end
+        @test isbitstype(TG_LayoutNested{Int}) && sizeof(TG_LayoutNested{Int}) == 2 * sizeof(Int)
+        @test isbitstype(TG_LayoutOuter)
+        # and one whose field types mention another member is laid out once
+        # it has them
+        typegroup
+            struct TG_LayoutTupleU
+                y::Tuple{TG_LayoutTupleP{Int8}, Int}
+            end
+            struct TG_LayoutTupleP{T}
+                n::TG_LayoutTupleL
+                b::T
+            end
+            struct TG_LayoutTupleL
+                x::Int
+            end
+        end
+        @test isbitstype(Tuple{TG_LayoutTupleP{Int8}, Int}) && isbitstype(TG_LayoutTupleU)
+        @test sizeof(TG_LayoutTupleU) == 3 * sizeof(Int)
     end
 
     @testset "TypeApp reflection" begin
@@ -1029,6 +1095,71 @@ using Test
         end
         @test !isdefined(@__MODULE__, :TG_CacheFail)
         @test stale_tuple_cache_refs(:TG_CacheFail) == 0
+
+        # ... nor through a supertype computed lazily during the resolution
+        # (here by the bound check of `B`, for the `TG_LazyFail{Int}` made
+        # before the member's supertype was set)
+        @eval abstract type TG_LazyA{X} end
+        @eval abstract type TG_LazyB{X<:TG_LazyA} end
+        @test_throws Exception @eval typegroup
+            struct TG_LazyFail{T} <: TG_LazyA{TG_LazyFail{Int}}
+                x::TG_LazyFail{Int}
+                y::TG_LazyB{TG_LazyFail{Int}}
+            end
+            struct TG_LazyFailBad
+                x::1
+            end
+        end
+        # an instantiation of a member made during the resolution gets its
+        # layout once the group is complete
+        @eval typegroup
+            struct TG_LayoutUser; x::Tuple{TG_LayoutMember{Int}, Int}; end
+            struct TG_LayoutMember{T}; b::T; end
+        end
+        @test isbitstype(Tuple{TG_LayoutMember{Int}, Int})
+        @test isbitstype(TG_LayoutUser)
+        # ... also one made while an instantiation of a member is in progress
+        @eval typegroup
+            struct TG_LayoutRef{T} <: Ref{Tuple{TG_LayoutHit{T}, Int}}; x::Int; end
+            struct TG_LayoutHit{T}; x::NTuple{3, Int}; r::TG_LayoutRef{T}; end
+            struct TG_LayoutOwner; h::TG_LayoutHit{TG_LayoutOwner}; end
+        end
+        @test sizeof(Tuple{TG_LayoutHit{TG_LayoutOwner}, Int}) == sizeof(Tuple{TG_LayoutHit{Int}, Int})
+        # ... and one made while an instantiation it embeds is in progress,
+        # since a supertype mentioning the type does not prevent inlining it
+        @eval typegroup
+            struct TG_SuperSelf{T} <: Ref{Tuple{TG_SuperSelf{Int}, TG_SuperSelfUser}}; x::T; end
+            struct TG_SuperSelfUser; g::TG_SuperSelf{Float64}; end
+        end
+        @test isbitstype(TG_SuperSelf{Int})
+        @test isbitstype(Tuple{TG_SuperSelf{Int}, TG_SuperSelfUser})
+        # layouts wait for the field types of the instantiations made while
+        # resolving the group, and for its members' inlining flags
+        @eval typegroup
+            struct TG_OrderP; a::TG_OrderQ{Int}; end
+            struct TG_OrderQ{T}; x::T; r::TG_OrderR{T}; end
+            struct TG_OrderR{T}; y::T; z::TG_OrderS{T}; end
+            struct TG_OrderS{T}; w::T; end
+            struct TG_OrderU; a::TG_OrderQ{Int8}; b::TG_OrderR{Int8}; end
+        end
+        @test isbitstype(TG_OrderP) && sizeof(TG_OrderP) == 3 * sizeof(Int)
+        @test isbitstype(TG_OrderS{Int8}) && isbitstype(TG_OrderU)
+        @test sizeof(TG_OrderU) == 5 && fieldoffset(TG_OrderU, 2) == 3
+        # a key without a stable hash is found among many deferred types
+        @eval typegroup
+            struct TG_ManyDeferred
+                $([:($(Symbol(:f, k))::NTuple{$k, TG_ManyDeferred}) for k in 1:40]...)
+                a::Vector{Union{Int, TG_ManyDeferred}}
+                b::Vector{Union{Int, TG_ManyDeferred}}
+            end
+            struct TG_ManyDeferredUser; x::TG_ManyDeferred; end
+        end
+        @test fieldtype(TG_ManyDeferred, :a) === fieldtype(TG_ManyDeferred, :b)
+
+        @test !isdefined(@__MODULE__, :TG_LazyFail)
+        tn = TG_LazyA.body.name
+        @test !any(t -> t isa DataType && any(p -> p isa DataType && p.name.name === :TG_LazyFail, t.parameters),
+                   [tn.cache..., tn.linearcache...])
     end
 
 end

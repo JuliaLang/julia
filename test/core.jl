@@ -24,8 +24,6 @@ for (T, c) in (
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
         (Core.TypeName, [:name, :module, :names, :wrapper, :hash, :n_uninitialized, :flags]),
-        # `super` is filled lazily for instantiations of self-referential
-        # definitions (issue #61347), so it is deliberately non-const (and atomic)
         (DataType, [:name, :parameters, :instance, :hash]),
         (TypeVar, [:name, :ub, :lb]),
         (Core.Memory, [:length, :ptr]),
@@ -8131,18 +8129,52 @@ struct B41503{j,k} <: AbstractArray{A41503{B41503{Any,k}},Any}
     l::k
 end
 @test !isbitstype(B41503{Any,Any})
-@test_broken isbitstype(B41503{Any,Int})
+@test isbitstype(B41503{Any,Int})
 
 struct B40050 <: Ref{Tuple{B40050}}
 end
 @test string((B40050(),)) == "($B40050(),)"
 @test isbitstype(Tuple{B40050})
 
+# a fieldless instantiation made during its own definition gets a layout
+struct E40050{T} <: Ref{E40050{Int}}
+end
+@test isdefined(E40050{Int}, :types)
+@test E40050{Int}() === E40050{Int}.instance
+@test Base.ismutationfree(E40050{Int}) && Base.isidentityfree(E40050{Int})
+@test Base.isidentityfree(Val{1})
+struct G40050{T} <: Ref{G40050{Union{T,Int}}}
+    x::Int
+end
+let g = Base.unwrap_unionall(Base.unwrap_unionall(G40050).super.parameters[1]) # made during the definition
+    @test !isconcretetype(g) && g.layout != C_NULL
+    @test Base.ismutationfree(g) && Base.isidentityfree(g)
+end
+
+# a supertype mentioning the type does not prevent inlining it
+struct V40050{T} <: Ref{Tuple{V40050{T},Int}}
+    x::T
+end
+@test isbitstype(Tuple{V40050{Int8},Int})
+@test fieldoffset(Tuple{V40050{Int8},Int}, 2) == fieldoffset(Tuple{Int8,Int}, 2)
+@test isbitstype(V40050{Int8})
+let S = Core._structtype(@__MODULE__, :S40050, Core.svec(), Core.svec(:x), Core.svec(), false, 1)
+    Core._setsuper!(S, Ref{Tuple{S,Int}})
+    Core._typebody!(S, Core.svec(Int8))
+    @test isbitstype(S) == isbitstype(Tuple{S,Int})
+end
+
 # issue #41654
 struct X41654 <: Ref{X41654}
 end
 @test isbitstype(X41654)
 @test ('a'=>X41654(),)[1][2] isa X41654
+
+# a failed layout of a type that mentions the new one caches neither
+struct WOvfLayout{X}; a::NTuple{16,X}; end
+struct LOvfLayout{T}; a::Vector{LOvfLayout{T}}; b::Vector{Tuple{Int, WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{Ptr{LOvfLayout{T}}}}}}}}}}}}; end
+@test_throws ErrorException LOvfLayout{Int}
+@test_throws ErrorException LOvfLayout{Int}
 
 # issue #43411
 struct A43411{S, T}
@@ -9497,41 +9529,62 @@ let f = (x...) -> length(x)
     @test ccall(:jl_array_copy, Ref{Matrix{Int}}, (Any,), m3) == m3
 end
 
-# issue #61347 (supertype half): every level of a structurally increasing
-# recursive supertype graph must be correct independently of instantiation
-# order, and deferred (lazily computed) supertypes must present the same
-# field-access semantics to compiled and interpreted code. (The field-type
-# analogue `struct S1{T}; x::S1{A{T}}; end` still hangs on instantiation;
-# a concrete type must publish with its layout, so its fix needs more.)
+# issue #61347 (supertype half): a supertype declaration that applies the type
+# being defined at structurally increasing parameters has an infinite supertype
+# graph, and the definition is refused instead of hanging (or, in a `typegroup`,
+# caching wrong supertypes)
 module Issue61347
 abstract type A{T} end
-struct S2{T} <: A{S2{A{T}}} end
+abstract type C{Y, Z} end
+struct Swap{T, U} <: C{Swap{U, T}, U} end  # finite: the parameters only move
 end
-let A = Issue61347.A, S2 = Issue61347.S2
-    @test supertype(S2{Int}) === A{S2{A{Int}}}
-    # deep levels materialize lazily, one per demand, and stay correct
-    deep = S2{A{A{Int}}}
-    @test supertype(deep) === A{S2{A{A{A{Int}}}}}
-    # reaching the same interned type by walking or by direct construction
-    # yields the same supertype
-    walked = getfield(supertype(S2{Int}), :parameters)[1]
-    walked = getfield(supertype(walked), :parameters)[1]
-    @test walked === S2{A{A{Int}}}
-    @test supertype(walked) === supertype(deep)
-    @test S2{A{A{A{Int}}}} <: A
-    # compiled and interpreted field access agree on the deferred slot. The
-    # slot can be filled at any moment by unrelated activity, so bracket the
-    # interpreted read with compiled reads and require monotone agreement
-    # (an unfilled slot can only become filled, never the reverse)
-    lazy = getfield(supertype(S2{A{A{A{A{Int}}}}}), :parameters)[1]
-    @noinline compiled_isdef(x::DataType) = isdefined(x, :super)
-    c1 = compiled_isdef(Base.inferencebarrier(lazy))
-    itp = Core.eval(@__MODULE__, :(isdefined($lazy, :super)))
-    c2 = compiled_isdef(Base.inferencebarrier(lazy))
-    @test c1 <= itp <= c2
-    @test supertype(lazy) isa Type # forcing accessor
-    @test isdefined(lazy, :super)
-    @test getfield(lazy, :super) === supertype(lazy)
+let M = Issue61347
+    @test_throws "structurally increasing" @eval M struct S2{T} <: A{S2{A{T}}} end
+    @test !isdefined(M, :S2)
+    @test_throws "structurally increasing" @eval M struct F{T} <: A{F{Tuple{T}}}; x::T; end
+    # ... also when its field types instantiate it before the definition completes
+    @test_throws "structurally increasing" @eval M struct G{T} <: A{G{Tuple{T}}}; x::G{Tuple{Int}}; end
+    @test_throws "structurally increasing" @eval M struct Rank{T, N} <: C{Rank{Tuple{T}, N}, N} end
+    @test_throws "structurally increasing" @eval M typegroup
+        struct S{T} <: A{R{Tuple{T}}} end
+        struct R{T} <: A{S{Tuple{T}}} end
+    end
+    @test !isdefined(M, :S) && !isdefined(M, :R)
+    @test supertype(M.Swap{Int, Float64}) === M.C{M.Swap{Float64, Int}, Float64}
+end
+
+# substituting into a dependent bound continues the instantiation stack
+module LazySuperBound
+struct NewT end
+struct Foo{T, S<:Union{Nothing, Val{T}}} end
+struct Bar{T}; x::Foo{T, Nothing}; end
+end
+@test fieldtype(LazySuperBound.Bar{LazySuperBound.NewT}, :x) === LazySuperBound.Foo{LazySuperBound.NewT, Nothing}
+
+# the bound check of an instantiation's supertype needs that supertype: a circular
+# constraint, as for a definition, not an infinite recursion
+module SuperSeesItself
+abstract type A{X} end
+abstract type B{X<:A} end
+struct S{T} <: A{B{S{T}}} end
+end
+@test_throws "circular type parameter constraint" SuperSeesItself.S{Int}
+
+# A type cached while another one is being built, and which mentions it, is
+# cached only once that one is complete: a failed construction leaves nothing
+# behind that mentions the type it did not make
+module OrphanInProgress
+abstract type A{X, Y} end
+abstract type B{X<:Integer} end
+struct K{T} <: A{Vector{K{T}}, B{T}} end
+end
+let K = OrphanInProgress.K
+    @test_throws TypeError K{String}
+    @test_throws TypeError K{String}
+    tn = Array.body.body.name
+    @test !any(t -> t isa DataType && any(p -> p isa DataType && p.name === K.body.name, t.parameters),
+               [tn.cache..., tn.linearcache...])
+    @test supertype(K{Int}).parameters[1] === Vector{K{Int}}
 end
 
 # Method tables and dispatch caches keep their entries in insertion-ordered dicts that

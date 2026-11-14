@@ -57,6 +57,21 @@ end
 end
 @test_throws MethodError (x -> (supertype(x); nothing))(Union{S,T} where {S,T})
 
+# `DataType.super` is left unset for an instantiation in a package image, and filled
+# on demand: a raw read that throws may succeed once the slot is filled, so neither
+# the throw nor the `isdefined` answer may be folded
+lazy_super_get(T) = getfield(T, :super)
+lazy_super_isdef(T) = isdefined(T, :super)
+let
+    @test !Compiler.is_consistent(Base.infer_effects(lazy_super_get, (DataType,)))
+    @test !Compiler.is_consistent(Base.infer_effects(lazy_super_isdef, (DataType,)))
+    # the other fields of a type are still foldable
+    @test Compiler.is_foldable(Base.infer_effects(T -> getfield(T, :name), (DataType,)))
+    # an object that may be a type but is not mutation free keeps the usual answer
+    @test Compiler.is_consistent_if_inaccessiblememonly(Compiler.builtin_effects(Compiler.fallback_lattice,
+        Core.isdefined, Any[Any, Symbol], Bool))
+end
+
 # Test that a missing methtable identification gets tainted
 # appropriately
 struct FCallback; f::Union{Nothing, Function}; end
