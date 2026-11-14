@@ -137,6 +137,7 @@ end
 @test_broken  success(ignorestatus(pipeline(falsecmd, falsecmd)))
 @test_broken  success(ignorestatus(falsecmd & falsecmd))
 @test run(ignorestatus(pipeline(falsecmd; stderr=devnull, stdout=devnull))).exitcode != 0
+@test run(ignorestatus(pipeline(falsecmd; stderr=truecmd))) isa Base.AbstractPipe
 
 # stdin Redirection
 let file = tempname()
