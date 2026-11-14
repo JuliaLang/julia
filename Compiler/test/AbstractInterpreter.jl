@@ -165,6 +165,19 @@ overlay_shadow_zero(xs::Vector{Int}...) = Int[xs[i][j] for i=eachindex(xs) for j
     overlay_shadow_zero(x...)
 end == Vector{Int}
 
+# inference through an overlay table leaves the global dispatch cache alone
+@newinterp OverlayCompileSigInterp
+Compiler.method_table(interp::OverlayCompileSigInterp) =
+    Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), OVERLAY_MT)
+Compiler.infer_compilation_signature(::OverlayCompileSigInterp) = true
+overlay_compilesig(f::Function, x) = :global
+@overlay OVERLAY_MT overlay_compilesig(f::Function, x) = :overlay
+@test overlay_compilesig(sin, 1) === :global
+Base.code_typed((Int,); interp=OverlayCompileSigInterp()) do x
+    overlay_compilesig(sin, x)
+end
+@test overlay_compilesig(sin, 1) === :global
+
 # partial concrete evaluation
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
