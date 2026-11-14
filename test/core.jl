@@ -537,6 +537,22 @@ let W = Union{S1,S2} where {S1<:Int,S2<:Int}
     @test pinnedspell_fold_62001(Ref(1), W) === true
     @test pinnedspell_caller_62001(Ref(1), Ref{Any}(W)) === true
 end
+# The same holds for a parameter of a type below `Type{...}`: the type cache
+# identifies types whose parameters are `==`, so that parameter is canonical
+# although the argument is only known up to `==`
+pinnedspell3_62001(y::Type{T}, x::Type{Vector{T}}) where {T} = T
+pinnedspell4_62001(x::Type{Vector{T}}, y::Type{T}) where {T} = T
+pinnedspell_fold2_62001(y::Type{T}, x::Type{Vector{T}}) where {T} = T === Int
+pinnedspell_caller2_62001(r) = pinnedspell_fold2_62001(r[]::Type{Int}, Vector{Int})
+let W = Union{S1,S2} where {S1<:Int,S2<:Int}
+    @test W == Int
+    @test W !== Int
+    @test pinnedspell3_62001(W, Vector{Int}) === Int
+    @test pinnedspell4_62001(Vector{Int}, W) === Int
+    # inference takes `T` to be `Int` itself, as the call binds it
+    @test pinnedspell_fold2_62001(W, Vector{Int}) === true
+    @test pinnedspell_caller2_62001(Ref{Any}(W)) === true
+end
 
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)
@@ -9319,6 +9335,107 @@ let r = f_def_typevar_with_lowerbound(1.0)
 end
 f_value_typevar_with_lowerbound(x::T) where {T>:Int} = T
 @test_throws UndefVarError(:T, :static_parameter) f_value_typevar_with_lowerbound(1.0)
+
+# A call inferred for an abstract argument type must behave like a call dispatched
+# on the argument's concrete type: a static parameter that a `Union` in the
+# signature binds only for some arguments may be undefined (#63514)
+f63514(x::Union{Nothing,S}) where {S} = @isdefined(S) ? S : false
+g63514(r) = f63514(r[])
+@test g63514(Ref{Any}(nothing)) === false
+@test g63514(Ref{Any}(1)) === Int
+@test g63514(Ref{Real}(1.0)) === Float64
+# ... and is not bound to the value found for the abstract argument type
+t63514(x::Union{Type{Int},S}) where {S} = @isdefined(S) ? S : false
+@test (r -> t63514(r[]))(Ref{DataType}(Int)) === t63514(Int) === false
+@test (r -> t63514(r[]))(Ref{DataType}(Float64)) === DataType
+u63514(x::Union{Tuple{Int,Nothing},Tuple{S,Any}}) where {S} = @isdefined(S) ? S : false
+@test (r -> u63514(r[]))(Ref{Tuple{Int,Any}}((1, nothing))) === u63514((1, nothing)) === false
+@test (r -> u63514(r[]))(Ref{Tuple{Int,Any}}((1, 2.0))) === u63514((1, 2.0)) === Int
+# the same with an invariant occurrence inside the `Union`
+v63514(x::Union{AbstractVector{S},Vector{Int}}) where {S} = @isdefined(S) ? S : false
+@test (r -> v63514(r[]))(Ref{AbstractVector{Int}}([1])) === v63514([1]) === false
+@test (r -> v63514(r[]))(Ref{AbstractVector{Int}}(1:2)) === v63514(1:2) === Int
+# a concrete argument may bind the parameter through a different member of the
+# `Union` than the abstract type does
+w63514(x::Union{Tuple{S,Int},Tuple{Any,S}}) where {S} = S
+@test (r -> w63514(r[]) <: Integer)(Ref{Tuple{String,Integer}}(("a", 1))) === (w63514(("a", 1)) <: Integer) === false
+@test (r -> w63514(r[]) <: Integer)(Ref{Tuple{String,Integer}}(("a", 0x1))) === (w63514(("a", 0x1)) <: Integer) === true
+# ... or through the declared bound of a parameter that such a member binds
+x63514(x::S, y::Union{T,U}) where {S,T<:Ref{S},U} = S
+@test ((r1, r2) -> x63514(r1[], r2[]) <: Real)(Ref{Real}(1), Ref{Any}(Ref{Any}(1))) ===
+    (x63514(1, Ref{Any}(1)) <: Real) === false
+# an equation between `Union`s is solved for the concrete argument types, not
+# for the abstract ones
+y63514(::Ref{Union{T,U}}, ::Ref{U}) where {T,U} = T
+let a = Ref{Union{Int,String}}(1), b = Ref{String}("hello")
+    args = Tuple{Ref{Union{Int,String}},Ref{<:Union{Int,String}}}[(a, b)]
+    @test (v -> y63514(v[1]...))(args) === y63514(a, b) === Int
+end
+z63514(::Vector{Union{Missing,S}}) where {S} = @isdefined(S) ? S : false
+@test (r -> z63514(r[]))(Ref{Vector{Union{Missing,V}} where V}(Missing[])) === z63514(Missing[]) === false
+@test (r -> z63514(r[]))(Ref{Vector{Union{Missing,V}} where V}(Union{Missing,Int}[])) === Int
+zz63514(::Ref{Union{T,U}}) where {T,U} = (T, U)
+@test (r -> zz63514(r[]))(Ref{Ref{Union{V,Int}} where V}(Ref{Union{Float64,Int}}(1))) ===
+    zz63514(Ref{Union{Float64,Int}}(1)) === (Float64, Int)
+# a var that is one alternative of a `Union` in a type parameter is bound to the
+# smallest type that the other lower bounds of the call allow
+u63514(x::Union{T,U}, y::Ref{Union{Int,T}}) where {T,U} = T
+v63514(y::Ref{Union{T,Int}}, x::T...) where {T} = T
+let y = Ref{Union{Int,String}}(1)
+    @test ((rx, ry) -> u63514(rx[], ry[]))(Ref{Number}(1), Ref(y)) === u63514(1, y) === Union{Int,String}
+    @test ((rx, ry) -> u63514(rx[], ry[]))(Ref{Number}(1.0), Ref(y)) === u63514(1.0, y) === String
+    @test ((ry, xs) -> v63514(ry[], xs...))(Ref(y), Int[]) === v63514(y) === String
+    @test ((ry, xs) -> v63514(ry[], xs...))(Ref(y), Int[1]) === v63514(y, 1) === Union{Int,String}
+end
+# ... and is not bound by a tail element that the call lacks
+b63514(::Ref{Union{Int,S}}, ::Ref{Union{Nothing,String,S}}...) where {S} = @isdefined(S) ? S : nothing
+let R = Base.RefValue{Union{Nothing,String}}
+    @test ((r, t) -> b63514(r, t...))(Ref(1), R[]) === b63514(Ref(1)) === nothing
+    @test ((r, t) -> b63514(r, t...))(Ref(1), R[R("a")]) === b63514(Ref(1), R("a")) === Union{}
+end
+
+# A failed first attempt at matching the signature must not leave a static
+# parameter undefined
+f_abandoned_match(a::S2, b::S1, c::Union{Type{S2},S1,S2}) where {S1,S2} = (S1, S2)
+@test f_abandoned_match(1, 1, (1, 1)) === (Int, Union{Int,Tuple{Int,Int}})
+
+# A call inferred for an argument of type `Type{X}` binds the parameter of a plain
+# argument slot to the tag of the argument (e.g. `DataType`), as the direct call
+# does
+f_type_key_tag(x::S) where {S} = S
+@test (r -> f_type_key_tag(r[]))(Ref{Type{Int}}(Int)) === f_type_key_tag(Int) === DataType
+@test (r -> f_type_key_tag(r[]) === DataType)(Ref{Type{Int}}(Int))
+@test (r -> f_type_key_tag(r[]))(Ref{Type{<:Real}}(Int)) === DataType
+@test (r -> f_type_key_tag(r[]))(Ref{Type{<:AbstractVector}}(Vector)) === f_type_key_tag(Vector) === UnionAll
+g_type_key_tag(x::S, y::Union{Set{S},S}) where {S} = S
+@test (r -> g_type_key_tag(r[], Float64))(Ref{DataType}(Int)) === g_type_key_tag(Int, Float64) ===
+    Union{Core.TypeEgal{Int},Core.TypeEgal{Float64}}
+
+# A call inferred for a variable number of arguments must leave a static parameter
+# that only those arguments bind undefined when there are none
+f_vararg_tail(x::S...) where {S} = @isdefined(S) ? S : :undef
+@test (v -> f_vararg_tail(v...))(Int[]) === f_vararg_tail() === :undef
+@test (v -> f_vararg_tail(v...))([1, 2]) === f_vararg_tail(1, 2) === Int
+g_vararg_tail(x::Vector{S}...) where {S} = @isdefined(S) ? S : :undef
+@test (v -> g_vararg_tail(v...))(Vector{Int}[]) === g_vararg_tail() === :undef
+@test (v -> g_vararg_tail(v...))([[1]]) === Int
+h_vararg_tail(t::Tuple{Vararg{S}}) where {S} = @isdefined(S) ? S : :undef
+@test (r -> h_vararg_tail(r[]))(Ref{Tuple{Vararg{Int}}}(())) === h_vararg_tail(()) === :undef
+@test (r -> h_vararg_tail(r[]))(Ref{Tuple{Vararg{Int}}}((1, 2))) === Int
+k_vararg_tail(x::S, y::S...) where {S} = S
+@test (v -> k_vararg_tail(1, v...))(Int[]) === Int
+# also when the number of elements of a tuple type parameter is not known
+l_vararg_tail(::Ref{NTuple{N,S}}) where {S,N} = @isdefined(S) ? S : :undef
+@test (r -> l_vararg_tail(r[]))(Ref{Ref{NTuple{N,Int}} where N}(Ref{Tuple{}}(()))) ===
+    l_vararg_tail(Ref{Tuple{}}(())) === :undef
+@test (r -> l_vararg_tail(r[]))(Ref{Ref{NTuple{N,Int}} where N}(Ref((1, 2)))) === Int
+# Arguments that may be absent do not make a static parameter egal to the type they
+# would bind it to, if another argument binds it up to type equality only
+t_vararg_tail(::Type{T}, xs::Vector{T}...) where {T} = T === Tuple{Int}
+let T = Tuple{S} where S<:Int, call(r, xs) = t_vararg_tail(r[], xs...)
+    @test call(Ref{Type{Tuple{Int}}}(T), Vector{Tuple{Int}}[]) === t_vararg_tail(T) === false
+    @test call(Ref{Type{Tuple{Int}}}(T), [Tuple{Int}[]]) === t_vararg_tail(T, Tuple{Int}[])
+end
 
 # Static parameters constrained indirectly through other static-parameter bounds
 # are defined.
