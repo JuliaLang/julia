@@ -741,7 +741,6 @@ broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
 
 ## Computation of inferred result type, for empty and concretely inferred cases only
-_bc_eltype(bc::Broadcasted, i) = bc.f(_bc_eltypes(bc.args, i)...)
 # Numbers must broadcast as scalars even if they override eltype
 # Tuples may have heterogenous eltypes across indices
 _bc_eltype(x::Number, i) = _broadcast_getindex(x, i)
@@ -750,8 +749,13 @@ _bc_eltype(x::Tuple, i) = _broadcast_getindex(x, i)
 # inference barrier prevents recursion limiting, and ::eltype gives the desired result
 _bc_eltype(x, i) = _broadcast_getindex(Base.inferencebarrier(x), i)::eltype(x)
 
-_bc_eltypes(args::Tuple, i) = (_bc_eltype(args[1], i), _bc_eltypes(tail(args), i)...)
+module BcEltype
+import ..Broadcast: Broadcasted, _bc_eltype
+ccall(:jl_set_module_max_methods, Cvoid, (Any, Cint), @__MODULE__, 127)
+_bc_eltype(bc::Broadcasted, i) = bc.f(_bc_eltypes(bc.args, i)...)
+_bc_eltypes(args::Tuple, i) = (_bc_eltype(args[1], i), _bc_eltypes(Base.tail(args), i)...)
 _bc_eltypes(::Tuple{}, i) = ()
+end
 
 function result_eltype(bc::Broadcasted)
     argtypes = Iterators.TupleOrBottom(typeof(bc), eltype(eachindex(bc)))
