@@ -2059,7 +2059,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
         }
         if (jl_is_vararg(p))
             p = ((jl_vararg_t*)p)->T;
-        if (istuple && dt->has_concrete_subtype) {
+        else if (istuple && dt->has_concrete_subtype) {
             // tuple types like Tuple{:x} and Tuple{Union{}} cannot have instances
             if (p && !jl_is_type(p) && !jl_is_typevar(p))
                 dt->has_concrete_subtype = 0;
