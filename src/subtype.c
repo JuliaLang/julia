@@ -7262,7 +7262,154 @@ static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, 
     return subtype_ab && subtype_ba;
 }
 
-static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_typeenv_t *env) JL_CANSAFEPOINT
+// Memo of `sub_msp` and `type_morespecific_` results within one `morespecific` query, whose
+// recursion over nested unions can repeat the same subqueries exponentially often. Keys are
+// parts of the query's arguments, which the caller keeps alive. Most queries are small, so
+// memoization only starts once a query has made MSP_MEMO_START union comparisons.
+typedef struct {
+    jl_value_t *a, *b, *a0, *b0;
+    uint32_t envidx, envlen; // the key's environment is envs[envidx:envidx+envlen-1]
+    uint32_t hash;
+    uint8_t kind, invariant, result, used;
+} msp_memo_entry_t;
+
+typedef struct {
+    jl_tvar_t *var;
+    jl_value_t *val;
+} msp_memo_env_t;
+
+typedef struct {
+    jl_genericmemory_t *table; // msp_memo_entry_t[cap], open addressing, cap a power of 2
+    jl_genericmemory_t *envs; // msp_memo_env_t[envs_cap]
+    size_t cap, count, envs_len, envs_cap;
+    size_t ncmp; // union comparisons made so far
+} msp_memo_t;
+
+#define MSP_MEMO_START 32
+// initial sizes; the table doubles when half full
+#define MSP_MEMO_INIT_CAP 64
+#define MSP_MEMO_INIT_ENVS 64
+
+// the slot for this key; `used` is set if the key is present
+static msp_memo_entry_t *msp_memo_slot(msp_memo_t *memo, int kind, jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int invariant, jl_typeenv_t *env, uint32_t *hash, uint32_t *envlen) JL_NOTSAFEPOINT
+{
+    uint64_t h = bitmix((uint64_t)kind, (uint64_t)invariant);
+    h = bitmix(h, (uintptr_t)a);
+    h = bitmix(h, (uintptr_t)b);
+    h = bitmix(h, (uintptr_t)a0);
+    h = bitmix(h, (uintptr_t)b0);
+    uint32_t n = 0;
+    for (jl_typeenv_t *e = env; e != NULL; e = e->prev, n++)
+        h = bitmix(bitmix(h, (uintptr_t)e->var), (uintptr_t)e->val);
+    *hash = (uint32_t)h;
+    *envlen = n;
+    msp_memo_entry_t *table = (msp_memo_entry_t*)memo->table->ptr;
+    msp_memo_env_t *envs = (msp_memo_env_t*)memo->envs->ptr;
+    size_t mask = memo->cap - 1;
+    for (size_t i = (uint32_t)h & mask; ; i = (i + 1) & mask) {
+        msp_memo_entry_t *m = &table[i];
+        if (!m->used)
+            return m;
+        if (m->hash != (uint32_t)h || m->kind != kind || m->a != a || m->b != b || m->a0 != a0 || m->b0 != b0 || m->invariant != invariant || m->envlen != n)
+            continue;
+        msp_memo_env_t *menv = envs + m->envidx;
+        jl_typeenv_t *e = env;
+        for (; e != NULL; e = e->prev, menv++)
+            if (e->var != menv->var || e->val != menv->val)
+                break;
+        if (e == NULL)
+            return m;
+    }
+}
+
+static int msp_memo_lookup(msp_memo_t *memo, int kind, jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int invariant, jl_typeenv_t *env, int *result) JL_NOTSAFEPOINT
+{
+    if (memo->count == 0)
+        return 0;
+    uint32_t h, n;
+    msp_memo_entry_t *m = msp_memo_slot(memo, kind, a, b, a0, b0, invariant, env, &h, &n);
+    if (!m->used)
+        return 0;
+    *result = m->result;
+    return 1;
+}
+
+static void msp_memo_store(msp_memo_t *memo, int kind, jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int invariant, jl_typeenv_t *env, int result) JL_CANSAFEPOINT
+{
+    if (memo->envs == NULL) {
+        memo->envs = jl_alloc_genericmemory((jl_value_t*)jl_memory_uint8_type, MSP_MEMO_INIT_ENVS * sizeof(msp_memo_env_t));
+        memo->envs_cap = MSP_MEMO_INIT_ENVS;
+    }
+    if ((memo->count + 1) * 2 > memo->cap) {
+        size_t newcap = memo->cap ? 2 * memo->cap : MSP_MEMO_INIT_CAP;
+        jl_genericmemory_t *newmem = jl_alloc_genericmemory((jl_value_t*)jl_memory_uint8_type, newcap * sizeof(msp_memo_entry_t));
+        msp_memo_entry_t *newtable = (msp_memo_entry_t*)newmem->ptr;
+        memset(newtable, 0, newcap * sizeof(msp_memo_entry_t));
+        for (size_t i = 0; i < memo->cap; i++) {
+            msp_memo_entry_t *o = &((msp_memo_entry_t*)memo->table->ptr)[i];
+            if (!o->used)
+                continue;
+            size_t j = o->hash & (newcap - 1);
+            while (newtable[j].used)
+                j = (j + 1) & (newcap - 1);
+            newtable[j] = *o;
+        }
+        memo->table = newmem;
+        memo->cap = newcap;
+    }
+    uint32_t h, n;
+    msp_memo_entry_t *m = msp_memo_slot(memo, kind, a, b, a0, b0, invariant, env, &h, &n);
+    if (m->used)
+        return;
+    if (memo->envs_len + n > memo->envs_cap) {
+        size_t newcap = 2 * memo->envs_cap;
+        while (newcap < memo->envs_len + n)
+            newcap *= 2;
+        jl_genericmemory_t *newmem = jl_alloc_genericmemory((jl_value_t*)jl_memory_uint8_type, newcap * sizeof(msp_memo_env_t));
+        memcpy(newmem->ptr, memo->envs->ptr, memo->envs_len * sizeof(msp_memo_env_t));
+        memo->envs = newmem;
+        memo->envs_cap = newcap;
+    }
+    msp_memo_env_t *menv = (msp_memo_env_t*)memo->envs->ptr + memo->envs_len;
+    for (jl_typeenv_t *e = env; e != NULL; e = e->prev, menv++) {
+        menv->var = e->var;
+        menv->val = e->val;
+    }
+    m->envidx = memo->envs_len;
+    memo->envs_len += n;
+    m->a = a; m->b = b; m->a0 = a0; m->b0 = b0; m->invariant = invariant;
+    m->kind = kind; m->envlen = n; m->hash = h; m->result = result; m->used = 1;
+    memo->count++;
+}
+
+static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int invariant, jl_typeenv_t *env, msp_memo_t *memo) JL_CANSAFEPOINT;
+static int type_morespecific_uncached(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int invariant, jl_typeenv_t *env, msp_memo_t *memo) JL_CANSAFEPOINT;
+
+// a `morespecific` query with its own memo
+static int type_morespecific_memo(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, jl_typeenv_t *env) JL_CANSAFEPOINT
+{
+    msp_memo_t memo = {NULL, NULL, 0, 0, 0, 0, 0};
+    JL_GC_PUSH2(&memo.table, &memo.envs);
+    int r = type_morespecific_(a, b, a0, b0, 0, env, &memo);
+    JL_GC_POP();
+    return r;
+}
+
+static int sub_msp_(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_typeenv_t *env) JL_CANSAFEPOINT;
+
+static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_typeenv_t *env, msp_memo_t *memo) JL_CANSAFEPOINT
+{
+    int usememo = memo->ncmp > MSP_MEMO_START;
+    int r;
+    if (usememo && msp_memo_lookup(memo, 0, x, y, y0, NULL, 0, env, &r))
+        return r;
+    r = sub_msp_(x, y, y0, env);
+    if (usememo)
+        msp_memo_store(memo, 0, x, y, y0, NULL, 0, env, r);
+    return r;
+}
+
+static int sub_msp_(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_typeenv_t *env) JL_CANSAFEPOINT
 {
     jl_stenv_t e;
     if (y == (jl_value_t*)jl_any_type || x == jl_bottom_type)
@@ -7306,8 +7453,6 @@ static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_typeenv_t *e
     return subtype;
 }
 
-static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int invariant, jl_typeenv_t *env) JL_CANSAFEPOINT;
-
 static int num_occurs(jl_tvar_t *v, jl_typeenv_t *env);
 
 static jl_value_t *nth_tuple_elt(jl_datatype_t *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
@@ -7329,7 +7474,7 @@ static jl_value_t *nth_tuple_elt(jl_datatype_t *t JL_PROPAGATES_ROOT, size_t i) 
     return NULL;
 }
 
-static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, jl_value_t *c0, jl_value_t *p0, int invariant, jl_typeenv_t *env) JL_CANSAFEPOINT
+static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, jl_value_t *c0, jl_value_t *p0, int invariant, jl_typeenv_t *env, msp_memo_t *memo) JL_CANSAFEPOINT
 {
     size_t plen = jl_nparams(pdt);
     if (plen == 0) return 0;
@@ -7359,8 +7504,8 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, jl_value_t
             break;
         }
 
-        if (type_morespecific_(pe, ce, p0, c0, invariant, env)) {
-            assert(!type_morespecific_(ce, pe, c0, p0, invariant, env));
+        if (type_morespecific_(pe, ce, p0, c0, invariant, env, memo)) {
+            assert(!type_morespecific_(ce, pe, c0, p0, invariant, env, memo));
             return 0;
         }
 
@@ -7373,9 +7518,9 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, jl_value_t
         if (cva && pva && i >= clen-1 && i >= plen-1 && (some_morespecific || (cdiag && !pdiag)))
             return 1;
 
-        int cms = type_morespecific_(ce, pe, c0, p0, invariant, env);
+        int cms = type_morespecific_(ce, pe, c0, p0, invariant, env, memo);
 
-        if (!cms && !sub_msp(ce, pe, p0, env)) {
+        if (!cms && !sub_msp(ce, pe, p0, env, memo)) {
             /*
               A bound vararg tuple can be more specific despite disjoint elements in order to
               preserve transitivity. For example in
@@ -7439,10 +7584,11 @@ static int args_morespecific_fix1(jl_value_t *a, jl_value_t *b, jl_value_t *a0, 
     if (changed) {
         if (eq_msp(b, (jl_value_t*)new_a, b0, a0, env))
             ret = swap;
+        // `new_a` only lives until we return, so it can't be a key in the caller's memo
         else if (swap)
-            ret = type_morespecific_(b, (jl_value_t*)new_a, b0, a0, 0, env);
+            ret = type_morespecific_memo(b, (jl_value_t*)new_a, b0, a0, env);
         else
-            ret = type_morespecific_((jl_value_t*)new_a, b, a0, b0, 0, env);
+            ret = type_morespecific_memo((jl_value_t*)new_a, b, a0, b0, env);
     }
     JL_GC_POP();
     return ret;
@@ -7533,19 +7679,31 @@ static int tuple_cmp_typeofbottom(jl_datatype_t *a, jl_datatype_t *b)
     jl_unionall_t *ua = (jl_unionall_t*)a;                              \
     jl_typeenv_t newenv = { ua->var, 0x0, env };                        \
     newenv.val = (jl_value_t*)(intptr_t)count_occurs(ua->body, ua->var); \
-    return type_morespecific_(ua->body, b, a0, b0, invariant, &newenv)
+    return type_morespecific_(ua->body, b, a0, b0, invariant, &newenv, memo)
 
 #define HANDLE_UNIONALL_B                                               \
     jl_unionall_t *ub = (jl_unionall_t*)b;                              \
     jl_typeenv_t newenv = { ub->var, 0x0, env };                        \
     newenv.val = (jl_value_t*)(intptr_t)count_occurs(ub->body, ub->var); \
-    return type_morespecific_(a, ub->body, a0, b0, invariant, &newenv)
+    return type_morespecific_(a, ub->body, a0, b0, invariant, &newenv, memo)
 
-static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int invariant, jl_typeenv_t *env)
+static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int invariant, jl_typeenv_t *env, msp_memo_t *memo)
 {
     if (a == b)
         return 0;
+    // only the Union cases recurse enough to be worth caching
+    int usememo = (jl_is_uniontype(a) || jl_is_uniontype(b)) && ++memo->ncmp > MSP_MEMO_START;
+    int r;
+    if (usememo && msp_memo_lookup(memo, 1, a, b, a0, b0, invariant, env, &r))
+        return r;
+    r = type_morespecific_uncached(a, b, a0, b0, invariant, env, memo);
+    if (usememo)
+        msp_memo_store(memo, 1, a, b, a0, b0, invariant, env, r);
+    return r;
+}
 
+static int type_morespecific_uncached(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int invariant, jl_typeenv_t *env, msp_memo_t *memo)
+{
     if (jl_is_tuple_type(a) && jl_is_tuple_type(b)) {
         // compare whether a and b have Type{Union{}} included,
         // which makes them instantly the most specific, regardless of all else,
@@ -7567,7 +7725,7 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
             ans = args_morespecific_fix1(b, a, b0, a0, 1, env);
             if (ans == 0) return 0;
         }
-        return tuple_morespecific((jl_datatype_t*)a, (jl_datatype_t*)b, a0, b0, invariant, env);
+        return tuple_morespecific((jl_datatype_t*)a, (jl_datatype_t*)b, a0, b0, invariant, env, memo);
     }
 
     if (!invariant) {
@@ -7581,13 +7739,13 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
         }
         // Union a is more specific than b if some element of a is more specific than b, but
         // not vice-versa.
-        if (sub_msp(b, a, a0, env))
+        if (sub_msp(b, a, a0, env, memo))
             return 0;
         jl_uniontype_t *u = (jl_uniontype_t*)a;
-        if (type_morespecific_(u->a, b, a0, b0, invariant, env) || type_morespecific_(u->b, b, a0, b0, invariant, env)) {
+        if (type_morespecific_(u->a, b, a0, b0, invariant, env, memo) || type_morespecific_(u->b, b, a0, b0, invariant, env, memo)) {
             if (jl_is_uniontype(b)) {
                 jl_uniontype_t *v = (jl_uniontype_t*)b;
-                if (type_morespecific_(v->a, a, b0, a0, invariant, env) || type_morespecific_(v->b, a, b0, a0, invariant, env))
+                if (type_morespecific_(v->a, a, b0, a0, invariant, env, memo) || type_morespecific_(v->b, a, b0, a0, invariant, env, memo))
                     return 0;
             }
             return 1;
@@ -7601,11 +7759,11 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
         jl_value_t *tp0a = jl_some_Type_T(a);
         if (jl_is_typevar(tp0a)) {
             jl_value_t *ub = ((jl_tvar_t*)tp0a)->ub;
-            if (jl_is_kind(b) && !sub_msp((jl_value_t*)jl_any_type, ub, b0, env))
+            if (jl_is_kind(b) && !sub_msp((jl_value_t*)jl_any_type, ub, b0, env, memo))
                 return 1;
         }
         else if (tp0a == jl_bottom_type) {
-            if (sub_msp(b, (jl_value_t*)jl_type_type, (jl_value_t*)jl_type_type, env))
+            if (sub_msp(b, (jl_value_t*)jl_type_type, (jl_value_t*)jl_type_type, env, memo))
                 return 1;
         }
         else if (jl_is_kind(b)) {
@@ -7618,8 +7776,8 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
             HANDLE_UNIONALL_A;
         }
         jl_uniontype_t *u = (jl_uniontype_t*)b;
-        if (type_morespecific_(a, u->a, a0, b0, invariant, env) || type_morespecific_(a, u->b, a0, b0, invariant, env))
-            return !type_morespecific_(b, a, b0, a0, invariant, env);
+        if (type_morespecific_(a, u->a, a0, b0, invariant, env, memo) || type_morespecific_(a, u->b, a0, b0, invariant, env, memo))
+            return !type_morespecific_(b, a, b0, a0, invariant, env, memo);
         return 0;
     }
 
@@ -7630,9 +7788,9 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
         int bfree = jl_has_free_typevars(bpara);
         if (!afree && !bfree && !jl_types_equal(apara, bpara))
             return 0;
-        if (type_morespecific_(apara, bpara, a0, b0, 1, env) && (jl_is_typevar(apara) || !afree || bfree))
+        if (type_morespecific_(apara, bpara, a0, b0, 1, env, memo) && (jl_is_typevar(apara) || !afree || bfree))
             return 1;
-        if (type_morespecific_(bpara, apara, b0, a0, 1, env) && (jl_is_typevar(bpara) || !bfree || afree))
+        if (type_morespecific_(bpara, apara, b0, a0, 1, env, memo) && (jl_is_typevar(bpara) || !bfree || afree))
             return 0;
         if (eq_msp(apara, bpara, a0, b0, env))
             return !afree && bfree;
@@ -7642,7 +7800,7 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
     if (jl_is_kind(a) && jl_is_typeeq(b) && !invariant) {
         // a kind (e.g. `DataType`) is more specific than an unbounded `Type{T}`
         jl_value_t *tp0b = jl_typeeq_T(b);
-        if (jl_is_typevar(tp0b) && sub_msp((jl_value_t*)jl_any_type, ((jl_tvar_t*)tp0b)->ub, b0, env))
+        if (jl_is_typevar(tp0b) && sub_msp((jl_value_t*)jl_any_type, ((jl_tvar_t*)tp0b)->ub, b0, env, memo))
             return 1;
     }
 
@@ -7658,7 +7816,7 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
                     if (!jl_is_typeeq(b)) return 1;
                     jl_value_t *tp0 = jl_typeeq_T(b);
                     if (jl_is_typevar(tp0)) {
-                        if (sub_msp((jl_value_t*)jl_any_type, ((jl_tvar_t*)tp0)->ub, b0, env))
+                        if (sub_msp((jl_value_t*)jl_any_type, ((jl_tvar_t*)tp0)->ub, b0, env, memo))
                             return 1;
                     }
                 }
@@ -7671,9 +7829,9 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
                     int bfree = jl_has_free_typevars(bpara);
                     if (!afree && !bfree && !jl_types_equal(apara, bpara))
                         return 0;
-                    if (type_morespecific_(apara, bpara, a0, b0, 1, env) && (jl_is_typevar(apara) || !afree || bfree))
+                    if (type_morespecific_(apara, bpara, a0, b0, 1, env, memo) && (jl_is_typevar(apara) || !afree || bfree))
                         ascore += 1;
-                    else if (type_morespecific_(bpara, apara, b0, a0, 1, env) && (jl_is_typevar(bpara) || !bfree || afree))
+                    else if (type_morespecific_(bpara, apara, b0, a0, 1, env, memo) && (jl_is_typevar(bpara) || !bfree || afree))
                         bscore += 1;
                     else if (eq_msp(apara, bpara, a0, b0, env)) {
                         if (!afree && bfree)
@@ -7716,13 +7874,13 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
     if (jl_is_typevar(a)) {
         if (jl_is_typevar(b)) {
             return (( type_morespecific_((jl_value_t*)((jl_tvar_t*)a)->ub,
-                                         (jl_value_t*)((jl_tvar_t*)b)->ub, a0, b0, 0, env) &&
+                                         (jl_value_t*)((jl_tvar_t*)b)->ub, a0, b0, 0, env, memo) &&
                      !type_morespecific_((jl_value_t*)((jl_tvar_t*)a)->lb,
-                                         (jl_value_t*)((jl_tvar_t*)b)->lb, a0, b0, 0, env)) ||
+                                         (jl_value_t*)((jl_tvar_t*)b)->lb, a0, b0, 0, env, memo)) ||
                     ( type_morespecific_((jl_value_t*)((jl_tvar_t*)b)->lb,
-                                         (jl_value_t*)((jl_tvar_t*)a)->lb, b0, a0, 0, env) &&
+                                         (jl_value_t*)((jl_tvar_t*)a)->lb, b0, a0, 0, env, memo) &&
                      !type_morespecific_((jl_value_t*)((jl_tvar_t*)b)->ub,
-                                         (jl_value_t*)((jl_tvar_t*)a)->ub, b0, a0, 0, env)));
+                                         (jl_value_t*)((jl_tvar_t*)a)->ub, b0, a0, 0, env, memo)));
         }
         if (!jl_is_type(b))
             return 0;
@@ -7740,7 +7898,7 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
                 num_occurs((jl_tvar_t*)a, env) >= 2)
                 return 1;
         }
-        return type_morespecific_(((jl_tvar_t*)a)->ub, b, a0, b0, 0, env);
+        return type_morespecific_(((jl_tvar_t*)a)->ub, b, a0, b0, 0, env, memo);
     }
     if (jl_is_typevar(b)) {
         if (!jl_is_type(a))
@@ -7749,7 +7907,7 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
             if (((jl_tvar_t*)b)->ub == jl_bottom_type)
                 return 0;
             if (jl_has_free_typevars(a)) {
-                if (type_morespecific_(a, ((jl_tvar_t*)b)->ub, a0, b0, 0, env))
+                if (type_morespecific_(a, ((jl_tvar_t*)b)->ub, a0, b0, 0, env, memo))
                     return 1;
                 if (eq_msp(a, ((jl_tvar_t*)b)->ub, a0, b0, env))
                     return num_occurs((jl_tvar_t*)b, env) < 2;
@@ -7758,12 +7916,12 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
             else {
                 if (obviously_disjoint(a, ((jl_tvar_t*)b)->ub, 1))
                     return 0;
-                if (type_morespecific_(((jl_tvar_t*)b)->ub, a, b0, a0, 0, env))
+                if (type_morespecific_(((jl_tvar_t*)b)->ub, a, b0, a0, 0, env, memo))
                     return 0;
                 return 1;
             }
         }
-        return type_morespecific_(a, ((jl_tvar_t*)b)->ub, a0, b0, 0, env);
+        return type_morespecific_(a, ((jl_tvar_t*)b)->ub, a0, b0, 0, env, memo);
     }
 
     if (jl_is_unionall(a)) {
@@ -7786,12 +7944,12 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
         return 0;
     if (jl_subtype(a, b))
         return 1;
-    return type_morespecific_(a, b, a, b, 0, NULL);
+    return type_morespecific_memo(a, b, a, b, NULL);
 }
 
 JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b)
 {
-    return type_morespecific_(a, b, a, b, 0, NULL);
+    return type_morespecific_memo(a, b, a, b, NULL);
 }
 
 // Equivalent to `jl_type_morespecific` of the signatures, except that more recent
@@ -7811,7 +7969,7 @@ JL_DLLEXPORT int jl_method_morespecific(jl_method_t *ma, jl_method_t *mb)
     }
     if (jl_subtype(a, b))
         return 1;
-    return type_morespecific_(a, b, a, b, 0, NULL);
+    return type_morespecific_memo(a, b, a, b, NULL);
 }
 
 #ifdef __cplusplus
