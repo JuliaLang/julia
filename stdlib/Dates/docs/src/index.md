@@ -191,6 +191,10 @@ The notable difference between the functions is that with [`tryparse`](@ref),
 an error is not thrown if the string is empty or in an invalid format;
 instead `nothing` is returned.
 
+To parse bytes without making a string, such as a field in a buffer that holds a file,
+use `Base.Parsers.parsevalue`, which returns a `Base.Parsers.ParseFailure` instead of `nothing`; for example,
+`Base.Parsers.parsevalue(Date, view(buf, i:j); dateformat = dateformat"m.d.y")`.
+
 !!! compat "Julia 1.9"
     Before Julia 1.9, empty strings could be passed to constructors and `parse`
     without error, returning as appropriate `DateTime(1)`, `Date(1)` or `Time(0)`.
@@ -775,6 +779,7 @@ Dates.Timestamp{P}(::Dates.Date, ::Dates.Time) where {P}
 Dates.Timestamp{P}(::Dates.TimeType) where {P}
 Dates.Timestamp{P}(::AbstractString, ::AbstractString) where {P}
 Dates.Timestamp{P}(::AbstractString, ::Dates.DateFormat) where {P}
+Base.Parsers.parsevalue(::Type{T}, ::AbstractVector{UInt8}) where {T<:Union{Dates.Date, Dates.DateTime, Dates.Time, Dates.Timestamp}}
 Dates.now()
 Dates.now(::Type{Dates.UTC})
 Dates.now(::Type{Dates.Timestamp})

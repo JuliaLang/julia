@@ -45,5 +45,5 @@ outdir = ARGS[1]
     @test lines[33] == "custom_library_ccall: $(VERSION.major)"
     @test lines[34] == "lazy_library_ccall: $(VERSION.major) 1"
     @test lines[35] == "symbols: :sym Symbol(\"a b\") :(::)"
-    @test lines[36] == "dates: 2026-03-08 2026-03-08T16:00:00.500"
+    @test lines[36] == "dates: 2026-03-08 2026-03-08T16:00:00.500 2026-03-08T16:00:00.000000001 2026-03-08"
 end
