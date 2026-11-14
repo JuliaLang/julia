@@ -49,14 +49,22 @@ void *jl_get_library_(const char *f_lib, int throw_err) JL_CANSAFEPOINT
     return hnd;
 }
 
+// The resolver behind the `jlplt_` thunks (see emit_plt_thunk in ccall.cpp).
+// A thunk is entered by the foreign call instruction itself, which for a
+// `:reset_safe` call runs with the caller's reset region still published:
+// the cancellation lowering cannot see into the thunk, so the lookup below
+// (`libmap_lock`, `dlopen`, `dlsym`) unpublishes the region itself.
 JL_DLLEXPORT
 void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd)
 {
+    jl_task_t *ct = jl_current_task;
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
     void *handle = jl_atomic_load_acquire(hnd);
     if (!handle)
         jl_atomic_store_release(hnd, (handle = jl_get_library(f_lib)));
     void * ptr;
     jl_dlsym(handle, f_name, &ptr, 1, 1);
+    reset_region_republish(ct, reset_ctx);
     return ptr;
 }
 

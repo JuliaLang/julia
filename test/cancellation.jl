@@ -2156,6 +2156,87 @@ end
     @test cell3[] === (Int64(0), Int64(0))
 end
 
+# The first call of a foreign symbol enters Julia's `jlplt_` thunk from the
+# call instruction itself, so for a `:reset_safe` call the thunk's symbol
+# resolver runs inside the caller's still-published reset region. The
+# resolver unpublishes the region around the lookup (whose locks and loader
+# frames must never be abandoned) and republishes it on the way out,
+# re-checking the governing source like the reset-safe allocators do. The
+# library only appears after the victim is compiled, so the JIT cannot
+# pre-resolve the thunk's GOT slot.
+const late_libccalltest = joinpath(mktempdir(), "libccalltest_late." * Libdl.dlext)
+
+mutable struct HandshakeFlags
+    @atomic started::Bool
+    @atomic go::Bool
+    @atomic left::Bool
+end
+
+# Assumed effect-free (hence reset-safe), so the caller's region stays
+# published across it: report readiness, wait for the go-ahead, and
+# acknowledge it on the way out.
+Base.@assume_effects :effect_free @noinline function _reset_safe_handshake(f::HandshakeFlags)
+    @atomic :release f.started = true
+    while !(@atomic :acquire f.go)
+    end
+    @atomic :release f.left = true
+    return nothing
+end
+
+function _plt_victim(f::HandshakeFlags, call::Bool)
+    Base.@cancel_check
+    _reset_safe_handshake(f)
+    call || return Cint(0)
+    return Base.@assume_effects :reset_safe @ccall late_libccalltest.get_c_int()::Cint
+end
+
+@testset "reset-safe foreign call through an unresolved PLT entry" begin
+    if Threads.nthreads(:default) >= 2
+        # compile the victim while its library does not exist yet
+        @test _plt_victim(HandshakeFlags(false, true, false), false) == 0
+        cp(Libdl.dlpath(libccalltest), late_libccalltest)
+        f = HandshakeFlags(false, false, false)
+        t, src = cancellable_spawn(() -> _plt_victim(f, true))
+        @test timedwait(() -> @atomic(:acquire, f.started), 30.0) == :ok
+        # raise the state without cancel!'s shootdown: nothing delivers while
+        # the handshake spins, so only the resolver's republish can
+        Base._raise_state!(src, 0x1)
+        @atomic :release f.go = true
+        # rely on the test harness watchdog for hangs, like other testsets
+        wait(t; throw=false)
+        @test istaskfailed(t)
+        @test t.result isa CancellationRequest
+    end
+end
+
+# A `:reset_safe` foreign call into a computation that only reads its
+# argument: abandoning it at any point tears nothing, so the caller's region
+# stays published across it, and `cancel!`'s shootdown resets the thread out
+# of the C spin (which never stops on its own) back to the cancellation
+# point.
+function _foreign_spin_victim(f::HandshakeFlags, cell::Base.RefValue{NTuple{2, Int64}})
+    Base.@cancel_check
+    _reset_safe_handshake(f)
+    return Base.@assume_effects :reset_safe @ccall libccalltest.cancelspin_wait(cell::Ref{NTuple{2, Int64}})::Int64
+end
+
+@testset "asynchronous reset delivery into a reset-safe foreign call" begin
+    if Threads.nthreads(:default) >= 2
+        f = HandshakeFlags(false, true, false)
+        cell = Ref((Int64(0), Int64(0)))
+        t, src = cancellable_spawn(() -> _foreign_spin_victim(f, cell))
+        # the victim is now a few instructions away from the C spin
+        @test timedwait(() -> @atomic(:acquire, f.left), 30.0) == :ok
+        done = wait_cancelled(t, src)
+        # release a spin the reset never reached, rather than leak it
+        done || (cell[] = (Int64(1), Int64(0)))
+        @test done
+        wait(t; throw=false)
+        @test istaskfailed(t)
+        @test t.result isa CancellationRequest
+    end
+end
+
 # BLAS cancellation handler: it executes on the thread blocked in the dgemm,
 # where the library's thread-local cancel token is exactly the one the
 # in-flight operation is bound to. The function pointers are pre-resolved
