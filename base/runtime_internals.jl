@@ -637,6 +637,7 @@ struct DataTypeLayout
     # isbitsegal : 1;
     # unused_bits : 7;
     # padding : 1;
+    ptrmap::UInt32
 end
 
 function DataTypeLayout(dt::DataType)
