@@ -652,7 +652,6 @@ let v = ["x", "y"]
     @test `{a,pre$v}` == Cmd(["a", "prex", "prey"])
 end
 @test_throws "unterminated double quote" Base.shell_parse("{a,\"b\$}")
-@test_throws "unquoted `*` inside braces" eval(:(`{a,b*}`))
 @test_throws "unquoted `|` inside braces" eval(:(`{a,b|c}`))
 @test_throws "unquoted `>` inside braces" eval(:(`{a,b>c}`))
 
@@ -692,6 +691,24 @@ let g(ex) = Core.eval(GlobTest, ex).exec
     @test g(:(`ls {a,b}*`)) == ["ls", "<a*>", "<b*>"]
     @test g(:(`ls {a,$v}/*`)) == ["ls", "<a/*>", "<x[*]/*>"]
     @test g(:(`ls {*}`)) == ["ls", "<{*}>"]  # not a brace expansion
+    # globs inside braces: each argument is globbed on its own, in order, if it has a glob
+    # character, and is used as it is otherwise
+    @test g(:(`ls {a*,b?}`)) == ["ls", "<a*>", "<b?>"]
+    @test g(:(`ls {b*,a}`)) == ["ls", "<b*>", "a"]
+    @test g(:(`ls {a,a*}`)) == ["ls", "a", "<a*>"]
+    @test g(:(`ls {a,b*}.c`)) == ["ls", "a.c", "<b*.c>"]
+    @test g(:(`ls {*.txt,sub/*}`)) == ["ls", "<*.txt>", "<sub/*>"]
+    @test g(:(`ls {a,{b,c*}}`)) == ["ls", "a", "b", "<c*>"]
+    @test g(:(`ls {a,{1..2}*}`)) == ["ls", "a", "<1*>", "<2*>"]
+    @test g(:(`ls {'a*',b*}`)) == ["ls", "a*", "<b*>"]
+    @test g(:(`ls {$v,y*}`)) == ["ls", "x*", "<y*>"]
+    @test g(:(`ls {$v*,y}`)) == ["ls", "<x[*]*>", "y"]
+    @test g(:(`ls $vs/{c,d*}`)) == ["ls", "a/c", "<a/d*>", "b/c", "<b/d*>"]
+    @test g(:(`ls {a,[bc]}`)) == ["ls", "a", "<[bc]>"]
+    # a `]` is allowed in a glob word, and is literal in an argument without a glob
+    @test g(:(`ls {a],b*}`)) == ["ls", "a]", "<b*>"]
+    @test_throws "must be quoted" g(:(`ls {a],b}`))
+    @test_throws "brace expansion in a redirection target" g(:(`cat > {a,b*}`))
     # without `*`, `?` or `[`, a word is not a glob
     @test g(:(`ls '*' "?" \[`)) == ["ls", "*", "?", "["]
     @test g(:(`ls $(String[])`)) == ["ls"]
@@ -701,6 +718,8 @@ let g(ex) = Core.eval(GlobTest, ex).exec
 end
 @test_throws "no files match the glob `*.txt`" Core.eval(EmptyGlobTest, :(`ls *.txt`))
 @test_throws "needs a `glob` function" Core.eval(NoGlobTest, :(`ls *.txt`))
+@test_throws "no files match the glob `b*`" Core.eval(EmptyGlobTest, :(`ls {a,b*}`))
+@test_throws "needs a `glob` function" Core.eval(NoGlobTest, :(`ls {a,b*}`))
 # shell_split and a partial parse, for REPL completion, do not glob
 @test Base.shell_split("ls *.txt") == ["ls", "*.txt"]
 @test Base.shell_parse("ls *.t"; partial=true)[1] == :((("ls",), ("*.t",)))

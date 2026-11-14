@@ -129,6 +129,16 @@ struct _GlobChar
     c::Char
 end
 
+# A brace expansion with a glob character in one of its alternatives, which are kept as parts
+# until the whole word is parsed, since whether the word is a glob depends on all of it.
+struct _GlobBrace
+    alts::Vector{Vector{Any}}
+end
+
+# One argument a glob word produces: its literal text, the same text as a pattern, with the
+# literal parts escaped, and whether it has a glob character, in which case it is globbed.
+const _GlobArg = Tuple{String,String,Bool}
+
 # Add the literal text from `p.lit` up to, but not including, position `j` to `word`.
 function _flush!(p::_ShellParser, word::Vector{Any}, j::Int = p.pos)
     j > p.lit && push!(word, String(p.s[p.lit:prevind(p.s, j)]))
@@ -357,15 +367,9 @@ function _parse_word!(p::_ShellParser, word::Vector{Any})
             depth -= 1
             _next!(p)
         elseif p.interpolate && !p.partial && c in "*?[]"
-            if p.in_brace > 0
-                # Glob characters inside braces are not supported: quote them.
-                c != ']' && bad == '\0' && (bad = c)
-                c == ']' && c in p.special && bad == '\0' && _special_error(p)
-            else
-                _flush!(p, word)
-                push!(word, _GlobChar(c))
-                p.lit = nextind(p.s, p.pos)
-            end
+            _flush!(p, word)
+            push!(word, _GlobChar(c))
+            p.lit = nextind(p.s, p.pos)
             _next!(p)
         elseif p.in_brace > 0 && depth == 0 && c == '.' &&
                 (n = nextind(p.s, p.pos); n <= lastindex(p.s) && p.s[n] == '.')
@@ -392,28 +396,53 @@ _special_error(p::_ShellParser) =
     error("parsing command `$(p.str)`: special characters \"$(p.special)\" must be quoted in commands")
 
 # Turn a word with unquoted glob characters into the expression that expands it at run time.
-# A word with an unquoted `*`, `?` or `[` is a glob: its other text is escaped, so that it is
-# matched literally, and each word it produces is passed to `cmd_glob_expand`. Without one,
-# a `]` is an ordinary character, unless it is special. Returns whether the word is a glob.
+# A word with an unquoted `*`, `?` or `[`, including in a brace expansion, is a glob word. Each
+# argument it produces that has one of these characters is a pattern, whose other text is
+# escaped so that it is matched literally, and is passed to `glob`; the others are used as
+# they are, as in `{a,b*}`. Without one, a `]` is an ordinary character, unless it is special.
+# Returns whether the word is a glob word.
 function _glob_word!(p::_ShellParser, word::Vector{Any})
-    any(x -> x isa _GlobChar, word) || return false
-    if !any(x -> x isa _GlobChar && x.c != ']', word)
+    _has_glob(word, _ -> true) || return false
+    if !_has_glob(word, !=(']'))
         ']' in p.special && _special_error(p)
-        map!(x -> x isa _GlobChar ? string(x.c) : x, word, word)
+        parts = _no_glob(word)
+        empty!(word)
+        append!(word, parts)
         return false
     end
-    parts = Any[]
-    for x in word
-        push!(parts, x isa _GlobChar ? string(x.c) :
-                     x isa String ? glob_escape(x) :
-                     x isa Vector{String} ? map(glob_escape, x) :
-                     Expr(:call, GlobalRef(Base, :cmd_glob_escape), x))
-    end
     mod = Expr(:macrocall, GlobalRef(Base, Symbol("@__MODULE__")), nothing)
-    ex = Expr(:call, GlobalRef(Base, :cmd_glob_expand), mod, Expr(:call, GlobalRef(Base, :arg_gen), parts...))
+    ex = Expr(:call, GlobalRef(Base, :cmd_glob_expand), mod, _glob_args(word))
     empty!(word)
     push!(word, ex)
     return true
+end
+
+# Whether `parts` has a glob character `c` for which `f(c)`, including in a brace expansion.
+_has_glob(parts::Vector{Any}, f) = any(parts) do x
+    x isa _GlobChar ? f(x.c) : x isa _GlobBrace ? any(alt -> _has_glob(alt, f), x.alts) : false
+end
+
+# `parts` with each glob character made literal text, for a word that is not a glob.
+_no_glob(parts::Vector{Any}) = Any[x isa _GlobChar ? string(x.c) :
+                                   x isa _GlobBrace ? _brace_expr(map(_no_glob, x.alts)) : x
+                                   for x in parts]
+
+# The `_GlobArg`s a glob word produces, as a vector if the word interpolates nothing and
+# otherwise as an expression that computes them. They come in the order `arg_gen` gives.
+function _glob_args(parts::Vector{Any})
+    args = Any[_glob_args1(x) for x in parts]
+    all(x -> x isa Vector{_GlobArg}, args) && return cmd_glob_product(args...)
+    return Expr(:call, GlobalRef(Base, :cmd_glob_product), args...)
+end
+
+function _glob_args1(x)
+    x isa String && return _GlobArg[(x, glob_escape(x), false)]
+    x isa _GlobChar && return _GlobArg[(string(x.c), string(x.c), x.c != ']')]
+    x isa Vector{String} && return _GlobArg[(v, glob_escape(v), false) for v in x]
+    x isa _GlobBrace || return Expr(:call, GlobalRef(Base, :cmd_glob_args), x)
+    alts = Any[_glob_args(alt) for alt in x.alts]
+    all(x -> x isa Vector{_GlobArg}, alts) && return reduce(vcat, alts)
+    return Expr(:call, GlobalRef(Base, :vcat), alts...)
 end
 
 # Parse a brace expansion, `{a,b}` or a range such as `{1..3}`; `p.pos` is at the `{`.
@@ -465,8 +494,10 @@ end
 # The arguments a brace expansion produces, given the parts of each alternative. If no
 # alternative interpolates anything, they are computed now and returned as a `Vector{String}`,
 # which `arg_gen` treats like any other collection whatever its length. Otherwise each
-# alternative is expanded at run time by `arg_gen`, as a word is.
+# alternative is expanded at run time by `arg_gen`, as a word is. If an alternative has a
+# glob character, they are returned as a `_GlobBrace`, for `_glob_word!` to handle.
 function _brace_expr(alts::Vector{Vector{Any}})
+    any(alt -> _has_glob(alt, _ -> true), alts) && return _GlobBrace(alts)
     if all(_isstatic, alts)
         vals = String[]
         for alt in alts
