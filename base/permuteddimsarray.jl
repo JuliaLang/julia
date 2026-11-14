@@ -292,7 +292,7 @@ end
 
 function Base.copyto!(dest::PermutedDimsArray{<:Any,N}, src::AbstractArray{<:Any,N}) where {N}
     isempty(src) && return dest
-    checkbounds(dest, axes(src)...)
+    axes(dest) == axes(src) || return invoke(copyto!, Tuple{AbstractArray, AbstractArray}, dest, src)
     src′ = Base.unalias(dest, src)
     _copy!(dest, src′)
 end
