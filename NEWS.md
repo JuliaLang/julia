@@ -41,6 +41,15 @@ Build system changes
   system image with additional code, use PackageCompiler.jl, or run a script on top of an existing
   system image with `julia --sysimage <image> --output-o <file> <script>`.
 
+* Image generation now honors the
+  [`BUILD_PATH_PREFIX_MAP`](https://reproducible-builds.org/specs/build-path-prefix-map/)
+  environment variable: serialized source locations (method and module files, debug info,
+  native code debug info (DWARF), docstring locations, and default logging locations)
+  have their build directory prefix replaced with the given stable prefix. Cache
+  dependencies use resolvable depot- or source-relative paths. Program values,
+  including `@__FILE__`, `@__DIR__`, symbols, and quoted expressions, are not rewritten
+  ([#62803]).
+
 New library functions
 ---------------------
 
@@ -51,6 +60,10 @@ New library functions
 
 New library features
 --------------------
+
+* `@assert` failure messages no longer include a `#= file:line =#` comment when the asserted
+  condition contains a macro call; the location is available from the stacktrace as usual
+  ([#62803]).
 
 Standard library changes
 ------------------------

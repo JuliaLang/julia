@@ -25,7 +25,7 @@ const TESTNAMES = [
         "misc", "threads", "stress", "binaryplatforms","stdlib_dependencies", "atexit",
         "enums", "cmdlineargs", "int", "interpreter",
         "checked", "bitset", "floatfuncs", "precompile", "precompile_distributed",
-        "relocatedepot",
+        "relocatedepot", "buildpathmap",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "cancellation", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",

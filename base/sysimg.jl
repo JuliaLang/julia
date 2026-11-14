@@ -138,6 +138,36 @@ let
     print("Total ─────── "); Base.time_print(stdout, tot_time         * 10^9); println();
 end
 
+# Remap the paths in pkgorigins, _included_files, and docstring metadata,
+# which would otherwise bake the build directory into the sysimage.
+let remap = Base.map_build_path
+    # Keep original filenames in the build tree for write_base_cache.jl. A prefix
+    # map may have overlapping sources or duplicate targets and is not invertible.
+    sources = get(ENV, "JULIA_BASE_CACHE_SOURCES", nothing)
+    if sources !== nothing
+        open(sources, "w") do io
+            for (_, file) in Base._included_files
+                write(io, remap(file), '\0', file, '\0')
+            end
+        end
+    end
+    for origin in values(Base.pkgorigins)
+        origin.path === nothing || (origin.path = remap(origin.path))
+        origin.cachepath === nothing || (origin.cachepath = remap(origin.cachepath))
+    end
+    for (i, (mod, file)) in enumerate(Base._included_files)
+        Base._included_files[i] = (mod, remap(file))
+    end
+    for mod in Base.Docs.modules
+        for multidoc in values(Base.Docs.meta(mod))
+            for docstr in values(multidoc.docs)
+                path = get(docstr.data, :path, nothing)
+                path isa String && (docstr.data[:path] = remap(path))
+            end
+        end
+    end
+end
+
 @eval Base BUILDROOT = ""
 Base.Compiler.set_typeinf_world!()
 end
