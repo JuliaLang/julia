@@ -145,10 +145,10 @@ since then.
 """
 function gc_live_bytes()
     num = gc_num()
-    Int(ccall(:jl_gc_live_bytes, Int64, ())) + num.allocd + num.deferred_alloc
+    ccall(:jl_gc_live_bytes, Int64, ()) + num.allocd + num.deferred_alloc
 end
 
-# must be kept in sync with the value from `src/julia_threads.h``
+# must be kept in sync with the value from `src/gc-tls-stock.h`
 const JL_GC_N_MAX_POOLS = 51
 function gc_page_utilization_data()
     page_utilization_raw = cglobal(:jl_gc_page_utilization_stats, Float64)
@@ -157,7 +157,7 @@ end
 
 # Full sweep reasons are currently only available for the stock GC
 @static if Base.USING_STOCK_GC
-# must be kept in sync with `src/gc-stock.h``
+# must be kept in sync with `src/gc-stock.h`
 const FULL_SWEEP_REASONS = [:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL, :FULL_SWEEP_REASON_FORCED_FULL_SWEEP,
                             :FULL_SWEEP_REASON_USER_MAX_EXCEEDED, :FULL_SWEEP_REASON_LARGE_PROMOTION_RATE, :FULL_SWEEP_REASON_LARGE_HEAP_GROWTH]
 end
@@ -172,6 +172,7 @@ The reasons are:
 - `:FULL_SWEEP_REASON_FORCED_FULL_SWEEP`: Full sweep was forced by `GC.gc(true)`
 - `:FULL_SWEEP_REASON_USER_MAX_EXCEEDED`: Full sweep was forced due to the system reaching the heap soft size limit
 - `:FULL_SWEEP_REASON_LARGE_PROMOTION_RATE`: Full sweep was forced by a large promotion rate across GC generations
+- `:FULL_SWEEP_REASON_LARGE_HEAP_GROWTH`: Full sweep was forced by the heap growing a lot since the last full sweep
 
 Note that the set of reasons is not guaranteed to be stable across minor versions of Julia.
 """
