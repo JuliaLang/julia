@@ -896,22 +896,8 @@ backtrace()
     @test lstrip(output[5])[1] == '├'
     @test lstrip(lstrip(output[5])[4:end])[1:3] == "[2]"
     @test occursin("f28442", output[5])
-    is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
-    if is_windows_32_bit
-        # These tests are currently broken (intermittently/non-determistically) on 32-bit Windows.
-        # https://github.com/JuliaLang/julia/issues/55900
-        # Instead of skipping them entirely, we skip one, and we loosen the other.
-
-        # Broken test: @test occursin("repeated 5001 times", output[7])
-        @test occursin("repeated ", output[7])
-        @test occursin(" times", output[7])
-
-        # Broken test: @test lstrip(output[8])[1:7] == "[10003]"
-        @test_broken false
-    else
-        @test occursin("repeated 5001 times", output[7])
-        @test lstrip(output[8])[1:7] == "[10003]"
-    end
+    @test occursin("repeated 5001 times", output[7])
+    @test lstrip(output[8])[1:7] == "[10003]"
 end
 
 @testset "Long stacktrace printing - nested repeated single frame" begin
@@ -942,20 +928,15 @@ end
 
     @test occursin("f28442a", output[19])
 
-    is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
-    if is_windows_32_bit
-        # Assuming tests are broken on 32-bit Windows as above, no need to repeat loose tests here.
-    else
-        @test occursin("repeated 10 times", output[7])
-        @test lstrip(lstrip(output[8])[7:end])[1:4] == "[21]"
-        @test occursin("repeated 9 times", output[10])
-        @test lstrip(lstrip(output[11])[4:end])[1:4] == "[30]"
-        @test occursin("repeated 6 times", output[13])
-        @test lstrip(lstrip(output[14])[4:end])[1:4] == "[81]"
-        @test lstrip(lstrip(output[16])[4:end])[1:4] == "[82]"
-        @test lstrip(output[19])[1:5] == "[101]"
-        @test lstrip(output[21])[1:5] == "[102]"
-    end
+    @test occursin("repeated 10 times", output[7])
+    @test lstrip(lstrip(output[8])[7:end])[1:4] == "[21]"
+    @test occursin("repeated 9 times", output[10])
+    @test lstrip(lstrip(output[11])[4:end])[1:4] == "[30]"
+    @test occursin("repeated 6 times", output[13])
+    @test lstrip(lstrip(output[14])[4:end])[1:4] == "[81]"
+    @test lstrip(lstrip(output[16])[4:end])[1:4] == "[82]"
+    @test lstrip(output[19])[1:5] == "[101]"
+    @test lstrip(output[21])[1:5] == "[102]"
 end
 
 @testset "Long stacktrace printing - nested cycles" begin
@@ -974,35 +955,30 @@ end
     @test lstrip(lstrip(output[5])[7:end])[1:3] == "[2]"
     @test occursin("g28442b", output[5])
 
-    is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
-    if is_windows_32_bit
-        # Assuming tests are broken on 32-bit Windows as above, no need to repeat loose tests here.
-    else
-        @test occursin("repeated 10 times", output[7])
+    @test occursin("repeated 10 times", output[7])
 
-        @test startswith(lstrip(output[8]), "├┌ ")
-        @test occursin("h28442b", output[8])
-        @test lstrip(lstrip(output[8])[7:end])[1:4] == "[21]"
-        @test startswith(lstrip(output[10]), "├├ ")
-        @test occursin("g28442b", output[10])
-        @test lstrip(lstrip(output[10])[7:end])[1:4] == "[22]"
-        @test occursin("repeated 10 times", output[12])
+    @test startswith(lstrip(output[8]), "├┌ ")
+    @test occursin("h28442b", output[8])
+    @test lstrip(lstrip(output[8])[7:end])[1:4] == "[21]"
+    @test startswith(lstrip(output[10]), "├├ ")
+    @test occursin("g28442b", output[10])
+    @test lstrip(lstrip(output[10])[7:end])[1:4] == "[22]"
+    @test occursin("repeated 10 times", output[12])
 
-        # The outer cycle closes here, having stood for two turns of the two above
-        @test occursin("repeated 2 times", output[13])
+    # The outer cycle closes here, having stood for two turns of the two above
+    @test occursin("repeated 2 times", output[13])
 
-        @test startswith(lstrip(output[14]), "┌ ")
-        @test occursin("f28442b", output[14])
-        @test lstrip(lstrip(output[14])[4:end])[1:4] == "[81]"
-        @test startswith(lstrip(output[16]), "├ ")
-        @test occursin("g28442b", output[16])
-        @test lstrip(lstrip(output[16])[4:end])[1:4] == "[82]"
-        @test occursin("repeated 10 times", output[18])
+    @test startswith(lstrip(output[14]), "┌ ")
+    @test occursin("f28442b", output[14])
+    @test lstrip(lstrip(output[14])[4:end])[1:4] == "[81]"
+    @test startswith(lstrip(output[16]), "├ ")
+    @test occursin("g28442b", output[16])
+    @test lstrip(lstrip(output[16])[4:end])[1:4] == "[82]"
+    @test occursin("repeated 10 times", output[18])
 
-        @test occursin("f28442b", output[19])
-        @test lstrip(output[19])[1:5] == "[101]"
-        @test lstrip(output[21])[1:5] == "[102]"
-    end
+    @test occursin("f28442b", output[19])
+    @test lstrip(output[19])[1:5] == "[101]"
+    @test lstrip(output[21])[1:5] == "[102]"
 end
 
 @testset "Long stacktrace printing - cycle longer than two frames" begin

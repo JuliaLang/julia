@@ -1788,7 +1788,7 @@ typedef CONTEXT bt_context_t;
 typedef CONTEXT bt_cursor_t;
 #else
 typedef struct {
-    STACKFRAME64 stackframe;
+    STACKFRAME_EX stackframe;
     CONTEXT context;
 } bt_cursor_t;
 #endif
