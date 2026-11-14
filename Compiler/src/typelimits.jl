@@ -270,6 +270,16 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
                type_more_complex(t, c.b, sources, depth, tupledepth, allowed_tuplelen)
     elseif isa(t, Int) && isa(c, Int)
         return t !== 1 && !(0 <= t < c) # alternatively, could use !(abs(t) <= abs(c) || abs(t) < n) for some n
+    elseif isa(t, Tuple) && isa(c, Tuple)
+        nfields(t) > nfields(c) && return true
+        elements = IdSet{Any}()
+        for j = 1:nfields(c)
+            push!(elements, getfield(c, j))
+        end
+        for i = 1:nfields(t)
+            getfield(t, i) in elements || return true
+        end
+        return false
     end
     if isType(t)
         # Type is fairly important, so do not widen it as fast as other types if avoidable
