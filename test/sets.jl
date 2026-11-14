@@ -1025,6 +1025,41 @@ end
     @test issetequal(Iterators.filter(iseven, 1:10), Iterators.filter(iseven, 1:10))
 end
 
+# Integer unit ranges need not be materialized to compare their elements as sets.
+@testset "issetequal with integer unit ranges" begin
+    ranges = (1:3, 1:0, 5:3, 0:2, Base.OneTo(3), UInt(1):UInt(3),
+              big(1):big(3), typemax(Int)-2:typemax(Int))
+    collections = ([3, 1, 2, 2], [1, 1, 3], [0, 2, 3], Int[],
+                   [1.0, 2.0, 3.0], [1.0, 1.5, 3.0], [-0.0, 1.0, 2.0],
+                   Any[1, 2, 3], [missing, 1, 2], [NaN, 1, 2],
+                   (3, 2, 1), Set([1, 2, 3]), BitSet([1, 2, 3]),
+                   Set(BigInt[1, 2, 3]), IdSet{BigInt}(BigInt[1, 2, 3]),
+                   [typemax(Int), typemax(Int)-1, typemax(Int)-2],
+                   3:-1:1, 1:2:5)
+    for r in ranges, a in collections
+        expected = issetequal(Set(r), a isa AbstractSet ? a : Set(a))
+        @test issetequal(r, a) == expected
+        expected_reverse = issetequal(a isa AbstractSet ? a : Set(a), Set(r))
+        @test issetequal(a, r) == expected_reverse
+    end
+    for a in ranges, b in ranges
+        @test issetequal(a, b) == issetequal(Set(a), Set(b))
+    end
+    @test issetequal((x for x in (3, 1, 2, 2)), 1:3)
+    @test issetequal(1:3, Iterators.filter(isodd, [1, 2, 3, 5])) == false
+    @test issetequal(Iterators.filter(isodd, 1:6), 1:2:5)
+    @test issetequal(typemin(Int):typemax(Int), typemin(Int):typemax(Int))
+
+    let r = 1:1000, s = Set(1:1000)
+        issetequal(r, s)
+        issetequal(s, r)
+        issetequal(r, r)
+        @test (@allocated issetequal(r, s)) < 1024
+        @test (@allocated issetequal(s, r)) < 1024
+        @test (@allocated issetequal(r, r)) < 1024
+    end
+end
+
 @testset "optimized union! with max_values" begin
     # issue #30315
     T = Union{Nothing, Bool}
