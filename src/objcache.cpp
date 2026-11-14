@@ -164,20 +164,6 @@ MDB_val mdbVal(T &x) JL_NOTSAFEPOINT
     return {sizeof x, (void *)&x};
 }
 
-namespace {
-class MDBMemoryBuffer : public llvm::MemoryBuffer {
-public:
-    MDBMemoryBuffer(MDBTxn Txn, llvm::StringRef Data) JL_NOTSAFEPOINT : Txn(std::move(Txn))
-    {
-        init(Data.begin(), Data.end(), false);
-    }
-    BufferKind getBufferKind() const override { return MemoryBuffer_MMap; }
-
-private:
-    MDBTxn Txn;
-};
-} // anonymous namespace
-
 void ObjCache::initDB()
 {
     // Read DEPOT_PATH before taking ObjCache::Lock so we can enter a GC-unsafe
@@ -457,8 +443,13 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     }
     QueueCond.notify_one();
 
-    auto Buf = std::make_unique<MDBMemoryBuffer>(
-        std::move(Txn), llvm::StringRef{(const char *)Data.mv_data, Data.mv_size});
+    // Copy the object out rather than reading it in place: a read transaction holds a
+    // reader slot until it ends, and the slots are shared by every process using the
+    // cache. The object is kept until it has been linked, along with the others compiled
+    // with it, so keeping the transaction for as long would run out of slots.
+    auto Buf = llvm::MemoryBuffer::getMemBufferCopy(
+        llvm::StringRef{(const char *)Data.mv_data, Data.mv_size});
+    Txn.abort();
     NHit.fetch_add(1, memory_order_relaxed);
     NRead.fetch_add(Buf->getBufferSize(), memory_order_relaxed);
 
