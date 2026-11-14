@@ -178,6 +178,10 @@ sockets_watchdog_timer = Timer(_ -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"
 
     @test_throws ArgumentError IPv4(-1)
     @test_throws ArgumentError IPv4(typemax(UInt32) + Int64(1))
+    @test IPv4(big(5)) == ip"0.0.0.5"
+    @test IPv6(big(5)) == ip"::5"
+    @test_throws "must fit within 32 bits" IPv4(big(2)^32)
+    @test_throws "must fit within 128 bits" IPv6(big(2)^128)
 
     @test ip"::1" == IPv6(1)
     @test ip"2605:2700:0:3::4713:93e3" == IPv6(parse(UInt128,"260527000000000300000000471393e3", base = 16))

@@ -3783,11 +3783,13 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, @nospecializ
             end
         else
             allow_import = allow_import_arg.val
+            isa(allow_import, Bool) || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
         end
     end
     if order_arg !== nothing
-        exct = global_order_exct(order_arg, #=loading=#true, #=storing=#false)
-        if !(isa(order_arg, Const) && get_atomic_order(order_arg.val, #=loading=#true, #=storing=#false).x >= MEMORY_ORDER_UNORDERED.x)
+        exct = Union{exct, global_order_exct(order_arg, #=loading=#true, #=storing=#false)}
+        order = isa(order_arg, Const) ? order_arg.val : nothing
+        if !(isa(order, Symbol) && get_atomic_order(order, #=loading=#true, #=storing=#false).x >= MEMORY_ORDER_UNORDERED.x)
             exct = Union{exct, ConcurrencyViolationError}
         end
     end

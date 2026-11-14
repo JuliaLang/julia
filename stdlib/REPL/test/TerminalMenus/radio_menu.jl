@@ -41,6 +41,10 @@ end
     @test String(take!(buf)) == "\e[2K^  11\r\n\e[2K   12\r\n\e[2K   13\r\n\e[2K   14\r\n\e[2K   15\r\n\e[2K   16\r\n\e[2K   17\r\n\e[2K   18\r\n\e[2K > 19\r\n\e[2K   20"
     TerminalMenus.printmenu(buf, radio_menu, 8; init=true)
     @test String(take!(buf)) == "\e[2K^  4\r\n\e[2K   5\r\n\e[2K   6\r\n\e[2K   7\r\n\e[2K > 8\r\n\e[2K   9\r\n\e[2K   10\r\n\e[2K   11\r\n\e[2K   12\r\n\e[2Kv  13"
+    # a page of one line shows the cursor
+    radio_menu = RadioMenu(string.(1:3); pagesize=1, charset=:ascii)
+    TerminalMenus.printmenu(buf, radio_menu, 2; init=true)
+    @test String(take!(buf)) == "\e[2KI> 2"
 end
 
 # Test using stdin

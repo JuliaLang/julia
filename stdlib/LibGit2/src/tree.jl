@@ -57,6 +57,8 @@ function treewalk(f, tree::GitTree, post::Bool = false)
             entry = GitTreeEntry(tree, entry_ptr, false)
             return f(root, entry)
         end, Cint, (Cstring, Ptr{Cvoid}, Ref{Vector{Any}}))
+    # libgit2 only records that the callback stopped the walk if no older error is set
+    ccall((:git_error_clear, libgit2), Cvoid, ())
     err = ccall((:git_tree_walk, libgit2), Cint,
                 (Ptr{Cvoid}, Cint, Ptr{Cvoid}, Any),
                 tree, post, cbf, payload)
