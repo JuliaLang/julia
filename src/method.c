@@ -680,6 +680,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     jl_atomic_store_relaxed(&mi->flags, 0);
     jl_atomic_store_relaxed(&mi->dispatch_status, 0);
     jl_atomic_store_relaxed(&mi->precompile, 0);
+    jl_atomic_store_relaxed(&mi->tier_work, 0);
     return mi;
 }
 
@@ -1093,6 +1094,8 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->max_varargs = UINT8_MAX;
     JL_MUTEX_INIT(&m->writelock, "method->writelock");
     jl_atomic_store_relaxed(&m->interp_sites, NULL);
+    jl_atomic_store_relaxed(&m->tier_flags, 0);
+    jl_atomic_store_relaxed(&m->tier_nstmts, 0);
     return m;
 }
 

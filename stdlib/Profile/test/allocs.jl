@@ -188,7 +188,7 @@ end
 
 @testset "alloc profiler catches allocs from buffer resize" begin
     f(a) = for _ in 1:100; push!(a, 1); end
-    f(Int[])
+    precompile(f, (Vector{Int},))
     resize!(Int[], 1)
     a = Int[]
     Allocs.clear()

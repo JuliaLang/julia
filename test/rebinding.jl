@@ -2,6 +2,10 @@
 
 using Test
 
+# These tests check how binding changes invalidate compiled code, so calls must compile
+# also when tiered execution is on.
+Base.Tiered.compiled_tier!()
+
 module Rebinding
     using Test
     make_foo() = Foo(1)

@@ -827,6 +827,8 @@ JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *src
 
 jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth) JL_CANSAFEPOINT;
 jl_value_t *jl_invoke_fromdispatch(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_invoke_tiered(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_tier_lazy_callees(jl_method_instance_t *root, jl_method_instance_t *mi) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi, jl_value_t *owner) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
@@ -881,6 +883,32 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types) JL_CANSAFEPOINT;
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile) JL_CANSAFEPOINT;
+
+// tiered execution (tiered.c)
+#define JL_TIER_CHECKED         0x01 // interpretability of the method was determined
+#define JL_TIER_NEEDS_COMPILER  0x02 // the method cannot run in the interpreter
+#define JL_TIER_HAS_LOOPS       0x04 // loop continuations are cached for this method
+extern JL_DLLEXPORT int jl_tier_enabled;
+extern JL_DLLEXPORT uint32_t jl_tier_work_threshold;
+extern JL_DLLEXPORT uint32_t jl_tier_loop_threshold;
+void jl_init_tiered(void);
+// What the tier gate decides: interpret, or why the call must be compiled
+enum {
+    JL_TIER_INTERPRET,          // run in the interpreter
+    JL_TIER_WHY_BUDGET,         // its statement budget is spent
+    JL_TIER_WHY_NEEDS_COMPILER, // the interpreter would run it differently or not at all
+    JL_TIER_WHY_GENERATOR,      // an optionally generated function
+    JL_TIER_WHY_MEASUREMENT,    // inside `@allocated` and the like
+    JL_TIER_WHY_TRACE,          // compilation is being traced
+    JL_TIER_WHY_PRECOMPILE,     // generating output
+    JL_TIER_WHY_OTHER,          // other cases the interpreter doesn't take
+};
+int jl_tier_gate(jl_method_instance_t *mi) JL_CANSAFEPOINT;
+void jl_tier_add_work(jl_method_instance_t *mi, uint64_t n) JL_NOTSAFEPOINT;
+extern _Atomic(uint8_t) jl_force_trace_compile_timing_enabled;
+jl_value_t *jl_apply_generic_site(jl_value_t *F, jl_value_t **args, uint32_t nargs, uint32_t callsite) JL_CANSAFEPOINT;
+jl_value_t *jl_interpret_mi(jl_value_t *f, jl_value_t **args, uint32_t nargs,
+                            jl_method_instance_t *mi) JL_CANSAFEPOINT;
 jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ast) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals, jl_value_t *binding_edge,
@@ -891,6 +919,8 @@ JL_DLLEXPORT void jl_add_binding_backedge(jl_binding_t *b, jl_value_t *edge) JL_
 static const uint8_t MI_FLAG_BACKEDGES_INUSE = 0b0100;
 static const uint8_t MI_FLAG_BACKEDGES_DIRTY = 0b1000;
 static const uint8_t MI_FLAG_BACKEDGES_ALL = 0b1100;
+// set once the tier gate has found this MethodInstance to be its own compilable form
+static const uint8_t MI_FLAG_TIER_COMPILABLE = 0b10000;
 
 STATIC_INLINE jl_array_t *jl_mi_get_backedges_mutate(jl_method_instance_t *mi JL_PROPAGATES_ROOT, uint8_t *flags) {
     *flags = jl_atomic_load_relaxed(&mi->flags) & (MI_FLAG_BACKEDGES_ALL);
@@ -2575,6 +2605,7 @@ JL_DLLIMPORT int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int 
 JL_DLLIMPORT uint64_t jl_getUnwindInfo(uint64_t dwBase) JL_NOTSAFEPOINT;
 JL_DLLIMPORT void jl_jit_register_ci(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 JL_DLLIMPORT void jl_jit_unregister_ci(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
+JL_DLLIMPORT void jl_jit_link_tier_stubs(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

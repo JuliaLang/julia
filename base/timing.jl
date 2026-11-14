@@ -556,6 +556,8 @@ function is_simply_call(@nospecialize ex)
     return true
 end
 
+# Allocation measurements turn tiered execution off: the code they run is compiled as it
+# would be without tiering. (Timings measure whatever runs.)
 function _gen_allocation_measurer(ex, fname::Symbol)
     if isexpr(ex, :call)
         if !is_simply_call(ex)
@@ -563,33 +565,34 @@ function _gen_allocation_measurer(ex, fname::Symbol)
         end
         pushfirst!(ex.args, GlobalRef(Base, fname))
         return quote
-            Experimental.@force_compile
-            $(esc(ex))
+            Experimental.@force_compile $(esc(ex))
         end
     elseif fname === :allocated
         # v1.11-compatible implementation
         return quote
-            Experimental.@force_compile
-            local b0 = Ref{Int64}(0)
-            local b1 = Ref{Int64}(0)
-            gc_bytes(b0)
-            $(esc(ex))
-            gc_bytes(b1)
-            b1[] - b0[]
+            Experimental.@force_compile begin
+                local b0 = Ref{Int64}(0)
+                local b1 = Ref{Int64}(0)
+                gc_bytes(b0)
+                $(esc(ex))
+                gc_bytes(b1)
+                b1[] - b0[]
+            end
         end
     else
         @assert fname === :allocations "unexpected fname"
         return quote
-            Experimental.@force_compile
-            # Note this value is unused, but without it `allocated` and `allocations`
-            # are sufficiently different that the compiler can remove allocations here
-            # that it cannot remove there, giving inconsistent numbers.
-            local b1 = Ref{Int64}(0)
-            local stats = Base.gc_num()
-            $(esc(ex))
-            local diff = Base.GC_Diff(Base.gc_num(), stats)
-            gc_bytes(b1)
-            Base.gc_alloc_count(diff)
+            Experimental.@force_compile begin
+                # Note this value is unused, but without it `allocated` and `allocations`
+                # are sufficiently different that the compiler can remove allocations here
+                # that it cannot remove there, giving inconsistent numbers.
+                local b1 = Ref{Int64}(0)
+                local stats = Base.gc_num()
+                $(esc(ex))
+                local diff = Base.GC_Diff(Base.gc_num(), stats)
+                gc_bytes(b1)
+                Base.gc_alloc_count(diff)
+            end
         end
     end
 end

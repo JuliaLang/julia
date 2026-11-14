@@ -1719,6 +1719,8 @@ end
         end
         return frame.func === :kwcall
     end
+    # the sorter frame is checked with the `CodeInstance` that calling it compiles
+    tier = Base.Tiered.compiled_tier!()
     bt = try
         kwsorter_outer(s = 3)
         nothing
@@ -1752,6 +1754,7 @@ end
     end
     # with no code attached at all, the frame is recognized by name instead
     @test kept(Base.StackTraces.StackFrame(:kwcall, Symbol("none"), 1)) == [:f]
+    Base.Tiered.compiled_tier!(tier)
 end
 
 # Test Base.print_with_compare in convert MethodErrors

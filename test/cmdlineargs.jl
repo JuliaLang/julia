@@ -1363,7 +1363,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # --print-before/--print-after with pass names is broken on Windows due to no-gnu-unique issues
     if !Sys.iswindows()
         withenv("JULIA_LLVM_ARGS" => "--print-before=BeforeOptimization", "JULIA_OBJCACHE" => "0") do
-            let code = readchomperrors(`$exename -g0 -E "@eval Int64(1)+Int64(1)"`)
+            let code = readchomperrors(`$exename --tiered=no -g0 -E "@eval Int64(1)+Int64(1)"`)
                 @test code[1]
                 code = code[3]
                 @test occursin("llvm.module.flags", code)
@@ -1371,7 +1371,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 @test !occursin("int.jl", code)
                 @test !occursin("name: \"Int64\"", code)
             end
-            let code = readchomperrors(`$exename -g1 -E "@eval Int64(1)+Int64(1)"`)
+            let code = readchomperrors(`$exename --tiered=no -g1 -E "@eval Int64(1)+Int64(1)"`)
                 @test code[1]
                 code = code[3]
                 @test occursin("llvm.module.flags", code)
@@ -1381,7 +1381,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 @test_skip occursin("int.jl", code)
                 @test !occursin("name: \"Int64\"", code)
             end
-            let code = readchomperrors(`$exename -g2 -E "@eval Int64(1)+Int64(1)"`)
+            let code = readchomperrors(`$exename --tiered=no -g2 -E "@eval Int64(1)+Int64(1)"`)
                 @test code[1]
                 code = code[3]
                 @test occursin("llvm.module.flags", code)
@@ -1525,7 +1525,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             Base.@trace_compile @eval applyf([true])
             Base.@trace_compile @eval applyf(Any[true])
             """,
-            `$exename -i`,
+            `$exename --tiered=no -i`,
             stderr=io)
         _stderr = String(take!(io))
         @test length(findall(r"precompile\(", _stderr)) == 5

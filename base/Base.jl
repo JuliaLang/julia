@@ -323,6 +323,7 @@ using .BinaryPlatforms.CPUID: @cpu_supports
 
 # misc useful functions & macros
 include("timing.jl")
+include("tiered.jl")
 include("client.jl")
 include("asyncmap.jl")
 

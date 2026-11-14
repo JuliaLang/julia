@@ -28,6 +28,7 @@ typedef struct JL_GC_TRACKED_TYPE {
     size_t nslots, nssa; // the slots and SSA values of src (see frame_set_src)
     size_t world; // the world the frame runs in, which a method body cannot change, or 0
                   // for a top-level thunk, which moves to the latest world as it goes
+    uint64_t tier_own; // statements this frame interpreted, for its budget (see tiered.c)
 } interpreter_state;
 
 STATIC_INLINE size_t frame_world(interpreter_state *s) JL_NOTSAFEPOINT
@@ -724,11 +725,111 @@ static int coverage_visit_stmt(jl_code_info_t *src, jl_module_t *module,
     return 1;
 }
 
+// Tiered execution: loop continuations. When an interpreted loop gets hot,
+// Base._tier_loop compiles the outermost loop around it into a continuation
+// (cached per MethodInstance, loop header and live-in types; see
+// base/tiered.jl), runs it from the current frame state, and writes the values
+// that are live at the loop exit back into that state. The frame then resumes
+// at the exit that was taken.
+
+static jl_value_t *tier_base_fn(_Atomic(jl_value_t*) *cache, const char *name) JL_CANSAFEPOINT
+{
+    jl_value_t *fn = jl_atomic_load_acquire(cache);
+    if (fn == NULL && jl_base_module != NULL) {
+        fn = jl_get_global(jl_base_module, jl_symbol(name));
+        if (fn != NULL)
+            jl_atomic_store_release(cache, fn);
+    }
+    return fn;
+}
+
+static _Atomic(jl_value_t*) tier_loop_fn;
+static _Atomic(jl_value_t*) tier_headers_fn;
+
+// Loop headers (1-based statement indices, a Vector{Int}) that have cached
+// continuations for this frame's MethodInstance, or NULL if there are none.
+static jl_array_t *tier_loop_headers(interpreter_state *s) JL_CANSAFEPOINT
+{
+    if (!(jl_atomic_load_relaxed(&s->mi->def.method->tier_flags) & JL_TIER_HAS_LOOPS))
+        return NULL;
+    jl_value_t *fn = tier_base_fn(&tier_headers_fn, "_tier_loop_headers");
+    if (fn == NULL)
+        return NULL;
+    jl_value_t *fargs[2] = { fn, (jl_value_t*)s->mi };
+    jl_value_t *h = jl_apply(fargs, 2);
+    // every headers vector stays reachable from Base.Tiered once published
+    return jl_is_array(h) ? (jl_array_t*)h : NULL;
+}
+
+static int tier_is_header(jl_array_t *headers, size_t ip) JL_NOTSAFEPOINT
+{
+    size_t n = jl_array_nrows(headers);
+    int64_t *h = jl_array_data(headers, int64_t);
+    for (size_t i = 0; i < n; i++) {
+        if (h[i] == (int64_t)ip + 1)
+            return 1;
+    }
+    return 0;
+}
+
+// Enter a loop continuation at statement `header` (0-based). With `compile`
+// unset, only a cached continuation is used. Returns the 0-based statement to
+// resume at, -1 if no continuation was run, or -2 if this loop can never have
+// one.
+static ssize_t eval_tier_loop(interpreter_state *s, size_t header, int compile) JL_CANSAFEPOINT
+{
+    jl_value_t *fn = tier_base_fn(&tier_loop_fn, "_tier_loop");
+    if (fn == NULL)
+        return -2;
+    size_t n = s->nslots + s->nssa;
+    jl_array_t *state = NULL;
+    jl_value_t *res = NULL;
+    JL_GC_PUSH2(&state, &res);
+    state = jl_alloc_vec_any(n);
+    for (size_t i = 0; i < n; i++) {
+        if (s->locals[i] != NULL)
+            jl_array_ptr_set(state, i, s->locals[i]);
+    }
+    res = jl_box_long((ssize_t)header + 1);
+    jl_value_t *fargs[6] = { fn, (jl_value_t*)s->src, (jl_value_t*)s->mi, res,
+                             (jl_value_t*)state, compile ? jl_true : jl_false };
+    JL_TRY {
+        res = jl_apply(fargs, 6);
+    }
+    JL_CATCH {
+        // An exception from inside the continuation propagates to this frame's
+        // handlers; the continuation saved the values they may read.
+        for (size_t i = 0; i < n; i++)
+            s->locals[i] = jl_array_ptr_ref(state, i);
+        jl_rethrow();
+    }
+    ssize_t next = jl_is_long(res) ? jl_unbox_long(res) : -1;
+    if (next > 0) {
+        for (size_t i = 0; i < n; i++)
+            s->locals[i] = jl_array_ptr_ref(state, i);
+    }
+    JL_GC_POP();
+    return next > 0 ? next - 1 : next == 0 ? -1 : -2;
+}
+
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel)
 {
     jl_handler_t __eh;
     size_t ns = jl_array_nrows(stmts);
     jl_task_t *ct = jl_current_task;
+    // Tiered execution: statements executed in this dispatch loop, checked
+    // against the threshold at back-edges, so the trigger approximates time
+    // spent interpreting loops rather than iteration counts.
+    int tier = !toplevel && jl_tier_enabled && s->mi != NULL && jl_is_method(s->mi->def.value);
+    int64_t tier_work = 0;
+    int64_t tier_threshold = tier ? (int64_t)jl_tier_loop_threshold : 0;
+    // Statements this frame interpreted (in s->tier_own, shared with the dispatch loops of
+    // its `try` blocks), added to its MethodInstance's budget on return. A frame that unwinds
+    // adds nothing; the tier gate charged its call already.
+    int count_work = tier;
+    jl_array_t *tier_headers = NULL; // kept alive by base/tiered.jl
+    if (tier)
+        tier_headers = tier_loop_headers(s);
     // Top-level coverage is recorded in jl_toplevel_eval_flex.
     int track_coverage = !toplevel && jl_options.code_coverage != JL_LOG_NONE &&
                          !jl_generating_output() && s->src->debuginfo != NULL;
@@ -765,6 +866,8 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
         }
         else if (jl_is_returnnode(stmt)) {
+            if (count_work)
+                jl_tier_add_work(s->mi, s->tier_own + 1);
             return eval_value(jl_returnnode_value(stmt), s);
         }
         else if (jl_is_upsilonnode(stmt)) {
@@ -977,7 +1080,33 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         else {
             eval_stmt_value(stmt, s);
         }
-        ip = eval_phi(stmts, s, ns, next_ip);
+        s->tier_own += count_work;
+        if (tier) {
+            ssize_t resume = -1;
+            tier_work++;
+            if (next_ip <= ip) {
+                // back-edge: compile a continuation for the loop once hot
+                if (tier_work >= tier_threshold) {
+                    resume = eval_tier_loop(s, next_ip, 1);
+                    if (resume < 0)
+                        tier = 0; // declined; stop asking in this frame
+                }
+            }
+            else if (tier_headers != NULL && tier_is_header(tier_headers, next_ip)) {
+                // entering a loop: reuse a cached continuation
+                resume = eval_tier_loop(s, next_ip, 0);
+                if (resume == -2)
+                    tier_headers = NULL;
+            }
+            if (resume >= 0) {
+                tier_work = 0;
+                tier_headers = tier_loop_headers(s);
+                ip = resume;
+                continue;
+            }
+        }
+        // lowered method source has no phi nodes
+        ip = s->mi != NULL ? next_ip : eval_phi(stmts, s, ns, next_ip);
     }
     abort();
 }
@@ -1078,10 +1207,10 @@ static jl_genericmemory_t *call_sites(jl_method_t *m, jl_code_info_t *src, size_
 
 // interpreter entry points
 
-jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+jl_value_t *NOINLINE jl_interpret_mi(jl_value_t *f, jl_value_t **args, uint32_t nargs,
+                                     jl_method_instance_t *mi)
 {
     interpreter_state *s;
-    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
     jl_task_t *ct = jl_current_task;
     size_t world = ct->world_age;
     jl_code_info_t *src = NULL;
@@ -1130,10 +1259,16 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->world = world;
     s->sites = call_sites(jl_is_method(mi->def.value) ? mi->def.method : NULL, src, jl_array_nrows(stmts));
     locals[2] = (jl_value_t*)s->sites;
+    s->tier_own = 0;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
     return r;
+}
+
+jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+{
+    return jl_interpret_mi(f, args, nargs, jl_get_ci_mi(codeinst));
 }
 
 JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;
@@ -1178,6 +1313,7 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     s->sparam_vals = NULL;
     s->preevaluation = 0;
     s->continue_at = 0;
+    s->tier_own = 0;
     s->mi = NULL;
     s->ci = NULL;
     s->sites = NULL;
@@ -1212,6 +1348,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     s->module = m;
     s->sparam_vals = jl_emptysvec;
     s->continue_at = 0;
+    s->tier_own = 0;
     s->mi = NULL;
     s->ci = NULL;
     s->sites = NULL;
@@ -1237,6 +1374,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e
     s->sparam_vals = sparam_vals;
     s->preevaluation = (sparam_vals != NULL);
     s->continue_at = 0;
+    s->tier_own = 0;
     s->mi = NULL;
     s->ci = NULL;
     s->sites = NULL;

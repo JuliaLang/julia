@@ -24,6 +24,7 @@
 #include <llvm/ExecutionEngine/Orc/Debugging/VTuneSupportPlugin.h>
 #include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderVTune.h>
 #include <llvm/ExecutionEngine/Orc/ExecutorProcessControl.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
@@ -1138,11 +1139,55 @@ private:
     jl_emitted_output_t Out;
 };
 
+// A tiered trampoline (see linkCallTarget): a function with the type and attributes of `F`
+// that calls what `Slot` points to, once linkTierStubs has pointed it at the callee's
+// compiled code, and `F` until then, both as tail calls with the same arguments.
+static Function *emitTierStub(Function *F, std::atomic<void *> *Slot) JL_NOTSAFEPOINT
+{
+    Module &M = *F->getParent();
+    LLVMContext &Ctx = M.getContext();
+    Function *Stub = Function::Create(F->getFunctionType(), GlobalValue::ExternalLinkage, "", M);
+    Stub->copyAttributesFrom(F);
+    F->setLinkage(GlobalValue::InternalLinkage);
+    F->setName(Twine("tierslow"));
+    IRBuilder<> B(BasicBlock::Create(Ctx, "top", Stub));
+    BasicBlock *Fast = BasicBlock::Create(Ctx, "compiled", Stub);
+    BasicBlock *Slow = BasicBlock::Create(Ctx, "tojlinvoke", Stub);
+    auto *PtrT = PointerType::get(Ctx, 0);
+    Value *SlotAddr = ConstantExpr::getIntToPtr(
+        ConstantInt::get(Type::getInt64Ty(Ctx), (uint64_t)(uintptr_t)Slot), PtrT);
+    LoadInst *Target = B.CreateAlignedLoad(PtrT, SlotAddr, Align(sizeof(void *)));
+    Target->setAtomic(AtomicOrdering::Monotonic);
+    B.CreateCondBr(B.CreateIsNotNull(Target), Fast, Slow);
+    SmallVector<Value *, 0> Args;
+    for (auto &Arg : Stub->args())
+        Args.push_back(&Arg);
+    auto TailCall = [&](BasicBlock *BB, FunctionCallee Callee) JL_NOTSAFEPOINT {
+        B.SetInsertPoint(BB);
+        CallInst *Call = B.CreateCall(Callee, Args);
+        // Not marked as passing return roots, which belong to the stub's caller: GC
+        // lowering expects those to be allocas of the calling function.
+        AttributeList Attrs = F->getAttributes();
+        for (unsigned i = 0; i < Args.size(); i++)
+            Attrs = Attrs.removeParamAttribute(Ctx, i, "julia.return_roots");
+        Call->setAttributes(Attrs);
+        Call->setCallingConv(F->getCallingConv());
+        Call->setTailCallKind(CallInst::TCK_MustTail);
+        if (Stub->getReturnType()->isVoidTy())
+            B.CreateRetVoid();
+        else
+            B.CreateRet(Call);
+    };
+    TailCall(Fast, FunctionCallee(F->getFunctionType(), Target));
+    TailCall(Slow, F);
+    return Stub;
+}
+
 class JLTrampolineMaterializationUnit : public orc::MaterializationUnit {
 public:
     JLTrampolineMaterializationUnit(JuliaOJIT &JIT, ObjectLinkingLayer &OL,
                                     SymbolStringPtr Sym, jl_code_instance_t *CI,
-                                    jl_invoke_api_t API) JL_NOTSAFEPOINT
+                                    jl_invoke_api_t API, std::atomic<void *> *Slot) JL_NOTSAFEPOINT
       : orc::MaterializationUnit({{{JIT.mangle(*Sym),
                                     JITSymbolFlags::Exported | JITSymbolFlags::Callable}},
                                   {}}),
@@ -1150,7 +1195,8 @@ public:
         OL(OL),
         Sym(Sym),
         CI(CI),
-        API(API)
+        API(API),
+        Slot(Slot)
     {
         assert(API == JL_INVOKE_ARGS || API == JL_INVOKE_SPECSIG);
     };
@@ -1165,10 +1211,14 @@ public:
 
         jl_task_t *ct = jl_current_task;
         uint8_t state = jl_gc_unsafe_enter(ct->ptls);
-        Function *F = emit_tojlinvoke(CI, "", Out);
+        // A callee that is not compiled is dispatched to as from the interpreter when
+        // tiering (jl_invoke_tiered), and compiled at its first call otherwise.
+        Function *F = emit_tojlinvoke(CI, Slot ? "jl_invoke_tiered" : "", Out);
         if (API == JL_INVOKE_SPECSIG)
             F = emit_specsig_to_fptr1(Out, CI, F); // may safepoint
         jl_gc_unsafe_leave(ct->ptls, state);
+        if (Slot)
+            F = emitTierStub(F, Slot);
         F->setLinkage(GlobalValue::ExternalLinkage);
         F->setName(*Sym);
 
@@ -1193,6 +1243,7 @@ private:
     SymbolStringPtr Sym;
     jl_code_instance_t *CI;
     jl_invoke_api_t API;
+    std::atomic<void *> *Slot; // for tiering: see linkCallTarget
 };
 
 #if defined(LLVM_SHLIB)
@@ -2261,6 +2312,52 @@ void JuliaOJIT::unregisterCI(jl_code_instance_t *CI)
 {
     std::unique_lock Lock{LinkerMutex};
     CISymbols.erase(CI);
+    std::unique_lock StubsLock{TierStubsMutex};
+    TierStubs.erase(CI);
+}
+
+void JuliaOJIT::linkTierStubs(jl_code_instance_t *CI)
+{
+    std::unique_lock StubsLock{TierStubsMutex};
+    auto It = TierStubs.find(CI);
+    if (It == TierStubs.end())
+        return;
+    // The compiled code must have the ABI the trampolines were made for (that of CI's
+    // definition and return type), and be valid in every world CI is.
+    size_t MinWorld = jl_atomic_load_relaxed(&CI->min_world);
+    size_t MaxWorld = jl_atomic_load_relaxed(&CI->max_world);
+    for (jl_code_instance_t *C = jl_atomic_load_relaxed(&jl_get_ci_mi(CI)->cache); C;
+         C = jl_atomic_load_relaxed(&C->next)) {
+        if (C != CI && !(jl_egal(C->def, CI->def) && jl_egal(C->owner, CI->owner) &&
+                         jl_egal(C->rettype, CI->rettype) &&
+                         jl_atomic_load_relaxed(&C->min_world) <= MinWorld &&
+                         jl_atomic_load_relaxed(&C->max_world) >= MaxWorld))
+            continue;
+        jl_callptr_t Invoke = jl_atomic_load_acquire(&C->invoke);
+        if (Invoke == NULL || Invoke == jl_fptr_wait_for_compiled_addr)
+            continue;
+        if (!(jl_atomic_load_acquire(&C->flags) & JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR))
+            continue;
+        void *SpecPtr = jl_atomic_load_relaxed(&C->specptr.fptr);
+        jl_invoke_api_t API = jl_callptr_invoke_api(Invoke);
+        if (SpecPtr == NULL || !(API == JL_INVOKE_SPECSIG || API == JL_INVOKE_ARGS))
+            continue;
+        auto &Stubs = It->second;
+        for (size_t i = 0; i < Stubs.size();) {
+            if (Stubs[i].second == API) {
+                Stubs[i].first->store(SpecPtr, std::memory_order_release);
+                Stubs[i] = Stubs.back();
+                Stubs.pop_back();
+            }
+            else {
+                i++;
+            }
+        }
+        if (Stubs.empty()) {
+            TierStubs.erase(It);
+            return;
+        }
+    }
 }
 
 #define addAbsoluteToMap(map,name) \
@@ -2596,12 +2693,25 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
     // We also generate a tojlinvoke to handle args1 -> specsig.
     CISymbolPtr Trampoline;
     if (!Sym || Sym->invoke_api != API) {
+        // When tiering, a call to a callee that is not compiled goes through a slot,
+        // pointed at the callee's compiled code once it has some (linkTierStubs), so
+        // that the call costs an indirect jump rather than a jl_invoke from then on.
+        // Not for a foreign CodeInstance, whose code only its owner can supply.
+        jl_method_instance_t *MI = jl_get_ci_mi(CI);
+        std::atomic<void *> *Slot = nullptr;
+        if (!Sym && jl_tier_enabled && CI->owner == jl_nothing &&
+            !(jl_is_method(MI->def.value) && MI->def.method->is_for_opaque_closure)) {
+            // TODO: don't leak when we have a way to GC code
+            Slot = new std::atomic<void *>(nullptr);
+            std::unique_lock StubsLock{TierStubsMutex};
+            TierStubs[CI].push_back({Slot, API});
+        }
         auto TSym = ES.intern(Names("tojlinvoke#", name_from_method_instance(jl_get_ci_mi(CI)), "#"));
         Trampoline.specptr = mangle(*TSym);
         Trampoline.invoke_api = API;
         Sym = &Trampoline;
         auto Err = JD.define(std::make_unique<JLTrampolineMaterializationUnit>(
-            *this, ObjectLayer, TSym, CI, API));
+            *this, ObjectLayer, TSym, CI, API, Slot));
         if (Err) {
 #ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
             MR.getExecutionSession().reportError(std::move(Err));
@@ -2907,4 +3017,10 @@ extern "C" JL_DLLEXPORT_CODEGEN
 void jl_jit_unregister_ci_impl(jl_code_instance_t *ci)
 {
     jl_ExecutionEngine->unregisterCI(ci);
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_jit_link_tier_stubs_impl(jl_code_instance_t *ci)
+{
+    jl_ExecutionEngine->linkTierStubs(ci);
 }
