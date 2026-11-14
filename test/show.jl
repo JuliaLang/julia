@@ -1816,6 +1816,16 @@ end
 # Test for PR 17803
 @test static_shown(Int128(-1)) == "Int128(0xffffffffffffffffffffffffffffffff)"
 
+# Type{Union{}} fields and elements are stored inline with the layout of
+# typeof(Union{}) and hold Union{} itself
+struct StaticShowBottomField{T}
+    x::T
+end
+@test endswith(static_shown(StaticShowBottomField{Type{Union{}}}(Union{})), "StaticShowBottomField{Type{Union{}}}(x=Union{})")
+@test endswith(static_shown(StaticShowBottomField{Union{Type{Union{}},Int}}(Union{})), "(x=Union{})")
+@test endswith(static_shown(Type{Union{}}[Union{}]), "[Union{}])")
+@test endswith(static_shown(Union{Type{Union{}},Int}[Union{}, 3]), "[Union{}, 3])")
+
 # Ignore unused high bits when statically showing odd-bit primitives.
 primitive type StaticShowUInt63 63 end
 let m = Memory{StaticShowUInt63}(undef, 1)

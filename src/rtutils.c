@@ -636,6 +636,17 @@ JL_DLLEXPORT int jl_is_operator(const char *sym) JL_NOTSAFEPOINT;
 
 static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
 static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
+
+// show a value stored inline (a field or memory element) of declared type `ty`; a
+// `Type{Union{}}` slot uses the layout of `typeof(Union{})` and holds `Union{}` itself
+static size_t jl_static_show_inline(JL_STREAM *out, char *ptr, jl_value_t *ty, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
+{
+    ty = normalize_typeofbottom_layout_alias(ty);
+    if (ty == (jl_value_t*)jl_typeofbottom_type)
+        return jl_static_show_x(out, jl_bottom_type, depth, ctx);
+    return jl_static_show_x_(out, (jl_value_t*)ptr, (jl_datatype_t*)ty, depth, ctx);
+}
+
 static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *prev, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
 
 static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const char *opn, const char *cls, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
@@ -1453,7 +1464,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             typetagdata = jl_genericmemory_typetagdata(m);
         }
         if (layout->size == 0 && tlen >= 3) {
-            n += jl_static_show_x_(out, (jl_value_t*)m->ptr, (jl_datatype_t*)el_type, depth, ctx);
+            n += jl_static_show_inline(out, (char*)m->ptr, el_type, depth, ctx);
             n += jl_printf(out, ", ...");
         }
         else {
@@ -1471,8 +1482,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                         size_t lock_size = sizeof(jl_mutex_t);
                         ptr += lock_size;
                     }
-                    n += jl_static_show_x_(out, (jl_value_t*)ptr,
-                            (jl_datatype_t*)(typetagdata ? jl_nth_union_component(el_type, typetagdata[j]) : el_type),
+                    n += jl_static_show_inline(out, ptr,
+                            typetagdata ? jl_nth_union_layout_component(el_type, typetagdata[j]) : el_type,
                             depth, ctx);
                 }
                 if (j != tlen - 1)
@@ -1572,12 +1583,12 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                     n += jl_static_show_x(out, *(jl_value_t**)fld_ptr, depth, ctx);
                 }
                 else {
-                    jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(vt, i);
+                    jl_value_t *ft = jl_field_type_concrete(vt, i);
                     if (jl_is_uniontype(ft)) {
                         uint8_t sel = ((uint8_t*)fld_ptr)[jl_field_size(vt, i) - 1];
-                        ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, sel);
+                        ft = jl_nth_union_layout_component(ft, sel);
                     }
-                    n += jl_static_show_x_(out, (jl_value_t*)fld_ptr, ft, depth, ctx);
+                    n += jl_static_show_inline(out, fld_ptr, ft, depth, ctx);
                 }
                 if ((istuple || isnamedtuple) && tlen == 1)
                     n += jl_printf(out, ",");

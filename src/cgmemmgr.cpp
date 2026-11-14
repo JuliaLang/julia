@@ -43,6 +43,9 @@
 #endif
 #include "julia_assert.h"
 
+#include <thread>
+#include <unordered_map>
+
 namespace {
 
 static size_t get_block_size(size_t size) JL_NOTSAFEPOINT
@@ -793,7 +796,10 @@ get_preferred_allocators() JL_NOTSAFEPOINT
         return {std::make_unique<SelfMemAllocator>(false),
                 std::make_unique<SelfMemAllocator>(true)};
 #endif
-    if (init_shared_map() != -1)
+    // Only once: this is called for every thread's arena, and starting another
+    // shared map would leave the blocks of the earlier arenas behind.
+    static intptr_t shared_map = init_shared_map();
+    if (shared_map != -1)
         return {std::make_unique<DualMapAllocator>(false),
                 std::make_unique<DualMapAllocator>(true)};
 #endif
@@ -805,6 +811,12 @@ get_preferred_allocators() JL_NOTSAFEPOINT
 // none of them is writing to those blocks anymore. `InFlight` counts the
 // allocations that have been handed out but not completed yet, so that the last
 // one to complete applies the protections for the whole batch.
+//
+// Each thread that links code allocates from blocks of its own (an `Arena`), so
+// that a batch only spans the allocations of one thread. A link can stay in
+// flight for a long time, waiting for a symbol that another link has yet to
+// produce, such as code that is still being compiled; with a single batch, every
+// other thread's executable memory would wait for it too.
 //
 // A finalization callback must therefore be deferred to the end of the batch if
 // (and only if) the memory it describes is not usable before those protections
@@ -827,12 +839,18 @@ class JLJITLinkMemoryManager : public jitlink::JITLinkMemoryManager {
         SmallVector<Allocation, 4> Allocs;
     };
 
+    // The blocks one thread allocates from, and the batch of its allocations.
+    struct Arena {
+        std::unique_ptr<ROAllocator> ROAlloc;
+        std::unique_ptr<ROAllocator> ExeAlloc;
+        SmallVector<PendingFinalize> FinalizedCallbacks;
+        uint32_t InFlight{0};
+    };
+
     std::mutex Mutex;
     RWAllocator RWAlloc;
-    std::unique_ptr<ROAllocator> ROAlloc;
-    std::unique_ptr<ROAllocator> ExeAlloc;
-    SmallVector<PendingFinalize> FinalizedCallbacks;
-    uint32_t InFlight{0};
+    // Node-based, so that an Arena stays where it is as others are added.
+    std::unordered_map<std::thread::id, Arena> Arenas;
 
 public:
     class InFlightAlloc;
@@ -841,8 +859,7 @@ public:
     {
         auto [ROAlloc, ExeAlloc] = get_preferred_allocators();
         if (ROAlloc && ExeAlloc)
-            return std::unique_ptr<JLJITLinkMemoryManager>(
-                new JLJITLinkMemoryManager(std::move(ROAlloc), std::move(ExeAlloc)));
+            return std::unique_ptr<JLJITLinkMemoryManager>(new JLJITLinkMemoryManager());
 
         return cantFail(
             orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>(
@@ -860,24 +877,33 @@ public:
     }
 
 protected:
-    JLJITLinkMemoryManager(std::unique_ptr<ROAllocator> ROAlloc,
-                           std::unique_ptr<ROAllocator> ExeAlloc) JL_NOTSAFEPOINT
-      : ROAlloc(std::move(ROAlloc)), ExeAlloc(std::move(ExeAlloc))
+    JLJITLinkMemoryManager() JL_NOTSAFEPOINT = default;
+
+    // Must be called with `Mutex` held.
+    Arena &threadArena() JL_NOTSAFEPOINT
     {
+        Arena &A = Arenas[std::this_thread::get_id()];
+        if (!A.ROAlloc) {
+            // Create succeeded with the same choice of allocators
+            auto [ROAlloc, ExeAlloc] = get_preferred_allocators();
+            A.ROAlloc = std::move(ROAlloc);
+            A.ExeAlloc = std::move(ExeAlloc);
+        }
+        return A;
     }
 
     // Must be called with `Mutex` held. Applies the page protections for the
     // whole batch and collects the callbacks that were waiting for them.
-    void completeBatch(SmallVectorImpl<PendingFinalize> &Ready) JL_NOTSAFEPOINT
+    static void completeBatch(Arena &A, SmallVectorImpl<PendingFinalize> &Ready) JL_NOTSAFEPOINT
     {
-        assert(InFlight > 0);
-        if (--InFlight > 0)
+        assert(A.InFlight > 0);
+        if (--A.InFlight > 0)
             return;
-        ROAlloc->finalize();
-        ExeAlloc->finalize();
-        for (auto &CB : FinalizedCallbacks)
+        A.ROAlloc->finalize();
+        A.ExeAlloc->finalize();
+        for (auto &CB : A.FinalizedCallbacks)
             Ready.push_back(std::move(CB));
-        FinalizedCallbacks.clear();
+        A.FinalizedCallbacks.clear();
     }
 
     static void runCallbacks(SmallVectorImpl<PendingFinalize> &Ready)
@@ -893,7 +919,7 @@ protected:
         }
     }
 
-    void finalize(SmallVector<Allocation, 4> ROAllocs,
+    void finalize(Arena &A, SmallVector<Allocation, 4> ROAllocs,
                   SmallVector<Allocation, 4> ExeAllocs,
                   OnFinalizedFunction OnFinalized)
     {
@@ -902,8 +928,8 @@ protected:
             std::unique_lock Lock{Mutex};
             // Move this allocation's content to its runtime address. This does
             // not touch any memory owned by the other in-flight allocations.
-            ROAlloc->flush(ROAllocs);
-            ExeAlloc->flush(ExeAllocs);
+            A.ROAlloc->flush(ROAllocs);
+            A.ExeAlloc->flush(ExeAllocs);
 
             // Executable memory is only usable once the page protections have
             // been applied, so those callbacks have to wait for the end of the
@@ -913,22 +939,22 @@ protected:
             ROAllocs.append(ExeAllocs.begin(), ExeAllocs.end());
             PendingFinalize P{std::move(OnFinalized), std::move(ROAllocs)};
             if (Deferred)
-                FinalizedCallbacks.push_back(std::move(P));
+                A.FinalizedCallbacks.push_back(std::move(P));
             else
                 Ready.push_back(std::move(P));
 
-            completeBatch(Ready);
+            completeBatch(A, Ready);
         }
 
         runCallbacks(Ready);
     }
 
-    void abandon()
+    void abandon(Arena &A)
     {
         SmallVector<PendingFinalize> Ready;
         {
             std::unique_lock Lock{Mutex};
-            completeBatch(Ready);
+            completeBatch(A, Ready);
         }
 
         runCallbacks(Ready);
@@ -938,16 +964,18 @@ protected:
 class JLJITLinkMemoryManager::InFlightAlloc
   : public jitlink::JITLinkMemoryManager::InFlightAlloc {
     JLJITLinkMemoryManager &MM;
+    // of the thread that allocated it, which may not be the one that completes it
+    JLJITLinkMemoryManager::Arena &A;
     jitlink::LinkGraph &G;
     SmallVector<Allocation, 4> ROAllocs;
     SmallVector<Allocation, 4> ExeAllocs;
     bool Completed{false};
 
 public:
-    InFlightAlloc(JLJITLinkMemoryManager &MM, jitlink::LinkGraph &G,
-                  SmallVector<Allocation, 4> ROAllocs,
+    InFlightAlloc(JLJITLinkMemoryManager &MM, JLJITLinkMemoryManager::Arena &A,
+                  jitlink::LinkGraph &G, SmallVector<Allocation, 4> ROAllocs,
                   SmallVector<Allocation, 4> ExeAllocs) JL_NOTSAFEPOINT
-        : MM(MM), G(G), ROAllocs(std::move(ROAllocs)),
+        : MM(MM), A(A), G(G), ROAllocs(std::move(ROAllocs)),
           ExeAllocs(std::move(ExeAllocs)) {}
 
     // LLVM does not guarantee that every InFlightAlloc is either finalized or
@@ -957,14 +985,14 @@ public:
     ~InFlightAlloc() override
     {
         if (!Completed)
-            MM.abandon();
+            MM.abandon(A);
     }
 
     void abandon(OnAbandonedFunction OnAbandoned) override
     {
         assert(!Completed);
         Completed = true;
-        MM.abandon();
+        MM.abandon(A);
         OnAbandoned(Error::success());
     }
 
@@ -973,7 +1001,7 @@ public:
         assert(!Completed);
         Completed = true;
         auto *GP = &G;
-        MM.finalize(std::move(ROAllocs), std::move(ExeAllocs),
+        MM.finalize(A, std::move(ROAllocs), std::move(ExeAllocs),
                     [GP, OnFinalized =
                              std::move(OnFinalized)](Expected<FinalizedAlloc> FA) mutable {
             if (!FA)
@@ -996,9 +1024,11 @@ void JLJITLinkMemoryManager::allocate(const jitlink::JITLinkDylib *JD,
     jitlink::BasicLayout BL{G};
     SmallVector<Allocation, 4> ROAllocs;
     SmallVector<Allocation, 4> ExeAllocs;
+    Arena *A;
 
     {
         std::unique_lock Lock{Mutex};
+        A = &threadArena();
         for (auto &[AG, Seg] : BL.segments()) {
             if (AG.getMemLifetime() == orc::MemLifetime::NoAlloc)
                 continue;
@@ -1011,9 +1041,9 @@ void JLJITLinkMemoryManager::allocate(const jitlink::JITLinkDylib *JD,
             if (Prot == (MemProt::Read | MemProt::Write))
                 Alloc = RWAlloc.alloc(Size, Alignment);
             else if (Prot == MemProt::Read)
-                Alloc = ROAlloc->alloc(Size, Alignment, ROAllocs);
+                Alloc = A->ROAlloc->alloc(Size, Alignment, ROAllocs);
             else if (Prot == (MemProt::Read | MemProt::Exec))
-                Alloc = ExeAlloc->alloc(Size, Alignment, ExeAllocs);
+                Alloc = A->ExeAlloc->alloc(Size, Alignment, ExeAllocs);
             else
                 abort();
 
@@ -1024,10 +1054,10 @@ void JLJITLinkMemoryManager::allocate(const jitlink::JITLinkDylib *JD,
         if (auto Err = BL.apply())
             return OnAllocated(std::move(Err));
 
-        ++InFlight;
+        ++A->InFlight;
     }
 
-    OnAllocated(std::make_unique<InFlightAlloc>(*this, G, std::move(ROAllocs),
+    OnAllocated(std::make_unique<InFlightAlloc>(*this, *A, G, std::move(ROAllocs),
                                                 std::move(ExeAllocs)));
 }
 }
