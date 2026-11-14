@@ -351,8 +351,19 @@ end
         for func in (@fastmath exp2,exp,exp10)
             @test func(T(2000)) == T(Inf)
             @test func(T(-2000)) == T(0)
+            @test func(T(Inf)) == T(Inf)
+            @test func(T(-Inf)) == T(0)
+            @test isnan(func(T(NaN)))
         end
     end
+    # a NaN whose payload is only in the low bits
+    for func in (@fastmath exp2,exp,exp10)
+        @test isnan(func(reinterpret(Float64, 0x7FF8000000012345)))
+    end
+    # finite results just below overflow
+    @test (@fastmath exp(88.72283f0)) ≈ exp(88.72283f0) < Inf32
+    @test (@fastmath exp2(127.99999f0)) ≈ exp2(127.99999f0) < Inf32
+    @test (@fastmath exp10(38.531837f0)) ≈ exp10(38.531837f0) < Inf32
 end
 
 @testset "+= with indexing (#47241)" begin
