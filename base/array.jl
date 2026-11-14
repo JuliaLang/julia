@@ -2599,6 +2599,15 @@ end
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
+    d = p.x - first(r)
+    iszero(d % step(r)) || return nothing
+    return convert(keytype(r), d ÷ step(r) + 1)
+end
+
+# overflow-safe version for integer ranges, whose span may exceed `typemax(T)`
+function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T<:Integer,S<:Integer}
+    isempty(r) && return nothing
+    minimum(r) <= p.x <= maximum(r) || return nothing
     f, h = first(r), step(r)
     d = maybe_unsigned(h > zero(h) ? p.x - f : f - p.x)
     n, m = divrem(d, uabs(h))
