@@ -143,7 +143,8 @@ private:
                                  Instruction *orig_i, Instruction *new_i);
     void removeWriteBarrierUse(CallInst *call, Instruction *val);
     void removeAlloc(CallInst *orig_inst);
-    void moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocFnKind allockind);
+    void moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocFnKind allockind, ArrayRef<Value*> roots = {});
+    bool collectStoredRefs(CallInst *orig_inst, SmallVectorImpl<Value*> &refs);
     void initializeAlloca(IRBuilder<> &prolog_builder, AllocaInst *buff, AllocFnKind allockind);
     bool forwardMemoryData(CallInst *orig_inst, Value *data);
     void splitOnStack(CallInst *orig_inst);
@@ -230,8 +231,10 @@ void Optimizer::optimizeAll()
         // Escape analysis does not follow the data pointer of a Memory, so keep the layout of
         // one that is loaded from. `moveToStack` forwards the data pointer, which lets SROA
         // split it afterwards.
-        if (is_memory && use_info.hasload)
+        if (is_memory && use_info.hasload) {
             use_info.addrescaped = true;
+            use_info.addrescaped_readonly = false;
+        }
         if (use_info.escaped) {
             REMARK([&]() {
                 std::string str;
@@ -309,6 +312,19 @@ void Optimizer::optimizeAll()
             });
             // No one actually care about the memory layout of this object, split it.
             splitOnStack(orig);
+            continue;
+        }
+        SmallVector<Value*, 4> refs;
+        if (has_ref && use_info.addrescaped && use_info.addrescaped_readonly &&
+            !use_info.hasunknownmem && !use_info.refload && collectStoredRefs(orig, refs)) {
+            REMARK([&](){
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
+                return OptimizationRemark(DEBUG_TYPE, "Stack Move Allocation", orig)
+                    << "GC allocation moved to stack " << ore::NV("GC Allocation", StringRef(str));
+            });
+            moveToStack(orig, sz, false, use_info.allockind, refs);
             continue;
         }
         // The move to stack code below, if has_ref is set, changes the allocation to an array of jlvalue_t's. This is fine
@@ -803,9 +819,48 @@ bool Optimizer::forwardMemoryData(CallInst *orig_inst, Value *data)
     return false;
 }
 
+bool Optimizer::collectStoredRefs(CallInst *orig_inst, SmallVectorImpl<Value*> &refs)
+{
+    for (auto call: use_info.readonlycalls) {
+        if (!use_info.rootcalls.count(call))
+            return false;
+    }
+    for (auto call: use_info.rootcalls) {
+        if (getGCAllocSize(call) != -1)
+            return false;
+    }
+    SmallVector<Instruction*, 8> sites(use_info.rootcalls.begin(), use_info.rootcalls.end());
+    sites.append(use_info.preserves.begin(), use_info.preserves.end());
+    auto &DT = getDomTree();
+    SmallPtrSet<Value*, 4> seen;
+    for (auto &memop: use_info.memops) {
+        auto &field = memop.second;
+        if (!field.hasobjref)
+            continue;
+        for (auto &access: field.accesses) {
+            auto store = dyn_cast<StoreInst>(access.inst);
+            if (!store || store->getParent() != orig_inst->getParent())
+                return false;
+            Value *val = store->getValueOperand();
+            if (isa<Constant>(val) || !seen.insert(val).second)
+                continue;
+            if (auto inst = dyn_cast<Instruction>(val)) {
+                if (use_info.uses.count(inst))
+                    return false;
+            }
+            for (auto site: sites) {
+                if (!DT.dominates(val, site))
+                    return false;
+            }
+            refs.push_back(val);
+        }
+    }
+    return true;
+}
+
 // This function should not erase any safepoint so that the lifetime marker can find and cache
 // all the original safepoints.
-void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocFnKind allockind)
+void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocFnKind allockind, ArrayRef<Value*> roots)
 {
     ++RemovedAllocs;
     ++StackAllocs;
@@ -937,6 +992,19 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
                 if (has_ref) {
                     call->replaceUsesOfWith(orig_i, buff);
                 }
+                else if (!roots.empty()) {
+                    SmallVector<Value*, 8> operands;
+                    for (auto &arg: call->args()) {
+                        if (arg.get() != orig_i && !isa<Constant>(arg.get()))
+                            operands.push_back(arg.get());
+                    }
+                    operands.append(roots.begin(), roots.end());
+                    IRBuilder<> builder(call);
+                    auto new_call = builder.CreateCall(pass.gc_preserve_begin_func, operands);
+                    new_call->takeName(call);
+                    call->replaceAllUsesWith(new_call);
+                    call->eraseFromParent();
+                }
                 else {
                     removeGCPreserve(call, orig_i);
                 }
@@ -953,6 +1021,27 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
                 }
             }
             // remove from operand bundle
+            if (!has_ref && !roots.empty()) {
+                SmallVector<OperandBundleDef, 2> bundles;
+                call->getOperandBundlesAsDefs(bundles);
+                for (auto &bundle: bundles) {
+                    if (bundle.getTag() != "jl_roots")
+                        continue;
+                    SmallVector<Value*, 0> operands;
+                    for (auto op: bundle.inputs()) {
+                        if (op != orig_i && !isa<Constant>(op))
+                            operands.push_back(op);
+                    }
+                    operands.append(roots.begin(), roots.end());
+                    bundle = OperandBundleDef("jl_roots", std::move(operands));
+                    break;
+                }
+                auto new_call = CallInst::Create(call, bundles, call->getIterator());
+                new_call->takeName(call);
+                call->replaceAllUsesWith(new_call);
+                call->eraseFromParent();
+                return;
+            }
             Value *replace = has_ref ? (Value*)buff : Constant::getNullValue(orig_i->getType());
             user->replaceUsesOfWith(orig_i, replace);
         }
