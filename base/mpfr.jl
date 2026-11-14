@@ -485,6 +485,15 @@ round(::Type{T}, x::BigFloat) where T<:Integer = round(T, x, rounding_raw(BigFlo
 round(::Type{Integer}, x::BigFloat, r::RoundingMode) = round(BigInt, x, r)
 round(::Type{Integer}, x::BigFloat, r::MPFRRoundingMode) = round(BigInt, x, r)
 
+# rounding `10^k` up keeps the comparison exact at `x`'s precision
+function Base._abs_ge_exp10(x::BigFloat, k::Int)
+    setprecision(BigFloat, max(precision(x), 4)) do
+        setrounding(BigFloat, RoundUp) do
+            abs(x) >= BigFloat(10)^k
+        end
+    end
+end
+
 function Bool(x::BigFloat)
     iszero(x) && return false
     isone(x) && return true
@@ -1236,6 +1245,8 @@ function setprecision(f::Function, ::Type{T}, prec::Integer; kws...) where T
 end
 
 function setprecision(f::Function, ::Type{BigFloat}, prec::Integer; base::Integer=2)
+    base > 1 || throw(DomainError(base, "`base` cannot be less than 2."))
+    prec > 0 || throw(DomainError(prec, "`precision` cannot be less than 1."))
     Base.ScopedValues.@with(CURRENT_PRECISION => _convert_precision_from_base(prec, base), f())
 end
 setprecision(f, ::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(setprecision, (f, Union{}, slurp...)))
