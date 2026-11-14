@@ -1440,6 +1440,18 @@ static const auto jlgetnthfieldchecked_func = new JuliaFunction<TypeFnContextAnd
             Attributes(C, {Attribute::NonNull}),
             {}); },
 };
+static const auto jlstoretaggedword_func = new JuliaFunction<TypeFnContextAndSizeT>{
+    XSTR(jl_store_tagged_word),
+    [](LLVMContext &C, Type *T_size) {
+        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        // the union type is passed as a bare literal pointer (it is always a
+        // permanently rooted type object), matching literal_pointer_val
+        auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
+        return FunctionType::get(getVoidTy(C),
+            {T_prjlvalue, T_size, T_pjlvalue, T_prjlvalue, getInt32Ty(C)}, false);
+    },
+    nullptr,
+};
 static const auto jlfieldindex_func = new JuliaFunction<>{
     XSTR(jl_field_index),
     [](LLVMContext &C) {
@@ -4218,6 +4230,271 @@ static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const 
 
 static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2) JL_CANSAFEPOINT;
 
+// whether every reference component among the components `t` of tagged union
+// `ut` is egal only to itself
+static bool tagged_refs_pointer_egal(jl_value_t *ut, jl_value_t *t)
+{
+    if (jl_is_uniontype(t))
+        return tagged_refs_pointer_egal(ut, ((jl_uniontype_t*)t)->a) &&
+               tagged_refs_pointer_egal(ut, ((jl_uniontype_t*)t)->b);
+    unsigned imm;
+    if (jl_is_datatype(t) && jl_immediate_component_index(ut, (jl_datatype_t*)t, &imm))
+        return true;
+    return jl_pointer_egal(t);
+}
+
+// Whether two tagged words of union type `ut` hold egal values. Immediates
+// have one encoding each, so they and #undef compare by word; references
+// compare by content.
+static Value *emit_tagged_egal(jl_codectx_t &ctx, Value *word1, bool maybe_null1,
+                               Value *word2, bool maybe_null2, jl_value_t *ut) JL_CANSAFEPOINT
+{
+    Value *bits1 = emit_tagged_bits(ctx, word1, maybe_null1);
+    Value *bits2 = emit_tagged_bits(ctx, word2, maybe_null2);
+    Value *same = ctx.builder.CreateICmpEQ(bits1, bits2);
+    if (tagged_refs_pointer_egal(ut, ut))
+        return same;
+    Value *bothrefs = emit_tagged_isref(ctx, ctx.builder.CreateOr(bits1, bits2));
+    if (maybe_null1)
+        bothrefs = ctx.builder.CreateAnd(bothrefs, ctx.builder.CreateIsNotNull(bits1));
+    if (maybe_null2)
+        bothrefs = ctx.builder.CreateAnd(bothrefs, ctx.builder.CreateIsNotNull(bits2));
+    Value *differ = ctx.builder.CreateAnd(ctx.builder.CreateNot(same), bothrefs);
+    return emit_guarded_test(ctx, differ, same, [&] () JL_CANSAFEPOINT {
+        return emit_box_compare(ctx,
+                mark_julia_type(ctx, word1, true, jl_any_type),
+                mark_julia_type(ctx, word2, true, jl_any_type),
+                nullptr, nullptr);
+    });
+}
+
+// Swap, replace, modify or setonce on the tagged word of union type `ut` at
+// `ptr`, owned by `parent`, which is null if a store needs no write barrier.
+// This follows typed_store for a boxed slot, on words instead of pointers.
+static jl_cgval_t emit_tagged_op(jl_codectx_t &ctx, Value *parent, Value *ptr,
+        jl_cgval_t rhs, jl_cgval_t cmpop, jl_value_t *ut, const jl_aliasinfo_t &ai,
+        AtomicOrdering Order, AtomicOrdering FailOrder, StoreKind op,
+        bool maybe_null, const jl_cgval_t *modifyop, const Twine &fname)
+{
+    LLVMContext &C = ctx.builder.getContext();
+    Type *T_prjlvalue = ctx.types().T_prjlvalue;
+    Type *T_int1 = getInt1Ty(C);
+    Type *T_int8 = getInt8Ty(C);
+    Align align = ctx.types().alignof_ptr;
+    bool atomic = Order != AtomicOrdering::NotAtomic;
+    // a failure ordering inherited from Order keeps only its load effects
+    if (FailOrder == AtomicOrdering::AcquireRelease)
+        FailOrder = AtomicOrdering::Acquire;
+    if (FailOrder == AtomicOrdering::Release)
+        FailOrder = AtomicOrdering::Monotonic;
+    if (op == StoreKind::SetOnce && !maybe_null) {
+        if (isStrongerThanMonotonic(Order))
+            ctx.builder.CreateFence(Order);
+        return mark_julia_const(ctx, jl_false);
+    }
+
+    auto load = [&](AtomicOrdering order) {
+        LoadInst *word = ctx.builder.CreateAlignedLoad(T_prjlvalue, ptr, align);
+        word->setOrdering(order);
+        ai.decorateInst(word);
+        return word;
+    };
+    // a plain store of a word that may hold a reference releases
+    auto store = [&](Value *word) {
+        StoreInst *inst = ctx.builder.CreateAlignedStore(word, ptr, align);
+        inst->setOrdering(AtomicOrdering::Release);
+        ai.decorateInst(inst);
+    };
+    // the word for `v`, whose write barrier is taken here, before any store
+    auto encode = [&](const jl_cgval_t &v) JL_CANSAFEPOINT {
+        Value *ref;
+        bool ref_maybe_null;
+        Value *word = emit_tagged_encode(ctx, v, ut, &ref, &ref_maybe_null);
+        emit_tagged_write_barrier(ctx, parent, ptr, ref, ref_maybe_null);
+        return word;
+    };
+    auto cmpxchg = [&](Value *expected, Value *word) {
+        AtomicOrdering success = Order;
+        if (success == AtomicOrdering::Unordered || success == AtomicOrdering::Monotonic)
+            success = AtomicOrdering::Release;
+        AtomicOrdering failure = AtomicOrdering::Monotonic;
+        if ((op == StoreKind::Replace || op == StoreKind::SetOnce) && FailOrder != AtomicOrdering::Unordered)
+            failure = FailOrder;
+        auto *inst = ctx.builder.CreateAtomicCmpXchg(ptr, expected, word, align, success, failure);
+        ai.decorateInst(inst);
+        return inst;
+    };
+
+    if (op == StoreKind::Swap) {
+        Value *word = encode(rhs);
+        Value *old;
+        if (atomic) {
+            auto *inst = ctx.builder.CreateAtomicRMW(AtomicRMWInst::Xchg, ptr, word, align,
+                    Order == AtomicOrdering::Unordered ? AtomicOrdering::Monotonic : Order);
+            ai.decorateInst(inst);
+            old = inst;
+        }
+        else {
+            old = load(AtomicOrdering::Unordered);
+            store(word);
+        }
+        return emit_tagged_decode(ctx, old, ut, maybe_null, nullptr);
+    }
+
+    if (op == StoreKind::SetOnce) {
+        Value *word = encode(rhs);
+        Value *Success;
+        if (atomic) {
+            Success = ctx.builder.CreateExtractValue(cmpxchg(Constant::getNullValue(T_prjlvalue), word), 1);
+        }
+        else {
+            Success = ctx.builder.CreateIsNull(load(AtomicOrdering::Monotonic));
+            BasicBlock *XchgBB = BasicBlock::Create(C, "xchg", ctx.f);
+            BasicBlock *DoneBB = BasicBlock::Create(C, "done_xchg", ctx.f);
+            ctx.builder.CreateCondBr(Success, XchgBB, DoneBB);
+            ctx.builder.SetInsertPoint(XchgBB);
+            store(word);
+            ctx.builder.CreateBr(DoneBB);
+            ctx.builder.SetInsertPoint(DoneBB);
+        }
+        return mark_julia_type(ctx, ctx.builder.CreateZExt(Success, T_int8), false, jl_bool_type);
+    }
+
+    if (op == StoreKind::Replace) {
+        auto result = [&](Value *old, Value *Success) JL_CANSAFEPOINT {
+            jl_cgval_t oldval = emit_tagged_decode(ctx, old, ut, maybe_null, nullptr);
+            const jl_cgval_t argv[2] = { oldval,
+                mark_julia_type(ctx, ctx.builder.CreateZExt(Success, T_int8), false, jl_bool_type) };
+            return emit_new_struct(ctx, (jl_value_t*)jl_apply_cmpswap_type(ut), 2, argv);
+        };
+        // a value outside the union is egal to nothing a tagged word holds
+        AtomicOrdering skipOrder = atomic && FailOrder != AtomicOrdering::Unordered ? FailOrder : AtomicOrdering::Monotonic;
+        Value *SameType = emit_isa(ctx, cmpop, ut, Twine()).first;
+        if (SameType == ConstantInt::getFalse(C))
+            return result(load(skipOrder), SameType);
+        BasicBlock *SkipBB = nullptr;
+        Value *skipped = nullptr;
+        if (SameType != ConstantInt::getTrue(C)) {
+            SkipBB = BasicBlock::Create(C, "skip_xchg", ctx.f);
+            BasicBlock *OkBB = BasicBlock::Create(C, "ok_xchg", ctx.f);
+            ctx.builder.CreateCondBr(SameType, OkBB, SkipBB);
+            ctx.builder.SetInsertPoint(SkipBB);
+            skipped = load(skipOrder);
+            ctx.builder.SetInsertPoint(OkBB);
+        }
+        cmpop = update_julia_type(ctx, cmpop, ut);
+        Value *cmpref;
+        bool cmpref_maybe_null;
+        Value *expected = emit_tagged_encode(ctx, cmpop, ut, &cmpref, &cmpref_maybe_null);
+        Value *word = encode(rhs);
+        Value *old, *Success;
+        BasicBlock *ExitBB = BasicBlock::Create(C, "done_xchg", ctx.f);
+        if (!atomic) {
+            old = load(AtomicOrdering::Monotonic);
+            Success = emit_tagged_egal(ctx, old, maybe_null, expected, false, ut);
+            BasicBlock *XchgBB = BasicBlock::Create(C, "xchg", ctx.f);
+            ctx.builder.CreateCondBr(Success, XchgBB, ExitBB);
+            ctx.builder.SetInsertPoint(XchgBB);
+            store(word);
+            ctx.builder.CreateBr(ExitBB);
+        }
+        else {
+            // The word found may be another reference that is egal to the
+            // expected one; then retry with that word.
+            bool needloop = cmpref && !tagged_refs_pointer_egal(ut, ut);
+            Value *Compare = expected;
+            PHINode *CmpPhi = nullptr;
+            BasicBlock *LoopBB = nullptr;
+            if (needloop) {
+                BasicBlock *FromBB = ctx.builder.GetInsertBlock();
+                LoopBB = BasicBlock::Create(C, "xchg", ctx.f);
+                ctx.builder.CreateBr(LoopBB);
+                ctx.builder.SetInsertPoint(LoopBB);
+                CmpPhi = ctx.builder.CreatePHI(T_prjlvalue, 2);
+                CmpPhi->addIncoming(expected, FromBB);
+                Compare = CmpPhi;
+            }
+            auto *inst = cmpxchg(Compare, word);
+            old = ctx.builder.CreateExtractValue(inst, 0);
+            Success = ctx.builder.CreateExtractValue(inst, 1);
+            if (needloop) {
+                Value *retry = emit_guarded_test(ctx, ctx.builder.CreateNot(Success), false, [&] () JL_CANSAFEPOINT {
+                    return emit_tagged_egal(ctx, old, maybe_null, expected, false, ut);
+                });
+                CmpPhi->addIncoming(old, ctx.builder.GetInsertBlock());
+                ctx.builder.CreateCondBr(retry, LoopBB, ExitBB);
+            }
+            else {
+                ctx.builder.CreateBr(ExitBB);
+            }
+        }
+        ctx.builder.SetInsertPoint(ExitBB);
+        if (SkipBB) {
+            BasicBlock *DoneBB = BasicBlock::Create(C, "post_xchg", ctx.f);
+            ctx.builder.CreateBr(DoneBB);
+            ctx.builder.SetInsertPoint(SkipBB);
+            ctx.builder.CreateBr(DoneBB);
+            ctx.builder.SetInsertPoint(DoneBB);
+            PHINode *Current = ctx.builder.CreatePHI(T_prjlvalue, 2);
+            Current->addIncoming(skipped, SkipBB);
+            Current->addIncoming(old, ExitBB);
+            PHINode *Succ = ctx.builder.CreatePHI(T_int1, 2);
+            Succ->addIncoming(ConstantInt::getFalse(C), SkipBB);
+            Succ->addIncoming(Success, ExitBB);
+            old = Current;
+            Success = Succ;
+        }
+        return result(old, Success);
+    }
+
+    assert(op == StoreKind::Modify);
+    Value *first = load(AtomicOrdering::Monotonic);
+    BasicBlock *FromBB = ctx.builder.GetInsertBlock();
+    BasicBlock *LoopBB = BasicBlock::Create(C, "xchg", ctx.f);
+    ctx.builder.CreateBr(LoopBB);
+    ctx.builder.SetInsertPoint(LoopBB);
+    PHINode *Compare = ctx.builder.CreatePHI(T_prjlvalue, 2);
+    Compare->addIncoming(first, FromBB);
+    jl_cgval_t oldval = emit_tagged_decode(ctx, Compare, ut, maybe_null, nullptr);
+    const jl_cgval_t argv[3] = { cmpop, oldval, rhs };
+    jl_cgval_t newval;
+    if (modifyop) {
+        newval = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type, true);
+    }
+    else {
+        Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, julia_call);
+        newval = mark_julia_type(ctx, callval, true, jl_any_type);
+    }
+    emit_typecheck(ctx, newval, ut, fname);
+    newval = update_julia_type(ctx, newval, ut);
+    if (newval.typ == jl_bottom_type)
+        return jl_cgval_t();
+    Value *word = encode(newval);
+    Value *found, *Success;
+    BasicBlock *DoneBB = BasicBlock::Create(C, "done_xchg", ctx.f);
+    if (atomic) {
+        auto *inst = cmpxchg(Compare, word);
+        found = ctx.builder.CreateExtractValue(inst, 0);
+        Success = ctx.builder.CreateExtractValue(inst, 1);
+        Compare->addIncoming(found, ctx.builder.GetInsertBlock());
+        ctx.builder.CreateCondBr(Success, DoneBB, LoopBB);
+    }
+    else {
+        // the operation may itself have stored here
+        found = load(AtomicOrdering::Monotonic);
+        Success = emit_tagged_egal(ctx, found, maybe_null, Compare, false, ut);
+        Compare->addIncoming(found, ctx.builder.GetInsertBlock());
+        BasicBlock *XchgBB = BasicBlock::Create(C, "xchg_store", ctx.f);
+        ctx.builder.CreateCondBr(Success, XchgBB, LoopBB);
+        ctx.builder.SetInsertPoint(XchgBB);
+        store(word);
+        ctx.builder.CreateBr(DoneBB);
+    }
+    ctx.builder.SetInsertPoint(DoneBB);
+    const jl_cgval_t pair[2] = { oldval, newval };
+    return emit_new_struct(ctx, (jl_value_t*)jl_apply_modify_type(ut), 2, pair);
+}
+
 static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2) JL_CANSAFEPOINT
 {
     ++EmittedBitsUnionCompares;
@@ -4349,6 +4626,14 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
                 jl_value_t *fldty = jl_svecref(types, i);
                 if (type_is_ghost(julia_type_to_llvm(ctx, fldty)))
                     continue;
+                if (jl_is_tagged_uniontype(fldty) && !is_undef_value(arg1) && !is_undef_value(arg2)) {
+                    Value *word1 = emit_tagged_field_word(ctx, arg1, i, sty, AtomicOrdering::Unordered);
+                    Value *word2 = emit_tagged_field_word(ctx, arg2, i, sty, AtomicOrdering::Unordered);
+                    Value *egal = emit_tagged_egal(ctx, word1, field_may_be_null(arg1, sty, i),
+                                                   word2, field_may_be_null(arg2, sty, i), fldty);
+                    answer = ctx.builder.CreateAnd(answer, egal);
+                    continue;
+                }
                 Value *nullcheck1 = nullptr;
                 Value *nullcheck2 = nullptr;
                 auto fld1 = emit_getfield_knownidx(ctx, arg1, i, sty, jl_memory_order_notatomic, &nullcheck1);
@@ -4421,8 +4706,8 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
     if (jl_type_intersection(rt1, rt2) == (jl_value_t*)jl_bottom_type) // types are disjoint (exhaustive test)
         return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
 
-    // can compare any concrete immutable by bits, except for UnionAll
-    // which has a special non-bits based egal
+    // can compare any concrete immutable by bits, except for UnionAll, which
+    // has a special non-bits based egal
     bool justbits1 = jl_is_concrete_immutable(rt1) && !jl_is_kind(rt1);
     bool justbits2 = jl_is_concrete_immutable(rt2) && !jl_is_kind(rt2);
     if (justbits1 || justbits2) { // whether this type is unique'd by value
@@ -4528,6 +4813,10 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         if (idx != -1) {
             jl_value_t *ft = jl_field_type(uty, idx);
+            if (jl_is_tagged_uniontype(ft) && op != StoreKind::Set && !tagged_union_has_codegen(ft)) {
+                // the generic builtin handles these for a word the runtime encodes
+                return false;
+            }
             if (!jl_has_free_typevars(ft)) {
                 if (op != StoreKind::Modify) {
                     emit_typecheck(ctx, val, ft, fname);
@@ -4538,7 +4827,8 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 // TODO: attempt better codegen for approximate types
                 bool isboxed = jl_field_isptr(uty, idx);
                 bool isatomic = jl_field_isatomic(uty, idx);
-                bool needlock = isatomic && !isboxed && jl_datatype_size(jl_field_type(uty, idx)) > MAX_ATOMIC_SIZE;
+                bool needlock = isatomic && !isboxed && !jl_is_tagged_uniontype(ft) &&
+                                jl_datatype_size(ft) > MAX_ATOMIC_SIZE;
                 *ret = jl_cgval_t();
                 if (isatomic == (order == jl_memory_order_notatomic)) {
                     std::string msg(fname);
@@ -4654,6 +4944,8 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     mty_dt = jl_field_type_concrete((jl_datatype_t*)mty_dt, 1);
     if (kind != (jl_value_t*)jl_not_atomic_sym && kind != (jl_value_t*)jl_atomic_sym)
         return false;
+    if (!memory_has_codegen(((jl_datatype_t*)mty_dt)->layout, ety))
+        return false;
 
     const jl_cgval_t &cmp = has_cmp ? argv[2] : undefval;
     enum jl_memory_order order = jl_memory_order_notatomic;
@@ -4739,10 +5031,12 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         AtomicOrdering Order = (needlock || order <= jl_memory_order_notatomic)
                                 ? AtomicOrdering::NotAtomic
                                 : get_llvm_atomic_order(order);
+        // a tagged word is one reference slot, like a boxed element
+        bool isref = isboxed || layout->flags.arrayelem_istagged;
         // Use Release ordering for boxed non-atomic stores so the GC sees a fully-formed pointer
-        AtomicOrdering storeOrder = (Order == AtomicOrdering::NotAtomic && isboxed)
+        AtomicOrdering storeOrder = (Order == AtomicOrdering::NotAtomic && isref)
                                      ? AtomicOrdering::Release : Order;
-        Type *elty = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, ety);
+        Type *elty = isref ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, ety);
         // Atomic stores require an integer or pointer scalar type; cast aggregates to iN
         if (Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
             unsigned nb = jl_datatype_size(ety);
@@ -4754,7 +5048,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         // Emit a barrier covering all reference slots in the element before clearing it.
         // Offsets are relative to `ptr`, which points past any element lock.
         Value *null_child = Constant::getNullValue(ctx.types().T_prjlvalue);
-        if (isboxed) {
+        if (isref) {
             emit_write_barrier(ctx, mem, ptr, null_child);
         }
         else {
@@ -4789,6 +5083,18 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     AtomicOrdering FailOrder = (needlock || fail_order <= jl_memory_order_notatomic)
                         ? AtomicOrdering::NotAtomic
                         : get_llvm_atomic_order(fail_order);
+    if (layout->flags.arrayelem_istagged) {
+        Value *mem = emit_memoryref_mem(ctx, ref, layout);
+        Value *ptr = emit_memoryref_ptr(ctx, ref, layout);
+        if (op != StoreKind::Set) {
+            *ret = emit_tagged_op(ctx, mem, ptr, val, cmp, ety, memorybuf_aliasinfo(ctx, layout),
+                                  Order, FailOrder, op, /*maybe_null*/true, modifyop, fname);
+            return true;
+        }
+        emit_tagged_store(ctx, mem, ptr, val, ety, memorybuf_aliasinfo(ctx, layout), Order);
+        *ret = val;
+        return true;
+    }
     Value *ptr = nullptr;
     Value *ptindex = nullptr;
     Value *lock = nullptr;
@@ -5184,6 +5490,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             mty_dt = jl_field_type_concrete((jl_datatype_t*)mty_dt, 1);
             if (kind != (jl_value_t*)jl_not_atomic_sym && kind != (jl_value_t*)jl_atomic_sym)
                 return false;
+            if (!memory_has_codegen(((jl_datatype_t*)mty_dt)->layout, ety))
+                return false;
             enum jl_memory_order order = jl_memory_order_unspecified;
             const std::string fname = "memoryrefget";
             {
@@ -5246,6 +5554,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 if (isStrongerThanMonotonic(Order))
                     ctx.builder.CreateFence(Order);
             }
+            else if (layout->flags.arrayelem_istagged) {
+                *ret = emit_tagged_load(ctx, emit_memoryref_ptr(ctx, ref, layout), ety,
+                        memorybuf_aliasinfo(ctx, layout),
+                        Order == AtomicOrdering::NotAtomic ? AtomicOrdering::Unordered : Order,
+                        maybenull, nullptr);
+            }
             else if (isunion) {
                 assert(!isatomic && !needlock);
                 Value *V = emit_memoryref_FCA(ctx, ref, layout);
@@ -5302,8 +5616,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         jl_value_t *mty_dt = jl_unwrap_unionall(ref.typ);
         if (jl_is_genericmemoryref_type(mty_dt) && jl_is_concrete_type(mty_dt)) {
             jl_value_t *kind = jl_tparam0(mty_dt);
+            jl_value_t *ety = jl_tparam1(mty_dt);
             mty_dt = jl_field_type_concrete((jl_datatype_t*)mty_dt, 1);
             if (kind != (jl_value_t*)jl_not_atomic_sym && kind != (jl_value_t*)jl_atomic_sym)
+                return false;
+            if (!memory_has_codegen(((jl_datatype_t*)mty_dt)->layout, ety))
                 return false;
             enum jl_memory_order order = jl_memory_order_unspecified;
             const std::string fname = "memoryref_isassigned";
@@ -5342,8 +5659,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             bool isboxed = layout->flags.arrayelem_isboxed;
             if (isboxed || layout->first_ptr >= 0) {
                 bool needlock = layout->flags.arrayelem_islocked;
+                bool istagged = layout->flags.arrayelem_istagged;
                 AtomicOrdering Order = (needlock || order <= jl_memory_order_notatomic)
-                                        ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic)
+                                        ? (isboxed || istagged ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic)
                                         : get_llvm_atomic_order(order);
                 PHINode *result = nullptr;
                 if (oob) {
@@ -5943,6 +6261,14 @@ isdefined_unknown_idx:
         }
         else if (!field_may_be_null(obj, stt, fieldidx)) {
             *ret = mark_julia_const(ctx, jl_true);
+        }
+        else if (jl_is_tagged_uniontype(jl_field_type(stt, fieldidx))) {
+            // a tagged word is defined iff it is nonzero
+            Value *w = emit_tagged_field_word(ctx, obj, fieldidx, stt,
+                    order <= jl_memory_order_notatomic ? AtomicOrdering::Unordered : get_llvm_atomic_order(order));
+            Value *isdef = ctx.builder.CreateIsNotNull(w);
+            setName(ctx.emission_context, isdef, "isdefined");
+            *ret = mark_julia_type(ctx, isdef, false, jl_bool_type);
         }
         else if (jl_field_isptr(stt, fieldidx) || jl_type_hasptr(jl_field_type(stt, fieldidx))) {
             Value *fldv;
@@ -10739,7 +11065,8 @@ static jl_llvm_functions_t
             if (sret) {
                 jl_aliasinfo_t sret_ai = sret_aliasinfo(ctx, jlrettype, returninfo.all_roots);
                 if (returninfo.return_roots || !inline_roots.empty() || retvalinfo.ispointer()) {
-                    emit_unionmove(ctx, sret, jlrettype, sret_ai, retvalinfo, retvalinfo.TIndex, /*skip*/isboxed_union);
+                    if (!emit_union_slotmove(ctx, sret, jlrettype, sret_ai, retvalinfo, /*skip*/isboxed_union))
+                        emit_unionmove(ctx, sret, jlrettype, sret_ai, retvalinfo, retvalinfo.TIndex, /*skip*/isboxed_union);
                 }
                 else if (retvalinfo.V) {
                     Align align(returninfo.union_align);
@@ -11528,6 +11855,7 @@ static void init_jit_functions(void)
     add_named_global("jl_adopt_thread", &jl_adopt_thread);
     add_named_global(jlgetcfunctiontrampoline_func, &jl_get_cfunction_trampoline);
     add_named_global(jlgetnthfieldchecked_func, &jl_get_nth_field_checked);
+    add_named_global(jlstoretaggedword_func, &jl_store_tagged_word);
     add_named_global(jlfieldindex_func, &jl_field_index);
     add_named_global(diff_gc_total_bytes_func, &jl_gc_diff_total_bytes);
     add_named_global(sync_gc_total_bytes_func, &jl_gc_sync_total_bytes);

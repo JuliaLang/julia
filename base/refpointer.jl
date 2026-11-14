@@ -29,6 +29,10 @@ object will be converted to a native pointer to the data it references.
 For most `T`, or when converted to a `Ptr{Cvoid}`, this is a pointer to the
 object data. When `T` is an `isbits` type, this value may be safely mutated,
 otherwise mutation is strictly undefined behavior.
+When `T` is a `Union` of reference types with small primitive types, such as
+`Union{Int16, String}`, a value of one of the small primitive types is stored
+without an object of its own, and converting a `Ref` holding such a value
+throws an `ArgumentError`.
 
 As a special case, setting `T = Any` will instead cause the creation of a
 pointer to the reference itself when converted to a `Ptr{Any}`
@@ -133,6 +137,7 @@ function unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, b::RefArray{T})
     else
         # see comment on equivalent branch for RefValue
         p = pointerref(Ptr{Ptr{Cvoid}}(pointer(b.x, b.i)), 1, Core.sizeof(Ptr{Cvoid}))
+        tagged_word_isref(UInt(p)) || throw_unboxed_address(b)
     end
     return p
 end

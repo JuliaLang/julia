@@ -214,6 +214,31 @@ int main()
         jl_value_t *t = jl_typeof(v);
     }
 
+    {
+        // jl_field_istagged tells a tagged word from a ghost field at its offset
+        jl_datatype_t *dt = (jl_datatype_t*)checked_eval_string(
+            "struct GhostBeforeTagged; ghost::Nothing; x::Union{Int16,String}; end; GhostBeforeTagged");
+        if (jl_field_istagged(dt, 0) || !jl_field_istagged(dt, 1)) {
+            jl_printf(jl_stderr_stream(), "jl_field_istagged misreports a field\n");
+            jl_atexit_hook(1);
+            exit(1);
+        }
+    }
+
+    {
+        // an element of an array of tagged words, which starts inside its memory
+        jl_array_t *a = (jl_array_t*)checked_eval_string(
+            "const offset_array = Union{Int16,String}[Int16(1), Int16(2)]; popfirst!(offset_array); offset_array");
+        jl_genericmemory_t *mem = a->ref.mem;
+        size_t first = ((char*)a->ref.ptr_or_offset - (char*)mem->ptr) / sizeof(void*);
+        jl_value_t *element = jl_genericmemoryref(mem, first + 0);
+        if (!jl_is_int16(element) || jl_unbox_int16(element) != 2) {
+            jl_printf(jl_stderr_stream(), "wrong element of an array of tagged words\n");
+            jl_atexit_hook(1);
+            exit(1);
+        }
+    }
+
     JL_TRY {
         jl_error("exception thrown");
     }

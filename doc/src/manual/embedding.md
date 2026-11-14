@@ -467,6 +467,23 @@ jl_gc_wb(jl_array_owner(some_array), &data[0], some_value);
 data[0] = some_value;
 ```
 
+All of this applies to arrays whose elements are all pointers. The elements of an array of a
+`Union` of reference types with small primitive types, such as `Vector{Union{Int16, String}}`, are
+tagged words, each either a pointer or the primitive value with tag bits, so `jl_array_ptr_ref`
+and `jl_array_ptr_set` must not be used on such an array. Read its elements with
+`jl_genericmemoryref` on the array's memory. That function counts from the start of the memory,
+which the array need not start at (after `popfirst!`, for example):
+
+```c
+jl_array_t *some_array = ...; // e.g. a Vector{Union{Int16, String}}
+jl_genericmemory_t *mem = some_array->ref.mem;
+size_t first = ((char*)some_array->ref.ptr_or_offset - (char*)mem->ptr) / sizeof(void*);
+jl_value_t *element = jl_genericmemoryref(mem, first + i); // element i, counted from 0
+```
+
+The developer documentation on tagged word Union optimizations gives the encoding for code that
+accesses the words directly.
+
 ### Controlling the Garbage Collector
 
 There are some functions to control the GC. In normal use cases, these should not be necessary.

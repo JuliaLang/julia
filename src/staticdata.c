@@ -495,6 +495,8 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
 
 static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
 {
+    if (!jl_tagged_word_isptr((uintptr_t)v))
+        return 0; // #undef, or an immediate
     // ignore items that are given a special relocation representation
     if (s->incremental && jl_object_in_image(v))
         return 0;
@@ -563,6 +565,10 @@ static int needs_uniquing(jl_value_t *v, jl_query_cache *query_cache) JL_NOTSAFE
     return caching_tag(v, query_cache) == 1;
 }
 
+// A tagged word can equal HT_NOTFOUND: it is the first immediate component's
+// zero. `field_replace` holds this word in its place, which is no tagged word.
+#define FIELD_REPLACE_NOTFOUND ((jl_value_t*)(uintptr_t)2)
+
 // whether `record_field_change` has already registered a replacement for `addr`
 static int has_field_change(jl_value_t **addr) JL_NOTSAFEPOINT
 {
@@ -579,15 +585,17 @@ static void record_field_change(jl_value_t *owner, jl_value_t **addr, jl_value_t
            "field change recorded after its object was queued");
     (void)idx;
     if (has_field_change(addr) || *addr != newval)
-        ptrhash_put(&field_replace, (void*)addr, newval);
+        ptrhash_put(&field_replace, (void*)addr, newval == HT_NOTFOUND ? FIELD_REPLACE_NOTFOUND : newval);
 }
 
 static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     jl_value_t *fld = (jl_value_t*)ptrhash_get(&field_replace, addr);
+    if (fld == FIELD_REPLACE_NOTFOUND)
+        return (jl_value_t*)HT_NOTFOUND;
     if (fld == HT_NOTFOUND) {
         fld = *addr;
-        if (mutabl && fld && jl_is_cpointer_type(jl_typeof(fld)) && jl_unbox_voidpointer(fld) != NULL && jl_unbox_voidpointer(fld) != (void*)(uintptr_t)-1) {
+        if (mutabl && jl_tagged_word_isptr((uintptr_t)fld) && jl_is_cpointer_type(jl_typeof(fld)) && jl_unbox_voidpointer(fld) != NULL && jl_unbox_voidpointer(fld) != (void*)(uintptr_t)-1) {
             void **nullval = ptrhash_bp(&nullptrs, (void*)jl_typeof(fld));
             if (*nullval == HT_NOTFOUND) {
                 void *C_NULL = NULL;
@@ -1789,12 +1797,14 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                                 size_t offset = i * elsz + jl_ptr_offset(t, j) * sizeof(jl_value_t*);
                                 jl_value_t *fld = get_replaceable_field((jl_value_t**)&data[offset], 1);
                                 size_t fld_pos = reloc_offset + headersize + offset;
-                                if (fld != NULL) {
+                                if (jl_tagged_word_isptr((uintptr_t)fld)) {
                                     arraylist_push(&s->relocs_list, (void*)(uintptr_t)fld_pos); // relocation location
                                     arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
                                     record_uniquing(s, fld, fld_pos);
+                                    fld = NULL; // relocation offset (none)
                                 }
-                                memset(&f->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
+                                // #undef and immediates are written as is
+                                memcpy(&f->buf[fld_pos], &fld, sizeof(fld));
                             }
                         }
                     }
@@ -1936,12 +1946,14 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 int mutabl = !jl_field_isconst(t, fldidx - 1);
                 jl_value_t *fld = get_replaceable_field((jl_value_t**)&data[offset], mutabl);
                 size_t fld_pos = offset + reloc_offset;
-                if (fld != NULL) {
+                if (jl_tagged_word_isptr((uintptr_t)fld)) {
                     arraylist_push(&s->relocs_list, (void*)(uintptr_t)(fld_pos)); // relocation location
                     arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
                     record_uniquing(s, fld, fld_pos);
+                    fld = NULL; // relocation offset (none)
                 }
-                memset(&f->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
+                // #undef and immediates are written as is
+                memcpy(&f->buf[fld_pos], &fld, sizeof(fld));
             }
 
             // Need do a tricky fieldtype walk an record all memoryref we find inlined in this value
@@ -3296,6 +3308,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             char *fldaddr = (char*)val + offs;
             if (jl_field_isptr(st, field)) {
                 record_field_change(val, (jl_value_t**)fldaddr, newval);
+            }
+            else if (jl_field_istagged(st, field)) {
+                uintptr_t w = jl_tagged_word_encode(jl_field_type_concrete(st, field), newval);
+                record_field_change(val, (jl_value_t**)fldaddr, (jl_value_t*)w);
             }
             else if (jl_field_size(st, field) > 0) {
                 // replace the bits

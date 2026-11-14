@@ -276,7 +276,9 @@ three different address spaces (their numbers are defined in `src/codegen_shared
 - GC Tracked Pointers (currently 10): These are pointers to boxed values that may be put
   into a GC frame. It is loosely equivalent to a `jl_value_t*` pointer on the C
   side. N.B. It is illegal to ever have a pointer in this address space that may
-  not be stored to a GC slot.
+  not be stored to a GC slot. A [tagged word](taggedwords.md) is in this address
+  space too, although it may hold an immediate instead of an address; the GC
+  skips a slot that does.
 - Derived Pointers (currently 11): These are pointers that are derived from some GC
   tracked pointer. Uses of these pointers generate uses of the original pointer.
   However, they need not themselves be known to the GC. The GC root placement
