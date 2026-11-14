@@ -7,10 +7,12 @@ include $(JULIAHOME)/stdlib/stdlib.mk
 DEPOTDIR := $(build_prefix)/share/julia
 CHECKBOUNDS_DIR := $(BUILDROOT)/stdlib/checkbounds-$(JULIA_BUILD_MODE)
 CHECKBOUNDS_DEPOT := $(CHECKBOUNDS_DIR)/share/julia
+STDLIB_PROJECT_SCRIPT := $(JULIAHOME)/contrib/activate_stdlib_project.jl
+STDLIB_PROJECT_DIR := $(BUILDROOT)/stdlib
 
 # set some influential environment variables
 export JULIA_DEPOT_PATH := $(shell echo $(call cygpath_w,$(DEPOTDIR)))
-export JULIA_LOAD_PATH := @stdlib$(PATHSEP)$(shell echo $(call cygpath_w,$(JULIAHOME)/stdlib))
+export JULIA_LOAD_PATH := @stdlib$(PATHSEP)@
 # The objcache would otherwise be created in the build depot
 export JULIA_OBJCACHE := 0
 unexport JULIA_PROJECT :=
@@ -41,9 +43,9 @@ FORCE:
 pkgimage_config_changed = $(if $(filter $(JULIA_CHECK_BOUNDS_PKGIMAGES),$(shell cat $(1) 2>/dev/null)),,FORCE)
 
 # The precompile workers inherit the coverage configuration through `Base.CacheFlags`.
-$(BUILDDIR)/stdlib/%.image: $(JULIAHOME)/stdlib/Project.toml $(JULIAHOME)/stdlib/Manifest.toml $(INDEPENDENT_STDLIBS_SRCS) $(DEPOTDIR)/compiled
+$(BUILDDIR)/stdlib/%.image: $(STDLIB_PROJECT_SCRIPT) $(INDEPENDENT_STDLIBS_SRCS) $(DEPOTDIR)/compiled
 	@$(call PRINT_JULIA, JULIA_CPU_TARGET="sysimage" $(call spawn,$(JULIA_EXECUTABLE)) $(JULIA_COVERAGE_IMAGE_FLAGS) --startup-file=no -e \
-		'Base.Precompilation.precompilepkgs(configs=[$(STDLIB_PKGIMAGE_CONFIGS)]; strict=true)')
+		'include(ARGS[1]); Base.Precompilation.precompilepkgs(configs=[$(STDLIB_PKGIMAGE_CONFIGS)]; strict=true)' $(call cygpath_w,$(STDLIB_PROJECT_SCRIPT)) $(call cygpath_w,$(STDLIB_PROJECT_DIR)))
 	echo '$(JULIA_CHECK_BOUNDS_PKGIMAGES)' > $@
 
 $(BUILDDIR)/stdlib/release.image: $(build_private_libdir)/sys.$(SHLIB_EXT) \
@@ -62,15 +64,16 @@ checkbounds-pkgimages: $(BUILDDIR)/stdlib/checkbounds-$(JULIA_BUILD_MODE).image
 
 # Same inputs as the normal images, but not those images themselves: these caches are
 # written to their own depot, so both can be built at the same time.
-$(BUILDDIR)/stdlib/checkbounds-$(JULIA_BUILD_MODE).image: $(JULIA_SYSIMG) $(JULIAHOME)/stdlib/Project.toml \
-    $(JULIAHOME)/stdlib/Manifest.toml $(INDEPENDENT_STDLIBS_SRCS) $(JULIAHOME)/pkgimage.mk
+$(BUILDDIR)/stdlib/checkbounds-$(JULIA_BUILD_MODE).image: $(JULIA_SYSIMG) $(STDLIB_PROJECT_SCRIPT) \
+    $(INDEPENDENT_STDLIBS_SRCS) $(JULIAHOME)/pkgimage.mk
 	rm -rf $(CHECKBOUNDS_DIR)
 	mkdir -p $(CHECKBOUNDS_DEPOT)
 	@$(call PRINT_JULIA, JULIA_CPU_TARGET="sysimage" JULIA_DEPOT_PATH="$(call cygpath_w,$(CHECKBOUNDS_DEPOT))$(PATHSEP)$(call cygpath_w,$(DEPOTDIR))" $(call spawn,$(JULIA_EXECUTABLE)) $(JULIA_COVERAGE_IMAGE_FLAGS) --startup-file=no -e \
-		'Base.Precompilation.precompilepkgs(configs=[``=>Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3)]; strict=true, force_stdlibs=true)')
+		'include(ARGS[1]); Base.Precompilation.precompilepkgs(configs=[``=>Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3)]; strict=true, force_stdlibs=true)' $(call cygpath_w,$(STDLIB_PROJECT_SCRIPT)) $(call cygpath_w,$(STDLIB_PROJECT_DIR)))
 	touch $@
 
 clean:
 	rm -rf $(BUILDROOT)/stdlib/checkbounds-release $(BUILDROOT)/stdlib/checkbounds-debug
 	rm -rf $(DEPOTDIR)/compiled
 	rm -f $(BUILDDIR)/stdlib/*.image
+	rm -f $(STDLIB_PROJECT_DIR)/Project.toml
