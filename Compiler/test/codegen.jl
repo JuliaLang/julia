@@ -87,6 +87,7 @@ end
             @test occursin(r"store <[0-9]+ x i(16|32)>", ir)
         end
         @test occursin(r"store <[0-9]+ x i16>", get_llvm(Base._fill!, Tuple{typeof(reinterpret(Int16, UInt8[])), Int16}))
+        @test occursin("llvm.memset", get_llvm(Base._fill!, Tuple{typeof(reinterpret(UInt8, UInt16[])), UInt8}))
     end
 end
 

@@ -376,7 +376,7 @@ unaliascopy(a::NonReshapedReinterpretArray{T}) where {T} = reinterpret(T, unalia
 unaliascopy(a::ReshapedReinterpretArray{T}) where {T} = reinterpret(reshape, T, unaliascopy(a.parent))
 
 _reinterpret_div(nbytes, divisor) = div(nbytes, divisor)
-_reinterpret_div(nbytes::BitInteger, divisor) = div(unsigned(nbytes), divisor) % typeof(nbytes)
+_reinterpret_div(nbytes::BitSigned, divisor) = div(nbytes & typemax(nbytes), divisor)
 
 function _reinterpret_length(len, ::Type{T}, ::Type{S}) where {T,S}
     issingletontype(T) && return len
