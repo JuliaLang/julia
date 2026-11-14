@@ -3416,6 +3416,23 @@ end
     end
 end
 
+@testset "ExplicitEnv of a project with only stdlibs and no manifest" begin
+    mktempdir() do dir
+        dates = Base.UUID("ade2ca70-3891-5945-98fb-dc099432e06a")
+        printf = Base.UUID("de0858da-6303-5e67-8744-51eddeeeb8d7")
+        project_file = joinpath(dir, "Project.toml")
+        write(project_file, "[deps]\nDates = \"$dates\"\n")
+        env = Base.Precompilation.ExplicitEnv(project_file)
+        @test env.project_deps == Dict("Dates" => dates)
+        @test printf in env.deps[dates]
+        @test env.lookup_strategy[dates] === nothing
+        @test env.lookup_strategy[printf] === nothing
+
+        write(project_file, "[deps]\nDates = \"$dates\"\nExample = \"7876af07-990d-54b4-ab0e-23690620f79a\"\n")
+        @test isempty(Base.Precompilation.ExplicitEnv(project_file).project_deps)
+    end
+end
+
 # Write dev packages, given as (name, uuid, deps), into the depot, and a project that depends on all of them
 function write_precompile_env(depot, pkgs)
     project = "[deps]\n"
