@@ -1463,6 +1463,10 @@ end
     @test Base.infer_exception_type(===, (Any,Any)) === only(Base.infer_exception_types(===, (Any,Any))) === Union{}
     @test (Base.infer_exception_type(setfield!, ()); Base.infer_exception_types(setfield!, ()); true) # `infer_exception_type[s]` shouldn't throw on empty `argtypes`
     @test (Base.infer_exception_type(Core.Intrinsics.mul_int, ()); Base.infer_exception_types(Core.Intrinsics.mul_int, ()); true) # `infer_exception_type[s]` shouldn't throw on empty `argtypes`
+    # opaque closures are not analyzed yet
+    oc = Base.Experimental.@opaque x -> x
+    @test Base.infer_exception_type(oc) === Any
+    @test Base.infer_exception_types(oc) == Any[Any]
 end
 
 @test Base._methods_by_ftype(Tuple{}, -1, Base.get_world_counter()) == Any[]
@@ -1596,3 +1600,46 @@ using .X1ConstConflict, .X2ConstConflict
 @test_throws ErrorException which(@__MODULE__, :xconstconflict)
 
 @test Base.infer_return_type(which, (Type,)) == Method
+
+mutable struct ReflAtomicFields{T}
+    @atomic a::T
+    const b::T
+    c::T
+end
+
+@testset "field and type queries on UnionAll and Union types" begin
+    @test nameof(Vector) === :Array
+    @test parentmodule(Vector) === Core
+    @test isconst(ReflAtomicFields, :b)
+    @test !isconst(ReflAtomicFields, :a)
+    @test !isconst(Union{Int,String}, :x)
+    @test Base.isfieldatomic(ReflAtomicFields, :a)
+    @test !Base.isfieldatomic(ReflAtomicFields, :c)
+    @test !Base.isfieldatomic(Union{Int,String}, :x)
+    @test Base.datatype_fielddesc_type(ReflAtomicFields{Int}) == 0
+    @test Base.aligned_sizeof(String) == Base.aligned_sizeof(Union{Int,String}) == sizeof(Ptr{Cvoid})
+    @test Base.gc_alignment(Int) == Base.gc_alignment(sizeof(Int))
+    @test !Base.ismutationfree(TypeVar(:T))
+    @test Base._fieldcount_noerror(Union{}) == 0
+    @test Base._fieldcount_noerror(Union{Int,String}) === nothing
+    @test_throws "type $Int has no field `q`" fieldtype(Union{Int,String}, :q)
+    @test_throws "ReflAtomicFields has no field `q`" fieldtype(Union{ReflAtomicFields{Int},ReflAtomicFields{Float64}}, :q)
+    @test fullname(Module(:ReflAnon, false, false)) == (:Main, :ReflAnon)
+    @test propertynames(Base.Iterators) == names(Base.Iterators)
+    @test propertynames([1, 2]) == ()
+    ci = only(code_lowered(sin, (Float64,)))
+    @test Base.min_world(ci) <= Base.get_world_counter() <= Base.max_world(ci)
+end
+
+@testset "reflection argument checks" begin
+    @test_throws "'debuginfo' must be either :source or :none" code_lowered(sin, (Int,); debuginfo=:bad)
+    @test_throws "'debuginfo' must be either :source or :none" code_typed(sin, (Int,); debuginfo=:bad)
+    @test_throws "foo: unanalyzable call given sin(::$Int)" Base.raise_match_failure(:foo, Tuple{typeof(sin), Int})
+    @test_throws "no matching methods" parentmodule(sin, (String,))
+    @test Base.EmissionParams().emit_metadata == 1
+    @test Base.EmissionParams(emit_metadata=false).emit_metadata == 0
+    @test Base.destructure_callex(Base, :(a[1, 2])) == (GlobalRef(Base, :getindex), Any[:a, 1, 2], Any[])
+    @test_throws "expected a `setproperty!` expression" Base.destructure_callex(Base, :(a = 1))
+    @test_throws "expected a `:call` expression" Base.destructure_callex(Base, :(begin end))
+    @test !isempty(Core.methodtable)
+end

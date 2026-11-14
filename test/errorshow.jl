@@ -1447,7 +1447,17 @@ if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
     end
 end
 
+@testset "CancellationRequest" begin
+    for (cr, msg) in ((Base.CANCEL_REQUEST_SAFE, "Safe Cancellation (CANCEL_REQUEST_SAFE)"),
+                      (Base.CANCEL_REQUEST_ABANDON_EXTERNAL, "Abandonment of External Resources (CANCEL_REQUEST_ABANDON_EXTERNAL)"),
+                      (Base.CANCEL_REQUEST_ABANDON_ALL, "Task Abandonment (CANCEL_REQUEST_ABANDON_ALL)"),
+                      (Base.CancellationRequest(0x2), "Unknown (2)"))
+        @test sprint(showerror, cr) == "CancellationRequest: " * msg
+    end
+end
+
 @testset "ScheduledAfterSyncException" begin
+    @test sprint(showerror, Base.ScheduledAfterSyncException(Any[])) == "ScheduledAfterSyncException: (no values)"
     t = :DummyTask
     msg = sprint(showerror, Base.ScheduledAfterSyncException(Any[t]))
     @test occursin(":DummyTask is registered after the end of a `@sync` block", msg)
@@ -1775,6 +1785,61 @@ end
             @test occursin("InexactError: $IntStr($InfStr)", str)
         end
     end
+end
+
+errorshow_ip_f(x) = x + 1
+@testset "showerror for other exception types" begin
+    for (err, msg) in Any[
+            Meta.ParseError("boom") => "ParseError(\"boom\")",
+            Core.TypeNameError(Union{Int,String}) => "TypeNameError: typename does not apply to unions whose components have different typenames",
+            Core.TypeNameError(Int) => "TypeNameError: typename does not apply to this type",
+            TypeError(:var"dict key", "", Int, "a") => "TypeError: \"a\" is not a valid key for type $Int",
+            TypeError(:var"keyword argument", :x, Int, "a") => "TypeError: in keyword argument x, expected $Int, got a value of type String",
+            TypeError(:typeassert, GlobalRef(Main, :g), Int, "a") => "TypeError: in typeassert of global binding `Main.g`, expected $Int, got a value of type String",
+            InitError(:Foo, ErrorException("bad")) => "InitError: bad\nduring initialization of module Foo",
+            StackOverflowError() => "StackOverflowError:",
+            UndefKeywordError(:k) => "UndefKeywordError: keyword argument `k` not assigned",
+            InexactError(:f, Int8, 1, 2, 3) => "InexactError: f(Int8, 1, 2, 3)",
+            CanonicalIndexError("getindex", Vector{Int}) => "CanonicalIndexError: getindex not defined for Vector{$Int}",
+            BoundsError([1, 2], 5:6) => "BoundsError: attempt to access 2-element Vector{$Int} at index [5:6]",
+        ]
+        @test sprint(showerror, err) == msg
+    end
+    # The hint is registered more than once in this file, so it may be repeated
+    @test startswith(sprint(showerror, UndefVarError(:T, :static_parameter)),
+        "UndefVarError: `T` not defined in static parameter matching\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")
+    @test startswith(sprint(showerror, UndefVarError(:x_undef, :local)),
+        "UndefVarError: `x_undef` not defined in local scope\nSuggestion: check for an assignment to a local variable that shadows a global of the same name.")
+    @test endswith(sprint(showerror, InitError(:Foo, ErrorException("bad")), backtrace()[1:1]),
+                   "\nduring initialization of module Foo")
+
+    f = errorshow_ip_f
+    @test repr(Base.InterpreterIP(code_lowered(f, (Int,))[1], 3, Main)) ==
+        "Base.InterpreterIP in top-level CodeInfo for Main at statement 3"
+    let s = repr(Base.InterpreterIP(Base.method_instance(f, (Int,)), 2, Main))
+        @test startswith(s, "Base.InterpreterIP in MethodInstance for ")
+        @test endswith(s, "errorshow_ip_f(::$Int) at statement 2")
+    end
+
+    @test Base.incomplete_tag(Expr(:incomplete)) === :other
+    for (msg, tag) in ("unterminated string" => :string, "unterminated multi-line comment" => :comment,
+                       "\"begin\" requires end" => :block, "invalid \"`\" syntax" => :cmd,
+                       "invalid character literal" => :char, "something else" => :other)
+        @test Base.incomplete_tag(Expr(:incomplete, "incomplete: " * msg)) === tag
+    end
+end
+
+module UndefImportTest
+    global declared_only
+    module Importer
+        import ..declared_only
+    end
+end
+
+@testset "UndefVarError hint for an import of an unassigned global" begin
+    err = try UndefImportTest.Importer.declared_only catch e; e end
+    @test occursin("Suggestion: this global was defined as `$(UndefImportTest).declared_only` but not assigned a value.",
+                   sprint(showerror, err))
 end
 
 # error message hint from PR #22647

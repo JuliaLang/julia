@@ -562,6 +562,31 @@ end
     @test_throws DomainError(Inf16, "`sind(x)` is only defined for finite `x`.") sind(Inf16)
 end
 
+@testset "sinpi and sind beyond the fast reduction range" begin
+    # floats this large are all even integers
+    for x in (Float32(2^25), 2.0^54, -2.0^54)
+        @test sinpi(x) === tanpi(x) === copysign(zero(x), x)
+        @test cospi(x) === one(x)
+    end
+    for x in (Float32(2^49) + Float32(2^26), 2.0^46 + 3, -1.5 * 2.0^60)
+        @test sind(x) ≈ sind(big(x))
+        @test cosd(x) ≈ cosd(big(x))
+    end
+end
+
+@testset "sind and cosd of reals that convert to BigFloat" begin
+    # `float` of these gives a BigFloat, so the generic method reduces them itself
+    for x in (0, 30, 90, 100, 180, 200, 270, 300, 400, -30, -100, -200, -300, -400)
+        @test sind(big(x)) ≈ sind(BigFloat(x)) atol=1e-70
+        @test cosd(big(x)) ≈ cosd(BigFloat(x)) atol=1e-70
+    end
+    @test iszero(sind(big(-180))) && signbit(sind(big(-180)))
+    @test sind(big(90)) == cosd(big(0)) == -cosd(big(180)) == 1
+    @test sind(big(1)//3) ≈ sind(BigFloat(1)/3)
+    @test_throws DomainError sind(big(1)//0)
+    @test_throws DomainError cosd(big(-1)//0)
+end
+
 # ensure zeros are signed the same
 ⩲(x,y) = typeof(x) == typeof(y) && x == y && signbit(x) == signbit(y)
 ⩲(x::Tuple, y::Tuple) = length(x) == length(y) && all(map(⩲,x,y))
@@ -821,7 +846,11 @@ end
     end
 end
 
-@testset "half-integer and nan/infs for sincospi,sinpi,cospi" begin
+@testset "integer, half-integer and nan/infs for sincospi,sinpi,cospi" begin
+    sh, ch = sinh(π), cosh(π)
+    @test sincospi(ComplexF64(2, 1)) === (ComplexF64(0, sh), ComplexF64(ch, -0.0))
+    @test sincospi(complex(3, 1)) === (ComplexF64(0, -sh), ComplexF64(-ch, -0.0))
+    @test sincospi(ComplexF64(-1, -1)) === (ComplexF64(-0.0, sh), ComplexF64(-ch, -0.0))
     @testset for T in (ComplexF32, ComplexF64)
         @test sincospi(T(0.5, 0.0)) == (T(1.0,0.0), T(0.0, -0.0))
         @test sincospi(T(1.5, 0.0)) == (T(-1.0,0.0), T(0.0, 0.0))

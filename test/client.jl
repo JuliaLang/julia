@@ -111,3 +111,52 @@ end
     @test !occursin("_repl_entry", outstr)
     @test !occursin(r"\.[/\\]client.jl", outstr)
 end
+
+function capture_stderr(f)
+    mktemp() do path, io
+        redirect_stderr(f, io)
+        flush(io)
+        read(path, String)
+    end
+end
+
+@testset "shell mode commands" begin
+    @test_throws "no cmd to execute" Base.repl_cmd(``, devnull)
+    @test_throws "cd method only takes one argument" Base.repl_cmd(`cd a b`, devnull)
+    withenv("OLDPWD" => nothing) do
+        @test_throws "cd: OLDPWD not set" Base.repl_cmd(`cd -`, devnull)
+    end
+    @test_throws "repl_cmd: expected an `AbstractCmd`, got $Int" Base.repl_cmd(1, devnull)
+
+    # a command that cannot be started shows the error instead of throwing it
+    missing_cmd = "/nonexistent/julia_test_cmd"
+    @test occursin("ERROR: IOError: could not spawn `$missing_cmd`",
+                   capture_stderr(() -> Base.repl_cmd(pipeline(`$missing_cmd`, stdout=devnull), devnull)))
+    if !Sys.iswindows()
+        @test occursin("ERROR: IOError: could not spawn `$missing_cmd -c",
+                       capture_stderr(() -> withenv(() -> Base.repl_cmd(`echo hi`, devnull), "JULIA_SHELL" => missing_cmd)))
+    end
+    @test capture_stderr(() -> Base.display_error(ErrorException("boom"))) == "ERROR: boom\n"
+    @test Base.parse_input_line(SubString("1 + 1")) == Base.parse_input_line("1 + 1")
+    withenv("JULIA_STACKFRAME_LINEINFO_COLOR" => nothing, "JULIA_STACKFRAME_FUNCTION_COLOR" => nothing) do
+        @test Base.stackframe_lineinfo_color() === Base.stackframe_function_color() === :bold
+    end
+end
+
+@testset "exec_options" begin
+    exe = Base.julia_cmd()
+    # CI debug logging turns on verbose tests and evaluation tracing
+    @test read(addenv(`$exe --startup-file=no -e 'print(ENV["JULIA_TEST_VERBOSE"], Base.TRACE_EVAL)'`,
+                      "RUNNER_DEBUG" => "true"), String) == "trueloc"
+    mktempdir() do dir
+        sep = Sys.iswindows() ? ";" : ":"
+        depot = dir * sep
+        mkpath(joinpath(dir, "config"))
+        write(joinpath(dir, "config", "startup.jl"), "error(\"startup failed\")")
+        err = IOBuffer()
+        p = run(pipeline(ignorestatus(addenv(`$exe --startup-file=yes -e 'print(1)'`, "JULIA_DEPOT_PATH" => depot));
+                         stdout=devnull, stderr=err))
+        @test p.exitcode == 1
+        @test occursin("startup failed", String(take!(err)))
+    end
+end

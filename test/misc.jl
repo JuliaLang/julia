@@ -1914,3 +1914,41 @@ if !Sys.iswindows() && !running_under_rr()
         end
     end
 end
+
+@testset "Base.Experimental" begin
+    C = Base.Experimental.Const([1 2; 3 4])
+    @test size(C) == (2, 2)
+    @test axes(C) == (Base.OneTo(2), Base.OneTo(2))
+    @test IndexStyle(typeof(C)) == IndexLinear()
+    @test C[2, 1] == 3
+    @test C[1, 2] == C[3] == 2
+    @test_throws BoundsError C[3, 1]
+
+    @test macroexpand(@__MODULE__, :(Base.Experimental.@compiler_options max_methods=default max_methods=2)) ==
+        Expr(:block, Expr(:meta, :max_methods, Base.Compiler.InferenceParams().max_methods), Expr(:meta, :max_methods, 2))
+    for (ex, msg) in Any[
+            :(Base.Experimental.@compiler_options max_methods=5) => "We must have that `1 <= max_methods <= 4`, but `max_methods = 5`.",
+            :(Base.Experimental.@compiler_options max_methods=x) => "invalid argument to \"max_methods\" option",
+            :(Base.Experimental.@compiler_options foo=1) => "unknown option \"foo\"",
+            :(Base.Experimental.@compiler_options foo) => "invalid option syntax",
+            :(Base.Experimental.@overlay mt x = 1) => "@overlay requires a function definition",
+            :(Base.Experimental.@reexport import Foo) => "@reexport must be used with a `using` statement",
+            :(Base.Experimental.@reexport using Foo: x) => "@reexport does not support `using Module: names` syntax",
+        ]
+        @test_throws msg macroexpand(@__MODULE__, ex)
+    end
+    @test macroexpand(@__MODULE__, :(Base.Experimental.@set_syntax_version v"1.14")) ==
+        Expr(:call, Base.set_syntax_version, @__MODULE__, v"1.14")
+    # outside of output generation, declaring an entrypoint does nothing
+    @test Base.Experimental.entrypoint(sin, (Float64,)) === nothing
+
+    # this redefines Base arithmetic, so it runs in its own process
+    script = """
+        Base.Experimental.@make_all_arithmetic_checked
+        x = typemax(Int)
+        overflows(f) = try f(); false catch e; e isa OverflowError end
+        print(overflows(() -> x + 1), overflows(() -> -typemin(Int8)), overflows(() -> x * x),
+              overflows(() -> -x - 2), overflows(() -> typemax(Int8) + Int8(1)), overflows(() -> typemin(Int8) - Int8(1)))
+        """
+    @test read(`$(Base.julia_cmd()) --startup-file=no -e $script`, String) == "truetruetruetruetruetrue"
+end

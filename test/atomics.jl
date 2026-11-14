@@ -585,6 +585,13 @@ let a = ARefxy{Union{Nothing,Integer}}()
     @test 1 === @atomic a.x
     @test false === @atomiconce a.x = 2
 end
+let a = ARefxy{Union{Nothing,Integer}}()
+    @test true === @atomiconce :sequentially_consistent :monotonic a.x = 6
+    @test 7 === @atomic a.x |= 1
+    @test 6 === @atomic a.x &= 6
+    @test_throws "@atomiconce expression missing field access or indexing" @macroexpand @atomiconce :sequentially_consistent :monotonic x = 1
+    @test_throws "@atomicswap expression missing field access or indexing" @macroexpand @atomicswap x = 1
+end
 
 # atomic getfield with boundcheck
 # via codegen

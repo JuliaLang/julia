@@ -4881,15 +4881,44 @@ precompile_test_harness("cache rejection reasons") do dir
     write(pkgfile,
           """
           module RejectReasons
+          include_dependency(joinpath(@__DIR__, "RejectReasons_dep.txt"); track_content=false)
           end
           """)
-    cachefile, _ = Base.compilecache(Base.PkgId("RejectReasons"))
+    depfile = joinpath(dir, "RejectReasons_dep.txt")
+    write(depfile, "dep")
+    cachefile, ocachefile = Base.compilecache(Base.PkgId("RejectReasons"))
 
     # fresh cache: nothing recorded, nothing reported
     reasons = Dict{Symbol,Int}()
     @test Base.stale_cachefile(pkgfile, cachefile; reasons) !== true
     @test isempty(reasons)
     @test Base.list_reasons(reasons) == ""
+
+    # each check that rejects an otherwise usable cache records its own reason
+    function reject_reason(args...; kwargs...)
+        reasons = Dict{Symbol,Int}()
+        @test Base.stale_cachefile(args...; reasons, kwargs...) === true
+        return only(keys(reasons))
+    end
+    spec = Base.PkgLoadSpec(pkgfile, Base.OLDEST_EDITION)
+    @test reject_reason(Base.PkgId("NotRejectReasons"), UInt128(0), spec, cachefile) === :pkgid_mismatch
+    @test reject_reason(Base.PkgId("RejectReasons"), UInt128(1), spec, cachefile) === :buildid_mismatch
+    mv(depfile, depfile * ".moved")
+    @test reject_reason(pkgfile, cachefile) === :source_missing
+    mv(depfile * ".moved", depfile)
+    if ocachefile !== nothing
+        mv(ocachefile, ocachefile * ".moved")
+        @test reject_reason(pkgfile, cachefile) === :ocachefile_missing
+        mv(ocachefile * ".moved", ocachefile)
+    end
+    f = Base.Filesystem.open(depfile, Base.Filesystem.JL_O_WRONLY)
+    oldtime = mtime(depfile)
+    Base.Filesystem.futime(f, oldtime - 100, oldtime - 100)
+    @test reject_reason(pkgfile, cachefile) === :mtime_changed
+    close(f)
+    # setting the old mtime back is not exact on Windows, so rebuild the cache instead
+    cachefile, ocachefile = Base.compilecache(Base.PkgId("RejectReasons"))
+    @test Base.stale_cachefile(pkgfile, cachefile) !== true
 
     # a cache left in the depot after updating Julia fails the header check, which
     # embeds the Julia version and commit (simulated here with junk bytes); that
