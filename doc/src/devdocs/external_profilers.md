@@ -136,7 +136,7 @@ Note that the Julia JIT runtime does not yet have integration for Tracy's symbol
 ## NVIDIA Nsight Systems (NVTX)
 
 [NVTX](https://github.com/NVIDIA/NVTX) is NVIDIA's lightweight instrumentation API for annotating events, code ranges, and resources so they can be visualized by NVIDIA profiling tools.
-Julia emits the same `JL_TIMING` zones used by Tracy and ITTAPI as NVTX ranges, grouped and colored by subsystem, which can then be viewed in [NVIDIA Nsight Systems](https://developer.nvidia.com/nsight-systems).
+Julia emits the same `JL_TIMING` zones used by Tracy and ITTAPI as NVTX ranges, grouped and colored by subsystem, which can then be viewed in [NVIDIA Nsight Systems](https://developer.nvidia.com/nsight-systems). The NVTX instrumentation also emits ranges for task execution, along with a task ID, in a different NVTX domain named `julia tasks`.
 
 NVTX is header-only and its calls are cheap no-ops unless a tool is actively attached and capturing, so building with NVTX support does not require a CUDA toolkit installation and has minimal overhead when no profiler is attached.
 
