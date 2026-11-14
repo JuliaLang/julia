@@ -48,7 +48,7 @@ using Base: popmeta!
 macro attach_meta(val, ex)
     esc(_attach_meta(val, ex))
 end
-_attach_meta(val, ex) = Base.pushmeta!(ex, Expr(:test, val))
+_attach_meta(val, ex) = Base.pushmeta!(ex, Symbol(:test, val))
 
 @attach_meta 42 function dummy()
     false
@@ -56,7 +56,7 @@ end
 let ast = only(code_lowered(dummy, Tuple{}))
     body = Expr(:block)
     body.args = ast.code
-    @test popmeta!(body, :test) == (true, [42])
+    @test popmeta!(body, :test42) == (true, [])
     @test popmeta!(body, :nonexistent) == (false, [])
 end
 
@@ -100,11 +100,12 @@ end
 # in the case multiple pushmeta!-based macros are combined
 @attach_meta 40 @attach_meta 41 @attach_meta 42 dummy_multi() = return nothing
 let ast = only(code_lowered(dummy_multi, Tuple{}))
+    @test filter(x -> Meta.isexpr(x, :meta), ast.code) == [Expr(:meta, :test40, :test41, :test42)]
     body = Expr(:block)
     body.args = ast.code
-    @test popmeta!(body, :test) == (true, [40])
-    @test popmeta!(body, :test) == (true, [41])
-    @test popmeta!(body, :test) == (true, [42])
+    @test popmeta!(body, :test40) == (true, [])
+    @test popmeta!(body, :test41) == (true, [])
+    @test popmeta!(body, :test42) == (true, [])
     @test popmeta!(body, :nonexistent) == (false, [])
 end
 
@@ -157,7 +158,7 @@ end
 function _nospec_with_default(@nospecialize x = 1)
     2x
 end
-@test collect(methods(_nospec_with_default))[2].nospecialize == 1
+@test collect(methods(_nospec_with_default))[2].nospecialize & 1 == 1
 @test _nospec_with_default() == 2
 @test _nospec_with_default(10) == 20
 
@@ -202,12 +203,12 @@ let a = 1
     @test !TestExpandModule.@is_in_def_module
     @test @eval TestExpandModule @is_in_def_module
 
-    @test Meta.lower(@__MODULE__, :($a)) === 1
-    @test !Meta.lower(@__MODULE__, :(@is_dollar_expr $a))
-    @test Meta.@lower @is_dollar_expr $a
-    @test Meta.@lower @__MODULE__() @is_dollar_expr $a
-    @test !Meta.@lower TestExpandModule.@is_in_def_module
-    @test Meta.@lower TestExpandModule @is_in_def_module
+    @test Core.eval(@__MODULE__, Meta.lower(@__MODULE__, :($a))) === 1
+    @test !Core.eval(@__MODULE__, Meta.lower(@__MODULE__, :(@is_dollar_expr $a)))
+    @test  Core.eval(@__MODULE__, (Meta.@lower @is_dollar_expr $a))
+    @test  Core.eval(@__MODULE__, (Meta.@lower @__MODULE__() @is_dollar_expr $a))
+    @test !Core.eval(@__MODULE__, Meta.@lower TestExpandModule.@is_in_def_module)
+    @test  Core.eval(@__MODULE__, (Meta.@lower TestExpandModule @is_in_def_module))
 
     @test macroexpand(@__MODULE__, :($a)) === 1
     @test !macroexpand(@__MODULE__, :(@is_dollar_expr $a))

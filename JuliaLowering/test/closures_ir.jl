@@ -500,9 +500,10 @@ function (x)::Int
     x*x
 end
 #---------------------
-LoweringError:
+expected `call` expression
+@ :1
 function (x)::Int
-#        └─┘ ── expected `call` expression
+#        └─┘
     x*x
 end
 
@@ -549,10 +550,11 @@ function f(::g) where {g}
     end
 end
 #---------------------
-LoweringError:
+cannot overwrite a static parameter
+@ :2
 function f(::g) where {g}
     function g()
-#            ╙ ── cannot overwrite a static parameter
+#            ╙
     end
 end
 
@@ -586,17 +588,19 @@ end
 # Error: Opaque closure with default args
 Base.Experimental.@opaque (x=1)->2x
 #---------------------
-LoweringError:
+opaque closure cannot have optional or keyword arguments
+@ :1
 Base.Experimental.@opaque (x=1)->2x
-#                          └─┘ ── opaque closure cannot have optional or keyword arguments
+#                          └─┘
 
 ########################################
 # Error: Opaque closure with keyword args
 Base.Experimental.@opaque (x; y=1)->2x
 #---------------------
-LoweringError:
+opaque closure cannot have optional or keyword arguments
+@ :1
 Base.Experimental.@opaque (x; y=1)->2x
-#                         └──────┘ ── opaque closure cannot have optional or keyword arguments
+#                         └──────┘
 
 ########################################
 # Mutually recursive closures
@@ -1167,8 +1171,6 @@ end
     [:-> [:tuple] [:block]]
 ]
 #---------------------
-LoweringError:
- at line 1: Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
-
-Expression:
-  (call JuliaLowering.eval_closure_type Main.TestMod :#11#12 (call core.svec) (call core.svec) (call core.svec))
+Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
+@ :1
+└───Expression: ::tombstone

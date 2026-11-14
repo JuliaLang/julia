@@ -34,19 +34,18 @@ x."b"
 # Error: Wrong number of children in `.`
 @ast_ [:. "x"::identifier "a"::identifier 3::value]
 #---------------------
-LoweringError:
- at line 1: invalid syntax: unknown form `.` or number of arguments 3
-
-Expression:
-  (. x a 3)
+invalid syntax: unknown form `.` or number of arguments 3
+@ :1
+└───Expression: ::tombstone
 
 ########################################
 # Error: Placeholder value used
 _ + 1
 #---------------------
-LoweringError:
+all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :1
 _ + 1
-╙ ── all-underscore identifiers are write-only and their values cannot be used in expressions
+╙
 
 ########################################
 # Named tuple
@@ -142,50 +141,56 @@ _ + 1
 # Error: Named tuple with repeated fields
 (; a=1, bs..., c=3, a=2)
 #---------------------
-LoweringError:
+Repeated named tuple field name
+@ :1
 (; a=1, bs..., c=3, a=2)
-#                   ╙ ── Repeated named tuple field name
+#                   ╙
 
 ########################################
 # Error: Named tuple frankentuple
 (a=1; b=2, c=3)
 #---------------------
-LoweringError:
+cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
+@ :1
 (a=1; b=2, c=3)
-#   └────────┘ ── cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
+#   └────────┘
 
 ########################################
 # Error: Named tuple field dots in rhs
 (; a=xs...)
 #---------------------
-LoweringError:
-(; a=xs...)
-#    └───┘ ── unexpected `...`
+unexpected `...`
 splatting can only be done into a `call`, `tuple`, `curly`, or array-like expression
+@ :1
+(; a=xs...)
+#    └───┘
 
 ########################################
 # Error: Named tuple field invalid lhs
 (; a[]=1)
 #---------------------
-LoweringError:
+expected identifier
+@ :1
 (; a[]=1)
-#  └─┘ ── expected identifier
+#  └─┘
 
 ########################################
 # Error: Named tuple element with weird dot syntax
 (; a."b")
 #---------------------
-LoweringError:
+expected identifier
+@ :1
 (; a."b")
-#    └─┘ ── expected identifier
+#    └─┘
 
 ########################################
 # Error: Named tuple element without valid name
 (; a=1, f())
 #---------------------
-LoweringError:
+expected identifier, `=`, or `...` after semicolon
+@ :1
 (; a=1, f())
-#       └─┘ ── expected identifier, `=`, or `...` after semicolon
+#       └─┘
 
 ########################################
 # Error: Modules not allowed inside blocks
@@ -194,12 +199,13 @@ begin
     end
 end
 #---------------------
-LoweringError:
+`module` is only allowed at top level
+@ :2
 begin
 #   ┌───────
     module C
     end
-#─────┘ ── `module` is only allowed at top level
+#─────┘
 end
 
 ########################################
@@ -209,12 +215,13 @@ function f()
     end
 end
 #---------------------
-LoweringError:
+this syntax is only allowed at top level
+@ :2
 function f()
 #   ┌───────
     module C
     end
-#─────┘ ── this syntax is only allowed at top level
+#─────┘
 end
 
 ########################################
@@ -230,36 +237,37 @@ x::T
 # Error: Invalid :: syntax outside function arg list
 ::T
 #---------------------
-LoweringError:
+`::` must be written `value::type` outside function argument lists
+@ :1
 ::T
-└─┘ ── `::` must be written `value::type` outside function argument lists
+└─┘
 
 ########################################
 # Error: braces vector syntax
 {x, y}
 #---------------------
-LoweringError:
+`{ }` outside of `where` is reserved for future use
+@ :1
 {x, y}
-└────┘ ── `{ }` outside of `where` is reserved for future use
+└────┘
 
 ########################################
 # Error: braces matrix syntax
 {x y; y z}
 #---------------------
-LoweringError:
+`{ }` outside of `where` is reserved for future use
+@ :1
 {x y; y z}
-└────────┘ ── `{ }` outside of `where` is reserved for future use
+└────────┘
 
 ########################################
 # Error: Test AST which has no source form and thus must have been constructed
 # programmatically (eg, a malformed if)
 @ast_ [:if]
 #---------------------
-LoweringError:
- at line 1: expected (if cond body) or (if cond body else)
-
-Expression:
-  (if)
+expected (if cond body) or (if cond body else)
+@ :1
+└───Expression: ::tombstone
 
 ########################################
 # Error: @atomic in wrong position
@@ -267,11 +275,9 @@ let
     @atomic x
 end
 #---------------------
-LoweringError:
- at line 2: unimplemented or unsupported `atomic` declaration
-
-Expression:
-  (atomic x)
+unimplemented or unsupported `atomic` declaration
+@ :2
+└───Expression: (atomic x)
 
 ########################################
 # GC.@preserve support
@@ -301,10 +307,10 @@ GC.@preserve a b g() begin
     body
 end
 #─┘ ── Error expanding macro
-Caused by:
-LoweringError:
+Caused by: Preserved variable must be a symbol
+@ :1
 GC.@preserve a b g() begin
-#                └─┘ ── Preserved variable must be a symbol
+#                └─┘
     body
 end
 
@@ -375,10 +381,10 @@ JuxtuposeTest.@emit_juxtupose
 MacroExpansionError while expanding @cfunction in module Main.TestMod:
 @cfunction(f, Int, NotATuple)
 └───────────────────────────┘ ── Error expanding macro
-Caused by:
-LoweringError:
+Caused by: @cfunction argument types must be a literal tuple
+@ :1
 @cfunction(f, Int, NotATuple)
-#                  └───────┘ ── @cfunction argument types must be a literal tuple
+#                  └───────┘
 
 ########################################
 # Error: Locals used in @cfunction return type
@@ -386,10 +392,11 @@ let T=Float64
     @cfunction(f, T, (Float64,))
 end
 #---------------------
-LoweringError:
+cfunction return type cannot reference local variable
+@ :2
 let T=Float64
     @cfunction(f, T, (Float64,))
-#                 ╙ ── cfunction return type cannot reference local variable
+#                 ╙
 end
 
 ########################################
@@ -398,10 +405,11 @@ let T=Float64
     @cfunction(f, Float64, (Float64,T))
 end
 #---------------------
-LoweringError:
+cfunction argument type cannot reference local variable
+@ :2
 let T=Float64
     @cfunction(f, Float64, (Float64,T))
-#                                   ╙ ── cfunction argument type cannot reference local variable
+#                                   ╙
 end
 
 ########################################
@@ -456,10 +464,10 @@ ccall(:fcntl, Cint, (RawFD, Cint, Cint...), s, F_GETFL)
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall strlen("foo"::Cstring)
 └───────────────────────────┘ ── Error expanding macro
-Caused by:
-LoweringError:
+Caused by: expected a return type annotation `::SomeType`
+@ :1
 @ccall strlen("foo"::Cstring)
-#      └────────────────────┘ ── expected a return type annotation `::SomeType`
+#      └────────────────────┘
 
 ########################################
 # Error: No argument type on @ccall
@@ -468,10 +476,10 @@ LoweringError:
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo("blah"::Cstring, "bad")::Int
 └─────────────────────────────────────┘ ── Error expanding macro
-Caused by:
-LoweringError:
+Caused by: argument needs a type annotation
+@ :1
 @ccall foo("blah"::Cstring, "bad")::Int
-#                           └───┘ ── argument needs a type annotation
+#                           └───┘
 
 ########################################
 # Error: @ccall varargs without one fixed argument
@@ -480,10 +488,10 @@ LoweringError:
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo(; x::Int)::Int
 └───────────────────────┘ ── Error expanding macro
-Caused by:
-LoweringError:
+Caused by: C ABI prohibits varargs without one required argument
+@ :1
 @ccall foo(; x::Int)::Int
-#          └──────┘ ── C ABI prohibits varargs without one required argument
+#          └──────┘
 
 ########################################
 # Error: Multiple varargs blocks
@@ -492,10 +500,10 @@ LoweringError:
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo(; x::Int; y::Float64)::Int
 └───────────────────────────────────┘ ── Error expanding macro
-Caused by:
-LoweringError:
+Caused by: C ABI prohibits varargs without one required argument
+@ :1
 @ccall foo(; x::Int; y::Float64)::Int
-#          └──────┘ ── C ABI prohibits varargs without one required argument
+#          └──────┘
 
 ########################################
 # Error: Bad @ccall first arg
@@ -504,10 +512,10 @@ LoweringError:
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall $(:(foo))(1::Cint)::Cint
 └─────────────────────────────┘ ── Error expanding macro
-Caused by:
-LoweringError:
+Caused by: interpolated value should be a variable or expression, not a literal name or tuple
+@ :1
 @ccall $(:(foo))(1::Cint)::Cint
-#      └───────┘ ── interpolated value should be a variable or expression, not a literal name or tuple
+#      └───────┘
 
 ########################################
 # Error: Bad @ccall option
@@ -516,10 +524,10 @@ LoweringError:
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall bad_opt foo(x::Int)::Int
 └─────────────────────────────┘ ── Error expanding macro
-Caused by:
-LoweringError:
+Caused by: bad option to ccall
+@ :1
 @ccall bad_opt foo(x::Int)::Int
-#      └─────┘ ── bad option to ccall
+#      └─────┘
 
 ########################################
 # Error: Unknown @ccall option name
@@ -528,10 +536,10 @@ LoweringError:
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall bad_opt=true foo(x::Int)::Int
 └──────────────────────────────────┘ ── Error expanding macro
-Caused by:
-LoweringError:
+Caused by: unknown option name for ccall
+@ :1
 @ccall bad_opt=true foo(x::Int)::Int
-#      └─────┘ ── unknown option name for ccall
+#      └─────┘
 
 ########################################
 # Error: Unknown option type
@@ -540,35 +548,38 @@ LoweringError:
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall gc_safe="hi" foo(x::Int)::Int
 └──────────────────────────────────┘ ── Error expanding macro
-Caused by:
-LoweringError:
+Caused by: gc_safe must be true or false
+@ :1
 @ccall gc_safe="hi" foo(x::Int)::Int
-#              └──┘ ── gc_safe must be true or false
+#              └──┘
 
 ########################################
 # Error: unary & syntax
 &x
 #---------------------
-LoweringError:
+invalid syntax: unknown form `&` or number of arguments 1
+@ :1
 &x
-└┘ ── invalid syntax: unknown form `&` or number of arguments 1
+└┘
 
 ########################################
 # Error: $ outside quote/string
 $x
 #---------------------
-LoweringError:
+`$` expression outside string or quote
+@ :1
 $x
-└┘ ── `$` expression outside string or quote
+└┘
 
 ########################################
 # Error: splat outside call
 x...
 #---------------------
-LoweringError:
-x...
-└──┘ ── unexpected `...`
+unexpected `...`
 splatting can only be done into a `call`, `tuple`, `curly`, or array-like expression
+@ :1
+x...
+└──┘
 
 ########################################
 # `include` should increment world age
@@ -613,17 +624,19 @@ const f(x::Int)::Int = x+1
 # Error: Destructuring assignment method definitions (broken, legacy)
 f(x)::Int, g() = [1.0, 2.0]
 #---------------------
-LoweringError:
+invalid assignment location
+@ :1
 f(x)::Int, g() = [1.0, 2.0]
-└──┘ ── invalid assignment location
+└──┘
 
 ########################################
 # Error: Destructuring assignment typedef, variable, and function (broken, legacy)
 T{U}, (x::Float64, g()) = [Bool, (1, 2)]
 #---------------------
-LoweringError:
+invalid assignment location
+@ :1
 T{U}, (x::Float64, g()) = [Bool, (1, 2)]
-#                  └─┘ ── invalid assignment location
+#                  └─┘
 
 ########################################
 # aliasscope form: should be passed through unless implementation changes
