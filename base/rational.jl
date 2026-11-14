@@ -266,7 +266,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     a = trunc(x)
     r = x-a
     y = one(x)
-    tolx = oftype(x, tol)
+    tolx = x isa IEEEFloat && tol > floatmin(x) ? truncbits(oftype(x, tol), 4) : oftype(x, tol)
     nt, t, tt = tolx, zero(tolx), tolx
 
     # compute the successive convergents of the continued fraction
@@ -280,12 +280,13 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
             q, qq = nq, q
         catch e
             isa(e,InexactError) || isa(e,OverflowError) || rethrow()
-            (a ≤ 2 || ((-p == p) && (p < 0))) && return p // q
+            (a < 2 || ((-p == p) && (p < 0))) && return p // q
             # find best semiconvergent that fits in T
             ia_p = iszero(p) ? typemax(T) : fld(typemax(T) - abs(pp), abs(p))
             ia_q = iszero(q) ? typemax(T) : fld(typemax(T) - qq, q)
             ia = min(ia_p, ia_q)
-            return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
+            cond = 2ia > a || 2ia == a && qq*y > q*r
+            return cond ? (ia*p + pp) // (ia*q + qq) : p // q
         end
 
         # naive approach of using
@@ -300,9 +301,29 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
         nt = a*t+tt
     end
 
-    # find optimal semiconvergent
-    # smallest a such that x-a*y < a*t+tt
-    a_min = cld(x-tt,y+t)
+    a_min = a
+    if tol > 0 && y < 1 < a
+        # find optimal semiconvergent
+        # smallest a such that x-a*y < a*t+tt
+        if p == 0
+            # 1/a satisfies the tolerance with a = ⌊1/y⌋
+            e = eps(y)
+            if t ≤ e && a < maxintfloat(a)
+                # round to nearest with tie down
+                a_min = -mod(1, -y) < r ? a + 1 : a
+            else
+                # prevent over-minimization
+                t = t > e ? max(e, t/2) : t
+                a_min = min(a, cld(1, y + t))
+            end
+        else
+            # equivalent to cld(x-tt,y+t), avoid intermediate rounding
+            yt = y + t
+            yr = x % yt - tt % yt
+            a_min = min(a, round((x - (tt + yr)) / yt) + (yr > 0))
+        end
+    end
+
     try
         ia = convert(T,a_min)
         np = checked_add(checked_mul(ia,p),pp)
@@ -310,11 +331,12 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
         return np // nq
     catch e
         isa(e,InexactError) || isa(e,OverflowError) || rethrow()
-        (a ≤ 2 || ((-p == p) && (p < 0))) && return p // q
+        (a < 2 || ((-p == p) && (p < 0))) && return p // q
         ia_p = iszero(p) ? typemax(T) : fld(typemax(T) - abs(pp), abs(p))
         ia_q = iszero(q) ? typemax(T) : fld(typemax(T) - qq, q)
         ia = min(ia_p, ia_q)
-        return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
+        cond = 2ia > a || 2ia == a && qq*x > q*y
+        return cond ? (ia*p + pp) // (ia*q + qq) : p // q
     end
 end
 rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)
