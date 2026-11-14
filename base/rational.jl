@@ -307,12 +307,12 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
         if p == 0
             # 1/a satisfies the tolerance with a = ⌊1/y⌋
             e = eps(y)
-            if t ≤ e
+            if t ≤ e && a < maxintfloat(a)
                 # round to nearest with tie down
                 a_min = -mod(1, -y) < r ? a + 1 : a
             else
                 # prevent over-minimization
-                t = t ≤ 2e ? e : t/2
+                t = t > e ? max(e, t/2) : t
                 a_min = min(a, cld(1, y + t))
             end
         else
