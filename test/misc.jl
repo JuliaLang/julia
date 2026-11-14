@@ -578,6 +578,12 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
     end
 end
 
+# the description is evaluated before the timed expression
+let i = 0
+    @test startswith(@capture_stdout(@time "i=$i" (i += 1)), "i=0: ")
+    @test startswith(@capture_stdout(@timev "i=$i" (i += 1)), "i=1: ")
+end
+
 # interactive utilities
 
 struct ambigconvert; end # inject a problematic `convert` method to ensure it still works
