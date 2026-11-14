@@ -578,7 +578,7 @@ function ExplicitEnv(::Nothing, envpath::String="")
 end
 function ExplicitEnv(envpath::String)
     # Handle missing project file by creating an empty environment
-    if !isfile(envpath) || project_file_manifest_path(envpath) === nothing
+    if !isfile(envpath)
         envpath = abspath(envpath)
         return ExplicitEnv(nothing, envpath)
     end
@@ -625,6 +625,12 @@ function ExplicitEnv(envpath::String)
         names[proj_uuid] = proj_name
     end
 
+    manifest = project_file_manifest_path(envpath)
+    # A project of only stdlibs needs no manifest, since each stdlib's Project.toml lists its deps.
+    stdlibs_only = manifest === nothing && !project_is_package && !isempty(project_deps) &&
+        all(((name, uuid),) -> Base.is_stdlib(PkgId(uuid, name)), project_deps)
+    manifest === nothing && !stdlibs_only && return ExplicitEnv(nothing, envpath)
+
     project_extensions = Dict{String, Vector{UUID}}()
     # Collect all extensions of the project
     for (name, triggers) in get(Dict{String, Any}, project_d, "extensions")::Dict{String, Any}
@@ -644,7 +650,6 @@ function ExplicitEnv(envpath::String)
         project_extensions[name] = uuids
     end
 
-    manifest = project_file_manifest_path(envpath)
     manifest_d = manifest === nothing ? Dict{String, Any}() : parsed_toml(manifest)
 
     # Dependencies in a manifest can either be stored compressed (when name is unique among all packages)
@@ -654,6 +659,11 @@ function ExplicitEnv(envpath::String)
     extensions = Dict{UUID, Dict{String, Vector{String}}}()
     name_to_uuid = Dict{String, UUID}()
     lookup_strategy = Dict{UUID, Union{SHA1, String, Nothing, Missing}}()
+    if stdlibs_only
+        for uuid in values(project_deps)
+            lookup_strategy[uuid] = nothing
+        end
+    end
 
     sizehint!(deps, length(manifest_d))
     sizehint!(weakdeps, length(manifest_d))
