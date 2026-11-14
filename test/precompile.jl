@@ -5147,6 +5147,33 @@ precompile_test_harness("pkgimage type cache dedup") do dir
     end
 end
 
+# A package image stores the selector of an isbits union as an index into its components,
+# so two packages that write the same union in different orders must agree on that order.
+precompile_test_harness("union component order") do dir
+    for (name, union) in ("UnionOrderLeft" => "Union{X, Y}", "UnionOrderRight" => "Union{Y, X}")
+        write(joinpath(dir, "$name.jl"),
+              """
+              module $name
+                  const X = @NamedTuple{a::Int8}
+                  const Y = @NamedTuple{b::Int8}
+                  const U = $union
+                  const M = U[(a=Int8(1),), (b=Int8(2),)]
+                  const R = Ref{U}((a=Int8(1),))
+              end
+              """)
+        @test Base.compilecache(Base.PkgId(name)) isa Tuple
+    end
+    @eval using UnionOrderLeft, UnionOrderRight
+    invokelatest() do
+        @test UnionOrderLeft.U === UnionOrderRight.U
+        for m in (UnionOrderLeft, UnionOrderRight)
+            @test m.M[1] === (a=Int8(1),)
+            @test m.M[2] === (b=Int8(2),)
+            @test m.R[] === (a=Int8(1),)
+        end
+    end
+end
+
 # Interactive precompile output has to keep its colors: a TTY's implied `:color` must survive
 # the driver's conversion of a raw stream to `IOContext{IO}` (#62970 dropped it). Run a real
 # precompile in a child whose stderr is a pty and look for the color escapes in its output.
