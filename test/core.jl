@@ -9386,6 +9386,37 @@ let v = Vector{Type{Union{}}}()
     push!(u, 3)
     push!(u, Union{})
     @test u[1] === 3 && u[2] === Union{}
+    @test u == Any[3, Union{}]
+end
+# the runtime builtins (not inlined, or the interpreter) select the union member
+# the same way (#63683)
+let m = Union{Int,Type{Union{}}}[3, Union{}]
+    get = Base.inferencebarrier(Core.memoryrefget)
+    swap = Base.inferencebarrier(Core.memoryrefswap!)
+    @test get(Core.memoryrefnew(m.ref, 1, false), :not_atomic, false) === 3
+    @test get(Core.memoryrefnew(m.ref, 2, false), :not_atomic, false) === Union{}
+    @test swap(Core.memoryrefnew(m.ref, 2, false), 4, :not_atomic, false) === Union{}
+    @test swap(Core.memoryrefnew(m.ref, 2, false), Union{}, :not_atomic, false) === 4
+    @test m[2] === Union{}
+end
+# ... and the same for struct fields: `===`, `hash` and field reads select the
+# union member, which must be normalized before its layout is used
+struct InlineBottomField{T}
+    x::T
+end
+let a = Base.inferencebarrier(InlineBottomField{Union{Type{Union{}},Int}}(Union{})),
+    b = Base.inferencebarrier(InlineBottomField{Union{Type{Union{}},Int}}(Union{})),
+    c = Base.inferencebarrier(InlineBottomField{Union{Type{Union{}},Int}}(3)),
+    egal = Base.inferencebarrier(===)
+    @test egal(a, b)
+    @test !egal(a, c)
+    @test a === b
+    @test a !== c
+    @test hash(a) == hash(b)
+    @test objectid(a) == objectid(b)
+    @test a.x === Union{}
+    @test c.x === 3
+    @test InlineBottomField{Type{Union{}}}(Union{}) === InlineBottomField{Type{Union{}}}(Union{})
 end
 
 # Pinned static-parameter uncertainty markers (`==`-only bindings) must be
