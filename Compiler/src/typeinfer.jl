@@ -1340,7 +1340,9 @@ function completed_inference_result(interp::AbstractInterpreter, frame::Inferenc
         proof = result.ci
     else
         cache = get_inference_cache(interp)
-        indices = get_indices(cache, result.linfo)
+        indices = result.overridden_by_const === nothing ?
+            get_indices(cache, result.linfo) :
+            get_constprop_indices(cache, result.linfo, result.argtypes)
         for i in length(indices):-1:1
             cached = cache.results[indices[i]]
             if cached isa LocalInferenceResult && cached.result === result
