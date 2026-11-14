@@ -27,6 +27,13 @@ JULIA_LIBDIR := $(shell $(JULIA)  --startup-file=no -e 'println(joinpath(Sys.BIN
 CPPFLAGS_ADD :=
 CFLAGS_ADD = $(shell $(JULIA_CONFIG) --cflags)
 LDFLAGS_ADD = -lm $(shell $(JULIA_CONFIG) --ldflags --ldlibs) -ljulia-internal
+ifeq ($(OS), WINNT)
+TWOIMAGES_LIBS :=
+else ifeq ($(OS), Linux)
+TWOIMAGES_LIBS := -ldl -lpthread
+else
+TWOIMAGES_LIBS := -lpthread
+endif
 
 # the juliac build script, maintained here as test infrastructure
 # (JuliaC.jl is the user-facing tool)
@@ -34,7 +41,9 @@ JULIAC_BUILDSCRIPT := $(SRCDIR)/juliac-buildscript.jl
 
 #=============================================================================
 
-release: $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/capplication$(EXE)
+TWOIMAGES := $(BIN)/twoimages$(EXE) $(BIN)/twoimages_a.$(SHLIB_EXT) $(BIN)/twoimages_b.$(SHLIB_EXT)
+
+release: $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/capplication$(EXE) $(TWOIMAGES)
 
 # Complete any needed Pkg operations before trimming (some Pkg code may not be trimmable)
 Manifest.toml: $(SRCDIR)/Project.toml
@@ -61,14 +70,24 @@ $(BIN)/trimmability$(EXE): $(BIN)/trimmability-o.a
 $(BIN)/basic_jll$(EXE): $(BIN)/basic_jll-o.a
 	$(CC) -o $@ $(WHOLE_ARCHIVE) $< $(NO_WHOLE_ARCHIVE) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
 
+$(BIN)/twoimages_%-o.a: $(SRCDIR)/twoimages_%.jl $(JULIAC_BUILDSCRIPT)
+	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $< --output-lib true
+
+# Not privatized: both libraries resolve the same libjulia
+$(BIN)/twoimages_%.$(SHLIB_EXT): $(BIN)/twoimages_%-o.a
+	$(CC) -shared -o $@ $(WHOLE_ARCHIVE) $< $(NO_WHOLE_ARCHIVE) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
+
+$(BIN)/twoimages$(EXE): $(SRCDIR)/twoimages.c
+	$(CC) -o $@ $< $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(TWOIMAGES_LIBS)
+
 $(BIN)/capplication$(EXE): $(SRCDIR)/capplication.c $(SRCDIR)/libsimple.h $(BIN)/libsimple-o.a
 	$(CC) -I$(BIN) -I$(SRCDIR) -I$(JULIA_LIBDIR) -o $@ $< -Wl,--whole-archive $(BIN)/libsimple-o.a -Wl,--no-whole-archive $(LDFLAGS_ADD) $(LDFLAGS) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS)
 
-check: $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/capplication$(EXE)
+check: $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/capplication$(EXE) $(TWOIMAGES)
 	$(JULIA) --startup-file=no --history-file=no --depwarn=error $(SRCDIR)/trimming.jl $<
 
 clean:
-	-rm -f $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/hello-o.a $(BIN)/trimmability-o.a $(BIN)/basic_jll-o.a $(BIN)/libsimple-o.a $(BIN)/libsimple.$(SHLIB_EXT) $(BIN)/capplication$(EXE) $(BIN)/bindinginfo_libsimple.json $(BIN)/Manifest.toml
+	-rm -f $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/hello-o.a $(BIN)/trimmability-o.a $(BIN)/basic_jll-o.a $(BIN)/libsimple-o.a $(BIN)/libsimple.$(SHLIB_EXT) $(BIN)/capplication$(EXE) $(BIN)/bindinginfo_libsimple.json $(BIN)/Manifest.toml $(TWOIMAGES) $(BIN)/twoimages_a-o.a $(BIN)/twoimages_b-o.a
 
 .PHONY: release clean check
 
