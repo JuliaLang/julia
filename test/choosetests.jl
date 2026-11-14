@@ -82,7 +82,7 @@ function test_path(test)
 end
 
 """
-`(; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(choices)` selects a set of tests to be
+`(; tests, net_on, exit_on_error, use_revise, buildroot, seed, shuffle) = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
 `["all"]`, all tests are selected.
 
@@ -96,7 +96,9 @@ The function returns a named tuple with the following elements:
   - `exit_on_error` is true if an error in one test should cancel
     remaining tests to be run (otherwise, all tests are run unconditionally),
   - `seed` is a seed which will be used to initialize the global RNG for each
-    test to be run.
+    test to be run,
+  - `shuffle` is the seed to shuffle the order of the tests with, or `nothing` to run them
+    in their usual order.
 
 Several options can be passed to `choosetests` by including a special token
 in the `choices` argument:
@@ -105,6 +107,9 @@ in the `choices` argument:
    - "--seed=SEED", which sets the value of `seed` to `SEED`
      (parsed as an `UInt128`); `seed` is otherwise initialized randomly.
      This option can be used to reproduce failed tests.
+   - "--shuffle" or "--shuffle=SEED", which runs the tests in a random order, shuffled
+     with `SEED` (parsed as a `UInt64`) or otherwise with a random seed. This option can
+     be used to find tests that depend on the state other tests leave behind.
    - "--help", which prints a help message and then skips all tests.
    - "--help-list", which prints the options computed without running them.
 """
@@ -114,6 +119,7 @@ function choosetests(choices = [])
     exit_on_error = false
     use_revise = false
     seed = rand(RandomDevice(), UInt128)
+    shuffle = nothing
     ci_option_passed = false
     dryrun = false
     buildroot = joinpath(@__DIR__, "..")
@@ -130,6 +136,10 @@ function choosetests(choices = [])
             buildroot = t[(length("--buildroot=") + 1):end]
         elseif startswith(t, "--seed=")
             seed = parse(UInt128, t[(length("--seed=") + 1):end])
+        elseif t == "--shuffle"
+            shuffle = rand(RandomDevice(), UInt64)
+        elseif startswith(t, "--shuffle=")
+            shuffle = parse(UInt64, t[(length("--shuffle=") + 1):end])
         elseif t == "--ci"
             ci_option_passed = true
         elseif t == "--help-list"
@@ -143,6 +153,8 @@ function choosetests(choices = [])
                   --help-list          : prints the options computed without running them
                   --revise             : load Revise
                   --seed=<SEED>        : set the initial seed for all testgroups (parsed as a UInt128)
+                  --shuffle[=<SEED>]   : run the tests in a random order, optionally shuffled with SEED \
+                                         (parsed as a UInt64)
                   --buildroot=<PATH>   : set the build root directory (default: in-tree)
                   --skip <NAMES>...    : skip test or collection tagged with <NAMES>
                 TESTS:
@@ -156,7 +168,8 @@ function choosetests(choices = [])
                       exit_on_error = false,
                       use_revise = false,
                       buildroot,
-                      seed = UInt128(0))
+                      seed = UInt128(0),
+                      shuffle = nothing)
         elseif startswith(t, "--")
             error("unknown option: $t")
         elseif startswith(t, "-")
@@ -291,9 +304,10 @@ function choosetests(choices = [])
         print("\n")
         exit_on_error && (print("\nwith option "); printstyled("exit_on_error", bold=true))
         use_revise && (print("\nwith option "); printstyled("use_revise", bold=true); print(" (Revise.jl)"))
+        shuffle === nothing || (print("\nwith option "); printstyled("shuffle", bold=true); print(" (seed 0x", string(shuffle, base = 16), ")"))
         print("\n\n")
         empty!(tests)
     end
 
-    return (; tests, net_on, exit_on_error, use_revise, buildroot, seed)
+    return (; tests, net_on, exit_on_error, use_revise, buildroot, seed, shuffle)
 end
