@@ -1249,11 +1249,11 @@ function return_cached_result(interp::AbstractInterpreter, method::Method, codei
         edgecycle, edgelimited, edgerecursed, local_result))
 end
 
-function return_cached_result(interp::AbstractInterpreter, method::Method,
-                              local_result::LocalInferenceResult,
-                              codeinst::Union{Nothing,CodeInstance},
-                              caller::AbsIntState, edgecycle::Bool, edgelimited::Bool,
-                              edgerecursed::Bool)
+function return_cached_result(
+        interp::AbstractInterpreter, method::Method, local_result::LocalInferenceResult,
+        codeinst::Union{Nothing,CodeInstance}, caller::AbsIntState,
+        edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool
+    )
     inf_result = local_result.result
     rt = inf_result.result
     exct = inf_result.exc_result
@@ -1267,6 +1267,81 @@ function return_cached_result(interp::AbstractInterpreter, method::Method,
     end
     return Future(MethodCallResult(interp, caller, method, rt, exct, effects,
         codeinst, edgecycle, edgelimited, edgerecursed, local_result))
+end
+
+function return_cached_result(
+        interp::AbstractInterpreter, method::Method, limited::LimitedInferenceResult,
+        codeinst::Union{Nothing,CodeInstance}, caller::AbsIntState,
+        edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool
+    )
+    inf_result = limited.result
+    world = get_inference_world(interp)
+    update_valid_age!(caller, world, inf_result.valid_worlds)
+    # Like a newly inferred limited result, this provides neither a CI target nor a
+    # reusable local result, so retain the dependencies of its facts explicitly.
+    add_inference_proof!(caller.edges, limited.proof)
+    update_valid_age!(caller, world, proof_worlds(limited.proof))
+    if codeinst !== nothing
+        update_valid_age!(caller, world, proof_worlds(codeinst))
+    end
+    effects = inf_result.ipo_effects
+    exct = refine_exception_type(inf_result.exc_result, effects)
+    return Future(MethodCallResult(interp, caller, method, inf_result.result, exct, effects,
+        codeinst, edgecycle, edgelimited, edgerecursed;
+        force_edgecycle=false, needs_mi_edge=codeinst === nothing))
+end
+
+function record_limited_result!(caller::InferenceState, result::InferenceResult,
+                                proof::LocalInferenceProof)
+    limited_results = caller.limited_results
+    if limited_results === nothing
+        caller.limited_results = limited_results =
+            IdDict{MethodInstance,LimitedInferenceResult}()
+    end
+    limited_results[result.linfo] = LimitedInferenceResult(result, proof)
+    return nothing
+end
+
+function is_on_callstack(sv::AbsIntState, callstack::Vector)
+    frameid = sv.frameid
+    return 1 <= frameid <= length(callstack) && callstack[frameid] === sv
+end
+
+"""
+    lookup_limited_result(
+            interp::AbstractInterpreter, caller::AbsIntState, mi::MethodInstance
+        ) -> Union{Nothing,LimitedInferenceResult}
+
+Find a limited result of `mi` that `caller` kept for an earlier call of its own.
+
+A limited result is not cached since its accuracy depends on the inference context. When
+`caller` makes the same call again (e.g. at another call site or in a later iteration over a
+cycle), the call is made under the same callers as the first one, so inferring it again
+would usually hit the same limitation, repeating the inference of the whole limited subtree
+for every such call.
+"""
+function lookup_limited_result(
+        interp::AbstractInterpreter, caller::AbsIntState, mi::MethodInstance
+    )
+    caller isa InferenceState || return nothing
+    limited_results = caller.limited_results
+    limited_results === nothing && return nothing
+    limited = get(limited_results, mi, nothing)
+    limited === nothing && return nothing
+    get_inference_world(interp) in proof_worlds(limited.proof) || return nothing
+    cache_owner(caller.interp) === cache_owner(interp) || return nothing
+    # The caller collects the limitation causes of the result, and only frames that finish
+    # after the caller can resolve them.
+    result = limited.result
+    callstack = caller.callstack
+    for typ in (result.result, result.exc_result)
+        if typ isa LimitedAccuracy
+            for cause in typ.causes
+                is_on_callstack(cause, callstack) || return nothing
+            end
+        end
+    end
+    return limited
 end
 
 function lookup_cached_edge(interp::AbstractInterpreter, method::Method,
@@ -1375,6 +1450,7 @@ function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, 
                     Core.svec(internal_result_edges(frame)...))
                 add_inference_proof!(caller.edges, proof)
                 update_valid_age!(caller, get_inference_world(interp), proof_worlds(proof))
+                caller isa InferenceState && record_limited_result!(caller, result, proof)
             end
             effects = result.ipo_effects # effects are adjusted already within `finish` for ipo_effects
             if !iszero(frame.cache_mode & CACHE_MODE_GLOBAL) && isdefined(result, :ci)
@@ -1449,6 +1525,11 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         frame = resolve_call_cycle!(interp, mi, caller)
     end
     if frame === false
+        limited = lookup_limited_result(interp, caller, mi)
+        if limited !== nothing
+            return return_cached_result(interp, method, limited, edge_ci, caller,
+                edgecycle, edgelimited, edgerecursed)
+        end
         # completely new, but check again after reserving in the engine
         if cache_mode == CACHE_MODE_GLOBAL
             reserve_start = _time_ns() # subtract engine_reserve (thread-synchronization) time from callers to avoid double-counting
