@@ -3198,16 +3198,30 @@ void jl_method_table_invalidate_deferred(jl_array_t *deferred, size_t max_world)
     env.max_world = max_world;
     env.prev = (size_t*)malloc_s(n * sizeof(size_t));
     htable_new(&env.heads, n);
+    // the dispatch caches to flush: those of the tables of the shadowed methods
+    arraylist_t caches;
+    arraylist_new(&caches, 0);
+    arraylist_push(&caches, jl_method_table->cache);
     for (i = 0; i < n; i++) {
-        void **bp = ptrhash_bp(&env.heads, jl_array_ptr_ref(deferred, 2 * i));
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(deferred, 2 * i);
+        void **bp = ptrhash_bp(&env.heads, mi);
         env.prev[i] = *bp == HT_NOTFOUND ? 0 : (size_t)*bp;
         *bp = (void*)(i + 2); // offset so that neither 0 nor the not-found marker (1) is a valid index
+        jl_methcache_t *mtc = jl_method_get_table(mi->def.method)->cache;
+        size_t j = 0;
+        while (j < caches.len && caches.items[j] != mtc)
+            j++;
+        if (j == caches.len)
+            arraylist_push(&caches, mtc);
     }
-    jl_methcache_t *mc = jl_method_table->cache;
-    JL_LOCK(&mc->writelock);
-    jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_mt_cache_deferred, (void*)&env);
-    invalidate_leafcache(mc, max_world);
-    JL_UNLOCK(&mc->writelock);
+    for (i = 0; i < caches.len; i++) {
+        jl_methcache_t *mc = (jl_methcache_t*)caches.items[i];
+        JL_LOCK(&mc->writelock);
+        jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_mt_cache_deferred, (void*)&env);
+        invalidate_leafcache(mc, max_world);
+        JL_UNLOCK(&mc->writelock);
+    }
+    arraylist_free(&caches);
     htable_free(&env.heads);
     free(env.prev);
 }
@@ -4099,11 +4113,18 @@ void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array
 
     // the method joins the contributors of its typenames as it is activated
     contributor_tag_method(mt, method, contributor_tag_for(method));
+    // missing-method backedges are kept by the global table for insertions into every table
     jl_methcache_t *mc = jl_method_table->cache;
     JL_LOCK(&mc->writelock);
     struct _typename_invalidate_backedge typename_env = {type, &isect, &isect2, d, n, max_world, env.invalidated};
     invalidate_missing_backedges(&typename_env);
     env.invalidated |= typename_env.invalidated;
+    // the dispatch cache to flush is the one of the method's own table
+    if (mt->cache != mc) {
+        JL_UNLOCK(&mc->writelock);
+        mc = mt->cache;
+        JL_LOCK(&mc->writelock);
+    }
     if (oldmi && jl_array_nrows(oldmi)) {
         if (deferred) {
             for (size_t i = 0, l = jl_array_nrows(oldmi); i < l; i++) {
