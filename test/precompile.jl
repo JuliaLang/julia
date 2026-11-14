@@ -5147,6 +5147,50 @@ precompile_test_harness("pkgimage type cache dedup") do dir
     end
 end
 
+precompile_test_harness("pkgimage type cache dedup with unset supertype") do dir
+    # An existing instantiation whose supertype, unset in the image it came from, was
+    # never computed must be reused even though another image brings that supertype
+    # in as a new type (#64260).
+    write(joinpath(dir, "UnsetSuperDep.jl"),
+          """
+          module UnsetSuperDep
+              abstract type A{T} end
+              struct S{T} <: A{Vector{T}} end
+              const V{T} = S{Vector{T}}
+              const P0 = S{Tuple{Int}}
+          end
+          """)
+    write(joinpath(dir, "UnsetSuperUser.jl"),
+          """
+          module UnsetSuperUser
+              using UnsetSuperDep: S
+              # the supertype precedes the type itself in the image
+              const P = Any[supertype(S{Tuple{Int}}), S{Tuple{Int}}]
+          end
+          """)
+    Base.compilecache(Base.PkgId("UnsetSuperDep"))
+    Base.compilecache(Base.PkgId("UnsetSuperUser"))
+    @eval using UnsetSuperDep
+    T = invokelatest(() -> UnsetSuperDep.P0)
+    @test !isdefined(T, :super)
+    # a raw read of the unset slot is not folded to a throw
+    @test invokelatest(() -> Base.infer_return_type(() -> getfield(UnsetSuperDep.P0, :super))) !== Union{}
+    @eval using UnsetSuperUser
+    invokelatest() do
+        @test UnsetSuperUser.P[2] === T
+        @test UnsetSuperUser.P[1] === supertype(T)
+    end
+    # the loaded body of `V` has its supertype unset; instantiating it after the
+    # definition must not grow `partial`, which only a definition drains
+    tn = T.name
+    npartial() = isdefined(tn, :partial) ? length(tn.partial) : 0
+    n = npartial()
+    for i in 1:3
+        @eval $(Symbol(:unset_super_f, i))(::UnsetSuperDep.V{X}, ::X) where {X} = $i
+    end
+    @test npartial() == n
+end
+
 # Interactive precompile output has to keep its colors: a TTY's implied `:color` must survive
 # the driver's conversion of a raw stream to `IOContext{IO}` (#62970 dropped it). Run a real
 # precompile in a child whose stderr is a pty and look for the color escapes in its output.
