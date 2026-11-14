@@ -45,10 +45,13 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/ValueHandle.h>
+#include <llvm/Analysis/AliasAnalysis.h>
 #include <llvm/Analysis/InstructionSimplify.h>
+#include <llvm/Analysis/ValueTracking.h>
 
 // support
 #include <llvm/ADT/BitmaskEnum.h>
+#include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/SmallBitVector.h>
 #include <llvm/ADT/Statistic.h>
 #include <llvm/Support/raw_ostream.h>
@@ -1585,6 +1588,13 @@ static const auto gcroot_flush_func = new JuliaFunction<>{
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), false); },
     nullptr,
 };
+// Lists what a catch block reads, so that it escapes before each setjmp;
+// FinalLowerGC turns it into an empty asm with the same memory operands.
+static const auto catch_escape_func = new JuliaFunction<>{
+    "julia.catch_escape",
+    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), true); },
+    nullptr,
+};
 static const auto gc_preserve_begin_func = new JuliaFunction<>{
     "llvm.julia.gc_preserve_begin",
     [](LLVMContext &C) { return FunctionType::get(Type::getTokenTy(C), true); },
@@ -2179,7 +2189,7 @@ struct jl_varinfo_t {
     // this i1 flag is true when it is defined
     Value *defFlag;
     bool isSA; // whether all stores dominate all uses
-    bool isVolatile;
+    bool isCatchLive; // read by a catch block: kept in memory, which escapes at each setjmp
     bool isArgument;
     bool usedUndef;
     bool used;
@@ -2192,7 +2202,7 @@ struct jl_varinfo_t {
                      dinfo(nullptr),
                      defFlag(nullptr),
                      isSA(false),
-                     isVolatile(false),
+                     isCatchLive(false),
                      isArgument(false),
                      usedUndef(false),
                      used(false)
@@ -2216,6 +2226,7 @@ public:
     std::map<int, SmallVector<int, 0>> phic_slots_for_catch; // catch_dest (1-based) -> PhiC statement indices
     std::map<int, std::pair<Value*, Value*> > scope_restore;
     std::map<jl_value_t*, AllocaInst*> eh_buffers;
+    SmallVector<std::pair<CallInst*, BasicBlock*>, 0> catch_entries; // each setjmp and the block its second return enters
     SmallVector<jl_cgval_t, 0> SAvalues;
     SmallVector<std::tuple<jl_cgval_t, BasicBlock *, AllocaInst *, PHINode *, SmallVector<PHINode*,0>, jl_value_t *>, 0> PhiNodes;
     SmallVector<bool, 0> ssavalue_assigned;
@@ -2472,7 +2483,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p) JL_CANSAFEPOINT;
 static unsigned julia_alignment(jl_value_t *jt) JL_CANSAFEPOINT;
-static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, jl_aliasinfo_t const &dst_ai, Align alignment, bool isVolatile) JL_CANSAFEPOINT;
+static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, jl_aliasinfo_t const &dst_ai, Align alignment) JL_CANSAFEPOINT;
 
 static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
 {
@@ -2790,7 +2801,7 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
         // The pointers written back here are a silent copy of the ones the separate
         // roots buffer holds; this buffer is never itself a root.
         jl_aliasinfo_t slot_ai = private_copy_aliasinfo(ctx, v.aliasinfo, v.typ);
-        recombine_value(ctx, v, loc, slot_ai, align, false);
+        recombine_value(ctx, v, loc, slot_ai, align);
         return mark_julia_slot(loc, v.typ, v.TIndex, slot_ai);
     }
     if (v.ispointer() || v.V == nullptr)
@@ -2946,7 +2957,7 @@ static void store_def_flag(jl_codectx_t &ctx, const jl_varinfo_t &vi, bool val)
 {
     assert((!vi.boxroot || vi.pTIndex) && "undef check is null pointer for boxed things");
     assert(vi.usedUndef && vi.defFlag && "undef flag codegen corrupted");
-    ctx.builder.CreateStore(ConstantInt::get(getInt1Ty(ctx.builder.getContext()), val), vi.defFlag, vi.isVolatile);
+    ctx.builder.CreateStore(ConstantInt::get(getInt1Ty(ctx.builder.getContext()), val), vi.defFlag);
 }
 
 static void alloc_def_flag(jl_codectx_t &ctx, jl_varinfo_t& vi)
@@ -3729,7 +3740,7 @@ static bool slot_eq(jl_value_t *e, int sl)
 
 #include "intrinsics.cpp"
 
-// --- find volatile variables ---
+// --- find catch-live variables ---
 
 // assigned in a try block and used outside that try block
 static bool local_var_occurs(jl_value_t *e, int sl)
@@ -3772,7 +3783,7 @@ static bool have_try_block(jl_array_t *stmts)
 }
 
 // conservative marking of all variables potentially used after a catch block that were assigned after the try
-static void mark_volatile_vars(jl_array_t *stmts, SmallVectorImpl<jl_varinfo_t> &slots, const std::set<int> &bbstarts)
+static void mark_catch_live_vars(jl_array_t *stmts, SmallVectorImpl<jl_varinfo_t> &slots, const std::set<int> &bbstarts)
 {
     if (!have_try_block(stmts))
         return;
@@ -3794,7 +3805,7 @@ static void mark_volatile_vars(jl_array_t *stmts, SmallVectorImpl<jl_varinfo_t> 
         for (int slot = 0; slot < (int)slots.size(); slot++) {
             if (!assigned_in_block.test(slot) && local_var_occurs(stmt, slot)) {
                 jl_varinfo_t &vi = slots[slot];
-                vi.isVolatile = true;
+                vi.isCatchLive = true;
             }
         }
     }
@@ -6740,15 +6751,15 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
             return mark_julia_const(ctx, jl_true);
         if (vi.boxroot == NULL || vi.pTIndex != NULL) {
             assert(vi.defFlag);
-            isnull = ctx.builder.CreateAlignedLoad(getInt1Ty(ctx.builder.getContext()), vi.defFlag, Align(1), vi.isVolatile);
+            isnull = ctx.builder.CreateAlignedLoad(getInt1Ty(ctx.builder.getContext()), vi.defFlag, Align(1));
         }
         if (vi.boxroot != NULL) {
-            Value *boxed = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, vi.boxroot, Align(sizeof(void*)), vi.isVolatile);
+            Value *boxed = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, vi.boxroot, Align(sizeof(void*)));
             Value *box_isnull = ctx.builder.CreateICmpNE(boxed, Constant::getNullValue(ctx.types().T_prjlvalue));
             if (vi.pTIndex) {
                 // value is either boxed in the stack slot, or unboxed in value
                 // as indicated by testing (pTIndex & UNION_BOX_MARKER)
-                Value *tindex = ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), vi.pTIndex, Align(sizeof(void*)), vi.isVolatile);
+                Value *tindex = ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), vi.pTIndex, Align(sizeof(void*)));
                 Value *load_unbox = ctx.builder.CreateICmpEQ(
                             ctx.builder.CreateAnd(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
                             ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
@@ -6785,13 +6796,13 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
     jl_cgval_t v;
     Value *isnull = NULL;
     if (vi.boxroot == NULL || vi.pTIndex != NULL) {
-        if ((!vi.isVolatile && vi.isSA) || vi.isArgument || vi.value.constant || !(vi.value.V || vi.inline_roots)) {
+        if ((!vi.isCatchLive && vi.isSA) || vi.isArgument || vi.value.constant || !(vi.value.V || vi.inline_roots)) {
             v = vi.value;
             if (vi.pTIndex)
                 v.TIndex = ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), vi.pTIndex, Align(1));
         }
         else {
-            // copy value to a non-mutable (non-volatile SSA) location
+            // copy value to an SSA location the slot's later stores cannot change
             // since this might be a union slot, the most convenient approach to copying
             // is to move the whole alloca chunk
             AllocaInst *ssaslot = nullptr;
@@ -6805,19 +6816,13 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
                 ssaslot = cast<AllocaInst>(varslot->clone());
                 setName(ctx.emission_context, ssaslot, varslot->getName() + StringRef(".ssa"));
                 ssaslot->insertAfter(varslot);
-                if (vi.isVolatile) {
-                    Value *unbox = ctx.builder.CreateAlignedLoad(zext_struct_type(ssaslot->getAllocatedType()), varslot, varslot->getAlign(), true);
-                    stack_ai.decorateInst(ctx.builder.CreateAlignedStore(unbox, ssaslot, ssaslot->getAlign()));
-                }
-                else {
-                    const DataLayout &DL = jl_Module->getDataLayout();
-                    uint64_t sz = DL.getTypeStoreSize(T);
-                    emit_memcpy(ctx, ssaslot, stack_ai, vi.value, sz, ssaslot->getAlign(), varslot->getAlign());
-                }
+                const DataLayout &DL = jl_Module->getDataLayout();
+                uint64_t sz = DL.getTypeStoreSize(T);
+                emit_memcpy(ctx, ssaslot, stack_ai, vi.value, sz, ssaslot->getAlign(), varslot->getAlign());
             }
             Value *tindex = NULL;
             if (vi.pTIndex)
-                tindex = ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), vi.pTIndex, Align(1), vi.isVolatile);
+                tindex = ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), vi.pTIndex, Align(1));
             v = mark_julia_slot(ssaslot, vi.value.typ, tindex, slot_ai, jl_gc_roots_t());
         }
         if (vi.inline_roots) {
@@ -6833,17 +6838,17 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
             auto roots_ai = ctx.alias().gcframe;
             for (size_t i = 0; i < nroots; i++) {
                 Value *ptr = emit_ptrgep(ctx, varslot, i * sizeof(jl_value_t*));
-                gcroots[i] = roots_ai.decorateInst(ctx.builder.CreateAlignedLoad(T_prjlvalue, ptr, Align(sizeof(void*)), vi.isVolatile));
+                gcroots[i] = roots_ai.decorateInst(ctx.builder.CreateAlignedLoad(T_prjlvalue, ptr, Align(sizeof(void*))));
             }
             v.inline_roots = jl_gc_roots_t(std::move(gcroots));
         }
         if (vi.usedUndef) {
             assert(vi.defFlag);
-            isnull = ctx.builder.CreateAlignedLoad(getInt1Ty(ctx.builder.getContext()), vi.defFlag, Align(1), vi.isVolatile);
+            isnull = ctx.builder.CreateAlignedLoad(getInt1Ty(ctx.builder.getContext()), vi.defFlag, Align(1));
         }
     }
     if (vi.boxroot != NULL) {
-        Instruction *boxed = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, vi.boxroot, Align(sizeof(void*)), vi.isVolatile);
+        Instruction *boxed = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, vi.boxroot, Align(sizeof(void*)));
         Value *box_isnull = NULL;
         if (vi.usedUndef)
             box_isnull = ctx.builder.CreateICmpNE(boxed, Constant::getNullValue(ctx.types().T_prjlvalue));
@@ -6909,13 +6914,13 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
             auto roots_ai = ctx.alias().gcframe;
             if (rval_info.TIndex) {
                 if (vi.value.V)
-                    emit_unionmove(ctx, vi.value.V, vi.value.typ, ai, rval_info, rval_info.TIndex, /*skip*/isboxed, vi.isVolatile);
+                    emit_unionmove(ctx, vi.value.V, vi.value.typ, ai, rval_info, rval_info.TIndex, /*skip*/isboxed);
                 assert(rval_info.inline_roots.size() <= vi.inline_roots_count);
-                store_all_roots(ctx, rval_info.inline_roots, vi.inline_roots, roots_ai, vi.isVolatile);
+                store_all_roots(ctx, rval_info.inline_roots, vi.inline_roots, roots_ai);
             }
             else {
                 Align align(julia_alignment(rval_info.typ));
-                split_value_into(ctx, rval_info, align, vi.value.V, align, ai, vi.inline_roots, roots_ai, vi.isVolatile);
+                split_value_into(ctx, rval_info, align, vi.value.V, align, ai, vi.inline_roots, roots_ai);
             }
         }
     }
@@ -7112,7 +7117,7 @@ static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, const jl_cg
         Value *tindex = rval_info.TIndex;
         if (!vi.boxroot)
             tindex = ctx.builder.CreateAnd(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
-        ctx.builder.CreateStore(tindex, vi.pTIndex, vi.isVolatile);
+        ctx.builder.CreateStore(tindex, vi.pTIndex);
     }
 
     // store boxed variables
@@ -7128,7 +7133,7 @@ static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, const jl_cg
         else {
             rval = boxed(ctx, rval_info);
         }
-        ctx.builder.CreateStore(rval, vi.boxroot, vi.isVolatile);
+        ctx.builder.CreateStore(rval, vi.boxroot);
     }
 
     // store unboxed variables
@@ -7152,7 +7157,7 @@ static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, const jl_cg
     else if (vi.pTIndex && !rval_info.inline_roots.empty()) {
         auto roots_ai = ctx.alias().gcframe;
         assert(rval_info.inline_roots.size() <= vi.inline_roots_count);
-        store_all_roots(ctx, rval_info.inline_roots, vi.inline_roots, roots_ai, vi.isVolatile);
+        store_all_roots(ctx, rval_info.inline_roots, vi.inline_roots, roots_ai);
     }
 
     return;
@@ -7208,9 +7213,11 @@ static void emit_phic_slot_clear(jl_codectx_t &ctx, jl_varinfo_t &vi, bool dead)
 {
     if (dead && !vi.boxroot && !vi.inline_roots)
         return;
+    // The root clears are volatile only so that DSE keeps them, as nothing reads
+    // them before the return. TODO: late-gc-lowering should clear dead roots itself.
     if (vi.boxroot) {
         // memory optimization: eagerly clear this gc-root now
-        ctx.builder.CreateAlignedStore(Constant::getNullValue(ctx.types().T_prjlvalue), vi.boxroot, Align(sizeof(void*)), true);
+        ctx.builder.CreateAlignedStore(Constant::getNullValue(ctx.types().T_prjlvalue), vi.boxroot, Align(sizeof(void*)), /*isVolatile*/true);
     }
     // note that a union slot may carry inline roots alongside its tindex, so this
     // is deliberately not part of the `pTIndex` else-branch below
@@ -7227,7 +7234,7 @@ static void emit_phic_slot_clear(jl_codectx_t &ctx, jl_varinfo_t &vi, bool dead)
         Value *nullval = Constant::getNullValue(T_prjlvalue);
         auto stack_ai = ctx.alias().gcframe;
         for (size_t i = 0; i < nroots; i++) {
-            stack_ai.decorateInst(ctx.builder.CreateAlignedStore(nullval, emit_ptrgep(ctx, ssaroots, i * sizeof(void*)), ssaroots->getAlign(), true));
+            stack_ai.decorateInst(ctx.builder.CreateAlignedStore(nullval, emit_ptrgep(ctx, ssaroots, i * sizeof(void*)), ssaroots->getAlign(), /*isVolatile*/true));
         }
     }
     if (vi.pTIndex) {
@@ -7239,7 +7246,7 @@ static void emit_phic_slot_clear(jl_codectx_t &ctx, jl_varinfo_t &vi, bool dead)
         ctx.builder.CreateAlignedStore(
             vi.boxroot ? ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER) :
                          ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x01),
-            vi.pTIndex, Align(1), true);
+            vi.pTIndex, Align(1));
     }
     else {
         assert(!vi.value.V || vi.value.constant || vi.value.typ == jl_bottom_type ||
@@ -8282,7 +8289,7 @@ static void emit_specsig_to_specsig(
             else {
                 roots = gf_thunk->arg_begin(); // root1 has type [n x {}*]*
             }
-            store_all_roots(ctx, retvalinfo.inline_roots, roots, roots_ai, false);
+            store_all_roots(ctx, retvalinfo.inline_roots, roots, roots_ai);
         }
         Value *retval = Constant::getNullValue(retty);
         tindex = ctx.builder.CreateOr(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER));
@@ -9464,6 +9471,28 @@ static DIFile *get_difile(jl_codectx_t &ctx, DIBuilder &dbuilder, StringRef file
     return dbuilder.createFile(file, ".");
 }
 
+// The blocks `Def` is live into: walk back from each use until reaching its definition.
+static void live_in_blocks(Instruction *Def, SmallPtrSetImpl<BasicBlock *> &LiveIn)
+{
+    BasicBlock *DefBB = Def->getParent();
+    SmallVector<BasicBlock *, 8> Worklist;
+    for (Use &U : Def->uses()) {
+        // a phi uses its operand at the end of the incoming block
+        auto *PN = dyn_cast<PHINode>(U.getUser());
+        BasicBlock *BB = PN ? PN->getIncomingBlock(U) : cast<Instruction>(U.getUser())->getParent();
+        if (BB != DefBB)
+            Worklist.push_back(BB);
+    }
+    while (!Worklist.empty()) {
+        BasicBlock *BB = Worklist.pop_back_val();
+        if (!LiveIn.insert(BB).second)
+            continue;
+        for (BasicBlock *Pred : predecessors(BB))
+            if (Pred != DefBB)
+                Worklist.push_back(Pred);
+    }
+}
+
 // Compile to LLVM IR, using a specialized signature if applicable.
 static jl_llvm_functions_t
     emit_function(
@@ -9652,8 +9681,8 @@ static jl_llvm_functions_t
     for (i = 0; i < stmtslen; i++)
         simple_use_analysis(ctx, jl_array_ptr_ref(stmts, i));
 
-    // determine which vars need to be volatile
-    mark_volatile_vars(stmts, ctx.slots, branch_targets);
+    // determine which vars a catch block reads
+    mark_catch_live_vars(stmts, ctx.slots, branch_targets);
 
     // Record the PhiC nodes of each catch block, so that `Expr(:leave, ...)` can
     // drop the gc roots they hold. They sit in the phi block at the top of the
@@ -10121,7 +10150,7 @@ static jl_llvm_functions_t
                                     jl_varinfo_t(ctx.builder.getContext()));
                 jl_value_t *typ = jl_array_ptr_ref(src->ssavaluetypes, i);
                 vi.used = true;
-                vi.isVolatile = true;
+                vi.isCatchLive = true;
                 vi.value = mark_julia_type(ctx, (Value*)NULL, false, typ);
                 allocate_local(vi, jl_symbol("phic"), -1);
             }
@@ -10752,12 +10781,12 @@ static jl_llvm_functions_t
             if (returninfo.return_roots) {
                 assert(inline_roots.size() <= returninfo.return_roots);
                 Value *return_roots = f->arg_begin() + 1;
-                store_all_roots(ctx, inline_roots, return_roots, roots_ai, false);
+                store_all_roots(ctx, inline_roots, return_roots, roots_ai);
             }
             else if (!inline_roots.empty()) {
                 assert(inline_roots.size() <= (size_t)returninfo.union_bytes / sizeof(void*));
                 Value *return_roots = f->arg_begin();
-                store_all_roots(ctx, inline_roots, return_roots, roots_ai, false);
+                store_all_roots(ctx, inline_roots, return_roots, roots_ai);
             }
 
             mallocVisitStmt(sync_bytes, have_dbg_update);
@@ -10839,6 +10868,7 @@ static jl_llvm_functions_t
                 Value *isz = ctx.builder.CreateICmpEQ(sj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
                 BasicBlock *tryblk = BasicBlock::Create(ctx.builder.getContext(), "try", f);
                 BasicBlock *catchpop = BasicBlock::Create(ctx.builder.getContext(), "catch_enter", f);
+                ctx.catch_entries.push_back({sj, catchpop});
                 BasicBlock *handlr = NULL;
                 handlr = BB[lname];
                 workstack.push_back(lname - 1);
@@ -11012,7 +11042,7 @@ static jl_llvm_functions_t
                         if (typedval.typ != jl_bottom_type) {
                             Align align(julia_alignment(phiType));
                             assert(typedval.typ == phiType);
-                            split_value_into(ctx, typedval, align, dest, align, best_aliasinfo(ctx, phiType), false);
+                            split_value_into(ctx, typedval, align, dest, align, best_aliasinfo(ctx, phiType));
                             if (tracked) {
                                 mayberoots = extract_gc_roots(ctx, typedval, tracked);
                             }
@@ -11133,6 +11163,72 @@ static jl_llvm_functions_t
         // This basic block is statically unreachable, thus so is this PHINode
         PN->replaceAllUsesWith(PoisonValue::get(PN->getType()));
         PN->eraseFromParent();
+    }
+
+    // step 11b. A longjmp reaches the catch block along no edge LLVM can see, so
+    // the slots it reads escape just before every setjmp: every later call may
+    // then read them, and the second return may have written them. So does each
+    // fresh object live into the catch block, whose stores in the try body the
+    // catch may read even when no `φᶜ` carries the object there (as after
+    // inlining a callee whose own catch did not use it).
+    if (!ctx.catch_entries.empty()) {
+        SmallSetVector<Value *, 8> catch_slots;
+        auto add_slot = [&](jl_varinfo_t &vi) {
+            if (!vi.isCatchLive)
+                return;
+            for (Value *V : std::initializer_list<Value *>{vi.value.V, vi.boxroot, vi.pTIndex, vi.defFlag, vi.inline_roots})
+                if (auto *AI = dyn_cast_or_null<AllocaInst>(V))
+                    catch_slots.insert(AI);
+        };
+        for (auto &vi : ctx.slots)
+            add_slot(vi);
+        for (auto &it : ctx.phic_slots)
+            add_slot(it.second);
+        // Only gc allocations: FinalLowerGC finds them rooted in the frame
+        // across the setjmp by then, and drops them from the escape again.
+        auto is_fresh = [](const Value *V) {
+            return isNoAliasCall(V) && V->getType()->getPointerAddressSpace() == AddressSpace::Tracked;
+        };
+        SmallVector<SmallSetVector<Value *, 4>, 0> catch_objects(ctx.catch_entries.size());
+        DominatorTree DT(*ctx.f);
+        SmallVector<const Value *, 4> Objs;
+        SmallPtrSet<BasicBlock *, 16> live;
+        for (auto &BB : *ctx.f) {
+            for (auto &I : BB) {
+                if (!I.getType()->isPointerTy())
+                    continue;
+                // capture tracking looks through `phi` and `select`, so this must too
+                Objs.clear();
+                getUnderlyingObjects(&I, Objs, nullptr, /*MaxLookup*/0);
+                if (none_of(Objs, is_fresh))
+                    continue;
+                live.clear();
+                live_in_blocks(&I, live);
+                for (size_t i = 0; i < ctx.catch_entries.size(); i++) {
+                    auto [sj, catchbb] = ctx.catch_entries[i];
+                    if (!live.count(catchbb))
+                        continue;
+                    for (const Value *Obj : Objs) {
+                        if (!is_fresh(Obj))
+                            continue;
+                        // an allocation on only some paths to the setjmp escapes through `I`
+                        if (DT.dominates(cast<Instruction>(Obj), sj))
+                            catch_objects[i].insert(const_cast<Value *>(Obj));
+                        else if (DT.dominates(&I, sj))
+                            catch_objects[i].insert(&I);
+                    }
+                }
+            }
+        }
+        Function *escape = prepare_call(catch_escape_func);
+        for (size_t i = 0; i < ctx.catch_entries.size(); i++) {
+            CallInst *sj = ctx.catch_entries[i].first;
+            SmallVector<Value *, 8> args(catch_slots.begin(), catch_slots.end());
+            for (Value *Base : catch_objects[i])
+                args.push_back(Base);
+            if (!args.empty())
+                CallInst::Create(escape, args, "", sj->getIterator());
+        }
     }
 
     // step 12. Perform any delayed instantiations

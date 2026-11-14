@@ -1293,6 +1293,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         }
                         // Known functions emitted in codegen that are not safepoints
                         if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
+                            callee == catch_escape_func ||
                             callee == gc_preserve_end_func || callee == typeof_func ||
                             callee == blackbox_func ||
                             callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
@@ -1565,6 +1566,75 @@ void LateLowerGCFrame::ComputeLiveness(State &S) {
     ComputeLiveSets(S);
 }
 
+// A longjmp may return to a setjmp from any safepoint until its handler is
+// popped, which codegen marks with the end of the jmp_buf's lifetime, so what is
+// live at the setjmp stays live at each of those safepoints: no other value may
+// take its slot, and none may reset it. Past the region the slot is reset and
+// shared like any other. A value whose definition does not dominate all of the
+// region, as when a returns-twice call has no jmp_buf alloca, keeps a slot of
+// its own for the whole function.
+void LateLowerGCFrame::ExtendReturnsTwiceLiveness(State &S) {
+    if (S.ReturnsTwice.empty())
+        return;
+    if (!S.DT)
+        S.DT = &GetDT();
+    DenseMap<Instruction *, int> SafepointIdx;
+    for (int i = 0, e = S.SafepointNumbering.size(); i < e; i++)
+        SafepointIdx[S.SafepointNumbering[i]] = i;
+    for (int Num : S.ReturnsTwice) {
+        auto *CI = cast<CallInst>(S.SafepointNumbering[Num]);
+        auto *Buf = CI->arg_size() ? dyn_cast<AllocaInst>(CI->getArgOperand(0)->stripPointerCasts()) : nullptr;
+        const LargeSparseBitVector Keep = S.LiveSets[Num];
+        if (!Buf) {
+            S.PermanentRoots |= Keep;
+            continue;
+        }
+        if (Keep.empty())
+            continue;
+        // missing lifetime ends only make the region larger
+        auto LifetimeEnd = [](Instruction &I) -> Value * {
+            auto *II = dyn_cast<IntrinsicInst>(&I);
+            if (!II || II->getIntrinsicID() != Intrinsic::lifetime_end)
+                return nullptr;
+            return II->getArgOperand(II->arg_size() - 1)->stripPointerCasts();
+        };
+        SmallPtrSet<BasicBlock *, 8> Visited;
+        SmallVector<BasicBlock::iterator, 8> Worklist{std::next(CI->getIterator())};
+        while (!Worklist.empty()) {
+            BasicBlock::iterator It = Worklist.pop_back_val();
+            BasicBlock *BB = It->getParent();
+            bool Ended = false;
+            for (; It != BB->end(); ++It) {
+                if (Value *Ends = LifetimeEnd(*It)) {
+                    if (Ends == Buf) {
+                        S.ReturnsTwiceEnds.push_back({&*It, Keep});
+                        Ended = true;
+                        break;
+                    }
+                    // a nested region ends here, but this one does not
+                    S.ReturnsTwiceKeptAt[&*It] |= Keep;
+                }
+                auto SP = SafepointIdx.find(&*It);
+                if (SP == SafepointIdx.end())
+                    continue;
+                for (int Idx : Keep) {
+                    auto Rev = S.ReversePtrNumbering.find(Idx);
+                    auto *Def = Rev == S.ReversePtrNumbering.end() ? nullptr : dyn_cast<Instruction>(Rev->second);
+                    if (Rev == S.ReversePtrNumbering.end() || (Def && !S.DT->dominates(Def, &*It)))
+                        S.PermanentRoots.set(Idx);
+                    else
+                        S.LiveSets[SP->second].set(Idx);
+                }
+            }
+            if (Ended)
+                continue;
+            for (BasicBlock *Succ : successors(BB))
+                if (Visited.insert(Succ).second)
+                    Worklist.push_back(Succ->begin());
+        }
+    }
+}
+
 // For debugging
 JL_USED_FUNC static void dumpSafepointsForBBName(Function &F, State &S, const char *BBName) {
     for (Instruction *&it : S.SafepointNumbering) {
@@ -1689,6 +1759,7 @@ void LateLowerGCFrame::ComputeLiveSets(State &S) {
             }
         }
     }
+    ExtendReturnsTwiceLiveness(S);
     // Compute the interference graph
     S.Neighbors.resize(S.MaxPtrNumber+1);
     for (Instruction *&Safepoint : S.SafepointNumbering) {
@@ -1782,13 +1853,8 @@ std::pair<SmallVector<int, 0>, int> LateLowerGCFrame::ColorRoots(const State &S)
     int PreAssignedColors = 0;
     /* First assign permanent slots to things that need them due
        to returns_twice */
-    for (int Num : S.ReturnsTwice) {
-        const LargeSparseBitVector &LS = S.LiveSets[Num];
-        for (int Idx : LS) {
-            if (Colors[Idx] == -1)
-                Colors[Idx] = PreAssignedColors++;
-        }
-    }
+    for (int Idx : S.PermanentRoots)
+        Colors[Idx] = PreAssignedColors++;
     /* Greedy coloring */
     int MaxAssignedColor = -1;
     int ActiveElement = 1;
@@ -2538,6 +2604,40 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
                 }
             }
             LastLive = &NowLive;
+        }
+    }
+    // A slot kept through a setjmp's region is reset where the region ends,
+    // unless its value is still used: the next safepoint may follow a join
+    // where the value is not live on every path, and so would not reset it.
+    for (auto &[End, Keep] : S.ReturnsTwiceEnds) {
+        BasicBlock *BB = End->getParent();
+        const LargeSparseBitVector &LiveOut = S.BBStates[BB].LiveOut;
+        auto UsedAfter = [&](int Idx) {
+            if (HasBitSet(LiveOut, Idx))
+                return true;
+            for (auto It = std::next(End->getIterator()); It != BB->end(); ++It) {
+                for (Value *Op : It->operands()) {
+                    auto Num = S.AllPtrNumbering.find(Op);
+                    if (Num != S.AllPtrNumbering.end() && Num->second == Idx)
+                        return true;
+                    auto Nums = S.AllCompositeNumbering.find(Op);
+                    if (Nums != S.AllCompositeNumbering.end() && is_contained(Nums->second, Idx))
+                        return true;
+                }
+            }
+            return false;
+        };
+        auto Outer = S.ReturnsTwiceKeptAt.find(End);
+        SmallVector<int, 8> Dead;
+        for (int Idx : Keep)
+            if (Colors[Idx] >= PreAssignedColors && !UsedAfter(Idx) &&
+                (Outer == S.ReturnsTwiceKeptAt.end() || !HasBitSet(Outer->second, Idx)))
+                Dead.push_back(Colors[Idx]);
+        llvm::sort(Dead);
+        Dead.erase(std::unique(Dead.begin(), Dead.end()), Dead.end());
+        for (size_t i = 0, j; i < Dead.size(); i = j) {
+            for (j = i + 1; j < Dead.size() && Dead[j] == Dead[j - 1] + 1; j++) {}
+            PlaceGCFrameReset(Dead[i] + MinColorRoot, j - i, GCFrame, End->getNextNode());
         }
     }
 }

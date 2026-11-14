@@ -145,11 +145,10 @@ end
     end
     let # φᶜ-node / ϒ-node
         result = code_escapes((Any,String)) do a, b
-            local x::String
+            local x::String = b
             try
                 x = a
             catch err
-                x = b
             end
             return x
         end

@@ -1183,6 +1183,25 @@ let e = Expr(:call, Core.GlobalRef(Base, :arrayset), false, Core.SSAValue(4), Co
     @test (@allocated new_to_reg(e)) == 0
 end
 
+# Test that SROA doesn't forward the value at the `enter` to a catch that reads a field the
+# `try` wrote: after inlining, the object reaches the catch with no `ϒ` to carry it there
+mutable struct SROATryCatch; x::Int; end
+@noinline sroa_try_throw(n) = n > 0 ? error("intentional") : nothing
+@inline sroa_try_write!(r, n) = (try; r.x = n; sroa_try_throw(n); r.x = 2n; catch; end; nothing)
+@inline sroa_try_inner!(r, n) = (try; r.x = n; sroa_try_throw(n); r.x = 2n; finally; sroa_try_throw(0); end; nothing)
+@inline sroa_try_outer!(r, n) = (try; sroa_try_inner!(r, n); catch; end; nothing)
+sroa_try_written(n) = (r = SROATryCatch(0); sroa_try_write!(r, n); r.x)
+sroa_try_nested(n) = (r = SROATryCatch(0); sroa_try_outer!(r, n); r.x) # only the outer catch reads it
+let
+    for f in (sroa_try_written, sroa_try_nested)
+        @test count(isnew, get_code(f, (Int,))) == 1
+        ir = first(only(Base.code_ircode(f, (Int,))))
+        ir.argtypes[1] = Tuple{}
+        oc = Core.OpaqueClosure(ir; do_compile=true) # run this Compiler's IR, not Base.Compiler's
+        @test oc(5) == 5
+    end
+end
+
 # Test that SROA doesn't try to forward a previous iteration's SSA value
 let sroa_no_forward() = begin
     res = (0, 0)

@@ -9460,6 +9460,21 @@ end
 end
 @test issue52533_beside(Ref(false))
 
+# ... and for a value the catch reads that the try never assigns, which reaches
+# the catch as an SSA value, rooted across the setjmp instead of in a PhiC slot
+@noinline function issue52533_ssa(freed::Ref{Bool})
+    x = Issue52533()
+    finalizer(_ -> (freed[] = true), x)
+    try
+        Base.inferencebarrier(identity)(nothing)
+    catch
+        Base.donotdelete(x)
+    end
+    GC.gc(true); GC.gc(true)
+    return freed[]
+end
+@test issue52533_ssa(Ref(false))
+
 # `jl_new_method_uninit` must satisfy Method's min-initialized invariant:
 # fields in the initialized prefix (e.g. `sig`, `name`) are assumed non-null
 # by codegen, which omits undef checks when loading them.
