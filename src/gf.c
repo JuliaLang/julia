@@ -2391,12 +2391,10 @@ static int intersect_entry_uncovered(jl_typemap_entry_t *ml, struct typemap_inte
     return !method_covered_by_record(ml->func.method, closure->image);
 }
 
-// the methods intersecting `newentry` in `world`, appended to `shadowed` (or a new
-// array), with the method of equal signature it replaces in `*replaced`; given an
-// `image` (not -1), only the methods of images outside its dependencies
-static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t *newentry, jl_typemap_entry_t **replaced, size_t world, size_t image, jl_value_t *shadowed) JL_CANSAFEPOINT
+static jl_value_t *intersect_matches(jl_typemap_t *defs, jl_typemap_intersection_visitor_fptr visitor, jl_typemap_entry_t *entry,
+        jl_typemap_entry_t **replaced, size_t world, size_t image, jl_value_t *shadowed) JL_CANSAFEPOINT
 {
-    jl_tupletype_t *type = newentry->sig;
+    jl_tupletype_t *type = entry->sig;
     jl_tupletype_t *ttypes = (jl_tupletype_t*)jl_unwrap_unionall((jl_value_t*)type);
     size_t l = jl_nparams(ttypes);
     jl_value_t *va = NULL;
@@ -2407,20 +2405,29 @@ static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t 
         else
             va = NULL;
     }
-    // search for all intersecting methods active in the previous world, to determine the changes needed to be made for the next world
-    struct matches_env env = {{get_intersect_visitor, (jl_value_t*)type, va, /* .search_bottom = */ 0,
+    struct matches_env env = {{visitor, (jl_value_t*)type, va, /* .search_bottom = */ 0,
             /* .min_valid = */ world, /* .max_valid = */ world,
             /* .ti = */ NULL, /* .env = */ NULL, /* .issubty = */ 0,
             /* .emptiness_only = */ 1,
             /* .entry_filter = */ image == (size_t)-1 ? NULL : intersect_entry_uncovered},
-        /* .newentry = */ newentry, /* .shadowed */ shadowed, /* .replaced */ NULL, image};
+        /* .newentry = */ entry, /* .shadowed */ shadowed, /* .replaced */ NULL, image};
     JL_GC_PUSH3(&env.match.env, &env.match.ti, &env.shadowed);
     jl_typemap_intersection_visitor(defs, 0, &env.match);
     env.match.env = NULL;
     env.match.ti = NULL;
-    *replaced = env.replaced;
+    if (replaced)
+        *replaced = env.replaced;
     JL_GC_POP();
     return env.shadowed;
+}
+
+// the methods intersecting `newentry` in `world`, appended to `shadowed` (or a new
+// array), with the method of equal signature it replaces in `*replaced`; given an
+// `image` (not -1), only the methods of images outside its dependencies
+static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t *newentry, jl_typemap_entry_t **replaced, size_t world, size_t image, jl_value_t *shadowed) JL_CANSAFEPOINT
+{
+    // search for all intersecting methods active in the previous world, to determine the changes needed to be made for the next world
+    return intersect_matches(defs, get_intersect_visitor, newentry, replaced, world, image, shadowed);
 }
 
 void print_func_loc(JL_STREAM *s, jl_method_t *m)
@@ -3261,10 +3268,12 @@ static void _method_table_invalidate(jl_methcache_t *mc, void *env0) JL_CANSAFEP
     }
 }
 
-// Invalidate everything compiled against `replaced`. `deleted` is set when the
-// method is being removed outright rather than replaced by one with the same
-// signature.
-static void jl_method_table_invalidate(jl_method_t *replaced, size_t max_world, int deleted) JL_CANSAFEPOINT
+static int invalidate_deleted_dispatch(jl_typemap_entry_t *deleted, size_t max_world) JL_CANSAFEPOINT;
+
+// Invalidate everything compiled against `replaced`. `deleted` is its method table
+// entry when the method is being removed outright, or NULL when it is being
+// replaced by one with the same signature.
+static void jl_method_table_invalidate(jl_method_t *replaced, size_t max_world, jl_typemap_entry_t *deleted) JL_CANSAFEPOINT
 {
     assert(!replaced->is_for_opaque_closure);
     assert(jl_atomic_load_relaxed(&jl_world_counter) == max_world);
@@ -3298,6 +3307,7 @@ static void jl_method_table_invalidate(jl_method_t *replaced, size_t max_world, 
         JL_UNLOCK(&mc->writelock);
         JL_GC_POP();
         invalidated |= typename_env.invalidated;
+        invalidated |= invalidate_deleted_dispatch(deleted, max_world);
     }
     JL_GC_POP();
     if (invalidated && _jl_debug_method_invalidation) {
@@ -3373,7 +3383,7 @@ JL_DLLEXPORT void jl_method_table_disable(jl_method_t *method) JL_CANSAFEPOINT
         jl_atomic_store_relaxed(&method->dispatch_status, 0);
         assert(jl_atomic_load_relaxed(&methodentry->max_world) == ~(size_t)0);
         jl_atomic_store_relaxed(&methodentry->max_world, world);
-        jl_method_table_invalidate(method, world, 1);
+        jl_method_table_invalidate(method, world, methodentry);
         contributor_tag_method(mt, method, -1); // a deletion is a contributor of no image
         jl_atomic_store_release(&jl_world_counter, world + 1);
     }
@@ -3752,6 +3762,7 @@ struct activate_env {
     size_t interferences_max; // of the new method's interference set
     int dispatch_bits; // of the new method
     int invalidated;
+    const char *why; // the `_jl_debug_method_invalidation` tag
 };
 
 // The specializations of `m`: `*specs` receives `m->specializations`, which keeps
@@ -3767,9 +3778,9 @@ static size_t method_specializations(jl_method_t *m, jl_value_t **specs, _Atomic
     return 1;
 }
 
-// Invalidate what the new method `type` changes for `mi`, a specialization of the
+// Invalidate what the new or deleted method `type` changes for `mi`, a specialization of the
 // not more specific `m` among the intersecting methods `d`: its dispatch backedges,
-// and its own dispatch if `replaced_dispatch`, which also queues it in `oldmi`.
+// and its own dispatch if `replaced_dispatch`, which also queues it in `oldmi` (if any).
 static void invalidate_specialization(struct activate_env *env, jl_method_instance_t *mi, jl_value_t *type, jl_method_t *m,
                                       jl_method_t *const *d, size_t n, int replaced_dispatch, char ambig, char *morespec,
                                       jl_array_t *oldmi) JL_CANSAFEPOINT
@@ -3779,16 +3790,65 @@ static void invalidate_specialization(struct activate_env *env, jl_method_instan
     if (replaced_dispatch) {
         // found that this specialization's dispatch got replaced by the new method
         jl_atomic_store_relaxed(&mi->dispatch_status, 0);
-        jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
+        if (oldmi)
+            jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
     }
     if (_jl_debug_method_invalidation && invalidatedmi) {
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)mi);
-        jl_value_t *loctag = jl_cstr_to_string("jl_method_table_insert");
+        jl_value_t *loctag = jl_cstr_to_string(env->why);
         JL_GC_PUSH1(&loctag);
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
         JL_GC_POP();
     }
     env->invalidated |= invalidatedmi;
+}
+
+// Invalidate the specializations of `m`, not more specific than `type`, whose dispatch
+// the new or deleted method `type` changes, given the other intersecting methods `d`
+// (none for a deletion, so that every specialization within `type` counts as replaced).
+static void invalidate_method_dispatch(struct activate_env *env, jl_method_t *m, jl_value_t *type,
+                                       jl_method_t *const *d, size_t n, char ambig, char *morespec,
+                                       jl_array_t *oldmi) JL_CANSAFEPOINT
+{
+    jl_value_t *specs = NULL;
+    jl_value_t *isect = NULL;
+    jl_value_t *isect2 = NULL;
+    JL_GC_PUSH3(&specs, &isect, &isect2);
+    _Atomic(jl_method_instance_t*) *data;
+    size_t l = method_specializations(m, &specs, &data);
+    for (size_t i = 0; i < l; i++) {
+        jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
+        if ((jl_value_t*)mi == jl_nothing)
+            continue;
+        if (jl_type_intersection2(type, mi->specTypes, &isect, &isect2)) {
+            // Replacing a method--see if this really was the selected method previously
+            // over the intersection (not ambiguous) and the new method will be selected now (morespec).
+            // TODO: this only checks pair-wise for ambiguities, but the ambiguities could arise from the interaction of multiple methods
+            // and thus might miss a case where we introduce an ambiguity between`.u two existing methods
+            // We could instead work to sort this into 3 groups `morespecific .. ambiguous .. lesspecific`, with `type` in ambiguous,
+            // such that everything in `morespecific` dominates everything in `ambiguous`, and everything in `ambiguous` dominates everything in `lessspecific`
+            // And then compute where each isect falls, and whether it changed group--necessitating invalidation--or not.
+            int replaced_dispatch = is_replacing(ambig, type, m, d, n, isect, isect2, morespec);
+            invalidate_specialization(env, mi, type, m, d, n, replaced_dispatch, ambig, morespec, oldmi);
+        }
+        // TODO: do we have any interesting cases left where isect3 is useful
+        //jl_value_t *isect3 = NULL;
+        //jl_value_t *isect4 = NULL;
+        //jl_value_t *isect5 = NULL;
+        //JL_GC_PUSH3(&isec3, &isect4, &isect5);
+        //isect3 = jl_type_intersection(m->sig, (jl_value_t*)mi->specTypes);
+        //jl_type_intersection2(type, isect3, &isect4, &isect5);
+        //if (!jl_types_equal(isect, isect4) && (!isect2 || !jl_types_equal(isect2, isect4)) &&
+        //    (!isect5 || (!jl_types_equal(isect, isect5) && (!isect2 || !jl_types_equal(isect2, isect5))))) {
+        //    jl_(type);
+        //    jl_(mi->specTypes);
+        //    jl_(m->sig);
+        //}
+        //JL_GC_POP();
+        isect = NULL;
+        isect2 = NULL;
+    }
+    JL_GC_POP();
 }
 
 // The activation of `method` over `d`, the `n` methods intersecting it: settle the
@@ -3804,10 +3864,7 @@ static jl_genericmemory_t *activate_against_methods(struct activate_env *env, jl
                                                      jl_method_t *const *d, size_t n, char *morespec, char *ambigs, size_t nknown,
                                                      jl_genericmemory_t *interferences, jl_array_t *oldmi, jl_array_t *newrecord) JL_CANSAFEPOINT
 {
-    jl_value_t *specs = NULL;
-    jl_value_t *isect = NULL;
-    jl_value_t *isect2 = NULL;
-    JL_GC_PUSH4(&interferences, &specs, &isect, &isect2);
+    JL_GC_PUSH1(&interferences);
     size_t j;
     // Compute the morespec values not given upfront
     for (j = nknown; j < n; j++)
@@ -3872,43 +3929,43 @@ static jl_genericmemory_t *activate_against_methods(struct activate_env *env, jl
             jl_array_ptr_1d_push(oldmi, (jl_value_t*)unspec);
         if (morespec[j])
             continue;
-        _Atomic(jl_method_instance_t*) *data;
-        size_t l = method_specializations(m, &specs, &data);
-        for (size_t i = 0; i < l; i++) {
-            jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
-            if ((jl_value_t*)mi == jl_nothing)
-                continue;
-            if (jl_type_intersection2(type, mi->specTypes, &isect, &isect2)) {
-                // Replacing a method--see if this really was the selected method previously
-                // over the intersection (not ambiguous) and the new method will be selected now (morespec).
-                // TODO: this only checks pair-wise for ambiguities, but the ambiguities could arise from the interaction of multiple methods
-                // and thus might miss a case where we introduce an ambiguity between`.u two existing methods
-                // We could instead work to sort this into 3 groups `morespecific .. ambiguous .. lesspecific`, with `type` in ambiguous,
-                // such that everything in `morespecific` dominates everything in `ambiguous`, and everything in `ambiguous` dominates everything in `lessspecific`
-                // And then compute where each isect falls, and whether it changed group--necessitating invalidation--or not.
-                int replaced_dispatch = is_replacing(ambig, type, m, d, n, isect, isect2, morespec);
-                invalidate_specialization(env, mi, type, m, d, n, replaced_dispatch, ambig, morespec, oldmi);
-            }
-            // TODO: do we have any interesting cases left where isect3 is useful
-            //jl_value_t *isect3 = NULL;
-            //jl_value_t *isect4 = NULL;
-            //jl_value_t *isect5 = NULL;
-            //JL_GC_PUSH3(&isec3, &isect4, &isect5);
-            //isect3 = jl_type_intersection(m->sig, (jl_value_t*)mi->specTypes);
-            //jl_type_intersection2(type, isect3, &isect4, &isect5);
-            //if (!jl_types_equal(isect, isect4) && (!isect2 || !jl_types_equal(isect2, isect4)) &&
-            //    (!isect5 || (!jl_types_equal(isect, isect5) && (!isect2 || !jl_types_equal(isect2, isect5))))) {
-            //    jl_(type);
-            //    jl_(mi->specTypes);
-            //    jl_(m->sig);
-            //}
-            //JL_GC_POP();
-            isect = NULL;
-            isect2 = NULL;
-        }
+        invalidate_method_dispatch(env, m, type, d, n, ambig, morespec, oldmi);
     }
     JL_GC_POP();
     return interferences;
+}
+
+// unlike `get_intersect_visitor`, no `Union{}`-key pruning: that reasons about an insertion
+static int collect_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_intersection_env *closure0) JL_CANSAFEPOINT
+{
+    struct matches_env *closure = container_of(closure0, struct matches_env, match);
+    if (oldentry != closure->newentry) {
+        if (closure->shadowed == NULL)
+            closure->shadowed = (jl_value_t*)jl_alloc_vec_any(0);
+        jl_array_ptr_1d_push((jl_array_t*)closure->shadowed, (jl_value_t*)oldentry->func.method);
+    }
+    return 1;
+}
+
+// A caller whose lookup dropped `deleted` from its matches (e.g. as ambiguous) holds edges
+// only to the methods that remained, so walk their backedges as an insertion at `deleted->sig` would.
+static int invalidate_deleted_dispatch(jl_typemap_entry_t *deleted, size_t max_world) JL_CANSAFEPOINT
+{
+    jl_method_t *method = deleted->func.method;
+    jl_value_t *type = method->sig;
+    jl_array_t *shadowed = (jl_array_t*)intersect_matches(jl_atomic_load_relaxed(&jl_method_get_table(method)->defs),
+            collect_intersect_visitor, deleted, NULL, max_world, (size_t)-1, NULL);
+    if (shadowed == NULL)
+        return 0;
+    struct activate_env env = {max_world, 0, 0, /* .invalidated = */ 0, /* .why = */ "jl_method_table_disable"};
+    JL_GC_PUSH1(&shadowed);
+    for (size_t j = 0, n = jl_array_nrows(shadowed); j < n; j++) {
+        jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(shadowed, j);
+        if (!jl_type_morespecific(m->sig, type)) // otherwise m wins wherever both match
+            invalidate_method_dispatch(&env, m, type, NULL, 0, 0, NULL, NULL);
+    }
+    JL_GC_POP();
+    return env.invalidated;
 }
 
 void jl_method_table_activate(jl_typemap_entry_t *newentry)
@@ -4022,13 +4079,14 @@ void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array
         // Always set LATEST_WHICH and carry over NO_LOSERS from initialization and across precompilation
         METHOD_SIG_LATEST_WHICH | (precompiled_status & METHOD_SIG_NO_LOSERS),
         /* .invalidated = */ 0,
+        /* .why = */ "jl_method_table_insert",
     };
     if (oldvalue && replaced) {
         jl_method_t *m = replaced->func.method;
         env.invalidated = 1;
         method_overwrite(newentry, m);
         // This is an optimized version of below, given we know the type-intersection is exact
-        jl_method_table_invalidate(m, max_world, 0);
+        jl_method_table_invalidate(m, max_world, NULL);
         // The replacement strictly beats the replaced method (the recency
         // tiebreak in `jl_method_morespecific` for type-equal signatures).
         env.dispatch_bits &= ~METHOD_SIG_NO_LOSERS;
