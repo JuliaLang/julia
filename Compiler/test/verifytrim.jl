@@ -150,6 +150,37 @@ let infos = typeinf_ext_toplevel(Any[mi], [Base.get_world_counter()], TRIM_UNSAF
     @test !isempty(errors)
 end
 
+# The argument types here are abstract, so method lookup by type would hit an assertion.
+abstract_mi(f, argtypes) = Base.specialize_method(only(methods(f)), Tuple{typeof(f), argtypes...}, Core.svec())
+
+# calls to builtins that the verifier cannot check yet are errors
+for (f, argtypes, name) in Any[
+    ((f, x) -> Core.invoke(f, Tuple{Any}, x), (Any, Any), "Core.invoke"),
+    (f -> Core.invokelatest(f), (Any,), "Core.invokelatest"),
+    ((w, f) -> Core.invoke_in_world(w, f), (UInt, Any), "Core.invoke_in_world"),
+    ((w, f) -> Core._call_in_world_total(w, f), (UInt, Any), "Core._call_in_world_total"),
+    ((x, f) -> Core.modifyfield!(x, :x, f, 1, :sequentially_consistent), (Any, Any), "Core.modifyfield!"),
+    ((m, f) -> Core.modifyglobal!(m, :x, f, 1, :sequentially_consistent), (Any, Any), "Core.modifyglobal!"),
+    ((r, f) -> Core.memoryrefmodify!(r, f, 1, :not_atomic, false), (Any, Any), "Core.memoryrefmodify!"),
+]
+    infos = typeinf_ext_toplevel(Any[abstract_mi(f, argtypes)], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, parents = get_verify_typeinf_trim(infos)
+    (warn, desc) = only(errors)
+    @test !warn
+    @test desc.desc == "trim verification not yet implemented for builtin `$name`"
+end
+
+# the summary after the messages, and whether only warnings were found
+let infos = typeinf_ext_toplevel(Any[abstract_mi(f -> Core.invokelatest(f), (Any,))], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    @test endswith(sprint(TrimVerifier.verify_typeinf_trim, infos, true),
+                   "Trim verify finished with 1 error, 0 warnings.\n")
+    @test_throws Core.TrimFailure TrimVerifier.verify_typeinf_trim(devnull, infos, false)
+    infos = typeinf_ext_toplevel(Any[Core.svec(Int64, Tuple{typeof(ifelse), Bool, Int64, UInt64})], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    @test endswith(sprint(TrimVerifier.verify_typeinf_trim, infos, false),
+                   "Trim verify finished with 0 errors, 1 warning.\n")
+    @test sprint(TrimVerifier.verify_typeinf_trim, Any[], false) == ""
+end
+
 # TrimVerifier (and also `collectinvokes!`) should check the implicit `Libdl.dlopen`
 # call for foreign library types on first use of a `ccall` / `cglobal`
 struct StaticTrimLib end

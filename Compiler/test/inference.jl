@@ -8131,6 +8131,53 @@ A58257.B58257.get!    # Creates binding partition in A.B, N+1:∞
 Base.invoke_in_world(A58257.B58257.age, getglobal, A58257, :get!) # Expands binding partition in A through <N
 @test Base.infer_return_type(A58257.f) == typeof(Base.get!) # Attempt to lookup A.B in world age N hangs
 
+# global builtins with arguments of the wrong type, or the wrong number of arguments
+let VS = Tuple{Vararg{Symbol}}, VI = Tuple{Vararg{Int}}
+    CVE = ConcurrencyViolationError
+    for (f, argtypes, rt, exct) in Any[
+        (() -> getglobal(1, :x), (), Union{}, TypeError),
+        ((x, s) -> getglobal(x, s), (Int, Symbol), Union{}, TypeError),
+        ((m, s) -> getglobal(m, s), (Any, Symbol), Any, Union{TypeError, UndefVarError}),
+        ((m, s) -> getglobal(m, s, :monotonic, 1), (Module, Symbol), Union{}, ArgumentError),
+        ((m, xs) -> getglobal(m, :x, :monotonic, 1, xs...), (Module, VI), Union{}, ArgumentError),
+        ((m, xs) -> getglobal(m, xs...), (Module, VS), Any, Union{ArgumentError, CVE, TypeError, UndefVarError}),
+        (() -> Core.get_binding_type(1, :x), (), Union{}, TypeError),
+        (() -> Core.get_binding_type(Base, :pi), (), Core.TypeEgal{Any}, Union{}),
+        ((x, s) -> Core.get_binding_type(x, s), (Int, Symbol), Union{}, TypeError),
+        ((m, s) -> Core.get_binding_type(m, s), (Any, Symbol), Type, TypeError),
+        ((m, s) -> Core.get_binding_type(m, s, 1), (Module, Symbol), Union{}, ArgumentError),
+        ((m, xs) -> Core.get_binding_type(m, :x, 1, xs...), (Module, VI), Union{}, ArgumentError),
+        ((m, xs) -> Core.get_binding_type(m, xs...), (Module, VS), Type, Union{ArgumentError, TypeError}),
+        (v -> setglobal!(1, :x, v), (Int,), Union{}, Union{ErrorException, TypeError}),
+        ((x, s, v) -> setglobal!(x, s, v), (Int, Symbol, Int), Union{}, TypeError),
+        ((m, s, v) -> setglobal!(m, s, v, :monotonic, 1), (Module, Symbol, Int), Union{}, ArgumentError),
+        ((m, xs) -> setglobal!(m, :x, 1, :monotonic, 1, xs...), (Module, VI), Union{}, ArgumentError),
+        ((m, xs) -> setglobal!(m, xs...), (Module, VS), Any, Union{ArgumentError, CVE, ErrorException, TypeError}),
+        (v -> swapglobal!(1, :x, v), (Int,), Union{}, TypeError),
+        ((x, s, v) -> swapglobal!(x, s, v), (Int, Symbol, Int), Union{}, TypeError),
+        ((m, s) -> swapglobal!(m, s), (Module, Symbol), Union{}, ArgumentError),
+        ((m, xs) -> swapglobal!(m, :x, 1, :monotonic, 1, xs...), (Module, VI), Union{}, ArgumentError),
+        ((m, xs) -> swapglobal!(m, xs...), (Module, VS), Any, Union{ArgumentError, CVE, ErrorException, TypeError, UndefVarError}),
+        ((m, s) -> setglobalonce!(m, s), (Module, Symbol), Union{}, ArgumentError),
+        ((m, xs) -> setglobalonce!(m, :x, 1, :monotonic, :monotonic, 1, xs...), (Module, VI), Union{}, ArgumentError),
+        ((m, xs) -> setglobalonce!(m, xs...), (Module, VS), Bool, Union{ArgumentError, CVE, ErrorException, TypeError}),
+        ((m, s) -> replaceglobal!(m, s, 1), (Module, Symbol), Union{}, ArgumentError),
+        ((m, xs) -> replaceglobal!(m, :x, 1, 2, :monotonic, :monotonic, 1, xs...), (Module, VI), Union{}, ArgumentError),
+        ((m, xs) -> replaceglobal!(m, xs...), (Module, VS), Any, Union{ArgumentError, CVE, ErrorException, TypeError, UndefVarError}),
+        (() -> isdefinedglobal(1, :x), (), Union{}, TypeError),
+        ((x, s) -> isdefinedglobal(x, s), (Int, Symbol), Union{}, TypeError),
+        ((m, s) -> isdefinedglobal(m, s), (Any, Symbol), Bool, Union{TypeError, UndefVarError}),
+        ((m, s, o) -> isdefinedglobal(m, s, true, o), (Module, Symbol, Symbol), Bool, Union{CVE, UndefVarError}),
+        ((m, s) -> isdefinedglobal(m, s, true, :not_an_order), (Module, Symbol), Bool, Union{CVE, UndefVarError}),
+        ((m, s) -> isdefinedglobal(m, s, true, :unordered, 1), (Module, Symbol), Union{}, ArgumentError),
+        ((m, xs) -> isdefinedglobal(m, :x, true, :unordered, 1, xs...), (Module, VI), Union{}, ArgumentError),
+        ((m, xs) -> isdefinedglobal(m, xs...), (Module, VS), Bool, Union{CVE, TypeError, UndefVarError}),
+    ]
+        @test Base.infer_return_type(f, argtypes) === rt
+        @test Base.infer_exception_type(f, argtypes) === exct
+    end
+end
+
 # Tests for `reformulate_globals_pass!`.
 module ReformGlobals
     global g::Int = 0

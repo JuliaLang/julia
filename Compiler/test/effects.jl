@@ -1810,3 +1810,30 @@ relocatable_ptr(m) = m.ptr
 @test !any(get_code(c -> getfield(c ? relocatable_refs[1] : relocatable_refs[2], :ptr_or_offset), (Bool,))) do x
     x isa PhiNode && any(v -> v isa Ptr, x.values)
 end
+
+@testset "is_better_effects" begin
+    (; ALWAYS_TRUE, ALWAYS_FALSE) = Compiler
+    # each field's values, from best to worst
+    orders = (
+        :consistent => (ALWAYS_TRUE, Compiler.CONSISTENT_IF_NOTRETURNED, ALWAYS_FALSE),
+        :consistent => (ALWAYS_TRUE, Compiler.CONSISTENT_IF_INACCESSIBLEMEMONLY, ALWAYS_FALSE),
+        :effect_free => (ALWAYS_TRUE, Compiler.EFFECT_FREE_IF_INACCESSIBLEMEMONLY, ALWAYS_FALSE),
+        :reset_safe => (ALWAYS_TRUE, Compiler.RESET_SAFE_IF_INACCESSIBLEMEMONLY, ALWAYS_FALSE),
+        :nothrow => (true, false),
+        :terminates => (true, false),
+        :notaskstate => (true, false),
+        :inaccessiblememonly => (ALWAYS_TRUE, Compiler.INACCESSIBLEMEM_OR_ARGMEMONLY, ALWAYS_FALSE),
+        :noub => (ALWAYS_TRUE, Compiler.NOUB_IF_NOINBOUNDS, ALWAYS_FALSE),
+        :nonoverlayed => (ALWAYS_TRUE, Compiler.CONSISTENT_OVERLAY, ALWAYS_FALSE),
+        :nortcall => (true, false),
+    )
+    total = Compiler.EFFECTS_TOTAL
+    for (field, values) in orders, i in eachindex(values), j in eachindex(values)
+        new = Compiler.Effects(total; field => values[i])
+        old = Compiler.Effects(total; field => values[j])
+        @test Compiler.is_better_effects(new, old) == (i < j)
+    end
+    # better in one field but worse in another is not better
+    @test !Compiler.is_better_effects(Compiler.Effects(total; nothrow=false),
+                                      Compiler.Effects(total; terminates=false))
+end
