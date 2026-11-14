@@ -2053,6 +2053,16 @@ end
             @test cp(q, out) == out
             @test isfile(joinpath(dir, "elsewhere", "out", "f"))
         end
+        if Sys.islinux()
+            # a source that exists but cannot be resolved (#64807)
+            p = Pipe()
+            Base.link_pipe!(p)
+            close(p.in)
+            out = joinpath(dir, "frompipe")
+            @test cp("/proc/self/fd/$(reinterpret(Cint, Base._fd(p.out)))", out; follow_symlinks=true) == out
+            @test isfile(out)
+            close(p)
+        end
     end
 end
 @test mkpath("") == ""
