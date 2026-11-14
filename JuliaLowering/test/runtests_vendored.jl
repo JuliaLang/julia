@@ -1,17 +1,21 @@
 let old_active_project = Base.active_project(),
-    juliasyntax_path = normpath(joinpath(@__DIR__, "..", "..", "JuliaSyntax")),
-    pushed_load_path = false
+    dep_paths = [normpath(joinpath(@__DIR__, "..", "..", dep))
+                 for dep in ("JuliaSyntax", "BaseSyntax")],
+    pushed_load_paths = String[]
 
     try
         # test local (dev) copy of JuliaLowering, not the copy vendored into Base
         Base.set_active_project(joinpath(@__DIR__, "..", "Project.toml"))
 
-        # There is no manifest to say where the in-tree JuliaSyntax (the only non-stdlib
-        # dependency) is, so put it in `LOAD_PATH`. It has to precede the active project,
-        # since the search for a dependency that a project names stops at that project.
-        if juliasyntax_path ∉ LOAD_PATH
-            pushfirst!(LOAD_PATH, juliasyntax_path)
-            pushed_load_path = true
+        # There is no manifest to say where the in-tree JuliaSyntax and BaseSyntax (the only
+        # non-stdlib dependencies) are, so put them in `LOAD_PATH`. They have to precede the
+        # active project, since the search for a dependency that a project names stops at
+        # that project.
+        for dep_path in dep_paths
+            if dep_path ∉ LOAD_PATH
+                pushfirst!(LOAD_PATH, dep_path)
+                push!(pushed_load_paths, dep_path)
+            end
         end
 
         # restore error hints (emptied by `testdefs.jl`) so that errors print as
@@ -27,8 +31,8 @@ let old_active_project = Base.active_project(),
         @test all(s -> which(Main, s) === Base.MainInclude, (:ans, :err))
     finally
         # Restore original load path and active project
-        if pushed_load_path
-            i = findfirst(==(juliasyntax_path), LOAD_PATH)
+        for dep_path in pushed_load_paths
+            i = findfirst(==(dep_path), LOAD_PATH)
             i === nothing || deleteat!(LOAD_PATH, i)
         end
         Base.set_active_project(old_active_project)
