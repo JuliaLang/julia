@@ -319,7 +319,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
             # equivalent to cld(x-tt,y+t), avoid intermediate rounding
             yt = y + t
             yr = x % yt - tt % yt
-            a_min = round((x - (tt + yr)) / yt) + (yr > 0)
+            a_min = min(a, round((x - (tt + yr)) / yt) + (yr > 0))
         end
     end
 
