@@ -3347,10 +3347,13 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     if isa(e, QuoteNode)
         e = e.value
     end
-    effects = Effects(EFFECTS_TOTAL;
-        inaccessiblememonly = is_mutation_free_argtype(typeof(e)) ? ALWAYS_TRUE : ALWAYS_FALSE)
-    return RTEffects(Const(e), Union{}, effects)
+    rt = Const(e)
+    return RTEffects(rt, Union{}, constant_effects(rt))
 end
+
+# obtaining a constant that refers to mutable memory reaches that memory (see `:inaccessiblememonly`)
+constant_effects(@nospecialize rt) = is_mutation_free_argtype(rt) ? EFFECTS_TOTAL :
+    Effects(EFFECTS_TOTAL; inaccessiblememonly=ALWAYS_FALSE)
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::AbsIntState)
     @assert e.head !== :(=)
@@ -4176,8 +4179,7 @@ function abstract_eval_partition_load(binding::Core.Binding, partition::Core.Bin
             return RTEffects(Any, UndefVarError, local_getglobal_effects)
         end
         rt = Const(partition_restriction(partition))
-        return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL,
-            inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE,
+        return RTEffects(rt, Union{}, Effects(constant_effects(rt);
             effect_free=isdepwarn ? ALWAYS_FALSE : ALWAYS_TRUE))
     end
 

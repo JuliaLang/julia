@@ -3193,6 +3193,8 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return Effects(EFFECTS_TOTAL;
             consistent = ALWAYS_FALSE,
             notaskstate = false,
+            # the scope of the task can refer to any mutable object
+            inaccessiblememonly = ALWAYS_FALSE,
             nothrow)
     elseif f === Core._task
         return TASK_BUILTIN_EFFECTS
