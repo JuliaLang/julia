@@ -440,6 +440,11 @@ c = Dates.Date(2013, 6, 1)
 @test [a:Dates.Month(1):c;] == [a + Dates.Month(1)*i for i in 0:5]
 @test [a:Dates.Month(2):Dates.Date(2013, 1, 2);] == [a]
 @test [c:Dates.Month(-1):a;] == reverse([a:Dates.Month(1):c;])
+# a clamped day (Jan 31 + 1 month) must not shift later elements
+let r = Dates.Date(2019, 1, 31):Dates.Month(1):Dates.Date(2019, 3, 29)
+    @test collect(r) == [Dates.Date(2019, 1, 31), Dates.Date(2019, 2, 28)]
+    @test Dates.Date(2019, 3, 31) ∉ r
+end
 
 @test length(range(Date(2000), step=Dates.Day(1), length=366)) == 366
 let n = 100000

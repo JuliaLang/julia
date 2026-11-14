@@ -23,8 +23,8 @@ function len(a, b, c)
     prev = v  # Ensure `v` does not overflow
     while v <= hi && prev <= v
         prev = v
-        v += st
         i += 1
+        v = lo + st * i  # month and year steps clamp the day, so repeated `+ st` can drift
     end
     return i - 1
 end
