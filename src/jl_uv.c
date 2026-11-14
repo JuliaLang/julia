@@ -133,6 +133,16 @@ void jl_wake_signal_watchers(void)
     uv_async_send(&signal_watch_async);
 }
 
+// Called with the IO lock held. While a condition is open the handle keeps the loop polling,
+// so its notification is dispatched even when no other handle is active.
+void jl_ref_signal_watchers(int ref)
+{
+    if (ref)
+        uv_ref((uv_handle_t*)&signal_watch_async);
+    else
+        uv_unref((uv_handle_t*)&signal_watch_async);
+}
+
 jl_mutex_t jl_uv_mutex;
 int jl_uv_loop_unwatched = 0;
 
