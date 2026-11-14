@@ -68,7 +68,7 @@ function read_until_end(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
     buffer = pipe.buffer
     i = 0
     b1 = b2 = b3 = b4 = BASE64_CODE_IGN
-    while true
+    while p < p_end
         if b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 < 0x40 && p + 2 < p_end
             # fast path to decode
             unsafe_store!(p    , b1 << 2 | b2 >> 4)
@@ -104,31 +104,46 @@ function read_until_end(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
 end
 
 function Base.read(pipe::Base64DecodePipe, ::Type{UInt8})
-    if isempty(pipe.rest)
-        unsafe_read(pipe, convert(Ptr{UInt8}, C_NULL), 0)
-        if isempty(pipe.rest)
-            throw(EOFError())
-        end
-    end
-    return popfirst!(pipe.rest)
+    isempty(pipe.rest) || return popfirst!(pipe.rest)
+    return read!(pipe, Ref{UInt8}())[]
 end
 
-function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb::Integer=length(data))
+function Base.peek(pipe::Base64DecodePipe, ::Type{UInt8})
+    isempty(pipe.rest) && pushfirst!(pipe.rest, read(pipe, UInt8))
+    return first(pipe.rest)
+end
+
+function Base.readbytes!(pipe::Base64DecodePipe, data::MutableDenseArrayType{UInt8}, nb::Integer=length(data))
     require_one_based_indexing(data)
+    olb = lb = length(data)
     filled::Int = 0
-    while filled < nb && !eof(pipe)
-        if length(data) == filled
-            resize!(data, min(max(length(data) * 2, 1024), nb))
+    GC.@preserve data while filled < nb && !eof(pipe)
+        if lb == filled
+            lb = min(max(lb * 2, 1024), nb)
+            resize!(data, lb)
         end
         p = pointer(data, filled + 1)
-        p_end = read_until_end(pipe, p, UInt(min(length(data), nb) - filled))
+        p_end = read_until_end(pipe, p, UInt(min(lb, nb) - filled))
         filled += p_end - p
     end
-    resize!(data, filled)
+    lb > olb && resize!(data, max(olb, filled))
     return filled
 end
 
-Base.eof(pipe::Base64DecodePipe) = isempty(pipe.rest) && eof(pipe.io)::Bool
+function Base.eof(pipe::Base64DecodePipe)
+    isempty(pipe.rest) || return false
+    buffer = pipe.buffer
+    while true
+        i = 0
+        while i < buffer.size && decode(buffer[i + 1]) == BASE64_CODE_IGN
+            i += 1
+        end
+        consumed!(buffer, i)
+        buffer.size > 0 && return false
+        eof(pipe.io) && return true
+        read_to_buffer(pipe.io, buffer)
+    end
+end
 Base.close(pipe::Base64DecodePipe) = nothing
 
 # Decode data from (b1, b2, b3, b4, buffer, input) into (ptr, rest).
