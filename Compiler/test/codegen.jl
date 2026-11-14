@@ -1687,3 +1687,27 @@ let v = Any[typemax(Int)], w = Any[nothing]
     recopy_union!(w, v, 1000)
     @test w[1] === 1000
 end
+
+# a call that leaves a static parameter undefined runs compiled code (#63046)
+@noinline function sum_undef_sparam!(out::Base.RefValue{T}, x::Vector{T}, w::Union{Nothing,Vector{S}}) where {T,S}
+    total = zero(T)
+    for i in eachindex(x)
+        total += w === nothing ? x[i] : w[i] * x[i]
+    end
+    out[] = total
+    nothing
+end
+@noinline function sum_undef_sparam_type!(out::Base.RefValue{R}, ::Type{R}, x::Vector{T}, w::Union{Nothing,Vector{S}}) where {R,T,S}
+    total = zero(R)
+    for i in eachindex(x)
+        total += w === nothing ? x[i] : w[i] * x[i]
+    end
+    out[] = total
+    nothing
+end
+let out = Ref(0.0), x = collect(1.0:16.0)
+    sum_undef_sparam!(out, x, nothing)
+    @test (@allocated sum_undef_sparam!(out, x, nothing)) == 0
+    sum_undef_sparam_type!(out, Float64, x, nothing)
+    @test (@allocated sum_undef_sparam_type!(out, Float64, x, nothing)) == 0
+end
