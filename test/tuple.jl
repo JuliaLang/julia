@@ -902,6 +902,8 @@ end
 @test_throws ErrorException("Tuple field type cannot be Union{}") Tuple{Vararg{Union{},1}}
 @test Tuple{} <: Tuple{Vararg{Union{},N}} where N
 @test !(Tuple{} >: Tuple{Vararg{Union{},N}} where N)
+@test (() -> () isa (NTuple{N,Union{}} where N))()
+@test (x -> x isa Tuple{Int,Vararg{1}})((1,))
 
 @test Val{Tuple{T,T,T} where T} === Val{Tuple{Vararg{T,3}} where T}
 @test Val{Tuple{Vararg{T,4}} where T} === Val{Tuple{T,T,T,T} where T}
