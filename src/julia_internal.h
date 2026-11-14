@@ -1604,7 +1604,18 @@ JL_DLLEXPORT size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_linkage_blob_dep_world(size_t image, size_t blob) JL_NOTSAFEPOINT;
 // The world since which every method on the typenames of `sig` in `mt` came from `image` or one of its dependencies, else 0.
 JL_DLLEXPORT size_t jl_sig_contributors_world(jl_value_t *sig, jl_methtable_t *mt, size_t image) JL_CANSAFEPOINT;
-void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array_t *record, size_t image, jl_array_t *deferred) JL_CANSAFEPOINT;
+// What the methods of one image share while they are activated, all in the same world
+typedef struct {
+    // (MethodInstance, signature) pairs whose dispatch cache invalidation is applied in one
+    // pass afterwards, or NULL to apply each right away
+    jl_array_t *deferred;
+    // The specialization lists that have digests in `digests`, which this keeps alive
+    jl_array_t *digested;
+    htable_t digests; // specializations svec => its `spec_digest_t`s
+} jl_activation_batch_t;
+void jl_activation_batch_init(jl_activation_batch_t *batch) JL_NOTSAFEPOINT;
+void jl_activation_batch_free(jl_activation_batch_t *batch) JL_NOTSAFEPOINT;
+void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array_t *record, size_t image, jl_activation_batch_t *batch) JL_CANSAFEPOINT;
 // The ext_backinterferences of a method: It is the back direction of `interferences`, computed for external methods during incremental precompile.
 JL_DLLEXPORT jl_value_t *jl_get_ext_backinterferences(jl_method_t *method) JL_NOTSAFEPOINT;
 extern JL_DLLEXPORT jl_genericmemory_t *jl_ext_backinterferences JL_GLOBALLY_ROOTED;
