@@ -593,6 +593,23 @@ JL_DLLEXPORT int8_t jl_is_memdebug(void) JL_NOTSAFEPOINT {
 }
 
 /**
+ * @brief Get the version of rr's software-ticks ABI that the runtime was compiled for.
+ *
+ * Compilers that instrument code for rr's software ticks (rr-debugger/rr#4104) predefine
+ * `__RR_SOFTTICKS__` to the version of the ABI.
+ *
+ * @return Returns that version, or 0 if the runtime was not compiled for software ticks.
+ */
+JL_DLLEXPORT int jl_softticks_abi_version(void) JL_NOTSAFEPOINT
+{
+#ifdef __RR_SOFTTICKS__
+    return __RR_SOFTTICKS__;
+#else
+    return 0;
+#endif
+}
+
+/**
  * @brief Get the directory path of the Julia binary.
  *
  * @return A pointer to `jl_value_t` representing the directory path as a Julia string.

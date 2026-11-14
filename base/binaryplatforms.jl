@@ -308,8 +308,10 @@ end
 get_compare_strategy(p::AbstractPlatform, key::String, default = compare_default) = default
 
 # Tags for which absence is meaningful: a platform without the tag only matches
-# platforms that also lack it (rather than acting as a wildcard).
-const strict_presence_tags = ("sanitize",)
+# platforms that also lack it (rather than acting as a wildcard).  `sanitize` marks
+# binaries built with a sanitizer, `rr_softticks` binaries instrumented for rr's
+# software ticks (the value is the version of the ABI).
+const strict_presence_tags = ("sanitize", "rr_softticks")
 
 
 """
@@ -1071,15 +1073,42 @@ function detect_cxxstring_abi()
 end
 
 """
-    host_triplet(build_triplet::String = Base.BUILD_TRIPLET, ext_tags::String = Base.BUILD_EXT_TAGS)
+    detect_rr_softticks()
+
+Return the version of rr's software-ticks ABI that the Julia runtime was compiled for (the
+value of `__RR_SOFTTICKS__`, which compilers that instrument code for it predefine), or
+`nothing` if it was not compiled for software ticks.
+"""
+function detect_rr_softticks()
+    version = ccall(:jl_softticks_abi_version, Cint, ())
+    return version == 0 ? nothing : Int(version)
+end
+
+"""
+    build_ext_tags()
+
+Return the extended tags (`-key+value`) that describe this build of Julia: the ones
+recorded by the build in `Base.BUILD_EXT_TAGS` (e.g. `-sanitize+address`), followed by
+`-rr_softticks+<version>` if the runtime was compiled for rr's software ticks (see
+`detect_rr_softticks()`).
+"""
+function build_ext_tags()
+    rr_softticks = detect_rr_softticks()
+    rr_softticks === nothing && return Base.BUILD_EXT_TAGS
+    return string(Base.BUILD_EXT_TAGS, "-rr_softticks+", rr_softticks)
+end
+
+"""
+    host_triplet(build_triplet::String = Base.BUILD_TRIPLET, ext_tags::String = build_ext_tags())
 
 Build host triplet out of `Sys.MACHINE` and various introspective utilities that
 detect compiler ABI values such as `libgfortran_version`, `libstdcxx_version` and
 `cxxstring_abi`.  We do this without using any `Platform` tech as it must run before
-we have much of that built.  Extended tags recorded by the build (e.g. `-sanitize+address`)
-are appended after the compiler ABI tags, as the triplet grammar requires.
+we have much of that built.  The extended tags that describe the build (e.g.
+`-sanitize+address`, see `build_ext_tags()`) are appended after the compiler ABI tags,
+as the triplet grammar requires.
 """
-function host_triplet(build_triplet::String = Base.BUILD_TRIPLET, ext_tags::String = Base.BUILD_EXT_TAGS)
+function host_triplet(build_triplet::String = Base.BUILD_TRIPLET, ext_tags::String = build_ext_tags())
     str = build_triplet
 
     if !occursin("-libgfortran", str)
@@ -1146,9 +1175,11 @@ only available in macOS `v"10.11"` and later, or an artifact can state that it r
 a libstdc++ that is at least `v"3.4.22"`, etc...
 
 Keys present in only one of `a` or `b` are normally ignored, with the exception of the
-`sanitize` tag: a sanitized platform (e.g. `x86_64-linux-gnu-sanitize+memory`) never
-matches a platform without a `sanitize` tag, since instrumented and uninstrumented
-binaries cannot be mixed.
+`sanitize` and `rr_softticks` tags: a sanitized platform (e.g.
+`x86_64-linux-gnu-sanitize+memory`) never matches an unsanitized platform, since sanitized and
+unsanitized binaries cannot be mixed, and a platform built for rr's software ticks (e.g.
+`x86_64-linux-gnu-rr_softticks+1`) never matches one without that tag, so that such a build never
+uses uninstrumented artifacts by accident.
 """
 function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
     for k in union(keys(tags(a)::Dict{String,String}), keys(tags(b)::Dict{String,String}))

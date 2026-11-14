@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# RUN: julia --startup-file=no -O2 %s %t -O && llvm-link -S %t/* | FileCheck %s
+# COM: without software ticks (src/llvm-softticks.cpp), which would follow the setjmp in a
+# COM: Julia built for them
+# RUN: env JULIA_LLVM_ARGS=-julia-softticks=0 julia --startup-file=no -O2 %s %t -O && llvm-link -S %t/* | FileCheck %s
 
 include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 
