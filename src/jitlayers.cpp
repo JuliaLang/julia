@@ -1192,7 +1192,7 @@ private:
     jl_invoke_api_t API;
 };
 
-#if defined(LLVM_SHLIB)
+#if defined(LLVM_SHLIB) || defined(JL_USE_FRAMEHOP)
 namespace JLEHFrames {
 static Error registerEHFrames(orc::ExecutorAddrRange EHFrameSection) {
     register_eh_frames(EHFrameSection.Start.toPtr<uint8_t *>(), static_cast<size_t>(EHFrameSection.size()));
@@ -1872,9 +1872,9 @@ JuliaOJIT::JuliaOJIT()
     OptimizeLayer(ES, JITPointersLayer, IRTransformRef(*Optimizers)),
     DebuginfoPlugin(std::make_shared<JLDebuginfoPlugin>())
 {
-    // LLVM 21+ removed EHFrameRegistrar. Use our own plugin for custom registration
-    // when dynamically linking, plus the built-in plugin for standard registration.
-# if defined(LLVM_SHLIB)
+    // LLVM 21+ removed EHFrameRegistrar. Use our own plugin when dynamically linking
+    // against LLVM or using framehop; register_eh_frames preserves system registration.
+# if defined(LLVM_SHLIB) || defined(JL_USE_FRAMEHOP)
     ObjectLayer.addPlugin(std::make_unique<EHFrameRegistrationPlugin>(
         ExecutorAddr::fromPtr(JLEHFrames::registerEHFrameSectionAllocAction),
         ExecutorAddr::fromPtr(JLEHFrames::deregisterEHFrameSectionAllocAction)));
