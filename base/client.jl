@@ -31,17 +31,19 @@ answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answ
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
-function repl_cmd(cmd::AbstractCmd, out)
+# Run a command typed in REPL shell mode and return whether it succeeded. `cd` is handled
+# here, printing the new directory to `out`; other commands run through the user's shell on
+# Unix. An error running a command is displayed rather than thrown, but other errors, such as
+# one from `cd`, are thrown.
+function _repl_cmd(cmd::AbstractCmd, out)
     if !(cmd isa Cmd)
         # Pipelines and redirects: run directly without shell wrapping.
         try
-            run(ignorestatus(cmd))
+            return _succeeded(run(ignorestatus(cmd)))
         catch
-            lasterr = current_exceptions()
-            lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
-            invokelatest(display_error, lasterr)
+            _display_repl_cmd_error()
         end
-        return nothing
+        return false
     end
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
@@ -68,6 +70,7 @@ function repl_cmd(cmd::AbstractCmd, out)
         end
         cd(dir)
         println(out, pwd())
+        return true
     else
         if !Sys.iswindows()
             shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
@@ -76,19 +79,64 @@ function repl_cmd(cmd::AbstractCmd, out)
             cmd = Cmd(`$shell -c $shell_escape_cmd`, original_cmd.ignorestatus, original_cmd.flags, original_cmd.env, original_cmd.dir, original_cmd.cpus, original_cmd.uid, original_cmd.gid)
         end
         try
-            run(ignorestatus(cmd))
+            return _succeeded(run(ignorestatus(cmd)))
         catch
             # Julia throws an exception if it can't find the cmd (which may be the shell itself), but the stack trace isn't useful
-            lasterr = current_exceptions()
-            lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
-            invokelatest(display_error, lasterr)
+            _display_repl_cmd_error()
         end
+        return false
     end
-    nothing
 end
 
-repl_cmd(@nospecialize(cmd), out) =
+_repl_cmd(@nospecialize(cmd), out) =
     throw(ArgumentError("repl_cmd: expected an `AbstractCmd`, got $(typeof(cmd))"))
+
+# Whether a process, or the last process of a pipeline, exited successfully, as in a shell.
+_succeeded(p::Process) = success(p)
+_succeeded(p::ProcessChain) = success(p.processes[end])
+
+# Display the current exception without its backtrace, which is not useful to the user.
+function _display_repl_cmd_error()
+    lasterr = current_exceptions()
+    lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
+    invokelatest(display_error, lasterr)
+    return nothing
+end
+
+repl_cmd(cmd, out) = (_repl_cmd(cmd, out); nothing)
+
+# Build the command that `f` returns and run it as `_repl_cmd` does, for a command in a
+# sequence typed in REPL shell mode. Returns whether it succeeded; any error, including one
+# building the command, is displayed and counts as a failure.
+function _repl_cmd_step(f, out)
+    try
+        return _repl_cmd(f(), out)
+    catch
+        _display_repl_cmd_error()
+        return false
+    end
+end
+
+# The expression that REPL shell mode evaluates for the line `line`, writing the output of
+# `cd` to `out`. Commands joined by `&&`, `||` and `;` run as in a shell: `a && b` runs `b`
+# only if `a` succeeds, `a || b` only if it fails, and `a; b` in any case, where `&&` and `||`
+# have equal precedence and group to the left. Each command is built just before it runs, so
+# it sees the effects of the commands before it, such as a `cd`.
+function shell_mode_expr(line::AbstractString, out)
+    commands = shell_parse_sequence(line)
+    built(ex) = Meta.isexpr(ex, :tuple) ? Expr(:call, GlobalRef(Base, :cmd_gen), ex) : ex
+    if length(commands) == 1
+        return Expr(:call, GlobalRef(Base, :repl_cmd), built(commands[1].second), out)
+    end
+    ok = gensym(:ok)
+    body = Any[]
+    for (op, ex) in commands
+        step = Expr(:call, GlobalRef(Base, :_repl_cmd_step), Expr(:->, Expr(:tuple), built(ex)), out)
+        push!(body, op === :and ? :($ok = $ok && $step) :
+                    op === :or  ? :($ok = $ok || $step) : :($ok = $step))
+    end
+    return Expr(:let, Expr(:block), Expr(:block, body..., nothing))
+end
 
 # deprecated function--preserved for DocTests.jl
 function ip_matches_func(ip, func::Symbol)

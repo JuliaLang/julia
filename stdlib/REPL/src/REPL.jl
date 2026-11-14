@@ -1437,15 +1437,11 @@ function setup_interface(
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = ShellCompletionProvider(),
-        # Transform "foo bar baz" into `foo bar baz` (shell quoting)
-        # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
-        # special)
+        # Transform "foo bar baz" into `foo bar baz` (shell quoting), and a sequence joined
+        # by `&&`, `||` and `;` into code that runs its commands, each through
+        # Base.repl_cmd (which handles `cd` specially)
         on_done = respond(repl, julia_prompt) do line
-            cmd_ex = Base.shell_parse(line::String)[1]
-            if Meta.isexpr(cmd_ex, :tuple)
-                cmd_ex = :(Base.cmd_gen($cmd_ex))
-            end
-            expr_to_syntax(Expr(:call, :(Base.repl_cmd), cmd_ex, outstream(repl)))
+            expr_to_syntax(Base.shell_mode_expr(line::String, outstream(repl)))
         end,
         sticky = true)
 

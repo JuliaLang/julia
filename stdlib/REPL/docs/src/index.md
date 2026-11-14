@@ -159,6 +159,26 @@ julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 shell> echo hello
 hello
 ```
+
+A line in shell mode is parsed like a [command literal](@ref Running-External-Programs), so
+pipelines, redirection and interpolation work as they do in backticks. In addition, commands can
+be joined with `&&`, `||` and `;`, as in a shell: `a && b` runs `b` only if `a` succeeds,
+`a || b` runs `b` only if `a` fails, and `a; b` runs both. `&&` and `||` have equal precedence
+and group to the left. Each command is built just before it runs, so it sees the effects of the
+commands before it, such as a `cd`:
+
+```julia-repl
+shell> cd /tmp && pwd
+/tmp
+/tmp
+
+shell> false || echo fallback
+fallback
+```
+
+As in command literals, the characters `#`, `(`, `)` and a single `&` must be quoted:
+shell mode does not support comments, subshells or running commands in the background.
+
 !!! note
     For Windows users, Julia's shell mode does not expose windows shell commands.
     Hence, this will fail:
