@@ -203,12 +203,11 @@ end
 const _mem_units = ["byte", "KiB", "MiB", "GiB", "TiB", "PiB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]
 function prettyprint_getunits(value, numunits, factor)
-    if value == 0 || value == 1
-        return (value, 1)
+    unit = 1
+    while unit < numunits && abs(value) >= factor^unit
+        unit += 1
     end
-    unit = ceil(Int, log(value) / log(factor))
-    unit = min(numunits, unit)
-    number = value/factor^(unit-1)
+    number = unit == 1 ? value : value/factor^(unit-1)
     return number, unit
 end
 
@@ -233,8 +232,11 @@ Format a given number of bytes into a human-readable string.
 
 # Examples
 ```jldoctest
+julia> Base.format_bytes(1023)
+"1023 bytes"
+
 julia> Base.format_bytes(1024)
-"1024 bytes"
+"1.000 KiB"
 
 julia> Base.format_bytes(10000)
 "9.766 KiB"
@@ -248,7 +250,8 @@ function format_bytes(bytes; binary=true) # also used by InteractiveUtils
     factor = binary ? 1024 : 1000
     bytes, mb = prettyprint_getunits(bytes, length(units), Int64(factor))
     if mb == 1
-        return string(Int(bytes), " ", _mem_units[mb], bytes==1 ? "" : "s")
+        number = isinteger(bytes) ? string(Int(bytes)) : Ryu.writefixed(Float64(bytes), 3)
+        return string(number, " ", _mem_units[mb], bytes==1 ? "" : "s")
     else
         return string(Ryu.writefixed(Float64(bytes), 3), binary ? " $(units[mb])" : "$(units[mb])B")
     end
