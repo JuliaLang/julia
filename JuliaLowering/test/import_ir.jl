@@ -56,10 +56,11 @@ function f()
     import A: b
 end
 #---------------------
-LoweringError:
+this syntax is only allowed at top level
+@ :2
 function f()
     import A: b
-#   └─────────┘ ── this syntax is only allowed at top level
+#   └─────────┘
 end
 
 ########################################
