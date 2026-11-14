@@ -117,6 +117,7 @@ mutable struct _ShellParser{S<:AbstractString}
     last_arg::Int             # start of the last argument in `str`, for REPLCompletions
     update_last_arg::Bool     # whether the next character of a word starts a new argument
     in_brace::Int             # how many brace expansions are being parsed
+    assign_ok::Bool           # whether the next word may be an environment assignment
 end
 
 _at_end(p::_ShellParser) = p.pos > lastindex(p.s)
@@ -306,17 +307,41 @@ function _parse_tilde!(p::_ShellParser, word::Vector{Any})
     return nothing
 end
 
+# If the word at `p.pos` starts with an environment assignment, an unquoted `NAME=` where
+# `NAME` is a letter or `_` followed by letters, digits and `_`, consume the `NAME=` and return
+# `NAME`; the rest of the word is its value. Otherwise return `nothing`.
+function _parse_assignment!(p::_ShellParser)
+    i = p.pos
+    c = p.s[i]
+    ('a' <= c <= 'z' || 'A' <= c <= 'Z' || c == '_') || return nothing
+    while true
+        i = nextind(p.s, i)
+        i > lastindex(p.s) && return nothing
+        c = p.s[i]
+        c == '=' && break
+        ('a' <= c <= 'z' || 'A' <= c <= 'Z' || '0' <= c <= '9' || c == '_') || return nothing
+    end
+    name = String(p.s[p.pos:prevind(p.s, i)])
+    p.pos = p.lit = nextind(p.s, i)
+    return name
+end
+
 # Parse one word into `word`, a list of literal strings and parts to interpolate. At the top
 # level, a word ends before unquoted whitespace or a pipeline or redirection operator. In a
 # brace expansion, it ends before a `,` or `}` that ends the alternative, and unquoted
 # whitespace and operators are reported in `bad` instead. Returns `(; stop, special, expanded,
 # dotdot, bad, glob)`: the character the word ended before (`'\0'` at the end of the command),
 # whether the word has quoted, escaped or expanded text, whether it has a brace expansion,
-# whether it has an unquoted `..`, the first bad character or `'\0'`, and whether the word
-# is a glob, in which case `word` holds the single expression that expands it.
+# whether it has an unquoted `..`, the first bad character or `'\0'`, whether the word is a
+# glob, in which case `word` holds the single expression that expands it, and the name of the
+# environment assignment the word starts with, or `nothing`, in which case `word` is its value.
 function _parse_word!(p::_ShellParser, word::Vector{Any})
     special = expanded = dotdot = false
     bad = '\0'
+    assign = nothing
+    if p.assign_ok && p.interpolate && !p.partial && p.in_brace == 0 && !_at_end(p)
+        assign = _parse_assignment!(p)
+    end
     depth = 0 # braces in a brace expansion that are literal, as in `{a,{b}}`
     while !_at_end(p)
         c = _char(p)
@@ -383,9 +408,15 @@ function _parse_word!(p::_ShellParser, word::Vector{Any})
     _flush!(p, word)
     p.lit = p.pos
     stop = _at_end(p) ? '\0' : _char(p)
-    glob = p.in_brace == 0 && _glob_word!(p, word)
-    special |= glob
-    return (; stop, special, expanded, dotdot, bad, glob)
+    if assign === nothing
+        glob = p.in_brace == 0 && _glob_word!(p, word)
+        special |= glob
+    else
+        # as in sh, the value of an assignment is not a glob
+        glob = false
+        map!(x -> x isa _GlobChar ? string(x.c) : x, word, word)
+    end
+    return (; stop, special, expanded, dotdot, bad, glob, assign)
 end
 
 _special_error(p::_ShellParser) =
@@ -493,18 +524,28 @@ end
 # One command of a pipeline: its words and its redirection targets (`nothing` if not redirected).
 mutable struct _ShellSegment
     args::Vector{Any}
+    env::Vector{Pair{String,Any}} # environment assignments before the first argument
     stdin::Any
     stdout::Any
     stderr::Any
     stdout_append::Bool
     stderr_append::Bool
 end
-_ShellSegment() = _ShellSegment(Any[], nothing, nothing, nothing, false, false)
+_ShellSegment() = _ShellSegment(Any[], Pair{String,Any}[], nothing, nothing, nothing, false, false)
 
 # Finish a word: it becomes the target of the pending redirection, if there is one, and
 # otherwise an argument. A partial parse keeps redirection targets as arguments, so that they
 # can be completed like any other word. Returns the redirection still waiting for a target.
 function _finish_word!(p::_ShellParser, seg::_ShellSegment, word::Vector{Any}, w, redirect::Symbol)
+    if w.assign !== nothing
+        w.expanded && error("parsing command `$(p.str)`: brace expansion in an environment assignment")
+        value = isempty(word) ? "" :
+            length(word) == 1 && word[1] isa String ? word[1] :
+            Expr(:call, GlobalRef(Base, :cmd_interpolate), word...)
+        push!(seg.env, w.assign => value)
+        empty!(word)
+        return redirect
+    end
     isempty(word) && !w.special && return redirect
     if redirect === :none || p.partial
         push!(seg.args, isempty(word) ? Any[""] : copy(word))
@@ -528,6 +569,10 @@ end
 
 function _segment_expr(seg::_ShellSegment)
     ex = Expr(:call, GlobalRef(Base, :cmd_gen), Expr(:tuple, Any[Expr(:tuple, w...) for w in seg.args]...))
+    if !isempty(seg.env)
+        ex = Expr(:call, GlobalRef(Base, :addenv), ex,
+                  Any[Expr(:call, GlobalRef(Base, :(=>)), k, v) for (k, v) in seg.env]...)
+    end
     if seg.stdin !== nothing || seg.stdout !== nothing
         kwargs = Any[]
         seg.stdin !== nothing && push!(kwargs, Expr(:kw, :stdin, seg.stdin))
@@ -557,18 +602,19 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
     s = rstrip_shell(lstrip(SubString(str, firstindex(str))))
     isempty(s) && return interpolate ? (Expr(:tuple,:()), firstindex(str)) : ([], firstindex(str))
     p = _ShellParser(s, str, interpolate, partial, String(special), String(filename),
-                     firstindex(s), firstindex(s), firstindex(str), false, 0)
+                     firstindex(s), firstindex(s), firstindex(str), false, 0, false)
 
     segments = [_ShellSegment()]
     redirect = :none # the redirection waiting for its target
     word = Any[]
     while true
-        w = _parse_word!(p, word)
         seg = segments[end]
+        p.assign_ok = isempty(seg.args) && redirect === :none
+        w = _parse_word!(p, word)
         # A word of digits right before `<` or `>` is a file descriptor, as in `2>`, even
         # where a filename is expected, so `2>2>f` is missing a filename, as in sh.
         fd = nothing
-        if (w.stop == '<' || w.stop == '>') && !w.special &&
+        if (w.stop == '<' || w.stop == '>') && !w.special && w.assign === nothing &&
                 length(word) == 1 && (d = word[1]; d isa String && all(isdigit, d))
             redirect === :none || error("parsing command `$str`: redirect operator without filename")
             fd = parse(Int, d)
@@ -616,9 +662,13 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
         isempty(args) && return Expr(:tuple, :()), p.last_arg
         return Expr(:tuple, Any[Expr(:tuple, w...) for w in args]...), p.last_arg
     end
+    for seg in segments
+        isempty(seg.args) && !isempty(seg.env) &&
+            error("parsing command `$str`: environment assignment without a command")
+    end
     if length(segments) == 1
         seg = segments[1]
-        if seg.stdin === nothing && seg.stdout === nothing && seg.stderr === nothing
+        if isempty(seg.env) && seg.stdin === nothing && seg.stdout === nothing && seg.stderr === nothing
             return Expr(:tuple, Any[Expr(:tuple, w...) for w in seg.args]...), p.last_arg
         end
         isempty(seg.args) && error("parsing command `$str`: redirection without a command")
