@@ -2170,6 +2170,49 @@ let buf = FastReadBuffer62001()
     @test Base.allocated(read_byte62001, buf, UInt8) == 0
 end
 
+# A method that declares a concrete `Type{X}` slot has one compiled specialization,
+# shared by runtime dispatch and inferred calls (#63611)
+struct SharedCtor63611
+    n::Int
+end
+@noinline SharedCtor63611(s::String) = SharedCtor63611(length(s))
+@noinline shared_ctor_caller63611(s::String) = SharedCtor63611(s)
+let m = only(methods(SharedCtor63611, (String,)))
+    @test Base.invokelatest(SharedCtor63611, "abc").n == 3
+    @test Base.invokelatest(shared_ctor_caller63611, "abc").n == 3
+    compiled = Any[mi.specTypes for mi in Base.specializations(m)
+                   if isdefined(mi, :cache) && mi.cache.invoke != C_NULL]
+    @test compiled == Any[Tuple{Core.TypeEgal{SharedCtor63611}, String}]
+end
+
+# Non-inlined constructor calls honor `@nospecialize`
+struct NoSpecializeCtor63611
+    a::Any
+end
+NoSpecializeCtor63611(@nospecialize(a), i::Int) = (@noinline; NoSpecializeCtor63611(a))
+let src = code_typed1((Vector{Float32},)) do v
+        NoSpecializeCtor63611(v, 1)
+    end
+    @test count(src.code) do @nospecialize x
+        Meta.isexpr(x, :invoke) &&
+        (x.args[1]::Core.CodeInstance).def.specTypes ==
+            Tuple{Core.TypeEgal{NoSpecializeCtor63611}, Any, Int}
+    end == 1
+end
+
+# A callee that takes a type in an unspecialized slot is compiled once
+struct TypeArgWrapper63611{S} end
+@noinline type_arg_nparams63611(T, w) = length(T.parameters) + w
+type_arg_outer63611(::Type{TypeArgWrapper63611{S}}, w) where {S} = type_arg_nparams63611(S, w)
+let types = (Tuple{Int}, Tuple{Float64}, Tuple{Int,Int}, Tuple{String})
+    for T in types
+        @test Base.invokelatest(type_arg_outer63611, TypeArgWrapper63611{T}, 1) == length(T.parameters) + 1
+    end
+    @test count(Base.specializations(only(methods(type_arg_nparams63611)))) do mi
+        isdefined(mi, :cache) && mi.cache.invoke != C_NULL
+    end == 1
+end
+
 # Test that irinterp can make use of constant results even if they're big
 # Check that pure functions with non-inlineable results still get deleted
 struct BigSemi
@@ -2590,6 +2633,13 @@ let src = code_typed1((Bool,)) do b
     end
     @test count(isinvoke(:pick_constant_some_any), src.code) == 0
     @test count(iscall((src, pick_constant_some_any)), src.code) == 0
+end
+
+@inline splat_sum_prod(t::Tuple) = +(t...) * *(t...)
+let src = code_typed1((Base.RefValue{Any},)) do r
+        splat_sum_prod(r[]::Tuple)
+    end
+    @test count(iscall((src, Core._apply_iterate)), src.code) == 0
 end
 
 end # module inline_tests

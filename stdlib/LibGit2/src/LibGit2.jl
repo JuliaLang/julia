@@ -70,8 +70,8 @@ end
 """
     need_update(repo::GitRepo)
 
-Equivalent to `git update-index`. Return `true`
-if `repo` needs updating.
+Reload the index of `repo` from the filesystem, discarding any changes to it that
+have not been written. Does nothing if `repo` is bare. Return `nothing`.
 """
 function need_update(repo::GitRepo)
     if !isbare(repo)

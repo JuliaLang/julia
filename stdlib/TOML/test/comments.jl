@@ -119,6 +119,9 @@ end
     # dropped too
     [[x]]
     b = 2
+    # dropped in a sub-table of an array table
+    [x.sub]
+    c = 3
 
     [y]
     # in y
@@ -292,6 +295,19 @@ end
     push!(inline_tables2, data2["sources"]["Example"])
     out2 = sprint_with_comments(data2, comments2; inline_tables = inline_tables2, sorted = true)
     @test out2 == out
+
+    # floating comments in the inline table move above its entry too
+    data, comments = parse_with_comments("""
+    [sources.Example]
+    # floating in table
+
+    path = "../Example"
+    """)
+    @test comments.floating[["sources", "Example"]] == [" floating in table"]
+    inline_tables = Base.IdSet{Dict{String, Any}}()
+    push!(inline_tables, data["sources"]["Example"])
+    @test sprint_with_comments(data, comments; inline_tables) ==
+        "[sources]\n# floating in table\nExample = {path = \"../Example\"}\n"
 end
 
 @testset "Comments is emptied on reuse" begin

@@ -535,10 +535,11 @@ Test Passed
 """
 macro test(ex, kws...)
     # Collect the broken/skip/context keywords and remove them from the rest of keywords
-    broken = [kw.args[2] for kw in kws if kw.args[1] === :broken]
-    skip = [kw.args[2] for kw in kws if kw.args[1] === :skip]
-    context = [kw.args[2] for kw in kws if kw.args[1] === :context]
-    kws = filter(kw -> kw.args[1] ∉ (:skip, :broken, :context), kws)
+    iskw(kw, name) = Meta.isexpr(kw, :(=)) && kw.args[1] === name
+    broken = [kw.args[2] for kw in kws if iskw(kw, :broken)]
+    skip = [kw.args[2] for kw in kws if iskw(kw, :skip)]
+    context = [kw.args[2] for kw in kws if iskw(kw, :context)]
+    kws = filter(kw -> !any(name -> iskw(kw, name), (:skip, :broken, :context)), kws)
     # Validation of broken/skip/context keywords
     for (kw, name) in ((broken, :broken), (skip, :skip), (context, :context))
         if length(kw) > 1

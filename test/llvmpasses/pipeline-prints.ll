@@ -291,7 +291,7 @@ attributes #2 = { inaccessiblemem_or_argmemonly }
 ; BEFORELOOPOPTIMIZATION-NOT: zext i1 {{%.*}} to i8
 
 ; COM: Loop simplification makes the exit condition obvious
-; AFTERLOOPSIMPLIFICATION: L35.lr.ph:
+; AFTERLOOPSIMPLIFICATION: L35.preheader:
 ; AFTERLOOPSIMPLIFICATION: add nuw nsw
 
 ; COM: Scalar optimization removes the preheader

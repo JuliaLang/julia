@@ -323,83 +323,19 @@ function do_cmd_escape(s; escape_backticks::Bool=false)
     return s
 end
 
-# Cache the set of valid login shells from /etc/shells. Real users have their
-# shell listed here; service/daemon accounts use /bin/false etc. which are not.
-const _login_shells = Base.OncePerProcess{Vector{String}}() do
-    @static if Sys.iswindows()
-        String[]
-    else
-        try
-            filter!(l -> !isempty(l) && !startswith(l, '#'), readlines("/etc/shells"))
-        catch
-            String[]  # no /etc/shells; skip shell filtering
-        end
-    end
-end
-
-# pw_shell byte offset in struct passwd — everything before the pw_shell field:
-# Linux:     pw_name, pw_passwd (2 Ptrs), pw_uid, pw_gid (2 Cuints),
-#            pw_gecos, pw_dir (2 Ptrs)
-# macOS/BSD: same as Linux plus pw_change (Clong) and pw_class (Ptr)
-#            between pw_gid and pw_gecos
-const _pw_shell_offset = @static if Sys.islinux()
-    4 * sizeof(Ptr{Cvoid}) + 2 * sizeof(Cuint)
-else
-    5 * sizeof(Ptr{Cvoid}) + 2 * sizeof(Cuint) + sizeof(Clong)
-end
-
-# Return a sorted, deduplicated list of real local usernames. When all=false
-# (the default), service accounts are excluded by requiring their shell to be
-# listed in /etc/shells, and on macOS names starting with '_' are also excluded.
-function list_users(; all::Bool=false)
-    seen = Set{String}()
-    @static if !Sys.iswindows()
-        valid_shells = all ? String[] : _login_shells()
-        ccall(:setpwent, Cvoid, ())
-        try
-            while true
-                ptr = ccall(:getpwent, Ptr{Cvoid}, ())
-                ptr == C_NULL && break
-                name_ptr = unsafe_load(Ptr{Ptr{UInt8}}(ptr))
-                name_ptr == C_NULL && continue
-                name = unsafe_string(name_ptr)
-                if !all
-                    @static Sys.isapple() && startswith(name, '_') && continue
-                    if !isempty(valid_shells)
-                        shell_ptr = unsafe_load(Ptr{Ptr{UInt8}}(ptr + _pw_shell_offset))
-                        shell_ptr == C_NULL && continue
-                        unsafe_string(shell_ptr) in valid_shells || continue
-                    end
-                end
-                push!(seen, name)
-            end
-        finally
-            ccall(:endpwent, Cvoid, ())
-        end
-    end
-    return sort!(collect(seen))
-end
-
-# Return tilde-completion strings for usernames matching `prefix`.
-# With an empty prefix, the current user is represented as "~/" (not "~name/")
-# since that shorthand is always available. With a non-empty prefix the current
-# user's actual name is included when it matches, and "~/" is not offered.
+# Return tilde-completion strings for the user name `prefix`: `~/` for an empty prefix,
+# and otherwise the current user's `~name/` if their name starts with `prefix`. Other users
+# are not offered, since listing them means enumerating the passwd database, which can take
+# seconds with network directory services and is not thread-safe on every platform.
 function _complete_tilde_usernames(prefix::AbstractString)::Vector{String}
-    me = try Sys.username() catch; "" end
-    users = list_users()
-    completions = String[]
-    if isempty(prefix)
-        push!(completions, "~/")            # always offer ~/ for current user
-        for name in users
-            name == me && continue          # ~/  already covers current user
-            push!(completions, "~$name/")
-        end
-    else
-        for name in users
-            startswith(name, prefix) && push!(completions, "~$name/")
-        end
+    isempty(prefix) && return ["~/"]
+    me = try
+        Libc.getpw().username
+    catch err
+        err isa Base.IOError || rethrow()
+        return String[]
     end
-    return completions
+    return startswith(me, prefix) ? ["~$me/"] : String[]
 end
 
 function do_cmd_escape_tilde(s; escape_backticks::Bool=false)
@@ -1442,7 +1378,7 @@ function shell_completions(str, pos, hint::Bool=false; escape_backticks::Bool=fa
     # First parse everything up to the current position
     scs = str[1:pos]
     args, last_arg_start = try
-        Base.shell_parse(scs, true)::Tuple{Expr,Int}
+        Base.shell_parse(scs, true; partial=true)::Tuple{Expr,Int}
     catch ex
         ex isa ArgumentError || ex isa ErrorException || rethrow()
         return Completion[], 1:0, false

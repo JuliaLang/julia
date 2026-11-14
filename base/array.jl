@@ -1079,7 +1079,7 @@ function setindex!(A::Array{T}, X::Array{T}, I::AbstractUnitRange{Int}) where T
     lI = length(I)
     setindex_shape_check(X, lI)
     if lI > 0
-        unsafe_copyto!(A, first(I), X, 1, lI)
+        @inbounds copyto!(A, first(I), X, 1, lI)
     end
     return A
 end
@@ -1425,6 +1425,19 @@ function append!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
     return a
 end
 
+function append!(a::Vector{T}, x::AbstractVector{<:T}, y::AbstractVector{<:T}, items::AbstractVector{<:T}...) where T
+    # take every length before growing `a`, since a collection may share memory with `a`
+    items = (x, y, items...)
+    ns = map(length, items)
+    pos = length(a) + 1
+    _growend!(a, sum(ns))
+    for (v, n) in zip(items, ns)
+        copyto!(a, pos, v, firstindex(v), n)
+        pos += n
+    end
+    return a
+end
+
 append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
 push!(a::AbstractVector, iter...) = append!(a, iter)
 append!(a::AbstractVector, iter...) = (foreach(v -> append!(a, v), iter); a)
@@ -1487,6 +1500,19 @@ function prepend!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
     # in case of aliasing, the _growbeg might have shifted our data, so copy
     # just the last n elements instead of all of them from the first
     copyto!(a, 1, items, lastindex(items)-n+1, n)
+    return a
+end
+
+function prepend!(a::Vector{T}, x::AbstractVector{<:T}, y::AbstractVector{<:T}, items::AbstractVector{<:T}...) where T
+    # growing at the front moves the data of `a`, so copy any collection that shares it first
+    items = map(v -> unalias(a, v), (x, y, items...))
+    ns = map(length, items)
+    _growbeg!(a, sum(ns))
+    pos = 1
+    for (v, n) in zip(items, ns)
+        copyto!(a, pos, v, firstindex(v), n)
+        pos += n
+    end
     return a
 end
 
@@ -2377,32 +2403,18 @@ vcat() = Vector{Any}()
 hcat() = Vector{Any}()
 
 function hcat(V::Vector{T}...) where T
+    isconcretetype(T) && return @inline _typed_hcat(T, V)
     height = length(V[1])
     for j = 2:length(V)
         if length(V[j]) != height
             throw(DimensionMismatch("vectors must have same lengths"))
         end
     end
-    return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
+    return [ v[i]::T for i=1:height, v in V ]
 end
-hcat(A::Vector...) = cat(A...; dims=Val(2)) # more special than SparseArrays's hcat
+hcat(A::Vector...) = _typed_hcat(promote_eltype(A...), A) # more special than SparseArrays's hcat
 
-function vcat(arrays::Vector{T}...) where T
-    n = 0
-    for a in arrays
-        n += length(a)
-    end
-    arr = Vector{T}(undef, n)
-    nd = 1
-    for a in arrays
-        na = length(a)
-        @assert nd + na <= 1 + length(arr) "Concurrent modification of arrays?"
-        unsafe_copyto!(arr, nd, a, 1, na)
-        nd += na
-    end
-    return arr
-end
-vcat(A::Vector...) = cat(A...; dims=Val(1)) # more special than SparseArrays's vcat
+vcat(A::Vector...) = @inline _typed_vcat(promote_eltype(A...), A) # more special than SparseArrays's vcat
 
 _cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(Returns(1), n-1)..., length(x)))
 

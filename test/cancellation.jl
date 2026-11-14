@@ -1698,6 +1698,62 @@ end
     unlock(lk)
 end
 
+@testset "a throw while acquiring the wait entry releases the lock" begin
+    # Inject allocation failure to check lock cleanup in each wait path.
+    # Use a subprocess to isolate the added Base method.
+    code = """
+    using Test
+    using Base: CANCEL_TOKEN, CancellationToken, CancellationTokenSource
+    using Base.ScopedValues: with
+    const VICTIM = Ref{Any}(nothing)
+    function Base.WaitEntry2(t::Task)
+        if VICTIM[] === t
+            VICTIM[] = nothing
+            throw(OutOfMemoryError())
+        end
+        return invoke(Base.WaitEntry2, Tuple{Union{Task, Nothing}}, t)
+    end
+    # run `f` in a task whose first wait entry allocation throws
+    oom_task(f) = Threads.@spawn (VICTIM[] = current_task(); f())
+    yield_until(f) = (for _ in 1:10_000; f() && return true; yield(); end; false)
+    with(CANCEL_TOKEN => CancellationToken(CancellationTokenSource())) do
+        waitee = Threads.@spawn for _ in 1:100; yield(); end
+        waiter = oom_task(() -> wait(waitee))
+        @test yield_until(() -> istaskdone(waiter) && istaskdone(waitee))
+        @test waiter.result isa OutOfMemoryError
+
+        c = Base.ThreadSynchronizer()
+        t = oom_task() do
+            lock(c)
+            try
+                wait(c)
+            catch e
+                e isa OutOfMemoryError && islocked(c)
+            finally
+                unlock(c)
+            end
+        end
+        @test yield_until(() -> istaskdone(t))
+        @test !istaskfailed(t) && t.result === true
+
+        rl = ReentrantLock()
+        lock(rl)
+        t = oom_task(() -> lock(rl))
+        @test yield_until(() -> istaskdone(t))
+        @test t.result isa OutOfMemoryError
+        unlock(rl)
+        t = Threads.@spawn lock(Returns(true), rl)
+        @test yield_until(() -> istaskdone(t)) && t.result === true
+    end
+    """
+    p = run(pipeline(`$(Base.julia_cmd()) --startup-file=no --threads=1 -e $code`;
+                     stdout, stderr); wait=false)
+    if timedwait(() -> process_exited(p), 300.0) !== :ok
+        kill(p, Base.SIGKILL)
+    end
+    @test success(p)
+end
+
 @testset "WaitEntryN memory accounting and deepcopy" begin
     # variable-sized (like CancellationTokenSource): the type has no
     # definite size, instances charge their slot tail
@@ -2386,8 +2442,10 @@ Sys.isunix() && @testset "^C" begin
         # A readiness marker printed from user code proves the runtime is up
         # (signal handling armed, the script started) before any SIGINT is
         # sent - on a loaded machine startup alone can outlast the first delay
-        # and an early SIGINT kills the child with no output at all.
-        code = "println(\"CHILD-READY\")\n" * code
+        # and an early SIGINT kills the child with no output at all. A
+        # scenario that must reach a certain point before the SIGINT prints
+        # the marker itself; output before the marker is kept.
+        occursin("CHILD-READY", code) || (code = "println(\"CHILD-READY\")\n" * code)
         out = Pipe()
         cmd = threads > 0 ?
             `$exe --startup-file=no --threads=$threads -e $code` :
@@ -2396,7 +2454,7 @@ Sys.isunix() && @testset "^C" begin
         p = run(pipeline(cmd, stdin=inpipe, stdout=out, stderr=out), wait=false)
         close(out.in)
         open_stdin && close(inpipe.out)
-        readuntil(out, "CHILD-READY\n") # returns early (at EOF) if the child dies
+        pre = readuntil(out, "CHILD-READY\n") # returns early (at EOF) if the child dies
         reader = @async read(out, String)
         killer = @async begin
             for d in delays
@@ -2407,7 +2465,7 @@ Sys.isunix() && @testset "^C" begin
         wait(p)
         open_stdin && close(inpipe.in)
         wait(killer)
-        return fetch(reader), p
+        return pre * fetch(reader), p
     end
 
     # Catching ^C in a script: continuing requires re-arming a fresh ^C
@@ -2450,11 +2508,16 @@ Sys.isunix() && @testset "^C" begin
     @test occursin("CompositeException", output)
     @test p.exitcode == 0
 
-    # ^C with a stray @async task pending is catchable and the script exits
+    # ^C after starting a stray @async task is catchable and the script exits
     # cleanly - historically a "fatal: error thrown and no exception handler
-    # available" (issues #29369, #45055)
+    # available" (issues #29369, #45055). As in #29369, the stray task runs
+    # while the main task sleeps and has printed by the time ^C arrives: an
+    # earlier ^C would cancel its println.
     output, p = run_with_sigint("""
-        @async println("Hello!")
+        @async begin
+            println("Hello!")
+            println("CHILD-READY")
+        end
         try
             println("Hit ctrl-c!")
             sleep(10)

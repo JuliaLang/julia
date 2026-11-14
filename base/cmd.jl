@@ -118,6 +118,10 @@ struct AndCmds <: AbstractCmd
     AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
 end
 
+hash(x::OrCmds, h::UInt) = hash(x.a, hash(x.b, hash(OrCmds, h)))
+==(x::OrCmds, y::OrCmds) = x.a == y.a && x.b == y.b
+hash(x::ErrOrCmds, h::UInt) = hash(x.a, hash(x.b, hash(ErrOrCmds, h)))
+==(x::ErrOrCmds, y::ErrOrCmds) = x.a == y.a && x.b == y.b
 hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
 ==(x::AndCmds, y::AndCmds) = x.a == y.a && x.b == y.b
 
@@ -164,7 +168,7 @@ function show_env(io::IO, env::Vector{String})
     print(io, "[")
     for (i, e) in enumerate(env)
         i > 1 && print(io, ", ")
-        eqidx = findnext('=', e, 2)
+        eqidx = isempty(e) ? nothing : findnext('=', e, nextind(e, 1))
         if eqidx === nothing || mode === :all
             show(io, e)
         elseif mode === :keys
@@ -199,14 +203,7 @@ function show(io::IO, cmd::Cmd)
     print_uid && print(io, "setuid(")
 
     print(io, '`')
-    join(io, map(cmd.exec) do arg
-        replace(sprint(context=io) do io
-            with_output_color(:underline, io) do io
-                # A leading `~` would be expanded when the command is parsed back.
-                print_shell_word(io, arg, startswith(arg, '~') ? shell_special * '~' : shell_special)
-            end
-        end, '`' => "\\`")
-    end, ' ')
+    join(io, map(arg -> sprint(_show_cmd_word, arg, true; context=io), cmd.exec), ' ')
     print(io, '`')
 
     print_uid && (print(io, ", "); show(io, Int64(cmd.uid)); print(io, ")"))
@@ -225,6 +222,7 @@ function show(io::IO, cmd::Cmd)
 end
 
 function show(io::IO, cmds::Union{OrCmds,ErrOrCmds})
+    _show_as_backticks(io, cmds) && return
     print(io, "pipeline(")
     show(io, cmds.a)
     print(io, ", ")
@@ -274,8 +272,12 @@ struct CmdRedirect <: AbstractCmd
     readable::Bool
 end
 CmdRedirect(cmd, handle, stream_no) = CmdRedirect(cmd, handle, stream_no, stream_no == STDIN_NO)
+hash(x::CmdRedirect, h::UInt) = hash(x.cmd, hash(x.handle, hash(x.stream_no, hash(x.readable, h))))
+==(x::CmdRedirect, y::CmdRedirect) = x.cmd == y.cmd && x.handle == y.handle &&
+                                     x.stream_no == y.stream_no && x.readable == y.readable
 
 function show(io::IO, cr::CmdRedirect)
+    _show_as_backticks(io, cr) && return
     print(io, "pipeline(")
     show(io, cr.cmd)
     print(io, ", ")
@@ -291,6 +293,69 @@ function show(io::IO, cr::CmdRedirect)
     print(io, cr.readable ? "<" : ">")
     show(io, cr.handle)
     print(io, ")")
+end
+
+## showing commands in backtick syntax ##
+
+# Print `word` as it would appear in a backtick literal.
+function _show_cmd_word(io::IO, word::AbstractString, underline::Bool)
+    # A leading `~` would be expanded when the command is parsed back.
+    special = startswith(word, '~') ? _shell_display_special * '~' : _shell_display_special
+    s = sprint(context=io) do io
+        if underline
+            with_output_color(print_shell_word, :underline, io, word, special)
+        else
+            print_shell_word(io, word, special)
+        end
+    end
+    print(io, replace(s, '`' => "\\`"))
+end
+
+# Print `cmd` as one backtick literal if it can be written that way, returning whether it was.
+function _show_as_backticks(io::IO, cmd::AbstractCmd)
+    buf = IOBuffer()
+    _show_backtick_body(IOContext(buf, io), cmd, (nothing, nothing, nothing)) || return false
+    print(io, '`')
+    write(io, take!(buf))
+    print(io, '`')
+    return true
+end
+
+# Print the body of a backtick literal for `cmd`, given the file redirects of enclosing
+# `CmdRedirect`s that apply to it, indexed by stream number. Returns `false` if `cmd` has
+# no backtick form, in which case the output is meaningless.
+_show_backtick_body(::IO, ::AbstractCmd, redirects) = false
+
+function _show_backtick_body(io::IO, cmd::Cmd, redirects)
+    # Anything that `show` wraps around the backticks, like `setenv(...)`, has no shell syntax.
+    (cmd.env === nothing || get_show_env_mode(io) === :none) && isempty(cmd.dir) &&
+        cmd.uid === nothing && cmd.gid === nothing && cmd.cpus === nothing || return false
+    join(io, map(arg -> sprint(_show_cmd_word, arg, true; context=io), cmd.exec), ' ')
+    for (op, r) in zip(("<", ">", "2>"), redirects)
+        r === nothing && continue
+        print(io, ' ', op, op != "<" && r.append ? ">" : "", ' ')
+        _show_cmd_word(io, r.filename, false)
+    end
+    return true
+end
+
+function _show_backtick_body(io::IO, cmds::OrCmds, redirects)
+    # A pipeline's stdin is the first command's and its stdout the last one's, but its
+    # stderr goes to every command, which `cmd 2> file` cannot express.
+    redirect_in, redirect_out, redirect_err = redirects
+    redirect_err === nothing || return false
+    _show_backtick_body(io, cmds.a, (redirect_in, nothing, nothing)) || return false
+    print(io, " | ")
+    return _show_backtick_body(io, cmds.b, (nothing, redirect_out, nothing))
+end
+
+function _show_backtick_body(io::IO, cr::CmdRedirect, redirects)
+    handle = cr.handle
+    handle isa FileRedirect && !isempty(handle.filename) &&
+        cr.stream_no in (STDIN_NO, STDOUT_NO, STDERR_NO) &&
+        cr.readable == (cr.stream_no == STDIN_NO) || return false
+    # When spawning, a redirect replaces any enclosing one of the same stream.
+    return _show_backtick_body(io, cr.cmd, setindex(redirects, handle, cr.stream_no + 1))
 end
 
 """
@@ -362,7 +427,7 @@ setenv(cmd::Cmd; dir=cmd.dir) = Cmd(cmd; dir=dir)
 
 # split environment entry string into before and after first `=` (key and value)
 function splitenv(e::String)
-    i = findnext('=', e, 2)
+    i = isempty(e) ? nothing : findnext('=', e, nextind(e, 1))
     if i === nothing
         throw(ArgumentError("malformed environment entry"))
     end
@@ -427,7 +492,7 @@ libuv does not support affinity setting.
 
 In Linux, the `taskset` command line program can be used to see how `setcpuaffinity` works.
 
-```julia
+```julia-repl
 julia> run(setcpuaffinity(`sh -c 'taskset -p \$\$'`, [1, 2, 5]));
 pid 2273's current affinity mask: 13
 ```
@@ -435,7 +500,7 @@ pid 2273's current affinity mask: 13
 Note that the mask value `13` reflects that the first, second, and the fifth bits (counting
 from the least significant position) are turned on:
 
-```julia
+```julia-repl
 julia> 0b010011
 0x13
 ```
@@ -459,7 +524,7 @@ Requires appropriate permissions to set UID.
 
 # Examples
 
-```julia
+```julia-repl
 julia> run(setuid(`id -u`, 1000));
 1000
 ```
@@ -483,7 +548,7 @@ Requires appropriate permissions to set GID.
 
 # Examples
 
-```julia
+```julia-repl
 julia> run(setgid(`id -g`, 1000));
 1000
 ```

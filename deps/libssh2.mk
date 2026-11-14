@@ -22,6 +22,12 @@ LIBSSH2_OPTS += -DCRYPTO_BACKEND=OpenSSL -DENABLE_ZLIB_COMPRESSION=OFF
 LIBSSH2_OPTS += -DOPENSSL_ROOT_DIR=$(build_prefix)
 endif
 
+# libssh2 links zlib whenever CMake finds it, even with compression off. Match
+# LibSSH2_jll, whose Linux binaries don't (its macOS/FreeBSD ones link libz).
+ifeq ($(OS),Linux)
+LIBSSH2_OPTS += -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON
+endif
+
 ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif

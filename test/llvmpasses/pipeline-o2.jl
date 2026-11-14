@@ -223,6 +223,35 @@ function memset_like(mem)
     end
 end
 
+# COM: A fill of an array of two or more dimensions allocated in the same function. LICM
+# COM: hoists the reload of its size out of the loop, and the size stored by the constructor
+# COM: must be forwarded to it before IndVarSimplify, or the bounds check stays and the loop
+# COM: does not become a memset (#61870)
+
+# ALL-LABEL: @julia_fill_fresh_matrix
+# BC_AUTO-NOT: call {{.*}}throw_boundserror
+# ALL: call void @llvm.memset{{.*}}(ptr {{.*}}, i8 0, i64 {{%.*}}, i1 false)
+# BC_AUTO-NOT: call {{.*}}throw_boundserror
+function fill_fresh_matrix(m, n)
+    A = Matrix{Float64}(undef, m, n)
+    for i in eachindex(A)
+        A[i] = 0.0
+    end
+    return A
+end
+
+# ALL-LABEL: @julia_fill_fresh_similar
+# BC_AUTO-NOT: call {{.*}}throw_boundserror
+# ALL: call void @llvm.memset{{.*}}(ptr {{.*}}, i8 0, i64 {{%.*}}, i1 false)
+# BC_AUTO-NOT: call {{.*}}throw_boundserror
+function fill_fresh_similar(B)
+    A = similar(B)
+    for i in eachindex(A)
+        A[i] = 0
+    end
+    return A
+end
+
 # COM: `===` on boxed values calls `jl_egal__unboxed`, which only reads memory, so a
 # COM: loop-invariant comparison is hoisted and the loop vectorizes
 
@@ -283,6 +312,9 @@ emit(loopedlength, Vector{Int64})
 
 emit(memset_like, Vector{Float64})
 emit(memset_like, Memory{Float64})
+
+emit(fill_fresh_matrix, Int64, Int64)
+emit(fill_fresh_similar, Array{Float32, 3})
 
 emit(sum_if_egal, Vector{Int64}, Any, Any)
 emit(small_column_copy, Matrix{Float64}, Matrix{Float64})

@@ -26,7 +26,7 @@ jl_svec_t *(jl_perm_symsvec)(size_t n, ...)
     if (n == 0) return jl_emptysvec;
     jl_task_t *ct = jl_current_task;
     jl_svec_t *jv = (jl_svec_t*)jl_gc_permobj(ct->ptls, (n + 1) * sizeof(void*), jl_simplevector_type, 0);
-    jl_set_typetagof(jv, jl_simplevector_tag, jl_astaggedvalue(jv)->bits.gc);
+    jl_set_typetagof(jv, jl_simplevector_tag, GC_PERM_BITS);
     jl_svec_set_len_unsafe(jv, n);
     va_list args;
     va_start(args, n);

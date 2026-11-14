@@ -1251,24 +1251,6 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                               int intersections, size_t world, int cache_result_recursion,
                               size_t *min_valid, size_t *max_valid, int *ambig) JL_CANSAFEPOINT;
 
-// Widen an egality-keyed slot `TypeEgal{A}` to `Type{A}` when the method
-// declares the slot as a *concrete* `Type{X}`: there a single `Type{A}`-keyed
-// specialization soundly covers all `==`-equal argument values, since no static
-// parameter can distinguish them (#61323). The reverse (narrowing a `Type{A}`
-// slot of a by-type signature to `TypeEgal{A}`) is not legal here; by-type
-// requests that mean the runtime calls narrow at their entry point instead
-// (see `jl_get_compile_hint_specialization`).
-static void egal_normalize_slot(jl_tupletype_t *tt, size_t i, jl_value_t *decl_i,
-                                jl_svec_t **newparams JL_REQUIRE_ROOTED_SLOT) JL_CANSAFEPOINT
-{
-    jl_value_t *elt = jl_tparam(tt, i);
-    if (jl_is_typeegal(elt) && !jl_has_free_typevars(elt) &&
-        jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i)) {
-        if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-        jl_svecset(*newparams, i, jl_wrap_Type(jl_some_Type_T(elt)));
-    }
-}
-
 // get the compilation signature specialization for this method
 static void jl_compilation_sig(
     jl_tupletype_t *const tt, // the original tupletype of the call (or DataType from precompile)
@@ -1332,14 +1314,8 @@ static void jl_compilation_sig(
         type_i = jl_rewrap_unionall(decl_i, decl);
         size_t i_arg = (i < nargs - 1 ? i : nargs - 1);
 
-        if (jl_is_vararg(elt)) {
+        if (jl_is_vararg(elt))
             elt = jl_unwrap_vararg(elt);
-        }
-        else {
-            egal_normalize_slot(tt, i, decl_i, newparams);
-            if (*newparams)
-                elt = jl_svecref(*newparams, i);
-        }
 
         if (jl_is_kind(type_i)) {
             // if we can prove the match was against the kind (not a Type)
@@ -1433,6 +1409,10 @@ static void jl_compilation_sig(
                     if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                     jl_svecset(*newparams, i, jl_type_type);
                 }
+            }
+            else if (jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i)) {
+                // the slot is declared as a concrete `Type{X}`, so only one type
+                // matches it and the dispatch key `TypeEgal{A}` is kept
             }
             else if (jl_is_some_Type(jl_some_Type_T(elt)) &&
                      // try to give up on specializing type parameters for Type{Type{Type{...}}}
@@ -1612,17 +1592,16 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             }
         }
 
-        // a closed type-valued dispatch slot is spelled by egality (`TypeEgal{A}`),
-        // or by equality (`Type{A}`) iff the method declares the slot as concrete
-        // `Type{X}` (see `egal_normalize_slot`); the other spellings are not
-        // compileable (an `==`-keyed slot admits non-egal argument values).
+        // a closed type-valued dispatch slot is spelled by egality (`TypeEgal{A}`).
+        // The equality spelling `Type{A}` admits non-egal argument values, so it is
+        // compileable only where the method declares the slot as concrete
+        // `Type{X}` (no static parameter can distinguish those values).
         // `Type{Union{}}` is exempt: the bottom object is the unique instance of
-        // its `Type`, so the equality spelling is exact (and `TypeEgal{Union{}}`
-        // cannot be spelled; it normalizes to `typeof(Union{})`).
+        // its `Type` (and `TypeEgal{Union{}}` cannot be spelled; it normalizes to
+        // `typeof(Union{})`).
+        int decl_concrete = jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i);
         if (!jl_is_vararg(jl_tparam(type, i)) && !jl_has_free_typevars(elt)) {
-            int decl_concrete = jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i);
-            if ((jl_is_typeeq(elt) && !decl_concrete && jl_typeeq_T(elt) != jl_bottom_type) ||
-                (jl_is_typeegal(elt) && decl_concrete)) {
+            if (jl_is_typeeq(elt) && !decl_concrete && jl_typeeq_T(elt) != jl_bottom_type) {
                 JL_GC_POP();
                 return 0;
             }
@@ -1684,7 +1663,9 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
                 JL_GC_POP();
                 return 0; // gets turned into a kind
             }
-
+            else if (decl_concrete) {
+                // jl_compilation_sig keeps the dispatch key for these slots
+            }
             else if (jl_is_some_Type(jl_some_Type_T(elt)) &&
                      // give up on specializing static parameters for Type{Type{Type{...}}}
                      (jl_is_some_Type(jl_some_Type_T(jl_some_Type_T(elt))) || !jl_has_free_typevars(decl_i))) {
@@ -1838,6 +1819,25 @@ JL_DLLEXPORT jl_typemap_entry_t *jl_mt_find_cache_entry(jl_methcache_t *cache, j
     return mt_find_cache_entry(&cache->cache, &cache->leafcache, tt, world, jl_cachearg_offset());
 }
 
+// `jl_typemap_assoc_exact` matches `TypeEgal{A}` slots from the argument values, while
+// the leafcache needs the argument tuple type to be built first (#60701). So the
+// compilation signature of a call into a slot declared as a concrete `Type{X}`
+// (constructors mostly) is filed in the typemap too. Other `TypeEgal{A}` slots are not
+// worth it: every entry in the typemap is visited when a method is added and scanned by
+// lookups by type.
+static int has_concrete_type_slot(jl_method_t *definition, jl_tupletype_t *tt) JL_NOTSAFEPOINT
+{
+    size_t i, np = jl_nparams(tt);
+    for (i = 0; i < np; i++) {
+        if (jl_is_typeegal(jl_tparam(tt, i))) {
+            jl_value_t *decl_i = jl_nth_slot_type(definition->sig, i);
+            if (jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i))
+                return 1;
+        }
+    }
+    return 0;
+}
+
 static jl_value_t *compute_simplett(jl_tupletype_t *cachett) JL_CANSAFEPOINT
 {
     // now scan `cachett` and ensure that `Type{T}` in the cache will be matched exactly by `typeof(T)`
@@ -1882,6 +1882,7 @@ static void cache_insert(
         jl_tupletype_t *cachett,
         jl_svec_t *guardsigs,
         jl_method_instance_t *newmeth,
+        int compilationsig, // `cachett` is the compilation signature
         int offs) JL_CANSAFEPOINT
 {
     // exact-dispatch lookups (`jl_typemap_entry_assoc_exact`) require datatype sigs
@@ -1894,7 +1895,8 @@ static void cache_insert(
     JL_GC_PUSH2(&simplett, &newentry);
     simplett = (jl_datatype_t*)compute_simplett(cachett);
     newentry = jl_typemap_alloc(cachett, simplett, guardsigs, (jl_value_t*)newmeth, min_valid, max_valid);
-    if (mc && tt && cachett == tt && tt->hash && !tt->hasfreetypevars) {
+    if (mc && tt && cachett == tt && tt->hash && !tt->hasfreetypevars &&
+        !(compilationsig && has_concrete_type_slot(definition, tt))) {
         // we check `tt->hash` exists, since otherwise the NamedTuple
         // constructor and `structdiff` method pollutes this lookup with a lot
         // of garbage in the linear table search
@@ -2009,7 +2011,7 @@ static jl_method_instance_t *cache_result(
     newmeth = jl_specializations_get_linfo(definition, (jl_value_t*)tt, sparams);
     JL_GC_PUSH1(&newmeth);
     cache_insert(mt, mc, cache, parent, definition, tt, min_valid, max_valid, current_world, tt,
-        jl_emptysvec, newmeth, offs);
+        jl_emptysvec, newmeth, 0, offs);
     JL_GC_POP();
     return newmeth;
 }
@@ -2045,7 +2047,8 @@ static void recache_method(
             jl_gc_write_atomic(entry, *(_Atomic(jl_method_instance_t*)*)&entry->func.linfo,
                    jl_method_instance_t, newmeth, release);
             orig_in_cache = 1;
-            if (jl_egal((jl_value_t*)tt, (jl_value_t*)newmeth->specTypes)) {
+            if (jl_egal((jl_value_t*)tt, (jl_value_t*)newmeth->specTypes) &&
+                !has_concrete_type_slot(definition, tt)) {
                 if (mc) JL_UNLOCK(&mc->writelock);
                 return; // cache entry already sufficient
             }
@@ -2055,6 +2058,12 @@ static void recache_method(
         struct jl_typemap_assoc search = {tt ? (jl_value_t*)tt : compilationsig, world, NULL};
         assert(cache);
         jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(cache), &search, offs, /*subtype*/1);
+        if (entry && typemap_entry_linfo(entry)->def.method != definition) {
+            // Another method owns this signature. Inference also matches methods
+            // it cannot tell are shadowed (`Type{Int} <: DataType` is false).
+            if (mc) JL_UNLOCK(&mc->writelock);
+            return;
+        }
         if (entry && jl_subtype((jl_value_t*)entry->sig, (jl_value_t*)newmeth->specTypes)) {
             jl_gc_write_atomic(entry, *(_Atomic(jl_method_instance_t*)*)&entry->func.linfo,
                    jl_method_instance_t, newmeth, release);
@@ -2171,7 +2180,7 @@ static void recache_method(
     }
 
     cache_insert(mt, mc, cache, parent, definition, tt, min_valid, max_valid, current_world, (jl_tupletype_t*)cachett,
-        guardsigs, newmeth, offs);
+        guardsigs, newmeth, !cache_with_orig, offs);
     JL_GC_POP();
     return;
 }
@@ -5047,27 +5056,6 @@ static jl_tupletype_t *egal_normalize_hint_types(jl_tupletype_t *types JL_PROPAG
     return types;
 }
 
-// The canonical per-method spelling of a by-type request: apply the
-// egality-slot widening of `jl_compilation_sig` (egality-keyed slots that the
-// method declares as concrete `Type{X}` are keyed by equality instead).
-// The caller must root the result.
-static jl_tupletype_t *egal_canonical_sig(jl_tupletype_t *types JL_PROPAGATES_ROOT, jl_method_t *m) JL_CANSAFEPOINT
-{
-    jl_svec_t *newparams = NULL;
-    JL_GC_PUSH1(&newparams);
-    size_t i, np = jl_nparams(types);
-    for (i = 0; i < np; i++) {
-        if (jl_is_vararg(jl_tparam(types, i)))
-            continue;
-        jl_value_t *decl_i = jl_nth_slot_type(m->sig, i);
-        egal_normalize_slot(types, i, decl_i, &newparams);
-    }
-    if (newparams)
-        types = (jl_tupletype_t*)jl_apply_tuple_type(newparams, 1);
-    JL_GC_POP();
-    return types;
-}
-
 // Try to get a MethodInstance for a precompile() call. This uses a special kind of lookup that
 // tries to find a method for which the requested signature is compileable.
 JL_DLLEXPORT jl_value_t *jl_get_compile_hint_specialization(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT
@@ -5081,8 +5069,7 @@ JL_DLLEXPORT jl_value_t *jl_get_compile_hint_specialization(jl_tupletype_t *type
     size_t max_valid2 = ~(size_t)0;
     int ambig = 0;
     jl_value_t *matches = NULL;
-    jl_tupletype_t *normtypes = NULL;
-    JL_GC_PUSH3(&types, &matches, &normtypes);
+    JL_GC_PUSH2(&types, &matches);
     types = egal_normalize_hint_types(types);
     matches = jl_matching_methods(types, jl_nothing, -1, 0, world, &min_valid2, &max_valid2, &ambig);
     size_t i, n = jl_array_nrows(matches);
@@ -5095,13 +5082,11 @@ JL_DLLEXPORT jl_value_t *jl_get_compile_hint_specialization(jl_tupletype_t *type
         match = (jl_method_match_t*)jl_array_ptr_ref(matches, 0);
     }
     else if (jl_is_datatype(types)) {
-        // first, select methods for which `types` (in its canonical per-method
-        // spelling, see `egal_canonical_sig`) is compileable
+        // first, select methods for which `types` is compileable
         size_t count = 0;
         for (i = 0; i < n; i++) {
             jl_method_match_t *match1 = (jl_method_match_t*)jl_array_ptr_ref(matches, i);
-            normtypes = egal_canonical_sig(types, match1->method);
-            if (jl_isa_compileable_sig(normtypes, match1->sparams, match1->method))
+            if (jl_isa_compileable_sig(types, match1->sparams, match1->method))
                 jl_array_ptr_set(matches, count++, (jl_value_t*)match1);
         }
         jl_array_del_end((jl_array_t*)matches, n - count);
@@ -5155,8 +5140,12 @@ JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tuplet
 
 JL_DLLEXPORT void jl_compile_method_sig(jl_method_t *m, jl_value_t *types, jl_svec_t *env, size_t world)
 {
+    JL_GC_PUSH1(&types);
+    if (jl_is_datatype(types))
+        types = (jl_value_t*)egal_normalize_hint_types((jl_tupletype_t*)types);
     jl_method_instance_t *mi = jl_specializations_get_linfo(m, types, env);
     jl_compile_method_instance(mi, NULL, world);
+    JL_GC_POP();
 }
 
 JL_DLLEXPORT int jl_is_compilable(jl_tupletype_t *types) JL_CANSAFEPOINT
@@ -5407,7 +5396,8 @@ STATIC_INLINE void call_cache_indices(uint32_t callsite, uint32_t cache_idx[4]) 
 // The lookup beyond the call-site cache, kept out of line so that the frame of
 // every dynamic call (`jl_apply_generic`) stays small
 static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_value_t **args, uint32_t nargs,
-                                                             uint32_t callsite, size_t world, int for_call) JL_CANSAFEPOINT
+                                                             uint32_t callsite, size_t world, int for_call,
+                                                             jl_typemap_entry_t **entry_out) JL_CANSAFEPOINT
 {
     // recomputed rather than passed in: taking the address of the caller's array
     // would put it on the stack and add a stack-protector check to `jl_apply_generic`
@@ -5461,6 +5451,8 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
     jl_method_instance_t *mfunc;
     if (entry) {
         mfunc = typemap_entry_linfo(entry);
+        if (entry_out)
+            *entry_out = entry;
     }
     else {
         assert(tt);
@@ -5487,7 +5479,8 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
 }
 
 STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t **args, uint32_t nargs,
-                                                       uint32_t callsite, size_t world, int for_call) JL_CANSAFEPOINT
+                                                       uint32_t callsite, size_t world, int for_call,
+                                                       jl_typemap_entry_t **entry_out) JL_CANSAFEPOINT
 {
 #ifdef JL_GF_PROFILE
     ncalls++;
@@ -5532,10 +5525,12 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     LOOP_BODY(2);
     LOOP_BODY(3);
 #undef LOOP_BODY
-    mfunc = jl_lookup_generic_slow(F, args, nargs, callsite, world, for_call);
+    mfunc = jl_lookup_generic_slow(F, args, nargs, callsite, world, for_call, entry_out);
     goto done;
 have_entry:
     mfunc = typemap_entry_linfo(entry);
+    if (entry_out)
+        *entry_out = entry;
 done:
 
 #ifdef JL_TRACE
@@ -5551,7 +5546,7 @@ jl_method_instance_t *jl_apply_lookup(jl_value_t **args, size_t nargs, size_t wo
 {
     assert(nargs);
     return jl_lookup_generic_(args[0], &args[1], nargs - 1,
-            jl_int32hash_fast(jl_return_address()), world, 0);
+            jl_int32hash_fast(jl_return_address()), world, 0, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
@@ -5559,8 +5554,86 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
     size_t world = jl_current_task->world_age;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
-                                                     world, 1);
+                                                     world, 1, NULL);
     JL_GC_PROMISE_ROOTED(mfunc);
+    return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
+}
+
+// jl_apply_generic for the interpreter, whose calls would otherwise all share one return
+// address in the call-site cache
+jl_value_t *jl_apply_generic_site(jl_value_t *F, jl_value_t **args, uint32_t nargs, uint32_t callsite)
+{
+    size_t world = jl_current_task->world_age;
+    jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1, NULL);
+    JL_GC_PROMISE_ROOTED(mfunc); // as in jl_apply_generic
+    return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
+}
+
+// What a call site's cache matches an argument on: its type, or TypeEgal{T} for an argument
+// that is the type T, on whose value dispatch can depend (NULL for a T with free typevars,
+// which is not cached). No argument has a TypeEgal{T} as its type, so the two cannot be confused.
+static jl_value_t *site_key(jl_value_t *a) JL_CANSAFEPOINT
+{
+    jl_value_t *t = jl_typeof(a);
+    if (!jl_is_kind(t))
+        return t;
+    return jl_has_free_typevars(a) ? NULL : jl_wrap_TypeEgal(a);
+}
+
+STATIC_INLINE int site_key_matches(jl_value_t *k, jl_value_t *a) JL_NOTSAFEPOINT
+{
+    return jl_typeof(a) == k || (jl_is_typeegal(k) && jl_typeegal_T(k) == a);
+}
+
+// jl_apply_generic for an interpreted call site with a cache of one dispatch, `sites[i]`:
+// svec(typemap entry, key of F, key of each argument), or NULL. A hit costs a comparison
+// per argument and a world check; on a miss the call is dispatched as usual, and replaces
+// what the site holds when its lookup found a method cache entry.
+jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t nargs,
+                                    jl_genericmemory_t *sites, size_t i, uint32_t callsite,
+                                    size_t world)
+{
+    _Atomic(jl_value_t*) *slot = &((_Atomic(jl_value_t*)*)jl_genericmemory_ptr_data(sites))[i];
+    jl_svec_t *site = (jl_svec_t*)jl_atomic_load_acquire(slot);
+    // (the interpreter keeps other things at a site, which are never a typemap entry)
+    if (site != NULL && jl_svec_len(site) == nargs + 2 && site_key_matches(jl_svecref(site, 1), F) &&
+            jl_typetagis(jl_svecref(site, 0), jl_typemap_entry_type)) {
+        uint32_t j;
+        for (j = 0; j < nargs; j++) {
+            if (!site_key_matches(jl_svecref(site, j + 2), args[j]))
+                break;
+        }
+        jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_svecref(site, 0);
+        if (j == nargs && world >= jl_atomic_load_relaxed(&entry->min_world) &&
+                world <= jl_atomic_load_relaxed(&entry->max_world)) {
+            jl_method_instance_t *mfunc = typemap_entry_linfo(entry);
+            // owned by its method, not by `site`, which another thread may replace
+            JL_GC_PROMISE_ROOTED(mfunc);
+            return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
+        }
+    }
+    jl_typemap_entry_t *entry = NULL;
+    jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1, &entry);
+    if (entry != NULL) {
+        jl_value_t *k = NULL;
+        site = NULL;
+        JL_GC_PUSH4(&entry, &mfunc, &site, &k);
+        site = jl_alloc_svec(nargs + 2);
+        jl_svecset(site, 0, (jl_value_t*)entry);
+        uint32_t j;
+        for (j = 0; j <= nargs; j++) {
+            k = site_key(j == 0 ? F : args[j - 1]);
+            if (k == NULL)
+                break;
+            jl_svecset(site, j + 1, k);
+        }
+        if (j > nargs) {
+            jl_atomic_store_release(slot, (jl_value_t*)site);
+            jl_gc_wb(sites, slot, site);
+        }
+        JL_GC_POP();
+    }
+    JL_GC_PROMISE_ROOTED(mfunc); // as in jl_apply_generic
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
 }
 

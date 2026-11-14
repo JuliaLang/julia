@@ -641,7 +641,7 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
     jl_gc_write(li, li->ssavaluetypes, jl_value_t, jl_box_long(nssavalue));
 
     // Flags that need to be copied to slotflags
-    const uint8_t vinfo_mask = 8 | 16 | 32 | 64;
+    const uint8_t vinfo_mask = 8 | 16 | 64;
     int i;
     for (i = 0; i < nslots; i++) {
         jl_value_t *vi = jl_array_ptr_ref(vis, i);
@@ -1092,6 +1092,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->purity.bits = 0;
     m->max_varargs = UINT8_MAX;
     JL_MUTEX_INIT(&m->writelock, "method->writelock");
+    jl_atomic_store_relaxed(&m->interp_sites, NULL);
     return m;
 }
 
@@ -1355,7 +1356,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                       jl_symbol_name(file),
                       line,
                       jl_symbol_name(((jl_tvar_t*)tv)->name));
-        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
+        argtype = jl_new_unionall((jl_tvar_t*)tv, argtype);
     }
     if (jl_has_free_typevars(argtype)) {
         jl_exceptionf(jl_argumenterror_type,
