@@ -310,6 +310,15 @@ function setup_stdio(stdio::IOStream, child_readable::Bool)
 end
 
 function setup_stdio(stdio::FileRedirect, child_readable::Bool)
+    # these device paths name Julia's own streams on every system, including Windows
+    filename = stdio.filename
+    filename == "/dev/null" && return setup_stdio(devnull, child_readable)
+    if child_readable
+        filename == "/dev/stdin" && return setup_stdio(stdin, child_readable)
+    else
+        filename == "/dev/stdout" && return setup_stdio(stdout, child_readable)
+        filename == "/dev/stderr" && return setup_stdio(stderr, child_readable)
+    end
     if child_readable
         attr = JL_O_RDONLY
         perm = zero(S_IRUSR)
