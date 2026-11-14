@@ -23,10 +23,6 @@
 #include <llvm-Compression.h>
 #include <llvm/Support/Compression.h>
 
-#ifdef _OS_DARWIN_
-#include <CoreFoundation/CoreFoundation.h>
-#endif
-
 using namespace llvm;
 
 #include "jitlayers.h"
@@ -936,75 +932,13 @@ static jl_object_file_entry_t find_object_file(uint64_t fbase, StringRef fname) 
         if (!morigobj || !getObjUUID(morigobj, uuid))
             return entry;
 
-        // Hide Darwin symbols (e.g. CoreFoundation) from non-Darwin systems.
-#ifndef _OS_DARWIN_
-        return entry;
-#else
-        // On macOS, debug symbols are not contained in the dynamic library.
-        // Use DBGCopyFullDSYMURLForUUID from the private DebugSymbols framework
-        // to make use of spotlight to find the dSYM file. If that fails, lookup
-        // the dSYM file in the same directory as the dynamic library.  TODO: If
-        // the DebugSymbols framework is moved or removed, an alternative would
-        // be to directly query Spotlight for the dSYM bundle.
-
-        typedef CFURLRef (*DBGCopyFullDSYMURLForUUIDfn)(CFUUIDRef, CFURLRef) JL_NOTSAFEPOINT;
-        DBGCopyFullDSYMURLForUUIDfn DBGCopyFullDSYMURLForUUID = NULL;
-
-        // First, try to load the private DebugSymbols framework.
-        CFURLRef dsfmwkurl = CFURLCreateWithFileSystemPath(
-            kCFAllocatorDefault,
-            CFSTR("/System/Library/PrivateFrameworks/DebugSymbols.framework"),
-            kCFURLPOSIXPathStyle, true);
-        CFBundleRef dsfmwkbundle =
-            CFBundleCreate(kCFAllocatorDefault, dsfmwkurl);
-        CFRelease(dsfmwkurl);
-
-        if (dsfmwkbundle) {
-            DBGCopyFullDSYMURLForUUID =
-                (DBGCopyFullDSYMURLForUUIDfn)CFBundleGetFunctionPointerForName(
-                    dsfmwkbundle, CFSTR("DBGCopyFullDSYMURLForUUID"));
-        }
-
-        if (DBGCopyFullDSYMURLForUUID != NULL) {
-            // Prepare UUID and shared object path URL.
-            CFUUIDRef objuuid = CFUUIDCreateWithBytes(
-                kCFAllocatorDefault, uuid[0], uuid[1], uuid[2], uuid[3],
-                uuid[4], uuid[5], uuid[6], uuid[7], uuid[8], uuid[9], uuid[10],
-                uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]);
-            CFURLRef objurl = CFURLCreateFromFileSystemRepresentation(
-                kCFAllocatorDefault, (UInt8 const *)fname.data(),
-                (CFIndex)strlen(fname.data()), FALSE);
-
-            // Call private DBGCopyFullDSYMURLForUUID() to find dSYM.
-            CFURLRef dsympathurl = DBGCopyFullDSYMURLForUUID(objuuid, objurl);
-            CFRelease(objuuid);
-            CFRelease(objurl);
-
-            char objpathcstr[JL_PATH_MAX];
-            if (dsympathurl != NULL &&
-                CFURLGetFileSystemRepresentation(
-                    dsympathurl, true, (UInt8 *)objpathcstr,
-                    (CFIndex)sizeof(objpathcstr))) {
-                // The dSYM was found. Copy its path.
-                debuginfopath = objpathcstr;
-                objpath = debuginfopath;
-                CFRelease(dsympathurl);
-            }
-        }
-
-        if (dsfmwkbundle) {
-            CFRelease(dsfmwkbundle);
-        }
-#endif
-
-        if (objpath.empty()) {
-            // Fall back to simple path relative to the dynamic library.
-            size_t sep = fname.rfind('/');
-            debuginfopath = fname.str();
-            debuginfopath += ".dSYM/Contents/Resources/DWARF/";
-            debuginfopath += fname.substr(sep + 1);
-            objpath = debuginfopath;
-        }
+        // On macOS, debug symbols are not contained in the dynamic library, so
+        // look for a dSYM bundle next to it.
+        size_t sep = fname.rfind('/');
+        debuginfopath = fname.str();
+        debuginfopath += ".dSYM/Contents/Resources/DWARF/";
+        debuginfopath += fname.substr(sep + 1);
+        objpath = debuginfopath;
     }
     else {
         // On Linux systems we need to mmap another copy because of the permissions on the mmap'ed shared library.
