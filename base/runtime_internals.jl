@@ -290,13 +290,7 @@ function lookup_binding_partition(world::UInt, b::Core.Binding, previous_partiti
     ccall(:jl_get_binding_partition_with_hint, Ref{Core.BindingPartition}, (Any, Any, UInt), b, previous_partition, world)
 end
 
-function convert(::Type{Core.Binding}, gr::Core.GlobalRef)
-    if isdefined(gr, :binding)
-        return gr.binding
-    else
-        return ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), gr.mod, gr.name, true)
-    end
-end
+convert(::Type{Core.Binding}, gr::Core.GlobalRef) = gr.binding
 
 function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
     b = convert(Core.Binding, gr)
