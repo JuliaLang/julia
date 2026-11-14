@@ -555,6 +555,7 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
 
         out = @capture_stdout @timev $call2f(c64)
         @test occursin("% compilation time", out)
+        @test occursin(r"^elapsed time \(ns\): +\d+$"m, out)
         out = @capture_stdout @timev $call2f(c64)
         @test occursin("% compilation time", out) == false
 

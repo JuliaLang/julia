@@ -312,7 +312,7 @@ function timev_print(elapsedtime, diff::GC_Diff, lock_conflicts, compile_times; 
     compile_time = first(compile_times)
     recompile_time = last(compile_times)
     time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, lock_conflicts, compile_time, recompile_time, true; msg)
-    padded_nonzero_print(elapsedtime,       "elapsed time (ns)")
+    padded_nonzero_print(round(Int64, elapsedtime), "elapsed time (ns)")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
     padded_nonzero_print(diff.poolalloc,    "pool allocs")
@@ -436,8 +436,9 @@ end
     @timev "description" expr
 
 This is a verbose version of the `@time` macro. It first prints the same information as
-`@time`, then any non-zero memory allocation counters, and then returns the value of the
-expression.
+`@time`, then the elapsed and garbage collection times in nanoseconds and the memory
+allocation and garbage collection counters, and then returns the value of the expression.
+The `malloc`, `realloc` and `free` counters are only printed when non-zero.
 
 Optionally provide a description string to print before the time report.
 
@@ -451,21 +452,24 @@ See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref),
 julia> x = rand(10,10);
 
 julia> @timev x * x;
-  0.546770 seconds (2.20 M allocations: 116.632 MiB, 4.23% gc time, 99.94% compilation time)
-elapsed time (ns): 546769547
-gc time (ns):      23115606
-bytes allocated:   122297811
-pool allocs:       2197930
-non-pool GC allocs:1327
-malloc() calls:    36
-realloc() calls:   5
-GC pauses:         3
+  0.006173 seconds (203 allocations: 10.359 KiB, 5.66% compilation time)
+elapsed time (ns):  6172500
+gc time (ns):       0
+bytes allocated:    10608
+pool allocs:        203
+non-pool GC allocs: 0
+minor collections:  0
+full collections:   0
 
 julia> @timev x * x;
-  0.000010 seconds (1 allocation: 896 bytes)
-elapsed time (ns): 9848
-bytes allocated:   896
-pool allocs:       1
+  0.000011 seconds (2 allocations: 944 bytes)
+elapsed time (ns):  11375
+gc time (ns):       0
+bytes allocated:    944
+pool allocs:        2
+non-pool GC allocs: 0
+minor collections:  0
+full collections:   0
 ```
 """
 macro timev(ex)
