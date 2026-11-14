@@ -11352,6 +11352,7 @@ void emit_always_inline(jl_codegen_output_t &out,
     // that are here for inlining only, so we'll restore the original ci_funcs
     // map after emitting everything necessary for inlining.
     auto orig_ci_funcs = out.ci_funcs;
+    bool safepoint_on_entry = out.safepoint_on_entry;
     while (true) {
         for (auto &[call, target] : out.call_targets) {
             auto [ci, api] = call;
@@ -11360,6 +11361,7 @@ void emit_always_inline(jl_codegen_output_t &out,
         }
         if (queue.empty()) {
             out.ci_funcs = std::move(orig_ci_funcs);
+            out.safepoint_on_entry = safepoint_on_entry;
             return;
         }
 
