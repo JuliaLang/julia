@@ -1180,6 +1180,18 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_
     jl_value_t *source,  jl_value_t **env, size_t nenv, int do_compile) JL_CANSAFEPOINT;
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
     int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva, int isinferred) JL_CANSAFEPOINT;
+// Whether `m` holds code that the compiler outlined from another method (see
+// `jl_new_outlined_codeinst`). Each of its specializations is a region with its own
+// arguments, so its signature, `Tuple`, says nothing about them.
+STATIC_INLINE int jl_is_outlined_method(jl_method_t *m) JL_NOTSAFEPOINT
+{
+    return m->source == NULL && m->generator == NULL && !m->is_for_opaque_closure &&
+        m->sig == (jl_value_t*)jl_anytuple_type;
+}
+JL_DLLEXPORT jl_value_t *jl_new_outlined_codeinst(
+    jl_method_instance_t *parent, jl_code_info_t *src, jl_value_t *sigtype,
+    jl_value_t *rettype, size_t min_world, size_t max_world, uint32_t effects) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_outlined_codeinst(jl_method_instance_t *parent, jl_value_t *sigtype) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source);
 
 STATIC_INLINE int jl_bkind_is_some_import(enum jl_partition_kind kind) JL_NOTSAFEPOINT {

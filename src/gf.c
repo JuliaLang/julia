@@ -1271,6 +1271,12 @@ static void jl_compilation_sig(
         return;
     }
 
+    if (jl_is_outlined_method(definition)) {
+        // each specialization is the code of one outlined region, which exists only
+        // for exactly its own signature
+        return;
+    }
+
     if (jl_is_builtinfunc(definition)) {
         assert(jl_is_datatype(decl));
         *newparams = ((jl_datatype_t*)decl)->parameters; // handle builtin methods

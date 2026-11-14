@@ -150,6 +150,8 @@ precompile(Tuple{typeof(Base.setup_stdio), Base.TTY, Bool})
 precompile(Tuple{typeof(Base.spawn_opts_inherit), Base.DevNull, Base.TTY, Base.TTY})
 precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:context,), Tuple{Base.TTY}}, typeof(Base.sprint), Function})
 precompile(Tuple{Type{Base.UUID}, Base.UUID})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:reasons, :stalecheck, :verify_checksums), Tuple{Nothing, Bool, Bool}}, typeof(Base.stale_cachefile), Base.PkgId, UInt128, Base.PkgLoadSpec, String})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:reasons, :stalecheck, :verify_checksums), Tuple{Base.Dict{Symbol, Int64}, Bool, Bool}}, typeof(Base.stale_cachefile), Base.PkgId, UInt128, Base.PkgLoadSpec, String})
 """
 
 if Sys.iswindows()

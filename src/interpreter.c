@@ -1018,7 +1018,10 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi JL_PROPAGATES
             jl_code_instance_t *cache = jl_atomic_load_relaxed(&mi->cache);
             jl_code_instance_t *uninferred = jl_cached_uninferred(cache, world);
             if (!uninferred) {
-                assert(mi->def.method->generator);
+                // A method with neither source nor generator (such as the one that
+                // holds outlined cold regions) has nothing to interpret.
+                if (!mi->def.method->generator)
+                    jl_throw(jl_new_struct(jl_missingcodeerror_type, (jl_value_t*)mi));
                 src = jl_code_for_staged(mi, world, &uninferred);
             }
             ret = (jl_value_t*)uninferred;
