@@ -266,7 +266,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     a = trunc(x)
     r = x-a
     y = one(x)
-    tolx = oftype(x, tol)
+    tolx = x isa IEEEFloat && tol > floatmin(x) ? truncbits(oftype(x, tol), 4) : oftype(x, tol)
     nt, t, tt = tolx, zero(tolx), tolx
 
     # compute the successive convergents of the continued fraction
