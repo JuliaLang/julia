@@ -5449,6 +5449,7 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
     }
 
     jl_method_instance_t *mfunc;
+    uint8_t path = JL_DISPATCH_PATH_CACHE;
     if (entry) {
         mfunc = typemap_entry_linfo(entry);
         if (entry_out)
@@ -5457,6 +5458,7 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
     else {
         assert(tt);
         // cache miss case
+        path = JL_DISPATCH_PATH_LOOKUP;
         JL_GC_PUSH1(&tt);
         mfunc = jl_mt_assoc_by_type(jl_method_table, mc, tt, world);
         JL_GC_POP();
@@ -5475,6 +5477,9 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
             record_dispatch_statement_on_first_dispatch(mfunc);
         }
     }
+    // read by `jl_dispatch_profile_record`, which `jl_apply_generic` calls next
+    if (for_call && __unlikely(jl_atomic_load_relaxed(&jl_dispatch_profile_enabled)))
+        jl_current_task->ptls->dispatch_profile_path = path;
     return mfunc;
 }
 
@@ -5556,6 +5561,8 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
                                                      jl_int32hash_fast(jl_return_address()),
                                                      world, 1, NULL);
     JL_GC_PROMISE_ROOTED(mfunc);
+    if (__unlikely(jl_atomic_load_relaxed(&jl_dispatch_profile_enabled)))
+        jl_dispatch_profile_record(mfunc);
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
 }
 

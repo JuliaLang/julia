@@ -1652,6 +1652,13 @@ JL_DLLEXPORT void jl_force_trace_compile_timing_disable(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_force_trace_dispatch_enable(void);
 JL_DLLEXPORT void jl_force_trace_dispatch_disable(void);
 
+// how `jl_apply_generic` found its target, for the dispatch profiler
+#define JL_DISPATCH_PATH_CALLSITE 0 // the call-site cache
+#define JL_DISPATCH_PATH_CACHE    1 // the method cache
+#define JL_DISPATCH_PATH_LOOKUP   2 // a full method lookup
+extern _Atomic(int) jl_dispatch_profile_enabled;
+void jl_dispatch_profile_record(jl_method_instance_t *mi) JL_NOTSAFEPOINT;
+
 JL_DLLEXPORT void jl_tag_newly_inferred_enable(void);
 JL_DLLEXPORT void jl_tag_newly_inferred_disable(void);
 

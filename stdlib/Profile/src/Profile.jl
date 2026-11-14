@@ -16,6 +16,11 @@ Profiling support.
 - `Profile.Allocs.print()` to print the report.
 - `Profile.Allocs.clear()` to clear the buffer.
 
+## Dynamic dispatch profiling
+- `Profile.Dispatch.@profile [sample_rate=0.01] foo()` to sample the dynamic dispatches within a specific call.
+- `Profile.Dispatch.print()` to print the call sites that dispatch the most.
+- `Profile.Dispatch.clear()` to clear the buffer.
+
 ## Heap profiling
 - `Profile.take_heap_snapshot()` to record a `.heapsnapshot` record of the heap.
 - Set `JULIA_PROFILE_PEEK_HEAP_SNAPSHOT=true` to capture a heap snapshot when signal $(Sys.isbsd() ? "SIGINFO (ctrl-t)" : "SIGUSR1") is sent.
@@ -35,7 +40,8 @@ public clear,
     take_heap_snapshot,
     take_page_profile,
     clear_malloc_data,
-    Allocs
+    Allocs,
+    Dispatch
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 import Base: AnnotatedString
@@ -1570,6 +1576,7 @@ function take_page_profile(filepath::String)
 end
 
 include("Allocs.jl")
+include("Dispatch.jl")
 include("heapsnapshot_reassemble.jl")
 include("precompile.jl")
 
