@@ -276,11 +276,6 @@ function enqueue_specializations!(all::Bool, newmethods, worklist)
     for method in newmethods
         method = method::Method
 
-        # skip all macros
-        if !all && !iszero(ccall(:jl_method_is_macro, Cint, (Any,), method))
-            continue
-        end
-
         # Check for special methods that should always be compiled
         if (method.name === :__init__ || isdefined(method, :ccallable)) && isdispatchtuple(method.sig)
             # Get method instance for __init__ methods and @ccallable functions
