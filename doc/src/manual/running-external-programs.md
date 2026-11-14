@@ -468,3 +468,25 @@ foo ever!
 julia> run(addenv(`sh -c "echo foo \$HOWLONG"`, "HOWLONG" => "ever!"));
 foo ever!
 ```
+
+As in a shell, words of the form `NAME=value` before a command add to its environment when it
+is run, so the last example can also be written as:
+
+```jldoctest
+julia> run(`HOWLONG=ever! sh -c "echo foo \$HOWLONG"`);
+foo ever!
+```
+
+`NAME` must be written unquoted and consist of letters, digits and underscores, not starting
+with a digit; the value can be quoted or interpolated like any other word, and can be empty.
+Only words before the program name are assignments, so in ``` `make CC=gcc` ``` the word
+`CC=gcc` is an argument, and ``` `'A=1' cmd` ``` runs a program named `A=1`.
+
+The assignments remain words of the command and are applied only when it runs, so they combine
+the way the command's text does. A command interpolated as a whole word in front of another
+keeps its assignments, while one interpolated after a program name is just words: with
+``` c = `CC=gcc make` ```, ``` `$c -j4` ``` runs `make -j4` with `CC` set, and
+``` `env -i $c` ``` passes `CC=gcc` to `env` as an argument. A command of only assignments, such
+as ``` `A=1 B=2` ```, can be interpolated in front of another like this, but running it on its
+own is an error. Interpolated strings never become assignments: ``` `$s cmd` ``` with
+`s = "A=1"` runs a program named `A=1`.

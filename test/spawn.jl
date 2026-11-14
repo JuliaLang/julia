@@ -552,7 +552,9 @@ let cmd = ["~", "~/x", "~root", "a~", "~'q"]
     @test eval(Meta.parse(string(`$cmd`))) == `$cmd`
 end
 let cmd = ["foo=bar", "baz"]
-    @test string(`$cmd`) == "`foo=bar baz`"
+    # quoted, since a leading `foo=bar` in a command literal is an environment assignment
+    @test string(`$cmd`) == "`'foo=bar' baz`"
+    @test eval(Meta.parse(string(`$cmd`))) == `$cmd`
     @test Base.shell_escape(`$cmd`) == "foo=bar baz"
     @test Base.shell_escape_posixly(`$cmd`) == "'foo=bar' baz"
 end
@@ -959,6 +961,86 @@ let sp(s) = eval(Base.shell_parse(s; special=Base.shell_special)[1])
     @test pp("echo hi | gr") == :((("gr",),))
     @test pp("cat 2>> lo") == :((("cat",), ("lo",)))
     @test pp("cat >") == :((("cat",),))
+end
+
+@testset "environment assignments before a command" begin
+    words(c) = (c.exec, c.nassign)
+    @test words(`FOO=bar cmd x`) == (["FOO=bar", "cmd", "x"], 1)
+    @test `FOO=bar cmd x`.env === nothing  # assignments apply when the command is run
+    @test words(`A=1 _b2=2 A=3 cmd`) == (["A=1", "_b2=2", "A=3", "cmd"], 3)
+    v = "x y"
+    @test `A='x y' cmd` == `A="x y" cmd` == `A=$v cmd` == `A="$v" cmd`
+    @test words(`A=$v cmd`) == (["A=x y", "cmd"], 1)
+    @test words(`A=pre$(v)post cmd`) == (["A=prex ypost", "cmd"], 1)
+    @test `A= cmd` == `A='' cmd`
+    @test words(`A= cmd`) == (["A=", "cmd"], 1)
+    @test words(`A==b cmd`) == (["A==b", "cmd"], 1)
+    @test words(`A=*.txt cmd`) == (["A=*.txt", "cmd"], 1)  # as in sh, a value is not a glob
+    @test words(`A=x[1]? cmd`) == (["A=x[1]?", "cmd"], 1)
+    @test words(`A=~/x cmd`) == (["A=" * `cmd ~/x`.exec[2], "cmd"], 1)
+    # only an unquoted `NAME=` before the program name is an assignment
+    @test words(`cmd A=1`) == (["cmd", "A=1"], 0)
+    @test words(`make CC=gcc A=1`) == (["make", "CC=gcc", "A=1"], 0)
+    for c in (`'A'=1 cmd`, `"A"=1 cmd`, `\A=1 cmd`, `A"=1" cmd`)
+        @test words(c) == (["A=1", "cmd"], 0)
+    end
+    n = "A"
+    @test words(`$n=1 cmd`) == (["A=1", "cmd"], 0)
+    @test words(`$("A=1") cmd`) == words(`$(["A=1"]) cmd`) == (["A=1", "cmd"], 0)
+    @test words(`1A=1 cmd`) == (["1A=1", "cmd"], 0)
+    @test words(`A-B=1 cmd`) == (["A-B=1", "cmd"], 0)
+    @test words(`=1 cmd`) == (["=1", "cmd"], 0)
+    @test Cmd(["A=1", "cmd"]).nassign == 0
+    # a command of only assignments is a fragment, which is an error only when run
+    @test words(`A=1`) == (["A=1"], 1)
+    @test words(`A=1 B=2`) == (["A=1", "B=2"], 2)
+    @test_throws "environment assignments without a command" run(`A=1`)
+    @test_throws "environment assignments without a command" run(pipeline(`A=1`, stdout=devnull))
+    # a command interpolated as a whole word keeps its assignments while it is in front
+    a = `A=1 B=2`
+    c = `C=3 prog x`
+    @test words(`$c`) == words(c)
+    @test words(`$a prog`) == (["A=1", "B=2", "prog"], 2)
+    @test words(`$a $c y`) == (["A=1", "B=2", "C=3", "prog", "x", "y"], 3)
+    @test words(`D=4 $a $c`) == (["D=4", "A=1", "B=2", "C=3", "prog", "x"], 4)
+    @test words(`$a $(String[]) $c`) == (["A=1", "B=2", "C=3", "prog", "x"], 3)
+    @test words(`$c $a`) == (["C=3", "prog", "x", "A=1", "B=2"], 1)
+    @test words(`sudo $c`) == (["sudo", "C=3", "prog", "x"], 0)
+    sudo = `sudo $c`
+    @test words(`$sudo z`) == (["sudo", "C=3", "prog", "x", "z"], 0)
+    @test words(`x$a`) == (["xA=1", "xB=2"], 0)
+    @test words(`$a$a`) == (["A=1A=1", "A=1B=2", "B=2A=1", "B=2B=2"], 0)
+    # the settings of a command keep its assignments, and equality compares them
+    @test ignorestatus(c).nassign == setenv(c, "X" => "1").nassign == Cmd(c; dir="/").nassign == 1
+    @test words(`$(ignorestatus(c)) y`) == (["C=3", "prog", "x", "y"], 1)
+    @test c != Cmd(c.exec)
+    # printing
+    @test sprint(show, `A=1 B='x y' prog 'C=3' D=4`) == "`A=1 B='x y' prog C=3 D=4`"
+    @test sprint(show, `'A=1' prog`) == "`'A=1' prog`"
+    @test sprint(show, `A= B='~' prog`) == "`A= B='~' prog`"
+    q = `'A=1' prog`
+    @test sprint(show, `$a $q`) == "`A=1 B=2 'A=1' prog`"
+    for c in (`A=1 B='x y' prog 'C=3'`, `'A=1' prog`, `A= prog`, `A=1`, `$a $q`)
+        @test eval(Meta.parse(sprint(show, c))) == c
+    end
+    # with redirections and pipelines
+    @test `A=1 cmd >out` == `>out A=1 cmd` == pipeline(`A=1 cmd`, stdout="out")
+    @test `A=2>out cmd` == pipeline(`A=2 cmd`, stdout="out")  # `2` is not an fd
+    @test `cmd > A=1` == pipeline(`cmd`, stdout="A=1")
+    @test `A=1 a | B=2 b` == pipeline(`A=1 a`, `B=2 b`)
+    @test `a | B=2 b | c` == pipeline(`a`, `B=2 b`, `c`)
+    sp(s) = eval(Base.shell_parse(s; special=Base.shell_special)[1])
+    @test_throws "brace expansion in an environment assignment" sp("A={x,y} cmd")
+    # `shell_split` and a partial parse, for REPL completion, keep assignments as words
+    @test Base.shell_split("A=1 cmd") == ["A=1", "cmd"]
+    @test Base.shell_parse("A=1 cm"; partial=true)[1] == :((("A=1",), ("cm",)))
+    # the variables reach the process, on top of its environment, the last one winning
+    printenv = `$(Base.julia_cmd()) --startup-file=no -e 'print(get(ENV, "JL_A", "-"), get(ENV, "JL_B", "-"))'`
+    @test read(`JL_A=1 $printenv`, String) == "1-"
+    @test read(`JL_A=1 JL_B=2 JL_A=3 $printenv`, String) == "32"
+    a, b = `JL_A=1`, `JL_B=2 $printenv`
+    @test read(`$a $b`, String) == "12"
+    @test read(addenv(`JL_A=1 $printenv`, "JL_A" => "0", "JL_B" => "2"), String) == "12"
 end
 
 let roundtrip(s) = first(Base.shell_split(Base.shell_escape(s))) == s

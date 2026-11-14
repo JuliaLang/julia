@@ -7,6 +7,13 @@ New language features
 Language changes
 ----------------
 
+* In a command literal, unquoted words of the form `NAME=value` before the program name now
+  set environment variables for the command when it is run, as in a shell: ``` `FOO=bar cmd` ```
+  runs `cmd` with `FOO` set to `bar`. The assignments remain words of the command, so a command
+  interpolated in front of another keeps them, and one interpolated after a program name, as in
+  ``` `env $c` ```, passes them as arguments. Such words used to be the program name and its
+  first arguments; quoting them, as in ``` `'FOO=bar' cmd` ```, keeps that meaning.
+
 * `Slices` exposes `dataids` of its parent array to properly identify aliasing in broadcasting ([#49182]).
 
 Compiler/Runtime improvements

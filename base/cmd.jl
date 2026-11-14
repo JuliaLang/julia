@@ -19,11 +19,16 @@ struct Cmd <: AbstractCmd
     cpus::Union{Nothing,Vector{UInt16}}
     uid::Union{Nothing,UInt32}
     gid::Union{Nothing,UInt32}
+    # How many leading words of `exec` are environment assignments, `NAME=value`, which apply
+    # when the command is run. Only an unquoted `NAME=` before the program name in a command
+    # literal is one, and a command interpolated as a whole word keeps its own.
+    nassign::Int
     Cmd(exec::Vector{<:AbstractString}) =
-        new(exec, false, 0x00, nothing, "", nothing, nothing, nothing)
-    Cmd(cmd::Cmd, ignorestatus, flags, env, dir, cpus = nothing, uid = nothing, gid = nothing) =
+        new(exec, false, 0x00, nothing, "", nothing, nothing, nothing, 0)
+    Cmd(cmd::Cmd, ignorestatus, flags, env, dir, cpus = nothing, uid = nothing, gid = nothing,
+        nassign::Int = cmd.nassign) =
         new(cmd.exec, ignorestatus, flags, env,
-            dir === cmd.dir ? dir : cstr(dir), cpus, uid, gid)
+            dir === cmd.dir ? dir : cstr(dir), cpus, uid, gid, nassign)
     function Cmd(cmd::Cmd; ignorestatus::Bool=cmd.ignorestatus, env=cmd.env, dir::AbstractString=cmd.dir,
                  cpus::Union{Nothing,Vector{UInt16}} = cmd.cpus,
                  uid::Union{Nothing,UInt32} = cmd.uid,
@@ -35,7 +40,7 @@ struct Cmd <: AbstractCmd
                 windows_verbatim * UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS |
                 windows_hide * UV_PROCESS_WINDOWS_HIDE
         new(cmd.exec, ignorestatus, flags, byteenv(env),
-            dir === cmd.dir ? dir : cstr(dir), cpus, uid, gid)
+            dir === cmd.dir ? dir : cstr(dir), cpus, uid, gid, cmd.nassign)
     end
 end
 
@@ -96,9 +101,10 @@ This can then be passed to the `Cmd` constructor to modify its settings, e.g.
 """
 Cmd
 
-hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, hash(x.cpus, hash(x.uid, hash(x.gid, h))))))))
+hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, hash(x.cpus, hash(x.uid, hash(x.gid, hash(x.nassign, h)))))))))
 ==(x::Cmd, y::Cmd) = x.exec == y.exec && x.env == y.env && x.ignorestatus == y.ignorestatus &&
-                     x.dir == y.dir && isequal(x.flags, y.flags) && x.cpus == y.cpus && x.uid == y.uid && x.gid == y.gid
+                     x.dir == y.dir && isequal(x.flags, y.flags) && x.cpus == y.cpus && x.uid == y.uid && x.gid == y.gid &&
+                     x.nassign == y.nassign
 
 struct OrCmds <: AbstractCmd
     a::AbstractCmd
@@ -203,7 +209,7 @@ function show(io::IO, cmd::Cmd)
     print_uid && print(io, "setuid(")
 
     print(io, '`')
-    join(io, map(arg -> sprint(_show_cmd_word, arg, true; context=io), cmd.exec), ' ')
+    _show_cmd_words(io, cmd)
     print(io, '`')
 
     print_uid && (print(io, ", "); show(io, Int64(cmd.uid)); print(io, ")"))
@@ -298,9 +304,9 @@ end
 ## showing commands in backtick syntax ##
 
 # Print `word` as it would appear in a backtick literal.
-function _show_cmd_word(io::IO, word::AbstractString, underline::Bool)
+function _show_cmd_word(io::IO, word::AbstractString, underline::Bool, extra_special::AbstractString="")
     # A leading `~` would be expanded when the command is parsed back.
-    special = startswith(word, '~') ? _shell_display_special * '~' : _shell_display_special
+    special = string(_shell_display_special, extra_special, startswith(word, '~') ? "~" : "")
     s = sprint(context=io) do io
         if underline
             with_output_color(print_shell_word, :underline, io, word, special)
@@ -309,6 +315,34 @@ function _show_cmd_word(io::IO, word::AbstractString, underline::Bool)
         end
     end
     print(io, replace(s, '`' => "\\`"))
+end
+
+# Print the words of `cmd` as they would appear in a backtick literal. An environment
+# assignment keeps its `NAME=` unquoted, and the program name is quoted if it would otherwise
+# be read as an assignment.
+function _show_cmd_words(io::IO, cmd::Cmd)
+    for (i, word) in enumerate(cmd.exec)
+        i > 1 && print(io, ' ')
+        if i <= cmd.nassign
+            j = findfirst('=', word)::Int
+            value = SubString(word, nextind(word, j))
+            s = sprint(context=io) do io
+                print(io, SubString(word, 1, j))
+                isempty(value) || _show_cmd_word(io, value, false)
+            end
+            with_output_color(print, :underline, io, s)
+        else
+            special = i == cmd.nassign + 1 && _is_assignment_word(word) ? "=" : ""
+            _show_cmd_word(io, word, true, special)
+        end
+    end
+end
+
+# Whether `word` has the form of an environment assignment, `NAME=value`.
+function _is_assignment_word(word::AbstractString)
+    j = findfirst('=', word)
+    (j === nothing || j == firstindex(word) || isdigit(word[1])) && return false
+    return all(c -> isascii(c) && (isletter(c) || isdigit(c) || c == '_'), SubString(word, 1, prevind(word, j)))
 end
 
 # Print `cmd` as one backtick literal if it can be written that way, returning whether it was.
@@ -330,7 +364,7 @@ function _show_backtick_body(io::IO, cmd::Cmd, redirects)
     # Anything that `show` wraps around the backticks, like `setenv(...)`, has no shell syntax.
     (cmd.env === nothing || get_show_env_mode(io) === :none) && isempty(cmd.dir) &&
         cmd.uid === nothing && cmd.gid === nothing && cmd.cpus === nothing || return false
-    join(io, map(arg -> sprint(_show_cmd_word, arg, true; context=io), cmd.exec), ' ')
+    _show_cmd_words(io, cmd)
     for (op, r) in zip(("<", ">", "2>"), redirects)
         r === nothing && continue
         print(io, ' ', op, op != "<" && r.append ? ">" : "", ' ')
@@ -735,22 +769,38 @@ function cmd_glob_expand(mod::Module, words::Vector{_GlobArg})
     return args
 end
 
+# An environment assignment in a command literal, `NAME=value`.
+struct CmdAssignment
+    word::String
+end
+cmd_assignment(name::String, value) = CmdAssignment(cstr(string(name, '=', value)))
+
 function cmd_gen(parsed)
     args = String[]
-    if length(parsed) >= 1 && isa(parsed[1], Tuple{Cmd})
-        cmd = (parsed[1]::Tuple{Cmd})[1]
-        (ignorestatus, flags, env, dir, cpus, uid, gid) = (cmd.ignorestatus, cmd.flags, cmd.env, cmd.dir, cmd.cpus, cmd.uid, cmd.gid)
-        append!(args, cmd.exec)
-        for arg in tail(parsed)
-            append!(args, Base.invokelatest(arg_gen, arg...)::Vector{String})
+    # The leading words that are environment assignments: those written as assignments, and
+    # those of each command interpolated as a whole word while every word before it is one.
+    nassign = 0
+    leading = true
+    # A command interpolated as the first word passes on its settings, such as its environment.
+    head = length(parsed) >= 1 && isa(parsed[1], Tuple{Cmd}) ? (parsed[1]::Tuple{Cmd})[1] : nothing
+    for (i, arg) in enumerate(parsed)
+        if arg isa Tuple{CmdAssignment}
+            push!(args, arg[1].word)
+            nassign += leading
+            continue
         end
-        return Cmd(Cmd(args), ignorestatus, flags, env, dir, cpus, uid, gid)
-    else
-        for arg in parsed
-            append!(args, arg_gen(arg...)::Vector{String})
+        words = i == 1 && head !== nothing ? head.exec :
+            head !== nothing ? Base.invokelatest(arg_gen, arg...)::Vector{String} :
+            arg_gen(arg...)::Vector{String}
+        append!(args, words)
+        if leading
+            n = arg isa Tuple{Cmd} ? arg[1].nassign : 0
+            nassign += n
+            leading = n == length(words)
         end
-        return Cmd(args)
     end
+    head === nothing && return Cmd(Cmd(args), false, 0x00, nothing, "", nothing, nothing, nothing, nassign)
+    return Cmd(Cmd(args), head.ignorestatus, head.flags, head.env, head.dir, head.cpus, head.uid, head.gid, nassign)
 end
 
 @assume_effects :foldable !:consistent function cmd_gen(
