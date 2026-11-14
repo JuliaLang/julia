@@ -652,9 +652,58 @@ let v = ["x", "y"]
     @test `{a,pre$v}` == Cmd(["a", "prex", "prey"])
 end
 @test_throws "unterminated double quote" Base.shell_parse("{a,\"b\$}")
-@test_throws "must be quoted" eval(:(`{a,b*}`))
+@test_throws "unquoted `*` inside braces" eval(:(`{a,b*}`))
 @test_throws "unquoted `|` inside braces" eval(:(`{a,b|c}`))
 @test_throws "unquoted `>` inside braces" eval(:(`{a,b>c}`))
+
+# Globbing calls the `cmd_glob` function visible where the command appears. This one shows
+# the path components it is given.
+module GlobTest
+    cmd_glob(parts) = ["<" * join(parts, "|") * ">"]
+    v = "x*"
+    vs = ["a", "b"]
+    p = "x*/y?"
+end
+module EmptyGlobTest
+    cmd_glob(parts) = String[]
+end
+module NoGlobTest end
+let g(ex) = Core.eval(GlobTest, ex).exec
+    @test g(:(`ls *.txt`)) == ["ls", "<*.txt>"]
+    @test g(:(`ls a/b?`)) == ["ls", "<a|b?>"]
+    @test g(:(`ls [ab]c`)) == ["ls", "<[ab]c>"]
+    @test g(:(`ls *.txt x`)) == ["ls", "<*.txt>", "x"]
+    @test g(:(`ls /tmp/*`)) == ["ls", "</|tmp|*>"]
+    @test g(:(`ls ~/*`)) == ["ls", "<" * join([splitpath(homedir()); "*"], "|") * ">"]
+    # quoted, escaped and interpolated text is escaped with bracket expressions
+    @test g(:(`ls "a*"*`)) == ["ls", "<a[*]*>"]
+    @test g(:(`ls 'q?['*`)) == ["ls", "<q[?][[]*>"]
+    @test g(:(`ls a\*b*`)) == ["ls", "<a[*]b*>"]
+    @test g(:(`ls $v*`)) == ["ls", "<x[*]*>"]
+    @test g(:(`ls "$v"/*`)) == ["ls", "<x[*]|*>"]
+    @test g(:(`ls $vs*`)) == ["ls", "<a*>", "<b*>"]
+    # literal text is escaped in every component, and before the pattern is split
+    @test g(:(`ls a*/'b*'/c?`)) == ["ls", "<a*|b[*]|c?>"]
+    @test g(:(`ls /tmp/'x*'/*`)) == ["ls", "</|tmp|x[*]|*>"]
+    @test g(:(`ls $p/*`)) == ["ls", "<x[*]|y[?]|*>"]
+    @test g(:(`ls {'a*',b}/*`)) == ["ls", "<a[*]|*>", "<b|*>"]
+    @test g(:(@cmd("ls \"a\\b\"*"))) == ["ls", Sys.iswindows() ? "<a|b*>" : "<a[\\]b*>"]
+    # brace expansion comes first
+    @test g(:(`ls {a,b}*`)) == ["ls", "<a*>", "<b*>"]
+    @test g(:(`ls {a,$v}/*`)) == ["ls", "<a|*>", "<x[*]|*>"]
+    @test g(:(`ls {*}`)) == ["ls", "<{*}>"]  # not a brace expansion
+    # without `*`, `?` or `[`, a word is not a glob
+    @test g(:(`ls '*' "?" \[`)) == ["ls", "*", "?", "["]
+    @test g(:(`ls $(String[])`)) == ["ls"]
+    @test_throws "must be quoted" g(:(`ls a]`))
+    @test_throws "glob in a redirection target" g(:(`cat > *.txt`))
+    @test Core.eval(GlobTest, :(`ls *.txt | cat`)) == pipeline(`ls '<*.txt>'`, `cat`)
+end
+@test_throws "no files match the glob `*.txt`" Core.eval(EmptyGlobTest, :(`ls *.txt`))
+@test_throws "needs a `cmd_glob` function" Core.eval(NoGlobTest, :(`ls *.txt`))
+# shell_split and a partial parse, for REPL completion, do not glob
+@test Base.shell_split("ls *.txt") == ["ls", "*.txt"]
+@test Base.shell_parse("ls *.t"; partial=true)[1] == :((("ls",), ("*.t",)))
 # brace expansion works through shell mode path
 let echostr = Base.shell_escape(echocmd)
     mktempdir() do dir

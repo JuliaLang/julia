@@ -250,6 +250,50 @@ split on spaces for this, which introduces ambiguities. When trying to port shel
 Julia, try cut and pasting first. Since Julia shows commands to you before running them, you can
 easily and safely just examine its interpretation without doing any damage.
 
+## Globbing
+
+An unquoted `*`, `?` or `[` in a command makes the word it appears in a *glob*, which expands
+to the paths that match it, as in a shell:
+
+```julia
+julia> using Glob
+
+julia> `ls *.md`
+`ls NEWS.md README.md`
+```
+
+Julia does not match globs itself. It calls a function named `cmd_glob` that is visible in the
+module where the command appears, and so globbing works once a package that provides one, such
+as [Glob.jl](https://github.com/vtjnash/Glob.jl), is loaded with `using`. Without one, a command
+with a glob throws an error. What a pattern matches, including the meaning of `*`, `?` and
+`[...]` and of a `**` path component, is up to that function, so a package can implement
+whatever glob syntax it chooses.
+
+A glob is expanded when the command is created, relative to the current working directory, not
+when it runs, and a `dir` given to the [`Cmd`](@ref) constructor afterwards does not change
+it. Brace expansion and a leading `~` are expanded first. A glob that matches nothing throws an
+error, as a command such as `rm` or `cat` given no arguments would fail, read its standard input
+or do something else unexpected. To allow a pattern to match nothing, call the globbing function
+yourself and interpolate the result, which may be empty, as in `` `rm -f $(glob("*.bak"))` ``.
+
+Quoted or escaped characters are matched literally, and so are the values of interpolated
+expressions: `` `ls $dir/*.txt` `` lists the `.txt` files in the directory `dir`, even if its name
+contains spaces or glob characters, without the quotes most shells would need. A glob cannot be the target of a redirection, and `*`, `?` and `[` must be quoted
+inside braces. Like other special characters, a `]` outside a glob must be quoted.
+
+### Implementing `cmd_glob`
+
+A package that provides globbing defines and exports a function `cmd_glob(parts)`. Julia calls
+it with a `Vector{String}` of the components of one pattern, as split by [`splitpath`](@ref),
+so the package does not have to know which characters are path separators. If the pattern is an
+absolute path, the first component is its root, such as `"/"` or `"C:\\"`. The function returns
+a collection of the matching paths, which may be empty, as strings.
+
+Within a component, the unquoted glob characters appear as written, and every literal `*`, `?`
+or `[`, and on Unix every literal `\`, appears as a bracket expression that contains just that
+character, such as `[*]`. A pattern matching implementation that supports bracket expressions
+therefore matches these characters literally without any special treatment.
+
 ## Pipelines
 
 Shell metacharacters, such as `|`, `&`, and `>`, need to be quoted (or escaped) inside of Julia's backticks:
