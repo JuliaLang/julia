@@ -953,6 +953,26 @@ end
     @test rationalize(Int64, big(r)) == r
 end
 
+@testset "rationalize float with zero tol" begin
+    @test rationalize(Int64, 0.1, tol=0) == 3602879701896397//36028797018963968
+    @test rationalize(Int64, -123.456, tol=0) == -8687443681197687//70368744177664
+    @test rationalize(Int64, 16.0, tol=0) == 16//1
+
+    for F in (Float16, Float32, Float64)
+        T = Base.inttype(F)
+        x = inv(maxintfloat(F))
+        @test rationalize(T, x, tol=0) == one(T)//T(maxintfloat(F))
+        @test rationalize(T, 17x, tol=0) == T(17)//T(maxintfloat(F))
+        @test rationalize(T, 256x, tol=0) == T(256)//T(maxintfloat(F))
+
+        for x in (floatmin(F), prevfloat(floatmin(F)), nextfloat(F(0.0)))
+            r = Rational{BigInt}(x)
+            @test rationalize(BigInt, x, tol=0) == r
+            @test (rationalize(T, x, tol=0) == r) == (r.den ≤ typemax(T))
+        end
+    end
+end
+
 @testset "rationalize(Union{}, x) throws MethodError" begin
     # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
     for x in (1.5, 3//2, 1, pi, 1.5 + 2.5im)
