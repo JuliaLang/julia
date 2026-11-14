@@ -46,6 +46,8 @@ typedef struct {
     _Atomic(uint64_t) bigalloc;
     _Atomic(int64_t) free_acc;
     _Atomic(uint64_t) alloc_acc;
+    // bytes moved out of `allocd` by GC resets, so `allocd + allocd_flushed` never decreases
+    _Atomic(int64_t) allocd_flushed;
 } jl_thread_gc_num_common_t;
 
 typedef struct {
