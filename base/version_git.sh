@@ -99,7 +99,14 @@ case $(uname) in
     date_string="$(date --date="@$git_time" -u '+%Y-%m-%d %H:%M %Z')"
     ;;
 esac
-if [ $(git describe --tags --exact-match 2> /dev/null) ]; then
+if [ "${JULIA_RELEASE_BUILD:-0}" = "1" ]; then
+    # Declared release build (see JULIA_RELEASE_BUILD in Make.inc): report the
+    # state that building from the (possibly not yet created) release tag would.
+    # Commits after the VERSION bump (fixes found during the release) must not
+    # show up as a build number.
+    tagged_commit="true"
+    build_number=0
+elif [ -n "$(git tag --points-at HEAD --list "v$(cat "$topdir/VERSION")")" ]; then
     tagged_commit="true"
 else
     tagged_commit="false"
