@@ -348,12 +348,23 @@ end
 function _resolved_path(path::AbstractString, keep_link::Bool)
     isabspath(path) || (path = joinpath(pwd(), path))
     if ispath(path)
-        keep_link && islink(path) || return realpath(path)
-        return joinpath(realpath(dirname(path)), basename(path))
+        keep_link && islink(path) || return _try_realpath(path)
+        return joinpath(_try_realpath(dirname(path)), basename(path))
     end
     parent = dirname(path)
     parent == path && return path
     return normpath(joinpath(_resolved_path(parent, false), basename(path)))
+end
+
+# Resolving a path can fail even when it exists, as on some Windows network drives.
+# The checks then use the path as given.
+function _try_realpath(path::AbstractString)
+    try
+        return realpath(path)
+    catch e
+        e isa IOError || rethrow()
+        return normpath(path)
+    end
 end
 
 _is_within(inner::AbstractString, outer::AbstractString) =
