@@ -1822,25 +1822,6 @@ JL_DLLEXPORT jl_typemap_entry_t *jl_mt_find_cache_entry(jl_methcache_t *cache, j
     return mt_find_cache_entry(&cache->cache, &cache->leafcache, tt, world, jl_cachearg_offset());
 }
 
-// `jl_typemap_assoc_exact` matches `TypeEgal{A}` slots from the argument values, while
-// the leafcache needs the argument tuple type to be built first (#60701). So the
-// compilation signature of a call into a slot declared as a concrete `Type{X}`
-// (constructors mostly) is filed in the typemap too. Other `TypeEgal{A}` slots are not
-// worth it: every entry in the typemap is visited when a method is added and scanned by
-// lookups by type.
-static int has_concrete_type_slot(jl_method_t *definition, jl_tupletype_t *tt) JL_NOTSAFEPOINT
-{
-    size_t i, np = jl_nparams(tt);
-    for (i = 0; i < np; i++) {
-        if (jl_is_typeegal(jl_tparam(tt, i))) {
-            jl_value_t *decl_i = jl_nth_slot_type(definition->sig, i);
-            if (jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i))
-                return 1;
-        }
-    }
-    return 0;
-}
-
 static jl_value_t *compute_simplett(jl_tupletype_t *cachett) JL_CANSAFEPOINT
 {
     // now scan `cachett` and ensure that `Type{T}` in the cache will be matched exactly by `typeof(T)`
@@ -1885,7 +1866,6 @@ static void cache_insert(
         jl_tupletype_t *cachett,
         jl_svec_t *guardsigs,
         jl_method_instance_t *newmeth,
-        int compilationsig, // `cachett` is the compilation signature
         int offs) JL_CANSAFEPOINT
 {
     // exact-dispatch lookups (`jl_typemap_entry_assoc_exact`) require datatype sigs
@@ -1898,8 +1878,10 @@ static void cache_insert(
     JL_GC_PUSH2(&simplett, &newentry);
     simplett = (jl_datatype_t*)compute_simplett(cachett);
     newentry = jl_typemap_alloc(cachett, simplett, guardsigs, (jl_value_t*)newmeth, min_valid, max_valid);
-    if (mc && tt && cachett == tt && tt->hash && !tt->hasfreetypevars &&
-        !(compilationsig && has_concrete_type_slot(definition, tt))) {
+    // a type-valued callee (a constructor) is always filed in the typemap, which indexes it
+    // by the name of that type, matched straight from the value
+    int type_callee = jl_nparams(cachett) && jl_is_some_Type(jl_tparam0(cachett));
+    if (mc && tt && cachett == tt && tt->hash && !tt->hasfreetypevars && !type_callee) {
         // we check `tt->hash` exists, since otherwise the NamedTuple
         // constructor and `structdiff` method pollutes this lookup with a lot
         // of garbage in the linear table search
@@ -1928,7 +1910,7 @@ static void cache_insert(
     }
     else {
          jl_typemap_insert(cache, parent, newentry, offs);
-         if (mt) {
+         if (mt && !type_callee) { // the count is only read for callees that are not types
              jl_typename_t *tn = jl_nth_argument_datatypename((jl_value_t*)(tt ? tt : cachett), 1);
              if (tn) {
                  int cache_entry_count = jl_atomic_load_relaxed(&tn->cache_entry_count);
@@ -2014,7 +1996,7 @@ static jl_method_instance_t *cache_result(
     newmeth = jl_specializations_get_linfo(definition, (jl_value_t*)tt, sparams);
     JL_GC_PUSH1(&newmeth);
     cache_insert(mt, mc, cache, parent, definition, tt, min_valid, max_valid, current_world, tt,
-        jl_emptysvec, newmeth, 0, offs);
+        jl_emptysvec, newmeth, offs);
     JL_GC_POP();
     return newmeth;
 }
@@ -2050,8 +2032,7 @@ static void recache_method(
             jl_gc_write_atomic(entry, *(_Atomic(jl_method_instance_t*)*)&entry->func.linfo,
                    jl_method_instance_t, newmeth, release);
             orig_in_cache = 1;
-            if (jl_egal((jl_value_t*)tt, (jl_value_t*)newmeth->specTypes) &&
-                !has_concrete_type_slot(definition, tt)) {
+            if (jl_egal((jl_value_t*)tt, (jl_value_t*)newmeth->specTypes)) {
                 if (mc) JL_UNLOCK(&mc->writelock);
                 return; // cache entry already sufficient
             }
@@ -2183,7 +2164,7 @@ static void recache_method(
     }
 
     cache_insert(mt, mc, cache, parent, definition, tt, min_valid, max_valid, current_world, (jl_tupletype_t*)cachett,
-        guardsigs, newmeth, !cache_with_orig, offs);
+        guardsigs, newmeth, offs);
     JL_GC_POP();
     return;
 }
@@ -5407,8 +5388,10 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
     JL_TIMING(METHOD_LOOKUP_FAST, METHOD_LOOKUP_FAST);
     jl_methcache_t *mc = jl_method_table->cache;
     jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
-    int cache_entry_count = jl_atomic_load_relaxed(&((jl_datatype_t*)FT)->name->cache_entry_count);
-    if (leafcache != (jl_genericmemory_t*)jl_an_empty_memory_any && (cache_entry_count == 0 || cache_entry_count >= 8)) {
+    // a type-valued callee is never in the leafcache (see `cache_insert`)
+    int type_callee = jl_is_kind(FT);
+    int cache_entry_count = type_callee ? 0 : jl_atomic_load_relaxed(&((jl_datatype_t*)FT)->name->cache_entry_count);
+    if (!type_callee && leafcache != (jl_genericmemory_t*)jl_an_empty_memory_any && (cache_entry_count == 0 || cache_entry_count >= 8)) {
         // hashing args is expensive, but so do that only if looking at mc->cache is probably even more expensive
         tt = lookup_arg_type_tuple(F, args, nargs);
         if (tt != NULL)
@@ -5425,7 +5408,8 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
                 // grow/replace mc->leafcache, freeing the memory `leafcache` still
                 // points at. Reload before dereferencing it in lookup_leafcache.
                 leafcache = jl_atomic_load_relaxed(&mc->leafcache);
-                entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
+                if (!type_callee)
+                    entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
             }
         }
     }
