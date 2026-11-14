@@ -80,15 +80,9 @@ if Sys.iswindows()
     end
 end
 
-# Simulate what the REPL shell mode does: parse the line, dispatch
-# simple commands through cmd_gen, and call repl_cmd.
-function shell_mode_run(line::String; stdout=nothing)
-    cmd_ex = Base.shell_parse(line)[1]
-    if Meta.isexpr(cmd_ex, :tuple)
-        cmd_ex = :(Base.cmd_gen($cmd_ex))
-    end
-    eval(:(Base.repl_cmd($cmd_ex, $(something(stdout, devnull)))))
-end
+# Run a line as REPL shell mode does.
+shell_mode_run(line::String; stdout=nothing) =
+    eval(Base.shell_mode_expr(line, something(stdout, devnull)))
 
 #### Examples used in the manual ####
 
@@ -884,6 +878,82 @@ mktempdir() do dir
         global dircmd = Cmd(`$shcmd -c "pwd > $outstr"`, dir=dir)
         shell_mode_run("\$dircmd")
         @test samefile(strip(read(outfile, String)), dir)
+    end
+end
+
+@testset "shell mode sequences with `&&`, `||` and `;`" begin
+    echostr, truestr, falsestr = Base.shell_escape.((echocmd, truecmd, falsecmd))
+    # parsing: each command with the operator before it
+    sq(s) = Base.shell_parse_sequence(s)
+    @test sq("a b") == [:then => :((("a",), ("b",)))]
+    @test sq("a && b || c; d;") == [:then => :((("a",),)), :and => :((("b",),)),
+                                    :or => :((("c",),)), :then => :((("d",),))]
+    @test sq("a&&b") == sq("a && b")
+    @test sq("a;b") == sq("a ; b") == [:then => :((("a",),)), :then => :((("b",),))]
+    @test sq("a | b || c") == [:then => sq("a | b")[1].second, :or => :((("c",),))]
+    # quoted and escaped operators are part of a word
+    let c = sq("echo 'a;b' \"&&\" \\|\\| 'a&b' \\(x\\)")
+        @test length(c) == 1 && Base.cmd_gen(eval(c[1].second)).exec == ["echo", "a;b", "&&", "||", "a&b", "(x)"]
+    end
+    # characters that command literals reject unquoted are rejected in shell mode too
+    @test_throws "subshells with `( ... )` are not supported in shell mode" sq("(echo hello; echo world) | sort -r")
+    @test_throws "subshells with `( ... )` are not supported" sq("echo (hi)")
+    @test_throws "in the background with `&` is not supported" sq("sleep 10 &")
+    @test_throws "in the background with `&` is not supported" sq("a & b")
+    @test_throws "must be quoted" sq("echo a#b")
+    @test_throws "must be quoted" sq("echo a]")
+    @test sq("echo *.txt")[1].second isa Expr  # globs still work
+    for (s, msg) in ("; a" => "empty command before `;`", "a;; b" => "empty command before `;`",
+                     "&& a" => "empty command before `&&`", "a || || b" => "empty command before `||`",
+                     "a &&" => "no command after `&&`", "a ||" => "no command after `||`",
+                     "a > ; b" => "redirect operator without filename")
+        @test_throws msg sq(s)
+    end
+    @test sq("  ") == [:then => Expr(:tuple, :())]  # as `shell_parse` gives
+    # in `shell_parse`, the operators are ordinary text, and backticks reject them
+    @test Base.shell_parse("a;b && c")[1] == :((("a;b",), ("&&",), ("c",)))
+    # backticks and `shell_parse` say that sequences are only for shell mode
+    for op in (";", "&&", "||")
+        @test_throws "`$op` between commands is only supported in REPL shell mode" eval(Meta.parse("`a $op b`"))
+    end
+    @test_throws "`||` between commands" Base.shell_parse("a || b")
+    @test_throws "`&&` between commands" Base.shell_parse("a&&b"; special=Base.shell_special)
+    @test_throws "must be quoted" Base.shell_parse("a & b"; special=Base.shell_special)
+    @test_throws "must be quoted" Base.shell_parse("{a,b;c}"; special=Base.shell_special)
+    @test Base.shell_parse("a || b"; partial=true)[1] == :((("b",),))  # completion does not throw
+    # running: `&&` and `||` have equal precedence and group to the left
+    mktempdir() do dir
+        f(name) = Base.shell_escape(joinpath(dir, name))
+        ran(name) = isfile(joinpath(dir, name))
+        shell_mode_run("$falsestr && $echostr x > $(f("and_false"))")
+        shell_mode_run("$truestr && $echostr x > $(f("and_true"))")
+        shell_mode_run("$falsestr || $echostr x > $(f("or_false"))")
+        shell_mode_run("$truestr || $echostr x > $(f("or_true"))")
+        shell_mode_run("$falsestr; $echostr x > $(f("then_false"))")
+        shell_mode_run("$truestr && $falsestr || $echostr x > $(f("and_or"))")
+        shell_mode_run("$falsestr && $echostr x > $(f("skipped")) || $echostr x > $(f("left"))")
+        shell_mode_run("$echostr x | $falsestr && $echostr x > $(f("pipe_status"))")
+        @test (ran("and_false"), ran("and_true"), ran("or_false"), ran("or_true")) == (false, true, true, false)
+        @test ran("then_false") && ran("and_or") && !ran("skipped") && ran("left")
+        @test !ran("pipe_status") # a pipeline's status is its last command's
+        # each command is built only when it runs, and a failure building one is a failure
+        shell_mode_run("$falsestr && $echostr \$(error(\"not built\")) > $(f("unbuilt"))")
+        @test !ran("unbuilt")
+        redirect_stderr(devnull) do
+            shell_mode_run("$echostr \$(error(\"build failure\")) || $echostr x > $(f("build_failed"))")
+        end
+        @test ran("build_failed")
+        # `cd` affects the commands after it
+        mkdir(joinpath(dir, "sub"))
+        withenv("OLDPWD" => nothing) do
+            old = pwd()
+            try
+                shell_mode_run("cd $(f("sub")) && $echostr x > in_sub")
+            finally
+                cd(old)
+            end
+        end
+        @test ran(joinpath("sub", "in_sub"))
     end
 end
 
