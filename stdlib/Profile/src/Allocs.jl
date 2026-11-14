@@ -43,7 +43,7 @@ Profile allocations that happen during `expr`, returning the result of `expr`. U
 
 A sample rate of 1.0 will record everything; 0.0 will record nothing.
 
-```julia
+```julia-repl
 julia> Profile.Allocs.@profile sample_rate=0.01 peakflops()
 1.03733270279065e11
 

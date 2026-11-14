@@ -2124,7 +2124,7 @@ julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)  # same as hcat
 ```
 
 Construct a block diagonal matrix:
-```
+```jldoctest
 julia> cat(true, trues(2,2), trues(4)', dims=(1,2))  # block-diagonal
 4×7 Matrix{Bool}:
  1  0  0  0  0  0  0
@@ -2133,7 +2133,7 @@ julia> cat(true, trues(2,2), trues(4)', dims=(1,2))  # block-diagonal
  0  0  0  1  1  1  1
 ```
 
-```
+```jldoctest
 julia> cat(1, [2], [3;;]; dims=Val(2))
 1×3 Matrix{Int64}:
  1  2  3
@@ -3664,7 +3664,7 @@ they must all have the same [`axes`](@ref), and the answer will too.
 See also [`broadcast`](@ref), which allows mismatched sizes.
 
 # Examples
-```
+```julia-repl
 julia> map(//, [1 2; 3 4], [4 3; 2 1])
 2×2 Matrix{Rational{$Int}}:
  1//4  2//3

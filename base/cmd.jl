@@ -492,7 +492,7 @@ libuv does not support affinity setting.
 
 In Linux, the `taskset` command line program can be used to see how `setcpuaffinity` works.
 
-```julia
+```julia-repl
 julia> run(setcpuaffinity(`sh -c 'taskset -p \$\$'`, [1, 2, 5]));
 pid 2273's current affinity mask: 13
 ```
@@ -500,7 +500,7 @@ pid 2273's current affinity mask: 13
 Note that the mask value `13` reflects that the first, second, and the fifth bits (counting
 from the least significant position) are turned on:
 
-```julia
+```julia-repl
 julia> 0b010011
 0x13
 ```
@@ -524,7 +524,7 @@ Requires appropriate permissions to set UID.
 
 # Examples
 
-```julia
+```julia-repl
 julia> run(setuid(`id -u`, 1000));
 1000
 ```
@@ -548,7 +548,7 @@ Requires appropriate permissions to set GID.
 
 # Examples
 
-```julia
+```julia-repl
 julia> run(setgid(`id -g`, 1000));
 1000
 ```
