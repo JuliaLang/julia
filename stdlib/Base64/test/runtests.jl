@@ -110,6 +110,14 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
     # Bit padding should be ignored, which means that `jl` and `jk` should give the same result.
     @test base64decode("jl") == base64decode("jk") == base64decode("jk==") == [142]
     @test base64decode("Aa") == base64decode("AS") == base64decode("AS==") == [1]
+
+    # reading past the end of the decoded data
+    @test read(Base64DecodePipe(IOBuffer("QQ==")), 5) == [0x41]
+    let pipe = Base64DecodePipe(IOBuffer("QQ=="))
+        @test read(pipe, UInt8) == 0x41
+        @test_throws EOFError read(pipe, UInt8)
+        @test_throws EOFError unsafe_read(Base64DecodePipe(IOBuffer("QQ==")), pointer(zeros(UInt8, 4)), 4)
+    end
 end
 
 @testset "Random data" begin
@@ -118,6 +126,15 @@ end
         data = rand(mt, UInt8, rand(0:300))
         @test hash(base64decode(base64encode(data))) == hash(data)
     end
+    # writes that do not line up with three-byte groups, and writes larger than the buffer
+    for chunks in ([b"a", b"bcd", b"e", b"fg"], [[b] for b in b"abcdefg"], [rand(mt, UInt8, 1000)])
+        io = IOBuffer()
+        pipe = Base64EncodePipe(io)
+        foreach(c -> write(pipe, c), chunks)
+        close(pipe)
+        @test String(take!(io)) == base64encode(reduce(vcat, chunks))
+    end
+    @test base64encode(show, 0.1f0; context=:compact => true) == base64encode("0.1")
 end
 
 struct PNG end

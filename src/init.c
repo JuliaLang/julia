@@ -684,7 +684,7 @@ JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
         /* sanitize_address */ 0,
 #endif
         /* unique_names */ 0,
-        /* debug_info_inline_scopes */ 0, // later !jl_generating_output() in release builds
+        /* debug_info_inline_scopes */ 0, // later 1 in assert builds, and when a debugger or profiler listens to the JIT
 };
 
 static void init_global_mutexes(void) JL_NOTSAFEPOINT {
@@ -802,7 +802,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     }
     // Initialize constant objects
     jl_nothing = jl_gc_permobj(ptls, 0, jl_nothing_type, 0);
-    jl_set_typetagof(jl_nothing, jl_nothing_tag, GC_OLD_MARKED);
+    jl_set_typetagof(jl_nothing, jl_nothing_tag, GC_PERM_BITS);
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     jl_init_box_caches();

@@ -1905,9 +1905,9 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
         ptls->gc_tls.heap.remset_nptr++; // conservative
         // Image objects are analogous to a third "permanent" GC
         // generation, so here we maintain the remset for them.
-        if (__unlikely((header & GC_IN_IMAGE) && !(header & GC_IN_IMAGE_REMSET))) {
-            header = jl_atomic_fetch_or_relaxed((_Atomic(uintptr_t) *)&o->header, GC_IN_IMAGE_REMSET);
-            if (!(header & GC_IN_IMAGE_REMSET)) {
+        if (__unlikely(header & GC_PERM_NOT_REMSET)) {
+            header = jl_atomic_fetch_and_relaxed((_Atomic(uintptr_t) *)&o->header, ~(uintptr_t)GC_PERM_NOT_REMSET);
+            if (header & GC_PERM_NOT_REMSET) {
                 int last_errno = errno; // waiting on a lock can affect errno
 #ifdef _OS_WINDOWS_
                 DWORD last_error = GetLastError();
@@ -1928,50 +1928,17 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
 
 JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
 {
-    if (ptr == NULL)
-        return;
-    // Image objects are never freed, and marking does not trace through them, so no
-    // edge to one needs to be remembered, not even from an image object.
-    if (jl_astaggedvalue(ptr)->bits.in_image != 0)
-        return;
-    if (jl_astaggedvalue(parent)->bits.in_image != 1 /* GC_IN_IMAGE_NOT_REMSET */ && // parent is not an unmarked image object
-        (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) != 0) // ptr is old
-        return;
-    jl_gc_queue_root((jl_value_t*)parent);
+    if (jl_gc_wb_must_remember(parent, ptr))
+        jl_gc_queue_root((jl_value_t*)parent);
 }
 
 void jl_gc_multi_wb_cold(const jl_value_t *parent, void *dest JL_UNUSED, const void *ptr, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
-    const jl_datatype_layout_t *ly = dt->layout;
-    uint32_t npointers = ly->npointers;
-    //if (npointers == 0) // this was checked by the caller
-    //    return;
-    jl_value_t *ptrf = ((jl_value_t**)ptr)[ly->first_ptr];
-    if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
-        // this pointer is young
-        jl_gc_wb_object(parent);
-        return;
-    }
-    assert(ly->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
-    const uint8_t *ptrs8 = (const uint8_t *)jl_dt_layout_ptrs(ly);
-    const uint16_t *ptrs16 = (const uint16_t *)jl_dt_layout_ptrs(ly);
-    const uint32_t *ptrs32 = (const uint32_t*)jl_dt_layout_ptrs(ly);
-    for (size_t i = 1; i < npointers; i++) {
-        uint32_t fld;
-        if (ly->flags.fielddesc_type == JL_FIELDDESC_8) {
-            fld = ptrs8[i];
-        }
-        else if (ly->flags.fielddesc_type == JL_FIELDDESC_16) {
-            fld = ptrs16[i];
-        }
-        else {
-            assert(ly->flags.fielddesc_type == JL_FIELDDESC_32);
-            fld = ptrs32[i];
-        }
-        jl_value_t *ptrf = ((jl_value_t**)ptr)[fld];
-        if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
-            // this pointer is young
-            jl_gc_wb_object(parent);
+    // the caller checked that parent is old and not in the remset, and that npointers != 0
+    size_t npointers = dt->layout->npointers;
+    for (size_t i = 0; i < npointers; i++) {
+        if (jl_gc_wb_must_remember(parent, ((jl_value_t**)ptr)[jl_ptr_offset(dt, i)])) {
+            jl_gc_queue_root(parent);
             return;
         }
     }
@@ -2137,7 +2104,7 @@ STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq2) JL_
 STATIC_INLINE int gc_in_sysimg(const void *obj) JL_NOTSAFEPOINT
 {
     int in_sysimg = (uintptr_t)obj - jl_sysimage_start - 1 < jl_sysimage_size;
-    assert(!in_sysimg || (jl_astaggedvalue(obj)->bits.in_image && jl_astaggedvalue(obj)->bits.gc == GC_OLD_MARKED));
+    assert(!in_sysimg || (jl_astaggedvalue(obj)->bits.perm && jl_astaggedvalue(obj)->bits.gc == GC_OLD_MARKED));
     return in_sysimg;
 }
 
@@ -2743,7 +2710,8 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         uint8_t bits = (gc_old(o->header) && !mark_reset_age) ? GC_OLD_MARKED : GC_MARKED;
         int update_meta = __likely(!remset_object && !(GC_VERIFY_ENABLED && gc_verifying));
         int foreign_alloc = 0;
-        if (update_meta && o->bits.in_image) {
+        // a permanent object (from an image or `jl_gc_permobj`) has no page metadata to update
+        if (update_meta && o->bits.perm) {
             foreign_alloc = 1;
             update_meta = 0;
         }
@@ -4735,10 +4703,14 @@ jl_value_t *jl_gc_permobj(jl_ptls_t _ptls, size_t sz, void *ty, unsigned align) 
         align = ((sz == 0) ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
                                                  sizeof(void*) * 2 : 16));
     }
-    jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0, align,
-                                                              sizeof(void*) % align);
-    jl_value_t* v = jl_valueof(o);
-    jl_set_typeof(v, (void*)(((uintptr_t)(ty) | GC_OLD_MARKED)));
+    // like an image object, a mutable one keeps its `objectid` in the word before its header
+    jl_datatype_t *dt = (jl_datatype_t*)ty;
+    size_t idsz = dt && jl_is_datatype(dt) && dt->name && dt->name->mutabl ? sizeof(void*) : 0;
+    char *p = (char*)jl_gc_perm_alloc(allocsz + idsz, 0, align, (idsz + sizeof(void*)) % align);
+    jl_value_t *v = jl_valueof(p + idsz);
+    if (idsz)
+        ((uintptr_t*)v)[-2] = inthash((uintptr_t)v);
+    jl_set_typeof(v, (void*)(((uintptr_t)(ty) | GC_PERM_BITS)));
     return v;
 }
 

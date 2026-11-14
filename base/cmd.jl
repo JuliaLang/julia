@@ -118,6 +118,10 @@ struct AndCmds <: AbstractCmd
     AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
 end
 
+hash(x::OrCmds, h::UInt) = hash(x.a, hash(x.b, hash(OrCmds, h)))
+==(x::OrCmds, y::OrCmds) = x.a == y.a && x.b == y.b
+hash(x::ErrOrCmds, h::UInt) = hash(x.a, hash(x.b, hash(ErrOrCmds, h)))
+==(x::ErrOrCmds, y::ErrOrCmds) = x.a == y.a && x.b == y.b
 hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
 ==(x::AndCmds, y::AndCmds) = x.a == y.a && x.b == y.b
 
@@ -164,7 +168,7 @@ function show_env(io::IO, env::Vector{String})
     print(io, "[")
     for (i, e) in enumerate(env)
         i > 1 && print(io, ", ")
-        eqidx = findnext('=', e, 2)
+        eqidx = isempty(e) ? nothing : findnext('=', e, nextind(e, 1))
         if eqidx === nothing || mode === :all
             show(io, e)
         elseif mode === :keys
@@ -268,6 +272,9 @@ struct CmdRedirect <: AbstractCmd
     readable::Bool
 end
 CmdRedirect(cmd, handle, stream_no) = CmdRedirect(cmd, handle, stream_no, stream_no == STDIN_NO)
+hash(x::CmdRedirect, h::UInt) = hash(x.cmd, hash(x.handle, hash(x.stream_no, hash(x.readable, h))))
+==(x::CmdRedirect, y::CmdRedirect) = x.cmd == y.cmd && x.handle == y.handle &&
+                                     x.stream_no == y.stream_no && x.readable == y.readable
 
 function show(io::IO, cr::CmdRedirect)
     _show_as_backticks(io, cr) && return
@@ -485,7 +492,7 @@ libuv does not support affinity setting.
 
 In Linux, the `taskset` command line program can be used to see how `setcpuaffinity` works.
 
-```julia
+```julia-repl
 julia> run(setcpuaffinity(`sh -c 'taskset -p \$\$'`, [1, 2, 5]));
 pid 2273's current affinity mask: 13
 ```
@@ -493,7 +500,7 @@ pid 2273's current affinity mask: 13
 Note that the mask value `13` reflects that the first, second, and the fifth bits (counting
 from the least significant position) are turned on:
 
-```julia
+```julia-repl
 julia> 0b010011
 0x13
 ```
@@ -517,7 +524,7 @@ Requires appropriate permissions to set UID.
 
 # Examples
 
-```julia
+```julia-repl
 julia> run(setuid(`id -u`, 1000));
 1000
 ```
@@ -541,7 +548,7 @@ Requires appropriate permissions to set GID.
 
 # Examples
 
-```julia
+```julia-repl
 julia> run(setgid(`id -g`, 1000));
 1000
 ```

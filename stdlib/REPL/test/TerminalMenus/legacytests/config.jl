@@ -6,6 +6,7 @@
 @test_throws TypeError TerminalMenus.config(scroll=true)
 # :foo is not a valid scroll option
 @test_throws ArgumentError TerminalMenus.config(scroll=:foo)
+@test_throws "charset should be :ascii or :unicode" TerminalMenus.config(charset=:foo)
 # Test scroll wrap
 TerminalMenus.config(scroll=:wrap)
 @test TerminalMenus.CONFIG[:scroll_wrap] == true

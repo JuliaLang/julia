@@ -97,6 +97,25 @@ top:
   ret {} addrspace(10)* %v
 }
 
+; A barrier with several children compares the AND of their tags, the lowest child level,
+; with the parent's threshold (`jl_gc_wb_must_remember` is the reference).
+declare void @julia.object_write_barrier({} addrspace(10)*, ...)
+
+define void @write_barrier_children({} addrspace(10)* %parent, {} addrspace(10)* %a, {} addrspace(10)* %b) {
+top:
+; CHECK-LABEL: @write_barrier_children
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  call void ({} addrspace(10)*, ...) @julia.object_write_barrier({} addrspace(10)* %parent, {} addrspace(10)* %a, {} addrspace(10)* %b)
+; CHECK: may_trigger_wb:
+; CHECK-NEXT: %parent_threshold = and i64 %{{.*}}, 4
+; CHECK: %child_tags = and i64
+; CHECK-NEXT: %child_level = and i64 %child_tags, 9
+; CHECK-NEXT: %should_trigger_wb = icmp ule i64 %child_level, %parent_threshold
+; CHECK: trigger_wb:
+; CHECK-NEXT: call void @ijl_gc_queue_root(ptr addrspace(10) %parent)
+  ret void
+}
+
 !0 = !{!1, !1, i64 0}
 !1 = !{!"jtbaa_gcframe", !2, i64 0}
 !2 = !{!"jtbaa"}

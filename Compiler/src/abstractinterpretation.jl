@@ -92,15 +92,6 @@ function multiple_methods(m::UnionSplitMethodMatches)
     return false
 end
 
-nmatches(info::MethodMatchInfo) = length(info.results)
-function nmatches(info::UnionSplitInfo)
-    n = 0
-    for mminfo in info.split
-        n += nmatches(mminfo)
-    end
-    return n
-end
-
 # intermediate state for computing gfresult
 mutable struct CallInferenceState
     inferidx::Int

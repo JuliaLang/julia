@@ -659,13 +659,13 @@ See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref).
 
 ```julia-repl
 julia> @lock_conflicts begin
-    l = ReentrantLock()
-    Threads.@threads for i in 1:Threads.nthreads()
-        lock(l) do
-        sleep(1)
-        end
-    end
-end
+           l = ReentrantLock()
+           Threads.@threads for i in 1:Threads.nthreads()
+               lock(l) do
+               sleep(1)
+               end
+           end
+       end
 5
 ```
 

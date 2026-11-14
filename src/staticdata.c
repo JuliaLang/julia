@@ -307,20 +307,22 @@ JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
 {
     if (obj == NULL)
         return 0;
-    uint8_t in_image = jl_astaggedvalue(obj)->bits.in_image != 0;
     assert((uintptr_t) obj % 4 == 0 && "Object not 4-byte aligned!");
+    // the `perm` bit marks every permanent object, so it only rules objects out
+    uint8_t in_image = jl_astaggedvalue(obj)->bits.perm != 0 &&
+                       eyt_tree_is_in_range(&image_tree, (uintptr_t)obj);
 #ifndef NDEBUG
-    if (eyt_tree_is_in_range(&image_tree, (uintptr_t)obj) != in_image) {
+    if (!jl_astaggedvalue(obj)->bits.perm && eyt_tree_is_in_range(&image_tree, (uintptr_t)obj)) {
         // print enough context to identify the object before aborting
         jl_datatype_t *ty = (jl_datatype_t*)jl_typeof(obj);
         jl_safe_printf("jl_object_in_image inconsistency: obj %p header %zx "
-                       "bits.in_image %d not matching image tree, typeof %p (%s)\n",
-                       (void*)obj, (size_t)jl_astaggedvalue(obj)->header, (int)in_image,
+                       "in the image tree without the perm bit, typeof %p (%s)\n",
+                       (void*)obj, (size_t)jl_astaggedvalue(obj)->header,
                        (void*)ty,
                        jl_is_datatype(ty) ? jl_symbol_name(ty->name->name) : "<?>");
     }
 #endif
-    assert(eyt_tree_is_in_range(&image_tree, (uintptr_t)obj) == in_image);
+    assert(jl_astaggedvalue(obj)->bits.perm || !eyt_tree_is_in_range(&image_tree, (uintptr_t)obj));
     return in_image;
 }
 
@@ -754,9 +756,9 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         jl_queue_for_serialization_(s, (jl_value_t*)dt->parameters, 1, 1);
 #ifndef NDEBUG
         if (jl_is_datatype_singleton(dt) &&
-            eyt_tree_is_in_range(&image_tree, (uintptr_t)dt->instance) !=
-                (jl_astaggedvalue(dt->instance)->bits.in_image != 0)) {
-            jl_safe_printf("singleton instance with inconsistent in_image bit: type %s.%s\n",
+            eyt_tree_is_in_range(&image_tree, (uintptr_t)dt->instance) &&
+                jl_astaggedvalue(dt->instance)->bits.perm == 0) {
+            jl_safe_printf("singleton instance with no perm bit: type %s.%s\n",
                            jl_symbol_name(dt->name->module->name),
                            jl_symbol_name(dt->name->name));
         }
@@ -1631,7 +1633,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         if (s->incremental && jl_needs_serialization(s, (jl_value_t*)t) && needs_uniquing((jl_value_t*)t, s->query_cache))
             arraylist_push(&s->uniquing_types, (void*)(uintptr_t)(ios_pos(f)|1));
         if (f == s->const_data)
-            write_uint(s->const_data, ((uintptr_t)t->smalltag << 4) | GC_OLD_MARKED | GC_IN_IMAGE);
+            write_uint(s->const_data, ((uintptr_t)t->smalltag << 4) | GC_PERM_BITS);
         else
             write_gctaggedfield(s, t);
         size_t reloc_offset = ios_pos(f);
@@ -4515,7 +4517,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     reloc_t *relocs_base = (reloc_t*)&relocs.buf[0];
 
     s.s = &sysimg;
-    jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD_MARKED | GC_IN_IMAGE); // gctags
+    jl_read_reloclist(&s, s.link_ids_gctags, GC_PERM_BITS); // gctags
     size_t sizeof_tags = ios_pos(&relocs);
     (void)sizeof_tags;
     jl_read_reloclist(&s, s.link_ids_relocs, 0); // general relocs
@@ -4642,7 +4644,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             arraylist_push(&cleanup_list, (void*)obj);
         }
         if (tag == 1)
-            *pfld = (uintptr_t)newobj | GC_OLD_MARKED | GC_IN_IMAGE;
+            *pfld = (uintptr_t)newobj | GC_PERM_BITS;
         else
             *pfld = (uintptr_t)newobj;
         assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg));
@@ -4674,7 +4676,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             memset(o, 0xba, sizeof(jl_value_t*) + sizeof(jl_datatype_t));
         else
             memset(o, 0xba, sizeof(jl_value_t*) + 0); // singleton
-        o->bits.in_image = 1;
+        o->header |= GC_PERM | GC_PERM_NOT_REMSET;
     }
     arraylist_grow(&cleanup_list, -cleanup_list.len);
     // finally cache all our new types now
@@ -4759,7 +4761,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             memset(o, 0xba, sizeof(jl_value_t*) * 3); // only specTypes and sparams fields stored
         else if (t == (jl_value_t*)jl_binding_type)
             memset(o, 0xba, sizeof(jl_value_t*) * 3); // stored as mod/name
-        o->bits.in_image = 1;
+        o->header |= GC_PERM | GC_PERM_NOT_REMSET;
     }
     arraylist_free(&cleanup_list);
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
