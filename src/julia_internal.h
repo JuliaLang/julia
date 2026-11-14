@@ -1542,6 +1542,7 @@ extern _Atomic(uint32_t) jl_gc_disable_counter;
 // signal.
 // Initialize the safepoint
 void jl_safepoint_init(void) JL_NOTSAFEPOINT;
+int jl_safepoint_any_enabled(void) JL_NOTSAFEPOINT;
 // Start the GC, return `1` if the thread should be running the GC.
 // Otherwise, the thread will wait in this function until the GC finishes on
 // another thread and return `0`.
@@ -1572,7 +1573,7 @@ void jl_init_signal_watchers(uv_async_cb cb);
 void jl_wake_signal_watchers(void) JL_NOTSAFEPOINT;
 void jl_wake_io_loop_thread(void) JL_NOTSAFEPOINT;
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
-int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+int jl_abandon_try_commit(jl_ptls_t ptls, int refuse) JL_NOTSAFEPOINT;
 void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;
 
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
