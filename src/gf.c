@@ -2043,9 +2043,9 @@ static void recache_method(
         if (entry && jl_subtype((jl_value_t*)entry->sig, (jl_value_t*)newmeth->specTypes)) {
             jl_gc_write_atomic(entry, *(_Atomic(jl_method_instance_t*)*)&entry->func.linfo,
                    jl_method_instance_t, newmeth, release);
-            if (entry->simplesig == (void*)jl_nothing || jl_egal((jl_value_t*)entry->simplesig, compute_simplett((jl_tupletype_t*)newmeth->specTypes))) {
+            if (jl_subtype(compilationsig, (jl_value_t*)entry->sig)) {
                 if (mc) JL_UNLOCK(&mc->writelock);
-                return; // cache entry already sufficient
+                return; // cache entry already covers the compilation signature
             }
         }
     }
