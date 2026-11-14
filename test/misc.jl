@@ -422,6 +422,12 @@ function timev_macro_scope()
 end
 @test timev_macro_scope() == 1
 
+function lock_conflicts_macro_scope()
+    @lock_conflicts (lock_conflicts_macro_local_var = 1)
+    return lock_conflicts_macro_local_var
+end
+@test lock_conflicts_macro_scope() == 1
+
 before_comp, before_recomp = Base.cumulative_compile_time_ns() # no need to turn timing on, @time will do that
 
 # exercise concurrent calls to `@time` for reentrant compilation time measurement.

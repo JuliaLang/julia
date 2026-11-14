@@ -683,11 +683,7 @@ macro lock_conflicts(ex)
     quote
         Threads.lock_profiling(true)
         local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
-        try
-            $(esc(ex))
-        finally
-            Threads.lock_profiling(false)
-        end
+        @__tryfinally($(esc(ex)), Threads.lock_profiling(false))
         Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts
     end
 end
