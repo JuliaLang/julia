@@ -336,7 +336,7 @@ function collect_body_meta(st)
             for m in children(c)
                 isnothing(mmetas) && (mmetas = SyntaxList())
                 km = head(m)
-                if km === :purity
+                if km in (:purity, :optlevel, :compile, :infer)
                     push!(mmetas, m)
                 elseif head(m) === :identifier && syntax_name(m) in (
                     "inline", "noinline", "propagate_inbounds",
