@@ -534,6 +534,8 @@ struct JL_GC_TRACKED_TYPE _jl_method_instance_t {
     //   bit 2: The ->backedges field is currently being walked higher up the stack - entries may be deleted, but not moved
     //   bit 3: The ->backedges field was modified and should be compacted when clearing bit 2
     //   bit 4: is its own compilable signature (a cache for the tier gate; see gf.c)
+    //   bit 5: queued for a background compile (see tiered.c)
+    //   bit 6: a background compile of it failed
     _Atomic(uint8_t) flags;
     _Atomic(uint8_t) dispatch_status; // bits defined in julia_internal.h or staticdata.jl
     _Atomic(uint8_t) precompile; // if set, this will be added to the output system image

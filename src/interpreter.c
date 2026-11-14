@@ -774,8 +774,8 @@ static int tier_is_header(jl_array_t *headers, size_t ip) JL_NOTSAFEPOINT
 
 // Enter a loop continuation at statement `header` (0-based). With `compile`
 // unset, only a cached continuation is used. Returns the 0-based statement to
-// resume at, -1 if no continuation was run, or -2 if this loop can never have
-// one.
+// resume at, -1 if no continuation was run, -2 if this loop can never have
+// one, or -3 if one is being compiled in the background.
 static ssize_t eval_tier_loop(interpreter_state *s, size_t header, int compile) JL_CANSAFEPOINT
 {
     jl_value_t *fn = tier_base_fn(&tier_loop_fn, "_tier_loop");
@@ -809,7 +809,7 @@ static ssize_t eval_tier_loop(interpreter_state *s, size_t header, int compile) 
             s->locals[i] = jl_array_ptr_ref(state, i);
     }
     JL_GC_POP();
-    return next > 0 ? next - 1 : next == 0 ? -1 : -2;
+    return next > 0 ? next - 1 : next == 0 ? -1 : next == -2 ? -3 : -2;
 }
 
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel)
@@ -1088,7 +1088,9 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 // back-edge: compile a continuation for the loop once hot
                 if (tier_work >= tier_threshold) {
                     resume = eval_tier_loop(s, next_ip, 1);
-                    if (resume < 0)
+                    if (resume == -3)
+                        tier_work = 0; // compiling in the background: ask again after another budget
+                    else if (resume < 0)
                         tier = 0; // declined; stop asking in this frame
                 }
             }

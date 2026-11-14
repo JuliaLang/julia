@@ -904,7 +904,13 @@ enum {
     JL_TIER_WHY_OTHER,          // other cases the interpreter doesn't take
 };
 int jl_tier_gate(jl_method_instance_t *mi) JL_CANSAFEPOINT;
+int jl_tier_interpretable(jl_method_instance_t *mi) JL_CANSAFEPOINT;
 void jl_tier_add_work(jl_method_instance_t *mi, uint64_t n) JL_NOTSAFEPOINT;
+int jl_tier_background_on(void) JL_NOTSAFEPOINT;
+int jl_tier_enqueue(jl_method_instance_t *mi) JL_NOTSAFEPOINT;
+int jl_tier_compiling_elsewhere(void) JL_NOTSAFEPOINT;
+jl_task_t *jl_tier_steal_task(jl_ptls_t ptls) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_tier_stop_worker(void) JL_CANSAFEPOINT;
 extern _Atomic(uint8_t) jl_force_trace_compile_timing_enabled;
 jl_value_t *jl_apply_generic_site(jl_value_t *F, jl_value_t **args, uint32_t nargs, uint32_t callsite) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_mi(jl_value_t *f, jl_value_t **args, uint32_t nargs,
@@ -921,6 +927,10 @@ static const uint8_t MI_FLAG_BACKEDGES_DIRTY = 0b1000;
 static const uint8_t MI_FLAG_BACKEDGES_ALL = 0b1100;
 // set once the tier gate has found this MethodInstance to be its own compilable form
 static const uint8_t MI_FLAG_TIER_COMPILABLE = 0b10000;
+// set while this MethodInstance is queued for, or being given, a background compile
+static const uint8_t MI_FLAG_TIER_QUEUED = 0b100000;
+// set once a background compile of it has failed, so it is not queued again
+static const uint8_t MI_FLAG_TIER_FAILED = 0b1000000;
 
 STATIC_INLINE jl_array_t *jl_mi_get_backedges_mutate(jl_method_instance_t *mi JL_PROPAGATES_ROOT, uint8_t *flags) {
     *flags = jl_atomic_load_relaxed(&mi->flags) & (MI_FLAG_BACKEDGES_ALL);
