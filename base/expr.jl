@@ -1038,10 +1038,18 @@ end
         @nospecialize ...
         ...
     end
+
     Base.@nospecializeinfer f(@nospecialize args...) = ...
+
+    function f(@nospecialize args...)
+        Base.@nospecializeinfer
+        ...
+    end
 
 Tells the compiler to infer `f` using the declared types of `@nospecialize`d arguments.
 This can be used to limit the number of compiler-generated specializations during inference.
+
+`@nospecializeinfer` can be applied immediately before a function definition or within a function body.
 
 # Examples
 
@@ -1069,6 +1077,9 @@ specialized code generation.
 
 !!! compat "Julia 1.10"
     Using `Base.@nospecializeinfer` requires Julia version 1.10.
+
+!!! compat "Julia 1.15"
+    The usage within a function body requires at least Julia 1.15.
 """
 macro nospecializeinfer(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :nospecializeinfer) : ex)
