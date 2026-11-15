@@ -24,7 +24,7 @@ typedef struct JL_GC_TRACKED_TYPE {
     size_t ip; // Leak the currently-evaluating statement index to backtrace capture
     int preevaluation; // use special rules for pre-evaluating expressions (deprecated--only for ccall handling)
     int continue_at; // statement index to jump to after leaving exception handler (0 if none)
-    jl_genericmemory_t *sites; // each statement's dispatch cache (see call_sites), or NULL
+    jl_genericmemory_t *sites; // each statement's caches (see call_sites), or NULL
     size_t nslots, nssa; // the slots and SSA values of src (see frame_set_src)
     size_t world; // the world the frame runs in, which a method body cannot change, or 0
                   // for a top-level thunk, which moves to the latest world as it goes
@@ -144,7 +144,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s) JL_CANSAF
 
 // expression evaluator
 
-// Core.apply_type at a statement whose dispatch cache (see call_sites) remembers its last
+// Core.apply_type at a statement whose cache (see call_sites) remembers its last
 // application instead: svec(apply_type, arguments..., result). The type cache gives the
 // same type for the same arguments, so arguments identical to those make a hit, as in a
 // keyword call's NamedTuple{names}, which applies the same constant names every time.
@@ -185,12 +185,10 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     // the call expression's arguments identify the call site
     uint32_t callsite = jl_int32hash_fast((uint32_t)((uintptr_t)args >> 3));
     jl_value_t *result;
-    if (s->sites == NULL || 2 * s->ip + 1 >= s->sites->length)
-        result = jl_apply_generic_site(argv[0], &argv[1], nargs - 1, callsite);
-    else if (argv[0] == BUILTIN(apply_type) && nargs > 1)
+    if (argv[0] == BUILTIN(apply_type) && nargs > 1 && s->sites != NULL && 2 * s->ip + 1 < s->sites->length)
         result = apply_type_cached(argv, nargs, s->sites, 2 * s->ip);
     else
-        result = jl_apply_generic_cached(argv[0], &argv[1], nargs - 1, s->sites, 2 * s->ip, callsite, frame_world(s));
+        result = jl_apply_generic_site(argv[0], &argv[1], nargs - 1, callsite);
     JL_GC_POP();
     return result;
 }
@@ -1047,8 +1045,8 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
 }
 
 // Each method body's caches for each of its statements, found by the code it runs: a
-// Memory{Any} holding, for statement i, the dispatch of its call at 2i (see
-// jl_apply_generic_cached) and the constant globals it read at 2i + 1 (see
+// Memory{Any} holding, for statement i, the last `Core.apply_type` it made at 2i (see
+// apply_type_cached) and the constant globals it read at 2i + 1 (see
 // eval_globalref_cached), and last the code itself. The method remembers the caches it last used, which a frame running
 // the same code finds without the lock. Top-level thunks, which mostly run once, have none.
 jl_genericmemory_t *jl_interp_call_sites JL_GLOBALLY_ROOTED = NULL;
