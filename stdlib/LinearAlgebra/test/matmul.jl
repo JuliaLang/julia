@@ -300,6 +300,28 @@ end
     @test U * V ≈ Matrix(U) * Matrix(V)
 end
 
+@testset "Symmetric/Hermitian x matrix with non-contiguous or negatively strided arrays" for T in (Float64, ComplexF64, Float32, ComplexF32)
+    # sizes 2 and 3 take the small-matrix path, larger sizes may dispatch to symm!/hemm!
+    @testset "n = $n" for n in (3, 5)
+        # views equal to M, with stride(·, 1) == 2 or with stride(·, 2) < 0, respectively
+        rowstep(M) = (P = zeros(T, 2size(M, 1), size(M, 2)); P[1:2:end, :] = M; view(P, 1:2:size(P, 1), :))
+        colrev(M) = (P = zeros(T, size(M)); P[:, end:-1:1] = M; view(P, :, size(P, 2):-1:1))
+        layouts = (copy, rowstep, colrev)
+        A, B, C = rand(T, n, n), rand(T, n, n), rand(T, n, n)
+        α, β = 2, 3
+        @testset for W in (Symmetric, Hermitian), fA in layouts, fB in layouts, fC in layouts
+            WA = Matrix(W(A))
+            for (X, Y, ref) in ((W(fA(A)), fB(B), WA * B), (fB(B), W(fA(A)), B * WA))
+                Cv = fC(C)
+                @test mul!(Cv, X, Y, α, β) ≈ α * ref + β * C
+                # nothing is written outside of the view
+                @test count(!iszero, parent(Cv)) == count(!iszero, Cv)
+                @test mul!(fC(C), X, Y) ≈ ref
+            end
+        end
+    end
+end
+
 @testset "dot product of subarrays of vectors (floats, negative stride, issue #37767)" begin
     for T in (Float32, Float64, ComplexF32, ComplexF64)
         a = Vector{T}(3:2:7)
@@ -330,7 +352,7 @@ end
     A0 = randn(complex(T), 10, 10)
     B0 = randn(T, 10, 10)
     @testset "Combination Mat{$(complex(T))} Mat{$T}" for Bax1 in (1:5, 2:2:10), Bax2 in (1:5, 2:2:10)
-        B = view(A0, Bax1, Bax2)
+        B = view(B0, Bax1, Bax2)
         tB = transpose(B)
         Bd, tBd = copy(B), copy(tB)
         for Aax1 in (1:5, 2:2:10, (:)), Aax2 in (1:5, 2:2:10)
@@ -397,12 +419,53 @@ end
     end
 end
 
+@testset "mixed complex-real matmul with non-contiguous or negatively strided arrays" for T in (Float64, Float32)
+    n = 5
+    # views equal to M, with stride(·, 1) == 2 or with stride(·, 2) < 0, respectively
+    rowstep(M::AbstractMatrix) = (P = zeros(eltype(M), 2size(M, 1), size(M, 2)); P[1:2:end, :] = M; view(P, 1:2:size(P, 1), :))
+    colrev(M::AbstractMatrix) = (P = zeros(eltype(M), size(M)); P[:, end:-1:1] = M; view(P, :, size(P, 2):-1:1))
+    # views equal to v, with stride 2 or -1, respectively
+    step2(v::AbstractVector) = (P = zeros(eltype(v), 2length(v)); P[1:2:end] = v; view(P, 1:2:length(P)))
+    rev(v::AbstractVector) = (P = zeros(eltype(v), length(v)); P[end:-1:1] = v; view(P, length(P):-1:1))
+    A, B, C = rand(complex(T), n, n), rand(T, n, n), rand(complex(T), n, n)
+    x, xc, y = rand(T, n), rand(complex(T), n), rand(complex(T), n)
+    α, β = 2, 3
+    @testset for fA in (copy, rowstep, colrev), opA in (identity, transpose, adjoint)
+        # complex matrix x real matrix
+        for fB in (copy, rowstep, colrev), opB in (identity, transpose), fC in (copy, rowstep, colrev)
+            Cv = fC(C)
+            @test mul!(Cv, opA(fA(A)), opB(fB(B)), α, β) ≈ α * opA(A) * opB(B) + β * C
+            # nothing is written outside of the view
+            @test count(!iszero, parent(Cv)) == count(!iszero, Cv)
+        end
+        # complex matrix x real vector, and real matrix x complex vector
+        for fx in (copy, step2, rev), fy in (copy, step2, rev)
+            yv = fy(y)
+            @test mul!(yv, opA(fA(A)), fx(x), α, β) ≈ α * opA(A) * x + β * y
+            @test count(!iszero, parent(yv)) == count(!iszero, yv)
+            yv = fy(y)
+            @test mul!(yv, opA(fA(B)), fx(xc), α, β) ≈ α * opA(B) * xc + β * y
+            @test count(!iszero, parent(yv)) == count(!iszero, yv)
+        end
+    end
+end
+
 @testset "matrix x vector with negative lda or 0 stride" for T in (Float32, Float64)
     for TA in (T, complex(T)), TB in (T, complex(T))
         A = view(randn(TA, 10, 10), 1:10, 10:-1:1) # negative lda
         v = view([randn(TB)], 1 .+ 0(1:10)) # 0 stride
         Ad, vd = copy(A), copy(v)
         @test Ad * vd ≈ A * vd ≈ Ad * v ≈ A * v
+    end
+end
+
+@testset "Symmetric/Hermitian x vector with negative lda" for T in (Float64, ComplexF64, Float32, ComplexF32)
+    A = view(randn(T, 5, 5), :, 5:-1:1) # negative lda, unsupported by symv!/hemv!
+    Ad = copy(A)
+    x, y = randn(T, 5), randn(T, 5)
+    for W in (Symmetric, Hermitian), uplo in (:U, :L)
+        @test W(A, uplo) * x ≈ W(Ad, uplo) * x
+        @test mul!(copy(y), W(A, uplo), x, 2, 3) ≈ 2 * W(Ad, uplo) * x + 3y
     end
 end
 

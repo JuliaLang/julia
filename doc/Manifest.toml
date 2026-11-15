@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.13-DEV"
+julia_version = "1.10.14-DEV"
 manifest_format = "2.0"
 project_hash = "e0c77beb18dc1f6cce661ebd60658c0c1a77390f"
 
@@ -168,7 +168,7 @@ version = "2.28.1010+0"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2025.12.2"
+version = "2026.10.20"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
