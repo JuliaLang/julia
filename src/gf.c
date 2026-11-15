@@ -5066,11 +5066,12 @@ STATIC_INLINE int sig_match_fast(jl_value_t *arg1t, jl_value_t **args, jl_value_
 }
 
 // Like `sig_match_fast`, but also matching a type value to a `TypeEgal{T}` slot (which
-// `sig_match_fast` never matches, since no value has the type `TypeEgal{T}`)
-STATIC_INLINE int sig_match_fast_type(jl_value_t *F, jl_value_t **args, jl_value_t **sig, size_t n) JL_NOTSAFEPOINT
+// `sig_match_fast` never matches, since no value has the type `TypeEgal{T}`), and the
+// arguments past `nfixed` to the element of the trailing unbound `Vararg`
+STATIC_INLINE int sig_match_fast_type(jl_value_t *F, jl_value_t **args, jl_value_t **sig, size_t nfixed, size_t n) JL_NOTSAFEPOINT
 {
     for (size_t i = 0; i < n; i++) {
-        jl_value_t *decl = sig[i];
+        jl_value_t *decl = i < nfixed ? sig[i] : jl_unwrap_vararg(sig[nfixed]);
         jl_value_t *a = i == 0 ? F : args[i - 1];
         if (jl_is_typeegal(decl) ? !typeegal_match(jl_typeegal_T(decl), a) : jl_typeof(a) != decl)
             return 0;
@@ -5079,17 +5080,27 @@ STATIC_INLINE int sig_match_fast_type(jl_value_t *F, jl_value_t **args, jl_value
 }
 
 // Whether `entry` can go in the call-site cache, which matches only by pointer comparison
-// (`isleafsig`), and `TypeEgal{T}` slots by egality (`isegalsig`): 0 for any other, since
-// rejecting one there would cost an `isa` on every probe of its slot, while the typemap already
-// splits those by typename; else 2 for one with a `TypeEgal{T}` slot, whose callee then keys the
-// cache by type values, and 1 for a leaf signature.
+// (`isleafsig`), and `TypeEgal{T}` slots and a `Vararg` tail by egality (`isegalsig`): 0 for
+// any other, since rejecting one there would cost an `isa` on every probe of its slot, while the
+// typemap already splits those by typename; else 2 for one with a `TypeEgal{T}` slot, whose
+// callee then keys the cache by type values, and 1 for one without.
 static int call_cache_admissible(jl_typemap_entry_t *entry) JL_NOTSAFEPOINT
 {
     if (entry->guardsigs != jl_emptysvec)
         return 0;
     if (entry->isleafsig)
         return 1;
-    return entry->isegalsig ? 2 : 0;
+    if (!entry->isegalsig)
+        return 0;
+    if (!entry->va)
+        return 2;
+    jl_svec_t *sig = entry->sig->parameters;
+    for (size_t i = 0, l = jl_svec_len(sig); i < l; i++) {
+        jl_value_t *decl = jl_svecref(sig, i);
+        if (jl_is_typeegal(i == l - 1 ? jl_unwrap_vararg(decl) : decl))
+            return 2;
+    }
+    return 1;
 }
 
 _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
@@ -5184,15 +5195,18 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
         uint8_t which = jl_atomic_load_relaxed(&pick_which[cache_idx[0]]) + 1;
         jl_atomic_store_relaxed(&pick_which[cache_idx[0]], which);
         jl_atomic_store_release(&call_cache[cache_idx[which % 3]], entry);
-        // and in the callee's slot and one of the two slots by type
+        // and in the callee's slot, and for a fixed-length entry in one of the two slots by
+        // type (whose hash has the argument count, so calls of other lengths never look there)
         uint32_t type_idx[2];
         uint8_t hint = jl_atomic_load_relaxed(&((jl_datatype_t*)jl_typeof(F))->dispatch_hint);
         int typevalues = hint & DISPATCH_HINT_TYPE_VALUES;
         jl_atomic_store_release(&call_cache[call_cache_callee_index(F, typevalues)], entry);
-        call_cache_type_indices(F, args, nargs, typevalues, type_idx);
-        which = jl_atomic_load_relaxed(&pick_which[type_idx[0]]) + 1;
-        jl_atomic_store_relaxed(&pick_which[type_idx[0]], which);
-        jl_atomic_store_release(&call_cache[type_idx[which & 1]], entry);
+        if (!entry->va) {
+            call_cache_type_indices(F, args, nargs, typevalues, type_idx);
+            which = jl_atomic_load_relaxed(&pick_which[type_idx[0]]) + 1;
+            jl_atomic_store_relaxed(&pick_which[type_idx[0]], which);
+            jl_atomic_store_release(&call_cache[type_idx[which & 1]], entry);
+        }
     }
     if (entry && for_call) {
         // mfunc was found in slow path, so log --trace-dispatch
@@ -5276,10 +5290,12 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     // check each cache entry to see if it matches
 #define LOOP_BODY(_i) do { \
             entry = jl_atomic_load_relaxed(&call_cache[cache_idx[_i]]); \
-            if (entry && nargs == jl_svec_len(entry->sig->parameters) && \
+            if (entry && (nargs == jl_svec_len(entry->sig->parameters) || \
+                          (entry->va && nargs + 1 >= jl_svec_len(entry->sig->parameters))) && \
                 (entry->isleafsig ? \
                     sig_match_fast(FT, args, jl_svec_data(entry->sig->parameters), nargs) : \
-                    sig_match_fast_type(F, args, jl_svec_data(entry->sig->parameters), nargs)) && \
+                    sig_match_fast_type(F, args, jl_svec_data(entry->sig->parameters), \
+                                        jl_svec_len(entry->sig->parameters) - entry->va, nargs)) && \
                 world >= jl_atomic_load_relaxed(&entry->min_world) && world <= jl_atomic_load_relaxed(&entry->max_world)) { \
                 goto have_entry; \
             } \
