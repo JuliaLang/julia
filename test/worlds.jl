@@ -222,6 +222,15 @@ let find(tt) = ccall(:jl_mt_find_cache_entry, Ptr{Cvoid}, (Any, Any, UInt), Core
     @test find(Tuple{typeof(fkindslot), Core.TypeEgal{Int}, Int}) != C_NULL
     @test find(Tuple{typeof(fkindslot), Type{Int}, Int}) == C_NULL
 end
+
+# A call with a type argument, served from the call-site cache by its `TypeEgal{Int}`
+# entry, sees a more specific method defined later
+ftypearg(::Type{T}) where {T} = 1
+gtypearg(@nospecialize(T)) = Base.inferencebarrier(ftypearg)(T)
+@test gtypearg(Int) == 1 && gtypearg(Int) == 1
+ftypearg(::Type{Int}) = 2
+@test gtypearg(Int) == 2
+@test gtypearg(Float64) == 1
 @test g26506(z26506) === 5
 
 # issue #38435

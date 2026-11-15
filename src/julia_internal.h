@@ -498,6 +498,7 @@ extern JL_DLLEXPORT size_t jl_typeinf_world;
 extern JL_DLLEXPORT jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 // values of `jl_datatype_t.dispatch_hint` for the type of a callee
+#define DISPATCH_HINT_TYPE_VALUES 0x01 // the call-site cache may have an entry with a `TypeEgal{T}` slot
 #define DISPATCH_HINT_BUILTIN 0x80     // a builtin, whose index in `jl_builtin_f_addrs` is in the low bits
 
 void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
@@ -2180,6 +2181,23 @@ void jl_typemap_insert(_Atomic(jl_typemap_t*) *cache, jl_value_t *parent,
 jl_typemap_entry_t *jl_typemap_alloc(
         jl_tupletype_t *type, jl_svec_t *guardsigs,
         jl_value_t *newvalue, size_t min_world, size_t max_world) JL_CANSAFEPOINT;
+
+// Whether the type value `a` is `T`, rejecting most distinct objects before `jl_egal` by the
+// name and the hash of the (unwrapped) datatype, which are the same for egal types
+STATIC_INLINE int typeegal_match(jl_value_t *T, jl_value_t *a) JL_NOTSAFEPOINT
+{
+    if (a == T)
+        return 1;
+    if (jl_typetagof(a) != jl_typetagof(T))
+        return 0;
+    jl_value_t *ua = jl_unwrap_unionall(a), *uT = jl_unwrap_unionall(T);
+    if (jl_is_datatype(ua) && jl_is_datatype(uT)) {
+        jl_datatype_t *da = (jl_datatype_t*)ua, *dT = (jl_datatype_t*)uT;
+        if (da->name != dT->name || (da->hash && dT->hash && da->hash != dT->hash))
+            return 0;
+    }
+    return jl_egal(T, a);
+}
 
 struct jl_typemap_assoc {
     // inputs
