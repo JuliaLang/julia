@@ -1,10 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Artifacts.jl is a Julia module that is used for managing and accessing
-artifacts in Julia packages. Artifacts are containers for
-platform-specific binaries, datasets, text, or any other kind of data
-that would be convenient to place within an immutable, life-cycled datastore.
+    Artifacts
+
+Access to the artifacts that packages declare in an `Artifacts.toml` file. Artifacts are
+immutable containers of platform-specific binaries, datasets, text, or any other data.
+Find one with the [`@artifact_str`](@ref) string macro, or with [`artifact_hash`](@ref)
+and [`artifact_path`](@ref).
 """
 module Artifacts
 
