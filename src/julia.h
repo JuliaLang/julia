@@ -792,6 +792,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_datatype_t {
     uint16_t ismutationfree:1; // whether any mutable memory is reachable through this type (in the type or via fields)
     uint16_t isidentityfree:1; // whether this type or any object reachable through its fields has non-content-based identity
     uint16_t smalltag:6; // whether this type has a small-tag optimization
+    _Atomic(uint8_t) dispatch_hint; // (hint) for calls with a callee of this type: DISPATCH_HINT_* in julia_internal.h
 } jl_datatype_t;
 
 typedef struct JL_GC_TRACKED_TYPE _jl_vararg_t {

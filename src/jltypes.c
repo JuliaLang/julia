@@ -4170,8 +4170,8 @@ void jl_init_types(void) JL_GC_DISABLED
     // self-referential instantiation stays NULL until
     // `jl_datatype_compute_super` fills it (reads then see an undefined
     // field, matching the interpreter), and `types`/`layout` are lazy too
-    jl_datatype_type->name->n_uninitialized = 8 - 1;
-    jl_datatype_type->name->names = jl_perm_symsvec(8,
+    jl_datatype_type->name->n_uninitialized = 9 - 1;
+    jl_datatype_type->name->names = jl_perm_symsvec(9,
             "name",
             "super",
             "parameters",
@@ -4179,8 +4179,9 @@ void jl_init_types(void) JL_GC_DISABLED
             "instance",
             "layout",
             "hash",
-            "flags"); // "hasfreetypevars", "isconcretetype", "isdispatchtuple", "isbitstype", "zeroinit", "has_concrete_subtype", "maybe_subtype_of_cache"
-    jl_datatype_type->types = jl_svec(8,
+            "flags", // "hasfreetypevars", "isconcretetype", "isdispatchtuple", "isbitstype", "zeroinit", "has_concrete_subtype", "maybe_subtype_of_cache"
+            "dispatch_hint");
+    jl_datatype_type->types = jl_svec(9,
             jl_typename_type,
             jl_datatype_type,
             jl_simplevector_type,
@@ -4188,9 +4189,10 @@ void jl_init_types(void) JL_GC_DISABLED
             jl_any_type, // instance
             jl_any_type /*jl_voidpointer_type*/,
             jl_any_type /*jl_int32_type*/,
-            jl_any_type /*jl_uint16_type*/);
+            jl_any_type /*jl_uint16_type*/,
+            jl_any_type /*jl_uint8_type*/);
     const static uint32_t datatype_constfields[1] = { 0x00000055 }; // (1<<0)|(1<<2)|(1<<4)|(1<<6)
-    const static uint32_t datatype_atomicfields[1] = { 0x0000002a }; // (1<<1)|(1<<3)|(1<<5)
+    const static uint32_t datatype_atomicfields[1] = { 0x0000012a }; // (1<<1)|(1<<3)|(1<<5)|(1<<8)
     jl_datatype_type->name->constfields = datatype_constfields;
     jl_datatype_type->name->atomicfields = datatype_atomicfields;
     jl_precompute_memoized_dt(jl_datatype_type, 1);
@@ -5134,6 +5136,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_datatype_type->types, 5, jl_voidpointer_type);
     jl_svecset(jl_datatype_type->types, 6, jl_int32_type);
     jl_svecset(jl_datatype_type->types, 7, jl_uint16_type);
+    jl_svecset(jl_datatype_type->types, 8, jl_uint8_type);
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
     jl_svecset(jl_typename_type->types, 4, jl_voidpointer_type);
     jl_svecset(jl_typename_type->types, 5, jl_voidpointer_type);
