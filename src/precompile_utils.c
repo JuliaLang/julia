@@ -32,7 +32,7 @@ static void jl_rebuild_methtables(arraylist_t *MIs, htable_t *mtables) JL_CANSAF
         //TODO: should this be a function like unsafe_insert_method, since all that is wanted is the jl_typemap_insert on a copy of the existing entry
         // as `jl_method_table_add`, for a method already in another table
         size_t min_world = jl_atomic_load_relaxed(&m->primary_world);
-        jl_typemap_entry_t *newentry = jl_typemap_alloc((jl_tupletype_t*)m->sig, NULL, jl_emptysvec,
+        jl_typemap_entry_t *newentry = jl_typemap_alloc((jl_tupletype_t*)m->sig, jl_emptysvec,
                                                         (jl_value_t*)m, min_world, ~(size_t)0);
         jl_typemap_insert(&mt->defs, (jl_value_t*)mt, newentry, 0);
     }
