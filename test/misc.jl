@@ -389,6 +389,8 @@ end
 @test sprint(Base.time_print, 1e9, 0, 0, 0, 333) == "  1.000000 seconds (333 lock conflicts)"
 @test sprint(Base.time_print, 1e9, 111, 0, 222, 333, 0.25e9) == "  1.000000 seconds (222 allocations: 111 bytes, 333 lock conflicts, 25.00% compilation time)"
 @test sprint(Base.time_print, 1e9, 111, 0.5e9, 222, 333, 0.25e9, 0.175e9) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time, 333 lock conflicts, 25.00% compilation time: 70% of which was recompilation)"
+@test sprint(Base.time_print, 1e9, 1024, 0, 1000) == "  1.000000 seconds (1.00 k allocations: 1.000 KiB)"
+@test sprint(Base.time_print, 1e9, -111, 0, -222) == "  1.000000 seconds (-222 allocations: -111 bytes)"
 
 # @showtime
 @test @showtime true
@@ -419,6 +421,12 @@ function timev_macro_scope()
     end
 end
 @test timev_macro_scope() == 1
+
+function lock_conflicts_macro_scope()
+    @lock_conflicts (lock_conflicts_macro_local_var = 1)
+    return lock_conflicts_macro_local_var
+end
+@test lock_conflicts_macro_scope() == 1
 
 before_comp, before_recomp = Base.cumulative_compile_time_ns() # no need to turn timing on, @time will do that
 
@@ -555,6 +563,7 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
 
         out = @capture_stdout @timev $call2f(c64)
         @test occursin("% compilation time", out)
+        @test occursin(r"^elapsed time \(ns\): +\d+$"m, out)
         out = @capture_stdout @timev $call2f(c64)
         @test occursin("% compilation time", out) == false
 
@@ -573,6 +582,12 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
         @test occursin("% compilation time:", out)
         @test occursin("% of which was recompilation", out)
     end
+end
+
+# the description is evaluated before the timed expression
+let i = 0
+    @test startswith(@capture_stdout(@time "i=$i" (i += 1)), "i=0: ")
+    @test startswith(@capture_stdout(@timev "i=$i" (i += 1)), "i=1: ")
 end
 
 # interactive utilities
@@ -1615,14 +1630,19 @@ end
 
     # Test the output of `format_bytes()`
     inputs = [(factor * (Int64(1000)^e),binary) for binary in (false,true), factor in (1,2), e in 0:6][:]
-    expected_output = ["1 byte", "1 byte", "2 bytes", "2 bytes", "1000 bytes", "1000 bytes", "2.000 kB", "1.953 KiB",
-                        "1000.000 kB", "976.562 KiB", "2.000 MB", "1.907 MiB", "1000.000 MB", "953.674 MiB",
-                        "2.000 GB", "1.863 GiB", "1000.000 GB", "931.323 GiB", "2.000 TB", "1.819 TiB",
-                        "1000.000 TB", "909.495 TiB", "2.000 PB", "1.776 PiB", "1000.000 PB", "888.178 PiB",
+    expected_output = ["1 byte", "1 byte", "2 bytes", "2 bytes", "1.000 kB", "1000 bytes", "2.000 kB", "1.953 KiB",
+                        "1.000 MB", "976.562 KiB", "2.000 MB", "1.907 MiB", "1.000 GB", "953.674 MiB",
+                        "2.000 GB", "1.863 GiB", "1.000 TB", "931.323 GiB", "2.000 TB", "1.819 TiB",
+                        "1.000 PB", "909.495 TiB", "2.000 PB", "1.776 PiB", "1000.000 PB", "888.178 PiB",
                         "2000.000 PB", "1776.357 PiB"]
     for ((n, binary), expected) in zip(inputs, expected_output)
         @test Base.format_bytes(n; binary) == expected
     end
+    @test Base.format_bytes(1023) == "1023 bytes"
+    @test Base.format_bytes(1024^2) == "1.000 MiB"
+    @test Base.format_bytes(-1) == "-1 bytes"
+    @test Base.format_bytes(-2048) == "-2.000 KiB"
+    @test Base.format_bytes(0.5) == "0.500 bytes"
 end
 
 @testset "in_finalizer" begin
