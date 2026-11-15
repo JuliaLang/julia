@@ -120,7 +120,7 @@ function unloaded_deps()
         id = PkgId(uuid, String(name))
         Base.root_module_exists(id) || push!(ids, id)
     end
-    return sort!(ids; by = id -> lowercase(id.name))
+    return sort_by!(ids, id -> lowercase(id.name))
 end
 
 function package_deps(m::Module)
@@ -154,6 +154,26 @@ function role_of(m::Module, id::PkgId, self, direct)
 end
 
 isjll(name::AbstractString) = endswith(name, "_jll")
+
+"""
+    sort_by!(v, key) -> v
+
+Sort `v` stably by `key`. All the browser's sorts go through one sort of `Vector{Any}`, so
+they share one compiled copy of the sorting code. The lists are small, so the dynamic
+comparisons cost little.
+"""
+function sort_by!(v::Vector, @nospecialize(key))
+    keys = Vector{Any}(undef, length(v))
+    for i in eachindex(v)
+        keys[i] = key(v[i])
+    end
+    perm = sortperm(keys)
+    old = copy(v)
+    for i in eachindex(perm)
+        v[i] = old[perm[i]]
+    end
+    return v
+end
 
 function Catalog()
     self, direct = project_info()
@@ -192,7 +212,7 @@ function Catalog()
     end
     rank(p) = (p.role === :julia ? findfirst(==(p.mod), (Base, Core, Main)) : 0,
                isjll(p.id.name), lowercase(p.id.name))
-    sort!(pkgs; by = rank)
+    sort_by!(pkgs, rank)
     bymod = IdDict{Module,PkgEntry}(p.mod => p for p in pkgs)
     return Catalog(pkgs, bymod, documented_bindings(), IdDict{Module,Vector{NameEntry}}(), nothing,
                    unloaded_deps(), nothing)
@@ -281,7 +301,7 @@ function module_entries(cat::Catalog, m::Module)
             end
             e === nothing || push!(out, e)
         end
-        sort!(out; by = e -> (findfirst(==(e.kind), KINDS), sortkey(e.name)))
+        sort_by!(out, e -> (findfirst(==(e.kind), KINDS), sortkey(e.name)))
     end
 end
 
@@ -389,7 +409,7 @@ function search(cat::Catalog, query::AbstractString; internal::Bool=false, limit
         (old === nothing || old[1] < sc) && (best[key] = (sc, e))
     end
     hits = collect(values(best))
-    sort!(hits; by = h -> (-h[1], length(String(h[2].name)), String(h[2].name)))
+    sort_by!(hits, h -> (-h[1], length(String(h[2].name)), String(h[2].name)))
     return NameEntry[h[2] for h in Iterators.take(hits, limit)]
 end
 
@@ -475,6 +495,6 @@ function search_text(cat::Catalog, query::AbstractString; internal::Bool=false, 
         sc += p === nothing ? 0 : getfield(ROLE_BOOST, p.role)
         push!(hits, (sc, e))
     end
-    sort!(hits; by = h -> -h[1])
+    sort_by!(hits, h -> -h[1])
     return NameEntry[h[2] for h in Iterators.take(hits, limit)]
 end

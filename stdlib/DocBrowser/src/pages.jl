@@ -61,7 +61,7 @@ end
 PageBuilder(width::Int) = PageBuilder(AnnotatedString{String}[], Spot[], width)
 
 Page(pb::PageBuilder, source=nothing) =
-    Page(pb.lines, sort!(pb.spots; by = s -> (s.line, first(s.cols))), source, heading_lines(pb.lines))
+    Page(pb.lines, sort_by!(pb.spots, s -> (s.line, first(s.cols))), source, heading_lines(pb.lines))
 
 is_heading_face(v) = v isa Symbol && startswith(String(v), "markdown_h") && v !== :markdown_hrule
 
@@ -153,10 +153,12 @@ function render_markdown(md, width::Int)
     return AnnotatedString{String}[AnnotatedString(l) for l in split(str, '\n')]
 end
 
-function walk_md(f, x)
+function walk_md(f, @nospecialize(x))
     f(x)
     if x isa AbstractVector
-        foreach(y -> walk_md(f, y), x)
+        for y in x
+            walk_md(f, y)
+        end
     elseif x isa Markdown.MD
         walk_md(f, x.content)
     elseif parentmodule(typeof(x)) === Markdown
@@ -171,7 +173,7 @@ end
 md_text(x::AbstractString) = x
 md_text(x::Markdown.Code) = x.code
 md_text(x::AbstractVector) = join(map(md_text, x))
-md_text(x) = hasfield(typeof(x), :text) ? md_text(getfield(x, :text)) : ""
+md_text(@nospecialize(x)) = hasfield(typeof(x), :text) ? md_text(getfield(x, :text)) : ""
 
 """
     ref_targets(md) -> Dict{String,String}
@@ -239,7 +241,7 @@ end
 function find_spots!(spots::Vector{Spot}, row::Int, line::AnnotatedString, ctx::Module,
                      refs::Dict{String,String}, cat::Catalog)
     str = String(line)
-    anns = sort(annotations(line); by = a -> a.label !== :link)
+    anns = sort_by!(copy(annotations(line)), a -> a.label !== :link)
     taken = UnitRange{Int}[]
     for ann in anns
         r = first(ann.region):thisind(str, last(ann.region))
@@ -344,8 +346,14 @@ What to paste for a rendered code block: the input of each `julia>` prompt in an
 or the whole block if it is long enough to be worth it.
 """
 function paste_text(lines::Vector{String})
-    text = [String(chopprefix(l, "  ")) for l in lines]
-    if any(startswith("julia> "), text)
+    text = String[]
+    prompt = false
+    for l in lines
+        t = String(chopprefix(l, "  "))
+        push!(text, t)
+        prompt |= startswith(t, "julia> ")
+    end
+    if prompt
         inputs = String[]
         continuing = false
         for l in text
@@ -360,7 +368,13 @@ function paste_text(lines::Vector{String})
         end
         return join(inputs, '\n')
     end
-    return length(text) >= 3 ? join(rstrip.(text), '\n') : nothing
+    length(text) >= 3 || return nothing
+    out = IOBuffer()
+    for (i, t) in enumerate(text)
+        i > 1 && print(out, '\n')
+        print(out, rstrip(t))
+    end
+    return String(take!(out))
 end
 
 function add_paste_link!(pb::PageBuilder, block::Vector{String})
@@ -486,7 +500,8 @@ function add_type_info!(pb::PageBuilder, @nospecialize(T), flags::Set{Symbol})
     add_methods!(pb, "Constructors", methods(T))
     if :methodswith in flags
         ms = try
-            InteractiveUtils.methodswith(T; supertypes=false)
+            # hidden from inference, so it is compiled only when someone asks for it
+            Base.inferencebarrier(InteractiveUtils.methodswith)(T; supertypes=false)
         catch
             Method[]
         end
@@ -562,7 +577,7 @@ function web_url(url::AbstractString)
     url = strip(url)
     m = match(r"^git@([^:]+):(.+)$", url)
     m === nothing || (url = string("https://", m[1], "/", m[2]))
-    url = replace(url, r"^git://" => "https://", r"^ssh://git@" => "https://")
+    url = replace(url, r"^(git://|ssh://git@)" => "https://")
     startswith(url, r"https?://") || return nothing
     # A remote can hold a user name and token, which must not be shown or opened.
     url = replace(url, r"^(https?://)[^/@]*@" => s"\1")

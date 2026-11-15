@@ -118,13 +118,20 @@ const SIDEBAR_TITLES = (project = "Project", direct = "Direct", julia = "Julia",
 function refresh_side!(b::Browser)
     rows = SideRow[]
     for role in SECTION_ORDER
-        pkgs = PkgEntry[p for p in b.cat.pkgs if p.role === role]
         unloaded = role === :direct ? b.cat.unloaded : PkgId[]
-        isempty(pkgs) && isempty(unloaded) && continue
+        any_pkg = false
+        for p in b.cat.pkgs
+            p.role === role && (any_pkg = true; break)
+        end
+        any_pkg || !isempty(unloaded) || continue
         push!(rows, SideRow(role, nothing))
         role in b.expanded || continue
-        append!(rows, SideRow(role, p) for p in pkgs)
-        append!(rows, SideRow(role, nothing, id) for id in unloaded)
+        for p in b.cat.pkgs
+            p.role === role && push!(rows, SideRow(role, p))
+        end
+        for id in unloaded
+            push!(rows, SideRow(role, nothing, id))
+        end
     end
     b.side_rows = rows
     b.side.cursor = clamp(b.side.cursor, 1, max(1, length(rows)))
@@ -133,16 +140,24 @@ end
 function refresh_names!(b::Browser)
     rows = NameRow[]
     if b.query !== nothing
-        append!(rows, NameRow(:entry, e, e.kind, 0) for e in b.results)
+        for e in b.results
+            push!(rows, NameRow(:entry, e, e.kind, 0))
+        end
     else
         push!(rows, NameRow(:about, nothing, :none, 0))
         entries = module_entries(b.cat, b.mod)
         for k in KINDS
-            es = NameEntry[e for e in entries if e.kind === k && (b.internal || (e.vis !== :internal && !e.deprecated))]
-            isempty(es) && continue
-            push!(rows, NameRow(:header, nothing, k, length(es)))
+            n = 0
+            for e in entries
+                e.kind === k && (b.internal || (e.vis !== :internal && !e.deprecated)) && (n += 1)
+            end
+            n == 0 && continue
+            push!(rows, NameRow(:header, nothing, k, n))
             k in b.collapsed && continue
-            append!(rows, NameRow(:entry, e, k, 0) for e in es)
+            for e in entries
+                e.kind === k && (b.internal || (e.vis !== :internal && !e.deprecated)) || continue
+                push!(rows, NameRow(:entry, e, k, 0))
+            end
         end
     end
     b.name_rows = rows
@@ -806,16 +821,13 @@ function footer_bar(b::Browser)
         put_hint!(rb, key, label)
     end
     legend = b.color ?
-        ((" ● ", :REPL_DocBrowser_exported), ("exported", nothing), (" ○ ", :REPL_DocBrowser_public),
-         ("public", nothing), (" · ", :REPL_DocBrowser_internal), ("internal ", nothing)) :
-        ((" E ", nothing), ("exported", nothing), (" P ", nothing), ("public", nothing),
-         (" - ", nothing), ("internal ", nothing))
-    lw = sum(l -> textwidth(l[1]), legend)
+        Seg[Seg(" ● ", :REPL_DocBrowser_exported), Seg("exported"), Seg(" ○ ", :REPL_DocBrowser_public),
+            Seg("public"), Seg(" · ", :REPL_DocBrowser_internal), Seg("internal ")] :
+        Seg[Seg(" E "), Seg("exported"), Seg(" P "), Seg("public"), Seg(" - "), Seg("internal ")]
+    lw = segs_width(legend)
     if !b.help && b.width - width(rb) > lw + 2
         put_seg!(rb, ' '^(b.width - width(rb) - lw))
-        for (text, face) in legend
-            put_seg!(rb, text, face)
-        end
+        put_segs!(rb, legend)
     end
     return fit(build(rb), b.width)
 end
@@ -826,35 +838,49 @@ function put_hint!(rb::RowBuilder, key::String, label::String)
     put_seg!(rb, " " * label * "  ", nothing, action === nothing ? nothing : (:key, action))
 end
 
+# A piece of a bar, kept in one concrete type so that lists of them compile once.
+struct Seg
+    text::String
+    face::Any
+    action::Any
+end
+Seg(text::String, face=nothing) = Seg(text, face, nothing)
+
+segs_width(segs::Vector{Seg}) = (w = 0; for s in segs; w += textwidth(s.text); end; w)
+
+function put_segs!(rb::RowBuilder, segs::Vector{Seg})
+    for s in segs
+        put_seg!(rb, s.text, s.face, s.action)
+    end
+end
+
 # The right of the header. A higher `level` leaves out more, for narrow terminals.
 function header_right(b::Browser, level::Int)
-    right = Any[]
+    right = Seg[]
     mode = b.textsearch ? "text" : "names"
     if b.query === nothing
-        push!(right, (" / search all $mode ", nothing, (:search,)))
+        push!(right, Seg(" / search all $mode ", nothing, (:search,)))
     else
         # The field being typed into stands out; once typing stops it is only shaded.
         face = b.typing ? :REPL_DocBrowser_searchbox : :REPL_DocBrowser_unfocused
         text = string(" ", b.query, b.typing ? "▏" : " ")
         pad = level == 0 ? max(0, 22 - textwidth(text)) : 0
-        level < 2 && push!(right, (" ", nothing, nothing), (" " * mode * " ⇄ ", face, (:toggle_text,)))
-        push!(right, (text * ' '^pad, face, (:search,)))
-        level == 0 && push!(right, (string(" ", length(b.results), " found "), :REPL_DocBrowser_dim, nothing))
+        level < 2 && push!(right, Seg(" "), Seg(" " * mode * " ⇄ ", face, (:toggle_text,)))
+        push!(right, Seg(text * ' '^pad, face, (:search,)))
+        level == 0 && push!(right, Seg(string(" ", length(b.results), " found "), :REPL_DocBrowser_dim))
     end
-    push!(right, ("  ", nothing, nothing), ("?", :REPL_DocBrowser_key, (:help,)),
-          ("  ", nothing, nothing), ("✕", :REPL_DocBrowser_key, (:quit,)), (" ", nothing, nothing))
+    push!(right, Seg("  "), Seg("?", :REPL_DocBrowser_key, (:help,)),
+          Seg("  "), Seg("✕", :REPL_DocBrowser_key, (:quit,)), Seg(" "))
     return right
 end
-
-right_width(right) = sum(r -> textwidth(r[1]), right; init=0)
 
 function header_bar(b::Browser)
     right = header_right(b, 0)
     for level in 1:2
-        right_width(right) < b.width && break
+        segs_width(right) < b.width && break
         right = header_right(b, level)
     end
-    rw = right_width(right)
+    rw = segs_width(right)
     room = max(0, b.width - rw)
     rb = RowBuilder(b, 1, 1)
     put_seg!(rb, " Julia docstrings ", :REPL_DocBrowser_title)
@@ -889,9 +915,7 @@ function header_bar(b::Browser)
     else
         put_seg!(rb, ' '^(room - width(rb)))
     end
-    for (text, face, action) in right
-        put_seg!(rb, text, face, action)
-    end
+    put_segs!(rb, right)
     return fit(build(rb), b.width)
 end
 
@@ -1434,9 +1458,14 @@ function cycle_link!(b::Browser, dir::Int)
     isempty(p.spots) && return (b.status = "No links on this page"; nothing)
     n = content_rows(b)
     if b.link == 0
-        visible = findall(s -> b.doc_scroll < s.line <= b.doc_scroll + n, p.spots)
-        b.link = isempty(visible) ? (dir > 0 ? 1 : length(p.spots)) :
-                 dir > 0 ? first(visible) : last(visible)
+        first_visible = last_visible = 0
+        for (i, s) in enumerate(p.spots)
+            b.doc_scroll < s.line <= b.doc_scroll + n || continue
+            first_visible == 0 && (first_visible = i)
+            last_visible = i
+        end
+        b.link = first_visible == 0 ? (dir > 0 ? 1 : length(p.spots)) :
+                 dir > 0 ? first_visible : last_visible
     else
         b.link = mod1(b.link + dir, length(p.spots))
     end
