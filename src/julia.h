@@ -775,7 +775,7 @@ typedef struct {
 typedef struct JL_GC_TRACKED_TYPE _jl_datatype_t {
     JL_DATA_TYPE
     jl_typename_t *name;
-    struct _jl_datatype_t *super;
+    _Atomic(struct _jl_datatype_t*) super;
     jl_svec_t *parameters;
     jl_svec_t *types;
     jl_value_t *instance;  // for singletons
@@ -1673,7 +1673,7 @@ STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint32_t x) JL_NOTSAFE
 #define jl_gf_name(f) (((jl_datatype_t*)jl_typeof(f))->name->singletonname)
 
 // struct type info
-JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st, void *stack, int cacheable) JL_CANSAFEPOINT;
 #define jl_get_fieldtypes(st) ((st)->types ? (st)->types : jl_compute_fieldtypes((st), NULL, 0))
 STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st) JL_NOTSAFEPOINT
 {

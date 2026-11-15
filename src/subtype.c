@@ -793,30 +793,30 @@ static int datatype_may_contain_types(jl_datatype_t *d) JL_NOTSAFEPOINT
     while (d != jl_any_type) {
         if (d == jl_anytype_type)
             return 1;
-        // raw read: a deferred (unset) supertype conservatively proves nothing
-        d = d->super;
+        d = jl_typename_super(d->name);
         if (d == NULL)
-            return 1;
+            return 1; // definition in progress
     }
     return 0;
 }
 
-// The supertype of `t` with typename `name`, `Any` if there is none, or NULL when unsure.
-static jl_datatype_t *super_with_name(jl_datatype_t *t, jl_typename_t *name) JL_NOTSAFEPOINT
+// the supertype of `dt` named `name`, or `Any`; NULL if a definition is in
+// progress. A lazy supertype is computed, so the answer does not depend on
+// which supertypes have been demanded already, unless only the type-names
+// are needed (`names`)
+static jl_datatype_t *super_named(jl_datatype_t *dt JL_PROPAGATES_ROOT, jl_typename_t *name, int names) JL_CANSAFEPOINT
 {
-    while (t != jl_any_type && t->name != name) {
-        // raw read: this heuristic must not reach a safepoint, so a
-        // deferred (unset) supertype conservatively proves nothing
-        t = t->super;
-        if (t == NULL)
+    while (dt != jl_any_type && dt->name != name) {
+        dt = names ? jl_typename_super(dt->name) : jl_get_super(dt);
+        if (dt == NULL)
             return NULL;
     }
-    return t;
+    return dt;
 }
 
 // Whether the type parameters `x` and `y` (in the same invariant position) can never be
 // equal, as their bounds (a typevar's upper bound) have unrelated typenames.
-static int params_never_equal(jl_value_t *x, jl_value_t *y) JL_NOTSAFEPOINT
+static int params_never_equal(jl_value_t *x, jl_value_t *y) JL_CANSAFEPOINT
 {
     int tvx = jl_is_typevar(x), tvy = jl_is_typevar(y);
     if (tvx && tvy)
@@ -834,13 +834,13 @@ static int params_never_equal(jl_value_t *x, jl_value_t *y) JL_NOTSAFEPOINT
     if (!jl_is_datatype(x) || !jl_is_datatype(y) || x == (jl_value_t*)jl_any_type || y == (jl_value_t*)jl_any_type)
         return 0;
     jl_datatype_t *dx = (jl_datatype_t*)x, *dy = (jl_datatype_t*)y;
-    return dx->name != dy->name && super_with_name(dx, dy->name) == jl_any_type &&
-           super_with_name(dy, dx->name) == jl_any_type;
+    return dx->name != dy->name && super_named(dx, dy->name, 1) == jl_any_type &&
+           super_named(dy, dx->name, 1) == jl_any_type;
 }
 
 // `covariant`: `a` and `b` are compared as sets of values (not as invariant parameters),
 // so a typevar admits only the values of its upper bound
-static int obviously_disjoint_(jl_value_t *a, jl_value_t *b, int specificity, int covariant) JL_NOTSAFEPOINT
+static int obviously_disjoint_(jl_value_t *a, jl_value_t *b, int specificity, int covariant) JL_CANSAFEPOINT
 {
     if (covariant) {
         while (jl_is_typevar(a))
@@ -879,13 +879,15 @@ static int obviously_disjoint_(jl_value_t *a, jl_value_t *b, int specificity, in
     if (jl_is_datatype(a) && jl_is_datatype(b)) {
         jl_datatype_t *ad = (jl_datatype_t*)a, *bd = (jl_datatype_t*)b;
         if (ad->name != bd->name) {
-            jl_datatype_t *temp = super_with_name(ad, bd->name);
+            // specificity only needs the names: declared subtypes take priority
+            // (issue #21710)
+            jl_datatype_t *temp = super_named(ad, bd->name, specificity);
             if (temp == NULL)
-                return 0;
+                return 0; // definition in progress
             if (temp == jl_any_type) {
-                temp = super_with_name(bd, ad->name);
+                temp = super_named(bd, ad->name, specificity);
                 if (temp == NULL)
-                    return 0;
+                    return 0; // definition in progress
                 if (temp == jl_any_type)
                     return 1;
                 bd = temp;
@@ -893,10 +895,8 @@ static int obviously_disjoint_(jl_value_t *a, jl_value_t *b, int specificity, in
             else {
                 ad = temp;
             }
-            if (specificity) {
-                // account for declared subtypes taking priority (issue #21710)
+            if (specificity)
                 return 0;
-            }
         }
         int istuple = (ad->name == jl_tuple_typename);
         size_t np;
@@ -961,7 +961,7 @@ static int obviously_disjoint_(jl_value_t *a, jl_value_t *b, int specificity, in
     return 0;
 }
 
-int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_NOTSAFEPOINT
+int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_CANSAFEPOINT
 {
     return obviously_disjoint_(a, b, specificity, !specificity);
 }
@@ -2804,7 +2804,7 @@ static int typeeq_kind_le(jl_datatype_t *k, jl_value_t *y) JL_NOTSAFEPOINT
     while (k != jl_any_type) {
         if (k == yd)
             return 1;
-        k = k->super;
+        k = jl_atomic_load_relaxed(&k->super);
     }
     return yd == jl_any_type;
 }
@@ -3161,7 +3161,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             return 1;
         jl_datatype_t *xd = (jl_datatype_t*)ux, *yd = (jl_datatype_t*)uy;
         while (xd != NULL && xd != jl_any_type && xd->name != yd->name) {
-            xd = jl_datatype_compute_super(xd);
+            xd = jl_get_super(xd);
         }
         if (xd == jl_any_type)
             return 0;
@@ -3287,8 +3287,12 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         if (y == (jl_value_t*)jl_any_type) return 1;
         jl_datatype_t *xd = (jl_datatype_t*)x, *yd = (jl_datatype_t*)y;
         while (xd != jl_any_type && xd->name != yd->name) {
-            jl_datatype_t *xsuper = jl_datatype_compute_super(xd);
+            jl_datatype_t *xsuper = jl_get_super(xd);
             if (xsuper == NULL) {
+                // not known yet (being defined or computed): the names differ
+                // and every supertype is abstract, so a concrete `yd` is not one
+                if (!yd->name->abstract)
+                    return 0;
                 assert(xd->parameters && jl_is_typename(xd->name));
                 jl_errorf("circular type parameter constraint in definition of %s", jl_symbol_name(xd->name->name));
             }
@@ -3727,7 +3731,7 @@ static jl_value_t *find_var_body(jl_value_t *t, jl_tvar_t *v) JL_NOTSAFEPOINT
 // returns true if it could be easily determined, with the result in subtype
 // the approximation widens typevar bounds under the assumption they are bound
 // in the immediate caller--the caller must be conservative in handling the result
-static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *subtype)
+static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *subtype) JL_CANSAFEPOINT
 {
     if (x == y || y == (jl_value_t*)jl_any_type) {
         *subtype = 1;
@@ -3893,12 +3897,9 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
             if (((jl_datatype_t*)x)->name != ((jl_datatype_t*)y)->name) {
                 jl_datatype_t *temp = (jl_datatype_t*)x;
                 while (temp->name != ((jl_datatype_t*)y)->name) {
-                    // raw read: this heuristic must not reach a safepoint, so
-                    // a deferred (unset) supertype stays undecided and the
-                    // full algorithm resolves it
-                    temp = temp->super;
+                    temp = jl_get_super(temp);
                     if (temp == NULL)
-                        return 0;
+                        return 0; // definition in progress
                     if (temp == jl_any_type) {
                         *subtype = 0;
                         return 1;
@@ -4090,7 +4091,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
     return 0;
 }
 
-JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
+JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype) JL_CANSAFEPOINT
 {
     return obvious_subtype(x, y, y, subtype);
 }
@@ -5824,7 +5825,7 @@ static jl_value_t *intersect_sub_datatype(jl_datatype_t *xd, jl_datatype_t *yd, 
     // if that attempt fails, then return bottom
     // otherwise return xd (finish_unionall will later handle propagating those constraints)
     assert(e->Loffset == 0);
-    jl_datatype_t *xdsuper = jl_datatype_compute_super(xd);
+    jl_datatype_t *xdsuper = jl_get_super(xd);
     if (xdsuper == NULL)
         return jl_bottom_type; // definition in progress
     jl_value_t *isuper = R ? intersect((jl_value_t*)yd, (jl_value_t*)xdsuper, e, param) :
@@ -6380,11 +6381,11 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
         }
         if (param == PARAM_INVARIANT) return jl_bottom_type;
         while (xd != NULL && xd != jl_any_type && xd->name != yd->name)
-            xd = jl_datatype_compute_super(xd);
+            xd = jl_get_super(xd);
         if (xd == NULL || xd == jl_any_type) {
             xd = (jl_datatype_t*)x;
             while (yd != NULL && yd != jl_any_type && yd->name != xd->name)
-                yd = jl_datatype_compute_super(yd);
+                yd = jl_get_super(yd);
             if (yd == NULL || yd == jl_any_type)
                 return jl_bottom_type;
             return intersect_sub_datatype((jl_datatype_t*)y, xd, e, 1, param);
@@ -7144,7 +7145,7 @@ static int count_missing_wrap(jl_value_t *x, jl_typeenv_t *env)
     return count;
 }
 
-static int obvious_subtype_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *subtype, int wrapx, int wrapy)
+static int obvious_subtype_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *subtype, int wrapx, int wrapy) JL_CANSAFEPOINT
 {
     if (wrapx != 0 || wrapy != 0) {
         int wrap_count = wrapx - wrapy;
@@ -7706,7 +7707,7 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
                     return 0;
                 return ascore > bscore || adiag > bdiag;
             }
-            tta = jl_datatype_compute_super(tta); super = 1;
+            tta = jl_get_super(tta); super = 1;
             if (tta == NULL)
                 return 0; // definition in progress
         }
