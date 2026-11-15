@@ -785,6 +785,7 @@ global state or mutable memory pointed to by its arguments.
     - a global reference or `getglobal` call to access a mutable global variable
     - a global assignment or `setglobal!` call to perform assignment to a non-constant global variable
     - `setfield!` call that changes a field of a global mutable variable
+    - returning a reference to a global mutable object, even without accessing it
 
 !!! note
     This `:inaccessiblememonly` assertion covers any other methods called by the annotated method.
