@@ -51,8 +51,8 @@ static JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT {
 }
 
 namespace {
-// Level 3 reduces JIT debug-info compression overhead at a small memory cost,
-// per the measurements in JuliaLang/julia#64984.
+// JIT objects are small, and for small inputs zstd's level 5 uses a slow match
+// finder; level 3, zstd's own default, avoids most of that for a little more memory.
 static constexpr int JIT_OBJ_ZSTD_LEVEL = 3;
 
 struct debug_link_info {
