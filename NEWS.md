@@ -59,6 +59,12 @@ New library features
 Standard library changes
 ------------------------
 
+* The new `DocBrowser` standard library is a full-screen, mouse-aware browser for the
+  documentation of every loaded module. It separates the active project's direct dependencies
+  from indirect ones, marks names as exported, public or internal, follows cross-references,
+  searches names or docstring text, and can load project dependencies that are not loaded yet.
+  The REPL opens it from `help?>` ([#64993]).
+
 #### Dates
 
 #### InteractiveUtils
@@ -83,6 +89,9 @@ Standard library changes
   commands without pipes or redirections through `$SHELL -c` on systems other than Windows. It no
   longer reads the `JULIA_SHELL` environment variable. The new `export NAME=value` and `unset NAME`
   commands in shell mode set and remove environment variables for later commands ([#20401]).
+
+* Pressing Enter at an empty `help?>` prompt now opens the documentation browser from the new
+  `DocBrowser` standard library, and Alt-Enter opens it at the name typed ([#64993]).
 
 #### SharedArrays
 

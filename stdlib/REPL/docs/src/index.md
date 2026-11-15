@@ -146,6 +146,12 @@ Another feature of help mode is the ability to access extended docstrings. You c
 
 Help mode can be exited by pressing backspace at the beginning of the line.
 
+#### The documentation browser
+
+Pressing Enter at an empty `help?>` prompt opens the documentation browser, a full-screen
+view of the documentation of every loaded module. Typing a name and pressing Alt-Enter
+instead opens the browser at that name. See [DocBrowser](@ref man-docbrowser).
+
 ### [Shell mode](@id man-shell-mode)
 
 Just as help mode is useful for quick access to documentation, another common task is to

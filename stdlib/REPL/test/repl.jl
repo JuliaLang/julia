@@ -2650,3 +2650,26 @@ end
     r = REPL.BasicREPL(term)
     @test !REPL.hascolor(r)
 end
+
+# Enter on an empty help prompt opens the documentation browser, Alt-Enter opens it at what
+# was typed, and `y` closes it and puts the name being viewed at the julia prompt.
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async REPL.run_repl(repl)
+    readuntil(stdout_read, "julia> ")
+    write(stdin_write, "?")
+    readuntil(stdout_read, "help?> ")
+    write(stdin_write, "sum\e\r")
+    readuntil(stdout_read, "\e[?1049h")
+    write(stdin_write, "y")
+    readuntil(stdout_read, "\e[?1049l")
+    write(stdin_write, "\r")
+    @test occursin("sum (generic function", readuntil(stdout_read, "methods)"))
+    write(stdin_write, "?")
+    readuntil(stdout_read, "help?> ")
+    write(stdin_write, "\r")
+    readuntil(stdout_read, "\e[?1049h")
+    write(stdin_write, "q")
+    readuntil(stdout_read, "\e[?1049l")
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
