@@ -12,6 +12,7 @@
 #include <string.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "builtin_proto.h"
 #ifndef _OS_WINDOWS_
 #include <unistd.h>
 #endif
@@ -5157,6 +5158,7 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
     return mfunc;
 }
 
+// Returns NULL, for a call (`for_call`), when F is a builtin: see `call_builtin`
 STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t **args, uint32_t nargs,
                                                        uint32_t callsite, size_t world, int for_call,
                                                        jl_typemap_entry_t **entry_out) JL_CANSAFEPOINT
@@ -5182,15 +5184,22 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
       if no generic match, use the concrete one even if inexact
       otherwise instantiate the generic method and use it
     */
-    uint32_t cache_idx[4];
-    call_cache_indices(callsite, cache_idx);
     jl_typemap_entry_t *entry;
     jl_method_instance_t *mfunc;
+    uint8_t hint = jl_atomic_load_relaxed(&((jl_datatype_t*)FT)->dispatch_hint);
+    if (__unlikely(hint & DISPATCH_HINT_BUILTIN)) {
+        if (for_call) {
+#ifdef JL_TRACE
+            if (traceen)
+                jl_printf(JL_STDOUT, " (builtin)\n");
+#endif
+            return NULL;
+        }
+        goto lookup;
+    }
+    uint32_t cache_idx[4];
+    call_cache_indices(callsite, cache_idx);
     // check each cache entry to see if it matches
-    //#pragma unroll
-    //for (i = 0; i < 4; i++) {
-    //    LOOP_BODY(i);
-    //}
 #define LOOP_BODY(_i) do { \
             entry = jl_atomic_load_relaxed(&call_cache[cache_idx[_i]]); \
             if (entry && nargs == jl_svec_len(entry->sig->parameters) && \
@@ -5204,6 +5213,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     LOOP_BODY(2);
     LOOP_BODY(3);
 #undef LOOP_BODY
+lookup:
     mfunc = jl_lookup_generic_slow(F, args, nargs, callsite, world, for_call, entry_out);
     goto done;
 have_entry:
@@ -5228,12 +5238,23 @@ jl_method_instance_t *jl_apply_lookup(jl_value_t **args, size_t nargs, size_t wo
             jl_int32hash_fast(jl_return_address()), world, 0, NULL);
 }
 
+// A builtin needs no dispatch: no method can be added to one (see `jl_method_def`), and its
+// method is valid from the first world on, so its `DataType` holds the index of the function to call.
+static NOINLINE jl_value_t *call_builtin(jl_value_t *F, jl_value_t **args, uint32_t nargs) JL_CANSAFEPOINT
+{
+    uint8_t hint = jl_atomic_load_relaxed(&((jl_datatype_t*)jl_typeof(F))->dispatch_hint);
+    assert(hint & DISPATCH_HINT_BUILTIN);
+    return verify_type(jl_builtin_f_addrs[hint & ~DISPATCH_HINT_BUILTIN](F, args, nargs));
+}
+
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 {
     size_t world = jl_current_task->world_age;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
                                                      world, 1, NULL);
+    if (__unlikely(mfunc == NULL))
+        return call_builtin(F, args, nargs);
     JL_GC_PROMISE_ROOTED(mfunc);
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
 }
@@ -5244,6 +5265,8 @@ jl_value_t *jl_apply_generic_site(jl_value_t *F, jl_value_t **args, uint32_t nar
 {
     size_t world = jl_current_task->world_age;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1, NULL);
+    if (__unlikely(mfunc == NULL))
+        return call_builtin(F, args, nargs);
     JL_GC_PROMISE_ROOTED(mfunc); // as in jl_apply_generic
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
 }
@@ -5293,6 +5316,8 @@ jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t n
     }
     jl_typemap_entry_t *entry = NULL;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1, &entry);
+    if (__unlikely(mfunc == NULL))
+        return call_builtin(F, args, nargs);
     if (entry != NULL) {
         jl_value_t *k = NULL;
         site = NULL;

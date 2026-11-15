@@ -3064,6 +3064,7 @@ void jl_init_intrinsic_functions(void)
                                       jl_get_module_edition(jl_core_module), 0, 1);
     jl_set_initial_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm, 0);
     jl_mk_builtin_func(jl_intrinsic_type, jl_symbol("IntrinsicFunction"), jl_f_intrinsic_call);
+    jl_atomic_store_relaxed(&jl_intrinsic_type->dispatch_hint, DISPATCH_HINT_BUILTIN | jl_builtin_id_intrinsic_call);
 
     jl_datatype_t *oc = (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type);
     // Save a reference to the just created OpaqueClosure method, so we can provide special
@@ -3084,6 +3085,8 @@ static void add_builtin(const char *name, jl_value_t *v) JL_CANSAFEPOINT
     jl_set_initial_const(jl_core_module, jl_symbol(name), v, 0);
 }
 
+static_assert(jl_n_builtins <= DISPATCH_HINT_BUILTIN, "a builtin's index must fit beside DISPATCH_HINT_BUILTIN");
+
 void jl_init_primitives(void) JL_GC_DISABLED
 {
     // Builtins are specially considered available from world 0
@@ -3095,6 +3098,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
         jl_value_t *builtin = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
         jl_set_initial_const(jl_core_module, sname, builtin, 0);
         jl_mk_builtin_func((jl_datatype_t*)jl_typeof(builtin), sname, jl_builtin_f_addrs[i]);
+        jl_atomic_store_relaxed(&((jl_datatype_t*)jl_typeof(builtin))->dispatch_hint, DISPATCH_HINT_BUILTIN | i);
         jl_builtin_instances[i] = builtin;
     }
     add_builtin("OpaqueClosure", (jl_value_t*)jl_opaque_closure_type);

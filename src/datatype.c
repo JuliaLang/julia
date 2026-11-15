@@ -121,6 +121,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->ismutationfree = 0;
     t->isidentityfree = 0;
     t->smalltag = 0;
+    jl_atomic_store_relaxed(&t->dispatch_hint, 0);
     t->name = NULL;
     t->super = NULL;
     t->parameters = NULL;
