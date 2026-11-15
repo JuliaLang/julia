@@ -80,21 +80,23 @@ function valid_as_lattice(@nospecialize(x), astag::Bool=false)
     return false
 end
 
-function valid_typeof_tparam(@nospecialize(t))
-    if t === Symbol || t === Module || isbitstype(t)
-        return true
+# is every value of type `t` a valid type parameter (as `jl_valid_type_param` decides) other
+# than a type or `TypeVar`: a symbol, module, bits value, or (named) tuple of those
+# (or, if `fields`, is `t` the type of the fields of such a tuple)
+function valid_typeof_tparam(@nospecialize(t), fields::Bool=false)
+    t isa TypeVar && return valid_typeof_tparam(t.ub, fields)
+    t isa Union && return valid_typeof_tparam(t.a, fields) && valid_typeof_tparam(t.b, fields)
+    t isa UnionAll && return valid_typeof_tparam(unwrap_unionall(t), fields)
+    t isa DataType || return false
+    if !fields
+        (t === Symbol || t === Module || isbitstype(t)) && return true
+        t.name === _NAMEDTUPLE_NAME && return valid_typeof_tparam(t.parameters[2], true)
     end
-    isconcretetype(t) || return false
-    if t <: NamedTuple
-        t = t.parameters[2]::DataType
+    t.name === Tuple.name || return false
+    for p in t.parameters
+        valid_typeof_tparam(unwrapva(p)) || return false
     end
-    if t <: Tuple
-        for p in t.parameters
-            valid_typeof_tparam(p) || return false
-        end
-        return true
-    end
-    return false
+    return true
 end
 
 # test if non-Type, non-TypeVar `x` can be used to parameterize a type

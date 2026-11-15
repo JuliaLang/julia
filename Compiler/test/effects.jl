@@ -995,6 +995,80 @@ end
 @eval new_typeeq_rep(T::Type{NewTypeEqRep{Int}}, x::Int) = ($(Expr(:new, :T, :x)); nothing)
 @eval splatnew_typeeq_rep(T::Type{NewTypeEqRep{Int}}, x::Int) = ($(Expr(:splatnew, :T, :((x,)))); nothing)
 @eval splatnew_const_typeeq_rep(T::Type{NewTypeEqRep{Int}}) = ($(Expr(:splatnew, :T, :((1,)))); nothing)
+# a type parameter given a value whose type is not concrete, but all of whose values are
+# valid type parameters, as when `merge` applies `NamedTuple{(names...,)}`
+apply_namedtuple_names(names) = (NamedTuple{names}; nothing)
+@test Compiler.is_nothrow(Base.infer_effects(apply_namedtuple_names, (Tuple{Vararg{Symbol}},)))
+@test Compiler.is_nothrow(Base.infer_effects(apply_namedtuple_names, (Tuple{Symbol, Vararg{Int}},)))
+@test !Compiler.is_nothrow(Base.infer_effects(apply_namedtuple_names, (Tuple{Vararg{Integer}},))) # e.g. a `BigInt`
+@test !Compiler.is_nothrow(Base.infer_effects(apply_namedtuple_names, (Tuple,)))
+@test !Compiler.is_nothrow(Base.infer_effects(apply_namedtuple_names, (Tuple{Type{Int}},))) # a type in a tuple is not
+@test Compiler.is_nothrow(Base.infer_effects(apply_namedtuple_names, (Tuple{Module, Tuple{Vararg{Symbol}}},)))
+# a type may restrict a parameter beyond the bounds of the variable it replaces
+apply_nothrow(f, @nospecialize(argtypes...)) = Compiler.is_nothrow(Base.infer_effects(x -> (f(x); nothing), argtypes))
+const ComplexVector{T} = Vector{Complex{T}}
+@test !apply_nothrow(x -> ComplexVector{x}, Type{<:AbstractString})
+@test apply_nothrow(x -> ComplexVector{x}, Type{<:Signed})
+@test !apply_nothrow(x -> NTuple{x}, Int)                   # a negative count
+@test !apply_nothrow(x -> NTuple{2, x}, Type{<:Integer})    # `Union{}`
+@test !apply_nothrow(x -> NamedTuple{x, Tuple{Int}}, Tuple{Symbol, Vararg{Int}})
+@test !apply_nothrow(x -> NamedTuple{(:a,), x}, Type{<:Tuple})
+@test !apply_nothrow(x -> GenericMemory{x}, Int)
+@test apply_nothrow(x -> GenericMemory{x}, Symbol)
+const UnionTuple{A, B} = Tuple{Union{A, B}}
+@test !Compiler.is_nothrow(Base.infer_effects((x, y) -> (UnionTuple{x, y}; nothing), (Type{<:Integer}, Type{<:Integer})))
+const BottomVarargTuple = Tuple{X, Vararg{Union{}, N}} where {X, N}
+@test !apply_nothrow(x -> BottomVarargTuple{x, 1}, DataType)
+@test apply_nothrow(x -> BottomVarargTuple{x, 0}, DataType)
+abstract type AbstractOfComplex{T} end
+struct OfComplex{T} <: AbstractOfComplex{Complex{T}} end # restricts `T` only in its supertype
+@test !apply_nothrow(x -> OfComplex{x}, Type{<:AbstractString})
+@test apply_nothrow(x -> OfComplex{x}, Type{<:Signed})
+const UnionIntVector{T} = Vector{Union{T, Int}}
+@test apply_nothrow(x -> UnionIntVector{x}, DataType)
+# a variable whose bounds mention a parameter may collapse to them
+const CollapseTuple = Ref{Vector{Tuple{Ref{S}, S}} where Union{A, B}<:S<:Union{A, B}} where {A, B}
+@test !Compiler.is_nothrow(Base.infer_effects((x, y) -> (CollapseTuple{x, y}; nothing), (Type{<:Integer}, Type{<:Integer})))
+const SubtypeVector{T} = Vector{<:T}
+@test apply_nothrow(x -> SubtypeVector{x}, Type{<:Integer})
+const ZipOne{T} = Base.Iterators.Zip{Tuple{T}}
+@test apply_nothrow(x -> ZipOne{x}, DataType)
+const NamedTupleA{T} = NamedTuple{(:a,), Tuple{T}}
+@test apply_nothrow(x -> NamedTupleA{x}, DataType)
+@test !apply_nothrow(x -> NamedTuple{(:a,), x}, Type{<:Tuple{Any}}) # e.g. a `Union` of tuple types
+# deep and self-referential supertypes, and bounds that depend on another parameter
+@test apply_nothrow(x -> Base.OneTo{x}, Type{<:Integer})
+abstract type AbstractSelfNode{T} end
+struct SelfNode{T} <: AbstractSelfNode{SelfNode{T}} end
+@test apply_nothrow(x -> SelfNode{x}, Type{<:Integer})
+struct DependentBound{A, B<:AbstractVector{A}} end
+@test apply_nothrow(x -> DependentBound{x}, Type{<:Integer})
+const DependentBoundFixed{A} = DependentBound{A, Vector{Int}}
+@test !apply_nothrow(x -> DependentBoundFixed{x}, Type{<:Integer})
+struct DependentBound3{A, B<:AbstractVector{A}, C} end
+const DependentBoundOther{X} = DependentBound3{Int, Vector{Int}, X} # leaves the dependent bound alone
+@test apply_nothrow(x -> DependentBoundOther{x}, DataType)
+struct SubtypeBound{A, B<:A} end
+@test !Compiler.is_nothrow(Base.infer_effects((x, y) -> (SubtypeBound{x, y}; nothing), (Type{<:Integer}, Type{<:Integer})))
+abstract type AbstractDependentBound{A, B<:AbstractVector{A}} end
+struct OfDependentBound{X} <: AbstractDependentBound{X, Vector{X}} end
+@test apply_nothrow(x -> OfDependentBound{x}, DataType)
+@test apply_nothrow(x -> Vector{x}, Union{Type{Int}, Symbol})
+const NamedTupleOf{A} = NamedTuple{(:a,), T} where T<:Tuple{A}
+@test apply_nothrow(x -> NamedTupleOf{x}, DataType)
+const SubtypeBoundTuple{X} = SubtypeBound{Any, Tuple{X}} # the `Tuple` still checks `Union{}`
+@test !apply_nothrow(x -> SubtypeBoundTuple{x}, Type{<:Integer})
+@test apply_nothrow(x -> SubtypeBoundTuple{x}, DataType)
+abstract type AbstractOfNumber{T<:Number} end
+struct OfNumber{T<:Number} <: AbstractOfNumber{T} end
+const OfComplexNumber{X} = OfNumber{Complex{X}}
+@test apply_nothrow(x -> OfComplexNumber{x}, Type{<:Real})
+@test !apply_nothrow(x -> OfComplexNumber{x}, Type{<:AbstractString})
+let ci = only(code_typed(merge, (NamedTuple{()}, Dict{Symbol,Any})))[1]
+    # only the whole application `NamedTuple{names, T}` remains
+    @test count(x -> Meta.isexpr(x, :call) && x.args[1] == GlobalRef(Core, :apply_type), ci.code) == 1
+end
+
 # `Core.apply_type(Union, T)` returns `T` itself, which is not necessarily a `DataType`
 @eval Base.@nospecializeinfer apply_union_typeeq_rep(@nospecialize(T::Type{NewTypeEqRep{Int}}), x::Int) =
     ($(Expr(:new, :(Core.apply_type(Union, T)), :x)); nothing)

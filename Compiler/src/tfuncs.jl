@@ -1837,11 +1837,8 @@ end
 add_tfunc(fieldtype, 2, 3, fieldtype_tfunc, 0)
 
 # Like `valid_tparam`, but in the type domain.
-valid_tparam_type(T::DataType) = valid_typeof_tparam(T)
-valid_tparam_type(T::TypeEq) = true
-valid_tparam_type(T::Core.TypeEgal) = true
-valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
-valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
+valid_tparam_type(@nospecialize T) = T <: Union{Type, TypeVar} || valid_typeof_tparam(T) ||
+    (isa(T, Union) && valid_tparam_type(T.a) && valid_tparam_type(T.b))
 
 function typeeq_apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
     length(argtypes) == 2 || return false
@@ -1910,6 +1907,327 @@ function typeegal_apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     return Core.TypeEgal
 end
 
+# can a parameter of lattice type `ai` replace a variable with bounds `lb` and `ub`
+function tparam_within_bounds(𝕃::AbstractLattice, @nospecialize(ai), @nospecialize(lb), @nospecialize(ub))
+    if lb === Union{} && ub === Any
+        # any valid parameter
+        return valid_tparam_type(widenconst(ai))
+    elseif ⊑(𝕃, ai, TypeVar)
+        # We don't know anything about the bounds of this typevar
+        return false
+    elseif (isa(ai, Const) && isa(ai.val, Type)) || isconstType(ai)
+        ai = isa(ai, Const) ? ai.val : type_parameter(ai)
+        (has_free_typevars(lb) || has_free_typevars(ub)) && return false
+        return lb <: ai <: ub
+    end
+    T, exact, _, istype = instanceof_tfunc(ai, false)
+    istype || return false
+    (has_free_typevars(lb) || has_free_typevars(ub)) && return false
+    Tub = T
+    while isa(Tub, TypeVar)
+        Tub = Tub.ub
+    end
+    Tub <: ub || return false
+    return exact ? lb <: T : lb === Bottom
+end
+
+# A substitution of the parameters `vals` (lattice elements) for the variables `vars`,
+# where `free` are other variables in scope that stay free
+# (and `rebound` are those of `vars` that are bound in the body itself)
+struct TParamSubst
+    vars::Vector{TypeVar}
+    vals::Vector{Any}
+    free::Vector{TypeVar}
+    rebound::Vector{TypeVar}
+end
+TParamSubst() = TParamSubst(TypeVar[], Any[], TypeVar[], TypeVar[])
+
+function substidx(s::TParamSubst, @nospecialize(p))
+    isa(p, TypeVar) || return 0
+    for i in 1:length(s.vars)
+        s.vars[i] === p && return i
+    end
+    return 0
+end
+
+function mentions_any(vars::Vector{TypeVar}, @nospecialize(p))
+    for v in vars
+        has_typevar(p, v) && return true
+    end
+    return false
+end
+
+# may `t` become `Union{}` under `s`
+function subst_may_be_bottom(s::TParamSubst, @nospecialize(t))
+    t === Union{} && return true
+    if isa(t, TypeVar)
+        i = substidx(s, t)
+        i == 0 && return false
+        ai = s.vals[i]
+        return isa(ai, Const) ? ai.val === Union{} : Union{} isa widenconst(ai)
+    end
+    isa(t, Union) && return subst_may_be_bottom(s, t.a) && subst_may_be_bottom(s, t.b)
+    isa(t, UnionAll) && return subst_may_be_bottom(s, t.body)
+    return false
+end
+
+# can `p` be a type (or a variable) under `s`, as a bound or a member of a union must be
+subst_type_nothrow(𝕃::AbstractLattice, s::TParamSubst, @nospecialize(p), stack::Union{Nothing, Vector{Any}}) =
+    (i = substidx(s, p); i == 0 ? tparams_subst_nothrow(𝕃, s, p, stack) :
+                                  widenconst(s.vals[i]) <: Union{Type, TypeVar})
+
+# Can `s` be applied to `t` without throwing? Each type that encloses a variable may restrict
+# its value beyond the bounds of the variable: by the bounds of its own parameters, by its
+# declared supertype, or by its own rules (as for `Tuple` or `NamedTuple`).
+function tparams_subst_nothrow(𝕃::AbstractLattice, s::TParamSubst, @nospecialize(t), stack::Union{Nothing, Vector{Any}}=nothing)
+    if isa(t, TypeVar)
+        # the whole body, which may be any parameter
+        return true
+    elseif isa(t, UnionAll)
+        v = t.var
+        substidx(s, v) == 0 || return false # shadowed
+        subst_type_nothrow(𝕃, s, v.lb, stack) || return false
+        subst_type_nothrow(𝕃, s, v.ub, stack) || return false
+        if (mentions_any(s.vars, v.lb) || mentions_any(s.vars, v.ub)) &&
+           !(v.lb === Union{} && !subst_may_be_bottom(s, v.ub))
+            # with its new bounds, the variable may be replaced by them (when they are equal)
+            push!(s.vars, v)
+            push!(s.vals, Union{Type, TypeVar})
+            push!(s.rebound, v)
+            ok = tparams_subst_nothrow(𝕃, s, t.body, stack)
+            pop!(s.vars)
+            pop!(s.vals)
+            pop!(s.rebound)
+        else
+            push!(s.free, v)
+            ok = tparams_subst_nothrow(𝕃, s, t.body, stack)
+            pop!(s.free)
+        end
+        return ok
+    elseif isa(t, Union)
+        return subst_type_nothrow(𝕃, s, t.a, stack) && subst_type_nothrow(𝕃, s, t.b, stack)
+    elseif isvarargtype(t)
+        T = isdefined(t, :T) ? t.T : Any
+        if isdefined(t, :N)
+            i = substidx(s, t.N)
+            if i == 0
+                npos = isa(t.N, Int) && t.N > 0
+            else
+                ai = s.vals[i]
+                if ⊑(𝕃, ai, TypeVar)
+                    npos = false
+                elseif isa(ai, Const) && isa(ai.val, Int) && ai.val >= 0
+                    npos = ai.val > 0
+                else
+                    return false # the count must be a non-negative `Int` (or a variable)
+                end
+            end
+            # a closed count expands the elements into fields, which may not be `Union{}`
+            npos && subst_may_be_bottom(s, T) && return false
+        end
+        return substidx(s, T) != 0 || tparams_subst_nothrow(𝕃, s, T, stack)
+    elseif isTypeEq(t)
+        p = type_parameter(t)
+        # any valid type parameter may be the parameter of `Type`
+        return substidx(s, p) != 0 || tparams_subst_nothrow(𝕃, s, p, stack)
+    elseif isTypeEgal(t)
+        # the parameter must stay a closed type
+        return !mentions_any(s.vars, type_parameter(t))
+    elseif !isa(t, DataType)
+        return true
+    end
+    mentions_any(s.vars, t) || return true
+    params = t.parameters
+    tn = t.name
+    if tn === Tuple.name
+        for p in params
+            isvarargtype(p) || !subst_may_be_bottom(s, p) || return false # a field may not be `Union{}`
+            substidx(s, p) != 0 || !mentions_any(s.vars, p) || tparams_subst_nothrow(𝕃, s, p, stack) || return false
+        end
+        return true
+    elseif tn === _NAMEDTUPLE_NAME
+        namedtuple_subst_nothrow(s, params) || return false
+    elseif tn === GenericMemory.body.body.body.name || tn === GenericMemoryRef.body.body.body.name
+        i = substidx(s, params[1])
+        i == 0 || widenconst(s.vals[i]) <: Union{Symbol, TypeVar} || return false
+        i = substidx(s, params[3])
+        i == 0 || widenconst(s.vals[i]) <: Union{Core.AddrSpace, TypeVar} || return false
+    end
+    w = tn.wrapper
+    for j in 1:length(params)
+        w = w::UnionAll
+        v = w.var
+        w = w.body
+        p = params[j]
+        if has_free_typevars(v.lb) || has_free_typevars(v.ub)
+            # a bound that depends on the other parameters must hold for their new values:
+            # as it did if none of them changes, or if the parameter is still the variable of
+            # the definition (bound in the body with the bound of the definition)
+            dependent_bound_unchanged(s, tn, params, j) || dependent_bound_kept(s, tn, params, j) ||
+                subst_within_bounds(s, tn, params) || return false
+            substidx(s, p) != 0 || !mentions_any(s.vars, p) || tparams_subst_nothrow(𝕃, s, p, stack) || return false
+            continue
+        end
+        i = substidx(s, p)
+        if i != 0 && contains_is(s.rebound, p)
+            # either still a variable, or replaced by its new upper bound
+            (v.lb === Union{} && v.ub === Any) || subst_within_bound(s, p.ub, v.lb, v.ub) || return false
+        elseif i != 0
+            tparam_within_bounds(𝕃, s.vals[i], v.lb, v.ub) || return false
+        elseif mentions_any(s.vars, p)
+            tparams_subst_nothrow(𝕃, s, p, stack) || return false
+            # a bound may reject a value substituted deeper into the parameter, unless
+            # it accepts the parameter for every value of the variables
+            (v.lb === Union{} && v.ub === Any) || subst_within_bound(s, p, v.lb, v.ub) || return false
+        end
+    end
+    return super_subst_nothrow(𝕃, s, t, stack)
+end
+
+# does `s` leave the `j`-th parameter of a type of `tn` and the parameters its bounds depend on unchanged
+function dependent_bound_unchanged(s::TParamSubst, tn::Core.TypeName, params::SimpleVector, j::Int)
+    mentions_any(s.vars, params[j]) && return false
+    vs = wrapper_vars(tn)
+    vj = vs[j]
+    for k in 1:length(params)
+        k == j && continue
+        if has_typevar(vj.lb, vs[k]) || has_typevar(vj.ub, vs[k])
+            mentions_any(s.vars, params[k]) && return false
+        end
+    end
+    return true
+end
+
+# the variables of the definition of `tn`
+function wrapper_vars(tn::Core.TypeName)
+    vs = TypeVar[]
+    w = tn.wrapper
+    while isa(w, UnionAll)
+        push!(vs, w.var)
+        w = w.body
+    end
+    return vs
+end
+
+# are the parameters of a type of `tn` within the bounds of its definition for every value of
+# the variables of `s`: a parameter in `Ref` must equal the variable it replaces
+function subst_within_bounds(s::TParamSubst, tn::Core.TypeName, params::SimpleVector)
+    any(p -> mentions_any(s.free, p), params) && return false
+    lhs = Tuple{map(p -> Ref{p}, params)...}
+    for i in length(s.vars):-1:1
+        lhs = UnionAll(s.vars[i], lhs)
+    end
+    vs = wrapper_vars(tn)
+    rhs = Tuple{map(v -> Ref{v}, vs)...}
+    for i in length(vs):-1:1
+        rhs = UnionAll(vs[i], rhs)
+    end
+    return lhs <: rhs
+end
+
+# is the `j`-th parameter of a type of `tn` the variable of its definition, as are the
+# parameters its bounds depend on, and bound in the body (so it gets the same new bounds)
+function dependent_bound_kept(s::TParamSubst, tn::Core.TypeName, params::SimpleVector, j::Int)
+    p = params[j]
+    isa(p, TypeVar) || return false
+    contains_is(s.free, p) || contains_is(s.rebound, p) || return false
+    w = tn.wrapper
+    for k in 1:length(params)
+        w = w::UnionAll
+        v = w.var
+        w = w.body
+        if k == j
+            v === p || return false
+        elseif has_typevar(p.lb, v) || has_typevar(p.ub, v)
+            params[k] === v || return false
+        end
+    end
+    return true
+end
+
+# is `p` within `lb` and `ub` for every value of the variables of `s`
+function subst_within_bound(s::TParamSubst, @nospecialize(p), @nospecialize(lb), @nospecialize(ub))
+    lb === Union{} || return false
+    mentions_any(s.free, p) && return false
+    for i in length(s.vars):-1:1
+        p = UnionAll(s.vars[i], p)
+    end
+    return p <: ub
+end
+
+# can the names and the field types of a `NamedTuple` be checked against each other, as they
+# are once neither mentions a free variable
+function namedtuple_subst_nothrow(s::TParamSubst, params::SimpleVector)
+    (mentions_any(s.free, params[1]) || mentions_any(s.free, params[2])) && return true
+    names = params[1]
+    i = substidx(s, names)
+    if i != 0
+        ai = s.vals[i]
+        isa(ai, Const) || return false
+        names = ai.val
+    end
+    isa(names, Tuple) || return false
+    for j in 1:length(names)
+        isa(names[j], Symbol) || return false
+        for k in 1:(j - 1)
+            names[k] === names[j] && return false
+        end
+    end
+    tt = params[2]
+    if contains_is(s.rebound, tt)
+        # a variable with new bounds, which may also be replaced by its (new) upper bound
+        tt = tt.ub
+    end
+    i = substidx(s, tt)
+    if i != 0
+        T, exact, _, istype = instanceof_tfunc(s.vals[i], false)
+        (exact && istype) || return false
+        tt = T
+    end
+    tt === Union{} && return !isempty(names)
+    # the field types must be a tuple type of the same length (and stay so)
+    isa(tt, DataType) && tt.name === Tuple.name || return false
+    length(tt.parameters) == length(names) || return false
+    for p in tt.parameters
+        isvarargtype(p) && return false
+    end
+    return true
+end
+
+# Can `s` be applied to the supertype of `t` (to which it applies the same way)? A supertype
+# may mention the type itself, so this may come back to an application it is already checking,
+# which (with the same substitution) holds if the rest of the check does.
+function super_subst_nothrow(𝕃::AbstractLattice, s::TParamSubst, t::DataType,
+                             stack::Union{Nothing, Vector{Any}})
+    super = supertype(t)
+    mentions_any(s.vars, super) || return true
+    entry = (t, copy(s.vars), copy(s.vals), copy(s.free), copy(s.rebound))
+    if stack === nothing
+        stack = Any[]
+    else
+        for e in stack
+            same_super_check(e, entry) && return true
+        end
+        length(stack) < 32 || return false
+    end
+    push!(stack, entry)
+    ok = tparams_subst_nothrow(𝕃, s, super, stack)
+    pop!(stack)
+    return ok
+end
+
+function same_super_check(@nospecialize(e), @nospecialize(f))
+    e = e::Tuple{DataType, Vector{TypeVar}, Vector{Any}, Vector{TypeVar}, Vector{TypeVar}}
+    f = f::Tuple{DataType, Vector{TypeVar}, Vector{Any}, Vector{TypeVar}, Vector{TypeVar}}
+    e[1] === f[1] || return false
+    e[2] == f[2] && e[4] == f[4] && e[5] == f[5] || return false
+    length(e[3]) == length(f[3]) || return false
+    for i in 1:length(e[3])
+        e[3][i] === f[3][i] || return false
+    end
+    return true
+end
+
 function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     rt === Type && return false
     length(argtypes) >= 1 || return false
@@ -1927,54 +2245,20 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
     headtype === TypeEq && return typeeq_apply_type_nothrow(𝕃, argtypes)
     headtype === Core.TypeEgal && return typeegal_apply_type_nothrow(𝕃, argtypes)
     isa(rt, Const) && return true
+    # TODO: a head that is not a `UnionAll`, such as `Tuple` itself
+    isa(headtype, UnionAll) || return false
+    s = TParamSubst()
     u = headtype
-    # TODO: implement optimization for isvarargtype(u) and istuple occurrences (which are valid but are not UnionAll)
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
         ai = widenconditional(argtypes[i])
-        if ⊑(𝕃, ai, TypeVar) || ai === DataType
-            # We don't know anything about the bounds of this typevar, but as
-            # long as the UnionAll is not constrained, that's ok.
-            if !(u.var.lb === Union{} && u.var.ub === Any)
-                return false
-            end
-        elseif (isa(ai, Const) && isa(ai.val, Type)) || isconstType(ai)
-            ai = isa(ai, Const) ? ai.val : type_parameter(ai)
-            if has_free_typevars(u.var.lb) || has_free_typevars(u.var.ub)
-                return false
-            end
-            if !(u.var.lb <: ai <: u.var.ub)
-                return false
-            end
-        else
-            T, exact, _, istype = instanceof_tfunc(ai, false)
-            if T === Bottom
-                if !(u.var.lb === Union{} && u.var.ub === Any)
-                    return false
-                end
-                if !valid_tparam_type(widenconst(ai))
-                    return false
-                end
-            else
-                istype || return false
-                if isa(u.var.ub, TypeVar)
-                    return false
-                end
-                Tub = T
-                while isa(Tub, TypeVar)
-                    Tub = Tub.ub
-                end
-                if !(Tub <: u.var.ub)
-                    return false
-                end
-                if exact ? !(u.var.lb <: T) : !(u.var.lb === Bottom)
-                    return false
-                end
-            end
-        end
+        tparam_within_bounds(𝕃, ai, u.var.lb, u.var.ub) || return false
+        push!(s.vars, u.var)
+        push!(s.vals, ai)
         u = u.body
     end
-    return true
+    # the types in the body may restrict the parameters further
+    return tparams_subst_nothrow(𝕃, s, u)
 end
 
 const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K, :_L, :_M,

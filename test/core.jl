@@ -8792,6 +8792,8 @@ struct ModTparamTestStruct{M}; end
 end
 @test ModTparamTestStruct{@__MODULE__}() == 2
 @test ModTparamTestStruct{ModTparamTest}() == 1
+# and in the tuples that may be type parameters
+@test ModTparamTestStruct{(ModTparamTest, (m = Main,))}.parameters[1] === (ModTparamTest, (m = Main,))
 
 # issue #47476
 f47476(::Union{Int, NTuple{N,Int}}...) where {N} = N

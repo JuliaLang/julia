@@ -2029,8 +2029,8 @@ static int is_nestable_type_param(jl_value_t *t)
         size_t i, l = jl_nparams(t);
         for (i = 0; i < l; i++) {
             jl_value_t *pi = jl_tparam(t, i);
-            if (!(pi == (jl_value_t*)jl_symbol_type || jl_isbits(pi) || is_nestable_type_param(pi) ||
-        jl_is_module(pi)))
+            if (!(pi == (jl_value_t*)jl_symbol_type || pi == (jl_value_t*)jl_module_type ||
+                  jl_isbits(pi) || is_nestable_type_param(pi)))
                 return 0;
         }
         return 1;
