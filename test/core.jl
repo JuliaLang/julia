@@ -9636,3 +9636,8 @@ for _ in 1:2
     @test Base.inferencebarrier(vtail_t)(Int, Vector, Union{}, Int) == 1
     @test Base.inferencebarrier(vtail_t)(Int, Vector, 1) == 2
 end
+vtail_i(x::Int, ys::Int...) = length(ys)
+for _ in 1:2, n in (1, 3, 4, 2, 5) # an empty tail, and lengths sharing one `Vararg` entry
+    @test Base.inferencebarrier(vtail_i)(ntuple(identity, n)...) == n - 1
+end
+@test_throws MethodError Base.inferencebarrier(vtail_i)(1, 2, 3.0)

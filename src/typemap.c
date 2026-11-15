@@ -1778,6 +1778,13 @@ static void jl_typemap_level_insert_(
     jl_typemap_list_insert_(map, &cache->linear, (jl_value_t*)cache, newrec);
 }
 
+// Whether the call-site cache can match an argument to `decl` by `===` alone, as the slots of
+// an `isegalsig` signature are: a concrete type other than a kind, or `TypeEgal{T}`
+static int sig_slot_is_egal(jl_value_t *decl) JL_NOTSAFEPOINT
+{
+    return jl_is_typeegal(decl) || (jl_is_concrete_type(decl) && !jl_is_kind(decl));
+}
+
 jl_typemap_entry_t *jl_typemap_alloc(
         jl_tupletype_t *type, jl_svec_t *guardsigs,
         jl_value_t *newvalue, size_t min_world, size_t max_world)
@@ -1790,7 +1797,7 @@ jl_typemap_entry_t *jl_typemap_alloc(
     int isva = jl_is_va_tuple((jl_datatype_t*)ttype);
     int issimplesig = !jl_is_unionall(type); // a TypeVar environment needs a complex matching test
     int isleafsig = issimplesig && !isva; // entirely leaf types don't need to be sorted
-    int isegalsig = isleafsig;
+    int isegalsig = issimplesig;
     size_t i, l;
     for (i = 0, l = jl_nparams(ttype); i < l && issimplesig; i++) {
         jl_value_t *decl = jl_tparam(ttype, i);
@@ -1801,8 +1808,13 @@ jl_typemap_entry_t *jl_typemap_alloc(
             isleafsig = 0; // TypeEgal{} may need special processing to compute the match
         else if (jl_is_some_Type(decl))
             isleafsig = isegalsig = 0;
-        else if (jl_is_vararg(decl))
-            isleafsig = isegalsig = 0; // makes iteration easier when the endpoints are the same
+        else if (jl_is_vararg(decl)) {
+            isleafsig = 0; // makes iteration easier when the endpoints are the same
+            // the call-site cache still matches each tail argument by `===` on its element,
+            // which must then pass the same test as a slot
+            if (jl_vararg_kind(decl) != JL_VARARG_UNBOUND || !sig_slot_is_egal(jl_unwrap_vararg(decl)))
+                isegalsig = 0;
+        }
         else if (decl == (jl_value_t*)jl_any_type)
             isleafsig = isegalsig = 0; // Any needs to go in the general cache
         else if (!jl_is_concrete_type(decl)) // tested by `isa` in sig_match_simple

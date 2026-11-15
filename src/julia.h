@@ -1057,7 +1057,7 @@ struct JL_GC_TRACKED_TYPE _jl_typemap_entry_t {
     int8_t isleafsig; // isleaftype(sig) & !any(isType, sig) : unsorted and very fast
     int8_t issimplesig; // !isa(sig, UnionAll) : sorted and fast, abstract slots are tested last
     int8_t va; // isVararg(sig)
-    int8_t isegalsig; // every slot a leaf type or a `TypeEgal{T}` : matched by `===` alone
+    int8_t isegalsig; // every slot (and an unbound `Vararg`'s element) a leaf type or a `TypeEgal{T}` : matched by `===` alone
 };
 
 // one level in a TypeMap tree (each level splits on a type at a given offset)
