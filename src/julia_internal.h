@@ -792,6 +792,7 @@ typedef union {
 // Also defined in typeinfer.jl - See documentation there.
 #define SOURCE_MODE_NOT_REQUIRED            0x0
 #define SOURCE_MODE_ABI                     0x1
+#define SOURCE_MODE_ABI_CALLEES             0x3
 
 // dispatch_status bits.
 // - LATEST_WHICH: invoke of this mi's exact specTypes yields exactly this result.
@@ -815,6 +816,7 @@ JL_DLLEXPORT int8_t jl_get_type_infer_preserve_ir(void);
 JL_DLLEXPORT void jl_set_type_infer_preserve_ir(int8_t v);
 JL_DLLEXPORT int8_t jl_get_precompile_keep_ir(void);
 JL_DLLEXPORT void jl_set_precompile_keep_ir(int8_t v);
+JL_DLLEXPORT int8_t jl_get_jit_on_demand(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t world) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
@@ -823,6 +825,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
 JL_DLLEXPORT void jl_ci_replace_nulldebuginfo(jl_code_instance_t *ci, jl_debuginfo_t *di) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_mi_cache_has_ci(jl_method_instance_t *mi, jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile) JL_CANSAFEPOINT;
+JL_DLLEXPORT void *jl_jit_resolve_callee(jl_code_instance_t *ci, int specsig, _Atomic(void*) *slot) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *srcs) JL_CANSAFEPOINT;
 
 jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth) JL_CANSAFEPOINT;

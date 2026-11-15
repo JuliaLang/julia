@@ -30,7 +30,9 @@ enum internal_compilation_triggers {
     TRIGGER_NONE, // No cache should be updated
     TRIGGER_FOREIGN, // Unmanageable cache, requires exact updates
     TRIGGER_DISPATCH, // Insert to global dispatch cache
-    TRIGGER_INVOKE // Insert to local (invoke) dispatch cache
+    TRIGGER_INVOKE, // Insert to local (invoke) dispatch cache
+    TRIGGER_CALLEE, // As TRIGGER_FOREIGN, for the first call from compiled code (see jl_jit_resolve_callee)
+    TRIGGER_PRECOMPILE // As TRIGGER_FOREIGN, and compile the callees ahead of their first call too
 };
 
 _Atomic(int) allow_new_worlds = 1;
@@ -1126,6 +1128,21 @@ JL_DLLEXPORT void jl_set_precompile_keep_ir(int8_t v)
     jl_atomic_store_relaxed(&jl_precompile_keep_ir, v);
 }
 
+// Whether the JIT compiles the callees of a function when they are first called, instead
+// of together with it. Enabled by setting the environment variable `JULIA_JIT_ON_DEMAND`
+// to anything but `0`.
+JL_DLLEXPORT int8_t jl_get_jit_on_demand(void)
+{
+    static _Atomic(int8_t) on_demand = -1;
+    int8_t v = jl_atomic_load_relaxed(&on_demand);
+    if (v < 0) {
+        const char *env = getenv("JULIA_JIT_ON_DEMAND");
+        v = env != NULL && env[0] != '\0' && strcmp(env, "0") != 0;
+        jl_atomic_store_relaxed(&on_demand, v);
+    }
+    return v;
+}
+
 static int invalidate_all_entries(jl_typemap_entry_t *entry, void *env)
 {
     jl_atomic_store_relaxed(&entry->max_world, 0);
@@ -2022,7 +2039,7 @@ static jl_method_instance_t *cache_result(
 static int need_copy_to_mi_cache(jl_svec_t *sparams, jl_method_instance_t *mi2,
     enum internal_compilation_triggers cause)
 {
-    return cause == TRIGGER_FOREIGN ||
+    return cause == TRIGGER_FOREIGN || cause == TRIGGER_CALLEE || cause == TRIGGER_PRECOMPILE ||
         !jl_egal((jl_value_t*)sparams, (jl_value_t*)mi2->sparam_vals);
 }
 
@@ -4505,6 +4522,33 @@ void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_c
 
 JL_DLLEXPORT jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
 
+static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world,
+    jl_value_t *F, jl_value_t **args, uint32_t nargs,
+    enum internal_compilation_triggers cause) JL_CANSAFEPOINT;
+
+// Called by a call stub of the on-demand JIT (see emit_on_demand_call_stubs) the first
+// time compiled code calls `ci`. Compiles `ci` and returns its entry point for the ABI
+// that the caller uses, which is also stored to `slot` for the calls that follow.
+JL_DLLEXPORT void *jl_jit_resolve_callee(jl_code_instance_t *ci, int specsig, _Atomic(void*) *slot)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
+    jl_code_instance_t *target = ci;
+    JL_GC_PUSH1(&target);
+    if (jl_atomic_load_acquire(&ci->invoke) == NULL) {
+        jl_code_instance_t *ci2 = jl_compile_method_very_internal(mi, ct->world_age, NULL, NULL, 0, TRIGGER_CALLEE);
+        // An equivalent CodeInstance may have been compiled in place of `ci`.
+        if (ci2 != NULL && jl_atomic_load_acquire(&ci->invoke) == NULL && jl_is_ci_equiv(ci, ci2, 0))
+            target = ci2;
+    }
+    // If `target` has no code even now, this is a function that calls `jl_invoke`.
+    jl_abi_t abi = {mi->specTypes, ci->rettype, specsig, 0};
+    void *f = jl_jit_abi_converter(ct, abi, target);
+    JL_GC_POP();
+    jl_atomic_store_release(slot, f);
+    return f;
+}
+
 JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *srcs)
 {
     assert(jl_array_dim0(codeinsts) == jl_array_dim0(srcs));
@@ -4733,7 +4777,8 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
     }
 
     // Ok, compilation is enabled. We'll need to try to compile something (probably).
-    jl_atomic_store_relaxed(&mi->precompile, 1);
+    if (cause != TRIGGER_CALLEE)
+        jl_atomic_store_relaxed(&mi->precompile, 1);
 
     // Everything from here on is considered (user facing) compile time
     uint64_t compilation_start = jl_hrtime();
@@ -4757,7 +4802,7 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
     // to significantly exceed the actual runtime.
     int should_skip_inference = !jl_is_method(mi->def.method) || jl_method_is_macro(mi->def.method);
     if (!should_skip_inference)
-        codeinst = jl_type_infer(mi, world, SOURCE_MODE_ABI, jl_options.trim);
+        codeinst = jl_type_infer(mi, world, cause == TRIGGER_PRECOMPILE ? SOURCE_MODE_ABI_CALLEES : SOURCE_MODE_ABI, jl_options.trim);
 
     if (codeinst) {
         mi2 = jl_get_ci_mi(codeinst);
@@ -4787,7 +4832,8 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
             // Something went wrong. Bail to the fallback path.
             codeinst = NULL;
         }
-        else if (did_compile && codeinst->owner == jl_nothing) {
+        else if (did_compile && codeinst->owner == jl_nothing && cause != TRIGGER_CALLEE) {
+            // A callee compiled on its first call is covered by the statement for its caller.
             record_precompile_statement(mi, compile_time, is_recompile);
         }
         JL_GC_POP();
@@ -5134,7 +5180,7 @@ JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tuplet
     else {
         // Otherwise (this branch), assuming we are at runtime (normal JIT) and
         // we should generate the native code immediately in preparation for use.
-        (void)jl_compile_method_internal(mi, world);
+        (void)jl_compile_method_very_internal(mi, world, NULL, NULL, 0, TRIGGER_PRECOMPILE);
     }
 }
 

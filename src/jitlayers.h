@@ -498,6 +498,7 @@ void emit_specsig_to_fptr1(
         Value *target) JL_CANSAFEPOINT;
 Function *emit_specsig_to_fptr1(jl_codegen_output_t &out, jl_code_instance_t *ci,
                                 Value *func) JL_CANSAFEPOINT;
+void emit_on_demand_call_stubs(jl_codegen_output_t &out) JL_CANSAFEPOINT;
 Function *get_or_emit_fptr1(StringRef Name, Module *M) JL_NOTSAFEPOINT;
 void jl_init_function(Function *F, const jl_codegen_output_t &params) JL_NOTSAFEPOINT;
 

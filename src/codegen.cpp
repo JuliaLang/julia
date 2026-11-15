@@ -1043,6 +1043,14 @@ static const auto jlinvoke_func = new JuliaFunction<>{
     get_func2_sig,
     get_func_attrs,
 };
+static const auto jljitresolvecallee_func = new JuliaFunction<>{
+    XSTR(jl_jit_resolve_callee),
+    [](LLVMContext &C) {
+        auto T_ptr = getPointerTy(C);
+        return FunctionType::get(T_ptr, {T_ptr, getInt32Ty(C), T_ptr}, false);
+    },
+    nullptr,
+};
 static const auto jlinvokemodify_func = new JuliaFunction<>{
     XSTR(jl_invoke_modify),
     get_func2_sig,
@@ -8335,6 +8343,72 @@ Function *emit_specsig_to_fptr1(jl_codegen_output_t &out, jl_code_instance_t *ci
     return spec_func;
 }
 
+// With on-demand JIT compilation (`JULIA_JIT_ON_DEMAND`), the callees of `out` that have
+// no code yet are not compiled with it. Each call to one goes through a slot instead of
+// being resolved by the linker: this defines the function that `out` calls the callee
+// through as a stub that calls the address in the slot. While the slot is empty, the
+// address comes from `jl_jit_resolve_callee`, which compiles the callee and fills the slot.
+void emit_on_demand_call_stubs(jl_codegen_output_t &out)
+{
+    Module &M = out.get_module();
+    LLVMContext &C = out.get_context();
+    Type *T_ptr = getPointerTy(C);
+    SmallVector<std::pair<jl_code_instance_t *, std::underlying_type_t<jl_invoke_api_t>>, 0> stubbed;
+    for (auto &[call, target] : out.call_targets) {
+        auto [ci, api] = call;
+        Function *F = target.decl;
+        if (!F->isDeclaration() || F->use_empty() || out.ci_funcs.contains(ci))
+            continue;
+        // The first call compiles the callee through the native cache.
+        if (ci->owner != jl_nothing || !jl_is_method_instance(ci->def))
+            continue;
+        jl_method_instance_t *mi = jl_get_ci_mi(ci);
+        if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
+            continue;
+        if (jl_atomic_load_relaxed(&ci->invoke) != NULL)
+            continue;
+        jl_init_function(F, out);
+        F->setLinkage(GlobalValue::InternalLinkage);
+        auto *Slot = new GlobalVariable(M, T_ptr, false, GlobalValue::InternalLinkage,
+                                        ConstantPointerNull::get(cast<PointerType>(T_ptr)),
+                                        F->getName() + "_slot");
+        BasicBlock *Top = BasicBlock::Create(C, "top", F);
+        BasicBlock *Resolve = BasicBlock::Create(C, "resolve", F);
+        BasicBlock *Call = BasicBlock::Create(C, "call", F);
+        IRBuilder<> B(Top);
+        LoadInst *Cached = B.CreateAlignedLoad(T_ptr, Slot, Align(sizeof(void*)));
+        Cached->setOrdering(AtomicOrdering::Acquire);
+        B.CreateCondBr(B.CreateIsNull(Cached), Resolve, Call);
+        B.SetInsertPoint(Resolve);
+        Value *CIPtr = B.CreateAlignedLoad(T_ptr, literal_pointer_val_slot(out, (jl_value_t*)ci),
+                                           Align(sizeof(void*)));
+        Value *Resolved = B.CreateCall(jljitresolvecallee_func->realize(&M),
+                                       {CIPtr, B.getInt32(api == JL_INVOKE_SPECSIG), Slot});
+        B.CreateBr(Call);
+        B.SetInsertPoint(Call);
+        PHINode *Callee = B.CreatePHI(T_ptr, 2);
+        Callee->addIncoming(Cached, Top);
+        Callee->addIncoming(Resolved, Resolve);
+        SmallVector<Value*, 8> Args;
+        for (auto &A : F->args())
+            Args.push_back(&A);
+        CallInst *R = B.CreateCall(F->getFunctionType(), Callee, Args);
+        R->setCallingConv(F->getCallingConv());
+        R->setAttributes(F->getAttributes());
+        R->setTailCall();
+        // The return roots buffer is forwarded; it is rooted by the original caller.
+        for (unsigned i = 0; i < R->arg_size(); i++)
+            R->removeParamAttr(i, "julia.return_roots");
+        if (F->getReturnType()->isVoidTy())
+            B.CreateRetVoid();
+        else
+            B.CreateRet(R);
+        stubbed.push_back(call);
+    }
+    for (auto &call : stubbed)
+        out.call_targets.erase(call);
+}
+
 static void emit_fptr1_wrapper(Module *M, StringRef gf_thunk_name, Value *target, jl_value_t *rettype_const, jl_value_t *declrt, jl_value_t *jlrettype, jl_codegen_output_t &out) JL_CANSAFEPOINT
 {
     Function *w = Function::Create(get_func_sig(M->getContext()), GlobalVariable::ExternalLinkage, gf_thunk_name, M);
@@ -11498,6 +11572,7 @@ static void init_jit_functions(void)
         add_named_global(jl_builtin_f_names[i], jl_builtin_f_addrs[i]);
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
     add_named_global(jlinvoke_func, &jl_invoke);
+    add_named_global(jljitresolvecallee_func, &jl_jit_resolve_callee);
     add_named_global(jlinvokemodify_func, &jl_invoke_modify);
     add_named_global(jlinvoketarget_func, &jl_invoke_target);
     add_named_global(jltopeval_func, &jl_toplevel_eval);

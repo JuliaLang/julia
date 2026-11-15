@@ -501,6 +501,8 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
     if (out.ci_funcs.empty())
         return;
 
+    if (jl_get_jit_on_demand())
+        emit_on_demand_call_stubs(out); // contains safepoints
     emit_llvmcall_modules(out);
 
     auto &ES = jl_ExecutionEngine->getExecutionSession();

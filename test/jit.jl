@@ -77,6 +77,92 @@ let mi = Base.method_instance(M3.foo, (Int,))
     @test ci.specptr != Ptr{Nothing}(0)
 end
 
+# With `JULIA_JIT_ON_DEMAND`, the `:invoke` callees of JIT-compiled code are compiled when
+# they are first called, through a stub that calls them directly from then on.
+@testset "on-demand JIT" begin
+    script = raw"""
+        using Test
+        module M
+            struct WithRefs
+                a::Vector{Int}
+                b::String
+            end
+            @noinline add(x, y) = x + y
+            @noinline withrefs(n) = WithRefs(collect(1:n), string(n))
+            @noinline maybe(x) = x > 0 ? x : nothing
+            @noinline constret(r) = (r[] += 1; 7)
+            @noinline varargs(xs...) = sum(xs)
+            @noinline fib(n) = n < 2 ? n : fib(n - 1) + fib(n - 2)
+            @noinline kw(x; a=1, b=2.0) = x + a + b
+            @noinline thrower(x) = x > 0 ? x : throw(ArgumentError("negative"))
+            @noinline cold(x) = string("cold ", x)
+            function workload(n)
+                n < 0 && return cold(n)
+                s = 0
+                for i in 1:n
+                    s = add(s, i)
+                end
+                w = withrefs(n ÷ 333)
+                GC.gc()
+                r = Ref(0)
+                c = constret(r) + constret(r)
+                return (s, w.a, w.b, maybe(n), maybe(-n), c, r[], varargs(1, 2.0, n), fib(n ÷ 66), kw(n; b=3.0))
+            end
+            throws(x) = thrower(x) + 1
+            @noinline leaf(x) = x * 3
+            @noinline mid(x) = leaf(x) + 1
+            top(x) = mid(x) + mid(x + 1)
+            @noinline work(v) = (v[1] += 1; nothing)
+            loop(v, n) = (for _ in 1:n; work(v); end; v[1])
+            @noinline redefined(x) = x + 1
+            calls_redefined(x, c) = c ? redefined(x) : 0
+            @noinline raced(x) = sum(i -> i * x, 1:10)
+            racer(x) = raced(x) + raced(x + 1)
+        end
+        function has_native_code(f, argtypes)
+            @nospecialize
+            ci = Base.method_instance(f, argtypes).cache
+            while true
+                ci.owner === nothing && ci.invoke != C_NULL && return true
+                isdefined(ci, :next) || return false
+                ci = ci.next
+            end
+        end
+        expected = (500500, [1, 2, 3], "3", 1000, nothing, 14, 2, 1003.0, 610, 1004.0)
+        @test M.workload(Base.inferencebarrier(1000)::Int) == expected
+        @test has_native_code(M.add, (Int, Int))
+        @test has_native_code(M.fib, (Int,))
+        @test !has_native_code(M.cold, (Int,))
+        @test M.workload(1000) == expected
+        @test M.workload(Base.inferencebarrier(-1)::Int) == "cold -1"
+        @test has_native_code(M.cold, (Int,))
+        @test_throws ArgumentError M.throws(Base.inferencebarrier(-1)::Int)
+        @test M.throws(1) == 2
+        # a filled stub neither compiles nor boxes
+        allocs(v) = @allocated M.loop(v, 1000)
+        allocs([0])
+        @test allocs([0]) == 0
+        # an explicit `precompile` compiles the callees ahead of their first call
+        @test precompile(M.top, (Int,))
+        @test has_native_code(M.mid, (Int,))
+        @test has_native_code(M.leaf, (Int,))
+        @test M.top(1) == 11
+        # a callee redefined before its first call
+        @test M.calls_redefined(Base.inferencebarrier(1)::Int, false) == 0
+        @eval M @noinline redefined(x) = x + 100
+        @test invokelatest(M.calls_redefined, 1, true) == 101
+        # first calls racing on several threads
+        res = zeros(Int, 16)
+        @sync for i in eachindex(res)
+            Threads.@spawn res[i] = M.racer(Base.inferencebarrier(1)::Int)
+        end
+        @test all(==(165), res)
+    """
+    cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --threads=4 -e $script`,
+                 "JULIA_JIT_ON_DEMAND" => "1")
+    @test success(pipeline(cmd; stdout, stderr))
+end
+
 # A call to a foreign CodeInstance without code must not run the native method
 # instead, and must use the code once its owner adds it to the JIT.
 module M4

@@ -631,14 +631,25 @@ function discard_optimized_result(interp::AbstractInterpreter, mi::MethodInstanc
     may_discard_trees(interp) || return false
     inlining_cost == MAX_INLINE_COST || return false
     precompile_keep_ir(interp) && return false
-    keep_source_for_output(mi) && return false
+    keep_source_for_codegen(interp, mi) && return false
     return true
 end
 
-# A cache without native code needs the source of every compileable signature, or
-# loading it means inferring them all again. Caches with native code drop it on save.
-keep_source_for_output(mi::MethodInstance) =
-    ccall(:jl_generating_output, Cint, ()) != 0 && isa_compileable_sig(mi)
+# The source of a compileable signature is needed again after inference:
+# - The JIT compiles a callee when it is first called (see `add_codeinsts_to_jit!`),
+#   and drops the source then.
+# - A cache without native code needs it, or loading the cache means inferring
+#   everything again. Caches with native code drop it on save.
+keep_source_for_codegen(interp::AbstractInterpreter, mi::MethodInstance) =
+    (jit_compiles_callees_lazily(interp) || ccall(:jl_generating_output, Cint, ()) != 0) &&
+    isa_compileable_sig(mi)
+
+# Whether the JIT compiles the `:invoke` callees of the code of `interp` when they are
+# first called, instead of together with their caller (`JULIA_JIT_ON_DEMAND`). Only the
+# native cache supports this: the first call looks the callee up there.
+jit_compiles_callees_lazily(interp::AbstractInterpreter) =
+    cache_owner(interp) === nothing && codegen_cache(interp) !== nothing &&
+    ccall(:jl_get_jit_on_demand, Int8, ()) != 0
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
     def = mi.def
@@ -650,7 +661,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance
         # irgen's typeinf_ext can reuse it instead of re-inferring.
         # The image leaves it out.
         precompile_keep_ir(interp) && return ci
-        keep_source_for_output(mi) || return nothing
+        keep_source_for_codegen(interp, mi) || return nothing
     end
     # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
     may_compress(interp) && return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
@@ -1661,6 +1672,14 @@ be `->invoke`'d (because it has already been compiled).
 const SOURCE_MODE_ABI = 0x1
 
 """
+    SOURCE_MODE_ABI_CALLEES
+
+As `SOURCE_MODE_ABI`, and additionally asks that the `:invoke` callees of the
+`CodeInstance` be compiled with it, instead of when they are first called.
+"""
+const SOURCE_MODE_ABI_CALLEES = 0x3
+
+"""
     SOURCE_MODE_GET_SOURCE
 
 Indicates to inference that it should return a CodeInstance after it has
@@ -2220,7 +2239,7 @@ jit_cache_root!(::InternalCodeCache, ::CodeInstance) = nothing
 jit_cache_root!(cache::OverlayCodeCache, ci::CodeInstance) =
     jit_cache_root!(cache.globalcache, ci)
 
-function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UInt8)
+function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UInt8, with_callees::Bool=false)
     source_mode == SOURCE_MODE_ABI || return ci
     ci isa CodeInstance && !ci_has_invoke(ci) || return ci
     codegen = codegen_cache(interp)
@@ -2228,6 +2247,9 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     workqueue = CompilationQueue(; interp)
     push!(workqueue, ci)
     codeinsts, srcs = Any[], Any[]
+    # Much of the `:invoke` closure of `ci` may never run. With `JULIA_JIT_ON_DEMAND`, its
+    # callees are compiled when they are first called (see `jl_jit_resolve_callee`).
+    lazy = !with_callees && jit_compiles_callees_lazily(interp)
     while !isempty(workqueue)
         # ci_has_real_invoke(ci) && return ci # optimization: cease looping if ci happens to get compiled (not just jl_fptr_wait_for_compiled, but fully jl_is_compiled_codeinst)
         callee = pop!(workqueue)
@@ -2257,8 +2279,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         end
         markinspected!(workqueue, callee)
         mi = get_ci_mi(callee)
-        sptypes = sptypes_from_meth_instance(mi)
-        collectinvokes!(workqueue, src, sptypes)
+        lazy || collectinvokes!(workqueue, src, sptypes_from_meth_instance(mi))
         if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
             valid_worlds = WorldRange(get_inference_world(workqueue.interp))
             cached = find_equivalent_cached_ci(
@@ -2280,13 +2301,27 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         push!(srcs, src)
     end
     ccall(:jl_add_codeinsts_to_jit, Cvoid, (Any, Any), codeinsts, srcs)
+    if jit_compiles_callees_lazily(interp) && may_discard_trees(interp) &&
+            !precompile_keep_ir(interp) && !generating_output()
+        # This source was only kept for the JIT (see `keep_source_for_codegen`).
+        for i = 1:length(codeinsts)
+            callee = codeinsts[i]::CodeInstance
+            def = get_ci_mi(callee).def
+            if def isa Method && isdefined(def, :source) && !is_inlineable(srcs[i]::CodeInfo) &&
+                    (@atomic :monotonic callee.inferred) isa String
+                @atomic :monotonic callee.inferred = nothing
+            end
+        end
+    end
     return ci
 end
 
 function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
+    with_callees = source_mode == SOURCE_MODE_ABI_CALLEES
+    with_callees && (source_mode = SOURCE_MODE_ABI)
     mi2 = ccall(:jl_normalize_to_compilable_mi, Any, (Any,), mi)::MethodInstance
     ci = typeinf_ext(interp, mi2, source_mode)
-    ci = add_codeinsts_to_jit!(interp, ci, source_mode)
+    ci = add_codeinsts_to_jit!(interp, ci, source_mode, with_callees)
     return ci
 end
 
