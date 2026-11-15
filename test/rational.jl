@@ -974,13 +974,13 @@ end
                 end
             end
         end
-
-        @test rationalize(0.5289118463117571, tol=2.8168590679879156e-7) == 311//588
-        @test rationalize(7.5e-17) == 1//13333333333333332
-        @test rationalize(0.27266304962472, tol=0.06067028370861334) == 1//4
-        @test rationalize(Int8, Float16(0.807), tol=Float16(0.0001)) == 67//83
-        @test rationalize(Float16(0.167), tol=Float16(0.0002)) == 54//323
     end
+
+    @test rationalize(0.5289118463117571, tol=2.8168590679879156e-7) == 311//588
+    @test rationalize(Int64, 7.5e-17) == 1//13333333333333332
+    @test rationalize(0.27266304962472, tol=0.06067028370861334) == 1//4
+    @test rationalize(Int8, Float16(0.807), tol=Float16(0.0001)) == 67//83
+    @test rationalize(Float16(0.167), tol=Float16(0.0002)) == 54//323
 end
 
 @testset "rationalize(Union{}, x) throws MethodError" begin
