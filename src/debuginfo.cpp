@@ -51,6 +51,10 @@ static JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT {
 }
 
 namespace {
+// Level 3 reduces JIT debug-info compression overhead at a small memory cost,
+// per the measurements in JuliaLang/julia#64984.
+static constexpr int JIT_OBJ_ZSTD_LEVEL = 3;
+
 struct debug_link_info {
     StringRef filename;
     uint32_t crc32;
@@ -362,8 +366,12 @@ void JITDebugInfoRegistry::registerJITObject(
         F = compression::Format::Zstd;
     else if (compression::zlib::isAvailable())
         F = compression::Format::Zlib;
-    if (F)
-        compression::compress(*F, unpacked, packed);
+    if (F) {
+        if (*F == compression::Format::Zstd)
+            compression::compress(compression::Params(*F, JIT_OBJ_ZSTD_LEVEL), unpacked, packed);
+        else
+            compression::compress(*F, unpacked, packed);
+    }
     // intentionally leak this so that we don't need to ref-count it
     // intentionally copy the input so that we exact-size the allocation (since no shrink_to_fit function)
     auto ObjectCopy = new LazyObjectInfo{SmallVector<uint8_t, 0>(F ? ArrayRef(packed) : unpacked), F ? Object.getData().size() : 0};
