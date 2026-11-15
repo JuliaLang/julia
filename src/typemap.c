@@ -265,6 +265,13 @@ static inline int sig_match_leaf(jl_value_t *arg1, jl_value_t **args, jl_value_t
 // `isa(a, decl)` for a slot `decl` of a signature that is not a `UnionAll`, once `a`'s type is
 // known not to be `decl` and `decl` is neither `Any` nor concrete (which pointer comparison
 // settles): the cheap tests for the type-valued slots before the general `jl_isa`
+// whether `sig_match_slot` has a test cheaper than `jl_isa` for `decl`
+STATIC_INLINE int sig_slot_is_type_valued(jl_value_t *decl) JL_NOTSAFEPOINT
+{
+    return jl_is_typeegal(decl) || jl_is_typeeq(decl) ||
+        decl == (jl_value_t*)jl_anytype_type || decl == (jl_value_t*)jl_type_type;
+}
+
 STATIC_INLINE int sig_match_slot(jl_value_t *decl, jl_value_t *a) JL_CANSAFEPOINT
 {
     if (jl_is_typeegal(decl)) // an egality key matches exactly its (`===`) instance
@@ -281,7 +288,7 @@ STATIC_INLINE int sig_match_slot(jl_value_t *decl, jl_value_t *a) JL_CANSAFEPOIN
             return 0; // quick rejection test
         return jl_types_equal(a, tp0);
     }
-    if (decl == (jl_value_t*)jl_anytype_type)
+    if (decl == (jl_value_t*)jl_anytype_type || decl == (jl_value_t*)jl_type_type) // `Type == AnyType`
         return jl_is_type(a);
     return jl_isa(a, decl);
 }
@@ -307,11 +314,27 @@ static inline int sig_match_simple(jl_value_t *arg1, jl_value_t **args, size_t n
             if (n - i != jl_unbox_long(jl_tparam1(decl)))
                 return 0;
         }
+        // the same tests as a slot, but chosen once for the whole tail
         jl_value_t *t = jl_unwrap_vararg(decl);
-        for (; i < n; i++) {
-            jl_value_t *a = (i == 0 ? arg1 : args[i - 1]);
-            if (!jl_isa(a, t))
-                return 0;
+        if (t == (jl_value_t*)jl_any_type) {
+        }
+        else if (jl_is_concrete_type(t)) {
+            for (; i < n; i++) {
+                if (jl_typeof(i == 0 ? arg1 : args[i - 1]) != t)
+                    return 0;
+            }
+        }
+        else if (sig_slot_is_type_valued(t)) {
+            for (; i < n; i++) {
+                if (!sig_match_slot(t, i == 0 ? arg1 : args[i - 1]))
+                    return 0;
+            }
+        }
+        else {
+            for (; i < n; i++) {
+                if (!jl_isa(i == 0 ? arg1 : args[i - 1], t))
+                    return 0;
+            }
         }
     }
     for (i = 0; i < lensig; i++) {
