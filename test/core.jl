@@ -9650,3 +9650,22 @@ end
         @test_throws ErrorException Core.unsafe_memoryrefstore!(memoryref(mem), 0x00, 0, true)
     end
 end
+
+# dispatch through cache entries with a `Vararg` tail, whose test is chosen by its element type
+vtail_ty(::Type{Int}...) = 1
+vtail_ty(@nospecialize(xs...)) = 2
+vtail_dt(::DataType...) = 1
+vtail_dt(@nospecialize(xs...)) = 2
+vtail_t(::Type...) = 1
+vtail_t(@nospecialize(xs...)) = 2
+for _ in 1:2
+    @test Base.inferencebarrier(vtail_ty)(Int, Int, Int) == 1
+    @test Base.inferencebarrier(vtail_ty)(Int, Int, Int, Int) == 1
+    @test Base.inferencebarrier(vtail_ty)(Int, Int, Float64) == 2
+    @test Base.inferencebarrier(vtail_dt)(Int, Float64, Int) == 1
+    @test Base.inferencebarrier(vtail_dt)(Int, Float64, Int, Int) == 1
+    @test Base.inferencebarrier(vtail_dt)(Int, Float64, Union{}) == 2
+    @test Base.inferencebarrier(vtail_t)(Int, Vector, Union{}) == 1
+    @test Base.inferencebarrier(vtail_t)(Int, Vector, Union{}, Int) == 1
+    @test Base.inferencebarrier(vtail_t)(Int, Vector, 1) == 2
+end

@@ -284,7 +284,7 @@ STATIC_INLINE int sig_match_slot(jl_value_t *decl, jl_value_t *a) JL_CANSAFEPOIN
             return 0; // quick rejection test
         return jl_types_equal(a, tp0);
     }
-    if (decl == (jl_value_t*)jl_anytype_type)
+    if (decl == (jl_value_t*)jl_anytype_type || decl == (jl_value_t*)jl_type_type) // `Type == AnyType`
         return jl_is_type(a);
     return jl_isa(a, decl);
 }
@@ -315,11 +315,21 @@ static inline int sig_match_simple(jl_value_t *arg1, jl_value_t **args, size_t n
             if (n - i != jl_unbox_long(jl_tparam1(decl)))
                 return 0;
         }
+        // the same tests as a slot, but chosen once for the whole tail
         jl_value_t *t = jl_unwrap_vararg(decl);
-        for (; i < n; i++) {
-            jl_value_t *a = (i == 0 ? arg1 : args[i - 1]);
-            if (!jl_isa(a, t))
-                return 0;
+        if (t == (jl_value_t*)jl_any_type) {
+        }
+        else if (jl_is_concrete_type(t)) {
+            for (; i < n; i++) {
+                if (jl_typeof(i == 0 ? arg1 : args[i - 1]) != t)
+                    return 0;
+            }
+        }
+        else {
+            for (; i < n; i++) {
+                if (!sig_match_slot(t, i == 0 ? arg1 : args[i - 1]))
+                    return 0;
+            }
         }
     }
     for (i = first; i < lensig; i++) {
