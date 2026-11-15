@@ -145,10 +145,10 @@ since then.
 """
 function gc_live_bytes()
     num = gc_num()
-    Int(ccall(:jl_gc_live_bytes, Int64, ())) + num.allocd + num.deferred_alloc
+    ccall(:jl_gc_live_bytes, Int64, ()) + num.allocd + num.deferred_alloc
 end
 
-# must be kept in sync with the value from `src/julia_threads.h``
+# must be kept in sync with the value from `src/gc-tls-stock.h`
 const JL_GC_N_MAX_POOLS = 51
 function gc_page_utilization_data()
     page_utilization_raw = cglobal(:jl_gc_page_utilization_stats, Float64)
@@ -157,7 +157,7 @@ end
 
 # Full sweep reasons are currently only available for the stock GC
 @static if Base.USING_STOCK_GC
-# must be kept in sync with `src/gc-stock.h``
+# must be kept in sync with `src/gc-stock.h`
 const FULL_SWEEP_REASONS = [:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL, :FULL_SWEEP_REASON_FORCED_FULL_SWEEP,
                             :FULL_SWEEP_REASON_USER_MAX_EXCEEDED, :FULL_SWEEP_REASON_LARGE_PROMOTION_RATE, :FULL_SWEEP_REASON_LARGE_HEAP_GROWTH]
 end
@@ -172,6 +172,7 @@ The reasons are:
 - `:FULL_SWEEP_REASON_FORCED_FULL_SWEEP`: Full sweep was forced by `GC.gc(true)`
 - `:FULL_SWEEP_REASON_USER_MAX_EXCEEDED`: Full sweep was forced due to the system reaching the heap soft size limit
 - `:FULL_SWEEP_REASON_LARGE_PROMOTION_RATE`: Full sweep was forced by a large promotion rate across GC generations
+- `:FULL_SWEEP_REASON_LARGE_HEAP_GROWTH`: Full sweep was forced by the heap growing a lot since the last full sweep
 
 Note that the set of reasons is not guaranteed to be stable across minor versions of Julia.
 """
@@ -203,12 +204,11 @@ end
 const _mem_units = ["byte", "KiB", "MiB", "GiB", "TiB", "PiB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]
 function prettyprint_getunits(value, numunits, factor)
-    if value == 0 || value == 1
-        return (value, 1)
+    unit = 1
+    while unit < numunits && abs(value) >= factor^unit
+        unit += 1
     end
-    unit = ceil(Int, log(value) / log(factor))
-    unit = min(numunits, unit)
-    number = value/factor^(unit-1)
+    number = unit == 1 ? value : value/factor^(unit-1)
     return number, unit
 end
 
@@ -233,8 +233,11 @@ Format a given number of bytes into a human-readable string.
 
 # Examples
 ```jldoctest
+julia> Base.format_bytes(1023)
+"1023 bytes"
+
 julia> Base.format_bytes(1024)
-"1024 bytes"
+"1.000 KiB"
 
 julia> Base.format_bytes(10000)
 "9.766 KiB"
@@ -248,7 +251,8 @@ function format_bytes(bytes; binary=true) # also used by InteractiveUtils
     factor = binary ? 1024 : 1000
     bytes, mb = prettyprint_getunits(bytes, length(units), Int64(factor))
     if mb == 1
-        return string(Int(bytes), " ", _mem_units[mb], bytes==1 ? "" : "s")
+        number = isinteger(bytes) ? string(Int(bytes)) : Ryu.writefixed(Float64(bytes), 3)
+        return string(number, " ", _mem_units[mb], bytes==1 ? "" : "s")
     else
         return string(Ryu.writefixed(Float64(bytes), 3), binary ? " $(units[mb])" : "$(units[mb])B")
     end
@@ -312,7 +316,7 @@ function timev_print(elapsedtime, diff::GC_Diff, lock_conflicts, compile_times; 
     compile_time = first(compile_times)
     recompile_time = last(compile_times)
     time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, lock_conflicts, compile_time, recompile_time, true; msg)
-    padded_nonzero_print(elapsedtime,       "elapsed time (ns)")
+    padded_nonzero_print(round(Int64, elapsedtime), "elapsed time (ns)")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
     padded_nonzero_print(diff.poolalloc,    "pool allocs")
@@ -402,9 +406,9 @@ macro time(ex)
 end
 macro time(msg, ex)
     quote
-        local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
         local _msg_str = _msg === nothing ? _msg : string(_msg)
+        local ret = @timed $(esc(ex))
         time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg_str)
         ret.value
     end
@@ -436,8 +440,9 @@ end
     @timev "description" expr
 
 This is a verbose version of the `@time` macro. It first prints the same information as
-`@time`, then any non-zero memory allocation counters, and then returns the value of the
-expression.
+`@time`, then the elapsed and garbage collection times in nanoseconds and the memory
+allocation and garbage collection counters, and then returns the value of the expression.
+The `malloc`, `realloc` and `free` counters are only printed when non-zero.
 
 Optionally provide a description string to print before the time report.
 
@@ -451,21 +456,24 @@ See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref),
 julia> x = rand(10,10);
 
 julia> @timev x * x;
-  0.546770 seconds (2.20 M allocations: 116.632 MiB, 4.23% gc time, 99.94% compilation time)
-elapsed time (ns): 546769547
-gc time (ns):      23115606
-bytes allocated:   122297811
-pool allocs:       2197930
-non-pool GC allocs:1327
-malloc() calls:    36
-realloc() calls:   5
-GC pauses:         3
+  0.006173 seconds (203 allocations: 10.359 KiB, 5.66% compilation time)
+elapsed time (ns):  6172500
+gc time (ns):       0
+bytes allocated:    10608
+pool allocs:        203
+non-pool GC allocs: 0
+minor collections:  0
+full collections:   0
 
 julia> @timev x * x;
-  0.000010 seconds (1 allocation: 896 bytes)
-elapsed time (ns): 9848
-bytes allocated:   896
-pool allocs:       1
+  0.000011 seconds (2 allocations: 944 bytes)
+elapsed time (ns):  11375
+gc time (ns):       0
+bytes allocated:    944
+pool allocs:        2
+non-pool GC allocs: 0
+minor collections:  0
+full collections:   0
 ```
 """
 macro timev(ex)
@@ -475,9 +483,9 @@ macro timev(ex)
 end
 macro timev(msg, ex)
     quote
-        local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
         local _msg_str = _msg === nothing ? _msg : string(_msg)
+        local ret = @timed $(esc(ex))
         timev_print(ret.time*1e9, ret.gcstats, ret.lock_conflicts, (ret.compile_time*1e9, ret.recompile_time*1e9); msg=_msg_str)
         ret.value
     end
@@ -676,11 +684,7 @@ macro lock_conflicts(ex)
     quote
         Threads.lock_profiling(true)
         local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
-        try
-            $(esc(ex))
-        finally
-            Threads.lock_profiling(false)
-        end
+        @__tryfinally($(esc(ex)), Threads.lock_profiling(false))
         Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts
     end
 end
