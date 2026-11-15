@@ -4315,6 +4315,59 @@ int jl_has_intersect_type_not_kind(jl_value_t *t)
 }
 
 
+// `dt <: t` for the type `dt` of a value that is not a type, as far as the supertype chain of
+// `dt` settles it without allocating: 1 or 0, or -1 when it takes `jl_subtype`. `dt` is
+// concrete and not a kind, so it is a subtype of an abstract `t` exactly when its supertype
+// with the name of `t` is a subtype of `t`, and of none if there is no such supertype.
+static int isa_by_supers(jl_datatype_t *dt, jl_value_t *t) JL_NOTSAFEPOINT
+{
+    if (jl_is_uniontype(t)) {
+        int a = isa_by_supers(dt, ((jl_uniontype_t*)t)->a);
+        if (a == 1)
+            return 1;
+        int b = isa_by_supers(dt, ((jl_uniontype_t*)t)->b);
+        return b == 1 ? 1 : a == 0 && b == 0 ? 0 : -1;
+    }
+    jl_value_t *body = jl_unwrap_unionall(t);
+    if (!jl_is_abstracttype(body))
+        return -1;
+    jl_typename_t *name = ((jl_datatype_t*)body)->name;
+    while (dt->name != name) {
+        if (dt == jl_any_type)
+            return 0;
+        // raw read: a deferred (unset) supertype leaves it to `jl_subtype`
+        dt = dt->super;
+        if (dt == NULL)
+            return -1;
+    }
+    if ((jl_value_t*)dt == t || name->wrapper == t)
+        return 1;
+    // the parameters are invariant: those of `t` that are an unbounded `where` variable of `t`,
+    // each used once, admit any parameter of `dt`, and the others must be `dt`'s own
+    for (jl_value_t *u = t; jl_is_unionall(u); u = ((jl_unionall_t*)u)->body) {
+        jl_tvar_t *v = ((jl_unionall_t*)u)->var;
+        if (v->lb != jl_bottom_type || v->ub != (jl_value_t*)jl_any_type)
+            return -1;
+    }
+    size_t i, j, np = jl_nparams(body);
+    for (i = 0; i < np; i++) {
+        jl_value_t *p = jl_tparam(body, i);
+        if (p == jl_tparam(dt, i))
+            continue;
+        if (!jl_is_typevar(p))
+            return -1;
+        jl_value_t *u = t;
+        while (jl_is_unionall(u) && ((jl_unionall_t*)u)->var != (jl_tvar_t*)p)
+            u = ((jl_unionall_t*)u)->body;
+        if (!jl_is_unionall(u))
+            return -1; // a free variable
+        for (j = 0; j < np; j++)
+            if (j != i && jl_tparam(body, j) == p)
+                return -1;
+    }
+    return 1;
+}
+
 JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
 {
     if (t == (jl_value_t*)jl_any_type || jl_typetagis(x,t))
@@ -4373,6 +4426,11 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
     }
     if (jl_is_concrete_type(t))
         return 0;
+    if (!jl_is_type(x)) {
+        int ans = isa_by_supers((jl_datatype_t*)jl_typeof(x), t);
+        if (ans != -1)
+            return ans;
+    }
     return jl_subtype(jl_typeof(x), t);
 }
 
