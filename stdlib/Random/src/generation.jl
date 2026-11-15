@@ -265,7 +265,7 @@ function SamplerRangeFast(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
 end
 
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt32,T}) where T
-    a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
+    a, m, mask = sp.a, sp.m, sp.mask
     # below, we don't use UInt32, to get reproducible values, whether Int is Int64 or Int32
     x = rand(rng, LessThan(m, Masked(mask, UInt52Raw(UInt32))))
     (x + a % UInt32) % T
@@ -504,7 +504,7 @@ rand(rng::AbstractRNG, sp::SamplerTag{<:Set,<:Sampler}) = rand(rng, sp.data).fir
 
 ## random values from BitSet
 
-function Sampler(RNG::Type{<:AbstractRNG}, t::BitSet, n::Repetition)
+function Sampler(RNG::Type{<:AbstractRNG}, t::BitSet, ::Repetition)
     isempty(t) && empty_collection_error()
     SamplerSimple(t, Sampler(RNG, minimum(t):maximum(t), Val(Inf)))
 end
@@ -564,7 +564,7 @@ end
 Sampler(::Type{<:AbstractRNG}, t::Tuple{A}, ::Repetition) where {A} =
     SamplerTrivial(t)
 
-rand(rng::AbstractRNG, sp::SamplerTrivial{Tuple{A}}) where {A} =
+rand(::AbstractRNG, sp::SamplerTrivial{Tuple{A}}) where {A} =
     @inbounds return sp[][1]
 
 ### 2
