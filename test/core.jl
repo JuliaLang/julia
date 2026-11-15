@@ -8837,6 +8837,17 @@ code_typed(h64751, (Ref{Vector{<:Union{Float32,Float64}}},))
 @test f64751(Float32, (1, 2)) === :tuple
 @test f64751(Float32, 1, 2) === :varargs
 
+# a fully-covering method that the cached one is more specific than doesn't
+# prevent caching the compilation signature, though it witnesses an ambiguity
+e64919(::UnionAll) = 1
+e64919(::UnionAll, xs::DataType...) = 2
+e64919(@nospecialize(::Type{<:Real}), xs...) = 3
+for T in (Vector, Dict, Set, Pair, Complex)
+    @test e64919(T) === 1
+end
+@test length(Base.specializations(which(e64919, (UnionAll,)))) <= 2
+@test_throws MethodError e64919(Rational)
+
 f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
 @test f48950(1, 1, 1) == 1
 
