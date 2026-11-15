@@ -2,13 +2,26 @@
 
 #define hash_size(h) (h->length / 2)
 
-// compute empirical max-probe for a given size
-#define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
+// past this many probes an insert grows the table, unless it is under half full
+#define IDTABLE_PROBE 8
 
 #define keyhash(k) jl_object_id_(jl_typetagof(k), k)
 #define h2index(hv, sz) (size_t)(((hv) & ((sz)-1)) * 2)
 
 static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val) JL_CANSAFEPOINT;
+
+// Whether at least half of the `npairs` slots hold a value, estimated from up to 64
+// evenly spaced ones, since the count is kept only by the caller. A run of colliding
+// keys mostly falls between the samples, so it does not make a sparse table grow,
+// and doubling a table only from half full leaves it at least a quarter full.
+static int idtable_half_full(_Atomic(jl_value_t*) *tab, size_t npairs) JL_NOTSAFEPOINT
+{
+    size_t step = npairs > 64 ? npairs / 64 : 1;
+    size_t i, n = 0, m = 0;
+    for (i = 0; i < npairs; i += step, m++)
+        n += jl_atomic_load_relaxed(&tab[2 * i + 1]) != NULL;
+    return n * 2 >= m;
+}
 
 JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t newsz)
 {
@@ -41,7 +54,6 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
         sz = hash_size(a);
         *pa = a;
     }
-    size_t maxprobe = max_probe(sz);
     _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*) a->ptr;
 
     hv = keyhash(key);
@@ -52,6 +64,7 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
         orig = index;
         empty_slot = -1;
 
+        int tombstones = 0;
         do {
             jl_value_t *k2 = jl_atomic_load_relaxed(&tab[index]);
             if (k2 == NULL) {
@@ -66,41 +79,45 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
                 }
                 // `nothing` is our sentinel value for deletion, so need to keep searching if it's also our search key
                 assert(key == jl_nothing);
+            }
+            if (jl_atomic_load_relaxed(&tab[index + 1]) == NULL) { // a tombstone
+                assert(k2 == jl_nothing);
+                tombstones = 1;
                 if (empty_slot == -1)
                     empty_slot = index;
-            }
-            if (empty_slot == -1 && jl_atomic_load_relaxed(&tab[index + 1]) == NULL) {
-                assert(jl_atomic_load_relaxed(&tab[index]) == jl_nothing);
-                empty_slot = index;
             }
 
             index = (index + 2) & (sz - 1);
             iter++;
-        } while (iter <= maxprobe && index != orig);
+        } while (index != orig);
 
+        // a lookup that misses scans as far as this did (`iter`), and nothing else empties a
+        // tombstone: past a long probe, grow a table at least half full, or rehash one with
+        // tombstones on the way at the same size
+        int same_size = 0;
+        if (empty_slot != -1 && iter > IDTABLE_PROBE) {
+            if (idtable_half_full(tab, sz / 2))
+                empty_slot = -1;
+            else if (tombstones)
+                empty_slot = -1, same_size = 1;
+        }
         if (empty_slot != -1) {
             jl_gc_write_atomic(a, tab[empty_slot], jl_value_t, key, release);
             jl_gc_write_atomic(a, tab[empty_slot + 1], jl_value_t, val, release);
             return 1;
         }
 
-        /* table full */
-        /* grow size, rehash, retry the insert */
-        /* it's important to grow the table really fast; otherwise we waste */
-        /* lots of time rehashing all the keys over and over. */
+        /* table full, or a long probe: double it (or drop its tombstones) and retry */
         sz = a -> length;
         if (sz < HT_N_INLINE)
             newsz = HT_N_INLINE;
-        else if (sz >= (1 << 19) || (sz <= (1 << 8)))
-            newsz = sz << 1;
         else
-            newsz = sz << 2;
+            newsz = same_size ? sz : sz << 1;
         *pa = jl_idtable_rehash(*pa, newsz);
 
         a = *pa;
         tab =  (_Atomic(jl_value_t*)*) a->ptr;
         sz = hash_size(a);
-        maxprobe = max_probe(sz);
     }
 }
 
@@ -110,13 +127,11 @@ inline _Atomic(jl_value_t*) *jl_table_peek_bp(jl_genericmemory_t *a, jl_value_t 
     size_t sz = hash_size(a);
     if (sz == 0)
         return NULL;
-    size_t maxprobe = max_probe(sz);
     _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*) a->ptr;
     uint_t hv = keyhash(key);
     size_t index = h2index(hv, sz);
     sz *= 2;
     size_t orig = index;
-    size_t iter = 0;
 
     do {
         jl_value_t *k2 = jl_atomic_load_relaxed(&tab[index]); // just to ensure the load doesn't get duplicated
@@ -131,8 +146,7 @@ inline _Atomic(jl_value_t*) *jl_table_peek_bp(jl_genericmemory_t *a, jl_value_t 
         }
 
         index = (index + 2) & (sz - 1);
-        iter++;
-    } while (iter <= maxprobe && index != orig);
+    } while (index != orig);
 
     return NULL;
 }
@@ -189,5 +203,5 @@ size_t jl_eqtable_nextind(jl_genericmemory_t *t, size_t i)
 }
 
 #undef hash_size
-#undef max_probe
+#undef IDTABLE_PROBE
 #undef h2index

@@ -2106,18 +2106,18 @@ typedef int (*smallintset_eq)(size_t val, const void *key, jl_value_t *data, uin
 ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_value_t *data, uint_t hv, int pop);
 
 // probe sequence, shared by lookup and insert
-#define smallintset_max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 #define smallintset_h2index(hv, sz) (size_t)((hv) & ((sz)-1))
 
 FORCE_INLINE ssize_t smallintset_probe_(jl_genericmemory_t *cache, smallintset_eq eq JL_NOTSAFEPOINT, const void *key, jl_value_t *data, uint_t hv, int pop, size_t w) JL_NOTSAFEPOINT
 {
     size_t sz = cache->length;
-    size_t maxprobe = smallintset_max_probe(sz);
     size_t tombstone = w == 1 ? UINT8_MAX : w == 2 ? UINT16_MAX : UINT32_MAX;
     size_t index = smallintset_h2index(hv, sz);
     size_t orig = index;
     void *ix = cache->ptr;
-    for (size_t iter = 0; iter <= maxprobe; iter++) {
+    // no slot is ever emptied again (a pop leaves a tombstone), so every key is found
+    // before the first empty slot, however far its insertion had to probe
+    while (1) {
         size_t val1 = w == 1 ? jl_atomic_load_acquire(&((_Atomic(uint8_t)*)ix)[index]) :
                       w == 2 ? jl_atomic_load_acquire(&((_Atomic(uint16_t)*)ix)[index]) :
                                jl_atomic_load_acquire(&((_Atomic(uint32_t)*)ix)[index]);
