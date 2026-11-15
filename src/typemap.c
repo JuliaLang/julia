@@ -201,8 +201,10 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
             if (!jl_subtype_anytype(a))
                 return 0;
         }
+        else if (!jl_is_concrete_type(decl)) {
+            // tested by subtyping in the second pass, once the cheaper slots have passed
+        }
         else {
-            assert(jl_is_concrete_type(decl));
             // decl is concrete here, and of the two wrappers only `TypeEgal{T}` is a subtype of the
             // kind `typeof(T)` (`Type{Int} <: DataType` is false)
             if (jl_is_typeegal(a))
@@ -210,6 +212,13 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
             if (!jl_types_equal(a, decl))
                 return 0;
         }
+    }
+    for (size_t j = 0; j < lensig; j++) {
+        jl_value_t *decl = jl_tparam(sig, j);
+        if (!jl_is_typeeq(decl) && !jl_is_typeegal(decl) && decl != (jl_value_t*)jl_any_type &&
+                decl != (jl_value_t*)jl_anytype_type && !jl_is_concrete_type(decl) &&
+                !jl_subtype(types[j], decl))
+            return 0;
     }
     if (va) {
         jl_value_t *decl = jl_tparam(sig, i);
@@ -253,55 +262,44 @@ static inline int sig_match_leaf(jl_value_t *arg1, jl_value_t **args, jl_value_t
     return 1;
 }
 
+// `isa(a, decl)` for a slot `decl` of a signature that is not a `UnionAll`, once `a`'s type is
+// known not to be `decl` and `decl` is neither `Any` nor concrete (which pointer comparison
+// settles): the cheap tests for the type-valued slots before the general `jl_isa`
+STATIC_INLINE int sig_match_slot(jl_value_t *decl, jl_value_t *a) JL_CANSAFEPOINT
+{
+    if (jl_is_typeegal(decl)) // an egality key matches exactly its (`===`) instance
+        return jl_is_type(a) && jl_egal(a, jl_typeegal_T(decl));
+    if (jl_is_typeeq(decl)) {
+        if (!jl_is_type(a))
+            return 0;
+        jl_value_t *tp0 = jl_typeeq_T(decl);
+        if (a == tp0)
+            return 1;
+        jl_datatype_t *da = (jl_datatype_t*)jl_unwrap_unionall(a);
+        jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(tp0);
+        if (jl_is_datatype(da) && jl_is_datatype(dt) && da->name != dt->name)
+            return 0; // quick rejection test
+        return jl_types_equal(a, tp0);
+    }
+    if (decl == (jl_value_t*)jl_anytype_type)
+        return jl_is_type(a);
+    return jl_isa(a, decl);
+}
+
 static inline int sig_match_simple(jl_value_t *arg1, jl_value_t **args, size_t n, jl_value_t **sig,
                                    int va, size_t lensig) JL_CANSAFEPOINT
 {
     // NOTE: This function is a performance hot spot!!
+    // Reject first by pointer comparison on the concrete slots, then `sig_match_slot` for the others.
     size_t i;
     if (va)
         lensig -= 1;
     for (i = 0; i < lensig; i++) {
         jl_value_t *decl = sig[i];
         jl_value_t *a = (i == 0 ? arg1 : args[i - 1]);
-        if (jl_typeof(a) == decl || decl == (jl_value_t*)jl_any_type) {
-            /*
-              we are only matching concrete types here, and those types are
-              hash-consed, so pointer comparison should work.
-            */
-            continue;
-        }
-        if (jl_is_typeeq(decl)) {
-            if (!jl_is_type(a))
-                return 0;
-            jl_value_t *tp0 = jl_typeeq_T(decl);
-            if (a != tp0) {
-                jl_datatype_t *da = (jl_datatype_t*)a;
-                jl_datatype_t *dt = (jl_datatype_t*)tp0;
-                while (jl_is_unionall(da))
-                    da = (jl_datatype_t*)((jl_unionall_t*)da)->body;
-                while (jl_is_unionall(dt))
-                    dt = (jl_datatype_t*)((jl_unionall_t*)dt)->body;
-                if (jl_is_datatype(da) && jl_is_datatype(dt) && da->name != dt->name)
-                    return 0; // quick rejection test
-                if (!jl_types_equal(a, tp0))
-                    return 0;
-            }
-        }
-        else if (decl == (jl_value_t*)jl_anytype_type) {
-            if (!jl_is_type(a))
-                return 0;
-        }
-        else if (jl_is_typeegal(decl)) {
-            // an egality key matches exactly its (`===`) instance
-            if (!jl_is_type(a))
-                return 0;
-            if (!jl_egal(a, jl_typeegal_T(decl)))
-                return 0;
-        }
-        else {
-            assert(jl_is_concrete_type(decl));
+        // concrete types are hash-consed, so pointer comparison is the full test
+        if (jl_typeof(a) != decl && decl != (jl_value_t*)jl_any_type && jl_is_concrete_type(decl))
             return 0;
-        }
     }
     if (va) {
         jl_value_t *decl = sig[i];
@@ -315,7 +313,13 @@ static inline int sig_match_simple(jl_value_t *arg1, jl_value_t **args, size_t n
             if (!jl_isa(a, t))
                 return 0;
         }
-        return 1;
+    }
+    for (i = 0; i < lensig; i++) {
+        jl_value_t *decl = sig[i];
+        jl_value_t *a = (i == 0 ? arg1 : args[i - 1]);
+        if (jl_typeof(a) != decl && decl != (jl_value_t*)jl_any_type && !jl_is_concrete_type(decl) &&
+                !sig_match_slot(decl, a))
+            return 0;
     }
     return 1;
 }
@@ -1146,19 +1150,7 @@ static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
         size_t lensig = jl_nparams(jl_unwrap_unionall((jl_value_t*)ml->sig));
         if (lensig == n || (ml->va && lensig <= n+1)) {
             int resetenv = 0, ismatch = 1;
-            if (ml->simplesig != (void*)jl_nothing && !isua) {
-                size_t lensimplesig = jl_nparams(ml->simplesig);
-                int isva = lensimplesig > 0 && jl_is_vararg(jl_tparam(ml->simplesig, lensimplesig - 1));
-                if (lensig == n || (isva && lensimplesig <= n + 1))
-                    ismatch = sig_match_by_type_simple(jl_svec_data(((jl_datatype_t*)types)->parameters), n,
-                                                       ml->simplesig, lensimplesig, isva);
-                else
-                    ismatch = 0;
-            }
-
-            if (ismatch == 0)
-                ; // nothing
-            else if (ml->isleafsig && !typesisva && !isua)
+            if (ml->isleafsig && !typesisva && !isua)
                 ismatch = sig_match_by_type_leaf(jl_svec_data(((jl_datatype_t*)types)->parameters),
                                                  ml->sig, lensig);
             else if (ml->issimplesig && !typesisva && !isua)
@@ -1405,7 +1397,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
 jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_value_t *arg1, jl_value_t **args, size_t n, size_t world)
 {
     // some manually-unrolled common special cases
-    while (ml->simplesig == (void*)jl_nothing && ml->guardsigs == jl_emptysvec && ml->isleafsig) {
+    while (ml->guardsigs == jl_emptysvec && ml->isleafsig) {
         // use a tight loop for as long as possible
         if (world >= jl_atomic_load_relaxed(&ml->min_world) && world <= jl_atomic_load_relaxed(&ml->max_world)) {
             if (n == jl_nparams(ml->sig) && jl_typeof(arg1) == jl_tparam(ml->sig, 0)) {
@@ -1436,18 +1428,6 @@ jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_valu
             continue; // ignore replaced methods
         size_t lensig = jl_nparams(ml->sig);
         if (lensig == n || (ml->va && lensig <= n+1)) {
-            if (ml->simplesig != (void*)jl_nothing) {
-                size_t lensimplesig = jl_nparams(ml->simplesig);
-                int isva = lensimplesig > 0 && jl_is_vararg(jl_tparam(ml->simplesig, lensimplesig - 1));
-                if (lensig == n || (isva && lensimplesig <= n + 1)) {
-                    if (!sig_match_simple(arg1, args, n, jl_svec_data(ml->simplesig->parameters), isva, lensimplesig))
-                        continue;
-                }
-                else {
-                    continue;
-                }
-            }
-
             if (ml->isleafsig) {
                 if (!sig_match_leaf(arg1, args, jl_svec_data(ml->sig->parameters), n))
                     continue;
@@ -1776,13 +1756,11 @@ static void jl_typemap_level_insert_(
 }
 
 jl_typemap_entry_t *jl_typemap_alloc(
-        jl_tupletype_t *type, jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
+        jl_tupletype_t *type, jl_svec_t *guardsigs,
         jl_value_t *newvalue, size_t min_world, size_t max_world)
 {
     jl_task_t *ct = jl_current_task;
     assert(min_world > 0 && max_world > 0);
-    if (!simpletype)
-        simpletype = (jl_tupletype_t*)jl_nothing;
     jl_value_t *ttype = jl_unwrap_unionall((jl_value_t*)type);
     assert(jl_is_tuple_type(ttype));
     // compute the complexity of this type signature
@@ -1801,15 +1779,14 @@ jl_typemap_entry_t *jl_typemap_alloc(
             isleafsig = 0; // makes iteration easier when the endpoints are the same
         else if (decl == (jl_value_t*)jl_any_type)
             isleafsig = 0; // Any needs to go in the general cache
-        else if (!jl_is_concrete_type(decl)) // anything else needs to go through the general subtyping test
-            isleafsig = issimplesig = 0;
+        else if (!jl_is_concrete_type(decl)) // tested by `isa` in sig_match_simple
+            isleafsig = 0;
     }
 
     jl_typemap_entry_t *newrec =
         (jl_typemap_entry_t*)jl_gc_alloc(ct->ptls, sizeof(jl_typemap_entry_t),
                                          jl_typemap_entry_type);
     newrec->sig = type;
-    newrec->simplesig = simpletype;
     newrec->func.value = newvalue;
     newrec->guardsigs = guardsigs;
     jl_atomic_store_relaxed(&newrec->next, (jl_typemap_entry_t*)jl_nothing);

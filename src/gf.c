@@ -393,7 +393,7 @@ jl_method_t *jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *sname, jl_fptr_args
     jl_atomic_store_relaxed(&codeinst->invoke, jl_fptr_args);
     jl_mi_cache_insert(mi, codeinst);
 
-    newentry = jl_typemap_alloc(tuptyp, NULL, jl_emptysvec,
+    newentry = jl_typemap_alloc(tuptyp, jl_emptysvec,
             (jl_value_t*)m, 1, ~(size_t)0);
     jl_typemap_insert(&jl_method_table->defs, (jl_value_t*)jl_method_table, newentry, 0);
 
@@ -1722,34 +1722,6 @@ JL_DLLEXPORT jl_typemap_entry_t *jl_mt_find_cache_entry(jl_methcache_t *cache, j
     return mt_find_cache_entry(&cache->cache, tt, world, jl_cachearg_offset());
 }
 
-static jl_value_t *compute_simplett(jl_tupletype_t *cachett) JL_CANSAFEPOINT
-{
-    // now scan `cachett` and reduce the complexity of rejecting this entry in the cache
-    // by replacing non-simple types with jl_any_type to build a new `type`
-    // (for example, if the signature contains jl_function_type), but not `Type{T}`
-    // or `TypeEgal{T}`, which are matched by comparing with `T` directly
-    // TODO: this is also related to how we should handle partial matches
-    //       (which currently might miss detection of a MethodError)
-    jl_value_t *simplett = jl_nothing;
-    cachett = (jl_tupletype_t*) jl_unwrap_unionall((jl_value_t*)cachett);
-    if (!jl_is_datatype(cachett))
-        return simplett;
-    size_t i, np = jl_nparams(cachett);
-    jl_svec_t *newparams = NULL;
-    JL_GC_PUSH1(&newparams);
-    for (i = 0; i < np; i++) {
-        jl_value_t *elt = jl_svecref(cachett->parameters, i);
-        if (!jl_is_vararg(elt) && !jl_is_some_Type(elt) && !jl_is_concrete_type(elt)) { // for example, jl_function_type or jl_tuple_type
-            if (!newparams) newparams = jl_svec_copy(cachett->parameters);
-            jl_svecset(newparams, i, jl_any_type);
-        }
-    }
-    if (newparams)
-        simplett = jl_apply_tuple_type(newparams, 1);
-    JL_GC_POP();
-    return simplett;
-}
-
 static void cache_insert(
         jl_methcache_t *mc, _Atomic(jl_typemap_t*) *cache, jl_value_t *parent JL_PROPAGATES_ROOT,
         jl_method_t *definition,
@@ -1764,11 +1736,9 @@ static void cache_insert(
     int unconstrained_max = max_valid == ~(size_t)0;
     if (max_valid > current_world)
         max_valid = current_world;
-    jl_datatype_t *simplett = NULL;
     jl_typemap_entry_t *newentry = NULL;
-    JL_GC_PUSH2(&simplett, &newentry);
-    simplett = (jl_datatype_t*)compute_simplett(cachett);
-    newentry = jl_typemap_alloc(cachett, simplett, guardsigs, (jl_value_t*)newmeth, min_valid, max_valid);
+    JL_GC_PUSH1(&newentry);
+    newentry = jl_typemap_alloc(cachett, guardsigs, (jl_value_t*)newmeth, min_valid, max_valid);
     jl_typemap_insert(cache, parent, newentry, offs);
     if (mc) {
         jl_method_cache_inserted();
@@ -1833,8 +1803,7 @@ static jl_method_instance_t *cache_result(
         newmeth = jl_atomic_load_relaxed(&definition->unspecialized);
         assert(newmeth != NULL); // handle builtin methods de-specialization (for invoke, or if the global cache entry somehow gets lost)
         jl_tupletype_t *cachett = (jl_tupletype_t*)definition->sig;
-        jl_datatype_t *simplett = NULL;
-        jl_typemap_entry_t *newentry = jl_typemap_alloc(cachett, simplett, jl_emptysvec, (jl_value_t*)newmeth, min_valid, max_valid);
+        jl_typemap_entry_t *newentry = jl_typemap_alloc(cachett, jl_emptysvec, (jl_value_t*)newmeth, min_valid, max_valid);
         JL_GC_PUSH1(&newentry);
         jl_typemap_insert(cache, parent, newentry, offs);
         if (mc)
@@ -3153,7 +3122,7 @@ JL_DLLEXPORT void jl_method_table_disable(jl_method_t *method) JL_CANSAFEPOINT
         jl_errorf("Method of %s already disabled", jl_symbol_name(method->name));
 }
 
-jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
+jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method)
 {
     JL_TIMING(ADD_METHOD, ADD_METHOD);
     assert(jl_is_method(method));
@@ -3165,7 +3134,7 @@ jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method,
     assert(jl_atomic_load_relaxed(&method->primary_world) == ~(size_t)0); // min-world
     assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_WHICH) == 0);
     JL_LOCK(&mt->cache->writelock);
-    newentry = jl_typemap_alloc((jl_tupletype_t*)method->sig, simpletype, jl_emptysvec, (jl_value_t*)method, ~(size_t)0, 1);
+    newentry = jl_typemap_alloc((jl_tupletype_t*)method->sig, jl_emptysvec, (jl_value_t*)method, ~(size_t)0, 1);
     jl_typemap_insert(&mt->defs, (jl_value_t*)mt, newentry, 0);
 
     if (mt == jl_method_table)
@@ -3900,9 +3869,9 @@ void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array
     JL_GC_POP();
 }
 
-JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
+JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method)
 {
-    jl_typemap_entry_t *newentry = jl_method_table_add(mt, method, simpletype);
+    jl_typemap_entry_t *newentry = jl_method_table_add(mt, method);
     JL_GC_PUSH1(&newentry);
     JL_LOCK(&world_counter_lock);
     if (!jl_atomic_load_relaxed(&allow_new_worlds))
@@ -5143,7 +5112,7 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
         last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
         tt = arg_type_tuple(F, args, nargs);
     }
-    if (entry != NULL && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
+    if (entry != NULL && entry->isleafsig && entry->guardsigs == jl_emptysvec) {
         // put the entry into the cache if it's valid for a leafsig lookup,
         // using pick_which to slightly randomize where it ends up
         // (intentionally not atomically synchronized, since we're just using it for randomness)
