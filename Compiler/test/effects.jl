@@ -977,6 +977,18 @@ end
 @eval new_typeeq_rep(T::Type{NewTypeEqRep{Int}}, x::Int) = ($(Expr(:new, :T, :x)); nothing)
 @eval splatnew_typeeq_rep(T::Type{NewTypeEqRep{Int}}, x::Int) = ($(Expr(:splatnew, :T, :((x,)))); nothing)
 @eval splatnew_const_typeeq_rep(T::Type{NewTypeEqRep{Int}}) = ($(Expr(:splatnew, :T, :((1,)))); nothing)
+# a type parameter given a value whose type is not concrete, but all of whose values are
+# valid type parameters, as when `merge` applies `NamedTuple{(names...,)}`
+apply_namedtuple_names(names) = (NamedTuple{names}; nothing)
+@test Compiler.is_nothrow(Base.infer_effects(apply_namedtuple_names, (Tuple{Vararg{Symbol}},)))
+@test Compiler.is_nothrow(Base.infer_effects(apply_namedtuple_names, (Tuple{Symbol, Vararg{Int}},)))
+@test !Compiler.is_nothrow(Base.infer_effects(apply_namedtuple_names, (Tuple{Vararg{Integer}},))) # e.g. a `BigInt`
+@test !Compiler.is_nothrow(Base.infer_effects(apply_namedtuple_names, (Tuple,)))
+let ci = only(code_typed(merge, (NamedTuple{()}, Dict{Symbol,Any})))[1]
+    # only the whole application `NamedTuple{names, T}` remains
+    @test count(x -> Meta.isexpr(x, :call) && x.args[1] == GlobalRef(Core, :apply_type), ci.code) == 1
+end
+
 # `Core.apply_type(Union, T)` returns `T` itself, which is not necessarily a `DataType`
 @eval Base.@nospecializeinfer apply_union_typeeq_rep(@nospecialize(T::Type{NewTypeEqRep{Int}}), x::Int) =
     ($(Expr(:new, :(Core.apply_type(Union, T)), :x)); nothing)
