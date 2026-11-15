@@ -67,9 +67,36 @@ end
     "\x7f" = "\x7f"
     """
     @test roundtrip(s)
+    @test toml_str(Dict("a" => "x\fy\rz")) == "a = \"x\\fy\\rz\"\n"
+    @test roundtrip("a = \"x\\fy\\rz\"")
 
     d = Dict("str" => string(Char(0xd800)))
     @test_throws ErrorException TOML.print(devnull, d)
+end
+
+@testset "printing Base.TOML dates and times" begin
+    # without Dates, Base's parser returns its own date and time structs
+    s = """
+    d = 1979-05-27
+    dt = 1979-05-27T07:32:00Z
+    dtms = 1979-05-27T07:32:00.099Z
+    t = 07:32:01.500
+    """
+    d = Base.TOML.parse(Base.TOML.Parser{nothing}(s))
+    @test d["t"] === Base.TOML.Time(7, 32, 1, 500)
+    @test toml_str(d; sorted=true) == s
+end
+
+@testset "conversion function results and printing to stdout" begin
+    @test_throws "did not return a valid TOML type but a `Complex{$Int}`" toml_str(x -> 2x, Dict("a" => 1im))
+    mktemp() do path, io
+        redirect_stdout(io) do
+            TOML.print(Dict("a" => 1))
+            TOML.print(x -> x.a, Dict("b" => MyStruct(2)))
+        end
+        close(io)
+        @test read(path, String) == "a = 1\nb = 2\n"
+    end
 end
 
 str = """

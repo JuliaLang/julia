@@ -608,6 +608,7 @@ using Test
         @test fieldtype(TypeVar, :ub) == Union{Type, TypeVar, Core.TypeApp}
         @test sprint(show, ta) == "Core.TypeApp(Vector, $Int)"
         @test sprint(show, tvb) == "S<:Core.TypeApp(Vector, $Int)"
+        @test sprint(show, UnionAll(tvb, Union{tvb, Nothing})) == "Union{Nothing, S} where S<:Core.TypeApp(Vector, $Int)"
         @test_throws TypeError TypeVar(:S, 1)
 
         # resolve_typegroup with empty inputs

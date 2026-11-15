@@ -440,7 +440,7 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
             pe = pe->prev;
         }
         uintptr_t bits = jl_astaggedvalue(v)->header;
-        if (bits & GC_IN_IMAGE)
+        if (bits & GC_PERM)
             return ((uintptr_t*)v)[-2];
         return inthash((uintptr_t)v);
     }
@@ -565,7 +565,7 @@ static uintptr_t NOINLINE jl_object_id__cold(uintptr_t tv, jl_value_t *v) JL_NOT
             return m->hash;
         }
         uintptr_t bits = jl_astaggedvalue(v)->header;
-        if (bits & GC_IN_IMAGE)
+        if (bits & GC_PERM)
             return ((uintptr_t*)v)[-2];
         return inthash((uintptr_t)v);
     }
@@ -3060,7 +3060,8 @@ void jl_init_intrinsic_properties(void)
 
 void jl_init_intrinsic_functions(void)
 {
-    jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module, 0, 1);
+    jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module,
+                                      jl_get_module_edition(jl_core_module), 0, 1);
     jl_set_initial_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm, 0);
     jl_mk_builtin_func(jl_intrinsic_type, jl_symbol("IntrinsicFunction"), jl_f_intrinsic_call);
 

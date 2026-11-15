@@ -989,6 +989,7 @@ end
 # here through the stream's copyuntil) compose; the sentinel keeps the
 # plain call, which any IO's write supports.
 function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    io.readable || _throw_not_readable()
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
@@ -1033,13 +1034,17 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false, cancel::CancelT
     else
         # Else, we can just copy the data directly into the buffer, and then
         # subtract the last one or two bytes depending on `keep`.
+        # Virtual size of `out`, which compaction during the copy does not change
+        vsize = out.size - out.offset_or_compacted
         cancel === DEFAULT_CANCEL ? copyuntil(out, s, 0x0a; keep=true) :
                                     copyuntil(out, s, 0x0a; keep=true, cancel=tok)
         line = out.data
         i = out.size
-        if keep || i == out.offset_or_compacted || line[i] != 0x0a
+        # Only strip bytes after `start`, the index of the last byte before the copied line
+        start = vsize + out.offset_or_compacted
+        if keep || i == start || line[i] != 0x0a
             return out
-        elseif i < 2 || line[i-1] != 0x0d
+        elseif i - 1 == start || line[i-1] != 0x0d
             i -= 1
         else
             i -= 2
@@ -1053,6 +1058,7 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false, cancel::CancelT
 end
 
 function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    io.readable || _throw_not_readable()
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.

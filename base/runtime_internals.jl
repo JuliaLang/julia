@@ -860,6 +860,11 @@ end
 
 ismutabletypename(tn::Core.TypeName) = tn.flags & 0x2 == 0x2
 
+# instances hold data that the Julia-visible fields do not describe (C-only fields after
+# them, an opaque layout, or trailing variable-sized data), so only the runtime can allocate
+# them (`Expr(:new)` throws)
+datatype_hashiddenfields(dt::DataType) = (@_total_meta; dt.name.flags & 0x8 == 0x8)
+
 """
     isstructtype(T)::Bool
 

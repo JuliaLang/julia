@@ -1,13 +1,8 @@
 function _unwrap_parse_error(core_hook_result)
     @test Meta.isexpr(core_hook_result[1], :error, 1)
     err = core_hook_result[1].args[1]
-    if JuliaSyntax._has_v1_10_hooks
-        @test err isa Meta.ParseError
-        return err.detail
-    else
-        @test err isa JuliaSyntax.ParseError
-        return err
-    end
+    @test err isa Meta.ParseError
+    return err.detail
 end
 
 @testset "Hooks for Core integration" begin
@@ -97,13 +92,9 @@ end
         @test Meta.parse(" #==# ", 1) == (nothing, 7)
 
         # Check the exception type that Meta.parse throws
-        if JuliaSyntax._has_v1_10_hooks
-            @test_throws Meta.ParseError Meta.parse("[x)")
-            @test_throws Meta.ParseError eval(Meta.parse("[x)", raise=false))
-            @test_throws Meta.ParseError eval(Meta.parse("(x")) # Expr(:incomplete)
-        else
-            @test_throws JuliaSyntax.ParseError Meta.parse("[x)")
-        end
+        @test_throws Meta.ParseError Meta.parse("[x)")
+        @test_throws Meta.ParseError eval(Meta.parse("[x)", raise=false))
+        @test_throws Meta.ParseError eval(Meta.parse("(x")) # Expr(:incomplete)
 
         # Check custom string types defined in a world age later than
         # enable_in_core!() can be passed to Meta.parse()
@@ -120,17 +111,13 @@ end
 
         err = Meta.parse("\"")
         @test Meta.isexpr(err, :incomplete)
-        if JuliaSyntax._has_v1_10_hooks
-            @test err.args[1] isa Meta.ParseError
-            exc = err.args[1]
-            @test exc.msg == "ParseError:\n# Error @ none:1:2\n\"\n#└ ── unterminated string literal"
-            @test exc.detail isa JuliaSyntax.ParseError
-            @test exc.detail.incomplete_tag === :string
-        else
-            @test err.args[1] isa String
-        end
+        @test err.args[1] isa Meta.ParseError
+        exc = err.args[1]
+        @test exc.msg == "ParseError:\n# Error @ none:1:2\n\"\n#└ ── unterminated string literal"
+        @test exc.detail isa JuliaSyntax.ParseError
+        @test exc.detail.incomplete_tag === :string
 
-        JuliaSyntax._set_core_parse_hook(orig_parser)
+        Core._setparser!(orig_parser)
     end
 
     if isdefined(Base, :VersionedParse) && isdefined(Base, :set_syntax_version)
@@ -141,6 +128,7 @@ end
             try
                 parse_in(mod, str) = Meta.parse(str; mod=mod, raise=false)
                 m = Module(:Mod)
+                Core.set_edition(m, VERSION)
                 w0 = Base.get_world_counter()
                 typegroup_src = "typegroup struct T end end"
                 @test Meta.isexpr(invokelatest(parse_in, m, typegroup_src), :typegroup)
@@ -156,15 +144,15 @@ end
                         late_parser(code, args...) =
                             Core.svec(:late, ncodeunits(code))
                     end
-                    JuliaSyntax._set_core_parse_hook(late_parser)
+                    Core._setparser!(late_parser)
                     w1 = Base.get_world_counter()
                     @test Base.invoke_in_world(w0, Meta.parse, "x") === :late
                     @test Base.invoke_in_world(w1, Meta.parse, "x") === :late
                 finally
-                    JuliaSyntax._set_core_parse_hook(old_parser)
+                    Core._setparser!(old_parser)
                 end
             finally
-                JuliaSyntax._set_core_parse_hook(orig_parser)
+                Core._setparser!(orig_parser)
             end
         end
     end

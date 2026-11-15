@@ -1183,13 +1183,17 @@ function history_reset_state(hist::REPLHistoryProvider)
 end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
+const _last_active_project = Ref{Union{String, Nothing}}(nothing)
 function parse_repl_input_line(line::String, repl; kwargs...)
     # N.B.: This re-latches the syntax version for `Main`. If `Base.active_module` is not `Main`,
     # then this does not affect the parser used for that module. We could probably skip this step
     # in that case, but let's just be consistent on the off chance that the active module tries
     # to `include(Main, ...)` or similar.
-    @Base.ScopedValues.with Base.MainInclude.main_parser=>Base.parser_for_active_project() Base.parse_input_line(line;
-        mod=Base.active_module(repl), type=Syntax, kwargs...)
+    if _last_active_project[] !== Base.active_project()
+        _last_active_project[] = Base.active_project()
+        Core.set_edition(Main, Base.edition_for_active_project(Base.LATEST_EDITION))
+    end
+    Base.parse_input_line(line; mod=Base.active_module(repl), type=Syntax, kwargs...)
 end
 
 function return_callback(s)

@@ -111,7 +111,7 @@ function _truncate_at_width_or_chars(ignore_ANSI::Bool, str::AbstractString, wid
     I = ignore_ANSI ? ANSIIterator(str) : pairs(str)
     for (i, c) in I
         if c isa ANSIDelimiter
-            truncidx == 0 && (needANSIend = c != "\033[0m")
+            truncidx == 0 && (needANSIend = c.del != "\033[0m")
             lastidx = i + ncodeunits(c) - 1
         else
             stop && break
@@ -631,6 +631,7 @@ end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
 modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
+modulesof!(s::Set{Module}, ::Core.TypeApp) = s
 function modulesof!(s::Set{Module}, x::TypeEq)
     p = type_parameter(x)
     # the parameter may be a non-type value, e.g. `Type{1}` (#62897)
@@ -2405,7 +2406,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         # handle some special syntaxes
         # `a b c`
         if is_core_macro(args[1], :var"@cmd")
-            print(io, "`", args[3], "`")
+            print(io, "`")
+            escape_raw_string(io, args[3], '`')
+            print(io, "`")
         # 11111111111111111111, 0xfffffffffffffffff, 1111...many digits...
         elseif is_core_macro(args[1], :var"@int128_str") ||
                is_core_macro(args[1], :var"@uint128_str") ||

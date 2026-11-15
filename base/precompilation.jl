@@ -578,7 +578,7 @@ function ExplicitEnv(::Nothing, envpath::String="")
 end
 function ExplicitEnv(envpath::String)
     # Handle missing project file by creating an empty environment
-    if !isfile(envpath) || project_file_manifest_path(envpath) === nothing
+    if !isfile(envpath)
         envpath = abspath(envpath)
         return ExplicitEnv(nothing, envpath)
     end
@@ -625,6 +625,12 @@ function ExplicitEnv(envpath::String)
         names[proj_uuid] = proj_name
     end
 
+    manifest = project_file_manifest_path(envpath)
+    # A project of only stdlibs needs no manifest, since each stdlib's Project.toml lists its deps.
+    stdlibs_only = manifest === nothing && !project_is_package && !isempty(project_deps) &&
+        all(((name, uuid),) -> Base.is_stdlib(PkgId(uuid, name)), project_deps)
+    manifest === nothing && !stdlibs_only && return ExplicitEnv(nothing, envpath)
+
     project_extensions = Dict{String, Vector{UUID}}()
     # Collect all extensions of the project
     for (name, triggers) in get(Dict{String, Any}, project_d, "extensions")::Dict{String, Any}
@@ -644,7 +650,6 @@ function ExplicitEnv(envpath::String)
         project_extensions[name] = uuids
     end
 
-    manifest = project_file_manifest_path(envpath)
     manifest_d = manifest === nothing ? Dict{String, Any}() : parsed_toml(manifest)
 
     # Dependencies in a manifest can either be stored compressed (when name is unique among all packages)
@@ -654,6 +659,11 @@ function ExplicitEnv(envpath::String)
     extensions = Dict{UUID, Dict{String, Vector{String}}}()
     name_to_uuid = Dict{String, UUID}()
     lookup_strategy = Dict{UUID, Union{SHA1, String, Nothing, Missing}}()
+    if stdlibs_only
+        for uuid in values(project_deps)
+            lookup_strategy[uuid] = nothing
+        end
+    end
 
     sizehint!(deps, length(manifest_d))
     sizehint!(weakdeps, length(manifest_d))
@@ -1257,7 +1267,7 @@ precompiles only the given packages and their dependencies (unless
   package loading system. When `true` (not default): returns early instead of
   throwing when packages are not found; suppresses progress messages when not
   in an interactive session; allows packages outside the current environment to
-  be added as serial precompilation jobs; skips LOADING_CACHE initialization;
+  be added as serial precompilation jobs; skips the session's loading cache;
   and changes cachefile locking behavior.
 
 - `_reasons::Dict{Symbol,Int}`: Internal, with `_from_loading`: why the loader rejected
@@ -1432,14 +1442,23 @@ function _precompile_for_loading(into::Module, names::Vector{Symbol})
     reasons = Dict{Symbol,Int}()
     stale_cache = Dict{Base.StaleCacheKey,Bool}()
     cachepath_cache = Dict{PkgId, Vector{String}}()
-    for pkg in pkgs
-        fresh = try
-            Base.compilecache_freshest_path(pkg; ignore_loaded=false, stale_cache, cachepath_cache,
-                                            verify_checksums=false, reasons) !== nothing
-        catch
-            true # e.g. no source located: leave it to `require` to report
+    @lock Base.require_lock begin
+        # one loading cache for all packages, so that each one is only located once
+        set_cache = Base.LOADING_CACHE[] === nothing
+        set_cache && (Base.LOADING_CACHE[] = Base.LoadingCache())
+        try
+            for pkg in pkgs
+                fresh = try
+                    Base.compilecache_freshest_path(pkg; ignore_loaded=false, stale_cache, cachepath_cache,
+                                                    remember_cachepaths=true, verify_checksums=false, reasons) !== nothing
+                catch
+                    true # e.g. no source located: leave it to `require` to report
+                end
+                fresh || push!(stale, pkg)
+            end
+        finally
+            set_cache && (Base.LOADING_CACHE[] = nothing)
         end
-        fresh || push!(stale, pkg)
     end
     isempty(stale) && return
 
@@ -3047,11 +3066,6 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
 end
 
 function report_precompile_results!(s::PrecompileSession)
-    if !s._from_loading
-        @lock Base.require_lock begin
-            Base.LOADING_CACHE[] = nothing
-        end
-    end
     notify(s.first_started) # in cases of no-op or !fancyprint
     # a cancel that lands while the last job runs is not seen by the job loop
     should_stop(s)
@@ -3447,28 +3461,27 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     end
 
     try
-        if !_from_loading
-            @lock Base.require_lock begin
-                Base.LOADING_CACHE[] = Base.LoadingCache()
-            end
+        # only tasks started here see the cache, since the environment can change while this runs
+        cache = _from_loading ? nothing : Base.LoadingCache()
+        Base.ScopedValues.@with Base.SESSION_LOADING_CACHE => cache begin
+            @debug "precompile: starting precompilation loop" graph.direct_deps graph.project_deps
+
+            # Initial pass
+            initial_tasks = spawn_precompile_tasks!(s;
+                direct_deps=graph.direct_deps, was_processed, configs, circular_deps,
+                requested_pkgids, pkg_names, requested_pkgs, from_loading=_from_loading)
+            append!(s.tasks, initial_tasks)
+
+            # Concurrent drainer for injected requests
+            drainer = drain_work_channel!(s, work_channel)
+
+            waitall(initial_tasks; failfast=false, throw=false)
+            @lock BG close(work_channel)
+            wait(drainer)
+            append!(s.tasks, s.injected_tasks)
+            waitall(s.injected_tasks; failfast=false, throw=false)
+            waitall(s.result_waiters; failfast=false, throw=false)
         end
-        @debug "precompile: starting precompilation loop" graph.direct_deps graph.project_deps
-
-        # Initial pass
-        initial_tasks = spawn_precompile_tasks!(s;
-            direct_deps=graph.direct_deps, was_processed, configs, circular_deps,
-            requested_pkgids, pkg_names, requested_pkgs, from_loading=_from_loading)
-        append!(s.tasks, initial_tasks)
-
-        # Concurrent drainer for injected requests
-        drainer = drain_work_channel!(s, work_channel)
-
-        waitall(initial_tasks; failfast=false, throw=false)
-        @lock BG close(work_channel)
-        wait(drainer)
-        append!(s.tasks, s.injected_tasks)
-        waitall(s.injected_tasks; failfast=false, throw=false)
-        waitall(s.result_waiters; failfast=false, throw=false)
 
         # Final output
         s.interrupted_or_done = true

@@ -703,6 +703,7 @@ end
 # path mutates the result vector). A cached answer is reused when its validity range covers
 # `world`, since the matches are the same in every world of that range.
 function verify_call_lookup(@nospecialize(sig), lim::Int, world::UInt, workspace::VerifyMethodWorkspace, memoize::Bool)
+    memoize &= !isdispatchtuple(sig) # ml_matches is already memoized better
     if memoize
         cached = get(workspace.lookups, sig, nothing)
         if cached !== nothing && cached.lim == lim

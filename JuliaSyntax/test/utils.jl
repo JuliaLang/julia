@@ -17,8 +17,6 @@
 end
 
 @testset "ambiguities" begin
-    if VERSION >= v"1.8"
-        @test detect_ambiguities(JuliaSyntax) == []
-        @test detect_unbound_args(JuliaSyntax) == []
-    end
+    @test detect_ambiguities(JuliaSyntax) == []
+    @test detect_unbound_args(JuliaSyntax) == []
 end

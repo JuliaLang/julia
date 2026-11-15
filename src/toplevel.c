@@ -38,20 +38,37 @@ jl_mutex_t jl_modules_mutex;
 // During incremental compilation, the following gets set
 jl_module_t *jl_precompile_toplevel_module = NULL;   // the first toplevel module being defined
 
-jl_module_t *jl_add_standard_imports(jl_module_t *m)
+jl_module_t *jl_add_standard_imports(jl_module_t *m) JL_CANSAFEPOINT
 {
-    jl_module_t *base_module = jl_base_relative_to(m);
-    assert(base_module != NULL);
+    jl_module_t *base = jl_base_relative_to(m);
+    jl_value_t *into =  NULL;
+    assert(base != NULL);
     // using Base
-    jl_module_initial_using(m, base_module);
-    return base_module;
+    JL_GC_PUSH1(&into);
+    jl_module_initial_using(m, base);
+    jl_datatype_t *include_into =
+        (jl_datatype_t *)jl_get_global(base, jl_symbol("IncludeInto"));
+    if (include_into) {
+        into = jl_new_struct(include_into, m);
+        jl_set_initial_const(m, jl_symbol("include"), into, 0);
+    }
+    jl_datatype_t *eval_into =
+        (jl_datatype_t *)jl_get_global(jl_core_module, jl_symbol("EvalInto"));
+    if (eval_into) {
+        into = jl_new_struct(eval_into, m);
+        jl_set_initial_const(m, jl_symbol("eval"), into, 0);
+    }
+    JL_GC_POP();
+    return base;
 }
 
 // create a new top-level module
 void jl_init_main_module(void)
 {
     assert(jl_main_module == NULL);
-    jl_main_module = jl_new_module_(jl_symbol("Main"), NULL, 0, 1); // baremodule Main; end
+    // baremodule Main; end
+    jl_main_module = jl_new_module_(
+        jl_symbol("Main"), NULL, BOOTSTRAP_EDITION, 0, 1);
     jl_set_initial_const(jl_core_module, jl_symbol("Main"), (jl_value_t*)jl_main_module, 0); // const Main.Core = Core
     jl_set_initial_const(jl_main_module, jl_symbol("Core"), (jl_value_t*)jl_core_module, 0); // const Core.Main = Main
 }
@@ -115,24 +132,6 @@ static int jl_is__toplevel__mod(jl_module_t *mod, jl_task_t *ct) JL_CANSAFEPOINT
         (jl_value_t*)mod == jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"), ct->world_age);
 }
 
-JL_DLLEXPORT void jl_setup_new_module(jl_module_t *m, jl_value_t *syntax_version) JL_CANSAFEPOINT
-{
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
-    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_setup_module!"), ct->world_age);
-    if (f != NULL) {
-        jl_value_t **fargs;
-        JL_GC_PUSHARGS(fargs, 3);
-        fargs[0] = f;
-        fargs[1] = (jl_value_t*)m;
-        fargs[2] = syntax_version;
-        jl_apply(fargs, 3);
-        JL_GC_POP();
-    }
-    ct->world_age = last_age;
-}
-
 JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym_t *name, jl_value_t *syntax_version,
                                               int std_imports, const char *filename, int lineno) JL_CANSAFEPOINT
 {
@@ -141,7 +140,14 @@ JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym
     // If we have `Base`, don't also try to import `Core` - the `Base` exports are a superset.
     // While we allow multiple imports of the same binding from different modules, various error printing
     // performs reflection on which module a binding came from and we'd prefer users see "Base" here.
-    jl_module_t *newm = jl_new_module_(name, is_parent__toplevel__ ? NULL : parent_module, std_imports && jl_base_module != NULL ? 0 : 1, 1);
+    jl_module_t *newm = jl_new_module_(
+        name,
+        is_parent__toplevel__ ? NULL : parent_module,
+        /* TODO: should track the expression edition (requires Syntax) */
+        jl_get_module_edition(parent_module),
+        std_imports && jl_base_module != NULL ? 0 : 1,
+        1
+    );
     jl_value_t *form = (jl_value_t*)newm;
     JL_GC_PUSH1(&form);
     JL_LOCK(&jl_modules_mutex);
@@ -154,7 +160,7 @@ JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym
 
     // add standard imports unless baremodule
     if (std_imports && jl_base_module != NULL) {
-        jl_setup_new_module(newm, syntax_version);
+        jl_add_standard_imports(newm);
     }
 
     if (parent_module == jl_main_module && name == jl_symbol("Base") && jl_base_module == NULL) {

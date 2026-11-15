@@ -234,6 +234,20 @@ let
     @test any(edge -> edge === binding, ci.edges)
 end
 
+let
+    interp = Compiler.NativeInterpreter(Base.get_world_counter())
+    mi = Base.method_instance(LimitedSrcTombstoneProof62338.entry, ())
+    frame = Compiler.InferenceState(
+        Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp)), Compiler.CACHE_MODE_LOCAL, interp)
+    out = mktemp() do path, io
+        redirect_stdout(() -> Compiler.print_callstack(frame), io)
+        close(io)
+        read(path, String)
+    end
+    @test startswith(out, "=================== Callstack: ==================\n*[0] MethodInstance entry() from entry()")
+    @test endswith(out, "================= End callstack ==================\n")
+end
+
 # Local constant inference keeps its dependency proof separate from the executable target.
 module LocalProofConstpropCache
     const SINK = Ref{Any}()
@@ -8723,5 +8737,12 @@ const SPLAT_SVEC_NAMES = ntuple(i -> Symbol(:a, i), 33)
 @inline splat_svec_outer(names, vals::Tuple) = splat_svec_inner(names, vals...)
 splat_svec_caller(vals) = splat_svec_outer(SPLAT_SVEC_NAMES, vals)
 @test Base.infer_return_type(splat_svec_caller, (NTuple{33,Int},)) === NamedTuple{SPLAT_SVEC_NAMES, NTuple{33,Int}}
+
+# a reference at a non-constant index of a constant `MemoryRef` is not that constant
+const memoryref_at_const = Core.memoryrefnew(Memory{Int}(undef, 4))
+memoryref_at_offset(i::Int) = Core.memoryrefoffset(Core.memoryrefnew(memoryref_at_const, i, true))
+@test Compiler.builtin_tfunction(Compiler.NativeInterpreter(), Core.memoryrefnew,
+    Any[Core.Const(memoryref_at_const), Int, Core.Const(true)], nothing) === MemoryRef{Int}
+@test memoryref_at_offset(3) == 3
 
 end # module inference

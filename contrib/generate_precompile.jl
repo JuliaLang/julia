@@ -399,9 +399,7 @@ function generate_precompile_statements()
         occursin("Main.", statement) && continue
         Base.in!(statement, executed) && continue
         try
-            ps = Meta.parse(statement)
-            # a malformed statement used to be skipped silently here, allowing
-            # hardcoded statements to rot unnoticed; make it loud instead
+            ps = Meta.parse(statement; mod=Base)
             isexpr(ps, :call) || error("statement does not parse to a call")
             popfirst!(ps.args) # precompile(...)
             ps.head = :tuple

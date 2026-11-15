@@ -591,18 +591,12 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
-const main_parser = Base.ScopedValues.ScopedValue{Any}(
-    Base.VersionedParse(Base.LATEST_STABLE_EDITION))
-function var"#_internal_julia_parse"(args...)
-    main_parser[](args...)
-end
-
 # Used for memoizing require_stdlib of these modules
 global InteractiveUtils::Module
 global Distributed::Module
 
 # weakly exposes ans and err variables to Main
-export ans, err, var"#_internal_julia_parse"
+export ans, err
 end
 
 function should_use_main_entrypoint()
@@ -696,9 +690,8 @@ function _start()
         atexit(__uninit_build)
     end
     local ret = 0
-    # `--project` has been processed at this point - latch the active project's syntax
-    # version and use it for `-L`, `argfile`, etc. If launched, the REPL will re-evaluate
-    # at each prompt.
+    # `--project` has been processed, so use its edition if specified
+    Core.set_edition(Main, edition_for_active_project(LATEST_EDITION))
     # The whole foreground execution runs as a ^C episode: a SIGINT (with
     # exit-on-sigint disabled) cancels the episode token's scope. An
     # interactive session installs its own per-evaluation episodes later
@@ -706,7 +699,7 @@ function _start()
     # standalone root, not a session child - see the `sigint_new_episode!`
     # docstring.
     sigint_tok = sigint_new_episode!()
-    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() CANCEL_TOKEN=>sigint_tok try
+    @Base.ScopedValues.with CANCEL_TOKEN=>sigint_tok try
         repl_was_requested = exec_options(JLOptions())
         if invokelatest(should_use_main_entrypoint) && !is_interactive
             main = invokelatest(getglobal, Main, :main)

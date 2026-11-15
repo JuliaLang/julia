@@ -37,6 +37,7 @@ const TESTNAMES = [
 
 const INTERNET_REQUIRED_LIST = [
     "Artifacts",
+    "Compiler/extras/CompilerDevTools/testpkg", # resolves `Compiler` from the General registry
     "Downloads",
     "LazyArtifacts",
     "LibCURL",

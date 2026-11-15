@@ -207,6 +207,11 @@ end
 end
 
 @test_throws KeyError Dict("a"=>2)[Base.secret_table_token]
+# the value type must not be widened by the lookup sentinel
+@test Base.infer_return_type((Dict{Int,Vector{Int}}, Pair{Int,Vector{Int}})) do d, p
+    v = get(d, p.first, Base.secret_table_token)
+    v !== Base.secret_table_token ? v : nothing
+end == Union{Nothing,Vector{Int}}
 
 @testset "issue #1821" begin
     d = Dict{String, Vector{Int}}()
@@ -507,6 +512,10 @@ end
     str13 = sprint(io -> show(io, MIME("text/plain"), d13); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
     @test count('\n', str13) == 1
     @test occursin('…', str13)
+
+    # no extra reset when the last escape before the cut is already a reset
+    @test Base._truncate_at_width_or_chars(true, "ab\e[0mcdefgh", 4) == "ab\e[0mc…"
+    @test Base._truncate_at_width_or_chars(true, "ab\e[31mcdefgh", 4) == "ab\e[31mc\e[0m…"
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate
@@ -1251,6 +1260,45 @@ end
     @test !haskey(widgc, B)
 
     GC.@preserve A B C a b c nothing
+end
+
+@testset "Weak dictionary finalizers: $D" for D in (WeakKeyDict, Base.WeakValueIdDict)
+    # A rooted entry finalizer must not keep its dictionary alive.
+    live = [0]
+    f, wr = (@noinline function (live)
+        local d = D(live=>live)
+        return d.finalizer, WeakRef(d)
+    end)(live)
+    GC.@preserve f live begin
+        GC.gc(); GC.gc()
+        @test wr.value === nothing
+    end
+
+    # A dictionary recovered from another finalizer must still clean up dead entries.
+    anchor, recovered = Ref(0), Ref{Any}()
+    (@noinline function (anchor, recovered)
+        saved = D{Vector{Int},Vector{Int}}()
+        finalizer(_ -> (recovered[] = saved), anchor)
+        return nothing
+    end)(anchor, recovered)
+    GC.gc(); GC.gc()
+    finalize(anchor)
+    d = recovered[]
+    keyref, valueref = (@noinline function (d)
+        deadkey, deadvalue = [1], [2]
+        d[deadkey] = deadvalue
+        return WeakRef(deadkey), WeakRef(deadvalue)
+    end)(d)
+    GC.gc(); GC.gc()
+    @test isempty(collect(d))
+    @test isempty(d)
+    key, value = [3], [4]
+    d[key] = value
+    @test length(d.ht) == 1
+    GC.gc(); GC.gc()
+    @test keyref.value === nothing
+    @test valueref.value === nothing
+    GC.@preserve d key value nothing
 end
 
 import Base.PersistentDict

@@ -68,11 +68,8 @@ end
     @test thisind(SourceFile("xαx", first_index=10), 12) == 11
     @test thisind(SourceFile("xαx", first_index=10), 13) == 13
 
-    if Base.VERSION >= v"1.4"
-        # Protect the `[begin` from being viewed by the parser on older Julia versions
-        @test eval(Meta.parse("SourceFile(\"a\nb\n\")[begin:end]")) == "a\nb\n"
-        @test eval(Meta.parse("SourceFile(\"abcd\", first_index=10)[begin+1:end-1]")) == "bc"
-    end
+    @test SourceFile("a\nb\n")[begin:end] == "a\nb\n"
+    @test SourceFile("abcd", first_index=10)[begin+1:end-1] == "bc"
 end
 
 @testset "SourceFile printing and text extraction" begin

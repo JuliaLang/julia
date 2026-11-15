@@ -12,9 +12,6 @@ let project = mktempdir(),
                for name in readdir(Sys.STDLIB) if isfile(joinpath(Sys.STDLIB, name, "Project.toml"))]
     write(joinpath(project, "Project.toml"), "[deps]\n",
           (string(name, " = \"", uuid, "\"\n") for (name, uuid) in stdlibs)...)
-    # stdlib dependencies are filled in from their own Project.toml
-    write(joinpath(project, "Manifest.toml"), "manifest_format = \"2.0\"\n",
-          (string("\n[[deps.", name, "]]\nuuid = \"", uuid, "\"\n") for (name, uuid) in stdlibs)...)
     run(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project -e $script`, load_path))
     run(addenv(`$test_exename $test_exeflags --project=$project -e $script`, load_path))
 end
@@ -136,9 +133,10 @@ if Sys.WORD_SIZE == 32
 end
 
 # These leave state behind on their worker (`precompile`: packages loaded and methods
-# added to Base, `threads`: exited adopted threads), which breaks later tests on the
-# same worker, so the worker is replaced once they finish
-const recycle_worker_tests = ["precompile", "threads"]
+# added to Base, `threads`: exited adopted threads, `SparseArrays`/`SuiteSparse`: methods
+# added to Base functions like `hvcat`), which breaks later tests on the same worker, so
+# the worker is replaced once they finish
+const recycle_worker_tests = ["precompile", "threads", "SparseArrays", "SuiteSparse"]
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
