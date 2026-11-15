@@ -241,6 +241,12 @@ STATISTIC(GeneratedCFuncWrappers, "Number of C function wrappers generated");
 STATISTIC(GeneratedCCallables, "Number of C-callable functions generated");
 STATISTIC(GeneratedInvokeWrappers, "Number of invoke wrappers generated");
 STATISTIC(EmittedFunctions, "Number of functions emitted");
+STATISTIC(EmittedSSANameDbgValues, "Number of debug values emitted for named SSA values");
+STATISTIC(SkippedSSANameGhost, "Number of named SSA values not described: ghost or constant");
+STATISTIC(SkippedSSANameRoots, "Number of named SSA values not described: split into bits and roots");
+STATISTIC(SkippedSSANameUnion, "Number of named SSA values not described: unboxed union");
+STATISTIC(SkippedSSANameScope, "Number of named SSA values not described: no scope for the owner");
+STATISTIC(SkippedSSANameArgument, "Number of named SSA values not described: reassigned argument");
 
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_dump_emitted_mi_name_impl(void *s)
@@ -9842,6 +9848,10 @@ static jl_llvm_functions_t
     DIFile *topfile = NULL;
     DISubprogram *SP = NULL;
     DebugLoc noDbg, topdebugloc;
+    // debug info variables for the named SSA values (see `emit_ssaname_dbgvalue`)
+    std::map<std::tuple<DILocalScope*, jl_sym_t*, DIType*>, DILocalVariable*> ssaname_dinfo;
+    SmallPtrSet<jl_sym_t*, 8> argument_names;
+    DenseMap<jl_sym_t*, DILocalVariable*> argument_value_dinfo;
     if (debug_enabled) {
         topfile = get_difile(ctx, dbuilder, ctx.file, mod_is_user_mod);
         DISubroutineType *subrty;
@@ -9873,6 +9883,7 @@ static jl_llvm_functions_t
                 jl_sym_t *argname = slot_symbol(ctx, i);
                 if (argname == jl_unused_sym)
                     continue;
+                argument_names.insert(argname);
                 jl_varinfo_t &varinfo = ctx.slots[i];
                 varinfo.dinfo = dbuilder.createParameterVariable(
                     SP,                                 // Scope (current function will be fill in later)
@@ -10263,6 +10274,7 @@ static jl_llvm_functions_t
                     dbuilder.insertDbgValueIntrinsic(theArg.V, vi.dinfo, dbuilder.createExpression(),
                                                         topdebugloc, ctx.builder.GetInsertBlock());
 #endif
+                    argument_value_dinfo[s] = vi.dinfo;
                 }
             }
         }
@@ -10335,6 +10347,7 @@ static jl_llvm_functions_t
     };
     struct DebugLineTable {
         DebugLoc loc;
+        jl_value_t *owner; // identity of the function of this frame, as the optimizer records it for the variables of inlined functions
         StringRef file;
         ssize_t line;
         ssize_t line0; // if this represents pc=1, then also cover the entry to the function (pc=0)
@@ -10355,6 +10368,7 @@ static jl_llvm_functions_t
     topinfo.is_user_code = mod_is_user_mod;
     topinfo.loc = topdebugloc;
     topinfo.edgeid = 0;
+    topinfo.owner = nullptr;
     SmallVector<DebugLineTable, 0> prev_lineinfo, new_lineinfo;
     // toplevel code has no CodeInstance for a backtrace to rebuild its frames from
     const bool inline_scopes = ctx.params->debug_info_inline_scopes || !jl_is_method(ctx.linfo->def.method);
@@ -10381,6 +10395,9 @@ static jl_llvm_functions_t
                     // actual node
                     DebugLineTable info;
                     info.edgeid = to;
+                    info.owner = func;
+                    if (func && jl_is_method_instance(func) && jl_is_method(((jl_method_instance_t*)func)->def.value))
+                        info.owner = ((jl_method_instance_t*)func)->def.value;
                     jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
                     info.file = jl_cdi_file(debuginfo);
                     info.line = i;
@@ -10642,6 +10659,145 @@ static jl_llvm_functions_t
     }
 
     new_lineinfo.push_back(topinfo);
+
+    // Describe the source variables that are assigned the value of an SSA statement to
+    // debuggers. The optimizer records them at debug info level 2 in the `ssanames` field of
+    // the CodeInfo (see `ssanames_field` in Compiler/src/ssair/legacy.jl).
+    // This only adds debug records for values that the statement computed anyway.
+    SmallVector<jl_value_t*, 0> ssanames;
+    if (debug_enabled && ctx.emission_context.params->debug_info_level >= 2 &&
+            jl_is_array(src->ssanames) && jl_typetagis(src->ssanames, jl_array_any_type)) {
+        jl_array_t *names = (jl_array_t*)src->ssanames;
+        size_t nstmts = jl_array_nrows(stmts);
+        if (jl_array_nrows(names) == nstmts) {
+            ssanames.assign(nstmts, nullptr);
+            for (size_t j = 0; j < nstmts; j++) {
+                jl_value_t *name = jl_array_ptr_ref(names, j);
+                if (name && name != jl_nothing)
+                    ssanames[j] = name;
+            }
+        }
+    }
+    // where the code of the current statement starts
+    BasicBlock *stmt_start_bb = nullptr;
+    Instruction *stmt_start_after = nullptr;
+    auto emit_ssaname_dbgvalue = [&](size_t idx, jl_sym_t *name, jl_value_t *owner) {
+        const jl_cgval_t &val = ctx.SAvalues[idx];
+        BasicBlock *bb = ctx.builder.GetInsertBlock();
+        if (val.typ == jl_bottom_type || !bb || getTerminatorOrNull(bb))
+            return;
+        Value *V = val.V;
+        bool deref = false;
+        if (val.isboxed) {
+            // a pointer to the object, like for boxed slots
+        }
+        else if (val.isghost || val.constant || !V) {
+            SkippedSSANameGhost++;
+            return;
+        }
+        else if (val.TIndex) {
+            SkippedSSANameUnion++;
+            return;
+        }
+        else if (!val.inline_roots.empty()) {
+            SkippedSSANameRoots++;
+            return;
+        }
+        else if (val.ispointer()) {
+            // The value is in memory that does not change while this SSA value is live.
+            // Since a variable can be assigned again, this states where the value is
+            // from here on, and not for the whole scope like a declare would.
+            deref = true;
+        }
+        if (!V || V->getType()->isVoidTy() || V->getType()->isTokenTy()) {
+            SkippedSSANameGhost++;
+            return;
+        }
+        DIType *ditype = julia_type_to_di(ctx, debugcache, val.typ, &dbuilder, val.isboxed);
+        DILocalScope *scope = nullptr;
+        DILocation *loc = nullptr;
+        DILocalVariable *var = nullptr;
+        if (owner == jl_nothing) {
+            // a variable of this function
+            scope = SP;
+            loc = DILocation::get(ctx.builder.getContext(), toplineno > 0 ? toplineno : 0, 0, SP, NULL);
+            if (argument_names.count(name)) {
+                // an argument that is assigned again
+                auto it = argument_value_dinfo.find(name);
+                if (it == argument_value_dinfo.end() || it->second->getType() != ditype) {
+                    SkippedSSANameArgument++;
+                    return;
+                }
+                var = it->second;
+            }
+        }
+        else if (inline_scopes) {
+            // a variable of a function that was inlined: it is in the scope of the
+            // innermost frame of that function that this statement is in
+            for (size_t j = new_lineinfo.size(); j-- > 0; ) {
+                const DebugLineTable &info = new_lineinfo[j];
+                if (info.owner == owner && info.loc) {
+                    loc = info.loc.get();
+                    scope = loc->getScope()->getSubprogram();
+                    break;
+                }
+            }
+        }
+        if (!scope) {
+            SkippedSSANameScope++;
+            return;
+        }
+        if (!var) {
+            DILocalVariable *&cached = ssaname_dinfo[std::make_tuple(scope, name, ditype)];
+            if (!cached) {
+                cached = dbuilder.createAutoVariable(
+                    scope,                   // Scope
+                    jl_symbol_name(name),    // Variable name
+                    scope->getFile(),        // File
+                    scope == SP && toplineno > 0 ? toplineno : 0, // Line
+                    ditype,                  // Variable type
+                    scope == SP,             // Keep the variables of this function if optimized out
+                    DINode::FlagZero);
+            }
+            var = cached;
+        }
+        SmallVector<uint64_t, 1> addr;
+        if (deref)
+            addr.push_back(llvm::dwarf::DW_OP_deref);
+        InsertPosition pos = bb;
+        if (deref && isa<AllocaInst>(V) && stmt_start_bb) {
+            // The statement filled a stack slot of its own with the value. State the
+            // location before these stores: when LLVM replaces the slot by the values
+            // that are stored to it, it describes the variable at each store, and it
+            // ends the description that uses the slot where that one is.
+            if (stmt_start_after)
+                pos = std::next(stmt_start_after->getIterator());
+            else
+                pos = stmt_start_bb->getFirstNonPHIIt();
+        }
+#if JL_LLVM_VERSION >= 240000
+        dbuilder.insertDbgValue(V, var, dbuilder.createExpression(addr), loc, pos);
+#else
+        dbuilder.insertDbgValueIntrinsic(V, var, dbuilder.createExpression(addr), loc, pos);
+#endif
+        EmittedSSANameDbgValues++;
+    };
+    auto emit_ssaname_dbgvalues = [&](size_t idx) {
+        jl_value_t *entry = ssanames[idx];
+        if (!ctx.ssavalue_assigned[idx])
+            return;
+        if (jl_is_symbol(entry)) {
+            emit_ssaname_dbgvalue(idx, (jl_sym_t*)entry, jl_nothing);
+        }
+        else if (jl_is_svec(entry)) {
+            for (size_t j = 0; j + 1 < jl_svec_len(entry); j += 2) {
+                jl_value_t *name = jl_svecref(entry, j);
+                if (jl_is_symbol(name))
+                    emit_ssaname_dbgvalue(idx, (jl_sym_t*)name, jl_svecref(entry, j + 1));
+            }
+        }
+    };
+    SmallVector<size_t, 4> ssaname_phis;
     Value *sync_bytes = nullptr;
     if (do_malloc_log(true, mod_is_tracked))
         sync_bytes = ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
@@ -10658,6 +10814,12 @@ static jl_llvm_functions_t
         }
         ctx.noalias().aliasscope.current = aliasscopes[cursor];
         jl_value_t *stmt = jl_array_ptr_ref(stmts, cursor);
+        if (!ssaname_phis.empty() && !jl_is_phinode(stmt)) {
+            // all phi nodes of this block exist now
+            for (size_t idx : ssaname_phis)
+                emit_ssaname_dbgvalues(idx);
+            ssaname_phis.clear();
+        }
         if (jl_is_returnnode(stmt)) {
             jl_value_t *retexpr = jl_returnnode_value(stmt);
             if (retexpr == NULL) {
@@ -10892,9 +11054,22 @@ static jl_llvm_functions_t
         else {
             // statement-scoped context for mark_reset_safe (see its
             // declaration); cleared like the debug location below
+            const bool named = (size_t)cursor < ssanames.size() && ssanames[cursor] && stmt != jl_nothing;
+            if (named && !jl_is_phinode(stmt)) {
+                stmt_start_bb = ctx.builder.GetInsertBlock();
+                stmt_start_after = stmt_start_bb && !stmt_start_bb->empty() ? &stmt_start_bb->back() : nullptr;
+            }
             ctx.current_stmt_idx = cursor;
             emit_stmtpos(ctx, stmt, cursor);
             ctx.current_stmt_idx = -1;
+            if (named) {
+                if (jl_is_phinode(stmt))
+                    ssaname_phis.push_back(cursor); // debug records cannot be between phi nodes
+                else
+                    emit_ssaname_dbgvalues(cursor);
+                stmt_start_bb = nullptr;
+                stmt_start_after = nullptr;
+            }
             mallocVisitStmt(nullptr, have_dbg_update);
         }
         find_next_stmt(cursor + 1);

@@ -455,7 +455,8 @@ Parameters that control optimizer operation.
 - `opt_params.record_ssa_names::Bool = false`\\
   If `true`, the optimizer records the source variable names of SSA statements (including
   inlined ones) in the `ssanames` field of the optimized `CodeInfo`, for debuggers and
-  similar tools. Does not affect optimization. Defaults to `false`.
+  similar tools. Does not affect optimization. Defaults to `false`, except for the
+  `NativeInterpreter` at debug info level 2 and above (`-g2`).
 ---
 """
 struct OptimizationParams
@@ -546,7 +547,7 @@ end
 
 function NativeInterpreter(world::UInt = get_world_counter();
                            inf_params::InferenceParams = InferenceParams(),
-                           opt_params::OptimizationParams = OptimizationParams())
+                           opt_params::OptimizationParams = default_native_opt_params())
     curr_max_world = get_world_counter()
     # Sometimes the caller is lazy and passes typemax(UInt).
     # we cap it to the current world age for correctness
@@ -561,6 +562,10 @@ function NativeInterpreter(world::UInt = get_world_counter();
     codegen = IdDict{CodeInstance,CodeInfo}()
     return NativeInterpreter(world, method_table, inf_cache, codegen, inf_params, opt_params)
 end
+
+# At debug info level 2 and above, codegen describes the local variables of optimized code
+# to debuggers, using the names of source variables that the optimizer records.
+default_native_opt_params() = OptimizationParams(; record_ssa_names = JLOptions().debug_level >= 2)
 
 # Quickly and easily satisfy the AbstractInterpreter API contract
 InferenceParams(interp::NativeInterpreter) = interp.inf_params
