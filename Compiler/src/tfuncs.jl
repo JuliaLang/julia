@@ -1837,7 +1837,18 @@ end
 add_tfunc(fieldtype, 2, 3, fieldtype_tfunc, 0)
 
 # Like `valid_tparam`, but in the type domain.
-valid_tparam_type(T::DataType) = valid_typeof_tparam(T)
+function valid_tparam_type(T::DataType)
+    if T.name === Tuple.name && !isconcretetype(T)
+        # every value is a valid type parameter if every value of each element type is
+        for p in T.parameters
+            p = unwrapva(p)
+            (isa(p, TypeVar) || p === Union{}) && return false
+            valid_tparam_type(p) || return false
+        end
+        return true
+    end
+    return valid_typeof_tparam(T)
+end
 valid_tparam_type(T::TypeEq) = true
 valid_tparam_type(T::Core.TypeEgal) = true
 valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
