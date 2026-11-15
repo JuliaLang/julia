@@ -1081,9 +1081,9 @@ end
 
 const _default_bit_splice = BitVector()
 
-function splice!(B::BitVector, r::Union{AbstractUnitRange{Int}, Integer}, ins::AbstractArray = _default_bit_splice)
+function splice!(B::BitVector, r::Union{AbstractUnitRange{<:Integer}, Integer}, ins::AbstractArray = _default_bit_splice)
     r isa Bool && depwarn("passing Bool as an index is deprecated", :splice!)
-    _splice_int!(B, isa(r, AbstractUnitRange{Int}) ? r : Int(r), ins)
+    _splice_int!(B, isa(r, AbstractUnitRange{Int}) ? r : Int(first(r)):Int(last(r)), ins)
 end
 
 function _splice_int!(B::BitVector, r, ins)
