@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdalign.h>
+#include <stdint.h>
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
@@ -870,7 +871,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
         assert(ptr_i == npointers);
 
-        if (alignm > 65535)
+        if (alignm > UINT16_MAX)
             jl_errorf("alignment out of bounds");
 
         st->layout = jl_get_layout(sz, nfields, npointers, alignm, haspadding, isbitsegal, 0, 0, desc, pointers);
