@@ -4450,7 +4450,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_typemap_entry_type =
         jl_new_datatype(jl_symbol("TypeMapEntry"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(9,
+                        jl_perm_symsvec(10,
                             "next",
                             "sig",
                             "guardsigs",
@@ -4459,8 +4459,9 @@ void jl_init_types(void) JL_GC_DISABLED
                             "func",
                             "isleafsig",
                             "issimplesig",
-                            "va"),
-                        jl_svec(9,
+                            "va",
+                            "isegalsig"),
+                        jl_svec(10,
                             jl_any_type, // Union{TypeMapEntry, Nothing}
                             jl_type_type, // TupleType
                             jl_any_type, // SimpleVector{TupleType}
@@ -4469,10 +4470,11 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type, // Any
                             jl_bool_type,
                             jl_bool_type,
+                            jl_bool_type,
                             jl_bool_type),
                         jl_emptysvec,
                         0, 1, 3);
-    const static uint32_t typemap_entry_constfields[1] = { 0x000001e6 }; // (1<<1)|(1<<2)|(1<<5)|(1<<6)|(1<<7)|(1<<8)
+    const static uint32_t typemap_entry_constfields[1] = { 0x000003e6 }; // (1<<1)|(1<<2)|(1<<5)|(1<<6)|(1<<7)|(1<<8)|(1<<9)
     const static uint32_t typemap_entry_atomicfields[1] = { 0x00000019 }; // (1<<0)|(1<<3)|(1<<4)
     jl_typemap_entry_type->name->constfields = typemap_entry_constfields;
     jl_typemap_entry_type->name->atomicfields = typemap_entry_atomicfields;

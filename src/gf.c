@@ -5065,6 +5065,33 @@ STATIC_INLINE int sig_match_fast(jl_value_t *arg1t, jl_value_t **args, jl_value_
     return 1;
 }
 
+// Like `sig_match_fast`, but also matching a type value to a `TypeEgal{T}` slot (which
+// `sig_match_fast` never matches, since no value has the type `TypeEgal{T}`)
+STATIC_INLINE int sig_match_fast_type(jl_value_t *F, jl_value_t **args, jl_value_t **sig, size_t n) JL_NOTSAFEPOINT
+{
+    for (size_t i = 0; i < n; i++) {
+        jl_value_t *decl = sig[i];
+        jl_value_t *a = i == 0 ? F : args[i - 1];
+        if (jl_is_typeegal(decl) ? !typeegal_match(jl_typeegal_T(decl), a) : jl_typeof(a) != decl)
+            return 0;
+    }
+    return 1;
+}
+
+// Whether `entry` can go in the call-site cache, which matches only by pointer comparison
+// (`isleafsig`), and `TypeEgal{T}` slots by egality (`isegalsig`): 0 for any other, since
+// rejecting one there would cost an `isa` on every probe of its slot, while the typemap already
+// splits those by typename; else 2 for one with a `TypeEgal{T}` slot, whose callee then keys the
+// cache by type values, and 1 for a leaf signature.
+static int call_cache_admissible(jl_typemap_entry_t *entry) JL_NOTSAFEPOINT
+{
+    if (entry->guardsigs != jl_emptysvec)
+        return 0;
+    if (entry->isleafsig)
+        return 1;
+    return entry->isegalsig ? 2 : 0;
+}
+
 _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 static _Atomic(uint8_t) pick_which[N_CALL_CACHE];
 #ifdef JL_GF_PROFILE
@@ -5091,23 +5118,29 @@ FORCE_INLINE void call_cache_indices(uint32_t callsite, uint32_t cache_idx[3]) J
 
 // Besides its call site's three slots, a call may find its entry in one slot keyed by the
 // callee alone (for a callee that mostly has one entry, from any site) and in two keyed by the
-// callee and the types of its first few arguments (for a site cycling through more types than
-// its slots hold). `nargs` includes F.
+// callee and its first few arguments (for a site cycling through more types than its slots
+// hold). A value's key is its type, or, for a callee whose entries can have a `TypeEgal{T}`
+// slot, a type value itself. `nargs` includes F.
 #define CALL_CACHE_HASH_ARGS 3
-FORCE_INLINE uint32_t call_cache_callee_index(jl_value_t *F) JL_NOTSAFEPOINT
+FORCE_INLINE uintptr_t call_cache_key(jl_value_t *a, int typevalues) JL_NOTSAFEPOINT
 {
-    uint64_t h = (uint64_t)(uintptr_t)jl_typeof(F) * 0x9e3779b97f4a7c15ull;
+    return typevalues && jl_is_type(a) ? (uintptr_t)a : (uintptr_t)jl_typeof(a);
+}
+
+FORCE_INLINE uint32_t call_cache_callee_index(jl_value_t *F, int typevalues) JL_NOTSAFEPOINT
+{
+    uint64_t h = (uint64_t)call_cache_key(F, typevalues) * 0x9e3779b97f4a7c15ull;
     return (uint32_t)(h >> 40) & (N_CALL_CACHE - 1);
 }
 
 FORCE_INLINE void call_cache_type_indices(jl_value_t *F, jl_value_t **args, uint32_t nargs,
-                                          uint32_t cache_idx[2]) JL_NOTSAFEPOINT
+                                          int typevalues, uint32_t cache_idx[2]) JL_NOTSAFEPOINT
 {
     const uint64_t k = 0x9e3779b97f4a7c15ull;
-    uint64_t h = ((uint64_t)(uintptr_t)jl_typeof(F) ^ nargs) * k;
+    uint64_t h = ((uint64_t)call_cache_key(F, typevalues) ^ nargs) * k;
     uint32_t i, n = nargs - 1 < CALL_CACHE_HASH_ARGS ? nargs - 1 : CALL_CACHE_HASH_ARGS;
     for (i = 0; i < n; i++)
-        h = (h ^ (uint64_t)(uintptr_t)jl_typeof(args[i])) * k;
+        h = (h ^ call_cache_key(args[i], typevalues)) * k;
     uint32_t x = (uint32_t)(h >> 32);
     cache_idx[0] = x & (N_CALL_CACHE - 1);
     cache_idx[1] = (x >> 16) & (N_CALL_CACHE - 1);
@@ -5135,7 +5168,15 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
         last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
         tt = arg_type_tuple(F, args, nargs);
     }
-    if (entry != NULL && entry->isleafsig && entry->guardsigs == jl_emptysvec) {
+    int admissible = entry != NULL ? call_cache_admissible(entry) : 0;
+    if (admissible == 2) {
+        // (a builtin's entry is never admitted, and its hint holds an index instead)
+        jl_datatype_t *ft = (jl_datatype_t*)jl_typeof(F);
+        uint8_t hint = jl_atomic_load_relaxed(&ft->dispatch_hint);
+        if (!(hint & (DISPATCH_HINT_TYPE_VALUES | DISPATCH_HINT_BUILTIN)))
+            jl_atomic_store_relaxed(&ft->dispatch_hint, hint | DISPATCH_HINT_TYPE_VALUES);
+    }
+    if (admissible) {
         // put the entry into the cache if it's valid for a leafsig lookup,
         // using pick_which to slightly randomize where it ends up
         // (intentionally not atomically synchronized, since we're just using it for randomness)
@@ -5145,8 +5186,10 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
         jl_atomic_store_release(&call_cache[cache_idx[which % 3]], entry);
         // and in the callee's slot and one of the two slots by type
         uint32_t type_idx[2];
-        jl_atomic_store_release(&call_cache[call_cache_callee_index(F)], entry);
-        call_cache_type_indices(F, args, nargs, type_idx);
+        uint8_t hint = jl_atomic_load_relaxed(&((jl_datatype_t*)jl_typeof(F))->dispatch_hint);
+        int typevalues = hint & DISPATCH_HINT_TYPE_VALUES;
+        jl_atomic_store_release(&call_cache[call_cache_callee_index(F, typevalues)], entry);
+        call_cache_type_indices(F, args, nargs, typevalues, type_idx);
         which = jl_atomic_load_relaxed(&pick_which[type_idx[0]]) + 1;
         jl_atomic_store_relaxed(&pick_which[type_idx[0]], which);
         jl_atomic_store_release(&call_cache[type_idx[which & 1]], entry);
@@ -5216,6 +5259,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     jl_typemap_entry_t *entry;
     jl_method_instance_t *mfunc;
     uint8_t hint = jl_atomic_load_relaxed(&((jl_datatype_t*)FT)->dispatch_hint);
+    int typevalues; // (a builtin's hint holds an index instead)
     if (__unlikely(hint & DISPATCH_HINT_BUILTIN)) {
         if (for_call) {
 #ifdef JL_TRACE
@@ -5226,13 +5270,16 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
         }
         goto lookup;
     }
+    typevalues = hint & DISPATCH_HINT_TYPE_VALUES;
     uint32_t cache_idx[4];
     call_cache_indices(callsite, cache_idx);
     // check each cache entry to see if it matches
 #define LOOP_BODY(_i) do { \
             entry = jl_atomic_load_relaxed(&call_cache[cache_idx[_i]]); \
             if (entry && nargs == jl_svec_len(entry->sig->parameters) && \
-                sig_match_fast(FT, args, jl_svec_data(entry->sig->parameters), nargs) && \
+                (entry->isleafsig ? \
+                    sig_match_fast(FT, args, jl_svec_data(entry->sig->parameters), nargs) : \
+                    sig_match_fast_type(F, args, jl_svec_data(entry->sig->parameters), nargs)) && \
                 world >= jl_atomic_load_relaxed(&entry->min_world) && world <= jl_atomic_load_relaxed(&entry->max_world)) { \
                 goto have_entry; \
             } \
@@ -5240,9 +5287,9 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     LOOP_BODY(0);
     LOOP_BODY(1);
     LOOP_BODY(2);
-    cache_idx[3] = call_cache_callee_index(F);
+    cache_idx[3] = call_cache_callee_index(F, typevalues);
     LOOP_BODY(3);
-    call_cache_type_indices(F, args, nargs, cache_idx);
+    call_cache_type_indices(F, args, nargs, typevalues, cache_idx);
     LOOP_BODY(0);
     LOOP_BODY(1);
 #undef LOOP_BODY
