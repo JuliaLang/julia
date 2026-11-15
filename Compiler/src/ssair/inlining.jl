@@ -365,6 +365,12 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                          item::InliningTodo, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     # Ok, do the inlining here
     inlined_at = compact.result[idx][:line]
+    if compact.result.name !== nothing
+        # Tag inlinee variables with their owner
+        owner = ssaname_owner(item.di.def)
+        set_ssaname_owner!(item.ir.stmts, owner)
+        set_ssaname_owner!(item.ir.new_nodes.stmts, owner)
+    end
     ssa_substitute = ir_prepare_inlining!(InsertHere(compact), compact, item.ir, item.spec_info, item.di, item.mi, inlined_at, argexprs)
     boundscheck = has_flag(compact.result[idx], IR_FLAG_INBOUNDS) ? :off : boundscheck
 
@@ -667,6 +673,12 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                     compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, item, boundscheck, state.todo_bbs)
                 elseif isa(item, UnionSplit)
                     compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, item, boundscheck, state.todo_bbs, interp)
+                end
+                if compact.result.name !== nothing
+                    # Move the call's names to the inlined return value
+                    retval = compact.ssa_rename[old_idx]
+                    (isa(retval, SSAValue) && retval.id != idx) && transfer_ssaname!(compact, compact.result[idx], retval)
+                    set_ssaname!(compact.result[idx], nothing)
                 end
                 compact[idx] = nothing
                 refinish && finish_current_bb!(compact, 0)

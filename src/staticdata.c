@@ -2901,6 +2901,7 @@ static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, jl_code_
     }
     strip_slotnames(ci->slotnames, jl_array_len(ci->slotnames));
     jl_gc_write(ci, ci->debuginfo, jl_debuginfo_t, jl_nulldebuginfo);
+    jl_gc_write(ci, ci->ssanames, jl_value_t, jl_nothing);
     jl_value_t *ret = (jl_value_t*)ci;
     if (compressed)
         ret = (jl_value_t*)jl_compress_ir(m, ci);

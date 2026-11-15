@@ -397,6 +397,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_code_info_t {
     jl_array_t *slotflags;  // local var bit flags
     // the following is a deprecated property (not preserved by compression)
     jl_value_t *slottypes; // inferred types of slots
+    jl_value_t *ssanames; // source variable names per statement (or nothing)
     // more inferred data:
     jl_value_t *rettype; // return type relevant for fptr
     jl_method_instance_t *parent; // context (after inference, otherwise nothing)

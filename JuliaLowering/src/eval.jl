@@ -632,6 +632,7 @@ function to_code_info(ex::SyntaxTree)
     # uninferred code.
     ssavaluetypes      = length(stmts) # Why does the runtime code do this?
     slottypes          = nothing
+    ssanames           = nothing
     parent             = nothing
     method_for_inference_limit_heuristics = nothing
     edges               = nothing
@@ -651,6 +652,7 @@ function to_code_info(ex::SyntaxTree)
         slotnames,
         slotflags,
         slottypes,
+        ssanames,
         rettype,
         parent,
         edges,

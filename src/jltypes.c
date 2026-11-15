@@ -4027,7 +4027,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(23,
+                        jl_perm_symsvec(24,
                             "code",
                             "debuginfo",
                             "ssavaluetypes",
@@ -4035,6 +4035,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "slotnames",
                             "slotflags",
                             "slottypes",
+                            "ssanames",
                             "rettype",
                             "parent",
                             "edges",
@@ -4051,13 +4052,14 @@ void jl_init_types(void) JL_GC_DISABLED
                             "constprop",
                             "purity",
                             "inlining_cost"),
-                        jl_svec(23,
+                        jl_svec(24,
                             jl_array_any_type,
                             jl_debuginfo_type,
                             jl_any_type,
                             jl_array_uint32_type,
                             jl_array_symbol_type,
                             jl_array_uint8_type,
+                            jl_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
@@ -4076,7 +4078,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_uint16_type,
                             jl_uint16_type),
                         jl_emptysvec,
-                        0, 1, 22);
+                        0, 1, 23);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
