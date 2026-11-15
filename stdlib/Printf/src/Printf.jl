@@ -490,7 +490,7 @@ tofloat(x::Base.IEEEFloat) = x
 tofloat(x::BigFloat) = x
 
 _snprintf(ptr, siz, str, arg) =
-    @ccall Base.MPFR.libmpfr.mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
+    @ccall gc_safe=true Base.MPFR.libmpfr.mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
                                              arg::Ref{BigFloat})::Cint
 
 # Arbitrary constant for a maximum number of bytes we want to output for a BigFloat.
