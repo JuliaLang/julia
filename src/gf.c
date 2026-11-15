@@ -5066,29 +5066,46 @@ static _Atomic(uint8_t) pick_which[N_CALL_CACHE];
 size_t ncalls;
 void call_cache_stats()
 {
-    int pick_which_stat[4] = {0, 0, 0, 0};
     int i, count = 0;
     for (i = 0; i < N_CALL_CACHE; i++) {
         if (jl_atomic_load_relaxed(&call_cache[i]))
             count++;
-        ++pick_which_stat[jl_atomic_load_relaxed(&pick_which[i]) & 3];
     }
-    jl_safe_printf("cache occupied: %d / %d; pick_which stats: {%d, %d, %d, %d}\n",
-            count, N_CALL_CACHE,
-            pick_which_stat[0], pick_which_stat[1], pick_which_stat[2], pick_which_stat[3]);
+    jl_safe_printf("cache occupied: %d / %d\n", count, N_CALL_CACHE);
 }
 #endif
 
-// compute the entry hashes
-// use different parts of the value
-// so that a collision across all of
-// them is less likely
-STATIC_INLINE void call_cache_indices(uint32_t callsite, uint32_t cache_idx[4]) JL_NOTSAFEPOINT
+// a call site's three slots, from different parts of its hash, so that a collision
+// across all of them is less likely
+FORCE_INLINE void call_cache_indices(uint32_t callsite, uint32_t cache_idx[3]) JL_NOTSAFEPOINT
 {
     cache_idx[0] = (callsite) & (N_CALL_CACHE - 1);
     cache_idx[1] = (callsite >> 8) & (N_CALL_CACHE - 1);
     cache_idx[2] = (callsite >> 16) & (N_CALL_CACHE - 1);
-    cache_idx[3] = (callsite >> 24 | callsite << 8) & (N_CALL_CACHE - 1);
+}
+
+// Besides its call site's three slots, a call may find its entry in one slot keyed by the
+// callee alone (for a callee that mostly has one entry, from any site) and in two keyed by the
+// callee and the types of its first few arguments (for a site cycling through more types than
+// its slots hold). `nargs` includes F.
+#define CALL_CACHE_HASH_ARGS 3
+FORCE_INLINE uint32_t call_cache_callee_index(jl_value_t *F) JL_NOTSAFEPOINT
+{
+    uint64_t h = (uint64_t)(uintptr_t)jl_typeof(F) * 0x9e3779b97f4a7c15ull;
+    return (uint32_t)(h >> 40) & (N_CALL_CACHE - 1);
+}
+
+FORCE_INLINE void call_cache_type_indices(jl_value_t *F, jl_value_t **args, uint32_t nargs,
+                                          uint32_t cache_idx[2]) JL_NOTSAFEPOINT
+{
+    const uint64_t k = 0x9e3779b97f4a7c15ull;
+    uint64_t h = ((uint64_t)(uintptr_t)jl_typeof(F) ^ nargs) * k;
+    uint32_t i, n = nargs - 1 < CALL_CACHE_HASH_ARGS ? nargs - 1 : CALL_CACHE_HASH_ARGS;
+    for (i = 0; i < n; i++)
+        h = (h ^ (uint64_t)(uintptr_t)jl_typeof(args[i])) * k;
+    uint32_t x = (uint32_t)(h >> 32);
+    cache_idx[0] = x & (N_CALL_CACHE - 1);
+    cache_idx[1] = (x >> 16) & (N_CALL_CACHE - 1);
 }
 
 // The lookup beyond the call-site cache, kept out of line so that the frame of
@@ -5099,7 +5116,7 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
 {
     // recomputed rather than passed in: taking the address of the caller's array
     // would put it on the stack and add a stack-protector check to `jl_apply_generic`
-    uint32_t cache_idx[4];
+    uint32_t cache_idx[3];
     call_cache_indices(callsite, cache_idx);
     jl_typemap_entry_t *entry = NULL;
     jl_tupletype_t *tt = NULL;
@@ -5118,9 +5135,16 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
         // using pick_which to slightly randomize where it ends up
         // (intentionally not atomically synchronized, since we're just using it for randomness)
         // TODO: use the thread's `cong` instead as a source of randomness
-        int which = jl_atomic_load_relaxed(&pick_which[cache_idx[0]]) + 1;
+        uint8_t which = jl_atomic_load_relaxed(&pick_which[cache_idx[0]]) + 1;
         jl_atomic_store_relaxed(&pick_which[cache_idx[0]], which);
-        jl_atomic_store_release(&call_cache[cache_idx[which & 3]], entry);
+        jl_atomic_store_release(&call_cache[cache_idx[which % 3]], entry);
+        // and in the callee's slot and one of the two slots by type
+        uint32_t type_idx[2];
+        jl_atomic_store_release(&call_cache[call_cache_callee_index(F)], entry);
+        call_cache_type_indices(F, args, nargs, type_idx);
+        which = jl_atomic_load_relaxed(&pick_which[type_idx[0]]) + 1;
+        jl_atomic_store_relaxed(&pick_which[type_idx[0]], which);
+        jl_atomic_store_release(&call_cache[type_idx[which & 1]], entry);
     }
     if (entry && for_call) {
         // mfunc was found in slow path, so log --trace-dispatch
@@ -5211,7 +5235,11 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     LOOP_BODY(0);
     LOOP_BODY(1);
     LOOP_BODY(2);
+    cache_idx[3] = call_cache_callee_index(F);
     LOOP_BODY(3);
+    call_cache_type_indices(F, args, nargs, cache_idx);
+    LOOP_BODY(0);
+    LOOP_BODY(1);
 #undef LOOP_BODY
 lookup:
     mfunc = jl_lookup_generic_slow(F, args, nargs, callsite, world, for_call, entry_out);
