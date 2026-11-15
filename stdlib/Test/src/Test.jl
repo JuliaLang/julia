@@ -2305,10 +2305,12 @@ function testset_forloop(args, testloop, source)
     if desc === nothing
         # No description provided. Generate from the loop variable names
         v = loopvars[1].args[1]
-        desc = Expr(:string, "$v = ", esc(v)) # first variable
-        for l = loopvars[2:end]
+        desc = Expr(:string)
+        for l = loopvars
             v = l.args[1]
-            push!(desc.args, ", $v = ")
+            occursin(r"^_+$", string(v)) && continue
+            isempty(desc.args) || push!(desc.args, ", ")
+            push!(desc.args, "$v = ")
             push!(desc.args, esc(v))
         end
     end
