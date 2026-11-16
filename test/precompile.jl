@@ -2821,6 +2821,44 @@ precompile_test_harness("Constprop CodeInstance invalidation") do load_path
     end
 end
 
+precompile_test_harness("Invalidation through a cached recursion cycle") do load_path
+    write(joinpath(load_path, "CycleUp.jl"),
+        """
+        module CycleUp
+            struct Thing
+                payload::Any
+            end
+            describe(x) = 1
+            inner(t::Thing) = describe(t.payload)
+            function f(t::Thing; flag = false)
+                t.payload isa Thing && return f(t.payload; flag = flag)
+                return inner(t)
+            end
+        end
+        """)
+    write(joinpath(load_path, "CycleMid.jl"),
+        """
+        module CycleMid
+            using CycleUp
+            go(t::CycleUp.Thing, @nospecialize(flag)) = CycleUp.f(t; flag = flag)
+            ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
+            go(CycleUp.Thing(CycleUp.Thing(1)), Base.inferencebarrier(false))
+            ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
+        end
+        """)
+    Base.compilecache(Base.PkgId("CycleMid"))
+    @eval using CycleUp, CycleMid
+    @eval begin
+        struct CycleB2 end
+        CycleUp.describe(::CycleB2) = "three"
+        cycle_loose(t, @nospecialize(flag)) = CycleUp.f(t; flag = flag)
+    end
+    invokelatest() do
+        @test Base.infer_return_type(cycle_loose, (CycleUp.Thing, Any)) == Union{Int, String}
+        @test cycle_loose(CycleUp.Thing(CycleB2()), Base.inferencebarrier(false)) == "three"
+    end
+end
+
 precompile_test_harness("llvmcall validation") do load_path
     write(joinpath(load_path, "LLVMCall.jl"),
         """
