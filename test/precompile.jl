@@ -6203,6 +6203,91 @@ end
     end end
 end
 
+precompile_test_harness("@ccallable name conflicts") do load_path
+    # unrelated packages using the same name
+    for (name, val) in (("CCallableConflictA", 1), ("CCallableConflictD", 4))
+        write(joinpath(load_path, "$name.jl"),
+        """
+        module $name
+        Base.@ccallable ccallable_conflict()::Cint = Cint($val)
+        end
+        """)
+    end
+    # unrelated packages which define the same method, with the same name
+    write(joinpath(load_path, "CCallableConflictE.jl"),
+    """
+    module CCallableConflictE
+    function shared end
+    end
+    """)
+    for (name, val) in (("CCallableConflictF", 6), ("CCallableConflictG", 7))
+        write(joinpath(load_path, "$name.jl"),
+        """
+        module $name
+        using CCallableConflictE
+        Base.@ccallable "ccallable_shared" CCallableConflictE.shared()::Cint = Cint($val)
+        end
+        """)
+    end
+
+    function run_script(script; output_o::Bool)
+        mktempdir() do dir
+            cmd = `$(Base.julia_cmd()) --startup-file=no --color=no`
+            if output_o
+                cmd = `$cmd --experimental --trim=unsafe --strip-ir --strip-metadata --output-o $(joinpath(dir, "out.o"))`
+            end
+            cmd = addenv(`$cmd -e $script`,
+                         "JULIA_LOAD_PATH" => join(LOAD_PATH, Sys.iswindows() ? ';' : ':'),
+                         "JULIA_DEPOT_PATH" => join(DEPOT_PATH, Sys.iswindows() ? ';' : ':'))
+            io = IOBuffer()
+            ok = success(pipeline(cmd; stdout=io, stderr=io))
+            return ok, String(take!(io))
+        end
+    end
+    # Packages which do not know about each other can be loaded together, since each
+    # package image exports its own symbols
+    script = "using CCallableConflictA, CCallableConflictD\n"
+    ok, output = run_script(script; output_o=false)
+    @test ok
+    @test !occursin("@ccallable", output)
+    # but they cannot both be put in the same image
+    ok, output = run_script(script * "Base.Compiler.add_ccallable_entrypoints!()\n"; output_o=true)
+    @test !ok
+    @test occursin("@ccallable: the C symbol \"ccallable_conflict\" is defined by both", output)
+    @test occursin("`CCallableConflictA.ccallable_conflict`", output)
+    @test occursin("`CCallableConflictD.ccallable_conflict`", output)
+    # unless only one of them is selected for it
+    ok, output = run_script(script * "Base.Experimental.entrypoint(CCallableConflictA.ccallable_conflict, ())\n"; output_o=true)
+    @test ok
+    @test !occursin("@ccallable", output)
+    # A method which a package replaces when it is loaded is not a conflict
+    script = """
+        using CCallableConflictF, CCallableConflictG
+        Base.Compiler.add_ccallable_entrypoints!()
+        """
+    ok, output = run_script(script; output_o=true)
+    @test ok
+    @test !occursin("@ccallable", output)
+    # A method which was replaced does not conflict with its replacement
+    ok, output = run_script("""
+        Base.@ccallable ccallable_replaced()::Cint = Cint(1)
+        Base.@ccallable ccallable_replaced()::Cint = Cint(2)
+        Base.Compiler.add_ccallable_entrypoints!()
+        """; output_o=true)
+    @test ok
+    @test !occursin("@ccallable", output)
+    # ... including if it was registered as an entrypoint before being replaced
+    ok, output = run_script("""
+        Base.@ccallable "ccallable_stale" f()::Cint = Cint(1)
+        Base.Experimental.entrypoint(f, ())
+        f() = Cint(2)
+        Base.@ccallable "ccallable_stale" g()::Cint = Cint(3)
+        Base.Compiler.add_ccallable_entrypoints!()
+        """; output_o=true)
+    @test ok
+    @test !occursin("@ccallable", output)
+end
+
 finish_precompile_test!()
 if original_num_precompile_tasks === nothing
     delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")

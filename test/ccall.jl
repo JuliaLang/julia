@@ -2399,3 +2399,33 @@ let f() = ccall((:foo, "libnonexistent"), Cvoid, ())
     @test m !== nothing
     @test occursin(Regex("attributes #$(m[1]) = [^\n]*\"frame-pointer\"=\"all\""), ir)
 end
+
+# Methods which were deleted or replaced are not exported anymore when generating an image
+module CCallableStale
+using Test
+Base.@ccallable "ccallable_stale_name" f()::Cint = Cint(1)
+const replaced = only(methods(f))
+f() = Cint(2)
+Base.@ccallable "ccallable_stale_name" g()::Cint = Cint(3)
+Base.@ccallable "ccallable_deleted_name" h()::Cint = Cint(4)
+const deleted = only(methods(h))
+Base.delete_method(deleted)
+@test isdefined(replaced, :ccallable) && isdefined(deleted, :ccallable)
+const worklist = Any[]
+Base.Compiler.enqueue_specializations!(false, Any[replaced, only(methods(f)), only(methods(g)), deleted], worklist)
+@test filter(x -> x isa Core.SimpleVector, worklist) == Any[only(methods(g)).ccallable]
+# Two methods cannot be exported with the same name
+Base.@ccallable "ccallable_stale_name" k()::Cint = Cint(5)
+@test_throws Base.Compiler.CCallableConflict Base.Compiler.enqueue_specializations!(
+    false, Any[only(methods(g)), only(methods(k))], Any[])
+@test try
+    Base.Compiler.enqueue_specializations!(false, Any[only(methods(g)), only(methods(k))], Any[])
+catch exc
+    occursin("the C symbol \"ccallable_stale_name\" is defined by both", exc.msg)
+end
+# ... including when one of the names is the default one
+Base.@ccallable "ccallable_default_name" l()::Cint = Cint(6)
+Base.@ccallable ccallable_default_name()::Cint = Cint(7)
+@test_throws Base.Compiler.CCallableConflict Base.Compiler.enqueue_specializations!(
+    false, Any[only(methods(l)), only(methods(ccallable_default_name))], Any[])
+end

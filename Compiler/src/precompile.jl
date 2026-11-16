@@ -272,7 +272,41 @@ function infer_all_method_defs!(all::Bool, allmeths, world::UInt, worklist)
     end
 end
 
+struct CCallableConflict <: Exception
+    msg::String
+end
+
+# Image generation runs while exiting, where an exception would be reported as a fatal
+# error with a backtrace of the compiler. Print the message and exit instead.
+function exit_on_ccallable_conflict(@nospecialize(exc))
+    isa(exc, CCallableConflict) || rethrow()
+    Core.println(Core.stderr, "ERROR: ", exc.msg)
+    invokelatest(invokelatest(getglobal, Base, :exit), 1)
+end
+
+# Add the C entry point requested for `method` with `@ccallable` to `worklist`, unless the
+# method has been deleted or replaced since. The output can only define each C symbol once,
+# so it is an error for two methods to request the same name.
+function enqueue_ccallable!(worklist, names::IdDict{Symbol,Method}, method::Method)
+    isdefined(method, :ccallable) || return
+    ccallable = method.ccallable
+    ccallable === nothing && return
+    ReinferUtils.method_is_latest_which(method) || return
+    ft = unwrap_unionall(ccallable[2]).parameters[1]::DataType
+    name = length(ccallable) > 2 ? Symbol(ccallable[3]::String) : ft.name.singletonname
+    prev = get(names, name, method)
+    if prev !== method
+        throw(CCallableConflict(string("@ccallable: the C symbol \"", name, "\" is defined by both `",
+            prev.module, ".", prev.name, "` at ", prev.file, ":", prev.line, " and `",
+            method.module, ".", method.name, "` at ", method.file, ":", method.line)))
+    end
+    names[name] = method
+    push!(worklist, ccallable)
+    return
+end
+
 function enqueue_specializations!(all::Bool, newmethods, worklist)
+    ccallable_names = IdDict{Symbol,Method}()
     for method in newmethods
         method = method::Method
 
@@ -302,9 +336,7 @@ function enqueue_specializations!(all::Bool, newmethods, worklist)
         end
 
         # Handle ccallable methods
-        if isdefined(method, :ccallable)
-            push!(worklist, method.ccallable)
-        end
+        enqueue_ccallable!(worklist, ccallable_names, method)
     end
 end
 
@@ -399,7 +431,11 @@ function compile_and_emit_native(worlds::Vector{UInt},
                 end
             end
         end
-        enqueue_specializations!(all, newmethods, specialization_worklist)
+        try
+            enqueue_specializations!(all, newmethods, specialization_worklist)
+        catch exc
+            exit_on_ccallable_conflict(exc)
+        end
 
         # Process the specialization worklist and prepare final tocompile worklist
         tocompile = []
@@ -417,6 +453,7 @@ function compile_and_emit_native(worlds::Vector{UInt},
     else # trimming mode
         # array of MethodInstances and ccallable aliases to include in the output
         tocompile = []
+        ccallable_names = IdDict{Symbol,Method}()
 
         # Process entrypoint method instances
         for mi in _entrypoint_mis
@@ -424,8 +461,10 @@ function compile_and_emit_native(worlds::Vector{UInt},
             push!(tocompile, mi)
 
             # Check if this method has a ccallable annotation
-            if isdefined(mi.def, :ccallable) && mi.def.ccallable !== nothing
-                push!(tocompile, mi.def.ccallable)
+            try
+                enqueue_ccallable!(tocompile, ccallable_names, mi.def::Method)
+            catch exc
+                exit_on_ccallable_conflict(exc)
             end
         end
 

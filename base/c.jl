@@ -242,6 +242,9 @@ Make the annotated function be callable from C using its name. This can, for exa
 be used to expose functionality as a C API when creating a custom Julia sysimage.
 
 If the first argument is a string, it is used as the external name of the function.
+
+The external name must be unique: generating an image in which two methods are
+exported with the same name is an error.
 """
 macro ccallable(def)
     expand_ccallable(nothing, nothing, def)
