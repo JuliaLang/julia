@@ -1,9 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Run Evaluate Print Loop (REPL)
+    REPL
 
-Example minimal code
+The read-eval-print loop: Julia's interactive prompt, with its modes for Julia code, help
+(`?`), the shell (`;`) and packages (`]`), and the line editor behind them. It starts when
+`julia` runs without a script. This starts one from code:
 
 ```julia
 import REPL

@@ -1,6 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 """
-The `Printf` module provides formatted output functions similar to the C standard library's `printf`. It allows formatted printing to an output stream or to a string.
+    Printf
+
+Formatted output in the style of C's `printf`. [`@printf`](@ref) prints and
+[`@sprintf`](@ref) returns a string, while [`Printf.Format`](@ref) and
+[`Printf.format`](@ref) work with formats made at run time.
 """
 module Printf
 

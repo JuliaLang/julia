@@ -1,7 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Interface to [libgit2](https://libgit2.org/).
+    LibGit2
+
+Bindings to [libgit2](https://libgit2.org/), a library for working with git repositories,
+such as [`LibGit2.clone`](@ref) and [`LibGit2.GitRepo`](@ref).
 """
 module LibGit2
 

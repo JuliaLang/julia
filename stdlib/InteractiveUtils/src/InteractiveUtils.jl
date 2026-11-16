@@ -1,9 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-The `InteractiveUtils` module provides utilities for interactive use of Julia,
-such as code introspection and clipboard access.
-It is intended for interactive work and is loaded automatically in interactive mode.
+    InteractiveUtils
+
+Tools for interactive use of Julia: code introspection such as [`@which`](@ref) and
+[`@code_warntype`](@ref), opening source with [`edit`](@ref) and [`less`](@ref),
+[`versioninfo`](@ref), [`subtypes`](@ref), and [`clipboard`](@ref) access. It is loaded
+automatically in interactive sessions.
 """
 module InteractiveUtils
 

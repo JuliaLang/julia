@@ -1,9 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Provide serialization of Julia objects via the functions
-* [`serialize`](@ref)
-* [`deserialize`](@ref)
+    Serialization
+
+Writing Julia objects to a stream with [`serialize`](@ref), and reading them back with
+[`deserialize`](@ref). Newer Julia releases can read what older 1.x releases wrote, but not
+the other way round.
 """
 module Serialization
 
