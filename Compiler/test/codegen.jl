@@ -1687,3 +1687,85 @@ let v = Any[typemax(Int)], w = Any[nothing]
     recopy_union!(w, v, 1000)
     @test w[1] === 1000
 end
+
+# At debug info level 2, debuggers are told which values the source variables of
+# optimized code have, including the variables of inlined functions. The optimizer
+# records nothing for this at the default level.
+@testset "debug info for the local variables of optimized code" begin
+    script = """
+        using InteractiveUtils
+        struct DbgVarsP; a::Int; b::Float64; end
+        @inline function dbgvars_g(p::DbgVarsP, k::Int)
+            q = p.a * k
+            r = q + 1
+            return r * p.b
+        end
+        function dbgvars_f(a::Vector{Float64}, v::Vector{Any}, n::Int)
+            s = 0.0
+            for i in 1:n
+                x = a[i] * 2.5
+                s += x
+            end
+            t = (n, s)
+            w = n > 2 ? t : (0, 0.0)
+            y = dbgvars_g(DbgVarsP(n, s), n)
+            z = v[1]
+            n = n + 1
+            return (s, y, z, n, w)
+        end
+        tt = (Vector{Float64}, Vector{Any}, Int)
+        ci = code_typed(dbgvars_f, tt)[1][1]
+        println(ci.ssanames isa Vector{Any} && length(ci.ssanames) == length(ci.code), " ",
+                any(x -> Meta.isexpr(x, :meta), ci.code))
+        code_llvm(stdout, dbgvars_f, tt; debuginfo=:source, raw=true, optimize=false, dump_module=true)
+        """
+    getir(level) = read(`$(Base.julia_cmd()) $level --color=no --startup-file=no -e $script`, String)
+    # the variables in the scope of the function `fname` that have a debug value,
+    # with the metadata of their types
+    function described_variables(ir, fname)
+        nodes = Dict{String,String}()
+        for m in eachmatch(r"^!(\d+) = (.*)$"m, ir)
+            nodes[m[1]] = m[2]
+        end
+        scopes = String[id for (id, node) in nodes if startswith(node, "distinct !DISubprogram(name: \"$fname\",")]
+        vars = Dict{String,Tuple{String,String}}()
+        for (id, node) in nodes
+            m = match(r"^!DILocalVariable\(name: \"([^\"]*)\"(?:, arg: \d+)?, scope: !(\d+),.*type: !(\d+)", node)
+            (m !== nothing && m[2] in scopes) || continue
+            vars[id] = (m[1], nodes[m[3]])
+        end
+        described = Dict{String,Vector{String}}()
+        for m in eachmatch(r"#dbg_value\([^\n]*?, !(\d+), !DIExpression", ir)
+            haskey(vars, m[1]) || continue
+            name, type = vars[m[1]]
+            types = get!(Vector{String}, described, name)
+            type in types || push!(types, type)
+        end
+        return described
+    end
+    hastype(vars, name, type) = haskey(vars, name) && length(vars[name]) == 1 && occursin(type, only(vars[name]))
+    let ir = getir("-g2")
+        @test first(split(ir, '\n')) == "true false"
+        f = described_variables(ir, "dbgvars_f")
+        @test hastype(f, "s", "name: \"Float64\"")
+        @test hastype(f, "i", "name: \"Int64\"")
+        @test hastype(f, "x", "name: \"Float64\"")
+        @test hastype(f, "y", "name: \"Float64\"")
+        @test hastype(f, "t", "name: \"Tuple\"")
+        @test hastype(f, "w", "name: \"Tuple\"")
+        @test hastype(f, "z", "DW_TAG_pointer_type") # a boxed value
+        @test hastype(f, "n", "name: \"Int64\"") # an argument that is assigned again
+        # the variables of the inlined function are in its scope, not in the caller's
+        g = described_variables(ir, "dbgvars_g;")
+        @test hastype(g, "q", "name: \"Int64\"")
+        @test hastype(g, "r", "name: \"Int64\"")
+        @test !haskey(f, "q") && !haskey(f, "r")
+        @test !haskey(g, "s") && !haskey(g, "y")
+    end
+    let ir = getir("-g1")
+        @test first(split(ir, '\n')) == "false false"
+        # `code_llvm` always asks for the debug info of level 2, which has the arguments
+        @test collect(keys(described_variables(ir, "dbgvars_f"))) == ["n"]
+        @test isempty(described_variables(ir, "dbgvars_g;"))
+    end
+end
