@@ -878,6 +878,10 @@ let s = Some("foo")
     @test !occursin("You attempted to index the type String", err_str)
 end
 
+# JuliaLang/julia#55900 diagnostic (not for merging): checks the backtraces below
+# against the frame-pointer chain. Prints lines starting with "W32BT".
+include(joinpath(@__DIR__, "w32bt", "diag_lib.jl"))
+
 # Execute backtrace once before checking formatting, see #38858
 backtrace()
 
@@ -886,6 +890,7 @@ backtrace()
     f28442(c) = g28442(c + 1)
     g28442(c) = c > 10000 ? (return backtrace()) : f28442(c+1)
     bt = f28442(1)
+    W32BT.report_layout("errorshow original long", "long", bt)
     io = IOBuffer()
     Base.show_backtrace(io, bt)
     output = split(String(take!(io)), '\n')
@@ -919,6 +924,7 @@ end
     g28442a(n) = 80 > n > 20 ? h28442a(n - 1) : f28442a(n - 1)
     h28442a(n) = n % 10 == 0 ? g28442a(n - 1) : h28442a(n - 1)
     bt = f28442a(100)
+    W32BT.report_layout("errorshow original nested", "nested", bt)
     io = IOBuffer()
     Base.show_backtrace(io, bt)
     output = split(String(take!(io)), '\n')
@@ -956,6 +962,25 @@ end
         @test lstrip(output[19])[1:5] == "[101]"
         @test lstrip(output[21])[1:5] == "[102]"
     end
+end
+
+# JuliaLang/julia#55900 diagnostic: the same recursions, in the same worker and
+# the same boxed-closure form, checked against the frame chain while the frames
+# are still live. Repeated, since the dropped frames vary.
+@testset "W32BT in-process check" begin
+    nbad = 0
+    for rep in 1:5
+        f28442a(n) = n ≤ 0 ? (bt = backtrace(); return W32BT.check("errorshow nested rep $rep", "nested", bt)) : g28442a(n - 1)
+        g28442a(n) = 80 > n > 20 ? h28442a(n - 1) : f28442a(n - 1)
+        h28442a(n) = n % 10 == 0 ? g28442a(n - 1) : h28442a(n - 1)
+        f28442(c) = g28442(c + 1)
+        g28442(c) = c > 10000 ? (bt = backtrace(); return W32BT.check("errorshow long rep $rep", "long", bt)) : f28442(c+1)
+        for r in (f28442a(100), f28442(1))
+            nbad += r.gaps > 0 || r.layout_bt != 0 || r.layout_own != 0
+            rep == 1 && println("W32BT [errorshow rep 1] nframes=$(r.nframes) chain=$(r.nchain) matched=$(r.matched) layout_bt=$(r.layout_bt) layout_own=$(r.layout_own) gap_lines=$(r.gaps)")
+        end
+    end
+    println("W32BT errorshow summary: $nbad of 10 in-process checks saw dropped frames or chain mismatches")
 end
 
 @testset "Long stacktrace printing - nested cycles" begin
