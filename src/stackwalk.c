@@ -776,11 +776,49 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
     if (!profile_abort_window_open(&abort_ptr))
         return 0;
     uv_mutex_lock(&jl_in_stackwalk);
-    BOOL result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
-        &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
+    // dbghelp has frame data only for code with FPO records. Without it, its x86
+    // walker guesses, and sometimes leaves a valid frame-pointer chain to scan the
+    // stack, dropping frames and inventing others (#55900). Julia code (JIT and
+    // images) and libjulia have no such records but always keep frame pointers, so
+    // follow the chain ourselves. The first frame of an asynchronous sample may
+    // be in a prologue, before the frame pointer is set up: leave it to dbghelp.
+    int use_fp = !from_signal_handler &&
+        !JuliaFunctionTableAccess64(GetCurrentProcess(), *ip - 1);
+    BOOL result;
+    if (!use_fp) {
+        DWORD64 pc0 = cursor->stackframe.AddrPC.Offset;
+        DWORD64 sp0 = cursor->stackframe.AddrStack.Offset;
+        result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
+            &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
+        // After a frame-pointer step, dbghelp may treat the frame as a first call
+        // and return it again instead of its caller.
+        if (result && cursor->stackframe.AddrPC.Offset == pc0 && cursor->stackframe.AddrStack.Offset == sp0)
+            result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
+                &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
+    }
     uv_mutex_unlock(&jl_in_stackwalk);
     if (!profile_abort_window_close(abort_ptr))
         return 0;
+    if (use_fp) {
+        // The saved frame pointer is at [fp] and the return address at [fp + 4].
+        uintptr_t fp = (uintptr_t)cursor->stackframe.AddrFrame.Offset;
+        if (fp < *sp || fp % sizeof(void*) != 0 || !readable_pointer((LPCVOID)fp) ||
+            !readable_pointer((LPCVOID)(fp + sizeof(void*))))
+            return 0;
+        DWORD32 caller_fp = ((DWORD32*)fp)[0];
+        DWORD32 ra = ((DWORD32*)fp)[1];
+        memset(&cursor->stackframe, 0, sizeof(cursor->stackframe));
+        cursor->stackframe.AddrPC.Offset = ra;
+        cursor->stackframe.AddrStack.Offset = fp + 2 * sizeof(void*);
+        cursor->stackframe.AddrFrame.Offset = caller_fp;
+        cursor->stackframe.AddrPC.Mode = AddrModeFlat;
+        cursor->stackframe.AddrStack.Mode = AddrModeFlat;
+        cursor->stackframe.AddrFrame.Mode = AddrModeFlat;
+        cursor->context.Eip = ra;
+        cursor->context.Esp = fp + 2 * sizeof(void*);
+        cursor->context.Ebp = caller_fp;
+        return ra != 0;
+    }
     return result;
 #else
     *ip = (uintptr_t)cursor->Rip;
