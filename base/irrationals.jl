@@ -161,6 +161,26 @@ function _rationalize_irrational(::Type{T}, x::AbstractIrrational, tol::Real) wh
         return rationalize(T, big(x), tol)
     end
 end
+"""
+    rationalize([T<:Integer=Int,] x::AbstractIrrational; tol::Real=eps(BigFloat, x)/2)
+
+Approximate `x` as a [`Rational`](@ref) number with components of the given
+integer type. The result will differ from `x` by no more than `tol` as long
+as it fits in `T`, otherwise the best semi-convergent representable by `T`
+is returned.
+
+# Examples
+```jldoctest
+julia> rationalize(pi)
+2646693125139304345//842468587426513207
+
+julia> rationalize(pi, tol=0.01)
+22//7
+
+julia> rationalize(BigInt, pi)
+256839923861488782607902790348837497679//81754686931803956266412424933874257924
+```
+"""
 function rationalize(::Type{T}, x::AbstractIrrational; tol::Union{Nothing,Real}=nothing) where {T<:Integer}
     return _rationalize_irrational(T, x, tol)
 end
@@ -331,6 +351,27 @@ end
 inv(x::AbstractIrrational) = 1/x
 
 eps(x::AbstractIrrational) = eps(BigFloat, x)
+"""
+    eps([T<:AbstractFloat=BigFloat,], x::AbstractIrrational)
+
+Return the *unit in last place* (ulp) of `T(x)`, that is, the distance between
+`T(x)` and the next representable floating-point value of type `T`.
+
+This is equivalent to `eps(T(x))`, but without the unnecessary overhead of
+computing the full expansion of `x` at the precision of `T`.
+
+# Examples
+```jldoctest
+julia> eps(pi)
+3.454467422037777850154540745120159828446400145774512554009481388067436721264971e-77
+
+julia> eps(pi) == eps(BigFloat, pi) == eps(BigFloat(pi))
+true
+
+julia> eps(Float64, pi)
+4.440892098500626e-16
+```
+"""
 function eps(::Type{T}, x::AbstractIrrational) where {T<:AbstractFloat}
     return T(2)^(exponent(x) - precision(T) + 1)
 end
