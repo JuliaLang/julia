@@ -1596,6 +1596,9 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
 
     iterateresult = Future{AbstractIterationResult}()
     call1future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[itft, itertype]), StmtInfo(true, false), sv)::Future
+    # Don't capture `itertype` directly in the closures below: closure conversion would make
+    # it a type parameter, specializing the continuations on every iterated type.
+    itertyperef = RefValue{Any}(itertype)
     function inferiterate(interp, sv)
         call1 = call1future[]
         stateordonet = call1.rt
@@ -1651,7 +1654,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
                 valtype = getfield_tfunc(𝕃ᵢ, stateordonet, Const(1))
                 push!(ret, valtype)
                 statetype = nstatetype
-                call2future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true, false), sv)::Future
+                call2future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertyperef[], statetype]), StmtInfo(true, false), sv)::Future
                 if !isready(call2future)
                     nextstate = 0x1
                     return false
@@ -1693,7 +1696,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
                 end
                 valtype = tmerge(valtype, nounion.parameters[1])
                 statetype = tmerge(statetype, nounion.parameters[2])
-                call2future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true, false), sv)::Future
+                call2future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertyperef[], statetype]), StmtInfo(true, false), sv)::Future
                 if !isready(call2future)
                     nextstate = 0x2
                     return false
