@@ -167,7 +167,8 @@ outside that syntax, such as shell functions or `$(...)` command substitution, a
 available. Three commands are handled by the REPL itself, since they change the state of the
 Julia process: `cd dir` changes Julia's working directory (`cd -` returns to the previous one),
 `export NAME=value` sets an environment variable that later commands inherit, and `unset NAME`
-removes one.
+removes one. These commands are available only in shell mode: a command literal run with
+[`run`](@ref), such as ``` `cd dir` ```, runs a program with that name like any other command.
 
 Pipelines, redirection and interpolation work as they do in backticks. In addition, commands can
 be joined with `&&`, `||` and `;`, as in a shell: `a && b` runs `b` only if `a` succeeds,
