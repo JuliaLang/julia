@@ -1,7 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Low level module for mmap (memory mapping of files).
+    Mmap
+
+Memory-mapped files. [`Mmap.mmap`](@ref) maps a file, or anonymous memory, into an array,
+and [`Mmap.sync!`](@ref) writes changes back to the file.
 """
 module Mmap
 

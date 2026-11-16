@@ -1,7 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Provide the [`SharedArray`](@ref) type. It represents an array, which is shared across multiple processes, on a single machine.
+    SharedArrays
+
+The [`SharedArray`](@ref) type: an array that several processes on one machine share,
+for parallel work with `Distributed`.
 """
 module SharedArrays
 

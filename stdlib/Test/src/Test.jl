@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Simple unit testing functionality:
+    Test
 
-* `@test`
-* `@test_throws`
+Unit testing. [`@test`](@ref) and [`@test_throws`](@ref) check results, and
+[`@testset`](@ref) groups tests and summarizes their results.
 
 All tests belong to a *test set*. There is a default, task-level
 test set that throws on the first failure. Users can choose to wrap

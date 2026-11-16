@@ -3,7 +3,7 @@
 """
     Profile
 
-Profiling support.
+Profilers for where time is spent, where memory is allocated, and what the heap holds.
 
 ## CPU profiling
 - `@profile foo()` to profile a specific call.

@@ -1,8 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 """
-The `Unicode` module provides essential functionality for managing Unicode characters and strings.
-It includes validation, category determination, normalization, case transformation, and grapheme segmentation,
-enabling effective Unicode data handling.
+    Unicode
+
+Unicode text handling beyond what `Base` provides: normalization with
+[`Unicode.normalize`](@ref), comparison with [`Unicode.isequal_normalized`](@ref), and
+splitting text into graphemes with [`Unicode.graphemes`](@ref).
 """
 module Unicode
 
