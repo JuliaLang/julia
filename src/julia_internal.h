@@ -500,6 +500,9 @@ extern JL_DLLEXPORT jl_value_t *jl_compile_and_emit_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_typeinf_world;
 extern JL_DLLEXPORT jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
+// values of `jl_datatype_t.dispatch_hint` for the type of a callee
+#define DISPATCH_HINT_TYPE_VALUES 0x01 // the call-site cache may have an entry with a `TypeEgal{T}` slot
+#define DISPATCH_HINT_BUILTIN 0x80     // a builtin, whose index in `jl_builtin_f_addrs` is in the low bits
 
 void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 
@@ -970,10 +973,10 @@ int jl_is_typeofbottom_param(jl_value_t *t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_has_concrete_subtype(jl_value_t *typ);
 jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size_t nargs, int leaf) JL_CANSAFEPOINT;
 jl_tupletype_t *jl_lookup_arg_tuple_type(jl_value_t *arg1 JL_PROPAGATES_ROOT, jl_value_t **args, size_t nargs, int leaf) JL_CANSAFEPOINT;
-JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method) JL_CANSAFEPOINT;
 void jl_method_table_activate(jl_typemap_entry_t *newentry) JL_CANSAFEPOINT;
 void jl_method_table_invalidate_deferred(jl_array_t *deferred, size_t max_world) JL_CANSAFEPOINT;
-jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype) JL_CANSAFEPOINT;
+jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method) JL_CANSAFEPOINT;
 jl_method_t *jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *name, jl_fptr_args_t fptr) JL_CANSAFEPOINT JL_GC_DISABLED;
 int jl_obviously_unequal(jl_value_t *a, jl_value_t *b);
 int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT;
@@ -1137,10 +1140,7 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_partition_leaf_value(jl_binding_partitio
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_leaf_partition_depwarn(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_leaf_binding_partition(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT, size_t world, int depwarn) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 jl_value_t *jl_apply_generic_site(jl_value_t *F, jl_value_t **args, uint32_t nargs, uint32_t callsite) JL_CANSAFEPOINT;
-jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t nargs,
-                                    jl_genericmemory_t *sites, size_t i, uint32_t callsite,
-                                    size_t world) JL_CANSAFEPOINT;
-// the interpreter's dispatch caches, by the code they are for (see interpreter.c)
+// the interpreter's per-statement caches, by the code they are for (see interpreter.c)
 extern jl_genericmemory_t *jl_interp_call_sites JL_GLOBALLY_ROOTED;
 extern jl_mutex_t jl_interp_call_sites_lock;
 jl_value_t *jl_get_globalref_const_quiet(jl_globalref_t *gr JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
@@ -2135,18 +2135,18 @@ typedef int (*smallintset_eq)(size_t val, const void *key, jl_value_t *data, uin
 ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_value_t *data, uint_t hv, int pop);
 
 // probe sequence, shared by lookup and insert
-#define smallintset_max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 #define smallintset_h2index(hv, sz) (size_t)((hv) & ((sz)-1))
 
 FORCE_INLINE ssize_t smallintset_probe_(jl_genericmemory_t *cache, smallintset_eq eq JL_NOTSAFEPOINT, const void *key, jl_value_t *data, uint_t hv, int pop, size_t w) JL_NOTSAFEPOINT
 {
     size_t sz = cache->length;
-    size_t maxprobe = smallintset_max_probe(sz);
     size_t tombstone = w == 1 ? UINT8_MAX : w == 2 ? UINT16_MAX : UINT32_MAX;
     size_t index = smallintset_h2index(hv, sz);
     size_t orig = index;
     void *ix = cache->ptr;
-    for (size_t iter = 0; iter <= maxprobe; iter++) {
+    // no slot is ever emptied again (a pop leaves a tombstone), so every key is found
+    // before the first empty slot, however far its insertion had to probe
+    while (1) {
         size_t val1 = w == 1 ? jl_atomic_load_acquire(&((_Atomic(uint8_t)*)ix)[index]) :
                       w == 2 ? jl_atomic_load_acquire(&((_Atomic(uint16_t)*)ix)[index]) :
                                jl_atomic_load_acquire(&((_Atomic(uint32_t)*)ix)[index]);
@@ -2205,8 +2205,25 @@ JL_DLLEXPORT ssize_t jl_idset_pop(jl_genericmemory_t *keys, jl_genericmemory_t *
 void jl_typemap_insert(_Atomic(jl_typemap_t*) *cache, jl_value_t *parent,
         jl_typemap_entry_t *newrec, int8_t offs) JL_CANSAFEPOINT;
 jl_typemap_entry_t *jl_typemap_alloc(
-        jl_tupletype_t *type, jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
+        jl_tupletype_t *type, jl_svec_t *guardsigs,
         jl_value_t *newvalue, size_t min_world, size_t max_world) JL_CANSAFEPOINT;
+
+// Whether the type value `a` is `T`, rejecting most distinct objects before `jl_egal` by the
+// name and the hash of the (unwrapped) datatype, which are the same for egal types
+STATIC_INLINE int typeegal_match(jl_value_t *T, jl_value_t *a) JL_NOTSAFEPOINT
+{
+    if (a == T)
+        return 1;
+    if (jl_typetagof(a) != jl_typetagof(T))
+        return 0;
+    jl_value_t *ua = jl_unwrap_unionall(a), *uT = jl_unwrap_unionall(T);
+    if (jl_is_datatype(ua) && jl_is_datatype(uT)) {
+        jl_datatype_t *da = (jl_datatype_t*)ua, *dT = (jl_datatype_t*)uT;
+        if (da->name != dT->name || (da->hash && dT->hash && da->hash != dT->hash))
+            return 0;
+    }
+    return jl_egal(T, a);
+}
 
 struct jl_typemap_assoc {
     // inputs

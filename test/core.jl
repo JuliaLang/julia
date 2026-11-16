@@ -21,7 +21,7 @@ for (T, c) in (
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
         (Core.MethodTable, [:cache, :module, :name]),
         (Core.MethodCache, []),
-        (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :func, :isleafsig, :issimplesig, :va]),
+        (Core.TypeMapEntry, [:sig, :guardsigs, :func, :isleafsig, :issimplesig, :va, :isegalsig]),
         (Core.TypeMapLevel, []),
         (Core.TypeName, [:name, :module, :names, :wrapper, :hash, :n_uninitialized, :flags]),
         (DataType, [:name, :parameters, :instance, :hash]),
@@ -44,8 +44,8 @@ for (T, c) in (
         (Core.MethodCache, [:leafcache, :cache, :var""]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
-        (Core.TypeName, [:cache, :linearcache, :Typeofwrapper, :max_args, :cache_entry_count]),
-        (DataType, [:super, :types, :layout]),
+        (Core.TypeName, [:cache, :linearcache, :Typeofwrapper, :max_args]),
+        (DataType, [:super, :types, :layout, :dispatch_hint]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
         (Task, [:_state, :preempt_request, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at, :waiting_on, :bound_cancel_token]),
@@ -676,6 +676,37 @@ let m = only(methods(anytype_compilesig_61915))
         sig = Tuple{typeof(anytype_compilesig_61915), IOBuffer, S}
         @test ccall(:jl_isa_compileable_sig, Cint, (Any, Any, Any), sig, Core.svec(), m) == 1
     end
+end
+
+# the compilation signature of a dispatch tuple is compileable, and both spellings of
+# `Union{}` (`typeof(Union{})` and `Type{Union{}}`) widen alike
+compilesig_any(x) = 1
+compilesig_called(x) = x()
+compilesig_nospec(@nospecialize(x::Union{DataType,Int})) = 1
+compilesig_typeT(::Type{T}) where {T} = 1
+compilesig_typeunion(x::Union{Type,Int}) = 1
+compilesig_typetypeT(::Type{Type{T}}) where {T} = 1
+compilesig_va(y::Int, x::Type{T}...) where {T} = 1
+let sparams(m, sig) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), sig, m.sig)[2],
+    compsig(m, sig) = ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Cint), sig, sparams(m, sig), m, 0),
+    iscompileable(m, sig) = ccall(:jl_isa_compileable_sig, Cint, (Any, Any, Any), sig, sparams(m, sig), m) == 1
+    for (f, x) in ((compilesig_any, Union{}), (compilesig_called, Type{Int}),
+                   (compilesig_nospec, Int), (compilesig_typeT, Type{Type{Int}}),
+                   (compilesig_typeunion, Type{Int}), (compilesig_typetypeT, Type{Type{Int}}))
+        m = only(methods(f))
+        S = compsig(m, Tuple{typeof(f), Core.TypeEgal{x}})
+        @test iscompileable(m, S)
+        @test compsig(m, S) == S
+    end
+    m = only(methods(compilesig_any))
+    @test compsig(m, Tuple{typeof(compilesig_any), Core.TypeofBottom}) == Tuple{typeof(compilesig_any), Type}
+    @test compsig(m, Tuple{typeof(compilesig_any), Type{Union{}}}) == Tuple{typeof(compilesig_any), Type}
+    # a limited vararg tail stays within the declared one, which shares `T` here
+    m = only(methods(compilesig_va))
+    S = compsig(m, Tuple{typeof(compilesig_va), Int, Core.TypeEgal{Type{Int}}, Core.TypeEgal{Type{Int}}})
+    @test S == Tuple{typeof(compilesig_va), Int, Core.TypeEgal{Type{Int}}, Vararg{Type{Type{Int}}}}
+    @test iscompileable(m, S)
+    @test compsig(m, ccall(:jl_type_intersection_with_env, Any, (Any, Any), S, m.sig)[1]) == S
 end
 
 @test promote_type(Bool,Bottom) === Bool
@@ -9639,3 +9670,27 @@ end
         @test_throws ErrorException Core.unsafe_memoryrefstore!(memoryref(mem), 0x00, 0, true)
     end
 end
+
+# dispatch through cache entries with a `Vararg` tail, whose test is chosen by its element type
+vtail_ty(::Type{Int}...) = 1
+vtail_ty(@nospecialize(xs...)) = 2
+vtail_dt(::DataType...) = 1
+vtail_dt(@nospecialize(xs...)) = 2
+vtail_t(::Type...) = 1
+vtail_t(@nospecialize(xs...)) = 2
+for _ in 1:2
+    @test Base.inferencebarrier(vtail_ty)(Int, Int, Int) == 1
+    @test Base.inferencebarrier(vtail_ty)(Int, Int, Int, Int) == 1
+    @test Base.inferencebarrier(vtail_ty)(Int, Int, Float64) == 2
+    @test Base.inferencebarrier(vtail_dt)(Int, Float64, Int) == 1
+    @test Base.inferencebarrier(vtail_dt)(Int, Float64, Int, Int) == 1
+    @test Base.inferencebarrier(vtail_dt)(Int, Float64, Union{}) == 2
+    @test Base.inferencebarrier(vtail_t)(Int, Vector, Union{}) == 1
+    @test Base.inferencebarrier(vtail_t)(Int, Vector, Union{}, Int) == 1
+    @test Base.inferencebarrier(vtail_t)(Int, Vector, 1) == 2
+end
+vtail_i(x::Int, ys::Int...) = length(ys)
+for _ in 1:2, n in (1, 3, 4, 2, 5) # an empty tail, and lengths sharing one `Vararg` entry
+    @test Base.inferencebarrier(vtail_i)(ntuple(identity, n)...) == n - 1
+end
+@test_throws MethodError Base.inferencebarrier(vtail_i)(1, 2, 3.0)

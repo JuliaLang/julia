@@ -204,7 +204,6 @@ TypeName
   max_args: Int32 0
   n_uninitialized: Int32 0
   flags: UInt8 0x02
-  cache_entry_count: UInt8 0x00
   max_methods: UInt8 0x00
   constprop_heuristic: UInt8 0x00
 ```

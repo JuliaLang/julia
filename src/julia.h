@@ -685,7 +685,6 @@ typedef struct JL_GC_TRACKED_TYPE {
     // the runtime's own constructor may allocate them
     uint8_t hiddenfields:1;
     uint8_t _unused:4;
-    _Atomic(uint8_t) cache_entry_count; // (approximate counter of TypeMapEntry for heuristics)
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
     uint8_t constprop_heustic; // override for inference's constprop heuristic
     uint8_t concrete_only; // Bool: inference refuses to commit (records no backedge) at non-concrete call sites
@@ -793,6 +792,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_datatype_t {
     uint16_t ismutationfree:1; // whether any mutable memory is reachable through this type (in the type or via fields)
     uint16_t isidentityfree:1; // whether this type or any object reachable through its fields has non-content-based identity
     uint16_t smalltag:6; // whether this type has a small-tag optimization
+    _Atomic(uint8_t) dispatch_hint; // (hint) for calls with a callee of this type: DISPATCH_HINT_* in julia_internal.h
 } jl_datatype_t;
 
 typedef struct JL_GC_TRACKED_TYPE _jl_vararg_t {
@@ -1045,7 +1045,6 @@ struct JL_GC_TRACKED_TYPE _jl_typemap_entry_t {
     JL_DATA_TYPE
     _Atomic(struct _jl_typemap_entry_t*) next; // invasive linked list
     jl_tupletype_t *sig; // the type signature for this entry
-    jl_tupletype_t *simplesig; // a simple signature for fast rejection
     jl_svec_t *guardsigs;
     _Atomic(size_t) min_world;
     _Atomic(size_t) max_world;
@@ -1056,8 +1055,9 @@ struct JL_GC_TRACKED_TYPE _jl_typemap_entry_t {
     } func;
     // memoized properties of sig:
     int8_t isleafsig; // isleaftype(sig) & !any(isType, sig) : unsorted and very fast
-    int8_t issimplesig; // all(isleaftype | isAny | isType | isVararg, sig) : sorted and fast
+    int8_t issimplesig; // !isa(sig, UnionAll) : sorted and fast, abstract slots are tested last
     int8_t va; // isVararg(sig)
+    int8_t isegalsig; // every slot (and an unbound `Vararg`'s element) a leaf type or a `TypeEgal{T}` : matched by `===` alone
 };
 
 // one level in a TypeMap tree (each level splits on a type at a given offset)

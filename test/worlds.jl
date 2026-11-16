@@ -213,6 +213,24 @@ f26506(x::String) = 5
 # The entry we created above should not have been changed
 @test cache26506.max_world == w26506
 @test fetch(schedule(t26506)) === 3
+
+# A lookup by type finds a cache entry with a kind slot for the egality key
+# `TypeEgal{Int}`, but not for `Type{Int}`, which is not a subtype of `DataType`
+fkindslot(::DataType, ::Int) = 1
+Base.inferencebarrier(fkindslot)(Int, 1)
+let find(tt) = ccall(:jl_mt_find_cache_entry, Ptr{Cvoid}, (Any, Any, UInt), Core.methodtable.cache, tt, Base.get_world_counter())
+    @test find(Tuple{typeof(fkindslot), Core.TypeEgal{Int}, Int}) != C_NULL
+    @test find(Tuple{typeof(fkindslot), Type{Int}, Int}) == C_NULL
+end
+
+# A call with a type argument, served from the call-site cache by its `TypeEgal{Int}`
+# entry, sees a more specific method defined later
+ftypearg(::Type{T}) where {T} = 1
+gtypearg(@nospecialize(T)) = Base.inferencebarrier(ftypearg)(T)
+@test gtypearg(Int) == 1 && gtypearg(Int) == 1
+ftypearg(::Type{Int}) = 2
+@test gtypearg(Int) == 2
+@test gtypearg(Float64) == 1
 @test g26506(z26506) === 5
 
 # issue #38435
