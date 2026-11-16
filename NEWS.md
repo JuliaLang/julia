@@ -48,6 +48,17 @@ New library functions
   of `x`, excluding the padding that `sizeof` includes. It throws for any other type or value ([#61359]).
 * `filterfirst(f, itr)` returns the first element of `itr` for which `f` returns `true` ([#60913]).
 * `growat!(a::Vector, i, delta)` grows `a` by `delta` uninitialized elements inserted at index `i` ([#63573]).
+* New trait functions `Base.isstrided`, `Base.islinearstrided`, and `Base.isdense` describe the
+  memory layout of an array type: whether `strides` and `Base.elsize` give the location of each element,
+  whether the elements are also evenly spaced in column-major order, and whether they are also laid out
+  exactly like an `Array`. They describe only the layout, not how the storage is accessed, so they also
+  apply to arrays that cannot be accessed through a `Ptr`, such as GPU arrays. `Base.isdense` defaults to
+  `true` for subtypes of `DenseArray`, and array types with this trait get default `strides` and
+  `Base.elsize` methods ([#60964]).
+* New trait functions `Base.isunsafeloadable` and `Base.isunsafestorable` declare that reading or
+  writing an element through a `Ptr` is equivalent to `getindex` or `setindex!`. A strided array type with
+  either trait must also provide a pointer to its elements through `Base.cconvert` and `Base.unsafe_convert`
+  ([#60964]).
 
 New library features
 --------------------
