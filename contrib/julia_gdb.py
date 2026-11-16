@@ -245,12 +245,42 @@ def _summary_mode():
         bool(gdb.print_options().get("summary"))
 
 
+def _host_text(s):
+    """`s` if gdb can write it in the host charset, else `s` with the
+    characters it cannot write escaped. gdb raises UnicodeEncodeError for a
+    printer result that the host charset lacks, e.g. in the C locale."""
+    if not isinstance(s, str):
+        return s
+    try:
+        charset = gdb.host_charset()
+    except (AttributeError, gdb.error):
+        charset = "utf-8"
+    try:
+        s.encode(charset)
+        return s
+    except LookupError:
+        charset = "ascii"
+    except UnicodeEncodeError:
+        pass
+    try:
+        return s.encode(charset, "backslashreplace").decode(charset)
+    except (LookupError, UnicodeError):
+        return s.encode("ascii", "backslashreplace").decode("ascii")
+
+
+def _host_safe(to_string):
+    def wrapper(self):
+        return _host_text(to_string(self))
+    return wrapper
+
+
 class JuliaValuePrinter:
     """to_string-based printer: dispatches on the runtime type tag."""
 
     def __init__(self, val):
         self.val = val
 
+    @_host_safe
     def to_string(self):
         try:
             addr = int(self.val)
@@ -291,6 +321,7 @@ class JuliaArrayPrinter(JuliaValuePrinter):
     """Adds expandable children for arrays so IDE variable views can drill
     down into elements."""
 
+    @_host_safe
     def to_string(self):
         try:
             return get_rt().render_array_summary(int(self.val),
@@ -310,17 +341,17 @@ class JuliaArrayPrinter(JuliaValuePrinter):
         try:
             for name, (kind, v) in rt.array_children(int(self.val)):
                 if rt.exhausted():
-                    yield name, "…"
+                    yield name, _host_text("…")
                     break
                 if kind != "val":
                     rt.spend(len(v))
-                    yield name, v
+                    yield name, _host_text(v)
                 elif _expand_depth[0] < core.MAX_DEPTH:
                     yield name, jl_value(v)
                 else:
                     s = rt.render_value_brief(v)
                     rt.spend(len(s))
-                    yield name, s
+                    yield name, _host_text(s)
         except (JLDebugError, Exception):
             return
         finally:
@@ -490,7 +521,7 @@ class JlCommand(gdb.Command):
             gdb.set_convenience_variable("jl", loc_to_gdb_value(rt, loc))
         except (gdb.error, JLDebugError, AttributeError):
             pass
-        print("$jl = %s" % rt.render_loc(loc))
+        print(_host_text("$jl = %s" % rt.render_loc(loc)))
 
 
 # --------------------------------------------------------------------------
