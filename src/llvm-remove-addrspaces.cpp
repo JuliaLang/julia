@@ -357,17 +357,35 @@ static bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
             VMap[&*I] = &*DestI++;
         }
 
-        SmallVector<ReturnInst *, 8> Returns; // Ignore returns cloned.
-        CloneFunctionInto(
-                NF,
-                F,
-                VMap,
-                CloneFunctionChangeType::GlobalChanges,
-                Returns,
-                "",
-                nullptr,
-                &TypeRemapper,
-                &Materializer);
+        if (llvm::any_of(*F, [](BasicBlock &BB) { return BB.hasAddressTaken(); })) {
+            SmallVector<ReturnInst *, 8> Returns; // Ignore returns cloned.
+            CloneFunctionInto(
+                    NF,
+                    F,
+                    VMap,
+                    CloneFunctionChangeType::GlobalChanges,
+                    Returns,
+                    "",
+                    nullptr,
+                    &TypeRemapper,
+                    &Materializer);
+        } else {
+            for (BasicBlock &BB : *F) {
+                VMap[&BB] = &BB;
+                for (Instruction &I : BB)
+                    VMap[&I] = &I;
+            }
+            CloneFunctionAttributesInto(NF, F, VMap, true, &TypeRemapper, &Materializer);
+            CloneFunctionMetadataInto(*NF, *F, VMap, RF_ReuseAndMutateDistinctMDs,
+                                      &TypeRemapper, &Materializer);
+            NF->splice(NF->begin(), F);
+            for (Instruction &I : instructions(NF)) {
+                RemapInstruction(&I, VMap, RF_ReuseAndMutateDistinctMDs,
+                                 &TypeRemapper, &Materializer);
+                RemapDbgRecordRange(&M, I.getDbgRecordRange(), VMap,
+                                    RF_ReuseAndMutateDistinctMDs, &TypeRemapper, &Materializer);
+            }
+        }
 
         // Update function attributes that contain types
         AttributeList Attrs = F->getAttributes();
