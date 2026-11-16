@@ -748,3 +748,11 @@ end
 end
 
 # END 1.14 deprecations
+
+# BEGIN 1.15 deprecations
+
+# Packages carrying copies of contrib/julia-config.jl (PackageCompiler, JuliaC,
+# GAP) can still read this.
+const DARWIN_FRAMEWORK = false
+
+# END 1.15 deprecations

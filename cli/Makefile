@@ -117,27 +117,6 @@ EXE_OBJS += $(BUILDDIR)/julia_res.o
 EXE_DOBJS += $(BUILDDIR)/julia_res_debug.o
 endif
 
-# Embed an Info.plist in the julia executable
-# Create an intermediate target Info.plist for Darwin code signing.
-ifeq ($(DARWIN_FRAMEWORK),1)
-.PHONY: Info.plist.phony
-Info.plist.phony:
-	@TMPFILE=$$(mktemp -u $(abspath $(BUILDDIR)/Info.plist.XXXXXX)); \
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleName string julia" $$TMPFILE; \
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleIdentifier string $(darwin_codesign_id_julia_ui)" $$TMPFILE; \
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleInfoDictionaryVersion string 6.0" $$TMPFILE; \
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleVersion string $(JULIA_COMMIT)" $$TMPFILE; \
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleShortVersionString string $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)" $$TMPFILE; \
-	if ! cmp -s $(BUILDDIR)/Info.plist $$TMPFILE; then \
-		mv $$TMPFILE $(BUILDDIR)/Info.plist; \
-	else \
-		rm -f $$TMPFILE; \
-	fi
-JLDFLAGS += -Wl,-sectcreate,__TEXT,__info_plist,Info.plist
-$(build_bindir)/julia$(EXE): Info.plist.phony
-$(build_bindir)/julia-debug$(EXE): Info.plist.phony
-endif
-
 julia-release: $(build_bindir)/julia$(EXE)
 julia-debug: $(build_bindir)/julia-debug$(EXE)
 libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
@@ -220,6 +199,5 @@ clean: | $(CLEAN_TARGETS)
 	rm -f $(build_bindir)/julia*
 	rm -f $(BUILDDIR)/julia.expmap
 	rm -f $(BUILDDIR)/*.def $(BUILDDIR)/*.strip
-	rm -f $(BUILDDIR)/Info.plist*
 
 .PHONY: clean release debug julia-release julia-debug
