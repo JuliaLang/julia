@@ -1,5 +1,11 @@
 /* Julia DTrace provider */
 
+/* Work around dtrace bug: older versions (e.g. apple dtrace) require struct and
+ * translator definitions when compiling provider files, even though the
+ * definitions aren't used.  This bug is fixed in bpftrace/"dtrace 2.0". */
+typedef struct { int dummy; } jl_task_t;
+typedef struct { int dummy; } jl_ptls_t;
+
 provider julia {
     probe gc__begin(int collection);
     probe gc__stop_the_world();
