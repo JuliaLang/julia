@@ -89,6 +89,11 @@ Standard library changes
 
 #### REPL
 
+* In shell mode, commands can be joined with `&&`, `||` and `;`, which run them as in a shell,
+  so that, for example, `cd build && make` works. In command literals these operators still
+  have to be quoted. Shell mode now also requires the characters that command literals reject
+  unquoted to be quoted, such as `(`, `)`, `#` and a single `&`.
+
 #### SharedArrays
 
 #### Sockets
