@@ -373,5 +373,6 @@ julia> eps(Float64, pi)
 ```
 """
 function eps(::Type{T}, x::AbstractIrrational) where {T<:AbstractFloat}
-    return T(2)^(exponent(x) - precision(T) + 1)
+    e = ldexp(eps(T), exponent(x))
+    return iszero(e) ? nextfloat(e) : e
 end
