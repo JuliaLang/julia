@@ -183,9 +183,14 @@ end
     @test testval("\"\\x00\"", "\0")
     @test testval("\"\\x41\"", "A")
     @test testval("\"\\x7f\"", "\x7f")
-    @test testval("\"\\xff\"", "\xff")
-    @test testval("\"\\xFF\"", "\xff")
+    @test testval("\"\\xff\"", "\u00ff")
+    @test testval("\"\\xFF\"", "\u00ff")
     @test testval("\"\\x0A\"", "\n")
+    # \xHH is the code point U+00HH, not a raw byte (#64171)
+    @test testval("\"Jos\\xE9\"", "José")
+    @test testval("\"\\x80\\xe9\\u00e9\"", "\u0080éé")
+    @test testval("\"\\\\xE9\"", "\\xE9")
+    @test testval("\"\\\\\\xE9\"", "\\é")
 
     # \xHH in multiline strings
     @test testval("\"\"\"\\x41\"\"\"", "A")

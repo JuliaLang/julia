@@ -1463,5 +1463,27 @@ function take_chunks(l::Parser, unescape::Bool)::String
         offset += n
     end
     empty!(l.chunks)
-    return unescape ? unescape_string(str) : str
+    return unescape ? unescape_string(hex_escapes_to_unicode(str)) : str
+end
+
+# TOML defines `\xHH` as the code point U+00HH, whereas `unescape_string` treats it
+# as a raw byte, so rewrite it to the equivalent `\u00HH` first. The escapes have
+# already been validated, so every backslash here starts a two-byte escape prefix.
+function hex_escapes_to_unicode(str::String)
+    occursin("\\x", str) || return str
+    cu = codeunits(str)
+    io = IOBuffer(sizehint = sizeof(str) + 8)
+    i = 1
+    while i <= length(cu)
+        b = cu[i]
+        if b == UInt8('\\') && i < length(cu)
+            next = cu[i+1]
+            next == UInt8('x') ? write(io, "\\u00") : write(io, b, next)
+            i += 2
+        else
+            write(io, b)
+            i += 1
+        end
+    end
+    return String(take!(io))
 end
