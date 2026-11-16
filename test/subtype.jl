@@ -3293,6 +3293,18 @@ let N = TypeVar(:N), S = Tuple{String}
     @test Union{Tuple{Int,Vararg{Int,N}}, S} <: Union{S, Tuple{Int,Vararg{Int}}}
 end
 
+# a free TypeVar that is the same object as a `where` variable of the other side is not captured
+# by it: being an atom, it is not within that variable's bounds
+let T = TypeVar(:T, Integer)
+    @test !(Ref{T} <: UnionAll(T, Ref{T}))
+    @test !(Wrapper61876.body <: Wrapper61876)
+end
+# a typevar parameter whose choices are not all matched, or that has several values
+@test !((Ref{S} where S<:Real) <: (Ref{T} where T<:Integer))
+@test (Ref{T} where T<:Integer) <: (Ref{S} where S<:Real)
+@test !(Val <: Val{1}) && Val{:a} <: Val && (Ref{T} where Int<:T<:Int) <: Ref{Int}
+@test (Ref{T} where T<:Integer) != (Ref{S} where S<:Real) && Val != Val{1}
+
 # issue #61917: an existential var inside an invariant constructor must not be
 # equated with an outer universal var whose bound is disjoint, e.g. `Ref{Ref{Bar}}`
 # inhabits the LHS but not the RHS, so the `UnionAll`s are not in a subtype relation.
