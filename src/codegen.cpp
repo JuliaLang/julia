@@ -9072,6 +9072,12 @@ const char *jl_generate_ccallable(jl_codegen_output_t &out, jl_value_t *nameval,
     jl_value_t *ff = ft->instance;
     assert(ff);
     const char *name = !jl_is_string(nameval) ? jl_symbol_name(ft->name->singletonname) : jl_string_data(nameval);
+    // `jl_extern_c` rejects duplicate names when it can see them, but entry points that
+    // were precompiled separately only meet here. LLVM would rename the second definition
+    // (to `name.1`) instead of failing, exporting whichever one happened to come first.
+    if (out.get_module().getNamedValue(name))
+        jl_errorf("@ccallable: cannot export `%s` as \"%s\": the output already defines a symbol with that name",
+                  jl_symbol_name(ft->name->singletonname), name);
     jl_value_t *crt = declrt;
     if (jl_is_abstract_ref_type(declrt)) {
         declrt = jl_tparam0(declrt);

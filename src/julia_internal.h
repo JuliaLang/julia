@@ -1634,6 +1634,7 @@ JL_DLLEXPORT size_t jl_linkage_blob_dep_world(size_t image, size_t blob) JL_NOTS
 // The world since which every method on the typenames of `sig` in `mt` came from `image` or one of its dependencies, else 0.
 JL_DLLEXPORT size_t jl_sig_contributors_world(jl_value_t *sig, jl_methtable_t *mt, size_t image) JL_CANSAFEPOINT;
 void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array_t *record, size_t image, jl_array_t *deferred) JL_CANSAFEPOINT;
+void jl_ccallable_loaded(jl_method_t *meth) JL_NOTSAFEPOINT;
 // The ext_backinterferences of a method: It is the back direction of `interferences`, computed for external methods during incremental precompile.
 JL_DLLEXPORT jl_value_t *jl_get_ext_backinterferences(jl_method_t *method) JL_NOTSAFEPOINT;
 extern JL_DLLEXPORT jl_genericmemory_t *jl_ext_backinterferences JL_GLOBALLY_ROOTED;

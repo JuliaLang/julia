@@ -301,8 +301,8 @@ function enqueue_specializations!(all::Bool, newmethods, worklist)
             end
         end
 
-        # Handle ccallable methods
-        if isdefined(method, :ccallable)
+        # Handle ccallable methods, unless they have been deleted or replaced since
+        if isdefined(method, :ccallable) && ReinferUtils.method_is_latest_which(method)
             push!(worklist, method.ccallable)
         end
     end

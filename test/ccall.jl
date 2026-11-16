@@ -2399,3 +2399,37 @@ let f() = ccall((:foo, "libnonexistent"), Cvoid, ())
     @test m !== nothing
     @test occursin(Regex("attributes #$(m[1]) = [^\n]*\"frame-pointer\"=\"all\""), ir)
 end
+
+# The name of the C symbol created by `@ccallable` must be unique
+module CCallableNames
+using Test
+module A
+    Base.@ccallable ccallable_unique_name()::Cint = Cint(1)
+end
+module B
+end
+const err = "the C symbol \"ccallable_unique_name\" is already defined by `A.ccallable_unique_name`"
+# a function with the same name, or one which asks to be exported with that name
+@test_throws err @eval B Base.@ccallable ccallable_unique_name()::Cint = Cint(2)
+@test_throws err @eval B Base.@ccallable "ccallable_unique_name" other_name()::Cint = Cint(2)
+@test !isdefined(only(methods(B.other_name)), :ccallable)
+# another method of the same function
+@test_throws err @eval A Base.@ccallable ccallable_unique_name(x::Cint)::Cint = x
+# declaring the same method again, or replacing it, is not a conflict
+Base._ccallable(nothing, Cint, Tuple{typeof(A.ccallable_unique_name)})
+@eval A Base.@ccallable ccallable_unique_name()::Cint = Cint(3)
+@test_throws err @eval B Base.@ccallable ccallable_unique_name()::Cint = Cint(2)
+# the name is available again once the method stops using it
+Base._ccallable("ccallable_unique_name2", Cint, Tuple{typeof(A.ccallable_unique_name)})
+@eval B Base.@ccallable "ccallable_unique_name" other_name()::Cint = Cint(2)
+@test_throws "already defined by `B.other_name`" @eval A Base.@ccallable "ccallable_unique_name" third_name()::Cint = Cint(3)
+@test only(methods(B.other_name)).ccallable[3] == "ccallable_unique_name"
+@test only(methods(A.ccallable_unique_name, Tuple{})).ccallable[3] == "ccallable_unique_name2"
+# ... or once that method is replaced by one which uses another name, or is deleted
+@eval B Base.@ccallable "ccallable_unique_name3" other_name()::Cint = Cint(4)
+@eval A Base.@ccallable "ccallable_unique_name" third_name()::Cint = Cint(3)
+@test_throws "already defined by `A.third_name`" @eval B Base.@ccallable "ccallable_unique_name" fourth_name()::Cint = Cint(5)
+Base.delete_method(only(methods(A.third_name)))
+@eval B Base.@ccallable "ccallable_unique_name" fourth_name()::Cint = Cint(5)
+@test only(methods(B.fourth_name)).ccallable[3] == "ccallable_unique_name"
+end

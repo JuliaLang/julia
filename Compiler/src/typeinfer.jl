@@ -2417,6 +2417,18 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
                  enqueue_unprepared_invokes = trim_mode != TRIM_NO)
     end
 
+    # `methods` is processed once per world, and may list the same entrypoint more than
+    # once, but a ccallable must only be emitted once, since it defines a symbol in the output
+    let seen = IdSet{Any}()
+        filter!(codeinfos) do item
+            item isa SimpleVector || return true
+            sig = item[2]
+            sig in seen && return false
+            push!(seen, sig)
+            return true
+        end
+    end
+
     if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE
         verify_typeinf_trim(codeinfos, trim_mode == TRIM_UNSAFE_WARN)
     end
