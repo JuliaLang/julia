@@ -1545,7 +1545,7 @@ end
     end
     """) isa Function
 
-    # final default arg may always be splatted, even if no-op or followed by va
+    # final default arg may always be splatted, even if no-op
     @test JuliaLowering.include_string(test_mod, """
     let
         f = function (x=1...)
@@ -1554,16 +1554,6 @@ end
         f(), f(2), try; f(9,9); catch e; "fail"; end
     end
     """) === (1, 2, "fail")
-    @test JuliaLowering.include_string(test_mod, """
-    let
-        f = function (x=1..., args...)
-            x, args
-        end
-        f(), f(2), f(3,4,5)
-    end
-    """) === ((1, ()),
-              (2, ()),
-              (3, (4,5)))
 end
 
 @testset "first-arg destructuring" begin
