@@ -5582,7 +5582,7 @@ static jl_value_t *site_key(jl_value_t *a) JL_CANSAFEPOINT
 
 STATIC_INLINE int site_key_matches(jl_value_t *k, jl_value_t *a) JL_NOTSAFEPOINT
 {
-    return jl_typeof(a) == k || (jl_is_typeegal(k) && jl_typeegal_T(k) == a);
+    return jl_typeof(a) == k || (jl_is_typeegal(k) && jl_egal(jl_typeegal_T(k), a));
 }
 
 // jl_apply_generic for an interpreted call site with a cache of one dispatch, `sites[i]`:

@@ -62,8 +62,7 @@ JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src) JL_
             if (jl_is_globalref(stmt)) {
                 jl_globalref_t *gr = (jl_globalref_t*)stmt;
                 jl_binding_t *b = gr->binding;
-                if (!b)
-                    b = jl_get_module_binding(gr->mod, gr->name, 1);
+                assert(b);
                 any_implicit |= jl_maybe_add_binding_backedge(b, (jl_value_t*)m, m);
             }
         }
