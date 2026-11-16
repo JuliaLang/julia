@@ -182,6 +182,6 @@ syntax: `outer` annotations must match with a local variable in an outer scope b
 @ :2
 let
     for outer i = 1:2
-#             ╙
+#             ╨
         nothing
     end

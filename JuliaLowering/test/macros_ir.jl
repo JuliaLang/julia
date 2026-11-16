@@ -103,7 +103,7 @@ end
 syntax: macros cannot accept keyword arguments
 @ :1
 macro mmm(a; b=2)
-#         ╙
+#         ╨
 end
 
 ########################################

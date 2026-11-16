@@ -47,7 +47,7 @@ function Base.showerror(io::IO, exc::LoweringError)
         i !== lastindex(exc.sts) && print(io, "\n")
     end
     if exc.internal
-        print(io, "Detailed provenance:\n  ")
+        print(io, "\nDetailed provenance:\n  ")
         _show_provtree(io, exc.sts[1], "  ")
     end
 end

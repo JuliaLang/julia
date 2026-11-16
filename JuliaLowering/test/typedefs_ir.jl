@@ -1345,7 +1345,7 @@ struct A; x; x; end
 syntax: duplicate field name
 @ :1
 struct A; x; x; end
-#            ╙
+#            ╨
 
 ########################################
 # Error: Duplicate field name with different types
@@ -1354,7 +1354,7 @@ struct A; x::Int; x::String; end
 syntax: duplicate field name
 @ :1
 struct A; x::Int; x::String; end
-#                 ╙
+#                 ╨
 
 ########################################
 # Error: Duplicate field name in mutable struct
@@ -1363,4 +1363,4 @@ mutable struct A; x; y; x; end
 syntax: duplicate field name
 @ :1
 mutable struct A; x; y; x; end
-#                       ╙
+#                       ╨

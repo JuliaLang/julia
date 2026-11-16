@@ -554,7 +554,7 @@ syntax: cannot overwrite a static parameter
 @ :2
 function f(::g) where {g}
     function g()
-#            ╙
+#            ╨
     end
 end
 

@@ -267,7 +267,7 @@ end
 syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
 @ :1
 function f(x::_) where _
-#             ╙
+#             ╨
     return _
 end
 
@@ -278,7 +278,7 @@ f(x::_, y=_) where _ = x
 syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
 @ :1
 f(x::_, y=_) where _ = x
-#    ╙
+#    ╨
 
 ########################################
 # Error: underscore sparam is not readable in a default kwarg value
@@ -287,7 +287,7 @@ f(x::_; y=_) where _ = x
 syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
 @ :1
 f(x::_; y=_) where _ = x
-#    ╙
+#    ╨
 
 ########################################
 # Error: underscore sparam is not readable in the return type
@@ -296,7 +296,7 @@ f(x::_; y=_) where _ = x
 syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
 @ :1
 (f(x)::_) where _ = x
-#      ╙
+#      ╨
 
 ########################################
 # Return types
@@ -2300,4 +2300,4 @@ end
 syntax: expected identifier or `identifier::type`
 @ :1
 4a = 1
-╙
+╨

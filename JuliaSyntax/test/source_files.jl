@@ -89,13 +89,13 @@ end
         +-*/""")
 
     # Empty ranges
-    @test sprint(highlight, src, 1:0) == "abcd\n└\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 2:1) == "abcd\n#└\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 3:2) == "abcd\n# └\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 4:3) == "abcd\n#  └\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 5:4) == "abcd\n#   └\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 6:5) == "abcd\nαβγδ\n└\n+-*/"
-    @test sprint(highlight, src, 19:18) == "abcd\nαβγδ\n+-*/\n#   └"
+    @test sprint(highlight, src, 1:0) == "abcd\n╨\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 2:1) == "abcd\n#╨\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 3:2) == "abcd\n# ╨\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 4:3) == "abcd\n#  ╨\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 5:4) == "abcd\n#   ╨\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 6:5) == "abcd\nαβγδ\n╨\n+-*/"
+    @test sprint(highlight, src, 19:18) == "abcd\nαβγδ\n+-*/\n#   ╨"
     @test sprint(io->highlight(io, src, 1:0, context_lines_after=0, note="hi")) ==
         "abcd\n└ ── hi"
 
@@ -103,11 +103,11 @@ end
     @test sprint(highlight, src, 1:4) == "abcd\n└──┘\nαβγδ\n+-*/"
     @test sprint(highlight, src, 2:4) == "abcd\n#└─┘\nαβγδ\n+-*/"
     @test sprint(highlight, src, 3:4) == "abcd\n# └┘\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 4:4) == "abcd\n#  ╙\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 5:5) == "abcd\n#   └\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 6:6) == "abcd\nαβγδ\n╙\n+-*/"
+    @test sprint(highlight, src, 4:4) == "abcd\n#  ╨\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 5:5) == "abcd\n#   ╨\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 6:6) == "abcd\nαβγδ\n╨\n+-*/"
     @test sprint(highlight, src, 6:9) == "abcd\nαβγδ\n└┘\n+-*/"
-    @test sprint(highlight, src, 8:8) == "abcd\nαβγδ\n#╙\n+-*/"
+    @test sprint(highlight, src, 8:8) == "abcd\nαβγδ\n#╨\n+-*/"
 
     # multi-byte chars
     @test sprint(highlight, src, 8:13) == """
@@ -116,12 +116,12 @@ end
         #└─┘
         +-*/"""
     # multi-byte char at eof
-    @test sprint(highlight, SourceFile("a α"), 3:4) == "a α\n# ╙"
+    @test sprint(highlight, SourceFile("a α"), 3:4) == "a α\n# ╨"
     @test sprint(highlight, SourceFile("a\nα"), 1:4) == "┌\na\nα\n┘"
-    @test sprint(highlight, SourceFile("a\nb\nα"), 3:3) == "a\nb\n╙\nα"
+    @test sprint(highlight, SourceFile("a\nb\nα"), 3:3) == "a\nb\n╨\nα"
 
     # empty files
-    @test sprint(highlight, SourceFile(""), 1:0) == "└"
+    @test sprint(highlight, SourceFile(""), 1:0) == "╨"
 
     # Multi-line ranges
     @test sprint(highlight, src, 1:7) == """

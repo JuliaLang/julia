@@ -27,7 +27,7 @@
     @test sprint(io->show(io, MIME("text/x.sexpression"), t, show_kind=true)) ==
         "(call-i (call-i a::Identifier *::Identifier b::Identifier) +::Identifier c::Identifier)"
 
-    @test sprint(highlight, t[1][3]) == "a*b + c\n# ╙"
+    @test sprint(highlight, t[1][3]) == "a*b + c\n# ╨"
 
     # Pass-through field access
     node = t[1][1]
@@ -38,7 +38,7 @@
 
     # Newline-terminated source
     t = parsestmt(SyntaxNode, "a*b + c\n")
-    @test sprint(highlight, t[1][3]) == "a*b + c\n# ╙"
+    @test sprint(highlight, t[1][3]) == "a*b + c\n# ╨"
 
     # copy
     t = parsestmt(SyntaxNode, "a*b + c")

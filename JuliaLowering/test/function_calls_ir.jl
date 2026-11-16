@@ -46,7 +46,7 @@ f(x; a=1, a=2)
 syntax: repeated keyword argument name
 @ :1
 f(x; a=1, a=2)
-#         ╙
+#         ╨
 
 ########################################
 # literal_pow lowering

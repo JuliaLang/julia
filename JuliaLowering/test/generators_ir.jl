@@ -152,7 +152,7 @@
 syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
 @ :1
 (_ for _ in xs)
-#╙
+#╨
 
 ########################################
 # 1D generator with destructuring

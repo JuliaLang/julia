@@ -243,7 +243,7 @@ syntax: use `(a, b) = ...` to assign multiple values
 syntax: invalid syntax in left-hand side of assignment
 @ :1
 1 = rhs
-╙
+╨
 
 ########################################
 # Basic updating assignment
