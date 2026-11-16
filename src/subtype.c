@@ -2318,8 +2318,8 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, jl
     }
     if (vvx != JL_VARARG_NONE && vvx != JL_VARARG_INT &&
         (!xbb || !jl_is_long(xbb->lb))) {
-        if (vvx == JL_VARARG_UNBOUND || (xbb && !xbb->existential)) {
-            // Unbounded on the LHS, bounded on the RHS
+        if (vvx == JL_VARARG_UNBOUND || (xbb ? !xbb->existential : !e->intersection)) {
+            // Unbounded (or a free length) on the LHS, bounded on the RHS
             if (vvy == JL_VARARG_NONE || vvy == JL_VARARG_INT)
                 return 0;
             else if (lx < ly) // Unbounded includes N == 0

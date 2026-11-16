@@ -3284,6 +3284,15 @@ typeintersect(Tuple{typeof(convert),
                     Type{B61876{T1,N,R} where {N, R<:(AbstractArray{<:AbstractArray{T1,N},N})}},
                     AbstractArray{T2,N}} where {T1,T2,N})
 
+# a free Vararg length is no particular length, so it may be shorter than any fixed prefix
+# (the unions get past `obvious_subtype`, which already rejected the plain tuples)
+let N = TypeVar(:N), S = Tuple{String}
+    @test !(Union{Tuple{Vararg{Int,N}}, S} <: Union{S, Tuple{Int,Vararg{Int}}})
+    @test !(Union{Tuple{Int,Vararg{Int,N}}, S} <: Union{S, Tuple{Int,Int,Vararg{Int}}})
+    @test Union{Tuple{Vararg{Int,N}}, S} <: Union{S, Tuple{Vararg{Int}}}
+    @test Union{Tuple{Int,Vararg{Int,N}}, S} <: Union{S, Tuple{Int,Vararg{Int}}}
+end
+
 # issue #61917: an existential var inside an invariant constructor must not be
 # equated with an outer universal var whose bound is disjoint, e.g. `Ref{Ref{Bar}}`
 # inhabits the LHS but not the RHS, so the `UnionAll`s are not in a subtype relation.
