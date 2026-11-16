@@ -485,7 +485,7 @@ end
 # similar to Array{UInt8}, but we need to mask the result so that only the LSB
 # in each byte can be non-zero
 
-function rand!(r::MersenneTwister, A1::Array{Bool}, sp::SamplerType{Bool})
+function rand!(r::MersenneTwister, A1::Array{Bool}, ::SamplerType{Bool})
     n1 = length(A1)
     n128 = n1 ÷ 16
 

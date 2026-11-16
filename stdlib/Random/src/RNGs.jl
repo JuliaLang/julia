@@ -24,7 +24,7 @@ e.g. `rand(default_rng())`.
     This function was introduced in Julia 1.3.
 """
 @inline default_rng() = TaskLocalRNG()
-@inline default_rng(tid::Int) = TaskLocalRNG()
+@inline default_rng(_tid::Int) = TaskLocalRNG()
 
 # defined only for backward compatibility with pre-v1.3 code when `default_rng()` didn't exist;
 # `GLOBAL_RNG` was never really documented, but was appearing in the docstring of `rand`
@@ -70,24 +70,24 @@ Two such objects will always generate different streams of random numbers.
 The entropy is obtained from the operating system.
 """
 struct RandomDevice <: AbstractRNG; end
-RandomDevice(seed::Nothing) = RandomDevice()
+RandomDevice(::Nothing) = RandomDevice()
 seed!(rng::RandomDevice, ::Nothing) = rng
 
-rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = Libc.getrandom!(Ref{sp[]}())[]
+rand(::RandomDevice, sp::SamplerBoolBitInteger) = Libc.getrandom!(Ref{sp[]}())[]
 rand(rd::RandomDevice, ::SamplerType{Bool}) = rand(rd, UInt8) % Bool
 
 # specialization for homogeneous tuple types of builtin integers, to avoid
 # repeated system calls
-rand(rd::RandomDevice, sp::SamplerTag{Ref{Tuple{Vararg{T, N}}}, Tuple{S}}
+rand(::RandomDevice, sp::SamplerTag{Ref{Tuple{Vararg{T, N}}}, Tuple{S}}
      ) where {T, N, S <: SamplerUnion(Base.BitInteger_types...)} =
          Libc.getrandom!(Ref{gentype(sp)}())[]
 
-function rand!(rd::RandomDevice, A::Array{Bool}, ::SamplerType{Bool})
+function rand!(::RandomDevice, A::Array{Bool}, ::SamplerType{Bool})
     Libc.getrandom!(A)
     # we need to mask the result so that only the LSB in each byte can be non-zero
     GC.@preserve A begin
         p = Ptr{UInt8}(pointer(A))
-        for i = 1:length(A)
+        for _ = 1:length(A)
             unsafe_store!(p, unsafe_load(p) & 0x1)
             p += 1
         end
@@ -95,7 +95,7 @@ function rand!(rd::RandomDevice, A::Array{Bool}, ::SamplerType{Bool})
     return A
 end
 for T in BitInteger_types
-    @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = Libc.getrandom!(A)
+    @eval rand!(::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = Libc.getrandom!(A)
 end
 
 # RandomDevice produces natively UInt64

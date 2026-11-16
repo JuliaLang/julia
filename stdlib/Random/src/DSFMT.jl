@@ -51,9 +51,7 @@ function dsfmt_get_idstring()
 end
 
 function dsfmt_get_min_array_size()
-    min_array_size = ccall((:dsfmt_get_min_array_size,:libdSFMT),
-                           Int32,
-                           ())
+    ccall((:dsfmt_get_min_array_size,:libdSFMT), Int32, ())
 end
 
 const dsfmt_min_array_size = dsfmt_get_min_array_size()
@@ -135,7 +133,7 @@ function sqrmod!(f::GF2X, m::GF2X)::GF2X
     sqrs = @lock _squares get(_squares[], m, nothing)
     if sqrs === nothing
         x2i = GF2X(1)
-        sqrs = GF2X[copy(mulxmod!(mulxmod!(x2i, m, d+1), m, d+1)) for i=1:d]
+        sqrs = GF2X[copy(mulxmod!(mulxmod!(x2i, m, d+1), m, d+1)) for _=1:d]
         @lock _squares get!(_squares[], m, sqrs)
     end
     let sqrs = sqrs  # work around the closure capture boxing issue, #15276
