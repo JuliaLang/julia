@@ -55,6 +55,9 @@ New library features
 * An unquoted `*`, `?` or `[` in a command literal makes a glob, which expands to the matching
   paths when the command is created. Julia calls a `glob` function provided by a package,
   such as Glob.jl, to match the pattern, so globbing works after `using Glob` ([#20401]).
+* `sum` and `prod` of complex numbers with small integer components (such as `Complex{Int8}`)
+  now widen them to `Int` or `UInt`, as they already do for real small integers, instead of
+  silently overflowing ([#15523]).
 
 Standard library changes
 ------------------------

@@ -140,6 +140,34 @@ Base.mapreduce_first(::typeof(abs), ::typeof(+), ::MapReduceFirstTag) = 0
     @test sum(BigInt[]) == big(0) && sum(BigInt[]) isa BigInt
 end
 
+@testset "sum/prod of small-integer Complex promote like their components (#15523)" begin
+    @test sum(ones(Complex{Int8}, 100_000)) === Complex{Int}(100_000, 0)
+    @test sum(ones(Complex{UInt8}, 1000)) === Complex{UInt}(1000, 0)
+    @testset for T in [Int8, Int16, Int32]
+        @test sum(Complex{T}[]) === zero(Complex{Int})
+        @test sum([Complex{T}(1, 2)]) === Complex{Int}(1, 2)
+        @test sum(Complex{T}[1+2im, 3+4im]) === Complex{Int}(4, 6)
+        @test prod(Complex{T}[]) === one(Complex{Int})
+        @test prod([Complex{T}(1, 2)]) === Complex{Int}(1, 2)
+        @test prod(fill(Complex{T}(0, 2), 10)) === Complex{Int}(-1024, 0)  # (2im)^10, overflows Int8
+    end
+    @testset for T in [UInt8, UInt16, UInt32]
+        @test sum(Complex{T}[]) === zero(Complex{UInt})
+        @test sum([Complex{T}(1, 2)]) === Complex{UInt}(1, 2)
+        @test prod(Complex{T}[]) === one(Complex{UInt})
+        @test prod(fill(Complex{T}(2, 0), 10)) === Complex{UInt}(1024, 0)
+    end
+    # mixed signed/unsigned small components promote to Complex{Int}, like add_sum on reals
+    @test Base.add_sum(Complex{Int8}(1, 1), Complex{UInt8}(2, 2)) === Complex{Int}(3, 3)
+    # dims, init and a mapped function go through the same promotion
+    @test sum(fill(Complex{Int8}(100, -100), 3, 2); dims=1) == Complex{Int}[300-300im 300-300im]
+    @test eltype(sum(fill(Complex{Int8}(1, 1), 3, 2); dims=1)) === Complex{Int}
+    @test sum(x -> Complex{Int8}(x, x), Int8[100, 100]) === Complex{Int}(200, 200)
+    # other complex types are unchanged
+    @test sum(Complex{Int}[1+im, 2]) === Complex{Int}(3, 1)
+    @test sum(ComplexF32[1, 2]) === ComplexF32(3)
+end
+
 @test sum(Bool[]) === sum(Bool[false]) === sum(Bool[false, false]) === 0
 @test sum(Bool[true, false, true]) === 2
 
