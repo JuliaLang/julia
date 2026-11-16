@@ -74,34 +74,44 @@ function move_to_node1(t)
 end
 
 # Base.compilecache only works from node 1, so precompile test is handled specially
-move_to_node1("ccall")
 move_to_node1("precompile")
 move_to_node1("SharedArrays")
 move_to_node1("threads")
 move_to_node1("Distributed")
-move_to_node1("gc")
-# Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
-move_to_node1("stress")
+if Sys.WORD_SIZE == 32
+    # On 32-bit workers that have used a lot of memory, `@threadcall` fails to allocate
+    # signal stacks (`ccall`) and allocations fail (`gc`)
+    move_to_node1("ccall")
+    move_to_node1("gc")
+end
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Move LinearAlgebra, Pkg, and SparseArrays tests to the front, because they
-# take a while, so we might as well get them all started early. SparseArrays in
-# particular runs as a single test set for close to an hour on slow platforms
-# (e.g. i686) and dominates the critical path if started late.
-# The ambiguity test must run before any worker has finished the SparseArrays tests:
-# SparseArrays' test module defines constructors (e.g. `Counting`) that are ambiguous
-# with Base's `Type` constructors, and once loaded on a worker they are picked up by
-# `detect_ambiguities(Core, Base)` in any test that later runs on the same worker.
-# Placing "ambiguous" last here schedules it first, so it completes while every
-# other worker is still busy with the long front-loaded test sets.
-for prependme in ["LinearAlgebra", "Pkg", "SparseArrays", "ambiguous"]
-    prependme_test_ids = findall(x->occursin(prependme, x), tests)
-    prependme_tests = tests[prependme_test_ids]
-    deleteat!(tests, prependme_test_ids)
-    prepend!(tests, prependme_tests)
+# Start the longest tests first, so that they don't end up running alone at the end while
+# the other workers sit idle. Roughly in decreasing order of their duration on this
+# branch's Linux CI (November 2026); tests that are not listed keep their order and run
+# after these. A package name also covers its test groups.
+const longest_tests = [
+    "LinearAlgebra/triangular", "SparseArrays", "Pkg", "LinearAlgebra/bidiag",
+    "LinearAlgebra/dense", "LinearAlgebra/diagonal", "LinearAlgebra/symmetric",
+    "LinearAlgebra/matmul", "LinearAlgebra/special", "LinearAlgebra/bunchkaufman",
+    "LinearAlgebra/addmul", "sorting", "LinearAlgebra/lu", "subarray", "cmdlineargs",
+    "loading", "bitarray", "Profile", "broadcast", "arrayops", "LibGit2/libgit2",
+    "LinearAlgebra/cholesky", "reducedim", "gc", "ccall",
+]
+function expected_rank(test)
+    rank = findfirst(name -> test == name || startswith(test, name * "/"), longest_tests)
+    return something(rank, length(longest_tests) + 1)
+end
+sort!(tests; by=expected_rank) # stable, so unlisted tests keep their order
+
+# `ambiguous` must be the first test on its worker, as methods defined by other tests can
+# make Base methods ambiguous
+if "ambiguous" in tests
+    splice!(tests, findfirst(isequal("ambiguous"), tests))
+    pushfirst!(tests, "ambiguous")
 end
 
 import LinearAlgebra
