@@ -101,8 +101,10 @@ end
 function _round_step(x, step, r::RoundingMode)
     # TODO: use div with rounding mode
     y = round(x / step, r) * step
-    if !isfinite(y)
-        if x > 0
+    if isnan(y)
+        if isnan(x) || isnan(step)
+            return y
+        elseif x > 0
             return (r == RoundUp ? oftype(x, Inf) : zero(x))
         elseif x < 0
             return (r == RoundDown ? -oftype(x, Inf) : -zero(x))
