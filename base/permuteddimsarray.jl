@@ -53,6 +53,7 @@ Base.similar(A::PermutedDimsArray, T::Type, dims::Base.Dims) = similar(parent(A)
 Base.dataids(A::PermutedDimsArray) = Base.dataids(parent(A))
 Base.unaliascopy(A::PermutedDimsArray) = typeof(A)(Base.unaliascopy(parent(A)))
 Base.cconvert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.cconvert(Ptr{T}, parent(A))
+Base.unsafe_convert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.unsafe_convert(Ptr{T}, parent(A))
 
 # It's OK to return a pointer to the first element, and indeed quite
 # useful for wrapping C routines that require a different storage
