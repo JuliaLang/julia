@@ -26,6 +26,7 @@
 
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
+#include <atomic>
 #include "julia.h"
 #include "julia_internal.h"
 #include "platform.h"
@@ -798,6 +799,12 @@ public:
     // entries in CISymbols, to prevent invokes to a new CodeInstance with the
     // same address from being linked to old symbol.
     void unregisterCI(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
+    // Point the trampolines for calls to CI made before it had code (see linkCallTarget)
+    // at its code, once CI or an equivalent CodeInstance has some with their API.
+    void linkDeferredStubs(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
+    // A new slot for a trampoline for calls to CI with API, which linkDeferredStubs will
+    // point at its code.
+    std::atomic<void *> *addDeferredStub(jl_code_instance_t *CI, jl_invoke_api_t API) JL_NOTSAFEPOINT;
 
     orc::ThreadSafeContext makeContext() JL_NOTSAFEPOINT;
     const DataLayout& getDataLayout() const JL_NOTSAFEPOINT;
@@ -915,6 +922,12 @@ private:
     // CodeInstance is eligible for garbage collection, it must be removed from
     // this map first, with unregisterCI.
     CISymbolMap CISymbols;
+    // The slots of the trampolines for calls to CodeInstances that had no code yet, not yet
+    // pointed at their code, by the CodeInstance they call, with their API. Protected by
+    // DeferredStubsMutex, which may be taken while holding LinkerMutex but not the other
+    // way around.
+    std::mutex DeferredStubsMutex;
+    DenseMap<jl_code_instance_t *, SmallVector<std::pair<std::atomic<void *> *, jl_invoke_api_t>, 1>> DeferredStubs;
     jl_name_counter_t Names;
 
     std::unique_ptr<DLSymOptimizer> DLSymOpt;

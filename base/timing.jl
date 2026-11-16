@@ -528,6 +528,7 @@ function gc_bytes()
 end
 
 @constprop :none function allocated(f, args::Vararg{Any,N}) where {N}
+    Experimental.@force_compile
     b0 = Ref{Int64}(0)
     b1 = Ref{Int64}(0)
     Base.gc_bytes(b0)
@@ -538,6 +539,7 @@ end
 only(methods(allocated)).called = 0xff
 
 @constprop :none function allocations(f, args::Vararg{Any,N}) where {N}
+    Experimental.@force_compile
     stats = Base.gc_num()
     @noinline f(args...)
     diff = Base.GC_Diff(Base.gc_num(), stats)

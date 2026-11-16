@@ -24,6 +24,7 @@
 #include <llvm/ExecutionEngine/Orc/Debugging/VTuneSupportPlugin.h>
 #include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderVTune.h>
 #include <llvm/ExecutionEngine/Orc/ExecutorProcessControl.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
@@ -451,6 +452,53 @@ static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time) JL_N
                             julia_double_to_half(orig_time + time * 1e-9));
 }
 
+static Function *emitDeferredStub(jl_codegen_output_t &out, Function *F, std::atomic<void *> *Slot) JL_NOTSAFEPOINT;
+
+// Calls to code that has none yet, such as those that add_codeinsts_to_jit! leaves out of the
+// batch because they might not run, go through trampolines that compile the callee when first
+// called. Emit those into the batch's own module, rather than leaving them to be made one module
+// each when the batch is linked (see linkCallTarget).
+static void emit_deferred_trampolines(jl_codegen_output_t &out) JL_CANSAFEPOINT
+{
+    SmallVector<std::pair<jl_code_instance_t *, jl_invoke_api_t>, 0> calls;
+    for (auto &[call, target] : out.call_targets) {
+        auto [ci, api] = call;
+        if (!target.decl->isDeclaration() || out.ci_funcs.count(ci))
+            continue;
+        if (api != JL_INVOKE_SPECSIG && api != JL_INVOKE_ARGS)
+            continue;
+        if (ci->owner != jl_nothing || jl_atomic_load_relaxed(&ci->invoke) != NULL)
+            continue;
+        jl_method_instance_t *mi = jl_get_ci_mi(ci);
+        if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
+            continue;
+        calls.push_back({ci, static_cast<jl_invoke_api_t>(api)});
+    }
+    // In the order codegen named the calls, not that of call_targets, which depends on where
+    // CodeInstances are in memory: the object cache can only reuse a module that is emitted
+    // the same way in every session.
+    std::sort(calls.begin(), calls.end(), [&](auto &a, auto &b) JL_NOTSAFEPOINT {
+        return out.call_targets.find(a)->second.decl->getName() <
+               out.call_targets.find(b)->second.decl->getName();
+    });
+    for (auto [ci, api] : calls) {
+        Function *F = emit_tojlinvoke(ci, "jl_invoke_deferred", out); // may safepoint
+        if (api == JL_INVOKE_SPECSIG)
+            F = emit_specsig_to_fptr1(out, ci, F); // may safepoint
+        // emitting may have inserted into call_targets
+        auto It = out.call_targets.find({ci, api});
+        Function *Decl = It->second.decl;
+        if (Decl->getFunctionType() != F->getFunctionType())
+            continue; // leave it to linkCallTarget (F is unused, so will be dropped)
+        Function *Stub = emitDeferredStub(out, F, jl_ExecutionEngine->addDeferredStub(ci, api));
+        Stub->setLinkage(GlobalValue::InternalLinkage);
+        Stub->setName(out.make_name("deferred"));
+        Decl->replaceAllUsesWith(Stub);
+        Decl->eraseFromParent();
+        out.call_targets.erase(It);
+    }
+}
+
 extern "C" JL_DLLEXPORT_CODEGEN void
 jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
 {
@@ -493,6 +541,8 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
         if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
             jl_as_global_root((jl_value_t*)mi, 1);
     }
+
+    emit_deferred_trampolines(out); // contains safepoints
 
     out.temporary_roots = nullptr;
     out.temporary_roots_set.clear();
@@ -1135,11 +1185,65 @@ private:
     jl_emitted_output_t Out;
 };
 
+// A trampoline for calls to a callee that has no code yet (see linkCallTarget): a function
+// with the type and attributes of `F` that tail-calls what `Slot` points to, once
+// linkDeferredStubs has pointed it at the callee's code, and `F` until then.
+static Function *emitDeferredStub(jl_codegen_output_t &out, Function *F, std::atomic<void *> *Slot) JL_NOTSAFEPOINT
+{
+    Module &M = *F->getParent();
+    LLVMContext &Ctx = M.getContext();
+    Function *Stub = Function::Create(F->getFunctionType(), GlobalValue::ExternalLinkage, "", M);
+    Stub->copyAttributesFrom(F);
+    F->setLinkage(GlobalValue::InternalLinkage);
+    F->setName(Twine("deferred"));
+    IRBuilder<> B(BasicBlock::Create(Ctx, "top", Stub));
+    BasicBlock *Fast = BasicBlock::Create(Ctx, "compiled", Stub);
+    BasicBlock *Slow = BasicBlock::Create(Ctx, "tojlinvoke", Stub);
+    auto *PtrT = PointerType::get(Ctx, 0);
+    // The slot's address is in a global that linking points at it, as for the pointers codegen
+    // emits (see julia_pgv), rather than in the code: the object cache can only reuse code that
+    // is the same in every session.
+    GlobalVariable *&GV = out.global_targets[(void *)Slot];
+    if (!GV) {
+        GV = new GlobalVariable(M, PtrT, false, GlobalVariable::ExternalLinkage, nullptr,
+                                out.make_name("deferred_slot"));
+        GV->setMetadata("julia.constgv", MDNode::get(Ctx, {}));
+    }
+    LoadInst *SlotAddr = B.CreateAlignedLoad(PtrT, GV, Align(sizeof(void *)));
+    LoadInst *Target = B.CreateAlignedLoad(PtrT, SlotAddr, Align(sizeof(void *)));
+    Target->setAtomic(AtomicOrdering::Monotonic);
+    B.CreateCondBr(B.CreateIsNotNull(Target), Fast, Slow);
+    SmallVector<Value *, 0> Args;
+    for (auto &Arg : Stub->args())
+        Args.push_back(&Arg);
+    // Not marked as passing return roots, which belong to the stub's caller: GC lowering
+    // expects those to be allocas of the calling function.
+    AttributeList Attrs = F->getAttributes();
+    for (unsigned i = 0; i < Args.size(); i++)
+        Attrs = Attrs.removeParamAttribute(Ctx, i, "julia.return_roots");
+    auto TailCall = [&](BasicBlock *BB, FunctionCallee Callee) JL_NOTSAFEPOINT {
+        B.SetInsertPoint(BB);
+        CallInst *Call = B.CreateCall(Callee, Args);
+        Call->setAttributes(Attrs);
+        Call->setCallingConv(F->getCallingConv());
+        // Not `musttail`: LLVM cannot honor that when the return value does not fit in
+        // registers and is returned in memory instead (as for some `swiftcc` aggregates).
+        Call->setTailCallKind(CallInst::TCK_Tail);
+        if (Stub->getReturnType()->isVoidTy())
+            B.CreateRetVoid();
+        else
+            B.CreateRet(Call);
+    };
+    TailCall(Fast, FunctionCallee(F->getFunctionType(), Target));
+    TailCall(Slow, F);
+    return Stub;
+}
+
 class JLTrampolineMaterializationUnit : public orc::MaterializationUnit {
 public:
     JLTrampolineMaterializationUnit(JuliaOJIT &JIT, ObjectLinkingLayer &OL,
                                     SymbolStringPtr Sym, jl_code_instance_t *CI,
-                                    jl_invoke_api_t API) JL_NOTSAFEPOINT
+                                    jl_invoke_api_t API, std::atomic<void *> *Slot) JL_NOTSAFEPOINT
       : orc::MaterializationUnit({{{JIT.mangle(*Sym),
                                     JITSymbolFlags::Exported | JITSymbolFlags::Callable}},
                                   {}}),
@@ -1147,7 +1251,8 @@ public:
         OL(OL),
         Sym(Sym),
         CI(CI),
-        API(API)
+        API(API),
+        Slot(Slot)
     {
         assert(API == JL_INVOKE_ARGS || API == JL_INVOKE_SPECSIG);
     };
@@ -1162,10 +1267,12 @@ public:
 
         jl_task_t *ct = jl_current_task;
         uint8_t state = jl_gc_unsafe_enter(ct->ptls);
-        Function *F = emit_tojlinvoke(CI, "", Out);
+        Function *F = emit_tojlinvoke(CI, Slot ? "jl_invoke_deferred" : "", Out);
         if (API == JL_INVOKE_SPECSIG)
             F = emit_specsig_to_fptr1(Out, CI, F); // may safepoint
         jl_gc_unsafe_leave(ct->ptls, state);
+        if (Slot)
+            F = emitDeferredStub(Out, F, Slot);
         F->setLinkage(GlobalValue::ExternalLinkage);
         F->setName(*Sym);
 
@@ -1190,6 +1297,7 @@ private:
     SymbolStringPtr Sym;
     jl_code_instance_t *CI;
     jl_invoke_api_t API;
+    std::atomic<void *> *Slot; // see linkCallTarget
 };
 
 #if defined(LLVM_SHLIB)
@@ -2278,6 +2386,61 @@ void JuliaOJIT::unregisterCI(jl_code_instance_t *CI)
 {
     std::unique_lock Lock{LinkerMutex};
     CISymbols.erase(CI);
+    std::unique_lock StubsLock{DeferredStubsMutex};
+    DeferredStubs.erase(CI);
+}
+
+std::atomic<void *> *JuliaOJIT::addDeferredStub(jl_code_instance_t *CI, jl_invoke_api_t API)
+{
+    // TODO: don't leak when we have a way to GC code
+    auto *Slot = new std::atomic<void *>(nullptr);
+    std::unique_lock StubsLock{DeferredStubsMutex};
+    DeferredStubs[CI].push_back({Slot, API});
+    return Slot;
+}
+
+void JuliaOJIT::linkDeferredStubs(jl_code_instance_t *CI)
+{
+    std::unique_lock StubsLock{DeferredStubsMutex};
+    auto It = DeferredStubs.find(CI);
+    if (It == DeferredStubs.end())
+        return;
+    // The code must have the ABI the trampolines were made for (that of CI's definition and
+    // return type), and be valid in every world CI is.
+    size_t MinWorld = jl_atomic_load_relaxed(&CI->min_world);
+    size_t MaxWorld = jl_atomic_load_relaxed(&CI->max_world);
+    for (jl_code_instance_t *C = jl_atomic_load_relaxed(&jl_get_ci_mi(CI)->cache); C;
+         C = jl_atomic_load_relaxed(&C->next)) {
+        if (C != CI && !(jl_egal(C->def, CI->def) && jl_egal(C->owner, CI->owner) &&
+                         jl_egal(C->rettype, CI->rettype) &&
+                         jl_atomic_load_relaxed(&C->min_world) <= MinWorld &&
+                         jl_atomic_load_relaxed(&C->max_world) >= MaxWorld))
+            continue;
+        jl_callptr_t Invoke = jl_atomic_load_acquire(&C->invoke);
+        if (Invoke == NULL || Invoke == jl_fptr_wait_for_compiled_addr)
+            continue;
+        if (!(jl_atomic_load_acquire(&C->flags) & JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR))
+            continue;
+        void *SpecPtr = jl_atomic_load_relaxed(&C->specptr.fptr);
+        jl_invoke_api_t API = jl_callptr_invoke_api(Invoke);
+        if (SpecPtr == NULL || !(API == JL_INVOKE_SPECSIG || API == JL_INVOKE_ARGS))
+            continue;
+        auto &Stubs = It->second;
+        for (size_t i = 0; i < Stubs.size();) {
+            if (Stubs[i].second == API) {
+                Stubs[i].first->store(SpecPtr, std::memory_order_release);
+                Stubs[i] = Stubs.back();
+                Stubs.pop_back();
+            }
+            else {
+                i++;
+            }
+        }
+        if (Stubs.empty()) {
+            DeferredStubs.erase(It);
+            return;
+        }
+    }
 }
 
 #define addAbsoluteToMap(map,name) \
@@ -2606,19 +2769,24 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
     CISymbolPtr *Sym = linkCISymbol(CI);
 
     // If !Sym: The target CI was not compiled, so generate a tojlinvoke
-    // trampoline that will cause it to be compiled.
-    // TODO: replace this with a GOT/PLT mechanism that avoids the jl_invoke
-    // after it has been compiled.
+    // trampoline that will cause it to be compiled. It calls through a slot,
+    // pointed at the code once there is some (linkDeferredStubs), so that from
+    // then on the call costs an indirect jump rather than a jl_invoke.
     //
     // We also generate a tojlinvoke to handle args1 -> specsig.
     CISymbolPtr Trampoline;
     if (!Sym || Sym->invoke_api != API) {
+        jl_method_instance_t *MI = jl_get_ci_mi(CI);
+        std::atomic<void *> *Slot = nullptr;
+        if (!Sym && CI->owner == jl_nothing &&
+            !(jl_is_method(MI->def.value) && MI->def.method->is_for_opaque_closure))
+            Slot = addDeferredStub(CI, API);
         auto TSym = ES.intern(Names("tojlinvoke#", name_from_method_instance(jl_get_ci_mi(CI)), "#"));
         Trampoline.specptr = mangle(*TSym);
         Trampoline.invoke_api = API;
         Sym = &Trampoline;
         auto Err = JD.define(std::make_unique<JLTrampolineMaterializationUnit>(
-            *this, ObjectLayer, TSym, CI, API));
+            *this, ObjectLayer, TSym, CI, API, Slot));
         if (Err) {
 #ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
             MR.getExecutionSession().reportError(std::move(Err));
@@ -2924,4 +3092,10 @@ extern "C" JL_DLLEXPORT_CODEGEN
 void jl_jit_unregister_ci_impl(jl_code_instance_t *ci)
 {
     jl_ExecutionEngine->unregisterCI(ci);
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_jit_link_deferred_stubs_impl(jl_code_instance_t *ci)
+{
+    jl_ExecutionEngine->linkDeferredStubs(ci);
 }
