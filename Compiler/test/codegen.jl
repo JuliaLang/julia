@@ -1719,7 +1719,7 @@ end
                 any(x -> Meta.isexpr(x, :meta), ci.code))
         code_llvm(stdout, dbgvars_f, tt; debuginfo=:source, raw=true, optimize=false, dump_module=true)
         """
-    getir(level) = read(`$(Base.julia_cmd()) $level --startup-file=no -e $script`, String)
+    getir(level) = read(`$(Base.julia_cmd()) $level --color=no --startup-file=no -e $script`, String)
     # the variables in the scope of the function `fname` that have a debug value,
     # with the metadata of their types
     function described_variables(ir, fname)
