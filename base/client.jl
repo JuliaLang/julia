@@ -31,61 +31,84 @@ answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answ
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
-# Run a command typed in REPL shell mode and return whether it succeeded. `cd` is handled
-# here, printing the new directory to `out`; other commands run through the user's shell on
-# Unix. An error running a command is displayed rather than thrown, but other errors, such as
-# one from `cd`, are thrown.
+# Run a command typed in REPL shell mode and return whether it succeeded. Commands run
+# directly, never through a system shell. `cd`, `export` and `unset` are handled here, since
+# they change the state of the Julia process, and `cd` prints the new directory to `out`. An
+# error running a command is displayed rather than thrown, but other errors, such as one from
+# `cd`, are thrown.
 function _repl_cmd(cmd::AbstractCmd, out)
-    if !(cmd isa Cmd)
-        # Pipelines and redirects: run directly without shell wrapping.
-        try
-            return _succeeded(run(ignorestatus(cmd)))
-        catch
-            _display_repl_cmd_error()
-        end
-        return false
+    if cmd isa Cmd
+        isempty(cmd.exec) && throw(ArgumentError("no cmd to execute"))
+        name = cmd.exec[1]
+        name == "cd" && return _repl_cd(cmd, out)
+        name == "export" && return _repl_export(cmd, out)
+        name == "unset" && return _repl_unset(cmd)
     end
-    if isempty(cmd.exec)
-        throw(ArgumentError("no cmd to execute"))
-    elseif cmd.exec[1] == "cd"
-        if length(cmd.exec) > 2
-            throw(ArgumentError("cd method only takes one argument"))
-        elseif length(cmd.exec) == 2
-            dir = cmd.exec[2]
-            if dir == "-"
-                if !haskey(ENV, "OLDPWD")
-                    error("cd: OLDPWD not set")
-                end
-                dir = ENV["OLDPWD"]
+    try
+        return _succeeded(run(ignorestatus(cmd)))
+    catch
+        # Julia throws an exception if it can't find the program, but the stack trace isn't useful
+        _display_repl_cmd_error()
+    end
+    return false
+end
+
+function _repl_cd(cmd::Cmd, out)
+    if length(cmd.exec) > 2
+        throw(ArgumentError("cd method only takes one argument"))
+    elseif length(cmd.exec) == 2
+        dir = cmd.exec[2]
+        if dir == "-"
+            if !haskey(ENV, "OLDPWD")
+                error("cd: OLDPWD not set")
             end
-        else
-            dir = homedir()
+            dir = ENV["OLDPWD"]
         end
-        try
-            ENV["OLDPWD"] = pwd()
-        catch ex
-            ex isa IOError || rethrow()
-            # if current dir has been deleted, then pwd() will throw an IOError: pwd(): no such file or directory (ENOENT)
-            delete!(ENV, "OLDPWD")
-        end
-        cd(dir)
-        println(out, pwd())
-        return true
     else
-        if !Sys.iswindows()
-            shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
-            shell_escape_cmd = shell_escape_posixly(cmd)
-            original_cmd = cmd
-            cmd = Cmd(`$shell -c $shell_escape_cmd`, original_cmd.ignorestatus, original_cmd.flags, original_cmd.env, original_cmd.dir, original_cmd.cpus, original_cmd.uid, original_cmd.gid)
-        end
-        try
-            return _succeeded(run(ignorestatus(cmd)))
-        catch
-            # Julia throws an exception if it can't find the cmd (which may be the shell itself), but the stack trace isn't useful
-            _display_repl_cmd_error()
-        end
-        return false
+        dir = homedir()
     end
+    try
+        ENV["OLDPWD"] = pwd()
+    catch ex
+        ex isa IOError || rethrow()
+        # if current dir has been deleted, then pwd() will throw an IOError: pwd(): no such file or directory (ENOENT)
+        delete!(ENV, "OLDPWD")
+    end
+    cd(dir)
+    println(out, pwd())
+    return true
+end
+
+# Whether `s` is a valid environment variable name for `export` and `unset`, as in sh.
+_is_env_name(s::AbstractString) =
+    !isempty(s) && !isdigit(s[1]) && all(c -> isascii(c) && (isletter(c) || isdigit(c) || c == '_'), s)
+
+# `export NAME=value ...` sets environment variables, which every later command inherits;
+# `export NAME` does nothing, since all of Julia's environment variables are exported; and
+# `export` alone lists the environment.
+function _repl_export(cmd::Cmd, out)
+    if length(cmd.exec) == 1
+        for (name, value) in sort!(collect(ENV), by=first)
+            println(out, name, '=', value)
+        end
+        return true
+    end
+    for arg in cmd.exec[2:end]
+        i = findfirst('=', arg)
+        name = i === nothing ? arg : arg[1:prevind(arg, i)]
+        _is_env_name(name) || error("export: `$arg` is not a valid environment variable name")
+        i === nothing || (ENV[name] = arg[nextind(arg, i):end])
+    end
+    return true
+end
+
+# `unset NAME ...` removes environment variables.
+function _repl_unset(cmd::Cmd)
+    for name in cmd.exec[2:end]
+        _is_env_name(name) || error("unset: `$name` is not a valid environment variable name")
+        delete!(ENV, name)
+    end
+    return true
 end
 
 _repl_cmd(@nospecialize(cmd), out) =

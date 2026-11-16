@@ -905,9 +905,8 @@ mktempdir() do dir
     # simple command in shell mode still works
     shell_mode_run("$echostr simple > $outstr")
     @test read(outfile, String) == "simple\n"
-    # shell mode preserves a Cmd's env and dir. The redirect is inside the command
-    # because `cmd > file` is a CmdRedirect, which repl_cmd runs without the shell
-    # wrapping under test; `global` is needed as shell_mode_run interpolates via eval.
+    # shell mode preserves a Cmd's env and dir. The redirect is inside the command so that
+    # the command is a plain `Cmd`; `global` is needed as shell_mode_run interpolates via eval.
     if !Sys.iswindows()
         global envcmd = Cmd(`$shcmd -c "echo \$HOWLONG > $outstr"`, env=("HOWLONG" => "ever!",))
         shell_mode_run("\$envcmd")
@@ -991,6 +990,31 @@ end
             end
         end
         @test ran(joinpath("sub", "in_sub"))
+    end
+end
+
+@testset "shell mode runs commands directly, with `export` and `unset`" begin
+    withenv("JL_SHELL_MODE_TEST" => nothing, "JL_SHELL_MODE_TEST2" => "x") do
+        shell_mode_run("export JL_SHELL_MODE_TEST='a b' JL_SHELL_MODE_TEST2")
+        @test ENV["JL_SHELL_MODE_TEST"] == "a b"
+        @test ENV["JL_SHELL_MODE_TEST2"] == "x"  # `export NAME` keeps the value
+        if !Sys.iswindows()
+            mktempdir() do dir
+                out = joinpath(dir, "out.txt")
+                # later commands inherit the variable, and no system shell is involved, even
+                # for a command without pipes or redirections
+                withenv("SHELL" => joinpath(dir, "no-such-shell"), "JULIA_SHELL" => nothing) do
+                    shell_mode_run("$(Base.shell_escape(shcmd)) -c 'echo \$JL_SHELL_MODE_TEST > $out'")
+                end
+                @test read(out, String) == "a b\n"
+            end
+        end
+        shell_mode_run("unset JL_SHELL_MODE_TEST JL_SHELL_MODE_TEST2")
+        @test !haskey(ENV, "JL_SHELL_MODE_TEST") && !haskey(ENV, "JL_SHELL_MODE_TEST2")
+        @test occursin("PATH=", uppercase(sprint(io -> shell_mode_run("export"; stdout=io))))
+        @test_throws "is not a valid environment variable name" shell_mode_run("export 1X=2")
+        @test_throws "is not a valid environment variable name" shell_mode_run("export =2")
+        @test_throws "is not a valid environment variable name" shell_mode_run("unset A-B")
     end
 end
 
