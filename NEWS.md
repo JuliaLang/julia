@@ -79,6 +79,11 @@ Standard library changes
 
 #### REPL
 
+* Shell mode now runs every command directly, as Julia's command literals do, instead of running
+  commands without pipes or redirections through `$SHELL -c` on systems other than Windows. It no
+  longer reads the `JULIA_SHELL` environment variable. The new `export NAME=value` and `unset NAME`
+  commands in shell mode set and remove environment variables for later commands ([#20401]).
+
 #### SharedArrays
 
 #### Sockets
