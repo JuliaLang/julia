@@ -10,6 +10,25 @@ function rand!(rng::AbstractRNG, B::BitArray, ::SamplerType{Bool})
     return B
 end
 
+# Contiguous views of a BitArray (e.g. `view(B, :)`, `view(B, 3:70)`, `view(M, :, 2:3)`)
+# cover a contiguous range of bits, so fill whole chunks at once and keep the parent's
+# bits outside the view in the two boundary chunks.
+function rand!(rng::AbstractRNG, V::Base.FastContiguousSubArray{Bool,<:Any,<:BitArray}, ::SamplerType{Bool})
+    isempty(V) && return V
+    Bc = parent(V).chunks
+    a = Base.first_index(V)  # linear index of the first bit in the parent
+    b = a + length(V) - 1
+    ka = Base._div64(a - 1) + 1
+    kb = Base._div64(b - 1) + 1
+    ca, cb = Bc[ka], Bc[kb]
+    rand!(rng, view(Bc, ka:kb))
+    keep_lo = Base._msk64 << Base._mod64(a - 1)          # bits >= a in chunk ka
+    keep_hi = Base._msk64 >>> (63 - Base._mod64(b - 1))  # bits <= b in chunk kb
+    Bc[ka] = (Bc[ka] & keep_lo) | (ca & ~keep_lo)
+    Bc[kb] = (Bc[kb] & keep_hi) | (cb & ~keep_hi)
+    return V
+end
+
 """
     bitrand([rng=default_rng()], [dims...])
 

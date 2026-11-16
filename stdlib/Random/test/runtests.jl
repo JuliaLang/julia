@@ -1208,6 +1208,40 @@ end
     @test maximum(m) <= 0.106
 end
 
+@testset "rand! for contiguous views of BitArray (#41862)" begin
+    rng = Xoshiro(41862)
+    for n in (1, 63, 64, 65, 129, 300), init in (false, true)
+        for lo in 1:min(n, 66), hi in unique((lo, lo + 62, lo + 63, lo + 64, n))
+            hi > n && continue
+            B = BitVector(fill(init, n))
+            V = view(B, lo:hi)
+            @test rand!(rng, V) === V
+            @test all(==(init), B[1:lo-1])  # parent bits outside the view are untouched
+            @test all(==(init), B[hi+1:end])
+        end
+    end
+    B = falses(1000)
+    rand!(rng, view(B, 7:993))
+    @test 400 < count(B) < 600
+    @test !any(B[1:6]) && !any(B[994:end])
+    M = trues(10, 20)
+    rand!(rng, view(M, :, 3:5))
+    @test all(M[:, 1:2]) && all(M[:, 6:end])
+    @test 0 < count(M[:, 3:5]) < 30
+    B = trues(10)
+    @test isempty(rand!(rng, view(B, 5:4)))
+    @test all(B)
+    B1, B2 = falses(300), falses(300)
+    rand!(Xoshiro(1), view(B1, 10:290))
+    rand!(Xoshiro(1), view(B2, 10:290))
+    @test B1 == B2
+    for r in (MersenneTwister(3), RandomDevice())
+        B = falses(500)
+        rand!(r, view(B, 3:497))
+        @test !any(B[1:2]) && !any(B[498:end]) && count(B) > 150
+    end
+end
+
 @testset "`shuffle(::NTuple)`" begin
     @testset "sorted" begin
         for n ∈ 0:20
