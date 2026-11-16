@@ -830,7 +830,7 @@ end
 # but better printing could be done if we were to change this.
 function to_compatible_exception(@nospecialize(exc))
     if exc isa LoweringError && !exc.internal
-        ErrorException(string("syntax: ", sprint(showerror, exc)))
+        ErrorException(sprint(showerror, exc))
     elseif exc isa MacroExpansionError
         loc = _macrocall_expr_location(exc.context.macrocall)
         lnn = loc isa MacroSource ? loc.lno : loc

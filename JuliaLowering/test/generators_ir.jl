@@ -149,7 +149,7 @@
 # Error: Use of placeholders in body
 (_ for _ in xs)
 #---------------------
-all-underscore identifiers are write-only and their values cannot be used in expressions
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
 @ :1
 (_ for _ in xs)
 #╙
@@ -222,7 +222,7 @@ all-underscore identifiers are write-only and their values cannot be used in exp
 # Error: `return` not permitted in generator body
 ((return x) + y for x in iter)
 #---------------------
-`return` not allowed inside comprehension or generator
+syntax: `return` not allowed inside comprehension or generator
 @ :1
 ((return x) + y for x in iter)
 # └──────┘
@@ -233,7 +233,7 @@ all-underscore identifiers are write-only and their values cannot be used in exp
     Int[(x > 1 && break; x) for x in 1:3]
 end
 #---------------------
-unlabeled `break` outside of a `while` or `for` loop
+syntax: unlabeled `break` outside of a `while` or `for` loop
 @ :2
 @label begin
     Int[(x > 1 && break; x) for x in 1:3]

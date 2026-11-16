@@ -21,6 +21,7 @@ end
     LoweringError(msg, SyntaxTree[st], [nothing], false)
 
 function Base.showerror(io::IO, exc::LoweringError)
+    print(io, "syntax: ")
     print(io, exc.msg)
     if exc.internal
         print(io, " (internal lowering bug)")

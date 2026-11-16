@@ -159,7 +159,7 @@ end
 # Error: Invalid lhs in `=`
 a.(b) = rhs
 #---------------------
-cannot assign to dotcall syntax
+syntax: cannot assign to dotcall syntax
 @ :1
 a.(b) = rhs
 └───┘
@@ -168,7 +168,7 @@ a.(b) = rhs
 # Error: Invalid lhs in `=`
 a.(b,c) = rhs
 #---------------------
-cannot assign to dotcall syntax
+syntax: cannot assign to dotcall syntax
 @ :1
 a.(b,c) = rhs
 └─────┘
@@ -177,7 +177,7 @@ a.(b,c) = rhs
 # Error: Invalid lhs in `=`
 T[x y] = rhs
 #---------------------
-invalid spacing in left side of indexed assignment
+syntax: invalid spacing in left side of indexed assignment
 @ :1
 T[x y] = rhs
 └────┘
@@ -186,7 +186,7 @@ T[x y] = rhs
 # Error: Invalid lhs in `=`
 T[x; y] = rhs
 #---------------------
-unexpected `;` in left side of indexed assignment
+syntax: unexpected `;` in left side of indexed assignment
 @ :1
 T[x; y] = rhs
 └─────┘
@@ -195,7 +195,7 @@ T[x; y] = rhs
 # Error: Invalid lhs in `=`
 T[x ;;; y] = rhs
 #---------------------
-unexpected `;` in left side of indexed assignment
+syntax: unexpected `;` in left side of indexed assignment
 @ :1
 T[x ;;; y] = rhs
 └────────┘
@@ -204,7 +204,7 @@ T[x ;;; y] = rhs
 # Error: Invalid lhs in `=`
 [x, y] = rhs
 #---------------------
-use `(a, b) = ...` to assign multiple values
+syntax: use `(a, b) = ...` to assign multiple values
 @ :1
 [x, y] = rhs
 └────┘
@@ -213,7 +213,7 @@ use `(a, b) = ...` to assign multiple values
 # Error: Invalid lhs in `=`
 [x y] = rhs
 #---------------------
-use `(a, b) = ...` to assign multiple values
+syntax: use `(a, b) = ...` to assign multiple values
 @ :1
 [x y] = rhs
 └───┘
@@ -222,7 +222,7 @@ use `(a, b) = ...` to assign multiple values
 # Error: Invalid lhs in `=`
 [x; y] = rhs
 #---------------------
-use `(a, b) = ...` to assign multiple values
+syntax: use `(a, b) = ...` to assign multiple values
 @ :1
 [x; y] = rhs
 └────┘
@@ -231,7 +231,7 @@ use `(a, b) = ...` to assign multiple values
 # Error: Invalid lhs in `=`
 [x ;;; y] = rhs
 #---------------------
-use `(a, b) = ...` to assign multiple values
+syntax: use `(a, b) = ...` to assign multiple values
 @ :1
 [x ;;; y] = rhs
 └───────┘
@@ -240,7 +240,7 @@ use `(a, b) = ...` to assign multiple values
 # Error: Invalid lhs in `=`
 1 = rhs
 #---------------------
-invalid syntax in left-hand side of assignment
+syntax: invalid syntax in left-hand side of assignment
 @ :1
 1 = rhs
 ╙
@@ -358,7 +358,7 @@ end
 # Error: invalid LHS: block
 begin; x; end = 1
 #---------------------
-invalid syntax in left-hand side of assignment
+syntax: invalid syntax in left-hand side of assignment
 @ :1
 begin; x; end = 1
 └───────────┘
@@ -367,7 +367,7 @@ begin; x; end = 1
 # Error: Updating assignment with invalid left hand side
 f() += y
 #---------------------
-invalid assignment location
+syntax: invalid assignment location
 @ :1
 f() += y
 └─┘
@@ -376,7 +376,7 @@ f() += y
 # Error: Updating assignment with invalid tuple destructuring on left hand side
 (if false end, b) += 2
 #---------------------
-invalid syntax in left-hand side of assignment
+syntax: invalid syntax in left-hand side of assignment
 @ :1
 (if false end, b) += 2
 #└──────────┘
@@ -385,7 +385,7 @@ invalid syntax in left-hand side of assignment
 # Error: Updating assignment to ssavalue (JuliaLang/julia#30062)
 f(), x += 10, 20
 #---------------------
-invalid multiple assignment location
+syntax: invalid multiple assignment location
 @ :1
 f(), x += 10, 20
 └────┘

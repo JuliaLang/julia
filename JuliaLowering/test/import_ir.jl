@@ -56,7 +56,7 @@ function f()
     import A: b
 end
 #---------------------
-this syntax is only allowed at top level
+syntax: this syntax is only allowed at top level
 @ :2
 function f()
     import A: b

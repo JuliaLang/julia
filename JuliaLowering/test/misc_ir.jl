@@ -34,7 +34,7 @@ x."b"
 # Error: Wrong number of children in `.`
 @ast_ [:. "x"::identifier "a"::identifier 3::value]
 #---------------------
-invalid syntax: unknown form `.` or number of arguments 3
+syntax: invalid syntax: unknown form `.` or number of arguments 3
 @ :1
 └───Expression: ::tombstone
 
@@ -42,7 +42,7 @@ invalid syntax: unknown form `.` or number of arguments 3
 # Error: Placeholder value used
 _ + 1
 #---------------------
-all-underscore identifiers are write-only and their values cannot be used in expressions
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
 @ :1
 _ + 1
 ╙
@@ -141,7 +141,7 @@ _ + 1
 # Error: Named tuple with repeated fields
 (; a=1, bs..., c=3, a=2)
 #---------------------
-repeated named tuple field name
+syntax: repeated named tuple field name
 @ :1
 (; a=1, bs..., c=3, a=2)
 #                   ╙
@@ -150,7 +150,7 @@ repeated named tuple field name
 # Error: Named tuple frankentuple
 (a=1; b=2, c=3)
 #---------------------
-cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
+syntax: cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
 @ :1
 (a=1; b=2, c=3)
 #   └────────┘
@@ -159,7 +159,7 @@ cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
 # Error: Named tuple field dots in rhs
 (; a=xs...)
 #---------------------
-unexpected `...`
+syntax: unexpected `...`
 splatting can only be done into a `call`, `tuple`, `curly`, or array-like expression
 @ :1
 (; a=xs...)
@@ -169,7 +169,7 @@ splatting can only be done into a `call`, `tuple`, `curly`, or array-like expres
 # Error: Named tuple field invalid lhs
 (; a[]=1)
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 (; a[]=1)
 #  └─┘
@@ -178,7 +178,7 @@ expected identifier
 # Error: Named tuple element with weird dot syntax
 (; a."b")
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 (; a."b")
 #    └─┘
@@ -187,7 +187,7 @@ expected identifier
 # Error: Named tuple element without valid name
 (; a=1, f())
 #---------------------
-expected identifier, `=`, or `...` after semicolon
+syntax: expected identifier, `=`, or `...` after semicolon
 @ :1
 (; a=1, f())
 #       └─┘
@@ -199,7 +199,7 @@ begin
     end
 end
 #---------------------
-`module` is only allowed at top level
+syntax: `module` is only allowed at top level
 @ :2
 begin
 #   ┌───────
@@ -215,7 +215,7 @@ function f()
     end
 end
 #---------------------
-this syntax is only allowed at top level
+syntax: this syntax is only allowed at top level
 @ :2
 function f()
 #   ┌───────
@@ -237,7 +237,7 @@ x::T
 # Error: Invalid :: syntax outside function arg list
 ::T
 #---------------------
-`::` must be written `value::type` outside function argument lists
+syntax: `::` must be written `value::type` outside function argument lists
 @ :1
 ::T
 └─┘
@@ -246,7 +246,7 @@ x::T
 # Error: braces vector syntax
 {x, y}
 #---------------------
-`{ }` outside of `where` is reserved for future use
+syntax: `{ }` outside of `where` is reserved for future use
 @ :1
 {x, y}
 └────┘
@@ -255,7 +255,7 @@ x::T
 # Error: braces matrix syntax
 {x y; y z}
 #---------------------
-`{ }` outside of `where` is reserved for future use
+syntax: `{ }` outside of `where` is reserved for future use
 @ :1
 {x y; y z}
 └────────┘
@@ -265,7 +265,7 @@ x::T
 # programmatically (eg, a malformed if)
 @ast_ [:if]
 #---------------------
-expected (if cond body) or (if cond body else)
+syntax: expected (if cond body) or (if cond body else)
 @ :1
 └───Expression: ::tombstone
 
@@ -275,7 +275,7 @@ let
     @atomic x
 end
 #---------------------
-unimplemented or unsupported `atomic` declaration
+syntax: unimplemented or unsupported `atomic` declaration
 @ :2
 └───Expression: (atomic x)
 
@@ -392,7 +392,7 @@ let T=Float64
     @cfunction(f, T, (Float64,))
 end
 #---------------------
-cfunction return type cannot reference local variable
+syntax: cfunction return type cannot reference local variable
 @ :2
 let T=Float64
     @cfunction(f, T, (Float64,))
@@ -405,7 +405,7 @@ let T=Float64
     @cfunction(f, Float64, (Float64,T))
 end
 #---------------------
-cfunction argument type cannot reference local variable
+syntax: cfunction argument type cannot reference local variable
 @ :2
 let T=Float64
     @cfunction(f, Float64, (Float64,T))
@@ -557,7 +557,7 @@ Caused by: syntax: gc_safe must be true or false
 # Error: unary & syntax
 &x
 #---------------------
-invalid syntax: unknown form `&` or number of arguments 1
+syntax: invalid syntax: unknown form `&` or number of arguments 1
 @ :1
 &x
 └┘
@@ -566,7 +566,7 @@ invalid syntax: unknown form `&` or number of arguments 1
 # Error: $ outside quote/string
 $x
 #---------------------
-`$` expression outside string or quote
+syntax: `$` expression outside string or quote
 @ :1
 $x
 └┘
@@ -575,7 +575,7 @@ $x
 # Error: splat outside call
 x...
 #---------------------
-unexpected `...`
+syntax: unexpected `...`
 splatting can only be done into a `call`, `tuple`, `curly`, or array-like expression
 @ :1
 x...
@@ -624,7 +624,7 @@ const f(x::Int)::Int = x+1
 # Error: Destructuring assignment method definitions (broken, legacy)
 f(x)::Int, g() = [1.0, 2.0]
 #---------------------
-invalid assignment location
+syntax: invalid assignment location
 @ :1
 f(x)::Int, g() = [1.0, 2.0]
 └──┘
@@ -633,7 +633,7 @@ f(x)::Int, g() = [1.0, 2.0]
 # Error: Destructuring assignment typedef, variable, and function (broken, legacy)
 T{U}, (x::Float64, g()) = [Bool, (1, 2)]
 #---------------------
-invalid assignment location
+syntax: invalid assignment location
 @ :1
 T{U}, (x::Float64, g()) = [Bool, (1, 2)]
 #                  └─┘

@@ -210,7 +210,7 @@ begin
     @goto foo
 end
 #---------------------
-label `foo` referenced but not defined
+syntax: label `foo` referenced but not defined
 @ :2
 begin
     @goto foo
@@ -224,7 +224,7 @@ begin
     @label foo
 end
 #---------------------
-label `foo` defined multiple times
+syntax: label `foo` defined multiple times
 @ :3
 begin
     @label foo
@@ -236,7 +236,7 @@ end
 # Error: using value of symbolic label
 x = @label foo
 #---------------------
-misplaced label in value position
+syntax: misplaced label in value position
 @ :1
 x = @label foo
 #          └─┘

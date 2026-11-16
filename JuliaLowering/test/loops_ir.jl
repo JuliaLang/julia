@@ -155,7 +155,7 @@ end
 # Error: break outside for/while
 break
 #---------------------
-unlabeled `break` outside of a `while` or `for` loop
+syntax: unlabeled `break` outside of a `while` or `for` loop
 @ :1
 break
 └───┘
@@ -164,7 +164,7 @@ break
 # Error: continue outside for/while
 continue
 #---------------------
-`continue` outside of a `while` or `for` loop
+syntax: `continue` outside of a `while` or `for` loop
 @ :1
 continue
 └──────┘
@@ -178,7 +178,7 @@ let
     i
 end
 #---------------------
-`outer` annotations must match with a local variable in an outer scope but no such variable was found
+syntax: `outer` annotations must match with a local variable in an outer scope but no such variable was found
 @ :2
 let
     for outer i = 1:2

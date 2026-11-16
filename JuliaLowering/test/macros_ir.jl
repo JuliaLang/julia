@@ -100,7 +100,7 @@ end
 macro mmm(a; b=2)
 end
 #---------------------
-macros cannot accept keyword arguments
+syntax: macros cannot accept keyword arguments
 @ :1
 macro mmm(a; b=2)
 #         ╙
@@ -111,7 +111,7 @@ end
 macro mmm(a::T) where T
 end
 #---------------------
-`where` not allowed in macro signatures
+syntax: `where` not allowed in macro signatures
 @ :1
 macro mmm(a::T) where T
 #     └───────────────┘
@@ -122,7 +122,7 @@ end
 macro mmm[](ex)
 end
 #---------------------
-invalid macro name
+syntax: invalid macro name
 @ :1
 macro mmm[](ex)
 #     └───┘
@@ -135,7 +135,7 @@ let
     end
 end
 #---------------------
-macro is only allowed in global scope
+syntax: macro is only allowed in global scope
 @ :2
 let
 #   ┌────────────
@@ -151,7 +151,7 @@ function f()
     end
 end
 #---------------------
-this syntax is only allowed at top level
+syntax: this syntax is only allowed at top level
 @ :2
 function f()
 #   ┌──────────
@@ -291,7 +291,7 @@ end
 # Error: thisfunction disallowed in comprehension/generator
 [@__FUNCTION__() for x in 1:2]
 #---------------------
-current function not defined in comprehension or generator
+syntax: current function not defined in comprehension or generator
 @ :1
 [@__FUNCTION__() for x in 1:2]
 #└─────────────┘
@@ -300,7 +300,7 @@ current function not defined in comprehension or generator
 # Error: thisfunction disallowed in comprehension/generator
 f(@__FUNCTION__() for x in 1:2)
 #---------------------
-current function not defined in comprehension or generator
+syntax: current function not defined in comprehension or generator
 @ :1
 f(@__FUNCTION__() for x in 1:2)
 # └─────────────┘
@@ -311,7 +311,7 @@ let
     @__FUNCTION__()
 end
 #---------------------
-@__FUNCTION__ can only be used inside a function
+syntax: @__FUNCTION__ can only be used inside a function
 @ :2
 let
     @__FUNCTION__()

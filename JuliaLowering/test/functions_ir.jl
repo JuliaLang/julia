@@ -137,7 +137,7 @@ function f(xs..., y)
     body
 end
 #---------------------
-`...` may only be used on the final parameter
+syntax: `...` may only be used on the final parameter
 @ :1
 function f(xs..., y)
 #          └───┘
@@ -264,7 +264,7 @@ function f(x::_) where _
     return _
 end
 #---------------------
-all-underscore identifiers are write-only and their values cannot be used in expressions
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
 @ :1
 function f(x::_) where _
 #             ╙
@@ -275,7 +275,7 @@ end
 # Error: underscore sparam is not readable in a default arg value
 f(x::_, y=_) where _ = x
 #---------------------
-all-underscore identifiers are write-only and their values cannot be used in expressions
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
 @ :1
 f(x::_, y=_) where _ = x
 #    ╙
@@ -284,7 +284,7 @@ f(x::_, y=_) where _ = x
 # Error: underscore sparam is not readable in a default kwarg value
 f(x::_; y=_) where _ = x
 #---------------------
-all-underscore identifiers are write-only and their values cannot be used in expressions
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
 @ :1
 f(x::_; y=_) where _ = x
 #    ╙
@@ -293,7 +293,7 @@ f(x::_; y=_) where _ = x
 # Error: underscore sparam is not readable in the return type
 (f(x)::_) where _ = x
 #---------------------
-all-underscore identifiers are write-only and their values cannot be used in expressions
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
 @ :1
 (f(x)::_) where _ = x
 #      ╙
@@ -437,7 +437,7 @@ function f(x)
     (::T)(y) = x + y
 end
 #---------------------
-adding methods to callable type only allowed at top level
+syntax: adding methods to callable type only allowed at top level
 @ :2
 function f(x)
     (::T)(y) = x + y
@@ -491,7 +491,7 @@ function f()
     end
 end
 #---------------------
-global method definition must be placed at top level, or use eval
+syntax: global method definition must be placed at top level, or use eval
 @ :2
 function f()
     function A.g()
@@ -504,7 +504,7 @@ end
 function (.+)(x,y)
 end
 #---------------------
-invalid function name
+syntax: invalid function name
 @ :1
 function (.+)(x,y)
 #         └┘
@@ -515,7 +515,7 @@ end
 function var".+"(x,y)
 end
 #---------------------
-dotted operator is not a valid function name
+syntax: dotted operator is not a valid function name
 @ :1
 function var".+"(x,y)
 #            └┘
@@ -546,7 +546,7 @@ function var".f"(); end
 function f[](x,y)
 end
 #---------------------
-invalid function name
+syntax: invalid function name
 @ :1
 function f[](x,y)
 #        └─┘
@@ -898,7 +898,7 @@ function f(x=1, ys, z=2)
     ys
 end
 #---------------------
-all function parameters after an optional parameter must also be optional
+syntax: all function parameters after an optional parameter must also be optional
 @ :1
 function f(x=1, ys, z=2)
 #               └┘
@@ -1046,7 +1046,7 @@ end
 # Error: multiple destructuring in destructured arg
 function f(_,(x...,y...)); end
 #---------------------
-multiple `...` in destructured parameter is ambiguous
+syntax: multiple `...` in destructured parameter is ambiguous
 @ :1
 function f(_,(x...,y...)); end
 #            └─────────┘
@@ -1055,7 +1055,7 @@ function f(_,(x...,y...)); end
 # Error: multiple destructuring in var-destructured arg
 function f(_,(x...,y...)...); end
 #---------------------
-multiple `...` in destructured parameter is ambiguous
+syntax: multiple `...` in destructured parameter is ambiguous
 @ :1
 function f(_,(x...,y...)...); end
 #            └─────────┘
@@ -1064,7 +1064,7 @@ function f(_,(x...,y...)...); end
 # Error: type in destructured arg
 function f(_,(x,y::Int)); end
 #---------------------
-cannot have type in destructured argument
+syntax: cannot have type in destructured argument
 @ :1
 function f(_,(x,y::Int)); end
 #               └────┘
@@ -1073,7 +1073,7 @@ function f(_,(x,y::Int)); end
 # Error: type in destructured arg, nested
 function f(_,(x,(y,(z::Int,)))...); end
 #---------------------
-cannot have type in destructured argument
+syntax: cannot have type in destructured argument
 @ :1
 function f(_,(x,(y,(z::Int,)))...); end
 #                   └────┘
@@ -1082,7 +1082,7 @@ function f(_,(x,(y,(z::Int,)))...); end
 # Error: type on splat
 function (_,((a,b)...)::Int); end
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 function (_,((a,b)...)::Int); end
 #            └──────┘
@@ -1091,7 +1091,7 @@ function (_,((a,b)...)::Int); end
 # Error: destructured arg with kw
 function f(_,(x,y=1)); end
 #---------------------
-expected identifier or tuple
+syntax: expected identifier or tuple
 @ :1
 function f(_,(x,y=1)); end
 #               └─┘
@@ -1100,7 +1100,7 @@ function f(_,(x,y=1)); end
 # Error: destructured arg with ;kw
 function f(_,(;x,y=1)); end
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 function f(_,(;x,y=1)); end
 #                └─┘
@@ -1109,7 +1109,7 @@ function f(_,(;x,y=1)); end
 # Error: destructured arg with other lhs-likes after ; (call)
 function f(_,(;x,y())); end
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 function f(_,(;x,y())); end
 #                └─┘
@@ -1118,7 +1118,7 @@ function f(_,(;x,y())); end
 # Error: destructured arg with other lhs-likes after ; (ref)
 function f(_,(;x,y())); end
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 function f(_,(;x,y())); end
 #                └─┘
@@ -1127,7 +1127,7 @@ function f(_,(;x,y())); end
 # Error: destructured arg with other lhs-likes after ; (tuple)
 function f(_,(;x,(y,z))); end
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 function f(_,(;x,(y,z))); end
 #                └───┘
@@ -1136,7 +1136,7 @@ function f(_,(;x,(y,z))); end
 # Error: destructured arg with other lhs-likes after ; (...)
 function f(_,(;x,y...)); end
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 function f(_,(;x,y...)); end
 #                └──┘
@@ -1145,7 +1145,7 @@ function f(_,(;x,y...)); end
 # Error: destructuring mixed tuple
 function f(_,(x,;y=1)); end
 #---------------------
-cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
+syntax: cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
 @ :1
 function f(_,(x,;y=1)); end
 #               └──┘
@@ -1154,7 +1154,7 @@ function f(_,(x,;y=1)); end
 # Error: ref in arg tuple (flisp allows this)
 function f(_,(_,x[])); end
 #---------------------
-expected identifier or tuple
+syntax: expected identifier or tuple
 @ :1
 function f(_,(_,x[])); end
 #               └─┘
@@ -1163,7 +1163,7 @@ function f(_,(_,x[])); end
 # Error: call in arg tuple (flisp allows this; args ignored)
 function f(_,(_,x(y))); end
 #---------------------
-expected identifier or tuple
+syntax: expected identifier or tuple
 @ :1
 function f(_,(_,x(y))); end
 #               └──┘
@@ -1172,7 +1172,7 @@ function f(_,(_,x(y))); end
 # Error: curly in arg tuple (flisp allows this)
 function f(_,(_,x{y})); end
 #---------------------
-expected identifier or tuple
+syntax: expected identifier or tuple
 @ :1
 function f(_,(_,x{y})); end
 #               └──┘
@@ -1181,7 +1181,7 @@ function f(_,(_,x{y})); end
 # Error: splat on non-final default positional arg
 function f(x=1...,y=2); end
 #---------------------
-splat only allowed on final positional default arg
+syntax: splat only allowed on final positional default arg
 @ :1
 function f(x=1...,y=2); end
 #            └──┘
@@ -1190,7 +1190,7 @@ function f(x=1...,y=2); end
 # Error: splat on non-final default positional arg 2
 function f(x=(1,2)...,y=(3,4)...); end
 #---------------------
-splat only allowed on final positional default arg
+syntax: splat only allowed on final positional default arg
 @ :1
 function f(x=(1,2)...,y=(3,4)...); end
 #            └──────┘
@@ -1320,7 +1320,7 @@ function f_bad_nospecialize(@nospecialize(x)=1); end
 # Error: nospecialize should be outermost expr in arg
 function f_bad_nospecialize(;@nospecialize(x)=1); end
 #---------------------
-expected identifier or `identifier::type`
+syntax: expected identifier or `identifier::type`
 @ :1
 function f_bad_nospecialize(;@nospecialize(x)=1); end
 #                            └──────────────┘
@@ -1337,7 +1337,7 @@ function f_bad_nospecialize(@nospecialize(x)...); end
 # Error: nospecialize should be outermost expr in arg
 function f_bad_nospecialize(;@nospecialize(x)...); end
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 function f_bad_nospecialize(;@nospecialize(x)...); end
 #                            └──────────────┘
@@ -1346,7 +1346,7 @@ function f_bad_nospecialize(;@nospecialize(x)...); end
 # Error: nospecialize should be outermost expr in arg
 function f_bad_nospecialize(@nospecialize(x)::T); end
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 function f_bad_nospecialize(@nospecialize(x)::T); end
 #                           └──────────────┘
@@ -1355,7 +1355,7 @@ function f_bad_nospecialize(@nospecialize(x)::T); end
 # Error: nospecialize should be outermost expr in arg
 function f_bad_nospecialize(;@nospecialize(x)::T); end
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 function f_bad_nospecialize(;@nospecialize(x)::T); end
 #                            └──────────────┘
@@ -1364,7 +1364,7 @@ function f_bad_nospecialize(;@nospecialize(x)::T); end
 # Error: nospecialize wrapping function is invalid
 @nospecialize function f_bad_nospecialize(); end
 #---------------------
-`nospecialize` cannot wrap a function definition; apply it to individual arguments, e.g. `function f(@nospecialize(x)); end`
+syntax: `nospecialize` cannot wrap a function definition; apply it to individual arguments, e.g. `function f(@nospecialize(x)); end`
 @ :1
 @nospecialize function f_bad_nospecialize(); end
 #             └────────────────────────────────┘
@@ -1373,7 +1373,7 @@ function f_bad_nospecialize(;@nospecialize(x)::T); end
 # Error: nospecialize wrapping non-arg assignment is invalid
 @nospecialize x = 1
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 @nospecialize x = 1
 #            └────┘
@@ -2137,7 +2137,7 @@ end
 function f_kw_destruct(; (x,y)=10)
 end
 #---------------------
-expected identifier or `identifier::type`
+syntax: expected identifier or `identifier::type`
 @ :1
 function f_kw_destruct(; (x,y)=10)
 #                        └───┘
@@ -2148,7 +2148,7 @@ end
 function f_kw_slurp_default(; kws...=def)
 end
 #---------------------
-expected identifier or `identifier::type`
+syntax: expected identifier or `identifier::type`
 @ :1
 function f_kw_slurp_default(; kws...=def)
 #                             └────┘
@@ -2159,7 +2159,7 @@ end
 function f_kw_slurp_type(; kws::T...)
 end
 #---------------------
-keyword parameter with `...` may not be given a type
+syntax: keyword parameter with `...` may not be given a type
 @ :1
 function f_kw_slurp_type(; kws::T...)
 #                          └────┘
@@ -2170,7 +2170,7 @@ end
 function f_kw_slurp_not_last(; kws..., x=1)
 end
 #---------------------
-`...` may only be used for the final keyword parameter
+syntax: `...` may only be used for the final keyword parameter
 @ :1
 function f_kw_slurp_not_last(; kws..., x=1)
 #                              └────┘
@@ -2184,7 +2184,7 @@ function foo()
     end
 end
 #---------------------
-if-generated requires both true and false cases
+syntax: if-generated requires both true and false cases
 @ :2
 function foo()
 #   ┌────────────
@@ -2297,7 +2297,7 @@ end
 # Error: juxtapose-assignment
 4a = 1
 #---------------------
-expected identifier or `identifier::type`
+syntax: expected identifier or `identifier::type`
 @ :1
 4a = 1
 ╙

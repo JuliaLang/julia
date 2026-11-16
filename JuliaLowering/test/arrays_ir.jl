@@ -32,7 +32,7 @@
 # Error: vect syntax with parameters
 [10, 20; 30]
 #---------------------
-unexpected semicolon or `parameters` form
+syntax: unexpected semicolon or `parameters` form
 @ :1
 [10, 20; 30]
 #      └──┘
@@ -41,7 +41,7 @@ unexpected semicolon or `parameters` form
 # Error: vect syntax with embedded assignments
 [a=20, 30]
 #---------------------
-assignment is not allowed in array expression
+syntax: assignment is not allowed in array expression
 @ :1
 [a=20, 30]
 #└──┘
@@ -86,7 +86,7 @@ T[x xs...]
 # Error: hcat syntax with embedded assignments
 [10 20 a=40]
 #---------------------
-assignment is not allowed in array expression
+syntax: assignment is not allowed in array expression
 @ :1
 [10 20 a=40]
 #     └───┘
@@ -132,7 +132,7 @@ assignment is not allowed in array expression
 # Error: vcat syntax with assignments
 [a=20; 30]
 #---------------------
-assignment is not allowed in array expression
+syntax: assignment is not allowed in array expression
 @ :1
 [a=20; 30]
 #└──┘
@@ -254,7 +254,7 @@ T[10 ; 20 ; 30 ;;; 40 ; 50 ; 60]
 # Error: splatting with multi-dimensional ncat
 [xs ; ys ;;; zs...]
 #---------------------
-splatting ... in an `ncat` with multiple dimensions is not supported
+syntax: splatting ... in an `ncat` with multiple dimensions is not supported
 @ :1
 [xs ; ys ;;; zs...]
 #            └───┘
@@ -272,7 +272,7 @@ splatting ... in an `ncat` with multiple dimensions is not supported
     ]
 ]
 #---------------------
-badly nested rows in `ncat`
+syntax: badly nested rows in `ncat`
 @ :1
 └───Expression: ::tombstone
 
@@ -288,7 +288,7 @@ badly nested rows in `ncat`
     ]
 ]
 #---------------------
-2D `nrow` cannot be mixed with `row` in `ncat`
+syntax: 2D `nrow` cannot be mixed with `row` in `ncat`
 @ :1
 └───Expression: ::tombstone
 
@@ -303,7 +303,7 @@ badly nested rows in `ncat`
     ]
 ]
 #---------------------
-badly nested rows in `ncat`
+syntax: badly nested rows in `ncat`
 @ :1
 └───Expression: ::tombstone
 
@@ -402,7 +402,7 @@ b[a[begin, end], begin, end]
 # Error: parameters in array ref
 a[i, j; w=1]
 #---------------------
-unexpected semicolon or `parameters` form
+syntax: unexpected semicolon or `parameters` form
 @ :1
 a[i, j; w=1]
 #     └───┘

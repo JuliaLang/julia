@@ -500,7 +500,7 @@ function (x)::Int
     x*x
 end
 #---------------------
-expected `call` expression
+syntax: expected `call` expression
 @ :1
 function (x)::Int
 #        └─┘
@@ -550,7 +550,7 @@ function f(::g) where {g}
     end
 end
 #---------------------
-cannot overwrite a static parameter
+syntax: cannot overwrite a static parameter
 @ :2
 function f(::g) where {g}
     function g()
@@ -588,7 +588,7 @@ end
 # Error: Opaque closure with default args
 Base.Experimental.@opaque (x=1)->2x
 #---------------------
-opaque closure cannot have optional or keyword arguments
+syntax: opaque closure cannot have optional or keyword arguments
 @ :1
 Base.Experimental.@opaque (x=1)->2x
 #                          └─┘
@@ -597,7 +597,7 @@ Base.Experimental.@opaque (x=1)->2x
 # Error: Opaque closure with keyword args
 Base.Experimental.@opaque (x; y=1)->2x
 #---------------------
-opaque closure cannot have optional or keyword arguments
+syntax: opaque closure cannot have optional or keyword arguments
 @ :1
 Base.Experimental.@opaque (x; y=1)->2x
 #                         └──────┘
@@ -1171,6 +1171,6 @@ end
     [:-> [:tuple] [:block]]
 ]
 #---------------------
-top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
+syntax: top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
 @ :1
 └───Expression: ::tombstone

@@ -92,7 +92,7 @@ end
 let f[]::T = rhs
 end
 #---------------------
-invalid assignment location in let syntax
+syntax: invalid assignment location in let syntax
 @ :1
 let f[]::T = rhs
 #   └─┘
@@ -103,7 +103,7 @@ end
 let f[] = rhs
 end
 #---------------------
-invalid assignment location in let syntax
+syntax: invalid assignment location in let syntax
 @ :1
 let f[] = rhs
 #   └─┘
@@ -114,7 +114,7 @@ end
 let (obj::Callable)() = rhs
 end
 #---------------------
-function signature does not define a local function name
+syntax: function signature does not define a local function name
 @ :1
 let (obj::Callable)() = rhs
 #   └───────────────┘
@@ -226,7 +226,7 @@ end
 function f(x, x)
 end
 #---------------------
-function argument name not unique
+syntax: function argument name not unique
 @ :1
 function f(x, x)
 #             ╙
@@ -237,7 +237,7 @@ end
 function f(x, (x,))
 end
 #---------------------
-destructured argument name `x` conflicts with an existing argument from the same scope
+syntax: destructured argument name `x` conflicts with an existing argument from the same scope
 @ :1
 function f(x, (x,))
 #              ╙
@@ -248,7 +248,7 @@ end
 function f(::T) where T where T
 end
 #---------------------
-function static parameter name not unique
+syntax: function static parameter name not unique
 @ :1
 function f(::T) where T where T
 #                     ╙
@@ -259,7 +259,7 @@ end
 function f(x::x) where x
 end
 #---------------------
-static parameter name `x` conflicts with an existing argument from the same scope
+syntax: static parameter name `x` conflicts with an existing argument from the same scope
 @ :1
 function f(x::x) where x
 #                      ╙
@@ -270,7 +270,7 @@ end
 function f((x,), (x,))
 end
 #---------------------
-destructured argument name `x` conflicts with an existing local variable from the same scope
+syntax: destructured argument name `x` conflicts with an existing local variable from the same scope
 @ :1
 function f((x,), (x,))
 #                 ╙
@@ -283,7 +283,7 @@ let
     global x
 end
 #---------------------
-global variable name `x` conflicts with an existing local variable from the same scope
+syntax: global variable name `x` conflicts with an existing local variable from the same scope
 @ :3
 let
     local x
@@ -297,7 +297,7 @@ function f(x)
     local x
 end
 #---------------------
-local variable name `x` conflicts with an existing argument from the same scope
+syntax: local variable name `x` conflicts with an existing argument from the same scope
 @ :2
 function f(x)
     local x
@@ -310,7 +310,7 @@ function f(x)
     global x
 end
 #---------------------
-global variable name `x` conflicts with an existing argument from the same scope
+syntax: global variable name `x` conflicts with an existing argument from the same scope
 @ :2
 function f(x)
     global x
@@ -324,7 +324,7 @@ function f((x,))
     global x
 end
 #---------------------
-global variable name `x` conflicts with an existing local variable from the same scope
+syntax: global variable name `x` conflicts with an existing local variable from the same scope
 @ :2
 function f((x,))
     global x
@@ -337,7 +337,7 @@ function f(::T) where T
     local T
 end
 #---------------------
-local variable name `T` conflicts with an existing static parameter from the same scope
+syntax: local variable name `T` conflicts with an existing static parameter from the same scope
 @ :2
 function f(::T) where T
     local T
@@ -350,7 +350,7 @@ function f(::T) where T
     global T
 end
 #---------------------
-global variable name `T` conflicts with an existing static parameter from the same scope
+syntax: global variable name `T` conflicts with an existing static parameter from the same scope
 @ :2
 function f(::T) where T
     global T
@@ -365,7 +365,7 @@ function f(::T) where T
     end
 end
 #---------------------
-cannot overwrite a static parameter
+syntax: cannot overwrite a static parameter
 @ :3
 function f(::T) where T
     let
@@ -381,7 +381,7 @@ function f(g)
     end
 end
 #---------------------
-cannot add method to a function argument
+syntax: cannot add method to a function argument
 @ :2
 function f(g)
     function g()
@@ -397,7 +397,7 @@ function f()
     end
 end
 #---------------------
-global method definition needs to be placed at the top level, or use `eval()`
+syntax: global method definition needs to be placed at the top level, or use `eval()`
 @ :3
 function f()
     global global_method

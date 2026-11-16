@@ -72,7 +72,7 @@ A where Y<:X where X
 # Error: bad type bounds
 A where f()
 #---------------------
-expected type name or type bounds
+syntax: expected type name or type bounds
 @ :1
 A where f()
 #       └─┘
@@ -81,7 +81,7 @@ A where f()
 # Error: bad type bounds
 A where X < Y < Z
 #---------------------
-expected `lb <: type_name <: ub` or `ub >: type_name >: lb`
+syntax: expected `lb <: type_name <: ub` or `ub >: type_name >: lb`
 @ :1
 A where X < Y < Z
 #       └───────┘
@@ -90,7 +90,7 @@ A where X < Y < Z
 # Error: bad type bounds
 A where X <: f() <: Z
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 A where X <: f() <: Z
 #            └─┘
@@ -99,7 +99,7 @@ A where X <: f() <: Z
 # Error: bad type bounds
 A where f() <: Y
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 A where f() <: Y
 #       └─┘
@@ -157,7 +157,7 @@ X{S, <:A, T, >:B}
 # Error: parameters in type application
 X{S, T; W}
 #---------------------
-unexpected semicolon or `parameters` form
+syntax: unexpected semicolon or `parameters` form
 @ :1
 X{S, T; W}
 #     └─┘
@@ -166,7 +166,7 @@ X{S, T; W}
 # Error: assignment in type application
 X{S, T=w}
 #---------------------
-assignment is not allowed in type parameter list
+syntax: assignment is not allowed in type parameter list
 @ :1
 X{S, T=w}
 #   └──┘
@@ -241,7 +241,7 @@ abstract type A{X, Y <: X} end
 # Error: Abstract type definition with bad signature
 abstract type A() end
 #---------------------
-invalid type signature
+syntax: invalid type signature
 @ :1
 abstract type A() end
 #             └─┘
@@ -250,7 +250,7 @@ abstract type A() end
 # Error: Abstract type definition with bad signature
 abstract type A(){T} end
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 abstract type A(){T} end
 #             └─┘
@@ -259,7 +259,7 @@ abstract type A(){T} end
 # Error: Abstract type definition with bad signature
 abstract type A() <: B end
 #---------------------
-expected identifier
+syntax: expected identifier
 @ :1
 abstract type A() <: B end
 #             └─┘
@@ -270,7 +270,7 @@ function f()
     abstract type A end
 end
 #---------------------
-this syntax is only allowed at top level
+syntax: this syntax is only allowed at top level
 @ :2
 function f()
     abstract type A end
@@ -1026,7 +1026,7 @@ struct X
     X() = new(a=1)
 end
 #---------------------
-`new` does not accept keyword arguments
+syntax: `new` does not accept keyword arguments
 @ :2
 struct X
     X() = new(a=1)
@@ -1039,7 +1039,7 @@ struct X
     X() = new(; a=1)
 end
 #---------------------
-`new` does not accept keyword arguments
+syntax: `new` does not accept keyword arguments
 @ :2
 struct X
     X() = new(; a=1)
@@ -1052,7 +1052,7 @@ struct X{S,T}
     X() = new{A}()
 end
 #---------------------
-too few type parameters specified in `new{...}`
+syntax: too few type parameters specified in `new{...}`
 @ :2
 struct X{S,T}
     X() = new{A}()
@@ -1065,7 +1065,7 @@ struct X{S,T}
     X() = new{}()
 end
 #---------------------
-too few type parameters specified in `new{...}`
+syntax: too few type parameters specified in `new{...}`
 @ :2
 struct X{S,T}
     X() = new{}()
@@ -1078,7 +1078,7 @@ struct X{S,T}
     X{A}() = new()
 end
 #---------------------
-too few type parameters specified in `new`
+syntax: too few type parameters specified in `new`
 @ :2
 struct X{S,T}
     X{A}() = new()
@@ -1091,7 +1091,7 @@ struct X{S,T}
     X() = new{A,B,C}()
 end
 #---------------------
-too many type parameters specified in `new{...}`
+syntax: too many type parameters specified in `new{...}`
 @ :2
 struct X{S,T}
     X() = new{A,B,C}()
@@ -1105,7 +1105,7 @@ function f()
     end
 end
 #---------------------
-this syntax is only allowed at top level
+syntax: this syntax is only allowed at top level
 @ :2
 function f()
 #   ┌───────
@@ -1342,7 +1342,7 @@ end
 # Error: Duplicate field name in struct
 struct A; x; x; end
 #---------------------
-duplicate field name
+syntax: duplicate field name
 @ :1
 struct A; x; x; end
 #            ╙
@@ -1351,7 +1351,7 @@ struct A; x; x; end
 # Error: Duplicate field name with different types
 struct A; x::Int; x::String; end
 #---------------------
-duplicate field name
+syntax: duplicate field name
 @ :1
 struct A; x::Int; x::String; end
 #                 ╙
@@ -1360,7 +1360,7 @@ struct A; x::Int; x::String; end
 # Error: Duplicate field name in mutable struct
 mutable struct A; x; y; x; end
 #---------------------
-duplicate field name
+syntax: duplicate field name
 @ :1
 mutable struct A; x; y; x; end
 #                       ╙

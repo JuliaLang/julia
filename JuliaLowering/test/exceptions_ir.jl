@@ -411,7 +411,7 @@ begin
     @label lab
 end
 #---------------------
-`goto` out of a `try` block is not permitted with `finally`
+syntax: `goto` out of a `try` block is not permitted with `finally`
 @ :3
 begin
     try
@@ -431,7 +431,7 @@ begin
     @label lab
 end
 #---------------------
-`goto` out of a `catch` block is not permitted with `finally`
+syntax: `goto` out of a `catch` block is not permitted with `finally`
 @ :4
     try
     catch
@@ -452,7 +452,7 @@ begin
     @label lab
 end
 #---------------------
-`goto` out of an `else` block is not permitted with `finally`
+syntax: `goto` out of an `else` block is not permitted with `finally`
 @ :5
     catch
     else

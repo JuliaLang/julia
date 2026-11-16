@@ -50,7 +50,7 @@ quote
     $$x + 1
 end
 #---------------------
-`$` expression outside string or quote
+syntax: `$` expression outside string or quote
 @ :2
 quote
     $$x + 1
