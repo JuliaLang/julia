@@ -24,10 +24,15 @@ mutable struct Regex <: AbstractPattern
     pattern::String
     compile_options::UInt32
     match_options::UInt32
+    # Whether every capture group has to take part in a match, which is what the `c` flag
+    # asks for. This field is `const` so that inference can read it off a `Regex` that is
+    # a constant, such as a `Regex` literal, which is what lets it infer the element type
+    # of the captures that `match` and `eachmatch` give for that `Regex`.
+    const required_captures::Bool
     regex::Ptr{Cvoid}
 
     function Regex(pattern::AbstractString, compile_options::Integer,
-                   match_options::Integer)
+                   match_options::Integer, required_captures::Bool=false)
         pattern = String(pattern)::String
         compile_options = UInt32(compile_options)
         match_options = UInt32(match_options)
@@ -37,7 +42,7 @@ mutable struct Regex <: AbstractPattern
         if (match_options & ~PCRE.EXECUTE_MASK) !=0
             throw(ArgumentError("invalid regex match options: $match_options"))
         end
-        re = compile(new(pattern, compile_options, match_options, C_NULL))
+        re = compile(new(pattern, compile_options, match_options, required_captures, C_NULL))
         finalizer(re) do re
             re.regex == C_NULL || PCRE.free_re(re.regex)
         end
@@ -48,6 +53,7 @@ end
 function Regex(pattern::AbstractString, flags::AbstractString)
     compile_options = DEFAULT_COMPILER_OPTS
     match_options = DEFAULT_MATCH_OPTS
+    required_captures = false
     for f in flags
         if f == 'a'
             # instruct pcre2 to treat the strings as simple bytes (aka "ASCII"), not char encodings
@@ -55,6 +61,8 @@ function Regex(pattern::AbstractString, flags::AbstractString)
             compile_options &= ~PCRE.UTF # user can re-enable with (*UTF)
             compile_options &= ~PCRE.MATCH_INVALID_UTF # this would force on UTF
             match_options &= ~PCRE.NO_UTF_CHECK # if the user did force on UTF, we should check it for safety
+        elseif f == 'c'
+            required_captures = true
         else
             compile_options |= f=='i' ? PCRE.CASELESS  :
                                f=='m' ? PCRE.MULTILINE :
@@ -63,11 +71,15 @@ function Regex(pattern::AbstractString, flags::AbstractString)
                                throw(ArgumentError("unknown regex flag: $f"))
         end
     end
-    Regex(pattern, compile_options, match_options)
+    Regex(pattern, compile_options, match_options, required_captures)
 end
 Regex(pattern::AbstractString) = Regex(pattern, DEFAULT_COMPILER_OPTS, DEFAULT_MATCH_OPTS)
 
-function compile(regex::Regex)
+# Having a `const` field makes a constant `Regex` an argument that inference propagates
+# into a callee where it would otherwise not, so that a call that is given a `Regex`
+# literal gets inferred again for that literal. `compile` has nothing to gain from that
+# but is costly to infer, and almost every function taking a `Regex` calls it.
+@constprop :none function compile(regex::Regex)
     if regex.regex == C_NULL
         if !isdefinedglobal(PCRE, :PCRE_COMPILE_LOCK)
             regex.regex = PCRE.compile(regex.pattern, regex.compile_options)
@@ -110,8 +122,18 @@ listed after the ending quote, to change its behaviour:
   8859-1 / Latin-1 bytes) instead of as character encodings. In this case, this option is
   often combined with `s`. This option can be further refined by starting the pattern with
   (*UCP) or (*UTF).
+- `c` requires every capture group to take part in a match, so that the captures of
+  a [`RegexMatch`](@ref) are never `nothing`: for a match `m` in a `String`, `m.captures`
+  is a `Vector{SubString{String}}` instead of a `Vector{Union{Nothing, SubString{String}}}`.
+  [`match`](@ref) and [`eachmatch`](@ref) throw an error if a group that can be skipped,
+  as in `r"(a)?"c` or `r"(a)|(b)"c`, does not take part in a match; write `r"(a?)"c` to
+  capture an empty string instead. This flag does not affect functions that do not return
+  a `RegexMatch`, such as [`occursin`](@ref) and [`replace`](@ref).
 
 See [`Regex`](@ref) if interpolation is needed.
+
+!!! compat "Julia 1.15"
+    The `c` flag requires at least Julia 1.15.
 
 # Examples
 ```jldoctest
@@ -119,6 +141,14 @@ julia> match(r"a+.*b+.*?d\$"ism, "Goodbye,\\nOh, angry,\\nBad world\\n")
 RegexMatch("angry,\\nBad world")
 ```
 This regex has the first three flags enabled.
+
+```jldoctest
+julia> hour, minute = match(r"(\\d+):(\\d+)"c, "11:30").captures
+2-element Vector{SubString{String}}:
+ "11"
+ "30"
+```
+The `c` flag of this regex makes its captures substrings that cannot be `nothing`.
 """
 macro r_str(pattern, flags...) Regex(pattern, flags...) end
 
@@ -147,6 +177,7 @@ function show(io::IO, re::Regex)
         if (opts & PCRE.DOTALL   ) != 0; print(io, "s"); end
         if (opts & PCRE.EXTENDED ) != 0; print(io, "x"); end
         if (opts & ac            ) == 0; print(io, "a"); end
+        if re.required_captures; print(io, "c"); end
     else
         print(io, "Regex(")
         show(io, re.pattern)
@@ -154,6 +185,7 @@ function show(io::IO, re::Regex)
         show(io, opts)
         print(io, ", ")
         show(io, mopts)
+        if re.required_captures; print(io, ", true"); end
         print(io, ")")
     end
 end
@@ -182,6 +214,8 @@ This type can be used as an iterator over the capture groups of the `Regex`,
 yielding the substrings captured in each group.
 Because of this, the captures of a match can be destructured.
 If a group was not captured, `nothing` will be yielded instead of a substring.
+A `Regex` with the `c` flag requires every group to be captured,
+so that its matches never yield `nothing` (see [`@r_str`](@ref)).
 
 Methods that accept a `RegexMatch` object are defined for [`iterate`](@ref),
 [`length`](@ref), [`eltype`](@ref), [`keys`](@ref keys(::RegexMatch)), [`haskey`](@ref), and
@@ -223,17 +257,17 @@ Dict{Any, Union{Nothing, SubString{String}}} with 3 entries:
   "minute" => "30"
 ```
 """
-struct RegexMatch{S<:AbstractString} <: AbstractMatch
+struct RegexMatch{S<:AbstractString,C<:Union{Nothing,SubString{S}}} <: AbstractMatch
     match::SubString{S}
-    captures::Vector{Union{Nothing,SubString{S}}}
+    captures::Vector{C}
     offset::Int
     offsets::Vector{Int}
     regex::Regex
 end
 
-RegexMatch(match::SubString{S}, captures::Vector{Union{Nothing,SubString{S}}},
-           offset::Union{Int, UInt}, offsets::Vector{Int}, regex::Regex) where {S<:AbstractString} =
-    RegexMatch{S}(match, captures, offset, offsets, regex)
+RegexMatch(match::SubString{S}, captures::Vector{C}, offset::Union{Int, UInt},
+           offsets::Vector{Int}, regex::Regex) where {S<:AbstractString,C<:Union{Nothing,SubString{S}}} =
+    RegexMatch{S,C}(match, captures, offset, offsets, regex)
 
 """
     keys(m::RegexMatch)::Vector
@@ -427,8 +461,21 @@ true
 """
 function match end
 
+# The methods of `match` on the supported string types, like the constructors of
+# `RegexMatchIterator`, do nothing but select from `re.required_captures` the method that
+# does the work, which is specialized on whether the captures are required. They are kept
+# this small so that they get inlined: inference propagates a constant `Regex` only into
+# a callee that it expects to be inlined, and it is by seeing which method a constant
+# `Regex` selects that it infers the element type of the captures. For a `Regex` that is
+# not a constant, the match is inferred to be of either of the two types.
 function match(re::Regex, str::DenseUTF8String, idx::Integer,
                add_opts::UInt32=UInt32(0))
+    return re.required_captures ? _match(Val(true), re, str, idx, add_opts) :
+                                  _match(Val(false), re, str, idx, add_opts)
+end
+
+function _match(::Val{required}, re::Regex, str::DenseUTF8String, idx::Integer,
+                add_opts::UInt32) where required
     compile(re)
     opts = re.match_options | add_opts
     matched, data = PCRE.exec_r_data(re.regex, str, idx-1, opts)
@@ -444,37 +491,53 @@ function match(re::Regex, str::DenseUTF8String, idx::Integer,
     else
         SubString{typeof(str)}
     end
-    cap = Union{Nothing,T}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
-                                        SubString(str, unsafe_load(p,2i+1)+1,
-                                                  prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
+    if required
+        for i = 1:n
+            if unsafe_load(p,2i+1) == PCRE.UNSET
+                PCRE.free_match_data(data)
+                throw_unset_capture(re, i)
+            end
+        end
+        cap = T[SubString(str, unsafe_load(p,2i+1)+1,
+                          prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
+    else
+        cap = Union{Nothing,T}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
+                                            SubString(str, unsafe_load(p,2i+1)+1,
+                                                      prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
+    end
     off = Int[ unsafe_load(p,2i+1) == PCRE.UNSET ? 0 : unsafe_load(p,2i+1)+1 for i=1:n ]
     result = RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re)
     PCRE.free_match_data(data)
     return result
 end
 
-function _annotatedmatch(m::RegexMatch{S}, str::AnnotatedString{S}) where {S<:AbstractString}
-    RegexMatch{AnnotatedString{S}}(
+@noinline throw_unset_capture(re::Regex, i::Int) = error(
+    "the `c` flag of ", re, " requires every capture group to take part in a match, ",
+    "but capture group ", i, " did not")
+
+function _annotatedmatch(m::RegexMatch{S,C}, str::AnnotatedString{S}) where {S<:AbstractString,C}
+    T = SubString{AnnotatedString{S}}
+    CA = Nothing <: C ? Union{Nothing,T} : T
+    RegexMatch{AnnotatedString{S},CA}(
         (@inbounds raw_substring(str, m.match.offset + 1, m.match.ncodeunits)),
-        Union{Nothing,SubString{AnnotatedString{S}}}[
+        CA[
             if !isnothing(cap)
                 (@inbounds raw_substring(str, cap.offset + 1, cap.ncodeunits))
             end for cap in m.captures],
         m.offset, m.offsets, m.regex)
 end
 
-function match(re::Regex, str::AnnotatedString)
-    m = match(re, str.string)
-    if !isnothing(m)
-        _annotatedmatch(m, str)
-    end
+function match(re::Regex, str::AnnotatedString{<:DenseUTF8String}, idx::Integer,
+               add_opts::UInt32=UInt32(0))
+    return re.required_captures ? _match(Val(true), re, str, idx, add_opts) :
+                                  _match(Val(false), re, str, idx, add_opts)
 end
 
-function match(re::Regex, str::AnnotatedString, idx::Integer, add_opts::UInt32=UInt32(0))
-    m = match(re, str.string, idx, add_opts)
-    if !isnothing(m)
-        _annotatedmatch(m, str)
-    end
+function _match(required::Val, re::Regex, str::AnnotatedString, idx::Integer,
+                add_opts::UInt32)
+    m = _match(required, re, str.string, idx, add_opts)
+    m === nothing && return nothing
+    return _annotatedmatch(m, str)
 end
 
 match(r::Regex, s::AbstractString) = match(r, s, firstindex(s))
@@ -730,25 +793,35 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
     nb
 end
 
-struct RegexMatchIterator{S <: AbstractString}
+struct RegexMatchIterator{S<:AbstractString,C<:Union{Nothing,SubString{S}}}
     regex::Regex
     string::S
     overlap::Bool
 
-    RegexMatchIterator(regex::Regex, string::AbstractString, ovr::Bool=false) =
-        new{String}(regex, String(string), ovr)
-    RegexMatchIterator(regex::Regex, string::AnnotatedString, ovr::Bool=false) =
-        new{AnnotatedString{String}}(regex, AnnotatedString(String(string.string), string.annotations), ovr)
+    function RegexMatchIterator(regex::Regex, string::AbstractString, ovr::Bool=false)
+        str = String(string)
+        return regex.required_captures ?
+            new{String,SubString{String}}(regex, str, ovr) :
+            new{String,Union{Nothing,SubString{String}}}(regex, str, ovr)
+    end
+    function RegexMatchIterator(regex::Regex, string::AnnotatedString, ovr::Bool=false)
+        str = AnnotatedString(String(string.string), string.annotations)
+        S = AnnotatedString{String}
+        return regex.required_captures ?
+            new{S,SubString{S}}(regex, str, ovr) :
+            new{S,Union{Nothing,SubString{S}}}(regex, str, ovr)
+    end
 end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(::Type{<:RegexMatchIterator}) = RegexMatch
 IteratorSize(::Type{<:RegexMatchIterator}) = SizeUnknown()
 
-function iterate(itr::RegexMatchIterator, (offset,prevempty)=(1,false))
+function iterate(itr::RegexMatchIterator{S,C}, (offset,prevempty)=(1,false)) where {S,C}
     opts_nonempty = UInt32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)
+    required = Val(!(Nothing <: C))
     while true
-        mat = match(itr.regex, itr.string, offset,
-                    prevempty ? opts_nonempty : UInt32(0))
+        mat = _match(required, itr.regex, itr.string, offset,
+                     prevempty ? opts_nonempty : UInt32(0))
 
         if mat === nothing
             if prevempty && offset <= sizeof(itr.string)
@@ -787,7 +860,7 @@ julia> rx = r"a.a"
 r"a.a"
 
 julia> m = eachmatch(rx, "a1a2a3a")
-Base.RegexMatchIterator{String}(r"a.a", "a1a2a3a", false)
+Base.RegexMatchIterator{String, Union{Nothing, SubString{String}}}(r"a.a", "a1a2a3a", false)
 
 julia> collect(m)
 2-element Vector{RegexMatch}:
@@ -810,7 +883,8 @@ eachmatch(re::Regex, str::AbstractString; overlap = false) =
 ## comparison ##
 
 function ==(a::Regex, b::Regex)
-    a.pattern == b.pattern && a.compile_options == b.compile_options && a.match_options == b.match_options
+    a.pattern == b.pattern && a.compile_options == b.compile_options &&
+        a.match_options == b.match_options && a.required_captures == b.required_captures
 end
 
 ## hash ##
@@ -820,6 +894,7 @@ function hash(r::Regex, h::UInt)
     h = hash(r.pattern, h)
     h = hash(r.compile_options, h)
     h = hash(r.match_options, h)
+    h = hash(r.required_captures, h)
 end
 
 ## String operations ##
@@ -856,6 +931,7 @@ function *(r1::Union{Regex,AbstractString,AbstractChar}, rs::Union{Regex,Abstrac
     match_opts   = nothing # all args must agree on this
     compile_opts = nothing # all args must agree on this
     shared = mask
+    required_captures = true # holds for the product only if it holds for every regex in it
     for r in (r1, rs...)
         r isa Regex || continue
         if match_opts === nothing
@@ -867,9 +943,11 @@ function *(r1::Union{Regex,AbstractString,AbstractChar}, rs::Union{Regex,Abstrac
                 throw(ArgumentError("cannot multiply regexes: incompatible options"))
         end
         shared &= r.compile_options
+        required_captures &= r.required_captures
     end
     unshared = mask & ~shared
-    Regex(string(wrap_string(r1, unshared), wrap_string.(rs, Ref(unshared))...), compile_opts | shared, match_opts)
+    Regex(string(wrap_string(r1, unshared), wrap_string.(rs, Ref(unshared))...), compile_opts | shared, match_opts,
+          required_captures)
 end
 
 *(r::Regex) = r # avoids wrapping r in a useless subpattern
@@ -924,4 +1002,5 @@ julia> match(r"Test "^2, "Test Test ")
 RegexMatch("Test Test ")
 ```
 """
-^(r::Regex, i::Integer) = Regex(string("(?:", r.pattern, "){$i}"), r.compile_options, r.match_options)
+^(r::Regex, i::Integer) = Regex(string("(?:", r.pattern, "){$i}"), r.compile_options, r.match_options,
+                                r.required_captures)

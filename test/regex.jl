@@ -273,3 +273,68 @@ end
         @test match(re, "ababc").match === SubString("ababc", 3:5)
     end
 end
+
+@testset "required captures (`c` flag)" begin
+    # the captures of a match are substrings that cannot be `nothing`
+    m = match(r"(\d+):(\d+)"c, "at 11:30")
+    @test m isa RegexMatch{String,SubString{String}}
+    @test m.captures isa Vector{SubString{String}}
+    @test m.captures == ["11", "30"]
+    @test m.offsets == [4, 7]
+    @test eltype(m) === SubString{String}
+    hour, minute = m
+    @test (hour, minute) == ("11", "30")
+    @test match(r"(?<x>a)(b)"c, "ab")["x"] == "a"
+    @test match(r"(a?)b"c, "b").captures == [""]
+    @test match(r"(a)(b)"c, "ab", 2) === nothing
+    @test match(r"(a)(b)"c, SubString("xabx", 2, 3)) isa RegexMatch{String,SubString{String}}
+    @test match(r"(a)(b)"c, Base.AnnotatedString("xab")).captures isa Vector{SubString{Base.AnnotatedString{String}}}
+    @test match(r"(a)(b)", "ab") isa RegexMatch{String,Union{Nothing,SubString{String}}}
+
+    # a capture group that does not take part in a match is an error
+    @test match(r"(a)|(b)", "b").captures == [nothing, "b"]
+    @test_throws "capture group 1 did not" match(r"(a)|(b)"c, "b")
+    @test_throws "capture group 2 did not" match(r"(a)(b)?"c, "a")
+    @test_throws ErrorException match(r"(a)|(b)"c, Base.AnnotatedString("b"))
+    @test match(r"(a)(b)?"c, "ab").captures == ["a", "b"]
+    @test occursin(r"(a)|(b)"c, "b")
+    @test replace("b", r"(a)|(b)"c => s"<\2>") == "<b>"
+
+    # eachmatch
+    itr = eachmatch(r"(\d)(\w)"c, "1a 2b")
+    @test itr isa Base.RegexMatchIterator{String,SubString{String}}
+    @test all(m -> m isa RegexMatch{String,SubString{String}}, itr)
+    @test [m.captures for m in itr] == [["1", "a"], ["2", "b"]]
+    @test [m.captures for m in eachmatch(r"(\w)(\w)"c, "abc", overlap=true)] == [["a", "b"], ["b", "c"]]
+    @test first(eachmatch(r"(\d)(\w)"c, Base.AnnotatedString("1a 2b"))) isa RegexMatch{Base.AnnotatedString{String},SubString{Base.AnnotatedString{String}}}
+    @test_throws "capture group 2 did not" collect(eachmatch(r"(\d)(\w)?"c, "1a 2"))
+    @test eachmatch(r"(\d)(\w)", "1a 2b") isa Base.RegexMatchIterator{String,Union{Nothing,SubString{String}}}
+
+    # construction, printing and comparison
+    @test Regex("(a)", "ic") == r"(a)"ic
+    @test r"(a)"c != r"(a)"
+    @test hash(r"(a)"c) == hash(Regex("(a)", "c"))
+    @test repr(r"(a)"c) == "r\"(a)\"c"
+    @test repr(r"(a)"imsxac) == "r\"(a)\"imsxac"
+    let re = Regex("(a)", Base.DEFAULT_COMPILER_OPTS | Base.PCRE.ANCHORED, Base.DEFAULT_MATCH_OPTS, true)
+        @test match(re, "ab").captures isa Vector{SubString{String}}
+        @test eval(Meta.parse(repr(re))) == re
+    end
+    @test deepcopy(r"(a)"c) == r"(a)"c
+
+    # a product requires its captures only if all of its regexes do
+    @test r"(a)"c * r"(b)"c == r"(?:(a))(?:(b))"c
+    @test r"(a)"c * r"(b)" == r"(?:(a))(?:(b))"
+    @test r"(a)"c * "b" == r"(?:(a))\Qb\E"c
+    @test r"(a)"c ^ 2 == r"(?:(a)){2}"c
+
+    # the flag of a `Regex` that is a constant is known to inference
+    @test Base.infer_return_type(s -> match(r"(a)(b)"c, s), (String,)) == Union{Nothing,RegexMatch{String,SubString{String}}}
+    @test Base.infer_return_type(s -> match(r"(a)(b)"c, s, 2), (SubString{String},)) == Union{Nothing,RegexMatch{String,SubString{String}}}
+    @test Base.infer_return_type(s -> match(r"(a)(b)", s), (String,)) == Union{Nothing,RegexMatch{String,Union{Nothing,SubString{String}}}}
+    @test Base.infer_return_type(s -> match(r"(a)(b)"c, s), (Base.AnnotatedString{String},)) == Union{Nothing,RegexMatch{Base.AnnotatedString{String},SubString{Base.AnnotatedString{String}}}}
+    @test Base.infer_return_type(s -> eachmatch(r"(a)(b)"c, s; overlap=true), (String,)) == Base.RegexMatchIterator{String,SubString{String}}
+    @test Base.infer_return_type(s -> [m[1] for m in eachmatch(r"(a)(b)"c, s)], (String,)) == Vector{SubString{String}}
+    # the match of a `Regex` that is not a constant is of either type
+    @test Base.infer_return_type(match, (Regex, String)) == Union{Nothing,RegexMatch{String,SubString{String}},RegexMatch{String,Union{Nothing,SubString{String}}}}
+end

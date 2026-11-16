@@ -87,7 +87,7 @@ textwidth(::ANSIDelimiter) = 0
 
 # An iterator similar to `pairs(::String)` but whose values are Char or ANSIDelimiter
 struct ANSIIterator{S}
-    captures::RegexMatchIterator{S}
+    captures::RegexMatchIterator{S,Union{Nothing,SubString{S}}}
 end
 ANSIIterator(s::AbstractString) = ANSIIterator(eachmatch(ansi_regex, s))
 

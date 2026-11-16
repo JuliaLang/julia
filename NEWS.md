@@ -55,6 +55,11 @@ New library features
 * An unquoted `*`, `?` or `[` in a command literal makes a glob, which expands to the matching
   paths when the command is created. Julia calls a `glob` function provided by a package,
   such as Glob.jl, to match the pattern, so globbing works after `using Glob` ([#20401]).
+* The new `c` flag of a regex, as in `r"(\d+):(\d+)"c`, requires every capture group to take part
+  in a match, so that the captures of a `RegexMatch` are never `nothing`: `m.captures` is then
+  a `Vector{SubString{String}}`, which is also what is inferred for a regex literal. `match` and
+  `eachmatch` throw an error if a group of such a regex does not take part in a match. For this,
+  `RegexMatch` has a second type parameter, the element type of its captures.
 
 Standard library changes
 ------------------------

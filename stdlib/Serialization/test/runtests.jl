@@ -495,6 +495,24 @@ create_serialization_stream() do s
     r2 = deserialize(s)
     @test r1 == r2
 end
+create_serialization_stream() do s
+    r1 = r"(a?)b.*"c
+    serialize(s, r1)
+    seekstart(s)
+    r2 = deserialize(s)
+    @test r1 == r2
+    @test match(r2, "ab").captures isa Vector{SubString{String}}
+end
+let io = IOBuffer()
+    # a stream of format version 31 does not hold the `c` flag of a `Regex`
+    r1 = r"a?b.*"i
+    serialize(io, r1)
+    b = take!(io)
+    @test b[4] == Serialization.ser_version
+    @test pop!(b) == Serialization.FALSE_TAG
+    b[4] = 31
+    @test deserialize(IOBuffer(b)) == r1
+end
 
 # issue #13452
 module Test13452

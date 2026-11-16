@@ -89,7 +89,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 31 # do not make changes without bumping the version #!
+const ser_version = 32 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -435,6 +435,7 @@ function serialize(s::AbstractSerializer, r::Regex)
     serialize(s, r.pattern)
     serialize(s, r.compile_options)
     serialize(s, r.match_options)
+    serialize(s, r.required_captures)
 end
 
 function serialize(s::AbstractSerializer, n::BigInt)
@@ -1902,7 +1903,8 @@ function deserialize(s::AbstractSerializer, t::Type{Regex})
     pattern = deserialize(s)
     compile_options = deserialize(s)
     match_options = deserialize(s)
-    return Regex(pattern, compile_options, match_options)
+    required_captures = format_version(s) >= 32 ? deserialize(s)::Bool : false
+    return Regex(pattern, compile_options, match_options, required_captures)
 end
 
 ## StackTraces
