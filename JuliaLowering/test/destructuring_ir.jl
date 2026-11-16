@@ -276,7 +276,7 @@ end
 # Error: Destructuring with tuple elimination and too few RHS elements
 (x,) = ()
 #---------------------
-More variables on left hand side than right hand in tuple assignment
+more variables on left hand side than right hand in tuple assignment
 @ :1
 (x,) = ()
 └───────┘
@@ -285,7 +285,7 @@ More variables on left hand side than right hand in tuple assignment
 # Error: Destructuring with tuple elimination, slurping, and too few RHS elements
 (x,y,ys...) = (1,)
 #---------------------
-More variables on left hand side than right hand in tuple assignment
+more variables on left hand side than right hand in tuple assignment
 @ :1
 (x,y,ys...) = (1,)
 └────────────────┘

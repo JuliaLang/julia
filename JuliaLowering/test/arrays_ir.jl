@@ -32,7 +32,7 @@
 # Error: vect syntax with parameters
 [10, 20; 30]
 #---------------------
-unexpected semicolon
+unexpected semicolon or `parameters` form
 @ :1
 [10, 20; 30]
 #      └──┘
@@ -254,7 +254,7 @@ T[10 ; 20 ; 30 ;;; 40 ; 50 ; 60]
 # Error: splatting with multi-dimensional ncat
 [xs ; ys ;;; zs...]
 #---------------------
-Splatting ... in an `ncat` with multiple dimensions is not supported
+splatting ... in an `ncat` with multiple dimensions is not supported
 @ :1
 [xs ; ys ;;; zs...]
 #            └───┘
@@ -272,7 +272,7 @@ Splatting ... in an `ncat` with multiple dimensions is not supported
     ]
 ]
 #---------------------
-Badly nested rows in `ncat`
+badly nested rows in `ncat`
 @ :1
 └───Expression: ::tombstone
 
@@ -303,7 +303,7 @@ Badly nested rows in `ncat`
     ]
 ]
 #---------------------
-Badly nested rows in `ncat`
+badly nested rows in `ncat`
 @ :1
 └───Expression: ::tombstone
 
@@ -402,7 +402,7 @@ b[a[begin, end], begin, end]
 # Error: parameters in array ref
 a[i, j; w=1]
 #---------------------
-unexpected semicolon
+unexpected semicolon or `parameters` form
 @ :1
 a[i, j; w=1]
 #     └───┘

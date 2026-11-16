@@ -141,7 +141,7 @@ _ + 1
 # Error: Named tuple with repeated fields
 (; a=1, bs..., c=3, a=2)
 #---------------------
-Repeated named tuple field name
+repeated named tuple field name
 @ :1
 (; a=1, bs..., c=3, a=2)
 #                   ╙
@@ -307,7 +307,7 @@ GC.@preserve a b g() begin
     body
 end
 #─┘ ── Error expanding macro
-Caused by: Preserved variable must be a symbol
+Caused by: syntax: Preserved variable must be a symbol
 @ :1
 GC.@preserve a b g() begin
 #                └─┘
@@ -381,7 +381,7 @@ JuxtuposeTest.@emit_juxtupose
 MacroExpansionError while expanding @cfunction in module Main.TestMod:
 @cfunction(f, Int, NotATuple)
 └───────────────────────────┘ ── Error expanding macro
-Caused by: @cfunction argument types must be a literal tuple
+Caused by: syntax: @cfunction argument types must be a literal tuple
 @ :1
 @cfunction(f, Int, NotATuple)
 #                  └───────┘
@@ -464,7 +464,7 @@ ccall(:fcntl, Cint, (RawFD, Cint, Cint...), s, F_GETFL)
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall strlen("foo"::Cstring)
 └───────────────────────────┘ ── Error expanding macro
-Caused by: expected a return type annotation `::SomeType`
+Caused by: syntax: expected a return type annotation `::SomeType`
 @ :1
 @ccall strlen("foo"::Cstring)
 #      └────────────────────┘
@@ -476,7 +476,7 @@ Caused by: expected a return type annotation `::SomeType`
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo("blah"::Cstring, "bad")::Int
 └─────────────────────────────────────┘ ── Error expanding macro
-Caused by: argument needs a type annotation
+Caused by: syntax: argument needs a type annotation
 @ :1
 @ccall foo("blah"::Cstring, "bad")::Int
 #                           └───┘
@@ -488,7 +488,7 @@ Caused by: argument needs a type annotation
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo(; x::Int)::Int
 └───────────────────────┘ ── Error expanding macro
-Caused by: C ABI prohibits varargs without one required argument
+Caused by: syntax: C ABI prohibits varargs without one required argument
 @ :1
 @ccall foo(; x::Int)::Int
 #          └──────┘
@@ -500,7 +500,7 @@ Caused by: C ABI prohibits varargs without one required argument
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo(; x::Int; y::Float64)::Int
 └───────────────────────────────────┘ ── Error expanding macro
-Caused by: C ABI prohibits varargs without one required argument
+Caused by: syntax: C ABI prohibits varargs without one required argument
 @ :1
 @ccall foo(; x::Int; y::Float64)::Int
 #          └──────┘
@@ -512,7 +512,7 @@ Caused by: C ABI prohibits varargs without one required argument
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall $(:(foo))(1::Cint)::Cint
 └─────────────────────────────┘ ── Error expanding macro
-Caused by: interpolated value should be a variable or expression, not a literal name or tuple
+Caused by: syntax: interpolated value should be a variable or expression, not a literal name or tuple
 @ :1
 @ccall $(:(foo))(1::Cint)::Cint
 #      └───────┘
@@ -524,7 +524,7 @@ Caused by: interpolated value should be a variable or expression, not a literal 
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall bad_opt foo(x::Int)::Int
 └─────────────────────────────┘ ── Error expanding macro
-Caused by: bad option to ccall
+Caused by: syntax: bad option to ccall
 @ :1
 @ccall bad_opt foo(x::Int)::Int
 #      └─────┘
@@ -536,7 +536,7 @@ Caused by: bad option to ccall
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall bad_opt=true foo(x::Int)::Int
 └──────────────────────────────────┘ ── Error expanding macro
-Caused by: unknown option name for ccall
+Caused by: syntax: unknown option name for ccall
 @ :1
 @ccall bad_opt=true foo(x::Int)::Int
 #      └─────┘
@@ -548,7 +548,7 @@ Caused by: unknown option name for ccall
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall gc_safe="hi" foo(x::Int)::Int
 └──────────────────────────────────┘ ── Error expanding macro
-Caused by: gc_safe must be true or false
+Caused by: syntax: gc_safe must be true or false
 @ :1
 @ccall gc_safe="hi" foo(x::Int)::Int
 #              └──┘

@@ -159,7 +159,7 @@ end
 # Error: Invalid lhs in `=`
 a.(b) = rhs
 #---------------------
-dotcall syntax not valid here
+cannot assign to dotcall syntax
 @ :1
 a.(b) = rhs
 └───┘
@@ -168,7 +168,7 @@ a.(b) = rhs
 # Error: Invalid lhs in `=`
 a.(b,c) = rhs
 #---------------------
-dotcall syntax not valid here
+cannot assign to dotcall syntax
 @ :1
 a.(b,c) = rhs
 └─────┘

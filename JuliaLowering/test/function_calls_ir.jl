@@ -43,7 +43,7 @@ f(; ks1..., ks2...)
 # Error: Call with repeated keywords
 f(x; a=1, a=2)
 #---------------------
-Repeated keyword argument name
+repeated keyword argument name
 @ :1
 f(x; a=1, a=2)
 #         ╙
@@ -502,7 +502,7 @@ end
 # Error: ccall with too few arguments
 ccall(:strlen, Csize_t, (Cstring,))
 #---------------------
-Too few arguments in ccall compared to argument types
+too few arguments in ccall compared to argument types
 @ :1
 ccall(:strlen, Csize_t, (Cstring,))
 └─────────────────────────────────┘
@@ -511,7 +511,7 @@ ccall(:strlen, Csize_t, (Cstring,))
 # Error: ccall with too many arguments
 ccall(:strlen, Csize_t, (Cstring,), "asdfg", "blah")
 #---------------------
-More arguments than types in ccall
+more arguments than types in ccall
 @ :1
 ccall(:strlen, Csize_t, (Cstring,), "asdfg", "blah")
 └──────────────────────────────────────────────────┘

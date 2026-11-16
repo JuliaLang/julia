@@ -92,7 +92,7 @@ end
 let f[]::T = rhs
 end
 #---------------------
-Invalid assignment location in let syntax
+invalid assignment location in let syntax
 @ :1
 let f[]::T = rhs
 #   └─┘
@@ -103,7 +103,7 @@ end
 let f[] = rhs
 end
 #---------------------
-Invalid assignment location in let syntax
+invalid assignment location in let syntax
 @ :1
 let f[] = rhs
 #   └─┘
@@ -114,7 +114,7 @@ end
 let (obj::Callable)() = rhs
 end
 #---------------------
-Function signature does not define a local function name
+function signature does not define a local function name
 @ :1
 let (obj::Callable)() = rhs
 #   └───────────────┘
@@ -381,7 +381,7 @@ function f(g)
     end
 end
 #---------------------
-Cannot add method to a function argument
+cannot add method to a function argument
 @ :2
 function f(g)
     function g()
@@ -397,7 +397,7 @@ function f()
     end
 end
 #---------------------
-Global method definition needs to be placed at the top level, or use `eval()`
+global method definition needs to be placed at the top level, or use `eval()`
 @ :3
 function f()
     global global_method

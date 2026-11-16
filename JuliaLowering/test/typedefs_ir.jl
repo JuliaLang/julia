@@ -157,7 +157,7 @@ X{S, <:A, T, >:B}
 # Error: parameters in type application
 X{S, T; W}
 #---------------------
-unexpected semicolon
+unexpected semicolon or `parameters` form
 @ :1
 X{S, T; W}
 #     └─┘

@@ -224,7 +224,7 @@ begin
     @label foo
 end
 #---------------------
-Label `foo` defined multiple times
+label `foo` defined multiple times
 @ :3
 begin
     @label foo

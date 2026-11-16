@@ -240,7 +240,7 @@ end
 # Error: const ref
 const x[] = 1
 #---------------------
-cannot declare this form constant
+cannot declare `ref[]` form constant
 @ :1
 const x[] = 1
 #     └─┘
@@ -249,7 +249,7 @@ const x[] = 1
 # Error: const ref
 const x[2] = 1
 #---------------------
-cannot declare this form constant
+cannot declare `ref[]` form constant
 @ :1
 const x[2] = 1
 #     └──┘
@@ -258,7 +258,7 @@ const x[2] = 1
 # Error: const setproperty
 const Main.x = 1
 #---------------------
-cannot declare this form constant
+cannot declare dotted form constant
 @ :1
 const Main.x = 1
 #     └────┘
@@ -267,7 +267,7 @@ const Main.x = 1
 # Error: const ref, tuple-nested
 const (a, (b, x[])) = (1, (2, 3))
 #---------------------
-cannot declare this form constant
+cannot declare `ref[]` form constant
 @ :1
 const (a, (b, x[])) = (1, (2, 3))
 #             └─┘
@@ -276,7 +276,7 @@ const (a, (b, x[])) = (1, (2, 3))
 # Error: const setproperty, tuple-nested
 const (a, (b, x.y)) = (1, (2, 3))
 #---------------------
-cannot declare this form constant
+cannot declare dotted form constant
 @ :1
 const (a, (b, x.y)) = (1, (2, 3))
 #             └─┘

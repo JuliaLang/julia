@@ -1171,6 +1171,6 @@ end
     [:-> [:tuple] [:block]]
 ]
 #---------------------
-Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
+top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
 @ :1
 └───Expression: ::tombstone

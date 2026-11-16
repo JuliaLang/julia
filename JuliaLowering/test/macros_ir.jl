@@ -311,7 +311,7 @@ let
     @__FUNCTION__()
 end
 #---------------------
-can only be used inside a function
+@__FUNCTION__ can only be used inside a function
 @ :2
 let
     @__FUNCTION__()
