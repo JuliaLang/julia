@@ -60,6 +60,21 @@ function precompile_workload()
     finally
         COPY[] = copy
     end
+    # The card that previews a name the pointer rests on.
+    follow!(b, NameTarget(Base, :sort!))
+    frame(b)
+    for h in b.hits
+        h.action isa Tuple && first(h.action) === :names || continue
+        handle!(b, MouseEvent(:move, 0, h.row, first(h.cols), 0))
+        b.hover_since = 0.0
+        show_card!(b)
+        frame(b)
+        break
+    end
+    hide_card!(b)
+    for tip in eachindex(TIPS)
+        start_page(b.cat, 80, tip)
+    end
     unloaded_page(PkgId(UUID(UInt128(1)), "Example"), 80)
     # The event loop, the screen set-up and the entry points.
     browse(terminal("jjlj\ty"); query = "sum")

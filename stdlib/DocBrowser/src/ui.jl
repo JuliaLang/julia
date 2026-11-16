@@ -11,7 +11,7 @@ end
 SideRow(role::Symbol, pkg) = SideRow(role, pkg, nothing, nothing)
 SideRow(role::Symbol, pkg, unloaded) = SideRow(role, pkg, unloaded, nothing)
 
-is_header(r::SideRow) = r.pkg === nothing && r.unloaded === nothing && r.page === nothing
+is_header(r::SideRow) = r.pkg === nothing && r.unloaded === nothing && r.page === nothing && r.role !== :start
 
 struct NameRow
     kind::Symbol # :about, :header, :entry, :heading (of a manual page) or :hit (of a search)
@@ -45,6 +45,8 @@ struct Snapshot
     query::Union{Nothing,String}
     internal::Bool
     textsearch::Bool
+    link::Int       # the link that was selected, which is often the one that was followed
+    title::String   # of the page, to say where going back or forward leads
 end
 
 mutable struct Browser
@@ -96,6 +98,13 @@ mutable struct Browser
     manual_hits::Vector{ManualHit} # what a search finds in the manual
     indirect::Bool               # whether a search includes indirect dependencies
     hidden::Int                  # how many names a search found in indirect dependencies, but left out
+    # The card that previews what the pointer rests on: where the pointer came to rest and when,
+    # and the card's lines and what it previews once it shows.
+    hover_at::Tuple{Int,Int}
+    hover_since::Float64
+    card::Union{Nothing,Tuple{Vector{AnnotatedString{String}},Any}}
+    tips::Vector{Int}            # the tips in the order they are shown, shuffled for each browser
+    tip::Int                     # which of them the start page shows
 end
 
 function Browser(term::REPL.Terminals.TextTerminal, cat::Catalog=Catalog())
@@ -107,11 +116,11 @@ function Browser(term::REPL.Terminals.TextTerminal, cat::Catalog=Catalog())
                 Snapshot[], Snapshot[], Hit[], nothing, "", false, false, nothing, String[],
                 (0.0, nothing), ReentrantLock(), Dict{Any,Set{Symbol}}(), false, LAYOUT[],
                 get(term.out_stream, :color, true)::Bool || REPL.Terminals.hascolor(term),
-                nothing, false, (0.0, 0.0, 0.0, 0.0), nothing, ManualHit[], SEARCH_INDIRECT[], 0)
+                nothing, false, (0.0, 0.0, 0.0, 0.0), nothing, ManualHit[], SEARCH_INDIRECT[], 0, (0, 0), Inf, nothing,
+                sortperm(rand(length(TIPS))), 1)
     any(p -> p.role in (:project, :direct), cat.pkgs) || push!(b.expanded, :indirect)
     refresh_side!(b)
-    first_pkg = findfirst(r -> r.pkg !== nothing, b.side_rows)
-    b.side.cursor = something(first_pkg, 1)
+    b.side.cursor = 1 # the start page
     sync_side!(b)
     return b
 end
@@ -144,7 +153,7 @@ end
 
 function refresh_side!(b::Browser)
     selected = row_key(side_row(b))
-    rows = SideRow[]
+    rows = SideRow[SideRow(:start, nothing)]
     for (block, roles) in pairs(BLOCKS)
         any(r -> has_section(b, r), roles) || continue
         push!(rows, SideRow(block, nothing))
@@ -201,6 +210,11 @@ function refresh_names!(b::Browser)
             end
         end
         names_first || add_name_hits!(rows, b)
+    elseif on_start(b)
+        push!(rows, NameRow(:about, nothing, :none, 0))
+        for k in eachindex(START_SECTIONS)
+            push!(rows, NameRow(:heading, nothing, :none, k))
+        end
     elseif side_row(b) !== nothing && side_row(b).role === :pkgdocs
         # Pkg's manual lists its pages, each of which unfolds to its headings.
         push!(rows, NameRow(:about, nothing, :none, 0))
@@ -258,7 +272,13 @@ side_row(b::Browser) = get(b.side_rows, b.side.cursor, nothing)
 function side_placeholder(b::Browser)
     b.query === nothing && b.source === :side || return nothing
     row = side_row(b)
-    return row === nothing || row.pkg !== nothing || row.page !== nothing ? nothing : row
+    return row === nothing || row.pkg !== nothing || row.page !== nothing || row.role === :start ? nothing : row
+end
+
+# Whether the start page is picked in the sidebar.
+function on_start(b::Browser)
+    row = side_row(b)
+    return row !== nothing && row.role === :start
 end
 
 # The manual page picked in the sidebar.
@@ -283,7 +303,7 @@ function sync_side!(b::Browser)
         b.names = ListState(1, 0)
         b.collapsed = Set{Symbol}()
     end
-    row !== nothing && row.page !== nothing && (b.names = ListState(1, 0))
+    row !== nothing && (row.page !== nothing || row.role === :start) && (b.names = ListState(1, 0))
     refresh_names!(b)
 end
 
@@ -325,7 +345,8 @@ list_offset(b::Browser, pane::Symbol) = pane === :names ? names_offset(b) : 0
 ## Navigation ##
 
 snapshot(b::Browser) = Snapshot(b.mod, b.focus, b.source, row_key(side_row(b)), row_key(name_row(b)),
-                                b.doc_scroll, b.override, b.query, b.internal, b.textsearch)
+                                b.doc_scroll, b.override, b.query, b.internal, b.textsearch, b.link,
+                                key_title(b, current_key(b)))
 
 row_key(::Nothing) = nothing
 row_key(r::SideRow) = (r.role, r.pkg === nothing ? nothing : r.pkg.mod, r.unloaded,
@@ -354,7 +375,8 @@ function restore!(b::Browser, s::Snapshot)
     reveal!(b.names, content_rows(b), names_offset(b))
     b.doc_key = current_key(b)
     b.doc_scroll = s.doc_scroll
-    b.link = 0
+    # Select the link again, which is often the one that was followed, to show where we were.
+    b.link = s.link
 end
 
 function navigate!(f, b::Browser)
@@ -367,14 +389,18 @@ end
 function go_back!(b::Browser)
     isempty(b.back) && return (b.status = "Nothing to go back to"; true)
     push!(b.forward, snapshot(b))
-    restore!(b, pop!(b.back))
+    s = pop!(b.back)
+    restore!(b, s)
+    b.status = "Back to " * s.title
     return true
 end
 
 function go_forward!(b::Browser)
     isempty(b.forward) && return (b.status = "Nothing to go forward to"; true)
     push!(b.back, snapshot(b))
-    restore!(b, pop!(b.forward))
+    s = pop!(b.forward)
+    restore!(b, s)
+    b.status = "Forward to " * s.title
     return true
 end
 
@@ -444,7 +470,7 @@ function follow!(b::Browser, t::Target)
         b.focus = :doc
         b.link = 0
     elseif t isa ToggleTarget
-        toggle_flag!(b, t.flag)
+        t.flag === :tip ? next_tip!(b, 1) : t.flag === :tip_back ? next_tip!(b, -1) : toggle_flag!(b, t.flag)
     elseif t isa CodeTarget
         b.result = t.code
         b.quit = true
@@ -504,10 +530,12 @@ function current_key(b::Browser)
     if b.source === :side
         row = side_row(b)
         row === nothing && return ModuleTarget(b.mod)
+        row.role === :start && return :start
         row.unloaded === nothing || return LoadTarget(row.unloaded)
         row.page === nothing || return ManualTarget(side_page(b).path, "")
         return row.pkg === nothing ? SectionTarget(row.role) : ModuleTarget(row.pkg.mod)
     end
+    b.query === nothing && on_start(b) && return :start
     p = b.query === nothing ? side_page(b) : nothing
     p === nothing || return ManualTarget(p.path, "")
     row = name_row(b)
@@ -657,6 +685,10 @@ function hit_subject(b::Browser, action)
         return p === nothing ? ModuleTarget(b.mod) : SourceTarget(p.path, 1)
     elseif kind === :load
         return action[2]
+    elseif kind === :card
+        b.card === nothing && return nothing
+        subject = b.card[2]
+        return subject isa ManualTarget ? SourceTarget(subject.path, 1) : subject
     elseif kind === :crumb
         return ModuleTarget(action[2])
     end
@@ -726,6 +758,7 @@ function page(b::Browser, key, width::Int)
             key isa SectionTarget ? section_page(b.cat, key.role, width) :
             key isa LoadTarget ? unloaded_page(key.id, width) :
             key isa ManualTarget ? manual_page(b.cat, key.path, width) :
+            key === :start ? start_page(b.cat, width, b.tips[b.tip], b.tip) :
             key === :help ? help_page(b.cat, width) : Page(PageBuilder(width))
         catch err
             pb = PageBuilder(width)
@@ -819,14 +852,15 @@ function hint_segments(b::Browser)
                 ("^A", b.indirect ? "direct only" : "+indirect"), ("⇥", "results"), ("esc", "cancel")]
     elseif b.focus === :doc
         p = page(b, current_key(b), doc_width(b))
-        hints = [("↑↓", "scroll"), ("⇥", "next link"), ("⏎", "follow"), ("⌫", "back")]
+        hints = [("↑↓", "scroll"), ("⇥", "next link"), ("⏎", "follow"), ("[ ]", "back/forward")]
         isempty(p.headings) || push!(hints, ("{ }", "headings"))
         any(s -> s.target == ToggleTarget(:extended), p.spots) && push!(hints, ("x", "extended"))
+        current_key(b) === :start && push!(hints, ("t T", "tips"))
         return vcat(narrow, hints, [("/", "search"), ("y", "insert"), ("e", "source")])
     else
         # On a narrow terminal the layout matters most, so it comes first.
         return vcat(narrow, [("↑↓", "move"), ("⏎", "open"), ("←→", "panes"), ("/", "search"),
-                     ("i", b.internal ? "hide internal" : "internal/deprecated"), ("⌫", "back"),
+                     ("i", b.internal ? "hide internal" : "internal"), ("[ ]", "back/forward"),
                      ("y", "insert")])
     end
 end
@@ -859,6 +893,7 @@ function describe(b::Browser, action)
         row.unloaded === nothing || return "↓ $(row.unloaded.name) is not loaded · ⏎ load it"
         row.role === :pkgdocs && return "Pkg's manual · ⏎ its pages"
         row.page === nothing || return "$(row.page.title) · ⏎ its sections · right-click: source"
+        row.role === :start && return "where to begin: the manual, the keys, and your project"
         row.pkg === nothing && return "⏎ fold or unfold this section"
         return "$(row.pkg.id.name) · ⏎ open · right-click: source"
     elseif kind === :names
@@ -879,9 +914,9 @@ function describe(b::Browser, action)
     elseif kind === :crumb
         return "→ $(display_name(action[2]))"
     elseif kind === :back
-        return "‹ go back (⌫)"
+        return isempty(b.back) ? "◀ nothing to go back to" : "◀ back to $(last(b.back).title) ([ or ⌫)"
     elseif kind === :forward
-        return "› go forward (])"
+        return isempty(b.forward) ? "▶ nothing to go forward to" : "▶ forward to $(last(b.forward).title) (])"
     elseif kind === :search
         return "/ search the $(b.textsearch ? "text of docstrings" : "names") of every loaded module"
     elseif kind === :toggle_text
@@ -922,6 +957,8 @@ function describe_target(b::Browser, p::Page, t)
         return "↓ jumps to “$(strip(String(p.lines[p.headings[t.heading]])))” ({ } step through headings)"
     elseif t isa ToggleTarget
         t.flag === :extended && return "shows or hides the extended help (x)"
+        t.flag === :tip && return "shows the next tip (t)"
+        t.flag === :tip_back && return "shows the previous tip (T)"
         return "finds every method that takes this type; this can take a moment"
     elseif t isa SectionTarget
         return "→ $(getfield(SECTION_TITLES, t.role))"
@@ -1027,15 +1064,17 @@ function header_bar(b::Browser)
     proj = project_label()
     proj === nothing || put_seg!(rb, " ($proj)", :REPL_DocBrowser_dim, (:project,))
     put_seg!(rb, " ")
-    put_seg!(rb, "‹", isempty(b.back) ? :REPL_DocBrowser_dim : :REPL_DocBrowser_key, (:back,))
-    put_seg!(rb, " ")
-    put_seg!(rb, "›", isempty(b.forward) ? :REPL_DocBrowser_dim : :REPL_DocBrowser_key, (:forward,))
+    put_seg!(rb, "◀ back", isempty(b.back) ? :REPL_DocBrowser_dim : :REPL_DocBrowser_key, (:back,))
+    put_seg!(rb, "  ")
+    put_seg!(rb, "forward ▶", isempty(b.forward) ? :REPL_DocBrowser_dim : :REPL_DocBrowser_key, (:forward,))
     put_seg!(rb, "  ")
     placeholder = side_placeholder(b)
     if placeholder !== nothing
         # Not the module shown before, which is no longer what is selected.
         put_seg!(rb, placeholder.unloaded === nothing ? getfield(SECTION_TITLES, placeholder.role) :
                  placeholder.unloaded.name, :REPL_DocBrowser_pane_title)
+    elseif on_start(b) && b.override === nothing && b.query === nothing
+        put_seg!(rb, "Start", :REPL_DocBrowser_pane_title)
     elseif side_page(b) !== nothing && b.override === nothing
         p = side_page(b)
         role = p.role === :pkgdocs ? :stdlibdocs : p.role
@@ -1086,7 +1125,10 @@ function list_line(b::Browser, pane::Symbol, i::Int, x::Int, w::Int, row::Int)
     push!(b.hits, Hit(row, x:x+w-1, action))
     if pane === :side
         r = b.side_rows[i]
-        if r.unloaded !== nothing
+        if r.role === :start
+            put_seg!(rb, " ⌂ ", :REPL_DocBrowser_kind_module, action)
+            put_seg!(rb, "Start", :REPL_DocBrowser_pane_title, action)
+        elseif r.unloaded !== nothing
             put_seg!(rb, "   ")
             put_seg!(rb, r.unloaded.name, nothing, action)
             room = w - width(rb) - 1
@@ -1127,11 +1169,16 @@ function list_line(b::Browser, pane::Symbol, i::Int, x::Int, w::Int, row::Int)
         if r.kind === :about
             p = b.query === nothing ? side_page(b) : nothing
             pkg = p !== nothing && p.role === :pkgdocs
-            title = pkg ? "Pkg" : p === nothing ? String(nameof(b.mod)) : p.title
+            title = on_start(b) ? "Start" : pkg ? "Pkg" : p === nothing ? String(nameof(b.mod)) : p.title
             n = pkg ? "$(count(r -> r.kind === :page, b.name_rows)) pages" :
-                p === nothing ? "$(count(r -> r.kind === :entry, b.name_rows)) names" : "$(length(b.name_rows) - 1) sections"
+                p === nothing && !on_start(b) ? "$(count(r -> r.kind === :entry, b.name_rows)) names" :
+                "$(length(b.name_rows) - 1) sections"
             put_seg!(rb, " " * title, b.focus === :names ? :REPL_DocBrowser_title : :REPL_DocBrowser_section, action)
             put_seg!(rb, "  " * n, :REPL_DocBrowser_dim, action)
+        elseif r.kind === :heading && on_start(b)
+            r.count in eachindex(START_SECTIONS) || return fit("", w)
+            put_seg!(rb, "  ")
+            put_seg!(rb, START_SECTIONS[r.count], :REPL_DocBrowser_pane_title, action)
         elseif r.kind === :page
             p = b.cat.manual[manual_page_of(b.cat, r.hit.path)]
             put_seg!(rb, Symbol(p.path) in b.expanded ? " ▾ " : " ▸ ", :REPL_DocBrowser_dim, action)
@@ -1247,6 +1294,15 @@ function draw_list(b::Browser, pane::Symbol, x::Int, w::Int)
     return lines
 end
 
+key_title(b::Browser, @nospecialize(key)) =
+    key isa NameEntry ? display_name(key) :
+    key isa ModuleTarget ? display_name(key.mod) :
+    key isa SectionTarget ? getfield(SECTION_TITLES, key.role) :
+    key isa LoadTarget ? key.id.name :
+    key isa ManualTarget ? manual_title(b.cat, key.path) :
+    key === :start ? "Start" :
+    key === :help ? "Keys and mouse" : ""
+
 function pane_title(b::Browser, pane::Symbol, x::Int, w::Int)
     rb = RowBuilder(b, 2, x)
     face = b.focus === pane ? :REPL_DocBrowser_title : :REPL_DocBrowser_section
@@ -1267,12 +1323,7 @@ function pane_title(b::Browser, pane::Symbol, x::Int, w::Int)
         end
     else
         key = current_key(b)
-        title = key isa NameEntry ? display_name(key) :
-                key isa ModuleTarget ? display_name(key.mod) :
-                key isa SectionTarget ? getfield(SECTION_TITLES, key.role) :
-                key isa LoadTarget ? key.id.name :
-                key isa ManualTarget ? manual_title(b.cat, key.path) :
-                key === :help ? "Keys and mouse" : ""
+        title = key_title(b, key)
         p = page(b, key, doc_width(b))
         n = content_rows(b)
         pos = length(p.lines) <= n ? "" :
@@ -1375,16 +1426,21 @@ function frame(b::Browser)
         built[i] = (pane_title(b, pane, x, w), lines)
     end
     sep = styled("│", :REPL_DocBrowser_border)
+    styled_rows = Vector{AnnotatedString{String}}(undef, H)
     for r in 1:content_rows(b)+1
         parts = AnnotatedString{String}[]
         for (i, (title, lines)) in enumerate(built)
             i > 1 && push!(parts, sep)
             push!(parts, r == 1 ? title : lines[r-1])
         end
-        rows[r+1] = ansi(annotatedstring(parts...), b.color)
+        styled_rows[r+1] = annotatedstring(parts...)
     end
-    rows[1] = ansi(header_bar(b), b.color)
-    rows[H] = ansi(footer_bar(b), b.color)
+    styled_rows[1] = header_bar(b)
+    styled_rows[H] = footer_bar(b)
+    overlay_card!(b, styled_rows)
+    for r in 1:H
+        rows[r] = ansi(styled_rows[r], b.color)
+    end
     return rows
 end
 
@@ -1441,6 +1497,189 @@ function check_size!(b::Browser)
     write(b.out, "\e[H\e[2J")
     b.prev = String[]
     return true
+end
+
+## The preview card ##
+
+# How long the pointer rests on something before its card shows, in seconds.
+const CARD_DELAY = 0.175
+
+card_width(b::Browser) = clamp(b.width ÷ 2, 30, 64)
+
+# What the pointer rests on, as something a card can preview, or `nothing`.
+function card_subject(b::Browser, @nospecialize(action))
+    action isa Tuple || return nothing
+    kind = first(action)
+    if kind === :spot
+        p = page(b, current_key(b), doc_width(b))
+        k = action[2]
+        k in eachindex(p.spots) || return nothing
+        t = p.spots[k].target
+        return t isa NameTarget || t isa ModuleTarget || t isa ManualTarget ? t : nothing
+    elseif kind === :names
+        row = get(b.name_rows, action[2], nothing)
+        row === nothing && return nothing
+        row.kind === :entry && return row.entry
+        row.kind === :hit && return ManualTarget(row.hit.path, row.hit.heading)
+    elseif kind === :side
+        row = get(b.side_rows, action[2], nothing)
+        row === nothing && return nothing
+        row.pkg === nothing || return ModuleTarget(row.pkg.mod)
+        row.page === nothing || return ManualTarget(row.page.path, "")
+    end
+    return nothing
+end
+
+"""
+    card_lines(b, subject, width) -> Vector{AnnotatedString}
+
+What the card of `subject` says: its name, and the start of its documentation: a docstring's
+signature and first paragraph, or the first paragraph of a section of the manual.
+"""
+function card_lines(b::Browser, @nospecialize(subject), width::Int)
+    title, kind, md = card_content(b, subject)
+    lines = AnnotatedString{String}[annotatedstring(styled(title, :REPL_DocBrowser_title),
+                                                    styled(isempty(kind) ? "" : "  " * kind, :REPL_DocBrowser_dim))]
+    body = md === nothing ? AnnotatedString{String}[] : render_markdown(md, width)
+    while !isempty(body) && isempty(strip(String(first(body))))
+        popfirst!(body)
+    end
+    while !isempty(body) && isempty(strip(String(last(body))))
+        pop!(body)
+    end
+    if isempty(body)
+        push!(lines, styled("No documentation", :REPL_DocBrowser_dim))
+    else
+        push!(lines, AnnotatedString(""))
+        append!(lines, body[1:min(end, 8)])
+        length(body) > 8 && push!(lines, styled("…", :REPL_DocBrowser_dim))
+    end
+    push!(lines, AnnotatedString(""))
+    push!(lines, styled("click to open · right-click: source", :REPL_DocBrowser_dim))
+    return lines
+end
+
+function card_content(b::Browser, @nospecialize(subject))
+    if subject isa NameEntry || subject isa NameTarget
+        m, s = subject isa NameEntry ? (subject.mod, subject.name) : (subject.mod, subject.name)
+        e = subject isa NameEntry ? subject : try
+            classify(b.cat, m, s)
+        catch
+            nothing
+        end
+        kind = e === nothing ? "" : String(e.kind)
+        return string(display_name(m), '.', s), kind, docstring_start(doc_results(Binding(m, s)))
+    elseif subject isa ModuleTarget
+        return display_name(subject.mod), "module", docstring_start(doc_results(module_binding(subject.mod)))
+    elseif subject isa ManualTarget
+        k = anchor_heading(b.cat, subject.path, subject.anchor)
+        hs = page_headings(b.cat, subject.path)
+        title = k in eachindex(hs) ? hs[k].text : manual_title(b.cat, subject.path)
+        return title, "manual · " * manual_title(b.cat, subject.path), section_start(subject.path, k)
+    end
+    return "", "", nothing
+end
+
+# A docstring's signature and first paragraph.
+function docstring_start(results)
+    isempty(results) && return nothing
+    blocks = Any[]
+    for x in md_blocks(REPL.parsedoc(first(results)))
+        if x isa Markdown.Code && isempty(blocks)
+            push!(blocks, x)
+        elseif x isa Markdown.Paragraph
+            push!(blocks, x)
+            break
+        end
+    end
+    return isempty(blocks) ? nothing : Markdown.MD(blocks)
+end
+
+md_blocks(md::Markdown.MD) = mapreduce(x -> x isa Markdown.MD ? md_blocks(x) : Any[x], vcat, md.content; init=Any[])
+
+# The first paragraph of the section of a manual page under its `k`th shown heading.
+function section_start(path::String, k::Int)
+    md = try
+        Markdown.parse(read(path, String))
+    catch
+        return nothing
+    end
+    seen = 0
+    for x in md_blocks(md)
+        if x isa Markdown.Header
+            seen += 1
+        elseif x isa Markdown.Paragraph && seen >= max(k, 1)
+            return Markdown.MD(Any[x])
+        end
+    end
+    return nothing
+end
+
+# Show the card of what the pointer has rested on. Returns whether the screen must change.
+function show_card!(b::Browser)
+    b.card === nothing && b.hover !== nothing && time() - b.hover_since >= CARD_DELAY || return false
+    b.hover_since = Inf # once, until the pointer moves on
+    subject = card_subject(b, b.hover)
+    subject === nothing && return false
+    b.card = (card_lines(b, subject, card_width(b) - 4), subject)
+    return true
+end
+
+function hide_card!(b::Browser)
+    b.hover_since = Inf
+    b.card === nothing && return false
+    b.card = nothing
+    return true
+end
+
+# Draw the card over the rows of the screen, below the pointer, or above it when there is no room.
+function overlay_card!(b::Browser, rows::Vector{AnnotatedString{String}})
+    b.card === nothing && return
+    lines = b.card[1]
+    cw = card_width(b)
+    h = length(lines) + 2
+    r0, c0 = b.hover_at
+    top = r0 + h <= b.height - 1 ? r0 + 1 : max(2, r0 - h)
+    left = clamp(c0, 1, max(1, b.width - cw + 1))
+    border = :REPL_DocBrowser_border
+    box = AnnotatedString{String}[styled("╭" * "─"^(cw - 2) * "╮", border)]
+    for l in lines
+        push!(box, annotatedstring(styled("│ ", border), fit(l, cw - 4), styled(" │", border)))
+    end
+    push!(box, styled("╰" * "─"^(cw - 2) * "╯", border))
+    for (i, piece) in enumerate(box)
+        r = top + i - 1
+        2 <= r <= b.height - 1 || continue
+        rows[r] = splice_cols(rows[r], left, piece)
+        push!(b.hits, Hit(r, left:left+cw-1, (:card,)))
+    end
+end
+
+# `line` with `piece` drawn over it from column `col`.
+splice_cols(line::AnnotatedString{String}, col::Int, piece::AnnotatedString{String}) =
+    annotatedstring(take_cols(line, 1, col - 1), piece, take_cols(line, col + textwidth(String(piece)), typemax(Int)))
+
+# The columns `from` to `to` of `s`, with spaces for the part of a wide character cut at an edge.
+function take_cols(s::AnnotatedString{String}, from::Int, to::Int)
+    str = String(s)
+    first_i = last_i = 0
+    lead = trail = 0
+    col = 1
+    for (i, c) in pairs(str)
+        stop = col + textwidth(c) - 1
+        if col >= from && stop <= to
+            first_i == 0 && (first_i = i)
+            last_i = i
+        elseif col < from <= stop
+            lead = stop - from + 1
+        elseif col <= to < stop
+            trail = to - col + 1
+        end
+        col = stop + 1
+        col > to && break
+    end
+    mid = first_i == 0 ? AnnotatedString("") : s[first_i:last_i]
+    return annotatedstring(' '^lead, mid, ' '^trail)
 end
 
 ## Selecting text ##
@@ -1690,7 +1929,7 @@ end
 function show_heading!(b::Browser)
     row = name_row(b)
     row !== nothing && row.kind === :hit && return scroll_to_heading!(b, hit_heading(b.cat, row.hit))
-    (row === nothing || side_page(b) === nothing || b.query !== nothing) && return
+    (row === nothing || (side_page(b) === nothing && !on_start(b)) || b.query !== nothing) && return
     row.kind === :heading ? scroll_to_heading!(b, row.count) : scroll_to_heading!(b, 0)
 end
 
@@ -1725,6 +1964,13 @@ function cycle_link!(b::Browser, dir::Int)
     line = p.spots[b.link].line
     if !(b.doc_scroll < line <= b.doc_scroll + n)
         b.doc_scroll = max(0, line - n ÷ 3)
+    end
+    # Preview the selected link, as if the pointer rested on it: the card goes below its line.
+    for (pane, x, _) in layout(b)
+        pane === :doc || continue
+        b.hover = (:spot, b.link)
+        b.hover_at = (line - b.doc_scroll + 2, x + first(p.spots[b.link].cols) - 1)
+        b.hover_since = time()
     end
 end
 
@@ -1796,7 +2042,7 @@ function focus_left!(b::Browser)
     if b.focus === :doc
         b.focus = b.source === :side ? :side : :names
     elseif b.focus === :names
-        if b.query === nothing && side_page(b) === nothing && package_of(b.cat, b.mod) !== nothing &&
+        if b.query === nothing && side_page(b) === nothing && !on_start(b) && package_of(b.cat, b.mod) !== nothing &&
                 get(b.cat.bymod, b.mod, nothing) === nothing
             # In a submodule, step out to its parent.
             child = b.mod
@@ -1830,6 +2076,11 @@ function toggle_flag!(b::Browser, flag::Symbol)
     key isa NameEntry || return
     flags = get!(Set{Symbol}, b.flags, key)
     flag in flags ? delete!(flags, flag) : push!(flags, flag)
+end
+
+function next_tip!(b::Browser, dir::Int)
+    b.tip = mod1(b.tip + dir, length(b.tips))
+    filter!(kv -> kv.first[1] !== :start, b.pages) # drawn with the old tip
 end
 
 function toggle_textsearch!(b::Browser)
@@ -1936,6 +2187,7 @@ isplain(ev::KeyEvent, c::Char) = ev.key === :char && ev.char == c && ev.mods & (
 isctrl(ev::KeyEvent, c::Char) = ev.key === :char && ev.char == c && ev.mods == CTRL
 
 function handle!(b::Browser, ev::KeyEvent)
+    hide_card!(b)
     if b.sel !== nothing && !(ev.key in (:up, :down, :pageup, :pagedown))
         b.sel = nothing
         b.dragging = false
@@ -2011,6 +2263,8 @@ function handle!(b::Browser, ev::KeyEvent)
     elseif isplain(ev, 'x')
         key = current_key(b)
         key isa NameEntry ? toggle_flag!(b, :extended) : (b.status = "No extended help here")
+    elseif isplain(ev, 't') || isplain(ev, 'T')
+        current_key(b) === :start ? next_tip!(b, ev.char == 't' ? 1 : -1) : (b.status = "Tips are on the start page")
     elseif isplain(ev, '{')
         jump_heading!(b, -1)
     elseif isplain(ev, '}')
@@ -2090,10 +2344,16 @@ function handle!(b::Browser, ev::MouseEvent)
             return click!(b, h, false)
         end
         hover = h === nothing ? nothing : h.action
+        # Moving onto the card keeps it, and what it previews.
+        hover == (:card,) && return false
         hover == b.hover && return false
+        hide_card!(b)
         b.hover = hover
+        b.hover_at = (ev.row, ev.col)
+        b.hover_since = time()
         return true
     elseif ev.action in (:wheelup, :wheeldown)
+        hide_card!(b)
         pane = pane_at(b, ev.row, ev.col)
         pane === nothing && return false
         delta = ev.action === :wheelup ? -3 : 3
@@ -2120,6 +2380,13 @@ function handle!(b::Browser, ev::MouseEvent)
         b.sel = nothing
         FIRST_OPEN[] = false
         h = hit_at(b, ev.row, ev.col)
+        if h !== nothing && h.action == (:card,) && b.card !== nothing
+            subject = b.card[2]
+            hide_card!(b)
+            subject isa NameEntry ? open_entry!(b, subject) : follow!(b, subject)
+            return true
+        end
+        hide_card!(b)
         # Clicking anywhere but the search field ends typing in it.
         (h === nothing || !(first(h.action) in (:search, :toggle_text))) && (b.typing = false)
         # Anything that navigates closes the help, so what it shows is not hidden underneath.
@@ -2216,6 +2483,7 @@ This browser shows Julia's manual, under *Manual*, *Base reference* and *Develop
   * `PgUp` `PgDn` `Space` `g` `G`: page up and down, top and bottom.
   * `{` `}`: jump to the previous or next heading. Long pages start with a list of their headings.
   * `x`: show or hide the extended help of a docstring.
+  * `t` `T` on the start page: show the next or the previous tip.
   * `w`: change the layout: three panes, two, one, or fit the window.
 
 # Finding things
@@ -2357,11 +2625,11 @@ end
 
 function run!(b::Browser)
     enter_screen(b)
-    timer = Timer(0.25; interval=0.25) do _
+    timer = Timer(0.05; interval=0.05) do _
         try
             @lock b.lock begin
                 # Packages loaded from the browser are only visible in the latest world.
-                b.quit || (check_size!(b) && Base.invokelatest(draw, b))
+                b.quit || ((check_size!(b) | Base.invokelatest(show_card!, b)) && Base.invokelatest(draw, b))
             end
         catch
         end

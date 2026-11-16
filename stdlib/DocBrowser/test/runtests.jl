@@ -535,13 +535,17 @@ end
     press!(b, 'g');       @test b.side.cursor == 1
     press!(b, :pagedown); @test b.side.cursor == min(n, 1 + DocBrowser.content_rows(b))
     press!(b, :pageup);   @test b.side.cursor == 1
-    # The first row is a section heading: Enter and → fold it, and fold it back.
-    press!(b, :enter);    @test !(:direct in b.expanded) || length(b.side_rows) < n
-    press!(b, :right)
+    # The first row is the start page, and the next the heading of the documentation:
+    # Enter and → fold it, and fold it back.
+    @test DocBrowser.on_start(b)
+    press!(b, :down);     @test DocBrowser.is_header(DocBrowser.side_row(b))
+    press!(b, :enter);    @test !(:docs in b.expanded) && length(b.side_rows) < n
+    press!(b, :right);    @test :docs in b.expanded
     press!(b, 'a');       @test all(in(b.expanded), DocBrowser.SECTION_ORDER)
     press!(b, 'a');       @test !(:indirect in b.expanded)
     # On a package, → moves to its names, and ← back again.
     b.side.cursor = findfirst(r -> r.pkg !== nothing, b.side_rows)
+    DocBrowser.sync_side!(b)
     press!(b, :right);    @test b.focus === :names
     press!(b, :left);     @test b.focus === :side
     press!(b, KeyEvent('l', DocBrowser.CTRL))
@@ -883,6 +887,111 @@ end
     @test findfirst(==(:code), roles) > findfirst(==(:devdocs), roles)
 end
 
+@testset "the start page" begin
+    b = test_browser()
+    # A fresh browser opens on the start page, whose sections the names pane lists.
+    @test DocBrowser.current_key(b) === :start
+    @test [r.kind for r in b.name_rows] == [:about; fill(:heading, length(DocBrowser.START_SECTIONS))]
+    p = DocBrowser.page(b, :start, DocBrowser.doc_width(b))
+    text = join(String.(p.lines), '\n')
+    @test occursin(string(VERSION), text)
+    @test length(p.headings) == length(DocBrowser.START_SECTIONS)
+    targets = [s.target for s in p.spots]
+    @test any(t -> t isa DocBrowser.ManualTarget && endswith(t.path, "getting-started.md"), targets)
+    @test any(t -> t isa DocBrowser.ManualTarget && endswith(t.path, "NEWS.md") ||
+                   t isa DocBrowser.URLTarget && occursin("NEWS", t.url), targets)
+    # Picking a section scrolls to it, and the header and panes say where we are.
+    b.focus = :names
+    press!(b, :down)
+    frame(b)
+    @test occursin("Start", String(DocBrowser.header_bar(b)))
+    @test occursin("$(length(DocBrowser.START_SECTIONS)) sections", String(DocBrowser.pane_title(b, :names, 1, 40)))
+    # Every tip fits its box and wraps between words, and the docs that it links to are installed.
+    for (i, tip) in enumerate(DocBrowser.TIPS)
+        lines = String.(DocBrowser.start_page(b.cat, 50, i).lines)
+        top = findfirst(l -> occursin("Did you know?", l), lines)
+        bottom = findnext(l -> occursin("╰", l), lines, top)
+        @test all(l -> textwidth(l) == 48 && endswith(l, "│") && !occursin(r"^  │   \S", l), lines[top+1:bottom-1])
+        @test occursin(replace(split(tip[1])[end], '`' => ""), join(lines, ' '))
+        link = DocBrowser.tip_link(tip)
+        @test (link === nothing) == (tip[2] === nothing)
+        link === nothing || @test DocBrowser.anchor_heading(b.cat, link.path, link.anchor) > 0
+    end
+    # Each browser shows the tips in its own order. `t`, `T` and the links in the box step
+    # through them, and they come round again.
+    @test sort(b.tips) == eachindex(DocBrowser.TIPS) && b.tip == 1
+    b.focus = :doc
+    tip_text() = join(String.(DocBrowser.page(b, :start, DocBrowser.doc_width(b)).lines), '\n')
+    before = tip_text()
+    press!(b, 't')
+    @test b.tip == 2 && tip_text() != before && occursin("2 of", tip_text())
+    press!(b, 'T')
+    @test b.tip == 1 && tip_text() == before
+    p = DocBrowser.page(b, :start, DocBrowser.doc_width(b))
+    back = findfirst(s -> s.target == DocBrowser.ToggleTarget(:tip_back), p.spots)
+    @test occursin("previous", String(collect(String(p.lines[p.spots[back].line]))[p.spots[back].cols]))
+    DocBrowser.follow!(b, p.spots[back].target)
+    @test b.tip == length(DocBrowser.TIPS)
+    DocBrowser.follow!(b, DocBrowser.ToggleTarget(:tip))
+    @test b.tip == 1 && tip_text() == before
+    DocBrowser.follow!(b, NameTarget(Base, :sum))
+    press!(b, 't'); @test b.tip == 1 && occursin("start page", b.status)
+end
+
+@testset "hover cards and history" begin
+    b = test_browser()
+    DocBrowser.follow!(b, NameTarget(Base, :sort!))
+    frame(b)
+    # Resting the pointer on a name shows a card with the start of its docstring.
+    h = first(h for h in b.hits if h.action isa Tuple && first(h.action) === :names &&
+              b.name_rows[h.action[2]].kind === :entry)
+    handle!(b, MouseEvent(:move, 0, h.row, first(h.cols) + 1, 0))
+    @test b.card === nothing && !DocBrowser.show_card!(b) # not straight away
+    b.hover_since -= 1
+    @test DocBrowser.show_card!(b)
+    entry = b.name_rows[h.action[2]].entry
+    @test occursin(String(entry.name), String(b.card[1][1]))
+    @test any(r -> occursin("╭", r), frame(b))
+    # Moving onto the card keeps it; right-click on it is its source; a click opens it.
+    c = first(h for h in b.hits if h.action == (:card,))
+    handle!(b, MouseEvent(:move, 0, c.row, first(c.cols) + 1, 0))
+    @test b.card !== nothing && DocBrowser.hit_subject(b, (:card,)) == entry
+    handle!(b, MouseEvent(:press, 1, c.row, first(c.cols) + 1, 0))
+    frame(b)
+    @test b.card === nothing && DocBrowser.current_key(b) == entry
+    # Cards of modules and of the manual.
+    @test occursin("module", String(DocBrowser.card_lines(b, ModuleTarget(Base.Iterators), 40)[1]))
+    tips = findfirst(p -> endswith(p.path, "performance-tips.md"), b.cat.manual)
+    if tips !== nothing
+        t = DocBrowser.ManualTarget(b.cat.manual[tips].path, "")
+        @test occursin("manual", String(DocBrowser.card_lines(b, t, 40)[1]))
+    end
+    # Tabbing to a link previews it too, below the link's line.
+    DocBrowser.follow!(b, NameTarget(Base, :sort!))
+    frame(b)
+    press!(b, :tab)
+    b.hover_since -= 1
+    @test DocBrowser.show_card!(b) && b.card !== nothing
+    rows = frame(b)
+    top = findfirst(r -> occursin("╭", r), rows)
+    @test top == b.hover_at[1] + 1
+    press!(b, :tab) # the next link closes it, and its own card follows
+    @test b.card === nothing && b.hover == (:spot, b.link)
+    # Back says where it leads, then where it went, and selects the link that was followed.
+    DocBrowser.follow!(b, NameTarget(Base, :sort!))
+    b.link = 0
+    frame(b)
+    press!(b, :tab)
+    followed = b.link
+    press!(b, :enter)
+    @test occursin("back to Base.sort!", DocBrowser.describe(b, (:back,)))
+    press!(b, :backspace)
+    @test b.status == "Back to Base.sort!" && b.link == followed
+    @test occursin("forward to", DocBrowser.describe(b, (:forward,)))
+    press!(b, ']')
+    @test startswith(b.status, "Forward to")
+end
+
 @testset "edge cases" begin
     b = test_browser()
     doc_text(b) = join(String.(DocBrowser.page(b, DocBrowser.current_key(b), DocBrowser.doc_width(b)).lines), '\n')
@@ -914,7 +1023,7 @@ end
     @test !b.typing
     # On a section heading, Shift-Tab does not move into the empty names pane.
     DocBrowser.close_search!(b)
-    b.side.cursor = 1
+    b.side.cursor = 2
     DocBrowser.move!(b, :side, 0)
     b.focus = :side
     press!(b, :backtab)

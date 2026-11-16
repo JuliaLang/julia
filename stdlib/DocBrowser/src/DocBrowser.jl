@@ -33,6 +33,8 @@ const FACES = (
     :REPL_DocBrowser_selection    => Face(inverse=true),
     :REPL_DocBrowser_dim          => Face(inherit=:shadow),
     :REPL_DocBrowser_key          => Face(weight=:bold, foreground=:bright_magenta),
+    :REPL_DocBrowser_tip          => Face(foreground=:cyan),
+    :REPL_DocBrowser_tip_title    => Face(foreground=:cyan, weight=:bold),
     :REPL_DocBrowser_match        => Face(weight=:bold, underline=true),
     :REPL_DocBrowser_searchbox    => Face(foreground=:black, background=:cyan, weight=:bold),
     :REPL_DocBrowser_link         => Face(underline=true),
@@ -51,6 +53,7 @@ const FACES = (
 include("catalog.jl")
 include("pages.jl")
 include("manual.jl")
+include("start.jl")
 include("input.jl")
 include("ui.jl")
 # Without this workload the first open takes about 2 s in every session, nearly all of it
