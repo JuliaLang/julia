@@ -416,3 +416,14 @@ let st = try f_wrapped4()() catch; stacktrace(catch_backtrace()) end
     @test sf.file === Symbol(@__FILE__)
     @test sf.linfo.def === only(methods(f_wrapped4()))
 end
+
+# A backtrace through deep recursion has every frame, in order. On i686 Windows,
+# dbghelp's frame guessing would sometimes drop frames and invent others (#55900).
+deep_bt_f(c) = deep_bt_g(c + 1)
+deep_bt_g(c) = c > 10000 ? backtrace() : deep_bt_f(c + 1)
+let names = (:deep_bt_f, :deep_bt_g)
+    for _ in 1:5
+        st = stacktrace(deep_bt_f(1))
+        @test [sf.func for sf in st if sf.func in names] == repeat([:deep_bt_g, :deep_bt_f], 5001)
+    end
+end
