@@ -93,8 +93,8 @@ function test_repr(x::String, remove_linenums::Bool = false)
     end
 
     x4 = Base.remove_linenums!(Meta.parse(x))
-    x5 = eval(Base.remove_linenums!(Meta.parse(repr(x4))))
-    x6 = eval(Base.remove_linenums!(Meta.parse(repr(x5))))
+    x5 = Base.remove_linenums!(eval(Meta.parse(repr(x4))))
+    x6 = Base.remove_linenums!(eval(Meta.parse(repr(x5))))
     if ! (x4 == x5 == x6)
         error(string(
             "\nrepr test (Rule 2) without line numbers failed:",
@@ -693,7 +693,7 @@ end
 @test_repr "::@m(x, y) + z"
 @test_repr "[@m(x) y z]"
 @test_repr "[@m(x) y; z]"
-@test_broken test_repr("let @m(x), y=z; end", true)
+test_repr("let @m(x), y=z; end", true)
 
 @test repr(:(@m x y))    == ":(#= $(@__FILE__):$(@__LINE__) =# @m x y)"
 @test string(:(@m x y))  ==   "#= $(@__FILE__):$(@__LINE__) =# @m x y"
@@ -3273,14 +3273,13 @@ using .Issue49382
 @test sprint(show, methods(Issue49382.Type49382)) isa String
 
 # Showing of bad SlotNumber in Expr(:toplevel)
-let lowered = Meta.lower(Main, Expr(:let, Expr(:block), Expr(:block, Expr(:toplevel, :(x = 1)), :(y = 1))))
+let lowered = Meta.lower(Main, :(let y = 1; end))
     ci = lowered.args[1]
     @assert isa(ci, Core.CodeInfo)
     @test !isempty(ci.slotnames)
-    @test_broken ci.code[1].head === :toplevel
-    @test_broken (ci.code[1].args[1] = :($(Core.SlotNumber(1)) = 1); false)
+    ci.code[1] = Expr(:toplevel, Expr(:block, :($(Core.SlotNumber(1)) = 1)))
     # Check that this gets printed as `_1 = 1` not `y = 1`
-    @test_broken contains(sprint(show, ci), "_1 = 1")
+    @test contains(sprint(show, ci), "_1 = 1")
 end
 
 # Pointers should be reprable
