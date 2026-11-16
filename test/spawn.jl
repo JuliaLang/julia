@@ -391,6 +391,42 @@ end
     @test ret == ""
 end
 
+@testset "device paths as redirect targets" begin
+    # `/dev/null` is `devnull` on every system, without a portability warning
+    @test success(@test_logs run(pipeline(`$echocmd hello`, stdout="/dev/null")))
+    @test read(pipeline(catcmd, stdin="/dev/null"), String) == ""
+    @test read(`$catcmd < /dev/null`, String) == ""
+    @test read(pipeline(`$echocmd hello`, stderr="/dev/null"), String) == "hello\n"
+    # `/dev/stdout` and `/dev/stderr` are Julia's current streams, not reopened, so writing
+    # through them does not truncate a file they were redirected to
+    mktemp() do path, io
+        redirect_stdout(io) do
+            run(pipeline(`$echocmd out`, stdout="/dev/stdout"))
+        end
+        redirect_stderr(io) do
+            run(`$echocmd err >/dev/stderr`)
+            run(pipeline(`$echocmd append`, stdout="/dev/stderr", append=true))
+        end
+        close(io)
+        @test read(path, String) == "out\nerr\nappend\n"
+    end
+    # `/dev/stdin` is Julia's current stdin, which is unavailable on the workers
+    mktemp() do path, io
+        write(io, "input\n")
+        close(io)
+        ret = Core.eval(Main, quote
+            remotecall_fetch(1, $catcmd, $path) do cmd, path
+                open(path) do f
+                    redirect_stdin(f) do
+                        read(pipeline(cmd, stdin="/dev/stdin"), String)
+                    end
+                end
+            end
+        end)
+        @test ret == "input\n"
+    end
+end
+
 # Test that redirecting an IOStream does not crash the process
 let fname = tempname(), p
     cmd = """

@@ -367,6 +367,13 @@ IO redirection can be accomplished by passing keyword arguments `stdin`, `stdout
 pipeline(`do_work`, stdout=pipeline(`sort`, "out.txt"), stderr="errs.txt")
 ```
 
+A string names a file, except for four device paths, which work on every system, including
+Windows: `"/dev/null"` means [`devnull`](@ref), which discards output and gives no input, and
+`"/dev/stdin"`, `"/dev/stdout"` and `"/dev/stderr"` mean Julia's current [`stdin`](@ref),
+[`stdout`](@ref) and [`stderr`](@ref) streams. So ``` `do_work 2>/dev/null` ``` discards the
+error output of `do_work` portably, and ``` `do_work >/dev/stderr` ``` sends its output to
+Julia's standard error.
+
 ### Avoiding Deadlock in Pipelines
 
 When reading and writing to both ends of a pipeline from a single process, it is important to

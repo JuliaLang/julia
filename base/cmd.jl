@@ -246,8 +246,8 @@ struct FileRedirect
     append::Bool
     FileRedirect(filename::AbstractString, append::Bool) = FileRedirect(convert(String, filename), append)
     function FileRedirect(filename::String, append::Bool)
-        if lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
-            @warn "For portability use devnull instead of a file redirect" maxlog=1
+        if Sys.iswindows() && lowercase(filename) == "nul"
+            @warn "For portability use devnull or \"/dev/null\" instead of a file redirect to NUL" maxlog=1
         end
         return new(filename, append)
     end
@@ -582,12 +582,20 @@ file. This is a more general version of the 2-argument `pipeline` function.
 `pipeline(from, to)` is equivalent to `pipeline(from, stdout=to)` when `from` is a command,
 and to `pipeline(to, stdin=from)` when `from` is another kind of data source.
 
+A string names a file, except that `"/dev/null"` means [`devnull`](@ref), and `"/dev/stdin"`,
+`"/dev/stdout"` and `"/dev/stderr"` mean Julia's current [`stdin`](@ref), [`stdout`](@ref)
+and [`stderr`](@ref), on every system including Windows.
+
 **Examples**:
 
 ```julia
 run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))
 run(pipeline(`update`, stdout="log.txt", append=true))
+run(pipeline(`noisy`, stderr="/dev/null"))
 ```
+
+!!! compat "Julia 1.15"
+    The device paths are handled this way on every system as of Julia 1.15.
 """
 function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
     if append && stdout === nothing && stderr === nothing

@@ -56,6 +56,11 @@ New library features
   paths when the command is created. Julia calls a `glob` function provided by a package,
   such as Glob.jl, to match the pattern, so globbing works after `using Glob` ([#20401]).
 
+* A redirection to `"/dev/null"`, `"/dev/stdin"`, `"/dev/stdout"` or `"/dev/stderr"`, in a
+  command literal or a call to `pipeline`, now means `devnull` or Julia's own `stdin`,
+  `stdout` or `stderr` on every system, including Windows, so that, for example,
+  ``` `cmd 2>/dev/null` ``` is portable.
+
 Standard library changes
 ------------------------
 
