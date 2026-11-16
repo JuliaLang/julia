@@ -6,28 +6,132 @@ StepRange{<:Dates.DatePeriod,<:Real}(start, step, stop) =
     throw(ArgumentError("must specify step as a Period when constructing Dates ranges"))
 Base.:(:)(a::T, b::T) where {T<:Date} = (:)(a, Day(1), b)
 
-# Given a start and end date, how many steps/periods are in between
-guess(a::DateTime, b::DateTime, c) = floor(Int64, (Int128(value(b)) - Int128(value(a))) / toms(c))
+# Given a start and end date, how many steps/periods are in between. Packages define `guess`
+# for their own TimeTypes, for example by forwarding to the DateTime method.
+function guess(a::DateTime, b::DateTime, c)
+    n = floor((Int128(value(b)) - Int128(value(a))) / toms(c))
+    -0x1p63 <= n < 0x1p63 || throw_stepcount_overflow(a, b, c)
+    return Int64(n)
+end
+function guess(a::DateTime, b::DateTime, c::FixedPeriod)
+    if !(c isa Union{Microsecond, Nanosecond})
+        ms, huge = Base.Checked.mul_with_overflow(value(c), toms(oneunit(c)))
+        span, wraps = Base.Checked.sub_with_overflow(value(b), value(a))
+        # Dividing typemin(Int64) by -1 overflows, so that step takes the widened path
+        huge | wraps | (ms == -1) || return fld(span, ms)
+    end
+    step = Int128(value(c)) * tons(oneunit(c))
+    # DateTime adds the step in Int64 milliseconds, which would wrap around
+    typemin(Int64) <= div(step, tons(Millisecond(1))) <= typemax(Int64) || throw_msstep_overflow(c)
+    n = fld((Int128(value(b)) - Int128(value(a))) * tons(Millisecond(1)), step)
+    typemin(Int64) <= n <= typemax(Int64) || throw_stepcount_overflow(a, b, c)
+    return n % Int64
+end
+@noinline throw_msstep_overflow(c) =
+    throw(OverflowError("$c does not fit in the milliseconds of a DateTime"))
+@noinline throw_stepcount_overflow(a, b, c) =
+    throw(OverflowError("the number of steps of $c from $a to $b does not fit in Int64"))
+@noinline throw_difference_overflow(a, b) = throw(OverflowError("the difference between $b and $a overflows"))
+guess(a::Date, b::Date, c) = Int64(div(value(b - a), days(c)))
 # Integer division keeps step counts above 2^53 exact
 function guess(a::T, b::T, c) where {T<:Timestamp}
-    # Calendar steps use an average length for this estimate; len corrects it below.
-    scale = widen(c isa Union{Year,Quarter,Month} ? tons(oneunit(c)) : timestamp_period_scale(typeof(c)))
+    scale = widen(timestamp_period_scale(typeof(c)))
     s = widen(timestamp_scale(T))
     return floor(Int64, div(widen(value(b)) * s - widen(value(a)) * s, widen(value(c)) * scale))
 end
-guess(a::Date, b::Date, c) = Int64(div(value(b - a), days(c)))
 len(a::Time, b::Time, c) = Int64(div(value(b - a), tons(c)))
-function len(a, b, c)
-    lo, hi, st = min(a, b), max(a, b), abs(c)
-    i = guess(a, b, c)
-    v = lo + st * i
-    prev = v  # Ensure `v` does not overflow
-    while v <= hi && prev <= v
-        prev = v
-        v += st
-        i += 1
+# a + c * n, rounded the same way, also when c * n overflows the period. Unsigned counts are
+# widened, as a negative step times an unsigned count would wrap around.
+addsteps(a, c, n) = a + c * (n isa Unsigned ? signed(widen(n)) : n)
+function addsteps(a::DateTime, c::Union{Microsecond, Nanosecond}, n)
+    if n isa Union{Int, Int64}
+        m, huge = Base.Checked.mul_with_overflow(value(c), Int64(n))
+        huge || return a + typeof(c)(m)
     end
-    return i - 1
+    # A step times a count below 2^64 fits in Int128, so the step is not converted to nanoseconds first
+    p = -Int128(2)^64 < n < Int128(2)^64 ? Int128(value(c)) * Int128(n) : big(value(c)) * n
+    return DateTime(UTM(value(a) + div(p, tons(Millisecond(1)) ÷ tons(oneunit(c)), RoundNearest) % Int64))
+end
+# DateTime steps below a millisecond round to repeated elements
+submillisecond(::TimeType, step) = false
+function submillisecond(::DateTime, step::Union{Microsecond, Nanosecond})
+    ms = value(typeof(step)(Millisecond(1)))
+    return -ms < value(step) < ms
+end
+# Whether `a + c * n`, whose product overflows, lies past `b == a + span`. Adding a fixed period
+# rounds to the unit of `span`, so an offset at least one unit beyond `b` is past it. A closer
+# offset is added near `b` by the type itself. Rounding can depend on the parity of the offset,
+# as ties to even do, so the part added keeps that parity and the sign of the step.
+@noinline function pastend(b, c, n, span)
+    c isa FixedPeriod && span isa FixedPeriod || return false
+    unit = tons(oneunit(span))
+    d = big(value(c)) * n * tons(oneunit(c)) - big(value(span)) * unit
+    (c > zero(c) ? d > 0 : d < 0) || return false
+    abs(d) >= unit && return true
+    e = isodd(value(span)) ? (c > zero(c) ? 1 : -1) : 0
+    k = (d + e * unit) // tons(oneunit(c))
+    isinteger(k) || return false
+    return b - e * oneunit(span) + typeof(c)(numerator(k)) != b
+end
+# Whether `c * n` overflows the count type of `c`
+function stepoverflows(c, n)
+    v = value(c)
+    p, huge = Base.Checked.mul_with_overflow(promote(v, n)...)
+    return huge || Base.hastypemax(typeof(v)) && !(typemin(typeof(v)) <= p <= typemax(typeof(v)))
+end
+# Whether `a + c * n` lies between `a` and `b == a + span`. Past the last element, `past` is
+# true and the product can overflow.
+function stepwithin(a, b, c, span, n, past)
+    if stepoverflows(c, n)
+        past && pastend(b, c, n, span) && return false
+        throw_stepcount_overflow(a, b, c)
+    end
+    v = addsteps(a, c, n)
+    return c > zero(c) ? a <= v <= b : b <= v <= a  # `a` stops a wraparound
+end
+# The largest n for which a + c * n does not pass b. It multiplies the step like indexing does,
+# as repeated additions can round differently, and corrects a guess that is off either way. It
+# compares only consecutive counts, as elements that wrap around can land between `a` and `b`.
+function len(a, b, c)
+    # Beyond this span, the elements next to the guess can wrap around
+    span = b - a
+    (span > zero(span)) == (b > a) || throw_difference_overflow(a, b)
+    n = guess(a, b, c)
+    # One loop for both directions, as separate loops get vectorized with a setup on every call
+    while true
+        if n > 0 && !stepwithin(a, b, c, span, n, false)
+            n -= 1
+        elseif stepwithin(a, b, c, span, Base.checked_add(n, one(n)), true)
+            n += 1
+        else
+            return n
+        end
+    end
+end
+# The correction above rejects spans close to the whole type, so count DateTime steps exactly
+function len(a::DateTime, b::DateTime, c::Union{Microsecond, Nanosecond})
+    unit = Int128(tons(Millisecond(1)))
+    span = abs(Int128(value(b)) - Int128(value(a)))
+    st = abs(Int128(value(c)) * tons(oneunit(c)))
+    # Step n lands on div(n * st, unit, RoundNearest), and that ties to an even millisecond
+    n = fld(span * unit + div(unit, 2) - isodd(span), st)
+    n < typemax(Int64) || throw_stepcount_overflow(a, b, c)
+    return n % Int64
+end
+# The largest n for which a + c * n does not pass b. Adding months keeps the time of day and
+# clamps the day, so only the step landing in the month of b can pass it.
+function len(a::T, b::T, c::Union{Year, Quarter, Month}) where {T <: Union{Date, DateTime, Timestamp}}
+    months = widen(value(c)) * value(Month(oneunit(c)))  # Month(c) overflows for huge steps
+    ya, ma, da = yearmonthday(a)
+    yb, mb, db = yearmonthday(b)
+    diff = 12 * (yb - ya) + mb - ma
+    n, r = typemin(Int64) <= months <= typemax(Int64) ? fldmod(diff, months % Int64) : fldmod(diff, months)
+    if iszero(r)
+        landed = (min(da, daysinmonth(yb, mb)), nsofday(a))
+        target = (db, nsofday(b))
+        n -= months > 0 ? landed > target : landed < target
+    end
+    return n % typeof(diff)
 end
 # Period ranges hook into Int64 overflow detection
 Base.length(r::StepRange{<:Period}) = length(StepRange(value(r.start), value(r.step), value(r.stop)))
@@ -114,7 +218,7 @@ end
 # Fixed steps add the offset in the unsigned value type, like integer ranges, so no period overflows
 function Base.unsafe_getindex(r::StepRange{<:TimeType}, i::Integer)
     vs = valuestep(r.start, r.step)
-    isnothing(vs) && return r.start + r.step * (i - oneunit(i))
+    isnothing(vs) && return addsteps(r.start, r.step, i - oneunit(i))
     return addvaluesteps(r.start, vs, i - oneunit(i))
 end
 function addvaluesteps(x, (neg, m, _), k)
@@ -122,6 +226,26 @@ function addvaluesteps(x, (neg, m, _), k)
     offset = k % U * m
     v = value(x) % U
     return withvalue(x, (neg ? v - offset : v + offset) % typeof(value(x)))
+end
+# `range` with a step and a length steps like `start:step:stop` does, from its start or its
+# stop. Base computes the other end only for its type, which multiplies the step as a period,
+# so that product can overflow. Adding the step once, or no step to a range that never takes
+# it, still throws for a step that cannot be added to the reference.
+function steprangelen(ref::T, step, len, offset) where {T}
+    r = StepRangeLen{T, T, typeof(step)}(ref, step, len, offset)
+    ref + (len > 1 ? step : zero(step))
+    return r
+end
+Base.range_start_step_length(a::T, step::Period, len::Integer) where {T <: Union{Date, DateTime, Timestamp}} =
+    steprangelen(a, step, len, 1)
+# An empty range starts at `stop + step`, as in Base
+Base.range_step_stop_length(step::Period, b::T, len::Integer) where {T <: Union{Date, DateTime, Timestamp}} =
+    iszero(len) ? steprangelen(b + step, step, len, 1) : steprangelen(b, step, len, len)
+function Base.unsafe_getindex(r::StepRangeLen{T, T, <:Period}, i::Integer) where {T <: TimeType}
+    vs = valuestep(r.ref, r.step)
+    # A reversed range indexes before its reference, which an unsigned offset cannot express
+    k = r.offset isa Unsigned ? signed(widen(i)) - signed(widen(r.offset)) : oftype(r.offset, i) - r.offset
+    return isnothing(vs) || vs[3] ? addsteps(r.ref, r.step, k) : addvaluesteps(r.ref, vs, k)
 end
 # A slice starts at r[first(s)] and keeps length(s) elements. Fixed steps end at r[last(s)].
 # Other steps continue from the slice start, so later elements can differ from r[s] and pass
@@ -136,6 +260,13 @@ function slicestep(r, s)
     fits = !Base.hastypemax(V) || typemin(V) <= v <= typemax(V)
     fits || length(s) < 2 || throw_slicestep_overflow(r, s)
     return fits ? typeof(r.step)(v) : r.step
+end
+@inline function Base.getindex(r::StepRangeLen{T, T, <:Period}, s::OrdinalRange{S}) where {T <: TimeType, S <: Integer}
+    S === Bool && return invoke(getindex, Tuple{StepRangeLen{T}, OrdinalRange{S}}, r, s)
+    @boundscheck checkbounds(r, s)
+    st = slicestep(r, s)
+    ref = checkbounds(Bool, r, first(s)) ? Base.unsafe_getindex(r, first(s)) : r.ref
+    return StepRangeLen{T, T, typeof(st)}(ref, st, length(s))
 end
 # Whether an integer selector spaces its elements evenly between its ends. A float reference
 # or step, as in LinRange{Int}, rounds them unevenly, and those of a StepRangeLen can wrap around.
@@ -163,17 +294,24 @@ end
     end
     start = Base.unsafe_getindex(r, first(s))
     if isnothing(valuestep(r.start, r.step))
-        stop = start + st * (length(s) - oneunit(length(s)))
+        n = length(s) - oneunit(length(s))
+        stop = addsteps(start, st, n)
+        # Steps from the slice start round differently and can wrap around an end of the type
+        iszero(n) || (st > zero(st)) == (stop > start) || throw_slicestop_overflow(start, st, n)
     else
         stop = Base.unsafe_getindex(r, last(s))
     end
     return range(start, stop; step = st)
 end
+@noinline throw_slicestop_overflow(start, st, n) =
+    throw(OverflowError("$start + $n * $st lies outside $(typeof(start))"))
 
 # Overload Base.steprange_last because `step::Period` may be a variable amount of time (e.g. for Month and Year)
 function Base.steprange_last(start::T, step, stop) where T<:TimeType
     step isa AbstractFloat && throw(ArgumentError("StepRange should not be used with floating point"))
     step == zero(step) && throw(ArgumentError("step cannot be zero"))
+    submillisecond(start, step) &&
+        throw(ArgumentError("a DateTime range step must be at least one millisecond"))
     stop == start && return stop
     vs = valuestep(start, step)
     if (step > zero(step)) != (stop > start)
@@ -181,11 +319,7 @@ function Base.steprange_last(start::T, step, stop) where T<:TimeType
         # An empty fixed-step range ends one unit before `start`, as an empty integer range does
         return valuebefore(start, step)
     end
-    if isnothing(vs)
-        diff = stop - start
-        (diff > zero(diff)) != (stop > start) && throw(OverflowError("Difference between stop and start overflowed"))
-        return start + step * len(start, stop, step)
-    end
+    isnothing(vs) && return addsteps(start, step, len(start, stop, step))
     neg, m, huge = vs
     huge && return start
     remain = valuedistance(start, stop, neg) % m % typeof(value(stop))
@@ -199,7 +333,7 @@ function in(x::T, r::StepRange{T}) where T<:TimeType
     lo, hi = neg ? (last(r), first(r)) : (first(r), last(r))
     lo <= x <= hi || return false
     vs = valuestep(first(r), step(r))
-    isnothing(vs) && return r[len(first(r), x, step(r)) + 1] == x
+    isnothing(vs) && return Base.unsafe_getindex(r, len(first(r), x, step(r)) + 1) == x
     _, m, huge = vs
     d = valuedistance(first(r), x, neg)
     return iszero(huge ? d : d % m)
@@ -220,11 +354,14 @@ function Base.iterate(r::StepRange{T}, (x, k)::Tuple{T, Integer}) where {T<:Time
     return y, (y, k - one(k))
 end
 Base.iterate(r::StepRange{<:TimeType}, (l, i)::Tuple{Integer, Integer}) =
-    l <= i ? nothing : (r.start + r.step * i, (l, i + 1))
+    l <= i ? nothing : (addsteps(r.start, r.step, i), (l, i + 1))
 
-+(x::Period, r::AbstractRange{<:TimeType}) = (x + first(r)):step(r):(x + last(r))
+# Empty ranges stay empty, as calendar arithmetic can move both ends to the same date
++(x::Period, r::AbstractRange{<:TimeType}) =
+    isempty(r) ? emptyrange(x + first(r), x + last(r), step(r)) : (x + first(r)):step(r):(x + last(r))
 +(r::AbstractRange{<:TimeType}, x::Period) = x + r
--(r::AbstractRange{<:TimeType}, x::Period) = (first(r)-x):step(r):(last(r)-x)
+-(r::AbstractRange{<:TimeType}, x::Period) =
+    isempty(r) ? emptyrange(first(r) - x, last(r) - x, step(r)) : (first(r) - x):step(r):(last(r) - x)
 *(x::Period, r::AbstractRange{<:Real}) = (x * first(r)):(x * step(r)):(x * last(r))
 *(r::AbstractRange{<:Real}, x::Period) = x * r
 /(r::AbstractRange{<:P}, x::P) where {P<:Period} = (first(r)/x):(step(r)/x):(last(r)/x)

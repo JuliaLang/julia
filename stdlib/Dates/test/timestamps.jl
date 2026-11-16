@@ -353,7 +353,11 @@ end
     @test r3[2:3] == [typemin(Timestamp) + Nanosecond(1), typemin(Timestamp) + Nanosecond(2)]
     @test_throws OverflowError r3[1:0]
     @test_throws OverflowError reverse(r3)[1:0]
-    # An empty range never takes its step
+    # Length-based ranges step in ticks, and an empty range never takes its step
+    s = Timestamp{Second}(1970)
+    @test last(range(s; step = Nanosecond(10^9), length = Int64(10)^10)) == s + Second(Int64(10)^10 - 1)
+    @test_throws InexactError range(s; step = Millisecond(500), length = 2)
+    @test length(range(s; step = Millisecond(500), length = 1)) == 1
     @test isempty(Timestamp{Second}(2026):Millisecond(1):Timestamp{Second}(2025))
     @test_throws InexactError Timestamp{Second}(2025):Millisecond(1):Timestamp{Second}(2026)
 end
@@ -677,7 +681,6 @@ Dates.tons(x::TestNanosecond{1.0}) = Dates.value(x) == 1 ? 1.0 : big(Dates.value
         @test_throws ArgumentError floor(origin, P(1))
         @test_throws ArgumentError ceil(origin, P(1))
         @test_throws ArgumentError round(origin, P(1))
-        @test_throws ArgumentError Dates.guess(origin, origin, P(1))
         @test_throws ArgumentError length(origin:P(1):origin)
     end
     for scale in (1, 1//1)
@@ -740,7 +743,7 @@ end
         @test_throws InexactError convert(T, TestNanosecond{1000000000}(n))
     end
     @test Dates.value(T(1970) + Hour(typemax(Int64))) == big(typemax(Int64)) * 3600000000000
-    @test Dates.guess(typemin(T), typemax(T), TestNanosecond{1}(typemax(Int128))) == 2
+    @test length(typemin(T):TestNanosecond{1}(typemax(Int128)):typemax(T)) == 3
     for scale in (1, 1000000000, 2//3, 1//1000)
         P = TestNanosecond{scale}
         U = Timestamp{P}
@@ -806,6 +809,11 @@ end
     @test Dates.value(TimestampHelpers.unix2timestamp(T, 1)) == Int128(10)^12
     @test TimestampHelpers.unix2timestamp(T, 1//2) == convert(T, TestPicosecond(500_000_000_000))
     @test collect(origin:TestPicosecond(1):origin+TestPicosecond(3)) == [origin + TestPicosecond(i) for i in 0:3]
+    # calendar steps have Int128 or BigInt lengths
+    for p in (Month(1), Quarter(1), Year(1))
+        @test collect(origin:p:(origin + 2p)) == [origin, origin + p, origin + 2p]
+        @test collect((origin + 2p):-p:origin) == [origin + 2p, origin + p, origin]
+    end
     @test typemax(T) + TestPicosecond(1) === typemin(T)
     @test typemin(T) - TestPicosecond(1) === typemax(T)
     @test typemax(T) - typemin(T) === TestPicosecond(-1)
@@ -926,10 +934,14 @@ end
     @test Date(round(t, Year(2000))) == Date(ceil(t, Year(2000))) == Date(2000)
     @test_throws OverflowError floor(t, Year(2000))
     @test_throws OverflowError floor(t, Hour(7))
-    # Days and years are signed, also before the start of an unsigned count
+    # Days, years, and calendar step counts are signed, also before the start of an unsigned count
     for C in (UInt64, UInt128)
         T = Timestamp{TestCountSecond{C}}
         @test year(T(2026)) == 2026 && year(T(2026)) isa Signed
+        for (p, stop) in ((Month(-2), T(2026, 1, 1)), (Quarter(-1), T(2025, 12, 1)), (Year(-1), T(2025, 3, 1)))
+            r = T(2026, 3, 1):p:stop
+            @test length(r) == 2 && collect(r) == [T(2026, 3, 1), stop]
+        end
     end
 end
 
