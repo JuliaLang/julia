@@ -226,11 +226,18 @@ JL_DLLEXPORT void jl_raise(int signo)
 #endif
 }
 
+static int jl_image_restored = 0;
+
 JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
 {
     uv_tty_reset_mode();
 
     if (jl_atomic_load_relaxed(&jl_all_tls_states) == NULL)
+        return;
+
+    // A signal can ask us to exit while the system image is still being restored.
+    // Its objects are not valid yet, so there is nothing we can safely clean up.
+    if (!jl_image_restored)
         return;
 
     jl_task_t *ct = jl_get_current_task();
@@ -600,6 +607,7 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
         jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
     }
+    jl_image_restored = 1;
 
     jl_init_flisp();
     jl_init_serializer();
