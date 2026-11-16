@@ -27,6 +27,13 @@ function precompile_workload()
     frame(b)
     follow!(b, SectionTarget(:julia))
     frame(b)
+    if !isempty(b.cat.manual)
+        follow!(b, ManualTarget(first(b.cat.manual).path, ""))
+        frame(b)
+        b.focus = :names
+        handle!(b, KeyEvent(:down))
+        frame(b)
+    end
     for ev in ("/", "s", "o", "r", "t", "\x14", "\x7f", "\e[B", "\e[A", "\t", "\e")
         e = read_event(IOBuffer(ev))
         e === nothing || handle!(b, e)

@@ -3,7 +3,7 @@
 """
     DocBrowser
 
-A full-screen, mouse-aware browser for the documentation of every loaded module.
+A full-screen, mouse-aware browser for Julia's manual and the documentation of every loaded module.
 
 Open it with Enter on an empty `help?>` prompt, or by calling [`DocBrowser.browse`](@ref).
 """
@@ -50,6 +50,7 @@ const FACES = (
 
 include("catalog.jl")
 include("pages.jl")
+include("manual.jl")
 include("input.jl")
 include("ui.jl")
 # Without this workload the first open takes about 2 s in every session, nearly all of it

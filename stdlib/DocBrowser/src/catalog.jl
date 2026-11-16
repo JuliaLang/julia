@@ -8,8 +8,8 @@
 A loaded top-level module, with its place in the environment.
 
 `role` is one of `:project` (the active project itself), `:direct` (a dependency of the
-active project, or bound in `Main`), `:julia` (`Core`, `Base` and `Main`), `:stdlib`,
-`:indirect` or `:extension`. `version` is `nothing` for extensions and for standard
+active project, or bound in `Main`), `:julia` (`Core`, `Base` and `Main`), `:indirect`
+(loaded for another package, or by Julia itself) or `:extension`. `version` is `nothing` for extensions and for standard
 libraries shipped with Julia, whose versions do not track Julia's. `via` is the chain of
 packages that pulled an indirect package in, starting from a direct dependency.
 """
@@ -53,6 +53,45 @@ kind_title(k::Symbol) = KIND_TITLES[k]
 kind_glyph(k::Symbol) = KIND_GLYPHS[k]
 kind_face(k::Symbol) = Symbol(:REPL_DocBrowser_kind_, k)
 
+"""
+    ManualPage
+
+A page of the manual: its file, its title, and the section it belongs to, which is `:manual`,
+`:basedocs`, `:stdlibdocs`, `:pkgdocs` or `:devdocs`. `group` is the part of the developer documentation
+that it is in.
+"""
+struct ManualPage
+    path::String
+    title::String
+    role::Symbol
+    group::String
+end
+
+"""
+    Heading
+
+A heading of a manual page: its level, its text, and the `@id` that Documenter links to it
+by, if it has one.
+"""
+struct Heading
+    level::Int
+    text::String
+    id::String
+    line::Int # in the file
+end
+
+"""
+    ManualHit
+
+A page of the manual, or one of its headings by its text, that matches a search.
+`heading` is empty for the page itself.
+"""
+struct ManualHit
+    path::String
+    heading::String
+    score::Int
+end
+
 mutable struct Catalog
     pkgs::Vector{PkgEntry}
     bymod::IdDict{Module,PkgEntry}
@@ -61,6 +100,11 @@ mutable struct Catalog
     index::Union{Nothing,Vector{NameEntry}}
     unloaded::Vector{PkgId} # direct dependencies of the active project that are not loaded
     texts::Union{Nothing,Vector{Pair{Binding,String}}} # lowercased docstring text, built on first use
+    manual::Vector{ManualPage}
+    anchors::Union{Nothing,Dict{String,String}} # the page of each heading, built on first use
+    headings::Dict{String,Vector{Heading}} # the headings each page shows, by page file
+    index_headings::Dict{String,Vector{Heading}} # the headings found by scanning each page
+    sections::Union{Nothing,Vector{Tuple{String,String,String}}} # lowercased text of each section, built on first use
 end
 
 function parse_uuids(deps)
@@ -149,7 +193,6 @@ function role_of(m::Module, id::PkgId, self, direct)
     uuid !== nothing && uuid in direct && return :direct
     extension_parent(id) === nothing || return :extension
     bound_in_main(m) && return :direct
-    Base.is_stdlib(id) && return :stdlib
     return :indirect
 end
 
@@ -215,7 +258,7 @@ function Catalog()
     sort_by!(pkgs, rank)
     bymod = IdDict{Module,PkgEntry}(p.mod => p for p in pkgs)
     return Catalog(pkgs, bymod, documented_bindings(), IdDict{Module,Vector{NameEntry}}(), nothing,
-                   unloaded_deps(), nothing)
+                   unloaded_deps(), nothing, manual_pages(), nothing, Dict{String,Vector{Heading}}(), Dict{String,Vector{Heading}}(), nothing)
 end
 
 function documented_bindings()

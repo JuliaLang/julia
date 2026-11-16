@@ -29,7 +29,7 @@ default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
 # sort is used to remove potential duplicates
-DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_private_libexecdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/julia/stdlib $(build_man1dir))
+DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_private_libexecdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/julia/stdlib $(build_datarootdir)/doc/julia $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
 BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src src/flisp src/support src/arch src/clangsa cli doc deps stdlib test test/clangsa test/embedding test/gcext test/llvmpasses)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS)) $(BUILDROOT)/sysimage.mk $(BUILDROOT)/pkgimage.mk
@@ -60,6 +60,8 @@ endif
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,base $(JULIAHOME)/test,$(eval $(call symlink_target,$(link),$$(build_datarootdir)/julia,$(notdir $(link)))))
+# The Markdown source of the manual, read by the REPL's documentation browser
+$(eval $(call symlink_target,$$(JULIAHOME)/doc/src,$$(build_datarootdir)/doc/julia,src))
 
 julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
@@ -87,7 +89,7 @@ TOP_LEVEL_PKG_LINK_TARGETS := $(addprefix $(build_datarootdir)/julia/,$(TOP_LEVE
 $(foreach module, $(TOP_LEVEL_PKGS), $(eval $(call symlink_target,$$(JULIAHOME)/$(module),$$(build_datarootdir)/julia,$(module))))
 
 .PHONY: julia-deps
-julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test
+julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_datarootdir)/doc/julia/src
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
@@ -493,6 +495,14 @@ endif
 	cp -R -L $(JULIAHOME)/base/* $(DESTDIR)$(datarootdir)/julia/base
 	cp -R -L $(JULIAHOME)/test/* $(DESTDIR)$(datarootdir)/julia/test
 	cp -R -L $(build_datarootdir)/julia/* $(DESTDIR)$(datarootdir)/julia
+	# Copy the Markdown source of the manual, without its images and styles, for the REPL's
+	# documentation browser. The pages that the HTML build links in under `stdlib` are left out:
+	# the browser reads those from the standard libraries themselves.
+	cd $(JULIAHOME)/doc/src && find . -path ./stdlib -prune -o -type f \( -name '*.md' -o -name pages.toml \) -print | \
+	while IFS= read -r f; do \
+		mkdir -p "$(abspath $(DESTDIR)$(docdir))/src/$$(dirname "$$f")" && \
+		cp "$$f" "$(abspath $(DESTDIR)$(docdir))/src/$$f" || exit 1; \
+	done
 
 	# Set .jl sources as read-only to match package directories
 	find $(DESTDIR)$(datarootdir)/julia/base -type f -name \*.jl -exec chmod 0444 '{}' \;

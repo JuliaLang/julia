@@ -31,9 +31,13 @@ end
 struct CodeTarget
     code::String
 end
+struct ManualTarget
+    path::String   # a page of the manual
+    anchor::String # the `@id` or text of one of its headings, or "" for its top
+end
 
 const Target = Union{ModuleTarget,NameTarget,URLTarget,SourceTarget,SectionTarget,LoadTarget,
-                     AnchorTarget,ToggleTarget,CodeTarget}
+                     AnchorTarget,ToggleTarget,CodeTarget,ManualTarget}
 
 """
     Spot
@@ -68,11 +72,18 @@ is_heading_face(v) = v isa Symbol && startswith(String(v), "markdown_h") && v !=
 # The lines that hold Markdown headings, leaving out the lines that underline them.
 function heading_lines(lines)
     out = Int[]
+    inside = false # whether the line before is part of a heading
     for (i, l) in enumerate(lines)
-        any(a -> a.label === :face && is_heading_face(a.value), annotations(l)) || continue
-        text = strip(String(l))
+        if !any(a -> a.label === :face && is_heading_face(a.value), annotations(l))
+            inside = false
+            continue
+        end
         # Underlines are drawn with a different character at each level, but never letters.
-        any(c -> isletter(c) || isdigit(c), text) && push!(out, i)
+        text = strip(String(l))
+        any(c -> isletter(c) || isdigit(c), text) || continue
+        # A long heading wraps onto more lines, but is one heading.
+        inside || push!(out, i)
+        inside = true
     end
     return out
 end
@@ -172,6 +183,7 @@ end
 
 md_text(x::AbstractString) = x
 md_text(x::Markdown.Code) = x.code
+md_text(x::Markdown.LaTeX) = x.formula
 md_text(x::AbstractVector) = join(map(md_text, x))
 md_text(@nospecialize(x)) = hasfield(typeof(x), :text) ? md_text(getfield(x, :text)) : ""
 
@@ -247,7 +259,10 @@ function find_spots!(spots::Vector{Spot}, row::Int, line::AnnotatedString, ctx::
         r = first(ann.region):thisind(str, last(ann.region))
         isempty(r) && continue
         target = if ann.label === :link && ann.value isa AbstractString
-            URLTarget(String(ann.value))
+            url = String(ann.value)
+            # an `@ref` that leads nowhere the browser knows
+            startswith(url, '@') ? nothing :
+                is_manual_link(url) ? manual_target(url) : something(pkgdocs_target(url), URLTarget(url))
         elseif ann.label === :face && ann.value in (:markdown_inlinecode, :markdown_link)
             text = strip(str[r])
             resolve_ref(get(refs, text, text), ctx, cat)
@@ -775,7 +790,7 @@ function add_links!(pb::PageBuilder, id::PkgId, dir, role::Symbol)
         if docs !== nothing
             link!("docs", docs)
         elseif isjll(id.name)
-        elseif role === :stdlib || Base.is_stdlib(id)
+        elseif Base.is_stdlib(id)
             link!("docs", julia_docs("stdlib/$(id.name)/"))
         elseif repo === nothing
             link!("search the web for", web_search(id.name).url, "$(id.name).jl")
@@ -800,15 +815,14 @@ function role_line(cat::Catalog, m::Module)
         push!(segs, (bound_in_main(m) && !in_project(p) ? "loaded in Main" : "direct dependency", :REPL_DocBrowser_exported))
     elseif p.role === :julia
         push!(segs, (m === Main ? "your workspace module" : "built into Julia", :REPL_DocBrowser_public))
-    elseif p.role === :stdlib
-        push!(segs, ("standard library", :REPL_DocBrowser_public))
     elseif p.role === :extension
         push!(segs, ("package extension", dim))
         p.parent === nothing || push!(segs, (" of ", dim), (p.parent, nothing, package_target(cat, p.parent)))
     else
         push!(segs, ("indirect dependency", dim))
     end
-    if !isempty(p.via) && p.role in (:indirect, :stdlib)
+    Base.is_stdlib(p.id) && p.role in (:direct, :indirect) && push!(segs, (" · standard library", dim))
+    if !isempty(p.via) && p.role === :indirect
         push!(segs, (" · loaded by ", dim))
         for (i, name) in enumerate(p.via)
             i > 1 && push!(segs, (" → ", dim))
@@ -853,6 +867,12 @@ function module_page(cat::Catalog, m::Module, width::Int)
     dir = p === nothing ? nothing : ext ? pathof(m) : pkgdir(m)
     dir === nothing || addline!(pb, "  ", (Base.contractuser(dir), :REPL_DocBrowser_dim))
     p === nothing || ext || add_links!(pb, p.id, dir, p.role)
+    manual = p === nothing || ext ? nothing : package_manual(m)
+    if manual !== nothing
+        headings = scan_headings(manual)
+        title = isempty(headings) ? "index.md" : headings[1].text
+        addline!(pb, "  ", ("manual ", :REPL_DocBrowser_dim), (title, nothing, ManualTarget(manual, "")))
+    end
     rule!(pb)
     results = doc_results(module_binding(m))
     if !isempty(results)
@@ -979,17 +999,24 @@ end
 
 ## Pages for sidebar sections ##
 
-const SECTION_TITLES = (project = "Project", direct = "Direct dependencies", julia = "Julia",
-                        stdlib = "Standard library", indirect = "Indirect dependencies",
-                        extension = "Extensions")
+const SECTION_TITLES = (docs = "Documentation", code = "Docstrings", project = "Project",
+                        direct = "Dependencies", julia = "Julia", manual = "Manual",
+                        basedocs = "Base", stdlibdocs = "Standard library",
+                        indirect = "Indirect dependencies and standard libraries",
+                        extension = "Extensions", devdocs = "Developer documentation")
 
 const SECTION_BLURBS = (
     project = "The package of the active project.",
     direct = "Packages that the active project depends on, and packages loaded into `Main` with `using` or `import`.",
     julia = "`Core` and `Base` are always loaded. `Main` is the module the REPL evaluates in, so it holds your own definitions.",
-    stdlib = "Standard libraries that are loaded, but that you did not ask for directly. Many are loaded by the REPL itself.",
-    indirect = "Packages that were loaded because one of your packages needs them.",
+    indirect = "Packages that were loaded because one of your packages needs them, or that Julia loaded for itself, such as the standard libraries that the REPL uses.",
     extension = "Package extensions: code that a package loads once some other package is loaded too.",
+    docs = "Julia's manual, written as a guide: how the language works, the functions of `Base` by topic, the standard libraries, and how Julia works inside.",
+    code = "The docstrings of the modules that are loaded now, listed name by name.",
+    manual = "The Julia manual: how the language works and how to use it.",
+    basedocs = "The functions, types and macros of `Base`, grouped by topic.",
+    stdlibdocs = "The manual pages of the standard libraries. A page lists the names of its library, which become links once the library is loaded.",
+    devdocs = "How Julia works inside, and how to build it and contribute to it.",
 )
 
 function section_page(cat::Catalog, role::Symbol, width::Int)
@@ -1004,6 +1031,30 @@ function section_page(cat::Catalog, role::Symbol, width::Int)
     end
     pkgs = PkgEntry[p for p in cat.pkgs if p.role === role]
     addline!(pb)
+    if role === :docs || role === :code
+        for r in (role === :docs ? (:manual, :basedocs, :stdlibdocs, :devdocs) :
+                                   (:project, :direct, :indirect, :julia, :extension))
+            n = count(p -> p.role === r, cat.pkgs) + count(p -> p.role === r, cat.manual)
+            n == 0 && continue
+            addline!(pb, "    ", (getfield(SECTION_TITLES, r), nothing, SectionTarget(r)), ("  $n", :REPL_DocBrowser_dim))
+        end
+    end
+    group = ""
+    # Pkg's manual is listed among the standard libraries, in its place.
+    pkg = role === :stdlibdocs && any(p -> p.role === :pkgdocs, cat.manual)
+    for p in cat.manual
+        p.role === role || continue
+        if pkg && lowercase(p.title) > "pkg"
+            pkg_line!(pb, cat)
+            pkg = false
+        end
+        if p.group != group
+            group = p.group
+            heading!(pb, group)
+        end
+        addline!(pb, "    ", (p.title, nothing, ManualTarget(p.path, "")))
+    end
+    pkg && pkg_line!(pb, cat)
     for p in pkgs
         version = p.version === nothing ? "" : string("  v", p.version)
         via = isempty(p.via) ? "" : string("  via ", join(p.via, " → "))
@@ -1016,6 +1067,11 @@ function section_page(cat::Catalog, role::Symbol, width::Int)
     end
     addline!(pb)
     return Page(pb)
+end
+
+function pkg_line!(pb::PageBuilder, cat::Catalog)
+    i = findfirst(p -> p.role === :pkgdocs, cat.manual)
+    addline!(pb, "    ", ("Pkg", nothing, ManualTarget(cat.manual[i].path, "")))
 end
 
 function unloaded_page(id::PkgId, width::Int)

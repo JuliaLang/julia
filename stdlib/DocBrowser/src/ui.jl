@@ -6,17 +6,21 @@ struct SideRow
     role::Symbol
     pkg::Union{Nothing,PkgEntry}
     unloaded::Union{Nothing,PkgId} # a dependency that can be loaded from the browser
+    page::Union{Nothing,ManualPage}
 end
-SideRow(role::Symbol, pkg) = SideRow(role, pkg, nothing)
+SideRow(role::Symbol, pkg) = SideRow(role, pkg, nothing, nothing)
+SideRow(role::Symbol, pkg, unloaded) = SideRow(role, pkg, unloaded, nothing)
 
-is_header(r::SideRow) = r.pkg === nothing && r.unloaded === nothing
+is_header(r::SideRow) = r.pkg === nothing && r.unloaded === nothing && r.page === nothing
 
 struct NameRow
-    kind::Symbol # :about, :header or :entry
+    kind::Symbol # :about, :header, :entry, :heading (of a manual page) or :hit (of a search)
     entry::Union{Nothing,NameEntry}
     group::Symbol
     count::Int
+    hit::Union{Nothing,ManualHit}
 end
+NameRow(kind::Symbol, entry, group::Symbol, count::Int) = NameRow(kind, entry, group, count, nothing)
 
 mutable struct ListState
     cursor::Int
@@ -89,19 +93,22 @@ mutable struct Browser
     dragging::Bool
     clicks::NTuple{4,Float64}    # time, row and column of the last press, and the click count
     under_help::Any              # the page, scroll and link that the help covers
+    manual_hits::Vector{ManualHit} # what a search finds in the manual
+    indirect::Bool               # whether a search includes indirect dependencies
+    hidden::Int                  # how many names a search found in indirect dependencies, but left out
 end
 
 function Browser(term::REPL.Terminals.TextTerminal, cat::Catalog=Catalog())
     h, w = displaysize(term)
     b = Browser(term, term.in_stream, term.out_stream, cat, h, w, :side, :side,
                 ListState(1, 0), ListState(1, 0), SideRow[], NameRow[],
-                Set([:project, :direct, :julia]), Set{Symbol}(), Main, false, nothing, false,
+                Set(DEFAULT_EXPANDED), Set{Symbol}(), Main, false, nothing, false,
                 NameEntry[], nothing, nothing, 0, 0, Dict{Tuple{Any,Int,Vector{Symbol}},Page}(),
                 Snapshot[], Snapshot[], Hit[], nothing, "", false, false, nothing, String[],
                 (0.0, nothing), ReentrantLock(), Dict{Any,Set{Symbol}}(), false, LAYOUT[],
                 get(term.out_stream, :color, true)::Bool || REPL.Terminals.hascolor(term),
-                nothing, false, (0.0, 0.0, 0.0, 0.0), nothing)
-    any(p -> p.role in (:project, :direct), cat.pkgs) || push!(b.expanded, :stdlib)
+                nothing, false, (0.0, 0.0, 0.0, 0.0), nothing, ManualHit[], SEARCH_INDIRECT[], 0)
+    any(p -> p.role in (:project, :direct), cat.pkgs) || push!(b.expanded, :indirect)
     refresh_side!(b)
     first_pkg = findfirst(r -> r.pkg !== nothing, b.side_rows)
     b.side.cursor = something(first_pkg, 1)
@@ -111,37 +118,107 @@ end
 
 ## Rows ##
 
-const SECTION_ORDER = (:project, :direct, :julia, :stdlib, :indirect, :extension)
-const SIDEBAR_TITLES = (project = "Project", direct = "Direct", julia = "Julia", stdlib = "Stdlib",
-                        indirect = "Indirect", extension = "Extensions")
+# The sidebar has two blocks: the curated documentation, and the docstrings of loaded code.
+# Indirect dependencies are a section inside the dependencies.
+const BLOCKS = (docs = (:manual, :basedocs, :stdlibdocs, :devdocs),
+                code = (:project, :direct, :indirect, :julia, :extension))
+const SECTION_ORDER = (:docs, BLOCKS.docs..., :code, BLOCKS.code...)
+const MANUAL_ROLES = BLOCKS.docs
+const DEFAULT_EXPANDED = (:docs, :code, :project, :direct, :julia)
+const SIDEBAR_TITLES = (docs = "Documentation", code = "Docstrings", manual = "Manual", basedocs = "Base",
+                        stdlibdocs = "Standard library", pkgdocs = "Pkg", devdocs = "Developer docs", project = "Project",
+                        direct = "Dependencies", indirect = "Indirect & stdlib", julia = "Julia",
+                        extension = "Extensions")
+
+is_block(role::Symbol) = role === :docs || role === :code
+
+# Whether the sidebar has anything to list in section `role`.
+# Pkg's manual is one row of the sidebar, which stands for all its pages. It shows the first.
+pkg_pages(b::Browser) = filter(p -> p.role === :pkgdocs, b.cat.manual)
+
+function has_section(b::Browser, role::Symbol)
+    role in MANUAL_ROLES && return any(p -> p.role === role, b.cat.manual)
+    role === :direct && !isempty(b.cat.unloaded) && return true
+    return any(p -> p.role === role, b.cat.pkgs)
+end
 
 function refresh_side!(b::Browser)
+    selected = row_key(side_row(b))
     rows = SideRow[]
-    for role in SECTION_ORDER
-        unloaded = role === :direct ? b.cat.unloaded : PkgId[]
-        any_pkg = false
-        for p in b.cat.pkgs
-            p.role === role && (any_pkg = true; break)
-        end
-        any_pkg || !isempty(unloaded) || continue
-        push!(rows, SideRow(role, nothing))
-        role in b.expanded || continue
-        for p in b.cat.pkgs
-            p.role === role && push!(rows, SideRow(role, p))
-        end
-        for id in unloaded
-            push!(rows, SideRow(role, nothing, id))
+    for (block, roles) in pairs(BLOCKS)
+        any(r -> has_section(b, r), roles) || continue
+        push!(rows, SideRow(block, nothing))
+        block in b.expanded || continue
+        for role in roles
+            has_section(b, role) || continue
+            # Indirect dependencies are inside the dependencies, when there are any.
+            role === :indirect && has_section(b, :direct) && !(:direct in b.expanded) && continue
+            push!(rows, SideRow(role, nothing))
+            role in b.expanded || continue
+            if role in MANUAL_ROLES
+                pages = filter(p -> p.role === role, b.cat.manual)
+                # Pkg's manual is among the standard libraries, in its place.
+                pkg = role === :stdlibdocs ? pkg_pages(b) : ManualPage[]
+                if !isempty(pkg)
+                    k = something(findfirst(p -> lowercase(p.title) > "pkg", pages), length(pages) + 1)
+                    insert!(pages, k, pkg[1])
+                end
+                for p in pages
+                    push!(rows, SideRow(p.role, nothing, nothing, p))
+                end
+                continue
+            end
+            for p in b.cat.pkgs
+                p.role === role && push!(rows, SideRow(role, p))
+            end
+            if role === :direct
+                for id in b.cat.unloaded
+                    push!(rows, SideRow(role, nothing, id))
+                end
+            end
         end
     end
     b.side_rows = rows
-    b.side.cursor = clamp(b.side.cursor, 1, max(1, length(rows)))
+    # Keep the same row selected. If it is gone, the names pane must follow the new one.
+    i = findfirst(r -> row_key(r) == selected, rows)
+    b.side.cursor = something(i, clamp(b.side.cursor, 1, max(1, length(rows))))
+    i === nothing && selected !== nothing && refresh_names!(b)
 end
 
 function refresh_names!(b::Browser)
     rows = NameRow[]
     if b.query !== nothing
-        for e in b.results
-            push!(rows, NameRow(:entry, e, e.kind, 0))
+        # The manual comes first, unless the query is exactly a name.
+        q = lowercase(last(split(b.query, '.')))
+        names_first = !isempty(b.results) && lowercase(String(b.results[1].name)) == q
+        names_first && add_name_hits!(rows, b)
+        if !isempty(b.manual_hits)
+            push!(rows, NameRow(:header, nothing, :manual_hits, length(b.manual_hits)))
+            if !(:manual_hits in b.collapsed)
+                for (i, h) in enumerate(b.manual_hits)
+                    push!(rows, NameRow(:hit, nothing, :manual_hits, i, h))
+                end
+            end
+        end
+        names_first || add_name_hits!(rows, b)
+    elseif side_row(b) !== nothing && side_row(b).role === :pkgdocs
+        # Pkg's manual lists its pages, each of which unfolds to its headings.
+        push!(rows, NameRow(:about, nothing, :none, 0))
+        for (j, p) in enumerate(pkg_pages(b))
+            at = ManualHit(p.path, "", 0)
+            push!(rows, NameRow(:page, nothing, :none, j, at))
+            Symbol(p.path) in b.expanded || continue
+            for (k, h) in enumerate(page_headings(b.cat, p.path))
+                k == 1 && h.level == 1 && continue # the title
+                push!(rows, NameRow(:heading, nothing, :none, k, at))
+            end
+        end
+    elseif side_page(b) !== nothing
+        # A page of the manual lists its headings, by their place on the page.
+        push!(rows, NameRow(:about, nothing, :none, 0))
+        for (k, h) in enumerate(page_headings(b.cat, side_page(b).path))
+            k == 1 && h.level == 1 && continue # the title
+            push!(rows, NameRow(:heading, nothing, :none, k))
         end
     else
         push!(rows, NameRow(:about, nothing, :none, 0))
@@ -164,6 +241,16 @@ function refresh_names!(b::Browser)
     b.names.cursor = clamp(b.names.cursor, 1, max(1, length(rows)))
 end
 
+# The names a search finds, under a heading when the manual has results too.
+function add_name_hits!(rows::Vector{NameRow}, b::Browser)
+    isempty(b.manual_hits) || isempty(b.results) || push!(rows, NameRow(:header, nothing, :name_hits, length(b.results)))
+    isempty(b.manual_hits) || !(:name_hits in b.collapsed) || return
+    for e in b.results
+        push!(rows, NameRow(:entry, e, e.kind, 0))
+    end
+    b.hidden > 0 && push!(rows, NameRow(:more, nothing, :none, b.hidden))
+end
+
 side_row(b::Browser) = get(b.side_rows, b.side.cursor, nothing)
 
 # The selected package row when it is a section heading or a package that is not loaded.
@@ -171,7 +258,20 @@ side_row(b::Browser) = get(b.side_rows, b.side.cursor, nothing)
 function side_placeholder(b::Browser)
     b.query === nothing && b.source === :side || return nothing
     row = side_row(b)
-    return row === nothing || row.pkg !== nothing ? nothing : row
+    return row === nothing || row.pkg !== nothing || row.page !== nothing ? nothing : row
+end
+
+# The manual page picked in the sidebar.
+function side_page(b::Browser)
+    row = side_row(b)
+    row === nothing && return nothing
+    # For Pkg's manual, the names pane picks the page.
+    if row.role === :pkgdocs && b.query === nothing
+        r = name_row(b)
+        i = r === nothing || r.hit === nothing ? nothing : manual_page_of(b.cat, r.hit.path)
+        i === nothing || return b.cat.manual[i]
+    end
+    return row.page
 end
 name_row(b::Browser) = get(b.name_rows, b.names.cursor, nothing)
 
@@ -183,16 +283,26 @@ function sync_side!(b::Browser)
         b.names = ListState(1, 0)
         b.collapsed = Set{Symbol}()
     end
+    row !== nothing && row.page !== nothing && (b.names = ListState(1, 0))
     refresh_names!(b)
+end
+
+# Unfold what section `role` is in, so that its heading is listed, and with `open`, the section too.
+function unfold_to!(b::Browser, role::Symbol; open::Bool=false)
+    is_block(role) && !open && return
+    role === :pkgdocs && (role = :stdlibdocs) # Pkg's manual is a row of the standard libraries
+    sections = Symbol[role in MANUAL_ROLES ? :docs : :code]
+    role === :indirect && push!(sections, :direct)
+    open && push!(sections, role)
+    all(in(b.expanded), sections) && return
+    union!(b.expanded, sections)
+    refresh_side!(b)
 end
 
 function select_package!(b::Browser, m::Module)
     p = package_of(b.cat, m)
     p === nothing && return
-    if !(p.role in b.expanded)
-        push!(b.expanded, p.role)
-        refresh_side!(b)
-    end
+    unfold_to!(b, p.role; open=true)
     i = findfirst(r -> r.pkg !== nothing && r.pkg.mod === p.mod, b.side_rows)
     i === nothing && return
     b.side.cursor = i
@@ -218,19 +328,24 @@ snapshot(b::Browser) = Snapshot(b.mod, b.focus, b.source, row_key(side_row(b)), 
                                 b.doc_scroll, b.override, b.query, b.internal, b.textsearch)
 
 row_key(::Nothing) = nothing
-row_key(r::SideRow) = (r.role, r.pkg === nothing ? nothing : r.pkg.mod, r.unloaded)
-row_key(r::NameRow) = r.entry === nothing ? (r.kind, r.group) : (r.entry.mod, r.entry.name)
+row_key(r::SideRow) = (r.role, r.pkg === nothing ? nothing : r.pkg.mod, r.unloaded,
+                       r.page === nothing ? nothing : r.page.path)
+row_key(r::NameRow) = r.entry !== nothing ? (r.entry.mod, r.entry.name) :
+    r.hit !== nothing && r.kind !== :hit ? (r.kind, r.hit.path, r.count) : (r.kind, r.group, r.count)
 
 function restore!(b::Browser, s::Snapshot)
     b.mod, b.focus, b.source, b.override, b.internal = s.mod, s.focus, s.source, s.override, s.internal
     b.query = s.query
     b.typing = false
     b.textsearch = s.textsearch
-    b.results = s.query === nothing ? NameEntry[] :
-        s.textsearch ? search_text(b.cat, s.query; internal=b.internal) :
-        search(b.cat, s.query; internal=b.internal)
+    run_search!(b)
     refresh_side!(b)
     i = findfirst(r -> row_key(r) == s.side, b.side_rows)
+    if i === nothing && s.side !== nothing
+        # The row was folded away since.
+        unfold_to!(b, s.side[1]; open=true)
+        i = findfirst(r -> row_key(r) == s.side, b.side_rows)
+    end
     i === nothing || (b.side.cursor = i)
     refresh_names!(b)
     i = findfirst(r -> row_key(r) == s.names, b.name_rows)
@@ -267,6 +382,8 @@ function close_search!(b::Browser)
     b.query = nothing
     b.typing = false
     empty!(b.results)
+    empty!(b.manual_hits)
+    b.hidden = 0
     refresh_names!(b)
 end
 
@@ -337,7 +454,10 @@ function follow!(b::Browser, t::Target)
         load_package!(b, t.id)
     elseif t isa SourceTarget
         edit_source!(b, t)
+    elseif t isa ManualTarget
+        open_manual!(b, t)
     elseif t isa SectionTarget
+        unfold_to!(b, t.role)
         i = findfirst(r -> is_header(r) && r.role === t.role, b.side_rows)
         i === nothing && return
         navigate!(b) do
@@ -385,9 +505,13 @@ function current_key(b::Browser)
         row = side_row(b)
         row === nothing && return ModuleTarget(b.mod)
         row.unloaded === nothing || return LoadTarget(row.unloaded)
+        row.page === nothing || return ManualTarget(side_page(b).path, "")
         return row.pkg === nothing ? SectionTarget(row.role) : ModuleTarget(row.pkg.mod)
     end
+    p = b.query === nothing ? side_page(b) : nothing
+    p === nothing || return ManualTarget(p.path, "")
     row = name_row(b)
+    row !== nothing && row.kind === :hit && return ManualTarget(row.hit.path, "")
     row !== nothing && row.kind === :entry && return row.entry
     return ModuleTarget(b.mod)
 end
@@ -522,11 +646,15 @@ function hit_subject(b::Browser, action)
     elseif kind === :side
         row = get(b.side_rows, action[2], nothing)
         row === nothing && return nothing
+        row.page === nothing || return SourceTarget(row.page.path, 1)
         return row.unloaded !== nothing ? row.unloaded : row.pkg
     elseif kind === :names
         row = get(b.name_rows, action[2], nothing)
         row === nothing && return nothing
-        return row.kind === :entry ? row.entry : ModuleTarget(b.mod)
+        row.kind === :entry && return row.entry
+        row.kind === :hit && return SourceTarget(row.hit.path, hit_line(b.cat, row.hit))
+        p = side_page(b)
+        return p === nothing ? ModuleTarget(b.mod) : SourceTarget(p.path, 1)
     elseif kind === :load
         return action[2]
     elseif kind === :crumb
@@ -597,6 +725,7 @@ function page(b::Browser, key, width::Int)
             key isa ModuleTarget ? module_page(b.cat, key.mod, width) :
             key isa SectionTarget ? section_page(b.cat, key.role, width) :
             key isa LoadTarget ? unloaded_page(key.id, width) :
+            key isa ManualTarget ? manual_page(b.cat, key.path, width) :
             key === :help ? help_page(b.cat, width) : Page(PageBuilder(width))
         catch err
             pb = PageBuilder(width)
@@ -687,7 +816,7 @@ function hint_segments(b::Browser)
         return [("esc", "close")]
     elseif b.typing
         return [("↑↓", "choose"), ("⏎", "open"), ("^T", b.textsearch ? "names" : "text"),
-                ("⇥", "results"), ("esc", "cancel")]
+                ("^A", b.indirect ? "direct only" : "+indirect"), ("⇥", "results"), ("esc", "cancel")]
     elseif b.focus === :doc
         p = page(b, current_key(b), doc_width(b))
         hints = [("↑↓", "scroll"), ("⇥", "next link"), ("⏎", "follow"), ("⌫", "back")]
@@ -728,12 +857,19 @@ function describe(b::Browser, action)
         row = get(b.side_rows, action[2], nothing)
         row === nothing && return nothing
         row.unloaded === nothing || return "↓ $(row.unloaded.name) is not loaded · ⏎ load it"
+        row.role === :pkgdocs && return "Pkg's manual · ⏎ its pages"
+        row.page === nothing || return "$(row.page.title) · ⏎ its sections · right-click: source"
         row.pkg === nothing && return "⏎ fold or unfold this section"
         return "$(row.pkg.id.name) · ⏎ open · right-click: source"
     elseif kind === :names
         row = get(b.name_rows, action[2], nothing)
         row === nothing && return nothing
         row.kind === :header && return "⏎ fold or unfold this group"
+        row.kind === :heading && return "↓ jumps to this section of the page"
+        row.kind === :page && return "this page · ⏎ show or hide its sections"
+        row.kind === :hit && return "the manual: $(manual_title(b.cat, row.hit.path)) · ⏎ open"
+        row.kind === :more && return "⏎ search indirect dependencies too (^A)"
+        row.kind === :about && side_page(b) !== nothing && return "the top of the page"
         row.kind === :about && return "the documentation of $(display_name(b.mod))"
         e = row.entry::NameEntry
         open = e.kind === :module ? "⏎ open the module" : "⏎ read"
@@ -777,6 +913,10 @@ function describe_target(b::Browser, p::Page, t)
     elseif t isa CodeTarget
         n = count(==('\n'), t.code) + 1
         return "⧉ closes the browser and puts $n line$(n == 1 ? "" : "s") of code at the prompt"
+    elseif t isa ManualTarget
+        i = manual_page_of(b.cat, t.path)
+        title = i === nothing ? basename(dirname(dirname(dirname(t.path)))) : b.cat.manual[i].title
+        return "→ the manual: $(title)$(isempty(t.anchor) ? "" : ", “" * t.anchor * "”") · ⏎ follow"
     elseif t isa AnchorTarget
         t.heading in eachindex(p.headings) || return nothing
         return "↓ jumps to “$(strip(String(p.lines[p.headings[t.heading]])))” ({ } step through headings)"
@@ -883,7 +1023,7 @@ function header_bar(b::Browser)
     rw = segs_width(right)
     room = max(0, b.width - rw)
     rb = RowBuilder(b, 1, 1)
-    put_seg!(rb, " Julia docstrings ", :REPL_DocBrowser_title)
+    put_seg!(rb, " Julia docs ", :REPL_DocBrowser_title)
     proj = project_label()
     proj === nothing || put_seg!(rb, " ($proj)", :REPL_DocBrowser_dim, (:project,))
     put_seg!(rb, " ")
@@ -896,6 +1036,13 @@ function header_bar(b::Browser)
         # Not the module shown before, which is no longer what is selected.
         put_seg!(rb, placeholder.unloaded === nothing ? getfield(SECTION_TITLES, placeholder.role) :
                  placeholder.unloaded.name, :REPL_DocBrowser_pane_title)
+    elseif side_page(b) !== nothing && b.override === nothing
+        p = side_page(b)
+        role = p.role === :pkgdocs ? :stdlibdocs : p.role
+        put_seg!(rb, getfield(SECTION_TITLES, role), :REPL_DocBrowser_pane_title, (:section, role))
+        put_seg!(rb, " › ", :REPL_DocBrowser_dim)
+        p.role === :pkgdocs && put_seg!(rb, "Pkg › ", :REPL_DocBrowser_dim)
+        put_seg!(rb, p.title, :REPL_DocBrowser_pane_title)
     else
         for (i, m) in enumerate(module_path(b.mod))
             i > 1 && put_seg!(rb, " › ", :REPL_DocBrowser_dim)
@@ -947,16 +1094,27 @@ function list_line(b::Browser, pane::Symbol, i::Int, x::Int, w::Int, row::Int)
                 put_seg!(rb, ' '^(room - 6))
                 put_seg!(rb, "↓ load", :REPL_DocBrowser_key, (:load, r.unloaded))
             end
+        elseif r.page !== nothing
+            put_seg!(rb, "   ")
+            put_seg!(rb, r.role === :pkgdocs ? "Pkg" : r.page.title, nothing, action)
         elseif r.pkg === nothing
             role = r.role
-            n = count(p -> p.role === role, b.cat.pkgs) + (role === :direct ? length(b.cat.unloaded) : 0)
-            put_seg!(rb, r.role in b.expanded ? " ▾ " : " ▸ ", :REPL_DocBrowser_dim, action)
-            put_seg!(rb, getfield(SIDEBAR_TITLES, r.role), :REPL_DocBrowser_section, action)
-            put_seg!(rb, " $n", :REPL_DocBrowser_dim, action)
+            chevron = role in b.expanded ? "▾ " : "▸ "
+            if is_block(role)
+                put_seg!(rb, chevron, :REPL_DocBrowser_dim, action)
+                put_seg!(rb, getfield(SIDEBAR_TITLES, role), :REPL_DocBrowser_pane_title, action)
+            else
+                n = count(p -> p.role === role, b.cat.pkgs) + (role === :direct ? length(b.cat.unloaded) : 0) +
+                    count(p -> p.role === role, b.cat.manual) + (role === :stdlibdocs && !isempty(pkg_pages(b)))
+                put_seg!(rb, role === :indirect && has_section(b, :direct) ? "   " : " ")
+                put_seg!(rb, chevron, :REPL_DocBrowser_dim, action)
+                put_seg!(rb, getfield(SIDEBAR_TITLES, role), :REPL_DocBrowser_section, action)
+                put_seg!(rb, " $n", :REPL_DocBrowser_dim, action)
+            end
         else
             p = r.pkg
             version = p.version === nothing || p.role === :julia ? "" : string(p.version)
-            put_seg!(rb, "   ")
+            put_seg!(rb, p.role === :indirect && has_section(b, :direct) ? "     " : "   ")
             put_seg!(rb, p.id.name, isjll(p.id.name) ? :REPL_DocBrowser_dim : nothing, action)
             room = w - width(rb) - 1
             if !isempty(version) && textwidth(version) + 1 <= room
@@ -967,11 +1125,45 @@ function list_line(b::Browser, pane::Symbol, i::Int, x::Int, w::Int, row::Int)
     else
         r = b.name_rows[i]
         if r.kind === :about
-            put_seg!(rb, " " * String(nameof(b.mod)), b.focus === :names ? :REPL_DocBrowser_title : :REPL_DocBrowser_section, action)
-            put_seg!(rb, "  $(count(r -> r.kind === :entry, b.name_rows)) names", :REPL_DocBrowser_dim, action)
+            p = b.query === nothing ? side_page(b) : nothing
+            pkg = p !== nothing && p.role === :pkgdocs
+            title = pkg ? "Pkg" : p === nothing ? String(nameof(b.mod)) : p.title
+            n = pkg ? "$(count(r -> r.kind === :page, b.name_rows)) pages" :
+                p === nothing ? "$(count(r -> r.kind === :entry, b.name_rows)) names" : "$(length(b.name_rows) - 1) sections"
+            put_seg!(rb, " " * title, b.focus === :names ? :REPL_DocBrowser_title : :REPL_DocBrowser_section, action)
+            put_seg!(rb, "  " * n, :REPL_DocBrowser_dim, action)
+        elseif r.kind === :page
+            p = b.cat.manual[manual_page_of(b.cat, r.hit.path)]
+            put_seg!(rb, Symbol(p.path) in b.expanded ? " ▾ " : " ▸ ", :REPL_DocBrowser_dim, action)
+            put_seg!(rb, p.title, :REPL_DocBrowser_pane_title, action)
+        elseif r.kind === :heading
+            path = r.hit === nothing ? (p = side_page(b); p === nothing ? nothing : p.path) : r.hit.path
+            hs = path === nothing ? Heading[] : page_headings(b.cat, path)
+            r.count in eachindex(hs) || return fit("", w)
+            h = hs[r.count]
+            put_seg!(rb, (r.hit === nothing ? "  " : "    ") * "  "^max(0, h.level - 2))
+            put_seg!(rb, h.text, h.level <= 2 ? :REPL_DocBrowser_pane_title : nothing, action)
+        elseif r.kind === :more
+            put_seg!(rb, " + $(r.count) in indirect dependencies (^A)", :REPL_DocBrowser_dim, action)
+        elseif r.kind === :hit
+            # a section of the manual with its page on the right, or a page with its part of the docs
+            h = r.hit::ManualHit
+            put_seg!(rb, " § ", :REPL_DocBrowser_kind_module)
+            put_match!(rb, hit_title(b.cat, h), nothing, action)
+            i = manual_page_of(b.cat, h.path)
+            where = !isempty(h.heading) ? " " * manual_title(b.cat, h.path) :
+                i === nothing ? "" : " " * getfield(SIDEBAR_TITLES, b.cat.manual[i].role)
+            if !isempty(where)
+                room = w - width(rb) - 1
+                if room > 4
+                    put_seg!(rb, ' '^max(1, room - textwidth(where)))
+                    put_seg!(rb, textwidth(where) > room ? first(where, room) : where, :REPL_DocBrowser_dim)
+                end
+            end
         elseif r.kind === :header
+            title = r.group === :manual_hits ? "In the manual" : r.group === :name_hits ? "Names" : kind_title(r.group)
             put_seg!(rb, r.group in b.collapsed ? " ▸ " : " ▾ ", :REPL_DocBrowser_dim, action)
-            put_seg!(rb, kind_title(r.group), :REPL_DocBrowser_section, action)
+            put_seg!(rb, title, :REPL_DocBrowser_section, action)
             put_seg!(rb, " $(r.count)", :REPL_DocBrowser_dim, action)
         else
             e = r.entry::NameEntry
@@ -1059,7 +1251,7 @@ function pane_title(b::Browser, pane::Symbol, x::Int, w::Int)
     rb = RowBuilder(b, 2, x)
     face = b.focus === pane ? :REPL_DocBrowser_title : :REPL_DocBrowser_section
     if pane === :side
-        put_seg!(rb, " Packages", face, (:focus, :side))
+        put_seg!(rb, " Contents", face, (:focus, :side))
     elseif pane === :names
         placeholder = side_placeholder(b)
         if placeholder !== nothing
@@ -1071,7 +1263,7 @@ function pane_title(b::Browser, pane::Symbol, x::Int, w::Int)
             return list_line(b, :names, 1, x, w, 2)
         else
             put_seg!(rb, " Results", face, (:focus, :names))
-            put_seg!(rb, " $(length(b.results))", :REPL_DocBrowser_dim)
+            put_seg!(rb, " $(length(b.results) + length(b.manual_hits))", :REPL_DocBrowser_dim)
         end
     else
         key = current_key(b)
@@ -1079,11 +1271,15 @@ function pane_title(b::Browser, pane::Symbol, x::Int, w::Int)
                 key isa ModuleTarget ? display_name(key.mod) :
                 key isa SectionTarget ? getfield(SECTION_TITLES, key.role) :
                 key isa LoadTarget ? key.id.name :
+                key isa ManualTarget ? manual_title(b.cat, key.path) :
                 key === :help ? "Keys and mouse" : ""
         p = page(b, key, doc_width(b))
         n = content_rows(b)
         pos = length(p.lines) <= n ? "" :
             string(round(Int, 100 * min(b.doc_scroll + n, length(p.lines)) / length(p.lines)), "% ")
+        # Say whether this is a page written as a guide, or the docstrings of some code.
+        kind = key isa ManualTarget ? "manual" : key isa NameEntry || key isa ModuleTarget ? "docstrings" : ""
+        isempty(kind) || (pos = kind * (isempty(pos) ? " " : " · " * pos))
         put_seg!(rb, " " * title, face, (:focus, :doc))
         room = w - width(rb)
         room > textwidth(pos) && put_seg!(rb, ' '^(room - textwidth(pos)) * pos, :REPL_DocBrowser_dim)
@@ -1447,6 +1643,63 @@ function move!(b::Browser, pane::Symbol, delta::Int)
     b.override = nothing
     b.source = pane
     pane === :side && sync_side!(b)
+    pane === :names && show_heading!(b)
+end
+
+"""
+    open_manual!(b, t::ManualTarget)
+
+Show a page of the manual, at the heading that `t` names. A page in the sidebar is picked
+there, so that the names pane lists its headings; any other page, such as the manual page of
+a package, is shown on its own.
+"""
+open_manual!(b::Browser, t::ManualTarget) = open_manual!(b, t.path, anchor_heading(b.cat, t.path, t.anchor))
+
+function open_manual!(b::Browser, path::String, k::Int)
+    i = manual_page_of(b.cat, path)
+    navigate!(b) do
+        b.query === nothing || close_search!(b)
+        b.override = nothing
+        b.focus = :doc
+        i === nothing && (b.override = ManualTarget(path, ""))
+        i === nothing && return
+        p = b.cat.manual[i]
+        pkg = p.role === :pkgdocs
+        unfold_to!(b, pkg ? :stdlibdocs : p.role; open=true)
+        j = findfirst(r -> pkg ? r.role === :pkgdocs : r.page == p, b.side_rows)
+        j === nothing || (b.side.cursor = j)
+        reveal!(b.side, content_rows(b))
+        b.source = :side
+        sync_side!(b)
+        if pkg
+            # Unfold the page in the names pane and pick it, so that it is the page shown.
+            push!(b.expanded, Symbol(path))
+            refresh_names!(b)
+            n = findfirst(r -> r.kind === :page && r.hit.path == path, b.name_rows)
+            n === nothing || (b.names.cursor = n)
+        end
+    end
+    scroll_to_heading!(b, k)
+    i === nothing && return # the names pane lists something else
+    # Pick the heading in the names pane too.
+    r = findfirst(r -> r.kind === :heading && r.count == k && (r.hit === nothing || r.hit.path == path), b.name_rows)
+    r === nothing || (b.names.cursor = r; reveal!(b.names, content_rows(b), names_offset(b)))
+end
+
+# When a heading of a manual page is picked, scroll the page to it.
+function show_heading!(b::Browser)
+    row = name_row(b)
+    row !== nothing && row.kind === :hit && return scroll_to_heading!(b, hit_heading(b.cat, row.hit))
+    (row === nothing || side_page(b) === nothing || b.query !== nothing) && return
+    row.kind === :heading ? scroll_to_heading!(b, row.count) : scroll_to_heading!(b, 0)
+end
+
+function scroll_to_heading!(b::Browser, k::Int)
+    key = current_key(b)
+    p = page(b, key, doc_width(b))
+    b.doc_key = key # so that drawing does not scroll back to the top
+    b.doc_scroll = k in eachindex(p.headings) ? p.headings[k] - 1 : 0
+    b.link = 0
 end
 
 function scroll_doc!(b::Browser, delta::Int)
@@ -1480,6 +1733,12 @@ function toggle_section!(b::Browser, role::Symbol)
     refresh_side!(b)
 end
 
+function toggle_page!(b::Browser, path::String)
+    key = Symbol(path)
+    key in b.expanded ? delete!(b.expanded, key) : push!(b.expanded, key)
+    refresh_names!(b)
+end
+
 function toggle_group!(b::Browser, group::Symbol)
     group in b.collapsed ? delete!(b.collapsed, group) : push!(b.collapsed, group)
     refresh_names!(b)
@@ -1502,8 +1761,14 @@ function activate!(b::Browser, pane::Symbol)
         row === nothing && return
         if row.kind === :header
             toggle_group!(b, row.group)
-        elseif row.kind === :about
+        elseif row.kind === :page
+            toggle_page!(b, row.hit.path)
+        elseif row.kind === :about || row.kind === :heading
             b.focus = :doc
+        elseif row.kind === :hit
+            open_manual!(b, row.hit.path, hit_heading(b.cat, row.hit))
+        elseif row.kind === :more
+            toggle_indirect!(b)
         else
             e = row.entry::NameEntry
             if b.query !== nothing
@@ -1531,7 +1796,8 @@ function focus_left!(b::Browser)
     if b.focus === :doc
         b.focus = b.source === :side ? :side : :names
     elseif b.focus === :names
-        if b.query === nothing && package_of(b.cat, b.mod) !== nothing && get(b.cat.bymod, b.mod, nothing) === nothing
+        if b.query === nothing && side_page(b) === nothing && package_of(b.cat, b.mod) !== nothing &&
+                get(b.cat.bymod, b.mod, nothing) === nothing
             # In a submodule, step out to its parent.
             child = b.mod
             navigate!(b) do
@@ -1589,11 +1855,38 @@ function start_search!(b::Browser, query::String="")
     update_search!(b)
 end
 
+function run_search!(b::Browser)
+    q = b.query
+    found = q === nothing ? NameEntry[] : b.textsearch ? search_text(b.cat, q; internal=b.internal) :
+        search(b.cat, q; internal=b.internal)
+    b.results = b.indirect ? found : filter(e -> !is_indirect(b.cat, e), found)
+    b.hidden = length(found) - length(b.results)
+    b.manual_hits = q === nothing ? ManualHit[] : search_manual(b.cat, q; text=b.textsearch)
+end
+
+function is_indirect(cat::Catalog, e::NameEntry)
+    p = package_of(cat, e.mod)
+    # The standard libraries are left in, since many are loaded by Julia itself.
+    return p !== nothing && p.role === :indirect && !Base.is_stdlib(p.id)
+end
+
+# Whether searches include indirect dependencies, kept for the next time the browser opens.
+const SEARCH_INDIRECT = Ref(false)
+
+function toggle_indirect!(b::Browser)
+    b.indirect = SEARCH_INDIRECT[] = !b.indirect
+    b.query === nothing || update_search!(b)
+    b.status = b.indirect ? "Searching indirect dependencies too" : "Leaving indirect dependencies out of searches"
+end
+
 function update_search!(b::Browser)
-    q = something(b.query, "")
-    b.results = b.textsearch ? search_text(b.cat, q; internal=b.internal) : search(b.cat, q; internal=b.internal)
+    run_search!(b)
     b.names = ListState(1, 0)
     refresh_names!(b)
+    # Start on the best result, not on the heading of its group.
+    first_result = findfirst(r -> r.kind !== :header, b.name_rows)
+    first_result === nothing || (b.names.cursor = first_result)
+    show_heading!(b)
 end
 
 function handle_typing!(b::Browser, ev::KeyEvent)
@@ -1610,6 +1903,8 @@ function handle_typing!(b::Browser, ev::KeyEvent)
         update_search!(b)
     elseif ev.key === :char && ev.mods == CTRL && ev.char == 't'
         toggle_textsearch!(b)
+    elseif ev.key === :char && ev.mods == CTRL && ev.char == 'a'
+        toggle_indirect!(b)
     elseif ev.key === :up || (ev.key === :char && ev.mods == CTRL && ev.char == 'p')
         move!(b, :names, -1)
     elseif ev.key === :down || (ev.key === :char && ev.mods == CTRL && ev.char == 'n')
@@ -1618,7 +1913,12 @@ function handle_typing!(b::Browser, ev::KeyEvent)
         move!(b, :names, (ev.key === :pageup ? -1 : 1) * content_rows(b))
     elseif ev.key === :enter
         row = name_row(b)
-        if row === nothing || row.entry === nothing
+        if row !== nothing && row.kind === :hit
+            b.typing = false
+            open_manual!(b, row.hit.path, hit_heading(b.cat, row.hit))
+        elseif row !== nothing && row.kind === :more
+            toggle_indirect!(b)
+        elseif row === nothing || row.entry === nothing
             b.status = "No matches"
         else
             b.typing = false
@@ -1704,6 +2004,8 @@ function handle!(b::Browser, ev::KeyEvent)
             (b.focus = pane === :names || side_placeholder(b) !== nothing ? :side : :names)
     elseif ev.key === :backspace
         go_back!(b)
+    elseif isctrl(ev, 'a')
+        toggle_indirect!(b)
     elseif isctrl(ev, 't')
         toggle_textsearch!(b)
     elseif isplain(ev, 'x')
@@ -1744,7 +2046,7 @@ function handle!(b::Browser, ev::KeyEvent)
         end
     elseif isplain(ev, 'a')
         all_open = all(r -> r in b.expanded, SECTION_ORDER)
-        b.expanded = all_open ? Set([:project, :direct, :julia]) : Set(SECTION_ORDER)
+        b.expanded = all_open ? Set(DEFAULT_EXPANDED) : Set(SECTION_ORDER)
         refresh_side!(b)
     elseif isctrl(ev, 'l')
         write(b.out, "\e[H\e[2J")
@@ -1850,9 +2152,12 @@ function click!(b::Browser, h::Hit, double::Bool)
         b.source = pane
         b.override = nothing
         pane === :side && sync_side!(b)
+        pane === :names && show_heading!(b)
         rows = pane === :side ? b.side_rows : b.name_rows
-        header = pane === :side ? is_header(rows[i]) : rows[i].kind === :header
+        header = pane === :side ? is_header(rows[i]) : rows[i].kind in (:header, :page)
         (header || double || (again && pane === :names)) && activate!(b, pane)
+    elseif kind === :section
+        follow!(b, SectionTarget(a[2]))
     elseif kind === :spot
         p = page(b, current_key(b), doc_width(b))
         _, k = a
@@ -1899,7 +2204,7 @@ end
 ## Help ##
 
 const HELP_TEXT = """
-This browser shows the docstrings of the loaded modules, and a package's README when it has no module docstring. Manuals, tutorials and guides are in each package's full documentation, linked from its page as *docs*. Julia's manual is at <$(julia_docs())>.
+This browser shows Julia's manual, under *Manual*, *Base reference* and *Developer docs*, and the docstrings of the loaded modules, with a package's README when it has no module docstring. A package's page links to its own manual page when it ships one, as *manual*, and to its full documentation online as *docs*. Julia's manual is also at <$(julia_docs())>.
 
 # Moving around
 
@@ -1917,6 +2222,7 @@ This browser shows the docstrings of the loaded modules, and a package's README 
 
   * `/`: search the names of every loaded module. `Plots.pl` searches inside modules matching `Plots`.
   * `Ctrl-T`: switch between searching names and searching the text of docstrings.
+  * `Ctrl-A`: include indirect dependencies in searches, or leave them out again.
   * `i`: show or hide internal (non-public) names.
   * `a`: unfold every package section, including indirect dependencies.
 

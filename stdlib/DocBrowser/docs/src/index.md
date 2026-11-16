@@ -4,24 +4,26 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/DocBrowser/docs
 
 # [DocBrowser](@id man-docbrowser)
 
-`DocBrowser` is a full-screen browser of the docstrings of every loaded module. Open it by
-pressing Enter at an empty `help?>` prompt, or by typing a name and pressing Alt-Enter to
-open it at that name. The REPL loads the package the first time the browser is opened.
+`DocBrowser` is a full-screen browser of Julia's manual and of the docstrings of every loaded
+module. Open it by pressing Enter at an empty `help?>` prompt, or by typing a name and pressing
+Alt-Enter to open it at that name. The REPL loads the package the first time the browser is
+opened.
 
-It shows docstrings, and a package's README when it has no module docstring, but not the
-manuals, tutorials and guides that make up a package's full documentation. Each package's
-page links to its full documentation where the browser can find it, from the docs badge in
-its README.
+The manual is read from the Markdown it is written in, which Julia installs in
+`share/doc/julia/src`. A package's page links to the first page of its own manual when the
+package ships one, as the standard libraries do, and to its full documentation online, from
+the docs badge in its README.
 
 The browser has three panes:
 
-  * Packages: the loaded modules. The active project's direct dependencies, and modules
+  * Contents: the manual, in the sections *Manual*, *Base reference* and *Developer docs*,
+    and the loaded modules. The active project's direct dependencies, and modules
     loaded into `Main`, come first, followed by `Base`, `Core` and `Main`. Standard libraries
     and indirect dependencies that you did not ask for are folded away, but can be unfolded;
     each indirect dependency says which of your packages loaded it. Dependencies of the
     active project that are not loaded yet are listed too: select one and press Enter to
     load it with `import` and see its documentation.
-  * Names: the names in the selected module, grouped into modules, types, functions, macros
+  * Names: the sections of the selected manual page, or the names in the selected module, grouped into modules, types, functions, macros
     and constants. Each is marked `●` if exported, `○` if public, or `·` if internal.
     Internal and deprecated names are hidden until you press `i`.
   * Documentation: the docstrings of the selected name, or the module docstring (or README)

@@ -59,8 +59,9 @@ New library features
 Standard library changes
 ------------------------
 
-* The new `DocBrowser` standard library is a full-screen, mouse-aware browser for the
-  documentation of every loaded module. It separates the active project's direct dependencies
+* The new `DocBrowser` standard library is a full-screen, mouse-aware browser for Julia's
+  manual and the documentation of every loaded module. Julia now installs the Markdown source
+  of the manual in `share/doc/julia/src` for it. It separates the active project's direct dependencies
   from indirect ones, marks names as exported, public or internal, follows cross-references,
   searches names or docstring text, and can load project dependencies that are not loaded yet.
   The REPL opens it from `help?>` ([#64993]).

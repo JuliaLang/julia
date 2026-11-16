@@ -171,7 +171,7 @@ end
     # The active project is named in the header, when there is one.
     label = DocBrowser.project_label()
     @test label === nothing || occursin("($label)", lines[1])
-    @test occursin("Packages", lines[2])
+    @test occursin("Contents", lines[2])
     @test any(l -> occursin("Base", l), lines)
 end
 
@@ -552,6 +552,7 @@ end
     press!(b, :left);     @test b.focus === :side
     press!(b, :backtab);  @test b.focus === :names
     # Group headings in the names pane fold too.
+    DocBrowser.follow!(b, ModuleTarget(Base))
     b.focus = :names
     b.names.cursor = findfirst(r -> r.kind === :header, b.name_rows)
     group = b.name_rows[b.names.cursor].group
@@ -606,6 +607,280 @@ end
     @test DocBrowser.word_cols("see Base.sort!.", 6) == 5:14
     @test DocBrowser.word_cols("a  b", 2) === nothing
     @test DocBrowser.col_slice("αβγδ", 2, 3) == "βγ"
+end
+
+@testset "the manual" begin
+    mktempdir() do dir
+        mkpath(joinpath(dir, "manual"))
+        write(joinpath(dir, "pages.toml"), """
+            manual = ["manual/intro.md", "manual/missing.md", "manual/more.md"]
+            base = []
+            [[devdocs]]
+            title = "Internals"
+            pages = ["manual/more.md"]
+            """)
+        filler = "A paragraph, so that the page is longer than the screen.\n\n"^30
+        write(joinpath(dir, "manual", "intro.md"), """
+            # [Introduction](@id man-intro)
+
+            ```@meta
+            CurrentModule = Base
+            ```
+
+            See [the details](@ref man-details), [More](@ref), [a slug](@ref Second-part),
+            [another page](more.md) and [`sum`](@ref). This is ```inline``` code. Pkg's
+            [environments](https://pkgdocs.julialang.org/v1/environments/) are installed too.
+
+            ```@docs
+            sum
+            ```
+
+            ```@example
+            1 + 1
+            ```
+
+            $(filler)
+            ## [Details](@id man-details)
+
+            $(filler)
+            Second part
+            -----------
+
+            $(filler)
+            """)
+        write(joinpath(dir, "manual", "more.md"), "# More\n\nText.\n")
+        cat = Catalog()
+        all_pages = DocBrowser.manual_pages(dir)
+        # The standard libraries' own pages come too, by the name of the library.
+        stdlibs = filter(p -> p.role === :stdlibdocs, all_pages)
+        @test any(p -> p.title == "Profile", stdlibs) && issorted(stdlibs, by=p -> lowercase(p.title))
+        # Pkg's manual has a section of its own, in the order of its documentation build.
+        pkg = filter(p -> p.role === :pkgdocs, all_pages)
+        @test pkg[1].title == "Introduction" && DocBrowser.page_name(pkg[1]) == "Pkg"
+        @test any(p -> p.title == "Managing Packages", pkg) && !any(p -> isdigit(p.title[1]), pkg)
+        @test !any(p -> p.title == "Pkg", stdlibs)
+        t = DocBrowser.pkgdocs_target("https://pkgdocs.julialang.org/dev/creating-packages/#adding-tests-to-packages")
+        @test endswith(t.path, "creating-packages.md") && DocBrowser.anchor_heading(cat, t.path, t.anchor) > 0
+        @test endswith(DocBrowser.pkgdocs_target("https://pkgdocs.julialang.org/v1/").path, "index.md")
+        @test DocBrowser.pkgdocs_target("https://pkgdocs.julialang.org/v1/no-such-page/") === nothing
+        cat.manual = filter(p -> !(p.role in (:stdlibdocs, :pkgdocs)), all_pages)
+        cat.anchors = nothing
+        # Pages that are listed but not installed are left out.
+        @test [p.title for p in cat.manual] == ["Introduction", "More", "More"]
+        @test [p.role for p in cat.manual] == [:manual, :manual, :devdocs]
+        @test cat.manual[3].group == "Internals"
+        intro = cat.manual[1].path
+        hs = DocBrowser.page_headings(cat, intro)
+        @test [(h.level, h.text, h.id) for h in hs] ==
+            [(1, "Introduction", "man-intro"), (2, "Details", "man-details"), (2, "Second part", "")]
+        @test DocBrowser.anchor_heading(cat, intro, "man-details") == 2
+        @test DocBrowser.anchor_heading(cat, intro, "Second-part") == 3
+        # Documenter syntax is made plain, and links to headings and pages lead there.
+        p = DocBrowser.manual_page(cat, intro, 80)
+        text = join(String.(p.lines), '\n')
+        @test !occursin("@meta", text) && !occursin("@docs", text) && !occursin("@id", text)
+        @test occursin("1 + 1", text) && length(p.headings) == 3
+        targets = [s.target for s in p.spots]
+        @test DocBrowser.ManualTarget(intro, "man-details") in targets
+        @test DocBrowser.ManualTarget(intro, "Second-part") in targets
+        @test DocBrowser.ManualTarget(cat.manual[2].path, "") in targets
+        @test count(==(NameTarget(Base, :sum)), targets) == 2 # the link and the `@docs` entry
+        @test any(t -> t isa DocBrowser.ManualTarget && endswith(t.path, joinpath("Pkg", "docs", "src", "environments.md")), targets)
+        @test !any(t -> t isa DocBrowser.URLTarget && startswith(t.url, "@"), targets)
+        # In the browser: the sidebar lists the pages, and the names pane their headings.
+        b = test_browser()
+        b.cat = cat
+        push!(b.expanded, :manual)
+        DocBrowser.refresh_side!(b)
+        i = findfirst(r -> r.page !== nothing && r.page.path == intro, b.side_rows)
+        b.side.cursor = i - 1
+        DocBrowser.move!(b, :side, 1)
+        @test DocBrowser.current_key(b) == DocBrowser.ManualTarget(intro, "")
+        @test [r.kind for r in b.name_rows] == [:about, :heading, :heading]
+        frame(b)
+        @test occursin("2 sections", String(DocBrowser.pane_title(b, :names, 1, 40)))
+        b.focus = :names
+        press!(b, :down)
+        shown = DocBrowser.page(b, DocBrowser.current_key(b), DocBrowser.doc_width(b))
+        @test b.doc_scroll == shown.headings[2] - 1
+        # Following a link opens the page at its heading, and picks the heading.
+        DocBrowser.follow!(b, DocBrowser.ManualTarget(intro, "Second-part"))
+        frame(b)
+        @test b.doc_scroll == shown.headings[3] - 1
+        @test DocBrowser.name_row(b).count == 3
+        # A package's own manual page is linked from its module page, and opens on its own.
+        page = DocBrowser.module_page(cat, Markdown, 80)
+        t = findfirst(s -> s.target isa DocBrowser.ManualTarget, page.spots)
+        @test t !== nothing
+        DocBrowser.follow!(b, page.spots[t].target)
+        @test b.override isa DocBrowser.ManualTarget
+    end
+    @test DocBrowser.slugify("Noteworthy differences from C/C++") == "Noteworthy-differences-from-C/C"
+    # Links to Markdown files, with or without an anchor, and with `#` in the path.
+    @test DocBrowser.manual_target("file:///a/README.md") == DocBrowser.ManualTarget("/a/README.md", "")
+    @test DocBrowser.manual_target("file:///opt/c#/x.md#Top") == DocBrowser.ManualTarget("/opt/c#/x.md", "Top")
+    @test DocBrowser.manual_target("file:///a/b.txt") === nothing
+end
+
+@testset "the headings of a page line up with what it shows" begin
+    mktempdir() do dir
+        path = joinpath(dir, "page.md")
+        write(path, """
+            # A title
+
+            ## A heading long enough to wrap onto several lines of a narrow pane, and then some more
+
+            !!! note
+                ## A heading in an admonition
+
+            ```julia
+            x = 1
+              ```
+            ## Not a heading, still in the code
+            ```
+
+            ### ``\\LaTeX``
+
+            Underlined
+            ----------
+
+            [Words](@ref "Underlined") and [`sum`](@ref).
+            """)
+        cat = Catalog()
+        cat.manual = [DocBrowser.ManualPage(path, "A title", :manual, "")]
+        hs = DocBrowser.page_headings(cat, path)
+        @test [h.text for h in hs] == ["A title", "A heading long enough to wrap onto several lines of a narrow pane, and then some more",
+                                      "A heading in an admonition", "\\LaTeX", "Underlined"]
+        for width in (24, 40, 80)
+            @test length(DocBrowser.manual_page(cat, path, width).headings) == length(hs)
+        end
+        # A link in words names a heading, and one in code a docstring.
+        targets = [s.target for s in DocBrowser.manual_page(cat, path, 80).spots]
+        @test DocBrowser.ManualTarget(path, "Underlined") in targets
+        @test NameTarget(Base, :sum) in targets
+        b = test_browser()
+        b.cat = cat
+        DocBrowser.follow!(b, DocBrowser.ManualTarget(path, "Underlined"))
+        @test DocBrowser.name_row(b).kind === :heading
+        # Left from a page's headings goes back to the sidebar, even inside a submodule.
+        b.focus = :names
+        b.mod = Base.Iterators
+        press!(b, :left)
+        @test b.focus === :side && b.mod === Base.Iterators
+        # Unfolding and folding everything while a page's headings are listed keeps the panes in step.
+        b.focus = :names
+        press!(b, 'a', 'a')
+        @test frame(b) isa Vector
+    end
+end
+
+@testset "searching the manual, and the sidebar" begin
+    b = test_browser()
+    # A standard library's page is found by its name, whether an earlier test loaded it or not.
+    press!(b, '/', "Profile"...)
+    @test isempty(b.manual_hits[1].heading) && DocBrowser.manual_title(b.cat, b.manual_hits[1].path) == "Profile"
+    h = findfirst(r -> r.kind === :header && r.group === :manual_hits, b.name_rows)
+    @test h !== nothing && b.name_rows[h+1].kind === :hit
+    # Picking a hit shows that page, and Enter opens it in the sidebar.
+    b.names.cursor = h + 1
+    DocBrowser.move!(b, :names, 0)
+    @test DocBrowser.current_key(b) == DocBrowser.ManualTarget(b.manual_hits[1].path, "")
+    frame(b)
+    @test occursin("manual", String(DocBrowser.pane_title(b, :doc, 1, 60)))
+    press!(b, :enter)
+    @test b.query === nothing && DocBrowser.side_page(b).title == "Profile"
+    # Pkg's manual is found by Pkg's name, and its pages say where they are from.
+    press!(b, '/', "Pkg"...)
+    @test DocBrowser.page_name(b.cat.manual[DocBrowser.manual_page_of(b.cat, b.manual_hits[1].path)]) == "Pkg"
+    h = findfirst(r -> r.kind === :hit, b.name_rows)
+    plain(rows) = [replace(l, r"\e\[[0-9;]*m" => "") for l in rows]
+    @test any(l -> occursin(r"Introduction +Pkg *│", l), plain(frame(b)))
+    b.names.cursor = h
+    press!(b, :enter)
+    @test DocBrowser.side_page(b).role === :pkgdocs
+    # Pkg is one row of the standard libraries, in its place among them, and the names pane
+    # lists its pages, the one opened unfolded to its headings.
+    rows = b.side_rows
+    i = b.side.cursor
+    @test rows[i].role === :pkgdocs && rows[i-1].page.role === :stdlibdocs && lowercase(rows[i-1].page.title) < "pkg"
+    screen = plain(frame(b))
+    @test any(l -> startswith(l, "   Pkg "), screen) && any(l -> occursin("│ Pkg  $(length(DocBrowser.pkg_pages(b))) pages", l), screen)
+    pages = DocBrowser.pkg_pages(b)
+    @test count(r -> r.kind === :page, b.name_rows) == length(pages)
+    @test any(r -> r.kind === :heading && r.hit.path == pages[1].path, b.name_rows)
+    # Picking another page shows it and unfolds it; its headings scroll to their place.
+    j = findfirst(r -> r.kind === :page && r.hit.path == pages[3].path, b.name_rows)
+    b.focus = :names
+    b.names.cursor = j
+    DocBrowser.move!(b, :names, 0)
+    press!(b, :enter)
+    @test DocBrowser.current_key(b) == DocBrowser.ManualTarget(pages[3].path, "")
+    k = findfirst(r -> r.kind === :heading && r.hit.path == pages[3].path, b.name_rows)
+    DocBrowser.move!(b, :names, k - j)
+    @test DocBrowser.current_key(b) == DocBrowser.ManualTarget(pages[3].path, "") && b.doc_scroll > 0
+    @test occursin("Pkg › " * pages[3].title, String(DocBrowser.header_bar(b)))
+    # A link to a heading of another page opens Pkg there.
+    t = DocBrowser.pkgdocs_target("https://pkgdocs.julialang.org/dev/creating-packages/#adding-tests-to-packages")
+    DocBrowser.follow!(b, t)
+    r = DocBrowser.name_row(b)
+    @test r.kind === :heading && r.hit.path == t.path && DocBrowser.current_key(b) == DocBrowser.ManualTarget(t.path, "")
+    DocBrowser.follow!(b, DocBrowser.SectionTarget(:stdlibdocs))
+    p = DocBrowser.page(b, DocBrowser.current_key(b), DocBrowser.doc_width(b))
+    @test DocBrowser.ManualTarget(pages[1].path, "") in [s.target for s in p.spots]
+    # A search for an exact name lists the names first, so Enter opens it.
+    press!(b, '/', "sort"...)
+    @test DocBrowser.name_row(b).kind === :entry && DocBrowser.name_row(b).entry.name === :sort
+    @test any(r -> r.kind === :hit, b.name_rows)
+    press!(b, :escape)
+    # Indirect dependencies are left out of searches until asked for.
+    b.cat.bymod[Fixture] = DocBrowser.PkgEntry(Fixture, Base.PkgId(Base.UUID(UInt128(3)), "Fixture"),
+                                               nothing, :indirect, String[], nothing)
+    press!(b, '/', "documented"...)
+    @test b.hidden > 0 && !any(e -> e.mod === Fixture, b.results)
+    @test b.name_rows[end].kind === :more
+    press!(b, KeyEvent('a', DocBrowser.CTRL))
+    @test b.hidden == 0 && any(e -> e.mod === Fixture, b.results)
+    press!(b, KeyEvent('a', DocBrowser.CTRL))
+    b.names.cursor = length(b.name_rows)
+    press!(b, :enter) # while typing, on the row that says what was left out
+    @test b.hidden == 0
+    # Outside the search field, Ctrl-A and Enter on that row also leave them out and bring them in.
+    b.typing = false
+    b.focus = :names
+    press!(b, KeyEvent('a', DocBrowser.CTRL))
+    @test b.hidden > 0
+    b.names.cursor = length(b.name_rows)
+    press!(b, :enter)
+    @test b.hidden == 0 && b.query !== nothing
+    press!(b, KeyEvent('a', DocBrowser.CTRL))
+    press!(b, :escape)
+    delete!(b.cat.bymod, Fixture)
+    # A hit's source is its page, at its heading; Enter opens it, and its links say where they go.
+    press!(b, '/', "Wall-time"...)
+    b.typing = false
+    i = findfirst(r -> r.kind === :hit, b.name_rows)
+    src = DocBrowser.hit_subject(b, (:names, i))
+    @test src isa DocBrowser.SourceTarget && src.line > 1
+    b.names.cursor = i
+    press!(b, :enter)
+    @test b.query === nothing && DocBrowser.side_page(b) !== nothing
+    @test DocBrowser.hit_subject(b, (:names, 1)) == DocBrowser.SourceTarget(DocBrowser.side_page(b).path, 1)
+    t = DocBrowser.ManualTarget(DocBrowser.side_page(b).path, "")
+    @test occursin("the manual", DocBrowser.describe_target(b, DocBrowser.page(b, t, 80), t))
+    # The section in the breadcrumbs leads to its overview.
+    frame(b)
+    h = only(h for h in b.hits if h.action isa Tuple && first(h.action) === :section)
+    handle!(b, MouseEvent(:press, 1, h.row, first(h.cols), 0))
+    @test DocBrowser.current_key(b) isa DocBrowser.SectionTarget
+    # Headings are found as well, and text search looks in the sections.
+    hits = DocBrowser.search_manual(b.cat, "performance tips")
+    @test any(h -> DocBrowser.hit_title(b.cat, h) == "Performance Tips", hits)
+    @test !isempty(DocBrowser.search_manual(b.cat, "type-stable"; text=true))
+    # The sidebar has the documentation, then the docstrings of loaded code, and indirect
+    # dependencies are inside the dependencies.
+    roles = [r.role for r in b.side_rows if DocBrowser.is_header(r)]
+    @test roles[1] === :docs && :code in roles
+    @test findfirst(==(:code), roles) > findfirst(==(:devdocs), roles)
 end
 
 @testset "edge cases" begin
@@ -768,9 +1043,10 @@ end
     handle!(b, MouseEvent(:press, 9, 5, 5, 0)); @test DocBrowser.current_key(b).name === :sum
     @test !handle!(b, MouseEvent(:press, 2, 5, 5, 0))
     # Double-clicking a package opens its names.
-    frame(b)
     b.focus = :side
     i = findfirst(r -> r.pkg !== nothing, b.side_rows)
+    b.side.scroll = i - 1 # so that the row is on the screen
+    frame(b)
     h = b.hits[findfirst(h -> h.action == (:side, i), b.hits)]
     handle!(b, MouseEvent(:press, 1, h.row, first(h.cols), 0))
     handle!(b, MouseEvent(:press, 1, h.row, first(h.cols), 0))
@@ -818,14 +1094,16 @@ end
     # How each kind of package describes its place in the environment.
     id = Base.PkgId(Base.UUID(UInt128(2)), "Fixture")
     roles = Dict(:project => "the active project", :direct => "direct dependency",
-                 :stdlib => "standard library", :indirect => "indirect dependency",
-                 :extension => "package extension")
+                 :indirect => "indirect dependency", :extension => "package extension")
     for (role, words) in roles
         cat.bymod[Fixture] = DocBrowser.PkgEntry(Fixture, id, v"1.2.3", role, ["Base", "Core"], "Base")
         text = join(first.(DocBrowser.role_line(cat, Fixture)))
         @test occursin(words, text)
-        role in (:indirect, :stdlib) && @test occursin("loaded by Base → Core", text)
+        role === :indirect && @test occursin("loaded by Base → Core", text)
     end
+    # A standard library says so, wherever it is.
+    cat.bymod[Fixture] = DocBrowser.PkgEntry(Fixture, Base.PkgId(Markdown), nothing, :indirect, String[], "Base")
+    @test occursin("indirect dependency · standard library", join(first.(DocBrowser.role_line(cat, Fixture))))
     @test occursin("submodule of", join(first.(DocBrowser.role_line(cat, Fixture.Inner))))
     delete!(cat.bymod, Fixture)
     # An extension shows neither the README nor the links of the package it extends.
