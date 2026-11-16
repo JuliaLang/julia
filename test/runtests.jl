@@ -75,7 +75,10 @@ else
     global running_under_rr() = false
 end
 
-const rmwait_timeout = running_under_rr() ? 300 : 30
+# Distributed gives a removed worker 15 s to exit before it signals it, and SIGKILLs it
+# after 36 s. Wait longer, so that a worker that is slow to exit gets killed instead of
+# failing the whole test run.
+const rmwait_timeout = running_under_rr() ? 300 : 60
 
 ENV["JULIA_TEST_BUILDROOT"] = buildroot
 if use_revise
