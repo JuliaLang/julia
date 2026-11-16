@@ -3288,10 +3288,10 @@ end
 end
 
 @testset "slurping into function def" begin
-    Meta.lower(@__MODULE__, :(begin
+    @test Meta.lower(@__MODULE__, :(begin
         x, f1()... = [1, 2, 3]
     end)).head === :error
-    Meta.lower(@__MODULE__, :(begin
+    @test Meta.lower(@__MODULE__, :(begin
         x, f2()... = 1, 2, 3
     end)).head === :error
 end

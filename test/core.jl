@@ -1088,7 +1088,10 @@ end
 @test a_global_closure_vector[2](10) == 12
 @test a_global_closure_vector[3](10) == 13
 
-# issue #22032
+# issue #22032 (JuliaLowering update: A non-simple assignment LHS containing a
+# call expression is no longer allowed to create a broken function def.
+# Previously this would evaluate the "function body" at function definition time
+# and create a constant-returning function that ignores all arguments.)
 @test_lowering_rejects let a = [], fs = []
     for f() in 1:3
         push!(a, f())
