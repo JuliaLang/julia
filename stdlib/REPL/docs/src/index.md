@@ -167,7 +167,8 @@ outside that syntax, such as shell functions or `$(...)` command substitution, a
 available. Three commands are handled by the REPL itself, since they change the state of the
 Julia process: `cd dir` changes Julia's working directory (`cd -` returns to the previous one),
 `export NAME=value` sets an environment variable that later commands inherit, and `unset NAME`
-removes one.
+removes one. These commands are available only in shell mode: a command literal run with
+[`run`](@ref), such as ``` `cd dir` ```, runs a program with that name like any other command.
 
 !!! compat "Julia 1.15"
     Before Julia 1.15, on systems other than Windows, a command without pipes or redirections
