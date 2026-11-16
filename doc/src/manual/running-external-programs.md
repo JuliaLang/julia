@@ -475,3 +475,16 @@ foo ever!
 julia> run(addenv(`sh -c "echo foo \$HOWLONG"`, "HOWLONG" => "ever!"));
 foo ever!
 ```
+
+As in a shell, words of the form `NAME=value` before a command add to its environment, so the
+last example can also be written as:
+
+```jldoctest
+julia> run(`HOWLONG=ever! sh -c "echo foo \$HOWLONG"`);
+foo ever!
+```
+
+`NAME` must be written unquoted and consist of letters, digits and underscores, not starting
+with a digit; the value can be quoted or interpolated like any other word, and can be empty.
+Only words before the command name are assignments, so in ``` `make CC=gcc` ``` the word
+`CC=gcc` is an argument, and ``` `'A=1' cmd` ``` runs a program named `A=1`.

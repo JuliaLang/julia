@@ -7,6 +7,11 @@ New language features
 Language changes
 ----------------
 
+* In a command literal, unquoted words of the form `NAME=value` before the command name now
+  set environment variables for the command, as in a shell: ``` `FOO=bar cmd` ``` means
+  ``` addenv(`cmd`, "FOO" => "bar") ```. Such words used to be the program name and its first
+  arguments; quoting them, as in ``` `'FOO=bar' cmd` ```, keeps that meaning.
+
 * `Slices` exposes `dataids` of its parent array to properly identify aliasing in broadcasting ([#49182]).
 
 Compiler/Runtime improvements

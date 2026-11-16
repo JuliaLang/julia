@@ -973,6 +973,48 @@ let sp(s) = eval(Base.shell_parse(s; special=Base.shell_special)[1])
     @test pp("cat >") == :((("cat",),))
 end
 
+@testset "environment assignments before a command" begin
+    e(c, pairs...) = addenv(c, pairs...)
+    @test `FOO=bar cmd x` == e(`cmd x`, "FOO" => "bar")
+    @test `A=1 _b2=2 A=3 cmd` == e(`cmd`, "A" => "1", "_b2" => "2", "A" => "3")  # the last wins
+    v = "x y"
+    @test `A='x y' cmd` == `A="x y" cmd` == `A=$v cmd` == `A="$v" cmd` == e(`cmd`, "A" => v)
+    @test `A=pre$(v)post cmd` == e(`cmd`, "A" => "prex ypost")
+    @test `A= cmd` == `A='' cmd` == e(`cmd`, "A" => "")
+    @test `A==b cmd` == e(`cmd`, "A" => "=b")
+    @test `A=*.txt cmd` == e(`cmd`, "A" => "*.txt")  # as in sh, a value is not a glob
+    @test `A=x[1]? cmd` == e(`cmd`, "A" => "x[1]?")
+    @test `A=~/x cmd` == e(`cmd`, "A" => `cmd ~/x`.exec[2])
+    # only an unquoted `NAME=` before the first argument is an assignment
+    @test `cmd A=1`.exec == ["cmd", "A=1"]
+    @test `make CC=gcc A=1`.exec == ["make", "CC=gcc", "A=1"]
+    for c in (`'A'=1 cmd`, `"A"=1 cmd`, `\A=1 cmd`, `A"=1" cmd`)
+        @test c.exec == ["A=1", "cmd"] && c.env === nothing
+    end
+    n = "A"
+    @test `$n=1 cmd`.exec == ["A=1", "cmd"]
+    @test `1A=1 cmd`.exec == ["1A=1", "cmd"]
+    @test `A-B=1 cmd`.exec == ["A-B=1", "cmd"]
+    @test `=1 cmd`.exec == ["=1", "cmd"]
+    # with redirections and pipelines
+    @test `A=1 cmd >out` == `>out A=1 cmd` == pipeline(e(`cmd`, "A" => "1"), stdout="out")
+    @test `A=2>out cmd` == pipeline(e(`cmd`, "A" => "2"), stdout="out")  # `2` is not an fd
+    @test `cmd > A=1` == pipeline(`cmd`, stdout="A=1")
+    @test `A=1 a | B=2 b` == pipeline(e(`a`, "A" => "1"), e(`b`, "B" => "2"))
+    @test `a | B=2 b | c` == pipeline(`a`, e(`b`, "B" => "2"), `c`)
+    sp(s) = eval(Base.shell_parse(s; special=Base.shell_special)[1])
+    @test_throws "environment assignment without a command" sp("A=1")
+    @test_throws "environment assignment without a command" sp("A=1 B=2")
+    @test_throws "environment assignment without a command" sp("A=1 | cat")
+    @test_throws "environment assignment without a command" sp("A=1 >out")
+    @test_throws "brace expansion in an environment assignment" sp("A={x,y} cmd")
+    # `shell_split` and a partial parse, for REPL completion, keep assignments as words
+    @test Base.shell_split("A=1 cmd") == ["A=1", "cmd"]
+    @test Base.shell_parse("A=1 cm"; partial=true)[1] == :((("A=1",), ("cm",)))
+    # the variable reaches the process
+    @test read(`JL_ENV_PREFIX_TEST=hello $(Base.julia_cmd()) --startup-file=no -e 'print(ENV["JL_ENV_PREFIX_TEST"])'`, String) == "hello"
+end
+
 let roundtrip(s) = first(Base.shell_split(Base.shell_escape(s))) == s
     @test roundtrip("foo'bar\\\$baz")
     @test roundtrip("foo'bar\\\"baz")
