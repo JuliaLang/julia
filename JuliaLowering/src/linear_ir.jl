@@ -1275,7 +1275,6 @@ struct Slot
     is_specialize::Bool
     is_read::Bool
     is_single_assign::Bool
-    is_maybe_undef::Bool
     is_called::Bool
 end
 
@@ -1313,7 +1312,7 @@ function compile_lambda(outer_ctx, ex)
             # Unused functions arguments like: `_` or `::T`
             push!(slots, Slot(UNUSED, :argument,
                               getmeta(arg, :nospecialize, false)::Bool,
-                              false, false, false, false, false))
+                              false, false, false, false))
         else
             @jl_assert head(arg) == :bindingid ex arg
             id = syntax_id(arg)
@@ -1322,7 +1321,7 @@ function compile_lambda(outer_ctx, ex)
             push!(slots, Slot(binfo.name, :argument, binfo.is_nospecialize,
                               binfo.is_specialize,
                               binfo.is_read, binfo.is_assigned_once,
-                              binfo.is_used_undef, binfo.is_called))
+                              binfo.is_called))
             slot_rewrites[id] = length(slots)
         end
     end
@@ -1333,7 +1332,7 @@ function compile_lambda(outer_ctx, ex)
             if binfo.kind == :local
                 push!(slots, Slot(binfo.name, :local, false, false,
                                   binfo.is_read, binfo.is_assigned_once,
-                                  binfo.is_used_undef, binfo.is_called))
+                                  binfo.is_called))
                 slot_rewrites[id] = length(slots)
             end
         end

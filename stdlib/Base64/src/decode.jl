@@ -118,7 +118,7 @@ function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb
     filled::Int = 0
     while filled < nb && !eof(pipe)
         if length(data) == filled
-            resize!(data, min(length(data) * 2, nb))
+            resize!(data, min(max(length(data) * 2, 1024), nb))
         end
         p = pointer(data, filled + 1)
         p_end = read_until_end(pipe, p, UInt(min(length(data), nb) - filled))

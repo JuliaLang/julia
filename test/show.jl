@@ -1425,6 +1425,7 @@ z856739 = [:a, :b]
                         LineNumberNode(0, :none), "a b c")) == ":(#= none:0 =# (Core).@cmd \"a b c\")"
 @test_repr "`a b c`"
 @test sprint(show, Meta.parse("`a b c`")) == ":(`a b c`)"
+@test_repr "`echo \\`x\\` \\\\\\``"
 # a"b" and a"b"c
 @test_repr "a\"b\""
 @test_repr "a\"b\"c"
@@ -3035,6 +3036,12 @@ Base.show(io::IO, ces::⛵) = Base.print(io, '⛵')
 @test Base.alignment(stdout, ⛵()) == (0, 2)
 @test Base.alignment(IOContext(IOBuffer(), :color=>true), ColoredLetter()) == (0, 1)
 @test Base.alignment(IOContext(IOBuffer(), :color=>false), ColoredLetter()) == (0, 1)
+
+@test Base.alignment(stdout, Inf) == (3, 0)
+@test Base.alignment(stdout, -Inf) == (4, 0)
+@test Base.alignment(stdout, Inf32) == (5, 0)
+@test Base.alignment(stdout, 1.5f0) == (1, 4)
+@test Base.alignment(stdout, 1.5f10) == (1, 5)
 
 # spacing around dots in Diagonal, etc:
 redminusthree = sprint((io, x) -> printstyled(io, x, color=:red), "-3", context=stdout)

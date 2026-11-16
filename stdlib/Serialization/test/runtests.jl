@@ -935,6 +935,8 @@ end
     b = take!(buf)
     b[2] = UInt8('X')
     @test_throws ErrorException("Unsupported serialization format (got header magic bytes 88 76)") deserialize(IOBuffer(b))
+    @test_throws "cannot serialize MethodCache objects" serialize(IOBuffer(), Core.methodtable.cache)
+    @test_throws "GenericMemory{:atomic} currently cannot be serialized" serialize(IOBuffer(), AtomicMemory{Int}(undef, 1))
 end
 
 @testset "old :method expressions" begin
@@ -982,4 +984,35 @@ end
 
     om = only(Base.MethodList(SerializeMethodFields.SerMT).ms)
     @test_throws ErrorException("cannot serialize Method objects with external method tables") serialize(IOBuffer(), om)
+end
+
+@testset "MethodInstance, MethodTable and PhiNode" begin
+    m = which(SerializeMethodFields.serrec, (Int,))
+    mi = Base.specialize_method(m, Tuple{typeof(SerializeMethodFields.serrec), Int}, Core.svec())
+    mi2 = serialize_roundtrip(mi)
+    @test mi2 isa Core.MethodInstance
+    @test mi2.specTypes == mi.specTypes
+    @test mi2.def.sig == m.sig
+    @test serialize_roundtrip(Core.methodtable) === Core.methodtable
+    phi = Core.PhiNode(Int32[1, 2], Any[3, 4])
+    phi2 = serialize_roundtrip(phi)
+    @test phi2.edges == phi.edges && phi2.values == phi.values
+end
+
+@testset "finished Tasks" begin
+    t = Task(() -> error("task failed"))
+    schedule(t)
+    @test_throws TaskFailedException wait(t)
+    t2 = serialize_roundtrip(t)
+    @test istaskfailed(t2)
+    @test t2.result.ex == ErrorException("task failed")
+end
+
+@testset "reset_state" begin
+    s = Serializer(IOBuffer())
+    serialize(s, [1, 2])
+    @test s.counter > 0
+    @test Serialization.reset_state(s) === s
+    @test s.counter == 0
+    @test isempty(s.backref_table)
 end

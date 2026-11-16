@@ -1787,7 +1787,10 @@ function _nth(::IteratorSize, itr, n::Integer)
     y[1]
 end
 
-_nth(::IteratorSize, z::Zip, n::Integer) = Base.map(nth(n), z.is)
+function _nth(::IteratorSize, z::Zip, n::Integer)
+    n > 0 || throw(BoundsError(z, n))
+    return Base.map(nth(n), z.is)
+end
 
 """
     nth(n::Integer)

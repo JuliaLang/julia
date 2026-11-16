@@ -1083,6 +1083,10 @@ end
             "ab cd\e[1;5D\e[1;5C|" => "ab cd|",
             "ab cd\eOd|" => "ab |cd",
             "ab cd\eOd\eOc|" => "ab cd|",
+            "ab\x01\eb|" => "|ab",
+            "ab\ef|" => "ab|",
+            # moving past the first or last line asks the history, and this prompt has none
+            "ab$up$down\x10\x0e|" => "ab|",
             # deleting and killing
             "ab cd\e\b" => "ab ",
             "ab cd\e\x7f" => "ab ",
@@ -1095,6 +1099,7 @@ end
             "ab cd\x02\x02\x0b\x01\x19" => "cdab ", # ^Y
             "ab cd\x17\x19\x19" => "ab cdcd",
             "ab\x17 cd\x17\x19\ey" => " ab", # alt-y cycles through the kill ring
+            "ab\x19" => "ab", # the kill ring is empty
             # the region: ^space twice activates it
             "abc\0\x02\x02\x7f" => "bc",
             "abc\0\0\x02\x02\x7f" => "a",
@@ -1110,6 +1115,7 @@ end
             "l1$(newline)l2\e[1;3A" => "l2\nl1",
             "l1$(newline)l2\e[1;3A\e[1;3B" => "l1\nl2",
             "l1$(newline)l2\e[1;3B" => "l1\nl2",
+            "l1$(newline)l2\e[A\e[1;3A" => "l1\nl2",
             "l1$(newline)l2$(newline)l3\0\0\x02\x02\x10\e[1;3A" => "l2\nl3\nl1", # the whole region moves
             "l1$(newline)l2$(newline)l3\e[A\0\0\x02\x02\x10\e[1;3B" => "l3\nl1\nl2",
             "ab\e[1;3C" => " ab",
@@ -1659,6 +1665,32 @@ end
         @test_throws ErrorException(expected_msg) REPL.LineEdit.add_nested_key!(keymap, 'a', "abdef")
         @test keymap == Dict('a' => "abc")
    end
+end
+
+@testset "key specifiers" begin
+    @test LineEdit.normalize_key("\\M-x") == "\ex"
+    @test LineEdit.normalize_key("\\C-a") == "\x01"
+    @test LineEdit.normalize_key("\\^") == "^"
+    @test_throws "must start with \"\\\\M-\"" LineEdit.normalize_key("\\Mx")
+    @test_throws "Could not find redirected value \"a\"" LineEdit.keymap([Dict{Any,Any}("a" => "zz")])
+    # a redirect to a key bound in a later keymap
+    km = LineEdit.keymap([Dict{Any,Any}("a" => "b"), Dict{Any,Any}("b" => (o...) -> :b)])
+    @test km['a']() === :b
+end
+
+@testset "edit_input" begin
+    s = new_state()
+    edit_insert(s, "l1\nl2\nl3")
+    seek(buffer(s), 4)
+    seen = Ref{Any}()
+    LineEdit.edit_input(s, (file, line, col) -> (seen[] = (read(file, String), line, col)))
+    @test seen[] == ("l1\nl2\nl3", 2, 2)
+    # unchanged input keeps the cursor where it was
+    @test content(s) == "l1\nl2\nl3"
+    @test position(buffer(s)) == 4
+    LineEdit.edit_input(s, (file, line, col) -> write(file, "new\n"))
+    @test content(s) == "new"
+    @test position(buffer(s)) == 3
 end
 
 # Test TerminalProperties and private CSI (`\e[?`) parsing

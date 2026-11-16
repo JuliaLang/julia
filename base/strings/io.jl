@@ -823,6 +823,41 @@ function String(chars::AbstractVector{<:AbstractChar})
     end
 end
 
+"""
+    String(iterable)::String
+
+Create a `String` from `iterable`. Each element is converted to `Char` via `convert(Char, c)::Char`
+and written to the resulting string.
+
+# Examples
+```jldoctest
+julia> String(Iterators.map(c -> c+1, "Hello, world"))
+"Ifmmp-!xpsme"
+
+julia> String(Iterators.take("Hello, world", 5))
+"Hello"
+
+julia> String(c for c in "Julia" if c != 'i')
+"Jula"
+```
+
+!!! compat "Julia 1.15"
+    Constructing a `String` from an arbitrary iterable requires Julia 1.15 or later.
+"""
+String(itr) = _string_from_itr(IteratorSize(itr), itr)
+
+_string_from_itr(::Union{HasLength, HasShape}, itr) = _string_from_itr(length(itr), itr)
+_string_from_itr(::SizeUnknown, itr) = _string_from_itr(0, itr)
+
+function _string_from_itr(sizehint::Integer, itr)
+    sprint(sizehint=sizehint) do io
+        for c in itr
+            write(io, convert(Char, c)::Char)
+        end
+    end
+end
+
+
 function AnnotatedString(chars::AbstractVector{C}) where {C<:AbstractChar}
     str = if C <: AnnotatedChar
         String(getfield.(chars, :char))

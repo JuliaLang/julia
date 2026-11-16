@@ -57,6 +57,21 @@ end
 end
 @test_throws MethodError (x -> (supertype(x); nothing))(Union{S,T} where {S,T})
 
+# `DataType.super` is left unset for an instantiation in a package image, and filled
+# on demand: a raw read that throws may succeed once the slot is filled, so neither
+# the throw nor the `isdefined` answer may be folded
+lazy_super_get(T) = getfield(T, :super)
+lazy_super_isdef(T) = isdefined(T, :super)
+let
+    @test !Compiler.is_consistent(Base.infer_effects(lazy_super_get, (DataType,)))
+    @test !Compiler.is_consistent(Base.infer_effects(lazy_super_isdef, (DataType,)))
+    # the other fields of a type are still foldable
+    @test Compiler.is_foldable(Base.infer_effects(T -> getfield(T, :name), (DataType,)))
+    # an object that may be a type but is not mutation free keeps the usual answer
+    @test Compiler.is_consistent_if_inaccessiblememonly(Compiler.builtin_effects(Compiler.fallback_lattice,
+        Core.isdefined, Any[Any, Symbol], Bool))
+end
+
 # Test that a missing methtable identification gets tainted
 # appropriately
 struct FCallback; f::Union{Nothing, Function}; end
@@ -546,6 +561,9 @@ end |> !Compiler.is_inaccessiblememonly
 @test Base.infer_effects((Int,)) do v
     constant_mutable_global[] = v
 end |> !Compiler.is_inaccessiblememonly
+@test Base.infer_effects() do
+    Core.current_scope()
+end |> !Compiler.is_inaccessiblememonly
 module ConsistentModule
 const global constant_global::Int = 42
 const global ConstantType = Ref
@@ -815,6 +833,25 @@ let tt = (MemoryRef{Any},Any,Symbol,Bool)
         @test Compiler.is_terminates(effects)
     end
 end
+
+# Byte accesses retain argument-memory effects and account for bounds checks.
+@testset "MemoryRef byte access effects" begin
+    geteffects = Base.infer_effects((MemoryRef{UInt8}, Int)) do ref, offset
+        Core.unsafe_memoryrefload(ref, UInt32, offset, true)
+    end
+    seteffects = Base.infer_effects((MemoryRef{UInt8}, UInt32, Int)) do ref, value, offset
+        Core.unsafe_memoryrefstore!(ref, value, offset, true)
+    end
+    for effects in (geteffects, seteffects)
+        @test Compiler.is_consistent_if_inaccessiblememonly(effects)
+        @test Compiler.is_inaccessiblemem_or_argmemonly(effects)
+        @test !Compiler.is_nothrow(effects)
+        @test Compiler.is_noub(effects)
+    end
+    @test Compiler.is_effect_free(geteffects)
+    @test Compiler.is_effect_free_if_inaccessiblememonly(seteffects)
+end
+
 # nothrow for arrayset
 @test Base.infer_effects((MemoryRef{Int},Int)) do a, v
     Core.memoryrefset!(a, v, :not_atomic, true)

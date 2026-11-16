@@ -23,9 +23,11 @@ Base.rem2pi
 Base.mod
 Base.Math.mod2pi
 Base.mod1
+Base.fld1
 Base.divrem
 Base.fldmod
 Base.cldmod1
+Base.fldmod1
 Base.:(//)
 Base.rationalize
 Base.numerator
@@ -44,6 +46,7 @@ Base.:(>)
 Base.:(>=)
 Base.cmp
 Base.isapprox
+Base.:≉
 ```
 
 ## Logical Operators

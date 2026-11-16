@@ -15,6 +15,7 @@
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
+#include <llvm/Analysis/MemorySSA.h>
 #include <llvm/Analysis/ScopedNoAliasAA.h>
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/Analysis/LazyCallGraph.h>
@@ -475,6 +476,13 @@ static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB
             // Fully unroll small constant-trip loops before IRCE splits them into
             // pre/main/post loops with unknown trip counts (#62798)
             FPM.addPass(createFunctionToLoopPassAdaptor(LoopFullUnrollPass()));
+            // Forward stores into the loads LICM just hoisted (the sizes of an array
+            // allocated before the loop), so IndVarSimplify sees the loop bound and a
+            // bounds check as the same value; GVN only runs after it. MemorySSA is built
+            // afresh: a load LICM hoisted keeps the clobber it was given inside the loop,
+            // which can stop at an unrelated store before the loop.
+            FPM.addPass(InvalidateAnalysisPass<MemorySSAAnalysis>());
+            FPM.addPass(EarlyCSEPass(/*UseMemorySSA=*/true));
         }
         {
             LoopPassManager LPM;

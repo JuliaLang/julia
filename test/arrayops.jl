@@ -90,6 +90,10 @@ using Dates
     @test ndims(a) == 5
     @test a[2,1,2,2,1] == b[14]
     @test a[2,2,2,2,2] == b[end]
+    @test Base.reshape!(a, (4, 2, 1, 2, 2)) === a
+    @test size(a) == (4, 2, 1, 2, 2)
+    @test a[2,2,1,2,2] == b[end-2]
+    @test_throws DimensionMismatch Base.reshape!(a, (4, 2, 1, 2, 1))
 
     @test_throws DimensionMismatch reshape(1:3, 4)
 
@@ -1408,6 +1412,7 @@ end
     @test @inferred(mapslices(hcat, [1 2; 3 4], dims=1)) == [1 2; 3 4] # previously an error, now allowed
     @test mapslices(identity, [1 2; 3 4], dims=(2,2)) == [1 2; 3 4] # previously an error
     @test_broken @inferred(mapslices(identity, [1 2; 3 4], dims=(2,2))) == [1 2; 3 4]
+    @test mapslices(x -> x[1] == 1 ? [7, 7] : 5, [1 2 3; 4 5 6], dims=1) == [7 5 5; 7 5 5]
 
     # type inference in mapslices
     a_ = @inferred (a -> mapslices(identity, reshape(a, size(a)..., 1, 1), dims=(3,4)))(a)
@@ -1992,6 +1997,16 @@ end
     A = [1]
     @test prepend!(A, [2, 3], [4], [5, 6]) === A
     @test A == [2, 3, 4, 5, 6, 1]
+    A = [1, 2, 3]
+    @test append!(A, A, A) == [1, 2, 3, 1, 2, 3, 1, 2, 3]
+    A = [1, 2, 3]
+    @test prepend!(A, A, A) == [1, 2, 3, 1, 2, 3, 1, 2, 3]
+    A = Int[]
+    @test append!(A, [1], A, OffsetArray(A, 0)) == [1]
+    A = Int[]
+    @test prepend!(A, OffsetArray(A, 0), A, [1]) == [1]
+    A = [1, 2]
+    @test append!(A, view(A, 2:-1:1), OffsetArray(A, 5)) == [1, 2, 2, 1, 1, 2]
 
     # offset array
     @test append!([1,2], OffsetArray([9,8], (-3,))) == [1,2,9,8]

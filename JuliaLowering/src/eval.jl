@@ -606,7 +606,6 @@ function to_code_info(ex::SyntaxTree)
         slotflags[i] =                   # Inference          | Codegen
             slot.is_read          << 3 | # SLOT_USED          | jl_vinfo_sa
             slot.is_single_assign << 4 | # SLOT_ASSIGNEDONCE  | -
-            slot.is_maybe_undef   << 5 | # SLOT_USEDUNDEF     | jl_vinfo_usedundef
             slot.is_called        << 6   # SLOT_CALLED        | -
     end
 
@@ -921,19 +920,12 @@ Like `include`, except reads code from the given string rather than from a file.
 """
 function include_string(mapexpr::Function, mod::Module, code::AbstractString,
                         filename::AbstractString)
-    version = if invokelatest(isdefined, mod, Symbol("#_internal_julia_parse"))
-        vp = invokelatest(getglobal, mod, Symbol("#_internal_julia_parse"))
-        vp isa Base.VersionedParse ? vp.edition : Base.LATEST_STABLE_EDITION
-    else
-        Base.LATEST_STABLE_EDITION
-    end
-    st = parseall(SyntaxTree, code; filename, version=VersionNumber(version),
-                  ignore_warnings=true)
+    st = Meta.parseall(code; filename, mod, type=Syntax)
     @jl_assert head(st) === :toplevel st
     if mapexpr !== identity
         # TODO: Is there any way to support provenance here?
         local last = nothing
-        sc = SyntaxContext(mod, version)
+        sc = SyntaxContext(mod, Core.get_edition(mod))
         for c in children(st)
             last = eval(mod, expr_to_est(
                 mapexpr(est_to_expr(c)), first_linenode(c), sc))

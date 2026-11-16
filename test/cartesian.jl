@@ -398,6 +398,18 @@ end
     @test_throws MethodError convert(Int, CartesianIndex(42, 1))
 end
 
+@testset "promotion of CartesianIndices and LinearIndices with mixed axis types" begin
+    for T in (CartesianIndices, LinearIndices)
+        a = T((1:2, Base.OneTo(2)))
+        b = T((1:2, 1:2))
+        @test @inferred(promote_type(typeof(a), typeof(b))) === T{2, NTuple{2, UnitRange{Int}}}
+        @test promote(a, b) == (b, b)
+        v = [a, b]
+        @test v isa Vector{T{2, NTuple{2, UnitRange{Int}}}}
+        @test v == [b, b]
+    end
+end
+
 @testset "CartesianIndices overflow" begin
     @testset "incremental steps" begin
         # n.b. typemax is an odd number

@@ -32,8 +32,8 @@ top:
 
 ; CHECK: may_trigger_wb:
 ; CHECK: load atomic volatile i64, ptr {{.*}} unordered, align 8, {{.*}}!tbaa
-; CHECK: and i64 {{.*}}, 1
-; CHECK: icmp eq i64 {{.*}}, 0
+; CHECK: and i64 {{.*}}, 9
+; CHECK: icmp ule i64
 ; CHECK: br i1 {{.*}}, label %trigger_wb, label
 
 ; CHECK: trigger_wb:

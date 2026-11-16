@@ -363,7 +363,9 @@ struct dispatcher_sigdefer_guard {
   }
 };
 
-void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) { // NOLINT(julia-first-decl-annotations)
+// not analyzed, since it cannot represent moving the gc-safe region into the lock (the moved-from
+// region's destructor looks like a second gc_safe_leave)
+void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) JL_NO_SAFEPOINT_ANALYSIS { // NOLINT(julia-first-decl-annotations)
   if (!InCooperativeContext) {
     // Not inside work_until/process_tasks — run inline to prevent deadlock
     // with callers that block on std::future (e.g. LocalTrampolinePool::reenter).
@@ -374,8 +376,11 @@ void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) { // NOLINT(julia-fi
     InCooperativeContext = true;
     {
       dispatcher_sigdefer_guard defer;
-      T->run();
-      jl_unique_gcsafe_lock Lock{DispatchMutex};
+      // GC-safe, as in process_tasks: LLVM can take seconds on a large module, and every
+      // other thread would wait for it to collect garbage
+      jl_gcsafe_region GCSafe;
+      T->run(); // n.b. JL_CANCALLBACK
+      jl_unique_gcsafe_lock Lock{DispatchMutex, std::move(GCSafe)};
       process_tasks(Lock);
     }
     InCooperativeContext = false;

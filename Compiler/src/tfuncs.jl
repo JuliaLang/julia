@@ -624,17 +624,14 @@ add_tfunc(Core.bitsizeof, 1, 1, bitsizeof_tfunc, 1)
     x = unwrap_unionall(xt)
     isconstType(x) && return Const(nfields(type_parameter(x)))
     if isa(x, DataType) && !isabstracttype(x)
-        if x.name === Tuple.name
-            isvatuple(x) && return Int
-            return Const(length(x.types))
-        elseif x.name === _NAMEDTUPLE_NAME
+        if x.name === _NAMEDTUPLE_NAME
             length(x.parameters) == 2 || return Int
             names = x.parameters[1]
             isa(names, Tuple{Vararg{Symbol}}) || return nfields_tfunc(𝕃, rewrap_unionall(x.parameters[2], xt))
             return Const(length(names))
-        else
-            return Const(isdefined(x, :types) ? length(x.types) : length(x.name.names))
         end
+        n = datatype_fieldcount(x)
+        return n === nothing ? Int : Const(n)
     end
     if isa(x, Union)
         na = nfields_tfunc(𝕃, unwraptv(x.a))
@@ -707,9 +704,12 @@ add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
         if lb_valid && ub_valid
             tv = TypeVar(nval, lb, ub)
             return PartialTypeVar(tv, lb_certain, ub_certain)
-        elseif !lb_valid && lb_certain
+        end
+        # A TypeApp bound (deferred in a typegroup definition) is accepted, but
+        # not modeled further, as it cannot take part in subtyping
+        if !lb_valid && !isa(lb, Core.TypeApp) && lb_certain
             return Union{}
-        elseif !ub_valid && ub_certain
+        elseif !ub_valid && !isa(ub, Core.TypeApp) && ub_certain
             return Union{}
         end
     end
@@ -719,6 +719,7 @@ end
     ⊑ = partialorder(𝕃)
     b = widenconst(b)
     (b ⊑ TypeVar) && return true
+    (b ⊑ Core.TypeApp) && return true
     if isType(b) || b === typeof(Union{})
         return true
     end
@@ -2420,6 +2421,26 @@ add_tfunc(Core.memoryrefmodify!, 5, 5, memoryrefmodify!_tfunc, 20)
 add_tfunc(Core.memoryrefreplace!, 6, 6, memoryrefreplace!_tfunc, 20)
 add_tfunc(Core.memoryrefsetonce!, 5, 5, memoryrefsetonce!_tfunc, 20)
 
+@nospecs function unsafe_memoryrefload_tfunc(𝕃::AbstractLattice, mem, typ, offset, boundscheck)
+    hasintersect(widenconst(mem), MemoryRef) || return Bottom
+    hasintersect(widenconst(offset), Int) || return Bottom
+    hasintersect(widenconst(boundscheck), Bool) || return Bottom
+    T, exact = instanceof_tfunc(typ, true)
+    egal = typ isa Const || isTypeEgal(widenconst(typ))
+    exact && (egal || isconcretetype(T)) && !isbitstype(T) && return Bottom
+    return T
+end
+@nospecs function unsafe_memoryrefstore!_tfunc(𝕃::AbstractLattice, mem, item, offset, boundscheck)
+    hasintersect(widenconst(mem), MemoryRef) || return Bottom
+    hasintersect(widenconst(offset), Int) || return Bottom
+    hasintersect(widenconst(boundscheck), Bool) || return Bottom
+    T = widenconst(item)
+    isconcretetype(T) && !isbitstype(T) && return Bottom
+    return item
+end
+add_tfunc(unsafe_memoryrefload, 4, 4, unsafe_memoryrefload_tfunc, 20)
+add_tfunc(unsafe_memoryrefstore!, 4, 4, unsafe_memoryrefstore!_tfunc, 20)
+
 @nospecs function memoryref_isassigned_tfunc(𝕃::AbstractLattice, mem, order, boundscheck)
     return _memoryref_isassigned_tfunc(𝕃, mem, order, boundscheck)
 end
@@ -2453,7 +2474,8 @@ end
     memoryref_builtin_common_errorcheck(ref, Const(:not_atomic), boundscheck) || return Bottom
     hasintersect(widenconst(idx), Int) || return Bottom
     hasintersect(widenconst(ref), GenericMemory) && return memoryref_tfunc(𝕃, ref)
-    return ref
+    # a reference at another index, so not the constant `ref` itself
+    return widenconst(ref)
 end
 add_tfunc(memoryrefnew, 1, 3, memoryref_tfunc, 1)
 
@@ -2599,6 +2621,26 @@ function memoryrefop_builtin_common_nothrow(𝕃::AbstractLattice, argtypes::Vec
     return false
 end
 
+function unsafe_memoryref_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, isget::Bool)
+    length(argtypes) == 4 || return false
+    boundscheck = argtypes[4]
+    boundscheck isa Const && boundscheck.val === false || return false
+    memtype = widenconst(argtypes[1])
+    isconcretetype(memtype) && memtype <: MemoryRef || return false
+    S = memtype.parameters[2]
+    isbitstype(S) && sizeof(S) > 0 || return false
+    widenconst(argtypes[3]) <: Int || return false
+    if isget
+        typ = argtypes[2]
+        typ isa Const || isconstType(typ) || return false
+        T, exact, _, istype = instanceof_tfunc(typ, true)
+        exact && istype || return false
+    else
+        T = widenconst(argtypes[2])
+    end
+    return isbitstype(T)
+end
+
 @nospecs function memoryref_builtin_common_typecheck(𝕃::AbstractLattice, boundscheck, memtype, order)
     ⊑ = partialorder(𝕃)
     return boundscheck ⊑ Bool && memtype ⊑ GenericMemoryRef && order ⊑ Symbol
@@ -2635,6 +2677,8 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
         length(argtypes) == 1 || return false
         memtype = widenconst(argtypes[1])
         return memtype ⊑ GenericMemoryRef
+    elseif f === unsafe_memoryrefload || f === unsafe_memoryrefstore!
+        return unsafe_memoryref_nothrow(𝕃, argtypes, f === unsafe_memoryrefload)
     elseif f === memoryrefset!
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryrefunset!
@@ -2758,6 +2802,7 @@ const _EFFECT_FREE_BUILTINS = [
     memoryrefoffset,
     memoryrefget,
     const_memoryrefget,
+    unsafe_memoryrefload,
     memoryref_isassigned,
     isdefined,
     Core.bitsizeof,
@@ -2808,6 +2853,8 @@ const _ARGMEM_BUILTINS = Any[
     const_memoryrefget,
     memoryref_isassigned,
     memoryrefset!,
+    unsafe_memoryrefload,
+    unsafe_memoryrefstore!,
     memoryrefunset!,
     modifyfield!,
     replacefield!,
@@ -2876,6 +2923,16 @@ const _FLOAT_INTRINSICS = Any[
 # Types compatible with fpext/fptrunc
 const CORE_FLOAT_TYPES = Union{Core.BFloat16, Float16, Float32, Float64}
 
+# `DataType.super` and `DataType.types` are write-once slots filled lazily: a slot
+# that is unset now can be filled later, so `isdefined` or an `UndefRefError` for
+# it is not `:consistent` even though `DataType` is otherwise mutation free
+function is_lazy_datatype_field_argtype(@nospecialize(obj), @nospecialize(name))
+    hasintersect(widenconst(ignorelimited(obj)), DataType) || return false
+    name isa Const || return true
+    fidx = _getfield_fieldindex(DataType, name)
+    return fidx == DATATYPE_SUPER_FIELDINDEX || fidx == DATATYPE_TYPES_FIELDINDEX
+end
+
 function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     # consistent if the first arg is immutable
     na = length(argtypes)
@@ -2890,6 +2947,10 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
         # Some bindings/fields are not allowed to transition from defined to undefined or the reverse, so even
         # if the object is not immutable, we can prove `:consistent`-cy of this:
         consistent = ALWAYS_TRUE
+    elseif is_mutation_free_argtype(wobj) && is_lazy_datatype_field_argtype(wobj, sym)
+        # mutation free makes it `:consistent` below (`inaccessiblememonly`), but a
+        # lazily filled slot is not
+        consistent = ALWAYS_FALSE
     end
     nothrow = isdefined_nothrow(𝕃, argtypes)
     if hasintersect(widenconst(wobj), Module)
@@ -2942,6 +3003,8 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             inaccessiblememonly=ALWAYS_FALSE,
             noub=ALWAYS_FALSE)
     end
+    bcheck = getfield_boundscheck(argtypes)
+    nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
     if is_relocatable_ptr_field(argtypes[1], argtypes[2])
         if !ismutabletype(widenconst(obj)) || is_mutation_free_argtype(obj)
             # access to immutable / mutation-free types is not modelled by `inaccessiblememonly`
@@ -2950,15 +3013,17 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
         else
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
         end
-    elseif is_immutable_argtype(obj) || is_mutation_free_argtype(obj) || is_const_field_argtype(obj, argtypes[2])
+    elseif is_immutable_argtype(obj) || is_const_field_argtype(obj, argtypes[2])
         # :consistent if the argtype is immutable or the field is const
         consistent = ALWAYS_TRUE
+    elseif is_mutation_free_argtype(obj)
+        # or if the object is mutation free, unless a lazily filled slot may throw now and succeed later
+        consistent = nothrow || !is_lazy_datatype_field_argtype(obj, argtypes[2]) ?
+            ALWAYS_TRUE : ALWAYS_FALSE
     else
         consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
     end
     noub = ALWAYS_TRUE
-    bcheck = getfield_boundscheck(argtypes)
-    nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
     if !nothrow
         if bcheck !== :on
             # If we cannot independently prove inboundsness, taint `:noub`.
@@ -3020,6 +3085,8 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     memoryref_isassigned,
     memoryrefget,
     const_memoryrefget,
+    unsafe_memoryrefload,
+    unsafe_memoryrefstore!,
     # Core.memoryrefmodify!,
     memoryrefnew,
     memoryrefoffset,
@@ -3141,20 +3208,22 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return Effects(EFFECTS_TOTAL;
             consistent = ALWAYS_FALSE,
             notaskstate = false,
+            # the scope of the task can refer to any mutable object
+            inaccessiblememonly = ALWAYS_FALSE,
             nothrow)
     elseif f === Core._task
         return TASK_BUILTIN_EFFECTS
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
-        elseif f === memoryrefget || f === const_memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
+        elseif f === memoryrefget || f === const_memoryrefget || f === unsafe_memoryrefload || f === unsafe_memoryrefstore! || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
         elseif f === Core._typevar || f === Core.memorynew
             consistent = CONSISTENT_IF_NOTRETURNED
         else
             consistent = ALWAYS_FALSE
         end
-        if f === setfield! || f === memoryrefset! || f === memoryrefunset!
+        if f === setfield! || f === memoryrefset! || f === unsafe_memoryrefstore! || f === memoryrefunset!
             effect_free = EFFECT_FREE_IF_INACCESSIBLEMEMONLY
         elseif contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
             effect_free = ALWAYS_TRUE
@@ -3169,7 +3238,14 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         else
             inaccessiblememonly = ALWAYS_FALSE
         end
-        if f === memoryrefnew || f === memoryrefget || f === const_memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
+        if f === unsafe_memoryrefload || f === unsafe_memoryrefstore!
+            noub = ALWAYS_FALSE
+            if length(argtypes) == 4 && memoryop_noub(f, argtypes)
+                T = f === unsafe_memoryrefload ? instanceof_tfunc(argtypes[2], true)[1] :
+                    instanceof_tfunc(_memoryref_elemtype(argtypes[1]), true)[1]
+                isprimitivetype(T) && T !== Bool && (noub = ALWAYS_TRUE)
+            end
+        elseif f === memoryrefnew || f === memoryrefget || f === const_memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
             noub = memoryop_noub(f, argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
         else
             noub = ALWAYS_TRUE
@@ -3193,7 +3269,7 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
     elseif f === memoryrefget || f === const_memoryrefget || f === memoryref_isassigned || f === memoryrefunset!
         expected_nargs = 3
     else
-        @assert f === memoryrefset! "unexpected memoryop is given"
+        @assert f === memoryrefset! || f === unsafe_memoryrefload || f === unsafe_memoryrefstore! "unexpected memoryop is given"
         expected_nargs = 4
     end
     if nargs == expected_nargs && !isva

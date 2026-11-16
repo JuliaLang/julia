@@ -64,6 +64,33 @@ The memory ordering specified must be compatible with the `isatomic` parameter.
 Core.memoryrefget
 
 """
+    Core.unsafe_memoryrefload(ref::MemoryRef{S}, ::Type{T}, offset::Int, boundscheck::Bool)
+
+Load a value of type `T` from the address of `ref` plus `offset` bytes.
+
+`S` and `T` must be isbits types, with `sizeof(S) > 0`. The caller must ensure
+that the `sizeof(T)` bytes being read lie within the referenced `Memory` and
+represent a valid value of `T`. If `boundscheck` is true, an access outside the
+referenced `Memory` throws a `BoundsError`. The `Memory` is protected from garbage
+collection during the load (like a [`GC.@preserve`](@ref) would).
+"""
+Core.unsafe_memoryrefload
+
+"""
+    Core.unsafe_memoryrefstore!(ref::MemoryRef{S}, value::T, offset::Int, boundscheck::Bool)
+
+Store `value` at the address of `ref` plus `offset` bytes, returning `value`.
+
+`S` and `T` must be isbits types, with `sizeof(S) > 0`. The caller must ensure
+that the `sizeof(T)` bytes being written lie within the referenced `Memory`
+and that the affected elements remain valid values of `S`. Padding bytes may
+be overwritten. If `boundscheck` is true, an access outside the referenced
+`Memory` throws a `BoundsError`. The `Memory` is protected from garbage
+collection during the store (like a [`GC.@preserve`](@ref) would).
+"""
+Core.unsafe_memoryrefstore!
+
+"""
     Core.const_memoryrefget(::GenericMemoryRef, ordering::Symbol, boundscheck::Bool)
 
 Same as [`Core.memoryrefget`](@ref), but additionally promises that the memory being read is

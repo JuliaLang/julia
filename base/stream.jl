@@ -1043,7 +1043,7 @@ Construct an uninitialized Pipe object, especially for IO communication between 
 The appropriate end of the pipe will be automatically initialized if the object is used in
 process spawning. This can be useful to easily obtain references in process pipelines, e.g.:
 
-```
+```julia-repl
 julia> err = Pipe()
 
 # After this `err` will be initialized and you may read `foo`'s

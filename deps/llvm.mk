@@ -82,10 +82,16 @@ LLVM_EXPERIMENTAL_TARGETS :=
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
 LLVM_CPPFLAGS :=
+LLVM_LDFLAGS :=
 # Find our zlib/zstd when linking against libLLVM with a sysroot toolchain: `-L` for
 # lld, `-rpath-link` for GNU ld (which does not search `-L` paths for the dependencies
-# of shared libraries). The latter is ELF-only, as in Make.inc's RPATH.
-LLVM_LDFLAGS := "-L$(build_shlibdir)"
+# of shared libraries). The latter is ELF-only, as in Make.inc's RPATH. ld64 needs
+# neither, as it does not resolve a dylib's own dependencies at link time. It must
+# not get the `-L` either: it looks there first for the libraries that libSystem
+# re-exports, and would bind libLLVM's `__register_frame` to our libunwind.
+ifneq ($(OS),Darwin)
+LLVM_LDFLAGS += "-L$(build_shlibdir)"
+endif
 ifeq (,$(filter $(OS),WINNT emscripten Darwin))
 LLVM_LDFLAGS += "-Wl,-rpath-link,$(build_shlibdir)"
 endif

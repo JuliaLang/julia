@@ -1,6 +1,8 @@
 # -*- makefile -*-
 ## jll artifact
 ZLIB_JLL_NAME := Zlib
+# Built with BinaryBuilder2, whose macOS and FreeBSD tarballs are named with the OS version they target
+ZLIB_JLL_OS_VERSIONS := darwin=20 freebsd=14.1
 
 ## source build
 ZLIB_VER := 1.4.0

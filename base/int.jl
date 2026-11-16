@@ -737,7 +737,7 @@ Parse `str` as an [`UInt128`](@ref).
 Throw an `ArgumentError` if the string is not a valid integer.
 
 # Examples
-```
+```julia-repl
 julia> uint128"123456789123"
 0x00000000000000000000001cbe991a83
 

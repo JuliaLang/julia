@@ -1244,6 +1244,10 @@ end
     empty_cycle = Iterators.cycle([])
     @test_throws BoundsError nth(empty_cycle, 42)
 
+    @test nth(zip(), 5) === ()
+    @test_throws BoundsError nth(zip(), 0)
+    @test_throws BoundsError nth(zip(), -3)
+
     # test the size unknown branch for cycles
     # only generate odd numbers so we know the actual length
     # but the iterator is still SizeUnknown()

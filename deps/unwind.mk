@@ -114,10 +114,14 @@ $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/libunwind/llvm-libunwind-freebsd-libg
 	cd $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/libunwind && patch -p2 -f < $(SRCDIR)/patches/llvm-libunwind-freebsd-libgcc-api-compat.patch
 	echo 1 > $@
 
+$(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/libunwind/llvm-libunwind-arm64-pauth-lr.patch-applied: $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/libunwind/llvm-libunwind-freebsd-libgcc-api-compat.patch-applied
+	cd $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/libunwind && patch -p2 -f < $(SRCDIR)/patches/llvm-libunwind-arm64-pauth-lr.patch
+	echo 1 > $@
+
 checksum-llvmunwind: $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER).tar.xz
 	$(JLCHECKSUM) $<
 
-$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/source-extracted $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/libunwind/llvm-libunwind-freebsd-libgcc-api-compat.patch-applied
+$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/source-extracted $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/libunwind/llvm-libunwind-arm64-pauth-lr.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) -S $(dir $<)/runtimes $(LLVMUNWIND_OPTS)
@@ -161,5 +165,12 @@ else # USE_BINARYBUILDER_LIBUNWIND
 $(eval $(call bb-install,unwind,UNWIND,false))
 
 $(eval $(call bb-install,llvmunwind,LLVMUNWIND,false))
+
+# Xcode's linker looks up the libunwind that libSystem re-exports on the -L
+# paths, so a libLLVM linked once this is installed binds unwinder symbols
+# like `__register_frame` to LLVM's libunwind instead of the system one.
+ifeq ($(USE_SYSTEM_LLVM)$(USE_BINARYBUILDER_LLVM),00)
+$(build_prefix)/manifest/llvmunwind: | $(build_prefix)/manifest/llvm
+endif
 
 endif

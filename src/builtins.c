@@ -440,7 +440,7 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
             pe = pe->prev;
         }
         uintptr_t bits = jl_astaggedvalue(v)->header;
-        if (bits & GC_IN_IMAGE)
+        if (bits & GC_PERM)
             return ((uintptr_t*)v)[-2];
         return inthash((uintptr_t)v);
     }
@@ -565,7 +565,7 @@ static uintptr_t NOINLINE jl_object_id__cold(uintptr_t tv, jl_value_t *v) JL_NOT
             return m->hash;
         }
         uintptr_t bits = jl_astaggedvalue(v)->header;
-        if (bits & GC_IN_IMAGE)
+        if (bits & GC_PERM)
             return ((uintptr_t*)v)[-2];
         return inthash((uintptr_t)v);
     }
@@ -2207,11 +2207,14 @@ JL_CALLABLE(jl_f__expr)
 }
 
 // Typevar constructor for internal use
+// A bound may also be a TypeApp (a type application deferred while a typegroup
+// is defined, see jl_resolve_typegroup), which resolve_type_refs rebuilds into
+// a TypeVar with real bounds once the group types exist.
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
 {
-    if (lb != jl_bottom_type && !jl_is_type(lb) && !jl_is_typevar(lb))
+    if (lb != jl_bottom_type && !jl_is_type(lb) && !jl_is_typevar(lb) && !jl_is_typeapp(lb))
         jl_type_error_rt("TypeVar", "lower bound", (jl_value_t *)jl_type_type, lb);
-    if (ub != (jl_value_t *)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub))
+    if (ub != (jl_value_t *)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub) && !jl_is_typeapp(ub))
         jl_type_error_rt("TypeVar", "upper bound", (jl_value_t *)jl_type_type, ub);
     jl_task_t *ct = jl_current_task;
     jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ct->ptls, sizeof(jl_tvar_t), jl_tvar_type);
@@ -2344,6 +2347,60 @@ JL_CALLABLE(jl_f_memoryrefget)
 JL_CALLABLE(jl_f_const_memoryrefget)
 {
     return jl_f_memoryrefget(F, args, nargs);
+}
+
+static char *unsafe_memoryref_ptr(jl_genericmemoryref_t *ref, intptr_t offset,
+                                 size_t size, int boundscheck) JL_CANSAFEPOINT
+{
+    jl_datatype_t *mty = (jl_datatype_t*)jl_typetagof(ref->mem);
+    jl_value_t *addrspace = jl_tparam2(mty);
+    if (jl_tparam0(mty) != (jl_value_t*)jl_not_atomic_sym ||
+        !jl_is_addrspacecore(addrspace) || jl_unbox_uint8(addrspace) != 0 ||
+        !jl_isbits(jl_tparam1(mty)) || mty->layout->size == 0)
+        jl_error("memoryref byte access requires non-atomic CPU memory with nonzero-size isbits elements");
+    if (boundscheck) {
+        size_t len = mty->layout->size * ref->mem->length;
+        size_t pos = (uintptr_t)ref->ptr_or_offset - (uintptr_t)ref->mem->ptr;
+        size_t start = pos + (size_t)offset;
+        if (pos > len || size > len || start > len - size)
+            jl_bounds_error_int((jl_value_t*)ref, offset);
+    }
+    return (char*)ref->ptr_or_offset + offset;
+}
+
+JL_CALLABLE(jl_f_unsafe_memoryrefload)
+{
+    JL_NARGS(unsafe_memoryrefload, 4, 4);
+    JL_TYPECHK(unsafe_memoryrefload, genericmemoryref, args[0]);
+    JL_TYPECHK(unsafe_memoryrefload, long, args[2]);
+    JL_TYPECHK(unsafe_memoryrefload, bool, args[3]);
+    jl_genericmemoryref_t *ref = (jl_genericmemoryref_t*)args[0];
+    if (!jl_isbits(args[1]))
+        jl_error("unsafe_memoryrefload: target type must be an isbits type");
+    size_t size = jl_datatype_size((jl_datatype_t*)args[1]);
+    char *ptr = unsafe_memoryref_ptr(ref, jl_unbox_long(args[2]), size, args[3] == jl_true);
+    if (size <= 16) {
+        JL_ALIGNED_ATTR(16) char data[16];
+        memcpy(data, ptr, size);
+        return jl_new_bits(args[1], data);
+    }
+    return jl_new_bits(args[1], ptr);
+}
+
+JL_CALLABLE(jl_f_unsafe_memoryrefstore)
+{
+    JL_NARGS(unsafe_memoryrefstore!, 4, 4);
+    JL_TYPECHK(unsafe_memoryrefstore!, genericmemoryref, args[0]);
+    JL_TYPECHK(unsafe_memoryrefstore!, long, args[2]);
+    JL_TYPECHK(unsafe_memoryrefstore!, bool, args[3]);
+    jl_genericmemoryref_t *ref = (jl_genericmemoryref_t*)args[0];
+    jl_value_t *typ = jl_typeof(args[1]);
+    if (!jl_isbits(typ))
+        jl_error("unsafe_memoryrefstore!: value must have an isbits type");
+    size_t size = jl_datatype_size(typ);
+    char *ptr = unsafe_memoryref_ptr(ref, jl_unbox_long(args[2]), size, args[3] == jl_true);
+    memcpy(ptr, jl_data_ptr(args[1]), size);
+    return args[1];
 }
 
 JL_CALLABLE(jl_f_memoryrefset)
@@ -2603,12 +2660,12 @@ static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super) JL_CANSA
     // which calls jl_subtype and would crash walking the supertype chain of a
     // type with super == NULL.
     const char *type_name = jl_symbol_name(tt->name->name);
-    if (tt->super != NULL)
+    if (jl_atomic_load_relaxed(&tt->super) != NULL)
         jl_errorf("invalid subtyping in definition of %s: type already has a supertype.", type_name);
     if (jl_is_datatype(super) && tt->name == ((jl_datatype_t*)super)->name)
         jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
     jl_check_valid_supertype(super, type_name);
-    jl_gc_write(tt, tt->super, jl_datatype_t, (jl_datatype_t*)super);
+    jl_gc_write_atomic(tt, tt->super, jl_datatype_t, (jl_datatype_t*)super, relaxed);
 }
 
 JL_CALLABLE(jl_f__setsuper)
@@ -2794,11 +2851,10 @@ JL_CALLABLE(jl_f__typebody)
         if (dt->types != NULL)
             jl_errorf("Internal Error: Expected type fields to be unset");
         jl_gc_write(dt, dt->types, jl_svec_t, (jl_svec_t*)ft);
-        // If a supertype can reference the same type, then we may not be
-        // able to compute the layout of the object before needing to
-        // publish it, so we must assume it cannot be inlined, if that
-        // check passes, then we also still need to check the fields too.
-        if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 0, 1))) {
+        // a field that reaches the same type cannot be inlined; outside a
+        // typegroup, neither can a supertype that does: the types built from
+        // it while it was evaluated already have their layouts
+        if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)jl_atomic_load_relaxed(&dt->super), dt->name, 0, 1))) {
             int mayinlinealloc = 1;
             size_t i;
             for (i = 0; i < nf; i++) {
@@ -2813,7 +2869,7 @@ JL_CALLABLE(jl_f__typebody)
     }
     {
         JL_TRY {
-            jl_reinstantiate_inner_types(dt, NULL);
+            jl_reinstantiate_inner_types(dt);
         }
         JL_CATCH {
             jl_gc_write(dt->name, dt->name->partial, jl_array_t, NULL);
@@ -2822,6 +2878,7 @@ JL_CALLABLE(jl_f__typebody)
     }
     if (jl_is_structtype(dt))
         jl_compute_field_offsets(dt);
+    jl_finish_inner_types(dt);
     return args[0];
 }
 
@@ -2853,8 +2910,8 @@ int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT
     jl_value_t *a=NULL, *b=NULL;
     int ok = 1;
     JL_GC_PUSH2(&a, &b);
-    a = jl_rewrap_unionall((jl_value_t*)dta->super, dta->name->wrapper);
-    b = jl_rewrap_unionall((jl_value_t*)dtb->super, dtb->name->wrapper);
+    a = jl_rewrap_unionall((jl_value_t*)jl_atomic_load_relaxed(&dta->super), dta->name->wrapper);
+    b = jl_rewrap_unionall((jl_value_t*)jl_atomic_load_relaxed(&dtb->super), dtb->name->wrapper);
     // if tb recursively refers to itself in its supertype, assume that it refers to ta
     // before checking whether the supertypes are equal
     b = jl_substitute_datatype(b, dtb, dta);
@@ -3003,7 +3060,8 @@ void jl_init_intrinsic_properties(void)
 
 void jl_init_intrinsic_functions(void)
 {
-    jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module, 0, 1);
+    jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module,
+                                      jl_get_module_edition(jl_core_module), 0, 1);
     jl_set_initial_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm, 0);
     jl_mk_builtin_func(jl_intrinsic_type, jl_symbol("IntrinsicFunction"), jl_f_intrinsic_call);
 

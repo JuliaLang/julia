@@ -14,7 +14,10 @@ end
 
 KeyTypeError(K, key) = TypeError(:var"dict key", K, key)
 
-const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
+# A singleton (rather than e.g. a `Symbol`) so that inference can narrow
+# `v` after `v !== secret_table_token`.
+struct SecretTableToken end
+const secret_table_token = SecretTableToken()
 
 haskey(d::AbstractDict, k) = in(k, keys(d))
 

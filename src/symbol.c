@@ -40,7 +40,7 @@ static jl_sym_t *mk_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
     // but its type is set below with jl_set_typetagof since
     // jl_symbol_type might not have been initialized
     jl_sym_t *sym = (jl_sym_t*)jl_gc_permobj(ct->ptls, nb, NULL, sizeof(void*));
-    jl_set_typetagof(sym, jl_symbol_tag, GC_OLD_MARKED);
+    jl_set_typetagof(sym, jl_symbol_tag, GC_PERM_BITS);
     jl_atomic_store_relaxed(&sym->left, NULL);
     jl_atomic_store_relaxed(&sym->right, NULL);
     sym->hash = hash_symbol(str, len);
@@ -54,15 +54,23 @@ static jl_sym_t *symtab_lookup(_Atomic(jl_sym_t*) *ptree, const char *str, size_
     jl_sym_t *node = jl_atomic_load_relaxed(ptree); // consume
     uintptr_t h = hash_symbol(str, len);
 
-    // Tree nodes sorted by major key of (int(hash)) and minor key of (str).
+    // Tree nodes are sorted by major key of (unsigned hash) and minor key of
+    // (name, in strcmp order), which is a strict total order on symbols.
     while (node != NULL) {
-        intptr_t x = (intptr_t)(h - node->hash);
-        if (x == 0) {
-            x = strncmp(str, jl_symbol_name(node), len);
-            if (x == 0 && jl_symbol_name(node)[len] == 0) {
-                if (slot != NULL)
-                    *slot = ptree;
-                return node;
+        int x;
+        if (h != node->hash) {
+            x = h < node->hash ? -1 : 1;
+        }
+        else {
+            const char *name = jl_symbol_name(node);
+            x = strncmp(str, name, len);
+            if (x == 0) {
+                if (name[len] == 0) {
+                    if (slot != NULL)
+                        *slot = ptree;
+                    return node;
+                }
+                x = -1; // str is a prefix of name
             }
         }
         if (x < 0)

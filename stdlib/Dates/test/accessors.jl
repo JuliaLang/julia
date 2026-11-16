@@ -193,6 +193,7 @@ end
     end
 end
 @testset "ISO year utils" begin
+    @test Dates.isoyear(Date(2021, 1, 1)) == Year(2020)
     # Tests from https://www.epochconverter.com/weeks
     @test Dates.weeksinyear(Dates.Year(2023)) == 52
     @test Dates.weeksinyear(Dates.Year(2022)) == 52

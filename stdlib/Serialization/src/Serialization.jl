@@ -1,9 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Provide serialization of Julia objects via the functions
-* [`serialize`](@ref)
-* [`deserialize`](@ref)
+    Serialization
+
+Writing Julia objects to a stream with [`serialize`](@ref), and reading them back with
+[`deserialize`](@ref). Newer Julia releases can read what older 1.x releases wrote, but not
+the other way round.
 """
 module Serialization
 
@@ -1151,7 +1153,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_dict(s, t)
     end
     t = desertag(b)::DataType
-    if ismutabletype(t) && length(t.types) > 0  # manual specialization of fieldcount
+    if ismutabletype(t) && fieldcount(t) > 0
         slot = s.counter; s.counter += 1
         push!(s.pending_refs, slot)
     end
@@ -1849,7 +1851,7 @@ end
 
 # default DataType deserializer
 function deserialize(s::AbstractSerializer, t::DataType)
-    nf = length(t.types)
+    nf = fieldcount(t)
     if isprimitivetype(t)
         return read(s.io, t)
     elseif ismutabletype(t)

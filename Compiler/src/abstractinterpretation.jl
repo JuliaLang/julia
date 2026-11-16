@@ -92,15 +92,6 @@ function multiple_methods(m::UnionSplitMethodMatches)
     return false
 end
 
-nmatches(info::MethodMatchInfo) = length(info.results)
-function nmatches(info::UnionSplitInfo)
-    n = 0
-    for mminfo in info.split
-        n += nmatches(mminfo)
-    end
-    return n
-end
-
 # intermediate state for computing gfresult
 mutable struct CallInferenceState
     inferidx::Int
@@ -984,7 +975,9 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     # try constant prop'
     new_result = const_prop_call(interp, mi, result, arginfo, sv, concrete_eval_result)
     new_result === nothing && return nothing
-    if eligibility === :none
+    # running a call that never returns gains nothing, and if it also cannot throw,
+    # its code is unreachable and may be undefined behavior
+    if eligibility === :none && new_result.rt !== Bottom
         # const-prop' may have refined effects to be foldable when the original
         # call was not; in that case, prefer concrete eval over the const-prop' result
         proof = inference_proof(new_result.const_result)
@@ -3354,10 +3347,13 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     if isa(e, QuoteNode)
         e = e.value
     end
-    effects = Effects(EFFECTS_TOTAL;
-        inaccessiblememonly = is_mutation_free_argtype(typeof(e)) ? ALWAYS_TRUE : ALWAYS_FALSE)
-    return RTEffects(Const(e), Union{}, effects)
+    rt = Const(e)
+    return RTEffects(rt, Union{}, constant_effects(rt))
 end
+
+# obtaining a constant that refers to mutable memory reaches that memory (see `:inaccessiblememonly`)
+constant_effects(@nospecialize rt) = is_mutation_free_argtype(rt) ? EFFECTS_TOTAL :
+    Effects(EFFECTS_TOTAL; inaccessiblememonly=ALWAYS_FALSE)
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::AbsIntState)
     @assert e.head !== :(=)
@@ -3465,6 +3461,8 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
     argtype = abstract_eval_value(interp, e.args[1], sstate, sv)
     rt, _... = instanceof_tfunc(argtype, true)
     ut = unwrap_unionall(rt)
+    # only the runtime may allocate such a type (see `check_new_struct_type`)
+    isa(ut, DataType) && datatype_hashiddenfields(ut) && return RTEffects(Bottom, ErrorException, EFFECTS_THROWS)
     exct = Union{ErrorException,TypeError}
     if isa(ut, DataType) && !isabstracttype(ut)
         ismutable = ismutabletype(ut)
@@ -3566,6 +3564,9 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
     𝕃ᵢ = typeinf_lattice(interp)
     argtype = abstract_eval_value(interp, e.args[1], sstate, sv)
     rt, isexact = instanceof_tfunc(argtype, true)
+    ut = unwrap_unionall(rt)
+    # only the runtime may allocate such a type (see `check_new_struct_type`)
+    isa(ut, DataType) && datatype_hashiddenfields(ut) && return RTEffects(Bottom, ErrorException, EFFECTS_THROWS)
     # `:splatnew` throws on a `UnionAll` or `Union` rep that is only `==` to `rt` (#61323)
     isexact = isexact && widenconst(argtype) <: DataType
     nothrow = false
@@ -4178,8 +4179,7 @@ function abstract_eval_partition_load(binding::Core.Binding, partition::Core.Bin
             return RTEffects(Any, UndefVarError, local_getglobal_effects)
         end
         rt = Const(partition_restriction(partition))
-        return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL,
-            inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE,
+        return RTEffects(rt, Union{}, Effects(constant_effects(rt);
             effect_free=isdepwarn ? ALWAYS_FALSE : ALWAYS_TRUE))
     end
 
