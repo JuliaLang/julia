@@ -785,7 +785,7 @@ function _calldecl_positionals(vcx, params_meta, eq_is_kw)
     for (i, p) in enumerate(params)
         if head(p) === :kw || head(p) === :(=) && eq_is_kw
             require_assign = true
-            allow_val_splat = i == lastindex(params)
+            allow_val_splat = i == lastindex(params) && !is_known(va_ok)
             ok[] &= vst1_pparam_and_default(vcx, p; eq_is_kw, allow_val_splat)
         elseif head(p) === :...
             ok[] &= @fail(p, "`...` may only be used on the final parameter")
