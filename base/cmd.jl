@@ -698,21 +698,35 @@ function glob_escape(s::AbstractString)
     return String(take!(io))
 end
 
-# The text an interpolated value adds to a glob, escaped: one string for each argument it
-# would produce on its own.
-cmd_glob_escape(x) = map(glob_escape, arg_gen(x))
+# The arguments an interpolated value adds to a glob word, as `_GlobArg`s: its text both as
+# it is and escaped, so that a pattern matches it literally.
+cmd_glob_args(x) = _GlobArg[(s, glob_escape(s), false) for s in arg_gen(x)]
 
-# Expand the glob patterns a word in a command produces, by calling the `glob` function
-# visible in the module `mod` where the command appears. Each pattern must match at least one
-# path.
-function cmd_glob_expand(mod::Module, patterns::Vector{String})
-    isdefined(mod, :glob) || error("an unquoted `*`, `?` or `[` in a command is a glob, ",
-        "which needs a `glob` function, such as the one the Glob package provides with ",
-        "`using Glob`; quote the character to use it literally")
-    f = getglobal(mod, :glob)
+# The arguments a glob word produces, from those of its parts, in the order `arg_gen` gives.
+function cmd_glob_product(parts::Vector{_GlobArg}...)
+    args = _GlobArg[("", "", false)]
+    for part in parts
+        args = _GlobArg[(a * b, ap * bp, ag | bg) for (a, ap, ag) in args for (b, bp, bg) in part]
+    end
+    return args
+end
+
+# Expand the arguments a glob word in a command produces. Each one with a glob character is a
+# pattern, which is expanded by calling the `glob` function visible in the module `mod` where
+# the command appears, and must match at least one path; the others are used as they are.
+function cmd_glob_expand(mod::Module, words::Vector{_GlobArg})
+    if any(last, words) && !isdefined(mod, :glob)
+        error("an unquoted `*`, `?` or `[` in a command is a glob, ",
+              "which needs a `glob` function, such as the one the Glob package provides with ",
+              "`using Glob`; quote the character to use it literally")
+    end
     args = String[]
-    for pattern in patterns
-        paths = f(pattern)
+    for (literal, pattern, isglob) in words
+        if !isglob
+            push!(args, cstr(literal))
+            continue
+        end
+        paths = getglobal(mod, :glob)(pattern)
         isempty(paths) && error("no files match the glob `$pattern` in a command")
         for path in paths
             push!(args, cmd_interpolate(path))
