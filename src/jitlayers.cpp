@@ -1536,11 +1536,8 @@ namespace {
         EmitterT(std::unique_ptr<TargetMachine> TM) JL_NOTSAFEPOINT : TM(std::move(TM)) {}
         ~EmitterT() JL_NOTSAFEPOINT = default;
 
-        // Emits M as an object file into Out.
         Error emit(Module &M, SmallVector<char, 0> &Out) JL_NOTSAFEPOINT {
             if (!PM) {
-                // The pipeline's object streamer writes to ObjStream for as long as the
-                // pipeline lives.
                 ObjStream = std::make_unique<raw_svector_ostream>(ObjBuffer);
                 auto NewPM = std::make_unique<legacy::PassManager>();
                 MCContext *Ctx;
