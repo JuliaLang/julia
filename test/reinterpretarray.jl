@@ -106,6 +106,8 @@ let n = typemax(Int) ÷ sizeof(Int) + 2
     a = reinterpret(Tuple{Int}, 1:n)
     @test size(a) == (n,)
     @test a[n] === (n,)
+end
+let n = typemax(Int) ÷ 2sizeof(Int) + 2
     b = reinterpret(NTuple{2,Int}, reshape(1:4n, 2n, 2))
     @test size(b) == (n, 2)
     @test length(b) == 2n
