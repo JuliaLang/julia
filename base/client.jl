@@ -631,33 +631,6 @@ function objcache_notice(io::IO)
     return nothing
 end
 
-# set when a placeholder prompt was drawn before the REPL stdlib loaded
-global early_prompt_shown::Bool = false
-
-# Show the banner and prompt before the REPL stdlib loads, so the session looks ready sooner.
-# Raw mode stops the terminal echoing keys typed meanwhile. The REPL reads them once it starts.
-function show_early_prompt(banner::Symbol)
-    Sys.iswindows() && return false
-    stdin isa TTY && stdout isa TTY || return false
-    get(ENV, "TERM", "dumb") == "dumb" && return false
-    # hooks registered by a startup file may change the prompt
-    isempty(repl_hooks) || return false
-    ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid}, Int32), stdin.handle, 1) == 0 || return false
-    color = get(stdout, :color, false)::Bool
-    banner == :no || repl_banner(stdout; short=banner==:short)
-    print(stdout, color ? text_colors[:green] * text_colors[:bold] * "julia> " * text_colors[:normal] : "julia> ")
-    global early_prompt_shown = true
-    return true
-end
-
-function undo_early_prompt()
-    early_prompt_shown || return
-    print(stdout, "\r\e[K")
-    ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid}, Int32), stdin.handle, 0)
-    global early_prompt_shown = false
-    nothing
-end
-
 function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::Bool)
     term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
     term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
@@ -691,9 +664,12 @@ end
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool)
     fallback_repl = parse(Bool, get(ENV, "JULIA_FALLBACK_REPL", "false"))
-    early_banner = false
     if !fallback_repl && interactive
-        early_banner = REPL_MODULE_REF[] === Base && show_early_prompt(banner)
+        if banner !== :no
+            # show the banner before the REPL stdlib loads, so the session looks alive sooner
+            repl_banner(stdout; short=banner===:short)
+            banner = :no
+        end
         load_InteractiveUtils()
         REPL = REPL_MODULE_REF[]
         if REPL === Base
@@ -702,9 +678,8 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
     end
     REPL = REPL_MODULE_REF[]
     if !fallback_repl && interactive && REPL !== Base
-        invokelatest(run_std_repl, REPL, quiet, early_banner ? :no : banner, history_file)
+        invokelatest(run_std_repl, REPL, quiet, banner, history_file)
     else
-        undo_early_prompt()
         if !fallback_repl && interactive && !quiet
             @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Sys.iswindows() ? ';' : ':')
         end
