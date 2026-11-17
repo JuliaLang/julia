@@ -547,7 +547,8 @@ end
 end
 
 @testset "Float16 degree-based trig functions" begin
-    # computed in Float32, so within a hair of half an ulp (a few results double round)
+    # the inverse degree functions are computed in Float32, so within a hair of half an ulp
+    # (a few results double round); sind, cosd and tand are correctly rounded (tested below)
     ulps(r, ref) = Float64(abs(big(Float64(r)) - ref) / Float64(eps(max(Float16(abs(ref)), floatmin(Float16)))))
     xs = filter(isfinite, reinterpret.(Float16, 0x0000:0xffff))
     for f in (sind, cosd, tand, atand, acotd), x in xs[1:97:end]
@@ -560,6 +561,19 @@ end
     @test asind(Float16(1)) === acosd(Float16(0)) === Float16(90)
     @test atand(Float16(1)) === atand(Float16(2), Float16(2)) === Float16(45)
     @test_throws DomainError(Inf16, "`sind(x)` is only defined for finite `x`.") sind(Inf16)
+end
+
+@testset "Float16 trig functions are correctly rounded #64488" begin
+    # computed in Float64, so rounding to Float16 at the end is the only rounding
+    xs = filter(isfinite, reinterpret.(Float16, 0x0000:0xffff))
+    setprecision(BigFloat, 256) do
+        for f in (sin, cos, tan, sinpi, cospi, tanpi, sind, cosd, tand), x in xs
+            @test f(x) === Float16(f(BigFloat(Float64(x)))) context=(f, x)
+        end
+        for f in (sincos, sincospi, sincosd), x in xs
+            @test f(x) === map(y -> Float16(y), f(BigFloat(Float64(x)))) context=(f, x)
+        end
+    end
 end
 
 # ensure zeros are signed the same

@@ -35,8 +35,8 @@ sincos(x) = _sincos(float(x))
 # and of x in degrees (sind, ...), based on CORE-MATH's sinf/cosf (https://core-math.gitlabpages.inria.fr/,
 # MIT licensed). The angle is reduced to π/16*(n + z) with |z| <= 1/2, and the angle-addition
 # formulas are applied with sin(π n/16) and cos(π n/16) from a 32-entry table, so there is no
-# branch on the quadrant. Float16 is computed in Float32 and Float32 in Float64, so each result is
-# rounded only once at the end; Float64 uses hi + lo table entries and fma-based error terms instead.
+# branch on the quadrant. Float16 and Float32 are computed in Float64, so each result is rounded
+# only once at the end; Float64 uses hi + lo table entries and fma-based error terms instead.
 # Only the reduction differs between radians, π*x and degrees.
 
 # sin(π j/16) for j = 0:31; cos(π j/16) is entry j + 8
@@ -48,10 +48,8 @@ const SINPI16_TABLE = (0x0p+0, 0x1.8f8b83c69a60bp-3, 0x1.87de2a6aea963p-2, 0x1.1
     -0x1.6a09e667f3bcdp-1, -0x1.a9b66290ea1a3p-1, -0x1.d906bcf328d46p-1, -0x1.f6297cff75cbp-1,
     -0x1p+0, -0x1.f6297cff75cbp-1, -0x1.d906bcf328d46p-1, -0x1.a9b66290ea1a3p-1,
     -0x1.6a09e667f3bcdp-1, -0x1.1c73b39ae68c8p-1, -0x1.87de2a6aea963p-2, -0x1.8f8b83c69a60bp-3)
-const SINPI16_TABLE_F32 = map(Float32, SINPI16_TABLE)
 # :nothrow needed since the compiler can't prove the index is inbounds.
-@assume_effects :nothrow sinpi16_table(::Type{Float64}, n::Int64) = getfield(SINPI16_TABLE, (n & 31) % Int + 1)
-@assume_effects :nothrow sinpi16_table(::Type{Float32}, n::Int64) = getfield(SINPI16_TABLE_F32, (n & 31) % Int + 1)
+@assume_effects :nothrow sinpi16_table(n::Int64) = getfield(SINPI16_TABLE, (n & 31) % Int + 1)
 
 # Float64: the low parts of SINPI16_TABLE, so that sin(π j/16) ≈ hi + lo
 const SINPI16_TABLE_LO = (0.0, -0x1.26d19b9ff8d82p-57, -0x1.72cedd3d5a61p-57, 0x1.b25dd267f66p-55,
@@ -68,8 +66,8 @@ const SINPI16_TABLE_LO = (0.0, -0x1.26d19b9ff8d82p-57, -0x1.72cedd3d5a61p-57, 0x
 end
 
 # Returns (sin(π z/16), 1 - cos(π z/16)): minimax polynomials with errors of about 2^-37 (relative)
-# and 2^-34 (absolute) in Float64 (for Float32 results), and 2^-23 and 2^-20 in Float32 (for Float16
-# results). They are fitted for |z| <= 0.53, which covers the rounding of n in the reductions.
+# and 2^-34 (absolute) in Float64. They are fitted for |z| <= 0.53, which covers the rounding of n
+# in the reductions.
 @inline function sincos16_poly(z::Float64)
     z2 = z*z
     z4 = z2*z2
@@ -77,17 +75,13 @@ end
     omc = z2*muladd(z2, -6.189991248606663e-5, 0.01927656839146767)
     return sz, omc
 end
-@inline function sincos16_poly(z::Float32)
-    z2 = z*z
-    return z*muladd(z2, -0.0012609607f0, 0.19634952f0), z2*0.019262165f0
-end
 
-# For Float16 and Float32 (computed in Float32 and Float64) and |z| <= 1/2, returns
-# (sin(π(n+z)/16), cos(π(n+z)/16)) via the angle-addition formulas.
-@inline function sincos16_kernel(z::T, n::Int64) where T<:Union{Float32, Float64}
+# For Float32 (computed in Float64) and |z| <= 1/2, returns (sin(π(n+z)/16), cos(π(n+z)/16))
+# via the angle-addition formulas.
+@inline function sincos16_kernel(z::Float64, n::Int64)
     sz, omc = sincos16_poly(z)
-    s0 = sinpi16_table(T, n)
-    c0 = sinpi16_table(T, n + 8)
+    s0 = sinpi16_table(n)
+    c0 = sinpi16_table(n + 8)
     return muladd(sz, c0, muladd(-omc, s0, s0)), muladd(-sz, s0, muladd(-omc, c0, c0))
 end
 
@@ -133,15 +127,17 @@ end
     q = s*ic
     return ifelse(iszero(c), q, muladd(fma(-q, c, s) + muladd(-q, ce, se), ic, q))
 end
-@inline function tan16(z::Union{Float32, Float64}, n::Int64)
+@inline function tan16(z::Float64, n::Int64)
     si, co = sincos16_kernel(z, n)
     return si/co
 end
 
 # The reductions for π*x and degrees, returning the same form as rem_pio16 (radians, in
 # pi_remainders.jl): they take a = |x| for finite x and find n and z with |z| <= 1/2 and
-# a = (n + z)/16 (for π*x) or a = 11.25*(n + z) (for degrees). Float16 and Float32 return (z, n);
-# Float64 returns (rh, rl, n), with the reduced angle π/16*z = rh + rl in radians.
+# a = (n + z)/16 (for π*x) or a = 11.25*(n + z) (for degrees). Float32 returns (z, n) with z in
+# Float64; Float16 and Float64 return (rh, rl, n), with the reduced angle π/16*z = rh + rl in
+# radians. Float16 is reduced in Float64 so that rounding to Float16 at the end is the only
+# rounding of the result.
 
 # π*x: 16a is exact. All Float32 with a >= 2^24 are even integers, which behave like a = 0.
 @inline function rem_pi16(a::Float32)
@@ -149,11 +145,7 @@ end
     id, n = roundmul(ad, 16.0)
     return 16*ad - id, n
 end
-@inline function rem_pi16(a::Float16)
-    af = Float32(a)
-    id, n = roundmul(af, 16f0)
-    return 16*af - id, n
-end
+@inline rem_pi16(a::Float16) = rem_pi16(Float64(a))
 
 # π*x, Float64: 16a and z = 16a - n are exact, and r = π/16*z is formed as hi + lo. All Float64
 # with a >= 2^53 are even integers, which behave like a = 0. (16a can exceed 2^51, so n is computed
@@ -174,11 +166,7 @@ end
     fn, n = roundmul(ad, 4/45)
     return (ad - 11.25*fn)*(4/45), n
 end
-@inline function rem_deg16(a::Float16)
-    af = Float32(a)
-    fn, n = roundmul(af, 4f0/45)
-    return (af - 11.25f0*fn)*(4f0/45), n
-end
+@inline rem_deg16(a::Float16) = rem_deg16(Float64(a))
 
 # Degrees, Float64: as for Float32, a - 11.25*n is exact, and r = π/180*(a - 11.25*n) is formed
 # as hi + lo. Below 2^45, the rounding of 4/45 moves |z| at most 2^-12 beyond 1/2, which
