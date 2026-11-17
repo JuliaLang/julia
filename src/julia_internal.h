@@ -495,6 +495,7 @@ extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
 
 extern JL_DLLEXPORT size_t jl_page_size;
 extern JL_DLLEXPORT size_t jl_hugepage_size;
+void jl_hugepage_request(void *p, size_t sz) JL_NOTSAFEPOINT;
 extern JL_DLLEXPORT jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_compile_and_emit_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_typeinf_world;
