@@ -45,8 +45,8 @@ public:
     // so `ns` (a consumer namespace, e.g. the package UUID) and `key` must
     // cover every input of the cached computation.  kvGet returns a
     // Vector{UInt8} with a copy of the value, or jl_nothing on a miss.
-    // kvPut queues the write (asynchronous, flushed at exit); a get in the
-    // same session may still miss right after a put.
+    // kvPut queues the write (asynchronous, and dropped if still pending at
+    // exit); a get in the same session may still miss right after a put.
     jl_value_t *kvGet(const char *Ns, const uint8_t *Key,
                       size_t KeyLen) JL_CANSAFEPOINT_ENTER_LEAVE;
     int kvPut(const char *Ns, const uint8_t *Key, size_t KeyLen, const uint8_t *Val,
@@ -88,6 +88,9 @@ private:
     uv_thread_t WriterThread;
     bool Started = false;
     std::atomic<bool> Exiting = false;
+    std::mutex WriterExitMutex;
+    std::condition_variable WriterExitCond;
+    bool WriterExited = false; // guarded by WriterExitMutex
     // held shared to start a transaction, and exclusively at exit to remove the semaphores
     std::shared_mutex TxnLock;
     bool LocksReleased = false; // guarded by TxnLock
