@@ -1525,11 +1525,13 @@ static inline void memmove_refs(_Atomic(void*) *dstp, _Atomic(void*) *srcp, size
   1 = owns the gc-managed data, exclusively (will free it)
   2 = malloc-allocated pointer (does not own it)
   3 = has a pointer to the String object that owns the data pointer (m must be isbits)
+  4 = has a pointer to the Memory object that owns the mapped data (m must be pointer-free)
 */
 #define JL_GENERICMEMORY_INLINED     0
 #define JL_GENERICMEMORY_GCMANAGED   1
 #define JL_GENERICMEMORY_MALLOCD     2
 #define JL_GENERICMEMORY_STRINGOWNED 3
+#define JL_GENERICMEMORY_MEMORYOWNED 4
 
 STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 {
@@ -1540,7 +1542,9 @@ STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
         return JL_GENERICMEMORY_GCMANAGED;
     if (owner == NULL)
         return JL_GENERICMEMORY_MALLOCD;
-    return JL_GENERICMEMORY_STRINGOWNED;
+    if (jl_typetagis(owner, jl_string_tag << 4))
+        return JL_GENERICMEMORY_STRINGOWNED;
+    return JL_GENERICMEMORY_MEMORYOWNED;
 }
 
 STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT

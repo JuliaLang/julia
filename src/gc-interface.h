@@ -262,6 +262,12 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
 // assume that there is already a field in the Julia object being allocated that we may use
 // to store the size of the memory buffer.
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz) JL_CANSAFEPOINT;
+// Allocate `sz` bytes that jl_gc_managed_expand can grow in place, tracked with
+// JL_MALLOCD_MAPPED. Returns NULL when unsupported or out of address space.
+JL_DLLEXPORT void *jl_gc_managed_map(size_t sz) JL_CANSAFEPOINT;
+// Grow the claimed bytes of `data`, from jl_gc_managed_map, from `oldsz` to `newsz` in
+// place. Returns 0 if `oldsz` is not the claimed size, or `newsz` does not fit its reservation.
+JL_DLLEXPORT int jl_gc_managed_expand(void *data, size_t oldsz, size_t newsz) JL_CANSAFEPOINT;
 // Allocates a new weak-reference, assigns its value and increments Julia allocation
 // counters. If thread-local allocators are used, then this function should allocate in the
 // thread-local allocator of the thread referenced by the first jl_ptls_t argument.

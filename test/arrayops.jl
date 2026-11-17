@@ -3707,3 +3707,66 @@ end
     @test_throws BoundsError Base.unsetindex!(m, 4)
     @test_throws BoundsError Base.unsetindex!(m, big(0))
 end
+
+@testset "growing and shrinking large memory in place" begin
+    M = 40 << 20 # above the size from which Memory that replaces outgrown Memory is mapped
+    expands = Sys.WORD_SIZE == 64 && Base.USING_STOCK_GC &&
+        !(Sys.islinux() && strip(read("/proc/sys/vm/overcommit_memory", String)) == "2")
+    # The memory of a vector that outgrew its own expands in place, keeping its data. Only the
+    # Memory ending at the claimed bytes may, so expanding the old one again copies.
+    m = append!(UInt8[], fill(0x07, M)).ref.mem
+    len = length(m)
+    e = Base.expand(m, 3len ÷ 2)
+    @test pointer(e) == pointer(m) || !expands
+    @test length(e) == 3len ÷ 2 && all(==(0x07), view(e, 1:M))
+    fill!(view(e, len+1:length(e)), 0x08)
+    again = Base.expand(m, 5len ÷ 4)
+    @test pointer(again) != pointer(m) && length(again) == 5len ÷ 4 && all(==(0x07), view(again, 1:M))
+    @test all(==(0x08), view(e, len+1:length(e)))
+    @test Base.expand(m, len ÷ 2) === m
+    # Other memory is copied once, to memory that expands in place from then on
+    plain = fill!(Memory{UInt8}(undef, M), 0x03)
+    moved = Base.expand(plain, 2M)
+    @test pointer(moved) != pointer(plain) && length(moved) == 2M && all(==(0x03), view(moved, 1:M))
+    @test pointer(Base.expand(moved, 3M)) == pointer(moved) || !expands
+    fresh = Base.expand(Memory{UInt8}(undef, 0), M)
+    @test length(fresh) == M && (pointer(Base.expand(fresh, 2M)) == pointer(fresh) || !expands)
+    # Small memory and memory that holds references always move
+    refs = Memory{Any}(undef, 16)
+    refs[1] = "kept"
+    grown = Base.expand(refs, 32)
+    @test length(grown) == 32 && grown[1] === refs[1] && !isassigned(grown, 2) && !isassigned(grown, 32)
+    @test Base.expand(Memory{Int}([1, 2, 3]), 5)[1:3] == [1, 2, 3]
+    # in a function, so that it is compiled for each element type
+    function checks(T, f)
+        v = T[]
+        n = if T === Any 100_000 else M ÷ 8 end
+        for i in 1:n
+            push!(v, f(i))
+        end
+        holds() = all(i -> v[i] == f(i), eachindex(v))
+        grown = holds()
+        sizehint!(v, length(v) ÷ 2 + 1)
+        resize!(v, length(v) ÷ 2)
+        sizehint!(v, length(v))
+        shrunk = length(v.ref.mem) == length(v) && holds()
+        GC.gc()
+        (grown, shrunk, holds())
+    end
+    for (T, f) in ((UInt8, i -> i % UInt8), (Float64, Float64), (NTuple{3, Int16}, i -> (i % Int16, 0, 1)), (Any, string))
+        @test all(checks(T, f))
+    end
+    # Vectors sharing a Memory grow apart, leaving it intact
+    v = append!(UInt8[], fill(0x01, M))
+    old = v.ref.mem
+    w = Base.wrap(Array, old, M)
+    append!(v, fill(0x02, M))
+    append!(w, fill(0x03, M))
+    @test all(==(0x02), view(v, M+1:2M)) && all(==(0x03), view(w, M+1:2M))
+    @test all(==(0x01), view(old, 1:M))
+    # A shortened Memory keeps the elements of longer ones still alive
+    long = append!(UInt8[], fill(0x05, 2M)).ref.mem
+    short = Base.memory_truncate(long, M ÷ 4)
+    GC.gc()
+    @test all(==(0x05), view(long, 1:2M)) && (isnothing(short) || all(==(0x05), short))
+end

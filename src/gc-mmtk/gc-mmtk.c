@@ -1417,6 +1417,16 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     return b;
 }
 
+JL_DLLEXPORT void *jl_gc_managed_map(size_t sz)
+{
+    return NULL;
+}
+
+JL_DLLEXPORT int jl_gc_managed_expand(void *data, size_t oldsz, size_t newsz)
+{
+    return 0;
+}
+
 void jl_gc_notify_image_load(const char* img_data, size_t len)
 {
     mmtk_set_vm_space((void*)img_data, len);

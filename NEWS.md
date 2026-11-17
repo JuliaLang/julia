@@ -12,6 +12,11 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* Large vectors of plain data now grow in place: once `push!`, `append!` or `resize!` has outgrown
+  a `Vector`'s memory, growing it further extends that memory instead of copying it, and
+  `sizehint!` shrinks it without copying. Peak memory while growing falls from almost twice the
+  final size to the final size.
+
 * After a sweep, Julia's default garbage collector now lets any thread reuse the free cells of
   pages that still hold live objects, instead of only the thread that allocated the page. This
   reduces the memory footprint of workloads that allocate many small objects on many threads and
@@ -54,6 +59,8 @@ New library functions
 
 * `bitsizeof(x)` returns the declared width in bits of a primitive type, or of the primitive type
   of `x`, excluding the padding that `sizeof` includes. It throws for any other type or value ([#61359]).
+* `Base.expand(mem, n)` returns a `Memory` of `n` elements that starts with those of `mem`. Large
+  memory grows in place, without copying, once `expand` or a growing array has allocated it.
 * `filterfirst(f, itr)` returns the first element of `itr` for which `f` returns `true` ([#60913]).
 * `growat!(a::Vector, i, delta)` grows `a` by `delta` uninitialized elements inserted at index `i` ([#63573]).
 

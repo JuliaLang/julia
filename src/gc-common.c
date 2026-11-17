@@ -701,9 +701,9 @@ size_t jl_genericmemory_nbytes(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 }
 
 // tracking Memorys with malloc'd storage
-void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned){
+void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int flags){
     // This is **NOT** a GC safe point.
-    void *a = (void*)((uintptr_t)m | !!isaligned);
+    void *a = (void*)((uintptr_t)m | flags);
     small_arraylist_push(&ptls->gc_tls_common.heap.mallocarrays, a);
 }
 
