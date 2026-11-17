@@ -1978,6 +1978,7 @@ public:
 
     // Extract roots from [first, first+numel), lazily
     jl_gc_roots_t slice(jl_codectx_t &ctx, size_t first, size_t numel) const;
+    jl_gc_roots_t slice(jl_codectx_t &ctx, Value *first, size_t numel) const;
 };
 }  // anonymous namespace
 
@@ -2933,6 +2934,15 @@ jl_gc_roots_t jl_gc_roots_t::slice(jl_codectx_t &ctx, size_t first, size_t numel
         return jl_gc_roots_t(emit_ptrgep(ctx, ptr, first * sizeof(void*)), numel, ai);
     else
         return jl_gc_roots_t(ArrayRef(roots).slice(first, numel));
+}
+
+jl_gc_roots_t jl_gc_roots_t::slice(jl_codectx_t &ctx, Value *first, size_t numel) const {
+    if (numel == 0)
+        return jl_gc_roots_t();
+    // selecting roots with a runtime index requires them to be in memory
+    Value *base = get_ptr(ctx);
+    Value *slot = ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, base, first);
+    return jl_gc_roots_t(slot, numel, ptr ? ai : ctx.alias().gcframe);
 }
 
 // --- allocating local variables ---
