@@ -96,6 +96,13 @@ function as_cpumask(cpus::Vector{UInt16})
     return cpumask
 end
 
+# The program `cmd` runs: its first word after any environment assignments.
+function _program(cmd::Cmd)
+    length(cmd.exec) > cmd.nassign && return cmd.exec[cmd.nassign + 1]
+    isempty(cmd.exec) && throw(ArgumentError("cannot spawn empty command"))
+    throw(ArgumentError("cannot spawn $(repr(cmd)): environment assignments without a command"))
+end
+
 # handle marshalling of `Cmd` arguments from Julia to C
 @noinline function _spawn_primitive(file, cmd::Cmd, stdio::SpawnIOs,
                                     tok::MaybeToken=default_cancel_token())
@@ -122,6 +129,14 @@ end
         handle = Libc.malloc(_sizeof_uv_process)
         disassociate_julia_struct(handle)
         (; exec, flags, env, dir, uid, gid) = cmd
+        if cmd.nassign > 0
+            # the leading environment assignments add to the environment, the last one winning
+            assignments = view(exec, 1:cmd.nassign)
+            env = addenv(cmd, Dict(let j = findfirst('=', w)::Int
+                                       w[1:prevind(w, j)] => w[nextind(w, j):end]
+                                   end for w in assignments)).env
+            exec = exec[cmd.nassign+1:end]
+        end
         flags ⊻= UV_PROCESS_WINDOWS_DISABLE_EXACT_NAME # libuv inverts the default for this, so flip this bit now
         if uid !== nothing
             flags |= UV_PROCESS_SETUID
@@ -173,8 +188,7 @@ end
 
 # optimization: we can spawn `Cmd` directly without allocating the ProcessChain
 function _spawn(cmd::Cmd, stdios::SpawnIOs, tok::MaybeToken=default_cancel_token())
-    isempty(cmd.exec) && throw(ArgumentError("cannot spawn empty command"))
-    return _spawn_primitive(cmd.exec[1], cmd, stdios, tok)
+    return _spawn_primitive(_program(cmd), cmd, stdios, tok)
 end
 
 # assume that having a ProcessChain means that the stdio are setup
@@ -248,8 +262,7 @@ function _spawn(cmds::AndCmds, stdios::SpawnIOs, chain::ProcessChain, tok::Maybe
 end
 
 function _spawn(cmd::Cmd, stdios::SpawnIOs, chain::ProcessChain, tok::MaybeToken)
-    isempty(cmd.exec) && throw(ArgumentError("cannot spawn empty command"))
-    pp = _spawn_primitive(cmd.exec[1], cmd, stdios, tok)
+    pp = _spawn_primitive(_program(cmd), cmd, stdios, tok)
     push!(chain.processes, pp)
     return chain
 end
