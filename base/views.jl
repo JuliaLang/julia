@@ -15,9 +15,9 @@ should transform to
 
 """
 replace_ref_begin_end!(__module__::Module, @nospecialize ex) =
-    replace_ref_begin_end_!(__module__, macroexpand!(__module__, ex), nothing, false, 0)[1]
+    replace_ref_begin_end_!(__module__, macroexpand!(__module__, ex), nothing, 0)[1]
 # replace_ref_begin_end_!(...) returns (new ex, whether withex was used)
-function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_context::Bool, escs::Int)
+function replace_ref_begin_end_!(__module__::Module, ex, withex, escs::Int)
     @nospecialize
     used_withex = false
     function escapes(@nospecialize(ex), escs::Int)
@@ -34,10 +34,9 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
         end
         return ex
     end
-    function handle_refexpr!(__module__::Module, ref_ex::Expr, main_ex::Expr, withex, in_quote_context, escs::Int)
-        @assert !in_quote_context "handle_refexpr! should not be called in quote context"
+    function handle_refexpr!(__module__::Module, ref_ex::Expr, main_ex::Expr, withex, escs::Int)
         local used_withex
-        ref_ex.args[1], used_withex = replace_ref_begin_end_!(__module__, ref_ex.args[1], withex, in_quote_context, escs)
+        ref_ex.args[1], used_withex = replace_ref_begin_end_!(__module__, ref_ex.args[1], withex, escs)
         S = gensym(:S) # temp var to cache ex.args[1] if needed. if S is a global or expression, then it has side effects to use
         assignments = []
         used_S = false # whether we actually need S
@@ -57,7 +56,7 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
             return main_ex, used_withex
         elseif nargs == 1
             # replace with lastindex(S)
-            ref_ex.args[2], used_S = replace_ref_begin_end_!(__module__, ref_ex.args[2], (:($firstindex($S)),:($lastindex($S))), in_quote_context, escs)
+            ref_ex.args[2], used_S = replace_ref_begin_end_!(__module__, ref_ex.args[2], (:($firstindex($S)),:($lastindex($S))), escs)
         else
             ni = 1
             nx = 0
@@ -67,7 +66,7 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
             temp_vars = Tuple{Int,Symbol}[]
             for j = 2:J
                 n = nx === 0 ? ni : :($nx + $ni)
-                exj, used_arg = replace_ref_begin_end_!(__module__, ref_ex.args[j], (:($firstindex($S,$n)),:($lastindex($S,$n))), in_quote_context, escs)
+                exj, used_arg = replace_ref_begin_end_!(__module__, ref_ex.args[j], (:($firstindex($S,$n)),:($lastindex($S,$n))), escs)
                 used_S |= used_arg
                 ref_ex.args[j] = exj
                 ni += 1
@@ -112,24 +111,16 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
         return main_ex, used_withex
     end
     if isa(ex,Symbol)
-        if !in_quote_context
-            if ex === :begin
-                withex === nothing && error("Invalid use of begin outside []")
-                return escapes((withex::NTuple{2,Expr})[1], escs), true
-            elseif ex === :end
-                withex === nothing && error("Invalid use of end outside []")
-                return escapes((withex::NTuple{2,Expr})[2], escs), true
-            end
+        if ex === :begin
+            withex === nothing && error("Invalid use of begin outside []")
+            return escapes((withex::NTuple{2,Expr})[1], escs), true
+        elseif ex === :end
+            withex === nothing && error("Invalid use of end outside []")
+            return escapes((withex::NTuple{2,Expr})[2], escs), true
         end
     elseif isa(ex,Expr)
-        if !in_quote_context && ex.head === :ref # n.b. macroexpand.scm design is incapable of tracking :begin and :end scope, so emulate that here too and ignore escs
-            return handle_refexpr!(__module__, ex, ex, withex, in_quote_context, escs)
-        elseif ex.head === :$
-            # no longer an executable expression (handle all equivalent forms of :inert, :quote, and QuoteNode the same way)
-            in_quote_context = false
-        elseif ex.head === :quote
-            # executable again
-            in_quote_context = true
+        if ex.head === :ref # n.b. macroexpand.scm design is incapable of tracking :begin and :end scope, so emulate that here too and ignore escs
+            return handle_refexpr!(__module__, ex, ex, withex, escs)
         elseif ex.head === :var"hygienic-scope"
             # no longer our expression
             escs += 1
@@ -137,9 +128,10 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
             # our expression again once zero
             escs == 0 && return ex, used_withex
             escs -= 1
-        elseif ex.head === :meta || ex.head === :inert
+        elseif ex.head === :meta || ex.head === :inert || ex.head === :quote
+            # not executable (`macroexpand!` leaves a `quote` only inside `module` or `toplevel`)
             return ex, used_withex
-        elseif !in_quote_context && last(string(ex.head)) == '=' &&
+        elseif last(string(ex.head)) == '=' &&
                Meta.isexpr(unwrap_scopes(ex.args[1], escs), :ref)
             lhs = ex.args[1]
             ref_ex = ex.args[1] = unwrap_scopes(lhs, escs)::Expr
@@ -149,16 +141,16 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
                     # we'll deal with the ref expression later
                     continue
                 end
-                ex.args[i], used = replace_ref_begin_end_!(__module__, ex.args[i], withex, in_quote_context, escs)
+                ex.args[i], used = replace_ref_begin_end_!(__module__, ex.args[i], withex, escs)
                 used_withex |= used
             end
-            ex, used = handle_refexpr!(__module__, ref_ex, ex, withex, in_quote_context, escs)
+            ex, used = handle_refexpr!(__module__, ref_ex, ex, withex, escs)
             used_withex |= used
             return ex, used_withex
         end
         # recursive search
         for i = eachindex(ex.args)
-            ex.args[i], used = replace_ref_begin_end_!(__module__, ex.args[i], withex, in_quote_context, escs)
+            ex.args[i], used = replace_ref_begin_end_!(__module__, ex.args[i], withex, escs)
             used_withex |= used
         end
     end
