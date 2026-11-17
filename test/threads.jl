@@ -940,6 +940,83 @@ end
     @test success(pipeline(cmd; stdout, stderr))
 end
 
+@testset "JIT code is not held back by another thread's link" begin
+    # One thread compiles a large function, while a second links a caller of it, which
+    # waits for the large function with its memory allocated. A small function compiled on
+    # a third thread meanwhile should be usable right away, not once the large one is done.
+    program = raw"""
+        # a long chain of dependent operations: quick to infer, slow for LLVM
+        function define_big(n)
+            body = Expr(:block)
+            for i in 1:n
+                push!(body.args, :(x = x * $(i % 7 + 3) + y))
+                push!(body.args, :(y = xor(y, x >> $(i % 13 + 1))))
+            end
+            push!(body.args, :(return x + y))
+            @eval big(x::Int, y::Int) = $body
+        end
+        define_big(parse(Int, ARGS[1]))
+        caller(x::Int, y::Int) = big(x, y) + 1
+        small(x::Int) = 3x + 1
+        # wait without yielding, so that the tasks run on the other threads; by the
+        # clock, since a short sleep can take much longer than asked for
+        function pause(seconds)
+            t_end = time() + seconds
+            while time() < t_end
+                GC.safepoint()
+                Libc.systemsleep(0.001)
+            end
+        end
+        function main()
+            t0 = time()
+            mi = Base.method_instance((typeof(big), Int, Int))
+            big_done = Threads.Atomic{Float64}(0.0)
+            tb = Threads.@spawn begin
+                Base.invokelatest(big, 1, 2)
+                big_done[] = time()
+                Threads.threadid()
+            end
+            # once `big` has been handed to the JIT, `caller` is compiled on its own
+            while !(isdefined(mi, :cache) && mi.cache.invoke != C_NULL)
+                pause(0.001)
+            end
+            emitted = time()
+            tc = Threads.@spawn (Base.invokelatest(caller, 1, 2); Threads.threadid())
+            pause(0.3)
+            small_start = time()
+            small_time = @elapsed Base.invokelatest(small, 1)
+            Threads.threadid() in (fetch(tb), fetch(tc)) && error("compiled on the main thread")
+            println(small_time, " ", big_done[] - small_start, " ",
+                    emitted - t0, " ", small_start - t0, " ", big_done[] - t0)
+        end
+        main()
+    """
+    # `big` has to be still compiling when `small` is, for long enough to tell whether
+    # `small` waited for it; how long it takes depends on the machine, so grow it until
+    # it is slow enough
+    local small_time, big_remaining, output
+    for n in (4000, 8000, 16000)
+        # without the objcache, which would skip LLVM after the first run
+        cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=3 -e $program $n`
+        cmd = addenv(cmd, "JULIA_OBJCACHE" => "0")
+        buf = IOBuffer()
+        proc = run(pipeline(cmd; stdout=buf, stderr); wait=false)
+        t = Timer(300) do _
+            kill(proc, Base.SIGKILL)
+        end
+        @test success(proc)
+        close(t)
+        output = "n=$n: " * String(take!(buf))
+        small_time, big_remaining = parse.(Float64, split(output)[2:3])
+        big_remaining > 1 && break
+    end
+    # small_time, big_remaining (from the start of `small`), and the times since the
+    # start at which `big` was emitted, `small` started and `big` was done
+    big_remaining > 1 && small_time < big_remaining / 4 || print(stderr, output)
+    @test big_remaining > 1
+    @test small_time < big_remaining / 4
+end
+
 @testset "--timeout-for-safepoint-straggler command-line flag" begin
     program = "
         function main()

@@ -458,16 +458,15 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
         return;
 
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
-    const char *name = name_from_method_instance(jl_get_ci_mi(codeinsts[len - 1]));
-    auto ctx = std::make_unique<LLVMContext>();
     auto &dl = jl_ExecutionEngine->getDataLayout();
     auto &tt = jl_ExecutionEngine->getTargetTriple();
-    auto mod = jl_create_llvm_module(name, *ctx, dl, tt);
-    jl_codegen_output_t out{*mod};
-    out.get_context().setDiscardValueNames(true);
-    out.imaging_mode = false;
-    JL_GC_PUSH1(&out.temporary_roots);
-
+    auto &ES = jl_ExecutionEngine->getExecutionSession();
+    // Each CodeInstance gets a module of its own: which ones are compiled together depends
+    // on what has been compiled already, which varies from run to run, and the object
+    // cache only finds a module with the same contents. The modules are added to the JIT
+    // together, so that none of them is linked before the others are there to be called
+    // directly.
+    SmallVector<jl_emitted_output_t, 0> outputs;
     for (int i = 0; i < len; ++i) {
         jl_code_instance_t *codeinst = codeinsts[i];
         jl_code_info_t *src = srcs[i];
@@ -476,8 +475,14 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
         if (jl_atomic_load_relaxed(&codeinst->invoke))
             continue;
 
+        auto ctx = std::make_unique<LLVMContext>();
+        auto mod = jl_create_llvm_module(name_from_method_instance(mi), *ctx, dl, tt);
+        jl_codegen_output_t out{*mod};
+        out.get_context().setDiscardValueNames(true);
+        out.imaging_mode = false;
         out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
-        out.temporary_roots_set.clear();
+        JL_GC_PUSH1(&out.temporary_roots);
+
         if (!jl_emit_codeinst(out, codeinst, src)) { // contains safepoints
             JL_GC_POP();
             return;
@@ -492,21 +497,19 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
         // here.
         if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
             jl_as_global_root((jl_value_t*)mi, 1);
+
+        out.temporary_roots = nullptr;
+        out.temporary_roots_set.clear();
+        JL_GC_POP();
+
+        if (out.ci_funcs.empty())
+            continue;
+
+        emit_llvmcall_modules(out);
+
+        outputs.push_back(out.finish(std::move(ctx), std::move(mod), *ES.getSymbolStringPool()));
     }
-
-    out.temporary_roots = nullptr;
-    out.temporary_roots_set.clear();
-    JL_GC_POP();
-
-    if (out.ci_funcs.empty())
-        return;
-
-    emit_llvmcall_modules(out);
-
-    auto &ES = jl_ExecutionEngine->getExecutionSession();
-    jl_emitted_output_t emitted =
-        out.finish(std::move(ctx), std::move(mod), *ES.getSymbolStringPool());
-    jl_ExecutionEngine->addOutput(std::move(emitted));
+    jl_ExecutionEngine->addOutputs(outputs);
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -1526,13 +1529,54 @@ namespace {
         T &transform;
     };
 
+    // A target machine and the pass pipeline that emits its object files. Building the
+    // pipeline costs about as much as compiling a small module, so it is built once and
+    // run for every module compiled with this target machine.
+    // Adapted from `OutputCompiler` in Ian Butterworth's JuliaLang/julia#64480.
+    struct EmitterT {
+        std::unique_ptr<TargetMachine> TM;
+        std::unique_ptr<legacy::PassManager> PM;
+        SmallVector<char, 0> ObjBuffer;
+        std::unique_ptr<raw_svector_ostream> ObjStream;
+
+        EmitterT(std::unique_ptr<TargetMachine> TM) JL_NOTSAFEPOINT : TM(std::move(TM)) {}
+        ~EmitterT() JL_NOTSAFEPOINT = default;
+
+        // Emits M as an object file into Out.
+        Error emit(Module &M, SmallVector<char, 0> &Out) JL_NOTSAFEPOINT {
+            if (!PM) {
+                // The pipeline's object streamer writes to ObjStream for as long as the
+                // pipeline lives.
+                ObjStream = std::make_unique<raw_svector_ostream>(ObjBuffer);
+                auto NewPM = std::make_unique<legacy::PassManager>();
+                MCContext *Ctx;
+                if (TM->addPassesToEmitMC(*NewPM, Ctx, *ObjStream))
+                    return make_error<StringError>("Target does not support MC emission",
+                                                   inconvertibleErrorCode());
+                PM = std::move(NewPM);
+            }
+            PM->run(M);
+            Out = std::move(ObjBuffer);
+            ObjBuffer.clear();
+            return Error::success();
+        }
+    };
+
+    struct EmitterCreator {
+        TMCreator CreateTM;
+        EmitterCreator(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT : CreateTM(TM, optlevel) {}
+        std::unique_ptr<EmitterT> operator()() JL_NOTSAFEPOINT {
+            return std::make_unique<EmitterT>(CreateTM());
+        }
+    };
+
     template<size_t N>
     struct CompilerT : orc::IRCompileLayer::IRCompiler {
 
         CompilerT(orc::IRSymbolMapper::ManglingOptions MO, TargetMachine &TM) JL_NOTSAFEPOINT
             : orc::IRCompileLayer::IRCompiler(MO) {
             for (size_t i = 0; i < N; ++i) {
-                TMs[i] = std::make_unique<JuliaOJIT::ResourcePool<std::unique_ptr<TargetMachine>>>(TMCreator(TM, i));
+                Emitters[i] = std::make_unique<JuliaOJIT::ResourcePool<std::unique_ptr<EmitterT>>>(EmitterCreator(TM, i));
             }
         }
 
@@ -1547,20 +1591,13 @@ namespace {
             }
             assert(PoolIdx < N && "Invalid optimization level for compiler!");
 
-            auto TM = **TMs[PoolIdx];
+            auto Emitter = **Emitters[PoolIdx];
             if (M.getDataLayout().isDefault())
-                M.setDataLayout((*TM)->createDataLayout());
+                M.setDataLayout((*Emitter)->TM->createDataLayout());
 
             SmallVector<char, 0> ObjBufferSV;
-            {
-                raw_svector_ostream ObjStream(ObjBufferSV);
-                legacy::PassManager PM;
-                MCContext *Ctx;
-                if ((*TM)->addPassesToEmitMC(PM, Ctx, ObjStream))
-                    return make_error<StringError>("Target does not support MC emission",
-                                                   inconvertibleErrorCode());
-                PM.run(M);
-            }
+            if (Error Err = (*Emitter)->emit(M, ObjBufferSV))
+                return std::move(Err);
 
             // OrcJIT requires that all modules / files have unique names:
             // https://llvm.org/doxygen/namespacellvm_1_1orc.html#a1f5a1bc60c220cdccbab0f26b2a425e1
@@ -1571,7 +1608,7 @@ namespace {
                                                              false);
         }
 
-        std::array<std::unique_ptr<JuliaOJIT::ResourcePool<std::unique_ptr<TargetMachine>>>, N> TMs;
+        std::array<std::unique_ptr<JuliaOJIT::ResourcePool<std::unique_ptr<EmitterT>>>, N> Emitters;
         _Atomic(size_t) bufcounter{0};
     };
 }
@@ -2090,16 +2127,25 @@ static void timing_print_module_names(jl_timing_block_t *block,
 
 void JuliaOJIT::addOutput(jl_emitted_output_t O)
 {
+    addOutputs(MutableArrayRef<jl_emitted_output_t>(O));
+}
+
+// Adds them all at once: no other thread links code in between, which could otherwise
+// find some of them in the JIT but not the others it calls.
+void JuliaOJIT::addOutputs(MutableArrayRef<jl_emitted_output_t> Os)
+{
     JL_TIMING(LLVM_JIT, JIT_Total);
-    ++ModulesAdded;
-#ifdef ENABLE_TIMINGS
-    timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, *O.module);
-#endif
-    std::unique_lock Lock{LinkerMutex};
-    auto MU = std::make_unique<JLMaterializationUnit>(
-        JLMaterializationUnit::Create(*this, ObjectLayer, std::move(O)));
     ExitOnError check{"Failed to add objectfile to JIT!"};
-    check(JD.define(MU, JD.getDefaultResourceTracker()));
+    std::unique_lock Lock{LinkerMutex};
+    for (auto &O : Os) {
+        ++ModulesAdded;
+#ifdef ENABLE_TIMINGS
+        timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, *O.module);
+#endif
+        auto MU = std::make_unique<JLMaterializationUnit>(
+            JLMaterializationUnit::Create(*this, ObjectLayer, std::move(O)));
+        check(JD.define(MU, JD.getDefaultResourceTracker()));
+    }
 }
 
 orc::JITDylib& JuliaOJIT::createJITDylib(StringRef NamePrefix)
