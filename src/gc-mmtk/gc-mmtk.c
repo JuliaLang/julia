@@ -717,6 +717,10 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
          jl_typemap_entry_t *v = jl_atomic_load_relaxed(&call_cache[i]);
         add_node_to_roots_buffer(closure, &buf, &len, v);
     }
+    for (size_t i = 0; i < N_CALL_CACHE; i++) {
+        jl_value_t *v = jl_atomic_load_relaxed(&call_cache_keys[i]);
+        add_node_to_roots_buffer(closure, &buf, &len, v);
+    }
     add_node_to_roots_buffer(closure, &buf, &len, _jl_debug_method_invalidation);
     add_node_to_roots_buffer(closure, &buf, &len, jl_ext_backinterferences);
     add_node_to_roots_buffer(closure, &buf, &len, jl_interp_call_sites);

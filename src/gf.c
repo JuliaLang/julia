@@ -5359,6 +5359,7 @@ STATIC_INLINE int sig_match_fast(jl_value_t *arg1t, jl_value_t **args, jl_value_
 }
 
 _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
+_Atomic(jl_value_t*) call_cache_keys[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 static _Atomic(uint8_t) pick_which[N_CALL_CACHE];
 #ifdef JL_GF_PROFILE
 size_t ncalls;
@@ -5367,7 +5368,7 @@ void call_cache_stats()
     int pick_which_stat[4] = {0, 0, 0, 0};
     int i, count = 0;
     for (i = 0; i < N_CALL_CACHE; i++) {
-        if (jl_atomic_load_relaxed(&call_cache[i]))
+        if (jl_atomic_load_relaxed(&call_cache[i]) || jl_atomic_load_relaxed(&call_cache_keys[i]))
             count++;
         ++pick_which_stat[jl_atomic_load_relaxed(&pick_which[i]) & 3];
     }
@@ -5387,6 +5388,45 @@ STATIC_INLINE void call_cache_indices(uint32_t callsite, uint32_t cache_idx[4]) 
     cache_idx[1] = (callsite >> 8) & (N_CALL_CACHE - 1);
     cache_idx[2] = (callsite >> 16) & (N_CALL_CACHE - 1);
     cache_idx[3] = (callsite >> 24 | callsite << 8) & (N_CALL_CACHE - 1);
+}
+
+// What a call site's cache matches an argument on: its type, or TypeEgal{T} for an argument
+// that is the type T, on whose value dispatch can depend (NULL for a T with free typevars,
+// which is not cached). No argument has a TypeEgal{T} as its type, so the two cannot be confused.
+static jl_value_t *site_key(jl_value_t *a) JL_CANSAFEPOINT
+{
+    jl_value_t *t = jl_typeof(a);
+    if (!jl_is_kind(t))
+        return t;
+    return jl_has_free_typevars(a) ? NULL : jl_wrap_TypeEgal(a);
+}
+
+STATIC_INLINE int site_key_matches(jl_value_t *k, jl_value_t *a) JL_NOTSAFEPOINT
+{
+    return jl_typeof(a) == k || (jl_is_typeegal(k) && jl_egal(jl_typeegal_T(k), a));
+}
+
+// `nargs` includes F here. Return the cached method only if the saved exact keys match.
+STATIC_INLINE jl_typemap_entry_t *call_cache_key_match(jl_value_t *cached, jl_value_t *F,
+                                                        jl_value_t **args, uint32_t nargs,
+                                                        size_t world) JL_NOTSAFEPOINT
+{
+    if (!cached || !jl_is_svec(cached))
+        return NULL;
+    jl_svec_t *site = (jl_svec_t*)cached;
+    if (jl_svec_len(site) != nargs + 1 || !site_key_matches(jl_svecref(site, 1), F))
+        return NULL;
+    uint32_t j;
+    for (j = 0; j < nargs - 1; j++) {
+        if (!site_key_matches(jl_svecref(site, j + 2), args[j]))
+            return NULL;
+    }
+    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_svecref(site, 0);
+    if (!jl_typetagis((jl_value_t*)entry, jl_typemap_entry_type) ||
+            world < jl_atomic_load_relaxed(&entry->min_world) ||
+            world > jl_atomic_load_relaxed(&entry->max_world))
+        return NULL;
+    return entry;
 }
 
 // The lookup beyond the call-site cache, kept out of line so that the frame of
@@ -5430,13 +5470,37 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
         }
     }
     if (entry != NULL && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
-        // put the entry into the cache if it's valid for a leafsig lookup,
-        // using pick_which to slightly randomize where it ends up
-        // (intentionally not atomically synchronized, since we're just using it for randomness)
-        // TODO: use the thread's `cong` instead as a source of randomness
+        // Keep the allocation-free path for signatures the original cache can match.
         int which = jl_atomic_load_relaxed(&pick_which[cache_idx[0]]) + 1;
         jl_atomic_store_relaxed(&pick_which[cache_idx[0]], which);
         jl_atomic_store_release(&call_cache[cache_idx[which & 3]], entry);
+    }
+    else if (entry != NULL) {
+        // Cache the exact function and argument keys with the method entry. The lookup's
+        // `nargs` includes F, so the svec has one entry plus `nargs` keys.
+        jl_svec_t *site = NULL;
+        jl_value_t *key = NULL;
+        int cacheable = 1;
+        JL_GC_PUSH3(&entry, &site, &key);
+        site = jl_alloc_svec(nargs + 1);
+        jl_svecset(site, 0, (jl_value_t*)entry);
+        for (uint32_t i = 0; i < nargs; i++) {
+            key = site_key(i == 0 ? F : args[i - 1]);
+            if (key == NULL) {
+                cacheable = 0;
+                break;
+            }
+            jl_svecset(site, i + 1, key);
+        }
+        if (cacheable) {
+            // use pick_which to slightly randomize where it ends up
+            // (intentionally not atomically synchronized, since we're just using it for randomness)
+            // TODO: use the thread's `cong` instead as a source of randomness
+            int which = jl_atomic_load_relaxed(&pick_which[cache_idx[0]]) + 1;
+            jl_atomic_store_relaxed(&pick_which[cache_idx[0]], which);
+            jl_atomic_store_release(&call_cache_keys[cache_idx[which & 3]], (jl_value_t*)site);
+        }
+        JL_GC_POP();
     }
     if (entry && for_call) {
         // mfunc was found in slow path, so log --trace-dispatch
@@ -5476,7 +5540,7 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
 
 STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t **args, uint32_t nargs,
                                                        uint32_t callsite, size_t world, int for_call,
-                                                       jl_typemap_entry_t **entry_out) JL_CANSAFEPOINT
+                                                       jl_typemap_entry_t **entry_out, jl_svec_t **site_out) JL_CANSAFEPOINT
 {
 #ifdef JL_GF_PROFILE
     ncalls++;
@@ -5521,6 +5585,15 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     LOOP_BODY(2);
     LOOP_BODY(3);
 #undef LOOP_BODY
+    for (uint32_t i = 0; i < 4; i++) {
+        jl_value_t *cached = jl_atomic_load_relaxed(&call_cache_keys[cache_idx[i]]);
+        entry = call_cache_key_match(cached, F, args, nargs, world);
+        if (entry) {
+            if (site_out)
+                *site_out = (jl_svec_t*)cached;
+            goto have_entry;
+        }
+    }
     mfunc = jl_lookup_generic_slow(F, args, nargs, callsite, world, for_call, entry_out);
     goto done;
 have_entry:
@@ -5542,7 +5615,7 @@ jl_method_instance_t *jl_apply_lookup(jl_value_t **args, size_t nargs, size_t wo
 {
     assert(nargs);
     return jl_lookup_generic_(args[0], &args[1], nargs - 1,
-            jl_int32hash_fast(jl_return_address()), world, 0, NULL);
+            jl_int32hash_fast(jl_return_address()), world, 0, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
@@ -5550,7 +5623,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
     size_t world = jl_current_task->world_age;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
-                                                     world, 1, NULL);
+                                                     world, 1, NULL, NULL);
     JL_GC_PROMISE_ROOTED(mfunc);
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
 }
@@ -5560,25 +5633,9 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
 jl_value_t *jl_apply_generic_site(jl_value_t *F, jl_value_t **args, uint32_t nargs, uint32_t callsite)
 {
     size_t world = jl_current_task->world_age;
-    jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1, NULL);
+    jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1, NULL, NULL);
     JL_GC_PROMISE_ROOTED(mfunc); // as in jl_apply_generic
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
-}
-
-// What a call site's cache matches an argument on: its type, or TypeEgal{T} for an argument
-// that is the type T, on whose value dispatch can depend (NULL for a T with free typevars,
-// which is not cached). No argument has a TypeEgal{T} as its type, so the two cannot be confused.
-static jl_value_t *site_key(jl_value_t *a) JL_CANSAFEPOINT
-{
-    jl_value_t *t = jl_typeof(a);
-    if (!jl_is_kind(t))
-        return t;
-    return jl_has_free_typevars(a) ? NULL : jl_wrap_TypeEgal(a);
-}
-
-STATIC_INLINE int site_key_matches(jl_value_t *k, jl_value_t *a) JL_NOTSAFEPOINT
-{
-    return jl_typeof(a) == k || (jl_is_typeegal(k) && jl_egal(jl_typeegal_T(k), a));
 }
 
 // jl_apply_generic for an interpreted call site with a cache of one dispatch, `sites[i]`:
@@ -5609,11 +5666,12 @@ jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t n
         }
     }
     jl_typemap_entry_t *entry = NULL;
-    jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1, &entry);
+    jl_method_instance_t *mfunc = NULL;
+    jl_value_t *k = NULL;
+    site = NULL;
+    JL_GC_PUSH4(&entry, &mfunc, &site, &k);
+    mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1, &entry, &site);
     if (entry != NULL) {
-        jl_value_t *k = NULL;
-        site = NULL;
-        JL_GC_PUSH4(&entry, &mfunc, &site, &k);
         site = jl_alloc_svec(nargs + 2);
         jl_svecset(site, 0, (jl_value_t*)entry);
         uint32_t j;
@@ -5627,8 +5685,8 @@ jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t n
             jl_atomic_store_release(slot, (jl_value_t*)site);
             jl_gc_wb(sites, slot, site);
         }
-        JL_GC_POP();
     }
+    JL_GC_POP();
     JL_GC_PROMISE_ROOTED(mfunc); // as in jl_apply_generic
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
 }

@@ -1157,6 +1157,19 @@ let T = Core.TypeVar(:T), g = Base.Generator(Rational{T}, 1:1)
     @test g.f === Rational{T}
     @test fieldtype(typeof(g), :f) === DataType
 end
+
+# Dynamic dispatch with type arguments must distinguish types that share DataType.
+call_cache_type_target(::Type{Int}, x::Int) = x + 1
+call_cache_type_target(::Type{Float64}, x::Int) = Float64(x) + 1
+@noinline function call_cache_type_call(T, x)
+    @nospecialize T x
+    call_cache_type_target(T, x)
+end
+@test call_cache_type_call(Int, 1) === 2
+@test call_cache_type_call(Float64, 1) === 2.0
+GC.gc(true)
+@test call_cache_type_call(Int, 2) === 3
+
 let f() = (T = Rational{Core.TypeVar(:T)}; () -> T)
     @test f() isa Function
     @test Base.infer_return_type(f()) == DataType
