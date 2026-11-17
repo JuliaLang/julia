@@ -321,10 +321,8 @@ function runtime_library_names(optional_components)
             join(map(repr, COMPONENTS), ", ")))
     end
     debug = isdebugbuild() ? "-debug" : ""
-    # Julia's own libraries are required (a framework's `libjulia` is its `Julia` binary)
-    required = String[]
-    Base.DARWIN_FRAMEWORK || push!(required, "libjulia$debug")
-    push!(required, "libjulia-internal$debug")
+    # Julia's own libraries are required
+    required = String["libjulia$debug", "libjulia-internal$debug"]
     # The rest come from `JL_RUNTIME_LIBS` in Make.inc and are optional: a build may use a
     # system copy (`USE_SYSTEM_LIBUV`) or turn off a feature (MMTk, Tracy, sanitizers).
     optional = copy(Base.RUNTIME_LIBRARY_NAMES)

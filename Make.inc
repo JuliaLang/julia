@@ -301,46 +301,8 @@ endif
 # Whether to use GPL libraries or not.
 USE_GPL_LIBS ?= 1
 
-# Whether to install Julia as a framework on Darwin (Apple) platforms.
-DARWIN_FRAMEWORK ?= 0
-
-# Override in Make.user to customize the framework:
-FRAMEWORK_NAME ?= Julia
-FRAMEWORK_VERSION ?= $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION)
-
-# The prefix for all code sign identifiers.
-DARWIN_CODESIGN_ID_BASE ?= org.julialang.julia
-# The codesign id for the ui/repl (also embedded in Info.plist).
-darwin_codesign_id_julia_ui := $(DARWIN_CODESIGN_ID_BASE).ui
-# The prefix for all deps.
-darwin_codesign_id_julia_deps := $(DARWIN_CODESIGN_ID_BASE).deps
-
-# Directories and file structure of a Darwin framework:
-framework_directory:=$(FRAMEWORK_NAME).framework
-framework_versions:=$(framework_directory)/Versions
-framework_currver:=$(framework_versions)/$(FRAMEWORK_VERSION)
-framework_dylib:=$(framework_currver)/$(FRAMEWORK_NAME)
-framework_headers:=$(framework_currver)/Headers
-framework_documentation:=$(framework_currver)/Documentation
-framework_resources:=$(framework_currver)/Resources
-framework_frameworks:=$(framework_currver)/Frameworks
-framework_modules:=$(framework_currver)/Modules
-framework_helpers:=$(framework_currver)/Helpers
-framework_infoplist:=$(framework_resources)/Info.plist
-
 # Directories where said libraries get installed to
 prefix ?= $(BUILDROOT)/julia-$(JULIA_COMMIT)
-ifeq ($(DARWIN_FRAMEWORK), 1)
-bindir := $(prefix)/$(framework_helpers)
-libdir := $(prefix)/$(framework_currver)
-libexecdir := $(prefix)/$(framework_helpers)
-datarootdir := $(prefix)/$(framework_resources)
-docdir := $(prefix)/$(framework_documentation)
-mandir := $(datarootdir)/man
-man1dir := $(mandir)/man1
-includedir := $(prefix)/$(framework_headers)
-sysconfdir := $(prefix)/$(framework_resources)
-else
 bindir := $(prefix)/bin
 libdir := $(prefix)/lib
 libexecdir := $(prefix)/libexec
@@ -350,7 +312,6 @@ mandir := $(datarootdir)/man
 man1dir := $(mandir)/man1
 includedir := $(prefix)/include
 sysconfdir := $(prefix)/etc
-endif
 
 # Directories where things get built into
 build_prefix := $(BUILDROOT)/usr$(MAYBE_HOST)
@@ -377,11 +338,7 @@ build_libdir := $(build_prefix)/lib/$(MULTIARCH)
 endif
 
 # Private library directories
-ifeq ($(DARWIN_FRAMEWORK), 1)
-private_libdir := $(prefix)/$(framework_frameworks)
-else
 private_libdir := $(libdir)/julia
-endif
 build_private_libdir := $(build_libdir)/julia
 
 private_libexecdir := $(libexecdir)/julia
@@ -875,12 +832,6 @@ endif # FreeBSD
 
 ifneq ($(CC_BASE)$(CXX_BASE),$(shell printf "%s\n" $(call shell_escape,$(CC)) | cut -d' ' -f1)$(shell printf "%s\n" $(call shell_escape,$(CXX)) | cut -d' ' -f1))
     $(error Forgot override directive on CC or CXX in Make.user? Cowardly refusing to build)
-endif
-
-ifeq ($(DARWIN_FRAMEWORK),1)
-ifneq ($(OS), Darwin)
-	$(error Darwin framework cannot be enabled for non-Darwin OS)
-endif
 endif
 
 ifeq ($(SANITIZE),1)
