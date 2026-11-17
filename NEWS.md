@@ -55,6 +55,8 @@ New library features
 * An unquoted `*`, `?` or `[` in a command literal makes a glob, which expands to the matching
   paths when the command is created. Julia calls a `glob` function provided by a package,
   such as Glob.jl, to match the pattern, so globbing works after `using Glob` ([#20401]).
+* `unescape_string` accepts a `hex_as_char` keyword argument that decodes a `\x` escape
+  sequence as the Unicode code point U+0000 to U+00FF instead of as a raw byte ([#65023]).
 
 Standard library changes
 ------------------------
