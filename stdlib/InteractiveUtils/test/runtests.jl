@@ -961,14 +961,14 @@ Sys.iswindows() || @testset "editor and pager commands" begin
             islink(name) || symlink(script, name)
             pipe = Pipe()
             Base.link_pipe!(pipe; reader_supports_async=true, writer_supports_async=true)
-            waited = false
             stderr_txt = @async readlines(pipe)
-            withenv("PATH" => dir, env...) do
+            waited = withenv("PATH" => dir, env...) do
                 try
                     redirect_stderr(f, pipe)
+                    false
                 catch e
                     e isa ProcessFailedException || rethrow()
-                    waited = true
+                    true
                 end
             end
             close(pipe.in)
@@ -1293,7 +1293,7 @@ function which_call_args(ex)
         if x.head === :call && (x.args[1] == :(Core.Typeof) || x.args[1] === GlobalRef(Core, :Typeof))
             push!(args, Core.eval(@__MODULE__, x.args[2]))
         else
-            foreach(walk, x.args)
+            foreach(@__FUNCTION__, x.args)
         end
     end
     walk(macroexpand(@__MODULE__, :(@which $ex)))
