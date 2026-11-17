@@ -706,7 +706,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
     else
         undo_early_prompt()
         if !fallback_repl && interactive && !quiet
-            @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Sys.iswindows() ? ';' : ':')
+            @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Filesystem.path_list_separator)
         end
         run_fallback_repl(interactive)
     end
