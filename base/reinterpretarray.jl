@@ -378,9 +378,17 @@ unaliascopy(a::ReshapedReinterpretArray{T}) where {T} = reinterpret(reshape, T, 
 _reinterpret_div(nbytes, divisor) = div(nbytes, divisor)
 _reinterpret_div(nbytes::BitSigned, divisor) = div(nbytes & typemax(nbytes), divisor)
 
+function _reinterpret_ratio(::Type{T}, ::Type{S}) where {T,S}
+    s, t = aligned_sizeof(S), aligned_sizeof(T)
+    s != 0 && t % s == 0 && return (1, div(t, s))
+    t != 0 && s % t == 0 && return (div(s, t), 1)
+    return (s, t)
+end
+
 function _reinterpret_length(len, ::Type{T}, ::Type{S}) where {T,S}
-    issingletontype(T) && return len
-    return _reinterpret_div(len * aligned_sizeof(S), aligned_sizeof(T))
+    (issingletontype(T) || aligned_sizeof(T) == aligned_sizeof(S)) && return len
+    num, den = _reinterpret_ratio(T, S)
+    return _reinterpret_div(len * num, den)
 end
 
 function size(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
@@ -395,6 +403,12 @@ function size(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     return psize
 end
 size(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
+
+function length(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
+    num, den = _reinterpret_ratio(T, S)
+    (num == 1 || den == 1) || return prod(size(a))
+    return _reinterpret_length(length(a.parent), T, S)
+end
 
 function axes(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     paxs = axes(a.parent)
@@ -490,6 +504,12 @@ function _is_scalar_reinterpret_applicable(T, S)
     isprimitivetype(S) && isprimitivetype(T) && Core.bitsizeof(T) === Core.bitsizeof(S)
 end
 
+function _reinterpret_offset(i, ::Type{T}, ::Type{S}) where {T,S}
+    s, t = aligned_sizeof(S), aligned_sizeof(T)
+    s == t && return (i - 1, 0)
+    return divrem((i - 1) * t, s)
+end
+
 @propagate_inbounds function _getindex_ra(a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     if issingletontype(T) # singleton types
         @boundscheck checkbounds(a, i1, tailinds...)
@@ -498,7 +518,7 @@ end
         return reinterpret(T, a.parent[i1, tailinds...])
     else
         @boundscheck checkbounds(a, i1, tailinds...)
-        ind_start, sidx = divrem((i1-1)*aligned_sizeof(T), aligned_sizeof(S))
+        ind_start, sidx = _reinterpret_offset(i1, T, S)
         # Optimizations that avoid branches
         if aligned_sizeof(T) % aligned_sizeof(S) == 0
             # T is bigger than S and contains an integer number of them
@@ -645,7 +665,7 @@ end
         setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
     else
         @boundscheck checkbounds(a, i1, tailinds...)
-        ind_start, sidx = divrem((i1-1)*aligned_sizeof(T), aligned_sizeof(S))
+        ind_start, sidx = _reinterpret_offset(i1, T, S)
         # Optimizations that avoid branches
         if aligned_sizeof(T) % aligned_sizeof(S) == 0
             # T is bigger than S and contains an integer number of them
@@ -748,6 +768,22 @@ end
                 unsafe_store!(tptr, v, i1)
                 a.parent[tailinds...] = s[]
             end
+        end
+    end
+    return a
+end
+
+function _fill!(a::ReinterpretArray{T,N,S}, x::T) where {T,N,S}
+    s, t = aligned_sizeof(S), aligned_sizeof(T)
+    if t != 0 && s % t == 0
+        isempty(a) && return a
+        for i in 0:div(s, t)-1
+            a[begin + i] = x
+        end
+        fill!(a.parent, first(a.parent))
+    else
+        for i in eachindex(a)
+            a[i] = x
         end
     end
     return a
