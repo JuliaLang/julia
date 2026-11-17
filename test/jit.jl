@@ -473,4 +473,32 @@ end
     end
 end
 
+@noinline kept_inner(x) = x * 3
+@noinline kept_outer(x) = kept_inner(x) + 1
+kept_caller(x::Int) = x > 0 ? kept_outer(x) : 0
+@noinline kept_dep() = Base.inferencebarrier(1)::Int
+@noinline kept_uses_dep(x) = x + kept_dep()
+kept_dep_caller(x::Int) = x > 0 ? kept_uses_dep(x) : 0
+code_instance(f, argtypes) = (@nospecialize; Base.method_instance(f, argtypes).cache)
+
+@testset "callees that might not run keep their source until compiled" begin
+    @test kept_caller(0) == 0
+    # inferred along with their caller, and not compiled yet
+    outer, inner = code_instance(kept_outer, (Int,)), code_instance(kept_inner, (Int,))
+    @test !is_compiled(kept_outer, (Int,)) && !is_compiled(kept_inner, (Int,))
+    @test outer.inferred isa String && inner.inferred isa String
+    # compiled from that source rather than inferred again, which then goes
+    @test kept_caller(2) == 7
+    @test code_instance(kept_outer, (Int,)) === outer && code_instance(kept_inner, (Int,)) === inner
+    @test outer.inferred === nothing && inner.inferred === nothing
+
+    # a callee invalidated before it is called no longer needs it
+    @test kept_dep_caller(0) == 0
+    uses = code_instance(kept_uses_dep, (Int,))
+    @test uses.inferred isa String
+    @eval kept_dep() = Base.inferencebarrier(2)::Int
+    @test uses.inferred === nothing
+    @test kept_dep_caller(1) == 3
+end
+
 sleep(5)  # Avoids problems where we don't respond to Distributed.jl fast enough
