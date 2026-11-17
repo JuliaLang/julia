@@ -2185,13 +2185,15 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
                          trim::Bool = false,
                          external_linkage::Bool = false,
-                         sure_to_run::Union{Vector{Bool},Nothing} = nothing)
+                         sure_to_run::Union{Vector{Bool},Nothing} = nothing,
+                         deferred::Vector{Any} = Any[])
     src = ci.code
     for i = 1:length(src)
         stmt = src[i]
         isexpr(stmt, :(=)) && (stmt = stmt.args[2])
         if isexpr(stmt, :invoke) && sure_to_run !== nothing && !sure_to_run[i]
             # leave it to be compiled when first called, through a trampoline
+            push!(deferred, stmt.args[1])
         elseif isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             edge = stmt.args[1]
             # If this CodeInstance is already compiled in the image, and we can
@@ -2308,7 +2310,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     codegen === nothing && return ci
     workqueue = CompilationQueue(; interp)
     push!(workqueue, ci)
-    codeinsts, srcs = Any[], Any[]
+    codeinsts, srcs, deferred = Any[], Any[], Any[]
     eager = IdSet{Any}()
     # Compile along with `ci` only the code sure to run when it does; a callee called only
     # where it might not run is compiled the first time it is called. Not when generating
@@ -2351,7 +2353,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         lazy = defer && !(callee in eager || has_force_compile(src))
         queued = length(workqueue.tocompile)
         collectinvokes!(workqueue, src, sptypes;
-                        sure_to_run = lazy ? stmts_sure_to_run(src.code) : nothing)
+                        sure_to_run = lazy ? stmts_sure_to_run(src.code) : nothing, deferred)
         if defer && !lazy
             for i = queued+1:length(workqueue.tocompile)
                 push!(eager, workqueue.tocompile[i])
@@ -2378,11 +2380,37 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         push!(srcs, src)
     end
     ccall(:jl_add_codeinsts_to_jit, Cvoid, (Any, Any), codeinsts, srcs)
+    for callee in codeinsts
+        ccall(:jl_drop_deferred_source, Cint, (Any,), callee)
+    end
+    keep_deferred_sources!(codegen, deferred)
     return ci
 end
 
 has_force_compile(src::CodeInfo) =
     any(stmt -> isexpr(stmt, :meta) && :force_compile in stmt.args, src.code)
+
+# A callee left to be compiled when first called keeps its optimized source until then, as
+# do the callees it calls, which were inferred along with it: inference otherwise discards
+# the source of what is not inlined, and compiling them would mean inferring them again.
+# `jl_drop_deferred_source` discards it once they are compiled or invalidated.
+function keep_deferred_sources!(codegen::IdDict{CodeInstance,CodeInfo}, deferred::Vector{Any})
+    while !isempty(deferred)
+        callee = pop!(deferred)
+        callee isa CodeInstance && callee.owner === nothing && !ci_has_invoke(callee) || continue
+        (@atomic :monotonic callee.inferred) === nothing || continue
+        src = get(codegen, callee, nothing)
+        src isa CodeInfo || continue
+        def = get_ci_mi(callee).def
+        def isa Method || continue
+        compressed = ccall(:jl_compress_ir, String, (Any, Any), def, src)
+        (@atomicreplace :release :monotonic callee.inferred nothing => compressed).success || continue
+        for stmt in src.code
+            isexpr(stmt, :(=)) && (stmt = stmt.args[2])
+            isexpr(stmt, :invoke) && push!(deferred, stmt.args[1])
+        end
+    end
+end
 
 function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
     mi2 = ccall(:jl_normalize_to_compilable_mi, Any, (Any,), mi)::MethodInstance

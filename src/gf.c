@@ -2456,6 +2456,20 @@ JL_DLLEXPORT jl_value_t *jl_debug_method_invalidation(int state) JL_CANSAFEPOINT
 
 static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_instance_t *replaced_ci, size_t max_world, int depth) JL_CANSAFEPOINT;
 
+// Discard the source a callee left to be compiled when first called kept until then (see
+// `keep_deferred_sources!`). Inference discards the source of what is not inlined, so it
+// is only kept otherwise by code from an image, or when the IR is kept on purpose.
+JL_DLLEXPORT int jl_drop_deferred_source(jl_code_instance_t *ci) JL_NOTSAFEPOINT
+{
+    jl_value_t *src = jl_atomic_load_relaxed(&ci->inferred);
+    if (src == NULL || !jl_is_string(src) || ci->owner != jl_nothing ||
+            (jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_FROM_IMAGE) ||
+            jl_ir_inlining_cost(src) != UINT16_MAX || jl_generating_output() ||
+            jl_atomic_load_relaxed(&jl_type_infer_preserve_ir))
+        return 0;
+    return jl_atomic_cmpswap(&ci->inferred, &src, jl_nothing);
+}
+
 // recursively invalidate cached methods that had an edge to a replaced method
 static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_world, int depth) JL_CANSAFEPOINT
 {
@@ -2477,6 +2491,8 @@ static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_wo
     if (replacedmaxworld == ~(size_t)0) {
         assert(jl_atomic_load_relaxed(&replaced->min_world) - 1 <= max_world && "attempting to set illogical world constraints (probable race condition)");
         jl_atomic_store_release(&replaced->max_world, max_world);
+        // it will not be compiled for the worlds it was kept for
+        jl_drop_deferred_source(replaced);
         // recurse to all backedges to update their valid range also
         _invalidate_backedges(replaced_mi, replaced, max_world, depth + 1);
         // TODO: should we visit all forward edges now and delete ourself from all of those lists too?
