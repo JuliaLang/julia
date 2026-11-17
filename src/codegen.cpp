@@ -4642,8 +4642,9 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         return true;
     }
     Value *mem = emit_memoryref_mem(ctx, ref, layout);
-    Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
+    Value *mlen = nullptr; // only loaded when needed
     if (memoryref_bounds_check_enabled(ctx, boundscheck)) {
+        mlen = emit_genericmemorylen(ctx, mem, ref.typ);
         BasicBlock *failBB, *endBB;
         failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
         endBB = BasicBlock::Create(ctx.builder.getContext(), "load");
@@ -4743,6 +4744,8 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         else {
             // isbits union selector bytes are stored after mem->length
+            if (!mlen)
+                mlen = emit_genericmemorylen(ctx, mem, ref.typ);
             ptindex = ctx.builder.CreateInBoundsGEP(AT, data, mlen);
             data = ctx.builder.CreateInBoundsGEP(AT, data, idx0);
         }
@@ -5091,9 +5094,10 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             jl_value_t *boundscheck = argv[3].constant;
             emit_typecheck(ctx, argv[3], (jl_value_t*)jl_bool_type, "memoryrefget");
             const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
-            Value *mem = emit_memoryref_mem(ctx, ref, layout);
-            Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
+            Value *mlen = nullptr; // only loaded when needed
             if (memoryref_bounds_check_enabled(ctx, boundscheck)) {
+                Value *mem = emit_memoryref_mem(ctx, ref, layout);
+                mlen = emit_genericmemorylen(ctx, mem, ref.typ);
                 BasicBlock *failBB, *endBB;
                 failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
                 endBB = BasicBlock::Create(ctx.builder.getContext(), "load");
@@ -5135,6 +5139,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 else {
                     Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * al), (elsz + al - 1) / al);
                     // isbits union selector bytes are stored after mem->length bytes
+                    if (!mlen)
+                        mlen = emit_genericmemorylen(ctx, mem, ref.typ);
                     ptindex = ctx.builder.CreateInBoundsGEP(AT, data, mlen);
                     data = ctx.builder.CreateInBoundsGEP(AT, data, idx0);
                 }
@@ -5212,9 +5218,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             }
             jl_value_t *boundscheck = argv[3].constant;
             emit_typecheck(ctx, argv[3], (jl_value_t*)jl_bool_type, fname);
-            Value *mem = emit_memoryref_mem(ctx, ref, layout);
-            Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
-            Value *oob = memoryref_bounds_check_enabled(ctx, boundscheck) ? ctx.builder.CreateIsNull(mlen) : nullptr;
+            Value *oob = nullptr;
+            if (memoryref_bounds_check_enabled(ctx, boundscheck)) {
+                Value *mem = emit_memoryref_mem(ctx, ref, layout);
+                oob = ctx.builder.CreateIsNull(emit_genericmemorylen(ctx, mem, ref.typ));
+            }
             bool isboxed = layout->flags.arrayelem_isboxed;
             if (isboxed || layout->first_ptr >= 0) {
                 bool needlock = layout->flags.arrayelem_islocked;
@@ -10514,21 +10522,35 @@ static jl_llvm_functions_t
             Value *isfalse = emit_condition(ctx, cond, "if");
             mallocVisitStmt(nullptr, have_dbg_update);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
-            workstack.push_back(lname - 1);
             BasicBlock *ifnot = BB[lname];
             BasicBlock *ifso = BB[cursor+2];
             Instruction *br;
-            if (ifnot == ifso)
-                br = ctx.builder.CreateBr(ifnot);
-            else
-                br = ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
+            int next = cursor + 1;
+            auto *constcond = ifnot == ifso ? nullptr : dyn_cast<ConstantInt>(isfalse);
+            if (constcond) {
+                // statically known condition (e.g. `:boundscheck`): only emit the taken side
+                if (constcond->isZero()) {
+                    br = ctx.builder.CreateBr(ifso);
+                }
+                else {
+                    br = ctx.builder.CreateBr(ifnot);
+                    next = lname - 1;
+                }
+            }
+            else {
+                workstack.push_back(lname - 1);
+                if (ifnot == ifso)
+                    br = ctx.builder.CreateBr(ifnot);
+                else
+                    br = ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
+            }
 
             // Check if backwards branch
-            if (ctx.LoopID && lname <= current_label) {
+            if (ctx.LoopID && lname <= current_label && (!constcond || next != cursor + 1)) {
                 br->setMetadata(LLVMContext::MD_loop, ctx.LoopID);
                 ctx.LoopID = NULL;
             }
-            find_next_stmt(cursor + 1);
+            find_next_stmt(next);
             continue;
         }
         else if (jl_is_enternode(stmt)) {
@@ -10651,6 +10673,9 @@ static jl_llvm_functions_t
             if (BB_rewrite_map.count(LookupKey)) {
                 FromBB = BB_rewrite_map[LookupKey];
             }
+            // The branch out of FromBB had a statically known condition and did not go here.
+            if (std::find(pred_begin(PhiBB), pred_end(PhiBB), FromBB) == pred_end(PhiBB))
+                continue;
             if (!preds.insert(FromBB).second) {
                 // Only codegen this branch once for each PHI (the expression must be the same on all branches)
 #ifndef NDEBUG
@@ -10663,7 +10688,6 @@ static jl_llvm_functions_t
 #endif
                 continue;
             }
-            assert(std::find(pred_begin(PhiBB), pred_end(PhiBB), FromBB) != pred_end(PhiBB)); // consistency check
             TerminatorInst *terminator = FromBB->getTerminator();
             if (!terminator->getParent()->getUniqueSuccessor()) {
                 // Can't use `llvm::SplitCriticalEdge` here because
