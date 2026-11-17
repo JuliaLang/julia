@@ -624,7 +624,7 @@ typedef struct {
 
 #define JI_COMPAT_SIZE 128
 
-typedef struct {
+typedef struct _jl_ji_header_t {
     char magic[8];
     uint16_t format_version;
     uint16_t bom;

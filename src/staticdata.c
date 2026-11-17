@@ -3603,11 +3603,6 @@ extern const jl_image_pointers_t jl_image_pointers;
 #define JL_IMAGE_SYM(handle, name, out) jl_dlsym(handle, #name, (void **)(out), 1, 0)
 #endif
 
-static const jl_ji_header_t *image_header(const jl_image_buf_t *buf) JL_NOTSAFEPOINT
-{
-    return (const jl_ji_header_t*)buf->data;
-}
-
 static int jl_image_read_ji(ios_t *s, jl_image_buf_t *image, int map) JL_NOTSAFEPOINT;
 
 // Takes in a path of the form "usr/lib/julia/sys.so"
@@ -3658,13 +3653,12 @@ static void jl_image_load_metadata(void *handle, jl_image_buf_t *image)
 
 JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
 {
-    size_t *plen;
-    JL_IMAGE_SYM(handle, jl_system_image_size, &plen);
-    JL_IMAGE_SYM(handle, jl_system_image_data, &image->data);
-    image->size = *plen;
-    const jl_ji_header_t *h = image_header(image);
+    const char *data;
+    JL_IMAGE_SYM(handle, jl_system_image_data, &data);
+    const jl_ji_header_t *h = (const jl_ji_header_t*)data;
     if (jl_verify_header(h)) {
-        image->heap = image->data + h->payload_start;
+        image->header = h;
+        image->heap = data + h->payload_start;
         image->heap_size = h->heap_size;
         image->loader = image->heap + image->heap_size;
     }
@@ -3748,7 +3742,6 @@ static int jl_image_read_ji(ios_t *s, jl_image_buf_t *image, int map) JL_NOTSAFE
         if (!p)
             return 0;
         image->heap = p + heap_offset;
-        image->data_owned = 1;
     }
     // read the file, leaving out the heap if it is mapped
     size_t size = payload_end - (map ? image->heap_size : 0);
@@ -3763,7 +3756,7 @@ static int jl_image_read_ji(ios_t *s, jl_image_buf_t *image, int map) JL_NOTSAFE
         return 0;
     }
     image->data = buf;
-    image->size = size;
+    image->header = (const jl_ji_header_t*)buf;
     if (map)
         image->loader = buf + h.payload_start;
     return 1;
@@ -3837,8 +3830,7 @@ static void jl_image_decompress(jl_image_buf_t *image, const char *data) JL_CANS
         jl_error("Compressed heap image is corrupt.");
     image->heap_size = h->heap_size;
     char *pages = jl_image_alloc_pages(image->heap_size);
-    image->size = h->payload_start + (payload_size - image->heap_size);
-    char *buf = (char *)malloc(image->size);
+    char *buf = (char *)malloc(h->payload_start + (payload_size - image->heap_size));
     memcpy(buf, data, h->payload_start);
     ZSTD_DCtx *dctx = ZSTD_createDCtx();
     ZSTD_inBuffer in = { comp_data, comp_len, 0 };
@@ -3846,9 +3838,9 @@ static void jl_image_decompress(jl_image_buf_t *image, const char *data) JL_CANS
     jl_image_decompress_into(dctx, &in, buf + h->payload_start, payload_size - image->heap_size);
     ZSTD_freeDCtx(dctx);
     image->data = buf;
+    image->header = (const jl_ji_header_t*)buf;
     image->heap = pages;
     image->loader = buf + h->payload_start;
-    image->data_owned = 1;
 }
 
 JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image) JL_CANSAFEPOINT
@@ -3871,7 +3863,7 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image) JL_C
 }
 
 // Read the .ji of the split image `handle` into `image` (see jl_image_read_ji), leaving
-// `image->data` NULL if it is the .ji of a package image not written with this .so.
+// `image->header` NULL if it is the .ji of a package image not written with this .so.
 static void jl_image_get_split_ji(void *handle, jl_image_buf_t *image, int map) JL_CANSAFEPOINT
 {
     const char *lib_path = jl_pathname_for_handle(handle);
@@ -3961,7 +3953,6 @@ static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage) JL_NOTSAFEPOI
         .kind = JL_IMAGE_KIND_SO,
         .pointers = NULL,
         .data = NULL,
-        .size = 0,
         .base = 0,
         .is_split = 0,
     };
@@ -4108,10 +4099,9 @@ static int all_usings_unchanged_implicit(jl_module_t *mod)
     return unchanged_implicit;
 }
 
-// The address of a section, in the loader data that follows the heap
-static char *image_section(const char *loader, const jl_ji_header_t *h, jl_image_section_t sec) JL_NOTSAFEPOINT
+static char *image_section(const jl_image_buf_t *buf, jl_image_section_t sec) JL_NOTSAFEPOINT
 {
-    return (char*)(loader + (sec.offset - h->heap_size));
+    return (char*)(buf->loader + (sec.offset - buf->header->heap_size));
 }
 
 static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_image_t *image,
@@ -4131,10 +4121,9 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
     }
 
     // step 1: read the section table
-    const jl_ji_header_t *h = image_header(buf);
+    const jl_ji_header_t *h = buf->header;
     size_t nwords = bitmap_nwords(h->pointer_free_offset);
     char *image_base = (char*)buf->heap;
-    const char *loader = buf->loader;
     uint32_t checksum = h->checksum;
     size_t sizeof_sysimg = h->heap_size;
     if (depmods) {
@@ -4147,8 +4136,8 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
 
     // step 2: apply relocations
     size_t nimports = h->imports.size / sizeof(import_t);
-    const import_t *imports = (const import_t*)(image_section(loader, h, h->imports));
-    const char *strtab = image_section(loader, h, h->strtab);
+    const import_t *imports = (const import_t*)(image_section(buf, h->imports));
+    const char *strtab = image_section(buf, h->strtab);
     s.imports_resolved = (uintptr_t*)malloc_s(nimports * sizeof(uintptr_t));
     s.pending = (uint8_t*)calloc_s(nimports);
     for (size_t i = 0; i < nimports; i++) {
@@ -4163,7 +4152,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
     // types, so that every reference to a type or its singleton instance is to a complete object
     // while the imports are resolved (see doc/src/devdocs/sysimg.md), and resolve the bindings.
     // MethodInstances read as NULL until they are resolved.
-    char *records = image_section(loader, h, h->auxdata);
+    char *records = image_section(buf, h->auxdata);
     for (size_t i = 0; i < nimports; i++) {
         import_t type = imports[i] >> IMPORT_TYPE_OFFSET;
         if (type == IMPORT_SINGLETON) {
@@ -4199,12 +4188,12 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
             jl_astaggedvalue(dt->instance)->bits.gc = GC_OLD;
         }
     }
-    jl_apply_slides((uintptr_t*)image_base, s.heap_delta, image_section(loader, h, h->slides), h->slides.size, nwords);
-    jl_apply_binds(&s, (uintptr_t*)image_base, image_section(loader, h, h->binds), h->binds.size, nwords);
+    jl_apply_slides((uintptr_t*)image_base, s.heap_delta, image_section(buf, h->slides), h->slides.size, nwords);
+    jl_apply_binds(&s, (uintptr_t*)image_base, image_section(buf, h->binds), h->binds.size, nwords);
 
     // step 3: get references to special values
-    jl_resolve_relocs(&s, (uintptr_t*)(image_section(loader, h, h->specials)), h->specials.size / sizeof(void*));
-    jl_value_t **specials = (jl_value_t**)(image_section(loader, h, h->specials));
+    jl_resolve_relocs(&s, (uintptr_t*)(image_section(buf, h->specials)), h->specials.size / sizeof(void*));
+    jl_value_t **specials = (jl_value_t**)(image_section(buf, h->specials));
     if (!pkg) {
         size_t i;
         for (i = 0; i < sizeof(jl_image_specials) / sizeof(jl_image_specials[0]); i++)
@@ -4226,9 +4215,9 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
         specials += sizeof(*pkg) / sizeof(void*);
         *internal_methods = jl_alloc_vec_any(0);
     }
-    assert((char*)specials == image_section(loader, h, h->specials) + h->specials.size);
-    const uintptr_t *fixup_types = (const uintptr_t*)image_section(loader, h, h->fixup_types);
-    const uintptr_t *fixup_objs = (const uintptr_t*)image_section(loader, h, h->fixup_objs);
+    assert((char*)specials == image_section(buf, h->specials) + h->specials.size);
+    const uintptr_t *fixup_types = (const uintptr_t*)image_section(buf, h->fixup_types);
+    const uintptr_t *fixup_objs = (const uintptr_t*)image_section(buf, h->fixup_objs);
     size_t nfixup_types = h->fixup_types.size / sizeof(uintptr_t), nfixup_objs = h->fixup_objs.size / sizeof(uintptr_t);
     // Resolve the provisional types, and the singletons of those types, in import order: a type
     // found in the caches or in the region replaces its provisional type, and a provisional type
@@ -4296,7 +4285,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
         jl_resolve_relocs(&s, (uintptr_t*)rec, sizeof(*rec) / sizeof(uintptr_t));
         jl_finalize_import(&s, i, (uintptr_t)jl_specializations_get_linfo((jl_method_t*)rec->def, (jl_value_t*)rec->specTypes, (jl_svec_t*)rec->sparam_vals));
     }
-    uintptr_t *gvars = (uintptr_t*)(image_section(loader, h, h->gvars));
+    uintptr_t *gvars = (uintptr_t*)(image_section(buf, h->gvars));
     jl_resolve_relocs(&s, gvars, h->gvars.size / sizeof(void*));
 #ifndef NDEBUG
     for (size_t i = 0; i < nimports; i++)
@@ -4377,7 +4366,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
 
     jl_update_all_gvars(image, gvars, h->gvars.size / sizeof(void*), h->gvar_objects, pkg != NULL);
 
-    jl_update_all_fptrs(image, image_base, (const uintptr_t*)image_section(loader, h, h->fptrs),
+    jl_update_all_fptrs(image, image_base, (const uintptr_t*)image_section(buf, h->fptrs),
                         h->fptrs.size / sizeof(uintptr_t));
 
     if (!pkg)
@@ -4432,10 +4421,10 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
 // Check that the image in `buf` can be loaded with `depmods`: returns NULL if so, else an exception
 static jl_value_t *jl_validate_cache_file(const jl_image_buf_t *buf, jl_array_t *depmods) JL_CANSAFEPOINT
 {
-    if (!buf->heap)
+    if (!buf->header)
         return jl_get_exceptionf(jl_errorexception_type,
                                  "Precompile file header verification checks failed.");
-    uint32_t flags = image_header(buf)->flags;
+    uint32_t flags = buf->header->flags;
 
     if (buf->is_split != !!(flags & JI_FLAG_SPLIT))
         return jl_get_exceptionf(jl_errorexception_type, "Expected %s image, but got %s",
@@ -4450,8 +4439,8 @@ static jl_value_t *jl_validate_cache_file(const jl_image_buf_t *buf, jl_array_t 
 
     if (!depmods)
         return NULL;
-    ios_t f; // over the image's data, which it does not own, so it needs no closing
-    ios_static_buffer(&f, (char*)buf->data, buf->size);
+    ios_t f; // over the image's header, which it does not own, so it needs no closing
+    ios_static_buffer(&f, (char*)buf->header, buf->header->payload_start);
     ios_seek(&f, sizeof(jl_ji_header_t));
     // Syntax version mismatch is not fatal to load
     if (!jl_match_cache_flags_current(read_uint8(&f)))
@@ -4467,7 +4456,7 @@ static jl_value_t *jl_validate_cache_file(const jl_image_buf_t *buf, jl_array_t 
         ios_skip(&f, len + 2 * sizeof(uint64_t));
         uint64_t build_id_lo = read_uint64(&f);
         if (first && !coverage_ok)
-            coverage_ok = jl_coverage_plain_image_accepted(image_header(buf)->checksum, build_id_lo);
+            coverage_ok = jl_coverage_plain_image_accepted(buf->header->checksum, build_id_lo);
         first = 0;
     }
     if (!coverage_ok)
@@ -4534,7 +4523,7 @@ static jl_value_t *jl_restore_incremental_from_buf(const jl_image_buf_t *buf, jl
 
         if (completeinfo) {
             // the sizes of the image's parts, for PkgCacheInspector
-            const jl_ji_header_t *h = image_header(buf);
+            const jl_ji_header_t *h = buf->header;
             cachesizes_sv = jl_alloc_svec(7);
             jl_svecset(cachesizes_sv, 0, jl_box_long(h->pointer_free_offset));
             jl_svecset(cachesizes_sv, 1, jl_box_long(h->heap_size - h->pointer_free_offset));
@@ -4586,8 +4575,8 @@ int jl_adopt_image_constants(jl_image_buf_t buf) JL_CANSAFEPOINT
     size_t i, n = sizeof(jl_image_specials) / sizeof(jl_image_specials[0]);
     if (!buf.heap)
         return 0;
-    const jl_ji_header_t *h = image_header(&buf);
-    const uintptr_t *specials = (const uintptr_t*)image_section(buf.loader, h, h->specials);
+    const jl_ji_header_t *h = buf.header;
+    const uintptr_t *specials = (const uintptr_t*)image_section(&buf, h->specials);
     for (i = 0; i < n; i++) {
         if (jl_image_specials[i] == &jl_nothing)
             jl_nothing = (jl_value_t*)(buf.heap + (specials[i] - h->preferred_base));
@@ -4612,9 +4601,10 @@ JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
         jl_restore_system_image_from_stream_(&buf, image, NULL, NULL, NULL, NULL);
         jl_init_git_commit();
     }
-    if (buf.data_owned) {
+    if (buf.data) {
         free((char*)buf.data);
         jl_sysimage_buf.data = NULL;
+        jl_sysimage_buf.header = NULL;
         jl_sysimage_buf.loader = NULL;
     }
     JL_SIGATOMIC_END();
@@ -4624,7 +4614,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
 {
     void *pkgimg_handle = jl_dlopen_e(fname, JL_RTLD_LAZY);
     jl_image_buf_t buf = get_image_buf(pkgimg_handle, /* is_pkgimage */ 1);
-    if (buf.data == NULL) {
+    if (buf.header == NULL) {
         // unload it, so that a recompiled image at the same path is not served this handle
         jl_dlclose(pkgimg_handle);
         return jl_get_exceptionf(jl_errorexception_type,
@@ -4645,8 +4635,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
     }
 
     jl_value_t* mod = jl_restore_incremental_from_buf(&buf, &pkgimage, depmods, completeinfo, pkgname);
-    if (buf.data_owned)
-        free((char*)buf.data);
+    free((char*)buf.data);
     return mod;
 }
 
