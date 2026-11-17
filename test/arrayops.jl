@@ -3731,6 +3731,9 @@ end
     @test pointer(Base.expand(moved, 3M)) == pointer(moved) || !expands
     fresh = Base.expand(Memory{UInt8}(undef, 0), M)
     @test length(fresh) == M && (pointer(Base.expand(fresh, 2M)) == pointer(fresh) || !expands)
+    # wide elements are mapped from fewer of them
+    wide = Base.expand(Memory{NTuple{8, Int}}(undef, 0), 40_000)
+    @test length(wide) == 40_000 && (pointer(Base.expand(wide, 50_000)) == pointer(wide) || !expands)
     # Small memory and memory that holds references always move
     refs = Memory{Any}(undef, 16)
     refs[1] = "kept"
@@ -3769,4 +3772,25 @@ end
     short = Base.memory_truncate(long, M ÷ 4)
     GC.gc()
     @test all(==(0x05), view(long, 1:2M)) && (isnothing(short) || all(==(0x05), short))
+end
+
+struct UnionField
+    x::Union{Int8, Nothing}
+    y::Int8
+end
+@testset "expanding memory whose elements must start zeroed" begin
+    M = 40 << 20 # above the size from which Memory that replaces outgrown Memory is mapped
+    # a mapping freed with other contents, which a later one may reuse
+    function dirty() # so that nothing here keeps the Memory alive
+        append!(UInt8[], fill(0xff, 3M))
+        nothing
+    end
+    dirty()
+    GC.gc(false)
+    GC.gc(false)
+    m = resize!(UnionField[], cld(M, sizeof(UnionField))).ref.mem
+    len = length(m)
+    e = Base.expand(m, 2len)
+    zeroed = Memory{UnionField}(undef, 1)[1]
+    @test all(x -> x === zeroed, view(e, len+1:2len))
 end

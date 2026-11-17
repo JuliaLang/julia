@@ -1422,7 +1422,7 @@ JL_DLLEXPORT void *jl_gc_managed_map(size_t sz)
     return NULL;
 }
 
-JL_DLLEXPORT int jl_gc_managed_expand(void *data, size_t oldsz, size_t newsz)
+JL_DLLEXPORT int jl_gc_managed_expand(void *data, size_t oldsz, size_t newsz, int zeroed)
 {
     return 0;
 }

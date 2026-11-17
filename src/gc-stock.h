@@ -769,6 +769,7 @@ void memory_mapping_init(void) JL_NOTSAFEPOINT;
 void memory_mapping_mark(void *data, size_t sz) JL_NOTSAFEPOINT;
 size_t memory_mapping_trim(void *data) JL_NOTSAFEPOINT;
 size_t memory_mapping_free(void *data) JL_NOTSAFEPOINT;
+void memory_mapping_cache_sweep(int forced) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

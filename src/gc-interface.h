@@ -266,8 +266,9 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz) JL_CANSAFEPOINT;
 // JL_MALLOCD_MAPPED. Returns NULL when unsupported or out of address space.
 JL_DLLEXPORT void *jl_gc_managed_map(size_t sz) JL_CANSAFEPOINT;
 // Grow the claimed bytes of `data`, from jl_gc_managed_map, from `oldsz` to `newsz` in
-// place. Returns 0 if `oldsz` is not the claimed size, or `newsz` does not fit its reservation.
-JL_DLLEXPORT int jl_gc_managed_expand(void *data, size_t oldsz, size_t newsz) JL_CANSAFEPOINT;
+// place, where the new bytes read as zero if `zeroed`. Returns 0 if `oldsz` is not the claimed
+// size, or `newsz` does not fit its reservation.
+JL_DLLEXPORT int jl_gc_managed_expand(void *data, size_t oldsz, size_t newsz, int zeroed) JL_CANSAFEPOINT;
 // As jl_gc_managed_map, for an object of type `ty` that jl_gc_expand can grow in place
 JL_DLLEXPORT struct _jl_value_t *jl_gc_alloc_expandable(struct _jl_tls_states_t *ptls, size_t sz, void *ty) JL_CANSAFEPOINT;
 // Grow the object `v` from `oldsz` to `newsz` bytes in place. Returns 0 if `v` is not from

@@ -274,7 +274,7 @@ static int genericmemory_expandable(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 static int expand_genericmemory_data(jl_genericmemory_t *m, size_t oldsz, size_t newsz) JL_CANSAFEPOINT
 {
     if (jl_genericmemory_how(m) == JL_GENERICMEMORY_MEMORYOWNED)
-        return jl_gc_managed_expand(m->ptr, oldsz, newsz);
+        return jl_gc_managed_expand(m->ptr, oldsz, newsz, ((jl_datatype_t*)jl_typetagof(m))->zeroinit);
     jl_value_t *str = jl_genericmemory_data_owner_field(m);
     if (!jl_gc_expand(str, sizeof(size_t) + oldsz + 1, sizeof(size_t) + newsz + 1))
         return 0;

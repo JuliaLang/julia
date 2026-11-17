@@ -3815,6 +3815,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_num.total_stack_pool_sweep_time += stack_pool_time;
         gc_num.stack_pool_sweep_time = stack_pool_time;
         gc_sweep_other(ptls, sweep_full);
+        memory_mapping_cache_sweep(collection == JL_GC_FULL);
         if (GC_DEBUG_ENV_ENABLED)
             gc_scrub();
         if (MEMFENCE_ENABLED)

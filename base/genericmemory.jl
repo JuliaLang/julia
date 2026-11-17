@@ -100,7 +100,7 @@ it in turn can be in place. As the result may or may not share its data with `me
 place of `mem` from then on. Elements past `length(mem)` are uninitialized.
 
 Memory grows in place only if `expand` or a growing array or buffer allocated it, its elements
-hold no references, and it is large (at least 32 MiB), where the platform and the address space
+hold no references, and it is large (at least 2 MiB), where the platform and the address space
 available allow. Expanding an empty `Memory` allocates such memory with nothing to copy.
 
 # Examples
@@ -131,7 +131,7 @@ function expand(mem::M, n::Integer) where {M<:Memory}
     newmem
 end
 
-const GROWABLE_MEMORY_BYTES = 32 << 20 # Memory this large is allocated to expand in place
+const GROWABLE_MEMORY_BYTES = 2 << 20 # Memory this large is allocated to expand in place
 
 # A Memory of `n > length(mem)` elements over the data of `mem`, or `nothing` if they would have to move
 function expand_inplace(mem::M, n::Integer) where {M<:GenericMemory}
