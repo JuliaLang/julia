@@ -774,6 +774,10 @@ JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT
 }
 #endif
 
+// Collections left to upgrade buffers in: two from when one goes without huge pages, as the
+// first can come before that buffer is tracked
+_Atomic(int) jl_hugepage_upgrades;
+
 #if defined(_OS_LINUX_)
 static void read_start(_Atomic(int) *fd, const char *path, char *buf, size_t sz) JL_NOTSAFEPOINT
 {
@@ -840,14 +844,24 @@ void jl_hugepage_request(void *p, size_t sz) JL_NOTSAFEPOINT
     }
     if (jl_atomic_load_relaxed(&stalling)) {
         size_t free = jl_atomic_load_relaxed(&ready);
-        if (sz > free)
+        if (sz > free) {
             sz = free;
+            jl_atomic_store_relaxed(&jl_hugepage_upgrades, 2);
+        }
         jl_atomic_store_relaxed(&ready, free - sz);
     }
     madvise(p, sz, MADV_HUGEPAGE);
 }
+
+// For memory already in use, which the kernel then upgrades in the background
+void jl_hugepage_upgrade(void *p, size_t sz) JL_NOTSAFEPOINT
+{
+    if (hugepages_on_request())
+        madvise(p, sz, MADV_HUGEPAGE);
+}
 #else
 void jl_hugepage_request(void *p, size_t sz) JL_NOTSAFEPOINT {}
+void jl_hugepage_upgrade(void *p, size_t sz) JL_NOTSAFEPOINT {}
 #endif
 
 JL_DLLEXPORT long jl_gethugepagesize(void) JL_NOTSAFEPOINT
