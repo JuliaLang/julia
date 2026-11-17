@@ -2026,6 +2026,8 @@ static int need_copy_to_mi_cache(jl_svec_t *sparams, jl_method_instance_t *mi2,
         !jl_egal((jl_value_t*)sparams, (jl_value_t*)mi2->sparam_vals);
 }
 
+static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t *start_method) JL_CANSAFEPOINT;
+
 static void recache_method(
         jl_methtable_t *mt, jl_methcache_t *mc, _Atomic(jl_typemap_t*) *cache, jl_value_t *parent JL_PROPAGATES_ROOT,
         jl_tupletype_t *tt, // the original tupletype of the signature
@@ -2058,19 +2060,19 @@ static void recache_method(
         struct jl_typemap_assoc search = {tt ? (jl_value_t*)tt : compilationsig, world, NULL};
         assert(cache);
         jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(cache), &search, offs, /*subtype*/1);
-        if (entry && typemap_entry_linfo(entry)->def.method != definition) {
-            // Another method owns this signature. Inference also matches methods
-            // it cannot tell are shadowed (`Type{Int} <: DataType` is false).
-            if (mc) JL_UNLOCK(&mc->writelock);
-            return;
-        }
-        if (entry && jl_subtype((jl_value_t*)entry->sig, (jl_value_t*)newmeth->specTypes)) {
-            jl_gc_write_atomic(entry, *(_Atomic(jl_method_instance_t*)*)&entry->func.linfo,
-                   jl_method_instance_t, newmeth, release);
-            if (entry->simplesig == (void*)jl_nothing || jl_egal((jl_value_t*)entry->simplesig, compute_simplett((jl_tupletype_t*)newmeth->specTypes))) {
+        if (entry) {
+            // an existing entry already covers this signature, so don't add another;
+            // retarget it only if `newmeth` can serve all of it
+            int retarget = typemap_entry_linfo(entry)->def.method == definition &&
+                jl_subtype((jl_value_t*)entry->sig, (jl_value_t*)newmeth->specTypes);
+            if (retarget)
+                jl_gc_write_atomic(entry, *(_Atomic(jl_method_instance_t*)*)&entry->func.linfo,
+                       jl_method_instance_t, newmeth, release);
+            if (!retarget || jl_subtype(compilationsig, (jl_value_t*)entry->sig)) {
                 if (mc) JL_UNLOCK(&mc->writelock);
                 return; // cache entry already sufficient
             }
+            orig_in_cache = 1;
         }
     }
 
@@ -2104,7 +2106,8 @@ static void recache_method(
     // In most cases `!jl_isa_compileable_sig(tt, sparams, definition)`,
     // although for some cases, (notably Varargs)
     // we might choose a replacement type that's preferable but not strictly better
-    jl_value_t *cachett = (jl_value_t*)tt;
+    // an invoke cache holds only `definition`, so it needs no guards
+    jl_value_t *cachett = cache_with_orig || mt ? (jl_value_t*)tt : compilationsig;
     if (!cache_with_orig && mt) {
         // now examine what will happen if we chose to use this sig in the cache
         size_t min_valid2 = 1;
@@ -2116,51 +2119,44 @@ static void recache_method(
             cache_with_orig = 1;
         }
         else {
-            int unmatched_tvars = 0;
             size_t i, l = jl_array_nrows(matches);
             for (i = 0; i < l; i++) {
                 jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(matches, i);
-                if (matc->method == definition)
+                // `definition` covers all of `compilationsig`, so it beats any method it is more specific than
+                if (matc->method == definition || method_morespecific_recorded(definition, matc->method))
                     continue;
-                jl_svec_t *env = matc->sparams;
-                int k, l;
-                for (k = 0, l = jl_svec_len(env); k < l; k++) {
-                    jl_value_t *env_k = jl_svecref(env, k);
-                    if (jl_is_svec(env_k) || jl_has_free_typevars(env_k) || jl_is_vararg(env_k)) {
-                        unmatched_tvars = 1;
-                        break;
-                    }
+                if (matc->fully_covers) {
+                    // another method covers all of `compilationsig`, so only `tt` can dispatch to `definition`
+                    cache_with_orig = 1;
+                    break;
                 }
-                if (unmatched_tvars || guards > MAX_UNSPECIALIZED_CONFLICTS) {
-                    // if distinguishing a guard entry from the generalized signature
-                    // would require matching type vars then bail out, since the
-                    // method cache matching algorithm cannot do that.
+                // `typeintersect` may be conservative (notably with diagonal type vars), and
+                // a guard wider than the method could block calls that dispatch to
+                // `definition` (even `tt`), so then guard with the method's own signature
+                jl_value_t *guard = (jl_value_t*)matc->spec_types;
+                if (!jl_subtype(guard, matc->method->sig))
+                    guard = matc->method->sig;
+                if (!jl_is_datatype(guard) || guards > MAX_UNSPECIALIZED_CONFLICTS) {
+                    // a guard with type vars would cost a full subtype check on every
+                    // lookup, so cache each signature individually instead (the
+                    // overlapping definitions are better fixed by their author)
                     //
                     // also bail if this requires too many guard entries
                     cache_with_orig = 1;
                     break;
                 }
+                // collect the guards at the front
+                jl_array_ptr_set(matches, guards, guard);
                 guards++;
             }
         }
         if (!cache_with_orig && guards > 0) {
             // use guard entries as placeholders to prevent this cached method
             // from matching when another more specific definition also exists
-            size_t i, l;
+            size_t i;
             guardsigs = jl_alloc_svec(guards);
-            guards = 0;
-            for (i = 0, l = jl_array_nrows(matches); i < l; i++) {
-                jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(matches, i);
-                jl_method_t *other = matc->method;
-                if (other != definition) {
-                    jl_svecset(guardsigs, guards, matc->spec_types);
-                    guards++;
-                    // alternative approach: insert sentinel entry
-                    //jl_typemap_insert(cache, parent, (jl_tupletype_t*)matc->spec_types,
-                    //        NULL, jl_emptysvec, /*guard*/NULL, jl_cachearg_offset(), other->min_world, other->max_world);
-                }
-            }
-            assert(guards == jl_svec_len(guardsigs));
+            for (i = 0; i < guards; i++)
+                jl_svecset(guardsigs, i, jl_array_ptr_ref(matches, i));
         }
         if (!cache_with_orig) {
             // determined above that there's no ambiguity in also using compilationsig as the cacheablesig
