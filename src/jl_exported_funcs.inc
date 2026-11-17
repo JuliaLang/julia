@@ -432,6 +432,7 @@
     XX(jl_signal_watch_stop) \
     XX(jl_sigrtmax) \
     XX(jl_sigrtmin) \
+    XX(jl_softticks_abi_version) \
     XX(jl_spawn) \
     XX(jl_sparam_slot_value) \
     XX(jl_specializations_get_linfo) \

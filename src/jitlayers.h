@@ -80,6 +80,28 @@ void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIR
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
 
+// Software ticks for rr (src/llvm-softticks.cpp): instrumenting the generated code is the
+// default when Julia itself is built for them, by a compiler that predefines __RR_SOFTTICKS__
+// to the version of rr's software-ticks ABI (rr-debugger/rr#4104), on a target the ABI defines.
+#if defined(__RR_SOFTTICKS__) && defined(_OS_LINUX_) && \
+    (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_))
+#if __RR_SOFTTICKS__ != 1
+#error "Julia implements version 1 of rr's software-ticks ABI"
+#endif
+#define JL_SOFTTICKS_DEFAULT true
+#else
+#define JL_SOFTTICKS_DEFAULT false
+#endif
+// Whether to instrument: JL_SOFTTICKS_DEFAULT, unless the LLVM option -julia-softticks says.
+bool jl_softticks_enabled(void) JL_NOTSAFEPOINT;
+// Registers -julia-softticks; jl_init_llvm calls it before parsing the LLVM options.
+void jl_softticks_add_option(void) JL_NOTSAFEPOINT;
+// Reads -julia-softticks, once the options are parsed, and maps the countdown's page when
+// ticks are enabled and the runtime has not mapped it.
+void jl_softticks_init(void) JL_NOTSAFEPOINT;
+// Instruments the module (SoftTicksPass); returns whether it changed it.
+bool addSoftTicks(Module &M, bool imaging) JL_NOTSAFEPOINT;
+
 struct OptimizationOptions {
     bool lower_intrinsics;
     bool dump_native;
@@ -98,6 +120,7 @@ struct OptimizationOptions {
     bool sanitize_memory;
     bool sanitize_thread;
     bool sanitize_address;
+    bool softticks;
 
     static constexpr OptimizationOptions defaults(
         bool lower_intrinsics=true,
@@ -125,10 +148,11 @@ struct OptimizationOptions {
         bool sanitize_thread=false,
 #endif
 #ifdef _COMPILER_ASAN_ENABLED_
-        bool sanitize_address=true
+        bool sanitize_address=true,
 #else
-        bool sanitize_address=false
+        bool sanitize_address=false,
 #endif
+        bool softticks=JL_SOFTTICKS_DEFAULT
 ) JL_NOTSAFEPOINT {
         return {lower_intrinsics,
                 dump_native,
@@ -146,7 +170,8 @@ struct OptimizationOptions {
                 warn_missed_transformations,
                 sanitize_memory,
                 sanitize_thread,
-                sanitize_address};
+                sanitize_address,
+                softticks};
     }
 };
 

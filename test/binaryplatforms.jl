@@ -272,6 +272,26 @@ end
     @test platforms_match(HostPlatform(sanitized_host), P("x86_64", "linux"; sanitize="address"))
     @test !platforms_match(HostPlatform(sanitized_host), P("x86_64", "linux"))
 
+    # A runtime compiled for rr's software ticks adds the version of their ABI
+    rr_softticks = BinaryPlatforms.detect_rr_softticks()
+    if rr_softticks === nothing
+        @test BinaryPlatforms.build_ext_tags() == Base.BUILD_EXT_TAGS
+        @test !haskey(tags(HostPlatform()), "rr_softticks")
+    else
+        @test BinaryPlatforms.build_ext_tags() == string(Base.BUILD_EXT_TAGS, "-rr_softticks+", rr_softticks)
+        @test tags(HostPlatform())["rr_softticks"] == string(rr_softticks)
+    end
+    softticks_host = parse(Platform, BinaryPlatforms.host_triplet("x86_64-linux-gnu-libgfortran5-cxx11", "-rr_softticks+1"))
+    @test tags(softticks_host)["rr_softticks"] == "1"
+    @test parse(Platform, triplet(HostPlatform())) == HostPlatform()
+    @test triplet(P("x86_64", "linux"; rr_softticks="1")) == "x86_64-linux-gnu-rr_softticks+1"
+    @test parse(Platform, "x86_64-linux-gnu-rr_softticks+1") == P("x86_64", "linux"; rr_softticks="1")
+    both = parse(Platform, BinaryPlatforms.host_triplet("x86_64-linux-gnu-libgfortran5-cxx11", "-sanitize+address-rr_softticks+1"))
+    @test tags(both)["sanitize"] == "address"
+    @test tags(both)["rr_softticks"] == "1"
+    @test platforms_match(HostPlatform(softticks_host), P("x86_64", "linux"; rr_softticks="1"))
+    @test !platforms_match(HostPlatform(softticks_host), P("x86_64", "linux"))
+
     # Test that we can modify tags at will using the dict-like interface:
     p = P("x86_64", "linux")
     p["foo"] = "bar"
@@ -467,6 +487,17 @@ end
     @test !platforms_match(msan, P("x86_64", "linux"; sanitize="thread"))
     @test !platforms_match(HostPlatform(msan), linux)
     @test platforms_match(HostPlatform(P("x86_64", "linux"; sanitize="memory")), msan)
+    # So is an `rr_softticks` tag
+    softticks = P("x86_64", "linux"; rr_softticks="1")
+    @test platforms_match(softticks, P("x86_64", "linux"; rr_softticks="1"))
+    @test !platforms_match(softticks, linux)
+    @test !platforms_match(linux, softticks)
+    @test !platforms_match("x86_64-linux-gnu-rr_softticks+1", "x86_64-linux-gnu")
+    @test !platforms_match("x86_64-linux-gnu", "x86_64-linux-gnu-rr_softticks+1")
+    @test !platforms_match(softticks, P("x86_64", "linux"; rr_softticks="2"))
+    @test !platforms_match(HostPlatform(softticks), linux)
+    @test platforms_match(HostPlatform(softticks), softticks)
+    @test !platforms_match(softticks, P("x86_64", "linux"; rr_softticks="1", sanitize="memory"))
     # Other extended tags are still wildcards
     @test platforms_match(P("x86_64", "linux"; cuda="10.1"), linux)
 end
@@ -535,6 +566,10 @@ end
     # with `clang`, which wouldn't have any `libstdc++` constraints at all
     detect_libstdcxx_version()
     detect_cxxstring_abi()
+
+    # `nothing` unless the runtime was compiled for rr's software ticks
+    rr_softticks = BinaryPlatforms.detect_rr_softticks()
+    @test rr_softticks === nothing || rr_softticks isa Int && rr_softticks > 0
 end
 
 @testset "select_platform" begin
@@ -582,6 +617,18 @@ end
     # Sanitized and unsanitized platforms never stand in for one another
     @test select_platform(Dict(P("x86_64", "linux"; sanitize="memory") => "sanitized"), P("x86_64", "linux")) === nothing
     @test select_platform(Dict(P("x86_64", "linux") => "normal"), P("x86_64", "linux"; sanitize="memory")) === nothing
+    # Likewise for software ticks: a host that has them selects only artifacts built for
+    # them, and one that does not never selects those
+    platforms = Dict(
+        P("x86_64", "linux"; libgfortran_version=v"5") => "normal",
+        P("x86_64", "linux"; libgfortran_version=v"5", rr_softticks="1") => "softticks",
+    )
+    softticks_host = HostPlatform(P("x86_64", "linux"; libgfortran_version=v"5", cxxstring_abi="cxx11", rr_softticks="1"))
+    @test select_platform(platforms, softticks_host) == "softticks"
+    @test select_platform(platforms, HostPlatform(P("x86_64", "linux"; libgfortran_version=v"5", cxxstring_abi="cxx11"))) == "normal"
+    @test select_platform(Dict(P("x86_64", "linux") => "normal"), softticks_host) === nothing
+    @test select_platform(Dict(P("x86_64", "linux"; rr_softticks="1") => "softticks"), P("x86_64", "linux")) === nothing
+    @test select_platform(Dict(P("x86_64", "linux"; rr_softticks="2") => "softticks"), softticks_host) === nothing
 
     # Ties are broken by reverse-sorting by triplet:
     platforms = Dict(

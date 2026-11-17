@@ -28,8 +28,10 @@ end
 
 # Some tests assume calls should be stripped out,
 # so strip out the calls to debug intrinsics that
-# are not actually materialized as call instructions.
-strip_debug_calls(ir) = replace(ir, r"call void @llvm\.dbg\.declare.*\n" => "", r"call void @llvm\.dbg\.value.*\n" => "")
+# are not actually materialized as call instructions,
+# and the software ticks (inline asm) of a Julia built for rr's software ticks.
+strip_debug_calls(ir) = replace(ir, r"call void @llvm\.dbg\.declare.*\n" => "", r"call void @llvm\.dbg\.value.*\n" => "",
+                                r"call void asm sideeffect \"(testb \$\$0x80, 0x70001807|movz x16, #0x7001, lsl #16)\\0A.*\n" => "")
 
 # Inline debug scopes follow CodegenParams, whose default retains them even
 # when Julia's internal codegen parameters disable them for image generation.

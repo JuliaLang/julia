@@ -678,6 +678,10 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
     }
     buildIntrinsicLoweringPipeline(MPM, PB, O, options);
     buildCleanupPipeline(MPM, PB, O, options);
+    // Last, at every optimization level, so that no later pass duplicates, moves or deletes
+    // a tick: the ticks are a property of the code that runs.
+    if (options.softticks)
+        MPM.addPass(SoftTicksPass(options.dump_native));
     MPM.addPass(AfterOptimizationMarkerPass());
 }
 
@@ -1104,6 +1108,7 @@ static std::optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJul
             OPTION(sanitize_memory),
             OPTION(sanitize_thread),
             OPTION(sanitize_address),
+            OPTION(softticks),
 #undef OPTION
         };
         while (!name.empty()) {
@@ -1220,6 +1225,19 @@ static void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
                     }
                     if (Name == "imaging") {
                         PM.addPass(LowerPTLSPass(imaging_mode));
+                        return true;
+                    }
+                }
+                return false;
+            }
+            if (Name.consume_front("SoftTicks")) {
+                if (Name.consume_front("<") && Name.consume_back(">")) {
+                    bool imaging_mode = true;
+                    if (Name.consume_front("no-")) {
+                        imaging_mode = false;
+                    }
+                    if (Name == "imaging") {
+                        PM.addPass(SoftTicksPass(imaging_mode));
                         return true;
                     }
                 }

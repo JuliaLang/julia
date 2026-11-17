@@ -87,6 +87,15 @@ struct LowerPTLSPass : RequiredPassInfoMixin<LowerPTLSPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
 };
 
+// Software ticks for rr; must run last. imaging_mode adds the initializer and the note that
+// a linked image needs (src/llvm-softticks.cpp).
+struct SoftTicksPass : RequiredPassInfoMixin<SoftTicksPass> {
+    bool imaging_mode;
+    SoftTicksPass(bool imaging_mode=false) JL_NOTSAFEPOINT : imaging_mode(imaging_mode) {}
+
+    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
+};
+
 // Loop Passes
 struct JuliaLICMPass : OptionalPassInfoMixin<JuliaLICMPass> {
     PreservedAnalyses run(Loop &L, LoopAnalysisManager &AM,

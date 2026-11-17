@@ -101,6 +101,16 @@ This pass is used to verify Julia's invariants about LLVM IR. This includes thin
 
 [^nislides]: https://llvm.org/devmtg/2015-02/slides/chisnall-pointers-not-int.pdf
 
+### SoftTicks
+
+* Filename: `llvm-softticks.cpp`
+* Class Name: `SoftTicksPass`
+* Opt Name: `module(SoftTicks)`, `module(SoftTicks<imaging>)`
+
+This pass instruments generated code with software ticks for [rr](https://rr-project.org/), so that rr can record and replay it on machines without a usable branch counter ([rr-debugger/rr#4104](https://github.com/rr-debugger/rr/pull/4104)). A tick, a short assembly sequence defined by rr's software-ticks ABI, decrements a countdown at a fixed address and traps when it reaches zero, unless the countdown's top bit is set: outside rr the countdown is disarmed that way, and the ticks only read it. The pass puts one at the start of every function, at the start of every block that is the target of a retreating edge of a depth-first walk of the CFG (so that every cycle contains one), and right after every call to a `returns_twice` function. In imaging mode (system and package images), each module that ticks also gets the ABI's initializer, which maps the countdown's page when the image is loaded outside rr, and the ELF note that marks it as instrumented.
+
+The pipeline runs this pass last, after all other optimization and lowering, when Julia itself is built for software ticks (by a compiler with a software-ticks pass, which predefines `__RR_SOFTTICKS__`), so that JIT code and images tick like the instrumented runtime. The hidden LLVM option `-julia-softticks=<0|1>` (e.g. through `JULIA_LLVM_ARGS`) overrides that default; enabling it in a runtime that is not instrumented maps the countdown's page for the JIT.
+
 ## Optimization Passes
 
 These passes are used to perform transformations on LLVM IR that LLVM will not perform itself, e.g. fast math flag propagation, escape analysis, and optimizations on Julia-specific internal functions. They use knowledge about Julia's semantics to perform these optimizations.

@@ -1715,6 +1715,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
         options.sanitize_memory = jl_options.target_sanitize_memory;
         options.sanitize_thread = jl_options.target_sanitize_thread;
         options.sanitize_address = jl_options.target_sanitize_address;
+        options.softticks = jl_softticks_enabled();
         NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), options};
         {
             TimeTraceScope OptimizeScope("AOT Optimize", M.getModuleIdentifier());
@@ -2796,6 +2797,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                     opts.sanitize_memory = params.sanitize_memory;
                     opts.sanitize_thread = params.sanitize_thread;
                     opts.sanitize_address = params.sanitize_address;
+                    opts.softticks = jl_softticks_enabled();
                     PrintOptions print_opts;
                     std::string pass_output_buffer;
                     raw_string_ostream pass_output_stream(pass_output_buffer);
