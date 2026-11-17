@@ -127,6 +127,9 @@ $"ix
 function split_idents(s::AbstractString)
     idents = eachsplit(s, '.')
     pidents = Union{UInt64,String}[occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident) for ident in idents]
+    n = length(pidents)
+    n == 1 && return (pidents[1],)
+    n == 2 && return (pidents[1], pidents[2])
     return tuple(pidents...)::VerTuple
 end
 
@@ -226,8 +229,17 @@ function hash(v::VersionNumber, h::UInt)
     h = hash(v.major, h)
     h = hash(v.minor, h)
     h = hash(v.patch, h)
-    h = hash(v.prerelease, ~h)
-    h = hash(v.build, ~h)
+    h = hash_idents(v.prerelease, ~h)
+    h = hash_idents(v.build, ~h)
+end
+
+# `hash(t, h)` for a `VerTuple`, without dispatching on its type
+function hash_idents(@nospecialize(t::VerTuple), h::UInt)
+    h ⊻= tuplehash_seed
+    for i in length(t):-1:1
+        h = hash(t[i]::Union{UInt64,String}, h)
+    end
+    return h
 end
 
 lowerbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, ("",), ())
