@@ -473,6 +473,9 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     // callback is what publishes the abandoned task state, so an
     // unredirected victim resumes untouched. On refusal the requester
     // observes the verdict and withdraws.
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    jl_reset_ctx_t *reset_ctx = ct2 ? jl_atomic_load_relaxed(&ct2->reset_ctx) : NULL;
+    jl_cancel_handler_ctx_t *hctx = ct2 ? jl_atomic_load_relaxed(&ct2->cancel_handler_ctx) : NULL;
     if (jl_abandon_try_commit(ptls2)) {
         // Redirect the thread to call jl_abandon_task_cb (which never
         // returns) on a minimal fake frame.
@@ -494,7 +497,10 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!SetThreadContext(ptls2->system_id, &ctxThread)) {
             // Roll the commit back: nothing observable was published yet
-            // (the task state is written by the callback).
+            // (the task state is written by the callback), except that the
+            // commit unpublished the interruptible regions.
+            jl_atomic_store_release(&ct2->reset_ctx, reset_ctx);
+            jl_atomic_store_release(&ct2->cancel_handler_ctx, hctx);
             jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_REFUSED);
         }
     }

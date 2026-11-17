@@ -1776,6 +1776,12 @@ int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
         jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_REFUSED);
         return 0;
     }
+    // Unpublish the victim's interruptible regions before redirecting: they
+    // lie in the frames being abandoned, and a cancellation delivered to
+    // one (by this same delivery, a later signal, or an off-thread sender)
+    // would longjmp back into them out of the abandon callback.
+    jl_atomic_store_release(&ct->reset_ctx, NULL);
+    jl_atomic_store_release(&ct->cancel_handler_ctx, NULL);
     // Commit: only the request slot here - the victim's observable task
     // state is written by the callback (see jl_abandon_task_cb).
     jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_DONE);
