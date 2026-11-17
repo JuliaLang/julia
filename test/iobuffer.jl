@@ -921,3 +921,43 @@ end
     write(io, 'a')
     @test write(io, 'a') == 0
 end
+
+@testset "growing large String-backed memory" begin
+    M, MiB = 40 << 20, 1 << 20 # above the size from which String-backed Memory can expand in place
+    chunk(i) = fill(UInt8('a' + i % 26), 64 * 1024)
+    expected(n) = [UInt8('a' + (i - 1) ÷ (64 * 1024) % 26) for i in 1:n]
+    v = empty!(Base.StringVector(1))
+    for i in 0:(M ÷ (64 * 1024) - 1)
+        append!(v, chunk(i))
+    end
+    s = String(v)
+    @test codeunits(s) == expected(M) && isempty(v)
+    # a String in use never changes, even through a vector wrapping it
+    w = unsafe_wrap(Vector{UInt8}, s)
+    append!(w, fill(0x7a, MiB))
+    @test codeunits(s) == expected(M) && w[end] == 0x7a
+    io = IOBuffer()
+    for i in 0:(M ÷ (64 * 1024) - 1)
+        write(io, chunk(i))
+    end
+    @test codeunits(takestring!(io)) == expected(M)
+    io = PipeBuffer()
+    write(io, fill(0x01, M))
+    read(io, MiB)
+    write(io, fill(0x02, M))
+    @test read(io) == [fill(0x01, M - MiB); fill(0x02, M)]
+    # vectors sharing a String grow apart
+    m = fill!(Base.array_growable_memory(Base.StringMemory(1), M), 0x01)
+    a = Base.wrap(Array, m, M)
+    b = Base.wrap(Array, m, M)
+    append!(a, fill(0x02, MiB))
+    append!(b, fill(0x03, MiB))
+    @test a[M+1:end] == fill(0x02, MiB) && b[M+1:end] == fill(0x03, MiB) && all(==(0x01), m)
+    # a String taken from Memory that has since grown is a copy, so that it never grows itself
+    m = fill!(Base.array_growable_memory(Base.StringMemory(1), M), 0x01)
+    grown = Base.expand_inplace(m, M + MiB)
+    s = ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), m, M)
+    isnothing(grown) || fill!(view(grown, M+1:M+MiB), 0x02)
+    @test ncodeunits(s) == M && all(==(0x01), codeunits(s))
+    @test isnothing(grown) || pointer(s) != pointer(m)
+end

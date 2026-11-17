@@ -268,6 +268,15 @@ JL_DLLEXPORT void *jl_gc_managed_map(size_t sz) JL_CANSAFEPOINT;
 // Grow the claimed bytes of `data`, from jl_gc_managed_map, from `oldsz` to `newsz` in
 // place. Returns 0 if `oldsz` is not the claimed size, or `newsz` does not fit its reservation.
 JL_DLLEXPORT int jl_gc_managed_expand(void *data, size_t oldsz, size_t newsz) JL_CANSAFEPOINT;
+// As jl_gc_managed_map, for an object of type `ty` that jl_gc_expand can grow in place
+JL_DLLEXPORT struct _jl_value_t *jl_gc_alloc_expandable(struct _jl_tls_states_t *ptls, size_t sz, void *ty) JL_CANSAFEPOINT;
+// Grow the object `v` from `oldsz` to `newsz` bytes in place. Returns 0 if `v` is not from
+// jl_gc_alloc_expandable, has been sealed, is not `oldsz` bytes, or cannot be extended. An
+// object may be expanded and sealed from different threads at once.
+JL_DLLEXPORT int jl_gc_expand(struct _jl_value_t *v, size_t oldsz, size_t newsz) JL_CANSAFEPOINT;
+// Stop the object `v` of `sz` bytes from ever growing, as when it becomes visible at that size.
+// Returns 0 if it has grown beyond `sz` bytes or has been sealed, when its size is not `v`'s to fix.
+JL_DLLEXPORT int jl_gc_seal(struct _jl_value_t *v, size_t sz) JL_NOTSAFEPOINT;
 // Allocates a new weak-reference, assigns its value and increments Julia allocation
 // counters. If thread-local allocators are used, then this function should allocate in the
 // thread-local allocator of the thread referenced by the first jl_ptls_t argument.

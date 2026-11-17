@@ -608,6 +608,7 @@ STATIC_INLINE jl_value_t *jl_gc_big_alloc_inner(jl_ptls_t ptls, size_t sz) JL_CA
     memset(v, 0xee, allocsz);
 #endif
     v->sz = allocsz;
+    v->mapped = 0;
 #ifndef NDEBUG
     v->header = 0; // must be initialized (and not gc_bigval_sentinel_tag) or gc_big_object_link assertions will get confused
 #endif
@@ -636,12 +637,16 @@ jl_value_t *jl_gc_big_alloc_noinline(jl_ptls_t ptls, size_t sz) {
 FORCE_INLINE size_t sweep_unlink_and_free_noaccount(bigval_t *v) JL_NOTSAFEPOINT
 {
     size_t sz = v->sz;
+    uintptr_t mapped = v->mapped;
     gc_big_object_unlink(v);
 #ifdef MEMDEBUG
     memset(v, 0xbb, sz);
 #endif
     gc_invoke_callbacks(jl_gc_cb_notify_external_free_t, gc_cblist_notify_external_free, (v));
-    jl_free_aligned(v);
+    if (mapped)
+        memory_mapping_free(v);
+    else
+        jl_free_aligned(v);
     return sz;
 }
 

@@ -169,6 +169,27 @@ JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str) JL_
     return m;
 }
 
+// A Memory over a new String of `len` bytes, to replace one that outgrew its String. Unless it is
+// small, it can then expand in place until jl_genericmemory_to_string takes the String.
+JL_DLLEXPORT jl_genericmemory_t *jl_alloc_string_growable_genericmemory(size_t len) JL_CANSAFEPOINT
+{
+    size_t sz = sizeof(size_t) + len + 1; // length, data, and trailing \nul
+    jl_value_t *str = NULL;
+    if (sz > len && sz > GC_MAX_SZCLASS)
+        str = jl_gc_alloc_expandable(jl_current_task->ptls, sz, jl_string_type);
+    if (str == NULL)
+        str = jl_alloc_string(len);
+    else {
+        jl_set_typetagof(str, jl_string_tag, 0);
+        *(size_t*)str = len;
+        jl_string_data(str)[len] = 0;
+    }
+    JL_GC_PUSH1(&str);
+    jl_genericmemory_t *m = jl_string_to_genericmemory(str);
+    JL_GC_POP();
+    return m;
+}
+
 // own_buffer != 0 iff GC should call free() on this pointer eventually
 JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void *data,
                                                          size_t nel, int own_buffer)
@@ -239,23 +260,46 @@ static jl_value_t *borrow_genericmemory(jl_genericmemory_t *m, size_t nel) JL_CA
     return (jl_value_t*)b;
 }
 
+// Whether `m` is over mapped data, or over all of a String
+static int genericmemory_expandable(jl_genericmemory_t *m) JL_NOTSAFEPOINT
+{
+    int how = jl_genericmemory_how(m);
+    if (how != JL_GENERICMEMORY_STRINGOWNED)
+        return how == JL_GENERICMEMORY_MEMORYOWNED;
+    jl_value_t *str = jl_genericmemory_data_owner_field(m);
+    return m->ptr == jl_string_data(str) && m->length == jl_string_len(str);
+}
+
+// Grow the data of `m` in place from `oldsz` to `newsz` bytes
+static int expand_genericmemory_data(jl_genericmemory_t *m, size_t oldsz, size_t newsz) JL_CANSAFEPOINT
+{
+    if (jl_genericmemory_how(m) == JL_GENERICMEMORY_MEMORYOWNED)
+        return jl_gc_managed_expand(m->ptr, oldsz, newsz);
+    jl_value_t *str = jl_genericmemory_data_owner_field(m);
+    if (!jl_gc_expand(str, sizeof(size_t) + oldsz + 1, sizeof(size_t) + newsz + 1))
+        return 0;
+    *(size_t*)str = newsz;
+    jl_string_data(str)[newsz] = 0;
+    return 1;
+}
+
 // Return a Memory of `nel` elements over the same data as `m`, which keeps its elements and
 // moves nothing, or `nothing` when `m` cannot grow in place.
 JL_DLLEXPORT jl_value_t *jl_genericmemory_expand(jl_genericmemory_t *m, size_t nel) JL_CANSAFEPOINT
 {
     if (nel <= m->length)
         return (jl_value_t*)m;
-    if (jl_genericmemory_how(m) != JL_GENERICMEMORY_MEMORYOWNED)
+    if (!genericmemory_expandable(m))
         return jl_nothing;
     size_t elsz = ((jl_datatype_t*)jl_typetagof(m))->layout->size;
     size_t nbytes;
-    if (nel >= MAXINTVAL || __builtin_mul_overflow(nel, elsz, &nbytes) || nbytes >= MAXINTVAL)
+    if (nel >= MAXINTVAL || __builtin_mul_overflow(nel, elsz, &nbytes) || nbytes >= MAXINTVAL - sizeof(size_t))
         jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
     jl_value_t *expanded = NULL;
     JL_GC_PUSH2(&m, &expanded);
     // allocated before claiming, as a collection in between would release the claimed bytes
     expanded = borrow_genericmemory(m, m->length);
-    if (jl_gc_managed_expand(m->ptr, m->length * elsz, nbytes))
+    if (expand_genericmemory_data(m, m->length * elsz, nbytes))
         ((jl_genericmemory_t*)expanded)->length = nel;
     else
         expanded = jl_nothing;
@@ -300,7 +344,9 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
     if (how != JL_GENERICMEMORY_INLINED) {
         jl_value_t *o = jl_genericmemory_data_owner_field(m);
         if (how == JL_GENERICMEMORY_STRINGOWNED && // implies jl_is_string(o)
-             ((mlength + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (len + sizeof(void*) + 1 <= GC_MAX_SZCLASS))) {
+             ((mlength + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (len + sizeof(void*) + 1 <= GC_MAX_SZCLASS)) &&
+             // a String in use must never grow, as one this large may otherwise; if it has, copy
+             (sizeof(size_t) + mlength + 1 <= GC_MAX_SZCLASS || jl_gc_seal(o, sizeof(size_t) + mlength + 1))) {
             jl_string_data(o)[len] = '\0';
             *(size_t*)o = len;
             return o;

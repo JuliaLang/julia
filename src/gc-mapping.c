@@ -7,6 +7,7 @@
 #include "gc-common.h"
 #include "gc-stock.h"
 #include "gc-alloc-profiler.h"
+#include "julia_gcext.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,10 +31,13 @@ extern "C" {
 
 typedef struct {
     _Atomic(size_t) mapped;  // bytes of address space, header included
-    _Atomic(size_t) claimed; // data bytes handed out to Memory objects
+    _Atomic(size_t) claimed; // data bytes handed out to Memory objects, and whether sealed
     _Atomic(size_t) live;    // data bytes reached by the Memory objects marked since the last trim
 } jl_memory_mapping_t;
 
+// Set in `claimed` once the bytes must never grow. Expanding compares `claimed` to the size it
+// grows from, so this stops it in the one step that sealing takes.
+#define JL_MEMORY_MAPPING_SEALED ((size_t)1 << (8 * sizeof(size_t) - 1))
 #define JL_MEMORY_MAPPING_HEADROOM_MAX ((size_t)2 << 30)
 
 // Budgets that leave mappings and address space to malloc, thread stacks and libraries; zero
@@ -183,7 +187,8 @@ size_t memory_mapping_trim(void *data) JL_NOTSAFEPOINT
 size_t memory_mapping_free(void *data) JL_NOTSAFEPOINT
 {
     jl_memory_mapping_t *mapping = memory_mapping(data);
-    size_t mapped = jl_atomic_load_relaxed(&mapping->mapped), claimed = jl_atomic_load_relaxed(&mapping->claimed);
+    size_t mapped = jl_atomic_load_relaxed(&mapping->mapped);
+    size_t claimed = jl_atomic_load_relaxed(&mapping->claimed) & ~JL_MEMORY_MAPPING_SEALED;
     os_release(mapping, mapped);
     memory_mapping_give(mapped);
     return JL_MEMORY_MAPPING_HEADER + claimed;
@@ -232,12 +237,21 @@ static int memory_mapping_expand(void *data, size_t oldsz, size_t newsz) JL_NOTS
     }
     return 1;
 }
+
+// Stop the mapped `data` of `sz` claimed bytes from growing. Returns 0 if it has grown already,
+// or has been sealed.
+static int memory_mapping_seal(void *data, size_t sz) JL_NOTSAFEPOINT
+{
+    size_t claimed = sz;
+    return jl_atomic_cmpswap(&memory_mapping(data)->claimed, &claimed, sz | JL_MEMORY_MAPPING_SEALED);
+}
 #else
 void memory_mapping_init(void) JL_NOTSAFEPOINT {}
 void memory_mapping_mark(void *data, size_t sz) JL_NOTSAFEPOINT {}
 size_t memory_mapping_trim(void *data) JL_NOTSAFEPOINT { return 0; }
 static void *memory_mapping_new(size_t sz) JL_NOTSAFEPOINT { return NULL; }
 static int memory_mapping_expand(void *data, size_t oldsz, size_t newsz) JL_NOTSAFEPOINT { return 0; }
+static int memory_mapping_seal(void *data, size_t sz) JL_NOTSAFEPOINT { return 1; }
 
 size_t memory_mapping_free(void *data) JL_NOTSAFEPOINT
 {
@@ -264,6 +278,59 @@ JL_DLLEXPORT void *jl_gc_managed_map(size_t sz) JL_CANSAFEPOINT
         jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.malloc) + 1);
     maybe_record_alloc_to_profile((jl_value_t*)data, sz, (jl_datatype_t*)jl_buff_tag);
     return data;
+}
+
+// An expandable object is a big object at the start of a mapping, which claims exactly its
+// header and the object's bytes; the GC frees it as it does any other big object.
+JL_DLLEXPORT jl_value_t *jl_gc_alloc_expandable(jl_ptls_t ptls, size_t sz, void *ty) JL_CANSAFEPOINT
+{
+    maybe_collect(ptls);
+    size_t allocsz = offsetof(bigval_t, header) + sz;
+    bigval_t *v = (bigval_t*)memory_mapping_new(allocsz);
+    if (v == NULL)
+        return NULL;
+    gc_invoke_callbacks(jl_gc_cb_notify_external_alloc_t,
+        gc_cblist_notify_external_alloc, (v, allocsz));
+    gc_count_managed_bytes(ptls, allocsz);
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.bigalloc,
+        jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.bigalloc) + 1);
+    v->sz = allocsz;
+    v->mapped = 1;
+#ifndef NDEBUG
+    v->header = 0;
+#endif
+    gc_big_object_link(ptls->gc_tls.heap.young_generation_of_bigvals, v);
+    jl_value_t *val = jl_valueof(&v->header);
+    jl_set_typeof(val, ty);
+    maybe_record_alloc_to_profile(val, sz, (jl_datatype_t*)ty);
+    return val;
+}
+
+// Only big objects outside images have a bigval_t header to consult
+static bigval_t *expandable_header(jl_value_t *val, size_t sz) JL_NOTSAFEPOINT
+{
+    if (sz <= GC_MAX_SZCLASS || jl_object_in_image(val))
+        return NULL;
+    bigval_t *v = bigval_header(jl_astaggedvalue(val));
+    if (!v->mapped)
+        return NULL;
+    return v;
+}
+
+JL_DLLEXPORT int jl_gc_expand(jl_value_t *val, size_t oldsz, size_t newsz) JL_CANSAFEPOINT
+{
+    bigval_t *v = expandable_header(val, oldsz);
+    size_t offs = offsetof(bigval_t, header);
+    if (v == NULL || !jl_gc_managed_expand(v, offs + oldsz, offs + newsz))
+        return 0;
+    v->sz = offs + newsz;
+    return 1;
+}
+
+JL_DLLEXPORT int jl_gc_seal(jl_value_t *val, size_t sz) JL_NOTSAFEPOINT
+{
+    bigval_t *v = expandable_header(val, sz);
+    return v == NULL || memory_mapping_seal(v, offsetof(bigval_t, header) + sz);
 }
 
 JL_DLLEXPORT int jl_gc_managed_expand(void *data, size_t oldsz, size_t newsz) JL_CANSAFEPOINT

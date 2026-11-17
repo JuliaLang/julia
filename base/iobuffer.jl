@@ -297,6 +297,12 @@ end
 
 _similar_data(b::GenericIOBuffer, len::Int) = similar(b.data, len)
 _similar_data(b::IOBuffer, len::Int) = StringMemory(len)
+# Data to replace that of `b` as it outgrows it
+_grown_data(b::GenericIOBuffer, len::Int) = similar(b.data, len)
+function _grown_data(b::IOBuffer, len::Int)
+    len < GROWABLE_MEMORY_BYTES && return StringMemory(len)
+    @assume_effects :total !:consistent !:nothrow @ccall jl_alloc_string_growable_genericmemory((len % Csize_t)::Csize_t)::Memory{UInt8}
+end
 
 # Note: Copying may change the value of the position (and mark) for un-seekable streams.
 # However, these values are not stable anyway due to compaction.
@@ -536,10 +542,16 @@ function _resize!(io::GenericIOBuffer, new_size::Int, exact::Bool)
         resize!(old_data, new_size)
     else
         new_size = exact ? new_size : min(io.maxsize, overallocation(new_size))
+        # memory that grows in place keeps the contents, offsets and all, where they are
+        expanded = if old_data isa GenericMemory && new_size > length(old_data) expand_inplace(old_data, new_size) end
+        if !isnothing(expanded)
+            io.data = expanded
+            return io
+        end
         used_span = get_used_span(io)
         deleted = first(used_span) - 1
         compacted = deleted - get_offset(io)
-        new_data = _similar_data(io, new_size)
+        new_data = _grown_data(io, new_size)
         io.data = new_data
         iszero(new_size) && return io
         len_used = length(used_span)

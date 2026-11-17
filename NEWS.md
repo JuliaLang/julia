@@ -14,8 +14,9 @@ Compiler/Runtime improvements
 
 * Large vectors of plain data now grow in place: once `push!`, `append!` or `resize!` has outgrown
   a `Vector`'s memory, growing it further extends that memory instead of copying it, and
-  `sizehint!` shrinks it without copying. Peak memory while growing falls from almost twice the
-  final size to the final size.
+  `sizehint!` shrinks it without copying. This includes the memory of an `IOBuffer`, so building
+  a large `String` copies it neither while growing nor when taking it. Peak memory while growing
+  falls from almost twice the final size to the final size.
 
 * After a sweep, Julia's default garbage collector now lets any thread reuse the free cells of
   pages that still hold live objects, instead of only the thread that allocated the page. This
