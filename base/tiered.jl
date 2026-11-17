@@ -604,8 +604,27 @@ mutable struct LoopEntry
     const plan::Union{Nothing,LoopPlan}
     const byobserved::IdDict{Any,Continuation} # observed live-in types => continuation
     const bywidened::IdDict{Any,Continuation}  # widened live-in types => continuation
+    const pending::IdDict{Any,Any}             # observed live-in types => job being compiled
+    const failed::IdDict{Any,Nothing}          # observed live-in types whose compile failed
 end
-LoopEntry(plan) = LoopEntry(plan, IdDict{Any,Continuation}(), IdDict{Any,Continuation}())
+LoopEntry(plan) = LoopEntry(plan, IdDict{Any,Continuation}(), IdDict{Any,Continuation}(),
+                            IdDict{Any,Any}(), IdDict{Any,Nothing}())
+
+# A continuation to compile in the background: the compile thread runs it (see
+# `_tier_compile_job`), in the world of the frame whose loop got hot. The C queue holds it
+# unrooted; `entry.pending` keeps it alive until it is done. It is mutable so that the
+# object queued is the one `entry.pending` holds: an immutable one would be queued as a
+# copy that nothing roots.
+mutable struct ContinuationJob
+    const entry::LoopEntry
+    const src::CodeInfo
+    const mi::MethodInstance
+    const h::Int
+    const defined::Vector{Bool}
+    const observed::Vector{Any}
+    const key::Any
+    const world::UInt
+end
 
 const cache_lock = ReentrantLock()
 const loops = IdDict{MethodInstance,Dict{Int,LoopEntry}}()
@@ -723,6 +742,19 @@ function compile_and_cache!(entry::LoopEntry, src::CodeInfo, mi::MethodInstance,
     return c
 end
 
+# Run by the compile thread (see `tier_compile_continuation` in src/tiered.c).
+_tier_compile_job(job::ContinuationJob) = Base.invoke_in_world(job.world, compile_job, job)
+
+function compile_job(job::ContinuationJob)
+    entry = job.entry
+    c = compile_and_cache!(entry, job.src, job.mi, job.h, job.defined, job.observed, job.key)
+    @lock cache_lock begin
+        c === nothing && (entry.failed[job.key] = nothing)
+        delete!(entry.pending, job.key)
+    end
+    return nothing
+end
+
 """
     _tier_loop(src, mi, h, state, compile) -> Int
 
@@ -730,7 +762,8 @@ Called by the interpreter at loop header `h` (a 1-based statement index) of a fr
 running `src` for `mi`, with the frame's slots and SSA values in `state`. Runs a
 continuation for the loop and returns the statement to resume at, after writing the live-out
 values into `state`. Returns 0 if there is no continuation (with `compile` unset, only
-cached ones are used), and -1 if this loop can never have one.
+cached ones are used), -1 if this loop can never have one, and -2 if one is being compiled in
+the background, when the frame keeps interpreting and asks again later.
 """
 function _tier_loop(src::CodeInfo, mi::MethodInstance, h::Int, state::Vector{Any}, compile::Bool)
     entry = loop_entry(src, mi, h)
@@ -755,6 +788,17 @@ function _tier_loop(src::CodeInfo, mi::MethodInstance, h::Int, state::Vector{Any
     c = @lock cache_lock get(entry.byobserved, key, nothing)
     if c === nothing
         compile || return 0
+        if ccall(:jl_tier_get_background, Cint, ()) != 0
+            # compile it on the compile thread, interpreting meanwhile
+            job = @lock cache_lock begin
+                haskey(entry.failed, key) && return -1
+                haskey(entry.pending, key) && return -2
+                entry.pending[key] = ContinuationJob(entry, src, mi, h, defined, observed, key,
+                                                     Base.tls_world_age())
+            end
+            ccall(:jl_tier_enqueue_continuation, Cvoid, (Any,), job)
+            return -2
+        end
         c = compile_and_cache!(entry, src, mi, h, defined, observed, key)
         c === nothing && return -1
     end
@@ -787,8 +831,21 @@ function compiled_tier!(on::Bool=true)
     return old != 0
 end
 
+# An idle thread of the default pool runs this, as a task of its own, to help compile what
+# tiering has queued (see jl_tier_steal_task in src/tiered.c).
+function _tier_steal()
+    try
+        while ccall(:jl_tier_steal_one, Cint, ()) != 0
+        end
+    finally
+        ccall(:jl_tier_steal_done, Cvoid, ())
+    end
+    return nothing
+end
+
 # The machinery must itself run compiled: with tiering on, anything not in the system
 # image would start out in the interpreter.
+precompile(_tier_steal, ())
 precompile(_tier_loop, (CodeInfo, MethodInstance, Int, Vector{Any}, Bool))
 precompile(_tier_loop_headers, (MethodInstance,))
 precompile(plan_loop, (CodeInfo, Core.SimpleVector, Int))
@@ -799,3 +856,5 @@ end # module Tiered
 
 const _tier_loop = Tiered._tier_loop
 const _tier_loop_headers = Tiered._tier_loop_headers
+const _tier_steal = Tiered._tier_steal
+const _tier_compile_job = Tiered._tier_compile_job

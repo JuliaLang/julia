@@ -509,6 +509,11 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
             continue;
         }
 
+        // nothing to run: help compile, if tiering has queued compiles (see tiered.c)
+        task = jl_tier_steal_task(ct->ptls);
+        if (task)
+            return task;
+
         jl_cpu_pause();
         jl_ptls_t ptls = ct->ptls;
         if (sleep_check_after_threshold(&start_cycles) || (ptls->tid == jl_atomic_load_relaxed(&io_loop_tid) && (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty))) {

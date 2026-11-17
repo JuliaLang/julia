@@ -17,12 +17,17 @@ set_tier_enabled(on) = ccall(:jl_tier_set_enabled, Cvoid, (Cint,), on)
 small_cost() = ccall(:jl_tier_get_small_cost, UInt32, ())
 set_small_cost(v) = ccall(:jl_tier_set_small_cost, Cvoid, (UInt32,), v)
 
-# Budgets of `work` and `loop` statements, without the cap for small methods unless `small`
-function with_tiering(f; work=20, loop=50, small=0)
-    old = (tier_enabled(), tier_threshold(0), tier_threshold(1), small_cost())
+background_on() = ccall(:jl_tier_get_background, Cint, ()) != 0
+set_background(on) = ccall(:jl_tier_set_background, Cvoid, (Cint,), on)
+
+# Budgets of `work` and `loop` statements, without the cap for small methods unless `small`,
+# compiling on the thread that spends a budget unless `background`
+function with_tiering(f; work=20, loop=50, small=0, background=false)
+    old = (tier_enabled(), tier_threshold(0), tier_threshold(1), small_cost(), background_on())
     set_tier_threshold(0, work)
     set_tier_threshold(1, loop)
     set_small_cost(small)
+    set_background(background)
     set_tier_enabled(true)
     try
         return f()
@@ -31,6 +36,7 @@ function with_tiering(f; work=20, loop=50, small=0)
         set_tier_threshold(0, old[2])
         set_tier_threshold(1, old[3])
         set_small_cost(old[4])
+        set_background(old[5])
     end
 end
 
@@ -628,6 +634,126 @@ end
         end
     end
     @test iscompiled(f, Float64)
+end
+
+@testset "background compilation" begin
+    f = fresh(:(function _(x)
+        y = x
+        y = y * x
+        y + one(x)
+    end))
+    with_tiering(work=20, background=true) do
+        for _ in 1:100
+            @test Base.invokelatest(f, 3) == 10
+        end
+        # the budget was spent long ago, but the caller never waited for a compile: f went
+        # on running interpreted, its work still counting, until the compile thread was done
+        # (done compiling: a code instance whose compile is still in progress has an
+        # `invoke` too, and dispatch interprets it meanwhile)
+        waiting = unsafe_load(cglobal(:jl_fptr_wait_for_compiled_addr, Ptr{Cvoid}))
+        done() = iscompiled(f, Int) && Base.method_instance(f, (Int,)).cache.invoke != waiting
+        t0 = time()
+        while !done() && time() - t0 < 60
+            sleep(0.01)
+        end
+        @test done()
+        @test mi_work(f, Int) > 20
+        # and from then on calls run the compiled code
+        work = mi_work(f, Int)
+        for _ in 1:10
+            @test Base.invokelatest(f, 3) == 10
+        end
+        @test mi_work(f, Int) == work
+    end
+    # measurements pause the compile thread, and compile on the spot
+    g = fresh(:(function _(x) x + 1 end))
+    with_tiering(work=20, background=true) do
+        @test Base.Experimental.@force_compile(Base.invokelatest(g, 1)) == 2
+    end
+    @test iscompiled(g, Int)
+end
+
+@testset "loop continuations compiled in the background" begin
+    # the loop goes on interpreted while its continuation compiles, and switches to it at a
+    # later back-edge, partway through
+    f = fresh(:(function _(t_end)
+        i = 0
+        s = 0
+        while time() < t_end
+            i += 1
+            s += i
+        end
+        (i, s)
+    end))
+    before = Tiered.stats[2]
+    i, s = with_tiering(background=true) do
+        Base.invokelatest(f, time() + 2.0)
+    end
+    @test i > 0 && s == i * (i + 1) ÷ 2
+    @test Tiered.stats[2] > before
+    # a later call enters the compiled loop as soon as it reaches it
+    g = fresh(:(function _(n)
+        s = 0
+        for i in 1:n
+            s += i
+        end
+        s
+    end))
+    compiled = Tiered.stats[1]
+    with_tiering(background=true) do
+        @test Base.invokelatest(g, 100_000) == 5000050000
+        t0 = time()
+        while Tiered.stats[1] == compiled && time() - t0 < 60
+            sleep(0.01)
+        end
+        @test Tiered.stats[1] > compiled
+        before = Tiered.stats[2]
+        @test Base.invokelatest(g, 100_000) == 5000050000
+        @test Tiered.stats[2] > before
+    end
+    # a queued job survives a collection before the compile thread takes it
+    h = fresh(:(function _(n)
+        s = 0
+        for i in 1:n
+            s += i
+        end
+        s
+    end))
+    compiled = Tiered.stats[1]
+    with_tiering(background=true) do
+        ccall(:jl_tier_quiesce, Cvoid, ())
+        try
+            @test Base.invokelatest(h, 100_000) == 5000050000
+            GC.gc(true)
+        finally
+            ccall(:jl_tier_resume, Cvoid, ())
+        end
+        t0 = time()
+        while Tiered.stats[1] == compiled && time() - t0 < 60
+            sleep(0.01)
+        end
+        @test Tiered.stats[1] > compiled
+        before = Tiered.stats[2]
+        @test Base.invokelatest(h, 100_000) == 5000050000
+        @test Tiered.stats[2] > before
+    end
+    # exits and exceptions behave as they do with the continuation compiled on the spot
+    check(:(function _(n)
+        s = 0
+        for i in 1:n
+            i == n - 3 && return (:early, s)
+            s += i
+        end
+        (:late, s)
+    end), 200_000; background=true, entered=false)
+    check(:(function _(n)
+        s = 0
+        for i in 1:n
+            s += i
+            i == n - 3 && error("stop at ", s)
+        end
+        s
+    end), 200_000; background=true, entered=false)
 end
 
 @testset "callees that never ran" begin

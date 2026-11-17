@@ -249,6 +249,9 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
     if (jl_base_module) {
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
+        // Stop the background compile thread before anything is torn down: it runs inference
+        // and codegen, which may write to streams the teardown closes.
+        jl_tier_stop_worker();
         jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_atexit"), ct->world_age);
         if (f != NULL) {
             jl_value_t **fargs;
