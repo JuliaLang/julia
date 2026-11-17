@@ -368,8 +368,16 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             farg = stmt.args[1]
             ftyp = argextype_widened(farg, codeinfo, sptypes)
             if ftyp <: IntrinsicFunction
-                #TODO: detect if f !== Core.Intrinsics.atomic_pointermodify (see statement_cost), otherwise error
-                continue
+                # `atomic_pointermodify` is the only intrinsic that calls a function. The
+                # optimizer turns the calls it can resolve into `:invoke_modify`.
+                f = argextype(farg, codeinfo, sptypes)
+                if !(f isa Core.Const)
+                    error = "unresolved call to (unknown) intrinsic"
+                elseif f.val === Core.Intrinsics.atomic_pointermodify
+                    error = "trim verification not yet implemented for intrinsic `Core.Intrinsics.atomic_pointermodify`"
+                else
+                    continue
+                end
             elseif ftyp <: Builtin
                 if !may_dispatch(ftyp)
                     continue

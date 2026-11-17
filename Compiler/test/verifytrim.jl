@@ -95,6 +95,22 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Task, Tuple{typeof(make_task_unkn
     @test desc.desc == "unresolved task function"
 end
 
+# `atomic_pointermodify` calls its function through dispatch unless the optimizer resolved it
+modify_pointer(p::Ptr{Int}) = Core.Intrinsics.atomic_pointermodify(p, +, 1, :sequentially_consistent)
+let infos = typeinf_ext_toplevel(Any[Core.svec(Pair{Int,Int}, Tuple{typeof(modify_pointer), Ptr{Int}})], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, parents = get_verify_typeinf_trim(infos)
+    @test isempty(errors)
+end
+
+modify_pointer_unknown(p::Ptr{Int}, @nospecialize(op)) = Core.Intrinsics.atomic_pointermodify(p, op, 1, :sequentially_consistent)
+let infos = typeinf_ext_toplevel(Any[Core.svec(Any, Tuple{typeof(modify_pointer_unknown), Ptr{Int}, Any})], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, parents = get_verify_typeinf_trim(infos)
+    (warn, desc) = only(errors)
+    @test !warn
+    @test desc isa CallMissing
+    @test occursin("atomic_pointermodify", desc.desc)
+end
+
 # test that basic `cfunction` generation is allowed, when the dispatch target can be resolved
 make_cfunction() = @cfunction(+, Float64, (Int64,Int64))
 let infos = typeinf_ext_toplevel(Any[Core.svec(Ptr{Cvoid}, Tuple{typeof(make_cfunction)})], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
