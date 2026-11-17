@@ -119,9 +119,9 @@ function version_block!(pb::PageBuilder)
         "DEV" in VERSION.prerelease ? "development build" : "prerelease"
     date = isempty(git.date_string) ? "" : string(", ", first(split(git.date_string)))
     # The Julia logo's three dots, beside the version.
-    addline!(pb, "   ", ("●", Face(foreground=:green)), "    ",
+    addline!(pb, "   ", ("●", :REPL_DocBrowser_logo_green), "    ",
              ("Julia ", :REPL_DocBrowser_pane_title), (string(Base.version_with_build_variant()), :REPL_DocBrowser_title))
-    addline!(pb, "  ", ("●", Face(foreground=:red)), " ", ("●", Face(foreground=:magenta)), "   ",
+    addline!(pb, "  ", ("●", :REPL_DocBrowser_logo_red), " ", ("●", :REPL_DocBrowser_logo_purple), "   ",
              (kind * date, :REPL_DocBrowser_dim))
 end
 

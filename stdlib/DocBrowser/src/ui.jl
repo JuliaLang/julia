@@ -796,6 +796,10 @@ function fit(s::AnnotatedString{String}, w::Int)
 end
 fit(s::AbstractString, w::Int) = fit(AnnotatedString(String(s)), w)
 
+# `s` with `face` beneath the faces it already has.
+under_face(s::AnnotatedString{String}, face::Symbol) =
+    AnnotatedString(String(s), [(region=1:ncodeunits(s), label=:face, value=face); annotations(s)])
+
 # Apply `face` to the display columns `cols` of `s`.
 function face_cols!(s::AnnotatedString, cols::UnitRange{Int}, face)
     str = String(s)
@@ -1006,7 +1010,7 @@ function footer_bar(b::Browser)
         put_seg!(rb, ' '^(b.width - width(rb) - lw))
         put_segs!(rb, legend)
     end
-    return fit(build(rb), b.width)
+    return under_face(fit(build(rb), b.width), :REPL_DocBrowser_bar)
 end
 
 function put_hint!(rb::RowBuilder, key::String, label::String)
@@ -1060,6 +1064,10 @@ function header_bar(b::Browser)
     rw = segs_width(right)
     room = max(0, b.width - rw)
     rb = RowBuilder(b, 1, 1)
+    put_seg!(rb, " ")
+    put_seg!(rb, "●", :REPL_DocBrowser_logo_red)
+    put_seg!(rb, "●", :REPL_DocBrowser_logo_green)
+    put_seg!(rb, "●", :REPL_DocBrowser_logo_purple)
     put_seg!(rb, " Julia docs ", :REPL_DocBrowser_title)
     proj = project_label()
     proj === nothing || put_seg!(rb, " ($proj)", :REPL_DocBrowser_dim, (:project,))
@@ -1102,7 +1110,7 @@ function header_bar(b::Browser)
         put_seg!(rb, ' '^(room - width(rb)))
     end
     put_segs!(rb, right)
-    return fit(build(rb), b.width)
+    return under_face(fit(build(rb), b.width), :REPL_DocBrowser_bar)
 end
 
 # `m` and the modules it is inside, outermost first. Following parents rather than looking
@@ -2623,7 +2631,16 @@ function drain_input(io::IO)
     end
 end
 
+# Drawn with `rich_faces` when the terminal allows, except where the user has set a face.
 function run!(b::Browser)
+    faces = rich_faces()
+    custom = values(StyledStrings.FACES.modifications)
+    StyledStrings.withfaces(Iterators.filter(((k, _),) -> !any(m -> haskey(m, k), custom), faces)) do
+        run_screen!(b)
+    end
+end
+
+function run_screen!(b::Browser)
     enter_screen(b)
     timer = Timer(0.05; interval=0.05) do _
         try
