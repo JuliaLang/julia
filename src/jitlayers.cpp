@@ -1526,10 +1526,7 @@ namespace {
         T &transform;
     };
 
-    // A target machine and the pass pipeline that emits its object files. Building the
-    // pipeline costs about as much as compiling a small module, so it is built once and
-    // run for every module compiled with this target machine.
-    // Adapted from `OutputCompiler` in Ian Butterworth's JuliaLang/julia#64480.
+    // Build the pipeline once for every module compiled with this target machine.
     struct EmitterT {
         std::unique_ptr<TargetMachine> TM;
         std::unique_ptr<legacy::PassManager> PM;
