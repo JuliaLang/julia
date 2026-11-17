@@ -79,7 +79,7 @@ function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool =
         elseif sortby === :summary
             3, false
         else
-            @assert "unreachable"
+            @assert false "unreachable"
         end
         sort!(rows; by=r->r[col], rev)
     end
@@ -360,7 +360,7 @@ function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3
     # Base.depwarn("`peakflops` has moved to the LinearAlgebra module, " *
     #              "add `using LinearAlgebra` to your imports.", :peakflops)
     let LinearAlgebra = Base.require_stdlib(Base.PkgId(
-            Base.UUID((0x37e2e46d_f89d_539d,0xb4ee_838fcccc9c8e)), "LinearAlgebra"))
+            Base.UUID((0x37e2e46d_f89d_539d,0xb4ee_838fcccc9c8e)), "LinearAlgebra"))::Module
         return LinearAlgebra.peakflops(n, eltype=eltype, ntrials=ntrials, parallel=parallel)
     end
 end
@@ -374,7 +374,7 @@ function report_bug(kind)
         @info "Package `BugReporting` not found - attempting temporary installation"
         # Create a temporary environment and add BugReporting
         let Pkg = Base.require_stdlib(Base.PkgId(
-            Base.UUID((0x44cfe95a_1eb2_52ea,0xb672_e2afdf69b78f)), "Pkg"))
+                Base.UUID((0x44cfe95a_1eb2_52ea,0xb672_e2afdf69b78f)), "Pkg"))::Module
             mktempdir() do tmp
                 old_load_path = copy(LOAD_PATH)
                 push!(empty!(LOAD_PATH), joinpath(tmp, "Project.toml"))

@@ -168,7 +168,7 @@ elseif Sys.iswindows()
 
 else
     has_system_clipboard() = false
-    clipboard(x="") = error("`clipboard` function not implemented for $(Sys.KERNEL)")
+    clipboard(_="") = error("`clipboard` function not implemented for $(Sys.KERNEL)")
 end
 
 
