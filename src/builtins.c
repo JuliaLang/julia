@@ -192,7 +192,11 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
     return 1;
 }
 
-static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *env, int tvar_names) JL_NOTSAFEPOINT
+// With `egal` set, decide `===` of two types (as `jl_egal` does for `UnionAll`,
+// `TypeEq` and `TypeEgal`). Without it, decide the coarser structural equivalence
+// of `jl_types_struct_equiv`, which implies `==` but ignores the names of bound
+// typevars and treats an unset `Vararg` `T` as `Any`.
+static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *env, int egal) JL_NOTSAFEPOINT
 {
     if (a == b)
         return 1;
@@ -208,7 +212,7 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
         if (jl_nparams(dtb) != l)
             return 0;
         for (i = 0; i < l; i++) {
-            if (!egal_types(jl_tparam(dta, i), jl_tparam(dtb, i), env, tvar_names))
+            if (!egal_types(jl_tparam(dta, i), jl_tparam(dtb, i), env, egal))
                 return 0;
         }
         return 1;
@@ -225,35 +229,48 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
     if (dtag == jl_unionall_tag << 4) {
         jl_unionall_t *ua = (jl_unionall_t*)a;
         jl_unionall_t *ub = (jl_unionall_t*)b;
-        if (tvar_names && ua->var->name != ub->var->name)
+        if (egal && ua->var->name != ub->var->name)
             return 0;
-        if (!(egal_types(ua->var->lb, ub->var->lb, env, tvar_names) && egal_types(ua->var->ub, ub->var->ub, env, tvar_names)))
+        if (!(egal_types(ua->var->lb, ub->var->lb, env, egal) && egal_types(ua->var->ub, ub->var->ub, env, egal)))
             return 0;
         jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, env };
-        return egal_types(ua->body, ub->body, &e, tvar_names);
+        return egal_types(ua->body, ub->body, &e, egal);
     }
     if (dtag == jl_uniontype_tag << 4) {
-        return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env, tvar_names) &&
-            egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env, tvar_names);
+        return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env, egal) &&
+            egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env, egal);
     }
     if (dtag == jl_typeegal_tag << 4) {
-        // `TypeEgal` parameters are egality keys: alpha-renamed parameters are
-        // `==` but not `===`, so their `TypeEgal`s are distinct types. The
-        // name-insensitive mode (tvar_names==0) must therefore still compare
-        // the parameter by name.
-        return egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, 1);
+        // `TypeEgal{T}` holds exactly the values `=== T`, so in either mode two
+        // of them are the same type iff their parameters are `===`, the same
+        // test `isa(x, TypeEgal{T})` makes (no enclosing `UnionAll` may bind a
+        // typevar inside the parameter, so `env` does not apply)
+        return jl_egal(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T);
     }
     if (dtag == jl_typeeq_tag << 4)
-        return egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, tvar_names);
+        return egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, egal);
     if (dtag == jl_vararg_tag << 4) {
         jl_vararg_t *vma = (jl_vararg_t*)a;
         jl_vararg_t *vmb = (jl_vararg_t*)b;
-        jl_value_t *vmaT = vma->T ? vma->T : (jl_value_t*)jl_any_type;
-        jl_value_t *vmbT = vmb->T ? vmb->T : (jl_value_t*)jl_any_type;
-        if (!egal_types(vmaT, vmbT, env, tvar_names))
+        jl_value_t *vmaT = vma->T;
+        jl_value_t *vmbT = vmb->T;
+        // an unset `T` means `Any`, so e.g. `Tuple{Any,Vararg}` and
+        // `Tuple{Any,Vararg{Any}}` are `==`, but they are not `===`
+        if (!egal) {
+            if (!vmaT)
+                vmaT = (jl_value_t*)jl_any_type;
+            if (!vmbT)
+                vmbT = (jl_value_t*)jl_any_type;
+        }
+        if (vmaT && vmbT) {
+            if (!egal_types(vmaT, vmbT, env, egal))
+                return 0;
+        }
+        else if (vmaT || vmbT) {
             return 0;
+        }
         if (vma->N && vmb->N)
-            return egal_types(vma->N, vmb->N, env, tvar_names);
+            return egal_types(vma->N, vmb->N, env, egal);
         return !vma->N && !vmb->N;
     }
     assert(dtag == jl_symbol_tag << 4 || dtag == jl_module_tag << 4 || !((jl_datatype_t*)jl_typeof(a))->name->mutabl);

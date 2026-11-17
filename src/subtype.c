@@ -660,9 +660,12 @@ static int obviously_egal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
             obviously_egal(((jl_unionall_t*)a)->body, ((jl_unionall_t*)b)->body);
     }
     if (jl_is_vararg(a)) {
+        // NB: an unset `T` is not `===` to `Any` (`Tuple{Any,Vararg}` and
+        // `Tuple{Any,Vararg{Any}}` are `==` but not `===`), so compare `T` as
+        // stored rather than through `jl_unwrap_vararg`
         jl_vararg_t *vma = (jl_vararg_t *)a;
         jl_vararg_t *vmb = (jl_vararg_t *)b;
-        return obviously_egal(jl_unwrap_vararg(vma), jl_unwrap_vararg(vmb)) &&
+        return ((!vma->T && !vmb->T) || (vma->T && vmb->T && obviously_egal(vma->T, vmb->T))) &&
             ((!vma->N && !vmb->N) || (vma->N && vmb->N && obviously_egal(vma->N, vmb->N)));
     }
     if (jl_is_some_Type(a))

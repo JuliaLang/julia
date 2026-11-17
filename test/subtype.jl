@@ -3470,6 +3470,17 @@ _typeegal_id(::Type{T}) where {T} = T
     @test typeintersect(TE{Int}, TE{Integer}) === Union{}
     @test tyeq(typeintersect(TE{Int}, (Type{T} where T)), TE{Int})
     @test tyeq(typeintersect(TE{Int}, Any), TE{Int})
+    # `==` but non-egal parameters (tuple types spelled with `Vararg` and with
+    # `Vararg{Any}`) give distinct, disjoint `TypeEgal`s
+    let a = Tuple{Any,Vararg}, b = Tuple{Any,Vararg{Any}}
+        @test a == b && a !== b
+        @test TE{a} !== TE{b}
+        @test TE{a} != TE{b}
+        @test !(TE{a} <: TE{b}) && !(TE{b} <: TE{a})
+        @test !(Ref{TE{a}} <: Ref{TE{b}}) && !(Tuple{TE{a}} <: Tuple{TE{b}})
+        @test typeintersect(TE{a}, TE{b}) === Union{}
+        @test Union{TE{a}, TE{b}} !== TE{a} && Union{TE{a}, TE{b}} !== TE{b}
+    end
     # the dispatch cache specializes type-valued arguments through `TypeEgal`
     @test _typeegal_id(Int) === Int
     @test _typeegal_id(Vector) === Vector
