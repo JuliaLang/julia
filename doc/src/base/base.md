@@ -409,6 +409,7 @@ Base.@timed
 Base.@elapsed
 Base.@allocated
 Base.@allocations
+Base.@dispatches
 Base.@lock_conflicts
 Base.TRACE_EVAL
 Base.EnvDict

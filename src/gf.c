@@ -12,6 +12,7 @@
 #include <string.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "threading.h"
 #ifndef _OS_WINDOWS_
 #include <unistd.h>
 #endif
@@ -5393,8 +5394,12 @@ STATIC_INLINE void call_cache_indices(uint32_t callsite, uint32_t cache_idx[4]) 
 // every dynamic call (`jl_apply_generic`) stays small
 static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_value_t **args, uint32_t nargs,
                                                              uint32_t callsite, size_t world, int for_call,
-                                                             jl_typemap_entry_t **entry_out) JL_CANSAFEPOINT
+                                                             jl_typemap_entry_t **entry_out,
+                                                             jl_ptls_t count_ptls) JL_CANSAFEPOINT
 {
+    if (count_ptls)
+        jl_atomic_store_relaxed(&count_ptls->dispatch_slow_count,
+                jl_atomic_load_relaxed(&count_ptls->dispatch_slow_count) + 1);
     // recomputed rather than passed in: taking the address of the caller's array
     // would put it on the stack and add a stack-protector check to `jl_apply_generic`
     uint32_t cache_idx[4];
@@ -5474,10 +5479,17 @@ static NOINLINE jl_method_instance_t *jl_lookup_generic_slow(jl_value_t *F, jl_v
     return mfunc;
 }
 
+// `count_ptls` is the caller's ptls when this lookup should be counted for `@time`, and
+// NULL otherwise. It is a parameter rather than a lookup here so that the caller's decision
+// (is this a real call, is this task inside the compiler) is made once, at the call site.
 STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t **args, uint32_t nargs,
                                                        uint32_t callsite, size_t world, int for_call,
-                                                       jl_typemap_entry_t **entry_out) JL_CANSAFEPOINT
+                                                       jl_typemap_entry_t **entry_out,
+                                                       jl_ptls_t count_ptls) JL_CANSAFEPOINT
 {
+    if (count_ptls)
+        jl_atomic_store_relaxed(&count_ptls->dispatch_count,
+                jl_atomic_load_relaxed(&count_ptls->dispatch_count) + 1);
 #ifdef JL_GF_PROFILE
     ncalls++;
 #endif
@@ -5521,7 +5533,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     LOOP_BODY(2);
     LOOP_BODY(3);
 #undef LOOP_BODY
-    mfunc = jl_lookup_generic_slow(F, args, nargs, callsite, world, for_call, entry_out);
+    mfunc = jl_lookup_generic_slow(F, args, nargs, callsite, world, for_call, entry_out, count_ptls);
     goto done;
 have_entry:
     mfunc = typemap_entry_linfo(entry);
@@ -5542,15 +5554,24 @@ jl_method_instance_t *jl_apply_lookup(jl_value_t **args, size_t nargs, size_t wo
 {
     assert(nargs);
     return jl_lookup_generic_(args[0], &args[1], nargs - 1,
-            jl_int32hash_fast(jl_return_address()), world, 0, NULL);
+            jl_int32hash_fast(jl_return_address()), world, 0, NULL, NULL);
+}
+
+// The ptls whose dispatch counters a call by `ct` should bump, or NULL to not count it.
+// Inference is Julia code and dispatches heavily, so counting while this task is
+// inside the compiler would swamp whatever the caller is actually measuring.
+STATIC_INLINE jl_ptls_t dispatch_count_ptls(jl_task_t *ct) JL_NOTSAFEPOINT
+{
+    return ct->reentrant_timing == 0 ? ct->ptls : NULL;
 }
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 {
-    size_t world = jl_current_task->world_age;
+    jl_task_t *ct = jl_current_task;
+    size_t world = ct->world_age;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
-                                                     world, 1, NULL);
+                                                     world, 1, NULL, dispatch_count_ptls(ct));
     JL_GC_PROMISE_ROOTED(mfunc);
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
 }
@@ -5559,8 +5580,10 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
 // address in the call-site cache
 jl_value_t *jl_apply_generic_site(jl_value_t *F, jl_value_t **args, uint32_t nargs, uint32_t callsite)
 {
-    size_t world = jl_current_task->world_age;
-    jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1, NULL);
+    jl_task_t *ct = jl_current_task;
+    size_t world = ct->world_age;
+    jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1, NULL,
+                                                     dispatch_count_ptls(ct));
     JL_GC_PROMISE_ROOTED(mfunc); // as in jl_apply_generic
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
 }
@@ -5589,6 +5612,7 @@ jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t n
                                     jl_genericmemory_t *sites, size_t i, uint32_t callsite,
                                     size_t world)
 {
+    jl_ptls_t count_ptls = dispatch_count_ptls(jl_current_task);
     _Atomic(jl_value_t*) *slot = &((_Atomic(jl_value_t*)*)jl_genericmemory_ptr_data(sites))[i];
     jl_svec_t *site = (jl_svec_t*)jl_atomic_load_acquire(slot);
     // (the interpreter keeps other things at a site, which are never a typemap entry)
@@ -5605,11 +5629,15 @@ jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t n
             jl_method_instance_t *mfunc = typemap_entry_linfo(entry);
             // owned by its method, not by `site`, which another thread may replace
             JL_GC_PROMISE_ROOTED(mfunc);
+            if (count_ptls)
+                jl_atomic_store_relaxed(&count_ptls->dispatch_count,
+                        jl_atomic_load_relaxed(&count_ptls->dispatch_count) + 1);
             return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
         }
     }
     jl_typemap_entry_t *entry = NULL;
-    jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1, &entry);
+    jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1, &entry,
+                                                     count_ptls);
     if (entry != NULL) {
         jl_value_t *k = NULL;
         site = NULL;
@@ -5631,6 +5659,34 @@ jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t n
     }
     JL_GC_PROMISE_ROOTED(mfunc); // as in jl_apply_generic
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
+}
+
+// Runtime dispatches since the process started, and how many of them missed the call-site
+// cache. Threads that have exited keep their `jl_all_tls_states` slot, so these only grow.
+JL_DLLEXPORT jl_dispatch_counts_t jl_dispatch_counts(void)
+{
+    jl_dispatch_counts_t counts = {0, 0};
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (int i = 0; i < nthreads; i++) {
+        jl_ptls_t ptls = allstates[i];
+        if (ptls == NULL)
+            continue;
+        counts.total += jl_atomic_load_relaxed(&ptls->dispatch_count);
+        counts.slow += jl_atomic_load_relaxed(&ptls->dispatch_slow_count);
+    }
+    return counts;
+}
+
+// Just this thread's counters. Calibration uses these rather than the process-wide totals
+// so that dispatches on other threads cannot be charged to the loop it is timing.
+JL_DLLEXPORT jl_dispatch_counts_t jl_dispatch_counts_thread(void)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    jl_dispatch_counts_t counts;
+    counts.total = jl_atomic_load_relaxed(&ptls->dispatch_count);
+    counts.slow = jl_atomic_load_relaxed(&ptls->dispatch_slow_count);
+    return counts;
 }
 
 // buggy way to lookup a method given a list of arguments
