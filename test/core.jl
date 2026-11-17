@@ -503,27 +503,17 @@ let X = Union{Tuple{S} where S<:Int, Vector{T}} where T
     @test g62001(X, 1) === (X, 1)
 end
 
-# `Tuple{Any,Vararg}` and `Tuple{Any,Vararg{Any}}` are `==` but not `===`,
-# as are the `Type{...}` and `Tuple{T,...} where T` pairs below;
-# methods on their `TypeEgal`s dispatch separately
-typeegal_vararg_dispatch(::Core.TypeEgal{Tuple{Any,Vararg}}) = :unset
-typeegal_vararg_dispatch(::Core.TypeEgal{Tuple{Any,Vararg{Any}}}) = :any
+# `Tuple{..., Vararg}` is normalized to `Tuple{..., Vararg{Any}}` on construction
 let a = Tuple{Any,Vararg}, b = Tuple{Any,Vararg{Any}}
-    @test Type{a} == Type{b}
-    @test Type{a} !== Type{b}
-    @test (Tuple{T,Vararg} where T) == (Tuple{T,Vararg{Any}} where T)
-    @test (Tuple{T,Vararg} where T) !== (Tuple{T,Vararg{Any}} where T)
-    @test typeegal_vararg_dispatch(a) === :unset
-    @test typeegal_vararg_dispatch(b) === :any
+    @test a === b
+    @test Type{a} === Type{b}
+    @test Core.TypeEgal{a} === Core.TypeEgal{b}
+    @test (Tuple{T,Vararg} where T) === (Tuple{T,Vararg{Any}} where T)
+    @test Tuple{Vararg} === Tuple
 end
 # a type literal in compiled code is only swapped for its wrapper if `===` to it
-struct TypeEgalVarargRoot{T<:Tuple{Any,Vararg{Any}}} end
-const TypeEgalVarargRootAlias = TypeEgalVarargRoot{T} where T<:Tuple{Any,Vararg}
-is_TypeEgalVarargRootAlias(t) = t === TypeEgalVarargRootAlias
 const RefAlphaRenamed = Ref{S} where S
 is_RefAlphaRenamed(t) = t === RefAlphaRenamed
-@test TypeEgalVarargRootAlias !== TypeEgalVarargRoot
-@test is_TypeEgalVarargRootAlias(TypeEgalVarargRootAlias)
 @test RefAlphaRenamed !== Ref
 @test is_RefAlphaRenamed(RefAlphaRenamed)
 
@@ -1177,8 +1167,7 @@ let f = g -> x -> g(x)
     @test f(Rational{Core.TypeVar(:T)}) isa Function
     @test fieldtype(typeof(f(Rational{Core.TypeVar(:T)})), 1) === DataType
 end
-# captured `==` but non-egal type values (tuple types spelled with `Vararg` and with
-# `Vararg{Any}`) must not share a closure type from the type cache
+# captured tuple types spelled with `Vararg` and with `Vararg{Any}` share a closure type
 let f = t -> (c -> t <: c), a = Tuple{Any,Vararg}, b = Tuple{Any,Vararg{Any}}
     @test f(b)(Tuple)
     @test f(a)(Tuple)
@@ -6185,17 +6174,6 @@ struct T20999
     x::Array{T} where T<:Integer
 end
 @test T20999 !== orig_T20999
-
-# struct redefinition only needs `==` bounds and field types, so respelling
-# `Vararg` as `Vararg{Any}` keeps the existing type
-struct TypeEgalVarargRedef{T<:Tuple{Any,Vararg}}
-    x::Tuple{T,Vararg}
-end
-const orig_TypeEgalVarargRedef = TypeEgalVarargRedef
-struct TypeEgalVarargRedef{T<:Tuple{Any,Vararg{Any}}}
-    x::Tuple{T,Vararg{Any}}
-end
-@test TypeEgalVarargRedef === orig_TypeEgalVarargRedef
 
 # issue #54757, type redefinitions with recursive reference in supertype
 struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A,N}},Vararg{Y,N}} where {X,Y<:T54757}, N}
