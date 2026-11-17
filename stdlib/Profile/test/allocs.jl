@@ -32,7 +32,7 @@ end
 # profiler and heap snapshot) to MMTk
 @static if Base.USING_STOCK_GC
 @testset "alloc profiler doesn't segfault" begin
-    res = Allocs.@profile sample_rate=1.0 begin
+    Allocs.@profile sample_rate=1.0 begin
         # test the allocations during compilation
         using Base64
     end
@@ -82,7 +82,7 @@ end
     precompile(do_work, ())
     do_work()
 
-    res = Allocs.@profile sample_rate=1 begin
+    Allocs.@profile sample_rate=1 begin
         do_work()
     end
     profile = Allocs.fetch()

@@ -359,7 +359,7 @@ function print(io::IO,
             isempty(taskids) && (any_nosamples = true)
             for taskid in taskids
                 printstyled(io, "Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
-                gdata = group_data(data, bytask[taskid], (t, k) -> t in threads)
+                gdata = group_data(data, bytask[taskid], (t, _k) -> t in threads)
                 nosamples = print_group(io, gdata, lidict, pf, format, threads, taskid, true)
                 nosamples && (any_nosamples = true)
                 println(io)
@@ -370,7 +370,7 @@ function print(io::IO,
             isempty(threadids) && (any_nosamples = true)
             for threadid in threadids
                 printstyled(io, "Thread $threadid ($(Threads.threadpooldescription(threadid))) "; bold=true, color=Base.info_color())
-                gdata = group_data(data, bythread[threadid], (t, k) -> k in tasks)
+                gdata = group_data(data, bythread[threadid], (_t, k) -> k in tasks)
                 nosamples = print_group(io, gdata, lidict, pf, format, threadid, tasks, true)
                 nosamples && (any_nosamples = true)
                 println(io)
@@ -1091,11 +1091,10 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
     ntext = max(30, cols - ndigoverhead - nindent - ndigcounts - ndigline - 6)
     widthfile = 2*ntext÷5 # min 12
     strs = Vector{AnnotatedString{String}}(undef, length(frames))
-    showextra = false
-    if level > nindent
-        nextra = level - nindent
+    nextra = level - nindent
+    showextra = nextra > 0
+    if showextra
         nindent -= ndigits(nextra) + 2
-        showextra = true
     end
     for i in eachindex(frames)
         frame = frames[i]
