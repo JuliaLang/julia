@@ -577,11 +577,11 @@ void jl_thread_resume(int tid) JL_NO_SAFEPOINT_ANALYSIS
     HANDLE_MACH_ERROR("thread_resume", ret);
 }
 
-// Serializes every path that suspends a thread and rewrites its context
-// (jl_send_cancellation_signal on any thread, and jl_send_abandon_signal) for
-// its complete suspend/rewrite/resume sequence: two rewriters working from
-// the same suspended snapshot would install conflicting continuations and
-// task chains. (The profiler does not need it: it only reads contexts, and
+// Serializes the senders that suspend a thread and rewrite its context
+// (jl_send_reset_signal, from any thread) for their complete
+// suspend/rewrite/resume sequence: two rewriters working from the same
+// suspended snapshot would install conflicting continuations and task
+// chains. (The profiler does not need it: it only reads contexts, and
 // suspend counts nest.) It also prevents two threads delivering
 // cancellations at each other from freezing both: a rewriter always takes
 // this lock before suspending and never blocks while holding a suspension,
@@ -614,6 +614,7 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     jl_value_t *bound;
     int bound_cancelled;
     jl_cancel_handler_ctx_t *hctx;
+    uintptr_t sp;
     if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
         return;
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
@@ -658,6 +659,17 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     unsigned int count = MACH_THREAD_STATE_COUNT;
     memset(&state, 0, sizeof(state));
     if (thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count) != KERN_SUCCESS)
+        goto resume;
+    // Leave a thread in a signal handler alone (usr2_handler runs on the
+    // signal stack): redirecting it would skip the handler's sigreturn and
+    // leave the signal masked. A thread whose signal stack is unknown is never
+    // redirected.
+#if defined(_CPU_X86_64_)
+    sp = state.__rsp;
+#elif defined(_CPU_AARCH64_)
+    sp = state.__sp;
+#endif
+    if (is_addr_on_sigstack(ptls2, (void*)sp))
         goto resume;
     // Re-check now that the thread cannot run: the current task may have
     // switched before the freeze. Delivery is gated on an actual
@@ -740,57 +752,38 @@ resume:
 }
 
 
-// Switch the target thread's current (already committed) task to
-// ptls->abandon_to (see jl_abandon_task_request): suspend the thread, validate the
-// pending request against its frozen state, and on commit redirect it into
-// the abandon callback. Holds the rewrite lock like every other
-// suspend-and-rewrite path (see its definition above), and the profile read
-// lock across the liveness re-check and suspension so the thread cannot
-// exit in between.
+// Abandonment is delivered by SIGUSR2 (see usr2_handler), not by suspending
+// the thread and rewriting its state: a thread stopped on a fault installs the
+// exception reply, a complete thread state, when it resumes, undoing any
+// rewrite, and a sender cannot tell that it is stopped. The kernel builds the
+// signal frame after installing the reply, so the handler edits the state the
+// thread resumes with.
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     if (ptls2 == NULL)
         return;
-    pthread_mutex_lock(&ctx_rewrite_lock);
+    // Thread teardown clears current_task under the profile write lock (see
+    // jl_free_thread_gc_state), so the read lock keeps the thread alive until
+    // the signal is sent. Refuse a request that cannot be sent, or the
+    // requester would wait forever.
+    int sent = 0;
     jl_lock_profile();
-    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    if (ct2 == NULL) {
-        jl_unlock_profile();
-        pthread_mutex_unlock(&ctx_rewrite_lock);
-        return;
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON &&
+        jl_atomic_load_relaxed(&ptls2->current_task) != NULL) {
+        jl_atomic_fetch_or(&ptls2->signal_request_flags, JL_SIGNAL_REQ_ABANDON);
+        sent = pthread_kill(ptls2->system_id, SIGUSR2) == 0;
     }
-    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
-    kern_return_t ret = thread_suspend(thread);
     jl_unlock_profile();
-    if (ret != KERN_SUCCESS) {
-        pthread_mutex_unlock(&ctx_rewrite_lock);
-        return;
-    }
-    // The victim thread is suspended: fetch its context *before* deciding
-    // anything, validate the pending request against its frozen state, and
-    // only then redirect it into the abandon callback (which never
-    // returns). A commit is rolled back to a refusal if the redirect
-    // cannot be completed - the callback is what publishes the abandoned
-    // task state, so an unredirected victim resumes untouched. On refusal
-    // the requester observes the verdict and withdraws.
-    host_thread_state_t state;
-    unsigned int count = MACH_THREAD_STATE_COUNT;
-    memset(&state, 0, sizeof(state));
-    if (thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count) != KERN_SUCCESS) {
-        // cannot redirect; leave the request pending for a retry/withdraw
-    }
-    else if (jl_abandon_try_commit(ptls2, 0)) {
-        jl_noreturn_call_in_state(&state, (void (*)(void))&jl_abandon_task_cb, 0, 0);
-        if (thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count) != KERN_SUCCESS) {
-            // Roll the commit back: nothing observable was published yet
-            // (the task state is written by the callback).
-            jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_REFUSED);
-        }
-    }
-    if (thread_resume(thread) != KERN_SUCCESS)
-        jl_safe_printf("error: thread_resume failed in task abandonment\n");
-    pthread_mutex_unlock(&ctx_rewrite_lock);
+    if (!sent)
+        jl_abandon_try_commit(ptls2, 1);
+}
+
+// Make the thread that received a signal call `fptr`, which must not return,
+// when the handler returns.
+static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_ctx)
+{
+    jl_noreturn_call_in_state((host_thread_state_t*)jl_to_bt_context(_ctx), fptr, 0, 0);
 }
 
 static void jl_exit_thread0_cb(int signo) JL_CANSAFEPOINT

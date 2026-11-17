@@ -1913,9 +1913,91 @@ if threadpoolsize() >= 2
         GC.gc(false)
     end
 
-    # Linux-only: blocks the abandon signal by number (SIGUSR2 == 12) and uses
-    # Linux's SIG_BLOCK/SIG_UNBLOCK values.
-    Sys.islinux() && @testset "an undelivered abandonment withdraws cleanly" begin
+    # Abandon victims that keep stopping on faults the runtime handles. On
+    # macOS, the reply to such a fault used to undo a committed abandonment,
+    # hanging `unsafe_abandon!`. Not on Windows, where a safepoint fault is
+    # handled inside exception dispatch, which abandonment does not refuse
+    # yet (#63985). The victims and the collector are pinned to other
+    # threads, since this one yields while waiting.
+    nt = Threads.nthreads(:default) + Threads.nthreads(:interactive)
+    Sys.isunix() && nt >= 3 && @testset "abandonment of a victim stopped on a fault" begin
+        function pinned(f, tid)
+            t = Task(f)
+            t.sticky = true
+            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid)
+            return schedule(t)
+        end
+        function abandon_repeatedly(body, n)
+            for _ in 1:n
+                spins = Threads.Atomic{Int}(0)
+                victim = pinned(nt - 1) do
+                    while true
+                        Threads.atomic_add!(spins, 1)
+                        body()
+                    end
+                end
+                while spins[] < 10
+                    yield()
+                end
+                rescue() = (t = Task(() -> (while true; wait(); end)); t.sticky = false; t)
+                while !Base.unsafe_abandon!(victim, rescue())
+                    yield()
+                end
+                @test victim.state === :abandoned
+            end
+        end
+
+        # safepoint faults, from collections on another thread, which pauses
+        # for as long as each collection took so that this thread progresses
+        stop = Threads.Atomic{Bool}(false)
+        collector = pinned(nt - 2) do
+            while !stop[]
+                t0 = time_ns()
+                GC.gc(false)
+                t1 = time_ns()
+                while time_ns() - t1 < t1 - t0
+                    GC.safepoint()
+                end
+            end
+        end
+        abandon_repeatedly(GC.safepoint, 200)
+        stop[] = true
+        wait(collector)
+
+        # Faults that throw (ReadOnlyMemoryError), the reproducer for the
+        # macOS hang. macOS only: a victim that keeps throwing also runs
+        # runtime code the refusals do not cover (growing its exception stack
+        # allocates), a risk this regression test accepts on one platform.
+        if Sys.isapple()
+            # exceptions seen by a catch on the victim's thread, which one
+            # staged for an abandoned victim would inflate
+            nexc() = fetch(pinned(nt - 1) do
+                try
+                    throw(ArgumentError("probe"))
+                catch
+                    length(Base.current_exceptions())
+                end
+            end)
+            @test nexc() == 1
+            pagesize = Int(ccall(:getpagesize, Cint, ()))
+            page = ccall(:valloc, Ptr{Cvoid}, (Csize_t,), pagesize)
+            @test ccall(:mprotect, Cint, (Ptr{Cvoid}, Csize_t, Cint), page, pagesize, 1 #= PROT_READ =#) == 0
+            poke() = try
+                ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), page, 0, 1)
+            catch
+            end
+            for _ in 1:200
+                abandon_repeatedly(poke, 1)
+                @test nexc() == 1
+            end
+            ccall(:mprotect, Cint, (Ptr{Cvoid}, Csize_t, Cint), page, pagesize, 3 #= PROT_READ|PROT_WRITE =#)
+            Libc.free(page)
+        end
+    end
+
+    # Blocks the abandon signal in the victim, using each platform's values
+    # for SIGUSR2, SIG_BLOCK and SIG_UNBLOCK.
+    (Sys.islinux() || Sys.isapple()) && @testset "an undelivered abandonment withdraws cleanly" begin
         # Block the abandon signal in the victim so delivery cannot happen,
         # and exercise the request/poll/withdraw primitives directly: the
         # withdrawal must return every published effect, leaving the victim
@@ -1924,16 +2006,17 @@ if threadpoolsize() >= 2
         release = Threads.Atomic{Bool}(false)
         victim = Threads.@spawn begin
             # block SIGUSR2 on this thread
+            SIG_BLOCK, SIG_UNBLOCK = Sys.isapple() ? (1, 2) : (0, 1)
             sset = zeros(UInt8, 128)
             ccall(:sigemptyset, Cint, (Ptr{UInt8},), sset)
-            ccall(:sigaddset, Cint, (Ptr{UInt8}, Cint), sset, 12) # SIGUSR2
-            ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), 0 #= SIG_BLOCK =#, sset, C_NULL)
+            ccall(:sigaddset, Cint, (Ptr{UInt8}, Cint), sset, Base.SIGUSR2)
+            ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), SIG_BLOCK, sset, C_NULL)
             started[] = true
             # spin in compute so the task stays current on its thread
             while !release[]
                 ccall(:jl_cpu_pause, Cvoid, ())
             end
-            ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), 1 #= SIG_UNBLOCK =#, sset, C_NULL)
+            ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), SIG_UNBLOCK, sset, C_NULL)
             :survived
         end
         while !started[]
@@ -1956,19 +2039,21 @@ if threadpoolsize() >= 2
 
     # A victim that blocks SIGBUS looks like one in a fault handler, which
     # abandonment must not redirect: the faults would stay blocked.
-    Sys.islinux() && @testset "abandonment refuses a context that blocks faults" begin
+    (Sys.islinux() || Sys.isapple()) && @testset "abandonment refuses a context that blocks faults" begin
+        SIG_BLOCK, SIG_UNBLOCK = Sys.isapple() ? (1, 2) : (0, 1)
+        SIGBUS = Sys.isapple() ? 10 : 7
         blocked = Threads.Atomic{Bool}(false)
         unblock = Threads.Atomic{Bool}(false)
         victim = Threads.@spawn begin
             sset = zeros(UInt8, 128)
             ccall(:sigemptyset, Cint, (Ptr{UInt8},), sset)
-            ccall(:sigaddset, Cint, (Ptr{UInt8}, Cint), sset, 7) # SIGBUS
-            ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), 0 #= SIG_BLOCK =#, sset, C_NULL)
+            ccall(:sigaddset, Cint, (Ptr{UInt8}, Cint), sset, SIGBUS)
+            ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), SIG_BLOCK, sset, C_NULL)
             blocked[] = true
             while !unblock[]
                 ccall(:jl_cpu_pause, Cvoid, ())
             end
-            ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), 1 #= SIG_UNBLOCK =#, sset, C_NULL)
+            ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), SIG_UNBLOCK, sset, C_NULL)
             while true
                 ccall(:jl_cpu_pause, Cvoid, ())
             end

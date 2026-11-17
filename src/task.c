@@ -1733,7 +1733,8 @@ JL_NORETURN void jl_abandon_task_cb(void) JL_CANSAFEPOINT
 // jl_abandon_task_cb, which publishes the task state and settles the slot.
 // On refusal (or no pending request) 0 is returned; the requester observes
 // REFUSED and settles. With `refuse` set, the request is refused for a reason
-// only the caller can see. Async-signal-safe: atomics and abandon_notify.
+// only the caller can see; that is safe from any thread. Async-signal-safe:
+// atomics and abandon_notify.
 int jl_abandon_try_commit(jl_ptls_t ptls2, int refuse) JL_NOTSAFEPOINT
 {
     uint8_t st = JL_ABANDON_PENDING;
@@ -1768,7 +1769,7 @@ int jl_abandon_try_commit(jl_ptls_t ptls2, int refuse) JL_NOTSAFEPOINT
     //  - the thread waits at a safepoint (fault_handling), holding its
     //    sleep_lock;
     //  - the caller refuses (`refuse`): it interrupted a fault handler or a
-    //    safe_restore region.
+    //    safe_restore region, or could not send the signal.
     if (refuse || ct != t ||
         jl_atomic_load_relaxed(&ptls2->gc_state) != 0 ||
         ptls2->in_task_switch ||
