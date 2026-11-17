@@ -75,6 +75,7 @@ struct JLOptions
     target_sanitize_thread::Int8
     target_sanitize_address::Int8
     coverage_exclude::Ptr{UInt8}
+    tiered::Int8
 end
 
 # This runs early in the sysimage when `!=` is not defined yet

@@ -14,3 +14,7 @@ if !@isdefined(Compiler)
         const Compiler = Base.REFLECTION_COMPILER[]
     end
 end
+
+# These tests inspect what compilation produces, so calls must compile also when tiered
+# execution is on.
+isdefined(Base, :Tiered) && Base.Tiered.compiled_tier!()

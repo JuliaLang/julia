@@ -53,7 +53,7 @@ end
     @test typeof(result_greedy) == typeof(expected)
     g_untyped(m) = Threads.@threads :greedy [i for i in 1:m if iseven(i)]
     g_typed(m)   = Threads.@threads :greedy Int[i for i in 1:m if iseven(i)]
-    g_untyped(10); g_typed(10)
+    Base.Experimental.@force_compile (g_untyped(10); g_typed(10)) # warm up the compiled tier
     @test @allocations(g_untyped(100_000)) < 1_000
     @test @allocations(g_typed(100_000)) < 1_000
 
@@ -76,7 +76,7 @@ end
     # push! per passing element with no per-element heap tuple or channel put!.
     f_untyped(m) = Threads.@threads [i for i in 1:m if iseven(i)]
     f_typed(m)   = Threads.@threads Int[i for i in 1:m if iseven(i)]
-    f_untyped(10); f_typed(10)  # warm up
+    Base.Experimental.@force_compile (f_untyped(10); f_typed(10)) # warm up the compiled tier
     for f in (f_untyped, f_typed)
         @test @allocations(f(1_000_000)) < 1_000
     end
@@ -322,7 +322,7 @@ end
     # Verify widening allocations aren't significantly worse than serial
     widen_threaded() = @threads [i == 100 ? 1.0 : i for i in 1:100_000]
     widen_serial() = [i == 100 ? 1.0 : i for i in 1:100_000]
-    widen_threaded(); widen_serial()
+    Base.Experimental.@force_compile (widen_threaded(); widen_serial()) # warm up the compiled tier
     @test @allocations(widen_threaded()) < @allocations(widen_serial()) + 200
 end
 
@@ -380,8 +380,7 @@ end
     t3(n) = @threads :dynamic Int[i for i in 1:n]
     alloc_budget = 100 + 10 * Threads.threadpoolsize(:default)
     for f in (t1, t2, t3)
-        f(1)
-        f(10_000)
+        Base.Experimental.@force_compile (f(1); f(10_000)) # warm up the compiled tier
         small_allocs = @allocations f(1)
         large_allocs = @allocations f(10_000)
         @test small_allocs < alloc_budget

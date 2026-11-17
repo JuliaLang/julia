@@ -283,6 +283,8 @@ end
 # would route every park through the cancellable arm - the cancellable
 # steady state is measured separately below.
 @testset "wait registration recycling is allocation-free" begin
+ # the warmup must compile, also the spawned task's loop, which inherits this
+ tier = Base.Tiered.compiled_tier!()
  Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
     ping = Event(true)
     pong = Event(true)
@@ -312,6 +314,7 @@ end
         @test allocated == 0
     end
  end
+ Base.Tiered.compiled_tier!(tier)
 end
 
 # ... and the same holds for the cancellable park of a task governed by a
@@ -321,6 +324,8 @@ end
 # tuple recursion; a dynamic tuple iteration would re-box the SourceWait
 # every park)
 @testset "cancellable park recycling is allocation-free" begin
+ # the warmup must compile, also the spawned task's loop, which inherits this
+ tier = Base.Tiered.compiled_tier!()
  src = Base.CancellationTokenSource()
  Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.CancellationToken(src)) do
     ping = Event(true)
@@ -346,6 +351,7 @@ end
         @test allocated == 0
     end
  end
+ Base.Tiered.compiled_tier!(tier)
 end
 
 @testset "unbuffered channel: interrupted taker is skipped" begin
@@ -887,7 +893,7 @@ end
         main()
     """
     # without the objcache, which would skip LLVM after the first run
-    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=2 -e $program`
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --tiered=no --threads=2 -e $program`
     cmd = addenv(cmd, "JULIA_OBJCACHE" => "0")
     output = IOBuffer()
     proc = run(pipeline(cmd; stdout=output, stderr); wait=false)
@@ -997,7 +1003,7 @@ end
     local small_time, big_remaining, output
     for n in (4000, 8000, 16000)
         # without the objcache, which would skip LLVM after the first run
-        cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=3 -e $program $n`
+        cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --tiered=no --threads=3 -e $program $n`
         cmd = addenv(cmd, "JULIA_OBJCACHE" => "0")
         buf = IOBuffer()
         proc = run(pipeline(cmd; stdout=buf, stderr); wait=false)

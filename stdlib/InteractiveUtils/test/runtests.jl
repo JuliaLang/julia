@@ -234,7 +234,7 @@ module Tmp14173
     export A
     A = randn(2000, 2000)
 end
-varinfo(Tmp14173) # warm up
+@allocated varinfo(Tmp14173) # warm up, compiling also what `varinfo` calls
 const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
 @test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 125000)
 
@@ -569,7 +569,8 @@ _true = true
 @noinline h_broken_code() = (g_broken_code(); f_broken_code())
 let errf = tempname(),
     old_stderr = stderr,
-    new_stderr = open(errf, "w")
+    new_stderr = open(errf, "w"),
+    tier = Base.Tiered.compiled_tier!() # calling `g_broken_code` must compile it
     try
         redirect_stderr(new_stderr)
         @test occursin("f_broken_code", sprint(code_native, h_broken_code, ()))
@@ -589,6 +590,7 @@ let errf = tempname(),
         println(new_stderr, "end")
         flush(new_stderr)
     finally
+        Base.Tiered.compiled_tier!(tier)
         Libc.flush_cstdio()
         redirect_stderr(old_stderr)
         close(new_stderr)

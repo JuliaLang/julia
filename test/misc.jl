@@ -500,6 +500,10 @@ macro capture_stdout(ex)
     end
 end
 
+# These check that `@time` reports the compilation that a first call does, so calls must
+# compile also when tiered execution is on.
+tier_time = Base.Tiered.compiled_tier!()
+
 # issue #48024, but with the time macro itself
 begin
     double(x::Real) = 2x;
@@ -583,6 +587,7 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
         @test occursin("% of which was recompilation", out)
     end
 end
+Base.Tiered.compiled_tier!(tier_time)
 
 # the description is evaluated before the timed expression
 let i = 0

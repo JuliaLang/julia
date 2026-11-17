@@ -5228,10 +5228,38 @@ STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
     return v;
 }
 
-// Kept out of line so that the frame of every dynamic call (`jl_apply_generic`) stays small
-static NOINLINE jl_value_t *_jl_invoke_compile(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world,
-   enum internal_compilation_triggers cause) JL_CANSAFEPOINT
+// Does compiled code for a more general specialization already serve this call? That is
+// what dispatch uses without tiering (e.g. code from a package image compiled for a
+// widened signature), so the tier gate must not interpret it.
+// Most specializations are their own compilable form, which only depends on the method and
+// the signature, so remember that rather than normalize again at every interpreted call.
+static int tier_compiled_elsewhere(jl_method_instance_t *mi, size_t world) JL_CANSAFEPOINT
 {
+    if (jl_atomic_load_relaxed(&mi->flags) & MI_FLAG_TIER_COMPILABLE)
+        return 0;
+    jl_method_instance_t *mi2 = jl_normalize_to_compilable_mi(mi);
+    if (mi2 == mi) {
+        jl_atomic_fetch_or_relaxed(&mi->flags, MI_FLAG_TIER_COMPILABLE);
+        return 0;
+    }
+    jl_code_instance_t *ci2 = NULL;
+    return jl_method_compiled_callptr(mi2, world, &ci2) != NULL;
+}
+
+// Everything _jl_invoke_gated does besides calling compiled code: kept out of line, so that
+// the call to compiled code inlines into dispatch as it does without tiering.
+static NOINLINE jl_value_t *_jl_invoke_slow(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world,
+   enum internal_compilation_triggers cause, int gated) JL_CANSAFEPOINT
+{
+    // Tiered execution: dynamic dispatch is the tier boundary. A callee that is
+    // not compiled yet runs in the interpreter until its method is hot.
+    // Statically resolved calls (TRIGGER_FOREIGN) always compile, except those whose
+    // callee the compiler left out of its caller's batch (jl_invoke_tiered).
+    if (gated && jl_tier_enabled && !tier_compiled_elsewhere(mfunc, world)) {
+        int why = jl_tier_gate(mfunc);
+        if (why == JL_TIER_INTERPRET)
+            return verify_type(jl_interpret_mi(F, args, nargs, mfunc));
+    }
     int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
@@ -5245,26 +5273,43 @@ static NOINLINE jl_value_t *_jl_invoke_compile(jl_value_t *F, jl_value_t **args,
     if (jl_options.malloc_log)
         jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
     jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
-    jl_value_t *res = invoke(F, args, nargs, codeinst);
-    return verify_type(res);
+    return verify_type(invoke(F, args, nargs, codeinst));
+}
+
+// `gated`: a callee that is not compiled yet may run interpreted (see the tier gate)
+STATIC_INLINE jl_value_t *_jl_invoke_gated(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world,
+   enum internal_compilation_triggers cause, int gated) JL_CANSAFEPOINT
+{
+    jl_code_instance_t *codeinst = NULL;
+    jl_callptr_t invoke = jl_method_compiled_callptr(mfunc, world, &codeinst);
+    if (__likely(invoke != NULL))
+        return verify_type(invoke(F, args, nargs, codeinst));
+    return _jl_invoke_slow(F, args, nargs, mfunc, world, cause, gated);
 }
 
 STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world,
    enum internal_compilation_triggers cause) JL_CANSAFEPOINT
 {
-    jl_code_instance_t *codeinst = NULL;
-    jl_callptr_t invoke = jl_method_compiled_callptr(mfunc, world, &codeinst);
-    if (invoke) {
-        jl_value_t *res = invoke(F, args, nargs, codeinst);
-        return verify_type(res);
-    }
-    return _jl_invoke_compile(F, args, nargs, mfunc, world, cause);
+    return _jl_invoke_gated(F, args, nargs, mfunc, world, cause, cause == TRIGGER_DISPATCH);
 }
 
 JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
     size_t world = jl_current_task->world_age;
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_FOREIGN);
+}
+
+// A call from compiled code to `codeinst`, which the compiler left out of its caller's batch
+// because it had never run (see jl_tier_lazy_callees in tiered.c): run it like a dispatch
+// from the interpreter, interpreted until its budget is spent. Once it is compiled, by this
+// call or otherwise, the trampoline that made the call is pointed at the compiled code, so
+// later calls go straight there.
+JL_DLLEXPORT jl_value_t *jl_invoke_tiered(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+{
+    size_t world = jl_current_task->world_age;
+    jl_value_t *res = _jl_invoke_gated(F, args, nargs, jl_get_ci_mi(codeinst), world, TRIGGER_FOREIGN, 1);
+    jl_jit_link_tier_stubs(codeinst);
+    return res;
 }
 
 jl_value_t *jl_invoke_target(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_value_t *target)

@@ -223,7 +223,7 @@ end
             print(enabled ? "enabled" : "disabled")
         """
         cmd = addenv(
-            `$(Base.julia_cmd()) --startup-file=no --color=no -e $script`,
+            `$(Base.julia_cmd()) --startup-file=no --tiered=no --color=no -e $script`,
             "JULIA_OBJCACHE" => "1",
             "JULIA_OBJCACHE_PATH" => joinpath(dir, "cache"),
             "JULIA_OBJCACHE_CAPACITY" => string(512 << 10),

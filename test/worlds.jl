@@ -2,6 +2,10 @@
 
 # tests for accurate updating of method tables
 
+# These tests check what calls compile and how that code is invalidated, so calls must
+# compile also when tiered execution is on.
+Base.Tiered.compiled_tier!()
+
 using Base: get_world_counter, tls_world_age
 @test typemax(UInt) > get_world_counter() == tls_world_age() > 0
 

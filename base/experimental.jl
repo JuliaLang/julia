@@ -245,8 +245,19 @@ end
 
 """
     Experimental.@force_compile
+    Experimental.@force_compile ex
 
 Force compilation of the block or function (Julia's built-in interpreter is blocked from executing it).
+
+On its own, the macro covers the code of the block or function it appears in. Code that
+code calls runs as it would otherwise: with tiered execution, a function reached by
+dynamic dispatch may start out in the interpreter.
+
+Given an expression, the macro also turns tiered execution off while `ex` runs: everything
+`ex` calls, and every task it starts, runs compiled, as without tiering. Code compiled this
+way stays compiled afterwards. Benchmark harnesses can wrap their runs in this form, so that
+they measure compiled code from the start. Without tiered execution the two forms behave
+the same.
 
 # Examples
 
@@ -266,6 +277,13 @@ true
 ```
 """
 macro force_compile() Expr(:meta, :force_compile) end
+macro force_compile(ex)
+    quote
+        $(Expr(:meta, :force_compile))
+        local tier_old = ccall(:jl_tier_compiled_enter, UInt8, ())
+        $(Expr(:tryfinally, esc(ex), :(ccall(:jl_tier_compiled_leave, Cvoid, (UInt8,), tier_old))))
+    end
+end
 
 # UI features for errors
 

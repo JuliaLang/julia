@@ -767,7 +767,9 @@ macro m_throw(x)
     :(\$(f_throw(x)))
 end
 """)
-let (err, st) = try
+# (the macro frame is missing only from compiled code)
+let tier = isdefined(Base, :Tiered) && Base.Tiered.compiled_tier!(),
+    (err, st) = try
         JuliaLowering.include_string(test_mod, "_never_exist = @m_throw 42")
     catch e
         e, stacktrace(catch_backtrace())
@@ -779,6 +781,7 @@ let (err, st) = try
     # TODO: store this in DebugInfo
     @test_broken any(sf->sf.func===Symbol("@m_throw"), st)
     @test any(sf->sf.func===Symbol("macro expansion"), st)
+    isdefined(Base, :Tiered) && Base.Tiered.compiled_tier!(tier)
 end
 
 let err = try

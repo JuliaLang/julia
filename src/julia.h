@@ -496,6 +496,9 @@ typedef struct JL_GC_TRACKED_TYPE _jl_method_t {
 
 // hidden fields:
     jl_mutex_t writelock;
+    // tiered execution state (see tiered.c); transient, zeroed when serialized
+    _Atomic(uint8_t) tier_flags;  // JL_TIER_* bits
+    _Atomic(uint32_t) tier_nstmts; // statements in its lowered code, once JL_TIER_CHECKED
     // the interpreter's caches for the code of this method it last ran (see interpreter.c),
     // kept alive by jl_interp_call_sites; zeroed when serialized
     _Atomic(jl_genericmemory_t*) interp_sites;
@@ -530,9 +533,14 @@ struct JL_GC_TRACKED_TYPE _jl_method_instance_t {
     //   bit 1: dispatched
     //   bit 2: The ->backedges field is currently being walked higher up the stack - entries may be deleted, but not moved
     //   bit 3: The ->backedges field was modified and should be compacted when clearing bit 2
+    //   bit 4: is its own compilable signature (a cache for the tier gate; see gf.c)
     _Atomic(uint8_t) flags;
     _Atomic(uint8_t) dispatch_status; // bits defined in julia_internal.h or staticdata.jl
     _Atomic(uint8_t) precompile; // if set, this will be added to the output system image
+// hidden fields:
+    // tiered execution state (see tiered.c), in what would otherwise be padding;
+    // transient, and zero in serialized images, which are built without tiering
+    _Atomic(uint32_t) tier_work; // statements interpreted in this specialization
 };
 #define JL_MI_FLAGS_MASK_PRECOMPILED    0x01
 #define JL_MI_FLAGS_MASK_DISPATCHED     0x02

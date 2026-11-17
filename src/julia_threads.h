@@ -556,9 +556,11 @@ typedef struct JL_GC_TRACKED_TYPE _jl_task_t {
     // Bit 1-2: 0-3 counter of how many times we've reentered inference
     // Bit 3: 1 if we are writing the image and inference is illegal
     uint8_t reentrant_timing;
-    // 2 bytes of padding on 32-bit, 6 bytes on 64-bit
-    // uint16_t padding2_32;
-    // uint48_t padding2_64;
+    // nonzero while code must run in the compiled tier (see tiered.c)
+    uint8_t tier_compiled;
+    // 1 byte of padding on 32-bit, 5 bytes on 64-bit
+    // uint8_t padding2_32;
+    // uint40_t padding2_64;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
     size_t world_age;

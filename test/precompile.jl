@@ -6,6 +6,10 @@ using REPL # testing the doc lookup function should be outside of the scope of t
 include("precompile_utils.jl")
 include("tempdepot.jl")
 
+# These tests inspect the code that calls compile, so calls must compile also when
+# tiered execution is on.
+Base.Tiered.compiled_tier!()
+
 # This file runs alongside the other tests, so keep its parallel precompilation to a few
 # processes; restored at the end of the file
 const original_num_precompile_tasks = get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", nothing)
@@ -2981,7 +2985,7 @@ precompile_test_harness("inlined frames of code compiled after loading") do load
         st = stacktrace(InlinedFrames.outer())
         any(fr -> fr.func === :middle && fr.inlined && basename(String(fr.file)) == "InlinedFrames.jl", st)
     """
-    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --pkgimages=no -E $(testcode)`) == "true"
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --tiered=no --pkgimages=no -E $(testcode)`) == "true"
 end
 
 precompile_test_harness("BindingReplaceDisallow") do load_path

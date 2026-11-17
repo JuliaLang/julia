@@ -26,6 +26,7 @@
 
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
+#include <atomic>
 #include "julia.h"
 #include "julia_internal.h"
 #include "platform.h"
@@ -791,6 +792,10 @@ public:
     // same address from being linked to old symbol.
     void unregisterCI(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
 
+    // Point the tiered trampolines for calls to CI (see linkCallTarget) at its compiled
+    // code, once CI or an equivalent CodeInstance has some with the trampolines' API.
+    void linkTierStubs(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
+
     orc::ThreadSafeContext makeContext() JL_NOTSAFEPOINT;
     const DataLayout& getDataLayout() const JL_NOTSAFEPOINT;
 
@@ -907,6 +912,11 @@ private:
     // CodeInstance is eligible for garbage collection, it must be removed from
     // this map first, with unregisterCI.
     CISymbolMap CISymbols;
+    // The slots of the tiered trampolines not yet pointed at compiled code, by the
+    // CodeInstance they call, with their API. Protected by TierStubsMutex, which may be
+    // taken while holding LinkerMutex but not the other way around.
+    std::mutex TierStubsMutex;
+    DenseMap<jl_code_instance_t *, SmallVector<std::pair<std::atomic<void *> *, jl_invoke_api_t>, 1>> TierStubs;
     jl_name_counter_t Names;
 
     std::unique_ptr<DLSymOptimizer> DLSymOpt;

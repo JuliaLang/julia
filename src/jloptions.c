@@ -168,6 +168,7 @@ JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT
                         0, // target_sanitize_thread
                         0, // target_sanitize_address
                         NULL, // coverage_exclude
+                        0, // tiered
     };
     jl_options_initialized = 1;
 }
@@ -359,6 +360,8 @@ static const char opts_hidden[] =
     " --trace-compile-timing                        If --trace-compile is enabled show how long each took\n"
     "                                               to compile in ms\n"
     " --task-metrics={yes|no*}                      Enable collection of per-task timing data.\n"
+    " --tiered={yes|no*}                            Experimental: interpret code until it is hot, then\n"
+    "                                               compile it (also JULIA_TIERED=1)\n"
     " --image-codegen                               Force generate code in imaging mode\n"
     " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n\n"
 
@@ -419,6 +422,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_trace_compile_timing,
            opt_trace_dispatch,
            opt_task_metrics,
+           opt_tiered,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
@@ -507,6 +511,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "trace-compile-timing",  no_argument, 0, opt_trace_compile_timing },
         { "trace-dispatch",  required_argument, 0, opt_trace_dispatch },
         { "task-metrics",    required_argument, 0, opt_task_metrics },
+        { "tiered",          required_argument, 0, opt_tiered },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
@@ -1151,6 +1156,14 @@ restart_switch:
                 jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_ON;
             else
                 jl_errorf("julia: invalid argument to --task-metrics={yes|no} (%s)", optarg);
+            break;
+        case opt_tiered:
+            if (!strcmp(optarg, "yes"))
+                jl_options.tiered = 1;
+            else if (!strcmp(optarg, "no"))
+                jl_options.tiered = -1;
+            else
+                jl_errorf("julia: invalid argument to --tiered={yes|no} (%s)", optarg);
             break;
         case opt_compress_sysimage:
             if (!strcmp(optarg,"yes"))
