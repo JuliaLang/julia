@@ -3543,10 +3543,8 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
 
     write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
     int64_t payload_start = ios_pos(f);
-    // Only a system image has a preferred address.  Its file is placed at 0x4000_0000_0000, which
-    // is user address space on every 64-bit platform we support with 47 or more bits of it, and
-    // above MMTk's heap range, which must not contain the image.
 #ifdef _P64
+    // This region is usually free on 64-bit Linux, macOS, FreeBSD, and Windows.
     h.preferred_base = !worklist ? 0x400000000000 + payload_start : 0;
 #endif
 
@@ -3673,24 +3671,23 @@ JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
     jl_image_load_metadata(handle, image);
 }
 
-// Setting JULIA_IMAGE_FORCE_SLIDE to a value other than 0 places images elsewhere, which exercises
-// the relocation path and keeps the image's address randomized.
 static int jl_image_force_slide(void) JL_NOTSAFEPOINT
 {
     const char *env = getenv("JULIA_IMAGE_FORCE_SLIDE");
     return env != NULL && env[0] != '\0' && strcmp(env, "0") != 0;
 }
 
-// A heap is placed `*lead` bytes past an allocation-granularity boundary, as it is in its file, so
-// that the file can be mapped.  Return the address of the boundary that puts the heap of `image`
-// at its preferred address, or 0 to place it anywhere.
-static uintptr_t jl_image_preferred_start(const jl_ji_header_t *h, size_t *lead) JL_NOTSAFEPOINT
+static int jl_image_should_map(const jl_ji_header_t *h) JL_NOTSAFEPOINT
 {
-    *lead = h->payload_start & (jl_getallocationgranularity() - 1);
-    uint64_t heap = h->preferred_base;
-    if (heap == 0 || (uint64_t)(uintptr_t)heap != heap || jl_image_force_slide())
-        return 0;
-    return (uintptr_t)heap - *lead;
+    return h->preferred_base != 0 && !jl_image_force_slide();
+}
+
+// The heap's preferred base is the address where we should map the beginning of
+// the heap, but this is not guaranteed to be on a page boundary.  Returns the
+// offset from the start of the heap in the .ji to the previous page boundary.
+static uintptr_t jl_image_heap_offset(const jl_ji_header_t *h) JL_NOTSAFEPOINT
+{
+    return h->payload_start & (jl_getallocationgranularity() - 1);
 }
 
 #ifndef _OS_WINDOWS_
@@ -3714,56 +3711,53 @@ static char *jl_image_mmap_at(uintptr_t addr, size_t size, int flags, int fd, si
 }
 #endif
 
-// Read and verify the header of the .ji open in `s` into `image`, and read the file into
-// `image->data`.  If `map`, map the heap copy-on-write instead, at its preferred address if it is
-// available, and read only the header and the loader data, which are then temporary.
-// Returns 1 on success, and 0 on failure.
+// Read and verify the .ji header.  If map is set, mmap the heap section, at the
+// preferred base address if possible.  Returns 1 on success.
 static int jl_image_read_ji(ios_t *s, jl_image_buf_t *image, int map) JL_NOTSAFEPOINT
 {
     jl_ji_header_t h;
     if (!jl_read_verify_header(s, &h))
         return 0;
     image->heap_size = h.heap_size;
-    int64_t heap_off = h.payload_start, loader_off = heap_off + h.heap_size, end = heap_off + h.payload_size;
+    int64_t loader_off = h.payload_start + h.heap_size,
+            payload_end = h.payload_start + h.payload_size;
     if (map) {
-        // a mapping must start on an allocation-granularity boundary, so map from the one before
-        // the heap
-        size_t lead;
-        uintptr_t addr = jl_image_preferred_start(&h, &lead);
-        int64_t offset = heap_off - lead;
-        size_t size = loader_off - offset;
+        size_t heap_offset = jl_image_heap_offset(&h);
+        uintptr_t addr = h.preferred_base - heap_offset;
+        int64_t file_off = h.payload_start - heap_offset;
+        size_t size = loader_off - file_off;
         char *p = NULL;
 #ifdef _OS_WINDOWS_
         HANDLE fmap = CreateFileMapping((HANDLE)_get_osfhandle(s->fd), NULL, PAGE_WRITECOPY, 0, 0, NULL);
         if (fmap) {
-            if (addr)
-                p = (char *)MapViewOfFileEx(fmap, FILE_MAP_COPY, (DWORD)(offset >> 32), (DWORD)offset, size, (void *)addr);
+            if (jl_image_should_map(&h))
+                p = (char *)MapViewOfFileEx(fmap, FILE_MAP_COPY, (DWORD)(file_off >> 32), (DWORD)file_off, size, (void *)addr);
             if (!p)
-                p = (char *)MapViewOfFile(fmap, FILE_MAP_COPY, (DWORD)(offset >> 32), (DWORD)offset, size);
+                p = (char *)MapViewOfFile(fmap, FILE_MAP_COPY, (DWORD)(file_off >> 32), (DWORD)file_off, size);
             CloseHandle(fmap);
         }
 #else
-        if (addr)
-            p = jl_image_mmap_at(addr, size, MAP_PRIVATE, s->fd, offset);
+        if (jl_image_should_map(&h))
+            p = jl_image_mmap_at(addr, size, MAP_PRIVATE, s->fd, file_off);
         if (!p) {
-            p = (char *)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, s->fd, offset);
+            p = (char *)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, s->fd, file_off);
             if (p == MAP_FAILED)
                 p = NULL;
         }
 #endif
         if (!p)
             return 0;
-        image->heap = p + lead;
+        image->heap = p + heap_offset;
         image->data_owned = 1;
     }
     // read the file, leaving out the heap if it is mapped
-    size_t size = end - (map ? image->heap_size : 0);
+    size_t size = payload_end - (map ? image->heap_size : 0);
     char *buf = (char *)malloc(size);
     ios_seek(s, 0);
     ios_bufmode(s, bm_none);
-    int ok = ios_readall(s, buf, heap_off) == (size_t)heap_off;
-    ios_seek(s, map ? loader_off : heap_off);
-    ok = ok && ios_readall(s, buf + heap_off, size - heap_off) == size - heap_off;
+    int ok = ios_readall(s, buf, h.payload_start) == (size_t)h.payload_start;
+    ios_seek(s, map ? loader_off : h.payload_start);
+    ok = ok && ios_readall(s, buf + h.payload_start, size - h.payload_start) == size - h.payload_start;
     if (!ok) {
         free(buf);
         return 0;
@@ -3771,13 +3765,13 @@ static int jl_image_read_ji(ios_t *s, jl_image_buf_t *image, int map) JL_NOTSAFE
     image->data = buf;
     image->size = size;
     if (map)
-        image->loader = buf + heap_off;
+        image->loader = buf + h.payload_start;
     return 1;
 }
 
-// Allocate a page-aligned buffer of at least `size` bytes (large pages preferred on Windows), at
-// the address `preferred` if it is nonzero and available.
-static char *jl_image_alloc_pages(size_t size, uintptr_t preferred)
+// Allocate a page-aligned buffer of at least `size` bytes, preferring
+// large/huge pages when available.
+static char *jl_image_alloc_pages(size_t size)
 {
     size_t page_size = jl_getpagesize(); /* jl_page_size is not set yet when loading sysimg */
     size_t aligned_size = LLT_ALIGN(size, page_size);
@@ -3785,29 +3779,22 @@ static char *jl_image_alloc_pages(size_t size, uintptr_t preferred)
     int fail = 0;
 #if defined(_OS_WINDOWS_)
     size_t large_page_size = GetLargePageMinimum();
-    for (int anywhere = !preferred; anywhere < 2 && !data; anywhere++) {
-        void *addr = anywhere ? NULL : (void *)preferred;
-        if (large_page_size > 0 && size > 4 * large_page_size) {
-            size_t large_aligned_size = LLT_ALIGN(size, large_page_size);
-            data = (char *)VirtualAlloc(addr, large_aligned_size,
-                                        MEM_COMMIT | MEM_RESERVE | MEM_LARGE_PAGES,
-                                        PAGE_READWRITE);
-        }
-        if (!data) {
-            /* Try small pages if large pages failed. */
-            data = (char *)VirtualAlloc(addr, aligned_size, MEM_COMMIT | MEM_RESERVE,
-                                        PAGE_READWRITE);
-        }
+    if (large_page_size > 0 && size > 4 * large_page_size) {
+        size_t large_aligned_size = LLT_ALIGN(size, large_page_size);
+        data = (char *)VirtualAlloc(NULL, large_aligned_size,
+                                    MEM_COMMIT | MEM_RESERVE | MEM_LARGE_PAGES,
+                                    PAGE_READWRITE);
+    }
+    if (!data) {
+        /* Try small pages if large pages failed. */
+        data = (char *)VirtualAlloc(NULL, aligned_size, MEM_COMMIT | MEM_RESERVE,
+                                    PAGE_READWRITE);
     }
     fail = !data;
 #else
-    if (preferred)
-        data = jl_image_mmap_at(preferred, aligned_size, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (!data) {
-        data = (char *)mmap(NULL, aligned_size, PROT_READ | PROT_WRITE,
-                            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        fail = data == (void *)-1;
-    }
+    data = (char *)mmap(NULL, aligned_size, PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    fail = data == (void *)-1;
 #endif
     if (fail) {
         const char *err;
@@ -3836,9 +3823,8 @@ static void jl_image_decompress_into(ZSTD_DCtx *dctx, ZSTD_inBuffer *in, char *d
     }
 }
 
-// Decompress the payload of the compressed .ji in `data` into `image`: the heap into new pages, at
-// the preferred address if it is available, and the header and the loader data into a temporary
-// buffer.
+// Decompress the payload of the compressed .ji in `data` into `image`: the heap into new pages, and
+// the header and the loader data into a temporary buffer.
 static void jl_image_decompress(jl_image_buf_t *image, const char *data) JL_CANSAFEPOINT
 {
     const jl_ji_header_t *h = (const jl_ji_header_t*)data;
@@ -3849,21 +3835,18 @@ static void jl_image_decompress(jl_image_buf_t *image, const char *data) JL_CANS
     unsigned long long payload_size = ZSTD_getFrameContentSize(comp_data, comp_len);
     if (payload_size == ZSTD_CONTENTSIZE_UNKNOWN || payload_size == ZSTD_CONTENTSIZE_ERROR)
         jl_error("Compressed heap image is corrupt.");
-    // as when mapping, start at the allocation-granularity boundary before the heap
-    size_t lead;
-    uintptr_t start = jl_image_preferred_start(h, &lead);
     image->heap_size = h->heap_size;
-    char *pages = jl_image_alloc_pages(lead + image->heap_size, start);
+    char *pages = jl_image_alloc_pages(image->heap_size);
     image->size = h->payload_start + (payload_size - image->heap_size);
     char *buf = (char *)malloc(image->size);
     memcpy(buf, data, h->payload_start);
     ZSTD_DCtx *dctx = ZSTD_createDCtx();
     ZSTD_inBuffer in = { comp_data, comp_len, 0 };
-    jl_image_decompress_into(dctx, &in, pages + lead, image->heap_size);
+    jl_image_decompress_into(dctx, &in, pages, image->heap_size);
     jl_image_decompress_into(dctx, &in, buf + h->payload_start, payload_size - image->heap_size);
     ZSTD_freeDCtx(dctx);
     image->data = buf;
-    image->heap = pages + lead;
+    image->heap = pages;
     image->loader = buf + h->payload_start;
     image->data_owned = 1;
 }
