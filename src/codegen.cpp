@@ -1038,6 +1038,15 @@ static const auto jlapplygeneric_func = new JuliaFunction<>{
     get_func_sig,
     get_func_attrs,
 };
+static const auto jlapplygenericspans_func = new JuliaFunction<TypeFnContextAndSizeT>{
+    XSTR(jl_apply_generic_spans),
+    [](LLVMContext &C, Type *T_size) { return FunctionType::get(PointerType::get(C, AddressSpace::Tracked),
+            {PointerType::get(C, AddressSpace::Tracked), T_size}, true); },
+    [](LLVMContext &C) { return AttributeList::get(C,
+            AttributeSet(),
+            Attributes(C, {Attribute::NonNull}),
+            {}); },
+};
 static const auto jlinvoke_func = new JuliaFunction<>{
     XSTR(jl_invoke),
     get_func2_sig,
@@ -4930,35 +4939,57 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    else if (f == BUILTIN(_apply_iterate) && nargs == 3) {
-        // turn Core._apply_iterate(iter, f, Tuple) ==> f(Tuple...) using the jlcall calling convention if Tuple is the va allocation
-        if (ctx.vaSlot > 0) {
-            if (LoadInst *load = dyn_cast_or_null<LoadInst>(argv[3].V)) {
-                if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot && ctx.argArray) {
-                    Value *theF = boxed(ctx, argv[2]);
-                    Value *nva = emit_n_varargs(ctx);
-#ifdef _P64
-                    nva = ctx.builder.CreateTrunc(nva, getInt32Ty(ctx.builder.getContext()));
-#endif
-                    Value *theArgs = emit_ptrgep(ctx, ctx.argArray, ctx.nReqArgs * sizeof(jl_value_t*));
-                    Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
-                    *ret = mark_julia_type(ctx, r, true, jl_any_type);
-                    return true;
+    else if (f == BUILTIN(_apply_iterate) && nargs >= 3) {
+        auto is_va = [&](const jl_cgval_t &arg) {
+            if (ctx.vaSlot > 0 && ctx.argArray)
+                if (LoadInst *load = dyn_cast_or_null<LoadInst>(arg.V))
+                    return load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot;
+            return false;
+        };
+        bool all_spans = true;
+        for (size_t i = 3; i <= nargs; i++)
+            all_spans &= is_va(argv[i]) || argv[i].typ == (jl_value_t*)jl_simplevector_type;
+        if (all_spans) {
+            size_t nspans = nargs - 2;
+            SmallVector<Value*, 4> data(nspans), lens(nspans), roots;
+            for (size_t i = 0; i < nspans; i++) {
+                const jl_cgval_t &arg = argv[i + 3];
+                if (is_va(arg)) {
+                    data[i] = emit_ptrgep(ctx, ctx.argArray, ctx.nReqArgs * sizeof(jl_value_t*));
+                    lens[i] = emit_n_varargs(ctx);
+                }
+                else {
+                    Value *svec_val = boxed(ctx, arg);
+                    data[i] = emit_ptrgep(ctx, emit_pointer_from_objref(ctx, svec_val), ctx.types().sizeof_ptr);
+                    lens[i] = ctx.builder.CreateAlignedLoad(ctx.types().T_size, decay_derived(ctx, svec_val), Align(ctx.types().sizeof_ptr));
+                    roots.push_back(svec_val);
                 }
             }
-        }
-        // optimization for _apply_iterate when there is one argument and it is a SimpleVector
-        const jl_cgval_t &arg = argv[3];
-        if (arg.typ == (jl_value_t*)jl_simplevector_type) {
             Value *theF = boxed(ctx, argv[2]);
-            Value *svec_val = boxed(ctx, arg);
-            Value *svec_len = ctx.builder.CreateAlignedLoad(ctx.types().T_size, decay_derived(ctx, svec_val), Align(ctx.types().sizeof_ptr));
+            SmallVector<OperandBundleDef, 1> bundles;
+            if (!roots.empty())
+                bundles.emplace_back("jl_roots", roots);
+            Value *r;
+            if (nspans == 1) {
+                Value *len = lens[0];
 #ifdef _P64
-            svec_len = ctx.builder.CreateTrunc(svec_len, getInt32Ty(ctx.builder.getContext()));
+                len = ctx.builder.CreateTrunc(len, getInt32Ty(ctx.builder.getContext()));
 #endif
-            Value *svec_data = emit_ptrgep(ctx, emit_pointer_from_objref(ctx, svec_val), ctx.types().sizeof_ptr);
-            OperandBundleDef OpBundle("jl_roots", svec_val);
-            Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, svec_data, svec_len }, OpBundle);
+                r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, data[0], len }, bundles);
+            }
+            else {
+                SmallVector<Value*, 8> args{theF, ConstantInt::get(ctx.types().T_size, nspans)};
+                for (size_t i = 0; i < nspans; i++) {
+                    args.push_back(data[i]);
+                    args.push_back(lens[i]);
+                }
+                CallInst *call = ctx.builder.CreateCall(prepare_call(jlapplygenericspans_func), args, bundles);
+                LLVMContext &C = ctx.builder.getContext();
+                for (size_t i = 0; i < nspans; i++)
+                    call->setAttributes(call->getAttributes().addParamAttributes(C, 2 + 2 * i,
+                        AttrBuilder(C, Attributes(C, {Attribute::NoAlias, Attribute::ReadOnly, Attribute::NoUndef}, {NoCaptureAttr(C)}))));
+                r = call;
+            }
             *ret = mark_julia_type(ctx, r, true, jl_any_type);
             return true;
         }
