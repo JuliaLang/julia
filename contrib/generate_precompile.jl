@@ -32,6 +32,11 @@ precompile(Tuple{typeof(Base.Terminals.width), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.Terminals.height), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.write), Base.Terminals.TTYTerminal, Array{UInt8, 1}})
 precompile(Tuple{typeof(Base.isempty), Base.AnnotatedString{String}})
+precompile(Tuple{typeof(Base.show_early_prompt), Symbol})
+precompile(Tuple{typeof(Base.print), Base.Terminals.TTYTerminal, String})
+precompile(Tuple{typeof(Base.write), Base.Terminals.TTYTerminal, String})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:short,), Tuple{Bool}}, typeof(Base.repl_banner), Base.TTY})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:short,), Tuple{Bool}}, typeof(Base.repl_banner), Base.Terminals.TTYTerminal})
 
 # loading.jl - without these each precompile worker would precompile these because they're hit before pkgimages are loaded
 precompile(Base.__require, (Module, Symbol))
