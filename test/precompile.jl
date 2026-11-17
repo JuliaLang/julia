@@ -2224,6 +2224,34 @@ precompile_test_harness("BadInvalidations") do load_path
     end
 end
 
+# Test that per-method compiler options survive precompilation
+precompile_test_harness("PerMethodCompilerOpts") do load_path
+    write(joinpath(load_path, "PerMethodCompilerOpts.jl"),
+        """
+        module PerMethodCompilerOpts
+        Base.Experimental.@compiler_options optimize=0 compile=min function opt0_compile_min(x)
+            x + 1
+        end
+        Base.Experimental.@compiler_options infer=false function no_infer(x)
+            x + 1
+        end
+        const inited = Ref(false)
+        Base.Experimental.@compiler_options compile=min function __init__()
+            inited[] = true
+        end
+        end
+        """)
+    Base.compilecache(Base.PkgId("PerMethodCompilerOpts"))
+    @eval using PerMethodCompilerOpts
+    invokelatest() do
+        m = only(methods(PerMethodCompilerOpts.opt0_compile_min))
+        @test (m.optlevel, m.compile) === (0x00, 0x03)
+        @test only(methods(PerMethodCompilerOpts.no_infer)).infer === 0x00
+        @test only(methods(PerMethodCompilerOpts.__init__)).compile === 0x03
+        @test PerMethodCompilerOpts.inited[]
+    end
+end
+
 # https://github.com/JuliaLang/julia/issues/48074
 precompile_test_harness("WindowsCacheOverwrite") do load_path
     # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312

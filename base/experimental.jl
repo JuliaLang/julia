@@ -142,8 +142,28 @@ macro sync(block)
     end
 end
 
+is_function_def_or_macrocall(@nospecialize ex) = is_function_def(Base.unwrap_macrocalls(ex))
+
+function add_compiler_options(@nospecialize(fdef), metas::Vector{Any}, macroname::String)
+    inner = Base.unwrap_macrocalls(fdef)
+    if inner.head === :function && length(inner.args) == 1
+        throw(ArgumentError(LazyString("Bad expression `", fdef, "` in `", macroname,
+            "`; expected a function definition with a body")))
+    end
+    for m in metas
+        Base.pushmeta!(fdef, m)
+    end
+    return esc(fdef)
+end
+
+function optlevel_meta(@nospecialize n)
+    n isa Int && 0 <= n <= 3 || error("optimization level must be 0, 1, 2 or 3, got `", n, "`")
+    return Expr(:optlevel, n)
+end
+
 """
     Experimental.@optlevel n::Int
+    Experimental.@optlevel n::Int function f(...) ... end
 
 Set the optimization level (equivalent to the `-O` command line argument)
 for code in the current module. Submodules inherit the setting of their
@@ -154,9 +174,36 @@ Supported values are 0, 1, 2, and 3.
 The effective optimization level is the minimum of that specified on the
 command line and in per-module settings. If a `--min-optlevel` value is
 set on the command line, that is enforced as a lower bound.
+
+When applied to a function definition, sets the optimization level for
+that specific method rather than the enclosing module:
+
+```julia
+Experimental.@optlevel 0 function my_function(x)
+    ...
+end
+```
+
+When used inside a function body (without a function definition argument),
+sets the optimization level for the enclosing method:
+
+```julia
+function my_function(x)
+    Experimental.@optlevel 0
+    ...
+end
+```
+
+Closures defined inside the method do not inherit its level.
 """
 macro optlevel(n::Int)
-    return Expr(:meta, :optlevel, n)
+    return Expr(:meta, optlevel_meta(n))
+end
+macro optlevel(n::Int, ex)
+    is_function_def_or_macrocall(ex) ||
+        throw(ArgumentError(LazyString("Bad expression `", ex, "` in `@optlevel n ex`; ",
+            "expected a function definition")))
+    return add_compiler_options(ex, Any[optlevel_meta(n)], "@optlevel")
 end
 
 """
@@ -179,7 +226,7 @@ Supported values are `1`, `2`, `3`, `4`, and `default` (currently equivalent to 
 """
 macro max_methods(n::Int)
     1 <= n <= 4 || error("We must have that `1 <= max_methods <= 4`, but `max_methods = $n`.")
-    return Expr(:meta, :max_methods, n)
+    return Expr(:meta, Expr(:max_methods, n))
 end
 
 """
@@ -208,31 +255,55 @@ are currently supported:
     requests the minimum possible amount of compilation.
   * `infer`: Enable or disable type inference. If disabled, implies [`@nospecialize`](@ref).
   * `max_methods`: Maximum number of matching methods considered when running type inference.
+
+When applied to a function definition, sets the `optimize`, `compile`, and `infer`
+options for that specific method rather than the enclosing module:
+
+```julia
+Base.Experimental.@compiler_options optimize=0 compile=min function my_function(x)
+    ...
+end
+```
+
+`max_methods` can only be set at the module level; to set it for a specific
+generic function use [`@max_methods`](@ref).
+
+In a `@generated` function, the optimization level can be set for an individual
+generated instance by splicing `Expr(:meta, Expr(:optlevel, n))` into the
+returned body, and inference can be disabled for it with
+`Expr(:meta, Expr(:infer, 0))`.
 """
 macro compiler_options(args...)
-    opts = Expr(:block)
-    for ex in args
+    fdef = nothing
+    option_args = args
+    if !isempty(args) && is_function_def_or_macrocall(args[end])
+        fdef = args[end]
+        option_args = args[1:end-1]
+    end
+    metas = Any[]
+    for ex in option_args
         if isa(ex, Expr) && ex.head === :(=) && length(ex.args) == 2
             if ex.args[1] === :optimize
-                push!(opts.args, Expr(:meta, :optlevel, ex.args[2]::Int))
+                push!(metas, optlevel_meta(ex.args[2]))
             elseif ex.args[1] === :compile
                 a = ex.args[2]
                 a = #a === :no  ? 0 :
                     #a === :yes ? 1 :
                     #a === :all ? 2 :
                     a === :min ? 3 : error("invalid argument to \"compile\" option")
-                push!(opts.args, Expr(:meta, :compile, a))
+                push!(metas, Expr(:compile, a))
             elseif ex.args[1] === :infer
                 a = ex.args[2]
                 a = a === false || a === :no  ? 0 :
                     a === true  || a === :yes ? 1 : error("invalid argument to \"infer\" option")
-                push!(opts.args, Expr(:meta, :infer, a))
+                push!(metas, Expr(:infer, a))
             elseif ex.args[1] === :max_methods
+                fdef === nothing || error("`max_methods` cannot be set on a method; see `@max_methods`")
                 a = ex.args[2]
                 a = a === :default ? 3 :
                   a isa Int ? ((1 <= a <= 4) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
                   error("invalid argument to \"max_methods\" option")
-                push!(opts.args, Expr(:meta, :max_methods, a))
+                push!(metas, Expr(:max_methods, a))
             else
                 error("unknown option \"$(ex.args[1])\"")
             end
@@ -240,7 +311,8 @@ macro compiler_options(args...)
             error("invalid option syntax")
         end
     end
-    return opts
+    fdef === nothing || return add_compiler_options(fdef, metas, "@compiler_options")
+    return isempty(metas) ? nothing : Expr(:meta, metas...)
 end
 
 """
