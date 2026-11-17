@@ -232,6 +232,21 @@ function _test_threads()
     println(Core.stdout, "threads: ", sum(v), " ", sum(w))
 end
 
+# Tasks whose function is only ever run by the task: a named function and a callable object
+task_value() = 3
+struct TaskJob
+    n::Int
+end
+(job::TaskJob)() = job.n + 1
+
+function _test_tasks()
+    a = Task(task_value)
+    b = Task(TaskJob(4))
+    schedule(a)
+    schedule(b)
+    println(Core.stdout, "tasks: ", fetch(a)::Int, " ", fetch(b)::Int)
+end
+
 function @main(args::Vector{String})::Cint
     println(Core.stdout, str())
     println(Core.stdout, PROGRAM_FILE)
@@ -276,6 +291,7 @@ function @main(args::Vector{String})::Cint
     end
     _test_linalg()
     _test_threads()
+    _test_tasks()
 
     try
         sock = connect("localhost", 4900)

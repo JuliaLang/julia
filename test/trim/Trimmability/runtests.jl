@@ -42,8 +42,9 @@ outdir = ARGS[1]
     # TODO: needs LinearAlgebra to specialize on `sortby` and on the number of `diagm` pairs
     # @test lines[32] == "dense eigen: 4.0 3.0 6.0 3.0 5.0"
     @test lines[32] == "threads: 4160 204"
-    @test lines[33] == "custom_library_ccall: $(VERSION.major)"
-    @test lines[34] == "lazy_library_ccall: $(VERSION.major) 1"
-    @test lines[35] == "symbols: :sym Symbol(\"a b\") :(::)"
-    @test lines[36] == "dates: 2026-03-08 2026-03-08T16:00:00.500"
+    @test lines[33] == "tasks: 3 5"
+    @test lines[34] == "custom_library_ccall: $(VERSION.major)"
+    @test lines[35] == "lazy_library_ccall: $(VERSION.major) 1"
+    @test lines[36] == "symbols: :sym Symbol(\"a b\") :(::)"
+    @test lines[37] == "dates: 2026-03-08 2026-03-08T16:00:00.500"
 end
