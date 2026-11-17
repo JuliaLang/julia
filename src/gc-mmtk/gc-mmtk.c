@@ -71,6 +71,7 @@ void jl_gc_init(void) {
 
     arraylist_new(&to_finalize, 0);
     arraylist_new(&finalizer_list_marked, 0);
+    jl_init_shared_free_stacks();
     gc_num.interval = default_collect_interval;
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
@@ -920,6 +921,7 @@ JL_DLLEXPORT void jl_gc_mmtk_sweep_stack_pools(void)
 JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     jl_gc_mmtk_sweep_stack_pools();
+    gc_trim_shared_free_stacks();
     sweep_mtarraylist_buffers();
 }
 
