@@ -229,7 +229,7 @@ end
 syntax: function argument name not unique
 @ :1
 function f(x, x)
-#             ╨
+#             ⊔
 end
 
 ########################################
@@ -240,7 +240,7 @@ end
 syntax: destructured argument name `x` conflicts with an existing argument from the same scope
 @ :1
 function f(x, (x,))
-#              ╨
+#              ⊔
 end
 
 ########################################
@@ -251,7 +251,7 @@ end
 syntax: function static parameter name not unique
 @ :1
 function f(::T) where T where T
-#                     ╨
+#                     ⊔
 end
 
 ########################################
@@ -262,7 +262,7 @@ end
 syntax: static parameter name `x` conflicts with an existing argument from the same scope
 @ :1
 function f(x::x) where x
-#                      ╨
+#                      ⊔
 end
 
 ########################################
@@ -273,7 +273,7 @@ end
 syntax: destructured argument name `x` conflicts with an existing local variable from the same scope
 @ :1
 function f((x,), (x,))
-#                 ╨
+#                 ⊔
 end
 
 ########################################
@@ -288,7 +288,7 @@ syntax: global variable name `x` conflicts with an existing local variable from 
 let
     local x
     global x
-#          ╨
+#          ⊔
 end
 
 ########################################
@@ -301,7 +301,7 @@ syntax: local variable name `x` conflicts with an existing argument from the sam
 @ :2
 function f(x)
     local x
-#         ╨
+#         ⊔
 end
 
 ########################################
@@ -314,7 +314,7 @@ syntax: global variable name `x` conflicts with an existing argument from the sa
 @ :2
 function f(x)
     global x
-#          ╨
+#          ⊔
 end
 
 ########################################
@@ -328,7 +328,7 @@ syntax: global variable name `x` conflicts with an existing local variable from 
 @ :2
 function f((x,))
     global x
-#          ╨
+#          ⊔
 end
 
 ########################################
@@ -341,7 +341,7 @@ syntax: local variable name `T` conflicts with an existing static parameter from
 @ :2
 function f(::T) where T
     local T
-#         ╨
+#         ⊔
 end
 
 ########################################
@@ -354,7 +354,7 @@ syntax: global variable name `T` conflicts with an existing static parameter fro
 @ :2
 function f(::T) where T
     global T
-#          ╨
+#          ⊔
 end
 
 ########################################
@@ -370,7 +370,7 @@ syntax: cannot overwrite a static parameter
 function f(::T) where T
     let
         T = rhs
-#       ╨
+#       ⊔
     end
 end
 
@@ -385,7 +385,7 @@ syntax: cannot add method to a function argument
 @ :2
 function f(g)
     function g()
-#            ╨
+#            ⊔
     end
 end
 

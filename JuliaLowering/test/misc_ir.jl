@@ -45,7 +45,7 @@ _ + 1
 syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
 @ :1
 _ + 1
-╨
+⊔
 
 ########################################
 # Named tuple
@@ -144,7 +144,7 @@ _ + 1
 syntax: repeated named tuple field name
 @ :1
 (; a=1, bs..., c=3, a=2)
-#                   ╨
+#                   ⊔
 
 ########################################
 # Error: Named tuple frankentuple
@@ -396,7 +396,7 @@ syntax: cfunction return type cannot reference local variable
 @ :2
 let T=Float64
     @cfunction(f, T, (Float64,))
-#                 ╨
+#                 ⊔
 end
 
 ########################################
@@ -409,7 +409,7 @@ syntax: cfunction argument type cannot reference local variable
 @ :2
 let T=Float64
     @cfunction(f, Float64, (Float64,T))
-#                                   ╨
+#                                   ⊔
 end
 
 ########################################

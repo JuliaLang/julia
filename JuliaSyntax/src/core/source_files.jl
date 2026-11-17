@@ -290,7 +290,7 @@ function _print_marker_line(io, prefix_str, str, underline, singleline, color,
 
     markline =
     if singleline
-        !(note isa AbstractString) && w < 2 ? string(indent, "╨") :
+        !(note isa AbstractString) && w < 2 ? string(indent, "⊔") :
         w == 0 ? string(indent, startstr)    :
         w == 1 ? string(indent, singlestart) :
                  string(indent, startstr, repeat('─', w-2), endstr)

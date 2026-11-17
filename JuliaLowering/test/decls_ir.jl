@@ -70,7 +70,7 @@ y = global x
 syntax: global declaration doesn't read the variable and can't return a value
 @ :1
 y = global x
-#          ╨
+#          ⊔
 
 ########################################
 # const
