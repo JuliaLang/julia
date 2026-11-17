@@ -2475,19 +2475,20 @@ typedef enum {
     JL_IMAGE_KIND_SO,
 } jl_image_kind_t;
 
+struct _jl_ji_header_t;
+
 typedef struct {
     jl_image_kind_t kind;
-    const void *pointers; // jl_image_pointers_t *
-    const char *data;     // begins with the .ji header, if `heap` is set
-    size_t size;
-    uint64_t base;
-    uint32_t heap_checksum;
     bool_t is_split;
+    const char *data;     // the buffer to free() once the image is loaded, or NULL
+    const struct _jl_ji_header_t *header; // followed by the incremental header
+    const char *heap;     // non-owning pointer to uncompressed heap section (NULL if failed)
+    const char *loader;   // non-owning pointer to loader metadata section
+    const void *pointers; // jl_image_pointers_t *
     const void *coverage; // jl_image_coverage_t *, if built with coverage counters
-    const char *heap;     // NULL if the .ji header failed verification
+    uint64_t base;        // load address of the native library, 0 if non-native
     size_t heap_size;
-    const char *loader;   // the loader data, after the heap; needed only while loading
-    bool_t data_owned;    // `data` can be freed after loading
+    uint32_t heap_checksum;
 } jl_image_buf_t;
 
 struct _jl_image_t;

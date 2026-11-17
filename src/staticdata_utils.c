@@ -624,7 +624,7 @@ typedef struct {
 
 #define JI_COMPAT_SIZE 128
 
-typedef struct {
+typedef struct _jl_ji_header_t {
     char magic[8];
     uint16_t format_version;
     uint16_t bom;
@@ -642,7 +642,7 @@ typedef struct {
     uint64_t world, typeinf_world, gensym_counter;
     jl_image_section_t imports, auxdata, strtab, binds, slides, specials, gvars, fixup_types, fixup_objs, fptrs;
 } jl_ji_header_t;
-static_assert(sizeof(jl_ji_header_t) == 384, "the header has no padding");
+static_assert(sizeof(jl_ji_header_t) == 384, "the header shouldn't have padding");
 static_assert(offsetof(jl_ji_header_t, payload_start) == 160 &&
               offsetof(jl_ji_header_t, payload_size) == 168,
               "update base/loading.jl if these offsets change");
