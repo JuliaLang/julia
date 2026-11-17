@@ -184,6 +184,9 @@ begin # SubString noshift deprecations
         @test_deprecated (SubString{typeof(ss)}(ss, 0, 1, Val(:noshift)) == "b")
         @test_deprecated (SubString{typeof(ss)}(ss, 0, 1, Val(:noshift)) isa SubString{typeof(ss)})
     end
+    for s in ("abc", SubString("abc"))
+        @test_throws BoundsError SubString{typeof(s)}(s, 2, -1, Val(:noshift))
+    end
 end
 
 

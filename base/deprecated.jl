@@ -707,7 +707,7 @@ end
         @inbounds isvalid(s, si) || string_index_err(s, si)
         @inbounds isvalid(s, sj) || string_index_err(s, sj)
     end
-    @inbounds raw_substring(s, i + 1, j)
+    raw_substring(s, i + 1, j)
 end
 
 # This method is slightly different because it returns a SubString{SubString},
@@ -720,7 +720,7 @@ end
         @inbounds isvalid(s, si) || string_index_err(s, si)
         @inbounds isvalid(s, sj) || string_index_err(s, sj)
     end
-    ss = @inbounds raw_substring(s, i + 1, j)
+    ss = raw_substring(s, i + 1, j)
     SubString{T}(ss)
 end
 
