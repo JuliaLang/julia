@@ -6101,6 +6101,12 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
                 if (xx && yy && xx->depth0 != yy->depth0) {
                     record_var_occurrence(xx, e, param);
                     record_var_occurrence(yy, e, param);
+                    // The outer variable cannot depend on the inner variable.
+                    // If the inner variable's declared bounds fix a closed type,
+                    // match that type against the outer variable directly.
+                    jl_value_t *lb = xx->var->lb, *ub = xx->var->ub;
+                    if (!jl_has_free_typevars(lb) && !jl_has_free_typevars(ub) && jl_types_equal(lb, ub))
+                        return intersect_var((jl_tvar_t*)y, lb, e, !R, param);
                     return subtype_in_env(yy->ub, yy->lb, e) ? y : jl_bottom_type;
                 }
                 if (xub == xlb && jl_is_typevar(xub) && xub != x) {
