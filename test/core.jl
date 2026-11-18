@@ -512,6 +512,12 @@ let a = Tuple{Any,Vararg}, b = Tuple{Any,Vararg{Any}}
     @test Tuple{Vararg} === Tuple
 end
 
+# a type literal in compiled code is only swapped for its wrapper if `===` to it
+const RefAlphaRenamed = Ref{S} where S
+is_RefAlphaRenamed(t) = t === RefAlphaRenamed
+@test RefAlphaRenamed !== Ref
+@test is_RefAlphaRenamed(RefAlphaRenamed)
+
 # a `Type{Union{}}` dispatch slot is an exact equality key (the bottom object is
 # the unique instance of its `Type`), so it must remain a compileable spelling
 # even when the method does not declare the slot as a concrete `Type{X}`
