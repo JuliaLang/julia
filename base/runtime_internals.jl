@@ -1814,7 +1814,7 @@ function _uncompressed_ir(m::Method)
 end
 
 _uncompressed_ir(codeinst::CodeInstance, s::String) =
-    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
+    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), get_ci_mi(codeinst).def::Method, codeinst, s)
 
 function get_ci_mi(codeinst::CodeInstance)
     def = codeinst.def
