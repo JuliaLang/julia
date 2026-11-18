@@ -883,11 +883,14 @@ end
     close(t)
 end
 
-@testset "GC does not wait for another thread's LLVM run" begin
-    # DIAGNOSTIC ONLY (do not merge): run the child many times and print where the time of
-    # the longest collections goes. Mode "control" replaces the compilation with plain Julia
-    # work for 3 seconds, to tell a compile-specific stall from a slow or overloaded runner.
+@testset "GC does not wait for another thread's LLVM run" for _ in 1:24
+    # One thread compiles a large function while another keeps collecting. Every collection
+    # waits for all threads to reach a safepoint, so if LLVM ran GC-unsafe, one collection
+    # would wait about as long as the whole compilation. Check that wait rather than the
+    # collection's duration: the compiling thread keeps running during the collection, and on
+    # an oversubscribed runner the GC's own threads can then wait for a CPU for a second or more.
     program = raw"""
+        # a long chain of dependent operations: quick to infer, slow for LLVM
         function define_big(n)
             body = Expr(:block)
             for i in 1:n
@@ -898,81 +901,47 @@ end
             @eval big(x::Int, y::Int) = $body
         end
         define_big(3000)
-        function work(secs)
-            t_end = time() + secs
-            x = 0.0
-            while time() < t_end
-                x += sum(rand(64))
-            end
-            return x
-        end
-        work(0.0)
-        # (utime+stime seconds, voluntary, involuntary context switches) of this thread
-        function thread_usage()
-            r = zeros(Int64, 18)
-            ccall(:getrusage, Cint, (Cint, Ptr{Int64}), 1, r) # RUSAGE_THREAD
-            return (r[1] + r[2] / 1e6 + r[3] + r[4] / 1e6, r[17], r[18])
-        end
-        function main(mode)
+        function main()
             done = Threads.Atomic{Bool}(false)
             compile_time = Ref(0.0)
             compile_thread = Ref(0)
-            t0 = time_ns()
             t = Threads.@spawn try
                 compile_thread[] = Threads.threadid()
-                compile_time[] = mode == "control" ? @elapsed(work(3.0)) :
-                    @elapsed Base.invokelatest(big, 1, 2)
+                # a dynamic call, so that `big` is compiled here, not along with `main`
+                compile_time[] = @elapsed Base.invokelatest(big, 1, 2)
             finally
                 done[] = true
             end
-            recs = NamedTuple[]
+            longest_wait = 0.0
+            collections = 0
             while !done[]
-                n0 = Base.gc_num(); u0 = thread_usage(); s = time_ns()
                 GC.gc(false)
-                e = time_ns(); n1 = Base.gc_num(); u1 = thread_usage()
-                ncoll = n1.pause - n0.pause
-                push!(recs, (at = (s - t0) / 1e9, wall = (e - s) / 1e9,
-                    ttsp = ncoll > 0 ? n1.time_to_safepoint / 1e9 : NaN,
-                    gctime = (n1.total_time - n0.total_time) / 1e9, ncoll = ncoll,
-                    full = n1.full_sweep - n0.full_sweep, cpu = u1[1] - u0[1],
-                    vcsw = u1[2] - u0[2], ivcsw = u1[3] - u0[3]))
-                Libc.systemsleep(0.01)
+                longest_wait = max(longest_wait, Base.gc_num().time_to_safepoint / 1e9)
+                collections += 1
+                Libc.systemsleep(0.01) # doesn't yield, so `t` runs on another thread
             end
             wait(t)
             compile_thread[] == Threads.threadid() && error("compiled on the collecting thread")
-            longest = maximum(r -> r.wall, recs)
-            println(compile_time[], " ", longest, " ", length(recs))
-            println("DIAG mode=$mode threads=$(Threads.nthreads()) gcthreads=$(Threads.ngcthreads()) loadavg=$(Sys.loadavg()) wall_sum=$(round(sum(r -> r.wall, recs), digits=3)) ttsp_sum=$(round(sum(r -> isnan(r.ttsp) ? 0.0 : r.ttsp, recs), digits=3))")
-            for r in sort(recs, by = r -> -r.wall)[1:min(5, end)]
-                println("DIAG   ", join(("$k=$(v isa Float64 ? round(v, digits=4) : v)" for (k, v) in pairs(r)), " "))
-            end
+            println(compile_time[], " ", longest_wait, " ", collections)
         end
-        main(ARGS[1])
+        main()
     """
-    function run_child(mode)
-        cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=2 -e $program $mode`
-        cmd = addenv(cmd, "JULIA_OBJCACHE" => "0")
-        output = IOBuffer()
-        proc = run(pipeline(cmd; stdout=output, stderr); wait=false)
-        t = Timer(300) do _
-            kill(proc, Base.SIGKILL)
-        end
-        @test success(proc)
-        close(t)
-        out = String(take!(output))
-        for line in eachline(IOBuffer(out))
-            startswith(line, "DIAG") && println(line)
-        end
-        compile_time, longest, collections = split(first(eachline(IOBuffer(out))))
-        compile_time, longest = parse.(Float64, (compile_time, longest))
-        println("DIAG mode=$mode compile_time=$compile_time longest=$longest collections=$collections ratio=$(round(longest / compile_time, digits=3))")
-        return compile_time, longest, collections
+    # without the objcache, which would skip LLVM after the first run
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=2 -e $program`
+    cmd = addenv(cmd, "JULIA_OBJCACHE" => "0")
+    output = IOBuffer()
+    proc = run(pipeline(cmd; stdout=output, stderr); wait=false)
+    t = Timer(300) do _
+        kill(proc, Base.SIGKILL)
     end
-    for i in 1:24
-        compile_time, longest, collections = run_child(i % 3 == 0 ? "control" : "compile")
-        @test parse(Int, collections) >= 2
-        @test longest < compile_time / 4
-    end
+    @test success(proc)
+    close(t)
+    compile_time, longest_wait, collections = split(String(take!(output)))
+    compile_time, longest_wait = parse.(Float64, (compile_time, longest_wait))
+    @test parse(Int, collections) >= 2
+    # a few seconds of LLVM, and at most a few ms to reach a safepoint
+    println("DIAG compile_time=$compile_time longest_wait=$longest_wait collections=$collections")
+    @test longest_wait < compile_time / 4
 end
 
 @testset "event loop thread wakeup with busy workers" begin
