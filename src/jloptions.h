@@ -3,6 +3,8 @@
 #ifndef JL_JLOPTIONS_H
 #define JL_JLOPTIONS_H
 
+#include <stdint.h>
+
 // NOTE: This struct needs to be kept in sync with JLOptions type in base/options.jl
 
 typedef struct {
