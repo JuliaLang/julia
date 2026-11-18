@@ -71,6 +71,22 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
 }
 
 
+// Whether `sp` is on the signal stack of `ptls`.
+static int jl_unw_on_signal_stack(jl_ptls_t ptls, uintptr_t sp) JL_NOTSAFEPOINT
+{
+#ifndef _OS_WINDOWS_
+    if (ptls != NULL && ptls->signal_stack != NULL)
+        return sp - (uintptr_t)ptls->signal_stack < ptls->signal_stack_size;
+#endif
+    return 0;
+}
+
+static jl_ptls_t jl_unw_current_ptls(void) JL_NOTSAFEPOINT
+{
+    jl_task_t *ct = jl_get_current_task();
+    return ct == NULL ? NULL : ct->ptls;
+}
+
 // Record backtrace entries into bt_data by stepping cursor with jl_unw_step
 // until the outermost frame is encountered or the buffer bt_data is (close to)
 // full. Returned instruction pointers are adjusted to point to the address of
@@ -87,14 +103,19 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
 // Flag `from_signal_handler==1` should be set if the cursor was obtained by
 // asynchronously interrupting the code.
 //
+// `ptls` is the thread whose stack is walked, if known. A walk that starts on
+// its signal stack may continue on the stack that the signal interrupted.
+//
 // jl_unw_stepn will return 1 if there are more frames to come. The number of
 // elements written to bt_data (and sp if non-NULL) are returned in bt_size.
 static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
                         uintptr_t *sp, size_t maxsize, int skip, jl_gcframe_t **ppgcstack,
-                        int from_signal_handler) JL_NOTSAFEPOINT
+                        int from_signal_handler, jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     volatile size_t n = 0;
     volatile int need_more_space = 0;
+    int left_signal_stack = 0;
+    int interrupted_frame = 0;
     uintptr_t return_ip = 0;
     uintptr_t thesp = 0;
 #if defined(_OS_WINDOWS_)
@@ -125,7 +146,16 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
             }
             uintptr_t oldsp = thesp;
             have_more_frames = jl_unw_step(cursor, from_signal_handler, &return_ip, &thesp);
-            if ((n < 2 ? oldsp > thesp : oldsp >= thesp) && !jl_running_under_rr(0)) {
+            int same_sp_ok = n < 2 || interrupted_frame;
+            interrupted_frame = 0;
+            if (!left_signal_stack && jl_unw_on_signal_stack(ptls, oldsp) &&
+                !jl_unw_on_signal_stack(ptls, thesp)) {
+                // The stack that the signal interrupted may be below the signal stack.
+                // The caller of the interrupted frame may have the same sp, as for n==1.
+                left_signal_stack = 1;
+                interrupted_frame = 1;
+            }
+            else if ((same_sp_ok ? oldsp > thesp : oldsp >= thesp) && !jl_running_under_rr(0)) {
                 // The stack pointer is clearly bad, as it must grow downwards,
                 // But sometimes the external unwinder doesn't check that.
                 // Except for n==0 when there is no oldsp and n==1 on all platforms but i686/x86_64.
@@ -245,8 +275,9 @@ static int jl_unw_lr_context(bt_cursor_t *cursor, bt_context_t *context,
 }
 #endif
 
-NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
-                                  bt_context_t *context, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT
+static size_t rec_backtrace_ctx_ptls(jl_bt_element_t *bt_data, size_t maxsize,
+                                     bt_context_t *context, jl_gcframe_t *pgcstack,
+                                     jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     bt_cursor_t cursor;
     if (!jl_unw_init(&cursor, context, 1))
@@ -256,7 +287,7 @@ NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
     int try_lr = jl_unw_lr_context(&cursor, context, &caller);
 #endif
     size_t bt_size = 0;
-    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
+    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1, ptls);
     jl_unw_fini(&cursor);
 #if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) && !defined(JL_USE_FRAMEHOP)
     // This needs a new cursor: setting the IP does not clear libunwind's
@@ -264,12 +295,29 @@ NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
     if (try_lr && bt_size == 1 && bt_data[0].uintptr != 0 &&
         jl_unw_init(&cursor, &caller, 1)) {
         size_t n = 0;
-        jl_unw_stepn(&cursor, bt_data + 1, &n, NULL, maxsize - 1, 0, &pgcstack, 1);
+        jl_unw_stepn(&cursor, bt_data + 1, &n, NULL, maxsize - 1, 0, &pgcstack, 1, ptls);
         bt_size += n;
     }
 #endif
     return bt_size;
 }
+
+NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
+                                  bt_context_t *context, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT
+{
+    return rec_backtrace_ctx_ptls(bt_data, maxsize, context, pgcstack, jl_unw_current_ptls());
+}
+
+#ifndef JL_USE_FRAMEHOP
+size_t rec_backtrace_ctx_target(jl_bt_element_t *bt_data, size_t maxsize,
+                                bt_context_t *context, jl_gcframe_t *pgcstack,
+                                jl_ptls_t target_ptls, jl_task_t *target_task) JL_NOTSAFEPOINT
+{
+    if (target_ptls == NULL && target_task != NULL)
+        target_ptls = target_task->ptls;
+    return rec_backtrace_ctx_ptls(bt_data, maxsize, context, pgcstack, target_ptls);
+}
+#endif
 
 // Record backtrace into buffer `bt_data`, using a maximum of `maxsize`
 // elements, and returning the number of elements written.
@@ -293,7 +341,8 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     }
     jl_gcframe_t *pgcstack = jl_pgcstack;
     size_t bt_size = 0;
-    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, skip + 1, &pgcstack, 0);
+    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, skip + 1, &pgcstack, 0,
+                 jl_unw_current_ptls());
     jl_unw_fini(&cursor);
     return bt_size;
 }
@@ -372,7 +421,8 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
             }
             size_t size_incr = 0;
             have_more_frames = jl_unw_stepn(&cursor, jl_array_data(ip, jl_bt_element_t) + offset,
-                                            &size_incr, sp_ptr, maxincr, skip, &pgcstack, 0);
+                                            &size_incr, sp_ptr, maxincr, skip, &pgcstack, 0,
+                                            NULL);
             skip = 0;
             offset += size_incr;
         }
@@ -980,8 +1030,10 @@ NOINLINE size_t rec_backtrace_ctx_target(jl_bt_element_t *bt_data, size_t maxsiz
     bt_cursor_t cursor;
     if (!jl_unw_init_target(&cursor, context, target_ptls, target_task))
         return 0;
+    if (target_ptls == NULL && target_task != NULL)
+        target_ptls = target_task->ptls;
     size_t bt_size = 0;
-    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
+    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1, target_ptls);
     jl_unw_fini(&cursor);
     return bt_size;
 }
@@ -1021,7 +1073,7 @@ NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize
     bt_cursor_t cursor;
     if (unw_init_local_dwarf(&cursor, context) != UNW_ESUCCESS)
         return 0;
-    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
+    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1, NULL);
     return bt_size;
 }
 #endif

@@ -1791,23 +1791,12 @@ size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t 
 size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #endif
 // rec_backtrace_ctx for a context belonging to another (suspended) thread or a
-// not-currently-running task. Under framehop the walk stays on the stack of `target_task`,
-// or of the task running on `target_ptls`; elsewhere the extra arguments are ignored.
-#ifdef JL_USE_FRAMEHOP
+// not-currently-running task. The walk may start on the signal stack of `target_ptls`,
+// or of the thread running `target_task`. Under framehop it also stays on the stack of
+// `target_task`, or of the task running on `target_ptls`.
 size_t rec_backtrace_ctx_target(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx,
                                 jl_gcframe_t *pgcstack, jl_ptls_t target_ptls,
                                 jl_task_t *target_task) JL_NOTSAFEPOINT;
-#else
-STATIC_INLINE size_t rec_backtrace_ctx_target(jl_bt_element_t *bt_data, size_t maxsize,
-                                              bt_context_t *ctx, jl_gcframe_t *pgcstack,
-                                              jl_ptls_t target_ptls,
-                                              jl_task_t *target_task) JL_NOTSAFEPOINT
-{
-    (void)target_ptls;
-    (void)target_task;
-    return rec_backtrace_ctx(bt_data, maxsize, ctx, pgcstack);
-}
-#endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip) JL_CANSAFEPOINT;
 void jl_fprint_critical_error(ios_t *t, int sig, int si_code, bt_context_t *context, jl_task_t *ct) JL_CANSAFEPOINT;
