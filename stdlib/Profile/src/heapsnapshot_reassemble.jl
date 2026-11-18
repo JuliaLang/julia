@@ -112,17 +112,20 @@ function assemble_snapshot(in_prefix, out_file::AbstractString = in_prefix)
     return nothing
 end
 
+# Read the integer entry `"<key>":<value>` of the snapshot metadata `json`, read from `file`.
+function metadata_count(json::String, key::String, file::String)
+    m = match(Regex("\"$key\":(\\d+)"), json)
+    m === nothing && error("malformed metadata file `$(file)`: no integer `$(key)` entry")
+    return parse(Int, something(m.captures[1]))
+end
+
 # Manually parse and write the .json files, given that we don't have JSON import/export in
 # julia's stdlibs.
 function assemble_snapshot(in_prefix, io::IO)
-    preamble = read(string(in_prefix, ".metadata.json"), String)
-    pos = last(findfirst("node_count\":", preamble)) + 1
-    endpos = findnext(==(','), preamble, pos) - 1
-    node_count = parse(Int, String(@view preamble[pos:endpos]))
-
-    pos = last(findnext("edge_count\":", preamble, endpos)) + 1
-    endpos = findnext(==(','), preamble, pos) - 1
-    edge_count = parse(Int, String(@view preamble[pos:endpos]))
+    metadata_file = string(in_prefix, ".metadata.json")
+    preamble = read(metadata_file, String)
+    node_count = metadata_count(preamble, "node_count", metadata_file)
+    edge_count = metadata_count(preamble, "edge_count", metadata_file)
 
     nodes = Nodes(node_count, edge_count)
 

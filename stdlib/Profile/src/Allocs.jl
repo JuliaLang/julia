@@ -8,7 +8,6 @@ public @profile,
 
 using ..Profile: Profile, ProfileFormat, StackFrameTree, print_flat, print_tree
 using Base.StackTraces: StackTrace, StackFrame, lookup
-using Base: InterpreterIP
 
 # --- Raw results structs, originally defined in C ---
 
@@ -397,7 +396,6 @@ function tree!(root::StackFrameTree{T}, all::Vector{Alloc}, C::Bool, recur::Symb
     tops = Vector{StackFrameTree{T}}()
     build = Dict{T, StackFrameTree{T}}()
     for r in all
-        first = true
         nb = r.size # or 1 for counting
         root.recur = 0
         root.count += nb
