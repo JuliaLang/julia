@@ -486,7 +486,15 @@ end
 function pipe_reader end
 function pipe_writer end
 
-iswritable(io::AbstractPipe) = iswritable(pipe_writer(io)::IO)
+# Call `f` on the inner IO of a pipe: a manual union split over the types that Base puts
+# there (e.g. `open(cmd)`), so that `--trim` can resolve the call
+@inline function _pipe_split(f::F, io::IO) where {F}
+    io isa PipeEndpoint && return f(io)
+    io isa DevNull && return f(io)
+    return f(io)
+end
+
+iswritable(io::AbstractPipe) = _pipe_split(iswritable, pipe_writer(io)::IO)
 # flush/closewrite/unsafe_write accept `cancel` like their LibuvStream
 # counterparts, so a keyword call on a compound pipe does not miss these
 # forwarders (only an explicit token is forwarded: the sentinel keeps the
@@ -494,15 +502,17 @@ iswritable(io::AbstractPipe) = iswritable(pipe_writer(io)::IO)
 # readbytes! below)
 for f in (:flush, :closewrite)
     @eval $(f)(io::AbstractPipe; cancel::CancelTokenArg=DEFAULT_CANCEL) =
-        cancel === DEFAULT_CANCEL ? $(f)(pipe_writer(io)::IO) :
-                                    $(f)(pipe_writer(io)::IO; cancel)
+        _pipe_split(pipe_writer(io)::IO) do w
+            cancel === DEFAULT_CANCEL ? $(f)(w) : $(f)(w; cancel)
+        end
 end
-write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io)::IO, byte)
+write(io::AbstractPipe, byte::UInt8) = _pipe_split(w -> write(w, byte), pipe_writer(io)::IO)
 writepartial(io::AbstractPipe, x) = writepartial(pipe_writer(io)::IO, x)
 write(to::IO, from::AbstractPipe) = write(to, pipe_reader(from))
 unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    (cancel === DEFAULT_CANCEL ? unsafe_write(pipe_writer(io)::IO, p, nb) :
-                                 unsafe_write(pipe_writer(io)::IO, p, nb; cancel))::Union{Int,UInt}
+    _pipe_split(pipe_writer(io)::IO) do w
+        cancel === DEFAULT_CANCEL ? unsafe_write(w, p, nb) : unsafe_write(w, p, nb; cancel)
+    end::Union{Int,UInt}
 buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io)::IO, args...)
 
 for f in (
@@ -510,17 +520,19 @@ for f in (
         :mark, :unmark, :reset, :ismarked,
         # Simple reader functions
         :read, :bytesavailable, :reseteof, :isreadable)
-    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io)::IO)
+    @eval $(f)(io::AbstractPipe) = _pipe_split($(f), pipe_reader(io)::IO)
 end
 # explicit-token-forwarding reader forwarders (same pattern as readbytes!
 # below: the sentinel keeps the plain call)
 readavailable(io::AbstractPipe; cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    cancel === DEFAULT_CANCEL ? readavailable(pipe_reader(io)::IO) :
-                                readavailable(pipe_reader(io)::IO; cancel)
+    _pipe_split(pipe_reader(io)::IO) do r
+        cancel === DEFAULT_CANCEL ? readavailable(r) : readavailable(r; cancel)
+    end
 read(io::AbstractPipe, byte::Type{UInt8}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    (cancel === DEFAULT_CANCEL ? read(pipe_reader(io)::IO, byte) :
-                                 read(pipe_reader(io)::IO, byte; cancel))::UInt8
-unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io)::IO, p, nb)
+    _pipe_split(pipe_reader(io)::IO) do r
+        cancel === DEFAULT_CANCEL ? read(r, byte) : read(r, byte; cancel)
+    end::UInt8
+unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = _pipe_split(r -> unsafe_read(r, p, nb), pipe_reader(io)::IO)
 copyuntil(out::IO, io::AbstractPipe, arg::UInt8; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
 copyuntil(out::IO, io::AbstractPipe, arg::AbstractChar; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
 copyuntil(out::IO, io::AbstractPipe, arg::AbstractString; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
@@ -529,17 +541,19 @@ readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = r
 # (only an explicit token is forwarded: the sentinel keeps the plain call,
 # which any user-defined readbytes! method supports)
 readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target); cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    cancel === DEFAULT_CANCEL ? readbytes!(pipe_reader(io)::IO, target, n) :
-                                readbytes!(pipe_reader(io)::IO, target, n; cancel)
+    _pipe_split(pipe_reader(io)::IO) do r
+        cancel === DEFAULT_CANCEL ? readbytes!(r, target, n) : readbytes!(r, target, n; cancel)
+    end
 peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)::T
-wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io)::IO, nb)
+wait_readnb(io::AbstractPipe, nb::Int) = _pipe_split(r -> wait_readnb(r, nb), pipe_reader(io)::IO)
 eof(io::AbstractPipe; cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    (cancel === DEFAULT_CANCEL ? eof(pipe_reader(io)::IO) :
-                                 eof(pipe_reader(io)::IO; cancel))::Bool
+    _pipe_split(pipe_reader(io)::IO) do r
+        cancel === DEFAULT_CANCEL ? eof(r) : eof(r; cancel)
+    end::Bool
 
-isopen(io::AbstractPipe) = isopen(pipe_writer(io)::IO) || isopen(pipe_reader(io)::IO)
-close(io::AbstractPipe) = (close(pipe_writer(io)::IO); close(pipe_reader(io)::IO))
-wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)::IO); wait_close(pipe_reader(io)::IO))
+isopen(io::AbstractPipe) = _pipe_split(isopen, pipe_writer(io)::IO) || _pipe_split(isopen, pipe_reader(io)::IO)
+close(io::AbstractPipe) = (_pipe_split(close, pipe_writer(io)::IO); _pipe_split(close, pipe_reader(io)::IO))
+wait_close(io::AbstractPipe) = (_pipe_split(wait_close, pipe_writer(io)::IO); _pipe_split(wait_close, pipe_reader(io)::IO))
 
 
 # Exception-safe wrappers (io = open(); try f(io) finally close(io))

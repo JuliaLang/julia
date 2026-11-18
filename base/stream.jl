@@ -999,7 +999,14 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
         end
         nothing
     end
-    readcb_specialized(stream_unknown_type, Int(nread), UInt(nrequested))
+    # manual union split, so that `--trim` can resolve the call for Base's streams
+    if stream_unknown_type isa PipeEndpoint
+        readcb_specialized(stream_unknown_type, Int(nread), UInt(nrequested))
+    elseif stream_unknown_type isa TTY
+        readcb_specialized(stream_unknown_type, Int(nread), UInt(nrequested))
+    else
+        readcb_specialized(stream_unknown_type, Int(nread), UInt(nrequested))
+    end
     nothing
 end
 

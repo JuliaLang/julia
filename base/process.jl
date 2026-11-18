@@ -40,7 +40,7 @@ pipe_writer(p::ProcessChain) = p.in
 # complete only after all content has been read from it for synchronizing
 # state without the kernel to aid.
 struct SyncCloseFD
-    fd
+    fd::OS_HANDLE
     t::Task
 end
 rawhandle(io::SyncCloseFD) = rawhandle(io.fd)
@@ -111,11 +111,11 @@ end
     cpumask === nothing || (cpumask = as_cpumask(cpumask))
     GC.@preserve stdio begin
         iohandles = Tuple{Cint, UInt}[ # assuming little-endian layout
-            let h = rawhandle(io)
+            let h = _rawhandle(io)
                 h === C_NULL     ? (0x00, UInt(0)) :
                 h isa OS_HANDLE  ? (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h))) :
                 h isa Ptr{Cvoid} ? (0x04, UInt(h)) :
-                error("invalid spawn handle $h from $io")
+                error(lazy"invalid spawn handle $h from $io")
             end
             for io in stdio]
         syncd = Task[io.t for io in stdio if io isa SyncCloseFD]
@@ -191,25 +191,45 @@ function _stdio_copy(stdios::SpawnIOs, fd::Int, @nospecialize replace)
     return new
 end
 
+# `_spawn` for the untyped fields of compound commands: a manual union split over the
+# command types defined in Base, so that `--trim` can resolve the call
+function _spawn_cmd(@nospecialize(cmd::AbstractCmd), stdios::SpawnIOs, tok::MaybeToken)
+    cmd isa Cmd && return _spawn(cmd, stdios, tok)
+    cmd isa CmdRedirect && return _spawn(cmd, stdios, tok)
+    cmd isa OrCmds && return _spawn(cmd, stdios, tok)
+    cmd isa ErrOrCmds && return _spawn(cmd, stdios, tok)
+    cmd isa AndCmds && return _spawn(cmd, stdios, tok)
+    return _spawn(cmd, stdios, tok)
+end
+
+function _spawn_cmd(@nospecialize(cmd::AbstractCmd), stdios::SpawnIOs, chain::ProcessChain, tok::MaybeToken)
+    cmd isa Cmd && return _spawn(cmd, stdios, chain, tok)
+    cmd isa CmdRedirect && return _spawn(cmd, stdios, chain, tok)
+    cmd isa OrCmds && return _spawn(cmd, stdios, chain, tok)
+    cmd isa ErrOrCmds && return _spawn(cmd, stdios, chain, tok)
+    cmd isa AndCmds && return _spawn(cmd, stdios, chain, tok)
+    return _spawn(cmd, stdios, chain, tok)
+end
+
 function _spawn(redirect::CmdRedirect, stdios::SpawnIOs, tok::MaybeToken=default_cancel_token())
     fdnum = redirect.stream_no + 1
-    io, close_io = setup_stdio(redirect.handle, redirect.readable)
+    io, close_io = _setup_stdio(redirect.handle, redirect.readable)
     try
         stdios = _stdio_copy(stdios, fdnum, io)
-        return _spawn(redirect.cmd, stdios, tok)
+        return _spawn_cmd(redirect.cmd, stdios, tok)
     finally
-        close_io && close_stdio(io)
+        close_io && _close_stdio(io)
     end
 end
 
 function _spawn(redirect::CmdRedirect, stdios::SpawnIOs, chain::ProcessChain, tok::MaybeToken)
     fdnum = redirect.stream_no + 1
-    io, close_io = setup_stdio(redirect.handle, redirect.readable)
+    io, close_io = _setup_stdio(redirect.handle, redirect.readable)
     try
         stdios = _stdio_copy(stdios, fdnum, io)
-        return _spawn(redirect.cmd, stdios, chain, tok)
+        return _spawn_cmd(redirect.cmd, stdios, chain, tok)
     finally
-        close_io && close_stdio(io)
+        close_io && _close_stdio(io)
     end
 end
 
@@ -217,9 +237,9 @@ function _spawn(cmds::OrCmds, stdios::SpawnIOs, chain::ProcessChain, tok::MaybeT
     in_pipe, out_pipe = link_pipe(false, false)
     try
         stdios_left = _stdio_copy(stdios, 2, out_pipe)
-        _spawn(cmds.a, stdios_left, chain, tok)
+        _spawn_cmd(cmds.a, stdios_left, chain, tok)
         stdios_right = _stdio_copy(stdios, 1, in_pipe)
-        _spawn(cmds.b, stdios_right, chain, tok)
+        _spawn_cmd(cmds.b, stdios_right, chain, tok)
     finally
         close_pipe_sync(out_pipe)
         close_pipe_sync(in_pipe)
@@ -231,9 +251,9 @@ function _spawn(cmds::ErrOrCmds, stdios::SpawnIOs, chain::ProcessChain, tok::May
     in_pipe, out_pipe = link_pipe(false, false)
     try
         stdios_left = _stdio_copy(stdios, 3, out_pipe)
-        _spawn(cmds.a, stdios_left, chain, tok)
+        _spawn_cmd(cmds.a, stdios_left, chain, tok)
         stdios_right = _stdio_copy(stdios, 1, in_pipe)
-        _spawn(cmds.b, stdios_right, chain, tok)
+        _spawn_cmd(cmds.b, stdios_right, chain, tok)
     finally
         close_pipe_sync(out_pipe)
         close_pipe_sync(in_pipe)
@@ -242,8 +262,8 @@ function _spawn(cmds::ErrOrCmds, stdios::SpawnIOs, chain::ProcessChain, tok::May
 end
 
 function _spawn(cmds::AndCmds, stdios::SpawnIOs, chain::ProcessChain, tok::MaybeToken)
-    _spawn(cmds.a, stdios, chain, tok)
-    _spawn(cmds.b, stdios, chain, tok)
+    _spawn_cmd(cmds.a, stdios, chain, tok)
+    _spawn_cmd(cmds.b, stdios, chain, tok)
     return chain
 end
 
@@ -262,13 +282,13 @@ function setup_stdios(f, stdios::Vector{Redirectable})
     close_io = falses(nstdio)
     try
         for i in 1:nstdio
-            open_io[i], close_io[i] = setup_stdio(stdios[i], i == 1)
+            open_io[i], close_io[i] = _setup_stdio(stdios[i], i == 1)
         end
         pp = f(open_io)
         return pp
     finally
         for i in 1:nstdio
-            close_io[i] && close_stdio(open_io[i])
+            close_io[i] && _close_stdio(open_io[i])
         end
     end
 end
@@ -302,7 +322,7 @@ function setup_stdio(stdio::Pipe, child_readable::Bool)
 end
 
 setup_stdio(stdio::AbstractPipe, readable::Bool) =
-    setup_stdio(readable ? pipe_reader(stdio) : pipe_writer(stdio), readable)
+    _setup_stdio(readable ? pipe_reader(stdio) : pipe_writer(stdio), readable)
 
 function setup_stdio(stdio::IOStream, child_readable::Bool)
     io = RawFD(fd(stdio))
@@ -338,27 +358,66 @@ function setup_stdio(stdio::IO, child_readable::Bool)
     end
     child = child_readable ? rd : wr
     try
-        let in = (child_readable ? parent : stdio),
-            out = (child_readable ? stdio : parent),
-            t = @async try
-                write(in, out)
-            catch ex
-                @warn "Process I/O error" exception=(ex, catch_backtrace())
-                rethrow()
-            finally
-                close(parent)
-            end
-            return (SyncCloseFD(child, t), true)
-        end
+        # a task for each direction, so that the types in each task body are known
+        t = child_readable ? @async(copy_stdio(parent, stdio, parent)) :
+                             @async(copy_stdio(stdio, parent, parent))
+        return (SyncCloseFD(child, t), true)
     catch
         close_pipe_sync(child)
         rethrow()
     end
 end
 
+function copy_stdio(to::IO, from::IO, parent::PipeEndpoint)
+    try
+        write(to, from)
+    catch ex
+        @warn "Process I/O error" exception=(ex, catch_backtrace())
+        rethrow()
+    finally
+        close(parent)
+    end
+end
+
 close_stdio(stdio) = close(stdio)
 close_stdio(stdio::OS_HANDLE) = close_pipe_sync(stdio)
 close_stdio(stdio::SyncCloseFD) = close_stdio(stdio.fd)
+
+# `setup_stdio`, `close_stdio` and `rawhandle` for the elements of `Vector{Redirectable}`
+# and `SpawnIOs`: a manual union split over the stdio types defined in Base, so that
+# `--trim` can resolve the calls
+function _setup_stdio(@nospecialize(stdio), readable::Bool)
+    stdio isa Union{DevNull,OS_HANDLE,RawFD} && return setup_stdio(stdio, readable)
+    stdio isa PipeEndpoint && return setup_stdio(stdio, readable)
+    stdio isa TTY && return setup_stdio(stdio, readable)
+    stdio isa FileRedirect && return setup_stdio(stdio, readable)
+    stdio isa IOStream && return setup_stdio(stdio, readable)
+    stdio isa Filesystem.File && return setup_stdio(stdio, readable)
+    stdio isa Pipe && return setup_stdio(stdio, readable)
+    stdio isa Process && return setup_stdio(stdio, readable)
+    stdio isa ProcessChain && return setup_stdio(stdio, readable)
+    stdio isa IOBuffer && return setup_stdio(stdio, readable)
+    stdio isa BufferStream && return setup_stdio(stdio, readable)
+    stdio isa Core.CoreSTDERR && return setup_stdio(stdio, readable)
+    stdio isa Core.CoreSTDOUT && return setup_stdio(stdio, readable)
+    return setup_stdio(stdio, readable)
+end
+
+function _close_stdio(@nospecialize(stdio))
+    stdio isa OS_HANDLE && return close_stdio(stdio)
+    stdio isa SyncCloseFD && return close_stdio(stdio)
+    stdio isa Filesystem.File && return close_stdio(stdio)
+    return close_stdio(stdio)
+end
+
+function _rawhandle(@nospecialize(io))
+    io isa SyncCloseFD && return rawhandle(io)
+    io isa Union{DevNull,OS_HANDLE,RawFD} && return rawhandle(io)
+    io isa PipeEndpoint && return rawhandle(io)
+    io isa TTY && return rawhandle(io)
+    io isa Filesystem.File && return rawhandle(io)
+    return rawhandle(io)
+end
 
 # INTERNAL
 # pad out stdio to have at least three elements,
@@ -516,7 +575,9 @@ function read(cmd::AbstractCmd; cancel::CancelTokenArg=DEFAULT_CANCEL)
     tok = resolve_cancel_token(cancel)
     @cancel_check tok
     procs = open(cmd, "r", devnull; cancel=tok)
-    bytes = read(procs.out; cancel=tok)
+    out = procs.out::PipeEndpoint
+    # a `cancel` keyword of type `MaybeToken` cannot be resolved statically
+    bytes = tok === nothing ? read(out; cancel=nothing) : read(out; cancel=tok)
     success(procs; cancel=tok) || pipeline_error(procs)
     return bytes::Vector{UInt8}
 end

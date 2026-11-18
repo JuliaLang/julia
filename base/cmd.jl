@@ -186,6 +186,14 @@ function show_env(io::IO, env::Vector{String})
     print(io, "]")
 end
 
+# `show(io, collect(Int, cpus))`, without the generic array printing
+function show_cpus(io::IO, cpus::Vector{UInt16})
+    isempty(cpus) && return print(io, "Int", Sys.WORD_SIZE, "[]")
+    print(io, '[')
+    join(io, cpus, ", ")
+    print(io, ']')
+end
+
 function show(io::IO, cmd::Cmd)
     env = cmd.env
     if env !== nothing && get_show_env_mode(io) === :none
@@ -210,7 +218,7 @@ function show(io::IO, cmd::Cmd)
     print_gid && (print(io, ", "); show(io, Int64(cmd.gid)); print(io, ")"))
     if print_cpus
         print(io, ", ")
-        show(io, collect(Int, something(cmd.cpus)))
+        show_cpus(io, something(cmd.cpus))
         print(io, ")")
     end
     if print_env || print_dir
@@ -301,12 +309,9 @@ end
 function _show_cmd_word(io::IO, word::AbstractString, underline::Bool)
     # A leading `~` would be expanded when the command is parsed back.
     special = startswith(word, '~') ? _shell_display_special * '~' : _shell_display_special
-    s = sprint(context=io) do io
-        if underline
-            with_output_color(print_shell_word, :underline, io, word, special)
-        else
-            print_shell_word(io, word, special)
-        end
+    s = sprint(print_shell_word, word, special; context=io)
+    if underline && get(io, :color, false)::Bool
+        s = output_color_string(IOBuffer(), s, :underline, false, false, false, false, false, false)
     end
     print(io, replace(s, '`' => "\\`"))
 end
@@ -420,7 +425,8 @@ with values `:none`, `:keys`, `:redact` (default), or `:all`.
 
 See also [`Cmd`](@ref), [`addenv`](@ref), [`ENV`](@ref), [`pwd`](@ref).
 """
-setenv(cmd::Cmd, env; dir=cmd.dir) = Cmd(cmd; env=byteenv(env), dir=dir)
+setenv(cmd::Cmd, env; dir=cmd.dir) =
+    Cmd(cmd, cmd.ignorestatus, cmd.flags, byteenv(env), dir, cmd.cpus, cmd.uid, cmd.gid)
 setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir=cmd.dir) =
     setenv(cmd, env; dir=dir)
 setenv(cmd::Cmd; dir=cmd.dir) = Cmd(cmd; dir=dir)
