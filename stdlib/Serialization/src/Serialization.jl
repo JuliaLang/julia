@@ -570,7 +570,7 @@ function serialize(s::AbstractSerializer, mt::Core.MethodTable)
     nothing
 end
 
-function serialize(::AbstractSerializer, _mc::Core.MethodCache)
+function serialize(::AbstractSerializer, ::Core.MethodCache)
     error("cannot serialize MethodCache objects")
 end
 
