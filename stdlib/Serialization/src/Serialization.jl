@@ -391,7 +391,7 @@ function serialize(s::AbstractSerializer, a::SubArray{T,N,A}) where {T,N,A<:Arra
     serialize_any(s, b)
 end
 
-serialize(s::AbstractSerializer, m::GenericMemory) = error("GenericMemory{:atomic} currently cannot be serialized")
+serialize(::AbstractSerializer, ::GenericMemory) = error("GenericMemory{:atomic} currently cannot be serialized")
 function serialize(s::AbstractSerializer, m::Memory)
     serialize_cycle_header(s, m) && return
     serialize(s, length(m))
@@ -502,7 +502,7 @@ end
 # TODO: make this bidirectional, so objects can be sent back via the same key
 const object_numbers = WeakKeyDict()
 const obj_number_salt = Ref{UInt64}(0)
-function object_number(s::AbstractSerializer, @nospecialize(l))
+function object_number(::AbstractSerializer, @nospecialize(l))
     global obj_number_salt, object_numbers
     if haskey(object_numbers, l)
         return object_numbers[l]
@@ -513,9 +513,9 @@ function object_number(s::AbstractSerializer, @nospecialize(l))
     return ln::UInt64
 end
 
-lookup_object_number(s::AbstractSerializer, n::UInt64) = nothing
+lookup_object_number(::AbstractSerializer, ::UInt64) = nothing
 
-remember_object(s::AbstractSerializer, @nospecialize(o), n::UInt64) = nothing
+remember_object(::AbstractSerializer, @nospecialize(_), ::UInt64) = nothing
 
 function lookup_object_number(s::Serializer, n::UInt64)
     return get(s.known_object_data, n, nothing)
@@ -570,7 +570,7 @@ function serialize(s::AbstractSerializer, mt::Core.MethodTable)
     nothing
 end
 
-function serialize(s::AbstractSerializer, mc::Core.MethodCache)
+function serialize(::AbstractSerializer, ::Core.MethodCache)
     error("cannot serialize MethodCache objects")
 end
 
@@ -685,7 +685,7 @@ function serialize(s::AbstractSerializer, g::GlobalRef)
 
         v = getglobal(g.mod, g.name)
         unw = unwrap_unionall(v)
-        if isa(unw,DataType) && v === unw.name.wrapper && should_send_whole_type(s, unw)
+        if isa(unw,DataType) && v === unw.name.wrapper && should_send_whole_type(unw)
             # handle references to types in Main by sending the whole type.
             # needed to be able to send nested functions (#15451).
             writetag(s.io, FULL_GLOBALREF_TAG)
@@ -717,12 +717,12 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, t.flags & 0x2 == 0x2) # .mutable
     serialize(s, Int32(length(primary.types) - t.n_uninitialized))
     serialize(s, t.max_methods)
-    ms = Base.matches_to_methods(Base._methods_by_ftype(Tuple{t.wrapper, Vararg}, -1, Base.get_world_counter()), t, nothing).ms
+    ms = Base.matches_to_methods(Base._methods_by_ftype(Tuple{t.wrapper, Vararg}, -1, Base.get_world_counter())::Vector, t, nothing).ms
     if t.singletonname !== t.name || !isempty(ms)
         serialize(s, t.singletonname)
         serialize(s, ms)
         serialize(s, t.max_args)
-        kws = Base.matches_to_methods(Base._methods_by_ftype(Tuple{typeof(Core.kwcall), Any, t.wrapper, Vararg}, -1, Base.get_world_counter()), t, nothing).ms
+        kws = Base.matches_to_methods(Base._methods_by_ftype(Tuple{typeof(Core.kwcall), Any, t.wrapper, Vararg}, -1, Base.get_world_counter())::Vector, t, nothing).ms
         if isempty(kws)
             writetag(s.io, UNDEFREF_TAG)
         else
@@ -735,7 +735,7 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
 end
 
 # decide whether to send all data for a type (instead of just its name)
-function should_send_whole_type(s, t::DataType)
+function should_send_whole_type(t::DataType)
     tn = t.name
     # TODO improve somehow?
     # send whole type for anonymous functions in Main
@@ -751,7 +751,7 @@ function should_send_whole_type(s, t::DataType)
 end
 
 function serialize_type_data(s, @nospecialize(t::DataType))
-    whole = should_send_whole_type(s, t)
+    whole = should_send_whole_type(t)
     iswrapper = (t === unwrap_unionall(t.name.wrapper))
     if whole && iswrapper
         writetag(s.io, WRAPPER_DATATYPE_TAG)
@@ -931,14 +931,14 @@ function readheader(s::AbstractSerializer)
     end
     version    = read(io, UInt8)
     flags      = read(io, UInt8)
-    reserved1  = read(io, UInt8)
-    reserved2  = read(io, UInt8)
-    reserved3  = read(io, UInt8)
+    _reserved1 = read(io, UInt8)
+    _reserved2 = read(io, UInt8)
+    _reserved3 = read(io, UInt8)
     endianflag = flags & 0x3
     wordflag   = (flags >> 2) & 0x3
-    wordsize = wordflag == 0 ? 4 :
-               wordflag == 1 ? 8 :
-               error("Unknown word size flag in header")
+    _wordsize = wordflag == 0 ? 4 :
+                wordflag == 1 ? 8 :
+                error("Unknown word size flag in header")
     endian_bom = endianflag == 0 ? 0x04030201 :
                  endianflag == 1 ? 0x01020304 :
                  error("Unknown endianness flag in header")
@@ -1175,12 +1175,12 @@ function deserialize_tuple(s::AbstractSerializer, len)
     Base.Cartesian.@nexprs 10 i -> begin
         len == i && return (Base.Cartesian.@ntuple i _ -> deserialize(s))
     end
-    return ntupleany(i -> deserialize(s), len)
+    return ntupleany(_ -> deserialize(s), len)
 end
 
 function deserialize_svec(s::AbstractSerializer)
     n = read(s.io, Int32)
-    svec(Any[ deserialize(s) for i=1:n ]...)
+    svec(Any[ deserialize(s) for _=1:n ]...)
 end
 
 function deserialize_module(s::AbstractSerializer)
@@ -1227,6 +1227,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     if syms isa SimpleVector
         # < v1.2
         _ambig = deserialize(s)
+        slot_syms = nothing
     else
         slot_syms = syms::String
     end
@@ -1285,10 +1286,12 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             end
             meth.source = template
             meth.debuginfo = template.debuginfo
-            if !@isdefined(slot_syms)
+            if slot_syms === nothing
                 slot_syms = ccall(:jl_compress_argnames, Ref{String}, (Any,), meth.source.slotnames)
             end
         end
+        # pre-v1.2 streams carry no slot names, so they can only be recovered from the source
+        slot_syms === nothing && error("cannot deserialize method `$name` without source from a pre-v1.2 stream")
         meth.slot_syms = slot_syms
         if generator !== nothing
             meth.generator = generator
@@ -1392,15 +1395,16 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
             end
         end
     end
-    if current_module[] !== nothing
-        map!(x->symbol_to_globalref(x, current_module[]), code)
+    cm = current_module[]
+    if cm !== nothing
+        map!(x->symbol_to_globalref(x, cm), code)
     end
     _x = deserialize(s)
     have_debuginfo = _x isa Core.DebugInfo
     if have_debuginfo
         ci.debuginfo = _x
     else
-        codelocs = _x::Vector{Int32}
+        _codelocs = _x::Vector{Int32}
         # TODO: convert codelocs to debuginfo format?
     end
     _x = deserialize(s)
@@ -1414,7 +1418,7 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     end
     ci.ssavaluetypes = _x
     if pre_12
-        linetable = deserialize(s)
+        _linetable = deserialize(s)
         # TODO: convert linetable to debuginfo format?
     end
     ssaflags = deserialize(s)
@@ -1433,7 +1437,7 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
             ci.method_for_inference_limit_heuristics = deserialize(s)
         end
         if !have_debuginfo # pre v1.11 format
-            linetable = deserialize(s)
+            _linetable = deserialize(s)
             # TODO: convert linetable to debuginfo format?
         end
     end
@@ -1626,7 +1630,7 @@ function deserialize_expr(s::AbstractSerializer, len)
     e = Expr(:temp)
     resolve_ref_immediately(s, e)
     e.head = deserialize(s)::Symbol
-    e.args = Any[ deserialize(s) for i = 1:len ]
+    e.args = Any[ deserialize(s) for _ = 1:len ]
 
     # Rewrite old :method expressions to define_method calls
     if e.head === :method
@@ -1728,7 +1732,7 @@ function deserialize_typename(s::AbstractSerializer, number)
     tag = Int32(read(s.io, UInt8)::UInt8)
     if tag != UNDEFREF_TAG
         mtname = handle_deserialize(s, tag)
-        defs = deserialize(s)
+        _defs = deserialize(s)
         maxa = deserialize(s)::Union{Int,Int32}
         if makenew
             tn.singletonname = mtname
@@ -1773,11 +1777,11 @@ function deserialize_datatype(s::AbstractSerializer, full::Bool)
             elseif np == 4
                 t = Tuple{deserialize(s), deserialize(s), deserialize(s), deserialize(s)}
             else
-                t = Tuple{Any[ deserialize(s) for i=1:np ]...}
+                t = Tuple{Any[ deserialize(s) for _=1:np ]...}
             end
         else
             t = ty
-            for i = 1:np
+            for _ = 1:np
                 t = t{deserialize(s)}
             end
         end
@@ -1886,7 +1890,7 @@ function deserialize_dict(s::AbstractSerializer, T::Type{<:AbstractDict})
     n = read(s.io, Int32)
     t = T(); sizehint!(t, n)
     deserialize_cycle(s, t)
-    for i = 1:n
+    for _ = 1:n
         k = deserialize(s)
         v = deserialize(s)
         t[k] = v
@@ -1900,7 +1904,7 @@ end
 
 deserialize(s::AbstractSerializer, ::Type{BigInt}) = parse(BigInt, deserialize(s), base = 62)
 
-function deserialize(s::AbstractSerializer, t::Type{Regex})
+function deserialize(s::AbstractSerializer, ::Type{Regex})
     pattern = deserialize(s)
     compile_options = deserialize(s)
     match_options = deserialize(s)
