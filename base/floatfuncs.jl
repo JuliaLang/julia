@@ -78,54 +78,432 @@ function round(x::Real, r::RoundingMode=RoundNearest;
     end
 end
 
-# round x to multiples of 1/invstep
-function _round_invstep(x, invstep, r::RoundingMode)
-    y = round(x * invstep, r) / invstep
-    if !isfinite(y)
-        return x
-    end
-    return y
+# Rounding to digits scales x, rounds to an integer, and scales back. The scaling
+# step itself rounds, and if it lands exactly on a rounding boundary (an integer, or
+# a half-integer for the nearest modes) the mode can't tell which side the exact
+# value was on. floor(x) could end up above x. So `_mul_round` and `_div_round`
+# recover the scaling error with an fma and round the exact product or quotient.
+# The rounded integer may not be representable, hence the `TwicePrecision`.
+
+# round(s + δ, r) for an infinitesimal δ with the sign of σ (δ == 0 iff σ == 0).
+# Branch-free: the sign of σ is unpredictable. Needs eps(s) <= 1 so the step of
+# one is representable, and σ to have the sign of s when s is a signed zero;
+# callers pass |s| < maxintfloat/2 or |s| <= 4, and σ is the error of s itself.
+function _round_sticky(s, σ, ::RoundingMode{:Down})
+    f = floor(s)
+    return ifelse((f == s) & (σ < 0), f - one(f), f)
+end
+function _round_sticky(s, σ, ::RoundingMode{:Up})
+    c = ceil(s)
+    return ifelse((c == s) & (σ > 0), copysign(c + one(c), c), c)
+end
+function _round_sticky(s, σ, ::RoundingMode{:ToZero})
+    t = trunc(s)
+    return ifelse((t == s) & !iszero(σ) & (signbit(σ) != signbit(s)), copysign(t + copysign(one(t), σ), s), t)
+end
+function _round_sticky(s, σ, ::RoundingMode{:FromZero})
+    t = round(s, RoundFromZero)
+    return ifelse((t == s) & !iszero(σ) & (signbit(σ) == signbit(s)), t + copysign(one(t), σ), t)
+end
+function _round_sticky(s, σ, r::Union{RoundingMode{:Nearest}, RoundingMode{:NearestTiesAway}, RoundingMode{:NearestTiesUp}})
+    half = oftype(s, 0.5)
+    tie = (abs(s - trunc(s)) == half) & !iszero(σ)
+    return ifelse(tie, copysign(s + copysign(half, σ), s), round(s, r))
 end
 
-# round x to multiples of 1/(invstepsqrt^2)
-# Using square root of step prevents overflowing
-function _round_invstepsqrt(x, invstepsqrt, r::RoundingMode)
-    y = round((x * invstepsqrt) * invstepsqrt, r) / invstepsqrt / invstepsqrt
-    if !isfinite(y)
-        return x
+# parity of an integer-valued float, without converting to an Integer
+_iseven_integral(s) = s == 2 * trunc(s / 2)
+
+# round(s + err + δ, r) - s for an integer-valued s, |err| < |s|, and an infinitesimal
+# δ with the sign of σ. The result is an integer, but s plus it may not be representable.
+function _round_offset(s, err, σ, r::RoundingMode)
+    # Only the fractional part of err and the sign and parity of s + trunc(err) matter,
+    # so swap the big integer for a small one with the same sign and parity.
+    ei = trunc(err)
+    ef = err - ei                              # exact
+    b = copysign(oftype(s, _iseven_integral(s) == _iseven_integral(ei) ? 2 : 3), s)
+    t = b + ef
+    e = (b - t) + ef                           # exact: b + ef == t + e
+    return ei + (_round_sticky(t, iszero(e) ? σ : e, r) - b)
+end
+
+# round(x * y, r) applied to the exact product. Exact unless x * y underflows,
+# which loses the sign of err; here y is an integer, so it never does.
+@inline function _mul_round(x, y, r::RoundingMode)
+    xy, err = two_mul(x, y)          # x * y == xy + err
+    isfinite(xy) || return TwicePrecision(xy, zero(xy))
+    if abs(xy) < maxintfloat(xy) / 2
+        return TwicePrecision(_round_sticky(xy, err, r), zero(xy))
     end
-    return y
+    return TwicePrecision(xy, _round_offset(xy, err, zero(err), r))
+end
+
+# round(x / y, r) applied to the exact quotient. Exact for |x / y| < maxintfloat^2 / 4;
+# past that the rounded quotient generally doesn't fit in a TwicePrecision, and the
+# result is the closest one to x / y instead (within eps(lo) / 2 + 1 of the rounded quotient).
+@inline function _div_round(x, y, r::RoundingMode)
+    q = x / y
+    (isfinite(q) && isfinite(y)) || return TwicePrecision(round(q, r), zero(q))
+    rem = fma(-q, y, x)              # x == q * y + rem
+    if abs(q) < maxintfloat(q) / 2
+        return TwicePrecision(_round_sticky(q, flipsign(rem, y), r), zero(q))
+    end
+    # q is an integer and |rem / y| <= eps(q) / 2
+    δ = rem / y
+    if abs(δ) >= maxintfloat(q) / 2
+        return TwicePrecision(q, δ)  # δ is already an integer
+    end
+    ρ = fma(-δ, y, rem)              # rem == δ * y + ρ
+    return TwicePrecision(q, _round_offset(q, δ, flipsign(ρ, y), r))
+end
+
+# (v.hi + v.lo) / y as a float, for v from `_mul_round`. When v.lo != 0 this rounds
+# twice. With an integer numerator and y = 10^d the exact quotient is at least
+# ulp/(2*5^d) from any midpoint, which is beyond the error in c for d <= 21; for
+# d == 22 the margin is gone on paper but no counterexample has been found.
+@inline function _tp_div(v::TwicePrecision, y)
+    hi = v.hi / y
+    iszero(v.lo) && return hi
+    rq = fma(-hi, y, v.hi)           # exact: v.hi == hi * y + rq
+    c = (rq + v.lo) / y
+    return hi + c
+end
+
+# (v.hi + v.lo) * y as a float, for v from `_div_round`. Correctly rounded when
+# pe + v.lo * y is exact: both are multiples of 2^d for y = 10^d, and with |v.lo| <= 2
+# (the fast path in `_round_step` keeps |v.hi| < 2^55) the sum fits for d <= 21.
+@inline function _tp_mul(v::TwicePrecision, y)
+    iszero(v.lo) && return v.hi * y
+    p, pe = two_mul(v.hi, y)         # exact: v.hi * y == p + pe
+    return p + (pe + v.lo * y)
+end
+
+# round x to multiples of 1/invstep
+function _round_invstep(x, invstep, r::RoundingMode)
+    # If 1/invstep is less than a quarter of the spacing of floats around x, the
+    # rounded value is within a quarter ulp of x and converts back to x, so skip the
+    # work. This also covers x * invstep overflowing.
+    eps(x) * abs(invstep) >= 4 && return x
+    return _tp_div(_mul_round(x, invstep, r), invstep)
+end
+
+# round x to multiples of 1/base^digits when base^digits overflows, for float types other
+# than Float32 and Float64, which `_round_digits_dd` rounds exactly. Only tiny x have
+# anything to round, so move a power of two from base^digits onto x, exactly in both
+# cases: base^digits == M * 2^(k*digits) with M = (base/2^k)^digits, and x * base^digits
+# == ldexp(x, s) * invstep. The odd part of base^digits is far beyond the precision of x
+# here, so invstep is inexact and the grid is approximate, but the rounding mode is
+# applied exactly to it: floor(x) <= x <= ceil(x) still holds.
+function _round_invstep_overflow(x, base, digits::Integer, r::RoundingMode)
+    base >= 2 || return x                  # not a meaningful base
+    # 2^k <= base < 2^(k+1), taken from the integer since base itself may overflow
+    k = top_set_bit(base) - 1
+    ee = exponent(eps(x))
+    # eps(x) * base^digits >= 2^(ee + k*digits) >= 8: the result is x (see `_round_invstep`)
+    digits >= cld(3 - ee, k) && return x
+    m = ldexp(oftype(x, base >> max(k - 63, 0)), -min(k, 63))   # base / 2^k, in [1, 2]
+    M = m^Int(digits)                      # in [1, 2^digits], no overflow
+    eM = exponent(M)
+    s = k * Int(digits) + eM - (precision(x) + 2)
+    invstep = ldexp(M, precision(x) + 2 - eM)
+    # s > 0 is large enough that ldexp(x, s) is normal, and |ldexp(x, s)| < 2^eM
+    return ldexp(_tp_div(_mul_round(ldexp(x, s), invstep, r), invstep), -s)
 end
 
 # round x to multiples of step
 function _round_step(x, step, r::RoundingMode)
-    # TODO: use div with rounding mode
-    y = round(x / step, r) * step
-    if !isfinite(y)
-        if x > 0
-            return (r == RoundUp ? oftype(x, Inf) : zero(x))
-        elseif x < 0
-            return (r == RoundDown ? -oftype(x, Inf) : -zero(x))
-        else
-            return x
-        end
+    if isfinite(step)
+        # step is less than a quarter of the spacing of floats around x: the result is x
+        eps(x) >= 4 * abs(step) && return x
+        v = _div_round(x, step, r)
+        y = _tp_mul(v, step)
+        isfinite(y) || return _round_step_nonfinite(x, step, r, v)
+    else
+        y = round(x / step, r) * step
+        isfinite(y) || return _round_step_nonfinite(x, step, r, nothing)
     end
     return y
 end
 
+# the result of `_round_step` when the rounded value is not finite as a float
+@noinline function _round_step_nonfinite(x, step, r::RoundingMode, v)
+    (isfinite(x) && !iszero(x)) || return x
+    if v !== nothing
+        # the product in `_tp_mul` can overflow although the rounded value is finite, as
+        # the multiple of step that `_div_round` chose may be near floatmax; scaling the
+        # step by a power of two changes nothing else (step >= 2, so step / 4 is normal)
+        y = ldexp(_tp_mul(v, ldexp(step, -2)), 2)
+        isfinite(y) && return y
+    end
+    # With a finite step, the rounded value is a nonzero multiple of step beyond floatmax,
+    # so the result is ±Inf. With an infinite step, the rounded value is 0 or ±step: ±Inf
+    # when rounding away from zero, and 0 otherwise. For the nearest modes that assumes
+    # |x| < step / 2, which can fail only for a base whose first power beyond floatmax is
+    # below 2 * floatmax (Float32 and Float64 take `_round_digits_dd` then).
+    if isfinite(step) || r == RoundFromZero || r == (x > 0 ? RoundUp : RoundDown)
+        return copysign(oftype(x, Inf), x)
+    end
+    return copysign(zero(x), x)
+end
+
+# When base^k is not exact in the float type, the float step is off its exact value and
+# rounding to it rounds to the wrong grid: `floor(floatmax(); digits=-299)` would be a
+# multiple of 1.0e299, not of 10^299. With base == bo * 2^t for odd bo, base^k == o * 2^j
+# for o == bo^k and j == t * k. Then o is carried as a double-double, exact for o < 2^106
+# and within a relative 2^-100 beyond, x is scaled by 2^∓j exactly, and the rounded
+# quotient or product N, and the result from it, are computed with a margin for the
+# error. When a value is within the margin of a rounding boundary or of a midpoint
+# between floats, exact integer arithmetic decides (`_round_digits_exact`). The odd part
+# o has more bits than the float, so x / base^k is never on a boundary, but N * base^k
+# can be a midpoint: 10^23 is.
+
+# whether `_round_digits_dd` handles x and base; other float types and bases are left
+# to the float code
+_has_dd_path(x, base) = x isa Union{Float32, Float64} && base isa Integer && base >= 2
+
+# whether the float power pow == base^k is exact and finite for certain, with one
+# comparison: it is faithful, so below maxintfloat exactly when base^k is, and exact then.
+# Other powers take `_round_digits_inexact`. Other float types only need it finite.
+@inline _pow_is_small(x::Union{Float32, Float64}, pow) = abs(pow) < maxintfloat(x)
+@inline _pow_is_small(x, pow) = isfinite(pow)
+
+# whether bo^k < 2^p for the odd part bo of base, so that base^k is exact in precision p
+@noinline function _odd_pow_is_exact(base::Integer, k::Integer, p::Int)
+    bo = base >> trailing_zeros(base)
+    bo == 1 && return true
+    k * (top_set_bit(bo) - 1) >= p && return false  # bo^k >= 2^p
+    # bo < 2^p and k < p here; bo^k by squaring, where any overflow means bo^k >= 2^64
+    o, b, k = UInt64(1), UInt64(bo), Int(k)
+    while true
+        if isodd(k)
+            o, f = Checked.mul_with_overflow(o, b)
+            f && return false
+        end
+        k >>= 1
+        k == 0 && return o < UInt64(1) << p
+        b, f = Checked.mul_with_overflow(b, b)
+        f && return false
+    end
+end
+
+# function of mpfr.jl: round(x, r; digits, base) with integer arithmetic
+function _round_digits_exact end
+
+# the rounding modes that `_round_digits_dd` supports
+const _DigitsRoundingModes = Union{RoundingMode{:Down}, RoundingMode{:Up}, RoundingMode{:ToZero},
+    RoundingMode{:FromZero}, RoundingMode{:Nearest}, RoundingMode{:NearestTiesAway},
+    RoundingMode{:NearestTiesUp}}
+
+function _round_digits_dd(x::T, r::RoundingMode, digits::Integer,
+                          base::Integer) where {T<:Union{Float32, Float64}}
+    r isa _DigitsRoundingModes || throw(ArgumentError("unsupported rounding mode $r"))
+    # base^|digits| >= 2^|digits|, against eps(x) >= 2^-1074 and |x| < 2^1024
+    if digits > 1100
+        return x                                    # the step is far below eps(x)
+    elseif digits < -1100
+        n = _round_dd_small(Float64(x), r)          # |x| is far below half the step
+        return iszero(n) ? copysign(zero(T), x) : copysign(T(Inf), x)
+    end
+    tz = trailing_zeros(base)
+    bo = base >> tz
+    bo < Int64(2)^53 || return _round_digits_exact(x, r, digits, base)
+    k = Int(abs(widen(digits)))                     # abs(typemin(Int8)) < 0
+    j = tz * k
+    oh, ol = _odd_pow_dd(bo, k)
+    xf = Float64(x)
+    ex = Float64(eps(x))
+    if !isfinite(oh)
+        # o >= 2^1023: settle the common cases from that bound before the integers
+        if digits >= 0
+            ldexp(ex, 1023 + j) >= 4 && return x
+        elseif abs(xf) < ldexp(1.0, 1021 + j)       # |x| < base^k / 4
+            n = _round_dd_small(xf, r)
+            return iszero(n) ? copysign(zero(T), x) : copysign(T(Inf), x)
+        end
+        return _round_digits_exact(x, r, digits, base)
+    end
+    if digits < 0
+        # N = round(x / base^k), the result N * base^k
+        # the result is x when the step is below a quarter of the spacing of floats around x
+        _ldexp(ex, -j) >= 4 * oh && return x
+        s = _ldexp(xf, -j)                          # |x / 2^j| >= o / 4 is normal
+        if abs(s) < oh / 4
+            n = _round_dd_small(xf, r)
+        else
+            q = s / oh
+            n = _round_dd_int(q, (fma(-q, oh, s) - q * ol) / oh, r, xf)
+        end
+        n === nothing && return _round_digits_exact(x, r, digits, base)
+        iszero(n) && return copysign(zero(T), x)
+        nh = Float64(n)
+        nl = Float64(n - Int64(nh))
+        h, e = two_mul(nh, oh)
+        u = _dd_to_float(T, h, e + (nh * ol + nl * oh))
+        if u === nothing
+            # N * o can be halfway between floats, but only when o < 2^54; the product is
+            # exact in UInt128 then, and its conversion rounds correctly
+            oh < 0x1p71 || return _round_digits_exact(x, r, digits, base)
+            u = copysign(T(UInt128(abs(n)) * UInt128(bo)^k), x)
+        end
+        return _ldexp(u, j)                         # exact, or overflows to ±Inf
+    else
+        # N = round(x * base^k), the result N / base^k
+        _ldexp(ex, j) * oh >= 4 && return x
+        s = _ldexp(xf, j)                           # |x * 2^j| < 2^56
+        h, e = two_mul(s, oh)
+        n = abs(h) < 0.25 ? _round_dd_small(xf, r) : _round_dd_int(h, e + s * ol, r, xf)
+        n === nothing && return _round_digits_exact(x, r, digits, base)
+        iszero(n) && return copysign(zero(T), x)
+        nh = Float64(n)
+        nl = Float64(n - Int64(nh))
+        q = nh / oh
+        u = _dd_to_float(T, q, (fma(-q, oh, nh) + nl - q * ol) / oh)
+        # ldexp is exact unless the result is subnormal
+        (u === nothing || exponent(u) - j < exponent(floatmin(T))) &&
+            return _round_digits_exact(x, r, digits, base)
+        return _ldexp(u, -j)
+    end
+end
+
+# ldexp(x, j), as a multiplication when 2^j is a normal Float64
+@inline _ldexp(x::Float64, j::Int) =
+    -1022 <= j <= 1023 ? x * reinterpret(Float64, UInt64(j + 1023) << 52) : ldexp(x, j)
+@inline _ldexp(x::Float32, j::Int) =
+    -126 <= j <= 127 ? x * reinterpret(Float32, UInt32(j + 127) << 23) : ldexp(x, j)
+
+# b^k as a double-double, for an odd integer b < 2^53, with a relative error below 2^-100
+# for k < 2^11 (exact while b^k < 2^106)
+function _dd_pow(b::Float64, k::Int)
+    rh, rl = 1.0, 0.0
+    ph, pl = b, 0.0
+    while true
+        isodd(k) && ((rh, rl) = _dd_mul(rh, rl, ph, pl))
+        k >>= 1
+        k == 0 && return rh, rl
+        ph, pl = _dd_mul(ph, pl, ph, pl)
+    end
+end
+@inline function _dd_mul(ah, al, bh, bl)
+    p, e = two_mul(ah, bh)
+    e += ah * bl + al * bh
+    h = p + e
+    return h, e - (h - p)
+end
+# 5^k for base 10, the common case (the table follows `two_mul` below)
+@inline _odd_pow_dd(bo, k::Int) = bo == 5 && k < 64 ? @inbounds(_POW5_DD[k + 1]) : _dd_pow(Float64(bo), k)
+
+# round(±δ, r) for |δ| < 1/4 with the sign of x
+_round_dd_small(x::Float64, r::RoundingMode) = Int64(_round_sticky(copysign(0.0, x), x, r))
+
+# round(q + q2, r) as an Int64, for the double-double q + q2 with |q| < 2^56 that
+# approximates a value with the sign of x and never on a rounding boundary, or nothing
+# when it is too close to one to tell. The distance to the boundary is measured from the
+# nearest integer n0 to q, so values close to an integer, as from decimal literals, are
+# told apart up to the error of q + q2 itself rather than that of its fraction.
+function _round_dd_int(q::Float64, q2::Float64, r::RoundingMode, x::Float64)
+    n0 = round(q)
+    d = (q - n0) + q2                               # q - n0 is exact
+    rd = round(d)
+    n = Int64(n0) + Int64(rd)
+    d2 = d - rd                                     # exact, in [-1/2, 1/2]
+    m = abs(q) * 0x1p-90 + (abs(d) + abs(q2)) * 0x1p-50
+    if r isa Union{RoundingMode{:Nearest}, RoundingMode{:NearestTiesAway}, RoundingMode{:NearestTiesUp}}
+        0.5 - abs(d2) < m && return nothing         # n is the nearest integer
+        return n
+    end
+    abs(d2) < m && return nothing
+    fl = d2 < 0 ? n - 1 : n                         # floor
+    up = r === RoundUp || (r === RoundFromZero && x > 0) || (r === RoundToZero && x < 0)
+    return up ? fl + 1 : fl
+end
+
+# h + l rounded to nearest in T, for a double-double with a relative error below 2^-95,
+# or nothing when it is too close to a midpoint between floats to tell
+function _dd_to_float(::Type{T}, h::Float64, l::Float64) where {T<:Union{Float32, Float64}}
+    u = T(h + l)
+    if !isfinite(u)
+        # beyond floatmax(T), well past where it rounds to Inf
+        return abs(h) >= 2 * Float64(floatmax(T)) ? copysign(T(Inf), h) : nothing
+    end
+    d = (h - Float64(u)) + l                        # h - u is exact
+    up = Float64(nextfloat(u)) - Float64(u)
+    dn = Float64(u) - Float64(prevfloat(u))
+    isfinite(up) || (up = dn)
+    isfinite(dn) || (dn = up)
+    m = abs(h) * 0x1p-94
+    (-dn / 2 + m < d < up / 2 - m) || return nothing
+    return u
+end
+
 function _round_digits(x, r::RoundingMode, digits::Integer, base)
     fx = float(x)
+    fx isa Union{IEEEFloat, BigFloat} || return _round_digits_approx(fx, r, digits, base)
     if digits >= 0
-        invstep = oftype(fx, base)^digits
-        if isfinite(invstep)
-            return _round_invstep(fx, invstep, r)
-        else
-            invstepsqrt = oftype(fx, base)^oftype(fx, digits/2)
-            return _round_invstepsqrt(fx, invstepsqrt, r)
-        end
+        pow = oftype(fx, base)^digits                # 1 / step
+        _pow_is_small(fx, pow) && return _round_invstep(fx, pow, r)
     else
-        step = oftype(fx, base)^-digits
-        return _round_step(fx, step, r)
+        # -digits overflows for typemin; base^-widen(digits) is then Inf or 1 anyway
+        pow = oftype(fx, base)^(digits isa BitSigned && digits == typemin(digits) ? -widen(digits) : -digits)
+        _pow_is_small(fx, pow) && return _round_step(fx, pow, r)
+    end
+    return _round_digits_inexact(fx, r, digits, base, pow)
+end
+
+# base^|digits| is large: it may overflow or not be exact
+@noinline function _round_digits_inexact(x, r::RoundingMode, digits::Integer, base, pow)
+    if digits >= 0
+        invstep = pow
+        if _has_dd_path(x, base) && !(isfinite(invstep) && _odd_pow_is_exact(base, digits, precision(x)))
+            return _round_digits_dd(x, r, digits, base)
+        end
+        return isfinite(invstep) ? _round_invstep(x, invstep, r) : _round_invstep_overflow(x, base, digits, r)
+    else
+        step = pow
+        if _has_dd_path(x, base) && !(isfinite(step) && _odd_pow_is_exact(base, -digits, precision(x)))
+            return _round_digits_dd(x, r, digits, base)
+        end
+        return _round_step(x, step, r)
+    end
+end
+# Float16 rounds natively while base^|digits| is below maxintfloat(Float16) == 2048, so
+# it is exact (for base 10, |digits| <= 3; for any |base| >= 2, |digits| <= 10). Past
+# that it is inexact, and 10^digits overflows from digits == 5, which ordinary values
+# reach. Those round in Float64 instead, which holds base^digits exactly for every
+# digits that matters to a Float16. The exactly rounded value is either a Float16
+# midpoint or at least ulp/(2*5^digits) away from one, so rounding the Float64 result
+# to Float16 gives the Float16 closest to it.
+function _round_digits(x::Float16, r::RoundingMode, digits::Integer, base)
+    if -11 < digits < 11
+        pow = Float16(base)^Int(abs(digits))
+        if abs(pow) < maxintfloat(Float16)
+            return digits >= 0 ? _round_invstep(x, pow, r) : _round_step(x, pow, r)
+        end
+    end
+    return Float16(_round_digits(Float64(x), r, digits, base))
+end
+
+# Rounding exactly needs a correctly rounded `fma` (a `muladd` stand-in would not be
+# exact), along with `eps`, `maxintfloat` and friends, which other AbstractFloat types
+# need not define. Those keep the previous formulas, which round the float product
+# x * base^digits rather than the exact value.
+function _round_digits_approx(x, r::RoundingMode, digits::Integer, base)
+    if digits >= 0
+        invstep = oftype(x, base)^digits
+        if isfinite(invstep)
+            y = round(x * invstep, r) / invstep
+        else
+            # square root of invstep, to avoid overflowing
+            invstepsqrt = oftype(x, base)^oftype(x, digits/2)
+            y = round((x * invstepsqrt) * invstepsqrt, r) / invstepsqrt / invstepsqrt
+        end
+        return isfinite(y) ? y : x
+    else
+        step = oftype(x, base)^-digits
+        y = round(x / step, r) * step
+        isfinite(y) && return y
+        x > 0 && return r == RoundUp ? oftype(x, Inf) : zero(x)
+        x < 0 && return r == RoundDown ? -oftype(x, Inf) : -zero(x)
+        return x
     end
 end
 
@@ -396,6 +774,9 @@ end
     Txy = T(xy)
     return Txy, T(xy-Txy)
 end
+
+# 5^k as double-doubles for `_odd_pow_dd`
+const _POW5_DD = ntuple(i -> _dd_pow(5.0, i - 1), 64)
 
 # Error of `r = abhi + c` plus `ablo`, rounded to odd. Rounding to odd (rather than
 # nearest) makes `r + fma_correction(...)` round correctly to nearest, since rounding
