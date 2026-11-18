@@ -3,9 +3,6 @@
 static size_t n_linkage_blobs(void) JL_NOTSAFEPOINT;
 static size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 
-// inverse of backedges graph (caller=>callees hash)
-jl_array_t *internal_methods JL_GLOBALLY_ROOTED = NULL; // rooted for the duration of our uses of this
-
 static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
 {
     write_uint64(s, *((uint64_t*)&x));
@@ -164,6 +161,9 @@ static int type_in_worklist(jl_value_t *v, jl_query_cache *cache) JL_NOTSAFEPOIN
         jl_vararg_t *tv = (jl_vararg_t*)v;
         result = ((tv->T && type_in_worklist(tv->T, cache)) ||
                   (tv->N && type_in_worklist(tv->N, cache)));
+    }
+    else if (jl_is_some_Type(v)) {
+        result = type_in_worklist(jl_some_Type_T(v), cache);
     }
     else if (jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
@@ -603,64 +603,77 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags_current(uint8_t flags)
     return jl_match_cache_flags(jl_cache_flags(), flags);
 }
 
-// return char* from String field in Base.GIT_VERSION_INFO
-static const char *git_info_string(const char *fld) JL_CANSAFEPOINT
-{
-    static jl_value_t *GIT_VERSION_INFO = NULL;
-    if (!GIT_VERSION_INFO)
-        GIT_VERSION_INFO = jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO"));
-    jl_value_t *f = jl_get_field(GIT_VERSION_INFO, fld);
-    assert(jl_is_string(f));
-    return jl_string_data(f);
-}
+static const char *jl_git_commit = NULL;
 
-static const char *jl_git_branch(void) JL_CANSAFEPOINT
+static void jl_init_git_commit(void) JL_CANSAFEPOINT
 {
-    static const char *branch = NULL;
-    if (!branch) branch = git_info_string("branch");
-    return branch;
-}
-
-static const char *jl_git_commit(void) JL_CANSAFEPOINT
-{
-    static const char *commit = NULL;
-    if (!commit) commit = git_info_string("commit");
-    return commit;
+    jl_value_t *info = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO")) : NULL;
+    if (info)
+        jl_git_commit = jl_string_data(jl_get_field(info, "commit"));
 }
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 17;
+static const int JI_FORMAT_VERSION = 18;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
+
+typedef struct {
+    uint64_t offset, size;
+} jl_image_section_t;
+
+#define JI_COMPAT_SIZE 128
+
+typedef struct _jl_ji_header_t {
+    char magic[8];
+    uint16_t format_version;
+    uint16_t bom;
+    uint8_t pointer_size;
+    uint8_t reserved[3];
+    uint32_t flags;
+    uint32_t checksum;
+    char compat[JI_COMPAT_SIZE];
+    uint64_t preferred_base;
+    uint64_t payload_start;
+    uint64_t payload_size;
+    uint64_t heap_size;
+    uint64_t pointer_free_offset;
+    uint64_t gvar_objects;
+    uint64_t world, typeinf_world, gensym_counter;
+    jl_image_section_t imports, auxdata, strtab, binds, slides, specials, gvars, fixup_types, fixup_objs, fptrs;
+} jl_ji_header_t;
+static_assert(sizeof(jl_ji_header_t) == 384, "the header shouldn't have padding");
+static_assert(offsetof(jl_ji_header_t, payload_start) == 160 &&
+              offsetof(jl_ji_header_t, payload_size) == 168,
+              "update base/loading.jl if these offsets change");
 
 // This .ji is for an incremental image and not a system image.
 static const uint32_t JI_FLAG_PKGIMAGE = 1 << 0;
 // This .ji must be loaded from the associated native image (.so/.dylib/.dll).
 static const uint32_t JI_FLAG_SPLIT = 1 << 1;
 
-static int64_t write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT
+static void jl_image_compat(char compat[JI_COMPAT_SIZE], uint32_t flags) JL_NOTSAFEPOINT
 {
-    ios_write(s, JI_MAGIC, strlen(JI_MAGIC));
-    write_uint16(s, JI_FORMAT_VERSION);
-    ios_write(s, (char *) &BOM, 2);
-    write_uint8(s, sizeof(void*));
-    ios_write(s, JL_BUILD_UNAME, strlen(JL_BUILD_UNAME)+1);
-    ios_write(s, JL_BUILD_ARCH, strlen(JL_BUILD_ARCH)+1);
-    ios_write(s, JULIA_VERSION_STRING, strlen(JULIA_VERSION_STRING)+1);
-    const char *gc_abi = jl_gc_image_abi();
-    ios_write(s, gc_abi, strlen(gc_abi)+1);
-    write_uint32(s, flags);
-    if (flags & JI_FLAG_PKGIMAGE) {
-        const char *branch = jl_git_branch(), *commit = jl_git_commit();
-        ios_write(s, branch, strlen(branch)+1);
-        ios_write(s, commit, strlen(commit)+1);
-    }
-    int64_t checksumpos = ios_pos(s);
-    write_uint32(s, 0); // eventually will hold checksum for the content portion of this (build_id.hi)
-    write_uint64(s, 0); // eventually will hold datastartpos
-    write_uint64(s, 0); // eventually will hold dataendpos
-    return checksumpos;
+    assert(!(flags & JI_FLAG_PKGIMAGE) || jl_git_commit);
+    memset(compat, 0, JI_COMPAT_SIZE);
+    int n = snprintf(compat, JI_COMPAT_SIZE, "%s;%s;%s;%s%s%s", JL_BUILD_UNAME, JL_BUILD_ARCH,
+                     JULIA_VERSION_STRING, jl_gc_image_abi(),
+                     (flags & JI_FLAG_PKGIMAGE) ? ";" : "",
+                     (flags & JI_FLAG_PKGIMAGE) ? jl_git_commit : "");
+    assert(n >= 0 && n < JI_COMPAT_SIZE);
+    (void)n;
+}
+
+static jl_ji_header_t ji_header_init(uint32_t flags) JL_CANSAFEPOINT
+{
+    jl_ji_header_t h = {0};
+    jl_image_compat(h.compat, flags);
+    memcpy(h.magic, JI_MAGIC, sizeof(h.magic));
+    h.format_version = JI_FORMAT_VERSION;
+    h.bom = BOM;
+    h.pointer_size = sizeof(void*);
+    h.flags = flags;
+    return h;
 }
 
 static int is_serialization_root_module(jl_module_t *mod) JL_NOTSAFEPOINT
@@ -699,9 +712,8 @@ static void write_module_path(ios_t *s, jl_module_t *depmod) JL_NOTSAFEPOINT
 
 // Cache file header
 // Serialize the global Base._require_dependencies array of pathnames that
-// are include dependencies. Also write Preferences and return
-// the location of the srctext "pointer" in the header index.
-static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t **udepsp) JL_CANSAFEPOINT
+// are include dependencies. Also write Preferences.
+static void write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t **udepsp) JL_CANSAFEPOINT
 {
     int64_t initial_pos = 0;
     int64_t pos = 0;
@@ -801,13 +813,10 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     JL_GC_POP(); // for depots, prefs_blob
 #undef jl_is_deptuple
 
-    // write a dummy file position to indicate the beginning of the source-text
     pos = ios_pos(s);
     ios_seek(s, initial_pos);
     write_uint64(s, pos - initial_pos);
     ios_seek(s, pos);
-    write_uint64(s, 0);
-    return pos;
 }
 
 
@@ -947,39 +956,28 @@ static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *depmods) JL_CANSAF
     }
 }
 
-static int readstr_verify(ios_t *s, const char *str, int include_null)
+static int jl_verify_header(const jl_ji_header_t *h) JL_NOTSAFEPOINT
 {
-    size_t i, len = strlen(str) + include_null;
-    for (i = 0; i < len; ++i)
-        if ((char)read_uint8(s) != str[i])
-            return 0;
-    return 1;
+    char compat[JI_COMPAT_SIZE];
+    jl_image_compat(compat, h->flags);
+    return memcmp(h->magic, JI_MAGIC, sizeof(h->magic)) == 0 &&
+           h->format_version == JI_FORMAT_VERSION && h->bom == BOM &&
+           h->pointer_size == sizeof(void *) &&
+           memcmp(h->compat, compat, JI_COMPAT_SIZE) == 0;
 }
 
-JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *checksum, int64_t *dataendpos, int64_t *datastartpos) JL_CANSAFEPOINT
+static int jl_read_verify_header(ios_t *s, jl_ji_header_t *h) JL_NOTSAFEPOINT
 {
-    uint16_t bom;
-    if (!(readstr_verify(s, JI_MAGIC, 0) &&
-          read_uint16(s) == JI_FORMAT_VERSION &&
-          ios_read(s, (char *) &bom, 2) == 2 && bom == BOM &&
-          read_uint8(s) == sizeof(void*) &&
-          readstr_verify(s, JL_BUILD_UNAME, 1) &&
-          readstr_verify(s, JL_BUILD_ARCH, 1) &&
-          readstr_verify(s, JULIA_VERSION_STRING, 1) &&
-          readstr_verify(s, jl_gc_image_abi(), 1)))
-        return -1;
+    return ios_readall(s, (char*)h, sizeof(*h)) == sizeof(*h) && jl_verify_header(h);
+}
 
-    *flags = read_uint32(s);
-
-    if ((*flags & JI_FLAG_PKGIMAGE) &&
-        !(readstr_verify(s, jl_git_branch(), 1) && readstr_verify(s, jl_git_commit(), 1)))
-        return -1;
-
-    *checksum = read_uint32(s);
-    *datastartpos = (int64_t)read_uint64(s);
-    *dataendpos = (int64_t)read_uint64(s);
-
-    return 0;
+JL_DLLEXPORT int jl_read_verify_pkgimage_header(ios_t *s, uint32_t *checksum) JL_NOTSAFEPOINT
+{
+    jl_ji_header_t h;
+    if (!jl_read_verify_header(s, &h) || !(h.flags & JI_FLAG_PKGIMAGE))
+        return 0;
+    *checksum = h.checksum;
+    return 1;
 }
 
 // Returns `depmodidxs` where `j = depmodidxs[i]` corresponds to the blob `depmods[j]` in `write_mod_list`
@@ -1004,22 +1002,4 @@ static jl_array_t *image_to_depmodidx(jl_array_t *depmods) JL_CANSAFEPOINT
         }
     }
     return depmodidxs;
-}
-
-// Returns `imageidxs` where `j = imageidxs[i]` is the blob corresponding to `depmods[j]`
-static jl_array_t *depmod_to_imageidx(jl_array_t *depmods) JL_CANSAFEPOINT
-{
-    if (!depmods)
-        return NULL;
-    size_t ldeps = jl_array_nrows(depmods);
-    jl_array_t *imageidxs = jl_alloc_array_1d(jl_array_int32_type, ldeps + 1);
-    int32_t *imgidxs = jl_array_data(imageidxs, int32_t);
-    imgidxs[0] = 0;
-    for (size_t i = 0; i < ldeps; i++) {
-        jl_value_t *depmod = jl_array_ptr_ref(depmods, i);
-        size_t j = external_blob_index(depmod);
-        assert(j < INT32_MAX);
-        imgidxs[i + 1] = (int32_t)j;
-    }
-    return imageidxs;
 }

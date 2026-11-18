@@ -54,24 +54,12 @@ static jl_sym_t *symtab_lookup(_Atomic(jl_sym_t*) *ptree, const char *str, size_
     jl_sym_t *node = jl_atomic_load_relaxed(ptree); // consume
     uintptr_t h = hash_symbol(str, len);
 
-    // Tree nodes are sorted by major key of (unsigned hash) and minor key of
-    // (name, in strcmp order), which is a strict total order on symbols.
     while (node != NULL) {
-        int x;
-        if (h != node->hash) {
-            x = h < node->hash ? -1 : 1;
-        }
-        else {
-            const char *name = jl_symbol_name(node);
-            x = strncmp(str, name, len);
-            if (x == 0) {
-                if (name[len] == 0) {
-                    if (slot != NULL)
-                        *slot = ptree;
-                    return node;
-                }
-                x = -1; // str is a prefix of name
-            }
+        int x = jl_symbol_order(h, str, len, node);
+        if (x == 0) {
+            if (slot != NULL)
+                *slot = ptree;
+            return node;
         }
         if (x < 0)
             ptree = &node->left;
@@ -129,6 +117,13 @@ JL_DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, size_t len)
 JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void)
 {
     return jl_atomic_load_relaxed(&symtab);
+}
+
+// Use the symbol table of the system image, which is loaded before any symbol is created
+void jl_set_symtab(jl_sym_t *root) JL_NOTSAFEPOINT
+{
+    assert(jl_atomic_load_relaxed(&symtab) == NULL);
+    jl_atomic_store_release(&symtab, root);
 }
 
 static _Atomic(uint32_t) gs_ctr = 0;  // TODO: per-module?
