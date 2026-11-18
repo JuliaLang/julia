@@ -17,6 +17,8 @@ add_sum(x, y) = x + y
 add_sum(x::Union{Bool,BitIntegerSmall}, y::Union{Bool,BitIntegerSmall}) = Int(x) + Int(y)
 add_sum(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) + UInt(y)
 add_sum(x::Real, y::Real)::Real = x + y
+add_sum(x::Complex{<:BitIntegerSmall}, y::Complex{<:BitIntegerSmall}) = Complex{Int}(x) + Complex{Int}(y)
+add_sum(x::Complex{<:BitUnsignedSmall}, y::Complex{<:BitUnsignedSmall}) = Complex{UInt}(x) + Complex{UInt}(y)
 
 """
     Base.mul_prod(x, y)
@@ -28,6 +30,8 @@ mul_prod(x, y) = x * y
 mul_prod(x::BitSignedSmall, y::BitSignedSmall) = Int(x) * Int(y)
 mul_prod(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) * UInt(y)
 mul_prod(x::Real, y::Real)::Real = x * y
+mul_prod(x::Complex{<:BitSignedSmall}, y::Complex{<:BitSignedSmall}) = Complex{Int}(x) * Complex{Int}(y)
+mul_prod(x::Complex{<:BitUnsignedSmall}, y::Complex{<:BitUnsignedSmall}) = Complex{UInt}(x) * Complex{UInt}(y)
 
 and_all(x, y) = (x && y)::Bool
 or_any(x, y) = (x || y)::Bool
@@ -365,6 +369,10 @@ reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:BitUnsignedSmall} = zero(UI
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T} = reduce_empty(*, T)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:BitSignedSmall}  = one(Int)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:BitUnsignedSmall} = one(UInt)
+reduce_empty(::typeof(add_sum), ::Type{Complex{T}}) where {T<:BitSignedSmall}    = zero(Complex{Int})
+reduce_empty(::typeof(add_sum), ::Type{Complex{T}}) where {T<:BitUnsignedSmall}  = zero(Complex{UInt})
+reduce_empty(::typeof(mul_prod), ::Type{Complex{T}}) where {T<:BitSignedSmall}   = one(Complex{Int})
+reduce_empty(::typeof(mul_prod), ::Type{Complex{T}}) where {T<:BitUnsignedSmall} = one(Complex{UInt})
 
 reduce_empty(op::BottomRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
 reduce_empty(op::MappingRF, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf, T)
@@ -430,6 +438,10 @@ reduce_first(::typeof(add_sum), x::BitUnsignedSmall) = UInt(x)
 reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
 reduce_first(::typeof(mul_prod), x::BitSignedSmall)   = Int(x)
 reduce_first(::typeof(mul_prod), x::BitUnsignedSmall) = UInt(x)
+reduce_first(::typeof(add_sum), x::Complex{<:BitSignedSmall})    = Complex{Int}(x)
+reduce_first(::typeof(add_sum), x::Complex{<:BitUnsignedSmall})  = Complex{UInt}(x)
+reduce_first(::typeof(mul_prod), x::Complex{<:BitSignedSmall})   = Complex{Int}(x)
+reduce_first(::typeof(mul_prod), x::Complex{<:BitUnsignedSmall}) = Complex{UInt}(x)
 reduce_first(::typeof(vcat), x) = vcat(x)
 reduce_first(::typeof(hcat), x) = hcat(x)
 reduce_first(op::MappingRF, x) = mapreduce_first(op.f, op.rf, x)
@@ -526,7 +538,8 @@ reduce(op, a::Number) = a  # Do we want this?
 Sum the results of calling function `f` on each element of `itr`.
 
 The return type is `Int` for signed integers of less than system word size, and
-`UInt` for unsigned integers of less than system word size.  For all other
+`UInt` for unsigned integers of less than system word size (likewise `Complex{Int}` and
+`Complex{UInt}` for complex numbers with such components).  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
 The value returned for empty `itr` can be specified by `init`. It must be
@@ -565,7 +578,8 @@ sum(f, a; kw...) = mapreduce(f, add_sum, a; kw...)
 Return the sum of all elements in a collection.
 
 The return type is `Int` for signed integers of less than system word size, and
-`UInt` for unsigned integers of less than system word size.  For all other
+`UInt` for unsigned integers of less than system word size (likewise `Complex{Int}` and
+`Complex{UInt}` for complex numbers with such components).  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
 The value returned for empty `itr` can be specified by `init`. It must be
@@ -597,7 +611,8 @@ sum(a::AbstractArray{Bool}; kw...) =
 Return the product of `f` applied to each element of `itr`.
 
 The return type is `Int` for signed integers of less than system word size, and
-`UInt` for unsigned integers of less than system word size.  For all other
+`UInt` for unsigned integers of less than system word size (likewise `Complex{Int}` and
+`Complex{UInt}` for complex numbers with such components).  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
 The value returned for empty `itr` can be specified by `init`. It must be the
@@ -621,7 +636,8 @@ prod(f, a; kw...) = mapreduce(f, mul_prod, a; kw...)
 Return the product of all elements of a collection.
 
 The return type is `Int` for signed integers of less than system word size, and
-`UInt` for unsigned integers of less than system word size.  For all other
+`UInt` for unsigned integers of less than system word size (likewise `Complex{Int}` and
+`Complex{UInt}` for complex numbers with such components).  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
 The value returned for empty `itr` can be specified by `init`. It must be the
