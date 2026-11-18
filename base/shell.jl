@@ -452,7 +452,7 @@ end
 
 # `parts` with each glob character made literal text, for a word that is not a glob.
 _no_glob(parts::Vector{Any}) = Any[x isa _GlobChar ? string(x.c) :
-                                   x isa _GlobBrace ? _brace_expr(map(_no_glob, x.alts)) : x
+                                   x isa _GlobBrace ? _brace_expr(Vector{Any}[_no_glob(alt) for alt in x.alts]) : x
                                    for x in parts]
 
 # The `_GlobArg`s a glob word produces, as a vector if the word interpolates nothing and
@@ -469,7 +469,7 @@ function _glob_args1(x)
     x isa Vector{String} && return _GlobArg[(v, glob_escape(v), false) for v in x]
     x isa _GlobBrace || return Expr(:call, GlobalRef(Base, :cmd_glob_args), x)
     alts = Any[_glob_args(alt) for alt in x.alts]
-    all(x -> x isa Vector{_GlobArg}, alts) && return reduce(vcat, alts)
+    all(x -> x isa Vector{_GlobArg}, alts) && return _GlobArg[g for alt in alts for g in alt::Vector{_GlobArg}]
     return Expr(:call, GlobalRef(Base, :vcat), alts...)
 end
 
@@ -544,7 +544,8 @@ _isstatic(parts::Vector{Any}) = all(x -> x isa Union{String,Vector{String}}, par
 function _brace_product(parts::Vector{Any})
     vals = [""]
     for part in parts
-        vals = [v * x for v in vals for x in (part isa String ? (part,) : part::Vector{String})]
+        xs = part isa String ? [part] : part::Vector{String}
+        vals = String[v * x for v in vals for x in xs]
     end
     return vals
 end
@@ -676,7 +677,7 @@ function _parse_pipeline!(p::_ShellParser)
         if (w.stop == '<' || w.stop == '>') && !w.special &&
                 length(word) == 1 && (d = word[1]; d isa String && all(isdigit, d))
             redirect === :none || error("parsing command `$str`: redirect operator without filename")
-            fd = parse(Int, d)
+            fd = parse(Int, d::String)
             empty!(word)
         else
             redirect = _finish_word!(p, seg, word, w, redirect)
