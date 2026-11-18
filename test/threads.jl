@@ -528,7 +528,9 @@ end
 @testset "GC does not wait for another thread's LLVM run" begin
     # One thread compiles a large function while another keeps collecting. Every collection
     # waits for all threads to reach a safepoint, so if LLVM ran GC-unsafe, one collection
-    # would take about as long as the whole compilation.
+    # would wait about as long as the whole compilation. Check that wait rather than the
+    # collection's duration: the compiling thread keeps running during the collection, and on
+    # an oversubscribed runner the GC's own threads can then wait for a CPU for a second or more.
     program = raw"""
         # a long chain of dependent operations: quick to infer, slow for LLVM
         function define_big(n)
@@ -552,16 +554,17 @@ end
             finally
                 done[] = true
             end
-            longest = 0.0
+            longest_wait = 0.0
             collections = 0
             while !done[]
-                longest = max(longest, @elapsed GC.gc(false))
+                GC.gc(false)
+                longest_wait = max(longest_wait, Base.gc_num().time_to_safepoint / 1e9)
                 collections += 1
                 Libc.systemsleep(0.01) # doesn't yield, so `t` runs on another thread
             end
             wait(t)
             compile_thread[] == Threads.threadid() && error("compiled on the collecting thread")
-            println(compile_time[], " ", longest, " ", collections)
+            println(compile_time[], " ", longest_wait, " ", collections)
         end
         main()
     """
@@ -575,11 +578,11 @@ end
     end
     @test success(proc)
     close(t)
-    compile_time, longest, collections = split(String(take!(output)))
-    compile_time, longest = parse.(Float64, (compile_time, longest))
+    compile_time, longest_wait, collections = split(String(take!(output)))
+    compile_time, longest_wait = parse.(Float64, (compile_time, longest_wait))
     @test parse(Int, collections) >= 2
-    # a few seconds of LLVM, and a few ms per collection
-    @test longest < compile_time / 4
+    # a few seconds of LLVM, and at most a few ms to reach a safepoint
+    @test longest_wait < compile_time / 4
 end
 
 @testset "event loop thread wakeup with busy workers" begin
