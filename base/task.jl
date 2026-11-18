@@ -276,22 +276,25 @@ Forcibly abandon task `t` and switch its thread to `next_task`, discarding
 `t`'s execution. Returns `true` if the abandonment committed: `t`'s state is
 `:abandoned` and it will never run another instruction.
 
-Returns `false` - with `t` untouched and still running - when the abandonment
-could not be performed safely: `t` was not (or no longer) running on a
-thread, was found holding runtime state that must not be discarded (runtime
-locks, an in-flight finalizer or GC transition, a signal-deferral region),
-or another abandonment was already in flight for that thread. Blocks (in a
-scheduler-friendly wait) until the delivery settles the request one way or
-the other; a victim thread that never services signals blocks the call
-indefinitely.
+Returns `false`, leaving `t` untouched, if the request did not abandon it: `t`
+was not running on a thread, another abandonment was in flight for that thread,
+the request could not be delivered, or `t` was in a critical section the runtime
+detects (holding a tracked runtime lock, running or inhibiting finalizers, in a
+GC transition or safepoint wait, in a signal-deferral region, or on Unix in a
+fault handler). Most refusals are transient, and the caller may retry.
+
+Blocks (in a scheduler-friendly wait) until the request is settled. A victim
+thread that never services signals blocks the call indefinitely.
 
 `next_task` must be a fresh, never-scheduled task; it takes over the
 victim's thread.
 
 !!! warning
-    Abandonment discards the victim's execution wherever it stands. Any
-    non-runtime resource it holds (locks, buffers, connections) is leaked.
-    This is a last-resort recovery primitive.
+    Abandonment discards the victim's execution wherever it stands: no cleanup
+    runs, and the resources it holds (locks, buffers, connections) leak. The
+    refusals above do not cover all runtime state either: a victim interrupted
+    inside the allocator, a write barrier or a foreign call can leave the
+    runtime inconsistent. This is a last-resort recovery primitive.
 
 !!! note
     The task must be currently running on a thread for this to have effect;

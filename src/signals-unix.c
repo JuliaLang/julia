@@ -125,6 +125,21 @@ static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr) JL_NOTSAFEPOINT
             (char*)ptr <= (char*)ptls->signal_stack + (ptls->signal_stack_size ? ptls->signal_stack_size : sig_stack_size));
 }
 
+// Whether the interrupted context blocks SIGSEGV or SIGBUS, as a fault handler
+// does (segv_handler leaves SIGUSR2 unblocked). Redirecting such a context
+// would leave the thread running with those faults blocked.
+static int jl_ctx_blocks_segv(const void *_ctx) JL_NOTSAFEPOINT
+{
+#if defined(_OS_OPENBSD_)
+    const struct sigcontext *ctx = (const struct sigcontext *)_ctx;
+    return (ctx->sc_mask & (sigmask(SIGSEGV) | sigmask(SIGBUS))) != 0;
+#else
+    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    return sigismember(&ctx->uc_sigmask, SIGSEGV) == 1 ||
+           sigismember(&ctx->uc_sigmask, SIGBUS) == 1;
+#endif
+}
+
 // Modify signal context `_ctx` so that `fptr` will execute when the signal returns
 // The function `fptr` itself must not return.
 JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void) JL_CANSAFEPOINT, int sig, void *_ctx)
@@ -807,7 +822,9 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
             // code (gc_state == 0): a thread inside a GC-safe region (e.g.
             // a foreign call reached through a reset-safe callee) may be
             // raced by a concurrent stop-the-world, and a longjmp back into
-            // Julia code would break that protocol.
+            // Julia code would break that protocol. Nor while it waits at a
+            // safepoint (fault_handling): the wait holds sleep_lock and owes
+            // the count its decrement.
             // A deliverable cancellation takes precedence over a
             // coincident preemption (the preempt request byte stays set and
             // is consumed at the reset point's own check).
@@ -816,7 +833,8 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
             jl_reset_ctx_t *reset_ctx = jl_atomic_load_acquire(&ct->reset_ctx);
             if (reset_ctx != NULL && reset_ctx->sp != 0 &&
                 ((reqflags & JL_SIGNAL_REQ_PREEMPT) || bound_cancelled) &&
-                jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_STATE_UNSAFE) {
+                jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_STATE_UNSAFE &&
+                jl_atomic_load_relaxed(&ptls->fault_handling) == 0) {
                 // Abandon the interrupted register state and longjmp to the
                 // reset point, whose re-executed check observes the
                 // cancellation and throws. Clear reset_ctx before the
@@ -861,7 +879,11 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         // redirect into the abandon callback (which must not return) to
         // switch to ptls->abandon_to. On refusal the requester observes the
         // verdict and withdraws; the current task continues untouched.
-        if (jl_abandon_try_commit(ptls)) {
+        // Also refuse if the signal interrupted a fault handler, or a stack
+        // walk whose safe_restore buffer lies in the frames being discarded.
+        // Only this thread can see either.
+        int refuse = jl_ctx_blocks_segv(ctx) || jl_get_safe_restore() != NULL;
+        if (jl_abandon_try_commit(ptls, refuse)) {
             jl_call_in_ctx(ptls, jl_abandon_task_cb, sig, ctx);
         }
     }

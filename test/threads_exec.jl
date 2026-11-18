@@ -1850,8 +1850,8 @@ if threadpoolsize() >= 2
             yield()
         end
         rescue() = (t = Task(() -> (while true; wait(); end)); t.sticky = false; t)
-        # A refusal is transient (the victim may momentarily be inside the
-        # allocator or a runtime lock); retry until the abandonment commits.
+        # A refusal is transient (the victim may be waiting at a safepoint
+        # for a collection); retry until the abandonment commits.
         while !Base.unsafe_abandon!(victim, rescue())
             yield()
         end
@@ -1952,6 +1952,41 @@ if threadpoolsize() >= 2
         @test fetch(victim) === :survived
         # the withdrawal returned the rescue task's affinity claim
         @test Threads.threadid(rescue) == 0
+    end
+
+    # A victim that blocks SIGBUS looks like one in a fault handler, which
+    # abandonment must not redirect: the faults would stay blocked.
+    Sys.islinux() && @testset "abandonment refuses a context that blocks faults" begin
+        blocked = Threads.Atomic{Bool}(false)
+        unblock = Threads.Atomic{Bool}(false)
+        victim = Threads.@spawn begin
+            sset = zeros(UInt8, 128)
+            ccall(:sigemptyset, Cint, (Ptr{UInt8},), sset)
+            ccall(:sigaddset, Cint, (Ptr{UInt8}, Cint), sset, 7) # SIGBUS
+            ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), 0 #= SIG_BLOCK =#, sset, C_NULL)
+            blocked[] = true
+            while !unblock[]
+                ccall(:jl_cpu_pause, Cvoid, ())
+            end
+            ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), 1 #= SIG_UNBLOCK =#, sset, C_NULL)
+            while true
+                ccall(:jl_cpu_pause, Cvoid, ())
+            end
+        end
+        while !blocked[]
+            yield()
+        end
+        rescue() = (t = Task(() -> (while true; wait(); end)); t.sticky = false; t)
+        refused = !Base.unsafe_abandon!(victim, rescue())
+        @test refused
+        if refused
+            @test !istaskdone(victim)
+            unblock[] = true
+            while !Base.unsafe_abandon!(victim, rescue())
+                yield()
+            end
+            @test victim.state === :abandoned
+        end
     end
 end
 

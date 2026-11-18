@@ -702,8 +702,10 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
         // Reset flavor, additionally gated on the thread running Julia code
         // (gc_state == 0): a thread inside a GC-safe region may be raced by
         // a concurrent stop-the-world, and a redirect back into Julia code
-        // would break that protocol.
-        jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_UNSAFE) {
+        // would break that protocol. Nor while it waits at a safepoint
+        // (fault_handling), whose wait holds sleep_lock.
+        jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_UNSAFE &&
+        jl_atomic_load_relaxed(&ptls2->fault_handling) == 0) {
         jl_reset_ctx_t *reset_ctx = jl_atomic_load_acquire(&ct2->reset_ctx);
         if (reset_ctx != NULL && reset_ctx->sp != 0 &&
             (reset_code == JL_RESET_CODE_PREEMPT || bound_cancelled)) {
@@ -778,7 +780,7 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     if (thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count) != KERN_SUCCESS) {
         // cannot redirect; leave the request pending for a retry/withdraw
     }
-    else if (jl_abandon_try_commit(ptls2)) {
+    else if (jl_abandon_try_commit(ptls2, 0)) {
         jl_noreturn_call_in_state(&state, (void (*)(void))&jl_abandon_task_cb, 0, 0);
         if (thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count) != KERN_SUCCESS) {
             // Roll the commit back: nothing observable was published yet

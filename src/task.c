@@ -1674,6 +1674,10 @@ JL_NORETURN void jl_abandon_task_cb(void) JL_CANSAFEPOINT
     // A cancellation-handler delivery in flight on this thread dies with the
     // abandoned task; disarm so future deliveries are not blocked.
     ptls->cancel_handler_armed = 0;
+    // So does an exception the fault handler staged for the victim's next
+    // catch, which the next catch on this thread would otherwise report.
+    ptls->sig_exception = NULL;
+    ptls->bt_size = 0;
 
     // Ordinary switch-exit bookkeeping that the redirect bypassed: the
     // timing block on the discarded stack must be exited before that stack
@@ -1728,17 +1732,20 @@ JL_NORETURN void jl_abandon_task_cb(void) JL_CANSAFEPOINT
 // DONE and 1 is returned; the caller then redirects the thread into
 // jl_abandon_task_cb, which publishes the task state and settles the slot.
 // On refusal (or no pending request) 0 is returned; the requester observes
-// REFUSED and settles. Async-signal-safe: loads, stores and CAS only.
-int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
+// REFUSED and settles. With `refuse` set, the request is refused for a reason
+// only the caller can see. Async-signal-safe: atomics and abandon_notify.
+int jl_abandon_try_commit(jl_ptls_t ptls2, int refuse) JL_NOTSAFEPOINT
 {
     uint8_t st = JL_ABANDON_PENDING;
     if (!jl_atomic_cmpswap(&ptls2->abandon_state, &st, JL_ABANDON_TAKEN))
         return 0; // no pending request (withdrawn, already consumed, or none)
     jl_task_t *t = ptls2->abandon_victim;
     jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
-    // The refusal set: conditions under which discarding the current
-    // context would corrupt *runtime* state. Leaking user resources is the
-    // documented cost of an unsafe abandon; leaking runtime state is not:
+    // Refuse stale requests, and contexts in a runtime critical section that
+    // discarding would corrupt. Leaking user resources is the documented cost
+    // of abandonment. The list is incomplete: runtime code that runs without
+    // a tracked lock (the allocator, the write barrier, raw uv mutexes,
+    // foreign calls) is not detected.
     //  - the thread already switched away (the request outlived its target);
     //  - the thread is not in managed compute (gc_state != 0): a GC-safe
     //    region is a foreign call or scheduler wait whose C frame owns
@@ -1757,8 +1764,12 @@ int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
     //    (sleep_check_state != not_sleeping): abandonment bypasses the
     //    JL_CATCH in jl_task_get_next that would restore the sleep state
     //    and running count, so the rescue task would re-enter the
-    //    scheduler with sleep bookkeeping still claimed by the victim.
-    if (ct != t ||
+    //    scheduler with sleep bookkeeping still claimed by the victim;
+    //  - the thread waits at a safepoint (fault_handling), holding its
+    //    sleep_lock;
+    //  - the caller refuses (`refuse`): it interrupted a fault handler or a
+    //    safe_restore region.
+    if (refuse || ct != t ||
         jl_atomic_load_relaxed(&ptls2->gc_state) != 0 ||
         ptls2->in_task_switch ||
         ptls2->locks.len != 0 ||
@@ -1766,6 +1777,7 @@ int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
         ptls2->finalizers_inhibited != 0 ||
         ptls2->defer_signal != 0 ||
         jl_atomic_load_relaxed(&ptls2->sleep_check_state) != 0 || // 0 == not_sleeping
+        jl_atomic_load_relaxed(&ptls2->fault_handling) != 0 ||
         jl_atomic_load_relaxed(&jl_uv_mutex.owner) == ct) {
         // Ping before the terminal store: the requester consumes (and may
         // free its handle) the moment a terminal state is visible, so a
