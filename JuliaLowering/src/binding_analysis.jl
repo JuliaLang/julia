@@ -256,8 +256,8 @@ function du_visit!(ctx, state::DefUseState, e)
         # XXX: the assignment is executed after the body, but flisp also makes
         # the mistake of modelling the assignment as dominating the body, so we
         # introduce boxes if it's corrected.
-        if head(e[1]) === :bindingid
-            du_assign!(state, syntax_id(e[1]))
+        if head(e[2]) === :bindingid
+            du_assign!(state, syntax_id(e[2]))
         end
         has_label = false
         for child in children(e)

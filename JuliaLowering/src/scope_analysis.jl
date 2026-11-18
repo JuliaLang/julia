@@ -49,6 +49,8 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
         id, parent_id, lambda_id, ex, is_permeable, is_lifted,
         Dict{NameKey, SyntaxTree}(), Dict{NameKey,IdTag}(), lambda_bindings)
     push!(ctx.scopes, s)
+    fid = enclosing_function(ctx, s)
+    isnothing(fid) || push!(get!(Set{ScopeId}, ctx.fn_lambdas, fid), s.id)
     return s
 end
 
@@ -71,6 +73,7 @@ mutable struct ScopeResolutionContext <: AbstractLoweringContext
     # Typevars referenced in each typevar's bounds.  Closures capturing a static
     # parameter must also capture the sparams of its typevar's dependencies
     const tv_deps::Dict{IdTag, Vector{IdTag}}
+    const fn_lambdas::Dict{FunctionId, Set{ScopeId}}
     const enable_soft_scopes::Bool
     const world::UInt
 end
@@ -91,6 +94,13 @@ is_top_scope(scope::ScopeInfo) = scope.parent_id === 0
 enclosing_lambda(ctx, scope::ScopeInfo) = ctx.scopes[scope.lambda_id]
 parent(ctx, scope::ScopeInfo) = is_top_scope(scope) ? nothing :
     ctx.scopes[scope.parent_id]
+
+function enclosing_function(ctx, lam::ScopeInfo)
+    head(lam.node_id) === :lambda || return nothing
+    p = parent(ctx, lam)
+    (isnothing(p) || head(p.node_id) !== :method_defs) && return nothing
+    return p.node_id[1].value::FunctionId
+end
 
 _var_str(v) = v === :local ? "local variable" :
     v === :global ? "global variable" :
@@ -482,9 +492,9 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         @ast ctx ex [:block stmts...]
     elseif k == :method_defs
         newscope = enter_scope!(ctx, ex)
-        mname = _resolve_scopes(ctx, ex[1], scope)
+        mname = _resolve_scopes(ctx, ex[2], scope)
         tvs = SyntaxList()
-        for tv in children(ex[2]) # hack. flisp: replace-vars
+        for tv in children(ex[3]) # hack. flisp: replace-vars
             rhs = _resolve_scopes(ctx, tv[2], newscope)
             if head(tv[1]) === :placeholder
                 @ast ctx tv [:(=) tv[1] rhs]
@@ -499,9 +509,9 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         end
         stmts = SyntaxList()
         add_local_decls!(ctx, stmts, ex, newscope)
-        push!(stmts, _resolve_scopes(ctx, ex[3], newscope))
+        push!(stmts, _resolve_scopes(ctx, ex[4], newscope))
         pop!(ctx.scope_stack)
-        @ast ctx ex [:method_defs mname [:block tvs...] [:block stmts...]]
+        @ast ctx ex [:method_defs ex[1] mname [:block tvs...] [:block stmts...]]
     elseif k == :islocal
         e1 = ex[1]
         islocal = head(e1) == :identifier &&
@@ -654,7 +664,7 @@ struct ClosureBindings
     capt_sp::Set{IdTag}
 end
 
-# `binding` is that in `function_decl`, `method_defs[1]`, `method[1]`,
+# `binding` is that in `function_decl`, `method_defs[2]`, `method[1]`,
 # `function_type[1]` when local
 struct ClosureKey
     binding::IdTag
@@ -680,6 +690,8 @@ mutable struct VariableAnalysisContext <: AbstractLoweringContext
     const tv_deps::Dict{IdTag, Vector{IdTag}}
     # Prevents infinite loops when analyzing a binding's type
     const types_in_analysis::Set{IdTag}
+    const fn_args::Dict{FunctionId, Set{NameKey}}
+    const fn_lambdas::Dict{FunctionId, Set{ScopeId}}
 end
 
 function init_closure_bindings!(ctx, fname)
@@ -726,6 +738,22 @@ end
 function add_assign!(b::BindingInfo)
     b.is_assigned_once = !b.is_assigned
     b.is_assigned = true
+end
+
+# All bindings corresponding to the same argument of one syntactic function get
+# the same "called" flag
+function mark_called!(ctx::VariableAnalysisContext, b::BindingInfo)
+    b.is_called = true
+    b.kind === :argument || return
+    fid = enclosing_function(ctx, ctx.scopes[b.lambda_id])
+    isnothing(fid) && return # lambda st1, generated, or opaque
+    nk = NameKey(b)
+    nk in ctx.fn_args[fid] && for lam in ctx.fn_lambdas[fid]
+        bid2 = get(ctx.scopes[lam].vars, nk, nothing)
+        isnothing(bid2) && continue
+        b2 = get_binding(ctx, bid2)
+        b2.kind === :argument && (b2.is_called = true)
+    end
 end
 
 # When a closure captures `T` and `T`'s typevar bound references `S`, it must
@@ -843,25 +871,25 @@ function analyze_variables!(ctx, ex)
     elseif k == :call
         name = ex[1]
         if head(name) == :bindingid
-            get_binding(ctx, name).is_called = true
+            mark_called!(ctx, get_binding(ctx, name))
         end
         foreach(e->analyze_variables!(ctx, e), children(ex))
     elseif k == :method_defs
-        push!(ctx.method_def_stack, ex[1])
-        is_closure = head(ex[1]) == :bindingid &&
-            get_binding(ctx, ex[1]).kind === :local
+        mname = ex[2]
+        push!(ctx.method_def_stack, mname)
+        is_closure = head(mname) == :bindingid &&
+            get_binding(ctx, mname).kind === :local
         ctx2 = VariableAnalysisContext(
-            ctx.layer, ctx.bindings, ctx.scopes,
-            ctx.lambda_bindings, true, ctx.method_def_stack,
-            ctx.closure_key_stack,
+            ctx.layer, ctx.bindings, ctx.scopes, ctx.lambda_bindings,
+            true, ctx.method_def_stack, ctx.closure_key_stack,
             ctx.closure_bindings, ctx.sp_typevars, ctx.tv_deps,
-            ctx.types_in_analysis)
+            ctx.types_in_analysis, ctx.fn_args, ctx.fn_lambdas)
         if is_closure
-            push!(ctx.closure_key_stack, closure_key(ctx2, ex[1]))
-            cb = init_closure_bindings!(ctx2, ex[1])
+            push!(ctx.closure_key_stack, closure_key(ctx2, mname))
+            cb = init_closure_bindings!(ctx2, mname)
         end
-        analyze_variables!(ctx2, ex[2])
         analyze_variables!(ctx2, ex[3])
+        analyze_variables!(ctx2, ex[4])
         if is_closure
             # All captures are known now; close them over typevar-bound deps
             expand_captured_sp_deps!(ctx2, cb)
@@ -892,7 +920,8 @@ function analyze_variables!(ctx, ex)
             ctx.layer, ctx.bindings, ctx.scopes,
             lbs, false, ctx.method_def_stack,
             ctx.closure_key_stack, ctx.closure_bindings,
-            ctx.sp_typevars, ctx.tv_deps, ctx.types_in_analysis)
+            ctx.sp_typevars, ctx.tv_deps, ctx.types_in_analysis,
+            ctx.fn_args, ctx.fn_lambdas)
             foreach(e->analyze_variables!(ctx2, e), ex[4:end])
         end
     else
@@ -943,6 +972,7 @@ enclosing lambda form and information about variables captured by closures.
                                   Vector{ScopeInfo}(), Vector{ScopeId}(),
                                   Dict(), Dict{IdTag, IdTag}(),
                                   Dict{IdTag, Vector{IdTag}}(),
+                                  Dict{FunctionId, Set{ScopeId}}(),
                                   enable_soft_scopes,
                                   world)
     ex2 = resolve_scopes(ctx2, ex)
@@ -954,7 +984,8 @@ enclosing lambda form and information about variables captured by closures.
                                    ctx2.scopes, lambda_bindings(ex2[1]), true,
                                    SyntaxList(), Vector{ClosureKey}(),
                                    Dict{ClosureKey,ClosureBindings}(),
-                                   ctx2.sp_typevars, ctx2.tv_deps, Set{IdTag}())
+                                   ctx2.sp_typevars, ctx2.tv_deps, Set{IdTag}(),
+                                   ctx.fn_args, ctx2.fn_lambdas)
     analyze_variables!(ctx3, ex2)
     analyze_def_and_use!(ctx3, ex2)
     ctx3, ex2

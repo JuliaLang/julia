@@ -4,7 +4,14 @@ mutable struct DesugaringContext <: AbstractLoweringContext
     const layer::ScopeLayer
     const bindings::Bindings
     const ssa_mapping::Dict{Int, IdTag}
+    const fn_args::Dict{FunctionId, Set{NameKey}}
     const world::UInt
+end
+
+function new_function_id!(ctx::DesugaringContext)
+    fid = length(ctx.fn_args) + 1
+    ctx.fn_args[fid] = Set{NameKey}()
+    return fid
 end
 
 # Translate a :ssavalue node from pre-lowered code into a normal SSA binding.
@@ -2678,7 +2685,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     @ast ctx src [:block
         [:global gen_name]
         [:function_decl gen_name]
-        [:method_defs gen_name [:block] gen_mdef]
+        [:method_defs new_function_id!(ctx)::value gen_name [:block] gen_mdef]
         nongen_mdef]
 end
 
@@ -2793,7 +2800,7 @@ is_vararg_type_expr(st) = @stm st begin
     _ -> (head(st) === :core || head(st) === :identifier) && syntax_name(st) == "Vararg"
 end
 
-function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, overlay)
+function keywords_method_def_expr(ctx, src, fid, mtable, sparams, argl, body, rett, overlay)
     kws = argl[end]
     pargl = argl[1:end-1]
     @jl_assert head(kws) === :parameters src
@@ -2952,18 +2959,18 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, o
     if overlay || head(mtable) === :nothing
         @ast ctx src [:block
             [:function_decl m1_name]
-            [:method_defs m1_name method_def_sparams(ctx, src, sparams) mdefs1]
-            [:method_defs (::nothing) method_def_sparams(ctx, src, pos_sparams) mdefs2]
-            [:method_defs (::nothing) method_def_sparams(ctx, src, pos_sparams) mdefs3]
+            [:method_defs fid::value m1_name method_def_sparams(ctx, src, sparams) mdefs1]
+            [:method_defs fid::value (::nothing) method_def_sparams(ctx, src, pos_sparams) mdefs2]
+            [:method_defs fid::value (::nothing) method_def_sparams(ctx, src, pos_sparams) mdefs3]
             (::nothing)]
     else
         @ast ctx src [:block
             [:function_decl m1_name]
             [:no_method_defs m1_name] # hack: define closure type for next decl
             [:function_decl mtable]
-            [:method_defs m1_name method_def_sparams(ctx, src, sparams) mdefs1]
-            [:method_defs mtable method_def_sparams(ctx, src, pos_sparams) mdefs2]
-            [:method_defs mtable method_def_sparams(ctx, src, pos_sparams) mdefs3]
+            [:method_defs fid::value m1_name method_def_sparams(ctx, src, sparams) mdefs1]
+            [:method_defs fid::value mtable method_def_sparams(ctx, src, pos_sparams) mdefs2]
+            [:method_defs fid::value mtable method_def_sparams(ctx, src, pos_sparams) mdefs3]
             mtable]
     end
 end
@@ -3072,14 +3079,20 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
             end
         end
     end
+    fid = new_function_id!(ctx)
+    for a in argl
+        head(a) === :parameters && continue
+        aname = head(a) === :kw ? a[1][1] : a[1]
+        head(aname) === :identifier && push!(ctx.fn_args[fid], NameKey(aname))
+    end
     sparams = mapsyntax(typevar_bounds, wheres)
     if has_kws
         keywords_method_def_expr(
-            ctx, src, mtable, sparams, argl, body, rett, overlay)
+            ctx, src, fid, mtable, sparams, argl, body, rett, overlay)
     elseif overlay
         mtmp = ssavar(ctx, mtable)
         @ast ctx src [:block
-            [:method_defs (::nothing)
+            [:method_defs fid::value (::nothing)
                 method_def_sparams(ctx, src, sparams)
                 [:block [:(=) mtmp method_def_expr(
                     ctx, src, mtable, sparams, argl, body, rett)]]]
@@ -3087,7 +3100,7 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
     else
         @ast ctx src [:block
             (head(mtable) === :nothing) ? nothing : [:function_decl mtable]
-            [:method_defs mtable
+            [:method_defs fid::value mtable
                 method_def_sparams(ctx, src, sparams)
                 [:block method_def_expr(ctx, src, mtable, sparams, argl, body, rett)]]
             [:removable mtable]]
@@ -4647,7 +4660,8 @@ end
 
 @fzone "JL: desugar" function expand_forms_2(ex::SyntaxTree, world::UInt)
     sl = base_layer(ex.context)
-    ctx_out = DesugaringContext(sl, Bindings(), Dict{Int, IdTag}(), world)
+    ctx_out = DesugaringContext(sl, Bindings(), Dict{Int, IdTag}(),
+                                Dict{FunctionId, Set{NameKey}}(), world)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
     if !validation_ok(vr)

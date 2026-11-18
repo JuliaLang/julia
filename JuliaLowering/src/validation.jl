@@ -1296,7 +1296,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     # assigned-once top-level locals only referenced inside `:method`, but
     # outside of `:lambda`, since any reference inside a lambda should resolve
     # to the lambda's sparam shadowing it.
-    [:method_defs id [:block tvs...] body] ->
+    ([:method_defs [:value] id [:block tvs...] body], when=(st[1].value isa FunctionId)) ->
         (head(id) === :nothing ? pass() : vst2_ident_val(vcx, id)) &
         allv(vst2_typevar, vcx, tvs) & vst2(with(vcx; in_method_defs=true), body)
     # from `function f end`, tells closure conversion to give f its value

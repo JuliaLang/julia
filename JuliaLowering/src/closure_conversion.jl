@@ -548,7 +548,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             @ast ctx ex [:call TypeEqOf::core _convert_closures(ctx, func_name)]
         end
     elseif k == :method_defs
-        name = ex[1]
+        name = ex[2]
         is_closure = head(name) == :bindingid && get_binding(ctx, name).kind === :local
         cap_rewrite = is_closure ? ctx.closure_infos[closure_key(ctx, name)] : nothing
         ctx2 = ClosureConversionCtx(
@@ -557,7 +557,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             ctx.top_bindings, ctx.lambda_bindings, ctx.sp_typevars,
             ctx.toplevel, true, ctx.toplevel_pure, ctx.toplevel_stmts,
             ctx.closure_infos, ctx.closure_structs)
-        tvs = map_cl_convert(ctx2, ex[2])
+        tvs = map_cl_convert(ctx2, ex[3])
         assign_fname = !is_closure ? nothing : let ck = closure_key(ctx, name)
             cl_ssa = get(ctx.closure_structs, ck, nothing)
             if cl_ssa === nothing
@@ -569,10 +569,10 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         end
         if is_closure && !ctx.toplevel
             push!(ctx2.toplevel_stmts, tvs)
-            push!(ctx2.toplevel_stmts, map_cl_convert(ctx2, ex[3]))
+            push!(ctx2.toplevel_stmts, map_cl_convert(ctx2, ex[4]))
             @ast ctx ex [:block assign_fname (::tombstone)]
         else
-            @ast ctx ex [:block tvs map_cl_convert(ctx2, ex[3]) assign_fname]
+            @ast ctx ex [:block tvs map_cl_convert(ctx2, ex[4]) assign_fname]
         end
     elseif k == :no_method_defs
         name = ex[1]

@@ -176,6 +176,7 @@ function NameKey(ex::SyntaxTree)
     @jl_assert head(ex) in (:identifier, :symboliclabel, :symbolicgoto) ex
     NameKey(syntax_name(ex), (ex.context.layer)::ScopeLayer)
 end
+NameKey(b::BindingInfo) = NameKey(b.name, (b.node_id.context.layer)::ScopeLayer)
 
 # One lambda's variables
 struct LambdaBindings
