@@ -85,6 +85,9 @@ public:
         jl_image_fptrs_t fptrs;
         jl_code_instance_t **fvars_cinst;
         size_t fvars_n;
+        // The CodeInstance of each function address in the image, built on first use by
+        // `lookup_image_codeinst`
+        llvm::DenseMap<uintptr_t, jl_code_instance_t *> *cinst_by_fptr;
     };
 
     struct libc_frames_t {
@@ -145,6 +148,7 @@ public:
     objectmap_t& getObjectMap() JL_NOTSAFEPOINT;
     void add_image_info(image_info_t info) JL_NOTSAFEPOINT;
     bool get_image_info(uint64_t base, image_info_t *info) const JL_NOTSAFEPOINT;
+    bool lookup_image_codeinst(uint64_t base, void *fptr, jl_code_instance_t **ci) JL_NOTSAFEPOINT;
     Locked<objfilemap_t>::LockT get_objfile_map() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
 
     std::shared_mutex symbol_mutex;

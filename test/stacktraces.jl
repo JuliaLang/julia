@@ -416,3 +416,20 @@ let st = try f_wrapped4()() catch; stacktrace(catch_backtrace()) end
     @test sf.file === Symbol(@__FILE__)
     @test sf.linfo.def === only(methods(f_wrapped4()))
 end
+
+# The frame of a throw on an error path shows the function and line of the throw once,
+# whether or not the compiler moved the error path out of the function's body.
+@inline function f_checked5(x::Int)
+    x < 0 && throw(ArgumentError("negative value $x, expected $(typeof(x)) ≥ 0"))
+    return x + 1
+end
+f_checked5_line = (@__LINE__) - 3
+@noinline f_caller5(x) = f_checked5(x) * 2
+let st = try f_caller5(-1) catch; stacktrace(catch_backtrace()) end
+    frames = filter(sf -> sf.func === :f_checked5, st)
+    @test length(frames) == 1
+    @test only(frames).line == f_checked5_line
+    @test only(frames).file === Symbol(@__FILE__)
+    i = findfirst(sf -> sf.func === :f_checked5, st)
+    @test st[i + 1].func === :f_caller5
+end

@@ -190,9 +190,43 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
         out = Vector{StackFrame}()
         _add_di_frames!(out, pointer, di, pc)
         reverse!(out)
+        ci = frames[end][4]::Core.CodeInstance
+        if is_outlined_code(ci)
+            # Tag the outlined code's own frame, so that `stacktrace` can merge it with the
+            # frame of the call to it.
+            f = out[end]
+            out[end] = StackFrame(f.func, f.file, f.line, ci, f.from_c, f.inlined, f.pointer,
+                                  f.pc, f.debuginfo)
+        end
     end
     return out
 end
+
+# Whether `ci` holds code that the compiler outlined from another function (see
+# `Compiler.outline_cold_regions!`): its method is in no method table, and its debug info
+# describes the method it was outlined from, which has the same name.
+function is_outlined_code(ci::Core.CodeInstance)
+    mi = ci.def
+    mi isa Core.MethodInstance || return false
+    m = mi.def
+    m isa Method || return false
+    m.is_for_opaque_closure && return false
+    di = ci.debuginfo
+    di isa Core.DebugInfo || return false
+    parent = di.def
+    return parent isa Method && parent !== m && parent.name === m.name
+end
+
+is_outlined_frame(frame::StackFrame) =
+    frame.linfo isa Core.CodeInstance && is_outlined_code(frame.linfo)
+
+# The frame of the code outlined from a function, merged with the frame of the call to it
+# in that function: they are the same source-level frame. The outlined code knows the exact
+# location of the throw; the caller knows the function's specialization, and whether that
+# frame was itself inlined.
+merge_outlined_frame(outlined::StackFrame, caller::StackFrame) =
+    StackFrame(caller.func, outlined.file, outlined.line, caller.linfo, false,
+               caller.inlined, outlined.pointer, outlined.pc, outlined.debuginfo)
 
 const top_level_scope_sym = Symbol("top-level scope")
 
@@ -240,13 +274,23 @@ trace, `stacktrace` first calls `backtrace`.
 Base.@constprop :none function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_funcs::Bool=false)
     stack = StackTrace()
     lookups = Dict{eltype(trace),StackTrace}()
+    outlined = 0 # index in `stack` of a frame of outlined code, awaiting its caller's frame
     for ip in trace
         frames = get(lookups, ip, nothing)
         frames === nothing && (frames = lookups[ip] = lookup(ip))
         for frame in frames
+            if outlined != 0 && !frame.from_c
+                if frame.func === stack[outlined].func
+                    stack[outlined] = merge_outlined_frame(stack[outlined], frame)
+                    outlined = 0
+                    continue
+                end
+                outlined = 0
+            end
             # Skip frames that come from C calls.
             if c_funcs || !frame.from_c
                 push!(stack, frame)
+                is_outlined_frame(frame) && (outlined = length(stack))
             end
         end
     end
