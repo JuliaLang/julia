@@ -880,6 +880,28 @@ function typeof_concrete_vararg(t::DataType)
     return nothing
 end
 
+# `Tuple{Union{A,B}}` has only the instances' types `Tuple{A}` and `Tuple{B}` when `A` and `B`
+# are concrete, so split those into a small `Union` of `Type`s (like `typeof_tfunc` on a `Union`)
+function typeof_split_tuple(𝕃::AbstractLattice, t::DataType)
+    params = t.parameters
+    for p in params
+        isvarargtype(p) && return nothing
+        if isa(p, Union)
+            for u in uniontypes(p)
+                isconcretetype(u) || return nothing
+            end
+        elseif !isconcretetype(p)
+            return nothing
+        end
+    end
+    1 < unionsplitcost(𝕃, params) <= InferenceParams().max_union_splitting || return nothing
+    rt = Union{}
+    for tt in switchtupleunion(t)
+        rt = Union{rt, Type{tt}}
+    end
+    return rt
+end
+
 @nospecs function typeof_tfunc(𝕃::AbstractLattice, t)
     isa(t, Const) && return Const(typeof(t.val))
     t = widenconst(t)
@@ -895,6 +917,8 @@ end
         else
             if t.name === Tuple.name
                 tt = typeof_concrete_vararg(t)
+                tt === nothing || return tt
+                tt = typeof_split_tuple(𝕃, t)
                 tt === nothing || return tt
             end
             return Type{<:t}

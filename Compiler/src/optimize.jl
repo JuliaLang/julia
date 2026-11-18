@@ -387,7 +387,60 @@ function apply_type_unionall_def(@nospecialize(Targ), src::Union{IRCode,Incremen
     return stmt::Expr, body, tvars
 end
 
+function resolve_ssa_copy(@nospecialize(x), src::Union{IRCode,IncrementalCompact})
+    while isa(x, SSAValue)
+        def = src[x][:stmt]
+        isa(def, Union{SSAValue,Argument}) || break
+        x = def
+    end
+    return x
+end
+
+# Match the `NamedTuple{names}(args::Tuple)` pattern
+#  %tup = tuple(a...)
+#  %tt  = typeof(%tup)
+#  %T   = apply_type(NamedTuple, names, %tt)
+#  %x   = new(%T, f...)   # each `f[i]` is `a[i]` or `getfield(%tup, i)`
+# and return `(names, a)`. Such a `new` never throws, and its type is exactly
+# `NamedTuple{names, Tuple{map(typeof, a)...}}`.
+function namedtuple_typeof_fields(args::Vector{Any}, src::Union{IRCode,IncrementalCompact})
+    Targ = resolve_ssa_copy(args[1], src)
+    isa(Targ, SSAValue) || return nothing
+    Tdef = src[Targ][:stmt]
+    is_known_call(Tdef, Core.apply_type, src) || return nothing
+    length(Tdef.args) == 4 || return nothing
+    argextype(Tdef.args[2], src) === Const(NamedTuple) || return nothing
+    names = argextype(Tdef.args[3], src)
+    isa(names, Const) || return nothing
+    names = names.val
+    isa(names, Tuple{Vararg{Symbol}}) || return nothing
+    for i in 2:length(names), j in 1:(i-1)
+        names[i] === names[j] && return nothing
+    end
+    tt = resolve_ssa_copy(Tdef.args[4], src)
+    isa(tt, SSAValue) || return nothing
+    ttdef = src[tt][:stmt]
+    is_known_call(ttdef, typeof, src) && length(ttdef.args) == 2 || return nothing
+    tup = resolve_ssa_copy(ttdef.args[2], src)
+    isa(tup, SSAValue) || return nothing
+    tupdef = src[tup][:stmt]
+    is_known_call(tupdef, tuple, src) || return nothing
+    nf = length(args) - 1
+    length(tupdef.args) - 1 == nf || return nothing
+    for i in 1:nf
+        f = resolve_ssa_copy(args[i+1], src)
+        f === resolve_ssa_copy(tupdef.args[i+1], src) && continue
+        isa(f, SSAValue) || return nothing
+        fdef = src[f][:stmt]
+        is_known_call(fdef, getfield, src) && length(fdef.args) == 3 || return nothing
+        resolve_ssa_copy(fdef.args[2], src) === tup || return nothing
+        argextype(fdef.args[3], src) === Const(i) || return nothing
+    end
+    return names, tupdef.args[2:end]
+end
+
 function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
+    namedtuple_typeof_fields(args, src) === nothing || return (false, true, true)
     Targ = args[1]
     atyp = argextype(Targ, src)
     # `Expr(:new)` of unknown type could raise arbitrary TypeError.

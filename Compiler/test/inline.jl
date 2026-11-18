@@ -2642,4 +2642,30 @@ let src = code_typed1((Base.RefValue{Any},)) do r
     @test count(iscall((src, Core._apply_iterate)), src.code) == 0
 end
 
+# union-split keyword calls on the keyword values, without allocating the `NamedTuple`
+@noinline kwsplit_noinline(a; x=1) = a + x
+kwsplit_noinline_caller(y) = kwsplit_noinline(1; x=y)
+function kwsplit_inline(a; x=1)
+    s = a + x
+    for i in 1:3
+        s = s*3 + i*x - (s >> 1)
+    end
+    return s
+end
+kwsplit_inline_caller(y) = kwsplit_inline(1; x=y)
+let src = code_typed1(kwsplit_noinline_caller, (Union{Int,UInt},))
+    @test count(isinvoke(:kwsplit_noinline), src.code) == 2
+    @test !any(iscall((src, Core.kwcall)), src.code)
+    @test !any(iscall((src, typeof)), src.code)
+    @test count(isnew, src.code) == 2
+    @test kwsplit_noinline_caller(UInt(1)) === UInt(2)
+    @test kwsplit_noinline_caller(1) === 2
+end
+let src = code_typed1(kwsplit_inline_caller, (Union{Int,UInt},))
+    @test !any(isnew, src.code)
+    @test !any(iscall((src, typeof)), src.code)
+    @test !any(iscall((src, tuple)), src.code)
+    @test kwsplit_inline_caller(UInt(2)) === kwsplit_inline(1; x=UInt(2))
+end
+
 end # module inline_tests

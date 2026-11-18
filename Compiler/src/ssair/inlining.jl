@@ -469,6 +469,37 @@ function fix_va_argexprs!(insert_node!::Inserter, inline_target::Union{IRCode, I
     return newargexprs
 end
 
+function insert_unionsplit_isa!(compact::IncrementalCompact, @nospecialize(cond), @nospecialize(x),
+                                @nospecialize(ty), line, interp::AbstractInterpreter)
+    𝕃ₒ = optimizer_lattice(interp)
+    isa_type = isa_tfunc(𝕃ₒ, argextype(x, compact), Const(ty))
+    ssa = insert_node_here!(compact, NewInstruction(Expr(:call, isa, x, ty), isa_type, line))
+    cond === true && return ssa
+    and_type = and_int_tfunc(𝕃ₒ, argextype(cond, compact), isa_type)
+    return insert_node_here!(compact, NewInstruction(Expr(:call, and_int, cond, ssa), and_type, line))
+end
+
+# If `x` is a `NamedTuple` built by `namedtuple_typeof_fields` from fields whose types
+# determine its type, then `x isa nt` (for a `NamedTuple` type `nt` with concrete field types)
+# iff each field is of the corresponding field type of `nt`. Return those fields.
+function splittable_namedtuple_fields(compact::IncrementalCompact, @nospecialize(x), @nospecialize(nt))
+    isa(nt, DataType) && nt.name === _NAMEDTUPLE_NAME || return nothing
+    isconcretetype(nt) || return nothing
+    x = resolve_ssa_copy(x, compact)
+    isa(x, SSAValue) || return nothing
+    def = compact[x][:stmt]
+    isexpr(def, :new) || return nothing
+    m = namedtuple_typeof_fields(def.args, compact)
+    m === nothing && return nothing
+    names, fields = m
+    names === nt.parameters[1] || return nothing
+    length(fields) == fieldcount(nt) || return nothing
+    for j = 1:length(fields)
+        isconcretetype(fieldtype(nt, j)) || return nothing
+    end
+    return fields
+end
+
 """
     ir_inline_unionsplit!
 
@@ -550,16 +581,17 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
                 aft, mft = fieldtype(atype, i), fieldtype(mtype, i)
                 # If this is always true, we don't need to check for it
                 aft <: mft && continue
-                # Generate isa check
-                isa_expr = Expr(:call, isa, argexprs[i], mft)
-                isa_type = isa_tfunc(optimizer_lattice(interp), argextype(argexprs[i], compact), Const(mft))
-                ssa = insert_node_here!(compact, NewInstruction(isa_expr, isa_type, line))
-                if cond === true
-                    cond = ssa
+                # Generate isa check, on the fields of a `NamedTuple` built from them
+                # (e.g. for keyword arguments) so the `NamedTuple` need not be allocated
+                fields = splittable_namedtuple_fields(compact, argexprs[i], mft)
+                if fields === nothing
+                    cond = insert_unionsplit_isa!(compact, cond, argexprs[i], mft, line, interp)
                 else
-                    and_expr = Expr(:call, and_int, cond, ssa)
-                    and_type = and_int_tfunc(optimizer_lattice(interp), argextype(cond, compact), isa_type)
-                    cond = insert_node_here!(compact, NewInstruction(and_expr, and_type, line))
+                    for j = 1:length(fields)
+                        ft = fieldtype(mft, j)
+                        argextype(fields[j], compact) ⊑ ft && continue
+                        cond = insert_unionsplit_isa!(compact, cond, fields[j], ft, line, interp)
+                    end
                 end
             end
             insert_node_here!(compact, NewInstruction(GotoIfNot(cond, next_cond_bb), Any, line))
@@ -575,9 +607,24 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
                 aft, mft = fieldtype(atype, i), fieldtype(mtype, i)
                 if !(aft <: mft)
                     𝕃ₒ = optimizer_lattice(interp)
-                    narrowed_type = tmeet(𝕃ₒ, argextype(argex, compact), mft)
-                    argexprs′[i] = insert_node_here!(compact,
-                        NewInstruction(PiNode(argex, mft), narrowed_type, line))
+                    fields = splittable_namedtuple_fields(compact, argex, mft)
+                    if fields === nothing
+                        narrowed_type = tmeet(𝕃ₒ, argextype(argex, compact), mft)
+                        argexprs′[i] = insert_node_here!(compact,
+                            NewInstruction(PiNode(argex, mft), narrowed_type, line))
+                    else
+                        newargs = Any[mft]
+                        for j = 1:length(fields)
+                            f, ft = fields[j], fieldtype(mft, j)
+                            if !(argextype(f, compact) ⊑ ft)
+                                f = insert_node_here!(compact, NewInstruction(PiNode(f, ft),
+                                    tmeet(𝕃ₒ, argextype(f, compact), ft), line))
+                            end
+                            push!(newargs, f)
+                        end
+                        argexprs′[i] = insert_node_here!(compact, NewInstruction(
+                            Expr(:new, newargs...), mft, NoCallInfo(), line, IR_FLAGS_REMOVABLE))
+                    end
                 end
             end
         end

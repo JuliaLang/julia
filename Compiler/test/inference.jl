@@ -2395,6 +2395,11 @@ let typeof_tfunc(@nospecialize xs...) =
         Compiler.typeof_tfunc(Compiler.fallback_lattice, xs...)
     @test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N
     @test typeof_tfunc(Tuple{Any}) == Type{<:Tuple{Any}}
+    @test typeof_tfunc(Tuple{Union{Int,Float64}}) == Union{Type{Tuple{Int}}, Type{Tuple{Float64}}}
+    @test typeof_tfunc(Tuple{Union{Int,Float64}, Int}) == Union{Type{Tuple{Int,Int}}, Type{Tuple{Float64,Int}}}
+    @test typeof_tfunc(Tuple{Union{Int,Vector}}) == Type{<:Tuple{Union{Int,Vector}}}
+    @test typeof_tfunc(Tuple{Union{Int,Float64,Int8,Int16,Int32}}) == Union{Type{Tuple{Int}}, Type{Tuple{Float64}}, Type{Tuple{Int8}}, Type{Tuple{Int16}}, Type{Tuple{Int32}}}
+    @test typeof_tfunc(Tuple{Union{Int,UInt}, Union{Int,UInt}, Union{Int,UInt}}) == Type{<:Tuple{Union{Int,UInt}, Union{Int,UInt}, Union{Int,UInt}}}
     @test typeof_tfunc(Type{Array}) === DataType
     @test typeof_tfunc(Type{<:Array}) === DataType
     @test typeof_tfunc(Array{Int}) == Type{Array{Int,N}} where N
