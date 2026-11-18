@@ -9490,6 +9490,13 @@ let R = Base.RefValue{Union{Nothing,String}}
     @test ((r, t) -> b63514(r, t...))(Ref(1), R[R("a")]) === b63514(Ref(1), R("a")) === Union{}
 end
 
+# Choosing a different union arm can constrain C through both A and B.
+chained_bounds63514(::Union{A,Z}, ::Ref{Union{Int,C}}) where {A,B>:A,C>:B,Z} = C
+let y = Ref{Union{Int,String}}(1), call(r, y) = chained_bounds63514(r[], y)
+    @test call(Ref{Number}(1), y) === chained_bounds63514(1, y) === Union{Int,String}
+    @test call(Ref{Number}(1.0), y) === chained_bounds63514(1.0, y) === String
+end
+
 # A failed first attempt at matching the signature must not leave a static
 # parameter undefined
 f_abandoned_match(a::S2, b::S1, c::Union{Type{S2},S1,S2}) where {S1,S2} = (S1, S2)

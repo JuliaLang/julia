@@ -3368,25 +3368,6 @@ static void mark_alt_occurs(jl_value_t *t, jl_stenv_t *e) JL_NOTSAFEPOINT
     }
 }
 
-// Does `t` mention a var that some instance may have constrained before reaching
-// `t`, where this search has not: a var marked `alt_occurs`, or one whose declared
-// bounds mention such a var?
-static int mentions_alt_occurs(jl_value_t *t, jl_stenv_t *e) JL_NOTSAFEPOINT
-{
-    for (jl_varbinding_t *v = e->vars; v != NULL; v = v->prev) {
-        if (!v->existential || v->var == NULL || !jl_has_typevar(t, v->var))
-            continue;
-        if (v->alt_occurs)
-            return 1;
-        for (jl_varbinding_t *o = v->prev; o != NULL; o = o->prev) {
-            if (o->alt_occurs && o->var != NULL &&
-                (jl_has_typevar(v->var->lb, o->var) || jl_has_typevar(v->var->ub, o->var)))
-                return 1;
-        }
-    }
-    return 0;
-}
-
 // Could what `t` accepts depend on a binding made so far, either by this search or
 // by an instance that diverged from it?
 static int depends_on_bindings(jl_value_t *t, jl_stenv_t *e) JL_NOTSAFEPOINT
@@ -4147,12 +4128,14 @@ static int forall_exists_equal_(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 
     if ((jl_is_uniontype(x) && jl_is_uniontype(y))) {
         if (e->instance_envout &&
-            (e->inv_open || mentions_alt_occurs(x, e) || mentions_alt_occurs(y, e))) {
+            (e->inv_open ||
+             (e->diverged && (depends_on_bindings(x, e) || depends_on_bindings(y, e))))) {
             // An instance has a different union here, whose components need not
             // line up with those of `x` (some may be absorbed, or come in another
             // order), so it may solve this equation in its own way. So may an
             // instance that reaches the equation with a var already constrained
-            // through an alternative that `x` did not choose: the componentwise
+            // through an alternative that `x` did not choose, even indirectly
+            // through a chain of declared bounds: the componentwise
             // match below may fail for it where it succeeds for `x`, and the
             // general match then binds the vars differently. Mark the vars of the
             // equation, and match it on the BOUND_ARM channel.
