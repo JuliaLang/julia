@@ -17,7 +17,7 @@ using Base: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax, MacroConte
     SourceAttrType, head, flattened_provenance, sourceref, unexpanded_sourceref,
     mapchildren, provenance, DEBUG_LOWERING,
     is_base_layer, base_layer, escape_layer, remove_scope, fill_context,
-    trim_provenance,
+    trim_provenance, prov_end,
     syntax_module, edition, adopt_scope, assert_syntax, @mknode, macro_prov,
     isa_lowering_ast_node, filename, source_line, first_linenode
 

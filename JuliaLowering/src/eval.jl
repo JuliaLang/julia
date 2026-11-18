@@ -134,7 +134,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt,
                 (nothing, nb_st.value, mname, body)
         end
         if head(mname) != :identifier
-            throw(LoweringError(mname, "Expected module name"))
+            throw(LoweringError(mname, "expected module name"))
         end
         if head(body) != :block
             throw(LoweringError(body, "module expression third argument must be a block"))
@@ -797,7 +797,7 @@ function _to_lowered_expr(ex::SyntaxTree)
             k == :popaliasscope ||
             k == :new_opaque_closure ||
             k == :the_exception ||
-            throw(LoweringError(ex, "Unknown syntax form $k"))
+            throw(LoweringError(ex, "unknown syntax form $k"))
         ret = Expr(k)
         for e in children(ex)
             push!(ret.args, _to_lowered_expr(e))
@@ -830,7 +830,7 @@ end
 # but better printing could be done if we were to change this.
 function to_compatible_exception(@nospecialize(exc))
     if exc isa LoweringError && !exc.internal
-        ErrorException(string("syntax: ", sprint(showerror, exc)))
+        ErrorException(sprint(showerror, exc))
     elseif exc isa MacroExpansionError
         loc = _macrocall_expr_location(exc.context.macrocall)
         lnn = loc isa MacroSource ? loc.lno : loc
