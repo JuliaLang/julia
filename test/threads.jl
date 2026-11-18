@@ -742,7 +742,7 @@ end
             foreach(wait, ts)
         end
         start = nmap()
-        burst(100); GC.gc(false)
+        burst(200)
         pooled = nmap() - start
         for _ in 1:4
             GC.gc()
@@ -750,8 +750,10 @@ end
         print(pooled, " ", nmap() - start)
         """
     pooled, idle = parse.(Int, split(readchomp(`$(Base.julia_cmd()) --startup-file=no -t 4 -e $script`)))
-    # stacks larger than the largest pool (e.g. with sanitizers) are not pooled
-    if pooled >= 50
+    # each thread keeps a few stacks for reuse, so the burst must be large
+    # enough for those not to matter; stacks larger than the largest pool
+    # (e.g. with sanitizers) are not pooled
+    if pooled >= 100
         @test idle <= pooled ÷ 3
     end
 end
