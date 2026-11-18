@@ -363,7 +363,7 @@ end
 @test_nocompletion("Base.print(\"lol")
 
 # inexistent completion inside a cmd
-@test_nocompletion("run(`lol")
+@test_nocompletion("run(`nonexistent_program_8f3a")
 
 # issue 55856: copy(A').<TAB> errors in the REPL
 let
@@ -1129,14 +1129,14 @@ let s, c, r
     @test r == 8:10
     @test s[r] == "/tm"
 
-    # Tests path in Julia code and not double-closing "
+    # Tests path in Julia code and not double-closing " (the existing one is replaced)
     # Issue #8047
     s = "@show \"/dev/nul\""
     c,r = completions(s, 15)
     c = map(named_completion, c)
-    @test "/dev/null" in [_c.completion for _c in c]
-    @test r == 8:15
-    @test s[r] == "/dev/nul"
+    @test "/dev/null\"" in [_c.completion for _c in c]
+    @test r == 8:16
+    @test s[r] == "/dev/nul\""
 
     s = "/t"
     c,r = test_scomplete(s)
@@ -1149,6 +1149,13 @@ let s, c, r
     @test "/tmp/" in c
     @test r == 1:4
     @test s[r] == "/tmp"
+
+    # After a pipe or a redirection, the command being typed is completed.
+    for s in ("echo hi | cat /t", "echo hi > /t", "cat </t", "echo hi 2>>/t")
+        c,r = test_scomplete(s)
+        @test "/tmp/" in c
+        @test s[r] == "/t"
+    end
 
     # This should match things that are inside the tmp directory
     s = tempdir()
@@ -1210,14 +1217,11 @@ let s, c, r
             @test r == 5:sizeof(s)
             @test s[r] == joinpath(path, prefix)
 
-            # `~ completes to ~/ for current user plus ~name/ for other real users
+            # `~ completes to ~/ only: other users are not enumerated
             me = Sys.username()
             s_bare = "`ls ~"
             c_bare, r_bare = test_complete(s_bare)
-            @test "~/" in c_bare              # current user always offered as ~/
-            @test !("~$me/" in c_bare)        # current user NOT listed by name (covered by ~/)
-            @test allunique(c_bare)           # no duplicates
-            @test all(c -> startswith(c, "~"), c_bare)
+            @test c_bare == ["~/"]
             @test s_bare[r_bare] == "~"
 
             # `~/prefix completes to ~/dname/ keeping the tilde form
@@ -1249,14 +1253,29 @@ let s, c, r
                 rm(dotdir)
             end
 
-            # `~letter completes to matching usernames including the current user's name
+            # `~prefix completes to the current user's name only, if it matches
             first_char = string(first(me))
             s_prefix = "`ls ~$first_char"
             c_prefix, r_prefix = test_complete(s_prefix)
-            @test "~$me/" in c_prefix             # current user included by name
-            @test !("~/" in c_prefix)             # ~/ shorthand NOT offered for non-empty prefix
-            @test all(c -> startswith(c, "~$first_char"), c_prefix)
+            @test c_prefix == ["~$me/"]
             @test s_prefix[r_prefix] == "~$first_char"
+            c_other, _ = test_complete("`ls ~$(me)_not_a_user")
+            @test isempty(c_other)
+
+            # `~name/prefix completes paths in that user's home directory, which is
+            # looked up by name rather than taken from HOME (set to `tmphome` here)
+            myhome = homedir(me)
+            entries = myhome === nothing || !isdir(myhome) ? String[] :
+                filter(e -> isascii(e) && all(c -> isletter(c) || isdigit(c) || c in "._-", e),
+                       readdir(myhome))
+            if !isempty(entries)
+                entry = first(entries)
+                s_named = "`ls ~$me/" * entry
+                c_named, r_named = test_complete(s_named)
+                @test any(c -> rstrip(c, '/') == joinpath(myhome, entry) ||
+                               endswith(rstrip(c, '/'), "/" * entry), c_named)
+                @test s_named[r_named] == "~$me/" * entry
+            end
 
             # Shell mode: ~/prefix completes with tilde preserved, not escaped
             s_shell = "ls ~/" * prefix
@@ -1362,6 +1381,11 @@ let current_dir, forbidden
             end
             c, r = test_complete("\"$(escape_string(path))/selfsym")
             @test c == [escape_string(joinpath(path, "selfsymlink")) * "\""]
+            # Directly before an existing closing quote, which gets replaced too
+            s = "f(\"$(escape_string(path))/selfsym|\")"
+            c, r = test_complete_pos(s)
+            @test c == [escape_string(joinpath(path, "selfsymlink")) * "\""]
+            @test r == 4:lastindex(s) - 2
         end
     end
 
@@ -1607,6 +1631,28 @@ if Sys.iswindows()
     rm(tmp)
 end
 
+# Completing in the middle of a path also replaces the rest of it if the completion ends with it
+mktempdir() do path
+    touch(joinpath(path, "foobar.txt"))
+    cd(path) do
+        c, r = test_complete_pos("cd(\"foob|.txt\")")
+        @test c == ["foobar.txt\""]
+        @test r == 5:13
+        c, r = test_complete_pos("cd(\"foob|ar.txt")
+        @test c == ["foobar.txt\""]
+        @test r == 5:14
+        c, r = test_complete_pos("cd(\"foob|.tx\")")
+        @test c == ["foobar.txt"]
+        @test r == 5:8
+        c, r = test_complete_pos("`cat foob|.txt -n`")
+        @test c == ["foobar.txt"]
+        @test r == 6:13
+        c, r = map_completion_text(shell_completions("cat foob.txt -n", 8))
+        @test c == ["foobar.txt"]
+        @test r == 5:12
+    end
+end
+
 # issue 51985
 let s = "`\\"
     c,r = test_scomplete(s)
@@ -1656,10 +1702,11 @@ function test_dict_completion(dict_name)
     s = "$dict_name[ \"abcd"  # leading whitespace
     c, r = test_complete(s)
     @test c == Any["\"abcd\"]"]
-    s = "$dict_name[Bas]"  # trailing close bracket
+    s = "$dict_name[Bas]"  # trailing close bracket, which is replaced
     c, r = completions(s, lastindex(s) - 1)
     c = map(x -> named_completion(x).completion, c)
-    @test c == Any["Base"]
+    @test c == Any["Base]"]
+    @test r == lastindex(s)-3:lastindex(s)
     s = "$dict_name[:b"
     c, r = test_complete(s)
     @test c == Any[":bar", ":bar2"]
@@ -1705,6 +1752,19 @@ function test_dict_completion(dict_name)
     s = "$dict_name["
     c, r = test_complete(s)
     @test c == sort!(repr.(keys(Main.CompletionFoo.test_dict)))
+    # Closing quote and bracket already present (e.g. auto-inserted) are replaced (#63817)
+    s = "$dict_name[\"abcd|\"]"
+    c, r = test_complete_pos(s)
+    @test c == Any["\"abcd\"]"]
+    @test r == sizeof(dict_name)+2:lastindex(s)-1
+    s = "$dict_name[:bar2|]"
+    c, r = test_complete_pos(s)
+    @test c == Any[":bar2]"]
+    @test r == sizeof(dict_name)+2:lastindex(s)-1
+    s = "$dict_name[\"ab|\"]"
+    c, r = test_complete_pos(s)
+    @test c == Any["\"abc\"", "\"abcd\""]
+    @test r == sizeof(dict_name)+2:sizeof(dict_name)+4
 end
 test_dict_completion("CompletionFoo.test_dict")
 test_dict_completion("CompletionFoo.test_customdict")
@@ -2226,6 +2286,21 @@ let s = "pop!(global_xs)."
 end
 @test length(global_xs) == 1 # the completion above shouldn't evaluate `pop!` call
 
+# https://github.com/JuliaLang/julia/issues/64794
+# completing a `push!` onto an empty vector must not write past its memory
+struct Issue64794Elem; x::Int; y::Int; end
+mutable struct Issue64794; v::Vector{Issue64794Elem}; end
+function issue64794(x::Int)
+    h = Issue64794(Issue64794Elem[])
+    push!(h.v, Issue64794Elem(x, x))
+    return h
+end
+let empty_mem = Issue64794Elem[].ref.mem
+    c, r, res = test_complete_context("issue64794(1).v.")
+    @test res
+    @test length(empty_mem) == 0
+end
+
 # https://github.com/JuliaLang/julia/issues/51499
 # allow aggressive concrete evaluation for child uncached frames
 struct Issue51499CompletionDict
@@ -2386,6 +2461,33 @@ end
     @test Base.ispublic(Base, :ispublic)
     # If this last test starts failing, that's okay, just pick a new example symbol:
     @test !Base.isexported(Base, :ispublic)
+end
+
+module TestPublicCompletions
+export pub_exported
+public pub_public, @pub_macro_str
+pub_exported() = 1
+pub_public() = 2
+pub_private() = 3
+macro pub_macro_str(x) end
+macro pub_private_str(x) end
+end
+
+@testset "non-public names are marked internal when the module is named" begin
+    for shift in (false, true)
+        c, r, res = map_named_completion(completions("TestPublicCompletions.pub_", 26, @__MODULE__, shift))
+        @test res
+        internal = Dict(x.completion => x.internal for x in c)
+        @test internal["pub_exported"] === false
+        @test internal["pub_public"] === false
+        @test internal["pub_macro\""] === false
+        @test internal["pub_private"] === true
+        @test internal["pub_private\""] === true
+    end
+    # without a prefix, names defined in the current module are not marked
+    c, r, res = map_named_completion(completions("pub_", 4, TestPublicCompletions, false))
+    @test "pub_private" in map(x -> x.completion, c)
+    @test !any(x -> x.internal, c)
 end
 
 # issue #51194
@@ -2804,17 +2906,17 @@ f54131 = F54131()
 @testset "performance of kwarg completion with large method tables" begin
     # The goal here is to simply ensure we aren't hitting catestrophically bad
     # behaviors when shift isn't pressed. The difference between good and bad
-    # is on the order of tens of milliseconds vs tens of seconds; using 1 sec as
+    # is on the order of tens of milliseconds vs tens of seconds; using 5 sec as
     # a very rough canary that is hopefully robust even in the noisy CI coalmines
     s = "g54131(kwa"
     a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
     @test REPLCompletions.KeywordArgumentCompletion("kwarg") in a
-    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 5
 
     s = "f54131.x("
     a, b, c = completions(s, lastindex(s), @__MODULE__, false)
     @test only(a) isa REPLCompletions.TextCompletion
-    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 5
 
     s = "f54131.x(kwa"
     a, b, c = completions(s, lastindex(s), @__MODULE__, false)

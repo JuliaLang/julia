@@ -76,13 +76,22 @@ if !@isdefined(testenv_defined)
         return pids
     end
 
-    function addprocs_with_testenv(X; rr_allowed=true, kwargs...)
+    # Each worker gets an equal share of the machine's memory as its heap size hint, sized
+    # for a pool of `pool_size` workers. A worker that replaces a recycled one is started
+    # on its own, so it must pass the size of the pool it joins: sized for a pool of one,
+    # it would get half the machine's memory.
+    function addprocs_with_testenv(X; rr_allowed=true, pool_size=X, kwargs...)
         exename = rr_allowed ? `$rr_exename $test_exename` : test_exename
-        if X isa Integer
-            heap_size=round(Int,(Sys.total_memory()/(1024^2)/(X+1)))
-            push!(test_exeflags.exec, "--heap-size-hint=$(heap_size)M")
+        exeflags = test_exeflags
+        if pool_size isa Integer
+            heap_size = round(Int, Sys.total_memory() / 2^20 / (pool_size + 1))
+            exeflags = `$exeflags --heap-size-hint=$(heap_size)M`
         end
-        procs = addprocs(X; exename=exename, exeflags=test_exeflags, kwargs...)
+        # starting many workers on a loaded machine can exceed the default 60 s
+        timeout = get(ENV, "JULIA_WORKER_TIMEOUT", "300")
+        procs = withenv("JULIA_WORKER_TIMEOUT" => timeout) do
+            addprocs(X; exename=exename, exeflags=exeflags, kwargs...)
+        end
         for w in procs
             worker_ospids[w] = remotecall_fetch(getpid, w)
         end

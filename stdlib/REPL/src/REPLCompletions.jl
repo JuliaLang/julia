@@ -37,7 +37,9 @@ end
 struct ModuleCompletion <: Completion
     parent::Module
     mod::String
+    internal::Bool # not public in the module, which was named explicitly
 end
+ModuleCompletion(parent::Module, mod::String) = ModuleCompletion(parent, mod, false)
 
 struct PackageCompletion <: Completion
     package::String
@@ -126,6 +128,7 @@ _completion_text(c::KeywordArgumentCompletion) = c.kwarg*'='
 completion_text(c) = _completion_text(c)::String
 
 named_completion(c::BslashCompletion) = NamedCompletion(c.completion, c.name)
+named_completion(c::ModuleCompletion) = NamedCompletion(c.mod, c.mod, c.internal)
 
 function named_completion(c)
     text = completion_text(c)::String
@@ -140,19 +143,20 @@ function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
 end
 
-function appendmacro!(syms, macros, needle, endchar)
+function appendmacro!(suggestions, mod, macros, needle, endchar, mark_internal)
     for macsym in macros
         s = String(macsym)
         if endswith(s, needle)
             from = nextind(s, firstindex(s))
             to = prevind(s, sizeof(s)-sizeof(needle)+1)
-            push!(syms, s[from:to]*endchar)
+            push!(suggestions, ModuleCompletion(mod, s[from:to]*endchar, mark_internal && !Base.ispublic(mod, macsym)))
         end
     end
 end
 
 function append_filtered_mod_names!(ffunc::Function, suggestions::Vector{Completion},
-                                    mod::Module, name::String, complete_internal_only::Bool)
+                                    mod::Module, name::String, complete_internal_only::Bool,
+                                    mark_internal::Bool)
     imported = usings = !complete_internal_only
     ssyms = names(mod; all=true, imported, usings)
     filter!(ffunc, ssyms)
@@ -170,12 +174,13 @@ function append_filtered_mod_names!(ffunc::Function, suggestions::Vector{Complet
         end
     end
 
-    syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
-    appendmacro!(syms, macros, "_str", "\"")
-    appendmacro!(syms, macros, "_cmd", "`")
-    for sym in syms
-        push!(suggestions, ModuleCompletion(mod, sym))
+    for s in ssyms
+        completes_global(String(s), name) || continue
+        text = sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s)
+        push!(suggestions, ModuleCompletion(mod, text, mark_internal && !Base.ispublic(mod, s)))
     end
+    appendmacro!(suggestions, mod, macros, "_str", "\"", mark_internal)
+    appendmacro!(suggestions, mod, macros, "_cmd", "`", mark_internal)
     return suggestions
 end
 
@@ -186,6 +191,9 @@ function complete_symbol!(suggestions::Vector{Completion},
                           shift::Bool=false)
     local mod, t, val
     complete_internal_only = isempty(name)
+    # Only mark internal names when a module is named explicitly. Without a prefix, the
+    # user's own definitions would all count as internal.
+    mark_internal = false
     if prefix !== nothing
         res = repl_eval_ex(prefix, context_module)
         res === nothing && return Completion[]
@@ -193,6 +201,7 @@ function complete_symbol!(suggestions::Vector{Completion},
             val = res.val
             if isa(val, Module)
                 mod = val
+                mark_internal = true
                 if !shift
                     # when module is explicitly accessed, show internal bindings that are
                     # defined by the module, unless shift key is pressed
@@ -212,7 +221,7 @@ function complete_symbol!(suggestions::Vector{Completion},
         let mod_for_check = mod,
             modname = nameof(mod_for_check),
             is_main = mod_for_check === Main
-            append_filtered_mod_names!(suggestions, mod, name, complete_internal_only) do s::Symbol
+            append_filtered_mod_names!(suggestions, mod, name, complete_internal_only, mark_internal) do s::Symbol
                 if Base.isdeprecated(mod_for_check, s)
                     return false
                 elseif s === modname
@@ -314,83 +323,19 @@ function do_cmd_escape(s; escape_backticks::Bool=false)
     return s
 end
 
-# Cache the set of valid login shells from /etc/shells. Real users have their
-# shell listed here; service/daemon accounts use /bin/false etc. which are not.
-const _login_shells = Base.OncePerProcess{Vector{String}}() do
-    @static if Sys.iswindows()
-        String[]
-    else
-        try
-            filter!(l -> !isempty(l) && !startswith(l, '#'), readlines("/etc/shells"))
-        catch
-            String[]  # no /etc/shells; skip shell filtering
-        end
-    end
-end
-
-# pw_shell byte offset in struct passwd — everything before the pw_shell field:
-# Linux:     pw_name, pw_passwd (2 Ptrs), pw_uid, pw_gid (2 Cuints),
-#            pw_gecos, pw_dir (2 Ptrs)
-# macOS/BSD: same as Linux plus pw_change (Clong) and pw_class (Ptr)
-#            between pw_gid and pw_gecos
-const _pw_shell_offset = @static if Sys.islinux()
-    4 * sizeof(Ptr{Cvoid}) + 2 * sizeof(Cuint)
-else
-    5 * sizeof(Ptr{Cvoid}) + 2 * sizeof(Cuint) + sizeof(Clong)
-end
-
-# Return a sorted, deduplicated list of real local usernames. When all=false
-# (the default), service accounts are excluded by requiring their shell to be
-# listed in /etc/shells, and on macOS names starting with '_' are also excluded.
-function list_users(; all::Bool=false)
-    seen = Set{String}()
-    @static if !Sys.iswindows()
-        valid_shells = all ? String[] : _login_shells()
-        ccall(:setpwent, Cvoid, ())
-        try
-            while true
-                ptr = ccall(:getpwent, Ptr{Cvoid}, ())
-                ptr == C_NULL && break
-                name_ptr = unsafe_load(Ptr{Ptr{UInt8}}(ptr))
-                name_ptr == C_NULL && continue
-                name = unsafe_string(name_ptr)
-                if !all
-                    @static Sys.isapple() && startswith(name, '_') && continue
-                    if !isempty(valid_shells)
-                        shell_ptr = unsafe_load(Ptr{Ptr{UInt8}}(ptr + _pw_shell_offset))
-                        shell_ptr == C_NULL && continue
-                        unsafe_string(shell_ptr) in valid_shells || continue
-                    end
-                end
-                push!(seen, name)
-            end
-        finally
-            ccall(:endpwent, Cvoid, ())
-        end
-    end
-    return sort!(collect(seen))
-end
-
-# Return tilde-completion strings for usernames matching `prefix`.
-# With an empty prefix, the current user is represented as "~/" (not "~name/")
-# since that shorthand is always available. With a non-empty prefix the current
-# user's actual name is included when it matches, and "~/" is not offered.
+# Return tilde-completion strings for the user name `prefix`: `~/` for an empty prefix,
+# and otherwise the current user's `~name/` if their name starts with `prefix`. Other users
+# are not offered, since listing them means enumerating the passwd database, which can take
+# seconds with network directory services and is not thread-safe on every platform.
 function _complete_tilde_usernames(prefix::AbstractString)::Vector{String}
-    me = try Sys.username() catch; "" end
-    users = list_users()
-    completions = String[]
-    if isempty(prefix)
-        push!(completions, "~/")            # always offer ~/ for current user
-        for name in users
-            name == me && continue          # ~/  already covers current user
-            push!(completions, "~$name/")
-        end
-    else
-        for name in users
-            startswith(name, prefix) && push!(completions, "~$name/")
-        end
+    isempty(prefix) && return ["~/"]
+    me = try
+        Libc.getpw().username
+    catch err
+        err isa Base.IOError || rethrow()
+        return String[]
     end
-    return completions
+    return startswith(me, prefix) ? ["~$me/"] : String[]
 end
 
 function do_cmd_escape_tilde(s; escape_backticks::Bool=false)
@@ -1147,10 +1092,19 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         if obj !== nothing
             # Skip leading whitespace inside brackets.
             i = @something findnext(!isspace, string, first(key)) nextind(string, last(key))
-            key = intersect(i:last(key), 1:pos)
+            fullkey, key = key, intersect(i:last(key), 1:pos)
             s = string[key]
             matches = find_dict_matches(obj, s)
-            length(matches) == 1 && !closed && (matches[1] *= ']')
+            if length(matches) == 1
+                if !closed
+                    matches[1] *= ']'
+                elseif endswith(matches[1], rstrip(string[nextind(string, pos):last(fullkey)]))
+                    # Also replace the rest of the key and the `]` (e.g. auto-inserted), so that
+                    # `d["a|"]` completes to `d["ab"]|` rather than `d["ab"|"]`
+                    matches[1] *= ']'
+                    key = first(key):nextind(string, last(fullkey))
+                end
+            end
             if length(matches) > 0
                 ret = Completion[DictCompletion(obj, match) for match in sort!(matches)]
                 return ret, key, true
@@ -1173,12 +1127,19 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     #  "~/example.txt TAB => "/home/user/example.txt"
     r, closed = find_str(cur)
     if r !== nothing
-        r = intersect(r, 1:pos)
+        rstr, r = r, intersect(r, 1:pos)
         s = do_string_unescape(string[r])
         ret, success = complete_path_string(s, hint; string_escape=true,
                                             dirsep=Sys.iswindows() ? '\\' : '/')
-        if length(ret) == 1 && !closed && close_path_completion(ret[1].path)
-            ret[1] = PathCompletion(ret[1].path * '"')
+        if length(ret) == 1
+            # Also replace the rest of the string after the cursor if the completion ends with
+            # it, so `"foo|.txt"` completes to `"foobar.txt"` rather than `"foobar.txt.txt"`
+            endswith(ret[1].path, string[nextind(string, pos):last(rstr)]) && (r = first(r):last(rstr))
+            # Close the string, replacing an existing closing quote
+            if last(r) == last(rstr) && close_path_completion(ret[1].path)
+                ret[1] = PathCompletion(ret[1].path * '"')
+                closed && (r = first(r):nextind(string, last(r)))
+            end
         end
         success && return ret, r, success
     end
@@ -1417,7 +1378,7 @@ function shell_completions(str, pos, hint::Bool=false; escape_backticks::Bool=fa
     # First parse everything up to the current position
     scs = str[1:pos]
     args, last_arg_start = try
-        Base.shell_parse(scs, true)::Tuple{Expr,Int}
+        Base.shell_parse(scs, true; partial=true)::Tuple{Expr,Int}
     catch ex
         ex isa ArgumentError || ex isa ErrorException || rethrow()
         return Completion[], 1:0, false
@@ -1464,6 +1425,11 @@ function shell_completions(str, pos, hint::Bool=false; escape_backticks::Bool=fa
     r = last_arg_start:pos
     use_envpath = length(args.args) < 2
     paths, success = complete_path_string(path, hint; use_envpath, cmd_escape=true, escape_backticks, dirsep='/')
+    if length(paths) == 1
+        # Also replace the rest of the argument after the cursor if the completion ends with it
+        argend = prevind(str, something(findnext(isspace, str, nextind(str, pos)), nextind(str, lastindex(str))))
+        endswith(paths[1].path, str[nextind(str, pos):argend]) && (r = last_arg_start:argend)
+    end
     return paths, r, success
 end
 
@@ -1499,7 +1465,7 @@ function complete_path_string(path, hint::Bool=false;
         catch err
             if err isa Base.IOError
                 false
-            elseif err isa Base.ArgumentError && occursin("embedded NULs", err.msg)
+            elseif err isa Base.ArgumentError && occursin("embedded NULs", String(err.msg)::String)
                 false
             else
                 rethrow()

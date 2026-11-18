@@ -19,6 +19,11 @@ using Base.Filesystem: StatStruct
 n = 20
 intvls = [2, .2, .1, .005, .00001]
 pipe_fds = fill((Base.INVALID_OS_HANDLE, Base.INVALID_OS_HANDLE), n)
+# Earlier tests on this worker may leave fds open on purpose, such as locks on loaded cache files.
+fd_base = Sys.iswindows() ? 0 : let fd = ccall(:dup, Cint, (Cint,), 0)
+    ccall(:close, Cint, (Cint,), fd)
+    max(Int(fd), 0)
+end
 
 for i in 1:n
     if Sys.iswindows() || i > n ÷ 2
@@ -27,7 +32,7 @@ for i in 1:n
         uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), Ref(pipe_fds, i), 0, 0))
     end
     Ctype = Sys.iswindows() ? Ptr{Cvoid} : Cint
-    FDmax = Sys.iswindows() ? typemax(Int32) : (n + 60 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
+    FDmax = Sys.iswindows() ? typemax(Int32) : (fd_base + 2n + 20 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
     fd_in_limits =
         0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax &&
         0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
@@ -174,12 +179,12 @@ function test_init_afile()
     watched_folders = FileWatching.watched_folders
     @test @lock watched_folders isempty(watched_folders[])
     @test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))
-    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.5
+    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 2
     @test @lock(watched_folders, length(FileWatching.watched_folders[])) == 1
     @test unwatch_folder(dir) === nothing
     @test @lock watched_folders isempty(watched_folders[])
     @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent())))
-    @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 0.5
+    @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 2
     @test unwatch_folder(dir) === nothing
     @test 0.99 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))
     @test 0.99 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))

@@ -71,8 +71,8 @@ Initialize a new `SecretBuffer` from `data`, securely zeroing `data` afterwards.
 function SecretBuffer!(d::AbstractVector{UInt8})
     len = length(d)
     s = SecretBuffer(sizehint=len)
-    for i in 1:len
-        write(s, d[i])
+    for b in d
+        write(s, b)
     end
     seek(s, 0)
     securezero!(d)

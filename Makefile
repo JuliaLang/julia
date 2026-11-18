@@ -31,7 +31,7 @@ all: debug release
 # sort is used to remove potential duplicates
 DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_private_libexecdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/julia/stdlib $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
-BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src src/flisp src/support src/clangsa cli doc deps stdlib test test/clangsa test/embedding test/gcext test/llvmpasses)
+BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src src/flisp src/support src/arch src/clangsa cli doc deps stdlib test test/clangsa test/embedding test/gcext test/llvmpasses)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS)) $(BUILDROOT)/sysimage.mk $(BUILDROOT)/pkgimage.mk
 DIRS += $(BUILDDIRS)
 $(BUILDDIRMAKE): | $(BUILDDIRS)
@@ -65,7 +65,7 @@ julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
 
 # Build the HTML docs (skipped if already exists, notably in tarballs)
-$(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl -o -name version_git.jl \) -prune -o -type f -print)
+$(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl -o -name version_git.jl -o -name version_git_dirty \) -prune -o -type f -print)
 	@$(MAKE) docs
 
 .PHONY: julia-symlink
@@ -153,6 +153,16 @@ julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink j
 .PHONY: stdlibs-cache-release stdlibs-cache-debug
 stdlibs-cache-release stdlibs-cache-debug : stdlibs-cache-% : julia-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk $*
+
+# The bounds-checked stdlib caches only need the system image, so they can be built in
+# parallel with the normal ones: `make release stdlibs-cache-checkbounds`.
+.PHONY: stdlibs-cache-checkbounds
+stdlibs-cache-checkbounds: julia-sysimg-$(JULIA_BUILD_MODE)
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk stdlibs-cache-checkbounds JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
+
+.PHONY: checkbounds-pkgimages
+checkbounds-pkgimages: stdlibs-cache-checkbounds
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk checkbounds-pkgimages JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 .PHONY: debug release
 debug release : % : julia-% stdlibs-cache-%
@@ -258,8 +268,10 @@ JL_PRIVATE_EXES := 7z
 JL_PRIVATE_TOOLS :=
 ifeq ($(JULIA_BUILD_MODE),release)
 JL_PRIVATE_LIBS-0 += libjulia-internal libjulia-codegen
+JL_STATIC_RUNTIME := libjulia-internal.a
 else ifeq ($(JULIA_BUILD_MODE),debug)
 JL_PRIVATE_LIBS-0 += libjulia-internal-debug libjulia-codegen-debug
+JL_STATIC_RUNTIME := libjulia-internal-debug.a
 endif
 # BSD-3-Clause
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libamd libcamd libccolamd libcolamd libsuitesparseconfig
@@ -312,7 +324,7 @@ endef
 
 
 .PHONY: install
-install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
+install: $(build_depsbindir)/stringreplace $(if $(filter 0,$(JULIA_INSTALL_DOCS)),,$(BUILDROOT)/doc/_build/html/en/index.html)
 	@$(MAKE) $(QUIET_MAKE) $(JULIA_BUILD_MODE)
 	@for subdir in $(bindir) $(datarootdir)/julia/stdlib/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir) $(private_libexecdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
@@ -367,7 +379,6 @@ endif
 else
 
 # Copy over .dSYM directories directly for Darwin
-ifneq ($(DARWIN_FRAMEWORK),1)
 ifeq ($(OS),Darwin)
 ifeq ($(JULIA_BUILD_MODE),release)
 	cp -a $(build_libdir)/libjulia.*.dSYM $(DESTDIR)$(libdir)
@@ -390,18 +401,6 @@ endif
 			fi \
 		done \
 	done
-else
-# libjulia in Darwin framework has special location and name
-ifeq ($(JULIA_BUILD_MODE),release)
-	$(INSTALL_M) $(build_libdir)/libjulia.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_dylib)
-	@$(call dsymutil,$(DESTDIR)$(prefix)/$(framework_dylib),$(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME).dSYM)
-	@$(call dsymutil,$(build_private_libdir)/sys.dylib,$(DESTDIR)$(prefix)/$(framework_resources)/sys.dylib.dSYM)
-else ifeq ($(JULIA_BUILD_MODE),debug)
-	$(INSTALL_M) $(build_libdir)/libjulia-debug.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_dylib)_debug
-	@$(call dsymutil,$(DESTDIR)$(prefix)/$(framework_dylib)_debug,$(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME)_debug.dSYM)
-	@$(call dsymutil,$(build_private_libdir)/sys-debug.dylib,$(DESTDIR)$(prefix)/$(framework_resources)/sys-debug.dylib.dSYM)
-endif
-endif
 
 	for suffix in $(JL_PRIVATE_LIBS-0) ; do \
 		for lib in $(build_libdir)/$${suffix}.*$(SHLIB_EXT)*; do \
@@ -439,14 +438,41 @@ endif
 	for exe in $(JL_PRIVATE_TOOLS) ; do \
 		$(INSTALL_M) $(build_depsbindir)/$$exe $(DESTDIR)$(private_libexecdir) || exit 1; \
 	done
+ifneq (,$(and $(filter-out none,$(COMPRESS_DEBUG_SECTIONS)),$(findstring $(OS),Linux FreeBSD)))
+	# Compress the debug sections of Julia's executables and libraries, and of bundled
+	# libraries (e.g. libstdc++ and libgfortran), which ship them uncompressed. This is done
+	# here rather than at link time so that the build tree keeps uncompressed debug info for
+	# tools like BOLT. The system image is left out, as it is in nearly every backtrace and
+	# symbolizing it decompresses all of its debug info. Files without debug info or with
+	# compressed debug info are left alone, as objcopy would only rewrite them, and so are
+	# libraries rewritten by BOLT, whose layout GNU objcopy breaks (contrib/optimized
+	# compresses those itself). Skipped if objcopy can't compress, like the ELF Tool Chain
+	# one in FreeBSD 13's base system.
+	if $(OBJCOPY) --help 2>&1 | grep -q -e --compress-debug-sections; then \
+		for file in $(DESTDIR)$(bindir)/julia* $(DESTDIR)$(libdir)/*.$(SHLIB_EXT)* $(DESTDIR)$(private_libdir)/*.$(SHLIB_EXT)*; do \
+			case "$${file##*/}" in sys.$(SHLIB_EXT)|sys-debug.$(SHLIB_EXT)) continue ;; esac; \
+			[ ! -L "$$file" ] && [ "$$(head -c 4 "$$file" | tail -c 3)" = ELF ] || continue; \
+			$(READELF) -SW "$$file" | awk '/\] \.note\.bolt_info / { b = 1 } /\] \.debug_/ { d = 1; if ($$(NF-3) ~ /C/) c = 1 } END { exit !(d && !c && !b) }' || continue; \
+			$(OBJCOPY) --compress-debug-sections=$(COMPRESS_DEBUG_SECTIONS) "$$file" || exit 1; \
+		done; \
+	else \
+		echo "$(OBJCOPY) can't compress debug sections; not compressing them"; \
+	fi
+endif
 
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
-	# Copy system image
+	# Copy system image and static runtime. The archive goes beside the library
+	# that `-ljulia-internal` finds, so linkers keep preferring that library.
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
+endif
+ifeq ($(OS),WINNT)
+	$(INSTALL_F) $(build_libdir)/$(JL_STATIC_RUNTIME) $(DESTDIR)$(libdir)
+else
+	$(INSTALL_F) $(build_libdir)/$(JL_STATIC_RUNTIME) $(DESTDIR)$(private_libdir)
 endif
 
 	# Copy in all .jl sources as well
@@ -459,8 +485,10 @@ endif
 	find $(DESTDIR)$(datarootdir)/julia/base -type f -name \*.jl -exec chmod 0444 '{}' \;
 	find $(DESTDIR)$(datarootdir)/julia/test -type f -name \*.jl -exec chmod 0444 '{}' \;
 
+ifneq ($(JULIA_INSTALL_DOCS),0)
 	# Copy documentation
 	cp -R -L $(BUILDROOT)/doc/_build/html $(DESTDIR)$(docdir)/
+endif
 	# Remove various files which should not be installed
 	-rm -f $(DESTDIR)$(datarootdir)/julia/base/version_git.sh
 	-rm -f $(DESTDIR)$(datarootdir)/julia/test/Makefile
@@ -489,12 +517,10 @@ endif
 	# Update RPATH entries and JL_SYSTEM_IMAGE_PATH if $(private_libdir_rel) != $(build_private_libdir_rel)
 ifneq ($(private_libdir_rel),$(build_private_libdir_rel))
 ifeq ($(OS), Darwin)
-ifneq ($(DARWIN_FRAMEWORK),1)
 	for j in $(JL_TARGETS) ; do \
 		install_name_tool -rpath @executable_path/$(build_private_libdir_rel) @executable_path/$(private_libdir_rel) $(DESTDIR)$(bindir)/$$j || exit 1; \
 		install_name_tool -rpath @executable_path/$(build_libdir_rel) @executable_path/$(libdir_rel) $(DESTDIR)$(bindir)/$$j || exit 1; \
 	done
-endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
 	for j in $(JL_TARGETS) ; do \
 		$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN/$(private_libdir_rel):$$ORIGIN/$(libdir_rel)' $(DESTDIR)$(bindir)/$$j || exit 1; \
@@ -502,13 +528,8 @@ else ifneq (,$(findstring $(OS),Linux FreeBSD))
 endif
 
 	# Overwrite JL_SYSTEM_IMAGE_PATH in libjulia-internal
-	if [ "$(DARWIN_FRAMEWORK)" = "0" ]; then \
-		RELEASE_TARGET=$(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT); \
-		DEBUG_TARGET=$(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT); \
-	else \
-		RELEASE_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib); \
-		DEBUG_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib)_debug; \
-	fi; \
+	RELEASE_TARGET=$(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT); \
+	DEBUG_TARGET=$(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT); \
 	if [ "$(JULIA_BUILD_MODE)" = "release" ]; then \
 		$(call stringreplace,$${RELEASE_TARGET},sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT)); \
 	elif [ "$(JULIA_BUILD_MODE)" = "debug" ]; then \
@@ -518,14 +539,12 @@ endif
 
 	# Set rpath for libjulia-internal, which is moving from `../lib` to `../lib/julia`.
 ifeq ($(OS), Darwin)
-ifneq ($(DARWIN_FRAMEWORK),1)
 ifeq ($(JULIA_BUILD_MODE),release)
 	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
 	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-codegen.$(SHLIB_EXT)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT)
 	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-codegen-debug.$(SHLIB_EXT)
-endif
 endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
 ifeq ($(JULIA_BUILD_MODE),release)
@@ -538,12 +557,11 @@ endif
 endif
 
 ifeq ($(OS), Darwin)
-ifneq ($(DARWIN_FRAMEWORK),1)
 	for j in $(JL_PRIVATE_TOOLS) ; do \
 		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
 		install_name_tool -rpath @loader_path/$(build_libdir_rel) @executable_path/$(reverse_private_libexecdir_rel) $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
+		codesign -s - -f $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
 	done
-endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
 	for j in $(JL_PRIVATE_TOOLS) ; do \
 		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
@@ -553,13 +571,12 @@ endif
 
 ifneq ($(reverse_private_libexecdir_rel),$(reverse_build_private_libexecdir_rel))
 ifeq ($(OS), Darwin)
-ifneq ($(DARWIN_FRAMEWORK),1)
 	for j in $(JL_PRIVATE_EXES) ; do \
 		[ $$j = 7z ] && continue; \
 		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
 		install_name_tool -rpath @executable_path/$(reverse_build_private_libexecdir_rel) @executable_path/$(reverse_private_libexecdir_rel) $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
+		codesign -s - -f $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
 	done
-endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
 	for j in $(JL_PRIVATE_EXES) ; do \
 		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
@@ -574,10 +591,18 @@ ifeq ($(OS), Linux)
 endif
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $$(LOADER_BUILD_DEP_LIBS) != $$(LOADER_INSTALL_DEP_LIBS)
+	# On macOS that invalidates the signature, and the kernel then kills whatever loads the
+	# library, so sign it again. The same goes for the executables whose rpaths are edited above.
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_BUILD_DEP_LIBS)$$,$(LOADER_INSTALL_DEP_LIBS))
+ifeq ($(OS),Darwin)
+	codesign -s - -f $(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT)
+endif
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_DEBUG_BUILD_DEP_LIBS)$$,$(LOADER_DEBUG_INSTALL_DEP_LIBS))
+ifeq ($(OS),Darwin)
+	codesign -s - -f $(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
+endif
 endif
 endif
 
@@ -597,10 +622,6 @@ endif
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
 	cp -R $(build_sysconfdir)/julia $(DESTDIR)$(sysconfdir)/
-
-ifeq ($(DARWIN_FRAMEWORK),1)
-	$(MAKE) -C $(JULIAHOME)/contrib/mac/framework frameworknoinstall
-endif
 
 distclean:
 	-rm -fr $(BUILDROOT)/julia-*.tar.gz $(BUILDROOT)/julia*.exe $(BUILDROOT)/julia-$(JULIA_COMMIT)
@@ -648,9 +669,6 @@ exe:
 app:
 	$(MAKE) -C contrib/mac/app
 	@mv contrib/mac/app/$(JULIA_BINARYDIST_FILENAME).dmg $(BUILDROOT)
-
-darwinframework:
-	$(MAKE) -C $(JULIAHOME)/contrib/mac/framework
 
 .PHONY: light-source-dist.tmp
 light-source-dist.tmp: $(BUILDROOT)/doc/_build/html/en/index.html

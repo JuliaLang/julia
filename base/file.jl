@@ -10,6 +10,7 @@ export
     cptree,
     DirEntry,
     diskstat,
+    eachentry,
     hardlink,
     mkdir,
     mkpath,
@@ -719,8 +720,9 @@ function temp_cleanup_purge_all()
             return true
         end
     end
-    if may_need_gc[]
-        # this is only usually required on Sys.iswindows(), but may as well do it everywhere
+    if Sys.iswindows() && may_need_gc[]
+        # Windows can't delete files that are still open, so let finalizers close them
+        # first. Elsewhere, skip it: for a large heap it delays exit by seconds.
         GC.gc(true)
     end
     @lock TEMP_CLEANUP_LOCK temp_cleanup_purge_prelocked(true)
@@ -803,22 +805,28 @@ function _tempname(parent::AbstractString, suffix::AbstractString, max_tries::In
 end
 
 if Sys.iswindows()
-# While this isn't a true analog of `mkstemp`, it _does_ create an
-# empty file for us, ensuring that other simultaneous calls to
-# `_win_mkstemp()` won't collide, so it's a better name for the
-# function than `tempname()`.
+# Create an empty file with a random name and return its path.
+# GetTempFileNameW is avoided: it takes names from a 16-bit counter, so when other
+# processes create temporary files in the same directory, it can hand back names
+# that this process deleted moments earlier.
 function _win_mkstemp(temppath::AbstractString)
-    tempp = cwstring(temppath)
-    temppfx = cwstring(temp_prefix)
-    tname = Vector{UInt16}(undef, 32767)
-    uunique = ccall(:GetTempFileNameW, stdcall, UInt32,
-                    (Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt16}),
-                    tempp, temppfx, UInt32(0), tname)
-    windowserror("GetTempFileName", uunique == 0)
-    lentname = something(findfirst(iszero, tname))
-    @assert lentname > 0 "unexpected index"
-    resize!(tname, lentname - 1)
-    return transcode(String, tname)
+    req = Libc.malloc(_sizeof_uv_fs)
+    try
+        ret = ccall(:uv_fs_mkstemp, Cint,
+                    (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                    C_NULL, req, joinpath(temppath, temp_prefix * "XXXXXX"), C_NULL)
+        if ret < 0
+            uv_fs_req_cleanup(req)
+            uv_error("mktemp($(repr(temppath)))", ret)
+        end
+        handle = ccall(:uv_fs_get_result, Cssize_t, (Ptr{Cvoid},), req)
+        path = unsafe_string(ccall(:jl_uv_fs_t_path, Cstring, (Ptr{Cvoid},), req))
+        uv_fs_req_cleanup(req)
+        close(File(OS_HANDLE(Ptr{Cvoid}(handle))))
+        return path
+    finally
+        Libc.free(req)
+    end
 end
 
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
@@ -1202,6 +1210,170 @@ function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=fa
         return entries
     finally
         Libc.free(req)
+    end
+end
+
+"""
+    DirEntryIterator{T}
+
+A stateful, single-pass iterator over the entries of a directory, yielding
+either filename `String`s or [`DirEntry`](@ref) objects depending on the
+element type `T`. Created by [`eachentry`](@ref).
+
+The underlying directory handle is opened lazily on the first call to
+`iterate` (via `uv_fs_opendir`) and is released when iteration reaches
+end-of-directory, when [`close`](@ref) is called, or by a finalizer.
+Entries are streamed one at a time from the operating system; the full
+listing is never materialized in memory. For deterministic cleanup on
+very large directories, prefer the do-block form of `eachentry`.
+
+A `DirEntryIterator` is single-consumer: do not iterate or close it from
+multiple tasks concurrently. Calling `close` from a finalizer while the
+owning task has finished iterating is safe.
+"""
+mutable struct DirEntryIterator{T}
+    const dir::String
+    # Yield joinpath(dir, name) instead of the bare name (String eltype only)
+    const join::Bool
+    # Opaque uv_dir_t*, C_NULL before opening and after closing. Whoever swaps it to C_NULL closes it.
+    @atomic uvdir::Ptr{Cvoid}
+    const status::RefValue{Cint}
+    closed::Bool
+    # The next name, when it was read ahead to check for the end of the directory
+    peeked::Union{Nothing, String}
+    function DirEntryIterator{T}(dir::AbstractString, join::Bool=false) where {T}
+        T === String || T === DirEntry || throw(ArgumentError("element type must be String or DirEntry"))
+        finalizer(close, new{T}(String(dir), join, C_NULL, RefValue{Cint}(0), false, nothing))
+    end
+end
+
+function _eachentry_open!(it::DirEntryIterator)
+    it.uvdir == C_NULL || return
+    it.closed && throw(ArgumentError("DirEntryIterator has already been consumed"))
+    dir_out = Ref{Ptr{Cvoid}}(C_NULL)
+    err = ccall(:jl_uv_fs_opendir, Cint,
+                (Cstring, Ptr{Ptr{Cvoid}}),
+                it.dir, dir_out)
+    if err < 0
+        it.closed = true
+        uv_error("eachentry($(repr(it.dir)))", err)
+    end
+    @atomic it.uvdir = dir_out[]
+    return
+end
+
+function Base.close(it::DirEntryIterator)
+    # Atomically claim the dir pointer so a concurrent finalizer cannot double-free.
+    uvdir = @atomicswap it.uvdir = C_NULL
+    if uvdir != C_NULL
+        ccall(:jl_uv_fs_closedir, Cint, (Ptr{Cvoid},), uvdir)
+    end
+    it.closed = true
+    it.peeked = nothing
+    return
+end
+
+Base.IteratorSize(::Type{<:DirEntryIterator}) = Base.SizeUnknown()
+Base.eltype(::Type{DirEntryIterator{T}}) where {T} = T
+
+function _eachentry_read!(it::DirEntryIterator)
+    _eachentry_open!(it)
+    name = ccall(:jl_uv_fs_readdir1, Any, (Ptr{Cvoid}, Ptr{Cint}), it.uvdir, it.status)::Union{Nothing, String}
+    if name === nothing && it.status[] < 0
+        err = it.status[]
+        close(it)
+        uv_error("eachentry($(repr(it.dir)))", err)
+    end
+    return name
+end
+
+function Base.isdone(it::DirEntryIterator, _=nothing)
+    it.closed && return true
+    it.peeked === nothing || return false
+    it.peeked = _eachentry_read!(it)
+    return it.peeked === nothing
+end
+
+function Base.iterate(it::DirEntryIterator{T}, _=nothing) where {T}
+    name = it.peeked
+    if name === nothing
+        name = _eachentry_read!(it)
+        if name === nothing
+            close(it)
+            return nothing
+        end
+    end
+    it.peeked = nothing
+    value = T === DirEntry ? DirEntry(it.dir, name, it.status[]) :
+            it.join ? joinpath(it.dir, name) : name
+    return value, nothing
+end
+
+"""
+    eachentry(dir::AbstractString=pwd(); join::Bool=false)::DirEntryIterator{String}
+    eachentry(entry::DirEntry; join::Bool=false)::DirEntryIterator{String}
+    eachentry(dir::AbstractString, ::Type{DirEntry})::DirEntryIterator{DirEntry}
+    eachentry(::Type{DirEntry})::DirEntryIterator{DirEntry}
+    eachentry(entry::DirEntry, ::Type{DirEntry})::DirEntryIterator{DirEntry}
+    eachentry(f, dir[, ::Type{DirEntry}]; kwargs...) -> f(::DirEntryIterator)
+
+Return a stateful, single-pass iterator over the contents of the directory `dir`
+(or the current working directory if not given), without first materializing the
+full listing. Useful for very large directories or when iteration may be
+short-circuited (e.g. with `break` or [`Iterators.take`](@ref)).
+
+By default the iterator yields filename `String`s, matching [`readdir`](@ref);
+if `join` is true it yields `joinpath(dir, name)` for each name instead.
+Pass `DirEntry` as the trailing type argument to yield [`DirEntry`](@ref)
+objects, which carry the entry type as cached at scan time so [`isfile`](@ref),
+[`isdir`](@ref), etc. can be checked without further `stat` calls (the full
+path of a `DirEntry` is available via `joinpath(entry)`, so there is no `join`
+keyword for that form, as with `readdir(dir, DirEntry)`).
+
+Unlike [`readdir`](@ref), the entries are returned in filesystem order (not
+sorted) and the iterator can only be traversed once. The do-block form ensures
+the underlying directory handle is released as soon as `f` returns; otherwise
+cleanup happens at end-of-iteration, on [`close`](@ref), or via a finalizer.
+
+See also [`readdir`](@ref), [`DirEntry`](@ref), [`walkdir`](@ref).
+
+!!! compat "Julia 1.14"
+    `eachentry` requires Julia 1.14 or later.
+
+# Examples
+```julia
+# short-circuit a huge directory
+for entry in eachentry("/very/large/dir", DirEntry)
+    isfile(entry) && basename(entry) == "needle.txt" && break
+end
+
+# deterministic cleanup
+eachentry("/very/large/dir") do names
+    for name in names
+        ...
+    end
+end
+```
+"""
+eachentry(dir::AbstractString=pwd(); join::Bool=false) = DirEntryIterator{String}(dir, join)
+eachentry(entry::DirEntry; join::Bool=false) = DirEntryIterator{String}(joinpath(entry), join)
+eachentry(dir::AbstractString, ::Type{DirEntry}) = DirEntryIterator{DirEntry}(dir)
+eachentry(::Type{DirEntry}) = DirEntryIterator{DirEntry}(pwd())
+eachentry(entry::DirEntry, ::Type{DirEntry}) = DirEntryIterator{DirEntry}(joinpath(entry))
+function eachentry(f, dir; join::Bool=false)
+    it = eachentry(dir; join)
+    try
+        return f(it)
+    finally
+        close(it)
+    end
+end
+function eachentry(f, dir, ::Type{DirEntry})
+    it = eachentry(dir, DirEntry)
+    try
+        return f(it)
+    finally
+        close(it)
     end
 end
 

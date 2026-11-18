@@ -11,5 +11,6 @@ profiles
 profiles-bolt
 
 toolchain
+toolchain-target
 pgo-instrumented.build
 optimized.build

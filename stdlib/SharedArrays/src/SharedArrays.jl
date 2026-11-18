@@ -1,7 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Provide the [`SharedArray`](@ref) type. It represents an array, which is shared across multiple processes, on a single machine.
+    SharedArrays
+
+The [`SharedArray`](@ref) type: an array that several processes on one machine share,
+for parallel work with `Distributed`.
 """
 module SharedArrays
 
@@ -172,6 +175,8 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
     S
 end
 
+SharedArray{T,N}(d::NTuple{N,Integer}; kwargs...) where {T,N} =
+    SharedArray{T,N}(map(Int, d); kwargs...)
 SharedArray{T,N}(I::Integer...; kwargs...) where {T,N} =
     SharedArray{T,N}(I; kwargs...)
 SharedArray{T}(d::NTuple; kwargs...) where {T} =
@@ -582,8 +587,12 @@ similar(S::SharedArray, T::Type) = similar(S.s, T, size(S))
 similar(S::SharedArray, dims::Dims) = similar(S.s, eltype(S), dims)
 similar(S::SharedArray) = similar(S.s, eltype(S), size(S))
 
-reduce(f, S::SharedArray) =
-    mapreduce(fetch, f, Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
+function reduce(f, S::SharedArray)
+    isempty(S) && return reduce(f, S.s)
+    # skip workers holding no elements, since many functions can't reduce an empty collection
+    return mapreduce(fetch, f, Any[ @spawnat p reduce(f, S.loc_subarr_1d)
+                                    for (i, p) in enumerate(procs(S)) if !isempty(range_1dim(S, i)) ])
+end
 
 reduce(::typeof(vcat), S::SharedVector) = invoke(reduce, Tuple{Any,SharedArray}, vcat, S)
 reduce(::typeof(hcat), S::SharedVector) = invoke(reduce, Tuple{Any,SharedArray}, hcat, S)

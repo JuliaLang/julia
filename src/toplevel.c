@@ -38,20 +38,37 @@ jl_mutex_t jl_modules_mutex;
 // During incremental compilation, the following gets set
 jl_module_t *jl_precompile_toplevel_module = NULL;   // the first toplevel module being defined
 
-jl_module_t *jl_add_standard_imports(jl_module_t *m)
+jl_module_t *jl_add_standard_imports(jl_module_t *m) JL_CANSAFEPOINT
 {
-    jl_module_t *base_module = jl_base_relative_to(m);
-    assert(base_module != NULL);
+    jl_module_t *base = jl_base_relative_to(m);
+    jl_value_t *into =  NULL;
+    assert(base != NULL);
     // using Base
-    jl_module_initial_using(m, base_module);
-    return base_module;
+    JL_GC_PUSH1(&into);
+    jl_module_initial_using(m, base);
+    jl_datatype_t *include_into =
+        (jl_datatype_t *)jl_get_global(base, jl_symbol("IncludeInto"));
+    if (include_into) {
+        into = jl_new_struct(include_into, m);
+        jl_set_initial_const(m, jl_symbol("include"), into, 0);
+    }
+    jl_datatype_t *eval_into =
+        (jl_datatype_t *)jl_get_global(jl_core_module, jl_symbol("EvalInto"));
+    if (eval_into) {
+        into = jl_new_struct(eval_into, m);
+        jl_set_initial_const(m, jl_symbol("eval"), into, 0);
+    }
+    JL_GC_POP();
+    return base;
 }
 
 // create a new top-level module
 void jl_init_main_module(void)
 {
     assert(jl_main_module == NULL);
-    jl_main_module = jl_new_module_(jl_symbol("Main"), NULL, 0, 1); // baremodule Main; end
+    // baremodule Main; end
+    jl_main_module = jl_new_module_(
+        jl_symbol("Main"), NULL, BOOTSTRAP_EDITION, 0, 1);
     jl_set_initial_const(jl_core_module, jl_symbol("Main"), (jl_value_t*)jl_main_module, 0); // const Main.Core = Core
     jl_set_initial_const(jl_main_module, jl_symbol("Core"), (jl_value_t*)jl_core_module, 0); // const Core.Main = Main
 }
@@ -115,24 +132,6 @@ static int jl_is__toplevel__mod(jl_module_t *mod, jl_task_t *ct) JL_CANSAFEPOINT
         (jl_value_t*)mod == jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"), ct->world_age);
 }
 
-JL_DLLEXPORT void jl_setup_new_module(jl_module_t *m, jl_value_t *syntax_version) JL_CANSAFEPOINT
-{
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
-    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_setup_module!"), ct->world_age);
-    if (f != NULL) {
-        jl_value_t **fargs;
-        JL_GC_PUSHARGS(fargs, 3);
-        fargs[0] = f;
-        fargs[1] = (jl_value_t*)m;
-        fargs[2] = syntax_version;
-        jl_apply(fargs, 3);
-        JL_GC_POP();
-    }
-    ct->world_age = last_age;
-}
-
 JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym_t *name, jl_value_t *syntax_version,
                                               int std_imports, const char *filename, int lineno) JL_CANSAFEPOINT
 {
@@ -141,7 +140,14 @@ JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym
     // If we have `Base`, don't also try to import `Core` - the `Base` exports are a superset.
     // While we allow multiple imports of the same binding from different modules, various error printing
     // performs reflection on which module a binding came from and we'd prefer users see "Base" here.
-    jl_module_t *newm = jl_new_module_(name, is_parent__toplevel__ ? NULL : parent_module, std_imports && jl_base_module != NULL ? 0 : 1, 1);
+    jl_module_t *newm = jl_new_module_(
+        name,
+        is_parent__toplevel__ ? NULL : parent_module,
+        /* TODO: should track the expression edition (requires Syntax) */
+        jl_get_module_edition(parent_module),
+        std_imports && jl_base_module != NULL ? 0 : 1,
+        1
+    );
     jl_value_t *form = (jl_value_t*)newm;
     JL_GC_PUSH1(&form);
     JL_LOCK(&jl_modules_mutex);
@@ -154,7 +160,7 @@ JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym
 
     // add standard imports unless baremodule
     if (std_imports && jl_base_module != NULL) {
-        jl_setup_new_module(newm, syntax_version);
+        jl_add_standard_imports(newm);
     }
 
     if (parent_module == jl_main_module && name == jl_symbol("Base") && jl_base_module == NULL) {
@@ -378,7 +384,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int *has_defs, int *has_opaque) JL_CANSAFEPOINT
+static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int *has_defs, int *needs_resolve) JL_CANSAFEPOINT
 {
     if (!jl_is_expr(v))
         return;
@@ -409,8 +415,9 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
         *has_ccall = 1;
         return;
     }
-    else if (head == jl_new_opaque_closure_sym) {
-        *has_opaque = 1;
+    else if (head == jl_new_opaque_closure_sym || head == jl_foreignglobal_sym) {
+        // the interpreter can run these, but only after definition effects are resolved
+        *needs_resolve = 1;
         return;
     }
     else if (head == jl_call_sym && jl_expr_nargs(e) > 0) {
@@ -443,7 +450,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
     for (i = 0; i < jl_array_nrows(e->args); i++) {
         jl_value_t *a = jl_exprarg(e, i);
         if (jl_is_expr(a))
-            expr_attributes(a, body, has_ccall, has_defs, has_opaque);
+            expr_attributes(a, body, has_ccall, has_defs, needs_resolve);
     }
 }
 
@@ -452,19 +459,19 @@ int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile)
     jl_array_t *body = src->code;
     assert(jl_typetagis(body, jl_array_any_type));
     size_t i;
-    int has_ccall = 0, has_defs = 0, has_opaque = 0;
+    int has_ccall = 0, has_defs = 0, needs_resolve = 0;
     if (include_force_compile && jl_has_meta(body, jl_force_compile_sym))
         return 1;
     for(i=0; i < jl_array_nrows(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
-        expr_attributes(stmt, body, &has_ccall, &has_defs, &has_opaque);
+        expr_attributes(stmt, body, &has_ccall, &has_defs, &needs_resolve);
         if (has_ccall)
             return 1;
     }
     return 0;
 }
 
-static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int *has_loops, int *has_opaque, int *forced_compile) JL_CANSAFEPOINT
+static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int *has_loops, int *needs_resolve, int *forced_compile) JL_CANSAFEPOINT
 {
     size_t i;
     *has_loops = 0;
@@ -480,7 +487,7 @@ static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int
                     *has_loops = 1;
             }
         }
-        expr_attributes(stmt, body, has_ccall, has_defs, has_opaque);
+        expr_attributes(stmt, body, has_ccall, has_defs, needs_resolve);
     }
     *forced_compile = jl_has_meta(body, jl_force_compile_sym);
 }
@@ -509,6 +516,15 @@ static int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
         return 0;
     }
     return 1;
+}
+
+static jl_value_t *make_linenumbernode(const char *filename, int lineno) JL_CANSAFEPOINT
+{
+    jl_value_t *line = jl_box_long(lineno);
+    JL_GC_PUSH1(&line);
+    jl_value_t *loc = jl_new_struct(jl_linenumbernode_type, line, jl_symbol(filename));
+    JL_GC_POP();
+    return loc;
 }
 
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_for_uninferred(jl_method_instance_t *mi, jl_code_info_t *src)
@@ -588,15 +604,15 @@ static jl_value_t *jl_eval_toplevel_stmts(jl_module_t *JL_NONNULL m, jl_array_t 
 {
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
-    jl_value_t *root = NULL;
-    JL_GC_PUSH1(&root);
+    jl_value_t *root = NULL, *loc = NULL;
+    JL_GC_PUSH2(&root, &loc);
     jl_value_t *res = jl_nothing;
     int i;
     for (i = 0; i < jl_array_nrows(stmts); i++) {
         root = jl_array_ptr_ref(stmts, i);
         if (jl_needs_lowering(root)) {
-            root = jl_svecref(jl_lower(root, m, *toplevel_filename, *toplevel_lineno, ~(size_t)0,
-                                       need_value), 0);
+            loc = make_linenumbernode(*toplevel_filename, *toplevel_lineno);
+            root = jl_svecref(jl_lower(m, root, ~(size_t)0, need_value, loc), 0);
         }
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         res = jl_toplevel_eval_flex(m, root, fast, 1, toplevel_filename, toplevel_lineno);
@@ -662,7 +678,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     JL_GC_PUSH3(&thk, &ex, &root);
 
     if (!expanded && (jl_needs_lowering(e))) {
-        ex = (jl_expr_t*)jl_svecref(jl_lower(e, m, *toplevel_filename, *toplevel_lineno, ~(size_t)0, 1), 0);
+        root = make_linenumbernode(*toplevel_filename, *toplevel_lineno);
+        ex = (jl_expr_t*)jl_svecref(jl_lower(m, e, ~(size_t)0, 1, root), 0);
     }
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
 
@@ -739,8 +756,8 @@ JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t
     size_t last_age = ct->world_age;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
 
-    int has_ccall = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced_compile = 0;
-    body_attributes((jl_array_t*)thk->code, &has_ccall, &has_defs, &has_loops, &has_opaque, &forced_compile);
+    int has_ccall = 0, has_defs = 0, has_loops = 0, needs_resolve = 0, forced_compile = 0;
+    body_attributes((jl_array_t*)thk->code, &has_ccall, &has_defs, &has_loops, &needs_resolve, &forced_compile);
 
     jl_method_instance_t *mfunc = NULL;
     jl_value_t *result;
@@ -767,7 +784,7 @@ JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t
     else {
         // use interpreter
         assert(thk);
-        if (has_opaque) {
+        if (needs_resolve) {
             jl_resolve_definition_effects_in_ir((jl_array_t*)thk->code, m, NULL, NULL, 0);
         }
         result = jl_interpret_toplevel_thunk(m, thk);
@@ -873,7 +890,8 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     jl_value_t *result = jl_nothing;
     jl_value_t *ast = NULL;
     jl_value_t *expression = NULL;
-    JL_GC_PUSH3(&ast, &result, &expression);
+    jl_value_t *loc = NULL;
+    JL_GC_PUSH4(&ast, &result, &expression, &loc);
 
     ast = jl_svecref(jl_parse(jl_string_data(text), jl_string_len(text),
                               filename, module), 0);
@@ -900,7 +918,8 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
                 jl_atomic_store_relaxed(&jl_lineno, lineno);
                 continue;
             }
-            expression = jl_svecref(jl_lower(expression, module, jl_string_data(filename), lineno, ~(size_t)0, 1), 0);
+            loc = make_linenumbernode(filename_str, lineno);
+            expression = jl_svecref(jl_lower(module, expression, ~(size_t)0, 1, loc), 0);
             ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             result = jl_toplevel_eval_flex(module, expression, 1, 1, &filename_str, &lineno);
         }

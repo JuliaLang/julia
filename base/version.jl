@@ -88,7 +88,7 @@ VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
         map(x->x isa Integer ? UInt64(x) : String(x), pre),
         map(x->x isa Integer ? UInt64(x) : String(x), bld))
 
-VersionNumber(v::Tuple) = VersionNumber(v...)
+VersionNumber(v::Tuple) = VersionNumber(v...)::VersionNumber
 VersionNumber(v::VersionNumber) = v
 
 function print(io::IO, v::VersionNumber)
@@ -127,6 +127,9 @@ $"ix
 function split_idents(s::AbstractString)
     idents = eachsplit(s, '.')
     pidents = Union{UInt64,String}[occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident) for ident in idents]
+    n = length(pidents)
+    n == 1 && return (pidents[1],)
+    n == 2 && return (pidents[1], pidents[2])
     return tuple(pidents...)::VerTuple
 end
 
@@ -226,8 +229,17 @@ function hash(v::VersionNumber, h::UInt)
     h = hash(v.major, h)
     h = hash(v.minor, h)
     h = hash(v.patch, h)
-    h = hash(v.prerelease, ~h)
-    h = hash(v.build, ~h)
+    h = hash_idents(v.prerelease, ~h)
+    h = hash_idents(v.build, ~h)
+end
+
+# `hash(t, h)` for a `VerTuple`, without dispatching on its type
+function hash_idents(@nospecialize(t::VerTuple), h::UInt)
+    h ⊻= tuplehash_seed
+    for i in length(t):-1:1
+        h = hash(t[i]::Union{UInt64,String}, h)
+    end
+    return h
 end
 
 lowerbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, ("",), ())
@@ -265,6 +277,21 @@ const VERSION = try
 catch e
     println("while creating Base.VERSION, ignoring error $e")
     VersionNumber(0)
+end
+
+# `VERSION` with build metadata for builds that behave differently from a regular one,
+# e.g. `v"1.14.0-alpha1+opt"` or `v"1.14.0-alpha1+assert"`. It is only for display (the
+# banner and `versioninfo()`): `VERSION` itself stays the same so comparisons with it work.
+function version_with_build_variant()
+    tags = String[]
+    isempty(BUILD_VARIANT) || push!(tags, BUILD_VARIANT)
+    if isdebugbuild()
+        push!(tags, "debug")
+    elseif ccall(:jl_is_assertsbuild, Int8, ()) != 0
+        push!(tags, "assert")
+    end
+    isempty(tags) && return VERSION
+    return VersionNumber(VERSION.major, VERSION.minor, VERSION.patch, VERSION.prerelease, (VERSION.build..., tags...))
 end
 
 const libllvm_version = if endswith(libllvm_version_string, "jl")
@@ -435,10 +462,10 @@ function Base.print(io::IO, r::VersionRange)
     return if (m, n) == (0, 0)
         print(io, '*')
     elseif m == 0
-        print(io, "0 -")
-        join(io, r.upper.t, '.')
+        print(io, "0 - ")
+        join(io, r.upper.t[1:n], '.')
     elseif n == 0
-        join(io, r.lower.t, '.')
+        join(io, r.lower.t[1:m], '.')
         print(io, " - *")
     else
         join(io, r.lower.t[1:m], '.')
@@ -744,6 +771,12 @@ const ver_regs =
 ]
 
 # Interaction with language edition: there is at most one edition per minor
-# version, and any version should specify some default edition.
-EditionNumber(v::VersionNumber) = (Int(v.major), Int(v.minor))
-VersionedParse(v::VersionNumber) = VersionedParse(EditionNumber(v))
+# version, and any version corresponds to some edition.  All editions correspond
+# to a julia release (the first release supporting them) except for
+# EXPERIMENTAL_EDITION.
+normalized_edition(v::VersionNumber) = normalized_edition((Int(v.major), Int(v.minor)))
+VersionedParse(v::VersionNumber) = VersionedParse(normalized_edition(v))
+
+const set_syntax_version = Core.set_edition # todo: deprecate
+Core.set_edition(mod::Module, v::VersionNumber) =
+    Core.set_edition(mod, normalized_edition(v))

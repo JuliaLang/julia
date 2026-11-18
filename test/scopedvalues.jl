@@ -285,3 +285,17 @@ end
     run_53584() # warmup
     @test (@allocated run_53584()) < 10_000
 end
+
+# `Core.current_scope()` and `getfield`/`setfield!` on the current task's `scope` field
+# must be treated as accessing the same memory
+@noinline function current_scope_after_setfield(t::Task, @nospecialize(new))
+    old = Core.current_scope()
+    setfield!(t, :scope, new)
+    cur = Core.current_scope()
+    setfield!(t, :scope, old)
+    return cur
+end
+@testset "current_scope aliases the Task's scope field" begin
+    new = Base.ScopedValues.Scope(nothing)
+    @test current_scope_after_setfield(current_task(), new) === new
+end

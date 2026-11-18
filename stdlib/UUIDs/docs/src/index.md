@@ -5,6 +5,7 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/UUIDs/docs/src/
 # UUIDs
 
 ```@docs
+UUIDs.UUID
 UUIDs.uuid1
 UUIDs.uuid4
 UUIDs.uuid5

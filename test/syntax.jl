@@ -1766,7 +1766,15 @@ end
 # #6080
 @test_loweringerror(:(ccall(:a, Cvoid, (Cint,), &x)), "invalid syntax &x")
 
-@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall/cglobal function name and library expression cannot reference local variables")
+@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall/cglobal function name and library expression cannot reference local variable")
+# #38907, #59324
+@test_loweringerror(:(let lib = nothing
+                          () -> (lib = "lib"; ccall((:a, lib), Cvoid, ()))
+                      end), "ccall/cglobal function name and library expression cannot reference local variable")
+@test_loweringerror(:(f(::Type{T}) where {T} = ccall(:a, (T where T), ())), "ccall return type cannot reference local variable")
+@test_loweringerror(:(f(T) = ccall(:a, T, ())), "ccall return type cannot reference local variable")
+@test_loweringerror(:(f(x, T) = ccall(:a, Cvoid, (T,), x)), "ccall argument type cannot reference local variable")
+@test_loweringerror(:(f(x) = ccall(:a, Cvoid, (Ref{<:Any},), x)), "ccall argument type cannot reference local variable")
 
 @test_parseerror "x.'"
 @test_parseerror "0.+1"
@@ -3301,7 +3309,7 @@ end
     @test f() == 1
     ex = Expr(:vcat)
     ex.args = fill!(Vector{Any}(undef, 600000), 1)
-    @test_throws ErrorException("syntax: expression too large") eval(ex)
+    @test_throws "expression too large" eval(ex)
 end
 
 # issue 25678
@@ -3627,7 +3635,7 @@ demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
     @test z == 5
 
     @test_throws ArgumentError begin x, y..., z = 1:1 end
-    @test_throws BoundsError begin x, y, _..., z = 1, 2 end
+    @test_throws ArgumentError begin x, y, _..., z = 1, 2 end
 
     last((a..., b)) = b
     front((a..., b)) = a
@@ -3807,6 +3815,17 @@ end
     @test p("public() = 6") == Expr(:(=), Expr(:call, :public), Expr(:block, 6))
 end
 
+# Nested property access in updating assignments is evaluated once (issue #62436).
+struct PropertyCounter62436
+    x::Base.RefValue{Int}
+    calls::Base.RefValue{Int}
+end
+
+function Base.getproperty(a::PropertyCounter62436, name::Symbol)
+    getfield(a, :calls)[] += 1
+    getfield(a, name)
+end
+
 @testset "removing argument side effects" begin
     # Allow let blocks in broadcasted LHSes, but only evaluate them once:
     execs = 0
@@ -3832,6 +3851,53 @@ end
     @test (f60152([1, 2, 3], (pa_execs+=1); kw=(kw_execs+=1)) .*= 2) == [2,4,6]
     @test pa_execs === 1
     @test kw_execs === 1
+
+    calls = Ref(0)
+    value = Ref(1)
+    a = PropertyCounter62436(value, calls)
+    @test (a.x.x += 1) == 2
+    @test (calls[], value[]) == (1, 2)
+
+    @test_throws "syntax:" Core.eval(@__MODULE__, :((a.x, b.x) += rhs))
+    @test_throws "syntax:" Core.eval(@__MODULE__, :((a[], b[]) += rhs))
+end
+
+mutable struct PropLog64814
+    log::Vector{Symbol}
+    v::Vector{Int}
+    i::Int
+    f::Any
+end
+
+function Base.getproperty(p::PropLog64814, name::Symbol)
+    push!(getfield(p, :log), name)
+    getfield(p, name)
+end
+
+@testset "property reads are not repeatable (#64814)" begin
+    log = Symbol[]
+    note(s) = (push!(log, s); s)
+    p = PropLog64814(log, [1, 2], 1, (args...; kws...) -> nothing)
+
+    # the callee `p.f` and the argument `p.i` are read in source order
+    p.f(p.i, note(:b); k=note(:k))
+    @test log == [:f, :i, :b, :k]
+
+    # `a.b[i] += rhs` executes `p.v` and `tmp[p.i]` once each
+    empty!(log)
+    p.v[p.i] += note(:rhs) === :rhs ? 10 : 0
+    @test log == [:v, :i, :rhs]
+    @test getfield(p, :v) == [11, 2]
+
+    # ...so when `rhs` mutates `p.v`, the old `p.v` receives the update
+    old = getfield(p, :v)
+    p.v[1] += (setfield!(p, :v, [100, 200]); 5)
+    @test old == [16, 2]
+    @test getfield(p, :v) == [100, 200]
+
+    # these shouldn't mention "SSAValue" (broken in flisp lowering)
+    @test_throws "syntax:" Core.eval(@__MODULE__, :(Base.f64814(; a=1, a=2)))
+    @test_throws "syntax:" Core.eval(@__MODULE__, :(const a.b.c::Int = 1))
 end
 
 # Allow GlobalRefs in macro definition
@@ -4794,4 +4860,41 @@ end
     :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1;b=3))
     ]
     @test_throws "invalid assignment location" Core.eval(@__MODULE__, ex)
+end
+
+# issue #20392: the calling convention of `ccall` must survive macro hygiene
+macro ccall_cdecl_20392()
+    :(ccall(:jl_get_world_counter, cdecl, UInt, ()))
+end
+macro ccall_llvmcall_20392()
+    :(ccall("llvm.donothing", llvmcall, Cvoid, ()))
+end
+macro ccall_conv_20392(conv)
+    Expr(:call, :ccall, QuoteNode(:jl_get_world_counter), esc(conv), :UInt, Expr(:tuple))
+end
+macro ccall_conv_nested_20392()
+    :(@ccall_conv_20392 cdecl)
+end
+macro cdecl_20392()
+    :cdecl
+end
+macro ccall_esc_callee_20392()
+    Expr(:call, esc(:ccall), QuoteNode(:jl_get_world_counter), :cdecl, :UInt, Expr(:tuple))
+end
+macro call_cdecl_20392()
+    :(g(cdecl))
+end
+@testset "ccall calling convention in macro (#20392)" begin
+    @test @ccall_cdecl_20392() isa UInt
+    @test @ccall_llvmcall_20392() === nothing
+    @test @ccall_conv_nested_20392() isa UInt
+    @test ccall(:jl_get_world_counter, @cdecl_20392(), UInt, ()) isa UInt
+    @test @ccall_esc_callee_20392() isa UInt
+    # hygiene must leave the convention a plain symbol for any lowerer
+    @test (@macroexpand @ccall_cdecl_20392()).args[3] === :cdecl
+    @test (@macroexpand @ccall_conv_nested_20392()).args[3] === :cdecl
+    @test (@macroexpand ccall(:jl_get_world_counter, @cdecl_20392(), UInt, ())).args[3] === :cdecl
+    @test (@macroexpand @ccall_esc_callee_20392()).args[3] === :cdecl
+    # but only there: the names are ordinary variables elsewhere
+    @test (@macroexpand @call_cdecl_20392()).args[2] == GlobalRef(@__MODULE__, :cdecl)
 end

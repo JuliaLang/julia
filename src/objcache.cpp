@@ -1,11 +1,13 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 #include "objcache.h"
 
+#include <chrono>
+
 #include <llvm/Support/Endian.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/SHA1.h>
 
-#include "jl_codegen_hash.inc"
+#include <jl_codegen_hash.inc>
 #include "jitlayers.h"
 #include "julia.h"
 #include "julia_internal.h"
@@ -51,6 +53,7 @@ static const size_t OBJCACHE_CAPACITY =
 static constexpr size_t OBJCACHE_EVICT_PAGE_BUDGET = 128;
 static constexpr size_t OBJCACHE_EVICT_ENTRY_BUDGET = 64;
 static constexpr size_t OBJCACHE_EVICT_MAX_ENTRY_PAGES = 8192;
+static constexpr size_t OBJCACHE_PRUNE_ENTRY_BUDGET = 256;
 
 static size_t objectPageEstimate(size_t Bytes, size_t PageSize) JL_NOTSAFEPOINT
 {
@@ -124,6 +127,7 @@ static int checkMDB_(int Err, int Line) JL_NOTSAFEPOINT
 
 class MDBTxn {
 public:
+    MDBTxn() JL_NOTSAFEPOINT = default;
     MDBTxn(MDB_env *Env, unsigned Flags = 0) JL_NOTSAFEPOINT
     {
         if (checkMDB(mdb_txn_begin(Env, nullptr, Flags, &Txn)))
@@ -187,6 +191,7 @@ void ObjCache::initDB()
     jl_gc_unsafe_leave(ct->ptls, gc_state);
 
     std::unique_lock<std::mutex> Lock{Mutex};
+    int OpenErr;
 
     if (Initialized.load(memory_order_acquire))
         return;
@@ -205,21 +210,33 @@ void ObjCache::initDB()
         goto done;
     }
 
-    if (checkMDB(mdb_env_create(&Env))) {
-        Env = nullptr;
-        goto done;
-    }
-    checkMDB(mdb_env_set_maxreaders(Env, 510));
-    checkMDB(mdb_env_set_maxdbs(Env, 128));
-    checkMDB(mdb_env_set_mapsize(Env, OBJCACHE_CAPACITY * 2));
     llvm::sys::fs::create_directories(*CachePath);
-    if (int Err = mdb_env_open(Env, CachePath->c_str(), MDB_NOSYNC | MDB_NOTLS, 0640)) {
-        // These two are expected conditions, not errors: record them so the
+    for (int Attempt = 0;; Attempt++) {
+        if (checkMDB(mdb_env_create(&Env))) {
+            Env = nullptr;
+            goto done;
+        }
+        checkMDB(mdb_env_set_maxreaders(Env, 510));
+        checkMDB(mdb_env_set_maxdbs(Env, 128));
+        checkMDB(mdb_env_set_mapsize(Env, OBJCACHE_CAPACITY * 2));
+        OpenErr = mdb_env_open(Env, CachePath->c_str(), MDB_NOSYNC | MDB_NOTLS, 0640);
+        // the last other user may have removed the semaphores as it exited; a retry makes new ones
+        if (Attempt == 0 && (OpenErr == EINVAL || OpenErr == EIDRM)) {
+            mdb_env_close(Env);
+            continue;
+        }
+        break;
+    }
+    if (int Err = OpenErr) {
+        // These are expected conditions, not errors: record them so the
         // REPL banner can explain why the cache is disabled.
         if (Err == MDB_REMOTE_FS)
             DisabledNotice = "the cache directory is on a network filesystem";
         else if (Err == MDB_PIDNS_MISMATCH)
             DisabledNotice = "it is in use by a process in a different pid namespace";
+        // on Apple this is usually the SysV semaphore limit, not a full disk
+        else if (Err == ENOSPC)
+            DisabledNotice = "no space is left for its lock file or semaphores";
         // EPERM/EACCES: sandboxes (e.g. sandbox-exec on macOS CI) may deny
         // access to the SysV semaphores LMDB uses on Apple platforms; the
         // cache cannot work in such environments, so disable it quietly.
@@ -229,33 +246,60 @@ void ObjCache::initDB()
         goto cleanup;
     }
 
-    {
-        MDBTxn Txn{Env};
+    // Every process starts here on its first lookup, so only take LMDB's
+    // cross-process write lock when the databases still need to be created:
+    // writers in other processes can hold it for a long time.
+    for (unsigned TxnFlags : {(unsigned)MDB_RDONLY, 0u}) {
+        MDBTxn Txn{Env, TxnFlags};
         if (!Txn.Txn)
             goto cleanup_env;
-        if (checkMDB(mdb_dbi_open(Txn.Txn, "objcache", MDB_CREATE, &ObjCacheDbi)))
-            goto cleanup_env;
-        if (checkMDB(mdb_dbi_open(Txn.Txn, "objmeta", MDB_CREATE, &ObjMetaDbi)))
+        unsigned DbiFlags = TxnFlags & MDB_RDONLY ? 0 : MDB_CREATE;
+        int Err = mdb_dbi_open(Txn.Txn, "objcache", DbiFlags, &ObjCacheDbi);
+        if (!Err)
+            Err = mdb_dbi_open(Txn.Txn, "objmeta", DbiFlags, &ObjMetaDbi);
+        if (Err == MDB_NOTFOUND && (TxnFlags & MDB_RDONLY))
+            continue;
+        if (checkMDB(Err))
             goto cleanup_env;
 
         MDB_stat Stat;
-        checkMDB(mdb_stat(Txn.Txn, ObjCacheDbi, &Stat));
+        if (checkMDB(mdb_stat(Txn.Txn, ObjCacheDbi, &Stat)))
+            goto cleanup_env;
         PageSize = Stat.ms_psize;
 
         int Version = OBJCACHE_SCHEMA;
         MDB_val Key = mdbVal("schema");
         MDB_val Ver = mdbVal(Version);
-        int Err = mdb_put(Txn.Txn, ObjMetaDbi, &Key, &Ver, MDB_NOOVERWRITE);
-        if (Err == MDB_KEYEXIST && *static_cast<int *>(Ver.mv_data) != OBJCACHE_SCHEMA)
+        if (TxnFlags & MDB_RDONLY)
+            Err = mdb_get(Txn.Txn, ObjMetaDbi, &Key, &Ver);
+        else
+            Err = mdb_put(Txn.Txn, ObjMetaDbi, &Key, &Ver, MDB_NOOVERWRITE);
+        if (Err == MDB_NOTFOUND && (TxnFlags & MDB_RDONLY))
+            continue;
+        if (Err && Err != MDB_KEYEXIST) {
+            checkMDB(Err);
+            goto cleanup_env;
+        }
+        if (Ver.mv_size != sizeof Version || memcmp(Ver.mv_data, &Version, sizeof Version))
             goto cleanup_env;
 
-        checkMDB(Txn.commit());
+        // Committing (also a read-only transaction) keeps the database
+        // handles open for the environment.
+        if (checkMDB(Txn.commit()))
+            goto cleanup_env;
+        break;
     }
-
 
 #ifndef __clang_gcanalyzer__
     uv_thread_create(
-        &WriterThread, [](void *arg) { static_cast<ObjCache *>(arg)->writerThread(); },
+        &WriterThread,
+        [](void *arg) {
+            auto *OC = static_cast<ObjCache *>(arg);
+            OC->writerThread();
+            std::unique_lock<std::mutex> Lock{OC->WriterExitMutex};
+            OC->WriterExited = true;
+            OC->WriterExitCond.notify_all();
+        },
         this);
 #endif
     Started = true;
@@ -276,6 +320,14 @@ ObjCache::~ObjCache()
     mdb_dbi_close(Env, ObjCacheDbi);
     mdb_dbi_close(Env, ObjMetaDbi);
     mdb_env_close(Env);
+}
+
+MDBTxn ObjCache::beginTxn(unsigned Flags) JL_NOTSAFEPOINT
+{
+    std::shared_lock<std::shared_mutex> Lock{TxnLock};
+    if (LocksReleased)
+        return {};
+    return MDBTxn{Env, Flags};
 }
 
 static std::atomic<size_t> NWrite = 0, NRead = 0, NMiss = 0, NHit = 0, NEvicted = 0;
@@ -389,7 +441,7 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     auto Hash = hashModule(M);
     auto ObjKey = toObjKey(Hash);
 
-    MDBTxn Txn{Env, MDB_RDONLY};
+    MDBTxn Txn = beginTxn(MDB_RDONLY);
     if (!Txn.Txn)
         return doCompile();
 
@@ -478,7 +530,7 @@ jl_value_t *ObjCache::kvGet(const char *Ns, const uint8_t *Key,
 
     jl_array_t *Ret = nullptr;
     {
-        MDBTxn Txn{Env, MDB_RDONLY};
+        MDBTxn Txn = beginTxn(MDB_RDONLY);
         if (!Txn.Txn)
             return jl_nothing;
 
@@ -552,6 +604,104 @@ const char *ObjCache::disabledNotice()
     return DisabledNotice;
 }
 
+int64_t ObjCache::prune(int64_t Cutoff)
+{
+    if (!Initialized.load(memory_order_acquire))
+        initDB();
+    if (!Env)
+        return 0;
+
+    // Access times are only refreshed when they are older than the granularity,
+    // so an entry used shortly after Cutoff may still record an earlier time.
+    Cutoff -= OBJCACHE_ATIME_GRANULARITY;
+    if (Cutoff <= 0)
+        return 0;
+
+    int64_t Removed = 0;
+    // Entries that have been hit sort after all entries that have only been
+    // written, so the two ranges are scanned separately.
+    for (int64_t Hit : {(int64_t)0, (int64_t)1 << 62}) {
+        while (true) {
+            std::shared_lock<std::shared_mutex> TxnGuard{TxnLock};
+            if (LocksReleased) {
+                Removed = -1;
+                goto done;
+            }
+            MDBTxn Txn{Env};
+            MDB_cursor *MetaCur;
+            if (!Txn.Txn || checkMDB(mdb_cursor_open(Txn.Txn, ObjMetaDbi, &MetaCur))) {
+                Removed = -1;
+                goto done;
+            }
+            auto LowMeta = toMetaKey(Hit, {});
+            MDB_val MetaKey = mdbVal(LowMeta);
+            int Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_SET_RANGE);
+            size_t InTxn = 0;
+            while (Ret == 0 && InTxn < OBJCACHE_PRUNE_ENTRY_BUDGET &&
+                   MetaKey.mv_size == METAKEY_SIZE &&
+                   ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
+                auto [Time, Hash] = fromMetaKey((const char *)MetaKey.mv_data);
+                if (Time >= (Hit | Cutoff))
+                    break;
+                auto ObjKey = toObjKey(Hash);
+                MDB_val Key = mdbVal(ObjKey);
+                int Err = mdb_del(Txn.Txn, ObjCacheDbi, &Key, nullptr);
+                if (Err == 0 || Err == MDB_NOTFOUND) {
+                    Key = mdbVal(ObjKey);
+                    Err = mdb_del(Txn.Txn, ObjMetaDbi, &Key, nullptr);
+                }
+                if (Err == 0 || Err == MDB_NOTFOUND)
+                    Err = mdb_cursor_del(MetaCur, 0);
+                if (Err) {
+                    checkMDB(Err);
+                    Removed = -1;
+                    goto done;
+                }
+                ++InTxn;
+                Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_NEXT);
+            }
+            if (Ret != 0 && Ret != MDB_NOTFOUND) {
+                checkMDB(Ret);
+                Removed = -1;
+                goto done;
+            }
+            if (InTxn == 0)
+                break;
+            if (checkMDB(Txn.commit())) {
+                Removed = -1;
+                goto done;
+            }
+            Removed += InTxn;
+            if (LogFile) {
+                std::unique_lock<std::mutex> Lock{LogMutex};
+                fprintf(LogFile, "prune_batch,%zu\n", InTxn);
+            }
+        }
+    }
+done:
+    return Removed;
+}
+
+std::string ObjCache::compact(const char *Dir)
+{
+    if (!Initialized.load(memory_order_acquire))
+        initDB();
+    if (!Env)
+        return "the native code cache is disabled";
+    if (std::error_code EC = llvm::sys::fs::create_directories(Dir))
+        return EC.message();
+    // never replace an existing cache, whatever the platform
+    std::string Path = (llvm::Twine(Dir) + "/data.mdb").str();
+    if (llvm::sys::fs::exists(Path))
+        return Path + " already exists";
+    std::shared_lock<std::shared_mutex> TxnGuard{TxnLock};
+    if (LocksReleased)
+        return "the native code cache is shutting down";
+    if (int Err = mdb_env_copy2(Env, Dir, MDB_CP_COMPACT))
+        return mdb_strerror(Err);
+    return {};
+}
+
 void ObjCache::shutdown()
 {
     if (Exiting.exchange(true, memory_order_acq_rel))
@@ -564,9 +714,29 @@ void ObjCache::shutdown()
             ObjQueue.clear();
         }
         QueueCond.notify_one();
-        uv_thread_join(&WriterThread);
-        Started = false;
+        // The writer checks Exiting between steps, but it cannot be
+        // interrupted while it waits for LMDB's write lock, which other
+        // processes may hold for a long time, or while it commits. Leave it
+        // to process exit in that case: an unfinished transaction is never
+        // published, and LMDB recovers the lock from a dead owner.
+        std::unique_lock<std::mutex> Lock{WriterExitMutex};
+        if (WriterExitCond.wait_for(Lock, std::chrono::milliseconds(100),
+                                    [this] { return WriterExited; })) {
+            uv_thread_join(&WriterThread);
+            Started = false;
+        }
     }
+
+#ifdef MDB_HAVE_ENV_RELEASE_LOCKS
+    // we never close the environment, so SysV semaphores (Apple) would outlive the process
+    if (!Started) {
+        std::unique_lock<std::mutex> InitLock{Mutex};
+        std::unique_lock<std::shared_mutex> Lock{TxnLock};
+        LocksReleased = true;
+        if (Env)
+            checkMDB(mdb_env_release_locks(Env));
+    }
+#endif
 
     if (LogFile) {
         std::unique_lock<std::mutex> Lock{LogMutex};

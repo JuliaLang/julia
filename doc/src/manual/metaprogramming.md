@@ -823,10 +823,14 @@ result are classified as either local or global. A variable is considered local 
 to (and not declared global), declared local, or used as a function argument name. Otherwise,
 it is considered global. Local variables are then renamed to be unique (using the [`gensym`](@ref)
 function, which generates new symbols), and global variables are resolved within the macro definition
-environment. Therefore both of the above concerns are handled; the macro's locals will not conflict
-with any user variables, and `time_ns` and `println` will refer to the Julia Base definitions.
+environment. Therefore the macro's locals will not conflict with variables in the surrounding code,
+and `time_ns` and `println` will refer to the Julia Base definitions.
 
-One problem remains however. Consider the following use of this macro:
+However, these rules apply to *all* variables in the macro result, including those in the user
+expression `ex`. So if `ex` assigns to `t0`, that `t0` is renamed to the same unique symbol as the
+macro's own `t0`, and the user's assignment overwrites the macro's start time. Similarly, global
+variables in `ex` are resolved in the macro definition environment. Consider the following use
+of this macro:
 
 ```julia
 module MyModule
@@ -840,7 +844,8 @@ end
 
 Here the user expression `ex` is a call to `time_ns`, but not the same `time_ns` function that the macro
 uses. It clearly refers to `MyModule.time_ns`. Therefore we must arrange for the code in `ex` to
-be resolved in the macro call environment. This is done by "escaping" the expression with [`esc`](@ref):
+be resolved in the macro call environment. This is done by "escaping" the expression with [`esc`](@ref),
+which also solves the problem with `t0` above:
 
 ```julia
 macro time(ex)
@@ -851,7 +856,8 @@ end
 ```
 
 An expression wrapped in this manner is left alone by the macro expander and simply pasted into
-the output verbatim. Therefore it will be resolved in the macro call environment.
+the output verbatim. Therefore it will be resolved in the macro call environment, and its variables
+are not renamed, so they cannot clash with the macro's renamed locals.
 
 This escaping mechanism can be used to "violate" hygiene when necessary, in order to introduce
 or manipulate user variables. For example, the following macro sets `x` to zero in the call environment:

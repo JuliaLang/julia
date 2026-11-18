@@ -61,7 +61,7 @@ function hashheader(stream::IO, md::MD)
 
         # handle Windows line ends
         if c == '\r'
-            peek(stream, Char) == '\n' && read(stream, Char)
+            !eof(stream) && peek(stream, Char) == '\n' && read(stream, Char)
             c = '\n'
         end
 
@@ -313,7 +313,7 @@ List(xs...) = List(vcat(xs...))
 isordered(list::List) = list.ordered >= 0
 
 const BULLETS = r"^ {0,3}(\*|\+|-)( |$)"
-const NUM_OR_BULLETS = r"^ {0,3}(\*|\+|-|(\d+)(\.|\)))( |$)"
+const NUM_OR_BULLETS = r"^ {0,3}(\*|\+|-|([0-9]{1,9})(\.|\)))( |$)"
 
 @breaking true ->
 function list(stream::IO, block::MD)
@@ -328,10 +328,10 @@ function list(stream::IO, block::MD)
                 -1, Regex("^ {0,3}(\\$(m.captures[1]))( |\$)")
             elseif m.captures[3] == "."
                 # An ordered list with `1. ` style numbering.
-                Base.parse(Int, something(m.captures[2])), r"^ {0,3}(\d+)\.( |$)"
+                Base.parse(Int, something(m.captures[2])), r"^ {0,3}([0-9]{1,9})\.( |$)"
             elseif m.captures[3] == ")"
                 # An ordered list with `1) ` style numbering.
-                Base.parse(Int, something(m.captures[2])), r"^ {0,3}(\d+)\)( |$)"
+                Base.parse(Int, something(m.captures[2])), r"^ {0,3}([0-9]{1,9})\)( |$)"
             else
                 # Failed to match any list marker. This branch shouldn't actually be needed
                 # since the `NUM_OR_BULLETS` regex should cover this, but we include it
@@ -343,14 +343,15 @@ function list(stream::IO, block::MD)
         list = List(initial)
 
         buffer = IOBuffer() # For capturing nested text for recursive parsing.
-        newline = false     # For checking if we have two consecutive newlines: end of list.
+        blank = false
         count = 0           # Count of list items. Used to check if we need to push remaining
                             # content in `buffer` after leaving the `while` loop.
         while !eof(stream)
             if blankline(stream)
                 println(buffer)
-                list.loose = true
+                blank = true
             elseif startswith(stream, " "^indent)
+                list.loose |= blank
                 # Indented text that is part of the current list item.
                 print(buffer, readline(stream, keep=true))
             else
@@ -360,6 +361,7 @@ function list(stream::IO, block::MD)
                     pushitem!(list, buffer)
                     break
                 end
+                list.loose |= blank
 
                 # Start of a new list item.
                 count += 1

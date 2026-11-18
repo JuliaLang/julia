@@ -277,7 +277,7 @@ been restored.
 function withenv(f, keyvals::Pair{T}...) where T<:AbstractString
     old = Dict{T,Any}()
     for (key,val) in keyvals
-        old[key] = get(ENV,key,nothing)
+        haskey(old, key) || (old[key] = get(ENV,key,nothing))
         val !== nothing ? (ENV[key]=val) : delete!(ENV, key)
     end
     try f()

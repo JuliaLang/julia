@@ -54,18 +54,15 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
         # also handle the var here, since this construct bounds the mindepth to the smallest possible value
         return is_derived_type(t, c.var.ub, mindepth) || is_derived_type(t, c.body, mindepth)
     elseif isType(c)
-        return is_derived_type(t, type_parameter(c), mindepth)
-    elseif isa(c, DataType)
         if mindepth > 0
             mindepth -= 1
         end
-        if isa(t, DataType)
-            # see if it is one of the supertypes of a parameter
-            super = supertype(c)
-            while super !== Any
-                t === super && return true
-                super = supertype(super)
-            end
+        return is_derived_type(t, type_parameter(c), mindepth)
+    elseif isa(c, DataType)
+        # see if it is one of the supertypes of a parameter
+        mindepth <= 1 && isa(t, DataType) && is_derived_supertype(t, c) && return true
+        if mindepth > 0
+            mindepth -= 1
         end
         # see if it was extracted from a type parameter
         cP = c.parameters
@@ -74,6 +71,41 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
         end
     end
     return false
+end
+
+function is_derived_supertype(t::DataType, c::DataType)
+    super = supertype(c)
+    while super !== Any
+        if t === super
+            depths = IdDict{Any,Int}()
+            return derived_depth(t, depths) <= derived_depth(c, depths)
+        end
+        super = supertype(super)
+    end
+    return false
+end
+
+function derived_depth(@nospecialize(t), depths::IdDict{Any,Int})
+    d = get(depths, t, 0)
+    d == 0 || return d
+    if isvarargtype(t)
+        d = derived_depth(unwrapva(t), depths)
+    elseif isa(t, Union)
+        d = max(derived_depth(t.a, depths), derived_depth(t.b, depths))
+    elseif isa(t, UnionAll)
+        d = max(derived_depth(t.var.ub, depths), derived_depth(t.body, depths))
+    elseif isType(t)
+        d = derived_depth(type_parameter(t), depths) + 1
+    elseif isa(t, DataType)
+        for p in t.parameters
+            d = max(d, derived_depth(p, depths))
+        end
+        d += 1
+    else
+        d = 1
+    end
+    depths[t] = d
+    return d
 end
 
 function is_derived_type_from_any(@nospecialize(t), sources::SimpleVector, mindepth::Int)
@@ -267,6 +299,16 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
                type_more_complex(t, c.b, sources, depth, tupledepth, allowed_tuplelen)
     elseif isa(t, Int) && isa(c, Int)
         return t !== 1 && !(0 <= t < c) # alternatively, could use !(abs(t) <= abs(c) || abs(t) < n) for some n
+    elseif isa(t, Tuple) && isa(c, Tuple)
+        nfields(t) > nfields(c) && return true
+        elements = IdSet{Any}()
+        for j = 1:nfields(c)
+            push!(elements, getfield(c, j))
+        end
+        for i = 1:nfields(t)
+            getfield(t, i) in elements || return true
+        end
+        return false
     end
     if isType(t)
         # Type is fairly important, so do not widen it as fast as other types if avoidable
@@ -317,7 +359,7 @@ union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
 
 function issimpleenoughtype(@nospecialize t)
     ut = unwrap_unionall(t)
-    ut isa DataType && ut.name.wrapper == t && return true
+    ut isa DataType && ut.name.wrapper == t::Type && return true
     return max(unionlen(t), union_count_abstract(t) + 1) <= MAX_TYPEUNION_LENGTH &&
            unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
 end
@@ -589,6 +631,14 @@ end
 @nospecializeinfer function tmerge(𝕃::AnyMustAliasesLattice, @nospecialize(typea), @nospecialize(typeb))
     if is_valid_lattice_norec(𝕃, typea)
         typeb === Union{} && return typea
+        if is_valid_lattice_norec(𝕃, typeb) && is_same_alias(typea, typeb) &&
+                widenconst(typea.vartyp) === widenconst(typeb.vartyp)
+            # alias information is identical so simply preserve it
+            𝕃′ = widenlattice(𝕃)
+            vartyp = tmerge(𝕃′, typea.vartyp, typeb.vartyp)
+            fldtyp = tmerge(𝕃′, typea.fldtyp, typeb.fldtyp)
+            return update_mustalias(typea; vartyp, fldtyp)
+        end
         typea = widenmustalias(typea)
     end
     if is_valid_lattice_norec(𝕃, typeb)
@@ -790,18 +840,18 @@ end
     heighta = 0
     while a !== Any
         heighta += 1
-        a = datatype_super(a)
+        a = supertype(a)
     end
     b = unwrap_unionall(bname.wrapper)
     heightb = 0
     while b !== Any
         b.name === aname && return aname
         heightb += 1
-        b = datatype_super(b)
+        b = supertype(b)
     end
     a = unwrap_unionall(aname.wrapper)
     while heighta > heightb
-        a = datatype_super(a)
+        a = supertype(a)
         heighta -= 1
     end
     return a.name === bname ? bname : nothing
@@ -871,11 +921,11 @@ end
                         uw = unwrap_unionall(wr)::DataType
                         ui = unwrap_unionall(ti)::DataType
                         while ui.name !== ijname
-                            ui = datatype_super(ui)
+                            ui = supertype(ui)
                         end
                         uj = unwrap_unionall(tj)::DataType
                         while uj.name !== ijname
-                            uj = datatype_super(uj)
+                            uj = supertype(uj)
                         end
                         p = Vector{Any}(undef, length(uw.parameters))
                         usep = true

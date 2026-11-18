@@ -1,9 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-The `InteractiveUtils` module provides utilities for interactive use of Julia,
-such as code introspection and clipboard access.
-It is intended for interactive work and is loaded automatically in interactive mode.
+    InteractiveUtils
+
+Tools for interactive use of Julia: code introspection such as [`@which`](@ref) and
+[`@code_warntype`](@ref), opening source with [`edit`](@ref) and [`less`](@ref),
+[`versioninfo`](@ref), [`subtypes`](@ref), and [`clipboard`](@ref) access. It is loaded
+automatically in interactive sessions.
 """
 module InteractiveUtils
 
@@ -76,7 +79,7 @@ function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool =
         elseif sortby === :summary
             3, false
         else
-            @assert "unreachable"
+            @assert false "unreachable"
         end
         sort!(rows; by=r->r[col], rev)
     end
@@ -101,7 +104,7 @@ controlled with boolean keyword arguments:
 See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
-    println(io, "Julia Version $VERSION")
+    println(io, "Julia Version $(Base.version_with_build_variant())")
     println(io, "Build Info:")
     if Base.isdebugbuild()
         println(io, "  DEBUG build")
@@ -114,7 +117,8 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     end
     println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
     if verbose
-        println(io, "  Sysimage: ", Sys.sysimage_target(), " (", Sys.MACHINE, ")")
+        println(io, "  Base Sysimage: ", Sys.sysimage_target(), " (", Sys.MACHINE, ")")
+        println(io, "  Matched Sysimage: ", Sys.matched_sysimage_target())
     end
     official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org release"
     if Base.GIT_VERSION_INFO.tagged_commit && !official_release
@@ -356,7 +360,7 @@ function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3
     # Base.depwarn("`peakflops` has moved to the LinearAlgebra module, " *
     #              "add `using LinearAlgebra` to your imports.", :peakflops)
     let LinearAlgebra = Base.require_stdlib(Base.PkgId(
-            Base.UUID((0x37e2e46d_f89d_539d,0xb4ee_838fcccc9c8e)), "LinearAlgebra"))
+            Base.UUID((0x37e2e46d_f89d_539d,0xb4ee_838fcccc9c8e)), "LinearAlgebra"))::Module
         return LinearAlgebra.peakflops(n, eltype=eltype, ntrials=ntrials, parallel=parallel)
     end
 end
@@ -370,7 +374,7 @@ function report_bug(kind)
         @info "Package `BugReporting` not found - attempting temporary installation"
         # Create a temporary environment and add BugReporting
         let Pkg = Base.require_stdlib(Base.PkgId(
-            Base.UUID((0x44cfe95a_1eb2_52ea,0xb672_e2afdf69b78f)), "Pkg"))
+                Base.UUID((0x44cfe95a_1eb2_52ea,0xb672_e2afdf69b78f)), "Pkg"))::Module
             mktempdir() do tmp
                 old_load_path = copy(LOAD_PATH)
                 push!(empty!(LOAD_PATH), joinpath(tmp, "Project.toml"))

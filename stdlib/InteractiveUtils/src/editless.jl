@@ -120,7 +120,7 @@ editor_matches(ps::AbstractArray, cmd::Cmd) = any(editor_matches(p, cmd) for p i
 
 function define_default_editors()
     # fallback: just call the editor with the path as argument
-    define_editor(r".*") do cmd, path, line, column
+    define_editor(r".*") do cmd, path, _line, _column
         `$cmd $path`
     end
     # vim family
@@ -142,7 +142,7 @@ function define_default_editors()
     for (editors, wait) in [
         [[r"\bemacs"], false],
         [[r"\bemacs\b.*\s(-nw|--no-window-system)\b",
-          r"\bemacsclient\b.\s*-(-?nw|t|-?tty)\b"], true],
+          r"\bemacsclient\b.*\s-(-?nw|t|-?tty)\b"], true],
     ]
         define_editor(editors; wait) do cmd, path, line, column
             `$cmd +$line:$column $path`
@@ -152,29 +152,29 @@ function define_default_editors()
     define_editor("gedit") do cmd, path, line, column
         `$cmd +$line:$column $path`
     end
-    define_editor(["micro", "kak"]; wait=true) do cmd, path, line, column
+    define_editor(["micro", "kak"]; wait=true) do cmd, path, line, _column
         `$cmd +$line $path`
     end
     define_editor(["hx", "helix"]; wait=true) do cmd, path, line, column
         `$cmd $path:$line:$column`
     end
-    define_editor(["textmate", "mate", "kate"]) do cmd, path, line, column
+    define_editor(["textmate", "mate", "kate"]) do cmd, path, line, _column
         `$cmd $path -l $line`
     end
-    define_editor([r"\bsubl", r"\batom", "pycharm", "bbedit"]) do cmd, path, line, column
+    define_editor([r"\bsubl", r"\batom", "pycharm", "bbedit"]) do cmd, path, line, _column
         `$cmd $path:$line`
     end
     define_editor(["code", "code-insiders"]) do cmd, path, line, column
         `$cmd -g $path:$line:$column`
     end
-    define_editor(r"\bnotepad++") do cmd, path, line, column
+    define_editor(r"\bnotepad\+\+") do cmd, path, line, _column
         `$cmd $path -n$line`
     end
     if Sys.iswindows()
         define_editor(r"\bCODE\.EXE\b"i) do cmd, path, line, column
             `$cmd -g $path:$line:$column`
         end
-        callback = function (cmd::Cmd, path::AbstractString, line::Integer)
+        callback = function (cmd::Cmd, path::AbstractString, _line::Integer)
             cmd == `open` || return false
             # don't emit this ccall on other platforms
             @static if Sys.iswindows()
@@ -188,7 +188,7 @@ function define_default_editors()
         end
         pushfirst!(EDITOR_CALLBACKS, callback)
     elseif Sys.isapple()
-        define_editor("open") do cmd, path, line, column
+        define_editor("open") do _cmd, path, _line, _column
             `open -t $path`
         end
     end
@@ -200,15 +200,17 @@ define_default_editors()
 
 Determine the editor to use when running functions like `edit`. Returns a `Cmd`
 object. Change editor by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR`
-environment variables.
+environment variables. The value is split like a shell command (see `Base.shell_split`),
+so it may contain flags, and spaces or backslashes in the path must be quoted or escaped.
 """
 function editor()
     # Note: the editor path can include spaces (if escaped) and flags.
     for var in ["JULIA_EDITOR", "VISUAL", "EDITOR"]
         str = get(ENV, var, nothing)
         str === nothing && continue
-        isempty(str) && error("invalid editor \$$var: $(repr(str))")
-        return Cmd(shell_split(str))
+        args = shell_split(str)
+        isempty(args) && error("invalid editor \$$var: $(repr(str))")
+        return Cmd(args)
     end
     editor_file = "/etc/alternatives/editor"
     editor = (Sys.iswindows() || Sys.isapple()) ? "open" :
@@ -226,7 +228,7 @@ function find_source(path::AbstractString)
 end
 
 """
-    edit(path::AbstractString, line::Integer=0, column::Integer=0)
+    edit(path::AbstractString, line::Integer=1, column::Integer=1)
 
 Edit a file or directory optionally providing a line number to edit the file at.
 Return to the `julia` prompt when you quit the editor. The editor can be changed
@@ -338,7 +340,7 @@ let _editless = Union{typeof(edit), typeof(less)}
     (el::_editless)(@nospecialize(f), idx::Integer) = el(methods(f).ms[idx])
     (el::_editless)(f, t) = (@nospecialize; el(functionloc(f, t)...))
     (el::_editless)(@nospecialize argtypes::Union{Tuple, Type{<:Tuple}}) = el(functionloc(argtypes)...)
-    (el::_editless)(file::Nothing, line::Integer) = error("could not find source file for function")
+    (::_editless)(::Nothing, ::Integer) = error("could not find source file for function")
     function (el::_editless)(m::Module)
         path = pathof(m)
         path === nothing && error("could not find source file for module: $m")

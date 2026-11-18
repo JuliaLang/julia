@@ -636,23 +636,18 @@ _is_op_prec(x, prec)   = kind(x) == K"Operator" && numeric_flags(head(x)) == Int
 
 is_prec_assignment(x)  = K"BEGIN_ASSIGNMENTS" <= kind(x) <= K"END_ASSIGNMENTS"
 is_prec_pair(x)        = _is_op_prec(x, PREC_PAIRARROW)
-is_prec_conditional(x) = kind(x) == K"?"
 is_prec_arrow(x)       = _is_op_prec(x, PREC_ARROW) || kind(x) == K"-->"
 is_prec_lazy_or(x)     = _is_op_prec(x, PREC_LAZYOR) || kind(x) in KSet"||"
 is_prec_lazy_and(x)    = _is_op_prec(x, PREC_LAZYAND) || kind(x) in KSet"&&"
 is_prec_comparison(x)  = _is_op_prec(x, PREC_COMPARISON) || kind(x) in KSet"<: >: in isa < > ∈"
 is_prec_pipe_lt(x)     = _is_op_prec(x, PREC_PIPE_LT)
 is_prec_pipe_gt(x)     = _is_op_prec(x, PREC_PIPE_GT)
-is_prec_pipe(x)        = is_prec_pipe_lt(x) || is_prec_pipe_gt(x)
 is_prec_colon(x)       = _is_op_prec(x, PREC_COLON) || kind(x) == K".."
 is_prec_plus(x)        = _is_op_prec(x, PREC_PLUS) || kind(x) in KSet"+ +% - -% ± ∓ $ ++"
 is_prec_bitshift(x)    = _is_op_prec(x, PREC_BITSHIFT)
 is_prec_times(x)       = _is_op_prec(x, PREC_TIMES) || kind(x) in KSet"* *% ⋆ &"
 is_prec_rational(x)    = _is_op_prec(x, PREC_RATIONAL)
 is_prec_power(x)       = _is_op_prec(x, PREC_POWER)
-is_prec_decl(x)        = _is_op_prec(x, PREC_DECL) || kind(x) == K"::"
-is_prec_where(x)       = _is_op_prec(x, PREC_WHERE) || kind(x) == K"where"
-is_prec_dot(x)         = _is_op_prec(x, PREC_DOT) || kind(x) == K"."
 is_prec_quote(x)       = _is_op_prec(x, PREC_QUOTE) || kind(x) == K"'"
 is_syntax_kind(x)      = K"BEGIN_SYNTAX_KINDS"<= kind(x) <= K"END_SYNTAX_KINDS"
 is_prec_compound_assign(x) = is_operator(x) && numeric_flags(head(x)) == Int(PREC_COMPOUND_ASSIGN)

@@ -57,8 +57,10 @@ isvalid(T,value)
 
 isvalid(c::AbstractChar) = !ismalformed(c) & !isoverlong(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
 isvalid(::Type{<:AbstractChar}, c::Unsigned) = ((c ≤  0xd7ff ) | ( 0xe000  ≤ c) & (c ≤  0x10ffff ))
-isvalid(::Type{T}, c::Integer) where {T<:AbstractChar}  = isvalid(T, Unsigned(c))
+isvalid(::Type{T}, c::Integer) where {T<:AbstractChar}  = c ≥ 0 && isvalid(T, Unsigned(c))
 isvalid(::Type{<:AbstractChar}, c::AbstractChar)     = isvalid(c)
+isvalid(::Type{Union{}}, value) = false
+isvalid(::Type{Union{}}, slurp...) = throw(MethodError(isvalid, (Union{}, slurp...)))
 
 # utf8 category constants
 const UTF8PROC_CATEGORY_CN = 0
@@ -375,7 +377,7 @@ function category_code(c::AbstractChar)
 end
 
 function category_code(x::Integer)
-    x ≤ 0x10ffff ? (@assume_effects :foldable :nothrow @ccall utf8proc_category(UInt32(x)::UInt32)::Cint) : Cint(30)
+    0 ≤ x ≤ 0x10ffff ? (@assume_effects :foldable :nothrow @ccall utf8proc_category(UInt32(x)::UInt32)::Cint) : Cint(30)
 end
 
 # more human-readable representations of the category code

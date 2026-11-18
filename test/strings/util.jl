@@ -189,6 +189,7 @@ end
     for n in [7,8]
         @test collect(Iterators.partition("foobars",n))[1]=="foobars"
     end
+    @test collect(Iterators.partition("∀ϵ∃Δ",typemax(Int))) == ["∀ϵ∃Δ"]
 
     # HOWEVER enumerate explicitly slices String "atoms" so `Tuple{Int, Char}` pairs are returned
     let v=collect(Iterators.partition(enumerate("foobars"),1))

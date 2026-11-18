@@ -63,13 +63,18 @@ function record_invoke_edge!(invokes::IdDict{Any,Vector{Any}},
                              @nospecialize(signature), @nospecialize(target))
     signatures = get!(Vector{Any}, invokes, target)
     for previous in signatures
-        previous == signature && return false
+        if isa(previous, Type) && isa(signature, Type)
+            previous == signature && return false
+        elseif previous == signature
+            return false
+        end
     end
     push!(signatures, signature)
     return true
 end
 
-function _materialize_inference_edges!(edges::Vector{Any}, source,
+# `source` is typed so that the recursion on `edge.edges` does not widen it to `Any`
+function _materialize_inference_edges!(edges::Vector{Any}, source::Union{Vector{Any},SimpleVector},
                                        seen_proofs::IdSet{LocalInferenceProof},
                                        standalone::IdDict{Any,Bool},
                                        invokes::IdDict{Any,Vector{Any}})
@@ -131,7 +136,7 @@ function _materialize_inference_edges!(edges::Vector{Any}, source,
     return nothing
 end
 
-function materialize_inference_edges(source)
+function materialize_inference_edges(source::Union{Vector{Any},SimpleVector})
     has_local_proof = false
     for edge in source
         if edge isa LocalInferenceProof
@@ -153,6 +158,27 @@ function materialize_inference_edges(source)
             deleteat!(edges, i)
         else
             i += 1
+        end
+    end
+    # A flattened proof certifies its CI with an identity `invoke` edge (`m.sig`, see
+    # `add_inference_proof!`). Where the same target is also a dispatch edge here, that
+    # edge already fails whenever the identity edge would (`m` being replaced), so drop
+    # the pair.
+    i = 1
+    while i <= length(edges)
+        edge = edges[i]
+        if edge isa Int
+            i += 2 + abs(edge)
+        elseif edge isa Union{Method,MethodInstance,CodeInstance,Core.Binding,PossiblyAmbiguous}
+            i += 1
+        else
+            target = edges[i + 1]
+            if target isa Union{MethodInstance,CodeInstance} && haskey(standalone, target) &&
+                    edge === ((target isa CodeInstance ? get_ci_mi(target) : target).def::Method).sig
+                deleteat!(edges, i:i+1)
+            else
+                i += 2
+            end
         end
     end
     return Core.svec(edges...)

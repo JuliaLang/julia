@@ -339,6 +339,13 @@ same:
     [`Base.cconvert`](@ref) version. This allows, for example, passing an `argv` pointer array of type
     `Vector{String}` to an argument of type `Ptr{Ptr{Cchar}}`.
 
+    Multidimensional Julia arrays are stored in column-major order, like in Fortran (see
+    [Performance Tips](@ref man-performance-column-major)), whereas C multidimensional arrays
+    (e.g. `double a[m][n]`) are stored in row-major order. Thus, an `m×n` Julia matrix passed to C
+    code that expects a row-major array will appear transposed. Either pass `permutedims(A)` (or
+    construct the array with its dimensions reversed), or check whether the library has an option
+    for column-major data, as many numerical libraries do.
+
 On all systems we currently support, basic C/C++ value types may be translated to Julia types
 as follows. Every C type also has a corresponding Julia type with the same name, prefixed by C.
 This can help when writing portable code (and remembering that an `int` in C is not the same as

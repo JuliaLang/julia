@@ -183,11 +183,19 @@ end
 # Complete method collection implementation
 function collect_all_method_defs(newmodules, mod_array)
     allmeths = Any[]
+    worklist = newmodules === nothing ? nothing : newmodules::Vector{Any}
 
-    function method_visitor(method)
+    function method_visitor(@nospecialize(method))
         method = method::Method
-        if newmodules !== nothing
-            method.module in newmodules || return true
+        if worklist !== nothing
+            found = false
+            for mod in worklist
+                if mod === method.module
+                    found = true
+                    break
+                end
+            end
+            found || return true
         end
         if isdefined(method, :external_mt)
             return true  # Continue iteration
@@ -426,6 +434,16 @@ function compile_and_emit_native(worlds::Vector{UInt},
             # Check if this method has a ccallable annotation
             if isdefined(mi.def, :ccallable) && mi.def.ccallable !== nothing
                 push!(tocompile, mi.def.ccallable)
+            end
+        end
+
+        # Similar to `__init__()` any (::LazyLibraryCallback)() methods are special and
+        # eagerly compiled under trim, so that they can be invoked dynamically.
+        matches = _compileable_methods(InternalMethodTable(latestworld), Core.LazyLibraryCallback)
+        if matches !== nothing
+            for match in matches
+                mi = match.second
+                mi === nothing || push!(tocompile, mi)
             end
         end
     end

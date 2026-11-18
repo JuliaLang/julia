@@ -137,9 +137,10 @@ function f(xs..., y)
     body
 end
 #---------------------
-LoweringError:
+syntax: `...` may only be used on the final parameter
+@ :1
 function f(xs..., y)
-#          └───┘ ── `...` may only be used on the final parameter
+#          └───┘
     body
 end
 
@@ -263,9 +264,10 @@ function f(x::_) where _
     return _
 end
 #---------------------
-LoweringError:
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :1
 function f(x::_) where _
-#             ╙ ── all-underscore identifiers are write-only and their values cannot be used in expressions
+#             ⊔
     return _
 end
 
@@ -273,25 +275,28 @@ end
 # Error: underscore sparam is not readable in a default arg value
 f(x::_, y=_) where _ = x
 #---------------------
-LoweringError:
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :1
 f(x::_, y=_) where _ = x
-#    ╙ ── all-underscore identifiers are write-only and their values cannot be used in expressions
+#    ⊔
 
 ########################################
 # Error: underscore sparam is not readable in a default kwarg value
 f(x::_; y=_) where _ = x
 #---------------------
-LoweringError:
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :1
 f(x::_; y=_) where _ = x
-#    ╙ ── all-underscore identifiers are write-only and their values cannot be used in expressions
+#    ⊔
 
 ########################################
 # Error: underscore sparam is not readable in the return type
 (f(x)::_) where _ = x
 #---------------------
-LoweringError:
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :1
 (f(x)::_) where _ = x
-#      ╙ ── all-underscore identifiers are write-only and their values cannot be used in expressions
+#      ⊔
 
 ########################################
 # Return types
@@ -432,10 +437,11 @@ function f(x)
     (::T)(y) = x + y
 end
 #---------------------
-LoweringError:
+syntax: adding methods to callable type only allowed at top level
+@ :2
 function f(x)
     (::T)(y) = x + y
-#    └─┘ ── adding methods to callable type only allowed at top level
+#    └─┘
 end
 
 ########################################
@@ -479,13 +485,29 @@ end
 10  (return core.nothing)
 
 ########################################
+# Error: Function with module ref in name not at top level
+function f()
+    function A.g()
+    end
+end
+#---------------------
+syntax: global method definition must be placed at top level, or use eval
+@ :2
+function f()
+    function A.g()
+#            └─┘
+    end
+end
+
+########################################
 # Error: Invalid dotop function name
 function (.+)(x,y)
 end
 #---------------------
-LoweringError:
+syntax: invalid function name
+@ :1
 function (.+)(x,y)
-#         └┘ ── invalid function name
+#         └┘
 end
 
 ########################################
@@ -493,9 +515,10 @@ end
 function var".+"(x,y)
 end
 #---------------------
-LoweringError:
+syntax: dotted operator is not a valid function name
+@ :1
 function var".+"(x,y)
-#            └┘ ── dotted operator is not a valid function name
+#            └┘
 end
 
 ########################################
@@ -523,9 +546,10 @@ function var".f"(); end
 function f[](x,y)
 end
 #---------------------
-LoweringError:
+syntax: invalid function name
+@ :1
 function f[](x,y)
-#        └─┘ ── invalid function name
+#        └─┘
 end
 
 ########################################
@@ -874,9 +898,10 @@ function f(x=1, ys, z=2)
     ys
 end
 #---------------------
-LoweringError:
+syntax: all function parameters after an optional parameter must also be optional
+@ :1
 function f(x=1, ys, z=2)
-#               └┘ ── all function parameters after an optional parameter must also be optional
+#               └┘
     ys
 end
 
@@ -932,7 +957,7 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.f %₈
     --- code_info
-    slots: [slot₁/#self#]
+    slots: [slot₁/#self#(called)]
     1   (call core.tuple 1 2)
     2   (call core._apply_iterate top.iterate slot₁/#self# %₁)
     3   (return %₂)
@@ -968,14 +993,13 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.f %₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/destructured#3 slot₄/w(!read) slot₅/iterstate(single_assign) slot₆/y(!read,single_assign) slot₇/z(!read,single_assign)]
-    1   (call top.indexed_iterate slot₃/destructured#3 1)
-    2   (= slot₆/y (call core.getfield %₁ 1))
-    3   (= slot₅/iterstate (call core.getfield %₁ 2))
-    4   slot₅/iterstate
-    5   (call top.indexed_iterate slot₃/destructured#3 2 %₄)
-    6   (= slot₇/z (call core.getfield %₅ 1))
-    7   (return core.nothing)
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/#arg#destructured#3 slot₄/w(!read) slot₅/y(!read,single_assign) slot₆/z(!read,single_assign) slot₇/(single_assign)]
+    1   (call top.indexed_iterate slot₃/#arg#destructured#3 1)
+    2   (= slot₅/y (call core.getfield %₁ 1))
+    3   (= slot₇/ (call core.getfield %₁ 2))
+    4   (call top.indexed_iterate slot₃/#arg#destructured#3 2 slot₇/)
+    5   (= slot₆/z (call core.getfield %₄ 1))
+    6   (return core.nothing)
 10  latestworld
 11  TestMod.f
 12  (return %₁₁)
@@ -1010,8 +1034,8 @@ end
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  (call core.define_method TestMod TestMod.f %₁₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/destructured#2 slot₃/x(!read,single_assign)]
-    1   (call top.indexed_iterate slot₂/destructured#2 1)
+    slots: [slot₁/#self#(!read) slot₂/#arg#destructured#2 slot₃/x(!read,single_assign)]
+    1   (call top.indexed_iterate slot₂/#arg#destructured#2 1)
     2   (= slot₃/x (call core.getfield %₁ 1))
     3   (return core.nothing)
 20  latestworld
@@ -1022,137 +1046,154 @@ end
 # Error: multiple destructuring in destructured arg
 function f(_,(x...,y...)); end
 #---------------------
-LoweringError:
+syntax: multiple `...` in destructured parameter is ambiguous
+@ :1
 function f(_,(x...,y...)); end
-#            └─────────┘ ── multiple `...` in destructured parameter is ambiguous
+#            └─────────┘
 
 ########################################
 # Error: multiple destructuring in var-destructured arg
 function f(_,(x...,y...)...); end
 #---------------------
-LoweringError:
+syntax: multiple `...` in destructured parameter is ambiguous
+@ :1
 function f(_,(x...,y...)...); end
-#            └─────────┘ ── multiple `...` in destructured parameter is ambiguous
+#            └─────────┘
 
 ########################################
 # Error: type in destructured arg
 function f(_,(x,y::Int)); end
 #---------------------
-LoweringError:
+syntax: cannot have type in destructured argument
+@ :1
 function f(_,(x,y::Int)); end
-#               └────┘ ── cannot have type in destructured argument
+#               └────┘
 
 ########################################
 # Error: type in destructured arg, nested
 function f(_,(x,(y,(z::Int,)))...); end
 #---------------------
-LoweringError:
+syntax: cannot have type in destructured argument
+@ :1
 function f(_,(x,(y,(z::Int,)))...); end
-#                   └────┘ ── cannot have type in destructured argument
+#                   └────┘
 
 ########################################
 # Error: type on splat
 function (_,((a,b)...)::Int); end
 #---------------------
-LoweringError:
+syntax: expected identifier
+@ :1
 function (_,((a,b)...)::Int); end
-#            └──────┘ ── expected identifier
+#            └──────┘
 
 ########################################
 # Error: destructured arg with kw
 function f(_,(x,y=1)); end
 #---------------------
-LoweringError:
+syntax: expected identifier or tuple
+@ :1
 function f(_,(x,y=1)); end
-#               └─┘ ── expected identifier or tuple
+#               └─┘
 
 ########################################
 # Error: destructured arg with ;kw
 function f(_,(;x,y=1)); end
 #---------------------
-LoweringError:
+syntax: expected identifier
+@ :1
 function f(_,(;x,y=1)); end
-#                └─┘ ── expected identifier
+#                └─┘
 
 ########################################
 # Error: destructured arg with other lhs-likes after ; (call)
 function f(_,(;x,y())); end
 #---------------------
-LoweringError:
+syntax: expected identifier
+@ :1
 function f(_,(;x,y())); end
-#                └─┘ ── expected identifier
+#                └─┘
 
 ########################################
 # Error: destructured arg with other lhs-likes after ; (ref)
 function f(_,(;x,y())); end
 #---------------------
-LoweringError:
+syntax: expected identifier
+@ :1
 function f(_,(;x,y())); end
-#                └─┘ ── expected identifier
+#                └─┘
 
 ########################################
 # Error: destructured arg with other lhs-likes after ; (tuple)
 function f(_,(;x,(y,z))); end
 #---------------------
-LoweringError:
+syntax: expected identifier
+@ :1
 function f(_,(;x,(y,z))); end
-#                └───┘ ── expected identifier
+#                └───┘
 
 ########################################
 # Error: destructured arg with other lhs-likes after ; (...)
 function f(_,(;x,y...)); end
 #---------------------
-LoweringError:
+syntax: expected identifier
+@ :1
 function f(_,(;x,y...)); end
-#                └──┘ ── expected identifier
+#                └──┘
 
 ########################################
 # Error: destructuring mixed tuple
 function f(_,(x,;y=1)); end
 #---------------------
-LoweringError:
+syntax: cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
+@ :1
 function f(_,(x,;y=1)); end
-#               └──┘ ── cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
+#               └──┘
 
 ########################################
 # Error: ref in arg tuple (flisp allows this)
 function f(_,(_,x[])); end
 #---------------------
-LoweringError:
+syntax: expected identifier or tuple
+@ :1
 function f(_,(_,x[])); end
-#               └─┘ ── expected identifier or tuple
+#               └─┘
 
 ########################################
 # Error: call in arg tuple (flisp allows this; args ignored)
 function f(_,(_,x(y))); end
 #---------------------
-LoweringError:
+syntax: expected identifier or tuple
+@ :1
 function f(_,(_,x(y))); end
-#               └──┘ ── expected identifier or tuple
+#               └──┘
 
 ########################################
 # Error: curly in arg tuple (flisp allows this)
 function f(_,(_,x{y})); end
 #---------------------
-LoweringError:
+syntax: expected identifier or tuple
+@ :1
 function f(_,(_,x{y})); end
-#               └──┘ ── expected identifier or tuple
+#               └──┘
 
 ########################################
 # Error: splat on non-final default positional arg
 function f(x=1...,y=2); end
 #---------------------
-LoweringError:
+syntax: splat only allowed on final positional default arg
+@ :1
 function f(x=1...,y=2); end
-#            └──┘ ── splat only allowed on final positional default arg
+#            └──┘
 
 ########################################
 # Error: splat on non-final default positional arg 2
 function f(x=(1,2)...,y=(3,4)...); end
 #---------------------
-LoweringError:
+syntax: splat only allowed on final positional default arg
+@ :1
 function f(x=(1,2)...,y=(3,4)...); end
-#            └──────┘ ── splat only allowed on final positional default arg
+#            └──────┘
 
 ########################################
 # Function argument destructuring combined with splats, types and defaults
@@ -1231,10 +1272,10 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.f %₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/destructured#2 slot₃/destructured#3]
-    1   (call top.indexed_iterate slot₂/destructured#2 1)
+    slots: [slot₁/#self#(!read) slot₂/#arg#destructured#2 slot₃/#arg#destructured#3]
+    1   (call top.indexed_iterate slot₂/#arg#destructured#2 1)
     2   (call core.getfield %₁ 1)
-    3   (call top.indexed_iterate slot₃/destructured#3 1)
+    3   (call top.indexed_iterate slot₃/#arg#destructured#3 1)
     4   (call core.getfield %₃ 1)
     5   (return core.nothing)
 10  latestworld
@@ -1279,9 +1320,10 @@ function f_bad_nospecialize(@nospecialize(x)=1); end
 # Error: nospecialize should be outermost expr in arg
 function f_bad_nospecialize(;@nospecialize(x)=1); end
 #---------------------
-LoweringError:
+syntax: expected identifier or `identifier::type`
+@ :1
 function f_bad_nospecialize(;@nospecialize(x)=1); end
-#                            └──────────────┘ ── expected identifier or `identifier::type`
+#                            └──────────────┘
 
 ########################################
 # FIXME: Error: nospecialize should be outermost expr in arg
@@ -1295,25 +1337,46 @@ function f_bad_nospecialize(@nospecialize(x)...); end
 # Error: nospecialize should be outermost expr in arg
 function f_bad_nospecialize(;@nospecialize(x)...); end
 #---------------------
-LoweringError:
+syntax: expected identifier
+@ :1
 function f_bad_nospecialize(;@nospecialize(x)...); end
-#                            └──────────────┘ ── expected identifier
+#                            └──────────────┘
 
 ########################################
 # Error: nospecialize should be outermost expr in arg
 function f_bad_nospecialize(@nospecialize(x)::T); end
 #---------------------
-LoweringError:
+syntax: expected identifier
+@ :1
 function f_bad_nospecialize(@nospecialize(x)::T); end
-#                           └──────────────┘ ── expected identifier
+#                           └──────────────┘
 
 ########################################
 # Error: nospecialize should be outermost expr in arg
 function f_bad_nospecialize(;@nospecialize(x)::T); end
 #---------------------
-LoweringError:
+syntax: expected identifier
+@ :1
 function f_bad_nospecialize(;@nospecialize(x)::T); end
-#                            └──────────────┘ ── expected identifier
+#                            └──────────────┘
+
+########################################
+# Error: nospecialize wrapping function is invalid
+@nospecialize function f_bad_nospecialize(); end
+#---------------------
+syntax: `nospecialize` cannot wrap a function definition; apply it to individual arguments, e.g. `function f(@nospecialize(x)); end`
+@ :1
+@nospecialize function f_bad_nospecialize(); end
+#             └────────────────────────────────┘
+
+########################################
+# Error: nospecialize wrapping non-arg assignment is invalid
+@nospecialize x = 1
+#---------------------
+syntax: expected identifier
+@ :1
+@nospecialize x = 1
+#            └────┘
 
 ########################################
 # Function return without arguments
@@ -1725,9 +1788,8 @@ end
     slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/all_kws...(single_assign)]
     1   (= slot₄/all_kws... (call top.pairs slot₂/kws))
     2   TestMod.#f_kw_slurp_simple#kw_body#2
-    3   slot₄/all_kws...
-    4   (call %₂ %₃ slot₃/#self#)
-    5   (return %₄)
+    3   (call %₂ slot₄/all_kws... slot₃/#self#)
+    4   (return %₃)
 32  latestworld
 33  TestMod.f_kw_slurp_simple
 34  (return %₃₃)
@@ -1786,22 +1848,20 @@ end
     slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/x(!read) slot₅/#kwtmp# slot₆/non_x_kws...(single_assign)]
     1   (newvar slot₄/x)
     2   (newvar slot₅/#kwtmp#)
-    3   (newvar slot₆/non_x_kws...)
-    4   (call core.isdefined slot₂/kws :x)
-    5   (gotoifnot %₄ label₈)
-    6   (= slot₅/#kwtmp# (call core.getfield slot₂/kws :x))
-    7   (goto label₁₀)
-    8   TestMod.x_default
-    9   (= slot₅/#kwtmp# %₈)
-    10  slot₅/#kwtmp#
-    11  (call core.tuple :x)
-    12  (call core.apply_type core.NamedTuple %₁₁)
-    13  (call top.structdiff slot₂/kws %₁₂)
-    14  (= slot₆/non_x_kws... (call top.pairs %₁₃))
-    15  TestMod.#f_kw_slurp#kw_body#3
-    16  slot₆/non_x_kws...
-    17  (call %₁₅ %₁₀ %₁₆ slot₃/#self#)
-    18  (return %₁₇)
+    3   (call core.isdefined slot₂/kws :x)
+    4   (gotoifnot %₃ label₇)
+    5   (= slot₅/#kwtmp# (call core.getfield slot₂/kws :x))
+    6   (goto label₉)
+    7   TestMod.x_default
+    8   (= slot₅/#kwtmp# %₇)
+    9   slot₅/#kwtmp#
+    10  (call core.tuple :x)
+    11  (call core.apply_type core.NamedTuple %₁₀)
+    12  (call top.structdiff slot₂/kws %₁₁)
+    13  (= slot₆/non_x_kws... (call top.pairs %₁₂))
+    14  TestMod.#f_kw_slurp#kw_body#3
+    15  (call %₁₄ %₉ slot₆/non_x_kws... slot₃/#self#)
+    16  (return %₁₅)
 32  latestworld
 33  TestMod.f_kw_slurp
 34  (return %₃₃)
@@ -1885,9 +1945,8 @@ end
     19  (call top.structdiff slot₂/kws %₁₈)
     20  (= slot₇/kws... (call top.pairs %₁₉))
     21  TestMod.#f_kw_slurp_dep#kw_body#4
-    22  slot₇/kws...
-    23  (call %₂₁ slot₅/a slot₆/b %₂₂ slot₃/#self#)
-    24  (return %₂₃)
+    22  (call %₂₁ slot₅/a slot₆/b slot₇/kws... slot₃/#self#)
+    23  (return %₂₂)
 32  latestworld
 33  TestMod.f_kw_slurp_dep
 34  (return %₃₃)
@@ -2012,9 +2071,9 @@ end
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  (call core.define_method TestMod TestMod.#f_kw_slurp#kw_body#6 %₁₃
     --- code_info
-    slots: [slot₁/#f_kw_slurp#kw_body#6(!read) slot₂/kw1(nospecialize,!read) slot₃/kw2(nospecialize,!read) slot₄/restkw(nospecialize,!read) slot₅/#self#(!read) slot₆/a(nospecialize,!read)]
-    1   (meta :nospecialize slot₂/kw1 slot₃/kw2 slot₄/restkw slot₆/a)
-    2   (meta :nkw 3)
+    slots: [slot₁/#f_kw_slurp#kw_body#6(!read) slot₂/kw1(!read) slot₃/kw2(!read) slot₄/restkw(!read) slot₅/#self#(!read) slot₆/a(!read)]
+    1   (meta :nkw 3)
+    2   (meta :nospecialize)
     3   (return core.nothing)
 15  latestworld
 16  TestMod.f_kw_slurp
@@ -2025,7 +2084,7 @@ end
 21  (call core.svec %₁₈ %₁₉ %₂₀)
 22  (call core.define_method TestMod TestMod.f_kw_slurp %₂₁
     --- code_info
-    slots: [slot₁/#self# slot₂/a(nospecialize)]
+    slots: [slot₁/#self# slot₂/a]
     1   (meta :nospecialize)
     2   TestMod.#f_kw_slurp#kw_body#6
     3   (call core.UndefKeywordError :kw1)
@@ -2044,33 +2103,31 @@ end
 30  (call core.svec %₂₇ %₂₈ %₂₉)
 31  (call core.define_method TestMod TestMod.f_kw_slurp %₃₀
     --- code_info
-    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/a(nospecialize) slot₅/kw1(!read) slot₆/kw2(!read) slot₇/#kwtmp# slot₈/restkw...(single_assign)]
-    1   (meta :nospecialize slot₄/a)
-    2   (newvar slot₅/kw1)
-    3   (newvar slot₆/kw2)
-    4   (newvar slot₇/#kwtmp#)
-    5   (newvar slot₈/restkw...)
-    6   (call core.isdefined slot₂/kws :kw1)
-    7   (gotoifnot %₆ label₁₀)
-    8   (= slot₇/#kwtmp# (call core.getfield slot₂/kws :kw1))
-    9   (goto label₁₂)
-    10  (call core.UndefKeywordError :kw1)
-    11  (= slot₇/#kwtmp# (call core.throw %₁₀))
-    12  slot₇/#kwtmp#
-    13  (call core.isdefined slot₂/kws :kw2)
-    14  (gotoifnot %₁₃ label₁₇)
-    15  (= slot₇/#kwtmp# (call core.getfield slot₂/kws :kw2))
-    16  (goto label₁₈)
-    17  (= slot₇/#kwtmp# 2)
-    18  slot₇/#kwtmp#
-    19  (call core.tuple :kw1 :kw2)
-    20  (call core.apply_type core.NamedTuple %₁₉)
-    21  (call top.structdiff slot₂/kws %₂₀)
-    22  (= slot₈/restkw... (call top.pairs %₂₁))
-    23  TestMod.#f_kw_slurp#kw_body#6
-    24  slot₈/restkw...
-    25  (call %₂₃ %₁₂ %₁₈ %₂₄ slot₃/#self# slot₄/a)
-    26  (return %₂₅)
+    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/a slot₅/kw1(!read) slot₆/kw2(!read) slot₇/#kwtmp# slot₈/restkw...(single_assign)]
+    1   (newvar slot₅/kw1)
+    2   (newvar slot₆/kw2)
+    3   (newvar slot₇/#kwtmp#)
+    4   (meta :nospecialize)
+    5   (call core.isdefined slot₂/kws :kw1)
+    6   (gotoifnot %₅ label₉)
+    7   (= slot₇/#kwtmp# (call core.getfield slot₂/kws :kw1))
+    8   (goto label₁₁)
+    9   (call core.UndefKeywordError :kw1)
+    10  (= slot₇/#kwtmp# (call core.throw %₉))
+    11  slot₇/#kwtmp#
+    12  (call core.isdefined slot₂/kws :kw2)
+    13  (gotoifnot %₁₂ label₁₆)
+    14  (= slot₇/#kwtmp# (call core.getfield slot₂/kws :kw2))
+    15  (goto label₁₇)
+    16  (= slot₇/#kwtmp# 2)
+    17  slot₇/#kwtmp#
+    18  (call core.tuple :kw1 :kw2)
+    19  (call core.apply_type core.NamedTuple %₁₈)
+    20  (call top.structdiff slot₂/kws %₁₉)
+    21  (= slot₈/restkw... (call top.pairs %₂₀))
+    22  TestMod.#f_kw_slurp#kw_body#6
+    23  (call %₂₂ %₁₁ %₁₇ slot₈/restkw... slot₃/#self# slot₄/a)
+    24  (return %₂₃)
 32  latestworld
 33  TestMod.f_kw_slurp
 34  (return %₃₃)
@@ -2080,9 +2137,10 @@ end
 function f_kw_destruct(; (x,y)=10)
 end
 #---------------------
-LoweringError:
+syntax: expected identifier or `identifier::type`
+@ :1
 function f_kw_destruct(; (x,y)=10)
-#                        └───┘ ── expected identifier or `identifier::type`
+#                        └───┘
 end
 
 ########################################
@@ -2090,9 +2148,10 @@ end
 function f_kw_slurp_default(; kws...=def)
 end
 #---------------------
-LoweringError:
+syntax: expected identifier or `identifier::type`
+@ :1
 function f_kw_slurp_default(; kws...=def)
-#                             └────┘ ── expected identifier or `identifier::type`
+#                             └────┘
 end
 
 ########################################
@@ -2100,9 +2159,10 @@ end
 function f_kw_slurp_type(; kws::T...)
 end
 #---------------------
-LoweringError:
+syntax: keyword parameter with `...` may not be given a type
+@ :1
 function f_kw_slurp_type(; kws::T...)
-#                          └────┘ ── keyword parameter with `...` may not be given a type
+#                          └────┘
 end
 
 ########################################
@@ -2110,9 +2170,10 @@ end
 function f_kw_slurp_not_last(; kws..., x=1)
 end
 #---------------------
-LoweringError:
+syntax: `...` may only be used for the final keyword parameter
+@ :1
 function f_kw_slurp_not_last(; kws..., x=1)
-#                              └────┘ ── `...` may only be used for the final keyword parameter
+#                              └────┘
 end
 
 ########################################
@@ -2123,13 +2184,14 @@ function foo()
     end
 end
 #---------------------
-LoweringError:
+syntax: if-generated requires both true and false cases
+@ :2
 function foo()
 #   ┌────────────
     if @generated
         1
     end
-#─────┘ ── if-generated requires both true and false cases
+#─────┘
 end
 
 ########################################
@@ -2169,7 +2231,7 @@ end
 21  (call core.define_method TestMod TestMod.f_only_generated %₂₀
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/y(!read)]
-    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub SyntaxContext(#=omitted=#) TestMod.#f_only_generated@generator##0 SourceRef:1 (call core.svec :#self# :x :y) (call core.svec)))
+    1   (meta :generated (new Base.SyntaxGeneratedFunctionStub SyntaxContext(#=omitted=#) #f_only_generated@generator##0 SourceRef:1 (call core.svec :#self# :x :y) (call core.svec)))
     2   (meta :generated_only)
     3   (return core.nothing)
 22  latestworld
@@ -2206,9 +2268,9 @@ end
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(nospecialize,!read) slot₄/x(nospecialize,!read) slot₅/y(nospecialize,!read)]
     1   (meta :nospecialize slot₃/#self# slot₄/x slot₅/y)
-    2   (call JuliaLowering.interpolate_expr (inert (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
+    2   (copyast (inert (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
     3   (call core.tuple %₂)
-    4   (call JuliaLowering.interpolate_syntax (syntaxinert (block (= nongen_stuff (call bothgen x y)) (syntaxunquote (block (call JuliaLowering.interpolate_expr (inert (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple nongen_stuff maybe_gen_stuff))) %₃)
+    4   (call JuliaLowering.interpolate_syntax (syntaxinert (block (= nongen_stuff (call bothgen x y)) (syntaxunquote (block (copyast (inert (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple nongen_stuff maybe_gen_stuff))) %₃)
     5   (return %₄)
 14  latestworld
 15  TestMod.f_partially_generated
@@ -2220,15 +2282,13 @@ end
 21  (call core.define_method TestMod TestMod.f_partially_generated %₂₀
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/maybe_gen_stuff(single_assign) slot₅/nongen_stuff(single_assign)]
-    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub SyntaxContext(#=omitted=#) TestMod.#f_partially_generated@generator##0 SourceRef:1 (call core.svec :#self# :x :y) (call core.svec)))
+    1   (meta :generated (new Base.SyntaxGeneratedFunctionStub SyntaxContext(#=omitted=#) #f_partially_generated@generator##0 SourceRef:1 (call core.svec :#self# :x :y) (call core.svec)))
     2   TestMod.bothgen
     3   (= slot₅/nongen_stuff (call %₂ slot₂/x slot₃/y))
     4   TestMod.some_nongen_stuff
     5   (= slot₄/maybe_gen_stuff (call %₄ slot₂/x slot₃/y))
-    6   slot₅/nongen_stuff
-    7   slot₄/maybe_gen_stuff
-    8   (call core.tuple %₆ %₇)
-    9   (return %₈)
+    6   (call core.tuple slot₅/nongen_stuff slot₄/maybe_gen_stuff)
+    7   (return %₆)
 22  latestworld
 23  TestMod.f_partially_generated
 24  (return %₂₃)
@@ -2237,6 +2297,7 @@ end
 # Error: juxtapose-assignment
 4a = 1
 #---------------------
-LoweringError:
+syntax: expected identifier or `identifier::type`
+@ :1
 4a = 1
-╙ ── expected identifier or `identifier::type`
+⊔

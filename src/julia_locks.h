@@ -150,7 +150,13 @@ int pthread_rwlock_unlock(pthread_rwlock_t *lock) JL_NOTSAFEPOINT JL_NOTSAFEPOIN
 // this scope; that is expected for these explicit instantiations, so silence it.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdtor-name"
+#ifdef _LIBCPP_SCOPED_LOCKABLE
+// libc++ marks lock_guard scoped_lockable, so its destructor already releases
+// everything the constructor acquired, jl_notsafepoint included.
+template JL_NOTSAFEPOINT_ENTER std::lock_guard<std::mutex>::lock_guard(std::mutex&);
+#else
 JL_TSA_ANNOTATE_SCOPED_LOCK(std::lock_guard, lock_guard, std::mutex);
+#endif
 JL_TSA_ANNOTATE_LOCK(std::unique_lock, unique_lock, std::mutex);
 JL_TSA_ANNOTATE_LOCK(std::unique_lock, unique_lock, std::shared_mutex);
 JL_TSA_ANNOTATE_LOCK(std::shared_lock, shared_lock, std::shared_mutex);
@@ -160,28 +166,54 @@ JL_TSA_ANNOTATE_LOCK(std::shared_lock, shared_lock, std::shared_mutex);
 #undef JL_TSA_ANNOTATE_LOCK
 #endif
 
+// simple C++ shim around a gc-safe region: the thread is gc-safe from construction to
+// destruction, unless the region is moved into a jl_unique_gcsafe_lock, which then ends it
+class jl_gcsafe_region {
+    jl_ptls_t ptls; // null once moved from
+    int8_t gc_state;
+public:
+    jl_gcsafe_region() JL_CANSAFEPOINT_LEAVE
+    {
+        ptls = jl_current_task->ptls;
+        gc_state = jl_gc_safe_enter(ptls); // contains jl_gc_safepoint after enter
+    }
+    jl_gcsafe_region(jl_gcsafe_region &&other) JL_NOTSAFEPOINT
+        : ptls(other.ptls), gc_state(other.gc_state)
+    {
+        other.ptls = nullptr;
+    }
+    jl_gcsafe_region(const jl_gcsafe_region &) = delete;
+    jl_gcsafe_region &operator=(jl_gcsafe_region &&) = delete;
+    jl_gcsafe_region &operator=(const jl_gcsafe_region &) = delete;
+    ~jl_gcsafe_region() JL_CANSAFEPOINT_ENTER
+    {
+        if (ptls)
+            jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint after leave
+    }
+};
+
 // simple C++ shim around a std::unique_lock + gc-safe + disabled finalizers region
 // since we nearly always want that combination together
 class jl_unique_gcsafe_lock {
+    jl_gcsafe_region gcsafe;
 public:
-    int8_t gc_state;
     std::unique_lock<std::mutex> native;
     explicit jl_unique_gcsafe_lock(std::mutex &native) JL_CANSAFEPOINT_LEAVE
+        : jl_unique_gcsafe_lock(native, jl_gcsafe_region()) {}
+    // takes over a gc-safe region the thread is already in
+    jl_unique_gcsafe_lock(std::mutex &native, jl_gcsafe_region &&gcsafe) JL_NOTSAFEPOINT
+        : gcsafe(std::move(gcsafe))
     {
-        jl_task_t *ct = jl_current_task;
-        gc_state = jl_gc_safe_enter(ct->ptls); // contains jl_gc_safepoint after enter
         this->native = std::unique_lock<std::mutex>(native);
-        ct->ptls->engine_nqueued++; // disables finalizers until inference is finished on this method graph
+        jl_current_task->ptls->engine_nqueued++; // disables finalizers until inference is finished on this method graph
     }
     jl_unique_gcsafe_lock(jl_unique_gcsafe_lock &&native) = delete;
     jl_unique_gcsafe_lock(jl_unique_gcsafe_lock &native) = delete;
     ~jl_unique_gcsafe_lock() JL_CANSAFEPOINT_ENTER
     {
-        jl_task_t *ct = jl_current_task;
         native.unlock();
-        jl_gc_safe_leave(ct->ptls, gc_state); // contains jl_gc_safepoint after leave
-        ct->ptls->engine_nqueued--; // enable finalizers (but don't run them until the next gc)
-    }
+        jl_current_task->ptls->engine_nqueued--; // enable finalizers (but don't run them until the next gc)
+    } // ~gcsafe then leaves the gc-safe region
     void wait(std::condition_variable& cond) JL_NOTSAFEPOINT {
         cond.wait(native);
     }

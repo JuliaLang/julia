@@ -220,6 +220,7 @@ setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) = ccall(:jl_set_fe
 rounding_raw(::Type{<:Union{Float32,Float64}}) = ccall(:jl_get_fenv_rounding, Int32, ())
 
 rounding(::Type{T}) where {T<:Union{Float32,Float64}} = from_fenv(rounding_raw(T))
+rounding(::Type{Union{}}, slurp...) = throw(MethodError(rounding, (Union{}, slurp...)))
 
 """
     setrounding(f::Function, T, mode)
@@ -243,6 +244,7 @@ function setrounding(f::Function, ::Type{T}, rounding::RoundingMode) where T
         setrounding_raw(T,old_rounding_raw)
     end
 end
+setrounding(f, ::Type{Union{}}, slurp...) = throw(MethodError(setrounding, (f, Union{}, slurp...)))
 function setrounding_raw(f::Function, ::Type{T}, rounding) where T
     old_rounding_raw = rounding_raw(T)
     setrounding_raw(T,rounding)
@@ -306,7 +308,9 @@ break identities such as `(x-y==0) == (x==y)`.
 
 !!! warning
 
-    This function only affects the current thread.
+    This setting is local to the current task: it only affects the current task, a new task
+    inherits the setting of the task that created it, and the setting is restored whenever
+    the task resumes running, on whichever thread that happens.
 """
 set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals,Int32,(Int8,),yes)==0
 
@@ -318,7 +322,7 @@ for IEEE arithmetic, and `true` if they might be converted to zeros.
 
 !!! warning
 
-    This function only affects the current thread.
+    This setting is local to the current task; see [`set_zero_subnormals`](@ref).
 """
 get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
 
@@ -412,8 +416,8 @@ function round end
 
 """
     trunc([T,] x)
-    trunc(x; digits::Integer= [, base = 10])
-    trunc(x; sigdigits::Integer= [, base = 10])
+    trunc(x; digits::Integer=0, base = 10)
+    trunc(x; sigdigits::Integer, base = 10)
 
 `trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
 is less than or equal to the absolute value of `x`.
@@ -443,8 +447,8 @@ function trunc end
 
 """
     floor([T,] x)
-    floor(x; digits::Integer= [, base = 10])
-    floor(x; sigdigits::Integer= [, base = 10])
+    floor(x; digits::Integer=0, base = 10)
+    floor(x; sigdigits::Integer, base = 10)
 
 `floor(x)` returns the nearest integral value of the same type as `x` that is less than or
 equal to `x`.
@@ -460,8 +464,8 @@ function floor end
 
 """
     ceil([T,] x)
-    ceil(x; digits::Integer= [, base = 10])
-    ceil(x; sigdigits::Integer= [, base = 10])
+    ceil(x; digits::Integer=0, base = 10)
+    ceil(x; sigdigits::Integer, base = 10)
 
 `ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
 equal to `x`.
@@ -487,5 +491,9 @@ round(::Type{T}, x) where T = round(T, x, RoundNearest)
 
 round(::Type{T}, x, r::RoundingMode) where T = _round_convert(T, round(x, r), x, r)
 _round_convert(::Type{T}, x_integer, x, r) where T = convert(T, x_integer)
+trunc(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(trunc, (Union{}, slurp...)))
+floor(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(floor, (Union{}, slurp...)))
+ ceil(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(ceil, (Union{}, slurp...)))
+round(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(round, (Union{}, slurp...)))
 
 round(x::Integer, r::RoundingMode) = x

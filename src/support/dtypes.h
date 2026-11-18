@@ -131,7 +131,11 @@ typedef intptr_t ssize_t;
 #define LLT_FREE(x) free(x)
 
 #define STATIC_INLINE static inline
-#define FORCE_INLINE static inline __attribute__((always_inline))
+#ifdef _COMPILER_MICROSOFT_
+#  define FORCE_INLINE static __forceinline
+#else
+#  define FORCE_INLINE static inline __attribute__((always_inline))
+#endif
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 #  define NOINLINE __declspec(noinline)

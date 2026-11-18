@@ -437,6 +437,7 @@ using Main: samepath
         @test Base.Filesystem.uripath(".") == Base.Filesystem.uripath(pwd())
         @test Base.Filesystem.uripath("$(sysdrive)unicode$(sep)Δεδομένα") == "file://$host/$(uridrive)unicode/%CE%94%CE%B5%CE%B4%CE%BF%CE%BC%CE%AD%CE%BD%CE%B1"
         @test Base.Filesystem.uripath("$(sysdrive)unicode$(sep)🧮🐛🔨") == "file://$host/$(uridrive)unicode/%F0%9F%A7%AE%F0%9F%90%9B%F0%9F%94%A8"
+        @test Base.Filesystem.uripath("$(sysdrive)control\tchar") == "file://$host/$(uridrive)control%09char"
     end
 
     if Sys.iswindows()

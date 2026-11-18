@@ -160,6 +160,20 @@ julia> if x > 0
 "positive!"
 ```
 
+An `if` expression can also be written on a single line by separating the condition from the
+first branch with a semicolon:
+
+```jldoctest
+julia> x = 3;
+
+julia> if x > 0; "positive!" else "negative..." end
+"positive!"
+```
+
+Without the semicolon (or a line break), the condition may continue into what was meant to be
+the branch: `if 7+2 < 10 -3 else 0 end` is parsed as `if 7+2 < 10-3 else 0 end`, which has an
+empty first branch and evaluates to `0`.
+
 Note that very short conditional statements (one-liners) are frequently expressed using Short-Circuit
 Evaluation in Julia, as outlined in the next section.
 

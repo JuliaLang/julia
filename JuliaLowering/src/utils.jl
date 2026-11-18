@@ -1,53 +1,53 @@
 # Within JL, :placeholder is used for never-read identifiers, but this magic
 # symbol is used in the IR (its write-only properties are enforced in codegen).
 const UNUSED = "#unused#"
-
-TODO(msg::AbstractString) = throw(ErrorException("Lowering TODO: $msg"))
-TODO(ex::SyntaxTree, msg="") = throw(LoweringError(ex, "Lowering TODO: $msg"))
+# Method printing does stupid stuff with slot names; ideally move to provenance
+# instead of reverse-engineering flisp slot naming
+const ERASE_SLOTNAME_PREFIX = "#arg#"
 
 """
-An error with detailed printing containing one or more SyntaxTrees and one
-message per tree.  If `!internal`, caused by bad user code in `syntax` (flisp:
-`Expr(:error, msg)`).
+An error with detailed printing containing a main message, one or more
+SyntaxTrees, and an optional message per tree.  If `!internal`, caused by bad
+user code in `syntax` (flisp: `Expr(:error, msg)`).
 """
 struct LoweringError <: Exception
+    msg::String
     sts::Vector{SyntaxTree}
-    msgs::Vector{String}
+    msgs::Vector{Union{String, Nothing}}
     internal::Bool
 end
 
-@noinline LoweringError(ex::SyntaxTree, msg::String) =
-    LoweringError(SyntaxList(ex), String[msg], false)
+@noinline LoweringError(st::SyntaxTree, msg::String) =
+    LoweringError(msg, SyntaxTree[st], [nothing], false)
 
-function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
-    println(io, exc.internal ? "internal lowering bug:" : "LoweringError:")
+function Base.showerror(io::IO, exc::LoweringError)
+    print(io, "syntax: ")
+    print(io, exc.msg)
+    if exc.internal
+        print(io, " (internal lowering bug)")
+    end
     for i in eachindex(exc.sts)
         st = exc.sts[i]
         msg = exc.msgs[i]
         src = sourceref(st)
+        print(io, "\n")
+        lnn = src isa LineNumberNode ? src : first_linenode(src)
+        l_str = lnn.file === nothing ? "" : String(lnn.file)
+        printstyled(io, "@ $(l_str):$(lnn.line)\n"; color=:light_black)
         if src isa LineNumberNode
-            l_str = (src.file === nothing || src.file === :var"") ?
-                "line " : "$(src.file):"
-            println(io, " at $(l_str)$(src.line): $msg")
+            printstyled(io, "└───"; color=:light_black)
+            if msg isa String
+                print(io, "$msg\n    ")
+            end
+            print(io, "Expression: ")
+            show(io, MIME"text/x.sexpression"(), prov_end(st))
         else
             highlight(io, src; note=msg)
         end
-        if exc.internal || src isa LineNumberNode
-            print(io, "\nExpression:\n  ")
-            show(io, MIME"text/x.sexpression"(), st)
-            # TODO: no parents available here; need to place them in LoweringError
-            parents = SyntaxList()
-            isempty(parents) || print(io, "\nContaining expressions:")
-            for p in parents
-                print(io, "\n  ")
-                show(io, MIME"text/x.sexpression"(), p)
-            end
-        end
-        i !== lastindex(exc.sts) && print(io, "\n\n")
+        i !== lastindex(exc.sts) && print(io, "\n")
     end
-
-    if (show_detail || exc.internal) && !isempty(exc.sts)
-        print(io, "\n\nDetailed provenance:\n  ")
+    if exc.internal
+        print(io, "\nDetailed provenance:\n  ")
         _show_provtree(io, exc.sts[1], "  ")
     end
 end
@@ -170,7 +170,6 @@ function _print_ir(io::IO, ex0, indent)
             slot.is_nospecialize   && push!(flags, "nospecialize")
             !slot.is_read          && push!(flags, "!read")
             slot.is_single_assign  && push!(flags, "single_assign")
-            slot.is_maybe_undef    && push!(flags, "maybe_undef")
             slot.is_called         && push!(flags, "called")
             if !isempty(flags)
                 print(io, "($(join(flags, ",")))")
@@ -271,8 +270,12 @@ function _find_assigned_ssavars!(ctx, ssamap, st)
     (is_leaf(st) || is_quoted(st)) && return
     if head(st) == :(=) && head(st[1]) == :bindingid
         b = get_binding(ctx, st[1])
-        b.is_ssa || return
-        ssamap[b.id] = syntax_id(ssavar(ctx, st[1], b.name))
+        if b.is_ssa
+            ssamap[b.id] = syntax_id(ssavar(ctx, st[1], b.name))
+        elseif b.kind == :typevar
+            ssamap[b.id] = _new_binding(
+                ctx.bindings, b.node_id, b.name, :typevar).id
+        end
     end
     foreach(e->_find_assigned_ssavars!(ctx, ssamap, e), children(st))
 end

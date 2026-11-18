@@ -5,8 +5,8 @@
     macro jl_assert(cond, args...)
         usage = "usage: @jl_assert(condition, tree|(tree, message)...)"
         @assert(!isempty(args), usage)
-        sts = Expr(:call, SyntaxList)
-        msgs = Expr(:call, Base.vect)
+        sts = Expr(:ref, Syntax)
+        msgs = Expr(:ref, String)
         for a in args
             if Meta.isexpr(a, :tuple, 2)
                 push!(sts.args, a.args[1])
@@ -16,12 +16,9 @@
                 push!(msgs.args, string(a))
             end
         end
-        # just add assertion string to first msg
-        msgs.args[2] = Expr(
-            :string, "`jl_assert(", QuoteNode(cond), ", _)`: ", msgs.args[2])
-        :($(esc(cond)) ? nothing : begin
-              throw(LoweringError($(esc(sts)), $(esc(msgs)), true))
-          end)
+        msg = "@jl_assert failed `$cond`"
+        :($(esc(cond)) ? nothing :
+            throw(LoweringError($msg, $(esc(sts)), $(esc(msgs)), true)))
     end
 else
     # allow @jl_assert false in value position to not change rettype

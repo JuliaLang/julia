@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <shared_mutex>
 
 #include <llvm/ADT/FunctionExtras.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
@@ -44,8 +45,8 @@ public:
     // so `ns` (a consumer namespace, e.g. the package UUID) and `key` must
     // cover every input of the cached computation.  kvGet returns a
     // Vector{UInt8} with a copy of the value, or jl_nothing on a miss.
-    // kvPut queues the write (asynchronous, flushed at exit); a get in the
-    // same session may still miss right after a put.
+    // kvPut queues the write (asynchronous, and dropped if still pending at
+    // exit); a get in the same session may still miss right after a put.
     jl_value_t *kvGet(const char *Ns, const uint8_t *Key,
                       size_t KeyLen) JL_CANSAFEPOINT_ENTER_LEAVE;
     int kvPut(const char *Ns, const uint8_t *Key, size_t KeyLen, const uint8_t *Val,
@@ -59,6 +60,12 @@ public:
     // about, returns a short description of that reason (for display in the
     // REPL banner); otherwise returns null.  Forces initialization.
     const char *disabledNotice() JL_CANSAFEPOINT_ENTER_LEAVE;
+    // Removes the entries last used before Cutoff (seconds since the epoch).
+    // Returns the number of entries removed, or -1 on error.
+    int64_t prune(int64_t Cutoff) JL_CANSAFEPOINT_ENTER_LEAVE;
+    // Writes a copy of the database without its free pages to Dir/data.mdb,
+    // which must not exist yet. Returns an empty string or a description of the error.
+    std::string compact(const char *Dir) JL_CANSAFEPOINT_ENTER_LEAVE;
     void shutdown() JL_NOTSAFEPOINT;
 
     using Hash = std::array<uint8_t, 20>;
@@ -69,6 +76,7 @@ protected:
     bool updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
     bool maybeEvictLRU(MDBTxn &Txn, size_t RoomFor);
     size_t dbiSize(MDBTxn &Txn, MDB_dbi Dbi);
+    MDBTxn beginTxn(unsigned Flags = 0) JL_NOTSAFEPOINT;
 
 private:
     std::atomic<bool> Initialized = false;
@@ -80,6 +88,12 @@ private:
     uv_thread_t WriterThread;
     bool Started = false;
     std::atomic<bool> Exiting = false;
+    std::mutex WriterExitMutex;
+    std::condition_variable WriterExitCond;
+    bool WriterExited = false; // guarded by WriterExitMutex
+    // held shared to start a transaction, and exclusively at exit to remove the semaphores
+    std::shared_mutex TxnLock;
+    bool LocksReleased = false; // guarded by TxnLock
     // Non-null MemoryBuffer -> cache miss, want to write new entry
     // Null MemoryBuffer     -> cache hit, want to update atime
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;

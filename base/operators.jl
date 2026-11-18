@@ -100,6 +100,9 @@ function getproperty(T::DataType, s::Symbol)
     return getfield(T, s)
 end
 supertype(T::UnionAll) = (@_foldable_meta; UnionAll(T.var, supertype(T.body)))
+# `TypeEgal{T}` (instance `T` by egality) refines `Type{T}`, which sits directly below `AnyType`
+supertype(::TypeEq) = Core.AnyType
+supertype(T::Core.TypeEgal) = Type{type_parameter(T)}
 
 ## generic comparison ##
 

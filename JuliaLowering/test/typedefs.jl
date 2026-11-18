@@ -545,6 +545,19 @@ end
 @test_throws ArgumentError test_mod.S8((1,), ())
 @test_throws ArgumentError test_mod.S8((1,2,3), ())
 
+ex_ssa_double = quote
+    init!(l, args...; kwargs...) = l
+    mutable struct Logger
+        path
+        Logger(args...; kwargs...) = init!(new(), args...; kwargs...)
+    end
+    nameof(typeof(Logger(1; a = 2)))
+end
+let m = @newmod()
+@test jl_eval(m, ex_ssa_double; edition=JL_NEW_EDITION) ==
+    fl_eval(m, ex_ssa_double)
+end
+
 # empty-curly `new{}()`
 @test JuliaLowering.include_string(test_mod, """
 struct S_empty_new
@@ -584,6 +597,16 @@ end
 # Wrong number of args checked by the runtime
 @test_throws ArgumentError test_mod.S9((1,))
 @test_throws ArgumentError test_mod.S9((1,2,3))
+
+# Nested `new` calls (issue #14477)
+@test JuliaLowering.include_string(test_mod, """
+struct S14477
+    fld::S14477
+    S14477() = new(new())
+end
+inner_fld_isdefined() = isdefined(S14477().fld, :fld)
+(isdefined(S14477(), :fld), inner_fld_isdefined())
+""") == (true, false)
 
 # Test cases from
 # https://github.com/JuliaLang/julia/issues/36104
@@ -739,6 +762,7 @@ end
 # typegroup: basic mutual recursion
 @test jl_eval(test_mod, """
 typegroup
+    "foo"
     struct TG_Node
         edges::Vector{TG_Edge}
     end
@@ -913,6 +937,20 @@ end
         end
     """)
     @test JuliaLowering.include_string(m, "WA{Int}(5)") isa m.WA{Int}
+end
+
+@testset "inner ctor with a `where`-typed `Type` self argument" begin
+    local test_mod = Module()
+    jl_eval(test_mod, """
+        struct CTW{T}
+            x::T
+            (t::(Type{CTW{T}} where T))(x) = new{T}(x)
+        end
+    """)
+    w = jl_eval(test_mod, "CTW{Int}(1)")
+    @test w isa test_mod.CTW{Int}
+    @test w.x === 1
+    @test jl_eval(test_mod, "CTW{Float64}(1)").x === 1.0
 end
 
 @testset "(AI) struct fields named with underscores" begin

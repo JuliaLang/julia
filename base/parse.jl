@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base.Checked: add_with_overflow, mul_with_overflow
-
 ## string to integer functions ##
 
 """
@@ -48,187 +46,191 @@ function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
     convert(T, d)
 end
 
-function parseint_iterate(s::AbstractString, startpos::Int, endpos::Int)
-    (0 < startpos <= endpos) || (return Char(0), 0, 0)
-    j = startpos
-    c, startpos = iterate(s,startpos)::Tuple{Char, Int}
-    c, startpos, j
+# Base's integer grammar, on the UTF-8 bytes of a string:
+#     [whitespace] [sign] [whitespace] [0x | 0o | 0b] digits [whitespace]
+# A sign is only accepted for signed types, and a radix prefix only when no base is given.
+
+isspace_ascii(b::UInt8) = (b == UInt8(' ')) | (UInt8('\t') <= b <= UInt8('\r'))
+
+# Whitespace beyond ASCII is rare; decoding it stays out of the inlined loops below.
+# The index after the character at `i` of `s` if it is whitespace, else `i`.
+@noinline function skipspacechar(s::UTF8String, i::Int)
+    c, next = iterate(s, i)::Tuple{Char, Int}
+    return isspace(c) ? next : i
+end
+# The index before the character ending at `j` of `s` if it is whitespace starting at or
+# after `i`, else `j`.
+@noinline function skipspacechar_back(s::UTF8String, i::Int, j::Int)
+    k = thisind(s, j)
+    return k >= i && isspace(s[k]) ? k - 1 : j
 end
 
-function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos::Int, endpos::Int)
-    c, i, j = parseint_iterate(s, startpos, endpos)
-
-    while isspace(c)
-        c, i, j = parseint_iterate(s,i,endpos)
+# The first index in `i:j` of `s` that does not start a whitespace character, or `j + 1`.
+# `i:j` must be in bounds, as for the functions below.
+@inline function skipspace(s::UTF8String, i::Int, j::Int)
+    while i <= j
+        b = @inbounds codeunit(s, i)
+        if isspace_ascii(b)
+            i += 1
+        elseif b >= 0x80 && (next = skipspacechar(s, i)) > i
+            i = next
+        else
+            break
+        end
     end
-    (j == 0) && (return 0, 0, 0)
+    return i
+end
 
+# The last index in `i:j` of `s` before any trailing whitespace, or `i - 1`.
+@inline function skipspace_back(s::UTF8String, i::Int, j::Int)
+    while j >= i
+        b = @inbounds codeunit(s, j)
+        if isspace_ascii(b)
+            j -= 1
+        elseif b >= 0x80 && (prev = skipspacechar_back(s, i, j)) < j
+            j = prev
+        else
+            break
+        end
+    end
+    return j
+end
+
+# Parse the grammar before the digits in the bytes `i:j` of `s`. Returns the sign, the base
+# (from the prefix, or 10, if `base` is 0) and the index of the first digit; `(0, 0, 0)` if
+# only whitespace and a sign remain, and a zero index if a prefix has nothing after it.
+@inline function parseint_preamble(signed::Bool, base::Int, s::UTF8String, i::Int, j::Int)
+    i = skipspace(s, i, j)
+    i > j && return 0, 0, 0
     sgn = 1
     if signed
-        if c == '-' || c == '+'
-            (c == '-') && (sgn = -1)
-            c, i, j = parseint_iterate(s,i,endpos)
+        c = @inbounds codeunit(s, i)
+        if c == UInt8('-') || c == UInt8('+')
+            c == UInt8('-') && (sgn = -1)
+            i = skipspace(s, i + 1, j)
+            i > j && return 0, 0, 0
         end
     end
-
-    while isspace(c)
-        c, i, j = parseint_iterate(s,i,endpos)
-    end
-    (j == 0) && (return 0, 0, 0)
-
     if base == 0
-        if c == '0' && i <= endpos
-            c, i = iterate(s,i)::Tuple{Char, Int}
-            base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
-            if base != 10
-                _c, _i, j = parseint_iterate(s,i,endpos)
-            end
-        else
-            base = 10
+        base = 10
+        if i < j && @inbounds(codeunit(s, i)) == UInt8('0')
+            c = @inbounds codeunit(s, i + 1)
+            base = c == UInt8('b') ? 2 : c == UInt8('o') ? 8 : c == UInt8('x') ? 16 : 10
+            base == 10 || (i = i + 2 <= j ? i + 2 : 0)
         end
     end
-    return sgn, base, j
+    return sgn, base, i
 end
 
-# '0':'9' -> 0:9
-# 'A':'Z' -> 10:35
-# 'a':'z' -> 10:35 if base <= 36, 36:61 otherwise
-# input outside of that is mapped to base
-@inline function __convert_digit(_c::UInt32, base::UInt32)
-    _0 = UInt32('0')
-    _9 = UInt32('9')
-    _A = UInt32('A')
-    _a = UInt32('a')
-    _Z = UInt32('Z')
-    _z = UInt32('z')
-    a = base <= 36 ? UInt32(10) : UInt32(36) # converting here instead of via a type assertion prevents typeassert related errors
-    d = _0 <= _c <= _9 ? _c-_0             :
-        _A <= _c <= _Z ? _c-_A+ UInt32(10) :
-        _a <= _c <= _z ? _c-_a+a           :
-        base
-    return d
+# Parse the bytes `i:j` of `s`, which must be in bounds, with the grammar above. Returns the
+# value, or `nothing` (or throws, if `raise`) when the bytes are not a valid `T`.
+@inline function parseint_utf8(::Type{T}, s::UTF8String, i::Int, j::Int, base::Int, raise::Bool) where {T<:Integer}
+    # Decimal digits not starting with '0', after an optional sign, need none of the grammar.
+    if (base == 0 || base == 10) && i <= j
+        c = @inbounds codeunit(s, i)
+        neg = T <: Signed && c == UInt8('-')
+        k = i + (neg | (T <: Signed && c == UInt8('+')))
+        if k <= j && ((@inbounds codeunit(s, k)) - UInt8('1') <= 0x08) &
+                     ((@inbounds codeunit(s, j)) - UInt8('0') <= 0x09)
+            n = Parsers.parseint(T, codeunits(s), k, j, 10, neg)
+            n isa Parsers.ParseFailure || return n
+            raise && throw_parseint_error(T, s, i, j, neg ? -1 : 1, 10, k)
+            return nothing
+        end
+    end
+    sgn, b, d = parseint_preamble(T <: Signed, base, s, i, j)
+    if sgn != 0 && 2 <= b <= 62 && d != 0
+        n = Parsers.parseint(T, codeunits(s), d, skipspace_back(s, d, j), b, sgn < 0)
+        n isa Parsers.ParseFailure || return n
+    end
+    raise && throw_parseint_error(T, s, i, j, sgn, b, d)
+    return nothing
 end
 
-
-function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool) where T<:Integer
-    sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
-    if sgn == 0 && base == 0 && i == 0
-        raise && throw(ArgumentError("input string is empty or only contains whitespace"))
-        return nothing
+# Throw the error for the bytes `i:j` of `s` that `parseint_utf8` rejected, given the
+# preamble's results. In the digits, it is the first problem from the left: a non-digit,
+# overflow, or anything but whitespace after whitespace.
+@noinline function throw_parseint_error(::Type{T}, s::UTF8String, i::Int, j::Int,
+                                        sgn::Int, base::Int, d::Int) where {T}
+    sgn == 0 && throw(ArgumentError("input string is empty or only contains whitespace"))
+    2 <= base <= 62 ||
+        throw(ArgumentError(LazyString("invalid base: base must be 2 ≤ base ≤ 62, got ", base)))
+    str = repr(SubString(s, i, thisind(s, j)))
+    d == 0 && throw(ArgumentError("premature end of integer: $str"))
+    k = skipspace_back(s, d, j)
+    p = d
+    while p <= k && Parsers.digitvalue(codeunit(s, p), base) < base
+        p += 1
     end
-    if !(2 <= base <= 62)
-        raise && throw(ArgumentError(LazyString("invalid base: base must be 2 ≤ base ≤ 62, got ", base)))
-        return nothing
+    if p > d && Parsers.parseint(T, codeunits(s), d, p - 1, base, sgn < 0) === Parsers.OVERFLOW
+        throw(OverflowError("overflow parsing $str"))
     end
-    if i == 0
-        raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
-        return nothing
-    end
-    c, i = parseint_iterate(s,i,endpos)
-    if i == 0
-        raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
-        return nothing
-    end
-
-    base = convert(T, base)
-    # Special case the common cases of base being 10 or 16 to avoid expensive runtime div
-    m::T = base == 10 ? div(typemax(T) - T(9), T(10)) :
-           base == 16 ? div(typemax(T) - T(15), T(16)) :
-                        div(typemax(T) - base + 1, base)
-    n::T = 0
-    while n <= m
-        # Fast path from `UInt32(::Char)`; non-ascii will be >= 0x80
-        _c = reinterpret(UInt32, c) >> 24
-        d::T = __convert_digit(_c, base % UInt32) # we know 2 <= base <= 62, so prevent an incorrect InexactError here
-        if d >= base
-            raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
-            return nothing
-        end
-        n *= base
-        n += d
-        if i > endpos
-            n *= sgn
-            return n
-        end
-        c, i = iterate(s,i)::Tuple{Char, Int}
-        isspace(c) && break
-    end
-    (T <: Signed) && (n *= sgn)
-    while !isspace(c)
-        # Fast path from `UInt32(::Char)`; non-ascii will be >= 0x80
-        _c = reinterpret(UInt32, c) >> 24
-        d::T = __convert_digit(_c, base % UInt32) # we know 2 <= base <= 62
-        if d >= base
-            raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
-            return nothing
-        end
-        (T <: Signed) && (d *= sgn)
-
-        n, ov_mul = mul_with_overflow(n, base)
-        n, ov_add = add_with_overflow(n, d)
-        if ov_mul | ov_add
-            raise && throw(OverflowError("overflow parsing $(repr(SubString(s,startpos,endpos)))"))
-            return nothing
-        end
-        (i > endpos) && return n
-        c, i = iterate(s,i)::Tuple{Char, Int}
-    end
-    while i <= endpos
-        c, i = iterate(s,i)::Tuple{Char, Int}
-        if !isspace(c)
-            raise && throw(ArgumentError("extra characters after whitespace in $(repr(SubString(s,startpos,endpos)))"))
-            return nothing
-        end
-    end
-    return n
+    c = s[p]
+    p > d && isspace(c) && throw(ArgumentError("extra characters after whitespace in $str"))
+    throw(ArgumentError("invalid base $base digit $(repr(c)) in $str"))
 end
 
+function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base::Integer, raise::Bool) where T<:Integer
+    if s isa UTF8String
+        # the last byte of the span, which is empty if `startpos` is not positive
+        j = 1 <= startpos <= endpos ? nextind(s, endpos) - 1 : startpos - 1
+        return parseint_utf8(T, s, startpos, j, Int(base), raise)
+    end
+    # other string types are parsed from a UTF-8 copy
+    str = 1 <= startpos <= endpos ? String(SubString(s, startpos, endpos)) : ""
+    return parseint_utf8(T, str, 1, ncodeunits(str), Int(base), raise)
+end
+
+# The index after `word` at index `i` of `s`, or 0 if `s[i:j]` does not start with it
+@inline function skipword(s::AbstractString, i::Int, j::Int, word::Tuple{Vararg{Char}})
+    for w in word
+        i <= j || return 0
+        c, i = iterate(s, i)::Tuple{AbstractChar, Int}
+        c == w || return 0
+    end
+    return i
+end
+
+# Whether `s[i:j]` is only whitespace
+@inline function allspace(s::AbstractString, i::Int, j::Int)
+    while i <= j
+        c, i = iterate(s, i)::Tuple{AbstractChar, Int}
+        isspace(c) || return false
+    end
+    return true
+end
+
+# Reads the characters of `sbuff[startpos:endpos]` with `iterate`: `true` or `false` with
+# whitespace around it, or an integer that is 0 or 1, read as `parse(UInt8, ...)` reads it
+# when it starts with a digit (so trailing whitespace and, without a `base`, a `0x`, `0o` or
+# `0b` prefix are allowed). `Base.Parsers.parsevalue(Bool, bytes)` gives the same results for
+# the bytes of a string without whitespace or a prefix.
 function tryparse_internal(::Type{Bool}, sbuff::AbstractString,
         startpos::Int, endpos::Int, base::Integer, raise::Bool)
-    if isempty(sbuff)
+    if startpos > endpos
         raise && throw(ArgumentError("input string is empty"))
         return nothing
     end
-
-    if isnumeric(sbuff[1])
+    c, i = iterate(sbuff, startpos)::Tuple{AbstractChar, Int}
+    if isdigit(c)
+        i > endpos && c <= '1' && return c == '1'   # a lone `0` or `1`
         intres = tryparse_internal(UInt8, sbuff, startpos, endpos, base, false)
         (intres == 1) && return true
         (intres == 0) && return false
-        raise && throw(ArgumentError("invalid Bool representation: $(repr(sbuff))"))
-    end
-
-    orig_start = startpos
-    orig_end   = endpos
-
-    # Ignore leading and trailing whitespace
-    while startpos <= endpos && isspace(sbuff[startpos])
-        startpos = nextind(sbuff, startpos)
-    end
-    while endpos >= startpos && isspace(sbuff[endpos])
-        endpos = prevind(sbuff, endpos)
-    end
-
-    len = endpos - startpos + 1
-    if sbuff isa Union{String, SubString{String}}
-        p = pointer(sbuff) + startpos - 1
-        truestr = "true"
-        falsestr = "false"
-        GC.@preserve sbuff truestr falsestr begin
-            (len == 4) && (0 == memcmp(p, unsafe_convert(Ptr{UInt8}, truestr), 4)) && (return true)
-            (len == 5) && (0 == memcmp(p, unsafe_convert(Ptr{UInt8}, falsestr), 5)) && (return false)
-        end
     else
-        (len == 4) && (SubString(sbuff, startpos:startpos+3) == "true") && (return true)
-        (len == 5) && (SubString(sbuff, startpos:startpos+4) == "false") && (return false)
-    end
-
-    if raise
-        substr = SubString(sbuff, orig_start, orig_end) # show input string in the error to avoid confusion
-        if all(isspace, substr)
-            throw(ArgumentError("input string only contains whitespace"))
-        else
-            throw(ArgumentError("invalid Bool representation: $(repr(substr))"))
+        # `true` or `false`, with whitespace around it
+        while isspace(c) && i <= endpos
+            c, i = iterate(sbuff, i)::Tuple{AbstractChar, Int}
         end
+        i = c == 't' ? skipword(sbuff, i, endpos, ('r', 'u', 'e')) :
+            c == 'f' ? skipword(sbuff, i, endpos, ('a', 'l', 's', 'e')) : 0
+        i > 0 && allspace(sbuff, i, endpos) && return c == 't'
+    end
+    if raise
+        allspace(sbuff, startpos, endpos) &&
+            throw(ArgumentError("input string only contains whitespace"))
+        throw(ArgumentError(
+            "invalid Bool representation: $(repr(SubString(sbuff, startpos, endpos)))"))
     end
     return nothing
 end
@@ -246,46 +248,40 @@ end
 Like [`parse`](@ref), but returns either a value of the requested type,
 or [`nothing`](@ref) if the string does not contain a valid number.
 """
-function tryparse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
-    # Zero base means, "figure it out"
-    tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), false)
-end
+tryparse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer} =
+    parseint_string(T, s, base, false)
 
 function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
-    v = tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), true)
-    v === nothing && error("should not happoen")
+    v = parseint_string(T, s, base, true)
+    v === nothing && error("should not happen")
     convert(T, v)
+end
+
+# Parse all of `s`. Base's fixed-width types parse UTF-8 strings directly; other integer
+# types, such as `BigInt`, can have their own `tryparse_internal` methods.
+@inline function parseint_string(::Type{T}, s::AbstractString, base, raise::Bool) where {T<:Integer}
+    b = base === nothing ? 0 : Int(check_valid_base(base))  # 0 takes the base from a prefix
+    T <: BitInteger && s isa UTF8String && return parseint_utf8(T, s, 1, ncodeunits(s), b, raise)
+    return tryparse_internal(T, s, firstindex(s), lastindex(s), b, raise)
 end
 tryparse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
 ## string to float functions ##
 
-function tryparse(::Type{Float64}, s::DenseUTF8String)
-    hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
-                          (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s) % UInt)
-    hasvalue ? val : nothing
+# Parse `s[i:j]` as a float, ignoring ASCII whitespace around it
+function tryparse_internal(::Type{T}, s::DenseUTF8String, i::Int, j::Int) where {T<:IEEEFloat}
+    while i <= j && isspace_ascii(codeunit(s, i))
+        i += 1
+    end
+    while j >= i && isspace_ascii(codeunit(s, j))
+        j -= 1
+    end
+    x = Parsers.parsefloat(T, codeunits(s), i, j)
+    return x isa Parsers.ParseFailure ? nothing : x
 end
-function tryparse_internal(::Type{Float64}, s::DenseUTF8String, startpos::Int, endpos::Int)
-    hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
-                          (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
-    hasvalue ? val : nothing
-end
-function tryparse(::Type{Float32}, s::DenseUTF8String)
-    hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
-                          (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s) % UInt)
-    hasvalue ? val : nothing
-end
-function tryparse_internal(::Type{Float32}, s::DenseUTF8String, startpos::Int, endpos::Int)
-    hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
-                          (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
-    hasvalue ? val : nothing
-end
-
-tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s)::String)
-tryparse(::Type{Float16}, s::AbstractString) =
-    convert(Union{Float16, Nothing}, tryparse(Float32, s))
-tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int) =
-    convert(Union{Float16, Nothing}, tryparse_internal(Float32, s, startpos, endpos))
+tryparse(::Type{T}, s::DenseUTF8String) where {T<:IEEEFloat} =
+    tryparse_internal(T, s, 1, ncodeunits(s))
+tryparse(::Type{T}, s::AbstractString) where {T<:IEEEFloat} = tryparse(T, String(s)::String)
 
 ## string to complex functions ##
 

@@ -212,7 +212,7 @@ function lookup(ip::Base.InterpreterIP)
         # uninferred CodeInstances have no `debuginfo`
         codeinfo = code.inferred::CodeInfo
         def = code.def isa Core.ABIOverride ? code.def.def : code.def
-        @assert def isa MethodInstance "unexpected $(typeof(def))"
+        @assert def isa MethodInstance lazy"unexpected $(typeof(def))"
         meth = def.def
         func = meth isa Method ? meth.name : top_level_scope_sym
         linfo = def
@@ -239,8 +239,11 @@ trace, `stacktrace` first calls `backtrace`.
 """
 Base.@constprop :none function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_funcs::Bool=false)
     stack = StackTrace()
+    lookups = Dict{eltype(trace),StackTrace}()
     for ip in trace
-        for frame in lookup(ip)
+        frames = get(lookups, ip, nothing)
+        frames === nothing && (frames = lookups[ip] = lookup(ip))
+        for frame in frames
             # Skip frames that come from C calls.
             if c_funcs || !frame.from_c
                 push!(stack, frame)

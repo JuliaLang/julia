@@ -1,6 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 """
-The `Printf` module provides formatted output functions similar to the C standard library's `printf`. It allows formatted printing to an output stream or to a string.
+    Printf
+
+Formatted output in the style of C's `printf`. [`@printf`](@ref) prints and
+[`@sprintf`](@ref) returns a string, while [`Printf.Format`](@ref) and
+[`Printf.format`](@ref) work with formats made at run time.
 """
 module Printf
 
@@ -132,7 +136,7 @@ function Format(f::AbstractString)
     numarguments = 0
 
     b = 0x00
-    local last_percent_pos
+    last_percent_pos = 0
 
     # skip ahead to first format specifier
     while pos <= len
@@ -240,8 +244,8 @@ function Format(f::AbstractString)
         # parse type
         !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(InvalidFormatStringError("'$(Char(b))' is not a valid type specifier", f, last_percent_pos, pos-1))
         type = Val{Char(b)}
-        if type <: Ints && precision > 0
-            # note - we should also set zero to false if dynamic precision > 0
+        if type <: Ints && parsedprecdigits && !dynamic_precision
+            # note - we should also set zero to false if dynamic precision >= 0
             # this is taken care of in fmt() for Ints
             zero = false
         elseif (type <: Strings || type <: Chars) && !parsedprecdigits
@@ -302,7 +306,9 @@ end
     end
     if spec.dynamic_precision
         precision = args[argp]::Integer
-        if zero && T <: Ints && precision > 0
+        if precision < 0
+            precision = T <: Ints ? 0 : T <: Floats && !(T <: HexBases) ? 6 : -1
+        elseif zero && T <: Ints
             zero = false
         end
         argp += 1
@@ -488,7 +494,7 @@ tofloat(x::Base.IEEEFloat) = x
 tofloat(x::BigFloat) = x
 
 _snprintf(ptr, siz, str, arg) =
-    @ccall Base.MPFR.libmpfr.mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
+    @ccall gc_safe=true Base.MPFR.libmpfr.mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
                                              arg::Ref{BigFloat})::Cint
 
 # Arbitrary constant for a maximum number of bytes we want to output for a BigFloat.
@@ -643,6 +649,8 @@ function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
                 newpos += n
             end
         end
+    else
+        error("$T is not a valid float type specifier")
     end
     if newpos - pos < width
         # need to pad
@@ -681,14 +689,17 @@ end
 fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, UInt64(arg), ptrfmt(spec, arg))
 
 # position counters
-function fmt(buf, pos, arg::Ref{<:Integer}, ::Spec{PositionCounter})
+function fmt(_, pos, arg::Ref{<:Integer}, ::Spec{PositionCounter})
     arg[] = pos - 1
     pos
 end
 
-# old Printf compat
-function fix_dec end
-function ini_dec end
+# old Printf compat: a number type formatted with `fmtfallback` implements these, which
+# write the decimal digits of `x` to `buf` and return `(ndigits, pt, neg)`, where the
+# decimal point follows the first `pt` digits and `neg` is the sign of `x`.
+# `fix_dec` rounds `x` to `prec` digits after the point and `ini_dec` to `n` significant digits.
+fix_dec(x, prec, buf) = throw(MethodError(fix_dec, (x, prec, buf)))
+ini_dec(x, n, buf) = throw(MethodError(ini_dec, (x, n, buf)))
 
 # generic fallback
 function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
@@ -706,13 +717,19 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
     end
     n, pt, neg = isf ? fix_dec(arg, prec, buf2) : ini_dec(arg, min(prec + ise, length(buf2) - 1), buf2)
     if isg && !hash
-        while buf2[n] == UInt8('0')
+        while n > 1 && buf2[n] == UInt8('0')
             n -= 1
         end
     end
     expform = ise || (isg && !(-4 < pt <= prec))
-    n2 = n + (expform ? 4 : 0) + (prec > 0 || hash) + (neg || (plus | space)) +
-        (isf && pt >= n ? prec + 1 : 0)
+    expdigits = expform ? max(ndigits(pt - 1), 2) : 0
+    # For `%g` the precision counts significant digits, and the integer part has used some of them
+    nzeros = isf ? prec : max(prec - pt, 0)
+    n2 = (neg || (plus | space)) + (
+        expform ? n + (n > 1 || hash) + 2 + expdigits :
+        pt <= 0 ? n + 2 - pt :
+        pt >= n ? pt + (hash || (isf && prec > 0) ? nzeros + 1 : 0) :
+        n + 1)
     if !leftalign && !zero && n2 < width
         # pad left w/ spaces
         for _ = 1:(width - n2)
@@ -750,15 +767,11 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
         buf[pos] = exp < 0 ? UInt8('-') : UInt8('+')
         pos += 1
         exp = abs(exp)
-        if exp < 10
-            buf[pos] = UInt8('0')
-            buf[pos + 1] = 48 + exp
-            pos += 2
-        else
-            buf[pos] = 48 + div(exp, 10)
-            buf[pos + 1] = 48 + rem(exp, 10)
-            pos += 2
+        for i = expdigits-1:-1:0
+            buf[pos + i] = 48 + rem(exp, 10)
+            exp = div(exp, 10)
         end
+        pos += expdigits
     elseif pt <= 0
         buf[pos] = UInt8('0')
         buf[pos + 1] = UInt8('.')
@@ -785,10 +798,9 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
         if hash || (isf && prec > 0)
             buf[pos] = UInt8('.')
             pos += 1
-            while prec > 0
+            for _ = 1:nzeros
                 buf[pos] = UInt8('0')
                 pos += 1
-                prec -= 1
             end
         end
     else
@@ -894,11 +906,11 @@ function plength(f::Spec{T}, x) where {T <: Ints}
     )
 end
 
-plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
+plength(f::Spec{T}, ::AbstractFloat) where {T <: Ints} =
     max(f.width, Base.checked_add(Int(f.hash), MAX_INTEGER_PART_WIDTH, MAX_FMT_CHARS_WIDTH))
-plength(f::Spec{T}, x) where {T <: Floats} =
+plength(f::Spec{T}, _) where {T <: Floats} =
     max(f.width, Base.checked_add(Int(f.hash), MAX_INTEGER_PART_WIDTH, f.precision, MAX_FMT_CHARS_WIDTH))
-plength(::Spec{PositionCounter}, x) = 0
+plength(::Spec{PositionCounter}, _) = 0
 
 @inline function computelen(substringranges, formats, args)
     len = sum(length, substringranges)

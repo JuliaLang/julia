@@ -1261,6 +1261,54 @@ static char *absrealpath(const char *in, int nprefix) JL_NOTSAFEPOINT
     return out;
 }
 
+// Make each entry of a path list absolute, optionally resolving symlinks.
+static char *abspathlist(const char *in, int resolve_symlinks) JL_NOTSAFEPOINT
+{
+    char cwd[JL_PATH_MAX];
+    size_t cwdlen = 0;
+    size_t outlen = 0;
+    char *out = (char*)malloc_s(1);
+    out[0] = '\0';
+    while (1) {
+        const char *end = strchr(in, PATHLISTSEPSTRING[0]);
+        size_t len = end ? (size_t)(end - in) : strlen(in);
+        if (len > 0) {
+            char *entry = (char*)malloc_s(len + 1);
+            memcpy(entry, in, len);
+            entry[len] = '\0';
+            if (resolve_symlinks) {
+                char *resolved = absrealpath(entry, 0);
+                free(entry);
+                entry = resolved;
+                len = strlen(entry);
+            }
+            int isabs = jl_isabspath(entry);
+            if (!isabs && cwdlen == 0) {
+                cwdlen = sizeof(cwd);
+                if (uv_cwd(cwd, &cwdlen))
+                    jl_error("fatal error: unexpected error while retrieving current working directory");
+            }
+            size_t prefix = isabs ? 0 : cwdlen + 1;
+            out = (char*)realloc_s(out, outlen + prefix + len + 2);
+            if (outlen > 0)
+                out[outlen++] = PATHLISTSEPSTRING[0];
+            if (!isabs) {
+                memcpy(out + outlen, cwd, cwdlen);
+                out[outlen + cwdlen] = PATHSEPSTRING[0];
+                outlen += prefix;
+            }
+            memcpy(out + outlen, entry, len);
+            outlen += len;
+            out[outlen] = '\0';
+            free(entry);
+        }
+        if (!end)
+            break;
+        in = end + 1;
+    }
+    return out;
+}
+
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir)
 {
     libsupport_init();
@@ -1337,8 +1385,12 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
         jl_options.machine_file = absrealpath(jl_options.machine_file, 0);
     if (jl_options.output_code_coverage)
         jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
-    if (jl_options.tracked_path)
-        jl_options.tracked_path = absrealpath(jl_options.tracked_path, 0);
+    if (jl_options.tracked_path) // `@` with no path tracks the current directory
+        jl_options.tracked_path = jl_options.tracked_path[0] ? abspathlist(jl_options.tracked_path, 1) :
+                                                               absrealpath(jl_options.tracked_path, 0);
+    // symlinks are kept, since these match the paths of source files as they were loaded
+    if (jl_options.coverage_exclude)
+        jl_options.coverage_exclude = abspathlist(jl_options.coverage_exclude, 0);
 
     const char **cmdp = jl_options.cmds;
     if (cmdp) {

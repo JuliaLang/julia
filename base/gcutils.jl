@@ -4,24 +4,27 @@
 """
     WeakRef(x)
 
-`w = WeakRef(x)` constructs a [weak reference](https://en.wikipedia.org/wiki/Weak_reference)
+`w = WeakRef(x)` constructs a mutable [weak reference](https://en.wikipedia.org/wiki/Weak_reference)
 to the Julia value `x`: although `w` contains a reference to `x`, it does not prevent `x` from being
-garbage collected. `w.value` is either `x` (if `x` has not been garbage-collected yet) or `nothing`
-(if `x` has been garbage-collected).
+garbage collected. The referenced value can be accessed or replaced with `w.value`. If the referenced
+value gets garbage-collected, `w.value` will be set to `nothing`.
 
 ```jldoctest
-julia> x = "a string"
-"a string"
+julia> x = "one string"
+"one string"
 
 julia> w = WeakRef(x)
-WeakRef("a string")
+WeakRef("one string")
+
+julia> x2 = "another string"; w.value = x2
+"another string"
 
 julia> GC.gc()
 
-julia> w           # a reference is maintained via `x`
-WeakRef("a string")
+julia> w           # a reference is maintained via `x2`
+WeakRef("another string")
 
-julia> x = nothing # clear reference
+julia> x2 = nothing # clear reference
 
 julia> GC.gc()
 

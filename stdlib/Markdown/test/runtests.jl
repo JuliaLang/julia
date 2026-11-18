@@ -41,6 +41,18 @@ import Base: show
 
     @test md"**foo *bar* baz**" == MD(Paragraph(Bold(["foo ", Italic("bar"), " baz"])))
     @test md"*foo **bar** baz*" == MD(Paragraph(Italic(["foo ", Bold("bar"), " baz"])))
+
+    @test MD(Header("x")) == md"# x"
+    @test MD(Markdown.BlockQuote()) == md"> "
+    let l = Markdown.List("a", "b")
+        @test l.items == ["a", "b"]
+        @test l.ordered == -1
+    end
+    mktemp() do path, io
+        write(io, "# title")
+        close(io)
+        @test Markdown.parse_file(path) == md"# title"
+    end
 end
 
 @testset "intraword emphasis" begin
@@ -98,6 +110,10 @@ end
     md = Markdown.parse(text)
     @test text == Markdown.plain(md)
 
+    md = Markdown.parse("a ` ` b")
+    @test md == MD(Paragraph(["a ", Code(""), " b"]))
+    @test Markdown.parse(Markdown.plain(md)) == md
+
     @test md"""
     ````julia
     foo()
@@ -111,6 +127,8 @@ end
     @test isempty(Markdown.parse("\r"))
     @test Markdown.parse("hello\r") == MD(Paragraph(["hello"]))
     @test Markdown.parse("hello\r*julia*") == MD(Paragraph(Any["hello\n", Italic(Any["julia"])]))
+    @test Markdown.parse("hello\r", flavor = :github) == MD(Paragraph(["hello"]))
+    @test Markdown.parse("#\r") == MD(Header{1}(""))
 end
 
 @testset "footnotes" begin
@@ -245,6 +263,8 @@ end
     @test length(doc[2].items[2][2].items) === 2
     @test doc[2].items[2][2].items[1][1].content[1] == "three"
     @test doc[2].items[2][2].items[2][1].content[1] == "four"
+
+    @test Markdown.parse("12345678901234567890. item")[1] isa Markdown.Paragraph
 end
 
 @testset "Links" begin
@@ -264,6 +284,7 @@ end
     ---
     World""" |> Markdown.plain == "Hello\n\n---\n\nWorld\n"
     @test md"[*a*](b)" |> Markdown.plain == "[*a*](b)\n"
+    @test md"~~a~~" |> Markdown.plain == "~~a~~\n"
     @test md"""
     > foo
     >
@@ -323,6 +344,28 @@ end
         |---|
         | L |
     """) == "  │ Tables in admonitions\n  │\n  │  R\n  │  –\n  │  L"
+
+    for (input, output) in (
+        "<div>\na\n</div>"                    => "<div>\na\n</div>",
+        "a[^1]\n\n[^1]: note text\n"          => "  a[^1]\n\n  │ [^1]\n  │\n  │  note\n  │  text",
+        "a\n\n---\n\nb"                       => "  a\n\n  ────────────────\n\n  b",
+        "a ``x^2`` b"                         => "  a x^2 b",
+        "a <span>x</span> b"                  => "  a <span>x</span> b",
+        "```styled\n{red:hi}\n```"            => "  hi",
+        "# aaaa bbbb cccc dddd eeee ffff"     => "  aaaa bbbb\n  cccc dddd\n  eeee ffff\n  ≡≡≡≡≡≡≡≡≡",
+        )
+        @test sprint(Markdown.term, Markdown.parse(input), 20) == output
+    end
+    @test sprint(Markdown.term, MD(Paragraph([Code("styled", "{red:hi}")]))) == "  hi"
+    @test sprint(Markdown.terminline, "a", "b") == "ab"
+    # each admonition category has its own colour, apart from info and note
+    categories = ("danger", "info", "warning", "tip", "compat", "todo", "other")
+    outs = map(categories) do c
+        out = sprint(Markdown.term, Markdown.parse("!!! $c\n    body\n"); context = :color => true)
+        @test endswith(replace(out, r"\e\[[0-9;]*m" => ""), "│ $(titlecase(c))\n  │\n  │  body")
+        out
+    end
+    @test allunique(outs)
 end
 
 @testset "Issue #38275" begin
@@ -432,6 +475,23 @@ end
     <p>not
     == =</p>
     """
+
+    @test html(Markdown.parse("```styled\n{red:hi}\n```")) == "<pre><code>hi\n</code></pre>\n"
+    @test html(Markdown.MD(Markdown.Paragraph([Markdown.Code("styled", "{red:hi}")]))) ==
+        "<p><code>hi</code></p>\n"
+    @test Markdown.htmlesc(:a_b) == "a_b"
+    @test sprint(Markdown.htmlesc, "<", :b) == "&lt;b"
+    @test Markdown.encode_uri_component(:a) == "a"
+    # line endings are normalised
+    @test html(Markdown.parse("a\r\nb\rc")) == "<p>a\nb\nc</p>\n"
+    # unterminated HTML comments, processing instructions, declarations and CDATA are text
+    for s in ("<!-- b", "<? b", "<!X b", "<![CDATA[ b")
+        @test html(Markdown.parse("a $s")) == "<p>a &lt;$(replace(s[2:end], "--" => "–"))</p>\n"
+    end
+    # objects that only show as PNG are inlined as data URIs
+    struct PNGOnly end
+    Base.show(io::IO, ::MIME"image/png", ::PNGOnly) = write(io, "png")
+    @test html(Markdown.MD([PNGOnly()])) == "<img src=\"data:image/png;base64,cG5n\" />\n"
 end
 
 @testset "the 'book' example input" begin
@@ -459,6 +519,16 @@ end
     """
     @test latex(table) ==
         "\\begin{tabular}\n{l | l}\na & b \\\\\n\\hline\n1 & 2 \\\\\n\\end{tabular}\n"
+    @test latex(md"### Title") == "\\subsubsection{Title}\n"
+    @test latex(md"#### Title") == "\\paragraph{Title}\n"
+    @test latex(md"###### Title") == "\\subparagraph{Title}\n"
+    @test latex(md"`a_b`") == "\\texttt{a\\_b}\n\n"
+    @test latex(md"~~a_b~~") == "\\sout{a\\_b}\n\n"
+    @test latex(md"[a_b](https://julialang.org/a_b)") == "\\href{https://julialang.org/a_b}{a\\_b}\n\n"
+    @test latex(md"![a_b](c_d.png)") ==
+        "\\begin{figure}\n\\centering\n\\includegraphics{c_d.png}\n\\caption{a\\_b}\n\\end{figure}\n\n\n"
+    @test latex(Markdown.parse("```styled\n{red:hi}\n```")) == "\\begin{verbatim}\nhi\n\\end{verbatim}\n"
+    @test Markdown.latexinline(Bold("a_b")) == "\\textbf{a\\_b}"
 
     # mime output
     @test sprint(show, "text/plain", book) ==
@@ -583,6 +653,25 @@ end
         )
         @test Markdown.rst(input) == output
     end
+    # RST transitions must use ASCII punctuation
+    @test Markdown.rst(Markdown.parse("a\n\n---\n\nb")) == "a\n\n-----\n\nb\n"
+    for (input, output) in (
+        "```jldoctest\njulia> 1\n1\n```" => ".. doctest::\n\n    julia> 1\n    1\n",
+        "```rst\n.. note:: hi\n```"      => "    .. note:: hi\n",
+        "```styled\n{red:hi}\n```"       => "::\n\n    hi\n",
+        "```python\nx\n```"              => "::\n\n    x\n",
+        "a\\\nb"                         => "a\nb\n",
+        "| a | b |\n|---|--:|\n| 1 | 22 |\n| x | y |\n" =>
+            "+-----+-----+\n| a   |   b |\n+=====+=====+\n| 1   |  22 |\n+-----+-----+\n| x   |   y |\n+-----+-----+\n",
+        )
+        @test Markdown.rst(Markdown.parse(input)) == output
+    end
+    @test Markdown.rstinline(md"*x*") == "*x*\n"
+    # other objects are shown as text/rst
+    struct RSTOnly end
+    Base.show(io::IO, ::MIME"text/rst", ::RSTOnly) = print(io, "rst!")
+    @test Markdown.rst(Markdown.MD([RSTOnly()])) == "rst!"
+    @test Markdown.rst(Markdown.MD(Markdown.Paragraph(["a ", RSTOnly()]))) == "a rst!\n"
 end
 
 @testset "Interpolation / Custom types" begin
@@ -967,6 +1056,9 @@ end
             """
     @test actual == expected
 
+    @test Markdown.latex(Markdown.parse("!!! note \"a_b & c\"\n    Body")) ==
+        "\\begin{quote}\n\\textbf{note}\n\na\\_b \\& c\n\nBody\n\n\\end{quote}\n"
+
     actual = Markdown.latex(m_1)
     expected =
             """
@@ -1163,9 +1255,7 @@ end
             </li>
             </ol>
             <ul>
-            <li>
-            <p>one</p>
-            </li>
+            <li>one</li>
             </ul>
             <p>two</p>
             <ul>
@@ -1178,10 +1268,8 @@ end
             </li>
             </ul>
             <ul>
-            <li>
-            <pre><code>foo
-            </code></pre>
-            </li>
+            <li><pre><code>foo
+            </code></pre></li>
             </ul>
             <ol>
             <li>foo</li>
@@ -1291,6 +1379,12 @@ end
     @test expected == Markdown.latex(md)
 end
 
+@testset "non-ASCII digits are not list markers" begin
+    for s in ("۱. item", "１. item", "۱) item")
+        @test typeof.(Markdown.parse(s)) == [Markdown.Paragraph]
+    end
+end
+
 @testset "issue 20225, check this can print" begin
     @test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
 
@@ -1358,6 +1452,8 @@ end
     end
     @test ("julia>", :markdown_julia_prompt) ∈
         codefaces(Markdown.MD(Markdown.Code("julia-repl", "julia> x")))
+    @test ("ERROR:", :error) ∈
+        codefaces(Markdown.MD(Markdown.Code("julia-repl", "julia> error(1)\nERROR: 1")))
 end
 
 @testset "table rendering with term #25213" begin
@@ -1415,6 +1511,9 @@ end
     @test md[2].loose
     @test md[4].loose
     @test !md[6].loose
+    md = Markdown.parse("- a\n- b\n\nText")
+    @test !md[1].loose
+    @test Markdown.html(md) == "<ul>\n<li>a</li>\n<li>b</li>\n</ul>\n<p>Text</p>\n"
 end
 
 @testset "issue #29995" begin

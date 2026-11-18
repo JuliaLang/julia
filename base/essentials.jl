@@ -517,6 +517,35 @@ pairs(::Type{NamedTuple}) = Pairs{Symbol, V, Nothing, NT} where {V, NT <: NamedT
 
 Transform an indexable container into a Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
+
+This is the type returned by [`pairs`](@ref) for arrays, tuples and named tuples,
+and the type of keyword arguments collected with `kwargs...`. `keys(p)` iterates
+over the keys selected from the container's key space. For arrays, `pairs(A)` uses
+linear indices for vectors and Cartesian indices otherwise;
+`pairs(IndexLinear(), A)` always uses linear indices.
+`values(p)` returns the container itself. Entries can be read like those of other
+`AbstractDict`s. `p[key]` indexes the container directly, so it accepts any key
+supported by the container, while `haskey(p, key)` only consults `keys(p)`.
+`p[key] = value` writes through to the container if it supports `setindex!`, but
+keys cannot be added or removed.
+Use e.g. `Dict(p)` for an independent mutable copy, or `NamedTuple(kwargs)` to get
+keyword arguments as a `NamedTuple`.
+
+# Examples
+```jldoctest
+julia> f(; kwargs...) = kwargs;
+
+julia> kw = f(a = 1, b = 2)
+pairs(::NamedTuple) with 2 entries:
+  :a => 1
+  :b => 2
+
+julia> kw[:a]
+1
+
+julia> NamedTuple(kw)
+(a = 1, b = 2)
+```
 """
 Pairs
 
@@ -799,7 +828,7 @@ end
 
 Size, in bytes, of the canonical binary representation of the given `DataType` `T`, if any.
 Or the size, in bytes, of object `obj` if it is not a `DataType`. The size of a primitive type
-includes padding, while `Core.bitsizeof` does not.
+includes padding, while [`bitsizeof`](@ref) does not.
 
 See also [`Base.summarysize`](@ref).
 
@@ -841,28 +870,38 @@ Stacktrace:
 sizeof(x) = Core.sizeof(x)
 
 """
-    Core.bitsizeof(T::DataType)
-    Core.bitsizeof(obj)
+    bitsizeof(T::DataType)
+    bitsizeof(obj)
 
-Logical size, in bits, of the canonical binary representation of the given `DataType` `T`, if any.
-Or the logical size, in bits, of object `obj` if it is not a `DataType`.
+Declared width, in bits, of the primitive type `T`, or of the primitive type of `obj` if it is
+not a `DataType`. Any other type or object throws an error.
 
-For primitive types, this may differ from `8*sizeof(T)`: `sizeof` rounds the value bytes up to
-a multiple of the type's alignment (see the manual section on primitive types), and the bits past
-the declared width are padding.
+This may differ from `8*sizeof(T)`: `sizeof` rounds the value bytes up to a multiple of the type's
+alignment (see the manual section on primitive types), and the bits past the declared width are
+padding.
+
+See also [`sizeof`](@ref).
+
+!!! compat "Julia 1.14"
+    This function requires Julia 1.14 or later.
 
 # Examples
 ```jldoctest
-julia> Core.bitsizeof(Float32)
+julia> bitsizeof(Float32)
 32
 
-julia> Core.bitsizeof(1.0)
+julia> bitsizeof(1.0)
 64
 
 julia> primitive type MyUInt63 <: Unsigned 63 end
 
-julia> Core.bitsizeof(MyUInt63)
+julia> bitsizeof(MyUInt63)
 63
+
+julia> bitsizeof(ComplexF32)
+ERROR: Type Complex is not a primitive type and has no bit size.
+Stacktrace:
+[...]
 ```
 """
 Core.bitsizeof
@@ -1111,10 +1150,17 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 unsafe_convert(::Type{Ptr{Any}}, sv::SimpleVector) = convert(Ptr{Any},pointer_from_objref(sv)) + sizeof(Ptr)
 
 """
-    isassigned(array, i)::Bool
+    isassigned(array, i...)::Bool
 
-Test whether the given array has a value associated with index `i`. Return `false`
-if the index is out of bounds, or has an undefined reference.
+Test whether the given array has a value associated with index `i...` (one or more
+integers, or a `CartesianIndex`). Return `false` if the index is out of bounds, or has an
+undefined reference.
+
+The generic fallback for `AbstractArray`s calls `getindex` within a `try`/`catch` block,
+which can be slow. New array types should therefore specialize `isassigned` for the same
+indices as their scalar `getindex` method, i.e. `isassigned(A::MyArray, i::Int)` for
+`IndexLinear()` arrays or `isassigned(A::MyArray{T,N}, I::Vararg{Int,N})` for
+`IndexCartesian()` arrays.
 
 # Examples
 ```jldoctest
@@ -1170,9 +1216,14 @@ end
     Val(c)
 
 Return `Val{c}()`, which contains no run-time data. Types like this can be used to
-pass the information between functions through the value `c`, which must be an `isbits`
-value or a `Symbol`. The intent of this construct is to be able to dispatch on constants
-directly (at compile time) without having to test the value of the constant at run time.
+pass the information between functions through the value `c`, which must be a valid type
+parameter, such as an `isbits` value, a `Symbol`, a type, a `Module`, or a tuple of
+`isbits` values or symbols. The intent of this construct is to be able to dispatch on
+constants directly (at compile time) without having to test the value of the constant
+at run time.
+
+!!! compat "Julia 1.10"
+    Using a `Module` as `c` requires at least Julia 1.10.
 
 # Examples
 ```jldoctest
@@ -1349,6 +1400,17 @@ function _defaultctor_typeinfo(@nospecialize(ty::Type))
     return dt, tvars, fts
 end
 
+function _is_all_underscore(s::Symbol)
+    p = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), s)
+    c = pointerref(p, 1, 1)
+    i = 1
+    while c === 0x5f
+        i = add_int(i, 1)
+        c = pointerref(p, i, 1)
+    end
+    return c === 0x00 && i !== 1
+end
+
 # Default constructor generation for structs without explicit inner constructors.
 # Called by lowered code from struct definitions (both flisp and JuliaLowering).
 # Uses jl_method_def directly with type objects, avoiding type-to-expression conversion.
@@ -1362,21 +1424,18 @@ function _defaultctors(@nospecialize(ty), functionloc)
     mod = dt.name.module
     n = length(fts)
     names = dt.name.names::Core.SimpleVector
-    src_file = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), functionloc.file)
-    src_line = UInt(functionloc.line)
 
     is_parametric = nparams !== 0
 
-    # Build argument names using actual field names for slot names (better debugging).
-    # The body references arguments via Core.Argument(N) to avoid issues with
-    # all-underscore field names being write-only in lowering.
     self = Symbol("#ctor-self#")
     argnames = Array{Any,1}(Core.undef, n + 1)
     @inbounds argnames[1] = self
     i = 1
     nany = 0
     while i !== n + 1
-        @inbounds argnames[i + 1] = names[i]::Symbol
+        @inbounds argnames[i + 1] = let n = names[i]::Symbol
+            _is_all_underscore(n) ? ccall(:jl_gensym, Ref{Symbol}, ()) : n
+        end
         if fts[i] === Any
             nany = nany + 1
         end
@@ -1397,20 +1456,20 @@ function _defaultctors(@nospecialize(ty), functionloc)
             end
             new_target = Expr(:curly, curly_args...)
         else
-            new_target = Core.Argument(1)
+            new_target = argnames[1]
         end
         new_args = Array{Any,1}(Core.undef, n + 1)
         @inbounds new_args[1] = new_target
         i = 1
         while i !== n + 1
-            @inbounds new_args[i + 1] = Core.Argument(i + 1)
+            @inbounds new_args[i + 1] = argnames[i + 1]
             i = i + 1
         end
         new_expr = Expr(:new, new_args...)
         lambda = Expr(:lambda, argnames,
             Expr(:block, functionloc, Expr(:return, new_expr)))
-        ci = ccall(:jl_lower, Any, (Any, Any, Ptr{UInt8}, UInt, UInt, Int32),
-                   lambda, mod, src_file, src_line, sub_int(UInt(0), UInt(1)), Int32(0))[1]
+        ci = ccall(:jl_lower, Any, (Any, Any, UInt, Int32, Any),
+                   mod, lambda, sub_int(UInt(0), UInt(1)), Int32(0), functionloc)[1]
 
         # Build argdata: svec(svec(Type{ty}, ft1, ft2, ...), svec(tvars...), functionloc)
         atypes_arr = Array{Any,1}(Core.undef, n + 1)
@@ -1444,7 +1503,6 @@ function _defaultctors(@nospecialize(ty), functionloc)
     end
 
     # Inner constructor: (::Type{T{A,B,...}})(x, y, ...) with convert calls
-    # Build lambda body using Core.Argument references
     nstmts = ((n - nany) + (n - nany)) + 1
     body_args = Array{Any,1}(Core.undef, nstmts)
     new_args = Array{Any,1}(Core.undef, n)
@@ -1453,7 +1511,7 @@ function _defaultctors(@nospecialize(ty), functionloc)
     while i !== n + 1
         ft = fts[i]
         if ft === Any
-            @inbounds new_args[i] = Core.Argument(i + 1)
+            @inbounds new_args[i] = argnames[i + 1]
         else
             # Use an isa check to avoid depending on convert inlining.
             # This matches the old convert-for-type-decl pattern:
@@ -1462,24 +1520,24 @@ function _defaultctors(@nospecialize(ty), functionloc)
             # convert methods (e.g. convert(::Any, v::T) = v) that prevent the
             # optimizer from inlining convert(fieldtype(self, i), arg) when the
             # field type is Any after specialization.
-            ft_expr = Expr(:call, GlobalRef(Core, :fieldtype), Core.Argument(1), i)
+            ft_expr = Expr(:call, GlobalRef(Core, :fieldtype), argnames[1], i)
             ft_ssa = Expr(:ssavalue, bidx)
             cnvt_ssa = Expr(:ssavalue, bidx + 1)
-            isa_check = Expr(:call, GlobalRef(Core, :isa), Core.Argument(i + 1), ft_ssa)
-            convert_expr = Expr(:call, GlobalRef(Base, :convert), ft_ssa, Core.Argument(i + 1))
+            isa_check = Expr(:call, GlobalRef(Core, :isa), argnames[i + 1], ft_ssa)
+            convert_expr = Expr(:call, GlobalRef(Base, :convert), ft_ssa, argnames[i + 1])
             @inbounds body_args[bidx] = Expr(:(=), ft_ssa, ft_expr)
             @inbounds body_args[bidx + 1] = Expr(:(=), cnvt_ssa, Expr(:if, isa_check,
-                                               Core.Argument(i + 1), convert_expr))
+                                               argnames[i + 1], convert_expr))
             @inbounds new_args[i] = cnvt_ssa
             bidx = bidx + 2
         end
         i = i + 1
     end
-    body_args[nstmts] = Expr(:return, Expr(:new, Core.Argument(1), new_args...))
+    body_args[nstmts] = Expr(:return, Expr(:new, argnames[1], new_args...))
     lambda = Expr(:lambda, argnames,
         Expr(:block, functionloc, body_args...))
-    ci = ccall(:jl_lower, Any, (Any, Any, Ptr{UInt8}, UInt, UInt, Int32),
-               lambda, mod, src_file, src_line, sub_int(UInt(0), UInt(1)), Int32(0))[1]
+    ci = ccall(:jl_lower, Any, (Any, Any, UInt, Int32, Any),
+               mod, lambda, sub_int(UInt(0), UInt(1)), Int32(0), functionloc)[1]
 
     # Build argdata: svec(svec(UnionAll...Type{dt}..., Any, Any, ...), svec(), functionloc)
     inner_atypes_arr = Array{Any,1}(Core.undef, n + 1)

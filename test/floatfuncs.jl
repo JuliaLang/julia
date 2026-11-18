@@ -22,6 +22,12 @@ end
     @test maxintfloat(Float32, Int32) === maxintfloat(Float32)
     @test maxintfloat(Float64, Int16) === 32767.0
     @test maxintfloat(Float64, Int64) === maxintfloat(Float64)
+    # `Type{Union{}}` dispatches to its own methods, which throw, instead of matching `Type{T}` methods
+    for args in ((Union{},), (Union{}, Int), (Float64, Union{}), (Union{}, Union{}))
+        @test_throws MethodError(maxintfloat, args) maxintfloat(args...)
+    end
+    @test which(maxintfloat, (Type{Union{}}, Type{Int})).sig == Tuple{typeof(maxintfloat), Type{Union{}}, Vararg}
+    @test which(maxintfloat, (Type{Float64}, Type{Union{}})).sig == Tuple{typeof(maxintfloat), Any, Type{Union{}}, Vararg}
 end
 
 @testset "isinteger" begin

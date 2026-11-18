@@ -3,6 +3,7 @@
 #ifndef LLVM_PASS_HELPERS_H
 #define LLVM_PASS_HELPERS_H
 
+#include <optional>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -59,6 +60,7 @@ struct JuliaPassContext {
     llvm::Function *pointer_from_objref_func;
     llvm::Function *gc_loaded_func;
     llvm::Function *alloc_obj_func;
+    llvm::Function *alloc_memory_func;
     llvm::Function *typeof_func;
     llvm::Function *blackbox_func;
     llvm::Function *object_write_barrier_func;
@@ -132,6 +134,10 @@ struct JuliaPassContext {
     llvm::Function *getOrDeclare(
         const jl_intrinsics::IntrinsicDescription &desc);
 
+    // If `call` is a `julia.gc_alloc_memory` of a constant size whose data will be inline,
+    // returns the size of the whole object.
+    std::optional<size_t> getInlineMemorySize(const llvm::CallInst *call) const;
+
 private:
     llvm::Module *module;
 };
@@ -198,6 +204,10 @@ namespace jl_well_known {
     extern const WellKnownFunctionDescription GCSmallAllocResetSafe;
     extern const WellKnownFunctionDescription GCQueueRootResetSafe;
     extern const WellKnownFunctionDescription GCAllocTypedResetSafe;
+
+    // `jl_alloc_genericmemory_unchecked`: allocates a GenericMemory, leaving its length and
+    // data uninitialized.
+    extern const WellKnownFunctionDescription GCAllocGenericMemory;
 }
 
 void setName(llvm::Value *V, const llvm::Twine &Name, int debug_info);

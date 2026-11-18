@@ -24,6 +24,11 @@ const libgmp = LazyLibrary(
         BundledLazyLibraryPath("libgmp.10.dylib")
     else
         BundledLazyLibraryPath("libgmp.so.10")
+    end;
+    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
+        LazyLibrary[libgcc_s]
+    else
+        LazyLibrary[]
     end
 )
 

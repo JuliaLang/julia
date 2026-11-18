@@ -22,11 +22,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Passes/PassBuilder.h>
-#if JL_LLVM_VERSION >= 220000
 #  include <llvm/Plugins/PassPlugin.h>
-#else
-#  include <llvm/Passes/PassPlugin.h>
-#endif
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
 #include <polly/LinkAllPasses.h>
@@ -287,6 +283,14 @@ LLVMOrcThreadSafeModuleRef jl_get_llvm_module_impl(void *native_code)
         return wrap(data->TSM_ref);
     else
         return NULL;
+}
+
+// frees native code that is not dumped, e.g. after taking its module with
+// `jl_get_llvm_module`. this drops the native code's reference to the LLVM context.
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_free_native_impl(void *native_code)
+{
+    delete (jl_native_code_desc_t*)native_code;
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -762,12 +766,12 @@ const char *plt_asm_x86_64 =
     "jmpq  *${0:a}\n";
 
 const char *plt_asm_riscv64 =
-    "1b: auipc t3, %pcrel_hi(${0})\n"
+    "1:  auipc t3, %pcrel_hi(${0})\n"
     "    ld    t3, %pcrel_lo(1b)(t3)\n"
     "    jalr  t1, t3";
 
 const char *plt_asm_riscv32 =
-    "1b: auipc t3, %pcrel_hi(${0})\n"
+    "1:  auipc t3, %pcrel_hi(${0})\n"
     "    lw    t3, %pcrel_lo(1b)(t3)\n"
     "    jalr  t1, t3";
 
@@ -838,12 +842,22 @@ static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t
     return F;
 }
 
-static jl_compiled_functions_t::iterator get_ci_equiv_compiled(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_compiled_functions_t &compiled_functions) JL_NOTSAFEPOINT
+typedef DenseMap<jl_method_instance_t*, SmallVector<jl_code_instance_t*, 1>> jl_compiled_by_mi_t;
+
+static jl_compiled_functions_t::iterator get_ci_equiv_compiled(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_compiled_functions_t &compiled_functions, jl_compiled_by_mi_t &by_mi) JL_NOTSAFEPOINT
 {
-    for (auto it = compiled_functions.begin(), E = compiled_functions.end(); it != E; ++it) {
-        auto codeinst = it->first;
-        if (codeinst != ci && jl_is_ci_equiv(ci, codeinst, 0))
-            return it;
+    // equivalent CodeInstances have egal defs, so they share a MethodInstance
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
+    if (by_mi.empty()) {
+        for (auto &it : compiled_functions)
+            by_mi[jl_get_ci_mi(it.first)].push_back(it.first);
+    }
+    auto candidates = by_mi.find(mi);
+    if (candidates != by_mi.end()) {
+        for (jl_code_instance_t *codeinst : candidates->second) {
+            if (codeinst != ci && jl_is_ci_equiv(ci, codeinst, 0))
+                return compiled_functions.find(codeinst);
+        }
     }
     return compiled_functions.end();
 }
@@ -878,6 +892,7 @@ static jl_code_instance_t *jl_get_ci_equiv_range(jl_code_instance_t *ci JL_PROPA
 // Static version of JuliaOJIT::linkOutput
 static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
 {
+    jl_compiled_by_mi_t by_mi;
     for (auto &[call, target] : out.call_targets) {
         auto [ci, api] = call;
         assert(api == JL_INVOKE_ARGS || api == JL_INVOKE_SPECSIG);
@@ -888,7 +903,7 @@ static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
         auto it = out.ci_funcs.find(ci);
         // Prefer a equivalent CodeInstance that we are compiling.
         if (it == out.ci_funcs.end()) {
-            auto equiv = get_ci_equiv_compiled(ci, out.ci_funcs);
+            auto equiv = get_ci_equiv_compiled(ci, out.ci_funcs, by_mi);
             if (equiv != out.ci_funcs.end())
                 it = equiv;
         }
@@ -1156,7 +1171,7 @@ static GlobalVariable *emit_ptls_table(Module &M, Type *T_size, Type *T_ptr) {
     std::array<Constant *, 3> ptls_table{
         new GlobalVariable(M, T_ptr, false, GlobalValue::ExternalLinkage, emit_pgcstack_default_func(M, T_ptr), "jl_pgcstack_func_slot"),
         new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_pgcstack_key_slot"),
-        new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_image_tls_offset"),
+        new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getAllOnesValue(T_size), "jl_image_tls_offset"),
     };
     for (auto &gv : ptls_table) {
         cast<GlobalVariable>(gv)->setVisibility(GlobalValue::HiddenVisibility);
@@ -1364,7 +1379,7 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
     }
     for (uint32_t i = 0; i < fvars_size; i++) {
         if (fvars_partition[i] == 0) {
-            auto gv = find_if(fvars.begin(), fvars.end(), [i](auto var) { return var.second == i; });
+            auto gv = llvm::find_if(fvars, [i](auto var) { return var.second == i; });
             bad = true;
             dbgs() << "fvar " << gv->first->getName() << " at " << i << " not in any partition\n";
         }
@@ -1648,14 +1663,11 @@ static void emit_bitcode(Module &M, TargetMachine &TM, SmallVectorImpl<char> &bu
 
 static void emit_native(Module &M, TargetMachine &TM, SmallVectorImpl<char> &buf, bool asm_)
 {
+    jl_fpctrl_default_scope fpctrl_scope;
     raw_svector_ostream OS(buf);
     legacy::PassManager emitter;
     addTargetPasses(&emitter, TM.getTargetTriple(), TM.getTargetIRAnalysis());
-#if JL_LLVM_VERSION >= 180000
     auto type = asm_ ? CodeGenFileType::AssemblyFile : CodeGenFileType::ObjectFile;
-#else
-    auto type = asm_ ? CGFT_AssemblyFile : CGFT_ObjectFile;
-#endif
     if (TM.addPassesToEmitFile(emitter, OS, nullptr, type, false))
         jl_safe_printf("ERROR: target does not support generation of %s files\n",
                        asm_ ? "assembly" : "object");
@@ -1669,11 +1681,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     AOTOutputs out;
     auto TM = std::unique_ptr<TargetMachine>(
         SourceTM.getTarget().createTargetMachine(
-#if JL_LLVM_VERSION < 210000
-            SourceTM.getTargetTriple().str(),
-#else
             SourceTM.getTargetTriple(),
-#endif
             SourceTM.getTargetCPU(),
             SourceTM.getTargetFeatureString(),
             SourceTM.Options,
@@ -1696,11 +1704,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
 
         auto PMTM = std::unique_ptr<TargetMachine>(
             SourceTM.getTarget().createTargetMachine(
-#if JL_LLVM_VERSION < 210000
-                SourceTM.getTargetTriple().str(),
-#else
                 SourceTM.getTargetTriple(),
-#endif
                 SourceTM.getTargetCPU(),
                 SourceTM.getTargetFeatureString(),
                 SourceTM.Options,
@@ -2298,15 +2302,14 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         // On PPC the small model is limited to 16bit offsets. For very large images the small code model
         CMModel = CodeModel::Medium; //  isn't good enough on x86 so use Medium, it has no cost because only the image goes in .ldata
     }
+    std::string Features = jl_ExecutionEngine->getTargetFeatureString().str();
+    if (TheTriple.isRISCV())
+        Features += ",+relax"; // provide the optimization for functions which themselves don't have a target string
     std::unique_ptr<TargetMachine> SourceTM(
         jl_ExecutionEngine->getTarget().createTargetMachine(
-#if JL_LLVM_VERSION < 210000
-            TheTriple.getTriple(),
-#else
             TheTriple,
-#endif
             jl_ExecutionEngine->getTargetCPU(),
-            jl_ExecutionEngine->getTargetFeatureString(),
+            Features,
             jl_ExecutionEngine->getTargetOptions(),
             RelocModel,
             CMModel,
@@ -2329,11 +2332,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         LLVMContext Context;
         Context.setDiscardValueNames(true);
         Module sysimgM("sysimg", Context);
-#if JL_LLVM_VERSION < 210000
-        sysimgM.setTargetTriple(TheTriple.str());
-#else
         sysimgM.setTargetTriple(TheTriple);
-#endif
         sysimgM.setDataLayout(DL);
         sysimgM.setStackProtectorGuard(StackProtectorGuard);
         sysimgM.setOverrideStackAlignment(OverrideStackAlignment);
@@ -2345,12 +2344,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                                               GlobalVariable::ExternalLinkage,
                                               data, "jl_system_image_data");
             sysdata->setAlignment(Align(jl_page_size));
-#if JL_LLVM_VERSION >= 180000
             sysdata->setCodeModel(CodeModel::Large);
-#else
-            if (TheTriple.isX86() && TheTriple.isArch64Bit() && TheTriple.isOSLinux())
-                sysdata->setSection(".ldata");
-#endif
             addComdat(sysdata, TheTriple);
             Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), sysimg_data.size());
             addComdat(new GlobalVariable(sysimgM, len->getType(), true,
@@ -2502,11 +2496,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         LLVMContext Context;
         Context.setDiscardValueNames(true);
         Module metadataM("metadata", Context);
-#if JL_LLVM_VERSION < 210000
-        metadataM.setTargetTriple(TheTriple.str());
-#else
         metadataM.setTargetTriple(TheTriple);
-#endif
         metadataM.setDataLayout(DL);
         metadataM.setStackProtectorGuard(StackProtectorGuard);
         metadataM.setOverrideStackAlignment(OverrideStackAlignment);
@@ -2631,11 +2621,6 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         JL_TIMING(NATIVE_AOT, NATIVE_Write);
 
         object::Archive::Kind Kind = getDefaultForHost(TheTriple);
-#if JL_LLVM_VERSION >= 180000
-#define WritingMode SymtabWritingMode::NormalSymtab
-#else
-#define WritingMode true
-#endif
 #define WRITE_ARCHIVE(fname, field, prefix, suffix) \
     if (fname) {\
         SmallVector<NewArchiveMember, 0> archive; \
@@ -2652,7 +2637,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         for (size_t i = 0; i < filenames.size(); i++) { \
             archive.push_back(NewArchiveMember(MemoryBufferRef(buffers[i], filenames[i]))); \
         } \
-        handleAllErrors(writeArchive(fname, archive, WritingMode, Kind, true, false), reportWriterError); \
+        handleAllErrors(writeArchive(fname, archive, SymtabWritingMode::NormalSymtab, Kind, true, false), reportWriterError); \
     }
 
         WRITE_ARCHIVE(unopt_bc_fname, unopt, "_unopt", ".bc");

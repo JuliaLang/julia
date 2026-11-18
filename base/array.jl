@@ -168,8 +168,8 @@ end
 """
     vect(X...)
 
-Create a [`Vector`](@ref) with element type computed from the `promote_typeof` of the argument,
-containing the argument list.
+Create a [`Vector`](@ref) containing the argument list, with element type given by
+[`promote_type`](@ref) of the argument types, i.e. `promote_type(map(typeof, X)...)`.
 
 # Examples
 ```jldoctest
@@ -184,8 +184,6 @@ function vect(X...)
     T = promote_typeof(X...)
     return T[X...]
 end
-
-asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
 
 allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
@@ -301,9 +299,9 @@ function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Arr
     n == 0 && return dest
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs)
-    @boundscheck n <= length(dest) - doffs + 1 || throw(BoundsError(dest, length(dest) + 1))
+    @boundscheck n <= length(dest) - doffs + 1 || throw_boundserror(dest, length(dest) + 1)
     @boundscheck checkbounds(src, soffs)
-    @boundscheck n <= length(src) - soffs + 1 || throw(BoundsError(src, length(src) + 1))
+    @boundscheck n <= length(src) - soffs + 1 || throw_boundserror(src, length(src) + 1)
     doffs = Int(doffs)
     soffs = Int(soffs)
     n = Int(n)
@@ -846,7 +844,8 @@ function collect(itr::Generator)
         # The typeassert gives inference a helping hand on the element type and dimensionality
         # (work-around for #28382)
         et′ = et <: Type ? Type : et
-        RT = dest isa AbstractArray ? AbstractArray{<:et′, ndims(dest)} : Any
+        RT = !(dest isa AbstractArray) ? Any :
+             isconcretetype(et′) ? AbstractArray{et′, ndims(dest)} : AbstractArray{<:et′, ndims(dest)}
         collect_to_with_first!(dest, v1, itr, st)::RT
     end
 end
@@ -866,7 +865,8 @@ function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
     # The typeassert gives inference a helping hand on the element type and dimensionality
     # (work-around for #28382)
     et′ = et <: Type ? Type : et
-    RT = dest isa AbstractArray ? AbstractArray{<:et′, ndims(dest)} : Any
+    RT = !(dest isa AbstractArray) ? Any :
+         isconcretetype(et′) ? AbstractArray{et′, ndims(dest)} : AbstractArray{<:et′, ndims(dest)}
     collect_to_with_first!(dest, v1, itr, st)::RT
 end
 
@@ -1062,13 +1062,12 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     @_propagate_inbounds_meta
     setindex_shape_check(X, length(I))
     @boundscheck checkbounds(A, I)
-    require_one_based_indexing(X)
     X′ = unalias(A, X)
     I′ = unalias(A, I)
-    count = 1
-    for i in I′
-        @inbounds A[i] = X′[count]
-        count += 1
+    k = firstindex(I′)
+    for j in eachindex(X′)
+        @inbounds A[I′[k]] = X′[j]
+        k += 1
     end
     return A
 end
@@ -1080,7 +1079,7 @@ function setindex!(A::Array{T}, X::Array{T}, I::AbstractUnitRange{Int}) where T
     lI = length(I)
     setindex_shape_check(X, lI)
     if lI > 0
-        unsafe_copyto!(A, first(I), X, 1, lI)
+        @inbounds copyto!(A, first(I), X, 1, lI)
     end
     return A
 end
@@ -1134,7 +1133,7 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
         newoffset = div(memlen - newlen, 2) + 1
         newmem = mem
         unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
-        for j in offset:newoffset+delta-1
+        for j in offset:min(newoffset + delta, offset + len)-1
             @inbounds unsetindex!(mem, j)
         end
     else
@@ -1168,6 +1167,7 @@ function _growbeg!(a::Vector, delta::Integer)
 end
 
 function _growend_internal!(a::Vector, delta::Int, len::Int)
+    @_terminates_locally_meta
     ref = a.ref
     mem = ref.mem
     memlen = length(mem)
@@ -1195,6 +1195,11 @@ function _growend_internal!(a::Vector, delta::Int, len::Int)
     end
     newref = @inbounds memoryref(newmem, newoffset)
     unsafe_copyto!(newref, ref, len)
+    if newmem === mem
+        for j in max(offset, newoffset + len):offset+len-1
+            @inbounds unsetindex!(mem, j)
+        end
+    end
     if ref !== a.ref
         @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
     end
@@ -1207,16 +1212,11 @@ function _growend!(a::Vector, delta::Integer)
     delta = Int(delta)
     delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
     ref = a.ref
-    mem = ref.mem
-    memlen = length(mem)
     len = length(a)
-    newlen = checked_add(len, delta)
-    offset = memoryrefoffset(ref)
-    newmemlen = checked_add(offset - 1, newlen)
-    if memlen < newmemlen
+    if length(ref.mem) - (memoryrefoffset(ref) - 1) - len < delta
         @noinline _growend_internal!(a, delta, len)
     end
-    setfield!(a, :size, (newlen,))
+    setfield!(a, :size, (len + delta,))
     return
 end
 
@@ -1307,7 +1307,7 @@ function _deleteat!(a::Vector, i::Integer, delta::Integer)
     len = length(a)
     0 <= delta || throw(ArgumentError("_deleteat! requires delta >= 0"))
     1 <= i <= len || throw(BoundsError(a, i))
-    i + delta <= len + 1 || throw(BoundsError(a, i + delta - 1))
+    delta <= len + 1 - i || throw(BoundsError(a, i + delta - 1))
     newa = a
     if 2*i + delta <= len
         unsafe_copyto!(newa, 1 + delta, a, 1, i - 1)
@@ -1425,6 +1425,19 @@ function append!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
     return a
 end
 
+function append!(a::Vector{T}, x::AbstractVector{<:T}, y::AbstractVector{<:T}, items::AbstractVector{<:T}...) where T
+    # take every length before growing `a`, since a collection may share memory with `a`
+    items = (x, y, items...)
+    ns = map(length, items)
+    pos = length(a) + 1
+    _growend!(a, sum(ns))
+    for (v, n) in zip(items, ns)
+        copyto!(a, pos, v, firstindex(v), n)
+        pos += n
+    end
+    return a
+end
+
 append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
 push!(a::AbstractVector, iter...) = append!(a, iter)
 append!(a::AbstractVector, iter...) = (foreach(v -> append!(a, v), iter); a)
@@ -1487,6 +1500,19 @@ function prepend!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
     # in case of aliasing, the _growbeg might have shifted our data, so copy
     # just the last n elements instead of all of them from the first
     copyto!(a, 1, items, lastindex(items)-n+1, n)
+    return a
+end
+
+function prepend!(a::Vector{T}, x::AbstractVector{<:T}, y::AbstractVector{<:T}, items::AbstractVector{<:T}...) where T
+    # growing at the front moves the data of `a`, so copy any collection that shares it first
+    items = map(v -> unalias(a, v), (x, y, items...))
+    ns = map(length, items)
+    _growbeg!(a, sum(ns))
+    pos = 1
+    for (v, n) in zip(items, ns)
+        copyto!(a, pos, v, firstindex(v), n)
+        pos += n
+    end
     return a
 end
 
@@ -1572,6 +1598,52 @@ function resize!(a::Vector, nl_::Integer; first::Bool=false)
 end
 
 """
+    growat!(a::Vector, i::Integer, delta::Integer) -> a
+
+Grow `a` by `delta` elements inserted at index `i`, so that the new elements occupy
+`i:i+delta-1` and the elements previously at `i:end` move to `i+delta:end`. `i` must be
+between `1` and `length(a) + 1`, and `delta` must be non-negative. As with
+[`resize!`](@ref), the new elements are not guaranteed to be initialized.
+
+If `a` has spare capacity at the end nearer to `i`, only the elements between `i` and that
+end are moved, so growing near either end of `a` is cheap.
+
+`growat!(a, i, delta)` is undone by `deleteat!(a, i:i+delta-1)`.
+
+See also [`resize!`](@ref), [`insert!`](@ref), [`deleteat!`](@ref).
+
+!!! compat "Julia 1.15"
+    This function requires at least Julia 1.15.
+
+# Examples
+```jldoctest
+julia> a = Any[1, 2, 3];
+
+julia> growat!(a, 2, 2)
+5-element Vector{Any}:
+   1
+ #undef
+ #undef
+   2
+   3
+
+julia> a[2:3] = ["x", "y"];
+
+julia> a
+5-element Vector{Any}:
+ 1
+  "x"
+  "y"
+ 2
+ 3
+```
+"""
+function growat!(a::Vector, i::Integer, delta::Integer)
+    _growat!(a, i, delta)
+    return a
+end
+
+"""
     sizehint!(s, n; first::Bool=false, shrink::Bool=true) -> s
 
 Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
@@ -1620,7 +1692,7 @@ function sizehint!(a::Vector, sz::Integer; first::Bool=false, shrink::Bool=true)
             return a
         end
         newmem = array_new_memory(mem, sz)
-        if first
+        if first && len != 0
             newref = memoryref(newmem, inc + 1)
         else
             newref = memoryref(newmem)
@@ -2331,32 +2403,18 @@ vcat() = Vector{Any}()
 hcat() = Vector{Any}()
 
 function hcat(V::Vector{T}...) where T
+    isconcretetype(T) && return @inline _typed_hcat(T, V)
     height = length(V[1])
     for j = 2:length(V)
         if length(V[j]) != height
             throw(DimensionMismatch("vectors must have same lengths"))
         end
     end
-    return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
+    return [ v[i]::T for i=1:height, v in V ]
 end
-hcat(A::Vector...) = cat(A...; dims=Val(2)) # more special than SparseArrays's hcat
+hcat(A::Vector...) = _typed_hcat(promote_eltype(A...), A) # more special than SparseArrays's hcat
 
-function vcat(arrays::Vector{T}...) where T
-    n = 0
-    for a in arrays
-        n += length(a)
-    end
-    arr = Vector{T}(undef, n)
-    nd = 1
-    for a in arrays
-        na = length(a)
-        @assert nd + na <= 1 + length(arr) "Concurrent modification of arrays?"
-        unsafe_copyto!(arr, nd, a, 1, na)
-        nd += na
-    end
-    return arr
-end
-vcat(A::Vector...) = cat(A...; dims=Val(1)) # more special than SparseArrays's vcat
+vcat(A::Vector...) = @inline _typed_vcat(promote_eltype(A...), A) # more special than SparseArrays's vcat
 
 _cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(Returns(1), n-1)..., length(x)))
 
@@ -2487,6 +2545,8 @@ Return `nothing` if there is no such element.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
+See also [`filterfirst`](@ref) to get the element instead of its index.
+
 # Examples
 ```jldoctest
 julia> A = [1, 4, 2, 2]
@@ -2533,15 +2593,17 @@ findfirst(::typeof(isone), r::OneTo) = isempty(r) ? nothing : oneunit(keytype(r)
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange{<:Integer}) where {T<:Integer}
     first(r) <= p.x <= last(r) || return nothing
     i1 = first(keys(r))
-    return i1 + oftype(i1, p.x - first(r))
+    return checked_add(i1, convert(typeof(i1), maybe_unsigned(p.x - first(r))))
 end
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
-    d = p.x - first(r)
-    iszero(d % step(r)) || return nothing
-    return convert(keytype(r), d ÷ step(r) + 1)
+    f, h = first(r), step(r)
+    d = maybe_unsigned(h > zero(h) ? p.x - f : f - p.x)
+    n, m = divrem(d, uabs(h))
+    iszero(m) || return nothing
+    return checked_add(oneunit(keytype(r)), convert(keytype(r), n))
 end
 
 findfirst(::typeof(iszero), r::AbstractRange) = findfirst(==(zero(first(r))), r)
@@ -3023,7 +3085,7 @@ function filter(f, a::Array{T, N}) where {T, N}
 end
 
 function filter(f, a::AbstractArray)
-    (IndexStyle(a) != IndexLinear()) && return a[map(f, a)::AbstractArray{Bool}]
+    (IndexStyle(a) != IndexLinear()) && return a[map!(x -> f(x)::Bool, similar(a, Bool), a)]
 
     j = 1
     idxs = Vector{Int}(undef, length(a))
@@ -3071,6 +3133,37 @@ function filter!(f, a::AbstractVector)
     end
     return a
 end
+
+"""
+    filterfirst(f, itr)
+
+Get the first element of an iterable collection `itr` for which the
+predicate `f` returns `true`. Throw an `ArgumentError` if there is no such
+element, like [`first`](@ref) does for an empty collection; returning
+`nothing` would be ambiguous, since the element itself may be `nothing`.
+
+See also [`findfirst`](@ref) for the index of that element,
+[`Iterators.filter`](@ref).
+
+!!! compat "Julia 1.15"
+    This method requires at least Julia 1.15.
+
+# Examples
+```jldoctest
+julia> filterfirst(>=(5), 2:2:10)
+6
+
+julia> filterfirst(iseven, [1; 2; 3; 4])
+2
+
+julia> filterfirst(isuppercase, "hello World")
+'W': ASCII/Unicode U+0057 (category Lu: Letter, uppercase)
+
+julia> filterfirst(isodd, 2:2:10)
+ERROR: ArgumentError: collection must be non-empty
+```
+"""
+filterfirst(f, itr) = first(Iterators.filter(f, itr))
 
 """
     filter(f)
@@ -3262,7 +3355,7 @@ end
 end
 @eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
     dims = (Int(l),)
-    ref = _wrap(memoryref(m), (l,))
+    ref = _wrap(memoryref(m), dims)
     $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end
 @eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}) where {T}

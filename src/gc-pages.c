@@ -11,6 +11,11 @@ extern "C" {
 #endif
 
 uv_mutex_t gc_pages_lock;
+#ifdef _OS_WINDOWS_
+// Pages whose commit failed, guarded by `gc_pages_lock`. They can't go back on
+// the lock-free stack they were popped from (see the invariants in gc-stock.h).
+static jl_gc_pagemeta_t *gc_pages_commit_failed;
+#endif
 
 JL_DLLEXPORT uint64_t jl_get_pg_size(void)
 {
@@ -143,6 +148,16 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
         gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
         goto exit;
     }
+#ifdef _OS_WINDOWS_
+    meta = gc_pages_commit_failed;
+    if (meta != NULL) {
+        gc_pages_commit_failed = meta->next;
+        uv_mutex_unlock(&gc_pages_lock);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, GC_PAGE_SZ);
+        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
+        goto exit;
+    }
+#endif
     {
         // must map a new set of pages
         char *data = jl_gc_try_alloc_pages();
@@ -170,7 +185,10 @@ exit:
     // jl_gc_try_alloc_pages does when the reservation itself fails).
     if (VirtualAlloc(meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE) == NULL) {
         gc_alloc_map_set(meta->data, GC_PAGE_FREED);
-        push_lf_back(&global_page_pool_freed, meta);
+        uv_mutex_lock(&gc_pages_lock);
+        meta->next = gc_pages_commit_failed;
+        gc_pages_commit_failed = meta;
+        uv_mutex_unlock(&gc_pages_lock);
         jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -(int64_t)GC_PAGE_SZ);
         SetLastError(last_error);
         errno = last_errno;

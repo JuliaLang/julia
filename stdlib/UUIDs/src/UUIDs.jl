@@ -1,8 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-This module provides universally unique identifiers (UUIDs),
-along with functions for creating the different variants.
+    UUIDs
+
+Universally unique identifiers (UUIDs). Make them with [`uuid1`](@ref), [`uuid4`](@ref),
+[`uuid5`](@ref) or [`uuid7`](@ref), and find which version of UUID one is with
+[`uuid_version`](@ref).
 """
 module UUIDs
 
@@ -149,7 +152,7 @@ function uuid5(ns::UUID, name::String)
         nsbytes[idx] = nsv >> 120
         nsv = nsv << 8
     end
-    hash_result = SHA.sha1(append!(nsbytes, convert(Vector{UInt8}, codeunits(unescape_string(name)))))
+    hash_result = SHA.sha1(append!(nsbytes, codeunits(name)))
     # set version number to 5
     hash_result[7] = (hash_result[7] & 0x0F) | (0x50)
     hash_result[9] = (hash_result[9] & 0x3F) | (0x80)

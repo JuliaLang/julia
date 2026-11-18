@@ -95,7 +95,12 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-cancellation.patch-applied: $(BUILDDIR)
 		patch -p1 -f < $(SRCDIR)/patches/openblas-cancellation.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-cancellation.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-default-allocator.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-cancellation.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-default-allocator.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-default-allocator.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured

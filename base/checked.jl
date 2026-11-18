@@ -46,43 +46,25 @@ const UnsignedInt = Union{UInt8,UInt16,UInt32,UInt64,UInt128}
 # Note: As far as this code has been tested, most checked_* functions are
 # working fine in LLVM. (Note that division is still handled via `base/int.jl`,
 # which always checks for overflow, and which provides its own sets of
-# workarounds for LLVM codegen bugs.) However, the comments in `base/int.jl`
-# and in issue #4905 are more pessimistic. For the time being, we thus retain
-# the ability to handle codegen bugs in LLVM, until the code here has been
-# tested on more systems and architectures. It also seems that things depend on
-# which compiler that was used to build LLVM (i.e. either gcc or clang).
-
-# These unions are used for most checked functions:
-#     BrokenSignedInt
-#     BrokenUnsignedInt
-# These unions are used for checked_{mul,div,rem}:
+# workarounds for LLVM codegen bugs.) Only multiplication still needs
+# workarounds, for the types in these unions:
 #     BrokenSignedIntMul
 #     BrokenUnsignedIntMul
 
-# This code runs early during bootstrap, and we can't use Julia's version
-# strings yet
-const llvm_version = Int(ccall(:jl_get_LLVM_VERSION, UInt32, ()))
-
-brokenSignedInt = Union{}
-brokenUnsignedInt = Union{}
 brokenSignedIntMul = Int128
 brokenUnsignedIntMul = UInt128
 if Core.sizeof(Ptr{Cvoid}) == 4
     brokenSignedIntMul = Union{brokenSignedIntMul, Int64}
     brokenUnsignedIntMul = Union{brokenUnsignedIntMul, UInt64}
 end
-const BrokenSignedInt = brokenSignedInt
-const BrokenUnsignedInt = brokenUnsignedInt
 const BrokenSignedIntMul = brokenSignedIntMul
 const BrokenUnsignedIntMul = brokenUnsignedIntMul
 # Use these definitions to test the non-LLVM implementations
-# const BrokenSignedInt = SignedInt
-# const BrokenUnsignedInt = UnsignedInt
 # const BrokenSignedIntMul = SignedInt
 # const BrokenUnsignedIntMul = UnsignedInt
 
 """
-    Base.checked_neg(x)
+    Base.checked_neg(x::Integer)
 
 Calculates `-x`, checking for overflow errors where applicable. For
 example, standard two's complement signed integers (e.g. `Int`) cannot
@@ -95,28 +77,17 @@ function checked_neg(x::T) where T<:Integer
 end
 throw_overflowerr_negation(x) = (@noinline;
     throw(OverflowError(Base.invokelatest(string, "checked arithmetic: cannot compute -x for x = ", x, "::", typeof(x)))))
-if BrokenSignedInt != Union{}
-function checked_neg(x::BrokenSignedInt)
-    r = -%(x)
-    (x<0) & (r<0) && throw_overflowerr_negation(x)
-    r
-end
-end
-if BrokenUnsignedInt != Union{}
-function checked_neg(x::T) where T<:BrokenUnsignedInt
-    x != 0 && throw_overflowerr_negation(x)
-    T(0)
-end
-end
 
 """
-    Base.checked_abs(x)
+    Base.checked_abs(x::Integer)
 
 Calculates `abs(x)`, checking for overflow errors where applicable.
 For example, standard two's complement signed integers (e.g. `Int`)
 cannot represent `abs(typemin(Int))`, thus leading to an overflow.
 
 The overflow protection may impose a perceptible performance penalty.
+
+See also: [`abs`](@ref), [`Base.uabs`](@ref).
 """
 function checked_abs end
 
@@ -132,38 +103,34 @@ checked_abs(x::Bool) = x
 """
     Base.add_with_overflow(x, y) -> (r, f)
 
-Calculates `r = x+y`, with the flag `f` indicating whether overflow has occurred.
+Calculates `r = x+y` for integers `x` and `y` of the same type, with the flag `f`
+indicating whether overflow has occurred.
 """
 function add_with_overflow end
 add_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_sadd_int(x, y)
 add_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_uadd_int(x, y)
 add_with_overflow(x::Bool, y::Bool) = (x +% y, false)
 
-if BrokenSignedInt != Union{}
-function add_with_overflow(x::T, y::T) where T<:BrokenSignedInt
-    r = x +% y
-    # x and y have the same sign, and the result has a different sign
-    f = (x<0) == (y<0) != (r<0)
-    r, f
-end
-end
-if BrokenUnsignedInt != Union{}
-function add_with_overflow(x::T, y::T) where T<:BrokenUnsignedInt
-    # x + y > typemax(T)
-    # Note: ~y == -y-1
-    x +% y, x > ~y
-end
-end
-
 throw_overflowerr_binaryop(op, x, y) = (@noinline;
     throw(OverflowError(LazyString(x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
 
 """
-    Base.checked_add(x, y)
+    Base.checked_add(x::Integer, y::Integer)
 
 Calculates `x+y`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
+
+# Examples
+```jldoctest
+julia> Base.checked_add(2, 3)
+5
+
+julia> Base.checked_add(typemax(Int8), Int8(1))
+ERROR: OverflowError: 127 + 1 overflowed for type Int8
+Stacktrace:
+[...]
+```
 """
 function checked_add(x::T, y::T) where T<:Integer
     @inline
@@ -196,30 +163,16 @@ checked_add(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) where {T} =
 """
     Base.sub_with_overflow(x, y) -> (r, f)
 
-Calculates `r = x-y`, with the flag `f` indicating whether overflow has occurred.
+Calculates `r = x-y` for integers `x` and `y` of the same type, with the flag `f`
+indicating whether overflow has occurred.
 """
 function sub_with_overflow end
 sub_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_ssub_int(x, y)
 sub_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_usub_int(x, y)
 sub_with_overflow(x::Bool, y::Bool) = (x-y, false)
 
-if BrokenSignedInt != Union{}
-function sub_with_overflow(x::T, y::T) where T<:BrokenSignedInt
-    r = x -% y
-    # x and y have different signs, and the result has a different sign than x
-    f = (x<0) != (y<0) == (r<0)
-    r, f
-end
-end
-if BrokenUnsignedInt != Union{}
-function sub_with_overflow(x::T, y::T) where T<:BrokenUnsignedInt
-    # x - y < 0
-    x -% y, x < y
-end
-end
-
 """
-    Base.checked_sub(x, y)
+    Base.checked_sub(x::Integer, y::Integer)
 
 Calculates `x-y`, checking for overflow errors where applicable.
 
@@ -235,7 +188,8 @@ end
 """
     Base.mul_with_overflow(x, y) -> (r, f)
 
-Calculates `r = x*y`, with the flag `f` indicating whether overflow has occurred.
+Calculates `r = x*y` for integers `x` and `y` of the same type, with the flag `f`
+indicating whether overflow has occurred.
 """
 function mul_with_overflow end
 mul_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_smul_int(x, y)
@@ -283,11 +237,22 @@ if UInt128 <: BrokenUnsignedIntMul
 end
 
 """
-    Base.checked_mul(x, y)
+    Base.checked_mul(x::Integer, y::Integer)
 
 Calculates `x*y`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
+
+# Examples
+```jldoctest
+julia> Base.checked_mul(2, 3)
+6
+
+julia> Base.checked_mul(Int8(100), Int8(2))
+ERROR: OverflowError: 100 * 2 overflowed for type Int8
+Stacktrace:
+[...]
+```
 """
 function checked_mul(x::T, y::T) where T<:Integer
     @inline
@@ -312,7 +277,7 @@ checked_mul(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) where {T} =
     checked_mul(checked_mul(x1, x2), x3, x4, x5, x6, x7, x8)
 
 """
-    Base.checked_div(x, y)
+    Base.checked_div(x::Integer, y::Integer)
 
 Calculates `div(x,y)`, checking for overflow errors where applicable.
 
@@ -321,7 +286,7 @@ The overflow protection may impose a perceptible performance penalty.
 checked_div(x::T, y::T) where {T<:Integer} = div(x, y) # Base.div already checks
 
 """
-    Base.checked_rem(x, y)
+    Base.checked_rem(x::Integer, y::Integer)
 
 Calculates `x%y`, checking for overflow errors where applicable.
 
@@ -330,7 +295,7 @@ The overflow protection may impose a perceptible performance penalty.
 checked_rem(x::T, y::T) where {T<:Integer} = rem(x, y) # Base.rem already checks
 
 """
-    Base.checked_fld(x, y)
+    Base.checked_fld(x::Integer, y::Integer)
 
 Calculates `fld(x,y)`, checking for overflow errors where applicable.
 
@@ -339,7 +304,7 @@ The overflow protection may impose a perceptible performance penalty.
 checked_fld(x::T, y::T) where {T<:Integer} = fld(x, y) # Base.fld already checks
 
 """
-    Base.checked_mod(x, y)
+    Base.checked_mod(x::Integer, y::Integer)
 
 Calculates `mod(x,y)`, checking for overflow errors where applicable.
 
@@ -348,7 +313,7 @@ The overflow protection may impose a perceptible performance penalty.
 checked_mod(x::T, y::T) where {T<:Integer} = mod(x, y) # Base.mod already checks
 
 """
-    Base.checked_cld(x, y)
+    Base.checked_cld(x::Integer, y::Integer)
 
 Calculates `cld(x,y)`, checking for overflow errors where applicable.
 
@@ -357,7 +322,7 @@ The overflow protection may impose a perceptible performance penalty.
 checked_cld(x::T, y::T) where {T<:Integer} = cld(x, y) # Base.cld already checks
 
 """
-    Base.checked_pow(x, y)
+    Base.checked_pow(x::Integer, y::Integer)
 
 Calculates `^(x,y)`, checking for overflow errors where applicable.
 
@@ -373,7 +338,7 @@ checked_power_by_squaring(x::Bool, p::Integer) = Base.power_by_squaring(x, p)
     Base.checked_length(r)
 
 Calculates `length(r)`, but may check for overflow errors where applicable when
-the result doesn't fit into `Union{Integer(eltype(r)),Int}`.
+the result doesn't fit into the integer type returned by `length(r)`.
 """
 checked_length(r) = length(r) # for most things, length doesn't error
 

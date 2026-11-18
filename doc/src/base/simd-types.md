@@ -33,3 +33,7 @@ code_native(triple,(m128,))
 
 However, since the automatic vectorization cannot be relied upon, future use will mostly be via
 libraries that use `llvmcall`.
+
+```@docs
+Core.VecElement
+```

@@ -271,14 +271,21 @@ function wait_no_relock(c::GenericCondition, tok::MaybeToken)
     # the lock only for its unlink
     ct = current_task()
     src = cancel_source(tok)
-    if src === nothing
-        ws = (c,)
-        w = _cached_wait_entry(ct)
-    else
-        ws = (c, SourceWait(src, 0x00))
-        w = _cancel_wait_entry(ct, src, 0x00)
+    ws = src === nothing ? (c,) : (c, SourceWait(src, 0x00))
+    local w::WaitEntry, parked::Bool
+    try
+        w = src === nothing ? _cached_wait_entry(ct) : _cancel_wait_entry(ct, src, 0x00)
+        parked = park!(ws, w, false)
+    catch
+        # Release on error, as in `wait(::GenericCondition, ::MaybeToken)`.
+        if @isdefined(w)
+            disarm!(ct, w)
+            withdraw!(ws, w, WAKE_FIRED)
+        end
+        unlock(c.lock)
+        rethrow()
     end
-    if !park!(ws, w, false)
+    if !parked
         # refused at the registration recheck (e.g. a token cancelled
         # while we were still spinning and thus not interruptibly
         # waiting): withdraw under the held lock, release, deliver
@@ -388,7 +395,8 @@ function lock(f, l::AbstractLock)
     end
 end
 
-function lock(f, l::ReentrantLock; cancel::CancelTokenArg=DEFAULT_CANCEL)
+# `@inline` keeps an uncontended `lock(f, l)` free of the call into its keyword body.
+@inline function lock(f, l::ReentrantLock; cancel::CancelTokenArg=DEFAULT_CANCEL)
     lock(l; cancel)
     try
         return f()
@@ -989,7 +997,7 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                     @atomic :monotonic ss[tid] = PerStateConcurrent
                     result = try
                         unlock(PerThreadLock)
-                        once.initializer()
+                        convert(T, once.initializer())
                     catch
                         lock(PerThreadLock)
                         ss = @atomic :monotonic once.ss

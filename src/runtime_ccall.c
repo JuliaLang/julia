@@ -49,14 +49,18 @@ void *jl_get_library_(const char *f_lib, int throw_err) JL_CANSAFEPOINT
     return hnd;
 }
 
+// Called by the lazy PLT stubs, which `gc_safe=true` ccalls also call from their gc-safe region.
 JL_DLLEXPORT
 void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd)
 {
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int8_t gc_state = jl_gc_unsafe_enter(ptls);
     void *handle = jl_atomic_load_acquire(hnd);
     if (!handle)
         jl_atomic_store_release(hnd, (handle = jl_get_library(f_lib)));
     void * ptr;
     jl_dlsym(handle, f_name, &ptr, 1, 1);
+    jl_gc_unsafe_leave(ptls, gc_state);
     return ptr;
 }
 

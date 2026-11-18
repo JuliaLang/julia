@@ -560,6 +560,11 @@ end
     @test_throws ArgumentError minimum(abs, Areduc, dims=region)
 end
 
+@testset "unsigned region beyond typemax(Int)" begin
+    @test sum([1, 2], dims=UInt(typemax(Int)) + 1) == [1, 2]
+    @test maximum([1, 2], dims=UInt(typemax(Int)) + 1) == [1, 2]
+end
+
 # issue #26488
 @testset "don't map over initial values not provided" begin
     @test sum(x->x+1, [1], dims=1)[1] === sum(x->x+1, [1]) === 2
@@ -667,6 +672,10 @@ end
         @test isequal(minimum(x, dims=2), reshape([missing, missing], :, 1))
         @test isequal(maximum(x, dims=2), reshape([missing, missing], :, 1))
     end
+    x = [missing missing; missing missing]
+    @test isequal(maximum(x, dims=1), [missing missing])
+    @test isequal(minimum(x, dims=2), reshape([missing, missing], :, 1))
+    @test isequal(extrema(x, dims=1), [(missing, missing) (missing, missing)])
 end
 
 # issue #26709

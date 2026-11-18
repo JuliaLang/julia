@@ -316,7 +316,7 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     jl_gc_wb_finalizer_queue(&to_finalize);
     arraylist_new(&to_finalize, 0);
 
-    // Finalizers shouldn't affect either rng or errno state
+    // Finalizers shouldn't affect the rng, errno, or floating-point control state
     uint64_t save_rngState[JL_RNG_SIZE];
     memcpy(&save_rngState[0], &ct->rngState[0], sizeof(save_rngState));
     jl_rng_split(ct->rngState, finalizer_rngState);
@@ -324,6 +324,7 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
+    uint64_t last_fpctrl = jl_fpctrl_enter_default();
 
     // This releases the finalizers lock.
     int8_t was_in_finalizer = ct->ptls->in_finalizer;
@@ -337,6 +338,7 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     SetLastError(last_error);
 #endif
     errno = last_errno;
+    jl_fpctrl_restore(last_fpctrl);
 }
 
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)
@@ -652,64 +654,25 @@ JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
     return jl_gc_alloc_(ptls, sz, ty);
 }
 
-JL_DLLEXPORT void *jl_malloc(size_t sz) JL_CANSAFEPOINT
+JL_DLLEXPORT void *jl_malloc(size_t sz) JL_NOTSAFEPOINT
 {
-    return jl_gc_counted_malloc(sz);
-}
-
-// === GMP allocation hooks ===================================================
-// These are special reset-safe versions of GMP's allocation functions. GMP is
-// generally reset-safe, but our allocators are not, so unpublish the reset
-// region around them as the *_reset_safe entry points above do.
-
-JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz)
-{
-    jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL || ct->ptls == NULL)
-        return jl_gc_counted_malloc(sz);
-    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
-    void *data = jl_gc_counted_malloc(sz);
-    reset_region_republish(ct, reset_ctx); // may longjmp
-    return data;
-}
-
-JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
-{
-    jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL || ct->ptls == NULL)
-        return jl_gc_counted_realloc_with_old_size(p, old, sz);
-    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
-    void *data = jl_gc_counted_realloc_with_old_size(p, old, sz);
-    reset_region_republish(ct, reset_ctx); // may longjmp
-    return data;
-}
-
-JL_DLLEXPORT void jl_gmp_counted_free_with_size(void *p, size_t sz)
-{
-    jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL || ct->ptls == NULL) {
-        jl_gc_counted_free_with_size(p, sz);
-        return;
-    }
-    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
-    jl_gc_counted_free_with_size(p, sz);
-    reset_region_republish(ct, reset_ctx); // may longjmp
+    return jl_gc_counted_malloc_(sz, 1);
 }
 
 //_unchecked_calloc does not check for potential overflow of nm*sz
-STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT {
+STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) JL_NOTSAFEPOINT {
     size_t nmsz = nm*sz;
-    return jl_gc_counted_calloc(nmsz, 1);
+    return jl_gc_counted_calloc_(nmsz, 1, 1);
 }
 
-JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT
+JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz) JL_NOTSAFEPOINT
 {
-    if (nm > SSIZE_MAX/sz)
+    if (sz != 0 && nm > SSIZE_MAX/sz)
         return NULL;
     return _unchecked_calloc(nm, sz);
 }
 
-JL_DLLEXPORT void jl_free(void *p)
+JL_DLLEXPORT void jl_free(void *p) JL_NOTSAFEPOINT
 {
     if (p != NULL) {
         size_t sz = memory_block_usable_size(p, 0);
@@ -717,10 +680,10 @@ JL_DLLEXPORT void jl_free(void *p)
     }
 }
 
-JL_DLLEXPORT void *jl_realloc(void *p, size_t sz) JL_CANSAFEPOINT
+JL_DLLEXPORT void *jl_realloc(void *p, size_t sz) JL_NOTSAFEPOINT
 {
     size_t old = p ? memory_block_usable_size(p, 0) : 0;
-    return jl_gc_counted_realloc_with_old_size(p, old, sz);
+    return jl_gc_counted_realloc_(p, old, sz, 1);
 }
 
 // =========================================================================== //

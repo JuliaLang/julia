@@ -65,12 +65,14 @@ function showerror(io::IO, exc::StringIndexError)
     if firstindex(s) <= exc.index <= ncodeunits(s)
         iprev = thisind(s, exc.index)
         inext = nextind(s, iprev)
-        escprev = escape_string(s[iprev:iprev])
-        if inext <= ncodeunits(s)
-            escnext = escape_string(s[inext:inext])
-            print(io, ", valid nearby indices [$iprev]=>'$escprev', [$inext]=>'$escnext'")
-        else
-            print(io, ", valid nearby index [$iprev]=>'$escprev'")
+        if isvalid(s, iprev)
+            escprev = escape_string(s[iprev:iprev])
+            if inext <= ncodeunits(s) && isvalid(s, inext)
+                escnext = escape_string(s[inext:inext])
+                print(io, ", valid nearby indices [$iprev]=>'$escprev', [$inext]=>'$escnext'")
+            else
+                print(io, ", valid nearby index [$iprev]=>'$escprev'")
+            end
         end
     end
 end
@@ -462,15 +464,15 @@ end
 function byte_string_classify(bytes::AbstractVector{UInt8})
     chunk_size = 1024
     chunk_threshold =  chunk_size + (chunk_size ÷ 2)
-    n = length(bytes)
-    if n > chunk_threshold
-        start = _find_nonascii_chunk(chunk_size,bytes,1,n)
+    first, last = firstindex(bytes), lastindex(bytes)
+    if length(bytes) > chunk_threshold
+        start = _find_nonascii_chunk(chunk_size,bytes,first,last)
         isnothing(start) && return 1
     else
-        _isascii(bytes,1,n) && return 1
-        start = 1
+        _isascii(bytes,first,last) && return 1
+        start = first
     end
-    return _byte_string_classify_nonascii(bytes,start,n)
+    return _byte_string_classify_nonascii(bytes,start,last)
 end
 
 function _byte_string_classify_nonascii(bytes::AbstractVector{UInt8}, first::Int, last::Int)
@@ -680,7 +682,7 @@ julia> repeat('A', 3)
 ```
 """
 function repeat(c::AbstractChar, r::Integer)
-    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
+    r < 0 && throw(ArgumentError(LazyString("can't repeat a character ", r, " times")))
     r = UInt(r)::UInt
     c = Char(c)::Char
     r == 0 && return ""

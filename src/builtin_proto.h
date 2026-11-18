@@ -57,10 +57,12 @@ extern "C" {
     XX(memoryrefnew,"memoryrefnew") \
     XX(memoryref_isassigned,"memoryref_isassigned") \
     XX(memoryrefget,"memoryrefget") \
+    XX(unsafe_memoryrefload,"unsafe_memoryrefload") \
     XX(memoryrefmodify,"memoryrefmodify!") \
     XX(memoryrefoffset,"memoryrefoffset") \
     XX(memoryrefreplace,"memoryrefreplace!") \
     XX(memoryrefset,"memoryrefset!") \
+    XX(unsafe_memoryrefstore,"unsafe_memoryrefstore!") \
     XX(memoryrefsetonce,"memoryrefsetonce!") \
     XX(memoryrefunset,"memoryrefunset!") \
     XX(memoryrefswap,"memoryrefswap!") \

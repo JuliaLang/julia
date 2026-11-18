@@ -15,6 +15,9 @@ Base.Sys.WORD_SIZE
 Base.Sys.KERNEL
 Base.Sys.ARCH
 Base.Sys.MACHINE
+Base.Sys.CPU_NAME
+Base.Sys.JIT
+Base.Sys.PAGESIZE
 ```
 
 See also:

@@ -541,6 +541,11 @@ JL_DLLEXPORT int jl_is_file_tracked(jl_sym_t *path)
     return jl_path_is_tracked(jl_symbol_name(path));
 }
 
+JL_DLLEXPORT int jl_is_file_coverage_excluded(jl_sym_t *path)
+{
+    return jl_path_is_coverage_excluded(jl_symbol_name(path));
+}
+
 static void jl_set_io_wait(int v)
 {
     jl_task_t *ct = jl_current_task;
@@ -623,6 +628,11 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
 
     jl_gc_enable(1);
 
+    // Writing a sysimage infers code and later needs it again to emit it. Keep it
+    // until then; it is dropped again before the image is serialized.
+    if (jl_options.outputo && !jl_options.incremental)
+        jl_set_precompile_keep_ir(1);
+
     if ((sysimage.kind != JL_IMAGE_KIND_NONE) &&
             (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
         jl_array_t *init_order = jl_module_init_order;
@@ -673,6 +683,8 @@ JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
 #else
         /* sanitize_address */ 0,
 #endif
+        /* unique_names */ 0,
+        /* debug_info_inline_scopes */ 0, // later 1 in assert builds, and when a debugger or profiler listens to the JIT
 };
 
 static void init_global_mutexes(void) JL_NOTSAFEPOINT {
@@ -681,6 +693,7 @@ static void init_global_mutexes(void) JL_NOTSAFEPOINT {
     JL_MUTEX_INIT(&newly_inferred_mutex, "newly_inferred_mutex");
     JL_MUTEX_INIT(&global_roots_lock, "global_roots_lock");
     JL_MUTEX_INIT(&typecache_lock, "typecache_lock");
+    JL_MUTEX_INIT(&jl_interp_call_sites_lock, "jl_interp_call_sites_lock");
     JL_MUTEX_INIT(&profile_show_peek_cond_lock, "profile_show_peek_cond_lock");
 }
 
@@ -789,7 +802,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     }
     // Initialize constant objects
     jl_nothing = jl_gc_permobj(ptls, 0, jl_nothing_type, 0);
-    jl_set_typetagof(jl_nothing, jl_nothing_tag, GC_OLD_MARKED);
+    jl_set_typetagof(jl_nothing, jl_nothing_tag, GC_PERM_BITS);
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     jl_init_box_caches();

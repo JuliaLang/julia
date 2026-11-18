@@ -23,10 +23,6 @@
 #include <llvm-Compression.h>
 #include <llvm/Support/Compression.h>
 
-#ifdef _OS_DARWIN_
-#include <CoreFoundation/CoreFoundation.h>
-#endif
-
 using namespace llvm;
 
 #include "jitlayers.h"
@@ -51,6 +47,10 @@ static JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT {
 }
 
 namespace {
+// JIT objects are small, and for small inputs zstd's level 5 uses a slow match
+// finder; level 3, zstd's own default, avoids most of that for a little more memory.
+constexpr int JIT_OBJ_ZSTD_LEVEL = 3;
+
 struct debug_link_info {
     StringRef filename;
     uint32_t crc32;
@@ -362,8 +362,12 @@ void JITDebugInfoRegistry::registerJITObject(
         F = compression::Format::Zstd;
     else if (compression::zlib::isAvailable())
         F = compression::Format::Zlib;
-    if (F)
-        compression::compress(*F, unpacked, packed);
+    if (F) {
+        if (*F == compression::Format::Zstd)
+            compression::compress(compression::Params(*F, JIT_OBJ_ZSTD_LEVEL), unpacked, packed);
+        else
+            compression::compress(*F, unpacked, packed);
+    }
     // intentionally leak this so that we don't need to ref-count it
     // intentionally copy the input so that we exact-size the allocation (since no shrink_to_fit function)
     auto ObjectCopy = new LazyObjectInfo{SmallVector<uint8_t, 0>(F ? ArrayRef(packed) : unpacked), F ? Object.getData().size() : 0};
@@ -546,12 +550,8 @@ static int lookup_pointer(
             if (havelock) {
                 auto lineinfo = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
                 jl_unlock_profile_wr();
-#if JL_LLVM_VERSION < 210000
-                info = std::move(lineinfo);
-#else
                 if (lineinfo)
                     info = std::move(*lineinfo);
-#endif
             }
         }
 
@@ -775,6 +775,12 @@ static inline void ignoreError(T &err) JL_NOTSAFEPOINT
 #endif
 }
 
+// Malformed DWARF should not add LLVM diagnostics to Julia's backtrace output.
+static void ignoreDWARFDiag(llvm::Error E) JL_NOTSAFEPOINT
+{
+    consumeError(std::move(E));
+}
+
 static void get_function_name_and_base(llvm::object::SectionRef Section, std::map<uintptr_t, StringRef, std::greater<size_t>> *symbolmap,
                                        size_t pointer, uint64_t slide, bool inimage,
                                        void **saddr, char **name, bool untrusted_dladdr) JL_NOTSAFEPOINT
@@ -934,75 +940,13 @@ static jl_object_file_entry_t find_object_file(uint64_t fbase, StringRef fname) 
         if (!morigobj || !getObjUUID(morigobj, uuid))
             return entry;
 
-        // Hide Darwin symbols (e.g. CoreFoundation) from non-Darwin systems.
-#ifndef _OS_DARWIN_
-        return entry;
-#else
-        // On macOS, debug symbols are not contained in the dynamic library.
-        // Use DBGCopyFullDSYMURLForUUID from the private DebugSymbols framework
-        // to make use of spotlight to find the dSYM file. If that fails, lookup
-        // the dSYM file in the same directory as the dynamic library.  TODO: If
-        // the DebugSymbols framework is moved or removed, an alternative would
-        // be to directly query Spotlight for the dSYM bundle.
-
-        typedef CFURLRef (*DBGCopyFullDSYMURLForUUIDfn)(CFUUIDRef, CFURLRef) JL_NOTSAFEPOINT;
-        DBGCopyFullDSYMURLForUUIDfn DBGCopyFullDSYMURLForUUID = NULL;
-
-        // First, try to load the private DebugSymbols framework.
-        CFURLRef dsfmwkurl = CFURLCreateWithFileSystemPath(
-            kCFAllocatorDefault,
-            CFSTR("/System/Library/PrivateFrameworks/DebugSymbols.framework"),
-            kCFURLPOSIXPathStyle, true);
-        CFBundleRef dsfmwkbundle =
-            CFBundleCreate(kCFAllocatorDefault, dsfmwkurl);
-        CFRelease(dsfmwkurl);
-
-        if (dsfmwkbundle) {
-            DBGCopyFullDSYMURLForUUID =
-                (DBGCopyFullDSYMURLForUUIDfn)CFBundleGetFunctionPointerForName(
-                    dsfmwkbundle, CFSTR("DBGCopyFullDSYMURLForUUID"));
-        }
-
-        if (DBGCopyFullDSYMURLForUUID != NULL) {
-            // Prepare UUID and shared object path URL.
-            CFUUIDRef objuuid = CFUUIDCreateWithBytes(
-                kCFAllocatorDefault, uuid[0], uuid[1], uuid[2], uuid[3],
-                uuid[4], uuid[5], uuid[6], uuid[7], uuid[8], uuid[9], uuid[10],
-                uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]);
-            CFURLRef objurl = CFURLCreateFromFileSystemRepresentation(
-                kCFAllocatorDefault, (UInt8 const *)fname.data(),
-                (CFIndex)strlen(fname.data()), FALSE);
-
-            // Call private DBGCopyFullDSYMURLForUUID() to find dSYM.
-            CFURLRef dsympathurl = DBGCopyFullDSYMURLForUUID(objuuid, objurl);
-            CFRelease(objuuid);
-            CFRelease(objurl);
-
-            char objpathcstr[JL_PATH_MAX];
-            if (dsympathurl != NULL &&
-                CFURLGetFileSystemRepresentation(
-                    dsympathurl, true, (UInt8 *)objpathcstr,
-                    (CFIndex)sizeof(objpathcstr))) {
-                // The dSYM was found. Copy its path.
-                debuginfopath = objpathcstr;
-                objpath = debuginfopath;
-                CFRelease(dsympathurl);
-            }
-        }
-
-        if (dsfmwkbundle) {
-            CFRelease(dsfmwkbundle);
-        }
-#endif
-
-        if (objpath.empty()) {
-            // Fall back to simple path relative to the dynamic library.
-            size_t sep = fname.rfind('/');
-            debuginfopath = fname.str();
-            debuginfopath += ".dSYM/Contents/Resources/DWARF/";
-            debuginfopath += fname.substr(sep + 1);
-            objpath = debuginfopath;
-        }
+        // On macOS, debug symbols are not contained in the dynamic library, so
+        // look for a dSYM bundle next to it.
+        size_t sep = fname.rfind('/');
+        debuginfopath = fname.str();
+        debuginfopath += ".dSYM/Contents/Resources/DWARF/";
+        debuginfopath += fname.substr(sep + 1);
+        objpath = debuginfopath;
     }
     else {
         // On Linux systems we need to mmap another copy because of the permissions on the mmap'ed shared library.
@@ -1078,7 +1022,9 @@ static jl_object_file_entry_t find_object_file(uint64_t fbase, StringRef fname) 
             slide = -fbase;
         }
 
-        auto context = DWARFContext::create(*debugobj).release();
+        auto context = DWARFContext::create(*debugobj,
+                DWARFContext::ProcessDebugRelocations::Process, nullptr, "",
+                ignoreDWARFDiag, ignoreDWARFDiag).release();
         auto binary = errorobj->takeBinary();
         binary.first.release();
         binary.second.release();
@@ -1101,7 +1047,14 @@ static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *o
   for (object::SectionRef Sec : obj->sections()) {
       if (!Sec.isText() || Sec.isVirtual())
           continue;
-      if (Address >= Sec.getAddress() && Address < Sec.getAddress() + Sec.getSize())
+      uint64_t Size = Sec.getSize();
+      // A dSYM keeps the section headers but not their contents, and LLVM clamps
+      // the size of a section that extends past the end of the file, so use the
+      // size from the header instead (https://github.com/llvm/llvm-project/pull/197286).
+      if (auto *MO = dyn_cast<const object::MachOObjectFile>(obj))
+          Size = MO->is64Bit() ? MO->getSection64(Sec.getRawDataRefImpl()).size
+                               : MO->getSection(Sec.getRawDataRefImpl()).size;
+      if (Address >= Sec.getAddress() && Address < Sec.getAddress() + Size)
           return Sec;
   }
   return object::SectionRef();
@@ -1324,7 +1277,9 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
             *Section = *std::next(lazyobject->object->section_begin(), fit->second.SectionIndex);
             if (context) {
                 if (lazyobject->context == nullptr)
-                    lazyobject->context = DWARFContext::create(*lazyobject->object);
+                    lazyobject->context = DWARFContext::create(*lazyobject->object,
+                            DWARFContext::ProcessDebugRelocations::Process, nullptr, "",
+                            ignoreDWARFDiag, ignoreDWARFDiag);
                 *context = lazyobject->context.get();
             }
         }

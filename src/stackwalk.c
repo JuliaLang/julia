@@ -203,14 +203,50 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
     return need_more_space;
 }
 
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+// Some libsystem_kernel syscall stubs have no unwind info but leave SP and
+// callee-saved registers unchanged. Try LR once when unwinding stops at the
+// first frame. Missing unwind info does not prove this assumption.
+static int jl_unw_lr_context(bt_cursor_t *cursor, bt_context_t *context,
+                             bt_context_t *caller) JL_NOTSAFEPOINT
+{
+    unw_proc_info_t pi;
+    if (unw_get_proc_info(cursor, &pi) != UNW_ENOINFO)
+        return 0;
+    // Only the GPR prefix is guaranteed here (see jl_to_bt_context).
+    arm_thread_state64_t *state = (arm_thread_state64_t*)caller;
+    memset(caller, 0, sizeof(*caller));
+    memcpy(state, context, sizeof(*state));
+    if (state->__lr <= 1)
+        return 0;
+    // Use LR - 1 for lookup and recording, matching a normal caller.
+    state->__pc = state->__lr - 1;
+    return 1;
+}
+#endif
+
 NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
                                   bt_context_t *context, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT
 {
     bt_cursor_t cursor;
     if (!jl_unw_init(&cursor, context, 1))
         return 0;
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    bt_context_t caller;
+    int try_lr = jl_unw_lr_context(&cursor, context, &caller);
+#endif
     size_t bt_size = 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    // This needs a new cursor: setting the IP does not clear libunwind's
+    // missing-info state.
+    if (try_lr && bt_size == 1 && bt_data[0].uintptr != 0 &&
+        jl_unw_init(&cursor, &caller, 1)) {
+        size_t n = 0;
+        jl_unw_stepn(&cursor, bt_data + 1, &n, NULL, maxsize - 1, 0, &pgcstack, 1);
+        bt_size += n;
+    }
+#endif
     return bt_size;
 }
 
@@ -476,6 +512,16 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
     }
     return SymGetModuleBase64(hProcess, dwAddr);
 }
+
+// StackWalkEx (dbghelp 6.3, Windows 8.1) is not declared by the mingw-w64 headers
+typedef BOOL (WINAPI *jl_StackWalkEx_t)(DWORD, HANDLE, HANDLE, LPSTACKFRAME_EX, PVOID,
+                                        PREAD_PROCESS_MEMORY_ROUTINE64,
+                                        PFUNCTION_TABLE_ACCESS_ROUTINE64,
+                                        PGET_MODULE_BASE_ROUTINE64,
+                                        PTRANSLATE_ADDRESS_ROUTINE64, DWORD);
+#define JL_SYM_STKWALK_DEFAULT 0x00000000
+#define JL_SYM_STKWALK_FORCE_FRAMEPTR 0x00000001
+static jl_StackWalkEx_t pStackWalkEx;
 #endif
 
 // Might be called from unmanaged thread.
@@ -619,6 +665,9 @@ void jl_init_stackwalk(void)
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
     if (!SymInitialize(GetCurrentProcess(), "", 1))
         jl_safe_printf("WARNING: failed to initialize stack walk info\n");
+#if !defined(_CPU_X86_64_)
+    pStackWalkEx = (jl_StackWalkEx_t)GetProcAddress(GetModuleHandleW(L"dbghelp.dll"), "StackWalkEx");
+#endif
     LdrRegisterDllNotification(0, dll_notification_callback, NULL, &dll_notification_cookie);
 }
 
@@ -677,6 +726,41 @@ STATIC_INLINE int profile_abort_window_close(_Atomic(int) *abort_ptr) JL_NOTSAFE
     return 1;
 }
 
+#if !defined(_CPU_X86_64_)
+// Without FPO data, which dbghelp has for none of our code, StackWalk64 follows the
+// EBP chain but also searches the stack for return addresses. That search sometimes
+// reports a stack slot as a return address and drops real frames (#55900), even
+// though all Julia code keeps frame pointers. So we ask StackWalkEx to follow the
+// frame pointer, and only redo a step with the default heuristics when that gives an
+// implausible frame, as with foreign code that uses EBP as a general register (the
+// libuv in libjulia-internal does). The caller holds jl_in_stackwalk.
+static BOOL jl_stackwalk_x86(bt_cursor_t *cursor, int force_frameptr) JL_NOTSAFEPOINT
+{
+    HANDLE hProcess = GetCurrentProcess();
+    if (!pStackWalkEx)
+        return StackWalk64(IMAGE_FILE_MACHINE_I386, hProcess, hMainThread,
+                           (LPSTACKFRAME64)&cursor->stackframe, &cursor->context, NULL,
+                           JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
+    if (force_frameptr) {
+        STACKFRAME_EX frame = cursor->stackframe;
+        CONTEXT context = cursor->context;
+        if (pStackWalkEx(IMAGE_FILE_MACHINE_I386, hProcess, hMainThread, &cursor->stackframe,
+                         &cursor->context, NULL, JuliaFunctionTableAccess64,
+                         JuliaGetModuleBase64, NULL, JL_SYM_STKWALK_FORCE_FRAMEPTR)) {
+            DWORD64 pc = cursor->stackframe.AddrPC.Offset;
+            if (pc != 0 && cursor->stackframe.AddrStack.Offset > frame.AddrStack.Offset &&
+                JuliaGetModuleBase64(hProcess, pc - 1) != 0)
+                return TRUE;
+        }
+        cursor->stackframe = frame;
+        cursor->context = context;
+    }
+    return pStackWalkEx(IMAGE_FILE_MACHINE_I386, hProcess, hMainThread, &cursor->stackframe,
+                        &cursor->context, NULL, JuliaFunctionTableAccess64,
+                        JuliaGetModuleBase64, NULL, JL_SYM_STKWALK_DEFAULT);
+}
+#endif
+
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context, int from_signal_handler)
 {
     int result;
@@ -690,14 +774,14 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context, int from_sign
     cursor->stackframe.AddrPC.Mode = AddrModeFlat;
     cursor->stackframe.AddrStack.Mode = AddrModeFlat;
     cursor->stackframe.AddrFrame.Mode = AddrModeFlat;
+    cursor->stackframe.StackFrameSize = sizeof(cursor->stackframe);
+    cursor->stackframe.InlineFrameContext = INLINE_FRAME_CONTEXT_IGNORE;
     cursor->context = *Context;
     _Atomic(int) *abort_ptr;
     if (!profile_abort_window_open(&abort_ptr))
         return 0;
     uv_mutex_lock(&jl_in_stackwalk);
-    result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
-            &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64,
-            JuliaGetModuleBase64, NULL);
+    result = jl_stackwalk_x86(cursor, 0);
     uv_mutex_unlock(&jl_in_stackwalk);
     if (!profile_abort_window_close(abort_ptr))
         return 0;
@@ -740,8 +824,8 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
     if (!profile_abort_window_open(&abort_ptr))
         return 0;
     uv_mutex_lock(&jl_in_stackwalk);
-    BOOL result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
-        &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
+    // A sample can land in a prologue, where EBP is still the caller's.
+    BOOL result = jl_stackwalk_x86(cursor, !from_signal_handler);
     uv_mutex_unlock(&jl_in_stackwalk);
     if (!profile_abort_window_close(abort_ptr))
         return 0;
@@ -908,6 +992,8 @@ static void jl_safe_fprint_codeloc(ios_t *s, const char* func_name, const char* 
     }
 }
 
+static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *func, size_t ip, int inlined) JL_NOTSAFEPOINT;
+
 // Print function, file and line containing native instruction pointer `ip` by
 // looking up debug info. Prints multiple such frames when `ip` points to
 // inlined code.
@@ -919,6 +1005,26 @@ void jl_fprint_native_codeloc(ios_t *s, uintptr_t ip) JL_NOTSAFEPOINT
     jl_frame_t *frames = NULL;
     int n = jl_getFunctionInfo(&frames, ip, 0, 0);
     int i;
+
+    // Like StackTraces.lookup: when DWARF gives a statement index for the outermost
+    // frame, rebuild the inlined frames from the CodeInstance debuginfo, since image
+    // code may have no DWARF inline scopes.
+    jl_debuginfo_t *di = NULL;
+    jl_frame_t *outer = &frames[n - 1];
+    if (outer->func_name && !outer->fromC && outer->pc > 0 && outer->ci)
+        di = jl_atomic_load_relaxed(&outer->ci->debuginfo);
+    if (di && jl_is_debuginfo(di)) {
+        jl_value_t *def = outer->ci->def;
+        if (jl_is_abioverride(def))
+            def = (jl_value_t*)((jl_abi_override_t*)def)->def;
+        jl_fprint_debugloc(s, di, def, outer->pc, 0);
+        for (i = 0; i < n; i++) {
+            free(frames[i].func_name);
+            free(frames[i].file_name);
+        }
+        free(frames);
+        return;
+    }
 
     for (i = 0; i < n; i++) {
         jl_frame_t frame = frames[i];
@@ -978,7 +1084,7 @@ static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *
     }
     intptr_t ip2 = stmt.loc;
     if (ip2 >= 0 && ip > 0 && jl_is_debuginfo(debuginfo->linetable)) {
-        jl_fprint_debugloc(s, (jl_debuginfo_t*)debuginfo->linetable, func, ip2, 0);
+        jl_fprint_debugloc(s, (jl_debuginfo_t*)debuginfo->linetable, func, ip2, inlined);
     }
     else {
         if (ip2 < 0) // set broken debug info to ignored
@@ -1295,6 +1401,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     // c->SegGS[0] = _ctx->Frame;
     c->Rax = val;
     c->Rsp += sizeof(void*);
+    // the interrupted code may have set the direction flag, which C code expects clear
+    c->EFlags &= ~0x400;
     assert(c->Rsp % 16 == 0);
     return 1;
     #elif defined(_CPU_X86_)
@@ -1308,6 +1416,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     // c->FloatSave.ControlWord = _ctx->FpCsr;
     c->Eax = val;
     c->Esp += sizeof(void*);
+    // the interrupted code may have set the direction flag, which C code expects clear
+    c->EFlags &= ~0x400;
     // Scrub the interrupted x87 state to all-registers-empty (see the
     // linux i686 branch): the resumed code expects the function-boundary
     // FPU state. Both the legacy FNSAVE area and the FXSAVE area (used by
@@ -1346,6 +1456,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->gregs[REG_ESP] = jl_ptr_demangle(mc->gregs[REG_ESP]);
     mc->gregs[REG_EIP] = jl_ptr_demangle(mc->gregs[REG_EIP]);
     mc->gregs[REG_EAX] = val;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    mc->gregs[REG_EFL] &= ~0x400;
     // The simulated longjmp resumes code that expects the i386 ABI's
     // function-boundary FPU state (an empty x87 register stack), but the
     // kernel will restore the *interrupted* state - possibly mid-computation
@@ -1374,6 +1486,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->gregs[REG_RSP] = jl_ptr_demangle(mc->gregs[REG_RSP]);
     mc->gregs[REG_RIP] = jl_ptr_demangle(mc->gregs[REG_RIP]);
     mc->gregs[REG_RAX] = val;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    mc->gregs[REG_EFL] &= ~0x400;
     return valid_longjmp_target(mc->gregs[REG_RSP], mc->gregs[REG_RIP]);
     #elif defined(_CPU_ARM_)
     // https://github.com/bminor/glibc/blame/master/sysdeps/arm/__longjmp.S
@@ -1491,6 +1605,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->__rsp = _OS_PTR_UNMUNGE(mc->__rsp);
     mc->__rip = _OS_PTR_UNMUNGE(mc->__rip);
     mc->__rax = val;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    mc->__rflags &= ~0x400;
     assert(mc->__rsp % 16 == 0);
     return 1;
     #elif defined(_CPU_AARCH64_)
@@ -1550,6 +1666,8 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->mc_r15 = ((long*)mctx)[7];
     mc->mc_rax = val;
     mc->mc_rsp += sizeof(void*);
+    // the interrupted code may have set the direction flag, which C code expects clear
+    mc->mc_rflags &= ~0x400;
     assert(mc->mc_rsp % 16 == 0);
     return 1;
     #elif defined(_CPU_AARCH64_)

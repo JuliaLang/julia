@@ -494,6 +494,27 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     Marks the end of the a loop. Contains metadata that is passed to `LowerSimdLoop` to either mark
     the inner loop of `@simd` expression, or to propagate information to LLVM loop passes.
 
+  * `gc_preserve_begin`
+
+    Part of the implementation of [`GC.@preserve`](@ref). The arguments are values to keep rooted
+    (alive) until the matching `gc_preserve_end`. Yields a token which is consumed by
+    `gc_preserve_end`. See also [Keeping values alive in the absence of uses](@ref).
+
+  * `gc_preserve_end`
+
+    Ends the region started by a `gc_preserve_begin`. `args[1]` is the token from the associated
+    `gc_preserve_begin`.
+
+  * `aliasscope`
+
+    Part of the implementation of `Base.Experimental.@aliasscope`. Has no arguments. Starts a region
+    (ended by the matching `popaliasscope`) in which the compiler may assume that `Const` arrays are
+    not modified through stores within the region. Regions may be nested.
+
+  * `popaliasscope`
+
+    Ends the region started by the innermost `aliasscope`. Has no arguments.
+
   * `copyast`
 
     Part of the implementation of quasi-quote. The argument is a surface syntax AST that is simply
@@ -737,7 +758,6 @@ A (usually temporary) container for holding lowered (and possibly inferred) sour
       * 0x02 - assigned (only false if there are *no* assignment statements with this var on the left)
       * 0x08 - used (if there is any read or write of the slot)
       * 0x10 - statically assigned once
-      * 0x20 - might be used before assigned. This flag is only valid after type inference.
 
   * `ssavaluetypes`
 

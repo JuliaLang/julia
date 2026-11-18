@@ -43,6 +43,9 @@ the combined range.
 See also [`AnnotatedChar`](@ref), [`annotatedstring`](@ref),
 [`annotations`](@ref), and [`annotate!`](@ref).
 
+!!! compat "Julia 1.11"
+    `AnnotatedString` requires at least Julia 1.11.
+
 # Constructors
 
 ```julia
@@ -77,6 +80,9 @@ More specifically, this is a simple wrapper around any other
 
 See also [`AnnotatedString`](@ref), [`annotatedstring`](@ref), `annotations`,
 `annotate!`.
+
+!!! compat "Julia 1.11"
+    `AnnotatedChar` requires at least Julia 1.11.
 
 # Constructors
 
@@ -259,6 +265,9 @@ present (in the form of [`AnnotatedString`](@ref) or [`AnnotatedChar`](@ref) val
 
 See also [`AnnotatedString`](@ref), [`AnnotatedChar`](@ref).
 
+!!! compat "Julia 1.11"
+    `annotatedstring` requires at least Julia 1.11.
+
 ## Examples
 
 ```jldoctest; setup=:(using Base: AnnotatedString, annotatedstring)
@@ -269,13 +278,19 @@ julia> annotatedstring(AnnotatedString("annotated", [(1:9, :label, 1)]), ", and 
 "annotated, and unannotated"
 ```
 """
-function annotatedstring(xs...)
-    isempty(xs) && return AnnotatedString("")
-    size = mapreduce(_str_sizehint, +, xs)
+function annotatedstring(@nospecialize(xs...))
+    # read the arguments with builtins, so no generic function specializes on their types
+    n = nfields(xs)
+    n == 0 && return AnnotatedString("")
+    size = 0
+    for i in 1:n
+        size += _str_sizehint(getfield(xs, i))
+    end
     buf = IOBuffer(sizehint=size)
     s = IOContext(buf, :color => true)
     annotations = Vector{RegionAnnotation}()
-    for x in xs
+    for i in 1:n
+        x = getfield(xs, i)
         size = filesize(s.io)
         if x isa AnnotatedString
             for annot in x.annotations
@@ -306,6 +321,7 @@ function annotatedstring(xs...)
 end
 
 annotatedstring(s::AnnotatedString) = s
+annotatedstring(s::String) = AnnotatedString(s)
 annotatedstring(c::AnnotatedChar) =
     AnnotatedString(string(c.char), [(region=1:ncodeunits(c), annot...) for annot in c.annotations])
 
@@ -378,6 +394,10 @@ To remove existing `label` annotations, use a value of `nothing`.
 
 The order in which annotations are applied to `str` is semantically meaningful,
 as described in [`AnnotatedString`](@ref).
+
+!!! compat "Julia 1.12"
+    `annotate!` requires at least Julia 1.11. Passing `label` and `value` as separate
+    arguments requires Julia 1.12; Julia 1.11 takes a `label => value` pair instead.
 """
 annotate!(s::AnnotatedString, range::UnitRange{Int}, label::Symbol, @nospecialize(val::Any)) =
     (_annotate!(s.annotations, range, label, val); s)
@@ -414,6 +434,9 @@ In accordance with the semantics documented in [`AnnotatedString`](@ref), the
 order of annotations returned matches the order in which they were applied.
 
 See also [`annotate!`](@ref).
+
+!!! compat "Julia 1.11"
+    `annotations` requires at least Julia 1.11.
 """
 annotations(s::AnnotatedString) = s.annotations
 

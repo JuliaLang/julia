@@ -112,8 +112,11 @@ function signature!(tv::Vector{Any}, expr::Expr)
         if isexpr(expr.args[1], :curly) && isempty(tv)
             append!(tv, mapany(tvar, (expr.args[1]::Expr).args[2:end]))
         end
+        allargs = sig.args[end]
         for i = length(tv):-1:1
-            push!(sig.args, :(Tuple{$((tv[i]::Expr).args[1])}))
+            # keep type parameters that no argument uses, e.g. in `S{T}(x) where T`, in the signature (#21016)
+            T = (tv[i]::Expr).args[1]
+            occurs(T, allargs) || push!(sig.args, :(Tuple{$T}))
         end
         for i = length(tv):-1:1
             sig = Expr(:where, sig, tv[i])
@@ -145,6 +148,7 @@ argtype(@nospecialize other) = :Any
 
 tvar(x::Expr)   = x
 tvar(s::Symbol) = :($s <: Any)
+occurs(s, @nospecialize ex) = ex === s || (ex isa Expr && any(a -> occurs(s, a), ex.args))
 
 # Docsystem types.
 # ================

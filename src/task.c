@@ -515,6 +515,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt) JL_CANSAFEPOINT
     jl_set_pgcstack(&t->gcstack);
     jl_signal_fence();
     lastt->ptls = NULL;
+    lastt->fpctrl = jl_fpctrl_get();
 #ifdef MIGRATE_TASKS
     ptls->previous_task = lastt;
 #endif
@@ -713,6 +714,7 @@ JL_DLLEXPORT void jl_switch(void) JL_CANSAFEPOINT_ENTER_LEAVE
            0 == ptls->finalizers_inhibited);
     ptls->finalizers_inhibited = finalizers_inhibited;
     jl_timing_block_task_enter(ct, ptls, blk); (void)blk;
+    jl_fpctrl_restore(ct->fpctrl);
 
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
@@ -786,12 +788,20 @@ JL_DLLEXPORT JL_NORETURN void JL_NO_SAFEPOINT_ANALYSIS jl_no_exc_handler(jl_valu
 #define pop_timings_stack() /* Nothing */
 #endif
 
-static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED) JL_CANSAFEPOINT_ENTER
+// The handler restores the gc state it saved, so a throw may come from a gc-safe region, but
+// the backtrace and the exception stack must be written in gc-unsafe state. Switching only from
+// another state keeps this from being a safepoint in the case that the exception may be unrooted.
+static inline void throw_enter_unsafe(jl_ptls_t ptls) JL_NO_SAFEPOINT_ANALYSIS
+{
+    if (jl_atomic_load_relaxed(&ptls->gc_state) != JL_GC_STATE_UNSAFE)
+        jl_gc_unsafe_enter(ptls);
+}
+
+static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED) JL_CANSAFEPOINT
 {
     JL_GC_PUSH1(&exception);
     jl_ptls_t ptls = ct->ptls;
     ptls->io_wait = 0;
-    jl_gc_unsafe_enter(ptls);
     if (exception) {
         /* The temporary ptls->bt_data is rooted by special purpose code in the\
            GC. This exists only for the purpose of preserving bt_data until we
@@ -826,6 +836,7 @@ JL_DLLEXPORT void JL_NO_SAFEPOINT_ANALYSIS jl_throw(jl_value_t *e JL_MAYBE_UNROO
     }
     if (ct == NULL) // During startup, or on other threads
         jl_no_exc_handler(e, ct);
+    throw_enter_unsafe(ct->ptls);
     record_backtrace(ct->ptls, 1);
     throw_internal(ct, e);
 }
@@ -834,6 +845,7 @@ JL_DLLEXPORT void JL_NO_SAFEPOINT_ANALYSIS jl_throw(jl_value_t *e JL_MAYBE_UNROO
 JL_DLLEXPORT void JL_NO_SAFEPOINT_ANALYSIS jl_rethrow(void)
 {
     jl_task_t *ct = jl_current_task;
+    throw_enter_unsafe(ct->ptls);
     jl_excstack_t *excstack = ct->excstack;
     if (!excstack || excstack->top == 0)
         jl_error("rethrow() not allowed outside a catch block");
@@ -845,12 +857,13 @@ JL_DLLEXPORT void JL_NO_SAFEPOINT_ANALYSIS jl_rethrow_other(jl_value_t *e JL_MAY
     // TODO: Should uses of `rethrow(exc)` be replaced with a normal throw, now
     // that exception stacks allow root cause analysis?
     jl_task_t *ct = jl_current_task;
+    throw_enter_unsafe(ct->ptls);
+    JL_GC_PROMISE_ROOTED(e); // the caller roots e if it was gc-safe, and there was no safepoint otherwise
     jl_excstack_t *excstack = ct->excstack;
     if (!excstack || excstack->top == 0)
         jl_error("rethrow(exc) not allowed outside a catch block");
     // overwrite exception on top of stack. see jl_excstack_exception
     jl_excstack_raw(excstack)[excstack->top-1].jlvalue = e;
-    JL_GC_PROMISE_ROOTED(e);
     throw_internal(ct, NULL);
 }
 
@@ -1126,6 +1139,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->threadpoolid = ct->threadpoolid;
     t->ptls = NULL;
     t->world_age = ct->world_age;
+    // a new task inherits the floating-point control state of its parent
+    t->fpctrl = jl_fpctrl_get();
     t->reentrant_timing = 0;
     t->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
     jl_atomic_store_relaxed(&t->first_enqueued_at, 0);
@@ -1244,6 +1259,7 @@ CFI_NORETURN
         assert(jl_atomic_load_relaxed(&ct->last_started_running_at) == 0);
         jl_atomic_store_relaxed(&ct->last_started_running_at, jl_hrtime());
     }
+    jl_fpctrl_restore(ct->fpctrl);
     JL_PROBE_RT_START_TASK(ct);
     jl_timing_block_task_enter(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
@@ -1452,83 +1468,16 @@ JL_NO_ASAN static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *
     tsan_switch_to_ctx(t);
     jl_start_fiber_set(t); // doesn't return
 }
+// Defined in arch/<arch>/start_fiber.S
+extern JL_NORETURN void jl_start_fiber_on_stack(char *stack_top, void (*fn)(void) JL_CANSAFEPOINT);
+
 JL_NO_ASAN static void NOINLINE jl_start_fiber_set(jl_ucontext_t *t)
 {
 CFI_NORETURN
     char *stk = (char*)t->stkbuf;
     size_t ssize = t->bufsz;
-    uintptr_t fn = (uintptr_t)&start_task;
     stk += ssize;
-#ifdef _CPU_X86_64_
-    asm volatile (
-        " movq %0, %%rsp;\n"
-        " movq %1, %%rax;\n"
-        " xorq %%rbp, %%rbp;\n"
-        " push %%rbp;\n" // instead of RSP
-        " jmpq *%%rax;\n" // call `fn` with fake stack frame
-        " ud2"
-        : : "r"(stk), "r"(fn) : "memory" );
-#elif defined(_CPU_X86_)
-    asm volatile (
-        " movl %0, %%esp;\n"
-        " movl %1, %%eax;\n"
-        " xorl %%ebp, %%ebp;\n"
-        " push %%ebp;\n" // instead of ESP
-        " jmpl *%%eax;\n" // call `fn` with fake stack frame
-        " ud2"
-        : : "r"(stk), "r"(fn) : "memory" );
-#elif defined(_CPU_AARCH64_)
-    asm volatile(
-        " mov sp, %0;\n"
-        " mov x29, xzr;\n" // Clear frame pointer (x29)
-        " mov x30, xzr;\n" // and link register (x30) to terminate unwinder.
-        " br %1;\n" // call `fn` with fake stack frame
-        " brk #0x1" // abort
-        : : "r" (stk), "r"(fn) : "memory" );
-#elif defined(_CPU_ARM_)
-    // A "i" constraint on `&start_task` works only on clang and not on GCC.
-    asm(" mov sp, %0;\n"
-        " mov lr, #0;\n" // Clear link register (lr)
-        " mov fp, #0;\n" // and frame pointer (fp) to terminate unwinder.
-        " bx %1;\n" // call `fn` with fake stack frame.  While `bx` can change
-                    // the processor mode to thumb, this will never happen
-                    // because all our addresses are word-aligned.
-        " udf #0" // abort
-        : : "r" (stk), "r"(fn) : "memory" );
-#elif defined(_CPU_RISCV64_)
-    asm volatile(
-        " mv sp, %0;\n"
-        " mv ra, zero;\n" // Clear return address register
-        " mv fp, zero;\n" // Clear frame pointer
-        " jr %1;\n" // call `fn` with fake stack frame
-        " ebreak" // abort
-        : : "r"(stk), "r"(fn) : "memory" );
-#elif defined(_CPU_PPC64_)
-    // N.B.: There is two iterations of the PPC64 ABI.
-    // v2 is current and used here. Make sure you have the
-    // correct version of the ABI reference when working on this code.
-    asm volatile(
-        // Move stack (-0x30 for initial stack frame) to stack pointer
-        " addi 1, %0, -0x30;\n"
-        // Build stack frame
-        // Skip local variable save area
-        " std 2, 0x28(1);\n" // Save TOC
-        // Clear link editor/compiler words
-        " std 0, 0x20(1);\n"
-        " std 0, 0x18(1);\n"
-        // Clear LR/CR save area
-        " std 0, 0x10(1);\n"
-        " std 0, 0x8(1);\n"
-        " std 0, 0x0(1); \n" // Clear back link to terminate unwinder
-        " mtlr 0; \n"        // Clear link register
-        " mr 12, %1; \n"     // Set up target global entry point
-        " mtctr 12; \n"      // Move jump target to counter register
-        " bctr; \n"          // branch to counter (lr update disabled)
-        " trap; \n"
-        : : "r"(stk), "r"(fn) : "memory");
-#else
-#error JL_TASK_SWITCH_ASM defined but not implemented for this CPU type
-#endif
+    jl_start_fiber_on_stack(stk, &start_task);
     __builtin_unreachable();
 }
 #endif
@@ -1597,6 +1546,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->sticky = 1;
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
+    ct->fpctrl = 0;
     ct->reentrant_timing = 0;
     jl_atomic_store_relaxed(&ct->running_time_ns, 0);
     jl_atomic_store_relaxed(&ct->finished_at, 0);

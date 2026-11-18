@@ -78,21 +78,19 @@ runtest harness).
 
 ## Contributing to the standard library
 
-The standard library (stdlib) packages are baked into the Julia system image.
-When running the ordinary test workflow on the stdlib packages, the system image
-version overrides the version you are developing.
-To test stdlib packages, you can do the following steps:
+The standard library (stdlib) packages whose source lives in the `stdlib/` directory
+of this repository are developed together with Julia itself, and may use features
+that only exist on the current development version (`master`). Changes to them
+should therefore be tested with a Julia built from the same checkout, not with a
+released version of Julia. For example, after editing `stdlib/Unicode`, run
 
-1. Edit the UUID field of the `Project.toml` in the stdlib package
-2. Change the current directory to the directory of the stdlib you are developing
-3. Start julia with `julia --project=.`
-4. You can now test the package by running `pkg> test` in Pkg mode.
+    make test-Unicode
 
-Because you changed the UUID, the package manager treats the stdlib package as
-different from the one in the system image, and the system image version will
-not override the package.
+which rebuilds Julia (including the stdlib) and then runs the `Unicode` tests.
 
-Be sure to change the UUID value back before making the pull request.
+Some stdlibs, such as `Pkg` and `SparseArrays`, are developed in their own repositories,
+and this repository only records which commit to use in a `stdlib/<name>.version` file.
+Changes to those should be made in their own repositories.
 
 ### News-worthy changes
 

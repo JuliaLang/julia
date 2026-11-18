@@ -43,7 +43,11 @@ Duplicate the file descriptor `src` so that the duplicate refers to the same OS
 resource (e.g. a file or socket). A `target` file descriptor may optionally
 be passed to use for the new duplicate.
 """
-dup(x::RawFD) = ccall((@static Sys.iswindows() ? :_dup : :dup), RawFD, (RawFD,), x)
+function dup(x::RawFD)
+    fd = ccall((@static Sys.iswindows() ? :_dup : :dup), RawFD, (RawFD,), x)
+    systemerror("dup", fd == RawFD(-1))
+    return fd
+end
 dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
     ccall((@static Sys.iswindows() ? :_dup2 : :dup2), Int32,
                 (RawFD, RawFD), src, target))

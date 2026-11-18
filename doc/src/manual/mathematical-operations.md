@@ -366,7 +366,7 @@ are true where the corresponding elements of `A` are between 0 and 1.
 
 Note the evaluation behavior of chained comparisons:
 
-```jldoctest
+```julia-repl
 julia> v(x) = (println(x); x)
 v (generic function with 1 method)
 
@@ -607,6 +607,10 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`ceil(T, x)`](@ref)  | round `x` towards `+Inf`         | `T`         |
 | [`trunc(x)`](@ref)    | round `x` towards zero           | `typeof(x)` |
 | [`trunc(T, x)`](@ref) | round `x` towards zero           | `T`         |
+
+By default, `round` rounds ties (values halfway between two integers) to the nearest even integer
+(see [`RoundNearest`](@ref)), so `round(2.5) == 2.0` and `round(3.5) == 4.0`. Use
+`round(x, RoundNearestTiesAway)` to round ties away from zero instead.
 
 ### Division functions
 

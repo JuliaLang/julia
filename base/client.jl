@@ -31,63 +31,135 @@ answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answ
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
-function repl_cmd(cmd::AbstractCmd, out)
-    if !(cmd isa Cmd)
-        # Pipelines and redirects: run directly without shell wrapping.
-        try
-            run(ignorestatus(cmd))
-        catch
-            lasterr = current_exceptions()
-            lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
-            invokelatest(display_error, lasterr)
-        end
-        return nothing
+# Run a command typed in REPL shell mode and return whether it succeeded. Commands run
+# directly, never through a system shell. `cd`, `export` and `unset` are handled here, since
+# they change the state of the Julia process, and `cd` prints the new directory to `out`. An
+# error running a command is displayed rather than thrown, but other errors, such as one from
+# `cd`, are thrown.
+function _repl_cmd(cmd::AbstractCmd, out)
+    if cmd isa Cmd
+        isempty(cmd.exec) && throw(ArgumentError("no cmd to execute"))
+        name = cmd.exec[1]
+        name == "cd" && return _repl_cd(cmd, out)
+        name == "export" && return _repl_export(cmd, out)
+        name == "unset" && return _repl_unset(cmd)
     end
-    if isempty(cmd.exec)
-        throw(ArgumentError("no cmd to execute"))
-    elseif cmd.exec[1] == "cd"
-        if length(cmd.exec) > 2
-            throw(ArgumentError("cd method only takes one argument"))
-        elseif length(cmd.exec) == 2
-            dir = cmd.exec[2]
-            if dir == "-"
-                if !haskey(ENV, "OLDPWD")
-                    error("cd: OLDPWD not set")
-                end
-                dir = ENV["OLDPWD"]
-            end
-        else
-            dir = homedir()
-        end
-        try
-            ENV["OLDPWD"] = pwd()
-        catch ex
-            ex isa IOError || rethrow()
-            # if current dir has been deleted, then pwd() will throw an IOError: pwd(): no such file or directory (ENOENT)
-            delete!(ENV, "OLDPWD")
-        end
-        cd(dir)
-        println(out, pwd())
-    else
-        if !Sys.iswindows()
-            shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
-            shell_escape_cmd = shell_escape_posixly(cmd)
-            cmd = `$shell -c $shell_escape_cmd`
-        end
-        try
-            run(ignorestatus(cmd))
-        catch
-            # Julia throws an exception if it can't find the cmd (which may be the shell itself), but the stack trace isn't useful
-            lasterr = current_exceptions()
-            lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
-            invokelatest(display_error, lasterr)
-        end
+    try
+        return _succeeded(run(ignorestatus(cmd)))
+    catch
+        # Julia throws an exception if it can't find the program, but the stack trace isn't useful
+        _display_repl_cmd_error()
     end
-    nothing
+    return false
 end
 
-repl_cmd(@nospecialize(cmd), out) =
+function _repl_cd(cmd::Cmd, out)
+    if length(cmd.exec) > 2
+        throw(ArgumentError("cd method only takes one argument"))
+    elseif length(cmd.exec) == 2
+        dir = cmd.exec[2]
+        if dir == "-"
+            if !haskey(ENV, "OLDPWD")
+                error("cd: OLDPWD not set")
+            end
+            dir = ENV["OLDPWD"]
+        end
+    else
+        dir = homedir()
+    end
+    try
+        ENV["OLDPWD"] = pwd()
+    catch ex
+        ex isa IOError || rethrow()
+        # if current dir has been deleted, then pwd() will throw an IOError: pwd(): no such file or directory (ENOENT)
+        delete!(ENV, "OLDPWD")
+    end
+    cd(dir)
+    println(out, pwd())
+    return true
+end
+
+# Whether `s` is a valid environment variable name for `export` and `unset`, as in sh.
+_is_env_name(s::AbstractString) =
+    !isempty(s) && !isdigit(s[1]) && all(c -> isascii(c) && (isletter(c) || isdigit(c) || c == '_'), s)
+
+# `export NAME=value ...` sets environment variables, which every later command inherits;
+# `export NAME` does nothing, since all of Julia's environment variables are exported; and
+# `export` alone lists the environment.
+function _repl_export(cmd::Cmd, out)
+    if length(cmd.exec) == 1
+        for (name, value) in sort!(collect(ENV), by=first)
+            println(out, name, '=', value)
+        end
+        return true
+    end
+    for arg in cmd.exec[2:end]
+        i = findfirst('=', arg)
+        name = i === nothing ? arg : arg[1:prevind(arg, i)]
+        _is_env_name(name) || error("export: `$arg` is not a valid environment variable name")
+        i === nothing || (ENV[name] = arg[nextind(arg, i):end])
+    end
+    return true
+end
+
+# `unset NAME ...` removes environment variables.
+function _repl_unset(cmd::Cmd)
+    for name in cmd.exec[2:end]
+        _is_env_name(name) || error("unset: `$name` is not a valid environment variable name")
+        delete!(ENV, name)
+    end
+    return true
+end
+
+_repl_cmd(@nospecialize(cmd), out) =
     throw(ArgumentError("repl_cmd: expected an `AbstractCmd`, got $(typeof(cmd))"))
+
+# Whether a process, or the last process of a pipeline, exited successfully, as in a shell.
+_succeeded(p::Process) = success(p)
+_succeeded(p::ProcessChain) = success(p.processes[end])
+
+# Display the current exception without its backtrace, which is not useful to the user.
+function _display_repl_cmd_error()
+    lasterr = current_exceptions()
+    lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
+    invokelatest(display_error, lasterr)
+    return nothing
+end
+
+repl_cmd(cmd, out) = (_repl_cmd(cmd, out); nothing)
+
+# Build the command that `f` returns and run it as `_repl_cmd` does, for a command in a
+# sequence typed in REPL shell mode. Returns whether it succeeded; any error, including one
+# building the command, is displayed and counts as a failure.
+function _repl_cmd_step(f, out)
+    try
+        return _repl_cmd(f(), out)
+    catch
+        _display_repl_cmd_error()
+        return false
+    end
+end
+
+# The expression that REPL shell mode evaluates for the line `line`, writing the output of
+# `cd` to `out`. Commands joined by `&&`, `||` and `;` run as in a shell: `a && b` runs `b`
+# only if `a` succeeds, `a || b` only if it fails, and `a; b` in any case, where `&&` and `||`
+# have equal precedence and group to the left. Each command is built just before it runs, so
+# it sees the effects of the commands before it, such as a `cd`.
+function shell_mode_expr(line::AbstractString, out)
+    commands = shell_parse_sequence(line)
+    built(ex) = Meta.isexpr(ex, :tuple) ? Expr(:call, GlobalRef(Base, :cmd_gen), ex) : ex
+    if length(commands) == 1
+        return Expr(:call, GlobalRef(Base, :repl_cmd), built(commands[1].second), out)
+    end
+    ok = gensym(:ok)
+    body = Any[]
+    for (op, ex) in commands
+        step = Expr(:call, GlobalRef(Base, :_repl_cmd_step), Expr(:->, Expr(:tuple), built(ex)), out)
+        push!(body, op === :and ? :($ok = $ok && $step) :
+                    op === :or  ? :($ok = $ok || $step) : :($ok = $step))
+    end
+    return Expr(:let, Expr(:block), Expr(:block, body..., nothing))
+end
 
 # deprecated function--preserved for DocTests.jl
 function ip_matches_func(ip, func::Symbol)
@@ -109,6 +181,20 @@ is_driver_entry(frame) = !frame.from_c &&
     (startswith(String(frame.func), "__repl_entry") ||
      startswith(String(frame.func), "__script_entry"))
 
+is_driver_exit(frame) = !frame.from_c && startswith(String(frame.func), "__script_exit")
+
+function remove_driver_spans!(bt::Vector{StackFrame}, unpaired::Bool)
+    while (exit_ind = findlast(is_driver_exit, bt)) !== nothing
+        entry_ind = findprev(is_driver_entry, bt, exit_ind)
+        if entry_ind === nothing
+            unpaired && deleteat!(bt, 1:exit_ind)
+            break
+        end
+        deleteat!(bt, entry_ind:exit_ind)
+    end
+    return bt
+end
+
 # `eval`/`include` machinery a driver entry runs user code through; directly
 # above the cut these frames cannot belong to user code
 function is_driver_machinery(frame)
@@ -121,9 +207,15 @@ end
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
         bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
+        remove_driver_spans!(bt, true)
         # remove REPL/driver frames from interactive printing
         eval_ind = findlast(is_driver_entry, bt)
         if eval_ind !== nothing
+            while eval_ind > 1 && bt[eval_ind-1].inlined &&
+                    bt[eval_ind-1].func === Symbol("macro expansion") &&
+                    bt[eval_ind-1].pointer == bt[eval_ind].pointer
+                eval_ind -= 1
+            end
             deleteat!(bt, eval_ind:length(bt))
             while !isempty(bt) && is_driver_machinery(bt[end])
                 pop!(bt)
@@ -359,6 +451,13 @@ function exec_options(opts)
     return repl
 end
 
+function uninit_exec_options()
+    global PROGRAM_FILE = ""
+    global have_color = nothing
+    global is_interactive = false
+    nothing
+end
+
 function _global_julia_startup_file()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
     # If it is not found, then continue on to the relative path based on Sys.BINDIR
@@ -492,6 +591,120 @@ function run_fallback_repl(interactive::Bool)
     nothing
 end
 
+function repl_banner(io::IO = stdout; short = false)
+    if GIT_VERSION_INFO.tagged_commit
+        commit_string = TAGGED_RELEASE_BANNER
+    elseif isempty(GIT_VERSION_INFO.commit)
+        commit_string = ""
+    else
+        days = Int(floor((ccall(:jl_clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
+        days = max(0, days)
+        unit = days == 1 ? "day" : "days"
+        distance = GIT_VERSION_INFO.fork_master_distance
+        commit = GIT_VERSION_INFO.commit_short
+
+        if distance == 0
+            commit_string = "Commit $(commit) ($(days) $(unit) old master)"
+        else
+            branch = GIT_VERSION_INFO.branch
+            commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
+        end
+    end
+
+    version = version_with_build_variant()
+    commit_date = isempty(GIT_VERSION_INFO.date_string) ? "" : " ($(split(GIT_VERSION_INFO.date_string)[1]))"
+
+    if get(io, :color, false)::Bool
+        c = text_colors
+        tx = c[:normal] # text
+        jl = c[:normal] # julia
+        d1 = c[:bold] * c[:blue]    # first dot
+        d2 = c[:bold] * c[:red]     # second dot
+        d3 = c[:bold] * c[:green]   # third dot
+        d4 = c[:bold] * c[:magenta] # fourth dot
+
+        if short
+            print(io,"""
+              $(d3)o$(tx)  | Version $(version)$(commit_date)
+             $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
+            """)
+        else
+            print(io,"""               $(d3)_$(tx)
+               $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
+              $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
+               $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
+              $(jl)| | | | | | |/ _` |$(tx)  |
+              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(version)$(commit_date)
+             $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
+            $(jl)|__/$(tx)                   |
+
+            """)
+        end
+    else
+        if short
+            print(io,"""
+              o  |  Version $(version)$(commit_date)
+             o o |  $(commit_string)
+            """)
+        else
+            print(io,"""
+                           _
+               _       _ _(_)_     |  Documentation: https://docs.julialang.org
+              (_)     | (_) (_)    |
+               _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
+              | | | | | | |/ _` |  |
+              | | |_| | | | (_| |  |  Version $(version)$(commit_date)
+             _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
+            |__/                   |
+
+            """)
+        end
+    end
+    objcache_notice(io)
+    return nothing
+end
+
+# Warn about conditions (that the user can potentially do something about)
+# which forced the compiled-code cache off for this session.
+function objcache_notice(io::IO)
+    notice = ccall(:jl_objcache_disabled_notice, Ptr{UInt8}, ())
+    notice == C_NULL && return nothing
+    msg = "Note: The compiled-code cache is disabled: $(unsafe_string(notice)).\n\n"
+    if get(io, :color, false)::Bool
+        printstyled(io, msg; color=warn_color())
+    else
+        print(io, msg)
+    end
+    return nothing
+end
+
+# set when a placeholder prompt was drawn before the REPL stdlib loaded
+global early_prompt_shown::Bool = false
+
+# Show the banner and prompt before the REPL stdlib loads, so the session looks ready sooner.
+# Raw mode stops the terminal echoing keys typed meanwhile. The REPL reads them once it starts.
+function show_early_prompt(banner::Symbol)
+    Sys.iswindows() && return false
+    stdin isa TTY && stdout isa TTY || return false
+    get(ENV, "TERM", "dumb") == "dumb" && return false
+    # hooks registered by a startup file may change the prompt
+    isempty(repl_hooks) || return false
+    ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid}, Int32), stdin.handle, 1) == 0 || return false
+    color = get(stdout, :color, false)::Bool
+    banner == :no || repl_banner(stdout; short=banner==:short)
+    print(stdout, color ? text_colors[:green] * text_colors[:bold] * "julia> " * text_colors[:normal] : "julia> ")
+    global early_prompt_shown = true
+    return true
+end
+
+function undo_early_prompt()
+    early_prompt_shown || return
+    print(stdout, "\r\e[K")
+    ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid}, Int32), stdin.handle, 0)
+    global early_prompt_shown = false
+    nothing
+end
+
 function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::Bool)
     term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
     term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
@@ -525,7 +738,9 @@ end
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool)
     fallback_repl = parse(Bool, get(ENV, "JULIA_FALLBACK_REPL", "false"))
+    early_banner = false
     if !fallback_repl && interactive
+        early_banner = REPL_MODULE_REF[] === Base && show_early_prompt(banner)
         load_InteractiveUtils()
         REPL = REPL_MODULE_REF[]
         if REPL === Base
@@ -534,8 +749,9 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
     end
     REPL = REPL_MODULE_REF[]
     if !fallback_repl && interactive && REPL !== Base
-        invokelatest(run_std_repl, REPL, quiet, banner, history_file)
+        invokelatest(run_std_repl, REPL, quiet, early_banner ? :no : banner, history_file)
     else
+        undo_early_prompt()
         if !fallback_repl && interactive && !quiet
             @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Sys.iswindows() ? ';' : ':')
         end
@@ -563,17 +779,12 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
-const main_parser = Base.ScopedValues.ScopedValue{Any}(Base.VersionedParse(Base.VERSION_EDITION))
-function var"#_internal_julia_parse"(args...)
-    main_parser[](args...)
-end
-
 # Used for memoizing require_stdlib of these modules
 global InteractiveUtils::Module
 global Distributed::Module
 
 # weakly exposes ans and err variables to Main
-export ans, err, var"#_internal_julia_parse"
+export ans, err
 end
 
 function should_use_main_entrypoint()
@@ -649,15 +860,26 @@ function init_frontend()
     end
 end
 
+function uninit_frontend()
+    JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
+    JuliaLowering.activate!(false; freeze_world_age=false)
+    nothing
+end
+
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
     # clear any postoutput hooks that were saved in the sysimage
     empty!(Base.postoutput_hooks)
+    if generating_output(false)
+        # `__init__` does not run when writing a system image, so set up enough to run user
+        # code here, and undo it before the image is written
+        __init_build()
+        atexit(__uninit_build)
+    end
     local ret = 0
-    # `--project` has been processed at this point - latch the active project's syntax
-    # version and use it for `-L`, `argfile`, etc. If launched, the REPL will re-evaluate
-    # at each prompt.
+    # `--project` has been processed, so use its edition if specified
+    Core.set_edition(Main, edition_for_active_project(LATEST_EDITION))
     # The whole foreground execution runs as a ^C episode: a SIGINT (with
     # exit-on-sigint disabled) cancels the episode token's scope. An
     # interactive session installs its own per-evaluation episodes later
@@ -665,7 +887,7 @@ function _start()
     # standalone root, not a session child - see the `sigint_new_episode!`
     # docstring.
     sigint_tok = sigint_new_episode!()
-    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() CANCEL_TOKEN=>sigint_tok try
+    @Base.ScopedValues.with CANCEL_TOKEN=>sigint_tok try
         repl_was_requested = exec_options(JLOptions())
         if invokelatest(should_use_main_entrypoint) && !is_interactive
             main = invokelatest(getglobal, Main, :main)
@@ -713,7 +935,6 @@ function _start()
             e isa IOError || rethrow()
         end
     end
-    generating_output(false) && init_frontend()
     return ret
 end
 

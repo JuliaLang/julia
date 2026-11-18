@@ -15,11 +15,9 @@
 #include <llvm/IR/Type.h>
 
 #include "llvm-codegen-shared.h"
+#include "julia_internal.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
-
-#define STR(csym)           #csym
-#define XSTR(csym)          STR(csym)
 
 using namespace llvm;
 
@@ -31,6 +29,7 @@ JuliaPassContext::JuliaPassContext()
         pgcstack_getter(nullptr), adoptthread_func(nullptr), gcroot_flush_func(nullptr),
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), gc_loaded_func(nullptr), alloc_obj_func(nullptr),
+        alloc_memory_func(nullptr),
         typeof_func(nullptr), blackbox_func(nullptr), object_write_barrier_func(nullptr),
         field_write_barrier_p11_func(nullptr), field_write_barrier_p13_func(nullptr),
         pop_handler_noexcept_func(nullptr),
@@ -62,6 +61,7 @@ void JuliaPassContext::initFunctions(Module &M)
     field_write_barrier_p13_func = M.getFunction("julia.field_write_barrier.p13");
     object_write_barrier_func = M.getFunction("julia.object_write_barrier");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
+    alloc_memory_func = M.getFunction("julia.gc_alloc_memory");
     pop_handler_noexcept_func = M.getFunction(XSTR(jl_pop_handler_noexcept));
     call_func = M.getFunction("julia.call");
     call2_func = M.getFunction("julia.call2");
@@ -102,6 +102,16 @@ llvm::Value *JuliaPassContext::getPGCstack(llvm::Function &F) const
         }
     }
     return nullptr;
+}
+
+std::optional<size_t> JuliaPassContext::getInlineMemorySize(const CallInst *call) const
+{
+    if (!alloc_memory_func || call->getCalledOperand() != alloc_memory_func)
+        return std::nullopt;
+    auto nbytes = dyn_cast<ConstantInt>(call->getArgOperand(1));
+    if (!nbytes || !jl_genericmemory_data_inline(nbytes->getZExtValue()))
+        return std::nullopt;
+    return JL_GENERICMEMORY_INLINE_DATA_OFFSET + nbytes->getZExtValue();
 }
 
 llvm::Function *JuliaPassContext::getOrNull(
@@ -151,8 +161,8 @@ namespace jl_intrinsics {
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
         target->addFnAttrs(FnAttrs);
-        addRetAttr(target, Attribute::NoAlias);
-        addRetAttr(target, Attribute::NonNull);
+        target->addRetAttr(Attribute::NoAlias);
+        target->addRetAttr(Attribute::NonNull);
         return target;
     }
 
@@ -184,7 +194,7 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_BYTES_NAME);
-            intrinsic->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            intrinsic->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, std::nullopt));
             return addGCAllocAttributes(intrinsic);
         });
 
@@ -197,8 +207,8 @@ namespace jl_intrinsics {
                 FunctionType::get(T_pprjlvalue, {Type::getInt32Ty(ctx)}, false),
                 Function::ExternalLinkage,
                 NEW_GC_FRAME_NAME);
-            addRetAttr(intrinsic, Attribute::NoAlias);
-            addRetAttr(intrinsic, Attribute::NonNull);
+            intrinsic->addRetAttr(Attribute::NoAlias);
+            intrinsic->addRetAttr(Attribute::NonNull);
 
             return intrinsic;
         });
@@ -280,6 +290,7 @@ namespace jl_well_known {
     static const char *GC_SMALL_ALLOC_NAME = XSTR(jl_gc_small_alloc);
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
     static const char *GC_ALLOC_TYPED_NAME = XSTR(jl_gc_alloc_typed);
+    static const char *GC_ALLOC_GENERICMEMORY_NAME = XSTR(jl_alloc_genericmemory_unchecked);
     static const char *GC_BIG_ALLOC_RESET_SAFE_NAME = XSTR(jl_gc_big_alloc_reset_safe);
     static const char *GC_SMALL_ALLOC_RESET_SAFE_NAME = XSTR(jl_gc_small_alloc_reset_safe);
     static const char *GC_QUEUE_ROOT_RESET_SAFE_NAME = XSTR(jl_gc_queue_root_reset_safe);
@@ -299,7 +310,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_BIG_ALLOC_NAME);
-            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, std::nullopt));
             return addGCAllocAttributes(bigAllocFunc);
         });
 
@@ -315,7 +326,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_SMALL_ALLOC_NAME);
-            smallAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, None));
+            smallAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, std::nullopt));
             return addGCAllocAttributes(smallAllocFunc);
         });
 
@@ -349,8 +360,25 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_TYPED_NAME);
-            allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, std::nullopt));
             return addGCAllocAttributes(allocTypedFunc);
+        });
+
+    const WellKnownFunctionDescription GCAllocGenericMemory(
+        GC_ALLOC_GENERICMEMORY_NAME,
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
+            auto func = Function::Create(
+                FunctionType::get(
+                    T_prjlvalue,
+                    { PointerType::get(ctx, 0),
+                        T_size,
+                        PointerType::get(ctx, 0) }, // type
+                    false),
+                Function::ExternalLinkage,
+                GC_ALLOC_GENERICMEMORY_NAME);
+            return addGCAllocAttributes(func);
         });
 
     // Like addGCAllocAttributes, but without the narrowed memory effects:
@@ -364,8 +392,8 @@ namespace jl_well_known {
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
         target->addFnAttrs(FnAttrs);
-        addRetAttr(target, Attribute::NoAlias);
-        addRetAttr(target, Attribute::NonNull);
+        target->addRetAttr(Attribute::NoAlias);
+        target->addRetAttr(Attribute::NonNull);
         return target;
     }
 
@@ -381,7 +409,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_BIG_ALLOC_RESET_SAFE_NAME);
-            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, std::nullopt));
             return addResetSafeGCAllocAttributes(bigAllocFunc);
         });
 
@@ -397,7 +425,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_SMALL_ALLOC_RESET_SAFE_NAME);
-            smallAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, None));
+            smallAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, std::nullopt));
             return addResetSafeGCAllocAttributes(smallAllocFunc);
         });
 
@@ -430,7 +458,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_TYPED_RESET_SAFE_NAME);
-            allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, std::nullopt));
             return addResetSafeGCAllocAttributes(allocTypedFunc);
         });
 }

@@ -260,7 +260,10 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution
         return false;
     ++TotalMarkedLoops;
     LLVMContext &Context = L.getHeader()->getContext();
-    LoopID = MDNode::get(Context, MDs);
+    // n.b. distinct: a uniqued node would be shared with any other `!{null}` of the
+    // context (e.g. the empty type array of a DISubroutineType), which the
+    // self-reference below would then corrupt
+    LoopID = MDNode::getDistinct(Context, MDs);
     // Set operand 0 to refer to the loop id itself
     LoopID->replaceOperandWith(0, LoopID);
     L.setLoopID(LoopID);

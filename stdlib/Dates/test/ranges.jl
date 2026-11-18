@@ -597,6 +597,12 @@ a = Dates.Time(23, 1, 1)
 end
 
 # Issue #45816
+@testset "period ranges" begin
+    @test length(Day(1):Day(1):Day(5)) == 5
+    r = StepRange{Day,Int}(Day(1), 1, Day(3))
+    @test (first(r), step(r), last(r)) === (Day(1), 1, Day(3))
+end
+
 @testset "default step for date ranges" begin
     r = Date(2000, 1, 1):Date(2000, 12, 31)
     @test step(r) === Day(1)

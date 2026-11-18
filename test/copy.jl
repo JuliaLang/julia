@@ -307,4 +307,5 @@ end
     @test !islocked(b.lock)
     @inferred deepcopy(a)
     @inferred deepcopy(a.lock)
+    unlock(a.lock)
 end

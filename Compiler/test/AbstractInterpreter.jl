@@ -18,6 +18,23 @@ Compiler.may_optimize(::AbsIntOnlyInterp2) = false
 Compiler.transform_result_for_cache(::AbsIntOnlyInterp2, ::Compiler.InferenceResult, edges::Core.SimpleVector) = nothing
 @test Base.infer_return_type(Base.init_stdio, (Ptr{Cvoid},); interp=AbsIntOnlyInterp2()) >: IO
 
+# concrete evaluation of a call returning a const global mutable object should preserve
+# its `:inaccessiblememonly` taint (JuliaLang/julia#64412)
+# Here `getproperty(Issue64412, :live)` is not foldable in general, but const-prop' refines
+# it to be foldable, and thus it is concretely evaluated afterwards. An optimizing interpreter
+# discards that concrete result since the mutable object can not be inlined, and uses the
+# const-prop' result, which retains the taint. A non-optimizing interpreter, however, always
+# uses the concrete result, so this case is specific to it.
+module Issue64412
+const live = Ref(0)
+end
+let effects = Base.infer_effects(; interp=AbsIntOnlyInterp1()) do
+        Issue64412.live[]
+    end
+    @test !Compiler.is_inaccessiblememonly(effects)
+    @test !Compiler.is_consistent(effects)
+end
+
 # OverlayMethodTable
 # ==================
 

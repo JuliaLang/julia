@@ -319,6 +319,7 @@ Base.ScopedValues.with
 Base.ScopedValues.@with
 Base.isassigned(::Base.ScopedValues.ScopedValue)
 Base.ScopedValues.get
+Base.ScopedValues.ScopedThunk
 ```
 
 ## Implementation notes and performance

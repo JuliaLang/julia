@@ -462,6 +462,16 @@ function div(x::T, y::T, ::typeof(RoundDown)) where T<:Integer
     d = div(x, y, RoundToZero)
     return d - (signbit(x ⊻ y) & (d * y != x))
 end
+# Granlund & Montgomery (1994), §6: nudge `x` one step toward zero when the signs differ so a
+# single truncated division gives the floor. No multiply-back, so a constant `y` lowers to a bare
+# multiply-shift. Division errors are checked on the original operands.
+function div(x::T, y::T, ::typeof(RoundDown)) where T<:BitSigned
+    (iszero(y) | ((x == typemin(T)) & (y == -1))) && throw(DivideError())
+    k = 8sizeof(T) - 1
+    dsign = y >> k
+    nsign = (x | (x +% dsign)) >> k
+    return _sdiv_nocheck(x +% (dsign - nsign), y) +% (nsign ⊻ dsign)
+end
 
 # cld(x, y) = div(x, y) + ((x > 0) == (y > 0) && rem(x, y) != 0 ? 1 : 0)
 function div(x::T, y::T, ::typeof(RoundUp)) where T<:Unsigned
@@ -472,6 +482,15 @@ function div(x::T, y::T, ::typeof(RoundUp)) where T<:Integer
     d = div(x, y, RoundToZero)
     return d + (((x > 0) == (y > 0)) & (d * y != x))
 end
+# as for `RoundDown`: step `x` toward zero when the signs agree, then round the truncation up
+function div(x::T, y::T, ::typeof(RoundUp)) where T<:BitSigned
+    (iszero(y) | ((x == typemin(T)) & (y == -1))) && throw(DivideError())
+    s = ifelse(y < 0, -(x < 0) % T, (x > 0) % T)
+    return _sdiv_nocheck(x -% s, y) +% (s != 0)
+end
+# caller has excluded `y == 0` and `typemin(T) ÷ -1`
+_sdiv_nocheck(x::T, y::T) where {T<:BitSigned} =
+    Core.sizeof(Int) == 4 && T === Int128 ? div(x, y) : sdiv_int(x, y)
 
 # Floats
 # NB. If eps(x/y) > 1, x/y rounds to an unsafe integer which can't be floored

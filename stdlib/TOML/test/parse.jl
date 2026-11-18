@@ -9,12 +9,15 @@ using TOML: ParserError
     path, io = mktemp(); write(io, str); close(io)
     invalid_path, io = mktemp(); write(io, invalid_str); close(io)
     p = TOML.Parser()
+    @test TOML.parse(TOML.Parser(str)) == TOML.parse(TOML.Parser(IOBuffer(str))) == dict
+    @test TOML.tryparse(TOML.Parser(invalid_str)) isa ParserError
     # TOML.parse
     @test TOML.parse(str) == TOML.parse(SubString(str)) ==
           TOML.parse(IOBuffer(str)) ==
           TOML.parse(p, str) == TOML.parse(p, SubString(str)) ==
           TOML.parse(p, IOBuffer(str)) == dict
     @test TOML.parse("a\t=1") == dict
+    @test TOML.parse("\ufeffa = 1") == TOML.parse(p, "\ufeffa = 1") == dict
     @test_throws ParserError TOML.parse(invalid_str)
     @test_throws ParserError TOML.parse(SubString(invalid_str))
     @test_throws ParserError TOML.parse(IOBuffer(invalid_str))

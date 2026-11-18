@@ -96,20 +96,19 @@ let
     x
 end
 #---------------------
-1   (newvar slot₁/x)
-2   TestMod.f
-3   (call %₂)
-4   TestMod.T
-5   (= slot₂/tmp %₃)
-6   (call core.isa slot₂/tmp %₄)
-7   (gotoifnot %₆ label₉)
-8   (goto label₁₁)
-9   (call top.convert %₄ slot₂/tmp)
-10  (= slot₂/tmp (call core.typeassert %₉ %₄))
-11  slot₂/tmp
-12  (= slot₁/x %₁₁)
-13  slot₁/x
-14  (return %₁₃)
+1   TestMod.f
+2   (call %₁)
+3   TestMod.T
+4   (= slot₂/tmp %₂)
+5   (call core.isa slot₂/tmp %₃)
+6   (gotoifnot %₅ label₈)
+7   (goto label₁₀)
+8   (call top.convert %₃ slot₂/tmp)
+9   (= slot₂/tmp (call core.typeassert %₈ %₃))
+10  slot₂/tmp
+11  (= slot₁/x %₁₀)
+12  slot₁/x
+13  (return %₁₂)
 
 ########################################
 # "complex lhs" of `::T` => type-assert, not decl
@@ -160,81 +159,91 @@ end
 # Error: Invalid lhs in `=`
 a.(b) = rhs
 #---------------------
-LoweringError:
+syntax: cannot assign to dotcall syntax
+@ :1
 a.(b) = rhs
-└───┘ ── dotcall syntax not valid here
+└───┘
 
 ########################################
 # Error: Invalid lhs in `=`
 a.(b,c) = rhs
 #---------------------
-LoweringError:
+syntax: cannot assign to dotcall syntax
+@ :1
 a.(b,c) = rhs
-└─────┘ ── dotcall syntax not valid here
+└─────┘
 
 ########################################
 # Error: Invalid lhs in `=`
 T[x y] = rhs
 #---------------------
-LoweringError:
+syntax: invalid spacing in left side of indexed assignment
+@ :1
 T[x y] = rhs
-└────┘ ── invalid spacing in left side of indexed assignment
+└────┘
 
 ########################################
 # Error: Invalid lhs in `=`
 T[x; y] = rhs
 #---------------------
-LoweringError:
+syntax: unexpected `;` in left side of indexed assignment
+@ :1
 T[x; y] = rhs
-└─────┘ ── unexpected `;` in left side of indexed assignment
+└─────┘
 
 ########################################
 # Error: Invalid lhs in `=`
 T[x ;;; y] = rhs
 #---------------------
-LoweringError:
+syntax: unexpected `;` in left side of indexed assignment
+@ :1
 T[x ;;; y] = rhs
-└────────┘ ── unexpected `;` in left side of indexed assignment
+└────────┘
 
 ########################################
 # Error: Invalid lhs in `=`
 [x, y] = rhs
 #---------------------
-LoweringError:
+syntax: use `(a, b) = ...` to assign multiple values
+@ :1
 [x, y] = rhs
-└────┘ ── use `(a, b) = ...` to assign multiple values
+└────┘
 
 ########################################
 # Error: Invalid lhs in `=`
 [x y] = rhs
 #---------------------
-LoweringError:
+syntax: use `(a, b) = ...` to assign multiple values
+@ :1
 [x y] = rhs
-└───┘ ── use `(a, b) = ...` to assign multiple values
+└───┘
 
 ########################################
 # Error: Invalid lhs in `=`
 [x; y] = rhs
 #---------------------
-LoweringError:
+syntax: use `(a, b) = ...` to assign multiple values
+@ :1
 [x; y] = rhs
-└────┘ ── use `(a, b) = ...` to assign multiple values
+└────┘
 
 ########################################
 # Error: Invalid lhs in `=`
 [x ;;; y] = rhs
 #---------------------
-LoweringError:
+syntax: use `(a, b) = ...` to assign multiple values
+@ :1
 [x ;;; y] = rhs
-└───────┘ ── use `(a, b) = ...` to assign multiple values
+└───────┘
 
 ########################################
 # Error: Invalid lhs in `=`
 1 = rhs
 #---------------------
-LoweringError:
+syntax: invalid syntax in left-hand side of assignment
+@ :1
 1 = rhs
-╙ ── invalid syntax in left-hand side of assignment
+⊔
 
 ########################################
 # Basic updating assignment
@@ -349,30 +358,34 @@ end
 # Error: invalid LHS: block
 begin; x; end = 1
 #---------------------
-LoweringError:
+syntax: invalid syntax in left-hand side of assignment
+@ :1
 begin; x; end = 1
-└───────────┘ ── invalid syntax in left-hand side of assignment
+└───────────┘
 
 ########################################
 # Error: Updating assignment with invalid left hand side
 f() += y
 #---------------------
-LoweringError:
+syntax: invalid assignment location
+@ :1
 f() += y
-└─┘ ── invalid assignment location
+└─┘
 
 ########################################
 # Error: Updating assignment with invalid tuple destructuring on left hand side
 (if false end, b) += 2
 #---------------------
-LoweringError:
+syntax: invalid syntax in left-hand side of assignment
+@ :1
 (if false end, b) += 2
-#└──────────┘ ── invalid syntax in left-hand side of assignment
+#└──────────┘
 
 ########################################
 # Error: Updating assignment to ssavalue (JuliaLang/julia#30062)
 f(), x += 10, 20
 #---------------------
-LoweringError:
+syntax: invalid multiple assignment location
+@ :1
 f(), x += 10, 20
-└────┘ ── invalid multiple assignment location
+└────┘

@@ -10,7 +10,7 @@ function github_paragraph(stream::IO, md::MD)
     for char in readeach(stream, Char)
         # handle Windows line ends
         if char == '\r'
-            peek(stream, Char) == '\n' && read(stream, Char)
+            !eof(stream) && peek(stream, Char) == '\n' && read(stream, Char)
             char = '\n'
         end
         if char == '\n'

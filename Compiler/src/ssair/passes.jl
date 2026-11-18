@@ -418,7 +418,7 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
                 lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
             elseif isexpr(def, :new)
-                typ = unwrap_unionall(widenconst(types(compact)[leaf]))
+                typ = unwrap_unionall(widenconst_split(types(compact)[leaf]))
                 (isa(typ, DataType) && !isabstracttype(typ)) || return nothing
                 if ismutabletype(typ)
                     isconst(typ, field) || return nothing
@@ -489,6 +489,7 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
             return nothing
         end
         ismutable(leaf) && return nothing
+        is_relocatable_ptr_field(Const(leaf), Const(field)) && return nothing
         isdefined(leaf, field) || return nothing
         val = getfield(leaf, field)
         is_inlineable_constant(val) || return nothing
@@ -1199,22 +1200,9 @@ end
 # and if possible refines the nothrowness of the new expr based on it.
 function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::Int,
                               @nospecialize(Targ), @nospecialize(farg))
-    isa(Targ, SSAValue) || return false
-
-    Tdef = compact[Targ][:stmt]
-    is_known_call(Tdef, Core.apply_type, compact) || return false
-    length(Tdef.args) ≥ 2 || return false
-
-    applyT = argextype(Tdef.args[2], compact)
-    isa(applyT, Const) || return false
-
-    applyT = applyT.val
-    tvars = Any[]
-    while isa(applyT, UnionAll)
-        applyTvar = applyT.var
-        applyT = applyT.body
-        push!(tvars, applyTvar)
-    end
+    def = apply_type_unionall_def(Targ, compact)
+    def === nothing && return false
+    Tdef, applyT, tvars = def
 
     @assert applyT.name === typ.name
     fT = fieldtype(applyT, fidx)

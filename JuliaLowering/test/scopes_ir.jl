@@ -31,12 +31,11 @@ end
 #---------------------
 1   TestMod.rhs
 2   (call top.indexed_iterate %₁ 1)
-3   (= slot₂/x (call core.getfield %₂ 1))
-4   (= slot₁/iterstate (call core.getfield %₂ 2))
-5   slot₁/iterstate
-6   (call top.indexed_iterate %₁ 2 %₅)
-7   (= slot₃/y (call core.getfield %₆ 1))
-8   (return core.nothing)
+3   (= slot₁/x (call core.getfield %₂ 1))
+4   (= slot₃/ (call core.getfield %₂ 2))
+5   (call top.indexed_iterate %₁ 2 slot₃/)
+6   (= slot₂/y (call core.getfield %₅ 1))
+7   (return core.nothing)
 
 ########################################
 # let syntax with named tuple on lhs creates locals for the unpacked vars
@@ -93,9 +92,10 @@ end
 let f[]::T = rhs
 end
 #---------------------
-LoweringError:
+syntax: invalid assignment location in let syntax
+@ :1
 let f[]::T = rhs
-#   └─┘ ── Invalid assignment location in let syntax
+#   └─┘
 end
 
 ########################################
@@ -103,9 +103,10 @@ end
 let f[] = rhs
 end
 #---------------------
-LoweringError:
+syntax: invalid assignment location in let syntax
+@ :1
 let f[] = rhs
-#   └─┘ ── Invalid assignment location in let syntax
+#   └─┘
 end
 
 ########################################
@@ -113,9 +114,10 @@ end
 let (obj::Callable)() = rhs
 end
 #---------------------
-LoweringError:
+syntax: function signature does not define a local function name
+@ :1
 let (obj::Callable)() = rhs
-#   └───────────────┘ ── Function signature does not define a local function name
+#   └───────────────┘
 end
 
 ########################################
@@ -207,13 +209,14 @@ end
     slots: [slot₁/#self#(!read) slot₂/z]
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
-    3   (gotoifnot true label₅)
-    4   (call top.setindex! %₂ slot₂/z :z)
-    5   (isdefined static_parameter₁)
-    6   (gotoifnot %₅ label₉)
-    7   static_parameter₁
-    8   (call top.setindex! %₂ %₇ :T)
-    9   (return %₂)
+    3   (isdefined slot₂/z)
+    4   (gotoifnot %₃ label₆)
+    5   (call top.setindex! %₂ slot₂/z :z)
+    6   (isdefined static_parameter₁)
+    7   (gotoifnot %₆ label₁₀)
+    8   static_parameter₁
+    9   (call top.setindex! %₂ %₈ :T)
+    10  (return %₂)
 11  latestworld
 12  TestMod.f
 13  (return %₁₂)
@@ -223,9 +226,10 @@ end
 function f(x, x)
 end
 #---------------------
-LoweringError:
+syntax: function argument name not unique
+@ :1
 function f(x, x)
-#             ╙ ── function argument name not unique
+#             ⊔
 end
 
 ########################################
@@ -233,9 +237,10 @@ end
 function f(x, (x,))
 end
 #---------------------
-LoweringError:
+syntax: destructured argument name `x` conflicts with an existing argument from the same scope
+@ :1
 function f(x, (x,))
-#              ╙ ── destructured argument name `x` conflicts with an existing argument from the same scope
+#              ⊔
 end
 
 ########################################
@@ -243,9 +248,10 @@ end
 function f(::T) where T where T
 end
 #---------------------
-LoweringError:
+syntax: function static parameter name not unique
+@ :1
 function f(::T) where T where T
-#                     ╙ ── function static parameter name not unique
+#                     ⊔
 end
 
 ########################################
@@ -253,9 +259,10 @@ end
 function f(x::x) where x
 end
 #---------------------
-LoweringError:
+syntax: static parameter name `x` conflicts with an existing argument from the same scope
+@ :1
 function f(x::x) where x
-#                      ╙ ── static parameter name `x` conflicts with an existing argument from the same scope
+#                      ⊔
 end
 
 ########################################
@@ -263,9 +270,10 @@ end
 function f((x,), (x,))
 end
 #---------------------
-LoweringError:
+syntax: destructured argument name `x` conflicts with an existing local variable from the same scope
+@ :1
 function f((x,), (x,))
-#                 ╙ ── destructured argument name `x` conflicts with an existing local variable from the same scope
+#                 ⊔
 end
 
 ########################################
@@ -275,11 +283,12 @@ let
     global x
 end
 #---------------------
-LoweringError:
+syntax: global variable name `x` conflicts with an existing local variable from the same scope
+@ :3
 let
     local x
     global x
-#          ╙ ── global variable name `x` conflicts with an existing local variable from the same scope
+#          ⊔
 end
 
 ########################################
@@ -288,10 +297,11 @@ function f(x)
     local x
 end
 #---------------------
-LoweringError:
+syntax: local variable name `x` conflicts with an existing argument from the same scope
+@ :2
 function f(x)
     local x
-#         ╙ ── local variable name `x` conflicts with an existing argument from the same scope
+#         ⊔
 end
 
 ########################################
@@ -300,10 +310,11 @@ function f(x)
     global x
 end
 #---------------------
-LoweringError:
+syntax: global variable name `x` conflicts with an existing argument from the same scope
+@ :2
 function f(x)
     global x
-#          ╙ ── global variable name `x` conflicts with an existing argument from the same scope
+#          ⊔
 end
 
 ########################################
@@ -313,10 +324,11 @@ function f((x,))
     global x
 end
 #---------------------
-LoweringError:
+syntax: global variable name `x` conflicts with an existing local variable from the same scope
+@ :2
 function f((x,))
     global x
-#          ╙ ── global variable name `x` conflicts with an existing local variable from the same scope
+#          ⊔
 end
 
 ########################################
@@ -325,10 +337,11 @@ function f(::T) where T
     local T
 end
 #---------------------
-LoweringError:
+syntax: local variable name `T` conflicts with an existing static parameter from the same scope
+@ :2
 function f(::T) where T
     local T
-#         ╙ ── local variable name `T` conflicts with an existing static parameter from the same scope
+#         ⊔
 end
 
 ########################################
@@ -337,10 +350,11 @@ function f(::T) where T
     global T
 end
 #---------------------
-LoweringError:
+syntax: global variable name `T` conflicts with an existing static parameter from the same scope
+@ :2
 function f(::T) where T
     global T
-#          ╙ ── global variable name `T` conflicts with an existing static parameter from the same scope
+#          ⊔
 end
 
 ########################################
@@ -351,11 +365,12 @@ function f(::T) where T
     end
 end
 #---------------------
-LoweringError:
+syntax: cannot overwrite a static parameter
+@ :3
 function f(::T) where T
     let
         T = rhs
-#       ╙ ── cannot overwrite a static parameter
+#       ⊔
     end
 end
 
@@ -366,10 +381,11 @@ function f(g)
     end
 end
 #---------------------
-LoweringError:
+syntax: cannot add method to a function argument
+@ :2
 function f(g)
     function g()
-#            ╙ ── Cannot add method to a function argument
+#            ⊔
     end
 end
 
@@ -381,11 +397,12 @@ function f()
     end
 end
 #---------------------
-LoweringError:
+syntax: global method definition needs to be placed at the top level, or use `eval()`
+@ :3
 function f()
     global global_method
     function global_method()
-#            └───────────┘ ── Global method definition needs to be placed at the top level, or use `eval()`
+#            └───────────┘
     end
 end
 
@@ -397,9 +414,10 @@ end
 #---------------------
 1   1
 2   (= slot₁/x %₁)
-3   (call core.isdefinedglobal TestMod :y)
-4   (call core.tuple true %₃)
-5   (return %₄)
+3   (isdefined slot₁/x)
+4   (call core.isdefinedglobal TestMod :y)
+5   (call core.tuple %₃ %₄)
+6   (return %₅)
 
 ########################################
 # Global function defined inside let (let over lambda)
@@ -442,7 +460,7 @@ end
 27  SourceLocation:3
 28  (call core.svec %₂₅ %₂₆ %₂₇)
 29  --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   (captured_local 1)
     2   (call core.isdefined %₁ :contents)
     3   (gotoifnot %₂ label₅)
@@ -478,7 +496,7 @@ end
 12  SourceLocation:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   TestMod.+
     2   (captured_local 1)
     3   (call core.isdefined %₂ :contents)

@@ -4,18 +4,17 @@ begin
     local x::T = 1
 end
 #---------------------
-1   (newvar slot₁/x)
-2   1
-3   TestMod.T
-4   (= slot₂/tmp %₂)
-5   (call core.isa slot₂/tmp %₃)
-6   (gotoifnot %₅ label₈)
-7   (goto label₁₀)
-8   (call top.convert %₃ slot₂/tmp)
-9   (= slot₂/tmp (call core.typeassert %₈ %₃))
-10  slot₂/tmp
-11  (= slot₁/x %₁₀)
-12  (return %₂)
+1   1
+2   TestMod.T
+3   (= slot₂/tmp %₁)
+4   (call core.isa slot₂/tmp %₂)
+5   (gotoifnot %₄ label₇)
+6   (goto label₉)
+7   (call top.convert %₂ slot₂/tmp)
+8   (= slot₂/tmp (call core.typeassert %₇ %₂))
+9   slot₂/tmp
+10  (= slot₁/x %₉)
+11  (return %₁)
 
 ########################################
 # Local declarations outside a scope could be disallowed
@@ -68,9 +67,10 @@ end
 # Error: Global declaration not allowed in value position
 y = global x
 #---------------------
-LoweringError:
+syntax: global declaration doesn't read the variable and can't return a value
+@ :1
 y = global x
-#          ╙ ── global declaration doesn't read the variable and can't return a value
+#          ⊔
 
 ########################################
 # const
@@ -86,13 +86,13 @@ const xx = 10
 const xx::T = 10
 #---------------------
 1   TestMod.T
-2   (= slot₁/tmp 10)
-3   (call core.isa slot₁/tmp %₁)
+2   (= slot₁/ 10)
+3   (call core.isa slot₁/ %₁)
 4   (gotoifnot %₃ label₆)
 5   (goto label₈)
-6   (call top.convert %₁ slot₁/tmp)
-7   (= slot₁/tmp (call core.typeassert %₆ %₁))
-8   slot₁/tmp
+6   (call top.convert %₁ slot₁/)
+7   (= slot₁/ (call core.typeassert %₆ %₁))
+8   slot₁/
 9   (call core.declare_const TestMod :xx %₈)
 10  latestworld
 11  (return %₈)
@@ -186,11 +186,12 @@ begin
     local x::S = 1
 end
 #---------------------
-LoweringError:
+syntax: multiple type declarations found for `x`
+@ :3
 begin
     local x::T = 1
     local x::S = 1
-#        └───────┘ ── multiple type declarations found for `x`
+#        └───────┘
 end
 
 ########################################
@@ -200,11 +201,12 @@ begin
     x::Int = 1
 end
 #---------------------
-LoweringError:
+syntax: multiple type declarations found for `x`
+@ :3
 begin
     local x::Int = 1
     x::Int = 1
-#   └────────┘ ── multiple type declarations found for `x`
+#   └────────┘
 end
 
 ########################################
@@ -238,49 +240,55 @@ end
 # Error: const ref
 const x[] = 1
 #---------------------
-LoweringError:
+syntax: cannot declare `ref[]` form constant
+@ :1
 const x[] = 1
-#     └─┘ ── cannot declare this form constant
+#     └─┘
 
 ########################################
 # Error: const ref
 const x[2] = 1
 #---------------------
-LoweringError:
+syntax: cannot declare `ref[]` form constant
+@ :1
 const x[2] = 1
-#     └──┘ ── cannot declare this form constant
+#     └──┘
 
 ########################################
 # Error: const setproperty
 const Main.x = 1
 #---------------------
-LoweringError:
+syntax: cannot declare dotted form constant
+@ :1
 const Main.x = 1
-#     └────┘ ── cannot declare this form constant
+#     └────┘
 
 ########################################
 # Error: const ref, tuple-nested
 const (a, (b, x[])) = (1, (2, 3))
 #---------------------
-LoweringError:
+syntax: cannot declare `ref[]` form constant
+@ :1
 const (a, (b, x[])) = (1, (2, 3))
-#             └─┘ ── cannot declare this form constant
+#             └─┘
 
 ########################################
 # Error: const setproperty, tuple-nested
 const (a, (b, x.y)) = (1, (2, 3))
 #---------------------
-LoweringError:
+syntax: cannot declare dotted form constant
+@ :1
 const (a, (b, x.y)) = (1, (2, 3))
-#             └─┘ ── cannot declare this form constant
+#             └─┘
 
 ########################################
 # Error: Const not supported on locals
 const local x = 1
 #---------------------
-LoweringError:
+syntax: unsupported `const local` declaration
+@ :1
 const local x = 1
-#    └──────────┘ ── unsupported `const local` declaration
+#    └──────────┘
 
 ########################################
 # Error: Const not supported on locals
@@ -288,10 +296,11 @@ let
     const x = 1
 end
 #---------------------
-LoweringError:
+syntax: unsupported `const` declaration on local variable
+@ :2
 let
     const x = 1
-#        └────┘ ── unsupported `const` declaration on local variable
+#        └────┘
 end
 
 ########################################
@@ -301,11 +310,12 @@ begin
     const x = 1
 end
 #---------------------
-LoweringError:
+syntax: unsupported `const` declaration on local variable
+@ :3
 begin
     local x
     const x = 1
-#        └────┘ ── unsupported `const` declaration on local variable
+#        └────┘
 end
 
 ########################################
@@ -313,9 +323,10 @@ end
 let local a = 1
 end
 #---------------------
-LoweringError:
+syntax: expected identifier or assignment
+@ :1
 let local a = 1
-#   └─────────┘ ── expected identifier or assignment
+#   └─────────┘
 end
 
 ########################################
@@ -323,9 +334,10 @@ end
 let global a = 1
 end
 #---------------------
-LoweringError:
+syntax: expected identifier or assignment
+@ :1
 let global a = 1
-#   └──────────┘ ── expected identifier or assignment
+#   └──────────┘
 end
 
 ########################################
@@ -333,9 +345,10 @@ end
 let const a = 1
 end
 #---------------------
-LoweringError:
+syntax: expected identifier or assignment
+@ :1
 let const a = 1
-#   └─────────┘ ── expected identifier or assignment
+#   └─────────┘
 end
 
 ########################################
@@ -343,9 +356,10 @@ end
 let function foo end
 end
 #---------------------
-LoweringError:
+syntax: expected identifier or assignment
+@ :1
 let function foo end
-#   └──────────────┘ ── expected identifier or assignment
+#   └──────────────┘
 end
 
 ########################################
@@ -353,18 +367,20 @@ end
 let function foo(x); x; end
 end
 #---------------------
-LoweringError:
+syntax: expected identifier or assignment
+@ :1
 let function foo(x); x; end
-#   └─────────────────────┘ ── expected identifier or assignment
+#   └─────────────────────┘
 end
 
 ########################################
 # Error: Const not supported in function scope
 function (); global g; const g = 1; end
 #---------------------
-LoweringError:
+syntax: unsupported `const` inside function
+@ :1
 function (); global g; const g = 1; end
-#                      └─────────┘ ── unsupported `const` inside function
+#                      └─────────┘
 
 ########################################
 # Type decl on function argument
@@ -418,10 +434,11 @@ function f()
     global x::Int
 end
 #---------------------
-LoweringError:
+syntax: type declarations for global variables must be at top level, not inside a function
+@ :2
 function f()
     global x::Int
-#          └────┘ ── type declarations for global variables must be at top level, not inside a function
+#          └────┘
 end
 
 ########################################
@@ -430,10 +447,11 @@ function f()
     global x::Int = 1
 end
 #---------------------
-LoweringError:
+syntax: type declarations for global variables must be at top level, not inside a function
+@ :2
 function f()
     global x::Int = 1
-#         └─────────┘ ── type declarations for global variables must be at top level, not inside a function
+#         └─────────┘
 end
 
 ########################################
@@ -443,11 +461,12 @@ function f()
     x::Int = 1
 end
 #---------------------
-LoweringError:
+syntax: type declarations for global variables must be at top level, not inside a function
+@ :3
 function f()
     global x
     x::Int = 1
-#   └────────┘ ── type declarations for global variables must be at top level, not inside a function
+#   └────────┘
 end
 
 ########################################
@@ -551,8 +570,9 @@ function f()
     global (x::Int, y) = 1,2
 end
 #---------------------
-LoweringError:
+syntax: type declarations for global variables must be at top level, not inside a function
+@ :2
 function f()
     global (x::Int, y) = 1,2
-#         └────────────────┘ ── type declarations for global variables must be at top level, not inside a function
+#         └────────────────┘
 end

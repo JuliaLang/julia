@@ -68,11 +68,8 @@ end
     @test thisind(SourceFile("xαx", first_index=10), 12) == 11
     @test thisind(SourceFile("xαx", first_index=10), 13) == 13
 
-    if Base.VERSION >= v"1.4"
-        # Protect the `[begin` from being viewed by the parser on older Julia versions
-        @test eval(Meta.parse("SourceFile(\"a\nb\n\")[begin:end]")) == "a\nb\n"
-        @test eval(Meta.parse("SourceFile(\"abcd\", first_index=10)[begin+1:end-1]")) == "bc"
-    end
+    @test SourceFile("a\nb\n")[begin:end] == "a\nb\n"
+    @test SourceFile("abcd", first_index=10)[begin+1:end-1] == "bc"
 end
 
 @testset "SourceFile printing and text extraction" begin
@@ -92,13 +89,13 @@ end
         +-*/""")
 
     # Empty ranges
-    @test sprint(highlight, src, 1:0) == "abcd\n└\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 2:1) == "abcd\n#└\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 3:2) == "abcd\n# └\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 4:3) == "abcd\n#  └\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 5:4) == "abcd\n#   └\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 6:5) == "abcd\nαβγδ\n└\n+-*/"
-    @test sprint(highlight, src, 19:18) == "abcd\nαβγδ\n+-*/\n#   └"
+    @test sprint(highlight, src, 1:0) == "abcd\n⊔\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 2:1) == "abcd\n#⊔\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 3:2) == "abcd\n# ⊔\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 4:3) == "abcd\n#  ⊔\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 5:4) == "abcd\n#   ⊔\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 6:5) == "abcd\nαβγδ\n⊔\n+-*/"
+    @test sprint(highlight, src, 19:18) == "abcd\nαβγδ\n+-*/\n#   ⊔"
     @test sprint(io->highlight(io, src, 1:0, context_lines_after=0, note="hi")) ==
         "abcd\n└ ── hi"
 
@@ -106,11 +103,11 @@ end
     @test sprint(highlight, src, 1:4) == "abcd\n└──┘\nαβγδ\n+-*/"
     @test sprint(highlight, src, 2:4) == "abcd\n#└─┘\nαβγδ\n+-*/"
     @test sprint(highlight, src, 3:4) == "abcd\n# └┘\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 4:4) == "abcd\n#  ╙\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 5:5) == "abcd\n#   └\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 6:6) == "abcd\nαβγδ\n╙\n+-*/"
+    @test sprint(highlight, src, 4:4) == "abcd\n#  ⊔\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 5:5) == "abcd\n#   ⊔\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 6:6) == "abcd\nαβγδ\n⊔\n+-*/"
     @test sprint(highlight, src, 6:9) == "abcd\nαβγδ\n└┘\n+-*/"
-    @test sprint(highlight, src, 8:8) == "abcd\nαβγδ\n#╙\n+-*/"
+    @test sprint(highlight, src, 8:8) == "abcd\nαβγδ\n#⊔\n+-*/"
 
     # multi-byte chars
     @test sprint(highlight, src, 8:13) == """
@@ -119,12 +116,12 @@ end
         #└─┘
         +-*/"""
     # multi-byte char at eof
-    @test sprint(highlight, SourceFile("a α"), 3:4) == "a α\n# ╙"
+    @test sprint(highlight, SourceFile("a α"), 3:4) == "a α\n# ⊔"
     @test sprint(highlight, SourceFile("a\nα"), 1:4) == "┌\na\nα\n┘"
-    @test sprint(highlight, SourceFile("a\nb\nα"), 3:3) == "a\nb\n╙\nα"
+    @test sprint(highlight, SourceFile("a\nb\nα"), 3:3) == "a\nb\n⊔\nα"
 
     # empty files
-    @test sprint(highlight, SourceFile(""), 1:0) == "└"
+    @test sprint(highlight, SourceFile(""), 1:0) == "⊔"
 
     # Multi-line ranges
     @test sprint(highlight, src, 1:7) == """

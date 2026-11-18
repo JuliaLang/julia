@@ -3,8 +3,10 @@
 """
     Base64
 
-Functionality for [base64 encoding and decoding](https://en.wikipedia.org/wiki/Base64),
-a method to represent binary data using text, common on the web.
+[Base64 encoding and decoding](https://en.wikipedia.org/wiki/Base64), a way to represent
+binary data as text that is common on the web. Use [`base64encode`](@ref) and
+[`base64decode`](@ref), or [`Base64EncodePipe`](@ref) and [`Base64DecodePipe`](@ref) for
+streams.
 """
 module Base64
 

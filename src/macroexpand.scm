@@ -382,6 +382,21 @@
       (cdr ranges)
       (list ranges))))
 
+;; strip the escapes and nested-macro scopes around a keyword symbol
+(define (unescape-keyword e)
+  (if (and (pair? e) (memq (car e) '(escape hygienic-scope)))
+      (unescape-keyword (cadr e))
+      e))
+
+;; resolve a `(call ccall name cconv ...)` with `resolve`, keeping the calling
+;; convention as a bare keyword; #f if `e` is not such a call
+(define (resolve-ccall-cconv e resolve)
+  (let ((cconv (and (length> e 3)
+                    (eq? (unescape-keyword (cadr e)) 'ccall)
+                    (unescape-keyword (cadddr e)))))
+    (and (memq cconv '(cdecl stdcall fastcall thiscall llvmcall))
+         `(call ccall ,(resolve (caddr e)) ,cconv ,@(map resolve (cddddr e))))))
+
 (define (just-line? ex)
   (and (pair? ex) (eq? (car ex) 'line) (atom? (cadr ex)) (or (atom? (caddr ex)) (nothing? (caddr ex)))))
 
@@ -526,6 +541,11 @@
                              (resolve-expansion-vars-with-new-env x env m lno parent-scope inarg)))
                        (cdr e))))
 
+           ((call)
+            (let ((resolve (lambda (x) (resolve-expansion-vars-with-new-env x env m lno parent-scope inarg))))
+              (or (resolve-ccall-cconv e resolve)
+                  (cons 'call (map resolve (cdr e))))))
+
            ;; todo: trycatch
            (else
             (cons (car e)
@@ -660,6 +680,9 @@
                (modu (caddr e)) ;; m is the macro's def module
                (lno  (cdddr e))) ;; lno is (optionally) the line number node
            (resolve-expansion-vars form modu lno)))
+        ((eq? (car e) 'call)
+         (or (resolve-ccall-cconv e julia-expand-macroscopes-)
+             (map julia-expand-macroscopes- e)))
         (else
          (map julia-expand-macroscopes- e))))
 

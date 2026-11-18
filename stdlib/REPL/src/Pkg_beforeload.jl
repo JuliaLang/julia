@@ -67,7 +67,8 @@ function projname(project_file::String)
             p = Base.TOML.Parser{nothing}()
             Base.TOML.reinit!(p, read(project_file, String); filepath=project_file)
             proj = Base.TOML.parse(p)
-            get(proj, "name", nothing)
+            name = get(proj, "name", nothing)
+            name isa String ? name : nothing
         catch
             nothing
         end
@@ -79,7 +80,7 @@ function projname(project_file::String)
     end
     for depot in Base.DEPOT_PATH
         envdir = joinpath(depot, "environments")
-        if startswith(safe_realpath(project_file), safe_realpath(envdir))
+        if startswith(safe_realpath(project_file), joinpath(safe_realpath(envdir), ""))
             return "@" * name
         end
     end

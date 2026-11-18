@@ -171,7 +171,7 @@ function lcm(abc::AbstractArray{<:Real})
         eltype(abc) <: Integer && return one(eltype(abc))
         throw(ArgumentError("lcm has no identity for $(eltype(abc))"))
     end
-    l == 1 && return abs(only(abc))
+    l == 1 && return lcm(only(abc))
     return reduce(lcm, abc)
 end
 
@@ -226,7 +226,8 @@ julia> gcdx(15, 12, 20)
     Bézout coefficients that are computed by the extended Euclidean algorithm.
     (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.)
     For signed integers, these coefficients `u` and `v` are minimal in
-    the sense that ``|u| < |b/d|`` and ``|v| < |a/d|``. Furthermore,
+    the sense that ``|u| <= |b/d|`` and ``|v| <= |a/d|`` (with strict inequality
+    when ``|b| > d`` and ``|a| > d``, respectively). Furthermore,
     the signs of `u` and `v` are chosen so that `d` is positive.
     For unsigned integers, the coefficients `u` and `v` might be near
     their `typemax`, and the identity then holds only via the unsigned
@@ -368,6 +369,7 @@ Inverse (modulo ``2^w``)* by Jeffrey Hurchalla](https://arxiv.org/abs/2204.04342
     The `invmod(n)` and `invmod(n, T)` methods require Julia 1.11 or later.
 """
 invmod(n::Integer, ::Type{T}) where {T<:BitInteger} = invmod(n % T)
+invmod(n, ::Type{Union{}}, slurp...) = throw(MethodError(invmod, (n, Union{}, slurp...)))
 
 function invmod(n::T) where {T<:BitInteger}
     isodd(n) || throw(DomainError(n, "Argument must be odd."))
@@ -1216,6 +1218,8 @@ end
 Return `true` if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """
 hastypemax(::Type{T}) where {T} = applicable(typemax, T) && applicable(typemin, T)
+hastypemax(::Type{Union{}}) = false
+hastypemax(::Type{Union{}}, slurp...) = throw(MethodError(hastypemax, (Union{}, slurp...)))
 
 """
     digits!(array, n::Integer; base::Integer = 10)
@@ -1487,6 +1491,7 @@ function clamp(x, ::Type{T}) where {T<:Integer}
     hi = typemax(T)
     return (x > hi) ? hi : (x < lo) ? lo : convert(T, x)
 end
+clamp(x, ::Type{Union{}}, slurp...) = throw(MethodError(clamp, (x, Union{}, slurp...)))
 
 
 """

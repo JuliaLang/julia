@@ -11,78 +11,6 @@ static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
     write_uint64(s, *((uint64_t*)&x));
 }
 
-// Decide if `t` must be new, because it points to something new.
-// If it is new, the object (in particular, the super field) might not be entirely
-// valid for the cache, so we want to finish transforming it before attempting
-// to look in the cache for it
-int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeof_sysimg)
-{
-    //if (jl_object_in_image(t))
-    //    return 0; // fast-path for rejection
-    assert(ptrhash_get(news, (void*)t) != (void*)t);
-    if (ptrhash_has(news, (void*)t) || ptrhash_has(news, (void*)jl_typeof(t)))
-        return 1;
-    if (!(image_base < (char*)t && (char*)t <= image_base + sizeof_sysimg))
-        return 0; // fast-path for rejection
-    if (jl_is_uniontype(t)) {
-        jl_uniontype_t *u = (jl_uniontype_t*)t;
-        return must_be_new_dt(u->a, news, image_base, sizeof_sysimg) ||
-               must_be_new_dt(u->b, news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_unionall(t)) {
-        jl_unionall_t *ua = (jl_unionall_t*)t;
-        return must_be_new_dt((jl_value_t*)ua->var, news, image_base, sizeof_sysimg) ||
-               must_be_new_dt(ua->body, news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_typevar(t)) {
-        jl_tvar_t *tv = (jl_tvar_t*)t;
-        return must_be_new_dt(tv->lb, news, image_base, sizeof_sysimg) ||
-               must_be_new_dt(tv->ub, news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_some_Type(t)) {
-        return must_be_new_dt(jl_some_Type_T(t), news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_vararg(t)) {
-        jl_vararg_t *tv = (jl_vararg_t*)t;
-        if (tv->T && must_be_new_dt(tv->T, news, image_base, sizeof_sysimg))
-            return 1;
-        if (tv->N && must_be_new_dt(tv->N, news, image_base, sizeof_sysimg))
-            return 1;
-    }
-    else if (jl_is_datatype(t)) {
-        jl_datatype_t *dt = (jl_datatype_t*)t;
-        assert(jl_astaggedvalue(dt->name)->bits.in_image && "type_in_worklist mistake?");
-        jl_datatype_t *super = dt->super;
-        // fast-path: check if super is in news, since then we must be new also
-        // (it is also possible that super is indeterminate or NULL right now,
-        // waiting for `t` to be resolved, then will be determined later as
-        // soon as possible afterwards).
-        while (super != NULL && super != jl_any_type) {
-            void *entry = ptrhash_get(news, (void*)super);
-            if (entry != HT_NOTFOUND) {
-                if (entry != (void*)super)
-                    return 1;
-                // A self-mapping marks an unresolved forward reference.
-                break;
-            }
-            if (!(image_base < (char*)super && (char*)super <= image_base + sizeof_sysimg))
-               break; // the rest must all be non-new
-            // otherwise super might be something that was not cached even though a later supertype might be
-            // for example while handling `Type{Mask{4, U} where U}`, if we have `Mask{4, U} <: AbstractSIMDVector{4}`
-            super = super->super;
-        }
-        jl_svec_t *tt = dt->parameters;
-        size_t i, l = jl_svec_len(tt);
-        for (i = 0; i < l; i++)
-            if (must_be_new_dt(jl_tparam(dt, i), news, image_base, sizeof_sysimg))
-                return 1;
-    }
-    else {
-        return must_be_new_dt(jl_typeof(t), news, image_base, sizeof_sysimg);
-    }
-    return 0;
-}
-
 static uint64_t jl_worklist_key(jl_array_t *worklist) JL_NOTSAFEPOINT
 {
     assert(jl_is_array(worklist));
@@ -121,42 +49,14 @@ JL_DLLEXPORT void jl_tag_newly_inferred_disable(void)
 // This gets called as the first step of Base.include_package_for_output
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
 {
-    assert(_newly_inferred == NULL || _newly_inferred == jl_nothing || jl_is_array_any(_newly_inferred));
     if (_newly_inferred == jl_nothing)
         _newly_inferred = NULL;
+    // The runtime also stores MethodInstances here, so a narrower element type is unsafe.
+    if (_newly_inferred != NULL)
+        JL_TYPECHK(jl_set_newly_inferred, array_any, _newly_inferred);
     JL_LOCK(&newly_inferred_mutex);
     newly_inferred = (jl_array_t*) _newly_inferred;
     JL_UNLOCK(&newly_inferred_mutex);
-}
-
-// Null `CodeInstance.inferred` for native-owned CIs where it is still a raw
-// `CodeInfo` left by `jl_precompile_keep_ir`. These are non-inlineable methods
-// whose IR is otherwise discarded, retained only long enough for
-// `jl_create_native` to reuse via the `typeinf_ext` short-circuit. A
-// CodeInstance cached racing the end of the include phase can escape this walk;
-// see jl_queue_for_serialization.
-JL_DLLEXPORT void jl_finalize_precompile_inferred(int8_t cleanup_keep_ir)
-{
-    jl_set_precompile_keep_ir(0);
-    if (!cleanup_keep_ir || newly_inferred == NULL)
-        return;
-    size_t n = jl_array_nrows(newly_inferred);
-    for (size_t i = 0; i < n; i++) {
-        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(newly_inferred, i);
-        if (ci == NULL)
-            continue;
-        if (ci->owner != jl_nothing)
-            continue; // foreign interpreters own their cached IR
-        jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
-        if (inferred == NULL || !jl_is_code_info(inferred))
-            continue;
-        jl_method_instance_t *mi = jl_get_ci_mi(ci);
-        if (!jl_is_method(mi->def.value))
-            continue; // toplevel code retains its inferred IR
-        if (mi->def.method->source == NULL)
-            continue; // optimized opaque closures can't reconstruct their IR
-        jl_gc_write_atomic(ci, ci->inferred, jl_value_t, jl_nothing, release);
-    }
 }
 
 static jl_array_t *queue_used(jl_array_t *list, jl_query_cache *query_cache) JL_CANSAFEPOINT;
@@ -579,16 +479,25 @@ static jl_array_t *queue_used(jl_array_t *list, jl_query_cache *query_cache)
     return new_used;
 }
 
+// The extext methods being collected, and in parallel their ext_backinterferences
+// (or `nothing`), which name only objects of images and so can be saved.
+struct extext_collection {
+    jl_array_t *methods;
+    jl_array_t *records;
+};
+
 // For every method:
 // - if the method is owned by a worklist module, add it to the list of things to be
 //   verified on reloading
 // - if the method is extext, record that it needs to be reinserted later in the method table
 static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) JL_CANSAFEPOINT
 {
-    jl_array_t *s = (jl_array_t*)closure;
+    struct extext_collection *s = (struct extext_collection*)closure;
     jl_method_t *m = ml->func.method;
-    if (!jl_object_in_image((jl_value_t*)m->module))
-        jl_array_ptr_1d_push(s, (jl_value_t*)m); // extext
+    if (!jl_object_in_image((jl_value_t*)m->module)) {
+        jl_array_ptr_1d_push(s->methods, (jl_value_t*)m); // extext
+        jl_array_ptr_1d_push(s->records, jl_get_ext_backinterferences(m));
+    }
     return 1;
 }
 
@@ -596,9 +505,11 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
 // contents are dropped from the image (see jl_prune_internal_mtable)
 static int jl_collect_methcache_internal(jl_typemap_entry_t *ml, void *closure) JL_CANSAFEPOINT
 {
-    jl_array_t *s = (jl_array_t*)closure;
-    if (jl_atomic_load_relaxed(&ml->max_world) == ~(size_t)0)
-        jl_array_ptr_1d_push(s, (jl_value_t*)ml->func.method); // extext
+    struct extext_collection *s = (struct extext_collection*)closure;
+    if (jl_atomic_load_relaxed(&ml->max_world) == ~(size_t)0) {
+        jl_array_ptr_1d_push(s->methods, (jl_value_t*)ml->func.method); // extext
+        jl_array_ptr_1d_push(s->records, jl_nothing); // no record
+    }
     return 1;
 }
 
@@ -617,9 +528,10 @@ static int jl_collect_methtable_from_mod(jl_methtable_t *mt, void *env) JL_CANSA
 // Collect methods of external functions defined by modules in the worklist
 // "extext" = "extending external"
 // Also collect relevant backedges
-static void jl_collect_extext_methods(jl_array_t *s, jl_array_t *mod_array) JL_CANSAFEPOINT
+static void jl_collect_extext_methods(jl_array_t *methods, jl_array_t *records, jl_array_t *mod_array) JL_CANSAFEPOINT
 {
-    jl_foreach_reachable_mtable(jl_collect_methtable_from_mod, mod_array, s);
+    struct extext_collection s = {methods, records};
+    jl_foreach_reachable_mtable(jl_collect_methtable_from_mod, mod_array, &s);
 }
 
 // Headers
@@ -718,7 +630,7 @@ static const char *jl_git_commit(void) JL_CANSAFEPOINT
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 16;
+static const int JI_FORMAT_VERSION = 17;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 
@@ -918,7 +830,10 @@ static void jl_add_methods(jl_array_t *external) JL_CANSAFEPOINT
 }
 
 extern _Atomic(int) allow_new_worlds;
-static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size_t world, const char *pkgname) JL_CANSAFEPOINT
+
+// `records` holds, in parallel with `external`, each method's activation record (or
+// `nothing`); `image` is the linkage blob of the loading image
+static void jl_activate_methods(jl_array_t *external, jl_array_t *records, jl_array_t *internal, size_t world, const char *pkgname, size_t image) JL_CANSAFEPOINT
 {
     size_t i, l = jl_array_nrows(internal);
     for (i = 0; i < l; i++) {
@@ -953,14 +868,23 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
             jl_printf(JL_STDERR, "WARNING: Method changes for %s have been disabled via a call to disable_new_worlds.\n", pkgname);
             return;
         }
+        assert(jl_array_nrows(records) == l);
+        // These methods all activate in the same world, so their dispatch cache invalidations
+        // can be applied together afterwards. The invalidation log wants them per method.
+        jl_array_t *deferred = _jl_debug_method_invalidation ? NULL : jl_alloc_vec_any(0);
+        JL_GC_PUSH1(&deferred);
         for (i = 0; i < l; i++) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
+            jl_value_t *record = jl_array_ptr_ref(records, i);
             //uint64_t t0 = uv_hrtime();
-            jl_method_table_activate(entry);
+            jl_method_table_activate_with_record(entry, record == jl_nothing ? NULL : (jl_array_t*)record, image, deferred);
             //jl_printf(JL_STDERR, "%f ", (double)(uv_hrtime() - t0) / 1e6);
             //jl_static_show(JL_STDERR, entry->func.value);
             //jl_printf(JL_STDERR, "\n");
         }
+        if (deferred)
+            jl_method_table_invalidate_deferred(deferred, world - 1);
+        JL_GC_POP();
     }
 }
 

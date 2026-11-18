@@ -210,10 +210,11 @@ begin
     @goto foo
 end
 #---------------------
-LoweringError:
+syntax: label `foo` referenced but not defined
+@ :2
 begin
     @goto foo
-#         └─┘ ── label `foo` referenced but not defined
+#         └─┘
 end
 
 ########################################
@@ -223,21 +224,22 @@ begin
     @label foo
 end
 #---------------------
-LoweringError:
- at line 3: Label `foo` defined multiple times
-
-Expression:
-  label:foo
+syntax: label `foo` defined multiple times
+@ :3
+begin
+    @label foo
+    @label foo
+#          └─┘
+end
 
 ########################################
 # Error: using value of symbolic label
 x = @label foo
 #---------------------
-LoweringError:
- at line 1: misplaced label in value position
-
-Expression:
-  label:foo
+syntax: misplaced label in value position
+@ :1
+x = @label foo
+#          └─┘
 
 ########################################
 # Anonymous labeled block with valued break
@@ -248,13 +250,13 @@ Expression:
 end
 #---------------------
 1   TestMod.a
-2   (= slot₁/loop-exit_result 42)
+2   (= slot₁/ 42)
 3   (goto label₆)
 4   TestMod.b
-5   (= slot₁/loop-exit_result %₄)
-6   (isdefined slot₁/loop-exit_result)
+5   (= slot₁/ %₄)
+6   (isdefined slot₁/)
 7   (gotoifnot %₆ label₉)
 8   (goto label₁₀)
-9   (= slot₁/loop-exit_result core.nothing)
-10  slot₁/loop-exit_result
+9   (= slot₁/ core.nothing)
+10  slot₁/
 11  (return %₁₀)

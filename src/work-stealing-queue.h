@@ -70,7 +70,7 @@ static inline ws_array_t *ws_queue_push(ws_queue_t *q, void *elt, int32_t eltsz)
     return old_ary;
 }
 
-static inline void ws_queue_pop(ws_queue_t *q, void *dest, int32_t eltsz) JL_NOTSAFEPOINT
+FORCE_INLINE void ws_queue_pop(ws_queue_t *q, void *dest, int32_t eltsz) JL_NOTSAFEPOINT
 {
     int64_t b = jl_atomic_load_relaxed(&q->bottom) - 1;
     ws_array_t *ary = jl_atomic_load_relaxed(&q->array);

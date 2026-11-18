@@ -37,6 +37,7 @@ const TESTNAMES = [
 
 const INTERNET_REQUIRED_LIST = [
     "Artifacts",
+    "Compiler/extras/CompilerDevTools/testpkg", # resolves `Compiler` from the General registry
     "Downloads",
     "LazyArtifacts",
     "LibCURL",
@@ -154,6 +155,7 @@ function choosetests(choices = [])
                       net_on = false,
                       exit_on_error = false,
                       use_revise = false,
+                      buildroot,
                       seed = UInt128(0))
         elseif startswith(t, "--")
             error("unknown option: $t")
@@ -205,6 +207,17 @@ function choosetests(choices = [])
         # Allow explicitly adding it for testing
         @warn "Skipping Profile tests because the architecture is ARM"
         filter!(x -> (x != "Profile"), tests)
+    end
+
+    # Avoid swapping during a full suite on small machines. Explicitly requested
+    # tests still run; measured x86-64 peaks are about 13 GiB and 9 GiB respectively.
+    memory_hungry = ("compileall" => 16, "jit" => 12) # minimum total memory, in GiB
+    total_gib = Sys.total_memory() / 2^30
+    too_hungry = [t for (t, gib) in memory_hungry if t in tests && !(t in choices) && total_gib < gib]
+    if !isempty(too_hungry)
+        @warn "Skipping tests [" * join(too_hungry, ", ") * "] because the host has only " *
+              "$(round(total_gib; digits=1)) GiB of memory (pass them by name to run them anyway)"
+        filter!(!in(too_hungry), tests)
     end
 
     if ccall(:jl_running_on_valgrind,Cint,()) != 0 && "rounding" in tests

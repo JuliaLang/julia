@@ -611,6 +611,15 @@ For example, the above conditions imply that:
 - Unless the `:static` schedule is used, the value of [`threadid()`](@ref Threads.threadid)
   may change even within a single iteration. See [`Task Migration`](@ref man-task-migration).
 
+!!! note
+    The number of tasks created by `@threads` depends on the number of threads. Since each
+    task has its own random number stream (see `Random.TaskLocalRNG`), results that use the
+    default random number generator can change with the number of threads, even when it is
+    seeded (and with the `:greedy` scheduler, they can also vary between runs). For results
+    that do not depend on the number of threads, spawn one task per iteration (e.g.
+    `@sync for x in xs; Threads.@spawn f(x); end`) or use a separate, explicitly seeded
+    random number generator for each iteration.
+
 ## Schedulers
 
 Without the scheduler argument, the exact scheduling is unspecified and varies across Julia

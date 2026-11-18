@@ -1,9 +1,11 @@
 use crate::slots::JuliaVMSlot;
+use crate::slots::TPinningRootSlot;
 use crate::SINGLETON;
 use mmtk::memory_manager;
 use mmtk::scheduler::*;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::ObjectReference;
+#[cfg(any(feature = "moving", feature = "concurrentimmix"))]
 use mmtk::vm::slot::Slot;
 use mmtk::vm::ObjectTracerContext;
 use mmtk::vm::RootsWorkFactory;
@@ -25,24 +27,19 @@ use dashmap::DashMap;
 #[cfg(feature = "concurrentimmix")]
 use std::sync::{Arc, Mutex};
 
+/// Collects stack roots. We cannot update the shadow stack, so they are tpinning roots.
 pub(crate) struct StackRootBuffer {
-    pub buffer: Vec<ObjectReference>,
+    pub buffer: Vec<TPinningRootSlot>,
 }
 
 impl SlotVisitor<JuliaVMSlot> for StackRootBuffer {
     fn visit_slot(&mut self, slot: JuliaVMSlot) {
-        match slot {
-            JuliaVMSlot::Simple(se) => {
-                if let Some(object) = se.load() {
-                    self.buffer.push(object);
-                }
-            }
-            JuliaVMSlot::Offset(oe) => {
-                if let Some(object) = oe.load() {
-                    self.buffer.push(object);
-                }
-            }
+        #[cfg(feature = "moving")]
+        if let Some(object) = slot.load() {
+            self.buffer.push(object);
         }
+        #[cfg(feature = "non_moving")]
+        self.buffer.push(slot);
     }
 }
 
@@ -64,7 +61,7 @@ impl Scanning<JuliaVM> for VMScanning {
         use mmtk::util::Address;
 
         let ptls: &mut _jl_tls_states_t = unsafe { std::mem::transmute(mutator.mutator_tls) };
-        let mut slot_buffer = StackRootBuffer { buffer: vec![] }; // need to be tpinned as they're all from the shadow stack
+        let mut slot_buffer = StackRootBuffer { buffer: vec![] };
         let mut node_buffer = vec![];
 
         // Scan thread local from ptls: See gc_queue_thread_local in gc.c
@@ -165,15 +162,15 @@ impl Scanning<JuliaVM> for VMScanning {
 
         // Push work
         const CAPACITY_PER_PACKET: usize = 4096;
-        for tpinning_roots in slot_buffer
+        for stack_roots in slot_buffer
             .buffer
             .chunks(CAPACITY_PER_PACKET)
             .map(|c| c.to_vec())
         {
-            factory.create_process_tpinning_roots_work(tpinning_roots);
+            crate::slots::report_tpinning_root_slots(&mut factory, stack_roots);
         }
         for nodes in node_buffer.chunks(CAPACITY_PER_PACKET).map(|c| c.to_vec()) {
-            factory.create_process_pinning_roots_work(nodes);
+            crate::slots::report_pinning_roots(&mut factory, nodes);
         }
 
         // Flush per-mutator barrier/remset buffers before this scan packet is considered done.
@@ -383,7 +380,16 @@ impl GCStackSnapshots {
             task,
             snapshot_roots.buffer.len()
         );
-        Arc::from(snapshot_roots.buffer.into_boxed_slice())
+        #[cfg(feature = "moving")]
+        let objects = snapshot_roots.buffer;
+        // The stack will change after the snapshot, so load the slots now.
+        #[cfg(feature = "non_moving")]
+        let objects: Vec<ObjectReference> = snapshot_roots
+            .buffer
+            .iter()
+            .filter_map(|slot| slot.load())
+            .collect();
+        Arc::from(objects.into_boxed_slice())
     }
 
     pub fn clear_snapshots(&self) {

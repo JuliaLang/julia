@@ -194,3 +194,12 @@ end
 @testset "fd" begin
     @test open(fd, tempname(), "w") isa RawFD
 end
+
+@testset "closed IOStream (#64218)" begin
+    mktemp() do _, file
+        close(file)
+        @test !iswritable(file)
+        @test !isreadable(file)
+        @test_throws ArgumentError write(file, "x")
+    end
+end

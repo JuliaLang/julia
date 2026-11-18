@@ -131,6 +131,23 @@ end
     catch_backtrace()
 
 Get the backtrace of the current exception, for use within `catch` blocks.
+
+The result is a raw backtrace in the same format as [`backtrace`](@ref), but for the point
+where the exception was thrown. Pass it to [`stacktrace`](@ref) to get a vector of
+[`StackFrame`](@ref Base.StackTraces.StackFrame)s, or to [`showerror`](@ref) to print the
+exception together with its stack trace.
+
+See also [`current_exceptions`](@ref) to get all exceptions currently being handled, along
+with their backtraces.
+
+# Examples
+```julia
+try
+    error("oops")
+catch e
+    showerror(stderr, e, catch_backtrace())
+end
+```
 """
 function catch_backtrace()
     bt, bt2 = ccall(:jl_get_backtrace, Ref{SimpleVector}, ())

@@ -6,8 +6,9 @@ calling Julia functions from C code. This can be used to integrate Julia code in
 C/C++ project, without the need to rewrite everything in C/C++. Julia has a C API to make
 this possible. As almost all programming languages have some way to call C functions, the
 Julia C API can also be used to build further language bridges (e.g. calling Julia from
-Python, Rust or C#). Even though Rust and C++ can use the C embedding API directly, both
-have packages helping with it, for C++ [Jluna](https://github.com/Clemapfel/jluna) is useful.
+Python, Rust or C#). Even though C++ can use the C embedding API directly, libraries that
+provide a more convenient API, like [Jluna](https://github.com/Clemapfel/jluna), are available.
+For Rust, the [jlrs](https://github.com/Taaitaaiger/jlrs) crate provides bindings to the C API.
 
 ## High-Level Embedding
 
@@ -145,8 +146,8 @@ Now the build command is simply `make`.
 If the `JULIA_DIR` environment variable hasn't been setup, add it using the System panel before
 starting Visual Studio. The `bin` folder under JULIA_DIR should be on the system PATH.
 
-We start by opening Visual Studio and creating a new Console Application project. Open the
-'stdafx.h' header file, and add the following lines at the end:
+We start by opening Visual Studio and creating a new Console Application project. Add the following
+line at the top of the project's main source file (e.g. `MyApp.cpp`):
 
 ```c
 #include <julia.h>
@@ -177,12 +178,17 @@ The next step is to set up the project to find the Julia include files and the l
 know whether the Julia installation is 32- or 64-bit. Remove any platform configuration that doesn't correspond
 to the Julia installation before proceeding.
 
-Using the project Properties dialog, go to `C/C++` | `General` and add `$(JULIA_DIR)\include\julia\` to the
-Additional Include Directories property. Then, go to the `Linker` | `General` section and add `$(JULIA_DIR)\lib`
-to the Additional Library Directories property. Finally, under `Linker` | `Input`, add `libjulia.dll.a;libopenlibm.dll.a;`
-to the list of libraries.
+In the project Properties dialog, select `All Configurations` and the platform that matches the Julia
+installation. Go to `C/C++` | `General` and add `$(JULIA_DIR)\include\julia\` to the Additional Include
+Directories property. Then, go to the `Linker` | `General` section and add
+`$(JULIA_DIR)\lib;$(JULIA_DIR)\lib\julia` to the Additional Library Directories property. Finally, under
+`Linker` | `Input`, add `libjulia.dll.a;libopenlibm.dll.a;` to the list of libraries.
 
 At this point, the project should build and run.
+
+!!! compat "Julia 1.13"
+    MSVC can include `julia.h` as of Julia 1.13. On older versions, add `#define __attribute__(x)`
+    before the include.
 
 ## Converting Types
 
@@ -275,7 +281,7 @@ but allocation might also happen at any point in running Julia code.
 When writing code that embeds Julia, it is generally safe to use `jl_value_t*` values in between `jl_...` calls
 (as GC will only get triggered by those calls). But in order to make sure that values can survive
 `jl_...` calls, we have to tell Julia that we still hold a reference to Julia
-[root](https://www.cs.purdue.edu/homes/hosking/690M/p611-fenichel.pdf) values, a process
+[root](https://doi.org/10.1145/363269.363280) values, a process
 called "GC rooting". Rooting a value will ensure that the garbage collector does not accidentally
 identify this value as unused and free the memory backing that value. This can be done using the
 `JL_GC_PUSH` macros:

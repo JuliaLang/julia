@@ -78,6 +78,7 @@ typedef struct {
     int8_t target_sanitize_memory;
     int8_t target_sanitize_thread;
     int8_t target_sanitize_address;
+    const char *coverage_exclude;
 } jl_options_t;
 
 #endif

@@ -110,11 +110,11 @@ close(ch)
 test_has_task_profiler_sample_in_buffer()
 
 @testset "Profile.print() groupby options on a task profile" begin
-    data, lidict = Profile.retrieve()
+    rawdata, lidict = Profile.retrieve()
     # the task profiler records -1 as the thread id of a task that isn't running on one,
     # which the grouped report has to tolerate. Such a sample isn't guaranteed to occur
     # naturally (#62575), so mark one that way.
-    data = copy(data)
+    data = copy(rawdata)
     block_end = findfirst(i -> Profile.is_block_end(data, i), eachindex(data))
     @test block_end !== nothing
     data[block_end - Profile.META_OFFSET_THREADID] = reinterpret(UInt, -1)
@@ -210,6 +210,78 @@ end
     # not be `UInt` here), rather than hitting a MethodError
     @test Profile.getdict(UInt32[1, 0]) isa Profile.LineInfoDict
     @test Profile.getdict(UInt64[1, 0]) isa Profile.LineInfoDict
+end
+
+@testset "printing a synthetic profile" begin
+    sf(func, file, line; from_c = false) = StackFrame(func, Symbol(file), line, nothing, from_c, false, UInt64(0))
+    lidict = Dict{UInt64,Vector{StackFrame}}(
+        0x1001 => [sf(:f1, "/a/file1.jl", 1)], 0x1002 => [sf(:f2, "/a/file2.jl", 2)],
+        0x1003 => [sf(:f3, "/a/file3.jl", 3)], 0x1004 => [sf(:cfun, "libc.c", 0; from_c = true)])
+    # Each sample lists its frames innermost first. As call chains they are
+    # f3 > f2 > f1, f3 > f2 > f1 > f2 > f1 and f3 > f1 > cfun.
+    data = Profile.add_fake_meta(UInt64[0x1001, 0x1002, 0x1003, 0,
+                                        0x1001, 0x1002, 0x1001, 0x1002, 0x1003, 0,
+                                        0x1004, 0x1001, 0x1003, 0])
+    function printed(; kwargs...)
+        io = IOBuffer()
+        Profile.print(IOContext(io, :displaysize => (50, 120)), data, lidict; kwargs...)
+        lines = split(String(take!(io)), '\n')
+        return lines[3:something(findfirst(startswith("Total snapshots"), lines)) - 1]
+    end
+    @test printed(format = :tree, recur = :flat) == [
+        " ╎3 /a/file3.jl:3  f3",
+        "1╎ 1 /a/file1.jl:1  f1",
+        " ╎ 2 /a/file2.jl:2  f2",
+        "1╎  2 /a/file1.jl:1  f1"]
+    # children are sorted by count, smallest first
+    @test printed(format = :tree, sortedby = :count) == [
+        " ╎3 /a/file3.jl:3  f3",
+        "1╎ 1 /a/file1.jl:1  f1",
+        " ╎ 2 /a/file2.jl:2  f2",
+        " ╎  2 /a/file1.jl:1  f1",
+        " ╎   1 /a/file2.jl:2  f2",
+        "1╎    1 /a/file1.jl:1  f1"]
+    # f2 has no overhead of its own, so it comes before f1 here
+    @test printed(format = :tree, sortedby = :overhead)[[2, end]] ==
+        [" ╎ 2 /a/file2.jl:2  f2", "1╎ 1 /a/file1.jl:1  f1"]
+    @test printed(format = :tree, sortedby = :flat_count) == printed(format = :tree, sortedby = :overhead)
+    @test printed(format = :flat, sortedby = :overhead) == [
+        "     3         0 /a/file3.jl     3 f3",
+        "     2         0 /a/file2.jl     2 f2",
+        "     3         2 /a/file1.jl     1 f1"]
+    @test printed(format = :flat, C = true)[end] == "     1         1 libc.c          ? cfun"
+    @test_throws "output format :bogus not recognized" printed(format = :bogus)
+
+    @test Profile.callers("f1", data, lidict; filename = "/a/file1.jl") == [(3, lidict[0x1002][1]), (1, lidict[0x1003][1])]
+    @test Profile.callers("f2", data, lidict; filename = "/a/file2.jl", linerange = 1:5) == [(2, lidict[0x1003][1]), (1, lidict[0x1001][1])]
+    @test isempty(Profile.callers("f2", data, lidict; filename = "/a/file2.jl", linerange = 5:9))
+end
+
+@testset "editor links" begin
+    for (editor, link) in ("code" => "vscode://file//a/b%20c.jl:3",
+                           "subl" => "subl://open?url=file:///a/b%20c.jl&line=3",
+                           "idea" => "idea://open?file=/a/b%20c.jl&line=3",
+                           "pycharm" => "pycharm://open?file=/a/b%20c.jl&line=3",
+                           "atom" => "atom://core/open/file?filename=/a/b%20c.jl&line=3",
+                           "emacs" => "emacs://open?file=/a/b%20c.jl&line=3",
+                           "vim" => "vim://open?file=/a/b%20c.jl&line=3")
+        withenv("JULIA_EDITOR" => editor) do
+            @test Profile.editor_link("/a/b c.jl", 3) == link
+        end
+    end
+    withenv("JULIA_EDITOR" => "ed") do
+        @test Profile.editor_link("/a/b c.jl", 3) == Base.Filesystem.uripath("/a/b c.jl")
+    end
+end
+
+@testset "peek duration" begin
+    old = Profile.get_peek_duration()
+    try
+        Profile.set_peek_duration(2.5)
+        @test Profile.get_peek_duration() == 2.5
+    finally
+        Profile.set_peek_duration(old)
+    end
 end
 
 @testset "init while profiling errors" begin
@@ -316,13 +388,11 @@ end
     end
     _, fdictc = Profile.flatten(Profile.retrieve()...)
     Base.update_stackframes_callback[] = identity
-    function getline(sfs)
-        for sf in sfs
-            sf.func === :busywait && return sf.line
-        end
-        nothing
-    end
-    @test getline(values(fdictc)) == getline(values(fdict0)) + 2
+    # several busywait frames can be sampled, so compare all of them
+    getlines(sfs) = sort!(unique!([sf.line for sf in sfs if sf.func === :busywait]))
+    lines0 = getlines(values(fdict0))
+    @test !isempty(lines0)
+    @test getlines(values(fdictc)) == lines0 .+ 2
 end
 
 import InteractiveUtils
@@ -355,7 +425,7 @@ end
 
 function run_with_watchdog(cmd, timeout=600)
     p = open(cmd)
-    t = Timer(timeout) do t
+    t = Timer(timeout) do _
         # should be under 10 seconds normally, so give it 10 minutes then report failure
         # n.b.: it was observed in an interactive CI session that a 2 minute timeout is not
         #       sufficient when the machine is under extremely high load which happens
@@ -400,7 +470,7 @@ end
         @profile println("done")
         """
     good = true
-    for i=1:100
+    for _=1:100
         s = run_with_watchdog(`$cmd -t2 -e $script`, 5)
         good &= occursin("done", s)
     end
@@ -422,7 +492,7 @@ if Sys.isbsd() || Sys.islinux()
             finally
                 closewrite(iob)
             end
-            t = Timer(120) do t
+            t = Timer(120) do _
                 # should be under 10 seconds, so give it 2 minutes then report failure
                 println("KILLING siginfo/sigusr1 test BY PROFILE TEST WATCHDOG\n")
                 kill(p, Base.SIGQUIT)
@@ -450,7 +520,7 @@ if Sys.isbsd() || Sys.islinux()
                 end
                 close(notify_exit) # notify test finished
                 wait(eof) # wait for test completion
-                s = read(iob, String) # consume test output from buffer
+                read(iob, String) # consume test output from buffer
                 close(t)
             catch
                 close(notify_exit)
@@ -503,7 +573,7 @@ end
 # Also used by heapsnapshot_reassemble.jl, which runs under MMTk too.
 function snapshot_array(sshot::AbstractString, key::AbstractString)
     start = last(findfirst("\"$key\":[", sshot)) + 1
-    section = strip(sshot[start:findnext(==(']'), sshot, start)-1])
+    section = strip(sshot[start:something(findnext(==(']'), sshot, start))-1])
     return isempty(section) ? UInt[] : parse.(UInt, split(section, ','))
 end
 
@@ -586,14 +656,23 @@ end
         part_files = [string(prefix, ext) for ext in (".metadata.json", ".nodes", ".edges", ".strings")]
         @test all(isfile, part_files)
 
+        # with data redacted, every name is written to `.strings` only once
+        strs = String[]
+        let io = IOBuffer(read(string(prefix, ".strings")))
+            while !eof(io)
+                push!(strs, String(read(io, read(io, UInt))))
+            end
+        end
+        @test allunique(strs)
+
         out_file = string(prefix, ".heapsnapshot")
         Profile.HeapSnapshot.assemble_snapshot(prefix, out_file)
         sshot = read(out_file, String)
         @test sshot != ""
 
         # structural check: the node/edge arrays must have the expected number of fields
-        node_count = parse(Int, match(r"\"node_count\":(\d+)", sshot).captures[1])
-        edge_count = parse(Int, match(r"\"edge_count\":(\d+)", sshot).captures[1])
+        node_count = Profile.HeapSnapshot.metadata_count(sshot, "node_count", out_file)
+        edge_count = Profile.HeapSnapshot.metadata_count(sshot, "edge_count", out_file)
         @test node_count > 0
         @test edge_count > 0
         @test length(snapshot_array(sshot, "nodes")) == 7 * node_count

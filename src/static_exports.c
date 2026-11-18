@@ -21,6 +21,10 @@ JL_HIDDEN const void **const jl_static_exported_data_ptrs[] = {
 
 #ifdef _OS_DARWIN_
 // the public `jl_*` names, as indirect symbols (see julia.h)
+#ifdef _COMPILER_CLANG_
+// julia.h redeclares the data symbols defined above
+#pragma clang diagnostic ignored "-Wtentative-definition-compat"
+#endif
 #include "julia.h"
 #include "jl_exported_funcs.inc"
 JL_RUNTIME_EXPORTED_FUNCS(JL_STATIC_ALIAS)

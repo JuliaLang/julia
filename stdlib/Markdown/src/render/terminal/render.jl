@@ -173,14 +173,14 @@ function term(io::IO, md::Code, _)
             highlight!(hl[afterprompt:prevind(md.code, exprend)])
             if (nextspace = findnext(' ', md.code, exprend)) |> !isnothing
                 nextword = hl[exprend:prevind(hl, nextspace)]
-                if nextword == "ERROR:"
+                if String(nextword) == "ERROR:"
                     StyledStrings.face!(nextword, :error)
                 end
             end
         end
         hl
     elseif md.language == "styled"
-        styled(md.code)
+        styled(md.code)::AnnotatedString{String}
     else
         styled"{markdown_code:$(md.code)}"
     end

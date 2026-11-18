@@ -31,6 +31,8 @@ const libLLVM = LazyLibrary(
         LazyLibrary[libz, libzstd]
     elseif Sys.isfreebsd()
         LazyLibrary[libz, libzstd, libgcc_s]
+    elseif Sys.iswindows() && Sys.WORD_SIZE == 64
+        LazyLibrary[libz, libzstd, libstdcxx]
     else
         LazyLibrary[libz, libzstd, libstdcxx, libgcc_s]
     end

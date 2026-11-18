@@ -87,7 +87,7 @@ create_serialization_stream() do s
     serialize(s, tpl)
 
     len = 257
-    lt = ntuple(i->0x1, len)
+    lt = ntuple(_->0x1, len)
     serialize(s, lt)
 
     serialize(s, Tuple{})
@@ -328,7 +328,8 @@ create_serialization_stream() do s # Base generic function
 end
 
 # Anonymous Functions
-main_ex = quote
+# This needs to be run on `Main` since the serializer treats it differently.
+@eval Main begin
     using Serialization
     $create_serialization_stream() do s
         local g() = :magic_token_anon_fun_test
@@ -340,7 +341,7 @@ main_ex = quote
         seekstart(s)
         ds = Serializer(s)
         local g2 = deserialize(ds)
-        @test g2 !== g
+        $Test.@test g2 !== g
         $Test.@test Base.invokelatest(g2) === :magic_token_anon_fun_test
         $Test.@test Base.invokelatest(g2) === :magic_token_anon_fun_test
         deserialize(ds) === g2
@@ -362,8 +363,6 @@ main_ex = quote
         end === 2
     end
 end
-# This needs to be run on `Main` since the serializer treats it differently.
-Core.eval(Main, main_ex)
 
 # Task
 # Runnable tasks drop CodeInstance hints but preserve explicit invoke targets.
@@ -502,12 +501,12 @@ using Test, Serialization
 
 module Shell
 export foo
-foo(x) = error("Instances must implement foo")
+foo(_) = error("Instances must implement foo")
 end
 
 module Instance1
 using ..Shell
-Shell.foo(x::Int) = "This is an Int"
+Shell.foo(::Int) = "This is an Int"
 end
 
 using .Shell, .Instance1
@@ -569,7 +568,7 @@ end
 struct T20324{T}
     x::T
 end
-let x = T20324[T20324(1) for i = 1:2]
+let x = T20324[T20324(1) for _ = 1:2]
     b = IOBuffer()
     serialize(b, x)
     seekstart(b)
@@ -593,9 +592,9 @@ end
 
     # Detection of incompatible binary serializations
     function corrupt_header(bytes, offset, val)
-        b = copy(bytes)
-        b[offset] = val
-        IOBuffer(b)
+        corrupted = copy(bytes)
+        corrupted[offset] = val
+        IOBuffer(corrupted)
     end
     @test_throws(
         ErrorException("""Cannot read stream serialized with a newer version of Julia.
@@ -605,7 +604,6 @@ end
                  deserialize(corrupt_header(b, 5, 2<<2)))
     @test_throws(ErrorException("Unknown endianness flag in header"),
                  deserialize(corrupt_header(b, 5, 2)))
-    other_wordsize = sizeof(Int) == 8 ? 4 : 8
     other_endianness = bswap(ENDIAN_BOM)
     @test_throws(ErrorException("Serialized byte order mismatch ($(repr(other_endianness)))"),
                  deserialize(corrupt_header(b, 5, UInt8(ENDIAN_BOM != 0x01020304))))
@@ -613,9 +611,8 @@ end
 
 # issue #26979
 let io = IOBuffer()
-    function gen_f(a::T) where T
-        f = x -> T(x)
-        return f
+    function gen_f(::T) where T
+        return x -> T(x)
     end
     f = gen_f(1f0)
     serialize(io, f)
@@ -661,7 +658,7 @@ end
 
 # issue #39895
 @eval Main begin
-    using Test, Serialization
+    using Serialization
     let g = gensym(:g)
         closure = eval(:(f -> $g(x) = f(x)))
         inc(x) = x + 1
@@ -670,7 +667,7 @@ end
         seekstart(b)
         f = deserialize(b)
         # this should not crash
-        @test_broken f(1) == 2
+        $Test.@test_broken f(1) == 2
     end
 end
 
@@ -802,6 +799,7 @@ end
     seekstart(buf)
     cancel!(p) # does not affect the serialized bytes
     p3, c3 = deserialize(buf)
+    @test !Base.iscancelled(p3)
     @test !Base.iscancelled(c3) # p3 was not cancelled at relink time
 
     # deserializing under an already-cancelled parent is born cancelled:
@@ -850,4 +848,169 @@ end
     a, b = deserialize(buf)
     @test a === b && Base._nslots(a) == 4
     GC.gc(true)
+end
+
+function serialize_roundtrip(x)
+    buf = IOBuffer()
+    serialize(buf, x)
+    seekstart(buf)
+    return deserialize(buf)
+end
+
+@testset "numeric scalars" begin
+    for x in (Int8(-5), 0xab, Int16(-300), 0xabcd, Int32(-7), Int32(typemax(Int32)), 0xabcdef01,
+              -7, typemin(Int32) - 1, typemax(Int), 0xabcdef0123456789,
+              typemin(Int128), typemax(UInt128), Float16(1.5), 1.25f0, -2.5, 'λ')
+        @test serialize_roundtrip(x) === x
+    end
+    @test isequal(serialize_roundtrip(NaN32), NaN32)
+end
+
+@testset "back references past 65535 objects" begin
+    # objects past this count are referenced with a 32-bit offset
+    v = Any[Ref(i) for i in 1:70_000]
+    push!(v, v[end], v[1])
+    w = serialize_roundtrip(v)
+    @test length(w) == length(v)
+    @test w[end-1] === w[end-2]
+    @test w[end] === w[1]
+    @test w[end-1][] == 70_000
+end
+
+@testset "Memory contents" begin
+    m = Memory{Any}(undef, 5)
+    m[1] = "a string longer than seven bytes"
+    m[2] = m[1]
+    m[4] = m
+    m[5] = 1.5
+    m2 = serialize_roundtrip(m)
+    @test m2 isa Memory{Any} && length(m2) == 5
+    @test m2[1] == m[1]
+    @test m2[2] === m2[1]
+    @test !isassigned(m2, 3)
+    @test m2[4] === m2
+    @test m2[5] === 1.5
+
+    ms = Memory{String}(undef, 3)
+    ms[1] = "x"; ms[3] = "z"
+    ms2 = serialize_roundtrip(ms)
+    @test ms2 isa Memory{String}
+    @test ms2[1] == "x" && !isassigned(ms2, 2) && ms2[3] == "z"
+
+    @test serialize_roundtrip(Memory{Int}(undef, 0)) isa Memory{Int}
+    @test isempty(serialize_roundtrip(Memory{Int}(undef, 0)))
+    @test serialize_roundtrip(Memory{Any}(undef, 0)) isa Memory{Any}
+    @test isempty(serialize_roundtrip(Memory{Any}(undef, 0)))
+
+    # booleans are run-length encoded, with runs capped at 127
+    bits = vcat(fill(true, 300), fill(false, 2), [true, false, true])
+    mb = Memory{Bool}(undef, length(bits))
+    copyto!(mb, bits)
+    mb2 = serialize_roundtrip(mb)
+    @test mb2 isa Memory{Bool}
+    @test collect(mb2) == bits
+    @test isempty(serialize_roundtrip(Memory{Bool}(undef, 0)))
+end
+
+@testset "Tuple types" begin
+    @test serialize_roundtrip(Tuple) === Tuple
+    for T in (Tuple{Int8,Int16,Int32,Rational{Int}}, Tuple{Int8,Int16,Int32,Int64,Rational{Int}},
+              Tuple{Rational{Int8},Vararg{Rational{Int16}}})
+        @test serialize_roundtrip(T) === T
+    end
+end
+
+@testset "UnionAll with free type variables" begin
+    # the body of a type wrapper, with its outer variable left free
+    @test serialize_roundtrip(Dict.body) === Dict.body
+    @test serialize_roundtrip(Dict) === Dict
+end
+
+@testset "serialization errors" begin
+    @test_throws ErrorException("cannot serialize a running Task") serialize(IOBuffer(), current_task())
+    buf = IOBuffer()
+    serialize(buf, 1)
+    b = take!(buf)
+    b[2] = UInt8('X')
+    @test_throws ErrorException("Unsupported serialization format (got header magic bytes 88 76)") deserialize(IOBuffer(b))
+    @test_throws "cannot serialize MethodCache objects" serialize(IOBuffer(), Core.methodtable.cache)
+    @test_throws "GenericMemory{:atomic} currently cannot be serialized" serialize(IOBuffer(), AtomicMemory{Int}(undef, 1))
+end
+
+@testset "old :method expressions" begin
+    # without a module context the expression is returned unchanged
+    e = Expr(:method, :f_old_method)
+    @test serialize_roundtrip(e) == e
+    with(Serialization.current_module => Main) do
+        @test serialize_roundtrip(Expr(:method, GlobalRef(Base, :f_old_method))) ==
+            Expr(:call, GlobalRef(Core, :define_method), Base, QuoteNode(:f_old_method))
+        @test serialize_roundtrip(Expr(:method, GlobalRef(Base, :f_old_method), :sig, :code)) ==
+            Expr(:call, GlobalRef(Core, :define_method), Base, QuoteNode(:f_old_method), :sig, :code)
+        @test serialize_roundtrip(Expr(:method, false, :sig, :code)) ==
+            Expr(:call, GlobalRef(Core, :define_method), Main, false, :sig, :code)
+    end
+end
+
+@testset "missing" begin
+    @test serialize_roundtrip(missing) === missing
+    v = Union{Missing,Int}[1, missing, 3]
+    @test isequal(serialize_roundtrip(v), v)
+    @test serialize_roundtrip(Some(missing)) === Some(missing)
+end
+
+module SerializeMethodFields
+@generated sergen(x) = :(x + 1)
+serrec(x) = x
+allow_recursion(_...) = true
+Base.Experimental.@MethodTable SerMT
+Base.Experimental.@overlay SerMT sin(x::Float64) = 1.0
+end
+
+@testset "Method fields" begin
+    m = which(SerializeMethodFields.sergen, (Int,))
+    m2 = serialize_roundtrip(m)
+    @test m2.sig == m.sig && m2.module === SerializeMethodFields
+    @test m2.generator isa typeof(m.generator)
+    @test m2.generator.gen === m.generator.gen
+    @test m2.generator.argnames === m.generator.argnames
+    @test m2.generator.spnames === m.generator.spnames
+
+    m = which(SerializeMethodFields.serrec, (Int,))
+    m.recursion_relation = SerializeMethodFields.allow_recursion
+    m2 = serialize_roundtrip(m)
+    @test m2.recursion_relation === SerializeMethodFields.allow_recursion
+
+    om = only(Base.MethodList(SerializeMethodFields.SerMT).ms)
+    @test_throws ErrorException("cannot serialize Method objects with external method tables") serialize(IOBuffer(), om)
+end
+
+@testset "MethodInstance, MethodTable and PhiNode" begin
+    m = which(SerializeMethodFields.serrec, (Int,))
+    mi = Base.specialize_method(m, Tuple{typeof(SerializeMethodFields.serrec), Int}, Core.svec())
+    mi2 = serialize_roundtrip(mi)
+    @test mi2 isa Core.MethodInstance
+    @test mi2.specTypes == mi.specTypes
+    @test mi2.def.sig == m.sig
+    @test serialize_roundtrip(Core.methodtable) === Core.methodtable
+    phi = Core.PhiNode(Int32[1, 2], Any[3, 4])
+    phi2 = serialize_roundtrip(phi)
+    @test phi2.edges == phi.edges && phi2.values == phi.values
+end
+
+@testset "finished Tasks" begin
+    t = Task(() -> error("task failed"))
+    schedule(t)
+    @test_throws TaskFailedException wait(t)
+    t2 = serialize_roundtrip(t)
+    @test istaskfailed(t2)
+    @test t2.result.ex == ErrorException("task failed")
+end
+
+@testset "reset_state" begin
+    s = Serializer(IOBuffer())
+    serialize(s, [1, 2])
+    @test s.counter > 0
+    @test Serialization.reset_state(s) === s
+    @test s.counter == 0
+    @test isempty(s.backref_table)
 end

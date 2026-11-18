@@ -265,10 +265,3 @@ function parse_inline_wrapper(stream::IO, delimiter::AbstractString;
         end
     end
 end
-
-function showrest(io::IO)
-    start = position(io)
-    show(read(io, String))
-    println()
-    seek(io, start)
-end

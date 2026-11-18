@@ -16,14 +16,14 @@ mutable struct BindingInfo
     unboxed::Bool # determined by binding_analysis.jl; flisp generally mutates `capt` instead
 
     # flisp: vinfo
-    is_nospecialize::Bool # @nospecialize on this argument (only valid for kind == :argument)
+    is_nospecialize::Bool # Only valid for kind == :argument
+    is_specialize::Bool
     is_read::Bool
     is_called::Bool
     is_assigned::Bool
     is_assigned_once::Bool
     is_captured::Bool
     is_always_defined::Bool
-    is_used_undef::Bool
 end
 
 """
@@ -51,19 +51,19 @@ function BindingInfo(bindings::Bindings,
                      is_ambiguous_local::Bool = false,
                      unboxed::Bool = false,
                      is_nospecialize::Bool = false,
+                     is_specialize::Bool = false,
                      is_read::Bool = false,
                      is_called::Bool = false,
                      is_assigned::Bool = false,
                      is_assigned_once::Bool = false,
                      is_captured::Bool = false,
-                     is_always_defined::Bool = is_ssa || kind === :argument,
-                     is_used_undef::Bool = false)
+                     is_always_defined::Bool = is_ssa || kind === :argument)
     bid = next_binding_id(bindings)
     b = BindingInfo(
         bid, name, kind, node_id, mod, type, lambda_id, is_const, is_ssa,
-        is_internal, is_ambiguous_local, unboxed, is_nospecialize,
+        is_internal, is_ambiguous_local, unboxed, is_nospecialize, is_specialize,
         is_read, is_called, is_assigned, is_assigned_once, is_captured,
-        is_always_defined, is_used_undef)
+        is_always_defined)
     add_binding(bindings, b)
     b
 end
@@ -82,13 +82,13 @@ function Base.show(io::IO, binfo::BindingInfo)
     binfo.is_ambiguous_local && print(io, ", is_ambiguous_local=true")
     binfo.unboxed            && print(io, ", unboxed=true")
     binfo.is_nospecialize    && print(io, ", is_nospecialize=true")
+    binfo.is_specialize      && print(io, ", is_specialize=true")
     binfo.is_read            && print(io, ", is_read=true")
     binfo.is_called          && print(io, ", is_called=true")
     binfo.is_assigned        && print(io, ", is_assigned=true")
     binfo.is_assigned_once   && print(io, ", is_assigned_once=true")
     binfo.is_captured        && print(io, ", is_captured=true")
     binfo.is_always_defined  && print(io, ", is_always_defined=true")
-    binfo.is_used_undef      && print(io, ", is_used_undef=true")
     print(io, ")")
 end
 
@@ -127,7 +127,7 @@ function _new_binding(bindings::Bindings, srcref::SyntaxTree,
     # A binding is only useful when it shows up in the tree, so create its tree
     # node eagerly and share it among uses (see `binding_ex`)
     bid = next_binding_id(bindings)
-    ex = @ast _ srcref bid::bindingid
+    ex = @mknode(srcref; value=bid, head=:bindingid, children=nothing)
     b = BindingInfo(bindings, name, kind, ex; kws...)
     return b
 end

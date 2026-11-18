@@ -269,7 +269,7 @@ let
     @test Base.binding_module(TestMod7648.TestModSub9475, :b9475) == TestMod7648.TestModSub9475
     defaultset = Set(Symbol[:Foo7648, :TestMod7648, :a9475, :c7648, :f9475, :foo7648, :foo7648_nomethods])
     allset = defaultset ∪ Set(Symbol[
-        Symbol("#foo7648"), Symbol("#foo7648_nomethods"), Symbol("#_internal_julia_parse"),
+        Symbol("#foo7648"), Symbol("#foo7648_nomethods"),
         :TestModSub9475, :d7648, :eval, :f7648, :include])
     imported = Set(Symbol[:convert, :curmod_name, :curmod])
     usings_from_Test = Set(Symbol[
@@ -355,7 +355,7 @@ let defaultset = Set((:A,))
     imported = Set((:M2,))
     usings_from_Base = delete!(Set(names(Module(); usings=true)), :anonymous) # the name of the anonymous module itself
     usings = Set((:A, :f, :C, :y, :M1, :m1_x)) ∪ usings_from_Base
-    allset = Set((:A, :B, :C, :eval, :include, Symbol("#_internal_julia_parse")))
+    allset = Set((:A, :B, :C, :eval, :include))
     @test Set(names(TestMod54609.A)) == defaultset
     @test Set(names(TestMod54609.A, imported=true)) == defaultset ∪ imported
     @test Set(names(TestMod54609.A, usings=true)) == defaultset ∪ usings
@@ -957,6 +957,20 @@ end
 # TypeEgal{T} has the single instance `T` (issue #62890)
 @test fieldcount(Core.TypeEgal{Int}) == nfields(Int)
 @test fieldcount(Core.TypeEgal{Type{Int}}) == nfields(Type{Int}) == 1
+@test fieldnames(Core.TypeEgal{Int}) == fieldnames(DataType)
+@test fieldname(Core.TypeEgal{Int}, 1) === fieldname(DataType, 1)
+@test fieldtypes(Core.TypeEgal{Int}) == fieldtypes(DataType)
+@test supertype(Core.TypeEgal{Int}) === Type{Int}
+@test supertype(Type{Int}) === Core.AnyType
+@test supertype(Type{<:Integer}) === Core.AnyType
+@test fieldtype(Core.TypeEgal{Int}, 1) === fieldtype(Core.TypeEgal{Int}, :name) === fieldtype(DataType, 1)
+@test fieldtype(Union{Core.TypeEgal{Int},Core.TypeEgal{Float64}}, 1) === fieldtype(DataType, 1)
+@test only(Base.return_types(() -> fieldtype(Core.TypeEgal{Int}, :name), ())) === Core.TypeEgal{fieldtype(DataType, 1)}
+@test fieldoffset(Core.TypeEgal{Int}, 2) == fieldoffset(Core.TypeEgal{Int}, :super) == fieldoffset(DataType, 2)
+@test_throws ArgumentError fieldcount(Type{Int})
+@test_throws ArgumentError fieldnames(Type{Int})
+@test_throws ArgumentError fieldname(Type{Int}, 1)
+@test_throws ArgumentError fieldtypes(Type{<:Integer})
 
 # Common-field unions are definite only when all alternatives share the field count.
 @test fieldcount(Union{Tuple{Int,Float64},Tuple{Int,Int}}) == 2
@@ -1180,6 +1194,22 @@ function f31353(f, x::Array{<:Dict})
 end
 @test  hasmethod(f31353, Tuple{Any, Array{D}} where D<:Dict)
 @test !hasmethod(f31353, Tuple{Any, Array{D}} where D<:AbstractDict)
+
+# `hasmethod` with several argument types folds to a constant
+module HasmethodFoldable
+using Test
+struct C end
+k(::C) = 1
+for sig in (Tuple{C, Int}, Tuple{C, Int, Float64}, Tuple{C, Vararg{Int}}, Tuple{C, T} where T)
+    f = @eval () -> hasmethod(k, $sig)
+    @test Core.Compiler.is_foldable(Base.infer_effects(f, ()))
+    @test only(code_typed(f, ())).first.code == Any[Core.ReturnNode(false)]
+end
+g() = hasmethod(k, Tuple{C, Int})
+@test !g()
+k(::C, ::Int) = 2
+@test g()
+end
 
 # issue #26267
 module M26267
@@ -1456,6 +1486,7 @@ end
 @test !Base.ismutationfree(Vector{UInt64})
 
 @test Base.ismutationfree(Type{Union{}})
+@test Base.ismutationfree(typeof(Type{Int}))
 
 @test !Base.ismutationfree(Core.SimpleVector)
 
@@ -1564,3 +1595,5 @@ end
 using .X1ConstConflict, .X2ConstConflict
 
 @test_throws ErrorException which(@__MODULE__, :xconstconflict)
+
+@test Base.infer_return_type(which, (Type,)) == Method

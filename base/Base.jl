@@ -23,9 +23,6 @@ include(strcat(BUILDROOT, "version_git.jl")) # include($BUILDROOT/base/version_g
 # a slightly more verbose fashion than usual, because we're running so early.
 let os = ccall(:jl_get_UNAME, Any, ())
     if os === :Darwin || os === :Apple
-        if DARWIN_FRAMEWORK
-            push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-        end
         push!(DL_LOAD_PATH, "@loader_path")
     end
 end
@@ -103,6 +100,17 @@ include("set.jl")
 
 include("syntax.jl")
 
+# Convenience function for `jl_parse`. Note that bootstrap `include` also goes through
+# `jl_parse`, which uses this as soon as it is defined.
+function _c_parseall_expr(code::Core.SimpleVector, filename::String,
+                          lineno::Int, mod::Union{Module, Nothing})
+    (ptr, len) = code
+    str = unsafe_string(ptr, len)
+    pfm = Meta.parser_for_module(mod)
+    ex, offset = Meta._parse_string(str, filename, lineno, 1, :all, Expr, pfm)
+    return Core.svec(ex, offset-1)
+end
+
 # Dynamic scopes (types only; the ScopedValues API is included much later)
 include("scope.jl")
 # Cancellation tokens (the `cancel` keyword-argument machinery is used from
@@ -147,6 +155,7 @@ using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
 # More strings & printing
 include("regex.jl")
+include("parsers/Parsers.jl")
 include("parse.jl")
 include("shell.jl")
 const IRShow = Compiler.IRShow # an alias for compatibility
@@ -303,9 +312,12 @@ include("pkgid.jl")
 include("toml/toml.jl")
 include("linking.jl")
 include("loading.jl")
+include("loading_cache.jl")
 
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
 include("binaryplatforms.jl")
+
+using .BinaryPlatforms.CPUID: @cpu_supports
 
 # misc useful functions & macros
 include("timing.jl")
@@ -321,7 +333,6 @@ include("docs/basedocs.jl")
 # Compiler frontend
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
 JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
-set_syntax_version(Base, VERSION)
 
 include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
 JuliaLowering.activate!(false; freeze_world_age=false)
@@ -420,6 +431,9 @@ const _sigint_episode = Ref{Tuple{Union{Nothing, CancellationTokenSource}, UInt6
 # has no published token binding, and Distributed points it at the handler
 # of the most recent remotely-submitted request.
 const _sigint_foreground_task = Ref{Union{Nothing, Task}}(nothing)
+# The token a `disable_sigint` region shields, for `reenable_sigint` to
+# restore; unset outside any region.
+const _sigint_shielded_token = ScopedValues.ScopedValue{Union{Nothing, CancellationToken}}()
 
 @doc """
     Base.sigint_new_episode!([src::CancellationTokenSource]) -> CancellationToken
@@ -595,8 +609,12 @@ function __init__()
     init_depot_path()
     init_load_path()
     init_active_project()
+    init_debuginfo_source_paths()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
+    empty!(loaded_cachefile_locks) # opened by the process that built the image
+    empty!(session_build_locks)
+    atexit(release_cachefile_locks)
     empty!(checksums_valid)
     for mod in loaded_modules_order
         push!(get!(Vector{Module}, loaded_precompiles, PkgId(mod)), mod)

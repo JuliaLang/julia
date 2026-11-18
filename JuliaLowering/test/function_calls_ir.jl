@@ -12,39 +12,41 @@ f(x, y)
 # Keyword calls
 f(x; a=1, b=2)
 #---------------------
-1   TestMod.f
-2   (call core.tuple :a :b)
-3   (call core.apply_type core.NamedTuple %₂)
-4   (call core.tuple 1 2)
-5   (call %₃ %₄)
+1   (call core.tuple :a :b)
+2   (call core.apply_type core.NamedTuple %₁)
+3   (call core.tuple 1 2)
+4   (call %₂ %₃)
+5   TestMod.f
 6   TestMod.x
-7   (call core.kwcall %₅ %₁ %₆)
+7   (call core.kwcall %₄ %₅ %₆)
 8   (return %₇)
 
 ########################################
 # Keyword call with only splats for kws
 f(; ks1..., ks2...)
 #---------------------
-1   TestMod.f
-2   (call core.NamedTuple)
-3   TestMod.ks1
-4   (call top.merge %₂ %₃)
-5   TestMod.ks2
-6   (call top.merge %₄ %₅)
-7   (call top.isempty %₆)
-8   (gotoifnot %₇ label₁₁)
-9   (call %₁)
+1   (call core.NamedTuple)
+2   TestMod.ks1
+3   (call top.merge %₁ %₂)
+4   TestMod.ks2
+5   (call top.merge %₃ %₄)
+6   (call top.isempty %₅)
+7   (gotoifnot %₆ label₁₁)
+8   TestMod.f
+9   (call %₈)
 10  (return %₉)
-11  (call core.kwcall %₆ %₁)
-12  (return %₁₁)
+11  TestMod.f
+12  (call core.kwcall %₅ %₁₁)
+13  (return %₁₂)
 
 ########################################
 # Error: Call with repeated keywords
 f(x; a=1, a=2)
 #---------------------
-LoweringError:
+syntax: repeated keyword argument name
+@ :1
 f(x; a=1, a=2)
-#         ╙ ── Repeated keyword argument name
+#         ⊔
 
 ########################################
 # literal_pow lowering
@@ -70,11 +72,9 @@ x^42.0
 # Error: Call with no function name
 @ast_ [:call]
 #---------------------
-LoweringError:
- at line 1: malformed `call`
-
-Expression:
-  (call)
+syntax: malformed `call`
+@ :1
+└───Expression: ::tombstone
 
 ########################################
 # Simple broadcast
@@ -159,10 +159,10 @@ a < b < c(1) .< d .< e
 7   (gotoifnot %₆ label₁₂)
 8   TestMod.<
 9   TestMod.b
-10  (= slot₁/if_val (call %₈ %₉ %₂))
+10  (= slot₁/ (call %₈ %₉ %₂))
 11  (goto label₁₃)
-12  (= slot₁/if_val false)
-13  slot₁/if_val
+12  (= slot₁/ false)
+13  slot₁/
 14  TestMod.<
 15  TestMod.d
 16  (call top.broadcasted %₁₄ %₂ %₁₅)
@@ -196,10 +196,10 @@ a .< b .< c < d < e
 15  TestMod.<
 16  TestMod.d
 17  TestMod.e
-18  (= slot₁/if_val (call %₁₅ %₁₆ %₁₇))
+18  (= slot₁/ (call %₁₅ %₁₆ %₁₇))
 19  (goto label₂₁)
-20  (= slot₁/if_val false)
-21  slot₁/if_val
+20  (= slot₁/ false)
+21  slot₁/
 22  (call top.broadcasted top.& %₉ %₂₁)
 23  (call top.materialize %₂₂)
 24  (return %₂₃)
@@ -236,10 +236,10 @@ x .+ (a .< b .< c)
 7   (call %₆ 0 2)
 8   (gotoifnot %₇ label₁₂)
 9   TestMod.<
-10  (= slot₁/if_val (call %₉ 2 %₂))
+10  (= slot₁/ (call %₉ 2 %₂))
 11  (goto label₁₃)
-12  (= slot₁/if_val false)
-13  slot₁/if_val
+12  (= slot₁/ false)
+13  slot₁/
 14  TestMod.<
 15  (call top.broadcasted %₁₄ %₂ 4)
 16  (call top.broadcasted top.& %₁₃ %₁₅)
@@ -262,17 +262,16 @@ x.^3
 # Broadcast with keywords
 f.(x, y, z = 1; w = 2)
 #---------------------
-1   top.broadcasted_kwsyntax
-2   (call core.tuple :z :w)
-3   (call core.apply_type core.NamedTuple %₂)
-4   (call core.tuple 1 2)
-5   (call %₃ %₄)
-6   TestMod.f
-7   TestMod.x
-8   TestMod.y
-9   (call core.kwcall %₅ %₁ %₆ %₇ %₈)
-10  (call top.materialize %₉)
-11  (return %₁₀)
+1   (call core.tuple :z :w)
+2   (call core.apply_type core.NamedTuple %₁)
+3   (call core.tuple 1 2)
+4   (call %₂ %₃)
+5   TestMod.f
+6   TestMod.x
+7   TestMod.y
+8   (call core.kwcall %₄ top.broadcasted_kwsyntax %₅ %₆ %₇)
+9   (call top.materialize %₈)
+10  (return %₉)
 
 ########################################
 # Broadcast with unary dot syntax
@@ -428,33 +427,37 @@ ccall(:printf, Cint, (Cstring, Cstring...), "%s = %s\n", "2 + 2", "5")
 # Error: ccall with too few arguments
 ccall(:foo, Csize_t)
 #---------------------
-LoweringError:
+syntax: too few arguments to ccall
+@ :1
 ccall(:foo, Csize_t)
-└──────────────────┘ ── too few arguments to ccall
+└──────────────────┘
 
 ########################################
 # Error: ccall with calling conv and too few arguments
 ccall(:foo, thiscall, Csize_t)
 #---------------------
-LoweringError:
+syntax: too few arguments to ccall with calling convention specified
+@ :1
 ccall(:foo, thiscall, Csize_t)
-└────────────────────────────┘ ── too few arguments to ccall with calling convention specified
+└────────────────────────────┘
 
 ########################################
 # Error: ccall without tuple for argument types
 ccall(:foo, Csize_t, Cstring)
 #---------------------
-LoweringError:
+syntax: ccall argument types must be a tuple; try `(T,)`
+@ :1
 ccall(:foo, Csize_t, Cstring)
-#                    └─────┘ ── ccall argument types must be a tuple; try `(T,)`
+#                    └─────┘
 
 ########################################
 # Error: ccall without tuple for argument types
 ccall(:foo, (Csize_t,), "arg")
 #---------------------
-LoweringError:
+syntax: ccall argument types must be a tuple; try `(T,)` and check if you specified a correct return type
+@ :1
 ccall(:foo, (Csize_t,), "arg")
-#           └────────┘ ── ccall argument types must be a tuple; try `(T,)` and check if you specified a correct return type
+#           └────────┘
 
 ########################################
 # Error: ccall with library name which is a local variable
@@ -462,10 +465,11 @@ let libc = "libc"
     ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
 end
 #---------------------
-LoweringError:
+syntax: function name and library expression cannot reference local variable
+@ :2
 let libc = "libc"
     ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
-#                   └──┘ ── function name and library expression cannot reference local variable
+#                   └──┘
 end
 
 ########################################
@@ -474,10 +478,11 @@ let Csize_t = 1
     ccall(:strlen, Csize_t, (Cstring,), "asdfg")
 end
 #---------------------
-LoweringError:
+syntax: ccall return type cannot reference local variable
+@ :2
 let Csize_t = 1
     ccall(:strlen, Csize_t, (Cstring,), "asdfg")
-#                  └─────┘ ── ccall return type cannot reference local variable
+#                  └─────┘
 end
 
 ########################################
@@ -486,43 +491,48 @@ let Cstring = 1
     ccall(:strlen, Csize_t, (Cstring,), "asdfg")
 end
 #---------------------
-LoweringError:
+syntax: ccall argument type cannot reference local variable
+@ :2
 let Cstring = 1
     ccall(:strlen, Csize_t, (Cstring,), "asdfg")
-#                            └─────┘ ── ccall argument type cannot reference local variable
+#                            └─────┘
 end
 
 ########################################
 # Error: ccall with too few arguments
 ccall(:strlen, Csize_t, (Cstring,))
 #---------------------
-LoweringError:
+syntax: too few arguments in ccall compared to argument types
+@ :1
 ccall(:strlen, Csize_t, (Cstring,))
-└─────────────────────────────────┘ ── Too few arguments in ccall compared to argument types
+└─────────────────────────────────┘
 
 ########################################
 # Error: ccall with too many arguments
 ccall(:strlen, Csize_t, (Cstring,), "asdfg", "blah")
 #---------------------
-LoweringError:
+syntax: more arguments than types in ccall
+@ :1
 ccall(:strlen, Csize_t, (Cstring,), "asdfg", "blah")
-└──────────────────────────────────────────────────┘ ── More arguments than types in ccall
+└──────────────────────────────────────────────────┘
 
 ########################################
 # Error: ccall varargs with too few args
 ccall(:foo, Csize_t, (Cstring...,), "asdfg")
 #---------------------
-LoweringError:
+syntax: C ABI prohibits vararg without one required argument
+@ :1
 ccall(:foo, Csize_t, (Cstring...,), "asdfg")
-#                     └────────┘ ── C ABI prohibits vararg without one required argument
+#                     └────────┘
 
 ########################################
 # Error: ccall with multiple varargs
 ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 #---------------------
-LoweringError:
+syntax: only the trailing ccall argument type should have `...`
+@ :1
 ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
-#                     └────────┘ ── only the trailing ccall argument type should have `...`
+#                     └────────┘
 
 ########################################
 # cglobal special support for (sym, lib) tuple
@@ -552,42 +562,47 @@ cglobal(f(), Int)
 # Error: cglobal too many arguments
 cglobal(:sym, Int, blah)
 #---------------------
-LoweringError:
+syntax: cglobal must have one or two arguments
+@ :1
 cglobal(:sym, Int, blah)
-└──────────────────────┘ ── cglobal must have one or two arguments
+└──────────────────────┘
 
 ########################################
 # Error: assigning to `cglobal`
 cglobal = 10
 #---------------------
-LoweringError:
+syntax: invalid syntax in left-hand side of assignment
+@ :1
 cglobal = 10
-└─────┘ ── invalid syntax in left-hand side of assignment
+└─────┘
 
 ########################################
 # Error: assigning to `ccall`
 ccall = 10
 #---------------------
-LoweringError:
+syntax: invalid syntax in left-hand side of assignment
+@ :1
 ccall = 10
-└───┘ ── invalid syntax in left-hand side of assignment
+└───┘
 
 ########################################
 # Error: assigning to `var"ccall"`
 var"ccall" = 10
 #---------------------
-LoweringError:
+syntax: invalid syntax in left-hand side of assignment
+@ :1
 var"ccall" = 10
-#   └───┘ ── invalid syntax in left-hand side of assignment
+#   └───┘
 
 ########################################
 # Error: Invalid function name ccall
 function ccall()
 end
 #---------------------
-LoweringError:
+syntax: ccall is a reserved identifier
+@ :1
 function ccall()
-#        └───┘ ── ccall is a reserved identifier
+#        └───┘
 end
 
 ########################################
@@ -595,9 +610,10 @@ end
 function A.ccall()
 end
 #---------------------
-LoweringError:
+syntax: ccall is a reserved identifier
+@ :1
 function A.ccall()
-#          └───┘ ── ccall is a reserved identifier
+#          └───┘
 end
 
 ########################################
@@ -605,9 +621,10 @@ end
 function ccall{<:T}()
 end
 #---------------------
-LoweringError:
+syntax: ccall is a reserved identifier
+@ :1
 function ccall{<:T}()
-#        └───┘ ── ccall is a reserved identifier
+#        └───┘
 end
 
 ########################################
@@ -661,7 +678,8 @@ tuple(((xs...)...)...)
 # Error: Standalone splat expression
 (xs...)
 #---------------------
-LoweringError:
-(xs...)
-#└───┘ ── unexpected `...`
+syntax: unexpected `...`
 splatting can only be done into a `call`, `tuple`, `curly`, or array-like expression
+@ :1
+(xs...)
+#└───┘

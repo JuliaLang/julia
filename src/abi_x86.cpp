@@ -57,20 +57,23 @@ inline bool is_complex128(jl_datatype_t *dt) const
     return is_complex_type(dt) && jl_tparam0(dt) == (jl_value_t*)jl_float64_type;
 }
 
-bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override JL_CANSAFEPOINT
 {
     size_t size = jl_datatype_size(dt);
     if (size == 0)
         return false;
-    if (is_complex64(dt) || (jl_is_primitivetype(dt) && size <= 8))
+    // Let LLVM assign native SIMD tuples to the vector return registers.
+    if (is_complex64(dt) || is_native_simd_type(dt) || (jl_is_primitivetype(dt) && size <= 8))
         return false;
     return true;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override JL_CANSAFEPOINT
 {
     size_t size = jl_datatype_size(dt);
-    if (is_complex64(dt) || is_complex128(dt) || (jl_is_primitivetype(dt) && size <= 8))
+    // A byval attribute would force SIMD arguments onto the stack.
+    if (is_complex64(dt) || is_complex128(dt) || is_native_simd_type(dt) ||
+        (jl_is_primitivetype(dt) && size <= 8))
         return false;
     // Avoid using i128 directly as a byval type since LLVM gives it 16-byte
     // stack alignment on x86-32, while the C ABI uses 4-byte alignment.

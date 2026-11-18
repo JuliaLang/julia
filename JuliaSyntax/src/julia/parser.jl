@@ -66,7 +66,7 @@ end
 
 # Convenient wrappers for ParseStream
 
-function Base.peek(ps::ParseState, n=1; skip_newlines=nothing)
+function peek(ps::ParseState, n=1; skip_newlines=nothing)
     skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
     peek(ps.stream, n; skip_newlines=skip_nl)
 end
@@ -114,7 +114,7 @@ function steal_token_bytes!(ps::ParseState, args...)
     steal_token_bytes!(ps.stream, args...)
 end
 
-function Base.position(ps::ParseState, args...)
+function position(ps::ParseState, args...)
     position(ps.stream, args...)
 end
 
@@ -2317,7 +2317,11 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             bump(ps, TRIVIA_FLAG)
             is_empty_tuple = peek(ps, skip_newlines=true) == K")"
             opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
-                _parsed_call = was_eventually_call(ps)
+                # For `(; x=1)` peek_behind skips the parameters TOMBSTONE and
+                # lands before the `(`, e.g. on the call of an enclosing signature
+                _parsed_call = num_semis == 0 &&
+                               peek_behind_pos(ps).node_index > mark.node_index &&
+                               was_eventually_call(ps)
                 _maybe_grouping_parens = !had_commas && !had_splat && num_semis == 0 && num_subexprs == 1
                 # Check if there's a newline between `)` and the next `(` or `.`.
                 # We need to find where `)` is and check what immediately follows it.

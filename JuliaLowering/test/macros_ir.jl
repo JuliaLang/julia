@@ -46,7 +46,7 @@ end
 2   latestworld
 3   TestMod.@add_one
 4   (call core.TypeEqOf %₃)
-5   (call core.svec %₄ JuliaLowering.MacroContext core.Any)
+5   (call core.svec %₄ Base.MacroContext core.Any)
 6   (call core.svec)
 7   SourceLocation:1
 8   (call core.svec %₅ %₆ %₇)
@@ -70,7 +70,7 @@ end
 2   latestworld
 3   TestMod.@foo
 4   (call core.TypeEqOf %₃)
-5   (call core.svec %₄ JuliaLowering.MacroContext core.Any)
+5   (call core.svec %₄ Base.MacroContext core.Any)
 6   (call core.svec)
 7   SourceLocation:1
 8   (call core.svec %₅ %₆ %₇)
@@ -100,9 +100,10 @@ end
 macro mmm(a; b=2)
 end
 #---------------------
-LoweringError:
+syntax: macros cannot accept keyword arguments
+@ :1
 macro mmm(a; b=2)
-#         ╙ ── macros cannot accept keyword arguments
+#         ⊔
 end
 
 ########################################
@@ -110,9 +111,10 @@ end
 macro mmm(a::T) where T
 end
 #---------------------
-LoweringError:
+syntax: `where` not allowed in macro signatures
+@ :1
 macro mmm(a::T) where T
-#     └───────────────┘ ── `where` not allowed in macro signatures
+#     └───────────────┘
 end
 
 ########################################
@@ -120,9 +122,10 @@ end
 macro mmm[](ex)
 end
 #---------------------
-LoweringError:
+syntax: invalid macro name
+@ :1
 macro mmm[](ex)
-#     └───┘ ── invalid macro name
+#     └───┘
 end
 
 ########################################
@@ -132,12 +135,13 @@ let
     end
 end
 #---------------------
-LoweringError:
+syntax: macro is only allowed in global scope
+@ :2
 let
 #   ┌────────────
     macro foo(ex)
     end
-#─────┘ ── macro is only allowed in global scope
+#─────┘
 end
 
 ########################################
@@ -147,12 +151,13 @@ function f()
     end
 end
 #---------------------
-LoweringError:
+syntax: this syntax is only allowed at top level
+@ :2
 function f()
 #   ┌──────────
     macro foo()
     end
-#─────┘ ── this syntax is only allowed at top level
+#─────┘
 end
 
 ########################################
@@ -162,8 +167,7 @@ _never_exist = @m_not_exist 42
 MacroExpansionError while expanding @m_not_exist in module Main.TestMod:
 _never_exist = @m_not_exist 42
 #              └──────────┘ ── Macro not found
-Caused by:
-UndefVarError: `@m_not_exist` not defined in `Main.TestMod`
+Caused by: UndefVarError: `@m_not_exist` not defined in `Main.TestMod`
 Suggestion: check for spelling errors or missing imports.
 
 ########################################
@@ -224,7 +228,7 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.foo %₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/a(nospecialize,!read)]
+    slots: [slot₁/#self#(!read) slot₂/a(!read)]
     1   (meta :nospecialize)
     2   (return core.nothing)
 10  latestworld
@@ -287,17 +291,19 @@ end
 # Error: thisfunction disallowed in comprehension/generator
 [@__FUNCTION__() for x in 1:2]
 #---------------------
-LoweringError:
+syntax: current function not defined in comprehension or generator
+@ :1
 [@__FUNCTION__() for x in 1:2]
-#└─────────────┘ ── current function not defined in comprehension or generator
+#└─────────────┘
 
 ########################################
 # Error: thisfunction disallowed in comprehension/generator
 f(@__FUNCTION__() for x in 1:2)
 #---------------------
-LoweringError:
+syntax: current function not defined in comprehension or generator
+@ :1
 f(@__FUNCTION__() for x in 1:2)
-# └─────────────┘ ── current function not defined in comprehension or generator
+# └─────────────┘
 
 ########################################
 # Error: thisfunction disallowed outside of function
@@ -305,10 +311,11 @@ let
     @__FUNCTION__()
 end
 #---------------------
-LoweringError:
+syntax: @__FUNCTION__ can only be used inside a function
+@ :2
 let
     @__FUNCTION__()
-#   └─────────────┘ ── can only be used inside a function
+#   └─────────────┘
 end
 
 ########################################
