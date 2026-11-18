@@ -418,7 +418,7 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
                 lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
             elseif isexpr(def, :new)
-                typ = unwrap_unionall(widenconst(types(compact)[leaf]))
+                typ = unwrap_unionall(widenconst_split(types(compact)[leaf]))
                 (isa(typ, DataType) && !isabstracttype(typ)) || return nothing
                 if ismutabletype(typ)
                     isconst(typ, field) || return nothing
