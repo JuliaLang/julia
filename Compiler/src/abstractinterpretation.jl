@@ -734,6 +734,9 @@ function abstract_call_method(interp::AbstractInterpreter,
 
         # see if the type is actually too big (relative to the caller), and limit it if required
         newsig = limit_type_size(sig, comparison, hardlimit ? comparison : mi.specTypes, InferenceParams(interp).tuple_complexity_limit_depth, spec_len)
+        if hardlimit && newsig !== sig
+            newsig = keep_unchanged_params(newsig, sig, frame_instance(topmost).specTypes)
+        end
 
         if newsig !== sig
             # continue inference, but note that we've limited parameter complexity
@@ -801,6 +804,29 @@ function abstract_call_method(interp::AbstractInterpreter,
     end
 
     return typeinf_edge(interp, method, sig, sparams, sv, edgecycle, edgelimited, edgerecursed)
+end
+
+# Under a hard limit, `limit_type_size` compares against the method signature only, so it
+# also widens arguments that are the same as in the frame the recursion came from. Those
+# cannot grow along the recursion, so keep them.
+function keep_unchanged_params(@nospecialize(newsig), @nospecialize(sig), @nospecialize(topsig))
+    newsig isa DataType || return newsig
+    sig isa DataType || return newsig
+    topsig isa DataType || return newsig
+    np = length(sig.parameters)
+    length(newsig.parameters) == np == length(topsig.parameters) || return newsig
+    params = Any[newsig.parameters...]
+    changed = false
+    for i in 1:np
+        p = sig.parameters[i]
+        isvarargtype(p) && return newsig
+        if p === topsig.parameters[i] && params[i] !== p
+            params[i] = p
+            changed = true
+        end
+    end
+    changed || return newsig
+    return Tuple{params...}
 end
 
 function edge_matches_sv(interp::I, frame::AbsIntState,

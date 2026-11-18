@@ -4777,6 +4777,14 @@ let
     @test mergewith(+, d, e, f).dicts == (Dict(1 => 10, 2 => 7), Dict(4.0 => 2, 5.0 => 20))
 end
 
+# A hard-limited recursive call keeps the arguments that did not change from the frame it
+# recursed from, here `out` of a forwarder to an abstractly typed wrapped object
+abstract type HardLimitPipe <: IO end
+struct HardLimitP <: HardLimitPipe; r::IO; end
+hardlimit_fwd(out::IO, io::HardLimitPipe, d::AbstractChar; kw...) = hardlimit_fwd(out, io.r::IO, d; kw...)
+hardlimit_fwd(out::IO, s::IO, d::AbstractChar; keep::Bool=false) = (write(out, d); out)
+@test Base.infer_return_type(p -> hardlimit_fwd(IOBuffer(), p, 'x'), (HardLimitP,)) === IOBuffer
+
 # Issue #31974
 f31974(a::UnitRange) = (if first(a) <= last(a); f31974((first(a)+1):last(a)); end; a)
 f31974(n::Int) = f31974(1:n)
