@@ -37,10 +37,15 @@ const BaseTOMLValue = Union{AbstractVector, AbstractDict, Bool, Integer, Abstrac
 
 is_valid_toml_value(@nospecialize(::Any)) = false
 is_valid_toml_value(@nospecialize(::BaseTOMLValue)) = true
+
+# Dynamic dispatch, for values of types that the printer does not handle statically.
+# Kept in one place so that it can be overridden for `juliac --trim`.
+@noinline _invoke_generic(@nospecialize(f), @nospecialize(args...)) = @invokelatest f(args...)
+
 # Packages (e.g. Dates) extend `is_valid_toml_value`. Call it dynamically, so that doing
 # so does not invalidate the printer, which also runs while loading packages.
 _is_valid_toml_value(@nospecialize(x)) =
-    x isa BaseTOMLValue || (@invokelatest is_valid_toml_value(x))::Bool
+    x isa BaseTOMLValue || _invoke_generic(is_valid_toml_value, x)::Bool
 
 ########
 # Keys #
@@ -63,7 +68,7 @@ function printkey(io::IO, keys::Vector{String})
     end
 end
 
-function to_toml_value(@nospecialize(f::Function), value)
+function to_toml_value(f::F, @nospecialize(value)) where {F<:Function}
     if f === identity
         error(lazy"type `$(typeof(value))` is not a valid TOML type, pass a conversion function to `TOML.print`")
     end
@@ -84,11 +89,37 @@ function printvalue(f::Function, io::IO, value, sorted::Bool)
     @invokelatest printvalue(f, io, toml_value, sorted)
 end
 
-function printvalue(f::Function, io::IO, value::AbstractVector, sorted::Bool)
+# Print a value of any type. Values of the common TOML types (e.g. as returned by `TOML.parse`)
+# are printed without dynamic dispatch, so that printing is inferable (needed for `--trim`).
+function printvalue_any(f::F, io::IO, @nospecialize(value), sorted::Bool) where {F<:Function}
+    value isa String && return printvalue(f, io, value, sorted)
+    value isa Int64 && return printvalue(f, io, value, sorted)
+    value isa UInt64 && return printvalue(f, io, value, sorted)
+    value isa Float64 && return printvalue(f, io, value, sorted)
+    value isa Bool && return printvalue(f, io, value, sorted)
+    value isa Dict{String, Any} && return printvalue(f, io, value, sorted)
+    value isa Vector{Any} && return printvalue(f, io, value, sorted)
+    value isa Vector{String} && return printvalue(f, io, value, sorted)
+    value isa Vector{Int64} && return printvalue(f, io, value, sorted)
+    value isa Vector{UInt64} && return printvalue(f, io, value, sorted)
+    value isa Vector{Float64} && return printvalue(f, io, value, sorted)
+    value isa Vector{Bool} && return printvalue(f, io, value, sorted)
+    value isa Vector{Dict{String, Any}} && return printvalue(f, io, value, sorted)
+    value isa Base.TOML.DateTime && return printvalue(f, io, value, sorted)
+    value isa Base.TOML.Date && return printvalue(f, io, value, sorted)
+    value isa Base.TOML.Time && return printvalue(f, io, value, sorted)
+    return printvalue_generic(f, io, value, sorted)
+end
+
+# Values of other types, e.g. from Dates (which extends `printvalue`)
+printvalue_generic(f::Function, io::IO, @nospecialize(value), sorted::Bool) =
+    _invoke_generic(printvalue, f, io, value, sorted)
+
+function printvalue(f::F, io::IO, value::AbstractVector, sorted::Bool) where {F<:Function}
     Base.print(io, "[")
     for (i, x) in enumerate(value)
         i != 1 && Base.print(io, ", ")
-        printvalue(f, io, x, sorted)
+        printvalue_any(f, io, x, sorted)
     end
     Base.print(io, "]")
 end
@@ -152,11 +183,11 @@ function printvalue(f::Function, io::IO, value::AbstractString, sorted::Bool)
     Base.print(io, qmark)
 end
 
-function printvalue(f::Function, io::IO, value::AbstractDict, sorted::Bool)
+function printvalue(f::F, io::IO, value::AbstractDict, sorted::Bool) where {F<:Function}
     print_inline_table(f, io, value, sorted)
 end
 
-function print_inline_table(f::Function, io::IO, value::AbstractDict, sorted::Bool)
+function print_inline_table(f::F, io::IO, value::AbstractDict, sorted::Bool) where {F<:Function}
     vkeys = collect(keys(value))::AbstractArray
     if sorted
         sort!(vkeys)
@@ -167,7 +198,7 @@ function print_inline_table(f::Function, io::IO, value::AbstractDict, sorted::Bo
         i != 1 && Base.print(io, ", ")
         printkey(io, [String(k)])
         Base.print(io, " = ")
-        printvalue(f, io, v, sorted)
+        printvalue_any(f, io, v, sorted)
     end
     Base.print(io, "}")
 end
@@ -245,7 +276,11 @@ function print_hoisted_inline_comments(io::IO, comments::Comments, a::AbstractDi
             block.inline === nothing || print_comment_line(io, indentstr, block.inline)
         end
         v = a[k]
-        v isa AbstractDict && print_hoisted_inline_comments(io, comments, v, kpath, indentstr, sorted)
+        if v isa Dict{String, Any}
+            print_hoisted_inline_comments(io, comments, v, kpath, indentstr, sorted)
+        elseif v isa AbstractDict
+            _invoke_generic(print_hoisted_inline_comments, io, comments, v, kpath, indentstr, sorted)
+        end
     end
 end
 
@@ -262,25 +297,34 @@ end
 # Tables #
 ##########
 
+# `value` if it is a valid TOML value, otherwise `value` converted by `f`
+toml_value(f::F, @nospecialize(value)) where {F<:Function} =
+    _is_valid_toml_value(value) ? value : to_toml_value(f, value)
+
 is_table(@nospecialize(value)) = isa(value, AbstractDict)
-is_array_of_tables(@nospecialize(value)) =
-    isa(value, AbstractArray) &&
+function is_array_of_tables(@nospecialize(value))
+    value isa AbstractArray || return false
+    value isa AbstractArray{<:Union{AbstractString, Number}} && return false
+    value isa Vector{Any} && return _is_array_of_tables(value)
+    value isa Vector{Dict{String, Any}} && return _is_array_of_tables(value)
+    return _invoke_generic(_is_array_of_tables, value)::Bool
+end
+_is_array_of_tables(value::AbstractArray) =
     length(value) > 0 && (isa(value, AbstractArray{<:AbstractDict}) ||
                           all(v -> isa(v, AbstractDict), value))
-is_tabular(@nospecialize(value)) = is_table(value) || @invokelatest(is_array_of_tables(value))
+is_tabular(@nospecialize(value)) = is_table(value) || is_array_of_tables(value)
 
-function print_table(f::Function, io::IO, a::AbstractDict,
-    ks::Vector{String} = String[];
-    indent::Int = 0,
-    first_block::Bool = true,
-    sorted::Bool = false,
-    inline_tables::IdSet,
-    by::Function = identity,
-    comments::Union{Comments, Nothing} = nothing,
-)
+print_table(f::F, io::IO, a::AbstractDict, ks::Vector{String} = String[];
+            indent::Int = 0, first_block::Bool = true, sorted::Bool = false, inline_tables::IdSet,
+            by::B = identity, comments::Union{Comments, Nothing} = nothing) where {F<:Function, B<:Function} =
+    _print_table(f, io, a, ks, indent, first_block, sorted, inline_tables, by, comments)
+
+function _print_table(f::F, io::IO, a::AbstractDict, ks::Vector{String}, indent::Int,
+                      first_block::Bool, sorted::Bool, inline_tables::IdSet, by::B,
+                      comments::Union{Comments, Nothing}) where {F<:Function, B<:Function}
 
     if a in inline_tables
-        @invokelatest print_inline_table(f, io, a, sorted)
+        print_inline_table(f, io, a, sorted)
         return
     end
 
@@ -298,10 +342,7 @@ function print_table(f::Function, io::IO, a::AbstractDict,
 
     # First print non-tabular entries
     for key in akeys
-        value = a[key]
-        if !_is_valid_toml_value(value)
-            value = to_toml_value(f, value)
-        end
+        value = toml_value(f, a[key])
         if is_tabular(value) && !(value in inline_tables)
             continue
         end
@@ -310,13 +351,17 @@ function print_table(f::Function, io::IO, a::AbstractDict,
             entry_path = [ks; String(key)]
             print_comments_above(io, comments, entry_path, entry_indentstr)
             if value isa AbstractDict && value in inline_tables
-                print_hoisted_inline_comments(io, comments, value, entry_path, entry_indentstr, sorted)
+                if value isa Dict{String, Any}
+                    print_hoisted_inline_comments(io, comments, value, entry_path, entry_indentstr, sorted)
+                else
+                    _invoke_generic(print_hoisted_inline_comments, io, comments, value, entry_path, entry_indentstr, sorted)
+                end
             end
         end
         Base.print(io, entry_indentstr)
         printkey(io, [String(key)])
         Base.print(io, " = ") # print separator
-        printvalue(f, io, value, sorted)
+        printvalue_any(f, io, value, sorted)
         if comments !== nothing
             print_comment_inline(io, comments, [ks; String(key)])
         end
@@ -325,38 +370,16 @@ function print_table(f::Function, io::IO, a::AbstractDict,
     end
 
     for key in akeys
-        value = a[key]
-        if !_is_valid_toml_value(value)
-            value = to_toml_value(f, value)
-        end
+        value = toml_value(f, a[key])
         if is_table(value) && !(value in inline_tables)
             push!(ks, String(key))
-            _values = @invokelatest values(value)
-            header = isempty(value) || !all(is_tabular(v) for v in _values)::Bool || any(v in inline_tables for v in _values)::Bool
-            if !header && comments !== nothing
-                # Preserve headers that anchor comments.
-                header = has_comments(comments, ks)
+            first_block = if value isa Dict{String, Any}
+                print_subtable(f, io, value, ks, indent, first_block, sorted, inline_tables, by, comments)
+            else
+                _invoke_generic(print_subtable, f, io, value, ks, indent, first_block, sorted, inline_tables, by, comments)::Bool
             end
-            if header
-                # print table
-                first_block || println(io)
-                first_block = false
-                if comments !== nothing
-                    print_comments_above(io, comments, ks, ' '^4indent)
-                end
-                Base.print(io, ' '^4indent)
-                Base.print(io,"[")
-                printkey(io, ks)
-                Base.print(io,"]")
-                if comments !== nothing
-                    print_comment_inline(io, comments, ks)
-                end
-                Base.print(io,"\n")
-            end
-            # Use runtime dispatch here since the type of value seems not to be enforced other than as AbstractDict
-            @invokelatest print_table(f, io, value, ks; indent = indent + header, first_block = header, sorted, by, inline_tables, comments)
             pop!(ks)
-        elseif @invokelatest(is_array_of_tables(value))
+        elseif is_array_of_tables(value)
             # print array of tables
             first_block || println(io)
             first_block = false
@@ -364,16 +387,62 @@ function print_table(f::Function, io::IO, a::AbstractDict,
             if comments !== nothing
                 print_comments_above(io, comments, ks, ' '^4indent)
             end
-            for v in value
-                Base.print(io, ' '^4indent)
-                Base.print(io,"[[")
-                printkey(io, ks)
-                Base.print(io,"]]\n")
-                # TODO, nicer error here
-                !isa(v, AbstractDict) && error("array should contain only tables")
-                @invokelatest print_table(f, io, v, ks; indent = indent + 1, sorted, by, inline_tables, comments)
+            if value isa Vector{Any}
+                print_array_of_tables(f, io, value, ks, indent, sorted, inline_tables, by, comments)
+            elseif value isa Vector{Dict{String, Any}}
+                print_array_of_tables(f, io, value, ks, indent, sorted, inline_tables, by, comments)
+            else
+                _invoke_generic(print_array_of_tables, f, io, value, ks, indent, sorted, inline_tables, by, comments)
             end
             pop!(ks)
+        end
+    end
+end
+
+# Print the table `value` at path `ks`, return the new `first_block`.
+function print_subtable(f::F, io::IO, value::AbstractDict, ks::Vector{String}, indent::Int,
+                        first_block::Bool, sorted::Bool, inline_tables::IdSet, by::B,
+                        comments::Union{Comments, Nothing}) where {F<:Function, B<:Function}
+    _values = values(value)
+    header = isempty(value) || !all(is_tabular(v) for v in _values)::Bool || any(v in inline_tables for v in _values)::Bool
+    if !header && comments !== nothing
+        # Preserve headers that anchor comments.
+        header = has_comments(comments, ks)
+    end
+    if header
+        # print table
+        first_block || println(io)
+        first_block = false
+        if comments !== nothing
+            print_comments_above(io, comments, ks, ' '^4indent)
+        end
+        Base.print(io, ' '^4indent)
+        Base.print(io,"[")
+        printkey(io, ks)
+        Base.print(io,"]")
+        if comments !== nothing
+            print_comment_inline(io, comments, ks)
+        end
+        Base.print(io,"\n")
+    end
+    _print_table(f, io, value, ks, indent + header, header, sorted, inline_tables, by, comments)
+    return first_block
+end
+
+function print_array_of_tables(f::F, io::IO, value::AbstractArray, ks::Vector{String}, indent::Int,
+                               sorted::Bool, inline_tables::IdSet, by::B,
+                               comments::Union{Comments, Nothing}) where {F<:Function, B<:Function}
+    for v in value
+        Base.print(io, ' '^4indent)
+        Base.print(io,"[[")
+        printkey(io, ks)
+        Base.print(io,"]]\n")
+        # TODO, nicer error here
+        !isa(v, AbstractDict) && error("array should contain only tables")
+        if v isa Dict{String, Any}
+            _print_table(f, io, v, ks, indent + 1, true, sorted, inline_tables, by, comments)
+        else
+            _invoke_generic(_print_table, f, io, v, ks, indent + 1, true, sorted, inline_tables, by, comments)
         end
     end
 end
@@ -383,9 +452,9 @@ end
 # API #
 #######
 
-print(f::Function, io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}(), comments::Union{Comments, Nothing}=nothing) =
+print(f::F, io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}(), comments::Union{Comments, Nothing}=nothing) where {F<:Function} =
     print_table(f, io, a; sorted, by, inline_tables, comments)
-print(f::Function, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}(), comments::Union{Comments, Nothing}=nothing) =
+print(f::F, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}(), comments::Union{Comments, Nothing}=nothing) where {F<:Function} =
     print(f, stdout, a; sorted, by, inline_tables, comments)
 print(io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}(), comments::Union{Comments, Nothing}=nothing) =
     print_table(identity, io, a; sorted, by, inline_tables, comments)
