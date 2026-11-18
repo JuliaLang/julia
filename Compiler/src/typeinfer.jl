@@ -938,6 +938,10 @@ function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeIn
     return nothing
 end
 
+# `==` on the signatures of two backedges, `nothing` for a plain dispatch edge
+invokesig_equal(@nospecialize(a), @nospecialize(b)) =
+    a === b || (a !== nothing && b !== nothing && (a::Type) == (b::Type))
+
 # Whether the (invokesig, item) backedge at iterator state `upto` already appeared earlier in
 # `edges`. Used instead of a hash table for short edge lists, which is nearly all of them.
 function backedge_seen_before(edges::SimpleVector, upto::Int, @nospecialize(invokesig), @nospecialize(item))
@@ -946,7 +950,7 @@ function backedge_seen_before(edges::SimpleVector, upto::Int, @nospecialize(invo
     while next !== nothing
         (invokesig2, item2), i = next
         i > upto && return false
-        if item2 === item && invokesig2 == invokesig
+        if item2 === item && invokesig_equal(invokesig2, invokesig)
             return true
         end
         next = iterate(backedges, i)
@@ -1017,14 +1021,14 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector, scratch::Uni
             elseif signatures isa Vector{Any}
                 duplicate = false
                 for signature in signatures
-                    if signature == invokesig
+                    if invokesig_equal(signature, invokesig)
                         duplicate = true
                         break
                     end
                 end
                 duplicate || push!(signatures, invokesig)
             else
-                duplicate = signatures == invokesig
+                duplicate = invokesig_equal(signatures, invokesig)
                 duplicate || (invoked[item] = Any[signatures, invokesig])
             end
         end
@@ -1083,7 +1087,7 @@ function record_slot_assign!(sv::InferenceState)
             if isa(lhs, SlotNumber)
                 typ = ssavaluetypes[i]
                 @assert typ !== NOT_FOUND "active slot in unreached region"
-                vt = widenconst(typ)
+                vt = widenconst_split(typ)
                 if vt !== Bottom
                     id = slot_id(lhs)
                     otherTy = slottypes[id]
