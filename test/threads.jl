@@ -286,8 +286,8 @@ end
  Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
     ping = Event(true)
     pong = Event(true)
-    n = 500
-    t = Threads.@spawn for i in 1:(n + 20)
+    n, trials = 500, 3
+    t = Threads.@spawn for i in 1:(20 + trials * n + 1)
         wait(ping)
         notify(pong)
     end
@@ -302,14 +302,18 @@ end
     measure() = @allocated for i in 1:n
         driver()
     end
-    allocated = measure()
+    # `@allocated` counts the whole process and every park yields, so another
+    # task or libuv callback that runs meanwhile is billed to the loop; a
+    # per-park allocation shows up in every trial
+    allocated = [measure() for _ in 1:trials]
+    driver() # let `t` finish outside the measurements
     wait(t)
     # the cached entries were recycled, not replaced
     @test t.cached_wait_entry === w_spawned
     @test current_task().cached_wait_entry === w_driver
     @test Base._slot_owner(w_driver::Base.WaitEntry, 1) === nothing # free between parks
     if Base.JLOptions().code_coverage == 0
-        @test allocated == 0
+        @test minimum(allocated) == 0
     end
  end
 end
@@ -325,8 +329,8 @@ end
  Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.CancellationToken(src)) do
     ping = Event(true)
     pong = Event(true)
-    n = 500
-    t = Threads.@spawn for i in 1:(n + 20)
+    n, trials = 500, 3
+    t = Threads.@spawn for i in 1:(20 + trials * n + 1)
         wait(ping)
         notify(pong)
     end
@@ -339,11 +343,15 @@ end
     measure() = @allocated for i in 1:n
         driver()
     end
-    allocated = measure()
+    # `@allocated` counts the whole process and every park yields, so another
+    # task or libuv callback that runs meanwhile is billed to the loop; a
+    # per-park allocation shows up in every trial
+    allocated = [measure() for _ in 1:trials]
+    driver() # let `t` finish outside the measurements
     wait(t)
     @test current_task().cached_cancel_entry === w_driver
     if Base.JLOptions().code_coverage == 0
-        @test allocated == 0
+        @test minimum(allocated) == 0
     end
  end
 end
