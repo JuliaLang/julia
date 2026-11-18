@@ -964,8 +964,7 @@ end == """
 MacroExpansionError while expanding @oldstyle_error in module Main.macro_test:
 @oldstyle_error
 └─────────────┘ ── Error expanding macro
-Caused by:
-Some error in old style macro"""
+Caused by: Some error in old style macro"""
 
 # Old-style macros returning non-Expr values
 fl_eval(test_mod, :(
@@ -1017,8 +1016,7 @@ end
     MacroExpansionError while expanding @sig_mismatch in module Main.macro_test:
     @sig_mismatch(1, 2, 3, 4)
     └───────────────────────┘ ── Error expanding macro
-    Caused by:
-    MethodError: no method matching var"@sig_mismatch"(""")
+    Caused by: MethodError: no method matching var"@sig_mismatch"(""")
 end
 
 @testset "old macros producing exotic expr heads (or are otherwise complex)" for edition in [JL_OLD_EDITION, JL_NEW_EDITION]
