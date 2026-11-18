@@ -785,20 +785,20 @@ function expand_dotcall(ctx, ex)
     k = head(ex)
     if k == :dotcall
         @jl_assert numchildren(ex) >= 1 ex
-        farg = setmeta(ex[1], :is_called, true)
+        farg = ex[1]
         args = SyntaxList()
         append!(args, ex[2:end])
         kws = remove_kw_args!(ctx, args)
-        @ast ctx ex [:call
-            (isnothing(kws) ? "broadcasted" : "broadcasted_kwsyntax")::top
-            farg    # todo: What about (z=f).(x,y) ?
-            (expand_dotcall(ctx, arg) for arg in args)...
-            if !isnothing(kws)
-                [:parameters
-                    kws...
-                ]
-            end
-        ]
+        @ast ctx ex [:block
+            head(farg) === :identifier ? [:mark_called farg] : nothing
+            [:call
+                (isnothing(kws) ? "broadcasted" : "broadcasted_kwsyntax")::top
+                farg    # todo: What about (z=f).(x,y) ?
+                (expand_dotcall(ctx, arg) for arg in args)...
+                if !isnothing(kws)
+                    [:parameters kws...]
+                end
+        ]]
     elseif k == :comparison
         expand_dotcall(ctx, expand_compare_chain(ctx, ex))
     elseif k == :.&& || k == :.||
@@ -817,7 +817,6 @@ function expand_fuse_broadcast(ctx, ex)
         @jl_assert numchildren(ex) == 2 ex
         lhs = ex[1]
         kl = head(lhs)
-        rhs = expand_dotcall(ctx, ex[2])
         @ast ctx ex [:block
             dest := if kl == :ref
                 sctx = with_stmts(ctx)
@@ -838,15 +837,17 @@ function expand_fuse_broadcast(ctx, ex)
             else
                 lhs
             end
-            bc := if !(head(rhs) == :call && head(rhs[1]) == :top && syntax_name(rhs[1]) == "broadcasted")
+            bc := if !(head(ex[2]) in (:dotcall, :.&&, :.||) ||
+                    (head(ex[2]) === :comparison &&
+                        any(is_dotted, children(ex[2])[2:2:end])))
                 # Ensure the rhs of .= is always wrapped in a call to `broadcasted()`
-                [:call(rhs)
+                [:call(ex[2])
                     "broadcasted"::top
                     "identity"::top
-                    rhs
+                    expand_dotcall(ctx, ex[2])
                 ]
             else
-                rhs
+                expand_dotcall(ctx, ex[2])
             end
             [:call "materialize!"::top dest bc]
             dest
@@ -1091,12 +1092,9 @@ function expand_splat(ctx, ex, topfunc, args)
     wrapped_args = _wrap_unsplatted_args(ctx, ex, args)
 
     # Construct the unevaluated _apply_iterate call
-    result = @ast ctx ex [:call
-        "_apply_iterate"::core
-        "iterate"::top
-        setmeta(topfunc, :is_called, true)
-        wrapped_args...
-    ]
+    result = @ast ctx ex [:block
+        head(topfunc) === :identifier ? [:mark_called topfunc] : nothing
+        [:call "_apply_iterate"::core "iterate"::top topfunc wrapped_args...]]
 
     # Recursively expand the entire call (matching native's expand-forms)
     return expand_forms_2(ctx, result)
@@ -1812,9 +1810,10 @@ function expand_kw_call(ctx, st)
     stmts = Syntax[]
     st = remove_argument_side_effects(ctx, stmts, st)
     args = copy(st[2:end])
-    func = setmeta(st[1], :is_called, true)
+    func = st[1]
     kws = remove_kw_args!(ctx, args)
     @ast ctx st [:block
+        head(func) === :identifier ? [:mark_called func] : nothing
         stmts...
         kw_container := expand_named_tuple(ctx, st, kws;
                                            field_name="keyword argument",

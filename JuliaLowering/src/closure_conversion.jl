@@ -588,6 +588,8 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         else
             @ast ctx ex (::tombstone)
         end
+    elseif k == :mark_called
+        @ast ctx ex (::tombstone)
     elseif k == :_opaque_closure
         ck = closure_key(ctx, ex[1])
         closure_binds = ctx.closure_bindings[ck]

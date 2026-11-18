@@ -971,7 +971,7 @@ end
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  (call core.define_method TestMod TestMod.f %₁₇
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/xs]
+    slots: [slot₁/#self#(!read,called) slot₂/xs]
     1   slot₂/xs
     2   (return %₁)
 19  latestworld

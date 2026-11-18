@@ -1324,6 +1324,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [:popaliasscope] -> pass()
     [:the_exception] -> pass()
     [:throw_undef_if_not [:symbol] cond] -> vst2(vcx, cond)
+    [:mark_called [:identifier]] -> pass()
 
     # Note to variable analysis that x is always defined before use
     [:always_defined x] -> vst2_ident(vcx, x)

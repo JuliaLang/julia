@@ -410,9 +410,6 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         if getmeta(ex, :nospecialize, false) && b.kind === :argument
             b.is_nospecialize = true
         end
-        if getmeta(ex, :is_called, false)
-            b.is_called = true
-        end
         newleaf(ex, :bindingid, b.id)
     elseif k === :bindingid
         ex
@@ -874,6 +871,8 @@ function analyze_variables!(ctx, ex)
             mark_called!(ctx, get_binding(ctx, name))
         end
         foreach(e->analyze_variables!(ctx, e), children(ex))
+    elseif k === :mark_called
+        mark_called!(ctx, get_binding(ctx, ex[1]))
     elseif k == :method_defs
         mname = ex[2]
         push!(ctx.method_def_stack, mname)
