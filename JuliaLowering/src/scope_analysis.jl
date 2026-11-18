@@ -73,6 +73,9 @@ mutable struct ScopeResolutionContext <: AbstractLoweringContext
     const tv_deps::Dict{IdTag, Vector{IdTag}}
     const enable_soft_scopes::Bool
     const world::UInt
+    # See `mark_forwarded`
+    const forward_targets::Dict{Symbol, Dict{NameKey, IdTag}}
+    const forward_links::Vector{Tuple{Symbol, NameKey, IdTag}}
 end
 
 function contains_softscope_marker(ex)
@@ -307,6 +310,16 @@ function enter_scope!(ctx, ex)
             @jl_assert head(c) in (:identifier, :placeholder) c
             explicit_declare_in_scope!(ctx, scope, c, :argument)
         end
+        fk = getmeta(ex, :forward_target, nothing)
+        if !isnothing(fk)
+            args = Dict{NameKey, IdTag}()
+            for c in children(ex[1])
+                head(c) === :identifier || continue
+                bid = get(scope.vars, NameKey(c), nothing)
+                isnothing(bid) || (args[NameKey(c)] = bid)
+            end
+            ctx.forward_targets[fk] = args
+        end
         for c in children(ex[2])
             head(c) === :placeholder && continue
             @jl_assert head(c) === :identifier c
@@ -402,6 +415,10 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         end
         if getmeta(ex, :is_called, false)
             b.is_called = true
+        end
+        fk = getmeta(ex, :forward_called, nothing)
+        if !isnothing(fk) && b.kind === :argument
+            push!(ctx.forward_links, (fk, NameKey(ex), b.id))
         end
         newleaf(ex, :bindingid, b.id)
     elseif k === :bindingid
@@ -903,6 +920,24 @@ function analyze_variables!(ctx, ex)
     nothing
 end
 
+# Mark wrapper arguments called if the method they are forwarded to calls them
+function propagate_forwarded_called!(ctx)
+    changed = true
+    while changed
+        changed = false
+        for (fk, name, bid) in ctx.forward_links
+            b = get_binding(ctx, bid)
+            b.is_called && continue
+            target = get(ctx.forward_targets, fk, nothing)
+            tbid = isnothing(target) ? nothing : get(target, name, nothing)
+            if !isnothing(tbid) && get_binding(ctx, tbid).is_called
+                b.is_called = true
+                changed = true
+            end
+        end
+    end
+end
+
 function warn_ambiguous_local(ctx, b)
     n = b.name
     loc = first_linenode(b.node_id)
@@ -944,7 +979,9 @@ enclosing lambda form and information about variables captured by closures.
                                   Dict(), Dict{IdTag, IdTag}(),
                                   Dict{IdTag, Vector{IdTag}}(),
                                   enable_soft_scopes,
-                                  world)
+                                  world,
+                                  Dict{Symbol, Dict{NameKey, IdTag}}(),
+                                  Vector{Tuple{Symbol, NameKey, IdTag}}())
     ex2 = resolve_scopes(ctx2, ex)
     warn && !enable_soft_scopes && (Base.JLOptions().warn_scope == 1) &&
         for b in ctx2.bindings.info
@@ -956,6 +993,7 @@ enclosing lambda form and information about variables captured by closures.
                                    Dict{ClosureKey,ClosureBindings}(),
                                    ctx2.sp_typevars, ctx2.tv_deps, Set{IdTag}())
     analyze_variables!(ctx3, ex2)
+    propagate_forwarded_called!(ctx2)
     analyze_def_and_use!(ctx3, ex2)
     ctx3, ex2
 end

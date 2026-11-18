@@ -2579,7 +2579,7 @@ end
 # - one containing the body
 # - possibly one generated method
 function method_def_expr(ctx, src, mtable, sparams, argl, body,
-                         rett=@ast(ctx, src, "Any"::core))
+                         rett=@ast(ctx, src, "Any"::core); forward_target=nothing)
     @jl_assert length(argl) > 0 src
     @jl_assert head(argl[end]) !== :parameters src argl[end]
     if length(pos_opt_args(argl)) > 0
@@ -2587,17 +2587,17 @@ function method_def_expr(ctx, src, mtable, sparams, argl, body,
             ctx, src, mtable, sparams, argl, body, rett)
     elseif head(body) === :_generated_body
         return generated_method_defs(
-            ctx, src, mtable, sparams, argl, body, rett)
+            ctx, src, mtable, sparams, argl, body, rett; forward_target)
     end
     # Needs to be done per method, not per function (may create ssavalues)
     arg_types = mapsyntax(a->expand_forms_2(ctx, a[2]), argl)
-    @ast ctx src [:method mtable
-        [:call "svec"::core arg_types...]
-        [:lambda(body)
-            [:block mapindex(argl, 1)...]
-            [:block mapindex(sparams, 1)...]
-            expand_forms_2(ctx, body)
-            is_core_Any(rett) ? nothing : expand_forms_2(ctx, rett)]]
+    lam = @ast ctx src [:lambda(body)
+        [:block mapindex(argl, 1)...]
+        [:block mapindex(sparams, 1)...]
+        expand_forms_2(ctx, body)
+        is_core_Any(rett) ? nothing : expand_forms_2(ctx, rett)]
+    isnothing(forward_target) || setmeta!(lam, :forward_target, forward_target)
+    @ast ctx src [:method mtable [:call "svec"::core arg_types...] lam]
 end
 
 function _untyped_arg(a)
@@ -2628,7 +2628,8 @@ end
 # The Julia runtime associates the code generator with the non-generated method
 # by adding (meta generated ...) to the non-generated body
 # May need hygiene/provenance adjustments
-function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
+function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett;
+                               forward_target=nothing)
     @jl_assert head(body) === :_generated_body && numchildren(body) == 2 body
     gen_name = let mangled = reserve_module_binding_i(
         ctx.layer.mod,
@@ -2672,7 +2673,8 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
                 [:call "svec"::core _expr_arg_syms(argl)...]
                 [:call "svec"::core _expr_arg_syms(sparams)...]]]
             body[2]]
-        method_def_expr(ctx, src, mtable, sparams, argl, nongen_body, rett)
+        method_def_expr(ctx, src, mtable, sparams, argl, nongen_body, rett;
+                        forward_target)
     end
 
     @ast ctx src [:block
@@ -2681,6 +2683,9 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
         [:method_defs gen_name [:block] gen_mdef]
         nongen_mdef]
 end
+
+# Tag arguments a wrapper forwards; see `propagate_forwarded_called!`
+mark_forwarded(ids, key) = mapsyntax(id->setmeta(id, :forward_called, key), ids)
 
 # Semantically, we want each wrapper method's body to call the method with one
 # additional default (on top of its args, `passed`) until we reach the body
@@ -2721,6 +2726,7 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
     end
     req = pos_req_args(argl)
     passed = copy(req)
+    keys = [gensym(:forward) for _ in 1:length(opt)+1]
     prop_metas = getmeta(body, :method_metas, nothing)
     methods = SyntaxList()
     for i in eachindex(opt)
@@ -2732,17 +2738,17 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
             scope_nest(
                 ctx,
                 make_assigns(ctx, opt_names[i:end-1], opt_defaults[i:end-1]),
-                @ast ctx src [:call mapindex(passed, 1)...
+                @ast ctx src [:call mark_forwarded(mapindex(passed, 1), keys[end])...
                     opt_names[i:end-1]... opt_defaults[end]])
         else
             @ast ctx src [:block
-                [:call mapindex(passed, 1)... opt_defaults[i]]]
+                [:call mark_forwarded(mapindex(passed, 1), keys[i+1])... opt_defaults[i]]]
         end
         wrapper_body = prepend_method_metas(ctx, src, wrapper_body, prop_metas)
         # this function and method_def_expr need sp bounds because of this
         push!(methods, method_def_expr(
             ctx, src, mtable, used_typevars(passed, sparams),
-            passed, wrapper_body))
+            passed, wrapper_body; forward_target=keys[i]))
         push!(passed, opt_decls[i])
     end
     if length(opt) + length(req) < length(argl)
@@ -2750,7 +2756,8 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
         @jl_assert length(passed) == length(opt) + length(req) == length(argl) - 1 src
         push!(passed, argl[end])
     end
-    push!(methods, method_def_expr(ctx, src, mtable, sparams, passed, body, rett))
+    push!(methods, method_def_expr(ctx, src, mtable, sparams, passed, body, rett;
+                                   forward_target=keys[end]))
     @ast ctx src [:block methods...]
 end
 
@@ -2807,12 +2814,14 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, o
     end
 
     # Positional names and splatted vararg so we can `(call f forward_pargl...)`
+    forward_key = gensym(:forward)
     forward_pargl = let l = mapindex(pos_decls, 1)
         pos_va = @stm argl[end-1] begin
             [:kw [:(::) _... t] _...] -> is_vararg_type_expr(t)
             [:(::) _... t] -> is_vararg_type_expr(t)
             _ -> false
         end
+        l = mark_forwarded(l, forward_key)
         pos_va && (l[end] = @ast ctx l[end] [:... l[end]])
         l
     end
@@ -2837,7 +2846,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, o
         method_def_expr(
             ctx, src, m1_name, sparams,
             SyntaxList(arg1, kw_decls..., restkw..., pos_decls...),
-            prepend_function_body(ctx, body, nkw), rett)
+            prepend_function_body(ctx, body, nkw), rett; forward_target=forward_key)
     end
     # (2) nokw methods (one per optarg).  Lowering wouldn't know to call
     # Core.kwcall given no kws in a call, so this method initializes kw defaults

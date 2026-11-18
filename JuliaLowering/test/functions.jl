@@ -506,6 +506,55 @@ end
     """)
     @test first(methods(test_mod.f45162)).called != 0
     @test first(methods(test_mod.f45162_2)).called != 0
+
+    # Arguments forwarded to a method that calls them
+    JuliaLowering.include_string(test_mod, """
+    f_called_kw(f, x; k = 1) = f(x) + k
+    f_called_kw_map(f, x; k = 1) = map(f, x)
+    f_called_opt(f::Function, x = 1) = f(x)
+    f_called_both(f, x = 1; k = 1) = f(x) + k
+    """)
+    @test which(test_mod.f_called_kw, (Any, Any)).called == 0b01
+    @test which(Core.kwcall, (NamedTuple, typeof(test_mod.f_called_kw), Any, Any)).called == 0b0100
+    @test which(test_mod.f_called_kw_map, (Any, Any)).called == 0
+    @test which(test_mod.f_called_opt, (Function,)).called == 0b01
+    @test which(test_mod.f_called_both, (Any,)).called == 0b01
+    JuliaLowering.include_string(test_mod, """
+    f_called_rett(g, x = 1)::g() = x
+    f_called_chain(g, x::T = 1, y = g(T)) where {T} = y
+    f_called_bcast(g, x = [1]) = g.(x)
+    f_called_quoted(g, x; k = 1) = :(g(x))
+    """)
+    @test which(test_mod.f_called_rett, (Any,)).called == 0b01
+    @test which(test_mod.f_called_chain, (Any,)).called == 0b01
+    @test which(test_mod.f_called_bcast, (Any,)).called == 0b01
+    @test which(test_mod.f_called_quoted, (Any, Any)).called == 0
+    JuliaLowering.include_string(test_mod, """
+    f_called_shadow(g, x; k = 1) = let g = identity; g(x); end
+    f_called_shadow_opt(g, x = 1) = let g = identity; g(x); end
+    f_called_dflt(g, x = g(), y = 2) = x + y
+    """)
+    @test which(test_mod.f_called_shadow, (Any, Any)).called == 0
+    @test which(test_mod.f_called_shadow_opt, (Any,)).called == 0
+    @test which(test_mod.f_called_dflt, (Any,)).called == 0b01
+    @test which(test_mod.f_called_dflt, (Any, Any)).called == 0
+    JuliaLowering.include_string(test_mod, """
+    function f_called_gen(g, x = 1; k = 1)
+        if @generated
+            :(g(x))
+        else
+            g(x)
+        end
+    end
+    """)
+    @test which(test_mod.f_called_gen, (Any,)).called == 0b01
+    @test which(test_mod.f_called_gen, (Any, Any)).called == 0b01
+    @test which(Core.kwcall, (NamedTuple, typeof(test_mod.f_called_gen), Any)).called == 0b0100
+    # only the code a generated function produces calls `g`, which lowering does not see
+    JuliaLowering.include_string(test_mod, """
+    @generated f_called_gen_only(g, x = 1; k = 1) = :(g(x))
+    """)
+    @test_broken which(test_mod.f_called_gen_only, (Any,)).called == 0b01
 end
 
 @testset "nospecialize" begin

@@ -525,6 +525,9 @@
                       (map (lambda (x) (make-ssavalue)) keynames)
                       keynames))
          (tempslot (gensy))
+         (mangled-key (new-forward-key))
+         (forward-meta (forward-called-meta mangled-key
+                                            (append (map arg-name pargl) (map arg-name vararg))))
          ;; list of function's initial line number and meta nodes (empty if none)
          (prologue (extract-method-prologue body))
          ;; body statements
@@ -559,9 +562,11 @@
           (insert-after-meta `(block
                                ,@stmts)
                              (cons `(meta nkw ,(+ (length vars) (length restkw)))
+                                   (cons `(meta forward-target ,mangled-key
+                                                ,@(map arg-name (append not-optional vararg)))
                                    (if (has-thisfunction? `(block ,@stmts))
                                        (cons `(meta thisfunction-original ,(arg-name (car not-optional))) annotations)
-                                       annotations)))
+                                       annotations))))
           rett)
 
         ;; call with no keyword args
@@ -569,6 +574,7 @@
           name positional-sparams pargl-all
           `(block
             ,@(keep-first linenum? (without-generated prologue))
+            ,@forward-meta
             ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
                    (ret `(return (call ,mangled
                                        ,@(if ordered-defaults keynames vals)
@@ -594,6 +600,7 @@
                 (if (pair? lnns)
                     (list (car lnns))
                     '()))
+            ,@forward-meta
             ;; nospecialize meta for just positional args
             ,@(map (lambda (m)
                      `(meta ,(cadr m) ,@(filter (lambda (v) (not (memq v keynames)))
@@ -683,11 +690,29 @@
           (else
            (loop filtered (cdr params))))))
 
+;; `analyze-variables!` marks `forward-called` args called if the
+;; `forward-target` method with the same key calls them
+(define forward-key-counter 0)
+(define (new-forward-key)
+  (set! forward-key-counter (+ forward-key-counter 1))
+  forward-key-counter)
+
+(define (forward-called-meta key names)
+  (let ((names (filter (lambda (n) (and (symbol? n) (not (eq? n UNUSED)))) names)))
+    (if (null? names) '() `((meta forward-called ,key ,@names)))))
+
+(define (forward-meta? e)
+  (and (pair? e) (eq? (car e) 'meta) (pair? (cdr e))
+       (memq (cadr e) '(forward-target forward-called))))
+
 (define (optional-positional-defs name sparams req opt dfl body overall-argl rett)
-  (let ((prologue (without-generated (extract-method-prologue body))))
+  (let ((prologue (filter (lambda (e) (not (forward-meta? e)))
+                          (without-generated (extract-method-prologue body))))
+        (keys (map (lambda (n) (new-forward-key)) (iota (+ (length opt) 1)))))
     `(block
       ,@(map (lambda (n)
                (let* ((passed (append req (list-head opt n)))
+                      (names  (map arg-name (cdr passed)))
                       ;; only keep static parameters used by these arguments
                       (sp     (filter-sparams (cons 'list passed) sparams))
                       (vals   (list-tail dfl n))
@@ -710,14 +735,22 @@
                                ;; then add only one next argument
                                `(block
                                  ,@prologue
+                                 (meta forward-target ,(list-ref keys n) ,@names)
+                                 ,@(forward-called-meta (list-ref keys (+ n 1)) names)
                                  (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,(car vals)))
                                ;; otherwise add all
                                `(block
                                  ,@prologue
+                                 (meta forward-target ,(list-ref keys n) ,@names)
+                                 ,@(forward-called-meta (last keys) names)
                                  (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
                  (method-def-expr- name sp passed body)))
              (iota (length opt)))
-      ,(method-def-expr- name sparams overall-argl body rett))))
+      ,(method-def-expr- name sparams overall-argl
+                         (insert-after-meta (blockify body)
+                                            `((meta forward-target ,(last keys)
+                                                    ,@(map arg-name (cdr overall-argl)))))
+                         rett))))
 
 ;; strip empty (parameters ...), normalizing `f(x;)` to `f(x)`.
 (define (remove-empty-parameters argl)
@@ -3709,7 +3742,18 @@
          ((nospecialize-meta? e)
           (let ((vi (get tab (caddr e) #f)))
             (if vi
-                (vinfo:set-nospecialize! vi #t)))))
+                (vinfo:set-nospecialize! vi #t))))
+         ((forward-meta? e)
+          (if (eq? (cadr e) 'forward-target)
+              (let ((t (table)))
+                (for-each (lambda (n) (let ((vi (get tab n #f))) (if vi (put! t n vi))))
+                          (cdddr e))
+                (put! forward-targets (caddr e) t))
+              (set! forward-links
+                    (cons (cons (caddr e)
+                                (filter cdr (map (lambda (n) (cons n (get tab n #f)))
+                                                 (cdddr e))))
+                          forward-links)))))
         e)
       (case (car e)
         ((local-def) ;; a local that we know has an assignment that dominates all usages
@@ -3777,7 +3821,33 @@
         (else (for-each (lambda (x) (analyze-vars x env captvars sp tab))
                         (cdr e))))))
 
-(define (analyze-variables! e) (analyze-vars e '() '() '() (table)) e)
+(define forward-targets #f)
+(define forward-links '())
+
+;; mark arguments called when the method they are forwarded to calls them
+(define (propagate-forwarded-called!)
+  (let ((changed #f))
+    (for-each
+     (lambda (link)
+       (let ((target (get forward-targets (car link) #f)))
+         (if target
+             (for-each (lambda (p)
+                         (let ((tvi (get target (car p) #f)))
+                           (if (and tvi (vinfo:called tvi) (not (vinfo:called (cdr p))))
+                               (begin (vinfo:set-called! (cdr p) #t)
+                                      (set! changed #t)))))
+                       (cdr link)))))
+     forward-links)
+    (if changed (propagate-forwarded-called!))))
+
+(define (analyze-variables! e)
+  (set! forward-targets (table))
+  (set! forward-links '())
+  (analyze-vars e '() '() '() (table))
+  (propagate-forwarded-called!)
+  (set! forward-targets #f)
+  (set! forward-links '())
+  e)
 
 ;; pass 4: closure conversion
 
@@ -5450,6 +5520,7 @@ f(x) = yt(x)
                       (assert (or (not value) tail))
                       (assert (not rett))
                       (set! rett (caddr e)))
+                     ((forward-meta? e) #f)
                      (else
                       (emit e)))
                (if (and tail (not have-ret?))
