@@ -647,9 +647,11 @@ static NOINLINE FeatureList<feature_sz> _get_host_cpu_features(void)
     // Fill in the features
     features[0] = info1[2];
     features[1] = info1[3];
+    uint32_t maxsubleaf7 = 0;
     if (maxleaf >= 7) {
         int32_t info7[4];
         jl_cpuidex(info7, 7, 0);
+        maxsubleaf7 = info7[0];
         features[2] = info7[1];
         features[3] = info7[2];
         features[4] = info7[3];
@@ -673,7 +675,8 @@ static NOINLINE FeatureList<feature_sz> _get_host_cpu_features(void)
         jl_cpuidex(infoex8, 0x80000008, 0);
         features[8] = infoex8[1];
     }
-    if (maxleaf >= 7) {
+    // Some CPUs return nonzero data for subleaves they do not have.
+    if (maxsubleaf7 >= 1) {
         int32_t info7[4];
         jl_cpuidex(info7, 7, 1);
         features[9] = info7[0];
