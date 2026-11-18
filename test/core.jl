@@ -503,6 +503,15 @@ let X = Union{Tuple{S} where S<:Int, Vector{T}} where T
     @test g62001(X, 1) === (X, 1)
 end
 
+# `Tuple{..., Vararg}` is normalized to `Tuple{..., Vararg{Any}}` on construction
+let a = Tuple{Any,Vararg}, b = Tuple{Any,Vararg{Any}}
+    @test a === b
+    @test Type{a} === Type{b}
+    @test Core.TypeEgal{a} === Core.TypeEgal{b}
+    @test (Tuple{T,Vararg} where T) === (Tuple{T,Vararg{Any}} where T)
+    @test Tuple{Vararg} === Tuple
+end
+
 # a `Type{Union{}}` dispatch slot is an exact equality key (the bottom object is
 # the unique instance of its `Type`), so it must remain a compileable spelling
 # even when the method does not declare the slot as a concrete `Type{X}`
@@ -1152,6 +1161,13 @@ let f = g -> x -> g(x)
     @test fieldtype(typeof(f(Rational)), 1) === Core.TypeEgal{Rational}
     @test f(Rational{Core.TypeVar(:T)}) isa Function
     @test fieldtype(typeof(f(Rational{Core.TypeVar(:T)})), 1) === DataType
+end
+# captured tuple types spelled with `Vararg` and with `Vararg{Any}` share a closure type
+let f = t -> (c -> t <: c), a = Tuple{Any,Vararg}, b = Tuple{Any,Vararg{Any}}
+    @test f(b)(Tuple)
+    @test f(a)(Tuple)
+    @test fieldtype(typeof(f(b)), 1) === Core.TypeEgal{b}
+    @test fieldtype(typeof(f(a)), 1) === Core.TypeEgal{a}
 end
 let T = Core.TypeVar(:T), g = Base.Generator(Rational{T}, 1:1)
     @test g.f === Rational{T}

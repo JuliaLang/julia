@@ -1628,6 +1628,10 @@ test_repr("(:).a")
 @test repr(NTuple) == "NTuple{N, T} where {N, T}"
 @test repr(Tuple{NTuple{N}, Vararg{NTuple{N}, 4}} where N) == "NTuple{5, NTuple{N, T} where T} where N"
 @test repr(Tuple{Float64, NTuple{N}, Vararg{NTuple{N}, 4}} where N) == "Tuple{Float64, Vararg{NTuple{N, T} where T, 5}} where N"
+@test repr(Tuple{String, Vararg}) == "Tuple{String, Vararg}"
+@test repr(Tuple{String, Vararg{Any}}) == "Tuple{String, Vararg}"
+@test repr(Tuple{String, Vararg{Any, N}} where N) == "Tuple{String, Vararg{Any, N}} where N"
+@test repr(Vararg{Any}) == "Vararg{Any}"
 
 # Test printing of NamedTuples using the macro syntax
 @test repr(@NamedTuple{kw::Int64}) == "@NamedTuple{kw::Int64}"

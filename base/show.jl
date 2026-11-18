@@ -1309,7 +1309,11 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
             headlen = (taillen > max_n ? fulln - taillen : fulln)
             for i = 1:headlen
                 i > 1 && print(io, ", ")
-                show(io, vakind === :fixed && i >= n ? pn : parameters[i])
+                if vakind === :unbound && i == n && pn === Any
+                    print(io, "Vararg") # `Tuple{..., Vararg}` is stored as `Vararg{Any}`
+                else
+                    show(io, vakind === :fixed && i >= n ? pn : parameters[i])
+                end
             end
             if headlen < fulln
                 headlen > 0 && print(io, ", ")
