@@ -106,6 +106,11 @@ static void os_release(void *p, size_t sz) JL_NOTSAFEPOINT
 }
 
 #ifdef _OS_LINUX_
+// Whether mappings ask for huge pages, as malloc'd memory this large does: when the kernel
+// gives them only on request ("madvise"). When it gives them anyway, asking adds only the
+// risk of it stalling to compact memory.
+static int memory_mapping_hugepages;
+
 static size_t read_sysctl(const char *path, size_t fallback) JL_NOTSAFEPOINT
 {
     unsigned long long value = fallback;
@@ -129,6 +134,14 @@ void memory_mapping_init(void) JL_NOTSAFEPOINT
     if (read_sysctl("/proc/sys/vm/overcommit_memory", 0) == 2)
         return;
     mappings = read_sysctl("/proc/sys/vm/max_map_count", mappings);
+    char mode[96] = "";
+    FILE *f = fopen("/sys/kernel/mm/transparent_hugepage/enabled", "r");
+    if (f != NULL) {
+        if (fgets(mode, sizeof(mode), f) == NULL)
+            mode[0] = '\0';
+        fclose(f);
+    }
+    memory_mapping_hugepages = strstr(mode, "[madvise]") != NULL;
 #endif
 #ifndef _OS_WINDOWS_
     struct rlimit limit;
@@ -184,10 +197,16 @@ static int memory_mapping_take(size_t bytes) JL_NOTSAFEPOINT
 // elsewhere they are committed as they are first written.
 static int memory_mapping_commit(jl_memory_mapping_t *mapping, size_t from, size_t to) JL_NOTSAFEPOINT
 {
-#ifdef _OS_WINDOWS_
+#if defined(_OS_WINDOWS_) || defined(_OS_LINUX_)
     size_t start = from & ~(jl_page_size - 1), len = LLT_ALIGN(to, jl_page_size) - start;
+#endif
+#ifdef _OS_WINDOWS_
     return VirtualAlloc((char*)mapping + start, len, MEM_COMMIT, PAGE_READWRITE) != NULL;
 #else
+#ifdef _OS_LINUX_
+    if (memory_mapping_hugepages && to - from >= jl_hugepage_size)
+        madvise((char*)mapping + start, len, MADV_HUGEPAGE);
+#endif
     return 1;
 #endif
 }
