@@ -38,7 +38,12 @@ $(BUILDDIR)/$(LMDB_SRC_DIR)/freebsd-pshared.patch-applied: $(BUILDDIR)/$(LMDB_SR
 		patch -p1 -f < $(SRCDIR)/patches/0005-Register-process-shared-mutexes-with-libthr.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(LMDB_SRC_DIR)/source-patched: $(BUILDDIR)/$(LMDB_SRC_DIR)/freebsd-pshared.patch-applied
+$(BUILDDIR)/$(LMDB_SRC_DIR)/reader-meta-race.patch-applied: $(BUILDDIR)/$(LMDB_SRC_DIR)/freebsd-pshared.patch-applied
+	cd $(BUILDDIR)/$(LMDB_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/0006-Retry-when-commits-race-a-reader-copying-the-meta-pa.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(LMDB_SRC_DIR)/source-patched: $(BUILDDIR)/$(LMDB_SRC_DIR)/reader-meta-race.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(LMDB_SRC_DIR)/build-configured: $(BUILDDIR)/$(LMDB_SRC_DIR)/source-patched
