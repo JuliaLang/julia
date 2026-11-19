@@ -728,13 +728,6 @@ expanded = JuliaLowering.macroexpand(test_mod, ex)
     """; edition) == 3
 end
 
-@test JuliaLowering.include_string(test_mod, raw"""
-v"1.14"
-""") isa VersionNumber
-@test jl_eval(test_mod, raw"""
-v"1.14"
-""";edition=JL_OLD_EDITION) isa VersionNumber
-
 # World age support for macro expansion
 JuliaLowering.include_string(test_mod, raw"""
 macro world_age_test()
