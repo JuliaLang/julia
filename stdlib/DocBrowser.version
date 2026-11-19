@@ -1,0 +1,4 @@
+DOCBROWSER_BRANCH = main
+DOCBROWSER_SHA1 = fb851b2ec34040346c51bb54cd63ad250b95990a
+DOCBROWSER_GIT_URL := https://github.com/IanButterworth/DocBrowser.jl.git
+DOCBROWSER_TAR_URL = https://api.github.com/repos/IanButterworth/DocBrowser.jl/tarball/$1
