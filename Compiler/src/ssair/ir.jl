@@ -768,16 +768,33 @@ end
 insert_node!(ir::IRCode, pos::Int, newinst::NewInstruction, attach_after::Bool=false) =
     insert_node!(ir, SSAValue(pos), newinst, attach_after)
 
-struct CFGTransformState
-    cfg_transforms_enabled::Bool
-    fold_constant_branches::Bool
-    result_bbs::Vector{BasicBlock}
-    bb_rename_pred::Vector{Int}
-    bb_rename_succ::Vector{Int}
+mutable struct CFGTransformState
+    const cfg_transforms_enabled::Bool
+    const fold_constant_branches::Bool
+    const result_bbs::Vector{BasicBlock}
+    const bb_rename_pred::Vector{Int}
+    const bb_rename_succ::Vector{Int}
+    # Built on the first killed edge when `lazy_domtree` is set, since most
+    # compactions kill none.
     domtree::Union{Nothing, DomTree}
     # Scratch buffers reused for the in-place domtree updates performed while
     # killing edges. Non-`nothing` exactly when `domtree` is.
     domtree_cache::Union{Nothing, DomTreeCache}
+    const lazy_domtree::Bool
+end
+CFGTransformState(cfg_transforms_enabled::Bool, fold_constant_branches::Bool,
+                  result_bbs::Vector{BasicBlock}, bb_rename_pred::Vector{Int}, bb_rename_succ::Vector{Int},
+                  domtree::Union{Nothing, DomTree}, domtree_cache::Union{Nothing, DomTreeCache}) =
+    CFGTransformState(cfg_transforms_enabled, fold_constant_branches, result_bbs,
+                      bb_rename_pred, bb_rename_succ, domtree, domtree_cache, false)
+
+function get_domtree!(cfg_transform::CFGTransformState)
+    if cfg_transform.domtree === nothing && cfg_transform.lazy_domtree
+        cache = DomTreeCache()
+        cfg_transform.domtree = construct_domtree(cfg_transform.result_bbs; cache)
+        cfg_transform.domtree_cache = cache
+    end
+    return cfg_transform.domtree
 end
 
 # N.B.: Takes ownership of the CFG array
@@ -818,18 +835,12 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
                 result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
             end
         end
-        # Reuse the same cache for the initial construction and any later
-        # in-place updates while killing edges during compaction.
-        domtree_cache = DomTreeCache()
-        # TODO: This could be done by just renaming the domtree
-        domtree = construct_domtree(result_bbs; cache=domtree_cache)
     else
         bb_rename = Vector{Int}()
         result_bbs = blocks
-        domtree = nothing
-        domtree_cache = nothing
     end
-    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename, domtree, domtree_cache)
+    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename,
+                             nothing, nothing, allow_cfg_transforms)
 end
 
 mutable struct IncrementalCompact
@@ -846,8 +857,9 @@ mutable struct IncrementalCompact
     # This supports insertion while compacting
     new_new_nodes::NewNodeStream  # New nodes that were before the compaction point at insertion time
     new_new_used_ssas::Vector{Int}
-    pending_nodes::NewNodeStream  # New nodes that were after the compaction point at insertion time
-    pending_perm::Vector{Int} # pending_nodes.info[pending_perm] is in min-heap order by pos
+    # Both `nothing` until `add_pending!` inserts the first node; most compactions insert none
+    pending_nodes::Union{Nothing, NewNodeStream}  # New nodes that were after the compaction point at insertion time
+    pending_perm::Union{Nothing, Vector{Int}} # pending_nodes.info[pending_perm] is in min-heap order by pos
 
     # State
     idx::Int
@@ -868,8 +880,8 @@ mutable struct IncrementalCompact
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         late_fixup = Vector{Int}()
         new_new_nodes = NewNodeStream()
-        pending_nodes = NewNodeStream()
-        pending_perm = Int[]
+        pending_nodes = nothing
+        pending_perm = nothing
         return new(code, result, cfg_transform, ssa_rename, used_ssas, late_fixup, perm, 1,
             new_new_nodes, new_new_used_ssas, pending_nodes, pending_perm,
             1, 1, 1, 1, false)
@@ -882,8 +894,8 @@ mutable struct IncrementalCompact
         new_len = length(code.stmts) + length(info)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         bb_rename = Vector{Int}()
-        pending_nodes = NewNodeStream()
-        pending_perm = Int[]
+        pending_nodes = nothing
+        pending_perm = nothing
         return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing, nothing),
             ssa_rename, parent.used_ssas,
             parent.late_fixup, perm, 1,
@@ -920,8 +932,9 @@ function getindex(compact::IncrementalCompact, ssa::OldSSAValue)
         return compact.ir.new_nodes.stmts[id]
     end
     id -= length(compact.ir.new_nodes)
-    (id ≤ length(compact.pending_nodes.stmts)) || throw(InvalidIRError())
-    return compact.pending_nodes.stmts[id]
+    pending_nodes = compact.pending_nodes
+    (pending_nodes !== nothing && id ≤ length(pending_nodes.stmts)) || throw(InvalidIRError())
+    return pending_nodes.stmts[id]
 end
 
 function getindex(compact::IncrementalCompact, ssa::NewSSAValue)
@@ -1040,10 +1053,18 @@ function count_added_node!(compact::IncrementalCompact, @nospecialize(v))
 end
 
 function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
-    node = add_inst!(compact.pending_nodes, pos, attach_after)
-    heappush!(compact.pending_perm, length(compact.pending_nodes), By(x::Int->compact.pending_nodes.info[x].pos))
+    if compact.pending_nodes === nothing
+        compact.pending_nodes = NewNodeStream()
+        compact.pending_perm = Int[]
+    end
+    pending_nodes = compact.pending_nodes::NewNodeStream
+    node = add_inst!(pending_nodes, pos, attach_after)
+    heappush!(compact.pending_perm::Vector{Int}, length(pending_nodes), By(x::Int->pending_nodes.info[x].pos))
     return node
 end
+
+heappop_pending!(pending_nodes::NewNodeStream, pending_perm::Vector{Int}) =
+    heappop!(pending_perm, By(x::Int->pending_nodes.info[x].pos))
 
 function inst_from_newinst!(node::Instruction, newinst::NewInstruction,
     newline::NTuple{3,Int32}=newinst.line::NTuple{3,Int32}, newflag::UInt32=newinst.flag::UInt32)
@@ -1075,7 +1096,7 @@ function insert_node!(compact::IncrementalCompact, @nospecialize(before), newins
             newline = something(newinst.line, compact.ir.stmts[before.id][:line])
             node = add_pending!(compact, before.id, attach_after)
             inst_from_newinst!(node, newinst, newline, newflag)
-            os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
+            os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes::NewNodeStream))
             push!(compact.ssa_rename, os)
             push!(compact.used_ssas, 0)
             return os
@@ -1093,13 +1114,13 @@ function insert_node!(compact::IncrementalCompact, @nospecialize(before), newins
         else
             if pos > length(compact.ir.stmts)
                 #@assert attach_after
-                info = compact.pending_nodes.info[pos - length(compact.ir.stmts) - length(compact.ir.new_nodes)]
+                info = (compact.pending_nodes::NewNodeStream).info[pos - length(compact.ir.stmts) - length(compact.ir.new_nodes)]
                 pos, attach_after = info.pos, info.attach_after
             end
             newline = something(newinst.line, compact.ir.stmts[pos][:line])
             node = add_pending!(compact, pos, attach_after)
             inst_from_newinst!(node, newinst, newline, newflag)
-            os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
+            os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes::NewNodeStream))
             push!(compact.ssa_rename, os)
             push!(compact.used_ssas, 0)
             return os
@@ -1181,9 +1202,9 @@ function getindex(view::TypesView, v::OldSSAValue)
         return ir.new_nodes.stmts[id][:type]
     end
     id -= length(ir.new_nodes)
-    stmts = view.ir.pending_nodes.stmts
-    (id ≤ length(stmts)) || throw(InvalidIRError())
-    return stmts[id][:type]
+    pending_nodes = view.ir.pending_nodes
+    (pending_nodes !== nothing && id ≤ length(pending_nodes.stmts)) || throw(InvalidIRError())
+    return pending_nodes.stmts[id][:type]
 end
 
 function kill_current_use!(compact::IncrementalCompact, @nospecialize(val))
@@ -1232,7 +1253,7 @@ function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::OldSSAVal
         return compact
     end
     id -= length(compact.ir.new_nodes)
-    compact.pending_nodes.stmts[id][:stmt] = v
+    (compact.pending_nodes::NewNodeStream).stmts[id][:stmt] = v
     return compact
 end
 
@@ -1483,7 +1504,8 @@ scan the compacted prefix when `to == active_bb`. `from` and `to` are non-rename
 """
 function kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
     # Note: We recursively kill as many edges as are obviously dead.
-    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree, domtree_cache) = compact.cfg_transform
+    domtree = get_domtree!(compact.cfg_transform)
+    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree_cache) = compact.cfg_transform
     preds = result_bbs[bb_rename_succ[to]].preds
     succs = result_bbs[bb_rename_pred[from]].succs
     deleteat!(preds, findfirst(x::Int->x==bb_rename_pred[from], preds)::Int)
@@ -1919,8 +1941,9 @@ function stmts_awaiting_insertion(compact::IncrementalCompact, idx::Int)
 
     new_node_waiting = compact.new_nodes_idx <= length(compact.perm) &&
         compact.ir.new_nodes.info[compact.perm[compact.new_nodes_idx]].pos <= idx
-    pending_node_waiting = !isempty(compact.pending_perm) &&
-        compact.pending_nodes.info[compact.pending_perm[1]].pos <= idx
+    pending_perm = compact.pending_perm
+    pending_node_waiting = pending_perm !== nothing && !isempty(pending_perm) &&
+        (compact.pending_nodes::NewNodeStream).info[pending_perm[1]].pos <= idx
 
     return new_node_waiting || pending_node_waiting
 end
@@ -1983,10 +2006,12 @@ function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.
             end
         end
     end
-    if !isempty(compact.pending_perm)
-        for eidx in bidx:length(compact.pending_perm)
-            if entry_at_idx(compact.pending_nodes.info[compact.pending_perm[eidx]], idx, it.start_idx, it.include_stmts_before_start)
-                entry = compact.pending_nodes.stmts[compact.pending_perm[eidx]]
+    pending_perm = compact.pending_perm
+    if pending_perm !== nothing && !isempty(pending_perm)
+        pending_nodes = compact.pending_nodes::NewNodeStream
+        for eidx in bidx:length(pending_perm)
+            if entry_at_idx(pending_nodes.info[pending_perm[eidx]], idx, it.start_idx, it.include_stmts_before_start)
+                entry = pending_nodes.stmts[pending_perm[eidx]]
                 return (entry[:stmt], (idx, aidx, eidx+1))
             end
         end
@@ -2031,12 +2056,16 @@ function iterate_compact(compact::IncrementalCompact)
             end
             compact.new_nodes_idx += 1
         end
-        while !isempty(compact.pending_perm)
-            info = compact.pending_nodes.info[compact.pending_perm[1]];
-            if !(info.attach_after ? info.pos <= compact.idx - 1 : info.pos <= compact.idx)
-                break
+        pending_perm = compact.pending_perm
+        if pending_perm !== nothing
+            pending_nodes = compact.pending_nodes::NewNodeStream
+            while !isempty(pending_perm)
+                info = pending_nodes.info[pending_perm[1]]
+                if !(info.attach_after ? info.pos <= compact.idx - 1 : info.pos <= compact.idx)
+                    break
+                end
+                heappop_pending!(pending_nodes, pending_perm)
             end
-            heappop!(compact.pending_perm, By(x::Int -> compact.pending_nodes.info[x].pos))
         end
         # Move to next block
         compact.idx += 1
@@ -2060,18 +2089,22 @@ function iterate_compact(compact::IncrementalCompact)
         compact.active_bb = active_bb
         old_result_idx == result_idx && @goto restart
         return Pair{Int,Int}(new_idx, old_result_idx)
-    elseif !isempty(compact.pending_perm) &&
-        (info = compact.pending_nodes.info[compact.pending_perm[1]];
-         info.attach_after ? info.pos == idx - 1 : info.pos == idx)
-        new_idx = heappop!(compact.pending_perm, By(x::Int -> compact.pending_nodes.info[x].pos))
-        new_node_entry = compact.pending_nodes.stmts[new_idx]
-        new_node_info = compact.pending_nodes.info[new_idx]
-        new_idx += length(compact.ir.stmts) + length(compact.ir.new_nodes)
-        (old_result_idx, result_idx, active_bb) =
-                process_newnode!(compact, new_idx, new_node_entry, new_node_info, idx, active_bb, false)
-        compact.active_bb = active_bb
-        old_result_idx == result_idx && @goto restart
-        return Pair{Int,Int}(new_idx, old_result_idx)
+    end
+    pending_perm = compact.pending_perm
+    if pending_perm !== nothing && !isempty(pending_perm)
+        pending_nodes = compact.pending_nodes::NewNodeStream
+        info = pending_nodes.info[pending_perm[1]]
+        if info.attach_after ? info.pos == idx - 1 : info.pos == idx
+            new_idx = heappop_pending!(pending_nodes, pending_perm)
+            new_node_entry = pending_nodes.stmts[new_idx]
+            new_node_info = pending_nodes.info[new_idx]
+            new_idx += length(compact.ir.stmts) + length(compact.ir.new_nodes)
+            (old_result_idx, result_idx, active_bb) =
+                    process_newnode!(compact, new_idx, new_node_entry, new_node_info, idx, active_bb, false)
+            compact.active_bb = active_bb
+            old_result_idx == result_idx && @goto restart
+            return Pair{Int,Int}(new_idx, old_result_idx)
+        end
     end
     # This will get overwritten in future iterations if
     # result_idx is not, incremented, but that's ok and expected
