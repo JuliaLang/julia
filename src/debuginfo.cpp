@@ -303,7 +303,7 @@ void JITDebugInfoRegistry::registerJITObject(
                 continue;
             }
         }
-        unw_dyn_info_t *di = new unw_dyn_info_t;
+        unw_dyn_info_t *di = new unw_dyn_info_t();
         di->gp = 0;
         di->format = UNW_INFO_FORMAT_ARM_EXIDX;
         di->start_ip = (uintptr_t)arm_text_addr;
@@ -1536,7 +1536,7 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
         return;
 
     // Our unwinder
-    unw_dyn_info_t *di = new unw_dyn_info_t;
+    unw_dyn_info_t *di = new unw_dyn_info_t();
     // In a shared library, this is set to the address of the PLT.
     // For us, just put 0 to emulate a static library. This field does
     // not seem to be used on our supported architectures.
