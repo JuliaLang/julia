@@ -547,8 +547,24 @@ struct NewPhiCNode2
     insert::NewSlotPhi{PhiCNode}
 end
 
+# Whether `ir` is a single basic block without CFG edges, try regions or a fallthrough
+# off its end, which `construct_ssa!` handles without a dominator tree.
+function is_straight_line(ir::IRCode)
+    blocks = ir.cfg.blocks
+    length(blocks) == 1 || return false
+    bb = blocks[1]
+    (all(iszero, bb.preds) && isempty(bb.succs)) || return false # pred 0 is the entry
+    code = ir.stmts.stmt
+    isa(code[last(bb.stmts)], ReturnNode) || return false
+    for stmt in code
+        isa(stmt, EnterNode) && return false
+    end
+    return true
+end
+
+# `domtree === nothing` means `ir` is straight-line code (see `is_straight_line`).
 function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
-                        domtree::DomTree, defuses::Vector{SlotInfo},
+                        domtree::Union{Nothing,DomTree}, defuses::Vector{SlotInfo},
                         𝕃ₒ::AbstractLattice)
     code = ir.stmts.stmt
     cfg = ir.cfg
@@ -575,6 +591,15 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     @zone "CC: IDF" for (idx, slot) in Iterators.enumerate(defuses)
         # No uses => no need for phi nodes
         isempty(slot.uses) && continue
+        if domtree === nothing
+            # The only block needs no phi nodes. As in `compute_live_ins`, the slot is
+            # live into it if it is used before its first def (arguments' defs are at 0).
+            defs = slot.defs
+            if isempty(defs) || first(slot.uses) <= first(defs)
+                push!(live_slots[1], idx)
+            end
+            continue
+        end
         # TODO: Restore this optimization
         if false # length(slot.defs) == 1
             if slot.defs[] == 0
@@ -876,6 +901,13 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     for i = 1:length(new_nodes)
         local node = new_nodes.stmts[i]
         node[:stmt] = new_to_regular(renumber_ssa!(node[:stmt], ssavalmap), nstmts)
+    end
+    if domtree === nothing
+        # A single block is already in dominator order. Only give the IR its own CFG,
+        # as `domsort_ssa!` does, rather than the one shared with the `OptimizationState`.
+        bb = cfg.blocks[1]
+        newcfg = CFG(BasicBlock[BasicBlock(bb.stmts, copy(bb.preds), Int[])], Int[])
+        return IRCode(ir, ir.stmts, newcfg, ir.new_nodes)
     end
     @zone "CC: DOMSORT" ir = domsort_ssa!(ir, domtree)
     return ir
