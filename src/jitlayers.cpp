@@ -2789,6 +2789,19 @@ TargetIRAnalysis JuliaOJIT::getTargetIRAnalysis() const {
 static void decorate_module(Module &M) {
     auto TT = Triple(M.getTargetTriple());
     if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
+        // debuginfo registers unwind info for each function symbol in the object, and a
+        // private function may get no symbol. Without an entry, Windows unwinds it as a
+        // leaf, so an exception raised below it (e.g. a safepoint fault while a PLT thunk
+        // resolves its symbol) is never dispatched and kills the process.
+        for (Function &F : M) {
+            if (!F.isDeclaration() && F.hasPrivateLinkage()) {
+                // setName picks a name unused in the module; the `__unnamed_N` the mangler
+                // gives unnamed globals may already be taken
+                if (!F.hasName())
+                    F.setName("jl_unnamed");
+                F.setLinkage(GlobalValue::InternalLinkage);
+            }
+        }
         // Add special values used by debuginfo to build the UnwindData table registration for Win64
         // This used to be GV, but with https://reviews.llvm.org/D100944 we no longer can emit GV into `.text`
         // and with JITLink it became difficult to change the content afterwards, but we
