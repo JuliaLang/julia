@@ -362,7 +362,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     late_fixup_offset = length(compact.late_fixup)
     if item.linear_inline_eligible
         #compact[idx] = nothing
-        inline_compact = IncrementalCompact(compact, item.ir, compact.result_idx)
+        inline_compact = inline_compaction!(compact, item.ir, compact.result_idx)
         @assert isempty(inline_compact.perm) && inline_compact.pending_perm === nothing "linetable not in canonical form (missing compact call)"
         for ((lineidx, idx′), stmt′) in inline_compact
             # This dance is done to maintain accurate usage counts in the
@@ -398,7 +398,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         end
         pn = PhiNode()
         #compact[idx] = nothing
-        inline_compact = IncrementalCompact(compact, item.ir, compact.result_idx)
+        inline_compact = inline_compaction!(compact, item.ir, compact.result_idx)
         @assert isempty(inline_compact.perm) && inline_compact.pending_perm === nothing "linetable not in canonical form (missing compact call)"
         for ((lineidx, idx′), stmt′) in inline_compact
             inline_compact[idx′] = nothing

@@ -913,6 +913,8 @@ mutable struct IncrementalCompact
     # `cfg_transform`, or built by `get_domtree!`.
     domtree::Union{Nothing, DomTree}
     domtree_cache::Union{Nothing, DomTreeCache}
+    # The compaction last used to inline a callee into this one (see `inline_compaction!`)
+    inline_scratch::Union{Nothing, IncrementalCompact}
 
     function IncrementalCompact(code::IRCode, cfg_transform::CFGTransformState,
                                 buffers::Union{Nothing,CompactionBuffers}=nothing)
@@ -940,7 +942,7 @@ mutable struct IncrementalCompact
         pending_perm = nothing
         return new(code, result, cfg_transform, ssa_rename, used_ssas, late_fixup, perm, 1,
             new_new_nodes, new_new_used_ssas, pending_nodes, pending_perm,
-            1, 1, 1, 1, false, buffers, cfg_transform.domtree, cfg_transform.domtree_cache)
+            1, 1, 1, 1, false, buffers, cfg_transform.domtree, cfg_transform.domtree_cache, nothing)
     end
 
     # For inlining
@@ -956,8 +958,53 @@ mutable struct IncrementalCompact
             ssa_rename, parent.used_ssas,
             parent.late_fixup, perm, 1,
             parent.new_new_nodes, parent.new_new_used_ssas, pending_nodes, pending_perm,
-            1, result_offset, 1, parent.active_result_bb, false, nothing, nothing, nothing)
+            1, result_offset, 1, parent.active_result_bb, false, nothing, nothing, nothing, nothing)
     end
+end
+
+"""
+    inline_compaction!(parent::IncrementalCompact, code::IRCode, result_offset::Int)
+
+A compaction of the callee `code` that writes into the result of `parent` from
+`result_offset` on, as `IncrementalCompact(parent, code, result_offset)` creates. Each such
+compaction is finished before the next callee is inlined, so `parent` reuses one for all.
+"""
+function inline_compaction!(parent::IncrementalCompact, code::IRCode, result_offset::Int)
+    sub = parent.inline_scratch
+    if sub === nothing
+        sub = IncrementalCompact(parent, code, result_offset)
+        parent.inline_scratch = sub
+        return sub
+    end
+    info = code.new_nodes.info
+    perm = resize!(sub.perm, length(info))
+    for i = 1:length(info)
+        perm[i] = i
+    end
+    sort!(perm; by=i::Int->(info[i].pos, i))
+    new_len = length(code.stmts) + length(info)
+    ssa_rename = resize!(sub.ssa_rename, new_len)
+    for i = 1:new_len
+        ssa_rename[i] = SSAValue(i)
+    end
+    bb_rename = sub.cfg_transform.bb_rename_pred
+    @assert isempty(bb_rename)
+    sub.ir = code
+    sub.result = parent.result
+    sub.cfg_transform = CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing, nothing, false)
+    sub.used_ssas = parent.used_ssas
+    sub.late_fixup = parent.late_fixup
+    sub.new_nodes_idx = 1
+    sub.new_new_nodes = parent.new_new_nodes
+    sub.new_new_used_ssas = parent.new_new_used_ssas
+    sub.pending_nodes = nothing
+    sub.pending_perm = nothing
+    sub.idx = 1
+    sub.result_idx = result_offset
+    sub.active_bb = 1
+    sub.active_result_bb = parent.active_result_bb
+    sub.renamed_new_nodes = false
+    return sub
 end
 
 function get_domtree!(compact::IncrementalCompact)
