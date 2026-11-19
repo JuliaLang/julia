@@ -52,25 +52,6 @@ Build system changes
 New library functions
 ---------------------
 
-* `Base.decompose(x::Real)` has been made `public` (but not exported); it is the point
-  where rational-valued `Real` subtypes that support hashing hook into the hashing protocol ([#63262]).
-* `tap(f)` creates a function that calls `f(x)` for side effects and returns `x` ([#61340]).
-* `unsplat(f)` creates a function that bundles its arguments into a tuple and passes them to `f`;
-  it is the inverse of `splat` ([#62714]).
-* `Base.set_binding_visibility!` sets the declared visibility (`:none`, `:public`, or `:export`) of a name
-  in a module, allowing an `export` or `public` declaration to be retracted programmatically ([#62131]).
-* `Base.generating_output()` has been made `public` (but not exported) to allow checking whether the current
-  process is performing compilation for a pkgimage/sysimage ([#61224]).
-* `Base.isfieldatomic(t, s)` has been made `public` (but not exported); it reports whether a field `s` of a
-  type `t` is declared `@atomic`.
-* `Base.raw_substring` is an unexported, public constructor to build a `SubString` without checking for
-  valid string indices.
-* `Base.unannotate(::AnnotatedString)` returns the underlying un-annotated string of the input string.
-* `Base.include_mapexprs(mod)` is an unexported, public function returning the non-identity
-  `mapexpr` functions used by `include(mapexpr, …)` calls while loading the package rooted at
-  `mod`, keyed by `(including_module, absolute_path)`. The table is stored inside the package
-  image, so it survives precompilation; revision tools (e.g. Revise) use it to re-apply the
-  original transform when an `include(mapexpr, …)`-ed file is edited.
 * `bitsizeof(x)` returns the declared width in bits of a primitive type, or of the primitive type
   of `x`, excluding the padding that `sizeof` includes. It throws for any other type or value ([#61359]).
 * `filterfirst(f, itr)` returns the first element of `itr` for which `f` returns `true` ([#60913]).
