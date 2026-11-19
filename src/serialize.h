@@ -3,6 +3,8 @@
 #ifndef JL_SERIALIZE_H
 #define JL_SERIALIZE_H
 
+#include "ios.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

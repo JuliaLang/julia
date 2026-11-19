@@ -1,18 +1,30 @@
+#ifndef JL_DEBUG_REGISTRY_H
+#define JL_DEBUG_REGISTRY_H
+
 #include <llvm/ADT/StringMap.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/DebugInfo/DIContext.h>
 #include <llvm/IR/DataLayout.h>
 
 #include "julia.h"
+#include "processor.h"
 
+#include <atomic>
+#include <functional>
 #include <map>
+#include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <type_traits>
+#include <utility>
+
+struct jl_linker_info_t;
 
 typedef struct {
     const llvm::object::ObjectFile *obj;
     llvm::DIContext *ctx;
     uint64_t slide;
-    std::map<uintptr_t, StringRef, std::greater<size_t>> *symbolmap;
+    std::map<uintptr_t, llvm::StringRef, std::greater<size_t>> *symbolmap;
 } jl_object_file_entry_t;
 
 // Central registry for resolving function addresses to `jl_code_instance_t`s and
@@ -101,7 +113,7 @@ public:
 private:
 
     struct LazyObjectInfo {
-        SmallVector<uint8_t, 0> data;
+        llvm::SmallVector<uint8_t, 0> data;
         size_t uncompressedsize;
         std::unique_ptr<const llvm::object::ObjectFile> object;
         std::unique_ptr<llvm::DIContext> context;
@@ -149,3 +161,5 @@ public:
 
     std::shared_mutex symbol_mutex;
 };
+
+#endif

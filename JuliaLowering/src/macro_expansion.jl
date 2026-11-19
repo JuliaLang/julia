@@ -152,7 +152,7 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
         highlight(io, JuliaSyntax.SourceFile(src.code), byterange, note=exc.msg)
     end
     if !isnothing(exc.err)
-        print(io, "\nCaused by:\n")
+        print(io, "\nCaused by: ")
         showerror(io, exc.err)
     end
 end

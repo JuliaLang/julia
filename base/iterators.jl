@@ -165,13 +165,14 @@ iterate(r::Reverse{<:Union{Tuple, NamedTuple}}, i::Int = length(r.itr)) = i < 1 
 
 struct Enumerate{I}
     itr::I
+    from::Int
 end
 
 """
-    enumerate(iter)
+    enumerate(iter; from=1)
 
-An iterator that yields `(i, x)` where `i` is a counter starting at 1,
-and `x` is the `i`th value from the given iterator. It's useful when
+An iterator that yields `(i, x)` where `i` is a counter starting at `from`,
+and `x` runs through the values of the given iterator. It's useful when
 you need not only the values `x` over which you are iterating, but
 also the number of iterations so far.
 
@@ -202,19 +203,22 @@ i = 2, val = a, str[i] = 'a'
 i = 3, val = ï, str[i] = 'ï'
 i = 4, val = v, StringIndexError("naïve", 4)
 i = 5, val = e, str[i] = 'v'
+
+julia> collect(enumerate("ab"; from=0)) == [(0, 'a'), (1, 'b')]
+true
 ```
 """
-enumerate(iter) = Enumerate(iter)
+enumerate(iter; from=1) = Enumerate(iter, from)
 
 length(e::Enumerate) = length(e.itr)
 size(e::Enumerate) = size(e.itr)
-@propagate_inbounds function iterate(e::Enumerate, state=(1,))
+@propagate_inbounds function iterate(e::Enumerate, state=(e.from,))
     i, rest = state[1], tail(state)
     n = iterate(e.itr, rest...)
     n === nothing && return n
     (i, n[1]), (i+1, n[2])
 end
-last(e::Enumerate) = (length(e.itr), last(e.itr))
+last(e::Enumerate) = (e.from + length(e.itr) - 1, last(e.itr))
 
 eltype(::Type{Enumerate{I}}) where {I} = TupleOrBottom(Int, eltype(I))
 
@@ -223,7 +227,8 @@ IteratorEltype(::Type{Enumerate{I}}) where {I} = IteratorEltype(I)
 
 @inline function iterate(r::Reverse{<:Enumerate})
     ri = reverse(r.itr.itr)
-    iterate(r, (length(ri), ri))
+    from = r.itr.from
+    iterate(r, (from + length(ri) - 1, ri))
 end
 @inline function iterate(r::Reverse{<:Enumerate}, state)
     i, ri, rest = state[1], state[2], tail(tail(state))

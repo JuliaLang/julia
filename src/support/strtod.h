@@ -3,6 +3,8 @@
 #ifndef JL_STRTOD_H
 #define JL_STRTOD_H
 
+#include "dtypes.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

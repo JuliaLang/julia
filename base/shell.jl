@@ -110,6 +110,7 @@ mutable struct _ShellParser{S<:AbstractString}
     const str::AbstractString # the original command, for error messages
     const interpolate::Bool
     const partial::Bool       # whether the command may end in the middle, for REPLCompletions
+    const sequence::Bool      # whether `;`, `&&` and `||` separate commands, for REPL shell mode
     const special::String
     const filename::String
     pos::Int                  # the next character to read
@@ -138,6 +139,29 @@ end
 # One argument a glob word produces: its literal text, the same text as a pattern, with the
 # literal parts escaped, and whether it has a glob character, in which case it is globbed.
 const _GlobArg = Tuple{String,String,Bool}
+
+# Whether the character `c` at `p.pos` starts a `;` or `&&`, which end a command in a sequence.
+_at_sequence_op(p::_ShellParser, c::AbstractChar) =
+    c == ';' || (c == '&' && (n = nextind(p.s, p.pos); n <= lastindex(p.s) && p.s[n] == '&'))
+
+# Throw an error for the `;`, `&&` or `||` `op` outside a sequence, as in a command literal.
+function _sequence_error(p::_ShellParser, op::AbstractString)
+    alt = op == ";" ? "`run(a); run(b)`" : "`success(a) $op run(b)`"
+    error("parsing command `$(p.str)`: `$op` between commands is only supported in REPL shell ",
+          "mode; in code, use Julia's `$op` instead, as in $alt, or quote `$op` to pass it as an argument")
+end
+
+# Throw an error for shell syntax that shell mode does not support, if `c` starts some.
+function _shell_mode_syntax_error(p::_ShellParser, c::AbstractChar)
+    if c == '(' || c == ')'
+        error("parsing command `$(p.str)`: subshells with `( ... )` are not supported in shell ",
+              "mode; quote the parentheses to pass them as arguments")
+    elseif c == '&'
+        error("parsing command `$(p.str)`: running a command in the background with `&` is not ",
+              "supported in shell mode; quote `&` to pass it as an argument")
+    end
+    return nothing
+end
 
 # Add the literal text from `p.lit` up to, but not including, position `j` to `word`.
 function _flush!(p::_ShellParser, word::Vector{Any}, j::Int = p.pos)
@@ -330,7 +354,7 @@ function _parse_word!(p::_ShellParser, word::Vector{Any})
     depth = 0 # braces in a brace expansion that are literal, as in `{a,{b}}`
     while !_at_end(p)
         c = _char(p)
-        if isspace(c) || (p.interpolate && c in "|<>")
+        if isspace(c) || (p.interpolate && c in "|<>") || (p.sequence && _at_sequence_op(p, c))
             p.in_brace == 0 && break
             bad == '\0' && (bad = c)
             _next!(p)
@@ -379,6 +403,10 @@ function _parse_word!(p::_ShellParser, word::Vector{Any})
         elseif c in p.special && bad == '\0'
             # After a bad character, the braces are not an expansion and the text is parsed
             # again outside them, where this character may be allowed, as in `{ ~#`.
+            if p.in_brace == 0 && p.interpolate
+                _at_sequence_op(p, c) && _sequence_error(p, c == ';' ? ";" : "&&")
+                p.sequence && _shell_mode_syntax_error(p, c)
+            end
             _special_error(p)
         else
             _next!(p)
@@ -424,7 +452,7 @@ end
 
 # `parts` with each glob character made literal text, for a word that is not a glob.
 _no_glob(parts::Vector{Any}) = Any[x isa _GlobChar ? string(x.c) :
-                                   x isa _GlobBrace ? _brace_expr(map(_no_glob, x.alts)) : x
+                                   x isa _GlobBrace ? _brace_expr(Vector{Any}[_no_glob(alt) for alt in x.alts]) : x
                                    for x in parts]
 
 # The `_GlobArg`s a glob word produces, as a vector if the word interpolates nothing and
@@ -441,7 +469,7 @@ function _glob_args1(x)
     x isa Vector{String} && return _GlobArg[(v, glob_escape(v), false) for v in x]
     x isa _GlobBrace || return Expr(:call, GlobalRef(Base, :cmd_glob_args), x)
     alts = Any[_glob_args(alt) for alt in x.alts]
-    all(x -> x isa Vector{_GlobArg}, alts) && return reduce(vcat, alts)
+    all(x -> x isa Vector{_GlobArg}, alts) && return _GlobArg[g for alt in alts for g in alt::Vector{_GlobArg}]
     return Expr(:call, GlobalRef(Base, :vcat), alts...)
 end
 
@@ -516,7 +544,8 @@ _isstatic(parts::Vector{Any}) = all(x -> x isa Union{String,Vector{String}}, par
 function _brace_product(parts::Vector{Any})
     vals = [""]
     for part in parts
-        vals = [v * x for v in vals for x in (part isa String ? (part,) : part::Vector{String})]
+        xs = part isa String ? [part] : part::Vector{String}
+        vals = String[v * x for v in vals for x in xs]
     end
     return vals
 end
@@ -574,25 +603,71 @@ function _segment_expr(seg::_ShellSegment)
     return ex
 end
 
-# Parse a command into an expression that builds it, and return it with the position in
-# `str` where the last argument starts. With `partial=true`, `str` is a command still being
-# typed, which may end in the middle of a pipeline or redirection, and the expression is the
-# tuple of words of its last command, as for a command without pipes or redirections.
-shell_parse(str::AbstractString, interpolate::Bool=true;
-            special::AbstractString="", filename="none", partial::Bool=false) =
-    __repl_entry_shell_parse(str, interpolate, special, filename, partial)
+# Whether the pipeline `segments` has no words and no redirections, like the text between two
+# `;` with nothing but spaces between them.
+_isempty_command(segments::Vector{_ShellSegment}) = length(segments) == 1 &&
+    (seg = segments[1]; isempty(seg.args) && seg.stdin === nothing && seg.stdout === nothing && seg.stderr === nothing)
 
-# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
-function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, special::AbstractString,
-                                  filename, partial::Bool=false)
+# The expression that builds the command or pipeline `segments`: the tuple of words of a
+# command without pipes or redirections, or a call to `pipeline`.
+function _pipeline_expr(p::_ShellParser, segments::Vector{_ShellSegment})
+    str = p.str
+    if length(segments) == 1
+        seg = segments[1]
+        if seg.stdin === nothing && seg.stdout === nothing && seg.stderr === nothing
+            return Expr(:tuple, Any[Expr(:tuple, w...) for w in seg.args]...)
+        end
+        isempty(seg.args) && error("parsing command `$str`: redirection without a command")
+    elseif any(seg -> isempty(seg.args), segments)
+        error("parsing command `$str`: empty command in pipeline")
+    end
+    ex = _segment_expr(segments[1])
+    for k in 2:length(segments)
+        ex = Expr(:call, GlobalRef(Base, :pipeline), ex, _segment_expr(segments[k]))
+    end
+    return ex
+end
+
+function _ShellParser(str::AbstractString, interpolate::Bool, special::AbstractString,
+                      filename, partial::Bool, sequence::Bool)
     s = rstrip_shell(lstrip(SubString(str, firstindex(str))))
-    isempty(s) && return interpolate ? (Expr(:tuple,:()), firstindex(str)) : ([], firstindex(str))
-    p = _ShellParser(s, str, interpolate, partial, String(special), String(filename),
-                     firstindex(s), firstindex(s), firstindex(str), false, 0)
+    return _ShellParser(s, str, interpolate, partial, sequence, String(special), String(filename),
+                        firstindex(s), firstindex(s), firstindex(str), false, 0)
+end
 
+# Read the operator that starts with `c` at `p.pos`, which a word stopped before, and return
+# it: `:pipe` for `|`, `:in` for `<`, `:out` for `>`, `:append` for `>>`, and in a sequence
+# `:and` for `&&`, `:or` for `||` and `:then` for `;`.
+function _parse_operator!(p::_ShellParser, c::AbstractChar)
+    _next!(p)
+    if c == '|'
+        # While completing, a `||` is read as two pipes, so that the last command is completed.
+        (!_at(p, '|') || (p.partial && !p.sequence)) && return :pipe
+        p.sequence || _sequence_error(p, "||")
+        _next!(p)
+        return :or
+    elseif c == '>'
+        _at(p, '>') || return :out
+        _next!(p)
+        return :append
+    elseif c == '&'
+        _next!(p) # the second `&`
+        return :and
+    end
+    return c == ';' ? :then : :in
+end
+
+_operator_string(op::Symbol) = op === :and ? "&&" : op === :or ? "||" : ";"
+
+# Parse a pipeline, a sequence of commands joined by `|` and each with its redirections.
+# Returns its segments and the operator that ended it, `:and`, `:or` or `:then` in a sequence,
+# or `nothing` at the end of the command.
+function _parse_pipeline!(p::_ShellParser)
+    str = p.str
     segments = [_ShellSegment()]
     redirect = :none # the redirection waiting for its target
     word = Any[]
+    op = nothing
     while true
         w = _parse_word!(p, word)
         seg = segments[end]
@@ -602,7 +677,7 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
         if (w.stop == '<' || w.stop == '>') && !w.special &&
                 length(word) == 1 && (d = word[1]; d isa String && all(isdigit, d))
             redirect === :none || error("parsing command `$str`: redirect operator without filename")
-            fd = parse(Int, d)
+            fd = parse(Int, d::String)
             empty!(word)
         else
             redirect = _finish_word!(p, seg, word, w, redirect)
@@ -614,53 +689,84 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
             end
         else
             redirect === :none || error("parsing command `$str`: redirect operator without filename")
-            _next!(p)
-            if w.stop == '|'
+            op = _parse_operator!(p, w.stop)
+            if op === :pipe
                 push!(segments, _ShellSegment())
-            elseif w.stop == '>'
-                append = _at(p, '>')
-                append && _next!(p)
+            elseif op === :out || op === :append
                 if fd === nothing || fd == 1
                     redirect = :stdout
-                    seg.stdout_append = append
+                    seg.stdout_append = op === :append
                 elseif fd == 2
                     redirect = :stderr
-                    seg.stderr_append = append
+                    seg.stderr_append = op === :append
                 else
                     error("parsing command `$str`: unsupported fd $fd in redirection")
                 end
-            else
+            elseif op === :in
                 (fd === nothing || fd == 0) ||
                     error("parsing command `$str`: unsupported fd $fd in redirection")
                 redirect = :stdin
             end
+            op = op in (:and, :or, :then) ? op : nothing
         end
         p.lit = p.pos
         p.update_last_arg = true
+        op === nothing || break
     end
-    redirect === :none || partial ||
+    redirect === :none || p.partial ||
         error("parsing command `$str`: redirect operator without filename")
+    return segments, op
+end
 
+# Parse a command into an expression that builds it, and return it with the position in
+# `str` where the last argument starts. With `partial=true`, `str` is a command still being
+# typed, which may end in the middle of a pipeline or redirection, and the expression is the
+# tuple of words of its last command, as for a command without pipes or redirections.
+shell_parse(str::AbstractString, interpolate::Bool=true;
+            special::AbstractString="", filename="none", partial::Bool=false) =
+    __repl_entry_shell_parse(str, interpolate, special, filename, partial)
+
+# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
+function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, special::AbstractString,
+                                  filename, partial::Bool=false)
+    p = _ShellParser(str, interpolate, special, filename, partial, false)
+    isempty(p.s) && return interpolate ? (Expr(:tuple,:()), firstindex(str)) : ([], firstindex(str))
+    segments, _ = _parse_pipeline!(p)
     interpolate || return segments[1].args, p.last_arg
     if partial
         args = segments[end].args
         isempty(args) && return Expr(:tuple, :()), p.last_arg
         return Expr(:tuple, Any[Expr(:tuple, w...) for w in args]...), p.last_arg
     end
-    if length(segments) == 1
-        seg = segments[1]
-        if seg.stdin === nothing && seg.stdout === nothing && seg.stderr === nothing
-            return Expr(:tuple, Any[Expr(:tuple, w...) for w in seg.args]...), p.last_arg
+    return _pipeline_expr(p, segments), p.last_arg
+end
+
+# Parse a sequence of commands separated by `;`, `&&` and `||`, as typed in REPL shell mode,
+# where these operators are not special in backticks. Returns a vector with a pair for each
+# command: `:then`, `:and` or `:or` for the operator before it (`:then` for the first command
+# and after a `;`), and the expression that builds it, as `shell_parse` returns. A `;` may end
+# the sequence. By default, the characters that command literals reject unquoted are special,
+# so that a shell mode line has the same syntax as a command literal.
+shell_parse_sequence(str::AbstractString; special::AbstractString=shell_special, filename="none") =
+    __repl_entry_shell_parse_sequence(str, special, filename)
+
+function __repl_entry_shell_parse_sequence(str::AbstractString, special::AbstractString, filename)
+    p = _ShellParser(str, true, special, filename, false, true)
+    isempty(p.s) && return Pair{Symbol,Any}[:then => Expr(:tuple, :())]
+    commands = Pair{Symbol,Any}[]
+    op = :then # the operator before the command being parsed
+    while true
+        segments, next = _parse_pipeline!(p)
+        if _isempty_command(segments)
+            next === nothing || error("parsing command `$str`: empty command before `$(_operator_string(next))`")
+            op === :then || error("parsing command `$str`: no command after `$(_operator_string(op))`")
+            break # after a final `;`
         end
-        isempty(seg.args) && error("parsing command `$str`: redirection without a command")
-    elseif any(seg -> isempty(seg.args), segments)
-        error("parsing command `$str`: empty command in pipeline")
+        push!(commands, op => _pipeline_expr(p, segments))
+        next === nothing && break
+        op = next
     end
-    ex = _segment_expr(segments[1])
-    for k in 2:length(segments)
-        ex = Expr(:call, GlobalRef(Base, :pipeline), ex, _segment_expr(segments[k]))
-    end
-    return ex, p.last_arg
+    return commands
 end
 
 """

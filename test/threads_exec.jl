@@ -1954,3 +1954,38 @@ if threadpoolsize() >= 2
         @test Threads.threadid(rescue) == 0
     end
 end
+
+# Issue #65027: test for inference waiting on a reservation whose owner is compiling.
+if threadpoolsize() >= 2
+    let m = Module()
+        @eval m begin
+            const in_generator = Threads.Atomic{Bool}(false)
+            const compiling = Threads.Atomic{Bool}(false)
+            helper(::Type{T}) where {T} = sizeof(T) + 1
+            @generated function gen(x::T) where {T}
+                in_generator[] = true
+                t = time()
+                while !compiling[] && time() - t < 10
+                    GC.safepoint()
+                end
+                # Allow time for the other task to wait for f's reservation.
+                t = time()
+                while time() - t < 0.5
+                    GC.safepoint()
+                end
+                n = helper(T)
+                return :(x * $n)
+            end
+            f(x) = gen(x) + 1
+        end
+        t = Threads.@spawn begin
+            while !m.in_generator[]
+                yield()
+            end
+            m.compiling[] = true
+            Base.invokelatest(m.f, 2)
+        end
+        @test Core.Compiler.return_type(m.f, Tuple{Int}) === Int
+        @test fetch(t) == 2 * (sizeof(Int) + 1) + 1
+    end
+end

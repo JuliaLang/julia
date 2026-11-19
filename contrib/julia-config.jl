@@ -7,8 +7,7 @@ const options = [
     "--cflags",
     "--ldflags",
     "--ldlibs",
-    "--allflags",
-    "--framework"
+    "--allflags"
 ];
 
 function shell_escape(str)
@@ -18,25 +17,10 @@ end
 
 function libDir()
     return if Base.isdebugbuild()
-        if Base.DARWIN_FRAMEWORK
-            joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug"))),"lib")
-        else
-            dirname(abspath(Libdl.dlpath("libjulia-debug")))
-        end
+        dirname(abspath(Libdl.dlpath("libjulia-debug")))
     else
-        if Base.DARWIN_FRAMEWORK
-            joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"lib")
-        else
-            dirname(abspath(Libdl.dlpath("libjulia")))
-        end
+        dirname(abspath(Libdl.dlpath("libjulia")))
     end
-end
-
-function frameworkDir()
-    libjulia = Base.isdebugbuild() ?
-        Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug") :
-        Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME)
-    normpath(joinpath(dirname(abspath(libjulia)),"..","..",".."))
 end
 
 private_libDir() = abspath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
@@ -45,8 +29,7 @@ function includeDir()
     return abspath(Sys.BINDIR, Base.INCLUDEDIR, "julia")
 end
 
-function ldflags(; framework::Bool=false)
-    framework && return "-F$(shell_escape(frameworkDir()))"
+function ldflags()
     fl = "-L$(shell_escape(libDir()))"
     if Sys.iswindows()
         fl = fl * " -Wl,--stack,8388608"
@@ -65,11 +48,7 @@ function ldrpath()
     return "-Wl,-rpath,$(shell_escape(private_libDir())) -Wl,-rpath,$(shell_escape(libDir())) -l$libname"
 end
 
-function ldlibs(; framework::Bool=false, rpath::Bool=true)
-    # Return "Julia" for the framework even if this is a debug build.
-    # If the user wants the debug framework, DYLD_IMAGE_SUFFIX=_debug
-    # should be used (refer to man 1 dyld).
-    framework && return "-framework $(Base.DARWIN_FRAMEWORK_NAME)"
+function ldlibs(; rpath::Bool=true)
     libname = if Base.isdebugbuild()
         "julia-debug"
     else
@@ -86,24 +65,19 @@ function ldlibs(; framework::Bool=false, rpath::Bool=true)
     end
 end
 
-function cflags(; framework::Bool=false)
+function cflags()
     flags = IOBuffer()
     print(flags, "-std=gnu11")
-    if framework
-        include = shell_escape(frameworkDir())
-        print(flags, " -F", include)
-    else
-        include = shell_escape(includeDir())
-        print(flags, " -I", include)
-    end
+    include = shell_escape(includeDir())
+    print(flags, " -I", include)
     if Sys.isunix()
         print(flags, " -fPIC")
     end
     return String(take!(flags))
 end
 
-function allflags(; framework::Bool=false, rpath::Bool=true)
-    return "$(cflags(; framework)) $(ldflags(; framework)) $(ldlibs(; framework, rpath))"
+function allflags(; rpath::Bool=true)
+    return "$(cflags()) $(ldflags()) $(ldlibs(; rpath))"
 end
 
 function check_args(args)
@@ -114,30 +88,17 @@ function check_args(args)
     end
 end
 
-function check_framework_flag(args)
-    framework = "--framework" in args
-    if framework && !Base.DARWIN_FRAMEWORK
-        println(stderr, "NOTICE: Ignoring --framework because Julia is not packaged as a framework.")
-        return false
-    elseif !framework && Base.DARWIN_FRAMEWORK
-        println(stderr, "NOTICE: Consider using --framework because Julia is packaged as a framework.")
-        return false
-    end
-    return framework
-end
-
 function (@main)(args)
     check_args(args)
-    framework = check_framework_flag(args)
     for args in args
         if args == "--ldflags"
-            println(ldflags(; framework))
+            println(ldflags())
         elseif args == "--cflags"
-            println(cflags(; framework))
+            println(cflags())
         elseif args == "--ldlibs"
-            println(ldlibs(; framework))
+            println(ldlibs())
         elseif args == "--allflags"
-            println(allflags(; framework))
+            println(allflags())
         end
     end
 end

@@ -5,6 +5,7 @@
 
 #include <stdarg.h>
 #include <sys/types.h>
+#include "dtypes.h"
 #include "analyzer_annotations.h"
 
 #ifdef __cplusplus

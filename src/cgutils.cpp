@@ -3368,6 +3368,42 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
     }
     assert(!jl_is_vecelement_type((jl_value_t*)stt));
 
+    if (!strct.inline_roots.empty()) { // bits and roots split on stack
+        assert(jl_is_concrete_immutable((jl_value_t*)stt));
+        bool isboxed = is_datatype_all_pointers(stt);
+        bool issame = is_tupletype_homogeneous(stt->types);
+        if (isboxed || issame) {
+            if (order != jl_memory_order_notatomic && order != jl_memory_order_unspecified) {
+                emit_atomic_error(ctx, "getfield: non-atomic field cannot be accessed atomically");
+                *ret = jl_cgval_t(); // unreachable
+                return true;
+            }
+            // Every field has the same layout, so both the bits and the roots of a
+            // field are found at a fixed multiple of its index in their buffers.
+            jl_value_t *jft = issame ? jl_svecref(stt->types, 0) : (jl_value_t*)jl_any_type;
+            size_t nroots = isboxed ? 1 : ((jl_datatype_t*)jft)->layout->npointers;
+            assert(strct.inline_roots.size() == nfields * nroots);
+            idx = idx0();
+            Value *first_root = ctx.builder.CreateMul(idx, ConstantInt::get(ctx.types().T_size, nroots));
+            jl_gc_roots_t roots = strct.inline_roots.slice(ctx, first_root, nroots);
+            Value *first_ptr = (isboxed || maybe_null) ? roots.get(ctx, 0) : nullptr;
+            if (maybe_null)
+                null_pointer_check(ctx, first_ptr, nullptr);
+            if (isboxed) {
+                setName(ctx.emission_context, first_ptr, "getfield");
+                *ret = mark_julia_type(ctx, first_ptr, true, jft);
+                return true;
+            }
+            Value *addr = nullptr;
+            if (!allpointers((jl_datatype_t*)jft)) {
+                Value *offset = ctx.builder.CreateMul(idx, ConstantInt::get(ctx.types().T_size, jl_field_offset(stt, 1)));
+                addr = emit_ptrgep(ctx, strct.V, offset);
+            }
+            *ret = mark_julia_slot(addr, jft, nullptr, strct.aliasinfo, std::move(roots));
+            return true;
+        }
+    }
+
     if (strct.inline_roots.empty() && !strct.ispointer()) { // unboxed
         assert(jl_is_concrete_immutable((jl_value_t*)stt));
         bool isboxed = is_datatype_all_pointers(stt);
@@ -3425,7 +3461,6 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
 
     bool maybeatomic = stt->name->atomicfields != NULL;
     if ((strct.inline_roots.empty() && strct.ispointer()) && !maybeatomic) { // boxed or stack
-        // COMBAK: inline_roots support could be implemented for this
         if (order != jl_memory_order_notatomic && order != jl_memory_order_unspecified) {
             emit_atomic_error(ctx, "getfield: non-atomic field cannot be accessed atomically");
             *ret = jl_cgval_t(); // unreachable

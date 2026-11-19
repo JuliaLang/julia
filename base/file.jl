@@ -720,8 +720,9 @@ function temp_cleanup_purge_all()
             return true
         end
     end
-    if may_need_gc[]
-        # this is only usually required on Sys.iswindows(), but may as well do it everywhere
+    if Sys.iswindows() && may_need_gc[]
+        # Windows can't delete files that are still open, so let finalizers close them
+        # first. Elsewhere, skip it: for a large heap it delays exit by seconds.
         GC.gc(true)
     end
     @lock TEMP_CLEANUP_LOCK temp_cleanup_purge_prelocked(true)

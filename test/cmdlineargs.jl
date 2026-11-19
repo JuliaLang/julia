@@ -1775,12 +1775,7 @@ end
 
 # Find the path of libjulia (or libjulia-debug, as the case may be)
 # to use as a dummy shlib to open
-libjulia = if Base.DARWIN_FRAMEWORK
-    abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME *
-        (Base.isdebugbuild() ? "_debug" : "")))
-else
-    abspath(Libdl.dlpath(Base.isdebugbuild() ? "libjulia-debug" : "libjulia"))
-end
+libjulia = abspath(Libdl.dlpath(Base.isdebugbuild() ? "libjulia-debug" : "libjulia"))
 
 
 # test error handling code paths of running --sysimage

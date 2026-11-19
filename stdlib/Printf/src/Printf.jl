@@ -1,6 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 """
-The `Printf` module provides formatted output functions similar to the C standard library's `printf`. It allows formatted printing to an output stream or to a string.
+    Printf
+
+Formatted output in the style of C's `printf`. [`@printf`](@ref) prints and
+[`@sprintf`](@ref) returns a string, while [`Printf.Format`](@ref) and
+[`Printf.format`](@ref) work with formats made at run time.
 """
 module Printf
 
@@ -132,7 +136,7 @@ function Format(f::AbstractString)
     numarguments = 0
 
     b = 0x00
-    local last_percent_pos
+    last_percent_pos = 0
 
     # skip ahead to first format specifier
     while pos <= len
@@ -645,6 +649,8 @@ function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
                 newpos += n
             end
         end
+    else
+        error("$T is not a valid float type specifier")
     end
     if newpos - pos < width
         # need to pad
@@ -683,14 +689,17 @@ end
 fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, UInt64(arg), ptrfmt(spec, arg))
 
 # position counters
-function fmt(buf, pos, arg::Ref{<:Integer}, ::Spec{PositionCounter})
+function fmt(_, pos, arg::Ref{<:Integer}, ::Spec{PositionCounter})
     arg[] = pos - 1
     pos
 end
 
-# old Printf compat
-function fix_dec end
-function ini_dec end
+# old Printf compat: a number type formatted with `fmtfallback` implements these, which
+# write the decimal digits of `x` to `buf` and return `(ndigits, pt, neg)`, where the
+# decimal point follows the first `pt` digits and `neg` is the sign of `x`.
+# `fix_dec` rounds `x` to `prec` digits after the point and `ini_dec` to `n` significant digits.
+fix_dec(x, prec, buf) = throw(MethodError(fix_dec, (x, prec, buf)))
+ini_dec(x, n, buf) = throw(MethodError(ini_dec, (x, n, buf)))
 
 # generic fallback
 function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
@@ -897,11 +906,11 @@ function plength(f::Spec{T}, x) where {T <: Ints}
     )
 end
 
-plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
+plength(f::Spec{T}, ::AbstractFloat) where {T <: Ints} =
     max(f.width, Base.checked_add(Int(f.hash), MAX_INTEGER_PART_WIDTH, MAX_FMT_CHARS_WIDTH))
-plength(f::Spec{T}, x) where {T <: Floats} =
+plength(f::Spec{T}, _) where {T <: Floats} =
     max(f.width, Base.checked_add(Int(f.hash), MAX_INTEGER_PART_WIDTH, f.precision, MAX_FMT_CHARS_WIDTH))
-plength(::Spec{PositionCounter}, x) = 0
+plength(::Spec{PositionCounter}, _) = 0
 
 @inline function computelen(substringranges, formats, args)
     len = sum(length, substringranges)

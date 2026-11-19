@@ -956,14 +956,14 @@ end
 
 function project_get_edition(d::Dict)
     # Syntax Evolution. First check syntax.julia_version entry
-    ds = get(d, "syntax", nothing)
+    ds = get(d, "syntax", nothing)::Union{Nothing, Dict{String, Any}}
     if ds !== nothing
-        return normalized_edition(VersionNumber(get(ds, "julia_version", nothing)))
+        return normalized_edition(VersionNumber(ds["julia_version"]::String))
     end
     # If not found, try minimum(compat["julia"])
-    cs = get(d, "compat", nothing)
+    cs = get(d, "compat", nothing)::Union{Nothing, Dict{String, Any}}
     if cs !== nothing
-        jv = get(cs, "julia", nothing)
+        jv = get(cs, "julia", nothing)::Union{Nothing, String}
         if jv !== nothing
             return normalized_edition(VersionNumber(minimum(semver_spec(jv)).t...))
         end
@@ -1167,7 +1167,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                     dep === nothing && return PkgId(name)
                 else
                     # Check if we're trying to load into an extension of this package
-                    extensions = get(entry, "extensions", nothing)
+                    extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
                     if extensions !== nothing
                         if haskey(extensions, where.name) && where.uuid == uuid5(UUID(uuid), where.name)
                             if name == dep_name
@@ -1258,10 +1258,10 @@ function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, en
     # Newer versions of Pkg will provide syntax version information in the manifest,
     # even if absent from the project file.
     edition = OLDEST_EDITION
-    syntax_table = get(entry, "syntax", nothing)
+    syntax_table = get(entry, "syntax", nothing)::Union{Nothing, Dict{String, Any}}
     if syntax_table !== nothing
         edition = normalized_edition(
-            VersionNumber(get(syntax_table, "julia_version", nothing)))
+            VersionNumber(syntax_table["julia_version"]::String))
     end
 
     # Resolve path
@@ -3258,6 +3258,8 @@ function __require_prelocked(pkg::PkgId, env)
 
                     unlock(require_lock)
                     try
+                        # precompile output and its key handling need a clean line and the terminal in its normal mode
+                        undo_early_prompt()
                         # a cache-fetch hook gets one chance to materialize a
                         # cachefile before we spend time compiling; returning
                         # `nothing` retries the cache search from the top

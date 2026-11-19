@@ -281,7 +281,7 @@ but allocation might also happen at any point in running Julia code.
 When writing code that embeds Julia, it is generally safe to use `jl_value_t*` values in between `jl_...` calls
 (as GC will only get triggered by those calls). But in order to make sure that values can survive
 `jl_...` calls, we have to tell Julia that we still hold a reference to Julia
-[root](https://www.cs.purdue.edu/homes/hosking/690M/p611-fenichel.pdf) values, a process
+[root](https://doi.org/10.1145/363269.363280) values, a process
 called "GC rooting". Rooting a value will ensure that the garbage collector does not accidentally
 identify this value as unused and free the memory backing that value. This can be done using the
 `JL_GC_PUSH` macros:

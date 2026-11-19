@@ -356,7 +356,9 @@ end
 function _join_preserve_annotations(iterator, args...)
     et = @default_eltype(iterator)
     if isconcretetype(et) && !_isannotated(et) && !any(_isannotated, args)
-        sprint(join, iterator, args...)
+        io = IOBuffer()
+        join(io, iterator, args...)
+        takestring!(io)
     else
         io = AnnotatedIOBuffer()
         join(io, iterator, args...)

@@ -87,7 +87,7 @@ create_serialization_stream() do s
     serialize(s, tpl)
 
     len = 257
-    lt = ntuple(i->0x1, len)
+    lt = ntuple(_->0x1, len)
     serialize(s, lt)
 
     serialize(s, Tuple{})
@@ -328,7 +328,8 @@ create_serialization_stream() do s # Base generic function
 end
 
 # Anonymous Functions
-main_ex = quote
+# This needs to be run on `Main` since the serializer treats it differently.
+@eval Main begin
     using Serialization
     $create_serialization_stream() do s
         local g() = :magic_token_anon_fun_test
@@ -340,7 +341,7 @@ main_ex = quote
         seekstart(s)
         ds = Serializer(s)
         local g2 = deserialize(ds)
-        @test g2 !== g
+        $Test.@test g2 !== g
         $Test.@test Base.invokelatest(g2) === :magic_token_anon_fun_test
         $Test.@test Base.invokelatest(g2) === :magic_token_anon_fun_test
         deserialize(ds) === g2
@@ -362,8 +363,6 @@ main_ex = quote
         end === 2
     end
 end
-# This needs to be run on `Main` since the serializer treats it differently.
-Core.eval(Main, main_ex)
 
 # Task
 # Runnable tasks drop CodeInstance hints but preserve explicit invoke targets.
@@ -502,12 +501,12 @@ using Test, Serialization
 
 module Shell
 export foo
-foo(x) = error("Instances must implement foo")
+foo(_) = error("Instances must implement foo")
 end
 
 module Instance1
 using ..Shell
-Shell.foo(x::Int) = "This is an Int"
+Shell.foo(::Int) = "This is an Int"
 end
 
 using .Shell, .Instance1
@@ -569,7 +568,7 @@ end
 struct T20324{T}
     x::T
 end
-let x = T20324[T20324(1) for i = 1:2]
+let x = T20324[T20324(1) for _ = 1:2]
     b = IOBuffer()
     serialize(b, x)
     seekstart(b)
@@ -593,9 +592,9 @@ end
 
     # Detection of incompatible binary serializations
     function corrupt_header(bytes, offset, val)
-        b = copy(bytes)
-        b[offset] = val
-        IOBuffer(b)
+        corrupted = copy(bytes)
+        corrupted[offset] = val
+        IOBuffer(corrupted)
     end
     @test_throws(
         ErrorException("""Cannot read stream serialized with a newer version of Julia.
@@ -605,7 +604,6 @@ end
                  deserialize(corrupt_header(b, 5, 2<<2)))
     @test_throws(ErrorException("Unknown endianness flag in header"),
                  deserialize(corrupt_header(b, 5, 2)))
-    other_wordsize = sizeof(Int) == 8 ? 4 : 8
     other_endianness = bswap(ENDIAN_BOM)
     @test_throws(ErrorException("Serialized byte order mismatch ($(repr(other_endianness)))"),
                  deserialize(corrupt_header(b, 5, UInt8(ENDIAN_BOM != 0x01020304))))
@@ -613,9 +611,8 @@ end
 
 # issue #26979
 let io = IOBuffer()
-    function gen_f(a::T) where T
-        f = x -> T(x)
-        return f
+    function gen_f(::T) where T
+        return x -> T(x)
     end
     f = gen_f(1f0)
     serialize(io, f)
@@ -661,7 +658,7 @@ end
 
 # issue #39895
 @eval Main begin
-    using Test, Serialization
+    using Serialization
     let g = gensym(:g)
         closure = eval(:(f -> $g(x) = f(x)))
         inc(x) = x + 1
@@ -670,7 +667,7 @@ end
         seekstart(b)
         f = deserialize(b)
         # this should not crash
-        @test_broken f(1) == 2
+        $Test.@test_broken f(1) == 2
     end
 end
 
@@ -802,6 +799,7 @@ end
     seekstart(buf)
     cancel!(p) # does not affect the serialized bytes
     p3, c3 = deserialize(buf)
+    @test !Base.iscancelled(p3)
     @test !Base.iscancelled(c3) # p3 was not cancelled at relink time
 
     # deserializing under an already-cancelled parent is born cancelled:

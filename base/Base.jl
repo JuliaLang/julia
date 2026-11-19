@@ -23,9 +23,6 @@ include(strcat(BUILDROOT, "version_git.jl")) # include($BUILDROOT/base/version_g
 # a slightly more verbose fashion than usual, because we're running so early.
 let os = ccall(:jl_get_UNAME, Any, ())
     if os === :Darwin || os === :Apple
-        if DARWIN_FRAMEWORK
-            push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-        end
         push!(DL_LOAD_PATH, "@loader_path")
     end
 end
