@@ -977,15 +977,22 @@ function retrieve_ir_for_inlining(cached_result::CodeInstance, src::String)
     strip_untracked_coverage_effects!(mi, src, src.debuginfo)
     return inflate_ir!(src, mi), SpecInfo(src), src.debuginfo
 end
+# A copy of `src` that can be inflated for inlining without modifying `src`. Inflating
+# it and inlining the result only rewrite the statements, so the other fields are shared.
+function copy_for_inlining(src::CodeInfo)
+    src = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), src)
+    src.code = copy_exprargs(src.code)
+    return src
+end
 function retrieve_ir_for_inlining(cached_result::CodeInstance, src::CodeInfo)
     mi = get_ci_mi(cached_result)
-    src = copy(src)
+    src = copy_for_inlining(src)
     strip_untracked_coverage_effects!(mi, src, src.debuginfo)
     return inflate_ir!(src, mi), SpecInfo(src), src.debuginfo
 end
 function retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo, preserve_local_sources::Bool)
     if preserve_local_sources
-        src = copy(src)
+        src = copy_for_inlining(src)
     end
     strip_untracked_coverage_effects!(mi, src, src.debuginfo)
     return inflate_ir!(src, mi), SpecInfo(src), src.debuginfo
