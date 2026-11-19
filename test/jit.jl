@@ -293,6 +293,166 @@ end
     end
 end
 
+# A system crash can leave the cache's meta page pointing to pages that a lost commit
+# overwrote, or past the end of the file. Julia must then disable the cache and name its
+# directory, instead of hanging, crashing or loading the wrong object code.
+@testset "object-cache damaged by a crash" begin
+    # the offsets below are for LMDB 1.0's 64-bit on-disk format
+    Sys.WORD_SIZE == 64 && mktempdir() do dir
+        kv = """
+            enabled() = ccall(:jl_objcache_kv_enabled, Cint, ()) != 0
+            get(key) = ccall(:jl_objcache_kv_get, Any, (Cstring, Ptr{UInt8}, Csize_t),
+                             "corruption-test", key, sizeof(key))
+            function put(key, value)
+                ccall(:jl_objcache_kv_put, Cint, (Cstring, Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+                      "corruption-test", key, sizeof(key), value, sizeof(value))
+                # wait until the writer stored the entry
+                for _ in 1:600
+                    get(key) === nothing || return get(key) == value
+                    sleep(0.05)
+                end
+                return false
+            end
+            value = repeat(b"objcache-corruption-test", 4096) # several overflow pages
+        """
+        # prints "disabled" if caching is unavailable here
+        put_script = kv * """
+            print(!enabled() ? "disabled" : put("key", b"value") && put("big", value))
+        """
+        get_script = kv * """
+            missed = get("big") === nothing
+            print(enabled(), " ", missed)
+        """
+        function run_julia(cache, script)
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                         "JULIA_OBJCACHE" => "1", "JULIA_OBJCACHE_PATH" => cache)
+            out, err = Pipe(), Pipe()
+            proc = run(pipeline(cmd; stdout=out, stderr=err), wait=false)
+            close(out.in); close(err.in)
+            outt = @async read(out, String)
+            errt = @async read(err, String)
+            completed = timedwait(() -> process_exited(proc), 120; pollint=0.05) === :ok
+            process_running(proc) && kill(proc, Base.SIGKILL)
+            wait(proc)
+            return completed && success(proc), fetch(outt), fetch(errt)
+        end
+        function with_page(f, path, page)
+            open(path, "r+") do io
+                ps = Int(psize(io))
+                seek(io, page)
+                buf = read(io, ps)
+                f(buf)
+                seek(io, page)
+                write(io, buf)
+            end
+        end
+        function psize(io)
+            seek(io, 0x30)
+            return read(io, UInt32)
+        end
+        # a root page according to the newest meta page: of the main database, or of
+        # the free-page database, which only write transactions read
+        function meta_root(path, off)
+            open(path) do io
+                rd(off, T) = (seek(io, off); read(io, T))
+                ps = Int(psize(io))
+                _, meta = maximum((rd(m + 0x98, UInt64), m) for m in (0, ps))
+                return Int(rd(meta + off, UInt64)) * ps
+            end
+        end
+        main_root(path) = meta_root(path, 0x88)
+        free_root(path) = meta_root(path, 0x58)
+        # the root page of the "objcache" database, from its record in the main database
+        function objcache_root(path)
+            open(path) do io
+                ps = Int(psize(io))
+                seek(io, main_root(path))
+                page = read(io, ps)
+                # the record (an MDB_db, with md_root last) follows the name, with its
+                # terminating NUL, padded to an even length (10 bytes)
+                rec = first(findfirst(b"objcache\0", page)) + 10
+                return Int(reinterpret(UInt64, page[rec+40:rec+47])[1]) * ps
+            end
+        end
+        # give the page the txnid of a lost commit, far ahead of any snapshot
+        stamp!(buf) = (buf[9:16] .= reinterpret(UInt8, [typemax(UInt64) >> 2]); buf)
+        cases = [
+            # LMDB reports this one as MDB_BAD_TXN
+            "database root reused" => path -> with_page(stamp!, path, objcache_root(path)),
+            # With a database's name hidden, the cache creates it in a write transaction
+            # while holding its lock; LMDB used to modify the root in place there,
+            # through its read-only map.
+            "root reused, databases missing" => path -> with_page(path, main_root(path)) do buf
+                stamp!(buf)
+                buf[last(findfirst(b"objcache", buf))] = UInt8('X')
+            end,
+            # LMDB modifies a sub-page in place whatever its txnid
+            "root marked as a sub-page, databases missing" => path -> with_page(path, main_root(path)) do buf
+                flags = reinterpret(UInt16, view(buf, 0x13:0x14))
+                flags[1] |= 0x40 # P_SUBP
+                buf[last(findfirst(b"objcache", buf))] = UInt8('X')
+            end,
+            # a lookup used to accept the reused pages as the entry's value
+            "value reused" => function (path)
+                ps = Int(open(psize, path))
+                offset = first(findfirst(b"objcache-corruption-test", read(path))) - 1
+                with_page(stamp!, path, offset ÷ ps * ps)
+            end,
+            # pages missing past the end of the file make mdb_env_open fail
+            "truncated" => path -> open(io -> truncate(io, 2 * psize(io)), path, "r+"),
+        ]
+        # Only the writer reads the free-page database, so it must report that damage
+        # itself: the script queues one write and then only polls the notice.
+        writer_script = kv * """
+            ccall(:jl_objcache_kv_put, Cint, (Cstring, Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+                  "corruption-test", "new", 3, "new", 3)
+            disabled() = ccall(:jl_objcache_disabled_notice, Ptr{UInt8}, ()) != C_NULL
+            for _ in 1:600
+                disabled() && break
+                sleep(0.05)
+            end
+            print(disabled())
+        """
+        @testset "free pages reused, found by the writer" begin
+            cache = joinpath(dir, "writer")
+            ok, stored, err = run_julia(cache, put_script)
+            @test ok
+            if stored == "disabled"
+                @test_skip false
+            else
+                @test stored == "true"
+                path = joinpath(cache, "data.mdb")
+                with_page(stamp!, path, free_root(path))
+                ok, out, err = run_julia(cache, writer_script)
+                @test ok
+                @test out == "true"
+                @test count("appears to be corrupted", err) == 1
+                @test occursin(cache, err)
+                @test occursin("MDB_CORRUPTED", err)
+            end
+        end
+        for (name, damage!) in cases
+            @testset "$name" begin
+                cache = joinpath(dir, replace(name, r"\W+" => "-"))
+                ok, stored, err = run_julia(cache, put_script)
+                @test ok
+                if stored == "disabled"
+                    @test_skip false
+                else
+                    @test stored == "true"
+                    damage!(joinpath(cache, "data.mdb"))
+                    ok, out, err = run_julia(cache, get_script)
+                    @test ok
+                    @test out == "false true"
+                    @test occursin("appears to be corrupted", err)
+                    @test occursin(cache, err)
+                    name == "database root reused" && @test occursin("MDB_BAD_TXN", err)
+                end
+            end
+        end
+    end
+end
+
 # `Base.Experimental.prune_objcache` removes the entries not used recently and writes a
 # smaller copy of the cache.
 @testset "object-cache pruning" begin
