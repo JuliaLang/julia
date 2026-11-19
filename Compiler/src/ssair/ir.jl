@@ -867,8 +867,10 @@ mutable struct CompactionBuffers
     spare::Union{Nothing,InstructionStream}    # dead statements available for reuse
     const used_ssas::Vector{Int}
     const ssa_rename::Vector{Any}
+    # The latest completed `IncrementalCompact`, reused by the next compaction
+    spare_compact::Any # ::Union{Nothing,IncrementalCompact}, which is defined below
 end
-CompactionBuffers() = CompactionBuffers(nothing, nothing, Int[], Any[])
+CompactionBuffers() = CompactionBuffers(nothing, nothing, Int[], Any[], nothing)
 
 function take_result_stream!(buffers::CompactionBuffers, len::Int)
     stmts = buffers.spare
@@ -918,6 +920,11 @@ mutable struct IncrementalCompact
 
     function IncrementalCompact(code::IRCode, cfg_transform::CFGTransformState,
                                 buffers::Union{Nothing,CompactionBuffers}=nothing)
+        if buffers !== nothing && buffers.spare_compact !== nothing
+            compact = buffers.spare_compact::IncrementalCompact
+            buffers.spare_compact = nothing
+            return reset_compaction!(compact, code, cfg_transform, buffers)
+        end
         # Sort by position with attach after nodes after regular ones
         info = code.new_nodes.info
         perm = sort!(collect(eachindex(info)); by=i::Int->(2info[i].pos+info[i].attach_after, i))
@@ -960,6 +967,47 @@ mutable struct IncrementalCompact
             parent.new_new_nodes, parent.new_new_used_ssas, pending_nodes, pending_perm,
             1, result_offset, 1, parent.active_result_bb, false, nothing, nothing, nothing, nothing)
     end
+end
+
+# Reinitialize the completed `compact` for compacting `code`, as
+# `IncrementalCompact(code, cfg_transform, buffers)` would construct it.
+function reset_compaction!(compact::IncrementalCompact, code::IRCode,
+                           cfg_transform::CFGTransformState, buffers::CompactionBuffers)
+    info = code.new_nodes.info
+    perm = resize!(compact.perm, length(info))
+    for i = 1:length(info)
+        perm[i] = i
+    end
+    sort!(perm; by=i::Int->(2info[i].pos+info[i].attach_after, i))
+    new_len = length(code.stmts) + length(info)
+    result = take_result_stream!(buffers, new_len)
+    used_ssas = fill!(resize!(buffers.used_ssas, new_len), 0)
+    ssa_rename = resize!(buffers.ssa_rename, new_len)
+    for i = 1:new_len
+        ssa_rename[i] = SSAValue(i)
+    end
+    code.debuginfo.codelocs = result.line
+    compact.ir = code
+    compact.result = result
+    compact.cfg_transform = cfg_transform
+    compact.ssa_rename = ssa_rename
+    compact.used_ssas = used_ssas
+    compact.late_fixup = empty!(compact.late_fixup)
+    compact.perm = perm
+    compact.new_nodes_idx = 1
+    compact.new_new_nodes = NewNodeStream() # becomes part of the result IR
+    compact.new_new_used_ssas = empty!(compact.new_new_used_ssas)
+    compact.pending_nodes = nothing
+    compact.pending_perm = nothing
+    compact.idx = 1
+    compact.result_idx = 1
+    compact.active_bb = 1
+    compact.active_result_bb = 1
+    compact.renamed_new_nodes = false
+    compact.buffers = buffers
+    compact.domtree = cfg_transform.domtree
+    compact.domtree_cache = cfg_transform.domtree_cache
+    return compact
 end
 
 """
@@ -2420,6 +2468,7 @@ function complete(compact::IncrementalCompact)
         # The input is dead now; reuse it if an earlier compaction produced it
         compact.ir.stmts === buffers.produced && (buffers.spare = compact.ir.stmts)
         buffers.produced = compact.result
+        buffers.spare_compact = compact
     end
     return IRCode(compact.ir, compact.result, cfg, compact.new_new_nodes)
 end
