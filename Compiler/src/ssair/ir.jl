@@ -418,6 +418,12 @@ function add_inst!(new::NewNodeStream, pos::Int, attach_after::Bool)
 end
 copy(nns::NewNodeStream) = NewNodeStream(copy(nns.stmts), copy(nns.info))
 
+# Shared empty placeholders for `IncrementalCompact`'s pending nodes, which most
+# compactions never use. Replaced by fresh ones in `add_pending!`; never mutated.
+const EMPTY_PENDING_NODES = NewNodeStream(
+    InstructionStream(Any[], Any[], CallInfo[], Int32[], UInt32[]), NewNodeInfo[])
+const EMPTY_PENDING_PERM = Int[]
+
 struct NewInstruction
     stmt::Any
     type::Any
@@ -768,16 +774,33 @@ end
 insert_node!(ir::IRCode, pos::Int, newinst::NewInstruction, attach_after::Bool=false) =
     insert_node!(ir, SSAValue(pos), newinst, attach_after)
 
-struct CFGTransformState
-    cfg_transforms_enabled::Bool
-    fold_constant_branches::Bool
-    result_bbs::Vector{BasicBlock}
-    bb_rename_pred::Vector{Int}
-    bb_rename_succ::Vector{Int}
+mutable struct CFGTransformState
+    const cfg_transforms_enabled::Bool
+    const fold_constant_branches::Bool
+    const result_bbs::Vector{BasicBlock}
+    const bb_rename_pred::Vector{Int}
+    const bb_rename_succ::Vector{Int}
+    # Built on the first killed edge when `lazy_domtree` is set, since most
+    # compactions kill none.
     domtree::Union{Nothing, DomTree}
     # Scratch buffers reused for the in-place domtree updates performed while
     # killing edges. Non-`nothing` exactly when `domtree` is.
     domtree_cache::Union{Nothing, DomTreeCache}
+    const lazy_domtree::Bool
+end
+CFGTransformState(cfg_transforms_enabled::Bool, fold_constant_branches::Bool,
+                  result_bbs::Vector{BasicBlock}, bb_rename_pred::Vector{Int}, bb_rename_succ::Vector{Int},
+                  domtree::Union{Nothing, DomTree}, domtree_cache::Union{Nothing, DomTreeCache}) =
+    CFGTransformState(cfg_transforms_enabled, fold_constant_branches, result_bbs,
+                      bb_rename_pred, bb_rename_succ, domtree, domtree_cache, false)
+
+function get_domtree!(cfg_transform::CFGTransformState)
+    if cfg_transform.domtree === nothing && cfg_transform.lazy_domtree
+        cache = DomTreeCache()
+        cfg_transform.domtree = construct_domtree(cfg_transform.result_bbs; cache)
+        cfg_transform.domtree_cache = cache
+    end
+    return cfg_transform.domtree
 end
 
 # N.B.: Takes ownership of the CFG array
@@ -813,18 +836,12 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
         let blocks = blocks, bb_rename = bb_rename
             result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
         end
-        # Reuse the same cache for the initial construction and any later
-        # in-place updates while killing edges during compaction.
-        domtree_cache = DomTreeCache()
-        # TODO: This could be done by just renaming the domtree
-        domtree = construct_domtree(result_bbs; cache=domtree_cache)
     else
         bb_rename = Vector{Int}()
         result_bbs = blocks
-        domtree = nothing
-        domtree_cache = nothing
     end
-    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename, domtree, domtree_cache)
+    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename,
+                             nothing, nothing, allow_cfg_transforms)
 end
 
 mutable struct IncrementalCompact
@@ -864,8 +881,8 @@ mutable struct IncrementalCompact
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         late_fixup = Vector{Int}()
         new_new_nodes = NewNodeStream()
-        pending_nodes = NewNodeStream()
-        pending_perm = Int[]
+        pending_nodes = EMPTY_PENDING_NODES
+        pending_perm = EMPTY_PENDING_PERM
         return new(code, result, cfg_transform, ssa_rename, used_ssas, late_fixup, perm, 1,
             new_new_nodes, new_new_used_ssas, pending_nodes, pending_perm,
             1, 1, 1, 1, false)
@@ -878,8 +895,8 @@ mutable struct IncrementalCompact
         new_len = length(code.stmts) + length(info)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         bb_rename = Vector{Int}()
-        pending_nodes = NewNodeStream()
-        pending_perm = Int[]
+        pending_nodes = EMPTY_PENDING_NODES
+        pending_perm = EMPTY_PENDING_PERM
         return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing, nothing),
             ssa_rename, parent.used_ssas,
             parent.late_fixup, perm, 1,
@@ -1036,6 +1053,10 @@ function count_added_node!(compact::IncrementalCompact, @nospecialize(v))
 end
 
 function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
+    if compact.pending_nodes === EMPTY_PENDING_NODES
+        compact.pending_nodes = NewNodeStream()
+        compact.pending_perm = Int[]
+    end
     node = add_inst!(compact.pending_nodes, pos, attach_after)
     heappush!(compact.pending_perm, length(compact.pending_nodes), By(x::Int->compact.pending_nodes.info[x].pos))
     return node
@@ -1481,7 +1502,8 @@ scan the compacted prefix when `to == active_bb`. `from` and `to` are non-rename
 """
 function kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
     # Note: We recursively kill as many edges as are obviously dead.
-    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree, domtree_cache) = compact.cfg_transform
+    domtree = get_domtree!(compact.cfg_transform)
+    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree_cache) = compact.cfg_transform
     preds = result_bbs[bb_rename_succ[to]].preds
     succs = result_bbs[bb_rename_pred[from]].succs
     deleteat!(preds, findfirst(x::Int->x==bb_rename_pred[from], preds)::Int)
