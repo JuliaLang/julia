@@ -691,6 +691,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     ]
     worklist = Tuple{Int, Int, Vector{Pair{Any, Any}}}[(1, 0, initial_incoming_vals)]
     visited = BitSet()
+    has_pinode = Vector{Bool}(undef, length(sv.slottypes))
     new_nodes = ir.new_nodes
     @zone "CC: SSA_RENAME" while !isempty(worklist)
         (item, pred, incoming_vals) = pop!(worklist)
@@ -739,7 +740,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             end
         end
         # Record Pi nodes if necessary
-        has_pinode = fill(false, length(sv.slottypes))
+        fill!(has_pinode, false)
         for slot in live_slots[item]
             (ival, idef) = incoming_vals[slot]
             (ival === UNDEF_TOKEN) && continue
@@ -840,12 +841,15 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                 incoming_vals[i] = Pair{Any, Any}(stmt.val, idef)
             end
         end
-        for succ in cfg.blocks[item].succs
-            push!(worklist, (succ, item, copy(incoming_vals)))
+        # `incoming_vals` belongs to this worklist item, so the last successor can have it
+        succs = cfg.blocks[item].succs
+        for (i, succ) in enumerate(succs)
+            push!(worklist, (succ, item, i == length(succs) ? incoming_vals : copy(incoming_vals)))
         end
     end
     # Delete any instruction in unreachable blocks (except for terminators)
-    for bb in setdiff(BitSet(1:length(cfg.blocks)), visited)
+    for bb in 1:length(cfg.blocks)
+        bb in visited && continue
         for idx in cfg.blocks[bb].stmts
             if isa(code[idx], Union{GotoNode, GotoIfNot, ReturnNode})
                 code[idx] = ReturnNode()
@@ -857,7 +861,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     # Convert into IRCode form
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
     nstmts = length(ir.stmts)
-    new_code = Vector{Any}(undef, nstmts)
+    new_code = code # each statement is only read before being replaced
     ssavalmap = fill(SSAValue(-1), length(ssavaluetypes) + 1)
     # Detect statement positions for assignments and construct array
     for (bb, idx) in bbidxiter(ir)
