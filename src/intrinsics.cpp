@@ -520,7 +520,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, Maybe
         // The pointers written back here are a silent copy of the ones the separate
         // roots buffer holds; this buffer is never itself a root.
         auto combined_ai = private_copy_aliasinfo(ctx, x.aliasinfo, x.typ);
-        recombine_value(ctx, x, combined, combined_ai, alignment, false);
+        recombine_value(ctx, x, combined, combined_ai, alignment);
         p = combined;
         ai = combined_ai;
     }
@@ -532,7 +532,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, Maybe
 }
 
 // emit code to store a raw value into a destination
-static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest, const jl_aliasinfo_t &dest_ai, MaybeAlign align_src, Align align_dst, bool isVolatile)
+static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest, const jl_aliasinfo_t &dest_ai, MaybeAlign align_src, Align align_dst)
 {
     if (x.isghost) {
         // this can happen when a branch yielding a different type ends
@@ -542,7 +542,7 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
     }
 
     if (!x.inline_roots.empty()) {
-        recombine_value(ctx, x, dest, dest_ai, align_dst, isVolatile);
+        recombine_value(ctx, x, dest, dest_ai, align_dst);
         return;
     }
 
@@ -550,12 +550,11 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
         assert(x.V);
         Value *unboxed = zext_struct_helper(ctx, x.V, julia_memory_access_type(x.V->getType(), x.typ));
         StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, align_dst);
-        store->setVolatile(isVolatile);
         dest_ai.decorateInst(store);
         return;
     }
 
-    emit_memcpy(ctx, dest, dest_ai, x, jl_datatype_size(x.typ), Align(align_dst), align_src ? *align_src : Align(julia_alignment(x.typ)), isVolatile);
+    emit_memcpy(ctx, dest, dest_ai, x, jl_datatype_size(x.typ), Align(align_dst), align_src ? *align_src : Align(julia_alignment(x.typ)));
 }
 
 static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
@@ -962,7 +961,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) 
         auto gep = emit_ptrgep(ctx, thePtr, im1);
         setName(ctx.emission_context, gep, "pointerset_ptr");
         if (!x.inline_roots.empty())
-            recombine_value(ctx, x, gep, jl_aliasinfo_t(), Align(align_nb), false);
+            recombine_value(ctx, x, gep, jl_aliasinfo_t(), Align(align_nb));
         else
             emit_memcpy(ctx, gep, jl_aliasinfo_t(), x, size, Align(align_nb), Align(julia_alignment(ety)));
     }

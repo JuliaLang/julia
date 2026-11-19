@@ -516,6 +516,18 @@ function gethandler(handler_info::HandlerInfo, pc::Int)
     return handler_info.handlers[handler_idx]
 end
 
+# The `enter` of each `try` enclosing `pc`, innermost first.
+struct EnclosingEnters{H<:Union{Nothing,HandlerInfo}}
+    handler_info::H
+    pc::Int
+end
+function iterate(it::EnclosingEnters, pc::Int=it.pc)
+    handler = gethandler(it.handler_info, pc)
+    handler === nothing && return nothing
+    enter_idx = get_enter_idx(handler)
+    return enter_idx, enter_idx
+end
+
 is_nonoverlayed(m::Method) = !isdefined(m, :external_mt)
 is_nonoverlayed(interp::AbstractInterpreter) = !isoverlayed(method_table(interp))
 isoverlayed(::MethodTableView) = error("unsatisfied MethodTableView interface")

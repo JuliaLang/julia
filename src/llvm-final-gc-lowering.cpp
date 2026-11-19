@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include <llvm/IR/InlineAsm.h>
 
 #define DEBUG_TYPE "final_gc_lowering"
 STATISTIC(NewGCFrameCount, "Number of lowered newGCFrameFunc intrinsics");
@@ -122,6 +123,43 @@ void FinalLowerGC::lowerSafepoint(CallInst *target, Function &F)
     target->eraseFromParent();
 }
 
+// `julia.catch_escape` becomes empty asms taking the same memory operands, which
+// lets the escape outlive the DSE after this pass. A gc frame slot or a gc-tracked
+// value is escaped by the published frame now, and as an operand it would take a
+// register under fast isel, so it is left out.
+static void lowerCatchEscape(CallInst *target, Function *getFrameSlot)
+{
+    SmallVector<Value *, 8> kept;
+    for (Value *V : target->args()) {
+        unsigned AS = cast<PointerType>(V->getType())->getAddressSpace();
+        auto *Slot = dyn_cast<CallInst>(V);
+        if ((AddressSpace::FirstSpecial <= AS && AS <= AddressSpace::LastSpecial) ||
+            (Slot && getFrameSlot && Slot->getCalledFunction() == getFrameSlot))
+            continue;
+        assert(isa<AllocaInst>(V) && "catch escape of a computed address");
+        kept.push_back(V);
+    }
+    // a frame index costs no register on x86, but AArch64 puts each `*m` address
+    // in a register, so bound the operands of each asm
+    constexpr size_t MaxOperands = 8;
+    LLVMContext &C = target->getContext();
+    for (size_t first = 0; first < kept.size(); first += MaxOperands) {
+        ArrayRef<Value *> ops = ArrayRef<Value *>(kept).slice(first, std::min(MaxOperands, kept.size() - first));
+        SmallVector<Type *, MaxOperands> argtys;
+        std::string constraints;
+        for (Value *V : ops) {
+            constraints += argtys.empty() ? "*m" : ",*m";
+            argtys.push_back(V->getType());
+        }
+        InlineAsm *escape = InlineAsm::get(FunctionType::get(Type::getVoidTy(C), argtys, false),
+                                           "", constraints, /*hasSideEffects*/true);
+        CallInst *A = CallInst::Create(escape, ops, "", target->getIterator());
+        for (unsigned i = 0; i < ops.size(); i++)
+            A->addParamAttr(i, Attribute::get(C, Attribute::ElementType, Type::getInt8Ty(C)));
+    }
+    target->eraseFromParent();
+}
+
 static bool hasUse(const JuliaPassContext &ctx, const jl_intrinsics::IntrinsicDescription &v)
 {
     auto Intr = ctx.getOrNull(v);
@@ -152,6 +190,20 @@ bool FinalLowerGC::runOnFunction(Function &F)
     auto gc_alloc_bytes = getOrNull(jl_intrinsics::GCAllocBytes);
     SmallVector<CallInst*, 0> write_barriers;
     SmallVector<CallInst*, 0> alloc_bytes;
+
+    // before the frame slots are lowered, and even with no frame at all
+    bool lowered_escape = false;
+    if (catch_escape_func && !catch_escape_func->use_empty()) {
+        Function *getFrameSlot = getOrNull(jl_intrinsics::getGCFrameSlot);
+        for (auto &BB : F) {
+            for (auto &I : make_early_inc_range(BB)) {
+                if (auto *CI = dyn_cast<CallInst>(&I); CI && CI->getCalledOperand() == catch_escape_func) {
+                    lowerCatchEscape(CI, getFrameSlot);
+                    lowered_escape = true;
+                }
+            }
+        }
+    }
 
     if (!pgcstack || !shouldRunFinalGC())
         goto verify_skip;
@@ -274,7 +326,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
             }
         }
     #endif
-    return false;
+    return lowered_escape;
 }
 
 PreservedAnalyses FinalLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)

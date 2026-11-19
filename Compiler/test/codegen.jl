@@ -635,6 +635,36 @@ function f37262(x)
         GC.gc()
     end
 end
+mutable struct CatchLiveObject; x::Int; end
+@noinline catch_live_throw(n) = n > 0 ? error("intentional") : nothing
+function catch_live_object(n)
+    r = CatchLiveObject(0)
+    try
+        r.x = n
+        catch_live_throw(n)
+        r.x = 2n
+    catch
+    end
+    return r.x
+end
+function catch_live_phi(c, n)
+    r = c ? CatchLiveObject(0) : CatchLiveObject(1)
+    try
+        r.x = n
+        catch_live_throw(n)
+        r.x = 2n
+    catch
+    end
+    return r.x
+end
+@testset "a mutation in a try is seen by the catch without a ϒ" begin
+    # the object reaches the catch only as an SSA value
+    @test !any(stmt -> stmt isa Core.UpsilonNode, first(only(code_typed(catch_live_object, (Int,)))).code)
+    @test catch_live_object(5) == 5
+    # ... or only through a `phi` of allocations
+    @test catch_live_phi(true, 5) == 5
+end
+
 @testset "#37262" begin
     str_opaque = "getelementptr inbounds i8, ptr %.roots.phic, i32 8\n  store volatile ptr null"
     llvmstr = get_llvm(f37262, (Bool,), false, false, false)

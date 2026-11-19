@@ -120,3 +120,50 @@ top:
 !1 = !{!"jtbaa_gcframe", !2, i64 0}
 !2 = !{!"jtbaa"}
 !3 = !{}
+
+declare void @julia.catch_escape(...)
+
+define void @catch_escape_lowering() {
+top:
+; CHECK-LABEL: @catch_escape_lowering
+  %slot = alloca i64
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %root = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+  %obj = call ptr addrspace(10) @ijl_box_int64(i64 1)
+; the published frame escapes the frame slot and the tracked value, leaving the alloca
+; CHECK: call void asm sideeffect "", "*m"(ptr elementtype(i8) %slot)
+; CHECK-NOT: @julia.catch_escape(
+  call void (...) @julia.catch_escape(ptr %slot, ptr %root, ptr addrspace(10) %obj)
+  call void @julia.pop_gc_frame(ptr %gcframe)
+  ret void
+}
+
+define void @catch_escape_no_frame() {
+top:
+; CHECK-LABEL: @catch_escape_no_frame
+  %slot = alloca i64
+; CHECK: call void asm sideeffect "", "*m"(ptr elementtype(i8) %slot)
+  call void (...) @julia.catch_escape(ptr %slot)
+  ret void
+}
+
+define void @catch_escape_split() {
+top:
+; CHECK-LABEL: @catch_escape_split
+  %s0 = alloca i64
+  %s1 = alloca i64
+  %s2 = alloca i64
+  %s3 = alloca i64
+  %s4 = alloca i64
+  %s5 = alloca i64
+  %s6 = alloca i64
+  %s7 = alloca i64
+  %s8 = alloca i64
+; at most 8 operands per asm
+; CHECK: call void asm sideeffect "", "*m,*m,*m,*m,*m,*m,*m,*m"(ptr elementtype(i8) %s0,
+; CHECK-NEXT: call void asm sideeffect "", "*m"(ptr elementtype(i8) %s8)
+  call void (...) @julia.catch_escape(ptr %s0, ptr %s1, ptr %s2, ptr %s3, ptr %s4, ptr %s5, ptr %s6, ptr %s7, ptr %s8)
+  ret void
+}
