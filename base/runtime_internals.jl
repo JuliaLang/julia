@@ -1734,6 +1734,11 @@ end
 
 Return the method table for `f`.
 
+The returned methods correspond to calls to the callable object `f` itself.
+For a type, these are its constructor methods. For example, `methods(T)` and
+`methods(T{Int})` list the constructors for `T` and `T{Int}`, respectively.
+See [Methods](@ref) and [Constructors](@ref man-constructors).
+
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
 A list of modules can also be specified as an array or set.
