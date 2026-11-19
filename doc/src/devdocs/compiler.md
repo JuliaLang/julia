@@ -55,23 +55,23 @@ The primitive routines that need to be able to handle tagged unions are:
 Everything else should be possible to handle in inference by using these
 primitives to implement union-splitting.
 
-The representation of the tagged-union is as a pair
-of `< void* union, byte selector >`.
-The selector is fixed-size as `byte & 0x7f`,
+The representation of the tagged-union is as a triple
+of `< void* union, jl_value_t* box, byte selector >`.
+The selector is fixed-size as `byte`,
 and will union-tag the first 126 isbits.
 It records the one-based depth-first count into the type-union of the
-isbits objects inside. An index of zero indicates that the `union*` is
-actually a tagged heap-allocated `jl_value_t*`,
+isbits objects inside. An index of zero indicates that the value is
+actually a tagged heap-allocated `jl_value_t*` (held in `box`),
 and needs to be treated as normal for a boxed object rather than as a
 tagged union.
 
-The high bit of the selector (`byte & 0x80`) can be tested to determine if the
-`void*` is actually a heap-allocated (`jl_value_t*`) box,
-thus avoiding the cost of re-allocating a box,
-while maintaining the ability to efficiently handle union-splitting based on the low bits.
+The `box` is non-NULL exactly when the value is a heap-allocated (`jl_value_t*`) box,
+in which case `union == box`. Testing it avoids the cost of re-allocating a box,
+while maintaining the ability to efficiently handle union-splitting based on the selector.
+A NULL `box` with a selector of zero is an undefined value.
 
-It is guaranteed that `byte & 0x7f` is an exact test for the type,
-if the value can be represented by a tag – it will never be marked `byte = 0x80`.
+It is guaranteed that `byte` is an exact test for the type,
+if the value can be represented by a tag – a boxed value of such a type will never have `byte = 0`.
 It is not necessary to also test the type-tag when testing `isa`.
 
 The `union*` memory region may be allocated at *any* size.
