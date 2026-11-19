@@ -557,6 +557,20 @@ Base.delete_method(which(AmbiguousDeletion.f, (Any, Int)))
 @test_throws MethodError Base.invoke_in_world(wc_ambiguous, AmbiguousDeletion.f, nothing, 1)
 @test_throws MethodError Base.invoke_in_world(wc_ambiguous, AmbiguousDeletion.g, nothing, 1)
 
+# When a less specific method covers the rest of the caller's signature, the lookup drops
+# both ambiguous methods and the caller's only edge is to that less specific method.
+module AmbiguousDeletionFallback
+abstract type X end; struct N <: X end
+abstract type Y end; struct I <: Y end
+f(x, y) = :fallback
+f(::N, ::Union{I,String}) = 1
+f(::Union{N,Symbol}, ::I) = 2
+g(@nospecialize(a::X), @nospecialize(b::Y)) = f(a, b) isa Symbol
+end
+@test_throws "is ambiguous" AmbiguousDeletionFallback.g(AmbiguousDeletionFallback.N(), AmbiguousDeletionFallback.I())
+Base.delete_method(which(AmbiguousDeletionFallback.f, (Symbol, AmbiguousDeletionFallback.I)))
+@test AmbiguousDeletionFallback.g(AmbiguousDeletionFallback.N(), AmbiguousDeletionFallback.I()) === false
+
 # Generated functions without edges must have min_world = 1.
 # N.B.: If changing this, move this test to precompile and make sure
 # that the specialization survives revalidation.
