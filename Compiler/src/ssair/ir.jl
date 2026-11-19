@@ -844,6 +844,37 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
                              nothing, nothing, allow_cfg_transforms)
 end
 
+"""
+    CompactionBuffers()
+
+Scratch storage that a sequence of compactions of one function passes along, each
+compacting the output of the previous one. Once a compaction completes, the statements
+of its input are dead, so the next compaction writes its result into them instead of
+allocating a new `InstructionStream`; its rename and use-count vectors are reused too.
+Only an input that an earlier compaction with the same buffers produced is reused, so
+the caller must not keep using the IR it passes to such a compaction.
+"""
+mutable struct CompactionBuffers
+    produced::Union{Nothing,InstructionStream} # result of the latest compaction
+    spare::Union{Nothing,InstructionStream}    # dead statements available for reuse
+    const used_ssas::Vector{Int}
+    const ssa_rename::Vector{Any}
+end
+CompactionBuffers() = CompactionBuffers(nothing, nothing, Int[], Any[])
+
+function take_result_stream!(buffers::CompactionBuffers, len::Int)
+    stmts = buffers.spare
+    stmts === nothing && return InstructionStream(len)
+    buffers.spare = nothing
+    # Shrinking first leaves every statement and type unassigned, as in a new stream
+    resize!(empty!(stmts.stmt), len)
+    resize!(empty!(stmts.type), len)
+    fill!(resize!(stmts.info, len), NoCallInfo())
+    fill!(resize!(stmts.line, 3len), Int32(0))
+    fill!(resize!(stmts.flag, len), IR_FLAG_NULL)
+    return stmts
+end
+
 mutable struct IncrementalCompact
     ir::IRCode
     result::InstructionStream
@@ -868,24 +899,35 @@ mutable struct IncrementalCompact
     active_result_bb::Int
     renamed_new_nodes::Bool
 
-    function IncrementalCompact(code::IRCode, cfg_transform::CFGTransformState)
+    buffers::Union{Nothing,CompactionBuffers}
+
+    function IncrementalCompact(code::IRCode, cfg_transform::CFGTransformState,
+                                buffers::Union{Nothing,CompactionBuffers}=nothing)
         # Sort by position with attach after nodes after regular ones
         info = code.new_nodes.info
         perm = sort!(collect(eachindex(info)); by=i::Int->(2info[i].pos+info[i].attach_after, i))
         new_len = length(code.stmts) + length(info)
-        result = InstructionStream(new_len)
+        if buffers === nothing
+            result = InstructionStream(new_len)
+            used_ssas = fill(0, new_len)
+            ssa_rename = Any[SSAValue(i) for i = 1:new_len]
+        else
+            result = take_result_stream!(buffers, new_len)
+            used_ssas = fill!(resize!(buffers.used_ssas, new_len), 0)
+            ssa_rename = resize!(buffers.ssa_rename, new_len)
+            for i = 1:new_len
+                ssa_rename[i] = SSAValue(i)
+            end
+        end
         code.debuginfo.codelocs = result.line
-        used_ssas = fill(0, new_len)
         new_new_used_ssas = Vector{Int}()
-        blocks = code.cfg.blocks
-        ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         late_fixup = Vector{Int}()
         new_new_nodes = NewNodeStream()
         pending_nodes = EMPTY_PENDING_NODES
         pending_perm = EMPTY_PENDING_PERM
         return new(code, result, cfg_transform, ssa_rename, used_ssas, late_fixup, perm, 1,
             new_new_nodes, new_new_used_ssas, pending_nodes, pending_perm,
-            1, 1, 1, 1, false)
+            1, 1, 1, 1, false, buffers)
     end
 
     # For inlining
@@ -901,12 +943,13 @@ mutable struct IncrementalCompact
             ssa_rename, parent.used_ssas,
             parent.late_fixup, perm, 1,
             parent.new_new_nodes, parent.new_new_used_ssas, pending_nodes, pending_perm,
-            1, result_offset, 1, parent.active_result_bb, false)
+            1, result_offset, 1, parent.active_result_bb, false, nothing)
     end
 end
 
-function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
-    return IncrementalCompact(code, CFGTransformState!(code.cfg.blocks, allow_cfg_transforms))
+function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false;
+                            buffers::Union{Nothing,CompactionBuffers}=nothing)
+    return IncrementalCompact(code, CFGTransformState!(code.cfg.blocks, allow_cfg_transforms), buffers)
 end
 
 struct TypesView{T}
@@ -2289,11 +2332,18 @@ function complete(compact::IncrementalCompact)
         resize!(compact.result, length(compact.result) - nundef)
     end
 
+    buffers = compact.buffers
+    if buffers !== nothing
+        # The input is dead now; reuse it if an earlier compaction produced it
+        compact.ir.stmts === buffers.produced && (buffers.spare = compact.ir.stmts)
+        buffers.produced = compact.result
+    end
     return IRCode(compact.ir, compact.result, cfg, compact.new_new_nodes)
 end
 
-function compact!(code::IRCode, allow_cfg_transforms::Bool=false)
-    compact = IncrementalCompact(code, allow_cfg_transforms)
+function compact!(code::IRCode, allow_cfg_transforms::Bool=false;
+                  buffers::Union{Nothing,CompactionBuffers}=nothing)
+    compact = IncrementalCompact(code, allow_cfg_transforms; buffers)
     # Just run through the iterator without any processing
     for _ in compact; end # _ isa Pair{Int, Any}
     return finish(compact)
