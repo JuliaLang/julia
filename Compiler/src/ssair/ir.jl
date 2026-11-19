@@ -91,7 +91,29 @@ block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.index, inst)
     return jump_dests
 end
 
+# If `stmts` is straight-line code, which forms a single basic block, the index of its
+# last statement that is not `nothing`, which ends that block; otherwise 0.
+function straight_line_length(stmts::Vector{Any})
+    n = length(stmts)
+    last_stmt = 0
+    for idx in 1:n
+        stmt = stmts[idx]
+        if isa(stmt, Union{GotoIfNot, GotoNode, EnterNode, PhiNode})
+            return 0
+        elseif isa(stmt, ReturnNode)
+            idx < n && return 0
+        elseif isexpr(stmt, :leave)
+            return 0
+        end
+        stmt === nothing || (last_stmt = idx)
+    end
+    return last_stmt
+end
+
 function compute_basic_blocks(stmts::Vector{Any})
+    # Fast path for a single block, giving the same CFG as the general code below
+    n = straight_line_length(stmts)
+    n > 0 && return CFG(BasicBlock[BasicBlock(StmtRange(1, n), Int[0], Int[])], Int[n + 1])
     # Compute ranges
     bb_starts = basic_blocks_starts(stmts) # ::BitSet and already sorted
     pop!(bb_starts, 1)
