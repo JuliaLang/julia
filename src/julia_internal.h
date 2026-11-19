@@ -3,6 +3,7 @@
 #ifndef JL_INTERNAL_H
 #define JL_INTERNAL_H
 
+#include "julia.h"
 #include "dtypes.h"
 #include "options.h"
 #include "julia_assert.h"
