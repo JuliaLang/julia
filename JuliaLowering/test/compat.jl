@@ -52,8 +52,6 @@ function expr_equal_forgiving(e1, e2; ignore_linenums=true)
     elseif e1 isa LineNumberNode && !ignore_linenums
         e1.file === nothing && (e1 = LineNumberNode(e1.line, :var""))
         e2.file === nothing && (e2 = LineNumberNode(e2.line, :var""))
-    elseif e1 isa Core.MacroSource
-        return true # todo: remove this case
     end
     !(e1 isa Expr) && return e1 == e2
     if ignore_linenums

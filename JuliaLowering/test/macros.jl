@@ -734,12 +734,6 @@ v"1.14"
 @test jl_eval(test_mod, raw"""
 v"1.14"
 """;edition=JL_OLD_EDITION) isa VersionNumber
-@test JuliaLowering.include_string(test_mod, raw"""
-Base.Experimental.@VERSION
-""") isa NamedTuple
-@test jl_eval(test_mod, raw"""
-Base.Experimental.@VERSION
-""";edition=JL_OLD_EDITION) isa NamedTuple
 
 # World age support for macro expansion
 JuliaLowering.include_string(test_mod, raw"""
@@ -1474,7 +1468,6 @@ end
         @legacy_quote_to_syntax :(module $x end)
     end
     """) ≈ @ast_ [:module
-        VersionNumber(JL_NEW_EDITION)::value
         true::value
         "AA"::identifier
         [:block]
@@ -1999,10 +1992,18 @@ end
 
     @test JuliaLowering.eval(test_mod, mac_st) === "goodfile"
 
-    # tolerate nothing
+    # tolerate nothing, falling back to the enclosing location
     mac_ex = Expr(:macrocall, Symbol("@srcfile"), nothing)
     mac_st = JuliaLowering.expr_to_est(mac_ex, LineNumberNode(1, "badfile"))
-    @test JuliaLowering.eval(test_mod, mac_st) == ""
+    @test JuliaLowering.eval(test_mod, mac_st) == "badfile"
+
+    # generator output is spliced in with Syntax provenance
+    JuliaLowering.include_string(test_mod, raw"""
+    @generated function gen_srcfile()
+        Expr(:macrocall, Symbol("@srcfile"), LineNumberNode(1, "goodfile"))
+    end
+    """)
+    @test JuliaLowering.include_string(test_mod, "gen_srcfile()") == "goodfile"
 end
 
 @testset "macro QuoteNode + inert behavior" begin
@@ -2028,15 +2029,6 @@ end
     # the following test needs to define this to be effective
     @test_throws UndefVarError JuliaLowering.include_string(test_mod, "invokelatest_target(1,2)")
     @test JuliaLowering.include_string(test_mod, "test_invokelatest()") === 3
-
-    for edition in (OLDEST_EDITION, JL_OLD_EDITION)
-        _version = jl_eval(test_mod,
-            "Base.Experimental.@VERSION";
-            edition
-        )
-        @test _version isa NamedTuple
-        @test _version.syntax == VersionNumber(edition)
-    end
 end
 
 # produces import/using in module that is `@eval`ed.
