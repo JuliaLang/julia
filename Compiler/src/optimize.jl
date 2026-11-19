@@ -1138,9 +1138,11 @@ function run_passes_ipo_safe(
     @pass "CC: SLOT2REG"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @pass "CC: COMPACT_1" ir = compact!(ir; buffers)
+    pre_inlining_stmts = ir.stmts.stmt
     @pass "CC: INLINING"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds; buffers)
     # @zone "CC: VERIFY 2" verify_ir(ir)
-    @pass "CC: COMPACT_2" ir = compact!(ir; buffers)
+    # If nothing was inlined or inserted, the IR is still as compact as `COMPACT_1` left it
+    @pass "CC: COMPACT_2" (ir.stmts.stmt === pre_inlining_stmts && isempty(ir.new_nodes)) || (ir = compact!(ir; buffers))
     @pass "CC: SROA"      ir = sroa_pass!(ir, sv.inlining; buffers)
     @pass "CC: GLOBALS"   ir = reformulate_globals_pass!(ir, sv)
     @pass "CC: ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining; buffers)
