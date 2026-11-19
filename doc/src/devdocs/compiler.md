@@ -47,7 +47,6 @@ The primitive routines that need to be able to handle tagged unions are:
 - isa
 - is
 - emit_typeof
-- emit_sizeof
 - boxed
 - unbox
 - specialized cc-ret
