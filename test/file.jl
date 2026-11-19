@@ -421,6 +421,26 @@ end
 no_error_logging(f::Function) =
     Base.CoreLogging.with_logger(f, Base.CoreLogging.NullLogger())
 
+# Keep a file in place while the handle is open, so that a removal attempt fails.
+# An ordinary open() shares delete, so on Windows the file has to be opened
+# without FILE_SHARE_DELETE. On other systems the chmod of the parent directory
+# in the test does the work.
+if Sys.iswindows()
+    function hold_undeletable(path::AbstractString)
+        handle = ccall(:CreateFileW, stdcall, Ptr{Cvoid},
+                       (Cwstring, Cuint, Cuint, Ptr{Cvoid}, Cuint, Cuint, Ptr{Cvoid}),
+                       path, 0x80000000,                # GENERIC_READ
+                       0x00000001 | 0x00000002,          # share read and write, but not delete
+                       C_NULL, 3, 0x80, C_NULL)          # OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL
+        handle == reinterpret(Ptr{Cvoid}, -1) && error("could not hold $(repr(path))")
+        return handle
+    end
+    release_undeletable(handle) = ccall(:CloseHandle, stdcall, Int32, (Ptr{Cvoid},), handle)
+else
+    hold_undeletable(path::AbstractString) = open(path)
+    release_undeletable(io) = close(io)
+end
+
 @testset "hof mktemp/dir when cleanup is prevented" begin
     d = mktempdir()
     with_temp_cleanup(3) do
@@ -441,14 +461,14 @@ no_error_logging(f::Function) =
         no_error_logging() do
             mktemp(d) do path, _
                 @test isfile(path)
-                f = open(path) # make undeletable on Windows
+                f = hold_undeletable(path) # make undeletable on Windows
                 chmod(d, 0o400) # make undeletable on UNIX
                 t = path
             end
         end
         # Make deleteable again
         chmod(d, 0o700)
-        close(f)
+        release_undeletable(f)
         if Libc.geteuid() == 0
             # Root can delete anything
             @test !isfile(t)
@@ -472,14 +492,16 @@ no_error_logging(f::Function) =
             mktempdir(d) do path
                 @test isdir(path)
                 # make undeletable on Windows:
-                f = open(joinpath(path, "file.txt"), "w+")
+                file = joinpath(path, "file.txt")
+                write(file, "")
+                f = hold_undeletable(file)
                 chmod(d, 0o400) # make undeletable on UNIX
                 t = path
             end
         end
         # Make deleteable again
         chmod(d, 0o700)
-        close(f)
+        release_undeletable(f)
         if Libc.geteuid() == 0
             # Root can delete anything
             @test !isdir(t)
@@ -1240,8 +1262,8 @@ end
             open(f1) do handle1
                 open(f2) do handle2
                     if Sys.iswindows()
-                        # currently this doesn't work on windows
-                        @test Base.UV_EBUSY == rename_errorcodes(f1, f2)
+                        # the open destination still prevents the rename
+                        @test Base.UV_EACCES == rename_errorcodes(f1, f2)
                     else
                         Base.rename(f1, f2)
                         @test !ispath(f1)
@@ -1259,14 +1281,9 @@ end
             write(f2, b"olddata")
             write(f1, b"newdata")
             open(f1) do handle1
-                if Sys.iswindows()
-                    # currently this doesn't work on windows
-                    @test Base.UV_EBUSY == rename_errorcodes(f1, f2)
-                else
-                    Base.rename(f1, f2)
-                    @test !ispath(f1)
-                    @test read(f2) == b"newdata"
-                end
+                Base.rename(f1, f2)
+                @test !ispath(f1)
+                @test read(f2) == b"newdata"
                 # rename doesn't break already opened files
                 @test read(handle1) == b"newdata"
             end
@@ -2438,6 +2455,75 @@ end
 end
 
 @test Base.infer_return_type(stat, (String,)) == Base.Filesystem.StatStruct
+
+@testset "open files can be deleted and renamed" begin
+    mktempdir() do dir
+        # An open file can be removed.
+        p = joinpath(dir, "open_file")
+        io = open(p, "w+")
+        write(io, "hello")
+        flush(io)
+        @test rm(p) === nothing
+        if Sys.iswindows()
+            # on windows removing a file currently does not
+            # remove the file from the filesystem
+            @test basename(p) in readdir(dir)
+        end
+
+        seekstart(io)
+        @test read(io, String) == "hello" # the open stream keeps the data
+        close(io)
+        @test !ispath(p) # on Windows the name goes away when the last handle closes
+
+        # An open file can be renamed, and the stream stays usable under the new
+        # name (#29658).
+        src = joinpath(dir, "rename_src")
+        dst = joinpath(dir, "rename_dst")
+        io = open(src, "w")
+        write(io, "hello")
+        flush(io)
+        @test mv(src, dst) == dst
+        @test !ispath(src)
+        write(io, " again") # the stream continues at the current position
+        close(io)
+        @test read(dst, String) == "hello again"
+    end
+end
+
+
+@testset "open(dir) succeeds for read only access" begin
+    mktempdir() do dir
+        open(dir) do io
+            @test isdir(stat(io))
+        end
+    end
+end
+
+
+if Sys.iswindows()
+    import Libdl, Mmap
+
+    @testset "cannot delete loaded DLLs or memory-mapped files" begin
+        # Windows blocks deletion until the DLL is unloaded or the file is unmapped.
+        mktempdir() do dir
+            dll = cp(Libdl.dlpath("libdSFMT"), joinpath(dir, "loaded.dll"))
+            Libdl.dlopen(dll) do _
+                @test_throws Base.IOError rm(dll; allow_delayed_delete=false)
+            end
+            @test rm(dll) === nothing
+
+            path = joinpath(dir, "mapped")
+            write(path, UInt8[0x01])
+            mapped = Mmap.mmap(path)
+            try
+                @test_throws Base.IOError rm(path)
+            finally
+                finalize(mapped.ref.mem) # Mmap attaches the unmap finalizer to the backing memory.
+            end
+            @test rm(path) === nothing
+        end
+    end
+end
 
 @testset "trylockfile" begin
     mktempdir() do dir
