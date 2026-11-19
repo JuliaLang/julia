@@ -1793,7 +1793,8 @@ end
 
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
-    @zone "CC: DOMTREE_1" domtree = construct_domtree(ir)
+    # Straight-line code needs no phi nodes and no reordering, so no domtree.
+    @zone "CC: DOMTREE_1" domtree = is_straight_line(ir) ? nothing : construct_domtree(ir)
     defuse_insts = scan_slot_def_use(Int(ci.nargs), ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
     @zone "CC: CONSTRUCT_SSA" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
