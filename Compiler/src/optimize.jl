@@ -1131,19 +1131,21 @@ function run_passes_ipo_safe(
     end
 
     __stage__ = 0  # used by @pass
+    # Each compaction below consumes the IR of the previous one, so they can reuse its storage
+    buffers = CompactionBuffers()
     # NOTE: The pass name MUST be unique for `optimize_until::String` to work
     @pass "CC: CONVERT"   ir = convert_to_ircode!(ci, sv)
     @pass "CC: SLOT2REG"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    @pass "CC: COMPACT_1" ir = compact!(ir)
-    @pass "CC: INLINING"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
+    @pass "CC: COMPACT_1" ir = compact!(ir; buffers)
+    @pass "CC: INLINING"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds; buffers)
     # @zone "CC: VERIFY 2" verify_ir(ir)
-    @pass "CC: COMPACT_2" ir = compact!(ir)
-    @pass "CC: SROA"      ir = sroa_pass!(ir, sv.inlining)
+    @pass "CC: COMPACT_2" ir = compact!(ir; buffers)
+    @pass "CC: SROA"      ir = sroa_pass!(ir, sv.inlining; buffers)
     @pass "CC: GLOBALS"   ir = reformulate_globals_pass!(ir, sv)
-    @pass "CC: ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
+    @pass "CC: ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining; buffers)
     if made_changes
-        @pass "CC: COMPACT_3" ir = compact!(ir, true)
+        @pass "CC: COMPACT_3" ir = compact!(ir, true; buffers)
     end
     if is_asserts()
         @zone "CC: VERIFY_3" begin

@@ -1304,9 +1304,10 @@ its argument).
 In a case when all usages are fully eliminated, `struct` allocation may also be erased as
 a result of succeeding dead code elimination.
 """
-function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
+function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing;
+                    buffers::Union{Nothing,CompactionBuffers}=nothing)
     𝕃ₒ = inlining === nothing ? SimpleInferenceLattice.instance : optimizer_lattice(inlining.interp)
-    compact = IncrementalCompact(ir)
+    compact = IncrementalCompact(ir; buffers)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     # initialization of domtree is delayed to avoid the expensive computation in many cases
     lazydomtree = LazyDomtree(ir)
@@ -2159,12 +2160,13 @@ Also note that currently this pass _needs_ to run after `sroa_pass!`, because
 the `typeassert` elimination depends on the transformation by `canonicalize_typeassert!` done
 within `sroa_pass!` which redirects references of `typeassert`ed value to the corresponding `PiNode`.
 """
-function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
+function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing;
+                    buffers::Union{Nothing,CompactionBuffers}=nothing)
     𝕃ₒ = inlining === nothing ? SimpleInferenceLattice.instance : optimizer_lattice(inlining.interp)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
     all_phis = Int[]
     unionphis = Pair{Int,Any}[] # sorted
-    compact = IncrementalCompact(ir, true)
+    compact = IncrementalCompact(ir, true; buffers)
     made_changes = false
     for ((old_idx, idx), stmt) in compact
         if isa(stmt, PhiNode)

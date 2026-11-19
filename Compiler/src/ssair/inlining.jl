@@ -69,13 +69,14 @@ end
 add_inlining_edge!(et::InliningEdgeTracker, edge::CodeInstance) = add_inlining_edge!(et.edges, edge)
 add_inlining_edge!(et::InliningEdgeTracker, edge::MethodInstance) = add_inlining_edge!(et.edges, edge)
 
-function ssa_inlining_pass!(ir::IRCode, state::InliningState, propagate_inbounds::Bool)
+function ssa_inlining_pass!(ir::IRCode, state::InliningState, propagate_inbounds::Bool;
+                            buffers::Union{Nothing,CompactionBuffers}=nothing)
     # Go through the function, performing simple inlining (e.g. replacing call by constants
     # and analyzing legality of inlining).
     @zone "CC: ANALYSIS" todo = assemble_inline_todo!(ir, state)
     isempty(todo) && return ir
     # Do the actual inlining for every call we identified
-    @zone "CC: EXECUTION" ir = batch_inline!(ir, todo, propagate_inbounds, state.interp)
+    @zone "CC: EXECUTION" ir = batch_inline!(ir, todo, propagate_inbounds, state.interp; buffers)
     return ir
 end
 
@@ -620,7 +621,8 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
     return insert_node_here!(compact, NewInstruction(pn, typ, line))
 end
 
-function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inbounds::Bool, interp::AbstractInterpreter)
+function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inbounds::Bool, interp::AbstractInterpreter;
+                       buffers::Union{Nothing,CompactionBuffers}=nothing)
     params = OptimizationParams(interp)
     # Compute the new CFG first (modulo statement ranges, which will be computed below)
     state = CFGInliningState(ir)
@@ -638,7 +640,7 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
 
     boundscheck = propagate_inbounds ? :propagate : :default
 
-    let compact = IncrementalCompact(ir, CFGTransformState!(state.new_cfg_blocks, false))
+    let compact = IncrementalCompact(ir, CFGTransformState!(state.new_cfg_blocks, false), buffers)
         # This needs to be a minimum and is more of a size hint
         nn = 0
         for (_, item) in todo
