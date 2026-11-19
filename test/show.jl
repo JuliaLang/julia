@@ -560,6 +560,18 @@ end
 @test !Meta.isoperator("'\x80")
 @test sprint(show, Symbol("\x80")) == "Symbol(\"\\x80\")"
 
+# issue #52641: A symbol's identifier spelling must survive parsing unchanged.
+@testset "Identifier normalization" begin
+    for (spelling, normalized) in (("e\u0301", "\u00e9"), ("\u00b5", "\u03bc"))
+        sym = Symbol(spelling)
+        @test Meta.isidentifier(spelling)
+        @test !Meta.isidentifier(sym)
+        @test Meta.isidentifier(Symbol(normalized))
+        @test Meta.parse(spelling) === Symbol(normalized)
+        @test repr(sym) == "Symbol($(repr(spelling)))"
+    end
+end
+
 # issue #32408: Printing of names which are invalid identifiers
 # Invalid identifiers which need `var` quoting:
 @test sprint(show, Expr(:call, :foo, Symbol("##")))   == ":(foo(var\"##\"))"
