@@ -167,6 +167,14 @@ function exprs_roughly_equal(fl_ex, ex)
         # The flisp parser adds an extra block around `w` in the following case
         # f(::g(z) = w) = 1
         fl_args[2] = fl_args[2].args[2]
+    elseif h == :macrocall && length(args) == length(fl_args) == 3 &&
+            args[1] in (GlobalRef(Core, Symbol("@int128_str")),
+                        GlobalRef(Core, Symbol("@uint128_str")),
+                        GlobalRef(Core, Symbol("@big_str")))
+        # Ignore the line number argument of the macrocall representing a large
+        # integer literal (flisp passes `nothing`)
+        fl_args = [fl_args[1], fl_args[3]]
+        args = [args[1], args[3]]
     end
     if length(fl_args) != length(args)
         return false

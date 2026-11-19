@@ -1185,11 +1185,9 @@ make sense to check usage for things like @ccall and @doc.
 vst0_macrocall(vcx, st) = @stm st begin
     (_, when=!vcx.unexpanded) ->
         @fail(st, "macrocall not valid in AST after macro expansion")
-    ([:macrocall name [:value] args...],
-     when=(typeof(st[2].value) === LineNumberNode)) ->
-         pass()
+    [:macrocall name args...] -> pass()
     [:macrocall _...] ->
-        @fail(st, "expected (macrocall name linenode args...)")
+        @fail(st, "expected (macrocall name args...)")
     _ -> @fail(st, "invalid macrocall syntax")
 end
 

@@ -755,11 +755,11 @@
     @testset "Large integer macros" begin
         @test parsestmt("0x00000000000000001") ==
             Expr(:macrocall, GlobalRef(Core, Symbol("@uint128_str")),
-                 nothing, "0x00000000000000001")
+                 LineNumberNode(1), "0x00000000000000001")
 
         @test parsestmt("(0x00000000000000001)") ==
             Expr(:macrocall, GlobalRef(Core, Symbol("@uint128_str")),
-                 nothing, "0x00000000000000001")
+                 LineNumberNode(1), "0x00000000000000001")
     end
 
     @testset "struct" begin
