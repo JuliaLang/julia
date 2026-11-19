@@ -371,8 +371,8 @@ function _already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int,
                                      OldSSAValue(compact.ir.new_nodes.info[id].pos))
     end
     id -= length(compact.ir.new_nodes)
-    @assert id <= length(compact.pending_nodes)
-    return !(id in compact.pending_perm)
+    @assert id <= length(compact.pending_nodes::NewNodeStream)
+    return !(id in compact.pending_perm::Vector{Int})
 end
 
 function already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int)
@@ -2665,7 +2665,7 @@ function cfg_simplify!(ir::IRCode)
     # Run instruction compaction to produce the result,
     # but we're messing with the CFG
     # so we don't want compaction to do so independently
-    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ, nothing, nothing))
+    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ, nothing, nothing, false))
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb
         bb_start = true
