@@ -33,7 +33,14 @@ end
                        "\e[9~" => '\e', "\e[Z" => '\e', "\e[2" => '\e', "\eXY" => '\e')
         @test TerminalMenus.readkey(IOBuffer(seq)) == UInt32(key)
     end
+    # a sequence is read whole: Shift-Tab and a modified arrow leave nothing to arrive as keys
+    io = IOBuffer("\e[Zq\e[1;5Cq")
+    @test TerminalMenus.readkey(io) == UInt32('\e') && TerminalMenus.readkey(io) == UInt32('q')
+    @test TerminalMenus.readkey(io) == UInt32(TerminalMenus.ARROW_RIGHT)
+    @test TerminalMenus.readkey(io) == UInt32('q')
 end
+
+include("terminal.jl")
 
 include("radio_menu.jl")
 include("multiselect_menu.jl")

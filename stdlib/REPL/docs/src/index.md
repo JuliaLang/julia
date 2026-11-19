@@ -1134,6 +1134,42 @@ Types that are derived from `TerminalMenus.ConfiguredMenu` configure the menu op
 Prior to Julia 1.6, and still supported throughout Julia 1.x, one can also configure menus by calling
 `TerminalMenus.config()`.
 
+### Programs that draw the whole terminal
+
+TerminalMenus also has what a program that takes over the terminal needs around its own
+drawing: [`readevent`](@ref REPL.TerminalMenus.readevent) reads one key, mouse report, paste
+or answer from the terminal at a time, [`enter_screen`](@ref REPL.TerminalMenus.enter_screen)
+and [`leave_screen`](@ref REPL.TerminalMenus.leave_screen) set and undo the terminal's modes,
+[`write_frame`](@ref REPL.TerminalMenus.write_frame) draws the rows that changed, and a
+[`LineField`](@ref REPL.TerminalMenus.LineField) is a line of text being typed, edited with
+the keys readline has. None of them runs a loop, so the program keeps its own:
+
+```julia
+using REPL.TerminalMenus: TerminalMenus, enter_screen, leave_screen, readevent, write_frame,
+    KeyEvent, PasteEvent, LineField, edit!, paste!
+
+function ask(question; term = TerminalMenus.default_terminal())
+    field = LineField()
+    s = enter_screen(term; paste = true)
+    shown = nothing
+    try
+        while true
+            h, w = displaysize(term)
+            rows = [question * " " * field.text * "▏"; fill("", h - 1)]
+            shown = write_frame(term.out_stream, rows, shown)
+            ev = readevent(term.in_stream)
+            ev isa PasteEvent && paste!(field, ev.text)
+            ev isa KeyEvent || continue
+            ev.key === :enter && return field.text
+            ev.key === :escape && return nothing
+            edit!(field, ev)
+        end
+    finally
+        leave_screen(s)
+    end
+end
+```
+
 ## References
 
 ### REPL
@@ -1163,6 +1199,30 @@ REPL.TerminalMenus.config
 
 ```@docs
 REPL.TerminalMenus.request
+```
+
+#### Programs that draw the whole terminal
+
+```@docs
+REPL.TerminalMenus.readevent
+REPL.TerminalMenus.KeyEvent
+REPL.TerminalMenus.MouseEvent
+REPL.TerminalMenus.PasteEvent
+REPL.TerminalMenus.FocusEvent
+REPL.TerminalMenus.SchemeEvent
+REPL.TerminalMenus.LegacyMouseEvent
+REPL.TerminalMenus.enter_screen
+REPL.TerminalMenus.leave_screen
+REPL.TerminalMenus.suspend
+REPL.TerminalMenus.ScreenModes
+REPL.TerminalMenus.mouse_reporting
+REPL.TerminalMenus.bracketed_paste
+REPL.TerminalMenus.focus_reporting
+REPL.TerminalMenus.scheme_reports
+REPL.TerminalMenus.write_frame
+REPL.TerminalMenus.LineField
+REPL.TerminalMenus.edit!
+REPL.TerminalMenus.paste!
 ```
 
 #### AbstractMenu extension interface
