@@ -334,6 +334,8 @@ end
 
 @fastmath begin
     hypot_fast(x::T, y::T) where {T<:FloatTypes} = sqrt(x*x + y*y)
+    hypot_fast(x::T, y::T, z::T, xs::T...) where {T<:FloatTypes} =
+        sqrt(sum(abs2, (x, y, z, xs...)))
 
     # complex numbers
 
@@ -402,6 +404,12 @@ for f in (:^, :atan, :hypot, :log)
         @eval $f_fast(x::Number, y::Integer) = $f(x, y)
     end
 end
+
+# `hypot` also accepts one or more than two arguments
+hypot_fast(x) = hypot(x)
+hypot_fast(x, y, z, xs...) = hypot(x, y, z, xs...)
+hypot_fast(x::Number, y::Number, z::Number, xs::Number...) = hypot_fast(promote(x, y, z, xs...)...)
+hypot_fast(x::T, y::T, z::T, xs::T...) where {T<:Number} = hypot(x, y, z, xs...)
 
 # Reductions
 
