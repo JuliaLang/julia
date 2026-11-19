@@ -1123,6 +1123,19 @@ end
         end
     end
 
+    @testset "escaped characters" begin
+        for chunk in ("\0", "\"", "\\", "\$", "\xff", "\x01\n", "\0" * "7", "\u0085a", "\U0001FFFEF")
+            str = chunk^1000
+            out = sprint(io -> show(io, MIME"text/plain"(), str; limit=80))
+            @test occursin(r" ⋯ \d+ bytes ⋯ ", out) && textwidth(out) <= 80
+            @test sprint(io -> show(io, MIME"text/plain"(), chunk; limit=80)) == repr(chunk)
+        end
+        @test textwidth(sprint(io -> show(io, MIME"text/plain"(), "\""^82; limit=20))) <= 20
+        str = "\x01"^15
+        out = sprint(io -> show(io, MIME"text/plain"(), str; limit=25))
+        @test occursin(r" ⋯ \d+ bytes ⋯ ", out) && textwidth(out) <= 25
+    end
+
     @testset "default elision limit" begin
         r = replstr("x"^1000)
         @test length(r) == 7*80-1
