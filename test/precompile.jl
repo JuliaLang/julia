@@ -698,13 +698,12 @@ precompile_test_harness(false) do dir
     @test !isdefined(Main, :FooBar)
     @test !isdefined(Main, :FooBar1)
 
+    # `..` is resolved lexically, as `include` does
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
-    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa (Sys.iswindows() ? Tuple{<:Vector, String, UInt128} : Bool) # `..` is not a symlink on Windows
-    mkdir(joinpath(dir, "subfolder"))
     @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
 
-    # a hardlink to the entry file, e.g. the identical entry file of another version of
-    # the package, is a different source; a symlink is the same
+    # a hardlink or symlink to the entry file from another directory, as when two versions
+    # of a package share an identical entry file, lies beside other sources and is rejected
     hardlinked_file = joinpath(dir, "hardlinked", "FooBar.jl")
     mkdir(dirname(hardlinked_file))
     hardlink(FooBar_file, hardlinked_file)
@@ -715,7 +714,7 @@ precompile_test_harness(false) do dir
         symlinked_file = joinpath(dir, "symlinked", "FooBar.jl")
         mkdir(dirname(symlinked_file))
         symlink(FooBar_file, symlinked_file)
-        @test Base.stale_cachefile(symlinked_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
+        @test Base.stale_cachefile(symlinked_file, joinpath(cachedir, "FooBar.ji")) === true
     end
 
     @eval using FooBar
