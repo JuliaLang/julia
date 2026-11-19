@@ -63,6 +63,11 @@ New library features
 * An unquoted `*`, `?` or `[` in a command literal makes a glob, which expands to the matching
   paths when the command is created. Julia calls a `glob` function provided by a package,
   such as Glob.jl, to match the pattern, so globbing works after `using Glob` ([#20401]).
+* `@time` now reports the number of dynamic dispatches and the share of the elapsed time they took, when that
+  share reaches one percent, which is usually a symptom of type instability. The share is estimated from the
+  count and a per-dispatch cost measured on the running machine. `@timev` also reports the raw count, `@timed` returns
+  it in new `dispatches` and `dispatch_time` fields, and the new `@dispatches` macro measures the count on
+  its own ([#62929]).
 
 Standard library changes
 ------------------------
