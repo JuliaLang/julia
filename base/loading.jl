@@ -5148,16 +5148,16 @@ end
 
         # now check if this file's content hash has changed relative to its source files
         if stalecheck
-            if !samefile(includes[1].filename, modspec.path)
-                # In certain cases the path rewritten by `fixup_stdlib_path` may
-                # point to an unreadable directory, make sure we can `stat` the
-                # file before comparing it with `modspec.path`.
-                stdlib_path = fixup_stdlib_path(includes[1].filename)
-                if !(isreadable(stdlib_path) && samefile(stdlib_path, modspec.path))
-                    @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $(modspec.path)"
-                    record_reason(reasons, :source_path_changed)
-                    return true # cache file was compiled from a different path
-                end
+            # Do not accept a lexically different path in place of the one requested:
+            # only the exact path spelling is sure to execute to produce the same cache result.
+            # A link in the path may arrive at the same file content, but `@__DIR__` and
+            # `include` would give different answers when run from it.
+            entry_path = abspath(modspec.path)
+            if abspath(includes[1].filename) != entry_path &&
+               abspath(fixup_stdlib_path(includes[1].filename)) != entry_path
+                @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $(modspec.path)"
+                record_reason(reasons, :source_path_changed)
+                return true # cache file was compiled from a different path
             end
             for (modkey, req_modkey) in requires
                 # verify that `require(modkey, name(req_modkey))` ==> `req_modkey`

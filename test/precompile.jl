@@ -698,10 +698,24 @@ precompile_test_harness(false) do dir
     @test !isdefined(Main, :FooBar)
     @test !isdefined(Main, :FooBar1)
 
+    # `..` is resolved lexically, as `include` does
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
-    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa (Sys.iswindows() ? Tuple{<:Vector, String, UInt128} : Bool) # `..` is not a symlink on Windows
-    mkdir(joinpath(dir, "subfolder"))
     @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
+
+    # a hardlink or symlink to the entry file from another directory, as when two versions
+    # of a package share an identical entry file, lies beside other sources and is rejected
+    hardlinked_file = joinpath(dir, "hardlinked", "FooBar.jl")
+    mkdir(dirname(hardlinked_file))
+    hardlink(FooBar_file, hardlinked_file)
+    reasons = Dict{Symbol,Int}()
+    @test Base.stale_cachefile(hardlinked_file, joinpath(cachedir, "FooBar.ji"); reasons) === true
+    @test haskey(reasons, :source_path_changed)
+    if !Sys.iswindows()
+        symlinked_file = joinpath(dir, "symlinked", "FooBar.jl")
+        mkdir(dirname(symlinked_file))
+        symlink(FooBar_file, symlinked_file)
+        @test Base.stale_cachefile(symlinked_file, joinpath(cachedir, "FooBar.ji")) === true
+    end
 
     @eval using FooBar
     fb_uuid = invokelatest(()->Base.module_build_id(FooBar))
