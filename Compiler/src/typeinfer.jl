@@ -2313,9 +2313,10 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     codeinsts, srcs, deferred = Any[], Any[], Any[]
     eager = IdSet{Any}()
     # Compile along with `ci` only the code sure to run when it does; a callee called only
-    # where it might not run is compiled the first time it is called. Not when generating
-    # output, so as not to change what goes into it.
-    defer = iszero(ccall(:jl_generating_output, Cint, ()))
+    # where it might not run is compiled the first time it is called. Also when generating
+    # a package image: what goes into it is decided by what was inferred, not by what the
+    # JIT compiled while its workload ran. Not when building a system image.
+    defer = iszero(ccall(:jl_generating_output, Cint, ())) || JLOptions().incremental != 0
     while !isempty(workqueue)
         # ci_has_real_invoke(ci) && return ci # optimization: cease looping if ci happens to get compiled (not just jl_fptr_wait_for_compiled, but fully jl_is_compiled_codeinst)
         callee = pop!(workqueue)
