@@ -796,19 +796,19 @@ end
 insert_node!(ir::IRCode, pos::Int, newinst::NewInstruction, attach_after::Bool=false) =
     insert_node!(ir, SSAValue(pos), newinst, attach_after)
 
-mutable struct CFGTransformState
-    const cfg_transforms_enabled::Bool
-    const fold_constant_branches::Bool
-    const result_bbs::Vector{BasicBlock}
-    const bb_rename_pred::Vector{Int}
-    const bb_rename_succ::Vector{Int}
-    # Built on the first killed edge when `lazy_domtree` is set, since most
-    # compactions kill none.
+struct CFGTransformState
+    cfg_transforms_enabled::Bool
+    fold_constant_branches::Bool
+    result_bbs::Vector{BasicBlock}
+    bb_rename_pred::Vector{Int}
+    bb_rename_succ::Vector{Int}
     domtree::Union{Nothing, DomTree}
     # Scratch buffers reused for the in-place domtree updates performed while
     # killing edges. Non-`nothing` exactly when `domtree` is.
     domtree_cache::Union{Nothing, DomTreeCache}
-    const lazy_domtree::Bool
+    # Whether a missing `domtree` should be built on the first killed edge (see
+    # `get_domtree!`), since most compactions kill none.
+    lazy_domtree::Bool
 end
 CFGTransformState(cfg_transforms_enabled::Bool, fold_constant_branches::Bool,
                   result_bbs::Vector{BasicBlock}, bb_rename_pred::Vector{Int}, bb_rename_succ::Vector{Int},
@@ -816,23 +816,15 @@ CFGTransformState(cfg_transforms_enabled::Bool, fold_constant_branches::Bool,
     CFGTransformState(cfg_transforms_enabled, fold_constant_branches, result_bbs,
                       bb_rename_pred, bb_rename_succ, domtree, domtree_cache, false)
 
-function get_domtree!(cfg_transform::CFGTransformState)
-    if cfg_transform.domtree === nothing && cfg_transform.lazy_domtree
-        cache = DomTreeCache()
-        cfg_transform.domtree = construct_domtree(cfg_transform.result_bbs; cache)
-        cfg_transform.domtree_cache = cache
-    end
-    return cfg_transform.domtree
-end
-
 # N.B.: Takes ownership of the CFG array
 function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bool=false)
     if allow_cfg_transforms
         bb_rename = Vector{Int}(undef, length(blocks))
         cur_bb = 1
-        dfs = DFS(blocks)
+        # The entry block is always reachable, so a single block needs no search
+        dfs = length(blocks) > 1 ? DFS(blocks) : nothing
         for i = 1:length(bb_rename)
-            if i != 1 && dfs.to_pre[i] == 0 # if i is unreachable
+            if i != 1 && (dfs::DFSTree).to_pre[i] == 0 # if i is unreachable
                 bb_rename[i] = -1
             else
                 bb_rename[i] = cur_bb
@@ -922,6 +914,10 @@ mutable struct IncrementalCompact
     renamed_new_nodes::Bool
 
     buffers::Union{Nothing,CompactionBuffers}
+    # The domtree kept up to date while killing edges, with its scratch buffers: that of
+    # `cfg_transform`, or built by `get_domtree!`.
+    domtree::Union{Nothing, DomTree}
+    domtree_cache::Union{Nothing, DomTreeCache}
 
     function IncrementalCompact(code::IRCode, cfg_transform::CFGTransformState,
                                 buffers::Union{Nothing,CompactionBuffers}=nothing)
@@ -949,7 +945,7 @@ mutable struct IncrementalCompact
         pending_perm = EMPTY_PENDING_PERM
         return new(code, result, cfg_transform, ssa_rename, used_ssas, late_fixup, perm, 1,
             new_new_nodes, new_new_used_ssas, pending_nodes, pending_perm,
-            1, 1, 1, 1, false, buffers)
+            1, 1, 1, 1, false, buffers, cfg_transform.domtree, cfg_transform.domtree_cache)
     end
 
     # For inlining
@@ -965,8 +961,17 @@ mutable struct IncrementalCompact
             ssa_rename, parent.used_ssas,
             parent.late_fixup, perm, 1,
             parent.new_new_nodes, parent.new_new_used_ssas, pending_nodes, pending_perm,
-            1, result_offset, 1, parent.active_result_bb, false, nothing)
+            1, result_offset, 1, parent.active_result_bb, false, nothing, nothing, nothing)
     end
+end
+
+function get_domtree!(compact::IncrementalCompact)
+    if compact.domtree === nothing && compact.cfg_transform.lazy_domtree
+        cache = DomTreeCache()
+        compact.domtree = construct_domtree(compact.cfg_transform.result_bbs; cache)
+        compact.domtree_cache = cache
+    end
+    return compact.domtree
 end
 
 function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false;
@@ -1567,8 +1572,9 @@ scan the compacted prefix when `to == active_bb`. `from` and `to` are non-rename
 """
 function kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
     # Note: We recursively kill as many edges as are obviously dead.
-    domtree = get_domtree!(compact.cfg_transform)
-    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree_cache) = compact.cfg_transform
+    domtree = get_domtree!(compact)
+    domtree_cache = compact.domtree_cache
+    (; bb_rename_pred, bb_rename_succ, result_bbs) = compact.cfg_transform
     preds = result_bbs[bb_rename_succ[to]].preds
     succs = result_bbs[bb_rename_pred[from]].succs
     deleteat!(preds, findfirst(x::Int->x==bb_rename_pred[from], preds)::Int)
