@@ -2093,6 +2093,38 @@ function foreign_library_type(@nospecialize(spec), ci::CodeInfo, sptypes::Vector
     return library_type
 end
 
+# The `Task` constructor is not specialized on the function it is given, so `--trim` looks
+# at the calls of the constructor instead, where the type of that function is known.
+is_task_constructor_def(@nospecialize def) = def isa Method && def.module === Base && def.name === :Task
+
+# Whether `stmt` creates a task: a call of the `Core._task` builtin, or an invoke of the
+# `Task` constructor.
+function is_task_creation(stmt::Expr, ci::CodeInfo, sptypes::Vector{VarState})
+    if isexpr(stmt, :call)
+        return 3 <= length(stmt.args) <= 4 &&
+            argextype_widened(stmt.args[1], ci, sptypes) === typeof(Core._task)
+    elseif isexpr(stmt, :invoke)
+        edge = stmt.args[1]
+        def = edge isa CodeInstance ? get_ci_mi(edge).def : edge isa MethodInstance ? edge.def : nothing
+        return length(stmt.args) >= 3 && is_task_constructor_def(def)
+    end
+    return false
+end
+
+# The function of a task runs when the task starts, which `--trim` cannot follow as a call.
+# Return what the task created by `stmt` will run: the `CodeInstance` that inlining attached
+# to the `Core._task` call, or else the `MethodInstance` that calling the function dispatches
+# to. Return `nothing` if that cannot be resolved.
+function task_deferred_call(interp::AbstractInterpreter, stmt::Expr, ci::CodeInfo, sptypes::Vector{VarState})
+    if isexpr(stmt, :call) && length(stmt.args) == 4
+        target = stmt.args[4]
+        return target isa CodeInstance ? target : nothing
+    end
+    f = isexpr(stmt, :call) ? stmt.args[2] : stmt.args[3]
+    ft = argextype(f, ci, sptypes)
+    return compileable_specialization_for_call(interp, argtypes_to_type(Any[ft]))
+end
+
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
@@ -2135,6 +2167,10 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 mi = compileable_specialization_for_call(invokelatest_queue.interp, atype)
                 mi === nothing || push!(invokelatest_queue, mi)
             end
+        end
+        if enqueue_unprepared_invokes && stmt isa Expr && is_task_creation(stmt, ci, sptypes)
+            target = task_deferred_call(workqueue.interp, stmt, ci, sptypes)
+            target === nothing || push!(workqueue, target)
         end
         if enqueue_unprepared_invokes && (isexpr(stmt, :foreigncall) || isexpr(stmt, :foreignglobal))
             # Enqueue (in this world) for `--trim`, but not otherwise since

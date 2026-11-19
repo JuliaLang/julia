@@ -61,6 +61,56 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Nothing, Tuple{typeof(finalizer),
     @test occursin(r"\[1\] finalizer\(f::Any, o::Any\)"s, repr)
 end
 
+# the function of a task is compiled where the task is created
+task_work() = nothing
+make_task() = Task(task_work)
+let infos = typeinf_ext_toplevel(Any[Core.svec(Task, Tuple{typeof(make_task)})], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, parents = get_verify_typeinf_trim(infos)
+    @test isempty(errors)
+    @test any(infos) do item
+        item isa Core.CodeInstance && Compiler.get_ci_mi(item).specTypes === Tuple{typeof(task_work)}
+    end
+end
+
+# the constructor is not specialized on the function, so that is found at the constructor call
+struct TaskJob
+    n::Int
+end
+(job::TaskJob)() = job.n
+make_task_noinline(n::Int) = @noinline Task(TaskJob(n))
+let infos = typeinf_ext_toplevel(Any[Core.svec(Task, Tuple{typeof(make_task_noinline), Int})], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, parents = get_verify_typeinf_trim(infos)
+    @test isempty(errors)
+    @test any(infos) do item
+        item isa Core.CodeInstance && Compiler.get_ci_mi(item).specTypes === Tuple{TaskJob}
+    end
+end
+
+make_task_unknown(@nospecialize(f)) = Task(f)
+let infos = typeinf_ext_toplevel(Any[Core.svec(Task, Tuple{typeof(make_task_unknown), Any})], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, parents = get_verify_typeinf_trim(infos)
+    (warn, desc) = only(errors)
+    @test !warn
+    @test desc isa CallMissing
+    @test desc.desc == "unresolved task function"
+end
+
+# `atomic_pointermodify` calls its function through dispatch unless the optimizer resolved it
+modify_pointer(p::Ptr{Int}) = Core.Intrinsics.atomic_pointermodify(p, +, 1, :sequentially_consistent)
+let infos = typeinf_ext_toplevel(Any[Core.svec(Pair{Int,Int}, Tuple{typeof(modify_pointer), Ptr{Int}})], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, parents = get_verify_typeinf_trim(infos)
+    @test isempty(errors)
+end
+
+modify_pointer_unknown(p::Ptr{Int}, @nospecialize(op)) = Core.Intrinsics.atomic_pointermodify(p, op, 1, :sequentially_consistent)
+let infos = typeinf_ext_toplevel(Any[Core.svec(Any, Tuple{typeof(modify_pointer_unknown), Ptr{Int}, Any})], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, parents = get_verify_typeinf_trim(infos)
+    (warn, desc) = only(errors)
+    @test !warn
+    @test desc isa CallMissing
+    @test occursin("atomic_pointermodify", desc.desc)
+end
+
 # test that basic `cfunction` generation is allowed, when the dispatch target can be resolved
 make_cfunction() = @cfunction(+, Float64, (Int64,Int64))
 let infos = typeinf_ext_toplevel(Any[Core.svec(Ptr{Cvoid}, Tuple{typeof(make_cfunction)})], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
@@ -95,7 +145,14 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Base.CFunction, Tuple{typeof(make
     @test repr == "unresolved ccallable for Tuple{$(typeof(make_cfunction_bad)), Any} => Base.CFunction\n\n"
 end
 
-let infos = typeinf_ext_toplevel(Any[Core.svec(Base.SecretBuffer, Tuple{Type{Base.SecretBuffer}})], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+# a constructor that registers a finalizer
+mutable struct FinalizedBuffer
+    data::Vector{UInt8}
+    FinalizedBuffer() = Base.finalizer(clear_buffer!, new(zeros(UInt8, 8)))
+end
+clear_buffer!(b::FinalizedBuffer) = (fill!(b.data, 0x00); nothing)
+
+let infos = typeinf_ext_toplevel(Any[Core.svec(FinalizedBuffer, Tuple{Type{FinalizedBuffer}})], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
     @test length(infos) > 4
     errors, parents = get_verify_typeinf_trim(infos)
     @test isempty(errors)
@@ -106,11 +163,11 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Base.SecretBuffer, Tuple{Type{Bas
     (warn, desc) = only(errors)
     @test !warn
     @test desc isa CCallableMissing
-    @test desc.rt == Base.SecretBuffer
-    @test desc.sig == Tuple{Type{Base.SecretBuffer}}
+    @test desc.rt == FinalizedBuffer
+    @test desc.sig == Tuple{Type{FinalizedBuffer}}
     @test occursin("unresolved ccallable", desc.desc)
     repr = sprint(verify_print_error, desc, parents, warn)
-    @test repr == "unresolved ccallable for Tuple{Type{Base.SecretBuffer}} => Base.SecretBuffer\n\n"
+    @test repr == "unresolved ccallable for Tuple{Type{$FinalizedBuffer}} => $FinalizedBuffer\n\n"
 end
 
 let infos = typeinf_ext_toplevel(Any[Core.svec(Float64, Tuple{typeof(+), Int32, Int64})], [Base.get_world_counter()], TRIM_UNSAFE, false)[1]

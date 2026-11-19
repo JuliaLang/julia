@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import ..Compiler: verify_typeinf_trim, NativeInterpreter, argtypes_to_type, compileable_specialization_for_call,
-    threads_deferred_call_type, is_threads_call_def, foreign_library_type, _libdl_dlopen, _compileable_methods, method_table
+    threads_deferred_call_type, is_threads_call_def, is_task_constructor_def, is_task_creation,
+    task_deferred_call, foreign_library_type, _libdl_dlopen, _compileable_methods, method_table
 
 using ..Compiler:
      # operators
@@ -280,6 +281,7 @@ function may_dispatch(@nospecialize ftyp)
                Core.invoke_in_world isa ftyp ||
                Core.invokelatest isa ftyp ||
                Core.finalizer isa ftyp ||
+               Core._task isa ftyp ||
                Core.modifyfield! isa ftyp ||
                Core.modifyglobal! isa ftyp ||
                Core.modifyglobal_partition isa ftyp ||
@@ -305,10 +307,28 @@ function _uncompiled_methods(interp::NativeInterpreter, @nospecialize(ftyp), cac
     return uncovered
 end
 
+# Whether the function of the task created by `stmt` was compiled. That code is recorded as
+# called from `stmt`.
+function verify_task_function!(interp::NativeInterpreter, stmt::Expr, codeinst::CodeInstance, codeinfo::CodeInfo, sptypes::Vector{VarState}, stmtidx::Int, inspected::IdSet{CodeInstance}, caches::IdDict{MethodInstance,CodeInstance}, parents::ParentMap)
+    # A task created with a `CodeInstance` runs exactly that one, so it must itself be
+    # compiled. Otherwise the task dispatches on its function.
+    target = task_deferred_call(interp, stmt, codeinfo, sptypes)
+    if target isa MethodInstance
+        target = get(caches, target, nothing)
+    elseif target isa CodeInstance && !(target in inspected)
+        target = nothing
+    end
+    target isa CodeInstance || return false
+    haskey(parents, target) || (parents[target] = (codeinst, stmtidx))
+    return true
+end
+
 function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance, codeinfo::CodeInfo, inspected::IdSet{CodeInstance}, caches::IdDict{MethodInstance,CodeInstance}, parents::ParentMap, errors::ErrorList)
     mi = get_ci_mi(codeinst)
     # The dynamic call of a `@threads` loop body is checked where the loop starts instead.
     is_threads_call_def(mi.def) && return
+    # A task created inside the `Task` constructor is checked where the constructor is called.
+    in_task_constructor = is_task_constructor_def(mi.def)
     sptypes = sptypes_from_meth_instance(mi)
     src = codeinfo.code
     for i = 1:length(src)
@@ -327,6 +347,10 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                     push!(errors, false => CallMissing(codeinst, codeinfo, sptypes, i, "unresolved `Threads.@threads` loop body"))
                 end
             end
+            if !in_task_constructor && is_task_creation(stmt, codeinfo, sptypes) &&
+                    !verify_task_function!(interp, stmt, codeinst, codeinfo, sptypes, i, inspected, caches, parents)
+                push!(errors, false => CallMissing(codeinst, codeinfo, sptypes, i, "unresolved task function"))
+            end
             if edge isa CodeInstance
                 haskey(parents, edge) || (parents[edge] = (codeinst, i))
                 edge in inspected && continue
@@ -344,8 +368,16 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             farg = stmt.args[1]
             ftyp = argextype_widened(farg, codeinfo, sptypes)
             if ftyp <: IntrinsicFunction
-                #TODO: detect if f !== Core.Intrinsics.atomic_pointermodify (see statement_cost), otherwise error
-                continue
+                # `atomic_pointermodify` is the only intrinsic that calls a function. The
+                # optimizer turns the calls it can resolve into `:invoke_modify`.
+                f = argextype(farg, codeinfo, sptypes)
+                if !(f isa Core.Const)
+                    error = "unresolved call to (unknown) intrinsic"
+                elseif f.val === Core.Intrinsics.atomic_pointermodify
+                    error = "trim verification not yet implemented for intrinsic `Core.Intrinsics.atomic_pointermodify`"
+                else
+                    continue
+                end
             elseif ftyp <: Builtin
                 if !may_dispatch(ftyp)
                     continue
@@ -383,6 +415,13 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                         end
                     end
                     error = "unresolved finalizer registered"
+                elseif Core._task isa ftyp
+                    in_task_constructor && continue
+                    if is_task_creation(stmt, codeinfo, sptypes) &&
+                            verify_task_function!(interp, stmt, codeinst, codeinfo, sptypes, i, inspected, caches, parents)
+                        continue
+                    end
+                    error = "unresolved task function"
                 elseif Core._apply isa ftyp
                     error = "trim verification not yet implemented for builtin `Core._apply`"
                 elseif Core._call_in_world_total isa ftyp
