@@ -18,6 +18,8 @@ endif
 else ifeq ($(OS),FreeBSD)
 ifeq ($(ARCH),aarch64)
 OPENSSL_TARGET := BSD-aarch64
+else ifeq ($(ARCH),powerpc64le)
+OPENSSL_TARGET := BSD-ppc64le
 else
 OPENSSL_TARGET := BSD-x86_64
 endif
