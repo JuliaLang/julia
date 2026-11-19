@@ -6203,6 +6203,20 @@ end
     end end
 end
 
+# Windows reuses PIDs, so the jobserver pool of an exited process can still carry the
+# name a fresh process picks first; adopting it would start with its leftover tokens.
+Sys.iswindows() && @testset "precompile jobserver skips a stale pool" begin
+    script = """
+        stale = ccall((:CreateSemaphoreA, "kernel32"), stdcall, Ptr{Cvoid},
+                      (Ptr{Cvoid}, Clong, Clong, Cstring), C_NULL, 0, 4, "jl_pc_\$(getpid())_1")
+        @assert stale != C_NULL
+        @assert Base.Precompilation.setup_precompile_jobserver!(4) === :created
+        @assert ENV["JULIA_PRECOMPILE_JOBSERVER"] != "jl_pc_\$(getpid())_1"
+        print(ccall(:jl_precompile_jobserver_acquire, Cint, ()))
+        """
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == "1"
+end
+
 finish_precompile_test!()
 if original_num_precompile_tasks === nothing
     delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")
