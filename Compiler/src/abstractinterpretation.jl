@@ -2522,6 +2522,14 @@ function get_ci_abi(ci::CodeInstance)
     (def::MethodInstance).specTypes
 end
 
+# whether `invoke(f, ci, args...)` passes its argument type check for any arguments of `argtype`
+function invoke_ci_argtypes_valid(@nospecialize(argtype), ci::CodeInstance)
+    argtype <: get_ci_abi(ci) || return false
+    isa(ci.def, ABIOverride) && return true
+    defdef = get_ci_mi(ci).def
+    return !isa(defdef, Method) || argtype <: defdef.sig
+end
+
 function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     argtypes = arginfo.argtypes
     ft′ = argtype_by_index(argtypes, 2)
@@ -2534,11 +2542,10 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         if isa(method_or_ci, CodeInstance)
             argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
             specsig = get_ci_abi(method_or_ci)
-            defdef = get_ci_mi(method_or_ci).def
             exct_ci = method_or_ci.exctype
             if !hasintersect(argtype, specsig)
                 return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
-            elseif !(argtype <: specsig) || ((!isa(method_or_ci.def, ABIOverride) && isa(defdef, Method)) && !(argtype <: defdef.sig))
+            elseif !invoke_ci_argtypes_valid(argtype, method_or_ci)
                 exct_ci = Union{exct_ci, TypeError}
             end
             callee_valid_range = WorldRange(method_or_ci.min_world, method_or_ci.max_world)
@@ -2550,8 +2557,10 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
                 end
                 return Future(CallMeta(Bottom, ErrorException, EFFECTS_THROWS, NoCallInfo()))
             end
+            # a foreign CodeInstance throws if its owner has not added code for it to the JIT
+            # (a native one falls back to `jl_invoke` of its MethodInstance)
             # TODO: When we add curing, we may want to assume this is nothrow
-            if (method_or_ci.owner === Nothing && method_or_ci.def.def isa Method)
+            if method_or_ci.owner !== nothing
                 exct_ci = Union{exct_ci, ErrorException}
             end
             update_valid_age!(sv, our_world, callee_valid_range)
