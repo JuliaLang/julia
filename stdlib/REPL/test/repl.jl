@@ -1385,6 +1385,11 @@ end
 @test occursin("|=", sprint(show, help_result("|=")))
 @test occursin("broadcast", sprint(show, help_result(".=")))
 
+# Punctuation help covers broadcasting, command literals, and concatenation.
+@test occursin("broadcasting", sprint(show, help_result(".")))
+@test occursin("Surround a command with backticks", sprint(show, help_result("`")))
+@test occursin("concatenated", sprint(show, help_result(";")))
+
 # PR 35277
 @test occursin("identical", sprint(show, help_result("===")))
 @test occursin("broadcast", sprint(show, help_result(".<=")))

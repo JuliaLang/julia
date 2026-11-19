@@ -3,6 +3,8 @@
 #ifndef JL_UTILS_H
 #define JL_UTILS_H
 
+#include "dtypes.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
