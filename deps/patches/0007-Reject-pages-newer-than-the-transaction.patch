@@ -1,0 +1,61 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Tim Besard <tim.besard@gmail.com>
+Date: Fri, 20 Nov 2026 10:01:44 +0100
+Subject: [PATCH] Reject pages newer than the transaction
+
+After a system crash with MDB_NOSYNC, the surviving meta page can
+reference pages that a later, lost commit overwrote. A reader returns
+their contents as part of its snapshot. A writer takes one whose txnid
+is at least its mt_workid for a page it dirtied itself and modifies it
+in place, which without MDB_WRITEMAP faults on the read-only map.
+
+Return MDB_CORRUPTED if a mapped page's txnid exceeds mt_txnid.
+Equality is valid for spilled pages and dirty MDB_WRITEMAP pages.
+Also reject P_SUBP on a standalone page, because mdb_page_touch()
+allows in-place updates to sub-pages at any txnid. Exempt the
+incremental dump, which scans free pages that writers may reuse.
+
+This does not detect a reused overflow continuation page, which has no
+header, or a page whose own write was lost, which keeps its old txnid.
+---
+ libraries/liblmdb/mdb.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/libraries/liblmdb/mdb.c b/libraries/liblmdb/mdb.c
+index 5f7d986..c572668 100644
+--- a/libraries/liblmdb/mdb.c
++++ b/libraries/liblmdb/mdb.c
+@@ -1606,6 +1606,7 @@ struct MDB_cursor {
+ #define C_EOF	0x02			/**< No more data */
+ #define C_SUB	0x04			/**< Cursor is a sub-cursor */
+ #define C_DEL	0x08			/**< last op was a cursor_del */
++#define C_RAW	0x10			/**< reads all pages, also free ones */
+ #define C_UNTRACK	0x40		/**< Un-track cursor when closing */
+ #define C_WRITEMAP	MDB_TXN_WRITEMAP /**< Copy of txn flag */
+ /** Read-only cursor into the txn's original snapshot in the map.
+@@ -7629,6 +7630,17 @@ mapped:
+ 		p = (MDB_page *)(env->me_map + env->me_psize * pgno);
+ 	}
+ 
++	/* A newer page was overwritten by a commit that this txn does not see.
++	 * Spilled and dirty WRITEMAP pages may have this txn's ID.
++	 * #P_SUBP is valid only inside a leaf node.
++	 */
++	if (!(mc->mc_flags & C_RAW) && (p->mp_txnid > txn->mt_txnid || IS_SUBP(p))) {
++		DPRINTF(("page %"Yu" has txnid %"Yu" (txn %"Yu") and flags 0x%x",
++			pgno, p->mp_txnid, txn->mt_txnid, MP_FLAGS(p)));
++		txn->mt_flags |= MDB_TXN_ERROR;
++		return MDB_CORRUPTED;
++	}
++
+ done:
+ 	*ret = p;
+ 	return MDB_SUCCESS;
+@@ -12069,6 +12081,7 @@ mdb_env_incr_dumpfd(MDB_env *env, HANDLE fd, size_t txnid)
+ 
+ 	/* dummy cursor for mdb_page_get() */
+ 	mdb_cursor_init(&mc, txn, MAIN_DBI, NULL);
++	mc.mc_flags |= C_RAW;
+ 	pg = 2;
+ 	while (pg < txn->mt_next_pgno) {
+ 		if ((rc = MDB_PAGE_GET(&mc, pg, 1, &mp)) != 0)

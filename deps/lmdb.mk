@@ -43,7 +43,12 @@ $(BUILDDIR)/$(LMDB_SRC_DIR)/reader-meta-race.patch-applied: $(BUILDDIR)/$(LMDB_S
 		patch -p1 -f < $(SRCDIR)/patches/0006-Retry-when-commits-race-a-reader-copying-the-meta-pa.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(LMDB_SRC_DIR)/source-patched: $(BUILDDIR)/$(LMDB_SRC_DIR)/reader-meta-race.patch-applied
+$(BUILDDIR)/$(LMDB_SRC_DIR)/newer-pages.patch-applied: $(BUILDDIR)/$(LMDB_SRC_DIR)/reader-meta-race.patch-applied
+	cd $(BUILDDIR)/$(LMDB_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/0007-Reject-pages-newer-than-the-transaction.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(LMDB_SRC_DIR)/source-patched: $(BUILDDIR)/$(LMDB_SRC_DIR)/newer-pages.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(LMDB_SRC_DIR)/build-configured: $(BUILDDIR)/$(LMDB_SRC_DIR)/source-patched
