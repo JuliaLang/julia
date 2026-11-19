@@ -1351,7 +1351,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABL
 // stops at objects of other images.  `visited` maps an object to VISITING, then to VISITED.
 static void add_uniquing_imports(jl_serializer_state *s, jl_value_t *v, htable_t *visited) JL_GC_DISABLED JL_CANSAFEPOINT
 {
-    if (v == NULL || !jl_needs_serialization(s, v))
+    if (!jl_needs_serialization(s, v))
         return;
     v = written_copy(v);
     void *state = ptrhash_get(visited, v);
@@ -1621,12 +1621,11 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         assert(!(s->incremental && jl_object_in_image(v)));
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         assert((!jl_is_datatype_singleton(t) || t->instance == v) && "detected singleton construction corruption");
-        if (s->incremental && (jl_is_datatype(v) || jl_is_method_instance(v) || jl_is_binding(v)) &&
-            needs_uniquing(v, s->query_cache))
-            continue; // written as a record (see _backref_id)
+        if (s->incremental && needs_uniquing(v, s->query_cache))
+            continue;
         int mutabl = t->name->mutabl;
         ios_t *f = s->s;
-        if (t->smalltag && t != jl_symbol_type) {
+        if (t->smalltag) {
             if (t->layout->npointers == 0 || t == jl_string_type) {
                 if (jl_datatype_nfields(t) == 0 || mutabl == 0 || t == jl_string_type) {
                     f = s->bits;
@@ -2014,7 +2013,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 int32_t invokeptr_id = ci_native_code(ci, &builtin_idx, &specfptr_id);
                 if (invokeptr_id > 0)
                     write_fptr(s->fptr_record, invokeptr_id, reloc_offset | FPTR_INVOKE);
-                if (invokeptr_id && specfptr_id) {
+                if (specfptr_id) {
                     assert(specfptr_id > invokeptr_id && specfptr_id > 0);
                     write_fptr(s->fptr_record, specfptr_id, reloc_offset);
                 }
@@ -3832,8 +3831,6 @@ static void jl_image_decompress_into(ZSTD_DCtx *dctx, ZSTD_inBuffer *in, char *d
 static void jl_image_decompress(jl_image_buf_t *image, const char *data) JL_CANSAFEPOINT
 {
     const jl_ji_header_t *h = (const jl_ji_header_t*)data;
-    if (!jl_verify_header(h))
-        jl_error("Precompile file header verification checks failed.");
     const char *comp_data = data + h->payload_start;
     size_t comp_len = h->payload_size;
     unsigned long long payload_size = ZSTD_getFrameContentSize(comp_data, comp_len);
@@ -3861,6 +3858,8 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image) JL_C
     JL_IMAGE_SYM(handle, jl_system_image_size, &plen);
     JL_IMAGE_SYM(handle, jl_system_image_data, &data);
     jl_image_load_metadata(handle, image);
+    if (!jl_verify_header((const jl_ji_header_t*)data))
+        jl_error("Precompile file header verification checks failed.");
     jl_image_decompress(image, data);
 
     size_t page_size = jl_getpagesize();
