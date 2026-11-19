@@ -235,6 +235,27 @@ end
             @test ldexp(prevfloat(T(1)), -p-1) === zero(T)
         end
     end
+    @testset "exponent(::Rational)" begin
+        # exact near powers of two, where converting to a float rounds across the boundary
+        @test exponent((2^60 - 1) // 2^60) == -1
+        @test exponent(2^60 // (2^60 - 1)) == 0
+        @test exponent(-1//4) == exponent(1//4) == -2
+        @test exponent(-3//4) == -1
+        @test exponent(typemax(Int) // 1) == 62
+        @test exponent(typemin(Int) // 1) == 63
+        @test exponent(1 // typemax(Int)) == -63
+        @test exponent(typemin(Int8) // Int8(1)) == 7
+        @test exponent(0xff // 0x01) == 7
+        @test exponent(big(2)^200 // (big(2)^300 + 1)) == -101
+        for T in (Int8, UInt8, Int64), n in T(1):T(100), d in T(1):T(100)
+            q = n // d
+            e = exponent(q)
+            @test (big(2)//1)^e <= q < (big(2)//1)^(e + 1)
+        end
+        @test_throws DomainError exponent(0//1)
+        @test_throws DomainError exponent(1//0)
+        @test_throws DomainError exponent(-1//0)
+    end
 end
 
 # We compare to BigFloat instead of hard-coding
