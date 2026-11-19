@@ -1149,7 +1149,7 @@ function _worker_task57153()
         r[1]::Bool
     end
 end
-let ir = Base.code_ircode(_worker_task57153, (), optimize_until="CC: SROA")[1].first
+let ir = Base.code_ircode(_worker_task57153, (), optimize_until="CC: COMPACT_2")[1].first
     @test findfirst(x->x==0, ir.cfg.blocks[1].preds) !== nothing
 end
 

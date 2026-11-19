@@ -1140,7 +1140,7 @@ function run_passes_ipo_safe(
     @pass "CC: COMPACT_1" ir = compact!(ir; buffers)
     @pass "CC: INLINING"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds; buffers)
     # @zone "CC: VERIFY 2" verify_ir(ir)
-    # No compaction here: SROA compacts the inlined IR, including the nodes inlining inserted
+    @pass "CC: COMPACT_2" ir = compact!(ir; buffers)
     @pass "CC: SROA"      ir = sroa_pass!(ir, sv.inlining; buffers)
     @pass "CC: GLOBALS"   ir = reformulate_globals_pass!(ir, sv)
     @pass "CC: ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining; buffers)
