@@ -3138,12 +3138,14 @@ function report_precompile_results!(s::PrecompileSession)
         if !quick_exit
             logstr = sprint(context=s.logio) do iostr
                 if s.fancyprint
+                    # loading also requests the extensions it makes loadable, so leave them out
+                    names = [p.name for p in s.requested_pkgids if !haskey(s.ext_to_parent, p)]
                     what = if s.n_batches > 1
                         "done."
-                    elseif isempty(s.requested_pkgids) || s.requested_all
+                    elseif isempty(names) || s.requested_all
                         "packages finished."
                     else
-                        "$(join((full_name(s.ext_to_parent, p) for p in s.requested_pkgids), ", ", " and ")) finished."
+                        "$(join(names, ", ", " and ")) finished."
                     end
                     printpkgstyle(iostr, :Precompiling, what)
                 end
