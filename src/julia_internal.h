@@ -2791,6 +2791,8 @@ JL_DLLIMPORT int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int 
 JL_DLLIMPORT uint64_t jl_getUnwindInfo(uint64_t dwBase) JL_NOTSAFEPOINT;
 JL_DLLIMPORT void jl_jit_register_ci(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 JL_DLLIMPORT void jl_jit_unregister_ci(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
+JL_DLLIMPORT void jl_jit_link_deferred_stubs(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_invoke_deferred(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst) JL_CANSAFEPOINT;
 
 #ifdef __cplusplus
 }

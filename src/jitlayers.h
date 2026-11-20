@@ -26,6 +26,7 @@
 
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
+#include <atomic>
 #include "julia.h"
 #include "julia_internal.h"
 #include "platform.h"
@@ -361,6 +362,8 @@ struct jl_linker_info_t {
         call_targets;
     DenseMap<void *, orc::SymbolStringPtr> global_targets;
     DenseMap<_Atomic(uint64_t) *, orc::SymbolStringPtr> coverage_counters;
+    // The GOT entries of the trampolines for deferred calls, with the callee and API each is for
+    SmallVector<std::tuple<jl_code_instance_t *, jl_invoke_api_t, orc::SymbolStringPtr>, 0> deferred_gots;
 };
 
 struct jl_emitted_output_t {
@@ -415,6 +418,9 @@ public:
     std::map<void*, GlobalVariable*> global_targets;
     // Module-local coverage counter globals, keyed by their runtime slots.
     DenseMap<_Atomic(uint64_t) *, GlobalVariable*> coverage_counters;
+    // The GOT entries of the trampolines for deferred calls (see emitDeferredStub), with the
+    // callee and API each is for.
+    SmallVector<std::tuple<jl_code_instance_t *, jl_invoke_api_t, GlobalVariable *>, 0> deferred_gots;
     // Imaging-mode coverage counter globals keyed by (interned filename, line),
     // and whether the location is user code. Insertion-ordered so the emitted
     // image coverage table is reproducible.
@@ -601,6 +607,7 @@ struct JITObjectInfo {
     StringMap<uint64_t> SectionLoadAddresses;
     std::unique_ptr<jl_linker_info_t> LinkerInfo;
     SmallVector<std::pair<_Atomic(uint64_t) *, jitlink::Symbol *>, 0> CoverageCounters;
+    SmallVector<std::tuple<jl_code_instance_t *, jl_invoke_api_t, jitlink::Symbol *>, 0> DeferredGOTs;
 };
 
 class JLDebuginfoPlugin : public orc::ObjectLinkingLayer::Plugin {
@@ -798,6 +805,12 @@ public:
     // entries in CISymbols, to prevent invokes to a new CodeInstance with the
     // same address from being linked to old symbol.
     void unregisterCI(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
+    // Point the trampolines for calls to CI made before it had code (see linkCallTarget)
+    // at its code, once CI or an equivalent CodeInstance has some with their API.
+    void linkDeferredStubs(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
+    // Add the GOT entry of a trampoline for calls to CI with API, once linked, for
+    // linkDeferredStubs to point at CI's code.
+    void addDeferredStub(jl_code_instance_t *CI, jl_invoke_api_t API, std::atomic<void *> *GOT) JL_NOTSAFEPOINT;
 
     orc::ThreadSafeContext makeContext() JL_NOTSAFEPOINT;
     const DataLayout& getDataLayout() const JL_NOTSAFEPOINT;
@@ -915,6 +928,12 @@ private:
     // CodeInstance is eligible for garbage collection, it must be removed from
     // this map first, with unregisterCI.
     CISymbolMap CISymbols;
+    // The GOT entries of the trampolines for calls to CodeInstances that had no code yet, not
+    // yet pointed at their code, by the CodeInstance they call, with their API. Protected by
+    // DeferredStubsMutex, which may be taken while holding LinkerMutex but not the other
+    // way around.
+    std::mutex DeferredStubsMutex;
+    DenseMap<jl_code_instance_t *, SmallVector<std::pair<std::atomic<void *> *, jl_invoke_api_t>, 1>> DeferredStubs;
     jl_name_counter_t Names;
 
     std::unique_ptr<DLSymOptimizer> DLSymOpt;
