@@ -1058,36 +1058,49 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         try
             local liveprinting = false
             local thistaskwaiting = false
+            local relay = true
             while !eof(pipe)
                 local str = readline(pipe, keep=true)
-                if single_requested_pkg && (liveprinting || !isempty(str))
-                    @lock print_lock begin
-                        if !liveprinting
-                            liveprinting = true
-                            pkg_liveprinted[] = pkg
-                        end
-                        # in fancy mode clear the progress bar residue from the line first
-                        print(io, fancyprint ? ansi_cleartoendofline : "", str)
-                    end
-                end
                 write(get!(IOBuffer, std_outputs, pkg_config), str)
-                if thistaskwaiting
-                    if occursin("Waiting for background task / IO / timer", str)
-                        thistaskwaiting = true
-                        !liveprinting && !fancyprint && @lock print_lock begin
-                            println(io, full_name(ext_to_parent, pkg), color_string(str, Base.warn_color()))
+                relay || continue
+                try
+                    if single_requested_pkg && (liveprinting || !isempty(str))
+                        @lock print_lock begin
+                            if !liveprinting
+                                liveprinting = true
+                                pkg_liveprinted[] = pkg
+                            end
+                            # in fancy mode clear the progress bar residue from the line first
+                            print(io, fancyprint ? ansi_cleartoendofline : "", str)
                         end
-                        push!(taskwaiting, pkg_config)
                     end
-                else
-                    # XXX: don't just re-enable IO for random packages without printing the context for them first
-                    !liveprinting && !fancyprint && @lock print_lock begin
-                        print(io, str)
+                    if thistaskwaiting
+                        if occursin("Waiting for background task / IO / timer", str)
+                            thistaskwaiting = true
+                            !liveprinting && !fancyprint && @lock print_lock begin
+                                println(io, full_name(ext_to_parent, pkg), color_string(str, Base.warn_color()))
+                            end
+                            push!(taskwaiting, pkg_config)
+                        end
+                    else
+                        # XXX: don't just re-enable IO for random packages without printing the context for them first
+                        !liveprinting && !fancyprint && @lock print_lock begin
+                            print(io, str)
+                        end
                     end
+                catch err
+                    err isa InterruptException && rethrow()
+                    # keep draining so the worker cannot block on a full pipe,
+                    # and let the final report show the captured output instead
+                    relay = false
+                    @lock print_lock (pkg_liveprinted[] == pkg && (pkg_liveprinted[] = nothing))
                 end
             end
         catch err
             err isa InterruptException || rethrow()
+        finally
+            # closing the reader unblocks the worker's writes if draining stops early
+            close(pipe.out)
         end
     end
 
@@ -1330,8 +1343,6 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                 end
                             end
                         catch err
-                            close(std_pipe.in) # close pipe to end the std output monitor
-                            wait(t_monitor)
                             if err isa ErrorException || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
                                 failed_deps[pkg_config] = sprint(showerror, err)
                                 !fancyprint && @lock print_lock begin
@@ -1341,9 +1352,12 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                 rethrow()
                             end
                         finally
-                            isopen(std_pipe.in) && close(std_pipe.in) # close pipe to end the std output monitor
-                            wait(t_monitor)
-                            Base.release(parallel_limiter)
+                            try
+                                isopen(std_pipe.in) && close(std_pipe.in) # close pipe to end the std output monitor
+                                wait(t_monitor)
+                            finally
+                                Base.release(parallel_limiter)
+                            end
                         end
                     else
                         if !is_stale
