@@ -617,4 +617,21 @@ end
     @test_throws OverflowError StepRange(dmin, Day(1), dmax)
 end
 
+# Issue #64956
+@testset "findfirst of a value in a range" begin
+    for r in (Date(2026, 1, 1):Day(1):Date(2026, 1, 31),
+              Date(2026, 1, 31):Day(-2):Date(2026, 1, 1),
+              DateTime(2026, 1, 1):Hour(1):DateTime(2026, 1, 2),
+              Time(1):Minute(30):Time(5),
+              Day(1):Day(2):Day(9))
+        v = collect(r)
+        for x in (v..., first(r) - step(r), last(r) + step(r))
+            @test findfirst(==(x), r) === findfirst(==(x), v)
+            @test findfirst(isequal(x), r) === findfirst(isequal(x), v)
+        end
+    end
+    @test findfirst(==(Date(2026, 1, 2)), Date(2026, 1, 1):Day(2):Date(2026, 1, 31)) === nothing
+    @test findfirst(==(DateTime(2026, 1, 1, 0, 30)), DateTime(2026, 1, 1):Hour(1):DateTime(2026, 1, 2)) === nothing
+end
+
 end  # RangesTest module
