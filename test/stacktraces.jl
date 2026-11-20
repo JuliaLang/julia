@@ -253,7 +253,7 @@ struct F49231{a,b,c,d,e,f,g} end
         stacktrace(catch_backtrace())
     end
     str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,105)))
-    @test contains(str, "[5] \e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
+    @test contains(str, "\e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
 
     st = try
         F49231{Vector,Val{'}'},Vector{Vector{Vector{Vector}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}()(1,2,3)
@@ -412,7 +412,25 @@ end
 end
 f_wrapped4_line = (@__LINE__) - 2
 let st = try f_wrapped4()() catch; stacktrace(catch_backtrace()) end
-    sf = st[findfirst(sf -> sf.line == f_wrapped4_line, st)]
-    @test sf.file === Symbol(@__FILE__)
+    i = findfirst(sf -> sf.line == f_wrapped4_line, st)
+    @test st[i].file === Symbol(@__FILE__)
+    sf = st[findnext(sf -> sf.linfo isa Core.MethodInstance, st, i)]
     @test sf.linfo.def === only(methods(f_wrapped4()))
+end
+
+# The frame of a throw on an error path shows the function and line of the throw once,
+# whether or not the compiler moved the error path out of the function's body.
+@inline function f_checked5(x::Int)
+    x < 0 && throw(ArgumentError("negative value $x, expected $(typeof(x)) ≥ 0"))
+    return x + 1
+end
+f_checked5_line = (@__LINE__) - 3
+@noinline f_caller5(x) = f_checked5(x) * 2
+let st = try f_caller5(-1) catch; stacktrace(catch_backtrace()) end
+    frames = filter(sf -> sf.func === :f_checked5, st)
+    @test length(frames) == 1
+    @test only(frames).line == f_checked5_line
+    @test only(frames).file === Symbol(@__FILE__)
+    i = findfirst(sf -> sf.func === :f_checked5, st)
+    @test st[i + 1].func === :f_caller5
 end

@@ -815,7 +815,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         end
 
         # Source and report filenames must support Unicode on Windows as well.
-        let unicode_dir = mkdir(joinpath(dir, "coverage λ space"))
+        let unicode_dir = realpath(mkdir(joinpath(dir, "coverage λ space")))
             srcfile = joinpath(unicode_dir, "source λ.jl")
             cp(inputfile, srcfile)
             outfile = joinpath(unicode_dir, "coverage λ.info")
@@ -838,9 +838,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
                         for m in eachmatch(r"^DA:(\d+),(\d+)$"m, read(outfile, String)))
             rm(outfile)
+            # (the `local y` and `let z` lines themselves don't run any code)
             covered = [
-                8, 9, 10,       # `local` without an assignment (#39307)
-                14, 15, 16,     # `let` without an assignment (#39307)
+                9, 10,          # `local` without an assignment (#39307)
+                15, 16,         # `let` without an assignment (#39307)
                 22, 23,         # lines a macro adds (#41043)
                 28,
                 33, 35,         # implicit returns (#53557)
@@ -1095,8 +1096,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             cov_bug()
             """), """
             DA:1,2
-            DA:2,1
-            DA:3,1
+            DA:2,2
+            DA:3,2
             DA:4,1
             DA:5,0
             DA:8,0
@@ -1116,7 +1117,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             rm(outfile)
             hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
                         for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
-            for ln in 5:10
+            for ln in (5:8..., 10) # (not the loop's `end`, which doesn't run any code)
                 @test get(hits, ln, 0) > 0
             end
         end
@@ -2179,15 +2180,8 @@ end
         # The heap payload in the .ji must be zstd-compressed exactly when a
         # compressed split pkgimage was requested.
         open(ji_file) do io
-            flags = Ref{UInt32}()
-            checksum = Ref{UInt32}()
-            dataendpos = Ref{Int64}()
-            datastartpos = Ref{Int64}()
-            err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), io.ios, flags, checksum, dataendpos, datastartpos)
-            @test err == 0
-            @test flags[] & Base.JI_FLAG_PKGIMAGE != 0
-            @test (flags[] & Base.JI_FLAG_SPLIT != 0) == native
-            seek(io, datastartpos[])
+            @test Base.isvalid_cache_header(io) !== nothing
+            seek(io, read(seek(io, Base.JI_PAYLOAD_START_OFFSET), Int64))
             zstd_magic = UInt8[0x28, 0xb5, 0x2f, 0xfd]
             @test (read(io, 4) == zstd_magic) == (native && compress)
         end

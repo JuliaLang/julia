@@ -55,6 +55,7 @@
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SourceMgr.h> // for llvmcall
 #include <llvm/Transforms/Utils/Cloning.h> // for llvmcall inlining
+#include <llvm/Transforms/Utils/Local.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/IR/Verifier.h> // for llvmcall validation
 #include <llvm/IR/PassTimingInfo.h>
@@ -11199,6 +11200,16 @@ static jl_llvm_functions_t
     if (ctx.topalloca != ctx.pgcstack && ctx.topalloca->use_empty()) {
         ctx.topalloca->eraseFromParent();
         ctx.topalloca = nullptr;
+    }
+
+    // Drop values that were computed eagerly but never used (e.g. the aggregate
+    // form of a `MemoryRef` that was only indexed), so that nothing downstream
+    // has to process them.
+    for (auto &BB : *ctx.f) {
+        for (auto &I : make_early_inc_range(reverse(BB))) {
+            if (I.use_empty() && !isa<CallBase>(I) && !isa<AllocaInst>(I) && isInstructionTriviallyDead(&I))
+                I.eraseFromParent();
+        }
     }
 
     JL_GC_POP();

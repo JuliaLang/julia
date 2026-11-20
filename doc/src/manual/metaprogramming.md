@@ -233,7 +233,9 @@ Interpolating into an unquoted expression is not supported and will cause a comp
 
 ```jldoctest interp1
 julia> $a + b
-ERROR: syntax: "$" expression outside quote
+ERROR: syntax: `$` expression outside string or quote
+@ :0
+└───Expression: ($ a)
 ```
 
 In this example, the tuple `(1,2,3)` is interpolated as an expression into a conditional test:

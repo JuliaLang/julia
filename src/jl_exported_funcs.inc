@@ -387,7 +387,7 @@
     XX(jl_cache_flags) \
     XX(jl_match_cache_flags_current) \
     XX(jl_match_cache_flags) \
-    XX(jl_read_verify_header) \
+    XX(jl_read_verify_pkgimage_header) \
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
     XX(jl_resolve_definition_effects_in_ir) \
