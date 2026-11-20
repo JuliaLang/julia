@@ -1917,6 +1917,20 @@ end
         """; edition) == GlobalRef(Core, :nothing)
     end
 
+    # Generated code that fails to lower
+    err = try
+        jl_eval(test_mod, raw"""
+        begin
+            @generated f_gen_lowering_error() = Expr(:continue)
+            f_gen_lowering_error()
+        end
+        """; edition)
+    catch e
+        e
+    end
+    @test err isa ErrorException
+    @test contains(err.msg, "`continue` outside of a `while` or `for` loop")
+
     @test jl_eval(test_mod, raw"""
     begin
         @generated function f_gen_trivial(x)

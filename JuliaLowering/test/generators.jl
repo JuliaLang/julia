@@ -12,6 +12,11 @@ collect(x for x in 1:5 if isodd(x))
 collect((y,x) for (x,y) in zip(1:3, 2:4) if y != 3)
 """) == [(2,1), (4,3)]
 
+# Typed comprehension with a filter
+@test JuliaLowering.include_string(test_mod, """
+Float64[x for x in 1:5 if isodd(x)]
+""") == [1.0, 3.0, 5.0]
+
 # product iterator
 @test JuliaLowering.include_string(test_mod, """
 collect((x,y) for x in 1:3, y in 1:2)

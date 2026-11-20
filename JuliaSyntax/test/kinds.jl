@@ -56,4 +56,15 @@ end
     @test_throws ErrorException JuliaSyntax.register_kinds!(FooKinds, 42, ["foo_3"])
     # Module ID already taken by FooKinds
     @test_throws ErrorException JuliaSyntax.register_kinds!(BarKinds, 42, ["hii?"])
+
+    @test_throws ArgumentError JuliaSyntax.Kind(typemax(UInt16) + 1)
+    @test_throws ErrorException JuliaSyntax.Kind("no_such_kind")
+
+    # Kind predicates also accept anything with a kind
+    t = parsestmt(SyntaxNode, "x")
+    @test JuliaSyntax.is_identifier(t)
+    @test !JuliaSyntax.is_contextual_keyword(t)
+    @test !JuliaSyntax.is_keyword(t)
+    @test !JuliaSyntax.is_literal(t)
+    @test !JuliaSyntax.is_number(t)
 end

@@ -39,6 +39,11 @@
             Expr(:toplevel, LineNumberNode(2), :a, LineNumberNode(3), :b)
         @test parseall(Expr, "a\nb\n#==#") ==
             Expr(:toplevel, LineNumberNode(1), :a, LineNumberNode(2), :b)
+
+        # The reference parser has the same interface
+        @test fl_parse(Expr, "x+y") == :(x+y)
+        @test fl_parseall(Expr, "a\nb") ==
+            Expr(:toplevel, LineNumberNode(1, :none), :a, LineNumberNode(2, :none), :b)
     end
 
     @testset "IO input" begin
@@ -112,6 +117,7 @@
         @test parseshow("'abc'", ignore_errors=true) == "(char (ErrorOverLongCharacter))"
         @test parseshow("1e1000", ignore_errors=true) == "(ErrorNumericOverflow)"
         @test parseshow("1f1000", ignore_errors=true) == "(ErrorNumericOverflow)"
+        @test_throws ArgumentError parse!(ParseStream("x"); rule=:no_such_rule)
     end
 end
 
