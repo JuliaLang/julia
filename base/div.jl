@@ -144,6 +144,8 @@ function rem(x::AbstractFloat, y::AbstractFloat, rnd::Union{typeof(RoundNearestT
         m, n = abs(r) < floatmax(r)/2 ? abs.((2r, y)) : abs.((r, y/2))
         m < n && return r
         m > n && return mod(x, -y)
+        rnd === RoundNearestTiesAway && signbit(x) != signbit(y) &&
+            abs(rem(x, y)) != abs(y)/2 && return mod(x, -y)
     end
     rnd === RoundNearestTiesUp || signbit(x) == signbit(y) ? mod(x, -y) : r
 end
