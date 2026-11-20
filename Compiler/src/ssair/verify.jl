@@ -184,6 +184,11 @@ function verify_ir(ir::IRCode, print::Bool=true,
         @verify_error "IR flag length is invalid $(length(ir.stmts.flag)) / $(length(ir.stmts))"
         raise_error()
     end
+    names = ir.stmts.name
+    if names !== nothing && length(names) != length(ir.stmts)
+        @verify_error "IR name length is invalid $(length(names)) / $(length(ir.stmts))"
+        raise_error()
+    end
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
     # Verify CFG

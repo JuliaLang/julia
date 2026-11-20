@@ -90,6 +90,8 @@ function copy(c::CodeInfo)
         cnew.slottypes = copy(cnew.slottypes::Vector{Any})
     end
     cnew.ssaflags  = copy(cnew.ssaflags)
+    ssanames = cnew.ssanames
+    ssanames isa Vector{Any} && (cnew.ssanames = copy(ssanames))
     cnew.edges     = cnew.edges === nothing || cnew.edges isa Core.SimpleVector ? cnew.edges : copy(cnew.edges::Vector)
     ssavaluetypes  = cnew.ssavaluetypes
     ssavaluetypes isa Vector{Any} && (cnew.ssavaluetypes = copy(ssavaluetypes))

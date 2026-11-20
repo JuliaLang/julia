@@ -91,7 +91,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 31 # do not make changes without bumping the version #!
+const ser_version = 32 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -1445,6 +1445,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     if !pre_12
         ci.slotflags = deserialize(s)
         ci.slottypes = deserialize(s)
+        if format_version(s) >= 32
+            ci.ssanames = deserialize(s)
+        end
         ci.rettype = deserialize(s)
         ci.parent = deserialize(s)
         if format_version(s) < 29 && ci.parent isa MethodInstance && ci.parent.def isa Method

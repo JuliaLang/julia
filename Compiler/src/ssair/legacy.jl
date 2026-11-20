@@ -42,9 +42,28 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{A
     end
     info = CallInfo[NoCallInfo() for i = 1:nstmts]
     di = DebugInfoStream(nothing, ci.debuginfo, nstmts)
-    stmts = InstructionStream(code, ssavaluetypes, info, di.codelocs, ci.ssaflags)
+    ssanames = ci.ssanames
+    names = ssanames isa Vector{Any} && length(ssanames) == nstmts ? copy(ssanames) : nothing
+    stmts = InstructionStream(code, ssavaluetypes, info, di.codelocs, ci.ssaflags, names)
     meta = Expr[]
     return IRCode(stmts, cfg, di, argtypes, meta, sptypes, world_range(ci))
+end
+
+# `nothing` unless at least one statement has a name
+function ssanames_field(stmts::InstructionStream, nstmts::Int)
+    names = stmts.name
+    names === nothing && return nothing
+    ssanames = nothing
+    for i = 1:min(length(names), nstmts)
+        entry = names[i]
+        entry === nothing && continue
+        stmts.stmt[i] === nothing && continue # deleted
+        if ssanames === nothing
+            ssanames = fill!(Vector{Any}(undef, nstmts), nothing)
+        end
+        ssanames[i] = entry
+    end
+    return ssanames
 end
 
 """
@@ -87,6 +106,7 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode)
         push!(ssavaluetypes, Any)
         push!(ssaflags, IR_FLAG_NULL)
     end
+    ci.ssanames = ssanames_field(stmts, length(code))
     @assert debuginfo.codelocs === stmts.line "line table not from debuginfo"
     ci.debuginfo = DebugInfo(debuginfo, length(code))
     # Translate BB Edges to statement edges

@@ -1014,3 +1014,15 @@ end
     @test s.counter == 0
     @test isempty(s.backref_table)
 end
+
+@testset "CodeInfo with ssanames" begin
+    f(x) = (y = x + 1; y * 2)
+    ci = copy(code_lowered(f, (Int,))[1])
+    @test ci.ssanames === nothing
+    ci.ssanames = Any[i == 1 ? :y : nothing for i in 1:length(ci.code)]
+    io = IOBuffer()
+    serialize(io, ci)
+    ci2 = deserialize(seekstart(io))
+    @test ci2.ssanames == ci.ssanames
+    @test ci2.code == ci.code
+end

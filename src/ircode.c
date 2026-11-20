@@ -563,6 +563,7 @@ static jl_code_info_flags_t code_info_flags(uint8_t propagate_inbounds, uint8_t 
     flags.bits.constprop = constprop;
     flags.bits.nargsmatchesmethod = nargsmatchesmethod;
     flags.bits.has_ssaflags = 0;
+    flags.bits.has_ssanames = 0;
     const uint32_t *ssaflag_data = jl_array_data(ssaflags, uint32_t);
     for (size_t i = 0, l = jl_array_dim0(ssaflags); i < l; i++)
         if (ssaflag_data[i])
@@ -1036,6 +1037,16 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
                                                  code->inlining, code->constprop,
                                                  nargsmatchesmethod,
                                                  code->ssaflags);
+    size_t nstmts = jl_array_dim0(code->code);
+    if (jl_is_array(code->ssanames) && jl_array_nrows((jl_array_t*)code->ssanames) == nstmts &&
+            jl_typetagis(code->ssanames, jl_array_any_type)) {
+        for (size_t i = 0; i < nstmts; i++) {
+            if (jl_array_ptr_ref((jl_array_t*)code->ssanames, i) != jl_nothing) {
+                flags.bits.has_ssanames = 1;
+                break;
+            }
+        }
+    }
     write_uint16(s.s, checked_size(flags.packed, IR_DATASIZE_FLAGS));
     write_uint16(s.s, checked_size(code->purity.bits, IR_DATASIZE_PURITY));
     write_uint8(s.s, checked_size(jl_encode_inlining_cost(code->inlining_cost), IR_DATASIZE_INLINING_COST));
@@ -1067,6 +1078,22 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     const uint32_t *ssaflags_data = jl_array_data(code->ssaflags, uint32_t);
     if (flags.bits.has_ssaflags)
         ios_write(s.s, (const char*)ssaflags_data, l * sizeof(*ssaflags_data));
+    // ssanames: count, then (index, name) pairs
+    if (flags.bits.has_ssanames) {
+        jl_array_t *ssanames = (jl_array_t*)code->ssanames;
+        int32_t nnames = 0;
+        for (i = 0; i < l; i++)
+            if (jl_array_ptr_ref(ssanames, i) != jl_nothing)
+                nnames++;
+        write_int32(s.s, nnames);
+        for (i = 0; i < l; i++) {
+            jl_value_t *name = jl_array_ptr_ref(ssanames, i);
+            if (name != jl_nothing) {
+                write_int32(s.s, (int32_t)i);
+                jl_encode_value(&s, name);
+            }
+        }
+    }
 
     // For opaque closure, also save the slottypes. We technically only need the first slot type,
     // but this is simpler for now. We may want to refactor where this gets stored in the future.
@@ -1162,6 +1189,19 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         ios_readall(s.s, (char*)ssaflags_data, l * sizeof(*ssaflags_data));
     else
         memset(ssaflags_data, 0, l * sizeof(*ssaflags_data));
+    if (flags.bits.has_ssanames) {
+        jl_array_t *ssanames = jl_alloc_vec_any(l);
+        jl_gc_write(code, code->ssanames, jl_value_t, (jl_value_t*)ssanames);
+        for (i = 0; i < l; i++)
+            jl_array_ptr_set(ssanames, i, jl_nothing);
+        int32_t nnames = read_int32(s.s);
+        for (int32_t j = 0; j < nnames; j++) {
+            size_t idx = read_int32(s.s);
+            jl_value_t *name = jl_decode_value(&s);
+            assert(idx < l);
+            jl_array_ptr_set(ssanames, idx, name);
+        }
+    }
 
     if (m->is_for_opaque_closure) {
         jl_gc_write(code, code->slottypes, jl_value_t, jl_decode_value(&s));

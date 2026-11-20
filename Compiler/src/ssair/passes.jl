@@ -1558,6 +1558,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             # but only do this if we didn't set the REFINED flag, to save work for irinterp
             # in revisiting only the renamings that came through *this* idx.
             compact.ssa_rename[old_idx] = lifted_val === nothing ? nothing : lifted_val.val::AnySSAValue
+            lifted_val === nothing || transfer_ssaname!(compact, compact[SSAValue(idx)], lifted_val.val)
             should_delete_node = true
         else
             compact[idx] = lifted_val.val
@@ -2192,6 +2193,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 # nullify safe `typeassert` calls
                 ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact), true)
                 if isexact && ⊑(𝕃ₒ, argextype(stmt.args[2], compact), ty)
+                    transfer_ssaname!(compact, compact.result[compact.result_idx-1], stmt.args[2])
                     delete_inst_here!(compact)
                     continue
                 end

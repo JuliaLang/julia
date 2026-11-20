@@ -1775,7 +1775,8 @@ function convert_to_ircode!(ci::CodeInfo, sv::OptimizationState)
     end
     strip_trailing_junk!(code, ssavaluetypes, ssaflags, di, sv.cfg, stmtinfo)
     types = Any[]
-    stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
+    names = new_ssanames(length(code), OptimizationParams(sv.inlining.interp).record_ssa_names)
+    stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags, names)
     # NOTE this `argtypes` contains types of slots yet: it will be modified to contain the
     # types of call arguments only once `slot2reg` converts this `IRCode` to the SSA form
     # and eliminates slots (see below)
