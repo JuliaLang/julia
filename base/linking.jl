@@ -206,6 +206,7 @@ function link_image_cmd(path, out; is_sysimage::Bool = false, debug_runtime::Boo
     end
     crtbegin = String[]
     crtend = String[]
+    extra = String[]
     @static if Sys.iswindows()
         # From `x86_64-w64-mingw32-gcc -shared -Wl,--verbose`.
         append!(LIBS,     String["-lopenlibm"])
@@ -232,10 +233,14 @@ function link_image_cmd(path, out; is_sysimage::Bool = false, debug_runtime::Boo
         append!(LIBS,     String["--as-needed", ld_linux, "--no-as-needed"])
         append!(crtbegin, String[_find_static("crti.o"), _find_static("crtbeginS.o")])
         append!(crtend,   String[_find_static("crtendS.o"), _find_static("crtn.o")])
+        # Link pkgimages serially: they are small enough that lld's thread pool costs
+        # about as much as it saves, and glibc before 2.41 can lose a wakeup in that
+        # pool's condition variable, hanging the link (glibc bug 25847).
+        is_sysimage || push!(extra, "--threads=1")
     end
 
     V = verbose_linking() ? "--verbose" : ""
-    `$(ld(; strict_definitions = is_sysimage)) $V $SHARED -o $out $crtbegin $(whole_archive(path)) $PRIVATE_LIBDIR $LIBDIR $SHLIBDIR $LIBS $crtend`
+    `$(ld(; strict_definitions = is_sysimage)) $V $extra $SHARED -o $out $crtbegin $(whole_archive(path)) $PRIVATE_LIBDIR $LIBDIR $SHLIBDIR $LIBS $crtend`
 end
 
 function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout;
