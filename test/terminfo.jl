@@ -1038,3 +1038,26 @@ end
 end
 
 end
+
+mutable struct GridTerminal <: Base.Terminals.TextTerminal
+    x::Int
+    y::Int
+end
+Base.Terminals.cmove(t::GridTerminal, x, y) = (t.x = x; t.y = y; nothing)
+Base.Terminals.getX(t::GridTerminal) = t.x
+Base.Terminals.getY(t::GridTerminal) = t.y
+Base.displaysize(::GridTerminal) = (24, 80)
+
+@testset "TextTerminal relative move fallbacks" begin
+    T = Base.Terminals
+    t = GridTerminal(5, 5)
+    T.cmove_up(t, 1);        @test T.pos(t) == (5, 4)
+    T.cmove_down(t, 2);      @test T.pos(t) == (5, 6)
+    T.cmove_down(t, 100);    @test T.pos(t) == (5, 24)
+    T.cmove_right(t, 1);     @test T.pos(t) == (6, 24)
+    T.cmove_right(t, 100);   @test T.pos(t) == (80, 24)
+    T.cmove_left(t, 100);    @test T.pos(t) == (1, 24)
+    T.cmove_line_up(t, 100); @test T.pos(t) == (1, 1)
+    T.cmove_col(t, 7);       @test T.pos(t) == (7, 1)
+    T.cmove_line_down(t, 3); @test T.pos(t) == (1, 4)
+end
