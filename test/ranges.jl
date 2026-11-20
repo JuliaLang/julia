@@ -1889,6 +1889,27 @@ end
     @test issorted(collect(LinRange(Float16(3.514), Float16(0.02235), 16190)); rev=true)
 end
 
+@testset "LinRange elements are `in` the range" begin
+    r = LinRange(Float16(0), Float16(1), 1000)
+    @test all(in(r), r)
+    @test !any(in(r), setdiff([prevfloat.(r); nextfloat.(r)], r))
+    r = LinRange(0f0, 1f0, 10^7)
+    @test r[5096204] in r
+    @test r[5116150] in r
+end
+
+@testset "searchsorted on LinRange agrees with collect" begin
+    for (r, rev) in [(LinRange(Float16(0), Float16(1), 1000), false),
+                     (LinRange(Float16(-1.0), Float16(13.19), 1947), false),
+                     (LinRange(Float16(0), Float16(1), 10000), false),
+                     (LinRange(Float16(1), Float16(0), 10000), true)]
+        v = collect(r)
+        xs = [v; prevfloat.(v); nextfloat.(v)]
+        @test all(x -> searchsortedfirst(r, x; rev) == searchsortedfirst(v, x; rev), xs)
+        @test all(x -> searchsortedlast(r, x; rev) == searchsortedlast(v, x; rev), xs)
+    end
+end
+
 @testset "Issue #26532" begin
     x = range(3, stop=3, length=5)
     @test step(x) == 0.0

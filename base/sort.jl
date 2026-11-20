@@ -5,7 +5,8 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype, tail,
-    sub_with_overflow, add_with_overflow, BitIntegerType, top_set_bit, uabs, maybe_unsigned
+    sub_with_overflow, add_with_overflow, BitIntegerType, top_set_bit, uabs, maybe_unsigned,
+    _linrange_index
 
 import Base:
     sort,
@@ -268,6 +269,38 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderi
         n = round(Integer, (x - f) / h + 1)
         lt(o, a[n], x) ? n + 1 : n
     end
+end
+
+function searchsortedlast(a::LinRange{<:AbstractFloat}, x::Real, o::FastRangeOrderings)::keytype(a)
+    require_one_based_indexing(a)
+    f, l = first(a), last(a)
+    lt(o, x, f) && return 0
+    (f == l || !lt(o, x, l)) && return length(a)
+    n = _linrange_index(a, x)
+    if 1 <= n <= length(a)
+        if lt(o, x, a[n])
+            n > 1 && !lt(o, x, a[n-1]) && return n - 1
+        elseif n == length(a) || lt(o, x, a[n+1])
+            return n
+        end
+    end
+    searchsortedlast(a, x, 1, length(a), o)
+end
+
+function searchsortedfirst(a::LinRange{<:AbstractFloat}, x::Real, o::FastRangeOrderings)::keytype(a)
+    require_one_based_indexing(a)
+    f, l = first(a), last(a)
+    lt(o, f, x) || return 1
+    (f == l || lt(o, l, x)) && return length(a) + 1
+    n = _linrange_index(a, x)
+    if 1 <= n <= length(a)
+        if lt(o, a[n], x)
+            n < length(a) && !lt(o, a[n+1], x) && return n + 1
+        elseif n == 1 || lt(o, a[n-1], x)
+            return n
+        end
+    end
+    searchsortedfirst(a, x, 1, length(a), o)
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrderings)::keytype(a)
