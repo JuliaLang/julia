@@ -237,8 +237,8 @@ end
     end
     @testset "exponent(::Rational)" begin
         # exact near powers of two, where converting to a float rounds across the boundary
-        @test exponent((2^60 - 1) // 2^60) == -1
-        @test exponent(2^60 // (2^60 - 1)) == 0
+        @test exponent((Int64(2)^60 - 1) // Int64(2)^60) == -1
+        @test exponent(Int64(2)^60 // (Int64(2)^60 - 1)) == 0
         @test exponent(-1//4) == exponent(1//4) == -2
         @test exponent(-3//4) == -1
         @test exponent(typemax(Int) // 1) == 62
