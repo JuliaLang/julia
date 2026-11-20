@@ -692,6 +692,10 @@ void CloneCtx::rewrite_alias(GlobalAlias *alias, Function *F)
     for (auto &arg : trampoline->args())
         Args.push_back(&arg);
     auto call = irbuilder.CreateCall(F->getFunctionType(), ptr, makeArrayRef(Args));
+    // the call must use the same calling convention as F to ensure ABI compatibility
+    call->setCallingConv(F->getCallingConv());
+    // likewise its return and argument attributes must match F's
+    call->setAttributes(F->getAttributes().removeFnAttributes(F->getContext()));
     if (F->isVarArg()) {
         assert(!TT.isARM() && !TT.isPPC() && "musttail not supported on ARM/PPC!");
         call->setTailCallKind(CallInst::TCK_MustTail);
