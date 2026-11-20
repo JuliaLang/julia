@@ -7,7 +7,6 @@ The CRC-32c checksum of data, strings and files, computed by [`CRC32c.crc32c`](@
 """
 module CRC32c
 
-import Base.FastContiguousSubArray
 import Base: DenseUInt8OrInt8
 
 export crc32c
