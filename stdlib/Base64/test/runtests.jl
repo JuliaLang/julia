@@ -1,12 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Random
+using Random, Test
 using Base64:
     Base64,
-    Base64EncodePipe,
-    base64encode,
     Base64DecodePipe,
+    Base64EncodePipe,
     base64decode,
+    base64encode,
     stringmime
 
 @test isempty(Test.detect_closure_boxes(Base64))
@@ -75,20 +75,24 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
     @test String(base64decode(base64encode(inputText))) == inputText
 
     # Decode with max line chars = 76 and padding
-    ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76))
-    @test read(ipipe, String) == inputText
+    let ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76))
+        @test read(ipipe, String) == inputText
+    end
 
     # Decode with max line chars = 76 and no padding
-    #ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76[1:end-1]))
-    #@test read(ipipe, String) == inputText
+    #let ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76[1:end-1]))
+    #    @test read(ipipe, String) == inputText
+    #end
 
     # Decode with two padding characters ("==")
-    ipipe = Base64DecodePipe(IOBuffer(string(encodedMaxLine76[1:end - 2], "==")))
-    @test read(ipipe, String) == inputText[1:end - 1]
+    let ipipe = Base64DecodePipe(IOBuffer(string(encodedMaxLine76[1:end - 2], "==")))
+        @test read(ipipe, String) == inputText[1:end - 1]
+    end
 
     # Test incorrect format
-    ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76[1:end - 3]))
-    @test_throws ArgumentError read(ipipe, String)
+    let ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76[1:end - 3]))
+        @test_throws ArgumentError read(ipipe, String)
+    end
 
     # issue #21314
     @test base64decode(chomp("test")) == base64decode("test")
@@ -155,7 +159,7 @@ function splace(in::String, p = 0.3)
     len == 0 && return in
     rc::String = ""
     i = 1
-    for (x, v) in enumerate(sort(randsubseq(collect(1:len), p)))
+    for v in sort(randsubseq(collect(1:len), p))
         rc = rc * in[i:v] * rand(spaces)^rand(Int.(1:10))
         i = v + 1
     end
