@@ -21,61 +21,42 @@ Non-zero microseconds or nanoseconds in the `Time` type will result in an `Inexa
 (+)(dt::Date, t::Time) = DateTime(dt ,t)
 (+)(t::Time, dt::Date) = DateTime(dt, t)
 
-# TimeType-Year arithmetic
-function (+)(dt::DateTime, y::Year)
-    oy, m, d = yearmonthday(dt); ny = oy + value(y); ld = daysinmonth(ny, m)
-    return DateTime(ny, m, d <= ld ? d : ld, hour(dt), minute(dt), second(dt), millisecond(dt))
-end
-function (+)(dt::Date,y::Year)
-    oy, m, d = yearmonthday(dt); ny = oy + value(y); ld = daysinmonth(ny, m)
-    return Date(ny, m, d <= ld ? d : ld)
-end
-function (-)(dt::DateTime,y::Year)
-    oy, m, d = yearmonthday(dt); ny = oy - value(y); ld = daysinmonth(ny, m)
-    return DateTime(ny, m, d <= ld ? d : ld, hour(dt), minute(dt), second(dt), millisecond(dt))
-end
-function (-)(dt::Date,y::Year)
-    oy, m, d = yearmonthday(dt); ny = oy - value(y); ld = daysinmonth(ny, m)
-    return Date(ny, m, d <= ld ? d : ld)
-end
-
 # TimeType-Month arithmetic
-# monthwrap adds two months with wraparound behavior (i.e. 12 + 1 == 1)
-monthwrap(m1, m2) = (v = mod1(m1 + m2, 12); return v < 0 ? 12 + v : v)
-# yearwrap takes a starting year/month and a month to add and returns
-# the resulting year with wraparound behavior (i.e. 2000-12 + 1 == 2001)
-yearwrap(y, m1, m2) = y + fld(m1 + m2 - 1, 12)
-
-function (+)(dt::DateTime, z::Month)
-    y,m,d = yearmonthday(dt)
-    ny = yearwrap(y, m, value(z))
-    mm = monthwrap(m, value(z)); ld = daysinmonth(ny, mm)
-    return DateTime(ny, mm, d <= ld ? d : ld, hour(dt), minute(dt), second(dt), millisecond(dt))
+# The day count of `dt` moved by `n * unit` months, with the day clamped to the month. It wraps
+# around Int64 like fixed periods, so it does not use the constructors, which reject values
+# beyond the ends. `totaldays` divides the year, so a month count beyond Int64 is widened.
+@inline function addmonths(dt::TimeType, n::Int64, unit::Int64)
+    y, m, d = yearmonthday(dt)
+    if unit % 12 == 0
+        # Whole years keep the month, so they need no division. `totaldays` subtracts one from
+        # the year in January and February.
+        years, huge = Base.Checked.mul_with_overflow(n, unit ÷ 12)
+        ny, wraps = Base.Checked.add_with_overflow(y, years)
+        huge | wraps | (ny == typemin(ny)) || return clampeddays(ny, m, d)
+    else
+        months, huge = Base.Checked.mul_with_overflow(n, unit)
+        k, wraps = Base.Checked.add_with_overflow(m - 1, months)
+        if !(huge | wraps)
+            q, r = fldmod(k, 12)
+            # Inlining helps here, but adds branch misses to the year path
+            return @inline clampeddays(y + q, r + 1, d)
+        end
+    end
+    return wideaddmonths(y, d, m - 1 + widemul(n, unit))
 end
-
-function (+)(dt::Date, z::Month)
-    y,m,d = yearmonthday(dt)
-    ny = yearwrap(y, m, value(z))
-    mm = monthwrap(m, value(z)); ld = daysinmonth(ny, mm)
-    return Date(ny, mm, d <= ld ? d : ld)
+@noinline function wideaddmonths(y, d, k)
+    q, r = fldmod(k, 12)
+    return clampeddays(y + q, Int64(r) + 1, d)
 end
-function (-)(dt::DateTime, z::Month)
-    y,m,d = yearmonthday(dt)
-    ny = yearwrap(y, m, -value(z))
-    mm = monthwrap(m, -value(z)); ld = daysinmonth(ny, mm)
-    return DateTime(ny, mm, d <= ld ? d : ld, hour(dt), minute(dt), second(dt), millisecond(dt))
+# The day count of day `d` of year `y` and month `m`, clamped to the length of the month
+clampeddays(y, m, d) = totaldays(y, m, min(d, daysinmonth(y, m))) % Int64
+for (P, unit) in ((Year, 12), (Quarter, 3), (Month, 1)), (op, sign) in ((:+, 1), (:-, -1))
+    @eval begin
+        ($op)(dt::Date, p::$P) = Date(UTD(addmonths(dt, value(p), $(Int64(sign * unit)))))
+        ($op)(dt::DateTime, p::$P) =
+            DateTime(UTM(MS_PER_DAY * addmonths(dt, value(p), $(Int64(sign * unit))) + mod(value(dt), MS_PER_DAY)))
+    end
 end
-function (-)(dt::Date, z::Month)
-    y,m,d = yearmonthday(dt)
-    ny = yearwrap(y, m, -value(z))
-    mm = monthwrap(m, -value(z)); ld = daysinmonth(ny, mm)
-    return Date(ny, mm, d <= ld ? d : ld)
-end
-
-(+)(x::Date, y::Quarter) = x + Month(y)
-(-)(x::Date, y::Quarter) = x - Month(y)
-(+)(x::DateTime, y::Quarter) = x + Month(y)
-(-)(x::DateTime, y::Quarter) = x - Month(y)
 (+)(x::Date, y::Week) = return Date(UTD(value(x) + 7 * value(y)))
 (-)(x::Date, y::Week) = return Date(UTD(value(x) - 7 * value(y)))
 (+)(x::Date, y::Day)  = return Date(UTD(value(x) + value(y)))

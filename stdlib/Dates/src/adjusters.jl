@@ -300,16 +300,16 @@ function DateTime(func::Function, y, m=1; step::Period=Day(1), limit::Int=10000)
     return adjust(DateFunction(func, DateTime(y, m)), DateTime(y, m), step, limit)
 end
 function DateTime(func::Function, y, m, d; step::Period=Hour(1), limit::Int=10000)
-    return adjust(DateFunction(func, DateTime(y)), DateTime(y, m, d), step, limit)
+    return adjust(func, DateTime(y, m, d); step, limit)
 end
 function DateTime(func::Function, y, m, d, h; step::Period=Minute(1), limit::Int=10000)
-    return adjust(DateFunction(func, DateTime(y)), DateTime(y, m, d, h), step, limit)
+    return adjust(func, DateTime(y, m, d, h); step, limit)
 end
 function DateTime(func::Function, y, m, d, h, mi; step::Period=Second(1), limit::Int=10000)
-    return adjust(DateFunction(func, DateTime(y)), DateTime(y, m, d, h, mi), step, limit)
+    return adjust(func, DateTime(y, m, d, h, mi); step, limit)
 end
 function DateTime(func::Function, y, m, d, h, mi, s; step::Period=Millisecond(1), limit::Int=10000)
-    return adjust(DateFunction(func, DateTime(y)), DateTime(y, m, d, h, mi, s), step, limit)
+    return adjust(func, DateTime(y, m, d, h, mi, s); step, limit)
 end
 
 """

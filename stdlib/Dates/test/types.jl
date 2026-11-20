@@ -216,6 +216,49 @@ c = Dates.Time(0)
     @test typemax(Dates.DateTime) - typemin(Dates.DateTime) == Dates.Millisecond(9223372017043199000)
     @test string(typemax(Dates.Date)) == "252522163911149-12-31"
     @test string(typemin(Dates.Date)) == "-252522163911150-01-01"
+    # Constructors reject values beyond the ends of the stored counts instead of wrapping
+    dmin, dmax = Dates.Date(Dates.UTD(typemin(Int64))), Dates.Date(Dates.UTD(typemax(Int64)))
+    tmin, tmax = Dates.DateTime(Dates.UTM(typemin(Int64))), Dates.DateTime(Dates.UTM(typemax(Int64)))
+    @test Dates.Date(25252734927766555, 7, 27) == dmax
+    @test Dates.Date(-25252734927766554, 6, 6) == dmin
+    @test Dates.DateTime(292277025, 8, 17, 7, 12, 55, 807) == tmax
+    @test Dates.DateTime(-292277024, 5, 15, 16, 47, 4, 192) == tmin
+    @test_throws ArgumentError Dates.Date(25252734927766555, 7, 28)
+    @test_throws ArgumentError Dates.Date(-25252734927766554, 6, 5)
+    @test_throws ArgumentError Dates.Date(25252734927766555, 12, 31)
+    @test_throws ArgumentError Dates.Date(typemax(Int64), 1, 1)
+    @test_throws ArgumentError Dates.Date(typemin(Int64), 3, 1)
+    @test_throws ArgumentError Dates.DateTime(typemin(Int64), 3, 1)
+    # The day count of this year wraps around Int64 to a day in year 1
+    @test_throws ArgumentError Dates.DateTime(50505469855533110, 3, 1)
+    @test_throws ArgumentError Dates.DateTime(292277025, 8, 17, 7, 12, 55, 808)
+    @test_throws ArgumentError Dates.DateTime(-292277024, 5, 15, 16, 47, 4, 191)
+    @test_throws ArgumentError Dates.DateTime(292277025, 12, 31)
+    @test_throws ArgumentError Dates.DateTime(Dates.Date(292277025, 12, 31), Dates.Time(0))
+    @test Dates.DateTime(292277025, 8, 17, 7, 12, 55) == tmax - Dates.Millisecond(807)
+    # Calendar arithmetic wraps at the ends like fixed periods, unlike the constructors
+    @test dmax + Dates.Month(1) == dmax + Dates.Day(31)
+    @test dmax + Dates.Year(1) == dmax + Dates.Day(366)  # across Feb 29
+    @test tmin - Dates.Month(1) == tmin - Dates.Day(30)
+    @test tmax + Dates.Year(1) == tmax + Dates.Day(365)
+    # Huge calendar steps move the year exactly and wrap only the stored count
+    let
+        function shifted(d, months)
+            q, r = fldmod(Dates.month(d) - 1 + months, 12)
+            y, m = Dates.year(d) + q, Int64(r) + 1
+            return Dates.Date(Dates.UTD(Dates.totaldays(y, m, min(Dates.day(d), Dates.daysinmonth(y, m))) % Int64))
+        end
+        d, t = Dates.Date(2025, 1, 31), Dates.DateTime(2025, 1, 31, 12)
+        for (p, months) in ((Dates.Month(typemax(Int64)), big(typemax(Int64))), (Dates.Month(typemin(Int64)), big(typemin(Int64))),
+                            (Dates.Quarter(Int64(2)^62), 3 * big(2)^62), (Dates.Quarter(typemin(Int64)), 3 * big(typemin(Int64))),
+                            (Dates.Year(typemax(Int64)), 12 * big(typemax(Int64))), (Dates.Year(typemin(Int64)), 12 * big(typemin(Int64))))
+            @test d + p == shifted(d, months) && d - p == shifted(d, -months)
+            @test t + p == Dates.DateTime(Dates.UTM(86400000 * Dates.value(shifted(d, months)) + 43200000))
+            @test t - p == Dates.DateTime(Dates.UTM(86400000 * Dates.value(shifted(d, -months)) + 43200000))
+        end
+        # The year reaches typemin(Int64), which `totaldays` decrements in January
+        @test Dates.Date(-5, 1, 15) + Dates.Year(typemin(Int64) + 5) == shifted(Dates.Date(-5, 1, 15), 12 * big(typemin(Int64) + 5))
+    end
     @test string(typemax(Dates.Time)) == "23:59:59.999999999"
     @test string(typemin(Dates.Time)) == "00:00:00"
     @test isfinite(Dates.Date)

@@ -383,6 +383,10 @@ function adjusthour(h::Int64, ampm::AMPM)
 end
 
 ### CONSTRUCTORS ###
+# Rata Die milliseconds of the time h:mi:s.ms on Rata Die day `days`
+rata_ms(days, h, mi, s, ms) =
+    ms + MS_PER_SECOND * (s + SECONDS_PER_MINUTE * mi + SECONDS_PER_HOUR * h + SECONDS_PER_DAY * days)
+
 # Core constructors
 """
     DateTime(y, [m, d, h, mi, s, ms])::DateTime
@@ -394,7 +398,7 @@ function DateTime(y::Int64, m::Int64=1, d::Int64=1,
     err = validargs(DateTime, y, m, d, h, mi, s, ms, ampm)
     err === nothing || throw(err)
     h = adjusthour(h, ampm)
-    rata = ms + 1000 * (s + 60mi + 3600h + 86400 * totaldays(y, m, d))
+    rata = rata_ms(totaldays(y, m, d), h, mi, s, ms)
     return DateTime(UTM(rata))
 end
 
@@ -411,6 +415,11 @@ function validargs(::Type{DateTime}, y::Int64, m::Int64, d::Int64,
     -1 < mi < 60 || return ArgumentError("Minute: $mi out of range (0:59)")
     -1 < s < 60 || return ArgumentError("Second: $s out of range (0:59)")
     -1 < ms < 1000 || return ArgumentError("Millisecond: $ms out of range (0:999)")
+    # Only years near the ends of DateTime need the exact count of milliseconds
+    maxyear = typemax(Int64) ÷ (DAYS_PER_LEAP_YEAR * MS_PER_DAY)
+    -maxyear < y < maxyear ||
+        typemin(Int64) <= rata_ms(totaldays(Int128(y), m, d), adjusthour(h, ampm), mi, s, ms) <= typemax(Int64) ||
+        return ArgumentError("DateTime: year $y, month $m, day $d lies outside the range of DateTime")
     return nothing
 end
 
@@ -430,6 +439,10 @@ end
 function validargs(::Type{Date}, y::Int64, m::Int64, d::Int64)
     0 < m < 13 || return ArgumentError("Month: $m out of range (1:12)")
     0 < d < daysinmonth(y, m) + 1 || return ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))")
+    # Only years near the ends of Date need the exact count of days
+    maxyear = typemax(Int64) ÷ DAYS_PER_LEAP_YEAR
+    -maxyear < y < maxyear || typemin(Int64) <= totaldays(Int128(y), m, d) <= typemax(Int64) ||
+        return ArgumentError("Date: year $y, month $m, day $d lies outside the range of Date")
     return nothing
 end
 
@@ -690,8 +703,11 @@ julia> Timestamp(Date(2018, 1, 1), Time(8, 15, 42, 0, 0, 5))
 ```
 """
 function Timestamp{P}(d::Date, t::Time=Time(0)) where {P}
-    ticks = (Int128(value(d)) - UNIXEPOCHDAYS) * timestamp_ticks_per_day(P) + timestamp_ticks(P, value(t))
-    value(typemin(P)) <= ticks <= value(typemax(P)) || throw(ArgumentError("Date out of range for Timestamp{$P}"))
+    days, tod, perday = Int128(value(d)) - UNIXEPOCHDAYS, timestamp_ticks(P, value(t)), timestamp_ticks_per_day(P)
+    # Compare (day, time of day) pairs, as the ticks of a far day can overflow before the check
+    fldmod(value(typemin(P)), perday) <= (days, tod) <= fldmod(value(typemax(P)), perday) ||
+        throw(ArgumentError("Date out of range for Timestamp{$P}"))
+    ticks = convert(promote_type(Int128, timestamp_count_type(P)), days) * perday + tod
     return Timestamp{P}(UTInstant(P(ticks)))
 end
 

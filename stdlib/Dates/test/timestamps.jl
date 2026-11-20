@@ -838,6 +838,17 @@ Dates.tons(x::TestBigNanosecond) = Dates.value(x)
     @test floor(t, Day) === ceil(t, Day) === round(t, Day) === round(t, Month) === t
 end
 
+@testset "Timestamps from dates whose ticks overflow Int128" begin
+    P = TestNanosecond{1 // Int128(10)^9}
+    T = Timestamp{P}
+    for d in (typemin(Date), typemax(Date))
+        @test_throws ArgumentError T(d)
+    end
+    d = Date(year(typemax(T)))
+    @test T(d) == d
+    @test Timestamp{TestBigNanosecond}(typemax(Date)) == typemax(Date)
+end
+
 # Seconds stored in narrow and in unbounded integers. Narrow counts get a 32-bit scale, as on 32-bit.
 struct TestCountSecond{T <: Integer} <: Dates.TimePeriod
     value::T

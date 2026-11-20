@@ -229,6 +229,11 @@ end
     @test Dates.DateTime(x->Dates.minute(x)==30, 2014, 5, 21, 12) == Dates.DateTime(2014, 5, 21, 12, 30)
     @test Dates.DateTime(x->Dates.second(x)==30, 2014, 5, 21, 12, 30) == Dates.DateTime(2014, 5, 21, 12, 30, 30)
     @test Dates.DateTime(x->Dates.millisecond(x)==500, 2014, 5, 21, 12, 30, 30) == Dates.DateTime(2014, 5, 21, 12, 30, 30, 500)
+    # The predicate is validated at the start, also where January 1 of its year lies outside DateTime
+    y = Dates.year(Dates.DateTime(Dates.UTM(typemin(Int64))))
+    for args in ((y, 12, 1), (y, 12, 1, 0), (y, 12, 1, 0, 0), (y, 12, 1, 0, 0, 0))
+        @test Dates.DateTime(_ -> true, args...) == Dates.DateTime(args...)
+    end
 end
 @testset "tonext, toprev, tofirst, tolast" begin
     dt = Dates.Date(2014, 5, 21)

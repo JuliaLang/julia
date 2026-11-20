@@ -79,6 +79,9 @@ Standard library changes
 * `floor`, `ceil`, and `round` of a `Date`, `DateTime`, or `Timestamp` now throw an `OverflowError`
   when the result lies outside the type. Before, `Date` and `DateTime` wrapped around, and
   `Timestamp` threw an `InexactError`, which it still throws for a result that is not a whole tick.
+* The `Date` and `DateTime` constructors now throw an `ArgumentError` for a date outside the type
+  instead of wrapping around. Adding a `Month`, `Quarter`, or `Year` wraps around at the ends of the
+  type, as adding a fixed period such as `Day` does.
 
 #### InteractiveUtils
 
