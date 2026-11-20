@@ -8584,6 +8584,10 @@ end
     jetls618(1,2,3), jetls618(1,2,3,4)
 end == Tuple{Int,Int}
 
+# issue #64985: preserve constant varargs when only a fixed argument is nospecialized
+Base.@nospecializeinfer f64985(@nospecialize(x), ys...) = Any[y for y in ys]
+@test (() -> f64985(0, 1, 2, 3, 4))() == Any[1, 2, 3, 4]
+
 # issue #60252
 f60252(f, nt::NamedTuple) = NamedTuple{keys(nt)}(f(v) for v in values(nt))
 @inferred f60252(identity, (a=1, b=2))
