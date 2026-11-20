@@ -5372,11 +5372,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     e->vars = vb->prev;
 
     if (res != jl_bottom_type) {
-        if (vb->ub == jl_bottom_type && cov_count(vb)) {
-            // T=Bottom in covariant position
-            res = jl_bottom_type;
-        }
-        else if (jl_has_typevar(vb->lb, u->var)) {
+        if (jl_has_typevar(vb->lb, u->var)) {
             // fail on circular constraints
             res = jl_bottom_type;
         }
@@ -5384,7 +5380,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
             JL_GC_PUSH1(&res);
             vb->ub = omit_bad_union(vb->ub, u->var);
             JL_GC_POP();
-            if (vb->ub == jl_bottom_type && vb->ub != vb->lb)
+            if (vb->ub == jl_bottom_type && (cov_count(vb) || vb->ub != vb->lb))
                 res = jl_bottom_type;
         }
     }
