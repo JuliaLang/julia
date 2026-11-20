@@ -151,6 +151,56 @@ end
     @test read(`$(Base.julia_cmd()) --startup-file=no -e $script`, String) == "done"
 end
 
+if Sys.islinux()
+    @testset "samples taken in a signal handler reach the task's frames" begin
+        # a thread waits for the GC on its signal stack, which may be above the task's stack
+        script = """
+            using Profile
+            const keep = [Vector{Any}(undef, 100) for _ in 1:100_000]
+            const started = Threads.Atomic{Bool}(false)
+            const stop = Threads.Atomic{Bool}(false)
+            @noinline function spin_marker()
+                n = 0
+                started[] = true
+                while !stop[]
+                    GC.safepoint()
+                    n += 1
+                end
+                return n
+            end
+            @noinline outer_marker() = (n = spin_marker(); Base.donotdelete(n); n + 1)
+            function count_samples(data, lidict)
+                insig = complete = 0
+                start = 1
+                for i in 2:length(data)
+                    (data[i-1] == 0 && data[i] == 0) || continue
+                    funcs = [fr.func for ip in data[start:i-2] for fr in get(lidict, ip, ())]
+                    start = i + 1
+                    (:jl_set_gc_and_wait in funcs && :spin_marker in funcs) || continue
+                    insig += 1
+                    complete += :outer_marker in funcs
+                end
+                return insig, complete
+            end
+            Profile.init(n=10^6, delay=0.001)
+            @profile begin
+                t = Threads.@spawn outer_marker()
+                wait(Threads.@spawn begin
+                    while !started[]
+                        GC.safepoint()
+                    end
+                    foreach(_ -> GC.gc(true), 1:10)
+                    stop[] = true
+                end)
+                wait(t)
+            end
+            insig, complete = count_samples(Profile.retrieve()...)
+            print(complete > 0 ? "done" : "no sample of \$insig reached outer_marker")
+            """
+        @test read(`$(Base.julia_cmd()) --startup-file=no -t2 -e $script`, String) == "done"
+    end
+end
+
 Profile.clear()
 
 @profile busywait(1, 20)
