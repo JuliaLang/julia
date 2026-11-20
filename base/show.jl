@@ -719,7 +719,7 @@ function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
                         (_ti, env) = typeintersect_env(x, unbounded_typealias(alias))
                         # ti === Union{} && continue # impossible, since we already checked that x <: alias
                         env = env::SimpleVector
-                        # unwrap `svec(tvar, constrained)` env markers down to the TypeVar
+                        # unwrap `svec(tvar, constrained, egal)` env markers down to the TypeVar
                         env = Core.svec(Any[e isa SimpleVector ? e[1] : e for e in env]...)
                         # TODO: In some cases (such as the following), the `env` is over-approximated.
                         #       We'd like to disable `fix_inferred_var_bound` since we'll already do that fix-up here.
@@ -941,7 +941,7 @@ function make_typealiases(@nospecialize(x::Type))
                     mod2 = modulesof!(Set{Module}(), alias)
                     mod in mod2 || (mod === Base && Core in mod2) || continue
                     env = env::SimpleVector
-                    # unwrap `svec(tvar, constrained)` env markers down to the TypeVar
+                    # unwrap `svec(tvar, constrained, egal)` env markers down to the TypeVar
                     env = Core.svec(Any[e isa SimpleVector ? e[1] : e for e in env]...)
                     applied = alias
                     if !isempty(env)
