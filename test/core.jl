@@ -8522,6 +8522,30 @@ let aint = ContainsPointerNopadding{Int}(), asym = ContainsPointerNopadding{Symb
     end
 end
 
+@testset "prevent alignment overflow" begin
+    # Ensure that alignments with low enough values are allowed
+    @test let
+        T = NTuple{64, VecElement{Int64}};
+        (sizeof(T), Base.datatype_alignment(T), Base.aligned_sizeof(T)) == (512, 512, 512)
+    end
+
+    # Ensure that alignments with barely low enough values are allowed
+    @test let
+        T = NTuple{4096, VecElement{Int64}};
+        (sizeof(T), Base.datatype_alignment(T), Base.aligned_sizeof(T)) == (32768, 32768, 32768)
+    end
+
+    # Ensure that alignments with barely out of bounds values are rejected
+    @test_throws ErrorException begin
+        T = NTuple{4097, VecElement{Int64}};
+    end
+
+    # Ensure that alignments with ludicrously high values are rejected
+    @test_throws ErrorException begin
+        T = NTuple{10_000, VecElement{Int64}};
+    end
+end
+
 # Check === for potentially NULL field
 let vnull1 = NullableHomogeneousPointerImmutable(),
     vnull2 = NullableHomogeneousPointerImmutable(),

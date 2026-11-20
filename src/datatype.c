@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdalign.h>
+#include <stdint.h>
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
@@ -192,7 +193,7 @@ static int layoutcache_initialized = 0;
 static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
                                            uint32_t nfields,
                                            uint32_t npointers,
-                                           uint32_t alignment,
+                                           uint16_t alignment,
                                            int haspadding,
                                            int isbitsegal,
                                            int arrayelem,
@@ -893,6 +894,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             }
         }
         assert(ptr_i == npointers);
+
+        if (alignm > UINT16_MAX)
+            jl_errorf("alignment out of bounds");
+
         st->layout = jl_get_layout(sz, nfields, npointers, alignm, haspadding, isbitsegal, 0, 0, desc, pointers);
         if (should_malloc) {
             free(desc);
