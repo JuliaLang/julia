@@ -71,6 +71,8 @@ Standard library changes
 
 #### Dates
 
+* `typemin` and `typemax` of `Date` and `DateTime` now return the smallest and largest representable
+  values, so `typemax(Date) + Day(1) == typemin(Date)`.
 * The `year`, `month`, `day`, and related accessors are faster and return correct results for every
   `Date`. The month and day are now always an `Int64`, as documented. Before, they had the type of
   the day count, for example `BigInt` for a `Timestamp` with a package-defined period.

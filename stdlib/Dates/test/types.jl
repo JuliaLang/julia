@@ -211,11 +211,14 @@ c = Dates.Time(0)
     @test zero(a) == Dates.Millisecond(0)
     @test zero(b) == Dates.Day(0)
     @test zero(c) == Dates.Nanosecond(0)
-    @test string(typemax(Dates.DateTime)) == "146138512-12-31T23:59:59"
-    @test string(typemin(Dates.DateTime)) == "-146138511-01-01T00:00:00"
-    @test typemax(Dates.DateTime) - typemin(Dates.DateTime) == Dates.Millisecond(9223372017043199000)
-    @test string(typemax(Dates.Date)) == "252522163911149-12-31"
-    @test string(typemin(Dates.Date)) == "-252522163911150-01-01"
+    @test string(typemax(Dates.DateTime)) == "292277025-08-17T07:12:55.807"
+    @test string(typemin(Dates.DateTime)) == "-292277024-05-15T16:47:04.192"
+    @test typemax(Dates.DateTime) + Dates.Millisecond(1) == typemin(Dates.DateTime)
+    @test typemin(Dates.DateTime) - Dates.Millisecond(1) == typemax(Dates.DateTime)
+    @test string(typemax(Dates.Date)) == "25252734927766555-07-27"
+    @test string(typemin(Dates.Date)) == "-25252734927766554-06-06"
+    @test typemax(Dates.Date) + Dates.Day(1) == typemin(Dates.Date)
+    @test typemin(Dates.Date) - Dates.Day(1) == typemax(Dates.Date)
     # Constructors reject values beyond the ends of the stored counts instead of wrapping
     dmin, dmax = Dates.Date(Dates.UTD(typemin(Int64))), Dates.Date(Dates.UTD(typemax(Int64)))
     tmin, tmax = Dates.DateTime(Dates.UTM(typemin(Int64))), Dates.DateTime(Dates.UTM(typemax(Int64)))

@@ -21,6 +21,12 @@ let
         f2 = T(2014); l2 = T(2014)
         f3 = T(-2000); l3 = T(2000)
         f4 = typemin(T); l4 = typemax(T)
+        # Over the whole type, a step of one or two stored units makes more than typemax(Int64)
+        # elements. These ranges are tested separately below.
+        function overflows(f, l, step)
+            s = Dates.valuestep(f, step)
+            return (f, l) == (f4, l4) && !isnothing(s) && s[2] <= 2
+        end
 
         # Built-in periods only, as other test files define package periods
         for P in (Dates.Year, Dates.Quarter, Dates.Month, Dates.Week, Dates.Day)
@@ -54,6 +60,7 @@ let
 
                 for (f, l) in ((f2, l2), (f3, l3), (f4, l4))
                     dr = f:pos_step:l
+                    overflows(f, l, pos_step) && continue
                     len = length(dr)
                     @test len > 0
                     @test isa(len, Int64)
@@ -112,6 +119,7 @@ let
 
                 for (f, l) in ((f2, l2), (f3, l3), (f4, l4))
                     dr = l:neg_step:f
+                    overflows(f, l, neg_step) && continue
                     len = length(dr)
                     @test len > 0
                     @test isa(len, Int64)
@@ -172,6 +180,7 @@ let
 
                     for (f, l) in ((f2, l2), (f3, l3), (f4, l4))
                         dr = f:pos_step:l
+                        overflows(f, l, pos_step) && continue
                         len = length(dr)
                         @test len > 0
                         @test isa(len, Int64)
@@ -230,6 +239,7 @@ let
 
                     for (f, l) in ((f2, l2), (f3, l3), (f4, l4))
                         dr = l:neg_step:f
+                        overflows(f, l, neg_step) && continue
                         len = length(dr)
                         @test len > 0
                         @test isa(len, Int64)
@@ -364,9 +374,9 @@ dr5 = Dates.Date(0):Dates.Day(1):Dates.Date(200000, 1, 1)
 dr6 = Dates.Date(0):Dates.Day(1):Dates.Date(2000000, 1, 1)
 dr7 = Dates.Date(0):Dates.Day(1):Dates.Date(20000000, 1, 1)
 dr8 = Dates.Date(0):Dates.Day(1):Dates.Date(200000000, 1, 1)
-dr9 = typemin(Dates.Date):Dates.Day(1):typemax(Dates.Date)
+dr9 = typemin(Dates.Date):Dates.Day(1):(typemin(Dates.Date) + Dates.Day(typemax(Int64) - 1))
 # Other steps
-dr10 = typemax(Dates.Date):Dates.Day(-1):typemin(Dates.Date)
+dr10 = typemax(Dates.Date):Dates.Day(-1):(typemax(Dates.Date) - Dates.Day(typemax(Int64) - 1))
 dr11 = typemin(Dates.Date):Dates.Week(1):typemax(Dates.Date)
 dr12 = typemin(Dates.Date):Dates.Month(1):typemax(Dates.Date)
 dr13 = typemin(Dates.Date):Dates.Year(1):typemax(Dates.Date)
@@ -376,7 +386,7 @@ dr16 = typemin(Dates.Date):Dates.Year(1000):typemax(Dates.Date)
 dr17 = typemax(Dates.Date):Dates.Week(-10000):typemin(Dates.Date)
 dr18 = typemax(Dates.Date):Dates.Month(-100000):typemin(Dates.Date)
 dr19 = typemax(Dates.Date):Dates.Year(-1000000):typemin(Dates.Date)
-dr20 = typemin(Dates.Date):Dates.Day(2):typemax(Dates.Date)
+dr20 = typemin(Dates.Date):Dates.Day(3):typemax(Dates.Date)
 
 drs = Any[dr, dr1, dr2, dr3, dr4, dr5, dr6, dr7, dr8, dr9, dr10,
           dr11, dr12, dr13, dr14, dr15, dr16, dr17, dr18, dr19, dr20]
@@ -429,20 +439,58 @@ b = Dates.Date(2013, 2, 1)
 @test first(a:Dates.Day(1):Dates.Date(200000000, 1, 1)) == a
 @test first(a:Dates.Day(1):typemax(Dates.Date)) == a
 @test first(typemin(Dates.Date):Dates.Day(1):typemax(Dates.Date)) == typemin(Dates.Date)
+@test length(dr9) == length(dr10) == typemax(Int64)
 
-@test length(typemin(Dates.Date):Dates.Week(1):typemax(Dates.Date)) == 26351950414948059
+@test length(typemin(Dates.Date):Dates.Week(1):typemax(Dates.Date)) == 2635249153387078803
 # Big Month/Year ranges
-@test length(typemin(Dates.Date):Dates.Month(1):typemax(Dates.Date)) == 6060531933867600
-@test length(typemin(Dates.Date):Dates.Year(1):typemax(Dates.Date)) == 505044327822300
-@test length(typemin(Dates.DateTime):Dates.Month(1):typemax(Dates.DateTime)) == 3507324288
-@test length(typemin(Dates.DateTime):Dates.Year(1):typemax(Dates.DateTime)) == 292277024
+@test length(typemin(Dates.Date):Dates.Month(1):typemax(Dates.Date)) == 606065638266397310
+@test length(typemin(Dates.Date):Dates.Year(1):typemax(Dates.Date)) == 50505469855533110
+@test length(typemin(Dates.DateTime):Dates.Month(1):typemax(Dates.DateTime)) == 7014648592
+@test length(typemin(Dates.DateTime):Dates.Year(1):typemax(Dates.DateTime)) == 584554050
 
-@test length(typemin(Dates.DateTime):Dates.Week(1):typemax(Dates.DateTime)) == 15250284420
-@test length(typemin(Dates.DateTime):Dates.Day(1):typemax(Dates.DateTime)) == 106751990938
-@test length(typemin(Dates.DateTime):Dates.Hour(1):typemax(Dates.DateTime)) == 2562047782512
-@test length(typemin(Dates.DateTime):Dates.Minute(1):typemax(Dates.DateTime)) == 153722866950720
-@test length(typemin(Dates.DateTime):Dates.Second(1):typemax(Dates.DateTime)) == 9223372017043200
-@test length(typemin(DateTime):Dates.Millisecond(1):typemax(DateTime)) == 9223372017043199001
+@test length(typemin(Dates.DateTime):Dates.Week(1):typemax(Dates.DateTime)) == 30500568905
+@test length(typemin(Dates.DateTime):Dates.Day(1):typemax(Dates.DateTime)) == 213503982335
+@test length(typemin(Dates.DateTime):Dates.Hour(1):typemax(Dates.DateTime)) == 5124095576031
+@test length(typemin(Dates.DateTime):Dates.Minute(1):typemax(Dates.DateTime)) == 307445734561826
+@test length(typemin(Dates.DateTime):Dates.Second(1):typemax(Dates.DateTime)) == 18446744073709552
+# Like integer ranges, length wraps around when the element count does not fit in Int64 (#48209)
+for (T, P) in ((Dates.Date, Dates.Day), (Dates.DateTime, Dates.Millisecond))
+    r = typemin(T):P(1):typemax(T)
+    @test last(r) == typemax(T)
+    @test length(r) == length(typemin(Int64):1:typemax(Int64))
+    @test_throws OverflowError Base.checked_length(r)
+    @test typemax(T) in r
+    @test first(Iterators.drop(r, 2)) == typemin(T) + P(2)
+    @test first(Iterators.drop(reverse(r), 2)) == typemax(T) - P(2)
+    @test r[typemax(Int64)] == typemin(T) + P(typemax(Int64) - 1)
+    @test r[big(2)^63 + 1] == r[UInt64(2)^63 + 1] == typemin(T) + P(typemax(Int64)) + P(1)
+    @test r[big(2)^64] == typemax(T)
+    @test_throws BoundsError r[big(2)^64 + 1]
+    @test_throws BoundsError r[0]
+    @test r[2:3] == [typemin(T) + P(1), typemin(T) + P(2)]
+    # Like for integer ranges, no empty range starts at an end of the type
+    @test_throws OverflowError r[1:0]
+    @test_throws OverflowError reverse(r)[1:0]
+    @test isempty(r[2:1]) && first(r[2:1]) == r[2]
+    r = typemin(T):P(2):typemax(T)
+    @test last(r) == typemax(T) - P(1)
+    @test length(r) == length(typemin(Int64):2:typemax(Int64))
+    @test_throws OverflowError Base.checked_length(r)
+    @test first(Iterators.drop(r, 2)) == typemin(T) + P(4)
+    # A slice step that does not fit in the period cannot form a range
+    @test_throws OverflowError r[1:Int64(2)^62:(Int64(2)^62 + 1)]
+    @test_throws OverflowError r[UInt64(1):UInt64(2)^62:(UInt64(2)^62 + 1)]
+    @test r[1:(Int64(2)^62 - 1):Int64(2)^62] == [r[1], r[Int64(2)^62]]
+end
+# Single-element ranges at the ends of the type, for every kind of step
+for T in (Dates.Date, Dates.DateTime), x in (typemin(T), typemax(T))
+    for s in (Dates.Day(1), Dates.Day(-1), Dates.Week(typemax(Int64)), Dates.Month(1), Dates.Month(-1),
+              Dates.Quarter(typemax(Int64)), Dates.Year(typemin(Int64)))
+        r = x:s:x
+        @test length(r) == 1 && collect(r) == [x] && last(r) == x && x in r
+    end
+    T === Dates.DateTime && @test collect(x:Dates.Microsecond(-1500):x) == [x]
+end
 # Steps larger than the range of the stored count
 for r in (Dates.Date(2000):Dates.Week(Int64(2)^61):Dates.Date(2001),
           Dates.Date(2001):Dates.Week(-Int64(2)^61):Dates.Date(2000),
@@ -940,15 +988,6 @@ end
     r = Date(2000, 1, 1):Date(2000, 12, 31)
     @test step(r) === Day(1)
     @test length(r) == 366
-end
-
-# Issue #48209
-@testset "steprange_last overflow" begin
-    epoch = Date(Date(1) - Day(1))
-    dmax = epoch + Day(typemax(fieldtype(Day, :value)))
-    dmin = epoch + Day(typemin(fieldtype(Day, :value)))
-    @test last(StepRange(dmin, Day(1), dmax)) == dmax
-    @test_throws OverflowError Base.checked_length(StepRange(dmin, Day(1), dmax))
 end
 
 end  # RangesTest module
