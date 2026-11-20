@@ -1838,6 +1838,8 @@ JL_DLLEXPORT const char *jl_gc_image_abi(void) JL_NOTSAFEPOINT;
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
 JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t newsz) JL_CANSAFEPOINT;
+// `jl_eqtable_put` into a table holding `count` entries and at most `ndel` tombstones
+JL_DLLEXPORT jl_genericmemory_t *jl_eqtable_put_counted(jl_genericmemory_t *h, jl_value_t *key, jl_value_t *val JL_ROOTED_BY_ARG(0), int *inserted, size_t count, size_t ndel) JL_CANSAFEPOINT;
 _Atomic(jl_value_t*) *jl_table_peek_bp(jl_genericmemory_t *a, jl_value_t *key) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t*) JL_CANSAFEPOINT;
@@ -2342,6 +2344,27 @@ STATIC_INLINE int jl_table_resize(size_t sz, size_t iter, size_t live, size_t to
     if (iter <= JL_TABLE_PROBE && (live + tombs) * 4 < sz * 3)
         return 1;
     return live * 2 >= sz ? 0 : tombs * 4 >= sz ? -1 : 1;
+}
+
+// `jl_table_resize` for a table that counts neither, where `slot(tab, j)` is 1 if slot `j` is
+// live, 2 if a tombstone, else 0. After a long probe, a table of more than 256 slots is judged
+// from 64 slots that `cong` draws (seeded by the key's hash), and 192 more before a resize, so
+// that its guesses, one per long probe, do not grow it early.
+typedef int (*jl_table_slot_t)(void *tab, size_t j) JL_NOTSAFEPOINT;
+STATIC_INLINE int jl_table_resize_sampled(void *tab, size_t sz, uint_t hv, size_t iter, jl_table_slot_t slot JL_NOTSAFEPOINT) JL_NOTSAFEPOINT
+{
+    if (iter <= JL_TABLE_PROBE)
+        return 1;
+    size_t m = 0, live = 0, tombs = 0;
+    uint64_t seed = int64hash(hv);
+    for (size_t n = sz <= 256 ? sz : 64; m < n; ) {
+        int s = slot(tab, sz <= 256 ? m : cong(sz, &seed));
+        live += s == 1;
+        tombs += s == 2;
+        if (++m == 64 && sz > 256 && jl_table_resize(m, iter, live, tombs) != 1)
+            n = 256;
+    }
+    return jl_table_resize(m, iter, live + (m == sz), tombs);
 }
 
 FORCE_INLINE ssize_t smallintset_probe_(jl_genericmemory_t *cache, smallintset_eq eq JL_NOTSAFEPOINT, const void *key, jl_value_t *data, uint_t hv, int pop, size_t w) JL_NOTSAFEPOINT

@@ -63,11 +63,12 @@ empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
 
 function rehash!(d::IdDict, newsz::Integer = length(d.ht)%UInt)
     d.ht = ccall(:jl_idtable_rehash, Memory{Any}, (Any, Csize_t), d.ht, newsz)
+    d.ndel = 0
     d
 end
 
 function sizehint!(d::IdDict, newsz::Integer)
-    newsz = _tablesz(newsz*2)  # *2 for keys and values in same array
+    newsz = _tablesz(newsz*4)  # *2 for keys and values in same array, *2 to stay under half full
     oldsz = length(d.ht)
     # grow at least 25%
     if newsz < (oldsz*5)>>2
@@ -81,12 +82,11 @@ function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where
     if !(val isa V) # avoid a dynamic call
         val = convert(V, val)::V
     end
-    if d.ndel >= ((3*length(d.ht))>>2)
-        rehash!(d, max((length(d.ht)%UInt)>>1, 32))
-        d.ndel = 0
-    end
     inserted = RefValue{Cint}(0)
-    d.ht = ccall(:jl_eqtable_put, Memory{Any}, (Any, Any, Any, Ptr{Cint}), d.ht, key, val, inserted)
+    ht = d.ht
+    d.ht = ccall(:jl_eqtable_put_counted, Memory{Any}, (Any, Any, Any, Ptr{Cint}, Csize_t, Csize_t),
+                 ht, key, val, inserted, d.count, d.ndel)
+    d.ht === ht || (d.ndel = 0) # a rehash drops every tombstone
     d.count += inserted[]
     return d
 end
