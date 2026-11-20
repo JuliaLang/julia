@@ -8,19 +8,19 @@ for parallel work with `Distributed`.
 """
 module SharedArrays
 
-using Mmap, Distributed, Random
+using Distributed, Mmap, Random
 
-import Base: length, size, elsize, ndims, IndexStyle, reshape, convert, deepcopy_internal,
-             show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, cconvert
+import Base: IndexStyle, cconvert, convert, copyto!, deepcopy_internal, elsize, fill!,
+    getindex, length, map!, ndims, reduce, reshape, setindex!, show, similar, size
 import Base: Array
 import Random
 using Serialization
-using Serialization: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG, serialize, deserialize
-import Serialization: serialize, deserialize
+using Serialization: UNDEFREF_TAG, deserialize, serialize, serialize_cycle_header, writetag
+import Serialization: deserialize, serialize
 import Distributed: RRID, procs, remotecall_fetch
-import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
+import Base.Filesystem: JL_O_CREAT, JL_O_RDWR
 
-export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindices, unshare!
+export SharedArray, SharedMatrix, SharedVector, indexpids, localindices, sdata, unshare!
 
 mutable struct SharedArray{T,N} <: DenseArray{T,N}
     id::RRID
@@ -45,7 +45,7 @@ mutable struct SharedArray{T,N} <: DenseArray{T,N}
     loc_subarr_1d::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int}},true}
 
     function SharedArray{T,N}(d,p,r,sn,s) where {T,N}
-        S = new(RRID(),d,p,r,sn,s,0,view(Array{T}(undef, ntuple(d->0,N)), 1:0))
+        S = new(RRID(),d,p,r,sn,s,0,view(Array{T}(undef, ntuple(_->0,N)), 1:0))
         sa_refs[S.id] = WeakRef(S)
         S
     end
@@ -110,9 +110,8 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
 
     pids, onlocalhost = shared_pids(pids)
 
-    local s = Array{T}(undef, ntuple(d->0,N))
+    local s = Array{T}(undef, ntuple(_->0,N))
     local io = nothing
-    local S
     local shmmem_create_pid
     try
         # On OSX, the shm_seg_name length must be <= 31 characters (including the terminating NULL character)
@@ -160,7 +159,7 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
         S = SharedArray{T,N}(dims, pids, refs, seg_name, s)
         initialize_shared_array(S, onlocalhost, init, pids)
         io = nothing
-
+        return S
     finally
         if io !== nothing && @isdefined shmmem_create_pid
             if onlocalhost
@@ -172,7 +171,6 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
             end
         end
     end
-    S
 end
 
 SharedArray{T,N}(d::NTuple{N,Integer}; kwargs...) where {T,N} =
@@ -225,7 +223,7 @@ function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset:
     func_mmap = mode -> open(filename, mode) do io
         mmap(io, Array{T,N}, dims, offset; shared=true)
     end
-    s = Array{T}(undef, ntuple(d->0,N))
+    s = Array{T}(undef, ntuple(_->0,N))
     if onlocalhost
         s = func_mmap(mode_val)
         refs[1] = remotecall(pids[1]) do
@@ -285,8 +283,8 @@ function finalize_refs(S::SharedArray{T,N}) where T where N
     empty!(S.pids)
     empty!(S.refs)
     init_loc_flds(S)
-    S.s = Array{T}(undef, ntuple(d->0,N))
-    S.dims = ntuple(d->0,N)
+    S.s = Array{T}(undef, ntuple(_->0,N))
+    S.dims = ntuple(_->0,N)
     delete!(sa_refs, S.id)
     S
 end
@@ -452,12 +450,11 @@ function init_loc_flds(S::SharedArray{T,N}, empty_local=false) where T where N
     else
         S.pidx = 0
         if empty_local
-            S.s = Array{T}(undef, ntuple(d->0,N))
+            S.s = Array{T}(undef, ntuple(_->0,N))
         end
-        S.loc_subarr_1d = view(Array{T}(undef, ntuple(d->0,N)), 1:0)
+        S.loc_subarr_1d = view(Array{T}(undef, ntuple(_->0,N)), 1:0)
     end
 end
-
 
 # Don't serialize s (it is the complete array) and
 # pidx, which is relevant to the current process only
@@ -517,7 +514,7 @@ end
 
 function show(io::IO, mime::MIME"text/plain", S::SharedArray)
     if length(S.s) > 0 || isempty(S.pids)
-        invoke(show, Tuple{IO,MIME"text/plain",DenseArray}, io, MIME"text/plain"(), S)
+        invoke(show, Tuple{IO,MIME"text/plain",DenseArray}, io, mime, S)
     else
         # retrieve from the first worker mapping the array.
         summary(io, S); println(io, ":")
@@ -542,7 +539,7 @@ function fill!(S::SharedArray, v)
 end
 
 function Random.rand!(S::SharedArray{T}) where T
-    f = S->map!(x -> rand(T), S.loc_subarr_1d, S.loc_subarr_1d)
+    f = S->map!(_ -> rand(T), S.loc_subarr_1d, S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(f, p, S)
     end
@@ -550,7 +547,7 @@ function Random.rand!(S::SharedArray{T}) where T
 end
 
 function Random.randn!(S::SharedArray)
-    f = S->map!(x -> randn(), S.loc_subarr_1d, S.loc_subarr_1d)
+    f = S->map!(_ -> randn(), S.loc_subarr_1d, S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(f, p, S)
     end
@@ -566,9 +563,9 @@ shmem_fill(v, I::Int...; kwargs...) = shmem_fill(v, I; kwargs...)
 # rand variant with range
 function shmem_rand(TR::Union{DataType, UnitRange}, dims; kwargs...)
     if isa(TR, UnitRange)
-        SharedArray{Int,length(dims)}(dims; init = S -> map!(x -> rand(TR), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
+        SharedArray{Int,length(dims)}(dims; init = S -> map!(_ -> rand(TR), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
     else
-        SharedArray{TR,length(dims)}(dims; init = S -> map!(x -> rand(TR), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
+        SharedArray{TR,length(dims)}(dims; init = S -> map!(_ -> rand(TR), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
     end
 end
 shmem_rand(TR::Union{DataType, UnitRange}, i::Int; kwargs...) = shmem_rand(TR, (i,); kwargs...)
@@ -578,7 +575,7 @@ shmem_rand(dims; kwargs...) = shmem_rand(Float64, dims; kwargs...)
 shmem_rand(I::Int...; kwargs...) = shmem_rand(I; kwargs...)
 
 function shmem_randn(dims; kwargs...)
-    SharedArray{Float64,length(dims)}(dims; init = S-> map!(x -> randn(), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
+    SharedArray{Float64,length(dims)}(dims; init = S-> map!(_ -> randn(), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
 end
 shmem_randn(I::Int...; kwargs...) = shmem_randn(I; kwargs...)
 
@@ -715,7 +712,7 @@ function print_shmem_limits(slen)
             "\nPlease ensure requested size is within system limits.",
             "\nIf not, increase system limits and try again."
         )
-    catch e
+    catch
         @warn "Unable to print shared memory limits."
     end
 end
