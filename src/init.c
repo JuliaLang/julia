@@ -235,14 +235,13 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
     if (jl_atomic_load_relaxed(&jl_all_tls_states) == NULL)
         return;
 
-    // A signal can ask us to exit while the system image is still being restored.
-    // Its objects are not valid yet, so there is nothing we can safely clean up.
-    if (!jl_image_restored)
-        return;
+    // the system image may still be restoring, and its objects are not valid yet
+    // n.b. the libuv cleanup must still run, since it flushes startup errors to stderr
+    jl_module_t *base = jl_image_restored ? jl_base_module : NULL;
 
     jl_task_t *ct = jl_get_current_task();
 
-    if (ct == NULL && jl_base_module) {
+    if (ct == NULL && base) {
         ct = container_of(jl_adopt_thread(), jl_task_t, gcstack);
     }
     else if (ct != NULL) {
@@ -253,10 +252,10 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
         jl_gc_safepoint_(ct->ptls);
     }
 
-    if (jl_base_module) {
+    if (base) {
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
-        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_atexit"), ct->world_age);
+        jl_value_t *f = jl_get_global_value(base, jl_symbol("_atexit"), ct->world_age);
         if (f != NULL) {
             jl_value_t **fargs;
             JL_GC_PUSHARGS(fargs, 2);
@@ -296,7 +295,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
     JL_STDOUT = (uv_stream_t*) STDOUT_FILENO;
     JL_STDERR = (uv_stream_t*) STDERR_FILENO;
 
-    if (ct)
+    if (ct && jl_image_restored)
         jl_gc_run_all_finalizers(ct);
 
     uv_loop_t *loop = jl_global_event_loop();
