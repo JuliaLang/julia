@@ -97,6 +97,12 @@ Standard library changes
   commands without pipes or redirections through `$SHELL -c` on systems other than Windows. It no
   longer reads the `JULIA_SHELL` environment variable. The new `export NAME=value` and `unset NAME`
   commands in shell mode set and remove environment variables for later commands ([#20401]).
+* `REPL.TerminalMenus` has public functions for programs that draw the whole terminal:
+  `readevent` reads keys, mouse reports, pastes and the terminal's answers, each whole;
+  `enter_screen`, `leave_screen` and `suspend` set and undo the terminal's modes; `write_frame`
+  draws the rows that changed; and a `LineField` is a line edited with the keys readline has.
+  `TerminalMenus.readkey` reads a sequence it does not know whole, so that Shift-Tab or Ctrl and
+  an arrow no longer leave the rest of it to arrive as keys.
 
 #### SharedArrays
 
