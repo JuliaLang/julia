@@ -117,6 +117,23 @@ Profile.Allocs.start
 Profile.Allocs.stop
 ```
 
+## Dynamic dispatch profiling
+
+```@docs
+Profile.Dispatch.@profile
+```
+
+The methods in `Profile.Dispatch` are not exported and need to be called e.g. as `Profile.Dispatch.print()`.
+
+```@docs
+Profile.Dispatch.print
+Profile.Dispatch.fetch
+Profile.Dispatch.DispatchSample
+Profile.Dispatch.start
+Profile.Dispatch.stop
+Profile.Dispatch.clear
+```
+
 ## Heap Snapshots
 
 ```@docs
