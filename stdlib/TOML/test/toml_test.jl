@@ -95,7 +95,7 @@ failures_valid = [
 n_files_valid = 0
 tested_valid = Set{String}()
 valid_test_folder = joinpath(testfiles, "valid")
-for (root, dirs, files) in walkdir(valid_test_folder)
+for (root, _, files) in walkdir(valid_test_folder)
     for f in files
         if endswith(f, ".toml")
             n_files_valid += 1
@@ -173,7 +173,7 @@ failures_invalid = [
 n_invalid = 0
 tested_invalid = Set{String}()
 invalid_test_folder = joinpath(testfiles, "invalid")
-for (root, dirs, files) in walkdir(invalid_test_folder)
+for (root, _, files) in walkdir(invalid_test_folder)
     for f in files
         if endswith(f, ".toml")
             n_invalid += 1
