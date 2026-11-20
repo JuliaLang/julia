@@ -4513,6 +4513,54 @@ void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_c
 }
 
 JL_DLLEXPORT jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_tupletype_t *ti, jl_svec_t *env, jl_method_t *m,
+                                                        int return_if_compileable) JL_CANSAFEPOINT;
+
+struct retarget_unspec_env {
+    jl_method_instance_t *unspec;
+    jl_method_instance_t *mi;
+    int can_retarget; // no static parameters, which `mi` might have left undetermined
+};
+
+// Point a cache entry that uses the unspecialized MethodInstance at the one dispatch would
+// pick for it. Dropping it is not enough: a broader entry may keep matching its calls.
+static void retarget_unspec_entry(jl_typemap_entry_t *entry, struct retarget_unspec_env *env) JL_CANSAFEPOINT
+{
+    jl_method_t *m = env->mi->def.method;
+    if (env->can_retarget) {
+        jl_value_t *compilationsig = jl_normalize_to_compilable_sig(entry->sig, jl_emptysvec, m, 1);
+        JL_GC_PUSH1(&compilationsig);
+        if (jl_is_datatype(compilationsig) && !((jl_datatype_t*)compilationsig)->hasfreetypevars &&
+                jl_subtype((jl_value_t*)entry->sig, compilationsig)) {
+            jl_method_instance_t *newmi = jl_egal(compilationsig, env->mi->specTypes) ? env->mi :
+                jl_specializations_get_linfo(m, compilationsig, jl_emptysvec);
+            jl_gc_write_atomic(entry, *(_Atomic(jl_method_instance_t*)*)&entry->func.linfo,
+                   jl_method_instance_t, newmi, release);
+            JL_GC_POP();
+            return;
+        }
+        JL_GC_POP();
+    }
+    jl_atomic_store_relaxed(&entry->max_world, 0);
+}
+
+static int retarget_unspec_cache(jl_typemap_entry_t *oldentry, void *closure0) JL_CANSAFEPOINT
+{
+    struct retarget_unspec_env *env = (struct retarget_unspec_env*)closure0;
+    if (jl_atomic_load_relaxed(&oldentry->max_world) == ~(size_t)0 &&
+            oldentry->func.linfo == env->unspec &&
+            mt_cache_entry_shadowed(oldentry, env->unspec, env->mi->specTypes)) {
+        if (_jl_debug_method_invalidation) {
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)env->unspec);
+            jl_value_t *loctag = jl_cstr_to_string("invalidate_mt_cache");
+            JL_GC_PUSH1(&loctag);
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+            JL_GC_POP();
+        }
+        retarget_unspec_entry(oldentry, env);
+    }
+    return 1;
+}
 
 JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *srcs)
 {
@@ -4521,11 +4569,8 @@ JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *src
     jl_emit_codeinsts_to_jit((jl_code_instance_t **)jl_array_ptr_data(codeinsts),
                              (jl_code_info_t **)jl_array_ptr_data(srcs),
                              ncodeinsts);
-    // since the user just injected new code for mi,
-    // drop any currently unspecialized caches for mi,
-    // this ensures they can be recomputed on the next dispatch
-    jl_array_t *shadowed = NULL;
-    JL_GC_PUSH1(&shadowed);
+    // since the user just injected new code for mi, move dispatch cache entries
+    // that use the unspecialized MethodInstance over to mi (or drop them)
     jl_methcache_t *mc = jl_method_table->cache;
     JL_LOCK(&mc->writelock);
     for (size_t i = 0; i < ncodeinsts; i++) {
@@ -4537,30 +4582,23 @@ JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *src
         jl_method_instance_t *unspecialized = jl_atomic_load_relaxed(&m->unspecialized);
         if (unspecialized == NULL)
             continue;
-        if (!shadowed)
-            shadowed = jl_alloc_vec_any(1);
-        jl_array_ptr_set(shadowed, 0, (jl_value_t*)unspecialized);
-        struct invalidate_mt_env mt_cache_env;
-        mt_cache_env.max_world = 0;
-        mt_cache_env.shadowed = shadowed;
-        mt_cache_env.newentry_sig = mi->specTypes;
-        jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_mt_cache, (void*)&mt_cache_env);
+        struct retarget_unspec_env env = {unspecialized, mi, !jl_is_unionall(m->sig)};
+        jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), retarget_unspec_cache, (void*)&env);
         jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
         size_t i, l = leafcache->length;
         for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
             jl_value_t *entry = jl_genericmemory_ptr_ref(leafcache, i);
             if (entry) {
                 while (entry != jl_nothing) {
-                    jl_method_instance_t *cacheli = typemap_entry_linfo((jl_typemap_entry_t*)entry);
-                    if (cacheli == unspecialized)
-                        jl_atomic_store_relaxed(&((jl_typemap_entry_t*)entry)->max_world, 0);
-                    entry = (jl_value_t*)jl_atomic_load_relaxed(&((jl_typemap_entry_t*)entry)->next);
+                    jl_typemap_entry_t *e = (jl_typemap_entry_t*)entry;
+                    if (typemap_entry_linfo(e) == unspecialized && jl_atomic_load_relaxed(&e->max_world) == ~(size_t)0)
+                        retarget_unspec_entry(e, &env);
+                    entry = (jl_value_t*)jl_atomic_load_relaxed(&e->next);
                 }
             }
         }
     }
     JL_UNLOCK(&mc->writelock);
-    JL_GC_POP();
 }
 
 JL_DLLEXPORT int jl_method_is_macro(jl_method_t *m)
