@@ -3786,11 +3786,16 @@ end
         project_path = write_precompile_env(depot, [("NoisyPkg", "c4000000-0000-0000-0000-000000000001", String[])])
         write(joinpath(depot, "dev", "NoisyPkg", "src", "NoisyPkg.jl"), """
             module NoisyPkg
-            println("NOISY-FIRST")
-            for i in 1:20000 # far more than a pipe buffer holds
-                println("noisy line ", i, " ", "x"^50)
+            # far more than a pipe buffer holds, in one write: 20000 separate writes take
+            # minutes on a loaded Windows machine
+            let io = IOBuffer()
+                println(io, "NOISY-FIRST")
+                for i in 1:20000
+                    println(io, "noisy line ", i, " ", "x"^50)
+                end
+                println(io, "NOISY-LAST")
+                write(stdout, take!(io))
             end
-            println("NOISY-LAST")
             end
             """)
         script = """
