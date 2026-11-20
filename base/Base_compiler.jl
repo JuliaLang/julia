@@ -145,8 +145,6 @@ include("exports.jl")
 
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
 
-function _setup_module! end # Revise/JuliaInterpreter compat
-
 # core docsystem
 include("docs/core.jl")
 Core.atdoc!(CoreDocs.docm)

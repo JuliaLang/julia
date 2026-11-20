@@ -313,9 +313,7 @@ elseif head === :call && length(x.args) >= 1 && isexpr(x.args[1], :(::))
         # `Expr(:overlay, mt, f)`: extract the name from f
         astname(x.args[end], ismacro)
     else
-        n = if isexpr(x, :module)
-            isa(x.args[1], Bool) ? 2 : 3
-        elseif isexpr(x, :struct)
+        n = if isexpr(x, (:module, :struct))
             2
         elseif isexpr(x, (:call, :macrocall, :function, :(=), :macro, :where, :curly,
                           :(::), :(<:), :(>:), :local, :global, :const, :atomic,
@@ -450,10 +448,9 @@ function moduledoc(__source__, __module__, meta, def, def′::Expr)
     if def === nothing
         esc(:(Core.eval($name, $(quot(docex)))))
     else
-        has_version = !isa(def.args[1], Bool)
         def = unblock(def)
-        block = def.args[3 + has_version].args
-        if !def.args[1 + has_version]
+        block = def.args[3].args
+        if !def.args[1]
             pushfirst!(block, :(import Base: @doc))
         end
         push!(block, docex)
