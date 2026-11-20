@@ -4,11 +4,13 @@
 Base.trunc(dt::Date, p::Type{Year}) = Date(UTD(totaldays(year(dt), 1, 1)))
 Base.trunc(dt::Date, p::Type{Quarter}) = firstdayofquarter(dt)
 Base.trunc(dt::Date, p::Type{Month}) = firstdayofmonth(dt)
+Base.trunc(dt::Date, p::Type{Week}) = firstdayofweek(dt)
 Base.trunc(dt::Date, p::Type{Day}) = dt
 
 Base.trunc(dt::DateTime, p::Type{Year}) = DateTime(trunc(Date(dt), Year))
 Base.trunc(dt::DateTime, p::Type{Quarter}) = DateTime(trunc(Date(dt), Quarter))
 Base.trunc(dt::DateTime, p::Type{Month}) = DateTime(trunc(Date(dt), Month))
+Base.trunc(dt::DateTime, p::Type{Week}) = DateTime(firstdayofweek(dt))
 Base.trunc(dt::DateTime, p::Type{Day}) = DateTime(Date(dt))
 Base.trunc(dt::DateTime, p::Type{Hour}) = dt - Minute(dt) - Second(dt) - Millisecond(dt)
 Base.trunc(dt::DateTime, p::Type{Minute}) = dt - Second(dt) - Millisecond(dt)
