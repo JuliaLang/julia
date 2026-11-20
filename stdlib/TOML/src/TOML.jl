@@ -13,8 +13,7 @@ using Dates
 
 module Internals
     # The parser is defined in Base
-    using Base.TOML: Parser, Printer, parse, tryparse, ParserError, reinit!,
-                     Comments, CommentBlock
+    using Base.TOML: Comments, Parser, ParserError, Printer, parse, reinit!, tryparse
     # Put the error instances in this module
     for errtype in instances(Base.TOML.ErrorType)
         @eval using Base.TOML: $(Symbol(errtype))
@@ -199,12 +198,12 @@ supported type.
 """
 const print = Internals.Printer.print
 
-public Parser, parsefile, tryparsefile, parse, tryparse, ParserError, print, Comments
+public Comments, Parser, ParserError, parse, parsefile, print, tryparse, tryparsefile
 
 # These methods are private Base interfaces, but we do our best to support them over
 # the TOML stdlib types anyway to minimize downstream breakage.
 Base.TOMLCache(p::Parser) = Base.TOMLCache(p._p, Dict{String, Base.CachedTOMLDict}())
-Base.TOMLCache(p::Parser, d::Base.CachedTOMLDict) = Base.TOMLCache(p._p, d)
+Base.TOMLCache(p::Parser, d::Dict{String, Base.CachedTOMLDict}) = Base.TOMLCache(p._p, d)
 Base.TOMLCache(p::Parser, d::Dict{String, Dict{String, Any}}) = Base.TOMLCache(p._p, d)
 
 Internals.reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing,
