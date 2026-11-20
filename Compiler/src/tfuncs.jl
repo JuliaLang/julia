@@ -189,8 +189,12 @@ add_tfunc(fpext, 2, 2, conversion_tfunc, 1)
 # arithmetic
 # ----------
 
-@nospecs math_tfunc(𝕃::AbstractLattice, args...) = math_tfunc(widenlattice(𝕃), args...)
-@nospecs math_tfunc(::JLTypeLattice, x, xs...) = widenconst(x)
+@nospecs math_tfunc(𝕃::AbstractLattice, x) = math_tfunc(widenlattice(𝕃), x)
+@nospecs math_tfunc(𝕃::AbstractLattice, x, y) = math_tfunc(widenlattice(𝕃), x, y)
+@nospecs math_tfunc(𝕃::AbstractLattice, x, y, z) = math_tfunc(widenlattice(𝕃), x, y, z)
+@nospecs math_tfunc(::JLTypeLattice, x) = widenconst(x)
+@nospecs math_tfunc(::JLTypeLattice, x, y) = widenconst(x)
+@nospecs math_tfunc(::JLTypeLattice, x, y, z) = widenconst(x)
 
 add_tfunc(neg_int, 1, 1, math_tfunc, 0)
 add_tfunc(add_int, 2, 2, math_tfunc, 1)
