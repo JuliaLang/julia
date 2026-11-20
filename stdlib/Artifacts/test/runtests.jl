@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 import Base: SHA1
 
-using Artifacts, Test, Base.BinaryPlatforms
-using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform, load_overrides
+using Artifacts, Base.BinaryPlatforms, Test
+using Artifacts: load_overrides, pack_platform!, unpack_platform, with_artifacts_directory
 using TOML
 
 @test isempty(Test.detect_closure_boxes(Artifacts))
