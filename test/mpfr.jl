@@ -504,6 +504,8 @@ end
     @test precision(x) == old_precision
     @test precision(setprecision(1) do; BigFloat(23); end) == 1  # minimum-precision
     @test_throws DomainError setprecision(0)
+    @test_throws DomainError setprecision(() -> 7, 0)
+    @test_throws DomainError setprecision(() -> 7, BigFloat, 10; base=1)
     @test_throws DomainError BigFloat(1, precision = 0)
     @test_throws DomainError BigFloat(big(1.1), precision = 0)
     @test_throws DomainError BigFloat(2.5, precision = -900)
