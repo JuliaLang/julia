@@ -1636,13 +1636,17 @@ static void jl_typemap_list_insert_(
         jl_typemap_entry_t *newrec)
 {
     jl_typemap_entry_t *l = jl_atomic_load_relaxed(pml);
+    // In a cache, a varargs entry can cover the calls of an exact-arity entry (`Vararg`
+    // matches zero arguments), and lookups take the first match, so keep it behind them.
+    int va_last = newrec->va && jl_is_method_instance(newrec->func.value);
 
     // Pick the first intersection point that guarantees that the list ordering
     // will be (leaf sigs..., simple sigs..., other sigs...)
     while ((jl_value_t*)l != jl_nothing) {
         if (newrec->isleafsig || !l->isleafsig)
             if (newrec->issimplesig || !l->issimplesig)
-                break;
+                if (!va_last || l->va || newrec->issimplesig != l->issimplesig)
+                    break;
         pml = &l->next;
         parent = (jl_value_t*)l;
         l = jl_atomic_load_relaxed(&l->next);
