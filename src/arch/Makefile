@@ -22,6 +22,8 @@ include $(JULIAHOME)/Make.inc
 ASM_ARCH := $(if $(filter arm%,$(ARCH)),arm,$(ARCH))
 TEST_RUNNER ?=
 TEST_CFLAGS := -O1 -g -fno-omit-frame-pointer -U_FORTIFY_SOURCE -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support
+# (the tests pass vectors by value, whose ABI some compilers warn about)
+TEST_CFLAGS += -Wno-psabi
 ifneq ($(filter arm%,$(ARCH)),)
 # ARM only has unwind tables (which the backtraces need) when asked for
 TEST_CFLAGS += -funwind-tables
@@ -60,6 +62,9 @@ macos_signal_ASM := $(SRCDIR)/$(ASM_ARCH)/macos_call_frame_unwind.S $(SRCDIR)/$(
 macos_signal_FLAGS := $(STEP_FLAGS)
 macos_signal_DEPS := $(STEP_DEPS)
 trampolines_ASM := $(JULIAHOME)/cli/arch/$(ASM_ARCH)/trampolines.S
+plt_resolver_ASM := $(wildcard $(SRCDIR)/$(ASM_ARCH)/*plt_resolver.S) $(SRCDIR)/test/plt_trampolines.S
+# (the large code model's stubs have absolute addresses in code)
+plt_resolver_FLAGS := -I$(BUILDDIR) $(if $(filter Darwin WINNT,$(OS)),,-no-pie)
 # libraries a test links against (the trampolines forward into another library,
 # as libjulia does into libjulia-internal)
 OTHER_LIB := $(BUILDDIR)/libarchtest_other.$(SHLIB_EXT)
@@ -76,11 +81,11 @@ TEST_LIB_FLAGS := -L$(BUILDDIR)
 endif
 
 ifeq ($(OS),WINNT)
-TESTS := win_setjmp win_restore_trigger trampolines
+TESTS := win_setjmp win_restore_trigger trampolines plt_resolver
 else ifeq ($(OS),Darwin)
-TESTS := start_fiber macos_signal trampolines
+TESTS := start_fiber macos_signal trampolines plt_resolver
 else
-TESTS := start_fiber unix_signal_call_trampoline trampolines
+TESTS := start_fiber unix_signal_call_trampoline trampolines plt_resolver
 endif
 TEST_BINS := $(TESTS:%=$(BUILDDIR)/test_%$(EXE))
 # The tests of unwinding from every instruction also run with the C code built
@@ -115,6 +120,12 @@ $(BUILDDIR)/test_%_thumb$(EXE): $(SRCDIR)/test/%.c $(SRCDIR)/test/archtest.h $(S
 $(BUILDDIR)/test_%$(EXE): $(SRCDIR)/test/%.c $(SRCDIR)/test/archtest.h $(SRCDIR)/common.h $$($$*_HDRS) $$(wildcard $$($$*_ASM)) $$($$*_LIBS) $$($$*_DEPS)
 	@$(call PRINT_CC, $(CC) $(TEST_CFLAGS) $(TEST_MODE_CFLAGS) $< $(wildcard $($*_ASM)) $($*_LIBS) $(if $($*_LIBS),$(TEST_LIB_FLAGS)) $($*_FLAGS) -o $@)
 
+# The instructions of the plt_resolver test's trampolines are the templates that
+# codegen emits, as assembler macros.
+$(BUILDDIR)/plt_stubs.S: $(SRCDIR)/test/plt_stubs.sed $(SRCDIR)/$(ASM_ARCH)/plt_stubs.inc
+	sed -f $^ > $@
+$(BUILDDIR)/test_plt_resolver$(EXE) $(BUILDDIR)/test_plt_resolver_thumb$(EXE): $(BUILDDIR)/plt_stubs.S
+
 # A test passes if it exits successfully and reports it (a crash under an
 # emulator does not always show in the exit status).
 test: $(TEST_BINS)
@@ -125,7 +136,7 @@ test: $(TEST_BINS)
 	done
 
 clean:
-	rm -f $(TEST_BINS) $(OTHER_LIB)
+	rm -f $(TEST_BINS) $(OTHER_LIB) $(BUILDDIR)/plt_stubs.S
 	rm -rf $(BUILDDIR)/libunwind-*
 
 .PHONY: test clean
