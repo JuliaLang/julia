@@ -165,6 +165,15 @@ overlay_shadow_zero(xs::Vector{Int}...) = Int[xs[i][j] for i=eachindex(xs) for j
     overlay_shadow_zero(x...)
 end == Vector{Int}
 
+# overlay methods count toward the number of varargs to specialize on
+overlay_vararg(x) = x
+@overlay OVERLAY_MT overlay_vararg(a, b, c, d, rest...) = a
+let sig = Tuple{typeof(overlay_vararg),Int,Int,Int,Int,Int,Int}
+    m = only(Base._methods_by_ftype(sig, OVERLAY_MT, -1, Base.get_world_counter())).method
+    @test Compiler.get_compileable_sig(m, sig, Core.svec()) ===
+        Tuple{typeof(overlay_vararg),Int,Int,Int,Int,Int,Vararg{Int}}
+end
+
 # partial concrete evaluation
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
