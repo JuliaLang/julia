@@ -170,9 +170,12 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     if isa(stmt, Expr)
         head = stmt.head
         if (head === :call || head === :foreigncall || head === :foreignglobal || head === :new || head === :splatnew ||
-            head === :static_parameter || head === :isdefined || head === :boundscheck)
+            head === :static_parameter || head === :isdefined || head === :boundscheck || head === :invoke_apply)
             @assert isempty(irsv.tasks) # TODO: this whole function needs to be converted to a stackless design to be a valid AbsIntState, but this should work here for now
-            result = abstract_eval_statement_expr(interp, stmt, StatementState(nothing, false), irsv)
+            # `:invoke_apply` refines as the `_apply_iterate` call in `args[2:end]`; its
+            # code instance stays valid since the argument types can only narrow
+            e = head === :invoke_apply ? Expr(:call, stmt.args[2:end]...) : stmt
+            result = abstract_eval_statement_expr(interp, e, StatementState(nothing, false), irsv)
             reverse!(irsv.tasks)
             while true
                 if length(irsv.callstack) > irsv.frameid

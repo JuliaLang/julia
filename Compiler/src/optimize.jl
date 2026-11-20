@@ -69,7 +69,7 @@ has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
 function iscallstmt(@nospecialize stmt)
     stmt isa Expr || return false
     head = stmt.head
-    return head === :call || head === :invoke || head === :foreigncall || head === :foreignglobal
+    return head === :call || head === :invoke || head === :invoke_apply || head === :foreigncall || head === :foreignglobal
 end
 
 function flags_for_effects(effects::Effects)
@@ -1912,14 +1912,25 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         return 20
     elseif head === :foreignglobal
         return 1
-    elseif head === :invoke || head === :invoke_modify
+    elseif head === :invoke || head === :invoke_modify || head === :invoke_apply
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
         # run-time of the function, we omit them from
         # consideration. This way, non-inlined error branches do not
         # prevent inlining.
         extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
-        return extyp === Union{} ? 0 : UNKNOWN_CALL_COST
+        extyp === Union{} && return 0
+        if head === :invoke_apply
+            # codegen passes every tuple element separately, so the call site's machine
+            # code grows with the flattened argument count
+            nflat = 0
+            for i = 5:length(ex.args)
+                t = widenconst(argextype(ex.args[i], src, sptypes))
+                isa(t, DataType) && (nflat += length(t.parameters))
+            end
+            return max(UNKNOWN_CALL_COST, nflat)
+        end
+        return UNKNOWN_CALL_COST
     elseif head === :(=)
         # A resolved store to a global should cost the same or less than the `setglobal!` tfunc declared.
         lhs = ex.args[1]

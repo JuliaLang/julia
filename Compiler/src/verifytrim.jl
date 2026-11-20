@@ -111,7 +111,7 @@ const MAX_NESTING_DEPTH = 1
 
 function is_call_expr(codeinfo::CodeInfo, @nospecialize(stmt))
     stmt = unwrap_stmt(codeinfo, stmt)
-    return stmt isa Expr && stmt.head ∈ (:call, :invoke, :foreigncall, :foreignglobal, :new)
+    return stmt isa Expr && stmt.head ∈ (:call, :invoke, :invoke_apply, :foreigncall, :foreignglobal, :new)
 end
 
 function has_unstable_arg(codeinfo::CodeInfo, sptypes::Vector{VarState}, args, startidx::Int)
@@ -170,7 +170,7 @@ function print_stmt_colored(io::IO, codeinfo::CodeInfo, sptypes::Vector{VarState
         length(stmt.args) >= 1 && print_value(io, codeinfo, stmt.args[1], stable)
         print(io, ")")
     else
-        startidx = stmt.head === :invoke ? 2 : 1
+        startidx = (stmt.head === :invoke || stmt.head === :invoke_apply) ? 2 : 1
         farg = startidx <= length(stmt.args) ? stmt.args[startidx] : nothing
         nargs = length(stmt.args) - startidx
 
@@ -316,7 +316,7 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
         isexpr(stmt, :(=)) && (stmt = stmt.args[2])
         error = ""
         warn = false
-        if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
+        if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify) || isexpr(stmt, :invoke_apply)
             error = "unresolved invoke"
             edge = stmt.args[1]
             atype = isexpr(stmt, :invoke) ? threads_deferred_call_type(stmt, codeinfo, sptypes) : nothing
