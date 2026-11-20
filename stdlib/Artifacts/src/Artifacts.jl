@@ -10,13 +10,12 @@ and [`artifact_path`](@ref).
 """
 module Artifacts
 
-import Base: get, SHA1
-using Base.BinaryPlatforms: AbstractPlatform, Platform, HostPlatform
-using Base.BinaryPlatforms: tags, triplet, select_platform
-using Base.TOML: TOML
+import Base: SHA1, get
+using Base.BinaryPlatforms: AbstractPlatform, HostPlatform, Platform
+using Base.BinaryPlatforms: select_platform, tags, triplet
 
-export artifact_exists, artifact_path, artifact_meta, artifact_hash,
-       select_downloadable_artifacts, find_artifacts_toml, @artifact_str
+export @artifact_str, artifact_exists, artifact_hash, artifact_meta, artifact_path,
+       find_artifacts_toml, select_downloadable_artifacts
 
 const _artifacts_world_age = Ref{UInt}(typemax(UInt))
 
@@ -177,7 +176,7 @@ end
 # Helpers to map an override to an actual path
 map_override_path(x::AbstractString) = String(x)::String
 map_override_path(x::SHA1) = artifact_path(x)
-map_override_path(x::Nothing) = nothing
+map_override_path(::Nothing) = nothing
 
 """
     query_override(hash::SHA1; overrides::Dict = load_overrides())
@@ -354,7 +353,7 @@ function process_overrides(artifact_dict::Dict, pkg_uuid::Base.UUID)
 end
 
 # If someone tries to call process_overrides() with `nothing`, do exactly that
-process_overrides(artifact_dict::Dict, pkg_uuid::Nothing) = nothing
+process_overrides(::Dict, ::Nothing) = nothing
 
 """
     artifact_meta(name::String, artifacts_toml::String;
