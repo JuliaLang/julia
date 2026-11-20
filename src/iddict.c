@@ -8,7 +8,7 @@
 #define keyhash(k) jl_object_id_(jl_typetagof(k), k)
 #define h2index(hv, sz) (size_t)(((hv) & ((sz)-1)) * 2)
 
-static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val) JL_CANSAFEPOINT;
+static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val, size_t *probe) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t newsz)
 {
@@ -22,14 +22,15 @@ JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t
     newa = jl_alloc_memory_any(newsz);
     for (i = 0; i < sz; i += 2) {
         if (ol[i + 1] != NULL) {
-            jl_table_assign_bp(&newa, ol[i], ol[i + 1]);
+            jl_table_assign_bp(&newa, ol[i], ol[i + 1], NULL);
         }
     }
     JL_GC_POP();
     return newa;
 }
 
-static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val)
+// `probe`, if not NULL, gets the probe distance of an inserted key
+static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val, size_t *probe)
 {
     // pa points to a **un**rooted address
     uint_t hv;
@@ -81,6 +82,8 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
         if (empty_slot != -1) {
             jl_gc_write_atomic(a, tab[empty_slot], jl_value_t, key, release);
             jl_gc_write_atomic(a, tab[empty_slot + 1], jl_value_t, val, release);
+            if (probe)
+                *probe = ((empty_slot - h2index(hv, hash_size(a))) & (a->length - 1)) / 2;
             return 1;
         }
 
@@ -140,9 +143,23 @@ inline _Atomic(jl_value_t*) *jl_table_peek_bp(jl_genericmemory_t *a, jl_value_t 
 JL_DLLEXPORT
 jl_genericmemory_t *jl_eqtable_put(jl_genericmemory_t *h, jl_value_t *key, jl_value_t *val, int *p_inserted)
 {
-    int inserted = jl_table_assign_bp(&h, key, val);
+    size_t probe = 0;
+    int inserted = jl_table_assign_bp(&h, key, val, &probe);
     if (p_inserted)
         *p_inserted = inserted;
+    size_t sz = hash_size(h);
+    if (inserted && probe > jl_table_long_probe(sz)) {
+        // deleted keys count towards the load since lookups probe past them; if at most
+        // a quarter of the slots are live, rehash at the same size to drop them
+        jl_value_t **tab = (jl_value_t**)h->ptr;
+        size_t step = jl_table_sample_stride(sz), used = 0, live = 0;
+        for (size_t i = 0; i < 2 * sz; i += 2 * step) {
+            used += tab[i] != NULL;
+            live += tab[i + 1] != NULL;
+        }
+        if (2 * used * step > sz)
+            h = jl_idtable_rehash(h, 4 * live * step > sz ? h->length << 1 : h->length);
+    }
     return h;
 }
 
