@@ -2790,6 +2790,8 @@ static void jl_prune_type_cache_hash(jl_serializer_state *s, jl_typename_t *tn) 
         else
             sz += 1;
     }
+    // leave the table at most 2/3 full
+    sz += (sz + 1) / 2;
     if (sz < HT_N_INLINE)
         sz = HT_N_INLINE;
     record_deferred_field_change(s, (jl_value_t**)&tn->cache, (jl_value_t*)cache_rehash_set(kept, sz));
