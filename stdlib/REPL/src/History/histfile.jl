@@ -100,6 +100,10 @@ function update!(hist::HistoryFile)
             end
             true
         end
+        function isblankline(data::Vector{UInt8}, at::Int)
+            data[at] == UInt8('\n') ||
+                (data[at] == UInt8('\r') && at < length(data) && data[at+1] == UInt8('\n'))
+        end
         histindex = if isempty(hist.records)
             0
         else
@@ -160,30 +164,32 @@ function update!(hist::HistoryFile)
                         space ({error:' '}) instead. A text editor may have converted tabs to spaces in the \
                         history file." _id=:invalid_history_content_spc maxlog=1 _file=nothing _line=nothing
                 continue
-            elseif bytes[pos] != UInt8('\t')
+            elseif bytes[pos] != UInt8('\t') && !isblankline(bytes, pos)
                 @warn S"Malformed history content: expected line to start with {success:'\\t'} at byte {emphasis:$(offset + pos - 1)} in \
                         {(underline=grey),link=$(Base.Filesystem.uripath(hist.path)):$(contractuser(hist.path))}, but found \
                         {error:$(sprint(show, Char(bytes[pos])))} instead" _id=:invalid_history_content maxlog=3 _file=nothing _line=nothing
                 continue
             end
             contentstart = pos
-            nlines = 0
+            # Editors can strip the tab prefix from otherwise empty content lines.
+            ntabs = 0
             while true
+                ntabs += bytes[pos] == UInt8('\t')
                 pos = findnext(bytes, pos, UInt8('\n'))
-                nlines += 1
-                if pos < length(bytes) && bytes[pos+1] == UInt8('\t')
+                if pos < length(bytes) && (bytes[pos+1] == UInt8('\t') || isblankline(bytes, pos+1))
                     pos += 1
                 else
                     break
                 end
             end
             contentend, pos = pos, contentstart
-            content = Vector{UInt8}(undef, contentend - contentstart - nlines)
+            content = Vector{UInt8}(undef, contentend - contentstart - ntabs)
             bytescopied = 0
-            while pos < contentend
+            while pos <= contentend
+                linestart = pos + (bytes[pos] == UInt8('\t'))
                 lineend = findnext(bytes, pos, UInt8('\n'))
-                nbytes = lineend - pos - (lineend == contentend)
-                copyto!(content, bytescopied + 1, bytes, pos + 1, nbytes)
+                nbytes = lineend - linestart + (lineend != contentend)
+                copyto!(content, bytescopied + 1, bytes, linestart, nbytes)
                 bytescopied += nbytes
                 pos = lineend + 1
             end

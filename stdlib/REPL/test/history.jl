@@ -108,6 +108,22 @@ const HISTORY_SAMPLE_INCOMPLETE = """
             @test hist[3] == HistEntry(:julia, DateTime("2025-10-19T06:27:18"), "@b REPL.History.HistoryFile(\"/home/tec/.julia/logs/repl_history.jl\") REPL.History.update!", 3)
             close(hist)
         end
+        @testset "Blank content lines" begin
+            # A text editor may remove the tab prefixes from empty lines.
+            sample = "# mode: julia\n\n\tbegin\n\n\n\t    x = 1\n\tend\n# mode: help\n\tcos\n"
+            for eol in ("\n", "\r\n")
+                write(hpath, replace(sample, "\n" => eol))
+                hist = HistoryFile(hpath)
+                try
+                    @test_nowarn update!(hist)
+                    @test length(hist) == 2
+                    @test hist[1].content == chop(replace("\nbegin\n\n\n    x = 1\nend\n", "\n" => eol))
+                    @test hist[2].mode == :help
+                finally
+                    close(hist)
+                end
+            end
+        end
         @testset "Malformed" begin
             write(hpath, HISTORY_SAMPLE_MALFORMED)
             hist = HistoryFile(hpath)
