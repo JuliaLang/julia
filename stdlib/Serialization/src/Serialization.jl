@@ -1509,6 +1509,32 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         ci.inlining_cost = deserialize(s)::UInt16
     end
     ci.debuginfo = NullDebugInfo
+    hoist_returned_calls!(ci)
+    return ci
+end
+
+# Lowering before v1.12 put the creation of a generic function directly in a `return`,
+# which `deserialize_expr` rewrites into a `Core.define_method` call in place. Since a
+# `return` value must be an argument, move such a call into a statement of its own. The
+# statement is appended so that no SSA value or label needs renumbering.
+function hoist_returned_calls!(ci::CodeInfo)
+    code = ci.code
+    for i in 1:length(code)
+        stmt = code[i]
+        isa(stmt, ReturnNode) && isdefined(stmt, :val) || continue
+        val = stmt.val
+        isa(val, Expr) && val.head === :call || continue
+        n = length(code)
+        push!(code, val, ReturnNode(SSAValue(n + 1)))
+        code[i] = GotoNode(n + 1)
+        push!(ci.ssaflags, 0x00000000, 0x00000000)
+        ssavaluetypes = ci.ssavaluetypes
+        if isa(ssavaluetypes, Int)
+            ci.ssavaluetypes = ssavaluetypes + 2
+        else
+            push!(ssavaluetypes::Vector{Any}, Any, Any)
+        end
+    end
     return ci
 end
 
