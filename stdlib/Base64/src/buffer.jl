@@ -15,7 +15,7 @@ end
 Base.empty!(buffer::Buffer) = buffer.size = 0
 Base.getindex(buffer::Buffer, i::Integer) = buffer.data[buffer.offset + i]
 Base.setindex!(buffer::Buffer, v::UInt8, i::Integer) = buffer.data[buffer.offset + i] = v
-Base.firstindex(buffer::Buffer) = 1
+Base.firstindex(::Buffer) = 1
 Base.lastindex(buffer::Buffer) = buffer.size
 Base.pointer(buffer::Buffer) = pointer(buffer.data) + buffer.offset
 capacity(buffer::Buffer) = length(buffer.data) - buffer.offset
