@@ -367,6 +367,19 @@ int exc_reg_is_write_fault(uintptr_t esr) {
 
 static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx) JL_NOTSAFEPOINT_ENTER_CONDITIONAL(1);
 
+// Thread 0 is suspended while parked in the scheduler. Redirecting it out of
+// its condition variable wait corrupts pthread state (FreeBSD's libthr aborts
+// the next wait), so resume and wake it; jl_task_get_next then runs the exit.
+static void jl_exit_thread0_wake(jl_ptls_t ptls2, int signo) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE
+{
+    jl_atomic_store_release(&jl_exit_thread0_pending, signo);
+    jl_thread_resume(0);
+    // resume before locking: thread 0 may own sleep_lock
+    uv_mutex_lock(&ptls2->sleep_lock);
+    uv_cond_signal(&ptls2->wake_signal);
+    uv_mutex_unlock(&ptls2->sleep_lock);
+}
+
 #if defined(HAVE_MACH)
 #include "signals-mach.c"
 #else
@@ -717,6 +730,13 @@ static void jl_exit_thread0_cb(void) JL_CANSAFEPOINT
     jl_raise(thread0_exit_signo);
 }
 
+void jl_exit_thread0_pending_cb(void) JL_CANSAFEPOINT
+{
+    // clear the request before the exit hooks can reenter the scheduler
+    if (jl_atomic_exchange(&jl_exit_thread0_pending, 0))
+        jl_exit_thread0_cb();
+}
+
 static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
@@ -726,8 +746,13 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
         thread0_exit_signo = signo;
         ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
         memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
-        jl_atomic_store_release(&ptls2->signal_request, 3);
-        jl_thread_resume(0); // resume with message 3 (call jl_exit_thread0_cb)
+        if (jl_atomic_load_relaxed(&ptls2->sleep_parked)) {
+            jl_exit_thread0_wake(ptls2, signo);
+        }
+        else {
+            jl_atomic_store_release(&ptls2->signal_request, 3);
+            jl_thread_resume(0); // resume with message 3 (call jl_exit_thread0_cb)
+        }
     }
     else {
         // thread 0 is gone? just do the exit ourself

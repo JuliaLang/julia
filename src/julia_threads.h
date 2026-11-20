@@ -310,6 +310,8 @@ typedef struct _jl_tls_states_t {
 #ifdef JL_LIBRARY_EXPORTS
     uv_mutex_t sleep_lock;
     uv_cond_t wake_signal;
+    // nonzero while jl_task_get_next takes, waits on or holds sleep_lock
+    _Atomic(int8_t) sleep_parked;
 #endif
 } jl_tls_states_t;
 
