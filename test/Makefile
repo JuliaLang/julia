@@ -11,6 +11,16 @@ export JULIA_LOAD_PATH := @$(PATHSEP)@stdlib
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
 
+# Like `Base.runtests`, run the tests with a fresh depot, followed by the default depots so
+# that the bundled stdlib caches can still be loaded, instead of writing to the bundled depot.
+# The depot is kept in the build tree rather than $TMPDIR, which may be a small tmpfs.
+# This ends in `|| exit 1;` rather than `&&`, as `PRINT_JULIA` expands to two commands, the
+# second of which would otherwise run the tests with the bundled depot if this failed. Not
+# every shell runs the `EXIT` trap when it is killed by a signal, hence the other two traps.
+TEST_DEPOT = mkdir -p "$(BUILDROOT)/tmp" && depot=$$(mktemp -d "$(BUILDROOT)/tmp/depot.XXXXXX") && \
+	trap 'rm -rf "$$depot"' EXIT && trap 'exit 129' HUP && trap 'exit 143' TERM && \
+	export JULIA_DEPOT_PATH="$(call cygpath_w,$$depot)$(PATHSEP)" || exit 1;
+
 TESTGROUPS = unicode strings compiler Compiler JuliaSyntax JuliaLowering
 TESTS = all default stdlib $(TESTGROUPS) \
 		$(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \
@@ -32,7 +42,7 @@ default:
 
 .PHONY: $(TESTS)
 $(TESTS):
-	+@cd $(SRCDIR) && \
+	+@cd $(SRCDIR) && $(TEST_DEPOT) \
 	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) $@)
 
 .PHONY: install-revise-deps
@@ -41,7 +51,7 @@ install-revise-deps:
 
 .PHONY: $(addprefix revise-, $(TESTS))
 $(addprefix revise-, $(TESTS)): revise-% :
-	@cd $(SRCDIR) && \
+	@cd $(SRCDIR) && $(TEST_DEPOT) \
     $(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) --revise $*)
 
 .PHONY: relocatedepot
@@ -89,3 +99,5 @@ clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
 	@$(MAKE) -C gcext $@ $(GCEXT_ARGS)
 	@$(MAKE) -C llvmpasses $@
+	@# test depots that a killed test run left behind
+	@rm -rf "$(BUILDROOT)/tmp"/depot.*
