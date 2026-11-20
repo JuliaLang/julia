@@ -8,7 +8,7 @@ endif
 ifneq ($(USE_BINARYBUILDER_MPFR),1)
 
 MPFR_CONFIGURE_OPTS := $(CONFIGURE_COMMON)
-MPFR_CONFIGURE_OPTS += --enable-thread-safe --enable-shared-cache --disable-float128 --disable-decimal-float
+MPFR_CONFIGURE_OPTS += --enable-thread-safe --disable-float128 --disable-decimal-float
 MPFR_CONFIGURE_OPTS += --enable-shared --disable-static
 
 ifeq ($(USE_SYSTEM_GMP), 0)
