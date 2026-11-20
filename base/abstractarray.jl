@@ -1660,8 +1660,8 @@ function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,Ab
     ind = findall(in(axes1(A)), I)
     X[ind] = A[I[ind]]
     Xind = axes1(X)
-    X[first(Xind):first(ind)-1] = default
-    X[last(ind)+1:last(Xind)] = default
+    fill!(view(X, first(Xind):first(ind)-1), default)
+    fill!(view(X, last(ind)+1:last(Xind)), default)
     X
 end
 function get!(X::AbstractArray{T}, A::AbstractArray, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
