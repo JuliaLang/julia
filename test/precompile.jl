@@ -6217,6 +6217,78 @@ end
     end end
 end
 
+precompile_test_harness("@ccallable name conflicts") do load_path
+    write(joinpath(load_path, "CCallableConflictA.jl"),
+    """
+    module CCallableConflictA
+    Base.@ccallable ccallable_conflict()::Cint = Cint(1)
+    end
+    """)
+    # the conflicting name comes from a dependency, loaded before any `@ccallable` here
+    write(joinpath(load_path, "CCallableConflictB.jl"),
+    """
+    module CCallableConflictB
+    using CCallableConflictA
+    Base.@ccallable ccallable_conflict()::Cint = Cint(2)
+    end
+    """)
+    # ... or loaded after one
+    write(joinpath(load_path, "CCallableConflictC.jl"),
+    """
+    module CCallableConflictC
+    Base.@ccallable ccallable_noconflict()::Cint = Cint(3)
+    using CCallableConflictA
+    Base.@ccallable "ccallable_conflict" other_name()::Cint = Cint(3)
+    end
+    """)
+    # an unrelated package using the same name
+    write(joinpath(load_path, "CCallableConflictD.jl"),
+    """
+    module CCallableConflictD
+    Base.@ccallable ccallable_conflict()::Cint = Cint(4)
+    end
+    """)
+    msg = "the C symbol \"ccallable_conflict\" is already defined by `CCallableConflictA.ccallable_conflict`"
+    for name in ("CCallableConflictB", "CCallableConflictC")
+        io = IOBuffer()
+        @test_throws Regex("Failed to precompile $name") Base.compilecache(Base.identify_package(name), io, io)
+        @test occursin(msg, String(take!(io)))
+    end
+
+    # Packages which do not know about each other can still be loaded together
+    @eval using CCallableConflictA, CCallableConflictD
+    invokelatest() do
+        @test isdefined(only(methods(CCallableConflictA.ccallable_conflict)), :ccallable)
+        @test isdefined(only(methods(CCallableConflictD.ccallable_conflict)), :ccallable)
+    end
+    # but they cannot both be put in the same image
+    function output_o(script)
+        mktempdir() do dir
+            cmd = `$(Base.julia_cmd()) --startup-file=no --experimental --trim=unsafe
+                    --strip-ir --strip-metadata --output-o $(joinpath(dir, "out.o")) -e $script`
+            cmd = addenv(cmd, "JULIA_LOAD_PATH" => join(LOAD_PATH, Sys.iswindows() ? ';' : ':'),
+                              "JULIA_DEPOT_PATH" => join(DEPOT_PATH, Sys.iswindows() ? ';' : ':'))
+            io = IOBuffer()
+            ok = success(pipeline(cmd; stdout=io, stderr=io))
+            return ok, String(take!(io))
+        end
+    end
+    ok, output = output_o("""
+        using CCallableConflictA, CCallableConflictD
+        Base.Compiler.add_ccallable_entrypoints!()
+        """)
+    @test !ok
+    @test occursin("@ccallable: cannot export `ccallable_conflict` as", output)
+    # A method which was replaced does not conflict with its replacement
+    ok, output = output_o("""
+        Base.@ccallable ccallable_replaced()::Cint = Cint(1)
+        Base.@ccallable ccallable_replaced()::Cint = Cint(2)
+        Base.Compiler.add_ccallable_entrypoints!()
+        """)
+    @test ok
+    @test !occursin("@ccallable", output)
+end
+
 finish_precompile_test!()
 if original_num_precompile_tasks === nothing
     delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")

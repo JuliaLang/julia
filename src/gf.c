@@ -6589,11 +6589,63 @@ JL_DLLEXPORT void jl_typeinf_timing_end(uint64_t start, int is_recompile)
     }
 }
 
+// The C symbol names claimed by `@ccallable` methods (jl_sym_t* => jl_method_t*), so that
+// asking for a second export with the same name can be rejected when it is declared,
+// instead of producing an image that contains two definitions of that symbol.
+// The methods are kept alive by `jl_method_table`, which never forgets a definition.
+// This is built lazily, by scanning the method table, the first time it is needed, and
+// kept up to date after that by `jl_extern_c` and by loading (`jl_activate_methods`).
+// Protected by `world_counter_lock`.
+static htable_t ccallable_names;
+static int ccallable_names_inited = 0;
+
+// the name of the C symbol that will be exported for `ccallable`
+static jl_sym_t *ccallable_symbol(jl_svec_t *ccallable) JL_NOTSAFEPOINT
+{
+    if (jl_svec_len(ccallable) > 2)
+        return jl_symbol(jl_string_data(jl_svecref(ccallable, 2)));
+    jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(jl_svecref(ccallable, 1));
+    return ft->name->singletonname;
+}
+
+// Record that `meth` exports `name`, unless another method already does.
+// Returns that other method on conflict, or NULL if `meth` now owns the name.
+static jl_method_t *ccallable_claim_name(jl_sym_t *name, jl_method_t *meth) JL_NOTSAFEPOINT
+{
+    void **bp = ptrhash_bp(&ccallable_names, name);
+    jl_method_t *prev = (jl_method_t*)*bp;
+    // the previous owner keeps the name, unless it has been deleted or replaced, or it
+    // has been re-declared with a different name since
+    if (prev != HT_NOTFOUND && prev != meth &&
+        (jl_atomic_load_relaxed(&prev->dispatch_status) & METHOD_SIG_LATEST_WHICH) &&
+        prev->ccallable != NULL && ccallable_symbol(prev->ccallable) == name)
+        return prev;
+    *bp = (void*)meth;
+    return NULL;
+}
+
+static int ccallable_names_scan(jl_typemap_entry_t *def, void *closure) JL_NOTSAFEPOINT
+{
+    jl_method_t *meth = def->func.method;
+    if (meth->ccallable != NULL)
+        ccallable_claim_name(ccallable_symbol(meth->ccallable), meth);
+    return 1;
+}
+
+void jl_ccallable_loaded(jl_method_t *meth) JL_NOTSAFEPOINT
+{
+    // if the table has not been built yet, building it will find this method later
+    if (ccallable_names_inited && meth->ccallable != NULL)
+        ccallable_claim_name(ccallable_symbol(meth->ccallable), meth);
+}
+
 // declare a C-callable entry point; called during code loading from the toplevel
 JL_DLLEXPORT void jl_extern_c(jl_value_t *name, jl_value_t *declrt, jl_tupletype_t *sigt) JL_CANSAFEPOINT
 {
     // validate arguments. try to do as many checks as possible here to avoid
     // throwing errors later during codegen.
+    if (name != jl_nothing)
+        JL_TYPECHK(@ccallable, string, name);
     JL_TYPECHK(@ccallable, type, declrt);
     if (!jl_is_tuple_type(sigt))
         jl_type_error("@ccallable", (jl_value_t*)jl_anytuple_type_type, (jl_value_t*)sigt);
@@ -6614,15 +6666,38 @@ JL_DLLEXPORT void jl_extern_c(jl_value_t *name, jl_value_t *declrt, jl_tupletype
             jl_error("@ccallable: argument types must be concrete");
     }
 
-    // save a record of this so that the alias is generated when we write an object file
-    jl_method_t *meth = (jl_method_t*)jl_methtable_lookup((jl_value_t*)sigt, jl_atomic_load_acquire(&jl_world_counter));
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
+    jl_method_t *meth = (jl_method_t*)jl_methtable_lookup((jl_value_t*)sigt, world);
     if (!jl_is_method(meth))
         jl_error("@ccallable: could not find requested method");
-    JL_GC_PUSH1(&meth);
+    jl_svec_t *ccallable = NULL;
+    jl_method_t *prev = NULL;
+    JL_GC_PUSH3(&meth, &ccallable, &prev);
     if (name == jl_nothing)
-        jl_gc_write(meth, meth->ccallable, jl_svec_t, jl_svec2(declrt, (jl_value_t*)sigt));
+        ccallable = jl_svec2(declrt, (jl_value_t*)sigt);
     else
-        jl_gc_write(meth, meth->ccallable, jl_svec_t, jl_svec3(declrt, (jl_value_t*)sigt, name));
+        ccallable = jl_svec3(declrt, (jl_value_t*)sigt, name);
+
+    // the exported name must be unique, since all of the entry points which are loaded
+    // may end up being linked into the same image
+    jl_sym_t *symbol = ccallable_symbol(ccallable);
+    JL_LOCK(&world_counter_lock);
+    if (!ccallable_names_inited) {
+        htable_new(&ccallable_names, 0);
+        jl_typemap_visitor(jl_atomic_load_relaxed(&jl_method_table->defs), ccallable_names_scan, NULL);
+        ccallable_names_inited = 1;
+    }
+    prev = ccallable_claim_name(symbol, meth);
+    if (prev == NULL) {
+        // save a record of this so that the alias is generated when we write an object file
+        jl_gc_write(meth, meth->ccallable, jl_svec_t, ccallable);
+    }
+    JL_UNLOCK(&world_counter_lock);
+    if (prev != NULL) {
+        jl_errorf("@ccallable: the C symbol \"%s\" is already defined by `%s.%s` at %s:%d",
+                  jl_symbol_name(symbol), jl_symbol_name(prev->module->name),
+                  jl_symbol_name(prev->name), jl_symbol_name(prev->file), (int)prev->line);
+    }
     JL_GC_POP();
 }
 

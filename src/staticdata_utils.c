@@ -850,6 +850,7 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *records, jl_ar
             jl_method_t *m = (jl_method_t*)obj;
             assert(jl_atomic_load_relaxed(&m->primary_world) == ~(size_t)0);
             jl_atomic_store_release(&m->primary_world, world);
+            jl_ccallable_loaded(m);
         }
         else if (jl_is_code_instance(obj)) {
             jl_code_instance_t *ci = (jl_code_instance_t*)obj;
@@ -878,6 +879,7 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *records, jl_ar
             jl_value_t *record = jl_array_ptr_ref(records, i);
             //uint64_t t0 = uv_hrtime();
             jl_method_table_activate_with_record(entry, record == jl_nothing ? NULL : (jl_array_t*)record, image, deferred);
+            jl_ccallable_loaded(entry->func.method);
             //jl_printf(JL_STDERR, "%f ", (double)(uv_hrtime() - t0) / 1e6);
             //jl_static_show(JL_STDERR, entry->func.value);
             //jl_printf(JL_STDERR, "\n");
