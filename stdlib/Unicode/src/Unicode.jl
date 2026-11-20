@@ -214,7 +214,7 @@ function graphemes(s::AbstractString, r::AbstractUnitRange{<:Integer})
     return @view s[start:iprev]
 end
 
-using Base.Unicode: utf8proc_error, UTF8PROC_DECOMPOSE, UTF8PROC_CASEFOLD, UTF8PROC_STRIPMARK
+using Base.Unicode: UTF8PROC_CASEFOLD, UTF8PROC_DECOMPOSE, UTF8PROC_STRIPMARK, utf8proc_error
 
 function _decompose_char!(codepoint::Union{Integer,Char}, dest::Vector{UInt32}, offset::Integer, options::Integer)
     ret = GC.@preserve dest @ccall utf8proc_decompose_char(codepoint::UInt32, pointer(dest, 1+offset)::Ptr{UInt32}, (length(dest)-offset)::Int, options::Cint, C_NULL::Ptr{Cint})::Int

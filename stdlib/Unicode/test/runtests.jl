@@ -2,7 +2,7 @@
 
 using Test
 using Unicode
-using Unicode: normalize, isassigned, julia_chartransform
+using Unicode: isassigned, julia_chartransform, normalize
 import Random
 
 @test isempty(Test.detect_closure_boxes(Unicode))
@@ -42,18 +42,16 @@ end
     #https://www.unicode.org/reports/tr15/
 
     @testset "canonical equivalence" begin
-        let ==(a::Array{Char},b::Array{Char}) = normalize(string(a...), :NFC)==normalize(string(b...), :NFC)
-            ==(a,b) = Base.:(==)(a,b)
+        let ==(a::Array{Char},b::Array{Char}) = Base.:(==)(normalize(string(a...), :NFC), normalize(string(b...), :NFC))
             @test ['C', '̧'] == ['Ç']
             @test ['q', '̇', '̣'] == ['q', '̣', '̇']
             @test ['가'] == ['ᄀ', 'ᅡ']
-            @test ['Ω'] == ['Ω']
+            @test ['\u2126'] == ['\u03a9']
         end
     end
 
     @testset "compatibility equivalence" begin
-        let ==(a::Array{Char},b::Array{Char}) = normalize(string(a...), :NFKC)==normalize(string(b...), :NFKC)
-            ==(a,b) = Base.:(==)(a,b)
+        let ==(a::Array{Char},b::Array{Char}) = Base.:(==)(normalize(string(a...), :NFKC), normalize(string(b...), :NFKC))
             @test ['ℌ'] == ['ℍ'] == ['H']
             @test ['ﻨ'] == ['ﻧ'] == ['ﻦ'] == ['ﻥ']
             @test ['①'] == ['1']
@@ -172,7 +170,7 @@ end
     THINSPACE = Char(0x002009)
     ZWSPACE = Char(0x002060)
 
-    uspace = [ENSPACE, EMSPACE, THINSPACE]
+    uspace = [NBSP, ENSPACE, EMSPACE, THINSPACE]
     aspace = [' ']
     acntrl_space = ['\t', '\n', '\v', '\f', '\r']
     for c in vcat(aspace,uspace)
@@ -267,7 +265,7 @@ end
                     @test grph == g_
                     @test length(graphemes(s_)) == length(grph)
                 end
-                S = [T(normalize(s)) for (s,g) in grphtest]
+                S = [T(normalize(s)) for (s,_) in grphtest]
                 G = map(graphemes, S)
                 @test map(graphemes, sort!(S)) == sort!(G)
             end
@@ -433,8 +431,8 @@ end
     @test typeof(lowercase(GenericString(str))) == String
 
     foomap(ch) = (ch > Char(65))
-    foobar(ch) = Char(0xd800)
-    foobaz(ch) = reinterpret(Char, typemax(UInt32))
+    foobar(_) = Char(0xd800)
+    foobaz(_) = reinterpret(Char, typemax(UInt32))
     @test_throws ArgumentError map(foomap, GenericString(str))
     @test map(foobar, GenericString(str)) == String(repeat(b"\ud800", outer=[length(str)]))
     @test map(foobaz, GenericString(str)) == String(repeat([0xff], outer=[4*length(str)]))
@@ -444,8 +442,8 @@ end
     @test ["a","b"].*["c" "d"] == ["ac" "ad"; "bc" "bd"]
 
     @test one(String) == ""
-    @test prod(["*" for i in 1:3]) == "***"
-    @test prod(["*" for i in 1:0]) == ""
+    @test prod(["*" for _ in 1:3]) == "***"
+    @test prod(["*" for _ in 1:0]) == ""
 end
 
 @testset "Grapheme breaks and iterator" begin
