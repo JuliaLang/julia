@@ -602,12 +602,23 @@ JL_DLLEXPORT const char *jl_precompile_jobserver_create(int ntokens) JL_NOTSAFEP
     uv_mutex_lock(&jl_precompile_jobserver_lock);
     const char *name = NULL;
     if (!JL_PRECOMPILE_JOBSERVER_ACTIVE()) {
-        unsigned counter = ++jl_precompile_jobserver_counter;
 #ifdef _OS_WINDOWS_
-        snprintf(jl_precompile_jobserver_name, sizeof(jl_precompile_jobserver_name),
-                 "jl_pc_%lu_%u", (unsigned long)GetCurrentProcessId(), counter);
-        jl_precompile_jobserver_sem = CreateSemaphoreA(NULL, ntokens, ntokens, jl_precompile_jobserver_name);
+        // Windows reuses PIDs, and the pool of an exited process lives on while any of
+        // its workers still holds it. CreateSemaphore opens such a pool, with whatever
+        // tokens it has left, instead of failing, so move on to a name nobody holds.
+        for (int attempt = 0; attempt < 16; attempt++) {
+            unsigned counter = ++jl_precompile_jobserver_counter;
+            snprintf(jl_precompile_jobserver_name, sizeof(jl_precompile_jobserver_name),
+                     "jl_pc_%lu_%u", (unsigned long)GetCurrentProcessId(), counter);
+            HANDLE sem = CreateSemaphoreA(NULL, ntokens, ntokens, jl_precompile_jobserver_name);
+            if (sem == NULL || GetLastError() != ERROR_ALREADY_EXISTS) {
+                jl_precompile_jobserver_sem = sem;
+                break;
+            }
+            CloseHandle(sem);
+        }
 #else
+        unsigned counter = ++jl_precompile_jobserver_counter;
         // Name must start with '/' and stay short (macOS limits names to ~31 chars).
         snprintf(jl_precompile_jobserver_name, sizeof(jl_precompile_jobserver_name),
                  "/jl_pc_%ld_%u", (long)getpid(), counter);
