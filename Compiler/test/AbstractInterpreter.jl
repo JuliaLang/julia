@@ -165,6 +165,18 @@ overlay_shadow_zero(xs::Vector{Int}...) = Int[xs[i][j] for i=eachindex(xs) for j
     overlay_shadow_zero(x...)
 end == Vector{Int}
 
+# adding an overlay method invalidates code whose lookup fell through to the global table
+overlay_fallthrough() = 1
+overlay_fallthrough_caller() = overlay_fallthrough()
+overlay_fallthrough_invoke() = @invoke overlay_fallthrough()
+@test Base.infer_return_type((); interp=MTOverlayInterp()) do
+    overlay_fallthrough_caller(), overlay_fallthrough_invoke()
+end === Tuple{Int,Int}
+@overlay OVERLAY_MT overlay_fallthrough() = "overlay"
+@test Base.infer_return_type((); interp=MTOverlayInterp()) do
+    overlay_fallthrough_caller(), overlay_fallthrough_invoke()
+end === Tuple{String,String}
+
 # partial concrete evaluation
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
