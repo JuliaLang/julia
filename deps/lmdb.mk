@@ -33,7 +33,12 @@ $(BUILDDIR)/$(LMDB_SRC_DIR)/release-locks.patch-applied: $(BUILDDIR)/$(LMDB_SRC_
 		patch -p1 -f < $(SRCDIR)/patches/0004-Add-mdb_env_release_locks.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(LMDB_SRC_DIR)/source-patched: $(BUILDDIR)/$(LMDB_SRC_DIR)/release-locks.patch-applied
+$(BUILDDIR)/$(LMDB_SRC_DIR)/freebsd-pshared.patch-applied: $(BUILDDIR)/$(LMDB_SRC_DIR)/release-locks.patch-applied
+	cd $(BUILDDIR)/$(LMDB_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/0005-Register-process-shared-mutexes-with-libthr.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(LMDB_SRC_DIR)/source-patched: $(BUILDDIR)/$(LMDB_SRC_DIR)/freebsd-pshared.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(LMDB_SRC_DIR)/build-configured: $(BUILDDIR)/$(LMDB_SRC_DIR)/source-patched
