@@ -28,7 +28,8 @@ mutable struct IdDict{K,V} <: AbstractDict{K,V}
     ht::Memory{Any}
     count::Int
     ndel::Int
-    IdDict{K,V}() where {K, V} = new{K,V}(Memory{Any}(undef, 32), 0, 0)
+    # The table is allocated on first insertion (`setindex!` rehashes an empty one).
+    IdDict{K,V}() where {K, V} = new{K,V}(Memory{Any}(undef, 0), 0, 0)
 
     function IdDict{K,V}(itr) where {K, V}
         d = IdDict{K,V}()

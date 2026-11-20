@@ -91,7 +91,29 @@ block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.index, inst)
     return jump_dests
 end
 
+# If `stmts` is straight-line code, which forms a single basic block, the index of its
+# last statement that is not `nothing`, which ends that block; otherwise 0.
+function straight_line_length(stmts::Vector{Any})
+    n = length(stmts)
+    last_stmt = 0
+    for idx in 1:n
+        stmt = stmts[idx]
+        if isa(stmt, Union{GotoIfNot, GotoNode, EnterNode, PhiNode})
+            return 0
+        elseif isa(stmt, ReturnNode)
+            idx < n && return 0
+        elseif isexpr(stmt, :leave)
+            return 0
+        end
+        stmt === nothing || (last_stmt = idx)
+    end
+    return last_stmt
+end
+
 function compute_basic_blocks(stmts::Vector{Any})
+    # Fast path for a single block, giving the same CFG as the general code below
+    n = straight_line_length(stmts)
+    n > 0 && return CFG(BasicBlock[BasicBlock(StmtRange(1, n), Int[0], Int[])], Int[n + 1])
     # Compute ranges
     bb_starts = basic_blocks_starts(stmts) # ::BitSet and already sorted
     pop!(bb_starts, 1)
@@ -417,6 +439,12 @@ function add_inst!(new::NewNodeStream, pos::Int, attach_after::Bool)
     return Instruction(new.stmts)
 end
 copy(nns::NewNodeStream) = NewNodeStream(copy(nns.stmts), copy(nns.info))
+
+# Shared empty placeholders for `IncrementalCompact`'s pending nodes, which most
+# compactions never use. Replaced by fresh ones in `add_pending!`; never mutated.
+const EMPTY_PENDING_NODES = NewNodeStream(
+    InstructionStream(Any[], Any[], CallInfo[], Int32[], UInt32[]), NewNodeInfo[])
+const EMPTY_PENDING_PERM = Int[]
 
 struct NewInstruction
     stmt::Any
@@ -778,16 +806,25 @@ struct CFGTransformState
     # Scratch buffers reused for the in-place domtree updates performed while
     # killing edges. Non-`nothing` exactly when `domtree` is.
     domtree_cache::Union{Nothing, DomTreeCache}
+    # Whether a missing `domtree` should be built on the first killed edge (see
+    # `get_domtree!`), since most compactions kill none.
+    lazy_domtree::Bool
 end
+CFGTransformState(cfg_transforms_enabled::Bool, fold_constant_branches::Bool,
+                  result_bbs::Vector{BasicBlock}, bb_rename_pred::Vector{Int}, bb_rename_succ::Vector{Int},
+                  domtree::Union{Nothing, DomTree}, domtree_cache::Union{Nothing, DomTreeCache}) =
+    CFGTransformState(cfg_transforms_enabled, fold_constant_branches, result_bbs,
+                      bb_rename_pred, bb_rename_succ, domtree, domtree_cache, false)
 
 # N.B.: Takes ownership of the CFG array
 function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bool=false)
     if allow_cfg_transforms
         bb_rename = Vector{Int}(undef, length(blocks))
         cur_bb = 1
-        dfs = DFS(blocks)
+        # The entry block is always reachable, so a single block needs no search
+        dfs = length(blocks) > 1 ? DFS(blocks) : nothing
         for i = 1:length(bb_rename)
-            if i != 1 && dfs.to_pre[i] == 0 # if i is unreachable
+            if i != 1 && (dfs::DFSTree).to_pre[i] == 0 # if i is unreachable
                 bb_rename[i] = -1
             else
                 bb_rename[i] = cur_bb
@@ -810,21 +847,53 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
                 succs[j] = bb_rename[succs[j]]
             end
         end
-        let blocks = blocks, bb_rename = bb_rename
-            result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
+        if cur_bb - 1 == length(blocks)
+            # Every block is reachable, so the renaming is the identity: keep the array
+            result_bbs = blocks
+        else
+            let blocks = blocks, bb_rename = bb_rename
+                result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
+            end
         end
-        # Reuse the same cache for the initial construction and any later
-        # in-place updates while killing edges during compaction.
-        domtree_cache = DomTreeCache()
-        # TODO: This could be done by just renaming the domtree
-        domtree = construct_domtree(result_bbs; cache=domtree_cache)
     else
         bb_rename = Vector{Int}()
         result_bbs = blocks
-        domtree = nothing
-        domtree_cache = nothing
     end
-    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename, domtree, domtree_cache)
+    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename,
+                             nothing, nothing, allow_cfg_transforms)
+end
+
+"""
+    CompactionBuffers()
+
+Scratch storage that a sequence of compactions of one function passes along, each
+compacting the output of the previous one. Once a compaction completes, the statements
+of its input are dead, so the next compaction writes its result into them instead of
+allocating a new `InstructionStream`; its rename and use-count vectors are reused too.
+Only an input that an earlier compaction with the same buffers produced is reused, so
+the caller must not keep using the IR it passes to such a compaction.
+"""
+mutable struct CompactionBuffers
+    produced::Union{Nothing,InstructionStream} # result of the latest compaction
+    spare::Union{Nothing,InstructionStream}    # dead statements available for reuse
+    const used_ssas::Vector{Int}
+    const ssa_rename::Vector{Any}
+    # The latest completed `IncrementalCompact`, reused by the next compaction
+    spare_compact::Any # ::Union{Nothing,IncrementalCompact}, which is defined below
+end
+CompactionBuffers() = CompactionBuffers(nothing, nothing, Int[], Any[], nothing)
+
+function take_result_stream!(buffers::CompactionBuffers, len::Int)
+    stmts = buffers.spare
+    stmts === nothing && return InstructionStream(len)
+    buffers.spare = nothing
+    # Shrinking first leaves every statement and type unassigned, as in a new stream
+    resize!(empty!(stmts.stmt), len)
+    resize!(empty!(stmts.type), len)
+    fill!(resize!(stmts.info, len), NoCallInfo())
+    fill!(resize!(stmts.line, 3len), Int32(0))
+    fill!(resize!(stmts.flag, len), IR_FLAG_NULL)
+    return stmts
 end
 
 mutable struct IncrementalCompact
@@ -851,24 +920,46 @@ mutable struct IncrementalCompact
     active_result_bb::Int
     renamed_new_nodes::Bool
 
-    function IncrementalCompact(code::IRCode, cfg_transform::CFGTransformState)
+    buffers::Union{Nothing,CompactionBuffers}
+    # The domtree kept up to date while killing edges, with its scratch buffers: that of
+    # `cfg_transform`, or built by `get_domtree!`.
+    domtree::Union{Nothing, DomTree}
+    domtree_cache::Union{Nothing, DomTreeCache}
+    # The compaction last used to inline a callee into this one (see `inline_compaction!`)
+    inline_scratch::Union{Nothing, IncrementalCompact}
+
+    function IncrementalCompact(code::IRCode, cfg_transform::CFGTransformState,
+                                buffers::Union{Nothing,CompactionBuffers}=nothing)
+        if buffers !== nothing && buffers.spare_compact !== nothing
+            compact = buffers.spare_compact::IncrementalCompact
+            buffers.spare_compact = nothing
+            return reset_compaction!(compact, code, cfg_transform, buffers)
+        end
         # Sort by position with attach after nodes after regular ones
         info = code.new_nodes.info
         perm = sort!(collect(eachindex(info)); by=i::Int->(2info[i].pos+info[i].attach_after, i))
         new_len = length(code.stmts) + length(info)
-        result = InstructionStream(new_len)
+        if buffers === nothing
+            result = InstructionStream(new_len)
+            used_ssas = fill(0, new_len)
+            ssa_rename = Any[SSAValue(i) for i = 1:new_len]
+        else
+            result = take_result_stream!(buffers, new_len)
+            used_ssas = fill!(resize!(buffers.used_ssas, new_len), 0)
+            ssa_rename = resize!(buffers.ssa_rename, new_len)
+            for i = 1:new_len
+                ssa_rename[i] = SSAValue(i)
+            end
+        end
         code.debuginfo.codelocs = result.line
-        used_ssas = fill(0, new_len)
         new_new_used_ssas = Vector{Int}()
-        blocks = code.cfg.blocks
-        ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         late_fixup = Vector{Int}()
         new_new_nodes = NewNodeStream()
-        pending_nodes = NewNodeStream()
-        pending_perm = Int[]
+        pending_nodes = EMPTY_PENDING_NODES
+        pending_perm = EMPTY_PENDING_PERM
         return new(code, result, cfg_transform, ssa_rename, used_ssas, late_fixup, perm, 1,
             new_new_nodes, new_new_used_ssas, pending_nodes, pending_perm,
-            1, 1, 1, 1, false)
+            1, 1, 1, 1, false, buffers, cfg_transform.domtree, cfg_transform.domtree_cache, nothing)
     end
 
     # For inlining
@@ -878,18 +969,114 @@ mutable struct IncrementalCompact
         new_len = length(code.stmts) + length(info)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         bb_rename = Vector{Int}()
-        pending_nodes = NewNodeStream()
-        pending_perm = Int[]
+        pending_nodes = EMPTY_PENDING_NODES
+        pending_perm = EMPTY_PENDING_PERM
         return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing, nothing),
             ssa_rename, parent.used_ssas,
             parent.late_fixup, perm, 1,
             parent.new_new_nodes, parent.new_new_used_ssas, pending_nodes, pending_perm,
-            1, result_offset, 1, parent.active_result_bb, false)
+            1, result_offset, 1, parent.active_result_bb, false, nothing, nothing, nothing, nothing)
     end
 end
 
-function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
-    return IncrementalCompact(code, CFGTransformState!(code.cfg.blocks, allow_cfg_transforms))
+# Reinitialize the completed `compact` for compacting `code`, as
+# `IncrementalCompact(code, cfg_transform, buffers)` would construct it.
+function reset_compaction!(compact::IncrementalCompact, code::IRCode,
+                           cfg_transform::CFGTransformState, buffers::CompactionBuffers)
+    info = code.new_nodes.info
+    perm = resize!(compact.perm, length(info))
+    for i = 1:length(info)
+        perm[i] = i
+    end
+    sort!(perm; by=i::Int->(2info[i].pos+info[i].attach_after, i))
+    new_len = length(code.stmts) + length(info)
+    result = take_result_stream!(buffers, new_len)
+    used_ssas = fill!(resize!(buffers.used_ssas, new_len), 0)
+    ssa_rename = resize!(buffers.ssa_rename, new_len)
+    for i = 1:new_len
+        ssa_rename[i] = SSAValue(i)
+    end
+    code.debuginfo.codelocs = result.line
+    compact.ir = code
+    compact.result = result
+    compact.cfg_transform = cfg_transform
+    compact.ssa_rename = ssa_rename
+    compact.used_ssas = used_ssas
+    compact.late_fixup = empty!(compact.late_fixup)
+    compact.perm = perm
+    compact.new_nodes_idx = 1
+    compact.new_new_nodes = NewNodeStream() # becomes part of the result IR
+    compact.new_new_used_ssas = empty!(compact.new_new_used_ssas)
+    compact.pending_nodes = EMPTY_PENDING_NODES
+    compact.pending_perm = EMPTY_PENDING_PERM
+    compact.idx = 1
+    compact.result_idx = 1
+    compact.active_bb = 1
+    compact.active_result_bb = 1
+    compact.renamed_new_nodes = false
+    compact.buffers = buffers
+    compact.domtree = cfg_transform.domtree
+    compact.domtree_cache = cfg_transform.domtree_cache
+    return compact
+end
+
+"""
+    inline_compaction!(parent::IncrementalCompact, code::IRCode, result_offset::Int)
+
+A compaction of the callee `code` that writes into the result of `parent` from
+`result_offset` on, as `IncrementalCompact(parent, code, result_offset)` creates. Each such
+compaction is finished before the next callee is inlined, so `parent` reuses one for all.
+"""
+function inline_compaction!(parent::IncrementalCompact, code::IRCode, result_offset::Int)
+    sub = parent.inline_scratch
+    if sub === nothing
+        sub = IncrementalCompact(parent, code, result_offset)
+        parent.inline_scratch = sub
+        return sub
+    end
+    info = code.new_nodes.info
+    perm = resize!(sub.perm, length(info))
+    for i = 1:length(info)
+        perm[i] = i
+    end
+    sort!(perm; by=i::Int->(info[i].pos, i))
+    new_len = length(code.stmts) + length(info)
+    ssa_rename = resize!(sub.ssa_rename, new_len)
+    for i = 1:new_len
+        ssa_rename[i] = SSAValue(i)
+    end
+    bb_rename = sub.cfg_transform.bb_rename_pred
+    @assert isempty(bb_rename)
+    sub.ir = code
+    sub.result = parent.result
+    sub.cfg_transform = CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing, nothing)
+    sub.used_ssas = parent.used_ssas
+    sub.late_fixup = parent.late_fixup
+    sub.new_nodes_idx = 1
+    sub.new_new_nodes = parent.new_new_nodes
+    sub.new_new_used_ssas = parent.new_new_used_ssas
+    sub.pending_nodes = EMPTY_PENDING_NODES
+    sub.pending_perm = EMPTY_PENDING_PERM
+    sub.idx = 1
+    sub.result_idx = result_offset
+    sub.active_bb = 1
+    sub.active_result_bb = parent.active_result_bb
+    sub.renamed_new_nodes = false
+    return sub
+end
+
+function get_domtree!(compact::IncrementalCompact)
+    if compact.domtree === nothing && compact.cfg_transform.lazy_domtree
+        cache = DomTreeCache()
+        compact.domtree = construct_domtree(compact.cfg_transform.result_bbs; cache)
+        compact.domtree_cache = cache
+    end
+    return compact.domtree
+end
+
+function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false;
+                            buffers::Union{Nothing,CompactionBuffers}=nothing)
+    return IncrementalCompact(code, CFGTransformState!(code.cfg.blocks, allow_cfg_transforms), buffers)
 end
 
 struct TypesView{T}
@@ -1036,6 +1223,10 @@ function count_added_node!(compact::IncrementalCompact, @nospecialize(v))
 end
 
 function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
+    if compact.pending_nodes === EMPTY_PENDING_NODES
+        compact.pending_nodes = NewNodeStream()
+        compact.pending_perm = Int[]
+    end
     node = add_inst!(compact.pending_nodes, pos, attach_after)
     heappush!(compact.pending_perm, length(compact.pending_nodes), By(x::Int->compact.pending_nodes.info[x].pos))
     return node
@@ -1481,7 +1672,9 @@ scan the compacted prefix when `to == active_bb`. `from` and `to` are non-rename
 """
 function kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
     # Note: We recursively kill as many edges as are obviously dead.
-    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree, domtree_cache) = compact.cfg_transform
+    domtree = get_domtree!(compact)
+    domtree_cache = compact.domtree_cache
+    (; bb_rename_pred, bb_rename_succ, result_bbs) = compact.cfg_transform
     preds = result_bbs[bb_rename_succ[to]].preds
     succs = result_bbs[bb_rename_pred[from]].succs
     deleteat!(preds, findfirst(x::Int->x==bb_rename_pred[from], preds)::Int)
@@ -2267,11 +2460,19 @@ function complete(compact::IncrementalCompact)
         resize!(compact.result, length(compact.result) - nundef)
     end
 
+    buffers = compact.buffers
+    if buffers !== nothing
+        # The input is dead now; reuse it if an earlier compaction produced it
+        compact.ir.stmts === buffers.produced && (buffers.spare = compact.ir.stmts)
+        buffers.produced = compact.result
+        buffers.spare_compact = compact
+    end
     return IRCode(compact.ir, compact.result, cfg, compact.new_new_nodes)
 end
 
-function compact!(code::IRCode, allow_cfg_transforms::Bool=false)
-    compact = IncrementalCompact(code, allow_cfg_transforms)
+function compact!(code::IRCode, allow_cfg_transforms::Bool=false;
+                  buffers::Union{Nothing,CompactionBuffers}=nothing)
+    compact = IncrementalCompact(code, allow_cfg_transforms; buffers)
     # Just run through the iterator without any processing
     for _ in compact; end # _ isa Pair{Int, Any}
     return finish(compact)

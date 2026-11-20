@@ -189,8 +189,7 @@ add_tfunc(fpext, 2, 2, conversion_tfunc, 1)
 # arithmetic
 # ----------
 
-@nospecs math_tfunc(𝕃::AbstractLattice, args...) = math_tfunc(widenlattice(𝕃), args...)
-@nospecs math_tfunc(::JLTypeLattice, x, xs...) = widenconst(x)
+@nospecs math_tfunc(::AbstractLattice, x, xs...) = widenconst(x)
 
 add_tfunc(neg_int, 1, 1, math_tfunc, 0)
 add_tfunc(add_int, 2, 2, math_tfunc, 1)

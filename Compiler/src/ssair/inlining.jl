@@ -69,13 +69,14 @@ end
 add_inlining_edge!(et::InliningEdgeTracker, edge::CodeInstance) = add_inlining_edge!(et.edges, edge)
 add_inlining_edge!(et::InliningEdgeTracker, edge::MethodInstance) = add_inlining_edge!(et.edges, edge)
 
-function ssa_inlining_pass!(ir::IRCode, state::InliningState, propagate_inbounds::Bool)
+function ssa_inlining_pass!(ir::IRCode, state::InliningState, propagate_inbounds::Bool;
+                            buffers::Union{Nothing,CompactionBuffers}=nothing)
     # Go through the function, performing simple inlining (e.g. replacing call by constants
     # and analyzing legality of inlining).
     @zone "CC: ANALYSIS" todo = assemble_inline_todo!(ir, state)
     isempty(todo) && return ir
     # Do the actual inlining for every call we identified
-    @zone "CC: EXECUTION" ir = batch_inline!(ir, todo, propagate_inbounds, state.interp)
+    @zone "CC: EXECUTION" ir = batch_inline!(ir, todo, propagate_inbounds, state.interp; buffers)
     return ir
 end
 
@@ -376,7 +377,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     late_fixup_offset = length(compact.late_fixup)
     if item.linear_inline_eligible
         #compact[idx] = nothing
-        inline_compact = IncrementalCompact(compact, item.ir, compact.result_idx)
+        inline_compact = inline_compaction!(compact, item.ir, compact.result_idx)
         @assert isempty(inline_compact.perm) && isempty(inline_compact.pending_perm) "linetable not in canonical form (missing compact call)"
         for ((lineidx, idx′), stmt′) in inline_compact
             # This dance is done to maintain accurate usage counts in the
@@ -412,7 +413,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         end
         pn = PhiNode()
         #compact[idx] = nothing
-        inline_compact = IncrementalCompact(compact, item.ir, compact.result_idx)
+        inline_compact = inline_compaction!(compact, item.ir, compact.result_idx)
         @assert isempty(inline_compact.perm) && isempty(inline_compact.pending_perm) "linetable not in canonical form (missing compact call)"
         for ((lineidx, idx′), stmt′) in inline_compact
             inline_compact[idx′] = nothing
@@ -620,7 +621,8 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
     return insert_node_here!(compact, NewInstruction(pn, typ, line))
 end
 
-function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inbounds::Bool, interp::AbstractInterpreter)
+function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inbounds::Bool, interp::AbstractInterpreter;
+                       buffers::Union{Nothing,CompactionBuffers}=nothing)
     params = OptimizationParams(interp)
     # Compute the new CFG first (modulo statement ranges, which will be computed below)
     state = CFGInliningState(ir)
@@ -638,7 +640,7 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
 
     boundscheck = propagate_inbounds ? :propagate : :default
 
-    let compact = IncrementalCompact(ir, CFGTransformState!(state.new_cfg_blocks, false))
+    let compact = IncrementalCompact(ir, CFGTransformState!(state.new_cfg_blocks, false), buffers)
         # This needs to be a minimum and is more of a size hint
         nn = 0
         for (_, item) in todo
@@ -975,15 +977,22 @@ function retrieve_ir_for_inlining(cached_result::CodeInstance, src::String)
     strip_untracked_coverage_effects!(mi, src, src.debuginfo)
     return inflate_ir!(src, mi), SpecInfo(src), src.debuginfo
 end
+# A copy of `src` that can be inflated for inlining without modifying `src`. Inflating
+# it and inlining the result only rewrite the statements, so the other fields are shared.
+function copy_for_inlining(src::CodeInfo)
+    src = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), src)
+    src.code = copy_exprargs(src.code)
+    return src
+end
 function retrieve_ir_for_inlining(cached_result::CodeInstance, src::CodeInfo)
     mi = get_ci_mi(cached_result)
-    src = copy(src)
+    src = copy_for_inlining(src)
     strip_untracked_coverage_effects!(mi, src, src.debuginfo)
     return inflate_ir!(src, mi), SpecInfo(src), src.debuginfo
 end
 function retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo, preserve_local_sources::Bool)
     if preserve_local_sources
-        src = copy(src)
+        src = copy_for_inlining(src)
     end
     strip_untracked_coverage_effects!(mi, src, src.debuginfo)
     return inflate_ir!(src, mi), SpecInfo(src), src.debuginfo
