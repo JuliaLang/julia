@@ -2631,6 +2631,8 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
         throw(ArgumentError("must have at least one element"))
     all(>(0), dims) ||
         throw(ArgumentError("`dims` argument must contain positive integers"))
+    prod(dims) == length(as) ||
+        throw(ArgumentError("argument count does not match specified shape (expected $(prod(dims)), got $(length(as)))"))
 
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2

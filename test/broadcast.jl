@@ -43,6 +43,25 @@ check_broadcast_shape((-1:1, 6:9), (-1:1, 1))
 check_broadcast_shape((-1:1, 6:9), (1, 6:9))
 @test_throws DimensionMismatch check_broadcast_shape((-1:1, 6:9), (-1, 6:9))
 @test_throws DimensionMismatch check_broadcast_shape((-1:1, 6:9), (-1:1, 6))
+@test check_broadcast_shape((OneTo(2),)) === nothing
+@test_throws "fewer non-singleton dimensions" check_broadcast_shape((OneTo(2),), (OneTo(2), OneTo(3)))
+@test_throws "destination axes (Base.OneTo(2),) are not compatible with source axes (Base.OneTo(3),)" copyto!(zeros(2), Broadcast.broadcasted(+, [1, 2, 3]))
+
+using Base.Broadcast: BroadcastStyle, Unknown, ArrayConflict, DefaultArrayStyle, Broadcasted
+@test BroadcastStyle(Unknown(), Unknown()) === Unknown()
+@test ArrayConflict(Val(2)) === ArrayConflict()
+@test BroadcastStyle(DefaultArrayStyle{1}(), DefaultArrayStyle{2}()) === DefaultArrayStyle{2}()
+@test_throws "do not have a style assigned" Broadcast.combine_styles(Broadcasted{Unknown}(+, (1,)))
+@test_throws ErrorException Broadcasted(nothing, (1,), (2,))
+@test Broadcast._bcsm(2, 1) && !Broadcast._bcsm(2, 3)
+@test Broadcast.instantiate(5) === 5
+@test Broadcast.cat_nested_args(()) === ()
+@test Broadcast.prepare_args((), (1,)) === ()
+@test Broadcast.broadcast_preserving_zero_d(() -> 1) == fill(1)
+@test Broadcast.broadcast_preserving_zero_d(+, 1, 2) == fill(3)
+@test sprint(show, Broadcast.broadcasted(+, 1, [1])) == "Base.Broadcast.Broadcasted(+, (1, [1]))"
+@test sprint(show, Broadcast.instantiate(Broadcast.broadcasted(+, 1, [1]))) ==
+    "Base.Broadcast.Broadcasted{Base.Broadcast.DefaultArrayStyle{1}}(+, (1, [1]))"
 
 ci(x) = CartesianIndex(x)
 @test @inferred(newindex(ci((2,2)), (true, true), (-1,-1)))   == ci((2,2))
@@ -1112,6 +1131,12 @@ p0 = copy(p)
 @test identity.(.*) == Broadcast.BroadcastFunction(*)
 @test map(.+, [[1,2], [3,4]], [5, 6]) == [[6,7], [9,10]]
 @test repr(.!) == "Base.Broadcast.BroadcastFunction(!)"
+@test repr(MIME("text/plain"), .!) == "Base.Broadcast.BroadcastFunction(!)"
+bc_types(T, S, x) = promote_type(T, S)(x)
+@test bc_types.(Int, Float64, [1, 2]) == [1.0, 2.0]
+# `@.` leaves function objects spliced into the expression undotted, as well as `let` bindings
+@test Base.Broadcast.__dot__(Expr(:call, sin, :x)) == Expr(:call, sin, :x)
+@test (@macroexpand @. let x; f(x); end) == :(let x; f.(x); end)
 @test eval(:(.+)) == Base.BroadcastFunction(+)
 
 @testset "Issue #5187: Broadcasting of short-circuiting ops" begin
@@ -1141,6 +1166,10 @@ p0 = copy(p)
     @test (@. iseven(r) || iseven(f1(o)) || f2(o)) == [3,true,true,true,4,true,true,true]
     @test (iseven.(1:8) .&& iseven.((F5187(0)).(ones(8))) .&& (F5187(0)).(ones(8))) == [false,false,false,1,false,false,false,2]
     @test (iseven.(1:8) .|| iseven.((F5187(0)).(ones(8))) .|| (F5187(0)).(ones(8))) == [1,true,true,true,2,true,true,true]
+
+    x = [true, false]; y = [true, true]
+    @test (x .&& y) == [true, false]
+    @test (x .|| y) == [true, true]
 end
 
 @testset "Issue #28382: inferrability of broadcast with Union eltype" begin
@@ -1200,6 +1229,23 @@ end
     @test Base.broadcasted_kwsyntax(+, [1], [2]) isa Broadcast.Broadcasted{<:Any, <:Any, typeof(+)}
     @test Broadcast.BroadcastFunction(+)(2:3, 2:3) == 4:2:6
     @test Broadcast.BroadcastFunction(+)(2:3, 2:3) isa AbstractRange
+
+    srl = StepRangeLen(1.0, 0.5, 3)
+    lr = LinRange(1, 2, 3)
+    for (r, expected) in Any[
+            .-(1:2:7) => -1:-2:-7,
+            .-(srl) => StepRangeLen(-1.0, -0.5, 3),
+            .-(lr) => LinRange(-1, -2, 3),
+            2 .+ (1:2:7) => 3:2:9,
+            lr .+ 1 => LinRange(2, 3, 3),
+            1 .- (1:2:7) => 0:-2:-6,
+            lr .- 1 => LinRange(0, 1, 3),
+            2 .\ srl => StepRangeLen(0.5, 0.25, 3),
+            2 .\ lr => LinRange(0.5, 1, 3),
+        ]
+        @test r isa typeof(expected)
+        @test r == expected
+    end
 end
 
 @testset "#42063" begin
@@ -1233,6 +1279,12 @@ end
     A[pos .< 0] .= false
     @test all(>=(0), pos[A])
     @test count(A) == count(>=(0), pos)
+
+    B = falses(4); m = BitVector([1, 0, 1, 0])
+    B[m] .= [true, true]
+    @test B == m
+    mB = Broadcast.BitMaskedBitArray(B, m)
+    @test repr(mB) == string(typeof(mB), (B, m))
 end
 
 @testset "issue #38432: make CartesianIndex a broadcast scalar" begin

@@ -813,6 +813,29 @@ Base.readline(s::ReadLineIO; keep::Bool=false) = readline(s.b; keep)
     @test collect(eachline(ReadLineIO(IOBuffer("ab\ncd")))) == ["ab", "cd"]
 end
 
+struct OpenOnlyIO <: IO end
+Base.isopen(::OpenOnlyIO) = true
+
+@testset "generic IO fallbacks" begin
+    @test isreadable(OpenOnlyIO())
+    @test iswritable(OpenOnlyIO())
+    @test_throws "OpenOnlyIO does not support byte I/O" read(OpenOnlyIO(), UInt8)
+    @test_throws "OpenOnlyIO does not support byte I/O" write(OpenOnlyIO(), 0x01)
+    @test_throws "cannot read a value of type Union{}" read(OpenOnlyIO(), Union{})
+    @test_throws "The IO stream does not support reading objects of type Vector{$Int}." read(OpenOnlyIO(), Vector{Int})
+    @test_throws "`write` is not supported on non-isbits arrays" write(IOBuffer(), Any[1])
+
+    # a stream that only reads single bytes, into a buffer that must grow
+    b = UInt8[0x00]
+    @test readbytes!(CopyUntilIO(IOBuffer("abcdef")), b, 4) == 4
+    @test b == b"abcd"
+    # non-isbits values are read one by one
+    @test read!(CopyUntilIO(IOBuffer("xy")), Ref{String}())[] == "xy"
+    @test read!(CopyUntilIO(IOBuffer("xy")), Vector{String}(undef, 1)) == ["xy"]
+    @test read!(IOBuffer(reinterpret(UInt8, [1, 2, 3])), view(zeros(Int, 6), 1:2:6)) == [1, 2, 3]
+    @test Base.writepartial(IOBuffer(), 0x01) == 1
+end
+
 # more tests for reverse(eachline)
 @testset "reverse(eachline)" begin
     lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))
