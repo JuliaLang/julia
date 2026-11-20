@@ -236,6 +236,17 @@ c = Dates.Time(0)
     @test_throws ArgumentError Dates.DateTime(292277025, 12, 31)
     @test_throws ArgumentError Dates.DateTime(Dates.Date(292277025, 12, 31), Dates.Time(0))
     @test Dates.DateTime(292277025, 8, 17, 7, 12, 55) == tmax - Dates.Millisecond(807)
+    # Conversions reject values beyond the ends too
+    @test_throws InexactError Dates.DateTime(dmax)
+    @test_throws InexactError Dates.DateTime(Dates.Date(292277025, 8, 18))
+    @test Dates.DateTime(Dates.Date(292277025, 8, 17)) == Dates.DateTime(292277025, 8, 17)
+    # Dates outside DateTime still compare with DateTimes
+    far, past, t = Dates.Date(300_000_000), Dates.Date(-300_000_000), Dates.DateTime(2000)
+    @test far != t && t != far && !isequal(far, t)
+    @test t < far && far > t && past < t && !(far < t) && isless(t, far)
+    @test sort(Dates.TimeType[far, t, past]) == Dates.TimeType[past, t, far]
+    @test Dates.Date(2000) == t == Dates.Date(2000) && Dates.Date(2000) != t + Dates.Millisecond(1)
+    @test Dates.Date(2000) < t + Dates.Millisecond(1) && !(t < Dates.Date(2000))
     # Calendar arithmetic wraps at the ends like fixed periods, unlike the constructors
     @test dmax + Dates.Month(1) == dmax + Dates.Day(31)
     @test dmax + Dates.Year(1) == dmax + Dates.Day(366)  # across Feb 29

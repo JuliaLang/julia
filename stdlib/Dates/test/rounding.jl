@@ -80,6 +80,19 @@ end
     @test Dates.datetime2epochms(Dates.DateTime(-1, 12, 31)) == -86400000
     @test Dates.datetime2epochms(Dates.DateTime(0, 1, 1)) == 0
     @test Dates.datetime2epochms(Dates.DateTime(2016, 1, 1)) == Int64(736329) * 86400000
+    for (T, to, from, lo, hi) in ((Date, Dates.date2epochdays, Dates.epochdays2date,
+                                   Date(Dates.UTD(typemin(Int64))), Date(Dates.UTD(typemax(Int64)))),
+                                  (DateTime, Dates.datetime2epochms, Dates.epochms2datetime,
+                                   DateTime(Dates.UTM(typemin(Int64))), DateTime(Dates.UTM(typemax(Int64)))))
+        @test from(to(lo)) == lo
+        @test_throws OverflowError to(hi)
+        @test from(Int128(Dates.value(hi)) - Dates.value(T(0))) == hi
+        @test_throws InexactError from(typemin(Int64))
+        # Counts are converted exactly before the epoch is added
+        @test from(UInt128(1)) == from(1)
+        @test from(2.0^54) == from(Int64(2)^54)
+        @test_throws InexactError from(0.5)
+    end
 end
 @testset "Basic rounding" begin
     dt = Dates.Date(2016, 2, 28)    # Sunday

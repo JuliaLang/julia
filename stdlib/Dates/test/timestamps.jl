@@ -140,6 +140,11 @@ end
     @test_throws InexactError unix2timestamp(9223372037)
     @test_throws InexactError unix2timestamp(typemin(Int64))
     @test_throws InexactError unix2timestamp(9223372037.0)
+    # Rationals convert exactly, rounding toward zero
+    for x in (1 // 3, -7 // 3, 9223372036 // 1, -9223372036 // 1, typemax(Int64) // 1000000007, 1 // typemax(Int64))
+        @test unix2timestamp(x) == Timestamp(Dates.UTInstant(Nanosecond(Int64(trunc(BigInt, 1000000000 * big(x))))))
+        @test unix2timestamp(Timestamp{Second}, x) == Timestamp{Second}(Dates.UTInstant(Second(Int64(trunc(BigInt, big(x))))))
+    end
     @test Dates.datetime2rata(ts) == Dates.datetime2rata(Date(2026, 8, 31))
     # promotion
     @test promote(dt, ts) isa Tuple{Timestamp, Timestamp}
@@ -836,6 +841,9 @@ Dates.tons(x::TestBigNanosecond) = Dates.value(x)
     P = TestNanosecond{1 // Int128(10)^25}
     t = Timestamp{P}(Dates.UTInstant(P(0)))
     @test floor(t, Day) === ceil(t, Day) === round(t, Day) === round(t, Month) === t
+    # Scaling a rational to such ticks exceeds a widened numerator
+    x = typemax(Int64) // (typemax(Int64) - 1)
+    @test Dates.value(unix2timestamp(Timestamp{P}, x)) == div(big(typemax(Int64)) * big(10)^34, typemax(Int64) - 1)
 end
 
 @testset "Timestamps from dates whose ticks overflow Int128" begin
@@ -913,5 +921,13 @@ Dates.tons(::TestUnsignedTick{S}) where {S} = S
     # A bound less than a tick past the end lies outside the type, although its truncated tick does not
     @test_throws OverflowError ceil(typemax(Timestamp{Second}), Millisecond(700))
     @test_throws InexactError floor(typemax(Timestamp{Second}), Millisecond(700))
+end
+
+@testset "Conversions of narrow counts" begin
+    P = TestCountSecond{Int8}
+    t = Timestamp{P}(Dates.UTInstant(P(100)))
+    @test DateTime(t) == DateTime(1970, 1, 1, 0, 1, 40)
+    @test Timestamp{Second}(t) == t && convert(Second, t) == Second(100)
+    @test convert(Timestamp{Second}, P(100)) == t
 end
 end

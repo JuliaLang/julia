@@ -82,6 +82,11 @@ Standard library changes
 * The `Date` and `DateTime` constructors now throw an `ArgumentError` for a date outside the type
   instead of wrapping around. Adding a `Month`, `Quarter`, or `Year` wraps around at the ends of the
   type, as adding a fixed period such as `Day` does.
+* Conversions to `DateTime`, such as `DateTime(::Date)`, `unix2datetime`, `julian2datetime`, and
+  `rata2datetime`, now throw an `InexactError` when the result lies outside `DateTime`, instead of
+  wrapping around. So do `epochdays2date` and `epochms2datetime` for results outside their types,
+  while `date2epochdays` and `datetime2epochms` throw an `OverflowError` when the count does not fit
+  in `Int64`.
 
 #### InteractiveUtils
 

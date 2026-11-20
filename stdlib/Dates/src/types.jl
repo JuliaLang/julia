@@ -796,6 +796,11 @@ Base.isless(x::Timestamp, y::Union{Date,DateTime,Timestamp}) = isless((days(x), 
 Base.isless(x::Union{Date,DateTime}, y::Timestamp) = isless((days(x), nsofday(x)), (days(y), nsofday(y)))
 (==)(x::Timestamp, y::Union{Date,DateTime,Timestamp}) = days(x) == days(y) && nsofday(x) == nsofday(y)
 (==)(x::Union{Date,DateTime}, y::Timestamp) = y == x
+# Comparing in Int128 needs no conversion, which can lie outside DateTime
+Base.isless(x::Date, y::DateTime) = widemul(value(x), MS_PER_DAY) < value(y)
+Base.isless(x::DateTime, y::Date) = value(x) < widemul(value(y), MS_PER_DAY)
+(==)(x::Date, y::DateTime) = widemul(value(x), MS_PER_DAY) == value(y)
+(==)(x::DateTime, y::Date) = y == x
 Base.isless(x::T, y::T) where {T<:Timestamp} = isless(value(x), value(y))
 (==)(x::T, y::T) where {T<:Timestamp} = value(x) == value(y)
 Base.min(x::AbstractTime) = x

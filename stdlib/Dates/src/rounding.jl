@@ -16,33 +16,36 @@ const BuiltinTimePeriod = Union{Hour, Minute, Second, Millisecond, Microsecond, 
     epochdays2date(days)::Date
 
 Take the number of days since the rounding epoch (`0000-01-01T00:00:00`) and return the
-corresponding `Date`.
+corresponding `Date`. Throws an `InexactError` if the result lies outside `Date`.
 """
-epochdays2date(i) = Date(UTD(DATEEPOCH + Int64(i)))
+epochdays2date(i) = Date(UTD(Int64(DATEEPOCH + Int128(i))))
 
 """
     epochms2datetime(milliseconds)::DateTime
 
 Take the number of milliseconds since the rounding epoch (`0000-01-01T00:00:00`) and
-return the corresponding `DateTime`.
+return the corresponding `DateTime`. Throws an `InexactError` if the result lies outside
+`DateTime`.
 """
-epochms2datetime(i) = DateTime(UTM(DATETIMEEPOCH + Int64(i)))
+epochms2datetime(i) = DateTime(UTM(Int64(DATETIMEEPOCH + Int128(i))))
 
 """
     date2epochdays(dt::Date)::Int64
 
 Take the given `Date` and return the number of days since the rounding epoch
-(`0000-01-01T00:00:00`) as an [`Int64`](@ref).
+(`0000-01-01T00:00:00`) as an [`Int64`](@ref). Throws an `OverflowError` if the number does
+not fit in an `Int64`.
 """
-date2epochdays(dt::Date) = value(dt) - DATEEPOCH
+date2epochdays(dt::Date) = Base.checked_sub(value(dt), DATEEPOCH)
 
 """
     datetime2epochms(dt::DateTime)::Int64
 
 Take the given `DateTime` and return the number of milliseconds since the rounding epoch
-(`0000-01-01T00:00:00`) as an [`Int64`](@ref).
+(`0000-01-01T00:00:00`) as an [`Int64`](@ref). Throws an `OverflowError` if the number does
+not fit in an `Int64`.
 """
-datetime2epochms(dt::DateTime) = value(dt) - DATETIMEEPOCH
+datetime2epochms(dt::DateTime) = Base.checked_sub(value(dt), DATETIMEEPOCH)
 
 # Exact floor and ceiling of `x` to multiples of `period` from `epoch`. They are equal only if
 # `x` is a multiple and `exact`. The distance between `x` and `epoch` always fits in UInt64.
