@@ -420,4 +420,10 @@ end
     @test_throws DimensionMismatch inbounds_setindex!(zeros(6), [1.0], 1:4)
 end
 
+@testset "hvncat with inconsistent shapes does not write out of bounds" begin
+    if bc_opt != bc_off
+        @test_throws Union{BoundsError, DimensionMismatch} hvncat((1, 2), true, reshape(1:2, 1, 1, 2), reshape(1:4, 2, 2, 1))
+    end
+end
+
 end
