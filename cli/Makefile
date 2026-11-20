@@ -33,6 +33,10 @@ endif
 
 LOADER_EXE_LDFLAGS := $(LOADER_LDFLAGS)
 
+ifneq (,$(filter $(OS),Linux FreeBSD))
+LOADER_EXE_LDFLAGS += -pie
+endif
+
 ifeq ($(OS),Darwin)
 LOADER_EXE_LDFLAGS += -Wl,-export_dynamic
 # The macOS app bundle (contrib/mac/app) uses a plain copy of this loader at
