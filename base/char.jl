@@ -351,7 +351,7 @@ function show(io::IO, c::AbstractChar)
             return
         end
     end
-    if isoverlong(c) || ismalformed(c)
+    if isoverlong(c) || ismalformed(c) || c > '\U10ffff'
         show_invalid(io, c)
     elseif isprint(c)
         write(io, 0x27)

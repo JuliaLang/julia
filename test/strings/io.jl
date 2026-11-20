@@ -170,6 +170,12 @@
     @test escape_string("\u00e4\u00f6\u00fc") == "\u00e4\u00f6\u00fc"
     @test escape_string("\u00e4\u00f6\u00fc", ascii=true) == "\\ue4\\uf6\\ufc"
     @test escape_string("\u00e4\u00f6\u00fc", ascii=true, fullhex=true) == "\\u00e4\\u00f6\\u00fc"
+
+    for s in ("\xf4\x90\x80\x80", "\xf7\xbf\xbf\xbf")
+        @test escape_string(s) == join("\\x" .* string.(codeunits(s), base=16))
+        @test unescape_string(escape_string(s)) == s
+        @test Meta.parse(repr(s)) == s
+    end
 end
 @testset "join()" begin
     @test join([]) == join([],",") == ""
