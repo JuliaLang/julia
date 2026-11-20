@@ -1179,6 +1179,17 @@ end
     @test_throws BoundsError copyto!(P, [1.0, 2.0, 3.0, 4.0, 5.0])
 end
 
+@testset "copyto! into PermutedDimsArray from a differently shaped source" begin
+    src = reshape(1:4, 2, 2)
+    P = PermutedDimsArray(zeros(Int, 3, 3), (2, 1))
+    @test copyto!(P, src) === P
+    @test P == copyto!(zeros(Int, 3, 3), src) == [1 4 0; 2 0 0; 3 0 0]
+    P = PermutedDimsArray(zeros(Int, 2, 2), (2, 1))
+    copyto!(P, reshape(collect(1:4), 4, 1))
+    @test P == [1 3; 2 4]
+    @test_throws BoundsError copyto!(P, reshape(collect(1:5), 5, 1))
+end
+
 @test @views quote var"begin" + var"end" end isa Expr
 
 @testset "@views handling of assignment" begin
