@@ -87,6 +87,11 @@ Standard library changes
   wrapping around. So do `epochdays2date` and `epochms2datetime` for results outside their types,
   while `date2epochdays` and `datetime2epochms` throw an `OverflowError` when the count does not fit
   in `Int64`.
+* `trunc` and the adjusters, such as `firstdayofmonth` and `tonext`, now throw an `OverflowError`
+  when the result or a step of their search lies outside the type, like `floor` and `ceil`, instead
+  of wrapping around. A `DateTime` or `Timestamp` adjuster whose day fits in `Date` but not in the
+  type throws what converting that `Date` throws: an `InexactError` for `DateTime` and an
+  `ArgumentError` for `Timestamp`.
 
 #### InteractiveUtils
 

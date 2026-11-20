@@ -1,18 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ### truncation
-Base.trunc(dt::Date, p::Type{Year}) = Date(UTD(totaldays(year(dt), 1, 1)))
+Base.trunc(dt::Date, p::Type{Year}) = firstdayofyear(dt)
 Base.trunc(dt::Date, p::Type{Quarter}) = firstdayofquarter(dt)
 Base.trunc(dt::Date, p::Type{Month}) = firstdayofmonth(dt)
 Base.trunc(dt::Date, p::Type{Day}) = dt
 
-Base.trunc(dt::DateTime, p::Type{Year}) = DateTime(trunc(Date(dt), Year))
-Base.trunc(dt::DateTime, p::Type{Quarter}) = DateTime(trunc(Date(dt), Quarter))
-Base.trunc(dt::DateTime, p::Type{Month}) = DateTime(trunc(Date(dt), Month))
-Base.trunc(dt::DateTime, p::Type{Day}) = DateTime(Date(dt))
-Base.trunc(dt::DateTime, p::Type{Hour}) = dt - Minute(dt) - Second(dt) - Millisecond(dt)
-Base.trunc(dt::DateTime, p::Type{Minute}) = dt - Second(dt) - Millisecond(dt)
-Base.trunc(dt::DateTime, p::Type{Second}) = dt - Millisecond(dt)
+# As for Timestamp, the floor throws an OverflowError instead of wrapping at the ends
+Base.trunc(dt::DateTime, p::Type{<:Union{Year, Quarter, Month, Day, Hour, Minute, Second}}) = floor(dt, oneunit(p))
 Base.trunc(dt::DateTime, p::Type{Millisecond}) = dt
 
 Base.trunc(dt::Timestamp, ::Type{T}) where {T<:Period} = floor(dt, oneunit(T))
@@ -51,7 +46,7 @@ julia> firstdayofweek(DateTime("1996-01-05T12:30:00"))
 """
 function firstdayofweek end
 
-firstdayofweek(dt::Date) = Date(UTD(value(dt) - dayofweek(dt) + 1))
+firstdayofweek(dt::Date) = Date(UTD(Base.checked_sub(value(dt), dayofweek(dt) - 1)))
 firstdayofweek(dt::T) where T<:AbstractDateTime = T(firstdayofweek(Date(dt)))
 
 """
@@ -67,7 +62,7 @@ julia> lastdayofweek(DateTime("1996-01-05T12:30:00"))
 """
 function lastdayofweek end
 
-lastdayofweek(dt::Date) = Date(UTD(value(dt) + (7 - dayofweek(dt))))
+lastdayofweek(dt::Date) = Date(UTD(Base.checked_add(value(dt), 7 - dayofweek(dt))))
 lastdayofweek(dt::T) where T<:AbstractDateTime = T(lastdayofweek(Date(dt)))
 
 """
@@ -83,7 +78,7 @@ julia> firstdayofmonth(DateTime("1996-05-20"))
 """
 function firstdayofmonth end
 
-firstdayofmonth(dt::Date) = Date(UTD(value(dt) - day(dt) + 1))
+firstdayofmonth(dt::Date) = Date(UTD(Base.checked_sub(value(dt), day(dt) - 1)))
 firstdayofmonth(dt::T) where T<:AbstractDateTime = T(firstdayofmonth(Date(dt)))
 
 """
@@ -101,7 +96,7 @@ function lastdayofmonth end
 
 function lastdayofmonth(dt::Date)
     y, m, d = yearmonthday(dt)
-    return Date(UTD(value(dt) + daysinmonth(y, m) - d))
+    return Date(UTD(Base.checked_add(value(dt), daysinmonth(y, m) - d)))
 end
 lastdayofmonth(dt::T) where T<:AbstractDateTime = T(lastdayofmonth(Date(dt)))
 
@@ -118,7 +113,7 @@ julia> firstdayofyear(DateTime("1996-05-20"))
 """
 function firstdayofyear end
 
-firstdayofyear(dt::Date) = Date(UTD(value(dt) - dayofyear(dt) + 1))
+firstdayofyear(dt::Date) = Date(UTD(Base.checked_sub(value(dt), dayofyear(dt) - 1)))
 firstdayofyear(dt::T) where T<:AbstractDateTime = T(firstdayofyear(Date(dt)))
 
 """
@@ -136,7 +131,7 @@ function lastdayofyear end
 
 function lastdayofyear(dt::Date)
     y, m, d = yearmonthday(dt)
-    return Date(UTD(value(dt) + daysinyear(y) - dayofyear(y, m, d)))
+    return Date(UTD(Base.checked_add(value(dt), daysinyear(y) - dayofyear(y, m, d))))
 end
 lastdayofyear(dt::T) where T<:AbstractDateTime = T(lastdayofyear(Date(dt)))
 
@@ -156,11 +151,7 @@ julia> firstdayofquarter(DateTime("1996-08-20"))
 """
 function firstdayofquarter end
 
-function firstdayofquarter(dt::Date)
-    y,m = yearmonth(dt)
-    mm = m < 4 ? 1 : m < 7 ? 4 : m < 10 ? 7 : 10
-    return Date(y, mm, 1)
-end
+firstdayofquarter(dt::Date) = Date(UTD(Base.checked_sub(value(dt), dayofquarter(dt) - 1)))
 firstdayofquarter(dt::T) where T<:AbstractDateTime = T(firstdayofquarter(Date(dt)))
 
 """
@@ -179,10 +170,12 @@ julia> lastdayofquarter(DateTime("1996-08-20"))
 """
 function lastdayofquarter end
 
+# Days from the first of each month to the last day of its quarter, in a common year
+const DAYS_TO_QUARTER_END = (89, 58, 30, 90, 60, 29, 91, 60, 29, 91, 60, 30)
 function lastdayofquarter(dt::Date)
-    y,m = yearmonth(dt)
-    mm, d = m < 4 ? (3, 31) : m < 7 ? (6, 30) : m < 10 ? (9, 30) : (12, 31)
-    return Date(y, mm, d)
+    y, m, d = yearmonthday(dt)
+    rest = DAYS_TO_QUARTER_END[m] + (m < 3 && isleapyear(y)) - (d - 1)
+    return Date(UTD(Base.checked_add(value(dt), rest)))
 end
 lastdayofquarter(dt::T) where T<:AbstractDateTime = T(lastdayofquarter(Date(dt)))
 
@@ -200,11 +193,20 @@ Base.show(io::IO, df::DateFunction) = println(io, df.f)
 # Core adjuster
 function adjust(df::DateFunction, start, step, limit)
     for i = 1:limit
+        i == 1 || (start = adjuststep(start, step))
         df.f(start) && return start
-        start += step
     end
     throw(ArgumentError("Adjustment limit reached: $limit iterations"))
 end
+# `x + step`, which throws instead of wrapping around the end of the type. A `Time` wraps
+# around at midnight by design. The direction of the step tells whether it passed an end,
+# unless the step is longer than the whole type and `x + step` wraps around arbitrarily.
+function adjuststep(x, step)
+    y = x + step
+    x isa Time || (step > zero(step) ? y >= x : y <= x) || throw_adjust_overflow(x, step)
+    return y
+end
+@noinline throw_adjust_overflow(x, step) = throw(OverflowError("$x + $step lies outside $(typeof(x))"))
 
 """
     adjust(df, start[, step, limit])::TimeType
@@ -212,7 +214,9 @@ end
 
 Adjusts the date in `start` until the `f::Function` passed using `df` returns `true`.
 The optional `step` parameter dictates the change in `start` on every iteration.
-If `limit` iterations occur, then an [`ArgumentError`](@ref) is thrown.
+If `limit` iterations occur, then an [`ArgumentError`](@ref) is thrown. A step past the end of
+the type throws an [`OverflowError`](@ref), unless the step is longer than the whole type, as
+adding it wraps around.
 
 The default values for parameters `step` and `limit` are 1 Day and 10,000 respectively.
 
@@ -422,7 +426,7 @@ Adjusts `dt` to the next day of week corresponding to `dow` with `1 = Monday, 2 
 etc`. Setting `same=true` allows the current `dt` to be considered as the next `dow`,
 allowing for no adjustment to occur.
 """
-tonext(dt::TimeType, dow::Int; same::Bool=false) = adjust(ISDAYOFWEEK[dow], same ? dt : dt + Day(1), Day(1), 7)
+tonext(dt::TimeType, dow::Int; same::Bool=false) = adjust(ISDAYOFWEEK[dow], same ? dt : adjuststep(dt, Day(1)), Day(1), 7)
 
 # Return the next TimeType where func evals true using step in incrementing
 """
@@ -433,7 +437,7 @@ returns `true`. `func` must take a single `TimeType` argument and return a [`Boo
 `same` allows `dt` to be considered in satisfying `func`.
 """
 function tonext(func::Function, dt::TimeType; step::Period=Day(1), limit::Int=10000, same::Bool=false)
-    return adjust(DateFunction(func, dt), same ? dt : dt + step, step, limit)
+    return adjust(DateFunction(func, dt), same ? dt : adjuststep(dt, step), step, limit)
 end
 
 """
@@ -443,7 +447,7 @@ Adjusts `dt` to the previous day of week corresponding to `dow` with `1 = Monday
 Tuesday, etc`. Setting `same=true` allows the current `dt` to be considered as the previous
 `dow`, allowing for no adjustment to occur.
 """
-toprev(dt::TimeType, dow::Int; same::Bool=false) = adjust(ISDAYOFWEEK[dow], same ? dt : dt + Day(-1), Day(-1), 7)
+toprev(dt::TimeType, dow::Int; same::Bool=false) = adjust(ISDAYOFWEEK[dow], same ? dt : adjuststep(dt, Day(-1)), Day(-1), 7)
 
 """
     toprev(func::Function, dt::TimeType; step=Day(-1), limit=10000, same=false)::TimeType
@@ -453,7 +457,7 @@ returns `true`. `func` must take a single `TimeType` argument and return a [`Boo
 `same` allows `dt` to be considered in satisfying `func`.
 """
 function toprev(func::Function, dt::TimeType; step::Period=Day(-1), limit::Int=10000, same::Bool=false)
-    return adjust(DateFunction(func, dt), same ? dt : dt + step, step, limit)
+    return adjust(DateFunction(func, dt), same ? dt : adjuststep(dt, step), step, limit)
 end
 
 # Return the first TimeType that falls on dow in the Month or Year
