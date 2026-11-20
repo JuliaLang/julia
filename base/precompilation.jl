@@ -1053,7 +1053,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     pkgspidlocked = Dict{PkgConfig,String}()
     pkg_liveprinted = Ref{Union{Nothing, PkgId}}(nothing)
 
-    function monitor_std(pkg_config, pipe; single_requested_pkg=false)
+    function monitor_std(pkg_config, pipe::Base.PipeEndpoint; single_requested_pkg=false)
         local pkg, config = pkg_config
         try
             local liveprinting = false
@@ -1100,7 +1100,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             err isa InterruptException || rethrow()
         finally
             # closing the reader unblocks the worker's writes if draining stops early
-            close(pipe.out)
+            close(pipe)
         end
     end
 
@@ -1261,8 +1261,18 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         is_project_dep = pkg in project_deps
 
                         # std monitoring
-                        std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
-                        t_monitor = @async monitor_std(pkg_config, std_pipe; single_requested_pkg)
+                        # The worker gets the write end as a raw handle. Opening it here as well would
+                        # bind it to our IOCP on Windows, after which every write in the worker takes a
+                        # thread-pool round trip; with output-heavy packages under load that is minutes.
+                        std_rd, std_wr = Base.link_pipe(true, true)
+                        std_out = try
+                            Base.open_pipe!(Base.PipeEndpoint(), std_rd)
+                        catch
+                            Base.close_pipe_sync(std_rd)
+                            Base.close_pipe_sync(std_wr)
+                            rethrow()
+                        end
+                        t_monitor = @async monitor_std(pkg_config, std_out; single_requested_pkg)
 
                         try
                             name = describe_pkg(pkg, is_project_dep, is_serial_dep, flags, cacheflags)
@@ -1288,7 +1298,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             if _from_loading && pkg in requested_pkgids
                                 # loading already took the cachefile_lock and printed logmsg for its explicit requests
                                 t = @elapsed ret = begin
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, !ignore_loaded;
+                                    Base.compilecache(pkg, sourcepath, std_wr, std_wr, !ignore_loaded;
                                                       flags, cacheflags, loadable_exts,
                                                       preresolved=preresolved_snapshot(cachepath_cache))
                                 end
@@ -1311,7 +1321,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                     logcalls === CoreLogging.Debug && @lock print_lock begin
                                         @debug "Precompiling $(repr("text/plain", pkg))"
                                     end
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, !ignore_loaded;
+                                    Base.compilecache(pkg, sourcepath, std_wr, std_wr, !ignore_loaded;
                                                       flags, cacheflags, loadable_exts,
                                                       preresolved=preresolved_snapshot(cachepath_cache))
                                 end
@@ -1353,7 +1363,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             end
                         finally
                             try
-                                isopen(std_pipe.in) && close(std_pipe.in) # close pipe to end the std output monitor
+                                Base.close_pipe_sync(std_wr) # close pipe to end the std output monitor
                                 wait(t_monitor)
                             finally
                                 Base.release(parallel_limiter)

@@ -4124,11 +4124,16 @@ end
             """)
         write(joinpath(pkg_path, "src", "NoisyPkg.jl"), """
             module NoisyPkg
-            println("NOISY-FIRST")
-            for i in 1:20000 # far more than a pipe buffer holds
-                println("noisy line ", i, " ", "x"^50)
+            # far more than a pipe buffer holds, in one write: 20000 separate writes take
+            # minutes on a loaded Windows machine
+            let io = IOBuffer()
+                println(io, "NOISY-FIRST")
+                for i in 1:20000
+                    println(io, "noisy line ", i, " ", "x"^50)
+                end
+                println(io, "NOISY-LAST")
+                write(stdout, take!(io))
             end
-            println("NOISY-LAST")
             end
             """)
         script = """
