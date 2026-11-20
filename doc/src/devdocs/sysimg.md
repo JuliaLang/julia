@@ -42,8 +42,9 @@ only when their mode can serve the request: count counters can serve hit mode,
 but hit counters cannot serve count mode. An ordinary system image has no
 counters. Package images are selected separately by their instrumentation flags.
 Allocation tracking retains its per-method recompilation fallback because
-images carry no allocation counters. Image generation does not record coverage
-hits for its own precompile workload.
+images carry no allocation counters. Image generation records coverage hits
+only for code from the images it loaded, and writes them only to an LCOV
+tracefile (`--code-coverage=<file>.info`).
 
 ## [System image optimized for multiple microarchitectures](@id sysimg-multi-versioning)
 

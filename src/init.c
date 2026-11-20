@@ -278,8 +278,9 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
     }
 
     jl_print_gc_stats(JL_STDERR);
-    // an image-generating process instruments the image, not itself
-    if (jl_options.code_coverage && !jl_generating_output())
+    // only code from loaded images has counters while generating output.
+    // write those to a tracefile only, since .cov files would land in the sources
+    if (jl_options.code_coverage && (!jl_generating_output() || jl_options.output_code_coverage))
         jl_write_coverage_data(jl_options.output_code_coverage);
     if (jl_options.malloc_log)
         jl_write_malloc_log();
