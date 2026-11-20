@@ -5280,10 +5280,11 @@ JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t na
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_FOREIGN);
 }
 
-// A call from compiled code to `codeinst`, which had no code when its caller was linked, so
-// is made through a trampoline (see linkCallTarget). Compiles the callee if it has no code
-// yet, and points the trampolines for calls to it at its code, so that from then on they go
-// straight there.
+// A call from compiled code to `codeinst`, which had no code when its caller was linked, as
+// when it was left out of its caller's batch because the call might not run (see
+// `add_codeinsts_to_jit!`), so is made through a trampoline (see linkCallTarget). Compiles
+// the callee if it has no code yet, and points the trampolines for calls to it at its code,
+// so that from then on they go straight there.
 JL_DLLEXPORT jl_value_t *jl_invoke_deferred(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
 {
     size_t world = jl_current_task->world_age;

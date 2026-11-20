@@ -2093,16 +2093,106 @@ function foreign_library_type(@nospecialize(spec), ci::CodeInfo, sptypes::Vector
     return library_type
 end
 
+"""
+    stmts_sure_to_run(code::Vector{Any}) -> Vector{Bool}
+
+Whether each statement of `code` runs whenever the code does, unless something throws first.
+A block's statements do if every path from the entry to a return passes through it, or if it
+is in the body of a loop whose header does: loop bodies are assumed to run at least once.
+Blocks that throw, and branches that may not be taken, are not sure to run.
+"""
+function stmts_sure_to_run(code::Vector{Any})
+    blocks = compute_basic_blocks(code).blocks
+    nblocks = length(blocks)
+    sure = fill(false, nblocks)
+    # Only blocks that return count as exits: give each block that ends without returning (by
+    # throwing, or being unreachable) a self-loop, so that it is on no path to an exit. If no
+    # block returns, the code always throws, and blocks that throw count as exits after all.
+    exitblocks = Vector{BasicBlock}(undef, nblocks)
+    returns = false
+    for i = 1:nblocks
+        bb = blocks[i]
+        term = code[last(bb.stmts)]
+        if isa(term, ReturnNode) && !isdefined(term, :val)
+            exitblocks[i] = BasicBlock(bb.stmts, push!(copy(bb.preds), i), Int[i])
+        else
+            returns |= isa(term, ReturnNode)
+            exitblocks[i] = bb
+        end
+    end
+    pdomtree = construct_postdomtree(returns ? exitblocks : blocks)
+    b = 1
+    while b != 0
+        sure[b] = true
+        b = pdomtree.idoms_bb[b]
+    end
+    # A loop runs at least once if it is entered from a block that is sure to run, even if
+    # the branch into it (such as the check that a `for` loop's iterator is not empty) is
+    # conditional; then so does its body, the blocks that reach a back edge to its header
+    # without passing through the header. That can make a loop nested in it sure to run.
+    domtree = construct_domtree(blocks)
+    worklist = Int[]
+    visited = BitSet()
+    changed = true
+    while changed
+        changed = false
+        for latch = 1:nblocks
+            bb_unreachable(domtree, latch) && continue
+            for header in blocks[latch].succs
+                dominates(domtree, header, latch) || continue
+                if !sure[header]
+                    for pred in blocks[header].preds
+                        if pred != 0 && sure[pred] && !dominates(domtree, header, pred)
+                            sure[header] = true
+                            changed = true
+                            break
+                        end
+                    end
+                    sure[header] || continue
+                end
+                empty!(visited)
+                push!(worklist, latch)
+                while !isempty(worklist)
+                    b = pop!(worklist)
+                    (b == header || b in visited) && continue
+                    push!(visited, b)
+                    if !sure[b]
+                        sure[b] = true
+                        changed = true
+                    end
+                    for pred in blocks[b].preds
+                        pred == 0 || push!(worklist, pred)
+                    end
+                end
+            end
+        end
+    end
+    stmts = fill(false, length(code))
+    for i = 1:nblocks
+        if sure[i]
+            for j in blocks[i].stmts
+                stmts[j] = true
+            end
+        end
+    end
+    return stmts
+end
+
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
+# (with `sure_to_run`, only the callees of `:invoke` statements that are sure to run, so
+# that the others are compiled when first called)
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
                          trim::Bool = false,
-                         external_linkage::Bool = false)
+                         external_linkage::Bool = false,
+                         sure_to_run::Union{Vector{Bool},Nothing} = nothing)
     src = ci.code
     for i = 1:length(src)
         stmt = src[i]
         isexpr(stmt, :(=)) && (stmt = stmt.args[2])
-        if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
+        if isexpr(stmt, :invoke) && sure_to_run !== nothing && !sure_to_run[i]
+            # leave it to be compiled when first called, through a trampoline
+        elseif isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             edge = stmt.args[1]
             # If this CodeInstance is already compiled in the image, and we can
             # link to it, we should do that instead of compiling it again.  With
@@ -2219,6 +2309,11 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     workqueue = CompilationQueue(; interp)
     push!(workqueue, ci)
     codeinsts, srcs = Any[], Any[]
+    eager = IdSet{Any}()
+    # Compile along with `ci` only the code sure to run when it does; a callee called only
+    # where it might not run is compiled the first time it is called. Not when generating
+    # output, so as not to change what goes into it.
+    defer = iszero(ccall(:jl_generating_output, Cint, ()))
     while !isempty(workqueue)
         # ci_has_real_invoke(ci) && return ci # optimization: cease looping if ci happens to get compiled (not just jl_fptr_wait_for_compiled, but fully jl_is_compiled_codeinst)
         callee = pop!(workqueue)
@@ -2239,6 +2334,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
             newcallee = typeinf_ext(workqueue.interp, callee.def, source_mode) # always SOURCE_MODE_ABI
             if newcallee isa CodeInstance
                 callee === ci && (ci = newcallee) # ci stopped meeting the requirements after typeinf_ext last checked, try again with newcallee
+                callee in eager && push!(eager, newcallee)
                 push!(workqueue, newcallee)
             end
             if newcallee !== callee
@@ -2249,7 +2345,18 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         markinspected!(workqueue, callee)
         mi = get_ci_mi(callee)
         sptypes = sptypes_from_meth_instance(mi)
-        collectinvokes!(workqueue, src, sptypes)
+        # `@force_compile` (as in `@time` and `@allocated`) asks for what a function calls to
+        # be compiled before it runs, so that none of the compiling happens in what they
+        # measure: nothing reached from it is deferred
+        lazy = defer && !(callee in eager || has_force_compile(src))
+        queued = length(workqueue.tocompile)
+        collectinvokes!(workqueue, src, sptypes;
+                        sure_to_run = lazy ? stmts_sure_to_run(src.code) : nothing)
+        if defer && !lazy
+            for i = queued+1:length(workqueue.tocompile)
+                push!(eager, workqueue.tocompile[i])
+            end
+        end
         if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
             valid_worlds = WorldRange(get_inference_world(workqueue.interp))
             cached = find_equivalent_cached_ci(
@@ -2273,6 +2380,9 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     ccall(:jl_add_codeinsts_to_jit, Cvoid, (Any, Any), codeinsts, srcs)
     return ci
 end
+
+has_force_compile(src::CodeInfo) =
+    any(stmt -> isexpr(stmt, :meta) && :force_compile in stmt.args, src.code)
 
 function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
     mi2 = ccall(:jl_normalize_to_compilable_mi, Any, (Any,), mi)::MethodInstance

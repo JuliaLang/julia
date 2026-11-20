@@ -299,7 +299,8 @@ jl_emitted_output_t jl_codegen_output_t::finish(std::unique_ptr<LLVMContext> ctx
     if (!deferred_gots.empty()) {
         // Kept, and their addresses taken, so that they stay in the object for the JIT to
         // find and point at the code, even if optimizing removes the calls through them, and
-        // so that their loads are not folded to their initial value.
+        // so that their loads are not folded to their initial value. Already in a fixed
+        // order (see emit_deferred_trampolines).
         SmallVector<GlobalValue *, 0> gots;
         for (auto [ci, api, got] : deferred_gots) {
             gots.push_back(got);
@@ -464,6 +465,55 @@ static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time) JL_N
                             julia_double_to_half(orig_time + time * 1e-9));
 }
 
+static void markSlowPath(Function *F) JL_NOTSAFEPOINT;
+static Function *emitDeferredStub(jl_codegen_output_t &out, Function *F, jl_code_instance_t *CI, jl_invoke_api_t API) JL_NOTSAFEPOINT;
+
+// Calls to code that has none yet, such as those that add_codeinsts_to_jit! leaves out of the
+// batch because they might not run, go through trampolines that compile the callee when first
+// called. Emit those into the batch's own module, rather than leaving them to be made one module
+// each when the batch is linked (see linkCallTarget).
+static void emit_deferred_trampolines(jl_codegen_output_t &out) JL_CANSAFEPOINT
+{
+    SmallVector<std::pair<jl_code_instance_t *, jl_invoke_api_t>, 0> calls;
+    for (auto &[call, target] : out.call_targets) {
+        auto [ci, api] = call;
+        if (!target.decl->isDeclaration() || out.ci_funcs.count(ci))
+            continue;
+        if (api != JL_INVOKE_SPECSIG && api != JL_INVOKE_ARGS)
+            continue;
+        if (ci->owner != jl_nothing || jl_atomic_load_relaxed(&ci->invoke) != NULL)
+            continue;
+        jl_method_instance_t *mi = jl_get_ci_mi(ci);
+        if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
+            continue;
+        calls.push_back({ci, static_cast<jl_invoke_api_t>(api)});
+    }
+    // In the order codegen named the calls, not that of call_targets, which depends on where
+    // CodeInstances are in memory: the object cache can only reuse a module that is emitted
+    // the same way in every session.
+    std::sort(calls.begin(), calls.end(), [&](auto &a, auto &b) JL_NOTSAFEPOINT {
+        return out.call_targets.find(a)->second.decl->getName() <
+               out.call_targets.find(b)->second.decl->getName();
+    });
+    for (auto [ci, api] : calls) {
+        Function *F = emit_tojlinvoke(ci, "jl_invoke_deferred", out); // may safepoint
+        markSlowPath(F);
+        if (api == JL_INVOKE_SPECSIG)
+            F = emit_specsig_to_fptr1(out, ci, F); // may safepoint
+        // emitting may have inserted into call_targets
+        auto It = out.call_targets.find({ci, api});
+        Function *Decl = It->second.decl;
+        if (Decl->getFunctionType() != F->getFunctionType())
+            continue; // leave it to linkCallTarget (F is unused, so will be dropped)
+        Function *Stub = emitDeferredStub(out, F, ci, api);
+        Stub->setLinkage(GlobalValue::InternalLinkage);
+        Stub->setName(out.make_name("deferred"));
+        Decl->replaceAllUsesWith(Stub);
+        Decl->eraseFromParent();
+        out.call_targets.erase(It);
+    }
+}
+
 extern "C" JL_DLLEXPORT_CODEGEN void
 jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
 {
@@ -506,6 +556,8 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
         if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
             jl_as_global_root((jl_value_t*)mi, 1);
     }
+
+    emit_deferred_trampolines(out); // contains safepoints
 
     out.temporary_roots = nullptr;
     out.temporary_roots_set.clear();
