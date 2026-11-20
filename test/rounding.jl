@@ -368,6 +368,21 @@ end
         @test 0.0 == floor(x, digits=-1000)
         @test 0.0 == ceil(x, digits=-1000)
     end
+    # issue #64142
+    let x = floatmax(Float64)
+        @test round(x, sigdigits=1) === Inf
+        @test round(x, digits=-308) === Inf
+        @test round(-x, sigdigits=2) === -Inf
+        @test round(x, RoundToZero, digits=-308) == 1.0e308
+        @test round(x, RoundDown, digits=-308) == 1.0e308
+        @test round(x, RoundUp, digits=-308) === Inf
+        @test round(-x, RoundUp, digits=-308) == -1.0e308
+        @test round(-x, RoundDown, digits=-308) === -Inf
+    end
+    let x = floatmax(Float32)
+        @test round(x, RoundToZero, digits=-38) == 3.0f38
+        @test round(x, RoundUp, digits=-38) === Inf32
+    end
 end
 @testset "rounding in other bases" begin
     @test round(pi, digits = 2, base = 2) ≈ 3.25
