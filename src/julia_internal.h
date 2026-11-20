@@ -2330,18 +2330,30 @@ typedef int (*smallintset_eq)(size_t val, const void *key, jl_value_t *data, uin
 ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_value_t *data, uint_t hv, int pop);
 
 // probe sequence, shared by lookup and insert
-#define smallintset_max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 #define smallintset_h2index(hv, sz) (size_t)((hv) & ((sz)-1))
+
+// An insert that takes an empty slot (reusing a tombstone needs no check) after `iter` probes,
+// in a table of `sz` slots that will hold `live` entries and at most `tombs` tombstones: 0 to
+// double the table, -1 to rehash it at the same size, else 1. Doubling waits for half live, so
+// that it leaves a quarter live, and a same-size rehash for a quarter tombstones, which it drops.
+#define JL_TABLE_PROBE 8 // about the length of a typemap list (`MAX_METHLIST_COUNT`)
+STATIC_INLINE int jl_table_resize(size_t sz, size_t iter, size_t live, size_t tombs) JL_NOTSAFEPOINT
+{
+    if (iter <= JL_TABLE_PROBE && (live + tombs) * 4 < sz * 3)
+        return 1;
+    return live * 2 >= sz ? 0 : tombs * 4 >= sz ? -1 : 1;
+}
 
 FORCE_INLINE ssize_t smallintset_probe_(jl_genericmemory_t *cache, smallintset_eq eq JL_NOTSAFEPOINT, const void *key, jl_value_t *data, uint_t hv, int pop, size_t w) JL_NOTSAFEPOINT
 {
     size_t sz = cache->length;
-    size_t maxprobe = smallintset_max_probe(sz);
     size_t tombstone = w == 1 ? UINT8_MAX : w == 2 ? UINT16_MAX : UINT32_MAX;
     size_t index = smallintset_h2index(hv, sz);
     size_t orig = index;
     void *ix = cache->ptr;
-    for (size_t iter = 0; iter <= maxprobe; iter++) {
+    // a pop leaves a tombstone, and slots are emptied only by a rehash or (with no readers)
+    // an in-place reset, so every key is found before the first empty slot
+    while (1) {
         size_t val1 = w == 1 ? jl_atomic_load_acquire(&((_Atomic(uint8_t)*)ix)[index]) :
                       w == 2 ? jl_atomic_load_acquire(&((_Atomic(uint16_t)*)ix)[index]) :
                                jl_atomic_load_acquire(&((_Atomic(uint32_t)*)ix)[index]);
@@ -2383,6 +2395,9 @@ FORCE_INLINE ssize_t smallintset_lookup_(jl_genericmemory_t *cache, smallintset_
 }
 
 void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_value_t *data) JL_CANSAFEPOINT;
+// `jl_smallintset_insert` into an index of `live` entries (after this one) and at most `tombs`
+// tombstones, for an index that pops; otherwise `val` is appended, and `val + 1` is the count
+void jl_smallintset_insert_counted(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_value_t *data, size_t live, size_t tombs) JL_CANSAFEPOINT;
 size_t jl_ordereddict_reserve(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, size_t stride) JL_CANSAFEPOINT;
 jl_genericmemory_t* smallintset_rehash(jl_genericmemory_t* a, smallintset_hash hash, jl_value_t *data, size_t newsz, size_t np) JL_CANSAFEPOINT;
 void smallintset_empty(const jl_genericmemory_t *a) JL_NOTSAFEPOINT;
@@ -2393,6 +2408,7 @@ JL_DLLEXPORT jl_value_t *jl_idset_get(jl_genericmemory_t *keys JL_PROPAGATES_ROO
 size_t jl_idset_max(jl_genericmemory_t *keys) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, size_t *max, ssize_t *newidx) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_genericmemory_t *jl_idset_put_idx(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, ssize_t idx) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_genericmemory_t *jl_idset_put_idx_counted(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, ssize_t idx, size_t live, size_t tombs) JL_CANSAFEPOINT;
 JL_DLLEXPORT ssize_t jl_idset_pop(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, jl_value_t *key) JL_NOTSAFEPOINT;
 
 // -- typemap.c -- //

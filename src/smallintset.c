@@ -107,57 +107,76 @@ ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, cons
     return idx;
 }
 
-static int smallintset_insert_(jl_genericmemory_t *a, uint_t hv, size_t val1) JL_NOTSAFEPOINT
+static inline size_t smallintset_rawref(const jl_genericmemory_t *arr, size_t idx) JL_NOTSAFEPOINT
+{
+    jl_value_t *el = (jl_value_t*)jl_typetagof(arr);
+    if (el == jl_memory_uint8_type)
+        return jl_atomic_load_relaxed(&((_Atomic(uint8_t)*)arr->ptr)[idx]);
+    else if (el == jl_memory_uint16_type)
+        return jl_atomic_load_relaxed(&((_Atomic(uint16_t)*)arr->ptr)[idx]);
+    else if (el == jl_memory_uint32_type)
+        return jl_atomic_load_relaxed(&((_Atomic(uint32_t)*)arr->ptr)[idx]);
+    else
+        abort();
+}
+
+// Insert `val1` into the first free slot of its probe, reusing a tombstone as is: 1 when done,
+// else 0 to grow the table or -1 to rehash it at the same size, by `jl_table_resize`.
+static int smallintset_insert_(jl_genericmemory_t *a, uint_t hv, size_t val1, size_t live, size_t tombs) JL_NOTSAFEPOINT
 {
     size_t sz = a->length;
     if (sz <= 1)
         return 0;
-    size_t orig, index, iter;
-    iter = 0;
-    index = smallintset_h2index(hv, sz);
-    orig = index;
-    size_t maxprobe = smallintset_max_probe(sz);
+    size_t tombstone = jl_max_int(a);
+    size_t index = smallintset_h2index(hv, sz), orig = index, iter = 0;
     do {
-        if (jl_intref(a, index) == 0) {
-            jl_intset_release(a, index, val1);
-            return 1;
+        size_t v = smallintset_rawref(a, index);
+        if (v == 0 || v == tombstone) {
+            int r = v == 0 ? jl_table_resize(sz, iter, live, tombs) : 1;
+            if (r > 0)
+                jl_intset_release(a, index, val1);
+            return r;
         }
         index = (index + 1) & (sz - 1);
         iter++;
-    } while (iter <= maxprobe && index != orig);
-    return 0;
+    } while (index != orig);
+    return 0; // no free slot
 }
 //}
 
-void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_value_t *data)
+void jl_smallintset_insert_counted(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_value_t *data, size_t live, size_t tombs)
 {
     jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
     if (val + 1 >= jl_max_int(a)) {
         a = smallintset_rehash(a, hash, data, a->length, val + 1);
         if (parent) jl_gc_wb(parent, (void*)pcache, a);
         jl_atomic_store_release(pcache, a);
+        tombs = 0;
     }
     while (1) {
-        if (smallintset_insert_(a, hash(val, data), val + 1))
+        int r = smallintset_insert_(a, hash(val, data), val + 1, live, tombs);
+        if (r > 0)
             return;
 
-        /* table full */
-        /* rehash to grow and retry the insert */
-        /* it's important to grow the table really fast; otherwise we waste */
-        /* lots of time rehashing all the keys over and over. */
+        /* no free slot, or a long probe: double the table, or rehash it at the same size to
+           drop its tombstones */
         size_t newsz;
         a = jl_atomic_load_relaxed(pcache);
         size_t sz = a->length;
         if (sz < HT_N_INLINE)
             newsz = HT_N_INLINE;
-        else if (sz >= (1 << 19) || (sz <= (1 << 8)))
-            newsz = sz << 1;
         else
-            newsz = sz << 2;
+            newsz = r < 0 ? sz : sz << 1;
         a = smallintset_rehash(a, hash, data, newsz, 0);
         if (parent) jl_gc_wb(parent, (void*)pcache, a);
         jl_atomic_store_release(pcache, a);
+        tombs = 0;
     }
+}
+
+void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_value_t *data)
+{
+    jl_smallintset_insert_counted(pcache, parent, hash, val, data, val + 1, 0);
 }
 
 // Support for insertion-ordered dictionaries backed by a Memory{Any} that stores
@@ -218,10 +237,11 @@ jl_genericmemory_t* smallintset_rehash(jl_genericmemory_t* a, smallintset_hash h
     while (1) {
         jl_genericmemory_t *newa = jl_alloc_int_1d(np + 1, newsz);
         JL_GC_PUSH1(&newa);
+        size_t live = 0;
         for (i = 0; i < sz; i += 1) {
             size_t val1 = jl_intref(a, i);
             if (val1 != 0) {
-                if (!smallintset_insert_(newa, hash(val1 - 1, data), val1)) {
+                if (smallintset_insert_(newa, hash(val1 - 1, data), val1, ++live, 0) <= 0) {
                     break;
                 }
             }

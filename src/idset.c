@@ -107,7 +107,8 @@ jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, 
     return keys;
 }
 
-jl_genericmemory_t *jl_idset_put_idx(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, ssize_t idx)
+// with `live` entries after this one and at most `tombs` tombstones (pops since the index was rebuilt)
+jl_genericmemory_t *jl_idset_put_idx_counted(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, ssize_t idx, size_t live, size_t tombs)
 {
     _Atomic(jl_genericmemory_t*) newidxs = idxs;
     JL_GC_PUSH1(&newidxs);
@@ -118,10 +119,16 @@ jl_genericmemory_t *jl_idset_put_idx(jl_genericmemory_t *keys, jl_genericmemory_
                 jl_smallintset_insert(&newidxs, NULL, idset_hash, i, (jl_value_t*)keys);
     }
     else {
-        jl_smallintset_insert(&newidxs, NULL, idset_hash, idx, (jl_value_t*)keys);
+        jl_smallintset_insert_counted(&newidxs, NULL, idset_hash, idx, (jl_value_t*)keys, live, tombs);
     }
     JL_GC_POP();
     return jl_atomic_load_relaxed(&newidxs);
+}
+
+// for a set that never pops, where `idx + 1` is the count
+jl_genericmemory_t *jl_idset_put_idx(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, ssize_t idx)
+{
+    return jl_idset_put_idx_counted(keys, idxs, idx, idx + 1, 0);
 }
 
 // Removal NULLs the key's slot in place, leaving an interior hole until a

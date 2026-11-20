@@ -31,8 +31,9 @@ mutable struct IdSet{K} <: AbstractSet{K}
     idxs::Union{Memory{UInt8}, Memory{UInt16}, Memory{UInt32}}
     count::Int
     max::Int # n.b. always <= length(list)
-    IdSet{T}() where {T} = new(Memory{Any}(undef, 0), Memory{UInt8}(undef, 0), 0, 0)
-    IdSet{T}(s::IdSet{T}) where {T} = new(copy(s.list), copy(s.idxs), s.count, s.max)
+    ndel::Int # pops since `idxs` was rebuilt, bounding its tombstones
+    IdSet{T}() where {T} = new(Memory{Any}(undef, 0), Memory{UInt8}(undef, 0), 0, 0, 0)
+    IdSet{T}(s::IdSet{T}) where {T} = new(copy(s.list), copy(s.idxs), s.count, s.max, s.ndel)
 end
 IdSet{T}(itr) where {T} = union!(IdSet{T}(), itr)
 IdSet() = IdSet{Any}()
@@ -65,7 +66,10 @@ function push!(s::IdSet{T}, @nospecialize(x)) where {T}
             s.max = Int(newmax[])
         end
         @assert s.list[s.max] === x "unexpected object in bucket"
-        setfield!(s, :idxs, ccall(:jl_idset_put_idx, Any, (Any, Any, Int), s.list, s.idxs, idx))
+        idxs = s.idxs
+        setfield!(s, :idxs, ccall(:jl_idset_put_idx_counted, Any, (Any, Any, Int, Csize_t, Csize_t),
+                                  s.list, idxs, idx, s.count + 1, s.ndel))
+        (idx < 0 || s.idxs !== idxs) && (s.ndel = 0) # a rehash drops every tombstone
         s.count += 1
     end
     s
@@ -74,6 +78,7 @@ function _pop!(s::IdSet, @nospecialize(x))
     removed = ccall(:jl_idset_pop, Int, (Any, Any, Any), s.list, s.idxs, x)
     if removed != -1
         s.count -= 1
+        s.ndel += 1
         while s.max > 0 && !isassigned(s.list, s.max)
             s.max -= 1
         end
@@ -115,6 +120,7 @@ function empty!(s::IdSet)
     end
     s.count = 0
     s.max = 0
+    s.ndel = 0
     s
 end
 
