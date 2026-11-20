@@ -833,7 +833,7 @@ Note that `@test_throws` does not support a trailing keyword form.
     The ability to specify anything other than a type or a value as `exception` requires Julia v1.8 or later.
 
 !!! compat "Julia 1.13"
-    The three-argument form `@test_throws extype pattern expr` requires Julia v1.12 or later.
+    The three-argument form `@test_throws extype pattern expr` requires Julia v1.13 or later.
 
 # Examples
 ```jldoctest
