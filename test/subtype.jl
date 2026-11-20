@@ -3812,3 +3812,8 @@ let A = Tuple{V, Tuple{S, S} where S>:Tuple{Tuple{T, T} where T<:V}} where V, B 
     @test X <: typeintersect(A, B)
     @test X <: typeintersect(B, A)
 end
+
+@testset "intersection requiring T == Tuple{T}" begin
+    @test typeintersect(Tuple{Tuple{T},T} where T, Tuple{Vararg{T}} where T>:Int64) === Union{}
+    @test typeintersect(Tuple{Tuple{T},T,Any} where T, Tuple{S,S,U} where S where U) === Union{}
+end
