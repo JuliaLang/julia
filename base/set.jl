@@ -126,11 +126,11 @@ function in!(x, s::AbstractSet)
     x ∈ s ? true : (push!(s, x); false)
 end
 
-function in!(x, s::Set)
-    xT = convert(eltype(s), x)
-    idx, sh = ht_keyindex2_shorthash!(s.dict, xT)
+function in!(x, s::Set{T}) where T
+    x isa T || return invoke(in!, Tuple{Any,AbstractSet}, x, s)
+    idx, sh = ht_keyindex2_shorthash!(s.dict, x)
     idx > 0 && return true
-    _setindex!(s.dict, nothing, xT, -idx, sh)
+    _setindex!(s.dict, nothing, x, -idx, sh)
     return false
 end
 

@@ -151,6 +151,15 @@ end
     @test only(s) === Int32(1)
     @test_throws Exception in!("hello", s)
 
+    # Lossy conversions cannot insert an element or match its rounded value (#64135).
+    s = Set{Float32}()
+    @test_throws TypeError in!(0.1, s)
+    @test isempty(s)
+    push!(s, 0.1f0)
+    @test_throws TypeError in!(0.1, s)
+    @test in!(Float64(0.1f0), s)
+    @test only(s) === 0.1f0
+
     # Other set types
     s = BitSet()
     @test !(in!(13, s))
