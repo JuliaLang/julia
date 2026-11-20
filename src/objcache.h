@@ -77,6 +77,9 @@ protected:
     bool maybeEvictLRU(MDBTxn &Txn, size_t RoomFor);
     size_t dbiSize(MDBTxn &Txn, MDB_dbi Dbi);
     MDBTxn beginTxn(unsigned Flags = 0) JL_NOTSAFEPOINT;
+    // Queues an object write or, for a null object, an access time update. Returns
+    // false if a fatal error disabled the cache.
+    bool enqueue(const Hash &H, std::unique_ptr<llvm::MemoryBuffer> Obj) JL_NOTSAFEPOINT;
 
 private:
     std::atomic<bool> Initialized = false;
