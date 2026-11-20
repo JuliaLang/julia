@@ -3779,6 +3779,69 @@ end
     end
 end
 
+# A failure relaying a worker's output must not strand the worker on a full pipe.
+# Runs in a subprocess so a regression can be timed out and killed.
+@testset "precompilepkgs with a failing output stream (single=$single)" for single in (false, true)
+    mkdepottempdir() do depot
+        project_path = write_precompile_env(depot, [("NoisyPkg", "c4000000-0000-0000-0000-000000000001", String[])])
+        write(joinpath(depot, "dev", "NoisyPkg", "src", "NoisyPkg.jl"), """
+            module NoisyPkg
+            println("NOISY-FIRST")
+            for i in 1:20000 # far more than a pipe buffer holds
+                println("noisy line ", i, " ", "x"^50)
+            end
+            println("NOISY-LAST")
+            end
+            """)
+        script = """
+            # if this hangs, dump the tasks before the parent kills it; stdout is a buffered
+            # file, so the flushes below keep the log showing how far it got
+            Timer(_ -> ccall(:jl_print_task_backtraces, Cvoid, (Cint,), 0), 270)
+            # fails the first write of the package's output, then works
+            mutable struct FailOnceIO <: IO
+                buf::IOBuffer
+                failed::Bool
+            end
+            function Base.unsafe_write(io::FailOnceIO, p::Ptr{UInt8}, n::UInt)
+                if !io.failed && occursin("NOISY-FIRST", unsafe_string(p, n))
+                    io.failed = true
+                    throw(Base.IOError("write: broken pipe (EPIPE)", Base.UV_EPIPE))
+                end
+                return unsafe_write(io.buf, p, n)
+            end
+            Base.write(io::FailOnceIO, x::UInt8) = write(io.buf, x)
+            io = FailOnceIO(IOBuffer(), false)
+            println("precompiling"); flush(stdout)
+            paths = Base.Precompilation.precompilepkgs($(single ? "[\"NoisyPkg\"]" : "String[]"); io, fancyprint=false)
+            println("precompiled"); flush(stdout)
+            output = String(take!(io.buf))
+            r = findlast("had output during precompilation:", output)
+            report = r === nothing ? "" : output[last(r)+1:end]
+            println("failed=", io.failed, " cached=", isfile(only(paths)),
+                    " reported=", occursin("NOISY-FIRST", report) && occursin("NOISY-LAST", report))
+            flush(stdout)
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project_path -e $script`,
+                     "JULIA_DEPOT_PATH" => depot)
+        log = joinpath(depot, "log.txt")
+        p = open(log, "w") do logio
+            run(pipeline(cmd; stdout=logio, stderr=logio); wait=false)
+        end
+        finished = try
+            timedwait(() -> process_exited(p), 300) === :ok
+        finally
+            process_exited(p) || kill(p, Base.SIGKILL)
+            wait(p)
+        end
+        output = read(log, String)
+        passed = occursin("failed=true cached=true reported=true", output)
+        @test finished
+        @test success(p)
+        @test passed
+        finished && success(p) && passed || println(output)
+    end
+end
+
 precompile_test_harness("invalidation for 'foreign-keyed' Preferences") do load_path
     # Test that compile-time preferences invalidate, even when queried from a
     # "foreign" UUID / package namespace

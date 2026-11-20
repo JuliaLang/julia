@@ -2534,38 +2534,56 @@ function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, job::Preco
     pkg, _ = pkg_config
     liveprinting = false
     thistaskwaiting = false
-    while !eof(pipe)
-        str = readline(pipe, keep=true)
-        # the marker may follow package output that lacks a trailing newline
-        i = findfirst(Base.PRECOMPILE_VERBOSE_TIMING_MARKER, str)
-        if i !== nothing
-            job.verbose_timing = strip(SubString(str, first(i)))
-            str = str[1:prevind(str, first(i))]
-            isempty(str) && continue
-        end
-        if single_requested_pkg && (liveprinting || !isempty(str))
-            BG.monitoring && @lock s.print_lock begin
-                if !liveprinting
-                    liveprinting = true
-                    s.pkg_liveprinted = pkg
+    relay = true
+    try
+        while !eof(pipe)
+            str = readline(pipe, keep=true)
+            # the marker may follow package output that lacks a trailing newline
+            i = findfirst(Base.PRECOMPILE_VERBOSE_TIMING_MARKER, str)
+            if i !== nothing
+                job.verbose_timing = strip(SubString(str, first(i)))
+                str = str[1:prevind(str, first(i))]
+                isempty(str) && continue
+            end
+            write(job.output, str)
+            waiting = !thistaskwaiting && occursin("Waiting for background task / IO / timer", str)
+            if waiting
+                thistaskwaiting = true
+                job.waiting_for_bg = true
+            end
+            relay || continue
+            try
+                if single_requested_pkg && (liveprinting || !isempty(str))
+                    BG.monitoring && @lock s.print_lock begin
+                        if !liveprinting
+                            liveprinting = true
+                            s.pkg_liveprinted = pkg
+                        end
+                        # in fancy mode clear the progress bar residue from the line first
+                        print(s.io, s.fancyprint ? ansi_cleartoendofline : "", str)
+                    end
                 end
-                # in fancy mode clear the progress bar residue from the line first
-                print(s.io, s.fancyprint ? ansi_cleartoendofline : "", str)
+                if waiting
+                    !liveprinting && !s.fancyprint && BG.monitoring && @lock s.print_lock begin
+                        println(s.io, full_name(s.ext_to_parent, pkg), color_string(str, Base.warn_color(), s.hascolor))
+                    end
+                elseif !thistaskwaiting
+                    # XXX: don't just re-enable IO for random packages without printing the context for them first
+                    !liveprinting && !s.fancyprint && BG.monitoring && @lock s.print_lock begin
+                        print(s.io, str)
+                    end
+                end
+            catch err
+                err isa Union{InterruptException, Base.CancellationRequest} && rethrow()
+                # keep draining so the worker cannot block on a full pipe,
+                # and let the final report show the captured output instead
+                relay = false
+                @lock s.print_lock (s.pkg_liveprinted == pkg && (s.pkg_liveprinted = nothing))
             end
         end
-        write(job.output, str)
-        if !thistaskwaiting && occursin("Waiting for background task / IO / timer", str)
-            thistaskwaiting = true
-            !liveprinting && !s.fancyprint && BG.monitoring && @lock s.print_lock begin
-                println(s.io, full_name(s.ext_to_parent, pkg), color_string(str, Base.warn_color(), s.hascolor))
-            end
-            job.waiting_for_bg = true
-        elseif !thistaskwaiting
-            # XXX: don't just re-enable IO for random packages without printing the context for them first
-            !liveprinting && !s.fancyprint && BG.monitoring && @lock s.print_lock begin
-                print(s.io, str)
-            end
-        end
+    finally
+        # closing the reader unblocks the worker's writes if draining stops early
+        close(pipe.out)
     end
 end
 
@@ -2889,8 +2907,6 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                             end
                         end
                     catch err
-                        close(std_pipe.in)
-                        wait(t_monitor)
                         err isa InterruptException && rethrow()
                         # If cancel was requested, this failure is almost certainly the
                         # subprocess being SIGKILL'd by the cancel; don't report it as
@@ -2902,11 +2918,14 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                             end
                         end
                     finally
-                        isopen(std_pipe.in) && close(std_pipe.in)
-                        wait(t_monitor)
-                        try; close(pid_ch); catch; end
-                        @lock s.print_lock clear_pid!(job)
-                        Base.release(s.parallel_limiter)
+                        try
+                            isopen(std_pipe.in) && close(std_pipe.in)
+                            wait(t_monitor)
+                        finally
+                            try; close(pid_ch); catch; end
+                            @lock s.print_lock clear_pid!(job)
+                            Base.release(s.parallel_limiter)
+                        end
                     end
                 else
                     if !is_stale
