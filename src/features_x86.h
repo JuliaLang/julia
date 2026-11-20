@@ -129,13 +129,13 @@ JL_FEATURE_DEF_NAME(amx_fp16, 32 * 9 + 21, 160000, "amx-fp16")
 // JL_FEATURE_DEF(hreset, 32 * 9 + 22, 160000) // Privileged instruction
 JL_FEATURE_DEF(avxifma, 32 * 9 + 23, 160000)
 
-// EAX=7,ECX=1: EBX
+// EAX=7,ECX=1: EDX (prefetchi is also set from AMD's 0x80000021 EAX[20])
 JL_FEATURE_DEF(avxvnniint8, 32 * 10 + 4, 160000)
 JL_FEATURE_DEF(avxneconvert, 32 * 10 + 5, 160000)
 JL_FEATURE_DEF_NAME(amx_complex, 32 * 10 + 8, 170000, "amx-complex")
 JL_FEATURE_DEF(avxvnniint16, 32 * 10 + 10, 170000)
 JL_FEATURE_DEF(prefetchi, 32 * 10 + 14, 160000)
-JL_FEATURE_DEF(usermsr, 32 * 10 + 15, 170000)
+JL_FEATURE_DEF(usermsr, 32 * 10 + 15, 180000)
 // JL_FEATURE_DEF(avx10, 32 * 10 + 19, 170000) // TODO: What to do about avx10 and it's mess?
 // JL_FEATURE_DEF(apxf, 32 * 10 + 21, 190000)
 
