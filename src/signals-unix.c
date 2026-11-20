@@ -1318,12 +1318,37 @@ static void run_saved_handler(int sig)
     sigaction(sig, &ours, NULL);
 }
 
+// Whether the previous action is the default and that ends the process.
+static int saved_handler_exits(int sig)
+{
+    struct sigaction *prev = &saved_handlers[sig];
+    if (!(prev->sa_flags & SA_SIGINFO) && prev->sa_handler == SIG_IGN)
+        return 0;
+    switch (sig) {
+    case SIGCONT:
+    case SIGURG:
+    case SIGWINCH:
+    case SIGTSTP:
+    case SIGTTIN:
+    case SIGTTOU:
+        return 0;
+    }
+    return 1;
+}
+
 static void signal_watch_handler(int sig)
 {
     int last_errno = errno;
-    if (!jl_notify_signal_watchers(sig))
+    if (jl_notify_signal_watchers(sig, saved_handler_exits(sig)) == JL_SIGNAL_PROCEED)
         run_saved_handler(sig);
     errno = last_errno;
+}
+
+// The signal thread or the handler above takes this delivery as the resumed one.
+static void jl_signal_watch_resume(int sig)
+{
+    jl_atomic_store_relaxed(&signal_deferred[sig], JL_SIGNAL_DEFER_RESUMED);
+    kill(getpid(), sig);
 }
 
 // The signal thread already gets the signals it waits for, so only the others need a handler.
@@ -1459,7 +1484,8 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
         if (sig == SIGINT && jl_ignore_sigint())
             continue;
         // Watchers do not see a parent's exit, which must always end this process.
-        if (!profile && !parent_exited && jl_notify_signal_watchers(sig))
+        int defer = sig == SIGTERM || (sig == SIGINT && jl_sigint_get_policy() == JL_SIGINT_EXIT);
+        if (!profile && !parent_exited && jl_notify_signal_watchers(sig, defer) != JL_SIGNAL_PROCEED)
             continue;
 
         if (sig == SIGINT) {
