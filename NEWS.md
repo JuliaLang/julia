@@ -7,6 +7,9 @@ New language features
 Language changes
 ----------------
 
+* The default `LOAD_PATH` now includes `@v#`, an environment shared by all minor versions of the
+  same major version (`~/.julia/environments/v1`), after the minor version's own `@v#.#`. Each minor
+  version keeps its own manifest there, named like `Manifest-v1.15.toml`.
 * `Slices` exposes `dataids` of its parent array to properly identify aliasing in broadcasting ([#49182]).
 
 Compiler/Runtime improvements
