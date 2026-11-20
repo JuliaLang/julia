@@ -18,6 +18,13 @@ Compiler.may_optimize(::AbsIntOnlyInterp2) = false
 Compiler.transform_result_for_cache(::AbsIntOnlyInterp2, ::Compiler.InferenceResult, edges::Core.SimpleVector) = nothing
 @test Base.infer_return_type(Base.init_stdio, (Ptr{Cvoid},); interp=AbsIntOnlyInterp2()) >: IO
 
+# interpreter with constant propagation disabled
+@newinterp NoConstPropInterp
+Compiler.InferenceParams(::NoConstPropInterp) = Compiler.InferenceParams(; ipo_constant_propagation=false)
+@noinline noconstprop_callee(x::Int) = x == 1 ? 1 : "one"
+@test Base.infer_return_type(() -> noconstprop_callee(1)) === Int
+@test Base.infer_return_type(() -> noconstprop_callee(1); interp=NoConstPropInterp()) === Union{Int,String}
+
 # concrete evaluation of a call returning a const global mutable object should preserve
 # its `:inaccessiblememonly` taint (JuliaLang/julia#64412)
 # Here `getproperty(Issue64412, :live)` is not foldable in general, but const-prop' refines
@@ -634,6 +641,7 @@ global source_mode_codegen::IdDict{CodeInstance,CodeInfo} = IdDict{CodeInstance,
 Compiler.codegen_cache(::SourceModeWinnerInterp) = source_mode_codegen
 
 source_mode_inadequate_winner(x::Int) = x + 1
+source_mode_inadequate_winner_other(x::Int) = x + 2
 let interp = SourceModeWinnerInterp()
     mi = Base.method_instance(source_mode_inadequate_winner, (Int,))
     inadequate = Core.CodeInstance(mi, Compiler.cache_owner(interp), Int, Any,
@@ -658,6 +666,16 @@ let interp = SourceModeWinnerInterp()
         valid_worlds, Compiler.SOURCE_MODE_ABI) === nothing
     @test Compiler.find_local_cached_ci(interp, mi,
         valid_worlds, Compiler.SOURCE_MODE_ABI) === ci
+    # executable lookups and stores go to the global cache only
+    @test haskey(overlay, mi)
+    @test overlay[mi] === get(overlay, mi, nothing) === inadequate
+    other_mi = Base.method_instance(source_mode_inadequate_winner_other, (Int,))
+    @test !haskey(overlay, other_mi)
+    other = Core.CodeInstance(other_mi, Compiler.cache_owner(interp), Any, Any,
+        nothing, nothing, zero(Int32), UInt(1), typemax(UInt), zero(UInt32),
+        nothing, nothing, Core.svec())
+    overlay[other_mi] = other
+    @test Compiler.code_cache(interp)[other_mi] === other
 
     # JIT compilation uses the local source to compile the ABI-equivalent global
     # winner; the local CI itself remains outside the executable cache.
@@ -765,4 +783,18 @@ using REPL.REPLCompletions: completions
         Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
     Compiler.typeinf_ext_toplevel(interp, mi, Compiler.SOURCE_MODE_NOT_REQUIRED)
     true
+end
+
+# a method of a module with inference disabled is cached without being inferred
+module NoInferModule
+Base.Experimental.@compiler_options infer=false
+f(x::Int) = x + 1
+end
+@newinterp NoInferInterp
+let interp = NoInferInterp()
+    mi = Base.method_instance(NoInferModule.f, (Int,))
+    ci = Compiler.typeinf_ext(interp, mi, Compiler.SOURCE_MODE_ABI)
+    @test ci.rettype === Any
+    @test ci.max_world == typemax(UInt)
+    @test get(Compiler.code_cache(interp), mi, nothing) === ci
 end
