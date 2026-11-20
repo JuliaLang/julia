@@ -333,9 +333,8 @@ function rem_fast(x::T, y::T) where {T<:FloatTypes}
 end
 
 @fastmath begin
-    hypot_fast(x::T, y::T) where {T<:FloatTypes} = sqrt(x*x + y*y)
-    hypot_fast(x::T, y::T, z::T, xs::T...) where {T<:FloatTypes} =
-        sqrt(sum(abs2, (x, y, z, xs...)))
+    hypot_fast(x::T, y::T, xs::T...) where {T<:FloatTypes} =
+        sqrt(+(map(v -> v*v, (x, y, xs...))...))
 
     # complex numbers
 
@@ -389,7 +388,7 @@ for f in (:acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
     end
 end
 
-for f in (:^, :atan, :hypot, :log)
+for f in (:^, :atan, :log)
     f_fast = fast_op[f]
     @eval begin
         # fall-back implementation for non-numeric types
@@ -405,11 +404,11 @@ for f in (:^, :atan, :hypot, :log)
     end
 end
 
-# `hypot` also accepts one or more than two arguments
+# `hypot` accepts any number of arguments
 hypot_fast(x) = hypot(x)
-hypot_fast(x, y, z, xs...) = hypot(x, y, z, xs...)
-hypot_fast(x::Number, y::Number, z::Number, xs::Number...) = hypot_fast(promote(x, y, z, xs...)...)
-hypot_fast(x::T, y::T, z::T, xs::T...) where {T<:Number} = hypot(x, y, z, xs...)
+hypot_fast(x, y, xs...) = hypot(x, y, xs...)
+hypot_fast(x::Number, y::Number, xs::Number...) = hypot_fast(promote(x, y, xs...)...)
+hypot_fast(x::T, y::T, xs::T...) where {T<:Number} = hypot(x, y, xs...)
 
 # Reductions
 
