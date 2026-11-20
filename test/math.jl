@@ -241,9 +241,9 @@ end
         @test exponent(Int64(2)^60 // (Int64(2)^60 - 1)) == 0
         @test exponent(-1//4) == exponent(1//4) == -2
         @test exponent(-3//4) == -1
-        @test exponent(typemax(Int) // 1) == 62
-        @test exponent(typemin(Int) // 1) == 63
-        @test exponent(1 // typemax(Int)) == -63
+        @test exponent(typemax(Int64) // Int64(1)) == 62
+        @test exponent(typemin(Int64) // Int64(1)) == 63
+        @test exponent(Int64(1) // typemax(Int64)) == -63
         @test exponent(typemin(Int8) // Int8(1)) == 7
         @test exponent(0xff // 0x01) == 7
         @test exponent(big(2)^200 // (big(2)^300 + 1)) == -101
