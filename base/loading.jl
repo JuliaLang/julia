@@ -3743,7 +3743,7 @@ const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 const PRECOMPILE_VERBOSE_TIMING_MARKER = "__JL_PRECOMP_VERBOSE_TIMING__"
 function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, output_o::Union{Nothing, String},
                            concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
-                           internal_stderr::IO = stderr, internal_stdout::IO = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing;
+                           internal_stderr::Redirectable = stderr, internal_stdout::Redirectable = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing;
                            report_timing::Bool=false,
                            preresolved::Vector{Pair{PkgId,String}} = @lock(require_lock, collect(preresolved_cachefiles)))
     @nospecialize internal_stderr internal_stdout
@@ -3884,7 +3884,7 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false)
+function compilecache(pkg::PkgId, internal_stderr::Redirectable = stderr, internal_stdout::Redirectable = stdout; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false)
     @nospecialize internal_stderr internal_stdout
     spec = locate_package_load_spec(pkg)
     spec === nothing && throw(ArgumentError("$(repr(MIME"text/plain"(), pkg)) not found during precompilation"))
@@ -3893,7 +3893,7 @@ end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
-function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
+function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectable = stderr, internal_stdout::Redirectable = stdout,
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                       loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing,
                       pid_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false,
