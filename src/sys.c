@@ -774,6 +774,96 @@ JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT
 }
 #endif
 
+// Collections left to upgrade buffers in: two from when one goes without huge pages, as the
+// first can come before that buffer is tracked
+_Atomic(int) jl_hugepage_upgrades;
+
+#if defined(_OS_LINUX_)
+static void read_start(_Atomic(int) *fd, const char *path, char *buf, size_t sz) JL_NOTSAFEPOINT
+{
+    if (jl_atomic_load_relaxed(fd) < 0)
+        jl_atomic_store_relaxed(fd, open(path, O_RDONLY | O_CLOEXEC));
+    ssize_t len = pread(jl_atomic_load_relaxed(fd), buf, sz - 1, 0);
+    if (len < 0)
+        len = 0;
+    buf[len] = '\0';
+}
+
+static int hugepages_on_request(void) JL_NOTSAFEPOINT
+{
+    static _Atomic(int) on_request = -1;
+    if (jl_atomic_load_relaxed(&on_request) < 0) {
+        _Atomic(int) fd = -1;
+        char mode[96];
+        read_start(&fd, "/sys/kernel/mm/transparent_hugepage/enabled", mode, sizeof(mode));
+        close(jl_atomic_load_relaxed(&fd));
+        jl_atomic_store_relaxed(&on_request, strstr(mode, "[madvise]") != NULL);
+    }
+    return jl_atomic_load_relaxed(&on_request);
+}
+
+// /proc/buddyinfo names each zone, then counts its free blocks of 1, 2, 4, ... pages
+static size_t ready_hugepage_bytes(void) JL_NOTSAFEPOINT
+{
+    static _Atomic(int) fd = -1;
+    char buf[4096], *rest, *end;
+    read_start(&fd, "/proc/buddyinfo", buf, sizeof(buf));
+    size_t bytes = 0, block = jl_page_size;
+    for (char *word = strtok_r(buf, " \n", &rest); word != NULL; word = strtok_r(NULL, " \n", &rest)) {
+        size_t n = strtoull(word, &end, 10);
+        if (*end != '\0') {
+            block = jl_page_size;
+            continue;
+        }
+        if (block >= jl_hugepage_size)
+            bytes += n * block;
+        block *= 2;
+    }
+    return bytes;
+}
+
+// Where the kernel gives huge pages unasked, asking only makes it stall to compact memory
+void jl_hugepage_request(void *p, size_t sz) JL_NOTSAFEPOINT
+{
+    static _Atomic(int) pressure = -1, stalling;
+    static _Atomic(size_t) ready;
+    static _Atomic(uint64_t) read_at;
+    if (!hugepages_on_request())
+        return;
+    uint64_t now = jl_hrtime();
+    if (now - jl_atomic_load_relaxed(&read_at) >= 100000000) {
+        char buf[64];
+        read_start(&pressure, "/proc/pressure/memory", buf, sizeof(buf));
+        double stalled_percent = 0;
+        sscanf(buf, "some avg10=%lf", &stalled_percent);
+        jl_atomic_store_relaxed(&stalling, stalled_percent >= 1);
+        // less a quarter, for what other processes take and the kernel keeps back
+        if (stalled_percent >= 1)
+            jl_atomic_store_relaxed(&ready, ready_hugepage_bytes() / 4 * 3);
+        jl_atomic_store_relaxed(&read_at, now);
+    }
+    if (jl_atomic_load_relaxed(&stalling)) {
+        size_t free = jl_atomic_load_relaxed(&ready);
+        if (sz > free) {
+            sz = free;
+            jl_atomic_store_relaxed(&jl_hugepage_upgrades, 2);
+        }
+        jl_atomic_store_relaxed(&ready, free - sz);
+    }
+    madvise(p, sz, MADV_HUGEPAGE);
+}
+
+// For memory already in use, which the kernel then upgrades in the background
+void jl_hugepage_upgrade(void *p, size_t sz) JL_NOTSAFEPOINT
+{
+    if (hugepages_on_request())
+        madvise(p, sz, MADV_HUGEPAGE);
+}
+#else
+void jl_hugepage_request(void *p, size_t sz) JL_NOTSAFEPOINT {}
+void jl_hugepage_upgrade(void *p, size_t sz) JL_NOTSAFEPOINT {}
+#endif
+
 JL_DLLEXPORT long jl_gethugepagesize(void) JL_NOTSAFEPOINT
 {
 #if defined(_OS_LINUX_)

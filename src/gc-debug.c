@@ -1002,7 +1002,7 @@ void gc_stats_big_obj(void)
 
         void **lst = ptls2->gc_tls_common.heap.mallocarrays.items;
         for (size_t i = 0, l = ptls2->gc_tls_common.heap.mallocarrays.len; i < l; i++) {
-            jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[i] & ~(uintptr_t)1);
+            jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[i] & ~(uintptr_t)3);
             uint8_t bits = jl_astaggedvalue(m)->bits.gc;
             if (gc_marked(bits)) {
                 size_t sz = jl_genericmemory_nbytes(m);
