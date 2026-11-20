@@ -29,8 +29,6 @@ struct jl_const_globals const_globals;
 struct jl_internal_global internal_global;
 #endif
 
-// compute empirical max-probe for a given size
-#define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 #define h2index(hv, sz) (size_t)((hv) & ((sz)-1))
 
 // --- type properties and predicates ---
@@ -1125,10 +1123,8 @@ static jl_datatype_t *lookup_type_set(jl_typename_t *tn, jl_value_t **key, size_
         size_t sz = jl_svec_len(cache);
         if (sz == 0)
             return NULL;
-        size_t maxprobe = max_probe(sz);
         size_t index = h2index(hv, sz);
         size_t orig = index;
-        size_t iter = 0;
         do {
             jl_datatype_t *val = jl_atomic_load_relaxed(&((_Atomic(jl_datatype_t*)*)jl_svec_data(cache))[index]);
             if ((jl_value_t*)val == jl_nothing)
@@ -1139,8 +1135,7 @@ static jl_datatype_t *lookup_type_set(jl_typename_t *tn, jl_value_t **key, size_
             if (jl_svec_len(cache) != sz)
                 break; // rehashed: restart the probe in the new table
             index = (index + 1) & (sz - 1);
-            iter++;
-        } while (iter <= maxprobe && index != orig);
+        } while (index != orig);
         if (jl_svec_len(cache) == sz)
             return NULL;
     }
@@ -1154,10 +1149,8 @@ static jl_datatype_t *lookup_type_setvalue(jl_typename_t *tn, jl_value_t *key1, 
         size_t sz = jl_svec_len(cache);
         if (sz == 0)
             return NULL;
-        size_t maxprobe = max_probe(sz);
         size_t index = h2index(hv, sz);
         size_t orig = index;
-        size_t iter = 0;
         do {
             jl_datatype_t *val = jl_atomic_load_relaxed(&((_Atomic(jl_datatype_t*)*)jl_svec_data(cache))[index]);
             if ((jl_value_t*)val == jl_nothing)
@@ -1168,8 +1161,7 @@ static jl_datatype_t *lookup_type_setvalue(jl_typename_t *tn, jl_value_t *key1, 
             if (jl_svec_len(cache) != sz)
                 break; // rehashed: restart the probe in the new table
             index = (index + 1) & (sz - 1);
-            iter++;
-        } while (iter <= maxprobe && index != orig);
+        } while (index != orig);
         if (jl_svec_len(cache) == sz)
             return NULL;
     }
@@ -1239,20 +1231,26 @@ static jl_value_t *lookup_typevalue(jl_typename_t *tn, jl_value_t *key1, jl_valu
     }
 }
 
-static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, int atomic)
+static int typecache_slot(void *tab, size_t j) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&((_Atomic(jl_value_t*)*)tab)[j]) != jl_nothing;
+}
+
+// Insert `val` into the first free slot of its probe: 1 when done, else 0 to double the table, by
+// `jl_table_resize` with `live` entries (after this one), or with -1 `jl_table_resize_sampled`.
+// Nothing is removed from a type cache, so it has no tombstones.
+static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, int atomic, ssize_t live)
 {
     _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*)jl_svec_data(a);
     size_t sz = jl_svec_len(a);
     if (sz <= 1)
         return 0;
-    size_t orig, index, iter;
-    iter = 0;
-    index = h2index(hv, sz);
-    orig = index;
-    size_t maxprobe = max_probe(sz);
+    size_t index = h2index(hv, sz), orig = index, iter = 0;
     do {
         jl_value_t *tab_i = jl_atomic_load_relaxed(&tab[index]);
         if (tab_i == jl_nothing) {
+            if (!(live >= 0 ? jl_table_resize(sz, iter, live, 0) : jl_table_resize_sampled(tab, sz, hv, iter, typecache_slot)))
+                return 0;
             jl_gc_wb(a, (void*)&tab[index], (jl_value_t*)val);
             if (atomic)
                 jl_atomic_store_release(&tab[index], (jl_value_t*)val);
@@ -1262,9 +1260,8 @@ static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, i
         }
         index = (index + 1) & (sz - 1);
         iter++;
-    } while (iter <= maxprobe && index != orig);
-
-    return 0;
+    } while (index != orig);
+    return 0; // no free slot
 }
 
 static void cache_insert_type_set(jl_datatype_t *val, uint_t hv) JL_CANSAFEPOINT
@@ -1272,22 +1269,11 @@ static void cache_insert_type_set(jl_datatype_t *val, uint_t hv) JL_CANSAFEPOINT
     jl_svec_t *a = jl_atomic_load_relaxed(&val->name->cache);
     while (1) {
         JL_GC_PROMISE_ROOTED(a);
-        if (cache_insert_type_set_(a, val, hv, 1))
+        if (cache_insert_type_set_(a, val, hv, 1, -1))
             return;
-
-        /* table full */
-        /* rehash to grow and retry the insert */
-        /* it's important to grow the table really fast; otherwise we waste */
-        /* lots of time rehashing all the keys over and over. */
-        size_t newsz;
+        /* no free slot, or a long probe: double the table and retry */
         size_t sz = jl_svec_len(a);
-        if (sz < HT_N_INLINE)
-            newsz = HT_N_INLINE;
-        else if (sz >= (1 << 19) || (sz <= (1 << 8)))
-            newsz = sz << 1;
-        else
-            newsz = sz << 2;
-        a = cache_rehash_set(a, newsz);
+        a = cache_rehash_set(a, sz < HT_N_INLINE ? HT_N_INLINE : sz << 1);
         jl_gc_write_atomic(val->name, val->name->cache, jl_svec_t, a, release);
     }
 }
@@ -1301,11 +1287,12 @@ jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz)
         size_t i;
         jl_svec_t *newa = jl_svec_fill(newsz, jl_nothing);
         JL_GC_PUSH1(&newa);
+        ssize_t live = 0;
         for (i = 0; i < sz; i += 1) {
             jl_value_t *val = ol[i];
             if (val != jl_nothing) {
                 uint_t hv = ((jl_datatype_t*)val)->hash;
-                if (!cache_insert_type_set_(newa, (jl_datatype_t*)val, hv, 0)) {
+                if (!cache_insert_type_set_(newa, (jl_datatype_t*)val, hv, 0, ++live)) {
                     break;
                 }
             }

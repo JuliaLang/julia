@@ -2696,6 +2696,7 @@ static void jl_prune_type_cache_hash(jl_svec_t *cache) JL_CANSAFEPOINT JL_GC_DIS
         else
             sz += 1;
     }
+    sz *= 2; // at most half full, as a type cache grows
     if (sz < HT_N_INLINE)
         sz = HT_N_INLINE;
     record_object_change((jl_value_t*)cache, (jl_value_t*)cache_rehash_set(kept, sz));
