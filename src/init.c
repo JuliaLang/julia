@@ -226,11 +226,17 @@ JL_DLLEXPORT void jl_raise(int signo)
 #endif
 }
 
+// Set once the system image has been restored (or bootstrapped). Until then, the globals
+// read from the image (`jl_base_module`, ...) may hold unrelocated pointers, so the exit
+// path must not touch them, e.g. when a signal asks the process to exit during startup.
+static _Atomic(int) jl_image_restored = 0;
+
 JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
 {
     uv_tty_reset_mode();
 
-    if (jl_atomic_load_relaxed(&jl_all_tls_states) == NULL)
+    if (jl_atomic_load_relaxed(&jl_all_tls_states) == NULL ||
+            !jl_atomic_load_relaxed(&jl_image_restored))
         return;
 
     jl_task_t *ct = jl_get_current_task();
@@ -612,6 +618,7 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         jl_load(jl_core_module, "boot.jl");
         post_boot_hooks();
     }
+    jl_atomic_store_relaxed(&jl_image_restored, 1);
 
     if (jl_base_module == NULL) {
         // nthreads > 1 requires code in Base

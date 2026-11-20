@@ -106,6 +106,25 @@ if Sys.isunix()
         @test occursin("==== Done", err_s)
     end
 
+    @testset "SIGTERM during startup" begin
+        # A fatal signal that arrives while the system image is being restored must
+        # terminate the process, not crash it in the exit hooks. Spread the signals over
+        # the startup time so that some land in the image restore, whatever the machine.
+        exename = `$(Base.julia_cmd()) --startup-file=no -e 0`
+        startup = @elapsed run(exename)
+        for delay in range(0, startup, length=20)
+            p = run(pipeline(exename, stderr=devnull), wait=false)
+            sleep(delay)
+            kill(p, Base.SIGTERM)
+            # an asynchronous exit can get stuck (see `signals-unix.c`); don't hang the test
+            if timedwait(() -> process_exited(p), 60) === :timed_out
+                kill(p, Base.SIGKILL)
+            end
+            wait(p)
+            @test success(p) || p.termsignal == Base.SIGTERM
+        end
+    end
+
     # issue #50743
     @testset "abort backtrace reaches Julia" begin
         script = """
