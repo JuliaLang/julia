@@ -385,6 +385,19 @@ end
     @test ret == ""
 end
 
+@testset "/dev/null as a redirect target in a command literal" begin
+    # A literal `/dev/null` is `devnull` on every system, without a portability warning
+    @test `a >/dev/null` == pipeline(`a`, stdout=devnull)
+    @test `a >>/dev/null 2>>/dev/null` == pipeline(`a`, stdout=devnull, stderr=devnull)
+    @test `a <"/dev/null"` == pipeline(`a`, stdin=devnull)
+    @test success(@test_logs run(`$echocmd hello >/dev/null`))
+    @test read(`$catcmd </dev/null`, String) == ""
+    # An interpolated path names a file, as with `pipeline` (which warns about it on Unix)
+    let path = "/dev/null"
+        @test @test_logs(match_mode=:any, `a >$path`).handle == Base.FileRedirect(path, false)
+    end
+end
+
 # Test that redirecting an IOStream does not crash the process
 let fname = tempname(), p
     cmd = """
@@ -1482,6 +1495,8 @@ end
     @test repr(`cat 'a b' > 'c d|e'`) == "`cat 'a b' > 'c d|e'`"
     @test repr(`cat > '~x'`) == "`cat > '~x'`"
     @test repr(pipeline(`a`, "out`s")) == "`a > out\\`s`"
+    @test repr(`a 2>/dev/null <'/dev/null' >>/dev/null`) == "`a < /dev/null > /dev/null 2> /dev/null`"
+    @test repr(pipeline(`a`, stdout=devnull)) == "`a > /dev/null`"
     # A pipeline's stdin is its first command's, and its stdout its last command's.
     @test repr(pipeline(pipeline(`a`, `b`), stdin="i.txt", stdout="o.txt")) == "`a < i.txt | b > o.txt`"
     # A redirect replaces any enclosing redirect of the same stream when spawned.
@@ -1490,7 +1505,7 @@ end
     # Everything else keeps the `pipeline(...)` form.
     @test repr(pipeline(pipeline(`a`, `b`), stderr="e.txt")) == "pipeline(`a | b`, stderr>Base.FileRedirect(\"e.txt\", false))"
     @test repr(pipeline(`a`, stderr=`b`)) == "pipeline(`a`, stderr=`b`)"
-    @test repr(pipeline(`a`, stdout=devnull)) == "pipeline(`a`, stdout>Base.DevNull())"
+    @test repr(pipeline(`a`, stderr="/dev/null")) == "pipeline(`a`, stderr>Base.FileRedirect(\"/dev/null\", false))"
     @test repr(pipeline(`a`, stdout=IOBuffer())) |> startswith("pipeline(`a`, stdout>")
     @test repr(pipeline(Cmd(`a`, dir="/tmp"), `b`)) == "pipeline(setenv(`a`; dir=\"/tmp\"), stdout=`b`)"
     @test repr(pipeline(`a` & `b`, `c`)) == "pipeline(`a` & `b`, stdout=`c`)"

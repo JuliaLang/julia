@@ -321,9 +321,9 @@ function _show_as_backticks(io::IO, cmd::AbstractCmd)
     return true
 end
 
-# Print the body of a backtick literal for `cmd`, given the file redirects of enclosing
-# `CmdRedirect`s that apply to it, indexed by stream number. Returns `false` if `cmd` has
-# no backtick form, in which case the output is meaningless.
+# Print the body of a backtick literal for `cmd`, given the file and `devnull` redirects of
+# enclosing `CmdRedirect`s that apply to it, indexed by stream number. Returns `false` if
+# `cmd` has no backtick form, in which case the output is meaningless.
 _show_backtick_body(::IO, ::AbstractCmd, redirects) = false
 
 function _show_backtick_body(io::IO, cmd::Cmd, redirects)
@@ -333,8 +333,8 @@ function _show_backtick_body(io::IO, cmd::Cmd, redirects)
     join(io, map(arg -> sprint(_show_cmd_word, arg, true; context=io), cmd.exec), ' ')
     for (op, r) in zip(("<", ">", "2>"), redirects)
         r === nothing && continue
-        print(io, ' ', op, op != "<" && r.append ? ">" : "", ' ')
-        _show_cmd_word(io, r.filename, false)
+        print(io, ' ', op, r !== devnull && op != "<" && r.append ? ">" : "", ' ')
+        r === devnull ? print(io, "/dev/null") : _show_cmd_word(io, r.filename, false)
     end
     return true
 end
@@ -351,7 +351,9 @@ end
 
 function _show_backtick_body(io::IO, cr::CmdRedirect, redirects)
     handle = cr.handle
-    handle isa FileRedirect && !isempty(handle.filename) &&
+    # A file named `/dev/null` has no backtick form: there, `/dev/null` means `devnull`.
+    (handle === devnull || handle isa FileRedirect && !isempty(handle.filename) &&
+        handle.filename != "/dev/null") &&
         cr.stream_no in (STDIN_NO, STDOUT_NO, STDERR_NO) &&
         cr.readable == (cr.stream_no == STDIN_NO) || return false
     # When spawning, a redirect replaces any enclosing one of the same stream.
