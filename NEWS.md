@@ -65,6 +65,9 @@ New library features
   such as Glob.jl, to match the pattern, so globbing works after `using Glob` ([#20401]).
 * `Base.enumerate(itr; from=1)` now accepts an optional starting point `from` for the enumeration.
 
+* In a command literal, a redirection to `/dev/null` now means `devnull` on every system,
+  including Windows, so that, for example, ``` `cmd 2>/dev/null` ``` is portable.
+
 Standard library changes
 ------------------------
 

@@ -367,6 +367,12 @@ IO redirection can be accomplished by passing keyword arguments `stdin`, `stdout
 pipeline(`do_work`, stdout=pipeline(`sort`, "out.txt"), stderr="errs.txt")
 ```
 
+As a special case in command literals, a redirection to or from `/dev/null` is replaced with the
+[`devnull`](@ref) object, including on Windows, where that path doesn't exist. This provides a
+portable way to discard output and read from an always-empty file. So
+``` `do_work 2>/dev/null` ``` means ```pipeline(`do_work`, stderr=devnull)```, and discards the
+error output of `do_work` portably.
+
 ### Avoiding Deadlock in Pipelines
 
 When reading and writing to both ends of a pipeline from a single process, it is important to
