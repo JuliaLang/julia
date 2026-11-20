@@ -611,7 +611,7 @@ struct LinRange{T,L<:Integer} <: AbstractRange{T}
             return new(start, stop, len, len)
         end
         lendiv = max(len - onelen, onelen)
-        if T <: Integer && !iszero(mod(stop-start, lendiv))
+        if T <: Integer && !iszero(rem(_linrange_widen(stop) - _linrange_widen(start), lendiv))
             throw(ArgumentError("LinRange{<:Integer} cannot have non-integer step"))
         end
         return new(start, stop, len, lendiv)
@@ -999,6 +999,20 @@ end
 unsafe_getindex(r::LinRange, i::Integer) = lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
 
 lerpi(j::Integer, d::Integer, a::T, b::T) where {T<:Number} = T(_lerp(j/d, a, b))
+
+# Widen before subtracting to accommodate the full span in either direction.
+_linrange_widen(x::Integer) = x
+_linrange_widen(x::T) where {T<:OverflowSafe} = convert(widen(signed(T)), x)
+
+function lerpi(j::Integer, d::Integer, a::T, b::T) where {T<:Integer}
+    start = _linrange_widen(a)
+    span = _linrange_widen(b) - start
+    iszero(span) && return a
+    # The constructor guarantees an integral step. For a nonconstant range,
+    # both the divisor and any in-bounds offset fit in the widened span type.
+    step = div(span, oftype(span, d))
+    return convert(T, start + oftype(span, j) * step)
+end
 
 function _lerp(t, a, b)
     s = one(t)

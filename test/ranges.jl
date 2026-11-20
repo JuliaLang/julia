@@ -1414,6 +1414,28 @@ end
     @test_throws ArgumentError LinRange{Int}(1, 5, 4)
 end
 
+@testset "Exact integer LinRange indexing" begin
+    # Integer interpolation must preserve precision and avoid overflow.
+    start = Int64(2)^53 + 1
+    r = LinRange{Int64}(start, start + 4, 5)
+    @test r[2] === start + 1
+    @test collect(r) == collect(start:start+4)
+    @test collect(r[2:4]) == collect(start+1:start+3)
+    @test LinRange{Int64}(start, start, 1)[1] === start
+
+    for T in (Int8, Int64, Int128, UInt8, UInt64, UInt128)
+        lo, hi = typemin(T), typemax(T)
+        mid = T(big(lo) + div(big(hi) - big(lo), 3))
+        @test LinRange{T}(lo, hi, 4)[2] === mid
+        @test LinRange{T,UInt}(hi, lo, UInt(4))[UInt(3)] === mid
+        @test_throws ArgumentError LinRange{T}(lo, hi, 3)
+    end
+    @test LinRange{Int8,UInt128}(1, 1, typemax(UInt128))[typemax(UInt128)] === Int8(1)
+    @test collect(LinRange{Bool}(true, false, 2)) == [true, false]
+    n = big(2)^256
+    @test LinRange{BigInt}(-n, n, 5)[2] == -(n >> 1)
+end
+
 @testset "LinRange ops" begin
     @test 2*LinRange(0,3,4) == LinRange(0,6,4)
     @test LinRange(0,3,4)*2 == LinRange(0,6,4)
