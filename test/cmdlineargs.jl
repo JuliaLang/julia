@@ -734,9 +734,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in a different directory
-        tdir = mktempdir() # a dir that contains no code
+        tdir = realpath(mktempdir()) # a dir that contains no code
         @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
-            --code-coverage=$covfile --code-coverage=@$tdir`) == "(3, $(repr(realpath(tdir))))"
+            --code-coverage=$covfile --code-coverage=@$tdir`) == "(3, $(repr(tdir)))"
         @test isfile(covfile)
         got = read(covfile, String)
         @test isempty(got)
@@ -812,6 +812,47 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                            "--code-coverage=-$excluded")
             @test readchomp(`$cov_exename_hit --code-coverage=-$excluded -e 'print(Base.JLOptions().code_coverage)'`) == "2"
             @test !success(pipeline(`$cov_exename_hit --code-coverage=- -e 0`, stderr=devnull))
+        end
+
+        # a tracked path given through a symlink matches files loaded through it
+        if !Sys.iswindows()
+            mktempdir() do parent
+                real = realpath(mkdir(joinpath(parent, "Real")))
+                link = joinpath(parent, "Link")
+                symlink(real, link)
+                write(joinpath(real, "linked.jl"), "f(x) = x + 1\nf(1)\n")
+                outfile = joinpath(dir, "linked.info")
+                for (tracked, loaded) in ((link, link), (link, real), (real, real), (real, link))
+                    srcfile = joinpath(loaded, "linked.jl")
+                    run(`$cov_exename --code-coverage=$outfile --code-coverage=@$tracked $srcfile`)
+                    covered = contains(read(outfile, String), "SF:$srcfile")
+                    rm(outfile)
+                    # files are compared unresolved, so a symlink below the tracked realpath is missed
+                    if (tracked, loaded) == (real, link)
+                        @test_broken covered
+                    else
+                        @test covered context=(tracked, loaded)
+                    end
+                end
+                # the tracked path lists the resolved path, then the given one if it differs
+                print_tracked = "print(unsafe_string(Base.JLOptions().tracked_path))"
+                both = "$real:$link"
+                @test readchomp(`$cov_exename --code-coverage=@$real -e $print_tracked`) == real
+                @test readchomp(`$cov_exename --track-allocation=@$link -e $print_tracked`) == both
+                # which is the list a process started with `Base.julia_cmd()` is given
+                @test readchomp(`$cov_exename --code-coverage=@$both -e $print_tracked`) == both
+                @test readchomp(`$cov_exename --code-coverage=@$real:$link:$real -e $print_tracked`) == both
+                @test readchomp(`$cov_exename --code-coverage=@: -e $print_tracked`) == ""
+                # so a child process tracks files loaded through the symlink as well
+                srcfile = joinpath(link, "linked.jl")
+                child = "run(`\$(Base.julia_cmd()) --startup-file=no \$(ARGS[1])`)"
+                pidfile = joinpath(parent, "child-%p.info")
+                run(`$cov_exename --code-coverage=$pidfile --code-coverage=@$link -e $child $srcfile`)
+                reports = filter(endswith(".info"), readdir(parent, join=true))
+                @test any(f -> contains(read(f, String), "SF:$srcfile"), reports)
+                run(`$cov_exename --code-coverage=@$link -e $child $srcfile`)
+                @test any(f -> startswith(f, "linked.jl.") && endswith(f, ".cov"), readdir(real))
+            end
         end
 
         # Source and report filenames must support Unicode on Windows as well.
