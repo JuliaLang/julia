@@ -2530,7 +2530,7 @@ function spawn_print_loop!(s::PrecompileSession)
     end
 end
 
-function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, job::PrecompileJob, pipe, single_requested_pkg::Bool)
+function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, job::PrecompileJob, pipe::Base.PipeEndpoint, single_requested_pkg::Bool)
     pkg, _ = pkg_config
     liveprinting = false
     thistaskwaiting = false
@@ -2583,7 +2583,7 @@ function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, job::Preco
         end
     finally
         # closing the reader unblocks the worker's writes if draining stops early
-        close(pipe.out)
+        close(pipe)
     end
 end
 
@@ -2806,8 +2806,18 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                     end
                     Base.acquire(s.parallel_limiter; priority=schedule_priority(priorities, pkg), cancel=() -> should_stop(s))
 
-                    std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
-                    t_monitor = Threads.@spawn :samepool precompilepkgs_monitor_std(s, pkg_config, job, std_pipe,
+                    # The worker gets the write end as a raw handle. Opening it here as well would
+                    # bind it to our IOCP on Windows, after which every write in the worker takes a
+                    # thread-pool round trip; with output-heavy packages under load that is minutes.
+                    std_rd, std_wr = Base.link_pipe(true, true)
+                    std_out = try
+                        Base.open_pipe!(Base.PipeEndpoint(), std_rd)
+                    catch
+                        Base.close_pipe_sync(std_rd)
+                        Base.close_pipe_sync(std_wr)
+                        rethrow()
+                    end
+                    t_monitor = Threads.@spawn :samepool precompilepkgs_monitor_std(s, pkg_config, job, std_out,
                         single_requested_pkg)
 
                     name = describe_pkg(s, pkg, is_project_dep, is_serial_dep, flags, cacheflags)
@@ -2836,7 +2846,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 pid > 0 && @lock s.print_lock set_pid!(job, pid)
                             end)
                             t = @elapsed ret = begin
-                                Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
+                                Base.compilecache(pkg, sourcespec, std_wr, std_wr, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
                                                   pid_channel=pid_ch, report_timing=true,
                                                   preresolved=preresolved_snapshot(s))
@@ -2862,7 +2872,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 s.logcalls === CoreLogging.Debug && @lock s.print_lock begin
                                     @debug "Precompiling $(repr(MIME"text/plain"(), pkg))"
                                 end
-                                Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
+                                Base.compilecache(pkg, sourcespec, std_wr, std_wr, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
                                                   pid_channel=pid_ch, report_timing=true,
                                                   preresolved=preresolved_snapshot(s))
@@ -2919,7 +2929,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                         end
                     finally
                         try
-                            isopen(std_pipe.in) && close(std_pipe.in)
+                            Base.close_pipe_sync(std_wr)
                             wait(t_monitor)
                         finally
                             try; close(pid_ch); catch; end
