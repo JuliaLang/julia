@@ -2669,6 +2669,21 @@ end
         @test occursin(r"Loading object cache file .+ for Child", log)
         @test occursin(r"Generating object cache file for Parent", log)
         @test occursin(r"Loading object cache file .+ for Parent", log)
+
+        # a process with pkgimages on can make caches for a configuration without them
+        mkdepottempdir() do depot2
+            code = """
+                flags = `--pkgimages=no`
+                cacheflags = Base.CacheFlags(; use_pkgimages=false)
+                for name in ("Child", "Parent")
+                    _, ocachefile = Base.compilecache(Base.identify_package(name); flags, cacheflags)
+                    ocachefile === nothing || error("unexpected object cache file for ", name)
+                end
+                """
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --pkgimages=yes -e $code`,
+                         "JULIA_LOAD_PATH" => dir, "JULIA_DEPOT_PATH" => depot2)
+            @test success(pipeline(cmd; stdout, stderr))
+        end
     end end
 end
 
