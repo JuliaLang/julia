@@ -1465,8 +1465,8 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 //#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L && !HAVE_KEVENT
 //            si_code = info.si_code;
 //#endif
-            // Let's forbid threads from running GC while we're trying to exit,
-            // also let's make sure we're not in the middle of GC.
+            // Keep GC from running while thread 0 is redirected, and wait out a
+            // running one. Undone by jl_exit_thread0_cb (here and signals-mach.c).
             jl_gc_enable_from_nonmutator(0);
             jl_exit_thread0(sig, signal_bt_data, signal_bt_size);
         }
