@@ -550,55 +550,64 @@ function _brace_product(parts::Vector{Any})
     return vals
 end
 
-# One command of a pipeline: its words and its redirection targets (`nothing` if not redirected).
+# One command of a pipeline: its words and its redirections, in the order they were written.
+# Each redirection is the stream (`:stdin`, `:stdout` or `:stderr`), its target, and its
+# operator: `:in` for `<`, `:out` for `>`, `:append` for `>>`, and `:dupin` and `:dupout` for
+# `<&` and `>&`, whose target is a file descriptor number.
 mutable struct _ShellSegment
     args::Vector{Any}
-    stdin::Any
-    stdout::Any
-    stderr::Any
-    stdout_append::Bool
-    stderr_append::Bool
+    redirects::Vector{Tuple{Symbol,Any,Symbol}}
 end
-_ShellSegment() = _ShellSegment(Any[], nothing, nothing, nothing, false, false)
+_ShellSegment() = _ShellSegment(Any[], Tuple{Symbol,Any,Symbol}[])
+
+const _STREAM_NAMES = (:stdin, :stdout, :stderr)
 
 # Finish a word: it becomes the target of the pending redirection, if there is one, and
 # otherwise an argument. A partial parse keeps redirection targets as arguments, so that they
 # can be completed like any other word. Returns the redirection still waiting for a target.
-function _finish_word!(p::_ShellParser, seg::_ShellSegment, word::Vector{Any}, w, redirect::Symbol)
+function _finish_word!(p::_ShellParser, seg::_ShellSegment, word::Vector{Any}, w, redirect::Symbol, op::Symbol)
     isempty(word) && !w.special && return redirect
     if redirect === :none || p.partial
         push!(seg.args, isempty(word) ? Any[""] : copy(word))
     else
         w.expanded && error("parsing command `$(p.str)`: brace expansion in a redirection target")
         w.glob && error("parsing command `$(p.str)`: glob in a redirection target")
-        target = if length(word) == 1 && word[1] isa String
+        target = if op === :dupin || op === :dupout
+            # As in POSIX shells, the target of `>&` and `<&` is a file descriptor number.
+            amp = op === :dupin ? "<&" : ">&"
+            length(word) == 1 && (d = word[1]; d isa String && !isempty(d) && all(isdigit, d)) ||
+                error("parsing command `$(p.str)`: `$amp` must be followed by a file descriptor number")
+            d in ("0", "1", "2") || error("parsing command `$(p.str)`: unsupported fd $d in redirection")
+            parse(Int, d)
+        elseif length(word) == 1 && word[1] isa String
             word[1]
         elseif length(word) == 1
             Expr(:call, GlobalRef(Base, :cmd_redirect_target), word[1])
         else
             Expr(:call, GlobalRef(Base, :cmd_interpolate), word...)
         end
-        getfield(seg, redirect) === nothing ||
+        any(r -> r[1] === redirect, seg.redirects) &&
             error("parsing command `$(p.str)`: $redirect is redirected more than once")
-        setfield!(seg, redirect, target)
+        push!(seg.redirects, (redirect, target, op))
     end
     empty!(word)
     return :none
 end
 
+# The redirections are applied in the order they were written, as in sh, so that in
+# `cmd >log 2>&1` the stderr of `cmd` goes to `log`: the first one is outermost.
 function _segment_expr(seg::_ShellSegment)
     ex = Expr(:call, GlobalRef(Base, :cmd_gen), Expr(:tuple, Any[Expr(:tuple, w...) for w in seg.args]...))
-    if seg.stdin !== nothing || seg.stdout !== nothing
-        kwargs = Any[]
-        seg.stdin !== nothing && push!(kwargs, Expr(:kw, :stdin, seg.stdin))
-        seg.stdout !== nothing && push!(kwargs, Expr(:kw, :stdout, seg.stdout))
-        seg.stdout_append && push!(kwargs, Expr(:kw, :append, true))
-        ex = Expr(:call, GlobalRef(Base, :pipeline), Expr(:parameters, kwargs...), ex)
-    end
-    if seg.stderr !== nothing
-        kwargs = Any[Expr(:kw, :stderr, seg.stderr)]
-        seg.stderr_append && push!(kwargs, Expr(:kw, :append, true))
-        ex = Expr(:call, GlobalRef(Base, :pipeline), Expr(:parameters, kwargs...), ex)
+    for (stream, target, op) in Iterators.reverse(seg.redirects)
+        if op === :dupin || op === :dupout
+            stream_no = findfirst(==(stream), _STREAM_NAMES)::Int - 1
+            ex = Expr(:call, GlobalRef(Base, :CmdRedirect), ex,
+                      Expr(:call, GlobalRef(Base, :DupRedirect), target), stream_no, op === :dupin)
+        else
+            kwargs = Any[Expr(:kw, stream, target)]
+            op === :append && push!(kwargs, Expr(:kw, :append, true))
+            ex = Expr(:call, GlobalRef(Base, :pipeline), Expr(:parameters, kwargs...), ex)
+        end
     end
     return ex
 end
@@ -606,7 +615,7 @@ end
 # Whether the pipeline `segments` has no words and no redirections, like the text between two
 # `;` with nothing but spaces between them.
 _isempty_command(segments::Vector{_ShellSegment}) = length(segments) == 1 &&
-    (seg = segments[1]; isempty(seg.args) && seg.stdin === nothing && seg.stdout === nothing && seg.stderr === nothing)
+    (seg = segments[1]; isempty(seg.args) && isempty(seg.redirects))
 
 # The expression that builds the command or pipeline `segments`: the tuple of words of a
 # command without pipes or redirections, or a call to `pipeline`.
@@ -614,7 +623,7 @@ function _pipeline_expr(p::_ShellParser, segments::Vector{_ShellSegment})
     str = p.str
     if length(segments) == 1
         seg = segments[1]
-        if seg.stdin === nothing && seg.stdout === nothing && seg.stderr === nothing
+        if isempty(seg.redirects)
             return Expr(:tuple, Any[Expr(:tuple, w...) for w in seg.args]...)
         end
         isempty(seg.args) && error("parsing command `$str`: redirection without a command")
@@ -636,7 +645,8 @@ function _ShellParser(str::AbstractString, interpolate::Bool, special::AbstractS
 end
 
 # Read the operator that starts with `c` at `p.pos`, which a word stopped before, and return
-# it: `:pipe` for `|`, `:in` for `<`, `:out` for `>`, `:append` for `>>`, and in a sequence
+# it: `:pipe` for `|`, `:in` for `<`, `:out` for `>`, `:append` for `>>`, `:dupin` for `<&`,
+# `:dupout` for `>&`, and in a sequence
 # `:and` for `&&`, `:or` for `||` and `:then` for `;`.
 function _parse_operator!(p::_ShellParser, c::AbstractChar)
     _next!(p)
@@ -647,6 +657,10 @@ function _parse_operator!(p::_ShellParser, c::AbstractChar)
         _next!(p)
         return :or
     elseif c == '>'
+        if _at(p, '&')
+            _next!(p)
+            return :dupout
+        end
         _at(p, '>') || return :out
         _next!(p)
         return :append
@@ -654,7 +668,10 @@ function _parse_operator!(p::_ShellParser, c::AbstractChar)
         _next!(p) # the second `&`
         return :and
     end
-    return c == ';' ? :then : :in
+    c == ';' && return :then
+    _at(p, '&') || return :in
+    _next!(p)
+    return :dupin
 end
 
 _operator_string(op::Symbol) = op === :and ? "&&" : op === :or ? "||" : ";"
@@ -666,6 +683,7 @@ function _parse_pipeline!(p::_ShellParser)
     str = p.str
     segments = [_ShellSegment()]
     redirect = :none # the redirection waiting for its target
+    redirect_op = :none # its operator
     word = Any[]
     op = nothing
     while true
@@ -680,7 +698,7 @@ function _parse_pipeline!(p::_ShellParser)
             fd = parse(Int, d::String)
             empty!(word)
         else
-            redirect = _finish_word!(p, seg, word, w, redirect)
+            redirect = _finish_word!(p, seg, word, w, redirect, redirect_op)
         end
         w.stop == '\0' && break
         if isspace(w.stop)
@@ -692,20 +710,19 @@ function _parse_pipeline!(p::_ShellParser)
             op = _parse_operator!(p, w.stop)
             if op === :pipe
                 push!(segments, _ShellSegment())
-            elseif op === :out || op === :append
-                if fd === nothing || fd == 1
-                    redirect = :stdout
-                    seg.stdout_append = op === :append
-                elseif fd == 2
-                    redirect = :stderr
-                    seg.stderr_append = op === :append
-                else
+            elseif op === :out || op === :append || op === :dupout
+                fd === nothing && (fd = 1)
+                op === :dupout || fd in (1, 2) ||
                     error("parsing command `$str`: unsupported fd $fd in redirection")
-                end
-            elseif op === :in
-                (fd === nothing || fd == 0) ||
+            elseif op === :in || op === :dupin
+                fd === nothing && (fd = 0)
+                op === :dupin || fd == 0 ||
                     error("parsing command `$str`: unsupported fd $fd in redirection")
-                redirect = :stdin
+            end
+            if op in (:out, :append, :dupout, :in, :dupin)
+                fd in (0, 1, 2) || error("parsing command `$str`: unsupported fd $fd in redirection")
+                redirect = _STREAM_NAMES[fd + 1]
+                redirect_op = op
             end
             op = op in (:and, :or, :then) ? op : nothing
         end

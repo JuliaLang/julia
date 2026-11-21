@@ -63,6 +63,12 @@ New library features
 * An unquoted `*`, `?` or `[` in a command literal makes a glob, which expands to the matching
   paths when the command is created. Julia calls a `glob` function provided by a package,
   such as Glob.jl, to match the pattern, so globbing works after `using Glob` ([#20401]).
+* A command literal can copy one of a command's standard streams to another with `N>&M`, as in
+  a shell, so that, for example, ``` `cmd >log 2>&1` ``` sends both streams of `cmd` to `log`.
+  The redirections of a command are applied in the order they are written ([#20401]).
+* `pipeline(cmd; stdout=x, stderr=x)`, with the same object or path string for both, now opens `x`
+  once and shares it between both streams, as in ``` `cmd >x 2>&1` ```. Before, the streams
+  could overwrite each other's output, and a not-yet-open `PipeEndpoint` received only one of them.
 * `Base.enumerate(itr; from=1)` now accepts an optional starting point `from` for the enumeration.
 
 Standard library changes

@@ -385,6 +385,74 @@ end
     @test ret == ""
 end
 
+@testset "copying a stream with `N>&M`" begin
+    # As in a shell, the redirects of a command are applied in the order they are written.
+    oe = `$shcmd -c 'echo out; echo err >&2'`
+    function observe(cmd)
+        mktempdir() do dir
+            log = joinpath(dir, "log")
+            err = IOBuffer()
+            out = read(pipeline(cmd(log), stderr=err), String)
+            return out, String(take!(err)), isfile(log) ? read(log, String) : nothing
+        end
+    end
+    @test observe(log -> `$oe >$log 2>&1`) == ("", "", "out\nerr\n")
+    @test observe(log -> `$oe 2>&1 >$log`) == ("err\n", "", "out\n")
+    @test observe(log -> `$oe 2>&1`) == ("out\nerr\n", "", nothing)
+    @test observe(log -> `$oe 2>& 1`) == ("out\nerr\n", "", nothing)
+    @test observe(log -> `$oe 2>&1 >&2`) == ("out\nerr\n", "", nothing)
+    @test observe(log -> `$oe >&2 2>&1`) == ("", "out\nerr\n", nothing)
+    @test observe(log -> `$oe 1>&2 2>$devnull`) == ("", "out\n", nothing)
+    @test observe(log -> `$oe 2<&1`) == ("out\nerr\n", "", nothing)
+    @test observe(log -> `$oe >>$log 2>&1`) == ("", "", "out\nerr\n")
+    @test observe(log -> `$oe 2>&1 | $catcmd`) == ("out\nerr\n", "", nothing)
+    @test observe(log -> `$oe 2>&1 | $catcmd >$log`) == ("", "", "out\nerr\n")
+    @test observe(log -> `$oe 2>$log >&2 | $catcmd`) == ("", "", "out\nerr\n")
+    @test observe(log -> pipeline(`$oe 2>&1`, stdout=log)) == ("", "", "out\nerr\n")
+    # A target given for both stdout and stderr is opened once and shared.
+    @test observe(log -> pipeline(oe, stdout=log, stderr=log)) == ("", "", "out\nerr\n")
+    @test observe(log -> pipeline(oe, stdout=log, stderr=log, append=true)) == ("", "", "out\nerr\n")
+    @test pipeline(`a`, stdout="log", stderr="log") == `a >log 2>&1`
+    @test repr(pipeline(`a`, stdout="log", stderr="log", append=true)) == "`a >> log 2>&1`"
+    let out = Base.PipeEndpoint(), log = @async read(out, String)
+        @test success(run(pipeline(oe, stdout=out, stderr=out)))
+        @test fetch(log) == "out\nerr\n"
+    end
+    # A copy of stdin is useful when stdin can be written too, like a file opened read-write
+    # or, as inetd does it, a socket.
+    reply = `$shcmd -c 'read x; echo "got $x"; echo "err $x" >&2'`
+    let path = tempname()
+        write(path, "abc\ndef\n")
+        open(f -> run(pipeline(`$reply 1<&0 2>$devnull`, stdin=f)), path, "r+")
+        @test read(path, String) == "abc\ngot abc\n"
+        rm(path)
+    end
+    if !Sys.iswindows() # a socket can't be a child's stdio on Windows
+        server = listen(ip"127.0.0.1", 0)
+        client = connect(ip"127.0.0.1", getsockname(server)[2])
+        conn = accept(server)
+        p = run(pipeline(`$reply >&0 2>&1`, stdin=conn), wait=false)
+        close(conn)
+        write(client, "hello\n")
+        closewrite(client)
+        @test read(client, String) == "got hello\nerr hello\n"
+        @test success(p)
+        close(client)
+        close(server)
+    end
+    @test read(pipeline(`$catcmd <&0`, stdin=IOBuffer("input\n")), String) == "input\n"
+    @test read(pipeline(`$echocmd piped`, `$catcmd <&0`), String) == "piped\n"
+    sp(s) = eval(Base.shell_parse(s; special=Base.shell_special)[1])
+    @test_throws "`>&` must be followed by a file descriptor number" sp("cat >&log")
+    @test_throws "`>&` must be followed by a file descriptor number" sp("cat >&-")
+    @test_throws "`<&` must be followed by a file descriptor number" sp("cat <&\$x")
+    @test_throws "unsupported fd 3 in redirection" sp("cat >&3")
+    @test_throws "unsupported fd 3 in redirection" sp("cat 3>&1")
+    @test_throws "must be quoted" sp("cat >>&2")
+    @test_throws "redirect operator without filename" sp("cat 2>&1>log")
+    @test_throws "stderr is redirected more than once" sp("cat 2>&1 2>err")
+end
+
 # Test that redirecting an IOStream does not crash the process
 let fname = tempname(), p
     cmd = """
@@ -997,11 +1065,12 @@ end
 # Parsing of pipelines and redirections
 let sp(s) = eval(Base.shell_parse(s; special=Base.shell_special)[1])
     # a word right before an operator ends like any other word
-    @test sp("cat >a<b") == pipeline(`cat`, stdin="b", stdout="a")
+    @test sp("cat >a<b") == pipeline(pipeline(`cat`, stdin="b"), stdout="a")
+    @test sp("cat <b>a") == pipeline(`cat`, stdin="b", stdout="a")
     @test sp("cat \"q\">  x") == pipeline(`cat q`, stdout="x")
     @test sp("cat ''>f") == pipeline(`cat ''`, stdout="f")  # an empty quoted argument is kept
     @test sp("cat <in>out") == pipeline(`cat`, stdin="in", stdout="out")
-    @test sp("cat 2>a>b") == pipeline(`cat`, stdout="b", stderr="a")
+    @test sp("cat 2>a>b") == pipeline(pipeline(`cat`, stdout="b"), stderr="a")
     @test sp("cat 2>>e") == pipeline(`cat`, stderr=Base.FileRedirect("e", true))
     @test sp("a | b >f | c") == pipeline(`a`, pipeline(`b`, stdout="f"), `c`)
     # an interpolation is not an fd number, and a line continuation is removed
@@ -1477,16 +1546,27 @@ end
     @test repr(`ls >> out.txt`) == "`ls >> out.txt`"
     @test repr(`make 2> errs.txt`) == "`make 2> errs.txt`"
     @test repr(`make 2>> errs.txt`) == "`make 2>> errs.txt`"
-    @test repr(`sort 2> e.txt > o.txt < i.txt`) == "`sort < i.txt > o.txt 2> e.txt`"
+    @test repr(`sort 2> e.txt > o.txt < i.txt`) == "`sort 2> e.txt > o.txt < i.txt`"
+    @test repr(pipeline(`sort`, stdin="i.txt", stdout="o.txt", stderr="e.txt")) == "`sort < i.txt > o.txt 2> e.txt`"
+    @test repr(`sort > o.txt 2>&1`) == "`sort > o.txt 2>&1`"
+    @test repr(`sort 2>& 1 > o.txt`) == "`sort 2>&1 > o.txt`"
+    @test repr(`sort >&2 <&0 2<&1`) == "`sort >&2 <&0 2<&1`"
+    @test repr(`sort 0>&1`) == "`sort 0>&1`"
+    @test repr(`a 2>&1 | b`) == "`a 2>&1 | b`"
     @test repr(`a < i.txt | b 2> e.txt | c > o.txt`) == "`a < i.txt | b 2> e.txt | c > o.txt`"
     @test repr(`cat 'a b' > 'c d|e'`) == "`cat 'a b' > 'c d|e'`"
     @test repr(`cat > '~x'`) == "`cat > '~x'`"
     @test repr(pipeline(`a`, "out`s")) == "`a > out\\`s`"
     # A pipeline's stdin is its first command's, and its stdout its last command's.
     @test repr(pipeline(pipeline(`a`, `b`), stdin="i.txt", stdout="o.txt")) == "`a < i.txt | b > o.txt`"
-    # A redirect replaces any enclosing redirect of the same stream when spawned.
-    @test repr(pipeline(pipeline(`a`, stdout="inner.txt"), stdout="outer.txt")) == "`a > inner.txt`"
-    @test repr(pipeline(pipeline(`a`, pipeline(`b`, "inner.txt")), stdout="outer.txt")) == "`a | b > inner.txt`"
+    # Redirects are shown in the order they are applied, outermost first.
+    @test repr(pipeline(`a 2>&1`, stdout="o.txt")) == "`a > o.txt 2>&1`"
+    # A stream can be redirected only once in backticks, and `>&` around a pipeline names
+    # a stream outside of it, which backticks cannot express.
+    @test repr(pipeline(pipeline(`a`, stdout="inner.txt"), stdout="outer.txt")) ==
+        "pipeline(`a > inner.txt`, stdout>Base.FileRedirect(\"outer.txt\", false))"
+    @test repr(Base.CmdRedirect(`a | b`, Base.DupRedirect(2), 1, false)) ==
+        "pipeline(`a | b`, stdout>Base.DupRedirect(2))"
     # Everything else keeps the `pipeline(...)` form.
     @test repr(pipeline(pipeline(`a`, `b`), stderr="e.txt")) == "pipeline(`a | b`, stderr>Base.FileRedirect(\"e.txt\", false))"
     @test repr(pipeline(`a`, stderr=`b`)) == "pipeline(`a`, stderr=`b`)"
