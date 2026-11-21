@@ -159,16 +159,7 @@ impl Collection<JuliaVM> for VMCollection {
             return;
         }
 
-        // Get the current epoch and wait for it to advance.
-        let epoch = crate::api::mmtk_gc_epoch();
-        unsafe { jl_gc_mmtk_block_for_gc_enter() };
-        let gc_state = unsafe { jl_gc_safe_enter() };
-        crate::api::mmtk_wait_for_new_gc_epoch(epoch);
-        unsafe { jl_gc_safe_leave(gc_state) };
-        unsafe { jl_gc_mmtk_block_for_gc_leave() };
-
-        // `GC.gc()` must run pending finalizers before returning, so run them now.
-        unsafe { jl_gc_mmtk_run_pending_finalizers() };
+        wait_for_pause(crate::api::mmtk_gc_epoch());
     }
 
     fn spawn_gc_thread(_tls: VMThread, ctx: GCThreadContext<JuliaVM>) {
@@ -212,6 +203,19 @@ impl Collection<JuliaVM> for VMCollection {
         use crate::gc_trigger::*;
         Box::new(JuliaGCTrigger::new())
     }
+}
+
+/// Wait, GC-safe, until a pause ends after `epoch` was read with `mmtk_gc_epoch()`, then run this
+/// thread's pending finalizers.
+pub(crate) fn wait_for_pause(epoch: u64) {
+    unsafe { jl_gc_mmtk_block_for_gc_enter() };
+    let gc_state = unsafe { jl_gc_safe_enter() };
+    crate::api::mmtk_wait_for_new_gc_epoch(epoch);
+    unsafe { jl_gc_safe_leave(gc_state) };
+    unsafe { jl_gc_mmtk_block_for_gc_leave() };
+
+    // `GC.gc()` must run pending finalizers before returning, so run them now.
+    unsafe { jl_gc_mmtk_run_pending_finalizers() };
 }
 
 pub fn is_current_gc_nursery() -> bool {
