@@ -32,6 +32,38 @@ end
     @test first(string.(REPL.doc_completions(:sin))) == "sin"
 end
 
+# Issue #56785: Look up documentation using the arguments produced by a splat.
+module SplattedHelpTests
+    using REPL, Test
+
+    "No arguments."
+    f() = error("help must not call f")
+
+    "Two integer arguments."
+    f(::Int, ::Int) = error("help must not call f")
+
+    "Mixed arguments."
+    f(::Symbol, ::Int, ::String; flag=false) = error("help must not call f")
+
+    "Explicit varargs."
+    g(::Bool...) = error("help must not call g")
+
+    const calls = Ref(0)
+    function splat_args()
+        calls[] += 1
+        return (1, "two")
+    end
+
+    help(input) = string(eval(REPL.helpmode(IOBuffer(), input, @__MODULE__)))
+    @testset "Help for splatted positional arguments" begin
+        @test help("f((1, 2)[1:2]...)") == "Two integer arguments.\n"
+        @test help("f(()...)") == "No arguments.\n"
+        @test help("f((:x,)..., splat_args()...; flag=true)") == "Mixed arguments.\n"
+        @test calls[] == 1
+        @test help("g(::Bool...)") == "Explicit varargs.\n"
+    end
+end
+
 @testset "docsearch" begin
     @test REPL.docsearch(:abc, "b")
     @test !REPL.docsearch(nothing, "b")

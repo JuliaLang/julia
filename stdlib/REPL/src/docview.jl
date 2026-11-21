@@ -629,6 +629,13 @@ function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{N
             else
                 if arg isa Symbol
                     arg = :($arg::(@isdefined($arg) ? typeof($arg) : Any))
+                elseif isexpr(arg, :(...))
+                    # Leave an explicit `::T...` annotation for `@doc` to interpret.
+                    if !isexpr(arg.args[1], :(::), 1)
+                        # Splat the argument types into the signature built by `@doc`.
+                        types = :($map($typeof, ($arg,)))
+                        arg = Expr(:(::), Expr(:(...), types))
+                    end
                 elseif !isexpr(arg, :(::))
                     arg = :(::typeof($arg))
                 end
