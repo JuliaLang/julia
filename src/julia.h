@@ -2475,16 +2475,20 @@ typedef enum {
     JL_IMAGE_KIND_SO,
 } jl_image_kind_t;
 
-// A loaded, but unparsed .ji or .so image file
+struct _jl_ji_header_t;
+
 typedef struct {
     jl_image_kind_t kind;
-    const void *pointers; // jl_image_pointers_t *
-    const char *data;
-    size_t size;
-    uint64_t base;
-    uint32_t heap_checksum;
     bool_t is_split;
+    const char *data;     // the buffer to free() once the image is loaded, or NULL
+    const struct _jl_ji_header_t *header; // followed by the incremental header
+    const char *heap;     // non-owning pointer to uncompressed heap section (NULL if failed)
+    const char *loader;   // non-owning pointer to loader metadata section
+    const void *pointers; // jl_image_pointers_t *
     const void *coverage; // jl_image_coverage_t *, if built with coverage counters
+    uint64_t base;        // load address of the native library, 0 if non-native
+    size_t heap_size;
+    uint32_t heap_checksum;
 } jl_image_buf_t;
 
 struct _jl_image_t;
@@ -2509,7 +2513,7 @@ JL_DLLEXPORT const char *jl_get_libjulia_internal_path(void) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint32_t jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, bool_t compress, ios_t **s, jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT, int64_t *srctextpos, jl_array_t *module_init_order) JL_CANSAFEPOINT;
+JL_DLLEXPORT uint32_t jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, bool_t compress, ios_t **s, jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT, jl_array_t *module_init_order) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete, const char *pkgimage) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT;

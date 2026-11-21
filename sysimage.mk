@@ -10,6 +10,14 @@ ifeq ($(JULIA_COVERAGE_IMAGES),1)
 JULIA_SYSIMG_BUILD_FLAGS += $(JULIA_COVERAGE_IMAGE_FLAGS)
 endif
 
+# With SPLIT_SYSIMAGE=1 (the default), the heap of sys.$(SHLIB_EXT) is written to sys.ji beside it
+# instead of into the library.  sys-o.a records the setting it was built with through split-sysimage.stamp,
+# which is rewritten only when the setting changes, so that switching it rebuilds the image.
+split_sysimage := $(filter 1,$(SPLIT_SYSIMAGE))
+split_sysimage_stamp := $(build_private_libdir)/split-sysimage.stamp
+split_sysimage_ji = $(if $(and $(split_sysimage),$(filter o,$*)),$1)
+nosplit_sysimage_ji = $(if $(and $(if $(split_sysimage),,1),$(filter o,$*)),$1)
+
 default: sysimg-$(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: sysimg-release sysimg-debug
 basecompiler-ji: $(build_private_libdir)/basecompiler.ji
@@ -201,12 +209,21 @@ $$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(buil
 		 JULIA_DEPOT_PATH=':' \
 		 JULIA_NUM_THREADS=1 \
 			$$(call spawn, $3) $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-$$* $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
+			$$(call split_sysimage_ji,--output-ji $$(call cygpath_w,$$(build_private_libdir)/sys$1.ji).tmp) \
 			$(bootstrap_julia_flags) \
 			--startup-file=no --warn-overwrite=yes --depwarn=error --sysimage $$(call cygpath_w,$$<) $$(call cygpath_w,$$(JULIAHOME)/contrib/generate_precompile.jl) $(JULIA_PRECOMPILE); then \
 		echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***'; \
 		false; \
 	fi )
-	@mv $$@.tmp $$@
+	@mv $$@.tmp $$@ $$(call split_sysimage_ji,&& mv $$(build_private_libdir)/sys$1.ji.tmp $$(build_private_libdir)/sys$1.ji) \
+		$$(call nosplit_sysimage_ji,&& rm -f $$(build_private_libdir)/sys$1.ji)
+$$(build_private_libdir)/sys$1-o.a: $$(split_sysimage_stamp)
+ifneq ($$(split_sysimage),)
+# sys$1.ji is written by the rule for sys$1-o.a; if it has gone missing, rebuild both.
+$$(build_private_libdir)/sys$1.ji: $$(build_private_libdir)/sys$1-o.a
+	@test -f $$@ || { rm -f $$<; $$(MAKE) -f $$(SRCDIR)/sysimage.mk $$<; }
+$$(build_private_libdir)/sys$1.$$(SHLIB_EXT): $$(build_private_libdir)/sys$1.ji
+endif
 .SECONDARY: $$(build_private_libdir)/sys$1-o.a $(build_private_libdir)/sys$1-bc.a # request Make to keep these files around
 .SECONDARY: $$(build_private_libdir)/sysbase$1-o.a $(build_private_libdir)/sysbase$1-bc.a # request Make to keep these files around
 endef
@@ -215,3 +232,7 @@ $(eval $(call base_builder,,-O1,$(JULIA_EXECUTABLE_release)))
 $(eval $(call base_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
 $(eval $(call sysimg_builder,,-O3,$(JULIA_BOOTSTRAP_EXECUTABLE_release),$(JULIA_BOOTSTRAP_SYSBASE_release),-O1))
 $(eval $(call sysimg_builder,-debug,-O0,$(JULIA_BOOTSTRAP_EXECUTABLE_debug),$(JULIA_BOOTSTRAP_SYSBASE_debug),-O0))
+
+$(split_sysimage_stamp): split-sysimage-check
+	@echo '$(split_sysimage)' | cmp -s - $@ || echo '$(split_sysimage)' > $@
+.PHONY: split-sysimage-check
