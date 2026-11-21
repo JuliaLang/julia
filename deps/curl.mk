@@ -17,6 +17,10 @@ ifeq ($(USE_SYSTEM_NGHTTP2), 0)
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/nghttp2
 endif
 
+ifeq ($(USE_SYSTEM_ZSTD), 0)
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/zstd
+endif
+
 ifneq ($(USE_BINARYBUILDER_CURL),1)
 CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN) -Wl,-rpath,$(build_shlibdir)
 
@@ -37,6 +41,9 @@ $(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.
 checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
+$(SRCCACHE)/curl-$(CURL_VER)/source-patched: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
+	echo 1 > $@
+
 ## xref: https://github.com/JuliaPackaging/Yggdrasil/blob/master/L/LibCURL/common.jl
 # Disable....almost everything
 CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON) \
@@ -46,28 +53,21 @@ CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON) \
 	--without-gssapi --without-brotli
 # A few things we actually enable
 CURL_CONFIGURE_FLAGS += --enable-versioned-symbols \
-	--with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-nghttp2=${build_prefix}
+	--with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-zstd=${build_prefix} --with-nghttp2=${build_prefix}
 
 # We use different TLS libraries on different platforms.
 #   On Windows, we use schannel
-#   On MacOS, we use SecureTransport
-#   On Linux, we use OpenSSL
+#   On macOS, we use OpenSSL and validate using SecTrust by default
+#   On other platforms, we use OpenSSL
 ifeq ($(OS), WINNT)
 CURL_TLS_CONFIGURE_FLAGS := --with-schannel
 else ifeq ($(OS), Darwin)
-CURL_TLS_CONFIGURE_FLAGS := --with-secure-transport
+CURL_TLS_CONFIGURE_FLAGS := --with-openssl
+CURL_TLS_CONFIGURE_FLAGS += --with-apple-sectrust
 else
 CURL_TLS_CONFIGURE_FLAGS := --with-openssl
 endif
 CURL_CONFIGURE_FLAGS += $(CURL_TLS_CONFIGURE_FLAGS)
-
-$(SRCCACHE)/curl-$(CURL_VER)/curl-8.6.0-build.patch-applied: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
-	cd $(dir $@) && \
-		patch -p1 -f < $(SRCDIR)/patches/curl-strdup.patch
-	echo 1 > $@
-
-$(SRCCACHE)/curl-$(CURL_VER)/source-patched: $(SRCCACHE)/curl-$(CURL_VER)/curl-8.6.0-build.patch-applied
-	echo 1 > $@
 
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-patched
 	mkdir -p $(dir $@)
