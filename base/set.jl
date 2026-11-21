@@ -127,7 +127,9 @@ function in!(x, s::AbstractSet)
 end
 
 function in!(x, s::Set)
-    xT = convert(eltype(s), x)
+    T = eltype(s)
+    xT = convert(T, x)
+    (x === xT || isequal(x, xT)) || throw(KeyTypeError(T, x))
     idx, sh = ht_keyindex2_shorthash!(s.dict, xT)
     idx > 0 && return true
     _setindex!(s.dict, nothing, xT, -idx, sh)
