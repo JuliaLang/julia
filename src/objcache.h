@@ -88,9 +88,7 @@ private:
     uv_thread_t WriterThread;
     bool Started = false;
     std::atomic<bool> Exiting = false;
-    std::mutex WriterExitMutex;
-    std::condition_variable WriterExitCond;
-    bool WriterExited = false; // guarded by WriterExitMutex
+    std::atomic<bool> WriterExited = false;
     // held shared to start a transaction, and exclusively at exit to remove the semaphores
     std::shared_mutex TxnLock;
     bool LocksReleased = false; // guarded by TxnLock
