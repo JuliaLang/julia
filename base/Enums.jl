@@ -208,6 +208,7 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         if length(values) == 1
             lo = hi = i
         else
+            lo = min(lo, i)
             hi = max(hi, i)
         end
         if doc !== nothing
