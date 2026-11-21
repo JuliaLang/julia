@@ -733,7 +733,11 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
 #endif
 #endif
 
-void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
+// Flags for jl_gc_track_malloced_genericmemory, kept in the low bits of the tracked pointer
+#define JL_MALLOCD_ALIGNED 1 // allocated by jl_gc_managed_malloc
+#define JL_MALLOCD_MAPPED  4 // allocated by jl_gc_managed_map
+#define JL_MALLOCD_FLAGS   7 // the bits a tracked pointer may be tagged with
+void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int flags) JL_NOTSAFEPOINT;
 size_t jl_genericmemory_nbytes(jl_genericmemory_t *a) JL_NOTSAFEPOINT;
 size_t memory_block_usable_size(void *mem, int isaligned) JL_NOTSAFEPOINT;
 // Counted allocators behind `jl_malloc` and friends; with `usable` set they count the usable

@@ -12,6 +12,9 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <libgen.h> // defines dirname
+#if defined(__GLIBC__) && defined(_P64)
+#include <malloc.h>
+#endif
 
 #if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
 #include <getopt.h>
@@ -735,6 +738,17 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     jl_safepoint_init();
     jl_page_size = jl_getpagesize();
     jl_hugepage_size = (size_t)jl_gethugepagesize();
+#if defined(__GLIBC__) && defined(_P64)
+    // glibc maps each block above a threshold afresh, and raises the threshold (to at most this)
+    // only as such blocks are freed, so until then every large array faults in all of its pages.
+    // To be removed once Julia allocates with mimalloc (#60568).
+    const char *tunables = getenv("GLIBC_TUNABLES");
+    if (getenv("MALLOC_MMAP_THRESHOLD_") == NULL && getenv("MALLOC_TRIM_THRESHOLD_") == NULL &&
+        (tunables == NULL || strstr(tunables, "glibc.malloc.") == NULL)) {
+        mallopt(M_MMAP_THRESHOLD, 32 << 20);
+        mallopt(M_TRIM_THRESHOLD, 64 << 20);
+    }
+#endif
     htable_new(&jl_current_modules, 0);
     init_global_mutexes();
     jl_precompile_toplevel_module = NULL;

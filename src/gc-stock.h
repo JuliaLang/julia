@@ -746,6 +746,31 @@ void gc_scrub(void);
 void gc_stats_all_pool(void);
 void gc_stats_big_obj(void);
 
+STATIC_INLINE void maybe_collect(jl_ptls_t ptls) JL_CANSAFEPOINT
+{
+    if (jl_atomic_load_relaxed(&gc_heap_stats.heap_size) >= jl_atomic_load_relaxed(&gc_heap_stats.heap_target) || (GC_DEBUG_ENV_ENABLED && jl_gc_debug_check_other())) {
+        jl_gc_collect(JL_GC_AUTO);
+    }
+    else {
+        jl_gc_safepoint_(ptls);
+    }
+}
+
+STATIC_INLINE void jl_batch_accum_heap_size(jl_thread_gc_num_common_t *num, uint64_t sz) JL_NOTSAFEPOINT
+{
+    uint64_t alloc_acc = jl_atomic_fetch_add_relaxed(&num->alloc_acc, sz) + sz;
+    if (alloc_acc >= 16*1024)
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size,
+            jl_atomic_exchange_relaxed(&num->alloc_acc, 0));
+}
+
+// gc-mapping.c: mappings for Memory that can grow in place
+void memory_mapping_init(void) JL_NOTSAFEPOINT;
+void memory_mapping_mark(void *data, size_t sz) JL_NOTSAFEPOINT;
+size_t memory_mapping_trim(void *data) JL_NOTSAFEPOINT;
+size_t memory_mapping_free(void *data) JL_NOTSAFEPOINT;
+void memory_mapping_cache_sweep(int forced) JL_NOTSAFEPOINT;
+
 #ifdef __cplusplus
 }
 #endif

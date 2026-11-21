@@ -173,8 +173,15 @@ function (ss::SummarySize)(obj::GenericMemory)
     headersize = 2 * sizeof(Int)
     size::Int = (ss.count ? 1 : headersize)
     datakey = unsafe_convert(Ptr{Cvoid}, obj)
-    if !haskey(ss.seen, datakey)
-        ss.seen[datakey] = true
+    # Memory sharing its data, as after `expand`, counts it once at the longest length
+    counted = get(ss.seen, datakey, nothing)
+    if !isnothing(counted)
+        if !ss.count && sizeof(obj) > counted::Int
+            size += sizeof(obj) - counted::Int
+            ss.seen[datakey] = sizeof(obj)
+        end
+    else
+        ss.seen[datakey] = sizeof(obj)
         if !ss.count
             size += sizeof(obj)
         elseif pointer_from_objref(obj) + 16 != datakey
