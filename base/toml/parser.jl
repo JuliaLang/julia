@@ -1463,5 +1463,6 @@ function take_chunks(l::Parser, unescape::Bool)::String
         offset += n
     end
     empty!(l.chunks)
-    return unescape ? unescape_string(str) : str
+    # TOML defines `\xHH` as the code point U+00HH, not a raw byte
+    return unescape ? unescape_string(str; hex_as_char=true) : str
 end

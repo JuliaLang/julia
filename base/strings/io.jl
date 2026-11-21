@@ -500,13 +500,15 @@ end
 
 # TODO: handle unescaping invalid UTF-8 sequences
 """
-    unescape_string(str::AbstractString, keep = ())::AbstractString
-    unescape_string(io, s::AbstractString, keep = ())::Nothing
+    unescape_string(str::AbstractString, keep = (); hex_as_char::Bool = false)::AbstractString
+    unescape_string(io, s::AbstractString, keep = (); hex_as_char::Bool = false)::Nothing
 
 General unescaping of traditional C and Unicode escape sequences. The first form returns
 the unescaped string, the second prints the result to `io`.
 The argument `keep` specifies a collection of characters which (along with backslashes) are
 to be kept as they are.
+If `hex_as_char` is `true`, a `\\x` escape sequence is decoded as the Unicode code point
+U+0000 to U+00FF it denotes rather than as a raw byte, so the result is always valid UTF-8.
 
 The following escape sequences are recognised:
  - Escaped backslash (`\\\\`)
@@ -532,9 +534,18 @@ julia> unescape_string("\\\\101") # octal
 
 julia> unescape_string("aaa \\\\g \\\\n", ['g']) # using `keep` argument
 "aaa \\\\g \\n"
+
+julia> unescape_string("\\\\xe9") # hex byte
+"\\xe9"
+
+julia> unescape_string("\\\\xe9"; hex_as_char=true) # hex code point
+"é"
 ```
+
+!!! compat "Julia 1.15"
+    The `hex_as_char` keyword argument requires Julia 1.15 or later.
 """
-function unescape_string(io::IO, s::AbstractString, keep = ())
+function unescape_string(io::IO, s::AbstractString, keep = (); hex_as_char::Bool = false)
     a = Iterators.Stateful(s)
     for c in a
         if !isempty(a) && c == '\\'
@@ -557,7 +568,7 @@ function unescape_string(io::IO, s::AbstractString, keep = ())
                     throw(ArgumentError("invalid $(m == 2 ? "hex (\\x)" :
                                         "unicode (\\$u)") escape sequence"))
                 end
-                if m == 2 # \x escape sequence
+                if m == 2 && !hex_as_char # \x escape sequence as a raw byte
                     write(io, UInt8(n))
                 else
                     print(io, Char(n))
@@ -591,8 +602,8 @@ function unescape_string(io::IO, s::AbstractString, keep = ())
         end
     end
 end
-unescape_string(s::AbstractString, keep = ()) =
-    sprint(unescape_string, s, keep; sizehint=lastindex(s))
+unescape_string(s::AbstractString, keep = (); hex_as_char::Bool = false) =
+    sprint(io -> unescape_string(io, s, keep; hex_as_char), sizehint=lastindex(s))
 
 """
     @b_str
