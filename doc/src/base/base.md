@@ -250,6 +250,7 @@ Base.floatmax
 Base.maxintfloat
 Base.eps(::Type{<:AbstractFloat})
 Base.eps(::AbstractFloat)
+Base.eps(::Type{<:AbstractFloat}, ::AbstractIrrational)
 Base.instances
 ```
 
