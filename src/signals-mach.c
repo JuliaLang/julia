@@ -798,6 +798,14 @@ static void jl_exit_thread0_cb(int signo) JL_CANSAFEPOINT
     jl_raise(signo);
 }
 
+void jl_exit_thread0_pending_cb(void) JL_CANSAFEPOINT
+{
+    // clear the request before the exit hooks can reenter the scheduler
+    int signo = jl_atomic_exchange(&jl_exit_thread0_pending, 0);
+    if (signo)
+        jl_exit_thread0_cb(signo);
+}
+
 static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
@@ -809,12 +817,17 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
         jl_raise(signo);
     }
 
+    ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
+    memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
+
+    if (jl_atomic_load_relaxed(&ptls2->sleep_parked)) {
+        jl_exit_thread0_wake(ptls2, signo);
+        return;
+    }
+
     // This aborts `sleep` and other syscalls.
     kern_return_t ret = thread_abort(thread);
     HANDLE_MACH_ERROR("thread_abort", ret);
-
-    ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
-    memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
 
     jl_noreturn_call_in_state(&state, (void (*)(void))&jl_exit_thread0_cb, signo, 0);
     unsigned int count = MACH_THREAD_STATE_COUNT;
