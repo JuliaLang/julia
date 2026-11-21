@@ -390,6 +390,17 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
     end
 end
 
+"""
+    cptree(src::AbstractString, dst::AbstractString; force::Bool=false, follow_symlinks::Bool=false)
+
+Recursively copy the directory tree `src` to `dst`. The destination must not exist unless
+`force=true` removes it first. With `follow_symlinks=true`, symbolic links inside `src` are
+followed and their targets are copied instead of recreating the links at `dst`.
+
+This is the operation behind [`cp`](@ref) for directories. Individual files are copied with
+[`sendfile`](@ref), which can share storage with the source through reflinks on file systems
+that support them.
+"""
 function cptree(src::String, dst::String; force::Bool=false,
                                           follow_symlinks::Bool=false)
     isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
@@ -1469,6 +1480,13 @@ function _walkdir(chnl, path, topdown, follow_symlinks, onerror)
     nothing
 end
 
+"""
+    unlink(p::AbstractString)
+
+Remove the file or symbolic link at `p`. This is a lower level operation without the
+options of [`rm`](@ref), which is implemented on top of it. Fails with an `IOError` if `p`
+does not exist or is a directory. Returns `nothing`.
+"""
 function unlink(p::AbstractString)
     err = ccall(:jl_fs_unlink, Int32, (Cstring,), p)
     err < 0 && uv_error("unlink($(repr(p)))", err)
@@ -1512,6 +1530,13 @@ end
 const UV_FS_COPYFILE_EXCL = 0x0001
 const UV_FS_COPYFILE_FICLONE = 0x0002
 
+"""
+    sendfile(src::AbstractString, dst::AbstractString; force::Bool=true)
+
+Copy the file at `src` to `dst` in a single operating system call, which may use efficient
+cloning such as reflinks where the file system supports it. With `force=false` the copy
+fails if `dst` already exists. Returns `nothing`.
+"""
 function sendfile(src::AbstractString, dst::AbstractString; force::Bool=true)
     flags = force ? UV_FS_COPYFILE_FICLONE : UV_FS_COPYFILE_FICLONE | UV_FS_COPYFILE_EXCL
     result = ccall(:jl_fs_copyfile, Cint, (Cstring, Cstring, Cint),
