@@ -267,6 +267,10 @@ typedef struct _jl_tls_states_t {
 #define JL_SIGNAL_REQ_PREEMPT 0x02
 #define JL_SIGNAL_REQ_ABANDON 0x04
     _Atomic(uint8_t) signal_request_flags;
+    // Nonzero while the thread waits at a safepoint, which holds `sleep_lock`
+    // with `gc_state` in flux. Abandonment and cancellation resets must not
+    // redirect the thread then.
+    _Atomic(int8_t) fault_handling;
     // (vestigial: this let the old sigint force-throw be raised
     // asynchronously during synchronous IO; nothing reads it anymore)
     volatile sig_atomic_t io_wait;

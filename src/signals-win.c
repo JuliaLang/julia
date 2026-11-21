@@ -400,8 +400,10 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     // Reset flavor, additionally gated on the thread running Julia code
     // (gc_state == 0): a thread inside a GC-safe region may be raced by a
     // concurrent stop-the-world, and a redirect back into Julia code would
-    // break that protocol.
-    if (jl_atomic_load_relaxed(&ptls2->gc_state) != JL_GC_STATE_UNSAFE)
+    // break that protocol. Nor while it waits at a safepoint
+    // (fault_handling), whose wait holds sleep_lock.
+    if (jl_atomic_load_relaxed(&ptls2->gc_state) != JL_GC_STATE_UNSAFE ||
+        jl_atomic_load_relaxed(&ptls2->fault_handling) != 0)
         goto resume;
     reset_ctx = jl_atomic_load_acquire(&ct2->reset_ctx);
     if (reset_ctx == NULL || reset_ctx->sp == 0)
@@ -473,7 +475,10 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     // callback is what publishes the abandoned task state, so an
     // unredirected victim resumes untouched. On refusal the requester
     // observes the verdict and withdraws.
-    if (jl_abandon_try_commit(ptls2)) {
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    jl_reset_ctx_t *reset_ctx = ct2 ? jl_atomic_load_relaxed(&ct2->reset_ctx) : NULL;
+    jl_cancel_handler_ctx_t *hctx = ct2 ? jl_atomic_load_relaxed(&ct2->cancel_handler_ctx) : NULL;
+    if (jl_abandon_try_commit(ptls2, 0)) {
         // Redirect the thread to call jl_abandon_task_cb (which never
         // returns) on a minimal fake frame.
 #if defined(_CPU_X86_64_)
@@ -494,7 +499,10 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!SetThreadContext(ptls2->system_id, &ctxThread)) {
             // Roll the commit back: nothing observable was published yet
-            // (the task state is written by the callback).
+            // (the task state is written by the callback), except that the
+            // commit unpublished the interruptible regions.
+            jl_atomic_store_release(&ct2->reset_ctx, reset_ctx);
+            jl_atomic_store_release(&ct2->cancel_handler_ctx, hctx);
             jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_REFUSED);
         }
     }

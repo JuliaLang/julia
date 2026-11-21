@@ -97,7 +97,7 @@ The signals that have a named constant in `Base` can be watched as follows:
 | `Base.SIGINT`   | yes        | yes        | yes     | interrupt running code (see below)    |
 | `Base.SIGQUIT`  | yes        | yes        | no      | print backtraces and exit             |
 | `Base.SIGUSR1`  | yes        | yes        | no      | profile peek on Linux, exit on macOS  |
-| `Base.SIGUSR2`  | no         | macOS only | no      | exit                                  |
+| `Base.SIGUSR2`  | no         | no         | no      | exit                                  |
 | `Base.SIGALRM`  | yes        | yes        | no      | exit                                  |
 | `Base.SIGTERM`  | yes        | yes        | no      | exit                                  |
 | `Base.SIGCONT`  | yes        | yes        | no      | resume if stopped (always happens)    |
@@ -110,8 +110,8 @@ that code relying on cancellation keeps working. If an intercepting condition's 
 run, for example because other code never yields, then on Unix Ctrl-\\ (`SIGQUIT`) still
 stops Julia, unless `SIGQUIT` is also intercepted.
 
-The signals Julia itself relies on, such as `SIGSEGV`, `SIGPIPE`, `SIGCHLD` and `SIGUSR2`
-outside macOS, cannot be watched, nor can the signals that cannot be caught (`SIGKILL`, `SIGSTOP`).
+The signals Julia itself relies on, such as `SIGSEGV`, `SIGPIPE`, `SIGCHLD` and `SIGUSR2`,
+cannot be watched, nor can the signals that cannot be caught (`SIGKILL`, `SIGSTOP`).
 Watching one throws an `ArgumentError`.
 
 On Windows, libuv reports console events as signals: Ctrl+C as `SIGINT`, Ctrl+Break as
