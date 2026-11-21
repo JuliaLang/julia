@@ -514,6 +514,11 @@ end
     # Check that Printf does not attempt to output more than 8KiB worth of digits
     @test_throws ArgumentError Printf.@sprintf("%f", parse(BigFloat, "1e99999"))
 
+    # Check BigFloat buffer resizing at exact capacity and with preceding output (#64204, #64185)
+    @test Printf.@sprintf("%320f", big"2.0") == " "^312 * "2.000000"
+    @test Printf.@sprintf("%s%320f", "a"^100, big"2.0") == "a"^100 * " "^312 * "2.000000"
+    @test Printf.@sprintf("%s%f", "a"^100, big"1e400") == "a"^100 * Printf.@sprintf("%f", big"1e400")
+
     # Check bug with precision > length of string
     @test Printf.@sprintf("%4.2s", "a") == "   a"
 
