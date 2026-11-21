@@ -5,7 +5,7 @@ import TOML: tryparsefile
 
 # These tests need to be updated if the error strings change
 
-tmp = tempname()
+tmp = joinpath(mktempdir(), "errors.toml")
 
 @testset "error printing" begin
 
