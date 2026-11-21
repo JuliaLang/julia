@@ -1,7 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-"The `Future` module implements future behavior of already existing functions,
-which will replace the current version in a future release of Julia."
+"""
+    Future
+
+The behavior that some existing functions will have in a future release of Julia, such as
+[`Future.copy!`](@ref) and [`Future.randjump`](@ref).
+"""
 module Future
 
 using Random

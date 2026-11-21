@@ -111,7 +111,7 @@ function _truncate_at_width_or_chars(ignore_ANSI::Bool, str::AbstractString, wid
     I = ignore_ANSI ? ANSIIterator(str) : pairs(str)
     for (i, c) in I
         if c isa ANSIDelimiter
-            truncidx == 0 && (needANSIend = c != "\033[0m")
+            truncidx == 0 && (needANSIend = c.del != "\033[0m")
             lastidx = i + ncodeunits(c) - 1
         else
             stop && break
@@ -1309,7 +1309,11 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
             headlen = (taillen > max_n ? fulln - taillen : fulln)
             for i = 1:headlen
                 i > 1 && print(io, ", ")
-                show(io, vakind === :fixed && i >= n ? pn : parameters[i])
+                if vakind === :unbound && i == n && pn === Any
+                    print(io, "Vararg") # `Tuple{..., Vararg}` is stored as `Vararg{Any}`
+                else
+                    show(io, vakind === :fixed && i >= n ? pn : parameters[i])
+                end
             end
             if headlen < fulln
                 headlen > 0 && print(io, ", ")
@@ -2386,7 +2390,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         # handle some special syntaxes
         # `a b c`
         if is_core_macro(args[1], :var"@cmd")
-            print(io, "`", args[3], "`")
+            print(io, "`")
+            escape_raw_string(io, args[3], '`')
+            print(io, "`")
         # 11111111111111111111, 0xfffffffffffffffff, 1111...many digits...
         elseif is_core_macro(args[1], :var"@int128_str") ||
                is_core_macro(args[1], :var"@uint128_str") ||

@@ -7,8 +7,6 @@ using JuliaSyntax
 const JS = JuliaSyntax
 const JL = JuliaLowering
 
-import FileWatching
-
 # The following are for docstrings testing. We need to load the REPL module
 # here for `Base.@doc` lookup to work at all. Yes this does seem really,
 # really, REALLY messed up.
@@ -23,7 +21,7 @@ using .JuliaSyntax: sourcetext
 
 using .JuliaLowering: JL_OLD_EDITION, JL_NEW_EDITION,
     @ast, LoweringError, MacroExpansionError, SyntaxTree,
-    children, flattened_provenance, head, is_leaf, mapchildren, numchildren,
+    children, flattened_provenance, head, is_leaf, numchildren,
     syntax_name, syntax_id
 
 function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
@@ -51,46 +49,6 @@ macro ast_(tree)
         @ast _ srcref $tree
     end
 end
-
-#-------------------------------------------------------------------------------
-function _format_as_ast_macro(io, ex, indent)
-    k = head(ex)
-    kind_str = repr(k)
-    if !is_leaf(ex)
-        println(io, indent, "[", kind_str)
-        ind2 = indent*"    "
-        for c in children(ex)
-            _format_as_ast_macro(io, c, ind2)
-        end
-        println(io, indent, "]")
-    else
-        val_str = if k == :identifier || k == :core || k == :top
-            repr(syntax_name(ex))
-        elseif k == :bindingid
-            repr(syntax_id(ex))
-        else
-            repr(get(ex, :value, nothing))
-        end
-        println(io, indent, val_str, "::", k)
-    end
-end
-
-function format_as_ast_macro(io::IO, ex)
-    print(io, "@ast_ ")
-    _format_as_ast_macro(io, ex, "")
-end
-
-"""
-    format_as_ast_macro(ex)
-
-Format AST `ex` as a Julia source code call to the `@ast_` macro for generating
-test case comparisons with the `≈` function.
-"""
-format_as_ast_macro(ex) = format_as_ast_macro(stdout, ex)
-
-#-------------------------------------------------------------------------------
-
-# Test tools
 
 function uncomment_description(desc)
     replace(desc, r"^# ?"m=>"")
@@ -237,22 +195,6 @@ function refresh_all_ir_test_cases(test_dir=".")
     foreach(refresh_ir_test_cases, filter(fn->endswith(fn, "ir.jl"), readdir(test_dir, join=true)))
 end
 
-function watch_ir_tests(dir, delay=0.5)
-    dir = abspath(dir)
-    while true
-        (name, event) = FileWatching.watch_folder(dir)
-        if endswith(name, "_ir.jl") && (event.changed || event.renamed)
-            FileWatching.unwatch_folder(dir)
-            sleep(delay)
-            try
-                refresh_ir_test_cases(joinpath(dir, name))
-            catch
-                @error "Error refreshing test case" exception=current_exceptions()
-            end
-        end
-    end
-end
-
 function lower_str(mod::Module, s::AbstractString)
     ex = parsestmt(SyntaxTree, s; version=VersionNumber(JL_NEW_EDITION))
     return JuliaLowering.to_lowered_expr(JuliaLowering.lower(mod, ex))
@@ -275,105 +217,6 @@ function docstrings_equal(d1, d2; debug=true)
     return s1 == s2
 end
 docstrings_equal(d1::Docs.DocStr, d2) = docstrings_equal(Docs.parsedoc(d1), d2)
-
-#-------------------------------------------------------------------------------
-# Tools for test case reduction
-
-function block_reduction_1(is_lowering_error::Function, orig_ex::ST, ex::ST,
-                           curr_path = Int[]) where {ST <: SyntaxTree}
-    if !is_leaf(ex)
-        if head(ex) == :block
-            for i in 1:numchildren(ex)
-                trial_ex = delete_block_child(orig_ex, orig_ex, curr_path, i)
-                if is_lowering_error(trial_ex)
-                    # @info "Reduced expression" curr_path i
-                    return trial_ex
-                end
-            end
-        end
-        for (i,e) in enumerate(children(ex))
-            push!(curr_path, i)
-            res = block_reduction_1(is_lowering_error, orig_ex, e, curr_path)
-            if !isnothing(res)
-                return res
-            end
-            pop!(curr_path)
-        end
-    end
-    return nothing
-end
-
-# Find children of all `:block`s in an expression and try deleting them while
-# preserving the invariant `is_lowering_error(reduced) == true`.
-function block_reduction(is_lowering_error, ex)
-    reduced = ex
-    was_reduced = false
-    while true
-        r = block_reduction_1(is_lowering_error, reduced, reduced)
-        if isnothing(r)
-            return (reduced, was_reduced)
-        end
-        reduced = r
-        was_reduced = true
-    end
-end
-
-function delete_block_child(ctx, ex, block_path, child_idx, depth=1)
-    if depth > length(block_path)
-        cs = copy(children(ex))
-        deleteat!(cs, child_idx)
-        @ast ctx ex [ex cs...]
-    else
-        j = block_path[depth]
-        mapchildren(ctx, ex, j:j) do e
-            delete_block_child(ctx, e, block_path, child_idx, depth+1)
-        end
-    end
-end
-
-function throws_lowering_exc(mod, ex)
-    try
-        debug_lower(mod, ex)
-        return false
-    catch exc
-        if exc isa LoweringError
-            return true
-        else
-            rethrow()
-        end
-    end
-end
-
-# Parse a file and lower the top level expression one child at a time, finding
-# any top level statement that fails lowering and producing a partially reduced
-# test case.
-function reduce_any_failing_toplevel(mod::Module, filename::AbstractString; do_eval::Bool=false)
-    text = read(filename, String)
-    ex0 = parseall(SyntaxTree, text; filename, version=VersionNumber(JL_NEW_EDITION))
-    for ex in children(ex0)
-        try
-            ex_compiled = JuliaLowering.lower(mod, ex)
-            ex_expr = JuliaLowering.to_lowered_expr(ex_compiled)
-            if do_eval
-                Base.eval(mod, ex_expr)
-            end
-        catch exc
-            @error "Failure lowering code" ex
-            if !(exc isa LoweringError)
-                rethrow()
-            end
-            (reduced,was_reduced) = block_reduction(e->throws_lowering_exc(mod,e), ex)
-            if !was_reduced
-                @info "No reduction possible"
-                return ex
-            else
-                @info "Reduced code" reduced
-                return reduced
-            end
-        end
-    end
-    nothing
-end
 
 function expr_structure_eq(e1,e2)
     @nospecialize

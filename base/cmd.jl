@@ -164,7 +164,7 @@ function show_env(io::IO, env::Vector{String})
     print(io, "[")
     for (i, e) in enumerate(env)
         i > 1 && print(io, ", ")
-        eqidx = findnext('=', e, 2)
+        eqidx = isempty(e) ? nothing : findnext('=', e, nextind(e, 1))
         if eqidx === nothing || mode === :all
             show(io, e)
         elseif mode === :keys
@@ -362,7 +362,7 @@ setenv(cmd::Cmd; dir=cmd.dir) = Cmd(cmd; dir=dir)
 
 # split environment entry string into before and after first `=` (key and value)
 function splitenv(e::String)
-    i = findnext('=', e, 2)
+    i = isempty(e) ? nothing : findnext('=', e, nextind(e, 1))
     if i === nothing
         throw(ArgumentError("malformed environment entry"))
     end
@@ -427,7 +427,7 @@ libuv does not support affinity setting.
 
 In Linux, the `taskset` command line program can be used to see how `setcpuaffinity` works.
 
-```julia
+```julia-repl
 julia> run(setcpuaffinity(`sh -c 'taskset -p \$\$'`, [1, 2, 5]));
 pid 2273's current affinity mask: 13
 ```
@@ -435,7 +435,7 @@ pid 2273's current affinity mask: 13
 Note that the mask value `13` reflects that the first, second, and the fifth bits (counting
 from the least significant position) are turned on:
 
-```julia
+```julia-repl
 julia> 0b010011
 0x13
 ```
@@ -459,7 +459,7 @@ Requires appropriate permissions to set UID.
 
 # Examples
 
-```julia
+```julia-repl
 julia> run(setuid(`id -u`, 1000));
 1000
 ```
@@ -483,7 +483,7 @@ Requires appropriate permissions to set GID.
 
 # Examples
 
-```julia
+```julia-repl
 julia> run(setgid(`id -g`, 1000));
 1000
 ```

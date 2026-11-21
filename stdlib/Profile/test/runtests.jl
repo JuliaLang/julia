@@ -212,6 +212,78 @@ end
     @test Profile.getdict(UInt64[1, 0]) isa Profile.LineInfoDict
 end
 
+@testset "printing a synthetic profile" begin
+    sf(func, file, line; from_c = false) = StackFrame(func, Symbol(file), line, nothing, from_c, false, UInt64(0))
+    lidict = Dict{UInt64,Vector{StackFrame}}(
+        0x1001 => [sf(:f1, "/a/file1.jl", 1)], 0x1002 => [sf(:f2, "/a/file2.jl", 2)],
+        0x1003 => [sf(:f3, "/a/file3.jl", 3)], 0x1004 => [sf(:cfun, "libc.c", 0; from_c = true)])
+    # Each sample lists its frames innermost first. As call chains they are
+    # f3 > f2 > f1, f3 > f2 > f1 > f2 > f1 and f3 > f1 > cfun.
+    data = Profile.add_fake_meta(UInt64[0x1001, 0x1002, 0x1003, 0,
+                                        0x1001, 0x1002, 0x1001, 0x1002, 0x1003, 0,
+                                        0x1004, 0x1001, 0x1003, 0])
+    function printed(; kwargs...)
+        io = IOBuffer()
+        Profile.print(IOContext(io, :displaysize => (50, 120)), data, lidict; kwargs...)
+        lines = split(String(take!(io)), '\n')
+        return lines[3:findfirst(startswith("Total snapshots"), lines) - 1]
+    end
+    @test printed(format = :tree, recur = :flat) == [
+        " ╎3 /a/file3.jl:3  f3",
+        "1╎ 1 /a/file1.jl:1  f1",
+        " ╎ 2 /a/file2.jl:2  f2",
+        "1╎  2 /a/file1.jl:1  f1"]
+    # children are sorted by count, smallest first
+    @test printed(format = :tree, sortedby = :count) == [
+        " ╎3 /a/file3.jl:3  f3",
+        "1╎ 1 /a/file1.jl:1  f1",
+        " ╎ 2 /a/file2.jl:2  f2",
+        " ╎  2 /a/file1.jl:1  f1",
+        " ╎   1 /a/file2.jl:2  f2",
+        "1╎    1 /a/file1.jl:1  f1"]
+    # f2 has no overhead of its own, so it comes before f1 here
+    @test printed(format = :tree, sortedby = :overhead)[[2, end]] ==
+        [" ╎ 2 /a/file2.jl:2  f2", "1╎ 1 /a/file1.jl:1  f1"]
+    @test printed(format = :tree, sortedby = :flat_count) == printed(format = :tree, sortedby = :overhead)
+    @test printed(format = :flat, sortedby = :overhead) == [
+        "     3         0 /a/file3.jl     3 f3",
+        "     2         0 /a/file2.jl     2 f2",
+        "     3         2 /a/file1.jl     1 f1"]
+    @test printed(format = :flat, C = true)[end] == "     1         1 libc.c          ? cfun"
+    @test_throws "output format :bogus not recognized" printed(format = :bogus)
+
+    @test Profile.callers("f1", data, lidict; filename = "/a/file1.jl") == [(3, lidict[0x1002][1]), (1, lidict[0x1003][1])]
+    @test Profile.callers("f2", data, lidict; filename = "/a/file2.jl", linerange = 1:5) == [(2, lidict[0x1003][1]), (1, lidict[0x1001][1])]
+    @test isempty(Profile.callers("f2", data, lidict; filename = "/a/file2.jl", linerange = 5:9))
+end
+
+@testset "editor links" begin
+    for (editor, link) in ("code" => "vscode://file//a/b%20c.jl:3",
+                           "subl" => "subl://open?url=file:///a/b%20c.jl&line=3",
+                           "idea" => "idea://open?file=/a/b%20c.jl&line=3",
+                           "pycharm" => "pycharm://open?file=/a/b%20c.jl&line=3",
+                           "atom" => "atom://core/open/file?filename=/a/b%20c.jl&line=3",
+                           "emacs" => "emacs://open?file=/a/b%20c.jl&line=3",
+                           "vim" => "vim://open?file=/a/b%20c.jl&line=3")
+        withenv("JULIA_EDITOR" => editor) do
+            @test Profile.editor_link("/a/b c.jl", 3) == link
+        end
+    end
+    withenv("JULIA_EDITOR" => "ed") do
+        @test Profile.editor_link("/a/b c.jl", 3) == Base.Filesystem.uripath("/a/b c.jl")
+    end
+end
+
+@testset "peek duration" begin
+    old = Profile.get_peek_duration()
+    try
+        Profile.set_peek_duration(2.5)
+        @test Profile.get_peek_duration() == 2.5
+    finally
+        Profile.set_peek_duration(old)
+    end
+end
+
 @testset "init while profiling errors" begin
     Profile.start_timer()
     try

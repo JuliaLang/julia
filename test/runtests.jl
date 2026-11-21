@@ -12,9 +12,6 @@ let project = mktempdir(),
                for name in readdir(Sys.STDLIB) if isfile(joinpath(Sys.STDLIB, name, "Project.toml"))]
     write(joinpath(project, "Project.toml"), "[deps]\n",
           (string(name, " = \"", uuid, "\"\n") for (name, uuid) in stdlibs)...)
-    # stdlib dependencies are filled in from their own Project.toml
-    write(joinpath(project, "Manifest.toml"), "manifest_format = \"2.0\"\n",
-          (string("\n[[deps.", name, "]]\nuuid = \"", uuid, "\"\n") for (name, uuid) in stdlibs)...)
     run(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project -e $script`, load_path))
     run(addenv(`$test_exename $test_exeflags --project=$project -e $script`, load_path))
 end
@@ -75,7 +72,10 @@ else
     global running_under_rr() = false
 end
 
-const rmwait_timeout = running_under_rr() ? 300 : 30
+# Distributed gives a removed worker 15 s to exit before it signals it, and SIGKILLs it
+# after 36 s. Wait longer, so that a worker that is slow to exit gets killed instead of
+# failing the whole test run.
+const rmwait_timeout = running_under_rr() ? 300 : 60
 
 ENV["JULIA_TEST_BUILDROOT"] = buildroot
 if use_revise

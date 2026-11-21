@@ -746,6 +746,8 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     code_native(buf, linear_foo, (), debuginfo = :none)
     output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
     @test !occursin(rgx, output)
+    @test_throws "'debuginfo' must be either :source or :none" code_native(buf, linear_foo, (), debuginfo = :bad)
+    @test_throws "'syntax' must be either :intel or :att" code_native(buf, linear_foo, (), syntax = :bad)
 
     @testset "binary" begin
         # check the RET instruction (opcode: C3)
@@ -961,14 +963,14 @@ Sys.iswindows() || @testset "editor and pager commands" begin
             islink(name) || symlink(script, name)
             pipe = Pipe()
             Base.link_pipe!(pipe; reader_supports_async=true, writer_supports_async=true)
-            waited = false
             stderr_txt = @async readlines(pipe)
-            withenv("PATH" => dir, env...) do
+            waited = withenv("PATH" => dir, env...) do
                 try
                     redirect_stderr(f, pipe)
+                    false
                 catch e
                     e isa ProcessFailedException || rethrow()
-                    waited = true
+                    true
                 end
             end
             close(pipe.in)
@@ -1293,7 +1295,7 @@ function which_call_args(ex)
         if x.head === :call && (x.args[1] == :(Core.Typeof) || x.args[1] === GlobalRef(Core, :Typeof))
             push!(args, Core.eval(@__MODULE__, x.args[2]))
         else
-            foreach(walk, x.args)
+            foreach(@__FUNCTION__, x.args)
         end
     end
     walk(macroexpand(@__MODULE__, :(@which $ex)))

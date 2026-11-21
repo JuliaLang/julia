@@ -2321,6 +2321,15 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         size_t i;
         for (i = 0; i < ntp; i++) {
             jl_value_t *pi = iparams[i];
+            if (jl_is_vararg(pi) && !((jl_vararg_t*)pi)->T && jl_anytuple_type) {
+                // normalize Tuple{..., Vararg} to Tuple{..., Vararg{Any}}, so the
+                // two spellings are `===` (the replacement is globally rooted)
+                pi = jl_tparam0(jl_anytuple_type);
+                if (p)
+                    jl_gc_write(p, iparams[i], jl_value_t, pi);
+                else
+                    iparams[i] = pi;
+            }
             if (jl_is_vararg(pi) && jl_unwrap_vararg(pi) == jl_bottom_type) {
                 jl_value_t *va1 = jl_unwrap_vararg_num(pi);
                 if (va1 && jl_is_long(va1)) {

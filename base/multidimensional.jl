@@ -1920,7 +1920,7 @@ If `dims` is `(2, 1)` instead, the same slices will be taken,
 but the result order will be row-major instead.
 
 # Higher dimensional examples
-```
+```jldoctest
 julia> A = [4 3; 2 1 ;;; 'A' 'B'; 'C' 'D']
 2×2×2 Array{Any, 3}:
 [:, :, 1] =

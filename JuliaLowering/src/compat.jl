@@ -365,7 +365,9 @@ function _dst_function_body(ctx, st, r, method_metas)
 end
 
 function dst_raw_lambda(ctx, st, sps)
-    argl = map(x->expr_to_est(x::Symbol, st[1]), st[1].value::Vector)
+    @jl_assert head(st) === :lambda st
+    argl = map(x->est_to_dst_ident(ctx, expr_to_est(x::Symbol, st[1])),
+               st[1].value::Vector)
     @ast _ st [:lambda [:block argl...] [:block sps...]
         est_to_dst(with(ctx; toplevel=false), st[2])]
 end
@@ -609,6 +611,9 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
         [:core x] -> newleaf(st, :core, syntax_name(x))
         [:top x] -> newleaf(st, :top, syntax_name(x))
         [:static_parameter x] -> newleaf(st, :static_parameter, x.value::IdTag)
+        [:toplevel_pure x] -> let lam = rec(ctx, x)
+            @mknode(lam; head=:generated_lambda)
+        end
         [:var"with-static-parameters" lam sps...] ->
             dst_raw_lambda(ctx, lam, sps)
         [:lambda _ _] -> dst_raw_lambda(ctx, st, SyntaxTree[])

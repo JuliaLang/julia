@@ -148,15 +148,15 @@ VERSIONSCRIPT := -Wl,--version-script=$(BUILDDIR)/julia.expmap
 endif
 
 ifeq ($(OS),WINNT)
-# The import library of the loader must not offer the runtime entry points that
-# the loader forwards, or libjulia-internal would resolve its own calls through
-# them. Build it from the linker's export definition with those left out, rather
-# than editing the import library afterwards: not every linker writes one that
-# objcopy can rewrite.
+# The import library of the loader must not offer thunks for the runtime entry
+# points that the loader forwards, or libjulia-internal would resolve its own
+# calls through them. Embedders still need their `__imp_` pointers, so mark them
+# DATA in the linker's export definition, rather than editing the import library
+# afterwards: not every linker writes one that objcopy can rewrite.
 # 1: the shared library being linked
 define implib_from_def
 	$(CPP_STDOUT) -P -I$(JULIAHOME)/src $(SRCDIR)/list_strip_symbols.h > $(BUILDDIR)/$(notdir $1).strip && \
-	awk 'NR == FNR { for (i = 1; i <= NF; i++) omit[$$i] = 1; next } !($$1 in omit)' $(BUILDDIR)/$(notdir $1).strip $(BUILDDIR)/$(notdir $1).def > $(BUILDDIR)/$(notdir $1).stripped.def && \
+	awk 'NR == FNR { for (i = 1; i <= NF; i++) omit[$$i] = 1; next } $$1 in omit { $$0 = $$0 " DATA" } 1' $(BUILDDIR)/$(notdir $1).strip $(BUILDDIR)/$(notdir $1).def > $(BUILDDIR)/$(notdir $1).stripped.def && \
 	$(DLLTOOL) -m $(DLLTOOL_MACHINE) -D $(notdir $1) -d $(BUILDDIR)/$(notdir $1).stripped.def -l $(build_libdir)/$(notdir $1).a
 endef
 DEF_FLAGS = --output-def $(BUILDDIR)/$(notdir $1).def

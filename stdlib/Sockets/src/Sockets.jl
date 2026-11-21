@@ -1,7 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Support for sockets. Provides [`IPAddr`](@ref) and subtypes, [`TCPSocket`](@ref), and [`UDPSocket`](@ref).
+    Sockets
+
+TCP and UDP networking, with [`TCPSocket`](@ref) and [`UDPSocket`](@ref), IP addresses
+such as [`IPv4`](@ref), and name lookups with [`getaddrinfo`](@ref).
 """
 module Sockets
 

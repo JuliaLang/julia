@@ -679,7 +679,7 @@ JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
         /* sanitize_address */ 0,
 #endif
         /* unique_names */ 0,
-        /* debug_info_inline_scopes */ 0, // later !jl_generating_output() in release builds
+        /* debug_info_inline_scopes */ 0, // later 1 in assert builds, and when a debugger or profiler listens to the JIT
 };
 
 static void init_global_mutexes(void) JL_NOTSAFEPOINT {
