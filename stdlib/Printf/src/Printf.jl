@@ -513,10 +513,10 @@ function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
                 siz = length(buf) - pos + 1
                 str = string(spec; modifier="R")
                 required_length = _snprintf(pointer(buf, pos), siz, str, x)
-                if required_length > siz
+                if required_length >= siz
                     required_length > __BIG_FLOAT_MAX__ &&
                         throw(ArgumentError("The given BigFloat requires $required_length bytes to be printed, which is more than the maximum of $__BIG_FLOAT_MAX__ bytes supported."))
-                    resize!(buf, required_length + 1)
+                    resize!(buf, pos + required_length)
                     required_length = _snprintf(pointer(buf, pos), required_length + 1, str, x)
                 end
                 required_length > 0 || throw(ArgumentError("The given BigFloat would produce less than the maximum allowed number of bytes $__BIG_FLOAT_MAX__, but still couldn't be printed fully for an unknown reason."))
