@@ -2814,7 +2814,7 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
                 else
                     for ai ∈ a
                         @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprod, N)
-                        @inbounds A[Ai] = ai
+                        A[Ai] = ai
                         @inbounds for j ∈ 1:N
                             inneroffsets[j] += 1
                             inneroffsets[j] < cat_size(a, j) && break
