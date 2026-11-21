@@ -35,9 +35,9 @@ sincos(x) = _sincos(float(x))
 # and of x in degrees (sind, ...), based on CORE-MATH's sinf/cosf (https://core-math.gitlabpages.inria.fr/,
 # MIT licensed). The angle is reduced to π/16*(n + z) with |z| <= 1/2, and the angle-addition
 # formulas are applied with sin(π n/16) and cos(π n/16) from a 32-entry table, so there is no
-# branch on the quadrant. Float16 is computed in Float32 and Float32 in Float64, so each result is
-# rounded only once at the end; Float64 uses hi + lo table entries and fma-based error terms instead.
-# Only the reduction differs between radians, π*x and degrees.
+# branch on the quadrant. Float16 reductions are computed in Float32, with Float64 polynomial and
+# table arithmetic; Float32 is computed in Float64. Float64 uses hi + lo table entries and fma-based
+# error terms instead. Only the reduction differs between radians, π*x and degrees.
 
 # sin(π j/16) for j = 0:31; cos(π j/16) is entry j + 8
 const SINPI16_TABLE = (0x0p+0, 0x1.8f8b83c69a60bp-3, 0x1.87de2a6aea963p-2, 0x1.1c73b39ae68c8p-1,
@@ -48,10 +48,8 @@ const SINPI16_TABLE = (0x0p+0, 0x1.8f8b83c69a60bp-3, 0x1.87de2a6aea963p-2, 0x1.1
     -0x1.6a09e667f3bcdp-1, -0x1.a9b66290ea1a3p-1, -0x1.d906bcf328d46p-1, -0x1.f6297cff75cbp-1,
     -0x1p+0, -0x1.f6297cff75cbp-1, -0x1.d906bcf328d46p-1, -0x1.a9b66290ea1a3p-1,
     -0x1.6a09e667f3bcdp-1, -0x1.1c73b39ae68c8p-1, -0x1.87de2a6aea963p-2, -0x1.8f8b83c69a60bp-3)
-const SINPI16_TABLE_F32 = map(Float32, SINPI16_TABLE)
 # :nothrow needed since the compiler can't prove the index is inbounds.
 @assume_effects :nothrow sinpi16_table(::Type{Float64}, n::Int64) = getfield(SINPI16_TABLE, (n & 31) % Int + 1)
-@assume_effects :nothrow sinpi16_table(::Type{Float32}, n::Int64) = getfield(SINPI16_TABLE_F32, (n & 31) % Int + 1)
 
 # Float64: the low parts of SINPI16_TABLE, so that sin(π j/16) ≈ hi + lo
 const SINPI16_TABLE_LO = (0.0, -0x1.26d19b9ff8d82p-57, -0x1.72cedd3d5a61p-57, 0x1.b25dd267f66p-55,
@@ -68,8 +66,8 @@ const SINPI16_TABLE_LO = (0.0, -0x1.26d19b9ff8d82p-57, -0x1.72cedd3d5a61p-57, 0x
 end
 
 # Returns (sin(π z/16), 1 - cos(π z/16)): minimax polynomials with errors of about 2^-37 (relative)
-# and 2^-34 (absolute) in Float64 (for Float32 results), and 2^-23 and 2^-20 in Float32 (for Float16
-# results). They are fitted for |z| <= 0.53, which covers the rounding of n in the reductions.
+# and 2^-34 (absolute) in Float64. They are fitted for |z| <= 0.53, which covers the rounding of n
+# in the reductions.
 @inline function sincos16_poly(z::Float64)
     z2 = z*z
     z4 = z2*z2
@@ -77,17 +75,12 @@ end
     omc = z2*muladd(z2, -6.189991248606663e-5, 0.01927656839146767)
     return sz, omc
 end
-@inline function sincos16_poly(z::Float32)
-    z2 = z*z
-    return z*muladd(z2, -0.0012609607f0, 0.19634952f0), z2*0.019262165f0
-end
-
-# For Float16 and Float32 (computed in Float32 and Float64) and |z| <= 1/2, returns
+# For Float16 and Float32 (both computed in Float64) and |z| <= 1/2, returns
 # (sin(π(n+z)/16), cos(π(n+z)/16)) via the angle-addition formulas.
-@inline function sincos16_kernel(z::T, n::Int64) where T<:Union{Float32, Float64}
-    sz, omc = sincos16_poly(z)
-    s0 = sinpi16_table(T, n)
-    c0 = sinpi16_table(T, n + 8)
+@inline function sincos16_kernel(z::Union{Float32, Float64}, n::Int64)
+    sz, omc = sincos16_poly(Float64(z))
+    s0 = sinpi16_table(Float64, n)
+    c0 = sinpi16_table(Float64, n + 8)
     return muladd(sz, c0, muladd(-omc, s0, s0)), muladd(-sz, s0, muladd(-omc, c0, c0))
 end
 
@@ -133,7 +126,18 @@ end
     q = s*ic
     return ifelse(iszero(c), q, muladd(fma(-q, c, s) + muladd(-q, ce, se), ic, q))
 end
-@inline function tan16(z::Union{Float32, Float64}, n::Int64)
+@inline function tan16(z::Float32, n::Int64)
+    si, co = sincos16_kernel(z, n)
+    q = si/co
+    # These are the only three positive reduced Float16 inputs whose quotient rounds one ulp low
+    # (verified exhaustively against 256-bit BigFloat).
+    if (n == 0 && (z == 0.1821578f0 || z == 0.2626678f0)) ||
+            (n == 152055 && z == 0.35939044f0)
+        return Float64(nextfloat(Float16(q)))
+    end
+    return q
+end
+@inline function tan16(z::Float64, n::Int64)
     si, co = sincos16_kernel(z, n)
     return si/co
 end
@@ -177,7 +181,8 @@ end
 @inline function rem_deg16(a::Float16)
     af = Float32(a)
     fn, n = roundmul(af, 4f0/45)
-    return (af - 11.25f0*fn)*(4f0/45), n
+    # Float64 scaling avoids the double-rounding boundary at Float16(1.475).
+    return Float64(af - 11.25f0*fn)*(4/45), n
 end
 
 # Degrees, Float64: as for Float32, a - 11.25*n is exact, and r = π/180*(a - 11.25*n) is formed
