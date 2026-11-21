@@ -137,14 +137,30 @@ for c in "mdHIMS"
     end
 end
 
+# Malformed text is not AM or PM; `lowercase` throws on it
 function tryparsenext(d::DatePart{'p'}, str, i, len)
     i+1 > len && return nothing
     c, ii = iterate(str, i)::Tuple{Char, Int}
+    Base.ismalformed(c) && return nothing
     ap = lowercase(c)
     (ap == 'a' || ap == 'p') || return nothing
     c, ii = iterate(str, ii)::Tuple{Char, Int}
-    lowercase(c) == 'm' || return nothing
+    !Base.ismalformed(c) && lowercase(c) == 'm' || return nothing
     return ap == 'a' ? AM : PM, ii
+end
+
+# Readers for UTF-8 text given as bytes, such as `codeunits(str)` or part of a buffer, at
+# byte indices: they compare bytes where a token is ASCII or valid UTF-8, which reads the
+# same characters as decoding the text. Setting bit 5 lowercases an ASCII letter.
+# Non-ASCII text, such as an overlong encoding of a letter, is read as characters.
+function tryparsenext(d::DatePart{'p'}, bytes::AbstractVector{UInt8}, i, len)
+    i+1 > len && return nothing
+    a, m = @inbounds bytes[i], bytes[i + 1]
+    (a < 0x80) & (m < 0x80) || return tryparsenext_chars(d, bytes, i, len, nothing)
+    m | 0x20 == UInt8('m') || return nothing
+    a | 0x20 == UInt8('a') && return AM, i + 2
+    a | 0x20 == UInt8('p') && return PM, i + 2
+    return nothing
 end
 
 for (tok, fn) in zip("uUeE", Any[monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
@@ -176,6 +192,26 @@ end
             return nothing
         end
         i = ii
+    end
+    ndigits >= min_width(d) || return nothing
+    ndigits < precision && (frac *= Int64(10) ^ (precision - ndigits))
+    return frac, i
+end
+
+@inline function tryparsenext_fraction(d::DatePart, bytes::AbstractVector{UInt8}, i, len, precision)
+    ndigits = 0
+    frac = Int64(0)
+    max_digits = max_width(d)
+    @inbounds while i <= len && (max_digits == 0 || ndigits < max_digits)
+        digit = bytes[i] - UInt8('0')
+        digit <= 0x09 || break
+        ndigits += 1
+        if ndigits <= precision
+            frac = 10frac + digit
+        elseif digit != 0
+            return nothing
+        end
+        i += 1
     end
     ndigits >= min_width(d) || return nothing
     ndigits < precision && (frac *= Int64(10) ^ (precision - ndigits))
@@ -269,6 +305,26 @@ Delim(d::String) = Delim{String, length(d)}(d)
     return true, i
 end
 
+@inline function tryparsenext(d::Delim{Char, N}, bytes::AbstractVector{UInt8}, i::Int, len) where N
+    u = reinterpret(UInt32, d.d)
+    if isascii(d.d)
+        b = (u >> 24) % UInt8
+        for j = 1:N
+            i <= len && (@inbounds bytes[i]) == b || return nothing
+            i += 1
+        end
+        return true, i
+    end
+    # A malformed character can decode differently in longer text, so it is read as a character
+    isvalid(d.d) || return tryparsenext_chars(d, bytes, i, len, nothing)
+    n = ncodeunits(d.d)
+    for j = 1:N, k = 1:n
+        i <= len && (@inbounds bytes[i]) == (u >> (32 - 8k)) % UInt8 || return nothing
+        i += 1
+    end
+    return true, i
+end
+
 @inline function tryparsenext(d::Delim{String, N}, str, i::Int, len) where N
     i1 = i
     i2 = firstindex(d.d)
@@ -288,6 +344,32 @@ end
     end
     return true, i1
 end
+
+@inline function tryparsenext(d::Delim{String, N}, bytes::AbstractVector{UInt8}, i::Int, len) where N
+    n = ncodeunits(d.d)
+    (n == 0 || i + n - 1 <= len) || return nothing
+    @inbounds for k = 1:n
+        b = codeunit(d.d, k)
+        b < 0x80 || isvalid(d.d) || return tryparsenext_chars(d, bytes, i, len, nothing)
+        bytes[i + k - 1] == b || return nothing
+    end
+    return true, i + n
+end
+
+"""
+    tryparsenext_chars(tok, bytes, i, len, locale)
+
+Read a token that has no reader for bytes, such as a month name or a token that a package
+defines, from the UTF-8 text that `bytes` encode, as characters at the same indices: the
+`String` or `SubString{String}` that `bytes` are the `codeunits` of, or a `StringView`.
+"""
+@inline function tryparsenext_chars(d::AbstractDateToken, bytes::AbstractVector{UInt8}, i, len, locale)
+    str = chartext(bytes)
+    return tryparsenext(d, str, i, lastindex(str), locale)
+end
+
+chartext(bytes::CodeUnits{UInt8, <:Union{String, SubString{String}}}) = bytes.s
+chartext(bytes::AbstractVector{UInt8}) = StringView(bytes)
 
 @inline function format(io, d::Delim, dt, locale)
     print(io, d.d)
