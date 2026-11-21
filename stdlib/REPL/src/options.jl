@@ -5,6 +5,8 @@
 mutable struct Options
     hascolor::Bool
     extra_keymap::Union{Dict,Vector{<:Dict}}
+    # A string, regex, or vector of either to exclude from history; nothing disables exclusion.
+    hist_ignore_patterns::Union{Nothing,AbstractString,Regex,AbstractVector}
     # controls the presumed tab width of code pasted into the REPL.
     # Must satisfy `0 < tabwidth <= 16`.
     tabwidth::Int
@@ -38,6 +40,7 @@ end
 Options(;
         hascolor = true,
         extra_keymap = AnyDict[],
+        hist_ignore_patterns = nothing,
         tabwidth = 8,
         kill_ring_max = 100,
         region_animation_duration = 0.2,
@@ -56,7 +59,7 @@ Options(;
         style_input = true,
         semantic_prompts = true,
         iocontext = Dict{Symbol,Any}()) =
-            Options(hascolor, extra_keymap, tabwidth,
+            Options(hascolor, extra_keymap, hist_ignore_patterns, tabwidth,
                     kill_ring_max, region_animation_duration,
                     beep_duration, beep_blink, beep_maxduration,
                     beep_colors, beep_use_current,

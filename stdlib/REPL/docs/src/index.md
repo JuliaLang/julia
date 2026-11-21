@@ -252,6 +252,22 @@ and the current REPL mode you were in. The history searcher reads this log file 
 Multiple REPLs can write to this file at once, and every time you begin a search the newest history is fetched.
 Use of this file can be disabled at startup by passing the `--history-file=no` flag to Julia.
 
+To exclude inputs from both the in-memory history and the history file, set
+`repl.options.hist_ignore_patterns` in `~/.julia/config/startup.jl`:
+
+```julia
+atreplinit() do repl
+    repl.options.hist_ignore_patterns = [r"^#IGNORE\b", "#NOHISTORY"]
+end
+```
+
+The option accepts a string, a regular expression, or a vector of either. Each complete
+input is matched using [`occursin`](@ref) after trailing whitespace is removed, and is
+excluded if any pattern matches. The default is `nothing`, which disables exclusion.
+
+!!! compat "Julia 1.15"
+    The `hist_ignore_patterns` option requires Julia 1.15 or later.
+
 ## Terminal integration
 
 The interactive REPL emits OSC 133 semantic prompt markers. Terminals that support these markers
