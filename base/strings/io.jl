@@ -193,6 +193,13 @@ print(io::IO, s::AbstractString) = for c in s; print(io, c); end
 write(io::IO, s::AbstractString) = (len = 0; for c in s; len += Int(write(io, c))::Int; end; len)
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
+@inline function escaped_char_width(c::AbstractChar)
+    ' ' <= c <= '~' && return c in ('"', '\\', '$') ? 2 : 1
+    c == '\0' && return textwidth(escape_nul('0'))
+    !isoverlong(c) && isprint(c) && return textwidth(c)
+    return textwidth(escape_string(string(c), ('"', '$'); fullhex=true))
+end
+
 # show elided string if more than `limit` characters
 function show(
     io    :: IO,
@@ -210,7 +217,7 @@ function show(
     limit = max(0, limit-2) # quote chars
 
     # early out for short strings
-    check_textwidth(str, limit) && return show(io, str)
+    check_textwidth(str, limit, escaped_char_width) && return show(io, str)
 
     # these don't depend on string data
     units = codeunit(str) == UInt8 ? "bytes" : "code units"
@@ -219,14 +226,14 @@ function show(
     # longest possible replacement string for omitted chars
     max_replacement = skip_text(ncodeunits(str) * 100) # *100 for 2 inner quote chars
 
-    head, tail = string_truncate_boundaries(str, limit, max_replacement, Val(:center))
+    head, tail = string_truncate_boundaries(str, limit, max_replacement, Val(:center), true, escaped_char_width)
 
     # threshold: min chars skipped to make elision worthwhile
     afterhead = nextind(str, head)
     n = tail - afterhead # skipped code units
     replacement = skip_text(n)
-    t = ncodeunits(replacement) # length of replacement (textwidth == ncodeunits here)
-    @views if 4t ≤ n || t ≤ n && t ≤ textwidth(str[afterhead:prevind(str,tail)])
+    t = ncodeunits(replacement) # length of replacement
+    @views if 4t ≤ n || !check_textwidth(str[afterhead:prevind(str,tail)], textwidth(replacement) + 2, escaped_char_width)
         show(io, str[begin:head])
         printstyled(io, replacement; color=:light_yellow, bold=true)
         show(io, str[tail:end])
