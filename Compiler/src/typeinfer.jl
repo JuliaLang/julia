@@ -426,21 +426,22 @@ end
 function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}}, cycleid::Int, time_before::UInt64) where {I<:AbstractInterpreter}
     world = get_inference_world(interp::I)
     cycle_valid_worlds = WorldRange()
-    cycle_valid_effects = EFFECTS_TOTAL
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
         @assert caller.cycleid == cycleid
-        # converge the world age range and effects for this cycle here:
-        # all frames in the cycle should have the same bits of `valid_worlds` and `effects`
-        # that are simply the intersection of each partial computation, without having
-        # dependencies on each other (unlike rt and exct)
+        # converge the world age range for this cycle here:
+        # all frames in the cycle should have the same `valid_worlds`, which is simply the
+        # intersection of each partial computation, without having dependencies on each
+        # other (unlike rt and exct)
         cycle_valid_worlds = intersect(cycle_valid_worlds, caller.valid_worlds)
-        cycle_valid_effects = merge_effects(cycle_valid_effects, caller.ipo_effects)
+    end
+    converge_cycle_effects!(frames, cycleid)
+    for frameid = cycleid:length(frames)
+        adjust_cycle_frame!(frames[frameid]::InferenceState, world, cycle_valid_worlds)
     end
     opt_cache = IdDict{MethodInstance,CodeInstance}()
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
-        adjust_cycle_frame!(caller, world, cycle_valid_worlds, cycle_valid_effects)
         finishinfer!(caller, caller.interp::I, cycleid, opt_cache)
         time_now = _time_ns()
         caller.time_self_ns += (time_now - time_before)
@@ -507,17 +508,48 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}
     return time_before
 end
 
-function adjust_cycle_frame!(sv::InferenceState, world::UInt, cycle_valid_worlds::WorldRange, cycle_valid_effects::Effects)
+# Unlike rt and exct, effects are not converged during inference: a call into an in-progress
+# frame merges that frame's partial effects and is recorded in its `cycle_backedges`, but is
+# not revisited when they change. Propagate the effects along those calls until they reach a
+# fixed point. Overrides apply as they do during inference (see `cycle_call_effects`), so
+# e.g. `@consistent_overlay` or `:terminates_globally` on one method of the cycle also covers
+# the other members it calls.
+function converge_cycle_effects!(frames::Vector{AbsIntState{I}}, cycleid::Int) where {I<:AbstractInterpreter}
+    worklist = BitSet(cycleid:length(frames))
+    while !isempty(worklist)
+        callee = frames[pop!(worklist)]::InferenceState
+        for (caller, pc) in callee.cycle_backedges
+            @assert caller.cycleid == cycleid
+            effects = merge_effects(caller.ipo_effects, cycle_call_effects(callee, caller, pc))
+            if effects !== caller.ipo_effects
+                caller.ipo_effects = effects
+                push!(worklist, caller.frameid)
+            end
+        end
+    end
+    return nothing
+end
+
+# An upper bound on what the call at `pc` in `caller` merges from the in-progress frame
+# `callee`: its effects with the overrides of `typeinf_edge`, `MethodCallResult` and
+# `merge_override_effects!`. Must run before `finishinfer!(caller)`, which replaces the
+# statement overrides in `caller.src.ssaflags`.
+function cycle_call_effects(callee::InferenceState, caller::InferenceState, pc::Int)
+    effects = adjust_effects(effects_for_cycle(callee.ipo_effects), callee.linfo.def::Method)
+    if is_effect_overridden(frame_instance(caller), :terminates_globally)
+        effects = Effects(effects; terminates=true)
+    end
+    return override_effects(effects, decode_statement_effects_override(caller.src.ssaflags[pc]))
+end
+
+function adjust_cycle_frame!(sv::InferenceState, world::UInt, cycle_valid_worlds::WorldRange)
     update_valid_age!(sv, world, cycle_valid_worlds)
-    sv.ipo_effects = cycle_valid_effects
-    # traverse the callees of this cycle that are tracked within `sv.cycle_backedges`
-    # and adjust their statements so that they are consistent with the new `cycle_valid_effects`
-    new_flags = flags_for_effects(cycle_valid_effects)
-    for (callee, pc) in sv.cycle_backedges
-        old_currpc = callee.currpc
-        callee.currpc = pc
-        set_curr_ssaflag!(callee, new_flags, IR_FLAGS_EFFECTS)
-        callee.currpc = old_currpc
+    # The flags of the calls into `sv` were computed from its partial effects. Drop those
+    # its converged effects no longer provide. Flags are never added: the call may have
+    # other targets, or throw a `MethodError`.
+    for (caller, pc) in sv.cycle_backedges
+        flags = flags_for_effects(cycle_call_effects(sv, caller, pc))
+        caller.ssaflags[pc] &= flags | ~IR_FLAGS_EFFECTS
     end
     return nothing
 end
