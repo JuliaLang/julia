@@ -232,8 +232,8 @@ function show(
     afterhead = nextind(str, head)
     n = tail - afterhead # skipped code units
     replacement = skip_text(n)
-    t = ncodeunits(replacement) # length of replacement (textwidth == ncodeunits here)
-    @views if 4t ≤ n || !check_textwidth(str[afterhead:prevind(str,tail)], t-1, escaped_char_width)
+    t = ncodeunits(replacement) # length of replacement
+    @views if 4t ≤ n || !check_textwidth(str[afterhead:prevind(str,tail)], textwidth(replacement) + 2, escaped_char_width)
         show(io, str[begin:head])
         printstyled(io, replacement; color=:light_yellow, bold=true)
         show(io, str[tail:end])

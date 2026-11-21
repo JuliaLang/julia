@@ -1106,7 +1106,7 @@ end
             end
             lower = textwidth("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
             limit = max(limit, lower)
-            if textwidth(str) + 2 ≤ limit+1 && !contains(out, '⋯')
+            if textwidth(str) + 2 ≤ limit && !contains(out, '⋯')
                 @test eval(Meta.parse(out)) == str
             else
                 @test limit-2 <= textwidth(out) <= limit
