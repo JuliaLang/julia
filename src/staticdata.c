@@ -2696,6 +2696,8 @@ static void jl_prune_type_cache_hash(jl_svec_t *cache) JL_CANSAFEPOINT JL_GC_DIS
         else
             sz += 1;
     }
+    // leave the table at most 2/3 full
+    sz += (sz + 1) / 2;
     if (sz < HT_N_INLINE)
         sz = HT_N_INLINE;
     record_object_change((jl_value_t*)cache, (jl_value_t*)cache_rehash_set(kept, sz));
