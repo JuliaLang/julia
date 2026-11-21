@@ -400,7 +400,7 @@ function load_from_array(T::MultiByteBitNumberType, data::AbstractArray{UInt8}, 
         unsigned(T)(0)
     end
     for i in 0:sizeof(x)-1
-        x |= typeof(x)(data[from + i]) << (8 * i)
+        x |= typeof(x)(data[from + i]::UInt8) << (8 * i)
     end
     reinterpret(T, ltoh(x))
 end

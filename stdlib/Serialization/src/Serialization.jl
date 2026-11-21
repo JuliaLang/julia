@@ -921,19 +921,22 @@ function writeheader(s::AbstractSerializer)
     nothing
 end
 
+# `io` is often not concretely typed, so `read` would not infer as `T`
+_read(io::IO, ::Type{T}) where {T} = read(io, T)::T
+
 function readheader(s::AbstractSerializer)
     # Tag already read
     io = s.io
-    m1 = read(io, UInt8)
-    m2 = read(io, UInt8)
+    m1 = _read(io, UInt8)
+    m2 = _read(io, UInt8)
     if m1 != UInt8('J') || m2 != UInt8('L')
         error("Unsupported serialization format (got header magic bytes $m1 $m2)")
     end
-    version    = read(io, UInt8)
-    flags      = read(io, UInt8)
-    _reserved1 = read(io, UInt8)
-    _reserved2 = read(io, UInt8)
-    _reserved3 = read(io, UInt8)
+    version    = _read(io, UInt8)
+    flags      = _read(io, UInt8)
+    _reserved1 = _read(io, UInt8)
+    _reserved2 = _read(io, UInt8)
+    _reserved3 = _read(io, UInt8)
     endianflag = flags & 0x3
     wordflag   = (flags >> 2) & 0x3
     _wordsize = wordflag == 0 ? 4 :
@@ -1024,7 +1027,7 @@ Open a file and deserialize its contents.
 deserialize(filename::AbstractString) = open(deserialize, filename)
 
 function deserialize(s::AbstractSerializer)
-    handle_deserialize(s, Int32(read(s.io, UInt8)::UInt8))
+    handle_deserialize(s, Int32(_read(s.io, UInt8)))
 end
 
 function deserialize_cycle(s::AbstractSerializer, @nospecialize(x))
@@ -1049,17 +1052,17 @@ end
 # representations is fixed, so deserialize_ does not get extended.
 function handle_deserialize(s::AbstractSerializer, b::Int32)
     if b == 0
-        return desertag(Int32(read(s.io, UInt8)::UInt8))
+        return desertag(Int32(_read(s.io, UInt8)))
     end
     if b >= VALUE_TAGS
         return desertag(b)
     elseif b == TUPLE_TAG
-        return deserialize_tuple(s, Int(read(s.io, UInt8)::UInt8))
+        return deserialize_tuple(s, Int(_read(s.io, UInt8)))
     elseif b == SHORTBACKREF_TAG
-        id = read(s.io, UInt16)::UInt16
+        id = _read(s.io, UInt16)
         return _getbackref(s, Int(id))
     elseif b == BACKREF_TAG
-        id = read(s.io, Int32)::Int32
+        id = _read(s.io, Int32)
         return _getbackref(s, Int(id))
     elseif b == ARRAY_TAG
         return deserialize_array(s)
@@ -1087,17 +1090,17 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         _setbackref!(s, slot, obj)
         return obj
     elseif b == SYMBOL_TAG
-        return deserialize_symbol(s, Int(read(s.io, UInt8)::UInt8))
+        return deserialize_symbol(s, Int(_read(s.io, UInt8)))
     elseif b == SHORTINT64_TAG
-        return Int64(read(s.io, Int32)::Int32)
+        return Int64(_read(s.io, Int32))
     elseif b == EXPR_TAG
-        return deserialize_expr(s, Int(read(s.io, UInt8)::UInt8))
+        return deserialize_expr(s, Int(_read(s.io, UInt8)))
     elseif b == MODULE_TAG
         return deserialize_module(s)
     elseif b == STRING_TAG
-        return deserialize_string(s, Int(read(s.io, UInt8)::UInt8))
+        return deserialize_string(s, Int(_read(s.io, UInt8)))
     elseif b == LONGSTRING_TAG
-        return deserialize_string(s, Int(read(s.io, Int64)::Int64))
+        return deserialize_string(s, Int(_read(s.io, Int64)))
     elseif b == SIMPLEVECTOR_TAG
         return deserialize_svec(s)
     elseif b == GLOBALREF_TAG
@@ -1107,45 +1110,45 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         tn = unwrap_unionall(ty).name
         return GlobalRef(tn.module, tn.name)
     elseif b == LONGTUPLE_TAG
-        return deserialize_tuple(s, Int(read(s.io, Int32)::Int32))
+        return deserialize_tuple(s, Int(_read(s.io, Int32)))
     elseif b == LONGEXPR_TAG
-        return deserialize_expr(s, Int(read(s.io, Int32)::Int32))
+        return deserialize_expr(s, Int(_read(s.io, Int32)))
     elseif b == LONGBACKREF_TAG
-        id = read(s.io, Int64)::Int64
+        id = _read(s.io, Int64)
         return _getbackref(s, Int(id))
     elseif b == LONGSYMBOL_TAG
-        return deserialize_symbol(s, Int(read(s.io, Int32)::Int32))
+        return deserialize_symbol(s, Int(_read(s.io, Int32)))
     elseif b == HEADER_TAG
         readheader(s)
         return deserialize(s)
     elseif b == INT8_TAG
-        return read(s.io, Int8)
+        return _read(s.io, Int8)
     elseif b == INT8_TAG+1
-        return read(s.io, UInt8)
+        return _read(s.io, UInt8)
     elseif b == INT8_TAG+2
-        return read(s.io, Int16)
+        return _read(s.io, Int16)
     elseif b == INT8_TAG+3
-        return read(s.io, UInt16)
+        return _read(s.io, UInt16)
     elseif b == INT32_TAG
-        return read(s.io, Int32)
+        return _read(s.io, Int32)
     elseif b == INT8_TAG+5
-        return read(s.io, UInt32)
+        return _read(s.io, UInt32)
     elseif b == INT64_TAG
-        return read(s.io, Int64)
+        return _read(s.io, Int64)
     elseif b == INT8_TAG+7
-        return read(s.io, UInt64)
+        return _read(s.io, UInt64)
     elseif b == INT8_TAG+8
-        return read(s.io, Int128)
+        return _read(s.io, Int128)
     elseif b == INT8_TAG+9
-        return read(s.io, UInt128)
+        return _read(s.io, UInt128)
     elseif b == INT8_TAG+10
-        return read(s.io, Float16)
+        return _read(s.io, Float16)
     elseif b == INT8_TAG+11
-        return read(s.io, Float32)
+        return _read(s.io, Float32)
     elseif b == INT8_TAG+12
-        return read(s.io, Float64)
+        return _read(s.io, Float64)
     elseif b == INT8_TAG+13
-        return read(s.io, Char)
+        return _read(s.io, Char)
     elseif b == IDDICT_TAG
         slot = s.counter; s.counter += 1
         push!(s.pending_refs, slot)
@@ -1179,7 +1182,7 @@ function deserialize_tuple(s::AbstractSerializer, len)
 end
 
 function deserialize_svec(s::AbstractSerializer)
-    n = read(s.io, Int32)
+    n = _read(s.io, Int32)
     svec(Any[ deserialize(s) for _=1:n ]...)
 end
 
@@ -1208,7 +1211,7 @@ function deserialize_module(s::AbstractSerializer)
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Method})
-    lnumber = read(s.io, UInt64)
+    lnumber = _read(s.io, UInt64)
     meth = lookup_object_number(s, lnumber)
     if meth !== nothing
         meth = meth::Method
@@ -1320,14 +1323,14 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Cvoid},), C_NULL)
     deserialize_cycle(s, linfo)
     if format_version(s) < 28
-        tag = Int32(read(s.io, UInt8)::UInt8)
+        tag = Int32(_read(s.io, UInt8))
         if tag != UNDEFREF_TAG
             code = handle_deserialize(s, tag)::CodeInfo
             ci = ccall(:jl_new_codeinst_for_uninferred, Ref{CodeInstance}, (Any, Any), linfo, code)
             @atomic linfo.cache = ci
         end
     end
-    tag = Int32(read(s.io, UInt8)::UInt8)
+    tag = Int32(_read(s.io, UInt8))
     if tag != UNDEFREF_TAG
         # for reading files prior to v1.2
         handle_deserialize(s, tag)
@@ -1573,7 +1576,7 @@ function deserialize_array(s::AbstractSerializer)
             A = Array{Bool, length(dims)}(undef, dims)
             i = 1
             while i <= n
-                b = read(s.io, UInt8)::UInt8
+                b = _read(s.io, UInt8)
                 v = (b >> 7) != 0
                 count = b & 0x7f
                 nxt = i + count
@@ -1597,7 +1600,7 @@ end
 
 function deserialize_fillarray!(A::Union{Array{T},Memory{T}}, s::AbstractSerializer) where {T}
     for i = eachindex(A)
-        tag = Int32(read(s.io, UInt8)::UInt8)
+        tag = Int32(_read(s.io, UInt8))
         if tag != UNDEFREF_TAG
             @inbounds A[i] = handle_deserialize(s, tag)
         end
@@ -1614,7 +1617,7 @@ function deserialize(s::AbstractSerializer, X::Type{Memory{T}} where T)
         if X === Memory{Bool}
             i = 1
             while i <= n
-                b = read(s.io, UInt8)::UInt8
+                b = _read(s.io, UInt8)
                 v = (b >> 7) != 0
                 count = b & 0x7f
                 nxt = i + count
@@ -1644,7 +1647,7 @@ function deserialize(s::AbstractSerializer, X::Type{MemoryRef{T}} where T)
 end
 
 function deserialize(s::AbstractSerializer, X::Type{Core.AddrSpace{M}} where M)
-    Core.bitcast(X, read(s.io, UInt8))
+    Core.bitcast(X, _read(s.io, UInt8))
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Core.IntrinsicFunction})
@@ -1703,7 +1706,7 @@ end
 module __deserialized_types__ end
 
 function deserialize(s::AbstractSerializer, ::Type{Core.TypeName})
-    number = read(s.io, UInt64)
+    number = _read(s.io, UInt64)
     return deserialize_typename(s, number)
 end
 
@@ -1755,7 +1758,7 @@ function deserialize_typename(s::AbstractSerializer, number)
         end
     end
 
-    tag = Int32(read(s.io, UInt8)::UInt8)
+    tag = Int32(_read(s.io, UInt8))
     if tag != UNDEFREF_TAG
         mtname = handle_deserialize(s, tag)
         _defs = deserialize(s)
@@ -1764,7 +1767,7 @@ function deserialize_typename(s::AbstractSerializer, number)
             tn.singletonname = mtname
             setfield!(tn, :max_args, Int32(maxa), :monotonic)
         end
-        tag = Int32(read(s.io, UInt8)::UInt8)
+        tag = Int32(_read(s.io, UInt8))
         if tag != UNDEFREF_TAG
             kws = handle_deserialize(s, tag)
             if makenew && !(kws isa Vector{Method})
@@ -1789,7 +1792,7 @@ function deserialize_datatype(s::AbstractSerializer, full::Bool)
     if isa(ty,DataType) && isempty(ty.parameters)
         t = ty
     else
-        np = Int(read(s.io, Int32)::Int32)
+        np = Int(_read(s.io, Int32))
         if np == 0
             t = unwrap_unionall(ty)
         elseif ty === Tuple
@@ -1817,13 +1820,13 @@ function deserialize_datatype(s::AbstractSerializer, full::Bool)
 end
 
 function deserialize(s::AbstractSerializer, ::Type{UnionAll})
-    form = read(s.io, UInt8)
+    form = _read(s.io, UInt8)
     if form == 0
         var = deserialize(s)
         body = deserialize(s)
         return UnionAll(var, body)
     else
-        n = read(s.io, Int16)
+        n = _read(s.io, Int16)
         t = deserialize(s)::DataType
         w = t.name.wrapper
         k = 0
@@ -1888,7 +1891,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
         deserialize_cycle(s, x)
         for i in 1:nf
-            tag = Int32(read(s.io, UInt8)::UInt8)
+            tag = Int32(_read(s.io, UInt8))
             if tag != UNDEFREF_TAG
                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), x, i-1, handle_deserialize(s, tag))
             end
@@ -1900,7 +1903,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
         na = nf
         vflds = Vector{Any}(undef, nf)
         for i in 1:nf
-            tag = Int32(read(s.io, UInt8)::UInt8)
+            tag = Int32(_read(s.io, UInt8))
             if tag != UNDEFREF_TAG
                 f = handle_deserialize(s, tag)
                 na >= i && (vflds[i] = f)
@@ -1913,7 +1916,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
 end
 
 function deserialize_dict(s::AbstractSerializer, T::Type{<:AbstractDict})
-    n = read(s.io, Int32)
+    n = _read(s.io, Int32)
     t = T(); sizehint!(t, n)
     deserialize_cycle(s, t)
     for _ = 1:n
@@ -1956,10 +1959,10 @@ end
 function deserialize(s::AbstractSerializer, ::Type{Base.StackTraces.StackFrame})
     func = deserialize(s)
     file = deserialize(s)
-    line = read(s.io, Int)
-    from_c = read(s.io, Bool)
-    inlined = read(s.io, Bool)
-    pointer = read(s.io, UInt64)
+    line = _read(s.io, Int)
+    from_c = _read(s.io, Bool)
+    inlined = _read(s.io, Bool)
+    pointer = _read(s.io, UInt64)
     return Base.StackTraces.StackFrame(func, file, line, nothing, from_c, inlined, pointer)
 end
 
