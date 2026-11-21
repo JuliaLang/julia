@@ -42,6 +42,11 @@ Lexical scope ID
 """
 const ScopeId = Int
 
+"""
+ID of one syntactic function (:function, :->)
+"""
+const FunctionId = Int
+
 # TODO: this is now redundant; replace calls with @mknode
 function newleaf(prov::SyntaxTree, k::Symbol, @nospecialize(value))
     context = prov.context

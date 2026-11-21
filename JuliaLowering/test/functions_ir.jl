@@ -600,7 +600,7 @@ end
 30  (call core.svec %₂₇ %₂₈ %₂₉)
 31  (call core.define_method TestMod TestMod.f %₃₀
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/z(!read)]
+    slots: [slot₁/#self#(!read,called) slot₂/x slot₃/y slot₄/z(!read)]
     1   (call core.tuple slot₂/x slot₃/y)
     2   (return %₁)
 32  latestworld
@@ -649,7 +649,7 @@ end
 24  (call core.svec %₂₁ %₂₂ %₂₃)
 25  (call core.define_method TestMod TestMod.f %₂₄
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/y]
+    slots: [slot₁/#self#(!read,called) slot₂/x slot₃/y]
     1   (call core.tuple slot₂/x slot₃/y)
     2   (return %₁)
 26  latestworld
@@ -701,7 +701,7 @@ end
 27  (call core.svec %₂₄ %₂₅ %₂₆)
 28  (call core.define_method TestMod TestMod.f %₂₇
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/#arg#(!read) slot₃/y slot₄/z]
+    slots: [slot₁/#self#(!read,called) slot₂/#arg#(!read) slot₃/y slot₄/z]
     1   (call core.tuple slot₃/y slot₄/z)
     2   (return %₁)
 29  latestworld
@@ -738,7 +738,7 @@ end
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  (call core.define_method TestMod TestMod.f %₁₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/#arg#(!read) slot₃/x]
+    slots: [slot₁/#self#(!read,called) slot₂/#arg#(!read) slot₃/x]
     1   slot₃/x
     2   (return %₁)
 20  latestworld
@@ -790,7 +790,7 @@ end
 27  (call core.svec %₂₄ %₂₅ %₂₆)
 28  (call core.define_method TestMod TestMod.f %₂₇
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/z]
+    slots: [slot₁/#self#(!read,called) slot₂/x slot₃/y slot₄/z]
     1   (call core.tuple slot₂/x slot₃/y slot₄/z)
     2   (return %₁)
 29  latestworld
@@ -846,7 +846,7 @@ end
 29  (call core.svec %₂₆ %₂₇ %₂₈)
 30  (call core.define_method TestMod TestMod.f %₂₉
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/z]
+    slots: [slot₁/#self#(!read,called) slot₂/x slot₃/y slot₄/z]
     1   static_parameter₁
     2   static_parameter₂
     3   static_parameter₃
@@ -885,7 +885,7 @@ end
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  (call core.define_method TestMod TestMod.f %₁₇
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/ys]
+    slots: [slot₁/#self#(!read,called) slot₂/x(!read) slot₃/ys]
     1   slot₃/ys
     2   (return %₁)
 19  latestworld
@@ -934,7 +934,7 @@ end
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  (call core.define_method TestMod TestMod.f %₁₇
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/xs]
+    slots: [slot₁/#self#(!read,called) slot₂/xs]
     1   slot₂/xs
     2   (return %₁)
 19  latestworld
@@ -971,7 +971,7 @@ end
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  (call core.define_method TestMod TestMod.f %₁₇
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/xs]
+    slots: [slot₁/#self#(!read,called) slot₂/xs]
     1   slot₂/xs
     2   (return %₁)
 19  latestworld
@@ -1034,7 +1034,7 @@ end
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  (call core.define_method TestMod TestMod.f %₁₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/#arg#destructured#2 slot₃/x(!read,single_assign)]
+    slots: [slot₁/#self#(!read,called) slot₂/#arg#destructured#2 slot₃/x(!read,single_assign)]
     1   (call top.indexed_iterate slot₂/#arg#destructured#2 1)
     2   (= slot₃/x (call core.getfield %₁ 1))
     3   (return core.nothing)
@@ -1223,7 +1223,7 @@ end
 16  (call core.svec %₁₃ %₁₄ %₁₅)
 17  (call core.define_method TestMod TestMod.f %₁₆
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/tmp(!read)]
+    slots: [slot₁/#self#(!read,called) slot₂/x(!read) slot₃/tmp(!read)]
     1   TestMod.T
     2   (= slot₃/tmp core.nothing)
     3   (call core.isa slot₃/tmp %₁)
@@ -1532,7 +1532,7 @@ end
 16  (call core.svec %₁₃ %₁₄ %₁₅)
 17  (call core.define_method TestMod TestMod.#f_kw_simple#kw_body#1 %₁₆
     --- code_info
-    slots: [slot₁/#f_kw_simple#kw_body#1(!read) slot₂/x slot₃/y slot₄/#self#(!read) slot₅/a slot₆/b]
+    slots: [slot₁/#f_kw_simple#kw_body#1(!read) slot₂/x slot₃/y slot₄/#self#(!read,called) slot₅/a slot₆/b]
     1   (meta :nkw 2)
     2   (call core.tuple slot₅/a slot₆/b slot₂/x slot₃/y)
     3   (return %₂)
@@ -1574,7 +1574,7 @@ end
 43  (call core.svec %₄₀ %₄₁ %₄₂)
 44  (call core.define_method TestMod TestMod.f_kw_simple %₄₃
     --- code_info
-    slots: [slot₁/#self# slot₂/a slot₃/b]
+    slots: [slot₁/#self#(called) slot₂/a slot₃/b]
     1   TestMod.#f_kw_simple#kw_body#1
     2   (call %₁ 'a' true slot₁/#self# slot₂/a slot₃/b)
     3   (return %₂)
@@ -1588,7 +1588,7 @@ end
 52  (call core.svec %₄₉ %₅₀ %₅₁)
 53  (call core.define_method TestMod TestMod.f_kw_simple %₅₂
     --- code_info
-    slots: [slot₁/#kwcall_self#(called) slot₂/kws slot₃/#self# slot₄/a(single_assign)]
+    slots: [slot₁/#kwcall_self#(called) slot₂/kws slot₃/#self#(called) slot₄/a(single_assign)]
     1   1
     2   (= slot₄/a %₁)
     3   (call slot₁/#kwcall_self# slot₂/kws slot₃/#self# slot₄/a 1.0)
@@ -1604,7 +1604,7 @@ end
 62  (call core.svec %₅₉ %₆₀ %₆₁)
 63  (call core.define_method TestMod TestMod.f_kw_simple %₆₂
     --- code_info
-    slots: [slot₁/#kwcall_self#(called) slot₂/kws slot₃/#self# slot₄/a]
+    slots: [slot₁/#kwcall_self#(called) slot₂/kws slot₃/#self#(called) slot₄/a]
     1   (call slot₁/#kwcall_self# slot₂/kws slot₃/#self# slot₄/a 1.0)
     2   (return %₁)
 64  latestworld
@@ -1619,7 +1619,7 @@ end
 73  (call core.svec %₇₀ %₇₁ %₇₂)
 74  (call core.define_method TestMod TestMod.f_kw_simple %₇₃
     --- code_info
-    slots: [slot₁/#kwcall_self#(!read) slot₂/kws slot₃/#self# slot₄/a slot₅/b slot₆/x(!read) slot₇/y(!read) slot₈/#kwtmp#]
+    slots: [slot₁/#kwcall_self#(!read) slot₂/kws slot₃/#self#(called) slot₄/a slot₅/b slot₆/x(!read) slot₇/y(!read) slot₈/#kwtmp#]
     1   (newvar slot₆/x)
     2   (newvar slot₇/y)
     3   (newvar slot₈/#kwtmp#)
