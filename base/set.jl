@@ -91,6 +91,24 @@ isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)
 in(x, s::Set) = haskey(s.dict, x)
 
+issetequal(a::AbstractUnitRange{<:Integer}, b) = issetequal(a, Set(b))
+issetequal(a, b::AbstractUnitRange{<:Integer}) = issetequal(Set(a), b)
+issetequal(a::AbstractUnitRange{<:Integer}, b::AbstractSet) = issetequal(Set(a), b)
+issetequal(a::AbstractSet, b::AbstractUnitRange{<:Integer}) = issetequal(a, Set(b))
+
+function issetequal(a::AbstractUnitRange{<:Integer}, b::Set{<:Integer})
+    length(a) == length(b) || return false
+    isempty(a) && return true
+    # Distinct integers with these endpoints fill the unit range exactly.
+    return extrema(b) == (first(a), last(a))
+end
+issetequal(a::Set{<:Integer}, b::AbstractUnitRange{<:Integer}) = issetequal(b, a)
+
+function issetequal(a::AbstractUnitRange{<:Integer}, b::AbstractUnitRange{<:Integer})
+    isempty(a) && return isempty(b)
+    return !isempty(b) && first(a) == first(b) && last(a) == last(b)
+end
+
 """
     in!(x, s::AbstractSet)::Bool
 
