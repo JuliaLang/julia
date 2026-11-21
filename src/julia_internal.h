@@ -854,7 +854,8 @@ STATIC_INLINE jl_method_instance_t *jl_get_ci_mi(jl_code_instance_t *ci JL_PROPA
 // Resolve a static-parameter env slot for a direct (defined) read: a plain
 // value is itself; a pinned (lb == ub) env uncertainty marker
 // (`svec(tvar, constrained)`, see `subtype.c`) is defined up to type equality
-// and reads as its `==`-representative `lb`. Returns NULL when the slot has no
+// and reads as its `==`-representative `lb`; a constrained marker holding a
+// closed type reads as that type. Returns NULL when the slot has no
 // statically defined value (unconstrained markers).
 STATIC_INLINE jl_value_t *jl_sparam_defined_value(jl_value_t *sp JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
@@ -862,10 +863,10 @@ STATIC_INLINE jl_value_t *jl_sparam_defined_value(jl_value_t *sp JL_PROPAGATES_R
         if (jl_svec_len(sp) != 2)
             return NULL;
         jl_value_t *inner = jl_svecref(sp, 0);
-        if (!jl_is_typevar(inner))
-            return NULL;
         if (jl_svecref(sp, 1) != jl_true)
             return NULL;
+        if (!jl_is_typevar(inner))
+            return jl_has_free_typevars(inner) ? NULL : inner;
         jl_tvar_t *v = (jl_tvar_t*)inner;
         if (v->lb != v->ub) // pinned markers share one bound object
             return NULL;

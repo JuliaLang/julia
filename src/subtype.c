@@ -2127,7 +2127,9 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         // however, is present in every concrete member even when the tuple tail
         // length is free, so a statically constraining right-side element at that
         // position records `lb_required` while matching that tuple element.
-        int eff_constrained = (vb.occurs_inv ||
+        int eff_constrained = (vb.pinned ||
+            (vb.occurs_inv && !jl_has_free_typevars(vb.lb) &&
+             (vb.lb != jl_bottom_type || vb.lb == vb.ub)) ||
             (cov_count(&vb) && u->var->lb == jl_bottom_type &&
              (vb.lb_certainty > BOUND_PROXY || vb.lb_required)));
         jl_value_t *val = subtype_unionall_envout_value(t, u, e, &vb, lb, &new_tvar,

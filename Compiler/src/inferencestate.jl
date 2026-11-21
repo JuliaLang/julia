@@ -1075,6 +1075,14 @@ function is_free_typevar_in_spec(v::TypeVar, @nospecialize(specTypes))
     return false
 end
 
+sparam_slot_defined(@nospecialize(sp)) = ccall(:jl_sparam_slot_value, Ptr{Cvoid}, (Any,), sp) != C_NULL
+
+function sparam_marker_defined(sp::SimpleVector, mi::MethodInstance)
+    sparam_slot_defined(sp) && return true
+    isdispatchtuple(mi.specTypes) && return false
+    return sp[2]::Bool
+end
+
 function sptypes_from_meth_instance(mi::MethodInstance)
     def = mi.def
     isa(def, Method) || return EMPTY_SPTYPES # toplevel
@@ -1096,20 +1104,21 @@ function sptypes_from_meth_instance(mi::MethodInstance)
         # typevars (when the var got pinned to a value that still contains
         # call-site tvars). `constrained` is true iff every concrete subtype
         # of the call site will pin this var to a definite value.
-        v_tvar = nothing
-        v_constrained = false
         if isa(v, SimpleVector)
             v_inner = v[1]
-            v_constrained = v[2]::Bool
             if isa(v_inner, TypeVar)
-                v_tvar = v_inner
+                vᵢ = (temp::UnionAll).var
+                v_egal = sparam_definitely_egal_from_spec(vᵢ, sigtypes, mi.specTypes)
+                ty = sptype_for_tvar(vᵢ, v_inner, sigtypes, mi.specTypes, v_egal)
+            elseif has_free_typevars(v_inner)
+                ty = rewrap_free_typevars(TypeEq{v_inner}, find_free_typevars(mi.specTypes))
+                v_egal = false
             else
-                # DataType-with-free-tvars case: route through the generic
-                # `has_free_typevars(v)` path by unwrapping.
-                v = v_inner
+                ty = Const(v_inner)
+                v_egal = false
             end
-        end
-        if v isa TypeVar && is_free_typevar_in_spec(v, mi.specTypes)
+            undef = !sparam_marker_defined(v, mi)
+        elseif v isa TypeVar && is_free_typevar_in_spec(v, mi.specTypes)
             # A plain TypeVar env entry that is free in `specTypes` is the exact
             # runtime value of this sparam (bound from a typevar embedded in the
             # call's argument types); TypeVars compare by identity, so `Const(v)`
@@ -1117,16 +1126,10 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             ty = Const(v)
             undef = false
             v_egal = false
-        elseif v_tvar !== nothing || has_free_typevars(v)
-            vᵢ = (temp::UnionAll).var
-            if v_tvar !== nothing
-                v_egal = sparam_definitely_egal_from_spec(vᵢ, sigtypes, mi.specTypes)
-                ty = sptype_for_tvar(vᵢ, v_tvar, sigtypes, mi.specTypes, v_egal)
-            else
-                ty = rewrap_free_typevars(TypeEq{v}, find_free_typevars(mi.specTypes))
-                v_egal = false
-            end
-            undef = !v_constrained && !constrains_var(vᵢ, temp.body, MATCH_TYPEOF)
+        elseif has_free_typevars(v)
+            ty = rewrap_free_typevars(TypeEq{v}, find_free_typevars(mi.specTypes))
+            undef = true
+            v_egal = false
         elseif isvarargtype(v)
             # this parameter came from `func(..., ::Vararg{T,v})`,
             # so the type is known to be `Int`

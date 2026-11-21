@@ -9423,6 +9423,37 @@ end
 @test gtuple_sparam_value_62099(Tuple{Type{Int}}) === Type{Int}
 @test gvararg_sparam_value_62099(Tuple{Type{Int}}) === Type{Int}
 
+bound_only_sparam(::Type{S}) where {T,S>:Vector{T}} = @isdefined(T) ? T : nothing
+bound_pair_sparam(::Type{S}) where {T,S>:Pair{T,Int}} = @isdefined(T) ? T : nothing
+bound_bottom_sparam(::Type{S}) where {T,S>:Pair{T,Union{}}} = @isdefined(T) ? T : nothing
+bound_range_sparam(::Type{S}) where {T<:Real,S>:Vector{T}} = @isdefined(T) ? T : nothing
+bound_equal_sparam(::Type{S}) where {T<:Tuple{Vector},S>:Vector{T}} = @isdefined(T) ? T : nothing
+bound_nested_sparam(::Type{S}) where {T,S>:Pair{Int,T}} = @isdefined(T) ? T : nothing
+@generated bound_nested_generated(::Type{S}) where {T,S>:Pair{Int,T}} = T
+module InterpretedBoundSparam
+Base.Experimental.@compiler_options compile=min
+bound_nested_sparam(::Type{S}) where {T,S>:Pair{Int,T}} = @isdefined(T) ? T : nothing
+end
+unresolved_sparam(::Type{S}, x::T) where {U,T,S>:Pair{T,U}} = @isdefined(T) ? T : typeof(x)
+const unresolved_sparam_arg = Pair{X,X} where X
+unresolved_sparam_defined(::Type{S}, x::T) where {U,T,S>:Pair{T,U}} = @isdefined(T)
+unresolved_sparam_site(r::Ref{Real}) = unresolved_sparam_defined(unresolved_sparam_arg, r[])
+@testset "static parameters without a value" begin
+    @test bound_only_sparam(Vector) === nothing
+    @test (() -> bound_only_sparam(Vector))() === nothing
+    @test bound_pair_sparam(Pair{X,Int} where X) === nothing
+    @test bound_pair_sparam(Pair{X,X} where X) === Int
+    @test bound_bottom_sparam(Pair{X,X} where X) === Union{}
+    @test bound_range_sparam(Vector{X} where X>:Int) === Int
+    @test bound_equal_sparam(Vector{X} where X>:(Tuple{Vector{Y}} where Y)) == Tuple{Vector}
+    @test bound_nested_sparam(Pair{X,Vector{X}} where X) === Vector{Int}
+    @test bound_nested_generated(Pair{X,Vector{X}} where X) === Vector{Int}
+    @test InterpretedBoundSparam.bound_nested_sparam(Pair{X,Vector{X}} where X) === Vector{Int}
+    @test unresolved_sparam(unresolved_sparam_arg, 1) === Int
+    @test (() -> unresolved_sparam(unresolved_sparam_arg, 1))() === Int
+    @test unresolved_sparam_site(Ref{Real}(1)) === unresolved_sparam_defined(unresolved_sparam_arg, 1)
+end
+
 # An inferred / constant-folded type must not contain a `(tvar, constrains_bool)`
 # SimpleVector pair as a type parameter. The intersection-env svec format must
 # stay confined to env entries; downstream consumers of intersection results
