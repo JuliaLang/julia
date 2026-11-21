@@ -3801,7 +3801,19 @@ end
         script = """
             # if this hangs, dump the tasks before the parent kills it; stdout is a buffered
             # file, so the flushes below keep the log showing how far it got
-            Timer(_ -> ccall(:jl_print_task_backtraces, Cvoid, (Cint,), 0), 270)
+            Timer(270) do _
+                ccall(:jl_print_task_backtraces, Cvoid, (Cint,), 0)
+                # the precompile worker too, which is waited on and thus in `uvhandles`: on Unix
+                # SIGQUIT has it print its tasks into the reported output, on Windows libuv
+                # writes a dump of it when CI configures a dump folder. Other tasks mutate
+                # `uvhandles`, so snapshot it under its lock and signal outside of it.
+                procs = @lock Base.preserve_handle_lock begin
+                    filter(h -> h isa Base.Process, collect(keys(Base.uvhandles)))
+                end
+                for p in procs
+                    process_running(p) && kill(p, Base.SIGQUIT)
+                end
+            end
             # fails the first write of the package's output, then works
             mutable struct FailOnceIO <: IO
                 buf::IOBuffer
@@ -3817,7 +3829,13 @@ end
             Base.write(io::FailOnceIO, x::UInt8) = write(io.buf, x)
             io = FailOnceIO(IOBuffer(), false)
             println("precompiling"); flush(stdout)
-            paths = Base.Precompilation.precompilepkgs($(single ? "[\"NoisyPkg\"]" : "String[]"); io, fancyprint=false)
+            paths = try
+                Base.Precompilation.precompilepkgs($(single ? "[\"NoisyPkg\"]" : "String[]"); io, fancyprint=false)
+            catch
+                # the end of the worker's output, which holds its tasks after a hang
+                print(last(String(take!(io.buf)), 50_000))
+                rethrow()
+            end
             println("precompiled"); flush(stdout)
             output = String(take!(io.buf))
             r = findlast("had output during precompilation:", output)
@@ -3833,7 +3851,7 @@ end
             run(pipeline(cmd; stdout=logio, stderr=logio); wait=false)
         end
         finished = try
-            timedwait(() -> process_exited(p), 300) === :ok
+            timedwait(() -> process_exited(p), 420) === :ok # leaves time to dump the worker
         finally
             process_exited(p) || kill(p, Base.SIGKILL)
             wait(p)
