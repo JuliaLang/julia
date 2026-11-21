@@ -76,16 +76,27 @@ if !@isdefined(testenv_defined)
         return pids
     end
 
-    # Each worker gets an equal share of the machine's memory as its heap size hint, sized
-    # for a pool of `pool_size` workers. A worker that replaces a recycled one is started
-    # on its own, so it must pass the size of the pool it joins: sized for a pool of one,
-    # it would get half the machine's memory.
+    # The memory the test run may use: the machine's, or a cgroup's limit where there is
+    # one (`Sys.total_memory`), lowered by `JULIA_TEST_MEMORY_MB` for limits the OS does not
+    # enforce, e.g. a CI job's share of a macOS host.
+    function test_memory()
+        memory = Sys.total_memory()
+        budget = get(ENV, "JULIA_TEST_MEMORY_MB", "")
+        isempty(budget) || (memory = min(memory, parse(UInt64, budget) * 2^20))
+        return memory
+    end
+
+    # Each worker gets an equal share of the test run's memory as its heap size hint, in
+    # MiB, sized for a pool of `pool_size` workers plus the process driving them. A worker
+    # that replaces a recycled one is started on its own, so it must pass the size of the
+    # pool it joins: sized for a pool of one, it would get half the memory.
+    worker_heap_size_hint(pool_size::Integer) = round(Int, test_memory() / 2^20 / (pool_size + 1))
+
     function addprocs_with_testenv(X; rr_allowed=true, pool_size=X, kwargs...)
         exename = rr_allowed ? `$rr_exename $test_exename` : test_exename
         exeflags = test_exeflags
         if pool_size isa Integer
-            heap_size = round(Int, Sys.total_memory() / 2^20 / (pool_size + 1))
-            exeflags = `$exeflags --heap-size-hint=$(heap_size)M`
+            exeflags = `$exeflags --heap-size-hint=$(worker_heap_size_hint(pool_size))M`
         end
         # starting many workers on a loaded machine can exceed the default 60 s
         timeout = get(ENV, "JULIA_WORKER_TIMEOUT", "300")

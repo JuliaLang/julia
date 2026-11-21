@@ -225,6 +225,8 @@ cd(@__DIR__) do
           Sys.CPU_THREADS = $(Sys.CPU_THREADS)
           Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
           Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))
+          test_memory() = $(Base.format_bytes(test_memory()))
+          heap size hint per worker = $(n > 1 ? "$(worker_heap_size_hint(n)) MiB" : "none")
           diskstat().total = $disk_total
           diskstat().available = $disk_available
           diskstat(tempdir()).total = $tmp_total

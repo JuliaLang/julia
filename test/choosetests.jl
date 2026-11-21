@@ -209,13 +209,13 @@ function choosetests(choices = [])
         filter!(x -> (x != "Profile"), tests)
     end
 
-    # Avoid swapping during a full suite on small machines. Explicitly requested
+    # Avoid swapping during a full suite with little memory. Explicitly requested
     # tests still run; measured x86-64 peaks are about 13 GiB and 9 GiB respectively.
-    memory_hungry = ("compileall" => 16, "jit" => 12) # minimum total memory, in GiB
-    total_gib = Sys.total_memory() / 2^30
+    memory_hungry = ("compileall" => 16, "jit" => 12) # minimum memory for the run, in GiB
+    total_gib = test_memory() / 2^30
     too_hungry = [t for (t, gib) in memory_hungry if t in tests && !(t in choices) && total_gib < gib]
     if !isempty(too_hungry)
-        @warn "Skipping tests [" * join(too_hungry, ", ") * "] because the host has only " *
+        @warn "Skipping tests [" * join(too_hungry, ", ") * "] because the test run has only " *
               "$(round(total_gib; digits=1)) GiB of memory (pass them by name to run them anyway)"
         filter!(!in(too_hungry), tests)
     end
