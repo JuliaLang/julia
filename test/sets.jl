@@ -518,7 +518,7 @@ end
     end
     @test isdisjoint(10:9, 1:10) # empty range
     @test !isdisjoint(1e-100:.1:1, 0:.1:1)
-    @test !isdisjoint(eps()/4:.1:.71, 0:.1:1)
+    @test !isdisjoint(eps()/8:.1:.71, 0:.1:1)
 end
 
 @testset "unique" begin

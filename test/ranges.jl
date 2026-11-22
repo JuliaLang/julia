@@ -1074,6 +1074,15 @@ end
     @test [-0.2:0.05:-3*0.05;]  == [range(-0.2, stop=-3*0.05, length=2);] == [-0.2,-3*0.05]
 end
 
+@testset "float range elements are correctly rounded" begin
+    r = pi:0.1:5.3
+    @test r[22] === 5.241592653589794
+    @test r == [Float64(big(first(r)) + (k-1)*big(0.1)) for k in eachindex(r)]
+    a, s, n = 1234567/1701, -37/10000001, 2^28 + 1
+    @test first(range(a; step=s, length=n)) === a
+    @test last(range(; stop=a, step=-s, length=n)) === a
+end
+
 function range_fuzztests(::Type{T}, niter, nrange) where {T}
     for i = 1:niter, n in nrange
         strt, Δ = randn(T), randn(T)
