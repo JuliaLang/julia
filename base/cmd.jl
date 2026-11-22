@@ -196,15 +196,27 @@ function show(io::IO, cmd::Cmd)
     print_uid = cmd.uid !== nothing
     print_gid = cmd.gid !== nothing
     print_cpus = cmd.cpus !== nothing
+    opts = (ignorestatus = cmd.ignorestatus,
+            detach = cmd.flags & UV_PROCESS_DETACHED != 0,
+            windows_verbatim = cmd.flags & UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS != 0,
+            windows_hide = cmd.flags & UV_PROCESS_WINDOWS_HIDE != 0)
+    print_opts = any(opts)
 
     (print_env || print_dir) && print(io, "setenv(")
     print_cpus && print(io, "setcpuaffinity(")
     print_gid && print(io, "setgid(")
     print_uid && print(io, "setuid(")
+    print_opts && print(io, "Cmd(")
 
     print(io, '`')
     join(io, map(arg -> sprint(_show_cmd_word, arg, true; context=io), cmd.exec), ' ')
     print(io, '`')
+
+    if print_opts
+        print(io, "; ")
+        join(io, ("$k=true" for (k, v) in pairs(opts) if v), ", ")
+        print(io, ")")
+    end
 
     print_uid && (print(io, ", "); show(io, Int64(cmd.uid)); print(io, ")"))
     print_gid && (print(io, ", "); show(io, Int64(cmd.gid)); print(io, ")"))
@@ -335,7 +347,8 @@ _show_backtick_body(::IO, ::AbstractCmd, redirects) = false
 function _show_backtick_body(io::IO, cmd::Cmd, redirects)
     # Anything that `show` wraps around the backticks, like `setenv(...)`, has no shell syntax.
     (cmd.env === nothing || get_show_env_mode(io) === :none) && isempty(cmd.dir) &&
-        cmd.uid === nothing && cmd.gid === nothing && cmd.cpus === nothing || return false
+        cmd.uid === nothing && cmd.gid === nothing && cmd.cpus === nothing &&
+        !cmd.ignorestatus && cmd.flags == 0x00 || return false
     # A stream can be redirected only once in backticks.
     allunique(r -> r.stream_no, redirects) || return false
     join(io, map(arg -> sprint(_show_cmd_word, arg, true; context=io), cmd.exec), ' ')

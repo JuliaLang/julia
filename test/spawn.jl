@@ -1143,7 +1143,7 @@ if Sys.iswindows()
 end
 
 # make sure Cmd is nestable
-@test string(Cmd(Cmd(`ls`, detach=true))) == "`ls`"
+@test string(Cmd(Cmd(`ls`, detach=true))) == "Cmd(`ls`; detach=true)"
 
 # equality tests for Cmd
 @test Base.Cmd(``) == Base.Cmd(``)
@@ -1180,6 +1180,17 @@ if !Sys.iswindows()
     @test string(cmd_both) == "setgid(setuid(`echo test`, 1001), 1000)"
     @test string(setuid(setgid(`echo test`, typemax(UInt32)), 0x80000000)) ==
         "setgid(setuid(`echo test`, 2147483648), 4294967295)"
+end
+
+@testset "show Cmd process options" begin
+    @test repr(Cmd(`echo`; ignorestatus=true)) == "Cmd(`echo`; ignorestatus=true)"
+    @test repr(setenv(Cmd(`echo`; detach=true, windows_hide=true); dir="/tmp")) ==
+        "setenv(Cmd(`echo`; detach=true, windows_hide=true); dir=\"/tmp\")"
+    for ignorestatus in (false, true), detach in (false, true),
+            windows_verbatim in (false, true), windows_hide in (false, true)
+        cmd = setcpuaffinity(Cmd(`echo 'a b'`; ignorestatus, detach, windows_verbatim, windows_hide), [1])
+        @test eval(Meta.parse(repr(cmd))) == cmd
+    end
 end
 
 # Cmd equality and hashing take CPU affinity into account
@@ -1588,6 +1599,7 @@ end
     @test repr(pipeline(`a`, stderr="/dev/null")) == "pipeline(`a`, stderr>Base.FileRedirect(\"/dev/null\", false))"
     @test repr(pipeline(`a`, stdout=IOBuffer())) |> startswith("pipeline(`a`, stdout>")
     @test repr(pipeline(Cmd(`a`, dir="/tmp"), `b`)) == "pipeline(setenv(`a`; dir=\"/tmp\"), stdout=`b`)"
+    @test repr(pipeline(Cmd(`a`; ignorestatus=true), `b`)) == "pipeline(Cmd(`a`; ignorestatus=true), stdout=`b`)"
     @test repr(pipeline(`a` & `b`, `c`)) == "pipeline(`a` & `b`, stdout=`c`)"
     @test repr(Base.CmdRedirect(`a`, Base.FileRedirect("", false), 1)) |> startswith("pipeline(")
     # Shown commands parse back to themselves.
