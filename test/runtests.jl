@@ -159,6 +159,8 @@ const longest_tests = [
     "Compiler/inference", "reducedim", "numbers", "misc", "broadcast", "REPL", "Profile",
     "rational", "cancellation", "gc", "InteractiveUtils", "sets", "ccall",
 ]
+# `gc` takes several times longer when julia doesn't use the stock GC
+Base.USING_STOCK_GC || pushfirst!(longest_tests, "gc")
 function expected_rank(test)
     rank = findfirst(name -> test == name || startswith(test, name * "/"), longest_tests)
     return something(rank, length(longest_tests) + 1)
