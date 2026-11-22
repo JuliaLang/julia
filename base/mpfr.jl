@@ -807,6 +807,7 @@ end
 sqrt(x::BigInt) = sqrt(BigFloat(x))
 
 function ^(x::BigFloat, y::BigFloat)
+    x < 0 && isfinite(y) && !isinteger(y) && Base.Math.throw_exp_domainerror(x)
     z = BigFloat()
     @ccall gc_safe=true libmpfr.mpfr_pow(z::Ref{BigFloat}, x::Ref{BigFloat}, y::Ref{BigFloat}, rounding_raw(BigFloat)::MPFRRoundingMode)::Int32
     return z
