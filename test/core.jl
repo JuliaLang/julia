@@ -4296,7 +4296,9 @@ end
 # types whose instances hold data that their Julia-visible fields do not describe
 # (C-only fields after them, an opaque layout, trailing variable-sized data) can only be
 # allocated by the runtime, since `new` would not set up that data
-for x in Any[which(sin, (Float64,)), current_task(),
+for x in Any[which(sin, (Float64,)),
+             # a new task with no scope, since the closures below keep their task's scope alive
+             let t = Task(Returns(nothing)); setfield!(t, :scope, nothing); t; end,
              Main, :sym, "str", Core.svec(1), Memory{Int}(undef, 2),
              Vector{T} where T]
     T = typeof(x)
