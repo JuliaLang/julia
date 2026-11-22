@@ -1084,7 +1084,7 @@ end
     @test !isempty(A)
     A = empty!(A)
     @test isempty(A)
-    @test isnothing(sizehint!(A, 10))
+    @test sizehint!(A, 10) === A
     @test Base.copymutable(A) == copy(A)
     @test_throws TypeError push!(IdSet{Int}(), "a string")
     @test_throws TypeError IdSet{Bool}(Any[1, 2, true, false])

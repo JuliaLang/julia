@@ -95,7 +95,7 @@ function sizehint!(s::IdSet, newsz::Integer)
     #     return s
     # end
     # rehash!(s, newsz)
-    nothing
+    s
 end
 
 function _zero!(a::Memory{<:BitInteger})

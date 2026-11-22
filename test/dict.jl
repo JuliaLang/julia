@@ -1048,6 +1048,7 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test isa(WeakKeyDict(Pair(A,2), Pair(B,3.0), Pair(C,4)), WeakKeyDict{Array{Int,1},Any})
     @test isa(WeakKeyDict(Pair(convert(Vector{Number}, A),2), Pair(B,3), Pair(C,4)), WeakKeyDict{Any,Int})
     @test copy(wkd) == wkd
+    @test sizehint!(wkd, 10) === wkd
 
     @test length(wkd) == 3
     @test !isempty(wkd)
