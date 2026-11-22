@@ -1109,7 +1109,23 @@ function overallocation(maxsize::Int)
     return maxsize > typemax(Int) - extra ? typemax(Int) : maxsize + extra
 end
 
-array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen) # when implemented, this should attempt to first expand mem
+array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen)
+
+# Memory to replace `mem` as it outgrows it, which can then expand in place if large
+function array_growable_memory(mem::M, newlen::Int) where {M<:Memory}
+    @_terminates_globally_notaskstate_meta
+    if newlen * elsize(M) >= GROWABLE_MEMORY_BYTES
+        ccall(:jl_alloc_growable_genericmemory, Ref{M}, (Any, Csize_t), M, newlen % Csize_t)
+    else
+        array_new_memory(mem, newlen)
+    end
+end
+
+# The first `newlen` elements of `mem` without copying them, or `nothing` if they would have to move
+function memory_truncate(mem::M, newlen::Int) where {M<:Memory}
+    @_terminates_globally_notaskstate_meta
+    ccall(:jl_genericmemory_truncate, Any, (Any, Csize_t), mem, newlen % Csize_t)::Union{Nothing, M}
+end
 
 function _growbeg_internal!(a::Vector, delta::Int, len::Int)
     @_terminates_locally_meta
@@ -1137,7 +1153,7 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
             @inbounds unsetindex!(mem, j)
         end
     else
-        newmem = array_new_memory(mem, newmemlen)
+        newmem = array_growable_memory(mem, newmemlen)
         unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
     end
     if ref !== a.ref
@@ -1177,6 +1193,7 @@ function _growend_internal!(a::Vector, delta::Int, len::Int)
         throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
     end
     newmemlen = checked_add(offset - 1, newlen)
+    copylen = len
 
     if offset - 1 > newlen && offset - 1 - newlen > div(newlen, 4)
         # If the offset is far enough that we can copy without resizing
@@ -1190,11 +1207,17 @@ function _growend_internal!(a::Vector, delta::Int, len::Int)
         # or exactly the requested size, whichever is larger
         # TODO we should possibly increase the offset if the current offset is nonzero.
         newmemlen2 = max(overallocation(memlen), newmemlen)
-        newmem = array_new_memory(mem, newmemlen2)
         newoffset = offset
+        if newmemlen2 * elsize(typeof(mem)) < GROWABLE_MEMORY_BYTES
+            newmem = array_new_memory(mem, newmemlen2)
+        else
+            expanded = expand_inplace(mem, newmemlen2)
+            newmem = if expanded === nothing array_growable_memory(mem, newmemlen2) else expanded end
+            copylen = if expanded === nothing len else 0 end # an expanded Memory holds its elements
+        end
     end
     newref = @inbounds memoryref(newmem, newoffset)
-    unsafe_copyto!(newref, ref, len)
+    unsafe_copyto!(newref, ref, copylen)
     if newmem === mem
         for j in max(offset, newoffset + len):offset+len-1
             @inbounds unsetindex!(mem, j)
@@ -1258,7 +1281,7 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         # the +1 is because I didn't want to have an off by 1 error.
         newmemlen = max(overallocation(memlen), checked_add(len, checked_mul(2, delta), 1))
         newoffset = (newmemlen - newlen) ÷ 2 + 1
-        newmem = array_new_memory(mem, newmemlen)
+        newmem = array_growable_memory(mem, newmemlen)
         newref = @inbounds memoryref(newmem, newoffset)
         unsafe_copyto!(newref, ref, i-1)
         unsafe_copyto!(newmem, newoffset + delta + i - 1, mem, offset + i - 1, len - i + 1)
@@ -1689,6 +1712,12 @@ function sizehint!(a::Vector, sz::Integer; first::Bool=false, shrink::Bool=true)
     if sz <= memlen
         # if we don't save at least 1/8th memlen then its not worth it to shrink
         if !shrink || memlen - sz <= div(memlen, 8)
+            return a
+        end
+        # a mapped Memory shortens in place, and the GC then releases its tail
+        truncated = if !first && memoryrefoffset(ref) == 1 memory_truncate(mem, sz) end
+        if truncated !== nothing
+            setfield!(a, :ref, memoryref(truncated))
             return a
         end
         newmem = array_new_memory(mem, sz)

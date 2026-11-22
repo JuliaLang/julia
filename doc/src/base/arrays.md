@@ -35,6 +35,7 @@ Base.Memory
 Base.Memory(::UndefInitializer, ::Int)
 Base.memoryref
 Base.memoryindex
+Base.expand
 Base.unsetindex!
 Base.unsetindex_atomic!
 Base.AbstractSlices

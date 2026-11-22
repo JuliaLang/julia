@@ -53,6 +53,7 @@ public
 # arrays
     has_offset_axes,
     require_one_based_indexing,
+    expand,
     memoryindex,
     unsetindex!,
     unsetindex_atomic!,

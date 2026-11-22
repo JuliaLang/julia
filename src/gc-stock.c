@@ -363,16 +363,6 @@ STATIC_INLINE void gc_setmark_buf(jl_ptls_t ptls, void *o, uint8_t mark_mode, si
     }
 }
 
-STATIC_INLINE void maybe_collect(jl_ptls_t ptls) JL_CANSAFEPOINT
-{
-    if (jl_atomic_load_relaxed(&gc_heap_stats.heap_size) >= jl_atomic_load_relaxed(&gc_heap_stats.heap_target) || (GC_DEBUG_ENV_ENABLED && jl_gc_debug_check_other())) {
-        jl_gc_collect(JL_GC_AUTO);
-    }
-    else {
-        jl_gc_safepoint_(ptls);
-    }
-}
-
 // weak references
 
 JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls, jl_value_t *value)
@@ -568,14 +558,6 @@ static void sweep_weak_refs(void) JL_NOTSAFEPOINT
 
 // The counted allocators call these from gc-safe regions too, concurrently with a
 // collector that takes each per-thread counter with an exchange, so every update is an atomic add.
-STATIC_INLINE void jl_batch_accum_heap_size(jl_thread_gc_num_common_t *num, uint64_t sz) JL_NOTSAFEPOINT
-{
-    uint64_t alloc_acc = jl_atomic_fetch_add_relaxed(&num->alloc_acc, sz) + sz;
-    if (alloc_acc >= 16*1024)
-        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size,
-            jl_atomic_exchange_relaxed(&num->alloc_acc, 0));
-}
-
 STATIC_INLINE void jl_batch_accum_free_size(jl_thread_gc_num_common_t *num, uint64_t sz) JL_NOTSAFEPOINT
 {
     jl_atomic_fetch_add_relaxed(&num->free_acc, sz);
@@ -626,6 +608,7 @@ STATIC_INLINE jl_value_t *jl_gc_big_alloc_inner(jl_ptls_t ptls, size_t sz) JL_CA
     memset(v, 0xee, allocsz);
 #endif
     v->sz = allocsz;
+    v->mapped = 0;
 #ifndef NDEBUG
     v->header = 0; // must be initialized (and not gc_bigval_sentinel_tag) or gc_big_object_link assertions will get confused
 #endif
@@ -654,12 +637,16 @@ jl_value_t *jl_gc_big_alloc_noinline(jl_ptls_t ptls, size_t sz) {
 FORCE_INLINE size_t sweep_unlink_and_free_noaccount(bigval_t *v) JL_NOTSAFEPOINT
 {
     size_t sz = v->sz;
+    uintptr_t mapped = v->mapped;
     gc_big_object_unlink(v);
 #ifdef MEMDEBUG
     memset(v, 0xbb, sz);
 #endif
     gc_invoke_callbacks(jl_gc_cb_notify_external_free_t, gc_cblist_notify_external_free, (v));
-    jl_free_aligned(v);
+    if (mapped)
+        memory_mapping_free(v);
+    else
+        jl_free_aligned(v);
     return sz;
 }
 
@@ -869,11 +856,14 @@ void jl_gc_reset_alloc_count(void)
     gc_num.deferred_alloc = 0;
 }
 
-static size_t jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
+static size_t jl_gc_free_memory(jl_genericmemory_t *m, int flags) JL_NOTSAFEPOINT
 {
     assert(jl_is_genericmemory(m));
     assert(jl_genericmemory_how(m) == JL_GENERICMEMORY_GCMANAGED);
     char *d = (char*)m->ptr;
+    if (flags & JL_MALLOCD_MAPPED)
+        return memory_mapping_free(d);
+    int isaligned = flags & JL_MALLOCD_ALIGNED;
     size_t freed_bytes = memory_block_usable_size(d, isaligned);
     assert(freed_bytes != 0);
     if (isaligned)
@@ -892,13 +882,16 @@ static void sweep_malloced_memory_ptls(jl_ptls_t ptls2, size_t *freed, size_t *n
     void **lst = ptls2->gc_tls_common.heap.mallocarrays.items;
     // filter without preserving order
     while (n < l) {
-        jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[n] & ~1);
+        jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[n] & ~(uintptr_t)JL_MALLOCD_FLAGS);
         if (gc_marked(jl_astaggedvalue(m)->bits.gc)) {
+            // after a full sweep, the mark reached every live Memory over a mapping
+            if (prev_sweep_full && ((uintptr_t)lst[n] & JL_MALLOCD_MAPPED))
+                *freed += memory_mapping_trim(m->ptr);
             n++;
         }
         else {
-            int isaligned = (uintptr_t)lst[n] & 1;
-            *freed += jl_gc_free_memory(m, isaligned);
+            int flags = (uintptr_t)lst[n] & JL_MALLOCD_FLAGS;
+            *freed += jl_gc_free_memory(m, flags);
             (*nfreed)++;
             l--;
             lst[n] = lst[l];
@@ -2923,7 +2916,9 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 gc_heap_snapshot_record_foreign_memory_edge(
                     new_obj, m->ptr, jl_genericmemory_nbytes(m));
             }
-            else if (how == JL_GENERICMEMORY_GCMANAGED) {
+            else if (how == JL_GENERICMEMORY_GCMANAGED || how == JL_GENERICMEMORY_MEMORYOWNED) {
+                if (how == JL_GENERICMEMORY_MEMORYOWNED)
+                    memory_mapping_mark(m->ptr, jl_genericmemory_nbytes(m));
                 if (update_meta || foreign_alloc) {
                     size_t nb = jl_genericmemory_nbytes(m);
                     if (bits == GC_OLD_MARKED) {
@@ -2934,7 +2929,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     }
                 }
             }
-            else if (how == JL_GENERICMEMORY_STRINGOWNED) {
+            if (how == JL_GENERICMEMORY_STRINGOWNED || how == JL_GENERICMEMORY_MEMORYOWNED) {
                 jl_value_t *owner = jl_genericmemory_data_owner_field(m);
                 uintptr_t nptr = (1 << 2) | (bits & GC_OLD);
                 gc_try_claim_and_push(mq, owner, &nptr);
@@ -3820,6 +3815,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_num.total_stack_pool_sweep_time += stack_pool_time;
         gc_num.stack_pool_sweep_time = stack_pool_time;
         gc_sweep_other(ptls, sweep_full);
+        memory_mapping_cache_sweep(collection == JL_GC_FULL);
         if (GC_DEBUG_ENV_ENABLED)
             gc_scrub();
         if (MEMFENCE_ENABLED)
@@ -4413,6 +4409,7 @@ void jl_concurrent_gc_threadfun(void *arg)
 // System-wide initializations
 void jl_gc_init(void)
 {
+    memory_mapping_init();
     JL_MUTEX_INIT(&heapsnapshot_lock, "heapsnapshot_lock");
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
     JL_MUTEX_INIT(&image_remset_lock, "image_remset_lock");

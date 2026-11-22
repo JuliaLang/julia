@@ -61,7 +61,7 @@ GC_SRCS := gc-common gc-stacks gc-alloc-profiler gc-heap-snapshot
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
 GC_SRCS += gc-mmtk
 else
-GC_SRCS += gc-stock gc-debug gc-pages gc-page-profiler
+GC_SRCS += gc-stock gc-debug gc-pages gc-page-profiler gc-mapping
 endif
 
 SRCS := \
@@ -530,6 +530,7 @@ $(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: $(addprefix $(SRCDIR)/,de
 $(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(addprefix $(SRCDIR)/,debuginfo.h processor.h jitlayers.h llvm-codegen-shared.h objcache.h)
 $(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj $(BUILDDIR)/gc-debug.static.o $(BUILDDIR)/gc-debug.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
 $(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj $(BUILDDIR)/gc-pages.static.o $(BUILDDIR)/gc-pages.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
+$(BUILDDIR)/gc-mapping.o $(BUILDDIR)/gc-mapping.dbg.obj $(BUILDDIR)/gc-mapping.static.o $(BUILDDIR)/gc-mapping.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
 $(BUILDDIR)/gc-mmtk.o $(BUILDDIR)/gc-mmtk.dbg.obj $(BUILDDIR)/gc-mmtk.static.o $(BUILDDIR)/gc-mmtk.static.dbg.obj: $(addprefix $(SRCDIR)/,gc-common.h gc-heap-snapshot.h gc-alloc-profiler.h threading.h gc-mmtk/gc-tls-mmtk.h gc-mmtk/gc-wb-mmtk.h)
 $(BUILDDIR)/gc-stacks.o $(BUILDDIR)/gc-stacks.dbg.obj $(BUILDDIR)/gc-stacks.static.o $(BUILDDIR)/gc-stacks.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
 $(BUILDDIR)/gc-stock.o $(BUILDDIR)/gc-stock.dbg.obj $(BUILDDIR)/gc-stock.static.o $(BUILDDIR)/gc-stock.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-page-profiler.h

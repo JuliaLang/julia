@@ -598,6 +598,11 @@ Base.convert(::Any, v::ambigconvert) = v
 import Base.summarysize
 @test summarysize(Core) > Base.summarysize(Core.Intrinsics) > Core.sizeof(Core)
 @test summarysize(Base) > 100_000 * sizeof(Ptr)
+let mem = Base.expand(Memory{UInt8}(undef, 0), 4 << 20), grown = Base.expand(mem, 8 << 20)
+    # data that both are over, as when `grown` expanded in place, counts once
+    data = if pointer(mem) == pointer(grown) sizeof(grown) else sizeof(mem) + sizeof(grown) end
+    @test summarysize((mem, grown)) == summarysize((grown, mem)) == sizeof((mem, grown)) + 4sizeof(Int) + data
+end
 
 let R = Ref{Any}(nothing), depth = 10^6
     for i = 1:depth

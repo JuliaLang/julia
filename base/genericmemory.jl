@@ -89,6 +89,59 @@ memoryindex(ref::GenericMemoryRef) = memoryrefoffset(ref)
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
 """
+    Base.expand(mem::Memory, n::Integer) -> Memory
+
+Return a `Memory` of `n` elements that starts with the elements of `mem`. If `n <= length(mem)`,
+return `mem`.
+
+Large memory grows in place where it can: the result is then over the same data as `mem`, and
+nothing is copied. Otherwise the elements are copied to new memory, allocated so that expanding
+it in turn can be in place. As the result may or may not share its data with `mem`, use it in
+place of `mem` from then on. Elements past `length(mem)` are uninitialized.
+
+Memory grows in place only if `expand` or a growing array or buffer allocated it, its elements
+hold no references, and it is large (at least 2 MiB), where the platform and the address space
+available allow. Expanding an empty `Memory` allocates such memory with nothing to copy.
+
+# Examples
+```jldoctest
+julia> mem = Memory{UInt8}(undef, 16);
+
+julia> Base.expand(mem, 8) === mem
+true
+
+julia> length(Base.expand(mem, 32))
+32
+
+julia> buffer = Base.expand(Memory{UInt8}(undef, 0), 1 << 26); # grows in place from here on
+
+julia> length(Base.expand(buffer, 1 << 27))
+134217728
+```
+
+!!! compat "Julia 1.15"
+    This function requires at least Julia 1.15.
+"""
+function expand(mem::M, n::Integer) where {M<:Memory}
+    n <= length(mem) && return mem
+    expanded = expand_inplace(mem, n)
+    expanded !== nothing && return expanded
+    newmem = array_growable_memory(mem, Int(n))
+    unsafe_copyto!(newmem, 1, mem, 1, length(mem))
+    newmem
+end
+
+const GROWABLE_MEMORY_BYTES = 2 << 20 # Memory this large is allocated to expand in place
+
+# A Memory of `n > length(mem)` elements over the data of `mem`, or `nothing` if they would have to move
+function expand_inplace(mem::M, n::Integer) where {M<:GenericMemory}
+    @_terminates_globally_notaskstate_meta
+    # the runtime maps only plain data, and refuses to expand anything it did not map
+    n * elsize(M) >= GROWABLE_MEMORY_BYTES || return nothing
+    ccall(:jl_genericmemory_expand, Any, (Any, Csize_t), mem, n % Csize_t)::Union{Nothing, M}
+end
+
+"""
     Base.unsetindex!(ref::MemoryRef) -> ref
 
 Unset the reference from `ref` to its underlying value, leaving it

@@ -42,14 +42,19 @@ using .Multimedia
 include("char.jl")
 function array_new_memory(mem::Memory{UInt8}, newlen::Int)
     # add an optimization to array_new_memory for StringVector
-    if (@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) === mem
-        # TODO: when implemented, this should use a memory growing call
+    if !((@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) isa String)
         return typeof(mem)(undef, newlen)
     else
         # If data is in a String, keep it that way.
-        # When implemented, this could use jl_gc_expand_string(oldstr, newlen) as an optimization
         str = _string_n(newlen)
         return (@assume_effects :total !:consistent @ccall jl_string_to_genericmemory(str::Any,)::Memory{UInt8})
+    end
+end
+function array_growable_memory(mem::Memory{UInt8}, newlen::Int)
+    if newlen >= GROWABLE_MEMORY_BYTES && (@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) isa String
+        return @assume_effects :total !:consistent !:nothrow @ccall jl_alloc_string_growable_genericmemory((newlen % Csize_t)::Csize_t)::Memory{UInt8}
+    else
+        return invoke(array_growable_memory, Tuple{Memory, Int}, mem, newlen)
     end
 end
 include("strings/basic.jl")
