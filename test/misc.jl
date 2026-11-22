@@ -592,12 +592,17 @@ end
 
 # interactive utilities
 
-struct ambigconvert; end # inject a problematic `convert` method to ensure it still works
-Base.convert(::Any, v::ambigconvert) = v
-
 import Base.summarysize
-@test summarysize(Core) > Base.summarysize(Core.Intrinsics) > Core.sizeof(Core)
-@test summarysize(Base) > 100_000 * sizeof(Ptr)
+# in a new process, since walking Core and Base can take minutes after other tests have run
+let script = """
+    struct ambigconvert; end # inject a problematic `convert` method to ensure it still works
+    Base.convert(::Any, v::ambigconvert) = v
+    using Test
+    @test Base.summarysize(Core) > Base.summarysize(Core.Intrinsics) > Core.sizeof(Core)
+    @test Base.summarysize(Base) > 100_000 * sizeof(Ptr)
+    """
+    @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`; stderr))
+end
 
 let R = Ref{Any}(nothing), depth = 10^6
     for i = 1:depth
