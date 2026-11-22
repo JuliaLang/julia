@@ -5927,6 +5927,26 @@ precompile_test_harness("mismatched package image .so is recompiled") do load_pa
     @test read(ocachefile) != oldso
 end
 
+# A cache file whose CPU target data is damaged is rejected, not read past its end.
+precompile_test_harness("damaged clone targets are rejected") do load_path
+    srcfile = joinpath(load_path, "DamagedTargets.jl")
+    write(srcfile, "module DamagedTargets\nend\n")
+    pkg = Base.PkgId("DamagedTargets")
+    Base.compilecache(pkg)
+    cachefile = only(Base.find_all_in_cache_path(pkg))
+    targets = Base.parse_cache_header(cachefile)[6]
+    if !isempty(targets) # only package images have clone targets
+        @test Base.clone_targets_wellformed(targets)
+        bytes = read(cachefile)
+        i = first(something(findfirst(targets, bytes)))
+        bytes[i+3] = 0x40 # the target count now runs far past the data
+        write(cachefile, bytes)
+        reasons = Dict{Symbol,Int}()
+        @test Base.stale_cachefile(srcfile, cachefile; reasons) === true
+        @test reasons == Dict(:clone_targets_invalid => 1)
+    end
+end
+
 # Asking about several packages at once gives the same answers as asking about each one.
 precompile_test_harness("isprecompiled for several packages") do load_path
     depfile = joinpath(load_path, "BatchDep.jl")
