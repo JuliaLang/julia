@@ -9438,6 +9438,10 @@ unresolved_sparam(::Type{S}, x::T) where {U,T,S>:Pair{T,U}} = @isdefined(T) ? T 
 const unresolved_sparam_arg = Pair{X,X} where X
 unresolved_sparam_defined(::Type{S}, x::T) where {U,T,S>:Pair{T,U}} = @isdefined(T)
 unresolved_sparam_site(r::Ref{Real}) = unresolved_sparam_defined(unresolved_sparam_arg, r[])
+const bound_only_below_site = Type{X} where X<:AbstractVector
+const bound_only_above_site = Type{X} where X>:Vector{Int}
+bound_only_below(r::Ref{bound_only_below_site}) = bound_only_sparam(r[])
+bound_only_above(r::Ref{bound_only_above_site}) = bound_only_sparam(r[])
 @testset "static parameters without a value" begin
     @test bound_only_sparam(Vector) === nothing
     @test (() -> bound_only_sparam(Vector))() === nothing
@@ -9452,6 +9456,10 @@ unresolved_sparam_site(r::Ref{Real}) = unresolved_sparam_defined(unresolved_spar
     @test unresolved_sparam(unresolved_sparam_arg, 1) === Int
     @test (() -> unresolved_sparam(unresolved_sparam_arg, 1))() === Int
     @test unresolved_sparam_site(Ref{Real}(1)) === unresolved_sparam_defined(unresolved_sparam_arg, 1)
+    @test bound_only_below(Ref{bound_only_below_site}(Vector)) === nothing
+    @test bound_only_below(Ref{bound_only_below_site}(Vector{Int})) === Int
+    @test bound_only_above(Ref{bound_only_above_site}(Any)) === nothing
+    @test bound_only_above(Ref{bound_only_above_site}(Vector{Int})) === Int
 end
 
 # An inferred / constant-folded type must not contain a `(tvar, constrains_bool)`
