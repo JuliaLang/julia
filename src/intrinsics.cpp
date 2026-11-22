@@ -655,11 +655,16 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) 
         } else if (vxt->isIntegerTy(1) && llvmt->isIntegerTy(8)) {
             vx = ctx.builder.CreateZExt(vx, llvmt);
         } else if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
-            vx = ctx.builder.CreatePtrToInt(vx, llvmt);
+            Type *int_t = llvmt->isIntegerTy() ? llvmt : Type::getIntNTy(ctx.builder.getContext(), nbits);
+            vx = ctx.builder.CreatePtrToInt(vx, int_t);
+            if (vx->getType() != llvmt)
+                vx = emit_bitcast(ctx, vx, llvmt);
             if (isa<Instruction>(vx) && !vx->hasName())
                 // CreatePtrToInt may undo an IntToPtr
                 setName(ctx.emission_context, vx, "bitcast_coercion");
         } else if (!vxt->isPointerTy() && llvmt->isPointerTy()) {
+            if (!vxt->isIntegerTy())
+                vx = emit_bitcast(ctx, vx, Type::getIntNTy(ctx.builder.getContext(), nbits));
             vx = emit_inttoptr(ctx, vx, llvmt);
             if (isa<Instruction>(vx) && !vx->hasName())
                 // emit_inttoptr may undo an PtrToInt
