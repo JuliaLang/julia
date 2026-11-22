@@ -1106,7 +1106,7 @@ end
             end
             lower = textwidth("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
             limit = max(limit, lower)
-            if textwidth(str) + 2 ≤ limit+1 && !contains(out, '⋯')
+            if textwidth(str) + 2 ≤ limit && !contains(out, '⋯')
                 @test eval(Meta.parse(out)) == str
             else
                 @test limit-2 <= textwidth(out) <= limit
@@ -1121,6 +1121,19 @@ end
                     ncodeunits(head) + skip + ncodeunits(tail)
             end
         end
+    end
+
+    @testset "escaped characters" begin
+        for chunk in ("\0", "\"", "\\", "\$", "\xff", "\x01\n", "\0" * "7", "\u0085a", "\U0001FFFEF")
+            str = chunk^1000
+            out = sprint(io -> show(io, MIME"text/plain"(), str; limit=80))
+            @test occursin(r" ⋯ \d+ bytes ⋯ ", out) && textwidth(out) <= 80
+            @test sprint(io -> show(io, MIME"text/plain"(), chunk; limit=80)) == repr(chunk)
+        end
+        @test textwidth(sprint(io -> show(io, MIME"text/plain"(), "\""^82; limit=20))) <= 20
+        str = "\x01"^15
+        out = sprint(io -> show(io, MIME"text/plain"(), str; limit=25))
+        @test occursin(r" ⋯ \d+ bytes ⋯ ", out) && textwidth(out) <= 25
     end
 
     @testset "default elision limit" begin
