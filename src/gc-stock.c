@@ -2496,6 +2496,8 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
     while (1) {
         jl_value_t ***rts = (jl_value_t ***)(((void **)s) + 2);
         uint32_t frame_kind = nroots & JL_GCFRAME_KIND_MASK;
+        if (frame_kind == JL_GCFRAME_INTERP)
+            jl_gc_clear_dead_interp_slots(s, offset, lb, ub); // leaves dead values out
         for (uint32_t i = 0; i < nr; i++) {
             if (frame_kind == JL_GCFRAME_INDIRECT) {
                 // slots hold addresses of local `jl_value_t*` variables

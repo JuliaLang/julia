@@ -48,6 +48,12 @@ extern "C" {
     pub static jl_method_type: *const jl_datatype_t;
     pub static jl_binding_partition_type: *const jl_datatype_t;
     pub static mut jl_small_typeof: [*mut jl_datatype_t; 128usize];
+    pub fn jl_gc_clear_dead_interp_slots(
+        gcframe: *mut jl_gcframe_t,
+        offset: usize,
+        lb: usize,
+        ub: usize,
+    );
 }
 
 #[inline(always)]
@@ -482,6 +488,14 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
         loop {
             let rts = Address::from_mut_ptr(s).shift::<Address>(2);
             let frame_kind = nroots.as_usize() & JL_GCFRAME_KIND_MASK;
+            // Clear the slots of the values that are dead at the statement an interpreter frame
+            // is running, as the stock GC does (see jl_gc_clear_dead_interp_slots), so that
+            // they are visited as null. Concurrent marking scans them all as live: this has not
+            // been checked against its invariants.
+            #[cfg(not(feature = "concurrentimmix"))]
+            if frame_kind == JL_GCFRAME_INTERP {
+                jl_gc_clear_dead_interp_slots(s, offset as usize, lb as usize, ub as usize);
+            }
             let mut i = 0;
             while i < nr {
                 if frame_kind == JL_GCFRAME_INDIRECT {
