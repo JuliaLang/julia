@@ -314,6 +314,12 @@ function Base.round(dt::TimeType, p::Period, ::RoundingMode{:NearestTiesUp})
     return (dt - f) < (c - dt) ? f : c
 end
 
+function Base.round(t::Time, p::TimePeriod, ::RoundingMode{:NearestTiesUp})
+    f = floor(t, p)
+    d = t - f
+    return d < Nanosecond(p) - d ? f : f + p
+end
+
 """
     round(x::Period, precision::T, [r::RoundingMode]) where T <: Union{TimePeriod, Week, Day} -> T
 

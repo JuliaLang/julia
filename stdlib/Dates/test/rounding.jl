@@ -208,6 +208,12 @@ end
     @test round(x, Dates.Millisecond) == Time(9, 25, 45, 26)
     @test round(x, Dates.Microsecond) == Time(9, 25, 45, 25, 651)
     @test round(x, Dates.Nanosecond) == x
+    @test round(Time(23, 1), Dates.Hour) == Time(23)
+    @test round(Time(23, 29), Dates.Hour) == Time(23)
+    @test round(Time(23, 30), Dates.Hour) == Time(0)
+    @test round(Time(23, 31), Dates.Hour) == Time(0)
+    @test round(Time(23, 50), Dates.Minute(15)) == Time(23, 45)
+    @test round(Time(23), Dates.Hour(7)) == Time(21)
 end
 @testset "Rounding DateTime to Date" begin
     now_ = DateTime(2020, 9, 1, 13)
