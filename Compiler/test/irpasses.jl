@@ -2337,3 +2337,9 @@ end
     @test code_typed1(inserted_phi_collatz, (Int, Val{true})) isa CodeInfo
     @test inserted_phi_collatz(6, Val(true)) == 8
 end
+
+# a branch on `x === 1.0` must not be folded by an earlier `x === 1`
+fold_distinct_consts(@nospecialize x) = x === 1 ? :int : x === 1.0 ? :float : :other
+let src = code_typed1(fold_distinct_consts, (Any,))
+    @test count(iscall((src, ===)), src.code) == 2
+end

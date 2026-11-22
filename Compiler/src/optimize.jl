@@ -1141,7 +1141,9 @@ function run_passes_ipo_safe(
     @pass "CC: COMPACT_2" ir = compact!(ir)
     @pass "CC: SROA"      ir = sroa_pass!(ir, sv.inlining)
     @pass "CC: GLOBALS"   ir = reformulate_globals_pass!(ir, sv)
+    @pass "CC: FOLD_BRANCHES" folded = fold_redundant_branches!(ir)
     @pass "CC: ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
+    made_changes |= folded
     if made_changes
         @pass "CC: COMPACT_3" ir = compact!(ir, true)
     end
