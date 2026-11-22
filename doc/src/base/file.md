@@ -18,6 +18,7 @@ Base.Filesystem.readlink
 Base.Filesystem.chmod
 Base.Filesystem.chown
 Base.RawFD
+Base.Filesystem.File
 Base.stat
 Base.Filesystem.StatStruct
 Base.Filesystem.diskstat
@@ -30,11 +31,15 @@ Base.Filesystem.uperm
 Base.Filesystem.gperm
 Base.Filesystem.operm
 Base.Filesystem.cp
+Base.Filesystem.cptree
+Base.Filesystem.sendfile
 Base.download
 Base.Filesystem.mv
 Base.Filesystem.rename
+Base.Filesystem.unlink
 Base.Filesystem.rm
 Base.Filesystem.touch
+Base.Filesystem.futime
 Base.Filesystem.trylockfile
 Base.Filesystem.unlockfile
 Base.Filesystem.tempname
