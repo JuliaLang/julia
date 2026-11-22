@@ -6,6 +6,38 @@ using Test
 using Dates
 
 @testset "conversion to/from UNIX" begin
+    # The ends of DateTime lie further from the epochs than Int64 milliseconds reach
+    for dt in (DateTime(Dates.UTM(typemin(Int64))), DateTime(Dates.UTM(typemax(Int64))))
+        @test Dates.datetime2unix(dt) == Float64(big(Dates.value(dt)) - Dates.UNIXEPOCH) / 1000
+        @test Dates.datetime2julian(dt) == Float64(big(Dates.value(dt)) - Dates.JULIANEPOCH) / 86400000
+        @test Dates.julian2datetime((big(Dates.value(dt)) - Dates.JULIANEPOCH) // 86400000) == dt
+        x = (big(Dates.value(dt)) - Dates.UNIXEPOCH) // 1000
+        @test Dates.unix2datetime(x) == dt
+        @test_throws InexactError Dates.unix2datetime(x + sign(Dates.value(dt)) // 1000)
+    end
+    s = Int64(cld(big(typemin(Int64)) - Dates.UNIXEPOCH, 1000))
+    @test Dates.unix2datetime(s) == Dates.unix2datetime(s // 1) == DateTime(Dates.UTM(Dates.UNIXEPOCH + 1000 * Int128(s)))
+    @test_throws InexactError Dates.unix2datetime(s - 1)
+    # Wide integers and rationals scale without overflow
+    for x in (Int128(1) << 125, -(Int128(1) << 125), typemax(UInt128), big(2)^100, typemax(Int128) // 3, big(2)^200 // 3)
+        @test_throws InexactError Dates.unix2datetime(x)
+        @test_throws InexactError Dates.julian2datetime(x)
+    end
+    @test Dates.unix2datetime(Int128(1095379200)) == DateTime(2004, 9, 17)
+    @test Dates.unix2datetime(typemax(Int128) // (typemax(Int128) - 1)) == DateTime(1970, 1, 1, 0, 0, 1)
+    @test Dates.unix2datetime(typemax(UInt128) // (typemax(UInt128) - 1)) == DateTime(1970, 1, 1, 0, 0, 1)
+    @test Dates.unix2datetime(-4381516797 // 4) == Dates.unix2datetime(-1095379199.25)
+    @test Dates.julian2datetime(typemax(Int128) // (typemax(Int128) - 1)) == DateTime(-4713, 11, 25, 12)
+    @test Dates.julian2datetime(1 // 172800000) == Dates.julian2datetime(0)
+    @test Dates.julian2datetime(3 // 172800000) == Dates.julian2datetime(0) + Dates.Millisecond(2)
+    # Results in local time are checked too, beyond any time zone offset. Windows localtime
+    # rejects times before 1970 and leaves the fields invalid, and TmStruct takes an Int.
+    @test_throws (Sys.iswindows() || Sys.WORD_SIZE == 32 ? ArgumentError : InexactError) Dates.unix2datetime(s - 2 * 86400; localtime = true)
+    # localtime_r fails for years beyond a C int, which TmStruct does not report
+    x = (Int128(Dates.value(Date(1970 + Int64(2)^32))) - Dates.UNIXEPOCHDAYS) * 86400
+    @test_throws ArgumentError Dates.unix2datetime(x; localtime = true)
+    @test Dates.unix2datetime(1095379199.75; localtime = true) - Dates.unix2datetime(1095379199.75) ==
+        Dates.unix2datetime(1095379199; localtime = true) - Dates.unix2datetime(1095379199)
     # Test conversion to and from unix
     @test Dates.unix2datetime(Dates.datetime2unix(DateTime(2000, 1, 1))) == DateTime(2000, 1, 1)
     @test Dates.value(Dates.DateTime(1970)) == Dates.UNIXEPOCH
@@ -43,6 +75,16 @@ end
 @testset "conversion to/from Rata Die" begin
     @test Date(Dates.rata2datetime(734869)) == Dates.Date(2013, 1, 1)
     @test Dates.datetime2rata(Dates.rata2datetime(734869)) == 734869
+    # Days outside DateTime do not wrap around, and integral non-integers are days too
+    lim = fld(typemax(Int64), 86400000)
+    @test Dates.rata2datetime(lim) == DateTime(Date(Dates.UTD(lim)))
+    @test Dates.rata2datetime(-lim) == DateTime(Date(Dates.UTD(-lim)))
+    for d in (lim + 1, -lim - 1, typemax(Int64), typemin(Int64), Int128(1) << 100)
+        @test_throws InexactError Dates.rata2datetime(d)
+    end
+    @test Dates.rata2datetime(734869.0) == Dates.rata2datetime(734869 // 1) == Dates.rata2datetime(734869)
+    @test Dates.rata2datetime(3e9) == Dates.rata2datetime(3_000_000_000)
+    @test_throws InexactError Dates.rata2datetime(734869.5)
 end
 
 @testset "conversion to/from Julian calendar" begin

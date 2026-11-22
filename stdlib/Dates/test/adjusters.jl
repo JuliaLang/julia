@@ -29,6 +29,50 @@ using Dates
     @test trunc(t, Dates.Nanosecond) == Dates.Time(1, 2, 3, 4, 5, 6)
 end
 
+@testset "Adjusters at the ends of the types" begin
+    dmin, dmax = Date(Dates.UTD(typemin(Int64))), Date(Dates.UTD(typemax(Int64)))
+    for f in (firstdayofweek, firstdayofmonth, firstdayofquarter, firstdayofyear)
+        @test_throws OverflowError f(dmin)
+        @test f(dmax) <= dmax
+    end
+    for f in (lastdayofmonth, lastdayofquarter, lastdayofyear)
+        @test_throws OverflowError f(dmax)
+        @test f(dmin) >= dmin
+    end
+    @test lastdayofweek(dmax) == dmax
+    @test firstdayofmonth(dmin + Day(26)) == Date(-25252734927766554, 7, 1)
+    for p in (Year, Quarter, Month)
+        @test_throws OverflowError trunc(dmin, p)
+    end
+    tmin, tmax = DateTime(Dates.UTM(typemin(Int64))), DateTime(Dates.UTM(typemax(Int64)))
+    for p in (Year, Quarter, Month, Day, Hour, Minute, Second)
+        @test_throws OverflowError trunc(tmin, p)
+        @test trunc(tmax, p) <= tmax
+    end
+    @test trunc(tmin, Millisecond) == tmin
+    # A first or last day outside DateTime cannot be converted
+    @test_throws InexactError firstdayofmonth(tmin)
+    @test_throws InexactError lastdayofmonth(tmax)
+    # Searches throw instead of stepping around the end of the type, while a Time wraps at midnight
+    @test_throws OverflowError Dates.tonext(dmax, 1)
+    @test_throws OverflowError Dates.toprev(dmin, 1)
+    @test_throws OverflowError Dates.tonext(_ -> false, dmax - Day(3); limit = 10)
+    @test_throws OverflowError Dates.adjust(_ -> false, tmin + Hour(3); step = Hour(-1), limit = 10)
+    @test_throws ArgumentError Dates.adjust(_ -> false, dmax; limit = 1)
+    # Steps that round or span more than Int64 ticks move as `+` does
+    t = DateTime(2000)
+    @test Dates.tonext(==(t + Millisecond(1)), t; step = Microsecond(600)) == t + Millisecond(1)
+    ts, p = typemin(Dates.Timestamp), Day(150_000)
+    @test Dates.tonext(==(ts + p), ts; step = p) == ts + p
+    @test_throws ArgumentError Dates.adjust(_ -> false, Date(2000); step = Day(0), limit = 3)
+    @test Dates.tonext(t -> hour(t) == 1, Dates.Time(23); step = Hour(1)) == Dates.Time(1)
+    for d in Date(2024):Day(1):Date(2025, 12, 31)
+        q = 3 * fld(month(d) - 1, 3)
+        @test firstdayofquarter(d) == Date(year(d), q + 1, 1)
+        @test lastdayofquarter(d) == lastdayofmonth(Date(year(d), q + 3, 1))
+    end
+end
+
 Jan = Dates.DateTime(2013, 1, 1) #Tuesday
 Feb = Dates.DateTime(2013, 2, 2) #Saturday
 Mar = Dates.DateTime(2013, 3, 3) #Sunday
@@ -229,6 +273,11 @@ end
     @test Dates.DateTime(x->Dates.minute(x)==30, 2014, 5, 21, 12) == Dates.DateTime(2014, 5, 21, 12, 30)
     @test Dates.DateTime(x->Dates.second(x)==30, 2014, 5, 21, 12, 30) == Dates.DateTime(2014, 5, 21, 12, 30, 30)
     @test Dates.DateTime(x->Dates.millisecond(x)==500, 2014, 5, 21, 12, 30, 30) == Dates.DateTime(2014, 5, 21, 12, 30, 30, 500)
+    # The predicate is validated at the start, also where January 1 of its year lies outside DateTime
+    y = Dates.year(Dates.DateTime(Dates.UTM(typemin(Int64))))
+    for args in ((y, 12, 1), (y, 12, 1, 0), (y, 12, 1, 0, 0), (y, 12, 1, 0, 0, 0))
+        @test Dates.DateTime(_ -> true, args...) == Dates.DateTime(args...)
+    end
 end
 @testset "tonext, toprev, tofirst, tolast" begin
     dt = Dates.Date(2014, 5, 21)

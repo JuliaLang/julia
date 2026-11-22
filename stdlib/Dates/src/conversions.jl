@@ -38,9 +38,13 @@ Timestamp{P}(dt::TimeType) where {P} = convert(Timestamp{P}, dt)
 Base.convert(::Type{Timestamp}, dt::Union{Date,DateTime}) = convert(Timestamp{Nanosecond}, dt)
 Base.convert(::Type{Timestamp{P}}, dt::Timestamp{P}) where {P} = dt
 Base.convert(::Type{Timestamp{P}}, dt::Timestamp{Q}) where {P,Q} =
-    Timestamp{P}(UTInstant(P(timestamp_ticks(P, widen(value(dt)) * timestamp_scale(Q)))))
+    Timestamp{P}(UTInstant(P(timestamp_ticks(P, widen(value(dt)) * widen(timestamp_scale(Q))))))
 
-Base.convert(::Type{DateTime}, dt::Date) = DateTime(UTM(value(dt) * 86400000))
+function Base.convert(::Type{DateTime}, dt::Date)
+    ms, wraps = Base.Checked.mul_with_overflow(value(dt), MS_PER_DAY)
+    wraps && Core.throw_inexacterror(:convert, DateTime, dt)
+    return DateTime(UTM(ms))
+end
 Base.convert(::Type{Date}, dt::DateTime) = Date(UTD(days(dt)))
 Base.convert(::Type{Time}, dt::DateTime) = Time(Nanosecond((value(dt) % 86400000) * 1000000))
 # DateTime to Timestamp throws an InexactError if the value does not fit.
@@ -51,7 +55,7 @@ function Base.convert(::Type{Timestamp{P}}, dt::DateTime) where {P}
 end
 Base.convert(::Type{Timestamp{P}}, dt::Date) where {P} = Timestamp{P}(dt)
 Base.convert(::Type{DateTime}, dt::Timestamp{P}) where {P} =
-    DateTime(UTM(Int64(fld(widen(value(dt)) * timestamp_scale(P), 1000000) + UNIXEPOCH)))
+    DateTime(UTM(Int64(fld(widen(value(dt)) * widen(timestamp_scale(P)), 1000000) + UNIXEPOCH)))
 Base.convert(::Type{Date}, dt::Timestamp) = Date(UTD(days(dt)))
 Base.convert(::Type{Time}, dt::Timestamp) = Time(Nanosecond(nsofday(dt)))
 
@@ -62,9 +66,9 @@ Base.convert(::Type{Day},dt::Date) = Day(value(dt))            # Converts Date t
 Base.convert(::Type{Timestamp},x::Nanosecond)  = Timestamp(UTInstant(x))       # Converts Unix nanoseconds to a Timestamp
 # Convert between a Timestamp and a period counted from the Unix epoch
 Base.convert(::Type{P}, dt::Timestamp{Q}) where {P<:TimePeriod,Q} =
-    P(timestamp_ticks(P, widen(value(dt)) * timestamp_scale(Q), timestamp_period_scale(P)))
+    P(timestamp_ticks(P, widen(value(dt)) * widen(timestamp_scale(Q)), timestamp_period_scale(P)))
 Base.convert(::Type{Timestamp{P}}, x::Q) where {P,Q<:TimePeriod} =
-    Timestamp{P}(UTInstant(P(timestamp_ticks(P, widen(value(x)) * timestamp_period_scale(Q)))))
+    Timestamp{P}(UTInstant(P(timestamp_ticks(P, widen(value(x)) * widen(timestamp_period_scale(Q))))))
 
 ### External Conversions
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
@@ -74,18 +78,60 @@ const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00
 
 Take the number of seconds since unix epoch `1970-01-01T00:00:00` (UTC) and convert to the
 corresponding `DateTime`. If `localtime` is `true`, then the output is in the host
-system's local time zone, otherwise it is in UTC/GMT.
+system's local time zone, otherwise it is in UTC/GMT. A result outside `DateTime` throws an
+`InexactError`, while a time that the system cannot convert to local time throws an
+`ArgumentError`.
 """
 function unix2datetime(x::Real; localtime::Bool=false)
-    # Rounding should match `now` below
-    ms = trunc(Int64, Int64(1000) * x)
-    if localtime
-        s, ms = divrem(ms, 1000)
-        return DateTime(Libc.TmStruct(s)) + Millisecond(ms)
-    else
-        rata = UNIXEPOCH + ms
-        return DateTime(UTM(rata))
-    end
+    # Rounding should match `now` below. Milliseconds from the Unix epoch can exceed Int64.
+    ms = scaledcount(x, MS_PER_SECOND, RoundToZero)
+    localtime && return localunix2datetime(x, ms)
+    rata = UNIXEPOCH + ms
+    typemin(Int64) <= rata <= typemax(Int64) || Core.throw_inexacterror(:unix2datetime, DateTime, x)
+    return DateTime(UTM(rata % Int64))
+end
+# Separate, so that the conversion to UTC inlines
+@noinline function localunix2datetime(x, ms)
+    s, ms = divrem(ms, MS_PER_SECOND)
+    # TmStruct takes its seconds as an Int
+    typemin(Int) <= s <= typemax(Int) ||
+        throw(ArgumentError("cannot convert $x seconds since the Unix epoch to local time"))
+    tm = Libc.TmStruct(s)
+    y, m, d = 1900 + Int64(tm.year), 1 + Int64(tm.month), Int64(tm.mday)
+    # totaldays indexes by month, so only a valid month gives a count to check against the range
+    rata = 0 < m < 13 ? rata_ms(Int128(totaldays(y, m, d)), tm.hour, tm.min, tm.sec, ms) : Int128(0)
+    typemin(Int64) <= rata <= typemax(Int64) || throw(InexactError(:unix2datetime, DateTime, x))
+    # TmStruct does not report a failure of localtime_r, which leaves invalid fields
+    err = validargs(DateTime, y, m, d, Int64(tm.hour), Int64(tm.min), Int64(tm.sec), Int64(0))
+    isnothing(err) || throw(err)
+    return DateTime(UTM(rata % Int64))
+end
+# `unit * x` rounded to an Int128. Rounding a float to Int128 is a library call, so floats
+# within Int64 round to Int64. Counts beyond `unit * typemax(Int64)` lie outside every
+# DateTime, so they are clamped to that bound.
+scaledcount(x::Real, unit, r) = round(Int128, Int128(unit) * x, r)
+scaledcount(x::Union{Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64}, unit, r) = Int128(unit) * x
+scaledcount(x::Integer, unit, r) = Int128(unit) * clampcount(x, typemax(Int64))
+scaledcount(x::Rational, unit, r) = clampcount(scaledrational(x, unit, r), Int128(typemax(Int64)) * unit)
+clampcount(x, m) = x > m ? m : x < -m ? -m : oftype(m, x)
+# `unit * x` rounded to an integer. Numerators up to 64 bits are widened, so only wider ones
+# can need a BigInt.
+@inline function scaledrational(x::Rational, unit::Integer, r)
+    m = numerator(x)
+    m = m isa Union{Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64} ? Int128(m) : m
+    n, huge = Base.Checked.mul_with_overflow(promote(m, unit)...)
+    return huge ? div(big(m) * unit, denominator(x), r) : div(n, denominator(x), r)
+end
+function scaledcount(x::Base.IEEEFloat, unit, r)
+    y = Int64(unit) * x
+    # Floats below 2^63 round to integers below 2^63, so the truncation is exact
+    return -0x1p63 <= y < 0x1p63 ? Int128(unsafe_trunc(Int64, round(y, r))) : round(Int128, y, r)
+end
+
+# `x - epoch`, rounded once to Float64, also when the difference overflows Int64
+function epochoffset(x::Int64, epoch::Int64)
+    d, wraps = Base.Checked.sub_with_overflow(x, epoch)
+    return wraps ? Float64(widen(x) - epoch) : Float64(d)
 end
 
 """
@@ -94,7 +140,7 @@ end
 Take the given `DateTime` and return the number of seconds
 since the unix epoch `1970-01-01T00:00:00` as a [`Float64`](@ref).
 """
-datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH) / 1000.0
+datetime2unix(dt::DateTime) = epochoffset(value(dt), UNIXEPOCH) / MS_PER_SECOND
 
 """
     unix2timestamp(x::Real)::Timestamp{Nanosecond}
@@ -112,8 +158,10 @@ unix2timestamp(x::Real) = unix2timestamp(Timestamp{Nanosecond}, x)
 unix2timestamp(::Type{Timestamp}, x::Real) = unix2timestamp(Timestamp{Nanosecond}, x)
 unix2timestamp(::Type{Timestamp{P}}, x::Real) where {P} =
     Timestamp{P}(UTInstant(P(trunc(timestamp_count_type(P), (1000000000 ÷ timestamp_scale(P)) * x))))
-unix2timestamp(::Type{Timestamp{P}}, x::Rational) where {P} =
-    Timestamp{P}(UTInstant(P(trunc(timestamp_count_type(P), (1000000000 ÷ timestamp_scale(P)) * big(x)))))
+function unix2timestamp(::Type{Timestamp{P}}, x::Rational) where {P}
+    ticks = scaledrational(x, NS_PER_SECOND ÷ timestamp_scale(P), RoundToZero)
+    return Timestamp{P}(UTInstant(P(convert(timestamp_count_type(P), ticks))))
+end
 function unix2timestamp(::Type{Timestamp{P}}, x::Integer) where {P}
     scale = 1000000000 ÷ timestamp_scale(P)
     cld(value(typemin(P)), scale) <= x <= fld(value(typemax(P)), scale) ||
@@ -223,7 +271,11 @@ end
 Take the number of Rata Die days since epoch `0000-12-31T00:00:00` and return the
 corresponding `DateTime`.
 """
-rata2datetime(days) = DateTime(yearmonthday(days)...)
+function rata2datetime(days)
+    ms = scaledcount(days isa Integer ? days : Int64(days), MS_PER_DAY, RoundToZero)
+    typemin(Int64) <= ms <= typemax(Int64) || Core.throw_inexacterror(:rata2datetime, DateTime, days)
+    return DateTime(UTM(ms % Int64))
+end
 
 """
     datetime2rata(dt::TimeType)::Int64
@@ -243,8 +295,9 @@ Take the number of Julian calendar days since epoch `-4713-11-24T12:00:00` and r
 corresponding `DateTime`.
 """
 function julian2datetime(f)
-    rata = JULIANEPOCH + round(Int64, Int64(86400000) * f)
-    return DateTime(UTM(rata))
+    rata = JULIANEPOCH + scaledcount(f, MS_PER_DAY, RoundNearest)
+    typemin(Int64) <= rata <= typemax(Int64) || Core.throw_inexacterror(:julian2datetime, DateTime, f)
+    return DateTime(UTM(rata % Int64))
 end
 
 """
@@ -253,4 +306,4 @@ end
 Take the given `DateTime` and return the number of Julian calendar days since the julian
 epoch `-4713-11-24T12:00:00` as a [`Float64`](@ref).
 """
-datetime2julian(dt::DateTime) = (value(dt) - JULIANEPOCH) / 86400000.0
+datetime2julian(dt::DateTime) = epochoffset(value(dt), JULIANEPOCH) / MS_PER_DAY

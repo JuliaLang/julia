@@ -281,6 +281,9 @@ function timestamp_period_scale(::Type{P}) where {P<:Period}
     scale = tons(oneunit(P))
     scale isa Union{Integer,Rational} ||
         throw(ArgumentError("Timestamp period scale must be an Integer or Rational number of nanoseconds"))
+    # A signed scale keeps its products with signed counts signed
+    scale isa Unsigned && return signed(widen(scale))
+    scale isa Rational{<:Unsigned} && return signed(widen(numerator(scale))) // signed(widen(denominator(scale)))
     return scale
 end
 # Nanoseconds per unit of P (a Rational below a nanosecond), and units of P per day
@@ -291,7 +294,8 @@ function timestamp_scale(::Type{P}) where {P<:Period}
     return scale
 end
 timestamp_scale(::Type{Timestamp{P}}) where {P} = timestamp_scale(P)
-timestamp_ticks_per_day(::Type{P}) where {P} = NS_PER_DAY ÷ timestamp_scale(P)
+# Units of P per day. A day of ticks shorter than a nanosecond can exceed the count type.
+timestamp_ticks_per_day(::Type{P}) where {P} = timestamp_ticks(P, NS_PER_DAY)
 # Prefer the finer resolution, then wider count storage; otherwise use period promotion.
 function timestamp_finer(::Type{P}, ::Type{Q}) where {P,Q}
     p, q = timestamp_scale(P), timestamp_scale(Q)
@@ -304,7 +308,13 @@ function timestamp_finer(::Type{P}, ::Type{Q}) where {P,Q}
 end
 
 # `ns` nanoseconds as a count of P. Throws an InexactError if `ns` has more precision than P.
+# Ticks shorter than a nanosecond widen the count where it overflows.
 function timestamp_ticks(::Type{P}, ns::Real, scale=timestamp_scale(P)) where {P}
+    if scale isa Rational
+        d = denominator(scale)
+        n, huge = ns isa Integer ? Base.Checked.mul_with_overflow(promote(ns, d)...) : (ns * d, false)
+        ns, scale = huge ? widemul(ns, d) : n, numerator(scale)
+    end
     ticks, remainder = divrem(ns, scale)
     iszero(remainder) || throw(InexactError(:convert, Timestamp{P}, ns))
     return ticks
@@ -329,8 +339,16 @@ function totaldays(y, m, d)
     return d + mdays + 365z + fld(z, 4) - fld(z, 100) + fld(z, 400) - 306
 end
 
-# Nanoseconds per day, and the Rata Die day number of the Unix epoch 1970-01-01
-const NS_PER_DAY = 86400000000000
+# Integer literals are Int32 on 32-bit systems, where products such as NS_PER_DAY would overflow
+const SECONDS_PER_MINUTE = Int64(60)
+const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE
+const SECONDS_PER_DAY = 24 * SECONDS_PER_HOUR
+const MS_PER_SECOND = Int64(1000)
+const NS_PER_SECOND = Int64(1000000000)
+const MS_PER_DAY = MS_PER_SECOND * SECONDS_PER_DAY
+const NS_PER_DAY = NS_PER_SECOND * SECONDS_PER_DAY
+const DAYS_PER_LEAP_YEAR = Int64(366)
+# The Rata Die day number of the Unix epoch 1970-01-01
 const UNIXEPOCHDAYS = totaldays(1970, 1, 1)
 
 # If the year is divisible by 4, except for every 100 years, except for every 400 years
@@ -365,6 +383,10 @@ function adjusthour(h::Int64, ampm::AMPM)
 end
 
 ### CONSTRUCTORS ###
+# Rata Die milliseconds of the time h:mi:s.ms on Rata Die day `days`
+rata_ms(days, h, mi, s, ms) =
+    ms + MS_PER_SECOND * (s + SECONDS_PER_MINUTE * mi + SECONDS_PER_HOUR * h + SECONDS_PER_DAY * days)
+
 # Core constructors
 """
     DateTime(y, [m, d, h, mi, s, ms])::DateTime
@@ -376,7 +398,7 @@ function DateTime(y::Int64, m::Int64=1, d::Int64=1,
     err = validargs(DateTime, y, m, d, h, mi, s, ms, ampm)
     err === nothing || throw(err)
     h = adjusthour(h, ampm)
-    rata = ms + 1000 * (s + 60mi + 3600h + 86400 * totaldays(y, m, d))
+    rata = rata_ms(totaldays(y, m, d), h, mi, s, ms)
     return DateTime(UTM(rata))
 end
 
@@ -393,6 +415,11 @@ function validargs(::Type{DateTime}, y::Int64, m::Int64, d::Int64,
     -1 < mi < 60 || return ArgumentError("Minute: $mi out of range (0:59)")
     -1 < s < 60 || return ArgumentError("Second: $s out of range (0:59)")
     -1 < ms < 1000 || return ArgumentError("Millisecond: $ms out of range (0:999)")
+    # Only years near the ends of DateTime need the exact count of milliseconds
+    maxyear = typemax(Int64) ÷ (DAYS_PER_LEAP_YEAR * MS_PER_DAY)
+    -maxyear < y < maxyear ||
+        typemin(Int64) <= rata_ms(totaldays(Int128(y), m, d), adjusthour(h, ampm), mi, s, ms) <= typemax(Int64) ||
+        return ArgumentError("DateTime: year $y, month $m, day $d lies outside the range of DateTime")
     return nothing
 end
 
@@ -412,6 +439,10 @@ end
 function validargs(::Type{Date}, y::Int64, m::Int64, d::Int64)
     0 < m < 13 || return ArgumentError("Month: $m out of range (1:12)")
     0 < d < daysinmonth(y, m) + 1 || return ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))")
+    # Only years near the ends of Date need the exact count of days
+    maxyear = typemax(Int64) ÷ DAYS_PER_LEAP_YEAR
+    -maxyear < y < maxyear || typemin(Int64) <= totaldays(Int128(y), m, d) <= typemax(Int64) ||
+        return ArgumentError("Date: year $y, month $m, day $d lies outside the range of Date")
     return nothing
 end
 
@@ -672,8 +703,11 @@ julia> Timestamp(Date(2018, 1, 1), Time(8, 15, 42, 0, 0, 5))
 ```
 """
 function Timestamp{P}(d::Date, t::Time=Time(0)) where {P}
-    ticks = (Int128(value(d)) - UNIXEPOCHDAYS) * timestamp_ticks_per_day(P) + timestamp_ticks(P, value(t))
-    value(typemin(P)) <= ticks <= value(typemax(P)) || throw(ArgumentError("Date out of range for Timestamp{$P}"))
+    days, tod, perday = Int128(value(d)) - UNIXEPOCHDAYS, timestamp_ticks(P, value(t)), timestamp_ticks_per_day(P)
+    # Compare (day, time of day) pairs, as the ticks of a far day can overflow before the check
+    fldmod(value(typemin(P)), perday) <= (days, tod) <= fldmod(value(typemax(P)), perday) ||
+        throw(ArgumentError("Date out of range for Timestamp{$P}"))
+    ticks = convert(promote_type(Int128, timestamp_count_type(P)), days) * perday + tod
     return Timestamp{P}(UTInstant(P(ticks)))
 end
 
@@ -733,10 +767,10 @@ Base.zero(::Type{Timestamp{P}}) where {P} = P(0)
 Base.zero(::T) where T <: TimeType = zero(T)::Period
 
 
-Base.typemax(::Union{DateTime, Type{DateTime}}) = DateTime(146138512, 12, 31, 23, 59, 59)
-Base.typemin(::Union{DateTime, Type{DateTime}}) = DateTime(-146138511, 1, 1, 0, 0, 0)
-Base.typemax(::Union{Date, Type{Date}}) = Date(252522163911149, 12, 31)
-Base.typemin(::Union{Date, Type{Date}}) = Date(-252522163911150, 1, 1)
+Base.typemax(::Union{DateTime, Type{DateTime}}) = DateTime(UTM(typemax(Int64)))
+Base.typemin(::Union{DateTime, Type{DateTime}}) = DateTime(UTM(typemin(Int64)))
+Base.typemax(::Union{Date, Type{Date}}) = Date(UTD(typemax(Int64)))
+Base.typemin(::Union{Date, Type{Date}}) = Date(UTD(typemin(Int64)))
 Base.typemax(::Union{Time, Type{Time}}) = Time(23, 59, 59, 999, 999, 999)
 Base.typemin(::Union{Time, Type{Time}}) = Time(0)
 Base.typemax(::Type{Timestamp}) = typemax(Timestamp{Nanosecond})
@@ -762,6 +796,11 @@ Base.isless(x::Timestamp, y::Union{Date,DateTime,Timestamp}) = isless((days(x), 
 Base.isless(x::Union{Date,DateTime}, y::Timestamp) = isless((days(x), nsofday(x)), (days(y), nsofday(y)))
 (==)(x::Timestamp, y::Union{Date,DateTime,Timestamp}) = days(x) == days(y) && nsofday(x) == nsofday(y)
 (==)(x::Union{Date,DateTime}, y::Timestamp) = y == x
+# Comparing in Int128 needs no conversion, which can lie outside DateTime
+Base.isless(x::Date, y::DateTime) = widemul(value(x), MS_PER_DAY) < value(y)
+Base.isless(x::DateTime, y::Date) = value(x) < widemul(value(y), MS_PER_DAY)
+(==)(x::Date, y::DateTime) = widemul(value(x), MS_PER_DAY) == value(y)
+(==)(x::DateTime, y::Date) = y == x
 Base.isless(x::T, y::T) where {T<:Timestamp} = isless(value(x), value(y))
 (==)(x::T, y::T) where {T<:Timestamp} = value(x) == value(y)
 Base.min(x::AbstractTime) = x

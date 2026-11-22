@@ -2,45 +2,57 @@
 
 # Convert # of Rata Die days to proleptic Gregorian calendar y,m,d,w
 # Reference: https://www.researchgate.net/profile/Peter-Baum/publication/316558298_Date_Algorithms/links/5f90c3f992851c14bcdb0da6/Date-Algorithms.pdf
-function yearmonthday(days)
-    z = days + 306; h = 100z - 25; a = fld(h, 3652425); b = a - fld(a, 4)
-    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
-    d = c - div(153m - 457, 5); return m > 12 ? (y + 1, m - 12, d) : (y, m, d)
+const DAYS_PER_400Y = 146097
+# Days in four Julian years, or quarter days in one
+const QUARTER_DAYS_PER_JULIAN_YEAR = 4 * 365 + 1
+# Days from March 1 to January 1. Years start in March, so the leap day is their last day.
+const DAYS_MAR_TO_JAN = 306
+# Hundredths of a day in a Gregorian century (36524.25 days) and in a Julian year (365.25 days)
+const CENTURY_HUNDREDTHS = 100 * DAYS_PER_400Y ÷ 4
+const JULIAN_YEAR_HUNDREDTHS = 100 * QUARTER_DAYS_PER_JULIAN_YEAR ÷ 4
+# For day `r` in 0:DAYS_PER_400Y-1 of a 400-year cycle, return the year within the cycle,
+# the month from 3 (March) to 14 (February of the next year), and the day of month. All
+# operands stay small and non-negative.
+@inline function cycleday2yearmonthday(r::Integer)
+    z = r % UInt64 + DAYS_MAR_TO_JAN        # day count with 1 = March 1 of year 0
+    h = 100z - 25                           # 100(z - 1/4), fixed point in hundredths of a day
+    a = h ÷ CENTURY_HUNDREDTHS              # whole Gregorian centuries
+    b = a - a ÷ 4                           # century leap days the Gregorian calendar skips
+    y = (100b + h) ÷ JULIAN_YEAR_HUNDREDTHS # March-based year, counting z + b in Julian years
+    c = b + z - 365y - y ÷ 4                # day of that year, 1 = March 1
+    m = (5c + 456) ÷ 153                    # month, 3 (March) to 14 (February)
+    d = c - (153m - 457) ÷ 5                # day of month
+    return y % Int64, m % Int64, d % Int64
 end
-function year(days)
-   z = days + 306; h = 100z - 25; a = fld(h, 3652425); b = a - fld(a, 4)
-   y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
-   return m > 12 ? y + 1 : y
+function yearmonthday(days::Integer)
+    q, r = fldmod(days, DAYS_PER_400Y)
+    y, m, d = cycleday2yearmonthday(r)
+    y += 400q
+    return m > 12 ? (y + 1, m - 12, d) : (y, m, d)
 end
-function yearmonth(days)
-    z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
-    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
-    return m > 12 ? (y + 1, m - 12) : (y, m)
-end
-function month(days)
-    z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
-    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
-    return m > 12 ? m - 12 : m
-end
-function monthday(days)
-    z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
-    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
-    d = c - div(153m - 457, 5); return m > 12 ? (m - 12, d) : (m, d)
-end
-function day(days)
-    z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
-    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
-    return c - div(153m - 457, 5)
-end
+year(days::Integer) = (@inline yearmonthday(days))[1]
+yearmonth(days::Integer) = (@inline yearmonthday(days))[1:2]
+month(days::Integer) = (@inline yearmonthday(days))[2]
+monthday(days::Integer) = (@inline yearmonthday(days))[2:3]
+day(days::Integer) = (@inline yearmonthday(days))[3]
 
 # ISO year utils
 # https://en.wikipedia.org/wiki/Talk:ISO_week_date#Algorithms
-const WEEK_INDEX = (15, 23, 3, 11)
+# The 400-year cycle plus one inserted week splits into four "centuries" of equally many weeks,
+# each treated as Julian years of 365.25 days. Year positions are counted in quarter days.
+const WEEKS_PER_400Y = DAYS_PER_400Y ÷ 7
+const WEEKS_PER_CENTURY = (WEEKS_PER_400Y + 1) ÷ 4
+const QUARTER_DAYS_PER_WEEK = 4 * 7
+# Position of the first week of each century in its Julian year, validated for every day
+const CENTURY_PHASE = (15, 23, 3, 11)
 function week(days)
-    w = div(abs(days - 1), 7) % 20871
-    c, w = divrem((w + (w >= 10435)), 5218)
-    w = (w * 28 + WEEK_INDEX[c + 1]) % 1461
-    return div(w, 28) + 1
+    # Weeks since the Monday 0001-01-01 that starts the cycle
+    weeks = div(mod1(days, DAYS_PER_400Y) - 1, 7)
+    weeks += weeks >= 2 * WEEKS_PER_CENTURY - 1
+    century, weekofcentury = divrem(weeks, WEEKS_PER_CENTURY)
+    position = (weekofcentury * QUARTER_DAYS_PER_WEEK + CENTURY_PHASE[century + 1]) %
+        QUARTER_DAYS_PER_JULIAN_YEAR
+    return div(position, QUARTER_DAYS_PER_WEEK) + 1
 end
 
 """
@@ -58,6 +70,8 @@ julia> weeksinyear(Year(2020))
     This function requires Julia 1.13 or later.
 """
 function weeksinyear(y::Year)
+    # Years 400 apart share their weekdays, and the years at the ends of Date are partly outside it
+    y = Year(mod(value(y), 400))
     firstday = firstdayofyear(Date(y))
     lastday = lastdayofyear(Date(y))
 
@@ -81,21 +95,14 @@ julia> isoyear(Date(2021, 12, 31))
 !!! compat "Julia 1.13"
     This function requires Julia 1.13 or later.
 """
-function isoyear(dt::Union{DateTime,Timestamp})
-    thisyear = Year(dt)
-    thismonth = Month(dt)
-    weeknumber = week(dt)
-    if weeknumber >= 52 && thismonth.value == 1
-        # If it is january, then it's the iso year from before
-        return Year(thisyear.value - 1)
-    elseif weeknumber == 1 && thismonth.value == 12
-        # If it is december, then it's the next year
-        return Year(thisyear.value + 1)
-    else
-        return thisyear
-    end
+isoyear(dt::Union{Date, DateTime, Timestamp}) = Year(isoyearweek(days(dt))[1])
+# The ISO year and week of a day count. Late December can lie in week 1 of the next ISO year,
+# and early January in week 52 or 53 of the previous one.
+function isoyearweek(days)
+    y, m = yearmonth(days)
+    w = week(days)
+    return y - (w >= 52 && m == 1) + (w == 1 && m == 12), w
 end
-isoyear(dt::Date) = isoyear(DateTime(dt))
 
 """
 Return the ISO week date that corresponds to `dt` (see
@@ -115,8 +122,10 @@ julia> isoweekdate(Date(2023, 01, 01))
 !!! compat "Julia 1.13"
     This function requires Julia 1.13 or later.
 """
-isoweekdate(dt::Union{DateTime,Timestamp}) = (isoyear(dt).value, week(dt), dayofweek(dt))
-isoweekdate(dt::Date) = isoweekdate(DateTime(dt))
+function isoweekdate(dt::Union{Date, DateTime, Timestamp})
+    y, w = isoyearweek(days(dt))
+    return value(Year(y)), w, dayofweek(dt)
+end
 
 function quarter(days)
     m = month(days)
@@ -128,9 +137,12 @@ end
 value(dt::TimeType) = dt.instant.periods.value
 value(dt::Timestamp) = value(dt.instant.periods)
 value(t::Time) = t.instant.value
+withvalue(x, v) = typeof(x)(UTInstant(typeof(x.instant.periods)(v)))
 days(dt::Date) = value(dt)
 days(dt::DateTime) = fld(value(dt), 86400000)
-days(dt::Timestamp{P}) where {P} = fld(value(dt), timestamp_ticks_per_day(P)) + UNIXEPOCHDAYS
+days(dt::Timestamp{P}) where {P} = signedcount(fld(value(dt), timestamp_ticks_per_day(P))) + UNIXEPOCHDAYS
+# Days before the Unix epoch need a sign. A day has at least 86400 ticks, so `signed` cannot overflow.
+signedcount(n::Integer) = n isa Unsigned ? signed(n) : n
 # Nanoseconds since midnight
 nsofday(dt::Date) = Int64(0)
 nsofday(dt::DateTime) = 1000000 * mod(value(dt), 86400000)

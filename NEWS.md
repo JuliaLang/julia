@@ -73,6 +73,39 @@ Standard library changes
 
 #### Dates
 
+* `typemin` and `typemax` of `Date` and `DateTime` now return the smallest and largest representable
+  values, so `typemax(Date) + Day(1) == typemin(Date)`.
+* The `year`, `month`, `day`, and related accessors are faster and return correct results for every
+  `Date`. The month and day are now always an `Int64`, as documented. Before, they had the type of
+  the day count, for example `BigInt` for a `Timestamp` with a package-defined period.
+* Ranges of `Date`, `DateTime`, and `Timestamp` with a fixed step such as `Day` or `Hour` now behave
+  like the corresponding integer ranges: they no longer throw an `OverflowError` when their endpoints
+  are far apart, `length` has the type of the stored count promoted to `Int` and wraps around if the
+  element count does not fit in it, and `Base.checked_length` throws an `OverflowError` instead. The
+  length of ranges with `Month`, `Quarter`, or `Year` steps is now computed exactly.
+* `week`, `isoyear`, and `isoweekdate` now return correct ISO 8601 results for every `Date`,
+  including years before 1.
+* `floor`, `ceil`, and `round` of a `Date`, `DateTime`, or `Timestamp` now throw an `OverflowError`
+  when the result lies outside the type. Before, `Date` and `DateTime` wrapped around, and
+  `Timestamp` threw an `InexactError`, which it still throws for a result that is not a whole tick.
+* The `Date` and `DateTime` constructors now throw an `ArgumentError` for a date outside the type
+  instead of wrapping around. Adding a `Month`, `Quarter`, or `Year` wraps around at the ends of the
+  type, as adding a fixed period such as `Day` does.
+* Conversions to `DateTime`, such as `DateTime(::Date)`, `unix2datetime`, `julian2datetime`, and
+  `rata2datetime`, now throw an `InexactError` when the result lies outside `DateTime`, instead of
+  wrapping around. So do `epochdays2date` and `epochms2datetime` for results outside their types,
+  while `date2epochdays` and `datetime2epochms` throw an `OverflowError` when the count does not fit
+  in `Int64`.
+* `trunc` and the adjusters, such as `firstdayofmonth` and `tonext`, now throw an `OverflowError`
+  when the result or a step of their search lies outside the type, like `floor` and `ceil`, instead
+  of wrapping around. A `DateTime` or `Timestamp` adjuster whose day fits in `Date` but not in the
+  type throws what converting that `Date` throws: an `InexactError` for `DateTime` and an
+  `ArgumentError` for `Timestamp`.
+* `DateTime` ranges with a step that is not a whole number of milliseconds no longer come out empty
+  or hang when they span more than the step's period can count, as in
+  `DateTime(0):Nanosecond(1_500_000):DateTime(300)`. In `start:step:stop`, steps shorter than a
+  millisecond, which repeated elements, now throw an `ArgumentError`.
+
 #### InteractiveUtils
 
 #### JuliaSyntaxHighlighting
