@@ -9049,6 +9049,22 @@ end
 @test_throws ErrorException @macroexpand @overlay mt begin
     x = 1
 end
+# the method table must be a `MethodTable`, rather than the methods be added to the global
+# method table
+overlay_target(x) = :global
+@test_throws TypeError @eval @overlay overlay_target overlay_target(x::Int) = :overlay
+@test_throws TypeError @eval @overlay overlay_target overlay_target(x::Int; k) = :overlay
+@test overlay_target(1) === :global
+@test !hasmethod(overlay_target, Tuple{Int}, (:k,))
+# in a local scope, with the method table given as a local variable
+let t = mt
+    @overlay t sqrt(x::Float64; k=1) = 6
+end
+# the method table expression is evaluated once per definition
+const nmt = Ref(0)
+getmt() = (nmt[] += 1; mt)
+@overlay getmt() atan(x::Float64, y=1; k=1) = 7
+@test nmt[] == 1
 
 end # module OverlayModule
 
@@ -9058,8 +9074,15 @@ end
 let ms = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, OverlayModule.mt, 1, Base.get_world_counter())
     @test only(ms).method.module === OverlayModule
 end
-for f in (exp, log)
+for f in (exp, log, sqrt)
     ms = Base._methods_by_ftype(Tuple{typeof(f), Float64}, OverlayModule.mt, 1, Base.get_world_counter())
+    @test only(ms).method.module === OverlayModule
+end
+for tt in (Tuple{typeof(Core.kwcall), NamedTuple, typeof(sqrt), Float64},
+           Tuple{typeof(atan), Float64}, Tuple{typeof(atan), Float64, Int},
+           Tuple{typeof(Core.kwcall), NamedTuple, typeof(atan), Float64},
+           Tuple{typeof(Core.kwcall), NamedTuple, typeof(atan), Float64, Int})
+    ms = Base._methods_by_ftype(tt, OverlayModule.mt, 1, Base.get_world_counter())
     @test only(ms).method.module === OverlayModule
 end
 let ms = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Base.get_world_counter())

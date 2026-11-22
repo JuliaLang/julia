@@ -322,15 +322,17 @@ end
 # @overlay lowering
 Base.Experimental.@overlay mt f() = 1
 #---------------------
-1   TestMod.f
-2   (call core.TypeEqOf %₁)
-3   (call core.svec %₂)
-4   (call core.svec)
-5   SourceLocation:1
-6   (call core.svec %₃ %₄ %₅)
-7   (call core.define_method TestMod TestMod.mt %₆
+1   TestMod.mt
+2   (call core.typeassert %₁ core.MethodTable)
+3   TestMod.f
+4   (call core.TypeEqOf %₃)
+5   (call core.svec %₄)
+6   (call core.svec)
+7   SourceLocation:1
+8   (call core.svec %₅ %₆ %₇)
+9   (call core.define_method TestMod %₂ %₈
     --- code_info
     slots: [slot₁/#self#(!read)]
     1   (return 1)
-8   latestworld
-9   (return %₇)
+10  latestworld
+11  (return %₉)

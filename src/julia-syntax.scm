@@ -539,7 +539,10 @@
          (kwdecl  `(|::| ,kw (core NamedTuple)))
          (rkw     (if (null? restkw) '() (symbol (string (car restkw) "..."))))
          (restkw  (map (lambda (v) `(|::| ,v (call (top pairs) (core NamedTuple)))) restkw))
-         (mangled (let ((und (and name (undot-name name))))
+         (mangled (let* ((name (if (overlay? name)
+                                   (let ((f (caddr name))) (and (sym-ref? f) f))
+                                   name))
+                         (und  (and name (undot-name name))))
                     (symbol (string (if (and name (= (string.char (string name) 0) #\#))
                                         ""
                                         "#")
@@ -757,13 +760,19 @@
 ;; which handles optional positional arguments by adding the needed small
 ;; boilerplate definitions.
 (define (method-def-expr name sparams argl body rett)
-  (let ((argl (throw-unassigned-kw-args (remove-empty-parameters argl))))
-    (if (has-parameters? argl)
-        ;; has keywords
-        (begin (check-kw-args (cdar argl))
-               (keywords-method-def-expr name sparams argl body rett))
-        ;; no keywords
-        (method-def-expr- name sparams argl body rett))))
+  (define (method-defs name)
+    (let ((argl (throw-unassigned-kw-args (remove-empty-parameters argl))))
+      (if (has-parameters? argl)
+          ;; has keywords
+          (begin (check-kw-args (cdar argl))
+                 (keywords-method-def-expr name sparams argl body rett))
+          ;; no keywords
+          (method-def-expr- name sparams argl body rett))))
+  (if (overlay? name)
+      (let ((mt (make-ssavalue)))
+        `(block (= ,mt (call (core typeassert) ,(cadr name) (core MethodTable)))
+                ,(method-defs `(overlay ,mt ,(caddr name)))))
+      (method-defs name)))
 
 (define (struct-def-expr sig fields mut info-var use-shim)
   (receive
