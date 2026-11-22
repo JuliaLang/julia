@@ -132,6 +132,21 @@ let l = ReentrantLock()
     @test_throws ErrorException unlock(l)
 end
 
+let l = ReentrantLock()
+    lock(l)
+    l.reentrancy_cnt = typemax(UInt32) - 1
+    @test trylock(l)
+    @test l.reentrancy_cnt == typemax(UInt32)
+    @test_throws ErrorException("lock count overflow") lock(l)
+    @test_throws ErrorException("lock count overflow") trylock(l)
+    @test l.reentrancy_cnt == typemax(UInt32)
+    @test islocked(l) && l.locked_by === current_task()
+    @test !fetch(@async trylock(l))
+    l.reentrancy_cnt = 0x0000_0001
+    @test unlock(l) === nothing
+    @test !islocked(l)
+end
+
 # Lockable{T, L<:AbstractLock}
 using Base: Lockable
 let
