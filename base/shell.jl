@@ -572,7 +572,8 @@ function _finish_word!(p::_ShellParser, seg::_ShellSegment, word::Vector{Any}, w
         w.expanded && error("parsing command `$(p.str)`: brace expansion in a redirection target")
         w.glob && error("parsing command `$(p.str)`: glob in a redirection target")
         target = if length(word) == 1 && word[1] isa String
-            word[1]
+            # `/dev/null` means `devnull` on every system, including Windows
+            word[1] == "/dev/null" ? GlobalRef(Base, :devnull) : word[1]
         elseif length(word) == 1
             Expr(:call, GlobalRef(Base, :cmd_redirect_target), word[1])
         else
@@ -588,16 +589,17 @@ end
 
 function _segment_expr(seg::_ShellSegment)
     ex = Expr(:call, GlobalRef(Base, :cmd_gen), Expr(:tuple, Any[Expr(:tuple, w...) for w in seg.args]...))
+    # A target that is a `GlobalRef` is `devnull`, which `>>` writes to like `>`.
     if seg.stdin !== nothing || seg.stdout !== nothing
         kwargs = Any[]
         seg.stdin !== nothing && push!(kwargs, Expr(:kw, :stdin, seg.stdin))
         seg.stdout !== nothing && push!(kwargs, Expr(:kw, :stdout, seg.stdout))
-        seg.stdout_append && push!(kwargs, Expr(:kw, :append, true))
+        seg.stdout_append && !(seg.stdout isa GlobalRef) && push!(kwargs, Expr(:kw, :append, true))
         ex = Expr(:call, GlobalRef(Base, :pipeline), Expr(:parameters, kwargs...), ex)
     end
     if seg.stderr !== nothing
         kwargs = Any[Expr(:kw, :stderr, seg.stderr)]
-        seg.stderr_append && push!(kwargs, Expr(:kw, :append, true))
+        seg.stderr_append && !(seg.stderr isa GlobalRef) && push!(kwargs, Expr(:kw, :append, true))
         ex = Expr(:call, GlobalRef(Base, :pipeline), Expr(:parameters, kwargs...), ex)
     end
     return ex

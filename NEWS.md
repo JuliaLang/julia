@@ -67,6 +67,9 @@ New library features
   sequence as the Unicode code point U+0000 to U+00FF instead of as a raw byte ([#65023]).
 * `Base.enumerate(itr; from=1)` now accepts an optional starting point `from` for the enumeration.
 
+* In a command literal, a redirection to `/dev/null` now means `devnull` on every system,
+  including Windows, so that, for example, ``` `cmd 2>/dev/null` ``` is portable.
+
 Standard library changes
 ------------------------
 
