@@ -659,6 +659,13 @@ end
 let len = 100, m1 = Memory{UInt8}(1:len), m2 = Memory{Union{Nothing,UInt8}}(1:len)
     @test summarysize(m2) == summarysize(m1) + len
 end
+# boxed elements with unassigned slots, in plain and atomic memory
+let r = Ref(1), m = Memory{Any}(undef, 4), a = AtomicMemory{Any}(undef, 4)
+    m[2] = r
+    @atomic a[2] = r
+    @test summarysize(m) == summarysize(Memory{Any}(undef, 4)) + summarysize(r)
+    @test summarysize(a) == summarysize(m)
+end
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
