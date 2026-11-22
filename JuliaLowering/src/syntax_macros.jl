@@ -59,7 +59,8 @@ function Base.var"@label"(__context__::MacroContext, name::SyntaxTree, body::Syn
 end
 
 function Base.var"@goto"(__context__::MacroContext, ex::SyntaxTree)
-    @jl_assert head(ex) == :identifier ex
+    head(ex) === :identifier ||
+        throw(LoweringError(ex, "expected a label name"))
     @ast __context__ ex [:symbolicgoto ex]
 end
 
