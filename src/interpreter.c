@@ -509,8 +509,16 @@ static NOINLINE jl_value_t *eval_value_full(jl_value_t *e, interpreter_state *s)
     abort();
 }
 
+// whether a statement cannot be part of a phi block, so the block ends before it
+STATIC_INLINE int ends_phi_block(jl_value_t *e) JL_NOTSAFEPOINT
+{
+    return jl_is_expr(e) || jl_is_returnnode(e) || jl_is_gotoifnot(e) ||
+           jl_is_gotonode(e) || jl_is_phicnode(e) || jl_is_upsilonnode(e) ||
+           jl_is_ssavalue(e);
+}
+
 // phi nodes don't behave like proper instructions, so we require a special interpreter to handle them
-static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_t to) JL_CANSAFEPOINT
+static NOINLINE size_t eval_phi_slow(jl_array_t *stmts, interpreter_state *s, size_t ns, size_t to) JL_CANSAFEPOINT
 {
     size_t from = s->ip;
     size_t ip = to;
@@ -519,11 +527,8 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
     for (ip = to; ip < ns; ip++) {
         jl_value_t *e = jl_array_ptr_ref(stmts, ip);
         if (!jl_is_phinode(e)) {
-            if (jl_is_expr(e) || jl_is_returnnode(e) || jl_is_gotoifnot(e) ||
-                jl_is_gotonode(e) || jl_is_phicnode(e) || jl_is_upsilonnode(e) ||
-                jl_is_ssavalue(e)) {
+            if (ends_phi_block(e))
                 break;
-            }
             // Everything else is allowed in the phi-block for implementation
             // convenience - fall through.
         } else {
@@ -611,6 +616,16 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
         JL_GC_POP();
     }
     return ip;
+}
+
+// Opportunistic unroll of the first iteration of eval_phi_slow's scan, a performance
+// micro-optimization: the next statement almost never starts a phi block, so the call is
+// usually skipped.
+STATIC_INLINE size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_t to) JL_CANSAFEPOINT
+{
+    if (to >= ns || ends_phi_block(jl_array_ptr_ref(stmts, to)))
+        return to;
+    return eval_phi_slow(stmts, s, ns, to);
 }
 
 // Resolve interpreter coverage frames like codegen's append_lineinfo and
