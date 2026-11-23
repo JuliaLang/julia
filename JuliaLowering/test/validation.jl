@@ -192,6 +192,7 @@ end
 @test !vst1_ok(Expr(:(=), Expr(:call, Base.view, :A, :idx), 2))
 # a generator body may read `_` for flisp compatibility, but not name a function `_`
 @test !vst1_ok(:([(_(y) = y) for _ in 1:3]))
+@test !vst1_ok(:([(for outer _ in xs; end) for k in ks]))
 
 @testset "underscores that should probably not be valid" begin
     @test vst1_ok(:(Mod._))

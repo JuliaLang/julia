@@ -1143,7 +1143,12 @@ vst1_generator(vcx, st) = let
 end
 
 vst1_iter(vcx, st) = @stm st begin
-    [:(=) [:outer i] v] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
+    [:(=) [:outer [:identifier]] v] -> let i = st[1][1]
+        vst1_ident(vcx, i; lhs=true) &
+        vst1_ident(with(vcx; readable_underscore=false), i) & vst1(vcx, v)
+    end
+    [:(=) [:outer i] v] ->
+        @fail(i, "expected a single variable name after `outer`") & vst1(vcx, v)
     # rare, malformed, happens to work for generators in desugaring (see
     # `check_no_splatted_iterable`)
     [:(=) i [:... v]] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
