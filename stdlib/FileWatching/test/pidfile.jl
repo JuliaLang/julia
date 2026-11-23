@@ -203,41 +203,46 @@ end
 
 @assert !ispath("pidfile")
 @testset "open_exclusive: break lock" begin
-    @testset "using stale_age without lock refreshing" begin
-        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10, refresh=0)::File
-        try
-            write_pidfile(f, getpid())
-        finally
+    # each case waits for its own lock to go stale, so they run at the same time
+    @sync begin
+        @async @testset "using stale_age without lock refreshing" begin
+            t = @elapsed f = open_exclusive("pidfile-norefresh", poll_interval=3, stale_age=10, refresh=0)::File
+            try
+                write_pidfile(f, getpid())
+            finally
+                close(f)
+            end
+            @test t < 2
+            t = @elapsed f = open_exclusive("pidfile-norefresh", poll_interval=3, stale_age=1, refresh=0)::File
             close(f)
+            @test 20 < t < 50
+            rm("pidfile-norefresh")
         end
-        @test t < 2
-        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=1, refresh=0)::File
-        close(f)
-        @test 20 < t < 50
-        rm("pidfile")
-    end
 
-    @testset "using stale_age with lock refreshing on (default)" begin
-        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10)::File
-        try
-            write_pidfile(f, getpid())
-        finally
+        @async @testset "using stale_age with lock refreshing on (default)" begin
+            t = @elapsed f = open_exclusive("pidfile-refresh", poll_interval=3, stale_age=10)::File
+            try
+                write_pidfile(f, getpid())
+            finally
+                close(f)
+            end
+            @test t < 2
+            t = @elapsed f = open_exclusive("pidfile-refresh", poll_interval=3, stale_age=5)::File
             close(f)
+            @test 20 < t < 50
+            rm("pidfile-refresh")
         end
-        @test t < 2
-        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=5)::File
-        close(f)
-        @test 20 < t < 50
-        rm("pidfile")
-    end
 
-    t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10)::File
-    close(f)
-    @test t < 2
-    t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10)::File
-    close(f)
-    @test 8 < t < 25
-    rm("pidfile")
+        @async @testset "without a pid in the file" begin
+            t = @elapsed f = open_exclusive("pidfile-nopid", poll_interval=3, stale_age=10)::File
+            close(f)
+            @test t < 2
+            t = @elapsed f = open_exclusive("pidfile-nopid", poll_interval=3, stale_age=10)::File
+            close(f)
+            @test 8 < t < 25
+            rm("pidfile-nopid")
+        end
+    end
 end
 
 @testset "open_exclusive: other errors" begin
