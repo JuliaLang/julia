@@ -3230,7 +3230,7 @@ function current_scope_tfunc(::AbstractInterpreter, sv::InferenceState)
         pc = pchandler.enter_idx
     end
 end
-current_scope_tfunc(::AbstractInterpreter, ::IRInterpretationState) = Any
+current_scope_tfunc(::AbstractInterpreter, ::Union{IRInterpretationState,Nothing}) = Any
 
 hasvarargtype(argtypes::Vector{Any}) = !isempty(argtypes) && isvarargtype(argtypes[end])
 

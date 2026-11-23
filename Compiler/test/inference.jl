@@ -8656,6 +8656,8 @@ end == Type
     Compiler.return_type(Tuple)
 end == Type
 
+@test Compiler._return_type(Compiler.NativeInterpreter(), Tuple{typeof(Core.current_scope)}) === Any
+
 @test Base.infer_return_type(Core.task_result_type, (Task,)) === Type
 task_returner() = Task(() -> "hello")
 @test Base.infer_return_type((typeof(task_returner),)) do f
