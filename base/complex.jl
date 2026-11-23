@@ -1130,6 +1130,12 @@ function round(z::Complex, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr; k
             round(imag(z), ri; kwargs...))
 end
 
+precision(::Type{Complex{T}}; base::Integer=2) where {T<:IEEEFloat} = precision(T; base)
+
+# `Complex` is not defined yet when twiceprecision.jl is loaded
+twiceprecision(val::TwicePrecision{T}, nb::Integer) where {T<:Complex} = val
+nbitslen(::Type{T}, len, offset) where {T<:Complex} =
+    min(cld(precision(T), 2), nbitslen(len, offset))
 
 float(z::Complex{<:AbstractFloat}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))
