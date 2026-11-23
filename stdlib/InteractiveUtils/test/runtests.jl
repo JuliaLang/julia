@@ -234,8 +234,8 @@ module Tmp14173
     export A
     A = randn(2000, 2000)
 end
-varinfo(Tmp14173) # warm up
 const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
+varinfo(Tmp14173) # warm up after the world bump above, since show caches type aliases per world
 @test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 125000)
 
 # PR #24997: test that `varinfo` doesn't fail when encountering `missing`
