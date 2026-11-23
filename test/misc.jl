@@ -1368,6 +1368,13 @@ end
     const f = 1
     const g::Int = 1
     @atomic h::Int
+    @atomic i::Int = 1
+    @static if true
+        @atomic j::Int = 1
+    end
+    @static if false
+        @atomic k::Int = 3
+    end
 end
 
 @testset "const and @atomic fields in @kwdef" begin
@@ -1388,6 +1395,14 @@ end
         @test @atomic(x.h) == 1
         @atomic x.h = 2
         @test @atomic(x.h) == 2
+    end
+    @testset "@atomic fields with default values" begin
+        @test @atomic(x.i) == 1
+        @test @atomic(x.j) == 1
+        @test :k ∉ fieldnames(Test_kwdef_const_atomic)
+        @test_throws ConcurrencyViolationError x.i = 1
+        @atomic x.i = 42
+        @test @atomic(x.i) == 42
     end
 end
 
