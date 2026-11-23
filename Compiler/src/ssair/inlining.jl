@@ -449,6 +449,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 NewInstruction(pn, argextype(SSAValue(idx), compact), compact.result[idx][:line]))
         end
     end
+    @assert @isdefined(return_value) "linearly inlined IR has no return value"
     return_value
 end
 
