@@ -39,6 +39,7 @@
 .idea/*
 .vscode/*
 .zed/*
+.directory
 *.heapsnapshot
 .cache
 # Buildkite: Ignore the entire .buildkite directory
