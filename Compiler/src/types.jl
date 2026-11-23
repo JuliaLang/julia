@@ -441,6 +441,12 @@ Parameters that control optimizer operation.
   generating `:invoke` expression based on the [`@nospecialize`](@ref) annotation,
   in order to avoid over-specialization.
 ---
+- `opt_params.exact_concrete_invokes::Bool = false`\\
+  If `true`, a call whose argument types are all concrete invokes the `MethodInstance` for
+  exactly those types, unless `compilesig_invokes` would only widen arguments that the
+  method marks [`@nospecialize`](@ref) and that are not functions. `--trim` sets this, since
+  it can not dispatch dynamically inside a callee that was compiled for a wider signature.
+---
 - `opt_params.assume_fatal_throw::Bool = false`\\
   If `true`, gives the optimizer license to assume that any `throw` is fatal and thus the
   state after a `throw` is not externally observable. In particular, this gives the
@@ -460,6 +466,7 @@ struct OptimizationParams
     inline_tupleret_bonus::Int
     max_tuple_splat::Int
     compilesig_invokes::Bool
+    exact_concrete_invokes::Bool
     assume_fatal_throw::Bool
     preserve_local_sources::Bool
 
@@ -470,6 +477,7 @@ struct OptimizationParams
         inline_tupleret_bonus::Int,
         max_tuple_splat::Int,
         compilesig_invokes::Bool,
+        exact_concrete_invokes::Bool,
         assume_fatal_throw::Bool,
         preserve_local_sources::Bool)
         return new(
@@ -479,6 +487,7 @@ struct OptimizationParams
             inline_tupleret_bonus,
             max_tuple_splat,
             compilesig_invokes,
+            exact_concrete_invokes,
             assume_fatal_throw,
             preserve_local_sources)
     end
@@ -491,6 +500,7 @@ function OptimizationParams(
         #=inline_tupleret_bonus::Int=# 250,
         #=max_tuple_splat::Int=# 32,
         #=compilesig_invokes::Bool=# true,
+        #=exact_concrete_invokes::Bool=# false,
         #=assume_fatal_throw::Bool=# false,
         #=preserve_local_sources::Bool=# false);
     inlining::Bool = params.inlining,
@@ -499,6 +509,7 @@ function OptimizationParams(
     inline_tupleret_bonus::Int = params.inline_tupleret_bonus,
     max_tuple_splat::Int = params.max_tuple_splat,
     compilesig_invokes::Bool = params.compilesig_invokes,
+    exact_concrete_invokes::Bool = params.exact_concrete_invokes,
     assume_fatal_throw::Bool = params.assume_fatal_throw,
     preserve_local_sources::Bool = params.preserve_local_sources)
     return OptimizationParams(
@@ -508,6 +519,7 @@ function OptimizationParams(
         inline_tupleret_bonus,
         max_tuple_splat,
         compilesig_invokes,
+        exact_concrete_invokes,
         assume_fatal_throw,
         preserve_local_sources)
 end

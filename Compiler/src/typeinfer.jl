@@ -2451,18 +2451,19 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     # back to `nothing` at serialization time (see `src/staticdata.c`).
     cache_owner = trim_mode == TRIM_NO ? nothing : :trim
     inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO, cache_owner)
+    opt_params = OptimizationParams(; exact_concrete_invokes = trim_mode != TRIM_NO)
 
     # Create an "invokelatest" queue to enable eager compilation of speculative
     # invokelatest calls such as from `Core.finalizer` and `ccallable`
     invokelatest_queue = CompilationQueue(;
-        interp = NativeInterpreter(get_world_counter(); inf_params)
+        interp = NativeInterpreter(get_world_counter(); inf_params, opt_params)
     )
 
     codeinfos = []
     workqueue = CompilationQueue(; interp = nothing)
     for this_world in reverse!(sort!(worlds))
         workqueue = CompilationQueue(workqueue;
-            interp = NativeInterpreter(this_world; inf_params)
+            interp = NativeInterpreter(this_world; inf_params, opt_params)
         )
 
         append!(workqueue, methods)

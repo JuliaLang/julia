@@ -757,14 +757,35 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
     return new_argtypes
 end
 
+# Returns `true` if every argument type that differs between `atype` and `compileable_atype`
+# belongs to an argument that `method` marks `@nospecialize` and is not a function type, e.g.
+# `Tuple{Type{BoundsError},Vector{Int},Int}` and `Tuple{Type{BoundsError},Any,Int}`.
+function widens_only_nospecialized_data(method::Method, @nospecialize(atype), @nospecialize(compileable_atype))
+    params = (atype::DataType).parameters
+    compileable_params = (compileable_atype::DataType).parameters
+    nargs = Int(method.nargs)
+    for i = 2:length(params)
+        i <= length(compileable_params) && params[i] === compileable_params[i] && continue
+        params[i] <: Function && return false
+        i_arg = min(i - 1, nargs - 1) # the arguments of a trailing `args...` share its slot
+        iszero(method.nospecialize & (1 << (i_arg - 1))) && return false
+    end
+    return true
+end
+
 function compileable_specialization(code::Union{MethodInstance,CodeInstance}, effects::Effects,
     et::InliningEdgeTracker, @nospecialize(info::CallInfo), state::InliningState)
     mi = code isa CodeInstance ? get_ci_mi(code) : code
     mi_invoke = mi
     method, atype, sparams = mi.def::Method, mi.specTypes, mi.sparam_vals
-    if OptimizationParams(state.interp).compilesig_invokes
+    opt_params = OptimizationParams(state.interp)
+    if opt_params.compilesig_invokes
         new_atype = get_compileable_sig(method, atype, sparams)
         new_atype === nothing && return nothing
+        if opt_params.exact_concrete_invokes && isdispatchtuple(atype) &&
+                !widens_only_nospecialized_data(method, atype, new_atype)
+            new_atype = atype
+        end
         if atype !== new_atype
             (_, sparams) = typeintersect_env(new_atype, method.sig)
             mi_invoke = specialize_method(method, new_atype, sparams)
