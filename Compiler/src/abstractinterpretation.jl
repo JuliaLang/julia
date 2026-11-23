@@ -3330,7 +3330,8 @@ end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), sstate::StatementState, sv::AbsIntState)
     if isa(e, SSAValue)
-        return RTEffects(abstract_eval_ssavalue(e, sv), Union{}, EFFECTS_TOTAL)
+        rt = widen_stale_slotwrapper(abstract_eval_ssavalue(e, sv), sstate.vtypes)
+        return RTEffects(rt, Union{}, EFFECTS_TOTAL)
     elseif isa(e, SlotNumber)
         if sstate.vtypes !== nothing
             vtyp = sstate.vtypes[slot_id(e)]

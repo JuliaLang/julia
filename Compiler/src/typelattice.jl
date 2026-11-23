@@ -808,11 +808,17 @@ function stoverwrite!(state::VarTable, newstate::VarTable)
 end
 
 function stoverwrite1!(state::VarTable, change::StateUpdate)
-    # Note: We no longer need to invalidate Conditional/MustAlias in other slots
-    # that reference this slot. The ssadef tracking handles this: when a slot is
-    # reassigned, its ssadef changes, and any Conditional/MustAlias referencing
-    # the old ssadef will be detected as stale by conditional_valid().
-    state[slot_id(change.var)] = change.vtype
+    changeid = slot_id(change.var)
+    state[changeid] = change.vtype
+    for i = 1:length(state)
+        vt = state[i]
+        typ = ignorelimited(vt.typ)
+        if isa(typ, Conditional) && typ.slot == changeid
+            state[i] = VarState(widenwrappedconditional(vt.typ), vt.ssadef, vt.undef)
+        elseif isa(typ, MustAlias) && typ.slot == changeid
+            state[i] = VarState(widenwrappedmustalias(vt.typ), vt.ssadef, vt.undef)
+        end
+    end
     return state
 end
 
