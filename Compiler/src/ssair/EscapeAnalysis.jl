@@ -1394,8 +1394,8 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     if length(args) == 4 && setfield!_nothrow(astate.𝕃ₒ,
         argextype(args[2], ir), argextype(args[3], ir), argextype(args[4], ir))
         return true
-    elseif length(args) == 3 && setfield!_nothrow(astate.𝕃ₒ,
-        argextype(args[2], ir), argextype(args[3], ir))
+    elseif length(args) == 5 && setfield!_nothrow(astate.𝕃ₒ,
+        argextype(args[2], ir), argextype(args[3], ir), argextype(args[4], ir), argextype(args[5], ir))
         return true
     else
         add_thrown_escapes!(astate, pc, args, 2)
