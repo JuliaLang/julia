@@ -58,10 +58,12 @@ struct MethodMatchTarget
     edge_idx::Int
 end
 
-struct MethodMatches
-    applicable::Vector{MethodMatchTarget}
-    info::MethodMatchInfo
-    valid_worlds::WorldRange
+# Mutable (with const fields) so that the one allocation is shared wherever they are held as
+# `Union{MethodMatches,UnionSplitMethodMatches}`, instead of being boxed again each time.
+mutable struct MethodMatches
+    const applicable::Vector{MethodMatchTarget}
+    const info::MethodMatchInfo
+    const valid_worlds::WorldRange
 end
 any_ambig(result::MethodLookupResult) = result.ambig
 any_ambig(info::MethodMatchInfo) = any_ambig(info.results)
@@ -70,11 +72,11 @@ fully_covering(info::MethodMatchInfo) = info.fullmatch
 fully_covering(m::MethodMatches) = fully_covering(m.info)
 multiple_methods(m::MethodMatches) = length(m.applicable) > 1
 
-struct UnionSplitMethodMatches
-    applicable::Vector{MethodMatchTarget}
-    applicable_argtypes::Vector{Vector{Any}}
-    info::UnionSplitInfo
-    valid_worlds::WorldRange
+mutable struct UnionSplitMethodMatches
+    const applicable::Vector{MethodMatchTarget}
+    const applicable_argtypes::Vector{Vector{Any}}
+    const info::UnionSplitInfo
+    const valid_worlds::WorldRange
 end
 any_ambig(info::UnionSplitInfo) = any(any_ambig, info.split)
 any_ambig(m::UnionSplitMethodMatches) = any_ambig(m.info)
