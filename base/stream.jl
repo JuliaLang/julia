@@ -1718,6 +1718,11 @@ function writepartial(s::LibuvStream, str::Union{String, SubString{String}};
     end
 end
 
+# Likewise for integers: the stack buffer that `print_dec` and `show_hex` otherwise fill
+# cannot outlive a detached request, so these streams are written from a `String`.
+print_dec(s::LibuvStream, x::BitUnsigned, neg::Bool) = (write(s, dec(x, 1, neg)); nothing)
+show_hex(s::LibuvStream, x::BitUnsigned) = print(s, "0x", hex(x, cld(Core.bitsizeof(x), 4), false))
+
 # Owner-carrying counterpart of the generic `write(::IO, ::Array)` methods,
 # again so a detached request keeps the array rooted (bits element types
 # only; others error in the generic method anyway).

@@ -1462,6 +1462,9 @@ function show_hex(io::IO, x::BitUnsigned)
     end
     return nothing
 end
+# Wrappers such as `IOContext` defer to the stream they write to, see the `LibuvStream` methods.
+print_dec(io::AbstractPipe, x::BitUnsigned, neg::Bool) = print_dec(pipe_writer(io)::IO, x, neg)
+show_hex(io::AbstractPipe, x::BitUnsigned) = show_hex(pipe_writer(io)::IO, x)
 
 show(io::IO, n::Signed) = print_dec(io, n)
 function show(io::IO, n::Unsigned)
