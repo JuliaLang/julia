@@ -671,8 +671,6 @@ end
 end
 add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
 @nospecs function typevar_tfunc(::AbstractLattice, n, lb_arg, ub_arg)
-    lb = Union{}
-    ub = Any
     ub_certain = lb_certain = true
     if isa(n, Const)
         nval = n.val
@@ -2536,7 +2534,7 @@ end
         lbt = Union{}
     end
 
-    ubt, ub_exact = instanceof_tfunc(ub)
+    ubt, _ub_exact = instanceof_tfunc(ub)
 
     t = (argt_exact ? Core.OpaqueClosure{argt, T} : Core.OpaqueClosure{<:argt, T}) where T
     t = lbt == ubt ? t{ubt} : (t{T} where lbt <: T <: ubt)

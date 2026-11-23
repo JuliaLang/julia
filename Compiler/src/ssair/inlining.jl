@@ -121,7 +121,6 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
     inlinee_cfg = todo.ir.cfg
     # Figure out if we need to split the BB
     need_split_before = false
-    need_split = true
     block = block_for_inst(ir, idx)
     inline_into_block!(state, block)
 
@@ -1749,7 +1748,7 @@ end
 function early_inline_special_case(ir::IRCode, stmt::Expr, flag::UInt32,
                                    @nospecialize(type), sig::Signature, state::InliningState)
     OptimizationParams(state.interp).inlining || return nothing
-    (; f, ft, argtypes) = sig
+    (; f, argtypes) = sig
 
     if isa(type, Const) # || isconstType(type)
         val = type.val
@@ -1803,7 +1802,7 @@ end
 function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, flag::UInt32,
                                    @nospecialize(type), sig::Signature, state::InliningState)
     OptimizationParams(state.interp).inlining || return nothing
-    (; f, ft, argtypes) = sig
+    (; f, argtypes) = sig
     if length(argtypes) == 3 && f === Core.:(!==)
         # special-case inliner for !== that precedes _methods_by_ftype union splitting
         # and that works, even though inference generally avoids inferring the `!==` Method
