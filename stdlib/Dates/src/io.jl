@@ -149,10 +149,10 @@ function tryparsenext(::DatePart{'p'}, str, i, len)
     return ap == 'a' ? AM : PM, ii
 end
 
-# Readers for UTF-8 text given as bytes, such as `codeunits(str)` or part of a buffer, at
+# Readers for bytes, such as `codeunits(str)` or part of a buffer, read as UTF-8 text at
 # byte indices: they compare bytes where a token is ASCII or valid UTF-8, which reads the
-# same characters as decoding the text. Setting bit 5 lowercases an ASCII letter.
-# Non-ASCII text, such as an overlong encoding of a letter, is read as characters.
+# same characters as decoding the bytes. Setting bit 5 lowercases an ASCII letter.
+# Non-ASCII bytes, such as an overlong encoding of a letter, are read as characters.
 function tryparsenext(d::DatePart{'p'}, bytes::AbstractVector{UInt8}, i, len)
     i+1 > len && return nothing
     a, m = @inbounds bytes[i], bytes[i + 1]
@@ -360,9 +360,9 @@ end
     tryparsenext_chars(tok, bytes, i, len, locale)
 
 Read a token that has no reader for bytes, such as a month name or a token that a package
-defines, from the UTF-8 text that `bytes` encode, as characters at the same indices: the
-`String` or `SubString{String}` that `bytes` are the `codeunits` of, or a `StringView`.
-It reads to the end of that text, so `len` must be `length(bytes)`.
+defines, from `bytes` read as UTF-8 text, as characters at the same indices: the `String`
+or `SubString{String}` that `bytes` are the `codeunits` of, or a `StringView`.
+It reads to the end of `bytes`, so `len` must be `length(bytes)`.
 """
 @inline function tryparsenext_chars(d::AbstractDateToken, bytes::AbstractVector{UInt8}, i, _len, locale)
     str = chartext(bytes)

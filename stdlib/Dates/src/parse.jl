@@ -18,7 +18,7 @@ end
 
 genvar(t::DataType) = Symbol(lowercase(string(nameof(t))))
 
-# Token types with a reader for UTF-8 bytes. Bytes are read for other tokens as characters,
+# Token types with a reader for bytes. Bytes are read for other tokens as characters,
 # with `tryparsenext_chars`.
 hasbytereader(D::Type) =
     D <: Union{Delim{Char}, Delim{String}} || D <: DatePart && first(D.parameters) in "yYmdHIMSsnp"
@@ -27,7 +27,7 @@ hasbytereader(D::Type) =
     tryparsenext_core(str, pos::Int, len::Int, df::DateFormat, raise=false)
 
 Parse the string according to the directives within the `DateFormat`. `str` is a string,
-or the bytes of UTF-8 text, such as `codeunits(s)`, read at byte indices with `len` their
+or bytes, such as `codeunits(s)`, read as UTF-8 text at byte indices with `len` their
 length. Parsing will start at index `pos` and will stop when all directives are used or we
 have parsed up to the end of the string, `len`. When a directive cannot be parsed the returned value
 will be `nothing` if `raise` is false otherwise an exception will be thrown.
