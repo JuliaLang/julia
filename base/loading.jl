@@ -2430,10 +2430,11 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
         return e
     end
     try
-        isvalid_cache_header(io) === nothing && return ArgumentError("Incompatible header in cache file $path.")
+        flags = Ref{UInt32}()
+        isvalid_cache_header(io, flags) === nothing && return ArgumentError("Incompatible header in cache file $path.")
         _, _, depmodnames, _, _, clone_targets, _ = _parse_cache_header(io, path)
 
-        pkgimage = !isempty(clone_targets) && cachefile_has_native(path)
+        pkgimage = !isempty(clone_targets) && flags[] & JI_FLAG_NO_NATIVE == 0
         if pkgimage
             ocachepath !== nothing || return ArgumentError("Expected ocachepath to be provided")
             isfile(ocachepath) || return ArgumentError("Ocachepath $ocachepath is not a file.")
@@ -3973,11 +3974,12 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
         if result
             # Read preferences blob back from .ji file (we can't precompute because we don't
             # actually know what the list of compile-time preferences are without compiling)
-            modules, _, required_modules, _, prefs_blob, clone_targets = parse_cache_header(tmppath)
+            header_flags = Ref{UInt32}()
+            modules, _, required_modules, _, prefs_blob = parse_cache_header(tmppath, header_flags)
             slot_cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags)
 
             # an image with no native code gets no object to link
-            has_native = cache_objects && cachefile_has_native(tmppath)
+            has_native = cache_objects && header_flags[] & JI_FLAG_NO_NATIVE == 0
             if has_native
                 # Run linker over tmppath_o
                 Compiler.@zone "PRECOMPILE_LINK" Linking.link_image(tmppath_o, tmppath_so)
@@ -4085,18 +4087,7 @@ const JI_FLAG_PKGIMAGE::UInt32 = 1 << 0
 const JI_FLAG_SPLIT::UInt32 = 1 << 1
 const JI_FLAG_NO_NATIVE::UInt32 = 1 << 2
 
-# whether a split cache file has a native image beside it, rather than no code at all
-function cachefile_has_native(cachefile::String)
-    flags = Ref{UInt32}(0)
-    open(cachefile, "r") do io
-        ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}),
-              io.ios, flags, Ref{UInt32}(), Ref{Int64}(), Ref{Int64}())
-    end
-    return flags[] & JI_FLAG_NO_NATIVE == 0
-end
-
-function isvalid_cache_header(f::IOStream)
-    flags = Ref{UInt32}()
+function isvalid_cache_header(f::IOStream, flags::Ref{UInt32}=Ref{UInt32}())
     checksum = Ref{UInt32}()
     err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), f.ios, flags, checksum, Ref{Int64}(), Ref{Int64}())
 
@@ -4418,10 +4409,10 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     return modules, (includes, includes_srcfiles, requires), required_modules, srctextpos, prefs_blob, clone_targets, flags, syntax_version
 end
 
-function parse_cache_header(cachefile::String)
+function parse_cache_header(cachefile::String, flags::Ref{UInt32}=Ref{UInt32}())
     io = open(cachefile, "r")
     try
-        isvalid_cache_header(io) === nothing && throw(ArgumentError("Incompatible header in cache file $cachefile."))
+        isvalid_cache_header(io, flags) === nothing && throw(ArgumentError("Incompatible header in cache file $cachefile."))
         ret = parse_cache_header(io, cachefile)
         return ret
     finally
@@ -4994,7 +4985,8 @@ end
         return true
     end
     try
-        checksum = isvalid_cache_header(io)
+        header_flags = Ref{UInt32}()
+        checksum = isvalid_cache_header(io, header_flags)
         if checksum === nothing
             @debug "Rejecting cache file $cachefile due to it containing an incompatible cache header"
             record_reason(reasons, :incompatible_header)
@@ -5059,13 +5051,12 @@ end
                 record_reason(reasons, :cpu_target)
                 return true
             end
-            if !isfile(ocachefile)
-                if cachefile_has_native(cachefile)
-                    @debug "Rejecting cache file $cachefile for $modkey since pkgimage $ocachefile was not found"
-                    record_reason(reasons, :ocachefile_missing)
-                    return true
-                end
+            if header_flags[] & JI_FLAG_NO_NATIVE != 0
                 ocachefile = nothing
+            elseif !isfile(ocachefile)
+                @debug "Rejecting cache file $cachefile for $modkey since pkgimage $ocachefile was not found"
+                record_reason(reasons, :ocachefile_missing)
+                return true
             end
         else
             ocachefile = nothing
