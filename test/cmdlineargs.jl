@@ -2179,7 +2179,7 @@ end
         @test isfile(Base.ocachefile_from_cachefile(ji_file)) == (native && code)
 
         # The heap payload in the .ji must be zstd-compressed exactly when a
-        # compressed split pkgimage was requested.
+        # compressed split pkgimage with code was requested.
         open(ji_file) do io
             flags = Ref{UInt32}()
             checksum = Ref{UInt32}()
@@ -2192,7 +2192,7 @@ end
             @test (flags[] & Base.JI_FLAG_NO_NATIVE != 0) == (native && !code)
             seek(io, datastartpos[])
             zstd_magic = UInt8[0x28, 0xb5, 0x2f, 0xfd]
-            @test (read(io, 4) == zstd_magic) == (native && compress)
+            @test (read(io, 4) == zstd_magic) == (native && code && compress)
         end
 
         # Load again in a fresh process from the existing cache, without

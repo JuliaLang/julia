@@ -2434,15 +2434,16 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
         isvalid_cache_header(io, flags) === nothing && return ArgumentError("Incompatible header in cache file $path.")
         _, _, depmodnames, _, _, clone_targets, _ = _parse_cache_header(io, path)
 
-        pkgimage = !isempty(clone_targets) && flags[] & JI_FLAG_NO_NATIVE == 0
-        if pkgimage
+        pkgimage = !isempty(clone_targets)
+        if flags[] & JI_FLAG_NO_NATIVE != 0
+            ocachepath = path # an image without code is restored from its .ji alone
+        elseif pkgimage
             ocachepath !== nothing || return ArgumentError("Expected ocachepath to be provided")
             isfile(ocachepath) || return ArgumentError("Ocachepath $ocachepath is not a file.")
             ocachepath == ocachefile_from_cachefile(path) || return ArgumentError("$ocachepath is not the expected ocachefile")
             # TODO: Check for valid clone_targets?
         else
-            # a cache without native code has no package image, even when pkgimages are enabled
-            ocachepath = nothing
+            @assert ocachepath === nothing
             isvalid_file_crc(io) || return ArgumentError("Invalid checksum in cache file $path.")
         end
     finally
@@ -3288,7 +3289,6 @@ function __require_prelocked(pkg::PkgId, env)
                                 local ocachefile = nothing
                                 if JLOptions().use_pkgimages == 1
                                     ocachefile = ocachefile_from_cachefile(cachefile)
-                                    isfile(ocachefile) || (ocachefile = nothing)
                                 end
                                 return cachefile, ocachefile
                             end
@@ -4127,7 +4127,7 @@ function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{No
         record_reason(reasons, :checksum_invalid)
         return true
     end
-    if ocachefile !== nothing && !isvalid_pkgimage_crc(io, ocachefile)
+    if ocachefile !== nothing && ocachefile != cachefile && !isvalid_pkgimage_crc(io, ocachefile)
         @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
         record_reason(reasons, :ocache_checksum_invalid)
         return true
@@ -5052,7 +5052,7 @@ end
                 return true
             end
             if header_flags[] & JI_FLAG_NO_NATIVE != 0
-                ocachefile = nothing
+                ocachefile = cachefile # an image without code is restored from its .ji alone
             elseif !isfile(ocachefile)
                 @debug "Rejecting cache file $cachefile for $modkey since pkgimage $ocachefile was not found"
                 record_reason(reasons, :ocachefile_missing)
