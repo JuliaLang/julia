@@ -129,6 +129,17 @@ macro mmm[](ex)
 end
 
 ########################################
+# Error: Bad macro name with a string in a module path
+macro A."mmm"(ex)
+end
+#---------------------
+syntax: invalid macro name
+@ :1
+macro A."mmm"(ex)
+#       └───┘
+end
+
+########################################
 # Error: Macros not allowed in local scope
 let
     macro foo(ex)

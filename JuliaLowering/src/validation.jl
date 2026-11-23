@@ -764,9 +764,19 @@ end
 
 # Macros may have either underscore or reserved (ccall, cglobal) names
 vst1_macro_calldecl_name(vcx, st) = @stm st begin
-    [:. _ _] -> vst1_calldecl_dot_name(vcx, st)
+    [:. _ _] -> vst1_macro_dot_name_strs(vcx, st) & vst1_calldecl_dot_name(vcx, st)
     m -> @fail(st, "invalid macro name") |
         vst1_ident(vcx, m; lhs=true) | vst1_ident(vcx, m; lhs=false)
+end
+
+# Unlike a function name, a macro name can't be qualified by a string, as in
+# `A."m"`
+vst1_macro_dot_name_strs(vcx, st) = @stm st begin
+    [:. l r] -> vst1_macro_dot_name_strs(vcx, l) & vst1_macro_dot_name_strs(vcx, r)
+    [:inert x] -> vst1_macro_dot_name_strs(vcx, x)
+    [:syntaxinert x] -> vst1_macro_dot_name_strs(vcx, x)
+    ([:value], when=st.value isa String) -> @fail(st, "invalid macro name")
+    _ -> pass()
 end
 
 vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
