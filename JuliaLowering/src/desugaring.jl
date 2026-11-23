@@ -1756,8 +1756,8 @@ function expand_named_tuple(ctx, ex, kws; field_name="named tuple field",
             name = to_symbol(ctx, kw[1])
             value = kw[2]
         elseif k == :.
-            # a.x ==> x=a.x
-            if head(kw[2]) != :symbol
+            # a.x ==> x=a.x (but not `.+`, which is `(. +)`)
+            if numchildren(kw) != 2 || head(kw[2]) != :symbol
                 throw(LoweringError(kw, "invalid $element_name"))
             end
             name = to_symbol(ctx, kw[2])

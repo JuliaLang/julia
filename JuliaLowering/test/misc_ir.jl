@@ -202,6 +202,15 @@ syntax: expected identifier, `=`, or `...` after semicolon
 #       └─┘
 
 ########################################
+# Error: Named tuple element with a dotted operator
+(.+, a=1)
+#---------------------
+syntax: invalid named tuple element
+@ :1
+(.+, a=1)
+#└┘
+
+########################################
 # Error: Modules not allowed inside blocks
 begin
     module C
