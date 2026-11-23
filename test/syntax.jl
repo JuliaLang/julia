@@ -4718,8 +4718,7 @@ end
                 $(Expr(:thisfunction))
             end
         end
-        # JuliaLowering returns the local shadowing the function argument
-        @test_broken @eval($f() === $f)
+        @test @eval($f() === $f)
     end
 
     @testset "Error upon misuse" begin
