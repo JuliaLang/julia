@@ -7775,6 +7775,150 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
     return 0;
 }
 
+// Return the upper bound that `dt` declares for its parameter `i`, with the parameters before
+// it substituted.
+static jl_value_t *declared_ub(jl_datatype_t *dt, size_t i) JL_CANSAFEPOINT
+{
+    jl_value_t *w = dt->name->wrapper;
+    for (size_t j = 0; j < i; j++)
+        w = ((jl_unionall_t*)w)->body;
+    jl_value_t *ub = ((jl_unionall_t*)w)->var->ub;
+    if (!jl_has_free_typevars(ub))
+        return ub;
+    JL_GC_PUSH1(&ub);
+    w = dt->name->wrapper;
+    for (size_t j = 0; j < i; j++) {
+        jl_tvar_t *wv = ((jl_unionall_t*)w)->var;
+        if (jl_has_typevar(ub, wv))
+            ub = jl_substitute_var(ub, wv, jl_tparam(dt, j));
+        w = ((jl_unionall_t*)w)->body;
+    }
+    JL_GC_POP();
+    return ub;
+}
+
+// Narrow `*ub` with the upper bound that the parameters of `t` imply for `v`: wherever `v` is
+// itself a parameter of a type `X{..., v, ...}`, any type that matches `t` instantiates `v`
+// within the bound that `X` declares for that parameter. `Union`s and `Vararg`s are skipped,
+// since a match need not instantiate what they contain, and so is `Type{...}`, since a type
+// object, such as `Complex.body`, may have free type variables. So are the bounds that are not
+// types or that refer to `v` or to a type variable bound within `t` (listed in `inner`).
+// Returns 0 if two implied bounds are not comparable.
+static int implied_ub(jl_value_t *t, jl_tvar_t *v, jl_value_t **ub, jl_typeenv_t *inner) JL_CANSAFEPOINT
+{
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *ua = (jl_unionall_t*)t;
+        if (ua->var == v)
+            return 1;
+        jl_typeenv_t newinner = { ua->var, NULL, inner };
+        return implied_ub(ua->body, v, ub, &newinner);
+    }
+    if (!jl_is_datatype(t))
+        return 1;
+    jl_datatype_t *dt = (jl_datatype_t*)t;
+    size_t i, np = jl_nparams(dt);
+    int istuple = jl_is_tuple_type(dt);
+    for (i = 0; i < np; i++) {
+        jl_value_t *p = jl_tparam(dt, i);
+        if (p == (jl_value_t*)v && !istuple) {
+            jl_value_t *declared = declared_ub(dt, i);
+            int usable = declared != (jl_value_t*)jl_any_type &&
+                         (jl_is_type(declared) || jl_is_typevar(declared)) &&
+                         !jl_has_typevar(declared, v);
+            for (jl_typeenv_t *e = inner; e != NULL && usable; e = e->prev)
+                usable = !jl_has_typevar(declared, e->var);
+            if (usable) {
+                JL_GC_PUSH1(&declared);
+                int narrower = *ub == NULL || jl_subtype(declared, *ub);
+                if (narrower)
+                    *ub = declared;
+                else if (!jl_subtype(*ub, declared)) {
+                    JL_GC_POP();
+                    return 0;
+                }
+                JL_GC_POP();
+            }
+        }
+        if (!jl_is_vararg(p) && !implied_ub(p, v, ub, inner))
+            return 0;
+    }
+    return 1;
+}
+
+// Restate in `t` the upper bounds that its parameters imply for its type variables, where they
+// are narrower than the declared ones, e.g. turn `Tuple{S{P}} where P` into
+// `Tuple{S{P}} where P<:B` for `struct S{P<:B}`. Both match the same types, but only the
+// latter is a subtype of `Tuple{S}`. Returns `t` itself if there is nothing to restate, or if
+// restating fails, e.g. if substituting the parameters into a declared bound throws.
+static jl_value_t *restate_implied_bounds(jl_value_t *t) JL_CANSAFEPOINT
+{
+    if (!jl_is_unionall(t))
+        return t;
+    size_t n = 0;
+    for (jl_value_t *u = t; jl_is_unionall(u); u = ((jl_unionall_t*)u)->body)
+        n++;
+    jl_value_t **roots;
+    JL_GC_PUSHARGS(roots, n + 2);
+    jl_value_t **vars = roots + 2; // the type variables of the result, outermost first
+    jl_value_t *res = t;
+    JL_TRY {
+        // what remains to be processed, with the processed variables replaced; this may lose
+        // type variables as the substitutions simplify it
+        roots[0] = t;
+        size_t k = 0;
+        int changed = 0;
+        while (jl_is_unionall(roots[0])) {
+            jl_unionall_t *ua = (jl_unionall_t*)roots[0];
+            jl_tvar_t *v = ua->var;
+            roots[1] = NULL; // the implied bound
+            // use the implied bound where it is narrower than the declared one
+            if (implied_ub(ua->body, v, &roots[1], NULL) && roots[1] != NULL &&
+                (v->ub == (jl_value_t*)jl_any_type ||
+                 (jl_subtype(roots[1], v->ub) && !jl_subtype(v->ub, roots[1]))) &&
+                jl_subtype(v->lb, roots[1])) {
+                vars[k++] = (jl_value_t*)jl_new_typevar(v->name, v->lb, roots[1]);
+                roots[0] = jl_instantiate_unionall(ua, vars[k-1]);
+                changed = 1;
+            }
+            else {
+                vars[k++] = (jl_value_t*)v;
+                roots[0] = ua->body;
+            }
+        }
+        if (changed) {
+            while (k-- > 0)
+                roots[0] = jl_type_unionall((jl_tvar_t*)vars[k], roots[0]);
+            res = roots[0];
+        }
+    }
+    JL_CATCH {
+        res = t;
+    }
+    JL_GC_POP();
+    return res;
+}
+
+// Compare `a` and `b`, neither of which is a subtype of the other. If one becomes a strict
+// subtype of the other once both restate the bounds that their parameters imply, it is more
+// specific. Otherwise compare them as written.
+static int restated_morespecific(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT
+{
+    jl_value_t *a2 = NULL, *b2 = NULL;
+    JL_GC_PUSH2(&a2, &b2);
+    a2 = restate_implied_bounds(a);
+    b2 = restate_implied_bounds(b);
+    int ret = -1;
+    if (a2 != a || b2 != b) {
+        int ab = jl_subtype(a2, b2);
+        if (ab != jl_subtype(b2, a2))
+            ret = ab;
+    }
+    if (ret < 0)
+        ret = type_morespecific_(a, b, a, b, 0, NULL);
+    JL_GC_POP();
+    return ret;
+}
+
 JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
 {
     if (obviously_disjoint(a, b, 1))
@@ -7785,7 +7929,7 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
         return 0;
     if (jl_subtype(a, b))
         return 1;
-    return type_morespecific_(a, b, a, b, 0, NULL);
+    return restated_morespecific(a, b);
 }
 
 JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b)
@@ -7810,7 +7954,7 @@ JL_DLLEXPORT int jl_method_morespecific(jl_method_t *ma, jl_method_t *mb)
     }
     if (jl_subtype(a, b))
         return 1;
-    return type_morespecific_(a, b, a, b, 0, NULL);
+    return restated_morespecific(a, b);
 }
 
 #ifdef __cplusplus

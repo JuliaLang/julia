@@ -374,3 +374,59 @@ let root = NTuple
     B = Tuple{Union{UnionAll(N, UnionAll(T, x1)), UnionAll(N, UnionAll(T, x2))}}
     @ccall jl_type_morespecific_no_subtype(A::Any, B::Any)::Cint
 end
+
+# The upper bounds that the parameters of a signature imply for the type variables that it
+# leaves unbounded count for specificity, whether or not the signature restates them (#62308)
+module ImpliedBounds
+abstract type Period end
+abstract type TimePeriod <: Period end
+struct Milli <: TimePeriod end
+struct Nano <: TimePeriod end
+struct Instant{P<:Period}
+    period::P
+end
+struct Stamp{P<:TimePeriod}
+    instant::Instant{P}
+    Stamp{P}(instant::Instant{P}) where {P} = new{P}(instant)
+end
+Stamp{P}(::Instant) where {P} = :other
+struct B{T<:Real, S<:AbstractMatrix{T}, D} end
+struct DependentRef{S, T<:Ref{S}} end
+struct DependentValue{S, T<:S} end
+struct Mark{T} end
+f(::B{T}) where {T<:Real} = :general
+f(::B{T,S,Vector{Float64}}) where {T,S} = :specific
+g(::B{T}) where {T<:Real} = :general
+g(::B{T,S,Vector{Float64}}) where {T<:Real,S} = :specific
+# the parameter that bounds `T` here is not a type
+k(::DependentValue{1,T}, ::Val{T}) where {T} = :specific
+k(::DependentValue, ::Val{Union{}}) = :general
+# explicit bounds that are wider than the implied ones are narrowed as well
+c(::Complex{T}, ::T) where {T} = :a
+c(::Complex{T}, ::Real) where {Int<:T<:Number} = :b
+c(::Complex{T}, ::T) where {Int<:T<:Number} = :c
+# restating the signature must not make this definition throw
+v(::Complex{Int}, ::Any) = :general
+v(::Complex{T}, ::Union{Nothing,Rational{Union{T,Real}}}) where {T} = :specific
+end # module ImpliedBounds
+let M = ImpliedBounds
+    @test  args_morespecific(Tuple{Type{M.Stamp{P}}, M.Instant{P}} where P, Tuple{Type{M.Stamp{P}}, M.Instant} where P)
+    # the outer method neither shadows the inner constructor nor takes over its calls
+    @test length(methods(M.Stamp{M.Milli})) == 2
+    @test M.Stamp{M.Milli}(M.Instant(M.Milli())) isa M.Stamp{M.Milli}
+    @test M.Stamp{M.Milli}(M.Instant(M.Nano())) === :other
+    x = M.B{Float64, Matrix{Float64}, Vector{Float64}}()
+    @test M.f(x) === :specific
+    @test M.g(x) === :specific
+    @test M.f(M.B{Float64, Matrix{Float64}, Int}()) === :general
+    @test M.k(M.DependentValue{Int,Int}(), Val(Union{})) === :general
+    @test M.c(1+im, 1) === :c
+    @test M.v(1.0+im, nothing) === :specific
+    # a parameter within a `Union` or a `Vararg` implies no bound, since a match need not
+    # instantiate it, e.g. `(1, 2)` matches the first signature but not the second
+    @test !args_morespecific(Tuple{Union{M.Instant{P}, Int}, P} where P, Tuple{Union{M.Instant, Int}, M.Period})
+    @test !args_morespecific(Tuple{P, Vararg{M.Instant{P}}} where P, Tuple{M.Period, Vararg{M.Instant}})
+    # nor does a bound that refers to a type variable bound within the signature, which is
+    # not in the scope of the type variable to bound
+    @test !args_morespecific(Tuple{M.Mark{M.DependentRef{S,T} where S}, T} where T, Tuple{M.Mark, Ref})
+end
