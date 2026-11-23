@@ -445,6 +445,23 @@ function f(x)
 end
 
 ########################################
+# Callable object method declared global
+global (::T)(y) = y
+#---------------------
+1   TestMod.T
+2   (call core.svec %₁ core.Any)
+3   (call core.svec)
+4   SourceLocation:1
+5   (call core.svec %₂ %₃ %₄)
+6   (call core.define_method TestMod core.nothing %₅
+    --- code_info
+    slots: [slot₁/#self#(!read) slot₂/y]
+    1   slot₂/y
+    2   (return %₁)
+7   latestworld
+8   (return core.nothing)
+
+########################################
 # `where` params used in callable object type
 function (x::X1{T})() where T
     T

@@ -2340,6 +2340,9 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         end
         ([:(::) x t], when=!type_decls) ->
             make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
+        # A callable object method such as `global (::T)(x) = x` has no name
+        # to declare
+        [:(::) _] -> nothing
         (_, when=head(ex) in (:call, :curly, :where)) ->
             make_lhs_decls(ctx, stmts, declkind, declmeta, ex[1], type_decls)
         [:tuple xs...] -> for x in xs
