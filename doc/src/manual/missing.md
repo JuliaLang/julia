@@ -218,8 +218,7 @@ ERROR: TypeError: non-boolean (Missing) used in boolean context
 
 For the same reason, contrary to logical operators presented above,
 the short-circuiting boolean operators [`&&`](@ref) and [`||`](@ref) do not
-allow for `missing` values in situations where the value of the operand
-determines whether the next operand is evaluated or not. For example:
+allow for `missing` values as their left-hand argument. For example:
 
 ```jldoctest
 julia> missing || false
@@ -230,14 +229,7 @@ ERROR: TypeError: non-boolean (Missing) used in boolean context
 
 julia> true && missing && false
 ERROR: TypeError: non-boolean (Missing) used in boolean context
-```
 
-In contrast, there is no error thrown when the result can be determined without
-the `missing` values. This is the case when the code short-circuits
-before evaluating the `missing` operand, and when the `missing` operand is the
-last one:
-
-```jldoctest
 julia> true && missing
 missing
 
@@ -273,11 +265,6 @@ julia> Array{Union{Missing, String}}(missing, 2, 3)
  missing  missing  missing
  missing  missing  missing
 ```
-
-!!! note
-    Using `undef` or `similar` may currently give an array filled with
-    `missing`, but this is not the correct way to obtain such an array.
-    Use a `missing` constructor as shown above instead.
 
 An array with element type allowing `missing` entries (e.g. `Vector{Union{Missing, T}}`)
 which does not contain any `missing` entries can be converted to an array type that does
