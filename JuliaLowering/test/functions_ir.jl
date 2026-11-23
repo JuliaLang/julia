@@ -590,6 +590,15 @@ _(x) = x
 ⊔
 
 ########################################
+# Error: Underscore function name declared global
+global _(x) = x
+#---------------------
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :1
+global _(x) = x
+#      ⊔
+
+########################################
 # Simple positional args with defaults
 function f(x::T, y::S=1, z::U=2)
     (x,y)

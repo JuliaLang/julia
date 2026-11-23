@@ -429,7 +429,7 @@ end
 
 vst1_local_arg(vcx, st) = @stm st begin
     [:function _...] -> vst1_function(vcx, st)
-    _ -> vst1_symdecl_or_assign(vcx, st) | vst1_dotted_or_op_assign(vcx, st) |
+    _ -> vst1_dotted_or_op_assign(vcx, st) | vst1_symdecl_or_assign(vcx, st) |
         @fail(st, "invalid local declaration: expected identifier or assignment")
 end
 
@@ -437,7 +437,7 @@ vst1_global_arg(vcx, st) = @stm st begin
     [:function _...] -> vcx.toplevel ?
         vst1_function(vcx, st) :
         @fail(st, "global function needs to be placed at top level, or use eval")
-    _ -> vst1_symdecl_or_assign(vcx, st) | vst1_dotted_or_op_assign(vcx, st) |
+    _ -> vst1_dotted_or_op_assign(vcx, st) | vst1_symdecl_or_assign(vcx, st) |
         @fail(st, "invalid global declaration: expected identifier or assignment")
 end
 
@@ -553,10 +553,12 @@ vst1_calldecl_dot_name_rhs(vcx, st) = @stm st begin
     _ -> @fail(st, "invalid `.` syntax")
 end
 
-vst1_symdecl_or_assign(vcx, st) = head(st) === :identifier ?
-    vst1_ident(vcx, st; lhs=true) :
-    @fail(st, "expected identifier or assignment") |
-    vst1_symdecl(vcx, st) | vst1_assign(vcx, st)
+vst1_symdecl_or_assign(vcx, st) = @stm st begin
+    [:identifier] -> vst1_ident(vcx, st; lhs=true)
+    # Report errors inside an assignment rather than the generic one below
+    [:(=) _...] -> vst1_assign(vcx, st)
+    _ -> @fail(st, "expected identifier or assignment") | vst1_symdecl(vcx, st)
+end
 
 vst1_symdecl(vcx, st) = @stm st begin
     [:identifier] -> vst1_ident(vcx, st; lhs=true)

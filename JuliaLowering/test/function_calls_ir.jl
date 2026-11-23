@@ -544,6 +544,32 @@ ccall(:foo, Cint, (Cstring, Cint...), "asdfg", xs...)
 #                                             └────┘
 
 ########################################
+# Error: ccall with splatted arguments in a `let` binding
+let x = ccall(:foo, Cint, (Cint,), xs...)
+    x
+end
+#---------------------
+syntax: splatting is not supported in `ccall` arguments
+@ :1
+let x = ccall(:foo, Cint, (Cint,), xs...)
+#                                 └────┘
+    x
+end
+
+########################################
+# Error: ccall with splatted arguments in a `global` update
+function f(xs)
+    global x += ccall(:foo, Cint, (Cint,), xs...)
+end
+#---------------------
+syntax: splatting is not supported in `ccall` arguments
+@ :2
+function f(xs)
+    global x += ccall(:foo, Cint, (Cint,), xs...)
+#                                         └────┘
+end
+
+########################################
 # Error: ccall with keyword arguments
 ccall(:foo, Cint, (Cint,), x=1)
 #---------------------
