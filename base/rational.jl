@@ -56,9 +56,9 @@ Return `(x÷gcd(x,y), y÷gcd(x,y))`.
 
 See also [`div`](@ref), [`gcd`](@ref).
 """
-function divgcd(x::TX, y::TY)::Tuple{TX, TY} where {TX<:Integer, TY<:Integer}
+function divgcd(x::Integer, y::Integer)
     g = gcd(uabs(x), uabs(y))
-    div(x,g), div(y,g)
+    oftype(x, div(x,g)), oftype(y, div(y,g))
 end
 
 """
