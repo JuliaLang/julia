@@ -1596,6 +1596,25 @@ end
     # issue 36495, dumping a partial NamedTupled shouldn't error
     @test occursin("NamedTuple", sprint(dump, NamedTuple{(:foo,:bar)}))
 end
+
+@testset "printing machine integers" begin
+    io = IOBuffer()
+    for T in Base.BitInteger_types
+        for x in T[typemin(T), typemax(T), 0, 1, 9, 10, 99, 100, typemax(T) ÷ T(3)]
+            print(io, x)
+            @test String(take!(io)) == string(x)
+            show(io, x)
+            @test String(take!(io)) == (T <: Signed ? string(x) : "0x" * string(x, base=16, pad=2sizeof(T)))
+        end
+    end
+    print_show(io, x) = (print(io, x); show(io, x))
+    for x in (-123456, 0x12345678, typemin(Int128))
+        print_show(io, x) # compile, and make room in `io`
+        truncate(io, 0)
+        @test (@allocated print_show(io, x)) == 0
+    end
+end
+
 # issue #17338
 @test repr(Core.svec(1, 2)) == "svec(1, 2)"
 

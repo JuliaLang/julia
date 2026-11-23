@@ -1433,10 +1433,40 @@ end
 nonnothing_nonmissing_typeinfo(io::IO) = nonmissingtype(nonnothingtype(get(io, :typeinfo, Any)))
 show(io::IO, b::Bool) = print(io, nonnothing_nonmissing_typeinfo(io) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
 show(io::IO, ::Nothing) = print(io, "nothing")
-show(io::IO, n::Signed) = (write(io, string(n)); nothing)
+# Machine integers are formatted into a stack buffer instead of a temporary `String`.
+const IntPrintBuf = NTuple{40,UInt8} # `typemin(Int128)` needs 39 digits and a sign
+function print_dec(io::IO, x::BitUnsigned, neg::Bool)
+    n = neg + ndigits(x)
+    buf = Ref{IntPrintBuf}()
+    GC.@preserve buf begin
+        p = Ptr{UInt8}(unsafe_convert(Ptr{IntPrintBuf}, buf))
+        unsafe_dec!(p, n, x, neg)
+        unsafe_write(io, p, n % UInt)
+    end
+    return nothing
+end
+print_dec(io::IO, n::BitSigned) = print_dec(io, unsigned(abs(n)), n < 0)
+print_dec(io::IO, n::BitUnsigned) = print_dec(io, n, false)
+print_dec(io::IO, n::Signed) = (write(io, string(n)); nothing)
+print_dec(io::IO, n::Unsigned) = print(io, string(n))
+show_hex(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = cld(Core.bitsizeof(n), 4), base = 16))
+function show_hex(io::IO, x::BitUnsigned)
+    n = 2 + cld(Core.bitsizeof(x), 4)
+    buf = Ref{IntPrintBuf}()
+    GC.@preserve buf begin
+        p = Ptr{UInt8}(unsafe_convert(Ptr{IntPrintBuf}, buf))
+        unsafe_store!(p, 0x30, 1) # '0'
+        unsafe_store!(p, 0x78, 2) # 'x'
+        unsafe_hex!(p + 2, n - 2, x, false)
+        unsafe_write(io, p, n % UInt)
+    end
+    return nothing
+end
+
+show(io::IO, n::Signed) = print_dec(io, n)
 function show(io::IO, n::Unsigned)
     if get(io, :hexunsigned, true)::Bool
-        print(io, "0x", string(n, pad = cld(Core.bitsizeof(n), 4), base = 16))
+        show_hex(io, n)
     else
         if get(io, :typeinfo, Nothing)::Type == typeof(n)
             print(io, n)
@@ -1445,7 +1475,7 @@ function show(io::IO, n::Unsigned)
         end
     end
 end
-print(io::IO, n::Unsigned) = print(io, string(n))
+print(io::IO, n::Unsigned) = print_dec(io, n)
 
 has_tight_type(p::Pair) =
     typeof(p.first)  == typeof(p).parameters[1] &&

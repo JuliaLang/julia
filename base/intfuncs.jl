@@ -981,64 +981,70 @@ function append_c_digits_fast(olength::Int, digits::Unsigned, buf, pos::Int)
 end
 
 
+# Fill the `n` bytes at `p` with the zero-padded decimal digits of `x`, after a `-` if `neg`.
+function unsafe_dec!(p::Ptr{UInt8}, n::Int, x::Unsigned, neg::Bool)
+    i = n
+    while i > 9 && x > typemax(UInt)
+        d, r = divrem(x, 0x3b9aca00) # 10^9
+        x = oftype(x, d)
+        r32 = r % UInt32
+        for j in 0:3
+            q, s = divrem(r32, 0x64)
+            r32 = q
+            v = @inbounds _dec_d100[1 + (s % Int)]
+            unsafe_store!(p, (v >> 8) % UInt8, i - 2*j)
+            unsafe_store!(p, v % UInt8, i - 2*j - 1)
+        end
+        unsafe_store!(p, 0x30 + (r32 % UInt8), i - 8)
+        i -= 9
+    end
+    y = x % UInt
+    while i >= 2
+        d, r = divrem(y, 0x64)
+        y = d
+        v = @inbounds _dec_d100[1 + (r % Int)]
+        unsafe_store!(p, (v >> 8) % UInt8, i)
+        unsafe_store!(p, v % UInt8, i - 1)
+        i -= 2
+    end
+    if i > neg
+        unsafe_store!(p, 0x30 + (rem(y, 0xa) % UInt8), i)
+    end
+    neg && unsafe_store!(p, 0x2d, 1) # '-'
+    return nothing
+end
+
 function dec(x::Unsigned, pad::Int, neg::Bool)
     n = neg + ndigits(x, pad=pad)
     str = _string_n(n)
-    GC.@preserve str begin
-        p = pointer(str)
-        i = n
-        while i > 9 && x > typemax(UInt)
-            d, r = divrem(x, 0x3b9aca00) # 10^9
-            x = oftype(x, d)
-            r32 = r % UInt32
-            for j in 0:3
-                q, s = divrem(r32, 0x64)
-                r32 = q
-                v = @inbounds _dec_d100[1 + (s % Int)]
-                unsafe_store!(p, (v >> 8) % UInt8, i - 2*j)
-                unsafe_store!(p, v % UInt8, i - 2*j - 1)
-            end
-            unsafe_store!(p, 0x30 + (r32 % UInt8), i - 8)
-            i -= 9
-        end
-        y = x % UInt
-        while i >= 2
-            d, r = divrem(y, 0x64)
-            y = d
-            v = @inbounds _dec_d100[1 + (r % Int)]
-            unsafe_store!(p, (v >> 8) % UInt8, i)
-            unsafe_store!(p, v % UInt8, i - 1)
-            i -= 2
-        end
-        if i > neg
-            unsafe_store!(p, 0x30 + (rem(y, 0xa) % UInt8), i)
-        end
-        neg && unsafe_store!(p, 0x2d, 1) # '-'
-    end
+    GC.@preserve str unsafe_dec!(pointer(str), n, x, neg)
     return str
+end
+
+# Same as `unsafe_dec!`, in hexadecimal.
+function unsafe_hex!(p::Ptr{UInt8}, n::Int, x::Unsigned, neg::Bool)
+    i = n
+    while i >= 2
+        b = (x % UInt8)::UInt8
+        d1, d2 = b >> 0x4, b & 0xf
+        unsafe_store!(p, d1 + ifelse(d1 > 0x9, 0x57, 0x30), i-1)
+        unsafe_store!(p, d2 + ifelse(d2 > 0x9, 0x57, 0x30), i)
+        x >>= 0x8
+        i -= 2
+    end
+    if i > neg
+        d = (x % UInt8)::UInt8 & 0xf
+        unsafe_store!(p, d + ifelse(d > 0x9, 0x57, 0x30), i)
+    end
+    neg && unsafe_store!(p, 0x2d, 1) # UInt8('-')
+    return nothing
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
     m = (top_set_bit(x) + 3) ÷ 4 # nibbles = ceil(bits / 4)
     n = neg + max(pad, m)
     str = _string_n(n)
-    GC.@preserve str begin
-        p = pointer(str)
-        i = n
-        while i >= 2
-            b = (x % UInt8)::UInt8
-            d1, d2 = b >> 0x4, b & 0xf
-            unsafe_store!(p, d1 + ifelse(d1 > 0x9, 0x57, 0x30), i-1)
-            unsafe_store!(p, d2 + ifelse(d2 > 0x9, 0x57, 0x30), i)
-            x >>= 0x8
-            i -= 2
-        end
-        if i > neg
-            d = (x % UInt8)::UInt8 & 0xf
-            unsafe_store!(p, d + ifelse(d > 0x9, 0x57, 0x30), i)
-        end
-        neg && unsafe_store!(p, 0x2d, 1) # UInt8('-')
-    end
+    GC.@preserve str unsafe_hex!(pointer(str), n, x, neg)
     return str
 end
 
