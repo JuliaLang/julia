@@ -1881,6 +1881,24 @@ let x = [1,2,3]
     @test unsafe_pointer_to_objref(pointer_from_objref(x)) == x
     @test unsafe_pointer_to_objref(pointer_from_objref(x)) === x
 end
+# The reference from `unsafe_pointer_to_objref` keeps the object alive once nothing else does
+@noinline function objref_outlives_preserve(r::Base.RefValue{Any}, w::WeakRef, c::Bool)
+    x = GC.@preserve r unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Cvoid}, (Any,Any),
+                                                      getindex, r))
+    r[] = nothing
+    GC.gc()
+    w.value === nothing && return :collected
+    c && return x
+    return nothing
+end
+@noinline function objref_and_weakref()
+    obj = Ref(314159)
+    return Ref{Any}(obj), WeakRef(obj)
+end
+let (r, w) = objref_and_weakref()
+    x = objref_outlives_preserve(r, w, true)
+    @test x isa Base.RefValue{Int} && x[] == 314159
+end
 
 let
     local a, aa

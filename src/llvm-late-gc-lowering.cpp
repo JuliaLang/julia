@@ -1292,7 +1292,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             continue;
                         }
                         // Known functions emitted in codegen that are not safepoints
-                        if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
+                        if (callee == pointer_from_objref_func || callee == pointer_to_objref_func ||
+                            callee == gc_preserve_begin_func ||
                             callee == gc_preserve_end_func || callee == typeof_func ||
                             callee == blackbox_func ||
                             callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
@@ -2168,6 +2169,13 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
                 auto *obj = CI->getOperand(0);
                 auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI->getIterator());
+                ASCI->takeName(CI);
+                CI->replaceAllUsesWith(ASCI);
+                UpdatePtrNumbering(CI, ASCI, S);
+            } else if (pointer_to_objref_func != nullptr && callee == pointer_to_objref_func) {
+                // The roots are placed, so the definition no longer has to be kept in place
+                auto *ptr = CI->getOperand(0);
+                auto *ASCI = new AddrSpaceCastInst(ptr, CI->getType(), "", CI->getIterator());
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);

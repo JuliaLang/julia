@@ -585,7 +585,8 @@ bool CancellationLowering::runOnFunction(Function &F) {
                     // argument-conversion glue (unsafe_convert of a mutable
                     // object), and must not invalidate a reset region
                     // published across an adjacent reset-safe foreign call.
-                    if (Callee && (Callee == pointer_from_objref_func || Callee == gc_loaded_func))
+                    if (Callee && (Callee == pointer_from_objref_func ||
+                                   Callee == pointer_to_objref_func || Callee == gc_loaded_func))
                         continue;
                     // Allocations and write barriers are safe to span:
                     // FinalLowerGC (stock and MMTk) lowers annotated sites

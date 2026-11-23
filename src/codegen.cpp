@@ -1612,6 +1612,30 @@ static const auto pointer_from_objref_func = new JuliaFunction<>{
             Attributes(C, {Attribute::NonNull}),
             {}); },
 };
+// The inverse of `julia.pointer_from_objref`: the result is a reference to the object that the
+// argument points at, and that object is rooted through it like through any other reference from
+// this call on. It is lowered to an address space cast once the GC roots are placed. Until then it
+// has to stay where it is relative to every safepoint, and to the control flow that decides if it
+// runs: only here is the object known to be alive, so a later root would come too late, and an
+// earlier or speculated one could be of something that is not an object. The optimizer moves a cast
+// freely, and may move a call that only reads memory past another one, so this claims to modify
+// state that only the runtime sees.
+static const auto pointer_to_objref_func = new JuliaFunction<>{
+    "julia.pointer_to_objref",
+    [](LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C),
+            {getPointerTy(C)}, false); },
+    [](LLVMContext &C) {
+        AttrBuilder FnAttrs(C);
+        FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
+        FnAttrs.addAttribute(Attribute::NoSync);
+        return AttributeList::get(C,
+            AttributeSet::get(C, FnAttrs),
+            AttributeSet(),
+            {}); },
+};
 static const auto gc_loaded_func = new JuliaFunction<>{
     "julia.gc_loaded",
     // # memory(none) nosync nounwind speculatable willreturn norecurse
@@ -11519,6 +11543,7 @@ static void init_jit_functions(void)
     add_named_global(gc_preserve_begin_func, (void*)NULL);
     add_named_global(gc_preserve_end_func, (void*)NULL);
     add_named_global(pointer_from_objref_func, (void*)NULL);
+    add_named_global(pointer_to_objref_func, (void*)NULL);
     add_named_global(julia_call, (void*)NULL);
     add_named_global(julia_call2, (void*)NULL);
     add_named_global(jllockvalue_func, &jl_lock_value);

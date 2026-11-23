@@ -358,6 +358,7 @@ bool Optimizer::isSafepoint(Instruction *inst)
     if (auto callee = call->getCalledFunction()) {
         // Known functions emitted in codegen that are not safepoints
         if (callee == pass.pointer_from_objref_func
+            || callee == pass.pointer_to_objref_func
             || callee == pass.gc_loaded_func
             || callee->getName() == "memcmp") {
             return false;
@@ -751,7 +752,7 @@ bool Optimizer::forwardMemoryData(CallInst *orig_inst, Value *data)
             }
             else if (auto call = dyn_cast<CallInst>(user)) {
                 auto callee = call->getCalledOperand();
-                if (callee == pass.pointer_from_objref_func) {
+                if (callee == pass.pointer_from_objref_func || callee == pass.pointer_to_objref_func) {
                     worklist.push_back({call, offset});
                 }
                 else if (callee == pass.gc_loaded_func) {
