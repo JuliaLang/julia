@@ -1866,8 +1866,14 @@ let
     @test pointer(a.ref.mem,2)===pointer(a,2)
 end
 
-@test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Cvoid}, (Any,Any),
-                                     x -> x+1, 314158)) == 314159
+# `unsafe_pointer_to_objref` on a `jl_value_t*` that C code returned as a plain pointer
+# (issue #2458), here to a boxed `Int`, which `pointer_from_objref` cannot provide. The
+# pointer does not root the box, so `r` has to keep it alive (issue #65171).
+let r = Ref{Any}(314159)
+    x = GC.@preserve r unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Cvoid}, (Any,Any),
+                                                      getindex, r))
+    @test x === 314159
+end
 let x = [1,2,3]
     @test unsafe_pointer_to_objref(pointer_from_objref(x)) == x
     @test unsafe_pointer_to_objref(pointer_from_objref(x)) === x
