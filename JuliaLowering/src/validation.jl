@@ -594,9 +594,11 @@ end
 
 vst1_call(vcx, st) = @stm st begin
     ([:call [:identifier] args...], when=syntax_name(st[1])==="cglobal") ->
-        (1 <= length(args) <= 2 ? pass() :
+        (1 <= count(a -> !(head(a) in (:parameters, :kw)), args) <= 2 ? pass() :
             @fail(st, "cglobal must have one or two arguments")) &
-        allv(vst1_call_arg, vcx, args)
+        vst1_ccall_args(vcx, st)
+    ([:call [:identifier] _...], when=syntax_name(st[1])==="ccall") ->
+        vst1_ccall_args(vcx, st)
     [:call f [:parameters kwargs...] args...] ->
         (vst1_ident(vcx, f) | vst1(vcx, f)) &
         allv(vst1_call_arg, vcx, args) &
@@ -622,6 +624,29 @@ end
 vst1_call_arg(vcx, st) = @stm st begin
     [:kw id val] -> vst1_ident(vcx, id; lhs=true) & vst1(vcx, val)
     _ -> vst1_splat_or_val(vcx, st)
+end
+
+# `ccall` and `cglobal` take their arguments positionally as written, so the
+# arguments can be neither splatted nor passed by keyword.  The exception is the
+# type in `cglobal(name, Ts...)`, which flisp lowers to `Ptr{Ts...}`.
+function vst1_ccall_args(vcx, st)
+    name = syntax_name(st[1])
+    ok = pass()
+    for (i, arg) in enumerate(children(st)[2:end])
+        ok &= @stm arg begin
+            ([:... _...], when=(name == "cglobal" && i == 2)) ->
+                vst1_splat_or_val(vcx, arg)
+            [:... _...] -> @fail(arg, name == "cglobal" ?
+                "splatting is only supported in the type argument of `cglobal`" :
+                "splatting is not supported in `ccall` arguments")
+            [:kw _...] ->
+                @fail(arg, "`$name` does not accept keyword arguments")
+            [:parameters _...] ->
+                @fail(arg, "`$name` does not accept keyword arguments")
+            _ -> vst1(vcx, arg)
+        end
+    end
+    return ok
 end
 
 # Arg to `parameters` (post-semicolon) in a call (not function decl).  Stricter

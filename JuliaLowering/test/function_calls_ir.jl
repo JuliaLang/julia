@@ -535,6 +535,33 @@ ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 #                     └────────┘
 
 ########################################
+# Error: ccall with splatted arguments
+ccall(:foo, Cint, (Cstring, Cint...), "asdfg", xs...)
+#---------------------
+syntax: splatting is not supported in `ccall` arguments
+@ :1
+ccall(:foo, Cint, (Cstring, Cint...), "asdfg", xs...)
+#                                             └────┘
+
+########################################
+# Error: ccall with keyword arguments
+ccall(:foo, Cint, (Cint,), x=1)
+#---------------------
+syntax: `ccall` does not accept keyword arguments
+@ :1
+ccall(:foo, Cint, (Cint,), x=1)
+#                         └──┘
+
+########################################
+# Error: ccall with keyword arguments after a semicolon
+ccall(:foo, Cint, (Cint,), x; y=1)
+#---------------------
+syntax: `ccall` does not accept keyword arguments
+@ :1
+ccall(:foo, Cint, (Cint,), x; y=1)
+#                           └───┘
+
+########################################
 # cglobal special support for (sym, lib) tuple
 # unlike flisp we outline the tuple and allow constant propagation to put it
 # back before codegen generates code for `cglobal`
@@ -566,6 +593,44 @@ syntax: cglobal must have one or two arguments
 @ :1
 cglobal(:sym, Int, blah)
 └──────────────────────┘
+
+########################################
+# cglobal with a splatted type
+cglobal(:sym, Ts...)
+#---------------------
+1   (call core.tuple top.Ptr)
+2   TestMod.Ts
+3   (call core._apply_iterate top.iterate core.apply_type %₁ %₂)
+4   (foreignglobal :sym)
+5   (call top.bitcast %₃ %₄)
+6   (return %₅)
+
+########################################
+# Error: cglobal with a splatted name
+cglobal(xs...)
+#---------------------
+syntax: splatting is only supported in the type argument of `cglobal`
+@ :1
+cglobal(xs...)
+#       └───┘
+
+########################################
+# Error: cglobal with keyword arguments
+cglobal(:sym, Int; x=1)
+#---------------------
+syntax: `cglobal` does not accept keyword arguments
+@ :1
+cglobal(:sym, Int; x=1)
+#                └───┘
+
+########################################
+# Error: cglobal with keyword arguments without a semicolon
+cglobal(:sym, Int, x=1)
+#---------------------
+syntax: `cglobal` does not accept keyword arguments
+@ :1
+cglobal(:sym, Int, x=1)
+#                 └──┘
 
 ########################################
 # Error: assigning to `cglobal`

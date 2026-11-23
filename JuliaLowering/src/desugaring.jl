@@ -1990,9 +1990,11 @@ function expand_cglobal(ctx, ex)
         ]
     elseif numchildren(ex) == 3
         # cglobal(name, T) -> bitcast(Ptr{T}, foreignglobal(name))
+        # `T` may be splatted, as in `cglobal(name, Ts...)`
+        ptr_type = @ast ctx ex[3] [:call "apply_type"::core "Ptr"::top ex[3]]
         return @ast ctx ex [:call
             "bitcast"::top
-            [:call "apply_type"::core "Ptr"::top expand_forms_2(ctx, ex[3])]
+            expand_forms_2(ctx, ptr_type)
             [:foreignglobal expand_csymbol(ctx, ex[2])]
         ]
     else
