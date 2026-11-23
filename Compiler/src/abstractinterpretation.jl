@@ -3129,8 +3129,6 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
         end
         return Future{CallMeta}(call, interp, sv) do call, interp, sv
-            # without `local`, these would be the variables of the enclosing function,
-            # boxed on every call because this closure assigns them
             local effects, exct
             n = argtypes[2]
             ub_var = Const(Any)
