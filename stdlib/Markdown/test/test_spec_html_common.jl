@@ -193,7 +193,6 @@ known_broken = BitSet([
     498,
     499,
     500,
-    503,
     505,
     506,
     508,
@@ -3935,12 +3934,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 503 (known broken)
+    # Example 503
     input = "[link](foo%20b&auml;)\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<p><a href=\"foo%20b%C3%A4\">link</a></p>\n"
     actual = Markdown.html(md)
-    expected == actual && push!(now_passing, 503)
+    @test expected == actual
 
     # Example 504
     input = "[link](\"title\")\n"
