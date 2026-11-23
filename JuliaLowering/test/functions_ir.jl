@@ -2215,6 +2215,57 @@ function foo()
 end
 
 ########################################
+# Error: if-generated outside of a function
+if @generated
+    1
+else
+    2
+end
+#---------------------
+syntax: `@generated` can only be used as an `if` condition inside a function
+@ :1
+if @generated
+#  └────────┘
+    1
+else
+
+########################################
+# Error: `@generated()` as a value
+function foo()
+    x = @generated()
+    x
+end
+#---------------------
+syntax: `@generated` can only be used as an `if` condition inside a function
+@ :2
+function foo()
+    x = @generated()
+#       └──────────┘
+    x
+end
+
+########################################
+# Error: `@generated` as an `elseif` condition
+function foo(x)
+    if x
+        1
+    elseif @generated
+        2
+    else
+        3
+    end
+end
+#---------------------
+syntax: `@generated` can only be used as an `if` condition inside a function
+@ :4
+    if x
+        1
+    elseif @generated
+#          └────────┘
+        2
+    else
+
+########################################
 # Fully generated function
 @generated function f_only_generated(x, y)
     generator_code(x,y)

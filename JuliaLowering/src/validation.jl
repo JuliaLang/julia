@@ -157,6 +157,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         inner_vcx = vcx.toplevel ? with(vcx; inner_cond=true) : vcx
         @stm st begin
             [:if [:generated] t f] ->
+                (vcx.toplevel ? vst1(vcx, st[1]) : pass()) &
                 vst1(inner_vcx, t) & vst1(inner_vcx, f)
             [:if [:generated] _...] ->
                 @fail(st, "if-generated requires both true and false cases")
@@ -289,7 +290,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     end
     [:softscope _] -> pass()
     [:softscope] -> pass()
-    [:generated] -> pass()
+    # Only valid as the condition of an `if` in a function body, where the
+    # function is split into a generator and a non-generated fallback
+    [:generated] ->
+        @fail(st, "`@generated` can only be used as an `if` condition inside a function")
     [:foreigncall fname rt at cconv roots_args...] ->
         # TODO: could be stricter
         vst1(vcx, fname) &
