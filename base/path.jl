@@ -350,17 +350,32 @@ julia> splitext("/home/my.user/example")
 """
 function splitext(path::String)::Tuple{String, String}
     drive, p = splitdrive(path)
+    lastsep = findlast(isseparator, p)
+    basename_start = isnothing(lastsep) ? firstindex(p) : nextind(p, lastsep)
+    basename_start > lastindex(p) && return (path, "") # trailing separator: no extension
+
+    # Skip leading dots in the basename
+    i = basename_start
+    while i <= lastindex(p) && p[i] == '.'
+        i = nextind(p, i)
+    end
+    # If the basename consists entirely of dots (e.g. ".", "..", "..."), it has no extension
+    i > lastindex(p) && return (path, "")
+
+    # Look for the last dot at or after the first non-dot character
     lastdot = findlast('.', p)
-    if !isnothing(lastdot)
-        # No separator after the last dot
-        if isnothing(findnext(isseparator, p, lastdot))
-            # No separator just before the last dot
-            prev = prevind(p, lastdot)
-            if checkbounds(Bool, p, prev)
-                if !isseparator(p[prev])
-                    return drive * p[1:prev], p[lastdot:end]
-                end
+    if !isnothing(lastdot) && lastdot >= i
+        # If the path ends with dots (e.g. "foo.."), all consecutive trailing dots form the extension
+        if lastdot == lastindex(p)
+            ext_start = lastdot
+            prev = prevind(p, ext_start)
+            while prev >= i && p[prev] == '.'
+                ext_start = prev
+                prev = prevind(p, ext_start)
             end
+            return drive * p[1:prevind(p, ext_start)], p[ext_start:end]
+        else
+            return drive * p[1:prevind(p, lastdot)], p[lastdot:end]
         end
     end
 
