@@ -17,6 +17,11 @@ Compiler/Runtime improvements
   reduces the memory footprint of workloads that allocate many small objects on many threads and
   keep few of them, such as a language server that runs type inference repeatedly ([#63512]).
 
+* Debug information emitted for JIT-compiled code at `-g2` now describes unboxed values
+  accurately: primitive types carry their DWARF encoding (so `Float64` locals display as
+  floats in a debugger), struct locals list their fields by name with offsets, and type
+  names include their parameters (`Complex{Float64}` rather than `Complex`).
+
 Command-line option changes
 ---------------------------
 
