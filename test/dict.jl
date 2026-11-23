@@ -207,6 +207,11 @@ end
 end
 
 @test_throws KeyError Dict("a"=>2)[Base.secret_table_token]
+# the value type must not be widened by the lookup sentinel
+@test Base.infer_return_type((Dict{Int,Vector{Int}}, Pair{Int,Vector{Int}})) do d, p
+    v = get(d, p.first, Base.secret_table_token)
+    v !== Base.secret_table_token ? v : nothing
+end == Union{Nothing,Vector{Int}}
 
 @testset "issue #1821" begin
     d = Dict{String, Vector{Int}}()
@@ -507,6 +512,10 @@ end
     str13 = sprint(io -> show(io, MIME("text/plain"), d13); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
     @test count('\n', str13) == 1
     @test occursin('…', str13)
+
+    # no extra reset when the last escape before the cut is already a reset
+    @test Base._truncate_at_width_or_chars(true, "ab\e[0mcdefgh", 4) == "ab\e[0mc…"
+    @test Base._truncate_at_width_or_chars(true, "ab\e[31mcdefgh", 4) == "ab\e[31mc\e[0m…"
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate

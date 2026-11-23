@@ -309,7 +309,7 @@ julia> round(DateTime(2016, 8, 6, 12, 0, 0), Day)
 Valid rounding modes for `round(::TimeType, ::Period, ::RoundingMode)` are
 `RoundNearestTiesUp` (default), `RoundDown` (`floor`), and `RoundUp` (`ceil`).
 """
-function Base.round(dt::TimeType, p::Period, r::RoundingMode{:NearestTiesUp})
+function Base.round(dt::TimeType, p::Period, ::RoundingMode{:NearestTiesUp})
     f, c = floorceil(dt, p)
     return (dt - f) < (c - dt) ? f : c
 end
@@ -342,14 +342,14 @@ Valid rounding modes for `round(::Period, ::T, ::RoundingMode)` are `RoundNeares
 Rounding to a `precision` of `Month`s or `Year`s is not supported, as these `Period`s are of
 inconsistent length.
 """
-function Base.round(x::ConvertiblePeriod, precision::ConvertiblePeriod, r::RoundingMode{:NearestTiesUp})
+function Base.round(x::ConvertiblePeriod, precision::ConvertiblePeriod, ::RoundingMode{:NearestTiesUp})
     f, c = floorceil(x, precision)
     _x, _f, _c = promote(x, f, c)
     return (_x - _f) < (_c - _x) ? f : c
 end
 
-Base.round(x::TimeTypeOrPeriod, p::Period, r::RoundingMode{:Down}) = Base.floor(x, p)
-Base.round(x::TimeTypeOrPeriod, p::Period, r::RoundingMode{:Up}) = Base.ceil(x, p)
+Base.round(x::TimeTypeOrPeriod, p::Period, ::RoundingMode{:Down}) = Base.floor(x, p)
+Base.round(x::TimeTypeOrPeriod, p::Period, ::RoundingMode{:Up}) = Base.ceil(x, p)
 
 # No implementation of other `RoundingMode`s: rounding to nearest "even" is skipped because
 # "even" is not defined for Period; rounding toward/away from zero is skipped because ISO

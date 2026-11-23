@@ -148,8 +148,8 @@ Help mode can be exited by pressing backspace at the beginning of the line.
 
 ### [Shell mode](@id man-shell-mode)
 
-Just as help mode is useful for quick access to documentation, another common task is to use the
-system shell to execute system commands. Just as `?` entered help mode when at the beginning
+Just as help mode is useful for quick access to documentation, another common task is to
+run system commands. Just as `?` entered help mode when at the beginning
 of the line, a semicolon (`;`) will enter the shell mode. And it can be exited by pressing backspace
 at the beginning of the line.
 
@@ -159,6 +159,38 @@ julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 shell> echo hello
 hello
 ```
+
+A line in shell mode is written in the syntax of Julia's [command literals](@ref
+Running-External-Programs), and it is run the same way on every system: directly, not
+through a system shell such as `sh`. So `$` interpolates Julia values, and shell features
+outside that syntax, such as shell functions or `$(...)` command substitution, are not
+available. Three commands are handled by the REPL itself, since they change the state of the
+Julia process: `cd dir` changes Julia's working directory (`cd -` returns to the previous one),
+`export NAME=value` sets an environment variable that later commands inherit, and `unset NAME`
+removes one. These commands are available only in shell mode: a command literal run with
+[`run`](@ref), such as ``` `cd dir` ```, runs a program with that name like any other command.
+
+Commands can be joined with `&&`, `||` and `;`, as in a shell: `a && b` runs `b` only if `a`
+succeeds, `a || b` runs `b` only if `a` fails, and `a; b` runs both. `&&` and `||` have equal
+precedence and group to the left. Each command is built just before it runs, so it sees the
+effects of the commands before it, such as a `cd`:
+
+```julia-repl
+shell> cd /tmp && pwd
+/tmp
+/tmp
+
+shell> false || echo fallback
+fallback
+```
+
+As in command literals, the characters `#`, `(`, `)` and a single `&` must be quoted:
+shell mode does not support comments, subshells or running commands in the background.
+
+!!! compat "Julia 1.15"
+    Before Julia 1.15, on systems other than Windows, a command without pipes or redirections
+    was run through the shell named by `JULIA_SHELL` or `SHELL`, and `export` and `unset`
+    were not supported.
 !!! note
     For Windows users, Julia's shell mode does not expose windows shell commands.
     Hence, this will fail:

@@ -302,14 +302,7 @@ intersect!(s1::BitSet, s2::BitSet) = _matched_map!(&, s1, s2)
 
 setdiff!(s1::BitSet, s2::BitSet) = _matched_map!((p, q) -> p & ~q, s1, s2)
 
-function symdiff!(s::BitSet, ns)
-    for x in ns
-        int_symdiff!(s, x)
-    end
-    return s
-end
-
-function symdiff!(s::BitSet, ns::AbstractSet)
+function symdiff!(s::BitSet, ns::AbstractSet{<:Integer})
     for x in ns
         int_symdiff!(s, x)
     end

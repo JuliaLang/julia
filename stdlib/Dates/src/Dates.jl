@@ -32,7 +32,7 @@ for more information.
 """
 module Dates
 
-import Base: ==, isless, div, fld, mod, rem, gcd, lcm, +, -, *, /, %
+import Base: %, *, +, -, /, ==, div, fld, gcd, isless, lcm, mod, rem
 using Printf: @sprintf
 using Base: CodeUnits, require_one_based_indexing
 using Base.Parsers: ParseFailure, INVALID, OVERFLOW
@@ -85,6 +85,6 @@ export Period, DatePeriod, TimePeriod,
        ISODateTimeFormat, ISODateFormat, ISOTimeFormat, DateFormat,
        RFC1123Format, @dateformat_str
 
-public format, Timestamp, unix2timestamp, timestamp2unix, ISOTimestampFormat
+public ISOTimestampFormat, Timestamp, format, timestamp2unix, unix2timestamp
 
 end # module

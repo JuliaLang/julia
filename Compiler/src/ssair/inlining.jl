@@ -771,13 +771,6 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
     return new_argtypes
 end
 
-function has_typeegal_slot(@nospecialize(atype))
-    for p in (atype::DataType).parameters
-        p isa Core.TypeEgal && return true
-    end
-    return false
-end
-
 function compileable_specialization(code::Union{MethodInstance,CodeInstance}, effects::Effects,
     et::InliningEdgeTracker, @nospecialize(info::CallInfo), state::InliningState)
     mi = code isa CodeInstance ? get_ci_mi(code) : code
@@ -804,18 +797,12 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
     end
     # prefer using a CodeInstance gotten from the cache, since that is where the invoke target should get compiled to normally
     # TODO: can this code be gotten directly from inference sometimes?
-    # A normalized compileable signature can have a less precise ABI for TypeEgal
-    # arguments, forcing boxed argument passing for non-recursive invokes, so a
-    # directly supplied inferred edge for the actual call signature wins there.
-    keep_direct_edge = code isa CodeInstance && mi !== mi_invoke && has_typeegal_slot(atype)
-    if !keep_direct_edge
-        cached = get(code_cache(state), mi_invoke, nothing)
-        if cached isa CodeInstance
-            code = cached
-        elseif !(code isa CodeInstance && code.def === mi_invoke)
-            #println("missing code for ", mi_invoke, " for ", mi)
-            code = mi_invoke
-        end
+    cached = get(code_cache(state), mi_invoke, nothing)
+    if cached isa CodeInstance
+        code = cached
+    else
+        #println("missing code for ", mi_invoke, " for ", mi)
+        code = mi_invoke
     end
     add_inlining_edge!(et, code) # to the code and edges
     return InvokeCase(code, effects, info)
@@ -1201,14 +1188,13 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
     sig::Signature, state::InliningState)
     # InvokeCICallInfo indicates that `abstract_invoke` already analyzed the call
     # and determined it is of the form `invoke(f, ::CodeInstance, args...)`
-    # where the argtypes and worldages are valid for the context, and the invoke
-    # pointer is set. Therefore, we can simply transform this into an
-    # `Expr(:invoke, ...)`
+    # where the worldages are valid for the context. If the argtypes are valid too,
+    # we can transform this into an `Expr(:invoke, ...)` of exactly that CodeInstance,
+    # which must not be replaced with the one for its compilation signature (or by the native one)
     if info isa InvokeCICallInfo
+        invoke_ci_argtypes_valid(argtypes_to_type(invoke_rewrite(sig.argtypes)), info.edge) || return nothing
         stmt.head = :invoke
         stmt.args = [info.edge, stmt.args[2], stmt.args[4:end]...]
-        # Transformed to :invoke, now handle it as such
-        handle_invoke_expr!(todo, ir, idx, stmt, info, flag, sig, state)
         return nothing
     end
     nspl = nsplit(info)

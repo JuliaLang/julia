@@ -170,7 +170,7 @@ extern "C" {
 
 struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
-    uintptr_t in_image:2;
+    uintptr_t perm:2;
 #ifdef _P64
     uintptr_t tag:60;
 #else
@@ -496,6 +496,9 @@ typedef struct JL_GC_TRACKED_TYPE _jl_method_t {
 
 // hidden fields:
     jl_mutex_t writelock;
+    // the interpreter's caches for the code of this method it last ran (see interpreter.c),
+    // kept alive by jl_interp_call_sites; zeroed when serialized
+    _Atomic(jl_genericmemory_t*) interp_sites;
 } jl_method_t;
 
 // This type is a placeholder to cache data for a specType signature specialization of a Method
@@ -638,7 +641,19 @@ typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_tvar_t *JL_NONNULL var;
     jl_value_t *JL_NONNULL body;
+// hidden fields (see `hiddenfields`; allocated by `jl_new_unionall` only):
+    // structural facts about this node, memoized on first query (each bit
+    // pair is "known" + value; 0 means nothing computed yet). The facts depend
+    // only on the (immutable) structure, so they may be serialized as found.
+    _Atomic(uint32_t) flags;
 } jl_unionall_t;
+#define JL_UNIONALL_FREEVARS_KNOWN  0x1
+#define JL_UNIONALL_FREEVARS        0x2  // the type has free typevars
+#define JL_UNIONALL_OCCURSINV_KNOWN 0x4
+#define JL_UNIONALL_OCCURSINV       0x8  // the binder occurs in an invariant position of `body`
+#define JL_UNIONALL_ALWAYSCOV_KNOWN 0x10
+#define JL_UNIONALL_ALWAYSCOV       0x20 // the binder has a guaranteed covariant occurrence in `body`
+                                         // (in a covariant context), and none inside an inner binder's upper bound
 
 // represents the "name" part of a DataType, describing the syntactic structure
 // of a type and storing all data common to different instantiations of the type,
@@ -665,7 +680,11 @@ typedef struct JL_GC_TRACKED_TYPE {
     uint8_t abstract:1;
     uint8_t mutabl:1;
     uint8_t mayinlinealloc:1;
-    uint8_t _unused:5;
+    // instances hold data that the Julia-visible fields do not describe (C-only
+    // fields after them, an opaque layout, or trailing variable-sized data), so only
+    // the runtime's own constructor may allocate them
+    uint8_t hiddenfields:1;
+    uint8_t _unused:4;
     _Atomic(uint8_t) cache_entry_count; // (approximate counter of TypeMapEntry for heuristics)
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
     uint8_t constprop_heustic; // override for inference's constprop heuristic
@@ -756,7 +775,7 @@ typedef struct {
 typedef struct JL_GC_TRACKED_TYPE _jl_datatype_t {
     JL_DATA_TYPE
     jl_typename_t *name;
-    struct _jl_datatype_t *super;
+    _Atomic(struct _jl_datatype_t*) super;
     jl_svec_t *parameters;
     jl_svec_t *types;
     jl_value_t *instance;  // for singletons
@@ -989,6 +1008,7 @@ struct JL_GC_TRACKED_TYPE _jl_module_t {
     jl_uuid_t build_id;
     jl_uuid_t uuid;
     _Atomic(uint32_t) counter;
+    _Atomic(uint32_t) edition;
     int32_t nospecialize;  // global bit flags: initialization for new methods
     int8_t optlevel;
     int8_t compile;
@@ -1025,7 +1045,6 @@ struct JL_GC_TRACKED_TYPE _jl_typemap_entry_t {
     JL_DATA_TYPE
     _Atomic(struct _jl_typemap_entry_t*) next; // invasive linked list
     jl_tupletype_t *sig; // the type signature for this entry
-    jl_tupletype_t *simplesig; // a simple signature for fast rejection
     jl_svec_t *guardsigs;
     _Atomic(size_t) min_world;
     _Atomic(size_t) max_world;
@@ -1036,7 +1055,7 @@ struct JL_GC_TRACKED_TYPE _jl_typemap_entry_t {
     } func;
     // memoized properties of sig:
     int8_t isleafsig; // isleaftype(sig) & !any(isType, sig) : unsorted and very fast
-    int8_t issimplesig; // all(isleaftype | isAny | isType | isVararg, sig) : sorted and fast
+    int8_t issimplesig; // !isa(sig, UnionAll) : sorted and fast, abstract slots are tested last
     int8_t va; // isVararg(sig)
 };
 
@@ -1653,7 +1672,7 @@ STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint32_t x) JL_NOTSAFE
 #define jl_gf_name(f) (((jl_datatype_t*)jl_typeof(f))->name->singletonname)
 
 // struct type info
-JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st, void *stack, int cacheable) JL_CANSAFEPOINT;
 #define jl_get_fieldtypes(st) ((st)->types ? (st)->types : jl_compute_fieldtypes((st), NULL, 0))
 STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st) JL_NOTSAFEPOINT
 {
@@ -2310,6 +2329,8 @@ JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s);
 
 // modules and global variables
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_set_module_edition(jl_module_t *m, uint32_t value);
+JL_DLLEXPORT uint32_t jl_get_module_edition(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl);
 JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m);

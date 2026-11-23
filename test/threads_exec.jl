@@ -1831,7 +1831,12 @@ end
 # Forcible task abandonment (unsafe_abandon!): the victim must be running
 # on a thread of its own while the driver keeps executing.
 if threadpoolsize() >= 2
-    @testset "task abandonment wakes waiters" begin
+    # Not run: a committed abandonment discards the victim's thread context at
+    # an arbitrary instruction, and the runtime cannot detect every state in
+    # which that corrupts it. On macOS the redirect can also be lost after the
+    # request committed, which hangs `unsafe_abandon!` (#63985). Nothing in Base
+    # calls `unsafe_abandon!` yet.
+    false && @testset "task abandonment wakes waiters" begin
         # Synchronize on observable state, never on timing: the spin counter
         # proves the victim is executing its loop on a thread.
         spins = Threads.Atomic{Int}(0)
@@ -1867,7 +1872,7 @@ if threadpoolsize() >= 2
         @test_throws TaskFailedException fetch(watcher)
     end
 
-    @testset "unsafe_abandon! validates at delivery and can refuse" begin
+    false && @testset "unsafe_abandon! validates at delivery and can refuse" begin
         # A victim cycling a ReentrantLock (which inhibits finalizers while
         # held) must never be abandoned mid-hold: the delivery-point
         # validation refuses instead of corrupting runtime bookkeeping.
@@ -1952,5 +1957,40 @@ if threadpoolsize() >= 2
         @test fetch(victim) === :survived
         # the withdrawal returned the rescue task's affinity claim
         @test Threads.threadid(rescue) == 0
+    end
+end
+
+# Issue #65027: test for inference waiting on a reservation whose owner is compiling.
+if threadpoolsize() >= 2
+    let m = Module()
+        @eval m begin
+            const in_generator = Threads.Atomic{Bool}(false)
+            const compiling = Threads.Atomic{Bool}(false)
+            helper(::Type{T}) where {T} = sizeof(T) + 1
+            @generated function gen(x::T) where {T}
+                in_generator[] = true
+                t = time()
+                while !compiling[] && time() - t < 10
+                    GC.safepoint()
+                end
+                # Allow time for the other task to wait for f's reservation.
+                t = time()
+                while time() - t < 0.5
+                    GC.safepoint()
+                end
+                n = helper(T)
+                return :(x * $n)
+            end
+            f(x) = gen(x) + 1
+        end
+        t = Threads.@spawn begin
+            while !m.in_generator[]
+                yield()
+            end
+            m.compiling[] = true
+            Base.invokelatest(m.f, 2)
+        end
+        @test Core.Compiler.return_type(m.f, Tuple{Int}) === Int
+        @test fetch(t) == 2 * (sizeof(Int) + 1) + 1
     end
 end

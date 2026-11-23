@@ -1775,12 +1775,7 @@ end
 
 # Find the path of libjulia (or libjulia-debug, as the case may be)
 # to use as a dummy shlib to open
-libjulia = if Base.DARWIN_FRAMEWORK
-    abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME *
-        (Base.isdebugbuild() ? "_debug" : "")))
-else
-    abspath(Libdl.dlpath(Base.isdebugbuild() ? "libjulia-debug" : "libjulia"))
-end
+libjulia = abspath(Libdl.dlpath(Base.isdebugbuild() ? "libjulia-debug" : "libjulia"))
 
 
 # test error handling code paths of running --sysimage
@@ -2011,8 +2006,10 @@ if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these
                      "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
                      "_RR_TRACE_DIR" => temp_trace_dir)
         success, out, err = readchomperrors(cmd)
-        # rr cannot read perf counters if running in containers, allow it to fail in this case
-        allowed_failure = occursin("Unable to open performance counter", err)
+        # rr cannot read perf counters if running in containers or if the host's
+        # perf_event_paranoid setting is too restrictive, allow it to fail in these cases
+        allowed_failure = occursin("Unable to open performance counter", err) ||
+                            occursin("perf_event_paranoid", err)
         @testset let cmd=cmd, stdout=out, stderr=err
             @test success || allowed_failure
         end

@@ -197,6 +197,18 @@ using Test, Random
             @test isshredded(s5)
             @test v5 == read(s6) == codeunits("frperg")
             shred!(s5); shred!(s6)
+
+            # Backspace (^H) and DEL both delete the previous character
+            v7, s7 = challenge_prompt(:(s=Base.getpass("LPAwVZM8D4I> ", with_suffix=false); (read(s), Base.shred!(s))), ["LPAwVZM8D4I> " => "\bab\bc\x7fdé\x7f\n"])
+            @test isshredded(s7)
+            @test v7 == codeunits("ad")
+            shred!(s7)
+
+            secret = "x"^130 * "пароль€ऄ"
+            v9, s9 = challenge_prompt(:(s=Base.getpass("LPAwVZM8D4I> ", with_suffix=false); (read(s), Base.shred!(s))), ["LPAwVZM8D4I> " => secret * "\n"])
+            @test isshredded(s9)
+            @test v9 == codeunits(secret)
+            shred!(s9)
         end
     end
 end

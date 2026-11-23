@@ -4,11 +4,12 @@
 #define THREADING_H
 
 #include <stdint.h>
+#include <uv.h>
+#include "julia.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "julia.h"
 
 #define PROFILE_JL_THREADING            0
 

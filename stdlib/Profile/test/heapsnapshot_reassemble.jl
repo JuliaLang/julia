@@ -61,7 +61,7 @@ end
 @testset "assemble_snapshot from synthetic parts" begin
     # node layout: type, name_idx, id, self_size, trace_node_id, detachedness
     # edge layout: type, name_or_index, from_node, to_node (node indices)
-    function write_parts(prefix; to_node = 1, strings_short_by = 0)
+    write_parts = function (prefix; to_node = 1, strings_short_by = 0)
         write(string(prefix, ".metadata.json"),
             """{"snapshot":{"node_count":2,"edge_count":1,"trace_function_count":0}}""")
         open(string(prefix, ".nodes"), "w") do io
@@ -101,6 +101,12 @@ end
         # a truncated strings file is an error, and must not leave output behind
         write_parts(prefix; strings_short_by = 5)
         @test_throws "truncated strings file" Profile.HeapSnapshot.assemble_snapshot(prefix, out_file)
+        @test !isfile(out_file)
+
+        # metadata without an edge count is an error, and must not leave output behind
+        write_parts(prefix)
+        write(string(prefix, ".metadata.json"), """{"snapshot":{"node_count":2}}""")
+        @test_throws "no integer `edge_count` entry" Profile.HeapSnapshot.assemble_snapshot(prefix, out_file)
         @test !isfile(out_file)
 
         # a failed assembly must preserve a pre-existing output file

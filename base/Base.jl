@@ -23,9 +23,6 @@ include(strcat(BUILDROOT, "version_git.jl")) # include($BUILDROOT/base/version_g
 # a slightly more verbose fashion than usual, because we're running so early.
 let os = ccall(:jl_get_UNAME, Any, ())
     if os === :Darwin || os === :Apple
-        if DARWIN_FRAMEWORK
-            push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-        end
         push!(DL_LOAD_PATH, "@loader_path")
     end
 end
@@ -315,6 +312,7 @@ include("pkgid.jl")
 include("toml/toml.jl")
 include("linking.jl")
 include("loading.jl")
+include("loading_cache.jl")
 
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
 include("binaryplatforms.jl")
@@ -335,7 +333,6 @@ include("docs/basedocs.jl")
 # Compiler frontend
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
 JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
-set_syntax_version(Base, v"1.14")
 
 include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
 JuliaLowering.activate!(false; freeze_world_age=false)
@@ -615,6 +612,9 @@ function __init__()
     init_debuginfo_source_paths()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
+    empty!(loaded_cachefile_locks) # opened by the process that built the image
+    empty!(session_build_locks)
+    atexit(release_cachefile_locks)
     empty!(checksums_valid)
     for mod in loaded_modules_order
         push!(get!(Vector{Module}, loaded_precompiles, PkgId(mod)), mod)

@@ -1,13 +1,11 @@
 # This file provides an adaptor to match the API expected by the Julia runtime
 # code in the binding Core._parse
 
-const _has_v1_6_hooks  = VERSION >= v"1.6"
-const _has_v1_10_hooks = isdefined(Core, :_setparser!)
-const _has_v1_14_version_hooks = isdefined(Base, :LATEST_STABLE_EDITION)
-const LATEST_STABLE_EDITION = @static if _has_v1_14_version_hooks
-    Base.LATEST_STABLE_EDITION
+const _has_v1_14_version_hooks = isdefined(Base, :LATEST_EDITION)
+const LATEST_EDITION = @static if _has_v1_14_version_hooks
+    Base.LATEST_EDITION
 else
-    (1, 13)
+    (Int(VERSION.major), Int(VERSION.minor))
 end
 
 struct ErrorSpec
@@ -110,32 +108,6 @@ function _incomplete_tag(theerror::ErrorSpec, codelen)
     end
 end
 
-#-------------------------------------------------------------------------------
-function _set_core_parse_hook(parser)
-    @static if _has_v1_10_hooks
-        Core._setparser!(parser)
-    else
-        # HACK! Fool the runtime into allowing us to set Core._parse, even during
-        # incremental compilation. (Ideally we'd just arrange for Core._parse to be
-        # set to the JuliaSyntax parser. But how do we signal that to the dumping
-        # code outside of the initial creation of Core?)
-        i = Base.fieldindex(Base.JLOptions, :incremental)
-        ptr = convert(Ptr{fieldtype(Base.JLOptions, i)},
-                      cglobal(:jl_options, Base.JLOptions) + fieldoffset(Base.JLOptions, i))
-        incremental = unsafe_load(ptr)
-        if incremental != 0
-            unsafe_store!(ptr, 0)
-        end
-
-        Base.eval(Core, :(_parse = $parser))
-
-        if incremental != 0
-            unsafe_store!(ptr, incremental)
-        end
-    end
-end
-
-
 # Wrap the function `f` so that it's always invoked in the given `world_age`
 #
 # NB: We need an inference barrier of one type or another here to prevent
@@ -166,9 +138,6 @@ function _has_nested_error(ex)
     end
 end
 
-# Debug log file for dumping parsed code
-const _debug_log = Ref{Union{Nothing,IO}}(nothing)
-
 function core_parser_hook(code, filename::String, lineno::Int, offset::Int,
                           options::Symbol, edition::Tuple{Int, Int})
     try
@@ -182,14 +151,6 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int,
             # For non-Base string types, convert to UTF-8 encoding, using an
             # invokelatest to avoid world age issues.
             code = Base.invokelatest(String, code)
-        end
-        if !isnothing(_debug_log[])
-            print(_debug_log[], """
-                  #-#-#-------------------------------
-                  # ENTER filename=$filename, lineno=$lineno, offset=$offset, options=$options"
-                  #-#-#-------------------------------
-                  """)
-            write(_debug_log[], code)
         end
 
         stream = ParseStream(code, offset+1; version=VersionNumber(edition))
@@ -217,29 +178,11 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int,
             pos_before_comments = last_non_whitespace_byte(stream)
             errspec = first_tree_error(stream)
             tag = _incomplete_tag(errspec, pos_before_comments)
-            if _has_v1_10_hooks
-                exc = ParseError(stream, filename=filename, first_line=lineno,
-                                 incomplete_tag=tag)
-                msg = sprint(showerror, exc)
-                error_ex = Expr(tag === :none ? :error : :incomplete,
-                                Meta.ParseError(msg, exc))
-            elseif tag !== :none
-                # Hack: For older Julia versions, replicate the messages which
-                # Base.incomplete_tag() will match
-                msg =
-                    tag === :string  ? "incomplete: invalid string syntax"     :
-                    tag === :comment ? "incomplete: unterminated multi-line comment #= ... =#" :
-                    tag === :block   ? "incomplete: construct requires end"    :
-                    tag === :cmd     ? "incomplete: invalid \"`\" syntax"      :
-                    tag === :char    ? "incomplete: invalid character literal" :
-                                       "incomplete: premature end of input"
-                error_ex = Expr(:incomplete, msg)
-            else
-                # In the flisp parser errors are normally `Expr(:error, msg)` where
-                # `msg` is a String. By using a JuliaSyntax.ParseError for msg
-                # we can do fancy error reporting instead.
-                error_ex = Expr(:error, ParseError(stream, filename=filename, first_line=lineno))
-            end
+            exc = ParseError(stream, filename=filename, first_line=lineno,
+                             incomplete_tag=tag)
+            msg = sprint(showerror, exc)
+            error_ex = Expr(tag === :none ? :error : :incomplete,
+                            Meta.ParseError(msg, exc))
             ex = if options === :all
                 # When encountering a toplevel error, the reference parser
                 # * truncates the top level expression arg list before that error
@@ -274,28 +217,9 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int,
         # the Core hook must return an offset (ie, it's 0-based) so the factors
         # of one cancel here.
         last_offset = last_byte(stream)
-
-        if !isnothing(_debug_log[])
-            println(_debug_log[], """
-                    #-#-#-
-                    # EXIT last_offset=$last_offset
-                    #-#-#-
-                    """)
-            flush(_debug_log[])
-        end
-
         # Rewrap result in an svec for use by the C code
         return Core.svec(ex, last_offset)
     catch exc
-        if !isnothing(_debug_log[])
-            println(_debug_log[], """
-                    #-#-#-
-                    # ERROR EXIT
-                    # $exc
-                    #-#-#-
-                    """)
-            flush(_debug_log[])
-        end
         @error("""JuliaSyntax parser failed — falling back to flisp!
                   This is not your fault. Please submit a bug report to https://github.com/JuliaLang/JuliaSyntax.jl/issues""",
                exception=(exc,catch_backtrace()),
@@ -381,32 +305,19 @@ end
     end
 end
 
-# Core._parse gained a `lineno` argument in
-# https://github.com/JuliaLang/julia/pull/43876
-# Prior to this, the following signature was needed:
-function core_parser_hook(code, filename, offset, options)
-    core_parser_hook(code, filename, 1, offset, options)
-end
 function core_parser_hook(code, filename, lineno, offset, options)
-    core_parser_hook(code, filename, lineno, offset, options, LATEST_STABLE_EDITION)
+    core_parser_hook(code, filename, lineno, offset, options, LATEST_EDITION)
 end
 
-if _has_v1_10_hooks
-    Base.incomplete_tag(e::JuliaSyntax.ParseError) = e.incomplete_tag
-else
-    # Hack: Meta.parse() attempts to construct a ParseError from a string if it
-    # receives `Expr(:error)`. Add an override to the ParseError constructor to
-    # prevent this.
-    Base.Meta.ParseError(e::JuliaSyntax.ParseError) = e
-end
+Base.incomplete_tag(e::JuliaSyntax.ParseError) = e.incomplete_tag
 
-_default_system_parser = _has_v1_6_hooks ? Core._parse : nothing
+const _default_system_parser = Core._parse
 
 # hook into InteractiveUtils.@activate
 activate!(enable=true) = enable_in_core!(enable)
 
 """
-    enable_in_core!([enable=true; freeze_world_age=true, debug_filename=nothing])
+    enable_in_core!([enable=true; freeze_world_age=true])
 
 Connect the JuliaSyntax parser to the Julia runtime so that it replaces the
 flisp parser for all parsing work. That is, JuliaSyntax will be used for
@@ -418,16 +329,12 @@ Keyword arguments:
   recompilation of the parser due to any user-defined methods (default `true`).
 """
 function enable_in_core!(enable=true; freeze_world_age = true)
-    if !_has_v1_6_hooks
-        error("Cannot use JuliaSyntax as the main Julia parser in Julia version $VERSION < 1.6")
-    end
     if enable
         hook = _has_v1_14_version_hooks ? new_core_parser_hook : core_parser_hook
         world_age = freeze_world_age ? Base.get_world_counter() : typemax(UInt)
-        _set_core_parse_hook(fix_world_age(hook, world_age))
+        Core._setparser!(fix_world_age(hook, world_age))
     else
-        @assert !isnothing(_default_system_parser)
-        _set_core_parse_hook(_default_system_parser)
+        Core._setparser!(_default_system_parser)
     end
     nothing
 end
@@ -439,23 +346,8 @@ end
 function _fl_parse_hook(code, filename, lineno, offset, options)
     @static if _has_v1_14_version_hooks
         Base.fl_parse(code, filename, lineno, offset, options, (1, 14))
-    elseif VERSION >= v"1.8.0-DEV.1370" # https://github.com/JuliaLang/julia/pull/43876
-        return Core.Compiler.fl_parse(code, filename, lineno, offset, options)
-    elseif _has_v1_6_hooks
-        return Core.Compiler.fl_parse(code, filename, offset, options)
     else
-        if options === :all
-            ex = Base.parse_input_line(String(code), filename=filename, depwarn=false)
-            if !@isexpr(ex, :toplevel)
-                ex = Expr(:toplevel, ex)
-            end
-            return ex, sizeof(code)
-        elseif options === :statement || options === :atom
-            ex, pos = Meta.parse(code, offset+1, greedy=options==:statement, raise=false)
-            return ex, pos-1
-        else
-            error("Unknown parse options $options")
-        end
+        return Core.Compiler.fl_parse(code, filename, lineno, offset, options)
     end
 end
 

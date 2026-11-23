@@ -193,6 +193,13 @@ print(io::IO, s::AbstractString) = for c in s; print(io, c); end
 write(io::IO, s::AbstractString) = (len = 0; for c in s; len += Int(write(io, c))::Int; end; len)
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
+@inline function escaped_char_width(c::AbstractChar)
+    ' ' <= c <= '~' && return c in ('"', '\\', '$') ? 2 : 1
+    c == '\0' && return textwidth(escape_nul('0'))
+    !isoverlong(c) && isprint(c) && return textwidth(c)
+    return textwidth(escape_string(string(c), ('"', '$'); fullhex=true))
+end
+
 # show elided string if more than `limit` characters
 function show(
     io    :: IO,
@@ -210,7 +217,7 @@ function show(
     limit = max(0, limit-2) # quote chars
 
     # early out for short strings
-    check_textwidth(str, limit) && return show(io, str)
+    check_textwidth(str, limit, escaped_char_width) && return show(io, str)
 
     # these don't depend on string data
     units = codeunit(str) == UInt8 ? "bytes" : "code units"
@@ -219,14 +226,14 @@ function show(
     # longest possible replacement string for omitted chars
     max_replacement = skip_text(ncodeunits(str) * 100) # *100 for 2 inner quote chars
 
-    head, tail = string_truncate_boundaries(str, limit, max_replacement, Val(:center))
+    head, tail = string_truncate_boundaries(str, limit, max_replacement, Val(:center), true, escaped_char_width)
 
     # threshold: min chars skipped to make elision worthwhile
     afterhead = nextind(str, head)
     n = tail - afterhead # skipped code units
     replacement = skip_text(n)
-    t = ncodeunits(replacement) # length of replacement (textwidth == ncodeunits here)
-    @views if 4t ≤ n || t ≤ n && t ≤ textwidth(str[afterhead:prevind(str,tail)])
+    t = ncodeunits(replacement) # length of replacement
+    @views if 4t ≤ n || !check_textwidth(str[afterhead:prevind(str,tail)], textwidth(replacement) + 2, escaped_char_width)
         show(io, str[begin:head])
         printstyled(io, replacement; color=:light_yellow, bold=true)
         show(io, str[tail:end])
@@ -356,7 +363,9 @@ end
 function _join_preserve_annotations(iterator, args...)
     et = @default_eltype(iterator)
     if isconcretetype(et) && !_isannotated(et) && !any(_isannotated, args)
-        sprint(join, iterator, args...)
+        io = IOBuffer()
+        join(io, iterator, args...)
+        takestring!(io)
     else
         io = AnnotatedIOBuffer()
         join(io, iterator, args...)
@@ -498,13 +507,15 @@ end
 
 # TODO: handle unescaping invalid UTF-8 sequences
 """
-    unescape_string(str::AbstractString, keep = ())::AbstractString
-    unescape_string(io, s::AbstractString, keep = ())::Nothing
+    unescape_string(str::AbstractString, keep = (); hex_as_char::Bool = false)::AbstractString
+    unescape_string(io, s::AbstractString, keep = (); hex_as_char::Bool = false)::Nothing
 
 General unescaping of traditional C and Unicode escape sequences. The first form returns
 the unescaped string, the second prints the result to `io`.
 The argument `keep` specifies a collection of characters which (along with backslashes) are
 to be kept as they are.
+If `hex_as_char` is `true`, a `\\x` escape sequence is decoded as the Unicode code point
+U+0000 to U+00FF it denotes rather than as a raw byte, so the result is always valid UTF-8.
 
 The following escape sequences are recognised:
  - Escaped backslash (`\\\\`)
@@ -530,9 +541,18 @@ julia> unescape_string("\\\\101") # octal
 
 julia> unescape_string("aaa \\\\g \\\\n", ['g']) # using `keep` argument
 "aaa \\\\g \\n"
+
+julia> unescape_string("\\\\xe9") # hex byte
+"\\xe9"
+
+julia> unescape_string("\\\\xe9"; hex_as_char=true) # hex code point
+"é"
 ```
+
+!!! compat "Julia 1.15"
+    The `hex_as_char` keyword argument requires Julia 1.15 or later.
 """
-function unescape_string(io::IO, s::AbstractString, keep = ())
+function unescape_string(io::IO, s::AbstractString, keep = (); hex_as_char::Bool = false)
     a = Iterators.Stateful(s)
     for c in a
         if !isempty(a) && c == '\\'
@@ -555,7 +575,7 @@ function unescape_string(io::IO, s::AbstractString, keep = ())
                     throw(ArgumentError("invalid $(m == 2 ? "hex (\\x)" :
                                         "unicode (\\$u)") escape sequence"))
                 end
-                if m == 2 # \x escape sequence
+                if m == 2 && !hex_as_char # \x escape sequence as a raw byte
                     write(io, UInt8(n))
                 else
                     print(io, Char(n))
@@ -589,8 +609,8 @@ function unescape_string(io::IO, s::AbstractString, keep = ())
         end
     end
 end
-unescape_string(s::AbstractString, keep = ()) =
-    sprint(unescape_string, s, keep; sizehint=lastindex(s))
+unescape_string(s::AbstractString, keep = (); hex_as_char::Bool = false) =
+    sprint(io -> unescape_string(io, s, keep; hex_as_char), sizehint=lastindex(s))
 
 """
     @b_str
@@ -822,6 +842,41 @@ function String(chars::AbstractVector{<:AbstractChar})
         end
     end
 end
+
+"""
+    String(iterable)::String
+
+Create a `String` from `iterable`. Each element is converted to `Char` via `convert(Char, c)::Char`
+and written to the resulting string.
+
+# Examples
+```jldoctest
+julia> String(Iterators.map(c -> c+1, "Hello, world"))
+"Ifmmp-!xpsme"
+
+julia> String(Iterators.take("Hello, world", 5))
+"Hello"
+
+julia> String(c for c in "Julia" if c != 'i')
+"Jula"
+```
+
+!!! compat "Julia 1.15"
+    Constructing a `String` from an arbitrary iterable requires Julia 1.15 or later.
+"""
+String(itr) = _string_from_itr(IteratorSize(itr), itr)
+
+_string_from_itr(::Union{HasLength, HasShape}, itr) = _string_from_itr(length(itr), itr)
+_string_from_itr(::SizeUnknown, itr) = _string_from_itr(0, itr)
+
+function _string_from_itr(sizehint::Integer, itr)
+    sprint(sizehint=sizehint) do io
+        for c in itr
+            write(io, convert(Char, c)::Char)
+        end
+    end
+end
+
 
 function AnnotatedString(chars::AbstractVector{C}) where {C<:AbstractChar}
     str = if C <: AnnotatedChar

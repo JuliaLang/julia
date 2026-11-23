@@ -90,6 +90,10 @@ using Dates
     @test ndims(a) == 5
     @test a[2,1,2,2,1] == b[14]
     @test a[2,2,2,2,2] == b[end]
+    @test Base.reshape!(a, (4, 2, 1, 2, 2)) === a
+    @test size(a) == (4, 2, 1, 2, 2)
+    @test a[2,2,1,2,2] == b[end-2]
+    @test_throws DimensionMismatch Base.reshape!(a, (4, 2, 1, 2, 1))
 
     @test_throws DimensionMismatch reshape(1:3, 4)
 

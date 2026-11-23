@@ -230,8 +230,8 @@ CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) 
 endif
 
 ifeq ($(OS),Darwin)
-# needed for codegen's dSYM lookup.
-CG_LIBS += -framework CoreFoundation
+# otherwise environment variables change when CoreFoundation is loaded
+RT_LIBS += -framework CoreFoundation
 endif
 
 ifeq ($(USEGCC),1)

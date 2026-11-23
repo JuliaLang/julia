@@ -810,8 +810,13 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
                 succs[j] = bb_rename[succs[j]]
             end
         end
-        let blocks = blocks, bb_rename = bb_rename
-            result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
+        if cur_bb - 1 == length(blocks)
+            # Every block is reachable, so the renaming is the identity: keep the array
+            result_bbs = blocks
+        else
+            let blocks = blocks, bb_rename = bb_rename
+                result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
+            end
         end
         # Reuse the same cache for the initial construction and any later
         # in-place updates while killing edges during compaction.

@@ -8,7 +8,6 @@ public @profile,
 
 using ..Profile: Profile, ProfileFormat, StackFrameTree, print_flat, print_tree
 using Base.StackTraces: StackTrace, StackFrame, lookup
-using Base: InterpreterIP
 
 # --- Raw results structs, originally defined in C ---
 
@@ -43,7 +42,7 @@ Profile allocations that happen during `expr`, returning the result of `expr`. U
 
 A sample rate of 1.0 will record everything; 0.0 will record nothing.
 
-```julia
+```julia-repl
 julia> Profile.Allocs.@profile sample_rate=0.01 peakflops()
 1.03733270279065e11
 
@@ -397,7 +396,6 @@ function tree!(root::StackFrameTree{T}, all::Vector{Alloc}, C::Bool, recur::Symb
     tops = Vector{StackFrameTree{T}}()
     build = Dict{T, StackFrameTree{T}}()
     for r in all
-        first = true
         nb = r.size # or 1 for counting
         root.recur = 0
         root.count += nb

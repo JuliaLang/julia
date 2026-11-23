@@ -44,6 +44,15 @@ outer_scope(x) = inner_scope(x)
         @test occursin("inlinedAt:", ir) == scopes
     end
 
+    # the JIT's own code keeps them only in assert builds or for a debugger
+    let cmd = `$(Base.julia_cmd()) --startup-file=no -e 'print(unsafe_load(
+                  cglobal(:jl_default_cgparams, Base.CodegenParams)).debug_info_inline_scopes)'`
+        asserts = ccall(:jl_is_assertsbuild, Int8, ()) != 0
+        no_listener = ("ENABLE_GDBLISTENER" => "0", "ENABLE_JITPROFILING" => "0")
+        @test readchomp(addenv(cmd, no_listener...)) == string(Int(asserts))
+        @test readchomp(addenv(cmd, "ENABLE_GDBLISTENER" => "1")) == "1"
+    end
+
     # IR consumers retain inline scopes during precompilation, independently of
     # Julia's internal parameters for generating the package image.
     mktempdir() do dir
@@ -744,7 +753,40 @@ end
         return val
     end
     @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f8, Tuple{Some{Int}}, true, false, false))
+    # nor the stack slot of a split union whose unboxed members are pointer-free: only its box
+    function f9(i, s)
+        val = i == 0 ? s : i
+        GC.@preserve val begin end
+        return i
+    end
+    @test f9(1, "s") == 1
+    @test occursin(r"gc_preserve_begin\(ptr addrspace\(10\) %[^,()]+\)", get_llvm(f9, Tuple{Int, String}, true, false, false))
 end
+
+# GC.@preserve of a split union roots the references of its unboxed form,
+# whose box pointer is NULL at runtime
+mutable struct PreservedObj
+    x::Int
+end
+struct PreservedFields
+    o::PreservedObj
+    k::Int
+end
+const preserved_weakref = Ref{WeakRef}()
+@noinline function preserved_obj(i)
+    o = PreservedObj(i)
+    preserved_weakref[] = WeakRef(o)
+    return o
+end
+@noinline function preserve_union_phi(i, s)
+    u = i == 0 ? s : PreservedFields(preserved_obj(i), i) # ::Union{String, PreservedFields}
+    GC.@preserve u begin
+        GC.gc()
+        freed = preserved_weakref[].value === nothing
+    end
+    return freed
+end
+@test !preserve_union_phi(Base.inferencebarrier(1)::Int, "s")
 
 # issue #32843
 function f32843(vals0, v)
@@ -1626,4 +1668,68 @@ end
     # `Union{}` (typed `Type{Union{}}`) is an unboxed ghost of `TypeofBottom`
     @test isequal(Base.mapany(identity, (Union{}, 'a')), Any[Union{}, 'a'])
     @test isequal(Any[x for x in (Union{}, 1.0)], Any[Union{}, 1.0])
+end
+
+# a value split out of a union keeps its box when it is boxed again, and gets a
+# new box when it arrived unboxed
+@noinline getu_union(v, i) = i == 0 ? v[1]::Union{Int, String} : i
+function recopy_union!(w, v, i)
+    y = getu_union(v, i)
+    if y isa Int
+        w[1] = y
+    end
+    nothing
+end
+let v = Any[typemax(Int)], w = Any[nothing]
+    recopy_union!(w, v, 0)
+    @test w[1] === typemax(Int)
+    @test (@allocated recopy_union!(w, v, 0)) == 0
+    recopy_union!(w, v, 1000)
+    @test w[1] === 1000
+end
+
+# Reading a field at a runtime index from a homogeneous struct whose bits and GC roots
+# are split on the stack must not box the struct to look the field up (#64822)
+struct HomogeneousSplit
+    a::Tuple{Int,Vector{Int}}
+    b::Tuple{Int,Vector{Int}}
+    c::Tuple{Int,Vector{Int}}
+end
+@noinline getfield_runtime(x, i) = getfield(x, i)
+function allocated_getfield_runtime(x, i)
+    getfield_runtime(x, i)
+    return @allocated getfield_runtime(x, i)
+end
+@noinline new_split_boxed(a, b, c, i) = (a, b, c)[i]
+@noinline new_split_inline(x, a, b, c, i) = (p=(x, a), q=(x + 1, b), r=(x + 2, c))[i]
+@noinline new_split_allptr(a, b, c, i) = (p=(a, b), q=(b, c), r=(c, a))[i]
+@testset "runtime getfield of a split value" begin
+    vs = [[i] for i in 1:3]
+    elts = ntuple(i -> (i, vs[i]), 3)
+    for x in (elts, NamedTuple{(:a, :b, :c)}(elts), HomogeneousSplit(elts...))
+        for i in 1:3
+            @test getfield_runtime(x, i) === elts[i]
+            @test allocated_getfield_runtime(x, i) == 0
+            x isa Tuple && continue
+            @test getfield_runtime(x, (:a, :b, :c)[i]) === elts[i]
+            @test allocated_getfield_runtime(x, (:a, :b, :c)[i]) == 0
+        end
+        @test_throws BoundsError getfield_runtime(x, 0)
+        @test_throws BoundsError getfield_runtime(x, 4)
+        for I in (x isa Tuple ? (Int,) : (Int, Symbol))
+            @test !occursin("jl_get_nth_field_checked", get_llvm(getfield_runtime, Tuple{typeof(x), I}))
+        end
+    end
+    # the same for a value built in the function, whose roots are not in memory yet
+    for i in 1:3
+        @test new_split_boxed(vs[1], "2", :c, i) === (vs[1], "2", :c)[i]
+        @test new_split_inline(1, vs..., i) === elts[i]
+        @test new_split_allptr(vs..., i) === (vs[i], vs[mod1(i + 1, 3)])
+    end
+    @test_throws BoundsError new_split_boxed(vs[1], "2", :c, 4)
+    @test_throws BoundsError new_split_inline(1, vs..., 4)
+    @test_throws BoundsError new_split_allptr(vs..., 0)
+    @test !occursin("jl_get_nth_field_checked", get_llvm(new_split_boxed, Tuple{Vector{Int}, String, Symbol, Int}))
+    @test !occursin("jl_get_nth_field_checked", get_llvm(new_split_inline, Tuple{Int, Vector{Int}, Vector{Int}, Vector{Int}, Int}))
+    @test !occursin("jl_get_nth_field_checked", get_llvm(new_split_allptr, Tuple{Vector{Int}, Vector{Int}, Vector{Int}, Int}))
 end

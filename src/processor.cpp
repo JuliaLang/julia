@@ -306,6 +306,19 @@ static std::string get_host_feature_string()
 static std::vector<tp::LLVMTargetSpec> jit_targets;
 // The sysimage clone selected at load time (unset until a sysimage is loaded).
 static int32_t sysimage_matched_target_index = -1;
+// Vector features removed from the JIT target to match the sysimage clone's vector ABI.
+// Package images are built without them too, or they could not be loaded.
+static tp::FeatureBits jit_vector_clamp{};
+
+static void disable_features(tp::LLVMTargetSpec &spec, const tp::FeatureBits &to_disable) JL_NOTSAFEPOINT
+{
+    // Features that imply the cleared ones (e.g. avxvnni implies avx2) are
+    // cleared with them; otherwise LLVM would enable the cleared ones again.
+    tp::apply_feature_delta(&spec.en_features, tp::FeatureBits{}, to_disable);
+    for (int w = 0; w < TARGET_FEATURE_WORDS; w++)
+        spec.dis_features.bits[w] = tp::llvm_feature_mask.bits[w] & ~spec.en_features.bits[w];
+    spec.cpu_features = tp::build_llvm_feature_string(spec.en_features, spec.dis_features);
+}
 
 // If cpu_target starts with "sysimage", replace it with the target string
 // stored in the loaded sysimage. Otherwise return as-is.
@@ -579,8 +592,6 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
     // (only FixedVectorType/NEON), so SVE clamping is not needed for ABI
     // correctness. RISC-V V is similar. Revisit if Julia adds scalable vector
     // support.
-    // Features that imply the cleared ones (e.g. avxvnni implies avx2) are
-    // cleared with them; otherwise LLVM would enable the cleared ones again.
     int matched_vreg = match_result.second;
     int host_vreg = tp::max_vector_size(target.en_features);
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_)
@@ -608,10 +619,9 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
                 if (fe) tp::feature_set(&to_disable, fe->bit);
             }
         }
-        tp::apply_feature_delta(&target.en_features, tp::FeatureBits{}, to_disable);
-        for (int w = 0; w < TARGET_FEATURE_WORDS; w++)
-            target.dis_features.bits[w] = tp::llvm_feature_mask.bits[w] & ~target.en_features.bits[w];
-        target.cpu_features = tp::build_llvm_feature_string(target.en_features, target.dis_features);
+        CF_DEBUG("[cpufeatures]   clamping JIT vector width %d -> %d\n", host_vreg, matched_vreg);
+        disable_features(target, to_disable);
+        jit_vector_clamp = to_disable;
     }
 #else
     (void)matched_vreg;
@@ -826,6 +836,15 @@ extern "C" jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
 
     if (specs.empty())
         jl_error("No targets specified");
+
+    // A package image runs against the loaded sysimage and the JIT, so it must
+    // not use the vector features that were removed from the JIT target.
+    if (jl_options.incremental && tp::feature_popcount(&jit_vector_clamp) != 0) {
+        for (auto &s : specs) {
+            disable_features(s, jit_vector_clamp);
+            finalize_codegen_target(s);
+        }
+    }
 
     jl_clone_targets_t result;
 

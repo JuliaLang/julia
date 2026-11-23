@@ -101,8 +101,8 @@ struct UTInstant{P<:Period} <: Instant
 end
 
 # Convenience default constructors
-UTM(x) = UTInstant(Millisecond(x))
-UTD(x) = UTInstant(Day(x))
+UTM(x) = UTInstant{Millisecond}(Millisecond(x))
+UTD(x) = UTInstant{Day}(Day(x))
 
 # Calendar types provide rules for interpreting instant
 # timelines in human-readable form.
@@ -686,9 +686,9 @@ Timestamp{P}(y, m=1, d=1, h=0, mi=0, s=0, ms=0, us=0, ns=0, ampm::AMPM=TWENTYFOU
 
 # Traits, Equality
 Base.isfinite(::Union{Type{T}, T}) where {T<:TimeType} = true
-calendar(dt::DateTime) = ISOCalendar
-calendar(dt::Date) = ISOCalendar
-calendar(dt::Timestamp) = ISOCalendar
+calendar(::DateTime) = ISOCalendar
+calendar(::Date) = ISOCalendar
+calendar(::Timestamp) = ISOCalendar
 
 """
     eps(::Type{DateTime})::Millisecond
@@ -746,7 +746,7 @@ Base.typemin(::Type{Timestamp}) = typemin(Timestamp{Nanosecond})
 Base.typemin(::Type{Timestamp{P}}) where {P} = Timestamp{P}(UTInstant(typemin(P)))
 Base.typemin(x::Timestamp) = typemin(typeof(x))
 # Date-DateTime promotion, isless, ==
-Base.promote_rule(::Type{Date}, x::Type{DateTime}) = DateTime
+Base.promote_rule(::Type{Date}, ::Type{DateTime}) = DateTime
 Base.promote_rule(::Type{Date}, ::Type{Timestamp{P}}) where {P} = Timestamp{P}
 # Promote to the finer resolution. Package periods may have no period promotion rules.
 Base.promote_rule(::Type{DateTime}, ::Type{Timestamp{P}}) where {P} = Timestamp{timestamp_finer(P, Millisecond)}

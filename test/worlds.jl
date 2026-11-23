@@ -213,6 +213,15 @@ f26506(x::String) = 5
 # The entry we created above should not have been changed
 @test cache26506.max_world == w26506
 @test fetch(schedule(t26506)) === 3
+
+# A lookup by type finds a cache entry with a kind slot for the egality key
+# `TypeEgal{Int}`, but not for `Type{Int}`, which is not a subtype of `DataType`
+fkindslot(::DataType, ::Int) = 1
+Base.inferencebarrier(fkindslot)(Int, 1)
+let find(tt) = ccall(:jl_mt_find_cache_entry, Ptr{Cvoid}, (Any, Any, UInt), Core.methodtable.cache, tt, Base.get_world_counter())
+    @test find(Tuple{typeof(fkindslot), Core.TypeEgal{Int}, Int}) != C_NULL
+    @test find(Tuple{typeof(fkindslot), Type{Int}, Int}) == C_NULL
+end
 @test g26506(z26506) === 5
 
 # issue #38435
@@ -556,6 +565,20 @@ Base.delete_method(which(AmbiguousDeletion.f, (Any, Int)))
 # `showerror` looks up candidates in the latest world, so test the exception rather than its message.
 @test_throws MethodError Base.invoke_in_world(wc_ambiguous, AmbiguousDeletion.f, nothing, 1)
 @test_throws MethodError Base.invoke_in_world(wc_ambiguous, AmbiguousDeletion.g, nothing, 1)
+
+# When a less specific method covers the rest of the caller's signature, the lookup drops
+# both ambiguous methods and the caller's only edge is to that less specific method.
+module AmbiguousDeletionFallback
+abstract type X end; struct N <: X end
+abstract type Y end; struct I <: Y end
+f(x, y) = :fallback
+f(::N, ::Union{I,String}) = 1
+f(::Union{N,Symbol}, ::I) = 2
+g(@nospecialize(a::X), @nospecialize(b::Y)) = f(a, b) isa Symbol
+end
+@test_throws "is ambiguous" AmbiguousDeletionFallback.g(AmbiguousDeletionFallback.N(), AmbiguousDeletionFallback.I())
+Base.delete_method(which(AmbiguousDeletionFallback.f, (Symbol, AmbiguousDeletionFallback.I)))
+@test AmbiguousDeletionFallback.g(AmbiguousDeletionFallback.N(), AmbiguousDeletionFallback.I()) === false
 
 # Generated functions without edges must have min_world = 1.
 # N.B.: If changing this, move this test to precompile and make sure

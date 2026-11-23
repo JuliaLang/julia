@@ -189,8 +189,12 @@ add_tfunc(fpext, 2, 2, conversion_tfunc, 1)
 # arithmetic
 # ----------
 
-@nospecs math_tfunc(𝕃::AbstractLattice, args...) = math_tfunc(widenlattice(𝕃), args...)
-@nospecs math_tfunc(::JLTypeLattice, x, xs...) = widenconst(x)
+@nospecs math_tfunc(𝕃::AbstractLattice, x) = math_tfunc(widenlattice(𝕃), x)
+@nospecs math_tfunc(𝕃::AbstractLattice, x, y) = math_tfunc(widenlattice(𝕃), x, y)
+@nospecs math_tfunc(𝕃::AbstractLattice, x, y, z) = math_tfunc(widenlattice(𝕃), x, y, z)
+@nospecs math_tfunc(::JLTypeLattice, x) = widenconst(x)
+@nospecs math_tfunc(::JLTypeLattice, x, y) = widenconst(x)
+@nospecs math_tfunc(::JLTypeLattice, x, y, z) = widenconst(x)
 
 add_tfunc(neg_int, 1, 1, math_tfunc, 0)
 add_tfunc(add_int, 2, 2, math_tfunc, 1)
@@ -395,7 +399,7 @@ end
     return egal_tfunc(widenlattice(𝕃), x, y)
 end
 @nospecs function egal_tfunc(::JLTypeLattice, x, y)
-    hasintersect(widenconst(x), widenconst(y)) || return Const(false)
+    hasintersect(widenconst_split(x), widenconst_split(y)) || return Const(false)
     return Bool
 end
 add_tfunc(===, 2, 2, egal_tfunc, 1)
@@ -425,7 +429,7 @@ end
     if arg1 isa MustAlias
         arg1 = widenmustalias(arg1)
     end
-    arg1t = arg1 isa Const ? typeof(arg1.val) : isconstType(arg1) ? typeof(type_parameter(arg1)) : widenconst(arg1)
+    arg1t = arg1 isa Const ? typeof(arg1.val) : isconstType(arg1) ? typeof(type_parameter(arg1)) : widenconst_split(arg1)
     a1 = unwrap_unionall(arg1t)
     if isa(a1, DataType) && !isabstracttype(a1)
         if a1 === Module
@@ -624,17 +628,14 @@ add_tfunc(Core.bitsizeof, 1, 1, bitsizeof_tfunc, 1)
     x = unwrap_unionall(xt)
     isconstType(x) && return Const(nfields(type_parameter(x)))
     if isa(x, DataType) && !isabstracttype(x)
-        if x.name === Tuple.name
-            isvatuple(x) && return Int
-            return Const(length(x.types))
-        elseif x.name === _NAMEDTUPLE_NAME
+        if x.name === _NAMEDTUPLE_NAME
             length(x.parameters) == 2 || return Int
             names = x.parameters[1]
             isa(names, Tuple{Vararg{Symbol}}) || return nfields_tfunc(𝕃, rewrap_unionall(x.parameters[2], xt))
             return Const(length(names))
-        else
-            return Const(isdefined(x, :types) ? length(x.types) : length(x.name.names))
         end
+        n = datatype_fieldcount(x)
+        return n === nothing ? Int : Const(n)
     end
     if isa(x, Union)
         na = nfields_tfunc(𝕃, unwraptv(x.a))
@@ -2477,7 +2478,8 @@ end
     memoryref_builtin_common_errorcheck(ref, Const(:not_atomic), boundscheck) || return Bottom
     hasintersect(widenconst(idx), Int) || return Bottom
     hasintersect(widenconst(ref), GenericMemory) && return memoryref_tfunc(𝕃, ref)
-    return ref
+    # a reference at another index, so not the constant `ref` itself
+    return widenconst(ref)
 end
 add_tfunc(memoryrefnew, 1, 3, memoryref_tfunc, 1)
 
@@ -2925,6 +2927,16 @@ const _FLOAT_INTRINSICS = Any[
 # Types compatible with fpext/fptrunc
 const CORE_FLOAT_TYPES = Union{Core.BFloat16, Float16, Float32, Float64}
 
+# `DataType.super` and `DataType.types` are write-once slots filled lazily: a slot
+# that is unset now can be filled later, so `isdefined` or an `UndefRefError` for
+# it is not `:consistent` even though `DataType` is otherwise mutation free
+function is_lazy_datatype_field_argtype(@nospecialize(obj), @nospecialize(name))
+    hasintersect(widenconst(ignorelimited(obj)), DataType) || return false
+    name isa Const || return true
+    fidx = _getfield_fieldindex(DataType, name)
+    return fidx == DATATYPE_SUPER_FIELDINDEX || fidx == DATATYPE_TYPES_FIELDINDEX
+end
+
 function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     # consistent if the first arg is immutable
     na = length(argtypes)
@@ -2939,6 +2951,10 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
         # Some bindings/fields are not allowed to transition from defined to undefined or the reverse, so even
         # if the object is not immutable, we can prove `:consistent`-cy of this:
         consistent = ALWAYS_TRUE
+    elseif is_mutation_free_argtype(wobj) && is_lazy_datatype_field_argtype(wobj, sym)
+        # mutation free makes it `:consistent` below (`inaccessiblememonly`), but a
+        # lazily filled slot is not
+        consistent = ALWAYS_FALSE
     end
     nothrow = isdefined_nothrow(𝕃, argtypes)
     if hasintersect(widenconst(wobj), Module)
@@ -2991,23 +3007,27 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             inaccessiblememonly=ALWAYS_FALSE,
             noub=ALWAYS_FALSE)
     end
+    bcheck = getfield_boundscheck(argtypes)
+    nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
     if is_relocatable_ptr_field(argtypes[1], argtypes[2])
-        if !ismutabletype(widenconst(obj)) || is_mutation_free_argtype(obj)
+        if !ismutabletype(widenconst_split(obj)) || is_mutation_free_argtype(obj)
             # access to immutable / mutation-free types is not modelled by `inaccessiblememonly`
             # so immediately widen these to ALWAYS_FALSE
             consistent = ALWAYS_FALSE
         else
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
         end
-    elseif is_immutable_argtype(obj) || is_mutation_free_argtype(obj) || is_const_field_argtype(obj, argtypes[2])
+    elseif is_immutable_argtype(obj) || is_const_field_argtype(obj, argtypes[2])
         # :consistent if the argtype is immutable or the field is const
         consistent = ALWAYS_TRUE
+    elseif is_mutation_free_argtype(obj)
+        # or if the object is mutation free, unless a lazily filled slot may throw now and succeed later
+        consistent = nothrow || !is_lazy_datatype_field_argtype(obj, argtypes[2]) ?
+            ALWAYS_TRUE : ALWAYS_FALSE
     else
         consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
     end
     noub = ALWAYS_TRUE
-    bcheck = getfield_boundscheck(argtypes)
-    nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
     if !nothrow
         if bcheck !== :on
             # If we cannot independently prove inboundsness, taint `:noub`.
@@ -3021,7 +3041,7 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             noub = ALWAYS_FALSE
         end
     end
-    if hasintersect(widenconst(obj), Module)
+    if hasintersect(widenconst_split(obj), Module)
         # Modeled more precisely in abstract_eval_getglobal
         inaccessiblememonly = ALWAYS_FALSE
     elseif is_relocatable_ptr_field(argtypes[1], argtypes[2])
@@ -3192,6 +3212,8 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return Effects(EFFECTS_TOTAL;
             consistent = ALWAYS_FALSE,
             notaskstate = false,
+            # the scope of the task can refer to any mutable object
+            inaccessiblememonly = ALWAYS_FALSE,
             nothrow)
     elseif f === Core._task
         return TASK_BUILTIN_EFFECTS

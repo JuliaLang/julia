@@ -601,10 +601,10 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         if head(name) == :bindingid
             bk = get_binding(ctx, name).kind
             if bk == :argument
-                throw(LoweringError(name, "Cannot add method to a function argument"))
+                throw(LoweringError(name, "cannot add method to a function argument"))
             elseif bk == :global && !is_top_scope(enclosing_lambda(ctx, scope))
                 throw(LoweringError(name, """
-                    Global method definition needs to be placed at the top \
+                    global method definition needs to be placed at the top \
                     level, or use `eval()`"""))
             end
         end

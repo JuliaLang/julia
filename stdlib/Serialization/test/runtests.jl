@@ -87,7 +87,7 @@ create_serialization_stream() do s
     serialize(s, tpl)
 
     len = 257
-    lt = ntuple(i->0x1, len)
+    lt = ntuple(_->0x1, len)
     serialize(s, lt)
 
     serialize(s, Tuple{})
@@ -328,7 +328,8 @@ create_serialization_stream() do s # Base generic function
 end
 
 # Anonymous Functions
-main_ex = quote
+# This needs to be run on `Main` since the serializer treats it differently.
+@eval Main begin
     using Serialization
     $create_serialization_stream() do s
         local g() = :magic_token_anon_fun_test
@@ -340,7 +341,7 @@ main_ex = quote
         seekstart(s)
         ds = Serializer(s)
         local g2 = deserialize(ds)
-        @test g2 !== g
+        $Test.@test g2 !== g
         $Test.@test Base.invokelatest(g2) === :magic_token_anon_fun_test
         $Test.@test Base.invokelatest(g2) === :magic_token_anon_fun_test
         deserialize(ds) === g2
@@ -362,8 +363,6 @@ main_ex = quote
         end === 2
     end
 end
-# This needs to be run on `Main` since the serializer treats it differently.
-Core.eval(Main, main_ex)
 
 # Task
 # Runnable tasks drop CodeInstance hints but preserve explicit invoke targets.
@@ -502,12 +501,12 @@ using Test, Serialization
 
 module Shell
 export foo
-foo(x) = error("Instances must implement foo")
+foo(_) = error("Instances must implement foo")
 end
 
 module Instance1
 using ..Shell
-Shell.foo(x::Int) = "This is an Int"
+Shell.foo(::Int) = "This is an Int"
 end
 
 using .Shell, .Instance1
@@ -569,7 +568,7 @@ end
 struct T20324{T}
     x::T
 end
-let x = T20324[T20324(1) for i = 1:2]
+let x = T20324[T20324(1) for _ = 1:2]
     b = IOBuffer()
     serialize(b, x)
     seekstart(b)
@@ -593,9 +592,9 @@ end
 
     # Detection of incompatible binary serializations
     function corrupt_header(bytes, offset, val)
-        b = copy(bytes)
-        b[offset] = val
-        IOBuffer(b)
+        corrupted = copy(bytes)
+        corrupted[offset] = val
+        IOBuffer(corrupted)
     end
     @test_throws(
         ErrorException("""Cannot read stream serialized with a newer version of Julia.
@@ -605,7 +604,6 @@ end
                  deserialize(corrupt_header(b, 5, 2<<2)))
     @test_throws(ErrorException("Unknown endianness flag in header"),
                  deserialize(corrupt_header(b, 5, 2)))
-    other_wordsize = sizeof(Int) == 8 ? 4 : 8
     other_endianness = bswap(ENDIAN_BOM)
     @test_throws(ErrorException("Serialized byte order mismatch ($(repr(other_endianness)))"),
                  deserialize(corrupt_header(b, 5, UInt8(ENDIAN_BOM != 0x01020304))))
@@ -613,9 +611,8 @@ end
 
 # issue #26979
 let io = IOBuffer()
-    function gen_f(a::T) where T
-        f = x -> T(x)
-        return f
+    function gen_f(::T) where T
+        return x -> T(x)
     end
     f = gen_f(1f0)
     serialize(io, f)
@@ -661,7 +658,7 @@ end
 
 # issue #39895
 @eval Main begin
-    using Test, Serialization
+    using Serialization
     let g = gensym(:g)
         closure = eval(:(f -> $g(x) = f(x)))
         inc(x) = x + 1
@@ -670,7 +667,7 @@ end
         seekstart(b)
         f = deserialize(b)
         # this should not crash
-        @test_broken f(1) == 2
+        $Test.@test_broken f(1) == 2
     end
 end
 
@@ -722,9 +719,24 @@ end
 if Int === Int64
     let f_data = "N0pMGgQAAAAWAQEFdGh1bmsbFUbnFgEBBXRodW5rGxVG4DoWAQEGbWV0aG9kAQtmMTExX3RvXzExMhUABuABAAAA4BUAB+AAAAAAThVG4DQQAQxMaW5lSW5mb05vZGUfTptEH04BBE1haW5EAQ90b3AtbGV2ZWwgc2NvcGUBBG5vbmW+vhUAAd8V305GTk4JAQAAAAAAAAAJ//////////9MTExMAwADAAUAAAX//xYBAQZtZXRob2QsBwAWAlYkH06bRAEGVHlwZW9mLAcAFgNWJB9Om0QBBHN2ZWMo4iQfTptETxYBViQfTptEAQRzdmVjFgRWJB9Om0QBBHN2ZWMo4yjkGhfgAQRub25lFgMBBm1ldGhvZCwHACjlGxVG5AEBXhYDViQfTptElyQfTp5EAQNWYWzhFgFWKOEWBFYkH06eRAELbGl0ZXJhbF9wb3co4CXhKOI6KOMVAAbkAQAAAAEAAAABAAAAAQAAAAAAAADkFQAH5AAAAAAAAAAAAAAAAAAAAAAAAAAAThVG4DQsCwAfTgEETWFpbkQBBG5vbmUBBG5vbmW/vhUAAeGifRXhAAhORk5OCQEAAAAAAAAACf//////////TExMTAMAAwAFAAAF//86ThUABucBAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAAAAAOcVAAfnAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABOFUbgNCwLAB9OAQRNYWluRCwNAAEEbm9uZb6+FQAB3xXfTkZOTgkBAAAAAAAAAAn//////////0xMTEwDAAMABQAABf//"
         @eval Main function f111_to_112 end
-        Core.eval(Main, with(Serialization.current_module => Main) do
-                 deserialize(IOBuffer(base64decode(f_data)))
-             end)
+        ex = with(Serialization.current_module => Main) do
+            deserialize(IOBuffer(base64decode(f_data)))
+        end
+        # v1.11 lowering returns the creation of the generic function from a nested thunk,
+        # whose rewrite into a `Core.define_method` call must not stay in the `return`
+        function returns_expr(src::Core.CodeInfo)
+            for stmt in src.code
+                isa(stmt, Core.ReturnNode) && isdefined(stmt, :val) && isa(stmt.val, Expr) &&
+                    return true
+                Meta.isexpr(stmt, :thunk) && (@__FUNCTION__)(stmt.args[1]::Core.CodeInfo) &&
+                    return true
+            end
+            return false
+        end
+        @test !returns_expr(ex.args[1]::Core.CodeInfo)
+        @test Core.eval(Main, (ex.args[1]::Core.CodeInfo).code[1]) ===
+            @invokelatest getglobal(Main, :f111_to_112)
+        Core.eval(Main, ex)
         @test @invokelatest(Main.f111_to_112(16)) == 256
     end
 end
@@ -802,6 +814,7 @@ end
     seekstart(buf)
     cancel!(p) # does not affect the serialized bytes
     p3, c3 = deserialize(buf)
+    @test !Base.iscancelled(p3)
     @test !Base.iscancelled(c3) # p3 was not cancelled at relink time
 
     # deserializing under an already-cancelled parent is born cancelled:
@@ -935,6 +948,8 @@ end
     b = take!(buf)
     b[2] = UInt8('X')
     @test_throws ErrorException("Unsupported serialization format (got header magic bytes 88 76)") deserialize(IOBuffer(b))
+    @test_throws "cannot serialize MethodCache objects" serialize(IOBuffer(), Core.methodtable.cache)
+    @test_throws "GenericMemory{:atomic} currently cannot be serialized" serialize(IOBuffer(), AtomicMemory{Int}(undef, 1))
 end
 
 @testset "old :method expressions" begin
@@ -982,4 +997,35 @@ end
 
     om = only(Base.MethodList(SerializeMethodFields.SerMT).ms)
     @test_throws ErrorException("cannot serialize Method objects with external method tables") serialize(IOBuffer(), om)
+end
+
+@testset "MethodInstance, MethodTable and PhiNode" begin
+    m = which(SerializeMethodFields.serrec, (Int,))
+    mi = Base.specialize_method(m, Tuple{typeof(SerializeMethodFields.serrec), Int}, Core.svec())
+    mi2 = serialize_roundtrip(mi)
+    @test mi2 isa Core.MethodInstance
+    @test mi2.specTypes == mi.specTypes
+    @test mi2.def.sig == m.sig
+    @test serialize_roundtrip(Core.methodtable) === Core.methodtable
+    phi = Core.PhiNode(Int32[1, 2], Any[3, 4])
+    phi2 = serialize_roundtrip(phi)
+    @test phi2.edges == phi.edges && phi2.values == phi.values
+end
+
+@testset "finished Tasks" begin
+    t = Task(() -> error("task failed"))
+    schedule(t)
+    @test_throws TaskFailedException wait(t)
+    t2 = serialize_roundtrip(t)
+    @test istaskfailed(t2)
+    @test t2.result.ex == ErrorException("task failed")
+end
+
+@testset "reset_state" begin
+    s = Serializer(IOBuffer())
+    serialize(s, [1, 2])
+    @test s.counter > 0
+    @test Serialization.reset_state(s) === s
+    @test s.counter == 0
+    @test isempty(s.backref_table)
 end

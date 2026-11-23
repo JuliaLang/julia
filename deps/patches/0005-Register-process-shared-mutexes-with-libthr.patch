@@ -1,0 +1,58 @@
+From 8c20d70db55cf5af5518b8349413becccf596843 Mon Sep 17 00:00:00 2001
+From: Tim Besard <tim.besard@gmail.com>
+Date: Thu, 19 Nov 2026 17:32:24 +0100
+Subject: [PATCH] Register process-shared mutexes with libthr when joining a
+ lock region
+
+FreeBSD's libthr stores a process-shared mutex in an off-page object and
+finds it through a per-process table keyed by the mutex address, filling
+the table on the first operation on that mutex. Filling it calls malloc()
+while holding the table's lock, but fork() takes the malloc locks before
+that lock, so a thread doing its first operation on a mutex can deadlock
+against a concurrent fork() on another thread.
+
+A process that opens an environment initialized by another process does
+its first operation on the writer mutex when it begins its first write
+transaction, which may happen on any thread at any time. Do a
+non-blocking operation on both mutexes while opening the environment
+instead, as the process that initializes the region already does in
+pthread_mutex_init().
+---
+ libraries/liblmdb/mdb.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/libraries/liblmdb/mdb.c b/libraries/liblmdb/mdb.c
+index 234809d..eb43f00 100644
+--- a/libraries/liblmdb/mdb.c
++++ b/libraries/liblmdb/mdb.c
+@@ -206,6 +206,9 @@ typedef SSIZE_T	ssize_t;
+ 
+ #ifndef _WIN32
+ #include <pthread.h>
++#ifdef __FreeBSD__
++#include <pthread_np.h>
++#endif
+ #include <signal.h>
+ #ifdef MDB_USE_POSIX_SEM
+ # define MDB_USE_HASH		1
+@@ -6205,6 +6208,17 @@ mdb_env_setup_locks(MDB_env *env, MDB_name *fname, int mode, int *excl)
+ 		/* check for write access */
+ 		if (semctl(semid, 0, IPC_SET, semu) < 0)
+ 			goto fail_errno;
++#elif defined(__FreeBSD__)
++		/* libthr keeps process-shared mutexes in an off-page object that it
++		 * looks up in a per-process table on every operation. Adding an entry
++		 * calls malloc() under the table's lock, while fork() takes the
++		 * malloc locks before that lock, so the first operation on a mutex
++		 * can deadlock against a concurrent fork() on another thread. Add both
++		 * mutexes now, with an operation that does not wait for their owner.
++		 * The initializing process above added them in pthread_mutex_init().
++		 */
++		(void)pthread_mutex_isowned_np(env->me_txns->mti_rmutex);
++		(void)pthread_mutex_isowned_np(env->me_txns->mti_wmutex);
+ #endif
+ 	}
+ #ifdef MDB_USE_SYSV_SEM
+-- 
+2.56.0
+

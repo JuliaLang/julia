@@ -869,6 +869,8 @@ end
     @test Printf.@sprintf("%.*e", -1, 1.25)      == "1.250000e+00"
     @test Printf.@sprintf("%.*g", -1, 1.25)      == "1.25"
     @test Printf.@sprintf("%.*a", -1, 1.25)      == "0x1.4p+0"
+    @test Printf.@sprintf("%05.0d", 3)           == "    3"
+    @test Printf.@sprintf("%05.*d", 0, 3)        == "    3"
 
     @test Printf.@sprintf("%*d%*d%*d", 4, 12, 4, 13, 4, 14)  == "  12  13  14"
     @test Printf.@sprintf("%*d%*d%*d", 4, 12, 5, 13, 6, 14)  == "  12   13    14"

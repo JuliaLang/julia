@@ -560,6 +560,18 @@ end
 @test !Meta.isoperator("'\x80")
 @test sprint(show, Symbol("\x80")) == "Symbol(\"\\x80\")"
 
+# issue #52641: A symbol's identifier spelling must survive parsing unchanged.
+@testset "Identifier normalization" begin
+    for (spelling, normalized) in (("e\u0301", "\u00e9"), ("\u00b5", "\u03bc"))
+        sym = Symbol(spelling)
+        @test Meta.isidentifier(spelling)
+        @test !Meta.isidentifier(sym)
+        @test Meta.isidentifier(Symbol(normalized))
+        @test Meta.parse(spelling) === Symbol(normalized)
+        @test repr(sym) == "Symbol($(repr(spelling)))"
+    end
+end
+
 # issue #32408: Printing of names which are invalid identifiers
 # Invalid identifiers which need `var` quoting:
 @test sprint(show, Expr(:call, :foo, Symbol("##")))   == ":(foo(var\"##\"))"
@@ -1106,7 +1118,7 @@ end
             end
             lower = textwidth("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
             limit = max(limit, lower)
-            if textwidth(str) + 2 ≤ limit+1 && !contains(out, '⋯')
+            if textwidth(str) + 2 ≤ limit && !contains(out, '⋯')
                 @test eval(Meta.parse(out)) == str
             else
                 @test limit-2 <= textwidth(out) <= limit
@@ -1121,6 +1133,19 @@ end
                     ncodeunits(head) + skip + ncodeunits(tail)
             end
         end
+    end
+
+    @testset "escaped characters" begin
+        for chunk in ("\0", "\"", "\\", "\$", "\xff", "\x01\n", "\0" * "7", "\u0085a", "\U0001FFFEF")
+            str = chunk^1000
+            out = sprint(io -> show(io, MIME"text/plain"(), str; limit=80))
+            @test occursin(r" ⋯ \d+ bytes ⋯ ", out) && textwidth(out) <= 80
+            @test sprint(io -> show(io, MIME"text/plain"(), chunk; limit=80)) == repr(chunk)
+        end
+        @test textwidth(sprint(io -> show(io, MIME"text/plain"(), "\""^82; limit=20))) <= 20
+        str = "\x01"^15
+        out = sprint(io -> show(io, MIME"text/plain"(), str; limit=25))
+        @test occursin(r" ⋯ \d+ bytes ⋯ ", out) && textwidth(out) <= 25
     end
 
     @testset "default elision limit" begin
@@ -1425,6 +1450,7 @@ z856739 = [:a, :b]
                         LineNumberNode(0, :none), "a b c")) == ":(#= none:0 =# (Core).@cmd \"a b c\")"
 @test_repr "`a b c`"
 @test sprint(show, Meta.parse("`a b c`")) == ":(`a b c`)"
+@test_repr "`echo \\`x\\` \\\\\\``"
 # a"b" and a"b"c
 @test_repr "a\"b\""
 @test_repr "a\"b\"c"
@@ -1627,6 +1653,10 @@ test_repr("(:).a")
 @test repr(NTuple) == "NTuple{N, T} where {N, T}"
 @test repr(Tuple{NTuple{N}, Vararg{NTuple{N}, 4}} where N) == "NTuple{5, NTuple{N, T} where T} where N"
 @test repr(Tuple{Float64, NTuple{N}, Vararg{NTuple{N}, 4}} where N) == "Tuple{Float64, Vararg{NTuple{N, T} where T, 5}} where N"
+@test repr(Tuple{String, Vararg}) == "Tuple{String, Vararg}"
+@test repr(Tuple{String, Vararg{Any}}) == "Tuple{String, Vararg}"
+@test repr(Tuple{String, Vararg{Any, N}} where N) == "Tuple{String, Vararg{Any, N}} where N"
+@test repr(Vararg{Any}) == "Vararg{Any}"
 
 # Test printing of NamedTuples using the macro syntax
 @test repr(@NamedTuple{kw::Int64}) == "@NamedTuple{kw::Int64}"

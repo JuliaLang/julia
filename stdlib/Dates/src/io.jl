@@ -37,7 +37,7 @@ containing that token.
 format(io::IO, tok::AbstractDateToken, dt::TimeType, locale)
 
 # fallback to tryparsenext/format methods that don't care about locale
-@inline function tryparsenext(d::AbstractDateToken, str, i, len, locale)
+@inline function tryparsenext(d::AbstractDateToken, str, i, len, _locale)
     return tryparsenext(d, str, i, len)
 end
 
@@ -77,7 +77,7 @@ function Base.show(io::IO, t::Time)
     end
 end
 
-@inline function format(io, d::AbstractDateToken, dt, locale)
+@inline function format(io, d::AbstractDateToken, dt, _locale)
     format(io, d, dt)
 end
 
@@ -98,7 +98,7 @@ end
 @inline max_width(d::DatePart) = d.fixed ? d.width : 0
 
 function _show_content(io::IO, d::DatePart{c}) where c
-    for i = 1:d.width
+    for _ = 1:d.width
         print(io, c)
     end
 end
@@ -138,7 +138,7 @@ for c in "mdHIMS"
 end
 
 # Malformed text is not AM or PM; `lowercase` throws on it
-function tryparsenext(d::DatePart{'p'}, str, i, len)
+function tryparsenext(::DatePart{'p'}, str, i, len)
     i+1 > len && return nothing
     c, ii = iterate(str, i)::Tuple{Char, Int}
     Base.ismalformed(c) && return nothing
@@ -237,7 +237,7 @@ for (tok, fn) in zip("uU", Any[monthabbr, monthname])
     end
 end
 
-function format(io, d::DatePart{'p'}, dt, locale)
+function format(io, ::DatePart{'p'}, dt, _locale)
     ampm = hour(dt) < 12 ? "AM" : "PM" # fixme: locale-specific?
     print(io, ampm)
 end
@@ -295,7 +295,7 @@ Delim(d::T) where {T<:AbstractChar} = Delim{T, 1}(d)
 Delim(d::String) = Delim{String, length(d)}(d)
 
 @inline function tryparsenext(d::Delim{<:AbstractChar, N}, str, i::Int, len) where N
-    for j = 1:N
+    for _ = 1:N
         i > len && return nothing
         next = iterate(str, i)
         @assert next !== nothing
@@ -328,7 +328,7 @@ end
 @inline function tryparsenext(d::Delim{String, N}, str, i::Int, len) where N
     i1 = i
     i2 = firstindex(d.d)
-    for j = 1:N
+    for _ = 1:N
         if i1 > len
             return nothing
         end
@@ -371,17 +371,17 @@ end
 chartext(bytes::CodeUnits{UInt8, <:Union{String, SubString{String}}}) = bytes.s
 chartext(bytes::AbstractVector{UInt8}) = StringView(bytes)
 
-@inline function format(io, d::Delim, dt, locale)
+@inline function format(io, d::Delim, _dt, _locale)
     print(io, d.d)
 end
 
 function _show_content(io::IO, d::Delim{<:AbstractChar, N}) where N
     if d.d in keys(CONVERSION_SPECIFIERS)
-        for i = 1:N
+        for _ = 1:N
             print(io, '\\', d.d)
         end
     else
-        for i = 1:N
+        for _ = 1:N
             print(io, d.d)
         end
     end
@@ -574,7 +574,7 @@ function DateFormat(f::AbstractString, locale::AbstractString)
     DateFormat(f, LOCALES[locale])
 end
 
-function Base.show(io::IO, df::DateFormat{S,T}) where {S,T}
+function Base.show(io::IO, ::DateFormat{S,T}) where {S,T}
     print(io, "dateformat\"", S, '"')
 end
 Base.Broadcast.broadcastable(x::DateFormat) = Ref(x)
@@ -938,10 +938,10 @@ Base.typeinfo_implicit(::Type{DateTime}) = true
 Base.typeinfo_implicit(::Type{<:Timestamp}) = true
 
 # minimal Base.TOML support
-Base.TOML.Printer.printvalue(f::Function, io::IO, value::Date, sorted::Bool) =
+Base.TOML.Printer.printvalue(::Function, io::IO, value::Date, _sorted::Bool) =
     Base.print(io, Dates.format(value, dateformat"YYYY-mm-dd"))
-Base.TOML.Printer.printvalue(f::Function, io::IO, value::Time, sorted::Bool) =
+Base.TOML.Printer.printvalue(::Function, io::IO, value::Time, _sorted::Bool) =
     Base.print(io, Dates.format(value, dateformat"HH:MM:SS.sss"))
-Base.TOML.Printer.printvalue(f::Function, io::IO, value::DateTime, sorted::Bool) =
+Base.TOML.Printer.printvalue(::Function, io::IO, value::DateTime, _sorted::Bool) =
     Base.print(io, Dates.format(value, dateformat"YYYY-mm-dd\THH:MM:SS.sss\Z"))
 Base.TOML.Printer.is_valid_toml_value(@nospecialize(::Union{Date,Time,DateTime})) = true

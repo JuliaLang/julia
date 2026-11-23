@@ -7,7 +7,7 @@ _directives(::Type{DateFormat{S,T}}) where {S,T} = T.parameters
 character_codes(df::Type{DateFormat{S,T}}) where {S,T} = character_codes(_directives(df))
 function character_codes(directives::Core.SimpleVector)
     letters = sizehint!(Char[], length(directives))
-    for (i, directive) in enumerate(directives)
+    for directive in directives
         if directive <: DatePart
             letter = first(directive.parameters)
             push!(letters, letter)
@@ -438,7 +438,7 @@ end
     return i <= min_pos ? nothing : (d, i)
 end
 
-@inline function tryparsenext_word(str::AbstractString, i, len, locale, maxchars=0)
+@inline function tryparsenext_word(str::AbstractString, i, len, _locale, maxchars=0)
     word_start, word_end = i, 0
     max_pos = maxchars <= 0 ? len : min(len, nextind(str, i, maxchars-1))
     @inbounds while i <= max_pos
@@ -652,7 +652,7 @@ end
     pos > len && throw(ArgumentError("Cannot parse an empty string as a Date or Time"))
     val = tryparsenext_internal(T, text, pos, len, df, true)
     @assert val !== nothing
-    values, endpos = val
+    values, _endpos = val
     if T <: Union{Date, DateTime, Time, Timestamp}
         x = fromparts(T, values...)
         x isa T && return x
@@ -674,7 +674,7 @@ end
     pos > len && return nothing
     res = tryparsenext_internal(T, text, pos, len, df, false)
     res === nothing && return nothing
-    values, endpos = res
+    values, _endpos = res
     if T <: Union{Date, DateTime, Time, Timestamp}
         x = fromparts(T, values...)
         x === nothing || return x isa ParseFailure ? nothing : x

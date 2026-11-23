@@ -97,12 +97,6 @@ endif
 	@printf "%s\n" "const PRIVATE_LIBEXECDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(private_libexecdir_rel)))) >> $@
 	@printf "%s\n" "const INCLUDEDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(includedir_rel)))) >> $@
 	@printf "%s\n" "const SOURCEDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(shell echo $(call cygpath_w,$(JULIAHOME)))))) >> $@
-ifeq ($(DARWIN_FRAMEWORK), 1)
-	@printf "%s\n" "const DARWIN_FRAMEWORK = true" >> $@
-	@printf "%s\n" "const DARWIN_FRAMEWORK_NAME = \"$(FRAMEWORK_NAME)\"" >> $@
-else
-	@printf "%s\n" "const DARWIN_FRAMEWORK = false" >> $@
-endif
 ifeq ($(OS), Darwin)
 	@printf "%s\n" "const MACOS_PRODUCT_VERSION = \"$(shell sw_vers -productVersion)\"" >> $@
 	@printf "%s\n" "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --sdk macosx --show-sdk-version)\"" >> $@
