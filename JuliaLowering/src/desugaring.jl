@@ -4336,7 +4336,7 @@ function expand_doc(ctx, ex, docex)
         # TODO: implement proper `doc!` support here
         expand_forms_2(ctx, ex, docex)
     elseif is_eventually_call(ex)
-        TODO("docsystem rewrite")
+        error("Lowering TODO: docsystem rewrite")
     else
         expand_forms_2(ctx, ex, docex)
     end
