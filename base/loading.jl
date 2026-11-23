@@ -4030,10 +4030,17 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
                     rm(joinpath(ocachefile * ".dSYM", "Contents", "Resources", "Relocations"); force=true, recursive=true)
                 end
             end
-            # this is atomic according to POSIX (not Win32):
-            # but force=true means it will fall back to non atomic
-            # move if the initial rename fails.
-            mv(tmppath, cachefile; force=true)
+            if cache_objects && !has_native
+                # A loaded image keeps its .ji mapped, which Windows will not replace,
+                # so fall back to a new name as for a loaded native image.
+                cachefile = rename_unique_ocachefile(tmppath, cachefile)
+                ocachefile = cachefile # an image without code is restored from its .ji alone
+            else
+                # this is atomic according to POSIX (not Win32):
+                # but force=true means it will fall back to non atomic
+                # move if the initial rename fails.
+                mv(tmppath, cachefile; force=true)
+            end
             pkg.uuid === nothing || prune_cachefiles(pkg, slot_cachefile, cachefile; session_only)
             return cachefile, ocachefile
         end
@@ -4170,10 +4177,13 @@ end
 
 # Checksum a file the driver accepted from the record, before it is trusted without checks.
 function checksums_valid_now(cachefile::String)
-    opath = ocachefile_from_cachefile(cachefile)
-    ocachefile = isfile(opath) ? opath : nothing
     try
         open(cachefile, "r") do io
+            flags = Ref{UInt32}(0)
+            isvalid_cache_header(io, flags)
+            opath = ocachefile_from_cachefile(cachefile)
+            # a sibling .so of an image without code is left over from another build
+            ocachefile = flags[] & JI_FLAG_NO_NATIVE != 0 ? cachefile : isfile(opath) ? opath : nothing
             key = checksum_key(io, ocachefile)
             invalid = checksums_invalid(io, cachefile, ocachefile, nothing)
             invalid && @lock require_lock delete!(checksums_valid, key)

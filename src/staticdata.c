@@ -4108,13 +4108,24 @@ static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **d
     size_t size;
     uint32_t flags = 0, checksum = 0;
     int64_t dataendpos = 0, datastartpos = 0;
-    if (!ios_file(&s, ji_path, 1, 0, 0, 0))
+    if (!ios_file(&s, ji_path, 1, 0, 0, 0)) {
+        if (!handle) { // let the caller report it
+            *dest = NULL;
+            return 0;
+        }
         goto error;
+    }
     size = ios_filesize(&s);
 
     if (jl_read_verify_header(&s, &flags, &checksum, &dataendpos, &datastartpos) == 0) {
         if (heap_checksum)
             *heap_checksum = checksum;
+        // without a native image, only an image that was written without code can be restored
+        if (!handle && !(flags & JI_FLAG_NO_NATIVE)) {
+            ios_close(&s);
+            *dest = NULL;
+            return 0;
+        }
         // check that the .ji matches the .so before reading all of it
         if (handle) {
             uint32_t *pchecksum;
@@ -5198,9 +5209,11 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
         buf = get_image_buf(pkgimg_handle, /* is_pkgimage */ 1);
     }
     if (buf.data == NULL) {
+        if (!pkgimg_handle)
+            return jl_get_exceptionf(jl_errorexception_type,
+                "Cache file \"%s\" is missing, or has native code it needs to be loaded with.", fname);
         // unload it, so that a recompiled image at the same path is not served this handle
-        if (pkgimg_handle)
-            jl_dlclose(pkgimg_handle);
+        jl_dlclose(pkgimg_handle);
         return jl_get_exceptionf(jl_errorexception_type,
             "Image checksum mismatch: the heap image (.ji) was not "
             "compiled for use with \"%s\".", fname);

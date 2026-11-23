@@ -2241,28 +2241,32 @@ precompile_test_harness("BadInvalidations") do load_path
 end
 
 # https://github.com/JuliaLang/julia/issues/48074
+# A package without code has no .so, so its loaded .ji is the file that cannot be replaced.
 precompile_test_harness("WindowsCacheOverwrite") do load_path
-    # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
-    write(joinpath(load_path, "WindowsCacheOverwrite.jl"),
-        """
-        module WindowsCacheOverwrite
-        f() = "something"
-        precompile(f, ())
-        end # module
-        """)
-    ji, ofile = Base.compilecache(Base.PkgId("WindowsCacheOverwrite"))
-    @eval using WindowsCacheOverwrite
+    for code in (true, false)
+        name = code ? "WindowsCacheOverwrite" : "WindowsCacheOverwriteNoCode"
+        # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
+        write(joinpath(load_path, "$name.jl"),
+            """
+            module $name
+            f() = "something"
+            $(code ? "precompile(f, ())" : "")
+            end # module
+            """)
+        ji, ofile = Base.compilecache(Base.PkgId(name))
+        @eval using $(Symbol(name))
 
-    write(joinpath(load_path, "WindowsCacheOverwrite.jl"),
-        """
-        module WindowsCacheOverwrite
-        f() = "something new"
-        precompile(f, ())
-        end # module
-        """)
+        write(joinpath(load_path, "$name.jl"),
+            """
+            module $name
+            f() = "something new"
+            $(code ? "precompile(f, ())" : "")
+            end # module
+            """)
 
-    ji_2, ofile_2 = Base.compilecache(Base.PkgId("WindowsCacheOverwrite"))
-    @test ofile_2 == Base.ocachefile_from_cachefile(ji_2)
+        ji_2, ofile_2 = Base.compilecache(Base.PkgId(name))
+        @test ofile_2 == (code ? Base.ocachefile_from_cachefile(ji_2) : ji_2)
+    end
 end
 
 precompile_test_harness("Issue #48391") do load_path
