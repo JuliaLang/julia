@@ -222,7 +222,7 @@ function GitConfigIter(cfg::GitConfig, name::Regex)
     return GitConfigIter(ci_ptr[])
 end
 
-function Base.iterate(ci::GitConfigIter, state=nothing)
+function Base.iterate(ci::GitConfigIter, _state=nothing)
     ensure_initialized()
     entry_ptr_ptr = Ref{Ptr{ConfigEntry}}(C_NULL)
     err = ccall((:git_config_next, libgit2), Cint,

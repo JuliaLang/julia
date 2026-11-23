@@ -126,8 +126,7 @@ function commit(repo::GitRepo, msg::AbstractString;
         end
     end
 
-    # return commit id
-    commit_id  = GitHash()
+    local commit_id
 
     # get necessary objects
     tree = GitTree(repo, tree_id)
