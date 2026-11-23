@@ -136,6 +136,7 @@ end
     @test unix2timestamp(86400) == Timestamp(1970, 1, 2)
     @test timestamp2unix(Timestamp(1970, 1, 2)) == 86400.0
     @test unix2timestamp(timestamp2unix(Timestamp(2026, 8, 31))) == Timestamp(2026, 8, 31)
+    @test Dates.datetime2unix(Timestamp(Dates.UTInstant(Nanosecond(1_500_000)))) == 0.0015
     @test unix2timestamp(9223372036) == Timestamp(2262, 4, 11, 23, 47, 16)
     @test_throws InexactError unix2timestamp(9223372037)
     @test_throws InexactError unix2timestamp(typemin(Int64))
@@ -451,6 +452,7 @@ end
         @test unix2timestamp(T, 0) === T(1970)
         @test unix2timestamp(T, -1) === T(1969, 12, 31, 23, 59, 59)
         @test timestamp2unix(T(1970, 1, 2)) == 86400.0
+        @test Dates.datetime2unix(T(1970, 1, 2)) == 86400.0
         @test convert(T, P(-1)) === T(Dates.UTInstant(P(-1)))
         @test convert(P, convert(T, P(-1))) === P(-1)
         @test convert(T, T(1970)) === T(1970)

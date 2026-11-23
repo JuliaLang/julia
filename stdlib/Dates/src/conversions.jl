@@ -89,12 +89,16 @@ function unix2datetime(x::Real; localtime::Bool=false)
 end
 
 """
-    datetime2unix(dt::DateTime)::Float64
+    datetime2unix(dt::Union{DateTime,Timestamp})::Float64
 
-Take the given `DateTime` and return the number of seconds
+Take the given `DateTime` or `Timestamp` and return the number of seconds
 since the unix epoch `1970-01-01T00:00:00` as a [`Float64`](@ref).
+
+!!! compat "Julia 1.14"
+    The `Timestamp` method requires Julia 1.14 or later.
 """
 datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH) / 1000.0
+datetime2unix(dt::Timestamp) = timestamp2unix(dt)
 
 """
     unix2timestamp(x::Real)::Timestamp{Nanosecond}
