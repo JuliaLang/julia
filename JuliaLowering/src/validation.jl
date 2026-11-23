@@ -509,6 +509,8 @@ end
 vst1_try_catchvar(vcx, st) = @stm st begin
     [:identifier] -> vst1_ident(vcx, st; lhs=true)
     ([:value], when=st.value===false) -> pass()
+    [:$ _] -> vst1(vcx, st)
+    _ -> @fail(st, "expected identifier as `catch` variable")
 end
 
 # syntax TODO:

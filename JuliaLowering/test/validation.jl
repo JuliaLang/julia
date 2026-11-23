@@ -184,6 +184,7 @@ end
 @test !vst1_ok(:(let ccall; end))
 @test !vst1_ok(:(let ccall::Int; end))
 @test !vst1_ok(:(try; catch ccall; end))
+@test !vst1_ok(Expr(:try, Expr(:block), :(f(x)), Expr(:block)))
 
 @test !vst1_ok(Expr(:const, Expr(:global, :x)))
 
