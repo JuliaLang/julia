@@ -780,6 +780,18 @@ end
     @test reinterpret(Int, take!(out)) == fib
 end
 
+struct CopyLineIO <: IO
+    b::IOBuffer
+end
+Base.eof(s::CopyLineIO) = eof(s.b)
+Base.read(s::CopyLineIO, ::Type{UInt8}) = read(s.b, UInt8)
+
+@testset "copyline fallback with repeated \\r" begin
+    out = IOBuffer()
+    copyline(IOContext(out), CopyLineIO(IOBuffer("x\r\r\ny")))
+    @test String(take!(out)) == "x\r"
+end
+
 # more tests for reverse(eachline)
 @testset "reverse(eachline)" begin
     lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))
