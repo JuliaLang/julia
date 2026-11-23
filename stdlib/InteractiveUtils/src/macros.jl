@@ -668,15 +668,15 @@ for fname in [:which, :less, :edit, :functionloc, :methods]
     end
 end
 
-for f in [code_warntype, code_llvm, code_native, infer_return_type, infer_effects,
-          infer_exception_type]
+for f in Any[code_warntype, code_llvm, code_native, infer_return_type, infer_effects,
+             infer_exception_type]
     fname = nameof(f)
     @eval macro ($fname)(ex0...)
         gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0; is_source_reflection = false, use_signature_tuple = $(in(fname, [:code_warntype, :code_llvm, :code_native])))
     end
 end
 
-for f in [code_typed, code_lowered, code_ircode]
+for f in Any[code_typed, code_lowered, code_ircode]
     fname = nameof(f)
     @eval macro ($fname)(ex0...)
         thecall = gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0; is_source_reflection = false, use_signature_tuple = true)
