@@ -7939,6 +7939,13 @@ end === Union{}
 @test Base.infer_return_type() do
     TypeVar(:Issue56248, Any, 1)
 end === Union{}
+# a `TypeVar` call with a wrong number of arguments throws a `MethodError`
+@test Base.infer_return_type() do
+    TypeVar()
+end === Union{}
+@test Base.infer_return_type((Symbol,Any,Any,Any)) do name, lb, ub, x
+    TypeVar(name, lb, ub, x)
+end === Union{}
 
 @test Base.infer_return_type((Nothing,)) do x
     @atomic x.count += 1

@@ -3125,7 +3125,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     if f === TypeVar && !isvarargtype(argtypes[end])
         # Manually look through the definition of TypeVar to
         # make sure to be able to get `PartialTypeVar`s out.
-        2 ≤ la ≤ 4 || return Future{CallMeta}(call, sv, interp) do call, sv, interp
+        2 ≤ la ≤ 4 || return Future{CallMeta}(call, interp, sv) do _, _, _
             return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
         end
         return Future{CallMeta}(call, interp, sv) do call, interp, sv
