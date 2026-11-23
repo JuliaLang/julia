@@ -728,6 +728,21 @@ expanded = JuliaLowering.macroexpand(test_mod, ex)
     """; edition) == 3
 end
 
+@testset "macros named by dotted operators" for edition in [JL_OLD_EDITION, JL_NEW_EDITION]
+    @test jl_eval(test_mod, raw"""
+    macro var".+"(x)
+        x
+    end
+    """; edition) isa Function
+    @test jl_eval(test_mod, raw"""@var".+" 1"""; edition) == 1
+    @test jl_eval(test_mod, raw"""
+    macro .*(x)
+        x
+    end
+    """; edition) isa Function
+    @test jl_eval(test_mod, raw"""@var".*" 2"""; edition) == 2
+end
+
 @test JuliaLowering.include_string(test_mod, raw"""
 v"1.14"
 """) isa VersionNumber
