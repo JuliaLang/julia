@@ -826,6 +826,11 @@ end
         @test sort(M; dims=2) == sort(M; dims=2, scratch)
         @test sort!(copy(M); dims=1) == sort!(copy(M); dims=1, scratch)
     end
+    # long rows are copied out to sort them
+    M = rand(3, 40)
+    @test sort!(copy(M); dims=2) == permutedims(sort!(permutedims(M); dims=1))
+    # long reverse-sorted input is reversed in place
+    @test sort!(collect(600.0:-1:1)) == 1:600
 end
 
 @testset "partialsort(x; scratch)" begin
@@ -1003,6 +1008,12 @@ end
         @test !issorted(v[1:2000])
         @test !issorted(v[2001:4000])
         @test !issorted(v)
+    end
+    # the legacy entry point also takes a scratch argument
+    for scratch in (nothing, similar(v))
+        rand!(v)
+        sort!(v, 1, 2000, MergeSort, Base.Forward, scratch)
+        @test issorted(v[1:2000])
     end
 
     # out-of-range lo/hi must throw rather than silently corrupt memory (#63215)

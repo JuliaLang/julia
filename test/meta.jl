@@ -428,6 +428,43 @@ end
     @test_throws Meta.ParseError("\"*\" is not a unary operator") Meta.parse("1 +* 2", 1; _parse=fl_parse)
 end
 
+@testset "Base.Syntax trees" begin
+    st = Base.expr_to_syntax(:(f(x, $(GlobalRef(Base, :sin)), 1)), LineNumberNode(3, :foo))
+    @test (firstindex(st), lastindex(st)) == (1, 4)
+    @test Base.edition(st) == Base.edition(:x) == Core.FLISP_EDITION
+    @test sprint(show, st) == "(call f x sin 1)"
+    tree = sprint(show, MIME"text/plain"(), st)
+    @test startswith(tree, "[call]")
+    @test occursin(r"\n  sin +:: identifier +\| mod=Base\n", tree)
+    @test occursin(r"\n  1 +:: value +\| \n", tree)
+    @test occursin("children=[\n(head=identifier", Base.node_string(st, 3))
+    @test_throws "can't be mutated" (st.head = :block)
+    @test_throws "are reserved" Base.expr_to_syntax(Expr(:value, 1))
+    @test_throws "usage: @mknode" @eval Base.@mknode(st; 1)
+    let n = Base.Syntax(:identifier, nothing, "y", st, st.context, LineNumberNode(7), Base.ImmutableDict{Symbol,Any}(:k, 1), nothing, 0x0)
+        major, minor = st.context.edition
+        @test endswith(sprint(show, MIME"text/plain"(), n), "| [$major.$minor,nothing,],jl_source=L7,meta\n")
+    end
+
+    sl = Base.ScopeLayer(Main, Base.ScopeLayer(Base, nothing))
+    @test occursin(r"^SL\(Main,SL\(Base,,\w+\),\w+\)$", sprint(show, sl))
+    sc = Base.SyntaxContext(sl, st, (1, 12), true)
+    @test occursin(r"^\[1\.12,internal,SL\(Main,.*\),call\]$", sprint(show, sc))
+    mc = Base.MacroContext(Base.expr_to_syntax(:(@m x)))
+    adopted = Base.adopt_scope(mc, Base.Syntax(:block, nothing, nothing, LineNumberNode(1), sc), st)
+    @test adopted.context.layer === sl
+    @test adopted.context.unexpanded === mc.macrocall
+    @test occursin(r"\| \[1\.14,SL\(Main,.*\),@m\]", sprint(show, MIME"text/plain"(), adopted))
+
+    # broken trees fail the invariant check that `show` relies on
+    g = Base.Syntax(:globalref, nothing, "x", LineNumberNode(1), st.context)
+    @test_throws "leaf globalref requires module" Base.assert_syntax(g)
+    cs = Base.Syntax[]
+    cyc = Base.Syntax(:block, cs, nothing, LineNumberNode(1), st.context)
+    push!(cs, cyc)
+    @test_throws "cycle detected" Base.assert_syntax(cyc)
+end
+
 const escape_test_var = :from_caller
 module EscapeHelpers
 const escape_test_var = :from_macro_module
@@ -457,6 +494,41 @@ end
     @test Meta.uncurly(:(A{B})) === :A
     @test Meta.uncurly(:(A{B}{C})) == :(A{B})
     @test Meta.uncurly(:A) === :A
+end
+
+@testset "isexpr, IR node equality and meta helpers" begin
+    @test Meta.isexpr(:(f(x)), :call, 2)
+    @test !Meta.isexpr(:(f(x)), (:call, :ref), 3)
+
+    phi(edges, values) = Core.PhiNode(Int32[edges...], values)
+    @test phi((1, 2), Any[1, :x]) == phi((1, 2), Any[1, :x])
+    @test phi((1, 2), Any[1, :x]) != phi((1, 3), Any[1, :x])
+    @test Expr(:block, phi((1,), Any[1])) == Expr(:block, phi((1,), Any[1]))
+    @test Expr(:block, Core.PhiCNode(Any[1])) == Expr(:block, Core.PhiCNode(Any[1]))
+    # values of phi nodes may be undefined
+    @test phi((1,), Vector{Any}(undef, 1)) != phi((1,), Any[1])
+    @test phi((1,), Any[1]) != phi((1,), Vector{Any}(undef, 1))
+
+    @test Base.popmeta!(1, :inline) == (false, [])
+    @test Base.popmeta!(Expr(:block, Expr(:meta, :foo), :x), :inline) == (false, [])
+    @test_throws "x + 1 is not a function expression" Base.findmeta(:(x + 1))
+    @test Base.findmeta(Any[Expr(:meta, :inline)]) == (1, Any[Expr(:meta, :inline)])
+    @test Base.replace_linenums!(1, LineNumberNode(1)) === 1
+    @test Base.is_self_quoting(1)
+    @test !Base.is_self_quoting(:x)
+
+    let (i, body) = Base.findmeta(@macroexpand Base.@polly f() = 1)
+        @test body[i] == Expr(:meta, :polly)
+    end
+    @test (@macroexpand Base.@polly 1) === 1
+    for setting in (:inaccessiblememonly, :noub_if_noinbounds)
+        ex = macroexpand(@__MODULE__, :(Base.@assume_effects $(QuoteNode(setting)) f() = 1))
+        i, body = Base.findmeta(ex)
+        override = Base.EffectsOverride(; NamedTuple{(setting,)}((true,))...)
+        @test body[i] == Expr(:meta, Base.form_purity_expr(override))
+    end
+    @test_throws "Bad expression `1` in `@constprop settings ex`" @macroexpand Base.@constprop :aggressive 1
+    @test_throws "@generated must be used with a function definition" @macroexpand @generated x = 1
 end
 
 @testset "Base.Meta docstrings" begin

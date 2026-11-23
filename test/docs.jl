@@ -1591,6 +1591,41 @@ Base.@ccallable c51586_long()::Int = 3
 @test docstrings_equal(@doc(c51586_short()), doc"ensure we can document ccallable functions")
 @test docstrings_equal(@doc(c51586_long()), doc"ensure we can document ccallable functions")
 
+f_docs_internals(x::Int) = x
+"f_docs_internals for Int"
+f_docs_internals(::Int)
+function g_docs_internals end
+@testset "Docs internals" begin
+    @test Docs.catdoc() === nothing
+    @test Docs.catdoc([1], [2]) == [1, 2]
+    @test Docs.docstr("abc").text == Core.svec("abc")
+    @test Docs.astname(:(Base.foo), true) == Expr(:., :Base, Symbol("@foo"))
+    @test Docs.signature(:(foo{T}(x::T))) == :(Union{Tuple{T}} where T <: Any)
+    @test_throws "f_docs_internals :: Tuple{Float64}'" Docs.docstr(
+        Docs.Binding(@__MODULE__, :f_docs_internals), Tuple{Float64})
+
+    @test Docs._doc(Vector) === Docs._doc(Array)
+    @test Docs._doc(f_docs_internals, Int) === Docs._doc(f_docs_internals, Tuple{Int})
+    @test Docs.simple_lookup_doc(:(a && b)) === Docs.keywords[:&&]
+    @test Docs.simple_lookup_doc(1) == :($(Docs._doc)($typeof($(esc(1)))))
+    @test Docs.simple_lookup_doc(:([1, 2])) == :($(Docs._doc)($typeof($(esc(:([1, 2]))))))
+    @test occursin("'@foo' not documentable", string(Docs.docerror(:(@foo x))))
+
+    # a keyword docstring goes into the keyword table
+    @doc "keyword doc" Base.BaseDocs.@kw_str("docs_internals_keyword")
+    try
+        @test Docs.simple_lookup_doc(:docs_internals_keyword) === Docs.keywords[:docs_internals_keyword]
+    finally
+        delete!(Docs.keywords, :docs_internals_keyword)
+    end
+
+    # a `GlobalRef` into the current module documents that binding
+    b = Docs.Binding(@__MODULE__, :g_docs_internals)
+    @test !haskey(Docs.meta(@__MODULE__), b)
+    @eval @doc "x" $(GlobalRef(@__MODULE__, :g_docs_internals))
+    @test haskey(Docs.meta(@__MODULE__), b)
+end
+
 @testset "Docs docstrings" begin
     undoc = Docs.undocumented_names(Docs)
     @test isempty(undoc)

@@ -188,6 +188,15 @@
     @test startswith("abc", r"A"i)
     @test !endswith("abc", r"C")
     @test endswith("abc", r"C"i)
+    # strings other than String are converted first
+    let g = GenericString("abc")
+        @test occursin(r"b", g) && !occursin(r"d", g)
+        @test startswith(g, r"a") && !startswith(g, r"b")
+        @test endswith(g, r"c") && !endswith(g, r"b")
+    end
+    @test codeunit(s"a\1") === UInt8
+    @test codeunit(s"a\1", 1) === UInt8('a')
+    @test [m.offset for m in Base.compile(eachmatch(r"b", "abb"))] == [2, 3]
     # test with substring
     @test endswith((@views "abc"[2:3]), r"C"i)
 

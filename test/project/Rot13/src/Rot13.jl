@@ -25,4 +25,8 @@ end
 
 end
 
+module NoMain
+main(args) = 0
+end
+
 end # module Rot13

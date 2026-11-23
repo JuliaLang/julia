@@ -595,6 +595,14 @@ let a = []
     @test timedwait(() -> a == [1], 10) === :ok
 end
 
+@testset "Timer show and propertynames" begin
+    t = Timer(600; interval=2)
+    @test :timeout in propertynames(t)
+    @test startswith(repr(t), "Timer (open, timeout: 600.0 s, interval: 2.0 s) @0x")
+    close(t)
+    @test startswith(repr(t), "Timer (closed, timeout: 600.0 s, interval: 2.0 s) @0x")
+end
+
 @testset "wait after closing a one-shot Timer (#34366)" begin
     t = Timer(600)
     close(t) # test assumes that thread won't get preempted for 10 minutes...
@@ -985,6 +993,36 @@ end
     message = "Setting a Task's `result` field directly is disallowed. The result of a task is determined by the return value of its code; to pass a value to a suspended task, use `schedule(t, val)` or `yieldto(t, val)` instead."
     @test_throws ErrorException(message) (t.result = 42)
     @test t.state == :runnable
+    wait(schedule(t))
+    @test_throws "Setting scope on a started task" (t.scope = nothing)
+    tf = Task(() -> error("boom"))
+    @test_throws TaskFailedException wait(schedule(tf))
+    @test tf.state === :failed
+    @test tf.backtrace isa Vector
+    @test !isempty(tf.backtrace)
+
+    @test fetch(42) === 42
+    @test fetch(Base.@async_unwrap 1 + 1) == 2
+    @test_throws ErrorException("boom") fetch(Base.UnwrapTaskFailedException(@async error("boom")))
+    @test fetch(Base.UnwrapTaskFailedException(@async 3)) == 3
+end
+
+@testset "task_local_storage" begin
+    key = :channels_test_tls_key
+    @test !haskey(task_local_storage(), key)
+    @test task_local_storage(() -> task_local_storage(key), key, 1) == 1
+    @test !haskey(task_local_storage(), key)
+    task_local_storage(key, 2)
+    try
+        @test task_local_storage(key, 3) do
+            task_local_storage(key)
+        end == 3
+        @test task_local_storage(key) == 2
+        @test_throws ErrorException task_local_storage(() -> error(), key, 4)
+        @test task_local_storage(key) == 2
+    finally
+        delete!(task_local_storage(), key)
+    end
 end
 
 function _task(@nospecialize(f), stack::Int, @nospecialize(invoke))
