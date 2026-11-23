@@ -693,6 +693,8 @@ precompile_test_harness(false) do dir
     cachefile, _ = @test_logs (:debug, r"Generating object cache file for FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), "")
     @test isfile(joinpath(cachedir, "FooBar.ji"))
+    # FooBar has no native code, so it gets no package image file
+    @test !isfile(Base.ocachefile_from_cachefile(cachefile))
     Tsc = Bool(Base.JLOptions().use_pkgimages) ? Tuple{<:Vector, String, UInt128} : Tuple{<:Vector, Nothing, UInt128}
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @test !isdefined(Main, :FooBar)
@@ -2239,25 +2241,32 @@ precompile_test_harness("BadInvalidations") do load_path
 end
 
 # https://github.com/JuliaLang/julia/issues/48074
+# A package without code has no .so, so its loaded .ji is the file that cannot be replaced.
 precompile_test_harness("WindowsCacheOverwrite") do load_path
-    # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
-    write(joinpath(load_path, "WindowsCacheOverwrite.jl"),
-        """
-        module WindowsCacheOverwrite
-        end # module
-        """)
-    ji, ofile = Base.compilecache(Base.PkgId("WindowsCacheOverwrite"))
-    @eval using WindowsCacheOverwrite
+    for code in (true, false)
+        name = code ? "WindowsCacheOverwrite" : "WindowsCacheOverwriteNoCode"
+        # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
+        write(joinpath(load_path, "$name.jl"),
+            """
+            module $name
+            f() = "something"
+            $(code ? "precompile(f, ())" : "")
+            end # module
+            """)
+        ji, ofile = Base.compilecache(Base.PkgId(name))
+        @eval using $(Symbol(name))
 
-    write(joinpath(load_path, "WindowsCacheOverwrite.jl"),
-        """
-        module WindowsCacheOverwrite
-        f() = "something new"
-        end # module
-        """)
+        write(joinpath(load_path, "$name.jl"),
+            """
+            module $name
+            f() = "something new"
+            $(code ? "precompile(f, ())" : "")
+            end # module
+            """)
 
-    ji_2, ofile_2 = Base.compilecache(Base.PkgId("WindowsCacheOverwrite"))
-    @test ofile_2 == Base.ocachefile_from_cachefile(ji_2)
+        ji_2, ofile_2 = Base.compilecache(Base.PkgId(name))
+        @test ofile_2 == (code ? Base.ocachefile_from_cachefile(ji_2) : ji_2)
+    end
 end
 
 precompile_test_harness("Issue #48391") do load_path
@@ -5777,13 +5786,13 @@ end
 # needed later, so the package is recompiled to the same path and loaded from it.
 precompile_test_harness("mismatched package image .so is recompiled") do load_path
     srcfile = joinpath(load_path, "MismatchedSo.jl")
-    write(srcfile, "module MismatchedSo\nf(x) = x + 1\nend\n")
+    write(srcfile, "module MismatchedSo\nf(x) = x + 1\nprecompile(f, (Int,))\nend\n")
     pkg = Base.PkgId("MismatchedSo")
     Base.compilecache(pkg)
     cachefile = only(Base.find_all_in_cache_path(pkg))
     ocachefile = Base.ocachefile_from_cachefile(cachefile)
     oldso = read(ocachefile)
-    write(srcfile, "module MismatchedSo\nf(x) = x + 2\nend\n")
+    write(srcfile, "module MismatchedSo\nf(x) = x + 2\nprecompile(f, (Int,))\nend\n")
     Base.compilecache(pkg)
     @test only(Base.find_all_in_cache_path(pkg)) == cachefile
     write(ocachefile, oldso)

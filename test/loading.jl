@@ -2585,12 +2585,16 @@ end
         open(joinpath(dir, "Child.jl"), "w") do io
             println(io, """
                 module Child
+                f() = 1
+                precompile(f, ())
                 end""")
         end
         open(joinpath(dir, "Parent.jl"), "w") do io
             println(io, """
                 module Parent
                 using Child
+                g() = Child.f()
+                precompile(g, ())
                 end""")
         end
 

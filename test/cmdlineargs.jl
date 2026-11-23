@@ -2098,8 +2098,8 @@ end
 # .ji) and the plain serialized .ji (--pkgimages=no), with --compress-sysimage
 # (which precompile workers inherit through julia_cmd) on and off in each.
 # Compression requires the split layout, so with --pkgimages=no the worker must
-# warn and emit an uncompressed heap.
-@testset "pkgimage: native=$native compress=$compress" for native in (true, false), compress in (true, false)
+# warn and emit an uncompressed heap. A package with no code gets no ocachefile.
+@testset "pkgimage: native=$native code=$code compress=$compress" for (native, code) in ((true, true), (true, false), (false, false)), compress in (true, false)
     mktempdir() do dir
         pkgdir = joinpath(dir, "CompressMe")
         mkpath(joinpath(pkgdir, "src"))
@@ -2113,6 +2113,7 @@ end
             """
             module CompressMe
             f() = 42
+            $(code ? "precompile(f, ())" : "")
             end
             """)
         cmd = addenv(`$(Base.julia_cmd()) --pkgimages=$(native ? "yes" : "no")
@@ -2127,10 +2128,10 @@ end
 
         compiled = joinpath(dir, "depot", "compiled", "v$(VERSION.major).$(VERSION.minor)", "CompressMe")
         ji_file = only(filter(endswith(".ji"), readdir(compiled; join=true)))
-        @test isfile(Base.ocachefile_from_cachefile(ji_file)) == native
+        @test isfile(Base.ocachefile_from_cachefile(ji_file)) == (native && code)
 
         # The heap payload in the .ji must be zstd-compressed exactly when a
-        # compressed split pkgimage was requested.
+        # compressed split pkgimage with code was requested.
         open(ji_file) do io
             flags = Ref{UInt32}()
             checksum = Ref{UInt32}()
@@ -2140,9 +2141,10 @@ end
             @test err == 0
             @test flags[] & Base.JI_FLAG_PKGIMAGE != 0
             @test (flags[] & Base.JI_FLAG_SPLIT != 0) == native
+            @test (flags[] & Base.JI_FLAG_NO_NATIVE != 0) == (native && !code)
             seek(io, datastartpos[])
             zstd_magic = UInt8[0x28, 0xb5, 0x2f, 0xfd]
-            @test (read(io, 4) == zstd_magic) == (native && compress)
+            @test (read(io, 4) == zstd_magic) == (native && code && compress)
         end
 
         # Load again in a fresh process from the existing cache, without

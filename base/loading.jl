@@ -2440,11 +2440,14 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
         return e
     end
     try
-        isvalid_cache_header(io) === nothing && return ArgumentError("Incompatible header in cache file $path.")
+        flags = Ref{UInt32}()
+        isvalid_cache_header(io, flags) === nothing && return ArgumentError("Incompatible header in cache file $path.")
         _, _, depmodnames, _, _, clone_targets, _ = _parse_cache_header(io, path)
 
         pkgimage = !isempty(clone_targets)
-        if pkgimage
+        if flags[] & JI_FLAG_NO_NATIVE != 0
+            ocachepath = path # an image without code is restored from its .ji alone
+        elseif pkgimage
             ocachepath !== nothing || return ArgumentError("Expected ocachepath to be provided")
             isfile(ocachepath) || return ArgumentError("Ocachepath $ocachepath is not a file.")
             ocachepath == ocachefile_from_cachefile(path) || return ArgumentError("$ocachepath is not the expected ocachefile")
@@ -3978,18 +3981,21 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
         end
 
         if result
-            if cache_objects
+            # Read preferences blob back from .ji file (we can't precompute because we don't
+            # actually know what the list of compile-time preferences are without compiling)
+            header_flags = Ref{UInt32}()
+            modules, _, required_modules, _, prefs_blob = parse_cache_header(tmppath, header_flags)
+            slot_cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags)
+
+            # an image with no native code gets no object to link
+            has_native = cache_objects && header_flags[] & JI_FLAG_NO_NATIVE == 0
+            if has_native
                 # Run linker over tmppath_o
                 Compiler.@zone "PRECOMPILE_LINK" Linking.link_image(tmppath_o, tmppath_so)
             end
 
-            # Read preferences blob back from .ji file (we can't precompute because we don't
-            # actually know what the list of compile-time preferences are without compiling)
-            modules, _, required_modules, _, prefs_blob = parse_cache_header(tmppath)
-            slot_cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags)
-
             # append checksum for so to the end of the .ji file:
-            crc_so = if cache_objects
+            crc_so = if has_native
                 open(_crc32c, tmppath_so, "r")
             else
                 UInt32(0)
@@ -4019,9 +4025,9 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
                 session_only = built_against_other_sources(required_modules)
                 session_only && keep_session_build_lock(pkg, slot_cachefile, cachefile, lock_cachefile_shared(tmppath))
             end
-            ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
+            ocachefile = has_native ? ocachefile_from_cachefile(cachefile) : nothing
 
-            if cache_objects
+            if has_native
                 ocachefile_new = rename_unique_ocachefile(tmppath_so, ocachefile)
                 if ocachefile_new != ocachefile
                     cachefile = cachefile_from_ocachefile(ocachefile_new)
@@ -4033,10 +4039,17 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
                     rm(joinpath(ocachefile * ".dSYM", "Contents", "Resources", "Relocations"); force=true, recursive=true)
                 end
             end
-            # this is atomic according to POSIX (not Win32):
-            # but force=true means it will fall back to non atomic
-            # move if the initial rename fails.
-            mv(tmppath, cachefile; force=true)
+            if cache_objects && !has_native
+                # A loaded image keeps its .ji mapped, which Windows will not replace,
+                # so fall back to a new name as for a loaded native image.
+                cachefile = rename_unique_ocachefile(tmppath, cachefile)
+                ocachefile = cachefile # an image without code is restored from its .ji alone
+            else
+                # this is atomic according to POSIX (not Win32):
+                # but force=true means it will fall back to non atomic
+                # move if the initial rename fails.
+                mv(tmppath, cachefile; force=true)
+            end
             pkg.uuid === nothing || prune_cachefiles(pkg, slot_cachefile, cachefile; session_only)
             return cachefile, ocachefile
         end
@@ -4088,9 +4101,9 @@ end
 
 const JI_FLAG_PKGIMAGE::UInt32 = 1 << 0
 const JI_FLAG_SPLIT::UInt32 = 1 << 1
+const JI_FLAG_NO_NATIVE::UInt32 = 1 << 2
 
-function isvalid_cache_header(f::IOStream)
-    flags = Ref{UInt32}()
+function isvalid_cache_header(f::IOStream, flags::Ref{UInt32}=Ref{UInt32}())
     checksum = Ref{UInt32}()
     err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), f.ios, flags, checksum, Ref{Int64}(), Ref{Int64}())
 
@@ -4130,7 +4143,7 @@ function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{No
         record_reason(reasons, :checksum_invalid)
         return true
     end
-    if ocachefile !== nothing && !isvalid_pkgimage_crc(io, ocachefile)
+    if ocachefile !== nothing && ocachefile != cachefile && !isvalid_pkgimage_crc(io, ocachefile)
         @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
         record_reason(reasons, :ocache_checksum_invalid)
         return true
@@ -4173,10 +4186,13 @@ end
 
 # Checksum a file the driver accepted from the record, before it is trusted without checks.
 function checksums_valid_now(cachefile::String)
-    opath = ocachefile_from_cachefile(cachefile)
-    ocachefile = isfile(opath) ? opath : nothing
     try
         open(cachefile, "r") do io
+            flags = Ref{UInt32}(0)
+            isvalid_cache_header(io, flags)
+            opath = ocachefile_from_cachefile(cachefile)
+            # a sibling .so of an image without code is left over from another build
+            ocachefile = flags[] & JI_FLAG_NO_NATIVE != 0 ? cachefile : isfile(opath) ? opath : nothing
             key = checksum_key(io, ocachefile)
             invalid = checksums_invalid(io, cachefile, ocachefile, nothing)
             invalid && @lock require_lock delete!(checksums_valid, key)
@@ -4412,10 +4428,10 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     return modules, (includes, includes_srcfiles, requires), required_modules, srctextpos, prefs_blob, clone_targets, flags, syntax_version
 end
 
-function parse_cache_header(cachefile::String)
+function parse_cache_header(cachefile::String, flags::Ref{UInt32}=Ref{UInt32}())
     io = open(cachefile, "r")
     try
-        isvalid_cache_header(io) === nothing && throw(ArgumentError("Incompatible header in cache file $cachefile."))
+        isvalid_cache_header(io, flags) === nothing && throw(ArgumentError("Incompatible header in cache file $cachefile."))
         ret = parse_cache_header(io, cachefile)
         return ret
     finally
@@ -4988,7 +5004,8 @@ end
         return true
     end
     try
-        checksum = isvalid_cache_header(io)
+        header_flags = Ref{UInt32}()
+        checksum = isvalid_cache_header(io, header_flags)
         if checksum === nothing
             @debug "Rejecting cache file $cachefile due to it containing an incompatible cache header"
             record_reason(reasons, :incompatible_header)
@@ -5053,7 +5070,9 @@ end
                 record_reason(reasons, :cpu_target)
                 return true
             end
-            if !isfile(ocachefile)
+            if header_flags[] & JI_FLAG_NO_NATIVE != 0
+                ocachefile = cachefile # an image without code is restored from its .ji alone
+            elseif !isfile(ocachefile)
                 @debug "Rejecting cache file $cachefile for $modkey since pkgimage $ocachefile was not found"
                 record_reason(reasons, :ocachefile_missing)
                 return true
