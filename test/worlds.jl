@@ -650,6 +650,19 @@ end
 end
 @test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()
 
+# ... including when importing a single binding, from a world that predates it (#64555)
+let world = Base.get_world_counter()
+    src = Module(:Src64555)
+    Core.eval(src, :(global x = 1))
+    dst = Module(:Dst64555)
+    @test_nowarn Base.invoke_in_world(world, Core._import, dst, src, :x, :x, false)
+    # re-importing with `import` upgrades the `using` import rather than conflicting with it
+    @test_nowarn Base.invoke_in_world(world, Core._import, dst, src, :x, :x, true)
+    bpart = Base.lookup_binding_partition(Base.get_world_counter(), GlobalRef(dst, :x))
+    @test Base.binding_kind(bpart) == Base.PARTITION_KIND_IMPORTED
+    @test Core.eval(dst, :x) == 1
+end
+
 # issue #59429 - world age semantics with toplevel in macros
 module M59429
 using Test
