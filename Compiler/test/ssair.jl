@@ -1089,6 +1089,11 @@ let ir = first(only(Base.code_ircode(irshow_debuginfo_smoke, (Int,))))
     @test occursin("return", output)
 end
 
+let mi = Base.method_instance(sin, (Float64,))
+    mi_info = Compiler.Timings.InferenceFrameInfo(mi, Compiler.VarState[], Any[Core.Const(sin), Float64], 2)
+    @test sprint(show, mi_info) == "InferenceFrameInfo for sin(::Float64)"
+end
+
 function roundtrip_di(codelocs, firstline, nstmts)
     str = ccall(:jl_compress_codelocs,
                 Any, (Int32, Any, Int), firstline, codelocs, nstmts)::String;

@@ -138,7 +138,7 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
         need_split = true #!(idx == last_block_idx)
     end
 
-    need_split || delete!(state.merged_orig_blocks, last(new_range))
+    need_split || delete!(state.merged_orig_blocks, block)
 
     push!(state.todo_bbs, (length(state.new_cfg_blocks) - 1 + (need_split_before ? 1 : 0), post_bb_id))
 
