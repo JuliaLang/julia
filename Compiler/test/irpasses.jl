@@ -935,6 +935,38 @@ let ir = Base.code_ircode(; optimize_until="CC: SLOT2REG") do
     @test na < nb
 end
 
+# `cfg_simplify!` must keep the `PhiCNode` operand of an upsilon in a block that it merges
+# into its successor (here the join block of `x > 0 && ...`, which holds only the
+# upsilon of `done = false`)
+@noinline upsilon_merged_g(x) = x == 1 ? error("boom") : nothing
+@inline function upsilon_merged(x, flag::Bool, r)
+    done = true
+    try
+        x > 0 && upsilon_merged_g(x + 1)
+        done = false
+        @goto next
+        @label next
+        upsilon_merged_g(x)
+        done = true
+    finally
+        r[] = done
+    end
+    return flag
+end
+let ir = only(Base.code_ircode(upsilon_merged, (Int, Bool, Base.RefValue{Bool})))[1]
+    nupsilon_false(ir) = count(s -> s isa UpsilonNode && s.val === false, ir.stmts.stmt)
+    @test nupsilon_false(ir) == 1
+    ir = Compiler.cfg_simplify!(ir)
+    Compiler.verify_ir(ir)
+    @test nupsilon_false(ir) == 1
+end
+# Inlining a const-propagated callee runs `cfg_simplify!` on it
+@noinline upsilon_merged_caller(x, r) = upsilon_merged(x, true, r)
+let r = Ref(true)
+    @test_throws ErrorException upsilon_merged_caller(1, r)
+    @test !r[]
+end
+
 # Issue #29213
 function f_29213()
     while true
@@ -1538,6 +1570,29 @@ let code = Any[
     ir = Compiler.compact!(ir)
 
     Compiler.verify_ir(ir)
+end
+
+# The result slot of a value-position `while` with a conditional `break` is
+# unassigned on the break path; lowering guards the read with `isdefined` and
+# backfills `nothing`. Driving the optimizer directly from lowered
+# (uninferred) code must treat every non-argument slot as maybe-undef —
+# slotflags carry no used-undef information — or the guard is folded away.
+f_breakblock_undef(c) = (v = while true; c && break; end; v)
+@test f_breakblock_undef(true) === nothing
+let m = only(methods(f_breakblock_undef))
+    mi = Compiler.specialize_method(m, Tuple{typeof(f_breakblock_undef),Bool}, Core.svec())
+    ci = Base.uncompressed_ir(m)
+    ci.slottypes = Any[Any for _ = 1:length(ci.slotflags)]
+    ci.ssavaluetypes = Any[Any for _ = 1:(ci.ssavaluetypes::Int)]
+    sv = Compiler.OptimizationState(mi, ci, Compiler.NativeInterpreter())
+    ir = Compiler.convert_to_ircode!(ci, sv)
+    ir = Compiler.slot2reg(ir, ci, sv)
+    ir = Compiler.compact!(ir)
+    Compiler.verify_ir(ir)
+    Compiler.replace_code_newstyle!(ci, ir)
+    ci.ssavaluetypes = length(ci.ssavaluetypes::Vector{Any})
+    oc = Core.OpaqueClosure(ci; sig=Tuple{Bool}, rettype=Any, nargs=1)
+    @test oc(true) === nothing
 end
 
 function f_with_merge_to_entry_block()

@@ -92,15 +92,6 @@ function multiple_methods(m::UnionSplitMethodMatches)
     return false
 end
 
-nmatches(info::MethodMatchInfo) = length(info.results)
-function nmatches(info::UnionSplitInfo)
-    n = 0
-    for mminfo in info.split
-        n += nmatches(mminfo)
-    end
-    return n
-end
-
 # intermediate state for computing gfresult
 mutable struct CallInferenceState
     inferidx::Int
@@ -984,7 +975,9 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     # try constant prop'
     new_result = const_prop_call(interp, mi, result, arginfo, sv, concrete_eval_result)
     new_result === nothing && return nothing
-    if eligibility === :none
+    # running a call that never returns gains nothing, and if it also cannot throw,
+    # its code is unreachable and may be undefined behavior
+    if eligibility === :none && new_result.rt !== Bottom
         # const-prop' may have refined effects to be foldable when the original
         # call was not; in that case, prefer concrete eval over the const-prop' result
         proof = inference_proof(new_result.const_result)
@@ -2529,6 +2522,14 @@ function get_ci_abi(ci::CodeInstance)
     (def::MethodInstance).specTypes
 end
 
+# whether `invoke(f, ci, args...)` passes its argument type check for any arguments of `argtype`
+function invoke_ci_argtypes_valid(@nospecialize(argtype), ci::CodeInstance)
+    argtype <: get_ci_abi(ci) || return false
+    isa(ci.def, ABIOverride) && return true
+    defdef = get_ci_mi(ci).def
+    return !isa(defdef, Method) || argtype <: defdef.sig
+end
+
 function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     argtypes = arginfo.argtypes
     ft′ = argtype_by_index(argtypes, 2)
@@ -2541,11 +2542,10 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         if isa(method_or_ci, CodeInstance)
             argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
             specsig = get_ci_abi(method_or_ci)
-            defdef = get_ci_mi(method_or_ci).def
             exct_ci = method_or_ci.exctype
             if !hasintersect(argtype, specsig)
                 return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
-            elseif !(argtype <: specsig) || ((!isa(method_or_ci.def, ABIOverride) && isa(defdef, Method)) && !(argtype <: defdef.sig))
+            elseif !invoke_ci_argtypes_valid(argtype, method_or_ci)
                 exct_ci = Union{exct_ci, TypeError}
             end
             callee_valid_range = WorldRange(method_or_ci.min_world, method_or_ci.max_world)
@@ -2557,8 +2557,10 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
                 end
                 return Future(CallMeta(Bottom, ErrorException, EFFECTS_THROWS, NoCallInfo()))
             end
+            # a foreign CodeInstance throws if its owner has not added code for it to the JIT
+            # (a native one falls back to `jl_invoke` of its MethodInstance)
             # TODO: When we add curing, we may want to assume this is nothrow
-            if (method_or_ci.owner === Nothing && method_or_ci.def.def isa Method)
+            if method_or_ci.owner !== nothing
                 exct_ci = Union{exct_ci, ErrorException}
             end
             update_valid_age!(sv, our_world, callee_valid_range)
@@ -3354,10 +3356,13 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     if isa(e, QuoteNode)
         e = e.value
     end
-    effects = Effects(EFFECTS_TOTAL;
-        inaccessiblememonly = is_mutation_free_argtype(typeof(e)) ? ALWAYS_TRUE : ALWAYS_FALSE)
-    return RTEffects(Const(e), Union{}, effects)
+    rt = Const(e)
+    return RTEffects(rt, Union{}, constant_effects(rt))
 end
+
+# obtaining a constant that refers to mutable memory reaches that memory (see `:inaccessiblememonly`)
+constant_effects(@nospecialize rt) = is_mutation_free_argtype(rt) ? EFFECTS_TOTAL :
+    Effects(EFFECTS_TOTAL; inaccessiblememonly=ALWAYS_FALSE)
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::AbsIntState)
     @assert e.head !== :(=)
@@ -3465,6 +3470,8 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
     argtype = abstract_eval_value(interp, e.args[1], sstate, sv)
     rt, _... = instanceof_tfunc(argtype, true)
     ut = unwrap_unionall(rt)
+    # only the runtime may allocate such a type (see `check_new_struct_type`)
+    isa(ut, DataType) && datatype_hashiddenfields(ut) && return RTEffects(Bottom, ErrorException, EFFECTS_THROWS)
     exct = Union{ErrorException,TypeError}
     if isa(ut, DataType) && !isabstracttype(ut)
         ismutable = ismutabletype(ut)
@@ -3566,6 +3573,9 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
     𝕃ᵢ = typeinf_lattice(interp)
     argtype = abstract_eval_value(interp, e.args[1], sstate, sv)
     rt, isexact = instanceof_tfunc(argtype, true)
+    ut = unwrap_unionall(rt)
+    # only the runtime may allocate such a type (see `check_new_struct_type`)
+    isa(ut, DataType) && datatype_hashiddenfields(ut) && return RTEffects(Bottom, ErrorException, EFFECTS_THROWS)
     # `:splatnew` throws on a `UnionAll` or `Union` rep that is only `==` to `rt` (#61323)
     isexact = isexact && widenconst(argtype) <: DataType
     nothrow = false
@@ -4178,8 +4188,7 @@ function abstract_eval_partition_load(binding::Core.Binding, partition::Core.Bin
             return RTEffects(Any, UndefVarError, local_getglobal_effects)
         end
         rt = Const(partition_restriction(partition))
-        return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL,
-            inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE,
+        return RTEffects(rt, Union{}, Effects(constant_effects(rt);
             effect_free=isdepwarn ? ALWAYS_FALSE : ALWAYS_TRUE))
     end
 

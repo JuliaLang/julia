@@ -222,7 +222,7 @@ JL_CALLABLE(jl_f_opaque_closure_call) JL_CANSAFEPOINT
         jl_method_error(F, args, nargs + 1, oc->world);
     argt = jl_unwrap_unionall(argt);
     assert(jl_is_datatype(argt));
-    jl_svec_t *types = jl_get_fieldtypes((jl_datatype_t*)argt);
+    jl_svec_t *types = ((jl_datatype_t*)argt)->parameters; // a tuple's field types
     size_t ntypes = jl_svec_len(types);
     for (int i = 0; i < nargs; ++i) {
         jl_value_t *typ = i >= ntypes ? jl_svecref(types, ntypes-1) : jl_svecref(types, i);

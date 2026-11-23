@@ -163,10 +163,6 @@ idxmask(::Type{<:Union{Int32,UInt32}}) = 3
 idxmask(::Type{<:Union{Int64,UInt64}}) = 1
 idxmask(::Type{<:Union{Int128,UInt128}}) = 0
 
-
-mt_avail(r::MersenneTwister, ::Type{T}) where {T<:BitInteger} =
-    r.idxI >> logsizeof(T)
-
 function mt_setfull!(r::MersenneTwister, ::Type{<:BitInteger})
     r.adv_ints = r.adv
     ints = r.ints
@@ -489,7 +485,7 @@ end
 # similar to Array{UInt8}, but we need to mask the result so that only the LSB
 # in each byte can be non-zero
 
-function rand!(r::MersenneTwister, A1::Array{Bool}, sp::SamplerType{Bool})
+function rand!(r::MersenneTwister, A1::Array{Bool}, ::SamplerType{Bool})
     n1 = length(A1)
     n128 = n1 ÷ 16
 

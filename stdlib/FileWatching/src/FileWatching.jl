@@ -1,7 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Utilities for monitoring files and file descriptors for events.
+    FileWatching
+
+Waiting for changes to files, folders and file descriptors, with [`watch_file`](@ref),
+[`watch_folder`](@ref), [`poll_file`](@ref) and [`poll_fd`](@ref). Also lock files that
+hold the process ID of their owner, with [`mkpidlock`](@ref).
 """
 module FileWatching
 

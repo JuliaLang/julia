@@ -101,10 +101,6 @@ with `make` when building Julia proper. This will then
 create a `.dmg` file in the `contrib/mac/app` directory holding a
 completely self-contained Julia.app.
 
-Alternatively, Julia may be built as a framework by invoking `make` with the
-`darwinframework` target and `DARWIN_FRAMEWORK=1` set. For example,
-`make DARWIN_FRAMEWORK=1 darwinframework`.
-
 Windows
 -------
 

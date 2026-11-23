@@ -793,6 +793,7 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
 
 static void jl_exit_thread0_cb(int signo) JL_CANSAFEPOINT
 {
+    jl_gc_enable_from_nonmutator(1);
     jl_fprint_critical_error(ios_safe_stderr, signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
     jl_raise(signo);

@@ -164,6 +164,14 @@ end
             end
         end
 
+        # issue #64216
+        @eval begin
+            @test @fastmath(hypot($third)) ≈ hypot($third)
+            @test @fastmath(hypot(-$third)) ≈ hypot(-$third)
+            @test @fastmath(hypot($half, $third, 1+$half)) ≈ hypot($half, $third, 1+$half)
+            @test @fastmath(hypot($half, $third, 1+$half, -$third)) ≈ hypot($half, $third, 1+$half, -$third)
+        end
+
         # issue 31795
         for f in (:min, :max)
             @eval begin

@@ -42,7 +42,7 @@ using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, AnyType, Meth
     TypeEq,
     _apply_iterate, apply_type, compilerbarrier, const_memoryrefget, donotdelete, memoryref_isassigned,
     memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, memoryrefunset!, print, println, show, svec,
-    typename, unsafe_write, write, stdout, stderr
+    typename, unsafe_memoryrefload, unsafe_memoryrefstore!, unsafe_write, write, stdout, stderr
 
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
     PARTITION_KIND_GLOBAL, PARTITION_KIND_UNDEF_CONST, PARTITION_KIND_BACKDATED_CONST, PARTITION_KIND_DECLARED,
@@ -53,7 +53,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     OneTo, Ordering, RefValue, _NAMEDTUPLE_NAME,
     _array_for, _bits_findnext, _defaultctors, _methods_by_ftype, _uniontypes, all, allocatedinline, any,
     argument_datatypename, binding_kind, cconvert, copy_exprargs,
-    datatype_fieldcount, datatype_fieldtypes, datatype_layoutsize, datatype_nfields,
+    datatype_fieldcount, datatype_fieldtypes, datatype_hashiddenfields, datatype_layoutsize, datatype_nfields,
     datatype_pointerfree, decode_effects_override, diff_names, fieldindex, visit,
     generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars, has_typevar,
     hasgenerator, hasintersect, indexed_iterate, isType, isTypeEq, isTypeEgal,
@@ -84,12 +84,6 @@ import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, ge
 # Needs to match UUID defined in Project.toml
 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Compiler,
     (0x807dbc54_b67e_4c79, 0x8afb_eafe4df6f2e1))
-
-# Syntax evolution bug: unset in bare modules (TODO).  This surfaces only when
-# Compiler.jl is loaded as a standalone package.
-if isdefined(Base, :end_base_include) && isdefined(Base, :set_syntax_version)
-    Base.set_syntax_version(Compiler, Base.VersionNumber(1, 14))
-end
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
@@ -230,23 +224,6 @@ else
         onlywarn ? println(io, msg) : error(msg)
     end
     # During bootstrap, skip including these files and defer to base/show.jl to include it later
-end
-
-# The Compiler sources use Julia 1.14 syntax (`typegroup` blocks; see the
-# `[syntax]` section in Compiler/Project.toml). When built into the sysimg this
-# module bypasses package loading, so install the module parser binding
-# consulted by `Base.parser_for_module` directly; without it, `Meta.parse`-style
-# reparsing of Compiler sources (e.g. by Revise) uses unversioned syntax and
-# rejects `typegroup` blocks. `Base.JuliaSyntax` and `Base.VersionNumber` only
-# need to exist by the time this is called, not when it is defined, so this is
-# safe to define this early in bootstrap. When loaded as a package instead,
-# package loading has already declared an equivalent binding from the project's
-# `[syntax]` entry (and defining over it would error), so skip it then.
-if !isdefined(@__MODULE__, Symbol("#_internal_julia_parse"))
-function var"#_internal_julia_parse"(code, filename::String, lineno::Int, offset::Int, options::Symbol)
-    return Base.JuliaSyntax.core_parser_hook(
-        code, filename, lineno, offset, options, (1, 14))
-end
 end
 
 end # baremodule Compiler

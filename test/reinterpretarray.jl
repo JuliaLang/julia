@@ -1,12 +1,71 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+using InteractiveUtils: code_llvm
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 isdefined(Main, :TSlow) || @eval Main include("testhelpers/arrayindexingtypes.jl")
 using .Main: TSlow, WrapperArray
 isdefined(Main, :StridedArrays) || @eval Main include("testhelpers/StridedArrays.jl")
 using .Main.StridedArrays
+
+struct ReinterpretShrinkValue
+    parent::Vector{UInt8}
+end
+function Base.convert(::Type{UInt32}, value::ReinterpretShrinkValue)
+    empty!(value.parent)
+    return UInt32(0)
+end
+
+# Reinterpretation follows resizing, including during value conversion.
+@testset "dense reinterpret storage" begin
+    function resize_during_reinterpret!(a)
+        values = zeros(eltype(a), 2)
+        for i in eachindex(values)
+            if i == 2
+                resize!(parent(a), 4096)
+                fill!(parent(a), 0x00)
+                GC.gc()
+            end
+            values[i] = a[1]
+            a[1] = values[1] + one(values[1])
+        end
+        return Tuple(values)
+    end
+    p = zeros(UInt8, 8)
+    a = reinterpret(UInt16, view(p, UInt(3):UInt(6)))
+    a[2] = reinterpret(UInt16, (0xa1, 0xb2))
+    @test p == [0x00, 0x00, 0x00, 0x00, 0xa1, 0xb2, 0x00, 0x00]
+
+    p = copyto!(Memory{UInt8}(undef, 8), 0x01:0x08)
+    a = reinterpret(UInt16, view(p, 3:6))
+    @test a[1] === reinterpret(UInt16, (0x03, 0x04))
+    a[2] = reinterpret(UInt16, (0xa1, 0xb2))
+    @test Tuple(p) === (0x01, 0x02, 0x03, 0x04, 0xa1, 0xb2, 0x07, 0x08)
+
+    p = zeros(UInt8, 4)
+    @test_throws BoundsError setindex!(reinterpret(UInt32, p), ReinterpretShrinkValue(p), 1)
+
+    p = collect(UInt8, 1:8)
+    a = reinterpret(UInt32, p)
+    expected = reinterpret(UInt32, (0x01, 0x02, 0x03, 0x04))
+    @test resize_during_reinterpret!(a) === (expected, UInt32(0))
+    @test a[1] == expected + UInt32(1)
+
+    p = collect(UInt8, 1:8)
+    a = reinterpret(UInt16, p)
+    resize!(p, 6; first=true)
+    @test a[1] == reinterpret(UInt16, (0x03, 0x04))
+    a[1] = reinterpret(UInt16, (0xa1, 0xb2))
+    @test p[1:2] == [0xa1, 0xb2]
+
+    for p in (fill(nothing, 3), Memory{Nothing}(undef, 3))
+        a = reinterpret(UInt8, p)
+        @test isempty(a)
+        @test_throws BoundsError a[1]
+        @test_throws BoundsError setindex!(a, 0x01, 1)
+    end
+end
 
 tslow(a::AbstractArray) = TSlow(a)
 wrapper(a::AbstractArray) = WrapperArray(a)
@@ -662,6 +721,43 @@ let R = reinterpret(reshape, Float32, ComplexF32[1.0f0+2.0f0*im, 4.0f0+3.0f0*im]
     @test !isassigned(R, 1, 1, 2)
     @test !isassigned(R, 5)
     @test Array(R)::Matrix{Float32} == [1.0f0 4.0f0; 2.0f0 3.0f0]
+end
+
+@testset "Reinterpret between differently padded bitstypes" begin
+    struct PaddedInner
+        x::UInt8
+        y::UInt8
+    end
+    struct PaddedOuter1
+        a::UInt32
+        b::PaddedInner
+    end
+    struct PaddedOuter2
+        a::PaddedInner
+        b::UInt32
+    end
+    o1 = PaddedOuter1(0x04030201, PaddedInner(0x05, 0x06))
+    o2 = PaddedOuter2(PaddedInner(0x01, 0x02), 0x06050403)
+    @test reinterpret(PaddedOuter2, o1) === o2
+    @test reinterpret(PaddedOuter1, o2) === o1
+
+    # a copy plan of many regions is still computed at compile time
+    nested(T, n) = n == 0 ? T : Tuple{UInt8, nested(T, n - 1), UInt8}
+    In = Tuple{UInt8, nested(Tuple{UInt8, Int64, UInt8}, 30), Int64, UInt8, UInt8}
+    Out = Tuple{UInt8, Int64, nested(Tuple{UInt8, Float64, UInt8}, 31)}
+    x = reinterpret(In, ntuple(UInt8, 81))
+    y = reinterpret(Out, x)
+    @test reinterpret(NTuple{81, UInt8}, y) === ntuple(UInt8, 81)
+    @test reinterpret(In, y) === x
+    f(x) = reinterpret(Out, x)
+    f(x)
+    @test @allocated(f(x)) == 0
+    # without computing the plan or looking up field offsets at run time
+    for (T, S) in ((Out, In), (PaddedOuter2, PaddedOuter1))
+        ir = sprint(io -> code_llvm(io, Base._reinterpret_padding, (Core.TypeEgal{T}, S); dump_module=true))
+        @test !occursin("packed_copies", ir)
+        @test !occursin("jl_get_field_offset", ir)
+    end
 end
 
 @testset "issue #54623" begin

@@ -397,6 +397,32 @@ function propagate_unpublished_cycle_proof!(
     return nothing
 end
 
+# Inside a cycle, a call to a function that is still being inferred can only
+# record an edge to its MethodInstance. Once the cycle is done, point those edges
+# to the finished CodeInstance instead. Then package caches save that code together
+# with its caller, and invalidating it also invalidates the caller.
+function link_cycle_ci_edges!(frames::Vector{AbsIntState{I}}, cycleid::Int) where {I<:AbstractInterpreter}
+    members = IdDict{MethodInstance,CodeInstance}()
+    for frameid = cycleid:length(frames)
+        caller = frames[frameid]::InferenceState
+        if !iszero(caller.cache_mode & CACHE_MODE_GLOBAL) && isdefined(caller.result, :ci)
+            members[caller.linfo] = caller.result.ci
+        end
+    end
+    isempty(members) && return nothing
+    for frameid = cycleid:length(frames)
+        caller = frames[frameid]::InferenceState
+        edges = internal_result_edges(caller)
+        for i = 1:length(edges)
+            edge = edges[i]
+            (edge isa MethodInstance && edge !== caller.linfo) || continue
+            ci = get(members, edge, nothing)
+            ci === nothing || (edges[i] = ci)
+        end
+    end
+    return nothing
+end
+
 function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}}, cycleid::Int, time_before::UInt64) where {I<:AbstractInterpreter}
     world = get_inference_world(interp::I)
     cycle_valid_worlds = WorldRange()
@@ -445,6 +471,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}
     # source was tombstoned), preserve the SCC's external dependencies explicitly.
     # One shared proof for the whole SCC avoids constructing a cyclic proof graph.
     propagate_unpublished_cycle_proof!(frames, cycleid, world, cycle_valid_worlds)
+    link_cycle_ci_edges!(frames, cycleid)
     empty!(opt_cache)
     cycletop = frames[cycleid]::InferenceState
     time_start = cycletop.time_start
@@ -911,6 +938,10 @@ function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeIn
     return nothing
 end
 
+# `==` on the signatures of two backedges, `nothing` for a plain dispatch edge
+invokesig_equal(@nospecialize(a), @nospecialize(b)) =
+    a === b || (a !== nothing && b !== nothing && (a::Type) == (b::Type))
+
 # Whether the (invokesig, item) backedge at iterator state `upto` already appeared earlier in
 # `edges`. Used instead of a hash table for short edge lists, which is nearly all of them.
 function backedge_seen_before(edges::SimpleVector, upto::Int, @nospecialize(invokesig), @nospecialize(item))
@@ -919,7 +950,7 @@ function backedge_seen_before(edges::SimpleVector, upto::Int, @nospecialize(invo
     while next !== nothing
         (invokesig2, item2), i = next
         i > upto && return false
-        if item2 === item && invokesig2 == invokesig
+        if item2 === item && invokesig_equal(invokesig2, invokesig)
             return true
         end
         next = iterate(backedges, i)
@@ -990,14 +1021,14 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector, scratch::Uni
             elseif signatures isa Vector{Any}
                 duplicate = false
                 for signature in signatures
-                    if signature == invokesig
+                    if invokesig_equal(signature, invokesig)
                         duplicate = true
                         break
                     end
                 end
                 duplicate || push!(signatures, invokesig)
             else
-                duplicate = signatures == invokesig
+                duplicate = invokesig_equal(signatures, invokesig)
                 duplicate || (invoked[item] = Any[signatures, invokesig])
             end
         end
@@ -1056,7 +1087,7 @@ function record_slot_assign!(sv::InferenceState)
             if isa(lhs, SlotNumber)
                 typ = ssavaluetypes[i]
                 @assert typ !== NOT_FOUND "active slot in unreached region"
-                vt = widenconst(typ)
+                vt = widenconst_split(typ)
                 if vt !== Bottom
                     id = slot_id(lhs)
                     otherTy = slottypes[id]
@@ -2065,7 +2096,7 @@ end
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
-                         enqueue_unprepared_invokes::Bool = false,
+                         trim::Bool = false,
                          external_linkage::Bool = false)
     src = ci.code
     for i = 1:length(src)
@@ -2078,23 +2109,10 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
             # invoke_modify, we need to compile it regardless.
             if edge isa CodeInstance && has_valid_abi_sparams(get_ci_mi(edge)) &&
                     (isexpr(stmt, :invoke_modify) ||
-                     !(external_linkage && ci_from_image(edge) && ci_has_invoke(edge))) &&
-                    (enqueue_unprepared_invokes ||
-                     ci_has_invoke(edge) || ci_has_source(workqueue.interp, edge) ||
-                     !iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), get_ci_mi(edge), edge)))
-                # The globally-cached check keeps batches closed under invoke
-                # edges even when the edge's source lives only in another
-                # interpreter's codegen cache (activation clears `inferred`,
-                # so `ci_has_source` cannot see it): the drain loops re-infer
-                # such edges, preventing them from silently leaking to
-                # permanent `tojlinvoke` fallbacks at link time. Uncached
-                # speculative edges must NOT be enqueued unconditionally:
-                # resolved invoke edges of recursion that inference widened
-                # (e.g. self-recursion with a growing tuple argument) form an
-                # unbounded chain of fresh signatures, and re-inferring each
-                # one would enqueue the next forever.
+                     !(external_linkage && ci_from_image(edge) && ci_has_invoke(edge)))
                 push!(workqueue, edge)
-            elseif enqueue_unprepared_invokes && edge isa MethodInstance && has_valid_abi_sparams(edge)
+            elseif trim && edge isa MethodInstance && has_valid_abi_sparams(edge)
+                # without a JIT, the callee for which inlining had no code must be compiled now
                 push!(workqueue, edge)
             end
         end
@@ -2105,7 +2123,7 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 mi === nothing || push!(invokelatest_queue, mi)
             end
         end
-        if enqueue_unprepared_invokes && (isexpr(stmt, :foreigncall) || isexpr(stmt, :foreignglobal))
+        if trim && (isexpr(stmt, :foreigncall) || isexpr(stmt, :foreignglobal))
             # Enqueue (in this world) for `--trim`, but not otherwise since
             # this callback is relatively unlikely to run in any given world
             library_type = foreign_library_type(stmt.args[1], ci, sptypes)
@@ -2272,7 +2290,7 @@ end
 
 function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
     invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
-    enqueue_unprepared_invokes::Bool = false,
+    trim::Bool = false,
     external_linkage::Bool,
 )
     interp = workqueue.interp
@@ -2333,7 +2351,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             if src isa CodeInfo
                 sptypes = sptypes_from_meth_instance(mi)
                 collectinvokes!(workqueue, src, sptypes; invokelatest_queue,
-                                enqueue_unprepared_invokes, external_linkage)
+                                trim, external_linkage)
                 # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
                     cached = find_equivalent_cached_ci(
@@ -2380,14 +2398,14 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
 
         append!(workqueue, methods)
         compile!(codeinfos, workqueue; invokelatest_queue, external_linkage,
-                 enqueue_unprepared_invokes = trim_mode != TRIM_NO)
+                 trim = trim_mode != TRIM_NO)
     end
 
     if invokelatest_queue !== nothing
         # This queue is intentionally aliased, to handle e.g. a `finalizer` calling `Core.finalizer`
         # (it will enqueue into itself and immediately drain)
         compile!(codeinfos, invokelatest_queue; invokelatest_queue, external_linkage,
-                 enqueue_unprepared_invokes = trim_mode != TRIM_NO)
+                 trim = trim_mode != TRIM_NO)
     end
 
     if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE

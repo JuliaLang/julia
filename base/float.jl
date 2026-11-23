@@ -797,11 +797,12 @@ function precision end
 _precision_with_base_2(::Type{Float16}) = 11
 _precision_with_base_2(::Type{Float32}) = 24
 _precision_with_base_2(::Type{Float64}) = 53
-function _precision(x, base::Integer)
+function _precision_in_base(p, base::Integer)
     base > 1 || throw(DomainError(base, "`base` cannot be less than 2."))
-    p = _precision_with_base_2(x)
     return base == 2 ? Int(p) : floor(Int, p / log2(base))
 end
+_precision(x, base::Integer) = _precision_in_base(_precision_with_base_2(x), base)
+_precision(::Type{T}, base::Integer) where {T} = _precision_in_base(_precision_with_base_2(T), base)
 precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, base)
 precision(::T; base::Integer=2) where {T<:AbstractFloat} = precision(T; base)
 precision(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(precision, (Union{}, slurp...)))
@@ -1074,11 +1075,11 @@ julia> 1.0 + eps()/2
 ```
 
 More generally, for any floating-point numeric type, `eps` corresponds to an
-upper bound on the distance to the nearest floating-point value: if ``\text{fl}(x)`` is the closest
-floating-point value to a number ``x`` (e.g. an arbitrary real number), then ``\text{fl}(x)``
-satisfies ``|x - \text{fl}(x)| ≤ \text{eps}(x)/2``, not including overflow cases.
+upper bound on the distance to the nearest floating-point value: if ``\\text{fl}(x)`` is the closest
+floating-point value to a number ``x`` (e.g. an arbitrary real number), then ``\\text{fl}(x)``
+satisfies ``|x - \\text{fl}(x)| ≤ \\text{eps}(x)/2``, not including overflow cases.
 This allows the definition of `eps` to be extended to complex numbers,
-for which ``\text{fl}(a + ib) = \text{fl}(a) + i \text{fl}(b)``.
+for which ``\\text{fl}(a + ib) = \\text{fl}(a) + i \\text{fl}(b)``.
 """
 eps(::Type{<:AbstractFloat})
 

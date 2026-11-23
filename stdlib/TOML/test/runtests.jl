@@ -3,7 +3,7 @@
 using Test
 using Dates
 
-using TOML: TOML, parse, tryparse, ParserError, Internals, print
+using TOML: Internals, ParserError, TOML, parse, tryparse
 
 @test isempty(Test.detect_closure_boxes(TOML))
 

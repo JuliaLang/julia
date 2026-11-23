@@ -340,3 +340,39 @@ end
     @test host_ccall() === nothing
     @test host_ir() === nothing
 end
+
+# Windows unwinds a JIT function with a frame only through its function table entry, and entries
+# are registered per function symbol. Private functions can lack a symbol, so a fault below one
+# (e.g. a lazy `ccall` thunk resolving its symbol) could not be dispatched and killed the process.
+# `@0` is unnamed so that llvmcall's own name-based linkage fixup does not reach it, and
+# `@__unnamed_1` takes the name LLVM would otherwise give it.
+@static if Sys.iswindows() && Sys.ARCH === :x86_64
+@testset "private JIT functions have unwind entries" begin
+    private_helper(c) = Base.llvmcall(("""
+        define private i64 @0(i64 %x) noinline "frame-pointer"="all" {
+            %y = add i64 %x, 1
+            ret i64 %y
+        }
+
+        define internal i64 @__unnamed_1(i64 %x) noinline "frame-pointer"="all" {
+            %y = add i64 %x, 2
+            ret i64 %y
+        }
+
+        define ptr @entry(i8 %c) {
+            %b = trunc i8 %c to i1
+            %p = select i1 %b, ptr @0, ptr @__unnamed_1
+            ret ptr %p
+        }""", "entry"), Ptr{Cvoid}, Tuple{Bool}, c)
+    fptr = private_helper(true)
+    @test fptr != private_helper(false)
+    base = Ref{UInt64}(0)
+    entry = ccall((:RtlLookupFunctionEntry, "kernel32"), Ptr{UInt32},
+                  (Ptr{Cvoid}, Ref{UInt64}, Ptr{Cvoid}), fptr, base, C_NULL)
+    @test entry != C_NULL
+    if entry != C_NULL
+        # RUNTIME_FUNCTION.BeginAddress
+        @test base[] + unsafe_load(entry, 1) == UInt64(fptr)
+    end
+end
+end

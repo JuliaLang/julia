@@ -84,6 +84,7 @@ profile data consumer.
 
 ```@docs
 Profile.@profile
+Profile.@profile_walltime
 ```
 
 The methods in `Profile` are not exported and need to be called e.g. as `Profile.print()`.

@@ -1150,6 +1150,13 @@ let s, c, r
     @test r == 1:4
     @test s[r] == "/tmp"
 
+    # After a pipe or a redirection, the command being typed is completed.
+    for s in ("echo hi | cat /t", "echo hi > /t", "cat </t", "echo hi 2>>/t")
+        c,r = test_scomplete(s)
+        @test "/tmp/" in c
+        @test s[r] == "/t"
+    end
+
     # This should match things that are inside the tmp directory
     s = tempdir()
     if !endswith(s, "/")
@@ -1210,14 +1217,11 @@ let s, c, r
             @test r == 5:sizeof(s)
             @test s[r] == joinpath(path, prefix)
 
-            # `~ completes to ~/ for current user plus ~name/ for other real users
+            # `~ completes to ~/ only: other users are not enumerated
             me = Sys.username()
             s_bare = "`ls ~"
             c_bare, r_bare = test_complete(s_bare)
-            @test "~/" in c_bare              # current user always offered as ~/
-            @test !("~$me/" in c_bare)        # current user NOT listed by name (covered by ~/)
-            @test allunique(c_bare)           # no duplicates
-            @test all(c -> startswith(c, "~"), c_bare)
+            @test c_bare == ["~/"]
             @test s_bare[r_bare] == "~"
 
             # `~/prefix completes to ~/dname/ keeping the tilde form
@@ -1249,14 +1253,29 @@ let s, c, r
                 rm(dotdir)
             end
 
-            # `~letter completes to matching usernames including the current user's name
+            # `~prefix completes to the current user's name only, if it matches
             first_char = string(first(me))
             s_prefix = "`ls ~$first_char"
             c_prefix, r_prefix = test_complete(s_prefix)
-            @test "~$me/" in c_prefix             # current user included by name
-            @test !("~/" in c_prefix)             # ~/ shorthand NOT offered for non-empty prefix
-            @test all(c -> startswith(c, "~$first_char"), c_prefix)
+            @test c_prefix == ["~$me/"]
             @test s_prefix[r_prefix] == "~$first_char"
+            c_other, _ = test_complete("`ls ~$(me)_not_a_user")
+            @test isempty(c_other)
+
+            # `~name/prefix completes paths in that user's home directory, which is
+            # looked up by name rather than taken from HOME (set to `tmphome` here)
+            myhome = homedir(me)
+            entries = myhome === nothing || !isdir(myhome) ? String[] :
+                filter(e -> isascii(e) && all(c -> isletter(c) || isdigit(c) || c in "._-", e),
+                       readdir(myhome))
+            if !isempty(entries)
+                entry = first(entries)
+                s_named = "`ls ~$me/" * entry
+                c_named, r_named = test_complete(s_named)
+                @test any(c -> rstrip(c, '/') == joinpath(myhome, entry) ||
+                               endswith(rstrip(c, '/'), "/" * entry), c_named)
+                @test s_named[r_named] == "~$me/" * entry
+            end
 
             # Shell mode: ~/prefix completes with tilde preserved, not escaped
             s_shell = "ls ~/" * prefix
@@ -2266,6 +2285,21 @@ let s = "pop!(global_xs)."
     @test "value" in c
 end
 @test length(global_xs) == 1 # the completion above shouldn't evaluate `pop!` call
+
+# https://github.com/JuliaLang/julia/issues/64794
+# completing a `push!` onto an empty vector must not write past its memory
+struct Issue64794Elem; x::Int; y::Int; end
+mutable struct Issue64794; v::Vector{Issue64794Elem}; end
+function issue64794(x::Int)
+    h = Issue64794(Issue64794Elem[])
+    push!(h.v, Issue64794Elem(x, x))
+    return h
+end
+let empty_mem = Issue64794Elem[].ref.mem
+    c, r, res = test_complete_context("issue64794(1).v.")
+    @test res
+    @test length(empty_mem) == 0
+end
 
 # https://github.com/JuliaLang/julia/issues/51499
 # allow aggressive concrete evaluation for child uncached frames

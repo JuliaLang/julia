@@ -551,11 +551,18 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b 
     }
 }
 
+static NOINLINE jl_binding_partition_t *jl_get_binding_partition_slow(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED
+{
+    // Duplicate the code for the entry frame for branch prediction
+    return jl_get_binding_partition_(b, (jl_value_t*)b, &b->partitions, world, ~(size_t)0, NULL);
+}
+
 jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) {
     if (!b)
         return NULL;
-    // Duplicate the code for the entry frame for branch prediction
-    return jl_get_binding_partition_(b, (jl_value_t*)b, &b->partitions, world, ~(size_t)0, NULL);
+    // without the frame of the search when the newest partition holds `world`
+    jl_binding_partition_t *bpart = jl_get_binding_partition_if_newest(b, world);
+    return bpart ? bpart : jl_get_binding_partition_slow(b, world);
 }
 
 jl_binding_partition_t *jl_get_binding_partition_with_hint(jl_binding_t *b, jl_binding_partition_t *prev, size_t world) JL_GLOBALLY_ROOTED {
@@ -639,10 +646,12 @@ static void jl_add_default_names(jl_module_t *m, uint8_t default_using_core, uin
     }
 }
 
-jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_using_core, uint8_t self_name)
+jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint32_t edition,
+                            uint8_t default_using_core, uint8_t self_name)
 {
     jl_module_t *m = jl_new_module__(name, parent);
     JL_GC_PUSH1(&m);
+    jl_set_module_edition(m, edition);
     JL_LOCK(&world_counter_lock);
     jl_add_default_names(m, default_using_core, self_name);
     JL_UNLOCK(&world_counter_lock);
@@ -738,7 +747,8 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
 
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent)
 {
-    return jl_new_module_(name, parent, 1, 1);
+    uint32_t edition = parent ? jl_get_module_edition(parent) : OLDEST_EDITION;
+    return jl_new_module_(name, parent, edition, 1, 1);
 }
 
 JL_DLLEXPORT uint32_t jl_module_next_counter(jl_module_t *m)
@@ -750,13 +760,24 @@ JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports, ui
 {
     // TODO: should we prohibit this during incremental compilation?
     // TODO: the parent module is a lie
-    jl_module_t *m = jl_new_module_(name, jl_main_module, default_names, default_names);
+    jl_module_t *m = jl_new_module_(
+        name, jl_main_module, OLDEST_EDITION, default_names, default_names);
     JL_GC_PUSH1(&m);
-    if (std_imports)
+    if (std_imports && jl_base_module != NULL)
         jl_add_standard_imports(m);
     JL_GC_POP();
     // TODO: should we somehow try to gc-root this correctly?
     return (jl_value_t*)m;
+}
+
+JL_DLLEXPORT void jl_set_module_edition(jl_module_t *m, uint32_t ed)
+{
+    jl_atomic_store_relaxed(&m->edition, ed);
+}
+
+JL_DLLEXPORT uint32_t jl_get_module_edition(jl_module_t *m)
+{
+    return jl_atomic_load_relaxed(&m->edition);
 }
 
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on)
@@ -1033,11 +1054,17 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value(jl_binding_t *b)
     return jl_get_binding_value_in_world(b, jl_current_task->world_age);
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_binding_value_in_world(jl_binding_t *b, size_t world)
+static NOINLINE jl_value_t *jl_get_binding_value_in_world_slow(jl_binding_t *b, size_t world) JL_CANSAFEPOINT
 {
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
     jl_walk_binding_inplace(&b, &bpart, world);
     return binding_leaf_value(b, bpart, 0);
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_binding_value_in_world(jl_binding_t *b, size_t world)
+{
+    jl_value_t *v = jl_get_binding_value_if_newest(b, world, 0);
+    return v ? v : jl_get_binding_value_in_world_slow(b, world);
 }
 
 // Read the value of an already-resolved leaf binding partition `bpart`.
@@ -1079,11 +1106,17 @@ JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_leaf_partition_depwarn(jl_bi
 
 // Read a binding's value at `world`, warning if it is deprecated (unless reached through an
 // explicit import, which `jl_walk_binding_inplace_depwarn` suppresses).
-static jl_value_t *jl_get_binding_value_depwarn_(jl_binding_t *b, size_t world, int seqcst) JL_CANSAFEPOINT
+static NOINLINE jl_value_t *jl_get_binding_value_depwarn_slow(jl_binding_t *b, size_t world, int seqcst) JL_CANSAFEPOINT
 {
-    assert(b); // alloc=1 parameter ensured that jl_get_module_binding returns a valid binding
     jl_binding_partition_t *bpart = jl_get_binding_leaf_partition_depwarn(b, world);
     return binding_leaf_value(NULL, bpart, seqcst);
+}
+
+STATIC_INLINE jl_value_t *jl_get_binding_value_depwarn_(jl_binding_t *b, size_t world, int seqcst) JL_CANSAFEPOINT
+{
+    assert(b); // alloc=1 parameter ensured that jl_get_module_binding returns a valid binding
+    jl_value_t *v = jl_get_binding_value_if_newest(b, world, seqcst);
+    return v ? v : jl_get_binding_value_depwarn_slow(b, world, seqcst);
 }
 
 static jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b, size_t world) JL_CANSAFEPOINT
@@ -1810,8 +1843,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
 jl_value_t *jl_get_globalref_value(jl_globalref_t *gr, size_t world)
 {
     jl_binding_t *b = gr->binding;
-    if (!b)
-        b = jl_get_module_binding(gr->mod, gr->name, 1);
+    assert(b);
     return jl_get_binding_value_depwarn(b, world);
 }
 
@@ -2039,8 +2071,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding(jl_binding_t *b,
 JL_DLLEXPORT int jl_globalref_is_const(jl_globalref_t *gr)
 {
     jl_binding_t *b = gr->binding;
-    if (!b)
-        b = jl_get_module_binding(gr->mod, gr->name, 1);
+    assert(b);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
     return jl_bkind_is_real_constant(jl_binding_kind(bpart));
@@ -2049,8 +2080,7 @@ JL_DLLEXPORT int jl_globalref_is_const(jl_globalref_t *gr)
 JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *gr) JL_CANSAFEPOINT
 {
     jl_binding_t *b = gr->binding;
-    if (!b)
-        b = jl_get_module_binding(gr->mod, gr->name, 1);
+    assert(b);
 
     JL_LOCK(&world_counter_lock);
     size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;

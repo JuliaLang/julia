@@ -302,6 +302,8 @@ inv(z::Complex{<:Integer}) = inv(float(z))
 
 _mulsub(a, b, c) = _mulsub(promote(a, b, c)...)
 _mulsub(a::T, b::T, c::T) where {T<:Real} = muladd(a, b, -c)
+_muladdz(a, b, c) = _muladdz(promote(a, b, c)...)
+_muladdz(a::T, b::T, c::T) where {T<:Real} = a * b
 muladd(z::Complex, w::Complex, x::Complex) =
     Complex(muladd(real(z), real(w), -_mulsub(imag(z), imag(w), real(x))),
             muladd(real(z), imag(w), muladd(imag(z), real(w), imag(x))))
@@ -346,13 +348,13 @@ end
 *(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
 
 muladd(x::Real, z::Complex, y::Union{Real,Complex}) = muladd(z, x, y)
-muladd(z::Complex, x::Real, y::Real) = Complex(muladd(real(z),x,y), imag(z)*x)
+muladd(z::Complex, x::Real, y::Real) = Complex(muladd(real(z),x,y), _muladdz(imag(z), x, y))
 muladd(z::Complex, x::Real, w::Complex) =
     Complex(muladd(real(z),x,real(w)), muladd(imag(z),x,imag(w)))
 muladd(x::Real, y::Real, z::Complex) = Complex(muladd(x,y,real(z)), imag(z))
 muladd(z::Complex, w::Complex, x::Real) =
     Complex(muladd(real(z), real(w), -_mulsub(imag(z), imag(w), x)),
-            muladd(real(z), imag(w), imag(z) * real(w)))
+            muladd(real(z), imag(w), _muladdz(imag(z), real(w), x)))
 
 /(a::R, z::S) where {R<:Real,S<:Complex} = (T = promote_type(R,S); a*inv(T(z)))
 /(z::Complex, x::Real) = Complex(real(z)/x, imag(z)/x)

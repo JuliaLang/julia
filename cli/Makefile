@@ -33,6 +33,10 @@ endif
 
 LOADER_EXE_LDFLAGS := $(LOADER_LDFLAGS)
 
+ifneq (,$(filter $(OS),Linux FreeBSD))
+LOADER_EXE_LDFLAGS += -pie
+endif
+
 ifeq ($(OS),Darwin)
 LOADER_EXE_LDFLAGS += -Wl,-export_dynamic
 # The macOS app bundle (contrib/mac/app) uses a plain copy of this loader at
@@ -117,27 +121,6 @@ EXE_OBJS += $(BUILDDIR)/julia_res.o
 EXE_DOBJS += $(BUILDDIR)/julia_res_debug.o
 endif
 
-# Embed an Info.plist in the julia executable
-# Create an intermediate target Info.plist for Darwin code signing.
-ifeq ($(DARWIN_FRAMEWORK),1)
-.PHONY: Info.plist.phony
-Info.plist.phony:
-	@TMPFILE=$$(mktemp -u $(abspath $(BUILDDIR)/Info.plist.XXXXXX)); \
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleName string julia" $$TMPFILE; \
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleIdentifier string $(darwin_codesign_id_julia_ui)" $$TMPFILE; \
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleInfoDictionaryVersion string 6.0" $$TMPFILE; \
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleVersion string $(JULIA_COMMIT)" $$TMPFILE; \
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleShortVersionString string $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)" $$TMPFILE; \
-	if ! cmp -s $(BUILDDIR)/Info.plist $$TMPFILE; then \
-		mv $$TMPFILE $(BUILDDIR)/Info.plist; \
-	else \
-		rm -f $$TMPFILE; \
-	fi
-JLDFLAGS += -Wl,-sectcreate,__TEXT,__info_plist,Info.plist
-$(build_bindir)/julia$(EXE): Info.plist.phony
-$(build_bindir)/julia-debug$(EXE): Info.plist.phony
-endif
-
 julia-release: $(build_bindir)/julia$(EXE)
 julia-debug: $(build_bindir)/julia-debug$(EXE)
 libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
@@ -148,15 +131,15 @@ VERSIONSCRIPT := -Wl,--version-script=$(BUILDDIR)/julia.expmap
 endif
 
 ifeq ($(OS),WINNT)
-# The import library of the loader must not offer the runtime entry points that
-# the loader forwards, or libjulia-internal would resolve its own calls through
-# them. Build it from the linker's export definition with those left out, rather
-# than editing the import library afterwards: not every linker writes one that
-# objcopy can rewrite.
+# The import library of the loader must not offer thunks for the runtime entry
+# points that the loader forwards, or libjulia-internal would resolve its own
+# calls through them. Embedders still need their `__imp_` pointers, so mark them
+# DATA in the linker's export definition, rather than editing the import library
+# afterwards: not every linker writes one that objcopy can rewrite.
 # 1: the shared library being linked
 define implib_from_def
 	$(CPP_STDOUT) -P -I$(JULIAHOME)/src $(SRCDIR)/list_strip_symbols.h > $(BUILDDIR)/$(notdir $1).strip && \
-	awk 'NR == FNR { for (i = 1; i <= NF; i++) omit[$$i] = 1; next } !($$1 in omit)' $(BUILDDIR)/$(notdir $1).strip $(BUILDDIR)/$(notdir $1).def > $(BUILDDIR)/$(notdir $1).stripped.def && \
+	awk 'NR == FNR { for (i = 1; i <= NF; i++) omit[$$i] = 1; next } $$1 in omit { $$0 = $$0 " DATA" } 1' $(BUILDDIR)/$(notdir $1).strip $(BUILDDIR)/$(notdir $1).def > $(BUILDDIR)/$(notdir $1).stripped.def && \
 	$(DLLTOOL) -m $(DLLTOOL_MACHINE) -D $(notdir $1) -d $(BUILDDIR)/$(notdir $1).stripped.def -l $(build_libdir)/$(notdir $1).a
 endef
 DEF_FLAGS = --output-def $(BUILDDIR)/$(notdir $1).def
@@ -220,6 +203,5 @@ clean: | $(CLEAN_TARGETS)
 	rm -f $(build_bindir)/julia*
 	rm -f $(BUILDDIR)/julia.expmap
 	rm -f $(BUILDDIR)/*.def $(BUILDDIR)/*.strip
-	rm -f $(BUILDDIR)/Info.plist*
 
 .PHONY: clean release debug julia-release julia-debug

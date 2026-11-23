@@ -156,14 +156,14 @@ function forkRand(rng::Union{TaskLocalRNG, Xoshiro}, ::Val{N}) where N
     # 0x5a94851fb48a6e05 == hash(UInt(2))|0x01
     # 0x3688cf5d48899fa7 == hash(UInt(3))|0x01
     # 0x867b4bb4c42e5661 == hash(UInt(4))|0x01
-    s0 = ntuple(i->VecElement(0x02011ce34bce797f *% rand(rng, UInt64)), Val(N))
-    s1 = ntuple(i->VecElement(0x5a94851fb48a6e05 *% rand(rng, UInt64)), Val(N))
-    s2 = ntuple(i->VecElement(0x3688cf5d48899fa7 *% rand(rng, UInt64)), Val(N))
-    s3 = ntuple(i->VecElement(0x867b4bb4c42e5661 *% rand(rng, UInt64)), Val(N))
+    s0 = ntuple(_->VecElement(0x02011ce34bce797f *% rand(rng, UInt64)), Val(N))
+    s1 = ntuple(_->VecElement(0x5a94851fb48a6e05 *% rand(rng, UInt64)), Val(N))
+    s2 = ntuple(_->VecElement(0x3688cf5d48899fa7 *% rand(rng, UInt64)), Val(N))
+    s3 = ntuple(_->VecElement(0x867b4bb4c42e5661 *% rand(rng, UInt64)), Val(N))
     (s0, s1, s2, s3)
 end
 
-_id(x, T) = x
+_id(x, _) = x
 
 @inline function xoshiro_bulk(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, T::Union{Type{UInt8}, Type{Bool}, Type{Float16}, Type{Float32}, Type{Float64}}, ::Val{N}, f::F = _id) where {N, F}
     if len >= simdThreshold(T)
@@ -210,7 +210,7 @@ end
     nothing
 end
 
-@noinline function xoshiro_bulk_nosimd(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{Bool}, f)
+@noinline function xoshiro_bulk_nosimd(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{Bool}, _f)
     s0, s1, s2, s3 = getstate(rng)
     i = 0
     while i+8 <= len
@@ -269,9 +269,9 @@ end
     return i
 end
 
-@noinline function xoshiro_bulk_simd(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{Bool}, ::Val{N}, f) where {N}
+@noinline function xoshiro_bulk_simd(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{Bool}, ::Val{N}, _f) where {N}
     s0, s1, s2, s3 = forkRand(rng, Val(N))
-    msk = ntuple(i->VecElement(0x0101010101010101), Val(N))
+    msk = ntuple(_->VecElement(0x0101010101010101), Val(N))
     i = 0
     while i + 64*N <= len
         res = _plus(_rotl23(_plus(s0,s3)),s0)

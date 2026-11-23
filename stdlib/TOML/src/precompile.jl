@@ -30,7 +30,7 @@ let
         TOML.parsefile(path)
     end
 
-    mktemp() do path, io
+    mktemp() do _, io
         TOML.print(io, test_dict)
         close(io)
     end

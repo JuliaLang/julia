@@ -72,33 +72,37 @@ A where Y<:X where X
 # Error: bad type bounds
 A where f()
 #---------------------
-LoweringError:
+syntax: expected type name or type bounds
+@ :1
 A where f()
-#       └─┘ ── expected type name or type bounds
+#       └─┘
 
 ########################################
 # Error: bad type bounds
 A where X < Y < Z
 #---------------------
-LoweringError:
+syntax: expected `lb <: type_name <: ub` or `ub >: type_name >: lb`
+@ :1
 A where X < Y < Z
-#       └───────┘ ── expected `lb <: type_name <: ub` or `ub >: type_name >: lb`
+#       └───────┘
 
 ########################################
 # Error: bad type bounds
 A where X <: f() <: Z
 #---------------------
-LoweringError:
+syntax: expected identifier
+@ :1
 A where X <: f() <: Z
-#            └─┘ ── expected identifier
+#            └─┘
 
 ########################################
 # Error: bad type bounds
 A where f() <: Y
 #---------------------
-LoweringError:
+syntax: expected identifier
+@ :1
 A where f() <: Y
-#       └─┘ ── expected identifier
+#       └─┘
 
 ########################################
 # Simple type application
@@ -153,17 +157,19 @@ X{S, <:A, T, >:B}
 # Error: parameters in type application
 X{S, T; W}
 #---------------------
-LoweringError:
+syntax: unexpected semicolon or `parameters` form
+@ :1
 X{S, T; W}
-#     └─┘ ── unexpected semicolon
+#     └─┘
 
 ########################################
 # Error: assignment in type application
 X{S, T=w}
 #---------------------
-LoweringError:
+syntax: assignment is not allowed in type parameter list
+@ :1
 X{S, T=w}
-#   └──┘ ── assignment is not allowed in type parameter list
+#   └──┘
 
 ########################################
 # Simple abstract type definition
@@ -235,25 +241,28 @@ abstract type A{X, Y <: X} end
 # Error: Abstract type definition with bad signature
 abstract type A() end
 #---------------------
-LoweringError:
+syntax: invalid type signature
+@ :1
 abstract type A() end
-#             └─┘ ── invalid type signature
+#             └─┘
 
 ########################################
 # Error: Abstract type definition with bad signature
 abstract type A(){T} end
 #---------------------
-LoweringError:
+syntax: expected identifier
+@ :1
 abstract type A(){T} end
-#             └─┘ ── expected identifier
+#             └─┘
 
 ########################################
 # Error: Abstract type definition with bad signature
 abstract type A() <: B end
 #---------------------
-LoweringError:
+syntax: expected identifier
+@ :1
 abstract type A() <: B end
-#             └─┘ ── expected identifier
+#             └─┘
 
 ########################################
 # Error: Abstract type definition in function scope
@@ -261,10 +270,11 @@ function f()
     abstract type A end
 end
 #---------------------
-LoweringError:
+syntax: this syntax is only allowed at top level
+@ :2
 function f()
     abstract type A end
-#   └─────────────────┘ ── this syntax is only allowed at top level
+#   └─────────────────┘
 end
 
 ########################################
@@ -1016,10 +1026,11 @@ struct X
     X() = new(a=1)
 end
 #---------------------
-LoweringError:
+syntax: `new` does not accept keyword arguments
+@ :2
 struct X
     X() = new(a=1)
-#             └─┘ ── `new` does not accept keyword arguments
+#             └─┘
 end
 
 ########################################
@@ -1028,10 +1039,11 @@ struct X
     X() = new(; a=1)
 end
 #---------------------
-LoweringError:
+syntax: `new` does not accept keyword arguments
+@ :2
 struct X
     X() = new(; a=1)
-#             └───┘ ── `new` does not accept keyword arguments
+#             └───┘
 end
 
 ########################################
@@ -1040,10 +1052,11 @@ struct X{S,T}
     X() = new{A}()
 end
 #---------------------
-LoweringError:
+syntax: too few type parameters specified in `new{...}`
+@ :2
 struct X{S,T}
     X() = new{A}()
-#         └────┘ ── too few type parameters specified in `new{...}`
+#         └────┘
 end
 
 ########################################
@@ -1052,10 +1065,11 @@ struct X{S,T}
     X() = new{}()
 end
 #---------------------
-LoweringError:
+syntax: too few type parameters specified in `new{...}`
+@ :2
 struct X{S,T}
     X() = new{}()
-#         └───┘ ── too few type parameters specified in `new{...}`
+#         └───┘
 end
 
 ########################################
@@ -1064,10 +1078,11 @@ struct X{S,T}
     X{A}() = new()
 end
 #---------------------
-LoweringError:
+syntax: too few type parameters specified in `new`
+@ :2
 struct X{S,T}
     X{A}() = new()
-#            └─┘ ── too few type parameters specified in `new`
+#            └─┘
 end
 
 ########################################
@@ -1076,10 +1091,11 @@ struct X{S,T}
     X() = new{A,B,C}()
 end
 #---------------------
-LoweringError:
+syntax: too many type parameters specified in `new{...}`
+@ :2
 struct X{S,T}
     X() = new{A,B,C}()
-#         └────────┘ ── too many type parameters specified in `new{...}`
+#         └────────┘
 end
 
 ########################################
@@ -1089,12 +1105,13 @@ function f()
     end
 end
 #---------------------
-LoweringError:
+syntax: this syntax is only allowed at top level
+@ :2
 function f()
 #   ┌───────
     struct X
     end
-#─────┘ ── this syntax is only allowed at top level
+#─────┘
 end
 
 ########################################
@@ -1325,22 +1342,25 @@ end
 # Error: Duplicate field name in struct
 struct A; x; x; end
 #---------------------
-LoweringError:
+syntax: duplicate field name
+@ :1
 struct A; x; x; end
-#            ╙ ── duplicate field name
+#            ⊔
 
 ########################################
 # Error: Duplicate field name with different types
 struct A; x::Int; x::String; end
 #---------------------
-LoweringError:
+syntax: duplicate field name
+@ :1
 struct A; x::Int; x::String; end
-#                 ╙ ── duplicate field name
+#                 ⊔
 
 ########################################
 # Error: Duplicate field name in mutable struct
 mutable struct A; x; y; x; end
 #---------------------
-LoweringError:
+syntax: duplicate field name
+@ :1
 mutable struct A; x; y; x; end
-#                       ╙ ── duplicate field name
+#                       ⊔

@@ -22,8 +22,14 @@ end
     x * y()
 end
 
+const_coverage_test(x) = false
+function const_block_coverage_test(x)
+    1.5
+end
+
 success = code_coverage_test() == [1, 2, 3] &&
-          short_form_func_coverage_test(2) == 4
+          short_form_func_coverage_test(2) == 4 &&
+          !const_coverage_test(1) && const_block_coverage_test(1) == 1.5
 exit(success ? 0 : 1)
 
 # end of file

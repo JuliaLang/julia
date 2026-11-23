@@ -282,7 +282,7 @@ str3 = \"\"\"\\
        \"\"\"
 """
 @test roundtrip(str)
-d = @test parse(str)["str1"] == parse(str)["str2"] == parse(str)["str3"]
+@test parse(str)["str1"] == parse(str)["str2"] == parse(str)["str3"]
 
 str = """
 str4 = \"\"\"Here are two quotation marks: \"\". Simple enough.\"\"\"

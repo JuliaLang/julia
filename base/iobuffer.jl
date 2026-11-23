@@ -118,6 +118,7 @@ function GenericIOBuffer{T}(
     ) where T<:AbstractVector{UInt8}
     require_one_based_indexing(data)
     mz = Int(maxsize)::Int
+    mz < 0 && throw(ArgumentError("negative maxsize"))
     len = Int(length(data))::Int
     if !truncate && mz < len
         throw(ArgumentError("maxsize must not be smaller than data length"))
@@ -146,6 +147,7 @@ function GenericIOBuffer(data::Vector{UInt8}, readable::Bool, writable::Bool, se
     # The user may pass a vector of length <= maxsize, but where the underlying memory
     # is larger than maxsize. Don't throw an error in that case.
     mz = Int(maxsize)::Int
+    mz < 0 && throw(ArgumentError("negative maxsize"))
     if !truncate && mz < length(data)
         throw(ArgumentError("maxsize must not be smaller than data length"))
     end
@@ -398,7 +400,7 @@ function load_from_array(T::MultiByteBitNumberType, data::AbstractArray{UInt8}, 
         unsigned(T)(0)
     end
     for i in 0:sizeof(x)-1
-        x |= typeof(x)(data[from + i]) << (8 * i)
+        x |= typeof(x)(data[from + i]::UInt8) << (8 * i)
     end
     reinterpret(T, ltoh(x))
 end
@@ -413,8 +415,6 @@ function peek(from::GenericIOBuffer, T::MultiByteBitNumberType)
     return load_from_array(T, from.data, from.ptr)
 end
 
-# This method can use a pointer, since the underlying buffer is dense
-# and memory backed
 function peek(from::GenericIOBuffer{<:MutableDenseArrayType}, T::MultiByteBitNumberType)
     from.readable || _throw_not_readable()
     avail = bytesavailable(from)
@@ -422,11 +422,8 @@ function peek(from::GenericIOBuffer{<:MutableDenseArrayType}, T::MultiByteBitNum
     if nb > avail
         throw(EOFError())
     end
-    GC.@preserve from begin
-        ptr::Ptr{T} = pointer(from.data, from.ptr)
-        x = unsafe_load(ptr)
-    end
-    return x
+    ref, offset = _memoryref_and_byteoffset(from.data)
+    return Core.unsafe_memoryrefload(ref, T, offset + from.ptr - 1, false)
 end
 
 function read(from::GenericIOBuffer, T::MultiByteBitNumberType)
@@ -992,6 +989,7 @@ end
 # here through the stream's copyuntil) compose; the sentinel keeps the
 # plain call, which any IO's write supports.
 function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    io.readable || _throw_not_readable()
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
@@ -1036,13 +1034,17 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false, cancel::CancelT
     else
         # Else, we can just copy the data directly into the buffer, and then
         # subtract the last one or two bytes depending on `keep`.
+        # Virtual size of `out`, which compaction during the copy does not change
+        vsize = out.size - out.offset_or_compacted
         cancel === DEFAULT_CANCEL ? copyuntil(out, s, 0x0a; keep=true) :
                                     copyuntil(out, s, 0x0a; keep=true, cancel=tok)
         line = out.data
         i = out.size
-        if keep || i == out.offset_or_compacted || line[i] != 0x0a
+        # Only strip bytes after `start`, the index of the last byte before the copied line
+        start = vsize + out.offset_or_compacted
+        if keep || i == start || line[i] != 0x0a
             return out
-        elseif i < 2 || line[i-1] != 0x0d
+        elseif i - 1 == start || line[i-1] != 0x0d
             i -= 1
         else
             i -= 2
@@ -1056,6 +1058,7 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false, cancel::CancelT
 end
 
 function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    io.readable || _throw_not_readable()
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.

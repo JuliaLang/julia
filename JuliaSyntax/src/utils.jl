@@ -1,25 +1,3 @@
-# Compatibility hacks for older Julia versions
-if VERSION < v"1.1"
-    isnothing(x) = x === nothing
-end
-if VERSION < v"1.4"
-    function only(x::Union{AbstractVector,AbstractString})
-        if length(x) != 1
-            error("Collection must contain exactly 1 element")
-        end
-        return x[1]
-    end
-end
-
-@static if VERSION < v"1.8"
-    macro callsite_inline(call)
-        esc(call)
-    end
-else
-    const var"@callsite_inline" = var"@inline"
-end
-
-
 _unsafe_wrap_substring(s) = (s.offset, unsafe_wrap(Vector{UInt8}, s.string))
 
 #--------------------------------------------------

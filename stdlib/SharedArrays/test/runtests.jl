@@ -225,11 +225,11 @@ B = @inferred(convert(SharedArray, copy(AA')))
 @test B*A ≈ AA'*AA
 
 d=SharedArray{Int64,2}((10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
-d2 = map(x->1, d)
+d2 = map(_->1, d)
 @test reduce(+, d2) == 100
 
 @test reduce(+, d) == ((50*id_me) + (50*id_other))
-map!(x->1, d, d)
+map!(_->1, d, d)
 @test reduce(+, d) == 100
 
 @test fill!(d, 1) == fill(1., 10, 10)
@@ -295,7 +295,6 @@ let
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
     @test objectid(aorig) == objectid(a1)
     id = a1.id
-    aorig = nothing
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
     GC.gc(true); GC.gc(true)
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
@@ -306,7 +305,7 @@ end
 
 #14399
 let s = convert(SharedArray, [1,2,3,4])
-    @test pmap(i->length(s), 1:2) == [4,4]
+    @test pmap(_->length(s), 1:2) == [4,4]
 end
 
 let S = SharedArray([1,2,3])
@@ -611,7 +610,6 @@ end
         S = SharedArray{Int64}(10, 10)
         fill!(S, 7)
         a = sdata(S) # alias to the real backing array, kept alive independently of S
-        S = nothing
         GC.gc(); GC.gc()
 
         # `a` is still reachable, so ordinary Julia semantics must keep its backing
@@ -676,12 +674,14 @@ end
 end
 
 @testset "indexpids" begin
-    S = SharedArray{Int}(3)
-    @test indexpids(S) == 0
-    @test [remotecall_fetch(indexpids, p, S) for p in procs(S)] == eachindex(procs(S))
-    S = SharedArray{Int}(3; pids=id_others[1:1])
-    @test remotecall_fetch(indexpids, id_others[2], S) == 0
-    @test SharedArray{Int}(3; pids=[myid()]) |> indexpids == 1
+    let S = SharedArray{Int}(3)
+        @test indexpids(S) == 0
+        @test [remotecall_fetch(indexpids, p, S) for p in procs(S)] == eachindex(procs(S))
+    end
+    let S = SharedArray{Int}(3; pids=id_others[1:1])
+        @test remotecall_fetch(indexpids, id_others[2], S) == 0
+        @test SharedArray{Int}(3; pids=[myid()]) |> indexpids == 1
+    end
 end
 
 @testset "reduce with concatenation" begin

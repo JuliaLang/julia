@@ -1,7 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Interface to [libgit2](https://libgit2.org/).
+    LibGit2
+
+Bindings to [libgit2](https://libgit2.org/), a library for working with git repositories,
+such as [`LibGit2.clone`](@ref) and [`LibGit2.GitRepo`](@ref).
 """
 module LibGit2
 
@@ -70,8 +73,8 @@ end
 """
     need_update(repo::GitRepo)
 
-Equivalent to `git update-index`. Return `true`
-if `repo` needs updating.
+Reload the index of `repo` from the filesystem, discarding any changes to it that
+have not been written. Does nothing if `repo` is bare. Return `nothing`.
 """
 function need_update(repo::GitRepo)
     if !isbare(repo)

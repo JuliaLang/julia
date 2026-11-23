@@ -487,7 +487,7 @@ static size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     // Image objects are permanently marked and never traced by the GC mark
     // phase, so they would otherwise appear as orphan nodes. Root them under
     // the synthetic [image] node with a label indicating which image they belong to.
-    if (jl_astaggedvalue(a)->bits.in_image) {
+    if (jl_object_in_image(a)) {
         jl_value_t *top_mod = jl_object_top_module(a);
         const char *label = "[image]";
         if (top_mod != (jl_value_t*)jl_nothing && jl_is_module((jl_module_t*)top_mod))

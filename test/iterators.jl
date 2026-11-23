@@ -1136,6 +1136,12 @@ end
     @test last(enumerate(Iterators.flatten((1,2,3)))) == (3,3)
 end
 
+@testset "enumerate with custom start" begin
+    @test collect(enumerate("ab"; from=0)) == [(0, 'a'), (1, 'b')]
+    @test collect(Iterators.reverse(enumerate("ab"; from=0))) == [(1, 'b'), (0, 'a')]
+    @test last(enumerate("ab"; from=0)) == (1, 'b')
+end
+
 @testset "isempty and isdone for Generators" begin
     itr = eachline(IOBuffer("foo\n"))
     gen = (x for x in itr)
@@ -1243,6 +1249,10 @@ end
 
     empty_cycle = Iterators.cycle([])
     @test_throws BoundsError nth(empty_cycle, 42)
+
+    @test nth(zip(), 5) === ()
+    @test_throws BoundsError nth(zip(), 0)
+    @test_throws BoundsError nth(zip(), -3)
 
     # test the size unknown branch for cycles
     # only generate odd numbers so we know the actual length

@@ -498,6 +498,27 @@ end
         cred = LibGit2.GitCredential("https", "github.com", nothing, nothing)
         @test !LibGit2.ismatch("https://@github.com", cred)
         Base.shred!(cred)
+
+        # A `*` host label matches exactly one label, as in git
+        cred = LibGit2.GitCredential("https", "foo.example.com")
+        @test LibGit2.ismatch("https://*.example.com", cred)
+        @test LibGit2.ismatch("https://*.*.com", cred)
+        @test !LibGit2.ismatch("https://*.example.org", cred)
+        @test !LibGit2.ismatch("https://*.foo.example.com", cred)
+        Base.shred!(cred)
+
+        cred = LibGit2.GitCredential("https", "foo.bar.example.com")
+        @test !LibGit2.ismatch("https://*.example.com", cred)
+        Base.shred!(cred)
+
+        cred = LibGit2.GitCredential("https", "example.com")
+        @test !LibGit2.ismatch("https://*.example.com", cred)
+        Base.shred!(cred)
+
+        # A URL that cannot be parsed matches nothing (#63412)
+        cred = LibGit2.GitCredential("https", "github.com")
+        @test !LibGit2.ismatch("https://my_host", cred)
+        Base.shred!(cred)
     end
 
     @testset "GITHUB_REGEX" begin
@@ -1147,6 +1168,31 @@ mktempdir() do dir
                 tree2 = LibGit2.GitTree(repo, tree_hash)
                 @test isa(tree2, LibGit2.GitTree)
                 @test LibGit2.GitHash(tree1) == LibGit2.GitHash(tree2)
+
+                LibGit2.with(LibGit2.GitCommit(repo, "HEAD")) do cmt
+                    @test LibGit2.repository(cmt) === repo
+                    @test LibGit2.GitHash(LibGit2.GitTree(cmt)) == tree_hash
+                    @test LibGit2.GitHash(LibGit2.peel(cmt)) == tree_hash
+                end
+                @test haskey(tree, test_file)
+                @test LibGit2.objtype(LibGit2.Consts.OBJ_TAG) == LibGit2.GitTag
+                @test LibGit2.objtype(LibGit2.Consts.OBJ_ANY) == LibGit2.GitUnknownObject
+                @test_throws "OBJ_BAD is not supported" LibGit2.objtype(LibGit2.Consts.OBJ_BAD)
+                @test LibGit2.Consts.OBJECT(LibGit2.GitUnknownObject) == LibGit2.Consts.OBJ_ANY
+
+                # a positive return from the callback skips the children of an entry
+                for (post, skip, expected) in (
+                        (false, 0, [("", test_dir), ("$test_dir/", "testfile")]),
+                        (true,  0, [("$test_dir/", "testfile"), ("", test_dir)]),
+                        (false, 1, [("", test_dir)]))
+                    walked = Tuple{String,String}[]
+                    LibGit2.treewalk(tree, post) do root, entry
+                        push!(walked, (root, LibGit2.filename(entry)))
+                        return skip
+                    end
+                    @test walked == expected
+                end
+
                 @test LibGit2.count(tree1) == LibGit2.count(tree2)
             end
         end
@@ -1555,6 +1601,12 @@ mktempdir() do dir
                 @test LibGit2.count(idx) == 0
                 LibGit2.add!(repo, test_file)
                 LibGit2.update!(repo, test_file)
+                @test LibGit2.count(idx) == 1
+
+                # reloading the index discards changes that were not written
+                LibGit2.remove!(idx, test_file)
+                @test LibGit2.count(idx) == 0
+                @test LibGit2.need_update(repo) === nothing
                 @test LibGit2.count(idx) == 1
             end
 
@@ -2003,6 +2055,12 @@ mktempdir() do dir
                     [credential "helperselector"]
                         selected = manager-core
                     """)
+                write(fp, """
+                    [credential "https://*.github.com"]
+                        helper = !echo wildcard
+                    [credential "https://my_host"]
+                        helper = !echo unparsable
+                    """)
             end
 
             LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
@@ -2017,8 +2075,13 @@ mktempdir() do dir
                 @test LibGit2.credential_helpers(cfg, github_cred) == expected
                 @test LibGit2.credential_helpers(cfg, mygit_cred) == expected[2:2]
 
+                api_cred = GitCredential("https", "api.github.com")
+                @test LibGit2.credential_helpers(cfg, api_cred) ==
+                    [expected; GitCredentialHelper(`echo wildcard`)]
+
                 Base.shred!(github_cred)
                 Base.shred!(mygit_cred)
+                Base.shred!(api_cred)
             end
         end
 

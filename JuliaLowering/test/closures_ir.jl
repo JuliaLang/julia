@@ -129,7 +129,7 @@ end
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.f %₂₀
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(single_assign) slot₃/g(single_assign,called) slot₄/x(!read,maybe_undef) slot₅/x(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x(single_assign) slot₃/g(single_assign,called) slot₄/x(!read) slot₅/x(!read)]
     1   (= slot₅/x slot₂/x)
     2   slot₅/x
     3   (= slot₅/x (call core.Box %₂))
@@ -417,7 +417,7 @@ end
 11  SourceLocation:3
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   TestMod.+
     2   (captured_local 1)
     3   (call core.isdefined %₂ :contents)
@@ -500,9 +500,10 @@ function (x)::Int
     x*x
 end
 #---------------------
-LoweringError:
+syntax: expected `call` expression
+@ :1
 function (x)::Int
-#        └─┘ ── expected `call` expression
+#        └─┘
     x*x
 end
 
@@ -549,10 +550,11 @@ function f(::g) where {g}
     end
 end
 #---------------------
-LoweringError:
+syntax: cannot overwrite a static parameter
+@ :2
 function f(::g) where {g}
     function g()
-#            ╙ ── cannot overwrite a static parameter
+#            ⊔
     end
 end
 
@@ -586,17 +588,19 @@ end
 # Error: Opaque closure with default args
 Base.Experimental.@opaque (x=1)->2x
 #---------------------
-LoweringError:
+syntax: opaque closure cannot have optional or keyword arguments
+@ :1
 Base.Experimental.@opaque (x=1)->2x
-#                          └─┘ ── opaque closure cannot have optional or keyword arguments
+#                          └─┘
 
 ########################################
 # Error: Opaque closure with keyword args
 Base.Experimental.@opaque (x; y=1)->2x
 #---------------------
-LoweringError:
+syntax: opaque closure cannot have optional or keyword arguments
+@ :1
 Base.Experimental.@opaque (x; y=1)->2x
-#                         └──────┘ ── opaque closure cannot have optional or keyword arguments
+#                         └──────┘
 
 ########################################
 # Mutually recursive closures
@@ -625,7 +629,7 @@ end
 14  (call core.svec %₁₁ %₁₂ %₁₃)
 15  (call core.define_method TestMod core.nothing %₁₄
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/recursive_b(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/recursive_b(!read)]
     1   (call core.getfield slot₁/#self# :recursive_b)
     2   (call core.isdefined %₁ :contents)
     3   (gotoifnot %₂ label₅)
@@ -1040,7 +1044,7 @@ end
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  (call core.define_method TestMod core.nothing %₁₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/y(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/y(!read)]
     1   (call core.getfield slot₁/#self# :y)
     2   (call core.isdefined %₁ :contents)
     3   (gotoifnot %₂ label₅)
@@ -1167,8 +1171,6 @@ end
     [:-> [:tuple] [:block]]
 ]
 #---------------------
-LoweringError:
- at line 1: Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
-
-Expression:
-  (call JuliaLowering.eval_closure_type Main.TestMod :#11#12 (call core.svec) (call core.svec) (call core.svec))
+syntax: top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
+@ :1
+└───Expression: ::tombstone

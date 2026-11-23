@@ -118,7 +118,7 @@ function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb
     filled::Int = 0
     while filled < nb && !eof(pipe)
         if length(data) == filled
-            resize!(data, min(length(data) * 2, nb))
+            resize!(data, min(max(length(data) * 2, 1024), nb))
         end
         p = pointer(data, filled + 1)
         p_end = read_until_end(pipe, p, UInt(min(length(data), nb) - filled))
@@ -129,7 +129,7 @@ function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb
 end
 
 Base.eof(pipe::Base64DecodePipe) = isempty(pipe.rest) && eof(pipe.io)::Bool
-Base.close(pipe::Base64DecodePipe) = nothing
+Base.close(::Base64DecodePipe) = nothing
 
 # Decode data from (b1, b2, b3, b4, buffer, input) into (ptr, rest).
 function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)

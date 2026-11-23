@@ -21,11 +21,9 @@ for (T, c) in (
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
         (Core.MethodTable, [:cache, :module, :name]),
         (Core.MethodCache, []),
-        (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :func, :isleafsig, :issimplesig, :va]),
+        (Core.TypeMapEntry, [:sig, :guardsigs, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
         (Core.TypeName, [:name, :module, :names, :wrapper, :hash, :n_uninitialized, :flags]),
-        # `super` is filled lazily for instantiations of self-referential
-        # definitions (issue #61347), so it is deliberately non-const (and atomic)
         (DataType, [:name, :parameters, :instance, :hash]),
         (TypeVar, [:name, :ub, :lb]),
         (Core.Memory, [:length, :ptr]),
@@ -504,6 +502,21 @@ end
 let X = Union{Tuple{S} where S<:Int, Vector{T}} where T
     @test g62001(X, 1) === (X, 1)
 end
+
+# `Tuple{..., Vararg}` is normalized to `Tuple{..., Vararg{Any}}` on construction
+let a = Tuple{Any,Vararg}, b = Tuple{Any,Vararg{Any}}
+    @test a === b
+    @test Type{a} === Type{b}
+    @test Core.TypeEgal{a} === Core.TypeEgal{b}
+    @test (Tuple{T,Vararg} where T) === (Tuple{T,Vararg{Any}} where T)
+    @test Tuple{Vararg} === Tuple
+end
+
+# a type literal in compiled code is only swapped for its wrapper if `===` to it
+const RefAlphaRenamed = Ref{S} where S
+is_RefAlphaRenamed(t) = t === RefAlphaRenamed
+@test RefAlphaRenamed !== Ref
+@test is_RefAlphaRenamed(RefAlphaRenamed)
 
 # a `Type{Union{}}` dispatch slot is an exact equality key (the bottom object is
 # the unique instance of its `Type`), so it must remain a compileable spelling
@@ -1155,6 +1168,13 @@ let f = g -> x -> g(x)
     @test f(Rational{Core.TypeVar(:T)}) isa Function
     @test fieldtype(typeof(f(Rational{Core.TypeVar(:T)})), 1) === DataType
 end
+# captured tuple types spelled with `Vararg` and with `Vararg{Any}` share a closure type
+let f = t -> (c -> t <: c), a = Tuple{Any,Vararg}, b = Tuple{Any,Vararg{Any}}
+    @test f(b)(Tuple)
+    @test f(a)(Tuple)
+    @test fieldtype(typeof(f(b)), 1) === Core.TypeEgal{b}
+    @test fieldtype(typeof(f(a)), 1) === Core.TypeEgal{a}
+end
 let T = Core.TypeVar(:T), g = Base.Generator(Rational{T}, 1:1)
     @test g.f === Rational{T}
     @test fieldtype(typeof(g), :f) === DataType
@@ -1562,7 +1582,7 @@ let A = [1]
 end
 
 # Module() constructor
-@test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
+@test names(Module(:anonymous), all = true, imported = true) == [:anonymous, :eval, :include]
 @test names(Module(:anonymous, false), all = true, imported = true) == [:anonymous]
 @test invokelatest(getglobal, Module(:anonymous, false, true), :Core) == Core
 @test_throws UndefVarError invokelatest(getglobal, Module(:anonymous, false, false), :Core)
@@ -4271,6 +4291,50 @@ end
 @test_throws TypeError("new", DataType, Complex) eval(Expr(:splatnew, Complex, ()))
 @test_throws TypeError("new", DataType, Complex.body) eval(Expr(:splatnew, Complex.body, ()))
 
+end
+
+# types whose instances hold data that their Julia-visible fields do not describe
+# (C-only fields after them, an opaque layout, trailing variable-sized data) can only be
+# allocated by the runtime, since `new` would not set up that data
+for x in Any[which(sin, (Float64,)),
+             # a new task with no scope, since the closures below keep their task's scope alive
+             let t = Task(Returns(nothing)); setfield!(t, :scope, nothing); t; end,
+             Base.CancellationTokenSource(),
+             Base.WaitEntryN(nothing, 2), Main, :sym, "str", Core.svec(1), Memory{Int}(undef, 2),
+             Vector{T} where T]
+    T = typeof(x)
+    @test Base.datatype_hashiddenfields(T)
+    vals = Any[getfield(x, i) for i in 1:(fieldcount(T) - T.name.n_uninitialized)]
+    args = Any[QuoteNode(v) for v in vals]
+    err = ErrorException("new: $(T.name.name) has hidden fields and can only be allocated by the runtime")
+    @test_throws err Core.eval(@__MODULE__, Expr(:new, T, args...))
+    fnew = @eval () -> $(Expr(:new, T, args...))
+    @test_throws err Base.invokelatest(fnew)
+    @test Base.infer_return_type(fnew, ()) === Union{}
+    @test !Core.Compiler.is_nothrow(Base.infer_effects(fnew, ()))
+    fdyn = @eval T -> $(Expr(:new, :T, args...))
+    @test_throws err Base.invokelatest(fdyn, T)
+    fsplat = @eval () -> $(Expr(:splatnew, T, Expr(:tuple, args...)))
+    @test_throws err Base.invokelatest(fsplat)
+    @test Base.infer_return_type(fsplat, ()) === Union{}
+    @test !Core.Compiler.is_nothrow(Base.infer_effects(fsplat, ()))
+    @test_throws err ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, vals, length(vals))
+    @test_throws err ccall(:jl_new_structt, Any, (Any, Any), T, Tuple(vals))
+    @test_throws err ccall(:jl_new_struct_uninit, Any, (Any,), T)
+end
+@test !Base.datatype_hashiddenfields(Core.MethodInstance)
+# the size of a type with C-only fields after its visible ones includes them
+for T in (Method, Task, UnionAll)
+    n = fieldcount(T)
+    ft = fieldtype(T, n)
+    visible_end = fieldoffset(T, n) + (Base.allocatedinline(ft) ? sizeof(ft) : sizeof(Ptr{Cvoid}))
+    al = Base.datatype_alignment(T)
+    @test sizeof(T) > cld(visible_end, al) * al
+end
+# the flag is on the TypeName, so it applies even when the type is not known exactly
+let fparam = @eval T -> $(Expr(:new, :(Memory{T})))
+    @test Base.infer_return_type(fparam, (Type,)) === Union{}
+    @test_throws ErrorException Base.invokelatest(fparam, Int)
 end
 
 # don't allow redefining types if n_uninitialized changes
@@ -8090,18 +8154,52 @@ struct B41503{j,k} <: AbstractArray{A41503{B41503{Any,k}},Any}
     l::k
 end
 @test !isbitstype(B41503{Any,Any})
-@test_broken isbitstype(B41503{Any,Int})
+@test isbitstype(B41503{Any,Int})
 
 struct B40050 <: Ref{Tuple{B40050}}
 end
 @test string((B40050(),)) == "($B40050(),)"
 @test isbitstype(Tuple{B40050})
 
+# a fieldless instantiation made during its own definition gets a layout
+struct E40050{T} <: Ref{E40050{Int}}
+end
+@test isdefined(E40050{Int}, :types)
+@test E40050{Int}() === E40050{Int}.instance
+@test Base.ismutationfree(E40050{Int}) && Base.isidentityfree(E40050{Int})
+@test Base.isidentityfree(Val{1})
+struct G40050{T} <: Ref{G40050{Union{T,Int}}}
+    x::Int
+end
+let g = Base.unwrap_unionall(Base.unwrap_unionall(G40050).super.parameters[1]) # made during the definition
+    @test !isconcretetype(g) && g.layout != C_NULL
+    @test Base.ismutationfree(g) && Base.isidentityfree(g)
+end
+
+# a supertype mentioning the type does not prevent inlining it
+struct V40050{T} <: Ref{Tuple{V40050{T},Int}}
+    x::T
+end
+@test isbitstype(Tuple{V40050{Int8},Int})
+@test fieldoffset(Tuple{V40050{Int8},Int}, 2) == fieldoffset(Tuple{Int8,Int}, 2)
+@test isbitstype(V40050{Int8})
+let S = Core._structtype(@__MODULE__, :S40050, Core.svec(), Core.svec(:x), Core.svec(), false, 1)
+    Core._setsuper!(S, Ref{Tuple{S,Int}})
+    Core._typebody!(S, Core.svec(Int8))
+    @test isbitstype(S) == isbitstype(Tuple{S,Int})
+end
+
 # issue #41654
 struct X41654 <: Ref{X41654}
 end
 @test isbitstype(X41654)
 @test ('a'=>X41654(),)[1][2] isa X41654
+
+# a failed layout of a type that mentions the new one caches neither
+struct WOvfLayout{X}; a::NTuple{16,X}; end
+struct LOvfLayout{T}; a::Vector{LOvfLayout{T}}; b::Vector{Tuple{Int, WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{WOvfLayout{Ptr{LOvfLayout{T}}}}}}}}}}}}; end
+@test_throws ErrorException LOvfLayout{Int}
+@test_throws ErrorException LOvfLayout{Int}
 
 # issue #43411
 struct A43411{S, T}
@@ -8754,6 +8852,27 @@ code_typed(caller63844, ())
 @test f63844(1, 2, 3, 4, 5, 6, (7, 8)) === 2
 @test caller63844() === 2
 
+# issue #64751: both methods are partial matches with the same compilation signature;
+# recording the varargs one must leave dispatch to the tuple one alone
+f64751(::DataType, ::Tuple) = :tuple
+f64751(::DataType, xs...) = :varargs
+g64751(::Vector{T}) where {T<:Union{Float32,Float64}} = f64751(T, (1, 2))
+h64751(r) = g64751(r[])
+code_typed(h64751, (Ref{Vector{<:Union{Float32,Float64}}},))
+@test f64751(Float32, (1, 2)) === :tuple
+@test f64751(Float32, 1, 2) === :varargs
+
+# a fully-covering method that the cached one is more specific than doesn't
+# prevent caching the compilation signature, though it witnesses an ambiguity
+e64919(::UnionAll) = 1
+e64919(::UnionAll, xs::DataType...) = 2
+e64919(@nospecialize(::Type{<:Real}), xs...) = 3
+for T in (Vector, Dict, Set, Pair, Complex)
+    @test e64919(T) === 1
+end
+@test length(Base.specializations(which(e64919, (UnionAll,)))) <= 2
+@test_throws MethodError e64919(Rational)
+
 f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
 @test f48950(1, 1, 1) == 1
 
@@ -9147,6 +9266,20 @@ let this_world = Base.get_world_counter()
     @atomic mysin_ci.min_world = this_world + 10
     @test_throws ErrorException f(1.0)
 end
+# the argument check is kept when the argument types are not known to pass it
+f_invoke_int(x::Int) = x + 1
+@test f_invoke_int(1) == 2
+const f_invoke_int_ci = Base.specialize_method(Base._which(Tuple{typeof(f_invoke_int), Int})).cache
+f_call_int(@nospecialize x) = invoke(f_invoke_int, f_invoke_int_ci, x)
+@test f_call_int(1) == 2
+@test_throws TypeError f_call_int("a")
+# a foreign `CodeInstance` without code throws, even if it claims not to
+struct InvokeCIOwner end
+const f_invoke_foreign_ci = Core.CodeInstance(f_invoke_int_ci.def, InvokeCIOwner(), Int, Union{},
+    nothing, nothing, Int32(0), Base.get_world_counter(), typemax(UInt), UInt32(0), nothing, nothing, Core.svec())
+f_call_foreign(x::Int) = invoke(f_invoke_int, f_invoke_foreign_ci, x)
+@test ErrorException <: Base.infer_exception_type(f_call_foreign, (Int,))
+@test_throws "Failed to invoke or compile external codeinst" f_call_foreign(1)
 
 
 myfun57023a(::Type{T}) where {T} = (x = @ccall mycfun()::Ptr{T}; x)
@@ -9446,41 +9579,62 @@ let f = (x...) -> length(x)
     @test ccall(:jl_array_copy, Ref{Matrix{Int}}, (Any,), m3) == m3
 end
 
-# issue #61347 (supertype half): every level of a structurally increasing
-# recursive supertype graph must be correct independently of instantiation
-# order, and deferred (lazily computed) supertypes must present the same
-# field-access semantics to compiled and interpreted code. (The field-type
-# analogue `struct S1{T}; x::S1{A{T}}; end` still hangs on instantiation;
-# a concrete type must publish with its layout, so its fix needs more.)
+# issue #61347 (supertype half): a supertype declaration that applies the type
+# being defined at structurally increasing parameters has an infinite supertype
+# graph, and the definition is refused instead of hanging (or, in a `typegroup`,
+# caching wrong supertypes)
 module Issue61347
 abstract type A{T} end
-struct S2{T} <: A{S2{A{T}}} end
+abstract type C{Y, Z} end
+struct Swap{T, U} <: C{Swap{U, T}, U} end  # finite: the parameters only move
 end
-let A = Issue61347.A, S2 = Issue61347.S2
-    @test supertype(S2{Int}) === A{S2{A{Int}}}
-    # deep levels materialize lazily, one per demand, and stay correct
-    deep = S2{A{A{Int}}}
-    @test supertype(deep) === A{S2{A{A{A{Int}}}}}
-    # reaching the same interned type by walking or by direct construction
-    # yields the same supertype
-    walked = getfield(supertype(S2{Int}), :parameters)[1]
-    walked = getfield(supertype(walked), :parameters)[1]
-    @test walked === S2{A{A{Int}}}
-    @test supertype(walked) === supertype(deep)
-    @test S2{A{A{A{Int}}}} <: A
-    # compiled and interpreted field access agree on the deferred slot. The
-    # slot can be filled at any moment by unrelated activity, so bracket the
-    # interpreted read with compiled reads and require monotone agreement
-    # (an unfilled slot can only become filled, never the reverse)
-    lazy = getfield(supertype(S2{A{A{A{A{Int}}}}}), :parameters)[1]
-    @noinline compiled_isdef(x::DataType) = isdefined(x, :super)
-    c1 = compiled_isdef(Base.inferencebarrier(lazy))
-    itp = Core.eval(@__MODULE__, :(isdefined($lazy, :super)))
-    c2 = compiled_isdef(Base.inferencebarrier(lazy))
-    @test c1 <= itp <= c2
-    @test supertype(lazy) isa Type # forcing accessor
-    @test isdefined(lazy, :super)
-    @test getfield(lazy, :super) === supertype(lazy)
+let M = Issue61347
+    @test_throws "structurally increasing" @eval M struct S2{T} <: A{S2{A{T}}} end
+    @test !isdefined(M, :S2)
+    @test_throws "structurally increasing" @eval M struct F{T} <: A{F{Tuple{T}}}; x::T; end
+    # ... also when its field types instantiate it before the definition completes
+    @test_throws "structurally increasing" @eval M struct G{T} <: A{G{Tuple{T}}}; x::G{Tuple{Int}}; end
+    @test_throws "structurally increasing" @eval M struct Rank{T, N} <: C{Rank{Tuple{T}, N}, N} end
+    @test_throws "structurally increasing" @eval M typegroup
+        struct S{T} <: A{R{Tuple{T}}} end
+        struct R{T} <: A{S{Tuple{T}}} end
+    end
+    @test !isdefined(M, :S) && !isdefined(M, :R)
+    @test supertype(M.Swap{Int, Float64}) === M.C{M.Swap{Float64, Int}, Float64}
+end
+
+# substituting into a dependent bound continues the instantiation stack
+module LazySuperBound
+struct NewT end
+struct Foo{T, S<:Union{Nothing, Val{T}}} end
+struct Bar{T}; x::Foo{T, Nothing}; end
+end
+@test fieldtype(LazySuperBound.Bar{LazySuperBound.NewT}, :x) === LazySuperBound.Foo{LazySuperBound.NewT, Nothing}
+
+# the bound check of an instantiation's supertype needs that supertype: a circular
+# constraint, as for a definition, not an infinite recursion
+module SuperSeesItself
+abstract type A{X} end
+abstract type B{X<:A} end
+struct S{T} <: A{B{S{T}}} end
+end
+@test_throws "circular type parameter constraint" SuperSeesItself.S{Int}
+
+# A type cached while another one is being built, and which mentions it, is
+# cached only once that one is complete: a failed construction leaves nothing
+# behind that mentions the type it did not make
+module OrphanInProgress
+abstract type A{X, Y} end
+abstract type B{X<:Integer} end
+struct K{T} <: A{Vector{K{T}}, B{T}} end
+end
+let K = OrphanInProgress.K
+    @test_throws TypeError K{String}
+    @test_throws TypeError K{String}
+    tn = Array.body.body.name
+    @test !any(t -> t isa DataType && any(p -> p isa DataType && p.name === K.body.name, t.parameters),
+               [tn.cache..., tn.linearcache...])
+    @test supertype(K{Int}).parameters[1] === Vector{K{Int}}
 end
 
 # Method tables and dispatch caches keep their entries in insertion-ordered dicts that
@@ -9500,4 +9654,57 @@ end
     # again, now from the filled caches
     @test all(i -> Base.invokelatest(OrderedDictGrowth.f, Ts[i]()) == i, eachindex(Ts))
     @test all(i -> Base.invokelatest(OrderedDictGrowth.g, Ts[i]()) === Ts[i], eachindex(Ts))
+end
+
+# Byte accesses support unaligned, cross-element loads and stores.
+@testset "MemoryRef byte access" begin
+    for value in (UInt32(0x12345678), 1.25 + 2.5im, ntuple(i -> UInt64(i), 256))
+        T = typeof(value)
+        bytes = fill!(Memory{UInt8}(undef, sizeof(T) + 2), 0xff)
+        ref = memoryref(bytes)
+        @test Core.unsafe_memoryrefstore!(ref, value, 1, true) === value
+        @test bytes[1] == bytes[end] == 0xff
+        expected = reinterpret(NTuple{sizeof(T),UInt8}, value)
+        @test Tuple(bytes[2:end-1]) === expected
+        @test Core.unsafe_memoryrefload(ref, T, 1, true) === value
+        shifted = memoryref(bytes, 2)
+        @test Core.unsafe_memoryrefload(shifted, T, 0, true) === value
+    end
+    bytes = fill!(Memory{UInt8}(undef, 8), 0x00)
+    bytes[1] = 0xff
+    ref = memoryref(bytes)
+    @test Core.unsafe_memoryrefload(memoryref(bytes, 2), UInt8, -1, true) === 0xff
+    @test Core.unsafe_memoryrefload(ref, Nothing, 0, true) === nothing
+    @test Core.unsafe_memoryrefstore!(ref, nothing, 0, true) === nothing
+    @test_throws BoundsError Core.unsafe_memoryrefload(ref, UInt32, 6, true)
+    @test_throws BoundsError Core.unsafe_memoryrefstore!(memoryref(bytes, 2), 0x00, typemax(Int), true)
+    @test_throws ErrorException Core.unsafe_memoryrefload(ref, String, 0, true)
+    @test_throws ErrorException Core.unsafe_memoryrefload(ref, Union{UInt8,UInt16}, 0, true)
+    @test_throws ErrorException Core.unsafe_memoryrefstore!(ref, "value", 0, true)
+    @test_throws TypeError Core.unsafe_memoryrefload(bytes, UInt8, 0, true)
+    @test_throws TypeError Core.unsafe_memoryrefstore!(ref, 0x00, 0.0, true)
+    for mem in (Memory{Any}(undef, 1), Memory{Union{UInt8,UInt16}}(undef, 1),
+                Memory{Nothing}(undef, 1), AtomicMemory{UInt8}(undef, 1))
+        @test_throws ErrorException Core.unsafe_memoryrefload(memoryref(mem), UInt8, 0, true)
+        @test_throws ErrorException Core.unsafe_memoryrefstore!(memoryref(mem), 0x00, 0, true)
+    end
+end
+
+# dispatch through cache entries with a `Vararg` tail, whose test is chosen by its element type
+vtail_ty(::Type{Int}...) = 1
+vtail_ty(@nospecialize(xs...)) = 2
+vtail_dt(::DataType...) = 1
+vtail_dt(@nospecialize(xs...)) = 2
+vtail_t(::Type...) = 1
+vtail_t(@nospecialize(xs...)) = 2
+for _ in 1:2
+    @test Base.inferencebarrier(vtail_ty)(Int, Int, Int) == 1
+    @test Base.inferencebarrier(vtail_ty)(Int, Int, Int, Int) == 1
+    @test Base.inferencebarrier(vtail_ty)(Int, Int, Float64) == 2
+    @test Base.inferencebarrier(vtail_dt)(Int, Float64, Int) == 1
+    @test Base.inferencebarrier(vtail_dt)(Int, Float64, Int, Int) == 1
+    @test Base.inferencebarrier(vtail_dt)(Int, Float64, Union{}) == 2
+    @test Base.inferencebarrier(vtail_t)(Int, Vector, Union{}) == 1
+    @test Base.inferencebarrier(vtail_t)(Int, Vector, Union{}, Int) == 1
+    @test Base.inferencebarrier(vtail_t)(Int, Vector, 1) == 2
 end

@@ -1,13 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Standard library module for computing the CRC-32c checksum.
+    CRC32c
 
-See [`CRC32c.crc32c`](@ref) for more information.
+The CRC-32c checksum of data, strings and files, computed by [`CRC32c.crc32c`](@ref).
 """
 module CRC32c
 
-import Base.FastContiguousSubArray
 import Base: DenseUInt8OrInt8
 
 export crc32c
