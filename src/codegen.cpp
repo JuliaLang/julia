@@ -6685,7 +6685,10 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r) J
                 ptr_phi = PHINode::Create(ctx.types().T_prjlvalue, jl_array_nrows(edges), "ptr_phi");
                 ptr_phi->insertInto(BB, InsertPt);
                 if (dest) {
-                    Value *isboxed = ctx.builder.CreateIsNotNull(ptr_phi);
+                    // With no roots to fill, every edge puts an unboxed member in the slot, even
+                    // one that also has a box, so only a value with no index is read from its box.
+                    Value *isboxed = inline_roots ? ctx.builder.CreateIsNotNull(ptr_phi) :
+                        ctx.builder.CreateICmpEQ(Tindex_phi, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
                     AllocaInst *phi = cast<AllocaInst>(dest->clone());
                     phi->insertAfter(dest);
                     setName(ctx.emission_context, phi, "union_phi");
@@ -10739,8 +10742,8 @@ static jl_llvm_functions_t
                     if (new_union.Vboxed)
                         V = new_union.Vboxed;
                     else if (new_union.isboxed) {
-                        // The `emit_unionmove` below follows `isboxed` too: a boxed value is in
-                        // no slot, and lives only in this box.
+                        // Without roots, the `emit_unionmove` below puts this value in the slot
+                        // as well; otherwise it lives only in this box.
                         assert(new_union.constant); // its box is made on demand
                         V = boxed(ctx, new_union);
                     }
@@ -10752,18 +10755,13 @@ static jl_llvm_functions_t
                 }
                 else if (jl_is_concrete_type(val.typ) || val.constant) {
                     size_t tindex = get_box_tindex((jl_datatype_t*)(val.constant ? jl_typeof(val.constant) : val.typ), phiType);
-                    if (tindex && dest && (!VN || !val.isboxed)) {
+                    if (tindex && dest && (!VN || !val.isboxed || roots.empty())) {
                         emit_unionmove(ctx, dest, phiType, union_slot_aliasinfo(ctx, phiType), val, RTindex, nullptr);
                     }
                 }
                 else {
-                    if (dest && (!VN || !val.isboxed)) {
+                    if (dest && (!VN || !val.isboxed || roots.empty())) {
                         Value *skip = ctx.builder.CreateIsNull(RTindex); // skip entirely if old value isn't part of the new union
-                        if (new_union.Vboxed != nullptr && roots.empty()) {
-                            // if the value is boxed, we won't select this slot anyways, so skip it also
-                            Value *isboxed = ctx.builder.CreateIsNotNull(new_union.Vboxed);
-                            skip = ctx.builder.CreateOr(isboxed, skip);
-                        }
                         emit_unionmove(ctx, dest, phiType, union_slot_aliasinfo(ctx, phiType), val, RTindex, skip);
                     }
                 }
