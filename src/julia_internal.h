@@ -2158,6 +2158,22 @@ JL_DLLEXPORT void jl_srand(uint64_t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_rand(void) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT extern void *jl_exe_handle;
+#ifdef _OS_DARWIN_
+// macho-image.c: package image dylibs mapped without dyld
+typedef struct {
+    uint64_t base;
+    const void *pointers; // jl_image_pointers
+    const uint32_t *checksum; // jl_system_image_checksum
+    void *unpack; // value of jl_image_unpack
+    const void *coverage; // jl_image_coverage, or NULL
+} jl_macho_image_info_t;
+int jl_macho_map_image(const char *path, jl_macho_image_info_t *info) JL_NOTSAFEPOINT;
+void jl_macho_unmap_image(uint64_t base) JL_NOTSAFEPOINT;
+// `dladdr` for the images mapped by jl_macho_map_image
+JL_DLLEXPORT int jl_macho_image_for_addr(uintptr_t addr, uint64_t *base, const char **path,
+                                         void **saddr, const char **sname) JL_NOTSAFEPOINT;
+#endif
+
 JL_DLLEXPORT extern void *jl_libjulia_handle;
 JL_DLLEXPORT extern void *jl_libjulia_internal_handle;
 JL_DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;

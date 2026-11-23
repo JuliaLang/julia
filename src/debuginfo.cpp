@@ -1137,6 +1137,18 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, uint64_t 
     if (pointer == ~(size_t)0) {
         return false;
     }
+    uint64_t macho_base;
+    if (jl_macho_image_for_addr(pointer, &macho_base, &dlinfo.dli_fname, saddr ? &dlinfo.dli_saddr : nullptr,
+                                (saddr || name) ? &dlinfo.dli_sname : nullptr)) {
+        // package image mapped without dyld
+        dlinfo.dli_fbase = (void*)(uintptr_t)macho_base;
+        if (!saddr)
+            dlinfo.dli_saddr = nullptr;
+        if (!saddr && !name)
+            dlinfo.dli_sname = nullptr;
+        dladdr_success = 1;
+    }
+    else
 #endif
     dladdr_success = dladdr((void*)pointer, &dlinfo) != 0;
 #endif

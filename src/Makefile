@@ -122,6 +122,10 @@ ifeq ($(OS),WINNT)
 SRCS += win32_ucontext
 endif
 
+ifeq ($(OS),Darwin)
+SRCS += macho-image
+endif
+
 ifeq ($(WITH_DTRACE),1)
 DTRACE_HEADERS := uprobes.h.gen
 ifneq ($(OS),Darwin)
