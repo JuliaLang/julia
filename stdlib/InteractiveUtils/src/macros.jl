@@ -257,35 +257,17 @@ function gen_call(fcn, args, where_params, kws; use_signature_tuple::Bool, not_a
 end
 
 function expand_ref_begin_end!(f::Function, ex, __module__::Module)
+    @assert ex isa Expr && ex.head === :ref "expected :ref"
     arr = ex.args[1]
-    args = copy(ex.args)
+    # We expect a :ref if and only if no begin/ends were found
     new = replace_ref_begin_end!(__module__, ex)
-    modified = ex.args .≠ args
-    if any(modified) && (isexpr(arr, :(::), 1) || isexpr(arr, :(::), 2) || isexpr(arr, :..., 1))
-        return Expr(:call, :error, "`begin` or `end` cannot be used with a type-annotated left-hand side argument for an indexing syntax")
+    isexpr(new, :ref) && return f(new)
+    if isexpr(arr, :(::), 1) || isexpr(arr, :(::), 2) || isexpr(arr, :..., 1)
+        return Expr(:call, error, "`begin` or `end` cannot be used with a type-annotated left-hand side argument for an indexing syntax")
     end
-    call = f(ex)
-    !any(modified) && return call
-    fixup_hygiene_for_ref_temporary!(new)
-    # We have to mutate `ex`, then return `new` which evaluates `arr` before use.
-    ex.head = call.head
-    ex.args = call.args
-    return new
-end
-
-function fixup_hygiene_for_ref_temporary!(ex)
-    # Match the local variable `##S#...` so we may escape its definition.
-    # We don't want to use `escs = 1` in `replace_ref_begin_end_!` because
-    # then we delegate escaping to this function, whereas we otherwise manage
-    # ourselves the escaping in all other code paths.
-    isexpr(ex, :block) || return
-    decl = ex.args[1]
-    isexpr(decl, :local, 1) || return
-    assignment = decl.args[1]
-    isexpr(assignment, :(=), 2) || return
-    variable = assignment.args[1]
-    startswith(string(variable), "##S#") || return
-    decl.args[1] = esc(assignment)
+    ref = pop!(new.args)
+    @assert ref isa Expr && ref.head === :ref "expected :ref"
+    return Expr(:block, esc(new), f(ref))
 end
 
 is_code_macro(fcn) = startswith(string(fcn), "code_")
