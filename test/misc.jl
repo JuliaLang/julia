@@ -665,6 +665,13 @@ let r = Ref(1), m = Memory{Any}(undef, 4), a = AtomicMemory{Any}(undef, 4)
     @atomic a[2] = r
     @test summarysize(m) == summarysize(Memory{Any}(undef, 4)) + summarysize(r)
     @test summarysize(a) == summarysize(m)
+    # boxed atomic union elements, and inline elements behind a lock
+    u = AtomicMemory{Union{Int,Nothing}}(undef, 2)
+    @atomic u[1] = 1000
+    @test summarysize(u) == summarysize(AtomicMemory{Union{Int,Nothing}}(undef, 2)) + sizeof(Int)
+    l = AtomicMemory{Tuple{String,Int,Int}}(undef, 2)
+    @atomic l[2] = ("abcd", 1, 2)
+    @test summarysize(l) == summarysize(AtomicMemory{Tuple{String,Int,Int}}(undef, 2)) + summarysize("abcd")
 end
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)

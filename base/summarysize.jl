@@ -7,8 +7,13 @@ struct SummarySize
     count::Bool
 end
 
-nth_pointer_isdefined(obj, i::Int) = ccall(:jl_nth_pointer_isdefined, Cint, (Any, Csize_t), obj, i-1) != 0
-get_nth_pointer(obj, i::Int) = ccall(:jl_get_nth_pointer, Any, (Any, Csize_t), obj, i-1)
+get_nth_pointer_or_nothing(obj, i::Int) = ccall(:jl_get_nth_pointer_or_nothing, Any, (Any, Csize_t), obj, i-1)
+
+function memory_npointers(mem::GenericMemory)
+    dtl = DataTypeLayout(typeof(mem))
+    datatype_arrayelem(dtl) == 1 && return length(mem)
+    return dtl.firstptr >= 0 ? length(mem) * Int(dtl.npointers) : 0
+end
 
 """
     Base.summarysize(obj; count = false, exclude=Union{...}, chargeall=Union{...})::Int
@@ -51,10 +56,8 @@ end
 
 # specialized on the exclude and chargeall types, so checking them is cheap
 function _summarysize_frontier(ss::SummarySize, size::Int, ::Type{Excl}, ::Type{Chg}) where {Excl, Chg}
-    mem = nothing # the memory whose layout is cached below
-    mem_inline = false
-    mem_np = 0
-    mem_len = 0
+    mem = nothing # the memory whose pointer count is cached below
+    mem_nf = 0
     while !isempty(ss.frontier_x)
         # DFS heap traversal of everything without a specialization
         # BFS heap traversal of anything with a specialization
@@ -88,32 +91,13 @@ function _summarysize_frontier(ss::SummarySize, size::Int, ::Type{Excl}, ::Type{
         elseif isa(x, GenericMemory)
             if x !== mem
                 mem = x
-                T = eltype(x)
-                mem_inline = allocatedinline(T)
-                mem_np = mem_inline ? datatype_npointers(T) : 1
-                mem_len = length(x)
+                mem_nf = memory_npointers(x)
             end
-            if !mem_inline
-                nf = mem_len
-                ptr = unsafe_load(Ptr{Ptr{Cvoid}}(getfield(x, :ptr)::Ptr{Cvoid}), i)
-                ptr == C_NULL || (val = unsafe_pointer_to_objref(ptr))
-            else
-                np = mem_np
-                nf = mem_len * np
-                idx = (i-1) ÷ np + 1
-                if @inbounds @inline isassigned(x, idx)
-                    elt = x[idx]
-                    p = (i-1) % np + 1
-                    if nth_pointer_isdefined(elt, p)
-                        val = get_nth_pointer(elt, p)
-                    end
-                end
-            end
+            nf = mem_nf
+            val = get_nth_pointer_or_nothing(x, i)
         else
             nf = datatype_npointers(typeof(x))
-            if nth_pointer_isdefined(x, i)
-                val = get_nth_pointer(x, i)
-            end
+            val = get_nth_pointer_or_nothing(x, i)
         end
         if nf > i
             ss.frontier_i[end] = i + 1
@@ -190,8 +174,7 @@ function (ss::SummarySize)(obj::GenericMemory)
         elseif pointer_from_objref(obj) + 16 != datakey
             size += 1
         end
-        T = eltype(obj)
-        if !isempty(obj) && T !== Symbol && (!allocatedinline(T) || (T isa DataType && !datatype_pointerfree(T)))
+        if eltype(obj) !== Symbol && memory_npointers(obj) > 0
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)
         end
