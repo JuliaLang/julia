@@ -1074,7 +1074,6 @@ function sptypes_from_meth_instance(mi::MethodInstance)
     temp = sig
     for i = 1:nvals
         v = spvals[i]
-        undef = true
         # An `svec(inner, constrained)` marker from subtyping/intersection
         # means the sparam value is uncertain; `inner` is either the env
         # TypeVar (carrying identity and bounds) or a DataType with free

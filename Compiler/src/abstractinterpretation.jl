@@ -3101,7 +3101,6 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif la == 3 && f === Core.:(>:)
         # mark issupertype as an exact alias for issubtype
         # swap T1 and T2 arguments and call <:
-        atype = argtypes_to_type(argtypes)
         let call = abstract_call_gf_by_type(interp, f, ArgInfo(fargs, Any[Const(f), Any, Any]), si, Tuple{typeof(f), Any, Any}, vtypes, sv, max_methods)::Future
             if fargs !== nothing && length(fargs) == 3
                 fargs_reverse = Any[<:, fargs[3], fargs[2]]
@@ -3126,34 +3125,26 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         2 ≤ la ≤ 4 || return Future{CallMeta}(call, sv, interp) do call, sv, interp
             return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
         end
-        # make sure generic code is prepared for inlining if needed later
-        let T = Any[Type{TypeVar}, Any, Any, Any]
-            resize!(T, la)
-            atype = Tuple{T...}
-            T[1] = Const(TypeVar)
-            return Future{CallMeta}(call, interp, sv) do call, interp, sv
-                # without `local`, these would be the variables of the enclosing function,
-                # boxed on every call because this closure assigns them
-                local effects, exct
-                n = argtypes[2]
-                ub_var = Const(Any)
-                lb_var = Const(Union{})
-                if la == 4
-                    ub_var = argtypes[4]
-                    lb_var = argtypes[3]
-                elseif la == 3
-                    ub_var = argtypes[3]
-                end
-                pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
-                typevar_argtypes = Any[n, lb_var, ub_var]
-                effects = builtin_effects(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
-                if effects.nothrow
-                    exct = Union{}
-                else
-                    exct = builtin_exct(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
-                end
-                return CallMeta(pT, exct, effects, call.info)
+        return Future{CallMeta}(call, interp, sv) do call, interp, sv
+            local effects, exct
+            n = argtypes[2]
+            ub_var = Const(Any)
+            lb_var = Const(Union{})
+            if la == 4
+                ub_var = argtypes[4]
+                lb_var = argtypes[3]
+            elseif la == 3
+                ub_var = argtypes[3]
             end
+            pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
+            typevar_argtypes = Any[n, lb_var, ub_var]
+            effects = builtin_effects(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
+            if effects.nothrow
+                exct = Union{}
+            else
+                exct = builtin_exct(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
+            end
+            return CallMeta(pT, exct, effects, call.info)
         end
     elseif la == 2 && f === Core.typename
         return Future{CallMeta}(call, interp, sv) do call, interp, sv
