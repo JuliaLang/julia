@@ -2001,7 +2001,7 @@ JL_CALLABLE(jl_f__import)
     else if (nargs == 5) {
         JL_TYPECHK(_import, symbol, args[3]);
         JL_TYPECHK(_import, bool, args[4]);
-        jl_module_import(jl_current_task, (jl_module_t *)args[0], (jl_module_t *)args[1],
+        jl_module_import((jl_module_t *)args[0], (jl_module_t *)args[1],
                          (jl_sym_t *)args[2], (jl_sym_t *)args[3], args[4] == jl_true);
     }
     return jl_nothing;
