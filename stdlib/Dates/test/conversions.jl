@@ -65,9 +65,9 @@ end
 
     if Sys.isapple()
         withenv("TZ" => "UTC") do
-            a = Dates.now()
-            b = Dates.now(Dates.UTC)
-            c = Dates.now()
+            local a = Dates.now()
+            local b = Dates.now(Dates.UTC)
+            local c = Dates.now()
             @test a <= b <= c
         end
     end

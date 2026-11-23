@@ -64,15 +64,16 @@ Month, and Day, and `T(0)` for Hour, Minute, Second, and Millisecond.
 """
 function default end
 
-default(p::Union{T,Type{T}}) where {T<:DatePeriod} = T(1)
-default(p::Union{T,Type{T}}) where {T<:TimePeriod} = T(0)
+default(::Union{T,Type{T}}) where {T<:DatePeriod} = T(1)
+default(::Union{T,Type{T}}) where {T<:TimePeriod} = T(0)
 
 (-)(x::P) where {P<:Period} = P(-value(x))
 ==(x::P, y::P) where {P<:Period} = value(x) == value(y)
 Base.isless(x::P, y::P) where {P<:Period} = isless(value(x), value(y))
 
 # Period Arithmetic, grouped by dimensionality:
-for op in (:+, :-, :lcm, :gcd)
+for f in Any[+, -, lcm, gcd]
+    op = nameof(f)
     @eval ($op)(x::P, y::P) where {P<:Period} = P(($op)(value(x), value(y)))
 end
 
@@ -94,7 +95,8 @@ end
 (*)(A::Period, B::AbstractArray) = Broadcast.broadcast_preserving_zero_d(*, A, B)
 (*)(A::AbstractArray, B::Period) = Broadcast.broadcast_preserving_zero_d(*, A, B)
 
-for op in (:(==), :isless, :/, :rem, :mod, :lcm, :gcd)
+for f in Any[==, isless, /, rem, mod, lcm, gcd]
+    op = nameof(f)
     @eval ($op)(x::Period, y::Period) = ($op)(promote(x, y)...)
 end
 div(x::Period, y::Period, r::RoundingMode) = div(promote(x, y)..., r)
