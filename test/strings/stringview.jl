@@ -1,3 +1,13 @@
+# A dense byte vector whose `pointer` is not a CPU `Ptr`, standing in for a GPU array
+struct NonCPUPtr end
+struct NonCPUByteVector <: DenseVector{UInt8}
+    data::Vector{UInt8}
+end
+Base.size(v::NonCPUByteVector) = size(v.data)
+Base.getindex(v::NonCPUByteVector, i::Int) = v.data[i]
+Base.pointer(::NonCPUByteVector) = NonCPUPtr()
+Base.pointer(::NonCPUByteVector, ::Integer) = NonCPUPtr()
+
 @testset "StringViews" begin
 
     @testset "Construction" begin
@@ -124,6 +134,21 @@
         # Non-dense arrays don't have pointer method
         abc = StringView(0x61:0x63)
         @test_throws MethodError pointer(abc)
+    end
+
+    @testset "String conversion (#63361)" begin
+        b = Vector{UInt8}("fooβ")
+        for v in Any[b, Memory{UInt8}(b), codeunits("fooβ"), codeunits(SubString("xfooβ", 2)),
+                     view(b, 1:5), view(codeunits("fooβ"), 1:5)]
+            s = StringView(v)
+            @test s isa Base.CPUStringView
+            @test String(s) === "fooβ"
+            @test String(SubString(s, 2)) === "ooβ"
+        end
+        s = StringView(NonCPUByteVector(b))
+        @test !(s isa Base.CPUStringView)
+        @test String(s) === convert(String, s) === "fooβ"
+        @test String(SubString(s, 2)) === "ooβ"
     end
 
     @testset "Comparison and equality" begin
