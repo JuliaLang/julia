@@ -2985,9 +2985,7 @@ end
 function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         arginfo::ArgInfo, si::StmtInfo, vtypes::Union{VarTable,Nothing},
         sv::AbsIntState, max_methods::Int = get_max_methods(interp, f, sv))
-    (; fargs, argtypes) = arginfo
-    argtypes::Vector{Any} = arginfo.argtypes  # declare type because the closure below captures `argtypes`
-    fargs = arginfo.fargs
+    (; fargs, argtypes) = arginfo # don't reassign `argtypes`: closures below capture it
     la = length(argtypes)
     𝕃ᵢ = typeinf_lattice(interp)
     if isa(f, Builtin)
@@ -3132,6 +3130,9 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             atype = Tuple{T...}
             T[1] = Const(TypeVar)
             return Future{CallMeta}(call, interp, sv) do call, interp, sv
+                # without `local`, these would be the variables of the enclosing function,
+                # boxed on every call because this closure assigns them
+                local effects, exct
                 n = argtypes[2]
                 ub_var = Const(Any)
                 lb_var = Const(Union{})
