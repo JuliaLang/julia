@@ -4,7 +4,7 @@ module TimestampTests
 
 using Test
 using Dates
-using Dates: Timestamp, ISOTimestampFormat, timestamp2unix, unix2timestamp
+using Dates: ISOTimestampFormat, Timestamp, timestamp2unix, unix2timestamp
 
 # The testsets before "Parameterized resolution" use the default Timestamp{Nanosecond}.
 
@@ -302,9 +302,9 @@ end
         Timestamp(2026, 8, 31, 10, 0, 0, 0, 3)
     @test Timestamp(t -> nanosecond(t) == 4, 2026, 8, 31, 10, 0, 0, 0, 0; step=Nanosecond(1)) ==
         Timestamp(2026, 8, 31, 10, 0, 0, 0, 0, 4)
-    @test_throws ArgumentError Timestamp(t -> false, 2026, 8, 31; limit=3)
+    @test_throws ArgumentError Timestamp(_ -> false, 2026, 8, 31; limit=3)
     # starts in the first and last years of the range, which are partial years
-    @test Timestamp(t -> true, 1677, 9, 21, 0, 12, 43, 145, 225) ==
+    @test Timestamp(_ -> true, 1677, 9, 21, 0, 12, 43, 145, 225) ==
         Timestamp(1677, 9, 21, 0, 12, 43, 145, 225)
     @test Timestamp(t -> t == typemax(Timestamp), 2262, 4, 11, 23, 47, 16, 854, 775;
                     step=Nanosecond(1), limit=808) == typemax(Timestamp)
