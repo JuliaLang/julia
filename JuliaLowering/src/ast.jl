@@ -331,7 +331,9 @@ end
 
 function is_eventually_call(ex::SyntaxTree)
     k = head(ex)
-    return k == :call || ((k == :where || k == :(::)) && is_eventually_call(ex[1]))
+    # `::f(x)` with one child is not a call with a return type annotation
+    return k == :call || (k == :where && is_eventually_call(ex[1])) ||
+        (k == :(::) && numchildren(ex) == 2 && is_eventually_call(ex[1]))
 end
 
 function find_parameters_ind(exs)

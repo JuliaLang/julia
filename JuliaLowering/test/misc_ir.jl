@@ -243,6 +243,15 @@ syntax: `::` must be written `value::type` outside function argument lists
 └─┘
 
 ########################################
+# Error: Invalid :: syntax as a function definition
+::f(x) = 1
+#---------------------
+syntax: invalid syntax in left-hand side of assignment
+@ :1
+::f(x) = 1
+└────┘
+
+########################################
 # Error: braces vector syntax
 {x, y}
 #---------------------
