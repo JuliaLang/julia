@@ -211,7 +211,7 @@ macro deprecate(old, new, export_old=true)
         end
         ex = :($(esc(old)) = begin
             $meta
-            depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.singletonname)
+            depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", depwarn_funcsym($(esc(fnexpr))))
             $(esc(new))
         end)
         Expr(:toplevel, maybe_export, replace_linenums!(ex, __source__))
@@ -221,7 +221,7 @@ macro deprecate(old, new, export_old=true)
         end
         ex = :(function $(esc(old))(args...; kwargs...)
             $meta
-            depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.singletonname)
+            depwarn($"`$old` is deprecated, use `$new` instead.", depwarn_funcsym($(esc(old))))
             $(esc(new))(args...; kwargs...)
         end)
         Expr(:toplevel,
@@ -314,6 +314,16 @@ function firstcaller(bt::Vector, funcsyms)
         end
     end
     return C_NULL, StackTraces.UNKNOWN
+end
+
+# The `funcsym` by which `firstcaller` finds the methods of the callable `f`, i.e. the name
+# that `jl_method_def` gives them. For a type, that is the name of the type itself (whose
+# constructor is being deprecated), not the name of the type of the type.
+function depwarn_funcsym(@nospecialize(f))
+    tn = argument_datatypename(Core.Typeof(f))
+    # `jl_method_def` names methods `Any` if their callee has no type name (e.g. a `Union`)
+    tn === nothing && (tn = Any.name)
+    return tn.singletonname
 end
 
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Cvoid, (Any, Any, Cint), m, s, flag)
