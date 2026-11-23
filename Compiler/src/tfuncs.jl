@@ -3809,6 +3809,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
         ft === Bottom && return CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo())
         typeidx = 3
     elseif length(argtypes) == 2 && !isvarargtype(argtypes[2])
+        ft = nothing
         typeidx = 2
     else
         return CallMeta(Any, Any, Effects(), NoCallInfo())
@@ -3819,7 +3820,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     if types === Bottom || !(unwrapped isa DataType) || unwrapped.name !== Tuple.name
         return CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo())
     end
-    if typeidx == 3
+    if ft !== nothing
         isdispatchelem(ft) || return CallMeta(Bool, Any, Effects(), NoCallInfo()) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
         types = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     end
