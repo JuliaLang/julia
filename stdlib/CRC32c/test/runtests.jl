@@ -50,6 +50,7 @@ function test_crc32c(crc32c)
                 @test crc32c(io, 16) == crc32c(a[17:32])
                 @test crc32c(io) == crc32c(a[33:end])
                 @test crc32c(io, 1000) == 0x00000000
+                @test crc32c(seek(io, 1000)) == 0x00000000
             end
             b = rand(UInt8, 30000)
             write(f, b)
