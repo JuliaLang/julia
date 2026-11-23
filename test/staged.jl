@@ -321,7 +321,7 @@ end
     end
 end
 
-@test_throws ErrorException("syntax: local variable name \"x\" conflicts with an argument") f30284(1)
+@test_throws "syntax: local variable name `x` conflicts with an existing argument" f30284(1)
 
 # issue #33243
 @generated function f33243()
@@ -347,7 +347,7 @@ let tup = g_vararg_generated()
     # the test only works if there is an unused that matches the position of
     # the inferencebarrier argument above (N.B. the generator function itself
     # shifts everything over by 1)
-    @test_broken only(code_lowered(only(methods(f_vararg_generated)).generator.gen)).slotflags[5] == 0x00
+    @test only(code_lowered(only(methods(f_vararg_generated)).generator.gen)).slotflags[5] == 0x00
 end
 
 # respect a given linetable in code generation

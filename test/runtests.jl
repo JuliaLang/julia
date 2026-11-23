@@ -152,7 +152,7 @@ limited_worker_rss && move_to_node1("Distributed")
 const longest_tests = [
     "Pkg", "LinearAlgebra", "SparseArrays", "threads", "cmdlineargs", "subarray",
     "compileall", "Compiler/AbstractInterpreter", "precompile", "jit",
-    "JuliaLowering_stdlibs", "loading", "arrayops", "JuliaLowering", "bitarray", "sorting",
+    "loading", "arrayops", "JuliaLowering", "bitarray", "sorting",
     "Random", "abstractarray", "iterators", "core", "ranges", "LibGit2/libgit2",
     "FileWatching", "atomics", "math", "rounding", "apint", "JuliaSyntax",
     "Compiler/inference", "reducedim", "numbers", "misc", "broadcast", "REPL", "Profile",
