@@ -1130,7 +1130,8 @@ end
 
 vst1_iter(vcx, st) = @stm st begin
     [:(=) [:outer i] v] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
-    # rare, malformed, happens to work in desugaring
+    # rare, malformed, happens to work for generators in desugaring (see
+    # `check_no_splatted_iterable`)
     [:(=) i [:... v]] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
     [:(=) i v] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
     _ -> @fail(st, "expected one of `=`, `in`, `∈`")

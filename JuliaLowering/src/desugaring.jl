@@ -991,6 +991,14 @@ function expand_generator(ctx, ex)
     body
 end
 
+# A splatted iterable such as `xs...` happens to work in generators, where it is
+# passed on as `Base.Generator(f, xs...)`, but has no meaning in a loop.
+function check_no_splatted_iterable(iter_ex, what)
+    if head(iter_ex) === :...
+        throw(LoweringError(iter_ex, "`...` cannot be used on the iterable of $what"))
+    end
+end
+
 function expand_comprehension_to_loops(ctx, ex)
     @jl_assert head(ex) == :typed_comprehension ex
     element_type = ex[1]
@@ -1005,6 +1013,7 @@ function expand_comprehension_to_loops(ctx, ex)
     iters = SyntaxList()
     iter_defs = SyntaxList()
     for iterspec in children(iterspecs)
+        check_no_splatted_iterable(iterspec[2], "a typed comprehension")
         iter = emit_assign_tmp(iter_defs, ctx, iterspec[2], "iter")
         push!(iters, iter)
         push!(new_iterspecs, @ast ctx iterspec [:in iterspec[1] iter])
@@ -2136,6 +2145,7 @@ function expand_for(ctx, ex)
         end
 
         iter_ex = iterspec[2]
+        check_no_splatted_iterable(iter_ex, "a `for` loop")
         next = newsym(ctx, iterspec, "")
         state = ssavar(ctx, iterspec, "state")
         collection = ssavar(ctx, iter_ex, "collection")

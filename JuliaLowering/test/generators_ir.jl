@@ -241,6 +241,15 @@ syntax: unlabeled `break` outside of a `while` or `for` loop
 end
 
 ########################################
+# Error: splatted iterable in typed comprehension
+Int[x for x in xs...]
+#---------------------
+syntax: `...` cannot be used on the iterable of a typed comprehension
+@ :1
+Int[x for x in xs...]
+#             └────┘
+
+########################################
 # Nested case with duplicate iteration variables
 (x for x in 1:3 for x in 1:2)
 #---------------------

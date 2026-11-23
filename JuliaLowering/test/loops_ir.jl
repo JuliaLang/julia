@@ -170,6 +170,17 @@ continue
 └──────┘
 
 ########################################
+# Error: splatted iterable in for loop
+for x in xs...
+end
+#---------------------
+syntax: `...` cannot be used on the iterable of a `for` loop
+@ :1
+for x in xs...
+#       └────┘
+end
+
+########################################
 # Error: `outer` without outer local variable
 let
     for outer i = 1:2
