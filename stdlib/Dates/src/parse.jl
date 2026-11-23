@@ -320,7 +320,7 @@ If successful, returns a 2-element tuple `(values, pos)`:
                                        df::DateFormat, raise::Bool=false) where T<:TimeType
     val = tryparsenext_core(str, pos, len, df, raise)
     val === nothing && return nothing
-    values, pos, num_parsed = val
+    values, pos, _num_parsed = val
     fields = translatevalues(T, values, df, raise)
     fields === nothing && return nothing
     return fields, pos
@@ -591,7 +591,7 @@ end
 fromparts(::Type{Timestamp}, values...) = fromparts(Timestamp{Nanosecond}, values...)
 
 # Fields of other types, which tokens that packages define can read, are left to the constructors
-fromparts(::Type, values...) = nothing
+fromparts(::Type, _values...) = nothing
 
 @inline function fromparts(::Type{Timestamp{P}}, y::Int64, m::Int64, d::Int64, h::Int64, mi::Int64,
                            s::Int64, ms::Int64, us::Int64, ns::Int64, ampm::AMPM) where {P}
@@ -636,7 +636,7 @@ the general reader then reads.
 end
 @inline parsefixed(::Type{T}, str::Union{String, SubString{String}}, df::DateFormat) where {T<:Union{Date, DateTime, Time, Timestamp}} =
     parsefixed(T, codeunits(str), ncodeunits(str), df)
-parsefixed(::Type, str::AbstractString, df::DateFormat) = nothing
+parsefixed(::Type, ::AbstractString, ::DateFormat) = nothing
 
 # `parse`, `tryparse`, and `parsevalue` inline the fixed-offset reader into callers, where
 # a constant format folds its checks, and call the general reader out of line

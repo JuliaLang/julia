@@ -309,7 +309,7 @@ end
     u = reinterpret(UInt32, d.d)
     if isascii(d.d)
         b = (u >> 24) % UInt8
-        for j = 1:N
+        for _ = 1:N
             i <= len && (@inbounds bytes[i]) == b || return nothing
             i += 1
         end
@@ -318,7 +318,7 @@ end
     # A malformed character can decode differently in longer text, so it is read as a character
     isvalid(d.d) || return tryparsenext_chars(d, bytes, i, len, nothing)
     n = ncodeunits(d.d)
-    for j = 1:N, k = 1:n
+    for _ = 1:N, k = 1:n
         i <= len && (@inbounds bytes[i]) == (u >> (32 - 8k)) % UInt8 || return nothing
         i += 1
     end
@@ -362,8 +362,9 @@ end
 Read a token that has no reader for bytes, such as a month name or a token that a package
 defines, from the UTF-8 text that `bytes` encode, as characters at the same indices: the
 `String` or `SubString{String}` that `bytes` are the `codeunits` of, or a `StringView`.
+It reads to the end of that text, so `len` must be `length(bytes)`.
 """
-@inline function tryparsenext_chars(d::AbstractDateToken, bytes::AbstractVector{UInt8}, i, len, locale)
+@inline function tryparsenext_chars(d::AbstractDateToken, bytes::AbstractVector{UInt8}, i, _len, locale)
     str = chartext(bytes)
     return tryparsenext(d, str, i, lastindex(str), locale)
 end
