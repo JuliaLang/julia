@@ -742,6 +742,7 @@ end
 
 vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [:identifier] -> vst1_ident(vcx, st; lhs=true) &
+        vst1_ident(with(vcx; readable_underscore=false), st) &
         (!is_dotted_operator(syntax_name(st)) ? pass() :
         @fail(st, "dotted operator is not a valid function name"))
     [:. _ _] -> vcx.toplevel ? vst1_calldecl_dot_name(vcx, st) :

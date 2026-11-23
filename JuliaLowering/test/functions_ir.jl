@@ -553,6 +553,26 @@ function f[](x,y)
 end
 
 ########################################
+# Error: Underscore function name
+function _(x)
+end
+#---------------------
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :1
+function _(x)
+#        ⊔
+end
+
+########################################
+# Error: Underscore function name, short form
+_(x) = x
+#---------------------
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :1
+_(x) = x
+⊔
+
+########################################
 # Simple positional args with defaults
 function f(x::T, y::S=1, z::U=2)
     (x,y)
