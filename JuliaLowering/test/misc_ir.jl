@@ -48,6 +48,15 @@ _ + 1
 ⊔
 
 ########################################
+# Error: Placeholder used in `@isdefined`
+@isdefined _
+#---------------------
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :1
+@isdefined _
+#          ⊔
+
+########################################
 # Named tuple
 (a=1, b=2)
 #---------------------

@@ -277,7 +277,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     # lowering TODO: 0 args segfaults
     [:gc_preserve_begin ids...] -> allv(vst1_ident, vcx, ids)
     [:gc_preserve_end ids...] -> allv(vst1_ident, vcx, ids)
-    [:isdefined [:identifier]] -> pass()
+    [:isdefined [:identifier]] -> vst1_ident(vcx, st[1])
     [:isdefined [:static_parameter [:value]]] -> pass()
     [:lambda _...] -> vst1_raw_lambda(vcx, st)
     [:generated_lambda _...] -> vst1_generated_lambda(vcx, st)
