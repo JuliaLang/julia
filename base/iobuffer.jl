@@ -918,6 +918,24 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt; cancel::Canc
     return to_write
 end
 
+# Make room for `n` bytes at the end of `io`, to be filled in place and then passed to
+# `commit_reserved!`. Returns the index into `io.data` of the first of them, or 0 if `io`
+# is not positioned at its end or `maxsize` denies the room.
+function reserve_end!(io::IOBuffer, n::Int)
+    ensureroom(io, n % UInt)
+    ptr = io.append ? io.size + 1 : io.ptr
+    start_offset = ptr - 1
+    room = min(length(io.data) - start_offset, io.maxsize - (start_offset - get_offset(io)))
+    return (start_offset == io.size && room >= n) ? ptr : 0
+end
+
+# Count the bytes before index `pos` as written, after `reserve_end!`.
+function commit_reserved!(io::IOBuffer, pos::Int)
+    io.size = pos - 1
+    io.append || (io.ptr = pos)
+    return nothing
+end
+
 @inline function _unsafe_write(data::AbstractVector{UInt8}, p::Ptr{UInt8}, from::Int, nb::UInt)
     for i in 0:nb-1
         data[from + i] = unsafe_load(p)

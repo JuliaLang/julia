@@ -1433,10 +1433,50 @@ end
 nonnothing_nonmissing_typeinfo(io::IO) = nonmissingtype(nonnothingtype(get(io, :typeinfo, Any)))
 show(io::IO, b::Bool) = print(io, nonnothing_nonmissing_typeinfo(io) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
 show(io::IO, ::Nothing) = print(io, "nothing")
-show(io::IO, n::Signed) = (write(io, string(n)); nothing)
+# Machine integers are written into an `IOBuffer` in place, without a temporary `String`.
+print_dec(io::IO, n::Signed) = (write(io, string(n)); nothing)
+print_dec(io::IO, n::Unsigned) = print(io, string(n))
+print_dec(io::Union{IOBuffer,IOContext{IOBuffer}}, n::BitSigned) = print_dec(io, unsigned(abs(n)), n < 0)
+print_dec(io::Union{IOBuffer,IOContext{IOBuffer}}, n::BitUnsigned) = print_dec(io, n, false)
+print_dec(io::IOContext{IOBuffer}, x::BitUnsigned, neg::Bool) = print_dec(io.io, x, neg)
+function print_dec(io::IOBuffer, x::BitUnsigned, neg::Bool)
+    nd = ndigits(x)
+    pos = reserve_end!(io, neg + nd)
+    if pos == 0
+        write(io, dec(x, 1, neg))
+        return nothing
+    end
+    data = io.data
+    neg && (@inbounds data[pos] = UInt8('-'))
+    append_c_digits_fast(nd, x, data, pos + neg)
+    commit_reserved!(io, pos + neg + nd)
+    return nothing
+end
+show_hex(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = cld(Core.bitsizeof(n), 4), base = 16))
+show_hex(io::IOContext{IOBuffer}, x::BitUnsigned) = show_hex(io.io, x)
+function show_hex(io::IOBuffer, x::BitUnsigned)
+    nd = cld(Core.bitsizeof(x), 4)
+    pos = reserve_end!(io, 2 + nd)
+    pos == 0 && return @invoke show_hex(io::IO, x::Unsigned)
+    data = io.data
+    @inbounds data[pos] = UInt8('0')
+    @inbounds data[pos + 1] = UInt8('x')
+    i = pos + 1 + nd
+    @inbounds while i > pos + 1 # a byte, two digits, at a time from the end
+        d1, d2 = (x % UInt8) >> 0x4, (x % UInt8) & 0xf
+        data[i - 1] = d1 + ifelse(d1 > 0x9, 0x57, 0x30)
+        data[i] = d2 + ifelse(d2 > 0x9, 0x57, 0x30)
+        x >>= 0x8
+        i -= 2
+    end
+    commit_reserved!(io, pos + 2 + nd)
+    return nothing
+end
+
+show(io::IO, n::Signed) = print_dec(io, n)
 function show(io::IO, n::Unsigned)
     if get(io, :hexunsigned, true)::Bool
-        print(io, "0x", string(n, pad = cld(Core.bitsizeof(n), 4), base = 16))
+        show_hex(io, n)
     else
         if get(io, :typeinfo, Nothing)::Type == typeof(n)
             print(io, n)
@@ -1445,7 +1485,7 @@ function show(io::IO, n::Unsigned)
         end
     end
 end
-print(io::IO, n::Unsigned) = print(io, string(n))
+print(io::IO, n::Unsigned) = print_dec(io, n)
 
 has_tight_type(p::Pair) =
     typeof(p.first)  == typeof(p).parameters[1] &&

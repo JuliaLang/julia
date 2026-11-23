@@ -921,3 +921,50 @@ end
     write(io, 'a')
     @test write(io, 'a') == 0
 end
+
+@testset "printing integers in place" begin
+    xs = Any[typemin(Int128), typemax(UInt128), -1, 0, 9, 10, 0x7f, 0xffff, typemin(Int8)]
+    io = IOBuffer()
+    for x in xs
+        print(io, x, ' ')
+        show(io, x)
+        show(IOContext(io, :compact => true), x)
+        @test String(take!(io)) == string(x, ' ', repr(x), repr(x; context=:compact => true))
+        show(io, x) # the buffer was taken
+        @test String(take!(io)) == repr(x)
+    end
+    @test sprint(show, 0x0f; context=:hexunsigned => false) == "UInt8(15)"
+    for x in (1234567, 0x1234, typemin(Int64))
+        s, r = string(x), repr(x)
+        io = IOBuffer()
+        foreach(_ -> print(io, x, ','), 1:1000) # growth
+        @test String(take!(io)) == (s * ',')^1000
+        io = IOBuffer(; maxsize=5)
+        print(io, x)
+        @test String(take!(io)) == first(s, 5)
+        io = IOBuffer(; maxsize=5)
+        show(io, x)
+        @test String(take!(io)) == first(r, 5)
+        io = IOBuffer(; append=true)
+        write(io, "ab")
+        seekstart(io)
+        print(io, x)
+        @test String(take!(io)) == "ab" * s
+        io = IOBuffer()
+        write(io, 'a'^40)
+        seek(io, 2)
+        show(io, x) # overwriting must not touch what follows
+        @test String(take!(io)) == "aa" * r * 'a'^(38 - length(r))
+        io = PipeBuffer()
+        print(io, x)
+        show(io, x)
+        @test read(io, String) == s * r
+        @test_throws ArgumentError print(IOBuffer("abc"), x)
+        @test string("x = ", x, ", ", x) == "x = $s, $s"
+        print_show(io, x) = (print(io, x); show(io, x); show(IOContext(io, :compact => true), x))
+        io = IOBuffer()
+        print_show(io, x) # compile, and make room in `io`
+        truncate(io, 0)
+        @test (@allocated print_show(io, x)) == 0
+    end
+end
