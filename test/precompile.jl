@@ -693,7 +693,9 @@ precompile_test_harness(false) do dir
     cachefile, _ = @test_logs (:debug, r"Generating object cache file for FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), "")
     @test isfile(joinpath(cachedir, "FooBar.ji"))
-    Tsc = Bool(Base.JLOptions().use_pkgimages) ? Tuple{<:Vector, String, UInt128} : Tuple{<:Vector, Nothing, UInt128}
+    # FooBar and FooBar1 have no native code, so they get no package image file
+    @test !isfile(Base.ocachefile_from_cachefile(cachefile))
+    Tsc = Tuple{<:Vector, Nothing, UInt128}
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @test !isdefined(Main, :FooBar)
     @test !isdefined(Main, :FooBar1)
@@ -2244,6 +2246,8 @@ precompile_test_harness("WindowsCacheOverwrite") do load_path
     write(joinpath(load_path, "WindowsCacheOverwrite.jl"),
         """
         module WindowsCacheOverwrite
+        f() = "something"
+        precompile(f, ())
         end # module
         """)
     ji, ofile = Base.compilecache(Base.PkgId("WindowsCacheOverwrite"))
@@ -2253,6 +2257,7 @@ precompile_test_harness("WindowsCacheOverwrite") do load_path
         """
         module WindowsCacheOverwrite
         f() = "something new"
+        precompile(f, ())
         end # module
         """)
 
@@ -5908,13 +5913,13 @@ end
 # needed later, so the package is recompiled to the same path and loaded from it.
 precompile_test_harness("mismatched package image .so is recompiled") do load_path
     srcfile = joinpath(load_path, "MismatchedSo.jl")
-    write(srcfile, "module MismatchedSo\nf(x) = x + 1\nend\n")
+    write(srcfile, "module MismatchedSo\nf(x) = x + 1\nprecompile(f, (Int,))\nend\n")
     pkg = Base.PkgId("MismatchedSo")
     Base.compilecache(pkg)
     cachefile = only(Base.find_all_in_cache_path(pkg))
     ocachefile = Base.ocachefile_from_cachefile(cachefile)
     oldso = read(ocachefile)
-    write(srcfile, "module MismatchedSo\nf(x) = x + 2\nend\n")
+    write(srcfile, "module MismatchedSo\nf(x) = x + 2\nprecompile(f, (Int,))\nend\n")
     Base.compilecache(pkg)
     @test only(Base.find_all_in_cache_path(pkg)) == cachefile
     write(ocachefile, oldso)
