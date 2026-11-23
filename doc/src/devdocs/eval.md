@@ -76,6 +76,14 @@ By default, Julia uses [JuliaSyntax.jl](https://github.com/JuliaLang/JuliaSyntax
 AST. Historically, it used a small lisp program written in femtolisp, the source-code for which is
 distributed inside Julia in [src/flisp](https://github.com/JuliaLang/julia/tree/master/src/flisp).
 
+If you want to test the parser without re-building Julia in its entirety, you can run the frontend
+on its own as follows:
+
+    $ cd src
+    $ flisp/flisp
+    > (load "jlfrontend.scm")
+    > (jl-parse-file "<filename>")
+
 ## [Macro Expansion](@id dev-macro-expansion)
 
 When [`eval()`](@ref) encounters a macro, it expands that AST node before attempting to evaluate
