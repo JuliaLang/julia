@@ -1174,13 +1174,25 @@ static uintptr_t rotate_left(uintptr_t p, unsigned n) JL_NOTSAFEPOINT
 static NOINLINE uintptr_t probe_mangled_sp(uintptr_t *sp) JL_NOTSAFEPOINT
 {
     jmp_buf env;
+#if defined(_CPU_X86_)
+    // _setjmp saves the stack pointer as it is when the call returns. On i686
+    // its argument is on the stack until the caller pops it, so read the stack
+    // pointer before that.
+    int (*setjmp_fn)(struct __jmp_buf_tag*) = _setjmp;
+    asm volatile ("pushl %1\n\t"
+                  "call *%2\n\t"
+                  "movl %%esp, %0\n\t"
+                  "addl $4, %%esp"
+                  : "=r" (*sp)
+                  : "r" (env), "r" (setjmp_fn)
+                  : "eax", "ecx", "edx", "memory", "cc");
+#else
     _setjmp(env);
 #if defined(_CPU_AARCH64_) || defined(_CPU_ARM_)
     asm volatile ("mov %0, sp" : "=r" (*sp));
-#elif defined(_CPU_X86_64_)
-    asm volatile ("movq %%rsp, %0" : "=r" (*sp));
 #else
-    asm volatile ("movl %%esp, %0" : "=r" (*sp));
+    asm volatile ("movq %%rsp, %0" : "=r" (*sp));
+#endif
 #endif
     return ((uintptr_t*)&env)[LONG_JMP_SP_ENV_SLOT];
 }
