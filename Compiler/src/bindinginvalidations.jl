@@ -90,6 +90,7 @@ export_affecting_partition_flags(bpart::Core.BindingPartition) =
 
 function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core.BindingPartition, new_bpart::Core.BindingPartition, new_max_world::UInt)
     gr = b.globalref
+    image_binding_replaced() && drain_pending_image_scans!()
 
     (_, ileaf) = walk_binding_partition(b, invalidated_bpart, new_max_world, false)
     (_, nleaf) = walk_binding_partition(b, new_bpart, new_max_world+1, false)
@@ -175,9 +176,55 @@ invalidate_code_for_globalref!(gr::GlobalRef, invalidated_bpart::Core.BindingPar
 function scan_new_method!(method::Method, world::UInt, image_backedges_only::Bool)
     isdefined(method, :source) || return
     isa(method.source, MaybeCompressed) || return
-    if image_backedges_only && !has_image_globalref(method)
-        return
+    if image_backedges_only
+        has_image_globalref(method) || return
+        # These backedges are only read once an image binding has been replaced, so defer
+        # the scan until then. An image being written serializes them, so it scans now.
+        if !generating_output()
+            defer_image_scan!(method, world)
+            return
+        end
     end
+    _scan_method_source!(method, world, image_backedges_only)
+end
+
+# Lock-free list of methods whose image binding backedges are not installed yet.
+mutable struct PendingImageScan # mutable, so that `===` compares one address
+    const method::Method
+    const world::UInt
+    const next::Union{PendingImageScan,Nothing}
+end
+mutable struct PendingImageScans
+    @atomic head::Union{PendingImageScan,Nothing}
+end
+const PENDING_IMAGE_SCANS = PendingImageScans(nothing)
+
+image_binding_replaced() = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) != typemax(UInt)
+
+function defer_image_scan!(method::Method, world::UInt)
+    # Push before marking, so that a method marked scanned is always scanned or pending.
+    old = @atomic PENDING_IMAGE_SCANS.head
+    while true
+        old, ok = @atomicreplace PENDING_IMAGE_SCANS.head old => PendingImageScan(method, world, old)
+        ok && break
+    end
+    @atomic method.did_scan_source |= 0x1
+    nothing
+end
+
+# Install the deferred backedges. Only `invalidate_code_for_globalref!` calls this, under the
+# `world_counter_lock`, so drains never overlap. A load racing with a replacement may push
+# after the drain; the next invalidation picks it up.
+function drain_pending_image_scans!()
+    pending = @atomicswap PENDING_IMAGE_SCANS.head = nothing
+    while pending !== nothing
+        _scan_method_source!(pending.method, pending.world, true)
+        pending = pending.next
+    end
+    nothing
+end
+
+function _scan_method_source!(method::Method, world::UInt, image_backedges_only::Bool)
     src = _uncompressed_ir(method)
     foreachgr(src) do gr::GlobalRef
         b = convert(Core.Binding, gr)

@@ -16,6 +16,9 @@ Compiler/Runtime improvements
   pages that still hold live objects, instead of only the thread that allocated the page. This
   reduces the memory footprint of workloads that allocate many small objects on many threads and
   keep few of them, such as a language server that runs type inference repeatedly ([#63512]).
+* The optimizer now moves throw-only error paths out of small functions into separate functions,
+  so that the code that remains is cheap enough to inline. Wrapping the construction and throwing
+  of an error in a `@noinline` helper function is no longer needed for this ([#29688], [#64732]).
 
 Command-line option changes
 ---------------------------

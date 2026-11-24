@@ -332,17 +332,14 @@ function iterate(s::BitSet, (word, idx) = (CHK0, 0))
     trailing_zeros(word) + (idx - 1 + s.offset) << 6, (_blsr(word), idx)
 end
 
-@noinline _throw_bitset_notempty_error() =
-    throw(ArgumentError("collection must be non-empty"))
-
 function first(s::BitSet)
     idx = _bits_findnext(s.bits, 0)
-    idx == -1 ? _throw_bitset_notempty_error() : idx + intoffset(s)
+    idx == -1 ? throw(ArgumentError("collection must be non-empty")) : idx + intoffset(s)
 end
 
 function last(s::BitSet)
     idx = _bits_findprev(s.bits, (length(s.bits) << 6) - 1)
-    idx == -1 ? _throw_bitset_notempty_error() : idx + intoffset(s)
+    idx == -1 ? throw(ArgumentError("collection must be non-empty")) : idx + intoffset(s)
 end
 
 length(s::BitSet) = bitcount(s.bits) # = mapreduce(count_ones, +, s.bits; init=0)

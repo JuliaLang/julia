@@ -2269,6 +2269,30 @@ precompile_test_harness("WindowsCacheOverwrite") do load_path
     end
 end
 
+# A package image keeps the edge of an uninformative call, so the callee's code is kept too.
+precompile_test_harness("uninformative call site image coverage") do load_path
+    write(joinpath(load_path, "UninfCoverageDep.jl"),
+        """
+        module UninfCoverageDep
+        @noinline f(x) = Base.inferencebarrier(identity)(x)
+        end
+        """)
+    write(joinpath(load_path, "UninfCoverage.jl"),
+        """
+        module UninfCoverage
+        using UninfCoverageDep
+        g(v::Vector{Any}) = UninfCoverageDep.f(v[1])
+        g(Any[1])
+        end
+        """)
+    Base.compilecache(Base.PkgId("UninfCoverageDep"))
+    Base.compilecache(Base.PkgId("UninfCoverage"))
+    @eval using UninfCoverage
+    Dep = Base.root_module(Base.PkgId("UninfCoverageDep"))
+    fmi = only(Base.method_instances(Dep.f, (Any,), Base.get_world_counter()))
+    @test isdefined(fmi, :cache)
+end
+
 precompile_test_harness("Issue #48391") do load_path
     write(joinpath(load_path, "I48391.jl"),
         """
@@ -5365,6 +5389,35 @@ precompile_test_harness("pkgimage type cache dedup with unset supertype") do dir
         @eval $(Symbol(:unset_super_f, i))(::UnsetSuperDep.V{X}, ::X) where {X} = $i
     end
     @test npartial() == n
+end
+
+precompile_test_harness("pkgimage value parameters of new types") do dir
+    # A lookup hashes a value parameter through its type's field types, so a type that
+    # is new to the process must have them while the imports are resolved.
+    write(joinpath(dir, "NewValueTypesDep.jl"),
+          """
+          module NewValueTypesDep
+              struct P{T}; a::Int8; b::T; end
+          end
+          """)
+    write(joinpath(dir, "NewValueTypesUser.jl"),
+          """
+          module NewValueTypesUser
+              using NewValueTypesDep: P
+              const V = Any[Val{P{Int}(1, 2)}, Val{(:a, P{Float64}(1, 2.0))},
+                            Val{P{P{Int}}(1, P{Int}(3, 4))}]
+          end
+          """)
+    Base.compilecache(Base.PkgId("NewValueTypesDep"))
+    Base.compilecache(Base.PkgId("NewValueTypesUser"))
+    @eval using NewValueTypesDep
+    @eval using NewValueTypesUser
+    invokelatest() do
+        P, V = NewValueTypesDep.P, NewValueTypesUser.V
+        @test V[1] === Val{P{Int}(1, 2)}
+        @test V[2] === Val{(:a, P{Float64}(1, 2.0))}
+        @test V[3] === Val{P{P{Int}}(1, P{Int}(3, 4))}
+    end
 end
 
 # Interactive precompile output has to keep its colors: a TTY's implied `:color` must survive
