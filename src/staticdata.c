@@ -331,30 +331,35 @@ static int gmp_limb_size = 0;
 #define BIND_LOW_MASK (((uintptr_t)1 << BIND_LOW_BITS) - 1)
 #define BIND_PAYLOAD(x) (((x) & ~BIND_BIT) >> BIND_LOW_BITS)
 
+// This is an implementation detail of the writer.  When a pending relocation
+// refers to an object in the pointer-free section of the image, it's marked
+// with this bit.  Relocations to these objects become normal slide relocations
+// when the final image is written.
 #define BITS_ITEM ((uintptr_t)1 << (8 * sizeof(void*) - 2))
 
 typedef uint64_t import_t;
-enum { IMPORT_IMAGE, IMPORT_SPECIAL, IMPORT_FUNCTION, IMPORT_SYMBOL, IMPORT_SINGLETON, IMPORT_DATATYPE,
-       IMPORT_METHOD_INSTANCE, IMPORT_BINDING, IMPORT_SPECPTR };
+typedef enum { IMPORT_IMAGE, IMPORT_SPECIAL, IMPORT_FUNCTION, IMPORT_SYMBOL, IMPORT_SINGLETON, IMPORT_DATATYPE,
+               IMPORT_METHOD_INSTANCE, IMPORT_BINDING, IMPORT_SPECPTR } import_type_t;
 #define IMPORT_HAS_RECORD(t) (IMPORT_DATATYPE <= (t) && (t) <= IMPORT_BINDING)
-enum { FUNCTION_BUILTIN, FUNCTION_RUNTIME };
+typedef enum { FUNCTION_BUILTIN, FUNCTION_RUNTIME } function_kind_t;
 #define IMPORT_TYPE_OFFSET 60
+#define IMPORT_TYPE(x) ((import_type_t)((x) >> IMPORT_TYPE_OFFSET))
 #define IMPORT_ENCODE(type, payload) (((import_t)(type) << IMPORT_TYPE_OFFSET) | (import_t)(payload))
 #define IMPORT_PAYLOAD(x) ((x) & (((import_t)1 << IMPORT_TYPE_OFFSET) - 1))
 #define IMPORT_FUNCTION_KIND_OFFSET 57
 
-// A dependency reference, the payload of an IMPORT_IMAGE or IMPORT_SPECPTR import
 #define DEPREF_DEPS_BITS 21
 #define DEPREF_OFFSET_BITS 38
+#define DEPREF_ENCODE(depsidx, offset) (((uint64_t)(depsidx) << DEPREF_OFFSET_BITS) | (uint64_t)(offset))
+#define DEPREF_DEPS(x) ((x) >> DEPREF_OFFSET_BITS)
+#define DEPREF_OFFSET(x) ((x) & (((uint64_t)1 << DEPREF_OFFSET_BITS) - 1))
 
-// The auxdata record of an IMPORT_DATATYPE import (see doc/src/devdocs/sysimg.md)
 typedef struct {
     uintptr_t name, parameters, types, layout, instance, super; // relocs
     uint32_t hash;
     uint16_t flags; // the bit fields of jl_datatype_t, which follow `hash`, as the compiler lays them out
     uint16_t padding;
 } jl_type_record_t;
-// The auxdata records of IMPORT_BINDING and IMPORT_METHOD_INSTANCE imports
 typedef struct {
     uintptr_t mod, name; // relocs
 } jl_binding_record_t;
@@ -1253,7 +1258,7 @@ static uintptr_t add_import(jl_serializer_state *s, import_t imp) JL_NOTSAFEPOIN
     return BIND_BIT | idx << BIND_LOW_BITS;
 }
 
-static uintptr_t add_function_import(jl_serializer_state *s, int kind, size_t idx) JL_NOTSAFEPOINT
+static uintptr_t add_function_import(jl_serializer_state *s, function_kind_t kind, size_t idx) JL_NOTSAFEPOINT
 {
     return add_import(s, IMPORT_ENCODE(IMPORT_FUNCTION, ((import_t)kind << IMPORT_FUNCTION_KIND_OFFSET) | idx));
 }
@@ -1267,7 +1272,7 @@ static uint64_t depref(jl_serializer_state *s, image_metadata_t *meta, const voi
         jl_safe_printf("ERROR: reference to a dependency image does not fit\n");
         abort();
     }
-    return (depsidx << DEPREF_OFFSET_BITS) | offset;
+    return DEPREF_ENCODE(depsidx, offset);
 }
 
 static uintptr_t add_image_bind(jl_serializer_state *s, image_metadata_t *meta, const void *addr) JL_NOTSAFEPOINT
@@ -1348,7 +1353,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABL
         return add_image_bind(s, external_blob_metadata(v), v);
     if (s->incremental && jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(v)) && needs_uniquing(v, s->query_cache)) {
         uintptr_t dt = backref_id(s, jl_typeof(v));
-        assert((dt & BIND_BIT) && get_import(s->imports, BIND_PAYLOAD(dt)) >> IMPORT_TYPE_OFFSET == IMPORT_DATATYPE &&
+        assert((dt & BIND_BIT) && IMPORT_TYPE(get_import(s->imports, BIND_PAYLOAD(dt))) == IMPORT_DATATYPE &&
                "the type of a uniqued singleton has a record");
         return add_import(s, IMPORT_ENCODE(IMPORT_SINGLETON, BIND_PAYLOAD(dt)));
     }
@@ -1365,7 +1370,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABL
         // the first reference to an object that is written as a record places its record
         void **bp = ptrhash_bp(&s->object_imports, w);
         if (*bp == HT_NOTFOUND) {
-            int type = jl_is_datatype(w) ? IMPORT_DATATYPE : jl_is_method_instance(w) ? IMPORT_METHOD_INSTANCE : IMPORT_BINDING;
+            import_type_t type = jl_is_datatype(w) ? IMPORT_DATATYPE : jl_is_method_instance(w) ? IMPORT_METHOD_INSTANCE : IMPORT_BINDING;
             *bp = (void*)add_import(s, IMPORT_ENCODE(type, s->auxdata_size));
             s->auxdata_size += jl_is_datatype(w) ? sizeof(jl_type_record_t) :
                             jl_is_binding(w) ? sizeof(jl_binding_record_t) : sizeof(jl_mi_record_t);
@@ -2202,17 +2207,17 @@ static void jl_finish_memrefs(jl_serializer_state *s, char *base, jl_relocmaps_t
 static uintptr_t jl_resolve_depref(jl_loader_state *s, uint64_t ref) JL_NOTSAFEPOINT
 {
     assert(s->deps && "the system image has no dependencies");
-    return s->deps[ref >> DEPREF_OFFSET_BITS]->base + (ref & (((uint64_t)1 << DEPREF_OFFSET_BITS) - 1));
+    return s->deps[DEPREF_DEPS(ref)]->base + DEPREF_OFFSET(ref);
 }
 
 static uintptr_t jl_resolve_import(jl_loader_state *s, import_t imp, const char *strtab) JL_CANSAFEPOINT
 {
     uint64_t payload = IMPORT_PAYLOAD(imp);
-    switch (imp >> IMPORT_TYPE_OFFSET) {
+    switch (IMPORT_TYPE(imp)) {
     case IMPORT_IMAGE:
     case IMPORT_SPECPTR: {
         uintptr_t addr = jl_resolve_depref(s, payload);
-        if (imp >> IMPORT_TYPE_OFFSET == IMPORT_IMAGE)
+        if (IMPORT_TYPE(imp) == IMPORT_IMAGE)
             return addr;
         return (uintptr_t)jl_atomic_load_relaxed(&((jl_code_instance_t*)addr)->specptr.fptr);
     }
@@ -2220,7 +2225,7 @@ static uintptr_t jl_resolve_import(jl_loader_state *s, import_t imp, const char 
         return (uintptr_t)jl_current_task->ptls->root_task;
     case IMPORT_FUNCTION: {
         size_t idx = payload & (((import_t)1 << IMPORT_FUNCTION_KIND_OFFSET) - 1);
-        if (payload >> IMPORT_FUNCTION_KIND_OFFSET == FUNCTION_BUILTIN) {
+        if ((function_kind_t)(payload >> IMPORT_FUNCTION_KIND_OFFSET) == FUNCTION_BUILTIN) {
             assert(idx < jl_n_builtins);
             return (uintptr_t)jl_builtin_f_addrs[idx];
         }
@@ -4176,7 +4181,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
     s.imports_resolved = (uintptr_t*)malloc_s(nimports * sizeof(uintptr_t));
     s.pending = (uint8_t*)calloc_s(nimports);
     for (size_t i = 0; i < nimports; i++) {
-        import_t type = imports[i] >> IMPORT_TYPE_OFFSET;
+        import_type_t type = IMPORT_TYPE(imports[i]);
         s.imports_resolved[i] = jl_resolve_import(&s, imports[i], strtab);
         s.pending[i] = IMPORT_HAS_RECORD(type) || type == IMPORT_SINGLETON;
     }
@@ -4189,7 +4194,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
     // MethodInstances read as NULL until they are resolved.
     char *records = image_section(buf, h->auxdata);
     for (size_t i = 0; i < nimports; i++) {
-        import_t type = imports[i] >> IMPORT_TYPE_OFFSET;
+        import_type_t type = IMPORT_TYPE(imports[i]);
         if (type == IMPORT_SINGLETON) {
             assert(IMPORT_PAYLOAD(imports[i]) < i && "a singleton must follow its type");
             s.imports_resolved[i] = (uintptr_t)((jl_datatype_t*)s.imports_resolved[IMPORT_PAYLOAD(imports[i])])->instance;
@@ -4264,7 +4269,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
     jl_typecache_region_begin(&region);
     JL_TRY {
         for (size_t i = 0; i < nimports; i++) {
-            import_t type = imports[i] >> IMPORT_TYPE_OFFSET;
+            import_type_t type = IMPORT_TYPE(imports[i]);
             if (type == IMPORT_SINGLETON) {
                 jl_datatype_t *dt = (jl_datatype_t*)s.imports_resolved[IMPORT_PAYLOAD(imports[i])];
                 assert(dt->instance);
@@ -4305,7 +4310,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
 #ifndef NDEBUG
     // a type that the lookup missed because it compared a provisional type is a second copy
     for (size_t i = 0; i < nimports; i++) {
-        if (imports[i] >> IMPORT_TYPE_OFFSET == IMPORT_DATATYPE)
+        if (IMPORT_TYPE(imports[i]) == IMPORT_DATATYPE)
             assert(jl_lookup_cache_type_((jl_datatype_t*)s.imports_resolved[i]) == (jl_datatype_t*)s.imports_resolved[i] &&
                    "a type was looked up before what it compares by identity was final");
     }
@@ -4314,7 +4319,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
     JL_UNLOCK(&typecache_lock); // Might GC
     // resolve the MethodInstances, whose records refer to the types
     for (size_t i = 0; i < nimports; i++) {
-        if (imports[i] >> IMPORT_TYPE_OFFSET != IMPORT_METHOD_INSTANCE)
+        if (IMPORT_TYPE(imports[i]) != IMPORT_METHOD_INSTANCE)
             continue;
         jl_mi_record_t *rec = (jl_mi_record_t*)(records + IMPORT_PAYLOAD(imports[i]));
         jl_resolve_relocs(&s, (uintptr_t*)rec, sizeof(*rec) / sizeof(uintptr_t));
