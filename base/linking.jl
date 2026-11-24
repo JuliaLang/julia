@@ -190,7 +190,8 @@ function _find_loaded(re::Regex)
     error("no loaded shared object matching $re")
 end
 
-function link_image_cmd(path, out; is_sysimage::Bool = false, debug_runtime::Bool = isdebugbuild())
+function link_image_cmd(path, out; is_sysimage::Bool = false, debug_runtime::Bool = isdebugbuild(),
+                        install_name::Union{Nothing, String} = nothing)
     PRIVATE_LIBDIR = "-L$(private_libdir())"
     LIBDIR = "-L$(libdir())"
     SHLIBDIR = "-L$(shlibdir())"
@@ -235,12 +236,22 @@ function link_image_cmd(path, out; is_sysimage::Bool = false, debug_runtime::Boo
     end
 
     V = verbose_linking() ? "--verbose" : ""
-    `$(ld(; strict_definitions = is_sysimage)) $V $SHARED -o $out $crtbegin $(whole_archive(path)) $PRIVATE_LIBDIR $LIBDIR $SHLIBDIR $LIBS $crtend`
+    # A library that links against this one records its install name as the path to load it from
+    INSTALL_NAME = Sys.isapple() && install_name !== nothing ? `-install_name $install_name` : ``
+    `$(ld(; strict_definitions = is_sysimage)) $V $SHARED -o $out $INSTALL_NAME $crtbegin $(whole_archive(path)) $PRIVATE_LIBDIR $LIBDIR $SHLIBDIR $LIBS $crtend`
 end
 
 function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout;
-                    is_sysimage::Bool = false, debug_runtime::Bool = isdebugbuild())
-    run(link_image_cmd(path, out; is_sysimage, debug_runtime), Base.DevNull(), internal_stderr, internal_stdout)
+                    is_sysimage::Bool = false, debug_runtime::Bool = isdebugbuild(),
+                    install_name::Union{Nothing, String} = nothing)
+    run(link_image_cmd(path, out; is_sysimage, debug_runtime, install_name), Base.DevNull(), internal_stderr, internal_stdout)
+end
+
+# Loading all of these libraries with one `dlopen` is much cheaper on macOS than one each
+function link_closure_image(out, libs::Vector{String}; install_name::String = out, rpaths::Vector{String} = String[])
+    weak = Cmd(collect(Iterators.flatmap(l -> ("-weak_library", l), libs)))
+    rpath = Cmd(collect(Iterators.flatmap(r -> ("-rpath", r), rpaths)))
+    run(`$(ld()) $SHARED -o $out -install_name $install_name $rpath $weak`, Base.DevNull(), Base.DevNull(), Base.DevNull())
 end
 
 

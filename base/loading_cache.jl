@@ -186,6 +186,7 @@ function evict_cachefile(cachefile::String, guard::Union{Nothing,Filesystem.File
         rm(ocachefile_from_cachefile(cachefile); force=true)
         @static if Sys.isapple()
             rm(ocachefile_from_cachefile(cachefile) * ".dSYM"; force=true, recursive=true)
+            rm(closure_image_from_cachefile(cachefile); force=true)
         end
     catch e
         e isa IOError || rethrow()

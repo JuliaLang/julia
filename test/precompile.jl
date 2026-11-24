@@ -5936,6 +5936,54 @@ precompile_test_harness("mismatched package image .so is recompiled") do load_pa
     @test read(ocachefile) != oldso
 end
 
+# On macOS a package's closure image loads the package images of its dependencies in one
+# `dlopen`, also from a depot that has moved. A broken one is skipped, and the images are
+# then loaded one at a time.
+if Sys.isapple() && Bool(Base.JLOptions().use_pkgimages)
+precompile_test_harness("closure image") do load_path
+    deps = ["ClosureDep$i" for i in 1:4]
+    for dep in deps
+        write(joinpath(load_path, "$dep.jl"), "module $dep\nf(x) = x + 1\nprecompile(f, (Int,))\nend\n")
+    end
+    write(joinpath(load_path, "ClosureTop.jl"), """
+        module ClosureTop
+        $(join(("using $dep" for dep in deps), "\n"))
+        g(x) = $(join(("$dep.f(x)" for dep in deps), " + "))
+        precompile(g, (Int,))
+        end
+        """)
+    cachefile, _ = Base.compilecache(Base.PkgId("ClosureTop"))
+    closure = Base.closure_image_from_cachefile(cachefile)
+    @test isfile(closure)
+    # the paths of the images dyld loads while the package is loaded from `depot`
+    function loaded_images(depot)
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e "using ClosureTop; ClosureTop.g(1) == 8 || exit(1)"`,
+                     "DYLD_PRINT_LIBRARIES" => "1",
+                     "JULIA_DEPOT_PATH" => join([depot; DEPOT_PATH[2:end]], ':'),
+                     "JULIA_LOAD_PATH" => join([load_path, "@stdlib"], ':'))
+        log = IOBuffer()
+        success(pipeline(cmd; stdout, stderr=log)) || return String[]
+        return [last(split(l)) for l in eachline(seekstart(log)) if startswith(l, "dyld[")]
+    end
+    # each image is loaded once, from the depot directory named `dir`
+    from_depot(images, dir) = all(deps) do dep
+        found = filter(endswith("/$dep.dylib"), images)
+        return length(found) == 1 && occursin("/$dir/", only(found))
+    end
+    moved = joinpath(mktempdir(), "moved_depot")
+    cp(DEPOT_PATH[1], moved)
+    for (depot, dir) in ((DEPOT_PATH[1], basename(DEPOT_PATH[1])), (moved, "moved_depot"))
+        images = loaded_images(depot)
+        @test count(endswith(basename(closure)), images) == 1
+        @test from_depot(images, dir)
+    end
+    write(closure, "not a library")
+    images = loaded_images(DEPOT_PATH[1])
+    @test !any(endswith(basename(closure)), images)
+    @test from_depot(images, basename(DEPOT_PATH[1]))
+end
+end
+
 # Asking about several packages at once gives the same answers as asking about each one.
 precompile_test_harness("isprecompiled for several packages") do load_path
     depfile = joinpath(load_path, "BatchDep.jl")
