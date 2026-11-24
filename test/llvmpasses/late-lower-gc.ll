@@ -46,9 +46,6 @@ top:
 define {} addrspace(10)* @gc_alloc_lowering() {
 top:
 ; CHECK-LABEL: @gc_alloc_lowering
-; FINAL-DSE-LABEL: @gc_alloc_lowering
-; FINAL-DSE: %v = call noalias nonnull {{.*}} @ijl_gc_small_alloc
-; FINAL-DSE-NEXT: ret ptr addrspace(10) %v
     %pgcstack = call {}*** @julia.get_pgcstack()
     %0 = bitcast {}*** %pgcstack to {}**
     %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
@@ -60,6 +57,39 @@ top:
     %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 8, {} addrspace(10)* @tag)
 ; CHECK-NEXT: ret ptr addrspace(10) %v
     ret {} addrspace(10)* %v
+}
+
+; This is the allocation-use shape from the original failure: a fresh Core.Const
+; used only by a phi and an identity comparison. Those are non-capturing uses, so
+; DSE can discard stores into the fresh object even though the allocation remains.
+; The tag must therefore reach the allocator as an argument, not through a store.
+define i1 @gc_alloc_phi_cmp(i1 %cond, {} addrspace(10)* %other) {
+top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %0 = bitcast {}*** %pgcstack to {}**
+    %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
+    br i1 %cond, label %alloc, label %noalloc
+
+alloc:
+; FINAL-DSE-LABEL: @gc_alloc_phi_cmp(
+; FINAL-DSE: alloc:
+; FINAL-DSE: [[V:%.*]] = call noalias nonnull {{.*}} @ijl_gc_small_alloc(ptr {{.*}}, i32 {{[0-9]+}}, i32 16, i64 {{.*}} @tag {{.*}})
+; FINAL-DSE-NOT: store atomic
+; FINAL-DSE: br label %merge
+    %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 8, {} addrspace(10)* @tag)
+    br label %merge
+
+noalloc:
+    br label %merge
+
+merge:
+; FINAL-DSE: merge:
+; FINAL-DSE-NEXT: [[VALUE:%.*]] = phi ptr addrspace(10) [ [[V]], %alloc ], [ %other, %noalloc ]
+; FINAL-DSE-NEXT: [[CMP:%.*]] = icmp eq ptr addrspace(10) [[VALUE]], @tag
+; FINAL-DSE-NEXT: ret i1 [[CMP]]
+    %value = phi {} addrspace(10)* [ %v, %alloc ], [ %other, %noalloc ]
+    %cmp = icmp eq {} addrspace(10)* %value, @tag
+    ret i1 %cmp
 }
 
 ; Confirm that loadedval instruction does not contain invariant.load metadata
@@ -511,6 +541,13 @@ exit:
 attributes #10 = { nounwind willreturn memory(argmem: read) "julia.safepoint" }
 attributes #11 = { nounwind willreturn memory(read) "julia.safepoint" }
 attributes #12 = { nounwind willreturn memory(argmem: read) }
+
+; The physical allocator sizes include the hidden header, but their returned
+; pointers start after it, so they must not carry allocsize.
+; FINAL: declare noalias nonnull ptr addrspace(10) @ijl_gc_small_alloc(ptr, i32, i32, i64) #[[PHYSICAL_ALLOC_ATTRS:[0-9]+]]
+; FINAL: declare noalias nonnull ptr addrspace(10) @ijl_gc_big_alloc(ptr, i64, i64) #[[PHYSICAL_ALLOC_ATTRS]]
+; FINAL: attributes #[[PHYSICAL_ALLOC_ATTRS]] = { nounwind willreturn allockind("alloc") memory(argmem: read, inaccessiblemem: readwrite) }
+
 ; CHECK: attributes [[ATTRS_STRIPPED]] = { nounwind willreturn "julia.safepoint" }
 
 !0 = !{i64 0, i64 23}
