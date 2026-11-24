@@ -1965,6 +1965,19 @@ end
     end
 end
 
+# a package adding a broad `similar` method must not invalidate showing a list
+let script = """
+        using Markdown
+        sprint(show, MIME"text/plain"(), md"- a\\n- b\\n\\n  c\\n\\n1. x\\n2. y")
+        log = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+        struct Num <: Real end
+        Base.similar(::Array, ::Type{Num}, ::NTuple{N,Int}) where {N} = error()
+        ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+        print(any(x -> x isa Core.MethodInstance && x.def isa Method && x.def.name === :term, log))
+        """
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == "false"
+end
+
 include("test_spec_roundtrip_common.jl")
 include("test_spec_roundtrip_github.jl")
 include("test_spec_roundtrip_julia.jl")
