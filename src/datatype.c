@@ -872,6 +872,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             haspadding |= structsz > sz;
             sz = structsz;
         }
+
+        if (alignm > UINT16_MAX)
+            jl_errorf("alignment out of bounds");
+
         if (should_malloc && npointers)
             pointers = (uint32_t*)malloc_s(npointers * sizeof(uint32_t));
         else
@@ -891,9 +895,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             }
         }
         assert(ptr_i == npointers);
-
-        if (alignm > UINT16_MAX)
-            jl_errorf("alignment out of bounds");
 
         st->layout = jl_get_layout(sz, nfields, npointers, alignm, haspadding, isbitsegal, 0, 0, desc, pointers);
         if (should_malloc) {
