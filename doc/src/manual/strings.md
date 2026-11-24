@@ -82,7 +82,7 @@ is a valid code point, use the [`isvalid`](@ref) function:
 
 ```jldoctest
 julia> Char(0x110000)
-'\U110000': Unicode U+110000 (category In: Invalid, too high)
+'\xf4\x90\x80\x80': Unicode U+110000 (category In: Invalid, too high)
 
 julia> isvalid(Char, 0x110000)
 false
@@ -442,10 +442,10 @@ julia> isvalid.(collect(s))
  1
 
 julia> s2 = "\xf7\xbf\xbf\xbf"
-"\U1fffff"
+"\xf7\xbf\xbf\xbf"
 
 julia> foreach(display, s2)
-'\U1fffff': Unicode U+1FFFFF (category In: Invalid, too high)
+'\xf7\xbf\xbf\xbf': Unicode U+1FFFFF (category In: Invalid, too high)
 ```
 
 We can see that the first two code units in the string `s` form an overlong encoding of
