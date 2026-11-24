@@ -8,6 +8,7 @@ effects
 inference
 lattice
 inline
+outlining
 interpreter_exec
 invalidation
 precompile
