@@ -17,12 +17,11 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     // (annotated by CancellationLowering) take their slow paths through the
     // reset-safe entry points, which unpublish/republish the region
     // themselves. The inline fastpath below is safe to span as-is: it only
-    // loads, bumps the cursor, and updates the allocation counter - a
-    // delivered reset can at worst abandon an unreferenced, still-untagged
-    // hole in the bump region and skew the allocation counter. Marking is
-    // not confused by the late tag store: it never reads headers of
-    // unreachable memory (sweep is line-liveness based), and on the normal
-    // path no safepoint lies between allocation and the tag store.
+    // loads, initializes the tag, bumps the cursor, and updates the allocation
+    // counter - a delivered reset can at worst abandon an unreferenced hole in
+    // the bump region and skew the allocation counter. Marking is not confused
+    // by the abandoned memory: it never reads headers of unreachable memory
+    // (sweep is line-liveness based).
     bool resetSafe = target->hasMetadata("julia.reset_region");
     uint64_t derefBytes = 0;
     if (auto CI = dyn_cast<ConstantInt>(target->getArgOperand(1))) {
@@ -96,6 +95,9 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 
                 // fastpath
                 builder.SetInsertPoint(fastpath);
+                auto tag_ptr = builder.CreateIntToPtr(result, PointerType::getUnqual(F.getContext()));
+                auto tag_store = builder.CreateAlignedStore(type, tag_ptr, Align(sizeof(void *)));
+                tag_store->setOrdering(AtomicOrdering::Unordered);
                 builder.CreateStore(new_cursor, cursor_ptr);
 
                 // ptls->gc_tls_common.gc_num.allocd += osize;

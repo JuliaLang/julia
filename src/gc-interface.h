@@ -219,18 +219,17 @@ struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void
 // offset to the arena in which we're allocating is passed in the second parameter, and the
 // object size in the third parameter. If thread-local allocators are used, then this
 // function should allocate in the thread-local allocator of the thread referenced by the
-// jl_ptls_t argument. An additional (last) parameter containing information about the type
-// of the object being allocated may be used to record an allocation of that type in the
-// allocation profiler.
+// jl_ptls_t argument. The function must set the object's type to the last parameter, which
+// may also be used to record an allocation of that type in the allocation profiler.
 JL_DLLEXPORT struct _jl_value_t *jl_gc_small_alloc(struct _jl_tls_states_t *ptls,
                                                    int offset, int osize,
                                                    struct _jl_value_t *type) JL_CANSAFEPOINT;
 // Description: Allocates large objects and increments Julia allocation counters. Size of
 // the object header must be included in the object size. If thread-local allocators are
 // used, then this function should allocate in the thread-local allocator of the thread
-// referenced by the jl_ptls_t argument. An additional (last) parameter containing
-// information about the type of the object being allocated may be used to record an
-// allocation of that type in the allocation profiler.
+// referenced by the jl_ptls_t argument. The function must set the object's type to the last
+// parameter, which may also be used to record an allocation of that type in the allocation
+// profiler.
 JL_DLLEXPORT struct _jl_value_t *jl_gc_big_alloc(struct _jl_tls_states_t *ptls, size_t sz,
                                                  struct _jl_value_t *type) JL_CANSAFEPOINT;
 // Reset-safe variants of jl_gc_small_alloc/jl_gc_big_alloc/jl_gc_alloc_typed/
