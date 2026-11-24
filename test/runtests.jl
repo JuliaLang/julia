@@ -188,9 +188,10 @@ cd(@__DIR__) do
     #   * https://github.com/JuliaLang/julia/pull/29384
     #   * https://github.com/JuliaLang/julia/pull/40348
     # If the `JULIA_TEST_USE_MULTIPLE_WORKERS` environment variable is set to `true`, we use
-    # multiple worker processes regardless of the value of `net_on`.
-    # Otherwise, we use multiple worker processes if and only if `net_on` is true.
-    use_workers = net_on || Base.get_bool_env("JULIA_TEST_USE_MULTIPLE_WORKERS", false)
+    # worker processes regardless of the value of `net_on`. If it is set to `false`, we do
+    # not use them and run all tests in this process, e.g. to run a test under a debugger.
+    # Otherwise, we use worker processes if and only if `net_on` is true.
+    use_workers = Base.get_bool_env("JULIA_TEST_USE_MULTIPLE_WORKERS", net_on; throw=true)
     # Number of workers that run tests. A serial run still uses one worker, so that this
     # process only coordinates and the worker can be replaced (see `max_worker_rss` and
     # `recycle_worker_tests`). If workers are not allowed, or if all tests only run on
