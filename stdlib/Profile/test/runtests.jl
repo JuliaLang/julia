@@ -110,11 +110,11 @@ close(ch)
 test_has_task_profiler_sample_in_buffer()
 
 @testset "Profile.print() groupby options on a task profile" begin
-    data, lidict = Profile.retrieve()
+    rawdata, lidict = Profile.retrieve()
     # the task profiler records -1 as the thread id of a task that isn't running on one,
     # which the grouped report has to tolerate. Such a sample isn't guaranteed to occur
     # naturally (#62575), so mark one that way.
-    data = copy(data)
+    data = copy(rawdata)
     block_end = findfirst(i -> Profile.is_block_end(data, i), eachindex(data))
     @test block_end !== nothing
     data[block_end - Profile.META_OFFSET_THREADID] = reinterpret(UInt, -1)
@@ -226,7 +226,7 @@ end
         io = IOBuffer()
         Profile.print(IOContext(io, :displaysize => (50, 120)), data, lidict; kwargs...)
         lines = split(String(take!(io)), '\n')
-        return lines[3:findfirst(startswith("Total snapshots"), lines) - 1]
+        return lines[3:something(findfirst(startswith("Total snapshots"), lines)) - 1]
     end
     @test printed(format = :tree, recur = :flat) == [
         " ╎3 /a/file3.jl:3  f3",
@@ -425,7 +425,7 @@ end
 
 function run_with_watchdog(cmd, timeout=600)
     p = open(cmd)
-    t = Timer(timeout) do t
+    t = Timer(timeout) do _
         # should be under 10 seconds normally, so give it 10 minutes then report failure
         # n.b.: it was observed in an interactive CI session that a 2 minute timeout is not
         #       sufficient when the machine is under extremely high load which happens
@@ -470,7 +470,7 @@ end
         @profile println("done")
         """
     good = true
-    for i=1:100
+    for _=1:100
         s = run_with_watchdog(`$cmd -t2 -e $script`, 5)
         good &= occursin("done", s)
     end
@@ -492,7 +492,7 @@ if Sys.isbsd() || Sys.islinux()
             finally
                 closewrite(iob)
             end
-            t = Timer(120) do t
+            t = Timer(120) do _
                 # should be under 10 seconds, so give it 2 minutes then report failure
                 println("KILLING siginfo/sigusr1 test BY PROFILE TEST WATCHDOG\n")
                 kill(p, Base.SIGQUIT)
@@ -520,7 +520,7 @@ if Sys.isbsd() || Sys.islinux()
                 end
                 close(notify_exit) # notify test finished
                 wait(eof) # wait for test completion
-                s = read(iob, String) # consume test output from buffer
+                read(iob, String) # consume test output from buffer
                 close(t)
             catch
                 close(notify_exit)
@@ -573,7 +573,7 @@ end
 # Also used by heapsnapshot_reassemble.jl, which runs under MMTk too.
 function snapshot_array(sshot::AbstractString, key::AbstractString)
     start = last(findfirst("\"$key\":[", sshot)) + 1
-    section = strip(sshot[start:findnext(==(']'), sshot, start)-1])
+    section = strip(sshot[start:something(findnext(==(']'), sshot, start))-1])
     return isempty(section) ? UInt[] : parse.(UInt, split(section, ','))
 end
 
@@ -671,8 +671,8 @@ end
         @test sshot != ""
 
         # structural check: the node/edge arrays must have the expected number of fields
-        node_count = parse(Int, match(r"\"node_count\":(\d+)", sshot).captures[1])
-        edge_count = parse(Int, match(r"\"edge_count\":(\d+)", sshot).captures[1])
+        node_count = Profile.HeapSnapshot.metadata_count(sshot, "node_count", out_file)
+        edge_count = Profile.HeapSnapshot.metadata_count(sshot, "edge_count", out_file)
         @test node_count > 0
         @test edge_count > 0
         @test length(snapshot_array(sshot, "nodes")) == 7 * node_count

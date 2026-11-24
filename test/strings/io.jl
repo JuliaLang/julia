@@ -154,6 +154,17 @@
         str= "aaa \\g \\n"
         @test "aaa \\g \n" == unescape_string(str, ['g'])
         @test "aaa \\g \\n" == unescape_string(str, ['g', 'n'])
+
+        # hex_as_char decodes \x as a code point rather than a raw byte
+        @test unescape_string("\\xe9"; hex_as_char=true) == "é"
+        @test unescape_string("\\xFF"; hex_as_char=true) == "ÿ"
+        @test unescape_string("\\x41\\xe9\\n"; hex_as_char=true) == "Aé\n"
+        @test unescape_string("\\\\xe9"; hex_as_char=true) == "\\xe9"
+        @test unescape_string("\\xe9\\g", ['g']; hex_as_char=true) == "é\\g"
+        @test unescape_string("\\xe9"; hex_as_char=false) == "\xe9"
+        @test sprint(unescape_string, "\\xe9") == "\xe9"
+        @test sprint(io -> unescape_string(io, "\\xe9"; hex_as_char=true)) == "é"
+        @test_throws ArgumentError unescape_string("\\xg"; hex_as_char=true)
     end
     @test Base.escape_raw_string(raw"\"\\\"\\-\\") == "\\\"\\\\\\\"\\\\-\\\\"
     @test Base.escape_raw_string(raw"`\`\\-\\") == "\`\\\`\\\\-\\\\"

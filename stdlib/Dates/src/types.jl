@@ -101,8 +101,8 @@ struct UTInstant{P<:Period} <: Instant
 end
 
 # Convenience default constructors
-UTM(x) = UTInstant(Millisecond(x))
-UTD(x) = UTInstant(Day(x))
+UTM(x) = UTInstant{Millisecond}(Millisecond(x))
+UTD(x) = UTInstant{Day}(Day(x))
 
 # Calendar types provide rules for interpreting instant
 # timelines in human-readable form.
@@ -677,6 +677,18 @@ function Timestamp{P}(d::Date, t::Time=Time(0)) where {P}
     return Timestamp{P}(UTInstant(P(ticks)))
 end
 
+# Reject a `UTInstant` of another period type, which the fallback constructors below would
+# take for a year. It is not converted, since its epoch depends on the type that held it.
+# The period type of the instant gets its own parameter `Q`: with `::UTInstant` instead,
+# dispatch would prefer this method to the inner constructor `Timestamp{P}(::UTInstant{P})`
+# (#62308).
+DateTime(::UTInstant{Q}) where {Q} =
+    throw(ArgumentError("DateTime requires a UTInstant{$Millisecond}, got a UTInstant{$Q}"))
+Date(::UTInstant{Q}) where {Q} =
+    throw(ArgumentError("Date requires a UTInstant{$Day}, got a UTInstant{$Q}"))
+Timestamp{P}(::UTInstant{Q}) where {P,Q} =
+    throw(ArgumentError("Timestamp{$P} requires a UTInstant{$P}, got a UTInstant{$Q}"))
+
 # Fallback constructors
 DateTime(y, m=1, d=1, h=0, mi=0, s=0, ms=0, ampm::AMPM=TWENTYFOURHOUR) = DateTime(Int64(y), Int64(m), Int64(d), Int64(h), Int64(mi), Int64(s), Int64(ms), ampm)
 Date(y, m=1, d=1) = Date(Int64(y), Int64(m), Int64(d))
@@ -686,9 +698,9 @@ Timestamp{P}(y, m=1, d=1, h=0, mi=0, s=0, ms=0, us=0, ns=0, ampm::AMPM=TWENTYFOU
 
 # Traits, Equality
 Base.isfinite(::Union{Type{T}, T}) where {T<:TimeType} = true
-calendar(dt::DateTime) = ISOCalendar
-calendar(dt::Date) = ISOCalendar
-calendar(dt::Timestamp) = ISOCalendar
+calendar(::DateTime) = ISOCalendar
+calendar(::Date) = ISOCalendar
+calendar(::Timestamp) = ISOCalendar
 
 """
     eps(::Type{DateTime})::Millisecond
@@ -746,7 +758,7 @@ Base.typemin(::Type{Timestamp}) = typemin(Timestamp{Nanosecond})
 Base.typemin(::Type{Timestamp{P}}) where {P} = Timestamp{P}(UTInstant(typemin(P)))
 Base.typemin(x::Timestamp) = typemin(typeof(x))
 # Date-DateTime promotion, isless, ==
-Base.promote_rule(::Type{Date}, x::Type{DateTime}) = DateTime
+Base.promote_rule(::Type{Date}, ::Type{DateTime}) = DateTime
 Base.promote_rule(::Type{Date}, ::Type{Timestamp{P}}) where {P} = Timestamp{P}
 # Promote to the finer resolution. Package periods may have no period promotion rules.
 Base.promote_rule(::Type{DateTime}, ::Type{Timestamp{P}}) where {P} = Timestamp{timestamp_finer(P, Millisecond)}

@@ -12,7 +12,7 @@ const URL_REGEX = r"""
     (?<user>.*?)
     (?:\:(?<password>.*?))?@
 )?
-(?<host>[A-Za-z0-9\-\.]+)
+(?<host>[A-Za-z0-9\-\.*]+)
 (?(<scheme>)
     # Only parse port when not using scp-like syntax
     (?:\:(?<port>\d+))?
@@ -171,6 +171,7 @@ end
 
 function credential_identifier(url::AbstractString)
     m = match(URL_REGEX, url)
+    m === nothing && throw(ArgumentError("Unable to parse URL"))
     scheme = something(m[:scheme], SubString(""))
     host = something(m[:host])
     credential_identifier(scheme, host)

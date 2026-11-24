@@ -3431,3 +3431,14 @@ end
         end
     end
 end
+
+@testset "rem and div just below a half with RoundNearestTiesAway" begin
+    for T in (Float16, Float32, Float64, BigFloat), y in (one(T), -one(T))
+        x = -copysign(prevfloat(T(0.5)), y)
+        @test isequal(rem(x, y, RoundNearestTiesAway), x)
+        @test iszero(div(x, y, RoundNearestTiesAway))
+    end
+    x, y = Float16(-2047), Float16(4096)
+    @test isequal(rem(x, y, RoundNearestTiesAway), x)
+    @test iszero(div(x, y, RoundNearestTiesAway))
+end

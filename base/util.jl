@@ -372,16 +372,21 @@ function getpass(input::TTY, output::IO, prompt::AbstractString; with_suffix::Bo
         flush(output)
 
         s = SecretBuffer()
-        plen = 0
         while true
             c = _getch()
             if c == 0xff || c == UInt8('\n') || c == UInt8('\r') || c == 0x04
                 break # EOF or return
-            elseif c == 0x00 || c == 0xe0
+            elseif Sys.iswindows() && (c == 0x00 || c == 0xe0)
                 _getch() # ignore function/arrow keys
-            elseif c == UInt8('\b') && plen > 0
-                plen -= 1 # delete last character on backspace
-            elseif !iscntrl(Char(c)) && plen < 128
+            elseif c == UInt8('\b') || c == 0x7f
+                while s.size > 0
+                    b = s.data[s.size]
+                    s.data[s.size] = 0x00
+                    s.size -= 1
+                    !Sys.iswindows() && is_valid_continuation(b) || break
+                end
+                seekend(s)
+            elseif c >= 0x20
                 write(s, c)
             end
         end
@@ -540,7 +545,6 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
     return unsafe_crc32c(buf, readbytes!(io, buf, min(nb, length(buf))), crc)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
-_crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
 _crc32c(x::UInt128, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, x, 16)
 _crc32c(x::UInt64, crc::UInt32=0x00000000) =
@@ -590,7 +594,8 @@ Stacktrace:
 ```
 """
 macro kwdef(expr)
-    expr = macroexpand(__module__, expr) # to expand @static
+    expr_orig = macroexpand(__module__, expr; legacyscope=false) # to expand @static
+    expr = Meta.unescape(expr_orig)
     isexpr(expr, :struct) || error("Invalid usage of @kwdef")
     _, T, fieldsblock = expr.args
     if T isa Expr && T.head === :<:
@@ -615,7 +620,7 @@ macro kwdef(expr)
         if T_no_esc isa Symbol
             sig = Expr(:call, T, Expr(:parameters, parameters...))
             body = Expr(:block, __source__, Expr(:call, T, fieldnames...))
-            kwdefs = esc(Expr(:function, sig, body))
+            kwdefs = Expr(:function, sig, body)
         elseif isexpr(T_no_esc, :curly)
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
@@ -630,17 +635,18 @@ macro kwdef(expr)
             body2 = Expr(:block, __source__, Expr(:call, SQ, fieldnames...))
             sig2 = :($(Expr(:call, SQ, Expr(:parameters, parameters...))) where {$(P...)})
             def2 = Expr(:function, sig2, body2)
-            kwdefs = esc(Expr(:block, def1, def2))
+            kwdefs = Expr(:block, def1, def2)
         else
             error("Invalid usage of @kwdef")
         end
     else
         kwdefs = nothing
     end
-    return quote
-        $(esc(:($Base.@__doc__ $expr)))
-        $kwdefs
-    end
+    def = Expr(:struct, expr.args...)
+    expr.head = :block
+    # place the constructors in the right escape/hygienic-scope layer
+    expr.args = Any[:($Base.@__doc__ $def), kwdefs]
+    return esc(expr_orig)
 end
 
 # @kwdef helper function
@@ -654,7 +660,7 @@ function extract_names_and_defvals_from_kwdef_fieldblock!(block, names, defvals)
             extract_names_and_defvals_from_kwdef_fieldblock!(item, names, defvals)
             for j in n+1:length(defvals)
                 if !isnothing(defvals[j])
-                    defvals[j] = Expr(item.head, defvals[j])
+                    defvals[j] = Expr(item.head, defvals[j], item.args[2:end]...)
                 end
             end
         else
@@ -681,7 +687,9 @@ function def_name_defval_from_kwdef_fielddef(kwdef)
         return Expr(kwdef.head, def), name, defval
     elseif kwdef isa Expr && kwdef.head in (:escape, :var"hygienic-scope")
         def, name, defval = @something(def_name_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
-        return Expr(kwdef.head, def), name, isnothing(defval) ? defval : Expr(kwdef.head, defval)
+        return (Expr(kwdef.head, def, kwdef.args[2:end]...),
+                name,
+                isnothing(defval) ? defval : Expr(kwdef.head, defval, kwdef.args[2:end]...))
     end
 end
 

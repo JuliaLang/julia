@@ -1071,6 +1071,18 @@ end
     end
     @test _bitcast_trigger(1) === Ptr{Nothing}(0)
     @test _bitcast_trigger(3) === Ptr{Nothing}(0)
+
+@testset "bitcast float <-> pointer" begin
+    # issue #63218: codegen used to emit inttoptr on a float operand and
+    # abort in the LLVM verifier; coerce through an integer like the runtime does
+    ptrbits = 8 * sizeof(Ptr{Cvoid})
+    FT = ptrbits == 64 ? Float64 : Float32
+    UIT = ptrbits == 64 ? UInt64 : UInt32
+    x = Core.bitcast(FT, one(UIT))
+    p = Core.bitcast(Core.LLVMPtr{UInt8,1}, x)
+    y = Core.bitcast(FT, p)
+    @test y === x
+end
 end
 
 # Test unsafe_store! on union values with inline_roots (split representation)

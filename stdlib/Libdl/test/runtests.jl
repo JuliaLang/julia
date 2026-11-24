@@ -18,11 +18,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     end
 end
 @test length(filter(dlls) do dl
-      if Base.DARWIN_FRAMEWORK
-          return occursin(Regex("^$(Base.DARWIN_FRAMEWORK_NAME)(?:_debug)?\$"), basename(dl))
-      else
-          return occursin(Regex("^libjulia-internal(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
-      end
+      return occursin(Regex("^libjulia-internal(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
     end) == 1 # look for something libjulia-like (but only one)
 
 # library handle pointer must not be NULL
@@ -40,13 +36,7 @@ end
 
 # Find the library directory by finding the path of libjulia-internal (or libjulia-internal-debug,
 # as the case may be) to get the private library directory
-private_libdir = if Base.DARWIN_FRAMEWORK
-    if Base.isdebugbuild()
-        dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
-    else
-        joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
-    end
-elseif Base.isdebugbuild()
+private_libdir = if Base.isdebugbuild()
     dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
 else
     dirname(abspath(Libdl.dlpath("libjulia-internal")))
@@ -57,9 +47,7 @@ let p = ccall(:jl_get_libjulia_internal_path, Cstring, ())
     @test p != C_NULL
     Sys.iswindows() && Libc.free(p)
 end
-if !Base.DARWIN_FRAMEWORK
-    @test realpath(Base.Libc.Libdl.private_shlibdir()) == realpath(private_libdir)
-end
+@test realpath(Base.Libc.Libdl.private_shlibdir()) == realpath(private_libdir)
 
 @test !isempty(Libdl.find_library(["libccalltest"], [private_libdir]))
 @test !isempty(Libdl.find_library("libccalltest", [private_libdir]))
@@ -378,6 +366,15 @@ Base.string(p::ResolvingPiece) = (p.resolved = true; "dir")
         @test !piece.resolved
         @test string(lazy_path) == joinpath("dir", "libfoo.$(Libdl.dlext)")
         @test piece.resolved
+    end
+
+    let missing_lib = LazyLibrary("libdefinitely_missing"; on_load_callback=() -> error("unreachable")),
+        missing_dep = LazyLibrary(lclf_path; dependencies=[missing_lib])
+        @test dlopen(missing_lib; throw_error=false) === nothing
+        @test missing_lib.handle == C_NULL
+        @test dlopen(missing_dep; throw_error=false) === nothing
+        @test missing_dep.handle == C_NULL
+        @test_throws ErrorException dlopen(missing_lib)
     end
 
     # Test parallel loading doesn't return C_NULL (issue #60378)

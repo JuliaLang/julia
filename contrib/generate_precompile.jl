@@ -32,6 +32,11 @@ precompile(Tuple{typeof(Base.Terminals.width), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.Terminals.height), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.write), Base.Terminals.TTYTerminal, Array{UInt8, 1}})
 precompile(Tuple{typeof(Base.isempty), Base.AnnotatedString{String}})
+precompile(Tuple{typeof(Base.show_early_prompt), Symbol})
+precompile(Tuple{typeof(Base.print), Base.Terminals.TTYTerminal, String})
+precompile(Tuple{typeof(Base.write), Base.Terminals.TTYTerminal, String})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:short,), Tuple{Bool}}, typeof(Base.repl_banner), Base.TTY})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:short,), Tuple{Bool}}, typeof(Base.repl_banner), Base.Terminals.TTYTerminal})
 # The owner-carrying write paths (String/Array) call _unsafe_write_owned
 # directly, so the workload session does not compile the raw-pointer
 # unsafe_write entry points on its own; interactive startup still reaches
@@ -53,8 +58,8 @@ precompile(Tuple{typeof(Base.getindex), Type{Pair{Base.PkgId, UInt128}}, Pair{Ba
 precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}, Core.SimpleVector})
 precompile(Base.include_package_for_output, (Base.PkgId, String, Tuple{Int, Int}, Vector{String}, Vector{String}, Vector{String}, typeof(Base._concrete_dependencies), Nothing))
 precompile(Base.include_package_for_output, (Base.PkgId, String, Tuple{Int, Int}, Vector{String}, Vector{String}, Vector{String}, typeof(Base._concrete_dependencies), String))
-precompile(Base.create_expr_cache, (Base.PkgId, Base.PkgLoadSpec, String, String, typeof(Base._concrete_dependencies), Cmd, Base.CacheFlags, IO, IO))
-precompile(Base.create_expr_cache, (Base.PkgId, Base.PkgLoadSpec, String, Nothing, typeof(Base._concrete_dependencies), Cmd, Base.CacheFlags, IO, IO))
+precompile(Base.create_expr_cache, (Base.PkgId, Base.PkgLoadSpec, String, String, typeof(Base._concrete_dependencies), Cmd, Base.CacheFlags, Base.Redirectable, Base.Redirectable))
+precompile(Base.create_expr_cache, (Base.PkgId, Base.PkgLoadSpec, String, Nothing, typeof(Base._concrete_dependencies), Cmd, Base.CacheFlags, Base.Redirectable, Base.Redirectable))
 
 # LazyArtifacts (but more generally helpful)
 precompile(Tuple{Type{Base.Val{x} where x}, Module})

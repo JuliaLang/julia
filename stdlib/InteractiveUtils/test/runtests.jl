@@ -556,10 +556,7 @@ if !is_asserts()
 @eval @noinline Base.@constprop :none f_broken_code() = 0
 let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
-       src.code = Any[
-           Expr(:meta, :noinline)
-           Core.ReturnNode(Expr(:invalid))
-       ]
+       src.code[end] = Core.ReturnNode(Expr(:invalid))
        m.source = src
    end
 end
@@ -782,7 +779,7 @@ end
     @test_throws err @code_lowered 1.0
 
     @test_throws "dot expressions are not lowered to a single function call" @which a .= 1 + 2
-    @test_throws "invalid keyword argument syntax" @eval @which round(1; digits(3))
+    @test_throws "syntax:" @eval @which round(1; digits(3))
 end
 
 using InteractiveUtils: editor, editor_matches, define_editor, find_source, EDITOR_CALLBACKS
@@ -963,14 +960,14 @@ Sys.iswindows() || @testset "editor and pager commands" begin
             islink(name) || symlink(script, name)
             pipe = Pipe()
             Base.link_pipe!(pipe; reader_supports_async=true, writer_supports_async=true)
-            waited = false
             stderr_txt = @async readlines(pipe)
-            withenv("PATH" => dir, env...) do
+            waited = withenv("PATH" => dir, env...) do
                 try
                     redirect_stderr(f, pipe)
+                    false
                 catch e
                     e isa ProcessFailedException || rethrow()
-                    waited = true
+                    true
                 end
             end
             close(pipe.in)
@@ -1051,6 +1048,23 @@ end
         ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("CloseClipboard")
     end
     @test clipboard() == ""
+    # clipboard without text (julia#47913)
+    let fmt = ccall((:RegisterClipboardFormatW, "user32"), stdcall, Cuint, (Cwstring,), "Julia InteractiveUtils test")
+        fmt == 0 && Base.windowserror("RegisterClipboardFormatW")
+        ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL) == 0 && Base.windowserror("OpenClipboard")
+        try
+            ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("EmptyClipboard")
+            h = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{Cvoid}, (Cuint, Csize_t), 2 #=GMEM_MOVEABLE=#, 1)
+            h == C_NULL && Base.windowserror("GlobalAlloc")
+            if ccall((:SetClipboardData, "user32"), stdcall, Ptr{Cvoid}, (Cuint, Ptr{Cvoid}), fmt, h) == C_NULL
+                ccall((:GlobalFree, "kernel32"), stdcall, Ptr{Cvoid}, (Ptr{Cvoid},), h)
+                Base.windowserror("SetClipboardData")
+            end
+        finally
+            ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("CloseClipboard")
+        end
+        @test clipboard() == ""
+    end
     # nul error (unsupported data)
     @test_throws ArgumentError("Windows clipboard strings cannot contain NUL character") clipboard("abc\0")
 end
@@ -1090,7 +1104,8 @@ file, ln = functionloc(Core.Compiler.tmeet, Tuple{Int, Float64})
     end
     @test e isa Exception
     s = sprint(showerror, e, bt)
-    m = match(r"(\S*InteractiveUtils[\/\\]src\S*):", s)
+    # the frame may print as `file:line:col`
+    m = match(r"(\S*InteractiveUtils[\/\\]src[^\s:]*):", s)
     @test isfile(expanduser(m.captures[1]))
 end
 
@@ -1295,7 +1310,7 @@ function which_call_args(ex)
         if x.head === :call && (x.args[1] == :(Core.Typeof) || x.args[1] === GlobalRef(Core, :Typeof))
             push!(args, Core.eval(@__MODULE__, x.args[2]))
         else
-            foreach(walk, x.args)
+            foreach(@__FUNCTION__, x.args)
         end
     end
     walk(macroexpand(@__MODULE__, :(@which $ex)))

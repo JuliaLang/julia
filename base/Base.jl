@@ -23,9 +23,6 @@ include(strcat(BUILDROOT, "version_git.jl")) # include($BUILDROOT/base/version_g
 # a slightly more verbose fashion than usual, because we're running so early.
 let os = ccall(:jl_get_UNAME, Any, ())
     if os === :Darwin || os === :Apple
-        if DARWIN_FRAMEWORK
-            push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-        end
         push!(DL_LOAD_PATH, "@loader_path")
     end
 end
@@ -338,7 +335,7 @@ include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
 JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
 
 include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
-JuliaLowering.activate!(false; freeze_world_age=false)
+JuliaLowering.activate!(true; freeze_world_age=false)
 
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")

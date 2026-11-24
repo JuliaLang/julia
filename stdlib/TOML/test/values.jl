@@ -77,6 +77,8 @@ end
     @test testval("0o1526535761042630654411", 0o1526535761042630654411 |> UInt64) # UInt64
     @test testval("0o3467204325743773607311464533371572447656531", 0o3467204325743773607311464533371572447656531 |> UInt128) # UInt128
     @test testval("0o34672043257437736073114645333715724476565312", 0o34672043257437736073114645333715724476565312 |> BigInt) # BigInt
+    @test testval("0o2000000000000000000000", UInt128(2)^64) # 22 digits, too large for UInt64
+    @test testval("0o4000000000000000000000000000000000000000000", big(2)^128) # 43 digits, too large for UInt128
 
     @test testval("0b10001010",0b10001010 |> UInt64) # UInt8
     @test testval("0b11111010001100",0b11111010001100 |> UInt64) # UInt16
@@ -183,9 +185,14 @@ end
     @test testval("\"\\x00\"", "\0")
     @test testval("\"\\x41\"", "A")
     @test testval("\"\\x7f\"", "\x7f")
-    @test testval("\"\\xff\"", "\xff")
-    @test testval("\"\\xFF\"", "\xff")
+    @test testval("\"\\xff\"", "\u00ff")
+    @test testval("\"\\xFF\"", "\u00ff")
     @test testval("\"\\x0A\"", "\n")
+    # \xHH is the code point U+00HH, not a raw byte (#64171)
+    @test testval("\"Jos\\xE9\"", "José")
+    @test testval("\"\\x80\\xe9\\u00e9\"", "\u0080éé")
+    @test testval("\"\\\\xE9\"", "\\xE9")
+    @test testval("\"\\\\\\xE9\"", "\\é")
 
     # \xHH in multiline strings
     @test testval("\"\"\"\\x41\"\"\"", "A")

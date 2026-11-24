@@ -132,7 +132,7 @@ days(dt::Date) = value(dt)
 days(dt::DateTime) = fld(value(dt), 86400000)
 days(dt::Timestamp{P}) where {P} = fld(value(dt), timestamp_ticks_per_day(P)) + UNIXEPOCHDAYS
 # Nanoseconds since midnight
-nsofday(dt::Date) = Int64(0)
+nsofday(::Date) = Int64(0)
 nsofday(dt::DateTime) = 1000000 * mod(value(dt), 86400000)
 nsofday(dt::Timestamp{P}) where {P} = mod(value(dt), timestamp_ticks_per_day(P)) * timestamp_scale(P)
 year(dt::TimeType) = year(days(dt))

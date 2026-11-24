@@ -11,79 +11,6 @@ static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
     write_uint64(s, *((uint64_t*)&x));
 }
 
-// Decide if `t` must be new, because it points to something new.
-// If it is new, the object (in particular, the super field) might not be entirely
-// valid for the cache, so we want to finish transforming it before attempting
-// to look in the cache for it
-int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeof_sysimg)
-{
-    //if (jl_object_in_image(t))
-    //    return 0; // fast-path for rejection
-    assert(ptrhash_get(news, (void*)t) != (void*)t);
-    if (ptrhash_has(news, (void*)t) || ptrhash_has(news, (void*)jl_typeof(t)))
-        return 1;
-    if (!(image_base < (char*)t && (char*)t <= image_base + sizeof_sysimg))
-        return 0; // fast-path for rejection
-    if (jl_is_uniontype(t)) {
-        jl_uniontype_t *u = (jl_uniontype_t*)t;
-        return must_be_new_dt(u->a, news, image_base, sizeof_sysimg) ||
-               must_be_new_dt(u->b, news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_unionall(t)) {
-        jl_unionall_t *ua = (jl_unionall_t*)t;
-        return must_be_new_dt((jl_value_t*)ua->var, news, image_base, sizeof_sysimg) ||
-               must_be_new_dt(ua->body, news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_typevar(t)) {
-        jl_tvar_t *tv = (jl_tvar_t*)t;
-        return must_be_new_dt(tv->lb, news, image_base, sizeof_sysimg) ||
-               must_be_new_dt(tv->ub, news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_some_Type(t)) {
-        return must_be_new_dt(jl_some_Type_T(t), news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_vararg(t)) {
-        jl_vararg_t *tv = (jl_vararg_t*)t;
-        if (tv->T && must_be_new_dt(tv->T, news, image_base, sizeof_sysimg))
-            return 1;
-        if (tv->N && must_be_new_dt(tv->N, news, image_base, sizeof_sysimg))
-            return 1;
-    }
-    else if (jl_is_datatype(t)) {
-        jl_datatype_t *dt = (jl_datatype_t*)t;
-        // the image being loaded is not in the image tree yet, so this tests the header bit
-        assert(jl_astaggedvalue(dt->name)->bits.perm && "type_in_worklist mistake?");
-        jl_datatype_t *super = dt->super;
-        // fast-path: check if super is in news, since then we must be new also
-        // (it is also possible that super is indeterminate or NULL right now,
-        // waiting for `t` to be resolved, then will be determined later as
-        // soon as possible afterwards).
-        while (super != NULL && super != jl_any_type) {
-            void *entry = ptrhash_get(news, (void*)super);
-            if (entry != HT_NOTFOUND) {
-                if (entry != (void*)super)
-                    return 1;
-                // A self-mapping marks an unresolved forward reference.
-                break;
-            }
-            if (!(image_base < (char*)super && (char*)super <= image_base + sizeof_sysimg))
-               break; // the rest must all be non-new
-            // otherwise super might be something that was not cached even though a later supertype might be
-            // for example while handling `Type{Mask{4, U} where U}`, if we have `Mask{4, U} <: AbstractSIMDVector{4}`
-            super = super->super;
-        }
-        jl_svec_t *tt = dt->parameters;
-        size_t i, l = jl_svec_len(tt);
-        for (i = 0; i < l; i++)
-            if (must_be_new_dt(jl_tparam(dt, i), news, image_base, sizeof_sysimg))
-                return 1;
-    }
-    else {
-        return must_be_new_dt(jl_typeof(t), news, image_base, sizeof_sysimg);
-    }
-    return 0;
-}
-
 static uint64_t jl_worklist_key(jl_array_t *worklist) JL_NOTSAFEPOINT
 {
     assert(jl_is_array(worklist));
@@ -711,6 +638,8 @@ static const uint16_t BOM = 0xFEFF; // byte-order marker
 static const uint32_t JI_FLAG_PKGIMAGE = 1 << 0;
 // This .ji must be loaded from the associated native image (.so/.dylib/.dll).
 static const uint32_t JI_FLAG_SPLIT = 1 << 1;
+// This split .ji has no code, so no native image was written and it is loaded on its own.
+static const uint32_t JI_FLAG_NO_NATIVE = 1 << 2;
 
 static int64_t write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT
 {
@@ -897,7 +826,7 @@ static void jl_add_methods(jl_array_t *external) JL_CANSAFEPOINT
         assert(!meth->is_for_opaque_closure);
         jl_methtable_t *mt = jl_method_get_table(meth);
         assert((jl_value_t*)mt != jl_nothing);
-        jl_typemap_entry_t *entry = jl_method_table_add(mt, meth, NULL);
+        jl_typemap_entry_t *entry = jl_method_table_add(mt, meth);
         jl_array_ptr_set(external, i, entry);
     }
 }

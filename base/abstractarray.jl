@@ -624,27 +624,6 @@ function isstored(A::AbstractArray{<:Any,N}, I::Vararg{Integer,N}) where {N}
     return true
 end
 
-# used to compute "end" for last index
-function trailingsize(A, n)
-    s = 1
-    for i=n:ndims(A)
-        s *= size(A,i)
-    end
-    return s
-end
-function trailingsize(inds::Indices, n)
-    s = 1
-    for i=n:length(inds)
-        s *= length(inds[i])
-    end
-    return s
-end
-# This version is type-stable even if inds is heterogeneous
-function trailingsize(inds::Indices)
-    @inline
-    prod(map(length, inds))
-end
-
 ## Bounds checking ##
 
 # The overall hierarchy is
@@ -2631,86 +2610,40 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
         throw(ArgumentError("must have at least one element"))
     all(>(0), dims) ||
         throw(ArgumentError("`dims` argument must contain positive integers"))
+    nblocks = Core.checked_dims(dims...)
+    length(as) == nblocks ||
+        throw(ArgumentError("argument count does not match specified shape (expected $nblocks, got $(length(as)))"))
 
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
 
     outdims = zeros(Int, N)
-
-    # validate shapes for lowest level of concatenation
-    d = findfirst(>(1), dims)
-    if d !== nothing # all dims are 1
-        if row_first && d < 3
-            d = d == 1 ? 2 : 1
-        end
-        nblocks = length(as) ÷ dims[d]
-        for b ∈ 1:nblocks
-            offset = ((b - 1) * dims[d])
-            startelementi = offset + 1
-            for i ∈ offset .+ (2:dims[d])
-                for dd ∈ 1:N
-                    dd == d && continue
-                    if cat_size(as[startelementi], dd) != cat_size(as[i], dd)
-                        throw(DimensionMismatch("incompatible shape in element $i"))
-                    end
-                end
-            end
-        end
-    end
-
-    # discover number of rows or columns
-    # d1 dimension is increased by 1 to appropriately handle 0-length arrays
-    for i ∈ 1:dims[d1]
-        outdims[d1] = checked_add(outdims[d1], cat_size(as[i], d1))
-    end
-
-    # adjustment to handle 0-length arrays
-    first_dim_zero = outdims[d1] == 0
-    if first_dim_zero
-        outdims[d1] = dims[d1]
-    end
-
     currentdims = zeros(Int, N)
-    blockcount = 0
-    elementcount = 0
+    closed = N
+    prev = as[1]
     for i ∈ eachindex(as)
-        elementcount = checked_add(elementcount, cat_length(as[i]))
-        currentdims[d1] = checked_add(currentdims[d1], first_dim_zero ? 1 : cat_size(as[i], d1))
-        if currentdims[d1] == outdims[d1]
-            currentdims[d1] = 0
-            for d ∈ (d2, 3:N...)
-                currentdims[d] = checked_add(currentdims[d], cat_size(as[i], d))
-                if outdims[d] == 0 # unfixed dimension
-                    blockcount += 1
-                    if blockcount == dims[d]
-                        outdims[d] = currentdims[d]
-                        currentdims[d] = 0
-                        blockcount = 0
-                    else
-                        break
-                    end
-                else # fixed dimension
-                    if currentdims[d] == outdims[d] # end of dimension
-                        currentdims[d] = 0
-                    elseif currentdims[d] < outdims[d] # dimension in progress
-                        break
-                    else # exceeded dimension
-                        throw(DimensionMismatch("argument $i has too many elements along axis $d"))
-                    end
-                end
+        a = as[i]
+        for k ∈ closed+2:N
+            d = k == 2 ? d2 : k
+            cat_size(a, d) == cat_size(prev, d) ||
+                throw(DimensionMismatch("incompatible shape in element $i"))
+        end
+        prev = a
+        closed = 0
+        n = i
+        for d ∈ (d1, d2, 3:N...)
+            currentdims[d] = checked_add(currentdims[d], cat_size(a, d))
+            n % dims[d] == 0 || break
+            n ÷= dims[d]
+            if n == 1
+                outdims[d] = currentdims[d]
+            elseif currentdims[d] != outdims[d]
+                throw(DimensionMismatch("argument $i has a mismatched number of elements along axis $d"))
             end
-        elseif currentdims[d1] > outdims[d1] # exceeded dimension
-            throw(DimensionMismatch("argument $i has too many elements along axis $d1"))
+            currentdims[d] = 0
+            closed += 1
         end
     end
-    # restore 0-length adjustment
-    if first_dim_zero
-        outdims[d1] = 0
-    end
-
-    outlen = Core.checked_dims(ntuple(i -> outdims[i], Val(N))...)
-    elementcount == outlen ||
-        throw(DimensionMismatch("mismatched number of elements; expected $(outlen), got $(elementcount)"))
 
     # copy into final array
     A = cat_similar(as[1], T, ntuple(i -> outdims[i], N))

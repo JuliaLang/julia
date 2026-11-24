@@ -3,18 +3,20 @@
 """
     Base64
 
-Functionality for [base64 encoding and decoding](https://en.wikipedia.org/wiki/Base64),
-a method to represent binary data using text, common on the web.
+[Base64 encoding and decoding](https://en.wikipedia.org/wiki/Base64), a way to represent
+binary data as text that is common on the web. Use [`base64encode`](@ref) and
+[`base64decode`](@ref), or [`Base64EncodePipe`](@ref) and [`Base64DecodePipe`](@ref) for
+streams.
 """
 module Base64
 
 using Base: require_one_based_indexing
 
 export
-    Base64EncodePipe,
-    base64encode,
     Base64DecodePipe,
+    Base64EncodePipe,
     base64decode,
+    base64encode,
     stringmime
 
 # Base64EncodePipe is a pipe-like IO object, which converts into base64 data
@@ -45,6 +47,6 @@ stringmime(m::MIME, x; context=nothing) = istextmime(m) ? Base.Multimedia._textr
 stringmime(m::AbstractString, x; context=nothing) = stringmime(MIME(m), x; context=context)
 
 _binstringmime(m::MIME, x, context) = Base64.base64encode(show, m, x; context=context)
-_binstringmime(m::MIME, x::Vector{UInt8}, context) = Base64.base64encode(write, x; context=context)
+_binstringmime(::MIME, x::Vector{UInt8}, context) = Base64.base64encode(write, x; context=context)
 
 end

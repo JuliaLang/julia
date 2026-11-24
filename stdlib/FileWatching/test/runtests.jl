@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, FileWatching
-using Base: uv_error, Experimental
+using FileWatching, Test
+using Base: Experimental, uv_error
 using Base.Filesystem: StatStruct
 
 @test isempty(Test.detect_closure_boxes(FileWatching))
@@ -165,6 +165,12 @@ test_12992()
 test2_12992()
 test2_12992()
 test2_12992()
+
+# `stat` gives the result of the latest poll, which the constructor has already done
+let pfw = PollingFileWatcher(@__FILE__, 5.007)
+    @test stat(pfw) == stat(@__FILE__)
+    close(pfw)
+end
 
 #######################################################################
 # This section tests file watchers.                                   #
@@ -367,7 +373,7 @@ function test_monitor_wait_poll()
         end
         (old, new) = wait(pfw)
         close(pfw)
-        @test new.mtime - old.mtime > 2.5 - 1.5 # mtime may only have second-level accuracy (plus add some hysteresis)
+        @test (new::StatStruct).mtime - old.mtime > 2.5 - 1.5 # mtime may only have second-level accuracy (plus add some hysteresis)
     end
 end
 

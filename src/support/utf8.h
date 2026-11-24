@@ -3,6 +3,9 @@
 #ifndef JL_UTF8_H
 #define JL_UTF8_H
 
+#include <stdarg.h>
+#include "dtypes.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

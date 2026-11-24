@@ -457,6 +457,16 @@ bolt-instrument: bolt-originals
 	touch $@
 	@echo $(AFTER_INSTRUMENT_MESSAGE)
 
+# On AArch64, threads contending for BOLT's instrumentation spinlocks barely
+# progress and slow down TLB invalidations machine-wide; fewer threads finish sooner.
+ifeq ($(HOST_ARCH),aarch64)
+BOLT_TRAIN_IMAGE_THREADS ?= 2
+endif
+BOLT_TRAIN_IMAGE_THREADS ?=
+ifneq (,$(BOLT_TRAIN_IMAGE_THREADS))
+bolt-train: export JULIA_IMAGE_THREADS := $(BOLT_TRAIN_IMAGE_THREADS)
+endif
+
 # Build the rest of Julia against the instrumented libraries: the system image
 # and the stdlib package images are the BOLT training workload.
 bolt-train: bolt-instrument | stage-path

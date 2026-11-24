@@ -56,17 +56,39 @@ using Main: samepath
     @testset "contractuser" begin
         # contractuser is left-inverse of expanduser
         @test contractuser(S(homedir())) == "~"
+        @test contractuser(S(homedir() * sep)) == "~$sep"
         @test contractuser(S(joinpath(homedir(), "x"))) == "~$(sep)x"
+        @test contractuser(expanduser(S("~"))) == "~"
+        @test contractuser(expanduser(S("~$sep"))) == "~$sep"
         if !Sys.iswindows()
             @test contractuser(S("/foo/bar")) == "/foo/bar"
             me = Sys.username()
             # current user's home contracts to ~ or ~username via stat
             result = contractuser(S(homedir()))
             @test result == "~" || result == "~$me"
+            # other existing users contract to ~username
+            home_st = stat(homedir())
+            for name in ("_networkd", "_appstore", "_geod", "daemon", "nobody")
+                name == me && continue
+                h = homedir(name)
+                if h !== nothing && isdir(h) && (st = try stat(h) catch; nothing; end) !== nothing && ispath(st)
+                    samefile(st, home_st) && continue
+                    pd = Libc.getpwuid(st.uid, false)
+                    if pd !== nothing && pd.username == name
+                        @test contractuser(S(h)) == "~$name"
+                        @test contractuser(S(h * sep)) == "~$name$sep"
+                        @test contractuser(S(joinpath(h, "sub"))) == "~$name$(sep)sub"
+                        @test contractuser(expanduser(S("~$name"))) == "~$name"
+                        @test contractuser(expanduser(S("~$name$sep"))) == "~$name$sep"
+                        break
+                    end
+                end
+            end
         end
         # round-trip: expanduser(contractuser(p)) == p for home-relative paths
         p = joinpath(homedir(), "some", "path")
         @test expanduser(contractuser(S(p))) == p
+        @test expanduser(contractuser(S(homedir() * sep))) == homedir() * sep
     end
     @testset "isdirpath" begin
         @test !isdirpath(S("foo"))

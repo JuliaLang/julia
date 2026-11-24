@@ -683,12 +683,11 @@ function ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{Ab
     end
 end
 
-# return whether textwidth(str) <= maxwidth
-function check_textwidth(str::AbstractString, maxwidth::Integer)
+function check_textwidth(str::AbstractString, maxwidth::Integer, charwidth::F = textwidth) where {F}
     # check efficiently for early return if str is wider than maxwidth
     total_width = 0
     for c in str
-        total_width += textwidth(c)
+        total_width += charwidth(c)
         total_width > maxwidth && return false
     end
     return true
@@ -699,9 +698,10 @@ function string_truncate_boundaries(
             maxwidth::Integer,
             replacement::Union{AbstractString,AbstractChar},
             ::Val{mode},
-            prefer_left::Bool = true) where {mode}
+            prefer_left::Bool = true,
+            charwidth::F = textwidth) where {mode,F}
     maxwidth >= 0 || throw(ArgumentError("maxwidth $maxwidth should be non-negative"))
-    check_textwidth(str, maxwidth) && return nothing
+    check_textwidth(str, maxwidth, charwidth) && return nothing
 
     l0, _ = left, right = firstindex(str), lastindex(str)
     width = textwidth(replacement)
@@ -709,7 +709,7 @@ function string_truncate_boundaries(
     rm_width_left, rm_width_right, force_other = 0, 0, false
     @inbounds while true
         if mode === :left || (mode === :center && (!prefer_left || left > l0))
-            rm_width = textwidth(str[right])
+            rm_width = charwidth(str[right])
             if mode === :left || (rm_width_right <= rm_width_left || force_other)
                 force_other = false
                 (width += rm_width) <= maxwidth || break
@@ -720,10 +720,10 @@ function string_truncate_boundaries(
             end
         end
         if mode ∈ (:right, :center)
-            rm_width = textwidth(str[left])
+            rm_width = charwidth(str[left])
             if mode === :left || (rm_width_left <= rm_width_right || force_other)
                 force_other = false
-                (width += textwidth(str[left])) <= maxwidth || break
+                (width += rm_width) <= maxwidth || break
                 rm_width_left += rm_width
                 left = nextind(str, left)
             else

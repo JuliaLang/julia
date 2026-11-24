@@ -1,7 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Interface to [libgit2](https://libgit2.org/).
+    LibGit2
+
+Bindings to [libgit2](https://libgit2.org/), a library for working with git repositories,
+such as [`LibGit2.clone`](@ref) and [`LibGit2.GitRepo`](@ref).
 """
 module LibGit2
 
@@ -9,9 +12,8 @@ import Base: ==
 using Base: something
 using NetworkOptions
 using Printf: @printf
-using SHA: sha1, sha256
 
-export with, GitRepo, GitConfig
+export GitConfig, GitRepo, with
 
 using LibGit2_jll
 
@@ -442,7 +444,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
         end
         iszero(commit_id) && return
         cmt =  GitCommit(repo, commit_id)
-        new_branch_ref = nothing
+        local new_branch_ref
         try
             new_branch_ref = create_branch(repo, branch_name, cmt, force=force)
         finally
@@ -750,10 +752,10 @@ function revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractStrin
     commit2_id = revparseid(repo, commit2)
     base_id = merge_base(repo, string(commit1_id), string(commit2_id))
     fc = with(GitRevWalker(repo)) do walker
-        count((i,r)->i!=base_id, walker, oid=commit1_id, by=Consts.SORT_TOPOLOGICAL)
+        count((i,_r)->i!=base_id, walker, oid=commit1_id, by=Consts.SORT_TOPOLOGICAL)
     end
     sc = with(GitRevWalker(repo)) do walker
-        count((i,r)->i!=base_id, walker, oid=commit2_id, by=Consts.SORT_TOPOLOGICAL)
+        count((i,_r)->i!=base_id, walker, oid=commit2_id, by=Consts.SORT_TOPOLOGICAL)
     end
     return (fc-1, sc-1)
 end
@@ -827,7 +829,7 @@ function merge!(repo::GitRepo;
                     throw(GitError(Error.Merge, Error.ERROR,
                                    "Unable to determine name of orphan branch."))
                 end
-                branchname = m.captures[1]
+                branchname = something(m.captures[1])
                 remotename = with(GitConfig, repo) do cfg
                     LibGit2.get(String, cfg, "branch.$branchname.remote")
                 end
@@ -903,7 +905,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
             try
                 rbs = GitRebase(repo, head_ann, upst_ann, onto=onto_ann)
                 try
-                    for rbs_op in rbs
+                    for _ in rbs
                         commit(rbs, sig)
                     end
                     finish(rbs, sig)
@@ -999,7 +1001,7 @@ example the HEAD of a branch before a merge attempt. `s`
 can be generated using the [`snapshot`](@ref) function.
 """
 function restore(s::State, repo::GitRepo)
-    head = reset!(repo, Consts.HEAD_FILE, "*")  # unstage everything
+    reset!(repo, Consts.HEAD_FILE, "*")  # unstage everything
     with(GitIndex, repo) do idx
         read_tree!(idx, s.work)            # move work tree to index
         opts = CheckoutOptions(

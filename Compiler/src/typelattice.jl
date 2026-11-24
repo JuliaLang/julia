@@ -732,7 +732,7 @@ end
 Widens extended lattice element `x` to native `Type` representation.
 """
 widenconst(::AnyConditional) = Bool
-widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
+widenconst(a::AnyMustAlias) = widenconst_split(widenmustalias(a))
 # a closed type value widens to the egality kind, mirroring how `jl_inst_arg_tuple_type`
 # keys runtime dispatch (`Const(v) ⊑ TypeEgal{v} ⊑ Type{v}`); an open one only to its
 # `==`-class `Type{v}`
@@ -759,6 +759,7 @@ function widenconst_split(@nospecialize x)
     isa(x, Const) && return widenconst(x)
     isa(x, PartialStruct) && return widenconst(x)
     isa(x, AnyConditional) && return Bool
+    isa(x, MustAlias) && return widenconst(x)
     return widenconst(x)
 end
 
@@ -773,8 +774,13 @@ function smerge(lattice::AbstractLattice, sa::Union{NotFound,VarState}, sb::Unio
     return VarState(tmerge(lattice, sa.typ, sb.typ), sa.ssadef == sb.ssadef ? sa.ssadef : join_pc, sa.undef | sb.undef)
 end
 
-@nospecializeinfer @inline schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o), join_pc::Int) =
-    (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !(n.undef <= o.undef && (n.ssadef === o.ssadef || o.ssadef === join_pc) && ⊑(lattice, n.typ, o.typ))))
+@nospecializeinfer @inline function schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o), join_pc::Int)
+    n === o && return false
+    o === NOT_FOUND && return true
+    n === NOT_FOUND && return false
+    nv, ov = n::VarState, o::VarState
+    return !(nv.undef <= ov.undef && (nv.ssadef === ov.ssadef || ov.ssadef === join_pc) && ⊑(lattice, nv.typ, ov.typ))
+end
 
 function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable, join_pc::Int)
     changed = false

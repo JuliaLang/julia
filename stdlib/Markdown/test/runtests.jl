@@ -482,6 +482,17 @@ end
     @test Markdown.htmlesc(:a_b) == "a_b"
     @test sprint(Markdown.htmlesc, "<", :b) == "&lt;b"
     @test Markdown.encode_uri_component(:a) == "a"
+    # existing percent escapes in URLs are kept, other unsafe characters are encoded
+    @test md"[a](https://example.com/a%20b)" |> html ==
+        "<p><a href=\"https://example.com/a%20b\">a</a></p>\n"
+    @test md"![chart](plot%201.png)" |> html ==
+        "<p><img src=\"plot%201.png\" alt=\"chart\" /></p>\n"
+    @test md"<https://example.com/a%20b>" |> html ==
+        "<p><a href=\"https://example.com/a%20b\">https://example.com/a%20b</a></p>\n"
+    @test md"[a](https://example.com/ä)" |> html ==
+        "<p><a href=\"https://example.com/%C3%A4\">a</a></p>\n"
+    @test html(MD(Paragraph([Markdown.Link(["a"], "my url")]))) ==
+        "<p><a href=\"my%20url\">a</a></p>\n"
     # line endings are normalised
     @test html(Markdown.parse("a\r\nb\rc")) == "<p>a\nb\nc</p>\n"
     # unterminated HTML comments, processing instructions, declarations and CDATA are text

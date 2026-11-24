@@ -38,6 +38,9 @@ function _core_lowering_hook(mod::Module, @nospecialize(code), world, warn, loc)
 end
 
 @fzone "JL: eval" function __script_exit_eval(mod::Module, @nospecialize(st))
+    if st isa Expr && st.head === :thunk
+        return ccall(:jl_toplevel_eval, Any, (Any, Any), mod, st)
+    end
     if !(st isa SyntaxTree)
         st = expr_to_est(st)
     end

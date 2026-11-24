@@ -275,6 +275,25 @@ extern "C" JL_DLLEXPORT_CODEGEN void jl_get_llvm_external_fns_impl(void *native_
            *num_elements * sizeof(jl_code_instance_t *));
 }
 
+// true if there is no code to put in a native image
+extern "C" JL_DLLEXPORT_CODEGEN int jl_native_code_is_empty_impl(void *native_code)
+{
+    jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
+    if (!desc->jl_fvar_map.empty() || !desc->jl_sysimg_gvars.empty() ||
+        !desc->jl_external_to_llvm.empty() || !desc->jl_coverage_entries.empty())
+        return 0;
+    bool empty = true;
+    desc->TSM_ref->withModuleDo([&](Module &M) {
+        for (auto &F : M.functions()) {
+            if (!F.isDeclaration()) {
+                empty = false;
+                break;
+            }
+        }
+    });
+    return empty;
+}
+
 extern "C" JL_DLLEXPORT_CODEGEN
 LLVMOrcThreadSafeModuleRef jl_get_llvm_module_impl(void *native_code)
 {
@@ -1663,6 +1682,7 @@ static void emit_bitcode(Module &M, TargetMachine &TM, SmallVectorImpl<char> &bu
 
 static void emit_native(Module &M, TargetMachine &TM, SmallVectorImpl<char> &buf, bool asm_)
 {
+    jl_fpctrl_default_scope fpctrl_scope;
     raw_svector_ostream OS(buf);
     legacy::PassManager emitter;
     addTargetPasses(&emitter, TM.getTargetTriple(), TM.getTargetIRAnalysis());

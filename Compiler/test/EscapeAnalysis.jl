@@ -288,6 +288,21 @@ end
         @test has_return_escape(result.state[Argument(2)], r)
         @test !has_all_escape(result.state[Argument(2)])
     end
+
+    let # setfield! with an explicit ordering
+        result = code_escapes((SafeRef{Any}, Any)) do s, x
+            setfield!(s, :x, x, :not_atomic)
+            nothing
+        end
+        @test !has_thrown_escape(result.state[Argument(2)])
+        @test !has_thrown_escape(result.state[Argument(3)])
+        result = code_escapes((SafeRef{Any}, Any)) do s, x
+            setfield!(s, :x, x, :release) # throws since `x` is not an atomic field
+            nothing
+        end
+        @test has_thrown_escape(result.state[Argument(2)])
+        @test has_thrown_escape(result.state[Argument(3)])
+    end
 end
 
 @testset "flow-sensitivity" begin

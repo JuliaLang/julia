@@ -21,6 +21,7 @@ extern "C" {
 // ========================================================================= //
 
 extern jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
+extern jl_array_t *jl_typecache_region_list JL_GLOBALLY_ROOTED;
 extern const unsigned pool_sizes[];
 extern jl_mutex_t finalizers_lock;
 
@@ -83,6 +84,7 @@ void jl_gc_init(void) {
     arraylist_new(&finalizer_list_marked, 0);
     small_arraylist_new(&orphaned_weak_processing_list, 0);
     uv_mutex_init(&orphaned_weak_processing_lock);
+    jl_init_shared_free_stacks();
     gc_num.interval = default_collect_interval;
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
@@ -732,6 +734,8 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
 
     // FIXME: transitively pinning for now, should be removed after we add moving Immix
     add_node_to_tpinned_roots_buffer(closure, &tpinned_buf, &tpinned_len, precompile_field_replace);
+    // the types region keys its entries by address
+    add_node_to_tpinned_roots_buffer(closure, &tpinned_buf, &tpinned_len, jl_typecache_region_list);
 
     // types recorded by the allocation profiler
     alloc_profile_root_env_t alloc_profile_env = {closure, &tpinned_buf, &tpinned_len};
@@ -1019,6 +1023,7 @@ JL_DLLEXPORT void jl_gc_mmtk_sweep_stack_pools(void)
 JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     jl_gc_mmtk_sweep_stack_pools();
+    gc_trim_shared_free_stacks();
     sweep_mtarraylist_buffers();
 }
 
@@ -1257,6 +1262,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_small_alloc(jl_ptls_t ptls, int offset, int osize
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == 0);
 
     jl_value_t *val = jl_mmtk_gc_alloc_default(ptls, osize, 16, NULL);
+    jl_set_typeof(val, type);
     maybe_record_alloc_to_profile(val, osize, (jl_datatype_t*)type);
     return val;
 }
@@ -1268,6 +1274,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz, jl_value_t *
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == 0);
 
     jl_value_t *val = jl_mmtk_gc_alloc_big(ptls, sz);
+    jl_set_typeof(val, type);
     maybe_record_alloc_to_profile(val, sz, (jl_datatype_t*)type);
     return val;
 }
@@ -1289,66 +1296,50 @@ inline jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
     return v;
 }
 
-// allocation wrappers that track allocation and let collection run
-void *jl_gc_counted_malloc_(size_t sz, int usable)
+// allocation wrappers that track allocation into a global counter, from any thread;
+// they never collect
+void *jl_gc_counted_malloc_(size_t sz, int usable) JL_NOTSAFEPOINT
 {
-    jl_gcframe_t **pgcstack = jl_get_pgcstack();
-    jl_task_t *ct = jl_current_task;
     void *data = malloc(sz);
-    if (data != NULL && pgcstack != NULL && ct->world_age) {
+    if (data != NULL) {
         if (usable)
             sz = memory_block_usable_size(data, 0);
-        jl_ptls_t ptls = ct->ptls;
-        malloc_maybe_collect(ptls, sz);
         jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz);
     }
     return data;
 }
 
-void *jl_gc_counted_calloc_(size_t nm, size_t sz, int usable)
+void *jl_gc_counted_calloc_(size_t nm, size_t sz, int usable) JL_NOTSAFEPOINT
 {
-    jl_gcframe_t **pgcstack = jl_get_pgcstack();
-    jl_task_t *ct = jl_current_task;
     void *data = calloc(nm, sz);
-    if (data != NULL && pgcstack != NULL && ct->world_age) {
+    if (data != NULL) {
         sz = usable ? memory_block_usable_size(data, 0) : nm * sz;
-        jl_ptls_t ptls = ct->ptls;
-        malloc_maybe_collect(ptls, sz);
         jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz);
     }
     return data;
 }
 
-JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
+JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz) JL_NOTSAFEPOINT
 {
     return jl_gc_counted_malloc_(sz, 0);
 }
 
-JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
+JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz) JL_NOTSAFEPOINT
 {
     return jl_gc_counted_calloc_(nm, sz, 0);
 }
 
-JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
+JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz) JL_NOTSAFEPOINT
 {
-    jl_gcframe_t **pgcstack = jl_get_pgcstack();
-    jl_task_t *ct = jl_current_task;
     free(p);
-    if (pgcstack != NULL && ct->world_age) {
+    if (p != NULL)
         jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, -sz);
-    }
 }
 
-void *jl_gc_counted_realloc_(void *p, size_t old, size_t sz, int usable)
+void *jl_gc_counted_realloc_(void *p, size_t old, size_t sz, int usable) JL_NOTSAFEPOINT
 {
-    jl_gcframe_t **pgcstack = jl_get_pgcstack();
-    jl_task_t *ct = jl_current_task;
-    if (pgcstack && ct->world_age) {
-        jl_ptls_t ptls = ct->ptls;
-        malloc_maybe_collect(ptls, sz);
-    }
     void *data = realloc(p, sz);
-    if (pgcstack && ct->world_age && (data != NULL || sz == 0)) {
+    if (data != NULL || sz == 0) {
         if (usable)
             sz = data ? memory_block_usable_size(data, 0) : 0;
         // wraps around when shrinking, which subtracts `old - sz` as intended
@@ -1357,9 +1348,9 @@ void *jl_gc_counted_realloc_(void *p, size_t old, size_t sz, int usable)
     return data;
 }
 
-JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_NOTSAFEPOINT
 {
-    return jl_gc_counted_realloc_(p, old, sz, 0);
+    return jl_gc_counted_realloc_(p, p ? old : 0, sz, 0);
 }
 
 void *jl_gc_perm_alloc_nolock(jl_ptls_t ptls, size_t sz, int zero, unsigned align, unsigned offset) JL_NOTSAFEPOINT

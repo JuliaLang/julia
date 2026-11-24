@@ -1,8 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-This module provides universally unique identifiers (UUIDs),
-along with functions for creating the different variants.
+    UUIDs
+
+Universally unique identifiers (UUIDs). Make them with [`uuid1`](@ref), [`uuid4`](@ref),
+[`uuid5`](@ref) or [`uuid7`](@ref), and find which version of UUID one is with
+[`uuid_version`](@ref).
 """
 module UUIDs
 
