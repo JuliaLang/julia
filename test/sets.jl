@@ -975,6 +975,33 @@ end
         @test count(==(2), values(d2)) == 3
         @test count(==(1), values(d2)) == 1
     end
+
+    @testset "replace with singleton type narrowing in Set (#64239)" begin
+        s1 = Set([1, missing])
+        r1 = replace(s1, missing => 0)
+        @test r1 == Set([1, 0])
+        @test typeof(r1) === Set{Int}
+
+        s2 = Set([1, nothing])
+        r2 = replace(s2, nothing => 0)
+        @test r2 == Set([1, 0])
+        @test typeof(r2) === Set{Int}
+
+        s3 = Set([1, missing, nothing])
+        r3 = replace(s3, missing => 0, nothing => 2)
+        @test r3 == Set([1, 0, 2])
+        @test typeof(r3) === Set{Int}
+
+        s4 = Set([1, missing])
+        r4 = replace(s4, missing => 0, count=0)
+        @test r4 == Set([1, missing])
+        @test typeof(r4) === Set{Union{Int, Missing}}
+
+        s5 = Set([1, missing])
+        r5 = replace(s5, missing => 0, count=1)
+        @test r5 == Set([1, 0])
+        @test typeof(r5) === Set{Union{Int, Missing}}
+    end
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
