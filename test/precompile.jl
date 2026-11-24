@@ -2798,6 +2798,56 @@ precompile_test_harness("Image WeakRef") do load_path
     end
 end
 
+# An object of a package image is never freed, and must keep alive what it refers to even
+# once nothing refers to it: an image that is loaded later can still refer to it, by its
+# address in the first image. (This is why such an object retains memory: issue #65162.)
+precompile_test_harness("Image object revived by a later image") do load_path
+    write(joinpath(load_path, "ImageRevivedA.jl"),
+        """
+        module ImageRevivedA
+            mutable struct Node
+                next::Any
+            end
+            mutable struct Payload
+                v::Vector{Int}
+            end
+            const holder = Ref{Any}(Node(nothing))
+            # store a new object in the `Node` of the image, then drop the node
+            @noinline function drop!()
+                node = holder[]::Node
+                node.next = Payload(collect(1:100))
+                holder[] = nothing
+                return WeakRef(node.next)
+            end
+        end
+        """)
+    write(joinpath(load_path, "ImageRevivedB.jl"),
+        """
+        module ImageRevivedB
+            using ImageRevivedA
+            # while this is precompiled, the other image still holds its `Node`
+            const kept = ImageRevivedA.holder[]::ImageRevivedA.Node
+            @noinline getnext() = kept.next
+        end
+        """)
+    @eval using ImageRevivedA
+    payload, junk = invokelatest() do
+        payload = ImageRevivedA.drop!()
+        GC.gc(true); GC.gc(true)
+        junk = [ImageRevivedA.Payload([i]) for i in 1:100_000] # reuse what was freed, if anything
+        GC.gc(true); GC.gc(true)
+        payload, junk
+    end
+    @eval using ImageRevivedB
+    invokelatest() do
+        @test ImageRevivedA.holder[] === nothing
+        next = ImageRevivedB.getnext()
+        @test next === payload.value
+        @test sum((next::ImageRevivedA.Payload).v) == 5050
+        @test length(junk) == 100_000
+    end
+end
+
 precompile_test_harness("Detecting importing outside of a package module") do load_path
     io = IOBuffer()
     write(joinpath(load_path, "ImportBeforeMod.jl"),
