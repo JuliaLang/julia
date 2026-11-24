@@ -45,7 +45,7 @@ function Base.getindex(rb::GitRebase, i::Integer)
     return rb_op
 end
 
-function Base.iterate(rb::GitRebase, state=nothing)
+function Base.iterate(rb::GitRebase, _state=nothing)
     ensure_initialized()
     rb_op_ptr_ptr = Ref{Ptr{RebaseOperation}}(C_NULL)
     GC.@preserve rb begin

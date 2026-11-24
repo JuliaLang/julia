@@ -1,14 +1,17 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Low level module for mmap (memory mapping of files).
+    Mmap
+
+Memory-mapped files. [`Mmap.mmap`](@ref) maps a file, or anonymous memory, into an array,
+and [`Mmap.sync!`](@ref) writes changes back to the file.
 """
 module Mmap
 
-import Base: OS_HANDLE, INVALID_OS_HANDLE, IOError
-import Base.Filesystem: JL_O_CREAT, JL_O_RDONLY, JL_O_RDWR, JL_O_EXCL, S_IRUSR, S_IWUSR
+import Base: INVALID_OS_HANDLE, IOError, OS_HANDLE
+import Base.Filesystem: JL_O_CREAT, JL_O_EXCL, JL_O_RDONLY, JL_O_RDWR, S_IRUSR, S_IWUSR
 using Base.Sys: PAGESIZE
-import Serialization: Serialization, AbstractSerializer
+import Serialization: AbstractSerializer, Serialization
 
 export mmap
 
@@ -311,9 +314,9 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer, mo
     throw(ArgumentError("invalid SharedMemory open mode: $mode; must be \"r\", \"r+\", or \"w+\""))
 end
 
-Base.position(io::SharedMemory) = 0
-Base.isfile(io::SharedMemory) = false
-Base.isreadable(io::SharedMemory) = true
+Base.position(::SharedMemory) = 0
+Base.isfile(::SharedMemory) = false
+Base.isreadable(::SharedMemory) = true
 Base.iswritable(io::SharedMemory) = !io.readonly
 Base.isopen(io::SharedMemory) = io.isopen
 isanonymous(io::SharedMemory) = isempty(io.name)
@@ -559,7 +562,7 @@ function mmap(io::IO, ::Type{<:BitArray}, dims::NTuple{N,Integer},
             throw(ArgumentError("the given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with \"r+\" mode to override)"))
         end
     end
-    B = BitArray{N}(undef, ntuple(i->0,Val(N))...)
+    B = BitArray{N}(undef, ntuple(_->0,Val(N))...)
     B.chunks = chunks
     B.len = n
     if N != 1
@@ -676,7 +679,7 @@ elseif Sys.isopenbsd() || Sys.isnetbsd()
     const MADV_FREE = 6
 end
 
-"""
+@doc """
     Mmap.madvise!(array, flag::Integer = Mmap.MADV_NORMAL)
 
 Advises the kernel on the intended usage of the memory-mapped `array`, with the intent

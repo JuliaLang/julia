@@ -250,6 +250,53 @@ split on spaces for this, which introduces ambiguities. When trying to port shel
 Julia, try cut and pasting first. Since Julia shows commands to you before running them, you can
 easily and safely just examine its interpretation without doing any damage.
 
+## Globbing
+
+An unquoted `*`, `?` or `[` in a command makes the word it appears in a *glob*, which expands
+to the paths that match it, as in a shell:
+
+```julia
+julia> using Glob
+
+julia> `ls *.md`
+`ls NEWS.md README.md`
+```
+
+Julia does not match globs itself. It calls a function named `glob` that is visible in the
+module where the command appears, and so globbing works once a package that provides one, such
+as [Glob.jl](https://github.com/vtjnash/Glob.jl), is loaded with `using`. Without one, a command
+with a glob throws an error. What a pattern matches, including the meaning of `*`, `?` and
+`[...]` and of a `**` path component, is up to that function, so a package can implement
+whatever glob syntax it chooses.
+
+A glob is expanded when the command is created, relative to the current working directory, not
+when it runs, and a `dir` given to the [`Cmd`](@ref) constructor afterwards does not change
+it. Brace expansion and a leading `~` are expanded first, as in shells, and each argument this
+produces is globbed on its own if it has a glob character: ``` `ls {*.txt,doc/*.md}` ``` lists the
+`.txt` files and then the `.md` files in `doc`, and in ``` `ls {README,*.md}` ``` the first argument
+is `README` whether or not such a file exists. A glob that matches nothing throws an
+error, as a command such as `rm` or `cat` given no arguments would fail, read its standard input
+or do something else unexpected. To allow a pattern to match nothing, call the globbing function
+yourself and interpolate the result, which may be empty, as in ``` `rm -f $(glob("*.bak"))` ```.
+
+Quoted or escaped characters are matched literally, and so are the values of interpolated
+expressions: ``` `ls $dir/*.txt` ``` lists the `.txt` files in the directory `dir`, even if its
+name contains spaces or glob characters, without the quotes most shells would need. A glob cannot be
+the target of a redirection. Like other special characters, a `]` outside a glob must be quoted.
+
+### Implementing `glob`
+
+A package that provides globbing defines and exports a function `glob(pattern)`. Julia calls it
+with one pattern as a `String` and the function returns a collection of the matching paths, which
+may be empty, as strings. A pattern may be relative or absolute. Its path components are
+separated by `/`, and on Windows also by `\`.
+
+The unquoted glob characters appear in the pattern as written, and every literal `*`, `?` or
+`[`, and on systems other than Windows every literal `\`, appears as a bracket expression that
+contains just that character, such as `[*]`. A pattern matching implementation that supports
+bracket expressions therefore matches these characters literally without any special
+treatment. On Windows, a `\` in the pattern is always a path separator, never an escape.
+
 ## Pipelines
 
 Shell metacharacters, such as `|`, `&`, and `>`, need to be quoted (or escaped) inside of Julia's backticks:
@@ -319,6 +366,21 @@ IO redirection can be accomplished by passing keyword arguments `stdin`, `stdout
 ```julia
 pipeline(`do_work`, stdout=pipeline(`sort`, "out.txt"), stderr="errs.txt")
 ```
+
+As a special case in command literals, a redirection to or from `/dev/null` is replaced with the
+[`devnull`](@ref) object, including on Windows, where that path doesn't exist. This provides a
+portable way to discard output and read from an always-empty file. So
+``` `do_work 2>/dev/null` ``` means ```pipeline(`do_work`, stderr=devnull)```, and discards the
+error output of `do_work` portably.
+
+In a command literal, `N>&M` makes the command's stream `N` a copy of its stream `M`, for the
+standard streams 0, 1 and 2, as in a shell; `>&M` is short for `1>&M` and `<&M` for `0<&M`.
+Redirections are applied in the order they are written, so ``` `do_work >log 2>&1` ``` sends
+both streams of `do_work` to `log`, while ``` `do_work 2>&1 >log` ``` sends only its output
+there, and its errors to where its output would otherwise have gone. In a pipeline, or when
+reading the output with [`read`](@ref), that is the pipe: ``` read(`do_work 2>&1`, String) ```
+captures both streams, and ``` `do_work >&2` ``` sends the output of `do_work` to its
+standard error.
 
 ### Avoiding Deadlock in Pipelines
 

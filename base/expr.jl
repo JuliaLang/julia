@@ -785,6 +785,7 @@ global state or mutable memory pointed to by its arguments.
     - a global reference or `getglobal` call to access a mutable global variable
     - a global assignment or `setglobal!` call to perform assignment to a non-constant global variable
     - `setfield!` call that changes a field of a global mutable variable
+    - returning a reference to a global mutable object, even without accessing it
 
 !!! note
     This `:inaccessiblememonly` assertion covers any other methods called by the annotated method.
@@ -1845,7 +1846,7 @@ quoted(@nospecialize(x)) = isa_ast_node(x) ? QuoteNode(x) : x
 
 # Implementation of generated functions
 function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool, loc::LineNumberNode)
-    ci = ccall(:jl_fl_lower, Any, (Any, Any, Csize_t, Cint, Any),
+    ci = ccall(:jl_lower, Any, (Any, Any, Csize_t, Cint, Any),
                defmod, ex, typemax(Csize_t), 0, loc)[1]
     if !isa(ci, CodeInfo)
         if isa(ci, Expr) && ci.head === :error

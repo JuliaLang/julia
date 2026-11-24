@@ -283,6 +283,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [:generated_lambda _...] -> vst1_generated_lambda(vcx, st)
     [:var"with-static-parameters" lam sps...] ->
         vst1_raw_lambda(vcx, lam) & allv(vst1_ident_lhs, vcx, sps)
+    [:toplevel_pure lam] -> @stm lam begin
+        [:var"with-static-parameters" _...] -> vst1(vcx, lam)
+        lam -> vst1_raw_lambda(vcx, lam)
+    end
     [:softscope _] -> pass()
     [:softscope] -> pass()
     [:generated] -> pass()
@@ -317,7 +321,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [:new t args...] -> vst1(vcx, t) & allv(vst1, vcx, args)
     [:splatnew t arg] -> vst1(vcx, t) & vst1(vcx, arg)
     [:thisfunction] -> vcx.toplevel ?
-        @fail(st, "can only be used inside a function") :
+        @fail(st, "@__FUNCTION__ can only be used inside a function") :
         !vcx.return_ok ?
         @fail(st, "current function not defined in comprehension or generator") : pass()
     [:var"latestworld-if-toplevel"] -> pass()
@@ -345,7 +349,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [:... _...] ->
         @fail(st, "unexpected `...`\nsplatting can only be done into a `call`, `tuple`, `curly`, or array-like expression")
     [:parameters _...] ->
-        @fail(st, "unexpected semicolon")
+        @fail(st, "unexpected semicolon or `parameters` form")
     [:braces _...] ->
         @fail(st, "`{ }` outside of `where` is reserved for future use")
     [:bracescat _...] ->
@@ -539,7 +543,7 @@ vst1_calldecl_dot_name_rhs(vcx, st) = @stm st begin
     [:syntaxinert x] ->  vst1_calldecl_dot_name_rhs(vcx, x)
     [:identifier] -> vst1_ident(vcx, st; lhs=true)
     ([:value], when=st.value isa String) -> _ident_str(vcx, st, st.value; lhs=true)
-    [:tuple _...] -> @fail(st, "dotcall syntax not valid here")
+    [:tuple _...] -> @fail(st, "dotcall syntax not valid in function declaration")
     _ -> @fail(st, "invalid `.` syntax")
 end
 
@@ -781,7 +785,7 @@ function _calldecl_positionals(vcx, params_meta, eq_is_kw)
     for (i, p) in enumerate(params)
         if head(p) === :kw || head(p) === :(=) && eq_is_kw
             require_assign = true
-            allow_val_splat = i == lastindex(params)
+            allow_val_splat = i == lastindex(params) && !is_known(va_ok)
             ok[] &= vst1_pparam_and_default(vcx, p; eq_is_kw, allow_val_splat)
         elseif head(p) === :...
             ok[] &= @fail(p, "`...` may only be used on the final parameter")
@@ -1006,11 +1010,11 @@ vst1_assign_lhs_nontuple(vcx, st; in_const=false, in_tuple=false) = @stm st begi
     [:(::) x t] ->
         vst1_assign_lhs(vcx, x; in_const, in_tuple) & vst1(vcx, t)
     [:. x y] ->
-        in_const ? @fail(st, "cannot declare this form constant") :
-        head(y) === :tuple ? @fail(st, "dotcall syntax not valid here") :
+        in_const ? @fail(st, "cannot declare dotted form constant") :
+        head(y) === :tuple ? @fail(st, "cannot assign to dotcall syntax") :
         vst1(vcx, x) & vst1(vcx, y)
     [:ref x is...] ->
-        in_const ? @fail(st, "cannot declare this form constant") :
+        in_const ? @fail(st, "cannot declare `ref[]` form constant") :
         vst1(vcx, x) & allv(vst1_call_arg, vcx, is)
     [:curly x tvs...] ->
         vst1_ident(vcx, x; lhs=true) & allv(vst1_typevar_decl, vcx, tvs)

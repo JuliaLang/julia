@@ -3,10 +3,8 @@ using FileWatching.Pidfile
 using Test
 
 using Base.Filesystem: File
-using FileWatching.Pidfile: iswindows,
-    write_pidfile, parse_pidfile,
-    isvalidpid, stale_pidfile,
-    tryopen_exclusive, open_exclusive
+using FileWatching.Pidfile: isvalidpid, iswindows, open_exclusive, parse_pidfile,
+    write_pidfile
 
 # helper utilities
 struct MemoryFile <: Base.AbstractPipe
@@ -75,7 +73,9 @@ end
     @testset "parse_pidfile" begin
         age = 0
         @test parse_pidfile("nonexist") === (Cuint(0), "", 0.0)
-        open(io -> write_pidfile(io, pid), "pidfile", "w")
+        let pid = pid
+            open(io -> write_pidfile(io, pid), "pidfile", "w")
+        end
         pid2, host2, age2 = parse_pidfile("pidfile")
         @test pid == pid2
         @test host == host2
@@ -103,20 +103,20 @@ end
     end
 
     # release the pidfile after a short delay
-    deleted = false
+    deleted = Ref(false)
     rmtask = @async begin
         sleep(3)
         rm("pidfile")
-        deleted = true
+        deleted[] = true
     end
     Base.errormonitor(rmtask)
     @test isfile("pidfile")
-    @test !deleted
+    @test !deleted[]
 
     # open the pidfile again (should wait for it to disappear first)
     t = @elapsed f2 = open_exclusive(joinpath(dir, "pidfile"))::File
     try
-        @test deleted
+        @test deleted[]
         @test isfile("pidfile")
         @test t > 2
         if t > 6
@@ -140,19 +140,19 @@ end
     finally
         close(f)
     end
-    deleted = false
+    deleted[] = false
     rmtask = @async begin
         sleep(8)
         rm("pidfile")
-        deleted = true
+        deleted[] = true
     end
     Base.errormonitor(rmtask)
     @test isfile("pidfile")
-    @test !deleted
+    @test !deleted[]
     # open the pidfile again (should wait for it to disappear first)
     t = @elapsed f2 = open_exclusive("pidfile", mode = 0o777, poll_interval = 1.0)::File
     try
-        @test deleted
+        @test deleted[]
         @test isfile("pidfile")
         @test filemode(f2) & 0o777 == (iswindows() ? 0o666 : 0o775)
         @test write(f2, "def") == 3
@@ -171,11 +171,11 @@ end
         rm("pidfile")
 
         f = open_exclusive("pidfile")::File
-        deleted = false
+        deleted[] = false
         rmtask = @async begin
             sleep(2)
             @test Pidfile.tryrmopenfile("pidfile")
-            deleted = true
+            deleted[] = true
         end
         Base.errormonitor(rmtask)
 
@@ -184,14 +184,14 @@ end
         @test time()-t1 ≈ 0 atol=1
 
         sleep(1)
-        @test !deleted
+        @test !deleted[]
 
         t1 = time()
         @test_throws Pidfile.PidlockedError open_exclusive("pidfile", wait=false)
         @test time()-t1 ≈ 0 atol=1
 
         wait(rmtask)
-        @test deleted
+        @test deleted[]
         t = @elapsed f2 = open_exclusive("pidfile", wait=false)::File
         @test isfile("pidfile")
         @test t ≈ 0 atol=1
@@ -203,41 +203,46 @@ end
 
 @assert !ispath("pidfile")
 @testset "open_exclusive: break lock" begin
-    @testset "using stale_age without lock refreshing" begin
-        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10, refresh=0)::File
-        try
-            write_pidfile(f, getpid())
-        finally
+    # each case waits for its own lock to go stale, so they run at the same time
+    @sync begin
+        @async @testset "using stale_age without lock refreshing" begin
+            t = @elapsed f = open_exclusive("pidfile-norefresh", poll_interval=3, stale_age=10, refresh=0)::File
+            try
+                write_pidfile(f, getpid())
+            finally
+                close(f)
+            end
+            @test t < 2
+            t = @elapsed f = open_exclusive("pidfile-norefresh", poll_interval=3, stale_age=1, refresh=0)::File
             close(f)
+            @test 20 < t < 50
+            rm("pidfile-norefresh")
         end
-        @test t < 2
-        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=1, refresh=0)::File
-        close(f)
-        @test 20 < t < 50
-        rm("pidfile")
-    end
 
-    @testset "using stale_age with lock refreshing on (default)" begin
-        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10)::File
-        try
-            write_pidfile(f, getpid())
-        finally
+        @async @testset "using stale_age with lock refreshing on (default)" begin
+            t = @elapsed f = open_exclusive("pidfile-refresh", poll_interval=3, stale_age=10)::File
+            try
+                write_pidfile(f, getpid())
+            finally
+                close(f)
+            end
+            @test t < 2
+            t = @elapsed f = open_exclusive("pidfile-refresh", poll_interval=3, stale_age=5)::File
             close(f)
+            @test 20 < t < 50
+            rm("pidfile-refresh")
         end
-        @test t < 2
-        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=5)::File
-        close(f)
-        @test 20 < t < 50
-        rm("pidfile")
-    end
 
-    t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10)::File
-    close(f)
-    @test t < 2
-    t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10)::File
-    close(f)
-    @test 8 < t < 25
-    rm("pidfile")
+        @async @testset "without a pid in the file" begin
+            t = @elapsed f = open_exclusive("pidfile-nopid", poll_interval=3, stale_age=10)::File
+            close(f)
+            @test t < 2
+            t = @elapsed f = open_exclusive("pidfile-nopid", poll_interval=3, stale_age=10)::File
+            close(f)
+            @test 8 < t < 25
+            rm("pidfile-nopid")
+        end
+    end
 end
 
 @testset "open_exclusive: other errors" begin
@@ -295,7 +300,7 @@ end
                 wait(synchronizer)
                 notify(synchronizer2)
             end
-            t = @elapsed mkpidlock("do_block_pidfile") do
+            local t = @elapsed mkpidlock("do_block_pidfile") do
                 # nothing
             end
             sleep(0.01)
@@ -330,7 +335,7 @@ end
     lockf = mkpidlock("pidfile"; refresh=0.2)
     new = mtime(lockf.fd)
     @test new ≈ time() atol=1
-    for i = 1:10
+    for _ = 1:10
         sleep(0.5)
         old, new = new, mtime(lockf.fd)
         @test new != old

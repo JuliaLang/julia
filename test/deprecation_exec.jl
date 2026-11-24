@@ -27,6 +27,10 @@ module DeprecationTests # to test @deprecate
     # test deprecation of a constructor
     struct A{T} end
     @deprecate A{T}(x::S) where {T, S} f()
+    abstract type B end
+    @deprecate B f false
+    const C = Union{A{Int}, B} # methods of a `Union` are not named after a type
+    @deprecate C() f() false
 
     module Sub
     f1() = true
@@ -125,6 +129,22 @@ begin # @deprecate
     @test @test_nowarn call(A{Int}, 1.)
     @test @test_nowarn call(DeprecationTests.Sub.f1)
     @test @test_nowarn call(DeprecationTests.Sub.f2)
+
+    # A deprecated constructor warns like any other deprecated method: only about itself,
+    # and once for each of its callers (issue #65165).
+    @noinline call_f3() = f3()
+    @noinline call_A() = A{Int}(1.)
+    @noinline call_B() = DeprecationTests.B()
+    @noinline call_C() = DeprecationTests.C()
+    let callers = (call_f3, call_A, call_B, call_C),
+        (logs, _) = Test.collect_test_logs(() -> foreach(c -> (c(); c()), callers))
+        @test map(l -> l.message, logs) == [
+            "`f3()` is deprecated, use `f()` instead.",
+            "`A{T}(x::S) where {T, S}` is deprecated, use `f()` instead.",
+            "`B` is deprecated, use `f` instead.",
+            "`C()` is deprecated, use `f()` instead."]
+        @test map(l -> l.kwargs[:caller].func, logs) == collect(map(nameof, callers))
+    end
 
     # issue #21972
     @noinline function f21972()

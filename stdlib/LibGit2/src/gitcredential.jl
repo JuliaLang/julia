@@ -61,14 +61,26 @@ Checks if the `git_cred` is valid for the given `url`.
 function ismatch(url::AbstractString, git_cred::GitCredential)
     isempty(url) && return true
 
+    # Like git, ignore configuration URLs which cannot be parsed
     m = match(URL_REGEX, url)
-    m === nothing && error("Unable to parse URL")
+    m === nothing && return false
 
     # Note: missing URL groups match anything
-    (m[:scheme] === nothing ? true : m[:scheme] == git_cred.protocol) &&
-    (m[:host] === nothing ? true : m[:host] == git_cred.host) &&
-    (m[:path] === nothing ? true : m[:path] == git_cred.path) &&
-    (m[:user] === nothing ? true : m[:user] == git_cred.username)
+    scheme, host, path, user = m[:scheme], m[:host], m[:path], m[:user]
+    (scheme === nothing || scheme == git_cred.protocol) &&
+    (host === nothing || ismatch_host(host, git_cred.host)) &&
+    (path === nothing || path == git_cred.path) &&
+    (user === nothing || user == git_cred.username)
+end
+
+# A `*` label in the pattern matches exactly one label of the host, e.g. `*.example.com`
+# matches `foo.example.com` but not `example.com` or `foo.bar.example.com`.
+ismatch_host(::AbstractString, ::Nothing) = false
+function ismatch_host(pattern::AbstractString, host::AbstractString)
+    pattern_labels = split(pattern, '.')
+    host_labels = split(host, '.')
+    length(pattern_labels) == length(host_labels) &&
+        all(((p, h),) -> p == "*" || p == h, zip(pattern_labels, host_labels))
 end
 
 function isfilled(cred::GitCredential)
@@ -93,7 +105,8 @@ function Base.copy!(a::GitCredential, b::GitCredential)
     a.host = b.host
     a.path = b.path
     a.username = b.username
-    a.password = b.password === nothing ? nothing : copy(b.password)
+    password = b.password
+    a.password = password === nothing ? nothing : copy(password)
     return a
 end
 
@@ -127,8 +140,10 @@ function Base.read!(io::IO, cred::GitCredential)
                 copy!(cred, urlcred)
             end
         elseif key in GIT_CRED_ATTRIBUTES
-            field = getproperty(cred, Symbol(key))
-            field !== nothing && Symbol(key) === :password && Base.shred!(field)
+            if key == "password"
+                password = cred.password
+                password !== nothing && Base.shred!(password)
+            end
             setproperty!(cred, Symbol(key), value)
         elseif !all(isspace, key)
             @warn "Unknown git credential attribute found: $(repr(key))"
@@ -221,7 +236,7 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
 
     # https://git-scm.com/docs/gitcredentials#gitcredentials-helper
     for entry in GitConfigIter(cfg, r"credential.*\.helper$")
-        section, url, name, value = split_cfg_entry(entry)
+        _section, url, name, value = split_cfg_entry(entry)
         @assert name == "helper"
 
         # Only use configuration settings where the URL applies to the git credential
@@ -247,7 +262,7 @@ specified `git_cred`.
 function default_username(cfg::GitConfig, cred::GitCredential)
     # https://git-scm.com/docs/gitcredentials#gitcredentials-username
     for entry in GitConfigIter(cfg, r"credential.*\.username")
-        section, url, name, value = split_cfg_entry(entry)
+        _section, url, name, value = split_cfg_entry(entry)
         @assert name == "username"
 
         # Only use configuration settings where the URL applies to the git credential
@@ -267,7 +282,7 @@ function use_http_path(cfg::GitConfig, cred::GitCredential)
     # Note: Ideally the regular expression should use "useHttpPath"
     # https://github.com/libgit2/libgit2/issues/4390
     for entry in GitConfigIter(cfg, r"credential.*\.usehttppath")
-        section, url, name, value = split_cfg_entry(entry)
+        _section, url, _name, value = split_cfg_entry(entry)
 
         # Ignore global configuration if we have already encountered more specific entry
         if ismatch(url, cred) && (!isempty(url) || !seen_specific)
@@ -279,8 +294,8 @@ function use_http_path(cfg::GitConfig, cred::GitCredential)
     return use_path
 end
 
-approve(cfg::GitConfig, cred::AbstractCredential, url::AbstractString) = nothing
-reject(cfg::GitConfig, cred::AbstractCredential, url::AbstractString) = nothing
+approve(::GitConfig, ::AbstractCredential, ::AbstractString) = nothing
+reject(::GitConfig, ::AbstractCredential, ::AbstractString) = nothing
 
 function approve(cfg::GitConfig, cred::UserPasswordCredential, url::AbstractString)
     git_cred = GitCredential(cred, url)

@@ -21,10 +21,12 @@ include("rich.jl")
 # the gen-delims set. They are only used to encode IPv6 literal addresses in
 # the URI, which is (still) rare. But they do occur in query strings and
 # indeed in the CommonMark spec tests.
+#
+# '%' is also left alone, as the user is expected to percent encode the URL.
 
 percent_escape(s::AbstractString) =
     '%' * join((uppercase(string(b, base=16)) for b in codeunits(s)), '%')
-encode_uri_component(s::AbstractString) = replace(s, r"[^A-Za-z0-9\-_.~/:?#@!$&'()*+,;=]+" => percent_escape)
+encode_uri_component(s::AbstractString) = replace(s, r"[^A-Za-z0-9\-_.~/:?#@!$&'()*+,;=%]+" => percent_escape)
 encode_uri_component(s::Symbol) = encode_uri_component(string(s))
 
 function withtag(f, io::IO, tag, attrs...)

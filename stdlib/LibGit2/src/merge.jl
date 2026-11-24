@@ -271,7 +271,7 @@ function merge_base(repo::GitRepo, one::AbstractString, two::AbstractString)
                 (Ptr{GitHash}, Ptr{Cvoid}, Ptr{GitHash}, Ptr{GitHash}),
                 moid_ptr, repo, oid1_ptr, oid2_ptr)
         moid_ptr[]
-    catch e
+    catch
         GitHash()
     end
     return moid

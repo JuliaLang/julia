@@ -170,7 +170,7 @@ extern "C" {
 
 struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
-    uintptr_t in_image:2;
+    uintptr_t perm:2;
 #ifdef _P64
     uintptr_t tag:60;
 #else
@@ -496,6 +496,9 @@ typedef struct JL_GC_TRACKED_TYPE _jl_method_t {
 
 // hidden fields:
     jl_mutex_t writelock;
+    // the interpreter's caches for the code of this method it last ran (see interpreter.c),
+    // kept alive by jl_interp_call_sites; zeroed when serialized
+    _Atomic(jl_genericmemory_t*) interp_sites;
 } jl_method_t;
 
 // This type is a placeholder to cache data for a specType signature specialization of a Method
@@ -772,7 +775,7 @@ typedef struct {
 typedef struct JL_GC_TRACKED_TYPE _jl_datatype_t {
     JL_DATA_TYPE
     jl_typename_t *name;
-    struct _jl_datatype_t *super;
+    _Atomic(struct _jl_datatype_t*) super;
     jl_svec_t *parameters;
     jl_svec_t *types;
     jl_value_t *instance;  // for singletons
@@ -1042,7 +1045,6 @@ struct JL_GC_TRACKED_TYPE _jl_typemap_entry_t {
     JL_DATA_TYPE
     _Atomic(struct _jl_typemap_entry_t*) next; // invasive linked list
     jl_tupletype_t *sig; // the type signature for this entry
-    jl_tupletype_t *simplesig; // a simple signature for fast rejection
     jl_svec_t *guardsigs;
     _Atomic(size_t) min_world;
     _Atomic(size_t) max_world;
@@ -1053,7 +1055,7 @@ struct JL_GC_TRACKED_TYPE _jl_typemap_entry_t {
     } func;
     // memoized properties of sig:
     int8_t isleafsig; // isleaftype(sig) & !any(isType, sig) : unsorted and very fast
-    int8_t issimplesig; // all(isleaftype | isAny | isType | isVararg, sig) : sorted and fast
+    int8_t issimplesig; // !isa(sig, UnionAll) : sorted and fast, abstract slots are tested last
     int8_t va; // isVararg(sig)
 };
 
@@ -1670,7 +1672,7 @@ STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint32_t x) JL_NOTSAFE
 #define jl_gf_name(f) (((jl_datatype_t*)jl_typeof(f))->name->singletonname)
 
 // struct type info
-JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st, void *stack, int cacheable) JL_CANSAFEPOINT;
 #define jl_get_fieldtypes(st) ((st)->types ? (st)->types : jl_compute_fieldtypes((st), NULL, 0))
 STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st) JL_NOTSAFEPOINT
 {
@@ -2363,7 +2365,7 @@ JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_binding_partition
 JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(1) JL_MAYBE_UNROOTED) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(1) JL_MAYBE_UNROOTED, enum jl_partition_kind) JL_CANSAFEPOINT;
-JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, int explici) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, int explici) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_import_module(jl_task_t *ct, jl_module_t *m, jl_module_t *import, jl_sym_t *asname) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t flags) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_value_t **symbols, size_t nsymbols, int exported) JL_CANSAFEPOINT;

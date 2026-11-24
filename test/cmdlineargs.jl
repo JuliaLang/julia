@@ -815,7 +815,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         end
 
         # Source and report filenames must support Unicode on Windows as well.
-        let unicode_dir = mkdir(joinpath(dir, "coverage λ space"))
+        let unicode_dir = realpath(mkdir(joinpath(dir, "coverage λ space")))
             srcfile = joinpath(unicode_dir, "source λ.jl")
             cp(inputfile, srcfile)
             outfile = joinpath(unicode_dir, "coverage λ.info")
@@ -838,9 +838,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
                         for m in eachmatch(r"^DA:(\d+),(\d+)$"m, read(outfile, String)))
             rm(outfile)
+            # (the `local y` and `let z` lines themselves don't run any code)
             covered = [
-                8, 9, 10,       # `local` without an assignment (#39307)
-                14, 15, 16,     # `let` without an assignment (#39307)
+                9, 10,          # `local` without an assignment (#39307)
+                15, 16,         # `let` without an assignment (#39307)
                 22, 23,         # lines a macro adds (#41043)
                 28,
                 33, 35,         # implicit returns (#53557)
@@ -1095,8 +1096,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             cov_bug()
             """), """
             DA:1,2
-            DA:2,1
-            DA:3,1
+            DA:2,2
+            DA:3,2
             DA:4,1
             DA:5,0
             DA:8,0
@@ -1116,7 +1117,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             rm(outfile)
             hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
                         for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
-            for ln in 5:10
+            for ln in (5:8..., 10) # (not the loop's `end`, which doesn't run any code)
                 @test get(hits, ln, 0) > 0
             end
         end
@@ -1775,12 +1776,7 @@ end
 
 # Find the path of libjulia (or libjulia-debug, as the case may be)
 # to use as a dummy shlib to open
-libjulia = if Base.DARWIN_FRAMEWORK
-    abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME *
-        (Base.isdebugbuild() ? "_debug" : "")))
-else
-    abspath(Libdl.dlpath(Base.isdebugbuild() ? "libjulia-debug" : "libjulia"))
-end
+libjulia = abspath(Libdl.dlpath(Base.isdebugbuild() ? "libjulia-debug" : "libjulia"))
 
 
 # test error handling code paths of running --sysimage
@@ -2011,8 +2007,10 @@ if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these
                      "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
                      "_RR_TRACE_DIR" => temp_trace_dir)
         success, out, err = readchomperrors(cmd)
-        # rr cannot read perf counters if running in containers, allow it to fail in this case
-        allowed_failure = occursin("Unable to open performance counter", err)
+        # rr cannot read perf counters if running in containers or if the host's
+        # perf_event_paranoid setting is too restrictive, allow it to fail in these cases
+        allowed_failure = occursin("Unable to open performance counter", err) ||
+                            occursin("perf_event_paranoid", err)
         @testset let cmd=cmd, stdout=out, stderr=err
             @test success || allowed_failure
         end
@@ -2148,8 +2146,8 @@ end
 # .ji) and the plain serialized .ji (--pkgimages=no), with --compress-sysimage
 # (which precompile workers inherit through julia_cmd) on and off in each.
 # Compression requires the split layout, so with --pkgimages=no the worker must
-# warn and emit an uncompressed heap.
-@testset "pkgimage: native=$native compress=$compress" for native in (true, false), compress in (true, false)
+# warn and emit an uncompressed heap. A package with no code gets no ocachefile.
+@testset "pkgimage: native=$native code=$code compress=$compress" for (native, code) in ((true, true), (true, false), (false, false)), compress in (true, false)
     mktempdir() do dir
         pkgdir = joinpath(dir, "CompressMe")
         mkpath(joinpath(pkgdir, "src"))
@@ -2163,6 +2161,7 @@ end
             """
             module CompressMe
             f() = 42
+            $(code ? "precompile(f, ())" : "")
             end
             """)
         cmd = addenv(`$(Base.julia_cmd()) --pkgimages=$(native ? "yes" : "no")
@@ -2177,10 +2176,10 @@ end
 
         compiled = joinpath(dir, "depot", "compiled", "v$(VERSION.major).$(VERSION.minor)", "CompressMe")
         ji_file = only(filter(endswith(".ji"), readdir(compiled; join=true)))
-        @test isfile(Base.ocachefile_from_cachefile(ji_file)) == native
+        @test isfile(Base.ocachefile_from_cachefile(ji_file)) == (native && code)
 
         # The heap payload in the .ji must be zstd-compressed exactly when a
-        # compressed split pkgimage was requested.
+        # compressed split pkgimage with code was requested.
         open(ji_file) do io
             flags = Ref{UInt32}()
             checksum = Ref{UInt32}()
@@ -2190,9 +2189,10 @@ end
             @test err == 0
             @test flags[] & Base.JI_FLAG_PKGIMAGE != 0
             @test (flags[] & Base.JI_FLAG_SPLIT != 0) == native
+            @test (flags[] & Base.JI_FLAG_NO_NATIVE != 0) == (native && !code)
             seek(io, datastartpos[])
             zstd_magic = UInt8[0x28, 0xb5, 0x2f, 0xfd]
-            @test (read(io, 4) == zstd_magic) == (native && compress)
+            @test (read(io, 4) == zstd_magic) == (native && code && compress)
         end
 
         # Load again in a fresh process from the existing cache, without

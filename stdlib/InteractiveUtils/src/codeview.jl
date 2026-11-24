@@ -106,7 +106,7 @@ function print_warntype_mi(io::IO, mi::Core.MethodInstance)
             if val isa Core.SimpleVector
                 val = val[1]
             end
-            print_highlighted(io::IO, v::String, color::Symbol) =
+            print_highlighted(io::IO, v::String, color::Union{Symbol,Int}) =
                 if highlighting[:warntype]
                     Base.printstyled(io, v; color)
                 else
@@ -166,7 +166,7 @@ See also: [`@code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref)
 function code_warntype(io::IO, arginfo::ArgInfo;
                        world=Base.get_world_counter(),
                        interp::Union{Nothing,Base.Compiler.AbstractInterpreter}=nothing,
-                       debuginfo::Symbol=:default, optimize::Bool=false, kwargs...)
+                       debuginfo::Symbol=:default, optimize::Bool=false, _kwargs...)
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
     debuginfo = Base.IRShow.debuginfo(debuginfo)
@@ -263,7 +263,7 @@ function _dump_function(arginfo::ArgInfo, native::Bool, wrapper::Bool,
             if arginfo.oc === nothing
                 src = Base.invoke_interp_compiler(nothing, :typeinf_code, Base.invoke_default_compiler(:_default_interp, world), mi, true)
             else
-                src, rt = Base.get_oc_code_rt(nothing, arginfo.oc, arginfo.tt, true)
+                src, _rt = Base.get_oc_code_rt(nothing, arginfo.oc, arginfo.tt, true)
             end
             src isa Core.CodeInfo || error("failed to infer source for $mi")
             str = _dump_function_native_assembly(mi, src, wrapper, syntax, debuginfo, binary, raw, params)
@@ -272,7 +272,7 @@ function _dump_function(arginfo::ArgInfo, native::Bool, wrapper::Bool,
         if arginfo.oc === nothing
             src = Base.invoke_interp_compiler(nothing, :typeinf_code, Base.invoke_default_compiler(:_default_interp, world), mi, true)
         else
-            src, rt = Base.get_oc_code_rt(nothing, arginfo.oc, arginfo.tt, true)
+            src, _rt = Base.get_oc_code_rt(nothing, arginfo.oc, arginfo.tt, true)
         end
         src isa Core.CodeInfo || error("failed to infer source for $mi")
         str = _dump_function_llvm(mi, src, wrapper, !raw, dump_module, optimize, debuginfo, llvm_options, params)
@@ -403,12 +403,28 @@ code_native(args...; kwargs...) = (@nospecialize; code_native(stdout, args...; k
 
 const num_regex = r"^(?:\$?-?\d+|0x[0-9A-Fa-f]+|-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)$"
 
+# Iterates the captures of a regex match as `SubString`s, for destructuring them without
+# the `nothing` that the element type of `RegexMatch.captures` allows for.
+# Use this only with a regex whose capture groups all take part in every match.
+# A group that can be skipped, as in `(a)?` or `(a)|(b)`, captures `nothing`, which
+# is an error here; write `(a?)` to capture an empty string instead.
+struct RequiredCaptures{S<:AbstractString}
+    captures::Vector{Union{Nothing,SubString{S}}}
+end
+function Base.iterate(rc::RequiredCaptures{S}, i::Int=1) where S<:AbstractString
+    i > length(rc.captures) && return nothing
+    capture = rc.captures[i]
+    capture === nothing && error("capture group $i did not take part in the match")
+    return capture, i+1
+end
+required_captures(m::RegexMatch{S}) where S<:AbstractString = RequiredCaptures{S}(m.captures)
+
 function print_llvm(io::IO, code::String)
     buf = IOBuffer(code)
     for line in eachline(buf)
         m = match(r"^(\s*)((?:[^;]|;\")*)(.*)$", line)
         m === nothing && continue
-        indent, tokens, comment = m.captures
+        indent, tokens, comment = required_captures(m)
         print(io, indent)
         print_llvm_tokens(io, tokens)
         printstyled_ll(io, comment, :comment)
@@ -420,21 +436,21 @@ const llvm_types =
     r"^(?:void|half|float|double|x86_\w+|ppc_\w+|label|metadata|type|opaque|token|i\d+)$"
 const llvm_cond = r"^(?:[ou]?eq|[ou]?ne|[uso][gl][te]|ord|uno)$" # true|false
 
-function print_llvm_tokens(io, tokens)
+function print_llvm_tokens(io::IO, tokens::AbstractString)
     m = match(r"^((?:[^\"\s:]+:|\"[^\"]*\":)?)(\s*)(.*)", tokens)
     if m !== nothing
-        label, spaces, tokens = m.captures
+        label, spaces, tokens = required_captures(m)
         printstyled_ll(io, label, :label, spaces)
     end
     m = match(r"^(%[^\s=]+)(\s*)=(\s*)(.*)", tokens)
     if m !== nothing
-        result, spaces, spaces2, tokens = m.captures
+        result, spaces, spaces2, tokens = required_captures(m)
         printstyled_ll(io, result, :variable, spaces)
         printstyled_ll(io, '=', :default, spaces2)
     end
     m = match(r"^([a-z]\w*)(\s*)(.*)", tokens)
     if m !== nothing
-        inst, spaces, tokens = m.captures
+        inst, spaces, tokens = required_captures(m)
         iskeyword = occursin(r"^(?:define|declare|type)$", inst) || occursin("=", tokens)
         printstyled_ll(io, inst, iskeyword ? :keyword : :instruction, spaces)
     end
@@ -442,51 +458,51 @@ function print_llvm_tokens(io, tokens)
     print_llvm_operands(io, tokens)
 end
 
-function print_llvm_operands(io, tokens)
+function print_llvm_operands(io::IO, tokens::AbstractString)
     while !isempty(tokens)
         tokens = print_llvm_operand(io, tokens)
     end
     return tokens
 end
 
-function print_llvm_operand(io, tokens)
+function print_llvm_operand(io::IO, tokens::AbstractString)
     islabel = false
     while !isempty(tokens)
         m = match(r"^,(\s*)(.*)", tokens)
         if m !== nothing
-            spaces, tokens = m.captures
+            spaces, tokens = required_captures(m)
             printstyled_ll(io, ',', :default, spaces)
             break
         end
         m = match(r"^(\*+|=)(\s*)(.*)", tokens)
         if m !== nothing
-            sym, spaces, tokens = m.captures
+            sym, spaces, tokens = required_captures(m)
             printstyled_ll(io, sym, :default, spaces)
             continue
         end
         m = match(r"^(\"[^\"]*\")(\s*)(.*)", tokens)
         if m !== nothing
-            str, spaces, tokens = m.captures
+            str, spaces, tokens = required_captures(m)
             printstyled_ll(io, str, :variable, spaces)
             continue
         end
         m = match(r"^([({\[<])(\s*)(.*)", tokens)
         if m !== nothing
-            bracket, spaces, tokens = m.captures
+            bracket, spaces, tokens = required_captures(m)
             printstyled_ll(io, bracket, :bracket, spaces)
             tokens = print_llvm_operands(io, tokens) # enter
             continue
         end
         m = match(r"^([)}\]>])(\s*)(.*)", tokens)
         if m !== nothing
-            bracket, spaces, tokens = m.captures
+            bracket, spaces, tokens = required_captures(m)
             printstyled_ll(io, bracket, :bracket, spaces)
             break # leave
         end
 
         m = match(r"^([^\s,*=(){}\[\]<>]+)(\s*)(.*)", tokens)
         m === nothing && break
-        token, spaces, tokens = m.captures
+        token, spaces, tokens = required_captures(m)
         if occursin(llvm_types, token)
             printstyled_ll(io, token, :type)
             islabel = token == "label"
@@ -516,7 +532,7 @@ function print_native(io::IO, code::String, arch::Symbol=sys_arch_category())
     for line in eachline(buf)
         m = match(r"^(\s*)((?:[^;#/]|#\S|;\"|/[^/])*)(.*)$", line)
         m === nothing && continue
-        indent, tokens, comment = m.captures
+        indent, tokens, comment = required_captures(m)
         print(io, indent)
         print_native_tokens(io, tokens, archv)
         printstyled_ll(io, comment, :comment)
@@ -545,19 +561,19 @@ const arm_keywords = r"^(?:lsl|lsr|asr|ror|rrx|!|/[zm])$"
 # rounding modes and fence orderings
 const riscv_keywords = r"^(?:rne|rtz|rdn|rup|rmm|dyn|[iorw]{1,4})$"
 
-function print_native_tokens(io, tokens, arch::Union{Val{:x86}, Val{:arm}, Val{:riscv}})
+function print_native_tokens(io::IO, tokens::AbstractString, arch::Union{Val{:x86}, Val{:arm}, Val{:riscv}})
     x86 = arch isa Val{:x86}
     arm = arch isa Val{:arm}
     riscv = arch isa Val{:riscv}
     m = match(r"^((?:[^\s:]+:|\"[^\"]+\":)?)(\s*)(.*)", tokens)
     if m !== nothing
-        label, spaces, tokens = m.captures
+        label, spaces, tokens = required_captures(m)
         printstyled_ll(io, label, :label, spaces)
     end
     haslabel = false
     m = match(r"^([a-z][\w.]*)(\s*)(.*)", tokens)
     if m !== nothing
-        instruction, spaces, tokens = m.captures
+        instruction, spaces, tokens = required_captures(m)
         printstyled_ll(io, instruction, :instruction, spaces)
         haslabel = riscv ? occursin(r"^(?:b(?:eqz?|nez?|(?:lt|ge|gt|le)[uz]?)|j|jal|call|tail|c\.(?:beqz|bnez|j))$", instruction) :
                            occursin(r"^(?:bl?|bl?\.\w{2,5}|[ct]bn?z)?$", instruction)
@@ -567,27 +583,27 @@ function print_native_tokens(io, tokens, arch::Union{Val{:x86}, Val{:arm}, Val{:
     while !isempty(tokens)
         m = match(r"^([,:*])(\s*)(.*)", tokens)
         if m !== nothing
-            sym, spaces, tokens = m.captures
+            sym, spaces, tokens = required_captures(m)
             printstyled_ll(io, sym, :default, spaces)
             isfuncname = false
             continue
         end
         m = match(r"^([(){}\[\]])(\s*)(.*)", tokens)
         if m !== nothing
-            bracket, spaces, tokens = m.captures
+            bracket, spaces, tokens = required_captures(m)
             printstyled_ll(io, bracket, :bracket, spaces)
             continue
         end
         m = match(r"^#([0-9a-fx.-]+)(\s*)(.*)", tokens)
-        if arm && m !== nothing && occursin(num_regex, m.captures[1])
-            num, spaces, tokens = m.captures
+        if arm && m !== nothing && occursin(num_regex, m.captures[1]::AbstractString)
+            num, spaces, tokens = required_captures(m)
             printstyled_ll(io, "#" * num, :number, spaces)
             continue
         end
 
         m = match(r"^([^\s,:*(){}\[\]][^\s,:*/(){}\[\]]*)(\s*)(.*)", tokens)
         m === nothing && break
-        token, spaces, tokens = m.captures
+        token, spaces, tokens = required_captures(m)
         if occursin(num_regex, token)
             printstyled_ll(io, token, :number)
         elseif x86 && occursin(x86_ptr, token) || occursin(avx512flags, token)

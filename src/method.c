@@ -62,8 +62,7 @@ JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src) JL_
             if (jl_is_globalref(stmt)) {
                 jl_globalref_t *gr = (jl_globalref_t*)stmt;
                 jl_binding_t *b = gr->binding;
-                if (!b)
-                    b = jl_get_module_binding(gr->mod, gr->name, 1);
+                assert(b);
                 any_implicit |= jl_maybe_add_binding_backedge(b, (jl_value_t*)m, m);
             }
         }
@@ -801,6 +800,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
     int last_lineno = jl_atomic_load_relaxed(&jl_lineno);
     int last_in = ct->ptls->in_pure_callback;
     size_t last_age = ct->world_age;
+    uint64_t last_fpctrl = jl_fpctrl_enter_default();
 
     JL_TRY {
         ct->ptls->in_pure_callback = 1;
@@ -897,10 +897,12 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
         ct->ptls->in_pure_callback = last_in;
         jl_atomic_store_relaxed(&jl_lineno, last_lineno);
         ct->world_age = last_age;
+        jl_fpctrl_restore(last_fpctrl);
     }
     JL_CATCH {
         ct->ptls->in_pure_callback = last_in;
         jl_atomic_store_relaxed(&jl_lineno, last_lineno);
+        jl_fpctrl_restore(last_fpctrl);
         jl_rethrow();
     }
     JL_GC_POP();
@@ -1092,6 +1094,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->purity.bits = 0;
     m->max_varargs = UINT8_MAX;
     JL_MUTEX_INIT(&m->writelock, "method->writelock");
+    jl_atomic_store_relaxed(&m->interp_sites, NULL);
     return m;
 }
 
@@ -1378,7 +1381,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     m->line = line;
     jl_method_set_source(m, f);
 
-    jl_method_table_insert(mt, m, NULL);
+    jl_method_table_insert(mt, m);
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
     JL_GC_POP();

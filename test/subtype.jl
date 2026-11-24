@@ -3812,3 +3812,8 @@ struct Q61645{T,S} end
         @test typeintersect(Y, X) === Union{}
     end
 end
+
+@testset "intersection requiring T == Tuple{T}" begin
+    @test typeintersect(Tuple{Tuple{T},T} where T, Tuple{Vararg{T}} where T>:Int64) === Union{}
+    @test typeintersect(Tuple{Tuple{T},T,Any} where T, Tuple{S,S,U} where S where U) === Union{}
+end

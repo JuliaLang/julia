@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Mmap, Random
+using Mmap, Random, Test
 
 @test isempty(Test.detect_closure_boxes(Mmap))
 
@@ -425,12 +425,12 @@ end
         io = open(Mmap.SharedMemory, "", 12; readonly = false, create = true)
         m = mmap(io, Vector{UInt8}, 12)
         @test_throws ArgumentError mmap(io, Vector{UInt8}, 12)
-        close(io); finalize(m); m = nothing; GC.gc()
+        close(io); finalize(m); GC.gc()
 
         io = open(Mmap.SharedMemory, shm_name, 12; readonly = false, create = true)
         m = mmap(io, Vector{UInt8}, 12)
         @test_throws ArgumentError mmap(io, Vector{UInt8}, 12)
-        close(io); finalize(m); m = nothing; GC.gc()
+        close(io); finalize(m); GC.gc()
     end
 
     @testset "Anonymous SharedMemory mmaps are independent" begin
@@ -443,7 +443,7 @@ end
         m1 .= 1
         @test all(m1 .== 1)
         @test all(m2 .== 0)
-        close(io1); close(io2); finalize(m1); finalize(m2); m1 = m2 = nothing; GC.gc()
+        close(io1); close(io2); finalize(m1); finalize(m2); GC.gc()
     end
 
     @testset "SharedMemory modes" begin
@@ -458,7 +458,7 @@ end
         if !(Sys.isfreebsd() && Sys.ARCH === :aarch64)
             @test_throws ReadOnlyMemoryError m .= 1
         end
-        close(io1); close(io2); finalize(m); m = nothing; GC.gc()
+        close(io1); close(io2); finalize(m); GC.gc()
     end
 
     @static if Sys.islinux()
@@ -496,7 +496,7 @@ end
             # page as the real region is indistinguishable from it, so mmap() succeeds for it too.
             io5 = open(Mmap.SharedMemory, name, 100; readonly = false, create = false)
             m = mmap(io5, Vector{UInt8}, 100)
-            finalize(m); m = nothing; GC.gc()
+            finalize(m); GC.gc()
 
             close(io1); close(io3); close(io4); close(io5)
         end
@@ -512,7 +512,7 @@ end
         m1 .= 1
         @test all(m1 .== 1)
         @test all(m2 .== 1)
-        close(io1); close(io2); finalize(m1); finalize(m2); m1 = m2 = nothing; GC.gc()
+        close(io1); close(io2); finalize(m1); finalize(m2); GC.gc()
     end
 
     @testset "Resource cleanup" begin
@@ -654,10 +654,10 @@ touch(file)
 open(file, "r+") do s
     A = mmap(s, Vector{UInt8}, (10,), 0)
     Mmap.sync!(A)
-    finalize(A); A = nothing; GC.gc()
+    finalize(A); GC.gc()
     A = mmap(s, Vector{UInt8}, (10,), 1)
     Mmap.sync!(A)
-    finalize(A); A = nothing;
+    finalize(A)
 end
 GC.gc()
 rm(file)

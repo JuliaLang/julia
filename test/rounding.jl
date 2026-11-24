@@ -85,6 +85,50 @@ end
     @test_throws ArgumentError Base.Rounding.from_fenv(-99)
 end
 
+@testset "rounding mode is task-local (#51277)" begin
+    old = rounding(Float64)
+    # a new task inherits the rounding mode of the task that created it
+    t = Base.Rounding.setrounding_raw(Float64, Base.Rounding.to_fenv(RoundDown)) do
+        Task(() -> rounding(Float64))
+    end
+    @test rounding(Float64) == old
+    @test fetch(schedule(t)) == RoundDown
+    @test rounding(Float64) == old
+    @test fetch(Threads.@spawn rounding(Float64)) == old
+    # switching away from a task and back restores its rounding mode
+    t = @task Base.Rounding.setrounding_raw(Float64, Base.Rounding.to_fenv(RoundUp)) do
+        yield()
+        rounding(Float64)
+    end
+    schedule(t)
+    yield()
+    @test rounding(Float64) == old
+    @test fetch(t) == RoundUp
+    @test rounding(Float64) == old
+end
+
+@noinline function alloc_with_finalizer(f)
+    finalizer(f, Ref(0))
+    nothing
+end
+
+@testset "inference and finalizers run under the default control state (#63570)" begin
+    old = rounding(Float64)
+    seen = Ref{Any}(nothing)
+    Base.Rounding.setrounding_raw(Float64, Base.Rounding.to_fenv(RoundDown)) do
+        @test rounding(Float64) == RoundDown
+        # generators run as part of inference
+        @eval @generated g63570() = QuoteNode(rounding(Float64))
+        @test @invokelatest(g63570()) == old
+        @test rounding(Float64) == RoundDown
+        alloc_with_finalizer(_ -> (seen[] = rounding(Float64)))
+        GC.gc(); GC.gc()
+        @test rounding(Float64) == RoundDown
+    end
+    @test seen[] == old
+    @test rounding(Float64) == old
+end
+
 @testset "round error throwing" begin
     badness = 1//0
     @test_throws DivideError round(Int64,badness,RoundNearestTiesAway)

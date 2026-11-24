@@ -1136,8 +1136,8 @@ function mightalias(A::SubArray, B::SubArray)
     #   3. One's parent is used in the other's indices
     # Note that it's ok for just the indices to alias each other as those should not be mutated,
     # so we can always do better than the default !_isdisjoint(dataids(A), dataids(B))
-    if isbits(A.parent) || isbits(B.parent)
-        return false # Quick out for immutables
+    if isbits(A.parent) || isbits(B.parent) || isempty(A) || isempty(B)
+        return false # Quick out for immutables and empty arrays
     elseif _parentsmatch(A.parent, B.parent)
         # Each SubArray unaliases its own parent from its own indices upon construction, so if
         # the two parents are the same, then by construction one cannot alias the other's indices
@@ -1920,7 +1920,7 @@ If `dims` is `(2, 1)` instead, the same slices will be taken,
 but the result order will be row-major instead.
 
 # Higher dimensional examples
-```
+```jldoctest
 julia> A = [4 3; 2 1 ;;; 'A' 'B'; 'C' 'D']
 2×2×2 Array{Any, 3}:
 [:, :, 1] =

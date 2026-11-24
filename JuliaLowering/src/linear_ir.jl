@@ -186,7 +186,7 @@ function compile_pop_exception(ctx, srcref, src_tokens, dest_tokens)
     # It's enough to check the token on the top of the dest stack.
     n = length(dest_tokens)
     jump_ok = n == 0 || (n <= length(src_tokens) && syntax_id(dest_tokens[n]) == syntax_id(src_tokens[n]))
-    jump_ok || throw(LoweringError(srcref, "Attempt to jump into catch block"))
+    jump_ok || throw(LoweringError(srcref, "attempt to jump into catch block"))
     if n < length(src_tokens)
         @ast ctx srcref [:pop_exception src_tokens[n+1]]
     else
@@ -197,7 +197,7 @@ end
 function compile_leave_handler(ctx, srcref, src_tokens, dest_tokens)
     n = length(dest_tokens)
     jump_ok = n == 0 || (n <= length(src_tokens) && syntax_id(dest_tokens[n]) == syntax_id(src_tokens[n]))
-    jump_ok || throw(LoweringError(srcref, "Attempt to jump into try block"))
+    jump_ok || throw(LoweringError(srcref, "attempt to jump into try block"))
     if n < length(src_tokens)
         @ast ctx srcref [:leave reverse(src_tokens[n+1:end])...]
     else
@@ -797,7 +797,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         # Skip duplicate check for default-scope labels (loop-exit, loop-cont) which allow nesting
         if nk.name != "loop-exit" && nk.name != "loop-cont"
             if haskey(ctx.symbolic_jump_targets, nk) || nk in ctx.symbolic_block_labels
-                throw(LoweringError(ex, "Label `$(nk.name)` defined multiple times"))
+                throw(LoweringError(ex, "label `$(nk.name)` defined multiple times"))
             end
             push!(ctx.symbolic_block_labels, nk)
         end
@@ -843,7 +843,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         label = emit_label(ctx, ex)
         nk = NameKey(ex)
         if haskey(ctx.symbolic_jump_targets, nk) || nk in ctx.symbolic_block_labels
-            throw(LoweringError(ex, "Label `$(nk.name)` defined multiple times"))
+            throw(LoweringError(ex, "label `$(nk.name)` defined multiple times"))
         end
         push!(ctx.symbolic_jump_targets, nk=>JumpTarget(label, ctx))
         if in_tail_pos
@@ -1087,7 +1087,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             compile(ctx, ex[1], needs_value, in_tail_pos)
         end
     else
-        throw(LoweringError(ex, "Invalid syntax; $(repr(k))"))
+        throw(LoweringError(ex, "invalid syntax; $(repr(k))"))
     end
 end
 

@@ -464,3 +464,28 @@ Base.decompose(x::DecomposedReal) = (x.num, x.pow, x.den)
     @test hash(BigFloat(3) * BigFloat(2)^2003) == hash(big(3) << 2003)
     @test hash(BigFloat(typemin(Int64))) == hash(typemin(Int64))
 end
+
+@testset "type hashes of package images do not depend on the build" begin
+    mktempdir() do dir
+        write(joinpath(dir, "TypeNameHashProbe.jl"), "module TypeNameHashProbe\nstruct T end\nend\n")
+        code = """
+            using TypeNameHashProbe
+            T = TypeNameHashProbe.T
+            cachepath = Base.pkgorigins[Base.PkgId(TypeNameHashProbe)].cachepath
+            print(cachepath !== nothing && startswith(cachepath, first(DEPOT_PATH)), " ",
+                  (objectid(Base.typename(T)), objectid(T), hash(T), hash(Tuple{T})))
+            """
+        # Precompile and load in two empty depots, so each image is generated independently.
+        function probe()
+            depot = mktempdir(dir)
+            cmd = `$(Base.julia_cmd()) --startup-file=no --compiled-modules=yes -e $code`
+            sep = Sys.iswindows() ? ";" : ":"
+            env = ("JULIA_LOAD_PATH" => dir * sep * "@stdlib",
+                   "JULIA_DEPOT_PATH" => depot * sep)
+            return read(addenv(cmd, env...), String)
+        end
+        a = probe()
+        @test startswith(a, "true ")
+        @test a == probe()
+    end
+end

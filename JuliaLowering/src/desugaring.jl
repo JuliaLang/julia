@@ -431,7 +431,7 @@ function expand_property_destruct(ctx, ex, is_const)
     lhs = ex[1]
     @jl_assert head(lhs) == :tuple ex
     if numchildren(lhs) != 1
-        throw(LoweringError(lhs, "Property destructuring must use a single `;` before the property names, eg `(; a, b) = rhs`"))
+        throw(LoweringError(lhs, "property destructuring must use a single `;` before the property names, eg `(; a, b) = rhs`"))
     end
     params = lhs[1]
     @jl_assert head(params) == :parameters ex
@@ -475,7 +475,7 @@ function expand_tuple_destruct(ctx, ex, is_const)
         num_splat = sum(head(rh) == :... for rh in children(rhs); init=0)
         if num_splat == 0 && !has_parameters(rhs) &&
                 (numchildren(lhs) - num_slurp) > numchildren(rhs)
-            throw(LoweringError(ex, "More variables on left hand side than right hand in tuple assignment"))
+            throw(LoweringError(ex, "more variables on left hand side than right hand in tuple assignment"))
         end
 
         if !any_assignment(children(rhs)) && !has_parameters(rhs) &&
@@ -942,7 +942,7 @@ function expand_generator(ctx, ex)
             iterspecs = iterspecs[1]
         end
         if head(iterspecs) != :iteration
-            throw(LoweringError(ex, """Expected `:iteration` iteration specification in generator"""))
+            throw(LoweringError(ex, """expected `:iteration` iteration specification in generator"""))
         end
         iter_ranges = SyntaxList()
         iter_lhss = SyntaxList()
@@ -1206,15 +1206,15 @@ function flatten_ncat_rows!(flat_elems, nrow_spans, row_major, parent_layout_dim
     if k == :row
         layout_dim = 1
         elems = children(ex)
-        parent_layout_dim != 1 || throw(LoweringError(ex,"Badly nested rows in `ncat`"))
+        parent_layout_dim != 1 || throw(LoweringError(ex,"badly nested rows in `ncat`"))
     elseif k == :nrow
         dim = ex[1].value::Int
         elems = children(ex)[2:end]
-        dim > 0                || throw(LoweringError(ex,"Unsupported dimension $dim in ncat"))
+        dim > 0                || throw(LoweringError(ex,"unsupported dimension $dim in ncat"))
         !row_major || dim != 2 || throw(LoweringError(ex,"2D `nrow` cannot be mixed with `row` in `ncat`"))
         layout_dim = nrow_flipdim(row_major, dim)
     elseif head(ex) == :...
-        throw(LoweringError(ex, "Splatting ... in an `ncat` with multiple dimensions is not supported"))
+        throw(LoweringError(ex, "splatting ... in an `ncat` with multiple dimensions is not supported"))
     else
         push!(flat_elems, ex)
         for ld in parent_layout_dim-1:-1:1
@@ -1223,10 +1223,10 @@ function flatten_ncat_rows!(flat_elems, nrow_spans, row_major, parent_layout_dim
         return
     end
     row_start = length(flat_elems)
-    parent_layout_dim > layout_dim || throw(LoweringError(ex, "Badly nested rows in `ncat`"))
+    parent_layout_dim > layout_dim || throw(LoweringError(ex, "badly nested rows in `ncat`"))
     for e in elems
         if layout_dim == 1
-            head(e) ∉ (:nrow, :row) || throw(LoweringError(e,"Badly nested rows in `ncat`"))
+            head(e) ∉ (:nrow, :row) || throw(LoweringError(e, "badly nested rows in `ncat`"))
         end
         flatten_ncat_rows!(flat_elems, nrow_spans, row_major, layout_dim, e)
     end
@@ -1634,7 +1634,7 @@ function expand_let(ctx, ex)
             elseif head(lhs) == :(::)
                 var = lhs[1]
                 if !is_identifier_like(var)
-                    throw(LoweringError(var, "Invalid assignment location in let syntax"))
+                    throw(LoweringError(var, "invalid assignment location in let syntax"))
                 elseif head(var) === :placeholder
                     # do a typeassert/convert here? (this falls through flisp as
                     # a typed global...)
@@ -1670,7 +1670,7 @@ function expand_let(ctx, ex)
                     ]
                 ]
             else
-                throw(LoweringError(lhs, "Invalid assignment location in let syntax"))
+                throw(LoweringError(lhs, "invalid assignment location in let syntax"))
             end
         elseif head(binding) == :function
             sig = binding[1]
@@ -1680,7 +1680,7 @@ function expand_let(ctx, ex)
                 # don't really make sense with let:
                 #    let A.f() = 1 ... end
                 #    let (obj::Callable)() = 1 ... end
-                throw(LoweringError(sig, "Function signature does not define a local function name"))
+                throw(LoweringError(sig, "function signature does not define a local function name"))
             end
             blk = @ast ctx binding [:block
                 [:scope_block(ex) scope_type
@@ -1767,13 +1767,13 @@ function expand_named_tuple(ctx, ex, kws; field_name="named tuple field",
             end
             nothing, nothing
         else
-            throw(LoweringError(kw, "Invalid $element_name"))
+            throw(LoweringError(kw, "invalid $element_name"))
         end
         if !isnothing(name) && !isnothing(value)
             if head(name) == :symbol
                 name_str = syntax_name(name)
                 if name_str in name_strs
-                    throw(LoweringError(name, "Repeated $field_name name"))
+                    throw(LoweringError(name, "repeated $field_name name"))
                 end
                 push!(name_strs, name_str)
             end
@@ -1894,9 +1894,9 @@ function expand_ccall(ctx, ex)
     end
     # todo: use multi-range errors here
     if length(args) < length(arg_types)
-        throw(LoweringError(ex, "Too few arguments in ccall compared to argument types"))
+        throw(LoweringError(ex, "too few arguments in ccall compared to argument types"))
     elseif length(args) > length(arg_types) && isnothing(vararg_type)
-        throw(LoweringError(ex, "More arguments than types in ccall"))
+        throw(LoweringError(ex, "more arguments than types in ccall"))
     end
     sctx = with_stmts(ctx)
     expanded_types = SyntaxList()
@@ -2209,7 +2209,7 @@ function match_try(ex)
     for e in ex[2:end]
         k = head(e)
         if k == :catch && isnothing(catch_)
-            @jl_assert numchildren(e) == 2 (e, "Invalid `catch` form")
+            @jl_assert numchildren(e) == 2 (e, "invalid `catch` form")
             catch_ = e
         elseif k == :else && isnothing(else_)
             @jl_assert numchildren(e) == 1 e
@@ -2218,7 +2218,7 @@ function match_try(ex)
             @jl_assert numchildren(e) == 1 e
             finally_ = e[1]
         else
-            throw(LoweringError(ex, "Invalid clause in `try` form"))
+            throw(LoweringError(ex, "invalid clause in `try` form"))
         end
     end
     (try_, catch_, else_, finally_)
@@ -2270,7 +2270,7 @@ function expand_try(ctx, ex)
         exc_var = catch_[1]
         catch_block = catch_[2]
         if !is_identifier_like(exc_var)
-            throw(LoweringError(exc_var, "Expected an identifier as exception variable"))
+            throw(LoweringError(exc_var, "expected an identifier as exception variable"))
         end
         try_block = @ast ctx ex [:trycatchelse
             try_body
@@ -4336,7 +4336,7 @@ function expand_doc(ctx, ex, docex)
         # TODO: implement proper `doc!` support here
         expand_forms_2(ctx, ex, docex)
     elseif is_eventually_call(ex)
-        TODO("docsystem rewrite")
+        error("Lowering TODO: docsystem rewrite")
     else
         expand_forms_2(ctx, ex, docex)
     end
@@ -4626,24 +4626,12 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             [:gc_preserve_end s]
             r
         ]
-    elseif k == :&
-        throw(LoweringError(ex, "invalid syntax"))
-    elseif k == :$
-        throw(LoweringError(ex, "`\$` expression outside string or quote"))
-    elseif k == :...
-        throw(LoweringError(ex, "`...` expression outside call"))
     elseif k == :ssavalue
         _resolve_ssavalue(ctx, ex)
     elseif is_leaf(ex)
         ex
-    elseif k == :return
-        if numchildren(ex) == 0
-            @ast ctx ex [:return (::nothing)]
-        elseif numchildren(ex) == 1
-            mapchildren(e->expand_forms_2(ctx,e), ex)
-        else
-            throw(LoweringError(ex, "More than one argument to return"))
-        end
+    elseif k == :return && numchildren(ex) == 0
+        @ast ctx ex [:return (::nothing)]
     else
         mapchildren(e->expand_forms_2(ctx,e), ex)
     end
@@ -4664,14 +4652,14 @@ end
     # surface only one error until we have pretty-printing for multiple
     if !validation_ok(vr)
         errors = validation_errors(vr)
-        throw(LoweringError(errors[1].sts, errors[1].msgs, false))
+        throw(LoweringError(errors[1].msgs[1], errors[1].sts, [nothing], false))
     end
     ex_out = expand_forms_2(ctx_out, est_to_dst(ex))
     if DEBUG
         vr = valid_st2(ex_out)
         if !validation_ok(vr)
             errors = validation_errors(vr)
-            throw(LoweringError(errors[1].sts, errors[1].msgs, true))
+            throw(LoweringError(errors[1].msgs[1], errors[1].sts, [nothing], true))
         end
     end
     ctx_out, ex_out

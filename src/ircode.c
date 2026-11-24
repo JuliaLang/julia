@@ -1764,7 +1764,7 @@ void jl_init_serializer(void)
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_emptytuple_type, jl_array_uint8_type, jl_array_uint32_type, jl_code_info_type,
-                     jl_typeofbottom_type, jl_typeofbottom_type->super,
+                     jl_typeofbottom_type, jl_atomic_load_relaxed(&jl_typeofbottom_type->super),
                      jl_namedtuple_type, jl_array_int32_type,
                      jl_uint32_type, jl_uint64_type,
                      jl_opaque_closure_type,

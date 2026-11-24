@@ -1635,7 +1635,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
     if (p.isboxed)
         return emit_typeof(ctx, p.V, maybenull, justtag, notag(p.typ));
     if (p.TIndex) {
-        Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
+        Value *tindex = p.TIndex;
         bool allunboxed = is_uniontype_allunboxed(p.typ);
         Type *expr_type = justtag ? ctx.types().T_size : ctx.types().T_pjlvalue;
         Value *datatype_or_p = Constant::getNullValue(PointerType::getUnqual(expr_type->getContext()));
@@ -1732,56 +1732,6 @@ static Value *emit_datatype_size(jl_codectx_t &ctx, Value *dt, bool add_isunion=
     }
     return Size;
 }
-
-/* this is valid code, it's simply unused
-static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
-{
-    if (p.TIndex) {
-        Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
-        Value *size = ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1, true);
-        unsigned counter = 0;
-        bool allunboxed = for_each_uniontype_small(
-                [&](unsigned idx, jl_datatype_t *jt) {
-                    Value *cmp = ctx.builder.CreateICmpEQ(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), idx));
-                    size = ctx.builder.CreateSelect(cmp, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), jl_datatype_size(jt)), size);
-                },
-                p.typ,
-                counter);
-        if (!allunboxed && p.ispointer() && p.V && !isa<AllocaInst>(p.V)) {
-            BasicBlock *currBB = ctx.builder.GetInsertBlock();
-            BasicBlock *dynloadBB = BasicBlock::Create(ctx.builder.getContext(), "dyn_sizeof", ctx.f);
-            BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_sizeof", ctx.f);
-            Value *isboxed = ctx.builder.CreateICmpNE(
-                    ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
-                    ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
-            ctx.builder.CreateCondBr(isboxed, dynloadBB, postBB);
-            ctx.builder.SetInsertPoint(dynloadBB);
-            Value *datatype = emit_typeof(ctx, p.V, false, false);
-            Value *dyn_size = emit_datatype_size(ctx, datatype);
-            ctx.builder.CreateBr(postBB);
-            dynloadBB = ctx.builder.GetInsertBlock(); // could have changed
-            ctx.builder.SetInsertPoint(postBB);
-            PHINode *sizeof_merge = ctx.builder.CreatePHI(getInt32Ty(ctx.builder.getContext()), 2);
-            sizeof_merge->addIncoming(dyn_size, dynloadBB);
-            sizeof_merge->addIncoming(size, currBB);
-            size = sizeof_merge;
-        }
-#ifndef NDEBUG
-        // try to catch codegen errors early, before it uses this to memcpy over the entire stack
-        CreateConditionalAbort(ctx.builder, ctx.builder.CreateICmpEQ(size, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1, true)));
-#endif
-        return size;
-    }
-    else if (jl_is_concrete_type(p.typ)) {
-        return ConstantInt::get(getInt32Ty(ctx.builder.getContext()), jl_datatype_size(p.typ));
-    }
-    else {
-        Value *datatype = emit_typeof(ctx, p, false, false);
-        Value *dyn_size = emit_datatype_size(ctx, datatype);
-        return dyn_size;
-    }
-}
-*/
 
 static Value *emit_datatype_isprimitivetype(jl_codectx_t &ctx, Value *typ)
 {
@@ -2118,14 +2068,13 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
         unsigned tindex = get_box_tindex(dt, arg.typ);
         if (tindex > 0) {
             // optimize more when we know that this is a split union-type where tindex = 0 is invalid
-            Value *xtindex = ctx.builder.CreateAnd(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
-            auto isa = ctx.builder.CreateICmpEQ(xtindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), tindex));
+            auto isa = ctx.builder.CreateICmpEQ(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), tindex));
             setName(ctx.emission_context, isa, "exactly_isa");
             return isa;
         }
         else if (arg.Vboxed) {
-            // test for (arg.TIndex == UNION_BOX_MARKER && typeof(arg.V) == type)
-            Value *isboxed = ctx.builder.CreateICmpEQ(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER));
+            // test for (arg.TIndex == 0 && typeof(arg.V) == type)
+            Value *isboxed = ctx.builder.CreateICmpEQ(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
             if (could_be_null) {
                 isboxed = ctx.builder.CreateAnd(isboxed,
                     ctx.builder.CreateNot(null_pointer_cmp(ctx, arg.Vboxed)));
@@ -2760,7 +2709,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         }
     }
     auto store_union = [&](const jl_cgval_t &val, const jl_cgval_t &val_union) JL_CANSAFEPOINT {
-        Value *tindex = ctx.builder.CreateAnd(val_union.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
+        Value *tindex = val_union.TIndex;
         Value *stindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
         ai_tindex.decorateInst(ctx.builder.CreateAlignedStore(stindex, ptindex, Align(1)));
         if (!val.isghost)
@@ -3368,6 +3317,42 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
     }
     assert(!jl_is_vecelement_type((jl_value_t*)stt));
 
+    if (!strct.inline_roots.empty()) { // bits and roots split on stack
+        assert(jl_is_concrete_immutable((jl_value_t*)stt));
+        bool isboxed = is_datatype_all_pointers(stt);
+        bool issame = is_tupletype_homogeneous(stt->types);
+        if (isboxed || issame) {
+            if (order != jl_memory_order_notatomic && order != jl_memory_order_unspecified) {
+                emit_atomic_error(ctx, "getfield: non-atomic field cannot be accessed atomically");
+                *ret = jl_cgval_t(); // unreachable
+                return true;
+            }
+            // Every field has the same layout, so both the bits and the roots of a
+            // field are found at a fixed multiple of its index in their buffers.
+            jl_value_t *jft = issame ? jl_svecref(stt->types, 0) : (jl_value_t*)jl_any_type;
+            size_t nroots = isboxed ? 1 : ((jl_datatype_t*)jft)->layout->npointers;
+            assert(strct.inline_roots.size() == nfields * nroots);
+            idx = idx0();
+            Value *first_root = ctx.builder.CreateMul(idx, ConstantInt::get(ctx.types().T_size, nroots));
+            jl_gc_roots_t roots = strct.inline_roots.slice(ctx, first_root, nroots);
+            Value *first_ptr = (isboxed || maybe_null) ? roots.get(ctx, 0) : nullptr;
+            if (maybe_null)
+                null_pointer_check(ctx, first_ptr, nullptr);
+            if (isboxed) {
+                setName(ctx.emission_context, first_ptr, "getfield");
+                *ret = mark_julia_type(ctx, first_ptr, true, jft);
+                return true;
+            }
+            Value *addr = nullptr;
+            if (!allpointers((jl_datatype_t*)jft)) {
+                Value *offset = ctx.builder.CreateMul(idx, ConstantInt::get(ctx.types().T_size, jl_field_offset(stt, 1)));
+                addr = emit_ptrgep(ctx, strct.V, offset);
+            }
+            *ret = mark_julia_slot(addr, jft, nullptr, strct.aliasinfo, std::move(roots));
+            return true;
+        }
+    }
+
     if (strct.inline_roots.empty() && !strct.ispointer()) { // unboxed
         assert(jl_is_concrete_immutable((jl_value_t*)stt));
         bool isboxed = is_datatype_all_pointers(stt);
@@ -3425,7 +3410,6 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
 
     bool maybeatomic = stt->name->atomicfields != NULL;
     if ((strct.inline_roots.empty() && strct.ispointer()) && !maybeatomic) { // boxed or stack
-        // COMBAK: inline_roots support could be implemented for this
         if (order != jl_memory_order_notatomic && order != jl_memory_order_unspecified) {
             emit_atomic_error(ctx, "getfield: non-atomic field cannot be accessed atomically");
             *ret = jl_cgval_t(); // unreachable
@@ -4108,7 +4092,7 @@ static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, j
     if (val.constant)
         return ConstantInt::get(getInt8Ty(ctx.builder.getContext()), get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), typ));
     if (val.TIndex)
-        return ctx.builder.CreateAnd(val.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
+        return val.TIndex;
     return compute_box_tindex(ctx, val, typ, maybenull);
 }
 
@@ -4164,9 +4148,8 @@ static AllocaInst *try_emit_union_alloca(jl_codectx_t &ctx, jl_uniontype_t *ut, 
 /*
  * Box unboxed values in a union. Optionally, skip certain unboxed values,
  * returning `Constant::getNullValue(ctx.types().T_pjlvalue)` in one of the skipped cases. If `skip` is not empty,
- * skip[0] (corresponding to unknown boxed) must always be set. In that
- * case, the calling code must separately deal with the case where
- * `vinfo` is already an unknown boxed union (union tag UNION_BOX_MARKER).
+ * skip[0] (corresponding to unknown boxed) must always be set. A value that is
+ * already boxed (`vinfo.Vboxed` is non-NULL at runtime) returns that box.
  */
 // Returns ctx.types().T_prjlvalue
 static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallBitVector &skip) JL_CANSAFEPOINT
@@ -4186,7 +4169,14 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
     // post_box_union:
     //   box = phi [ box1, box_union_1 ], [ box2, box_union_2 ], [ vinfo, box_union_isboxed ]
     //   ...
+    if (vinfo.isboxed)
+        return vinfo.Vboxed;
     Value *tindex = vinfo.TIndex;
+    if (vinfo.Vboxed) {
+        // a value that is boxed already goes to the default case, to keep its box
+        tindex = ctx.builder.CreateSelect(ctx.builder.CreateIsNotNull(vinfo.Vboxed),
+                ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), tindex);
+    }
     BasicBlock *defaultBB = BasicBlock::Create(ctx.builder.getContext(), "box_union_isboxed", ctx.f);
     SwitchInst *switchInst = ctx.builder.CreateSwitch(tindex, defaultBB);
     BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_box_union", ctx.f);
@@ -4225,21 +4215,22 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
             vinfo.typ,
             counter);
     ctx.builder.SetInsertPoint(defaultBB);
-    if (skip.size() > 0) {
-        assert(skip[0]);
+    assert(skip.size() == 0 || skip[0]);
+    if (vinfo.Vboxed) {
+        // NULL here exactly when this is a skipped unboxed value
+        box_merge->addIncoming(vinfo.Vboxed, defaultBB);
+        ctx.builder.CreateBr(postBB);
+    }
+    else if (skip.size() > 0) {
         box_merge->addIncoming(Constant::getNullValue(ctx.types().T_prjlvalue), defaultBB);
         ctx.builder.CreateBr(postBB);
     }
-    else if (!vinfo.Vboxed) {
+    else {
         Function *trap_func = Intrinsic::getOrInsertDeclaration(
                 ctx.f->getParent(),
                 Intrinsic::trap);
         ctx.builder.CreateCall(trap_func);
         ctx.builder.CreateUnreachable();
-    }
-    else {
-        box_merge->addIncoming(vinfo.Vboxed, defaultBB);
-        ctx.builder.CreateBr(postBB);
     }
     ctx.builder.SetInsertPoint(postBB);
     return box_merge;
@@ -4396,7 +4387,6 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         }
     }
     else {
-        tindex = ctx.builder.CreateAnd(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
         if (skip)
             tindex = ctx.builder.CreateSelect(skip, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), tindex);
         BasicBlock *defaultBB = BasicBlock::Create(ctx.builder.getContext(), "union_move_skip", ctx.f);
@@ -4767,7 +4757,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     jl_cgval_t rhs_union = convert_julia_type_to_union(ctx, fval_info, jtype, false);
                     if (rhs_union.typ == jl_bottom_type)
                         return jl_cgval_t();
-                    Value *tindex = ctx.builder.CreateAnd(rhs_union.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
+                    Value *tindex = rhs_union.TIndex;
                     Value *stindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
                     size_t fsz = 0, al = 0;
                     bool isptr = !jl_islayout_inline(jtype, &fsz, &al);

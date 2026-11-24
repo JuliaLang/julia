@@ -1651,6 +1651,11 @@ using Base: typed_hvncat
 
     # reject shapes that don't nest evenly between levels (e.g. 1 + 2 does not fit into 2)
     @test_throws DimensionMismatch hvncat(((1, 2, 1), (2, 2), (4,)), true, [1 2], [3], [4], [1 2; 3 4])
+    @test_throws DimensionMismatch [reshape(1:2, 1, 1, 2) reshape(1:4, 2, 2, 1);;;]
+    @test_throws DimensionMismatch [fill(1, 1, 1, 3); fill(1, 1, 1, 3);; 1; 1;; fill(1, 1, 1, 2); fill(1, 1, 1, 2)]
+    @test [1; zeros(Int, 0, 1);; [2 3]; zeros(Int, 0, 2)] == [1 2 3]
+    @test_throws DimensionMismatch [zeros(Int, 0, 1); 1; 2;; [3 4]; [5 6]; zeros(Int, 1, 0)]
+    @test_throws ArgumentError hvncat((2, 2), false, 1, 2, [3 4], [5 6], zeros(Int, 1, 0))
 
     # zero-length arrays are handled appropriately
     @test [zeros(Int, 1, 2, 0) ;;; 1 3] == [1 3;;;]
@@ -1758,7 +1763,7 @@ using Base: typed_hvncat
     @test [["A";"B"];;"C";"D"] == ["A" "C"; "B" "D"]
 
     #58866 - ensure proper dimension calculation for 0-dimension elements
-    @test [zeros(1, 0) zeros(1,0);;; zeros(0,0) zeros(0, 0)] == Array{Float64, 3}(undef, 1, 0, 0)
+    @test_throws DimensionMismatch [zeros(1, 0) zeros(1,0);;; zeros(0,0) zeros(0, 0)]
 end
 
 @testset "stack" begin

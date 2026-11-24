@@ -578,7 +578,7 @@ function ExplicitEnv(::Nothing, envpath::String="")
 end
 function ExplicitEnv(envpath::String)
     # Handle missing project file by creating an empty environment
-    if !isfile(envpath) || project_file_manifest_path(envpath) === nothing
+    if !isfile(envpath)
         envpath = abspath(envpath)
         return ExplicitEnv(nothing, envpath)
     end
@@ -625,6 +625,12 @@ function ExplicitEnv(envpath::String)
         names[proj_uuid] = proj_name
     end
 
+    manifest = project_file_manifest_path(envpath)
+    # A project of only stdlibs needs no manifest, since each stdlib's Project.toml lists its deps.
+    stdlibs_only = manifest === nothing && !project_is_package && !isempty(project_deps) &&
+        all(((name, uuid),) -> Base.is_stdlib(PkgId(uuid, name)), project_deps)
+    manifest === nothing && !stdlibs_only && return ExplicitEnv(nothing, envpath)
+
     project_extensions = Dict{String, Vector{UUID}}()
     # Collect all extensions of the project
     for (name, triggers) in get(Dict{String, Any}, project_d, "extensions")::Dict{String, Any}
@@ -644,7 +650,6 @@ function ExplicitEnv(envpath::String)
         project_extensions[name] = uuids
     end
 
-    manifest = project_file_manifest_path(envpath)
     manifest_d = manifest === nothing ? Dict{String, Any}() : parsed_toml(manifest)
 
     # Dependencies in a manifest can either be stored compressed (when name is unique among all packages)
@@ -654,6 +659,11 @@ function ExplicitEnv(envpath::String)
     extensions = Dict{UUID, Dict{String, Vector{String}}}()
     name_to_uuid = Dict{String, UUID}()
     lookup_strategy = Dict{UUID, Union{SHA1, String, Nothing, Missing}}()
+    if stdlibs_only
+        for uuid in values(project_deps)
+            lookup_strategy[uuid] = nothing
+        end
+    end
 
     sizehint!(deps, length(manifest_d))
     sizehint!(weakdeps, length(manifest_d))
@@ -2520,42 +2530,60 @@ function spawn_print_loop!(s::PrecompileSession)
     end
 end
 
-function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, job::PrecompileJob, pipe, single_requested_pkg::Bool)
+function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, job::PrecompileJob, pipe::Base.PipeEndpoint, single_requested_pkg::Bool)
     pkg, _ = pkg_config
     liveprinting = false
     thistaskwaiting = false
-    while !eof(pipe)
-        str = readline(pipe, keep=true)
-        # the marker may follow package output that lacks a trailing newline
-        i = findfirst(Base.PRECOMPILE_VERBOSE_TIMING_MARKER, str)
-        if i !== nothing
-            job.verbose_timing = strip(SubString(str, first(i)))
-            str = str[1:prevind(str, first(i))]
-            isempty(str) && continue
-        end
-        if single_requested_pkg && (liveprinting || !isempty(str))
-            BG.monitoring && @lock s.print_lock begin
-                if !liveprinting
-                    liveprinting = true
-                    s.pkg_liveprinted = pkg
+    relay = true
+    try
+        while !eof(pipe)
+            str = readline(pipe, keep=true)
+            # the marker may follow package output that lacks a trailing newline
+            i = findfirst(Base.PRECOMPILE_VERBOSE_TIMING_MARKER, str)
+            if i !== nothing
+                job.verbose_timing = strip(SubString(str, first(i)))
+                str = str[1:prevind(str, first(i))]
+                isempty(str) && continue
+            end
+            write(job.output, str)
+            waiting = !thistaskwaiting && occursin("Waiting for background task / IO / timer", str)
+            if waiting
+                thistaskwaiting = true
+                job.waiting_for_bg = true
+            end
+            relay || continue
+            try
+                if single_requested_pkg && (liveprinting || !isempty(str))
+                    BG.monitoring && @lock s.print_lock begin
+                        if !liveprinting
+                            liveprinting = true
+                            s.pkg_liveprinted = pkg
+                        end
+                        # in fancy mode clear the progress bar residue from the line first
+                        print(s.io, s.fancyprint ? ansi_cleartoendofline : "", str)
+                    end
                 end
-                # in fancy mode clear the progress bar residue from the line first
-                print(s.io, s.fancyprint ? ansi_cleartoendofline : "", str)
+                if waiting
+                    !liveprinting && !s.fancyprint && BG.monitoring && @lock s.print_lock begin
+                        println(s.io, full_name(s.ext_to_parent, pkg), color_string(str, Base.warn_color(), s.hascolor))
+                    end
+                elseif !thistaskwaiting
+                    # XXX: don't just re-enable IO for random packages without printing the context for them first
+                    !liveprinting && !s.fancyprint && BG.monitoring && @lock s.print_lock begin
+                        print(s.io, str)
+                    end
+                end
+            catch err
+                err isa Union{InterruptException, Base.CancellationRequest} && rethrow()
+                # keep draining so the worker cannot block on a full pipe,
+                # and let the final report show the captured output instead
+                relay = false
+                @lock s.print_lock (s.pkg_liveprinted == pkg && (s.pkg_liveprinted = nothing))
             end
         end
-        write(job.output, str)
-        if !thistaskwaiting && occursin("Waiting for background task / IO / timer", str)
-            thistaskwaiting = true
-            !liveprinting && !s.fancyprint && BG.monitoring && @lock s.print_lock begin
-                println(s.io, full_name(s.ext_to_parent, pkg), color_string(str, Base.warn_color(), s.hascolor))
-            end
-            job.waiting_for_bg = true
-        elseif !thistaskwaiting
-            # XXX: don't just re-enable IO for random packages without printing the context for them first
-            !liveprinting && !s.fancyprint && BG.monitoring && @lock s.print_lock begin
-                print(s.io, str)
-            end
-        end
+    finally
+        # closing the reader unblocks the worker's writes if draining stops early
+        close(pipe)
     end
 end
 
@@ -2778,8 +2806,18 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                     end
                     Base.acquire(s.parallel_limiter; priority=schedule_priority(priorities, pkg), cancel=() -> should_stop(s))
 
-                    std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
-                    t_monitor = Threads.@spawn :samepool precompilepkgs_monitor_std(s, pkg_config, job, std_pipe,
+                    # The worker gets the write end as a raw handle. Opening it here as well would
+                    # bind it to our IOCP on Windows, after which every write in the worker takes a
+                    # thread-pool round trip; with output-heavy packages under load that is minutes.
+                    std_rd, std_wr = Base.link_pipe(true, true)
+                    std_out = try
+                        Base.open_pipe!(Base.PipeEndpoint(), std_rd)
+                    catch
+                        Base.close_pipe_sync(std_rd)
+                        Base.close_pipe_sync(std_wr)
+                        rethrow()
+                    end
+                    t_monitor = Threads.@spawn :samepool precompilepkgs_monitor_std(s, pkg_config, job, std_out,
                         single_requested_pkg)
 
                     name = describe_pkg(s, pkg, is_project_dep, is_serial_dep, flags, cacheflags)
@@ -2808,7 +2846,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 pid > 0 && @lock s.print_lock set_pid!(job, pid)
                             end)
                             t = @elapsed ret = begin
-                                Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
+                                Base.compilecache(pkg, sourcespec, std_wr, std_wr, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
                                                   pid_channel=pid_ch, report_timing=true,
                                                   preresolved=preresolved_snapshot(s))
@@ -2834,7 +2872,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 s.logcalls === CoreLogging.Debug && @lock s.print_lock begin
                                     @debug "Precompiling $(repr(MIME"text/plain"(), pkg))"
                                 end
-                                Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
+                                Base.compilecache(pkg, sourcespec, std_wr, std_wr, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
                                                   pid_channel=pid_ch, report_timing=true,
                                                   preresolved=preresolved_snapshot(s))
@@ -2879,8 +2917,6 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                             end
                         end
                     catch err
-                        close(std_pipe.in)
-                        wait(t_monitor)
                         err isa InterruptException && rethrow()
                         # If cancel was requested, this failure is almost certainly the
                         # subprocess being SIGKILL'd by the cancel; don't report it as
@@ -2892,11 +2928,14 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                             end
                         end
                     finally
-                        isopen(std_pipe.in) && close(std_pipe.in)
-                        wait(t_monitor)
-                        try; close(pid_ch); catch; end
-                        @lock s.print_lock clear_pid!(job)
-                        Base.release(s.parallel_limiter)
+                        try
+                            Base.close_pipe_sync(std_wr)
+                            wait(t_monitor)
+                        finally
+                            try; close(pid_ch); catch; end
+                            @lock s.print_lock clear_pid!(job)
+                            Base.release(s.parallel_limiter)
+                        end
                     end
                 else
                     if !is_stale
@@ -3095,12 +3134,14 @@ function report_precompile_results!(s::PrecompileSession)
         if !quick_exit
             logstr = sprint(context=s.logio) do iostr
                 if s.fancyprint
+                    # loading also requests the extensions it makes loadable, so leave them out
+                    names = [p.name for p in s.requested_pkgids if !haskey(s.ext_to_parent, p)]
                     what = if s.n_batches > 1
                         "done."
-                    elseif isempty(s.requested_pkgids) || s.requested_all
+                    elseif isempty(names) || s.requested_all
                         "packages finished."
                     else
-                        "$(join((full_name(s.ext_to_parent, p) for p in s.requested_pkgids), ", ", " and ")) finished."
+                        "$(join(names, ", ", " and ")) finished."
                     end
                     printpkgstyle(iostr, :Precompiling, what)
                 end

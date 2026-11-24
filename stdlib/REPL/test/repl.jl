@@ -1385,6 +1385,11 @@ end
 @test occursin("|=", sprint(show, help_result("|=")))
 @test occursin("broadcast", sprint(show, help_result(".=")))
 
+# Punctuation help covers broadcasting, command literals, and concatenation.
+@test occursin("broadcasting", sprint(show, help_result(".")))
+@test occursin("Surround a command with backticks", sprint(show, help_result("`")))
+@test occursin("concatenated", sprint(show, help_result(";")))
+
 # PR 35277
 @test occursin("identical", sprint(show, help_result("===")))
 @test occursin("broadcast", sprint(show, help_result(".<=")))
@@ -2205,6 +2210,38 @@ struct BareTerminal <: Terminals.TextTerminal end
               Terminals.getX, Terminals.getY, Terminals.pos, Terminals.clear, Terminals.clear_line,
               t -> Terminals.clear_line(t, 1), t -> Terminals.cmove(t, 1, 1), t -> Terminals.raw!(t, true))
         @test_throws "Unimplemented" f(t)
+    end
+end
+
+# A terminal that only knows absolute moves, so relative moves use the fallbacks
+mutable struct PositionTerminal <: Terminals.TextTerminal
+    x::Int
+    y::Int
+end
+Base.displaysize(::PositionTerminal) = (10, 20)
+Terminals.cmove(t::PositionTerminal, x, y) = (t.x = x; t.y = y; nothing)
+Terminals.getX(t::PositionTerminal) = t.x
+Terminals.getY(t::PositionTerminal) = t.y
+
+@testset "TextTerminal relative moves" begin
+    for (f, args, expected) in (
+            (Terminals.cmove_up, (), (5, 4)),
+            (Terminals.cmove_up, (3,), (5, 2)),
+            (Terminals.cmove_up, (10,), (5, 1)),
+            (Terminals.cmove_down, (), (5, 6)),
+            (Terminals.cmove_down, (10,), (5, 10)),
+            (Terminals.cmove_left, (), (4, 5)),
+            (Terminals.cmove_left, (10,), (1, 5)),
+            (Terminals.cmove_right, (), (6, 5)),
+            (Terminals.cmove_right, (30,), (20, 5)),
+            (Terminals.cmove_line_up, (2,), (1, 3)),
+            (Terminals.cmove_line_up, (10,), (1, 1)),
+            (Terminals.cmove_line_down, (2,), (1, 7)),
+            (Terminals.cmove_line_down, (10,), (1, 10)),
+            (Terminals.cmove_col, (8,), (8, 5)))
+        t = PositionTerminal(5, 5)
+        f(t, args...)
+        @test Terminals.pos(t) == expected
     end
 end
 

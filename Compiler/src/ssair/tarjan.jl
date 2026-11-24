@@ -130,8 +130,8 @@ function tarjan!(reach::CFGReachability, cfg::CFG; root::Int=1,
                 child_preorder = stack[-scc[succ]].preorder
 
                 # only need to update `minpreorder` for `v`
-                stack[cursor] = item = SCCStackItem(item;
-                                                    minpreorder=min(minpreorder, child_preorder))
+                stack[cursor] = SCCStackItem(item;
+                                             minpreorder=min(minpreorder, child_preorder))
             elseif scc[succ] == 0
                 # next child is a new element in DFS tree
                 preorder_id += 1

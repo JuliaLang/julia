@@ -3,6 +3,8 @@
 #ifndef JL_TIMEFUNCS_H
 #define JL_TIMEFUNCS_H
 
+#include "dtypes.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

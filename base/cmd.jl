@@ -118,6 +118,10 @@ struct AndCmds <: AbstractCmd
     AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
 end
 
+hash(x::OrCmds, h::UInt) = hash(x.a, hash(x.b, hash(OrCmds, h)))
+==(x::OrCmds, y::OrCmds) = x.a == y.a && x.b == y.b
+hash(x::ErrOrCmds, h::UInt) = hash(x.a, hash(x.b, hash(ErrOrCmds, h)))
+==(x::ErrOrCmds, y::ErrOrCmds) = x.a == y.a && x.b == y.b
 hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
 ==(x::AndCmds, y::AndCmds) = x.a == y.a && x.b == y.b
 
@@ -164,7 +168,7 @@ function show_env(io::IO, env::Vector{String})
     print(io, "[")
     for (i, e) in enumerate(env)
         i > 1 && print(io, ", ")
-        eqidx = findnext('=', e, 2)
+        eqidx = isempty(e) ? nothing : findnext('=', e, nextind(e, 1))
         if eqidx === nothing || mode === :all
             show(io, e)
         elseif mode === :keys
@@ -261,13 +265,22 @@ setup_stdio(stdio::Union{DevNull,OS_HANDLE,RawFD}, ::Bool) = (stdio, false)
 const Redirectable = Union{IO, IOServer, FileRedirect, RawFD, OS_HANDLE}
 const StdIOSet = NTuple{3, Redirectable}
 
+# The redirect target of `N>&M` in a command literal: the command's own stream `fd` as it is
+# at that point, like a shell's `dup2`.
+struct DupRedirect
+    fd::Int
+end
+
 struct CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
-    handle::Redirectable
+    handle::Union{Redirectable,DupRedirect}
     stream_no::Int
     readable::Bool
 end
 CmdRedirect(cmd, handle, stream_no) = CmdRedirect(cmd, handle, stream_no, stream_no == STDIN_NO)
+hash(x::CmdRedirect, h::UInt) = hash(x.cmd, hash(x.handle, hash(x.stream_no, hash(x.readable, h))))
+==(x::CmdRedirect, y::CmdRedirect) = x.cmd == y.cmd && x.handle == y.handle &&
+                                     x.stream_no == y.stream_no && x.readable == y.readable
 
 function show(io::IO, cr::CmdRedirect)
     _show_as_backticks(io, cr) && return
@@ -307,48 +320,62 @@ end
 # Print `cmd` as one backtick literal if it can be written that way, returning whether it was.
 function _show_as_backticks(io::IO, cmd::AbstractCmd)
     buf = IOBuffer()
-    _show_backtick_body(IOContext(buf, io), cmd, (nothing, nothing, nothing)) || return false
+    _show_backtick_body(IOContext(buf, io), cmd, ()) || return false
     print(io, '`')
     write(io, take!(buf))
     print(io, '`')
     return true
 end
 
-# Print the body of a backtick literal for `cmd`, given the file redirects of enclosing
-# `CmdRedirect`s that apply to it, indexed by stream number. Returns `false` if `cmd` has
-# no backtick form, in which case the output is meaningless.
+# Print the body of a backtick literal for `cmd`, given the enclosing file, `devnull` and
+# copy `CmdRedirect`s that apply to it, outermost first, which is the order they are applied
+# in. Returns `false` if `cmd` has no backtick form, in which case the output is meaningless.
 _show_backtick_body(::IO, ::AbstractCmd, redirects) = false
 
 function _show_backtick_body(io::IO, cmd::Cmd, redirects)
     # Anything that `show` wraps around the backticks, like `setenv(...)`, has no shell syntax.
     (cmd.env === nothing || get_show_env_mode(io) === :none) && isempty(cmd.dir) &&
         cmd.uid === nothing && cmd.gid === nothing && cmd.cpus === nothing || return false
+    # A stream can be redirected only once in backticks.
+    allunique(r -> r.stream_no, redirects) || return false
     join(io, map(arg -> sprint(_show_cmd_word, arg, true; context=io), cmd.exec), ' ')
-    for (op, r) in zip(("<", ">", "2>"), redirects)
-        r === nothing && continue
-        print(io, ' ', op, op != "<" && r.append ? ">" : "", ' ')
-        _show_cmd_word(io, r.filename, false)
+    for r in redirects
+        handle, n = r.handle, r.stream_no
+        if handle isa DupRedirect
+            print(io, ' ', n == (r.readable ? STDIN_NO : STDOUT_NO) ? "" : n,
+                  r.readable ? "<&" : ">&", handle.fd)
+        else
+            op = n == STDIN_NO ? "<" : n == STDOUT_NO ? ">" : "2>"
+            print(io, ' ', op, handle !== devnull && op != "<" && handle.append ? ">" : "", ' ')
+            handle === devnull ? print(io, "/dev/null") : _show_cmd_word(io, handle.filename, false)
+        end
     end
     return true
 end
 
 function _show_backtick_body(io::IO, cmds::OrCmds, redirects)
     # A pipeline's stdin is the first command's and its stdout the last one's, but its
-    # stderr goes to every command, which `cmd 2> file` cannot express.
-    redirect_in, redirect_out, redirect_err = redirects
-    redirect_err === nothing || return false
-    _show_backtick_body(io, cmds.a, (redirect_in, nothing, nothing)) || return false
+    # stderr goes to every command, which `cmd 2> file` cannot express, and `>&` around a
+    # pipeline names its streams outside of it, but a command's inside it.
+    all(r -> r.stream_no != STDERR_NO && !(r.handle isa DupRedirect), redirects) || return false
+    _show_backtick_body(io, cmds.a, filter(r -> r.stream_no == STDIN_NO, redirects)) || return false
     print(io, " | ")
-    return _show_backtick_body(io, cmds.b, (nothing, redirect_out, nothing))
+    return _show_backtick_body(io, cmds.b, filter(r -> r.stream_no == STDOUT_NO, redirects))
 end
 
 function _show_backtick_body(io::IO, cr::CmdRedirect, redirects)
     handle = cr.handle
-    handle isa FileRedirect && !isempty(handle.filename) &&
+    if handle isa DupRedirect
         cr.stream_no in (STDIN_NO, STDOUT_NO, STDERR_NO) &&
-        cr.readable == (cr.stream_no == STDIN_NO) || return false
-    # When spawning, a redirect replaces any enclosing one of the same stream.
-    return _show_backtick_body(io, cr.cmd, setindex(redirects, handle, cr.stream_no + 1))
+            handle.fd in (STDIN_NO, STDOUT_NO, STDERR_NO) || return false
+    else
+        # A file named `/dev/null` has no backtick form: there, `/dev/null` means `devnull`.
+        (handle === devnull || handle isa FileRedirect && !isempty(handle.filename) &&
+            handle.filename != "/dev/null") &&
+            cr.stream_no in (STDIN_NO, STDOUT_NO, STDERR_NO) &&
+            cr.readable == (cr.stream_no == STDIN_NO) || return false
+    end
+    return _show_backtick_body(io, cr.cmd, (redirects..., cr))
 end
 
 """
@@ -485,7 +512,7 @@ libuv does not support affinity setting.
 
 In Linux, the `taskset` command line program can be used to see how `setcpuaffinity` works.
 
-```julia
+```julia-repl
 julia> run(setcpuaffinity(`sh -c 'taskset -p \$\$'`, [1, 2, 5]));
 pid 2273's current affinity mask: 13
 ```
@@ -493,7 +520,7 @@ pid 2273's current affinity mask: 13
 Note that the mask value `13` reflects that the first, second, and the fifth bits (counting
 from the least significant position) are turned on:
 
-```julia
+```julia-repl
 julia> 0b010011
 0x13
 ```
@@ -517,7 +544,7 @@ Requires appropriate permissions to set UID.
 
 # Examples
 
-```julia
+```julia-repl
 julia> run(setuid(`id -u`, 1000));
 1000
 ```
@@ -541,7 +568,7 @@ Requires appropriate permissions to set GID.
 
 # Examples
 
-```julia
+```julia-repl
 julia> run(setgid(`id -g`, 1000));
 1000
 ```
@@ -574,6 +601,11 @@ command's streams should be redirected. `append` controls whether file output ap
 file. This is a more general version of the 2-argument `pipeline` function.
 `pipeline(from, to)` is equivalent to `pipeline(from, stdout=to)` when `from` is a command,
 and to `pipeline(to, stdin=from)` when `from` is another kind of data source.
+The redirects are applied in the order `stdin`, `stdout`, `stderr`, and any redirects of
+`command` itself are applied after them. So ```pipeline(`cmd 2>&1`, stdout="log")``` sends both
+streams of `cmd` to `log`: stdout goes to `log`, and then `2>&1` makes stderr a copy of it. If
+`stderr` is the same object as `stdout`, or the same path string, it is opened once and shared
+by both streams, as in ``` `cmd >log 2>&1` ```.
 
 **Examples**:
 
@@ -586,14 +618,18 @@ function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothin
     if append && stdout === nothing && stderr === nothing
         throw(ArgumentError("append set to true, but no output redirections specified"))
     end
-    if stdin !== nothing
-        cmd = redir_out(stdin, cmd)
+    # The outermost redirect is applied first, so this is `cmd <stdin >stdout 2>stderr`.
+    if stderr !== nothing && (stderr === stdout || stderr isa AbstractString && isequal(stderr, stdout))
+        # Open the target once and share it, as in `cmd >stdout 2>&1`.
+        cmd = CmdRedirect(cmd, DupRedirect(STDOUT_NO), STDERR_NO, false)
+    elseif stderr !== nothing
+        cmd = append ? redir_err_append(cmd, stderr) : redir_err(cmd, stderr)
     end
     if stdout !== nothing
         cmd = append ? redir_out_append(cmd, stdout) : redir_out(cmd, stdout)
     end
-    if stderr !== nothing
-        cmd = append ? redir_err_append(cmd, stderr) : redir_err(cmd, stderr)
+    if stdin !== nothing
+        cmd = redir_out(stdin, cmd)
     end
     return cmd
 end
@@ -672,6 +708,60 @@ function arg_gen(head, tail...)
         push!(vals, cmd_interpolate(h,t))
     end
     return vals
+end
+
+# Escape the characters that a glob would treat as special, so that the text is matched
+# literally: `*`, `?` and `[`, and on Unix, where it is the escape character, `\`. Bracket
+# expressions such as `[*]` are used instead of backslashes, which are path separators on
+# Windows.
+function glob_escape(s::AbstractString)
+    any(c -> c in "*?[\\", s) || return String(s)
+    io = IOBuffer()
+    for c in s
+        if c in "*?[" || (c == '\\' && !Sys.iswindows())
+            print(io, '[', c, ']')
+        else
+            print(io, c)
+        end
+    end
+    return String(take!(io))
+end
+
+# The arguments an interpolated value adds to a glob word, as `_GlobArg`s: its text both as
+# it is and escaped, so that a pattern matches it literally.
+cmd_glob_args(x) = _GlobArg[(s, glob_escape(s), false) for s in arg_gen(x)]
+
+# The arguments a glob word produces, from those of its parts, in the order `arg_gen` gives.
+function cmd_glob_product(parts::Vector{_GlobArg}...)
+    args = _GlobArg[("", "", false)]
+    for part in parts
+        args = _GlobArg[(a * b, ap * bp, ag | bg) for (a, ap, ag) in args for (b, bp, bg) in part]
+    end
+    return args
+end
+
+# Expand the arguments a glob word in a command produces. Each one with a glob character is a
+# pattern, which is expanded by calling the `glob` function visible in the module `mod` where
+# the command appears, and must match at least one path; the others are used as they are.
+function cmd_glob_expand(mod::Module, words::Vector{_GlobArg})
+    if any(last, words) && !isdefined(mod, :glob)
+        error("an unquoted `*`, `?` or `[` in a command is a glob, ",
+              "which needs a `glob` function, such as the one the Glob package provides with ",
+              "`using Glob`; quote the character to use it literally")
+    end
+    args = String[]
+    for (literal, pattern, isglob) in words
+        if !isglob
+            push!(args, cstr(literal))
+            continue
+        end
+        paths = getglobal(mod, :glob)(pattern)
+        isempty(paths) && error("no files match the glob `$pattern` in a command")
+        for path in paths
+            push!(args, cmd_interpolate(path))
+        end
+    end
+    return args
 end
 
 function cmd_gen(parsed)

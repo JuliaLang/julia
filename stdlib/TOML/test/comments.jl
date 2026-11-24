@@ -73,7 +73,7 @@ end
     # 3
     bar = 456
     """
-    data, comments = parse_with_comments(str)
+    _, comments = parse_with_comments(str)
     @test comments.floating[String[]] == [" 1", " 2"]
     @test comments.items[["bar"]].above == [" 3"]
     @test !haskey(comments.items, ["foo"])
@@ -87,7 +87,7 @@ end
          2]
     b = { x = 1 } # inline b
     """
-    data, comments = parse_with_comments(str)
+    _, comments = parse_with_comments(str)
     @test comments.items[["a"]].above == [" above a", " one", " two"]
     @test comments.items[["b"]].inline == " inline b"
     @test !haskey(comments.items, ["b", "x"])
@@ -119,6 +119,9 @@ end
     # dropped too
     [[x]]
     b = 2
+    # dropped in a sub-table of an array table
+    [x.sub]
+    c = 3
 
     [y]
     # in y
@@ -145,10 +148,10 @@ end
     data, comments = parse_with_comments(str)
     @test comments.floating[["a"]] == [" floats in a"]
     out = sprint_with_comments(data, comments)
-    data2, comments2 = parse_with_comments(out)
+    _, comments2 = parse_with_comments(out)
     @test comments2.floating[["a"]] == [" floats in a"]
 
-    data, comments = parse_with_comments("x = 1\n# tail")
+    _, comments = parse_with_comments("x = 1\n# tail")
     @test comments.floating[String[]] == [" tail"]
 
     data, comments = parse_with_comments("# just a comment\n")
@@ -160,14 +163,14 @@ end
 end
 
 @testset "comment without preceding whitespace" begin
-    data, comments = parse_with_comments("a = 1# c\n[b]# d\nx = 2\n")
+    _, comments = parse_with_comments("a = 1# c\n[b]# d\nx = 2\n")
     @test comments.items[["a"]].inline == " c"
     @test comments.items[["b"]].inline == " d"
 end
 
 @testset "crlf line endings" begin
     str = "# above\r\na = 1\r\n\r\n# floating\r\n\r\nb = 2\r\n"
-    data, comments = parse_with_comments(str)
+    _, comments = parse_with_comments(str)
     @test comments.items[["a"]].above == [" above"]
     @test comments.floating[String[]] == [" floating"]
     @test !haskey(comments.items, ["b"])
@@ -190,7 +193,7 @@ end
 @testset "programmatic comments are sanitized" begin
     data = Dict{String, Any}("a" => 1)
     comments = TOML.Comments()
-    comments.items[["a"]] = TOML.Internals.CommentBlock(["evil\nb = 2"], "inline\nevil = 3")
+    comments.items[["a"]] = Base.TOML.CommentBlock(["evil\nb = 2"], "inline\nevil = 3")
     out = sprint_with_comments(data, comments)
     data2, comments2 = parse_with_comments(out)
     @test data2 == data
@@ -292,6 +295,19 @@ end
     push!(inline_tables2, data2["sources"]["Example"])
     out2 = sprint_with_comments(data2, comments2; inline_tables = inline_tables2, sorted = true)
     @test out2 == out
+
+    # floating comments in the inline table move above its entry too
+    data, comments = parse_with_comments("""
+    [sources.Example]
+    # floating in table
+
+    path = "../Example"
+    """)
+    @test comments.floating[["sources", "Example"]] == [" floating in table"]
+    inline_tables = Base.IdSet{Dict{String, Any}}()
+    push!(inline_tables, data["sources"]["Example"])
+    @test sprint_with_comments(data, comments; inline_tables) ==
+        "[sources]\n# floating in table\nExample = {path = \"../Example\"}\n"
 end
 
 @testset "Comments is emptied on reuse" begin
@@ -328,9 +344,10 @@ end
         comments = TOML.Comments()
         @test TOML.tryparse("# c\na = 1"; comments) == Dict("a" => 1)
         @test comments.items[["a"]].above == [" c"]
-        comments = TOML.Comments()
-        @test open(io -> TOML.parse(io; comments), path) == Dict("a" => 1)
-        @test comments.items[["a"]].inline == " inline"
+        let comments = TOML.Comments()
+            @test open(io -> TOML.parse(io; comments), path) == Dict("a" => 1)
+            @test comments.items[["a"]].inline == " inline"
+        end
     end
 end
 
@@ -346,7 +363,7 @@ end
     out = sprint_with_comments(data, comments; sorted=true, inline_tables)
     @test occursin("a = {x = 1}", out) || occursin("a = { x = 1 }", out)
     lines = split(out, '\n')
-    @test lines[findfirst(==("b = 1"), lines) - 1] == "# above b"
+    @test lines[something(findfirst(==("b = 1"), lines)) - 1] == "# above b"
 end
 
 @testset "a comment that ends in a multi-byte character" begin

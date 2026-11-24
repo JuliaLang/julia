@@ -851,44 +851,29 @@ end
     return false
 end
 
-function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
-    if isprimitivetype(In)
-        memcpy(ptr_out, ptr_in, packedsize(In))
-        return
-    end
-    writeoffset = 0
-    for i ∈ 1:fieldcount(In)
-        readoffset = fieldoffset(In, i)
-        fT = fieldtype(In, i)
-        if ispacked(fT)
-            readsize = sizeof(fT)
-            memcpy(ptr_out + writeoffset, ptr_in + readoffset, readsize)
-            writeoffset += readsize
-        else # nested padded type
-            _copytopacked!(ptr_out + writeoffset, Ptr{fT}(ptr_in + readoffset))
-            writeoffset += packedsize(fT)
+# The copies that move each non-padding byte of `In` to the corresponding one of `Out`, as
+# `(source offset, destination offset, size)` triples. The plan is returned as a type
+# parameter: as a value, a plan of more than a few copies would exceed the size of constants
+# the optimizer embeds in code, and the plan would be recomputed on every call.
+# Precondition, already checked by `_reinterpret`: `packedsize(Out) == packedsize(In)`.
+@assume_effects :foldable function packed_copies(Out, In)
+    src, dst = non_padding_bytes(In), non_padding_bytes(Out)
+    copies = Tuple{Int,Int,Int}[]
+    s = t = 1
+    while true
+        s = findnext(src, s)
+        s === nothing && break
+        t = findnext(dst, t)::Int
+        # extend the copy while both sides stay contiguous
+        n = 1
+        while s + n <= length(src) && src[s + n] && dst[t + n]
+            n += 1
         end
+        push!(copies, (s - 1, t - 1, n))
+        s += n
+        t += n
     end
-end
-
-function _copyfrompacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
-    if isprimitivetype(Out)
-        memcpy(ptr_out, ptr_in, packedsize(Out))
-        return
-    end
-    readoffset = 0
-    for i ∈ 1:fieldcount(Out)
-        writeoffset = fieldoffset(Out, i)
-        fT = fieldtype(Out, i)
-        if ispacked(fT)
-            writesize = sizeof(fT)
-            memcpy(ptr_out + writeoffset, ptr_in + readoffset, writesize)
-            readoffset += writesize
-        else # nested padded type
-            _copyfrompacked!(Ptr{fT}(ptr_out + writeoffset), ptr_in + readoffset)
-            readoffset += packedsize(fT)
-        end
-    end
+    return Val((copies...,))
 end
 
 @inline function _reinterpret(::Type{Out}, x::In) where {Out, In}
@@ -923,27 +908,20 @@ end
 # If the code reaches this part, it needs to handle padding and is unlikely
 # to compile to a noop. Therefore, we don't forcibly inline it.
 function _reinterpret_padding(::Type{Out}, x::In) where {Out, In}
-    inpackedsize = packedsize(In)
     in = Ref{In}(x)
     out = Ref{Out}()
     GC.@preserve in out begin
-        ptr_in = unsafe_convert(Ptr{In}, in)
-        ptr_out = unsafe_convert(Ptr{Out}, out)
-
-        if fieldcount(In) > 0 && ispacked(Out)
-            _copytopacked!(ptr_out, ptr_in)
-        elseif fieldcount(Out) > 0 && ispacked(In)
-            _copyfrompacked!(ptr_out, ptr_in)
-        else
-            packed = Ref{NTuple{inpackedsize, UInt8}}()
-            GC.@preserve packed begin
-                ptr_packed = unsafe_convert(Ptr{NTuple{inpackedsize, UInt8}}, packed)
-                _copytopacked!(ptr_packed, ptr_in)
-                _copyfrompacked!(ptr_out, ptr_packed)
-            end
-        end
+        ptr_in = Ptr{UInt8}(unsafe_convert(Ptr{In}, in))
+        ptr_out = Ptr{UInt8}(unsafe_convert(Ptr{Out}, out))
+        _copy_packed!(ptr_out, ptr_in, packed_copies(Out, In))
     end
     return out[]
+end
+
+@inline function _copy_packed!(ptr_out::Ptr{UInt8}, ptr_in::Ptr{UInt8}, ::Val{copies}) where {copies}
+    for (src, dst, n) in copies
+        memcpy(ptr_out + dst, ptr_in + src, n)
+    end
 end
 
 function String(v::ReinterpretArray{UInt8,1,S,<:Union{Vector{S},Memory{S}},IsReshaped}) where {S,IsReshaped}

@@ -90,6 +90,10 @@ using Dates
     @test ndims(a) == 5
     @test a[2,1,2,2,1] == b[14]
     @test a[2,2,2,2,2] == b[end]
+    @test Base.reshape!(a, (4, 2, 1, 2, 2)) === a
+    @test size(a) == (4, 2, 1, 2, 2)
+    @test a[2,2,1,2,2] == b[end-2]
+    @test_throws DimensionMismatch Base.reshape!(a, (4, 2, 1, 2, 1))
 
     @test_throws DimensionMismatch reshape(1:3, 4)
 
@@ -1525,6 +1529,8 @@ end
     @test @views mightalias(AA, AA[:])
     @test @views mightalias(AA[:], AA[:])
     @test @views mightalias(AA[1:1], AA[1:2])
+
+    @test @views !mightalias(zeros(0)[:], zeros(0, 0)[:, :])
 end
 
 @testset "lexicographic comparison" begin

@@ -219,18 +219,17 @@ struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void
 // offset to the arena in which we're allocating is passed in the second parameter, and the
 // object size in the third parameter. If thread-local allocators are used, then this
 // function should allocate in the thread-local allocator of the thread referenced by the
-// jl_ptls_t argument. An additional (last) parameter containing information about the type
-// of the object being allocated may be used to record an allocation of that type in the
-// allocation profiler.
+// jl_ptls_t argument. The function must set the object's type to the last parameter, which
+// may also be used to record an allocation of that type in the allocation profiler.
 JL_DLLEXPORT struct _jl_value_t *jl_gc_small_alloc(struct _jl_tls_states_t *ptls,
                                                    int offset, int osize,
                                                    struct _jl_value_t *type) JL_CANSAFEPOINT;
 // Description: Allocates large objects and increments Julia allocation counters. Size of
 // the object header must be included in the object size. If thread-local allocators are
 // used, then this function should allocate in the thread-local allocator of the thread
-// referenced by the jl_ptls_t argument. An additional (last) parameter containing
-// information about the type of the object being allocated may be used to record an
-// allocation of that type in the allocation profiler.
+// referenced by the jl_ptls_t argument. The function must set the object's type to the last
+// parameter, which may also be used to record an allocation of that type in the allocation
+// profiler.
 JL_DLLEXPORT struct _jl_value_t *jl_gc_big_alloc(struct _jl_tls_states_t *ptls, size_t sz,
                                                  struct _jl_value_t *type) JL_CANSAFEPOINT;
 // Reset-safe variants of jl_gc_small_alloc/jl_gc_big_alloc/jl_gc_alloc_typed/
@@ -247,14 +246,13 @@ JL_DLLEXPORT struct _jl_value_t *jl_gc_big_alloc_reset_safe(struct _jl_tls_state
 JL_DLLEXPORT void *jl_gc_alloc_typed_reset_safe(struct _jl_tls_states_t *ptls, size_t sz,
                                                 void *ty) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_gc_queue_root_reset_safe(const struct _jl_value_t *ptr);
-// Wrapper around Libc malloc that updates Julia allocation counters.
-JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz) JL_CANSAFEPOINT;
-// Wrapper around Libc calloc that updates Julia allocation counters.
-JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT;
-// Wrapper around Libc free that updates Julia allocation counters.
-JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz);
-// Wrapper around Libc realloc that updates Julia allocation counters.
-JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_CANSAFEPOINT;
+// Wrappers around Libc malloc, calloc, free and realloc that update Julia allocation counters.
+// They must never collect or reach a safepoint: libraries call them while holding their own
+// locks, from gc-safe regions concurrently with a collection, and from foreign threads.
+JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_NOTSAFEPOINT;
 // Wrapper around Libc malloc that's used to dynamically allocate memory for Arrays and
 // Strings. It increments Julia allocation counters and should check whether we're close to
 // the Julia heap target, and therefore, whether we should run a collection. Note that this

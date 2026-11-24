@@ -5,7 +5,7 @@
 Function sets `+refs/*:refs/*` refspecs and `mirror` flag for remote reference.
 """
 function mirror_callback(remote::Ptr{Ptr{Cvoid}}, repo_ptr::Ptr{Cvoid},
-                         name::Cstring, url::Cstring, payload::Ptr{Cvoid})
+                         name::Cstring, url::Cstring, _payload::Ptr{Cvoid})
     ensure_initialized()
     # Create the remote with a mirroring url
     fetch_spec = "+refs/*:refs/*"
@@ -197,7 +197,8 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
 
          # Use `copy` to ensure shredding the `git_cred` does not shred the `cred`s copy
         cred.user = something(git_cred.username, "")
-        cred.pass = git_cred.password !== nothing ? copy(git_cred.password) : ""
+        password = git_cred.password
+        cred.pass = password !== nothing ? copy(password) : ""
         Base.shred!(git_cred)
         revised = true
 
@@ -379,10 +380,10 @@ function verify_host_error(message::AbstractString)
 end
 
 function certificate_callback(
-    cert_p :: Ptr{CertHostKey},
-    valid  :: Cint,
-    host_p :: Ptr{Cchar},
-    data_p :: Ptr{Cvoid},
+    cert_p  :: Ptr{CertHostKey},
+    valid   :: Cint,
+    host_p  :: Ptr{Cchar},
+    _data_p :: Ptr{Cvoid},
 )::Cint
     valid != 0 && return Consts.CERT_ACCEPT
     host = unsafe_string(host_p)
