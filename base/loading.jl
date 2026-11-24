@@ -4107,6 +4107,14 @@ end
 const JI_FLAG_PKGIMAGE::UInt32 = 1 << 0
 const JI_FLAG_SPLIT::UInt32 = 1 << 1
 const JI_FLAG_NO_NATIVE::UInt32 = 1 << 2
+const JI_FLAG_NATIVE_EMBEDDED::UInt32 = 1 << 3
+
+# Is the native code of this cache file a section of it, instead of a file next to it?
+function cache_embeds_native_code(cachefile::String)
+    flags = Ref{UInt32}()
+    parse_cache_header(cachefile, flags)
+    return flags[] & JI_FLAG_NATIVE_EMBEDDED != 0
+end
 
 function isvalid_cache_header(f::IOStream, flags::Ref{UInt32}=Ref{UInt32}())
     checksum = Ref{UInt32}()

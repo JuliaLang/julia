@@ -2265,7 +2265,8 @@ precompile_test_harness("WindowsCacheOverwrite") do load_path
             """)
 
         ji_2, ofile_2 = Base.compilecache(Base.PkgId(name))
-        @test ofile_2 == (code ? Base.ocachefile_from_cachefile(ji_2) : ji_2)
+        separate = code && !Base.cache_embeds_native_code(ji_2)
+        @test ofile_2 == (separate ? Base.ocachefile_from_cachefile(ji_2) : ji_2)
     end
 end
 
@@ -5976,6 +5977,7 @@ precompile_test_harness("mismatched package image .so is recompiled") do load_pa
     pkg = Base.PkgId("MismatchedSo")
     Base.compilecache(pkg)
     cachefile = only(Base.find_all_in_cache_path(pkg))
+    Base.cache_embeds_native_code(cachefile) && return # nothing to mismatch
     ocachefile = Base.ocachefile_from_cachefile(cachefile)
     oldso = read(ocachefile)
     write(srcfile, "module MismatchedSo\nf(x) = x + 2\nprecompile(f, (Int,))\nend\n")

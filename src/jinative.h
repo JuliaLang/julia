@@ -69,7 +69,7 @@ typedef struct {
 typedef struct {
     uint64_t text_start, text_end;
     uint64_t eh_frame, eh_frame_size;
-    uint64_t unwind_info, unwind_info_size; // Mach-O compact unwind
+    uint64_t unwind_info, unwind_info_size; // Mach-O compact unwind, or the function table of COFF (.pdata)
     uint32_t debug, ndebug; // range of jl_native_debug_section_t
 } jl_native_object_t;
 

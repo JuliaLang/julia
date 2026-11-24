@@ -127,6 +127,7 @@ struct Prelinker {
 
     void layout();
     void resolve();
+    Error addImportStubs(LinkGraph &G);
     Error markRelocatedSectionsWritable(LinkGraph &G);
     Error relaxStubCalls(LinkGraph &G);
     Error recordFixups(LinkGraph &G);
@@ -164,6 +165,7 @@ public:
     void notifyFinalized(JITLinkMemoryManager::FinalizedAlloc Alloc) override { Alloc.release(); }
     Error modifyPassConfig(LinkGraph &G, PassConfiguration &Config) override
     {
+        Config.PostPrunePasses.push_back([this](LinkGraph &G) { return P.addImportStubs(G); });
         Config.PostPrunePasses.push_back([this](LinkGraph &G) { return P.markRelocatedSectionsWritable(G); });
         Config.PreFixupPasses.push_back([this](LinkGraph &G) { return P.relaxStubCalls(G); });
         Config.PostFixupPasses.push_back([this](LinkGraph &G) { return P.recordFixups(G); });
@@ -192,6 +194,45 @@ bool Prelinker::isAbsolute(Edge::Kind K) const
                K == aarch64::MoveWide16;
     return K == x86_64::Pointer32 || K == x86_64::Pointer32Signed || K == x86_64::Pointer16 ||
            K == x86_64::Pointer8;
+}
+
+// COFF code calls a function of another image through `__imp_` pointers if it
+// was declared `dllimport`, and directly otherwise, which a linker makes work
+// with a jump through such a pointer. JITLink does the first; this is the second.
+Error Prelinker::addImportStubs(LinkGraph &G)
+{
+    if (!TT.isOSBinFormatCOFF() || TT.getArch() != Triple::x86_64)
+        return Error::success();
+    std::vector<std::pair<Block*, Edge*>> Calls;
+    for (auto &Sec : G.sections()) {
+        if (!isExec(Sec.getMemProt()))
+            continue;
+        for (auto *B : Sec.blocks()) {
+            for (auto &E : B->edges()) {
+                Symbol &T = E.getTarget();
+                if (!T.isExternal() || StringRef(G.getEdgeKindName(E.getKind())) != "PCRel32" ||
+                    *T.getName() == "__ImageBase" || E.getOffset() == 0)
+                    continue;
+                // only `call rel32` and `jmp rel32` can go through a stub
+                unsigned char Op = B->getContent()[E.getOffset() - 1];
+                if (Op == 0xe8 || Op == 0xe9)
+                    Calls.push_back({B, &E});
+            }
+        }
+    }
+    if (Calls.empty())
+        return Error::success();
+    Section &Ptrs = G.createSection("$__STUBPTRS", orc::MemProt::Read);
+    Section &Stubs = G.createSection("$__STUBS", orc::MemProt::Read | orc::MemProt::Exec);
+    DenseMap<Symbol*, Symbol*> StubFor;
+    for (auto &Call : Calls) {
+        Symbol *&Stub = StubFor[&Call.second->getTarget()];
+        if (!Stub)
+            Stub = &x86_64::createAnonymousPointerJumpStub(
+                G, Stubs, x86_64::createAnonymousPointer(G, Ptrs, &Call.second->getTarget()));
+        Call.second->setTarget(*Stub);
+    }
+    return Error::success();
 }
 
 // A slot that is fixed up at load time has to be writable then. Sections that
@@ -232,8 +273,39 @@ Error Prelinker::markRelocatedSectionsWritable(LinkGraph &G)
 // at once does.
 Error Prelinker::relaxStubCalls(LinkGraph &G)
 {
+    if (TT.isOSBinFormatCOFF() && TT.getArch() == Triple::x86_64) {
+        // the stubs of addImportStubs whose function turned out to be in the image
+        Section *Stubs = G.findSectionByName("$__STUBS");
+        if (!Stubs)
+            return Error::success();
+        for (auto &Sec : G.sections()) {
+            if (!isExec(Sec.getMemProt()) || &Sec == Stubs)
+                continue;
+            for (auto *B : Sec.blocks()) {
+                for (auto &E : B->edges()) {
+                    if (!E.getTarget().isDefined() || &E.getTarget().getBlock().getSection() != Stubs)
+                        continue;
+                    Block &Stub = E.getTarget().getBlock();
+                    if (Stub.edges_size() != 1)
+                        continue;
+                    Block &Ptr = Stub.edges().begin()->getTarget().getBlock();
+                    if (Ptr.edges_size() != 1)
+                        continue;
+                    Symbol &Target = Ptr.edges().begin()->getTarget();
+                    int64_t Delta = Target.getAddress().getValue() - (B->getAddress().getValue() + E.getOffset());
+                    if (!inImage(Target.getAddress().getValue()) || !isInt<32>(Delta)) {
+                        NStubCalls++;
+                        continue;
+                    }
+                    E.setTarget(Target);
+                    NRelaxed++;
+                }
+            }
+        }
+        return Error::success();
+    }
     if (!TT.isAArch64())
-        return Error::success(); // x86_64 has this as a default pass
+        return Error::success(); // x86_64 ELF has this as a default pass
     Section *Stubs = G.findSectionByName(aarch64::PLTTableManager::getSectionName());
     Section *GOT = G.findSectionByName(aarch64::GOTTableManager::getSectionName());
     if (!GOT)
@@ -367,6 +439,8 @@ Error Prelinker::recordFixups(LinkGraph &G)
                 bool Import = !inImage(TAddr);
                 if (!isPointer64(E.getKind())) {
                     // relative to the image or a constant, as long as the target is in it
+                    if (TT.isOSBinFormatCOFF() && E.getKind() == x86_64::Pointer32 && !Import)
+                        continue; // JITLink lowered an offset from __ImageBase to this
                     if (isAbsolute(E.getKind()))
                         return error("absolute relocation that the loader cannot apply", *B, E);
                     if (Import && !(T.isAbsolute() && TAddr == VBase))
@@ -404,6 +478,20 @@ Error Prelinker::recordFixups(LinkGraph &G)
     if (TT.isOSBinFormatMachO()) {
         section("__TEXT,__eh_frame", UW.eh_frame, UW.eh_frame_size);
         section("__TEXT,__unwind_info", UW.unwind_info, UW.unwind_info_size);
+    }
+    else if (TT.isOSBinFormatCOFF()) {
+        // The function table, which the system wants sorted by address. Its
+        // entries are three offsets from the start of the image.
+        section(".pdata", UW.unwind_info, UW.unwind_info_size);
+        struct Entry { support::ulittle32_t Begin, End, Unwind; };
+        Entry *Entries = (Entry*)(Image.data() + UW.unwind_info);
+        size_t N = UW.unwind_info_size / sizeof(Entry);
+        std::sort(Entries, Entries + N, [](const Entry &A, const Entry &B) { return A.Begin < B.Begin; });
+        size_t Padding = 0; // between the tables of the functions, if any
+        while (Padding < N && Entries[Padding].Begin == 0)
+            Padding++;
+        UW.unwind_info += Padding * sizeof(Entry);
+        UW.unwind_info_size = (N - Padding) * sizeof(Entry);
     }
     else {
         section(".eh_frame", UW.eh_frame, UW.eh_frame_size);
@@ -489,6 +577,10 @@ void Prelinker::resolve()
             uint64_t Addr;
             if (It != Exports.end()) {
                 Addr = It->second;
+            }
+            else if (Name == "__ImageBase") {
+                // what COFF measures the addresses in its function tables from
+                Addr = VBase;
             }
             else {
                 uint32_t &Idx = ImportIdx[Name];

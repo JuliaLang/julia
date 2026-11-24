@@ -1132,6 +1132,31 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, uint64_t 
     bool untrusted_dladdr = false;
 #endif
 
+    // The native code section of a .ji, which the dynamic loader does not know
+    uint64_t native_base;
+    const char *native_path, *native_name;
+    void *native_saddr;
+    if (jl_native_image_for_addr(pointer, &native_base, &native_path, &native_saddr, &native_name)) {
+        JITDebugInfoRegistry::image_info_t image_info;
+        bool inimage = getJITDebugRegistry().get_image_info(native_base, &image_info);
+        if (isImage)
+            *isImage = inimage;
+        if (onlyImage && !inimage)
+            return false;
+        if (_fbase)
+            *_fbase = native_base;
+        if (saddr)
+            *saddr = native_saddr;
+        if (name && native_name)
+            jl_copy_str(name, native_name);
+        if (filename)
+            jl_copy_str(filename, native_path);
+        jl_object_file_entry_t entry = find_native_debug_info(pointer);
+        *slide = entry.slide;
+        *context = entry.ctx;
+        return true;
+    }
+
 // GOAL: Determine containing Library
 // Assigning fname, fbase
 #ifdef _OS_WINDOWS_
@@ -1192,19 +1217,6 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, uint64_t 
 #endif
     dladdr_success = dladdr((void*)pointer, &dlinfo) != 0;
 #endif
-    uint64_t native_base;
-    bool native = false;
-    if (jl_native_image_for_addr(pointer, &native_base, &dlinfo.dli_fname, &dlinfo.dli_saddr, &dlinfo.dli_sname)) {
-        native = true;
-        // native code section of a .ji, which the dynamic loader does not know
-        dlinfo.dli_fbase = (void*)(uintptr_t)native_base;
-        dladdr_success = 1;
-#ifdef __GLIBC__
-        static struct link_map native_map;
-        native_map.l_addr = native_base;
-        extra_info = &native_map;
-#endif
-    }
     if (!dladdr_success || !dlinfo.dli_fname)
         return false;
 
@@ -1233,7 +1245,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, uint64_t 
         jl_copy_str(filename, dlinfo.dli_fname);
     fname = dlinfo.dli_fname;
 #endif // ifdef _OS_WINDOWS_
-    jl_object_file_entry_t entry = native ? find_native_debug_info(pointer) : find_object_file(fbase, fname);
+    jl_object_file_entry_t entry = find_object_file(fbase, fname);
     *slide = entry.slide;
     *context = entry.ctx;
     if (entry.obj)

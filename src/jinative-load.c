@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // Loads the native code section of a .ji file (see jinative.h) without the
-// dynamic loader of the system: map three segments from the file, add the load
+// dynamic loader of the system: map the segments from the file, add the load
 // address to the rebase slots, store the addresses of the imports in the bind
 // slots, and tell the unwinder where the unwind tables are.
 
@@ -12,10 +12,10 @@
 #include <stdio.h>
 #include <zstd.h>
 
-#ifndef _OS_WINDOWS_
-#include <fcntl.h>
+#ifdef _OS_WINDOWS_
+#include <windows.h>
+#else
 #include <sys/mman.h>
-#include <sys/stat.h>
 #include <unistd.h>
 #include <dlfcn.h>
 #include <pthread.h>
@@ -101,8 +101,6 @@ JL_DLLEXPORT int jl_native_image_for_addr(uintptr_t addr, uint64_t *base, const 
     return 1;
 }
 
-#ifndef _OS_WINDOWS_
-
 #ifdef _OS_DARWIN_
 struct unw_dynamic_unwind_sections {
     uintptr_t dso_base;
@@ -153,6 +151,19 @@ static void native_register_unwinder(void) JL_NOTSAFEPOINT
 }
 #endif
 
+#ifdef _OS_WINDOWS_
+#if defined(_CPU_X86_64_)
+extern void ___chkstk_ms(void);
+#endif
+static void *native_libgcc_handle(void) JL_NOTSAFEPOINT
+{
+    static void *handle = NULL;
+    if (handle == NULL)
+        handle = jl_dlopen(JL_LIBGCC_NAME, JL_RTLD_NOLOAD);
+    return handle;
+}
+#endif
+
 // Addresses of the symbols that images import, which are the same few in every image
 #define IMPORT_CACHE_SIZE 4096 // power of 2
 static struct { const char *name; void *addr; } import_cache[IMPORT_CACHE_SIZE];
@@ -167,9 +178,23 @@ static void *native_resolve_import(const char *name) JL_NOTSAFEPOINT
         i = (i + 1) & (IMPORT_CACHE_SIZE - 1);
     }
     void *addr = NULL;
-    if (!jl_dlsym(jl_libjulia_internal_handle, name, &addr, 0, 0) &&
-        !jl_dlsym(jl_libjulia_handle, name, &addr, 0, 0) &&
-        !jl_dlsym(jl_RTLD_DEFAULT_handle, name, &addr, 0, 0))
+#ifdef _OS_WINDOWS_
+    // where the JIT finds the symbols that code refers to (see JuliaOJIT::JuliaOJIT)
+    void *handles[] = {jl_libjulia_internal_handle, jl_libjulia_handle, jl_exe_handle, native_libgcc_handle(),
+                       jl_ntdll_handle, jl_kernel32_handle, jl_crtdll_handle, jl_winsock_handle};
+#if defined(_CPU_X86_64_)
+    // part of the static libgcc, which a linker puts into every image that needs it
+    if (strcmp(name, "___chkstk_ms") == 0)
+        addr = (void*)&___chkstk_ms;
+#endif
+#else
+    void *handles[] = {jl_libjulia_internal_handle, jl_libjulia_handle, jl_RTLD_DEFAULT_handle};
+#endif
+    for (size_t h = 0; addr == NULL && h < sizeof(handles) / sizeof(handles[0]); h++) {
+        if (handles[h] != NULL)
+            jl_dlsym(handles[h], name, &addr, 0, 0);
+    }
+    if (addr == NULL)
         return NULL;
     if (import_cache_count < IMPORT_CACHE_SIZE / 2) {
         import_cache[i].name = strdup(name);
@@ -179,7 +204,7 @@ static void *native_resolve_import(const char *name) JL_NOTSAFEPOINT
     return addr;
 }
 
-static pthread_mutex_t native_lock = PTHREAD_MUTEX_INITIALIZER;
+static jl_mutex_t native_lock;
 
 static int native_env_flag(const char *name, int dflt) JL_NOTSAFEPOINT
 {
@@ -357,10 +382,11 @@ static void native_register_debugger(jl_native_image_t *img) JL_CANSAFEPOINT
 // With ENABLE_JITPROFILING=1, as for code from the JIT, tell perf the names of the functions
 static void native_write_perf_map(jl_native_image_t *img) JL_NOTSAFEPOINT
 {
+#ifndef _OS_WINDOWS_
     static FILE *map = NULL;
     const jl_native_header_t *h = img->hdr;
     const jl_native_sym_t *syms = (const jl_native_sym_t*)(img->meta + h->syms_off);
-    pthread_mutex_lock(&native_lock);
+    JL_LOCK_NOGC(&native_lock);
     if (map == NULL) {
         char path[64];
         snprintf(path, sizeof(path), "/tmp/perf-%d.map", (int)getpid());
@@ -372,7 +398,8 @@ static void native_write_perf_map(jl_native_image_t *img) JL_NOTSAFEPOINT
                     (unsigned)syms[i].size, img->meta + h->strtab_off + syms[i].name);
         fflush(map);
     }
-    pthread_mutex_unlock(&native_lock);
+    JL_UNLOCK_NOGC(&native_lock);
+#endif
 }
 
 static uint64_t native_time[4]; // map, imports, fixups, registration (ns)
@@ -417,20 +444,30 @@ static int native_header_ok(const jl_native_header_t *h, uint64_t avail) JL_NOTS
     return h->image_pointers >= h->text_off && h->image_pointers < h->vm_size;
 }
 
+static int native_read(ios_t *f, void *buf, size_t n, uint64_t off) JL_NOTSAFEPOINT
+{
+    return ios_seek(f, off) == 0 && ios_readall(f, (char*)buf, n) == n;
+}
+
 // Load the native code section at offset `off` of the file `path`. Returns NULL, with
 // the reason in `err`, if it cannot be loaded.
 jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const char **err) JL_CANSAFEPOINT
 {
     jl_native_header_t hdr;
     jl_native_image_t *img = NULL;
-    char *base = (char*)MAP_FAILED, *meta = (char*)MAP_FAILED;
+    // `meta` is such that the offsets of the tables, which follow the segments in
+    // the file, can be used as they are; `meta_mem` is where they really are
+    char *base = NULL, *meta = NULL, *meta_mem = NULL;
     void **imports = NULL;
     size_t pagesz = jl_getpagesize(), text_end = 0, meta_size = 0;
     int perf = 0, copy = 0, mapped = 0;
     const uint32_t *import_names;
     const uint8_t *p, *pend;
     const jl_native_bind_t *binds;
+    const jl_native_object_t *objs;
+    const char *strtab;
     uint64_t t0 = jl_hrtime(), t1, t2, t3, t4, slot = 0;
+    int64_t fsize;
     size_t n;
     jl_native_image_t *chunk;
 #ifdef _OS_DARWIN_
@@ -441,51 +478,63 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
 #else
     int gdb_default = 0;
 #endif
-    struct stat st;
-    const char *strtab;
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
-    if (fd == -1) {
+    ios_t f;
+    if (ios_file(&f, path, 1, 0, 0, 0) == NULL) {
         *err = "cannot open the file";
         return NULL;
     }
+    ios_bufmode(&f, bm_none);
+    hdr.vm_size = hdr.codesig_off = 0;
     *err = "not a native code section";
-    if (fstat(fd, &st) != 0 || off > (uint64_t)st.st_size ||
-        pread(fd, &hdr, sizeof(hdr), off) != sizeof(hdr) ||
-        memcmp(hdr.magic, JL_NATIVE_MAGIC, sizeof(hdr.magic)) != 0 || hdr.version != JL_NATIVE_VERSION) {
-        hdr.vm_size = hdr.codesig_off = 0; // nothing is mapped
+    fsize = ios_filesize(&f);
+    if (fsize < 0 || off > (uint64_t)fsize || !native_read(&f, &hdr, sizeof(hdr), off) ||
+        memcmp(hdr.magic, JL_NATIVE_MAGIC, sizeof(hdr.magic)) != 0 || hdr.version != JL_NATIVE_VERSION)
         goto fail;
-    }
     *err = "native code section is damaged";
-    if (!native_header_ok(&hdr, (uint64_t)st.st_size - off))
+    if (!native_header_ok(&hdr, (uint64_t)fsize - off))
         goto fail;
     *err = "native code section is laid out for another page size";
     if (hdr.page_size % pagesz != 0 || off % pagesz != 0)
         goto fail;
     *err = "cannot map the native code section";
     text_end = hdr.rodata_off;
-    base = (char*)mmap(NULL, hdr.vm_size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
-    if (base == MAP_FAILED)
-        goto fail;
-    // The header and the code, shared with every process that has the file mapped.
-    // perf only looks symbols up in its map file for code that is not in a file.
+    meta_size = hdr.codesig_off - hdr.vm_size;
+    // perf only looks symbols up in its map file for code that is not in a file
     perf = native_env_flag("ENABLE_JITPROFILING", 0);
     copy = perf || getenv("JULIA_NATIVE_IMAGE_COPY") != NULL;
+#ifdef _OS_WINDOWS_
+    // TODO: map the code from the file (MapViewOfFile3 onto a placeholder), so
+    // that it is shared between processes. For now everything is a private copy.
+    (void)copy; (void)mapped;
+    base = (char*)VirtualAlloc(NULL, hdr.vm_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (base == NULL || !native_read(&f, base, hdr.vm_size, off))
+        goto fail;
+    meta_mem = (char*)malloc(meta_size);
+    if (meta_mem == NULL || !native_read(&f, meta_mem, meta_size, off + hdr.vm_size))
+        goto fail;
+#else
+    base = (char*)mmap(NULL, hdr.vm_size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+    if (base == MAP_FAILED) {
+        base = NULL;
+        goto fail;
+    }
+    // The header and the code, shared with every process that has the file mapped
 #ifdef _OS_DARWIN_
     // The kernel only maps signed files executable; the signature is the last part of the section
     memset(&sig, 0, sizeof(sig));
     sig.fs_file_start = off;
     sig.fs_blob_start = (void*)(uintptr_t)hdr.codesig_off;
     sig.fs_blob_size = hdr.codesig_size;
-    mapped = hdr.codesig_size != 0 && !copy && fcntl(fd, F_ADDFILESIGS_RETURN, &sig) != -1;
+    mapped = hdr.codesig_size != 0 && !copy && fcntl(f.fd, F_ADDFILESIGS_RETURN, &sig) != -1;
 #else
     mapped = !copy;
 #endif
     if (mapped)
-        mapped = mmap(base, text_end, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_FIXED, fd, off) != MAP_FAILED;
+        mapped = mmap(base, text_end, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_FIXED, f.fd, off) != MAP_FAILED;
     if (!mapped) {
         // e.g. a file system that is mounted noexec: use a private copy
         if (mprotect(base, text_end, PROT_READ | PROT_WRITE) != 0 ||
-            pread(fd, base, text_end, off) != (ssize_t)text_end ||
+            !native_read(&f, base, text_end, off) ||
             mprotect(base, text_end, PROT_READ | PROT_EXEC) != 0)
             goto fail;
 #ifdef _OS_DARWIN_
@@ -494,21 +543,20 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
     }
     if (hdr.relro_off > hdr.rodata_off &&
         mmap(base + hdr.rodata_off, hdr.relro_off - hdr.rodata_off, PROT_READ, MAP_PRIVATE | MAP_FIXED,
-             fd, off + hdr.rodata_off) == MAP_FAILED)
+             f.fd, off + hdr.rodata_off) == MAP_FAILED)
         goto fail;
     // Everything that is fixed up; the first part of it is made read-only afterwards
     if (hdr.vm_size > hdr.relro_off &&
         mmap(base + hdr.relro_off, hdr.vm_size - hdr.relro_off, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED,
-             fd, off + hdr.relro_off) == MAP_FAILED)
+             f.fd, off + hdr.relro_off) == MAP_FAILED)
         goto fail;
-    // The tables follow the segments. `meta` is such that their offsets can be used as they are.
-    meta_size = hdr.codesig_off - hdr.vm_size;
-    if (meta_size != 0) {
-        meta = (char*)mmap(NULL, meta_size, PROT_READ, MAP_PRIVATE, fd, off + hdr.vm_size);
-        if (meta == MAP_FAILED)
-            goto fail;
-        meta -= hdr.vm_size;
+    meta_mem = (char*)mmap(NULL, meta_size, PROT_READ, MAP_PRIVATE, f.fd, off + hdr.vm_size);
+    if (meta_mem == MAP_FAILED) {
+        meta_mem = NULL;
+        goto fail;
     }
+#endif
+    meta = meta_mem - hdr.vm_size;
     t1 = jl_hrtime();
 
     *err = "native code section is damaged";
@@ -517,19 +565,21 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
         goto fail;
     import_names = (const uint32_t*)(meta + hdr.imports_off);
     imports = (void**)malloc(sizeof(void*) * (hdr.nimports + 1));
-    pthread_mutex_lock(&native_lock);
+    JL_LOCK_NOGC(&native_lock);
     for (uint32_t i = 0; i < hdr.nimports; i++) {
         imports[i] = import_names[i] < hdr.strtab_size ? native_resolve_import(strtab + import_names[i]) : NULL;
         if (imports[i] == NULL) {
-            pthread_mutex_unlock(&native_lock);
+            JL_UNLOCK_NOGC(&native_lock);
+            if (import_names[i] < hdr.strtab_size && getenv("JULIA_DEBUG_NATIVE_IMAGE") != NULL)
+                jl_safe_printf("native image %s: cannot resolve %s\n", path, strtab + import_names[i]);
             *err = "native code refers to a symbol that this process does not have";
             goto fail;
         }
     }
-    pthread_mutex_unlock(&native_lock);
+    JL_UNLOCK_NOGC(&native_lock);
     t2 = jl_hrtime();
 
-    // every slot is in the two segments that are mapped writable
+    // every slot is in the two segments that are still writable
     *err = "native code section is damaged";
     p = (const uint8_t*)(meta + hdr.rebase_off);
     pend = (const uint8_t*)(meta + hdr.codesig_off);
@@ -562,14 +612,25 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
     }
     free(imports);
     imports = NULL;
+    *err = "cannot map the native code section";
+#ifdef _OS_WINDOWS_
+    {
+        DWORD old;
+        if (!VirtualProtect(base, text_end, PAGE_EXECUTE_READ, &old) ||
+            (hdr.data_off > text_end && !VirtualProtect(base + text_end, hdr.data_off - text_end, PAGE_READONLY, &old)))
+            goto fail;
+        FlushInstructionCache(GetCurrentProcess(), base, text_end);
+    }
+#else
     if (hdr.data_off > hdr.relro_off)
         mprotect(base + hdr.relro_off, hdr.data_off - hdr.relro_off, PROT_READ);
+#endif
     t3 = jl_hrtime();
 
-    pthread_mutex_lock(&native_lock);
+    JL_LOCK_NOGC(&native_lock);
     n = jl_atomic_load_relaxed(&native_nimages);
     if (n == NATIVE_CHUNK * NATIVE_NCHUNKS) {
-        pthread_mutex_unlock(&native_lock);
+        JL_UNLOCK_NOGC(&native_lock);
         *err = "too many native images";
         goto fail;
     }
@@ -584,15 +645,25 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
     img->meta = meta;
     img->path = strdup(path);
     jl_atomic_store_release(&native_nimages, n + 1);
-#ifdef _OS_DARWIN_
+    objs = (const jl_native_object_t*)(meta + hdr.objects_off);
+    (void)objs;
+#if defined(_OS_DARWIN_)
     static int unwinder_registered = 0;
     if (!unwinder_registered) {
         unwinder_registered = 1;
         native_register_unwinder();
     }
+#elif defined(_OS_WINDOWS_)
+#if defined(_CPU_X86_64_)
+    // the function tables of each object, sorted by the prelinker
+    for (uint32_t i = 0; i < hdr.nobjects; i++) {
+        if (objs[i].unwind_info_size != 0)
+            RtlAddFunctionTable((PRUNTIME_FUNCTION)(base + objs[i].unwind_info),
+                                (DWORD)(objs[i].unwind_info_size / sizeof(RUNTIME_FUNCTION)), (DWORD64)(uintptr_t)base);
+    }
+#endif
 #else
     // TODO: the prelinker can write the lookup table that this builds
-    const jl_native_object_t *objs = (const jl_native_object_t*)(meta + hdr.objects_off);
     for (uint32_t i = 0; i < hdr.nobjects; i++) {
         if (objs[i].eh_frame_size != 0)
             jl_register_eh_frames((uint8_t*)base + objs[i].eh_frame, objs[i].eh_frame_size);
@@ -607,8 +678,8 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
     native_count[1] += hdr.nrebase;
     native_count[2] += hdr.nbind;
     native_count[3] += hdr.text_size;
-    pthread_mutex_unlock(&native_lock);
-    close(fd);
+    JL_UNLOCK_NOGC(&native_lock);
+    ios_close(&f);
     if (native_env_flag("ENABLE_GDBLISTENER", gdb_default))
         native_register_debugger(img);
     if (perf)
@@ -618,30 +689,19 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
 
 fail:
     free(imports);
-    if (meta != MAP_FAILED)
-        munmap(meta + hdr.vm_size, hdr.codesig_off - hdr.vm_size);
-    if (base != MAP_FAILED)
+#ifdef _OS_WINDOWS_
+    free(meta_mem);
+    if (base != NULL)
+        VirtualFree(base, 0, MEM_RELEASE);
+#else
+    if (meta_mem != NULL)
+        munmap(meta_mem, meta_size);
+    if (base != NULL)
         munmap(base, hdr.vm_size);
-    close(fd);
-    return NULL;
-}
-
-#else // _OS_WINDOWS_
-
-JL_DLLEXPORT void jl_native_image_stats(uint64_t *time, uint64_t *count) JL_NOTSAFEPOINT
-{
-    memset(time, 0, 4 * sizeof(uint64_t));
-    memset(count, 0, 4 * sizeof(uint64_t));
-}
-
-jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const char **err) JL_NOTSAFEPOINT
-{
-    // TODO: CreateFileMapping(PAGE_EXECUTE_READ) + MapViewOfFileEx, RtlAddFunctionTable
-    *err = "native code sections are not implemented on this platform";
-    return NULL;
-}
-
 #endif
+    ios_close(&f);
+    return NULL;
+}
 
 #ifdef __cplusplus
 }

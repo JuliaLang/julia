@@ -2308,7 +2308,9 @@ end
                 `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
-            @test !isempty(filter(!endswith(".ji"), readdir(cov_cache_dir))) # check that object cache file(s) exists
+            # check that the native code exists, as object cache file(s) or in the .ji
+            @test any(f -> !endswith(f, ".ji") || Base.cache_embeds_native_code(joinpath(cov_cache_dir, f)),
+                      readdir(cov_cache_dir))
             @test !cov_hit()
             rm_cov_files()
 
