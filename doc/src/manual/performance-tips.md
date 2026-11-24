@@ -154,7 +154,7 @@ julia> time_sum(x)
 In some situations, your function may need to allocate memory as part of its operation, and this
 can complicate the simple picture above. In such cases, consider using one of the [tools](@ref tools)
 below to diagnose problems, or write a version of your function that separates allocation from
-its algorithmic aspects (see [Pre-allocating outputs](@ref)).
+its algorithmic aspects (see [Pre-allocate outputs](@ref)).
 
 !!! note
     For more serious benchmarking, consider the [BenchmarkTools.jl](https://github.com/JuliaCI/BenchmarkTools.jl)
@@ -1440,7 +1440,7 @@ may be the case during development of a package.
 Keeping the time taken to load the package down is usually helpful.
 General good practice for package developers includes:
 
-1. Reduce your dependencies to those you really need. Consider using [package extensions](@ref) to support interoperability with other packages without bloating your essential dependencies.
+1. Reduce your dependencies to those you really need. Consider using [package extensions](@ref man-extensions) to support interoperability with other packages without bloating your essential dependencies.
 3. Avoid use of [`__init__()`](@ref) functions unless there is no alternative, especially those which might trigger a lot
    of compilation, or just take a long time to execute.
 4. Where possible, fix [invalidations](https://julialang.org/blog/2020/08/invalidations/) among your dependencies and from your package code.
