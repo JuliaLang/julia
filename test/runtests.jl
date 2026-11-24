@@ -139,7 +139,8 @@ end
 # stdlibs cached the paths of, `precompile`: packages loaded and methods added to Base,
 # `threads`: exited adopted threads, `SparseArrays`/`SuiteSparse`: methods added to Base
 # functions like `hvcat`), which breaks later tests on the same worker, so the worker is
-# replaced once they finish
+# replaced once they finish. Without workers they run after all other tests instead, in
+# this order (see below)
 const recycle_worker_tests = ["Pkg", "precompile", "threads", "SparseArrays", "SuiteSparse"]
 
 # In a constrained memory environment, run the "distributed" test after all other tests
@@ -186,15 +187,19 @@ cd(@__DIR__) do
     #   * https://github.com/JuliaLang/julia/issues/6722
     #   * https://github.com/JuliaLang/julia/pull/29384
     #   * https://github.com/JuliaLang/julia/pull/40348
-    n = 1
-    JULIA_TEST_USE_MULTIPLE_WORKERS = Base.get_bool_env("JULIA_TEST_USE_MULTIPLE_WORKERS", false)
     # If the `JULIA_TEST_USE_MULTIPLE_WORKERS` environment variable is set to `true`, we use
     # multiple worker processes regardless of the value of `net_on`.
     # Otherwise, we use multiple worker processes if and only if `net_on` is true.
-    if net_on || JULIA_TEST_USE_MULTIPLE_WORKERS
+    use_workers = net_on || Base.get_bool_env("JULIA_TEST_USE_MULTIPLE_WORKERS", false)
+    n = 1
+    if use_workers
         n = min(Sys.EFFECTIVE_CPU_THREADS, length(tests))
         n > 1 && addprocs_with_testenv(n)
         LinearAlgebra.BLAS.set_num_threads(1)
+    else
+        # Without workers, nothing can replace the process that the tests in
+        # `recycle_worker_tests` leave state behind in, so run them after all other tests
+        foreach(move_to_node1, recycle_worker_tests)
     end
     prefix_id_width[] = ndigits(n + 1) # worker ids start at 2, so `n + 1` is the widest
     skipped = 0
