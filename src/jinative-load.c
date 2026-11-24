@@ -10,10 +10,12 @@
 #include "julia_assert.h"
 #include "jinative.h"
 #include <stdio.h>
+#include <zstd.h>
 
 #ifndef _OS_WINDOWS_
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <dlfcn.h>
 #include <pthread.h>
@@ -211,7 +213,7 @@ typedef struct {
     uint64_t st_value, st_size;
 } native_elf_sym_t;
 
-static void native_register_debugger(jl_native_image_t *img) JL_NOTSAFEPOINT
+static void native_register_debugger(jl_native_image_t *img) JL_CANSAFEPOINT
 {
     const jl_native_header_t *h = img->hdr;
     const jl_native_object_t *objs = (const jl_native_object_t*)(img->meta + h->objects_off);
@@ -240,7 +242,8 @@ static void native_register_debugger(jl_native_image_t *img) JL_NOTSAFEPOINT
         size_t size = sizeof(native_elf_ehdr_t) + nsec * sizeof(native_elf_shdr_t) + obj->eh_frame_size;
         for (uint32_t i = 0; i < obj->ndebug; i++) {
             shstrsz += strlen(strtab + dsecs[obj->debug + i].name) + 2;
-            size += LLT_ALIGN(dsecs[obj->debug + i].size, 8);
+            const jl_native_debug_section_t *ds = &dsecs[obj->debug + i];
+            size += LLT_ALIGN(ds->usize ? ds->usize : ds->size, 8);
         }
         size = LLT_ALIGN(size, 8) + (nsym + 1) * sizeof(native_elf_sym_t) + strsz + shstrsz;
         char *buf = (char*)calloc(1, size);
@@ -293,9 +296,13 @@ static void native_register_debugger(jl_native_image_t *img) JL_NOTSAFEPOINT
             shstrpos += strlen(strtab + ds->name) + 2;
             sh[si].sh_type = 1;
             sh[si].sh_offset = pos;
-            sh[si].sh_size = ds->size;
+            size_t dsize = ds->usize ? ds->usize : ds->size;
+            sh[si].sh_size = dsize;
             sh[si].sh_addralign = 1;
-            memcpy(buf + pos, img->meta + ds->off, ds->size);
+            if (ds->usize)
+                ZSTD_decompress(buf + pos, dsize, img->meta + ds->off, ds->size);
+            else
+                memcpy(buf + pos, img->meta + ds->off, dsize);
             const uint32_t *slides = (const uint32_t*)(img->meta + ds->slides_off);
             for (uint32_t j = 0; j < ds->nslides; j++) {
                 uint64_t v;
@@ -303,7 +310,7 @@ static void native_register_debugger(jl_native_image_t *img) JL_NOTSAFEPOINT
                 v += slide;
                 memcpy(buf + pos + slides[j], &v, sizeof(v));
             }
-            pos += ds->size;
+            pos += dsize;
             si++;
         }
         pos = LLT_ALIGN(pos, 8);
@@ -377,9 +384,42 @@ JL_DLLEXPORT void jl_native_image_stats(uint64_t *time, uint64_t *count) JL_NOTS
     memcpy(count, native_count, sizeof(native_count));
 }
 
+// The file is as trusted as a shared library would be, but a truncated or damaged
+// one should fail to load instead of making the fixups write somewhere else.
+static int native_header_ok(const jl_native_header_t *h, uint64_t avail) JL_NOTSAFEPOINT
+{
+    uint64_t ps = h->page_size;
+    if (ps == 0 || (ps & (ps - 1)) != 0 || h->file_size > avail)
+        return 0;
+    // the segments are in this order and each starts on a page
+    if (h->text_off != ps || h->rodata_off % ps || h->relro_off % ps || h->data_off % ps || h->vm_size % ps)
+        return 0;
+    if (h->text_off > h->rodata_off || h->text_size > h->rodata_off - h->text_off ||
+        h->rodata_off > h->relro_off || h->rodata_size > h->relro_off - h->rodata_off ||
+        h->relro_off > h->data_off || h->relro_size > h->data_off - h->relro_off ||
+        h->data_off > h->vm_size || h->data_size > h->vm_size - h->data_off)
+        return 0;
+    // the tables are between the segments and the signature
+    if (h->vm_size > h->codesig_off || h->codesig_off > h->file_size ||
+        h->codesig_size > h->file_size - h->codesig_off)
+        return 0;
+#define NATIVE_TABLE_OK(off, n, size) \
+    ((off) >= h->vm_size && (off) <= h->codesig_off && (uint64_t)(n) <= (h->codesig_off - (off)) / (size))
+    if (!NATIVE_TABLE_OK(h->rebase_off, h->nrebase, 1) ||
+        !NATIVE_TABLE_OK(h->bind_off, h->nbind, sizeof(jl_native_bind_t)) ||
+        !NATIVE_TABLE_OK(h->imports_off, h->nimports, sizeof(uint32_t)) ||
+        !NATIVE_TABLE_OK(h->syms_off, h->nsyms, sizeof(jl_native_sym_t)) ||
+        !NATIVE_TABLE_OK(h->objects_off, h->nobjects, sizeof(jl_native_object_t)) ||
+        !NATIVE_TABLE_OK(h->debug_off, h->ndebug, sizeof(jl_native_debug_section_t)) ||
+        !NATIVE_TABLE_OK(h->strtab_off, h->strtab_size, 1) || h->strtab_size == 0)
+        return 0;
+#undef NATIVE_TABLE_OK
+    return h->image_pointers >= h->text_off && h->image_pointers < h->vm_size;
+}
+
 // Load the native code section at offset `off` of the file `path`. Returns NULL, with
 // the reason in `err`, if it cannot be loaded.
-jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const char **err) JL_NOTSAFEPOINT
+jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const char **err) JL_CANSAFEPOINT
 {
     jl_native_header_t hdr;
     jl_native_image_t *img = NULL;
@@ -388,7 +428,7 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
     size_t pagesz = jl_getpagesize(), text_end = 0, meta_size = 0;
     int perf = 0, copy = 0, mapped = 0;
     const uint32_t *import_names;
-    const uint8_t *p;
+    const uint8_t *p, *pend;
     const jl_native_bind_t *binds;
     uint64_t t0 = jl_hrtime(), t1, t2, t3, t4, slot = 0;
     size_t n;
@@ -401,21 +441,28 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
 #else
     int gdb_default = 0;
 #endif
+    struct stat st;
+    const char *strtab;
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd == -1) {
         *err = "cannot open the file";
         return NULL;
     }
     *err = "not a native code section";
-    if (pread(fd, &hdr, sizeof(hdr), off) != sizeof(hdr) ||
-        memcmp(hdr.magic, JL_NATIVE_MAGIC, sizeof(hdr.magic)) != 0 || hdr.version != JL_NATIVE_VERSION)
+    if (fstat(fd, &st) != 0 || off > (uint64_t)st.st_size ||
+        pread(fd, &hdr, sizeof(hdr), off) != sizeof(hdr) ||
+        memcmp(hdr.magic, JL_NATIVE_MAGIC, sizeof(hdr.magic)) != 0 || hdr.version != JL_NATIVE_VERSION) {
+        hdr.vm_size = hdr.codesig_off = 0; // nothing is mapped
+        goto fail;
+    }
+    *err = "native code section is damaged";
+    if (!native_header_ok(&hdr, (uint64_t)st.st_size - off))
         goto fail;
     *err = "native code section is laid out for another page size";
     if (hdr.page_size % pagesz != 0 || off % pagesz != 0)
         goto fail;
     *err = "cannot map the native code section";
-    text_end = LLT_ALIGN(hdr.text_off + hdr.text_size, hdr.page_size);
-    assert(text_end == hdr.rodata_off);
+    text_end = hdr.rodata_off;
     base = (char*)mmap(NULL, hdr.vm_size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (base == MAP_FAILED)
         goto fail;
@@ -464,11 +511,15 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
     }
     t1 = jl_hrtime();
 
+    *err = "native code section is damaged";
+    strtab = meta + hdr.strtab_off;
+    if (strtab[hdr.strtab_size - 1] != 0)
+        goto fail;
     import_names = (const uint32_t*)(meta + hdr.imports_off);
     imports = (void**)malloc(sizeof(void*) * (hdr.nimports + 1));
     pthread_mutex_lock(&native_lock);
     for (uint32_t i = 0; i < hdr.nimports; i++) {
-        imports[i] = native_resolve_import(meta + hdr.strtab_off + import_names[i]);
+        imports[i] = import_names[i] < hdr.strtab_size ? native_resolve_import(strtab + import_names[i]) : NULL;
         if (imports[i] == NULL) {
             pthread_mutex_unlock(&native_lock);
             *err = "native code refers to a symbol that this process does not have";
@@ -478,17 +529,24 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
     pthread_mutex_unlock(&native_lock);
     t2 = jl_hrtime();
 
+    // every slot is in the two segments that are mapped writable
+    *err = "native code section is damaged";
     p = (const uint8_t*)(meta + hdr.rebase_off);
+    pend = (const uint8_t*)(meta + hdr.codesig_off);
     for (uint32_t i = 0; i < hdr.nrebase; i++) {
         uint64_t delta = 0;
         unsigned shift = 0;
         uint8_t b;
         do {
+            if (p == pend || shift > 63)
+                goto fail;
             b = *p++;
             delta |= (uint64_t)(b & 0x7f) << shift;
             shift += 7;
         } while (b & 0x80);
         slot += delta;
+        if (slot < hdr.relro_off || slot > hdr.vm_size - sizeof(uint64_t))
+            goto fail;
         uint64_t v;
         memcpy(&v, base + slot, sizeof(v));
         v += (uintptr_t)base;
@@ -496,6 +554,9 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
     }
     binds = (const jl_native_bind_t*)(meta + hdr.bind_off);
     for (uint32_t i = 0; i < hdr.nbind; i++) {
+        if (binds[i].import >= hdr.nimports || binds[i].slot < hdr.relro_off ||
+            binds[i].slot > hdr.vm_size - sizeof(uint64_t))
+            goto fail;
         uint64_t v = (uintptr_t)imports[binds[i].import] + binds[i].addend;
         memcpy(base + binds[i].slot, &v, sizeof(v));
     }

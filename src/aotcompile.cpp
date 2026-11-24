@@ -51,6 +51,7 @@ using namespace llvm;
 #include <mutex>
 
 #include "jitlayers.h"
+#include "jinative-prelink.h"
 #include "serialize.h"
 #include "julia_assert.h"
 #include "processor.h"
@@ -2283,9 +2284,6 @@ static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned worke
 
 jl_emission_params_t default_emission_params = { 1 };
 
-bool jl_prelink_native_image(ArrayRef<MemoryBufferRef> Objects, const Triple &TT, uint64_t PageSize,
-                             SmallVectorImpl<char> &Out, std::string &Err, std::string *Stats);
-
 static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
                            const char *unopt_bc_fname, const char *obj_fname,
                            const char *asm_fname, ios_t *z, uint32_t checksum,
@@ -2673,7 +2671,9 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
             objects.push_back(MemoryBufferRef(StringRef(metadata_outputs[0].obj.data(), metadata_outputs[0].obj.size()), "metadata"));
             SmallVector<char, 0> image;
             std::string err;
-            if (!jl_prelink_native_image(objects, TheTriple, jl_page_size, image, err, nullptr))
+            // aarch64 kernels other than Darwin's are built for 4, 16 or 64 KiB pages
+            uint64_t page_size = TheTriple.isAArch64() && !TheTriple.isOSDarwin() ? 65536 : jl_page_size;
+            if (!jl_prelink_native_image(objects, TheTriple, page_size, image, err, nullptr))
                 report_fatal_error(Twine("cannot link the native code of the image: ") + err);
             ios_write(params->native_image, image.data(), image.size());
             obj_fname = nullptr;

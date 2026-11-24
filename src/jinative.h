@@ -19,7 +19,7 @@ extern "C" {
 #endif
 
 #define JL_NATIVE_MAGIC "\177JLNATV"
-#define JL_NATIVE_VERSION 2
+#define JL_NATIVE_VERSION 3
 
 // All offsets are relative to the start of the section, which is page aligned in
 // the file. For the four segments the file offset is also the offset from the
@@ -47,7 +47,7 @@ typedef struct {
     // image offsets of the symbols the loader needs (0 if absent)
     uint64_t image_pointers; // jl_image_pointers
     uint64_t image_coverage; // jl_image_coverage
-    // ad-hoc code signature over [0, codesig_off), used by macOS to map the text
+    // ad-hoc code signature over [0, relro_off), which macOS needs to map the text
     uint64_t codesig_off, codesig_size;
 } jl_native_header_t;
 
@@ -77,7 +77,8 @@ typedef struct {
 // `slides` are the offsets in it of the 64-bit addresses, for a consumer that
 // needs them to be those of the loaded image (a debugger).
 typedef struct {
-    uint64_t off, size;
+    uint64_t off, size; // as stored
+    uint64_t usize; // size once decompressed (zstd), or 0 if it is stored as it is
     uint64_t slides_off; // uint32_t[nslides]
     uint32_t name; // offset into the string table, e.g. "debug_line"
     uint32_t nslides;

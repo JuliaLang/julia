@@ -27,11 +27,13 @@
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/Triple.h>
 
-#include <map>
 #include <string>
 #include <vector>
 
+#include <zstd.h>
+
 #include "jinative.h"
+#include "jinative-prelink.h"
 
 using namespace llvm;
 using namespace llvm::jitlink;
@@ -591,9 +593,20 @@ void Prelinker::write(SmallVectorImpl<char> &Out)
     size_t DebugTable = Out.size();
     OS.write_zeros(Debug.size() * sizeof(jl_native_debug_section_t));
     for (size_t I = 0; I < Debug.size(); I++) {
-        jl_native_debug_section_t DS = {Out.size(), Debug[I].Data.size(), 0, str(Debug[I].Name),
+        jl_native_debug_section_t DS = {Out.size(), Debug[I].Data.size(), 0, 0, str(Debug[I].Name),
                                         (uint32_t)Debug[I].Slides.size()};
-        OS.write(Debug[I].Data.data(), Debug[I].Data.size());
+        // as the linker does for the debug sections of a shared library
+        std::vector<char> Compressed(ZSTD_compressBound(Debug[I].Data.size()));
+        size_t CSize = ZSTD_compress(Compressed.data(), Compressed.size(), Debug[I].Data.data(),
+                                     Debug[I].Data.size(), 3);
+        if (!ZSTD_isError(CSize) && CSize < Debug[I].Data.size()) {
+            DS.usize = DS.size;
+            DS.size = CSize;
+            OS.write(Compressed.data(), CSize);
+        }
+        else {
+            OS.write(Debug[I].Data.data(), Debug[I].Data.size());
+        }
         align();
         DS.slides_off = Out.size();
         OS.write((const char*)Debug[I].Slides.data(), Debug[I].Slides.size() * sizeof(uint32_t));
@@ -615,12 +628,17 @@ void Prelinker::write(SmallVectorImpl<char> &Out)
     H.codesig_off = Out.size();
     if (TT.isOSDarwin()) {
         // the header is part of what is signed, so its size has to be known first
-        uint64_t NPages = (Out.size() + 4095) >> 12;
+        // Signed is what the loader maps and never writes: the header, the code
+        // and the read-only data. The kernel kills a process that touches a
+        // signed page whose hash is wrong, so leaving the tables out lets the
+        // loader report a damaged file instead.
+        uint64_t Signed = RegionOff[RELRO];
+        uint64_t NPages = (Signed + 4095) >> 12;
         H.codesig_size = CodeSignatureHeaderSize + NPages * 32;
         H.file_size = H.codesig_off + H.codesig_size;
         memcpy(Out.data(), &H, sizeof(H));
         SmallVector<char, 0> Sig;
-        writeCodeSignature(ArrayRef<char>(Out.data(), Out.size()), Sig);
+        writeCodeSignature(ArrayRef<char>(Out.data(), Signed), Sig);
         assert(Sig.size() == H.codesig_size);
         OS.write(Sig.data(), Sig.size());
     }
@@ -632,8 +650,6 @@ void Prelinker::write(SmallVectorImpl<char> &Out)
 
 } // namespace
 
-// Link `Objects` (object files of the triple `TT`) into `Out`. Returns false, with
-// the reason in `Err`, if they cannot be represented.
 bool jl_prelink_native_image(ArrayRef<MemoryBufferRef> Objects, const Triple &TT, uint64_t PageSize,
                              SmallVectorImpl<char> &Out, std::string &Err, std::string *Stats)
 {
@@ -658,8 +674,6 @@ bool jl_prelink_native_image(ArrayRef<MemoryBufferRef> Objects, const Triple &TT
         if (!P.Err.empty())
             break;
     }
-    if (P.Err.empty() && P.Allocs.size() != Objects.size())
-        P.fail("object without content");
     if (P.Err.empty())
         P.layout();
     if (P.Err.empty()) {

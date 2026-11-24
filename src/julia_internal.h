@@ -2160,7 +2160,7 @@ JL_DLLEXPORT void jl_init_rand(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT extern void *jl_exe_handle;
 // jinative-load.c: native code sections of .ji files
 struct _jl_native_image_t;
-struct _jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const char **err) JL_NOTSAFEPOINT;
+struct _jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const char **err) JL_CANSAFEPOINT;
 // `dladdr` for the images loaded by jl_native_image_load
 JL_DLLEXPORT int jl_native_image_for_addr(uintptr_t addr, uint64_t *base, const char **path,
                                           void **saddr, const char **sname) JL_NOTSAFEPOINT;

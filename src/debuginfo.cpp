@@ -27,6 +27,7 @@ using namespace llvm;
 
 #include "jitlayers.h"
 #include "debuginfo.h"
+#include <llvm/Support/Compression.h>
 #include "jinative.h"
 #if defined(_OS_LINUX_)
 #  include <link.h>
@@ -1086,10 +1087,25 @@ static jl_object_file_entry_t find_native_debug_info(size_t pointer) JL_NOTSAFEP
         return success.first->second;
     const jl_native_header_t *h = img->hdr;
     const jl_native_debug_section_t *secs = (const jl_native_debug_section_t*)(img->meta + h->debug_off) + obj->debug;
-    StringMap<std::unique_ptr<MemoryBuffer>> sections;
+    // the context refers to the buffers and lives as long as the image, which is forever
+    auto &sections = *new StringMap<std::unique_ptr<MemoryBuffer>>();
     for (uint32_t i = 0; i < obj->ndebug; i++) {
-        sections[img->meta + h->strtab_off + secs[i].name] =
-            MemoryBuffer::getMemBuffer(StringRef(img->meta + secs[i].off, secs[i].size), "", false);
+        StringRef stored(img->meta + secs[i].off, secs[i].size);
+        std::unique_ptr<MemoryBuffer> buf;
+        if (secs[i].usize != 0) {
+            auto data = WritableMemoryBuffer::getNewUninitMemBuffer(secs[i].usize);
+            size_t usize = secs[i].usize;
+            if (auto err = compression::zstd::decompress(arrayRefFromStringRef(stored),
+                                                         (uint8_t*)data->getBufferStart(), usize)) {
+                consumeError(std::move(err));
+                continue;
+            }
+            buf = std::move(data);
+        }
+        else {
+            buf = MemoryBuffer::getMemBuffer(stored, "", false);
+        }
+        sections[img->meta + h->strtab_off + secs[i].name] = std::move(buf);
     }
     entry.ctx = DWARFContext::create(sections, sizeof(void*)).release();
     entry.slide = h->link_base - (uintptr_t)img->base;
