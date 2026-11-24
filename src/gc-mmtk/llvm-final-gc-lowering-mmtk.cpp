@@ -84,6 +84,9 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 
                 // fastpath
                 builder.SetInsertPoint(fastpath);
+                auto tag_ptr = builder.CreateIntToPtr(result, PointerType::getUnqual(F.getContext()));
+                auto tag_store = builder.CreateAlignedStore(type, tag_ptr, Align(sizeof(void *)));
+                tag_store->setOrdering(AtomicOrdering::Unordered);
                 builder.CreateStore(new_cursor, cursor_ptr);
 
                 // ptls->gc_tls_common.gc_num.allocd += osize;

@@ -532,6 +532,7 @@ STATIC_INLINE jl_value_t *jl_gc_big_alloc_inner(jl_ptls_t ptls, size_t sz) JL_CA
 JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz, jl_value_t *type)
 {
     jl_value_t *val = jl_gc_big_alloc_inner(ptls, sz);
+    jl_set_typeof(val, type);
     maybe_record_alloc_to_profile(val, sz, (jl_datatype_t*)type);
     return val;
 }
@@ -975,6 +976,7 @@ STATIC_INLINE jl_value_t *jl_gc_small_alloc_inner(jl_ptls_t ptls, int offset,
 JL_DLLEXPORT jl_value_t *jl_gc_small_alloc(jl_ptls_t ptls, int offset, int osize, jl_value_t* type)
 {
     jl_value_t *val = jl_gc_small_alloc_inner(ptls, offset, osize);
+    jl_set_typeof(val, type);
     maybe_record_alloc_to_profile(val, osize, (jl_datatype_t*)type);
     return val;
 }

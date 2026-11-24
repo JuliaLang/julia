@@ -2015,7 +2015,7 @@ CallInst *LateLowerGCFrame::EmitGCAllocBytes(IRBuilder<> &builder, CallInst *CI,
     }
 
     // Unlike `julia.gc_alloc_obj`, `julia.gc_alloc_bytes` lets FinalLowerGC pick the pool for
-    // a constant size, and doesn't set the tag.
+    // a constant size.
     auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
     auto ptls = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_gcframe);
     auto newI = builder.CreateCall(
@@ -2031,15 +2031,9 @@ CallInst *LateLowerGCFrame::EmitGCAllocBytes(IRBuilder<> &builder, CallInst *CI,
     newI->setAttributes(allocBytesIntrinsic->getAttributes());
     newI->addDereferenceableRetAttr(CI->getRetDereferenceableBytes());
     newI->takeName(CI);
-    // Setting the tag in IR was meant to let LLVM see that a fresh object has clear GC bits,
-    // and fold away write barriers on it. Since #59559, write barriers load the tag as volatile,
-    // because a safepoint between the allocation and the barrier can age the object (#59547).
-    // Eliding these write barriers is allowed when no safepoint intervenes.
-    auto &M = *builder.GetInsertBlock()->getModule();
-    StoreInst *store = builder.CreateAlignedStore(
-        tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getPointerABIAlignment(0));
-    store->setOrdering(AtomicOrdering::Unordered);
-    store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+    // The allocator that FinalLowerGC lowers this to sets the tag. A store emitted here
+    // would write before the pointer that the call returns, outside of what LLVM takes
+    // to be the allocated object, so LLVM may delete it when the object is not captured.
     return newI;
 }
 
