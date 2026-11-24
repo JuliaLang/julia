@@ -168,6 +168,10 @@ timesofar("promotions")
         let b1 = trues(1)
             @test all(copyto!(b1, []))
         end
+        let b1 = bitrand(200)
+            r1 = reverse(b1)
+            @test copyto!(b1, view(b1, 200:-1:1)) == r1
+        end
         for n in [1; 1023:1025]
             b1 = falses(n)
             for m in [1; 10; 1023:1025]

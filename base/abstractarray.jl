@@ -1059,11 +1059,11 @@ julia> y
 """
 function copyto!(dest::AbstractArray, src::AbstractArray)
     isempty(src) && return dest
+    src′ = unalias(dest, src)
     if dest isa BitArray
         # avoid ambiguities with other copyto!(::AbstractArray, ::SourceArray) methods
-        return _copyto_bitarray!(dest, src)
+        return _copyto_bitarray!(dest, src′)
     end
-    src′ = unalias(dest, src)
     copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(src′), src′)
 end
 
