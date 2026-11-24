@@ -913,7 +913,7 @@ function _replace!(new::Callable, res::Union{AbstractDict,AbstractSet},
     count == 0 && return res
     c = 0
     # collect replacements first: A may be res, and a new value may equal a later old one
-    repl = Pair{eltype(A),eltype(res)}[]
+    repl = Pair{eltype(A),Any}[]
     for x in A
         y = new(x)
         if x !== y
@@ -980,12 +980,23 @@ function _replace!(new::Callable, t::Dict{K,V}, A::AbstractDict, count::Int) whe
         if x1 !== x2
             k2, v2 = first(x2), last(x2)
             if isequal(k1, k2)
+                v2_conv = v2 isa V ? v2 : convert(V, v2)::V
                 t.keys[i] = k2
-                t.vals[i] = v2
+                t.vals[i] = v2_conv
                 t.age += 1
             else
+                if !(k2 isa K)
+                    k2_conv = convert(K, k2)::K
+                    if !isequal(k2, k2_conv)
+                        throw(KeyTypeError(K, k2))
+                    end
+                    k2 = k2_conv
+                end
+                if !(v2 isa V)
+                    v2 = convert(V, v2)::V
+                end
                 _delete!(t, i)
-                push!(news, x2)
+                push!(news, Pair{K,V}(k2, v2))
             end
             c += 1
             c == count && break
