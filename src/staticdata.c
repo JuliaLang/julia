@@ -3747,8 +3747,9 @@ int jl_embed_native_code(void) JL_NOTSAFEPOINT
     return 0;
 #else
     // TODO: on by default to try it on every platform of CI
+    // the code comes from the objects, which are only made for an object output
     const char *env = getenv("JULIA_PKGIMAGE_EMBED");
-    return env == NULL || env[0] != '0';
+    return jl_options.outputo != NULL && (env == NULL || env[0] != '0');
 #endif
 }
 
@@ -4098,7 +4099,7 @@ static size_t jl_image_split_ji_objects_end(ios_t *s, size_t size) JL_CANSAFEPOI
 }
 #endif
 
-static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **dest, int use_mmap, uint32_t *heap_checksum, uint64_t *native_off) JL_CANSAFEPOINT;
+static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **dest, int use_mmap, uint32_t *heap_checksum, uint64_t *native_off, int *native_fd) JL_CANSAFEPOINT;
 
 // Returns 0, with *dest NULL, if the .ji of a package image was not written with this .so.
 static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_CANSAFEPOINT
@@ -4129,13 +4130,15 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
 #ifdef _OS_WINDOWS_
     free((char *)lib_path);
 #endif
-    return jl_image_read_split_ji(ji_path, handle, dest, use_mmap, NULL, NULL);
+    return jl_image_read_split_ji(ji_path, handle, dest, use_mmap, NULL, NULL, NULL);
 }
 
 // Read the split .ji at `ji_path`. With its native image `handle`, first check that the .ji
 // was written with it; without one, store the checksum from its header in `heap_checksum`
-// and the offset of its native code section, if it has one, in `native_off`.
-static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **dest, int use_mmap, uint32_t *heap_checksum, uint64_t *native_off) JL_CANSAFEPOINT
+// and the offset of its native code section, if it has one, in `native_off`, with a
+// descriptor of the same open file in `native_fd`: the heap and the code have to
+// come from one file, and the path can name another one a moment later.
+static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **dest, int use_mmap, uint32_t *heap_checksum, uint64_t *native_off, int *native_fd) JL_CANSAFEPOINT
 {
     ios_t s;
     size_t size;
@@ -4227,6 +4230,8 @@ static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **d
             goto error;
     }
 
+    if (native_off && *native_off != 0 && *native_off != UINT64_MAX)
+        *native_fd = dup(s.fd);
     ios_close(&s);
     return size;
 
@@ -5243,15 +5248,20 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
     size_t len = strlen(fname);
     if (len > 3 && strcmp(fname + len - 3, ".ji") == 0) {
         uint64_t native_off = 0;
-        buf.size = jl_image_read_split_ji(fname, NULL, (char **)&buf.data, 1, &buf.heap_checksum, &native_off);
+        int native_fd = -1;
+        buf.size = jl_image_read_split_ji(fname, NULL, (char **)&buf.data, 1, &buf.heap_checksum, &native_off, &native_fd);
         if (buf.data != NULL && native_off != 0) {
-            const char *err;
-            jl_native_image_t *native = native_off == UINT64_MAX ? NULL : jl_native_image_load(fname, native_off, &err);
-            if (native_off == UINT64_MAX)
-                err = "the native code section is missing";
-            if (native == NULL)
+            const char *err = "the native code section is missing";
+            jl_native_image_t *native = native_fd == -1 ? NULL : jl_native_image_load(fname, native_fd, native_off, &err);
+            if (native == NULL) {
+#ifdef _OS_WINDOWS_
+                UnmapViewOfFile(buf.data);
+#else
+                munmap((void*)buf.data, buf.size);
+#endif
                 return jl_get_exceptionf(jl_errorexception_type,
                     "Cache file \"%s\": %s.", fname, err);
+            }
             buf.kind = JL_IMAGE_KIND_SO;
             buf.pointers = native->base + native->hdr->image_pointers;
             buf.base = (uintptr_t)native->base;

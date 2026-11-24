@@ -199,24 +199,34 @@ bool Prelinker::isAbsolute(Edge::Kind K) const
 // COFF code calls a function of another image through `__imp_` pointers if it
 // was declared `dllimport`, and directly otherwise, which a linker makes work
 // with a jump through such a pointer. JITLink does the first; this is the second.
+// The same stub stands in for the function where its address is needed as an
+// offset from the image.
 Error Prelinker::addImportStubs(LinkGraph &G)
 {
     if (!TT.isOSBinFormatCOFF() || TT.getArch() != Triple::x86_64)
         return Error::success();
     std::vector<std::pair<Block*, Edge*>> Calls;
     for (auto &Sec : G.sections()) {
-        if (!isExec(Sec.getMemProt()))
+        if (Sec.getMemLifetime() == orc::MemLifetime::NoAlloc)
             continue;
+        bool Exec = isExec(Sec.getMemProt());
         for (auto *B : Sec.blocks()) {
             for (auto &E : B->edges()) {
                 Symbol &T = E.getTarget();
-                if (!T.isExternal() || StringRef(G.getEdgeKindName(E.getKind())) != "PCRel32" ||
-                    *T.getName() == "__ImageBase" || E.getOffset() == 0)
+                if (!T.isExternal() || *T.getName() == "__ImageBase")
                     continue;
-                // only `call rel32` and `jmp rel32` can go through a stub
-                unsigned char Op = B->getContent()[E.getOffset() - 1];
-                if (Op == 0xe8 || Op == 0xe9)
+                StringRef Kind = G.getEdgeKindName(E.getKind());
+                if (Kind == "Pointer32NB") {
+                    // the address of a function as an offset from the image, as the
+                    // unwind data has for the personality: only a stub is in the image
                     Calls.push_back({B, &E});
+                }
+                else if (Exec && Kind == "PCRel32" && E.getOffset() != 0) {
+                    // only `call rel32` and `jmp rel32` can go through a stub
+                    unsigned char Op = B->getContent()[E.getOffset() - 1];
+                    if (Op == 0xe8 || Op == 0xe9)
+                        Calls.push_back({B, &E});
+                }
             }
         }
     }
@@ -240,6 +250,9 @@ Error Prelinker::addImportStubs(LinkGraph &G)
 Error Prelinker::markRelocatedSectionsWritable(LinkGraph &G)
 {
     for (auto &Sec : G.sections()) {
+        // JITLink loads the debug info of COFF objects like any other data
+        if (TT.isOSBinFormatCOFF() && Sec.getName().starts_with(".debug_"))
+            Sec.setMemLifetime(orc::MemLifetime::NoAlloc);
         if (Sec.getMemLifetime() == orc::MemLifetime::NoAlloc)
             continue;
         auto Prot = Sec.getMemProt();
@@ -248,7 +261,9 @@ Error Prelinker::markRelocatedSectionsWritable(LinkGraph &G)
         bool HasPointer = false;
         for (auto *B : Sec.blocks()) {
             for (auto &E : B->edges()) {
-                if (isPointer64(E.getKind())) {
+                // COFF edges have kinds of their own until JITLink lowers them before the fixups
+                if (isPointer64(E.getKind()) ||
+                    (TT.isOSBinFormatCOFF() && StringRef(G.getEdgeKindName(E.getKind())) == "Pointer64")) {
                     HasPointer = true;
                     break;
                 }
@@ -546,6 +561,11 @@ void Prelinker::layout()
             Region R = Prot == RelroProt ? RELRO : isExec(Prot) ? RX :
                        (Prot & orc::MemProt::Write) != orc::MemProt::None ? RW : RO;
             ZeroFill += Seg.ZeroFillSize;
+            if (Seg.Alignment.value() > PageSize) {
+                // the regions start on a page, which would not be aligned enough
+                fail("section aligned to more than a page in " + A.G->getName());
+                return;
+            }
             uint64_t Off = alignTo(RegionSize[R], Seg.Alignment);
             RegionSize[R] = Off + Seg.ContentSize + Seg.ZeroFillSize;
             Placements.push_back({&Seg, R, Off});

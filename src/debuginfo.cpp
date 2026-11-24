@@ -1082,9 +1082,11 @@ static jl_object_file_entry_t find_native_debug_info(size_t pointer) JL_NOTSAFEP
         return entry;
     // objects are told apart by the address of their code
     uint64_t key = (uintptr_t)img->base + obj->text_start;
-    auto success = getJITDebugRegistry().get_objfile_map()->emplace(key, entry);
-    if (!success.second)
-        return success.first->second;
+    // held until the entry is complete, so that no other thread sees it half made
+    auto map = getJITDebugRegistry().get_objfile_map();
+    auto it = map->find(key);
+    if (it != map->end())
+        return it->second;
     const jl_native_header_t *h = img->hdr;
     const jl_native_debug_section_t *secs = (const jl_native_debug_section_t*)(img->meta + h->debug_off) + obj->debug;
     // the context refers to the buffers and lives as long as the image, which is forever
@@ -1109,7 +1111,7 @@ static jl_object_file_entry_t find_native_debug_info(size_t pointer) JL_NOTSAFEP
     }
     entry.ctx = DWARFContext::create(sections, sizeof(void*)).release();
     entry.slide = h->link_base - (uintptr_t)img->base;
-    (*getJITDebugRegistry().get_objfile_map())[key] = entry;
+    (*map)[key] = entry;
     return entry;
 }
 

@@ -96,7 +96,7 @@ JL_DLLEXPORT int jl_native_image_for_addr(uintptr_t addr, uint64_t *base, const 
         if (saddr)
             *saddr = found ? img->base + syms[lo - 1].addr : NULL;
         if (sname)
-            *sname = found ? img->meta + h->strtab_off + syms[lo - 1].name : NULL;
+            *sname = found && syms[lo - 1].name < h->strtab_size ? img->meta + h->strtab_off + syms[lo - 1].name : NULL;
     }
     return 1;
 }
@@ -188,11 +188,13 @@ static void *native_resolve_import(const char *name) JL_NOTSAFEPOINT
         addr = (void*)&___chkstk_ms;
 #endif
 #else
-    void *handles[] = {jl_libjulia_internal_handle, jl_libjulia_handle, jl_RTLD_DEFAULT_handle};
+    // RTLD_DEFAULT is a null pointer on some systems, which the loop skips; the
+    // handle of the program searches the same libraries there
+    void *handles[] = {jl_libjulia_internal_handle, jl_libjulia_handle, jl_exe_handle, jl_RTLD_DEFAULT_handle};
 #endif
     for (size_t h = 0; addr == NULL && h < sizeof(handles) / sizeof(handles[0]); h++) {
         if (handles[h] != NULL)
-            jl_dlsym(handles[h], name, &addr, 0, 0);
+            jl_dlsym(handles[h], name, &addr, 0, /* search_deps */ 1);
     }
     if (addr == NULL)
         return NULL;
@@ -238,6 +240,8 @@ typedef struct {
     uint64_t st_value, st_size;
 } native_elf_sym_t;
 
+static arraylist_t native_gdb_objects;
+
 static void native_register_debugger(jl_native_image_t *img) JL_CANSAFEPOINT
 {
     const jl_native_header_t *h = img->hdr;
@@ -258,12 +262,15 @@ static void native_register_debugger(jl_native_image_t *img) JL_CANSAFEPOINT
         }
         size_t first = lo, nsym = 0, strsz = 1;
         for (size_t i = first; i < h->nsyms && syms[i].addr < obj->text_end; i++) {
+            if (syms[i].name >= h->strtab_size)
+                break; // damaged: leave the rest out
             nsym++;
             strsz += strlen(strtab + syms[i].name) + 1;
         }
         int has_eh = obj->eh_frame_size != 0;
         uint32_t nsec = 2 + has_eh + obj->ndebug + 3;
-        size_t shstrsz = 1 + sizeof(".text") + sizeof(".eh_frame") + sizeof(".symtab") + sizeof(".strtab") + sizeof(".shstrtab");
+        size_t shstrsz = 1 + sizeof(".text") + (has_eh ? sizeof(".eh_frame") : 0) + sizeof(".symtab") +
+                         sizeof(".strtab") + sizeof(".shstrtab");
         size_t size = sizeof(native_elf_ehdr_t) + nsec * sizeof(native_elf_shdr_t) + obj->eh_frame_size;
         for (uint32_t i = 0; i < obj->ndebug; i++) {
             shstrsz += strlen(strtab + dsecs[obj->debug + i].name) + 2;
@@ -330,6 +337,8 @@ static void native_register_debugger(jl_native_image_t *img) JL_CANSAFEPOINT
                 memcpy(buf + pos, img->meta + ds->off, dsize);
             const uint32_t *slides = (const uint32_t*)(img->meta + ds->slides_off);
             for (uint32_t j = 0; j < ds->nslides; j++) {
+                if (slides[j] > dsize - sizeof(uint64_t))
+                    continue;
                 uint64_t v;
                 memcpy(&v, buf + pos + slides[j], sizeof(v));
                 v += slide;
@@ -374,7 +383,12 @@ static void native_register_debugger(jl_native_image_t *img) JL_CANSAFEPOINT
         sh[si].sh_addralign = 1;
 #undef NATIVE_SHNAME
         assert(si == nsec - 1 && strpos == strsz && shstrpos == shstrsz);
-        // the debugger keeps reading from the buffer, so it is never freed
+        // the debugger keeps reading from the buffer, so it stays for good
+        JL_LOCK_NOGC(&native_lock);
+        if (native_gdb_objects.items == NULL)
+            arraylist_new(&native_gdb_objects, 0);
+        arraylist_push(&native_gdb_objects, buf);
+        JL_UNLOCK_NOGC(&native_lock);
         jl_register_gdb_object(buf, size);
     }
 }
@@ -393,7 +407,7 @@ static void native_write_perf_map(jl_native_image_t *img) JL_NOTSAFEPOINT
         map = fopen(path, "a");
     }
     if (map != NULL) {
-        for (uint32_t i = 0; i < h->nsyms; i++)
+        for (uint32_t i = 0; i < h->nsyms && syms[i].name < h->strtab_size; i++)
             fprintf(map, "%lx %x %s\n", (unsigned long)((uintptr_t)img->base + syms[i].addr),
                     (unsigned)syms[i].size, img->meta + h->strtab_off + syms[i].name);
         fflush(map);
@@ -449,9 +463,33 @@ static int native_read(ios_t *f, void *buf, size_t n, uint64_t off) JL_NOTSAFEPO
     return ios_seek(f, off) == 0 && ios_readall(f, (char*)buf, n) == n;
 }
 
-// Load the native code section at offset `off` of the file `path`. Returns NULL, with
-// the reason in `err`, if it cannot be loaded.
-jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const char **err) JL_CANSAFEPOINT
+// What unwinding and backtraces index with: the objects and their debug sections
+static int native_tables_ok(const jl_native_header_t *h, const char *meta) JL_NOTSAFEPOINT
+{
+    const jl_native_object_t *objs = (const jl_native_object_t*)(meta + h->objects_off);
+    const jl_native_debug_section_t *dsecs = (const jl_native_debug_section_t*)(meta + h->debug_off);
+    for (uint32_t i = 0; i < h->nobjects; i++) {
+        const jl_native_object_t *o = &objs[i];
+        if (o->text_start > o->text_end || o->text_end > h->vm_size ||
+            o->eh_frame > h->vm_size || o->eh_frame_size > h->vm_size - o->eh_frame ||
+            o->unwind_info > h->vm_size || o->unwind_info_size > h->vm_size - o->unwind_info ||
+            o->debug > h->ndebug || o->ndebug > h->ndebug - o->debug)
+            return 0;
+    }
+    for (uint32_t i = 0; i < h->ndebug; i++) {
+        const jl_native_debug_section_t *d = &dsecs[i];
+        if (d->off < h->vm_size || d->off > h->codesig_off || d->size > h->codesig_off - d->off ||
+            d->slides_off < h->vm_size || d->slides_off > h->codesig_off ||
+            d->nslides > (h->codesig_off - d->slides_off) / sizeof(uint32_t) || d->name >= h->strtab_size)
+            return 0;
+    }
+    return 1;
+}
+
+// Load the native code section at offset `off` of the open file `fd`, which this
+// takes over; `path` is what backtraces show. Returns NULL, with the reason in
+// `err`, if it cannot be loaded.
+jl_native_image_t *jl_native_image_load(const char *path, int fd, uint64_t off, const char **err) JL_CANSAFEPOINT
 {
     jl_native_header_t hdr;
     jl_native_image_t *img = NULL;
@@ -479,7 +517,7 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
     int gdb_default = 0;
 #endif
     ios_t f;
-    if (ios_file(&f, path, 1, 0, 0, 0) == NULL) {
+    if (ios_fd(&f, fd, 1, 1) == NULL) {
         *err = "cannot open the file";
         return NULL;
     }
@@ -561,7 +599,7 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
 
     *err = "native code section is damaged";
     strtab = meta + hdr.strtab_off;
-    if (strtab[hdr.strtab_size - 1] != 0)
+    if (strtab[hdr.strtab_size - 1] != 0 || !native_tables_ok(&hdr, meta))
         goto fail;
     import_names = (const uint32_t*)(meta + hdr.imports_off);
     imports = (void**)malloc(sizeof(void*) * (hdr.nimports + 1));
