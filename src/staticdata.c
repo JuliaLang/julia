@@ -4071,7 +4071,14 @@ static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **d
 // Returns 0, with *dest NULL, if the .ji of a package image was not written with this .so.
 static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_CANSAFEPOINT
 {
+#if defined(__APPLE__) && !defined(JL_LIBRARY_STATIC)
+    // Finding the path from the handle walks every loaded image, so ask by address instead
+    void *pointers;
+    JL_IMAGE_SYM(handle, jl_image_pointers, &pointers);
+    const char *lib_path = jl_pathname_for_symbol(pointers);
+#else
     const char *lib_path = jl_pathname_for_handle(handle);
+#endif
     if (!lib_path)
         jl_error("unable to find path to native image\n");
 
