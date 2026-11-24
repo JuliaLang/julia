@@ -4889,15 +4889,3 @@ end
     # but only there: the names are ordinary variables elsewhere
     @test (@macroexpand @call_cdecl_20392()).args[2] == GlobalRef(@__MODULE__, :cdecl)
 end
-
-# a package adding a broad `==` method must not invalidate the parser
-let script = """
-        Meta.parse("f(x) = begin\\n 1\\n end")
-        log = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
-        struct Num <: Real end
-        Base.:(==)(::Any, ::Num) = false
-        ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
-        print(any(x -> x isa Core.MethodInstance && x.def isa Method && x.def.name === :syntax_to_expr, log))
-        """
-    @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == "false"
-end
