@@ -101,10 +101,10 @@ if isempty(tests)
     exit()
 end
 
-const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
-    parse(Int, ENV["JULIA_TEST_MAXRSS_MB"]) * 2^20
+const max_worker_rss = 2^20 * if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
+    parse(Int, ENV["JULIA_TEST_MAXRSS_MB"])
 else
-    typemax(Csize_t)
+    3800
 end
 
 # Check all test files exist
