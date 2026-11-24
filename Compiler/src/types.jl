@@ -452,6 +452,11 @@ Parameters that control optimizer operation.
   retained in `CallInfo` objects and always makes their copies before inlining them into
   caller context. Defaults to `false`.
 ---
+- `opt_params.record_ssa_names::Bool = false`\\
+  If `true`, the optimizer records the source variable names of SSA statements (including
+  inlined ones) in the `ssanames` field of the optimized `CodeInfo`, for debuggers and
+  similar tools. Does not affect optimization. Defaults to `false`.
+---
 """
 struct OptimizationParams
     inlining::Bool
@@ -462,6 +467,7 @@ struct OptimizationParams
     compilesig_invokes::Bool
     assume_fatal_throw::Bool
     preserve_local_sources::Bool
+    record_ssa_names::Bool
 
     function OptimizationParams(
         inlining::Bool,
@@ -471,7 +477,8 @@ struct OptimizationParams
         max_tuple_splat::Int,
         compilesig_invokes::Bool,
         assume_fatal_throw::Bool,
-        preserve_local_sources::Bool)
+        preserve_local_sources::Bool,
+        record_ssa_names::Bool)
         return new(
             inlining,
             inline_cost_threshold,
@@ -480,7 +487,8 @@ struct OptimizationParams
             max_tuple_splat,
             compilesig_invokes,
             assume_fatal_throw,
-            preserve_local_sources)
+            preserve_local_sources,
+            record_ssa_names)
     end
 end
 function OptimizationParams(
@@ -492,7 +500,8 @@ function OptimizationParams(
         #=max_tuple_splat::Int=# 32,
         #=compilesig_invokes::Bool=# true,
         #=assume_fatal_throw::Bool=# false,
-        #=preserve_local_sources::Bool=# false);
+        #=preserve_local_sources::Bool=# false,
+        #=record_ssa_names::Bool=# false);
     inlining::Bool = params.inlining,
     inline_cost_threshold::Int = params.inline_cost_threshold,
     inline_nonleaf_penalty::Int = params.inline_nonleaf_penalty,
@@ -500,7 +509,8 @@ function OptimizationParams(
     max_tuple_splat::Int = params.max_tuple_splat,
     compilesig_invokes::Bool = params.compilesig_invokes,
     assume_fatal_throw::Bool = params.assume_fatal_throw,
-    preserve_local_sources::Bool = params.preserve_local_sources)
+    preserve_local_sources::Bool = params.preserve_local_sources,
+    record_ssa_names::Bool = params.record_ssa_names)
     return OptimizationParams(
         inlining,
         inline_cost_threshold,
@@ -509,7 +519,8 @@ function OptimizationParams(
         max_tuple_splat,
         compilesig_invokes,
         assume_fatal_throw,
-        preserve_local_sources)
+        preserve_local_sources,
+        record_ssa_names)
 end
 
 """

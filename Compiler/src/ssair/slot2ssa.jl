@@ -60,6 +60,19 @@ function renumber_ssa!(@nospecialize(stmt), ssanums::Vector{SSAValue}, new_ssa::
     return ssamap(val->renumber_ssa(val, ssanums, new_ssa), stmt)
 end
 
+# Excludes compiler-generated slots like `#self#`
+function is_source_slotname(name::Symbol)
+    c = unsafe_load(unsafe_convert(Ptr{UInt8}, name))
+    return c != 0x00 && c != 0x23 # '#'
+end
+
+function record_slot_assignment!(inst::Instruction, ci::CodeInfo, id::Int)
+    getfield(inst, :data).name === nothing && return nothing
+    name = ci.slotnames[id]
+    is_source_slotname(name) && add_ssaname!(inst, name)
+    return nothing
+end
+
 function make_ssa!(ci::CodeInfo, code::Vector{Any}, idx::Int, @nospecialize(typ))
     stmt = code[idx]
     @assert isexpr(stmt, :(=))
@@ -394,7 +407,8 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             nstmts += length(ir.cfg.blocks[i].stmts)
         end
     end
-    result = InstructionStream(nstmts + nfixupstmts)
+    names = ir.stmts.name !== nothing
+    result = InstructionStream(nstmts + nfixupstmts, names)
     inst_rename = Vector{SSAValue}(undef, length(ir.stmts) + length(ir.new_nodes))
     @inbounds for i = 1:length(ir.stmts)
         inst_rename[i] = SSAValue(-1)
@@ -471,7 +485,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         result[i][:stmt] = renumber_ssa!(result[i][:stmt], inst_rename, true)
     end
     cfg = CFG(new_bbs, Int[first(bb.stmts) for bb in new_bbs[2:end]])
-    new_new_nodes = NewNodeStream(length(ir.new_nodes))
+    new_new_nodes = NewNodeStream(length(ir.new_nodes), names)
     for i = 1:length(ir.new_nodes)
         new_info = ir.new_nodes.info[i]
         new_new_info = NewNodeInfo(inst_rename[new_info.pos].id, new_info.attach_after)
@@ -547,6 +561,45 @@ struct NewPhiCNode2
     insert::NewSlotPhi{PhiCNode}
 end
 
+# No side effects or control flow
+is_passive_stmt(@nospecialize stmt) = !isa(stmt, Union{Expr, GlobalRef, GotoNode, GotoIfNot, ReturnNode,
+    EnterNode, UpsilonNode, PhiCNode, NewvarNode, SlotNumber})
+
+# `idx` just copies `val` into slot `id`. Name the definition of `val` instead, but only if
+# nothing observable happens in between, so the variable doesn't show up too early.
+function record_slot_copy!(ir::IRCode, ci::CodeInfo, code::Vector{Any}, bb::BasicBlock,
+                           phi_nodes::Vector{NewPhiNode2}, idx::Int, @nospecialize(val), id::Int)
+    ir.stmts.name === nothing && return nothing
+    is_source_slotname(ci.slotnames[id]) || return nothing
+    if isa(val, SSAValue)
+        start = val.id
+        (first(bb.stmts) <= start < idx && !isa(code[start], PhiNode)) || return nothing
+        target = ir.stmts[start]
+    elseif isa(val, NewSSAValue)
+        start = first(bb.stmts) - 1
+        isphi = false
+        for phi in phi_nodes
+            phi.ssaval === val && (isphi = true)
+        end
+        isphi || return nothing
+        target = ir.new_nodes.stmts[val.id]
+    else
+        return nothing
+    end
+    for i = (start + 1):(idx - 1)
+        is_passive_stmt(code[i]) || return nothing
+    end
+    # Also check inserted nodes (e.g. undef checks)
+    info = ir.new_nodes.info
+    length(info) <= 256 || return nothing
+    for i = 1:length(info)
+        pos = info[i].pos
+        (start < pos <= idx && !isa(ir.new_nodes.stmts[i][:stmt], PhiNode)) && return nothing
+    end
+    add_ssaname!(target, ci.slotnames[id])
+    return nothing
+end
+
 function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                         domtree::DomTree, defuses::Vector{SlotInfo},
                         𝕃ₒ::AbstractLattice)
@@ -616,6 +669,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                 phic_ssa = NewSSAValue(
                     insert_node!(ir, insertpoint,
                         NewInstruction(node, vt.typ)).id - length(ir.stmts))
+                record_slot_assignment!(ir.new_nodes.stmts[phic_ssa.id], ci, idx)
                 undef_node = undef_ssaval = nothing
                 if vt.typ === Union{}
                     undef_ssaval = false
@@ -643,6 +697,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             vt = bbstate.vartable[idx]
             ssaval = NewSSAValue(insert_node!(ir,
                 first_insert_for_bb(code, cfg, block), NewInstruction(node, vt.typ)).id - length(ir.stmts))
+            record_slot_assignment!(ir.new_nodes.stmts[ssaval.id], ci, idx)
             undef_node = undef_ssaval = nothing
             if vt.typ === Union{}
                 undef_ssaval = false
@@ -777,6 +832,12 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                             thisdef = true
                             typ = typ_for_val(val, ci, ir, idx, sv.slottypes)
                             thisval = make_ssa!(ci, code, idx, typ)
+                            # Copies are named at their source, if safe (see `record_slot_copy!`)
+                            if isa(val, Expr) || isa(val, PiNode) || isa(val, GlobalRef)
+                                record_slot_assignment!(ir.stmts[idx], ci, id)
+                            else
+                                record_slot_copy!(ir, ci, code, cfg.blocks[item], new_phi_nodes[item], idx, val, id)
+                            end
                         else
                             code[idx] = nothing
                             typ = Union{}

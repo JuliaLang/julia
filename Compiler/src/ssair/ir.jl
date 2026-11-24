@@ -299,24 +299,31 @@ end
 const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
 
 # SSA-indexed nodes
+new_ssanames(len::Int, names::Bool) = names ? fill!(Vector{Any}(undef, len), nothing) : nothing
+
 struct InstructionStream
     stmt::Vector{Any}
     type::Vector{Any}
     info::Vector{CallInfo}
     line::Vector{Int32}
     flag::Vector{UInt32}
-    function InstructionStream(stmts::Vector{Any}, type::Vector{Any}, info::Vector{CallInfo}, line::Vector{Int32}, flag::Vector{UInt32})
-        return new(stmts, type, info, line, flag)
+    # Source variable names, if `record_ssa_names` (else `nothing`). Each entry is `nothing`,
+    # a `Symbol`, or `svec(name, owner, ...)` where `owner` is the inlined `Method`/`MethodInstance`
+    # (`nothing` for this function). Not a use of the statement.
+    name::Union{Nothing,Vector{Any}}
+    function InstructionStream(stmts::Vector{Any}, type::Vector{Any}, info::Vector{CallInfo}, line::Vector{Int32}, flag::Vector{UInt32},
+                               name::Union{Nothing,Vector{Any}}=nothing)
+        return new(stmts, type, info, line, flag, name)
     end
 end
-function InstructionStream(len::Int)
+function InstructionStream(len::Int, names::Bool=false)
     stmts = Vector{Any}(undef, len)
     types = Vector{Any}(undef, len)
     info = Vector{CallInfo}(undef, len)
     fill!(info, NoCallInfo())
     lines = fill(Int32(0), 3len)
     flags = fill(IR_FLAG_NULL, len)
-    return InstructionStream(stmts, types, info, lines, flags)
+    return InstructionStream(stmts, types, info, lines, flags, new_ssanames(len, names))
 end
 InstructionStream() = InstructionStream(0)
 length(is::InstructionStream) = length(is.stmt)
@@ -333,7 +340,8 @@ function copy(is::InstructionStream)
         copy(is.type),
         copy(is.info),
         copy(is.line),
-        copy(is.flag))
+        copy(is.flag),
+        is.name === nothing ? nothing : copy(is.name))
 end
 function resize!(stmts::InstructionStream, len)
     old_length = length(stmts)
@@ -342,10 +350,13 @@ function resize!(stmts::InstructionStream, len)
     resize!(stmts.info, len)
     resize!(stmts.line, 3len)
     resize!(stmts.flag, len)
+    names = stmts.name
+    names === nothing || resize!(names, len)
     for i in (old_length + 1):len
         stmts.line[3i-2], stmts.line[3i-1], stmts.line[3i] = NoLineUpdate
         stmts.flag[i] = IR_FLAG_NULL
         stmts.info[i] = NoCallInfo()
+        names === nothing || (names[i] = nothing)
     end
     return stmts
 end
@@ -384,6 +395,8 @@ function setindex!(is::InstructionStream, newval::Instruction, idx::Int)
     is.info[idx] = newval[:info]
     (is.line[3idx-2], is.line[3idx-1], is.line[3idx-0]) = newval[:line]
     is.flag[idx] = newval[:flag]
+    names = is.name
+    names === nothing || (names[idx] = ssaname(newval))
     return is
 end
 function setindex!(is::InstructionStream, newval::Union{AnySSAValue, Nothing}, idx::Int)
@@ -396,6 +409,111 @@ function setindex!(node::Instruction, newval::Instruction)
 end
 
 has_flag(inst::Instruction, flag::UInt32) = has_flag(inst[:flag], flag)
+
+# Source variable names (see `InstructionStream.name`)
+
+function ssaname(inst::Instruction)
+    names = getfield(inst, :data).name
+    names === nothing && return nothing
+    return names[getfield(inst, :idx)]
+end
+function set_ssaname!(inst::Instruction, @nospecialize(name))
+    names = getfield(inst, :data).name
+    names === nothing || (names[getfield(inst, :idx)] = name)
+    return inst
+end
+function push_ssaname_pair!(pairs::Vector{Any}, name::Symbol, @nospecialize(owner))
+    for j = 1:2:length(pairs)
+        (pairs[j] === name && pairs[j+1] === owner) && return pairs
+    end
+    return push!(pairs, name, owner)
+end
+function push_ssaname_pairs!(pairs::Vector{Any}, @nospecialize(entry))
+    if isa(entry, Symbol)
+        push_ssaname_pair!(pairs, entry, nothing)
+    elseif isa(entry, SimpleVector)
+        for i = 1:2:length(entry)
+            push_ssaname_pair!(pairs, entry[i]::Symbol, entry[i+1])
+        end
+    end
+    return pairs
+end
+function merge_ssanames(@nospecialize(a), @nospecialize(b))
+    a === nothing && return b
+    b === nothing && return a
+    a === b && return a
+    pairs = push_ssaname_pairs!(push_ssaname_pairs!(Any[], a), b)
+    (length(pairs) == 2 && pairs[2] === nothing) && return pairs[1]
+    return svec(pairs...)
+end
+function add_ssaname!(inst::Instruction, @nospecialize(name))
+    name === nothing && return inst
+    return set_ssaname!(inst, merge_ssanames(ssaname(inst), name))
+end
+# `from` was replaced by `to`, so move its names there.
+# N.B.: The variable is then visible from the definition of `to` onwards.
+function transfer_ssaname!(compact, from::Instruction, @nospecialize(to))
+    name = ssaname(from)
+    name === nothing && return nothing
+    result = compact.result
+    if isa(to, NewSSAValue)
+        if to.id < 0
+            stmts = compact.new_new_nodes.stmts
+            -to.id <= length(stmts) && add_ssaname!(stmts[-to.id], name)
+            return nothing
+        end
+        to = SSAValue(to.id)
+    elseif isa(to, OldSSAValue)
+        stmts = compact.ir.stmts
+        to.id <= length(stmts) || return nothing
+        if to.id < compact.idx
+            to = compact.ssa_rename[to.id] # already compacted
+        else
+            add_ssaname!(stmts[to.id], name)
+            return nothing
+        end
+    end
+    if isa(to, SSAValue) && 1 <= to.id <= length(result)
+        add_ssaname!(result[to.id], name)
+    end
+    return nothing
+end
+# Owner to record for variables of inlined code
+function ssaname_owner(@nospecialize(def))
+    if isa(def, MethodInstance)
+        mdef = def.def
+        return isa(mdef, Method) ? mdef : def
+    elseif isa(def, Method)
+        return def
+    end
+    return nothing
+end
+# Tag the names in `stmts` with `owner` before inlining them
+function set_ssaname_owner!(stmts::InstructionStream, @nospecialize(owner))
+    names = stmts.name
+    names === nothing && return nothing
+    for i = 1:length(names)
+        entry = names[i]
+        if owner === nothing
+            entry === nothing || (names[i] = nothing)
+        elseif isa(entry, Symbol)
+            names[i] = svec(entry, owner)
+        elseif isa(entry, SimpleVector)
+            changed = false
+            for j = 2:2:length(entry)
+                entry[j] === nothing && (changed = true)
+            end
+            if changed
+                pairs = Any[entry...]
+                for j = 2:2:length(pairs)
+                    pairs[j] === nothing && (pairs[j] = owner)
+                end
+                names[i] = svec(pairs...)
+            end
+        end
+    end
+    return nothing
+end
 add_flag!(inst::Instruction, flag::UInt32) = inst[:flag] |= flag
 sub_flag!(inst::Instruction, flag::UInt32) = inst[:flag] &= ~flag
 
@@ -409,7 +527,7 @@ struct NewNodeStream
     stmts::InstructionStream
     info::Vector{NewNodeInfo}
 end
-NewNodeStream(len::Int=0) = NewNodeStream(InstructionStream(len), fill(NewNodeInfo(0, false), len))
+NewNodeStream(len::Int=0, names::Bool=false) = NewNodeStream(InstructionStream(len, names), fill(NewNodeInfo(0, false), len))
 length(new::NewNodeStream) = length(new.stmts)
 isempty(new::NewNodeStream) = isempty(new.stmts)
 function add_inst!(new::NewNodeStream, pos::Int, attach_after::Bool)
@@ -484,7 +602,7 @@ struct IRCode
     function IRCode(stmts::InstructionStream, cfg::CFG, debuginfo::DebugInfoStream,
                     argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{VarState},
                     valid_worlds=WorldRange(typemin(UInt), typemax(UInt)))
-        return new(stmts, argtypes, sptypes, debuginfo, cfg, NewNodeStream(), meta, valid_worlds)
+        return new(stmts, argtypes, sptypes, debuginfo, cfg, NewNodeStream(0, stmts.name !== nothing), meta, valid_worlds)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
         di = ir.debuginfo
@@ -861,14 +979,15 @@ mutable struct IncrementalCompact
         info = code.new_nodes.info
         perm = sort!(collect(eachindex(info)); by=i::Int->(2info[i].pos+info[i].attach_after, i))
         new_len = length(code.stmts) + length(info)
-        result = InstructionStream(new_len)
+        names = code.stmts.name !== nothing
+        result = InstructionStream(new_len, names)
         code.debuginfo.codelocs = result.line
         used_ssas = fill(0, new_len)
         new_new_used_ssas = Vector{Int}()
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         late_fixup = Vector{Int}()
-        new_new_nodes = NewNodeStream()
-        pending_nodes = NewNodeStream()
+        new_new_nodes = NewNodeStream(0, names)
+        pending_nodes = NewNodeStream(0, names)
         pending_perm = Int[]
         return new(code, result, cfg_transform, ssa_rename, used_ssas, late_fixup, perm, 1,
             new_new_nodes, new_new_used_ssas, pending_nodes, pending_perm,
@@ -882,7 +1001,7 @@ mutable struct IncrementalCompact
         new_len = length(code.stmts) + length(info)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         bb_rename = Vector{Int}()
-        pending_nodes = NewNodeStream()
+        pending_nodes = NewNodeStream(0, parent.result.name !== nothing)
         pending_perm = Int[]
         return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing, nothing),
             ssa_rename, parent.used_ssas,
@@ -1052,6 +1171,7 @@ function inst_from_newinst!(node::Instruction, newinst::NewInstruction,
     node[:info] = newinst.info
     node[:line] = newline
     node[:flag] = newflag
+    set_ssaname!(node, nothing)
     return node
 end
 
@@ -1580,6 +1700,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         ssa_rename[idx] = stmt
     elseif isa(stmt, OldSSAValue)
         ssa_rename[idx] = ssa_rename[stmt.id]
+        transfer_ssaname!(compact, inst, ssa_rename[idx])
     elseif isa(stmt, GotoNode) && cfg_transforms_enabled
         stmt.label < 0 && (println(stmt); println(compact))
         label = bb_rename_succ[stmt.label]
@@ -1702,6 +1823,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             if stmt.typ === result[pi_val.id][:type]
                 used_ssas[pi_val.id] -= 1
                 ssa_rename[idx] = pi_val
+                transfer_ssaname!(compact, inst, pi_val)
                 return result_idx
             end
         elseif isa(pi_val, Argument)
@@ -1780,6 +1902,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             @assert !isa(v, NewSSAValue)
             if isa(v, SSAValue)
                 used_ssas[v.id] -= 1
+                v.id < result_idx && transfer_ssaname!(compact, inst, v)
             end
             ssa_rename[idx] = v
         else
@@ -1818,6 +1941,9 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         else
             # Constant assign, replace uses of this ssa value with its result
         end
+        if isa(stmt, SSAValue) && stmt.id < result_idx
+            transfer_ssaname!(compact, inst, stmt)
+        end
         if has_flag(inst, IR_FLAG_REFINED) && !isa(stmt, Refined)
             # If we're compacting away an instruction that was marked as refined,
             # leave a marker in the ssa_rename, so we can taint any users.
@@ -1855,6 +1981,7 @@ function reprocess_phi_node!(𝕃ₒ::AbstractLattice, compact::IncrementalCompa
         v = Refined(v)
     end
     compact.ssa_rename[old_idx] = v
+    transfer_ssaname!(compact, compact.result[compact.result_idx-1], isa(v, Refined) ? v.val : v)
 
     delete_inst_here!(compact)
     return true
@@ -1892,6 +2019,7 @@ function finish_current_bb!(compact::IncrementalCompact, active_bb::Int,
             else
                 node[:stmt], node[:type], node[:line], node[:flag] = nothing, Nothing, NoLineUpdate, IR_FLAGS_EFFECTS
             end
+            set_ssaname!(node, nothing)
             compact.result_idx = old_result_idx + 1
         elseif cfg_transforms_enabled && compact.result_idx - 1 == first(bb.stmts)
             # Optimization: If this BB consists of only a branch, eliminate this bb

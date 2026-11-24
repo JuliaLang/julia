@@ -696,6 +696,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->slotflags = NULL;
     src->slotnames = NULL;
     src->slottypes = jl_nothing;
+    src->ssanames = jl_nothing;
     src->rettype = (jl_value_t*)jl_any_type;
     src->edges = (jl_value_t*)jl_emptysvec;
     src->parent = (jl_method_instance_t*)jl_nothing;

@@ -2644,4 +2644,92 @@ let src = code_typed1((Base.RefValue{Any},)) do r
     @test count(iscall((src, Core._apply_iterate)), src.code) == 0
 end
 
+# `record_ssa_names` optimizer option: the names of the source variables that are assigned
+# the value of each statement, kept in the `ssanames` field of the optimized `CodeInfo`
+@newinterp SSANamesInterp true
+struct SSANamesP; a::Int; b::Float64; end
+@inline function ssanames_g(p::SSANamesP, k::Int)
+    q = p.a * k
+    r = q + 1
+    return r * p.b
+end
+function ssanames_f(a::Vector{Float64}, n::Int)
+    s = 0.0
+    for i in 1:n
+        x = a[i] * 2.5
+        s += x
+    end
+    y = ssanames_g(SSANamesP(n, s), n)
+    return s + y
+end
+ssanames_h(v::Vector{Any}) = (z = v[1]; w = z isa Int ? z + 1 : 0; w)
+ssanames_interp(record::Bool) =
+    SSANamesInterp(; opt_params=Compiler.OptimizationParams(; record_ssa_names=record))
+# (name, owner) pairs of the entries of `ssanames`
+function ssanames_pairs(ssanames::Vector{Any})
+    pairs = Set{Tuple{Symbol,Any}}()
+    for entry in ssanames
+        if entry isa Symbol
+            push!(pairs, (entry, nothing))
+        elseif entry isa Core.SimpleVector
+            for j in 1:2:length(entry)
+                push!(pairs, (entry[j]::Symbol, entry[j+1] === nothing ? nothing : entry[j+1]))
+            end
+        else
+            @test entry === nothing
+        end
+    end
+    return pairs
+end
+let tt = (Vector{Float64}, Int)
+    src = code_typed1(ssanames_f, tt; interp=ssanames_interp(true))
+    @test src.ssanames isa Vector{Any} && length(src.ssanames) == length(src.code)
+    @test !any(x -> Meta.isexpr(x, :meta), src.code)
+    pairs = ssanames_pairs(src.ssanames)
+    gm = only(methods(ssanames_g))
+    for name in (:s, :i, :x, :y)
+        @test (name, nothing) in pairs
+    end
+    # the variables of the inlined function are marked with its method
+    @test (:q, gm) in pairs && (:r, gm) in pairs
+    @test !((:q, nothing) in pairs) && !((:r, nothing) in pairs)
+    # the default interpreter does not record anything
+    @test code_typed1(ssanames_f, tt).ssanames === nothing
+    @test code_typed1(ssanames_f, tt; interp=ssanames_interp(false)).ssanames === nothing
+end
+# the names survive compression of the cached source
+let interp = ssanames_interp(true)
+    mi = Base.method_instance(ssanames_f, (Vector{Float64}, Int))
+    m = mi.def::Method
+    ci = Compiler.typeinf_ext(interp, mi, Compiler.SOURCE_MODE_ABI)::Core.CodeInstance
+    inferred = ci.inferred
+    src = inferred isa String ? Base._uncompressed_ir(ci, inferred) : inferred::CodeInfo
+    @test src.ssanames isa Vector{Any} && length(src.ssanames) == length(src.code)
+    @test (:q, only(methods(ssanames_g))) in ssanames_pairs(src.ssanames)
+    compressed = ccall(:jl_compress_ir, Any, (Any, Any), m, copy(src))::String
+    src2 = ccall(:jl_uncompress_ir, Any, (Any, Any, Any), m, ci, compressed)::CodeInfo
+    @test isequal(src2.ssanames, src.ssanames)
+    @test src2.code == src.code
+    # without names, the field stays `nothing`, and nothing is stored for it
+    src3 = copy(src)
+    src3.ssanames = nothing
+    compressed3 = ccall(:jl_compress_ir, Any, (Any, Any), m, src3)::String
+    @test ccall(:jl_uncompress_ir, Any, (Any, Any, Any), m, ci, compressed3).ssanames === nothing
+    @test sizeof(compressed3) < sizeof(compressed)
+end
+# recording the names does not change the optimized code
+# (the code instances of the two interpreters differ, so compare their method instances)
+ssanames_normalize(@nospecialize x) = x isa Core.CodeInstance ? x.def :
+    x isa Expr ? Expr(x.head, Any[ssanames_normalize(a) for a in x.args]...) : x
+for (f, tt) in ((ssanames_f, (Vector{Float64}, Int)), (ssanames_h, (Vector{Any},)),
+                (sort!, (Vector{Int},)), (sum, (Vector{Float64},)), (string, (Int, String)))
+    a = code_typed1(f, tt; interp=ssanames_interp(false))
+    b = code_typed1(f, tt; interp=ssanames_interp(true))
+    @test map(ssanames_normalize, a.code) == map(ssanames_normalize, b.code)
+    @test a.ssavaluetypes == b.ssavaluetypes
+    @test a.ssaflags == b.ssaflags
+    @test a.debuginfo.codelocs == b.debuginfo.codelocs
+    @test a.inlining_cost == b.inlining_cost
+end
+
 end # module inline_tests

@@ -796,6 +796,10 @@ These are only populated after inference (or by generated functions in some case
 
     The range of world ages for which this code was valid at the time when it had been inferred.
 
+  * `ssanames`
+
+    `nothing`, or (in optimized code, if the optimizer was asked to record them) a `Vector{Any}` that names the source variables assigned the value of each statement, for tools such as debuggers.
+
 Optional Fields:
 
   * `slottypes`
