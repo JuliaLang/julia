@@ -3210,7 +3210,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
             ftt = closure.typ
             rty = (unwrap_unionall(ftt)::DataType).parameters[2]
             rty = rewrap_unionall(rty isa TypeVar ? rty.ub : rty, ftt)
-            if !(rt ⊑ rty && sig ⊑ ocsig_box.contents)
+            if !(rt ⊑ rty && match.spec_types ⊑ ocsig_box.contents)
                 effects = Effects(effects; nothrow=false)
                 exct = exct ⊔ TypeError
             end
@@ -3458,6 +3458,32 @@ function is_field_pointerfree(dt::DataType, fidx::Int)
     return datatype_pointerfree(ft)
 end
 
+# The helpers below loop instead of calling `any` or `all` with a closure, since a closure
+# capturing `dt` would have a different type for each value of `dt` at runtime.
+
+function any_field_pointerfree(dt::DataType, fidxs::UnitRange{Int})
+    for fidx in fidxs
+        is_field_pointerfree(dt, fidx) && return true
+    end
+    return false
+end
+
+# whether each of `vals` is an instance of the type of the corresponding field of `dt`
+function all_isa_fieldtypes(@nospecialize(vals::Tuple), dt::DataType)
+    for i = 1:length(vals)
+        getfield(vals, i) isa fieldtype(dt, i) || return false
+    end
+    return true
+end
+
+# whether each of `fields` is a subtype of the type of the corresponding field of `dt`
+function all_partialorder_fieldtypes(𝕃::AbstractLattice, fields::Vector{Any}, dt::DataType)
+    for i = 1:length(fields)
+        ⊑(𝕃, fields[i], fieldtype(dt, i)) || return false
+    end
+    return true
+end
+
 function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
                            sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
@@ -3472,7 +3498,7 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
         fcount = datatype_fieldcount(ut)
         nargs = length(e.args) - 1
         has_any_uninitialized = fcount === nothing || (fcount > nargs &&
-            any(i::Int->is_field_pointerfree(ut, i), (nargs+1):fcount))
+            any_field_pointerfree(ut, (nargs+1):fcount))
         if has_any_uninitialized
             # allocation with undefined field is inconsistent always
             consistent = ALWAYS_FALSE
@@ -3576,19 +3602,16 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
     if length(e.args) == 2 && isconcretedispatch(rt) && !ismutabletype(rt)
         at = abstract_eval_value(interp, e.args[2], sstate, sv)
         n = fieldcount(rt)
-        if (isa(at, Const) && isa(at.val, Tuple) && n == length(at.val::Tuple) &&
-            (let t = rt, at = at
-                all(i::Int -> getfield(at.val::Tuple, i) isa fieldtype(t, i), 1:n)
-            end))
+        if (isa(at, Const) && let atval = at.val
+                isa(atval, Tuple) && n == length(atval) && all_isa_fieldtypes(atval, rt)
+            end)
             nothrow = isexact
             rt = Const(ccall(:jl_new_structt, Any, (Any, Any), rt, at.val))
         elseif at isa PartialStruct
             if ⊑(𝕃ᵢ, at, Tuple) && n > 0
                 fields = at.fields
                 if (n == length(fields) && !isvarargtype(fields[end]) &&
-                    (let t = rt
-                        all(i::Int -> ⊑(𝕃ᵢ, fields[i], fieldtype(t, i)), 1:n)
-                    end))
+                    all_partialorder_fieldtypes(𝕃ᵢ, fields, rt))
                     nothrow = isexact
                     undefs = Union{Nothing,Bool}[false for _ in 1:n]
                     rt = PartialStruct(𝕃ᵢ, rt, undefs, fields)
