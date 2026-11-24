@@ -124,10 +124,15 @@ and this is still used in optimizing the callers of `f` and `g`.
 """
 macro nospecialize(vars...)
     if nfields(vars) === 1
-        # in argument position, need to fix `@nospecialize x=v` to `@nospecialize (kw x v)`
         var = getfield(vars, 1)
-        if isa(var, Expr) && var.head === :(=)
-            var.head = :kw
+        if isa(var, Expr)
+            if var.head === :(=)
+                # in argument position, need to fix `@nospecialize x=v` to `@nospecialize (kw x v)`
+                var.head = :kw
+            elseif var.head === :tuple
+                # `@nospecialize a, b` parses as a single tuple expression
+                return Expr(:meta, :nospecialize, var.args...)
+            end
         end
     end
     return Expr(:escape, Expr(:meta, :nospecialize, vars...))
@@ -141,10 +146,15 @@ For details, see [`@nospecialize`](@ref).
 """
 macro specialize(vars...)
     if nfields(vars) === 1
-        # in argument position, need to fix `@specialize x=v` to `@specialize (kw x v)`
         var = getfield(vars, 1)
-        if isa(var, Expr) && var.head === :(=)
-            var.head = :kw
+        if isa(var, Expr)
+            if var.head === :(=)
+                # in argument position, need to fix `@specialize x=v` to `@specialize (kw x v)`
+                var.head = :kw
+            elseif var.head === :tuple
+                # `@specialize a, b` parses as a single tuple expression
+                return Expr(:meta, :specialize, var.args...)
+            end
         end
     end
     return Expr(:escape, Expr(:meta, :specialize, vars...))
