@@ -96,6 +96,11 @@ end
     @test Dates.Date(Dates.Day(10), Dates.Month(2), y) == Dates.Date(1, 2, 10)
 end
 
+@testset "construction from a UTInstant of another period type" begin
+    @test_throws ArgumentError("DateTime requires a UTInstant{$(Dates.Millisecond)}, got a UTInstant{$(Dates.Day)}") Dates.DateTime(Dates.UTD(1))
+    @test_throws ArgumentError("Date requires a UTInstant{$(Dates.Day)}, got a UTInstant{$(Dates.Millisecond)}") Dates.Date(Dates.UTM(1))
+end
+
 @testset "Time construction by parts" begin
     t = Dates.Time(Dates.Nanosecond(82800000000000))
     @test Dates.Time(23) == t
