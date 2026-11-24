@@ -340,7 +340,7 @@ function GitBranchIter(repo::GitRepo, flags::Cint=Cint(Consts.BRANCH_LOCAL))
     return GitBranchIter(repo, bi_ptr[])
 end
 
-function Base.iterate(bi::GitBranchIter, state=nothing)
+function Base.iterate(bi::GitBranchIter, _state=nothing)
     ensure_initialized()
     ref_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     btype = Ref{Cint}()

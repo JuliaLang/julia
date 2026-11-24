@@ -2,7 +2,7 @@
 
 module Test_LibGit2_https
 
-using Test, LibGit2, NetworkOptions
+using LibGit2, NetworkOptions, Test
 
 # we currently use system SSL/TLS on macOS and Windows platforms
 # and libgit2 cannot set the CA roots path on those systems
