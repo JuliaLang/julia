@@ -810,18 +810,31 @@ For a complete list of customizable faces, see the [JuliaSyntaxHighlighting pack
 
 ## Customising the history searcher
 
-The history searcher uses the following default faces, that can be customised:
+The interactive history search opened with `^R` uses faces configured in
+`config/faces.toml` under the first Julia depot (usually `~/.julia`). Julia
+loads the settings when the REPL first displays styled text. Add only the
+properties you want to override. This example makes the focused and selected
+entry bullets red.
 
 ```toml
 [REPL.History.search]
-separator.fg  = "blue"
-prefix.fg = "magenta"
-selected.fg = "blue"
-unselected.fg = "grey"
-hint = { fg = "magenta", slant = "italic", weight ="light" }
-results.inherit = "shadow"
-match = { weight = "bold", underline = true }
+selected.fg = "red"
 ```
+
+| Face | What it styles | Default |
+| :--- | :--- | :--- |
+| `separator` | The `;` between filters in the search query | Blue |
+| `prefix` | Filter prefixes such as `=` for exact matches or `/` for regular expressions | Magenta |
+| `selected` | Bullets beside the focused entry and entries selected with Tab | Blue |
+| `unselected` | Bullets beside the remaining entries | Grey |
+| `hint` | Help and filter-type hints in the search prompt | Magenta, italic, light weight |
+| `results` | The result position and total shown to the right of the query, such as `[3/12]` | Inherits `shadow` |
+| `match` | Matching text in result rows and the single-entry preview | Bold, underlined |
+
+Use the arrow keys to move the focus and Tab to toggle selection of the
+focused entry. To change the focused row's text highlight, customize the
+shared `[region]` face in the same file. It also styles the focused entry when
+it appears in the selection preview.
 
 ## Customizing Colors
 
