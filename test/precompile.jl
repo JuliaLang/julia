@@ -2847,13 +2847,18 @@ precompile_test_harness("Image object revived by a later image") do load_path
         GC.gc(true); GC.gc(true)
         payload, junk
     end
-    @eval using ImageRevivedB
-    invokelatest() do
-        @test ImageRevivedA.holder[] === nothing
-        next = ImageRevivedB.getnext()
-        @test next === payload.value
-        @test sum((next::ImageRevivedA.Payload).v) == 5050
-        @test length(junk) == 100_000
+    # MMTk does not treat image objects as permalloc'd, so it frees the payload
+    # (but this is a bug, since semantically it should be immortal)
+    @test payload.value !== nothing broken=!Base.USING_STOCK_GC
+    if Base.USING_STOCK_GC # otherwise this reads freed memory
+        @eval using ImageRevivedB
+        invokelatest() do
+            @test ImageRevivedA.holder[] === nothing
+            next = ImageRevivedB.getnext()
+            @test next === payload.value
+            @test sum((next::ImageRevivedA.Payload).v) == 5050
+            @test length(junk) == 100_000
+        end
     end
 end
 
