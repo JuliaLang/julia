@@ -743,14 +743,6 @@ function ExplicitEnv(envpath::String)
     sizehint!(weakdeps_expanded, length(deps))
     sizehint!(extensions_expanded, length(deps))
 
-    if proj_name !== nothing && proj_uuid !== nothing
-        deps_expanded[proj_uuid] = filter!(!=(proj_uuid), collect(values(project_deps)))
-        extensions_expanded[proj_uuid] = project_extensions
-        path = get(project_d, "path", nothing)::Union{String, Nothing}
-        entry_point = path !== nothing ? path : dirname(envpath)
-        lookup_strategy[proj_uuid] = entry_point
-    end
-
     for key in ["deps", "weakdeps"]
         d = key == "deps" ? deps :
             key == "weakdeps" ? weakdeps :
@@ -793,6 +785,16 @@ function ExplicitEnv(envpath::String)
             exts_expanded[ext] = triggers_expanded
         end
         extensions_expanded[pkg] = exts_expanded
+    end
+
+    # Loading takes the project's dependencies and extensions from its own file, also when
+    # the manifest has an entry for it, as it does for a workspace member.
+    if proj_name !== nothing && proj_uuid !== nothing
+        deps_expanded[proj_uuid] = filter!(!=(proj_uuid), collect(values(project_deps)))
+        extensions_expanded[proj_uuid] = project_extensions
+        path = get(project_d, "path", nothing)::Union{String, Nothing}
+        entry_point = path !== nothing ? path : dirname(envpath)
+        lookup_strategy[proj_uuid] = entry_point
     end
 
     fixup_stdlib_deps!(deps_expanded, weakdeps_expanded, extensions_expanded, names, lookup_strategy)
@@ -910,11 +912,13 @@ function fixup_stdlib_deps!(deps::Dict{UUID, Vector{UUID}}, weakdeps::Dict{UUID,
             push!(pkg_weakdeps, dep_uuid)
             get!(names, dep_uuid, dep_name)
         end
-        pkg_extensions = get!(Dict{String, Vector{UUID}}, extensions, uuid)
-        # an entry that is loaded from here has the extensions listed here
-        lookup_strategy[uuid] === nothing && empty!(pkg_extensions)
+        # The extensions are those of the copy that gets loaded: the manifest's for a path or
+        # an installed tree, and the ones listed here for the stdlib itself.
+        strategy = lookup_strategy[uuid]
+        strategy isa String && continue
+        strategy isa SHA1 && Base.find_installed_tree(PkgId(uuid, name), strategy) !== nothing && continue
+        pkg_extensions = empty!(get!(Dict{String, Vector{UUID}}, extensions, uuid))
         for (ext, triggers) in project_extensions
-            haskey(pkg_extensions, ext) && continue
             triggers = triggers isa String ? [triggers] : triggers::Vector{String}
             trigger_uuids = UUID[]
             for trigger in triggers

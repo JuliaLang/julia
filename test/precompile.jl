@@ -3511,6 +3511,66 @@ end
     end
 end
 
+@testset "ExplicitEnv takes the project and stdlib extensions from where loading does" begin
+    mktempdir() do dir
+        root, dep1, dep2 = Base.UUID.("e1000000-0000-0000-0000-00000000000" .* ("1", "2", "3"))
+        statistics = Base.UUID("10745b16-79ce-11e8-11f9-7d13ad32a3b2")
+        project_file = joinpath(dir, "Project.toml")
+        # a project that is also in its manifest, as a workspace member is, and that changed since it was resolved
+        write(project_file, """
+            name = "Root"
+            uuid = "$root"
+
+            [deps]
+            Dep = "$dep2"
+
+            [weakdeps]
+            Statistics = "$statistics"
+
+            [extensions]
+            RootExt = "Statistics"
+            """)
+        explicit_env(statistics_source) = (write(joinpath(dir, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.Dep]]
+            path = "Dep1"
+            uuid = "$dep1"
+
+            [[deps.Dep]]
+            path = "Dep2"
+            uuid = "$dep2"
+
+            [[deps.Root]]
+            path = "."
+            uuid = "$root"
+
+                [deps.Root.deps]
+                Dep = "$dep1"
+
+            [[deps.Statistics]]
+            $statistics_source
+            uuid = "$statistics"
+            """); Base.Precompilation.ExplicitEnv(project_file))
+        env = explicit_env("")
+        @test env.deps[root] == [dep2]
+        @test env.extensions[root] == Dict("RootExt" => [statistics])
+        # a stdlib has the extensions of the copy that is loaded
+        has_stdlib_ext(env) = haskey(env.extensions[statistics], "SparseArraysExt")
+        @test has_stdlib_ext(env)
+        @test !has_stdlib_ext(explicit_env("path = \"Statistics\""))
+        tree = "1"^40
+        @test has_stdlib_ext(explicit_env("git-tree-sha1 = \"$tree\"")) # not installed, so the stdlib is loaded
+        mkpath(joinpath(dir, "packages", "Statistics", Base.version_slug(statistics, Base.SHA1(tree))))
+        pushfirst!(DEPOT_PATH, dir)
+        try
+            @test !has_stdlib_ext(explicit_env("git-tree-sha1 = \"$tree\""))
+        finally
+            popfirst!(DEPOT_PATH)
+        end
+    end
+end
+
 # Write dev packages, given as (name, uuid, deps), into the depot, and a project that depends on all of them
 function write_precompile_env(depot, pkgs)
     project = "[deps]\n"

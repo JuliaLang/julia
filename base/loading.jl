@@ -1301,17 +1301,23 @@ function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, en
         end
         return nothing
     end
-    hash = SHA1(hash)
+    path = find_installed_tree(pkg, SHA1(hash))
+    # no depot contains the package, return missing to stop looking
+    path === nothing && return missing
+    return PkgLoadSpec(entry_path(abspath(path), pkg.name, entryfile), edition)
+end
+
+# where the depots have the package with this tree, or `nothing`
+function find_installed_tree(pkg::PkgId, hash::SHA1)
     # Keep the 4 since it used to be the default
     uuid = pkg.uuid::UUID # checked within `explicit_manifest_uuid_path`
     for slug in (version_slug(uuid, hash), version_slug(uuid, hash, 4))
         for depot in DEPOT_PATH
             path = joinpath(depot, "packages", pkg.name, slug)
-            ispath(path) && return PkgLoadSpec(entry_path(abspath(path), pkg.name, entryfile), edition)
+            ispath(path) && return path
         end
     end
-    # no depot contains the package, return missing to stop looking
-    return missing
+    return nothing
 end
 
 ## implicit project & manifest API ##
