@@ -1037,4 +1037,16 @@ end
     end
 end
 
+# a package adding a broad `convert` method must not invalidate reading the terminfo
+let script = """
+        Base.get_have_truecolor()
+        log = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+        struct Num <: Real end
+        Base.convert(::Type{S}, ::Num) where {S<:Union{AbstractChar,AbstractString,Number}} = error()
+        ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+        print(any(x -> x isa Core.MethodInstance && x.def isa Method && x.def.name === :extendedterminfo, log))
+        """
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == "false"
+end
+
 end
