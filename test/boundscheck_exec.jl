@@ -420,4 +420,38 @@ end
     @test_throws DimensionMismatch inbounds_setindex!(zeros(6), [1.0], 1:4)
 end
 
+struct PaddedVector <: AbstractVector{Int}
+    data::Vector{Int}
+    n::Int
+end
+Base.size(v::PaddedVector) = (v.n,)
+Base.IndexStyle(::Type{PaddedVector}) = IndexLinear()
+Base.getindex(v::PaddedVector, i::Int) = v.data[i]
+Base.setindex!(v::PaddedVector, x, i::Int) = (v.data[i] = x; v)
+
+inbounds_copyto!(a, b) = @inbounds copyto!(a, b)
+inbounds_copyto!(a, b, c) = @inbounds copyto!(a, b, c)
+inbounds_copyto!(a, b, c, d) = @inbounds copyto!(a, b, c, d)
+inbounds_copyto!(a, b, c, d, e) = @inbounds copyto!(a, b, c, d, e)
+inbounds_copyto!(a, b, c, d, e, f) = @inbounds copyto!(a, b, c, d, e, f)
+
+@testset "copyto! skips its bounds checks under @inbounds" begin
+    for args in ((1:4,), (2, 1:4), (1, 1:4, 5), (1, 1:4, 1, 4),
+                 (CartesianIndices((1:4,)), 1:4, CartesianIndices((1:4,))),
+                 (1:4, 1:1, 1:4, 1:4, 1:1))
+        dest = PaddedVector(zeros(Int, 8), 2)
+        if bc_opt == bc_on
+            @test_throws BoundsError inbounds_copyto!(dest, args...)
+        else
+            @test inbounds_copyto!(dest, args...) === dest
+        end
+    end
+    dest = PaddedVector(zeros(Int, 8), 2)
+    if bc_opt == bc_on
+        @test_throws BoundsError inbounds_copyto!(IndexLinear(), dest, IndexLinear(), 1:4)
+    else
+        @test inbounds_copyto!(IndexLinear(), dest, IndexLinear(), 1:4) === dest
+    end
+end
+
 end

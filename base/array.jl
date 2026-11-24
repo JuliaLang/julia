@@ -318,16 +318,16 @@ end
 # It is also mitigated by using a constant string.
 _throw_argerror(s) = (@noinline; throw(ArgumentError(s)))
 
-_copyto2arg!(dest, src) = copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
+_copyto2arg!(dest, src) = (@_propagate_inbounds_meta; copyto!(dest, firstindex(dest), src, firstindex(src), length(src)))
 
-copyto!(dest::Array, src::Array) = _copyto2arg!(dest, src)
-copyto!(dest::Array, src::Memory) = _copyto2arg!(dest, src)
-copyto!(dest::Memory, src::Array) = _copyto2arg!(dest, src)
+copyto!(dest::Array, src::Array) = (@_propagate_inbounds_meta; _copyto2arg!(dest, src))
+copyto!(dest::Array, src::Memory) = (@_propagate_inbounds_meta; _copyto2arg!(dest, src))
+copyto!(dest::Memory, src::Array) = (@_propagate_inbounds_meta; _copyto2arg!(dest, src))
 
 # also to avoid ambiguities in packages
-copyto!(dest::Array{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
-copyto!(dest::Array{T}, src::Memory{T}) where {T} = _copyto2arg!(dest, src)
-copyto!(dest::Memory{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
+copyto!(dest::Array{T}, src::Array{T}) where {T} = (@_propagate_inbounds_meta; _copyto2arg!(dest, src))
+copyto!(dest::Array{T}, src::Memory{T}) where {T} = (@_propagate_inbounds_meta; _copyto2arg!(dest, src))
+copyto!(dest::Memory{T}, src::Array{T}) where {T} = (@_propagate_inbounds_meta; _copyto2arg!(dest, src))
 
 # N.B: This generic definition in for multidimensional arrays is here instead of
 # `multidimensional.jl` for bootstrapping purposes.

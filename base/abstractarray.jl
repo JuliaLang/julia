@@ -1058,7 +1058,9 @@ julia> y
 ```
 """
 function copyto!(dest::AbstractArray, src::AbstractArray)
+    @_propagate_inbounds_meta
     isempty(src) && return dest
+    @boundscheck length(src) <= length(dest) || throw_boundserror(dest, LinearIndices(src))
     src′ = unalias(dest, src)
     if dest isa BitArray
         # avoid ambiguities with other copyto!(::AbstractArray, ::SourceArray) methods
@@ -1068,7 +1070,9 @@ function copyto!(dest::AbstractArray, src::AbstractArray)
 end
 
 function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    @_propagate_inbounds_meta
     isempty(src) && return dest
+    @boundscheck length(src) <= length(dest) || throw_boundserror(dest, LinearIndices(src))
     src′ = unalias(dest, src)
     copyto_unaliased!(deststyle, dest, srcstyle, src′)
 end
@@ -1078,8 +1082,6 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     idf, isf = first(destinds), first(srcinds)
     Δi = idf - isf
-    (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
-        throw(BoundsError(dest, srcinds))
     if deststyle isa IndexLinear
         if srcstyle isa IndexLinear
             # Single-index implementation
@@ -1116,30 +1118,38 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
+    @_propagate_inbounds_meta
     copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
+    @_propagate_inbounds_meta
     srcinds = LinearIndices(src)
-    checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
+    @boundscheck checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
     copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer,
                  src::AbstractArray, sstart::Integer,
                  n::Integer)
+    @_propagate_inbounds_meta
     n == 0 && return dest
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
         n," elements, but n should be non-negative")))
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    (checkbounds(Bool, destinds, dstart) && n <= last(destinds) - dstart + 1) || throw_boundserror(dest, dstart)
-    (checkbounds(Bool, srcinds, sstart)  && n <= last(srcinds) - sstart + 1)  || throw_boundserror(src, sstart)
+    @boundscheck (checkbounds(Bool, destinds, dstart) && n <= last(destinds) - dstart + 1) || throw_boundserror(dest, dstart)
+    @boundscheck (checkbounds(Bool, srcinds, sstart)  && n <= last(srcinds) - sstart + 1)  || throw_boundserror(src, sstart)
     dstart = Int(dstart)
     sstart = Int(sstart)
     n = Int(n)
     src′ = unalias(dest, src)
-    @inbounds for i = 0:n-1
-        dest[dstart+i] = src′[sstart+i]
+    return _copyto_loops!(dest, dstart:dstart+n-1, src′, sstart:sstart+n-1)
+end
+
+function _copyto_loops!(dest::AbstractArray, Rdest::UnitRange{Int}, src::AbstractArray, Rsrc::UnitRange{Int})
+    Δi = first(Rsrc) - first(Rdest)
+    for i in Rdest
+        @inbounds dest[i] = src[i + Δi]
     end
     return dest
 end
@@ -1151,6 +1161,7 @@ end
 
 function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
                A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
+    @_propagate_inbounds_meta
     if length(ir_dest) != length(ir_src)
         throw(ArgumentError(LazyString("source and destination must have same size (got ",
             length(ir_src)," and ",length(ir_dest),")")))
@@ -1162,11 +1173,16 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     @boundscheck checkbounds(B, ir_dest, jr_dest)
     @boundscheck checkbounds(A, ir_src, jr_src)
     A′ = unalias(B, A)
+    return _copyto_loops!(B, ir_dest, jr_dest, A′, ir_src, jr_src)
+end
+
+function _copyto_loops!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+                        A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int})
     jdest = first(jr_dest)
     for jsrc in jr_src
         idest = first(ir_dest)
         for isrc in ir_src
-            @inbounds B[idest,jdest] = A′[isrc,jsrc]
+            @inbounds B[idest,jdest] = A[isrc,jsrc]
             idest += step(ir_dest)
         end
         jdest += step(jr_dest)
