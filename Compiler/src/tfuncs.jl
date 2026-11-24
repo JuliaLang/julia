@@ -1564,18 +1564,19 @@ end
     else
         @assert false "unreachable"
     end
-    info = NoCallInfo()
     if nargs >= v_argi && RT !== Bottom
         # we may be able to refine this to a PartialStruct by analyzing `op(o.f, v)::T`
         # as well as compute the info for the method matches
         op = unwrapva(argtypes[op_argi])
         v = unwrapva(argtypes[v_argi])
         callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true, si.saw_latestworld), vtypes, sv, #=max_methods=#1)
-        TF = Core.Box(TF)
-        RT = Core.Box(RT)
-        return Future{CallMeta}(callinfo, interp, sv) do callinfo, interp, sv
-            TF = TF.contents
-            RT = RT.contents
+        # `TF` and `RT` are not statically typed, so capture them in explicit boxes
+        # to make the type of the closure statically known
+        TF_box = Core.Box(TF)
+        RT_box = Core.Box(RT)
+        return Future{CallMeta}(callinfo, interp, sv) do callinfo, interp, _
+            local TF = TF_box.contents
+            local RT = RT_box.contents
             TF2 = tmeet(ipo_lattice(interp), callinfo.rt, widenconst(TF))
             if TF2 === Bottom
                 RT = Bottom
@@ -1586,7 +1587,7 @@ end
             return CallMeta(RT, Any, Effects(), info)
         end
     end
-    return Future(CallMeta(RT, Any, Effects(), info))
+    return Future(CallMeta(RT, Any, Effects(), NoCallInfo()))
 end
 
 # we could use tuple_tfunc instead of widenconst, but `o` is mutable, so that is unlikely to be beneficial
@@ -3623,11 +3624,11 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
             if !hasintersect(af_argtype, ocargt)
                 return Future(CallMeta(Const(Union{}), Union{}, RT_CALL_EFFECTS, NoCallInfo()))
             end
-            rt = rewrap_unionall(uaft.parameters[2], aftw)
+            ocrt = rewrap_unionall(uaft.parameters[2], aftw)
             if aftw isa DataType
-                return Future(CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, NoCallInfo()))
+                return Future(CallMeta(Const(ocrt), Union{}, RT_CALL_EFFECTS, NoCallInfo()))
             else
-                return Future(CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, NoCallInfo()))
+                return Future(CallMeta(Type{<:ocrt}, Union{}, RT_CALL_EFFECTS, NoCallInfo()))
             end
         end
     end
@@ -3643,8 +3644,8 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     # Run the abstract_call without restricting abstract call
     # sites. Otherwise, our behavior model of abstract_call
     # below will be wrong.
+    old_restrict = isa(sv, InferenceState) && sv.restrict_abstract_call_sites
     if isa(sv, InferenceState)
-        old_restrict = sv.restrict_abstract_call_sites
         sv.restrict_abstract_call_sites = false
     end
     # TODO: Could pass vtypes here to enable Conditional/MustAlias refinements
@@ -3652,7 +3653,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     # slot-dependent refinements will be widened. This is conservative but
     # may miss some precision opportunities.
     call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, nothing, sv, #=max_methods=#-1)
-    tt = Core.Box(tt)
+    input_known = isa(tt, Const) || isconstType(tt)
     return Future{CallMeta}(call, interp, sv) do call, _, sv
         if isa(sv, InferenceState)
             sv.restrict_abstract_call_sites = old_restrict
@@ -3672,7 +3673,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
             # in two ways: both as being a subtype of this, and
             # because of LimitedAccuracy causes
             return CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, info)
-        elseif isa(tt.contents, Const) || isconstType(tt.contents)
+        elseif input_known
             # input arguments were known for certain
             # XXX: this doesn't imply we know anything about rt
             return CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, info)
