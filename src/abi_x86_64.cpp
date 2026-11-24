@@ -288,4 +288,16 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
     return NULL;
 }
 
+bool caller_extends_param(unsigned nbits, const Triple &TT) const override
+{
+    // The psABI leaves the unused bits unspecified. On Darwin, the ABI is
+    // whatever clang does, which is to extend.
+    return TT.isOSDarwin() && nbits < 32;
+}
+
+bool callee_extends_return(unsigned nbits, const Triple &TT) const override
+{
+    return TT.isOSDarwin() && nbits < 32;
+}
+
 };

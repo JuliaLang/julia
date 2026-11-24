@@ -377,6 +377,13 @@ public:
     virtual bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) JL_CANSAFEPOINT = 0;
     virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&, LLVMContext &ctx, Type* llvm_t) JL_CANSAFEPOINT = 0;
     virtual Type *preferred_llvm_type(jl_datatype_t *ty, bool isret, LLVMContext &ctx) const JL_CANSAFEPOINT = 0;
+    // Whether the caller must extend an integer argument of `nbits` to fill its
+    // register. Where it need not, the high bits are unspecified: a definition
+    // marked `zeroext` or `signext` would read them all the same.
+    virtual bool caller_extends_param(unsigned nbits, const Triple &TT) const { return false; }
+    // Likewise, whether the callee must extend an integer result of `nbits`.
+    // Where it must, the caller reads the high bits without extending again.
+    virtual bool callee_extends_return(unsigned nbits, const Triple &TT) const { return nbits <= 32; }
 };
 
 // Determine if object of bitstype ty maps to a native x86 SIMD type (__m128, __m256, or __m512) in C
@@ -1216,7 +1223,7 @@ public:
     SmallVector<Type*, 0> fargt_sig; // vector of ABI coercion types for call signature
     SmallVector<bool, 0> fargt_isboxed; // vector of whether the llvm output type is a Julia-box for each argument
     SmallVector<bool, 0> byRefList; // vector of "byref" parameters
-    AttributeList attributes; // vector of function call site attributes
+    AttributeList attributes; // vector of function call site (or cfunction definition) attributes
     Type *lrt; // input parameter of the llvm return type (from julia_struct_to_llvm)
     bool retboxed; // input parameter indicating whether lrt is jl_value_t*
     bool gc_safe; // input parameter indicating whether the call is safe to execute concurrently to GC
@@ -1225,6 +1232,7 @@ public:
     std::string err_msg;
     CallingConv::ID cc; // calling convention ABI
     bool llvmcall;
+    bool cfunction; // whether this describes a definition, rather than a call site
     jl_svec_t *at; // svec of julia argument types
     jl_value_t *rt; // julia return type
     jl_unionall_t *unionall_env; // UnionAll environment for `at` and `rt`
@@ -1232,14 +1240,14 @@ public:
     size_t nreqargs; // number of required arguments in ccall function definition
     jl_codegen_output_t *ctx;
 
-    function_sig_t(const char *fname, Type *lrt, jl_value_t *rt, bool retboxed, bool gc_safe, jl_svec_t *at, jl_unionall_t *unionall_env, size_t nreqargs, CallingConv::ID cc, bool llvmcall, jl_codegen_output_t *ctx) JL_CANSAFEPOINT
+    function_sig_t(Type *lrt, jl_value_t *rt, bool retboxed, bool gc_safe, jl_svec_t *at, jl_unionall_t *unionall_env, size_t nreqargs, CallingConv::ID cc, bool llvmcall, bool cfunction, jl_codegen_output_t *ctx) JL_CANSAFEPOINT
       : lrt(lrt), retboxed(retboxed), gc_safe(gc_safe),
-        prt(NULL), sret(0), cc(cc), llvmcall(llvmcall),
+        prt(NULL), sret(0), cc(cc), llvmcall(llvmcall), cfunction(cfunction),
         at(at), rt(rt), unionall_env(unionall_env),
         nccallargs(jl_svec_len(at)), nreqargs(nreqargs),
         ctx(ctx)
     {
-        err_msg = generate_func_sig(fname);
+        err_msg = generate_func_sig();
     }
 
     FunctionType *functype(LLVMContext &ctxt) const {
@@ -1259,7 +1267,7 @@ public:
             const jl_cgval_t *cancel_guard) const JL_CANSAFEPOINT; // NULL, or (fn, state)
 
 private:
-std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
+std::string generate_func_sig() JL_CANSAFEPOINT
 {
     assert(rt && !jl_is_abstract_ref_type(rt));
 
@@ -1318,9 +1326,12 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
         else {
             t = _julia_struct_to_llvm(ctx, LLVMCtx, tti, &isboxed, llvmcall);
             if (t == getVoidTy(LLVMCtx)) {
-                return make_errmsg(fname, i + 1, " type doesn't correspond to a C type");
+                return make_errmsg(cfunction ? "cfunction" : "ccall", i + 1, " type doesn't correspond to a C type");
             }
-            if (jl_is_primitivetype(tti) && t->isIntegerTy()) {
+            // A call site may always extend its arguments, but a definition may rely
+            // only on what the ABI requires of its callers.
+            if (jl_is_primitivetype(tti) && t->isIntegerTy() &&
+                (!cfunction || abi->caller_extends_param(jl_datatype_nbits((jl_datatype_t*)tti), ctx->TargetTriple))) {
                 // see pull req #978. need to annotate signext/zeroext for
                 // small integer arguments. Small means narrower than 32 bits,
                 // as for `_BitInt(N)` in C, although `sizeof` rounds up to 4.
@@ -1395,17 +1406,13 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
     // If return value is boxed it must be non-null.
     if (retboxed)
         RetAttrs = RetAttrs.addAttribute(LLVMCtx, Attribute::NonNull);
-    else if (ctx->TargetTriple.isRISCV64() && rt != jl_bottom_type &&
-             jl_is_primitivetype(rt) && lrt->isIntegerTy()) {
-        // RISC-V returns integers as if passed as the first named argument.
-        size_t sz = jl_datatype_size(rt);
-        if (sz < 4) {
-            bool issigned = jl_signed_type && jl_subtype(rt, (jl_value_t*)jl_signed_type);
-            RetAttrs = RetAttrs.addAttribute(LLVMCtx, issigned ? Attribute::SExt : Attribute::ZExt);
-        }
-        else if (sz == 4) {
-            RetAttrs = RetAttrs.addAttribute(LLVMCtx, Attribute::SExt);
-        }
+    else if (!llvmcall && !sret && jl_is_primitivetype(rt) && prt->isIntegerTy() &&
+             abi->callee_extends_return(jl_datatype_nbits((jl_datatype_t*)rt), ctx->TargetTriple)) {
+        bool issigned = jl_signed_type && jl_subtype(rt, (jl_value_t*)jl_signed_type);
+        // RISC-V sign-extends anything stored in 4 bytes, the unsigned included.
+        if (ctx->TargetTriple.isRISCV64() && jl_datatype_size(rt) == 4)
+            issigned = true;
+        RetAttrs = RetAttrs.addAttribute(LLVMCtx, issigned ? Attribute::SExt : Attribute::ZExt);
     }
     if (rt == jl_bottom_type)
         FnAttrs = FnAttrs.addAttribute(LLVMCtx, Attribute::NoReturn);
@@ -1681,9 +1688,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     }
     if (rt != args[2] && rt != (jl_value_t*)jl_any_type)
         jl_temporary_root(ctx, rt);
-    function_sig_t sig("ccall", lrt, rt, retboxed, gc_safe,
+    function_sig_t sig(lrt, rt, retboxed, gc_safe,
                        (jl_svec_t*)at, unionall, nreqargs,
-                       cc, llvmcall, &ctx.emission_context);
+                       cc, llvmcall, /*cfunction*/false, &ctx.emission_context);
     for (size_t i = 0; i < nccallargs; i++) {
         jl_value_t *tti = jl_svecref(at, i);
         if (jl_is_abstract_ref_type(tti)) {

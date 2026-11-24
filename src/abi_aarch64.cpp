@@ -391,4 +391,16 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
     return NULL;
 }
 
+bool caller_extends_param(unsigned nbits, const Triple &TT) const override
+{
+    // AAPCS64 leaves the unused bits unspecified. Apple's variant does not.
+    return TT.isOSDarwin() && nbits < 32;
+}
+
+bool callee_extends_return(unsigned nbits, const Triple &TT) const override
+{
+    // Apple clang extends in the callee, and trusts the callee to have done so.
+    return TT.isOSDarwin() && nbits < 32;
+}
+
 };

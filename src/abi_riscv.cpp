@@ -315,4 +315,9 @@ Type *preferred_llvm_type(jl_datatype_t *ty, bool isret,
     return this->cached_llvmtype;
 }
 
+bool caller_extends_param(unsigned nbits, const Triple &TT) const override
+{
+    return nbits <= 32;
+}
+
 };

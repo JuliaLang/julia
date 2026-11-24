@@ -162,4 +162,9 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
     return Type::getIntNTy(ctx, size * 8);
 }
 
+bool caller_extends_param(unsigned nbits, const Triple &TT) const override
+{
+    return nbits <= 32;
+}
+
 };

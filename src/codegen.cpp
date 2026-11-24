@@ -8900,7 +8900,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     if (rt != declrt && rt != (jl_value_t*)jl_any_type)
         jl_temporary_root(ctx, rt);
 
-    function_sig_t sig("cfunction", lrt, rt, retboxed, false, argt, unionall_env, false, CallingConv::C, false, &ctx.emission_context);
+    function_sig_t sig(lrt, rt, retboxed, false, argt, unionall_env, false, CallingConv::C, false, /*cfunction*/true, &ctx.emission_context);
     assert(sig.fargt.size() + sig.sret == sig.fargt_sig.size());
     if (!sig.err_msg.empty()) {
         emit_error(ctx, sig.err_msg);
@@ -9039,8 +9039,8 @@ const char *jl_generate_ccallable(jl_codegen_output_t &out, jl_value_t *nameval,
     }
     jl_value_t *err;
     { // scope block for sig
-        function_sig_t sig("cfunction", lcrt, crt, toboxed, false,
-                           argtypes, NULL, false, CallingConv::C, false, &out);
+        function_sig_t sig(lcrt, crt, toboxed, false,
+                           argtypes, NULL, false, CallingConv::C, false, /*cfunction*/true, &out);
         if (sig.err_msg.empty()) {
             //Safe b/c out holds context lock
             Function *cw = gen_cfun_wrapper(&out.get_module(), out, sig, ff, name, declrt, sigt, NULL, NULL, NULL);
