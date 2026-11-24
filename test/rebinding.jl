@@ -366,8 +366,8 @@ let test_code =
     @test success(pipeline(`$(Base.julia_cmd()) -e $test_code`; stderr))
 end
 
-# Test that image binding backedges wait for a binding to be replaced in an image that theirs
-# was built against, and that only such images then validate in full
+# Replacing an image binding installs deferred backedges and requires full validation
+# only for dependent images.
 let test_code =
     """
     using Test
@@ -402,7 +402,7 @@ let test_code =
                                         convert(Core.Binding, GlobalRef(m, name)))
             unreplaced(m) = RU.image_deps_unreplaced(RU.external_blob_index(m))
             @test nbackedges(DeferredBackedgesA, :read_me) == 0
-            # every image was built against `Main`, so what names it is not deferred
+            # Methods that reference `Main` are scanned at load time.
             @test nbackedges(Main, :deferred_backedges_main) == 1
             @eval @eval DeferredBackedgesA const created = 1
             @test nbackedges(DeferredBackedgesA, :read_me) == 1

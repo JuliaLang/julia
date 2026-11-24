@@ -17,9 +17,8 @@ debug_method_invalidation(onoff::Bool) =
 # The linkage blob owning `v`, or typemax(UInt) if it is in no image.
 external_blob_index(@nospecialize(v)) = ccall(:jl_external_blob_index, Csize_t, (Any,), v)
 
-# Whether no binding has been replaced in the images that linkage blob `image` was built
-# against, so that what was loaded from it can fast-path validation. For anything else,
-# whether none has been replaced in any image.
+# Check whether `image` and its dependencies have no replaced bindings, allowing
+# fast validation. For an unknown image, check all images.
 image_deps_unreplaced(image::UInt) = ccall(:jl_linkage_blob_deps_replaced, Cint, (Csize_t,), image) == 0
 
 struct VerifyMethodInitialState
@@ -126,14 +125,14 @@ function insert_backedges(internal_methods::Vector{Any})
     # to enable any applicable new codes
     isempty(internal_methods) && return nothing
     image = external_blob_index(internal_methods[1])
-    # Read first: a replacement is recorded before its world is published, so one that the
-    # check misses is not part of `world`.
+    # Read the world before checking for replacements. Replacements are recorded
+    # before their world is published, so the check covers all replacements in `world`.
     world = get_world_counter()
     backedges_only = image_deps_unreplaced(image)
     if backedges_only && !generating_output()
         defer_image_scans!(internal_methods, image, world)
     else
-        # An image being written serializes these backedges, so it does not defer them.
+        # Install backedges before serializing an image.
         scan_new_methods!(internal_methods, world, backedges_only)
     end
     scan_new_code!(internal_methods, VerifyMethodWorkspace())

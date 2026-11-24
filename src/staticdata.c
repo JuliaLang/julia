@@ -210,8 +210,8 @@ typedef struct {
     _Atomic(size_t) world;   // the world in which the image's methods were activated
                              // (0 until then)
     _Atomic(uint8_t) binding_replaced; // a binding of one of its modules has been replaced
-    _Atomic(size_t) deps_unreplaced;   // the value of n_images_replaced for which none of
-                                       // `deps` had (memo for jl_linkage_blob_deps_replaced)
+    _Atomic(size_t) deps_unreplaced;   // n_images_replaced at the last check that found
+                                     // no replaced bindings in `deps`
 } image_metadata_t;
 
 // number of images with `binding_replaced` set
@@ -315,9 +315,8 @@ JL_DLLEXPORT size_t jl_linkage_blob_dep_world(size_t image, size_t blob) JL_NOTS
     return world;
 }
 
-// A binding of `m` is being replaced or `m` is `using` another module, under the
-// world_counter_lock. Returns whether `m` belongs to an image: the images loaded against
-// that one then validate in full.
+// Record a binding replacement or new `using` in `m`. Requires world_counter_lock.
+// Return whether `m` belongs to an image; dependent images now require full validation.
 int jl_image_binding_replaced(jl_module_t *m, size_t new_world) JL_NOTSAFEPOINT
 {
     image_metadata_t *meta = external_blob_metadata((jl_value_t*)m);
@@ -339,8 +338,7 @@ static int image_binding_replaced(void *meta) JL_NOTSAFEPOINT
            jl_atomic_load_acquire(&((image_metadata_t*)meta)->binding_replaced);
 }
 
-// Whether a binding has been replaced in the sysimage or in one of `depmods`, the images
-// that the image being restored was built against.
+// Check for replaced bindings in the sysimage and the restored image's dependencies.
 static int depmods_binding_replaced(jl_array_t *depmods) JL_NOTSAFEPOINT
 {
     if (jl_atomic_load_acquire(&n_images_replaced) == 0)
@@ -354,8 +352,8 @@ static int depmods_binding_replaced(jl_array_t *depmods) JL_NOTSAFEPOINT
     return 0;
 }
 
-// Whether a binding has been replaced in linkage blob `image` or in one it was loaded
-// against (which includes the sysimage). For anything else, in any image at all.
+// Check for replaced bindings in `image` and its dependencies, including the sysimage.
+// For an unknown image, check whether any image has replaced bindings.
 JL_DLLEXPORT int jl_linkage_blob_deps_replaced(size_t image) JL_NOTSAFEPOINT
 {
     size_t n = jl_atomic_load_acquire(&n_images_replaced);
@@ -378,7 +376,7 @@ JL_DLLEXPORT int jl_linkage_blob_deps_replaced(size_t image) JL_NOTSAFEPOINT
     return 0;
 }
 
-// The same, once any replacement in progress has run its invalidation and published its world.
+// Wait for any ongoing replacement to finish invalidation and publish its world before checking.
 JL_DLLEXPORT int jl_linkage_blob_deps_replaced_locked(size_t image)
 {
     JL_LOCK(&world_counter_lock);

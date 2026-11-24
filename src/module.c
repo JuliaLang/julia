@@ -1645,8 +1645,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t fla
         jl_atomic_store_relaxed(&to->has_reexports, 1);
     }
 
-    // Names that `to` has no binding for yet resolve differently from here on, without a
-    // partition of `to` being replaced.
+    // Adding a using can change name resolution without replacing an existing binding.
     if (to != jl_main_module)
         jl_image_binding_replaced(to, new_world);
 
@@ -2013,14 +2012,12 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
                       jl_symbol_name(b->globalref->mod->name), jl_symbol_name(b->globalref->name));
     }
 
-    // Check if this is replacing a binding of a module in the system or a package image.
-    // Until the first such replacement, the images loaded against that image can fast-path
-    // validation. For these purposes, we consider the `Main` module to be a non-sysimg module.
-    // This is legal, because we special case the `Main` in check_safe_import_from.
+    // Record binding replacements in system and package images so dependent images
+    // use full validation. Exclude `Main`, which check_safe_import_from handles separately.
     if (b->globalref->mod != jl_main_module && jl_image_binding_replaced(b->globalref->mod, new_world)) {
         // During incremental compilation replacement of image bindings is forbidden;
         // We use this to avoid inserting backedges while loading pkgimages.
-        // `check_safe_newbinding` checks this on `b->globalref->mod`; assert to be extra sure.
+        // This also follows from check_safe_newbinding's check on `b->globalref->mod`.
         assert(!(jl_options.incremental && jl_generating_output()));
     }
 

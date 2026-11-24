@@ -182,11 +182,9 @@ function scan_new_method!(method::Method, world::UInt, image_backedges_only::Boo
     _scan_method_source!(method, world, image_backedges_only)
 end
 
-# Methods whose image binding backedges are not installed yet, collected while loading
-# `image`. Their source can only name bindings of the images `image` was built against, and
-# an image is only deferred while no binding of those has been replaced
-# (`image_deps_unreplaced`), so nothing reads these backedges until one is:
-# `scan_pending_images!` installs them then.
+# Methods awaiting image binding backedges. While `image_deps_unreplaced` holds,
+# these backedges are unused. `scan_pending_images!` installs them when a binding
+# in a dependency image is replaced.
 mutable struct PendingImageScan
     const image::UInt # linkage blob
     const world::UInt
@@ -201,13 +199,12 @@ const PENDING_IMAGE_SCANS = PendingImageScans(nothing)
 image_depends_on(image::UInt, blob::UInt) =
     ccall(:jl_linkage_blob_dep_world, Csize_t, (Csize_t, Csize_t), image, blob) != 0
 
-# Every image was built against `Main`, whose bindings change all the time, so source that
-# names it (as its own module or through a root) is scanned at load.
+# All images depend on `Main`. Scan methods that reference it at load time,
+# since changes to its bindings do not trigger image scans.
 names_main(method::Method) = method.module === Core.Main || !isa(method.source, String) ||
     ccall(:jl_method_has_root, Cint, (Any, Any), method, Core.Main) != 0
 
-# Whether the image binding backedges of `method` can wait for `scan_pending_images!`.
-# Those of a method that names `Main` are installed here.
+# Return whether the scan can be deferred, scanning methods that reference `Main` now.
 function defers_image_scan(method::Method, world::UInt)
     isdefined(method, :source) || return false
     isa(method.source, MaybeCompressed) || return false
@@ -217,11 +214,10 @@ function defers_image_scan(method::Method, world::UInt)
     return false
 end
 
-# Leave the image binding backedges of what `image` loaded to `scan_pending_images!`: those
-# of its methods, and of the methods of earlier images that it has code for. They are
-# published before any of that code is validated and before the methods are marked as
-# scanned, so that a replacement from here on finds them. If one came before that, they are
-# scanned in full instead.
+# Defer scans for this image's methods and methods from earlier images with code in this image.
+# Publish the pending scans before validating code or marking methods as scanned,
+# so binding replacement finds them. Recheck for replacements after publishing;
+# if a replacement already occurred, scan in full.
 function defer_image_scans!(internal_methods::Vector{Any}, image::UInt, world::UInt)
     deferred = Method[]
     for item in internal_methods
@@ -266,10 +262,10 @@ function push_pending_image_scan!(pending::PendingImageScan)
     nothing
 end
 
-# `b` is changing: install the deferred backedges of the images that can name it before they
-# are read. Only `invalidate_code_for_globalref!` calls this, under the `world_counter_lock`,
-# so calls never overlap. A load racing with the change may push afterwards; the next change
-# picks it up.
+# Install backedges for images that depend on the image containing `b`.
+# Called only by `invalidate_code_for_globalref!` under `world_counter_lock`.
+# Concurrent loads may enqueue scans after the drain; these remain pending until
+# the next invalidation.
 function scan_pending_images!(b::Core.Binding)
     (@atomic PENDING_IMAGE_SCANS.head) === nothing && return
     mod = b.globalref.mod
