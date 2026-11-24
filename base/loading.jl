@@ -3442,7 +3442,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
     mkpath(cachepath)
-    cache_objects = JLOptions().use_pkgimages == 1
+    cache_objects = cacheflags.use_pkgimages
     tmppath, tmpio = mktemp(cachepath)
 
     if cache_objects
