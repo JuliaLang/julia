@@ -73,6 +73,9 @@ mutable struct ScopeResolutionContext <: AbstractLoweringContext
     const tv_deps::Dict{IdTag, Vector{IdTag}}
     const enable_soft_scopes::Bool
     const world::UInt
+    # hack: if `thisfunction` appears in a lambda's body, generate a local `f`,
+    # store it here, and assign `f = slot1` in lambda body resolution
+    const thisfunction_var::Dict{ScopeId, IdTag}
 end
 
 function contains_softscope_marker(ex)
@@ -453,9 +456,18 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         else
             syntax_id(arg_bindings[1])
         end
+        body = _resolve_scopes(ctx, ex[3], newscope)
         body_stmts = SyntaxList()
         add_local_decls!(ctx, body_stmts, ex, newscope)
-        body = _resolve_scopes(ctx, ex[3], newscope)
+        thisfunction = get(ctx.thisfunction_var, newscope.id, nothing)
+        if thisfunction !== nothing
+            tfself = arg_bindings[1] # different from self_id in kw cases
+            for i in eachindex(children(ex[1]))
+                getmeta(ex[1][i], :thisfunction_original, false) &&
+                    (tfself = arg_bindings[i])
+            end
+            push!(body_stmts, @ast ctx ex [:(=) thisfunction::bindingid tfself])
+        end
         if head(body) == :block
             append!(body_stmts, children(body))
         else
@@ -558,12 +570,12 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         push!(stmts, locals_dict)
         @mknode(ex; head=:block, children=stmts)
     elseif k == :thisfunction
-        lam = enclosing_lambda(ctx, scope::ScopeInfo).node_id
-        self_arg = lam[1][1]
-        for a in children(lam[1])
-            getmeta(a, :thisfunction_original, false) && (self_arg = a)
+        scope::ScopeInfo
+        lam = enclosing_lambda(ctx, scope)
+        bid = get!(ctx.thisfunction_var, lam.id) do
+            declare_in_scope!(ctx, lam, newsym(ctx, ex, ""), :local)
         end
-        return _resolve_scopes(ctx, self_arg, scope)
+        get_binding(ctx, bid).node_id
     elseif k == :assert
         etype = extension_type(ex)
         if etype == "require_existing_locals"
@@ -944,7 +956,7 @@ enclosing lambda form and information about variables captured by closures.
                                   Dict(), Dict{IdTag, IdTag}(),
                                   Dict{IdTag, Vector{IdTag}}(),
                                   enable_soft_scopes,
-                                  world)
+                                  world, Dict{ScopeId, IdTag}())
     ex2 = resolve_scopes(ctx2, ex)
     warn && !enable_soft_scopes && (Base.JLOptions().warn_scope == 1) &&
         for b in ctx2.bindings.info
