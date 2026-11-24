@@ -2910,6 +2910,21 @@ end
     end
 end
 
+@testset "extension of a stdlib that is not in the environment" begin
+    # Pkg mode loads Pkg's REPLExt in an environment that has REPL but not Pkg (#65221)
+    depot_path = mkdepottempdir()
+    dir = mktempdir()
+    write(joinpath(dir, "Project.toml"), "[deps]\nREPL = \"3fa0cd96-eef1-5676-8a61-b3b8758bbffb\"\n")
+    script = """
+    using REPL
+    REPL.load_pkg() isa Module || exit(1)
+    """
+    sep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --check-bounds=auto --startup-file=no -e $script`,
+                 "JULIA_DEPOT_PATH" => depot_path * sep, "JULIA_LOAD_PATH" => dir)
+    @test success(pipeline(cmd; stdout, stderr))
+end
+
 @testset "dependency loaded with require_stdlib is checked against the environment" begin
     # A manifest from before JuliaSyntaxHighlighting changed its UUID (#59365).
     depot_path = mkdepottempdir()

@@ -407,11 +407,19 @@ function identify_package_env(where::PkgId, name::String)
         # that we've found `where` but it did not have the required dependency. We terminate the search.
         break
     end
-    if pkg_env === nothing && is_stdlib(where)
+    if pkg_env === nothing
         # if not found it could be that manifests are from a different julia version/commit
         # where stdlib dependencies have changed, so look up deps based on the stdlib Project.toml
         # as a fallback
-        pkg_env = identify_stdlib_project_dep(where, name)
+        if is_stdlib(where)
+            pkg_env = identify_stdlib_project_dep(where, name)
+        else
+            # or that `where` is an extension of a stdlib that is not in the manifests
+            triggers = get(EXT_PRIMED, where, nothing)
+            if triggers !== nothing && is_stdlib(triggers[1])
+                pkg_env = identify_stdlib_project_dep(triggers[1], name, #=ext=#true)
+            end
+        end
     end
 
     # Cache the result
@@ -448,7 +456,7 @@ function identify_package_env(where::Nothing, name::String)
 end
 identify_package_env(name::String) = identify_package_env(nothing, name)
 
-function identify_stdlib_project_dep(stdlib::PkgId, depname::String)
+function identify_stdlib_project_dep(stdlib::PkgId, depname::String, ext::Bool=false)
     @debug """
     Stdlib $(repr(MIME"text/plain"(), stdlib)) is trying to load `$depname`
     which is not listed as a dep in the load path manifests, so resorting to search
@@ -456,6 +464,12 @@ function identify_stdlib_project_dep(stdlib::PkgId, depname::String)
     stdlib_projfile = locate_project_file(joinpath(Sys.STDLIB, stdlib.name))
     stdlib_projfile === nothing && return nothing
     found = explicit_project_deps_get(stdlib_projfile, depname)
+    if found === nothing && ext
+        # an extension can also load the weak dependencies that trigger it
+        weakdeps = get(parsed_toml(stdlib_projfile), "weakdeps", nothing)::Union{Dict{String, Any}, Nothing}
+        uuid = weakdeps === nothing ? nothing : get(weakdeps, depname, nothing)::Union{String, Nothing}
+        uuid === nothing || (found = UUID(uuid))
+    end
     if found !== nothing
         @debug "$(repr(MIME"text/plain"(), stdlib)) indeed depends on $depname in project $stdlib_projfile"
         pkgid = PkgId(found, depname)
@@ -3438,6 +3452,8 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
     # the PkgId of the ext, or package if not an ext
     this_uuidkey = ext isa String ? PkgId(uuid5(package_uuidkey.uuid, ext), ext) : package_uuidkey
     env = Sys.STDLIB
+    # the environment may not have the parent, whose project file then gives the extension's deps
+    ext isa String && get!(EXT_PRIMED, this_uuidkey, PkgId[package_uuidkey])
     newm = start_loading(this_uuidkey, UInt128(0), true)
     newm === nothing || return newm
     try
@@ -3473,8 +3489,6 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
         run_package_callbacks(this_uuidkey)
     else
         # if the user deleted their bundled depot, next try to load it completely normally
-        # if it is an extension, we first need to indicate where to find its parent via EXT_PRIMED
-        ext isa String && (EXT_PRIMED[this_uuidkey] = PkgId[package_uuidkey])
         newm = _require_prelocked(this_uuidkey)
     end
     return newm
