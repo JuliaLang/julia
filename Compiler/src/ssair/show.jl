@@ -7,7 +7,7 @@
 using Base, Core.IR
 
 import Base: show
-using Base: isexpr, prec_decl, show_unquoted, with_output_color
+using Base: isexpr, prec_decl, show_tuple_as_call, show_unquoted, with_output_color
 using .Compiler: ALWAYS_FALSE, ALWAYS_TRUE, BasicBlock, CFG, CachedMethodTable,
     DebugInfoStream, EMPTY_SPTYPES, Effects, IRCode, IncrementalCompact, InferenceResult,
     InferenceState, InvalidIRError, LimitedAccuracy, NativeInterpreter, StmtRange,

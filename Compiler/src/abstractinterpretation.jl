@@ -5171,10 +5171,11 @@ function condition_object_change(currstate::VarTable, condt::Conditional,
     if then_or_else === :then
         thentype = condt.thentype
         elsetype = Union{}
-    elseif then_or_else === :else
+    else
+        @assert then_or_else === :else
         thentype = Union{}
         elsetype = condt.elsetype
-    else @assert false end
+    end
     newcondt = Conditional(condt.slot, condt.ssadef, thentype, elsetype)
     return StateRefinement(slot_id(condslot), newcondt, vtype.undef)
 end
