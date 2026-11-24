@@ -455,11 +455,6 @@ typedef enum {
     JL_SYMBOL_SPECPTR_IMG,
 } jl_symbol_prefix_t;
 
-static inline int jl_jlcall_specptr_is_native(jl_invoke_api_t type) JL_NOTSAFEPOINT
-{
-    return type == JL_INVOKE_ARGS || type == JL_INVOKE_SPARAM || type == JL_INVOKE_SPECSIG;
-}
-
 static inline jl_invoke_api_t jl_callptr_invoke_api(jl_callptr_t ptr) JL_NOTSAFEPOINT
 {
     if (ptr == jl_fptr_args_addr)
@@ -1052,7 +1047,7 @@ STATIC_INLINE jl_datatype_t *jl_typename_super(jl_typename_t *tn JL_PROPAGATES_R
 int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT;
 int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int freevars) JL_NOTSAFEPOINT;
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type) JL_CANSAFEPOINT;
-jl_datatype_t *jl_lookup_or_defer_type_(jl_datatype_t *dt, int *isnew) JL_CANSAFEPOINT;
+jl_datatype_t *jl_lookup_or_defer_type_(jl_datatype_t *dt) JL_CANSAFEPOINT;
 jl_svec_t *jl_publish_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, jl_svec_t *types) JL_NOTSAFEPOINT;
 jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v) JL_CANSAFEPOINT;
 void jl_cache_type_(jl_datatype_t *type) JL_CANSAFEPOINT;
@@ -1757,6 +1752,18 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi) JL_
 void jl_init_serializer(void) JL_CANSAFEPOINT;
 void jl_init_uv(void) JL_NOTSAFEPOINT;
 void jl_init_box_caches(void) JL_NOTSAFEPOINT;
+int jl_adopt_image_constants(jl_image_buf_t buf) JL_CANSAFEPOINT;
+void jl_set_symtab(jl_sym_t *root) JL_NOTSAFEPOINT;
+// The order of the symbol table's search tree, a strict total order: compares the name `str` of
+// length `len`, whose hash is `h`, with `sym`, by hash, then by name
+STATIC_INLINE int jl_symbol_order(uintptr_t h, const char *str, size_t len, jl_sym_t *sym) JL_NOTSAFEPOINT
+{
+    if (h != sym->hash)
+        return h < sym->hash ? -1 : 1;
+    const char *name = jl_symbol_name(sym);
+    int x = strncmp(str, name, len);
+    return x != 0 ? x : name[len] == 0 ? 0 : -1; // a prefix of `name` comes first
+}
 JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT;
 
 extern JL_DLLEXPORT const int jl_tls_elf_support;

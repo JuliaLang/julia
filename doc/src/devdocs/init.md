@@ -22,7 +22,7 @@ or early initialization. Other options are handled later by [`exec_options()` in
 `jl_parse_opts()` stores command line options in the [global `jl_options` struct](https://github.com/JuliaLang/julia/blob/master/src/julia.h).
 
 `jl_resolve_sysimg_location()` searches configured paths for the base system image.
-See [Building the Julia system image](@ref Building-the-Julia-system-image).
+See [Julia images](@ref).
 
 If a sysimage is found, it is pre-loaded via [`jl_preload_sysimg()` from `staticdata.c`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c).
 
@@ -139,7 +139,7 @@ is called
 
 !!! sidebar "sysimg"
     If there is a sysimg file, it contains a pre-cooked image of the `Core` and `Main` modules (and
-    whatever else is created by `boot.jl`). See [Building the Julia system image](@ref Building-the-Julia-system-image).
+    whatever else is created by `boot.jl`). See [Julia images](@ref).
 
     [`jl_restore_system_image()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) deserializes
     the saved sysimg into the current Julia runtime environment and initialization continues after
