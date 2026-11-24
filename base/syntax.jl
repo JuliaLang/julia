@@ -772,8 +772,9 @@ function syntax_to_expr(s::Syntax, suppress_linenodes=false)
             (h === :(=) && is_eventually_call(out.args[1])))
             let b = out.args[end]
                 b isa Expr && b.head === :block && !isempty(b.args) &&
-                    b.args[1] isa LineNumberNode && first_linenode(s) != b.args[1] &&
-                    push_lno!(b, first_linenode(s), true)
+                    let b1 = b.args[1]
+                        b1 isa LineNumberNode && first_linenode(s) != b1
+                    end && push_lno!(b, first_linenode(s), true)
             end
         elseif h in (:for, :while) && length(out.args) > 0
             let b = out.args[end]
