@@ -143,6 +143,9 @@ end
         @test partialsort(w, r) == sort(w)[r]
         @test w[partialsortperm(w, r)] == sort(w)[r]
     end
+    for n in (259, 260, 1000)
+        @test partialsort(collect(n:-1:1), 4:3) == Int[]
+    end
     @test_throws ArgumentError partialsortperm!([1,2], [2,3,1], 1:2)
     # index vector must hold all indices of v, regardless of eltype(k)
     @test partialsortperm([300:-1:1;], Int8(3)) === 298
@@ -1335,6 +1338,14 @@ end
             @test searchsorted(v, 1.2, rev=true) === 3:2
             @test searchsorted(v, 1, rev=true) == 3:3
             @test searchsorted(v, 0.1, rev=true) === 4:3
+        end
+    end
+
+    @testset "empty ranges" begin
+        for r in (1:0, 5:4, 1:-1:2, 1.0:0.0, 1.0:-1.0:2.0), x in (0, 1, 2, 5), rev in (false, true)
+            @test searchsortedfirst(r, x; rev) === 1
+            @test searchsortedlast(r, x; rev) === 0
+            @test searchsorted(r, x; rev) === 1:0
         end
     end
 
